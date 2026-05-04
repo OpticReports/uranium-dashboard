@@ -2168,7 +2168,7 @@
             renderTable();
             renderAnalysisTable();
             renderInsightsTicker();
-            renderCharts();
+            // Don't render charts yet - they're hidden. Will render when Charts tab is clicked
         }
 
         function renderHeatMap() {
@@ -2524,7 +2524,12 @@
             $('.tab-content').removeClass('active');
             $('.tab-button').removeClass('active');
             $(`#${tabName}`).addClass('active');
-            $(`button[onclick="switchTab('${tabName}')"]`).addClass('active');
+            $(`button[onclick="switchTab('${tabName}')")"].addClass('active');
+            
+            // Render charts only when Charts tab is clicked
+            if (tabName === 'charts') {
+                setTimeout(renderCharts, 100);
+            }
         }
 
         function openModal(ticker) {
