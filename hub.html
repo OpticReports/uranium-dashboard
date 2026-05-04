@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Uranium Analytics Hub</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: #e2e8f0;
+            line-height: 1.6;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            width: 100%;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 50px;
+        }
+        
+        h1 {
+            font-size: 3em;
+            color: #60a5fa;
+            margin-bottom: 10px;
+            text-shadow: 0 0 30px rgba(96, 165, 250, 0.3);
+        }
+        
+        .tagline {
+            font-size: 1.3em;
+            color: #94a3b8;
+            margin-bottom: 30px;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 30px;
+            margin-bottom: 50px;
+        }
+        
+        .card {
+            background: rgba(30, 41, 59, 0.8);
+            border: 2px solid #334155;
+            border-radius: 12px;
+            padding: 35px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            backdrop-filter: blur(10px);
+        }
+        
+        .card:hover {
+            border-color: #60a5fa;
+            background: rgba(30, 41, 59, 1);
+            box-shadow: 0 0 40px rgba(96, 165, 250, 0.2);
+            transform: translateY(-5px);
+        }
+        
+        .card-icon {
+            font-size: 3em;
+            margin-bottom: 15px;
+        }
+        
+        .card-title {
+            font-size: 1.8em;
+            color: #60a5fa;
+            margin-bottom: 12px;
+            font-weight: 700;
+        }
+        
+        .card-desc {
+            color: #cbd5e1;
+            line-height: 1.8;
+            margin-bottom: 20px;
+        }
+        
+        .features {
+            list-style: none;
+            margin-bottom: 20px;
+            font-size: 0.95em;
+        }
+        
+        .features li {
+            padding: 6px 0;
+            color: #94a3b8;
+            padding-left: 20px;
+            position: relative;
+        }
+        
+        .features li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #22c55e;
+            font-weight: bold;
+        }
+        
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #0ea5e9, #3b82f6);
+            color: white;
+            padding: 14px 35px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            border: 1px solid #60a5fa;
+            cursor: pointer;
+            font-size: 1em;
+        }
+        
+        .cta-button:hover {
+            background: linear-gradient(135deg, #3b82f6, #60a5fa);
+            box-shadow: 0 0 20px rgba(96, 165, 250, 0.3);
+            transform: scale(1.05);
+        }
+        
+        .footer {
+            text-align: center;
+            color: #64748b;
+            border-top: 1px solid #334155;
+            padding-top: 30px;
+            margin-top: 50px;
+        }
+        
+        .status {
+            background: rgba(34, 197, 94, 0.1);
+            border-left: 4px solid #22c55e;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 30px 0;
+            color: #86efac;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>⚛️ Uranium Analytics Hub</h1>
+            <p class="tagline">Professional-grade investment thesis deployment & portfolio optimization</p>
+            <div class="status">
+                ✅ All systems operational | Last updated: May 4, 2024
+            </div>
+        </header>
+        
+        <div class="grid">
+            <!-- Dashboard 1: Original Stock Picker -->
+            <div class="card" onclick="window.location.href='index.html';">
+                <div class="card-icon">📊</div>
+                <div class="card-title">Sector Dashboard</div>
+                <div class="card-desc">
+                    Technical & fundamental analysis of 13 uranium companies with interactive heat maps and detailed metrics.
+                </div>
+                <ul class="features">
+                    <li>13 uranium companies analyzed</li>
+                    <li>50+ technical indicators</li>
+                    <li>Interactive heat maps & rankings</li>
+                    <li>Real-time chart data</li>
+                    <li>Company deep dives</li>
+                </ul>
+                <button class="cta-button">Open Dashboard →</button>
+            </div>
+            
+            <!-- Dashboard 2: Thesis Deployment Engine -->
+            <div class="card" onclick="window.location.href='thesis-deployment.html';">
+                <div class="card-icon">🎯</div>
+                <div class="card-title">Thesis Deployment Engine</div>
+                <div class="card-desc">
+                    Portfolio-integrated capital allocation framework for 20% annual return target. Macro thesis validation, conviction tracking, and stress scenarios.
+                </div>
+                <ul class="features">
+                    <li>Macro thesis validation</li>
+                    <li>Optimal allocation sizing</li>
+                    <li>Dynamic entry/exit rules</li>
+                    <li>Stress scenario analysis</li>
+                    <li>Live conviction monitoring</li>
+                </ul>
+                <button class="cta-button">Open Deployment Engine →</button>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>💼 For professional investors | Built for thematic capital allocation | Uranium Supply/Demand Framework</p>
+            <p style="margin-top: 15px; color: #475569; font-size: 0.9em;">GitHub: <strong>OpticReports/uranium-dashboard</strong> | Status: Production</p>
+        </div>
+    </div>
+</body>
+</html>
