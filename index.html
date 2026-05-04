@@ -2524,7 +2524,7 @@
             $('.tab-content').removeClass('active');
             $('.tab-button').removeClass('active');
             $(`#${tabName}`).addClass('active');
-            $(`button[onclick="switchTab('${tabName}')")"].addClass('active');
+            $(`button[onclick="switchTab('${tabName}')"]`).addClass('active');
             
             // Render charts only when Charts tab is clicked
             if (tabName === 'charts') {
