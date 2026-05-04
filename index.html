@@ -1,0 +1,2593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Uranium Sector Analysis Dashboard</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: #e2e8f0;
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+        
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            background: rgba(15, 23, 42, 0.8);
+            border-bottom: 2px solid #3b82f6;
+            padding: 20px 0;
+            margin-bottom: 30px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+        
+        h1 {
+            font-size: 2.5em;
+            color: #60a5fa;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+        
+        .subtitle {
+            color: #94a3b8;
+            font-size: 0.95em;
+            margin-bottom: 20px;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid #475569;
+            border-radius: 8px;
+            padding: 15px;
+            backdrop-filter: blur(10px);
+            text-align: center;
+        }
+        
+        .stat-card h3 {
+            color: #94a3b8;
+            font-size: 0.85em;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .stat-card .value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #60a5fa;
+        }
+        
+        .stat-card.buy .value { color: #22c55e; }
+        .stat-card.sell .value { color: #ef4444; }
+        .stat-card.hold .value { color: #eab308; }
+        
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+        }
+        
+        .control-group {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .control-group label {
+            color: #cbd5e1;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        
+        input[type="text"], input[type="number"], select {
+            padding: 8px 12px;
+            background: rgba(30, 41, 59, 0.9);
+            border: 1px solid #475569;
+            border-radius: 6px;
+            color: #e2e8f0;
+            font-size: 0.95em;
+        }
+        
+        input[type="text"]:focus, input[type="number"]:focus, select:focus {
+            outline: none;
+            border-color: #60a5fa;
+            box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
+        }
+        
+        button {
+            padding: 8px 16px;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s;
+            font-size: 0.95em;
+        }
+        
+        button:hover {
+            background: #2563eb;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+        
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 25px;
+            border-bottom: 1px solid #334155;
+            flex-wrap: wrap;
+        }
+        
+        .tab-button {
+            padding: 12px 20px;
+            background: transparent;
+            color: #94a3b8;
+            border: none;
+            border-bottom: 2px solid transparent;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+        
+        .tab-button.active {
+            color: #60a5fa;
+            border-bottom-color: #3b82f6;
+        }
+        
+        .tab-button:hover {
+            color: #cbd5e1;
+        }
+        
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s ease-in;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .table-wrapper {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid #475569;
+            border-radius: 8px;
+            overflow-x: auto;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        th {
+            background: rgba(15, 23, 42, 0.9);
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            color: #60a5fa;
+            cursor: pointer;
+            user-select: none;
+            border-bottom: 2px solid #334155;
+            white-space: nowrap;
+        }
+        
+        th:hover {
+            background: rgba(15, 23, 42, 0.95);
+            color: #93c5fd;
+        }
+        
+        th.sortable::after {
+            content: " ⇅";
+            opacity: 0.4;
+        }
+        
+        th.sorted-asc::after {
+            content: " ↑";
+            opacity: 1;
+            color: #22c55e;
+        }
+        
+        th.sorted-desc::after {
+            content: " ↓";
+            opacity: 1;
+            color: #ef4444;
+        }
+        
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #334155;
+        }
+        
+        tbody tr {
+            transition: background 0.2s;
+        }
+        
+        tbody tr:hover {
+            background: rgba(59, 130, 246, 0.1);
+        }
+        
+        tbody tr.buy { background: rgba(34, 197, 94, 0.05); }
+        tbody tr.sell { background: rgba(239, 68, 68, 0.05); }
+        tbody tr.hold { background: rgba(234, 179, 8, 0.05); }
+        
+        .ticker-cell {
+            font-weight: 600;
+            color: #60a5fa;
+        }
+        
+        .signal-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 0.85em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .signal-buy {
+            background: rgba(34, 197, 94, 0.2);
+            color: #22c55e;
+            border: 1px solid #22c55e;
+        }
+        
+        .signal-sell {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            border: 1px solid #ef4444;
+        }
+        
+        .signal-hold {
+            background: rgba(234, 179, 8, 0.2);
+            color: #eab308;
+            border: 1px solid #eab308;
+        }
+        
+        .heat-map-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+        
+        .heat-map-item {
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 2px solid transparent;
+            backdrop-filter: blur(10px);
+        }
+        
+        .heat-map-item:hover {
+            transform: scale(1.05);
+            border-color: #60a5fa;
+        }
+        
+        .heat-map-item.buy {
+            background: rgba(34, 197, 94, 0.2);
+            border: 2px solid #22c55e;
+        }
+        
+        .heat-map-item.sell {
+            background: rgba(239, 68, 68, 0.2);
+            border: 2px solid #ef4444;
+        }
+        
+        .heat-map-item.hold {
+            background: rgba(234, 179, 8, 0.2);
+            border: 2px solid #eab308;
+        }
+        
+        .heat-map-item .ticker {
+            font-size: 1.3em;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+        
+        .heat-map-item .price {
+            font-size: 0.9em;
+            color: #cbd5e1;
+            margin-bottom: 8px;
+        }
+        
+        .heat-map-item .signal {
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+        
+        .chart-container {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid #475569;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 25px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .chart-container h3 {
+            color: #60a5fa;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+        }
+        
+        .two-column {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 20px;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(5px);
+        }
+        
+        .modal-content {
+            background: #1e293b;
+            margin: 50px auto;
+            padding: 30px;
+            border: 1px solid #475569;
+            border-radius: 12px;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+        
+        .modal-content h2 {
+            color: #60a5fa;
+            margin-bottom: 20px;
+        }
+        
+        .modal-content p {
+            margin-bottom: 15px;
+            color: #cbd5e1;
+            line-height: 1.8;
+        }
+        
+        .close {
+            color: #94a3b8;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: color 0.3s;
+        }
+        
+        .close:hover {
+            color: #60a5fa;
+        }
+        
+        .insight-item {
+            background: rgba(15, 23, 42, 0.9);
+            border-left: 3px solid #3b82f6;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+        }
+        
+        .insight-item strong {
+            color: #60a5fa;
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #64748b;
+            font-size: 0.85em;
+            border-top: 1px solid #334155;
+            margin-top: 40px;
+        }
+        
+        .export-btn {
+            background: #10b981;
+            margin-left: 10px;
+        }
+        
+        .export-btn:hover {
+            background: #059669;
+        }
+        
+        .error {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid #ef4444;
+            color: #fca5a5;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+        }
+        
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .two-column {
+                grid-template-columns: 1fr;
+            }
+            
+            h1 {
+                font-size: 1.8em;
+            }
+            
+            .heat-map-container {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            table {
+                font-size: 0.85em;
+            }
+            
+            th, td {
+                padding: 8px;
+            }
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 30px;
+            color: #94a3b8;
+        }
+        
+        .spinner {
+            border: 3px solid #334155;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .highlight {
+            background: rgba(234, 179, 8, 0.2);
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: #fbbf24;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>⚛️ Uranium Sector Analysis Dashboard</h1>
+            <p class="subtitle">Real-time Technical + Fundamental Analysis | 14 Companies | Live Updates</p>
+            
+            <div class="stats-grid" id="sectorStats">
+                <div class="stat-card">
+                    <h3>Total Companies</h3>
+                    <div class="value">13</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Avg Score</h3>
+                    <div class="value" id="avgScore">38.4</div>
+                </div>
+                <div class="stat-card buy">
+                    <h3>Buy Signals</h3>
+                    <div class="value" id="buyCount">0</div>
+                </div>
+                <div class="stat-card hold">
+                    <h3>Hold Signals</h3>
+                    <div class="value" id="holdCount">7</div>
+                </div>
+                <div class="stat-card sell">
+                    <h3>Sell Signals</h3>
+                    <div class="value" id="sellCount">6</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Sector Signal</h3>
+                    <div class="value" id="sectorSignal" style="color: #ef4444;">SELL</div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Controls -->
+        <div class="controls">
+            <div class="control-group">
+                <label>Search Ticker</label>
+                <input type="text" id="searchInput" placeholder="DNN, UUUU, OKLO...">
+            </div>
+            <div class="control-group">
+                <label>Filter by Signal</label>
+                <select id="signalFilter">
+                    <option value="">All Signals</option>
+                    <option value="BUY">BUY</option>
+                    <option value="HOLD">HOLD</option>
+                    <option value="SELL">SELL</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label>Filter by Trend</label>
+                <select id="trendFilter">
+                    <option value="">All Trends</option>
+                    <option value="uptrend">Uptrend</option>
+                    <option value="downtrend">Downtrend</option>
+                    <option value="consolidation">Consolidation</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <button onclick="resetFilters()">Reset Filters</button>
+                <button class="export-btn" onclick="exportData()">Export CSV</button>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab-button active" onclick="switchTab('overview')">Overview</button>
+            <button class="tab-button" onclick="switchTab('analysis')">Detailed Analysis</button>
+            <button class="tab-button" onclick="switchTab('charts')">Charts & Visualizations</button>
+            <button class="tab-button" onclick="switchTab('insights')">Insights</button>
+        </div>
+
+        <!-- Overview Tab -->
+        <div id="overview" class="tab-content active">
+            <h2 style="color: #60a5fa; margin-bottom: 20px;">Heat Map - All Companies</h2>
+            <div class="heat-map-container" id="heatMap">
+                <!-- Populated by JavaScript -->
+            </div>
+
+            <h2 style="color: #60a5fa; margin-bottom: 20px; margin-top: 30px;">Company Rankings</h2>
+            <div class="table-wrapper">
+                <table id="companiesTable">
+                    <thead>
+                        <tr>
+                            <th class="sortable" data-sort="ticker">Ticker</th>
+                            <th class="sortable" data-sort="price">Price</th>
+                            <th class="sortable" data-sort="composite_score">Score</th>
+                            <th class="sortable" data-sort="signal">Signal</th>
+                            <th class="sortable" data-sort="ta_score">TA</th>
+                            <th class="sortable" data-sort="fa_score">FA</th>
+                            <th class="sortable" data-sort="risk_score">Risk</th>
+                            <th class="sortable" data-sort="rsi">RSI</th>
+                            <th class="sortable" data-sort="return_1m">1m %</th>
+                            <th class="sortable" data-sort="return_3m">3m %</th>
+                            <th class="sortable" data-sort="trend">Trend</th>
+                            <th class="sortable" data-sort="valuation_grade">Valuation</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <!-- Populated by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Analysis Tab -->
+        <div id="analysis" class="tab-content">
+            <h2 style="color: #60a5fa; margin-bottom: 20px;">Detailed Metrics</h2>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Ticker</th>
+                            <th>P/E Ratio</th>
+                            <th>P/B Ratio</th>
+                            <th>Market Cap</th>
+                            <th>52W High</th>
+                            <th>52W Low</th>
+                            <th>Volatility</th>
+                            <th>Dividend</th>
+                            <th>View</th>
+                        </tr>
+                    </thead>
+                    <tbody id="analysisTableBody">
+                        <!-- Populated by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Charts Tab -->
+        <div id="charts" class="tab-content">
+            <div class="chart-container">
+                <h3>Composite Score Distribution</h3>
+                <div id="scoreChart" style="height: 400px;"></div>
+            </div>
+
+            <div class="two-column">
+                <div class="chart-container">
+                    <h3>Score vs Volatility (Risk/Return)</h3>
+                    <div id="riskReturnChart" style="height: 400px;"></div>
+                </div>
+                <div class="chart-container">
+                    <h3>Signal Distribution</h3>
+                    <div id="signalChart" style="height: 400px;"></div>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <h3>Price Returns (1M, 3M, 1Y)</h3>
+                <div id="returnsChart" style="height: 400px;"></div>
+            </div>
+        </div>
+
+        <!-- Insights Tab -->
+        <div id="insights" class="tab-content">
+            <h2 style="color: #60a5fa; margin-bottom: 20px;">Company Insights</h2>
+            <div class="control-group" style="margin-bottom: 20px;">
+                <label>Select Company</label>
+                <select id="insightsTicker" onchange="displayInsights()">
+                    <option value="">Choose a company...</option>
+                </select>
+            </div>
+            <div id="insightsContent">
+                <!-- Populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Detailed Company View -->
+    <div id="companyModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2 id="modalTicker">Company Analysis</h2>
+            <div id="modalContent">
+                <!-- Populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>📊 Uranium Sector Analysis Dashboard | Data Updated: <span id="lastUpdate">Loading...</span> | © 2026 Quantitative Analysis Platform</p>
+        <p style="margin-top: 10px; font-size: 0.8em;">Disclaimer: For educational and informational purposes only. Not investment advice. Always conduct your own research.</p>
+    </div>
+
+    <script>
+        // Global data
+        let allData = {};
+        let filteredData = {};
+        let sortField = 'composite_score';
+        let sortOrder = 'desc';
+
+        // Embedded analysis data (will be populated with real data)
+        const dataSource = {
+  "DNN": {
+    "ticker": "DNN",
+    "technical": {
+      "current_price": 3.75,
+      "52_week_high": 4.369999885559082,
+      "52_week_low": 1.409999966621399,
+      "sma_20": 3.7629999995231627,
+      "sma_50": 3.790000009536743,
+      "sma_200": 3.0380499994754793,
+      "ema_20": 3.770161830976177,
+      "ema_50": 3.7189778567923657,
+      "rsi": 49.68956575168543,
+      "rsi_oversold": "False",
+      "rsi_overbought": "False",
+      "macd": 0.025833734948945253,
+      "macd_signal": 0.03507482955068196,
+      "macd_histogram": -0.009241094601736707,
+      "macd_positive": "False",
+      "bb_upper": 4.084937937142918,
+      "bb_lower": 3.441062061903407,
+      "bb_middle": 3.7629999995231627,
+      "bb_position": 0.4798097738662337,
+      "avg_volume": 23773750.0,
+      "current_volume": "11686300",
+      "volume_ratio": 0.4915631736684368,
+      "return_1m": 2.459013990675496,
+      "return_1w": -3.3505183146019135,
+      "return_3m": -0.7936500427734305,
+      "return_6m": 16.459626294429608,
+      "return_1y": 162.2377718565864,
+      "volatility": 54.15590720379711,
+      "support": 2.4800000190734863,
+      "resistance": 4.369999885559082,
+      "trend": "downtrend"
+    },
+    "fundamental": {
+      "market_cap": 3390059776,
+      "pe_ratio": NaN,
+      "pb_ratio": 12.46944,
+      "ps_ratio": 689.3168,
+      "peg_ratio": 106.92,
+      "dividend_yield": 0,
+      "roe": -46.594003,
+      "roa": -5.7919998,
+      "debt_to_equity": 166.799,
+      "total_debt": 614438976,
+      "total_assets": 0,
+      "current_ratio": 10.749,
+      "quick_ratio": 10.452,
+      "revenue_growth_ttm": 4.3999999999999995,
+      "earnings_growth_ttm": NaN,
+      "eps": -0.18,
+      "enterprise_value": 3461114880,
+      "ev_revenue": 703.765,
+      "ev_ebitda": -53.647,
+      "fifty_two_week_high": 4.43,
+      "fifty_two_week_low": 1.39,
+      "shares_outstanding": 904015964,
+      "float_shares": 899957084
+    },
+    "valuation": {
+      "pe_ratio": NaN,
+      "pb_ratio": 12.46944,
+      "ps_ratio": 689.3168,
+      "peg_ratio": 106.92,
+      "ev_ebitda": -53.647,
+      "intrinsic_value": 2.644659687068302,
+      "price_to_intrinsic": 1.417951813738654,
+      "valuation_grade": "Deeply Overvalued",
+      "valuation_signal": "SELL"
+    },
+    "scores": {
+      "ta_score": "30",
+      "fa_score": "20",
+      "risk_score": "75",
+      "composite_score": 24.75,
+      "signal": "SELL",
+      "confidence": "90"
+    },
+    "insights": {
+      "summary": "SELL: DNN shows weak technicals (30) and weak fundamentals (20). Currently in downtrend with Deeply Overvalued valuation. Risk score: 75/100.",
+      "key_catalysts": [
+        "Await technical breakout or fundamental catalyst"
+      ],
+      "risk_factors": [
+        "High leverage (D/E: 166.8) - refinance risk"
+      ],
+      "target_price": {
+        "conservative": 2.5124267027148868,
+        "base": 2.644659687068302,
+        "bull": 2.7028422001838046,
+        "current": 3.75
+      },
+      "entry_exit": {
+        "strong_buy": 2.4800000190734863,
+        "buy": 2.9524999856948853,
+        "hold": 3.424999952316284,
+        "sell": 4.369999885559082,
+        "current": 3.75
+      }
+    },
+    "timestamp": "2026-05-03T23:08:58.051335",
+    "cohort": {
+      "pb_ratio_percentile": 81.81818181818183,
+      "peg_ratio_percentile": 75.0,
+      "dividend_yield_percentile": 0.0,
+      "debt_to_equity_percentile": 88.88888888888889,
+      "roe_percentile": 9.090909090909092,
+      "undervalued_score": 31.06060606060606
+    }
+  },
+  "UUUU": {
+    "ticker": "UUUU",
+    "technical": {
+      "current_price": 21.65999984741211,
+      "52_week_high": 27.719999313354492,
+      "52_week_low": 4.349999904632568,
+      "sma_20": 20.16849994659424,
+      "sma_50": 19.832999992370606,
+      "sma_200": 16.982849979400633,
+      "ema_20": 20.408118977519468,
+      "ema_50": 19.9412878334782,
+      "rsi": 56.31768885386885,
+      "rsi_oversold": "False",
+      "rsi_overbought": "False",
+      "macd": 0.5618861644526305,
+      "macd_signal": 0.4632839604553553,
+      "macd_histogram": 0.0986022039972752,
+      "macd_positive": "True",
+      "bb_upper": 23.079089218420954,
+      "bb_lower": 17.257910674767523,
+      "bb_middle": 20.16849994659424,
+      "bb_position": 0.7562195764368002,
+      "avg_volume": 9701815.0,
+      "current_volume": "7366800",
+      "volume_ratio": 0.7593218382333615,
+      "return_1m": 22.028168154434425,
+      "return_1w": 1.5947474552282959,
+      "return_3m": 3.093763024508389,
+      "return_6m": -0.7332715382670774,
+      "return_1y": 376.0439327347333,
+      "volatility": 80.03331608417729,
+      "support": 13.470000267028809,
+      "resistance": 27.719999313354492,
+      "trend": "uptrend"
+    },
+    "fundamental": {
+      "market_cap": 5376732672,
+      "pe_ratio": NaN,
+      "pb_ratio": 7.6754074,
+      "ps_ratio": 81.562035,
+      "peg_ratio": NaN,
+      "dividend_yield": 0,
+      "roe": -14.183000000000002,
+      "roa": -6.2480003,
+      "debt_to_equity": 99.278,
+      "total_debt": 677641024,
+      "total_assets": 0,
+      "current_ratio": 30.694,
+      "quick_ratio": 28.171,
+      "revenue_growth_ttm": -32.1,
+      "earnings_growth_ttm": NaN,
+      "eps": -0.38,
+      "enterprise_value": 5053150208,
+      "ev_revenue": 76.653,
+      "ev_ebitda": -54.627,
+      "fifty_two_week_high": 27.9,
+      "fifty_two_week_low": 4.2,
+      "shares_outstanding": 248233278,
+      "float_shares": 238832363
+    },
+    "valuation": {
+      "pe_ratio": NaN,
+      "pb_ratio": 7.6754074,
+      "ps_ratio": 81.562035,
+      "peg_ratio": NaN,
+      "ev_ebitda": -54.627,
+      "intrinsic_value": 10.829999923706055,
+      "price_to_intrinsic": 2.0,
+      "valuation_grade": "Deeply Overvalued",
+      "valuation_signal": "SELL"
+    },
+    "scores": {
+      "ta_score": "85",
+      "fa_score": "5",
+      "risk_score": "70",
+      "composite_score": 39.25,
+      "signal": "SELL",
+      "confidence": 72.5
+    },
+    "insights": {
+      "summary": "SELL: UUUU shows strong technical momentum (85) and weak fundamentals (5). Currently in uptrend with Deeply Overvalued valuation. Risk score: 70/100.",
+      "key_catalysts": [
+        "Strong uptrend - momentum may continue"
+      ],
+      "risk_factors": [
+        "High volatility (80%) - expect large swings",
+        "High leverage (D/E: 99.3) - refinance risk"
+      ],
+      "target_price": {
+        "conservative": 10.288499927520752,
+        "base": 10.829999923706055,
+        "bull": 9.091784935951233,
+        "current": 21.65999984741211
+      },
+      "entry_exit": {
+        "strong_buy": 13.470000267028809,
+        "buy": 17.03250002861023,
+        "hold": 20.59499979019165,
+        "sell": 27.719999313354492,
+        "current": 21.65999984741211
+      }
+    },
+    "timestamp": "2026-05-03T23:08:58.856834",
+    "cohort": {
+      "pb_ratio_percentile": 72.72727272727273,
+      "dividend_yield_percentile": 7.6923076923076925,
+      "debt_to_equity_percentile": 55.55555555555556,
+      "roe_percentile": 27.27272727272727,
+      "undervalued_score": 42.42424242424242
+    }
+  },
+  "LTBR": {
+    "ticker": "LTBR",
+    "technical": {
+      "current_price": 12.569999694824219,
+      "52_week_high": 27.719999313354492,
+      "52_week_low": 9.1899995803833,
+      "sma_20": 12.064499998092652,
+      "sma_50": 11.860799999237061,
+      "sma_200": 15.817150011062623,
+      "ema_20": 12.236756840776366,
+      "ema_50": 12.423532117384616,
+      "rsi": 52.633387101026415,
+      "rsi_oversold": "False",
+      "rsi_overbought": "False",
+      "macd": 0.27975796180351864,
+      "macd_signal": 0.23413015511597945,
+      "macd_histogram": 0.045627806687539185,
+      "macd_positive": "True",
+      "bb_upper": 13.961745125659236,
+      "bb_lower": 10.167254870526067,
+      "bb_middle": 12.064499998092652,
+      "bb_position": 0.633219395160583,
+      "avg_volume": 809735.0,
+      "current_volume": "718700",
+      "volume_ratio": 0.8875743298733536,
+      "return_1m": 13.34535186540069,
+      "return_1w": -4.265045047492322,
+      "return_3m": -16.088116963001763,
+      "return_6m": -54.6536796313395,
+      "return_1y": 34.582435647405994,
+      "volatility": 93.35771888291853,
+      "support": 9.850000381469727,
+      "resistance": 18.350000381469727,
+      "trend": "uptrend"
+    },
+    "fundamental": {
+      "market_cap": 413670720,
+      "pe_ratio": NaN,
+      "pb_ratio": 1.9392163,
+      "ps_ratio": NaN,
+      "peg_ratio": NaN,
+      "dividend_yield": 0,
+      "roe": -15.387,
+      "roa": -11.616999999999999,
+      "debt_to_equity": NaN,
+      "total_debt": 0,
+      "total_assets": 0,
+      "current_ratio": 168.119,
+      "quick_ratio": 166.985,
+      "revenue_growth_ttm": NaN,
+      "earnings_growth_ttm": NaN,
+      "eps": -0.76,
+      "enterprise_value": 197999280,
+      "ev_revenue": NaN,
+      "ev_ebitda": NaN,
+      "fifty_two_week_high": 31.34,
+      "fifty_two_week_low": 8.85,
+      "shares_outstanding": 32909366,
+      "float_shares": 31129298
+    },
+    "valuation": {
+      "pe_ratio": NaN,
+      "pb_ratio": 1.9392163,
+      "ps_ratio": NaN,
+      "peg_ratio": NaN,
+      "ev_ebitda": NaN,
+      "intrinsic_value": 13.605755542496427,
+      "price_to_intrinsic": 0.9238736985654996,
+      "valuation_grade": "Fair Value",
+      "valuation_signal": "HOLD"
+    },
+    "scores": {
+      "ta_score": "70",
+      "fa_score": "40",
+      "risk_score": "100",
+      "composite_score": 40.5,
+      "signal": "HOLD",
+      "confidence": "60"
+    },
+    "insights": {
+      "summary": "HOLD: LTBR shows strong technical momentum (70) and neutral fundamentals (40). Currently in uptrend with Fair Value valuation. Risk score: 100/100.",
+      "key_catalysts": [
+        "Strong uptrend - momentum may continue"
+      ],
+      "risk_factors": [
+        "High volatility (93%) - expect large swings",
+        "Micro-cap - low liquidity, high risk",
+        "Deep drawdown (55%) - sentiment very negative"
+      ],
+      "target_price": {
+        "conservative": 12.925467765371605,
+        "base": 13.605755542496427,
+        "bull": NaN,
+        "current": 12.569999694824219
+      },
+      "entry_exit": {
+        "strong_buy": 9.850000381469727,
+        "buy": 11.975000381469727,
+        "hold": 14.100000381469727,
+        "sell": 18.350000381469727,
+        "current": 12.569999694824219
+      }
+    },
+    "timestamp": "2026-05-03T23:08:59.599404",
+    "cohort": {
+      "pb_ratio_percentile": 18.181818181818183,
+      "dividend_yield_percentile": 15.384615384615385,
+      "roe_percentile": 18.181818181818183,
+      "undervalued_score": 60.6060606060606
+    }
+  },
+  "URAA": {
+    "ticker": "URAA",
+    "technical": {
+      "current_price": 42.68000030517578,
+      "52_week_high": 61.3084602355957,
+      "52_week_low": 12.676224708557129,
+      "sma_20": 41.20999984741211,
+      "sma_50": 40.121348266601565,
+      "sma_200": 37.45860165596008,
+      "ema_20": 41.3690828001634,
+      "ema_50": 40.61383499207233,
+      "rsi": 53.13087820058388,
+      "rsi_oversold": "False",
+      "rsi_overbought": "False",
+      "macd": 1.089484638932099,
+      "macd_signal": 1.0895924185158254,
+      "macd_histogram": -0.00010777958372654162,
+      "macd_positive": "False",
+      "bb_upper": 47.623423587825805,
+      "bb_lower": 34.79657610699841,
+      "bb_middle": 41.20999984741211,
+      "bb_position": 0.6146034097591727,
+      "avg_volume": 78925.0,
+      "current_volume": "40500",
+      "volume_ratio": 0.5131453911941717,
+      "return_1m": 20.293125298292015,
+      "return_1w": -4.604383763987396,
+      "return_3m": -5.793308863952095,
+      "return_6m": -13.464556088717284,
+      "return_1y": 236.69330803487964,
+      "volatility": 98.0385175511981,
+      "support": 28.33295249938965,
+      "resistance": 61.3084602355957,
+      "trend": "uptrend"
+    },
+    "fundamental": {
+      "market_cap": 0,
+      "pe_ratio": 39.59782,
+      "pb_ratio": NaN,
+      "ps_ratio": NaN,
+      "peg_ratio": NaN,
+      "dividend_yield": 892.0,
+      "roe": NaN,
+      "roa": NaN,
+      "debt_to_equity": NaN,
+      "total_debt": 0,
+      "total_assets": 44953492,
+      "current_ratio": NaN,
+      "quick_ratio": NaN,
+      "revenue_growth_ttm": NaN,
+      "earnings_growth_ttm": NaN,
+      "eps": NaN,
+      "enterprise_value": 0,
+      "ev_revenue": NaN,
+      "ev_ebitda": NaN,
+      "fifty_two_week_high": 63.13,
+      "fifty_two_week_low": 13.77,
+      "shares_outstanding": 0,
+      "float_shares": 0
+    },
+    "valuation": {
+      "pe_ratio": 39.59782,
+      "pb_ratio": NaN,
+      "ps_ratio": NaN,
+      "peg_ratio": NaN,
+      "ev_ebitda": NaN,
+      "intrinsic_value": 42.68000030517578,
+      "price_to_intrinsic": 1.0,
+      "valuation_grade": "Fair Value",
+      "valuation_signal": "HOLD"
+    },
+    "scores": {
+      "ta_score": "60",
+      "fa_score": "50",
+      "risk_score": "95",
+      "composite_score": 42.25,
+      "signal": "HOLD",
+      "confidence": "60"
+    },
+    "insights": {
+      "summary": "HOLD: URAA shows mixed technicals (60) and neutral fundamentals (50). Currently in uptrend with Fair Value valuation. Risk score: 95/100.",
+      "key_catalysts": [
+        "Strong uptrend - momentum may continue"
+      ],
+      "risk_factors": [
+        "High volatility (98%) - expect large swings",
+        "Micro-cap - low liquidity, high risk"
+      ],
+      "target_price": {
+        "conservative": 40.54600028991699,
+        "base": 42.68000030517578,
+        "bull": NaN,
+        "current": 42.68000030517578
+      },
+      "entry_exit": {
+        "strong_buy": 28.33295249938965,
+        "buy": 36.57682943344116,
+        "hold": 44.820706367492676,
+        "sell": 61.3084602355957,
+        "current": 42.68000030517578
+      }
+    },
+    "timestamp": "2026-05-03T23:09:00.371482",
+    "cohort": {
+      "pe_ratio_percentile": 50.0,
+      "dividend_yield_percentile": 92.3076923076923,
+      "undervalued_score": 50.0
+    }
+  },
+  "OKLO": {
+    "ticker": "OKLO",
+    "technical": {
+      "current_price": 70.4000015258789,
+      "52_week_high": 174.13999938964844,
+      "52_week_low": 25.469999313354492,
+      "sma_20": 62.69799976348877,
+      "sma_50": 60.15099983215332,
+      "sma_200": 86.32504978179932,
+      "ema_20": 65.23257668158558,
+      "ema_50": 64.52805258214717,
+      "rsi": 56.28377481554745,
+      "rsi_oversold": "False",
+      "rsi_overbought": "False",
+      "macd": 3.8786613180575245,
+      "macd_signal": 3.032893773041403,
+      "macd_histogram": 0.8457675450161215,
+      "macd_positive": "True",
+      "bb_upper": 81.98564132460233,
+      "bb_lower": 43.41035820237521,
+      "bb_middle": 62.69799976348877,
+      "bb_position": 0.6996615744331954,
+      "avg_volume": 15077620.0,
+      "current_volume": "10474300",
+      "volume_ratio": 0.6946918678146816,
+      "return_1m": 46.27051727309626,
+      "return_1w": -7.283022200804501,
+      "return_3m": -4.373812959213208,
+      "return_6m": -48.759005867509195,
+      "return_1y": 167.57887858192433,
+      "volatility": 112.64971554710148,
+      "support": 45.58000183105469,
+      "resistance": 105.30999755859375,
+      "trend": "uptrend"
+    },
+    "fundamental": {
+      "market_cap": 12243956736,
+      "pe_ratio": NaN,
+      "pb_ratio": 7.6546707,
+      "ps_ratio": NaN,
+      "peg_ratio": NaN,
+      "dividend_yield": 0,
+      "roe": -12.235999999999999,
+      "roa": -9.6190006,
+      "debt_to_equity": 0.098,
+      "total_debt": 1450000,
+      "total_assets": 0,
+      "current_ratio": 49.079,
+      "quick_ratio": 48.264,
+      "revenue_growth_ttm": NaN,
+      "earnings_growth_ttm": NaN,
+      "eps": -0.72,
+      "enterprise_value": 10992721920,
+      "ev_revenue": NaN,
+      "ev_ebitda": -79.214,
+      "fifty_two_week_high": 193.84,
+      "fifty_two_week_low": 24.53,
+      "shares_outstanding": 173919838,
+      "float_shares": 145622477
+    },
+    "valuation": {
+      "pe_ratio": NaN,
+      "pb_ratio": 7.6546707,
+      "ps_ratio": NaN,
+      "peg_ratio": NaN,
+      "ev_ebitda": -79.214,
+      "intrinsic_value": 76.20089306260206,
+      "price_to_intrinsic": 0.9238737066774599,
+      "valuation_grade": "Fair Value",
+      "valuation_signal": "HOLD"
+    },
+    "scores": {
+      "ta_score": "90",
+      "fa_score": "50",
+      "risk_score": "100",
+      "composite_score": 51.5,
+      "signal": "HOLD",
+      "confidence": "60"
+    },
+    "insights": {
+      "summary": "HOLD: OKLO shows strong technical momentum (90) and neutral fundamentals (50). Currently in uptrend with Fair Value valuation. Risk score: 100/100.",
+      "key_catalysts": [
+        "Strong uptrend - momentum may continue"
+      ],
+      "risk_factors": [
+        "High volatility (113%) - expect large swings",
+        "Deep drawdown (60%) - sentiment very negative"
+      ],
+      "target_price": {
+        "conservative": 72.39084840947196,
+        "base": 76.20089306260206,
+        "bull": NaN,
+        "current": 70.4000015258789
+      },
+      "entry_exit": {
+        "strong_buy": 45.58000183105469,
+        "buy": 60.51250076293945,
+        "hold": 75.44499969482422,
+        "sell": 105.30999755859375,
+        "current": 70.4000015258789
+      }
+    },
+    "timestamp": "2026-05-03T23:09:01.217807",
+    "cohort": {
+      "pb_ratio_percentile": 63.63636363636363,
+      "dividend_yield_percentile": 23.076923076923077,
+      "debt_to_equity_percentile": 0.0,
+      "roe_percentile": 36.36363636363637,
+      "undervalued_score": 45.45454545454546
+    }
+  },
+  "PENMF": {
+    "ticker": "PENMF",
+    "technical": {
+      "current_price": 0.4336499869823456,
+      "52_week_high": 0.75,
+      "52_week_low": 0.19900000095367432,
+      "sma_20": 0.4200209990143776,
+      "sma_50": 0.44380259931087496,
+      "sma_200": 0.40922770999372005,
+      "ema_20": 0.4236830026400744,
+      "ema_50": 0.4410582925055991,
+      "rsi": 50.589762522379736,
+      "rsi_oversold": "False",
+      "rsi_overbought": "False",
+      "macd": -0.006865528203783167,
+      "macd_signal": -0.004399462481980924,
+      "macd_histogram": -0.002466065721802243,
+      "macd_positive": "False",
+      "bb_upper": 0.5216937328001233,
+      "bb_lower": 0.3183482652286319,
+      "bb_middle": 0.4200209990143776,
+      "bb_position": 0.5670238099267019,
+      "avg_volume": 29770.05,
+      "current_volume": "3600",
+      "volume_ratio": 0.12092690472471494,
+      "return_1m": 4.9745782080457435,
+      "return_1w": 5.768290430466938,
+      "return_3m": -23.77395055905156,
+      "return_6m": 13.953485822340884,
+      "return_1y": 9.784803849041502,
+      "volatility": 184.85439344854686,
+      "support": 0.34053000807762146,
+      "resistance": 0.75,
+      "trend": "consolidation"
+    },
+    "fundamental": {
+      "market_cap": 193951824,
+      "pe_ratio": NaN,
+      "pb_ratio": 0.8707831,
+      "ps_ratio": NaN,
+      "peg_ratio": NaN,
+      "dividend_yield": 0,
+      "roe": -10.528,
+      "roa": -3.404,
+      "debt_to_equity": 6.12,
+      "total_debt": 12434000,
+      "total_assets": 0,
+      "current_ratio": 5.181,
+      "quick_ratio": 4.713,
+      "revenue_growth_ttm": NaN,
+      "earnings_growth_ttm": NaN,
+      "eps": -0.04,
+      "enterprise_value": 157385792,
+      "ev_revenue": NaN,
+      "ev_ebitda": NaN,
+      "fifty_two_week_high": 0.7711,
+      "fifty_two_week_low": 0.17102,
+      "shares_outstanding": 447254315,
+      "float_shares": 284566667
+    },
+    "valuation": {
+      "pe_ratio": NaN,
+      "pb_ratio": 0.8707831,
+      "ps_ratio": NaN,
+      "peg_ratio": NaN,
+      "ev_ebitda": NaN,
+      "intrinsic_value": 0.46938231880691356,
+      "price_to_intrinsic": 0.9238737157475526,
+      "valuation_grade": "Fair Value",
+      "valuation_signal": "HOLD"
+    },
+    "scores": {
+      "ta_score": "40",
+      "fa_score": "35",
+      "risk_score": "100",
+      "composite_score": 28.0,
+      "signal": "HOLD",
+      "confidence": "60"
+    },
+    "insights": {
+      "summary": "HOLD: PENMF shows mixed technicals (40) and neutral fundamentals (35). Currently in consolidation with Fair Value valuation. Risk score: 100/100.",
+      "key_catalysts": [
+        "Await technical breakout or fundamental catalyst"
+      ],
+      "risk_factors": [
+        "High volatility (185%) - expect large swings",
+        "High leverage (D/E: 6.1) - refinance risk",
+        "Micro-cap - low liquidity, high risk"
+      ],
+      "target_price": {
+        "conservative": 0.4459132028665679,
+        "base": 0.46938231880691356,
+        "bull": NaN,
+        "current": 0.4336499869823456
+      },
+      "entry_exit": {
+        "strong_buy": 0.34053000807762146,
+        "buy": 0.4428975060582161,
+        "hold": 0.5452650040388107,
+        "sell": 0.75,
+        "current": 0.4336499869823456
+      }
+    },
+    "timestamp": "2026-05-03T23:09:02.057962",
+    "cohort": {
+      "pb_ratio_percentile": 9.090909090909092,
+      "dividend_yield_percentile": 30.76923076923077,
+      "debt_to_equity_percentile": 33.33333333333333,
+      "roe_percentile": 45.45454545454545,
+      "undervalued_score": 63.63636363636363
+    }
+  },
+  "UEC": {
+    "ticker": "UEC",
+    "technical": {
+      "current_price": 14.9399995803833,
+      "52_week_high": 20.139999389648438,
+      "52_week_low": 5.159999847412109,
+      "sma_20": 14.37699990272522,
+      "sma_50": 14.167399959564209,
+      "sma_200": 13.314150004386901,
+      "ema_20": 14.41204662018724,
+      "ema_50": 14.371956017260304,
+      "rsi": 53.71802897151955,
+      "rsi_oversold": "False",
+      "rsi_overbought": "False",
+      "macd": 0.18952221968730143,
+      "macd_signal": 0.16924406985937504,
+      "macd_histogram": 0.02027814982792639,
+      "macd_positive": "True",
+      "bb_upper": 15.760793307033243,
+      "bb_lower": 12.993206498417198,
+      "bb_middle": 14.37699990272522,
+      "bb_position": 0.7034262036172998,
+      "avg_volume": 8233045.0,
+      "current_volume": "6256400",
+      "volume_ratio": 0.7599132520227935,
+      "return_1m": 10.095798941555012,
+      "return_1w": -3.049969316565171,
+      "return_3m": -8.455883212293047,
+      "return_6m": -3.799099566854991,
+      "return_1y": 183.49145416423158,
+      "volatility": 79.5232485374342,
+      "support": 11.520000457763672,
+      "resistance": 20.139999389648438,
+      "trend": "uptrend"
+    },
+    "fundamental": {
+      "market_cap": 7323897856,
+      "pe_ratio": NaN,
+      "pb_ratio": 5.17313,
+      "ps_ratio": 362.5692,
+      "peg_ratio": 1.37,
+      "dividend_yield": 0,
+      "roe": -7.1209999999999996,
+      "roa": -5.461,
+      "debt_to_equity": 0.131,
+      "total_debt": 1857000,
+      "total_assets": 0,
+      "current_ratio": 28.725,
+      "quick_ratio": 24.346,
+      "revenue_growth_ttm": -59.4,
+      "earnings_growth_ttm": NaN,
+      "eps": -0.18,
+      "enterprise_value": 6839408640,
+      "ev_revenue": 338.585,
+      "ev_ebitda": -65.861,
+      "fifty_two_week_high": 20.34,
+      "fifty_two_week_low": 5.03,
+      "shares_outstanding": 490220783,
+      "float_shares": 481558582
+    },
+    "valuation": {
+      "pe_ratio": NaN,
+      "pb_ratio": 5.17313,
+      "ps_ratio": 362.5692,
+      "peg_ratio": 1.37,
+      "ev_ebitda": -65.861,
+      "intrinsic_value": 7.46999979019165,
+      "price_to_intrinsic": 2.0,
+      "valuation_grade": "Deeply Overvalued",
+      "valuation_signal": "SELL"
+    },
+    "scores": {
+      "ta_score": "65",
+      "fa_score": "20",
+      "risk_score": "70",
+      "composite_score": 38.25,
+      "signal": "SELL",
+      "confidence": 75.0
+    },
+    "insights": {
+      "summary": "SELL: UEC shows mixed technicals (65) and weak fundamentals (20). Currently in uptrend with Deeply Overvalued valuation. Risk score: 70/100.",
+      "key_catalysts": [
+        "Strong uptrend - momentum may continue"
+      ],
+      "risk_factors": [
+        "Monitor general market conditions"
+      ],
+      "target_price": {
+        "conservative": 7.096499800682068,
+        "base": 7.46999979019165,
+        "bull": 5.251409852504731,
+        "current": 14.9399995803833
+      },
+      "entry_exit": {
+        "strong_buy": 11.520000457763672,
+        "buy": 13.675000190734863,
+        "hold": 15.829999923706055,
+        "sell": 20.139999389648438,
+        "current": 14.9399995803833
+      }
+    },
+    "timestamp": "2026-05-03T23:09:03.179806",
+    "cohort": {
+      "pb_ratio_percentile": 45.45454545454545,
+      "peg_ratio_percentile": 0.0,
+      "dividend_yield_percentile": 38.46153846153847,
+      "debt_to_equity_percentile": 11.11111111111111,
+      "roe_percentile": 54.54545454545454,
+      "undervalued_score": 68.18181818181819
+    }
+  },
+  "SMR": {
+    "ticker": "SMR",
+    "technical": {
+      "current_price": 12.140000343322754,
+      "52_week_high": 53.43000030517578,
+      "52_week_low": 9.15999984741211,
+      "sma_20": 11.319999933242798,
+      "sma_50": 11.696199970245361,
+      "sma_200": 25.68334996700287,
+      "ema_20": 11.763229883218841,
+      "ema_50": 12.562431992131044,
+      "rsi": 52.05885741405462,
+      "rsi_oversold": "False",
+      "rsi_overbought": "False",
+      "macd": 0.18587325137432842,
+      "macd_signal": 0.05619536305164388,
+      "macd_histogram": 0.12967788832268454,
+      "macd_positive": "True",
+      "bb_upper": 14.020377629135666,
+      "bb_lower": 8.61962223734993,
+      "bb_middle": 11.319999933242798,
+      "bb_position": 0.6518306885972162,
+      "avg_volume": 38021335.0,
+      "current_volume": "20445900",
+      "volume_ratio": 0.5377480827540643,
+      "return_1m": 19.605919207715527,
+      "return_1w": -4.03161494535107,
+      "return_3m": -26.334947326853133,
+      "return_6m": -71.26627137675088,
+      "return_1y": -29.047341260887826,
+      "volatility": 124.83436995742233,
+      "support": 9.15999984741211,
+      "resistance": 21.559999465942383,
+      "trend": "consolidation"
+    },
+    "fundamental": {
+      "market_cap": 3930132224,
+      "pe_ratio": NaN,
+      "pb_ratio": 3.3079019,
+      "ps_ratio": 124.849335,
+      "peg_ratio": NaN,
+      "dividend_yield": 0,
+      "roe": -84.82499999999999,
+      "roa": -11.635,
+      "debt_to_equity": NaN,
+      "total_debt": 0,
+      "total_assets": 0,
+      "current_ratio": 4.298,
+      "quick_ratio": 4.265,
+      "revenue_growth_ttm": -94.69999999999999,
+      "earnings_growth_ttm": NaN,
+      "eps": -2.17,
+      "enterprise_value": 2558335232,
+      "ev_revenue": 81.271,
+      "ev_ebitda": -14.135,
+      "fifty_two_week_high": 57.42,
+      "fifty_two_week_low": 8.85,
+      "shares_outstanding": 323734120,
+      "float_shares": 311928407
+    },
+    "valuation": {
+      "pe_ratio": NaN,
+      "pb_ratio": 3.3079019,
+      "ps_ratio": 124.849335,
+      "peg_ratio": NaN,
+      "ev_ebitda": -14.135,
+      "intrinsic_value": 6.070000171661377,
+      "price_to_intrinsic": 2.0,
+      "valuation_grade": "Deeply Overvalued",
+      "valuation_signal": "SELL"
+    },
+    "scores": {
+      "ta_score": "60",
+      "fa_score": "10",
+      "risk_score": "100",
+      "composite_score": 25.0,
+      "signal": "HOLD",
+      "confidence": "60"
+    },
+    "insights": {
+      "summary": "HOLD: SMR shows mixed technicals (60) and weak fundamentals (10). Currently in consolidation with Deeply Overvalued valuation. Risk score: 100/100.",
+      "key_catalysts": [
+        "Await technical breakout or fundamental catalyst"
+      ],
+      "risk_factors": [
+        "High volatility (125%) - expect large swings",
+        "Deep drawdown (77%) - sentiment very negative"
+      ],
+      "target_price": {
+        "conservative": 5.766500163078308,
+        "base": 6.070000171661377,
+        "bull": 3.1958550903797156,
+        "current": 12.140000343322754
+      },
+      "entry_exit": {
+        "strong_buy": 9.15999984741211,
+        "buy": 12.259999752044678,
+        "hold": 15.359999656677246,
+        "sell": 21.559999465942383,
+        "current": 12.140000343322754
+      }
+    },
+    "timestamp": "2026-05-03T23:09:04.163108",
+    "cohort": {
+      "pb_ratio_percentile": 36.36363636363637,
+      "dividend_yield_percentile": 46.15384615384615,
+      "roe_percentile": 0.0,
+      "undervalued_score": 54.54545454545454
+    }
+  },
+  "STMXF": {
+    "ticker": "STMXF",
+    "technical": {
+      "current_price": 0.08990000188350677,
+      "52_week_high": 0.18000000715255737,
+      "52_week_low": 0.08179999887943268,
+      "sma_20": 0.1020200002938509,
+      "sma_50": NaN,
+      "sma_200": NaN,
+      "ema_20": 0.0981462150091319,
+      "ema_50": 0.10191211043971303,
+      "rsi": 40.25361450222567,
+      "rsi_oversold": "False",
+      "rsi_overbought": "False",
+      "macd": -0.013796926244998522,
+      "macd_signal": NaN,
+      "macd_histogram": NaN,
+      "macd_positive": "False",
+      "bb_upper": 0.13261990968578416,
+      "bb_lower": 0.07142009090191764,
+      "bb_middle": 0.1020200002938509,
+      "bb_position": 0.30196022388322497,
+      "avg_volume": 58690.2,
+      "current_volume": "20000",
+      "volume_ratio": 0.3407723947098494,
+      "return_1m": -10.099999456107621,
+      "return_1w": -2.2826068382886255,
+      "return_3m": 0,
+      "return_6m": 0,
+      "return_1y": 0,
+      "volatility": 259.86253604624807,
+      "support": 0.08179999887943268,
+      "resistance": 0.18000000715255737,
+      "trend": "consolidation"
+    },
+    "fundamental": {
+      "market_cap": 0,
+      "pe_ratio": NaN,
+      "pb_ratio": NaN,
+      "ps_ratio": NaN,
+      "peg_ratio": NaN,
+      "dividend_yield": 0,
+      "roe": NaN,
+      "roa": NaN,
+      "debt_to_equity": NaN,
+      "total_debt": 0,
+      "total_assets": 0,
+      "current_ratio": NaN,
+      "quick_ratio": NaN,
+      "revenue_growth_ttm": NaN,
+      "earnings_growth_ttm": NaN,
+      "eps": NaN,
+      "enterprise_value": 0,
+      "ev_revenue": NaN,
+      "ev_ebitda": NaN,
+      "fifty_two_week_high": 0.18,
+      "fifty_two_week_low": 0.0818,
+      "shares_outstanding": 0,
+      "float_shares": 0
+    },
+    "valuation": {
+      "pe_ratio": NaN,
+      "pb_ratio": NaN,
+      "ps_ratio": NaN,
+      "peg_ratio": NaN,
+      "ev_ebitda": NaN,
+      "intrinsic_value": 0.08990000188350677,
+      "price_to_intrinsic": 1.0,
+      "valuation_grade": "Fair Value",
+      "valuation_signal": "HOLD"
+    },
+    "scores": {
+      "ta_score": "40",
+      "fa_score": "50",
+      "risk_score": "100",
+      "composite_score": 34.0,
+      "signal": "HOLD",
+      "confidence": "60"
+    },
+    "insights": {
+      "summary": "HOLD: STMXF shows mixed technicals (40) and neutral fundamentals (50). Currently in consolidation with Fair Value valuation. Risk score: 100/100.",
+      "key_catalysts": [
+        "Await technical breakout or fundamental catalyst"
+      ],
+      "risk_factors": [
+        "High volatility (260%) - expect large swings",
+        "Micro-cap - low liquidity, high risk",
+        "Deep drawdown (50%) - sentiment very negative"
+      ],
+      "target_price": {
+        "conservative": 0.08540500178933143,
+        "base": 0.08990000188350677,
+        "bull": NaN,
+        "current": 0.08990000188350677
+      },
+      "entry_exit": {
+        "strong_buy": 0.08179999887943268,
+        "buy": 0.10635000094771385,
+        "hold": 0.13090000301599503,
+        "sell": 0.18000000715255737,
+        "current": 0.08990000188350677
+      }
+    },
+    "timestamp": "2026-05-03T23:09:04.996716",
+    "cohort": {
+      "dividend_yield_percentile": 53.84615384615385,
+      "undervalued_score": 50.0
+    }
+  },
+  "LEU": {
+    "ticker": "LEU",
+    "technical": {
+      "current_price": 206.63999938964844,
+      "52_week_high": 436.0,
+      "52_week_low": 71.08999633789062,
+      "sma_20": 198.68300094604493,
+      "sma_50": 198.34000091552736,
+      "sma_200": 252.07130004882814,
+      "ema_20": 201.984925490296,
+      "ema_50": 207.75617297501566,
+      "rsi": 52.01177192211282,
+      "rsi_oversold": "False",
+      "rsi_overbought": "False",
+      "macd": 2.8374188677942414,
+      "macd_signal": 1.5467317262609006,
+      "macd_histogram": 1.2906871415333407,
+      "macd_positive": "True",
+      "bb_upper": 224.17580107588475,
+      "bb_lower": 173.1902008162051,
+      "bb_middle": 198.68300094604493,
+      "bb_position": 0.6560636415591257,
+      "avg_volume": 900295.0,
+      "current_volume": "480800",
+      "volume_ratio": 0.534047173426488,
+      "return_1m": 12.788598775815574,
+      "return_1w": -6.910530963663552,
+      "return_3m": -22.6675625921018,
+      "return_6m": -46.09063141953116,
+      "return_1y": 190.67380789765255,
+      "volatility": 94.56251777888201,
+      "support": 168.52000427246094,
+      "resistance": 337.760009765625,
+      "trend": "uptrend"
+    },
+    "fundamental": {
+      "market_cap": 4064936960,
+      "pe_ratio": 52.849102,
+      "pb_ratio": 5.31099,
+      "ps_ratio": 9.059364,
+      "peg_ratio": 2.87,
+      "dividend_yield": 0,
+      "roe": 16.794,
+      "roa": 1.533,
+      "debt_to_equity": 158.96,
+      "total_debt": 1216199936,
+      "total_assets": 0,
+      "current_ratio": 5.59,
+      "quick_ratio": 4.702,
+      "revenue_growth_ttm": -3.5999999999999996,
+      "earnings_growth_ttm": -75.3,
+      "eps": 3.91,
+      "enterprise_value": 3322485760,
+      "ev_revenue": 7.405,
+      "ev_ebitda": 62.336,
+      "fifty_two_week_high": 464.25,
+      "fifty_two_week_low": 70.43,
+      "shares_outstanding": 18952387,
+      "float_shares": 18298271
+    },
+    "valuation": {
+      "pe_ratio": 52.849102,
+      "pb_ratio": 5.31099,
+      "ps_ratio": 9.059364,
+      "peg_ratio": 2.87,
+      "ev_ebitda": 62.336,
+      "intrinsic_value": 107.40059637611988,
+      "price_to_intrinsic": 1.924011656937075,
+      "valuation_grade": "Deeply Overvalued",
+      "valuation_signal": "SELL"
+    },
+    "scores": {
+      "ta_score": "60",
+      "fa_score": "35",
+      "risk_score": "90",
+      "composite_score": 37.5,
+      "signal": "HOLD",
+      "confidence": "60"
+    },
+    "insights": {
+      "summary": "HOLD: LEU shows mixed technicals (60) and neutral fundamentals (35). Currently in uptrend with Deeply Overvalued valuation. Risk score: 90/100.",
+      "key_catalysts": [
+        "Strong uptrend - momentum may continue"
+      ],
+      "risk_factors": [
+        "High volatility (95%) - expect large swings",
+        "High leverage (D/E: 159.0) - refinance risk",
+        "Deep drawdown (53%) - sentiment very negative"
+      ],
+      "target_price": {
+        "conservative": 102.03056655731388,
+        "base": 107.40059637611988,
+        "bull": 105.46738564134972,
+        "current": 206.63999938964844
+      },
+      "entry_exit": {
+        "strong_buy": 168.52000427246094,
+        "buy": 210.83000564575195,
+        "hold": 253.14000701904297,
+        "sell": 337.760009765625,
+        "current": 206.63999938964844
+      }
+    },
+    "timestamp": "2026-05-03T23:09:05.802292",
+    "cohort": {
+      "pe_ratio_percentile": 75.0,
+      "pb_ratio_percentile": 54.54545454545454,
+      "peg_ratio_percentile": 50.0,
+      "dividend_yield_percentile": 61.53846153846154,
+      "debt_to_equity_percentile": 77.77777777777779,
+      "roe_percentile": 81.81818181818183,
+      "undervalued_score": 40.151515151515156
+    }
+  },
+  "ISOU": {
+    "ticker": "ISOU",
+    "technical": {
+      "current_price": 11.359999656677246,
+      "52_week_high": 13.210000038146973,
+      "52_week_low": 5.71999979019165,
+      "sma_20": 11.473999977111816,
+      "sma_50": 11.079199962615967,
+      "sma_200": 9.600759992599487,
+      "ema_20": 11.458068931567302,
+      "ema_50": 11.114805991358278,
+      "rsi": 50.01985335809735,
+      "rsi_oversold": "False",
+      "rsi_overbought": "False",
+      "macd": 0.2085303830966243,
+      "macd_signal": 0.26626027531500496,
+      "macd_histogram": -0.05772989221838065,
+      "macd_positive": "False",
+      "bb_upper": 12.717437117889698,
+      "bb_lower": 10.230562836333934,
+      "bb_middle": 11.473999977111816,
+      "bb_position": 0.454159194423269,
+      "avg_volume": 105505.0,
+      "current_volume": "79200",
+      "volume_ratio": 0.7506753234443865,
+      "return_1m": 7.271005599572056,
+      "return_1w": -4.13502708032577,
+      "return_3m": -0.35087687010102453,
+      "return_6m": 12.698410145429651,
+      "return_1y": 83.81876977707246,
+      "volatility": 65.85862860869469,
+      "support": 7.940000057220459,
+      "resistance": 13.210000038146973,
+      "trend": "consolidation"
+    },
+    "fundamental": {
+      "market_cap": 625014208,
+      "pe_ratio": NaN,
+      "pb_ratio": 2.1400988,
+      "ps_ratio": NaN,
+      "peg_ratio": NaN,
+      "dividend_yield": 0,
+      "roe": -0.32,
+      "roa": -2.717,
+      "debt_to_equity": 1.463,
+      "total_debt": 5872556,
+      "total_assets": 0,
+      "current_ratio": 9.599,
+      "quick_ratio": 9.428,
+      "revenue_growth_ttm": NaN,
+      "earnings_growth_ttm": NaN,
+      "eps": -0.02,
+      "enterprise_value": 577432896,
+      "ev_revenue": NaN,
+      "ev_ebitda": -35.366,
+      "fifty_two_week_high": 13.58,
+      "fifty_two_week_low": 5.72,
+      "shares_outstanding": 55018855,
+      "float_shares": 38136457
+    },
+    "valuation": {
+      "pe_ratio": NaN,
+      "pb_ratio": 2.1400988,
+      "ps_ratio": NaN,
+      "peg_ratio": NaN,
+      "ev_ebitda": -35.366,
+      "intrinsic_value": 12.296053356372193,
+      "price_to_intrinsic": 0.9238736468876939,
+      "valuation_grade": "Fair Value",
+      "valuation_signal": "HOLD"
+    },
+    "scores": {
+      "ta_score": "50",
+      "fa_score": "45",
+      "risk_score": "75",
+      "composite_score": 41.75,
+      "signal": "SELL",
+      "confidence": 71.25
+    },
+    "insights": {
+      "summary": "SELL: ISOU shows mixed technicals (50) and neutral fundamentals (45). Currently in consolidation with Fair Value valuation. Risk score: 75/100.",
+      "key_catalysts": [
+        "Await technical breakout or fundamental catalyst"
+      ],
+      "risk_factors": [
+        "Monitor general market conditions"
+      ],
+      "target_price": {
+        "conservative": 11.681250688553583,
+        "base": 12.296053356372193,
+        "bull": NaN,
+        "current": 11.359999656677246
+      },
+      "entry_exit": {
+        "strong_buy": 7.940000057220459,
+        "buy": 9.257500052452087,
+        "hold": 10.575000047683716,
+        "sell": 13.210000038146973,
+        "current": 11.359999656677246
+      }
+    },
+    "timestamp": "2026-05-03T23:09:06.751675",
+    "cohort": {
+      "pb_ratio_percentile": 27.27272727272727,
+      "dividend_yield_percentile": 69.23076923076923,
+      "debt_to_equity_percentile": 22.22222222222222,
+      "roe_percentile": 63.63636363636363,
+      "undervalued_score": 57.575757575757585
+    }
+  },
+  "EFR": {
+    "ticker": "EFR",
+    "technical": {
+      "current_price": 10.619999885559082,
+      "52_week_high": 11.370808601379395,
+      "52_week_low": 10.064645767211914,
+      "sma_20": 10.491319417953491,
+      "sma_50": 10.436502151489258,
+      "sma_200": 10.793265047073364,
+      "ema_20": 10.498737622869257,
+      "ema_50": 10.511616242175581,
+      "rsi": 58.908909581579394,
+      "rsi_oversold": "False",
+      "rsi_overbought": "False",
+      "macd": 0.037788470132987584,
+      "macd_signal": 0.024308167424598993,
+      "macd_histogram": 0.01348030270838859,
+      "macd_positive": "True",
+      "bb_upper": 10.656212114496723,
+      "bb_lower": 10.32642672141026,
+      "bb_middle": 10.491319417953491,
+      "bb_position": 0.8901945638079035,
+      "avg_volume": 124800.0,
+      "current_volume": "95000",
+      "volume_ratio": 0.7612179487179487,
+      "return_1m": 3.4749321402859135,
+      "return_1w": 1.0466189750877763,
+      "return_3m": -3.075650047009182,
+      "return_6m": -2.4636349829388338,
+      "return_1y": -3.1350543288218513,
+      "volatility": 9.001423881420806,
+      "support": 10.064645767211914,
+      "resistance": 11.05500316619873,
+      "trend": "uptrend"
+    },
+    "fundamental": {
+      "market_cap": 313540832,
+      "pe_ratio": 18.310345,
+      "pb_ratio": 0.8571428,
+      "ps_ratio": 6.493032,
+      "peg_ratio": NaN,
+      "dividend_yield": 768.0,
+      "roe": 3.842,
+      "roa": 3.982,
+      "debt_to_equity": 24.903,
+      "total_debt": 110000000,
+      "total_assets": 0,
+      "current_ratio": 0.164,
+      "quick_ratio": 0.159,
+      "revenue_growth_ttm": -16.5,
+      "earnings_growth_ttm": 2.9000000000000004,
+      "eps": 0.58,
+      "enterprise_value": 491101248,
+      "ev_revenue": 10.17,
+      "ev_ebitda": NaN,
+      "fifty_two_week_high": 12.21,
+      "fifty_two_week_low": 10.11,
+      "shares_outstanding": 29523618,
+      "float_shares": 0
+    },
+    "valuation": {
+      "pe_ratio": 18.310345,
+      "pb_ratio": 0.8571428,
+      "ps_ratio": 6.493032,
+      "peg_ratio": NaN,
+      "ev_ebitda": NaN,
+      "intrinsic_value": 5.309999942779541,
+      "price_to_intrinsic": 2.0,
+      "valuation_grade": "Deeply Overvalued",
+      "valuation_signal": "SELL"
+    },
+    "scores": {
+      "ta_score": "75",
+      "fa_score": "25",
+      "risk_score": "65",
+      "composite_score": 45.0,
+      "signal": "SELL",
+      "confidence": 66.25
+    },
+    "insights": {
+      "summary": "SELL: EFR shows strong technical momentum (75) and weak fundamentals (25). Currently in uptrend with Deeply Overvalued valuation. Risk score: 65/100.",
+      "key_catalysts": [
+        "Strong uptrend - momentum may continue"
+      ],
+      "risk_factors": [
+        "High leverage (D/E: 24.9) - refinance risk",
+        "Liquidity concerns - cash crunch risk",
+        "Micro-cap - low liquidity, high risk"
+      ],
+      "target_price": {
+        "conservative": 5.044499945640564,
+        "base": 5.309999942779541,
+        "bull": 4.871924947500228,
+        "current": 10.619999885559082
+      },
+      "entry_exit": {
+        "strong_buy": 10.064645767211914,
+        "buy": 10.312235116958618,
+        "hold": 10.559824466705322,
+        "sell": 11.05500316619873,
+        "current": 10.619999885559082
+      }
+    },
+    "timestamp": "2026-05-03T23:09:07.442311",
+    "cohort": {
+      "pe_ratio_percentile": 25.0,
+      "pb_ratio_percentile": 0.0,
+      "dividend_yield_percentile": 84.61538461538461,
+      "debt_to_equity_percentile": 44.44444444444444,
+      "roe_percentile": 72.72727272727273,
+      "undervalued_score": 75.0
+    }
+  },
+  "RYCEY": {
+    "ticker": "RYCEY",
+    "technical": {
+      "current_price": 16.34000015258789,
+      "52_week_high": 18.53925132751465,
+      "52_week_low": 10.183440208435059,
+      "sma_20": 16.409930849075316,
+      "sma_50": 16.657210292816163,
+      "sma_200": 15.65351001739502,
+      "ema_20": 16.13658461327681,
+      "ema_50": 16.394603817459434,
+      "rsi": 50.881370142183165,
+      "rsi_oversold": "False",
+      "rsi_overbought": "False",
+      "macd": -0.22545639637858628,
+      "macd_signal": -0.1736919444116481,
+      "macd_histogram": -0.051764451966938185,
+      "macd_positive": "False",
+      "bb_upper": 18.26038329203785,
+      "bb_lower": 14.559478406112781,
+      "bb_middle": 16.409930849075316,
+      "bb_position": 0.48110443293115174,
+      "avg_volume": 4135185.0,
+      "current_volume": "6959900",
+      "volume_ratio": 1.683092775776658,
+      "return_1m": 3.9998188745688834,
+      "return_1w": 5.351385631577732,
+      "return_3m": -3.9158573728769075,
+      "return_6m": 6.152459595421078,
+      "return_1y": 60.300502184215055,
+      "volatility": 69.4095954050227,
+      "support": 14.506814002990723,
+      "resistance": 18.53925132751465,
+      "trend": "downtrend"
+    },
+    "fundamental": {
+      "market_cap": 135828627456,
+      "pe_ratio": 17.569893,
+      "pb_ratio": 36.91736,
+      "ps_ratio": 6.4048963,
+      "peg_ratio": 2.09,
+      "dividend_yield": 79.0,
+      "roe": 623.504,
+      "roa": 7.093000000000001,
+      "debt_to_equity": 158.445,
+      "total_debt": 4361999872,
+      "total_assets": 0,
+      "current_ratio": 1.202,
+      "quick_ratio": 0.729,
+      "revenue_growth_ttm": 16.6,
+      "earnings_growth_ttm": 4.1000000000000005,
+      "eps": 0.93,
+      "enterprise_value": 134979624960,
+      "ev_revenue": 6.365,
+      "ev_ebitda": 29.363,
+      "fifty_two_week_high": 18.98,
+      "fifty_two_week_low": 10.22,
+      "shares_outstanding": 8312645835,
+      "float_shares": 8196894366
+    },
+    "valuation": {
+      "pe_ratio": 17.569893,
+      "pb_ratio": 36.91736,
+      "ps_ratio": 6.4048963,
+      "peg_ratio": 2.09,
+      "ev_ebitda": 29.363,
+      "intrinsic_value": 17.686399545706468,
+      "price_to_intrinsic": 0.923873743231961,
+      "valuation_grade": "Fair Value",
+      "valuation_signal": "HOLD"
+    },
+    "scores": {
+      "ta_score": "40",
+      "fa_score": "75",
+      "risk_score": "70",
+      "composite_score": 51.5,
+      "signal": "SELL",
+      "confidence": 60.0
+    },
+    "insights": {
+      "summary": "SELL: RYCEY shows mixed technicals (40) and attractive fundamentals (75). Currently in downtrend with Fair Value valuation. Risk score: 70/100.",
+      "key_catalysts": [
+        "Elevated volume - increased interest"
+      ],
+      "risk_factors": [
+        "High leverage (D/E: 158.4) - refinance risk"
+      ],
+      "target_price": {
+        "conservative": 16.802079568421146,
+        "base": 17.686399545706468,
+        "bull": 19.154370708000105,
+        "current": 16.34000015258789
+      },
+      "entry_exit": {
+        "strong_buy": 14.506814002990723,
+        "buy": 15.514923334121704,
+        "hold": 16.523032665252686,
+        "sell": 18.53925132751465,
+        "current": 16.34000015258789
+      }
+    },
+    "timestamp": "2026-05-03T23:09:08.137768",
+    "cohort": {
+      "pe_ratio_percentile": 0.0,
+      "pb_ratio_percentile": 90.9090909090909,
+      "peg_ratio_percentile": 25.0,
+      "dividend_yield_percentile": 76.92307692307693,
+      "debt_to_equity_percentile": 66.66666666666666,
+      "roe_percentile": 90.9090909090909,
+      "undervalued_score": 61.36363636363637
+    }
+  }
+};
+
+        // Initialize
+        $(document).ready(function() {
+            loadData();
+            setupEventListeners();
+        });
+
+        function loadData() {
+            allData = dataSource || {};
+            filteredData = {...allData};
+            renderAll();
+            $('#lastUpdate').text(new Date().toLocaleString());
+        }
+
+        function renderAll() {
+            renderHeatMap();
+            renderTable();
+            renderAnalysisTable();
+            renderInsightsTicker();
+            renderCharts();
+        }
+
+        function renderHeatMap() {
+            const container = $('#heatMap');
+            container.empty();
+
+            Object.entries(allData).forEach(([ticker, data]) => {
+                if (data.error) return;
+
+                const signal = data.scores.signal;
+                const price = data.technical.current_price || 'N/A';
+                const score = (data.scores.composite_score || 0).toFixed(1);
+
+                const signalClass = signal === 'BUY' ? 'buy' : signal === 'SELL' ? 'sell' : 'hold';
+
+                const html = `
+                    <div class="heat-map-item ${signalClass}" onclick="openModal('${ticker}')">
+                        <div class="ticker">${ticker}</div>
+                        <div class="price">$${price.toFixed(2)}</div>
+                        <div class="signal">${signal} (${score})</div>
+                    </div>
+                `;
+                container.append(html);
+            });
+        }
+
+        function renderTable() {
+            const tbody = $('#tableBody');
+            tbody.empty();
+
+            // Sort data
+            const sorted = Object.entries(filteredData).sort((a, b) => {
+                let aVal = a[1][getSortPath(sortField)] || 0;
+                let bVal = b[1][getSortPath(sortField)] || 0;
+
+                // Handle NaN
+                aVal = isNaN(aVal) ? -Infinity : aVal;
+                bVal = isNaN(bVal) ? -Infinity : bVal;
+
+                return sortOrder === 'desc' ? bVal - aVal : aVal - bVal;
+            });
+
+            sorted.forEach(([ticker, data]) => {
+                if (data.error) return;
+
+                const signal = data.scores.signal;
+                const signalClass = signal === 'BUY' ? 'buy' : signal === 'SELL' ? 'sell' : 'hold';
+
+                const row = `
+                    <tr class="${signalClass}">
+                        <td class="ticker-cell">${ticker}</td>
+                        <td>$${(data.technical.current_price || 0).toFixed(2)}</td>
+                        <td><strong>${(data.scores.composite_score || 0).toFixed(1)}</strong></td>
+                        <td><span class="signal-badge signal-${signal.toLowerCase()}">${signal}</span></td>
+                        <td>${(data.scores.ta_score || 0).toFixed(0)}</td>
+                        <td>${(data.scores.fa_score || 0).toFixed(0)}</td>
+                        <td>${(data.scores.risk_score || 0).toFixed(0)}</td>
+                        <td>${(data.technical.rsi || 0).toFixed(1)}</td>
+                        <td style="color: ${data.technical.return_1m > 0 ? '#22c55e' : '#ef4444'}">${(data.technical.return_1m || 0).toFixed(1)}%</td>
+                        <td style="color: ${data.technical.return_3m > 0 ? '#22c55e' : '#ef4444'}">${(data.technical.return_3m || 0).toFixed(1)}%</td>
+                        <td><span class="highlight">${data.technical.trend}</span></td>
+                        <td>${data.valuation.valuation_grade}</td>
+                        <td><button onclick="openModal('${ticker}')" style="padding: 4px 8px; font-size: 0.8em;">Details</button></td>
+                    </tr>
+                `;
+                tbody.append(row);
+            });
+
+            // Update sorting headers
+            $('th.sortable').removeClass('sorted-asc sorted-desc');
+            $(`th[data-sort="${sortField}"]`).addClass(sortOrder === 'asc' ? 'sorted-asc' : 'sorted-desc');
+        }
+
+        function renderAnalysisTable() {
+            const tbody = $('#analysisTableBody');
+            tbody.empty();
+
+            Object.entries(filteredData).forEach(([ticker, data]) => {
+                if (data.error) return;
+
+                const row = `
+                    <tr>
+                        <td class="ticker-cell">${ticker}</td>
+                        <td>${isNaN(data.fundamental.pe_ratio) ? 'N/A' : data.fundamental.pe_ratio.toFixed(2)}</td>
+                        <td>${isNaN(data.fundamental.pb_ratio) ? 'N/A' : data.fundamental.pb_ratio.toFixed(2)}</td>
+                        <td>$${(data.fundamental.market_cap / 1e9).toFixed(1)}B</td>
+                        <td>$${(data.technical.fifty_two_week_high || 0).toFixed(2)}</td>
+                        <td>$${(data.technical.fifty_two_week_low || 0).toFixed(2)}</td>
+                        <td>${(data.technical.volatility || 0).toFixed(1)}%</td>
+                        <td>${(data.fundamental.dividend_yield || 0).toFixed(2)}%</td>
+                        <td><button onclick="openModal('${ticker}')" style="padding: 4px 8px; font-size: 0.8em;">View</button></td>
+                    </tr>
+                `;
+                tbody.append(row);
+            });
+        }
+
+        function renderInsightsTicker() {
+            const select = $('#insightsTicker');
+            select.find('option:not(:first)').remove();
+
+            Object.keys(filteredData).forEach(ticker => {
+                if (!filteredData[ticker].error) {
+                    select.append(`<option value="${ticker}">${ticker}</option>`);
+                }
+            });
+        }
+
+        function displayInsights() {
+            const ticker = $('#insightsTicker').val();
+            if (!ticker) return;
+
+            const data = allData[ticker];
+            if (!data || data.error) return;
+
+            const insights = data.insights;
+            const html = `
+                <div class="insight-item">
+                    <strong>📌 Summary</strong>
+                    <p>${insights.summary}</p>
+                </div>
+                <div class="insight-item">
+                    <strong>🎯 Key Catalysts</strong>
+                    <ul>
+                        ${insights.key_catalysts.map(c => `<li>${c}</li>`).join('')}
+                    </ul>
+                </div>
+                <div class="insight-item">
+                    <strong>⚠️ Risk Factors</strong>
+                    <ul>
+                        ${insights.risk_factors.map(r => `<li>${r}</li>`).join('')}
+                    </ul>
+                </div>
+                <div class="insight-item">
+                    <strong>🎪 Price Targets</strong>
+                    <p>Conservative: $${insights.target_price.conservative.toFixed(2)} | Base: $${insights.target_price.base.toFixed(2)} | Bull: $${insights.target_price.bull.toFixed(2)}</p>
+                    <p>Current: $${insights.target_price.current.toFixed(2)}</p>
+                </div>
+                <div class="insight-item">
+                    <strong>📈 Entry/Exit Levels</strong>
+                    <p>Strong Buy: $${insights.entry_exit.strong_buy.toFixed(2)} | Buy: $${insights.entry_exit.buy.toFixed(2)} | Hold: $${insights.entry_exit.hold.toFixed(2)} | Sell: $${insights.entry_exit.sell.toFixed(2)}</p>
+                </div>
+            `;
+            $('#insightsContent').html(html);
+        }
+
+        function renderCharts() {
+            // Add small delay to ensure DOM is ready
+            setTimeout(() => {
+                try {
+                    // Ensure containers exist
+                    if (!document.getElementById('scoreChart')) {
+                        console.error('scoreChart container not found');
+                        return;
+                    }
+
+                    // Score Distribution
+                    const scores = Object.values(allData)
+                        .filter(d => !d.error)
+                        .map(d => ({ticker: d.ticker, score: d.scores.composite_score}))
+                        .sort((a, b) => b.score - a.score);
+
+                    const scoreTrace = {
+                        x: scores.map(s => s.ticker),
+                        y: scores.map(s => s.score),
+                        type: 'bar',
+                        marker: {
+                            color: scores.map(s => s.score > 60 ? '#22c55e' : s.score > 40 ? '#eab308' : '#ef4444')
+                        }
+                    };
+
+                    Plotly.newPlot('scoreChart', [scoreTrace], {
+                        title: {text: 'Composite Score Distribution', font: {color: '#60a5fa'}},
+                        paper_bgcolor: 'rgba(30, 41, 59, 0.8)',
+                        plot_bgcolor: 'rgba(45, 55, 72, 0.5)',
+                        font: {color: '#cbd5e1', size: 12},
+                        xaxis: {showgrid: true, gridcolor: 'rgba(100, 116, 139, 0.3)'},
+                        yaxis: {showgrid: true, gridcolor: 'rgba(100, 116, 139, 0.3)'},
+                        margin: {b: 80, l: 60, t: 50, r: 30},
+                        height: 400
+                    }, {responsive: true});
+
+                    // Risk/Return
+                    const riskReturn = Object.values(allData)
+                        .filter(d => !d.error)
+                        .map(d => ({
+                            ticker: d.ticker,
+                            risk: d.scores.risk_score,
+                            return: d.technical.return_1m,
+                            score: d.scores.composite_score
+                        }));
+
+                    const riskReturnTrace = {
+                        x: riskReturn.map(r => r.risk),
+                        y: riskReturn.map(r => r.return),
+                        text: riskReturn.map(r => r.ticker),
+                        mode: 'markers+text',
+                        marker: {
+                            size: 12,
+                            color: riskReturn.map(r => r.score > 60 ? '#22c55e' : r.score > 40 ? '#eab308' : '#ef4444'),
+                            line: {color: '#60a5fa', width: 2}
+                        },
+                        textposition: 'top center'
+                    };
+
+                    Plotly.newPlot('riskReturnChart', [riskReturnTrace], {
+                        title: {text: 'Risk vs Return', font: {color: '#60a5fa'}},
+                        xaxis: {title: 'Risk Score', showgrid: true, gridcolor: 'rgba(100, 116, 139, 0.3)'},
+                        yaxis: {title: '1M Return %', showgrid: true, gridcolor: 'rgba(100, 116, 139, 0.3)'},
+                        paper_bgcolor: 'rgba(30, 41, 59, 0.8)',
+                        plot_bgcolor: 'rgba(45, 55, 72, 0.5)',
+                        font: {color: '#cbd5e1', size: 12},
+                        margin: {b: 60, l: 60, t: 50, r: 30},
+                        height: 400
+                    }, {responsive: true});
+
+                    // Signal Distribution
+                    const signals = {};
+                    Object.values(allData).forEach(d => {
+                        if (!d.error) {
+                            signals[d.scores.signal] = (signals[d.scores.signal] || 0) + 1;
+                        }
+                    });
+
+                    const signalTrace = {
+                        labels: Object.keys(signals),
+                        values: Object.values(signals),
+                        type: 'pie',
+                        marker: {
+                            colors: Object.keys(signals).map(k => 
+                                k === 'SELL' ? '#ef4444' : k === 'HOLD' ? '#eab308' : '#22c55e'
+                            )
+                        }
+                    };
+
+                    Plotly.newPlot('signalChart', [signalTrace], {
+                        title: {text: 'Trading Signal Distribution', font: {color: '#60a5fa'}},
+                        paper_bgcolor: 'rgba(30, 41, 59, 0.8)',
+                        font: {color: '#cbd5e1', size: 12},
+                        margin: {t: 50, b: 30, l: 30, r: 30},
+                        height: 400
+                    }, {responsive: true});
+
+                    // Returns
+                    const returns = Object.values(allData)
+                        .filter(d => !d.error)
+                        .map(d => ({
+                            ticker: d.ticker,
+                            '1m': d.technical.return_1m || 0,
+                            '3m': d.technical.return_3m || 0,
+                            '1y': d.technical.return_1y || 0
+                        }))
+                        .sort((a, b) => b['1m'] - a['1m']);
+
+                    const returnTraces = [
+                        {x: returns.map(r => r.ticker), y: returns.map(r => r['1m']), name: '1M', type: 'bar', marker: {color: '#60a5fa'}},
+                        {x: returns.map(r => r.ticker), y: returns.map(r => r['3m']), name: '3M', type: 'bar', marker: {color: '#3b82f6'}},
+                        {x: returns.map(r => r.ticker), y: returns.map(r => r['1y']), name: '1Y', type: 'bar', marker: {color: '#1e40af'}}
+                    ];
+
+                    Plotly.newPlot('returnsChart', returnTraces, {
+                        title: {text: 'Returns (1M, 3M, 1Y)', font: {color: '#60a5fa'}},
+                        barmode: 'group',
+                        paper_bgcolor: 'rgba(30, 41, 59, 0.8)',
+                        plot_bgcolor: 'rgba(45, 55, 72, 0.5)',
+                        font: {color: '#cbd5e1', size: 12},
+                        xaxis: {showgrid: true, gridcolor: 'rgba(100, 116, 139, 0.3)'},
+                        yaxis: {showgrid: true, gridcolor: 'rgba(100, 116, 139, 0.3)'},
+                        margin: {b: 80, l: 60, t: 50, r: 30},
+                        height: 400,
+                        legend: {x: 0, y: 1, bgcolor: 'rgba(0, 0, 0, 0.5)'}
+                    }, {responsive: true});
+                } catch (e) {
+                    console.error('Error rendering charts:', e);
+                }
+            }, 500);
+        }
+
+        function getSortPath(field) {
+            const map = {
+                'ticker': 'ticker',
+                'price': 'technical.current_price',
+                'composite_score': 'scores.composite_score',
+                'signal': 'scores.signal',
+                'ta_score': 'scores.ta_score',
+                'fa_score': 'scores.fa_score',
+                'risk_score': 'scores.risk_score',
+                'rsi': 'technical.rsi',
+                'return_1m': 'technical.return_1m',
+                'return_3m': 'technical.return_3m',
+                'trend': 'technical.trend',
+                'valuation_grade': 'valuation.valuation_grade'
+            };
+            return map[field] || field;
+        }
+
+        function getValueByPath(obj, path) {
+            return path.split('.').reduce((a, b) => a && a[b], obj);
+        }
+
+        $('th.sortable').on('click', function() {
+            const field = $(this).data('sort');
+            if (sortField === field) {
+                sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortField = field;
+                sortOrder = 'desc';
+            }
+            renderTable();
+        });
+
+        $('#searchInput').on('keyup', function() {
+            const query = $(this).val().toUpperCase();
+            filteredData = Object.fromEntries(
+                Object.entries(allData).filter(([ticker]) => ticker.includes(query))
+            );
+            renderTable();
+            renderInsightsTicker();
+        });
+
+        $('#signalFilter').on('change', applyFilters);
+        $('#trendFilter').on('change', applyFilters);
+
+        function applyFilters() {
+            const signal = $('#signalFilter').val();
+            const trend = $('#trendFilter').val();
+
+            filteredData = Object.fromEntries(
+                Object.entries(allData).filter(([ticker, data]) => {
+                    if (data.error) return false;
+                    if (signal && data.scores.signal !== signal) return false;
+                    if (trend && data.technical.trend !== trend) return false;
+                    return true;
+                })
+            );
+
+            renderTable();
+            renderAnalysisTable();
+            renderInsightsTicker();
+        }
+
+        function resetFilters() {
+            $('#searchInput').val('');
+            $('#signalFilter').val('');
+            $('#trendFilter').val('');
+            filteredData = {...allData};
+            sortField = 'composite_score';
+            sortOrder = 'desc';
+            renderAll();
+        }
+
+        function switchTab(tabName) {
+            $('.tab-content').removeClass('active');
+            $('.tab-button').removeClass('active');
+            $(`#${tabName}`).addClass('active');
+            $(`button[onclick="switchTab('${tabName}')"]`).addClass('active');
+        }
+
+        function openModal(ticker) {
+            const data = allData[ticker];
+            if (!data || data.error) return;
+
+            $('#modalTicker').text(`${ticker} - ${data.ticker}`);
+
+            const html = `
+                <h3 style="color: #60a5fa; margin-top: 20px; margin-bottom: 10px;">Technical Analysis</h3>
+                <p><strong>Price:</strong> $${(data.technical.current_price || 0).toFixed(2)}</p>
+                <p><strong>RSI:</strong> ${(data.technical.rsi || 0).toFixed(1)} | <strong>Trend:</strong> ${data.technical.trend}</p>
+                <p><strong>MACD:</strong> ${(data.technical.macd || 0).toFixed(3)} | <strong>Positive:</strong> ${data.technical.macd_positive ? 'Yes' : 'No'}</p>
+                <p><strong>Volatility:</strong> ${(data.technical.volatility || 0).toFixed(1)}% | <strong>52W High/Low:</strong> $${(data.technical.fifty_two_week_high || 0).toFixed(2)} / $${(data.technical.fifty_two_week_low || 0).toFixed(2)}</p>
+                <p><strong>Returns:</strong> 1M: ${(data.technical.return_1m || 0).toFixed(1)}% | 3M: ${(data.technical.return_3m || 0).toFixed(1)}% | 1Y: ${(data.technical.return_1y || 0).toFixed(1)}%</p>
+
+                <h3 style="color: #60a5fa; margin-top: 20px; margin-bottom: 10px;">Fundamental Analysis</h3>
+                <p><strong>Market Cap:</strong> $${(data.fundamental.market_cap / 1e9).toFixed(2)}B</p>
+                <p><strong>P/E Ratio:</strong> ${isNaN(data.fundamental.pe_ratio) ? 'N/A' : data.fundamental.pe_ratio.toFixed(2)} | <strong>P/B Ratio:</strong> ${isNaN(data.fundamental.pb_ratio) ? 'N/A' : data.fundamental.pb_ratio.toFixed(2)}</p>
+                <p><strong>ROE:</strong> ${isNaN(data.fundamental.roe) ? 'N/A' : data.fundamental.roe.toFixed(1)}% | <strong>ROA:</strong> ${isNaN(data.fundamental.roa) ? 'N/A' : data.fundamental.roa.toFixed(1)}%</p>
+                <p><strong>Debt/Equity:</strong> ${isNaN(data.fundamental.debt_to_equity) ? 'N/A' : data.fundamental.debt_to_equity.toFixed(2)} | <strong>Current Ratio:</strong> ${isNaN(data.fundamental.current_ratio) ? 'N/A' : data.fundamental.current_ratio.toFixed(2)}</p>
+
+                <h3 style="color: #60a5fa; margin-top: 20px; margin-bottom: 10px;">Scores & Signals</h3>
+                <p><strong>TA Score:</strong> ${(data.scores.ta_score || 0).toFixed(0)}/100 | <strong>FA Score:</strong> ${(data.scores.fa_score || 0).toFixed(0)}/100 | <strong>Risk Score:</strong> ${(data.scores.risk_score || 0).toFixed(0)}/100</p>
+                <p><strong>Composite Score:</strong> ${(data.scores.composite_score || 0).toFixed(1)}/100 | <strong>Signal:</strong> <span class="signal-badge signal-${data.scores.signal.toLowerCase()}">${data.scores.signal}</span></p>
+                <p><strong>Confidence:</strong> ${(data.scores.confidence || 0).toFixed(0)}%</p>
+
+                <h3 style="color: #60a5fa; margin-top: 20px; margin-bottom: 10px;">Valuation</h3>
+                <p><strong>Grade:</strong> ${data.valuation.valuation_grade} | <strong>Intrinsic Value:</strong> $${(data.valuation.intrinsic_value || 0).toFixed(2)}</p>
+
+                <h3 style="color: #60a5fa; margin-top: 20px; margin-bottom: 10px;">Insights</h3>
+                <p>${data.insights.summary}</p>
+            `;
+
+            $('#modalContent').html(html);
+            $('#companyModal').show();
+        }
+
+        function closeModal() {
+            $('#companyModal').hide();
+        }
+
+        window.onclick = function(event) {
+            const modal = $('#companyModal');
+            if (event.target === modal[0]) {
+                modal.hide();
+            }
+        }
+
+        function exportData() {
+            let csv = 'Ticker,Price,P/E,P/B,Market Cap,Score,Signal,TA,FA,Risk,Trend,Valuation\n';
+
+            Object.entries(filteredData).forEach(([ticker, data]) => {
+                if (data.error) return;
+
+                csv += `${ticker},${(data.technical.current_price || 0).toFixed(2)},${isNaN(data.fundamental.pe_ratio) ? 'N/A' : data.fundamental.pe_ratio.toFixed(2)},${isNaN(data.fundamental.pb_ratio) ? 'N/A' : data.fundamental.pb_ratio.toFixed(2)},${(data.fundamental.market_cap / 1e9).toFixed(2)}B,${(data.scores.composite_score || 0).toFixed(1)},${data.scores.signal},${(data.scores.ta_score || 0).toFixed(0)},${(data.scores.fa_score || 0).toFixed(0)},${(data.scores.risk_score || 0).toFixed(0)},${data.technical.trend},${data.valuation.valuation_grade}\n`;
+            });
+
+            const blob = new Blob([csv], {type: 'text/csv'});
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'uranium-analysis.csv';
+            a.click();
+        }
+
+        function setupEventListeners() {
+            // Tab switching
+            $(window).on('resize', () => {
+                setTimeout(() => {
+                    Plotly.Plots.resize('scoreChart');
+                    Plotly.Plots.resize('riskReturnChart');
+                    Plotly.Plots.resize('signalChart');
+                    Plotly.Plots.resize('returnsChart');
+                }, 100);
+            });
+        }
+    </script>
+</body>
+</html>
