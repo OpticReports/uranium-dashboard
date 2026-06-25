@@ -1,0 +1,40 @@
+services:
+  backend:
+    build: ./backend
+    env_file:
+      - ./backend/.env
+    environment:
+      # Inside the container, persist SQLite + cache under /app/data (volume).
+      DATABASE_URL: "sqlite:////app/data/genomics.db"
+      CACHE_DIR: "/app/data/cache"
+      RUN_SCHEDULER: "true"
+    volumes:
+      - backend_data:/app/data
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  # One-shot backfill so you have history from day one. Run with:
+  #   docker compose run --rm backfill
+  backfill:
+    build: ./backend
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: "sqlite:////app/data/genomics.db"
+      CACHE_DIR: "/app/data/cache"
+    volumes:
+      - backend_data:/app/data
+    command: ["python", "-m", "scripts.backfill"]
+    profiles: ["tools"]
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+    restart: unless-stopped
+
+volumes:
+  backend_data:

@@ -1,0 +1,29 @@
+# Thresholds for named, evidence-linked alpha flags.
+# Each flag links back to the underlying rows (catalysts / revisions / posts).
+
+flags:
+  pre_catalyst_sentiment_ramp:
+    # Hype acceleration rising into a high-impact catalyst within N days.
+    within_days: 30
+    min_hype_acceleration_z: 1.0
+    min_catalyst_impact: 0.6
+
+  analyst_revision_cluster:
+    # >= X estimate revisions in the same direction within a short window.
+    window_days: 21
+    min_revisions: 3
+
+  unusual_options_social_spike:
+    # IV/skew move co-occurring with a social mention spike.
+    min_iv_change_z: 1.5
+    min_mention_z: 1.5
+    co_occurrence_days: 5
+
+  runway_cliff_approaching:
+    # Quarters-of-runway crossing below threshold.
+    threshold_quarters: 4.0
+
+  binary_event_within_n_days:
+    # High-impact catalyst imminent.
+    within_days: 21
+    min_catalyst_impact: 0.85

@@ -1,0 +1,58 @@
+# Alpha Signal scoring weights and component parameters.
+# Retune the model WITHOUT touching code — edit and reload (POST /scores/reload).
+#
+# The composite is a weighted sum of normalized components. Each component is
+# scaled to a 0-100 range (from an underlying z-score) before weighting so the
+# weights are directly comparable. Weights need not sum to 1; the engine
+# normalizes by the sum of weights of the components that actually have data
+# (so a missing component does NOT silently drag a name toward zero).
+
+# Final scaling of the composite for display: "0_100" or "zscore"
+output_scale: "0_100"
+
+weights:
+  revision_velocity: 0.25   # rate of change of consensus estimates (leading)
+  catalyst_score:    0.30   # proximity-weighted upcoming catalysts
+  hype_divergence:   0.20   # social acceleration leading price
+  positioning:       0.15   # short interest + options skew
+  runway_penalty:    0.10   # penalty as cash runway shortens (enters negatively)
+
+components:
+  revision_velocity:
+    # Look-back window (days) over which to measure estimate revisions.
+    window_days: 90
+    # A single revision's contribution decays with age inside the window.
+    half_life_days: 30
+
+  catalyst_score:
+    # time_decay = exp(-lambda * days_until); horizon sets the practical window.
+    horizon_days: 180
+    half_life_days: 45
+    # Default impact weights by event type (0-1). Manual per-catalyst override
+    # always wins over these defaults.
+    impact_weights:
+      pdufa: 1.0
+      adcom: 0.95
+      phase3_readout: 0.9
+      phase2_readout: 0.7
+      phase1_readout: 0.4
+      data_presentation: 0.5
+      earnings: 0.35
+      conference: 0.3
+      other: 0.2
+
+  hype_divergence:
+    # Windows for mention velocity / acceleration and the price comparison.
+    mention_window_days: 14
+    price_window_days: 14
+
+  positioning:
+    # Percentile thresholds that raise squeeze / crowding flags.
+    squeeze_short_interest_pct: 0.80   # >=80th percentile short interest
+    crowding_skew_pct: 0.80
+
+  runway_penalty:
+    # Penalty ramps in below this many quarters of runway, maxing at floor.
+    threshold_quarters: 8.0
+    floor_quarters: 2.0
+    # Names with positive net income / no meaningful burn are exempt (penalty 0).
