@@ -5,12 +5,15 @@ upsert), and start the ingestion/scoring scheduler (unless RUN_SCHEDULER=false).
 """
 from __future__ import annotations
 
+import base64
 import logging
 import os
+import secrets
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session, select
 
@@ -74,6 +77,35 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def basic_auth(request: Request, call_next):
+    """Optional HTTP Basic auth gate (active only when creds are configured).
+
+    /health is always exempt so platform health checks pass. Constant-time
+    comparison avoids leaking credential length via timing.
+    """
+    user = settings.dashboard_user
+    pwd = settings.dashboard_password
+    if user and pwd and request.url.path != "/health":
+        header = request.headers.get("authorization", "")
+        ok = False
+        if header.startswith("Basic "):
+            try:
+                decoded = base64.b64decode(header[6:]).decode("utf-8")
+                got_user, _, got_pwd = decoded.partition(":")
+                ok = secrets.compare_digest(got_user, user) and secrets.compare_digest(
+                    got_pwd, pwd
+                )
+            except (ValueError, UnicodeDecodeError):
+                ok = False
+        if not ok:
+            return Response(
+                status_code=401,
+                headers={"WWW-Authenticate": 'Basic realm="Genomics Alpha Tracker"'},
+            )
+    return await call_next(request)
 
 app.include_router(universe.router)
 app.include_router(market.router)

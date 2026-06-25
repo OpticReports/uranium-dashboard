@@ -22,9 +22,13 @@ services:
     rootDir: genomics-alpha-tracker        # project lives in this subdirectory
     dockerfilePath: ./Dockerfile           # relative to rootDir
     dockerContext: .                       # relative to rootDir
-    plan: free
+    plan: starter            # always-on (scheduler runs) + supports a persistent disk
     healthCheckPath: /health
     autoDeploy: true
+    disk:
+      name: data             # persists SQLite + cache across restarts/redeploys
+      mountPath: /app/data
+      sizeGB: 1
     envVars:
       # Authenticated FMP works from cloud IPs (unlike yfinance/StockTwits which
       # get rate-limited/blocked), so use it for prices + fundamentals + analyst.
@@ -34,10 +38,16 @@ services:
         value: fmp
       - key: FMP_API_KEY
         sync: false            # <- you enter this secret in the Render dashboard
+      # Login gate (protects your proprietary signals on a public URL).
+      # Enter both in the Render dashboard when prompted.
+      - key: DASHBOARD_USER
+        sync: false
+      - key: DASHBOARD_PASSWORD
+        sync: false
       - key: RUN_SCHEDULER
         value: "true"
       - key: BACKFILL_ON_STARTUP
-        value: "true"          # seed data on first boot (ephemeral disk)
+        value: "true"          # seed data on first boot
       - key: DATABASE_URL
         value: sqlite:////app/data/genomics.db
       - key: CACHE_DIR
