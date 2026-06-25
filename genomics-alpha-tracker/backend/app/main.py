@@ -6,14 +6,17 @@ upsert), and start the ingestion/scoring scheduler (unless RUN_SCHEDULER=false).
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlmodel import Session
+from fastapi.staticfiles import StaticFiles
+from sqlmodel import Session, select
 
 from .config import settings
 from .db import engine, init_db
+from .models import ScoreSnapshot
 from .routers import catalysts, market, scores, universe, views
 from .scheduler import shutdown_scheduler, start_scheduler
 from .universe.manager import sync_from_yaml
@@ -31,6 +34,23 @@ async def lifespan(app: FastAPI):
     with Session(engine) as session:
         summary = sync_from_yaml(session)
     logger.info("Universe synced on startup: %s", summary)
+
+    # On ephemeral-disk hosts, seed an initial dataset so the dashboard isn't
+    # blank on first load. Best-effort: never block startup on it.
+    if settings.backfill_on_startup:
+        try:
+            from .ingestion.runner import run_all
+            from .scoring.engine import compute_scores
+
+            with Session(engine) as session:
+                already = session.exec(select(ScoreSnapshot).limit(1)).first()
+                if already is None:
+                    logger.info("Empty DB -> running startup backfill (best-effort)")
+                    run_all(session)
+                    compute_scores(session)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Startup backfill failed (non-fatal): %s", exc)
+
     if settings.run_scheduler:
         start_scheduler()
         logger.info("Scheduler started")
@@ -79,6 +99,12 @@ def health():
     }
 
 
-@app.get("/", tags=["meta"])
-def root():
-    return {"name": "Genomics Sector Alpha Tracker", "docs": "/docs", "health": "/health"}
+# Single-service deployment: if a built frontend is present, serve it at "/".
+# (Mounted AFTER the API routers so /universe, /scores, /views, etc. win.)
+if settings.frontend_dist and os.path.isdir(settings.frontend_dist):
+    app.mount("/", StaticFiles(directory=settings.frontend_dist, html=True), name="frontend")
+    logger.info("Serving frontend from %s", settings.frontend_dist)
+else:
+    @app.get("/", tags=["meta"])
+    def root():
+        return {"name": "Genomics Sector Alpha Tracker", "docs": "/docs", "health": "/health"}

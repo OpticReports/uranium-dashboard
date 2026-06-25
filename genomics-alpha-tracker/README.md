@@ -37,6 +37,26 @@ npm install
 npm run dev                         # http://localhost:5173 (proxies /api -> :8000)
 ```
 
+### Deploy a live, shareable URL (Render)
+The repo ships a single-service image ([`Dockerfile`](Dockerfile) — FastAPI serves
+the built React SPA, so one URL, no CORS) and a [`render.yaml`](render.yaml) blueprint.
+
+1. On [Render](https://render.com): **New + → Blueprint → connect this repo**. It
+   reads `render.yaml` automatically.
+2. When prompted, paste your **`FMP_API_KEY`** (it's `sync: false` → stored as a
+   Render secret, never in git).
+3. **Deploy.** Your dashboard will be at `https://<service-name>.onrender.com`.
+
+The blueprint defaults to **`MARKET_PROVIDER=fmp`** on purpose: cloud hosts share
+datacenter IPs that yfinance rate-limits (429) and StockTwits/ClinicalTrials block
+(403), but your **authenticated FMP key works from anywhere** — so prices,
+fundamentals, and analyst data populate reliably. `BACKFILL_ON_STARTUP=true` seeds
+data on first boot.
+
+> Render's **free tier** has an ephemeral disk (SQLite resets on redeploy) and
+> sleeps after ~15 min idle. For persistence, attach a disk (paid) or point
+> `DATABASE_URL` at Postgres. The same image deploys to Fly.io/Railway/any VM.
+
 ---
 
 ## What works without any paid keys

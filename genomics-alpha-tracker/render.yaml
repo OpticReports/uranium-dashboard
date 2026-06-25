@@ -1,0 +1,42 @@
+# Render blueprint — deploys the whole app as ONE web service.
+# How to use:
+#   1. Push this repo to GitHub (done).
+#   2. On Render: New + -> Blueprint -> connect this repo -> it reads render.yaml.
+#      (Render uses this file at the repo root; rootDir points it at the project.)
+#   3. Set the FMP_API_KEY secret when prompted (sync:false => entered in dashboard,
+#      never stored in git).
+#   4. Deploy. Your URL will be https://<service-name>.onrender.com
+#
+# Note: Render's free tier has an EPHEMERAL disk (SQLite resets on redeploy) and
+# spins down after ~15 min idle. backfill_on_startup re-seeds on cold start.
+# For persistent storage, add a disk (paid) or switch DATABASE_URL to Postgres.
+services:
+  - type: web
+    name: genomics-alpha-tracker
+    runtime: docker
+    rootDir: genomics-alpha-tracker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      # Authenticated FMP works from cloud IPs (unlike yfinance/StockTwits which
+      # get rate-limited/blocked), so use it for prices + fundamentals + analyst.
+      - key: MARKET_PROVIDER
+        value: fmp
+      - key: ANALYST_PROVIDER
+        value: fmp
+      - key: FMP_API_KEY
+        sync: false            # <- you enter this secret in the Render dashboard
+      - key: RUN_SCHEDULER
+        value: "true"
+      - key: BACKFILL_ON_STARTUP
+        value: "true"          # seed data on first boot (ephemeral disk)
+      - key: DATABASE_URL
+        value: sqlite:////app/data/genomics.db
+      - key: CACHE_DIR
+        value: /app/data/cache
+      - key: FRONTEND_DIST
+        value: /app/static
+      - key: LOG_LEVEL
+        value: INFO
