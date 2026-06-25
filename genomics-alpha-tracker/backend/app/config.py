@@ -66,6 +66,17 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
     run_scheduler: bool = True
     log_level: str = "INFO"
+    # When set to a built frontend dir, the API also serves the SPA at "/"
+    # (single-service deployment). Left empty for local dev (Vite serves the UI).
+    frontend_dist: str = ""
+    # Run a one-shot backfill on startup if the DB is empty (useful on hosts
+    # with ephemeral disks so the dashboard isn't blank on first load).
+    backfill_on_startup: bool = False
+    # Optional HTTP Basic auth gate. When BOTH are set, every request (except
+    # /health) requires these credentials — protects a publicly-hosted instance.
+    # Leave unset for local dev (no auth).
+    dashboard_user: str | None = None
+    dashboard_password: str | None = None
 
 
 @functools.lru_cache

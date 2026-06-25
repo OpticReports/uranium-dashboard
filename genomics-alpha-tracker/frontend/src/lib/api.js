@@ -1,7 +1,10 @@
 // Thin REST client for the FastAPI backend.
 // In dev, requests go through the Vite proxy (/api -> :8000). In prod set
 // VITE_API_BASE to the backend origin.
-const BASE = import.meta.env.VITE_API_BASE || "/api";
+// "/api" in dev (Vite proxy). For the single-service deploy, build with
+// VITE_API_BASE="" so calls hit same-origin /universe, /scores, etc.
+// (?? not || so an explicit empty string is respected.)
+const BASE = import.meta.env.VITE_API_BASE ?? "/api";
 
 async function req(path, opts = {}) {
   const res = await fetch(`${BASE}${path}`, {

@@ -37,6 +37,31 @@ npm install
 npm run dev                         # http://localhost:5173 (proxies /api -> :8000)
 ```
 
+### Deploy a live, shareable URL (Render)
+The repo ships a single-service image ([`Dockerfile`](Dockerfile) — FastAPI serves
+the built React SPA, so one URL, no CORS) and a `render.yaml` blueprint **at the
+repository root** (Render requires it there for Blueprint auto-detection).
+
+1. On [Render](https://render.com): **New + → Blueprint → connect this repo**. It
+   reads `render.yaml` automatically.
+2. When prompted, enter these secrets (all `sync: false` → stored by Render, never
+   in git): **`FMP_API_KEY`**, and a **`DASHBOARD_USER`** / **`DASHBOARD_PASSWORD`**
+   login of your choice (the app is password-gated when both are set).
+3. **Deploy.** Your dashboard will be at `https://<service-name>.onrender.com`.
+   Add a custom domain (e.g. `genomics.optic.capital`) under
+   **Settings → Custom Domains**, then CNAME it at your DNS provider.
+
+The blueprint uses the **Starter plan with a 1 GB persistent disk** so the service
+stays always-on (the ingestion scheduler actually runs) and your history survives
+restarts. It defaults to **`MARKET_PROVIDER=fmp`** on purpose: cloud hosts share
+datacenter IPs that yfinance rate-limits (429) and StockTwits/ClinicalTrials block
+(403), but your **authenticated FMP key works from anywhere** — so prices,
+fundamentals, and analyst data populate reliably. `BACKFILL_ON_STARTUP=true` seeds
+data on first boot.
+
+> The same image deploys to Fly.io / Railway / any VM. For a heavier datastore,
+> point `DATABASE_URL` at Postgres (no code changes).
+
 ---
 
 ## What works without any paid keys
