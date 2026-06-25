@@ -19,9 +19,9 @@ services:
   - type: web
     name: genomics-alpha-tracker
     runtime: docker
-    rootDir: genomics-alpha-tracker        # project lives in this subdirectory
-    dockerfilePath: ./Dockerfile           # relative to rootDir
-    dockerContext: .                       # relative to rootDir
+    # Paths are relative to the REPO ROOT (the project lives in a subdirectory).
+    dockerfilePath: genomics-alpha-tracker/Dockerfile
+    dockerContext: genomics-alpha-tracker
     plan: starter            # always-on (scheduler runs) + supports a persistent disk
     healthCheckPath: /health
     autoDeploy: true
