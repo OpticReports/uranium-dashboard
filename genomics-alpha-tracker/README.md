@@ -39,7 +39,8 @@ npm run dev                         # http://localhost:5173 (proxies /api -> :80
 
 ### Deploy a live, shareable URL (Render)
 The repo ships a single-service image ([`Dockerfile`](Dockerfile) — FastAPI serves
-the built React SPA, so one URL, no CORS) and a [`render.yaml`](render.yaml) blueprint.
+the built React SPA, so one URL, no CORS) and a `render.yaml` blueprint **at the
+repository root** (Render requires it there for Blueprint auto-detection).
 
 1. On [Render](https://render.com): **New + → Blueprint → connect this repo**. It
    reads `render.yaml` automatically.
