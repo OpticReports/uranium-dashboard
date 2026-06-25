@@ -1,0 +1,65 @@
+# Coverage universe for the Genomics Sector Alpha Tracker.
+#
+# This file is one of THREE ways to edit the universe (the others are the
+# dashboard UI and the REST API). Editing this file and reloading
+# (POST /universe/reload or a restart) UPSERTS into the DB — it never wipes
+# history. Setting active: false drops a name from active ingestion and the
+# default views but RETAINS all of its historical data.
+#
+# Each entry:
+#   symbol     : ticker (uppercase)
+#   name       : company name
+#   subsector  : list of free-form theme tags (first-class; create new ones freely)
+#   active     : whether the name is in active ingestion / default views
+universe:
+  # --- Synthetic bio / platforms ---
+  - {symbol: TWST, name: Twist Bioscience,            subsector: [synbio, tools],          active: true}
+  - {symbol: ABSI, name: Absci,                       subsector: [synbio, ai-drug],        active: true}
+  - {symbol: GENB, name: Generate Biomedicines,       subsector: [synbio, ai-drug],        active: true}
+
+  # --- AI-driven drug discovery / data platforms ---
+  - {symbol: TEM,  name: Tempus AI,                   subsector: [ai-dx, data],            active: true}
+  - {symbol: RXRX, name: Recursion Pharmaceuticals,   subsector: [ai-drug],                active: true}
+  - {symbol: SDGR, name: Schrodinger,                 subsector: [ai-drug, tools],         active: true}
+
+  # --- Gene / cell editing therapy ---
+  - {symbol: CRSP, name: CRISPR Therapeutics,         subsector: [gene-editing],           active: true}
+  - {symbol: BEAM, name: Beam Therapeutics,           subsector: [gene-editing],           active: true}
+  - {symbol: NTLA, name: Intellia Therapeutics,       subsector: [gene-editing],           active: true}
+  - {symbol: PRME, name: Prime Medicine,              subsector: [gene-editing],           active: true}
+
+  # --- Sequencing / tools / instruments ---
+  - {symbol: TXG,  name: 10x Genomics,                subsector: [tools, sequencing],      active: true}
+  - {symbol: ILMN, name: Illumina,                    subsector: [sequencing, tools],      active: true}
+  - {symbol: PACB, name: Pacific Biosciences,         subsector: [sequencing],             active: true}
+  - {symbol: QSI,  name: Quantum-Si,                  subsector: [sequencing, proteomics], active: true}
+  - {symbol: ALMR, name: Alamar Biosciences,          subsector: [proteomics, tools],      active: true}
+  - {symbol: MASS, name: 908 Devices,                 subsector: [tools, instruments],     active: true}
+
+  # --- Liquid biopsy / diagnostics ---
+  - {symbol: PSNL, name: Personalis,                  subsector: [liquid-biopsy, dx],      active: true}
+  - {symbol: GH,   name: Guardant Health,             subsector: [liquid-biopsy, dx],      active: true}
+  - {symbol: NTRA, name: Natera,                      subsector: [liquid-biopsy, dx],      active: true}
+  - {symbol: VCYT, name: Veracyte,                    subsector: [dx],                     active: true}
+  - {symbol: CDNA, name: CareDx,                      subsector: [dx, transplant],         active: true}
+  - {symbol: ADPT, name: Adaptive Biotechnologies,    subsector: [dx, immune],             active: true}
+  - {symbol: WGS,  name: GeneDx Holdings,             subsector: [dx, rare-disease],       active: true}
+
+  # --- Oligo / RNA / targeted protein degradation ---
+  - {symbol: IONS, name: Ionis Pharmaceuticals,       subsector: [rna, oligo],             active: true}
+  - {symbol: ARCT, name: Arcturus Therapeutics,       subsector: [rna, mrna],              active: true}
+  - {symbol: NRIX, name: Nurix Therapeutics,          subsector: [protein-degradation],    active: true}
+
+  # --- Vaccines / mRNA platforms ---
+  - {symbol: BNTX, name: BioNTech,                    subsector: [mrna, vaccines],         active: true}
+
+  # --- Neuro / psychedelics ---
+  - {symbol: CMPS, name: Compass Pathways,            subsector: [neuro, psychedelics],    active: true}
+  - {symbol: ATAI, name: atai Life Sciences,          subsector: [neuro, psychedelics],    active: true}
+
+  # --- Imaging / devices / blood safety ---
+  - {symbol: BFLY, name: Butterfly Network,           subsector: [devices, imaging],       active: true}
+  - {symbol: CERS, name: Cerus,                       subsector: [blood-safety],           active: true}
+
+  # --- Large-cap pharma anchor ---
+  - {symbol: LLY,  name: Eli Lilly,                   subsector: [pharma, anchor],         active: true}

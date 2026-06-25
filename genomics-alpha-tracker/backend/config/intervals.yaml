@@ -1,0 +1,23 @@
+# Refresh intervals for the APScheduler ingestion cron jobs (minutes).
+# A module is only scheduled if it is enabled here AND its required key (if any)
+# is present; otherwise it logs a warning and is skipped (graceful degradation).
+jobs:
+  market:
+    enabled: true
+    interval_minutes: 60
+  analyst:
+    enabled: true
+    interval_minutes: 360
+  catalysts:
+    enabled: true
+    interval_minutes: 720
+  science:
+    enabled: true
+    interval_minutes: 1440
+  social:
+    enabled: true
+    interval_minutes: 120
+  scoring:
+    # Recompute the Alpha Signal after ingestion settles.
+    enabled: true
+    interval_minutes: 60
