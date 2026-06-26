@@ -18,9 +18,22 @@ from ..models import (
     SocialMention,
     FlagEvent,
 )
-from ..schemas import HeatmapTile, MoverOut
+from ..schemas import MoverOut
 
 router = APIRouter(prefix="/views", tags=["views"])
+
+
+MOMENTUM_DAYS = 7
+HIGH_IMPACT = 0.6
+N_COMPONENTS = 5
+
+DRIVER_LABELS = {
+    "revision_velocity": "analyst revisions rising",
+    "catalyst_score": "near-term catalyst",
+    "hype_divergence": "chatter leading price",
+    "positioning": "squeeze/positioning",
+    "runway_penalty": "balance-sheet strength",
+}
 
 
 def _latest_scores(session: Session) -> dict[str, ScoreSnapshot]:
@@ -30,27 +43,161 @@ def _latest_scores(session: Session) -> dict[str, ScoreSnapshot]:
     return latest
 
 
-@router.get("/heatmap", response_model=list[HeatmapTile])
+def _history(session: Session) -> dict[str, list[ScoreSnapshot]]:
+    hist: dict[str, list[ScoreSnapshot]] = {}
+    for snap in session.exec(select(ScoreSnapshot).order_by(ScoreSnapshot.asof.asc())).all():
+        hist.setdefault(snap.symbol, []).append(snap)
+    return hist
+
+
+def _momentum(snaps: list[ScoreSnapshot], days: int = MOMENTUM_DAYS) -> float | None:
+    """Change in composite vs the closest snapshot >= `days` ago. None if unknowable."""
+    if not snaps or snaps[-1].composite is None:
+        return None
+    latest = snaps[-1]
+    cutoff = latest.asof - timedelta(days=days)
+    prior = next((s for s in reversed(snaps[:-1]) if s.asof <= cutoff), None)
+    if prior is None:
+        prior = snaps[0] if len(snaps) > 1 else None
+    if prior is None or prior.composite is None or prior is latest:
+        return None
+    return latest.composite - prior.composite
+
+
+def _driver(snap: ScoreSnapshot | None) -> str | None:
+    """Plain-language label for the component contributing the most to the score."""
+    if snap is None:
+        return None
+    comps = (snap.formula or {}).get("components", {})
+    best_key, best_w = None, None
+    for key, val in comps.items():
+        w = val.get("weighted")
+        if w is None:
+            continue
+        if best_w is None or w > best_w:
+            best_key, best_w = key, w
+    if best_key is None:
+        return None
+    return DRIVER_LABELS.get(best_key, best_key.replace("_", " "))
+
+
+def _completeness(snap: ScoreSnapshot | None) -> float | None:
+    if snap is None:
+        return None
+    return max(0.0, 1.0 - len(snap.missing or []) / N_COMPONENTS)
+
+
+def _sparkline(member_syms: list[str], hist: dict, max_points: int = 10) -> list[float]:
+    """Subsector avg composite bucketed by date — a small trend series."""
+    by_date: dict[str, list[float]] = {}
+    for sym in member_syms:
+        for s in hist.get(sym, []):
+            if s.composite is None:
+                continue
+            by_date.setdefault(s.asof.date().isoformat(), []).append(s.composite)
+    dates = sorted(by_date)[-max_points:]
+    return [round(sum(by_date[d]) / len(by_date[d]), 1) for d in dates]
+
+
+@router.get("/heatmap")
 def heatmap(session: Session = Depends(get_session)):
-    """Average composite Alpha Signal rolled up by subsector theme."""
+    """Subsector roll-up enriched for decision-making.
+
+    Per tile: level (avg composite) AND momentum (WoW change), breadth, a
+    trend sparkline, near-term catalyst density, active-flag counts, and a
+    data-completeness confidence factor — plus a ranked member list with each
+    name's dominant driver, flags, and next catalyst (for instant drill-down).
+    """
+    today = date.today()
     secs = [s for s in session.exec(select(Security)).all() if s.active]
-    scores = _latest_scores(session)
-    by_tag: dict[str, list[tuple[str, float | None]]] = {}
+    hist = _history(session)
+    latest = {sym: snaps[-1] for sym, snaps in hist.items() if snaps}
+
+    # Active flags (deduped to the most recent per (symbol, type), last 14d).
+    since = datetime.utcnow() - timedelta(days=14)
+    flags_by_sym: dict[str, dict[str, FlagEvent]] = {}
+    for f in session.exec(select(FlagEvent).where(FlagEvent.asof >= since)).all():
+        flags_by_sym.setdefault(f.symbol, {})[f.flag_type] = f
+
+    # Upcoming catalysts per symbol.
+    cats_by_sym: dict[str, list[Catalyst]] = {}
+    for c in session.exec(
+        select(Catalyst).where(Catalyst.date >= today).order_by(Catalyst.date.asc())
+    ).all():
+        cats_by_sym.setdefault(c.symbol, []).append(c)
+
+    by_tag: dict[str, list[Security]] = {}
     for sec in secs:
-        comp = scores.get(sec.symbol)
-        composite = comp.composite if comp else None
         for tag in sec.subsector or ["untagged"]:
-            by_tag.setdefault(tag, []).append((sec.symbol, composite))
+            by_tag.setdefault(tag, []).append(sec)
+
     tiles = []
     for tag, members in sorted(by_tag.items()):
-        vals = [c for _, c in members if c is not None]
-        tiles.append(HeatmapTile(
-            subsector=tag,
-            avg_composite=(sum(vals) / len(vals)) if vals else None,
-            count=len(members),
-            symbols=[s for s, _ in members],
-        ))
-    return tiles
+        m_rows = []
+        for sec in members:
+            snap = latest.get(sec.symbol)
+            composite = snap.composite if snap else None
+            mom = _momentum(hist.get(sec.symbol, []))
+            flags = list(flags_by_sym.get(sec.symbol, {}).values())
+            ucats = cats_by_sym.get(sec.symbol, [])
+            nxt = ucats[0] if ucats else None
+            m_rows.append({
+                "symbol": sec.symbol,
+                "name": sec.name,
+                "composite": composite,
+                "momentum": mom,
+                "driver": _driver(snap),
+                "completeness": _completeness(snap),
+                "flags": [{"type": f.flag_type, "severity": f.severity, "message": f.message}
+                          for f in flags],
+                "next_catalyst": None if nxt is None else {
+                    "event_type": nxt.event_type, "date": nxt.date.isoformat(),
+                    "days_until": (nxt.date - today).days, "impact": nxt.effective_impact,
+                },
+            })
+
+        comps = [r["composite"] for r in m_rows if r["composite"] is not None]
+        moms = [r["momentum"] for r in m_rows if r["momentum"] is not None]
+        comps_sorted = sorted(comps)
+        median = comps_sorted[len(comps_sorted) // 2] if comps_sorted else None
+        rising = sum(1 for m in moms if m > 0)
+        completes = [r["completeness"] for r in m_rows if r["completeness"] is not None]
+        member_syms = [r["symbol"] for r in m_rows]
+        cat30 = sum(
+            1 for sym in member_syms for c in cats_by_sym.get(sym, [])
+            if 0 <= (c.date - today).days <= 30 and c.effective_impact >= HIGH_IMPACT
+        )
+        cat90 = sum(
+            1 for sym in member_syms for c in cats_by_sym.get(sym, [])
+            if 0 <= (c.date - today).days <= 90 and c.effective_impact >= HIGH_IMPACT
+        )
+        flag_total = sum(len(r["flags"]) for r in m_rows)
+        flag_high = sum(1 for r in m_rows for f in r["flags"] if f["severity"] == "high")
+        best = max((r for r in m_rows if r["composite"] is not None),
+                   key=lambda r: r["composite"], default=None)
+        worst = min((r for r in m_rows if r["composite"] is not None),
+                    key=lambda r: r["composite"], default=None)
+
+        tiles.append({
+            "subsector": tag,
+            "count": len(members),
+            "avg_composite": (sum(comps) / len(comps)) if comps else None,
+            "median_composite": median,
+            "momentum": (sum(moms) / len(moms)) if moms else None,
+            "breadth": (rising / len(moms)) if moms else None,
+            "data_completeness": (sum(completes) / len(completes)) if completes else None,
+            "sparkline": _sparkline(member_syms, hist),
+            "catalysts_30d": cat30,
+            "catalysts_90d": cat90,
+            "flag_count": flag_total,
+            "flag_high": flag_high,
+            "best": None if best is None else {"symbol": best["symbol"], "composite": best["composite"]},
+            "worst": None if worst is None else {"symbol": worst["symbol"], "composite": worst["composite"]},
+            "members": sorted(m_rows, key=lambda r: (r["composite"] is None, -(r["composite"] or 0))),
+        })
+    # Strongest themes first (by momentum, then level).
+    tiles.sort(key=lambda t: (-(t["momentum"] or -999), -(t["avg_composite"] or 0)))
+    return {"asof": datetime.utcnow().isoformat(), "tiles": tiles}
 
 
 @router.get("/movers", response_model=list[MoverOut])
