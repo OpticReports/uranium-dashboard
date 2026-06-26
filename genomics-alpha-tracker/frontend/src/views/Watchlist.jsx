@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
 import { scoreColor, fmtNum } from "../lib/format";
 import AddTicker from "../components/AddTicker";
+import InfoTip from "../components/InfoTip";
 
 const COMPONENT_COLS = [
   "revision_velocity",
@@ -92,15 +93,15 @@ export default function Watchlist({ onPick }) {
             <tr>
               <Th>Symbol</Th>
               <Th>Name</Th>
-              <Th onClick={() => toggleSort("composite")} active={sort.key === "composite"}>
+              <Th onClick={() => toggleSort("composite")} active={sort.key === "composite"} tip="composite">
                 Alpha
               </Th>
               {COMPONENT_COLS.map((c) => (
-                <Th key={c} onClick={() => toggleSort(c)} active={sort.key === c}>
+                <Th key={c} onClick={() => toggleSort(c)} active={sort.key === c} tip={c}>
                   {c.replace(/_/g, " ")}
                 </Th>
               ))}
-              <Th>Tags</Th>
+              <Th tip="tags">Tags</Th>
               <Th>Controls</Th>
             </tr>
           </thead>
@@ -149,15 +150,15 @@ export default function Watchlist({ onPick }) {
   );
 }
 
-function Th({ children, onClick, active }) {
+function Th({ children, onClick, active, tip }) {
   return (
     <th
-      onClick={onClick}
-      className={`px-3 py-2 text-left font-medium ${onClick ? "cursor-pointer select-none" : ""} ${
-        active ? "text-sky-300" : ""
-      }`}
+      className={`px-3 py-2 text-left font-medium ${active ? "text-sky-300" : ""}`}
     >
-      {children} {active ? "↕" : ""}
+      <span onClick={onClick} className={onClick ? "cursor-pointer select-none" : ""}>
+        {children} {active ? "↕" : ""}
+      </span>
+      {tip && <InfoTip term={tip} />}
     </th>
   );
 }
