@@ -7,6 +7,7 @@ import { api } from "../lib/api";
 import { fmtNum, fmtMoney, fmtPct, scoreColor, naIfNull } from "../lib/format";
 import RunwayGauge from "../components/RunwayGauge";
 import Flags from "../components/Flags";
+import InfoTip from "../components/InfoTip";
 
 // Per-name deep dive: price + catalyst markers, revision/hype timelines,
 // runway gauge, auditable score breakdown, flags, science/analyst feed.
@@ -46,7 +47,7 @@ export default function DeepDive({ symbol, onBack }) {
           </div>
         </div>
         <div className="text-right">
-          <div className="text-xs text-gray-400">Alpha Signal</div>
+          <div className="text-xs text-gray-400">Alpha Signal<InfoTip term="composite" /></div>
           <div className="text-4xl font-bold" style={{ color: scoreColor(score?.composite) }}>
             {fmtNum(score?.composite, 0)}
           </div>
@@ -179,7 +180,7 @@ function ScoreBreakdown({ score }) {
         <tbody>
           {rows.map(([k, v]) => (
             <tr key={k} className="border-t border-edge/40">
-              <td className="py-1">{k.replace(/_/g, " ")}</td>
+              <td className="py-1">{k.replace(/_/g, " ")}<InfoTip term={k} /></td>
               <td className="text-right text-gray-400">{rawValue(k, v)}</td>
               <td className="text-right" style={{ color: scoreColor(v.normalized) }}>
                 {fmtNum(v.normalized, 1)}
