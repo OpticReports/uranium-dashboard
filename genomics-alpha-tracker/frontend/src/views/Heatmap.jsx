@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
 import { scoreColor, fmtNum, severityColor } from "../lib/format";
+import Treemap from "./Treemap";
 
 // Sector heatmap, rebuilt for decisions: color by momentum OR level, with a
 // trend sparkline, catalyst/flag overlays, confidence shading, a quadrant
@@ -44,15 +45,15 @@ export default function Heatmap({ onPick }) {
   const [tiles, setTiles] = useState([]);
   const [open, setOpen] = useState(null);
   const [colorBy, setColorBy] = useState("momentum"); // momentum | level
-  const [view, setView] = useState("grid"); // grid | quadrant
+  const [view, setView] = useState("treemap"); // treemap | grid | quadrant
 
   const load = async () => {
     const hm = await api.heatmap();
     setTiles(hm.tiles || []);
   };
   useEffect(() => {
-    load();
-  }, []);
+    if (view !== "treemap") load();
+  }, [view]);
 
   const colorFor = (t) =>
     colorBy === "momentum" ? momentumColor(t.momentum) : scoreColor(t.avg_composite);
@@ -60,18 +61,33 @@ export default function Heatmap({ onPick }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3 text-sm">
-        <Toggle label="Color by" value={colorBy} setValue={setColorBy} options={[["momentum", "Momentum (Δ7d)"], ["level", "Level"]]} />
-        <Toggle label="View" value={view} setValue={setView} options={[["grid", "Grid"], ["quadrant", "Quadrant"]]} />
-        <span className="text-gray-500">Click a tile to drill into names + drivers.</span>
+        <Toggle label="View" value={view} setValue={setView}
+          options={[["treemap", "Treemap"], ["grid", "Sectors"], ["quadrant", "Quadrant"]]} />
+        {view === "grid" && (
+          <Toggle label="Color by" value={colorBy} setValue={setColorBy}
+            options={[["momentum", "Momentum (Δ7d)"], ["level", "Level"]]} />
+        )}
       </div>
 
-      {view === "grid" ? (
-        <Grid tiles={tiles} colorFor={colorFor} open={open} setOpen={setOpen} onPick={onPick} />
-      ) : (
-        <Quadrant tiles={tiles} open={open} setOpen={setOpen} />
-      )}
+      <p className="text-xs text-gray-500 -mt-1">
+        <b className="text-gray-300">Alpha Signal</b> = 0–100 relative score (50 = universe average; higher
+        = stronger forward-looking setup). It blends analyst-revision velocity, catalyst proximity,
+        hype-vs-price divergence, positioning, and cash runway — not a price or % move.
+      </p>
 
-      {open && <DrillDown tile={tiles.find((t) => t.subsector === open)} onPick={onPick} />}
+      {view === "treemap" && <Treemap onPick={onPick} />}
+      {view === "grid" && (
+        <>
+          <Grid tiles={tiles} colorFor={colorFor} open={open} setOpen={setOpen} onPick={onPick} />
+          {open && <DrillDown tile={tiles.find((t) => t.subsector === open)} onPick={onPick} />}
+        </>
+      )}
+      {view === "quadrant" && (
+        <>
+          <Quadrant tiles={tiles} open={open} setOpen={setOpen} />
+          {open && <DrillDown tile={tiles.find((t) => t.subsector === open)} onPick={onPick} />}
+        </>
+      )}
     </div>
   );
 }

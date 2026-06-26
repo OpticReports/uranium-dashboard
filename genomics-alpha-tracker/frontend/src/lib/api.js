@@ -57,6 +57,7 @@ export const api = {
 
   // Views
   heatmap: () => req("/views/heatmap"),
+  treemap: () => req("/views/treemap"),
   movers: (limit = 10) => req(`/views/movers?limit=${limit}`),
   deepDive: (symbol, days = 365) => req(`/views/deep-dive/${symbol}?days=${days}`),
 
