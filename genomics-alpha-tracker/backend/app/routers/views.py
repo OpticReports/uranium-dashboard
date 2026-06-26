@@ -200,6 +200,49 @@ def heatmap(session: Session = Depends(get_session)):
     return {"asof": datetime.utcnow().isoformat(), "tiles": tiles}
 
 
+@router.get("/treemap")
+def treemap(session: Session = Depends(get_session)):
+    """Flat per-name data for a Finviz-style treemap.
+
+    Each name: primary subsector (for grouping), market cap (tile size), and the
+    metrics you can color by — Alpha Signal composite, Δ7d momentum, and recent
+    price change.
+    """
+    today = date.today()
+    secs = [s for s in session.exec(select(Security)).all() if s.active]
+    hist = _history(session)
+    latest = {sym: snaps[-1] for sym, snaps in hist.items() if snaps}
+
+    # Latest market cap per symbol.
+    mcap: dict[str, float | None] = {}
+    for f in session.exec(select(Fundamental).order_by(Fundamental.asof.asc())).all():
+        mcap[f.symbol] = f.market_cap
+
+    # Recent 1-bar price change per symbol.
+    pchg: dict[str, float | None] = {}
+    for sec in secs:
+        bars = session.exec(
+            select(PriceBar).where(PriceBar.symbol == sec.symbol)
+            .order_by(PriceBar.date.desc()).limit(2)
+        ).all()
+        if len(bars) == 2 and bars[1].close:
+            pchg[sec.symbol] = (bars[0].close - bars[1].close) / bars[1].close
+
+    nodes = []
+    for sec in secs:
+        snap = latest.get(sec.symbol)
+        nodes.append({
+            "symbol": sec.symbol,
+            "name": sec.name,
+            "subsector": (sec.subsector or ["untagged"])[0],  # primary theme
+            "market_cap": mcap.get(sec.symbol),
+            "composite": snap.composite if snap else None,
+            "momentum": _momentum(hist.get(sec.symbol, [])),
+            "price_change": pchg.get(sec.symbol),
+        })
+    return {"asof": datetime.utcnow().isoformat(), "nodes": nodes}
+
+
 @router.get("/movers", response_model=list[MoverOut])
 def movers(limit: int = Query(10, ge=1, le=50), session: Session = Depends(get_session)):
     """Names with the largest social mention acceleration this week."""
