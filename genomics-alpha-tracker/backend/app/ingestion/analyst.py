@@ -88,7 +88,7 @@ class AnalystIngestion(IngestionSource):
             prev = None
             for e in ests:
                 d = _parse_date(e.get("date"))
-                cur = e.get("estimatedEpsAvg")
+                cur = e.get("epsAvg", e.get("estimatedEpsAvg"))  # stable | legacy
                 if d and prev is not None and cur is not None:
                     records.append(
                         AnalystRevision(

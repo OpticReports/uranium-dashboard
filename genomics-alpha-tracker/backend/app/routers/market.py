@@ -13,6 +13,40 @@ from ..models import Fundamental, PriceBar, Security
 router = APIRouter(prefix="/market", tags=["market"])
 
 
+@router.get("/diag")
+def diagnose(session: Session = Depends(get_session)):
+    """Live diagnostics: makes one real FMP call and reports the result, plus
+    current row counts. Use to tell "key invalid" from "ingestion not running".
+    Auth-gated (not /health), so the key is never echoed — only its status.
+    """
+    import httpx
+
+    from ..config import settings
+    from ..models import AnalystRevision
+
+    fmp: dict = {"provider": settings.market_provider, "key_present": bool(settings.fmp_api_key)}
+    if settings.fmp_api_key:
+        try:
+            r = httpx.get(
+                "https://financialmodelingprep.com/stable/profile",
+                params={"symbol": "CRSP", "apikey": settings.fmp_api_key},
+                timeout=settings.http_timeout_seconds,
+            )
+            body = (r.text or "")[:200]
+            fmp["status"] = r.status_code
+            fmp["ok"] = r.status_code == 200 and body.lstrip().startswith("[")
+            fmp["sample"] = body
+        except Exception as exc:  # noqa: BLE001
+            fmp["error"] = repr(exc)[:200]
+
+    counts = {
+        "price_bars": len(session.exec(select(PriceBar)).all()),
+        "fundamentals": len(session.exec(select(Fundamental)).all()),
+        "analyst_revisions": len(session.exec(select(AnalystRevision)).all()),
+    }
+    return {"fmp": fmp, "row_counts": counts}
+
+
 @router.get("/{symbol}/prices")
 def get_prices(
     symbol: str,

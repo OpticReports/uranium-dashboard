@@ -7,6 +7,7 @@ scheduler never crashes.
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlmodel import Session
@@ -57,23 +58,30 @@ def start_scheduler() -> BackgroundScheduler:
 
     cfg = intervals_config()
     sched = BackgroundScheduler(timezone="UTC")
+    now = datetime.utcnow()
 
-    for name, func in _JOB_FUNCS.items():
+    # Stagger an immediate first run of each job on startup (a few seconds apart)
+    # so ingestion actually happens right after boot instead of waiting a full
+    # interval — otherwise frequent restarts mean the hourly jobs never fire.
+    for i, (name, func) in enumerate(_JOB_FUNCS.items()):
         job_cfg = cfg.get(name, {})
         if not job_cfg.get("enabled", True):
             logger.info("Job '%s' disabled in intervals.yaml", name)
             continue
         minutes = job_cfg.get("interval_minutes", 60)
         sched.add_job(_wrap(name, func), "interval", minutes=minutes,
-                      id=name, max_instances=1, coalesce=True)
-        logger.info("Scheduled '%s' every %d min", name, minutes)
+                      id=name, max_instances=1, coalesce=True,
+                      next_run_time=now + timedelta(seconds=5 + i * 5))
+        logger.info("Scheduled '%s' every %d min (first run now)", name, minutes)
 
     scoring_cfg = cfg.get("scoring", {})
     if scoring_cfg.get("enabled", True):
         sched.add_job(_scoring_job, "interval",
                       minutes=scoring_cfg.get("interval_minutes", 60),
-                      id="scoring", max_instances=1, coalesce=True)
-        logger.info("Scheduled 'scoring' every %d min",
+                      id="scoring", max_instances=1, coalesce=True,
+                      # score after the initial ingestion sweep has had time to run
+                      next_run_time=now + timedelta(minutes=3))
+        logger.info("Scheduled 'scoring' every %d min (first run in 3 min)",
                     scoring_cfg.get("interval_minutes", 60))
 
     sched.start()

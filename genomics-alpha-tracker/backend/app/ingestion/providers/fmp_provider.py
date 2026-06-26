@@ -1,8 +1,9 @@
-"""Financial Modeling Prep provider (optional, requires FMP_API_KEY).
+"""Financial Modeling Prep provider — FMP "stable" API.
 
-FMP is the best free-ish source for fundamentals, analyst estimates, and price
-targets, so it's also used by the analyst ingestion module. Degrades gracefully
-without a key.
+FMP retired the legacy /api/v3/ endpoints for subscriptions created after
+2025-08-31 (they 403 with a "Legacy Endpoint" message). This provider targets
+the current /stable/ API. It powers market data AND the analyst layer
+(estimates / price targets). Degrades gracefully without a key.
 """
 from __future__ import annotations
 
@@ -16,7 +17,7 @@ from ...utils.ratelimit import RateLimiter, with_backoff
 from .base import MarketProvider
 
 logger = logging.getLogger(__name__)
-_BASE = "https://financialmodelingprep.com/api/v3"
+_BASE = "https://financialmodelingprep.com/stable"
 
 
 class FMPProvider(MarketProvider):
@@ -25,7 +26,7 @@ class FMPProvider(MarketProvider):
     def __init__(self) -> None:
         self.key = settings.fmp_api_key
         self.enabled = bool(self.key)
-        self._rl = RateLimiter(max_calls=250, period=60.0)  # free tier ~250/day; be gentle
+        self._rl = RateLimiter(max_calls=600, period=60.0)  # well under paid limits
         if not self.enabled:
             logger.warning("FMPProvider disabled: FMP_API_KEY unset")
 
@@ -33,9 +34,7 @@ class FMPProvider(MarketProvider):
         self._rl.acquire()
         params = {**(params or {}), "apikey": self.key}
         resp = with_backoff(
-            lambda: httpx.get(
-                f"{_BASE}{path}", params=params, timeout=settings.http_timeout_seconds
-            )
+            lambda: httpx.get(f"{_BASE}{path}", params=params, timeout=settings.http_timeout_seconds)
         )
         resp.raise_for_status()
         return resp.json()
@@ -44,7 +43,7 @@ class FMPProvider(MarketProvider):
         if not self.enabled:
             return None
         try:
-            data = self._get(f"/profile/{symbol.upper()}")
+            data = self._get("/profile", {"symbol": symbol.upper()})
             if data and isinstance(data, list):
                 return data[0].get("companyName") or symbol
         except Exception as exc:  # noqa: BLE001
@@ -55,23 +54,18 @@ class FMPProvider(MarketProvider):
         if not self.enabled:
             return []
         data = self._get(
-            f"/historical-price-full/{symbol.upper()}",
-            {"from": start.isoformat(), "to": end.isoformat()},
+            "/historical-price-eod/full",
+            {"symbol": symbol.upper(), "from": start.isoformat(), "to": end.isoformat()},
         )
         out = []
-        for bar in (data or {}).get("historical", []):
-            out.append(
-                {
-                    "date": bar.get("date"),
-                    "open": bar.get("open"),
-                    "high": bar.get("high"),
-                    "low": bar.get("low"),
-                    "close": bar.get("close"),
-                    "adj_close": bar.get("adjClose"),
-                    "volume": bar.get("volume"),
-                }
-            )
-        return list(reversed(out))  # FMP returns newest-first
+        for bar in data or []:
+            out.append({
+                "date": bar.get("date"),
+                "open": bar.get("open"), "high": bar.get("high"), "low": bar.get("low"),
+                "close": bar.get("close"), "adj_close": bar.get("close"),  # stable EOD is adjusted
+                "volume": bar.get("volume"),
+            })
+        return list(reversed(out))  # stable returns newest-first
 
     def get_fundamentals(self, symbol: str) -> dict:
         out = {
@@ -81,15 +75,16 @@ class FMPProvider(MarketProvider):
         }
         if not self.enabled:
             return out
+        sym = symbol.upper()
         try:
-            profile = self._get(f"/profile/{symbol.upper()}")
+            profile = self._get("/profile", {"symbol": sym})
             if profile:
-                out["market_cap"] = profile[0].get("mktCap")
-            cf = self._get(f"/cash-flow-statement/{symbol.upper()}", {"period": "quarter", "limit": 1})
-            bs = self._get(f"/balance-sheet-statement/{symbol.upper()}", {"period": "quarter", "limit": 1})
-            inc = self._get(f"/income-statement/{symbol.upper()}", {"period": "quarter", "limit": 1})
+                out["market_cap"] = profile[0].get("marketCap")
+            bs = self._get("/balance-sheet-statement", {"symbol": sym, "period": "quarter", "limit": 1})
+            cf = self._get("/cash-flow-statement", {"symbol": sym, "period": "quarter", "limit": 1})
+            inc = self._get("/income-statement", {"symbol": sym, "period": "quarter", "limit": 1})
             if bs:
-                out["cash"] = bs[0].get("cashAndShortTermInvestments")
+                out["cash"] = bs[0].get("cashAndShortTermInvestments") or bs[0].get("cashAndCashEquivalents")
             if cf:
                 fcf = cf[0].get("freeCashFlow")
                 if fcf is not None and fcf < 0:
@@ -107,7 +102,8 @@ class FMPProvider(MarketProvider):
         if not self.enabled:
             return []
         try:
-            return self._get(f"/analyst-estimates/{symbol.upper()}", {"limit": 8}) or []
+            return self._get("/analyst-estimates",
+                             {"symbol": symbol.upper(), "period": "annual", "limit": 8}) or []
         except Exception as exc:  # noqa: BLE001
             logger.warning("fmp estimates(%s) failed: %s", symbol, exc)
             return []
@@ -116,7 +112,7 @@ class FMPProvider(MarketProvider):
         if not self.enabled:
             return []
         try:
-            return self._get(f"/price-target/{symbol.upper()}") or []
+            return self._get("/price-target-news", {"symbol": symbol.upper(), "limit": 50}) or []
         except Exception as exc:  # noqa: BLE001
             logger.warning("fmp price targets(%s) failed: %s", symbol, exc)
             return []
