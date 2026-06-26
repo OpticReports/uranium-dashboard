@@ -38,21 +38,31 @@ async def lifespan(app: FastAPI):
         summary = sync_from_yaml(session)
     logger.info("Universe synced on startup: %s", summary)
 
-    # On ephemeral-disk hosts, seed an initial dataset so the dashboard isn't
-    # blank on first load. Best-effort: never block startup on it.
+    # Seed an initial dataset so the dashboard isn't blank on first load.
+    # MUST run in a background thread: a synchronous backfill (32 names x network)
+    # would block the ASGI startup, so the app never opens its port and the host's
+    # health check times out / crash-loops before any data is fetched.
     if settings.backfill_on_startup:
-        try:
-            from .ingestion.runner import run_all
-            from .scoring.engine import compute_scores
+        import threading
 
-            with Session(engine) as session:
-                already = session.exec(select(ScoreSnapshot).limit(1)).first()
-                if already is None:
-                    logger.info("Empty DB -> running startup backfill (best-effort)")
+        def _startup_backfill() -> None:
+            try:
+                from .ingestion.runner import run_all
+                from .scoring.engine import compute_scores
+
+                with Session(engine) as session:
+                    if session.exec(select(ScoreSnapshot).limit(1)).first() is not None:
+                        logger.info("DB already seeded -> skipping startup backfill")
+                        return
+                    logger.info("Empty DB -> background startup backfill begun")
                     run_all(session)
                     compute_scores(session)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Startup backfill failed (non-fatal): %s", exc)
+                    logger.info("Background startup backfill complete")
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Startup backfill failed (non-fatal): %s", exc)
+
+        threading.Thread(target=_startup_backfill, daemon=True, name="startup-backfill").start()
+        logger.info("Startup backfill dispatched to background thread")
 
     if settings.run_scheduler:
         start_scheduler()
