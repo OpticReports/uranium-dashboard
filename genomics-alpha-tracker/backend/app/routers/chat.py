@@ -26,10 +26,18 @@ class ChatRequest(BaseModel):
     deep: bool = False  # True -> Opus "Deep analysis" model
 
 
+class ChatUsage(BaseModel):
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_read_input_tokens: int = 0
+    cache_creation_input_tokens: int = 0
+
+
 class ChatResponse(BaseModel):
     answer: str
     model: str
     tools_used: list[str]
+    usage: ChatUsage | None = None
 
 
 @router.get("/status")
