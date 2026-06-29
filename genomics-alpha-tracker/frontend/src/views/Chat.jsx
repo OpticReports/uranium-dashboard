@@ -32,6 +32,21 @@ function render(text) {
   });
 }
 
+// Compact token-usage + prompt-cache savings line. Cache reads bill at ~0.1x, so
+// every cached input token would otherwise have cost ~10x — show what that saved.
+function usageLine(u) {
+  if (!u) return null;
+  const k = (n) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`);
+  const cached = u.cache_read_input_tokens || 0;
+  const fresh = (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0);
+  const totalIn = cached + fresh;
+  const pct = totalIn ? Math.round((cached / totalIn) * 100) : 0;
+  const saved = Math.round(cached * 0.9); // vs. paying full price for those tokens
+  const parts = [`${k(totalIn)} in / ${k(u.output_tokens || 0)} out`];
+  if (cached > 0) parts.push(`${pct}% cached → ~${k(saved)} tok saved`);
+  return <> · {parts.join(" · ")}</>;
+}
+
 export default function Chat({ onPick }) {
   const [status, setStatus] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -58,7 +73,7 @@ export default function Chat({ onPick }) {
     setBusy(true);
     try {
       const res = await api.chat({ message: msg, history, deep });
-      setMessages((m) => [...m, { role: "assistant", content: res.answer, model: res.model, tools: res.tools_used }]);
+      setMessages((m) => [...m, { role: "assistant", content: res.answer, model: res.model, tools: res.tools_used, usage: res.usage }]);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -110,9 +125,11 @@ export default function Chat({ onPick }) {
               m.role === "user" ? "bg-sky-700/40 border border-sky-700" : "bg-ink border border-edge"
             }`}>
               {m.role === "assistant" ? render(m.content) : m.content}
-              {m.role === "assistant" && m.tools?.length > 0 && (
+              {m.role === "assistant" && (m.tools?.length > 0 || m.usage) && (
                 <div className="mt-2 pt-2 border-t border-edge/50 text-[10px] text-gray-500">
-                  data pulled: {m.tools.join(" · ")} · {m.model}
+                  {m.tools?.length > 0 && <>data pulled: {m.tools.join(" · ")} · </>}
+                  {m.model}
+                  {m.usage && usageLine(m.usage)}
                 </div>
               )}
             </div>

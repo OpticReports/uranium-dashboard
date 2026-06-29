@@ -179,6 +179,21 @@ invent numbers — every figure traces to a tool result.
 - **Sonnet 4.6** by default; a **"Deep analysis"** toggle switches to **Opus 4.8**.
 - Research, not investment advice.
 
+**Token-cost optimization.** An agentic tool loop re-sends the entire conversation
+(system prompt + tool schemas + every prior tool result) on *each* iteration —
+quadratic token growth, the dominant cost. Two measures cut it sharply with no
+quality loss:
+1. **Prompt caching** — the static prefix (system + tool schemas) and the *growing*
+   conversation tail both carry an ephemeral `cache_control` breakpoint, so every
+   loop iteration and follow-up turn reads the prior prefix at **~0.1×** instead of
+   full price. This is what neutralizes the quadratic growth.
+2. **Lean tool payloads** — tools return only what the model needs to reason (e.g.
+   the 0–100 component scores, not the verbose audit `formula`), shrinking the
+   results that get re-sent every iteration.
+
+Each answer shows a live usage line (`tokens in/out · % cached → tokens saved`) so
+the savings are visible.
+
 ---
 
 ## Configuration (everything is YAML)

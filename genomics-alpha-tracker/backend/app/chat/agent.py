@@ -164,8 +164,9 @@ def _tool_get_alpha_analysis(session: Session, symbol: str) -> dict:
     return {
         "in_universe": True, "symbol": symbol, "name": sec.name, "subsector": sec.subsector,
         "alpha_signal": snap.composite if snap else None,
+        # components (0-100 per driver) is enough to reason on; the full `formula`
+        # dict is large and redundant, and would be re-sent every loop iteration.
         "components": snap.components if snap else None,
-        "formula": snap.formula if snap else None,
         "missing_components": snap.missing if snap else None,
         "fundamentals": None if fund is None else {
             "market_cap": fund.market_cap, "cash": fund.cash,
@@ -268,6 +269,33 @@ def _tool_get_top_alpha(session: Session, limit: int = 10) -> dict:
     return {"top": rows[:limit]}
 
 
+def _set_conversation_cache(messages: list[dict]) -> None:
+    """Put a single ephemeral cache breakpoint on the last block of the last message.
+
+    The agent re-sends the entire conversation on every loop iteration AND every
+    follow-up turn — that's quadratic token growth. A breakpoint at the tail lets
+    each subsequent request read the whole prior prefix (system + tools + all prior
+    turns/tool-results) from cache at ~0.1x instead of full price. We strip any
+    earlier message-level breakpoint first so we never exceed the 4-breakpoint cap
+    (the static system+tools breakpoint is the only other one).
+    """
+    for m in messages:
+        c = m.get("content")
+        if isinstance(c, list):
+            for blk in c:
+                if isinstance(blk, dict):
+                    blk.pop("cache_control", None)
+    if not messages:
+        return
+    last = messages[-1]
+    c = last["content"]
+    if isinstance(c, str):
+        c = [{"type": "text", "text": c}]
+        last["content"] = c
+    if isinstance(c, list) and c and isinstance(c[-1], dict):
+        c[-1]["cache_control"] = {"type": "ephemeral"}
+
+
 def _dispatch(session: Session, name: str, args: dict) -> dict:
     if name == "get_alpha_analysis":
         return _tool_get_alpha_analysis(session, args["symbol"])
@@ -282,9 +310,19 @@ def _dispatch(session: Session, name: str, args: dict) -> dict:
     return {"error": f"unknown tool {name}"}
 
 
+def _accumulate(usage: dict, resp) -> None:
+    u = getattr(resp, "usage", None)
+    if u is None:
+        return
+    usage["input_tokens"] += getattr(u, "input_tokens", 0) or 0
+    usage["output_tokens"] += getattr(u, "output_tokens", 0) or 0
+    usage["cache_read_input_tokens"] += getattr(u, "cache_read_input_tokens", 0) or 0
+    usage["cache_creation_input_tokens"] += getattr(u, "cache_creation_input_tokens", 0) or 0
+
+
 def run_chat(session: Session, message: str, history: list[dict] | None = None,
              deep: bool = False) -> dict:
-    """Run one chat turn. Returns {answer, model, tools_used}. Raises on config error."""
+    """Run one chat turn. Returns {answer, model, tools_used, usage}. Raises on config error."""
     if not settings.anthropic_api_key:
         raise RuntimeError("ANTHROPIC_API_KEY not set")
     import anthropic
@@ -299,7 +337,12 @@ def run_chat(session: Session, message: str, history: list[dict] | None = None,
     messages.append({"role": "user", "content": message})
 
     tools_used: list[str] = []
+    usage = {"input_tokens": 0, "output_tokens": 0,
+             "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}
     for _ in range(settings.chat_max_tool_iters):
+        # Move the conversation cache breakpoint to the tail before each call so the
+        # whole prior prefix is read from cache (~0.1x) instead of re-paid in full.
+        _set_conversation_cache(messages)
         resp = client.messages.create(
             model=model,
             max_tokens=settings.chat_max_tokens,
@@ -309,9 +352,11 @@ def run_chat(session: Session, message: str, history: list[dict] | None = None,
             output_config={"effort": "high" if deep else "medium"},
             messages=messages,
         )
+        _accumulate(usage, resp)
         if resp.stop_reason != "tool_use":
             text = "".join(b.text for b in resp.content if b.type == "text")
-            return {"answer": text, "model": resp.model, "tools_used": tools_used}
+            return {"answer": text, "model": resp.model,
+                    "tools_used": tools_used, "usage": usage}
 
         messages.append({"role": "assistant", "content": resp.content})
         results = []
@@ -327,4 +372,4 @@ def run_chat(session: Session, message: str, history: list[dict] | None = None,
         messages.append({"role": "user", "content": results})
 
     return {"answer": "(Reached tool-call limit without a final answer — try rephrasing.)",
-            "model": model, "tools_used": tools_used}
+            "model": model, "tools_used": tools_used, "usage": usage}
