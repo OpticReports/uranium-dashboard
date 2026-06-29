@@ -64,4 +64,8 @@ export const api = {
   // Market
   refreshMarket: (symbol) =>
     req(`/market/refresh${symbol ? `?symbol=${symbol}` : ""}`, { method: "POST" }),
+
+  // Chat analyst
+  chatStatus: () => req("/chat/status"),
+  chat: (payload) => req("/chat", { method: "POST", body: JSON.stringify(payload) }),
 };

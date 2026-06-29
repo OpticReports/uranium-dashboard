@@ -53,6 +53,12 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     sentiment_engine: str = "lexicon"        # lexicon | anthropic
 
+    # --- Chat analyst (grounded LLM over the dashboard's data) ---
+    chat_model_default: str = "claude-sonnet-4-6"   # fast/cheap default
+    chat_model_deep: str = "claude-opus-4-8"        # "Deep analysis" toggle
+    chat_max_tokens: int = 4096
+    chat_max_tool_iters: int = 6
+
     # --- Science layer (NCBI rewards a key with higher rate limits) ---
     ncbi_api_key: str | None = None
     ncbi_email: str | None = None

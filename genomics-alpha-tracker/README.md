@@ -162,6 +162,22 @@ links back to the underlying rows (which catalysts, revisions, posts):
 - **Movers in Narrative** — largest hype acceleration this week + active flags.
 - **Per-name Deep Dive** — price chart with catalyst markers, estimate-revision
   timeline, hype timeline, runway gauge, auditable score breakdown, science feed.
+- **Analyst Chat** — natural-language Q&A grounded in your data.
+
+---
+
+## Analyst Chat (grounded LLM)
+Interrogate the data in plain English — e.g. *"thoughts on MU given its forward
+P/E? bull and bear case, then a probability analysis on the trade."* A Claude agent
+answers by **calling tools that pull your real data** (Alpha Signal components,
+flags, catalysts, fundamentals/runway) plus **live FMP valuation for any ticker**,
+then writes a structured trade memo (snapshot · thesis & smart entry · bull · bear
+· probability/EV · what-would-change-my-mind). The model is instructed never to
+invent numbers — every figure traces to a tool result.
+
+- Requires `ANTHROPIC_API_KEY` (the tab shows a "disabled" notice without it; the rest of the app runs regardless).
+- **Sonnet 4.6** by default; a **"Deep analysis"** toggle switches to **Opus 4.8**.
+- Research, not investment advice.
 
 ---
 
