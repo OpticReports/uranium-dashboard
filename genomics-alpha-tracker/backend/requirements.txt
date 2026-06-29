@@ -18,7 +18,7 @@ yfinance==0.2.51
 pytest==8.3.4
 
 # LLM chat analyst + optional Anthropic sentiment
-anthropic==0.69.0
+anthropic==0.113.0
 
 # Optional: Postgres upgrade path
 # psycopg2-binary==2.9.10
