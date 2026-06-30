@@ -1,19 +1,27 @@
-"""Social / hype ingestion: X/Twitter, Reddit, StockTwits.
+"""Social / hype ingestion: ApeWisdom, FMP social, X/Twitter, Reddit, StockTwits.
 
 Aggregates daily mention VOLUME + mean SENTIMENT per platform. The scoring
 engine derives velocity, acceleration (2nd derivative) and price-vs-chatter
-divergence from this series.
+divergence from this series (it sums volume across ALL platforms per day).
 
-Graceful degradation is central here:
-  * X requires a PAID tier (X_BEARER_TOKEN). Absent -> log + skip, never crash.
-  * Reddit requires app creds. Absent -> skip.
-  * StockTwits has a keyless public endpoint (rate-limited) -> default on.
+Sources, strongest first:
+  * ApeWisdom — FREE, no key. Aggregates ~15 stock subreddits and returns real
+    daily mention counts (hundreds for active names) + a 24h-ago baseline. This
+    is the robust primary; it fixes the "low/incorrect for major firms" problem
+    the StockTwits-only setup had. One snapshot covers the whole watchlist.
+  * FMP social — uses the FMP key (StockTwits+Twitter, with history). Best-effort:
+    it's a legacy endpoint and some tiers 403 it, in which case we skip silently.
+  * X requires a PAID tier (X_BEARER_TOKEN). Absent -> skip.
+  * Reddit (official API) requires app creds. Absent -> skip.
+  * StockTwits public endpoint (keyless, rate-limited, ~30-msg cap, often 403 on
+    cloud IPs) -> best-effort secondary.
 """
 from __future__ import annotations
 
 import logging
+import time
 from collections import defaultdict
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import httpx
 from sqlmodel import Session, select
@@ -26,6 +34,40 @@ from .base import IngestionSource
 
 logger = logging.getLogger(__name__)
 
+# ApeWisdom returns a market-wide ranking, so we fetch it ONCE and reuse it for
+# every symbol in the cycle rather than hammering it 32x. Cached by a short TTL.
+_APE_TTL_SECONDS = 1200  # 20 min
+_ape_cache: dict[str, object] = {"ts": 0.0, "by_ticker": {}}
+
+
+def _apewisdom_snapshot() -> dict[str, dict]:
+    """Market-wide {TICKER: row} from ApeWisdom (all stock subreddits). Cached."""
+    now = time.monotonic()
+    cached = _ape_cache["by_ticker"]
+    if cached and now - float(_ape_cache["ts"]) < _APE_TTL_SECONDS:
+        return cached  # type: ignore[return-value]
+    by_ticker: dict[str, dict] = {}
+    try:
+        page, pages = 1, 1
+        while page <= pages and page <= 12:  # safety cap; ~9 pages today
+            url = f"https://apewisdom.io/api/v1.0/filter/all-stocks/page/{page}"
+            r = with_backoff(lambda u=url: httpx.get(u, timeout=settings.http_timeout_seconds))
+            r.raise_for_status()
+            j = r.json()
+            pages = int(j.get("pages", 1) or 1)
+            for row in j.get("results", []):
+                t = (row.get("ticker") or "").upper()
+                if t:
+                    by_ticker[t] = row
+            page += 1
+        _ape_cache["by_ticker"] = by_ticker
+        _ape_cache["ts"] = now
+        logger.info("ApeWisdom snapshot: %d tickers across %d pages", len(by_ticker), pages)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("ApeWisdom snapshot fetch failed: %s", exc)
+        return cached  # type: ignore[return-value]
+    return by_ticker
+
 
 class SocialIngestion(IngestionSource):
     name = "social"
@@ -33,6 +75,8 @@ class SocialIngestion(IngestionSource):
     def available(self) -> bool:
         # At least one platform must be usable.
         return any([
+            settings.apewisdom_enabled,
+            bool(settings.fmp_social_enabled and settings.fmp_api_key),
             bool(settings.x_bearer_token),
             bool(settings.reddit_client_id and settings.reddit_client_secret),
             settings.stocktwits_enabled,
@@ -40,12 +84,87 @@ class SocialIngestion(IngestionSource):
 
     def fetch(self, symbol: str) -> dict:
         return {
+            # message-list platforms (counted per day in normalize)
             "stocktwits": self._stocktwits(symbol) if settings.stocktwits_enabled else [],
             "x": self._x(symbol) if settings.x_bearer_token else self._skip("x", "X_BEARER_TOKEN"),
             "reddit": self._reddit(symbol)
             if (settings.reddit_client_id and settings.reddit_client_secret)
             else self._skip("reddit", "REDDIT_CLIENT_ID/SECRET"),
+            # pre-aggregated platforms (already daily counts; passed through)
+            "aggregates": (
+                (self._apewisdom(symbol) if settings.apewisdom_enabled else [])
+                + (self._fmp_social(symbol)
+                   if (settings.fmp_social_enabled and settings.fmp_api_key) else [])
+            ),
         }
+
+    def _apewisdom(self, symbol: str) -> list[dict]:
+        """Today's aggregated Reddit mention count for `symbol` from ApeWisdom."""
+        row = _apewisdom_snapshot().get(symbol.upper())
+        if not row:
+            return []  # genuinely little Reddit chatter for this name today
+        today = date.today()
+        recs = [{"platform": "reddit_apewisdom", "date": today.isoformat(),
+                 "volume": int(row.get("mentions") or 0), "sentiment": None}]
+        # Seed yesterday from the 24h-ago baseline so acceleration works on day one
+        # (upsert is idempotent; a later real fetch for that day overwrites it).
+        prev = row.get("mentions_24h_ago")
+        if prev is not None:
+            recs.append({"platform": "reddit_apewisdom",
+                         "date": (today - timedelta(days=1)).isoformat(),
+                         "volume": int(prev), "sentiment": None})
+        return recs
+
+    def _fmp_social(self, symbol: str) -> list[dict]:
+        """Best-effort FMP historical social sentiment (StockTwits + Twitter).
+
+        Legacy v4 endpoint — some FMP tiers 403/402 it; we skip silently then.
+        Hourly rows are aggregated per day: summed posts, mean sentiment (0-1 -> -1..1).
+        """
+        url = "https://financialmodelingprep.com/api/v4/historical/social-sentiment"
+        try:
+            r = with_backoff(lambda: httpx.get(
+                url, params={"symbol": symbol.upper(), "page": 0,
+                             "apikey": settings.fmp_api_key},
+                timeout=settings.http_timeout_seconds))
+            if r.status_code in (401, 402, 403):
+                logger.info("FMP social unavailable (HTTP %s) for %s — skipping",
+                            r.status_code, symbol)
+                return []
+            r.raise_for_status()
+            data = r.json()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("FMP social fetch failed for %s: %s", symbol, exc)
+            return []
+        if not isinstance(data, list):
+            return []
+        # day -> {platform: {"posts": int, "sent": [floats]}}
+        agg: dict[str, dict[str, dict]] = defaultdict(
+            lambda: {"stocktwits_fmp": {"posts": 0, "sent": []},
+                     "twitter_fmp": {"posts": 0, "sent": []}})
+        for row in data:
+            d = str(row.get("date") or "")[:10]
+            if not d:
+                continue
+            for plat, posts_k, sent_k in (
+                ("stocktwits_fmp", "stocktwitsPosts", "stocktwitsSentiment"),
+                ("twitter_fmp", "twitterPosts", "twitterSentiment"),
+            ):
+                posts = row.get(posts_k)
+                if posts:
+                    agg[d][plat]["posts"] += int(posts)
+                s = row.get(sent_k)
+                if s is not None:
+                    agg[d][plat]["sent"].append(float(s))
+        out = []
+        for d, plats in agg.items():
+            for plat, vals in plats.items():
+                if vals["posts"]:
+                    mean_s = (sum(vals["sent"]) / len(vals["sent"]) * 2 - 1
+                              if vals["sent"] else None)  # 0..1 -> -1..1
+                    out.append({"platform": plat, "date": d,
+                                "volume": vals["posts"], "sentiment": mean_s})
+        return out
 
     @staticmethod
     def _skip(platform: str, key: str) -> list:
@@ -155,6 +274,17 @@ class SocialIngestion(IngestionSource):
             records.append(SocialMention(
                 symbol=symbol, date=d, platform=platform, volume=count,
                 sentiment=mean_s, source=platform,
+            ))
+        # Pre-aggregated platforms (ApeWisdom, FMP social) already carry daily
+        # counts — pass them straight through.
+        for item in raw.get("aggregates", []):
+            d = _parse_day(item.get("date"))
+            if not d or not item.get("volume"):
+                continue
+            records.append(SocialMention(
+                symbol=symbol, date=d, platform=item["platform"],
+                volume=int(item["volume"]), sentiment=item.get("sentiment"),
+                source=item["platform"],
             ))
         return records
 

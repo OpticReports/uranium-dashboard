@@ -72,7 +72,7 @@ data on first boot.
 | **Analyst** | ✅ yfinance upgrades/downgrades (rating direction) | FMP: price-target & EPS/revenue **estimate revisions** → revision *velocity* |
 | **Catalyst calendar** | ✅ ClinicalTrials.gov + yfinance earnings (no key) | — (PDUFA/AdComm/conferences are operator-curated via the API) |
 | **Science signal** | ✅ PubMed + bioRxiv/medRxiv (no key) | NCBI key raises PubMed rate limits |
-| **Social / hype** | ✅ StockTwits (no key) + lexicon sentiment | **X/Twitter (PAID tier)**, Reddit (app creds) → fuller hype score |
+| **Social / hype** | ✅ **ApeWisdom** (no key, ~15 subreddits, real daily mention counts) + StockTwits + lexicon sentiment | FMP social (StockTwits+Twitter history, uses FMP key), **X/Twitter (PAID tier)**, Reddit (app creds) → fuller hype score |
 
 > **Graceful degradation is guaranteed:** any module missing its key logs a
 > warning and is skipped. The pipeline never crashes. Check `/health` to see

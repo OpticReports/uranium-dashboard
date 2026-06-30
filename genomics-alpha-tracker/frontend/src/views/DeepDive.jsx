@@ -96,7 +96,7 @@ export default function DeepDive({ symbol, onBack }) {
 
       <div className="grid lg:grid-cols-2 gap-4">
         {/* Hype timeline */}
-        <HypeTimeline mentions={mentions} />
+        <HypeTimeline mentions={mentions} days={days} onChange={setDays} />
 
         {/* Runway + positioning */}
         <Panel title="Runway & positioning">
@@ -245,7 +245,7 @@ function TimeframeBar({ days, onChange }) {
 // Hype chart. The window comes from the shared timeframe (the payload is already
 // bounded by it); bars bucket daily → weekly → monthly as the span grows so they
 // stay readable. Mention history is sparse early on — it fills in over time.
-function HypeTimeline({ mentions }) {
+function HypeTimeline({ mentions, days, onChange }) {
   const span = mentions.length
     ? (new Date(mentions[mentions.length - 1].date) - new Date(mentions[0].date)) / 86400000
     : 0;
@@ -255,9 +255,12 @@ function HypeTimeline({ mentions }) {
 
   return (
     <div className="bg-panel border border-edge rounded-xl p-4">
-      <h3 className="font-semibold mb-3">
-        Hype timeline <span className="text-xs font-normal text-gray-400">({labelFor} mentions)</span>
-      </h3>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-semibold">
+          Hype timeline <span className="text-xs font-normal text-gray-400">({labelFor} mentions)</span>
+        </h3>
+        {onChange && <TimeframeBar days={days} onChange={onChange} />}
+      </div>
       {data.length ? (
         <ResponsiveContainer width="100%" height={180}>
           <BarChart data={data} margin={{ left: -10, right: 10 }}>
