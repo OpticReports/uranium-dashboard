@@ -20,7 +20,7 @@ from sqlmodel import Session, select
 from .config import settings
 from .db import engine, init_db
 from .models import ScoreSnapshot
-from .routers import catalysts, chat, market, scores, universe, views
+from .routers import catalysts, chat, market, scores, social, universe, views
 from .scheduler import shutdown_scheduler, start_scheduler
 from .universe.manager import sync_from_yaml
 
@@ -126,6 +126,7 @@ app.include_router(catalysts.router)
 app.include_router(scores.router)
 app.include_router(views.router)
 app.include_router(chat.router)
+app.include_router(social.router)
 
 
 @app.get("/health", tags=["meta"])
