@@ -26,7 +26,6 @@ export default function DeepDive({ symbol, onBack }) {
   const { security, prices, catalysts, revisions, mentions, publications, fundamentals, score, flags } = data;
 
   const priceData = prices.map((p) => ({ date: p.date, close: p.close }));
-  const hypeData = aggregateMentions(mentions);
 
   return (
     <div className="space-y-4">
@@ -80,20 +79,7 @@ export default function DeepDive({ symbol, onBack }) {
 
       <div className="grid lg:grid-cols-2 gap-4">
         {/* Hype timeline */}
-        <Panel title="Hype timeline (daily mentions)">
-          {hypeData.length ? (
-            <ResponsiveContainer width="100%" height={180}>
-              <BarChart data={hypeData} margin={{ left: -10, right: 10 }}>
-                <XAxis dataKey="date" tick={{ fontSize: 9, fill: "#94a3b8" }} minTickGap={30} />
-                <YAxis tick={{ fontSize: 9, fill: "#94a3b8" }} />
-                <Tooltip contentStyle={{ background: "#121826", border: "1px solid #1f2937" }} />
-                <Bar dataKey="volume" fill="#a78bfa" />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <Empty>No social data (X/Reddit keys absent or no chatter).</Empty>
-          )}
-        </Panel>
+        <HypeTimeline mentions={mentions} />
 
         {/* Runway + positioning */}
         <Panel title="Runway & positioning">
@@ -208,10 +194,91 @@ function rawValue(key, v) {
   return fmtNum(v.raw, 2);
 }
 
-function aggregateMentions(mentions) {
-  const byDay = {};
-  for (const m of mentions) byDay[m.date] = (byDay[m.date] || 0) + m.volume;
-  return Object.entries(byDay)
+// Selectable-timeframe hype chart. Filters mentions to the chosen window and
+// buckets daily → weekly → monthly as the window grows so bars stay readable.
+const RANGES = [
+  { id: "1M", label: "1M", days: 30 },
+  { id: "3M", label: "3M", days: 90 },
+  { id: "6M", label: "6M", days: 180 },
+  { id: "1Y", label: "1Y", days: 365 },
+  { id: "ALL", label: "All", days: Infinity },
+];
+
+function HypeTimeline({ mentions }) {
+  const [range, setRange] = useState("3M");
+  const sel = RANGES.find((r) => r.id === range) || RANGES[1];
+
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - sel.days);
+  const cutoffStr = sel.days === Infinity ? "0000-00-00" : cutoff.toISOString().slice(0, 10);
+  const inRange = mentions.filter((m) => m.date >= cutoffStr);
+
+  // Span of the actual data in range decides the bucket granularity.
+  const span = inRange.length
+    ? (new Date(inRange[inRange.length - 1].date) - new Date(inRange[0].date)) / 86400000
+    : 0;
+  const bucket = span <= 45 ? "day" : span <= 200 ? "week" : "month";
+
+  const data = bucketMentions(inRange, bucket);
+  const labelFor = { day: "daily", week: "weekly", month: "monthly" }[bucket];
+
+  return (
+    <div className="bg-panel border border-edge rounded-xl p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-semibold">
+          Hype timeline <span className="text-xs font-normal text-gray-400">({labelFor} mentions)</span>
+        </h3>
+        <div className="flex gap-1">
+          {RANGES.map((r) => (
+            <button
+              key={r.id}
+              onClick={() => setRange(r.id)}
+              className={`text-xs px-2 py-0.5 rounded border ${
+                range === r.id
+                  ? "border-sky-500 text-sky-300 bg-sky-500/10"
+                  : "border-edge text-gray-400 hover:text-gray-200"
+              }`}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {data.length ? (
+        <ResponsiveContainer width="100%" height={180}>
+          <BarChart data={data} margin={{ left: -10, right: 10 }}>
+            <XAxis dataKey="date" tick={{ fontSize: 9, fill: "#94a3b8" }} minTickGap={30} />
+            <YAxis tick={{ fontSize: 9, fill: "#94a3b8" }} allowDecimals={false} />
+            <Tooltip contentStyle={{ background: "#121826", border: "1px solid #1f2937" }} />
+            <Bar dataKey="volume" fill="#a78bfa" />
+          </BarChart>
+        </ResponsiveContainer>
+      ) : (
+        <Empty>
+          {mentions.length
+            ? "No mentions in this window — try a longer range."
+            : "No social data (X/Reddit keys absent or no chatter)."}
+        </Empty>
+      )}
+    </div>
+  );
+}
+
+function bucketMentions(mentions, bucket) {
+  const key = (d) => {
+    if (bucket === "day") return d;
+    if (bucket === "month") return d.slice(0, 7); // YYYY-MM
+    const dt = new Date(d + "T00:00:00"); // week → Monday's date
+    const dow = (dt.getDay() + 6) % 7;
+    dt.setDate(dt.getDate() - dow);
+    return dt.toISOString().slice(0, 10);
+  };
+  const acc = {};
+  for (const m of mentions) {
+    const k = key(m.date);
+    acc[k] = (acc[k] || 0) + m.volume;
+  }
+  return Object.entries(acc)
     .sort()
     .map(([date, volume]) => ({ date, volume }));
 }
