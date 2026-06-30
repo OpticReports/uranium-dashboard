@@ -171,10 +171,10 @@ function ScoreBreakdown({ score }) {
         <thead className="text-gray-400">
           <tr>
             <th className="text-left py-1">Component</th>
-            <th className="text-right">Raw</th>
-            <th className="text-right">Normalized</th>
-            <th className="text-right">Weight</th>
-            <th className="text-right">Weighted</th>
+            <th className="text-right whitespace-nowrap">Raw<InfoTip term="raw" /></th>
+            <th className="text-right whitespace-nowrap">Normalized<InfoTip term="normalized" /></th>
+            <th className="text-right whitespace-nowrap">Weight<InfoTip term="weight" /></th>
+            <th className="text-right whitespace-nowrap">Weighted<InfoTip term="weighted" /></th>
           </tr>
         </thead>
         <tbody>

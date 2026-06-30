@@ -50,6 +50,30 @@ export const GLOSSARY = {
     calc: "Latest composite minus the composite from ~7 days ago, using saved score history.",
     read: "Positive = the setup is improving (inflecting up); negative = deteriorating. The alpha is often in the change, not the level.",
   },
+  raw: {
+    title: "Raw",
+    what: "The driver's actual measured value, in its own native units — before any scaling.",
+    calc: "Pulled straight from the data: e.g. quarters of cash runway, a sum of weighted upcoming catalysts, the net direction of analyst revisions.",
+    read: "Not comparable across rows — each driver is measured differently, so a raw 0.62 and a raw 7.8q live on totally different scales. It answers 'what is the underlying number?', not 'is it good?'.",
+  },
+  normalized: {
+    title: "Normalized (0–100)",
+    what: "The raw value re-expressed on a common 0–100, peer-relative scale where 50 = the universe average.",
+    calc: "Cross-sectional ranking (z-score / percentile) of this name's raw value against all other names in the universe for that one driver.",
+    read: "This is the equalizer that makes drivers comparable. 70+ = ranks well above peers on that driver; below 50 = below average. A 'good' raw number only becomes obvious here (e.g. 7.8q runway → ~97).",
+  },
+  weight: {
+    title: "Weight",
+    what: "How much this driver counts toward the final Alpha Signal — your priorities.",
+    calc: "Set in scoring.yaml (editable, then POST /scores/reload). The active weights sum to 1.0; a missing component's weight is dropped from the denominator.",
+    read: "Higher weight = this driver moves the score more. It reflects what you've decided matters, not anything about this particular stock.",
+  },
+  weighted: {
+    title: "Weighted",
+    what: "The points this driver actually contributes to the Alpha Signal.",
+    calc: "Normalized × Weight. The Alpha Signal is the sum of these divided by the sum of the non-missing weights (a weighted average).",
+    read: "This is where you see which drivers are carrying — or dragging — the score. Add the Weighted column (over the used weights) and you get the headline number.",
+  },
   na: {
     title: "“n/a” vs 0",
     what: "n/a means there's no data for that input — deliberately different from a real 0.",
