@@ -48,6 +48,8 @@ class Settings(BaseSettings):
     reddit_client_secret: str | None = None
     reddit_user_agent: str = "genomics-alpha-tracker/0.1"
     stocktwits_enabled: bool = True          # public endpoint, no key (rate-limited)
+    apewisdom_enabled: bool = True           # free, no key: ~15 subreddits, real counts
+    fmp_social_enabled: bool = True          # uses FMP key; legacy endpoint, best-effort
 
     # --- Optional LLM sentiment ---
     anthropic_api_key: str | None = None
