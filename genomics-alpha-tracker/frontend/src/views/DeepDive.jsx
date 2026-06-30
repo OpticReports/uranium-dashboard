@@ -242,34 +242,59 @@ function TimeframeBar({ days, onChange }) {
   );
 }
 
-// Hype chart. The window comes from the shared timeframe (the payload is already
-// bounded by it); bars bucket daily → weekly → monthly as the span grows so they
-// stay readable. Mention history is sparse early on — it fills in over time.
+// Friendly label + color per source platform (stacked-bar segments + legend).
+const PLATFORM_META = {
+  reddit_apewisdom: { label: "Reddit", color: "#f59e0b" },
+  reddit: { label: "Reddit (API)", color: "#fb923c" },
+  x: { label: "X / Twitter", color: "#38bdf8" },
+  twitter_fmp: { label: "Twitter (FMP)", color: "#0ea5e9" },
+  stocktwits: { label: "StockTwits", color: "#a78bfa" },
+  stocktwits_fmp: { label: "StockTwits (FMP)", color: "#8b5cf6" },
+};
+const platformMeta = (p) => PLATFORM_META[p] || { label: p, color: "#64748b" };
+
+// Hype chart. Bars are STACKED BY SOURCE so you can see where chatter comes from.
+// The window comes from the shared timeframe; bars bucket daily → weekly → monthly
+// as the span grows. Mention history is sparse early on — it fills in over time.
 function HypeTimeline({ mentions, days, onChange }) {
   const span = mentions.length
     ? (new Date(mentions[mentions.length - 1].date) - new Date(mentions[0].date)) / 86400000
     : 0;
   const bucket = span <= 45 ? "day" : span <= 200 ? "week" : "month";
-  const data = bucketMentions(mentions, bucket);
+  const { rows, platforms } = bucketMentions(mentions, bucket);
   const labelFor = { day: "daily", week: "weekly", month: "monthly" }[bucket];
 
   return (
     <div className="bg-panel border border-edge rounded-xl p-4">
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-semibold">
-          Hype timeline <span className="text-xs font-normal text-gray-400">({labelFor} mentions)</span>
+          Hype timeline <span className="text-xs font-normal text-gray-400">({labelFor} mentions by source)</span>
         </h3>
         {onChange && <TimeframeBar days={days} onChange={onChange} />}
       </div>
-      {data.length ? (
-        <ResponsiveContainer width="100%" height={180}>
-          <BarChart data={data} margin={{ left: -10, right: 10 }}>
-            <XAxis dataKey="date" tick={{ fontSize: 9, fill: "#94a3b8" }} minTickGap={30} />
-            <YAxis tick={{ fontSize: 9, fill: "#94a3b8" }} allowDecimals={false} />
-            <Tooltip contentStyle={{ background: "#121826", border: "1px solid #1f2937" }} />
-            <Bar dataKey="volume" fill="#a78bfa" />
-          </BarChart>
-        </ResponsiveContainer>
+      {rows.length ? (
+        <>
+          <ResponsiveContainer width="100%" height={180}>
+            <BarChart data={rows} margin={{ left: -10, right: 10 }}>
+              <XAxis dataKey="date" tick={{ fontSize: 9, fill: "#94a3b8" }} minTickGap={30} />
+              <YAxis tick={{ fontSize: 9, fill: "#94a3b8" }} allowDecimals={false} />
+              <Tooltip contentStyle={{ background: "#121826", border: "1px solid #1f2937" }} />
+              {platforms.map((p) => (
+                <Bar key={p} dataKey={p} stackId="m" name={platformMeta(p).label}
+                     fill={platformMeta(p).color} />
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+          <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-[10px] text-gray-400">
+            {platforms.map((p) => (
+              <span key={p} className="inline-flex items-center gap-1">
+                <span className="w-2 h-2 rounded-sm inline-block"
+                      style={{ background: platformMeta(p).color }} />
+                {platformMeta(p).label}
+              </span>
+            ))}
+          </div>
+        </>
       ) : (
         <Empty>No social data in this window (mention history builds over time).</Empty>
       )}
@@ -277,6 +302,7 @@ function HypeTimeline({ mentions, days, onChange }) {
   );
 }
 
+// Pivot mentions into stacked rows keyed by date, one numeric field per platform.
 function bucketMentions(mentions, bucket) {
   const key = (d) => {
     if (bucket === "day") return d;
@@ -287,13 +313,16 @@ function bucketMentions(mentions, bucket) {
     return dt.toISOString().slice(0, 10);
   };
   const acc = {};
+  const platforms = new Set();
   for (const m of mentions) {
     const k = key(m.date);
-    acc[k] = (acc[k] || 0) + m.volume;
+    const p = m.platform || "other";
+    platforms.add(p);
+    acc[k] = acc[k] || { date: k };
+    acc[k][p] = (acc[k][p] || 0) + m.volume;
   }
-  return Object.entries(acc)
-    .sort()
-    .map(([date, volume]) => ({ date, volume }));
+  const rows = Object.values(acc).sort((a, b) => (a.date < b.date ? -1 : 1));
+  return { rows, platforms: Array.from(platforms).sort() };
 }
 
 function nearestDate(series, target) {
