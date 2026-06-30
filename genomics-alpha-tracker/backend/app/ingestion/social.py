@@ -78,6 +78,7 @@ class SocialIngestion(IngestionSource):
             settings.apewisdom_enabled,
             bool(settings.fmp_social_enabled and settings.fmp_api_key),
             bool(settings.x_bearer_token),
+            bool(settings.twitterapi_io_key),
             bool(settings.reddit_client_id and settings.reddit_client_secret),
             settings.stocktwits_enabled,
         ])
@@ -86,7 +87,7 @@ class SocialIngestion(IngestionSource):
         return {
             # message-list platforms (counted per day in normalize)
             "stocktwits": self._stocktwits(symbol) if settings.stocktwits_enabled else [],
-            "x": self._x(symbol) if settings.x_bearer_token else self._skip("x", "X_BEARER_TOKEN"),
+            "x": self._x_source(symbol),
             "reddit": self._reddit(symbol)
             if (settings.reddit_client_id and settings.reddit_client_secret)
             else self._skip("reddit", "REDDIT_CLIENT_ID/SECRET"),
@@ -191,6 +192,55 @@ class SocialIngestion(IngestionSource):
         except Exception as exc:  # noqa: BLE001
             logger.warning("StockTwits fetch failed for %s: %s", symbol, exc)
             return []
+
+    def _x_source(self, symbol: str) -> list[dict]:
+        """Pick the X feed: official API if a bearer token is set, else twitterapi.io."""
+        if settings.x_bearer_token:
+            return self._x(symbol)
+        if settings.twitterapi_io_key:
+            return self._twitterapi_io(symbol)
+        return self._skip("x", "X_BEARER_TOKEN or TWITTERAPI_IO_KEY")
+
+    def _twitterapi_io(self, symbol: str) -> list[dict]:
+        """Recent $TICKER posts via twitterapi.io (3rd-party X data, pay-per-tweet).
+
+        Spend is bounded: only the last `lookback_days` of posts, capped at
+        `max_posts` per symbol per run. Cashtag query, English, no retweets.
+        """
+        base = "https://api.twitterapi.io/twitter/tweet/advanced_search"
+        headers = {"X-API-Key": settings.twitterapi_io_key}
+        since_unix = int((datetime.utcnow()
+                          - timedelta(days=settings.twitterapi_io_lookback_days)).timestamp())
+        query = f"${symbol} lang:en -filter:retweets since_time:{since_unix}"
+        out: list[dict] = []
+        cursor: str | None = None
+        try:
+            for _page in range(10):  # hard page cap (safety); max_posts is the real bound
+                params = {"query": query, "queryType": "Latest"}
+                if cursor:
+                    params["cursor"] = cursor
+                r = with_backoff(lambda p=dict(params): httpx.get(
+                    base, headers=headers, params=p,
+                    timeout=settings.http_timeout_seconds))
+                if r.status_code in (401, 403):
+                    logger.warning("twitterapi.io auth failed (HTTP %s) — check TWITTERAPI_IO_KEY",
+                                   r.status_code)
+                    break
+                r.raise_for_status()
+                j = r.json()
+                tweets = j.get("tweets") or []
+                for tw in tweets:
+                    d = _x_created_date(tw.get("created_at"))
+                    if d:
+                        out.append({"date": d, "text": tw.get("text", ""), "sentiment": None})
+                cursor = j.get("next_cursor")
+                has_next = j.get("has_next_page", bool(cursor))
+                if not tweets or not has_next or not cursor or len(out) >= settings.twitterapi_io_max_posts:
+                    break
+            return out[: settings.twitterapi_io_max_posts]
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("twitterapi.io fetch failed for %s: %s", symbol, exc)
+            return out
 
     def _x(self, symbol: str) -> list[dict]:
         url = "https://api.twitter.com/2/tweets/search/recent"
@@ -313,5 +363,20 @@ def _parse_day(value) -> date | None:
         return None
     try:
         return date.fromisoformat(str(value)[:10])
+    except ValueError:
+        return None
+
+
+def _x_created_date(value) -> str | None:
+    """Twitter timestamps come as 'Wed Oct 10 20:19:24 +0000 2018' or ISO. -> YYYY-MM-DD."""
+    if not value:
+        return None
+    s = str(value)
+    try:
+        return datetime.strptime(s, "%a %b %d %H:%M:%S %z %Y").date().isoformat()
+    except ValueError:
+        pass
+    try:
+        return date.fromisoformat(s[:10]).isoformat()
     except ValueError:
         return None

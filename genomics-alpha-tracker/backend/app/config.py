@@ -43,7 +43,12 @@ class Settings(BaseSettings):
     analyst_provider: str = "fmp"  # falls back to yfinance recommendations
 
     # --- Social / hype ---
-    x_bearer_token: str | None = None       # paid tier required; skip if absent
+    x_bearer_token: str | None = None       # official X API (pay-per-use); skip if absent
+    # twitterapi.io: 3rd-party X data, ~97% cheaper. Preferred for X when set and no
+    # official bearer token. Cost is bounded by max_posts x lookback x cadence.
+    twitterapi_io_key: str | None = None
+    twitterapi_io_max_posts: int = 50       # cap posts/symbol/run -> bounds spend
+    twitterapi_io_lookback_days: int = 2    # only recent posts feed the daily hype series
     reddit_client_id: str | None = None
     reddit_client_secret: str | None = None
     reddit_user_agent: str = "genomics-alpha-tracker/0.1"
