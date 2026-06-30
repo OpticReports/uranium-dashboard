@@ -254,23 +254,68 @@ const PLATFORM_META = {
 const platformMeta = (p) => PLATFORM_META[p] || { label: p, color: "#64748b" };
 
 // Hype chart. Bars are STACKED BY SOURCE so you can see where chatter comes from.
-// The window comes from the shared timeframe; bars bucket daily → weekly → monthly
-// as the span grows. Mention history is sparse early on — it fills in over time.
+// Granularity (daily/weekly/monthly) is user-controlled, plus an optional custom
+// calendar range. Mention history is sparse early on — it fills in over time.
+const GRAINS = [
+  { id: "day", label: "Daily" },
+  { id: "week", label: "Weekly" },
+  { id: "month", label: "Monthly" },
+];
+
 function HypeTimeline({ mentions, days, onChange }) {
-  const span = mentions.length
-    ? (new Date(mentions[mentions.length - 1].date) - new Date(mentions[0].date)) / 86400000
-    : 0;
-  const bucket = span <= 45 ? "day" : span <= 200 ? "week" : "month";
-  const { rows, platforms } = bucketMentions(mentions, bucket);
-  const labelFor = { day: "daily", week: "weekly", month: "monthly" }[bucket];
+  const [grain, setGrain] = useState("day");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+
+  // A custom start date older than the fetched window widens the deep-dive fetch.
+  useEffect(() => {
+    if (!from || !onChange) return;
+    const need = Math.ceil((new Date() - new Date(from + "T00:00:00")) / 86400000) + 1;
+    if (need > days) onChange(Math.min(need, 3650));
+  }, [from, days, onChange]);
+
+  const lo = from || "0000-00-00";
+  const hi = to || "9999-99-99";
+  const inRange = mentions.filter((m) => m.date >= lo && m.date <= hi);
+  const { rows, platforms } = bucketMentions(inRange, grain);
 
   return (
     <div className="bg-panel border border-edge rounded-xl p-4">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
         <h3 className="font-semibold">
-          Hype timeline <span className="text-xs font-normal text-gray-400">({labelFor} mentions by source)</span>
+          Hype timeline <span className="text-xs font-normal text-gray-400">(mentions by source)</span>
         </h3>
-        {onChange && <TimeframeBar days={days} onChange={onChange} />}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex gap-1">
+            {GRAINS.map((g) => (
+              <button
+                key={g.id}
+                onClick={() => setGrain(g.id)}
+                className={`text-xs px-2 py-0.5 rounded border ${
+                  grain === g.id
+                    ? "border-sky-500 text-sky-300 bg-sky-500/10"
+                    : "border-edge text-gray-400 hover:text-gray-200"
+                }`}
+              >
+                {g.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1 text-xs text-gray-400">
+            <input type="date" value={from} max={to || undefined}
+                   onChange={(e) => setFrom(e.target.value)}
+                   className="bg-ink border border-edge rounded px-1.5 py-0.5 text-gray-200" />
+            <span>–</span>
+            <input type="date" value={to} min={from || undefined}
+                   onChange={(e) => setTo(e.target.value)}
+                   className="bg-ink border border-edge rounded px-1.5 py-0.5 text-gray-200" />
+            {(from || to) && (
+              <button onClick={() => { setFrom(""); setTo(""); }}
+                      className="px-1.5 py-0.5 rounded border border-edge hover:text-gray-200"
+                      title="Clear custom range">✕</button>
+            )}
+          </div>
+        </div>
       </div>
       {rows.length ? (
         <>
@@ -296,7 +341,11 @@ function HypeTimeline({ mentions, days, onChange }) {
           </div>
         </>
       ) : (
-        <Empty>No social data in this window (mention history builds over time).</Empty>
+        <Empty>
+          {from || to
+            ? "No mentions in this date range — widen it or clear the custom range."
+            : "No social data in this window (mention history builds over time)."}
+        </Empty>
       )}
     </div>
   );
