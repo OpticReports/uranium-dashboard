@@ -39,6 +39,11 @@ logger = logging.getLogger(__name__)
 _APE_TTL_SECONDS = 1200  # 20 min
 _ape_cache: dict[str, object] = {"ts": 0.0, "by_ticker": {}}
 
+# twitterapi.io bills per tweet returned. The social job runs every 2h, but X volume
+# is a DAILY figure — so we pull each symbol at most once per UTC day to avoid paying
+# ~12x for the same window. Resets on process restart (at worst a few extra pulls/day).
+_x_fetch_day: dict[str, str] = {}
+
 
 def _apewisdom_snapshot() -> dict[str, dict]:
     """Market-wide {TICKER: row} from ApeWisdom (all stock subreddits). Cached."""
@@ -204,18 +209,28 @@ class SocialIngestion(IngestionSource):
     def _twitterapi_io(self, symbol: str) -> list[dict]:
         """Recent $TICKER posts via twitterapi.io (3rd-party X data, pay-per-tweet).
 
-        Spend is bounded: only the last `lookback_days` of posts, capped at
-        `max_posts` per symbol per run. Cashtag query, English, no retweets.
+        Pulled at most once per UTC day per symbol (see _x_fetch_day) so the 2h
+        social cadence doesn't re-pay for the same window. `max_posts` caps posts
+        per day (0 = uncapped → true volume); only the last `lookback_days` count.
+        Cashtag query, English, no retweets.
         """
+        sym = symbol.upper()
+        today = datetime.utcnow().date().isoformat()
+        if _x_fetch_day.get(sym) == today:
+            return []  # already pulled X for this symbol today — don't re-pay
+
         base = "https://api.twitterapi.io/twitter/tweet/advanced_search"
         headers = {"X-API-Key": settings.twitterapi_io_key}
         since_unix = int((datetime.utcnow()
                           - timedelta(days=settings.twitterapi_io_lookback_days)).timestamp())
         query = f"${symbol} lang:en -filter:retweets since_time:{since_unix}"
+        cap = settings.twitterapi_io_max_posts  # 0 => uncapped
+        max_pages = 500 if cap <= 0 else max(2, cap // 20 + 2)  # ~20 tweets/page
         out: list[dict] = []
         cursor: str | None = None
+        got_response = False
         try:
-            for _page in range(10):  # hard page cap (safety); max_posts is the real bound
+            for _page in range(max_pages):
                 params = {"query": query, "queryType": "Latest"}
                 if cursor:
                     params["cursor"] = cursor
@@ -225,8 +240,9 @@ class SocialIngestion(IngestionSource):
                 if r.status_code in (401, 403):
                     logger.warning("twitterapi.io auth failed (HTTP %s) — check TWITTERAPI_IO_KEY",
                                    r.status_code)
-                    break
+                    break  # don't mark fetched: let a fixed key retry next cycle
                 r.raise_for_status()
+                got_response = True
                 j = r.json()
                 tweets = j.get("tweets") or []
                 for tw in tweets:
@@ -235,9 +251,13 @@ class SocialIngestion(IngestionSource):
                         out.append({"date": d, "text": tw.get("text", ""), "sentiment": None})
                 cursor = j.get("next_cursor")
                 has_next = j.get("has_next_page", bool(cursor))
-                if not tweets or not has_next or not cursor or len(out) >= settings.twitterapi_io_max_posts:
+                if not tweets or not has_next or not cursor:
                     break
-            return out[: settings.twitterapi_io_max_posts]
+                if cap > 0 and len(out) >= cap:
+                    break
+            if got_response:
+                _x_fetch_day[sym] = today  # success (even if 0 posts) -> once/day
+            return out if cap <= 0 else out[:cap]
         except Exception as exc:  # noqa: BLE001
             logger.warning("twitterapi.io fetch failed for %s: %s", symbol, exc)
             return out

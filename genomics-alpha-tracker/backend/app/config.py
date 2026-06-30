@@ -47,7 +47,10 @@ class Settings(BaseSettings):
     # twitterapi.io: 3rd-party X data, ~97% cheaper. Preferred for X when set and no
     # official bearer token. Cost is bounded by max_posts x lookback x cadence.
     twitterapi_io_key: str | None = None
-    twitterapi_io_max_posts: int = 50       # cap posts/symbol/run -> bounds spend
+    # Posts pulled per symbol per DAY (0 = uncapped — true volume for megacaps).
+    # X is fetched at most once/UTC-day/symbol regardless of the 2h social cadence,
+    # so this bounds DAILY spend, not per-run: cost ~= names x this x 30 x $0.00015.
+    twitterapi_io_max_posts: int = 300
     twitterapi_io_lookback_days: int = 2    # only recent posts feed the daily hype series
     reddit_client_id: str | None = None
     reddit_client_secret: str | None = None
