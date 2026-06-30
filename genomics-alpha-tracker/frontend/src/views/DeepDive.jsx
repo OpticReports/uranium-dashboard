@@ -14,11 +14,20 @@ import InfoTip from "../components/InfoTip";
 export default function DeepDive({ symbol, onBack }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
+  const [days, setDays] = useState(365); // shared timeframe for price + hype charts
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => setData(null), [symbol]); // clear when switching names
 
   useEffect(() => {
-    setData(null);
-    api.deepDive(symbol).then(setData).catch((e) => setErr(e.message));
-  }, [symbol]);
+    let alive = true;
+    setLoading(true);
+    api.deepDive(symbol, days)
+      .then((d) => { if (alive) { setData(d); setErr(null); } })
+      .catch((e) => { if (alive) setErr(e.message); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [symbol, days]);
 
   if (err) return <div className="text-rose-400">⚠ {err}</div>;
   if (!data) return <div className="text-gray-400">Loading {symbol}…</div>;
@@ -51,6 +60,14 @@ export default function DeepDive({ symbol, onBack }) {
             {fmtNum(score?.composite, 0)}
           </div>
         </div>
+      </div>
+
+      {/* Shared timeframe control for the price + hype charts */}
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-gray-400">
+          Timeframe {loading && <span className="text-sky-400">· refreshing…</span>}
+        </span>
+        <TimeframeBar days={days} onChange={setDays} />
       </div>
 
       {/* Price + catalyst markers */}
@@ -194,56 +211,53 @@ function rawValue(key, v) {
   return fmtNum(v.raw, 2);
 }
 
-// Selectable-timeframe hype chart. Filters mentions to the chosen window and
-// buckets daily → weekly → monthly as the window grows so bars stay readable.
+// Timeframe selector shared by the price + hype charts. Drives a refetch of the
+// deep-dive payload with the chosen window (backend caps at 10y).
 const RANGES = [
-  { id: "1M", label: "1M", days: 30 },
-  { id: "3M", label: "3M", days: 90 },
-  { id: "6M", label: "6M", days: 180 },
-  { id: "1Y", label: "1Y", days: 365 },
-  { id: "ALL", label: "All", days: Infinity },
+  { label: "1M", days: 30 },
+  { label: "3M", days: 90 },
+  { label: "6M", days: 180 },
+  { label: "1Y", days: 365 },
+  { label: "2Y", days: 730 },
+  { label: "All", days: 3650 },
 ];
 
+function TimeframeBar({ days, onChange }) {
+  return (
+    <div className="flex gap-1">
+      {RANGES.map((r) => (
+        <button
+          key={r.label}
+          onClick={() => onChange(r.days)}
+          className={`text-xs px-2 py-0.5 rounded border ${
+            days === r.days
+              ? "border-sky-500 text-sky-300 bg-sky-500/10"
+              : "border-edge text-gray-400 hover:text-gray-200"
+          }`}
+        >
+          {r.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// Hype chart. The window comes from the shared timeframe (the payload is already
+// bounded by it); bars bucket daily → weekly → monthly as the span grows so they
+// stay readable. Mention history is sparse early on — it fills in over time.
 function HypeTimeline({ mentions }) {
-  const [range, setRange] = useState("3M");
-  const sel = RANGES.find((r) => r.id === range) || RANGES[1];
-
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - sel.days);
-  const cutoffStr = sel.days === Infinity ? "0000-00-00" : cutoff.toISOString().slice(0, 10);
-  const inRange = mentions.filter((m) => m.date >= cutoffStr);
-
-  // Span of the actual data in range decides the bucket granularity.
-  const span = inRange.length
-    ? (new Date(inRange[inRange.length - 1].date) - new Date(inRange[0].date)) / 86400000
+  const span = mentions.length
+    ? (new Date(mentions[mentions.length - 1].date) - new Date(mentions[0].date)) / 86400000
     : 0;
   const bucket = span <= 45 ? "day" : span <= 200 ? "week" : "month";
-
-  const data = bucketMentions(inRange, bucket);
+  const data = bucketMentions(mentions, bucket);
   const labelFor = { day: "daily", week: "weekly", month: "monthly" }[bucket];
 
   return (
     <div className="bg-panel border border-edge rounded-xl p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="font-semibold">
-          Hype timeline <span className="text-xs font-normal text-gray-400">({labelFor} mentions)</span>
-        </h3>
-        <div className="flex gap-1">
-          {RANGES.map((r) => (
-            <button
-              key={r.id}
-              onClick={() => setRange(r.id)}
-              className={`text-xs px-2 py-0.5 rounded border ${
-                range === r.id
-                  ? "border-sky-500 text-sky-300 bg-sky-500/10"
-                  : "border-edge text-gray-400 hover:text-gray-200"
-              }`}
-            >
-              {r.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <h3 className="font-semibold mb-3">
+        Hype timeline <span className="text-xs font-normal text-gray-400">({labelFor} mentions)</span>
+      </h3>
       {data.length ? (
         <ResponsiveContainer width="100%" height={180}>
           <BarChart data={data} margin={{ left: -10, right: 10 }}>
@@ -254,11 +268,7 @@ function HypeTimeline({ mentions }) {
           </BarChart>
         </ResponsiveContainer>
       ) : (
-        <Empty>
-          {mentions.length
-            ? "No mentions in this window — try a longer range."
-            : "No social data (X/Reddit keys absent or no chatter)."}
-        </Empty>
+        <Empty>No social data in this window (mention history builds over time).</Empty>
       )}
     </div>
   );
