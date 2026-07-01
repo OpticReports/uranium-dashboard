@@ -1,0 +1,30 @@
+# Standalone Render blueprint for the Treasury Canary (separate from the genomics
+# app's root render.yaml). Deploy as its own service; attach to the same domain as
+# a new section via a path/subdomain at deploy time (see README > Deploy).
+services:
+  - type: web
+    name: treasury-canary
+    runtime: docker
+    dockerfilePath: treasury-canary/Dockerfile
+    dockerContext: treasury-canary
+    plan: starter
+    healthCheckPath: /health
+    disk:
+      name: canary-data
+      mountPath: /app/data
+      sizeGB: 1
+    envVars:
+      - key: FRED_API_KEY
+        sync: false            # set in Render dashboard; free key
+      - key: DATABASE_URL
+        value: sqlite:////app/data/canary.db
+      - key: RUN_SCHEDULER
+        value: "true"
+      - key: BACKFILL_ON_STARTUP
+        value: "true"
+      - key: REFRESH_INTERVAL_MINUTES
+        value: "720"
+      - key: DISPLAY_TZ
+        value: America/Puerto_Rico
+      - key: ALERT_WEBHOOK_URL
+        sync: false            # optional; POST target for regime-change alerts
