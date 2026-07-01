@@ -5,8 +5,9 @@ WORKDIR /fe
 COPY frontend/package*.json ./
 RUN npm install
 COPY frontend/ ./
-# same-origin API calls in prod
-ENV VITE_API_BASE=""
+# Served at genomics.optic.capital/canary via the genomics reverse proxy:
+# asset base "/canary/" (vite.config default) + API calls under "/canary".
+ENV VITE_API_BASE="/canary"
 RUN npm run build
 
 FROM python:3.11-slim AS app
