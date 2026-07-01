@@ -167,7 +167,10 @@ async def _canary_proxy(path: str, request: Request):
     url = f"{_CANARY_UPSTREAM}/{path}"
     body = await request.body()
     fwd = {k: v for k, v in request.headers.items()
-           if k.lower() not in ("host", "authorization", "content-length")}
+           if k.lower() not in ("host", "authorization", "content-length", "accept-encoding")}
+    # Request an uncompressed upstream response so we never forward compressed bytes
+    # with the encoding header stripped (which renders as garbage in the browser).
+    fwd["accept-encoding"] = "identity"
     try:
         async with httpx.AsyncClient(timeout=90.0, follow_redirects=True) as client:
             up = await client.request(request.method, url,
