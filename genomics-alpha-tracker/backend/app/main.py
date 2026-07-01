@@ -11,9 +11,10 @@ import os
 import secrets
 from contextlib import asynccontextmanager
 
+import httpx
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session, select
 
@@ -144,6 +145,38 @@ def health():
             "anthropic_sentiment": bool(settings.anthropic_api_key),
         },
     }
+
+
+# --- Treasury Canary reverse proxy -------------------------------------------
+# Serve the separate Treasury Canary service under this domain at /canary/* so it
+# lives at genomics.optic.capital/canary. Sits behind the same login gate above.
+# The Canary's SPA is built with base "/canary/" + API base "/canary", so browser
+# requests arrive under /canary and we strip that prefix before forwarding.
+_CANARY_UPSTREAM = os.environ.get(
+    "CANARY_UPSTREAM", "https://treasury-canary.onrender.com").rstrip("/")
+_CANARY_HOP_HEADERS = {"content-encoding", "transfer-encoding", "connection", "content-length"}
+
+
+@app.get("/canary", include_in_schema=False)
+def _canary_root():
+    return RedirectResponse(url="/canary/")
+
+
+@app.api_route("/canary/{path:path}", methods=["GET", "POST", "HEAD"], include_in_schema=False)
+async def _canary_proxy(path: str, request: Request):
+    url = f"{_CANARY_UPSTREAM}/{path}"
+    body = await request.body()
+    fwd = {k: v for k, v in request.headers.items()
+           if k.lower() not in ("host", "authorization", "content-length")}
+    try:
+        async with httpx.AsyncClient(timeout=90.0, follow_redirects=True) as client:
+            up = await client.request(request.method, url,
+                                      params=dict(request.query_params), content=body, headers=fwd)
+    except Exception as exc:  # noqa: BLE001
+        return Response(f"Canary upstream unavailable: {exc}", status_code=502)
+    headers = {k: v for k, v in up.headers.items() if k.lower() not in _CANARY_HOP_HEADERS}
+    return Response(content=up.content, status_code=up.status_code, headers=headers,
+                    media_type=up.headers.get("content-type"))
 
 
 # Single-service deployment: if a built frontend is present, serve it at "/".

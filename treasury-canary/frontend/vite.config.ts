@@ -16,6 +16,9 @@ const proxied = [
 ];
 
 export default defineConfig({
+  // Served under /canary on the shared domain (behind the genomics reverse proxy).
+  // For a standalone root deploy, change this to "/".
+  base: "/canary/",
   plugins: [react()],
   server: {
     proxy: proxied.reduce<Record<string, { target: string; changeOrigin: boolean }>>(
