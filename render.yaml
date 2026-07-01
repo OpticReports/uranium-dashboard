@@ -1,5 +1,6 @@
 # Render blueprint (MUST live at the repo root for Blueprint auto-detection).
-# Deploys the Genomics Sector Alpha Tracker as ONE web service.
+# Deploys TWO web services: the Genomics Sector Alpha Tracker and the Treasury
+# Canary. Each gets its own <name>.onrender.com URL; add custom domains per service.
 #
 # How to use:
 #   1. On Render: New + -> Blueprint -> connect the OpticReports/uranium-dashboard
@@ -54,5 +55,38 @@ services:
         value: /app/data/cache
       - key: FRONTEND_DIST
         value: /app/static
+      - key: LOG_LEVEL
+        value: INFO
+
+  # --- Treasury Market Health Monitor ("The Canary") -------------------------
+  - type: web
+    name: treasury-canary
+    runtime: docker
+    dockerfilePath: treasury-canary/Dockerfile
+    dockerContext: treasury-canary
+    plan: starter
+    healthCheckPath: /health
+    autoDeploy: true
+    disk:
+      name: canary-data
+      mountPath: /app/data
+      sizeGB: 1
+    envVars:
+      - key: FRED_API_KEY
+        sync: false            # <- enter your free FRED key in the Render dashboard
+      - key: DATABASE_URL
+        value: sqlite:////app/data/canary.db
+      - key: CACHE_DIR
+        value: /app/data/cache
+      - key: RUN_SCHEDULER
+        value: "true"
+      - key: BACKFILL_ON_STARTUP
+        value: "true"
+      - key: REFRESH_INTERVAL_MINUTES
+        value: "720"
+      - key: DISPLAY_TZ
+        value: America/Puerto_Rico
+      - key: ALERT_WEBHOOK_URL
+        sync: false            # optional: POST target for regime-change alerts
       - key: LOG_LEVEL
         value: INFO
