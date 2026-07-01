@@ -30,13 +30,22 @@ Standalone app that lives alongside the genomics dashboard in this repo.
 | Scoring (thresholds, composite, events) + tests | ✅ |
 | Recession model (Estrella-Mishkin probit) + tests | ✅ |
 | FRED source (cache + backoff + graceful degradation) + tests | ✅ |
-| Treasury FiscalData / NY Fed (ACM, SOFR) / OFR / news sources | ⏳ |
-| Remaining metrics (vol, funding, premium, auctions, flows, liquidity, cross-asset) | ⏳ |
-| Jobs (backfill, refresh) + API routes + main.py | ⏳ |
-| Frontend (MetricTable, StressGauge, ReSteepenAlert, FlightToQuality, EventFeed, NewsPanel) | ⏳ |
-| Deploy wiring (Docker, render.yaml, same-domain section) + QA | ⏳ |
+| Volatility / funding / premium / cross-asset metrics (FRED) | ✅ |
+| Jobs (backfill, refresh) + API routes + main.py | ✅ |
+| Frontend (MetricTable, StressGauge, ReSteepenAlert, FlightToQuality, EventFeed, NewsPanel) | ✅ |
+| Deploy wiring (Docker, render.yaml, same-domain section) | ✅ |
+| News RSS (Fed/Treasury, keyless) | ✅ |
+| **Follow-up:** Treasury auction results (E), foreign flows (F), on/off-run liquidity + OFR FSI (G) | ⏳ |
 
-Backend tests: `cd backend && python -m pytest -q` (currently 22 passing).
+Backend tests: `cd backend && python -m pytest -q` (currently 24 passing).
+
+### Follow-up phase (scoped, not yet built)
+The composite already **reweights over available categories**, so these render as
+absent rather than wrong until wired: **auctions** (bid-to-cover/tails/bidder class
+via Treasury FiscalData), **foreign flows** (Fed custody / TIC), and **liquidity**
+(on-the-run vs off-the-run + OFR Financial Stress Index cross-check). Each needs a
+live-API integration verified against the provider's real schema — deliberately
+deferred over shipping guessed endpoints.
 
 ## Run it
 
