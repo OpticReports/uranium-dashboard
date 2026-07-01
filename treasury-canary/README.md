@@ -38,6 +38,39 @@ Standalone app that lives alongside the genomics dashboard in this repo.
 
 Backend tests: `cd backend && python -m pytest -q` (currently 22 passing).
 
+## Run it
+
+### Docker (single service — API serves the built SPA)
+```bash
+cp .env.example backend/.env          # optionally set FRED_API_KEY
+FRED_API_KEY=xxxx docker compose up --build   # -> http://localhost:8000
+```
+
+### Bare metal
+```bash
+# backend
+cd backend && python -m pip install -e . && python -m pytest -q   # 24 tests
+uvicorn app.main:app --reload         # http://localhost:8000 (docs at /docs)
+# frontend (new shell)
+cd frontend && npm install && npm run dev     # http://localhost:5173 (proxies to :8000)
+```
+Trigger an immediate pull/compute: `curl -X POST localhost:8000/refresh`.
+
+## Deploy (same domain, new section)
+The app ships a single-service `Dockerfile` and a standalone `render.yaml` (kept
+separate from the genomics app's root blueprint so the live deploy is untouched).
+To surface it under the existing domain as a new section, either:
+- **Path route** `genomics.optic.capital/canary/*` via a reverse-proxy rule to the
+  canary service, or
+- **Subdomain** `canary.optic.capital` (own Render service) plus a nav link from the
+  genomics dashboard.
+
+Set `FRED_API_KEY` (free) in the Render dashboard; optionally `ALERT_WEBHOOK_URL`.
+
+## API
+`GET /health · /metrics · /metrics/{id}/history · /composite · /recession-prob ·
+/curve/canary?pair=3m10y · /events · /alerts · /news` and `POST /refresh`.
+
 ## Which modules work with NO keys
 Treasury FiscalData (par curve, auctions), NY Fed (SOFR, ACM term premium), OFR
 (Financial Stress Index), and the RSS news feed are keyless. FRED (curve tenors,

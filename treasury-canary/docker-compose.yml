@@ -1,0 +1,19 @@
+# Local single-service run. `docker compose up --build` -> http://localhost:8000
+services:
+  canary:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - FRED_API_KEY=${FRED_API_KEY:-}
+      - DATABASE_URL=sqlite:////app/data/canary.db
+      - RUN_SCHEDULER=true
+      - BACKFILL_ON_STARTUP=true
+      - ALERT_WEBHOOK_URL=${ALERT_WEBHOOK_URL:-}
+    volumes:
+      - canary-data:/app/data
+
+volumes:
+  canary-data:
