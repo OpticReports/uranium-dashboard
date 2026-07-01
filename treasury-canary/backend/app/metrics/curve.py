@@ -175,6 +175,67 @@ def analyze_spread(
     )
 
 
+def build_curve_metrics(
+    tenors: dict[str, tuple[list, list]],
+    *, min_inversion_days: int = 10, steepen_persist_days: int = 60,
+    recession_starts: list | None = None,
+) -> tuple[list, dict[str, "SpreadAnalysis"]]:
+    """Build a MetricResult per pair + the SpreadAnalysis map (for the canary chart).
+
+    RE_STEEPENING overrides the threshold status to CRITICAL. Deferred import of
+    the assemble/threshold layer avoids an import cycle.
+    """
+    from ..scoring import thresholds as T
+    from .base import MetricResult, Status, delta, percentile_rank
+
+    metrics: list[MetricResult] = []
+    analyses: dict[str, SpreadAnalysis] = {}
+    for pair, (short, long) in PAIRS.items():
+        if short not in tenors or long not in tenors:
+            metrics.append(MetricResult(
+                metric_id=f"curve.{pair}", category="A", label=pair, value=None,
+                status=Status.STALE, note="tenor series unavailable"))
+            continue
+        da, va = tenors[short]
+        db, vb = tenors[long]
+        dates, spread = build_spread(da, va, db, vb)
+        a = analyze_spread(dates, spread, min_inversion_days=min_inversion_days,
+                           steepen_persist_days=steepen_persist_days)
+        a.pair = pair
+        analyses[pair] = a
+        status = T.classify(f"curve.{pair}", a.current_value)
+        if a.state is CurveState.RE_STEEPENING:
+            status = Status.CRITICAL
+        med_lag = None
+        if recession_starts:
+            lags = [lag_months_to_recession(e, recession_starts)
+                    for e in a.episodes if e.sustained]
+            lags = sorted(x for x in lags if x is not None)
+            if lags:
+                med_lag = lags[len(lags) // 2]
+        note = _state_note(a, med_lag)
+        metrics.append(MetricResult(
+            metric_id=f"curve.{pair}", category="A", label=pair,
+            value=a.current_value, status=status, asof=(dates[-1] if dates else None),
+            unit="pct", delta_1d=delta(spread, 1), delta_5d=delta(spread, 5),
+            delta_20d=delta(spread, 20), percentile=percentile_rank(spread, a.current_value),
+            note=note, source_series=f"FRED:{short}-{long}", extra=a.as_dict(),
+        ))
+    return metrics, analyses
+
+
+def _state_note(a: "SpreadAnalysis", med_lag: int | None) -> str:
+    if a.state is CurveState.RE_STEEPENING:
+        base = (f"RE-STEEPENING: dis-inverted {a.dis_inversion_date} after "
+                f"{a.days_inverted}d inverted.")
+        if med_lag is not None:
+            base += f" Historically recession followed prior dis-inversions by ~{med_lag}mo (median)."
+        return base + " Association, not causation; recent lead times longer/noisier."
+    if a.state is CurveState.INVERTED:
+        return f"Inverted {a.days_inverted}d (depth {a.current_depth_bps:.0f}bps). Watch for dis-inversion."
+    return "Positive/normal. The canary is the dis-inversion after sustained inversion, not the inversion."
+
+
 def lag_months_to_recession(
     episode: InversionEpisode, recession_starts: list[date]
 ) -> int | None:

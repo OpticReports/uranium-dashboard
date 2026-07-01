@@ -23,6 +23,32 @@ def recession_probability(spread_3m10y_pct: float | None) -> float | None:
     return round(100.0 * _norm_cdf(BETA0 + BETA1 * spread_3m10y_pct), 1)
 
 
+def build_recession_metrics(bundle: dict[str, tuple[list, list]]) -> list:
+    """MetricResults for the recession model + NFCI cross-check."""
+    from .assemble import simple_metric
+    from .base import MetricResult, Status, last_valid
+    from .curve import build_spread
+    from ..scoring import thresholds as T
+
+    out: list = []
+    d3, v3 = bundle.get("3mo", ([], []))
+    d10, v10 = bundle.get("10y", ([], []))
+    dates, spread = build_spread(d3, v3, d10, v10)  # 10y - 3m
+    latest = last_valid(spread)
+    prob = recession_probability(latest)
+    out.append(MetricResult(
+        metric_id="recession.prob", category="I", label="Recession prob (12mo, Estrella-Mishkin)",
+        value=prob, status=T.classify("recession.prob", prob) if prob is not None else Status.STALE,
+        asof=(dates[-1] if dates else None), unit="%", source_series="FRED:T10Y3M (probit)",
+        note="Probit on 3m10y. ~30% at spread 0, ~50% near -0.82pp. Model, not a forecast."))
+
+    nfci = bundle.get("nfci", ([], []))
+    out.append(simple_metric(
+        "recession.nfci", "I", "Chicago Fed NFCI", nfci[0], nfci[1], unit="idx",
+        source="FRED:NFCI", note="External cross-check: >0 = tighter-than-average financial conditions."))
+    return out
+
+
 def near_term_forward_spread(
     fwd_3m_in_6q_pct: float | None, current_3m_pct: float | None
 ) -> float | None:

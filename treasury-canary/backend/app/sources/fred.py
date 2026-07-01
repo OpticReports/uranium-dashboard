@@ -94,6 +94,33 @@ def _parse(data: dict) -> tuple[list[date], list[float | None]]:
     return dates, vals
 
 
+def fetch_bundle(start: str = "1976-01-01") -> dict[str, tuple[list[date], list[float | None]]]:
+    """Fetch the full FRED catalog into one logical-keyed bundle for the builders.
+
+    Keys are provider-agnostic (tenor labels, "sofr", "hy_oas", ...). Missing key or
+    failed series -> that entry is ([], []) and its metrics render STALE.
+    """
+    from ..config import (
+        FRED_BREAKEVENS, FRED_CREDIT, FRED_FUNDING, FRED_MACRO, FRED_REAL_YIELDS,
+        FRED_TENORS, FRED_VOL,
+    )
+    bundle: dict[str, tuple[list, list]] = {}
+    for label, sid in FRED_TENORS.items():
+        bundle[label] = fetch_series(sid, start)
+    bundle["real_10y"] = fetch_series(FRED_REAL_YIELDS["10y"], start)
+    bundle["breakeven_5y5y"] = fetch_series(FRED_BREAKEVENS["5y5y"], start)
+    for k in ("sofr", "effr", "iorb"):
+        bundle[k] = fetch_series(FRED_FUNDING[k], start)
+    bundle["vix"] = fetch_series(FRED_VOL["vix"], start)
+    bundle["hy_oas"] = fetch_series(FRED_CREDIT["hy_oas"], start)
+    bundle["ig_oas"] = fetch_series(FRED_CREDIT["ig_oas"], start)
+    bundle["sp500"] = fetch_series(FRED_MACRO["sp500"], start)
+    bundle["nfci"] = fetch_series(FRED_MACRO["nfci"], start)
+    bundle["acm_tp10"] = fetch_series(FRED_MACRO["acm_tp10"], start)
+    bundle["recession"] = fetch_series(FRED_MACRO["recession"], start)
+    return bundle
+
+
 def recession_start_dates(dates: list[date], usrec: list[float | None]) -> list[date]:
     """First day of each USREC==1 run (NBER recession onsets) for chart annotation."""
     starts: list[date] = []

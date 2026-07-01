@@ -39,6 +39,7 @@ DEFAULTS: dict[str, Threshold] = {
     "liquidity.ofr_fsi": Threshold(yellow=1.0, red=3.0, higher_is_worse=True),
     # H. Cross-asset
     "crossasset.stock_bond_corr": Threshold(yellow=0.0, red=0.30, higher_is_worse=True),
+    "crossasset.flight_to_quality": Threshold(yellow=0.6, red=0.4, higher_is_worse=False),
     "crossasset.hy_oas": Threshold(yellow=350.0, red=550.0, higher_is_worse=True),
     "crossasset.ig_oas": Threshold(yellow=130.0, red=180.0, higher_is_worse=True),
     "crossasset.erp": Threshold(yellow=1.0, red=0.0, higher_is_worse=False),
