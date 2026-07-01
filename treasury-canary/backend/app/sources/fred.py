@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import threading
 import time
 from datetime import date, datetime
 
@@ -94,31 +95,68 @@ def _parse(data: dict) -> tuple[list[date], list[float | None]]:
     return dates, vals
 
 
-def fetch_bundle(start: str = "1976-01-01") -> dict[str, tuple[list[date], list[float | None]]]:
-    """Fetch the full FRED catalog into one logical-keyed bundle for the builders.
+# In-process cache of the assembled bundle. Every API endpoint calls fetch_bundle,
+# and the browser fires several at once — without this, each request re-fetches ~25
+# FRED series, a thundering herd that times out / OOMs a small (free-tier) instance.
+# A lock serializes the cold fetch so concurrent callers share ONE network pass.
+_BUNDLE_TTL_SECONDS = 6 * 3600  # data is EOD/daily; a few hours stale is fine
+_bundle_cache: dict[str, object] = {"ts": 0.0, "data": None}
+_bundle_lock = threading.Lock()
+
+
+def fetch_bundle(start: str = "1976-01-01", force: bool = False
+                 ) -> dict[str, tuple[list[date], list[float | None]]]:
+    """Fetch the full FRED catalog into one logical-keyed bundle (memoized).
 
     Keys are provider-agnostic (tenor labels, "sofr", "hy_oas", ...). Missing key or
     failed series -> that entry is ([], []) and its metrics render STALE.
     """
+    now = time.time()
+    cached = _bundle_cache["data"]
+    if not force and cached is not None and now - float(_bundle_cache["ts"]) < _BUNDLE_TTL_SECONDS:
+        return cached  # type: ignore[return-value]
+    with _bundle_lock:
+        # double-check: another thread may have populated it while we waited
+        now = time.time()
+        cached = _bundle_cache["data"]
+        if not force and cached is not None and now - float(_bundle_cache["ts"]) < _BUNDLE_TTL_SECONDS:
+            return cached  # type: ignore[return-value]
+        bundle = _fetch_bundle_uncached(start)
+        _bundle_cache["data"] = bundle
+        _bundle_cache["ts"] = time.time()
+        return bundle
+
+
+def _fetch_bundle_uncached(start: str) -> dict[str, tuple[list[date], list[float | None]]]:
+    from concurrent.futures import ThreadPoolExecutor
+
     from ..config import (
         FRED_BREAKEVENS, FRED_CREDIT, FRED_FUNDING, FRED_MACRO, FRED_REAL_YIELDS,
         FRED_TENORS, FRED_VOL,
     )
-    bundle: dict[str, tuple[list, list]] = {}
-    for label, sid in FRED_TENORS.items():
-        bundle[label] = fetch_series(sid, start)
-    bundle["real_10y"] = fetch_series(FRED_REAL_YIELDS["10y"], start)
-    bundle["breakeven_5y5y"] = fetch_series(FRED_BREAKEVENS["5y5y"], start)
+    # logical key -> FRED series id
+    plan: dict[str, str] = dict(FRED_TENORS)
+    plan["real_10y"] = FRED_REAL_YIELDS["10y"]
+    plan["breakeven_5y5y"] = FRED_BREAKEVENS["5y5y"]
     for k in ("sofr", "effr", "iorb"):
-        bundle[k] = fetch_series(FRED_FUNDING[k], start)
-    bundle["vix"] = fetch_series(FRED_VOL["vix"], start)
-    bundle["hy_oas"] = fetch_series(FRED_CREDIT["hy_oas"], start)
-    bundle["ig_oas"] = fetch_series(FRED_CREDIT["ig_oas"], start)
-    bundle["sp500"] = fetch_series(FRED_MACRO["sp500"], start)
-    bundle["nfci"] = fetch_series(FRED_MACRO["nfci"], start)
-    bundle["acm_tp10"] = fetch_series(FRED_MACRO["acm_tp10"], start)
-    bundle["recession"] = fetch_series(FRED_MACRO["recession"], start)
-    return bundle
+        plan[k] = FRED_FUNDING[k]
+    plan["vix"] = FRED_VOL["vix"]
+    plan["hy_oas"] = FRED_CREDIT["hy_oas"]
+    plan["ig_oas"] = FRED_CREDIT["ig_oas"]
+    plan["sp500"] = FRED_MACRO["sp500"]
+    plan["nfci"] = FRED_MACRO["nfci"]
+    plan["acm_tp10"] = FRED_MACRO["acm_tp10"]
+    plan["recession"] = FRED_MACRO["recession"]
+
+    # Fetch concurrently — ~25 sequential FRED calls would be slow on a cold
+    # instance; the disk cache + this pool keep the cold path to a few seconds.
+    def _one(item):
+        key, sid = item
+        return key, fetch_series(sid, start)
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = pool.map(_one, plan.items())
+    return {key: series for key, series in results}
 
 
 def recession_start_dates(dates: list[date], usrec: list[float | None]) -> list[date]:
