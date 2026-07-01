@@ -144,25 +144,41 @@ export class ApiError extends Error {
   }
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// Free-tier hosting spins the service down after idle; the waking request 502/503s
+// for ~20s while the container boots. Retry those (and transient network errors) so
+// a cold start looks like a slow load, not an error.
+const RETRY_STATUSES = new Set([502, 503, 504]);
+const MAX_RETRIES = 4;
+
 async function getJson<T>(path: string, init?: RequestInit): Promise<T> {
-  let res: Response;
-  try {
-    res = await fetch(`${BASE}${path}`, {
-      headers: { Accept: "application/json" },
-      ...init,
-    });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "network error";
-    throw new ApiError(`Request failed: ${msg}`, 0);
+  let lastErr = new ApiError("unknown error", 0);
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    let res: Response;
+    try {
+      res = await fetch(`${BASE}${path}`, { headers: { Accept: "application/json" }, ...init });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "network error";
+      lastErr = new ApiError(`Request failed: ${msg}`, 0);
+      if (attempt < MAX_RETRIES) { await sleep(2000 * (attempt + 1)); continue; }
+      throw lastErr;
+    }
+    if (res.ok) {
+      try {
+        return (await res.json()) as T;
+      } catch {
+        throw new ApiError(`Malformed JSON from ${path}`, res.status);
+      }
+    }
+    lastErr = new ApiError(`HTTP ${res.status} for ${path}`, res.status);
+    if (RETRY_STATUSES.has(res.status) && attempt < MAX_RETRIES) {
+      await sleep(3000 * (attempt + 1)); // 3s, 6s, 9s, 12s — covers a cold boot
+      continue;
+    }
+    throw lastErr;
   }
-  if (!res.ok) {
-    throw new ApiError(`HTTP ${res.status} for ${path}`, res.status);
-  }
-  try {
-    return (await res.json()) as T;
-  } catch {
-    throw new ApiError(`Malformed JSON from ${path}`, res.status);
-  }
+  throw lastErr;
 }
 
 // ---------------------------------------------------------------------------
