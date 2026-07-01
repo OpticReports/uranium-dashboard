@@ -59,25 +59,25 @@ services:
         value: INFO
 
   # --- Treasury Market Health Monitor ("The Canary") -------------------------
+  # FREE plan = $0, isolated from the genomics service (its own URL). The dashboard
+  # computes live on each request, so it works without a persistent disk; the
+  # tradeoffs are cold starts after idle and no persisted history/scheduled alerts.
+  # Bump `plan` to `starter` + re-add a disk later if you want those.
   - type: web
     name: treasury-canary
     runtime: docker
     dockerfilePath: treasury-canary/Dockerfile
     dockerContext: treasury-canary
-    plan: starter
+    plan: free
     healthCheckPath: /health
     autoDeploy: true
-    disk:
-      name: canary-data
-      mountPath: /app/data
-      sizeGB: 1
     envVars:
       - key: FRED_API_KEY
-        sync: false            # <- enter your free FRED key in the Render dashboard
+        sync: false            # <- enter your free FRED key on THIS service
       - key: DATABASE_URL
-        value: sqlite:////app/data/canary.db
+        value: sqlite:///./data/canary.db   # ephemeral on free tier (OK; live compute)
       - key: CACHE_DIR
-        value: /app/data/cache
+        value: ./data/cache
       - key: RUN_SCHEDULER
         value: "true"
       - key: BACKFILL_ON_STARTUP
@@ -86,7 +86,5 @@ services:
         value: "720"
       - key: DISPLAY_TZ
         value: America/Puerto_Rico
-      - key: ALERT_WEBHOOK_URL
-        sync: false            # optional: POST target for regime-change alerts
       - key: LOG_LEVEL
         value: INFO
