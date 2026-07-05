@@ -19,6 +19,23 @@ Format per entry:
 
 <!-- New entries go below this line, newest first. -->
 
+## 2026-07-05 — safeguard panel — three protections tested individually
+
+- Change: created one new saved symphony `tbm9SE57MoSeY7rOEhys`
+  "KMLM switcher — ROTATOR VOL CAP 75/25" (risk-on rotator filter blended
+  75% / 25% BIL). V1 (XLK trend gates @200/100/50d) and V2 (TQQQ 60d-DD>20%
+  circuit breaker) were backtested ad-hoc only and NOT saved. Original
+  untouched; nothing invested.
+- Why:    the original's 32% maxDD (Jan-Feb 2025) occurred fully above trend,
+  holding rotator TECL/SOXL/SVIX — target that branch specifically.
+- Before (original): CAGR 600.8%, maxDD 32.0%, MAR 18.75, Sharpe 2.89.
+- After:  vol cap 75/25: CAGR 461.6%, maxDD 27.4%, MAR 16.87, Sharpe 2.82,
+  crash episode -27.4% vs -32.0%. Trend gates: no DD change (XLK never broke
+  200d SMA in the episode). DD breaker: worse (42.1% DD, fires after the
+  loss). Full table in `results/results.md` addendum.
+- Artifacts: `results/results.md` (addendum), backtests in session scratch.
+
+
 ## 2026-07-05 — regime-gate experiment — two variants created (backtest-only)
 
 - Change: created two *new saved* symphonies (original untouched, nothing

@@ -62,3 +62,47 @@ these entry points).
 
 Artifacts: `fixtures/original_symphony.json` (pre-experiment backup),
 raw backtests in session scratchpad; summary JSON inline here.
+
+---
+
+# Addendum 2026-07-05 — three targeted safeguards, tested individually
+
+Motivation: the original's 32% max DD (2025-01-02 → 2025-02-27) happened with
+SPY above its 200d SMA on 100% of days, holding TECL/SOXL/SVIX from the
+risk-on rotator. Three safeguards aimed at *that* failure mode, each applied
+alone to the original (window 2022-04-13 → 2026-07-03; OOS = from 2025-07-01):
+
+| Variant | CAGR | maxDD | MAR | Sharpe | Jan–Feb 25 | OOS CAGR | OOS DD | OOS Sharpe |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Original | +600.8% | 32.0% | 18.75 | 2.89 | −32.0% | +61.9% | 28.7% | 1.04 |
+| V1 rotator XLK-200d gate | +433.9% | 32.0% | 13.54 | 2.71 | −32.0% | +65.5% | 28.7% | 1.07 |
+| V1 @100d | +386.4% | 37.4% | 10.33 | 2.56 | −34.9% | +65.5% | 28.7% | 1.07 |
+| V1 @50d | +434.3% | 33.3% | 13.03 | 2.66 | −33.3% | +51.4% | 32.3% | 0.95 |
+| **V3 rotator vol cap 75/25** | **+461.6%** | **27.4%** | **16.87** | **2.82** | **−27.4%** | +42.4% | **27.0%** | 0.89 |
+| V3 @50/50 | +343.2% | 25.5% | 13.44 | 2.67 | −22.7% | +23.6% | 25.5% | 0.66 |
+| V2 TQQQ 60d-DD>20% breaker | +43.5% | **42.1%** | 1.03 | 1.22 | −32.1% | +21.2% | 24.4% | 0.68 |
+
+Findings:
+
+1. **Trend gates cannot see this strategy's crashes.** XLK stayed above its
+   200d SMA through the whole Jan–Feb 2025 slide (episode return identical to
+   original, −32.0%). Faster windows (100d/50d) only add whipsaw and make DD
+   *worse*.
+2. **Drawdown circuit-breakers fire too late.** V2 waits for TQQQ to be down
+   20% in 60d — by then the loss is taken; it then sits in BIL through the
+   V-shaped recovery. Result: worst maxDD of the whole panel (42.1%) at 1/14th
+   the return.
+3. **Only position sizing works — and it's linear, not free.** The 75/25 vol
+   cap cut maxDD 32.0→27.4%, worst-30d −27.2→−22.9%, and the crash episode
+   −32→−27.4%, keeping 77% of the CAGR and nearly all the Sharpe (2.82 vs
+   2.89). Deeper caps cut DD further at proportional return cost. There is no
+   signal here that dodges the drawdown while keeping the upside — the
+   drawdown *is* the exposure that earns the returns.
+
+Saved (uninvested): **V3 75/25 → `tbm9SE57MoSeY7rOEhys`**
+("KMLM switcher — ROTATOR VOL CAP 75/25"). V1/V2 and the sub-variants were
+backtest-only and not saved.
+
+Practical takeaway: control this strategy's risk by *how much capital it
+gets* (portfolio-level sizing; see `correlation-backtest.json` inverse-vol
+weights) and/or the in-tree vol cap — not by market-timing overlays.
