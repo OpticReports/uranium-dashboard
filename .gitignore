@@ -1,0 +1,9 @@
+# Secrets — Composer API credentials must NEVER be committed.
+# The MCP server reads COMPOSER_API_KEY_ID / COMPOSER_SECRET from the
+# environment at runtime; keep them in a local .env that stays untracked.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets.*

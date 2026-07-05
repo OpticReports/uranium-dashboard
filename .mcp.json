@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "composer": {
+      "type": "http",
+      "url": "https://ai.composer.trade/mcp",
+      "headers": {
+        "x-api-key-id": "${COMPOSER_API_KEY_ID}",
+        "authorization": "Bearer ${COMPOSER_SECRET}"
+      }
+    }
+  }
+}
