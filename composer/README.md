@@ -141,7 +141,8 @@ composer/
 ├── fixtures/        # symphony JSON snapshots + human-readable logic summaries
 ├── results/         # backtest / sweep outputs (baseline.json, sweeps, …)
 └── scripts/
-    └── composer-api.py  # helper CLI (auth from env; capital moves double-guarded)
+    ├── composer-api.py  # helper CLI (auth from env; capital moves double-guarded)
+    └── monte-carlo.py   # bootstrap Monte Carlo on a backtest's equity curve
 ```
 
 ## 4. Workflows (mapped to goals)
@@ -170,3 +171,30 @@ composer/
 - `COMPOSER_ALLOW_CAPITAL=1 composer-api.py transfer --from A --to B
   --amount X --yes` — withdraw then invest; not atomic; check
   `market-hours` and re-check `symphony-stats` after each leg.
+
+**Monte Carlo a strategy** (read-only)
+- `monte-carlo.py --id <symphony-id> --sims 5000 --horizon 252 -o
+  results/mc-<name>.json` (or `-f` a saved backtest JSON). IID + stationary
+  block bootstrap of the backtest's daily returns → CAGR / max-drawdown
+  percentiles, P(loss), P(DD>20/30/50%), VaR/CVaR. Caveat: assumes the
+  sampled regime persists — it resamples backtest history, it does not
+  re-run the strategy logic on synthetic prices.
+
+## 5. Roadmap candidates (not built yet)
+
+- **Parameter sweep harness** — clone a tree, vary thresholds/windows
+  (`patch-nodes` or in-memory), `backtest-def` each variant, write a grid to
+  `results/sweeps/`; walk-forward split via `start_date`/`end_date` to catch
+  overfitting.
+- **Community verifier** — paginate `search`, fetch each `symphony_sid`'s
+  tree, re-backtest independently, flag stats that don't reproduce.
+- **Correlation / allocation report** — per-symphony daily curves
+  (`portfolio/accounts/…/symphonies/{id}`) → correlation matrix and
+  risk-parity / vol-target weights across our symphonies (report only;
+  any resulting transfer stays human-gated).
+- **Live-vs-backtest divergence** — `symphony-historical-holdings` +
+  `portfolio-history` vs backtest curve → implementation-shortfall tracking.
+- **Rebalance preview digest** — `dry-run` before the trading window,
+  summarizing tomorrow's likely trades per symphony.
+- **Scheduled monitoring** — daily stats snapshot + drawdown alert via a
+  scheduled session/trigger.
