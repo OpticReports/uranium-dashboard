@@ -19,6 +19,25 @@ Format per entry:
 
 <!-- New entries go below this line, newest first. -->
 
+## 2026-07-05 — regime-gate experiment — two variants created (backtest-only)
+
+- Change: created two *new saved* symphonies (original untouched, nothing
+  invested):
+  - Copy A `gRwiDs9bEHhW3vjXrNdW` "KMLM switcher — TREND GATE ONLY" — whole
+    tree inside `IF SPY > 200d SMA`, else 100% BIL.
+  - Copy B `F9yaDwptEh8MOnNy3CIl` "KMLM switcher — FULL REGIME v1" — trend
+    gate + all 11 pop-leg UVXY allocations swapped for a VIXY/VIXM 20d
+    cum-return switch (UVXY/SVIX) + layered risk-off sleeve.
+- Why:    test whether a trend gate and vol-term-structure awareness improve
+  risk-adjusted returns.
+- Before (original): CAGR 600.8%, Sharpe 2.89, maxDD 32.0%, MAR 18.75.
+- After:  Copy A CAGR 180.9%, Sharpe 2.06, maxDD 32.0% (unchanged!), MAR 5.6.
+          Copy B CAGR 65.7%, Sharpe 1.15, maxDD 50.0%, MAR 1.3. Both worse —
+          gate never fired during the original's worst stretch; 90% of pops
+          resolved to SVIX (short vol at long-vol moments). **Keep original.**
+- Artifacts: `results/results.md`, `fixtures/original_symphony.json`.
+
+
 ## 2026-07-05 — Simons KMLM switcher (`rhZ9oDAUvN26v5Ra5qql`) — baseline capture
 
 - Change: none — read-only baseline only (Step D).
