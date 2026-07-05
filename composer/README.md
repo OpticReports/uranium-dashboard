@@ -141,8 +141,15 @@ composer/
 ├── fixtures/        # symphony JSON snapshots + human-readable logic summaries
 ├── results/         # backtest / sweep outputs (baseline.json, sweeps, …)
 └── scripts/
-    ├── composer-api.py  # helper CLI (auth from env; capital moves double-guarded)
-    └── monte-carlo.py   # bootstrap Monte Carlo on a backtest's equity curve
+    ├── composerlib.py       # shared helpers (auth, API calls, curve math)
+    ├── composer-api.py      # general CLI (capital moves double-guarded)
+    ├── monte-carlo.py       # bootstrap Monte Carlo on a backtest equity curve
+    ├── sweep.py             # parameter sweep grid + walk-forward split
+    ├── verify-community.py  # re-backtest public symphonies vs claimed stats
+    ├── correlation.py       # correlation matrix + inverse-vol weights
+    ├── divergence.py        # live vs backtest implementation shortfall
+    ├── rebalance-digest.py  # market hours + dry-run + trade previews
+    └── monitor.py           # snapshot + alerts (exit 2 = alert), cron-friendly
 ```
 
 ## 4. Workflows (mapped to goals)
@@ -180,21 +187,39 @@ composer/
   sampled regime persists — it resamples backtest history, it does not
   re-run the strategy logic on synthetic prices.
 
-## 5. Roadmap candidates (not built yet)
+## 5. Analysis tools (all read-only)
 
-- **Parameter sweep harness** — clone a tree, vary thresholds/windows
-  (`patch-nodes` or in-memory), `backtest-def` each variant, write a grid to
-  `results/sweeps/`; walk-forward split via `start_date`/`end_date` to catch
-  overfitting.
-- **Community verifier** — paginate `search`, fetch each `symphony_sid`'s
-  tree, re-backtest independently, flag stats that don't reproduce.
-- **Correlation / allocation report** — per-symphony daily curves
-  (`portfolio/accounts/…/symphonies/{id}`) → correlation matrix and
-  risk-parity / vol-target weights across our symphonies (report only;
-  any resulting transfer stays human-gated).
-- **Live-vs-backtest divergence** — `symphony-historical-holdings` +
-  `portfolio-history` vs backtest curve → implementation-shortfall tracking.
-- **Rebalance preview digest** — `dry-run` before the trading window,
-  summarizing tomorrow's likely trades per symphony.
-- **Scheduled monitoring** — daily stats snapshot + drawdown alert via a
-  scheduled session/trigger.
+All scripts live in `scripts/`, auth from the env vars, write JSON reports to
+`results/`, and never touch the deploy/trading routes.
+
+**`sweep.py` — parameter sweeps + walk-forward.** `--list-nodes` prints every
+tweakable condition/filter/asset with its node id; each `--set
+'node-id:field=v1,v2,…'` adds a dimension (cartesian product, baseline value
+auto-included, in-memory only — nothing is saved to Composer). `--split
+YYYY-MM-DD` reports in-sample vs out-of-sample separately so overfit settings
+stand out. Grids land in `results/sweeps/`.
+
+**`verify-community.py` — trust-but-verify search.** Pulls the top public
+symphonies by OOS stats, re-backtests each over ~the same window with our
+cost assumptions, and flags `SHARPE_NOT_REPRODUCED` / `DRAWDOWN_WORSE`.
+
+**`correlation.py` — correlation & allocation report.** Live deposit-adjusted
+curves for invested symphonies (default) or `--ids` backtest curves for any
+symphonies. Correlation matrix, per-strategy stats, inverse-vol weights.
+Report only — acting on it stays human-gated.
+
+**`divergence.py` — implementation shortfall.** Live deposit-adjusted curve
+vs a fresh backtest over the same dates: cumulative gap, mean daily gap
+(bps and annualized), live~model return correlation. `--all` covers every
+invested symphony.
+
+**`rebalance-digest.py` — what would trade today.** Market hours, per-symphony
+rebalance flags (`may_rebalance_today`, queued deploys, current holdings),
+Composer's `/dry-run` simulation, and (with `--previews`, during market
+hours) per-symphony trade previews.
+
+**`monitor.py` — scheduled monitoring.** Snapshots per-symphony state to
+`results/monitor/` (git-ignored), compares to the previous run, and alerts on
+drawdown from tracked peak (`--dd-alert`), large moves (`--move-alert`),
+holding rotations, and queued deploys. Exit code 2 when alerts fire, so a
+scheduled session/cron can decide whether to notify.

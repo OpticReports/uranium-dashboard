@@ -1,0 +1,66 @@
+{
+  "symphony_id": "rhZ9oDAUvN26v5Ra5qql",
+  "split": "2025-07-01",
+  "start": null,
+  "end": null,
+  "capital": 10000,
+  "results": [
+    {
+      "params": {
+        "c305d8d3:rhs-val": 79
+      },
+      "in_sample": {
+        "cagr": 10.0695,
+        "sharpe": 3.409,
+        "max_drawdown": 0.3205,
+        "cumulative_return": 2184.51,
+        "days": 805
+      },
+      "out_of_sample": {
+        "cagr": 0.6193,
+        "sharpe": 1.041,
+        "max_drawdown": 0.2871,
+        "cumulative_return": 0.62,
+        "days": 252
+      }
+    },
+    {
+      "params": {
+        "c305d8d3:rhs-val": 76
+      },
+      "in_sample": {
+        "cagr": 9.7847,
+        "sharpe": 3.37,
+        "max_drawdown": 0.3511,
+        "cumulative_return": 2009.67,
+        "days": 805
+      },
+      "out_of_sample": {
+        "cagr": 0.4454,
+        "sharpe": 0.88,
+        "max_drawdown": 0.2797,
+        "cumulative_return": 0.45,
+        "days": 252
+      }
+    },
+    {
+      "params": {
+        "c305d8d3:rhs-val": 82
+      },
+      "in_sample": {
+        "cagr": 10.0695,
+        "sharpe": 3.409,
+        "max_drawdown": 0.3205,
+        "cumulative_return": 2184.51,
+        "days": 805
+      },
+      "out_of_sample": {
+        "cagr": 0.0903,
+        "sharpe": 0.496,
+        "max_drawdown": 0.4435,
+        "cumulative_return": 0.09,
+        "days": 252
+      }
+    }
+  ]
+}

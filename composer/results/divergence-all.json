@@ -1,0 +1,26 @@
+{
+  "results": [
+    {
+      "symphony": "mbkiXcuNDjueXpiox5Av",
+      "name": "The Holy Grail w Sorts & Safe Sectors  139 | 38 | 2015 (Modified #1)",
+      "window": [
+        "2025-12-05",
+        "2026-07-02"
+      ],
+      "n_days": 142,
+      "live_cumulative_return": 0.7331,
+      "model_cumulative_return": 0.5986,
+      "cumulative_gap": 0.1345,
+      "mean_daily_gap_bps": 5.88,
+      "annualized_gap": 0.1481,
+      "worst_daily_gap_bps": -363.5,
+      "best_daily_gap_bps": 348.0,
+      "daily_return_correlation": 0.965
+    },
+    {
+      "symphony": "rhZ9oDAUvN26v5Ra5qql",
+      "name": "Simons KMLM switcher (single pops)| BT 4/13/22 = A.R. 466% / D.D. 22% V2 (Buy Copy)",
+      "error": "only 2 live days \u2014 too new to compare"
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "dates": [
+    "2023-01-03",
+    "2026-07-02"
+  ],
+  "n_days": 877,
+  "stats": {
+    "Simons KMLM switcher (single pops)| BT 4 [rhZ9oDAU]": {
+      "days": 876,
+      "cumulative_return": 195.7456,
+      "cagr": 3.5697,
+      "sharpe": 2.457,
+      "ann_vol": 0.7249,
+      "max_drawdown": 0.3205
+    },
+    "The Holy Grail w Sorts & Safe Sectors  1 [mbkiXcuN]": {
+      "days": 876,
+      "cumulative_return": 8.0185,
+      "cagr": 0.8826,
+      "sharpe": 1.612,
+      "ann_vol": 0.454,
+      "max_drawdown": 0.2924
+    }
+  },
+  "correlations": {
+    "Simons KMLM switcher (single pops)| BT 4 [rhZ9oDAU]|Simons KMLM switcher (single pops)| BT 4 [rhZ9oDAU]": 1.0,
+    "Simons KMLM switcher (single pops)| BT 4 [rhZ9oDAU]|The Holy Grail w Sorts & Safe Sectors  1 [mbkiXcuN]": 0.318,
+    "The Holy Grail w Sorts & Safe Sectors  1 [mbkiXcuN]|Simons KMLM switcher (single pops)| BT 4 [rhZ9oDAU]": 0.318,
+    "The Holy Grail w Sorts & Safe Sectors  1 [mbkiXcuN]|The Holy Grail w Sorts & Safe Sectors  1 [mbkiXcuN]": 1.0
+  },
+  "inverse_vol_weights": {
+    "Simons KMLM switcher (single pops)| BT 4 [rhZ9oDAU]": 0.3851,
+    "The Holy Grail w Sorts & Safe Sectors  1 [mbkiXcuN]": 0.6149
+  }
+}
