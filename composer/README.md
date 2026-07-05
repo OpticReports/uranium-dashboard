@@ -1,17 +1,29 @@
 # Composer Symphony Workspace
 
-Tooling for **creating, editing, and backtesting** Composer symphonies through the
-official Composer MCP server. This workspace is deliberately *additive* to the
-rest of the repo — nothing here touches the uranium-dashboard site.
+Tooling for **creating, editing, backtesting, and managing** Composer
+symphonies. This workspace is deliberately *additive* to the rest of the
+repo — nothing here touches the uranium-dashboard site.
 
-> **The one rule that matters:** this project may create, edit, and backtest
-> symphonies. It may **NEVER move capital.** Funding, investing, withdrawing,
-> rebalancing, and liquidating are **manual human actions in the Composer UI
-> only.** The deny-list below is the enforcement mechanism, not a suggestion.
+> **The one rule that matters:** the agent may create, edit, search, and
+> backtest symphonies freely. It may move capital (invest / withdraw /
+> transfer between symphonies) **only** when the human explicitly requests
+> that *specific* operation in-session, only through the guarded CLI
+> ([`scripts/composer-api.py`](scripts/composer-api.py)), and always after a
+> dry-run trade preview. **Never autonomously, never as a side effect of an
+> optimization.** The guards below are the enforcement mechanism, not a
+> suggestion.
 
 ---
 
-## 1. MCP server
+## 1. MCP server — ⚠️ offline; REST API in use instead
+
+> **Status 2026-07-05:** the MCP endpoint `ai.composer.trade/mcp` 404s for the
+> whole host and the public `invest-composer/composer-trade-mcp` GitHub repo
+> is gone (Composer is now "Composer by SoFi"). The workspace now talks to the
+> documented **REST API** at `https://api.composer.trade` — same credentials,
+> same two headers. See [`API.md`](API.md) for the verified route map and
+> [`scripts/composer-api.py`](scripts/composer-api.py) for the helper CLI.
+> The MCP registration below is kept in case the endpoint returns.
 
 The Composer MCP server is registered at **project scope** in
 [`../.mcp.json`](../.mcp.json):
@@ -57,7 +69,32 @@ values into any file that gets committed, logged, or echoed.
 
 ---
 
-## 2. Safety contract (capital cannot move)
+## 2. Safety contract (capital moves are guarded)
+
+### REST API (the active path)
+
+The MCP deny list does **not** apply to raw HTTP calls, so the REST path has
+its own guards:
+
+1. **Route discipline.** The agent may freely call the read / build /
+   backtest / search routes in [`API.md`](API.md) §1–4 and §6-read. It must
+   **never** hand-roll a `curl`/HTTP call to the `deploy/…` or
+   `trading/…order-requests` (POST) routes.
+2. **Guarded CLI only.** Capital moves go through
+   `scripts/composer-api.py invest|withdraw|transfer`, which refuse unless
+   **both** `COMPOSER_ALLOW_CAPITAL=1` is set in the environment **and**
+   `--yes` is passed — and they print a dry-run trade preview first.
+   `COMPOSER_ALLOW_CAPITAL` is deliberately **not** set in the environment
+   config; it is set inline, per command, only for an operation the human
+   explicitly requested that session.
+3. **One human request = one operation.** "Optimize my symphony" never
+   implies moving money. Only "move $X from A to B"-style instructions do,
+   and the agent should confirm amount/source/destination before executing.
+4. **Transfers are not atomic.** A symphony-to-symphony transfer is
+   withdraw → settle → invest across up to two trading days (deploys queue
+   for the next rebalance window). Expect to babysit it.
+
+### MCP deny list (kept for if/when the MCP returns)
 
 Capital-moving tools are **hard-denied** in
 [`../.claude/settings.json`](../.claude/settings.json). Claude Code evaluates the
@@ -99,16 +136,37 @@ add any capital-moving identifier that differs from the names above.
 ```
 composer/
 ├── README.md        # this file
+├── API.md           # verified REST route map (replaces the MCP tool list)
 ├── CHANGELOG.md     # every symphony mutation logged here (what/why/stats)
 ├── fixtures/        # symphony JSON snapshots + human-readable logic summaries
-└── results/         # backtest / sweep outputs (baseline.json, sweeps, …)
+├── results/         # backtest / sweep outputs (baseline.json, sweeps, …)
+└── scripts/
+    └── composer-api.py  # helper CLI (auth from env; capital moves double-guarded)
 ```
 
-## 4. Workflow
+## 4. Workflows (mapped to goals)
 
-1. Pull a symphony's definition (read-only) → snapshot into `fixtures/`.
-2. Backtest it → save stats into `results/`.
-3. Propose a change → copy/create a variant, backtest, compare.
-4. Record the mutation in `CHANGELOG.md` with before/after stats and the reason.
-5. Save via `save_symphony` / `update_saved_symphony`.
-6. **Funding stays manual.** Nothing here ever invests real money.
+**Prompt-to-edit a symphony**
+1. `composer-api.py get <id>` → snapshot into `fixtures/`.
+2. Edit the tree (or build a `patch-nodes` update list for surgical changes).
+3. `composer-api.py backtest-def -f edited.json` → compare against
+   `results/baseline.json`.
+4. Apply via `update` (full) or `patch-nodes` (surgical); log in `CHANGELOG.md`
+   with before/after stats.
+
+**Create a custom symphony from a prompt**
+1. Write the logic tree JSON (grammar in `API.md` §2; example in `fixtures/`).
+2. `backtest-def` until it's worth keeping → `create -f tree.json --name …
+   --hashtag …` → log it.
+
+**Find the best community symphonies**
+- `composer-api.py search --min-sharpe 1.5 --min-days 504 --order
+  oos_calmar_ratio --pages 4` — out-of-sample stats only (post-creation data,
+  resistant to backtest overfitting). Then `get <sid>` to inspect,
+  `backtest <sid>` to verify, `copy <sid>` to adopt.
+
+**Move money between symphonies** (explicit human request only — see §2)
+- `composer-api.py preview <id> --amount X` any time (read-only dry run).
+- `COMPOSER_ALLOW_CAPITAL=1 composer-api.py transfer --from A --to B
+  --amount X --yes` — withdraw then invest; not atomic; check
+  `market-hours` and re-check `symphony-stats` after each leg.
