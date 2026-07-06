@@ -229,3 +229,25 @@ Honesty notes: (1) InverseHold's monster 2022 (+157.8%) is in-sample for it
 "always-long-vol/inverse" position pays heavy carry; per-dollar-of-bleed the
 best static is KMLM, the biggest raw pop is UVXY. (3) The right sizing for a
 sleeve like this is 5–15% of the book — it hedges; it shouldn't dominate.
+
+## Addendum 4b — sleeve optimization pass (2026-07-06)
+
+10 variants of the crash sleeve tested (weights, rebalance frequency, third
+legs). Kept the original **50/50, threshold rebalance** (`nNdBk7hc5NiBzeRvbI5T`
+unchanged). Key numbers (full 2022- window | post-Jun-2024 both-OOS slice):
+
+- Weight sweep 30/70→70/30: performance is nearly flat (CAGR 47–48%, Sharpe
+  1.40–1.58) — the blend is **robust to weights**, a good non-overfit sign.
+  FB-heavy (30/70) has the best recent slice (+62.8% CAGR, 5.7% DD); IH-heavy
+  hedges HG harder (corr −0.17) with more 2022 pop. 50/50 is a sane middle.
+- **Rebalance-frequency trap:** switching the root from threshold ("none" +
+  corridor) to monthly/quarterly *destroyed* the sleeve (+48% → −1%/−11%
+  CAGR). Composer's root rebalance frequency controls how often the whole
+  tree's conditions re-evaluate — monthly means the components' daily RSI
+  logic only fires monthly. Never change rebalance frequency on
+  signal-driven trees.
+- Third legs (KMLM 20–34%, gated-VIXM 20%): dilution — lower carry, no
+  drawdown improvement worth it.
+- VIXstrat 20% leg (40/40/20): best post-Jun-24 risk-adjusted profile
+  (Sharpe 1.82, DD 8.1%) but truncates testable history to 2023+ and cuts
+  full CAGR to +30%. Optional future upgrade if its live record holds.

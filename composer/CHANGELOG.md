@@ -19,6 +19,17 @@ Format per entry:
 
 <!-- New entries go below this line, newest first. -->
 
+## 2026-07-06 — crash sleeve optimization pass — no change adopted
+
+- Change: none — `nNdBk7hc5NiBzeRvbI5T` kept at 50/50 threshold-rebalance.
+  10 variants tested (weight sweep, monthly/quarterly rebalance, +KMLM,
+  +gated-VIXM, +VIXstrat legs).
+- Finding: weights are flat (robust); third legs dilute; monthly/quarterly
+  root rebalance destroys signal-driven trees (+48% -> -1%/-11% CAGR) since
+  root frequency gates condition re-evaluation. Recorded as a hard rule.
+- Artifacts: `results/results.md` addendum 4b.
+
+
 ## 2026-07-06 — crash-convexity research — sleeve saved (uninvested)
 
 - Change: created saved symphony `nNdBk7hc5NiBzeRvbI5T` "Crash Convexity Sleeve —
