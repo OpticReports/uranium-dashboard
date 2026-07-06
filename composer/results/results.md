@@ -251,3 +251,42 @@ unchanged). Key numbers (full 2022- window | post-Jun-2024 both-OOS slice):
 - VIXstrat 20% leg (40/40/20): best post-Jun-24 risk-adjusted profile
   (Sharpe 1.82, DD 8.1%) but truncates testable history to 2023+ and cuts
   full CAGR to +30%. Optional future upgrade if its live record holds.
+
+## Addendum 4c — deep-history validation + 20y simulation (2026-07-06)
+
+**Rebalance audit (landmine follow-up):** every symphony we created uses
+threshold rebalance (`none` + 0.1 corridor) — signals still evaluate daily,
+so nothing was exposed to the monthly-rebalance trap. Direct test of `daily`
+vs threshold on the sleeve: +49.2%/1.59/14.8% vs +48.2%/1.56/14.8% —
+essentially a wash, `daily` marginally better and matches the components'
+native setting, so the saved sleeve `nNdBk7hc5NiBzeRvbI5T` was updated to
+`daily` (prior version preserved: `OT3P700PVT2iG95wnaLq`).
+
+**Deep history (real limit + proxy):** the composite sleeve's hard data
+limit is 2021-01 (KMLM inception, used as an RSI hurdle inside InverseHold;
+LABD 2015 next). Two same-class substitutions unlock 15 years: LABD→BIS
+(both 2x-inverse-biotech) and KMLM→DBC (broad futures proxy).
+FrontrunBonds runs natively from 2011-10.
+
+**Deep-proxy sleeve, 2011-10-05 → 2026-07-02 (3,706 days):**
+CAGR +47.6%, Sharpe 1.30, maxDD 16.3%. Crash capture — positive in
+**10 of 12** SPY >8% episodes: 2011 +22.3%, 2012 +3.7%, 2015-16 +19.2%,
+Volmageddon 2018 +23.5%, Q4-2018 +4.8%, **COVID +172.3%**, Sep-2020 0.0%,
+**2022 bear +82.3%**, Aug-2024 +29.4%, Feb-25 +1.3%, 2026 +7.6%.
+Calm carry ex-episodes: **+28.7%/yr**. Every era profitable:
+2011-15 +39.5%/yr (Shp 0.83), 2016-19 +36.0% (2.13), 2020-21 +127.8%
+(2.44), 2022-26 +37.7% (1.54).
+
+**20-year Monte Carlo** (block bootstrap of the 15y daily returns,
+`monte-carlo-sleeve-20y.json`): CAGR p05 +31.8% / median +47.2% /
+p95 +68.0%; median 20y max drawdown 14.6%, p95 22.2%; P(any 20y window
+losing money) ≈ 0.
+
+Caveats, in order of importance: (1) the components were authored
+2023-2025 — pre-creation history is rule-replay, not live record, and the
+authors may have (consciously or not) fitted rules that look good on this
+history; (2) LABD/KMLM substitutions are same-class but not identical;
+(3) VIX-complex ETFs don't exist before 2009/2011, so 2008 is untestable in
+kind — the closest analogue tested is COVID (+172%); (4) MC resamples this
+15y distribution — a genuinely new regime (rates, vol-market structure) is
+outside it.

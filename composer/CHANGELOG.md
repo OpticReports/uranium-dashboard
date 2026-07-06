@@ -19,6 +19,21 @@ Format per entry:
 
 <!-- New entries go below this line, newest first. -->
 
+## 2026-07-06 — sleeve deep-history validation; rebalance set to daily
+
+- Change: `nNdBk7hc5NiBzeRvbI5T` root rebalance `none`+corridor -> `daily`
+  (wash on stats, matches components' native setting; old version
+  `OT3P700PVT2iG95wnaLq` preserved). No other symphony changed; audit
+  confirmed none of ours use monthly/quarterly.
+- Why:    user asked for 20-30y validation. Deep-proxy sleeve (LABD->BIS,
+  KMLM->DBC) reaches 2011: +47.6% CAGR / Sharpe 1.30 / maxDD 16.3% over
+  15y, positive in 10/12 SPY crash episodes incl. COVID +172% and 2022
+  +82%, calm carry +28.7%/yr. 20y Monte Carlo: median CAGR +47%,
+  P(DD>30%) 0.2%.
+- Artifacts: `results/results.md` addendum 4c,
+  `results/monte-carlo-sleeve-20y.json`.
+
+
 ## 2026-07-06 — crash sleeve optimization pass — no change adopted
 
 - Change: none — `nNdBk7hc5NiBzeRvbI5T` kept at 50/50 threshold-rebalance.
