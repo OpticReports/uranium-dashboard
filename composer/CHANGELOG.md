@@ -19,6 +19,19 @@ Format per entry:
 
 <!-- New entries go below this line, newest first. -->
 
+## 2026-07-06 — draft cleanup — two rejected variants deleted
+
+- Change: deleted saved symphonies `gRwiDs9bEHhW3vjXrNdW` "KMLM switcher —
+  TREND GATE ONLY" and `F9yaDwptEh8MOnNy3CIl` "KMLM switcher — FULL REGIME
+  v1" (both rejected by the safeguard study — worse than the original on
+  every risk metric). Definitions archived first to `fixtures/rejected/`.
+  Keepers untouched: crash sleeve `nNdBk7hc5NiBzeRvbI5T`, P5
+  `YPTSJFJwD2ZKfAeYJUbW`, vol cap `tbm9SE57MoSeY7rOEhys`.
+- Why:    user asked to prune underperformer drafts.
+- Artifacts: `fixtures/rejected/trend-gate-only.json`,
+  `fixtures/rejected/full-regime-v1.json`.
+
+
 ## 2026-07-06 — sleeve deep-history validation; rebalance set to daily
 
 - Change: `nNdBk7hc5NiBzeRvbI5T` root rebalance `none`+corridor -> `daily`

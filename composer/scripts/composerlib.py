@@ -35,7 +35,8 @@ def call(method, path, body=None, timeout=120):
         data=json.dumps(body).encode() if body is not None else None)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
-            return json.load(r)
+            body = r.read()
+            return json.loads(body) if body.strip() else {"status": r.status}
     except urllib.error.HTTPError as e:
         detail = e.read().decode(errors="replace")[:2000]
         sys.exit(f"error: HTTP {e.code} on {method} {path}\n{detail}")
