@@ -106,3 +106,64 @@ backtest-only and not saved.
 Practical takeaway: control this strategy's risk by *how much capital it
 gets* (portfolio-level sizing; see `correlation-backtest.json` inverse-vol
 weights) and/or the in-tree vol cap — not by market-timing overlays.
+
+---
+
+# Addendum 2 — 2026-07-05 — six improvement ideas, tested individually
+
+Same protocol: each idea applied alone to the original; full window
+2022-04-13 → 2026-07-03; OOS = from 2025-07-01; episode = 2025-01-02 →
+2025-02-27 (the original's max-DD window). P5's full window starts
+**2023-04-19** (ZVOL inception inside the paired VIX sleeve) — matched
+original stats shown for fairness.
+
+| Variant | CAGR | maxDD | MAR | Sharpe | Jan–Feb 25 | OOS CAGR | OOS DD | OOS Shp |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Original | +600.8% | 32.0% | 18.75 | 2.89 | −32.0% | +61.9% | 28.7% | 1.04 |
+| V3 vol cap 75/25 BIL (prior) | +461.6% | 27.4% | 16.87 | 2.82 | −27.4% | +42.4% | 27.0% | 0.89 |
+| P1 inverse-vol rotator (21d) | +483.2% | 32.0% | 15.08 | 2.69 | −32.0% | +61.9% | 28.7% | 1.04 |
+| P2 vol cap 75/25 KMLM | +461.7% | 27.4% | 16.88 | 2.83 | −27.4% | +42.7% | 26.5% | 0.89 |
+| P3 VIX-term pass-through | +369.6% | 40.1% | 9.22 | 2.42 | −23.4% | +89.6% | 40.1% | 1.25 |
+| P4 rotator + KMLM/GLD cands | +264.3% | 28.2% | 9.37 | 2.37 | −20.6% | −6.3% | 26.8% | 0.10 |
+| **P5 pair w/ VIX strategy 75/25** | +229.9%* | **24.5%** | 9.40 | **2.44*** | −24.5% | +53.4% | **20.4%** | **1.08** |
+| Original (P5-matched window*) | +323.2%* | 32.0% | 10.08 | 2.34* | −32.0% | — | — | — |
+| P6 pop confirm RSI(5)>82 | +522.7% | 45.5% | 11.49 | 2.77 | −32.0% | +5.0% | 45.5% | 0.41 |
+
+\* 2023-04-19 → 2026-07-03 (803 days).
+
+Findings:
+
+- **P5 is the winner — diversification beats modification.** The paired
+  public VIX strategy (`2pOC3xJ0uBNHwrlPiQNh`, independently verified
+  earlier) has **+0.06 daily correlation** with the original. The 75/25 pair
+  is better on *every risk measure over every window tested*: maxDD 24.5% vs
+  32.0% matched, OOS DD 20.4% vs 28.7%, higher Sharpe both full-matched
+  (2.44 vs 2.34) and OOS (1.08 vs 1.04), and a softer crash episode. Cost:
+  ~⅓ of matched-window CAGR. Saved as **`YPTSJFJwD2ZKfAeYJUbW`**
+  ("KMLM switcher + VIX sleeve 75/25"), uninvested.
+- **P1 (inverse-vol) was a no-op where it mattered**: the bottom-2 rotator
+  picks had similar realized vols in the crash, so weights barely moved —
+  identical DD and episode; it only shaved CAGR. Rejected.
+- **P2 (KMLM ballast)** ≈ identical to the BIL vol cap; ballast choice is a
+  wash at 25%. Keep V3-BIL if using an in-tree cap.
+- **P3 (pass-through)** is a live grenade: better episode (−23.4%) and the
+  best OOS CAGR/Sharpe of the panel (+89.6% / 1.25), but skipping UVXY pops
+  left it long through a later vol event → 40.1% maxDD *in the OOS window*.
+  The VIX-term filter direction is genuinely informative but unsafe as a
+  hard skip. Possible hybrid for future work: pop → UVXY when stressed,
+  pop → BIL when calm (tested as P6-style else already? no — P6 used RSI
+  confirmation; the VIX-term else→BIL variant remains untested).
+- **P4 (defensive candidates)** looked great in the crash (−20.6%) and then
+  died OOS (−6.3% CAGR, Sharpe 0.10): bottom-RSI selection loves whatever is
+  falling, so it systematically buys GLD/KMLM weakness during tech rallies.
+  Rejected.
+- **P6 (pop confirmation)** kept the CAGR but *increased* maxDD to 45.5% and
+  collapsed OOS: the RSI(5)>82 filter rejects exactly the early entries that
+  made UVXY pops profitable. Rejected.
+
+Running conclusion across all 12 variants tested today: the only two levers
+that improved this symphony's risk profile without destroying its engine are
+**(a) sizing the rotator exposure** (V3 vol cap) and **(b) pairing with a
+near-zero-correlation long-vol strategy** (P5) — both are allocation moves,
+not signal moves. Every signal-based override (5 gate styles, breaker,
+SVIX switch, candidate widening, entry confirmation) failed out-of-sample.

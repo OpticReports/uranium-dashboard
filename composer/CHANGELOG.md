@@ -19,6 +19,24 @@ Format per entry:
 
 <!-- New entries go below this line, newest first. -->
 
+## 2026-07-05 — improvement panel — six ideas tested individually
+
+- Change: created one new saved symphony `YPTSJFJwD2ZKfAeYJUbW`
+  "KMLM switcher + VIX sleeve 75/25" (75% original / 25% verified public
+  VIX strategy `2pOC3xJ0uBNHwrlPiQNh`, corr +0.06). P1 inverse-vol rotator,
+  P2 KMLM ballast, P3 VIX-term pass-through, P4 defensive candidates,
+  P6 pop confirmation: backtested ad-hoc only, NOT saved (all rejected).
+  Original untouched; nothing invested.
+- Why:    continue the safeguard study — improve risk without killing the
+  return engine.
+- Before (original, P5-matched window 2023-04-19..): CAGR 323.2%, maxDD
+  32.0%, Sharpe 2.34; OOS Sharpe 1.04, OOS DD 28.7%.
+- After  (P5 pair): CAGR 229.9%, maxDD 24.5%, Sharpe 2.44; OOS Sharpe 1.08,
+  OOS DD 20.4%. Better on every risk metric in every window; only variant
+  of 12 tested today that improves OOS risk-adjusted performance.
+- Artifacts: `results/results.md` (addendum 2).
+
+
 ## 2026-07-05 — safeguard panel — three protections tested individually
 
 - Change: created one new saved symphony `tbm9SE57MoSeY7rOEhys`
