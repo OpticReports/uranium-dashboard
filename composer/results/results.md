@@ -315,3 +315,38 @@ Reading: the sleeve is the only position whose downside tail is short (worst
 halves P(DD>20%) (19.8→10.6%) for ~15pts of median return. Standing caveat:
 MC resamples each position's own backtest regime — ORIG's +601% median is
 "if its backtest regime persists," and its OOS Sharpe (~1.0) argues it won't.
+
+## Addendum 6 — 2026-07-06 — 2008 credit-event simulation (two methods)
+
+No true replay is possible: the sleeve's VIX-complex instruments (UVXY/SVXY,
+first ETPs 2009-2011) did not exist in 2008. Two approximations:
+
+**Method 1 — mechanism replay on real 2006-2010 data.** The InverseHold
+mechanism rebuilt with 2006-era same-class instruments (LABD→QID, TMV→SDS,
+KMLM→DBC, BIL→SHY) and run through actual GFC prices:
+- GFC peak→trough (2007-10-09 → 2009-03-09, SPY −55.2%): **+61.2%**
+- Calendar 2008: **+20.0%**
+- BUT full-window (2006-2010) CAGR −1.9% with 33.9% maxDD — the mechanism
+  gave back its crash gains in the 2009 V-recovery whipsaw (short through
+  the rally). Crash protection real; exit discipline is the weakness.
+  (FrontrunBonds is not replicable pre-2009 — too many young instruments.)
+
+**Method 2 — conditional bootstrap** (walk the real sleeve through 2008's
+actual 356-day SPY path, sampling sleeve returns from 2011-2026 days with
+matching SPY return + 20d vol): median **+896%** (p05 +405%), maxDD ~8%.
+Book (HG55/P5 45), same method: median +387%, maxDD p50 26%.
+
+**⚠ Method 2 is an upper bound, not an estimate.** Its day-matching assumes
+every high-vol 2008 day pays like the sleeve's observed high-vol days — but
+those were short, sharp spikes (COVID: 25 days, +172%) that resolved
+quickly. 2008 held vol elevated for ~a year: VIX-futures roll dynamics flip,
+inverse ETFs decay in chop, and 356 compounded "spike days" is a regime the
+sleeve's history simply does not contain. The book's number is worse-founded
+still (its history's max 20d vol is 55% vs GFC's ~96%).
+
+**Defensible conclusion:** both methods agree on *sign* — the sleeve is very
+likely strongly positive through a 2008-style event, plausibly in the
++20% to +60%+ zone the real-data mechanism replay showed (vs the book's
+engines, which would face deep drawdowns), with the main risk being giving
+gains back in the recovery whipsaw. The +896% median is a methodological
+ceiling, not a forecast; do not size anything off it.
