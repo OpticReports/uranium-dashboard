@@ -192,3 +192,40 @@ Selected blend points (full window | OOS from 2025-07):
 Recommendation recorded: swap ORIG exposure for P5 (dominates on risk at
 similar OOS return), target the flat optimum band **HG 50–60 / P5 40–50**.
 Study only — no capital was moved; execution is a human decision.
+
+---
+
+# Addendum 4 — 2026-07-06 — crash-convexity research
+
+Question: best per-dollar upside/downside positions for a market crash —
+max payout in a selloff, minimal bleed while waiting.
+
+Method: identified SPY's four >8% drawdown episodes since 2022 (2022 bear
+−24.5%; Aug-2024 spike −8.4%; Feb–Apr 2025 −18.8%; early-2026 −8.9%), then
+measured 15 candidates on **crash capture** (return during those episodes)
+vs **calm bleed** (annualized return on all other days). Full table in
+session data; highlights:
+
+| Candidate | avg crash | calm CAGR | maxDD | verdict |
+| --- | ---: | ---: | ---: | --- |
+| UVXY (static) | +109.2% | −86.3%/yr | 99.6% | biggest pop, ruinous bleed |
+| SQQQ (static) | +77.8% | −72.0%/yr | 97.3% | same problem |
+| TAIL / BTAL (tail ETFs) | +10–12% | −16–18%/yr | 36–48% | weak pop, real bleed |
+| TLT | −5.9% | −1.5%/yr | 39.9% | failed 2022; broken hedge |
+| KMLM | +12.1% | −5.9%/yr | 27.5% | best *static* score |
+| GATE→UVXY (custom VIX-term gate) | +72.4% | −62.4%/yr | 90.9% | gating helps, not enough |
+| InverseHold-PSQ (`sYcm9hgSipM4TkpFcuSj`) | +45.9% | **+21.8%/yr** | 21.1% | free hedge; slow-bear specialist |
+| Frontrun-Bonds (`hA7nbIZL4cdRBzikH47U`) | +23.0% | **+30.3%/yr** | 17.5% | free hedge; fast-spike specialist (Aug-24 +58.4% OOS) |
+| **Blend 50/50 of the above** | all 4 episodes positive (+90.7/+27.5/+1.7/+11.5%) | **+48.2%/yr overall** | 14.8% | **winner** |
+
+Blend correlations vs our book: **HG −0.12**, ORIG +0.05, P5 +0.06.
+Saved (uninvested) as **"Crash Convexity Sleeve — InverseHold + Bond
+Frontrunner 50/50"** — id in CHANGELOG.
+
+Honesty notes: (1) InverseHold's monster 2022 (+157.8%) is in-sample for it
+(OOS starts ~2023-04); its OOS crash record is Aug-24 −2.6%, Feb-25 +5.0%,
+2026 +23.3% — still net positive with +22%/yr carry. Frontrun-Bonds' Aug-24
++58.4% IS out-of-sample. (2) No static instrument is a free hedge — every
+"always-long-vol/inverse" position pays heavy carry; per-dollar-of-bleed the
+best static is KMLM, the biggest raw pop is UVXY. (3) The right sizing for a
+sleeve like this is 5–15% of the book — it hedges; it shouldn't dominate.

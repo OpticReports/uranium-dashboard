@@ -19,6 +19,19 @@ Format per entry:
 
 <!-- New entries go below this line, newest first. -->
 
+## 2026-07-06 — crash-convexity research — sleeve saved (uninvested)
+
+- Change: created saved symphony `nNdBk7hc5NiBzeRvbI5T` "Crash Convexity Sleeve —
+  InverseHold + Bond Frontrunner 50/50" (50% `sYcm9hgSipM4TkpFcuSj` +
+  50% `hA7nbIZL4cdRBzikH47U`). Nothing invested.
+- Why:    user asked for best per-dollar crash payout with minimal bleed.
+  15-candidate panel vs SPY's four >8% episodes since 2022: all static
+  hedges bleed (UVXY -86%/yr); two community signal strategies are
+  positive-carry hedges; their 50/50 blend is positive in all four
+  episodes with +48%/yr calm carry, maxDD 14.8%, corr to HG -0.12.
+- Artifacts: `results/results.md` addendum 4.
+
+
 ## 2026-07-05 — portfolio allocation study (no changes, analysis only)
 
 - Change: none — analysis artifact only (`results/allocation-grid.json`,
