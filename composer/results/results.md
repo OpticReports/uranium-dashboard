@@ -290,3 +290,28 @@ history; (2) LABD/KMLM substitutions are same-class but not identical;
 kind — the closest analogue tested is COVID (+172%); (4) MC resamples this
 15y distribution — a genuinely new regime (rates, vol-market structure) is
 outside it.
+
+## Addendum 5 — 2026-07-06 — sleeve full profile + 12-month Monte Carlo (all positions)
+
+Sleeve (real components, daily rebalance, 2022-01→2026-07): **CAGR +49.3%,
+Sharpe 1.59, maxDD 14.8%** (15y deep-proxy: +47.6%/1.30/16.3%).
+Correlations (804 common days): SLEEVE~HG **−0.124**, ~ORIG +0.054,
+~P5 +0.057, **~target book (HG55/P5 45) −0.040**.
+
+12-month Monte Carlo (block bootstrap of each position's own backtest
+history, 5,000 sims; `monte-carlo-12mo-all.json`):
+
+| Position | p05 | median | p95 | P(loss) | DD p50/p95 | P(DD>20%) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| SLEEVE | +4% | +47% | +130% | 3.0% | 10.5%/18.0% | 2.6% |
+| HG | −16% | +70% | +258% | 10.8% | 26.4%/45.5% | 79.0% |
+| ORIG | +136% | +601% | +2009% | 0.1% | 28.5%/43.5% | 94.2% |
+| P5 | +49% | +228% | +637% | 0.6% | 22.3%/35.6% | 67.0% |
+| BOOK 55/45 | +39% | +149% | +366% | 0.3% | 15.6%/25.5% | 19.8% |
+| BOOK 50/40/10 (+sleeve) | +37% | +134% | +318% | 0.3% | 13.8%/22.5% | **10.6%** |
+
+Reading: the sleeve is the only position whose downside tail is short (worst
+5% of years still +4%; P(DD>20%) 2.6%). Adding 10% sleeve to the target book
+halves P(DD>20%) (19.8→10.6%) for ~15pts of median return. Standing caveat:
+MC resamples each position's own backtest regime — ORIG's +601% median is
+"if its backtest regime persists," and its OOS Sharpe (~1.0) argues it won't.
