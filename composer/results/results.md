@@ -350,3 +350,34 @@ likely strongly positive through a 2008-style event, plausibly in the
 engines, which would face deep drawdowns), with the main risk being giving
 gains back in the recovery whipsaw. The +896% median is a methodological
 ceiling, not a forecast; do not size anything off it.
+
+## Addendum 7 — 2026-07-06 — sleeve monetization policy study
+
+Question: build auto-sell/harvest logic for the sleeve, or judge event days
+manually? Constraint: Composer conditions cannot reference a symphony's own
+P&L, so "sell when I'm up X%" cannot live in-tree — only vol-indicator
+proxies could, and signal overrides have failed OOS all week. Tested instead
+at the **portfolio level** (10% sleeve target, rest = book):
+
+| Policy | Real book 2023+ (CAGR/Shp/DD, rebals) | Notes |
+| --- | --- | --- |
+| Book alone | +150.7% / 2.49 / 16.3% | no hedge |
+| Drift (never rebalance) | +143.5% / 2.49 / 15.8%, 0 | sleeve weight decays → hedge evaporates over time |
+| Quarterly rebalance | +136.1% / 2.55 / 14.6%, 12 | fine |
+| **Threshold band 7.5–15%** | **+136.2% / 2.56 / 14.6%, 7** | equal-best risk, fewest trades |
+| Pop-harvest (+25%/20d cut to 5%, vol re-entry) | +136.0% / 2.56 / 14.5%, 33 | **zero edge over the band, 5× the trades** |
+
+15-year SPY-proxy window: drift "wins" only because the sleeve out-compounds
+SPY (+47.6% vs +15.6%/yr) so drift lets the sleeve take over the portfolio —
+an artifact, not a harvest lesson; with a high-return book (the real case),
+drift *under*-hedges instead.
+
+Conclusion: **the threshold band IS the monetization logic.** Selling
+whenever a crash pop pushes the sleeve above 15% of the book mechanically
+sells high into panic (in tranches, if it keeps popping — the band re-fires),
+re-buys the crashed engines low, and re-enters the sleeve after. No
+top-ticking, no signals, 7 trades in 3 years, and the fancy pop rule added
+nothing. Extreme events (2008-scale) still warrant human judgment on top —
+the band handles tranching; the human decides if the regime broke.
+Operational plan: once the sleeve is funded, monitor.py alerts on band
+breach; execution stays human-approved via the guarded CLI.
