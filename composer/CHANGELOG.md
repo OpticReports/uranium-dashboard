@@ -19,6 +19,19 @@ Format per entry:
 
 <!-- New entries go below this line, newest first. -->
 
+## 2026-07-05 — portfolio allocation study (no changes, analysis only)
+
+- Change: none — analysis artifact only (`results/allocation-grid.json`,
+  results.md addendum 3).
+- Why:    quantify how the two invested symphonies interact and where P5
+  fits. HG~ORIG corr +0.30; crash episodes complementary (Jan-Feb 2025:
+  HG -8.1% vs ORIG -32%). Blend grid over 804 common days.
+- Finding: current HG79/ORIG21 sits off the frontier. HG 50-60 / P5 40-50
+  band improves full-window CAGR (+129%->+151..173%), Sharpe (2.15->2.5+),
+  and cuts OOS drawdown (17.8%->~14%) at a ~4pt OOS CAGR give-up.
+- Artifacts: `results/allocation-grid.json`, `results/results.md`.
+
+
 ## 2026-07-05 — improvement panel — six ideas tested individually
 
 - Change: created one new saved symphony `YPTSJFJwD2ZKfAeYJUbW`

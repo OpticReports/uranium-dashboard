@@ -167,3 +167,28 @@ that improved this symphony's risk profile without destroying its engine are
 near-zero-correlation long-vol strategy** (P5) — both are allocation moves,
 not signal moves. Every signal-based override (5 gate styles, breaker,
 SVIX switch, candidate widening, entry confirmation) failed out-of-sample.
+
+---
+
+# Addendum 3 — 2026-07-05 — portfolio allocation study
+
+Common window 2023-04-19 → 2026-07-02 (804 days, P5-limited), backtest
+curves, daily-rebalanced blends. HG = Holy Grail (`mbkiXcuNDjueXpiox5Av`),
+ORIG = KMLM switcher, P5 = KMLM + VIX sleeve (`YPTSJFJwD2ZKfAeYJUbW`).
+
+Correlations: HG~ORIG **+0.30**, HG~VIXstrat +0.12, ORIG~VIXstrat +0.06.
+Crash complementarity: Jan–Feb 2025 episode HG −8.1% vs ORIG −32.0%.
+
+Selected blend points (full window | OOS from 2025-07):
+
+| Mix | CAGR | Sharpe | maxDD | OOS CAGR | OOS Sharpe | OOS DD |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Current (HG 79 / ORIG 21) | +129% | 2.15 | 17.8% | +69.1% | 1.60 | 17.8% |
+| HG 55 / P5 45 | +151% | 2.49 | 16.3% | +65.2% | 1.63 | 13.8% |
+| HG 45 / ORIG 55 (max full Shp w/ ORIG) | +212% | 2.51 | 21.4% | +73.4% | 1.46 | 18.0% |
+| HG 35 / P5 65 (max full Shp overall) | +181% | 2.59 | 18.7% | +62.8% | 1.46 | 14.8% |
+| HG 40 / P5 60 (matches current DD) | +173% | 2.59 | 17.8% | +63.6% | 1.51 | 14.6% |
+
+Recommendation recorded: swap ORIG exposure for P5 (dominates on risk at
+similar OOS return), target the flat optimum band **HG 50–60 / P5 40–50**.
+Study only — no capital was moved; execution is a human decision.
