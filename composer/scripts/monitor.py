@@ -33,6 +33,11 @@ def main():
     p.add_argument("--dd-alert", type=float, default=0.15)
     p.add_argument("--move-alert", type=float, default=0.08)
     p.add_argument("--keep", type=int, default=30)
+    # crash-sleeve monetization band (results.md addendum 7): alert when the
+    # sleeve's share of the book leaves [lo, hi] so a human can rebalance it
+    p.add_argument("--band-symphony", default="nNdBk7hc5NiBzeRvbI5T")
+    p.add_argument("--band-lo", type=float, default=0.075)
+    p.add_argument("--band-hi", type=float, default=0.15)
     a = p.parse_args()
     acct = a.account or cl.default_account()
 
@@ -92,6 +97,18 @@ def main():
             alerts.append(f"QUEUED DEPLOY pending — {label}")
         if s.get("may_rebalance_today"):
             alerts.append(f"may rebalance today — {label}")
+
+    total_value = sum(s["value"] for s in meta)
+    band = next((s for s in meta if s["id"] == a.band_symphony), None)
+    if band and total_value > 0:
+        w = band["value"] / total_value
+        snap["sleeve_weight"] = round(w, 4)
+        if w > a.band_hi:
+            alerts.append(f"SLEEVE BAND BREACH: {w:.1%} > {a.band_hi:.1%} — "
+                          f"harvest: trim {band['name'][:30]} back to target (sells the pop)")
+        elif w < a.band_lo:
+            alerts.append(f"SLEEVE BAND BREACH: {w:.1%} < {a.band_lo:.1%} — "
+                          f"re-enter: top {band['name'][:30]} back up to target")
 
     stamp = now.strftime("%Y%m%dT%H%M%SZ")
     snap_path = os.path.join(DIR, f"snapshot-{stamp}.json")

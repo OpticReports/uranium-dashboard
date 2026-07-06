@@ -19,6 +19,25 @@ Format per entry:
 
 <!-- New entries go below this line, newest first. -->
 
+## 2026-07-06 — reallocation executed (user-approved) + sleeve funded 10%
+
+- Change (capital, explicitly approved in-session):
+  - AM: withdrew $49,075.85 from HG `mbkiXcuNDjueXpiox5Av` (executed same
+    day; HG now ~$118.8k = 55%) and requested full exit of ORIG
+    `rhZ9oDAUvN26v5Ra5qql` $47,616.90 — Composer converted it to a full
+    **liquidation**, pending tomorrow's window (~$46.0k).
+  - PM (post-close, queued for 2026-07-07): invested **$21,424 into the
+    crash sleeve** `nNdBk7hc5NiBzeRvbI5T` (10.0% of book, deploy 8cfad181)
+    and **$27,870 into P5** `YPTSJFJwD2ZKfAeYJUbW` (deploy eab1bb62).
+    Final leg (ORIG liquidation proceeds ~$46k -> P5) queues after landing.
+- Why:    allocation study (addendum 3) + sleeve sizing frontier (addendum
+  5/7): target HG 55 / P5 35 / sleeve 10; user chose 10% sleeve.
+- Tooling: monitor.py now alerts on sleeve monetization-band breach
+  (target 10%, band 7.5–15%); composer-api.py trade preview made
+  best-effort (endpoint 402s on this account tier for new deploys).
+- Artifacts: deploy ids above; policy in results.md addendum 7.
+
+
 ## 2026-07-06 — draft cleanup — two rejected variants deleted
 
 - Change: deleted saved symphonies `gRwiDs9bEHhW3vjXrNdW` "KMLM switcher —

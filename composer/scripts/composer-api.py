@@ -277,11 +277,15 @@ def main():
         acct = a.account or default_account()
         guard_capital(a, f"{a.cmd} ${a.amount:,.2f} {'into' if a.cmd == 'invest' else 'from'} "
                          f"{a.symphony_id} (account {acct})")
-        print("-- dry-run preview --", file=sys.stderr)
+        print("-- dry-run preview (best-effort) --", file=sys.stderr)
         amt = a.amount if a.cmd == "invest" else -a.amount
-        preview = call("POST", f"/dry-run/trade-preview/{a.symphony_id}",
-                       {"amount": amt, "broker_account_uuid": acct})
-        print(json.dumps(preview, indent=2)[:3000], file=sys.stderr)
+        try:
+            preview = call("POST", f"/dry-run/trade-preview/{a.symphony_id}",
+                           {"amount": amt, "broker_account_uuid": acct})
+            print(json.dumps(preview, indent=2)[:3000], file=sys.stderr)
+        except SystemExit as e:
+            print(f"preview unavailable ({str(e)[:120]}...) — proceeding; "
+                  "the deploy itself validates amount and buying power", file=sys.stderr)
         out(call("POST", f"/deploy/accounts/{acct}/symphonies/{a.symphony_id}/{a.cmd}",
                  {"amount": a.amount}), a.out)
     elif a.cmd == "transfer":
