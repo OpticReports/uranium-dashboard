@@ -19,6 +19,21 @@ Format per entry:
 
 <!-- New entries go below this line, newest first. -->
 
+## 2026-07-07 — reallocation COMPLETE — final leg executed
+
+- Change (capital, per approved plan): final invest $41,463 into P5
+  `YPTSJFJwD2ZKfAeYJUbW` (deploy 0bf3edd3, fills 2026-07-08 window) from
+  ORIG liquidation proceeds. Tuesday window fills confirmed: sleeve
+  `nNdBk7hc5NiBzeRvbI5T` live $21,825, P5 first tranche live $27,763,
+  ORIG `rhZ9oDAUvN26v5Ra5qql` fully liquidated (definition kept in
+  drafts).
+- End state (at Wed fill, ~$209k book): HG ~$117.8k (56.4%) / P5 ~$69.2k
+  (33.1%) / sleeve ~$21.8k (10.4%) — all within POLICY.md bands.
+  Reallocation project complete; ongoing ops = lean daily band check
+  (fresh-session trigger) + POLICY.md standing operations.
+- Artifacts: deploy ids in this entry and the two prior entries.
+
+
 ## 2026-07-06 — reallocation executed (user-approved) + sleeve funded 10%
 
 - Change (capital, explicitly approved in-session):
