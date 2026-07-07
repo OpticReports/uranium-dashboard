@@ -87,9 +87,12 @@ its own guards:
    `COMPOSER_ALLOW_CAPITAL` is deliberately **not** set in the environment
    config; it is set inline, per command, only for an operation the human
    explicitly requested that session.
-3. **One human request = one operation.** "Optimize my symphony" never
-   implies moving money. Only "move $X from A to B"-style instructions do,
-   and the agent should confirm amount/source/destination before executing.
+3. **One human request = one operation** — with two standing exceptions
+   pre-authorized by the owner on 2026-07-06 and codified in
+   [`POLICY.md`](POLICY.md): the sleeve monetization band and the
+   criterion-gated sleeve scale-up to 15%. Those execute without per-trade
+   approval but are always reported and logged. Everything else: "move $X
+   from A to B"-style instructions only, confirmed before executing.
 4. **Transfers are not atomic.** A symphony-to-symphony transfer is
    withdraw → settle → invest across up to two trading days (deploys queue
    for the next rebalance window). Expect to babysit it.
