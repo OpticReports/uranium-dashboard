@@ -28,13 +28,13 @@ in `CHANGELOG.md` with deploy IDs, and pushed.
   (targets: HG 55% / P5 35% of the Composer account ex-sleeve overweight).
   Deploying the deposit itself requires the owner's "it landed" message —
   it is NOT auto-executed on cash detection.
-- Rebalance trigger: at the daily post-close check, sleeve outside the band.
-- Trigger: at the daily post-close check, sleeve weight outside the band.
-- Action: rebalance the sleeve back to exactly 10%:
-  - Over 15% → withdraw the excess from the sleeve; invest proceeds into
+- Trigger: at the daily post-close check, sleeve outside the band (7–15% of
+  crash-exposed assets; dollar equivalents recorded above).
+- Action: rebalance the sleeve back to the 10% target:
+  - Over the band → withdraw the excess from the sleeve; invest proceeds into
     whichever engine (HG `mbkiXcuNDjueXpiox5Av` or P5 `YPTSJFJwD2ZKfAeYJUbW`)
     is furthest **below** its target (HG 55% / P5 35%).
-  - Under 7.5% → withdraw the shortfall from whichever engine is furthest
+  - Under the band → withdraw the shortfall from whichever engine is furthest
     **above** its target; invest into the sleeve.
   - Two-leg timing: the withdraw executes at the next trading window; the
     invest is placed as soon as the proceeds appear as buying power
