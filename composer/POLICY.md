@@ -12,7 +12,23 @@ in `CHANGELOG.md` with deploy IDs, and pushed.
 ## Pre-authorized operation 1 — sleeve monetization band
 
 - Instrument: Crash Convexity Sleeve `nNdBk7hc5NiBzeRvbI5T`.
-- Target weight: **10%** of total portfolio value. Band: **7.5% – 15%**.
+- Sizing denominator (updated 2026-07-07, owner decision): the sleeve is
+  sized against the **family book's crash-exposed assets** — Composer
+  engines + owner-reported IBKR equities — not the Composer account alone.
+  - Current figures: IBKR equities ≈ $346k (owner-reported 2026-07-07;
+    refresh whenever the owner reports new numbers) + Composer engines.
+  - Target: **10% of crash-exposed assets** (≈ $53k at current figures).
+    Band: **7% – 15%** of the same measure.
+  - Operationally, monitor.py's band check runs on Composer-visible values;
+    the dollar target is recorded here and updated on owner reports.
+- PENDING (awaiting owner confirmation that the deposit landed): owner is
+  selling TAIL (~$17k) + $30k BOXX at IBKR and wiring ~$47k to Composer.
+  On arrival: top the sleeve up to the ~$53k family target (≈ +$31k), and
+  invest the remainder (≈ $16k) into the most underweight engine
+  (targets: HG 55% / P5 35% of the Composer account ex-sleeve overweight).
+  Deploying the deposit itself requires the owner's "it landed" message —
+  it is NOT auto-executed on cash detection.
+- Rebalance trigger: at the daily post-close check, sleeve outside the band.
 - Trigger: at the daily post-close check, sleeve weight outside the band.
 - Action: rebalance the sleeve back to exactly 10%:
   - Over 15% → withdraw the excess from the sleeve; invest proceeds into
