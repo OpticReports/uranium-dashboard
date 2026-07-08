@@ -47,6 +47,8 @@ def main():
 
     meta = cl.get(f"/portfolio/accounts/{acct}/symphony-stats-meta")["symphonies"]
     total = cl.get(f"/portfolio/accounts/{acct}/total-stats")
+    idle = total.get("total_unallocated_cash") or 0.0
+    pending = total.get("pending_deploys_cash") or 0.0
 
     prev = None
     older = sorted(glob.glob(os.path.join(DIR, "snapshot-*.json")))
@@ -97,6 +99,10 @@ def main():
             alerts.append(f"QUEUED DEPLOY pending — {label}")
         if s.get("may_rebalance_today"):
             alerts.append(f"may rebalance today — {label}")
+
+    if idle > 5000 and pending == 0:
+        alerts.append(f"IDLE CASH ${idle:,.0f} unallocated — check POLICY.md "
+                      "for a PENDING DEPOSIT block (deployment may be pre-authorized)")
 
     total_value = sum(s["value"] for s in meta)
     band = next((s for s in meta if s["id"] == a.band_symphony), None)
