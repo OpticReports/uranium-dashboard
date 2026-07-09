@@ -381,3 +381,39 @@ nothing. Extreme events (2008-scale) still warrant human judgment on top —
 the band handles tranching; the human decides if the regime broke.
 Operational plan: once the sleeve is funded, monitor.py alerts on band
 breach; execution stays human-approved via the guarded CLI.
+
+---
+
+# Addendum 8 — 2026-07-09 — BTC multi-timeframe MA scalping study (hourly)
+
+Data: 65,925 hourly BTC/USD closes (Bitstamp, 2019-01-01 → 2026-07-09, no
+gaps). MAs across the requested timeframes (1h/4h/12h/1d/1w → 13 SMAs from
+20h to 8400h). Signal lagged one bar; fees applied per side on turnover.
+IS = 2019-23, OOS = 2024-26. CAGR / Sharpe / maxDD:
+
+| Strategy | 0 bps FULL | 0 bps OOS | 10 bps FULL | 10 bps OOS | turns/yr |
+| --- | --- | --- | --- | --- | ---: |
+| Buy & hold | +40%/0.85/77% | +17%/0.57/54% | ~same | ~same | 0 |
+| Daily 200d filter | +39%/0.96/63% | +24%/0.77/30% | +34%/0.96 | +19%/0.77 | 35 |
+| MA-ladder hourly (13 MAs) | **+50%/1.31/43%** | +23%/0.85/24% | +16% | **−5.9%** | 262 |
+| MA touch/breakout scalp | +3.5%/0.50/16% | **+0.0%/0.04** | −13.5% | −16.4% | 180 |
+| MA-ladder, daily-sampled | — | — | +27%/0.97/57% | +12%/0.73/30% | 55 |
+
+At 25 bps/side every hourly strategy is deeply negative (−22% to −36% CAGR).
+
+Findings:
+1. **The literal scalp (MA touch/bounce/breakout with stops+targets) has no
+   edge even with zero costs** — +3.5%/yr frictionless over 7.5 years and
+   exactly 0.0% out-of-sample. It is a signal problem, not a cost problem.
+2. **The MA-ladder (trend version) has a real frictionless signal**
+   (Sharpe 1.31 vs 0.85 hold, maxDD 43% vs 77%) but hourly execution turns
+   over ~262 units/yr → ~26%/yr cost drag at 10 bps → OOS negative. Break-
+   even is ~4 bps/side — unattainable at retail.
+3. **All the value lives in the slow component.** The daily-sampled ladder
+   (55 turns/yr, fee-robust) ≈ the plain daily 200d filter: Sharpe ~0.96,
+   maxDD 77%→~60% (OOS 54%→30%). Twelve extra MAs add ~nothing over one.
+4. Conclusion: do NOT build the intraday bot (Hyperliquid/Bybit/IBKR venue
+   question is moot). If BTC exposure is wanted, the buildable expression is
+   an IBIT symphony with a daily 200d-MA trend filter — it captures the
+   entire measurable benefit at 35 turns/yr. Consistent with this project's
+   standing result: slow allocation structures survive; fast signals die.
