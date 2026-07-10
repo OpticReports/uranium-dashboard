@@ -19,6 +19,16 @@ Format per entry:
 
 <!-- New entries go below this line, newest first. -->
 
+## 2026-07-10 — $30k deposit deployed to crash sleeve (per staged plan)
+
+- Change (capital, owner-directed): invested $30,000 into the sleeve
+  `nNdBk7hc5NiBzeRvbI5T` (deploy 427f1feb, executes 2026-07-10 19:50Z
+  window). Sleeve lands at ~$52k ≈ the ~$53k family target (10% of
+  crash-exposed assets per POLICY.md). PENDING DEPOSIT block removed.
+- Next: TAIL sale proceeds (~$17k), when sent, go to the most underweight
+  engine on the owner's confirmation.
+
+
 ## 2026-07-07 — reallocation COMPLETE — final leg executed
 
 - Change (capital, per approved plan): final invest $41,463 into P5

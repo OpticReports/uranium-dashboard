@@ -21,14 +21,6 @@ in `CHANGELOG.md` with deploy IDs, and pushed.
     Band: **7% – 15%** of the same measure.
   - Operationally, monitor.py's band check runs on Composer-visible values;
     the dollar target is recorded here and updated on owner reports.
-- PENDING DEPOSIT (owner-directed 2026-07-07, auto-deploy on arrival):
-  owner requested a **$30k deposit** (from BOXX sale; expected to clear
-  ~2026-07-08/09). When the daily check sees total_unallocated_cash ≥ $28k
-  with no pending deploys: invest the full unallocated cash (− $150 buffer)
-  **into the sleeve** `nNdBk7hc5NiBzeRvbI5T` — this lands it at ≈ $52k,
-  at the ~$53k family target. Owner explicitly authorized deploy-on-arrival
-  for THIS deposit ("you can adjust the first order for when it lands").
-  Report after execution, then delete this block from POLICY.md.
 - LATER: TAIL sale proceeds (~$17k) may arrive as a second deposit; that
   one goes to the most underweight engine (HG 55 / P5 35 targets) and
   still requires an owner "it landed" message (not pre-authorized).
