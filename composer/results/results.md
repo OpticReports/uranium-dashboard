@@ -417,3 +417,58 @@ Findings:
    an IBIT symphony with a daily 200d-MA trend filter — it captures the
    entire measurable benefit at 35 turns/yr. Consistent with this project's
    standing result: slow allocation structures survive; fast signals die.
+
+---
+
+# Addendum 9 — 2026-07-11 — Shiller CAPE as a sleeve-allocation signal
+
+Data: monthly CAPE, S&P price, dividend yield, CPI (multpl.com), Feb 1871 →
+May 2026 (1,864 months). Real total-return index built from price+dividends,
+CPI-deflated. CAPE signal = expanding-window percentile (no lookahead).
+Current CAPE: 42.2 = ~99th percentile of all history.
+
+**Part 1 — does CAPE predict? Yes, at decade horizon:**
+
+| CAPE pctile | fwd 1y real | fwd 10y real (ann) | P(−20% within 24m) |
+| --- | ---: | ---: | ---: |
+| 0–20% | +13.0% | +10.0% | 11.2% |
+| 40–60% | +12.9% | +8.4% | 19.0% |
+| 80–90% | +6.4% | +6.6% | 16.7% |
+| 90–100% | +4.4% | **+3.6%** | **21.9%** |
+
+Monotone at 10y; correction probability doubles cheap→dear. Thesis direction
+confirmed. BUT: even at extreme valuations, 78% of 24-month windows contain
+NO 20% correction — elevated risk ≠ imminent event.
+
+**Part 2 — does CAPE time allocations? No, for 145 years:**
+
+| Rule (real, cash=0% real) | CAGR | Sharpe | maxDD | since-1990 CAGR |
+| --- | ---: | ---: | ---: | ---: |
+| 100% equities | +6.69% | 0.52 | 77% | +8.09% |
+| CAPE-tilt w=1−0.6·pctile | +4.56% | 0.48 | 62% | **+3.84%** |
+| classic CAPE>25 → 50% | +6.28% | 0.52 | 72% | +6.04% |
+
+Every CAPE rule lowers return without raising Sharpe. Cause: regime drift —
+since 1990 the market has spent ~75 of every 120 months in the top CAPE
+decile; "expensive" persisted for 35 years and the opportunity cost of
+de-risking compounded. CAPE speaks in decades; allocations trade in months.
+
+**Part 3 — applied to the sleeve (2011-2026, SPY book + deep-proxy sleeve,
+monthly rebalance):** CAPE percentile ranged **0.79–0.99 the entire era** —
+the signal has almost no variance where the sleeve is tradeable. Result:
+CAPE-scaled 5–20% sleeve (avg 19%) ≈ fixed 20% sleeve (CAGR +22.5% vs
++22.7%, Sharpe 1.52 vs 1.51, maxDD identical). **The "signal" collapses to a
+static sizing choice.** (Notable side-result: in this era a 20% fixed sleeve
+dominated 10% on every metric — consistent with the earlier frontier — the
+cap at 10% remains an evidence-quality decision, not a math one.)
+
+**Proof criterion recorded:** a valuation-timing policy earns adoption only
+if it beats a fixed-weight policy holding the SAME average sleeve weight
+(isolating timing from sizing). Here it doesn't (22.5 vs 22.7). It cannot
+currently, because CAPE hasn't left its top quintile since 2011 ex-2020's
+weeks. Re-test if CAPE ever falls below its 60th percentile and re-rises —
+i.e., after a full valuation cycle.
+
+**Decision: no CAPE dial in POLICY.md.** CAPE=42 (99th pctile) is context
+supporting the sleeve's existence and the eventual 15% scale-up — the gate
+for which remains live tracking (Jan 2027 review), not valuation.
