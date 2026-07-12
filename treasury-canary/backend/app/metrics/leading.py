@@ -49,9 +49,7 @@ def _ma(vals: list[float | None], n: int) -> list[float | None]:
 def _metric(metric_id: str, label: str, dates: list[date], series: list[float | None],
             unit: str, note: str, source: str) -> MetricResult:
     value = last_valid(series)
-    asof = None
-    non_null = [d for d, v in zip(dates, [v for v in series]) if v is not None]
-    # series was derived from the clean values; align asof to the last raw date
+    # derived series are index-aligned to the clean values; asof = last raw date
     asof = dates[-1] if dates else None
     m = MetricResult(
         metric_id=metric_id, category="K", label=label, value=value,
