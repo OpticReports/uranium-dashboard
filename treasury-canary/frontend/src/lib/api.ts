@@ -265,6 +265,40 @@ export interface TrackRecord {
   caveat: string;
 }
 
+export interface SeverityComponent {
+  id: string;
+  label: string;
+  value: number | null;
+  unit: string;
+  score: number | null;
+  note: string;
+}
+
+export interface SeverityBlock {
+  id: string;
+  label: string;
+  score: number | null;
+  components: SeverityComponent[];
+}
+
+export interface SeverityIndex {
+  blocks: SeverityBlock[];
+  severity_score: number | null;
+  severity_class: "MILD" | "MODERATE" | "SEVERE" | null;
+  formula: {
+    base_amplifiers: number | null;
+    policy_space_adj: number;
+    dampener_adj: number;
+    weights: Record<string, number>;
+    text: string;
+  };
+  composition: {
+    type_scores: Record<string, number | null>;
+    matched_type: string | null;
+  };
+  note: string;
+}
+
 // ---------------------------------------------------------------------------
 // Fetch helpers
 // ---------------------------------------------------------------------------
@@ -341,6 +375,7 @@ export const api = {
   news: (limit = 40) => getJson<NewsResponse>(`/news?limit=${limit}`),
   pins: () => getJson<PinBoard>("/pins"),
   trackRecord: () => getJson<TrackRecord>("/track-record"),
+  severity: () => getJson<SeverityIndex>("/severity"),
   refresh: () =>
     getJson<unknown>("/refresh", { method: "POST" }),
 };
