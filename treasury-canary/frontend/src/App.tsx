@@ -12,6 +12,8 @@ import FlightToQuality from "./components/FlightToQuality";
 import FlowCompass from "./components/FlowCompass";
 import EventFeed from "./components/EventFeed";
 import NewsPanel from "./components/NewsPanel";
+import LeadingStack from "./components/LeadingStack";
+import PinBoard from "./components/PinBoard";
 
 const POLL_MS = 60_000;
 
@@ -114,6 +116,16 @@ export default function App() {
           <SahmChart />
 
           {metrics ? (
+            <LeadingStack metrics={metrics.metrics} />
+          ) : (
+            !metricsError && (
+              <div className="rounded-lg border border-panelborder bg-panel/60 p-6 text-center text-xs text-slate-500">
+                Loading leading stack…
+              </div>
+            )
+          )}
+
+          {metrics ? (
             <MetricTable
               categories={metrics.categories}
               metrics={metrics.metrics}
@@ -144,6 +156,8 @@ export default function App() {
           </div>
 
           <FlowCompass />
+
+          <PinBoard />
 
           <EventFeed />
 
