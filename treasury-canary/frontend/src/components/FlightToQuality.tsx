@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import {
   ResponsiveContainer,
   LineChart,
@@ -11,6 +12,7 @@ import type { Metric, HistoryPoint } from "../lib/api";
 import { api } from "../lib/api";
 import { Panel, StatusPill, InlineError } from "./ui";
 import { formatValue, errorMessage } from "../lib/format";
+import InfoTip from "./InfoTip";
 
 const CORR_ID = "crossasset.stock_bond_corr";
 const FTQ_ID = "crossasset.flight_to_quality";
@@ -77,8 +79,24 @@ export default function FlightToQuality({ metrics }: { metrics: Metric[] }) {
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <MetricCard metric={corr} label="60d stock-bond corr" />
-        <MetricCard metric={ftq} label="Flight-to-quality" />
+        <MetricCard
+          metric={corr}
+          label={
+            <>
+              60d stock-bond corr
+              <InfoTip metricId="crossasset.stock_bond_corr" />
+            </>
+          }
+        />
+        <MetricCard
+          metric={ftq}
+          label={
+            <>
+              Flight-to-quality
+              <InfoTip metricId="crossasset.flight_to_quality" />
+            </>
+          }
+        />
       </div>
 
       <div className="mt-4">
@@ -127,7 +145,7 @@ function MetricCard({
   label,
 }: {
   metric: Metric | undefined;
-  label: string;
+  label: ReactNode;
 }) {
   return (
     <div className="rounded border border-panelborder bg-slate-900/40 px-3 py-2">

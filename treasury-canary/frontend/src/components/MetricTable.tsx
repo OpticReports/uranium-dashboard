@@ -21,6 +21,7 @@ import {
   formatPercentile,
   errorMessage,
 } from "../lib/format";
+import InfoTip from "./InfoTip";
 
 const ALL_STATUSES: MetricStatus[] = [
   "CRITICAL",
@@ -235,15 +236,18 @@ export default function MetricTable({
               </Th>
               <Th onClick={() => setSort("delta_1d")} active={sortKey === "delta_1d"} dir={sortDir} right>
                 1d Δ
+                <InfoTip term="deltas" />
               </Th>
               <Th onClick={() => setSort("delta_20d")} active={sortKey === "delta_20d"} dir={sortDir} right>
                 20d Δ
               </Th>
               <Th onClick={() => setSort("percentile")} active={sortKey === "percentile"} dir={sortDir} right>
                 %ile
+                <InfoTip term="percentile" />
               </Th>
               <Th onClick={() => setSort("status")} active={sortKey === "status"} dir={sortDir}>
                 Status
+                <InfoTip term="status_lights" />
               </Th>
               <th className="px-2 py-2 font-semibold">Signal / note</th>
             </tr>
@@ -328,7 +332,10 @@ function GroupBody({
                     <span className="w-3 text-[10px] text-slate-600">
                       {expanded ? "▾" : "▸"}
                     </span>
-                    <span className="text-slate-200">{m.label}</span>
+                    <span className="text-slate-200">
+                      {m.label}
+                      <InfoTip metricId={m.metric_id} />
+                    </span>
                   </div>
                 </td>
                 <td className="px-2 py-2 text-right font-mono text-slate-100">

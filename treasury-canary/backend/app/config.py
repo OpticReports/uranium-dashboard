@@ -17,6 +17,7 @@ class Settings(BaseSettings):
 
     # --- Keys (all optional; core needs only FRED) ---
     fred_api_key: str | None = None          # free: fredaccount.stlouisfed.org/apikeys
+    fmp_api_key: str | None = None           # optional: gold (GLD) for the flow compass
     move_api_key: str | None = None          # optional licensed MOVE override
     alert_webhook_url: str | None = None     # POST target on regime-change events
 
@@ -71,4 +72,11 @@ FRED_LABOR: dict[str, str] = {
     "unrate": "UNRATE",            # lagging context
     "claims_4wk": "IC4WSA",        # initial jobless claims, 4-week MA (leading)
     "sahm": "SAHMREALTIME",        # official real-time Sahm recession indicator
+}
+# Flow-compass discriminators: where money hides when the stock-bond hedge breaks.
+# (Gold comes from FMP — FRED's LBMA gold series were discontinued.)
+FRED_FLOWS: dict[str, str] = {
+    "usd": "DTWEXBGS",             # nominal broad dollar index (daily)
+    "oil": "DCOILWTICO",           # WTI crude (daily)
+    "btc": "CBBTCUSD",             # Coinbase BTC-USD (daily)
 }

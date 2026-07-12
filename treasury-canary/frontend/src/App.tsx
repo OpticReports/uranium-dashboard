@@ -6,7 +6,10 @@ import { InlineError } from "./components/ui";
 import StressGauge from "./components/StressGauge";
 import MetricTable from "./components/MetricTable";
 import ReSteepenAlert from "./components/ReSteepenAlert";
+import SahmChart from "./components/SahmChart";
+import LaborPanel from "./components/LaborPanel";
 import FlightToQuality from "./components/FlightToQuality";
+import FlowCompass from "./components/FlowCompass";
 import EventFeed from "./components/EventFeed";
 import NewsPanel from "./components/NewsPanel";
 
@@ -108,6 +111,8 @@ export default function App() {
 
           <ReSteepenAlert />
 
+          <SahmChart />
+
           {metrics ? (
             <MetricTable
               categories={metrics.categories}
@@ -129,8 +134,18 @@ export default function App() {
                 Loading…
               </div>
             )}
-            <EventFeed />
+            {metrics ? (
+              <LaborPanel metrics={metrics.metrics} />
+            ) : (
+              <div className="rounded-lg border border-panelborder bg-panel/60 p-6 text-center text-xs text-slate-500">
+                Loading…
+              </div>
+            )}
           </div>
+
+          <FlowCompass />
+
+          <EventFeed />
 
           <NewsPanel />
         </div>

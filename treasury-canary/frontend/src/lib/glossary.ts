@@ -204,6 +204,41 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     calc: "Year-over-year % change of the 4-week moving average (FRED IC4WSA). YoY removes seasonality; the MA removes week noise.",
     read: "Claims LEAD the unemployment rate: layoffs show up here first. Sustained +10–25% YoY = cracks forming; >25% = the labor cycle is turning. One of the earliest honest recession tells.",
   },
+  // ── Flow compass ──────────────────────────────────────────────────────────
+  flow_compass: {
+    title: "Flow compass — where is the money going?",
+    what: "When stocks and bonds sell off together, the DESTINATION of the haven bid identifies the regime. This panel measures ~20-day drifts in the candidate destinations and classifies the pattern.",
+    calc: "Rule-based on 20-trading-day moves: stocks (S&P), 10y yield, broad dollar, gold, oil, BTC. Stocks down + bonds up = growth scare (hedge intact). Stocks & bonds down + dollar UP + no gold bid = rates/inflation shock → money hides in front-end cash. Stocks & bonds down + dollar DOWN + gold UP = debasement / sell-USD-assets → the haven bid is leaving the country. Everything down incl. gold + dollar spike = liquidity crunch (dash for cash).",
+    read: "The debasement configuration is the most dangerous for Treasuries — it means the marginal safe-haven buyer is choosing gold/foreign assets over USTs (fiscal/credibility premium). The rules and thresholds are shown transparently; this is a drift classifier, not a prediction.",
+    caveat: "20-day windows classify the prevailing regime, not turning points. Mixed readings are reported as mixed rather than forced into a bucket.",
+  },
+  flow_usd: {
+    title: "Broad dollar index",
+    what: "Trade-weighted USD vs major partners — the world's default haven currency.",
+    read: "Dollar UP in a selloff = classic risk-off (foreigners buying US safety). Dollar DOWN while US stocks AND bonds fall = the 'sell America' tell — capital leaving USD assets altogether.",
+  },
+  flow_gold: {
+    title: "Gold",
+    what: "The anti-currency haven — the asset money chooses when it distrusts BOTH risk assets and paper claims.",
+    read: "Gold bid while bonds sell = inflation/fiscal fear (bonds aren't trusted as the hedge). Gold SOLD in a crash = forced liquidation — even havens get sold for cash (Mar 2020).",
+    caveat: "Pulled via FMP (GLD proxy) — requires the FMP key on the canary service; shows n/a without it.",
+  },
+  flow_btc: {
+    title: "Bitcoin",
+    what: "A hybrid: trades like levered risk most of the time, but corroborates gold in debasement episodes.",
+    read: "Only meaningful in COMBINATION: BTC up + gold up + dollar down while bonds fall = confirms the debasement read. BTC down hard = it's behaving as risk, not haven.",
+  },
+  flow_bills: {
+    title: "3-month T-bill",
+    what: "The front end — the closest thing to cash that still yields.",
+    read: "Bill yields FALLING while stocks fall = money crowding into cash-like safety even when it won't touch duration. The signature of a rates-shock regime.",
+  },
+  flow_oil: {
+    title: "WTI crude",
+    what: "The inflation impulse.",
+    read: "Oil UP during an equity selloff = supply/inflation shock (stagflationary — bad for both stocks and bonds). Oil down = demand fear (recessionary — usually good for bonds).",
+  },
+
   "labor.unrate": {
     title: "Unemployment rate",
     what: "The headline U-3 rate — shown for context only.",
