@@ -14,6 +14,7 @@ const CHANNEL_TIP: Record<string, string> = {
   fiscal: "pin_fiscal",
   plumbing: "pin_plumbing",
   uncertainty: "pin_uncertainty",
+  basis_trade: "pin_basis",
 };
 
 function partDotColor(status: string): string {

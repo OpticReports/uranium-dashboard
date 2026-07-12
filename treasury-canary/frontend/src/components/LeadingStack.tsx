@@ -11,6 +11,62 @@ import InfoTip from "./InfoTip";
 
 const STORAGE_KEY = "canary.leading.excluded";
 
+// Correlated indicators grouped into families so breadth isn't overstated when
+// one causal channel (e.g. housing) lights up several series at once.
+const FAMILIES = [
+  {
+    id: "housing_capex",
+    label: "Housing/Capex",
+    members: [
+      "leading.permits_yoy",
+      "leading.trucks_off_peak",
+      "leading.core_capex_yoy",
+    ],
+  },
+  { id: "credit", label: "Credit", members: ["leading.sloos"] },
+  { id: "labor", label: "Labor", members: ["leading.temp_help_yoy"] },
+  {
+    id: "activity",
+    label: "Broad activity",
+    members: ["leading.cfnai_ma3", "leading.gdpnow", "leading.cp_prob"],
+  },
+];
+
+interface FamilyState {
+  id: string;
+  label: string;
+  nLive: number;
+  flashing: boolean;
+  hasRed: boolean;
+}
+
+// A family is LIVE if >=1 member is included and non-STALE; it FLASHES if at
+// least half of its included, non-STALE members are YELLOW/RED/CRITICAL.
+function familyStates(live: Metric[]): FamilyState[] {
+  const byId = new Map(live.map((m) => [m.metric_id, m]));
+  const states: FamilyState[] = [];
+  for (const fam of FAMILIES) {
+    const members = fam.members
+      .map((id) => byId.get(id))
+      .filter((m): m is Metric => m !== undefined);
+    if (members.length === 0) continue;
+    const flashing = members.filter(
+      (m) =>
+        m.status === "YELLOW" || m.status === "RED" || m.status === "CRITICAL",
+    );
+    states.push({
+      id: fam.id,
+      label: fam.label,
+      nLive: members.length,
+      flashing: flashing.length >= members.length / 2 && flashing.length > 0,
+      hasRed: flashing.some(
+        (m) => m.status === "RED" || m.status === "CRITICAL",
+      ),
+    });
+  }
+  return states;
+}
+
 function readExcluded(): Set<string> {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -88,6 +144,20 @@ export default function LeadingStack({ metrics }: { metrics: Metric[] }) {
     else breadthColor = nRed > 0 ? "text-amber-400" : "text-slate-300";
   }
 
+  // Effective breadth: same include/exclude state, collapsed to families.
+  const families = familyStates(live);
+  const nFamilies = families.length;
+  const famFlashing = families.filter((f) => f.flashing).length;
+  const famRed = families.filter((f) => f.flashing && f.hasRed).length;
+  let famColor = "text-slate-300";
+  if (nFamilies > 0) {
+    const frac = famFlashing / nFamilies;
+    if (famFlashing === 0) famColor = "text-emerald-400";
+    else if (frac > 1 / 2) famColor = "text-red-400";
+    else if (frac > 1 / 3) famColor = "text-amber-400";
+    else famColor = famRed > 0 ? "text-amber-400" : "text-slate-300";
+  }
+
   return (
     <Panel title={title} subtitle={subtitle}>
       {/* Breadth readout */}
@@ -101,7 +171,31 @@ export default function LeadingStack({ metrics }: { metrics: Metric[] }) {
           <span className="font-mono text-xs text-slate-400">
             {nRed} red · {nYellow} yellow
           </span>
+          <span className={`text-sm font-semibold ${famColor}`}>
+            {nFamilies > 0
+              ? `Effective: ${famFlashing} of ${nFamilies} families flashing`
+              : "Effective: no live families"}
+            <InfoTip term="effective_breadth" />
+          </span>
         </div>
+        {families.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {families.map((f) => (
+              <span
+                key={f.id}
+                className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                  f.flashing
+                    ? f.hasRed
+                      ? "border-red-600/60 bg-red-500/10 text-red-400"
+                      : "border-amber-600/60 bg-amber-500/10 text-amber-400"
+                    : "border-panelborder bg-slate-800/50 text-slate-400"
+                }`}
+              >
+                {f.label} ({f.nLive})
+              </span>
+            ))}
+          </div>
+        )}
         <p className="mt-1 text-[11px] text-slate-500">
           Breadth across independent causal channels — no weights, no fitted
           model.

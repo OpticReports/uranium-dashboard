@@ -192,6 +192,27 @@ def build_pin_board(bundle: dict) -> dict:
         basis="Sept-2019 repo spasm; 2022 gilt/LDI. Plumbing breaks fast and forces the Fed.",
         certainty="High-quality daily/weekly reads; a genuine early-warning channel."))
 
+    # --- BASIS-TRADE UNWIND ----------------------------------------------------
+    cot = bundle.get("cot_net_short", ([], []))[1]
+    cot_clean = _clean(cot)
+    cot_now = cot_clean[-1] if cot_clean else None
+    cot_pctl = _percentile(cot, cot_now)
+    parts = [
+        PinPart("Leveraged-fund net short, UST futures", cot_now, "M contracts",
+                _grade(cot_now, 4.0, 5.5),
+                "Hedge funds' aggregate net short across the Treasury futures complex — "
+                "the cash-futures basis trade. Bigger book = bigger forced unwind."),
+        PinPart("Positioning percentile (vs 2010+)", cot_pctl, "%ile",
+                _grade(cot_pctl, 85.0, 95.0),
+                "How crowded today's book is versus its own history."),
+    ]
+    channels.append(PinChannel(
+        "basis_trade", "Basis-trade unwind", _worst(parts), parts,
+        basis="March 2020: the basis trade unwound violently and broke the Treasury "
+              "market until the Fed intervened. THIS cycle's known loaded spring.",
+        certainty="Weekly CFTC data with a few days' lag; crowding is measurable but the "
+                  "unwind trigger (a margin/vol spike) arrives via the other channels."))
+
     # --- UNCERTAINTY / GEOPOLITICS -------------------------------------------
     epu_d, epu_v = bundle.get("epu", ([], []))
     epu30 = None

@@ -167,30 +167,59 @@ def build_models(spread_dates: list[date], spread_vals: list[float | None],
 
 # --- cached fit over the live FRED bundle ------------------------------------
 _MODEL_TTL_SECONDS = 6 * 3600
-_model_cache: dict[str, object] = {"ts": 0.0, "models": None, "spread": None}
+_model_cache: dict[str, object] = {"ts": 0.0, "models": None, "spread": None,
+                                   "adj_models": None, "adj_spread": None, "tp": None}
 _model_lock = threading.Lock()
 
 
-def cached_models_and_spread() -> tuple[dict[int, dict], float | None]:
-    """(models, current_3m10y_spread), fit from the memoized FRED bundle. Cached so
-    /recession-prob and /recession-model don't refit the probit on every request."""
+def _fit_all() -> None:
+    from ..sources.fred import fetch_bundle
+    from .curve import build_spread
+    bundle = fetch_bundle()
+    d3, v3 = bundle.get("3mo", ([], []))
+    d10, v10 = bundle.get("10y", ([], []))
+    sdates, spread = build_spread(d3, v3, d10, v10)     # 10y - 3m, daily
+    rdates, rvals = bundle.get("recession", ([], []))
+    _model_cache["models"] = build_models(sdates, spread, rdates, rvals)
+    _model_cache["spread"] = next((v for v in reversed(spread) if v is not None), None)
+
+    # Term-premium-ADJUSTED variant (the Bernanke critique): subtract the ACM 10y
+    # term premium so the input is the expectations component only. When QE pins
+    # the premium negative, the RAW curve inverts "too easily"; the adjusted
+    # spread strips that distortion. Shorter sample (ACM on FRED from ~1990).
+    td, tv = bundle.get("acm_tp10", ([], []))
+    tp_map = dict(zip(td, tv))
+    adj_dates, adj_vals = [], []
+    for d, s in zip(sdates, spread):
+        tp = tp_map.get(d)
+        if s is not None and tp is not None:
+            adj_dates.append(d)
+            adj_vals.append(s - tp)
+    _model_cache["adj_models"] = build_models(adj_dates, adj_vals, rdates, rvals)
+    _model_cache["adj_spread"] = adj_vals[-1] if adj_vals else None
+    _model_cache["tp"] = next((v for v in reversed(tv) if v is not None), None)
+    _model_cache["ts"] = time.time()
+
+
+def _ensure_fit() -> None:
     now = time.time()
     if _model_cache["models"] is not None and now - float(_model_cache["ts"]) < _MODEL_TTL_SECONDS:
-        return _model_cache["models"], _model_cache["spread"]  # type: ignore[return-value]
+        return
     with _model_lock:
         now = time.time()
         if _model_cache["models"] is not None and now - float(_model_cache["ts"]) < _MODEL_TTL_SECONDS:
-            return _model_cache["models"], _model_cache["spread"]  # type: ignore[return-value]
-        from ..sources.fred import fetch_bundle
-        from .curve import build_spread
-        bundle = fetch_bundle()
-        d3, v3 = bundle.get("3mo", ([], []))
-        d10, v10 = bundle.get("10y", ([], []))
-        sdates, spread = build_spread(d3, v3, d10, v10)     # 10y - 3m, daily
-        rdates, rvals = bundle.get("recession", ([], []))
-        models = build_models(sdates, spread, rdates, rvals)
-        latest = next((v for v in reversed(spread) if v is not None), None)
-        _model_cache["models"] = models
-        _model_cache["spread"] = latest
-        _model_cache["ts"] = time.time()
-        return models, latest
+            return
+        _fit_all()
+
+
+def cached_models_and_spread() -> tuple[dict[int, dict], float | None]:
+    """(models, current_3m10y_spread) — cached; refit at most every 6h."""
+    _ensure_fit()
+    return _model_cache["models"] or {}, _model_cache["spread"]  # type: ignore[return-value]
+
+
+def cached_adjusted() -> tuple[dict[int, dict], float | None, float | None]:
+    """(adjusted models, current adjusted spread, current ACM TP10)."""
+    _ensure_fit()
+    return (_model_cache["adj_models"] or {}, _model_cache["adj_spread"],
+            _model_cache["tp"])  # type: ignore[return-value]

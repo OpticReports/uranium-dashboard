@@ -28,7 +28,7 @@ from ..metrics.volatility import build_volatility_metrics
 from ..scoring.composite import compute_composite
 from ..scoring.events import Event, detect_band_cross, detect_curve_events, detect_metric_flip
 from ..sources.fred import fetch_bundle, recession_start_dates
-from ..store.models import EventLog, MetricSnapshot, utcnow
+from ..store.models import EventLog, MetricSnapshot, PredictionLog, utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -166,6 +166,36 @@ def run_refresh(session: Session) -> dict:
             fired += 1
             if ev.severity in ("RED", "CRITICAL"):
                 _fire_webhook(ev)
+
+    # --- prediction log (track record): one row/day, idempotent -----------------
+    try:
+        from ..metrics.recession_model import cached_adjusted, cached_models_and_spread, predict
+        models, spread = cached_models_and_spread()
+        adj_models, adj_spread, _tp = cached_adjusted()
+        m12, a12 = models.get(12), adj_models.get(12)
+        prob = predict(m12["b0"], m12["b1"], m12["cov"], spread)["probability_pct"] \
+            if (m12 and spread is not None) else None
+        prob_adj = predict(a12["b0"], a12["b1"], a12["cov"], adj_spread)["probability_pct"] \
+            if (a12 and adj_spread is not None) else None
+        by_id = {m.metric_id: m for m in metrics}
+        curve_state = (analyses.get("3m10y").state.value if analyses.get("3m10y") else None)
+        from ..metrics.pins import build_pin_board
+        pins_overall = build_pin_board(bundle).get("overall")
+        row = session.execute(
+            select(PredictionLog).where(PredictionLog.asof == today)).scalars().first()
+        vals = dict(composite_score=composite.score, composite_band=composite.band,
+                    coverage=composite.coverage, rec_prob_12m=prob,
+                    rec_prob_adj_12m=prob_adj, curve_state=curve_state,
+                    pins_overall=pins_overall,
+                    sahm=(by_id.get("labor.sahm").value if by_id.get("labor.sahm") else None))
+        if row:
+            for k, v in vals.items():
+                setattr(row, k, v)
+        else:
+            session.add(PredictionLog(asof=today, **vals))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Prediction log write failed (non-fatal): %s", exc)
+
     session.commit()
 
     return {
