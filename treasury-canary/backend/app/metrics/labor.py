@@ -16,8 +16,10 @@ from .base import MetricResult, Status, delta, last_valid, percentile_rank
 
 def _sahm_from_unrate(dates: list[date], unrate: list[float | None]
                       ) -> tuple[list[date], list[float | None]]:
-    """Sahm gap series: 3-month avg unemployment minus its low over the trailing
-    12 months. Triggers a recession call at >= 0.50pp."""
+    """Sahm gap series: 3-month avg unemployment minus its low over the PRIOR 12
+    months (excluding the current reading — official definition; matches FRED's
+    SAHMREALTIME, which can go slightly negative while unemployment is falling).
+    Triggers a recession call at >= 0.50pp."""
     pts = [(d, v) for d, v in zip(dates, unrate) if v is not None]
     ma3: list[float | None] = []
     for i in range(len(pts)):
@@ -28,7 +30,7 @@ def _sahm_from_unrate(dates: list[date], unrate: list[float | None]
     for i in range(len(pts)):
         out_dates.append(pts[i][0])
         cur = ma3[i]
-        prior = [ma3[j] for j in range(max(0, i - 12), i + 1) if ma3[j] is not None]
+        prior = [ma3[j] for j in range(max(0, i - 12), i) if ma3[j] is not None]
         gaps.append(round(cur - min(prior), 2) if (cur is not None and prior) else None)
     return out_dates, gaps
 

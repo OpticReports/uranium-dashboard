@@ -27,6 +27,15 @@ def test_sahm_low_when_flat():
     assert gaps[-1] == 0.0
 
 
+def test_sahm_negative_when_unemployment_falling():
+    # Official definition (low of the PRIOR 12 months, excluding current) can go
+    # negative while unemployment declines — matches FRED SAHMREALTIME behavior.
+    dates = _months(24)
+    unrate = [5.0 - i * 0.05 for i in range(24)]  # steadily falling
+    d, gaps = _sahm_from_unrate(dates, unrate)
+    assert gaps[-1] is not None and gaps[-1] < 0.0
+
+
 def test_build_labor_metrics_and_informational_unrate():
     dates = _months(30)
     unrate = [3.5] * 18 + [3.7, 3.9, 4.1, 4.3, 4.5, 4.6, 4.6, 4.6, 4.6, 4.6, 4.6, 4.6]

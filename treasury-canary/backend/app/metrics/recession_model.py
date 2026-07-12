@@ -82,7 +82,7 @@ def fit_probit(xs: list[float], ys: list[int], iters: int = 25
         for x, y in zip(xs, ys):
             eta = b0 + b1 * x
             P = _clip(_Phi(eta))
-            phi = _phi(eta)
+            phi = max(_phi(eta), 1e-10)              # floor: avoid blowups near separation
             w = phi * phi / (P * (1.0 - P))          # probit working weight
             z = eta + (y - P) / phi                    # working response
             s00 += w
@@ -157,7 +157,10 @@ def build_models(spread_dates: list[date], spread_vals: list[float | None],
         if sum(ys) < 5 or len(xs) < 30:      # need enough recession months to fit
             continue
         b0, b1, cov = fit_probit(xs, ys)
-        out[h] = {"b0": b0, "b1": b1, "cov": cov, "auc": auc(xs, ys),
+        # AUC scored by the fitted model's own risk ranking: Phi(b0+b1*x) is
+        # monotone in sign(b1)*x, so rank by that (not a hardcoded direction).
+        out[h] = {"b0": b0, "b1": b1, "cov": cov,
+                  "auc": auc(xs, ys, b1_sign=(1.0 if b1 > 0 else -1.0)),
                   "n_obs": len(xs), "n_pos": sum(ys)}
     return out
 
