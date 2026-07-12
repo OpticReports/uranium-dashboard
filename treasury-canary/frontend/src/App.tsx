@@ -16,15 +16,17 @@ import LeadingStack from "./components/LeadingStack";
 import PinBoard from "./components/PinBoard";
 import AlertBeacon from "./components/AlertBeacon";
 import PlaybookTab from "./components/PlaybookTab";
+import SeverityTab from "./components/SeverityTab";
 import TrackRecordTab from "./components/TrackRecordTab";
 
 const POLL_MS = 60_000;
 
-type Tab = "monitor" | "playbook" | "track";
+type Tab = "monitor" | "playbook" | "severity" | "track";
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: "monitor", label: "Monitor" },
   { id: "playbook", label: "Playbook" },
+  { id: "severity", label: "Severity" },
   { id: "track", label: "Track record" },
 ];
 
@@ -200,6 +202,7 @@ export default function App() {
         </div>
 
         {tab === "playbook" && <PlaybookTab />}
+        {tab === "severity" && <SeverityTab />}
         {tab === "track" && <TrackRecordTab />}
 
         <footer className="mt-8 border-t border-panelborder pt-4 text-center text-[10px] text-slate-600">
