@@ -217,6 +217,58 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     caveat: "Foreigners can also move holdings to other custodians without selling — read the trend, not single weeks.",
   },
 
+  // ── Severity tab ──────────────────────────────────────────────────────────
+  severity_index: {
+    title: "Recession Severity Index (the gun-size gauge)",
+    what: "Answers a different question than the probability model: IF a recession arrives, how bad does the balance-sheet configuration say it would be — and where does the damage concentrate? Timing comes from the curve; triggers from the pin board; this measures the powder in the keg.",
+    calc: "Six blocks, every component scored as a percentile of its own full history (higher = more severe conditions). Composite = 0.35·LeverageExcess + 0.25·WealthAtRisk + 0.20·Amplification + 0.20·BoomConcentration, adjusted +0.15·(PolicySpace−50) and −0.15·(Dampeners−50). Weights are literature-informed and fixed — with ~5 well-documented severe recessions, fitting weights would be fiction.",
+    read: "Classes: <35 MILD (2001-like) · 35–60 MODERATE (1990-like) · >60 SEVERE (2008-like). Read the COMPOSITION alongside the score — it decides which markets bleed (see the Impact Map).",
+    caveat: "A structured prior, not a prediction. Exogenous shocks (2020) bypass balance sheets and this index by design. Severity is partly endogenous to the policy response.",
+  },
+  sev_block_a: {
+    title: "Block A — Private leverage excess",
+    what: "The heaviest-weighted block, per the strongest result in empirical macro: recessions preceded by private credit booms are deeper and slower to heal.",
+    calc: "3-year CHANGES in household/corporate/total-private debt-to-GDP (Mian-Sufi-Verner: the buildup rate predicts the bust), plus the debt-service ratio, saving rate (inverted — buffers), margin debt, and bottom-50% net worth (inverted — the marginal consumer's cushion).",
+    read: "2007 would have scored this block near 100. A LOW read here is the single best argument the next recession is not a 2008 repeat.",
+  },
+  sev_block_b: {
+    title: "Block B — Wealth at risk",
+    what: "How much paper wealth is exposed to a de-rating: equity market cap/GDP (Buffett indicator) and house price/income.",
+    read: "Wealth destruction scales with the starting valuation — but WHERE it lands depends on leverage (Block A): an unlevered equity bubble (2001) produced a mild recession with a huge drawdown; a levered housing bubble (2008) produced a depression-class event.",
+  },
+  sev_block_c: {
+    title: "Block C — Amplification",
+    what: "Whether a downturn becomes a credit crunch: delinquencies already forming (cards, CRE) and spread complacency (tight HY = maximal repricing room).",
+    read: "Banking-crisis recessions are historically 2–3× deeper — this block watches the transmission machinery. Pairs with the live SLOOS/discount-window/basis-trade channels on the Monitor tab.",
+  },
+  sev_block_d: {
+    title: "Block D — Policy space (the divisor)",
+    what: "Government debt doesn't cause the recession — it caps the rescue. Fiscal room (debt/GDP, deficit), monetary room (distance to zero), and the inflation constraint (above-target inflation handcuffs cutting).",
+    read: "High score = thin space = whatever hits, hits harder. This is where today's configuration is historically unusual — and it is Dalio's core concern quantified.",
+  },
+  sev_block_e: {
+    title: "Block E — Structural dampeners",
+    what: "The severity-REDUCERS, so the index can honestly find mildness: lean inventories, housing under-supply (low months' supply and vacancies — the anti-2006), and mortgage rate lock-in (outstanding stock financed below market → rate shocks transmit slowly).",
+    read: "High dampener score subtracts from severity. These are the main reasons 2022–24's tightening didn't break households.",
+  },
+  sev_block_f: {
+    title: "Block F — Boom concentration",
+    what: "When one sector's capex IS the expansion, its stop IS the recession (telecom 2001; AI/data-centers now). Info-processing + software investment share of GDP, level and 3-year surge.",
+    read: "High concentration doesn't predict the stop — it predicts the recession's SHAPE if the boom stops: capex-led, valuation-heavy, housing-light. 2001 is the template.",
+  },
+  impact_map: {
+    title: "Impact Map — what each recession TYPE does to markets",
+    what: "Severity doesn't hit markets uniformly; COMPOSITION decides which market bleeds. Computed from every NBER recession (equities 1957+, housing 1975+): peak-to-trough drawdowns, months-to-trough, months-to-recover, by recession type.",
+    calc: "Types are hand-classified from each episode's balance-sheet configuration (documented in the generated data): household/credit-leverage busts (1990, 2008), valuation/corporate unwind (2001), inflation/rates-driven (six episodes 1957–81), exogenous (2020).",
+    read: "The headline contrasts: 2001 — mildest recession, −33% equities, housing FLAT. Household busts — housing −9% nominal/−15% real with troughs YEARS later, duration returns +24%/12m. Inflation types — housing survives nominally but loses ~13% REAL. Equity drawdowns track pre-recession valuation; housing drawdowns track household leverage.",
+    caveat: "1–6 episodes per type; every episode shown. Price-only equities; approximated bond returns. Medians are priors, not laws.",
+  },
+  todays_translation: {
+    title: "Today's translation",
+    what: "The live bridge: reads the current Severity composition and highlights the matching Impact-Map row — i.e., IF the gun fires with today's configuration, this is the historical damage pattern to study.",
+    caveat: "If the matched type is fiscal-constrained, note that it has thin U.S. precedent — the nearest analogs are the 1970s (equity de-rating via multiple compression, housing holds nominally but falls in real terms, duration fails as the hedge). Analog-based, not sample-based.",
+  },
+
   // ── Recession model extras & labor ────────────────────────────────────────
   "recession.nfci": {
     title: "Chicago Fed NFCI",

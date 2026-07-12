@@ -99,6 +99,42 @@ FRED_LEADING: dict[str, str] = {
 FRED_FOREIGN: dict[str, str] = {
     "custody": "WMTSECL1",         # marketable USTs held in custody (weekly)
 }
+# Severity index — the gun-SIZE gauge (all IDs verified live 2026-07). Grouped by
+# block; several blocks also reuse series already in the bundle.
+FRED_SEVERITY: dict[str, str] = {
+    # A. private leverage excess
+    "hh_debt_gdp": "HDTGPDUSQ163N",   # household debt / GDP (BIS)
+    "priv_credit": "CRDQUSAPABIS",    # total private nonfin credit, $ (BIS)
+    "corp_debt": "BCNSDODNS",         # nonfin corporate debt securities+loans, $
+    "dsr": "TDSP",                     # household debt-service ratio
+    "for_ratio": "FODSP",              # financial obligations ratio
+    "saving_rate": "PSAVERT",          # personal saving rate (buffer)
+    "margin_debt": "BOGZ1FL153166006Q",  # households: security credit (margin), $mm
+    "bottom50_nw": "WFRBLB50107",      # DFA: bottom-50% net worth, $mm
+    # B. wealth at risk
+    "equity_liab": "NCBEILQ027S",      # corporate equities liability, $mm (cap/GDP num.)
+    "gdp": "GDP",                       # nominal GDP, $bn
+    "hpi_cs": "CSUSHPINSA",            # Case-Shiller national HPI
+    "med_house_px": "MSPUS",           # median sales price (q)
+    "med_income": "MEHOINUSA672N",     # real median household income (a)
+    # C. amplification (adds to SLOOS/HY/discount-window already live)
+    "delinq_cc": "DRCCLACBS",          # credit-card delinquency rate
+    "delinq_cre": "DRSREACBS",         # CRE delinquency rate
+    # D. policy space (adds to EFFR / interest_gdp already live)
+    "fed_debt_gdp": "GFDEGDQ188S",     # federal debt / GDP
+    "deficit_gdp": "FYFSGDA188S",      # federal surplus/deficit % GDP (a; negative=deficit)
+    "core_pce": "PCEPILFE",            # core PCE index (YoY = inflation constraint)
+    # E. structural dampeners
+    "inv_sales": "ISRATIO",            # inventories/sales
+    "months_supply": "MSACSR",         # new-home months' supply
+    "vac_rental": "RRVRUSQ156N",       # rental vacancy rate
+    "vac_owner": "RHVRUSQ156N",        # homeowner vacancy rate
+    "mtg30": "MORTGAGE30US",           # 30y mortgage rate (lock-in gap proxy)
+    # F. boom concentration
+    "capex_info": "Y033RC1Q027SBEA",   # equip: information processing, $bn
+    "capex_soft": "B985RC1Q027SBEA",   # software investment, $bn
+    "cpi": "CPIAUCSL",                 # CPI (real-housing deflator; impact study)
+}
 # Pin board (trigger channels) — the measurable proxies for what historically
 # "pricks the bubble". (Oil/EFFR/HY/term premium/SOFR-IORB already in bundle.)
 FRED_PINS: dict[str, str] = {
