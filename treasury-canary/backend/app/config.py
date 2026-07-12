@@ -17,6 +17,7 @@ class Settings(BaseSettings):
 
     # --- Keys (all optional; core needs only FRED) ---
     fred_api_key: str | None = None          # free: fredaccount.stlouisfed.org/apikeys
+    fmp_api_key: str | None = None           # optional: gold (GLD) for the flow compass
     move_api_key: str | None = None          # optional licensed MOVE override
     alert_webhook_url: str | None = None     # POST target on regime-change events
 
@@ -64,4 +65,18 @@ FRED_VOL: dict[str, str] = {"vix": "VIXCLS"}
 FRED_CREDIT: dict[str, str] = {"ig_oas": "BAMLC0A0CM", "hy_oas": "BAMLH0A0HYM2"}
 FRED_MACRO: dict[str, str] = {
     "recession": "USREC", "sp500": "SP500", "nfci": "NFCI", "acm_tp10": "THREEFYTP10",
+}
+# Labor / real-economy. Note: the unemployment RATE is lagging; the Sahm Rule
+# (rate-of-change) and initial jobless claims are the useful forward signals.
+FRED_LABOR: dict[str, str] = {
+    "unrate": "UNRATE",            # lagging context
+    "claims_4wk": "IC4WSA",        # initial jobless claims, 4-week MA (leading)
+    "sahm": "SAHMREALTIME",        # official real-time Sahm recession indicator
+}
+# Flow-compass discriminators: where money hides when the stock-bond hedge breaks.
+# (Gold comes from FMP — FRED's LBMA gold series were discontinued.)
+FRED_FLOWS: dict[str, str] = {
+    "usd": "DTWEXBGS",             # nominal broad dollar index (daily)
+    "oil": "DCOILWTICO",           # WTI crude (daily)
+    "btc": "CBBTCUSD",             # Coinbase BTC-USD (daily)
 }

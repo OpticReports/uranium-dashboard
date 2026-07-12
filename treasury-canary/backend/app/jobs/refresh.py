@@ -17,6 +17,7 @@ from ..config import FRED_TENORS, settings
 from ..metrics.crossasset import build_crossasset_metrics
 from ..metrics.curve import build_curve_metrics
 from ..metrics.funding import build_funding_metrics
+from ..metrics.labor import build_labor_metrics
 from ..metrics.premium import build_premium_metrics
 from ..metrics.recession import build_recession_metrics
 from ..metrics.volatility import build_volatility_metrics
@@ -42,6 +43,7 @@ def compute_all(bundle: dict):
         + build_premium_metrics(bundle)
         + build_crossasset_metrics(bundle)
         + build_recession_metrics(bundle)
+        + build_labor_metrics(bundle)
     )
     composite = compute_composite(metrics)
     return metrics, analyses, composite, recession_starts
@@ -100,7 +102,7 @@ def _fire_webhook(ev: Event) -> None:
 
 def run_refresh(session: Session) -> dict:
     bundle = fetch_bundle()
-    metrics, analyses, composite, _ = compute_all(bundle)
+    metrics, analyses, composite, recession_starts = compute_all(bundle)
     today = utcnow().date()
 
     prev_status = _prev_status_map(session)
@@ -117,9 +119,17 @@ def run_refresh(session: Session) -> dict:
         note=json.dumps(composite.contributions))
 
     # --- events ---
+    from ..metrics.curve import lag_months_to_recession
     new_events: list[Event] = []
-    med_lag = None
     for pair, a in analyses.items():
+        # Median historical dis-inversion -> recession lag for THIS pair, so the
+        # CRITICAL alert carries its own base-rate context.
+        lags = sorted(
+            x for x in (lag_months_to_recession(e, recession_starts)
+                        for e in a.episodes if e.sustained)
+            if x is not None
+        )
+        med_lag = lags[len(lags) // 2] if lags else None
         for ev in detect_curve_events(pair, a, today, median_lag_months=med_lag):
             new_events.append(ev)
     bc = detect_band_cross(prev_band, composite.band, composite.score, today)

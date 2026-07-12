@@ -32,6 +32,11 @@ def detect_curve_events(pair: str, a: SpreadAnalysis, asof: date,
     if a.state is CurveState.RE_STEEPENING and a.dis_inversion_date is not None:
         lag = (f" Historically, recession onset followed prior dis-inversions by a "
                f"median of ~{median_lag_months:.0f} months." if median_lag_months else "")
+        # Depth of THE episode that just ended (matched by its dis-inversion date),
+        # not the deepest episode in all of history.
+        ep = next((e for e in reversed(a.episodes)
+                   if e.dis_inversion == a.dis_inversion_date), None)
+        depth = ep.max_depth_bps if ep else (a.current_depth_bps or 0.0)
         events.append(Event(
             event_type="curve_resteepening",
             severity="CRITICAL",
@@ -39,12 +44,12 @@ def detect_curve_events(pair: str, a: SpreadAnalysis, asof: date,
             # dedup on the dis-inversion date -> fires once per episode
             dedup_key=f"{pair}:{a.dis_inversion_date.isoformat()}",
             rationale=(f"{pair} dis-inverted on {a.dis_inversion_date.isoformat()} after "
-                       f"{a.days_inverted} days inverted (max depth {min(e.max_depth_bps for e in a.episodes):.0f}bps)."
+                       f"{a.days_inverted} days inverted (max depth {depth:.0f}bps)."
                        f"{lag} Framed as association, not causation; post-2000 lead times "
                        f"have been longer and noisier."),
             detail={"pair": pair, "days_inverted": a.days_inverted,
                     "dis_inversion": a.dis_inversion_date.isoformat(),
-                    "current_bps": a.current_depth_bps},
+                    "max_depth_bps": depth, "current_bps": a.current_depth_bps},
         ))
     if a.state is CurveState.INVERTED and a.days_inverted == 1:
         events.append(Event(

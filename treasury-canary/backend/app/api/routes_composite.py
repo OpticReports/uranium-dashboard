@@ -24,14 +24,45 @@ def composite():
 
 
 @router.get("/recession-prob")
-def recession_prob():
-    bundle = fetch_bundle()
-    d3, v3 = bundle.get("3mo", ([], []))
-    d10, v10 = bundle.get("10y", ([], []))
-    _, spread = build_spread(d3, v3, d10, v10)
-    latest = next((v for v in reversed(spread) if v is not None), None)
-    return {"spread_3m10y": latest, "probability_pct": recession_probability(latest),
-            "model": "Estrella-Mishkin probit"}
+def recession_prob(horizon: int = 12):
+    """Recession probability at `horizon` months, from a probit FIT ON FRED DATA
+    (3m10y + USREC). Falls back to the published Estrella-Mishkin 12m coefficients
+    if the model can't be fit (e.g. no FRED key)."""
+    from ..metrics.recession_model import cached_models_and_spread, predict
+    models, spread = cached_models_and_spread()
+    m = models.get(horizon)
+    if m is None:  # fitting unavailable -> published 12m coefficients on the spread
+        return {"spread_3m10y": spread, "horizon_months": horizon,
+                "probability_pct": recession_probability(spread),
+                "model": "Estrella-Mishkin (published 12m coefficients)", "fitted": False}
+    r = predict(m["b0"], m["b1"], m["cov"], spread) if spread is not None else {
+        "probability_pct": None, "ci_low_pct": None, "ci_high_pct": None}
+    return {"spread_3m10y": spread, "horizon_months": horizon, **r,
+            "auc": m["auc"], "n_obs": m["n_obs"], "fitted": True,
+            "model": "probit fit on FRED 3m10y + USREC"}
+
+
+@router.get("/recession-model")
+def recession_model():
+    """All horizons at once for the dial: probability + confidence band + in-sample
+    AUC per horizon, plus the fitted coefficients (full transparency)."""
+    from ..metrics.recession_model import cached_models_and_spread, predict
+    models, spread = cached_models_and_spread()
+    horizons = {}
+    for h, m in sorted(models.items()):
+        r = predict(m["b0"], m["b1"], m["cov"], spread) if spread is not None else {
+            "probability_pct": None, "ci_low_pct": None, "ci_high_pct": None}
+        horizons[h] = {**r, "auc": m["auc"], "n_obs": m["n_obs"], "n_pos": m["n_pos"],
+                       "b0": round(m["b0"], 4), "b1": round(m["b1"], 4)}
+    return {
+        "spread_3m10y": spread,
+        "default_horizon": 12,
+        "horizons": horizons,
+        "spread_input": "3m10y (10y minus 3m), monthly-averaged",
+        "method": "probit MLE (IRLS) fit on FRED data; CI via delta method on the index; AUC in-sample",
+        "note": "Probabilities are model estimates with confidence bands, not forecasts. "
+                "The yield curve's predictive power peaks ~12-18mo; post-2000 lead times are longer/noisier.",
+    }
 
 
 @router.get("/curve/canary")
@@ -77,14 +108,15 @@ def canary(
         ed["lag_to_recession_months"] = lag_months_to_recession(e, starts)
         episodes.append(ed)
 
-    # Recession probability is ALWAYS from the 3m10y spread — the Estrella-Mishkin
-    # probit is calibrated on 3m10y, so applying it to the charted pair (2s10s,
-    # 5s10s, ...) would be invalid. This keeps it consistent with /recession-prob.
-    d3, v3 = bundle.get("3mo", ([], []))
-    d10, v10 = bundle.get("10y", ([], []))
-    _, s_3m10y = build_spread(d3, v3, d10, v10)
-    latest_3m10y = next((v for v in reversed(s_3m10y) if v is not None), None)
-    prob = recession_probability(latest_3m10y)
+    # Recession probability ALWAYS from 3m10y (the probit is calibrated on it), via
+    # the same fitted 12m model as /recession-prob — consistent across every pair.
+    from ..metrics.recession_model import cached_models_and_spread, predict
+    models, latest_3m10y = cached_models_and_spread()
+    m12 = models.get(12)
+    if m12 is not None and latest_3m10y is not None:
+        prob = predict(m12["b0"], m12["b1"], m12["cov"], latest_3m10y)["probability_pct"]
+    else:
+        prob = recession_probability(latest_3m10y)
     # Downsample the series for transport (chart doesn't need every daily point).
     series = [{"date": d.isoformat(), "spread": s}
               for d, s in zip(dates, spread) if s is not None]

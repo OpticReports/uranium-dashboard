@@ -39,6 +39,7 @@ export interface Metric {
   percentile: number | null;
   note: string;
   source_series: string;
+  informational: boolean;
   extra: Record<string, unknown>;
 }
 
@@ -71,6 +72,72 @@ export interface RecessionProb {
   spread_3m10y: number | null;
   probability_pct: number | null;
   model: string;
+  horizon_months?: number;
+  ci_low_pct?: number | null;
+  ci_high_pct?: number | null;
+  auc?: number | null;
+  n_obs?: number;
+  fitted?: boolean;
+}
+
+export interface HorizonStat {
+  probability_pct: number | null;
+  ci_low_pct: number | null;
+  ci_high_pct: number | null;
+  auc: number | null;
+  n_obs: number;
+  n_pos: number;
+  b0: number;
+  b1: number;
+}
+
+export interface RecessionModel {
+  spread_3m10y: number | null;
+  default_horizon: number;
+  horizons: Record<string, HorizonStat>;
+  spread_input: string;
+  method: string;
+  note: string;
+}
+
+export interface SahmPoint {
+  date: string;
+  value: number;
+}
+
+export interface SahmSeries {
+  series: SahmPoint[];
+  recessions: Recession[];
+  trigger: number;
+  current: number | null;
+  triggered: boolean;
+  source: string;
+  note: string;
+}
+
+export interface FlowAsset {
+  label: string;
+  ret_pct?: number | null;
+  chg_bps?: number | null;
+  unit: string;
+  role: string;
+}
+
+export interface FlowRegime {
+  id: string;
+  label: string;
+  description: string;
+  destinations: string[];
+  severity: "INFO" | "WARN" | "RED" | "CRITICAL";
+  inputs: Record<string, number | null>;
+  missing_inputs: string[];
+  window_days: number;
+}
+
+export interface FlowDestinations {
+  window_days: number;
+  assets: Record<string, FlowAsset>;
+  regime: FlowRegime;
 }
 
 export interface CurveSeriesPoint {
@@ -191,7 +258,15 @@ export const api = {
   metricHistory: (metricId: string) =>
     getJson<HistoryPoint[]>(`/metrics/${encodeURIComponent(metricId)}/history`),
   composite: () => getJson<Composite>("/composite"),
-  recessionProb: () => getJson<RecessionProb>("/recession-prob"),
+  recessionProb: (horizon?: number) =>
+    getJson<RecessionProb>(
+      horizon === undefined
+        ? "/recession-prob"
+        : `/recession-prob?horizon=${encodeURIComponent(horizon)}`,
+    ),
+  recessionModel: () => getJson<RecessionModel>("/recession-model"),
+  laborSahm: () => getJson<SahmSeries>("/labor/sahm"),
+  flowDestinations: () => getJson<FlowDestinations>("/flows/destinations"),
   curveCanary: (pair: string) =>
     getJson<CurveCanary>(`/curve/canary?pair=${encodeURIComponent(pair)}`),
   events: (limit = 100) => getJson<CanaryEvent[]>(`/events?limit=${limit}`),

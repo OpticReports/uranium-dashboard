@@ -21,6 +21,7 @@ CATEGORY_WEIGHTS: dict[str, float] = {
     "G": 0.07,  # liquidity
     "H": 0.10,  # cross-asset
     "I": 0.05,  # recession model
+    "J": 0.08,  # labor (Sahm / claims)
 }
 
 # Status -> stress points (0 best, 100 worst).
@@ -60,8 +61,8 @@ def compute_composite(metrics: list[MetricResult]) -> CompositeResult:
             n_crit += 1
         elif m.status is Status.RED:
             n_red += 1
-        if m.status is Status.STALE:
-            continue
+        if m.status is Status.STALE or m.informational:
+            continue  # informational metrics (e.g. lagging unemployment rate) are display-only
         by_cat.setdefault(m.category, []).append(STATUS_POINTS[m.status])
 
     cat_scores: dict[str, float] = {
