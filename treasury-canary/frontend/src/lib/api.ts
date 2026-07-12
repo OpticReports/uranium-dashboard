@@ -265,6 +265,17 @@ export interface TrackRecord {
   caveat: string;
 }
 
+export interface CorrPoint {
+  date: string;
+  corr: number;
+}
+
+export interface CorrSeries {
+  series: CorrPoint[];
+  current: number | null;
+  note: string;
+}
+
 export interface SeverityComponent {
   id: string;
   label: string;
@@ -368,6 +379,7 @@ export const api = {
   recessionModel: () => getJson<RecessionModel>("/recession-model"),
   laborSahm: () => getJson<SahmSeries>("/labor/sahm"),
   flowDestinations: () => getJson<FlowDestinations>("/flows/destinations"),
+  corrSeries: () => getJson<CorrSeries>("/crossasset/corr"),
   curveCanary: (pair: string) =>
     getJson<CurveCanary>(`/curve/canary?pair=${encodeURIComponent(pair)}`),
   events: (limit = 100) => getJson<CanaryEvent[]>(`/events?limit=${limit}`),
