@@ -239,6 +239,112 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     read: "Oil UP during an equity selloff = supply/inflation shock (stagflationary — bad for both stocks and bonds). Oil down = demand fear (recessionary — usually good for bonds).",
   },
 
+  // ── Leading stack ─────────────────────────────────────────────────────────
+  leading_stack: {
+    title: "Leading stack (additive by design)",
+    what: "Independent, individually-validated recession indicators — each with its own causal story and track record. You choose which to include; the readout is transparent breadth: 'X of N included are flashing.'",
+    calc: "Deliberately NO joint model: with only ~8 recessions of usable history, fitting combined weights is guaranteed overfitting. Each indicator is scored against its OWN historically-grounded threshold. Nothing here enters the composite stress score or the probit.",
+    read: "One indicator flashing is noise; a majority flashing across INDEPENDENT causal channels (housing, credit, labor, capex) is how real recessions announce themselves. Toggle indicators off if you distrust their current regime-validity — the breadth math updates honestly.",
+  },
+  "leading.permits_yoy": {
+    title: "Building permits (YoY)",
+    what: "New housing permits — the most interest-rate-sensitive, forward-committed sector in the economy.",
+    calc: "Year-over-year % change of monthly permits (FRED PERMIT).",
+    read: "'Housing IS the business cycle' (Leamer): rates → permits → construction jobs → durables → consumption. The strongest single leading indicator in Moody's backtests, leading by ~6–12 months. Below −10% = warning, below −20% = historically recessionary.",
+    caveat: "False-positive mode: supply-constrained slowdowns (labor/materials shortages) can depress permits without a demand recession.",
+  },
+  "leading.sloos": {
+    title: "SLOOS — banks tightening C&I standards",
+    what: "The Fed's Senior Loan Officer survey: net % of banks tightening business-loan standards. Credit supply is genuinely causal — tightening chokes investment 2–3 quarters later.",
+    calc: "Net percentage tightening minus easing, quarterly (FRED DRTSCILM).",
+    read: "Net tightening above ~20% has accompanied every modern recession. Quarterly cadence means it's slow — but few series are more causally direct.",
+  },
+  "leading.temp_help_yoy": {
+    title: "Temp-help employment (YoY)",
+    what: "Firms cut temporary staff before permanent staff — the first crack in labor demand.",
+    calc: "Year-over-year % change (FRED TEMPHELPS).",
+    read: "Sustained declines have preceded prior recessions by ~6–12 months.",
+    caveat: "LIVE false-positive: temp-help fell through 2023–25 with NO recession (structural post-COVID shrink of the temp industry). Weight this one lightly unless claims confirm.",
+  },
+  "leading.trucks_off_peak": {
+    title: "Heavy truck sales (% off 12-month peak)",
+    what: "Class-8 truck purchases — a pure read on freight demand and business capex confidence.",
+    calc: "% below the trailing 12-month peak of the sales rate (FRED HTRUCKSSAAR).",
+    read: "Turned down before all 7 recessions since 1973, ~13-month average lead. −10% off peak = warning; −20% = historically serious.",
+    caveat: "Known false-positive mode: mid-cycle fleet-replacement pauses (e.g. 2015–16) that preceded no recession.",
+  },
+  "leading.core_capex_yoy": {
+    title: "Core capex orders (YoY)",
+    what: "Nondefense capital-goods orders excluding aircraft — business investment intentions in close to real time.",
+    calc: "Year-over-year % change (FRED NEWORDER).",
+    read: "Sustained negative YoY = firms pulling back spending before they pull back hiring. Confirms (or vetoes) what trucks and permits are saying.",
+  },
+  "leading.cfnai_ma3": {
+    title: "CFNAI (3-month average)",
+    what: "The Chicago Fed's weighted factor of 85 real-activity indicators — the broadest single read on whether growth is above or below trend.",
+    calc: "3-month moving average of the monthly index (FRED CFNAI). Zero = trend growth.",
+    read: "Official rule: MA3 below −0.70 following an expansion means a recession has LIKELY ALREADY BEGUN. This is coincident confirmation, not prediction — it pairs with the curve/probit the way Sahm does.",
+  },
+  "leading.gdpnow": {
+    title: "Atlanta Fed GDPNow",
+    what: "A model nowcast of the CURRENT quarter's real GDP growth, updated as source data lands.",
+    calc: "Atlanta Fed's published nowcast (FRED GDPNOW), % SAAR.",
+    read: "Where the economy already is, not where it's going. Noisy in the first weeks of each quarter; converges toward the official print as data accumulates.",
+  },
+  "leading.cp_prob": {
+    title: "Chauvet–Piger recession probability",
+    what: "A dynamic-factor Markov-switching model over the four coincident series NBER itself watches (payrolls, industrial production, real income, real sales) — the econometric gold standard for 'are we in a recession right now?'",
+    calc: "Published monthly (FRED RECPROUSM156N), ~2-month data lag.",
+    read: "Readings above 80% for three consecutive months have marked every recession start with essentially no false alarms. Complements our curve probit: the curve predicts, Chauvet–Piger confirms.",
+    caveat: "The publication lag means it tells you 'yes it started ~2 months ago' — use for confirmation, never timing.",
+  },
+
+  // ── Pin board ─────────────────────────────────────────────────────────────
+  pin_board: {
+    title: "Pin board — the gun vs. the trigger",
+    what: "Dalio's framing: debt buildup, rich valuations, and fragile plumbing are the LOADED GUN; some shock — the PIN — pricks the bubble. The gun is tracked across this dashboard; this board watches the pin channels.",
+    calc: "Six channels through which historical pricks actually arrived (oil shocks, Fed overtightening, credit accidents, fiscal repricing, plumbing seizures, geopolitical shocks), each scored green/yellow/red from measurable daily/weekly proxies.",
+    read: "Honest epistemics: pins are inherently unpredictable — that's Dalio's own point. This board does NOT forecast the prick; it makes a spark visible within DAYS of ignition instead of in hindsight. Multiple channels flashing simultaneously is the dangerous configuration.",
+    caveat: "A green board doesn't mean no pin exists — it means no spark is visible in the monitored channels yet. Novel shocks (a pandemic) can arrive through unmonitored channels.",
+  },
+  pin_oil: {
+    title: "Oil / energy shock",
+    what: "Energy price spikes tax consumers and force central banks to tighten into weakness.",
+    calc: "12-month % change in WTI crude.",
+    read: "Hamilton's research: oil shocks preceded ~10 of 11 postwar recessions. +25% = squeeze forming; +50% = historically recessionary territory.",
+  },
+  pin_policy: {
+    title: "Central-bank overtightening",
+    what: "Fast hiking cycles break the weakest balance sheet in the system — the question is only which one.",
+    calc: "12-month change in the effective fed funds rate, bps.",
+    read: "+200bps in a year = something usually cracks; +300bps = 2022-class shock. Note: CUTTING into weakness is the curve panel's re-steepening signal — this channel only watches the tightening side.",
+  },
+  pin_credit: {
+    title: "Credit / banking accident",
+    what: "Credit events (2008 subprime, 1998 LTCM, 2023 SVB) announce themselves through spread GAPS and emergency borrowing — never through levels.",
+    calc: "HY OAS 20-day change (a gap of +75–150bps = accident in progress) + primary-credit discount-window borrowing (banks pay its stigma price only under true duress — it lit up within days of SVB).",
+    read: "This is a tripwire, not a forecast: it confirms an accident within days. $10B+ at the window = yellow; $50B+ = systemic event underway.",
+  },
+  pin_fiscal: {
+    title: "Fiscal / debt-service pin",
+    what: "Dalio's core scenario: Treasury supply overwhelms demand, the market starts charging for fiscal risk, and debt service compounds — the gun and the pin in one channel.",
+    calc: "Federal interest outlays as % of GDP (the loaded gun — slow, structural) + the 60-day move in the ACM term premium (the spark — the market actively repricing fiscal risk).",
+    read: "Interest/GDP above ~3% historically marks the crowding-out zone (the late-1980s/early-90s peak). A term-premium jump of +40–75bps in ~3 months alongside a falling dollar and bid gold (see the Flow Compass debasement regime) is the fiscal pin actually being pulled.",
+  },
+  pin_plumbing: {
+    title: "Funding-plumbing seizure",
+    what: "The repo/reserves machinery that broke in Sept 2019 (and the UK gilt/LDI blowup of 2022). Plumbing breaks FAST and forces central-bank intervention.",
+    calc: "SOFR−IORB spread (repo above the reserves floor = scarcity) + 26-week change in reserve balances (QT drain) + the overnight RRP balance (the system's shock absorber).",
+    read: "The dangerous sequence: RRP drained to ~zero → reserves falling → SOFR persistently above IORB. Each alone is context; all three together preceded the 2019 spasm.",
+  },
+  pin_uncertainty: {
+    title: "Uncertainty / geopolitical shock",
+    what: "Exogenous pins — wars, embargoes, tariff shocks, debt-ceiling standoffs — show up in policy-uncertainty indices before they show up in earnings.",
+    calc: "30-day average of the daily Economic Policy Uncertainty index, as a percentile of its full history since 1985.",
+    read: ">90th percentile = elevated; >97.5th = crisis-grade uncertainty.",
+    caveat: "The noisiest channel: elevated uncertainty usually resolves benignly. Treat as context that sharpens the other channels, never as confirmation by itself.",
+  },
+
   "labor.unrate": {
     title: "Unemployment rate",
     what: "The headline U-3 rate — shown for context only.",

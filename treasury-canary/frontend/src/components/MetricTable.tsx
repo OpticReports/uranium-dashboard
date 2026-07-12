@@ -144,8 +144,11 @@ export default function MetricTable({
     }
   };
 
+  // Category "K" (leading stack) has a dedicated panel; keep it out of the
+  // master table so it isn't double-rendered.
   const filtered = useMemo(
-    () => metrics.filter((m) => activeStatuses.has(m.status)),
+    () =>
+      metrics.filter((m) => m.category !== "K" && activeStatuses.has(m.status)),
     [metrics, activeStatuses],
   );
 
@@ -178,8 +181,9 @@ export default function MetricTable({
     };
   }, [sortKey, sortDir]);
 
-  // Group by category, preserving category map ordering (A..I).
-  const catKeys = Object.keys(categories);
+  // Group by category, preserving category map ordering (A..I). "K" lives in
+  // its own panel and is excluded here.
+  const catKeys = Object.keys(categories).filter((c) => c !== "K");
   const grouped = useMemo(() => {
     const map = new Map<string, Metric[]>();
     for (const m of filtered) {

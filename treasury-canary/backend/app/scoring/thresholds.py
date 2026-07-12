@@ -49,6 +49,16 @@ DEFAULTS: dict[str, Threshold] = {
     # J. Labor (Sahm gap in pp; claims YoY in %). Sahm rule triggers at 0.50.
     "labor.sahm": Threshold(yellow=0.30, red=0.50, higher_is_worse=True),
     "labor.claims_yoy": Threshold(yellow=10.0, red=25.0, higher_is_worse=True),
+    # K. Leading stack (each vs its OWN historical rule; display-only — never
+    # jointly fitted and never in the composite, by design).
+    "leading.permits_yoy": Threshold(yellow=-10.0, red=-20.0, higher_is_worse=False),
+    "leading.sloos": Threshold(yellow=10.0, red=20.0, higher_is_worse=True),
+    "leading.temp_help_yoy": Threshold(yellow=-2.0, red=-8.0, higher_is_worse=False),
+    "leading.trucks_off_peak": Threshold(yellow=-10.0, red=-20.0, higher_is_worse=False),
+    "leading.core_capex_yoy": Threshold(yellow=0.0, red=-5.0, higher_is_worse=False),
+    "leading.cfnai_ma3": Threshold(yellow=-0.35, red=-0.70, higher_is_worse=False),
+    "leading.gdpnow": Threshold(yellow=1.0, red=0.0, higher_is_worse=False),
+    "leading.cp_prob": Threshold(yellow=20.0, red=50.0, higher_is_worse=True),
 }
 
 

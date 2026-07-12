@@ -198,6 +198,35 @@ export interface NewsResponse {
   items: NewsItem[];
 }
 
+export type PinStatus = "GREEN" | "YELLOW" | "RED" | "STALE";
+
+export interface PinPart {
+  label: string;
+  value: number | null;
+  unit: string;
+  status: string;
+  detail: string;
+}
+
+export interface PinChannel {
+  channel_id: string;
+  label: string;
+  status: PinStatus;
+  parts: PinPart[];
+  basis: string;
+  certainty: string;
+}
+
+export interface PinBoard {
+  channels: PinChannel[];
+  overall: PinStatus;
+  n_red: number;
+  n_yellow: number;
+  n_live: number;
+  n_channels: number;
+  framing: string;
+}
+
 // ---------------------------------------------------------------------------
 // Fetch helpers
 // ---------------------------------------------------------------------------
@@ -272,6 +301,7 @@ export const api = {
   events: (limit = 100) => getJson<CanaryEvent[]>(`/events?limit=${limit}`),
   alerts: () => getJson<CanaryEvent[]>("/alerts"),
   news: (limit = 40) => getJson<NewsResponse>(`/news?limit=${limit}`),
+  pins: () => getJson<PinBoard>("/pins"),
   refresh: () =>
     getJson<unknown>("/refresh", { method: "POST" }),
 };

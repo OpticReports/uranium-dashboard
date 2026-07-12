@@ -80,3 +80,26 @@ FRED_FLOWS: dict[str, str] = {
     "oil": "DCOILWTICO",           # WTI crude (daily)
     "btc": "CBBTCUSD",             # Coinbase BTC-USD (daily)
 }
+# Leading stack (K): independent, individually-validated leading indicators.
+# Deliberately NOT jointly fitted (≈8 recessions of history -> joint weights
+# would overfit); each is scored vs its OWN historical threshold and the UI
+# reports transparent breadth across whichever the user includes.
+FRED_LEADING: dict[str, str] = {
+    "permits": "PERMIT",           # building permits (monthly) — housing leads the cycle
+    "sloos": "DRTSCILM",           # SLOOS net % tightening C&I standards (quarterly)
+    "temp_help": "TEMPHELPS",      # temp-help employment (monthly)
+    "heavy_trucks": "HTRUCKSSAAR", # heavy truck sales SAAR (monthly)
+    "core_capex": "NEWORDER",      # nondefense capital goods ex-aircraft orders (monthly)
+    "cfnai": "CFNAI",              # Chicago Fed National Activity Index (monthly)
+    "gdpnow": "GDPNOW",            # Atlanta Fed GDPNow nowcast
+    "cp_prob": "RECPROUSM156N",    # Chauvet-Piger smoothed recession probability
+}
+# Pin board (trigger channels) — the measurable proxies for what historically
+# "pricks the bubble". (Oil/EFFR/HY/term premium/SOFR-IORB already in bundle.)
+FRED_PINS: dict[str, str] = {
+    "epu": "USEPUINDXD",           # daily Economic Policy Uncertainty index
+    "discount_window": "WLCFLPCL", # primary-credit borrowing (weekly; SVB tell)
+    "reserves": "WRESBAL",         # reserve balances (weekly)
+    "rrp": "RRPONTSYD",            # overnight reverse repo (daily; the cushion)
+    "interest_gdp": "FYOIGDA188S", # federal interest outlays as % of GDP (annual)
+}
