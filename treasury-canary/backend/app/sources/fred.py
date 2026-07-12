@@ -131,13 +131,13 @@ def _fetch_bundle_uncached(start: str) -> dict[str, tuple[list[date], list[float
     from concurrent.futures import ThreadPoolExecutor
 
     from ..config import (
-        FRED_BREAKEVENS, FRED_CREDIT, FRED_FLOWS, FRED_FUNDING, FRED_LABOR,
-        FRED_LEADING, FRED_MACRO, FRED_PINS, FRED_REAL_YIELDS, FRED_TENORS,
-        FRED_VOL,
+        FRED_BREAKEVENS, FRED_CREDIT, FRED_FLOWS, FRED_FOREIGN, FRED_FUNDING,
+        FRED_LABOR, FRED_LEADING, FRED_MACRO, FRED_PINS, FRED_REAL_YIELDS,
+        FRED_TENORS, FRED_VOL,
     )
     # logical key -> FRED series id
     plan: dict[str, str] = dict(FRED_TENORS)
-    for extra in (FRED_LABOR, FRED_FLOWS, FRED_LEADING, FRED_PINS):
+    for extra in (FRED_LABOR, FRED_FLOWS, FRED_LEADING, FRED_PINS, FRED_FOREIGN):
         for k, sid in extra.items():
             plan[k] = sid
     plan["real_10y"] = FRED_REAL_YIELDS["10y"]
@@ -161,9 +161,11 @@ def _fetch_bundle_uncached(start: str) -> dict[str, tuple[list[date], list[float
     with ThreadPoolExecutor(max_workers=8) as pool:
         results = pool.map(_one, plan.items())
     bundle = {key: series for key, series in results}
-    # Gold rides along in the same bundle (FMP; graceful [] without a key).
+    # Non-FRED series ride along in the same bundle (each gracefully []).
     from .fmp import fetch_gold
+    from .ofr import fetch_fsi
     bundle["gold"] = fetch_gold()
+    bundle["ofr_fsi"] = fetch_fsi()
     return bundle
 
 

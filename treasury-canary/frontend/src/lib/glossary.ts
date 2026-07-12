@@ -184,6 +184,39 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     read: "Moves later and less than HY; IG widening means stress has reached the quality end — a later-cycle, more serious confirmation.",
   },
 
+  // ── Auctions (E) / Liquidity (G) / Foreign (F) ────────────────────────────
+  "auctions.bid_to_cover": {
+    title: "Bid-to-cover (coupon auctions)",
+    what: "Total bids ÷ amount sold, averaged over the last 8 Note/Bond auctions — the headline gauge of demand for Treasury duration at auction.",
+    calc: "Live from Treasury FiscalData auction results (no key). Trailing-8 average; the Δ column compares against the prior 8 auctions; percentile vs all rolling windows in recent history.",
+    read: "2.5+ = comfortable demand. Below 2.4 = softening; below 2.2 = historically weak. The dangerous pattern is a fading TREND while deficits grow — structural demand eroding into rising supply (the slow-burn version of the fiscal pin).",
+  },
+  "auctions.dealer_takedown": {
+    title: "Primary-dealer takedown",
+    what: "The share of competitive auction supply absorbed by primary dealers — the buyers of LAST resort, obligated to bid.",
+    calc: "Dealer accepted ÷ competitive accepted, averaged over the last 8 coupon auctions.",
+    read: "The single best 'weak auction' tell: when real investors step back, dealers are forced to warehouse the supply. ~10% = healthy; >15% = investors hesitating; >20% = genuinely weak demand. Rising takedown + rising term premium = the market charging for fiscal risk.",
+  },
+  "auctions.indirect_share": {
+    title: "Indirect (foreign proxy) share",
+    what: "Indirect bidders — mostly foreign central banks and institutions bidding through dealers — as a share of competitive accepted.",
+    calc: "Indirect accepted ÷ competitive accepted, trailing-8 average.",
+    read: "The auction-level read on foreign appetite: 60–75% is normal for recent years. A sustained slide below ~60% (worse, 50%) = foreign buyers backing away — cross-check the custody holdings metric (category F) to confirm actual selling vs mere hesitancy.",
+  },
+  "liquidity.ofr_fsi": {
+    title: "OFR Financial Stress Index",
+    what: "The Office of Financial Research's daily, 33-variable stress index across credit, equity valuation, safe assets, funding, and volatility. Zero = average conditions.",
+    calc: "Published daily by OFR (no key); pulled from their CSV feed.",
+    read: "Its value here is INDEPENDENCE: it's built from different inputs than our composite. Both hot = broad-based stress (believe it). Our composite hot while FSI calm = stress localized to rates. Negative values = looser/calmer than average.",
+  },
+  "foreign.custody_26w": {
+    title: "Foreign custody holdings (26-week change)",
+    what: "Marketable Treasuries the New York Fed holds in custody for foreign central banks — the cleanest weekly read on whether foreign officials are net sellers.",
+    calc: "26-week % change of the weekly custody level (FRED WMTSECL1).",
+    read: "Sustained declines = official-sector selling: structural pressure on Treasury demand rather than a cyclical recession canary (hence its deliberately small composite weight). −2% = notable; −5% over six months = significant. Confirms or vetoes the auction indirect-share trend, and pairs with the flow compass's debasement regime.",
+    caveat: "Foreigners can also move holdings to other custodians without selling — read the trend, not single weeks.",
+  },
+
   // ── Recession model extras & labor ────────────────────────────────────────
   "recession.nfci": {
     title: "Chicago Fed NFCI",

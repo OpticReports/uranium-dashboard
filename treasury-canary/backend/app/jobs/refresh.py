@@ -14,11 +14,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..config import FRED_TENORS, settings
+from ..metrics.auctions import build_auction_metrics
 from ..metrics.crossasset import build_crossasset_metrics
 from ..metrics.curve import build_curve_metrics
+from ..metrics.foreign import build_foreign_metrics
 from ..metrics.funding import build_funding_metrics
 from ..metrics.labor import build_labor_metrics
 from ..metrics.leading import build_leading_metrics
+from ..metrics.liquidity import build_liquidity_metrics
 from ..metrics.premium import build_premium_metrics
 from ..metrics.recession import build_recession_metrics
 from ..metrics.volatility import build_volatility_metrics
@@ -30,8 +33,20 @@ from ..store.models import EventLog, MetricSnapshot, utcnow
 logger = logging.getLogger(__name__)
 
 
-def compute_all(bundle: dict):
-    """Build every metric + composite from a fetched bundle. No I/O."""
+def _fetch_auctions() -> list[dict]:
+    """Cached FiscalData pull (its own source-level cache handles failure memoing)."""
+    from ..sources.treasury import fetch_recent_auctions
+    try:
+        return fetch_recent_auctions()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Auction fetch failed: %s", exc)
+        return []
+
+
+def compute_all(bundle: dict, auctions: list[dict] | None = None):
+    """Build every metric + composite from a fetched bundle. Auctions come from
+    their own cached source unless passed explicitly (tests pass [] to stay
+    offline). Everything degrades to STALE."""
     tenors = {k: bundle[k] for k in FRED_TENORS if k in bundle}
     rec_dates, rec_vals = bundle.get("recession", ([], []))
     recession_starts = recession_start_dates(rec_dates, rec_vals)
@@ -46,6 +61,9 @@ def compute_all(bundle: dict):
         + build_recession_metrics(bundle)
         + build_labor_metrics(bundle)
         + build_leading_metrics(bundle)
+        + build_liquidity_metrics(bundle)
+        + build_foreign_metrics(bundle)
+        + build_auction_metrics(auctions if auctions is not None else _fetch_auctions())
     )
     composite = compute_composite(metrics)
     return metrics, analyses, composite, recession_starts

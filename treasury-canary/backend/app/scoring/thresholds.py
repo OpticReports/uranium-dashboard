@@ -32,8 +32,12 @@ DEFAULTS: dict[str, Threshold] = {
     # D. Funding / plumbing (bps)
     "funding.sofr_effr": Threshold(yellow=5.0, red=15.0, higher_is_worse=True),
     "funding.sofr_iorb": Threshold(yellow=5.0, red=15.0, higher_is_worse=True),
-    # E. Auctions
+    # E. Auctions (trailing-8 coupon-auction averages)
     "auctions.bid_to_cover": Threshold(yellow=2.4, red=2.2, higher_is_worse=False),
+    "auctions.dealer_takedown": Threshold(yellow=15.0, red=20.0, higher_is_worse=True),
+    "auctions.indirect_share": Threshold(yellow=60.0, red=50.0, higher_is_worse=False),
+    # F. Foreign flows
+    "foreign.custody_26w": Threshold(yellow=-2.0, red=-5.0, higher_is_worse=False),
     # G. Liquidity
     "liquidity.on_off_run": Threshold(yellow=5.0, red=12.0, higher_is_worse=True),
     "liquidity.ofr_fsi": Threshold(yellow=1.0, red=3.0, higher_is_worse=True),

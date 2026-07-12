@@ -32,20 +32,15 @@ Standalone app that lives alongside the genomics dashboard in this repo.
 | FRED source (cache + backoff + graceful degradation) + tests | ✅ |
 | Volatility / funding / premium / cross-asset metrics (FRED) | ✅ |
 | Jobs (backfill, refresh) + API routes + main.py | ✅ |
-| Frontend (MetricTable, StressGauge, ReSteepenAlert, FlightToQuality, EventFeed, NewsPanel) | ✅ |
+| Frontend (all panels) + "?" tooltips everywhere | ✅ |
 | Deploy wiring (Docker, render.yaml, same-domain section) | ✅ |
-| News RSS (Fed/Treasury, keyless) | ✅ |
-| **Follow-up:** Treasury auction results (E), foreign flows (F), on/off-run liquidity + OFR FSI (G) | ⏳ |
+| Recession horizon model (probit + CI + AUC) & labor signals (Sahm/claims) | ✅ |
+| Flow compass ("where is the money going") & Dalio pin board | ✅ |
+| Leading stack (additive, toggleable, never fitted) | ✅ |
+| Auctions (E, FiscalData) · OFR FSI (G) · foreign custody (F) — full coverage | ✅ |
+| Open slot: on-the-run/off-the-run spread (no clean free source; not faked) | ⏳ |
 
-Backend tests: `cd backend && python -m pytest -q` (currently 24 passing).
-
-### Follow-up phase (scoped, not yet built)
-The composite already **reweights over available categories**, so these render as
-absent rather than wrong until wired: **auctions** (bid-to-cover/tails/bidder class
-via Treasury FiscalData), **foreign flows** (Fed custody / TIC), and **liquidity**
-(on-the-run vs off-the-run + OFR Financial Stress Index cross-check). Each needs a
-live-API integration verified against the provider's real schema — deliberately
-deferred over shipping guessed endpoints.
+Backend tests: `cd backend && python -m pytest -q` (currently 58 passing).
 
 ## Run it
 
