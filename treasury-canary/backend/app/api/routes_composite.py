@@ -77,7 +77,14 @@ def canary(
         ed["lag_to_recession_months"] = lag_months_to_recession(e, starts)
         episodes.append(ed)
 
-    prob = recession_probability(a.current_value)
+    # Recession probability is ALWAYS from the 3m10y spread — the Estrella-Mishkin
+    # probit is calibrated on 3m10y, so applying it to the charted pair (2s10s,
+    # 5s10s, ...) would be invalid. This keeps it consistent with /recession-prob.
+    d3, v3 = bundle.get("3mo", ([], []))
+    d10, v10 = bundle.get("10y", ([], []))
+    _, s_3m10y = build_spread(d3, v3, d10, v10)
+    latest_3m10y = next((v for v in reversed(s_3m10y) if v is not None), None)
+    prob = recession_probability(latest_3m10y)
     # Downsample the series for transport (chart doesn't need every daily point).
     series = [{"date": d.isoformat(), "spread": s}
               for d, s in zip(dates, spread) if s is not None]
