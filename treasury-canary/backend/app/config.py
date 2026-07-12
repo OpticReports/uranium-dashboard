@@ -94,6 +94,11 @@ FRED_LEADING: dict[str, str] = {
     "gdpnow": "GDPNOW",            # Atlanta Fed GDPNow nowcast
     "cp_prob": "RECPROUSM156N",    # Chauvet-Piger smoothed recession probability
 }
+# F. Foreign flows: Fed custody holdings of Treasuries for foreign officials —
+# the cleanest weekly read on whether foreign central banks are net sellers.
+FRED_FOREIGN: dict[str, str] = {
+    "custody": "WMTSECL1",         # marketable USTs held in custody (weekly)
+}
 # Pin board (trigger channels) — the measurable proxies for what historically
 # "pricks the bubble". (Oil/EFFR/HY/term premium/SOFR-IORB already in bundle.)
 FRED_PINS: dict[str, str] = {

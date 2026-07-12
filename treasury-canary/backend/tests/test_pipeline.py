@@ -15,7 +15,7 @@ def test_compute_all_flags_resteepening_as_critical():
     d = _dates(len(v10))
     bundle = {"3mo": (d, [3.0] * len(v10)), "10y": (d, v10)}
 
-    metrics, analyses, composite, _ = compute_all(bundle)
+    metrics, analyses, composite, _ = compute_all(bundle, auctions=[])
     by_id = {m.metric_id: m for m in metrics}
 
     # 3m10y should be RE_STEEPENING -> CRITICAL override
@@ -34,6 +34,6 @@ def test_compute_all_flags_resteepening_as_critical():
 
 
 def test_compute_all_all_stale_is_safe():
-    metrics, analyses, composite, _ = compute_all({})
+    metrics, analyses, composite, _ = compute_all({}, auctions=[])
     assert all(m.status is Status.STALE for m in metrics)
     assert composite.score is None and composite.band == "NO_DATA"
