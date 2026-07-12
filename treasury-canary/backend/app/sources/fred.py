@@ -131,11 +131,13 @@ def _fetch_bundle_uncached(start: str) -> dict[str, tuple[list[date], list[float
     from concurrent.futures import ThreadPoolExecutor
 
     from ..config import (
-        FRED_BREAKEVENS, FRED_CREDIT, FRED_FUNDING, FRED_MACRO, FRED_REAL_YIELDS,
-        FRED_TENORS, FRED_VOL,
+        FRED_BREAKEVENS, FRED_CREDIT, FRED_FUNDING, FRED_LABOR, FRED_MACRO,
+        FRED_REAL_YIELDS, FRED_TENORS, FRED_VOL,
     )
     # logical key -> FRED series id
     plan: dict[str, str] = dict(FRED_TENORS)
+    for k, sid in FRED_LABOR.items():
+        plan[k] = sid
     plan["real_10y"] = FRED_REAL_YIELDS["10y"]
     plan["breakeven_5y5y"] = FRED_BREAKEVENS["5y5y"]
     for k in ("sofr", "effr", "iorb"):

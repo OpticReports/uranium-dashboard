@@ -69,12 +69,15 @@ app.add_middleware(
     allow_headers=["*"], allow_credentials=True,
 )
 
-from .api import routes_composite, routes_events, routes_metrics, routes_news  # noqa: E402
+from .api import (  # noqa: E402
+    routes_composite, routes_events, routes_labor, routes_metrics, routes_news,
+)
 
 app.include_router(routes_metrics.router)
 app.include_router(routes_composite.router)
 app.include_router(routes_events.router)
 app.include_router(routes_news.router)
+app.include_router(routes_labor.router)
 
 
 @app.get("/health")

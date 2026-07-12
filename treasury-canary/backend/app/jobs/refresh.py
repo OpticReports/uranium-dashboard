@@ -17,6 +17,7 @@ from ..config import FRED_TENORS, settings
 from ..metrics.crossasset import build_crossasset_metrics
 from ..metrics.curve import build_curve_metrics
 from ..metrics.funding import build_funding_metrics
+from ..metrics.labor import build_labor_metrics
 from ..metrics.premium import build_premium_metrics
 from ..metrics.recession import build_recession_metrics
 from ..metrics.volatility import build_volatility_metrics
@@ -42,6 +43,7 @@ def compute_all(bundle: dict):
         + build_premium_metrics(bundle)
         + build_crossasset_metrics(bundle)
         + build_recession_metrics(bundle)
+        + build_labor_metrics(bundle)
     )
     composite = compute_composite(metrics)
     return metrics, analyses, composite, recession_starts

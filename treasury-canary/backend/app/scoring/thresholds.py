@@ -46,6 +46,9 @@ DEFAULTS: dict[str, Threshold] = {
     # I. Recession model (%)
     "recession.prob": Threshold(yellow=30.0, red=50.0, higher_is_worse=True),
     "recession.nfci": Threshold(yellow=0.0, red=0.7, higher_is_worse=True),
+    # J. Labor (Sahm gap in pp; claims YoY in %). Sahm rule triggers at 0.50.
+    "labor.sahm": Threshold(yellow=0.30, red=0.50, higher_is_worse=True),
+    "labor.claims_yoy": Threshold(yellow=10.0, red=25.0, higher_is_worse=True),
 }
 
 

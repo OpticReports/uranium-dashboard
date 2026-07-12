@@ -65,3 +65,10 @@ FRED_CREDIT: dict[str, str] = {"ig_oas": "BAMLC0A0CM", "hy_oas": "BAMLH0A0HYM2"}
 FRED_MACRO: dict[str, str] = {
     "recession": "USREC", "sp500": "SP500", "nfci": "NFCI", "acm_tp10": "THREEFYTP10",
 }
+# Labor / real-economy. Note: the unemployment RATE is lagging; the Sahm Rule
+# (rate-of-change) and initial jobless claims are the useful forward signals.
+FRED_LABOR: dict[str, str] = {
+    "unrate": "UNRATE",            # lagging context
+    "claims_4wk": "IC4WSA",        # initial jobless claims, 4-week MA (leading)
+    "sahm": "SAHMREALTIME",        # official real-time Sahm recession indicator
+}
