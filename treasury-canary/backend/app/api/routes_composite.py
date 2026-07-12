@@ -54,10 +54,25 @@ def recession_model():
             "probability_pct": None, "ci_low_pct": None, "ci_high_pct": None}
         horizons[h] = {**r, "auc": m["auc"], "n_obs": m["n_obs"], "n_pos": m["n_pos"],
                        "b0": round(m["b0"], 4), "b1": round(m["b1"], 4)}
+    # Term-premium-adjusted variant (expectations component only).
+    from ..metrics.recession_model import cached_adjusted
+    adj_models, adj_spread, tp_now = cached_adjusted()
+    adjusted = {}
+    for h, m in sorted(adj_models.items()):
+        r = predict(m["b0"], m["b1"], m["cov"], adj_spread) if adj_spread is not None else {
+            "probability_pct": None, "ci_low_pct": None, "ci_high_pct": None}
+        adjusted[h] = {**r, "auc": m["auc"], "n_obs": m["n_obs"]}
     return {
         "spread_3m10y": spread,
         "default_horizon": 12,
         "horizons": horizons,
+        "adjusted": {
+            "spread_minus_tp": adj_spread, "acm_tp10": tp_now, "horizons": adjusted,
+            "note": "Bernanke critique: when QE pins the term premium negative, the raw "
+                    "curve inverts 'too easily'. This variant subtracts the ACM 10y term "
+                    "premium so the input is the expectations component only (sample "
+                    "starts ~1990 — fewer recessions, wider bands).",
+        },
         "spread_input": "3m10y (10y minus 3m), monthly-averaged",
         "method": "probit MLE (IRLS) fit on FRED data; CI via delta method on the index; AUC in-sample",
         "note": "Probabilities are model estimates with confidence bands, not forecasts. "

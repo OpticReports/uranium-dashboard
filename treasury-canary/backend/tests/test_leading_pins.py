@@ -92,7 +92,33 @@ def test_pin_board_oil_shock_red():
     by = {c["channel_id"]: c for c in board["channels"]}
     assert by["oil_shock"]["status"] == "RED"
     assert board["overall"] == "RED"
-    assert board["n_channels"] == 6
+    assert board["n_channels"] == 7
+
+
+def test_pin_board_basis_trade():
+    from app.sources.cftc import aggregate_net_short
+    rows = [{"report_date_as_yyyy_mm_dd": "2026-07-07T00:00:00.000",
+             "contract_market_name": "UST 10Y NOTE",
+             "lev_money_positions_long": "400000", "lev_money_positions_short": "2400000"},
+            {"report_date_as_yyyy_mm_dd": "2026-07-07T00:00:00.000",
+             "contract_market_name": "UST 5Y NOTE",
+             "lev_money_positions_long": "500000", "lev_money_positions_short": "2500000"},
+            {"report_date_as_yyyy_mm_dd": "2026-06-30T00:00:00.000",
+             "contract_market_name": "UST 10Y NOTE",
+             "lev_money_positions_long": "500000", "lev_money_positions_short": "1500000"}]
+    d, v = aggregate_net_short(rows)
+    assert v == [1.0, 4.0]  # per-date sums (short-long)/1e6, oldest first
+
+    from datetime import date, timedelta
+    weeks = [date(2025, 1, 1) + timedelta(weeks=i) for i in range(11)]
+    # level yellow (4.0M) but BELOW prior highs -> percentile calm -> channel YELLOW
+    board = build_pin_board({"cot_net_short": (weeks, [5.0] * 10 + [4.0])})
+    by = {c["channel_id"]: c for c in board["channels"]}
+    assert by["basis_trade"]["status"] == "YELLOW"
+    # record-crowded book (6M, new high) -> level RED + percentile RED -> RED
+    board2 = build_pin_board({"cot_net_short": (weeks, [5.0] * 10 + [6.0])})
+    by2 = {c["channel_id"]: c for c in board2["channels"]}
+    assert by2["basis_trade"]["status"] == "RED"
 
 
 def test_pin_board_credit_event_discount_window():
