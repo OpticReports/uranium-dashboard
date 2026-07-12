@@ -16,6 +16,7 @@ _CATEGORY_LABELS = {
     "A": "Yield curve", "B": "Volatility", "C": "Term premium & real rates",
     "D": "Funding / plumbing", "E": "Auctions", "F": "Foreign / flows",
     "G": "Liquidity", "H": "Cross-asset", "I": "Recession model", "J": "Labor",
+    "K": "Leading stack (additive, not in composite)",
 }
 
 

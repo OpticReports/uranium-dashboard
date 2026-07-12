@@ -132,14 +132,14 @@ def _fetch_bundle_uncached(start: str) -> dict[str, tuple[list[date], list[float
 
     from ..config import (
         FRED_BREAKEVENS, FRED_CREDIT, FRED_FLOWS, FRED_FUNDING, FRED_LABOR,
-        FRED_MACRO, FRED_REAL_YIELDS, FRED_TENORS, FRED_VOL,
+        FRED_LEADING, FRED_MACRO, FRED_PINS, FRED_REAL_YIELDS, FRED_TENORS,
+        FRED_VOL,
     )
     # logical key -> FRED series id
     plan: dict[str, str] = dict(FRED_TENORS)
-    for k, sid in FRED_LABOR.items():
-        plan[k] = sid
-    for k, sid in FRED_FLOWS.items():
-        plan[k] = sid
+    for extra in (FRED_LABOR, FRED_FLOWS, FRED_LEADING, FRED_PINS):
+        for k, sid in extra.items():
+            plan[k] = sid
     plan["real_10y"] = FRED_REAL_YIELDS["10y"]
     plan["breakeven_5y5y"] = FRED_BREAKEVENS["5y5y"]
     for k in ("sofr", "effr", "iorb"):
