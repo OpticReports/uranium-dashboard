@@ -91,10 +91,26 @@ export interface HorizonStat {
   b1: number;
 }
 
+export interface AdjustedHorizonStat {
+  probability_pct: number | null;
+  ci_low_pct: number | null;
+  ci_high_pct: number | null;
+  auc: number | null;
+  n_obs: number;
+}
+
+export interface AdjustedModel {
+  spread_minus_tp: number | null;
+  acm_tp10: number | null;
+  horizons: Record<string, AdjustedHorizonStat>;
+  note: string;
+}
+
 export interface RecessionModel {
   spread_3m10y: number | null;
   default_horizon: number;
   horizons: Record<string, HorizonStat>;
+  adjusted: AdjustedModel;
   spread_input: string;
   method: string;
   note: string;
@@ -227,6 +243,28 @@ export interface PinBoard {
   framing: string;
 }
 
+export interface TrackRecordRow {
+  asof: string;
+  composite_score: number | null;
+  composite_band: string | null;
+  coverage: number | null;
+  rec_prob_12m: number | null;
+  rec_prob_adj_12m: number | null;
+  curve_state: string | null;
+  pins_overall: string | null;
+  sahm: number | null;
+  outcome_recession_12m: number | null;
+}
+
+export interface TrackRecord {
+  rows: TrackRecordRow[];
+  n_total: number;
+  n_resolved: number;
+  brier: number | null;
+  brier_note: string;
+  caveat: string;
+}
+
 // ---------------------------------------------------------------------------
 // Fetch helpers
 // ---------------------------------------------------------------------------
@@ -302,6 +340,7 @@ export const api = {
   alerts: () => getJson<CanaryEvent[]>("/alerts"),
   news: (limit = 40) => getJson<NewsResponse>(`/news?limit=${limit}`),
   pins: () => getJson<PinBoard>("/pins"),
+  trackRecord: () => getJson<TrackRecord>("/track-record"),
   refresh: () =>
     getJson<unknown>("/refresh", { method: "POST" }),
 };

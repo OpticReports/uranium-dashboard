@@ -370,6 +370,32 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     calc: "SOFR−IORB spread (repo above the reserves floor = scarcity) + 26-week change in reserve balances (QT drain) + the overnight RRP balance (the system's shock absorber).",
     read: "The dangerous sequence: RRP drained to ~zero → reserves falling → SOFR persistently above IORB. Each alone is context; all three together preceded the 2019 spasm.",
   },
+  pin_basis: {
+    title: "Basis-trade unwind",
+    what: "Hedge funds run a massive arbitrage: long cash Treasuries, short Treasury futures, levered 20–50×. Their aggregate net-short futures book measures the trade's size — and its forced-unwind potential.",
+    calc: "CFTC Traders-in-Financial-Futures (weekly): leveraged-fund net short summed across the UST futures complex (2y through ultra-bond), in millions of contracts, plus its percentile vs history since 2010.",
+    read: "March 2020: this trade unwound violently and broke the Treasury market until the Fed stepped in with $1.6T of purchases. A bigger book = a bigger potential fire-sale. >4M contracts = crowded; >5.5M = record-zone crowding.",
+    caveat: "Crowding is measurable; the trigger isn't — an unwind needs a vol/margin spike (watch the MOVE proxy and plumbing channels for the spark). Data lags ~3 business days.",
+  },
+  adjusted_prob: {
+    title: "Term-premium-adjusted recession probability",
+    what: "The same probit, but fed the 3m10y spread MINUS the ACM term premium — isolating the expectations component of the curve.",
+    calc: "Adjusted spread = 3m10y − ACM TP10; horizon-specific probits refit on this input (sample from ~1990, so fewer recessions and wider confidence bands).",
+    read: "The Bernanke critique: when QE pins the term premium negative, the raw curve inverts 'too easily' and overstates recession odds — arguably part of why 2022–24's inversion ran so long without a recession. When RAW and ADJUSTED agree, trust the signal more; when raw is alarmed and adjusted is calm, suspect term-premium distortion.",
+  },
+  effective_breadth: {
+    title: "Effective breadth (causal families)",
+    what: "The overfit-aware answer to 'are my 8 indicators really 8?' Permits, trucks, and capex are all downstream of interest rates — when they flash together that may be ONE cause, not three.",
+    calc: "Indicators are grouped a priori (no fitted correlations) into causal families: Housing/Capex {permits, trucks, core capex} · Credit {SLOOS} · Labor {temp help} · Broad activity {CFNAI, GDPNow, Chauvet-Piger}. A family flashes when at least half its included, live members flash.",
+    read: "Read \"X of 4 families flashing\" as the deduplicated signal: 3 indicators flashing inside one family is weaker evidence than 2 flashing across different families. Real recessions light up MULTIPLE families.",
+  },
+  alert_beacon: {
+    title: "Alert beacon",
+    what: "A single at-a-glance status light for the whole dashboard, in the header.",
+    calc: "Worst of: composite band (HIGH/SEVERE), any CRITICAL metric (e.g. re-steepening), RED metric count, pin-board overall status, and logged high-severity events.",
+    read: "Green dot = nothing flashing anywhere. Pulsing amber = warnings warming. Pulsing red = at least one critical/red condition — click it to jump to the event feed.",
+    caveat: "On the free hosting tier the event LOG resets on redeploys; the beacon also derives from live metric state, so current conditions always show.",
+  },
   pin_uncertainty: {
     title: "Uncertainty / geopolitical shock",
     what: "Exogenous pins — wars, embargoes, tariff shocks, debt-ceiling standoffs — show up in policy-uncertainty indices before they show up in earnings.",

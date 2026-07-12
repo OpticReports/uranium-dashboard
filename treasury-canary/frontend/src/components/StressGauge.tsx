@@ -286,6 +286,21 @@ function RecessionDial({
       : null;
   const hasContext = band !== null || auc !== null;
 
+  // Term-premium-adjusted probability for the selected horizon (may be absent).
+  const adj = model?.adjusted?.horizons?.[String(horizon)] ?? null;
+  const adjProb =
+    adj && adj.probability_pct !== null && !Number.isNaN(adj.probability_pct)
+      ? adj.probability_pct
+      : null;
+  const adjBand =
+    adj &&
+    adj.ci_low_pct !== null &&
+    adj.ci_high_pct !== null &&
+    !Number.isNaN(adj.ci_low_pct) &&
+    !Number.isNaN(adj.ci_high_pct)
+      ? ` (band ${Math.round(adj.ci_low_pct)}–${Math.round(adj.ci_high_pct)}%)`
+      : "";
+
   return (
     <div>
       <div className="flex items-center justify-between gap-2">
@@ -312,6 +327,10 @@ function RecessionDial({
       </div>
       <p className="font-mono text-xl text-slate-100">
         {error ? "err" : !model ? "…" : hasProb ? fmtPct(prob) : "n/a"}
+      </p>
+      <p className="text-[11px] text-slate-400">
+        TP-adjusted: {adjProb !== null ? `${fmtPct(adjProb)}${adjBand}` : "n/a"}
+        <InfoTip term="adjusted_prob" />
       </p>
       {hasContext ? (
         <p className="text-[10px] text-slate-500">

@@ -53,6 +53,25 @@ class MetricSnapshot(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
+class PredictionLog(Base):
+    """One row per day: the dashboard's own headline predictions, logged so the
+    system can be scored against reality later (calibration / Brier). Truth for
+    'recession within 12m' resolves from USREC once 12 months have elapsed."""
+    __tablename__ = "prediction_log"
+    __table_args__ = (UniqueConstraint("asof", name="uq_prediction_asof"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    asof: Mapped["Date"] = mapped_column(Date, nullable=False)
+    composite_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    composite_band: Mapped[str | None] = mapped_column(String, nullable=True)
+    coverage: Mapped[float | None] = mapped_column(Float, nullable=True)
+    rec_prob_12m: Mapped[float | None] = mapped_column(Float, nullable=True)
+    rec_prob_adj_12m: Mapped[float | None] = mapped_column(Float, nullable=True)
+    curve_state: Mapped[str | None] = mapped_column(String, nullable=True)   # 3m10y
+    pins_overall: Mapped[str | None] = mapped_column(String, nullable=True)
+    sahm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class EventLog(Base):
     """Regime-change / alert events. Idempotent per (event_type, dedup_key)."""
     __tablename__ = "event_log"
