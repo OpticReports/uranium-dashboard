@@ -443,6 +443,27 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     read: "March 2020: this trade unwound violently and broke the Treasury market until the Fed stepped in with $1.6T of purchases. A bigger book = a bigger potential fire-sale. >4M contracts = crowded; >5.5M = record-zone crowding.",
     caveat: "Crowding is measurable; the trigger isn't — an unwind needs a vol/margin spike (watch the MOVE proxy and plumbing channels for the spark). Data lags ~3 business days.",
   },
+  pin_private_credit: {
+    title: "Corporate & private credit",
+    what: "This cycle's leverage grew OUTSIDE the banking system: roughly $1.7T of private credit plus ~$1.3T of bank loans funding those vehicles, atop a record corporate maturity wall. No prior recession had this structure — a pin board built only on past bubbles would miss it entirely.",
+    calc: "Three reads. (1) CCC-and-lower bond spread, as a percentile of its own history since 1996 — the tier where refinancing distress prices first. (2) The GAP between CCC and BBB spreads (percentile): investment grade priced for perfection while the distress tier cracks is a bifurcation the aggregate high-yield spread hides. (3) Bank lending to nondepository financial institutions (the Fed's H.8 breakout, added precisely to watch this) — month-over-month annualized growth.",
+    read: "Private-credit marks are opaque and lag by quarters; public CCC bonds and the funding pipe are the real-time windows. Distress percentile high + dispersion extreme + NDFI loan growth stalling together = the private-credit margin call arriving. Any one alone is context.",
+    caveat: "The NDFI series only starts 2015 — it has never seen a recession, so its thresholds are judgment, not history. And CCC is a proxy: private loans are floating-rate and covenant-lite in ways public bonds aren't.",
+  },
+  pin_carry: {
+    title: "Yen-carry unwind",
+    what: "Trillions of dollars of global positions are funded by borrowing cheap yen. When the yen appreciates sharply, those positions lose money on the funding leg and get force-unwound — selling whatever they own, including US assets. August 2024 demonstrated it: a BoJ hike → ~8% yen surge → days of global deleveraging.",
+    calc: "USD/JPY 1-month % change (falling = yen appreciating = stress; yellow at −4%, red at −7%, calibrated to the Aug-2024 episode) plus the 12-month change in 10-year JGB yields — rising Japanese yields shrink the carry's profit cushion and pull Japanese capital home (they're also a structural buyer of Treasuries).",
+    read: "The FX leg is the trigger and moves in days; the JGB leg is the slow pressure making the trigger easier to pull. Green FX + rising JGB = loaded but not firing.",
+    caveat: "Carry unwinds have so far produced violent vol shocks, not recessions — this channel warns of market breakage, which matters here because forced selling transmits into Treasuries. JGB data is monthly with ~2-month lag.",
+  },
+  pin_attributes: {
+    title: "Mass · speed · kill rate",
+    what: "Not all pins are the same size. These badges size each channel on three researched attributes: MASS (the dollar exposure behind it), SPEED (how fast it transmits once it fires), and KILL RATE (its documented historical record as a recession trigger).",
+    calc: "Static, sourced numbers — documented exposure sizes and episode counts from the literature (e.g. Hamilton's oil-shock count, the CFTC-measured basis book). Deliberately NOT fitted weights: with ~11 postwar recessions and nine channels, any statistically fitted 'probability contribution' would be curve-fitting noise.",
+    read: "Use them to weigh a red: a RED on a fast, multi-trillion, high-kill-rate channel (credit accident) demands attention within days; a RED on a slow or historically benign channel (uncertainty) is context. Mass × speed tells you how big and how fast; kill rate tells you how often this gun has actually fired historically.",
+    caveat: "A channel with a low historical kill rate isn't safe — the private-credit channel has NO kill-rate history precisely because it has never existed at this size. Unprecedented ≠ improbable.",
+  },
   adjusted_prob: {
     title: "Term-premium-adjusted recession probability",
     what: "The same probit, but fed the 3m10y spread MINUS the ACM term premium — isolating the expectations component of the curve.",
