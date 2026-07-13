@@ -350,7 +350,8 @@ w("## Honest limitations\n")
 w("- Composite/pins not fully replayable: SOFR (2018+), IORB (2021+), RRP, FMP gold "
   "etc. lack deep history; the composite's funding leg simply didn't exist pre-2018.")
 w("- Part C uses today's revised data (except SAHMREALTIME, which is real-time by "
-  "construction). A full ALFRED vintage replay is the next rigor step.")
+  "construction). See VINTAGE.md (`python -m scripts.vintage_check`) for the "
+  "ALFRED as-of-then replay of these alarms.")
 w("- NBER dates recessions ~4–12 months after they begin: outcome TRUTH here uses "
   "final dating; in real time you would not know a hit was a hit that fast.")
 w("- Threshold-selection bias: rules like CFNAI −0.7 and Sahm 0.5 were set by "

@@ -79,3 +79,56 @@ def test_metric_flip_event():
     m = _m("funding.sofr_effr", "D", 20, Status.RED)
     assert detect_metric_flip(m, "GREEN", date(2026, 1, 1)) is not None
     assert detect_metric_flip(m, "RED", date(2026, 1, 1)) is None  # already red, no re-fire
+
+
+# --- weight-sensitivity ensemble ---------------------------------------------
+
+def _mixed_metrics():
+    return [
+        _m("curve.3m10y", "A", -0.2, Status.RED),
+        _m("vol.vix", "B", 14, Status.GREEN),
+        _m("premium.acm", "C", 0.5, Status.GREEN),
+        _m("funding.sofr_effr", "D", 20, Status.RED),
+        _m("crossasset.hy_oas", "H", 300, Status.YELLOW),
+        _m("labor.sahm", "J", 0.1, Status.GREEN),
+    ]
+
+
+def test_ensemble_band_brackets_and_is_deterministic():
+    from app.scoring.ensemble import weight_ensemble
+    metrics = _mixed_metrics()
+    e1 = weight_ensemble(metrics, n_draws=300)
+    e2 = weight_ensemble(metrics, n_draws=300)
+    assert e1 == e2                       # seeded -> no flicker between reloads
+    assert e1["band_low"] <= e1["band_high"]
+    # scores live in the convex hull of category scores (0..90 here)
+    assert 0.0 <= e1["band_low"] and e1["band_high"] <= 90.0
+    # equal-weight variant is a real composite over the same categories
+    assert 0.0 <= e1["equal_weight_score"] <= 100.0
+    assert e1["n_draws"] == 300
+    assert e1["driver_category"] in {"A", "B", "C", "D", "H", "J"}
+    assert e1["driver_direction"] in {"raises", "lowers"}
+
+
+def test_ensemble_band_brackets_headline():
+    from app.scoring.ensemble import weight_ensemble
+    metrics = _mixed_metrics()
+    headline = compute_composite(metrics).score
+    e = weight_ensemble(metrics, n_draws=500)
+    # the headline uses in-hull weights, so it must sit inside (or on) the band
+    assert e["band_low"] - 0.51 <= headline <= e["band_high"] + 0.51
+
+
+def test_ensemble_uniform_statuses_collapse_the_band():
+    from app.scoring.ensemble import weight_ensemble
+    metrics = [_m(f"m{i}", c, 1.0, Status.YELLOW)
+               for i, c in enumerate("ABCDHJ")]
+    e = weight_ensemble(metrics, n_draws=200)
+    # every category scores 50 -> weights cannot matter at all
+    assert e["band_low"] == e["band_high"] == 50.0
+    assert e["spread"] == 0.0
+
+
+def test_ensemble_none_when_no_data():
+    from app.scoring.ensemble import weight_ensemble
+    assert weight_ensemble([_m("x", "A", None, Status.STALE)]) is None

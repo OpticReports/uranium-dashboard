@@ -19,6 +19,13 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     read: "Bands: <25 LOW · 25–50 ELEVATED · 50–75 HIGH · >75 SEVERE. Watch the change and which categories drive it (see contributions) more than the level itself.",
     caveat: "A score built from thresholds is a summary, not a prediction. Always check WHICH family is hot — 26 driven by volatility means something different than 26 driven by funding stress.",
   },
+  weight_band: {
+    title: "Weighting band — are the weights load-bearing?",
+    what: "The composite's category weights (curve 30%, funding 15%, …) are literature-informed judgment calls, not fitted parameters — with only ~8 recessions of history, fitting them would be curve-fitting folklore. This band answers: how much would the score change under DIFFERENT reasonable weightings?",
+    calc: "The composite is recomputed under 1,000 random plausible weightings (Dirichlet draws over the weight simplex, seeded so the band is stable between reloads) plus a naive equal-mix. The band shows the 5th–95th percentile of those scores. 'Driver' names the category whose weighting moves the score most (correlation of its weight with the score across draws).",
+    read: "A narrow band (e.g. 21–27 around a headline of 24) means the weights barely matter — every reasonable mix tells the same story, so argue with the data, not the weights. A wide band means the reading genuinely depends on how much you trust one family — the driver tells you which one to go inspect.",
+    caveat: "Robustness, never selection: nothing is ever picked from these draws — choosing the 'best' weighting against a handful of recessions would be pure data-snooping. The band widens mechanically when categories disagree; that is the point.",
+  },
   coverage: {
     title: "Coverage",
     what: "The share of the composite's total category weight that currently has live data.",
@@ -382,6 +389,13 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     calc: "Published monthly (FRED RECPROUSM156N), ~2-month data lag.",
     read: "Readings above 80% for three consecutive months have marked every recession start with essentially no false alarms. Complements our curve probit: the curve predicts, Chauvet–Piger confirms.",
     caveat: "The publication lag means it tells you 'yes it started ~2 months ago' — use for confirmation, never timing.",
+  },
+  "leading.wei": {
+    title: "Weekly Economic Index (WEI)",
+    what: "Ten weekly activity series — retail sales, unemployment claims, staffing-index, steel production, fuel sales, electricity output, rail traffic — distilled into a single factor by Lewis, Mertens & Stock (NY Fed, now maintained by the Dallas Fed).",
+    calc: "The factor is SCALED so the number reads directly as the 4-quarter real GDP growth rate the weekly data implies. Published every week with roughly a 2-week lag (FRED: WEI, since 2008).",
+    read: "The fastest broad read on the economy between monthly prints. Around 2%+ = normal expansion. Below ~1% = stall speed (yellow). Below 0 = the weekly data says contraction is already underway (red). If the monthly leading stack flashes and WEI then breaks lower, the slowdown is confirmed at weekly cadence instead of waiting a month.",
+    caveat: "A nowcast of where activity IS, not a forecast — it turns with the recession, not ahead of it. Weekly data is noisy: read the trend over ~4 weeks, not single prints. History starts 2008, so its thresholds rest on two recessions (one a pandemic).",
   },
 
   // ── Pin board ─────────────────────────────────────────────────────────────

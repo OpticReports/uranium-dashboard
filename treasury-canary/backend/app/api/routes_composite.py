@@ -14,12 +14,14 @@ router = APIRouter(tags=["composite"])
 
 @router.get("/composite")
 def composite():
+    from ..scoring.ensemble import weight_ensemble
     bundle = fetch_bundle()
     metrics, _, comp, _ = compute_all(bundle)
     return {
         "score": comp.score, "band": comp.band, "coverage": comp.coverage,
         "category_scores": comp.category_scores, "contributions": comp.contributions,
         "n_red": comp.n_red, "n_critical": comp.n_critical,
+        "ensemble": weight_ensemble(metrics),
     }
 
 

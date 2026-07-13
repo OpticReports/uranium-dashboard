@@ -114,6 +114,15 @@ def build_leading_metrics(bundle: dict[str, tuple[list, list]]) -> list[MetricRe
         "converges as data arrives. A nowcast, not a forecast — shows where we already are.",
         "FRED:GDPNOW"))
 
+    d, v = bundle.get("wei", ([], []))
+    out.append(_metric(
+        "leading.wei", "Weekly Economic Index (NY Fed)", d, v, "% GDP-scaled",
+        "Ten weekly activity series (retail sales, claims, staffing, steel, fuel, "
+        "electricity, rail) distilled into one factor, SCALED so the reading is the "
+        "4-quarter GDP growth it implies. Updates weekly with ~2wk lag — the fastest "
+        "broad read between monthly prints. Below ~1% = stall speed; below 0 = "
+        "contraction underway. A nowcast, not a forecast.", "FRED:WEI"))
+
     d, v = bundle.get("cp_prob", ([], []))
     out.append(_metric(
         "leading.cp_prob", "Chauvet-Piger recession prob.", d, v, "%",
