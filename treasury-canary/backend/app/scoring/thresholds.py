@@ -63,6 +63,7 @@ DEFAULTS: dict[str, Threshold] = {
     "leading.cfnai_ma3": Threshold(yellow=-0.35, red=-0.70, higher_is_worse=False),
     "leading.gdpnow": Threshold(yellow=1.0, red=0.0, higher_is_worse=False),
     "leading.cp_prob": Threshold(yellow=20.0, red=50.0, higher_is_worse=True),
+    "leading.wei": Threshold(yellow=1.0, red=0.0, higher_is_worse=False),
 }
 
 

@@ -93,6 +93,7 @@ FRED_LEADING: dict[str, str] = {
     "cfnai": "CFNAI",              # Chicago Fed National Activity Index (monthly)
     "gdpnow": "GDPNOW",            # Atlanta Fed GDPNow nowcast
     "cp_prob": "RECPROUSM156N",    # Chauvet-Piger smoothed recession probability
+    "wei": "WEI",                  # NY Fed/Dallas Fed Weekly Economic Index (weekly nowcast)
 }
 # F. Foreign flows: Fed custody holdings of Treasuries for foreign officials —
 # the cleanest weekly read on whether foreign central banks are net sellers.

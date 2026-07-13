@@ -1,6 +1,6 @@
 # Canary Backtest Report
 
-_Generated 2026-07-12. Reproduce: `python -m scripts.backtest`._
+_Generated 2026-07-13. Reproduce: `python -m scripts.backtest`._
 
 ## A. Re-steepening canary — full replay (monthly 3m10y, 1953–2026)
 
@@ -57,6 +57,6 @@ Fixed thresholds applied month-by-month (7 long-history indicators; SLOOS/GDPNow
 ## Honest limitations
 
 - Composite/pins not fully replayable: SOFR (2018+), IORB (2021+), RRP, FMP gold etc. lack deep history; the composite's funding leg simply didn't exist pre-2018.
-- Part C uses today's revised data (except SAHMREALTIME, which is real-time by construction). A full ALFRED vintage replay is the next rigor step.
+- Part C uses today's revised data (except SAHMREALTIME, which is real-time by construction). See VINTAGE.md (`python -m scripts.vintage_check`) for the ALFRED as-of-then replay of these alarms.
 - NBER dates recessions ~4–12 months after they begin: outcome TRUTH here uses final dating; in real time you would not know a hit was a hit that fast.
 - Threshold-selection bias: rules like CFNAI −0.7 and Sahm 0.5 were set by researchers who had seen this history.

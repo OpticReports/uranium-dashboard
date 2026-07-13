@@ -8,6 +8,13 @@ import InfoTip from "./InfoTip";
 
 const HORIZONS = [6, 12, 18, 24] as const;
 
+// Short names for the ensemble's driver-category readout.
+const CAT_SHORT: Record<string, string> = {
+  A: "curve", B: "volatility", C: "term premium", D: "funding", E: "auctions",
+  F: "foreign flows", G: "liquidity", H: "cross-asset", I: "recession model",
+  J: "labor",
+};
+
 const BAND_COLOR: Record<string, string> = {
   LOW: "#10b981",
   ELEVATED: "#f59e0b",
@@ -182,6 +189,32 @@ export default function StressGauge({
             </span>
           </div>
           <p className="mt-1 text-[11px] text-slate-500">0 = calm · 100 = severe</p>
+          {composite?.ensemble && (
+            <p className="mt-1 text-center text-[10px] leading-snug text-slate-500">
+              weighting band{" "}
+              <span className="font-mono text-slate-300">
+                {Math.round(composite.ensemble.band_low)}–
+                {Math.round(composite.ensemble.band_high)}
+              </span>
+              {composite.ensemble.equal_weight_score !== null && (
+                <>
+                  {" · equal-mix "}
+                  <span className="font-mono text-slate-300">
+                    {Math.round(composite.ensemble.equal_weight_score)}
+                  </span>
+                </>
+              )}
+              {composite.ensemble.driver_category && (
+                <>
+                  {" · driver: "}
+                  {CAT_SHORT[composite.ensemble.driver_category] ??
+                    composite.ensemble.driver_category}{" "}
+                  ({composite.ensemble.driver_direction})
+                </>
+              )}
+              <InfoTip term="weight_band" />
+            </p>
+          )}
         </div>
 
         {/* Key readouts */}

@@ -43,6 +43,17 @@ export interface Metric {
   extra: Record<string, unknown>;
 }
 
+export interface WeightEnsemble {
+  band_low: number;
+  band_high: number;
+  equal_weight_score: number | null;
+  n_draws: number;
+  spread: number;
+  driver_category: string | null;
+  driver_direction: "raises" | "lowers" | null;
+  note: string;
+}
+
 export interface Composite {
   score: number | null;
   band: CompositeBand;
@@ -51,6 +62,7 @@ export interface Composite {
   contributions: Record<string, number>;
   n_red: number;
   n_critical: number;
+  ensemble?: WeightEnsemble | null;
 }
 
 export type Categories = Record<string, string>;

@@ -28,7 +28,7 @@ const FAMILIES = [
   {
     id: "activity",
     label: "Broad activity",
-    members: ["leading.cfnai_ma3", "leading.gdpnow", "leading.cp_prob"],
+    members: ["leading.cfnai_ma3", "leading.gdpnow", "leading.cp_prob", "leading.wei"],
   },
 ];
 
