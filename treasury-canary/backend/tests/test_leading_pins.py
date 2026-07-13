@@ -185,3 +185,27 @@ def test_pin_board_carry_calm():
     board = build_pin_board({"jpy": (days, [160.0] * 29 + [161.0])})
     by = {c["channel_id"]: c for c in board["channels"]}
     assert by["carry_unwind"]["status"] == "GREEN"
+
+
+def test_transmission_note_fires_only_on_fast_red_plus_elevated_dial():
+    from app.metrics.pins import transmission_note
+
+    def board_with(channel_id, status):
+        return {"channels": [{"channel_id": channel_id, "label": channel_id,
+                              "status": status}]}
+
+    # fast channel red + elevated prob -> active, message names the channel
+    t = transmission_note(board_with("basis_trade", "RED"), 35.0)
+    assert t["active"] is True
+    assert "basis_trade" in t["fast_red_channels"]
+    assert "35%" in t["message"]
+
+    # fast red but calm dial -> silent
+    assert transmission_note(board_with("basis_trade", "RED"), 20.0)["active"] is False
+    # elevated dial but only a SLOW channel red -> silent (gives time)
+    assert transmission_note(board_with("private_credit", "RED"), 40.0)["active"] is False
+    # fast channel merely yellow -> silent
+    assert transmission_note(board_with("plumbing", "YELLOW"), 40.0)["active"] is False
+    # prob unavailable -> silent, never crashes
+    assert transmission_note(board_with("credit_event", "RED"), None)["active"] is False
+    assert transmission_note({"channels": []}, 90.0)["active"] is False
