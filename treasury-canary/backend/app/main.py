@@ -92,6 +92,34 @@ def health():
         "fred_key_present": bool(settings.fred_api_key),
         "scheduler": bool(settings.run_scheduler),
         "display_tz": settings.display_tz,
+        "storage": _storage_status(),
+    }
+
+
+def _storage_status() -> dict:
+    """Is the DB directory a real mounted disk (persists across deploys) or the
+    container's ephemeral filesystem? A mount has a different st_dev than /."""
+    import os
+    url = settings.database_url
+    if not url.startswith("sqlite"):
+        return {"backend": "external-db", "persistent": True}
+    db_path = url.replace("sqlite:///", "")
+    db_dir = os.path.dirname(os.path.abspath(db_path)) or "/"
+    try:
+        mounted = os.stat(db_dir).st_dev != os.stat("/").st_dev
+        writable = os.access(db_dir, os.W_OK)
+        db_exists = os.path.exists(db_path)
+        size_kb = round(os.path.getsize(db_path) / 1024) if db_exists else 0
+    except OSError:
+        return {"backend": "sqlite", "persistent": False, "error": "stat failed"}
+    return {
+        "backend": "sqlite", "dir": db_dir, "mounted_disk": mounted,
+        "writable": writable, "db_exists": db_exists, "db_size_kb": size_kb,
+        "persistent": mounted,
+        "note": ("DB directory is a mounted disk — history survives redeploys."
+                 if mounted else
+                 "DB directory is on the container's EPHEMERAL filesystem — "
+                 "history resets on every deploy. Attach a Render disk at this path."),
     }
 
 
