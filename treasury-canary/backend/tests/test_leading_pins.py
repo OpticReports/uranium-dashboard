@@ -92,7 +92,7 @@ def test_pin_board_oil_shock_red():
     by = {c["channel_id"]: c for c in board["channels"]}
     assert by["oil_shock"]["status"] == "RED"
     assert board["overall"] == "RED"
-    assert board["n_channels"] == 7
+    assert board["n_channels"] == 9
 
 
 def test_pin_board_basis_trade():
@@ -133,3 +133,55 @@ def test_pin_board_empty_is_stale():
     board = build_pin_board({})
     assert board["overall"] == "STALE"
     assert board["n_live"] == 0
+
+
+def test_pin_board_private_credit_bifurcation():
+    # 200 calm days of CCC ~7 / BBB ~1.5, then CCC gaps to 12 while BBB stays
+    # tight -> CCC pctile RED, dispersion pctile RED. NDFI growth stalls to -2 -> RED.
+    days = _days(201)
+    ccc = [7.0] * 200 + [12.0]
+    bbb = [1.5] * 201
+    months = [date(2024, 1, 1) + timedelta(days=30 * i) for i in range(12)]
+    ndfi = [15.0] * 11 + [-2.0]
+    board = build_pin_board({"ccc_oas": (days, ccc), "bbb_oas": (days, bbb),
+                             "ndfi_loans": (months, ndfi)})
+    by = {c["channel_id"]: c for c in board["channels"]}
+    ch = by["private_credit"]
+    assert ch["status"] == "RED"
+    parts = {p["label"]: p for p in ch["parts"]}
+    assert parts["CCC spread percentile (vs 1996+)"]["status"] == "RED"
+    assert parts["CCC−BBB dispersion percentile"]["status"] == "RED"
+    assert parts["Bank loans to NDFIs, m/m ann. growth"]["status"] == "RED"
+    # attributes ride along for the frontend badges
+    assert ch["mass"] and ch["speed"] and ch["kill_rate"]
+
+
+def test_pin_board_private_credit_calm():
+    days = _days(201)
+    board = build_pin_board({"ccc_oas": (days, [7.0] * 200 + [6.5]),
+                             "bbb_oas": (days, [1.5] * 201)})
+    by = {c["channel_id"]: c for c in board["channels"]}
+    # mid-history readings -> not RED; NDFI missing -> that part STALE but channel live
+    assert by["private_credit"]["status"] in ("GREEN", "YELLOW")
+
+
+def test_pin_board_carry_unwind():
+    days = _days(30)
+    # yen appreciates 8% in a month (Aug-2024 scale): 160 -> 147.2
+    jpy = [160.0] * 9 + [160.0 - i * (12.8 / 21) for i in range(21)]
+    months = [date(2024, 1, 1) + timedelta(days=30 * i) for i in range(14)]
+    jgb = [1.0] * 2 + [1.0 + i * 0.06 for i in range(12)]   # +66bps over 12m
+    board = build_pin_board({"jpy": (days, jpy), "jgb10": (months, jgb)})
+    by = {c["channel_id"]: c for c in board["channels"]}
+    ch = by["carry_unwind"]
+    parts = {p["label"]: p for p in ch["parts"]}
+    assert parts["USD/JPY, 1-month change"]["status"] == "RED"
+    assert parts["10y JGB yield, 12-month change"]["status"] == "YELLOW"
+    assert ch["status"] == "RED"
+
+
+def test_pin_board_carry_calm():
+    days = _days(30)
+    board = build_pin_board({"jpy": (days, [160.0] * 29 + [161.0])})
+    by = {c["channel_id"]: c for c in board["channels"]}
+    assert by["carry_unwind"]["status"] == "GREEN"

@@ -15,6 +15,8 @@ const CHANNEL_TIP: Record<string, string> = {
   plumbing: "pin_plumbing",
   uncertainty: "pin_uncertainty",
   basis_trade: "pin_basis",
+  private_credit: "pin_private_credit",
+  carry_unwind: "pin_carry",
 };
 
 function partDotColor(status: string): string {
@@ -88,6 +90,16 @@ function ChannelCard({ channel }: { channel: PinChannel }) {
           </li>
         ))}
       </ul>
+      {(channel.mass || channel.speed || channel.kill_rate) && (
+        <div className="mb-2 flex flex-wrap items-center gap-1.5">
+          {channel.mass && <AttrBadge label="mass" value={channel.mass} />}
+          {channel.speed && <AttrBadge label="speed" value={channel.speed} />}
+          {channel.kill_rate && (
+            <AttrBadge label="kill rate" value={channel.kill_rate} />
+          )}
+          <InfoTip term="pin_attributes" />
+        </div>
+      )}
       <div className="mt-auto border-t border-panelborder/60 pt-2">
         {channel.basis && (
           <p className="text-[10px] italic leading-snug text-slate-500">
@@ -101,6 +113,18 @@ function ChannelCard({ channel }: { channel: PinChannel }) {
         )}
       </div>
     </div>
+  );
+}
+
+function AttrBadge({ label, value }: { label: string; value: string }) {
+  return (
+    <span
+      className="rounded border border-slate-700 bg-slate-800/60 px-1.5 py-0.5 text-[9px] leading-tight text-slate-400"
+      title={value}
+    >
+      <span className="uppercase tracking-wide text-slate-500">{label}</span>{" "}
+      <span className="text-slate-300">{value}</span>
+    </span>
   );
 }
 
@@ -129,7 +153,7 @@ export default function PinBoard() {
     </>
   );
   const subtitle =
-    "The gun is the debt buildup; the pin is the trigger. Six spark channels, measured.";
+    "The gun is the debt buildup; the pin is the trigger. Nine spark channels, measured and sized.";
 
   if (error) {
     return (

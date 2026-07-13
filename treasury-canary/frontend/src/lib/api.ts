@@ -243,6 +243,9 @@ export interface PinChannel {
   parts: PinPart[];
   basis: string;
   certainty: string;
+  mass: string;
+  speed: string;
+  kill_rate: string;
 }
 
 export interface PinBoard {

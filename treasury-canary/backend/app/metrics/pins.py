@@ -21,6 +21,14 @@ Channels (proxy -> historical basis):
                   drain + RRP buffer  RRP≈0 means the shock absorber is gone.
   UNCERTAINTY     EPU 30d percentile  Exogenous shocks (wars, tariffs, standoffs)
                                       show up as policy-uncertainty spikes first.
+  PRIVATE CREDIT  CCC pctile + CCC-BBB  This cycle's untested leverage (~$3T);
+                  dispersion + NDFI     public CCC + bank NDFI funding are the
+                  loan growth           real-time windows into opaque marks.
+  CARRY UNWIND    JPY 1m change +     Aug 2024: yen surge -> global deleveraging
+                  JGB 10y 12m change  in days. FX is the trigger, JGB the cushion.
+
+Each channel also carries researched static attributes (mass / speed / kill
+rate) — documented exposure sizes and episode counts, never fitted weights.
 """
 from __future__ import annotations
 
@@ -50,11 +58,19 @@ class PinChannel:
     parts: list[PinPart] = field(default_factory=list)
     basis: str = ""      # historical basis for this channel
     certainty: str = ""  # honest note on signal quality/latency
+    # Researched static attributes — documented exposure sizes and episode
+    # counts, NEVER fitted (with ~11 recessions and 9 channels, fitted weights
+    # would be data-snooping). They size a red: a fast, multi-trillion,
+    # high-kill-rate channel firing reads differently than a noisy slow one.
+    mass: str = ""       # systemic exposure behind the channel
+    speed: str = ""      # transmission speed once it fires
+    kill_rate: str = ""  # documented historical record as a recession trigger
 
     def as_dict(self) -> dict:
         return {"channel_id": self.channel_id, "label": self.label, "status": self.status,
                 "parts": [p.as_dict() for p in self.parts], "basis": self.basis,
-                "certainty": self.certainty}
+                "certainty": self.certainty, "mass": self.mass, "speed": self.speed,
+                "kill_rate": self.kill_rate}
 
 
 def _grade(value: float | None, yellow: float, red: float, higher_is_worse: bool = True) -> str:
@@ -109,7 +125,10 @@ def build_pin_board(bundle: dict) -> dict:
         [PinPart("WTI, 12-month change", oil_12m, "%", _grade(oil_12m, 25.0, 50.0),
                  "Sustained +25-50% squeezes real incomes and forces the Fed's hand.")],
         basis="Hamilton: oil price shocks preceded ~10 of 11 postwar recessions.",
-        certainty="High historical association; the proxy reads the spark in real time."))
+        certainty="High historical association; the proxy reads the spark in real time.",
+        mass="Household real income (~$20T consumption base)",
+        speed="3–12 months",
+        kill_rate="Preceded ~10 of 11 postwar recessions (Hamilton)"))
 
     # --- POLICY SHOCK --------------------------------------------------------
     effr = bundle.get("effr", ([], []))[1]
@@ -124,7 +143,10 @@ def build_pin_board(bundle: dict) -> dict:
                  _grade(hike_12m_bps, 200.0, 300.0),
                  "Fast hiking cycles break the weakest balance sheet in the system.")],
         basis="Nearly every modern recession followed a tightening cycle; PACE is the pin.",
-        certainty="High-quality proxy; note cuts-into-weakness are the curve panel's domain."))
+        certainty="High-quality proxy; note cuts-into-weakness are the curve panel's domain.",
+        mass="The entire economy — rates reprice everything",
+        speed="12–24 months (long and variable lags)",
+        kill_rate="Nearly every modern recession followed a tightening cycle"))
 
     # --- CREDIT EVENT --------------------------------------------------------
     hy = bundle.get("hy_oas", ([], []))[1]
@@ -146,7 +168,10 @@ def build_pin_board(bundle: dict) -> dict:
         "credit_event", "Credit / banking accident", _worst(parts), parts,
         basis="2008 subprime, 1998 LTCM, 2023 SVB: credit events announce via spread gaps "
               "and emergency borrowing, not levels.",
-        certainty="Fast confirmation (days) rather than prediction — this is the tripwire."))
+        certainty="Fast confirmation (days) rather than prediction — this is the tripwire.",
+        mass="Banking system (~$24T assets)",
+        speed="Days–weeks once firing",
+        kill_rate="High conditional on firing: 2008 (recession), 1998 + 2023 (contained)"))
 
     # --- FISCAL PIN ----------------------------------------------------------
     ig = bundle.get("interest_gdp", ([], []))[1]
@@ -166,7 +191,10 @@ def build_pin_board(bundle: dict) -> dict:
         "fiscal", "Fiscal / debt-service pin", _worst(parts), parts,
         basis="Dalio's core scenario: supply overwhelms demand for Treasuries -> term "
               "premium reprices. The flow compass's DEBASEMENT regime is its market symptom.",
-        certainty="The level is the loaded gun (slow, certain); the 60d premium move is the spark."))
+        certainty="The level is the loaded gun (slow, certain); the 60d premium move is the spark.",
+        mass="$28T+ Treasury market — the world's risk-free anchor",
+        speed="Quarters (slow burn, fast finale)",
+        kill_rate="No US precedent — the genuinely unprecedented channel"))
 
     # --- PLUMBING ------------------------------------------------------------
     sofr = bundle.get("sofr", ([], []))[1]
@@ -190,7 +218,10 @@ def build_pin_board(bundle: dict) -> dict:
     channels.append(PinChannel(
         "plumbing", "Funding-plumbing seizure", _worst(parts), parts,
         basis="Sept-2019 repo spasm; 2022 gilt/LDI. Plumbing breaks fast and forces the Fed.",
-        certainty="High-quality daily/weekly reads; a genuine early-warning channel."))
+        certainty="High-quality daily/weekly reads; a genuine early-warning channel.",
+        mass="Repo/reserves core (~$5T daily funding)",
+        speed="Days",
+        kill_rate="Forces Fed response (2019 repo) — no recession from plumbing alone yet"))
 
     # --- BASIS-TRADE UNWIND ----------------------------------------------------
     cot = bundle.get("cot_net_short", ([], []))[1]
@@ -211,7 +242,84 @@ def build_pin_board(bundle: dict) -> dict:
         basis="March 2020: the basis trade unwound violently and broke the Treasury "
               "market until the Fed intervened. THIS cycle's known loaded spring.",
         certainty="Weekly CFTC data with a few days' lag; crowding is measurable but the "
-                  "unwind trigger (a margin/vol spike) arrives via the other channels."))
+                  "unwind trigger (a margin/vol spike) arrives via the other channels.",
+        mass="~$1–2T notional cash-futures basis book",
+        speed="Days",
+        kill_rate="0-for-2 as sole trigger (2019, 2020) — both forced Fed rescue"))
+
+    # --- CORPORATE & PRIVATE CREDIT ------------------------------------------
+    # This cycle's untested leverage: ~$1.7T private credit + ~$1.3T of bank
+    # loans funding it. Private marks lag; public CCC is the real-time window.
+    ccc_d, ccc_v = bundle.get("ccc_oas", ([], []))
+    bbb_d, bbb_v = bundle.get("bbb_oas", ([], []))
+    ccc_clean = _clean(ccc_v)
+    ccc_now = ccc_clean[-1] if ccc_clean else None
+    ccc_pctl = _percentile(ccc_v, ccc_now)
+    # CCC minus BBB, date-aligned: the distress-vs-perfection bifurcation.
+    cm = {d: v for d, v in zip(ccc_d, ccc_v) if v is not None}
+    bm = {d: v for d, v in zip(bbb_d, bbb_v) if v is not None}
+    disp_series = [cm[d] - bm[d] for d in sorted(set(cm) & set(bm))]
+    disp_now = round(disp_series[-1], 2) if disp_series else None
+    disp_pctl = _percentile(disp_series, disp_now)
+    ndfi = bundle.get("ndfi_loans", ([], []))[1]
+    ndfi_now = _clean(ndfi)[-1] if _clean(ndfi) else None
+    parts = [
+        PinPart("CCC spread percentile (vs 1996+)", ccc_pctl, "%ile",
+                _grade(ccc_pctl, 85.0, 95.0),
+                f"CCC-and-lower OAS now {ccc_now if ccc_now is not None else 'n/a'}% — "
+                "where refinancing distress prices first; private-credit marks follow with a lag."),
+        PinPart("CCC−BBB dispersion percentile", disp_pctl, "%ile",
+                _grade(disp_pctl, 85.0, 95.0),
+                f"Gap now {disp_now if disp_now is not None else 'n/a'}pp. IG priced for "
+                "perfection while the distress tier cracks = bifurcation an aggregate HY level hides."),
+        PinPart("Bank loans to NDFIs, m/m ann. growth", ndfi_now, "%",
+                _grade(ndfi_now, 5.0, 0.0, False),
+                "Banks bankroll private-credit funds (H.8 breakout). A stall here is the "
+                "private-credit margin call arriving via its funding."),
+    ]
+    channels.append(PinChannel(
+        "private_credit", "Corporate & private credit", _worst(parts), parts,
+        basis="This cycle's leverage grew OUTSIDE banks: ~$1.7T private credit, record "
+              "maturity wall. No prior recession had this structure — past-bubble "
+              "channels alone would miss it.",
+        certainty="Public CCC is a real-time proxy; private marks themselves are opaque "
+                  "and lag by quarters. NDFI series starts 2015 (young history).",
+        mass="~$3T (private credit ~$1.7T + ~$1.3T bank NDFI loans)",
+        speed="Weeks–months",
+        kill_rate="Untested at this size — no prior cycle carried it"))
+
+    # --- CARRY-TRADE UNWIND ----------------------------------------------------
+    jpy = bundle.get("jpy", ([], []))[1]
+    jpy_1m = _pct_change(jpy, 21)   # negative = yen appreciating = carry stress
+    jgb = bundle.get("jgb10", ([], []))[1]
+    jgb_clean = _clean(jgb)
+    jgb_now = jgb_clean[-1] if jgb_clean else None
+    jgb_12m = None
+    cj = _change(jgb, 12)           # monthly series -> 12 obs = 12 months
+    if cj is not None:
+        jgb_12m = round(cj * 100.0, 0)
+    parts = [
+        PinPart("USD/JPY, 1-month change", jpy_1m, "%",
+                _grade(jpy_1m, -4.0, -7.0, False),
+                "Falling = yen appreciating = levered carry positions forced to unwind "
+                "(Aug 2024: ~8% appreciation in a month cascaded into global risk assets)."),
+        # Cushion leg, not the trigger: caps at YELLOW (like plumbing's RRP
+        # buffer) — only the FX leg actually firing can take the channel RED.
+        PinPart("10y JGB yield, 12-month change", jgb_12m, "bps",
+                "STALE" if jgb_12m is None else ("YELLOW" if jgb_12m >= 50.0 else "GREEN"),
+                f"JGB 10y now {jgb_now if jgb_now is not None else 'n/a'}% — rising Japanese "
+                "yields compress the carry cushion and pull capital home. Pressure gauge: "
+                "caps at YELLOW; the yen leg is the trigger."),
+    ]
+    channels.append(PinChannel(
+        "carry_unwind", "Yen-carry unwind", _worst(parts), parts,
+        basis="August 2024 demonstrated the mechanism: BoJ hike -> yen surge -> multi-day "
+              "global deleveraging. The funding leg of trillions in global positions.",
+        certainty="FX read is daily and clean; JGB series is monthly with ~2-month lag. "
+                  "Historically produces vol shocks, not recessions — so far.",
+        mass="Multi-$T yen-funded carry complex",
+        speed="Days",
+        kill_rate="Vol shocks only (Aug 2024) — no recession attributed yet"))
 
     # --- UNCERTAINTY / GEOPOLITICS -------------------------------------------
     epu_d, epu_v = bundle.get("epu", ([], []))
@@ -229,7 +337,10 @@ def build_pin_board(bundle: dict) -> dict:
         basis="Wars, embargoes, tariff shocks, standoffs — exogenous pins show up as "
               "policy-uncertainty spikes before they show up in earnings.",
         certainty="Noisiest channel: elevated uncertainty often resolves benignly. Context, "
-                  "not confirmation."))
+                  "not confirmation.",
+        mass="Unbounded (exogenous shocks)",
+        speed="Fast to spike, often slow to bite",
+        kill_rate="Noisiest channel — most spikes resolve benignly"))
 
     live = [ch for ch in channels if ch.status != "STALE"]
     n_red = sum(1 for ch in live if ch.status == "RED")

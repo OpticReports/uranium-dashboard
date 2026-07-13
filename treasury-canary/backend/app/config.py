@@ -144,4 +144,12 @@ FRED_PINS: dict[str, str] = {
     "reserves": "WRESBAL",         # reserve balances (weekly)
     "rrp": "RRPONTSYD",            # overnight reverse repo (daily; the cushion)
     "interest_gdp": "FYOIGDA188S", # federal interest outlays as % of GDP (annual)
+    # Corporate & private credit pin: distress tier vs IG, and bank funding TO
+    # private-credit vehicles (the H.8 NDFI breakout the Fed added for this).
+    "ccc_oas": "BAMLH0A3HYC",      # CCC-and-lower OAS (daily, 1996+)
+    "bbb_oas": "BAMLC0A4CBBB",     # BBB OAS (daily, 1996+)
+    "ndfi_loans": "B1030NCBCMG",   # loans to nondepository fin. inst., m/m ann. growth
+    # Carry-unwind pin: yen appreciation forces levered unwinds (Aug 2024).
+    "jpy": "DEXJPUS",              # USD/JPY daily (falling = yen appreciating)
+    "jgb10": "IRLTLT01JPM156N",    # 10y JGB (monthly, OECD, ~2mo lag) — the carry cushion
 }
