@@ -457,6 +457,13 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     read: "The FX leg is the trigger and moves in days; the JGB leg is the slow pressure making the trigger easier to pull. Green FX + rising JGB = loaded but not firing.",
     caveat: "Carry unwinds have so far produced violent vol shocks, not recessions — this channel warns of market breakage, which matters here because forced selling transmits into Treasuries. JGB data is monthly with ~2-month lag.",
   },
+  transmission_note: {
+    title: "Transmission watch — spark meets storm conditions",
+    what: "A caution that appears under the recession dial ONLY when two things are true at once: a fast, multi-trillion pin channel (credit accident, plumbing, basis trade, carry unwind) is flashing red, AND the 12-month curve model is already elevated (≥30%). History's lesson: market accidents on a calm macro backdrop stayed contained (LTCM 1998, repo 2019, yen unwind Aug 2024); the same accidents on a vulnerable backdrop became 2008.",
+    calc: "A rule, not a model: any fast/high-mass channel RED + 12-month probability ≥ 30% → the note shows. Slow channels (private credit: weeks–months; fiscal: quarters) don't trip it — they give time, and speak through the composite instead.",
+    read: "When you see this, the two independent warning systems agree — treat the dial's percentage as likely understating near-term risk, and go read WHICH channel is red and how it historically transmitted (the Playbook tab).",
+    caveat: "Deliberately worded, never numbered. We tested the numeric version (augmenting the probit with financial-conditions data, 50 years, walk-forward): it added nothing to onset prediction — conditions indices confirm recessions, they don't predict them. With ~11 recessions on record, any 'pins add +X%' number would be invented. The calibrated probability is never adjusted.",
+  },
   pin_attributes: {
     title: "Mass · speed · kill rate",
     what: "Not all pins are the same size. These badges size each channel on three researched attributes: MASS (the dollar exposure behind it), SPEED (how fast it transmits once it fires), and KILL RATE (its documented historical record as a recession trigger).",

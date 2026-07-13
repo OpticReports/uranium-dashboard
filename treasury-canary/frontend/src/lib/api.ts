@@ -118,10 +118,19 @@ export interface AdjustedModel {
   note: string;
 }
 
+export interface TransmissionNote {
+  active: boolean;
+  fast_red_channels: string[];
+  prob_12m_pct: number | null;
+  prob_threshold_pct: number;
+  message: string;
+}
+
 export interface RecessionModel {
   spread_3m10y: number | null;
   default_horizon: number;
   horizons: Record<string, HorizonStat>;
+  transmission?: TransmissionNote;
   adjusted: AdjustedModel;
   spread_input: string;
   method: string;

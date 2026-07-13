@@ -113,6 +113,39 @@ def _percentile(vals: list, value: float | None) -> float | None:
     return round(100.0 * sum(1 for v in c if v <= value) / len(c), 1)
 
 
+# Channels that transmit in DAYS with multi-trillion mass — the ones where an
+# active red on an already-elevated curve model historically mattered (2008)
+# vs. fizzled on a calm backdrop (1998, 2019, Aug 2024). Slow channels
+# (private_credit: weeks-months; fiscal: quarters) give time and speak through
+# the composite instead.
+FAST_HIGH_MASS = {"credit_event", "plumbing", "basis_trade", "carry_unwind"}
+
+
+def transmission_note(board: dict, prob_12m_pct: float | None,
+                      prob_threshold: float = 30.0) -> dict:
+    """Qualitative pins->dial link. Deliberately WORDED, never numbered: with
+    ~11 recessions there is no data to estimate P(recession | pin config), and
+    the NFCI horse race showed conditions indices add nothing to onset
+    prediction — so the calibrated probability is never adjusted."""
+    red_fast = [c["label"] for c in board["channels"]
+                if c["channel_id"] in FAST_HIGH_MASS and c["status"] == "RED"]
+    active = bool(red_fast) and prob_12m_pct is not None and prob_12m_pct >= prob_threshold
+    return {
+        "active": active,
+        "fast_red_channels": red_fast,
+        "prob_12m_pct": prob_12m_pct,
+        "prob_threshold_pct": prob_threshold,
+        "message": (
+            "Trigger channels active on a loaded gun: "
+            + ", ".join(red_fast)
+            + f" flashing red while the 12-month curve model reads "
+              f"{prob_12m_pct:.0f}%. Accidents that became recessions fired on "
+              "exactly this configuration (2008); on a calm macro backdrop they "
+              "stayed contained (1998, 2019, Aug 2024)."
+        ) if active else "",
+    }
+
+
 def build_pin_board(bundle: dict) -> dict:
     channels: list[PinChannel] = []
 

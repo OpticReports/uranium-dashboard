@@ -390,6 +390,17 @@ function RecessionDial({
         Model estimate with a confidence band, not a forecast. Curve predictive
         power peaks ~12–18mo.
       </p>
+      {model?.transmission?.active && (
+        <div className="mt-2 rounded border border-amber-600/60 bg-amber-500/10 px-2 py-1.5">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-400">
+            ⚠ Transmission watch
+            <InfoTip term="transmission_note" />
+          </p>
+          <p className="mt-0.5 text-[10px] leading-snug text-amber-200/90">
+            {model.transmission.message}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

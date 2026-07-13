@@ -64,10 +64,15 @@ def recession_model():
         r = predict(m["b0"], m["b1"], m["cov"], adj_spread) if adj_spread is not None else {
             "probability_pct": None, "ci_low_pct": None, "ci_high_pct": None}
         adjusted[h] = {**r, "auc": m["auc"], "n_obs": m["n_obs"]}
+    # Qualitative pins->dial transmission note (worded, never numbered).
+    from ..metrics.pins import build_pin_board, transmission_note
+    p12 = horizons.get(12, {}).get("probability_pct")
+    transmission = transmission_note(build_pin_board(fetch_bundle()), p12)
     return {
         "spread_3m10y": spread,
         "default_horizon": 12,
         "horizons": horizons,
+        "transmission": transmission,
         "adjusted": {
             "spread_minus_tp": adj_spread, "acm_tp10": tp_now, "horizons": adjusted,
             "note": "Bernanke critique: when QE pins the term premium negative, the raw "
