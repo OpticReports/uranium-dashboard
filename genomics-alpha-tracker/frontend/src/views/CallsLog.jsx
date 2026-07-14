@@ -1,4 +1,8 @@
 import React, { useCallback, useEffect, useState } from "react";
+import {
+  CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer,
+  Tooltip, XAxis, YAxis,
+} from "recharts";
 import { api } from "../lib/api";
 import { fmtNum, fmtPct, FLAG_LABELS } from "../lib/format";
 
@@ -31,6 +35,7 @@ const retColor = (v) =>
 export default function CallsLog({ onPick }) {
   const [calls, setCalls] = useState([]);
   const [card, setCard] = useState(null);
+  const [perf, setPerf] = useState(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -38,6 +43,7 @@ export default function CallsLog({ onPick }) {
   const load = useCallback(() => {
     api.calls().then(setCalls).catch(() => setCalls([]));
     api.callsScorecard().then(setCard).catch(() => setCard(null));
+    api.callsPerformance().then(setPerf).catch(() => setPerf(null));
   }, []);
   useEffect(load, [load]);
 
@@ -117,6 +123,8 @@ export default function CallsLog({ onPick }) {
       </div>
 
       {card && <Scorecard card={card} />}
+
+      {perf && <PerformanceOverTime perf={perf} />}
 
       <div className="bg-panel border border-edge rounded-xl p-4">
         <h3 className="font-semibold mb-3">🔴 Open calls ({open.length})</h3>
@@ -244,6 +252,111 @@ export default function CallsLog({ onPick }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// The learning-loop instrument: is call quality actually improving over time?
+// Equity curve (cumulative R) + rolling win rate/avg R, plus month-made
+// cohorts — later cohorts beating earlier ones is what "learning" looks like.
+function PerformanceOverTime({ perf }) {
+  const tooltipStyle = { background: "#121826", border: "1px solid #1f2937", fontSize: 12 };
+  const enough = (perf.closed_calls || 0) >= 5;
+  return (
+    <div className="bg-panel border border-edge rounded-xl p-4">
+      <div className="flex items-baseline justify-between flex-wrap gap-2 mb-1">
+        <h3 className="font-semibold">📈 Call strength over time — is the loop learning?</h3>
+        <span className="text-xs text-gray-500">
+          {perf.closed_calls} closed call(s) · cumulative {fmtNum(perf.cum_r, 1)}R
+        </span>
+      </div>
+      <p className="text-xs text-gray-500 mb-3">{perf.note}</p>
+
+      {!enough ? (
+        <div className="text-sm text-gray-500 border border-edge rounded-lg p-3">
+          Fewer than 5 closed calls — the lines start drawing once the record exists.
+          The flag-cohort table below moves first (flags accrue faster than calls).
+        </div>
+      ) : (
+        <div className="grid lg:grid-cols-2 gap-4">
+          <div>
+            <div className="text-xs text-gray-400 mb-1">Equity curve (cumulative R by exit date)</div>
+            <ResponsiveContainer width="100%" height={180}>
+              <LineChart data={perf.equity_curve} margin={{ left: -20, right: 10, top: 5 }}>
+                <CartesianGrid stroke="#1f2937" />
+                <XAxis dataKey="date" tick={{ fontSize: 9, fill: "#94a3b8" }} minTickGap={40} />
+                <YAxis tick={{ fontSize: 9, fill: "#94a3b8" }} />
+                <Tooltip contentStyle={tooltipStyle} />
+                <ReferenceLine y={0} stroke="#4b5563" />
+                <Line type="stepAfter" dataKey="cum_r" name="cumulative R" stroke="#38bdf8" dot={false} strokeWidth={2} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+          <div>
+            <div className="text-xs text-gray-400 mb-1">
+              Rolling win rate & avg R (last {perf.rolling_window} calls)
+            </div>
+            <ResponsiveContainer width="100%" height={180}>
+              <LineChart data={perf.rolling} margin={{ left: -20, right: 10, top: 5 }}>
+                <CartesianGrid stroke="#1f2937" />
+                <XAxis dataKey="date" tick={{ fontSize: 9, fill: "#94a3b8" }} minTickGap={40} />
+                <YAxis tick={{ fontSize: 9, fill: "#94a3b8" }} />
+                <Tooltip contentStyle={tooltipStyle} />
+                <ReferenceLine y={0} stroke="#4b5563" />
+                <Line type="monotone" dataKey="win_rate" name="win rate" stroke="#34d399" dot={false} strokeWidth={2} />
+                <Line type="monotone" dataKey="avg_r" name="avg R" stroke="#f59e0b" dot={false} strokeWidth={2} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {(perf.monthly_cohorts?.length > 0 || perf.flag_cohorts?.length > 0) && (
+        <div className="grid sm:grid-cols-2 gap-4 mt-3 pt-3 border-t border-edge/60">
+          <CohortTable
+            title="Call cohorts by month made"
+            rows={perf.monthly_cohorts}
+            cols={[["n", (r) => r.n], ["win", (r) => fmtPct(r.win_rate, 0)], ["avg R", (r) => fmtNum(r.avg_r, 2)]]}
+          />
+          <CohortTable
+            title="Flag cohorts by fire month (1m vs XBI)"
+            rows={perf.flag_cohorts}
+            cols={[["n", (r) => r.n], ["hit", (r) => fmtPct(r.hit_rate, 0)], ["avg excess", (r) => fmtPct(r.avg_excess)]]}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CohortTable({ title, rows, cols }) {
+  if (!rows?.length) {
+    return (
+      <div>
+        <div className="text-xs text-gray-400 mb-1">{title}</div>
+        <div className="text-xs text-gray-600">no data yet</div>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <div className="text-xs text-gray-400 mb-1">{title}</div>
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="text-left text-gray-500 border-b border-edge">
+            <th className="py-1 pr-2">month</th>
+            {cols.map(([label]) => <th key={label} className="py-1 pr-2 text-right">{label}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.month} className={`border-b border-edge/40 ${r.n < 10 ? "text-gray-600" : "text-gray-300"}`}>
+              <td className="py-1 pr-2">{r.month}{r.n < 10 && <span className="text-gray-700"> (low n)</span>}</td>
+              {cols.map(([label, fn]) => <td key={label} className="py-1 pr-2 text-right">{fn(r)}</td>)}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

@@ -82,6 +82,16 @@ def get_scorecard(session: Session = Depends(get_session)):
     return manager.scorecard(session)
 
 
+@router.get("/performance")
+def get_performance(session: Session = Depends(get_session)):
+    """Call accuracy/strength over time: equity curve (cumulative R), rolling
+    win rate & avg R, entry-month cohorts (the learning metric), and flag
+    fire-month cohorts (the fast early signal)."""
+    from ..calls.performance import calls_performance
+
+    return calls_performance(session)
+
+
 @router.post("/generate", response_model=list[TradeCallOut])
 def generate_now(session: Session = Depends(get_session)):
     """Run auto-generation immediately (also runs on the scheduler)."""
