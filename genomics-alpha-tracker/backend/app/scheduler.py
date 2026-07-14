@@ -57,15 +57,17 @@ def _calls_job():
     """Grade open trade calls and flag outcomes, then turn fresh flags into
     new calls. Evaluate FIRST so a symbol whose call just closed frees its slot."""
     from .calls.manager import evaluate_calls, generate_calls
+    from .calls.postmortem import update_postmortems
     from .scoring.outcomes import evaluate_flag_outcomes
 
     try:
         with Session(engine) as session:
             closed = evaluate_calls(session)
             graded = evaluate_flag_outcomes(session)
+            pms = update_postmortems(session)
             made = generate_calls(session)
-        logger.info("Calls job done: %d closed, %d flag outcomes, %d generated",
-                    len(closed), graded, len(made))
+        logger.info("Calls job done: %d closed, %d flag outcomes, %d post-mortems, %d generated",
+                    len(closed), graded, pms, len(made))
     except Exception as exc:  # noqa: BLE001
         logger.exception("Calls job failed: %s", exc)
 

@@ -198,27 +198,42 @@ export default function CallsLog({ onPick }) {
               </thead>
               <tbody>
                 {closed.map((c) => (
-                  <tr key={c.id} className="border-b border-edge/50 hover:bg-ink/50" title={c.thesis}>
-                    <td className="py-2 pr-3">
-                      <button onClick={() => onPick?.(c.symbol)} className="font-semibold text-sky-400 hover:underline">
-                        {c.symbol}
-                      </button>
-                    </td>
-                    <td className="py-2 pr-3 text-xs text-gray-300">{signalLabel(c)}</td>
-                    <td className="py-2 pr-3 text-xs text-gray-400">
-                      {c.call_date} → {c.exit_date || "—"}
-                    </td>
-                    <td className="py-2 pr-3 text-right">
-                      {fmtNum(c.entry_price, 2)} → {fmtNum(c.exit_price, 2)}
-                    </td>
-                    <td className="py-2 pr-3">
-                      <span className={`text-xs px-2 py-0.5 rounded border ${STATUS_BADGE[c.status] || ""}`}>
-                        {STATUS_LABEL[c.status] || c.status}
-                      </span>
-                    </td>
-                    <td className={`py-2 pr-3 text-right ${retColor(c.return_pct)}`}>{fmtPct(c.return_pct)}</td>
-                    <td className={`py-2 text-right ${retColor(c.r_multiple)}`}>{fmtNum(c.r_multiple, 2)}</td>
-                  </tr>
+                  <React.Fragment key={c.id}>
+                    <tr className="border-b border-edge/30 hover:bg-ink/50" title={c.thesis}>
+                      <td className="py-2 pr-3">
+                        <button onClick={() => onPick?.(c.symbol)} className="font-semibold text-sky-400 hover:underline">
+                          {c.symbol}
+                        </button>
+                      </td>
+                      <td className="py-2 pr-3 text-xs text-gray-300">{signalLabel(c)}</td>
+                      <td className="py-2 pr-3 text-xs text-gray-400">
+                        {c.call_date} → {c.exit_date || "—"}
+                      </td>
+                      <td className="py-2 pr-3 text-right">
+                        {fmtNum(c.entry_price, 2)} → {fmtNum(c.exit_price, 2)}
+                      </td>
+                      <td className="py-2 pr-3">
+                        <span className={`text-xs px-2 py-0.5 rounded border ${STATUS_BADGE[c.status] || ""}`}>
+                          {STATUS_LABEL[c.status] || c.status}
+                        </span>
+                      </td>
+                      <td className={`py-2 pr-3 text-right ${retColor(c.return_pct)}`}>{fmtPct(c.return_pct)}</td>
+                      <td className={`py-2 text-right ${retColor(c.r_multiple)}`}>{fmtNum(c.r_multiple, 2)}</td>
+                    </tr>
+                    {c.postmortem?.summary && (
+                      <tr className="border-b border-edge/50">
+                        <td colSpan={7} className="pb-2 pl-3 pr-3">
+                          <div className="text-xs text-gray-400 bg-ink/60 border border-edge/60 rounded px-2 py-1.5">
+                            <span className="text-gray-500 uppercase text-[9px] tracking-wide mr-2">why</span>
+                            {c.postmortem.summary}
+                            {!c.postmortem.hindsight_complete && (
+                              <span className="text-gray-600"> (hindsight verdict pending — needs ~10 more bars)</span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>
