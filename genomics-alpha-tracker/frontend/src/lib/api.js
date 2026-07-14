@@ -60,6 +60,16 @@ export const api = {
   treemap: () => req("/views/treemap"),
   movers: (limit = 10) => req(`/views/movers?limit=${limit}`),
   deepDive: (symbol, days = 365) => req(`/views/deep-dive/${symbol}?days=${days}`),
+  today: () => req("/views/today"),
+  regime: () => req("/views/regime"),
+
+  // Signal track record (uncensored flag forward returns)
+  flagTrackRecord: () => req("/flags/track-record"),
+
+  // Decision journal (append-only)
+  journal: (symbol) => req(`/journal${symbol ? `?symbol=${symbol}` : ""}`),
+  addJournal: (payload) =>
+    req("/journal", { method: "POST", body: JSON.stringify(payload) }),
 
   // Market
   refreshMarket: (symbol) =>

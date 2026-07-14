@@ -17,6 +17,7 @@ class BarLike:
     high: float | None
     low: float | None
     close: float | None
+    open: float | None = None  # enables gap-aware exit fills when present
 
 
 @dataclass
@@ -96,6 +97,10 @@ def grade_call(
     - Stop and target are checked intrabar (low/high). When BOTH are touched
       in the same bar the order is unknowable from dailies, so the call is
       graded as STOPPED — the conservative reading.
+    - GAP-AWARE FILLS: biotech gaps through levels are the norm, not the
+      exception. When the bar OPENS beyond a level, the fill is the open, not
+      the level — a stop at $96 gapped to $87 is a $87 exit, and grading it
+      at $96 would systematically flatter tight stops.
     - A bar on/after `expires_on` closes the call at that bar's close
       (time-stop / sell-before-binary).
     Returns None while the call is still open.
@@ -105,14 +110,18 @@ def grade_call(
             continue
         if direction == "short":
             if b.high >= stop:
-                return CallExit("stopped", b.date, stop)
+                fill = b.open if (b.open is not None and b.open >= stop) else stop
+                return CallExit("stopped", b.date, fill)
             if b.low <= target:
-                return CallExit("target_hit", b.date, target)
+                fill = b.open if (b.open is not None and b.open <= target) else target
+                return CallExit("target_hit", b.date, fill)
         else:
             if b.low <= stop:
-                return CallExit("stopped", b.date, stop)
+                fill = b.open if (b.open is not None and b.open <= stop) else stop
+                return CallExit("stopped", b.date, fill)
             if b.high >= target:
-                return CallExit("target_hit", b.date, target)
+                fill = b.open if (b.open is not None and b.open >= target) else target
+                return CallExit("target_hit", b.date, fill)
         if b.date >= expires_on:
             return CallExit("expired", b.date, b.close)
     return None
@@ -124,6 +133,41 @@ def call_return(direction: str, entry: float, exit_price: float) -> float | None
         return None
     raw = (exit_price - entry) / entry
     return -raw if direction == "short" else raw
+
+
+def addv(bars: Sequence[BarLike], volumes: Sequence[float | None], window: int) -> float | None:
+    """MEDIAN daily dollar volume (close x volume) over the trailing window.
+
+    Median, not mean: a single volume-blowout day would otherwise promote a
+    thin name a full liquidity tier for a month. `bars` and `volumes` are
+    parallel sequences. None when no clean observations exist in the window.
+    """
+    dollars = sorted(
+        b.close * v
+        for b, v in zip(bars[-window:], volumes[-window:])
+        if b.close is not None and v is not None
+    )
+    if not dollars:
+        return None
+    mid = len(dollars) // 2
+    if len(dollars) % 2:
+        return dollars[mid]
+    return (dollars[mid - 1] + dollars[mid]) / 2
+
+
+def liquidity_tier(
+    addv_value: float | None,
+    tier_a_min: float,
+    tier_b_min: float,
+) -> str | None:
+    """A (deep) / B (size with care) / C (thin — slippage at any size)."""
+    if addv_value is None:
+        return None
+    if addv_value >= tier_a_min:
+        return "A"
+    if addv_value >= tier_b_min:
+        return "B"
+    return "C"
 
 
 def call_r_multiple(

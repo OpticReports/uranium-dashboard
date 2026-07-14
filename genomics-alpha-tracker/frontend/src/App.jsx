@@ -7,8 +7,10 @@ import Movers from "./views/Movers";
 import DeepDive from "./views/DeepDive";
 import Chat from "./views/Chat";
 import CallsLog from "./views/CallsLog";
+import Today from "./views/Today";
 
 const TABS = [
+  { id: "today", label: "Today" },
   { id: "heatmap", label: "Sector Heatmap" },
   { id: "watchlist", label: "Watchlist" },
   { id: "catalysts", label: "Catalyst Calendar" },
@@ -18,7 +20,7 @@ const TABS = [
 ];
 
 export default function App() {
-  const [tab, setTab] = useState("heatmap");
+  const [tab, setTab] = useState("today");
   const [picked, setPicked] = useState(null);
   const [health, setHealth] = useState(null);
 
@@ -63,6 +65,7 @@ export default function App() {
           <DeepDive symbol={picked} onBack={() => setPicked(null)} />
         ) : (
           <>
+            {tab === "today" && <Today onPick={pick} />}
             {tab === "heatmap" && <Heatmap onPick={pick} />}
             {tab === "watchlist" && <Watchlist onPick={pick} />}
             {tab === "catalysts" && <CatalystCalendar onPick={pick} />}

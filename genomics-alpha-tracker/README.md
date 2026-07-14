@@ -156,6 +156,11 @@ links back to the underlying rows (which catalysts, revisions, posts):
 ---
 
 ## Dashboard views
+- **Today** (default) — what's actionable right now, readable by a first-time
+  viewer: sector regime strip (XBI/ARKG/IBB), fresh flags as tradeable cards
+  (why it fired, that signal's real hit rate, reference levels, liquidity tier,
+  binary-event framing), open calls with signal-decay hints, this week's
+  catalysts, and a pre-market digest (EST/NYSE framing, data-freshness stamped).
 - **Sector Heatmap** — color = composite signal by subsector; click to drill in.
 - **Watchlist** — sortable by any signal component; inline add/deactivate/remove.
 - **Catalyst Calendar** — next 90 days, filterable by impact & subsector.
@@ -193,6 +198,24 @@ so every call is gradeable. Tuning lives in
 [`config/calls.yaml`](backend/config/calls.yaml) (triggers, conviction gate,
 cooldown, risk unit, horizon); the engine is deliberately conservative because
 false positives are the main failure mode.
+
+**Evidence-based defaults.** The stop/target/time-stop defaults come from a
+real-data backtest of the exit mechanics
+([`docs/BACKTEST_CALLS.md`](../docs/BACKTEST_CALLS.md), ~2y adjusted bars,
+30 names): a paired exit-config grid with cluster-bootstrap CIs, regime split,
+and **slippage-adjusted plateau selection**. Headline finding: tight (1.5–2×ATR)
+stops look best frictionless but lose their edge to trading costs; 3×ATR / 2:1 /
+45d is robust net of slippage in both XBI regimes. Rerun with
+`python -m scripts.backtest_calls --refresh`.
+
+**The flags grade themselves too.** Every flag — including ones that never
+became calls — is graded from its fire-time close against forward 1w/1m/3m
+returns, raw and XBI-excess (`GET /flags/track-record`). Flag cards on the
+Today tab show that signal's live hit rate (with n, and an "insufficient
+history" warning below n=10). New signal ideas (pullback-into-catalyst,
+insider clusters) ship **observe-only** and are promoted to call triggers only
+when their record earns it. This is the loop that turns the equal starting
+weights into evidence-based ones.
 
 ---
 
@@ -241,14 +264,17 @@ Reload at runtime: `POST /universe/reload`, `POST /scores/reload`.
 
 ## Testing
 ```bash
-cd backend && pytest          # 59 tests
+cd backend && pytest          # 80 tests
 ```
 Coverage includes the **scoring math with known inputs/outputs**
 (`tests/test_scoring.py`), an offline end-to-end engine run
 (`tests/test_engine.py`), universe sync/history-safety
 (`tests/test_universe.py`), catalyst normalization + override preservation
-(`tests/test_catalysts.py`), and the **trade-call level math, grading rules,
-generation gates, and scorecard** (`tests/test_calls.py`).
+(`tests/test_catalysts.py`), the **trade-call level math, grading rules,
+generation gates, and scorecard** (`tests/test_calls.py`), and the
+**review-hardening pass** — gap-aware fills, binary-expiry refusal, liquidity
+tiers, hardened flags, re-fire suppression, flag forward-return grading
+(`tests/test_review_hardening.py`).
 
 ---
 

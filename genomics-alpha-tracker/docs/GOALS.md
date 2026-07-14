@@ -88,3 +88,45 @@ explanations on every number.
 ## Open items
 - Monthly data-feed budget: **unanswered** — free-tier baseline until specified.
 - Telegram alerts: deferred until requested.
+
+---
+
+## Build status (2026-07-14)
+
+**Shipped:**
+- Calls Log: exact auto-generated calls (entry / 3×ATR stop / 2R target /
+  sell-before-binary time-stop), gap-aware self-grading, per-signal scorecard,
+  manual call logging. Defaults set from `docs/BACKTEST_CALLS.md` evidence.
+- Flag track record: EVERY flag graded at fire-time vs forward 1w/1m/3m returns
+  (raw + XBI-excess) — `/flags/track-record`. This is the learning loop that
+  retunes the equal starting weights.
+- Flag re-fire suppression (7d per symbol+type) so state-like flags stay eventful.
+- New flags: pullback-into-catalyst (ATR-normalized, depth-capped, above-50dma
+  qualifier), volume anomaly (log-z + $1M floor), insider buying cluster
+  (distinct insiders + $25k floor). Pullback & insider are OBSERVE-ONLY until
+  their track record earns call-trigger status.
+- Today landing tab (default): purpose statement, regime strip (XBI/ARKG/IBB),
+  actionable cards (why it fired + that signal's honest hit rate + reference
+  levels + liquidity tier + binary framing + implied move), open calls with
+  signal-decay hints, 7-day catalysts, pre-market digest. NY-timezone aware,
+  data-freshness stamped.
+- Liquidity tiers (median ADDV): A/B/C badges, sizing warnings, Tier C excluded
+  from auto-calls, tier stamped on calls at fire-time.
+- Equal signal weights (4 × 0.225; runway penalty stays 0.10 as a risk drag,
+  not an alpha term). Composite displayed 0–10 (render-only; storage stays 0–100).
+- Benchmarks + relative strength vs XBI (20/60d, unadjusted) + regime label.
+- Insider-transaction ingestion (yfinance, daily).
+- Append-only decision journal (chat memos + desk notes, per name).
+- Exit-mechanics backtest on ~2y real adjusted bars: paired grid, cluster
+  bootstrap, slippage-adjusted plateau selection. Key finding: tight stops'
+  frictionless edge is an artifact — costs eat it; 3×ATR/2R/45d is robust in
+  both regimes. The pullback entry's price-half alone showed NO edge vs
+  baseline (kept observe-only).
+
+**Deferred (with reasons):**
+- 13F/fund flows: needs a data feed decision (budget question unanswered).
+- Auto-suggested universe entrants: needs a screening feed.
+- Telegram alerts: operator said "at some point"; revisit when asked.
+- Historical event-move (implied vs realized) framing: needs an event-history
+  dataset; the diffusive implied move shipped with honest labeling instead.
+- Subsector RS rotation rollup: cheap follow-up on the RS machinery.

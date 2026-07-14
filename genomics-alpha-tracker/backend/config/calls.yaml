@@ -14,6 +14,9 @@ calls:
     analyst_revision_cluster:
       direction: upward            # downward clusters never generate a long call
     unusual_options_social_spike: {}
+    # pullback_into_catalyst and insider_buying_cluster are OBSERVE-ONLY:
+    # they fire flags whose forward returns are tracked (/flags/track-record),
+    # and get promoted to call triggers only once the evidence supports it.
 
   # Gates that a triggering flag must ALSO pass before a call is made.
   # Conservative on purpose: false positives are the main failure mode.
@@ -22,10 +25,15 @@ calls:
   cooldown_days: 14                # no new auto-call on a symbol within this window
   max_open_calls: 10               # cap on concurrent open auto-calls
 
-  # Risk framing for the exact levels.
+  # Risk framing for the exact levels — set from evidence, not assumption:
+  # docs/BACKTEST_CALLS.md (2y adjusted bars, 30 names, paired exit-config
+  # grid, cluster-bootstrap CIs, slippage-adjusted plateau selection) picked
+  # stop 3.0xATR / 2:1 RR / 45d: net avg R 0.185, ~51% win rate, positive in
+  # BOTH XBI regimes. Tight (1.5-2x) stops looked better frictionless but
+  # LOSE their edge to slippage — small risk units make costs huge in R terms.
   risk:
     atr_window: 14                 # ATR lookback (daily bars)
-    stop_atr_mult: 2.0             # stop = entry - 2*ATR (long)
+    stop_atr_mult: 3.0             # stop = entry - 3*ATR (long)
     fallback_stop_pct: 0.08        # stop when ATR can't be computed
     reward_risk: 2.0               # target = entry + reward_risk * (entry - stop)
 
@@ -33,6 +41,18 @@ calls:
   # off a pre-catalyst setup expires the day BEFORE its catalyst (sell into
   # the event). Non-catalyst calls get the default horizon.
   horizon:
-    default_days: 30
+    default_days: 45               # backtest: 45d beat 20/30d at the picked stop/RR
     min_days: 5
     max_days: 45
+
+  # Liquidity tiers by 20-day MEDIAN daily dollar volume (median, not mean, so
+  # one volume-spike day can't promote a thin name for a month). The desk
+  # trades $10-100k clips, so thin names need explicit slippage warnings.
+  #   Tier A: full sizes fine · Tier B: warn above warn_position_usd ·
+  #   Tier C: thin-float — expect slippage at any size.
+  liquidity:
+    addv_window_days: 20
+    tier_a_min_addv: 25000000     # >$25M/day
+    tier_b_min_addv: 5000000      # $5-25M/day
+    warn_position_usd: 50000
+    exclude_tier_c_from_auto_calls: true   # a call the desk can't exit isn't a call

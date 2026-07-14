@@ -143,6 +143,26 @@ class SocialMention(SQLModel, table=True):
     source: str = "stocktwits"
 
 
+class InsiderTxn(SQLModel, table=True):
+    """An insider transaction (Form 4 style), ingested best-effort."""
+
+    __tablename__ = "insider_txn"
+    __table_args__ = (
+        UniqueConstraint("symbol", "date", "insider", "shares", "txn_type",
+                         name="uq_insider"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    symbol: str = Field(index=True, foreign_key="security.symbol")
+    date: Date = Field(index=True)
+    insider: str = ""
+    title: Optional[str] = None
+    txn_type: str = "buy"          # buy | sell | other
+    shares: Optional[float] = None
+    value: Optional[float] = None  # USD value when reported
+    source: str = "yfinance"
+
+
 class ScoreSnapshot(SQLModel, table=True):
     """An auditable Alpha Signal computation for one name at one time."""
 
@@ -169,6 +189,53 @@ class FlagEvent(SQLModel, table=True):
     message: str = ""
     severity: str = "info"        # info | warn | high
     evidence: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+
+
+class JournalEntry(SQLModel, table=True):
+    """An APPEND-ONLY decision-journal memo ("what did I think at entry").
+
+    Immutable by design: no update endpoint exists, so hindsight can't be
+    edited into the record. Optionally linked to the call/flag it discusses.
+    """
+
+    __tablename__ = "journal_entry"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    symbol: Optional[str] = Field(default=None, index=True)
+    created_at: DateTime = Field(default_factory=_utcnow, index=True)
+    title: str = ""
+    content: str = ""              # the memo (chat answer, operator note)
+    source: str = "chat"           # chat | manual
+    model: Optional[str] = None    # LLM model when source == chat
+    call_id: Optional[int] = Field(default=None, foreign_key="trade_call.id")
+    flag_id: Optional[int] = Field(default=None, foreign_key="flag_event.id")
+
+
+class FlagOutcome(SQLModel, table=True):
+    """Forward returns measured from a flag's fire-time — the learning loop.
+
+    EVERY flag is graded (not just the ones that became trade calls), so
+    per-flag-type hit rates are uncensored. Horizons are trading bars
+    (5/21/63 ≈ 1w/1m/3m); excess returns subtract XBI over the same window.
+    Rows fill in progressively as bars accrue and are immutable once complete.
+    """
+
+    __tablename__ = "flag_outcome"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    flag_id: int = Field(index=True, unique=True, foreign_key="flag_event.id")
+    symbol: str = Field(index=True, foreign_key="security.symbol")
+    flag_type: str = Field(index=True)
+    fired_on: Date = Field(index=True)          # trading date of the fire-time bar
+    price_at_fire: float
+    fwd_1w: Optional[float] = None              # +5 trading bars, fractional
+    fwd_1m: Optional[float] = None              # +21
+    fwd_3m: Optional[float] = None              # +63
+    excess_1w: Optional[float] = None           # minus XBI same-window return
+    excess_1m: Optional[float] = None
+    excess_3m: Optional[float] = None
+    complete: bool = Field(default=False, index=True)
+    updated_at: DateTime = Field(default_factory=_utcnow)
 
 
 class TradeCall(SQLModel, table=True):

@@ -106,6 +106,46 @@ def price_change_raw(closes: Sequence[float]) -> float | None:
     return (obs[-1] - obs[0]) / obs[0]
 
 
+def pullback_from_high_raw(
+    highs: Sequence[float | None], last_close: float | None
+) -> float | None:
+    """Fractional pullback of the last close from the window high.
+
+    0.0 = at the high; 0.10 = 10% below it. None when the high or close is
+    unknowable (no data), never a silent zero.
+    """
+    obs = [h for h in highs if h is not None]
+    if not obs or last_close is None:
+        return None
+    peak = max(obs)
+    if peak <= 0:
+        return None
+    return max(0.0, (peak - last_close) / peak)
+
+
+def volume_zscore_raw(volumes: Sequence[float | None], min_history: int = 20) -> float | None:
+    """Z-score of the LATEST daily volume vs the name's own trailing history.
+
+    Computed on log(volume+1): raw volume is log-normal-ish, so one prior
+    blowout day would inflate σ and suppress detection for weeks, while tiny
+    absolute uticks on quiet names would clear a raw-volume threshold. The
+    latest observation is excluded from the baseline so a genuine spike can't
+    inflate its own mean/σ. None with insufficient history or a flat baseline.
+    """
+    import math
+
+    obs = [math.log(v + 1.0) for v in volumes if v is not None and v >= 0]
+    if len(obs) < min_history + 1:
+        return None
+    latest, base = obs[-1], obs[:-1]
+    mean = sum(base) / len(base)
+    var = sum((v - mean) ** 2 for v in base) / len(base)
+    std = var ** 0.5
+    if std == 0:
+        return None
+    return (latest - mean) / std
+
+
 def runway_penalty_magnitude(
     runway_quarters: float | None,
     threshold_quarters: float,

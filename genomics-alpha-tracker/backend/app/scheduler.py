@@ -27,6 +27,8 @@ _JOB_FUNCS = {
     "catalysts": runner.run_catalysts,
     "science": runner.run_science,
     "social": runner.run_social,
+    "insiders": runner.run_insiders,
+    "benchmarks": lambda session: runner.run_benchmarks(session),
 }
 
 
@@ -52,15 +54,18 @@ def _scoring_job():
 
 
 def _calls_job():
-    """Grade open trade calls, then turn any fresh flags into new calls.
-    Evaluate FIRST so a symbol whose call just closed frees its slot."""
+    """Grade open trade calls and flag outcomes, then turn fresh flags into
+    new calls. Evaluate FIRST so a symbol whose call just closed frees its slot."""
     from .calls.manager import evaluate_calls, generate_calls
+    from .scoring.outcomes import evaluate_flag_outcomes
 
     try:
         with Session(engine) as session:
             closed = evaluate_calls(session)
+            graded = evaluate_flag_outcomes(session)
             made = generate_calls(session)
-        logger.info("Calls job done: %d closed, %d generated", len(closed), len(made))
+        logger.info("Calls job done: %d closed, %d flag outcomes, %d generated",
+                    len(closed), graded, len(made))
     except Exception as exc:  # noqa: BLE001
         logger.exception("Calls job failed: %s", exc)
 

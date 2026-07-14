@@ -14,7 +14,16 @@ from sqlmodel import Session, select
 
 from ..config import calls_config
 from ..models import Catalyst, FlagEvent, PriceBar, ScoreSnapshot, Security, TradeCall
-from .rules import BarLike, atr, build_levels, call_r_multiple, call_return, grade_call
+from .rules import (
+    BarLike,
+    addv,
+    atr,
+    build_levels,
+    call_r_multiple,
+    call_return,
+    grade_call,
+    liquidity_tier,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +39,7 @@ def _recent_bars(session: Session, symbol: str, since: date) -> list[BarLike]:
         .where(PriceBar.date >= since)
         .order_by(PriceBar.date.asc())
     ).all()
-    return [BarLike(b.date, b.high, b.low, b.close) for b in rows]
+    return [BarLike(b.date, b.high, b.low, b.close, b.open) for b in rows]
 
 
 def _latest_close(session: Session, symbol: str) -> tuple[date, float] | None:
@@ -56,9 +65,15 @@ def _latest_composite(session: Session, symbol: str) -> float | None:
     return snap.composite if snap else None
 
 
-def _expiry_for(session: Session, symbol: str, call_date: date, cfg: dict) -> date:
+def _expiry_for(session: Session, symbol: str, call_date: date, cfg: dict) -> date | None:
     """Time-stop for a new call: the day before the nearest binary catalyst
-    (sell into the event), else the default horizon. Clamped to sane bounds."""
+    (sell into the event), else the default horizon.
+
+    Returns None — REFUSE the call — when the binary is so close that a
+    sell-before-the-event exit can't respect the minimum horizon. Stretching
+    the expiry past the event instead would force holding through the binary,
+    the one thing the desk said it never does.
+    """
     h = cfg.get("horizon", {})
     default_days = h.get("default_days", 30)
     min_days = h.get("min_days", 5)
@@ -73,11 +88,44 @@ def _expiry_for(session: Session, symbol: str, call_date: date, cfg: dict) -> da
     ).all()
     for c in nearest:
         if c.effective_impact >= _BINARY_IMPACT:
-            expiry = min(expiry, c.date - timedelta(days=1))
+            binary_exit = c.date - timedelta(days=1)
+            if binary_exit < call_date + timedelta(days=min_days):
+                return None  # too close to the event to establish and exit
+            expiry = min(expiry, binary_exit)
             break
-    lo = call_date + timedelta(days=min_days)
     hi = call_date + timedelta(days=max_days)
-    return max(lo, min(expiry, hi))
+    return min(expiry, hi)
+
+
+def symbol_liquidity(session: Session, symbol: str) -> dict:
+    """ADDV + liquidity tier + a sizing warning for one name.
+
+    Tier A = deep, B = size with care above the warn threshold, C = thin-float
+    (slippage at any size). None tier = no volume data.
+    """
+    cfg = calls_config().get("liquidity", {})
+    window = cfg.get("addv_window_days", 20)
+    tier_a = cfg.get("tier_a_min_addv", 25_000_000)
+    tier_b = cfg.get("tier_b_min_addv", 5_000_000)
+    warn_usd = cfg.get("warn_position_usd", 50_000)
+
+    rows = session.exec(
+        select(PriceBar)
+        .where(PriceBar.symbol == symbol)
+        .order_by(PriceBar.date.desc())
+        .limit(window * 2)
+    ).all()
+    rows.reverse()
+    bars = [BarLike(b.date, b.high, b.low, b.close) for b in rows]
+    volumes = [b.volume for b in rows]
+    value = addv(bars, volumes, window)
+    tier = liquidity_tier(value, tier_a, tier_b)
+    warning = None
+    if tier == "B":
+        warning = f"size with care above ${warn_usd/1000:.0f}k — ${value/1e6:.1f}M/day traded"
+    elif tier == "C":
+        warning = f"thin float — only ${value/1e6:.2f}M/day traded; expect slippage"
+    return {"addv": value, "tier": tier, "warning": warning}
 
 
 def _flag_triggers_call(flag: FlagEvent, trigger_cfg: dict) -> bool:
@@ -152,6 +200,14 @@ def generate_calls(session: Session, asof: date | None = None) -> list[TradeCall
             continue
         bar_date, entry = latest
 
+        liq = symbol_liquidity(session, sym)
+        if (
+            liq["tier"] in (None, "C")
+            and cfg.get("liquidity", {}).get("exclude_tier_c_from_auto_calls", True)
+        ):
+            logger.info("Skipping %s: liquidity tier %s (thin-float)", sym, liq["tier"])
+            continue
+
         atr_window = risk.get("atr_window", 14)
         bars = _recent_bars(session, sym, bar_date - timedelta(days=atr_window * 3))
         levels = build_levels(
@@ -166,6 +222,9 @@ def generate_calls(session: Session, asof: date | None = None) -> list[TradeCall
             continue
 
         expires_on = _expiry_for(session, sym, bar_date, cfg)
+        if expires_on is None:
+            logger.info("Skipping %s: binary catalyst too close to trade into", sym)
+            continue
         call = TradeCall(
             symbol=sym,
             call_date=bar_date,
@@ -187,6 +246,9 @@ def generate_calls(session: Session, asof: date | None = None) -> list[TradeCall
                 "flag_type": flag.flag_type,
                 "flag_message": flag.message,
                 "flag_evidence": flag.evidence,
+                # Stamped at fire-time so the scorecard can later be cut by
+                # liquidity tier (thin names behave differently).
+                "liquidity": {"tier": liq["tier"], "addv": liq["addv"]},
             },
         )
         session.add(call)

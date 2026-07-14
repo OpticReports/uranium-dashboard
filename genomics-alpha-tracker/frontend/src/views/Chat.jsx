@@ -47,6 +47,53 @@ function usageLine(u) {
   return <> · {parts.join(" · ")}</>;
 }
 
+// Append-only decision journal: freeze this memo next to the name so "what
+// did I think at entry" can be answered honestly later (entries are immutable).
+function SaveToJournal({ message, question }) {
+  const [state, setState] = useState("idle"); // idle | asking | saving | saved | error
+  const [symbol, setSymbol] = useState("");
+
+  const save = async (e) => {
+    e.preventDefault();
+    setState("saving");
+    try {
+      await api.addJournal({
+        symbol: symbol.trim() ? symbol.trim().toUpperCase() : null,
+        title: (question || "chat memo").slice(0, 180),
+        content: message.content,
+        source: "chat",
+        model: message.model || null,
+      });
+      setState("saved");
+    } catch (err) {
+      setState("error");
+    }
+  };
+
+  if (state === "saved") return <span className="text-emerald-400 shrink-0">saved to journal ✓</span>;
+  if (state === "asking" || state === "saving") {
+    return (
+      <form onSubmit={save} className="flex items-center gap-1 shrink-0">
+        <input
+          value={symbol}
+          onChange={(e) => setSymbol(e.target.value)}
+          placeholder="ticker (opt.)"
+          className="bg-panel border border-edge rounded px-1.5 py-0.5 w-20 text-[10px]"
+          autoFocus
+        />
+        <button type="submit" disabled={state === "saving"} className="text-sky-300 hover:underline disabled:opacity-50">
+          {state === "saving" ? "…" : "save"}
+        </button>
+      </form>
+    );
+  }
+  return (
+    <button onClick={() => setState("asking")} className="text-sky-400 hover:underline shrink-0">
+      {state === "error" ? "retry save" : "save to journal"}
+    </button>
+  );
+}
+
 export default function Chat({ onPick }) {
   const [status, setStatus] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -125,11 +172,14 @@ export default function Chat({ onPick }) {
               m.role === "user" ? "bg-sky-700/40 border border-sky-700" : "bg-ink border border-edge"
             }`}>
               {m.role === "assistant" ? render(m.content) : m.content}
-              {m.role === "assistant" && (m.tools?.length > 0 || m.usage) && (
-                <div className="mt-2 pt-2 border-t border-edge/50 text-[10px] text-gray-500">
-                  {m.tools?.length > 0 && <>data pulled: {m.tools.join(" · ")} · </>}
-                  {m.model}
-                  {m.usage && usageLine(m.usage)}
+              {m.role === "assistant" && (
+                <div className="mt-2 pt-2 border-t border-edge/50 text-[10px] text-gray-500 flex items-center justify-between gap-2">
+                  <span>
+                    {m.tools?.length > 0 && <>data pulled: {m.tools.join(" · ")} · </>}
+                    {m.model}
+                    {m.usage && usageLine(m.usage)}
+                  </span>
+                  <SaveToJournal message={m} question={messages[i - 1]?.content} />
                 </div>
               )}
             </div>

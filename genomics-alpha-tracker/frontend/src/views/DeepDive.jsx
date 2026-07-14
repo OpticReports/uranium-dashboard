@@ -4,7 +4,7 @@ import {
   ReferenceLine, BarChart, Bar, CartesianGrid,
 } from "recharts";
 import { api } from "../lib/api";
-import { fmtNum, fmtMoney, fmtPct, scoreColor, naIfNull } from "../lib/format";
+import { fmtNum, fmtMoney, fmtPct, scoreColor, naIfNull, fmtScore10 } from "../lib/format";
 import RunwayGauge from "../components/RunwayGauge";
 import Flags from "../components/Flags";
 import InfoTip from "../components/InfoTip";
@@ -57,7 +57,7 @@ export default function DeepDive({ symbol, onBack }) {
         <div className="text-right">
           <div className="text-xs text-gray-400">Alpha Signal<InfoTip term="composite" /></div>
           <div className="text-4xl font-bold" style={{ color: scoreColor(score?.composite) }}>
-            {fmtNum(score?.composite, 0)}
+            {fmtScore10(score?.composite)}
           </div>
         </div>
       </div>
@@ -160,7 +160,65 @@ export default function DeepDive({ symbol, onBack }) {
           <Empty>No publications/preprints found.</Empty>
         )}
       </Panel>
+
+      <JournalPanel symbol={security.symbol} />
     </div>
+  );
+}
+
+// Append-only decision journal for this name: what the desk/analyst thought at
+// the time, frozen. Saved from Analyst Chat or added here; never editable.
+function JournalPanel({ symbol }) {
+  const [entries, setEntries] = useState([]);
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const load = () => api.journal(symbol).then(setEntries).catch(() => setEntries([]));
+  useEffect(load, [symbol]);
+
+  const add = async (e) => {
+    e.preventDefault();
+    if (!note.trim()) return;
+    setSaving(true);
+    try {
+      await api.addJournal({ symbol, title: "desk note", content: note.trim(), source: "manual" });
+      setNote("");
+      load();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Panel title={`Decision journal — ${symbol} (append-only)`}>
+      <form onSubmit={add} className="flex gap-2 mb-3">
+        <input
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="What do you think right now? (frozen once saved)"
+          className="flex-1 bg-ink border border-edge rounded px-3 py-2 text-sm"
+        />
+        <button disabled={saving || !note.trim()}
+          className="text-xs px-3 rounded bg-sky-700 hover:bg-sky-600 text-white disabled:opacity-50">
+          {saving ? "…" : "Add"}
+        </button>
+      </form>
+      {entries.length ? (
+        <div className="space-y-2 max-h-72 overflow-y-auto">
+          {entries.map((e) => (
+            <div key={e.id} className="border border-edge rounded-lg p-2 text-sm">
+              <div className="flex justify-between text-xs text-gray-500 mb-1">
+                <span>{e.title || (e.source === "chat" ? "chat memo" : "desk note")}</span>
+                <span>{e.created_at.slice(0, 16).replace("T", " ")} · {e.source}{e.model ? ` · ${e.model}` : ""}</span>
+              </div>
+              <div className="text-gray-300 whitespace-pre-wrap max-h-40 overflow-y-auto">{e.content}</div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <Empty>No journal entries yet — save a chat memo or add a desk note at entry time.</Empty>
+      )}
+    </Panel>
   );
 }
 

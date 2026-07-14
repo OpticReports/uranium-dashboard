@@ -27,6 +27,12 @@ export function scoreColor(v) {
   return `rgb(${r}, ${g}, 70)`;
 }
 
+// Composite is stored 0-100 (cross-sectional vs the universe) but displayed
+// as 0-10 with one decimal — the desk's preferred granularity. Render-layer
+// conversion ONLY: configs, APIs and stored values stay 0-100.
+export const fmtScore10 = (v) =>
+  v === null || v === undefined ? "n/a" : (Number(v) / 10).toFixed(1);
+
 export const severityColor = {
   high: "bg-emerald-600/20 text-emerald-300 border-emerald-700",
   warn: "bg-amber-600/20 text-amber-300 border-amber-700",
@@ -39,4 +45,7 @@ export const FLAG_LABELS = {
   unusual_options_social_spike: "Unusual options + social spike",
   runway_cliff_approaching: "Runway cliff approaching",
   binary_event_within_n_days: "Binary event imminent",
+  pullback_into_catalyst: "Pullback into catalyst",
+  volume_anomaly: "Volume anomaly",
+  insider_buying_cluster: "Insider buying cluster",
 };

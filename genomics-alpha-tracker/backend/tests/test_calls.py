@@ -133,8 +133,8 @@ def test_generate_call_from_fresh_flag(session):
     assert call.symbol == "CRSP" and call.direction == "long"
     assert call.source == "auto_flag" and call.flag_type == "pre_catalyst_sentiment_ramp"
     assert call.entry_price == 100.0
-    assert call.stop_price == 96.0            # ATR=2 (flat 2pt range), 2*ATR stop
-    assert call.target_price == 108.0         # 2R target
+    assert call.stop_price == 94.0            # ATR=2 (flat 2pt range), 3*ATR stop
+    assert call.target_price == 112.0         # 2R target
     assert call.call_date == last_bar
     assert call.composite_at_call == 80.0
     assert call.status == "open"
@@ -193,16 +193,16 @@ def test_evaluate_target_hit_lifecycle(session):
     _fire_flag(session)
     call = manager.generate_calls(session)[0]
 
-    # A post-call bar rips through the target.
+    # A post-call bar rips through the target (112 with the 3xATR/2R config).
     session.add(PriceBar(symbol="CRSP", date=last_bar + timedelta(days=1),
-                         open=100.0, high=110.0, low=100.0, close=109.0))
+                         open=100.0, high=114.0, low=100.0, close=113.0))
     session.commit()
     closed = manager.evaluate_calls(session)
     assert len(closed) == 1
     got = closed[0]
     assert got.status == "target_hit"
     assert got.exit_price == call.target_price
-    assert abs(got.return_pct - 0.08) < 1e-9
+    assert abs(got.return_pct - 0.12) < 1e-9
     assert abs(got.r_multiple - 2.0) < 1e-9
 
 
@@ -219,7 +219,7 @@ def test_scorecard_aggregates_by_signal(session):
     _fire_flag(session)
     manager.generate_calls(session)
     session.add(PriceBar(symbol="CRSP", date=last_bar + timedelta(days=1),
-                         open=100.0, high=110.0, low=100.0, close=109.0))
+                         open=100.0, high=114.0, low=100.0, close=113.0))
     session.commit()
     manager.evaluate_calls(session)
 
