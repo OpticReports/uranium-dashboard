@@ -211,6 +211,33 @@ class JournalEntry(SQLModel, table=True):
     flag_id: Optional[int] = Field(default=None, foreign_key="flag_event.id")
 
 
+class CallPostmortem(SQLModel, table=True):
+    """WHY a closed call went right or wrong, computed from the data.
+
+    Attached to the immutable TradeCall after it closes; the hindsight verdict
+    fills ~10 bars post-exit (was a stop protective or a shakeout?). The
+    summary is deterministic prose composed from these fields — reproducible,
+    never hand-edited.
+    """
+
+    __tablename__ = "call_postmortem"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    call_id: int = Field(index=True, unique=True, foreign_key="trade_call.id")
+    created_at: DateTime = Field(default_factory=_utcnow)
+    mfe_r: Optional[float] = None            # max favorable excursion, in R
+    mae_r: Optional[float] = None            # max adverse excursion, in R
+    name_return: Optional[float] = None      # the trade's return (direction-aware)
+    bench_return: Optional[float] = None     # XBI over the same window
+    alpha: Optional[float] = None            # name minus sector beta
+    composite_at_exit: Optional[float] = None
+    signal_decay: Optional[float] = None     # composite at exit minus at call
+    catalyst_status: str = "no_catalyst"     # exited_before_event | event_passed_during_trade | no_catalyst
+    hindsight_verdict: Optional[str] = None  # protected | shakeout | neutral | exited_early | clean_exit
+    hindsight_complete: bool = Field(default=False, index=True)
+    summary: str = ""
+
+
 class FlagOutcome(SQLModel, table=True):
     """Forward returns measured from a flag's fire-time — the learning loop.
 

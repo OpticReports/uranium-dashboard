@@ -134,6 +134,9 @@ class TradeCallOut(BaseModel):
     last_price: Optional[float] = None
     unrealized_pct: Optional[float] = None
     unrealized_r: Optional[float] = None
+    # WHY it went right/wrong (closed calls; hindsight fields fill ~10 bars
+    # after exit).
+    postmortem: Optional[dict] = None
 
 
 class TradeCallCreate(BaseModel):

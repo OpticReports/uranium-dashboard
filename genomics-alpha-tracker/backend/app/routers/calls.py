@@ -12,10 +12,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
 
 from ..calls import manager
+from ..calls.postmortem import update_postmortems
 from ..calls.rules import atr, build_levels, call_r_multiple, call_return
 from ..config import calls_config
 from ..db import get_session
-from ..models import Security, TradeCall
+from ..models import CallPostmortem, Security, TradeCall
 from ..schemas import CallsScorecardOut, TradeCallClose, TradeCallCreate, TradeCallOut
 
 router = APIRouter(prefix="/calls", tags=["calls"])
@@ -42,6 +43,22 @@ def _to_out(session: Session, call: TradeCall) -> TradeCallOut:
             out.unrealized_r = call_r_multiple(
                 call.direction, call.entry_price, call.stop_price, last
             )
+    else:
+        pm = session.exec(
+            select(CallPostmortem).where(CallPostmortem.call_id == call.id)
+        ).first()
+        if pm is not None:
+            out.postmortem = {
+                "summary": pm.summary,
+                "mfe_r": pm.mfe_r,
+                "mae_r": pm.mae_r,
+                "alpha": pm.alpha,
+                "bench_return": pm.bench_return,
+                "signal_decay": pm.signal_decay,
+                "catalyst_status": pm.catalyst_status,
+                "hindsight_verdict": pm.hindsight_verdict,
+                "hindsight_complete": pm.hindsight_complete,
+            }
     return out
 
 
@@ -74,8 +91,10 @@ def generate_now(session: Session = Depends(get_session)):
 
 @router.post("/evaluate", response_model=list[TradeCallOut])
 def evaluate_now(session: Session = Depends(get_session)):
-    """Grade open calls against the latest bars immediately; returns calls closed."""
+    """Grade open calls against the latest bars immediately; returns calls closed.
+    Also builds/refreshes post-mortems so 'why' appears with the outcome."""
     closed = manager.evaluate_calls(session)
+    update_postmortems(session)
     return [_to_out(session, c) for c in closed]
 
 
@@ -145,4 +164,5 @@ def close_call(call_id: int, payload: TradeCallClose, session: Session = Depends
         call = manager.close_call_manual(session, call, payload.exit_price, payload.note)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
+    update_postmortems(session)
     return _to_out(session, call)

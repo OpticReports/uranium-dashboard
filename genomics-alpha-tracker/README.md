@@ -210,6 +210,15 @@ stops look best frictionless but lose their edge to trading costs, and
 0.190; the 2:1 neighbor is statistically indistinguishable). Rerun with
 `python -m scripts.backtest_calls --refresh`.
 
+**Every closed call gets a post-mortem — the WHY, not just the outcome.**
+Computed from the data, never hand-written: path excursions (did it ever work,
+or did we round-trip a +2R winner?), sector attribution (name alpha vs XBI
+beta over the trade window), signal decay (did the composite fade before the
+exit?), catalyst discipline, and — ~10 bars after exit — a **hindsight
+verdict**: a stop that kept falling *protected capital*; one that snapped back
+above entry was a *shakeout* (a pattern of shakeouts means widen the stop, not
+blame the signal). Shown under each closed call in the Calls Log.
+
 **The flags grade themselves too.** Every flag — including ones that never
 became calls — is graded from its fire-time close against forward 1w/1m/3m
 returns, raw and XBI-excess (`GET /flags/track-record`). Flag cards on the
