@@ -88,6 +88,7 @@ export const api = {
     return req(`/calls${qs ? `?${qs}` : ""}`);
   },
   callsScorecard: () => req("/calls/scorecard"),
+  callsPerformance: () => req("/calls/performance"),
   createCall: (payload) =>
     req("/calls", { method: "POST", body: JSON.stringify(payload) }),
   closeCall: (id, payload = {}) =>
