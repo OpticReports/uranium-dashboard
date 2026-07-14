@@ -13,6 +13,7 @@ from datetime import date
 
 from ..config import flags_config
 from ..models import FlagEvent, Security
+from ..utils.labels import event_label
 
 
 def evaluate_flags(
@@ -135,8 +136,8 @@ def evaluate_flags(
                 flag_type="binary_event_within_n_days",
                 severity="high",
                 message=(
-                    f"High-impact {nearest.event_type} in "
-                    f"{(nearest.date - asof).days}d"
+                    f"High-impact {event_label(nearest.event_type)} in "
+                    f"{(nearest.date - asof).days} days"
                 ),
                 evidence={"catalysts": [_cat_ev(c, asof) for c in imminent]},
             )
@@ -184,9 +185,10 @@ def evaluate_flags(
                     severity="high",
                     message=(
                         f"Pulled back {pullback:.0%} ({depth_atr:.1f} ATRs) from its "
-                        f"{f.get('high_lookback_days', 30)}d high, still above the "
-                        f"50dma, with a high-impact {nearest.event_type} in "
-                        f"{(nearest.date - asof).days}d"
+                        f"{f.get('high_lookback_days', 30)}-day high, still above the "
+                        f"50-day average, with a high-impact "
+                        f"{event_label(nearest.event_type)} in "
+                        f"{(nearest.date - asof).days} days"
                     ),
                     evidence={
                         "pullback_pct": pullback,

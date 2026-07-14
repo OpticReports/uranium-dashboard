@@ -5,6 +5,7 @@ import {
 } from "recharts";
 import { api } from "../lib/api";
 import { fmtNum, fmtPct, FLAG_LABELS } from "../lib/format";
+import InfoTip from "../components/InfoTip";
 
 // Calls Log: every exact trade call the tracker (or the desk) has made, graded
 // against what price actually did — the honest track record that tells us which
@@ -140,8 +141,8 @@ export default function CallsLog({ onPick }) {
                   <th className="py-2 pr-3 text-right">Stop</th>
                   <th className="py-2 pr-3 text-right">Target</th>
                   <th className="py-2 pr-3 text-right">Last</th>
-                  <th className="py-2 pr-3 text-right">Unrealized</th>
-                  <th className="py-2 pr-3">Time-stop</th>
+                  <th className="py-2 pr-3 text-right">Unrealized<InfoTip term="avg_r" /></th>
+                  <th className="py-2 pr-3">Exit by<InfoTip term="ref_levels" /></th>
                   <th className="py-2" />
                 </tr>
               </thead>
@@ -201,7 +202,7 @@ export default function CallsLog({ onPick }) {
                   <th className="py-2 pr-3 text-right">Entry → Exit</th>
                   <th className="py-2 pr-3">Outcome</th>
                   <th className="py-2 pr-3 text-right">Return</th>
-                  <th className="py-2 text-right">R</th>
+                  <th className="py-2 text-right">R<InfoTip term="avg_r" /></th>
                 </tr>
               </thead>
               <tbody>
@@ -280,7 +281,9 @@ function PerformanceOverTime({ perf }) {
       ) : (
         <div className="grid lg:grid-cols-2 gap-4">
           <div>
-            <div className="text-xs text-gray-400 mb-1">Equity curve (cumulative R by exit date)</div>
+            <div className="text-xs text-gray-400 mb-1">
+              Equity curve (cumulative R by exit date)<InfoTip term="equity_curve" />
+            </div>
             <ResponsiveContainer width="100%" height={180}>
               <LineChart data={perf.equity_curve} margin={{ left: -20, right: 10, top: 5 }}>
                 <CartesianGrid stroke="#1f2937" />
@@ -294,7 +297,7 @@ function PerformanceOverTime({ perf }) {
           </div>
           <div>
             <div className="text-xs text-gray-400 mb-1">
-              Rolling win rate & avg R (last {perf.rolling_window} calls)
+              Rolling win rate & avg R (last {perf.rolling_window} calls)<InfoTip term="rolling_perf" />
             </div>
             <ResponsiveContainer width="100%" height={180}>
               <LineChart data={perf.rolling} margin={{ left: -20, right: 10, top: 5 }}>
@@ -314,12 +317,12 @@ function PerformanceOverTime({ perf }) {
       {(perf.monthly_cohorts?.length > 0 || perf.flag_cohorts?.length > 0) && (
         <div className="grid sm:grid-cols-2 gap-4 mt-3 pt-3 border-t border-edge/60">
           <CohortTable
-            title="Call cohorts by month made"
+            title={<>Call cohorts by month made<InfoTip term="cohorts" /></>}
             rows={perf.monthly_cohorts}
             cols={[["n", (r) => r.n], ["win", (r) => fmtPct(r.win_rate, 0)], ["avg R", (r) => fmtNum(r.avg_r, 2)]]}
           />
           <CohortTable
-            title="Flag cohorts by fire month (1m vs XBI)"
+            title={<>Flag cohorts by fire month (1-month result vs sector)<InfoTip term="signal_track_record" /></>}
             rows={perf.flag_cohorts}
             cols={[["n", (r) => r.n], ["hit", (r) => fmtPct(r.hit_rate, 0)], ["avg excess", (r) => fmtPct(r.avg_excess)]]}
           />
@@ -367,10 +370,10 @@ function Scorecard({ card }) {
     { label: "Calls made", value: o.calls },
     { label: "Open", value: o.open },
     { label: "Closed", value: o.closed },
-    { label: "Win rate", value: fmtPct(o.win_rate, 0) },
+    { label: "Win rate", value: fmtPct(o.win_rate, 0), term: "win_rate" },
     { label: "Avg return", value: fmtPct(o.avg_return_pct) },
-    { label: "Avg R", value: fmtNum(o.avg_r, 2) },
-    { label: "Total R", value: fmtNum(o.total_r, 1) },
+    { label: "Avg R", value: fmtNum(o.avg_r, 2), term: "avg_r" },
+    { label: "Total R", value: fmtNum(o.total_r, 1), term: "total_r" },
   ];
   const signals = Object.entries(card.by_signal || {});
   return (
@@ -380,7 +383,9 @@ function Scorecard({ card }) {
         {tiles.map((t) => (
           <div key={t.label} className="bg-ink border border-edge rounded-lg p-2 text-center">
             <div className="text-lg font-bold">{t.value}</div>
-            <div className="text-[10px] uppercase tracking-wide text-gray-500">{t.label}</div>
+            <div className="text-[10px] uppercase tracking-wide text-gray-500">
+              {t.label}{t.term && <InfoTip term={t.term} />}
+            </div>
           </div>
         ))}
       </div>
