@@ -19,6 +19,7 @@ from sqlmodel import Session, select
 
 from ..calls import manager as call_mgr
 from ..calls.rules import BarLike, atr, build_levels
+from ..utils.labels import event_label as _event_label
 from ..config import calls_config, scoring_config
 from ..db import get_session
 from ..models import (
@@ -256,10 +257,11 @@ def today_view(session: Session = Depends(get_session)):
                 "impact": nxt.effective_impact,
                 "implied_move_pct": im,
                 "framing": (
-                    "Desk default: exit before the binary. "
-                    + (f"Options imply a ±{im:.0%} move by the event."
+                    f"Binary event risk: {_event_label(nxt.event_type)} in {days_until} days — "
+                    "desk default is to exit before it. "
+                    + (f"Options pricing implies a ±{im:.0%} move by the event date."
                        if im is not None else
-                       "No options data to size the implied move — treat gap risk as unbounded.")
+                       "No options data to size the expected move — treat gap risk as unbounded.")
                 ),
             }
 

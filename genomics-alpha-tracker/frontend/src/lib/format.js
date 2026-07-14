@@ -39,6 +39,22 @@ export const severityColor = {
   info: "bg-sky-600/20 text-sky-300 border-sky-700",
 };
 
+// Catalyst event codes -> plain English. Never show a raw code to the desk.
+export const EVENT_LABELS = {
+  pdufa: "FDA decision (PDUFA)",
+  adcom: "FDA advisory committee",
+  phase3_readout: "Phase 3 trial results",
+  phase2_readout: "Phase 2 trial results",
+  phase1_readout: "Phase 1 trial results",
+  data_presentation: "Data presentation (medical conference)",
+  earnings: "Earnings report",
+  conference: "Investor conference",
+  other: "Corporate event",
+};
+
+export const eventLabel = (t) =>
+  t ? EVENT_LABELS[t] || t.replace(/_/g, " ") : "event";
+
 export const FLAG_LABELS = {
   pre_catalyst_sentiment_ramp: "Pre-catalyst sentiment ramp",
   analyst_revision_cluster: "Analyst revision cluster",

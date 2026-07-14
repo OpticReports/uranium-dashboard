@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
-import { fmtNum, fmtPct, fmtScore10, scoreColor, FLAG_LABELS } from "../lib/format";
+import { eventLabel, fmtNum, fmtPct, fmtScore10, scoreColor, FLAG_LABELS } from "../lib/format";
+import InfoTip from "../components/InfoTip";
 
 // The landing view: what is this, what's actionable RIGHT NOW, and why —
 // readable by someone who has never seen the dashboard before.
@@ -95,8 +96,8 @@ export default function Today({ onPick }) {
                 <button key={i} onClick={() => onPick?.(c.symbol)}
                   className="w-full text-left border border-edge rounded-lg p-2 hover:bg-ink text-sm">
                   <div className="flex justify-between">
-                    <span><b className="text-sky-400">{c.symbol}</b> <span className="text-gray-400 text-xs">{c.event_type}</span></span>
-                    <span className="text-xs text-gray-400">{c.days_until === 0 ? "today" : `in ${c.days_until}d`}</span>
+                    <span><b className="text-sky-400">{c.symbol}</b> <span className="text-gray-400 text-xs">{eventLabel(c.event_type)}</span></span>
+                    <span className="text-xs text-gray-400">{c.days_until === 0 ? "today" : `in ${c.days_until} days`}</span>
                   </div>
                   <div className="text-xs text-gray-400 truncate">{c.title}</div>
                 </button>
@@ -132,6 +133,7 @@ function RegimeStrip({ regime }) {
       <span className={`text-xs px-2 py-1 rounded border ${labelColor}`}>
         sector regime: {regime.label || "unknown (need benchmark history)"}
       </span>
+      <InfoTip term="regime" />
       {regime.benchmarks.map((b) => (
         <span key={b.symbol} className="text-xs text-gray-400">
           <b className="text-gray-200">{b.symbol}</b>{" "}
@@ -149,19 +151,29 @@ function RegimeStrip({ regime }) {
 }
 
 function TrackRecordChip({ tr }) {
-  if (!tr) return <span className="text-[10px] text-gray-600">no track record yet</span>;
+  if (!tr)
+    return (
+      <span className="text-[10px] text-gray-600">
+        no track record yet — this signal hasn't been graded before
+        <InfoTip term="signal_track_record" />
+      </span>
+    );
   if (!tr.sufficient)
     return (
       <span className="text-[10px] text-gray-500">
-        track record: n={tr.n_graded_1m ?? 0} graded — insufficient history, treat with caution
+        track record: only {tr.n_graded_1m ?? 0} graded fire(s) — not enough history to trust yet
+        <InfoTip term="signal_track_record" />
       </span>
     );
-  const basis = tr.vs_benchmark ? "vs XBI" : "raw (no benchmark data)";
+  const basis = tr.vs_benchmark ? "beat the sector" : "was up (no benchmark data)";
   return (
     <span className="text-[10px] text-gray-400">
-      this signal (1m): <b className={tr.hit_rate_1m >= 0.5 ? "text-emerald-400" : "text-rose-400"}>
+      when this signal fired before, the stock {basis}{" "}
+      <b className={tr.hit_rate_1m >= 0.5 ? "text-emerald-400" : "text-rose-400"}>
         {fmtPct(tr.hit_rate_1m, 0)}
-      </b> hit rate {basis} · avg excess {fmtPct(tr.avg_excess_1m)} · n={tr.n_graded_1m}
+      </b>{" "}
+      of the time a month later (avg {fmtPct(tr.avg_excess_1m)}, {tr.n_graded_1m} fires)
+      <InfoTip term="signal_track_record" />
     </span>
   );
 }
@@ -179,7 +191,7 @@ function ActionCard({ c, onPick }) {
           <div className="text-2xl font-bold" style={{ color: scoreColor(c.composite) }}>
             {fmtScore10(c.composite)}<span className="text-xs text-gray-500">/10</span>
           </div>
-          <div className="text-[10px] text-gray-500">signal vs universe</div>
+          <div className="text-[10px] text-gray-500">signal vs universe<InfoTip term="composite" /></div>
         </div>
       </div>
 
@@ -201,35 +213,40 @@ function ActionCard({ c, onPick }) {
           <span className={pctColor(c.price_change_1d)}>({fmtPct(c.price_change_1d)})</span>
         </span>
         <span className="text-gray-400">
-          vs XBI 20d <b className={pctColor(c.relative_strength?.rs_20d)}>{fmtPct(c.relative_strength?.rs_20d)}</b>
+          vs sector (XBI, 20d)<InfoTip term="relative_strength" />{" "}
+          <b className={pctColor(c.relative_strength?.rs_20d)}>{fmtPct(c.relative_strength?.rs_20d)}</b>
         </span>
         {c.suggested_levels && (
           <span className="col-span-2 text-gray-400">
-            Ref levels: entry <b className="text-gray-200">{c.suggested_levels.entry}</b> ·
-            stop <b className="text-rose-300">{c.suggested_levels.stop}</b> ·
-            target <b className="text-emerald-300">{c.suggested_levels.target}</b>
-            <span className="text-gray-600"> (off {c.suggested_levels.anchored_on_close_of} close — not a logged call)</span>
+            Reference levels<InfoTip term="ref_levels" />: buy near{" "}
+            <b className="text-gray-200">{c.suggested_levels.entry}</b> · exit if it falls to{" "}
+            <b className="text-rose-300">{c.suggested_levels.stop}</b> · take profit at{" "}
+            <b className="text-emerald-300">{c.suggested_levels.target}</b>
+            <span className="text-gray-600"> (computed off the {c.suggested_levels.anchored_on_close_of} close — not a logged call)</span>
           </span>
         )}
         {c.next_catalyst && (
           <span className="col-span-2 text-gray-400">
-            Next catalyst: <b className="text-gray-200">{c.next_catalyst.event_type}</b>{" "}
-            in {c.next_catalyst.days_until}d ({c.next_catalyst.date})
+            Next catalyst: <b className="text-gray-200">{eventLabel(c.next_catalyst.event_type)}</b>{" "}
+            in {c.next_catalyst.days_until} days ({c.next_catalyst.date})
+            <InfoTip term="catalyst_impact" />
           </span>
         )}
         {c.binary_event && (
           <span className="col-span-2 text-amber-300/90">⚠ {c.binary_event.framing}</span>
         )}
-        <span className="col-span-2 flex items-center gap-2">
+        <span className="col-span-2 flex items-center gap-2 flex-wrap">
           {liq.tier && (
             <span className={`px-1.5 py-0.5 rounded border text-[10px] ${TIER_BADGE[liq.tier] || ""}`}>
               liquidity {liq.tier}
             </span>
           )}
+          <InfoTip term="liquidity_tier" />
           {liq.warning && <span className="text-[10px] text-amber-300">{liq.warning}</span>}
           {c.sentiment_7d !== null && c.sentiment_7d !== undefined && (
             <span className="text-[10px] text-gray-500">
               7d social sentiment {fmtNum(c.sentiment_7d, 2)}
+              <InfoTip term="sentiment_7d" />
             </span>
           )}
         </span>

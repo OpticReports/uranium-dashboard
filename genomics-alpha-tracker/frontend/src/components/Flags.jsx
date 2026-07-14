@@ -1,5 +1,5 @@
 import React from "react";
-import { FLAG_LABELS, severityColor } from "../lib/format";
+import { eventLabel, FLAG_LABELS, severityColor } from "../lib/format";
 
 // Renders evidence-linked flags. Evidence is shown inline so each flag is
 // auditable (which catalysts / revisions / posts drove it).
@@ -37,11 +37,11 @@ function Evidence({ ev }) {
           •{" "}
           {c.url ? (
             <a className="underline" href={c.url} target="_blank" rel="noreferrer">
-              {c.event_type} · {c.date}
+              {eventLabel(c.event_type)} · {c.date}
             </a>
           ) : (
             <span>
-              {c.event_type} · {c.date}
+              {eventLabel(c.event_type)} · {c.date}
             </span>
           )}{" "}
           (impact {c.impact?.toFixed?.(2)}, in {c.days_until}d)

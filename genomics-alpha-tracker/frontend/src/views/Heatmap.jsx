@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
-import { scoreColor, fmtNum, severityColor, fmtScore10 } from "../lib/format";
+import { scoreColor, fmtNum, severityColor, fmtScore10, eventLabel } from "../lib/format";
 import Treemap from "./Treemap";
 
 // Sector heatmap, rebuilt for decisions: color by momentum OR level, with a
@@ -210,7 +210,7 @@ function DrillDown({ tile, onPick }) {
             </span>
             {m.next_catalyst && (
               <span className="text-[11px] text-amber-300">
-                🗓 {m.next_catalyst.event_type} in {m.next_catalyst.days_until}d
+                🗓 {eventLabel(m.next_catalyst.event_type)} in {m.next_catalyst.days_until}d
               </span>
             )}
             {m.flags.map((f) => (

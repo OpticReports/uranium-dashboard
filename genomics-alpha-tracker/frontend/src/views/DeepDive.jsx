@@ -4,7 +4,7 @@ import {
   ReferenceLine, BarChart, Bar, CartesianGrid,
 } from "recharts";
 import { api } from "../lib/api";
-import { fmtNum, fmtMoney, fmtPct, scoreColor, naIfNull, fmtScore10 } from "../lib/format";
+import { fmtNum, fmtMoney, fmtPct, scoreColor, naIfNull, fmtScore10, eventLabel } from "../lib/format";
 import RunwayGauge from "../components/RunwayGauge";
 import Flags from "../components/Flags";
 import InfoTip from "../components/InfoTip";
@@ -87,7 +87,7 @@ export default function DeepDive({ symbol, onBack }) {
                   x={nearestDate(priceData, c.date)}
                   stroke="#f59e0b"
                   strokeDasharray="3 3"
-                  label={{ value: c.event_type, fontSize: 9, fill: "#f59e0b", position: "top" }}
+                  label={{ value: eventLabel(c.event_type), fontSize: 9, fill: "#f59e0b", position: "top" }}
                 />
               ))}
           </LineChart>
