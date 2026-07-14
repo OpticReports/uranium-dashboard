@@ -1,6 +1,11 @@
 # Thresholds for named, evidence-linked alpha flags.
 # Each flag links back to the underlying rows (catalysts / revisions / posts).
 
+# A flag that re-fires while its condition persists is noise: each flag type
+# is suppressed for this many days after firing on a name (state-like flags —
+# pullback, insider window — would otherwise re-fire on every scoring run).
+refire_suppression_days: 7
+
 flags:
   pre_catalyst_sentiment_ramp:
     # Hype acceleration rising into a high-impact catalyst within N days.
@@ -27,3 +32,37 @@ flags:
     # High-impact catalyst imminent.
     within_days: 21
     min_catalyst_impact: 0.85
+
+  pullback_into_catalyst:
+    # Price pulled back from its recent high while a high-impact catalyst
+    # approaches — the "flag it if it pulled back and has a catalyst coming"
+    # setup the desk asked for. Hardened against being a mere downtrend
+    # detector: depth is ATR-normalized AND capped (a name 30%+ off its high
+    # is breaking down, not pulling back), and a trend qualifier (close above
+    # the 50-day MA) requires the pullback to occur WITHIN strength.
+    # OBSERVE-ONLY until its forward-return track record earns call-trigger status.
+    high_lookback_days: 30
+    min_pullback_pct: 0.10        # >=10% below the 30d high...
+    min_pullback_atr: 1.5         # ...and at least 1.5 ATRs deep (vol-normalized)
+    max_pullback_pct: 0.30        # deeper than 30% = breakdown, not a pullback
+    require_above_50dma: true     # pullback within an uptrend, not a knife
+    catalyst_min_days: 10         # far enough out to establish AND exit before it
+    catalyst_max_days: 45
+    min_catalyst_impact: 0.7
+
+  volume_anomaly:
+    # Latest daily volume unusually high vs the name's own trailing history
+    # (z-score on log-volume; the current day is excluded from its baseline).
+    # The dollar floor stops Tier-C noise (a tiny uptick on a quiet name) firing.
+    lookback_days: 60
+    min_volume_z: 2.5
+    min_dollar_volume: 1000000    # spike day must trade >= $1M
+
+  insider_buying_cluster:
+    # CLUSTER buying = multiple DISTINCT insiders buying in the open market in
+    # a short window (one officer's 10b5-1 plan printing twice is not a signal).
+    # OBSERVE-ONLY until its forward-return track record earns call-trigger status.
+    window_days: 30
+    min_buys: 2
+    min_distinct_insiders: 2
+    min_total_value: 25000        # aggregate buy value >= $25k

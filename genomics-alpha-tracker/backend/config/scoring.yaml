@@ -10,11 +10,23 @@
 # Final scaling of the composite for display: "0_100" or "zscore"
 output_scale: "0_100"
 
+# Benchmark ETFs ingested for relative-strength and the market-regime strip.
+# Stored as inactive Security rows: they never enter scoring, flags, or the
+# default dashboards (they do appear, marked inactive, in Universe management).
+# IBB is the investable NBI proxy (the ^NBI index isn't available on all
+# providers); XBI is the primary sector barometer.
+benchmarks: [XBI, ARKG, IBB]
+
+# EQUAL WEIGHTS by operator decision (2026-07 questionnaire): the four SIGNAL
+# components start equal "until we can see and feel the data", then get retuned
+# from Calls Log / flag track-record evidence — not intuition. runway_penalty
+# stays at 0.10: it is a risk drag, not an alpha term — promoting it to equal
+# footing would reshuffle the ranking for balance-sheet reasons, not signal.
 weights:
-  revision_velocity: 0.25   # rate of change of consensus estimates (leading)
-  catalyst_score:    0.30   # proximity-weighted upcoming catalysts
-  hype_divergence:   0.20   # social acceleration leading price
-  positioning:       0.15   # short interest + options skew
+  revision_velocity: 0.225  # rate of change of consensus estimates (leading)
+  catalyst_score:    0.225  # proximity-weighted upcoming catalysts
+  hype_divergence:   0.225  # social acceleration leading price
+  positioning:       0.225  # short interest + options skew
   runway_penalty:    0.10   # penalty as cash runway shortens (enters negatively)
 
 components:

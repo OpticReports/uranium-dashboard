@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
-import { scoreColor, fmtNum } from "../lib/format";
+import { scoreColor, fmtNum, fmtScore10 } from "../lib/format";
 import AddTicker from "../components/AddTicker";
 import InfoTip from "../components/InfoTip";
 
@@ -115,7 +115,7 @@ export default function Watchlist({ onPick }) {
                 </td>
                 <td className="px-3 py-2 text-gray-300">{r.name}</td>
                 <td className="px-3 py-2 font-bold" style={{ color: scoreColor(r.composite) }}>
-                  {fmtNum(r.composite, 0)}
+                  {fmtScore10(r.composite)}
                 </td>
                 {COMPONENT_COLS.map((c) => (
                   <td key={c} className="px-3 py-2" style={{ color: scoreColor(r.components?.[c]) }}>

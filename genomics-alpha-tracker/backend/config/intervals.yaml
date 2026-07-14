@@ -21,3 +21,15 @@ jobs:
     # Recompute the Alpha Signal after ingestion settles.
     enabled: true
     interval_minutes: 60
+  calls:
+    # Grade open trade calls, then generate new ones from fresh flags.
+    enabled: true
+    interval_minutes: 60
+  insiders:
+    # Insider transactions move slowly; daily is plenty.
+    enabled: true
+    interval_minutes: 1440
+  benchmarks:
+    # Benchmark ETF bars for relative strength + the regime strip.
+    enabled: true
+    interval_minutes: 360

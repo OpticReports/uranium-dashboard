@@ -83,6 +83,26 @@ def get_score(symbol: str, session: Session = Depends(get_session)):
     )
 
 
+@router.get("/flags/track-record")
+def flags_track_record(session: Session = Depends(get_session)):
+    """Uncensored per-flag-type forward returns (1w/1m/3m, raw + XBI-excess).
+
+    This is the evidence that decides which signals earn call-trigger status
+    and how the equal starting weights get retuned.
+    """
+    from ..scoring.outcomes import flag_track_record
+
+    return flag_track_record(session)
+
+
+@router.post("/flags/grade")
+def grade_flags_now(session: Session = Depends(get_session)):
+    """Run the flag forward-return evaluator immediately (also scheduled)."""
+    from ..scoring.outcomes import evaluate_flag_outcomes
+
+    return {"graded": evaluate_flag_outcomes(session)}
+
+
 @router.get("/flags", response_model=list[FlagOut])
 def list_flags(
     days: int = Query(7, ge=1, le=90),
