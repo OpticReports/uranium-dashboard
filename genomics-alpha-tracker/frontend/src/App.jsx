@@ -6,12 +6,14 @@ import CatalystCalendar from "./views/CatalystCalendar";
 import Movers from "./views/Movers";
 import DeepDive from "./views/DeepDive";
 import Chat from "./views/Chat";
+import CallsLog from "./views/CallsLog";
 
 const TABS = [
   { id: "heatmap", label: "Sector Heatmap" },
   { id: "watchlist", label: "Watchlist" },
   { id: "catalysts", label: "Catalyst Calendar" },
   { id: "movers", label: "Movers in Narrative" },
+  { id: "calls", label: "Calls Log" },
   { id: "chat", label: "Analyst Chat" },
 ];
 
@@ -65,6 +67,7 @@ export default function App() {
             {tab === "watchlist" && <Watchlist onPick={pick} />}
             {tab === "catalysts" && <CatalystCalendar onPick={pick} />}
             {tab === "movers" && <Movers onPick={pick} />}
+            {tab === "calls" && <CallsLog onPick={pick} />}
             {tab === "chat" && <Chat onPick={pick} />}
           </>
         )}

@@ -68,4 +68,20 @@ export const api = {
   // Chat analyst
   chatStatus: () => req("/chat/status"),
   chat: (payload) => req("/chat", { method: "POST", body: JSON.stringify(payload) }),
+
+  // Trade calls (the tracker's own logged track record)
+  calls: ({ status, symbol } = {}) => {
+    const q = new URLSearchParams();
+    if (status) q.set("status", status);
+    if (symbol) q.set("symbol", symbol);
+    const qs = q.toString();
+    return req(`/calls${qs ? `?${qs}` : ""}`);
+  },
+  callsScorecard: () => req("/calls/scorecard"),
+  createCall: (payload) =>
+    req("/calls", { method: "POST", body: JSON.stringify(payload) }),
+  closeCall: (id, payload = {}) =>
+    req(`/calls/${id}/close`, { method: "POST", body: JSON.stringify(payload) }),
+  evaluateCalls: () => req("/calls/evaluate", { method: "POST" }),
+  generateCalls: () => req("/calls/generate", { method: "POST" }),
 };

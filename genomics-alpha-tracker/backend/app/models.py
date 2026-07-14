@@ -169,3 +169,41 @@ class FlagEvent(SQLModel, table=True):
     message: str = ""
     severity: str = "info"        # info | warn | high
     evidence: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+
+
+class TradeCall(SQLModel, table=True):
+    """An exact trade call (entry/stop/target/horizon) logged at fire-time.
+
+    Calls are IMMUTABLE once made (levels never retro-edited) and are graded
+    against subsequent daily bars, so the tracker builds an honest track record
+    of its own signals — the feedback loop for improving what fires.
+    """
+
+    __tablename__ = "trade_call"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    symbol: str = Field(index=True, foreign_key="security.symbol")
+    created_at: DateTime = Field(default_factory=_utcnow, index=True)
+    call_date: Date = Field(index=True)            # trading date the call is made
+    direction: str = "long"                        # long | short
+    source: str = "auto_flag"                      # auto_flag | manual | chat
+    flag_type: Optional[str] = None                # trigger flag for auto calls
+    thesis: str = ""                               # why the call was made
+
+    # The exact call — levels are frozen at fire-time.
+    entry_price: float
+    stop_price: float
+    target_price: float
+    expires_on: Date                               # time-stop (sell-before-binary aware)
+
+    # Context snapshotted at fire-time for later attribution.
+    composite_at_call: Optional[float] = None
+    evidence: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+
+    # Outcome (filled by the evaluator; NULL while the call is open).
+    status: str = Field(default="open", index=True)  # open | target_hit | stopped | expired | closed_manual
+    closed_at: Optional[DateTime] = None
+    exit_date: Optional[Date] = None
+    exit_price: Optional[float] = None
+    return_pct: Optional[float] = None             # fractional, direction-aware
+    r_multiple: Optional[float] = None             # (exit-entry)/(entry-stop) for longs

@@ -1,0 +1,38 @@
+# Trade Calls engine configuration.
+# The tracker turns its own high-conviction flags into EXACT trade calls
+# (entry / stop / target / time horizon), logs them at fire-time, and then
+# grades every call against subsequent price action — so signal quality is
+# measured, not assumed. Edit + POST /scores/reload to hot-reload.
+
+calls:
+  enabled: true
+
+  # Only these flag types auto-generate a call. Long-side setups only for now
+  # (the desk is usually long). A flag type may require extra conditions.
+  triggers:
+    pre_catalyst_sentiment_ramp: {}
+    analyst_revision_cluster:
+      direction: upward            # downward clusters never generate a long call
+    unusual_options_social_spike: {}
+
+  # Gates that a triggering flag must ALSO pass before a call is made.
+  # Conservative on purpose: false positives are the main failure mode.
+  min_composite: 55                # composite Alpha Signal at fire-time
+  flag_lookback_hours: 24          # only fresh flags generate calls
+  cooldown_days: 14                # no new auto-call on a symbol within this window
+  max_open_calls: 10               # cap on concurrent open auto-calls
+
+  # Risk framing for the exact levels.
+  risk:
+    atr_window: 14                 # ATR lookback (daily bars)
+    stop_atr_mult: 2.0             # stop = entry - 2*ATR (long)
+    fallback_stop_pct: 0.08        # stop when ATR can't be computed
+    reward_risk: 2.0               # target = entry + reward_risk * (entry - stop)
+
+  # Time horizon. The desk rarely holds through binaries, so a call generated
+  # off a pre-catalyst setup expires the day BEFORE its catalyst (sell into
+  # the event). Non-catalyst calls get the default horizon.
+  horizon:
+    default_days: 30
+    min_days: 5
+    max_days: 45

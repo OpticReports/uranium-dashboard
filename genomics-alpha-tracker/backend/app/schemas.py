@@ -106,3 +106,67 @@ class MoverOut(BaseModel):
     name: str
     mention_acceleration: Optional[float]
     composite: Optional[float]
+
+
+# --- Trade calls (the tracker's own logged track record) ----------------------
+
+class TradeCallOut(BaseModel):
+    id: int
+    symbol: str
+    name: str = ""
+    created_at: DateTime
+    call_date: Date
+    direction: str
+    source: str
+    flag_type: Optional[str]
+    thesis: str
+    entry_price: float
+    stop_price: float
+    target_price: float
+    expires_on: Date
+    composite_at_call: Optional[float]
+    status: str
+    exit_date: Optional[Date]
+    exit_price: Optional[float]
+    return_pct: Optional[float]
+    r_multiple: Optional[float]
+    # Live context for OPEN calls (from the latest bar; null once closed).
+    last_price: Optional[float] = None
+    unrealized_pct: Optional[float] = None
+    unrealized_r: Optional[float] = None
+
+
+class TradeCallCreate(BaseModel):
+    """Log a manual call (an operator take, or an AI chat call transcribed)."""
+
+    symbol: str = Field(..., min_length=1, max_length=12)
+    direction: str = "long"                  # long | short
+    entry_price: Optional[float] = None      # default: latest close
+    stop_price: Optional[float] = None       # default: ATR-based, like auto calls
+    target_price: Optional[float] = None
+    horizon_days: int = Field(30, ge=1, le=365)
+    thesis: str = ""
+    source: str = "manual"                   # manual | chat
+
+
+class TradeCallClose(BaseModel):
+    exit_price: Optional[float] = None       # default: latest close
+    note: Optional[str] = None
+
+
+class CallBucketOut(BaseModel):
+    calls: int
+    open: int
+    closed: int
+    target_hit: int
+    stopped: int
+    expired: int
+    win_rate: Optional[float]
+    avg_return_pct: Optional[float]
+    avg_r: Optional[float]
+    total_r: Optional[float]
+
+
+class CallsScorecardOut(BaseModel):
+    overall: CallBucketOut
+    by_signal: dict[str, CallBucketOut]

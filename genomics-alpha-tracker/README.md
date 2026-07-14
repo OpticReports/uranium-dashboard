@@ -160,9 +160,39 @@ links back to the underlying rows (which catalysts, revisions, posts):
 - **Watchlist** — sortable by any signal component; inline add/deactivate/remove.
 - **Catalyst Calendar** — next 90 days, filterable by impact & subsector.
 - **Movers in Narrative** — largest hype acceleration this week + active flags.
+- **Calls Log** — the tracker's own exact trade calls, logged and graded (below).
 - **Per-name Deep Dive** — price chart with catalyst markers, estimate-revision
   timeline, hype timeline, runway gauge, auditable score breakdown, science feed.
 - **Analyst Chat** — natural-language Q&A grounded in your data.
+
+---
+
+## Calls Log — the tracker grades itself
+
+The tracker doesn't just flag names — it makes **exact trade calls** and keeps
+score. When a trigger signal fires (pre-catalyst sentiment ramp, upward analyst
+revision cluster, unusual options + social spike) on a name whose composite
+clears the conviction bar, a call is logged with:
+
+- **entry** (latest close), **stop** (2×ATR, %-fallback), **target** (2R), and a
+  **time-stop** — which lands the day *before* the nearest binary catalyst, so
+  auto-calls sell into events rather than holding through binaries.
+
+Levels are **frozen at fire-time and never edited**. A scheduled evaluator then
+grades every open call against subsequent daily bars — target hit, stopped out
+(a bar spanning both levels grades as stopped, the conservative reading), or
+time-stop expiry — and records return % and **R-multiple**. The *Calls Log* tab
+shows open calls with live unrealized P&L, the closed-call history, and a
+**scorecard by signal type** (win rate, avg return, avg R) — so "which signals
+actually pay" is answered with evidence, and weights/thresholds get retuned
+from the record, not intuition.
+
+Manual calls (the desk's own takes, or a chat memo worth tracking) are logged
+via the same tab or `POST /calls` — missing levels are auto-filled the same way
+so every call is gradeable. Tuning lives in
+[`config/calls.yaml`](backend/config/calls.yaml) (triggers, conviction gate,
+cooldown, risk unit, horizon); the engine is deliberately conservative because
+false positives are the main failure mode.
 
 ---
 
@@ -202,6 +232,7 @@ the savings are visible.
 | `config/watchlist.yaml` | the universe (symbol, name, subsector tags, active) |
 | `config/scoring.yaml` | component weights & parameters |
 | `config/flags.yaml` | flag thresholds |
+| `config/calls.yaml` | trade-call triggers, conviction gate, risk unit, horizon |
 | `config/intervals.yaml` | scheduler refresh intervals per module |
 
 Reload at runtime: `POST /universe/reload`, `POST /scores/reload`.
@@ -210,13 +241,14 @@ Reload at runtime: `POST /universe/reload`, `POST /scores/reload`.
 
 ## Testing
 ```bash
-cd backend && pytest          # 38 tests
+cd backend && pytest          # 59 tests
 ```
 Coverage includes the **scoring math with known inputs/outputs**
 (`tests/test_scoring.py`), an offline end-to-end engine run
 (`tests/test_engine.py`), universe sync/history-safety
-(`tests/test_universe.py`), and catalyst normalization + override preservation
-(`tests/test_catalysts.py`).
+(`tests/test_universe.py`), catalyst normalization + override preservation
+(`tests/test_catalysts.py`), and the **trade-call level math, grading rules,
+generation gates, and scorecard** (`tests/test_calls.py`).
 
 ---
 

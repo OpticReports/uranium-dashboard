@@ -51,6 +51,20 @@ def _scoring_job():
         logger.exception("Scoring job failed: %s", exc)
 
 
+def _calls_job():
+    """Grade open trade calls, then turn any fresh flags into new calls.
+    Evaluate FIRST so a symbol whose call just closed frees its slot."""
+    from .calls.manager import evaluate_calls, generate_calls
+
+    try:
+        with Session(engine) as session:
+            closed = evaluate_calls(session)
+            made = generate_calls(session)
+        logger.info("Calls job done: %d closed, %d generated", len(closed), len(made))
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Calls job failed: %s", exc)
+
+
 def start_scheduler() -> BackgroundScheduler:
     global _scheduler
     if _scheduler is not None:
@@ -83,6 +97,16 @@ def start_scheduler() -> BackgroundScheduler:
                       next_run_time=now + timedelta(minutes=3))
         logger.info("Scheduled 'scoring' every %d min (first run in 3 min)",
                     scoring_cfg.get("interval_minutes", 60))
+
+    calls_cfg = cfg.get("calls", {})
+    if calls_cfg.get("enabled", True):
+        sched.add_job(_calls_job, "interval",
+                      minutes=calls_cfg.get("interval_minutes", 60),
+                      id="calls", max_instances=1, coalesce=True,
+                      # run after scoring so calls see fresh flags/composites
+                      next_run_time=now + timedelta(minutes=5))
+        logger.info("Scheduled 'calls' every %d min (first run in 5 min)",
+                    calls_cfg.get("interval_minutes", 60))
 
     sched.start()
     _scheduler = sched
