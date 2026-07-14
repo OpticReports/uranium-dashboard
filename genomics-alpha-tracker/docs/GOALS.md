@@ -117,11 +117,17 @@ explanations on every number.
 - Benchmarks + relative strength vs XBI (20/60d, unadjusted) + regime label.
 - Insider-transaction ingestion (yfinance, daily).
 - Append-only decision journal (chat memos + desk notes, per name).
-- Exit-mechanics backtest on ~2y real adjusted bars: paired grid, cluster
-  bootstrap, slippage-adjusted plateau selection. Key finding: tight stops'
-  frictionless edge is an artifact — costs eat it; 3×ATR/2R/45d is robust in
-  both regimes. The pullback entry's price-half alone showed NO edge vs
-  baseline (kept observe-only).
+- Exit-mechanics backtest on ~2y real adjusted bars: genuinely paired grid
+  (identical entries per cell), open-first gap-aware fills, cluster bootstrap,
+  slippage-adjusted plateau selection. Key findings: tight stops' frictionless
+  edge is a cost artifact; 3×ATR/3:1/45d is robust net-of-costs in both
+  regimes (2:1 statistically indistinguishable). The pullback entry's
+  price-half alone showed NO edge vs baseline (kept observe-only).
+- Two adversarial review rounds applied: round 1 (design) forced the flag
+  track record, dedup, binary-expiry refusal, and observe-only gating; round 2
+  (code) caught open-first grading (gap-up-then-fade days were being scored as
+  stop-losses), the Monday-binary time-stop hole, paired-entry claims, and
+  track-record denominator honesty — all fixed and tested.
 
 **Deferred (with reasons):**
 - 13F/fund flows: needs a data feed decision (budget question unanswered).

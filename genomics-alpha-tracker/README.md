@@ -202,10 +202,12 @@ false positives are the main failure mode.
 **Evidence-based defaults.** The stop/target/time-stop defaults come from a
 real-data backtest of the exit mechanics
 ([`docs/BACKTEST_CALLS.md`](../docs/BACKTEST_CALLS.md), ~2y adjusted bars,
-30 names): a paired exit-config grid with cluster-bootstrap CIs, regime split,
-and **slippage-adjusted plateau selection**. Headline finding: tight (1.5–2×ATR)
-stops look best frictionless but lose their edge to trading costs; 3×ATR / 2:1 /
-45d is robust net of slippage in both XBI regimes. Rerun with
+30 names): a **genuinely paired** exit-config grid (identical entries in every
+cell), open-first gap-aware fills, cluster-bootstrap CIs, regime split, and
+**slippage-adjusted plateau selection**. Headline findings: tight (1.5–2×ATR)
+stops look best frictionless but lose their edge to trading costs, and
+3×ATR / 3:1 / 45d is robust net of slippage in both XBI regimes (net avg R
+0.190; the 2:1 neighbor is statistically indistinguishable). Rerun with
 `python -m scripts.backtest_calls --refresh`.
 
 **The flags grade themselves too.** Every flag — including ones that never

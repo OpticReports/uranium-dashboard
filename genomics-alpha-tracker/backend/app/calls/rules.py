@@ -94,36 +94,52 @@ def grade_call(
 ) -> CallExit | None:
     """Walk daily bars chronologically and decide the call's exit, if any.
 
-    - Stop and target are checked intrabar (low/high). When BOTH are touched
-      in the same bar the order is unknowable from dailies, so the call is
-      graded as STOPPED — the conservative reading.
-    - GAP-AWARE FILLS: biotech gaps through levels are the norm, not the
-      exception. When the bar OPENS beyond a level, the fill is the open, not
-      the level — a stop at $96 gapped to $87 is a $87 exit, and grading it
-      at $96 would systematically flatter tight stops.
-    - A bar on/after `expires_on` closes the call at that bar's close
-      (time-stop / sell-before-binary).
+    - THE OPEN RESOLVES FIRST: the open is the one intrabar event whose order
+      is KNOWN. A bar that opens beyond the target exits at the open as a win
+      even if it later fades through the stop — grading biotech's classic
+      gap-up-then-fade readout day as a stop-loss would systematically convert
+      the strategy's best days into -1R.
+    - Then stop and target are checked intrabar (low/high). When BOTH are
+      touched and the open resolved neither, the order is unknowable from
+      dailies, so the call grades STOPPED — the conservative reading.
+    - GAP-AWARE FILLS: a stop gapped through fills at the open, not the level.
+    - The time-stop exits at the close of the LAST bar at-or-before
+      `expires_on` — never on a bar after it. A binary on a Monday (expiry
+      Sunday) must exit at Friday's close, not ride through the event to
+      Monday's post-readout print.
     Returns None while the call is still open.
     """
+    prev: BarLike | None = None
     for b in sorted(bars, key=lambda b: b.date):
         if b.low is None or b.high is None or b.close is None:
             continue
+        if b.date > expires_on:
+            # Time-stop passed on a non-trading day: exit at the last bar
+            # before it (prev is None only on a data gap straight past expiry).
+            if prev is not None:
+                return CallExit("expired", prev.date, prev.close)
+            return CallExit("expired", b.date, b.open if b.open is not None else b.close)
         if direction == "short":
+            if b.open is not None and b.open >= stop:
+                return CallExit("stopped", b.date, b.open)
+            if b.open is not None and b.open <= target:
+                return CallExit("target_hit", b.date, b.open)
             if b.high >= stop:
-                fill = b.open if (b.open is not None and b.open >= stop) else stop
-                return CallExit("stopped", b.date, fill)
+                return CallExit("stopped", b.date, stop)
             if b.low <= target:
-                fill = b.open if (b.open is not None and b.open <= target) else target
-                return CallExit("target_hit", b.date, fill)
+                return CallExit("target_hit", b.date, target)
         else:
+            if b.open is not None and b.open <= stop:
+                return CallExit("stopped", b.date, b.open)
+            if b.open is not None and b.open >= target:
+                return CallExit("target_hit", b.date, b.open)
             if b.low <= stop:
-                fill = b.open if (b.open is not None and b.open <= stop) else stop
-                return CallExit("stopped", b.date, fill)
+                return CallExit("stopped", b.date, stop)
             if b.high >= target:
-                fill = b.open if (b.open is not None and b.open >= target) else target
-                return CallExit("target_hit", b.date, fill)
-        if b.date >= expires_on:
+                return CallExit("target_hit", b.date, target)
+        if b.date == expires_on:
             return CallExit("expired", b.date, b.close)
+        prev = b
     return None
 
 

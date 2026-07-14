@@ -156,11 +156,12 @@ function TrackRecordChip({ tr }) {
         track record: n={tr.n_graded_1m ?? 0} graded — insufficient history, treat with caution
       </span>
     );
+  const basis = tr.vs_benchmark ? "vs XBI" : "raw (no benchmark data)";
   return (
     <span className="text-[10px] text-gray-400">
       this signal (1m): <b className={tr.hit_rate_1m >= 0.5 ? "text-emerald-400" : "text-rose-400"}>
         {fmtPct(tr.hit_rate_1m, 0)}
-      </b> hit rate vs XBI · avg {fmtPct(tr.avg_excess_1m)} · n={tr.n_graded_1m}
+      </b> hit rate {basis} · avg excess {fmtPct(tr.avg_excess_1m)} · n={tr.n_graded_1m}
     </span>
   );
 }

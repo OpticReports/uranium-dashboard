@@ -18,6 +18,46 @@ from app.scoring.flags import evaluate_flags
 from app.scoring.outcomes import evaluate_flag_outcomes, flag_track_record
 
 
+# --- gap-aware fills + open-first resolution --------------------------------------
+
+def test_gap_up_then_fade_is_a_win_not_a_stop():
+    # The classic biotech readout day: opens way above target, fades hard
+    # intraday through the stop. The open is the KNOWN first event — this is
+    # a target exit at the open, not a -1R stop.
+    bars = [BarLike(date(2026, 1, 2), 116.0, 95.0, 98.0, open=115.0)]
+    ex = grade_call("long", 100.0, 96.0, 108.0, date(2026, 2, 1), bars)
+    assert ex.status == "target_hit" and ex.exit_price == 115.0
+
+
+def test_short_gap_down_then_squeeze_is_a_win():
+    bars = [BarLike(date(2026, 1, 2), 105.0, 84.0, 103.0, open=85.0)]
+    ex = grade_call("short", 100.0, 104.0, 92.0, date(2026, 2, 1), bars)
+    assert ex.status == "target_hit" and ex.exit_price == 85.0
+
+
+def test_open_through_stop_still_resolves_first():
+    # Opens below the stop, then rips through the target intraday: the open
+    # was first — stopped at the open, not a win.
+    bars = [BarLike(date(2026, 1, 2), 112.0, 94.0, 111.0, open=95.0)]
+    ex = grade_call("long", 100.0, 96.0, 108.0, date(2026, 2, 1), bars)
+    assert ex.status == "stopped" and ex.exit_price == 95.0
+
+
+def test_monday_binary_exits_at_friday_close():
+    # Expiry lands on a Sunday (event Monday). The first bar on/after expiry
+    # is the event day itself — the time-stop must exit at Friday's close.
+    fri = date(2026, 1, 9)   # Friday
+    sun = date(2026, 1, 11)  # expires_on (event Monday the 12th)
+    mon = date(2026, 1, 12)
+    bars = [
+        BarLike(fri, 101.0, 99.0, 100.5, open=100.0),
+        BarLike(mon, 70.0, 55.0, 60.0, open=65.0),  # post-event crash
+    ]
+    ex = grade_call("long", 100.0, 90.0, 120.0, sun, bars)
+    assert ex.status == "expired"
+    assert ex.exit_date == fri and ex.exit_price == 100.5
+
+
 # --- gap-aware fills ------------------------------------------------------------
 
 def test_gap_through_stop_fills_at_open():
@@ -294,7 +334,44 @@ def test_flag_outcome_incomplete_until_bars_exist(session):
         assert rec["horizons"]["3m"]["n"] == 0
 
 
+def test_track_record_reports_declared_basis(session):
+    # With no benchmark data at all, stats must say basis=raw, not fake "vs XBI".
+    start = date.today() - timedelta(days=120)
+    _seed_prices(session, "NOBM", [100.0 + i for i in range(80)], start)
+    flag = FlagEvent(symbol="NOBM", flag_type="volume_anomaly",
+                     severity="warn", message="t", evidence={})
+    flag.asof = flag.asof.replace(year=start.year, month=start.month, day=start.day)
+    session.add(flag)
+    session.commit()
+    evaluate_flag_outcomes(session)
+    h1m = flag_track_record(session)["by_flag_type"]["volume_anomaly"]["horizons"]["1m"]
+    assert h1m["basis"] == "raw"
+    assert h1m["vs_benchmark"] is False
+    assert h1m["n"] == h1m["n_raw"] == 1
+    assert h1m["n_excess"] == 0
+
+
+def test_outcomes_group_analyst_clusters_by_direction(session):
+    from app.scoring.outcomes import outcome_key
+
+    assert outcome_key("analyst_revision_cluster", {"direction": "upward"}) == \
+        "analyst_revision_cluster:upward"
+    assert outcome_key("analyst_revision_cluster", {"direction": "downward"}) == \
+        "analyst_revision_cluster:downward"
+    assert outcome_key("volume_anomaly", {}) == "volume_anomaly"
+    assert outcome_key("volume_anomaly", None) == "volume_anomaly"
+
+
 # --- flag re-fire suppression -------------------------------------------------------
+
+def test_opposite_direction_cluster_is_not_suppressed():
+    # Suppression keys must include direction: a downward analyst cluster
+    # fired 3 days ago must NOT suppress a fresh upward cluster.
+    from app.scoring.outcomes import outcome_key
+
+    down_key = ("CRSP", outcome_key("analyst_revision_cluster", {"direction": "downward"}))
+    up_key = ("CRSP", outcome_key("analyst_revision_cluster", {"direction": "upward"}))
+    assert down_key != up_key
 
 def test_flags_do_not_refire_within_suppression_window(session):
     from app.scoring.engine import compute_scores

@@ -52,14 +52,34 @@ def _fwd_return(closes: list[tuple[date, float]], fired_on: date, bars_fwd: int)
     return (closes[idx + bars_fwd][1] - base) / base
 
 
+def outcome_key(flag_type: str, evidence: dict | None) -> str:
+    """Track-record bucket for a flag. Directional flags (analyst revision
+    clusters) are SPLIT by direction — pooling upward and downward clusters
+    into one hit rate would make the number meaningless."""
+    direction = (evidence or {}).get("direction")
+    return f"{flag_type}:{direction}" if direction else flag_type
+
+
 def evaluate_flag_outcomes(session: Session, batch: int = 500) -> int:
     """Create/refresh FlagOutcome rows for flags not yet fully graded.
 
-    Idempotent and cheap: complete rows are never touched again; incomplete
-    rows fill in horizon by horizon as bars accrue.
+    Idempotent and bounded: only flags WITHOUT a complete outcome are scanned
+    (complete rows are never touched again); incomplete rows fill in horizon
+    by horizon as bars accrue — including a late excess backfill when the
+    benchmark's bars arrive after the symbol's did.
     """
-    flags = session.exec(select(FlagEvent).order_by(FlagEvent.asof.asc())).all()
-    existing = {o.flag_id: o for o in session.exec(select(FlagOutcome)).all()}
+    complete_ids = select(FlagOutcome.flag_id).where(FlagOutcome.complete == True)  # noqa: E712
+    flags = session.exec(
+        select(FlagEvent)
+        .where(FlagEvent.id.not_in(complete_ids))  # type: ignore[union-attr]
+        .order_by(FlagEvent.asof.asc())
+    ).all()
+    existing = {
+        o.flag_id: o
+        for o in session.exec(
+            select(FlagOutcome).where(FlagOutcome.complete == False)  # noqa: E712
+        ).all()
+    }
 
     closes_cache: dict[str, list[tuple[date, float]]] = {}
 
@@ -90,22 +110,31 @@ def evaluate_flag_outcomes(session: Session, batch: int = 500) -> int:
             if base_idx < 0:
                 continue  # no bar at/before fire date yet — grade later
             out = FlagOutcome(
-                flag_id=flag.id, symbol=flag.symbol, flag_type=flag.flag_type,
+                flag_id=flag.id, symbol=flag.symbol,
+                flag_type=outcome_key(flag.flag_type, flag.evidence),
                 fired_on=closes[base_idx][0], price_at_fire=closes[base_idx][1],
             )
         changed = out.id is None
         for label, bars_fwd in HORIZONS.items():
-            if getattr(out, f"fwd_{label}") is not None:
-                continue
-            fwd = _fwd_return(closes, out.fired_on, bars_fwd)
+            fwd = getattr(out, f"fwd_{label}")
             if fwd is None:
-                continue
-            setattr(out, f"fwd_{label}", fwd)
-            bench_fwd = _fwd_return(bench_closes, out.fired_on, bars_fwd)
-            if bench_fwd is not None:
-                setattr(out, f"excess_{label}", fwd - bench_fwd)
-            changed = True
-        out.complete = all(getattr(out, f"fwd_{h}") is not None for h in HORIZONS)
+                fwd = _fwd_return(closes, out.fired_on, bars_fwd)
+                if fwd is None:
+                    continue
+                setattr(out, f"fwd_{label}", fwd)
+                changed = True
+            # Excess is retried even when fwd was already set: the benchmark's
+            # bars can arrive later than the symbol's (different job cadences).
+            if getattr(out, f"excess_{label}") is None:
+                bench_fwd = _fwd_return(bench_closes, out.fired_on, bars_fwd)
+                if bench_fwd is not None:
+                    setattr(out, f"excess_{label}", fwd - bench_fwd)
+                    changed = True
+        out.complete = all(
+            getattr(out, f"fwd_{h}") is not None
+            and getattr(out, f"excess_{h}") is not None
+            for h in HORIZONS
+        )
         if changed:
             session.add(out)
             n += 1
@@ -129,13 +158,20 @@ def flag_track_record(session: Session) -> dict:
         raw = [r for r in raw if r is not None]
         exc = [getattr(o, f"excess_{label}") for o in rows]
         exc = [e for e in exc if e is not None]
-        graded = exc if exc else raw  # prefer benchmark-relative when available
+        # ONE declared basis per stat: hit_rate is computed on the excess rows
+        # when any exist (n = n_excess), else on raw rows (n = n_raw) — the
+        # basis and its matching n are always reported together so the UI can
+        # never pair a benchmark-relative rate with a raw count.
+        graded, basis = (exc, "excess") if exc else (raw, "raw")
         return {
-            "n": len(raw),
+            "n": len(graded),
+            "n_raw": len(raw),
+            "n_excess": len(exc),
+            "basis": basis,
             "hit_rate": (sum(1 for g in graded if g > 0) / len(graded)) if graded else None,
             "avg_return": (sum(raw) / len(raw)) if raw else None,
             "avg_excess": (sum(exc) / len(exc)) if exc else None,
-            "vs_benchmark": bool(exc),
+            "vs_benchmark": basis == "excess",
         }
 
     return {

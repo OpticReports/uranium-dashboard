@@ -26,16 +26,19 @@ calls:
   max_open_calls: 10               # cap on concurrent open auto-calls
 
   # Risk framing for the exact levels — set from evidence, not assumption:
-  # docs/BACKTEST_CALLS.md (2y adjusted bars, 30 names, paired exit-config
-  # grid, cluster-bootstrap CIs, slippage-adjusted plateau selection) picked
-  # stop 3.0xATR / 2:1 RR / 45d: net avg R 0.185, ~51% win rate, positive in
-  # BOTH XBI regimes. Tight (1.5-2x) stops looked better frictionless but
-  # LOSE their edge to slippage — small risk units make costs huge in R terms.
+  # docs/BACKTEST_CALLS.md (2y adjusted bars, 30 names, GENUINELY paired
+  # exit-config grid — identical entries in every cell — open-first gap-aware
+  # fills, cluster-bootstrap CIs, slippage-adjusted plateau selection) picked
+  # stop 3.0xATR / 3:1 RR / 45d: net avg R 0.190, positive net-of-costs in
+  # BOTH XBI regimes (0.217 above / 0.178 below the 50dma). The 2:1 neighbor
+  # (net 0.171) is statistically indistinguishable — the plateau rule decides.
+  # Tight (1.5-2x) stops looked better frictionless but LOSE their edge to
+  # slippage: small risk units make costs huge in R terms.
   risk:
     atr_window: 14                 # ATR lookback (daily bars)
     stop_atr_mult: 3.0             # stop = entry - 3*ATR (long)
     fallback_stop_pct: 0.08        # stop when ATR can't be computed
-    reward_risk: 2.0               # target = entry + reward_risk * (entry - stop)
+    reward_risk: 3.0               # target = entry + reward_risk * (entry - stop)
 
   # Time horizon. The desk rarely holds through binaries, so a call generated
   # off a pre-catalyst setup expires the day BEFORE its catalyst (sell into

@@ -127,7 +127,10 @@ def _gather_raw(session: Session, sec: Security, asof: date, cfg: dict) -> dict:
     pullback_pct = C.pullback_from_high_raw(
         [(b.high if b.high is not None else b.close) for b in hb_bars], last_close
     )
-    volume_z = C.volume_zscore_raw([b.volume for b in bars])
+    # Slice to the configured lookback: the fetch window is wider (>=90d for
+    # the 50dma) and feeding it all would silently make the knob a no-op.
+    va_since = asof - timedelta(days=va_cfg.get("lookback_days", 60))
+    volume_z = C.volume_zscore_raw([b.volume for b in bars if b.date >= va_since])
 
     # Trend/volatility context for the hardened pullback flag + volume floor.
     from ..calls.rules import BarLike, atr as _atr
@@ -153,6 +156,7 @@ def _gather_raw(session: Session, sec: Security, asof: date, cfg: dict) -> dict:
         .where(InsiderTxn.symbol == sec.symbol)
         .where(InsiderTxn.txn_type == "buy")
         .where(InsiderTxn.date >= ins_since)
+        .where(InsiderTxn.date <= asof)
     ).all()
 
     # --- positioning + runway (from latest fundamental) ---
@@ -206,10 +210,15 @@ def compute_scores(session: Session, asof: date | None = None) -> list[ScoreSnap
     from ..config import load_yaml_config
     from ..models import FlagEvent
 
+    # The key includes the flag's DIRECTION (analyst clusters fire upward or
+    # downward as distinct signals) — a downward cluster must never suppress a
+    # subsequent upward one, or the missed fire censors calls AND stats.
+    from .outcomes import outcome_key
+
     suppress_days = load_yaml_config("flags.yaml").get("refire_suppression_days", 7)
     recent_cutoff = datetime.utcnow() - timedelta(days=suppress_days)
     suppressed: set[tuple[str, str]] = {
-        (f.symbol, f.flag_type)
+        (f.symbol, outcome_key(f.flag_type, f.evidence))
         for f in session.exec(select(FlagEvent).where(FlagEvent.asof >= recent_cutoff)).all()
     }
 
@@ -328,11 +337,14 @@ def compute_scores(session: Session, asof: date | None = None) -> list[ScoreSnap
 
         # Flags reference the same evidence rows. Suppressed = fired within
         # the re-fire window already; skipping keeps the flag stream eventful.
+        from .outcomes import outcome_key as _okey
+
         for flag in evaluate_flags(sec, asof, r, contributions):
-            if (flag.symbol, flag.flag_type) in suppressed:
+            key = (flag.symbol, _okey(flag.flag_type, flag.evidence))
+            if key in suppressed:
                 continue
             session.add(flag)
-            suppressed.add((flag.symbol, flag.flag_type))
+            suppressed.add(key)
 
     session.commit()
     for snap in snapshots:

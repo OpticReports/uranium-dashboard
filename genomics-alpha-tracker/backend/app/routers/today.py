@@ -56,7 +56,7 @@ def _closes(session: Session, symbol: str, days: int) -> list[tuple[date, float]
     rows = session.exec(
         select(PriceBar)
         .where(PriceBar.symbol == symbol)
-        .where(PriceBar.date >= date.today() - timedelta(days=days))
+        .where(PriceBar.date >= _ny_today() - timedelta(days=days))
         .where(PriceBar.close != None)  # noqa: E711
         .order_by(PriceBar.date.asc())
     ).all()
@@ -112,11 +112,16 @@ def regime_payload(session: Session) -> dict:
 
 
 def relative_strength(
-    session: Session, symbol: str, bench: str = "XBI"
+    session: Session,
+    symbol: str,
+    bench: str = "XBI",
+    bench_closes: list[tuple[date, float]] | None = None,
 ) -> dict[str, float | None]:
-    """Name return minus benchmark return over 20/60 trading bars."""
+    """Name return minus benchmark return over 20/60 trading bars (unadjusted
+    excess return — not beta-adjusted). Pass `bench_closes` to avoid
+    re-fetching the benchmark series per name."""
     sym_closes = _closes(session, symbol, 160)
-    ben_closes = _closes(session, bench, 160)
+    ben_closes = bench_closes if bench_closes is not None else _closes(session, bench, 160)
     out: dict[str, float | None] = {}
     for label, n in (("rs_20d", 20), ("rs_60d", 60)):
         rs_sym = _trailing_return(sym_closes, n)
@@ -146,7 +151,7 @@ def regime(session: Session = Depends(get_session)):
 
 @router.get("/today")
 def today_view(session: Session = Depends(get_session)):
-    from ..scoring.outcomes import flag_track_record
+    from ..scoring.outcomes import flag_track_record, outcome_key
 
     today = _ny_today()
     now = datetime.utcnow()
@@ -160,22 +165,33 @@ def today_view(session: Session = Depends(get_session)):
     ).first()
     track = flag_track_record(session).get("by_flag_type", {})
 
-    def _hit_rate_for(flag_type: str) -> dict | None:
-        t = track.get(flag_type)
+    # One benchmark fetch serves every card's relative-strength calc.
+    bench_closes = _closes(session, "XBI", 160)
+
+    def _hit_rate_for(flag: FlagEvent) -> dict | None:
+        t = track.get(outcome_key(flag.flag_type, flag.evidence))
         if not t:
             return None
         h1m = t.get("horizons", {}).get("1m", {})
+        # n matches the hit-rate's declared basis (excess vs raw) — never a
+        # benchmark-relative rate paired with a raw count.
         return {
             "fired": t.get("fired"),
             "n_graded_1m": h1m.get("n"),
             "hit_rate_1m": h1m.get("hit_rate"),
             "avg_excess_1m": h1m.get("avg_excess"),
+            "vs_benchmark": h1m.get("vs_benchmark", False),
             "sufficient": (h1m.get("n") or 0) >= 10,
         }
 
-    # Latest composite per name.
+    # Latest composite per name — recency-bounded (hourly scoring would
+    # otherwise make this a full-history table scan on every page load).
     latest_score: dict[str, ScoreSnapshot] = {}
-    for snap in session.exec(select(ScoreSnapshot).order_by(ScoreSnapshot.asof.asc())).all():
+    for snap in session.exec(
+        select(ScoreSnapshot)
+        .where(ScoreSnapshot.asof >= now - timedelta(days=14))
+        .order_by(ScoreSnapshot.asof.asc())
+    ).all():
         latest_score[snap.symbol] = snap
 
     # --- actionable: fresh flags (48h), deduped to newest per (symbol, type) ---
@@ -208,7 +224,7 @@ def today_view(session: Session = Depends(get_session)):
             lv = build_levels(
                 entry=last_close, direction="long",
                 atr_value=atr(bars, atr_window),
-                stop_atr_mult=risk_cfg.get("stop_atr_mult", 2.0),
+                stop_atr_mult=risk_cfg.get("stop_atr_mult", 3.0),
                 fallback_stop_pct=risk_cfg.get("fallback_stop_pct", 0.08),
                 reward_risk=risk_cfg.get("reward_risk", 2.0),
             )
@@ -263,14 +279,14 @@ def today_view(session: Session = Depends(get_session)):
             "flags": [
                 {"type": f.flag_type, "severity": f.severity,
                  "message": f.message, "asof": f.asof.isoformat(),
-                 "track_record": _hit_rate_for(f.flag_type)}
+                 "track_record": _hit_rate_for(f)}
                 for f in sorted(flags.values(), key=lambda f: f.asof, reverse=True)
             ],
             "last_price": last_close,
             "price_change_1d": chg_1d,
             "suggested_levels": suggested,
             "liquidity": call_mgr.symbol_liquidity(session, sym),
-            "relative_strength": relative_strength(session, sym),
+            "relative_strength": relative_strength(session, sym, bench_closes=bench_closes),
             "next_catalyst": None if nxt is None else {
                 "event_type": nxt.event_type, "title": nxt.title,
                 "date": nxt.date.isoformat(),
@@ -299,7 +315,7 @@ def today_view(session: Session = Depends(get_session)):
             "id": c.id, "symbol": c.symbol, "direction": c.direction,
             "entry": c.entry_price, "stop": c.stop_price, "target": c.target_price,
             "last_price": last,
-            "unrealized_pct": (None if not last else
+            "unrealized_pct": (None if last is None else
                                (last - c.entry_price) / c.entry_price
                                * (-1 if c.direction == "short" else 1)),
             "expires_on": c.expires_on.isoformat(),

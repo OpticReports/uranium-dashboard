@@ -11,7 +11,8 @@
 output_scale: "0_100"
 
 # Benchmark ETFs ingested for relative-strength and the market-regime strip.
-# Stored as inactive Security rows so they never enter scoring or the views.
+# Stored as inactive Security rows: they never enter scoring, flags, or the
+# default dashboards (they do appear, marked inactive, in Universe management).
 # IBB is the investable NBI proxy (the ^NBI index isn't available on all
 # providers); XBI is the primary sector barometer.
 benchmarks: [XBI, ARKG, IBB]

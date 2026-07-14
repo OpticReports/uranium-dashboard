@@ -7,17 +7,20 @@ the live engine, so measured defaults transfer.
 
 WHAT THIS DOES NOT TEST: the signal (flags/composite). No historical flag,
 social or revision data exists yet — signal validation comes from the live
-flag track record (/flags/track-record) as it accrues. Entries here are
-SYSTEMATIC (every Nth trading day when flat), so the comparison across exit
-configs is PAIRED: entry-selection effects largely cancel, and only RELATIVE
+flag track record (/flags/track-record) as it accrues. Entries are a FIXED
+bar-index grid, identical for every config (truly paired — see simulate()),
+so cross-config differences are pure exit mechanics and only RELATIVE
 statements between configs are meaningful. Absolute expectancy is NOT — the
 sample is the CURRENT universe (survivorship) with no borrow/fees.
 
 Methodological guards (from the adversarial design review):
   - split-adjusted OHLC (adj factor applied to open/high/low from adj_close)
-  - gap-aware exit fills (a stop gapped through fills at the open)
-  - non-overlapping trades per name (re-enter only when flat) -> honest n
+  - open-first, gap-aware exit fills (an open beyond a level resolves at the
+    open — a gap-up-through-target day that fades is a WIN, not a stop)
+  - genuinely paired entries: a fixed bar-index grid, identical across all
+    configs, truncated so the longest time-stop resolves before data ends
   - cluster bootstrap by (symbol, entry-month) for the avg-R confidence band
+    (this carries the overlapping-trade dependence pairing introduces)
   - plateau selection (neighborhood-robust), never the argmax of the grid
   - regime split: XBI above/below its 50dma at entry
   - slippage sensitivity by liquidity tier (10/40/100 bps per side)
@@ -152,33 +155,35 @@ def simulate(
     horizon_days: int,
     entry_filter=None,
 ) -> list[dict]:
-    """Non-overlapping systematic trades on one name. Returns closed trades.
+    """Systematic trades on one name with GENUINELY PAIRED entries.
 
-    Entry: at the close of every ENTRY_GRID_BARS-th bar when flat (paired
-    entries across all configs). `entry_filter(bars, i) -> bool` optionally
-    gates entries (pullback variant). Exits use the LIVE grade_call.
+    Entry candidates are every ENTRY_GRID_BARS-th bar by INDEX — independent
+    of position state — and the entry set is truncated so that the LONGEST
+    time-stop in the grid can still resolve before the data ends. Every config
+    therefore trades the *identical* entry dates: cross-config differences are
+    pure exit mechanics. The price of pairing is overlapping trades per name;
+    the (symbol, entry-month) cluster bootstrap carries that dependence.
+    Exits use the LIVE grade_call (open-first, gap-aware).
     """
     trades: list[dict] = []
-    i = ATR_WARMUP_BARS
-    grid = 0
-    while i < len(bars) - 1:
-        grid += 1
+    if not bars:
+        return trades
+    last_date = bars[-1].date
+    entry_cutoff = last_date - timedelta(days=max(TIME_STOPS) + 7)
+    for i in range(ATR_WARMUP_BARS, len(bars) - 1, ENTRY_GRID_BARS):
         b = bars[i]
-        if b.close is None or (grid % ENTRY_GRID_BARS) != 0:
-            i += 1
+        if b.close is None or b.date > entry_cutoff:
             continue
         if entry_filter is not None and not entry_filter(bars, i):
-            i += 1
             continue
         atr_val = atr(bars[: i + 1], 14)  # strictly bars <= entry date
         lv = build_levels(b.close, "long", atr_val, stop_mult, FALLBACK_STOP_PCT, rr)
         if lv is None:
-            i += 1
             continue
         expiry = b.date + timedelta(days=horizon_days)
         ex = grade_call("long", lv.entry, lv.stop, lv.target, expiry, bars[i + 1:])
         if ex is None:
-            break  # still open at end of data — drop the partial trade
+            continue  # data gap past expiry — cutoff makes this rare
         risk = lv.entry - lv.stop
         trades.append({
             "entry_date": b.date.isoformat(),
@@ -191,9 +196,6 @@ def simulate(
             "ret": (ex.exit_price - lv.entry) / lv.entry,
             "hold_days": (ex.exit_date - b.date).days,
         })
-        # advance to the bar after the exit (re-enter only when flat)
-        while i < len(bars) and bars[i].date <= ex.exit_date:
-            i += 1
     return trades
 
 
@@ -374,11 +376,14 @@ def main() -> None:
 
     pick = plateau_pick(grid_stats, key="avg_r_net")
 
-    # Regime split + slippage for the picked config.
+    # Regime split (gross AND net) + slippage for the picked config.
     picked_trades = grid_trades.get(pick, [])
+    picked_net = with_slippage(picked_trades, tiers)
     up = summarize([t for t in picked_trades if t["regime_up"] is True])
     down = summarize([t for t in picked_trades if t["regime_up"] is False])
-    slipped = summarize(with_slippage(picked_trades, tiers))
+    up_net = summarize([t for t in picked_net if t["regime_up"] is True])
+    down_net = summarize([t for t in picked_net if t["regime_up"] is False])
+    slipped = summarize(picked_net)
 
     # Pullback entry-timing sanity check under the picked exit config.
     s, r, h = pick if pick else (2.0, 2.0, 30)
@@ -394,8 +399,8 @@ def main() -> None:
     pb_ci = cluster_bootstrap_ci(pb_trades)
     base_ci = cluster_bootstrap_ci(base_trades)
 
-    _write_report(grid_stats, pick, up, down, slipped, base_sum, pb_sum,
-                  base_ci, pb_ci, tiers, len(data), bench_bars)
+    _write_report(grid_stats, pick, up, down, up_net, down_net, slipped,
+                  base_sum, pb_sum, base_ci, pb_ci, tiers, len(data), bench_bars)
     print(f"\nReport written to {REPORT}")
     if pick:
         print(f"Plateau pick: stop {pick[0]}xATR, {pick[1]}:1 reward:risk, {pick[2]}d time-stop")
@@ -407,8 +412,8 @@ def _fmt(v, dp=2, pct=False):
     return f"{v*100:.0f}%" if pct else f"{v:.{dp}f}"
 
 
-def _write_report(grid_stats, pick, up, down, slipped, base_sum, pb_sum,
-                  base_ci, pb_ci, tiers, n_names, bench_bars) -> None:
+def _write_report(grid_stats, pick, up, down, up_net, down_net, slipped,
+                  base_sum, pb_sum, base_ci, pb_ci, tiers, n_names, bench_bars) -> None:
     lines: list[str] = []
     w = lines.append
     w("# Trade-Call Exit-Mechanics Backtest")
@@ -419,10 +424,12 @@ def _write_report(grid_stats, pick, up, down, slipped, base_sum, pb_sum,
     w("## What this is — and is not")
     w("")
     w("This backtests the **exit mechanics** of the calls engine (stop width x ATR14,")
-    w("reward:risk, time-stop) with **systematic, non-overlapping entries** (every 5th")
-    w("trading day when flat) using the *exact* live level/grading code, gap-aware fills")
-    w("included. Because entries are identical across configs, comparisons between")
-    w("configs are **paired** and meaningful.")
+    w("reward:risk, time-stop) with a **fixed bar-index entry grid** (every 5th trading")
+    w("bar, independent of position state, truncated so the longest time-stop resolves")
+    w("in-sample) using the *exact* live level/grading code — open-first, gap-aware")
+    w("fills. Entries are therefore **identical across all configs (truly paired)**;")
+    w("the trades on one name overlap in time, and the cluster bootstrap carries that")
+    w("dependence.")
     w("")
     w("**It does NOT validate the signal.** No historical flag/social/revision data")
     w("exists yet; signal validation accrues live via `/flags/track-record`. And because")
@@ -465,10 +472,10 @@ def _write_report(grid_stats, pick, up, down, slipped, base_sum, pb_sum,
     w("")
     w("### Regime split for the pick (XBI vs its 50dma at entry)")
     w("")
-    w("| regime | n | win% | avg R | med R |")
-    w("|---|---|---|---|---|")
-    w(f"| XBI above 50dma | {up.get('n',0)} | {_fmt(up.get('win_rate'),pct=True)} | {_fmt(up.get('avg_r'),3)} | {_fmt(up.get('median_r'),3)} |")
-    w(f"| XBI below 50dma | {down.get('n',0)} | {_fmt(down.get('win_rate'),pct=True)} | {_fmt(down.get('avg_r'),3)} | {_fmt(down.get('median_r'),3)} |")
+    w("| regime | n | win% | avg R gross | avg R net | med R gross |")
+    w("|---|---|---|---|---|---|")
+    w(f"| XBI above 50dma | {up.get('n',0)} | {_fmt(up.get('win_rate'),pct=True)} | {_fmt(up.get('avg_r'),3)} | {_fmt(up_net.get('avg_r'),3)} | {_fmt(up.get('median_r'),3)} |")
+    w(f"| XBI below 50dma | {down.get('n',0)} | {_fmt(down.get('win_rate'),pct=True)} | {_fmt(down.get('avg_r'),3)} | {_fmt(down_net.get('avg_r'),3)} | {_fmt(down.get('median_r'),3)} |")
     w("")
     w("If the sign of avg-R flips across regimes, treat the pick as regime-conditional —")
     w("the honest default is the one that is robust in both, and the regime strip on the")
@@ -480,6 +487,8 @@ def _write_report(grid_stats, pick, up, down, slipped, base_sum, pb_sum,
     for t in tiers.values():
         tier_counts[t] = tier_counts.get(t, 0) + 1
     w(f"Universe tiers: {tier_counts}. Slippage model: A=10bps, B=40bps, C=100bps per side.")
+    w("(Backtest tiers use full-sample median ADDV; the live app tiers on the trailing")
+    w("20 bars — a name near a boundary can be tiered differently live.)")
     w("")
     w(f"- avg R without slippage: **{_fmt(grid_stats.get(pick, {}).get('avg_r'), 3)}**")
     w(f"- avg R with tiered slippage: **{_fmt(slipped.get('avg_r'), 3)}** (n={slipped.get('n', 0)})")
@@ -507,8 +516,9 @@ def _write_report(grid_stats, pick, up, down, slipped, base_sum, pb_sum,
     w("- **No signal selection**: systematic entries ≠ flag-triggered entries.")
     w("- **~2 years = roughly one biotech regime**; the regime split is thin.")
     w("- **Longs only**, no borrow/fees, daily bars (no intraday stop dynamics).")
-    w("- Overlap across names remains (32 correlated names) — hence cluster bootstrap,")
-    w("  and `clusters` is the honest effective-sample-size guide, not `n`.")
+    w(f"- Trades overlap within AND across the {n_names} correlated names (the price of")
+    w("  truly paired entries) — hence cluster bootstrap, and `clusters` is the honest")
+    w("  effective-sample-size guide, not `n`.")
     REPORT.parent.mkdir(parents=True, exist_ok=True)
     REPORT.write_text("\n".join(lines) + "\n")
 
