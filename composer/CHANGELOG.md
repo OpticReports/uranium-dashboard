@@ -19,6 +19,13 @@ Format per entry:
 
 <!-- New entries go below this line, newest first. -->
 
+## 2026-07-14 — residual cash swept to P5
+
+- Change (capital, owner-directed): invested $140 residual cash into P5
+  `YPTSJFJwD2ZKfAeYJUbW` (deploy 7a602c18) — most underweight engine
+  (28.4% vs 35% target). ~$11 dust remains.
+
+
 ## 2026-07-10 — $30k deposit deployed to crash sleeve (per staged plan)
 
 - Change (capital, owner-directed): invested $30,000 into the sleeve
