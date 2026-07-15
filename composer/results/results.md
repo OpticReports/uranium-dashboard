@@ -472,3 +472,34 @@ i.e., after a full valuation cycle.
 **Decision: no CAPE dial in POLICY.md.** CAPE=42 (99th pctile) is context
 supporting the sleeve's existence and the eventual 15% scale-up — the gate
 for which remains live tracking (Jan 2027 review), not valuation.
+
+---
+
+# Addendum 10 — 2026-07-14 — live transaction-cost analysis (TCA)
+
+Source: Composer trade-activity report (fill-level, 2025-12-04 → 2026-07-14):
+193 filled orders, 23 symbols, **$8.53M traded notional** (~7.3 months, avg
+equity ~$180k → ~7.8× equity turned over per month across daily rebalances).
+
+| Cost component | Total | Rate |
+| --- | ---: | ---: |
+| Commissions | **$0.00** | 0 bps |
+| Regulatory fees (REG $82.46, TAF $17.20, CAT $0.71) | $100.37 | 0.12 bps of turnover |
+| Slippage (fill vs same-day close, notional-weighted) | $2,807 | **+3.3 bps** per side |
+| — window fills only (~3:45–3:53pm, n=177) | $4,640 | +6.1 bps |
+| — off-window deploy fills (n=14) | −$1,834 | −22.3 bps (favorable timing noise) |
+
+Annualized: ≈ $4,800/yr ≈ **2.6–2.8% of average equity** — dominated entirely
+by turnover volume, not by per-trade inefficiency.
+
+Method caveat: fill-vs-close includes 7–15 minutes of market drift (fills
+print ~3:45–3:53, close at 4:00), so +6.1 bps is an UPPER bound on true
+spread+impact; drift noise is visible in per-symbol dispersion (TNA +41 bps,
+TQQQ −5 bps, UVXY −11 bps).
+
+Verdict: execution is at or better than modeled — every backtest in this
+project charged 5 bps/side + fees, i.e., live friction (≤3–6 bps) is inside
+the assumption, and the earlier divergence study (HG live +13.4% ABOVE its
+model over 142 days) independently confirms no alpha leak to execution. The
+2.6%/yr aggregate cost is the price of strategies that turn over ~90×/yr and
+is already priced into every net backtest number we've used for decisions.
