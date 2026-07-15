@@ -29,6 +29,10 @@ jobs:
     # Insider transactions move slowly; daily is plenty.
     enabled: true
     interval_minutes: 1440
+  short_interest:
+    # FINRA publishes short interest bi-monthly; a daily check is plenty.
+    enabled: true
+    interval_minutes: 1440
   benchmarks:
     # Benchmark ETF bars for relative strength + the regime strip.
     enabled: true

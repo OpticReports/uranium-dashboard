@@ -11,6 +11,7 @@ from .catalysts import CatalystIngestion
 from .insiders import InsiderIngestion
 from .market import MarketIngestion
 from .science import ScienceIngestion
+from .shortinterest import ShortInterestIngestion
 from .social import SocialIngestion
 
 logger = logging.getLogger(__name__)
@@ -57,6 +58,12 @@ def run_social(session: Session, symbols: list[str] | None = None) -> int:
 
 def run_insiders(session: Session, symbols: list[str] | None = None) -> int:
     src = InsiderIngestion()
+    symbols = symbols or active_symbols(session)
+    return sum(src.run(session, sym) for sym in symbols)
+
+
+def run_short_interest(session: Session, symbols: list[str] | None = None) -> int:
+    src = ShortInterestIngestion()
     symbols = symbols or active_symbols(session)
     return sum(src.run(session, sym) for sym in symbols)
 
@@ -115,5 +122,6 @@ def run_all(session: Session, symbols: list[str] | None = None) -> dict:
         "science": run_science(session, symbols),
         "social": run_social(session, symbols),
         "insiders": run_insiders(session, symbols),
+        "short_interest": run_short_interest(session, symbols),
         "benchmarks": run_benchmarks(session),
     }
