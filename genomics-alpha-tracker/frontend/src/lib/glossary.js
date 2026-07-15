@@ -124,9 +124,9 @@ export const GLOSSARY = {
   },
   positioning: {
     title: "Positioning",
-    what: "How crowded or squeezable the stock is, based on short interest and options.",
-    calc: "Percentile of short interest plus options skew vs. the universe, scaled 0–100.",
-    read: "High = heavily shorted / crowded — squeeze potential, but also a caution sign. Often n/a for thin-float names with no options data.",
+    what: "How crowded or squeezable the stock is, based on how heavily it's shorted (and options skew, when a feed provides it).",
+    calc: "Short interest comes from FINRA's official bi-monthly publication, expressed as % of shares outstanding, then ranked as a percentile vs. the universe (0–100). Options skew joins the average when options data is available.",
+    read: "High = heavily shorted / crowded — squeeze fuel, but also a caution sign that sophisticated money is betting against it. FINRA data updates twice a month, so this moves slowly by design.",
   },
   runway_penalty: {
     title: "Cash Runway",
