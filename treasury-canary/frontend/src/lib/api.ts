@@ -316,10 +316,16 @@ export interface PinConfluence {
   caveat: string;
 }
 
+export interface RecessionSpan {
+  start: string;
+  end: string;
+}
+
 export interface PinHistory {
   channels: PinHistoryChannel[];
   collective: { series: PinCollectivePoint[]; last_data_month: string | null };
   confluence: PinConfluence | null;
+  recessions: RecessionSpan[];
   framing?: string;
 }
 
