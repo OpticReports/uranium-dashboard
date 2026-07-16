@@ -271,6 +271,39 @@ export interface PinBoard {
   framing: string;
 }
 
+export interface PinHistoryEpisode {
+  start: string;
+  end: string;
+  peak_date: string;
+  peak_score: number;
+  window_start: string;
+  window_end: string;
+}
+
+export interface PinHistoryChannel {
+  channel_id: string;
+  lag_months: [number, number];
+  lag_basis: string;
+  series: { date: string; score: number }[];
+  episodes: PinHistoryEpisode[];
+  note: string | null;
+}
+
+export interface PinCollectivePoint {
+  date: string;
+  n_red: number | null;
+  pressure: number | null;
+  windows_open: number;
+  window_channels: string[];
+  projected: boolean;
+}
+
+export interface PinHistory {
+  channels: PinHistoryChannel[];
+  collective: { series: PinCollectivePoint[]; last_data_month: string | null };
+  framing?: string;
+}
+
 export interface TrackRecordRow {
   asof: string;
   composite_score: number | null;
@@ -414,6 +447,7 @@ export const api = {
   alerts: () => getJson<CanaryEvent[]>("/alerts"),
   news: (limit = 40) => getJson<NewsResponse>(`/news?limit=${limit}`),
   pins: () => getJson<PinBoard>("/pins"),
+  pinsHistory: () => getJson<PinHistory>("/pins/history"),
   trackRecord: () => getJson<TrackRecord>("/track-record"),
   severity: () => getJson<SeverityIndex>("/severity"),
   refresh: () =>

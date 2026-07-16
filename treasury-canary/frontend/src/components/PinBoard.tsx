@@ -1,8 +1,15 @@
 import { useEffect, useState } from "react";
-import { api, ApiError, type PinBoard as PinBoardData, type PinChannel } from "../lib/api";
+import {
+  api,
+  ApiError,
+  type PinBoard as PinBoardData,
+  type PinChannel,
+  type PinHistory,
+} from "../lib/api";
 import { InlineError, Loading, Panel, StatusPill } from "./ui";
 import { formatValue, STATUS_COLOR } from "../lib/format";
 import InfoTip from "./InfoTip";
+import { ChannelHistoryChart, CollectiveHistoryChart } from "./PinHistoryChart";
 
 // Dalio pin board — the gun is the debt buildup; the pin is the trigger.
 // Six measurable spark channels, each scored from live data, never a forecast.
@@ -64,7 +71,11 @@ function OverallBanner({ board }: { board: PinBoardData }) {
   );
 }
 
-function ChannelCard({ channel }: { channel: PinChannel }) {
+function ChannelCard({ channel, history }: {
+  channel: PinChannel;
+  history?: PinHistory["channels"][number];
+}) {
+  const [showHistory, setShowHistory] = useState(false);
   return (
     <div className="flex flex-col rounded-lg border border-panelborder bg-slate-900/50 p-3">
       <div className="mb-2 flex items-start justify-between gap-2">
@@ -142,7 +153,23 @@ function ChannelCard({ channel }: { channel: PinChannel }) {
             {channel.certainty}
           </p>
         )}
+        {history && history.series.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowHistory((v) => !v)}
+            className="mt-2 rounded border border-slate-700 bg-slate-800/60 px-2 py-0.5 text-[10px] text-slate-400 hover:border-slate-500 hover:text-slate-200"
+          >
+            {showHistory ? "▾ hide history" : "▸ history"}
+            {history.episodes.length > 0 &&
+              ` (${history.episodes.length} red episode${history.episodes.length === 1 ? "" : "s"})`}
+          </button>
+        )}
       </div>
+      {showHistory && history && (
+        <div className="mt-2 border-t border-panelborder/60 pt-2">
+          <ChannelHistoryChart hist={history} />
+        </div>
+      )}
     </div>
   );
 }
@@ -161,6 +188,7 @@ function AttrBadge({ label, value }: { label: string; value: string }) {
 
 export default function PinBoard() {
   const [board, setBoard] = useState<PinBoardData | null>(null);
+  const [history, setHistory] = useState<PinHistory | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -172,6 +200,11 @@ export default function PinBoard() {
         alive &&
         setError(e instanceof ApiError ? e.message : "failed to load pin board"),
       );
+    // hindcast loads independently — the live board never waits on it
+    api
+      .pinsHistory()
+      .then((h) => alive && setHistory(h))
+      .catch(() => undefined);
     return () => {
       alive = false;
     };
@@ -201,14 +234,37 @@ export default function PinBoard() {
     );
   }
 
+  const histByChannel = new Map(
+    (history?.channels ?? []).map((h) => [h.channel_id, h]),
+  );
+  const channelLabels = Object.fromEntries(
+    board.channels.map((c) => [c.channel_id, c.label]),
+  );
+
   return (
     <Panel title={title} subtitle={subtitle}>
       <OverallBanner board={board} />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {board.channels.map((c) => (
-          <ChannelCard key={c.channel_id} channel={c} />
+          <ChannelCard
+            key={c.channel_id}
+            channel={c}
+            history={histByChannel.get(c.channel_id)}
+          />
         ))}
       </div>
+      {history && history.collective.series.length > 0 && (
+        <div className="mt-4 border-t border-panelborder/60 pt-3">
+          <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-200">
+            Red hits &amp; damage-window convergence
+          </h3>
+          <p className="mb-2 text-[11px] leading-snug text-slate-500">
+            Every red episode above casts its channel&apos;s documented damage window
+            forward. This counts how many are open at once — the convergence view.
+          </p>
+          <CollectiveHistoryChart history={history} channelLabels={channelLabels} />
+        </div>
+      )}
       {board.framing && (
         <p className="mt-4 border-t border-panelborder/60 pt-3 text-[11px] leading-relaxed text-slate-500">
           {board.framing}
