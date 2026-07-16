@@ -75,10 +75,11 @@ function OverallBanner({ board }: { board: PinBoardData }) {
   );
 }
 
-function ChannelCard({ channel, history, recessions }: {
+function ChannelCard({ channel, history, recessions, drawdowns }: {
   channel: PinChannel;
   history?: PinHistory["channels"][number];
   recessions?: PinHistory["recessions"];
+  drawdowns?: PinHistory["drawdowns"];
 }) {
   const [showHistory, setShowHistory] = useState(false);
   return (
@@ -172,7 +173,11 @@ function ChannelCard({ channel, history, recessions }: {
       </div>
       {showHistory && history && (
         <div className="mt-2 border-t border-panelborder/60 pt-2">
-          <ChannelHistoryChart hist={history} recessions={recessions} />
+          <ChannelHistoryChart
+            hist={history}
+            recessions={recessions}
+            drawdowns={drawdowns}
+          />
         </div>
       )}
     </div>
@@ -256,6 +261,7 @@ export default function PinBoard() {
             channel={c}
             history={histByChannel.get(c.channel_id)}
             recessions={history?.recessions}
+            drawdowns={history?.drawdowns}
           />
         ))}
       </div>

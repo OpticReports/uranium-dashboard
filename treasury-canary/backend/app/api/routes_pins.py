@@ -54,7 +54,11 @@ def pin_history():
         now = time.time()
         if _hist_cache["data"] is not None and now - float(_hist_cache["ts"]) < _HIST_TTL:
             return _hist_cache["data"]
-        data = build_pin_history(_assemble_bundle(with_auctions=False))
+        bundle = _assemble_bundle(with_auctions=False)
+        # SPX drawdown ground truth (Yahoo, keyless) — history endpoint only
+        from ..sources.yahoo import fetch_spx_monthly
+        bundle["spx_monthly"] = fetch_spx_monthly()
+        data = build_pin_history(bundle)
         _hist_cache["data"] = data
         _hist_cache["ts"] = time.time()
         return data

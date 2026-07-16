@@ -14,10 +14,12 @@ import {
   YAxis,
 } from "recharts";
 import type {
+  DrawdownSpan,
   PinCollectivePoint,
   PinConfluence,
   PinHistory,
   PinHistoryChannel,
+  PinHistoryEpisode,
   RecessionSpan,
 } from "../lib/api";
 
@@ -133,6 +135,40 @@ function tickForSpan(nMonths: number) {
   return nMonths <= 30 ? (d: string) => d : (d: string) => d.slice(0, 4);
 }
 
+// SPX drawdowns >=15% as a thin amber strip along the chart bottom — the
+// market's own ground truth (1987, 2018 Q4, Aug 2024 had no NBER band).
+// yMax scales the strip height to each chart's y-domain.
+function drawdownStrip(drawdowns: DrawdownSpan[], first: string, last: string,
+                       yMax: number) {
+  return drawdowns
+    .filter((d) => d.trough >= first && d.start <= last)
+    .map((d, i) => (
+      <ReferenceArea
+        key={`dd-${i}`}
+        x1={d.start < first ? first : d.start}
+        x2={d.trough > last ? last : d.trough}
+        y1={0}
+        y2={yMax * 0.05}
+        fill={AMBER}
+        fillOpacity={0.55}
+        stroke="none"
+      />
+    ));
+}
+
+// Episode-outcome dot styling: the measured record, visible per episode.
+// Filled red = the window caught a recession or >=15% drawdown; hollow = a
+// miss that keeps us honest; gray = the window is still running.
+function peakDotProps(outcome: PinHistoryEpisode["outcome"]) {
+  if (outcome === "miss") {
+    return { fill: "#0f172a", stroke: RED, strokeWidth: 1.5 };
+  }
+  if (outcome === "open") {
+    return { fill: MUTED, stroke: "#0f172a", strokeWidth: 1 };
+  }
+  return { fill: RED, stroke: "#0f172a", strokeWidth: 1 }; // hit (or unjudged)
+}
+
 // NBER recessions, clipped to the visible range — the ground truth the
 // windows are supposed to line up with. Dotted verticals at entry/exit with
 // a whisper of fill between (kept fainter than the damage-window gray).
@@ -176,9 +212,10 @@ function recessionMarks(recessions: RecessionSpan[], first: string, last: string
     .filter(Boolean);
 }
 
-export function ChannelHistoryChart({ hist, recessions = [] }: {
+export function ChannelHistoryChart({ hist, recessions = [], drawdowns = [] }: {
   hist: PinHistoryChannel;
   recessions?: RecessionSpan[];
+  drawdowns?: DrawdownSpan[];
 }) {
   const { range, setRange } = useRange();
   if (hist.series.length === 0) {
@@ -251,6 +288,7 @@ export function ChannelHistoryChart({ hist, recessions = [] }: {
             />
           ))}
           {recessionMarks(recessions, first, last)}
+          {drawdownStrip(drawdowns, first, last, 100)}
           <ReferenceLine y={50} stroke={AMBER} strokeDasharray="3 4" strokeOpacity={0.5} />
           <ReferenceLine y={80} stroke={RED} strokeDasharray="3 4" strokeOpacity={0.5} />
           <Tooltip
@@ -274,19 +312,27 @@ export function ChannelHistoryChart({ hist, recessions = [] }: {
               x={e.peak_date}
               y={e.peak_score}
               r={3.5}
-              fill={RED}
-              stroke="#0f172a"
-              strokeWidth={1}
+              {...peakDotProps(e.outcome)}
             />
           ))}
         </LineChart>
       </ResponsiveContainer>
       <p className="mt-1 text-[10px] leading-snug text-slate-500">
         Monthly max severity, full source history.{" "}
-        <span className="text-red-400">●</span> red-episode peak;{" "}
         <span className="rounded-sm bg-slate-500/20 px-1">gray band</span> = damage
         window, {lagLo}–{lagHi} months after the peak ({hist.lag_basis});
-        dotted verticals = NBER recessions.
+        dotted verticals = NBER recessions;{" "}
+        <span className="rounded-sm bg-amber-500/40 px-1">amber strip</span> = SPX
+        drawdown ≥15%. Peaks: <span className="text-red-400">●</span> window caught a
+        recession/drawdown · <span className="text-red-400">○</span> miss —
+        kept visible on purpose · <span className="text-slate-400">●</span> window
+        still open.
+        {hist.outcomes && (
+          <span className="text-slate-400">
+            {" "}Record: {hist.outcomes.hit} hit / {hist.outcomes.miss} miss
+            {hist.outcomes.open > 0 ? ` / ${hist.outcomes.open} open` : ""}.
+          </span>
+        )}
         {hist.note ? ` ${hist.note}` : ""}
       </p>
     </div>
@@ -426,6 +472,8 @@ export function CollectiveHistoryChart({ history, channelLabels }: {
           <YAxis allowDecimals={false} width={28} tick={{ fill: MUTED, fontSize: 9 }} />
           {recessionMarks(history.recessions ?? [], series[0].date,
                           series[series.length - 1].date)}
+          {drawdownStrip(history.drawdowns ?? [], series[0].date,
+                         series[series.length - 1].date, 4)}
           {firstProjected && (
             <ReferenceArea
               x1={firstProjected}
@@ -471,6 +519,10 @@ export function CollectiveHistoryChart({ history, channelLabels }: {
         <span className="flex items-center gap-1">
           <span className="inline-block w-3 border-t border-dashed border-slate-400" />{" "}
           NBER recession span
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block h-1 w-3 rounded-sm bg-amber-500/60" /> SPX
+          drawdown ≥15%
         </span>
         <span>
           Overlap is the signal: one open window is a data point — several at once is

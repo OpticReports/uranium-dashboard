@@ -352,11 +352,13 @@ def build_pin_history(bundle: dict) -> dict:
         })
 
     recessions = _recession_spans(*bundle.get("recession", ([], [])))
+    drawdowns = _drawdown_spans(*bundle.get("spx_monthly", ([], [], [])))
 
     if not all_months:
         return {"channels": channels_out,
                 "collective": {"series": [], "last_data_month": None},
-                "confluence": None, "recessions": recessions}
+                "confluence": None, "recessions": recessions,
+                "drawdowns": drawdowns}
 
     last_data = max(all_months)
     # extend through the farthest projected window so convergence AHEAD of us
@@ -376,17 +378,83 @@ def build_pin_history(bundle: dict) -> dict:
             "projected": m > last_data,
         })
 
+    _annotate_outcomes(channels_out, recessions, drawdowns, last_data)
+
     return {
         "channels": channels_out,
         "collective": {"series": collective, "last_data_month": last_data},
         "confluence": _confluence(collective, last_data, bundle),
         "recessions": recessions,
+        "drawdowns": drawdowns,
         "framing": "Each channel's severity, recomputed monthly over full source "
                    "history (monthly max, expanding percentiles — no lookahead). "
                    "A red episode casts that channel's documented damage window "
                    "forward; the bottom series counts overlapping open windows. "
                    "One spark is a data point — several open windows is a regime.",
     }
+
+
+def _drawdown_spans(dates: list[date], closes: list[float | None],
+                    lows: list[float | None], threshold_pct: float = 15.0) -> list[dict]:
+    """SPX peak-to-trough drawdowns deeper than threshold, as {start, trough,
+    depth_pct} month spans. The market's own ground truth — half these channels
+    historically produced violent drawdowns WITHOUT recessions (1987, 2018 Q4,
+    Aug 2024), so judging them against NBER bands alone undercounts real hits.
+
+    start = the peak month (decline begins), trough = the depth month. Depth is
+    measured running-peak-of-closes vs monthly LOWS so intra-month troughs keep
+    their real size. An episode closes when the close regains the prior peak.
+    """
+    spans: list[dict] = []
+    peak: float | None = None
+    peak_d: date | None = None
+    active: dict | None = None
+    for d, c, l in zip(dates, closes, lows):
+        if c is None:
+            continue
+        if peak is None or c >= peak:
+            if active is not None:
+                spans.append(active)
+                active = None
+            peak, peak_d = c, d
+            continue
+        low = l if l is not None else c
+        depth = (peak - low) / peak * 100.0
+        if depth >= threshold_pct:
+            if active is None:
+                active = {"start": _ym(peak_d), "trough": _ym(d),
+                          "depth_pct": round(depth, 1)}
+            elif depth > active["depth_pct"]:
+                active["trough"] = _ym(d)
+                active["depth_pct"] = round(depth, 1)
+    if active is not None:
+        spans.append(active)
+    return spans
+
+
+def _annotate_outcomes(channels_out: list[dict], recessions: list[dict],
+                       drawdowns: list[dict], last_data: str) -> None:
+    """Judge every red episode against its own window: did a recession onset OR
+    a >=15% drawdown land inside it? hit / miss / open (window still running).
+    The measured kill rate, next to the documented one — misses stay visible."""
+    onsets = [r["start"] for r in recessions]
+    for ch in channels_out:
+        counts = {"hit": 0, "miss": 0, "open": 0}
+        for e in ch["episodes"]:
+            ws, we = e["window_start"], e["window_end"]
+            if any(ws <= o <= we for o in onsets):
+                e["outcome"] = "hit_recession"
+                counts["hit"] += 1
+            elif any(not (dd["trough"] < ws or dd["start"] > we) for dd in drawdowns):
+                e["outcome"] = "hit_drawdown"
+                counts["hit"] += 1
+            elif we > last_data:
+                e["outcome"] = "open"
+                counts["open"] += 1
+            else:
+                e["outcome"] = "miss"
+                counts["miss"] += 1
+        ch["outcomes"] = counts if ch["episodes"] else None
 
 
 def _recession_spans(dates: list[date], vals: list[float | None]) -> list[dict]:
