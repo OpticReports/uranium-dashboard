@@ -87,8 +87,10 @@ function AccidentGauge({ board }: { board: PinBoardData }) {
   const LO = -1.0, HI = 2.0;
   const pos = (v: number) => `${Math.min(100, Math.max(0, ((v - LO) / (HI - LO)) * 100))}%`;
   const statusText = g.status === "RED" ? "TRIGGERED" : g.status === "YELLOW" ? "ARMED — one condition" : "disarmed";
+  // tri-state: true = lit, false = dark, null = UNKNOWN (data missing/stale) —
+  // "no data" must never render as "condition not met"
   const Cond = ({ on, label, detail, hint }: {
-    on: boolean; label: string; detail: string; hint?: string;
+    on: boolean | null; label: string; detail: string; hint?: string;
   }) => (
     <span
       title={hint}
@@ -96,11 +98,17 @@ function AccidentGauge({ board }: { board: PinBoardData }) {
         "rounded border px-2 py-1 text-[10px] leading-tight " +
         (on
           ? "border-red-600 bg-red-500/15 text-red-300"
-          : "border-slate-700 bg-slate-800/50 text-slate-500")
+          : on === null
+            ? "border-slate-600 border-dashed bg-slate-800/30 text-slate-500"
+            : "border-slate-700 bg-slate-800/50 text-slate-500")
       }
     >
-      <span className="font-semibold uppercase tracking-wide">{on ? "■" : "□"} {label}</span>{" "}
-      <span className={on ? "text-red-200" : "text-slate-500"}>{detail}</span>
+      <span className="font-semibold uppercase tracking-wide">
+        {on ? "■" : on === null ? "?" : "□"} {label}
+      </span>{" "}
+      <span className={on ? "text-red-200" : "text-slate-500"}>
+        {on === null ? `unknown — ${detail}` : detail}
+      </span>
     </span>
   );
   return (
@@ -113,14 +121,20 @@ function AccidentGauge({ board }: { board: PinBoardData }) {
         <StatusPill status={g.status} pulse={g.status === "RED"} />
         <span className="text-[11px] text-slate-400">{statusText}</span>
         <span className="text-[10px] text-slate-500">
-          — measured: 41% odds of a ≥15% drawdown within 12m when both fire, vs 20% base
+          — hindcast: 44% odds of a ≥15% drawdown within 12m when both fire, vs 20% base (5 of 11 clusters — context, not calibration)
         </span>
       </div>
       <div className="mb-2 flex flex-wrap gap-1.5">
         <Cond
           on={g.fast_red}
           label="1 · fast channel red"
-          detail={g.fast_red ? g.fast_red_channels.join(", ") : "none of credit / plumbing / basis / carry"}
+          detail={
+            g.fast_red
+              ? g.fast_red_channels.join(", ")
+              : g.fast_red === null
+                ? "no fast channel reporting"
+                : "none of credit / plumbing / basis / carry"
+          }
         />
         <Cond
           on={g.curve_flat}

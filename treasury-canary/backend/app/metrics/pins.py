@@ -32,9 +32,15 @@ rate) — documented exposure sizes and episode counts, never fitted weights.
 """
 from __future__ import annotations
 
+import datetime
 from dataclasses import dataclass, field
 
 RANK = {"GREEN": 0, "YELLOW": 1, "RED": 2}
+
+# Channels whose dollar mass is the SAME underlying market as another channel;
+# they get a bar on the mass map but are excluded from the dollar sums so the
+# $28T Treasury market is never counted twice.
+MASS_OVERLAP_EXCLUDED = {"demand_strike"}  # same market as the fiscal pin
 
 
 @dataclass
@@ -541,16 +547,18 @@ def build_pin_board(bundle: dict) -> dict:
     # Cap-weight concentration is the gun (top-10 ~34% of S&P vs 18% in 2010);
     # the pin is the rotation OUT — mega-caps underperforming equal-weight fast
     # forces de-facto passive selling of the biggest names.
-    spy = bundle.get("spy", ([], []))[1]
-    rsp = bundle.get("rsp", ([], []))[1]
+    # align SPY/RSP BY DATE (not position) so a missing day or lagging last
+    # print in one series can't produce mixed-date ratios
+    sm = {d: v for d, v in zip(*bundle.get("spy", ([], []))) if v is not None}
+    rm = {d: v for d, v in zip(*bundle.get("rsp", ([], []))) if v is not None}
+    common = sorted(set(sm) & set(rm))
     ratio_pctl = rel_20d = None
-    cs, cr = _clean(spy), _clean(rsp)
-    if len(cs) > 300 and len(cr) > 300:
-        n = min(len(cs), len(cr))
-        ratio = [cs[-n + i] / cr[-n + i] for i in range(n)]
+    cs = [sm[d] for d in common]
+    cr = [rm[d] for d in common]
+    if len(common) > 300:
+        ratio = [a / b for a, b in zip(cs, cr)]
         ratio_pctl = _percentile(ratio, ratio[-1])
-        if n > 21:
-            rel_20d = round(((cs[-1] / cs[-22]) - (cr[-1] / cr[-22])) * 100.0, 2)
+        rel_20d = round(((cs[-1] / cs[-22]) - (cr[-1] / cr[-22])) * 100.0, 2)
     parts = [
         PinPart("SPY/RSP ratio percentile (vs 2010+)", ratio_pctl, "%ile", "STALE",
                 "Cap-weight vs equal-weight: how concentrated the index bid is versus "
@@ -576,21 +584,27 @@ def build_pin_board(bundle: dict) -> dict:
     # Crowded short-vol + thin realized vol = the spring; a fast VIX repricing
     # is the release (Feb-2018: XIV -90% overnight; 0DTE now ~59% of SPX volume).
     vix = bundle.get("vix", ([], []))[1]
-    spx = bundle.get("sp500", ([], []))[1]
     vrp_pctl = vix_5d = None
-    cv, cx = _clean(vix), _clean(spx)
-    if len(cv) > 300 and len(cx) > 300:
-        rets = [(cx[i] / cx[i - 1] - 1) for i in range(1, len(cx))]
+    # the spike trigger needs ONLY the VIX — never gate it behind SP500
+    ch5 = _change(vix, 5)
+    if ch5 is not None:
+        vix_5d = round(ch5, 1)
+    # VRP leg: VIX minus 20d realized, date-aligned (not positional)
+    vm = {d: v for d, v in zip(*bundle.get("vix", ([], []))) if v is not None}
+    xd, xv = zip(*[(d, v) for d, v in zip(*bundle.get("sp500", ([], [])))
+                   if v is not None]) if _clean(bundle.get("sp500", ([], []))[1]) else ((), ())
+    if len(xv) > 300 and len(vm) > 300:
         import math as _m
-        rv = []
+        rvm = {}
+        rets = [(xv[i] / xv[i - 1] - 1) for i in range(1, len(xv))]
         for i in range(20, len(rets)):
             w = rets[i - 20:i]
             mu = sum(w) / 20
-            rv.append(_m.sqrt(sum((x - mu) ** 2 for x in w) / 19) * _m.sqrt(252) * 100)
-        n = min(len(cv), len(rv))
-        vrp = [cv[-n + i] - rv[-n + i] for i in range(n)]
-        vrp_pctl = _percentile(vrp, vrp[-1])
-        vix_5d = round(_change(vix, 5) or 0.0, 1) if _change(vix, 5) is not None else None
+            rvm[xd[i + 1]] = _m.sqrt(sum((x - mu) ** 2 for x in w) / 19) * _m.sqrt(252) * 100
+        vdates = sorted(set(vm) & set(rvm))
+        if len(vdates) > 300:
+            vrp = [vm[d] - rvm[d] for d in vdates]
+            vrp_pctl = _percentile(vrp, vrp[-1])
     parts = [
         PinPart("Vol-risk premium percentile (VIX − realized)", vrp_pctl, "%ile", "STALE",
                 "Compressed premium = short-vol sellers crowded in for thin carry. "
@@ -630,56 +644,87 @@ def build_pin_board(bundle: dict) -> dict:
     # several channels share the same underlying market, and leverage/speed
     # (not size) set the blast radius.
     sized = [ch for ch in channels if ch.mass_trillions is not None]
+    # demand_strike is the SAME $28T Treasury market as the fiscal pin — its
+    # bar still shows, but the dollar sums count that market once, not twice
+    summed = [ch for ch in sized if ch.channel_id not in MASS_OVERLAP_EXCLUDED]
 
     def _mass_at(status: str) -> float:
-        return round(sum(ch.mass_trillions for ch in sized if ch.status == status), 1)
+        return round(sum(ch.mass_trillions for ch in summed if ch.status == status), 1)
 
     exposure = {
         "red_trillions": _mass_at("RED"),
         "yellow_trillions": _mass_at("YELLOW"),
         "green_trillions": _mass_at("GREEN"),
-        "monitored_trillions": round(sum(ch.mass_trillions for ch in sized), 1),
+        "monitored_trillions": round(sum(ch.mass_trillions for ch in summed), 1),
         "unsized": [ch.label for ch in channels if ch.mass_trillions is None],
         "note": ("Direct exposure, documented orders of magnitude — NOT additive "
-                 "risk: fiscal, demand-strike and basis-trade all touch the same "
-                 "$28T Treasury market, and leverage/location set the blast "
-                 "radius, not size (2008: mid-size subprime on ~30x overnight-"
-                 "funded dealer leverage; Mar-2020: a $1-2T basis book at "
-                 "50-100x broke the whole Treasury market)."),
+                 "risk: leverage/location set the blast radius, not size (2008: "
+                 "mid-size subprime on ~30x overnight-funded dealer leverage; "
+                 "Mar-2020: a $1-2T basis book at 50-100x broke the whole "
+                 "Treasury market). Sums count the $28T Treasury market once "
+                 "(demand-strike shows a bar but is excluded from the totals — "
+                 "it is the same market as the fiscal pin); basis-trade rides "
+                 "on that market too but its $1.5T book is its own exposure."),
     }
 
-    # Accident composite — the ONE measured pins->market configuration
-    # (studies/pin-rule-hindcast, 1985-2026): a FAST_HIGH_MASS channel red
-    # while the 3m10y curve has been flat/inverted (<+0.25pp) within the
-    # trailing ~6 months preceded a >=15% SPX drawdown within 12m in 41% of
-    # months vs a 20% base, with 6-12 month leads on 2007 / 2019 / 2024.
-    # Two documented conditions, zero fitted parameters. GREEN = disarmed,
-    # YELLOW = one condition met (armed), RED = both (triggered).
-    fast_red_now = [ch.label for ch in channels
-                    if ch.channel_id in FAST_HIGH_MASS and ch.status == "RED"]
-    t3m = {d: v for d, v in zip(*bundle.get("3mo", ([], []))) if v is not None}
-    t10 = {d: v for d, v in zip(*bundle.get("10y", ([], []))) if v is not None}
-    spread_series = [round(t10[d] - t3m[d], 2) for d in sorted(set(t3m) & set(t10))]
-    spread_now = spread_series[-1] if spread_series else None
-    spread_min_6m = min(spread_series[-126:]) if spread_series else None
-    curve_flat = spread_min_6m is not None and spread_min_6m < 0.25
-    armed = bool(fast_red_now)
-    triggered = armed and curve_flat
+    # Accident composite (studies/pin-rule-hindcast v2, 1981-2026): a
+    # FAST_HIGH_MASS channel red while the daily 3m10y spread touched <+0.25pp
+    # within the trailing 183 days — the same instrument and window the study
+    # measured. In-sample: a >=15% SPX drawdown started within 12m in 44% of
+    # signal months vs a 20% base; 5 of 11 signal-clusters were followed by
+    # one (1998 LTCM 4m early, 2007 up to 12m, 2019 11m, 2025 12m; missed
+    # 2018 curve-steep and 2021 policy-driven). The sibling rule
+    # oil/policy-window+curve scores the same within noise — this is A
+    # measured configuration, not THE one. Descriptive, never calibrated.
+    # GREEN = disarmed, YELLOW = one condition met (armed), RED = both.
+    fast_live = [ch for ch in channels if ch.channel_id in FAST_HIGH_MASS
+                 and ch.status != "STALE"]
+    fast_red_now = [ch.label for ch in fast_live if ch.status == "RED"]
+    # condition 1 is UNKNOWN (None) when no fast channel reports at all —
+    # "no data" must never display as "condition false"
+    fast_red: bool | None = bool(fast_red_now) if fast_live else None
+    t3m = dict(zip(*bundle.get("3mo", ([], []))))
+    t10 = dict(zip(*bundle.get("10y", ([], []))))
+    pairs = [(d, round(t10[d] - t3m[d], 2)) for d in sorted(set(t3m) & set(t10))
+             if t3m[d] is not None and t10[d] is not None]
+    spread_now = spread_min_6m = None
+    curve_flat: bool | None = None
+    if pairs:
+        last_d, spread_now = pairs[-1]
+        # a true trailing-6-CALENDAR-month window (not "last 126 obs", which
+        # silently stretches over gaps), and only if the tape is FRESH — a
+        # spread computed from a stale tape must read unknown, not green
+        cutoff = last_d - datetime.timedelta(days=183)
+        window = [v for d, v in pairs if d >= cutoff]
+        fresh = (datetime.date.today() - last_d).days <= 14
+        if fresh and window:
+            spread_min_6m = min(window)
+            curve_flat = spread_min_6m < 0.25
+        else:
+            spread_now = spread_now if fresh else None
+    triggered = bool(fast_red) and bool(curve_flat)
+    known = [c for c in (fast_red, curve_flat) if c is not None]
     accident_gauge = {
+        # worst KNOWN state; the `unknown` list discloses what couldn't be
+        # evaluated. STALE only when NEITHER condition is knowable.
         "status": ("RED" if triggered else
-                   "YELLOW" if (armed or curve_flat) else
-                   "STALE" if (spread_now is None and not armed) else "GREEN"),
-        "fast_red": armed,
+                   "YELLOW" if any(known) else
+                   "GREEN" if known else "STALE"),
+        "fast_red": fast_red,
         "fast_red_channels": fast_red_now,
         "curve_flat": curve_flat,
+        "unknown": [name for name, c in (("fast channels", fast_red),
+                                         ("curve", curve_flat)) if c is None],
         "curve_threshold_pp": 0.25,
         "spread_3m10y_now": spread_now,
         "spread_3m10y_min_6m": spread_min_6m,
-        "basis": ("Measured (hindcast 1985-2026): fast-channel red on a curve "
-                  "that touched <+0.25pp within 6m preceded a >=15% drawdown "
-                  "within 12m in 41% of months vs a 20% base — 2007 flagged "
-                  "12m early, the 2019 repo spasm 6m early, 2024-09 12m early. "
-                  "Misses: 2018 (curve steep), 2022 (policy-driven)."),
+        "basis": ("Hindcast 1981-2026 (in-sample, ~11 signal clusters — wide "
+                  "error bars): this configuration preceded a >=15% drawdown "
+                  "start within 12m in 44% of months vs a 20% base; 5 of 11 "
+                  "clusters hit — 1998 LTCM flagged 4m early, 2007 up to 12m, "
+                  "2019 11m, 2025 12m. Missed 2018 (curve steep) and 2021 "
+                  "(policy-driven). Descriptive context, not a calibrated "
+                  "probability."),
     }
 
     return {

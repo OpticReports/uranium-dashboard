@@ -263,9 +263,10 @@ export interface PinChannel {
 
 export interface PinAccidentGauge {
   status: "GREEN" | "YELLOW" | "RED" | "STALE";
-  fast_red: boolean;
+  fast_red: boolean | null; // null = no fast channel reporting (unknown)
   fast_red_channels: string[];
-  curve_flat: boolean;
+  curve_flat: boolean | null; // null = no fresh curve tape (unknown)
+  unknown: string[];
   curve_threshold_pp: number;
   spread_3m10y_now: number | null;
   spread_3m10y_min_6m: number | null;
