@@ -243,6 +243,7 @@ export interface PinPart {
   unit: string;
   status: string;
   detail: string;
+  score: number | null;
 }
 
 export interface PinChannel {
@@ -255,6 +256,7 @@ export interface PinChannel {
   mass: string;
   speed: string;
   kill_rate: string;
+  score: number | null;
 }
 
 export interface PinBoard {
@@ -264,6 +266,8 @@ export interface PinBoard {
   n_yellow: number;
   n_live: number;
   n_channels: number;
+  pressure: number | null;
+  hottest: { channel_id: string; label: string; score: number } | null;
   framing: string;
 }
 
