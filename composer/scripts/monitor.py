@@ -8,8 +8,9 @@ compares against the previous snapshot. Alerts on:
   - a queued deploy appearing
   - rebalance scheduled today
   - the canary ACCIDENT COMPOSITE tripping (fast-channel red on a flat curve —
-    the one measured pins->market configuration: 41% vs 20% base odds of a
-    >=15% drawdown within 12m; see treasury-canary/studies/pin-rule-hindcast)
+    a measured pins->market configuration: 44% vs 20% base odds of a >=15%
+    drawdown starting within 12m, in-sample over ~11 signal clusters; see
+    treasury-canary/studies/pin-rule-hindcast v2)
 
 Exit code: 0 = quiet, 2 = alerts fired (easy to wire into cron/CI/triggers).
 Read-only. State lives in composer/results/monitor/state.json (tracked peaks
@@ -44,17 +45,22 @@ def check_accident_gauge(state, alerts, url, now):
         return
     status = g.get("status", "STALE")
     prev = state.get("accident_gauge")
-    state["accident_gauge"] = status
     low = g.get("spread_3m10y_min_6m")
     line = (f"accident gauge {status}: fast_red={g.get('fast_red')} "
             f"curve_flat={g.get('curve_flat')} "
             f"3m10y 6m-low {low if low is not None else 'n/a'}pp "
             f"(trip <+{g.get('curve_threshold_pp', 0.25)}pp)")
     print(f"  {line}")
+    if status == "STALE":
+        # a data outage is not a reset — keep the remembered state so a
+        # RED -> STALE -> RED bounce can't emit phantom RESET/TRIPPED churn
+        return
+    state["accident_gauge"] = status
     if status == "RED" and prev != "RED":
         alerts.append("ACCIDENT COMPOSITE TRIPPED — fast-channel red on a flat "
-                      "curve (measured: 41% vs 20% base odds of a >=15% drawdown "
-                      "within 12m, 6-12m leads on 2007/2019/2024). Verify sleeve "
+                      "curve (hindcast: 44% vs 20% base odds of a >=15% drawdown "
+                      "starting within 12m — descriptive, ~11 clusters — leads of "
+                      "4-12m on 1998/2007/2019/2025). Verify sleeve "
                       "at target; expect gap risk. " + line)
     elif status == "RED" and now.weekday() == 0:
         alerts.append("accident composite STILL TRIPPED (weekly reminder) — " + line)
