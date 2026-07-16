@@ -648,8 +648,43 @@ def build_pin_board(bundle: dict) -> dict:
                  "50-100x broke the whole Treasury market)."),
     }
 
+    # Accident composite — the ONE measured pins->market configuration
+    # (studies/pin-rule-hindcast, 1985-2026): a FAST_HIGH_MASS channel red
+    # while the 3m10y curve has been flat/inverted (<+0.25pp) within the
+    # trailing ~6 months preceded a >=15% SPX drawdown within 12m in 41% of
+    # months vs a 20% base, with 6-12 month leads on 2007 / 2019 / 2024.
+    # Two documented conditions, zero fitted parameters. GREEN = disarmed,
+    # YELLOW = one condition met (armed), RED = both (triggered).
+    fast_red_now = [ch.label for ch in channels
+                    if ch.channel_id in FAST_HIGH_MASS and ch.status == "RED"]
+    t3m = {d: v for d, v in zip(*bundle.get("3mo", ([], []))) if v is not None}
+    t10 = {d: v for d, v in zip(*bundle.get("10y", ([], []))) if v is not None}
+    spread_series = [round(t10[d] - t3m[d], 2) for d in sorted(set(t3m) & set(t10))]
+    spread_now = spread_series[-1] if spread_series else None
+    spread_min_6m = min(spread_series[-126:]) if spread_series else None
+    curve_flat = spread_min_6m is not None and spread_min_6m < 0.25
+    armed = bool(fast_red_now)
+    triggered = armed and curve_flat
+    accident_gauge = {
+        "status": ("RED" if triggered else
+                   "YELLOW" if (armed or curve_flat) else
+                   "STALE" if (spread_now is None and not armed) else "GREEN"),
+        "fast_red": armed,
+        "fast_red_channels": fast_red_now,
+        "curve_flat": curve_flat,
+        "curve_threshold_pp": 0.25,
+        "spread_3m10y_now": spread_now,
+        "spread_3m10y_min_6m": spread_min_6m,
+        "basis": ("Measured (hindcast 1985-2026): fast-channel red on a curve "
+                  "that touched <+0.25pp within 6m preceded a >=15% drawdown "
+                  "within 12m in 41% of months vs a 20% base — 2007 flagged "
+                  "12m early, the 2019 repo spasm 6m early, 2024-09 12m early. "
+                  "Misses: 2018 (curve steep), 2022 (policy-driven)."),
+    }
+
     return {
         "exposure": exposure,
+        "accident_gauge": accident_gauge,
         "channels": [ch.as_dict() for ch in channels],
         "overall": overall, "n_red": n_red, "n_yellow": n_yellow,
         "n_live": len(live), "n_channels": len(channels),

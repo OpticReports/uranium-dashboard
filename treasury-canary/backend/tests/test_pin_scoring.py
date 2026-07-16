@@ -52,6 +52,32 @@ def test_exposure_map_sums_mass_by_status():
         assert "leverage" in c
 
 
+def test_accident_gauge_arming_states():
+    import datetime
+    days = [datetime.date(2024, 1, 1) + datetime.timedelta(days=i) for i in range(400)]
+
+    def curve(spread):
+        return {"3mo": (days, [4.0] * 400), "10y": (days, [4.0 + spread] * 400)}
+
+    # steep curve, nothing red -> GREEN (disarmed)
+    g = build_pin_board(curve(1.0))["accident_gauge"]
+    assert g["status"] == "GREEN" and not g["fast_red"] and not g["curve_flat"]
+    # flat curve alone -> YELLOW (one condition)
+    g = build_pin_board(curve(0.1))["accident_gauge"]
+    assert g["status"] == "YELLOW" and g["curve_flat"]
+    # fast-channel red alone (HY OAS gap) on a steep curve -> YELLOW (armed)
+    hy = [3.0] * 380 + [3.0 + 0.10 * i for i in range(20)]  # +190bps/20 obs > 150 RED
+    b = curve(1.0); b["hy_oas"] = (days, hy)
+    g = build_pin_board(b)["accident_gauge"]
+    assert g["fast_red"] and g["status"] == "YELLOW"
+    # both -> RED (triggered)
+    b = curve(0.1); b["hy_oas"] = (days, hy)
+    g = build_pin_board(b)["accident_gauge"]
+    assert g["status"] == "RED" and g["fast_red"] and g["curve_flat"]
+    # empty bundle -> STALE, never a false alarm
+    assert build_pin_board({})["accident_gauge"]["status"] == "STALE"
+
+
 def test_exposure_counts_red_mass():
     # +100% oil yoy -> oil channel RED -> its $20T consumption base counts red
     import datetime

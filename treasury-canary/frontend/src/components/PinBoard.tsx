@@ -75,6 +75,96 @@ function OverallBanner({ board }: { board: PinBoardData }) {
   );
 }
 
+// Accident composite gauge — the one measured pins->market configuration
+// (studies/pin-rule-hindcast): fast-channel red on a flat/inverted curve.
+// Two arming conditions shown as switches, plus a spread meter so you can
+// watch the curve approach the trip line before it flips.
+function AccidentGauge({ board }: { board: PinBoardData }) {
+  const g = board.accident_gauge;
+  if (!g || g.status === "STALE") return null;
+  const thr = g.curve_threshold_pp;
+  // meter scale: -1.0pp .. +2.0pp, trip zone left of the threshold
+  const LO = -1.0, HI = 2.0;
+  const pos = (v: number) => `${Math.min(100, Math.max(0, ((v - LO) / (HI - LO)) * 100))}%`;
+  const statusText = g.status === "RED" ? "TRIGGERED" : g.status === "YELLOW" ? "ARMED — one condition" : "disarmed";
+  const Cond = ({ on, label, detail }: { on: boolean; label: string; detail: string }) => (
+    <span
+      className={
+        "rounded border px-2 py-1 text-[10px] leading-tight " +
+        (on
+          ? "border-red-600 bg-red-500/15 text-red-300"
+          : "border-slate-700 bg-slate-800/50 text-slate-500")
+      }
+    >
+      <span className="font-semibold uppercase tracking-wide">{on ? "■" : "□"} {label}</span>{" "}
+      <span className={on ? "text-red-200" : "text-slate-500"}>{detail}</span>
+    </span>
+  );
+  return (
+    <div className="mb-4 rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2.5">
+      <div className="mb-1.5 flex flex-wrap items-center gap-2">
+        <span className="text-xs font-semibold uppercase tracking-wide text-slate-200">
+          Accident composite
+        </span>
+        <StatusPill status={g.status} pulse={g.status === "RED"} />
+        <span className="text-[11px] text-slate-400">{statusText}</span>
+        <span className="text-[10px] text-slate-500">
+          — measured: 41% odds of a ≥15% drawdown within 12m when both fire, vs 20% base
+        </span>
+      </div>
+      <div className="mb-2 flex flex-wrap gap-1.5">
+        <Cond
+          on={g.fast_red}
+          label="1 · fast channel red"
+          detail={g.fast_red ? g.fast_red_channels.join(", ") : "none of credit / plumbing / basis / carry"}
+        />
+        <Cond
+          on={g.curve_flat}
+          label={`2 · curve flat (<+${thr.toFixed(2)}pp in 6m)`}
+          detail={
+            g.spread_3m10y_now != null && g.spread_3m10y_min_6m != null
+              ? `3m10y now ${g.spread_3m10y_now >= 0 ? "+" : ""}${g.spread_3m10y_now.toFixed(2)}pp · 6m low ${g.spread_3m10y_min_6m >= 0 ? "+" : ""}${g.spread_3m10y_min_6m.toFixed(2)}pp`
+              : "no curve data"
+          }
+        />
+      </div>
+      {g.spread_3m10y_now != null && g.spread_3m10y_min_6m != null && (
+        <div>
+          <div className="relative h-3 w-full overflow-hidden rounded bg-slate-800/70">
+            {/* trip zone: everything below the threshold */}
+            <div className="absolute inset-y-0 left-0 bg-red-500/25" style={{ width: pos(thr) }} />
+            <div className="absolute inset-y-0 w-px bg-red-400/70" style={{ left: pos(thr) }} />
+            {/* 6m low (hollow) and current (solid) markers */}
+            <div
+              className="absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-sky-300 bg-transparent"
+              style={{ left: pos(g.spread_3m10y_min_6m) }}
+              title={`6m low ${g.spread_3m10y_min_6m.toFixed(2)}pp`}
+            />
+            <div
+              className="absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-sky-400"
+              style={{ left: pos(g.spread_3m10y_now) }}
+              title={`now ${g.spread_3m10y_now.toFixed(2)}pp`}
+            />
+          </div>
+          <div className="mt-0.5 flex justify-between text-[9px] text-slate-600">
+            <span>-1.0pp (deep inversion)</span>
+            <span className="text-red-400/80">trip &lt; +{thr.toFixed(2)}pp</span>
+            <span>+2.0pp (steep)</span>
+          </div>
+          <p className="mt-1 text-[10px] text-slate-500">
+            <span className="text-sky-400">●</span> now ·{" "}
+            <span className="text-sky-300">○</span> 6-month low —{" "}
+            {g.curve_flat
+              ? "the curve condition is MET; a fast-channel red completes the composite."
+              : `the 6m low sits ${(g.spread_3m10y_min_6m - thr).toFixed(2)}pp above the trip line — flattening toward it is the thing to watch.`}
+          </p>
+        </div>
+      )}
+      <p className="mt-1.5 text-[10px] italic leading-snug text-slate-600">{g.basis}</p>
+    </div>
+  );
+}
+
 // Exposure map: severity says HOW STRESSED each channel is; this says HOW MUCH
 // sits behind it. Bars use a sqrt scale so the $1.5T basis book stays legible
 // next to the $28T Treasury market. Colors are the channel's live status.
@@ -316,6 +406,7 @@ export default function PinBoard() {
   return (
     <Panel title={title} subtitle={subtitle}>
       <OverallBanner board={board} />
+      <AccidentGauge board={board} />
       <MassMap board={board} />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {board.channels.map((c) => (
