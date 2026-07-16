@@ -344,6 +344,11 @@ export default function PinBoard() {
             />
           )}
           <CollectiveHistoryChart history={history} channelLabels={channelLabels} />
+          {history.measured_roles && (
+            <p className="mt-2 text-[10px] leading-snug text-slate-500">
+              {history.measured_roles}
+            </p>
+          )}
         </div>
       )}
       {board.framing && (

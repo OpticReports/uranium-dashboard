@@ -154,6 +154,12 @@ def test_episode_outcomes_hit_miss_open():
     assert channels[0]["outcomes"] == {"hit": 2, "miss": 1, "open": 1}
 
 
+def test_measured_roles_note_present():
+    flat = [50.0] * 504
+    hist = build_pin_history({"oil": _daily(date(2024, 1, 1), flat)})
+    assert "accident radar" in hist["measured_roles"]
+
+
 def test_recession_spans_extracted():
     from app.metrics.pin_history import _recession_spans
     dates, vals = [], []
