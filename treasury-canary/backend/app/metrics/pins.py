@@ -66,6 +66,17 @@ class PinChannel:
     mass: str = ""       # systemic exposure behind the channel
     speed: str = ""      # transmission speed once it fires
     kill_rate: str = ""  # documented historical record as a recession trigger
+    # Numeric mass for the exposure map ($T direct exposure, None = unbounded/
+    # economy-wide, excluded from sums). These restate the documented mass
+    # strings as orders of magnitude — TODAY's sizes, deliberately never
+    # projected onto historical charts (private credit was tiny in 2008;
+    # passive indexing was half its current share — 2026 masses on 2008
+    # episodes would be anachronistic).
+    mass_trillions: float | None = None
+    # Why size alone doesn't set the blast radius: leverage/location badge.
+    # 2008 = mid-size subprime on ~30x dealer leverage funded overnight;
+    # Mar-2020 = a $1-2T basis book at 50-100x broke the $28T Treasury market.
+    leverage: str = ""
 
     score: float | None = None   # max live part score (0-100)
 
@@ -73,7 +84,8 @@ class PinChannel:
         return {"channel_id": self.channel_id, "label": self.label, "status": self.status,
                 "parts": [p.as_dict() for p in self.parts], "basis": self.basis,
                 "certainty": self.certainty, "mass": self.mass, "speed": self.speed,
-                "kill_rate": self.kill_rate, "score": self.score}
+                "kill_rate": self.kill_rate, "score": self.score,
+                "mass_trillions": self.mass_trillions, "leverage": self.leverage}
 
 
 def _grade(value: float | None, yellow: float, red: float, higher_is_worse: bool = True) -> str:
@@ -254,6 +266,8 @@ def build_pin_board(bundle: dict) -> dict:
         basis="Hamilton: oil price shocks preceded ~10 of 11 postwar recessions.",
         certainty="High historical association; the proxy reads the spark in real time.",
         mass="Household real income (~$20T consumption base)",
+        mass_trillions=20.0,
+        leverage="unlevered — a broad income squeeze, not a margin call",
         speed="3–12 months",
         kill_rate="Preceded ~10 of 11 postwar recessions (Hamilton)"))
 
@@ -272,6 +286,8 @@ def build_pin_board(bundle: dict) -> dict:
         basis="Nearly every modern recession followed a tightening cycle; PACE is the pin.",
         certainty="High-quality proxy; note cuts-into-weakness are the curve panel's domain.",
         mass="The entire economy — rates reprice everything",
+        mass_trillions=None,
+        leverage="economy-wide (unbounded; excluded from exposure sums)",
         speed="12–24 months (long and variable lags)",
         kill_rate="Nearly every modern recession followed a tightening cycle"))
 
@@ -297,6 +313,8 @@ def build_pin_board(bundle: dict) -> dict:
               "and emergency borrowing, not levels.",
         certainty="Fast confirmation (days) rather than prediction — this is the tripwire.",
         mass="Banking system (~$24T assets)",
+        mass_trillions=24.0,
+        leverage="~10x bank balance-sheet leverage; deposit/wholesale funded",
         speed="Days–weeks once firing",
         kill_rate="High conditional on firing: 2008 (recession), 1998 + 2023 (contained)"))
 
@@ -320,6 +338,8 @@ def build_pin_board(bundle: dict) -> dict:
               "premium reprices. The flow compass's DEBASEMENT regime is its market symptom.",
         certainty="The level is the loaded gun (slow, certain); the 60d premium move is the spark.",
         mass="$28T+ Treasury market — the world's risk-free anchor",
+        mass_trillions=28.0,
+        leverage="sovereign anchor — collateral under the whole system",
         speed="Quarters (slow burn, fast finale)",
         kill_rate="No US precedent — the genuinely unprecedented channel"))
 
@@ -347,6 +367,8 @@ def build_pin_board(bundle: dict) -> dict:
         basis="Sept-2019 repo spasm; 2022 gilt/LDI. Plumbing breaks fast and forces the Fed.",
         certainty="High-quality daily/weekly reads; a genuine early-warning channel.",
         mass="Repo/reserves core (~$5T daily funding)",
+        mass_trillions=5.0,
+        leverage="overnight rollover — 100% run-prone by construction",
         speed="Days",
         kill_rate="Forces Fed response (2019 repo) — no recession from plumbing alone yet"))
 
@@ -371,6 +393,8 @@ def build_pin_board(bundle: dict) -> dict:
         certainty="Weekly CFTC data with a few days' lag; crowding is measurable but the "
                   "unwind trigger (a margin/vol spike) arrives via the other channels.",
         mass="~$1–2T notional cash-futures basis book",
+        mass_trillions=1.5,
+        leverage="50–100x repo leverage at the collateral core (Mar-2020 proof)",
         speed="Days",
         kill_rate="0-for-2 as sole trigger (2019, 2020) — both forced Fed rescue"))
 
@@ -412,6 +436,8 @@ def build_pin_board(bundle: dict) -> dict:
         certainty="Public CCC is a real-time proxy; private marks themselves are opaque "
                   "and lag by quarters. NDFI series starts 2015 (young history).",
         mass="~$3T (private credit ~$1.7T + ~$1.3T bank NDFI loans)",
+        mass_trillions=3.0,
+        leverage="opaque marks; ~$1.3T of it bank-funded (loss location unclear)",
         speed="Weeks–months",
         kill_rate="Untested at this size — no prior cycle carried it"))
 
@@ -445,6 +471,8 @@ def build_pin_board(bundle: dict) -> dict:
         certainty="FX read is daily and clean; JGB series is monthly with ~2-month lag. "
                   "Historically produces vol shocks, not recessions — so far.",
         mass="Multi-$T yen-funded carry complex",
+        mass_trillions=3.0,
+        leverage="FX-margin funding — unwinds at market speed (Aug-2024)",
         speed="Days",
         kill_rate="Vol shocks only (Aug 2024) — no recession attributed yet"))
 
@@ -466,6 +494,8 @@ def build_pin_board(bundle: dict) -> dict:
         certainty="Noisiest channel: elevated uncertainty often resolves benignly. Context, "
                   "not confirmation.",
         mass="Unbounded (exogenous shocks)",
+        mass_trillions=None,
+        leverage="unbounded (excluded from exposure sums)",
         speed="Fast to spike, often slow to bite",
         kill_rate="Noisiest channel — most spikes resolve benignly"))
 
@@ -502,6 +532,8 @@ def build_pin_board(bundle: dict) -> dict:
         certainty="Auction data is exact but episodic (per-auction); custody is weekly. "
                   "A weak single auction is noise — a weak RUN of them is the signal.",
         mass="$28T+ Treasury market; ~$3.3T foreign-official custody",
+        mass_trillions=28.0,
+        leverage="overlaps the fiscal pin — same underlying market",
         speed="Weeks (auction cycle), fast finale if it compounds",
         kill_rate="No full US precedent; UK gilts Sept-2022 is the modern template"))
 
@@ -535,6 +567,8 @@ def build_pin_board(bundle: dict) -> dict:
         certainty="Ratio is a clean daily proxy for concentration, not a direct flow "
                   "read. Rotations can be benign (2024) absent leverage.",
         mass="~$12T+ indexed to cap-weight S&P vehicles",
+        mass_trillions=12.0,
+        leverage="unlevered but price-insensitive in both directions",
         speed="Weeks",
         kill_rate="Untested at current concentration — 2000 tech unwind is the analog"))
 
@@ -573,6 +607,8 @@ def build_pin_board(bundle: dict) -> dict:
         certainty="VRP from VIX minus 20d realized is a standard but coarse crowding "
                   "proxy; dealer gamma positioning itself is not freely observable.",
         mass="SPX options ~4M contracts/day; multi-$B vol-selling ETPs",
+        mass_trillions=2.0,
+        leverage="daily notional churn — dealer hedging amplifies into the move",
         speed="Days",
         kill_rate="Vol shocks, not recessions (Feb-2018, Aug-2024) — but margin "
                   "spirals are how other channels get triggered"))
@@ -588,7 +624,32 @@ def build_pin_board(bundle: dict) -> dict:
     hottest = max((ch for ch in channels if ch.score is not None),
                   key=lambda c: c.score, default=None)
 
+    # Exposure map: how much direct mass sits behind each stress level RIGHT
+    # NOW. Answers "a red, but on how big a complex?" — severity says how
+    # stressed, this says how much is stressed. Sums are labeled non-additive:
+    # several channels share the same underlying market, and leverage/speed
+    # (not size) set the blast radius.
+    sized = [ch for ch in channels if ch.mass_trillions is not None]
+
+    def _mass_at(status: str) -> float:
+        return round(sum(ch.mass_trillions for ch in sized if ch.status == status), 1)
+
+    exposure = {
+        "red_trillions": _mass_at("RED"),
+        "yellow_trillions": _mass_at("YELLOW"),
+        "green_trillions": _mass_at("GREEN"),
+        "monitored_trillions": round(sum(ch.mass_trillions for ch in sized), 1),
+        "unsized": [ch.label for ch in channels if ch.mass_trillions is None],
+        "note": ("Direct exposure, documented orders of magnitude — NOT additive "
+                 "risk: fiscal, demand-strike and basis-trade all touch the same "
+                 "$28T Treasury market, and leverage/location set the blast "
+                 "radius, not size (2008: mid-size subprime on ~30x overnight-"
+                 "funded dealer leverage; Mar-2020: a $1-2T basis book at "
+                 "50-100x broke the whole Treasury market)."),
+    }
+
     return {
+        "exposure": exposure,
         "channels": [ch.as_dict() for ch in channels],
         "overall": overall, "n_red": n_red, "n_yellow": n_yellow,
         "n_live": len(live), "n_channels": len(channels),

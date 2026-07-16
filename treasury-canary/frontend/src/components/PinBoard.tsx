@@ -75,6 +75,68 @@ function OverallBanner({ board }: { board: PinBoardData }) {
   );
 }
 
+// Exposure map: severity says HOW STRESSED each channel is; this says HOW MUCH
+// sits behind it. Bars use a sqrt scale so the $1.5T basis book stays legible
+// next to the $28T Treasury market. Colors are the channel's live status.
+function MassMap({ board }: { board: PinBoardData }) {
+  const exp = board.exposure;
+  if (!exp) return null;
+  const sized = board.channels
+    .filter((c) => c.mass_trillions != null)
+    .sort((a, b) => (b.mass_trillions ?? 0) - (a.mass_trillions ?? 0));
+  if (sized.length === 0) return null;
+  const max = Math.sqrt(sized[0].mass_trillions ?? 1);
+  return (
+    <div className="mb-4 rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2.5">
+      <div className="mb-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+        <span className="text-xs font-semibold uppercase tracking-wide text-slate-200">
+          Systemic mass map
+        </span>
+        <span className="text-[11px] text-slate-400">
+          stress-bearing exposure now:{" "}
+          <span className="font-mono font-bold text-red-400">
+            ${exp.red_trillions.toFixed(1)}T red
+          </span>{" "}
+          ·{" "}
+          <span className="font-mono font-bold text-amber-400">
+            ${exp.yellow_trillions.toFixed(1)}T yellow
+          </span>{" "}
+          · of ~${exp.monitored_trillions.toFixed(0)}T monitored
+          {exp.unsized.length > 0 && (
+            <span className="text-slate-500">
+              {" "}(excl. {exp.unsized.join(", ")} — unbounded)
+            </span>
+          )}
+        </span>
+      </div>
+      <ul className="space-y-1">
+        {sized.map((c) => (
+          <li key={c.channel_id} className="flex items-center gap-2 text-[10px]"
+              title={`${c.mass} — leverage/location: ${c.leverage}`}>
+            <span className="w-40 shrink-0 truncate text-slate-400">{c.label}</span>
+            <span className="h-2.5 grow overflow-hidden rounded-sm bg-slate-800/70">
+              <span
+                className="block h-2.5 rounded-sm"
+                style={{
+                  width: `${(Math.sqrt(c.mass_trillions ?? 0) / max) * 100}%`,
+                  backgroundColor: partDotColor(c.status),
+                  opacity: c.status === "STALE" ? 0.35 : 0.85,
+                }}
+              />
+            </span>
+            <span className="w-14 shrink-0 text-right font-mono text-slate-300">
+              ${(c.mass_trillions ?? 0).toFixed(1)}T
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-1.5 text-[10px] italic leading-snug text-slate-600">
+        {exp.note} Bar length is √-scaled.
+      </p>
+    </div>
+  );
+}
+
 function ChannelCard({ channel, history, recessions, drawdowns }: {
   channel: PinChannel;
   history?: PinHistory["channels"][number];
@@ -254,6 +316,7 @@ export default function PinBoard() {
   return (
     <Panel title={title} subtitle={subtitle}>
       <OverallBanner board={board} />
+      <MassMap board={board} />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {board.channels.map((c) => (
           <ChannelCard
