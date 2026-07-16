@@ -116,6 +116,22 @@ def test_empty_bundle_degrades_gracefully():
     assert len(hist["channels"]) == len(LAG_WINDOWS)
     assert hist["collective"]["series"] == []
     assert hist["confluence"] is None
+    assert hist["recessions"] == []
+
+
+def test_recession_spans_extracted():
+    from app.metrics.pin_history import _recession_spans
+    dates, vals = [], []
+    d = date(2007, 1, 1)
+    while d <= date(2010, 12, 1):
+        dates.append(d)
+        vals.append(1.0 if date(2008, 1, 1) <= d <= date(2009, 6, 1) else 0.0)
+        d = date(d.year + (d.month == 12), d.month % 12 + 1, 1)
+    spans = _recession_spans(dates, vals)
+    assert spans == [{"start": "2008-01", "end": "2009-06"}]
+    # ongoing recession at the end of the series still closes its span
+    spans = _recession_spans(dates, [1.0] * len(dates))
+    assert spans == [{"start": "2007-01", "end": "2010-12"}]
 
 
 def test_confluence_forward_window_is_intersection_arithmetic():

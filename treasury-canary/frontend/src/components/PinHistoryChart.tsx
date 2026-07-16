@@ -18,6 +18,7 @@ import type {
   PinConfluence,
   PinHistory,
   PinHistoryChannel,
+  RecessionSpan,
 } from "../lib/api";
 
 // Pin-channel hindcast charts. Monthly severity (same 0-100 scale and bands as
@@ -132,7 +133,53 @@ function tickForSpan(nMonths: number) {
   return nMonths <= 30 ? (d: string) => d : (d: string) => d.slice(0, 4);
 }
 
-export function ChannelHistoryChart({ hist }: { hist: PinHistoryChannel }) {
+// NBER recessions, clipped to the visible range — the ground truth the
+// windows are supposed to line up with. Dotted verticals at entry/exit with
+// a whisper of fill between (kept fainter than the damage-window gray).
+function recessionMarks(recessions: RecessionSpan[], first: string, last: string) {
+  return recessions
+    .filter((r) => r.end >= first && r.start <= last)
+    .map((r) => ({
+      x1: r.start < first ? first : r.start,
+      x2: r.end > last ? last : r.end,
+      clippedLeft: r.start < first,
+      clippedRight: r.end > last,
+    }))
+    .flatMap((r, i) => [
+      <ReferenceArea
+        key={`rec-a-${i}`}
+        x1={r.x1}
+        x2={r.x2}
+        fill={SERIES}
+        fillOpacity={0.05}
+        stroke="none"
+      />,
+      !r.clippedLeft && (
+        <ReferenceLine
+          key={`rec-s-${i}`}
+          x={r.x1}
+          stroke="#94a3b8"
+          strokeDasharray="2 3"
+          strokeOpacity={0.55}
+        />
+      ),
+      !r.clippedRight && (
+        <ReferenceLine
+          key={`rec-e-${i}`}
+          x={r.x2}
+          stroke="#94a3b8"
+          strokeDasharray="2 3"
+          strokeOpacity={0.55}
+        />
+      ),
+    ])
+    .filter(Boolean);
+}
+
+export function ChannelHistoryChart({ hist, recessions = [] }: {
+  hist: PinHistoryChannel;
+  recessions?: RecessionSpan[];
+}) {
   const { range, setRange } = useRange();
   if (hist.series.length === 0) {
     return (
@@ -203,6 +250,7 @@ export function ChannelHistoryChart({ hist }: { hist: PinHistoryChannel }) {
               stroke="none"
             />
           ))}
+          {recessionMarks(recessions, first, last)}
           <ReferenceLine y={50} stroke={AMBER} strokeDasharray="3 4" strokeOpacity={0.5} />
           <ReferenceLine y={80} stroke={RED} strokeDasharray="3 4" strokeOpacity={0.5} />
           <Tooltip
@@ -237,7 +285,8 @@ export function ChannelHistoryChart({ hist }: { hist: PinHistoryChannel }) {
         Monthly max severity, full source history.{" "}
         <span className="text-red-400">●</span> red-episode peak;{" "}
         <span className="rounded-sm bg-slate-500/20 px-1">gray band</span> = damage
-        window, {lagLo}–{lagHi} months after the peak ({hist.lag_basis}).
+        window, {lagLo}–{lagHi} months after the peak ({hist.lag_basis});
+        dotted verticals = NBER recessions.
         {hist.note ? ` ${hist.note}` : ""}
       </p>
     </div>
@@ -375,6 +424,8 @@ export function CollectiveHistoryChart({ history, channelLabels }: {
             tickFormatter={tickForSpan(series.length)}
           />
           <YAxis allowDecimals={false} width={28} tick={{ fill: MUTED, fontSize: 9 }} />
+          {recessionMarks(history.recessions ?? [], series[0].date,
+                          series[series.length - 1].date)}
           {firstProjected && (
             <ReferenceArea
               x1={firstProjected}
@@ -416,6 +467,10 @@ export function CollectiveHistoryChart({ history, channelLabels }: {
         <span className="flex items-center gap-1">
           <span className="inline-block h-0.5 w-3 rounded bg-red-500" /> channels at
           red that month
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block w-3 border-t border-dashed border-slate-400" />{" "}
+          NBER recession span
         </span>
         <span>
           Overlap is the signal: one open window is a data point — several at once is

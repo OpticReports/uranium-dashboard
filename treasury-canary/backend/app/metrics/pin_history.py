@@ -351,10 +351,12 @@ def build_pin_history(bundle: dict) -> dict:
             "note": HISTORY_NOTES.get(cid),
         })
 
+    recessions = _recession_spans(*bundle.get("recession", ([], [])))
+
     if not all_months:
         return {"channels": channels_out,
                 "collective": {"series": [], "last_data_month": None},
-                "confluence": None}
+                "confluence": None, "recessions": recessions}
 
     last_data = max(all_months)
     # extend through the farthest projected window so convergence AHEAD of us
@@ -378,12 +380,32 @@ def build_pin_history(bundle: dict) -> dict:
         "channels": channels_out,
         "collective": {"series": collective, "last_data_month": last_data},
         "confluence": _confluence(collective, last_data, bundle),
+        "recessions": recessions,
         "framing": "Each channel's severity, recomputed monthly over full source "
                    "history (monthly max, expanding percentiles — no lookahead). "
                    "A red episode casts that channel's documented damage window "
                    "forward; the bottom series counts overlapping open windows. "
                    "One spark is a data point — several open windows is a regime.",
     }
+
+
+def _recession_spans(dates: list[date], vals: list[float | None]) -> list[dict]:
+    """NBER recession spans as {start, end} months, from the USREC series.
+    Ground truth the charts annotate — did the windows line up with the pain?"""
+    spans: list[dict] = []
+    start: date | None = None
+    prev, prev_d = 0.0, None
+    for d, v in zip(dates, vals):
+        cur = v or 0.0
+        if cur == 1.0 and prev != 1.0:
+            start = d
+        elif cur != 1.0 and prev == 1.0 and start is not None and prev_d is not None:
+            spans.append({"start": _ym(start), "end": _ym(prev_d)})
+            start = None
+        prev, prev_d = cur, d
+    if prev == 1.0 and start is not None and prev_d is not None:
+        spans.append({"start": _ym(start), "end": _ym(prev_d)})
+    return spans
 
 
 # --- confluence: the refined forward window ------------------------------------
