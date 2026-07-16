@@ -44,10 +44,11 @@ class PinPart:
     unit: str
     status: str          # GREEN | YELLOW | RED | STALE
     detail: str = ""
+    score: float | None = None   # 0-100 severity through documented anchors
 
     def as_dict(self) -> dict:
         return {"label": self.label, "value": self.value, "unit": self.unit,
-                "status": self.status, "detail": self.detail}
+                "status": self.status, "detail": self.detail, "score": self.score}
 
 
 @dataclass
@@ -66,11 +67,13 @@ class PinChannel:
     speed: str = ""      # transmission speed once it fires
     kill_rate: str = ""  # documented historical record as a recession trigger
 
+    score: float | None = None   # max live part score (0-100)
+
     def as_dict(self) -> dict:
         return {"channel_id": self.channel_id, "label": self.label, "status": self.status,
                 "parts": [p.as_dict() for p in self.parts], "basis": self.basis,
                 "certainty": self.certainty, "mass": self.mass, "speed": self.speed,
-                "kill_rate": self.kill_rate}
+                "kill_rate": self.kill_rate, "score": self.score}
 
 
 def _grade(value: float | None, yellow: float, red: float, higher_is_worse: bool = True) -> str:
@@ -111,6 +114,97 @@ def _percentile(vals: list, value: float | None) -> float | None:
     if value is None or not c:
         return None
     return round(100.0 * sum(1 for v in c if v <= value) / len(c), 1)
+
+
+# --- continuous severity scoring (0-100) --------------------------------------
+# Every part maps to documented anchors: BENIGN -> 0, the existing YELLOW
+# threshold -> 50, the existing RED threshold -> 80, and a documented
+# historical-episode EXTREME -> 100 (piecewise linear, clamped). Colors are
+# derived from the same bands (<50 GREEN, 50-79 YELLOW, >=80 RED), so the
+# score can never disagree with the pill. Cushion/pressure-gauge legs carry
+# cap=79 — they can push a channel to the top of YELLOW but never to RED,
+# preserving the original cap semantics. Anchors are episode-calibrated and
+# cited, never fitted.
+def _pscore(value: float | None, benign: float, yellow: float, red: float,
+            extreme: float, higher_is_worse: bool = True, cap: float = 100.0
+            ) -> float | None:
+    if value is None:
+        return None
+    v, b, y, r, e = ((value, benign, yellow, red, extreme) if higher_is_worse
+                     else (-value, -benign, -yellow, -red, -extreme))
+    if v <= b:
+        sc = 0.0
+    elif v <= y:
+        sc = 50.0 * (v - b) / (y - b) if y != b else 50.0
+    elif v <= r:
+        sc = 50.0 + 30.0 * (v - y) / (r - y) if r != y else 80.0
+    elif v <= e:
+        sc = 80.0 + 20.0 * (v - r) / (e - r) if e != r else 100.0
+    else:
+        sc = 100.0
+    return round(min(sc, cap), 1)
+
+
+def _status_from_score(score: float | None) -> str:
+    if score is None:
+        return "STALE"
+    return "RED" if score >= 80.0 else "YELLOW" if score >= 50.0 else "GREEN"
+
+
+# (benign, yellow, red, extreme, higher_is_worse, cap) per part label.
+# Extreme anchors cite the episode that printed them.
+ANCHORS: dict[str, tuple] = {
+    "WTI, 12-month change": (0, 25, 50, 100, True, 100),                 # 1973/79/2022 ~ +100%
+    "Fed funds, 12-month change": (0, 200, 300, 450, True, 100),         # 2022-23 pace ~ +450bps
+    "HY OAS, 20d change": (0, 75, 150, 350, True, 100),                  # Mar-2020 ~ +350bps/20d
+    "Discount-window borrowing": (0, 10, 50, 155, True, 100),            # Mar-2023 peak ~$153B
+    "Federal interest / GDP": (2.0, 3.0, 4.0, 5.0, True, 100),           # >1990s peak
+    "Term premium, 60d change": (0, 40, 75, 150, True, 100),             # 2023-Q3 repricing scale
+    "SOFR − IORB": (-8, 5, 15, 50, True, 100),                      # Sep-2019 sustained prints
+    "Reserves, 26-week change": (0, -8, -15, -25, False, 100),           # beyond-2019 drain pace
+    "RRP buffer": (600, 100, 20, 0, False, 79),                          # cushion leg: caps YELLOW
+    "Leveraged-fund net short, UST futures": (2, 4, 5.5, 8, True, 100),  # ~2x the 2020 book
+    "Positioning percentile (vs 2010+)": (50, 85, 95, 100, True, 100),
+    "CCC spread percentile (vs 1996+)": (50, 85, 95, 100, True, 100),
+    "CCC−BBB dispersion percentile": (50, 85, 95, 100, True, 100),
+    "Bank loans to NDFIs, m/m ann. growth": (10, 5, 0, -10, False, 100),
+    "USD/JPY, 1-month change": (0, -4, -7, -12, False, 100),             # Aug-2024 ~ -8%/1m
+    "10y JGB yield, 12-month change": (0, 50, 100, 150, True, 79),       # cushion leg: caps YELLOW
+    "EPU index, 30d avg (percentile)": (50, 90, 97.5, 100, True, 100),
+    # Demand-strike channel (Dalio): auction demand + foreign custody flows.
+    "Coupon bid-to-cover, last 4 auctions": (2.6, 2.35, 2.2, 2.0, False, 100),  # <2.2 = weak tape
+    "Indirect (foreign) share, last 4 auctions": (65, 56, 50, 42, False, 100),  # 53% = weakest since Mar-23
+    "Foreign custody holdings, 13-week change": (0.5, -1.5, -4.0, -8.0, False, 100),
+    # Passive-concentration channel (Burry): crowding gauge + unwind trigger.
+    "SPY/RSP ratio percentile (vs 2010+)": (50, 90, 97, 100, True, 79),  # crowding gauge: caps YELLOW
+    "Mega-cap vs equal-weight, 20d relative": (0, -2.5, -4.5, -8.0, False, 100),  # Jul-2024 rotation ~ -4.5%
+    # Vol-supply channel (Volmageddon): crowding gauge + the spike trigger.
+    "Vol-risk premium percentile (VIX − realized)": (50, 15, 5, 0, False, 79),  # crowded short-vol: caps YELLOW
+    "VIX, 5-day change": (0, 8, 15, 25, True, 100),                      # Feb-2018 +20, Aug-2024 spike
+}
+
+
+def _apply_scores(channels: list["PinChannel"]) -> None:
+    """Assign part scores from ANCHORS and derive channel score/status.
+
+    Status is recomputed from the score bands, which reproduces the original
+    threshold colors exactly (yellow anchor -> 50, red anchor -> 80). Parts
+    with no anchor entry keep their existing status and get no score.
+    """
+    for ch in channels:
+        for p in ch.parts:
+            a = ANCHORS.get(p.label)
+            if a is None or p.value is None:
+                continue
+            p.score = _pscore(p.value, *a[:4], higher_is_worse=a[4], cap=a[5])
+            p.status = _status_from_score(p.score)
+        live = [p.score for p in ch.parts if p.score is not None]
+        ch.score = round(max(live), 1) if live else None
+        statuses = [p.status for p in ch.parts if p.status != "STALE"]
+        if statuses:
+            ch.status = max(statuses, key=lambda x: RANK[x])
+        else:
+            ch.status = "STALE"
 
 
 # Channels that transmit in DAYS with multi-trillion mass — the ones where an
@@ -375,15 +469,132 @@ def build_pin_board(bundle: dict) -> dict:
         speed="Fast to spike, often slow to bite",
         kill_rate="Noisiest channel — most spikes resolve benignly"))
 
+    # --- DEMAND STRIKE (Dalio) ----------------------------------------------
+    # The Big-Debt-Cycle trigger in its literal form: more Treasury supply than
+    # demand at prevailing prices. Auction tape (bid-to-cover, foreign share)
+    # + the Fed custody account (weekly read on foreign official selling).
+    auctions = bundle.get("auctions") or []
+    coupons = [a for a in auctions if a.get("bid_to_cover") is not None]
+    b2c_4 = ind_4 = None
+    if len(coupons) >= 4:
+        last4 = coupons[-4:]
+        b2c_4 = round(sum(a["bid_to_cover"] for a in last4) / 4.0, 2)
+        ind = [a.get("indirect_pct") for a in last4 if a.get("indirect_pct") is not None]
+        ind_4 = round(sum(ind) / len(ind), 1) if ind else None
+    cust = bundle.get("custody", ([], []))[1]
+    cust_13w = _pct_change(cust, 13)
+    parts = [
+        PinPart("Coupon bid-to-cover, last 4 auctions", b2c_4, "x", "STALE",
+                "Demand insufficient at the prevailing price shows up here first — "
+                "sub-2.2x coupon tapes are what a buyer's strike looks like."),
+        PinPart("Indirect (foreign) share, last 4 auctions", ind_4, "%", "STALE",
+                "Foreign central banks/SWFs stepping back from auctions — the demand "
+                "side of Dalio's supply/demand imbalance."),
+        PinPart("Foreign custody holdings, 13-week change", cust_13w, "%", "STALE",
+                "Fed custody account (H.4.1): the cleanest weekly read on whether "
+                "foreign officials are net sellers between auctions."),
+    ]
+    channels.append(PinChannel(
+        "demand_strike", "Treasury demand strike", "STALE", parts,
+        basis="Dalio's Big Debt Cycle end-game: debt sales exceed demand -> price falls "
+              "or the central bank prints. Auction tails/weak bid-to-cover are the tape "
+              "of that imbalance forming.",
+        certainty="Auction data is exact but episodic (per-auction); custody is weekly. "
+                  "A weak single auction is noise — a weak RUN of them is the signal.",
+        mass="$28T+ Treasury market; ~$3.3T foreign-official custody",
+        speed="Weeks (auction cycle), fast finale if it compounds",
+        kill_rate="No full US precedent; UK gilts Sept-2022 is the modern template"))
+
+    # --- PASSIVE CONCENTRATION (Burry) ----------------------------------------
+    # Cap-weight concentration is the gun (top-10 ~34% of S&P vs 18% in 2010);
+    # the pin is the rotation OUT — mega-caps underperforming equal-weight fast
+    # forces de-facto passive selling of the biggest names.
+    spy = bundle.get("spy", ([], []))[1]
+    rsp = bundle.get("rsp", ([], []))[1]
+    ratio_pctl = rel_20d = None
+    cs, cr = _clean(spy), _clean(rsp)
+    if len(cs) > 300 and len(cr) > 300:
+        n = min(len(cs), len(cr))
+        ratio = [cs[-n + i] / cr[-n + i] for i in range(n)]
+        ratio_pctl = _percentile(ratio, ratio[-1])
+        if n > 21:
+            rel_20d = round(((cs[-1] / cs[-22]) - (cr[-1] / cr[-22])) * 100.0, 2)
+    parts = [
+        PinPart("SPY/RSP ratio percentile (vs 2010+)", ratio_pctl, "%ile", "STALE",
+                "Cap-weight vs equal-weight: how concentrated the index bid is versus "
+                "its own history. Crowding gauge — caps at YELLOW."),
+        PinPart("Mega-cap vs equal-weight, 20d relative", rel_20d, "%", "STALE",
+                "The trigger: mega-caps underperforming the average stock FAST "
+                "(Jul-2024 rotation ~ -4.5%/20d) is the passive bid reversing."),
+    ]
+    channels.append(PinChannel(
+        "concentration", "Passive-concentration unwind", "STALE", parts,
+        basis="Burry's index thesis made measurable: top-10 weight ~34% of the S&P "
+              "(vs 18% in 2010). Flows into cap-weight funds are price-insensitive on "
+              "the way in — and on the way out.",
+        certainty="Ratio is a clean daily proxy for concentration, not a direct flow "
+                  "read. Rotations can be benign (2024) absent leverage.",
+        mass="~$12T+ indexed to cap-weight S&P vehicles",
+        speed="Weeks",
+        kill_rate="Untested at current concentration — 2000 tech unwind is the analog"))
+
+    # --- VOL SUPPLY / GAMMA (Volmageddon) --------------------------------------
+    # Crowded short-vol + thin realized vol = the spring; a fast VIX repricing
+    # is the release (Feb-2018: XIV -90% overnight; 0DTE now ~59% of SPX volume).
+    vix = bundle.get("vix", ([], []))[1]
+    spx = bundle.get("sp500", ([], []))[1]
+    vrp_pctl = vix_5d = None
+    cv, cx = _clean(vix), _clean(spx)
+    if len(cv) > 300 and len(cx) > 300:
+        rets = [(cx[i] / cx[i - 1] - 1) for i in range(1, len(cx))]
+        import math as _m
+        rv = []
+        for i in range(20, len(rets)):
+            w = rets[i - 20:i]
+            mu = sum(w) / 20
+            rv.append(_m.sqrt(sum((x - mu) ** 2 for x in w) / 19) * _m.sqrt(252) * 100)
+        n = min(len(cv), len(rv))
+        vrp = [cv[-n + i] - rv[-n + i] for i in range(n)]
+        vrp_pctl = _percentile(vrp, vrp[-1])
+        vix_5d = round(_change(vix, 5) or 0.0, 1) if _change(vix, 5) is not None else None
+    parts = [
+        PinPart("Vol-risk premium percentile (VIX − realized)", vrp_pctl, "%ile", "STALE",
+                "Compressed premium = short-vol sellers crowded in for thin carry. "
+                "Crowding gauge — caps at YELLOW."),
+        PinPart("VIX, 5-day change", vix_5d, "pts", "STALE",
+                "The release: a fast repricing forces dealer/ETP rebalancing into "
+                "the move (Feb-2018 +20pts; Aug-2024 spike)."),
+    ]
+    channels.append(PinChannel(
+        "vol_supply", "Vol-supply unwind", "STALE", parts,
+        basis="Volmageddon mechanism: short-vol products + dealer hedging turn a vol "
+              "spike into forced selling. 0DTE is now ~59% of SPX option volume — the "
+              "vol-supply complex is bigger than 2018, differently structured.",
+        certainty="VRP from VIX minus 20d realized is a standard but coarse crowding "
+                  "proxy; dealer gamma positioning itself is not freely observable.",
+        mass="SPX options ~4M contracts/day; multi-$B vol-selling ETPs",
+        speed="Days",
+        kill_rate="Vol shocks, not recessions (Feb-2018, Aug-2024) — but margin "
+                  "spirals are how other channels get triggered"))
+
+    _apply_scores(channels)
+
     live = [ch for ch in channels if ch.status != "STALE"]
     n_red = sum(1 for ch in live if ch.status == "RED")
     n_yellow = sum(1 for ch in live if ch.status == "YELLOW")
     overall = "RED" if n_red else ("YELLOW" if n_yellow else ("GREEN" if live else "STALE"))
+    scores = [ch.score for ch in channels if ch.score is not None]
+    pressure = round(sum(scores) / len(scores), 1) if scores else None
+    hottest = max((ch for ch in channels if ch.score is not None),
+                  key=lambda c: c.score, default=None)
 
     return {
         "channels": [ch.as_dict() for ch in channels],
         "overall": overall, "n_red": n_red, "n_yellow": n_yellow,
         "n_live": len(live), "n_channels": len(channels),
+        "pressure": pressure,
+        "hottest": {"channel_id": hottest.channel_id, "label": hottest.label,
+                    "score": hottest.score} if hottest else None,
         "framing": "The gun is the debt/vulnerability buildup (tracked across this "
                    "dashboard); the pin is the trigger. Pins are inherently hard to "
                    "predict — this board watches the channels historical pricks arrived "

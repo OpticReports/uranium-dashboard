@@ -92,7 +92,7 @@ def test_pin_board_oil_shock_red():
     by = {c["channel_id"]: c for c in board["channels"]}
     assert by["oil_shock"]["status"] == "RED"
     assert board["overall"] == "RED"
-    assert board["n_channels"] == 9
+    assert board["n_channels"] == 12
 
 
 def test_pin_board_basis_trade():
