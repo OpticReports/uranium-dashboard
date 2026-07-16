@@ -87,8 +87,11 @@ function AccidentGauge({ board }: { board: PinBoardData }) {
   const LO = -1.0, HI = 2.0;
   const pos = (v: number) => `${Math.min(100, Math.max(0, ((v - LO) / (HI - LO)) * 100))}%`;
   const statusText = g.status === "RED" ? "TRIGGERED" : g.status === "YELLOW" ? "ARMED — one condition" : "disarmed";
-  const Cond = ({ on, label, detail }: { on: boolean; label: string; detail: string }) => (
+  const Cond = ({ on, label, detail, hint }: {
+    on: boolean; label: string; detail: string; hint?: string;
+  }) => (
     <span
+      title={hint}
       className={
         "rounded border px-2 py-1 text-[10px] leading-tight " +
         (on
@@ -105,6 +108,7 @@ function AccidentGauge({ board }: { board: PinBoardData }) {
       <div className="mb-1.5 flex flex-wrap items-center gap-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-slate-200">
           Accident composite
+          <InfoTip term="accident_gauge" />
         </span>
         <StatusPill status={g.status} pulse={g.status === "RED"} />
         <span className="text-[11px] text-slate-400">{statusText}</span>
@@ -126,6 +130,11 @@ function AccidentGauge({ board }: { board: PinBoardData }) {
               ? `3m10y now ${g.spread_3m10y_now >= 0 ? "+" : ""}${g.spread_3m10y_now.toFixed(2)}pp · 6m low ${g.spread_3m10y_min_6m >= 0 ? "+" : ""}${g.spread_3m10y_min_6m.toFixed(2)}pp`
               : "no curve data"
           }
+          hint={"Flattening = the gap between the 10-year and 3-month Treasury yields shrinking. "
+            + "Steep (about +1pp or more) is normal — long rates above short rates. Near zero or "
+            + "negative (inverted) means money is expensive today vs the future: levered players "
+            + "earn nothing borrowing short to hold assets, so the system runs with no shock "
+            + "absorber. Trips when the gap touched below +" + thr.toFixed(2) + "pp in the last 6 months."}
         />
       </div>
       {g.spread_3m10y_now != null && g.spread_3m10y_min_6m != null && (
