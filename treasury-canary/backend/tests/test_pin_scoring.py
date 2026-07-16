@@ -39,6 +39,30 @@ def test_board_has_new_channels_and_pressure_fields():
         assert "score" in c
 
 
+def test_exposure_map_sums_mass_by_status():
+    board = build_pin_board({})
+    exp = board["exposure"]
+    # all channels STALE on an empty bundle -> no colored mass, but the
+    # monitored total and the unbounded exclusions are still reported
+    assert exp["red_trillions"] == exp["yellow_trillions"] == exp["green_trillions"] == 0
+    sized = [c["mass_trillions"] for c in board["channels"] if c["mass_trillions"] is not None]
+    assert exp["monitored_trillions"] == round(sum(sized), 1)
+    assert len(exp["unsized"]) == 2  # policy shock + uncertainty: unbounded
+    for c in board["channels"]:
+        assert "leverage" in c
+
+
+def test_exposure_counts_red_mass():
+    # +100% oil yoy -> oil channel RED -> its $20T consumption base counts red
+    import datetime
+    days = [datetime.date(2024, 1, 1) + datetime.timedelta(days=i) for i in range(400)]
+    vals = [50.0] * 337 + [100.0] * 63
+    board = build_pin_board({"oil": (days, vals)})
+    oil = next(c for c in board["channels"] if c["channel_id"] == "oil_shock")
+    assert oil["status"] == "RED"
+    assert board["exposure"]["red_trillions"] == 20.0
+
+
 def test_scores_flow_from_synthetic_data():
     # oil +60% y/y -> RED with score in (80, 100)
     dates = [None] * 260

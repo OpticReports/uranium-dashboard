@@ -257,10 +257,22 @@ export interface PinChannel {
   speed: string;
   kill_rate: string;
   score: number | null;
+  mass_trillions: number | null;
+  leverage: string;
+}
+
+export interface PinExposure {
+  red_trillions: number;
+  yellow_trillions: number;
+  green_trillions: number;
+  monitored_trillions: number;
+  unsized: string[];
+  note: string;
 }
 
 export interface PinBoard {
   channels: PinChannel[];
+  exposure?: PinExposure;
   overall: PinStatus;
   n_red: number;
   n_yellow: number;
