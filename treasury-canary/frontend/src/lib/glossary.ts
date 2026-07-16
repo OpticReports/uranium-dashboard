@@ -399,6 +399,13 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
   },
 
   // ── Pin board ─────────────────────────────────────────────────────────────
+  accident_gauge: {
+    title: "Accident composite — fast spark on a flat curve",
+    what: "A two-condition tripwire for MARKET ACCIDENTS (fast, forced-selling dislocations like 1987, the 2019 repo spasm, or March 2020 — distinct from recessions). Condition 1: any fast-transmission channel (credit event, plumbing, basis trade, yen carry) is red. Condition 2: the yield curve is flat or inverted.",
+    calc: "“Curve flat” uses the 3m10y spread — the 10-year Treasury yield minus the 3-month bill yield. Normally long rates sit well ABOVE short rates (lenders demand more for locking money up longer), so the spread is comfortably positive and the curve is called STEEP. When the Fed pushes short rates up, or investors rush into long bonds expecting trouble, the gap shrinks — the curve FLATTENS — and can go negative (INVERT: short rates above long rates). A flat/inverted curve means money is expensive TODAY relative to the future: levered players earn nothing for borrowing short to hold assets, funding cushions vanish, and the whole system runs with no shock absorber. The gauge trips condition 2 when the spread has touched below +0.25 percentage points within the trailing 6 months.",
+    read: "GREEN = disarmed. YELLOW = armed (one condition met). RED = both — the configuration that, in the 1985–2026 hindcast, preceded a ≥15% S&P drawdown within 12 months in 41% of months versus a 20% base rate, flagging 2007 twelve months early and the 2019 repo spasm six months early. The meter shows where the spread sits now (solid dot) and its 6-month low (hollow dot) relative to the red trip zone — watch the dots drift toward the line as the curve flattens.",
+    caveat: "A high-conviction tripwire, not a net: it missed 2018 (curve stayed steep) and 2022 (policy-driven grind, the slow channels' domain). Both conditions and the +0.25pp threshold come verbatim from the pre-specified study (studies/pin-rule-hindcast) — nothing is fitted, and 41% is descriptive history, not a calibrated probability.",
+  },
   pin_board: {
     title: "Pin board — the gun vs. the trigger",
     what: "Dalio's framing: debt buildup, rich valuations, and fragile plumbing are the LOADED GUN; some shock — the PIN — pricks the bubble. The gun is tracked across this dashboard; this board watches the pin channels.",
