@@ -391,6 +391,21 @@ def build_pin_history(bundle: dict) -> dict:
                    "A red episode casts that channel's documented damage window "
                    "forward; the bottom series counts overlapping open windows. "
                    "One spark is a data point — several open windows is a regime.",
+        # Static, dated conclusion of studies/pin-rule-hindcast.md (re-run the
+        # script there to refresh). Kept as documented text, like kill rates —
+        # never auto-fitted into a probability.
+        "measured_roles": (
+            "Measured division of labor (hindcast 1985–2026, "
+            "studies/pin-rule-hindcast): recession onsets belong to the yield "
+            "curve — 38% precision, 4/4 onsets caught, and nothing built from "
+            "pin reds improved on it; raw convergence counts scored BELOW base "
+            "rate (6% vs 12%). Pin reds earn their keep on market accidents: a "
+            "fast-channel red on a flat/inverted curve preceded a ≥15% drawdown "
+            "within 12m in 41% of months vs a 20% base (2007 caught 12 months "
+            "early; the 2019 repo spasm 6 months early; 2024-09 12 months "
+            "early). Read the curve model for recession odds; read this board "
+            "as an accident radar."
+        ),
     }
 
 

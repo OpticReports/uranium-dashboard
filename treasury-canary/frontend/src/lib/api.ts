@@ -348,6 +348,7 @@ export interface PinHistory {
   recessions: RecessionSpan[];
   drawdowns: DrawdownSpan[];
   framing?: string;
+  measured_roles?: string;
 }
 
 export interface TrackRecordRow {
