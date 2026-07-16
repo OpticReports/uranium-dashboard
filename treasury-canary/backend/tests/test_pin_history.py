@@ -119,6 +119,41 @@ def test_empty_bundle_degrades_gracefully():
     assert hist["recessions"] == []
 
 
+def test_drawdown_spans_peak_to_trough():
+    from app.metrics.pin_history import _drawdown_spans
+    dates = [date(2020, m, 1) for m in range(1, 13)]
+    closes = [100, 105, 80, 70, 75, 90, 106, 108, 100, 99, 107, 110]
+    lows = [98, 100, 75, 62, 70, 85, 100, 102, 95, 93, 100, 105]
+    spans = _drawdown_spans(dates, closes, lows)
+    # peak Feb (105) -> trough Apr (low 62, -41%), recovered Jul (close 106);
+    # the Aug->Oct decline is only -13.9% so it must NOT register
+    assert len(spans) == 1
+    assert spans[0]["start"] == "2020-02" and spans[0]["trough"] == "2020-04"
+    assert spans[0]["depth_pct"] == round((105 - 62) / 105 * 100, 1)
+
+
+def test_episode_outcomes_hit_miss_open():
+    from app.metrics.pin_history import _annotate_outcomes
+    channels = [{
+        "channel_id": "x",
+        "episodes": [
+            {"window_start": "2007-11", "window_end": "2008-06"},  # recession onset inside
+            {"window_start": "2018-01", "window_end": "2018-12"},  # drawdown overlap
+            {"window_start": "2014-01", "window_end": "2014-06"},  # nothing -> miss
+            {"window_start": "2026-06", "window_end": "2026-12"},  # still running -> open
+        ],
+    }]
+    recessions = [{"start": "2008-01", "end": "2009-06"}]
+    drawdowns = [{"start": "2018-09", "trough": "2018-12", "depth_pct": 19.8}]
+    _annotate_outcomes(channels, recessions, drawdowns, last_data="2026-07")
+    eps = channels[0]["episodes"]
+    assert eps[0]["outcome"] == "hit_recession"
+    assert eps[1]["outcome"] == "hit_drawdown"
+    assert eps[2]["outcome"] == "miss"
+    assert eps[3]["outcome"] == "open"
+    assert channels[0]["outcomes"] == {"hit": 2, "miss": 1, "open": 1}
+
+
 def test_recession_spans_extracted():
     from app.metrics.pin_history import _recession_spans
     dates, vals = [], []

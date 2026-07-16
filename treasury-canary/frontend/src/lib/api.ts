@@ -278,6 +278,7 @@ export interface PinHistoryEpisode {
   peak_score: number;
   window_start: string;
   window_end: string;
+  outcome?: "hit_recession" | "hit_drawdown" | "miss" | "open";
 }
 
 export interface PinHistoryChannel {
@@ -287,6 +288,7 @@ export interface PinHistoryChannel {
   series: { date: string; score: number }[];
   episodes: PinHistoryEpisode[];
   note: string | null;
+  outcomes?: { hit: number; miss: number; open: number } | null;
 }
 
 export interface PinCollectivePoint {
@@ -321,11 +323,18 @@ export interface RecessionSpan {
   end: string;
 }
 
+export interface DrawdownSpan {
+  start: string;
+  trough: string;
+  depth_pct: number;
+}
+
 export interface PinHistory {
   channels: PinHistoryChannel[];
   collective: { series: PinCollectivePoint[]; last_data_month: string | null };
   confluence: PinConfluence | null;
   recessions: RecessionSpan[];
+  drawdowns: DrawdownSpan[];
   framing?: string;
 }
 
