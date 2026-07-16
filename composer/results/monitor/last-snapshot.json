@@ -1,14 +1,14 @@
 {
-  "taken_at": "2026-07-16T00:19:19+00:00",
+  "taken_at": "2026-07-16T00:20:15+00:00",
   "total_stats": {
     "pending_deploys_cash": 0,
     "total_cash": 17248.77801189,
-    "time_weighted_return": 0.5578204455161924,
+    "time_weighted_return": 0.5578202077885184,
     "total_unallocated_cash": 17010.94801189,
     "portfolio_value": 254585.79,
     "net_deposits": 247000.0,
     "pending_net_deposits": 0.0,
-    "todays_percent_change": 0.0018910233978387096,
+    "todays_percent_change": 0.0018908705065196305,
     "simple_return": 0.030711709420468303,
     "todays_dollar_change": 455.02812485468,
     "metrics": {
@@ -58,5 +58,5 @@
       "last_percent_change": 0.0052
     }
   },
-  "sleeve_weight": 0.2252
+  "sleeve_weight": 0.0917
 }

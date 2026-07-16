@@ -36,8 +36,11 @@ def main():
     # crash-sleeve monetization band (results.md addendum 7): alert when the
     # sleeve's share of the book leaves [lo, hi] so a human can rebalance it
     p.add_argument("--band-symphony", default="nNdBk7hc5NiBzeRvbI5T")
-    p.add_argument("--band-lo", type=float, default=0.075)
+    p.add_argument("--band-lo", type=float, default=0.07)
     p.add_argument("--band-hi", type=float, default=0.15)
+    # POLICY.md denominator: family crash-exposed assets = Composer engines +
+    # owner-reported IBKR equities (update on owner reports; last 2026-07-07)
+    p.add_argument("--ibkr-equities", type=float, default=346000)
     a = p.parse_args()
     acct = a.account or cl.default_account()
 
@@ -110,7 +113,8 @@ def main():
     total_value = sum(s["value"] for s in meta)
     band = next((s for s in meta if s["id"] == a.band_symphony), None)
     if band and total_value > 0:
-        w = band["value"] / total_value
+        crash_exposed = (total_value - band["value"]) + a.ibkr_equities
+        w = band["value"] / (crash_exposed + band["value"])
         snap["sleeve_weight"] = round(w, 4)
         if w > a.band_hi:
             alerts.append(f"SLEEVE BAND BREACH: {w:.1%} > {a.band_hi:.1%} — "
