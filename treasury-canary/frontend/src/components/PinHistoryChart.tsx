@@ -49,7 +49,8 @@ const tooltipStyle = {
 
 // Zoom presets. Cutoffs are anchored to the LAST DATA month (not the projected
 // tail), so "6m" always means the last 6 observed months plus whatever damage
-// windows are still open ahead.
+// windows are still open ahead. The two month inputs override the presets for
+// a fully custom range; picking a preset clears them.
 const RANGES: { label: string; months: number | null }[] = [
   { label: "6m", months: 6 },
   { label: "12m", months: 12 },
@@ -58,20 +59,48 @@ const RANGES: { label: string; months: number | null }[] = [
   { label: "all", months: null },
 ];
 
-function RangePicker({ value, onChange }: {
-  value: number | null;
-  onChange: (months: number | null) => void;
+interface RangeState {
+  preset: number | null;
+  from: string; // "YYYY-MM" or "" (unset)
+  to: string;
+}
+
+function useRange() {
+  const [range, setRange] = useState<RangeState>({ preset: null, from: "", to: "" });
+  return { range, setRange };
+}
+
+function rangeBounds(range: RangeState, firstAll: string, lastAll: string,
+                     lastData: string): [string, string] {
+  if (range.from || range.to) {
+    return [range.from || firstAll, range.to || lastAll];
+  }
+  const lo = range.preset !== null
+    ? addMonths(lastData, -(range.preset - 1))
+    : firstAll;
+  return [lo, lastAll];
+}
+
+const monthInputCls =
+  "w-[84px] rounded border border-slate-700 bg-slate-800/60 px-1 py-0.5 " +
+  "text-[9px] leading-tight text-slate-400 [color-scheme:dark] " +
+  "focus:border-slate-500 focus:outline-none";
+
+function RangeControls({ range, onChange }: {
+  range: RangeState;
+  onChange: (r: RangeState) => void;
 }) {
+  const custom = Boolean(range.from || range.to);
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex flex-wrap items-center justify-end gap-1">
       {RANGES.map((r) => (
         <button
           key={r.label}
           type="button"
-          onClick={() => onChange(r.months)}
+          onClick={() => onChange({ preset: r.months, from: "", to: "" })}
           className={
             "rounded px-1.5 py-0.5 text-[9px] leading-tight " +
-            (value === r.months
+            (!custom && range.preset === r.months
               ? "bg-slate-600/60 text-slate-100"
               : "bg-slate-800/60 text-slate-500 hover:text-slate-300")
           }
@@ -79,19 +108,32 @@ function RangePicker({ value, onChange }: {
           {r.label}
         </button>
       ))}
+      <input
+        type="month"
+        value={range.from}
+        onChange={(e) => onChange({ ...range, from: e.target.value })}
+        className={monthInputCls}
+        title="custom range start (YYYY-MM)"
+      />
+      <span className="text-[9px] text-slate-600">–</span>
+      <input
+        type="month"
+        value={range.to}
+        onChange={(e) => onChange({ ...range, to: e.target.value })}
+        className={monthInputCls}
+        title="custom range end (YYYY-MM)"
+      />
     </div>
   );
 }
 
 // Year ticks read best zoomed out; month ticks once zoomed in.
-function tickFor(months: number | null) {
-  return months !== null && months <= 24
-    ? (d: string) => d
-    : (d: string) => d.slice(0, 4);
+function tickForSpan(nMonths: number) {
+  return nMonths <= 30 ? (d: string) => d : (d: string) => d.slice(0, 4);
 }
 
 export function ChannelHistoryChart({ hist }: { hist: PinHistoryChannel }) {
-  const [range, setRange] = useState<number | null>(null);
+  const { range, setRange } = useRange();
   if (hist.series.length === 0) {
     return (
       <div className="flex h-24 items-center justify-center text-[11px] text-slate-500">
@@ -109,19 +151,35 @@ export function ChannelHistoryChart({ hist }: { hist: PinHistoryChannel }) {
   for (let m = addMonths(lastData, 1); m <= horizon; m = addMonths(m, 1)) {
     full.push({ date: m, score: null });
   }
-  const cutoff = range !== null ? addMonths(lastData, -(range - 1)) : full[0].date;
-  const data = full.filter((d) => d.date >= cutoff);
+  const [lo, hi] = rangeBounds(range, full[0].date, full[full.length - 1].date, lastData);
+  const data = full.filter((d) => d.date >= lo && d.date <= hi);
+  if (data.length === 0) {
+    return (
+      <div>
+        <div className="mb-1 flex justify-end">
+          <RangeControls range={range} onChange={setRange} />
+        </div>
+        <div className="flex h-24 items-center justify-center text-[11px] text-slate-500">
+          No data in the selected range.
+        </div>
+      </div>
+    );
+  }
   const first = data[0].date;
   const last = data[data.length - 1].date;
   const bands = hist.episodes
-    .filter((e) => e.window_end >= first)
-    .map((e) => ({ ...e, x1: e.window_start < first ? first : e.window_start }));
+    .filter((e) => e.window_end >= first && e.window_start <= last)
+    .map((e) => ({
+      ...e,
+      x1: e.window_start < first ? first : e.window_start,
+      x2: e.window_end > last ? last : e.window_end,
+    }));
   const peaks = hist.episodes.filter((e) => e.peak_date >= first && e.peak_date <= last);
   const [lagLo, lagHi] = hist.lag_months;
   return (
     <div>
       <div className="mb-1 flex justify-end">
-        <RangePicker value={range} onChange={setRange} />
+        <RangeControls range={range} onChange={setRange} />
       </div>
       <ResponsiveContainer width="100%" height={170}>
         <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
@@ -130,7 +188,7 @@ export function ChannelHistoryChart({ hist }: { hist: PinHistoryChannel }) {
             dataKey="date"
             tick={{ fill: MUTED, fontSize: 9 }}
             minTickGap={44}
-            tickFormatter={tickFor(range)}
+            tickFormatter={tickForSpan(data.length)}
           />
           <YAxis domain={[0, 100]} ticks={[0, 50, 80, 100]} width={28}
                  tick={{ fill: MUTED, fontSize: 9 }} />
@@ -139,7 +197,7 @@ export function ChannelHistoryChart({ hist }: { hist: PinHistoryChannel }) {
             <ReferenceArea
               key={`w-${i}`}
               x1={e.x1}
-              x2={e.window_end}
+              x2={e.x2}
               fill={MUTED}
               fillOpacity={0.14}
               stroke="none"
@@ -277,7 +335,7 @@ export function CollectiveHistoryChart({ history, channelLabels }: {
   history: PinHistory;
   channelLabels: Record<string, string>;
 }) {
-  const [range, setRange] = useState<number | null>(null);
+  const { range, setRange } = useRange();
   const all = history.collective.series;
   if (all.length === 0) {
     return (
@@ -287,13 +345,25 @@ export function CollectiveHistoryChart({ history, channelLabels }: {
     );
   }
   const lastData = history.collective.last_data_month ?? all[all.length - 1].date;
-  const cutoff = range !== null ? addMonths(lastData, -(range - 1)) : all[0].date;
-  const series = all.filter((p) => p.date >= cutoff);
+  const [lo, hi] = rangeBounds(range, all[0].date, all[all.length - 1].date, lastData);
+  const series = all.filter((p) => p.date >= lo && p.date <= hi);
+  if (series.length === 0) {
+    return (
+      <div>
+        <div className="mb-1 flex justify-end">
+          <RangeControls range={range} onChange={setRange} />
+        </div>
+        <div className="flex h-24 items-center justify-center text-[11px] text-slate-500">
+          No data in the selected range.
+        </div>
+      </div>
+    );
+  }
   const firstProjected = series.find((p) => p.projected)?.date;
   return (
     <div>
       <div className="mb-1 flex justify-end">
-        <RangePicker value={range} onChange={setRange} />
+        <RangeControls range={range} onChange={setRange} />
       </div>
       <ResponsiveContainer width="100%" height={210}>
         <ComposedChart data={series} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
@@ -302,7 +372,7 @@ export function CollectiveHistoryChart({ history, channelLabels }: {
             dataKey="date"
             tick={{ fill: MUTED, fontSize: 9 }}
             minTickGap={44}
-            tickFormatter={tickFor(range)}
+            tickFormatter={tickForSpan(series.length)}
           />
           <YAxis allowDecimals={false} width={28} tick={{ fill: MUTED, fontSize: 9 }} />
           {firstProjected && (
