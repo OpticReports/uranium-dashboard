@@ -7,6 +7,9 @@ compares against the previous snapshot. Alerts on:
   - single-period value move beyond --move-alert (default 8%), deposit-aware
   - a queued deploy appearing
   - rebalance scheduled today
+  - the canary ACCIDENT COMPOSITE tripping (fast-channel red on a flat curve —
+    the one measured pins->market configuration: 41% vs 20% base odds of a
+    >=15% drawdown within 12m; see treasury-canary/studies/pin-rule-hindcast)
 
 Exit code: 0 = quiet, 2 = alerts fired (easy to wire into cron/CI/triggers).
 Read-only. State lives in composer/results/monitor/state.json (tracked peaks
@@ -21,9 +24,42 @@ import glob
 import json
 import os
 import sys
+import urllib.request
 import composerlib as cl
 
 DIR = "composer/results/monitor"
+
+
+def check_accident_gauge(state, alerts, url, now):
+    """Poll the canary's accident composite. Alert on a NEW trip, weekly
+    (Mondays) while still tripped, and once on reset. Degrades to a printed
+    note if the canary is unreachable — never a false alarm."""
+    try:
+        req = urllib.request.Request(f"{url}/pins",
+                                     headers={"user-agent": "composer-monitor/1.0"})
+        with urllib.request.urlopen(req, timeout=90) as r:
+            g = json.load(r).get("accident_gauge") or {}
+    except Exception as e:  # noqa: BLE001
+        print(f"  (canary accident gauge unreachable: {e})")
+        return
+    status = g.get("status", "STALE")
+    prev = state.get("accident_gauge")
+    state["accident_gauge"] = status
+    low = g.get("spread_3m10y_min_6m")
+    line = (f"accident gauge {status}: fast_red={g.get('fast_red')} "
+            f"curve_flat={g.get('curve_flat')} "
+            f"3m10y 6m-low {low if low is not None else 'n/a'}pp "
+            f"(trip <+{g.get('curve_threshold_pp', 0.25)}pp)")
+    print(f"  {line}")
+    if status == "RED" and prev != "RED":
+        alerts.append("ACCIDENT COMPOSITE TRIPPED — fast-channel red on a flat "
+                      "curve (measured: 41% vs 20% base odds of a >=15% drawdown "
+                      "within 12m, 6-12m leads on 2007/2019/2024). Verify sleeve "
+                      "at target; expect gap risk. " + line)
+    elif status == "RED" and now.weekday() == 0:
+        alerts.append("accident composite STILL TRIPPED (weekly reminder) — " + line)
+    elif status != "RED" and prev == "RED":
+        alerts.append("accident composite RESET (was tripped) — " + line)
 
 
 def main():
@@ -41,6 +77,8 @@ def main():
     # POLICY.md denominator: family crash-exposed assets = Composer engines +
     # owner-reported IBKR equities (update on owner reports; last 2026-07-07)
     p.add_argument("--ibkr-equities", type=float, default=346000)
+    p.add_argument("--canary-url", default="https://treasury-canary.onrender.com",
+                   help="public canary API for the accident-composite check")
     a = p.parse_args()
     acct = a.account or cl.default_account()
 
@@ -122,6 +160,8 @@ def main():
         elif w < a.band_lo:
             alerts.append(f"SLEEVE BAND BREACH: {w:.1%} < {a.band_lo:.1%} — "
                           f"re-enter: top {band['name'][:30]} back up to target")
+
+    check_accident_gauge(state, alerts, a.canary_url.rstrip("/"), now)
 
     stamp = now.strftime("%Y%m%dT%H%M%SZ")
     snap_path = os.path.join(DIR, f"snapshot-{stamp}.json")
