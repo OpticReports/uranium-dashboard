@@ -143,6 +143,26 @@ class SocialMention(SQLModel, table=True):
     source: str = "stocktwits"
 
 
+class InsiderTxn(SQLModel, table=True):
+    """An insider transaction (Form 4 style), ingested best-effort."""
+
+    __tablename__ = "insider_txn"
+    __table_args__ = (
+        UniqueConstraint("symbol", "date", "insider", "shares", "txn_type",
+                         name="uq_insider"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    symbol: str = Field(index=True, foreign_key="security.symbol")
+    date: Date = Field(index=True)
+    insider: str = ""
+    title: Optional[str] = None
+    txn_type: str = "buy"          # buy | sell | other
+    shares: Optional[float] = None
+    value: Optional[float] = None  # USD value when reported
+    source: str = "yfinance"
+
+
 class ScoreSnapshot(SQLModel, table=True):
     """An auditable Alpha Signal computation for one name at one time."""
 
@@ -169,3 +189,115 @@ class FlagEvent(SQLModel, table=True):
     message: str = ""
     severity: str = "info"        # info | warn | high
     evidence: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+
+
+class JournalEntry(SQLModel, table=True):
+    """An APPEND-ONLY decision-journal memo ("what did I think at entry").
+
+    Immutable by design: no update endpoint exists, so hindsight can't be
+    edited into the record. Optionally linked to the call/flag it discusses.
+    """
+
+    __tablename__ = "journal_entry"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    symbol: Optional[str] = Field(default=None, index=True)
+    created_at: DateTime = Field(default_factory=_utcnow, index=True)
+    title: str = ""
+    content: str = ""              # the memo (chat answer, operator note)
+    source: str = "chat"           # chat | manual
+    model: Optional[str] = None    # LLM model when source == chat
+    call_id: Optional[int] = Field(default=None, foreign_key="trade_call.id")
+    flag_id: Optional[int] = Field(default=None, foreign_key="flag_event.id")
+
+
+class CallPostmortem(SQLModel, table=True):
+    """WHY a closed call went right or wrong, computed from the data.
+
+    Attached to the immutable TradeCall after it closes; the hindsight verdict
+    fills ~10 bars post-exit (was a stop protective or a shakeout?). The
+    summary is deterministic prose composed from these fields — reproducible,
+    never hand-edited.
+    """
+
+    __tablename__ = "call_postmortem"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    call_id: int = Field(index=True, unique=True, foreign_key="trade_call.id")
+    created_at: DateTime = Field(default_factory=_utcnow)
+    mfe_r: Optional[float] = None            # max favorable excursion, in R
+    mae_r: Optional[float] = None            # max adverse excursion, in R
+    name_return: Optional[float] = None      # the trade's return (direction-aware)
+    bench_return: Optional[float] = None     # XBI over the same window
+    alpha: Optional[float] = None            # name minus sector beta
+    composite_at_exit: Optional[float] = None
+    signal_decay: Optional[float] = None     # composite at exit minus at call
+    catalyst_status: str = "no_catalyst"     # exited_before_event | event_passed_during_trade | no_catalyst
+    hindsight_verdict: Optional[str] = None  # protected | shakeout | neutral | exited_early | clean_exit
+    hindsight_complete: bool = Field(default=False, index=True)
+    summary: str = ""
+
+
+class FlagOutcome(SQLModel, table=True):
+    """Forward returns measured from a flag's fire-time — the learning loop.
+
+    EVERY flag is graded (not just the ones that became trade calls), so
+    per-flag-type hit rates are uncensored. Horizons are trading bars
+    (5/21/63 ≈ 1w/1m/3m); excess returns subtract XBI over the same window.
+    Rows fill in progressively as bars accrue and are immutable once complete.
+    """
+
+    __tablename__ = "flag_outcome"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    flag_id: int = Field(index=True, unique=True, foreign_key="flag_event.id")
+    symbol: str = Field(index=True, foreign_key="security.symbol")
+    flag_type: str = Field(index=True)
+    fired_on: Date = Field(index=True)          # trading date of the fire-time bar
+    price_at_fire: float
+    fwd_1w: Optional[float] = None              # +5 trading bars, fractional
+    fwd_1m: Optional[float] = None              # +21
+    fwd_3m: Optional[float] = None              # +63
+    excess_1w: Optional[float] = None           # minus XBI same-window return
+    excess_1m: Optional[float] = None
+    excess_3m: Optional[float] = None
+    complete: bool = Field(default=False, index=True)
+    updated_at: DateTime = Field(default_factory=_utcnow)
+
+
+class TradeCall(SQLModel, table=True):
+    """An exact trade call (entry/stop/target/horizon) logged at fire-time.
+
+    Calls are IMMUTABLE once made (levels never retro-edited) and are graded
+    against subsequent daily bars, so the tracker builds an honest track record
+    of its own signals — the feedback loop for improving what fires.
+    """
+
+    __tablename__ = "trade_call"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    symbol: str = Field(index=True, foreign_key="security.symbol")
+    created_at: DateTime = Field(default_factory=_utcnow, index=True)
+    call_date: Date = Field(index=True)            # trading date the call is made
+    direction: str = "long"                        # long | short
+    source: str = "auto_flag"                      # auto_flag | manual | chat
+    flag_type: Optional[str] = None                # trigger flag for auto calls
+    thesis: str = ""                               # why the call was made
+
+    # The exact call — levels are frozen at fire-time.
+    entry_price: float
+    stop_price: float
+    target_price: float
+    expires_on: Date                               # time-stop (sell-before-binary aware)
+
+    # Context snapshotted at fire-time for later attribution.
+    composite_at_call: Optional[float] = None
+    evidence: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+
+    # Outcome (filled by the evaluator; NULL while the call is open).
+    status: str = Field(default="open", index=True)  # open | target_hit | stopped | expired | closed_manual
+    closed_at: Optional[DateTime] = None
+    exit_date: Optional[Date] = None
+    exit_price: Optional[float] = None
+    return_pct: Optional[float] = None             # fractional, direction-aware
+    r_multiple: Optional[float] = None             # (exit-entry)/(entry-stop) for longs

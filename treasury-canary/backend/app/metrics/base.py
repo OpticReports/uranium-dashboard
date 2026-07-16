@@ -70,6 +70,7 @@ class MetricResult:
     percentile: float | None = None      # 0-100, vs own history
     note: str = ""                       # what it means / historical lead time
     source_series: str = ""              # provenance (e.g. "FRED:T10Y3M")
+    informational: bool = False          # display-only; excluded from the composite
     extra: dict = field(default_factory=dict)
 
     def as_dict(self) -> dict:
@@ -79,7 +80,8 @@ class MetricResult:
             "asof": self.asof.isoformat() if self.asof else None, "unit": self.unit,
             "delta_1d": self.delta_1d, "delta_5d": self.delta_5d, "delta_20d": self.delta_20d,
             "percentile": self.percentile, "note": self.note,
-            "source_series": self.source_series, "extra": self.extra,
+            "source_series": self.source_series, "informational": self.informational,
+            "extra": self.extra,
         }
 
 

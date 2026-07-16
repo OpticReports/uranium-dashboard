@@ -78,6 +78,8 @@ services:
     envVars:
       - key: FRED_API_KEY
         sync: false            # <- enter your free FRED key on THIS service
+      - key: FMP_API_KEY
+        sync: false            # optional: enables gold (GLD) in the flow compass
       - key: DATABASE_URL
         value: sqlite:///./data/canary.db   # ephemeral on free tier (OK; live compute)
       - key: CACHE_DIR

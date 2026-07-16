@@ -21,6 +21,7 @@ CATEGORY_WEIGHTS: dict[str, float] = {
     "G": 0.07,  # liquidity
     "H": 0.10,  # cross-asset
     "I": 0.05,  # recession model
+    "J": 0.08,  # labor (Sahm / claims)
 }
 
 # Status -> stress points (0 best, 100 worst).
@@ -52,7 +53,11 @@ def _band(score: float | None) -> str:
     return "LOW"
 
 
-def compute_composite(metrics: list[MetricResult]) -> CompositeResult:
+def compute_composite(metrics: list[MetricResult],
+                      weights: dict[str, float] | None = None) -> CompositeResult:
+    """Weighted composite. `weights` defaults to the literature-informed priors;
+    the weight-sensitivity ensemble passes alternatives to test robustness."""
+    wts = weights if weights is not None else CATEGORY_WEIGHTS
     by_cat: dict[str, list[float]] = {}
     n_red = n_crit = 0
     for m in metrics:
@@ -60,26 +65,26 @@ def compute_composite(metrics: list[MetricResult]) -> CompositeResult:
             n_crit += 1
         elif m.status is Status.RED:
             n_red += 1
-        if m.status is Status.STALE:
-            continue
+        if m.status is Status.STALE or m.informational:
+            continue  # informational metrics (e.g. lagging unemployment rate) are display-only
         by_cat.setdefault(m.category, []).append(STATUS_POINTS[m.status])
 
     cat_scores: dict[str, float] = {
         c: round(sum(v) / len(v), 1) for c, v in by_cat.items() if v
     }
-    live_weight = sum(CATEGORY_WEIGHTS.get(c, 0.0) for c in cat_scores)
+    live_weight = sum(wts.get(c, 0.0) for c in cat_scores)
     if live_weight <= 0:
         return CompositeResult(None, "NO_DATA", 0.0, {}, {}, n_red, n_crit)
 
     contributions: dict[str, float] = {}
     score = 0.0
     for c, s in cat_scores.items():
-        w = CATEGORY_WEIGHTS.get(c, 0.0) / live_weight  # renormalize over available
+        w = wts.get(c, 0.0) / live_weight  # renormalize over available
         contrib = round(w * s, 2)
         contributions[c] = contrib
         score += w * s
 
-    total_weight = sum(CATEGORY_WEIGHTS.values())
+    total_weight = sum(wts.values())
     coverage = round(live_weight / total_weight, 3)
     score = round(score, 1)
     return CompositeResult(score, _band(score), coverage, cat_scores, contributions, n_red, n_crit)

@@ -1,16 +1,19 @@
 import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import {
   ResponsiveContainer,
   LineChart,
   Line,
+  XAxis,
   YAxis,
   ReferenceLine,
   Tooltip,
 } from "recharts";
-import type { Metric, HistoryPoint } from "../lib/api";
+import type { Metric, CorrPoint } from "../lib/api";
 import { api } from "../lib/api";
 import { Panel, StatusPill, InlineError } from "./ui";
 import { formatValue, errorMessage } from "../lib/format";
+import InfoTip from "./InfoTip";
 
 const CORR_ID = "crossasset.stock_bond_corr";
 const FTQ_ID = "crossasset.flight_to_quality";
@@ -23,15 +26,18 @@ export default function FlightToQuality({ metrics }: { metrics: Metric[] }) {
   const corr = findMetric(metrics, CORR_ID);
   const ftq = findMetric(metrics, FTQ_ID);
 
-  const [history, setHistory] = useState<HistoryPoint[] | null>(null);
+  // The computed rolling-60d correlation SERIES (~10y of daily data) — not the
+  // snapshot log, which accrues one point per refresh day and resets on
+  // free-tier redeploys (it rendered as a single dot).
+  const [history, setHistory] = useState<CorrPoint[] | null>(null);
   const [histError, setHistError] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
     api
-      .metricHistory(CORR_ID)
+      .corrSeries()
       .then((h) => {
-        if (alive) setHistory(h);
+        if (alive) setHistory(h.series);
       })
       .catch((e) => {
         if (alive) setHistError(errorMessage(e));
@@ -44,9 +50,7 @@ export default function FlightToQuality({ metrics }: { metrics: Metric[] }) {
   const corrValue = corr?.value ?? null;
   const regime = interpretRegime(corrValue);
 
-  const histData = (history ?? [])
-    .filter((p) => p.value !== null)
-    .map((p) => ({ asof: p.asof, value: p.value as number }));
+  const histData = history ?? [];
 
   return (
     <Panel
@@ -77,25 +81,54 @@ export default function FlightToQuality({ metrics }: { metrics: Metric[] }) {
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <MetricCard metric={corr} label="60d stock-bond corr" />
-        <MetricCard metric={ftq} label="Flight-to-quality" />
+        <MetricCard
+          metric={corr}
+          label={
+            <>
+              60d stock-bond corr
+              <InfoTip metricId="crossasset.stock_bond_corr" />
+            </>
+          }
+        />
+        <MetricCard
+          metric={ftq}
+          label={
+            <>
+              Flight-to-quality
+              <InfoTip metricId="crossasset.flight_to_quality" />
+            </>
+          }
+        />
       </div>
 
       <div className="mt-4">
         <p className="mb-1 text-[11px] uppercase tracking-wide text-slate-500">
-          Correlation history
+          Correlation regime, rolling 60d (~10 years)
         </p>
         {histError ? (
           <InlineError message={histError} />
         ) : history === null ? (
           <p className="text-xs text-slate-500">Loading…</p>
         ) : histData.length === 0 ? (
-          <p className="text-xs text-slate-500">No history available.</p>
+          <p className="text-xs text-slate-500">
+            No series available (requires the FRED key).
+          </p>
         ) : (
-          <ResponsiveContainer width="100%" height={100}>
+          <ResponsiveContainer width="100%" height={130}>
             <LineChart data={histData} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 9, fill: "#64748b" }}
+                tickFormatter={(d: string) => String(d).slice(0, 4)}
+                minTickGap={60}
+              />
               <YAxis hide domain={[-1, 1]} />
-              <ReferenceLine y={0} stroke="#f59e0b" strokeDasharray="3 3" />
+              <ReferenceLine
+                y={0}
+                stroke="#f59e0b"
+                strokeDasharray="3 3"
+                label={{ value: "0 = regime line", fontSize: 9, fill: "#f59e0b", position: "insideTopRight" }}
+              />
               <Tooltip
                 contentStyle={{
                   backgroundColor: "#0f172a",
@@ -108,7 +141,7 @@ export default function FlightToQuality({ metrics }: { metrics: Metric[] }) {
               />
               <Line
                 type="monotone"
-                dataKey="value"
+                dataKey="corr"
                 stroke="#38bdf8"
                 dot={false}
                 strokeWidth={1.4}
@@ -127,7 +160,7 @@ function MetricCard({
   label,
 }: {
   metric: Metric | undefined;
-  label: string;
+  label: ReactNode;
 }) {
   return (
     <div className="rounded border border-panelborder bg-slate-900/40 px-3 py-2">

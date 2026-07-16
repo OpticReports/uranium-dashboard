@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -21,6 +22,7 @@ import {
   formatMonthYear,
   median,
 } from "../lib/format";
+import InfoTip from "./InfoTip";
 
 const DEFAULT_PAIR = "3m10y";
 
@@ -98,7 +100,12 @@ export default function ReSteepenAlert() {
 
   return (
     <Panel
-      title="Yield-Curve Canary — Inversion & Re-Steepening"
+      title={
+        <>
+          Yield-Curve Canary — Inversion & Re-Steepening
+          <InfoTip term="resteepening" />
+        </>
+      }
       subtitle="The signal that has preceded every modern U.S. recession"
       right={
         <div className="flex flex-wrap gap-1">
@@ -336,7 +343,12 @@ function ReadoutRow({ data }: { data: CurveCanary }) {
   return (
     <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
       <Stat
-        label="Current spread"
+        label={
+          <>
+            Current spread
+            <InfoTip term="curve_pair" />
+          </>
+        }
         value={
           spread === null
             ? "n/a"
@@ -345,10 +357,23 @@ function ReadoutRow({ data }: { data: CurveCanary }) {
               }`
         }
       />
-      <Stat label="Days inverted" value={String(data.days_inverted)} />
+      <Stat
+        label={
+          <>
+            Days inverted
+            <InfoTip term="days_inverted" />
+          </>
+        }
+        value={String(data.days_inverted)}
+      />
       <Stat label="Last state change" value={formatDate(data.last_change)} />
       <Stat
-        label="Recession prob."
+        label={
+          <>
+            Recession prob.
+            <InfoTip term="recession_prob" />
+          </>
+        }
         value={
           data.recession_probability_pct === null
             ? "n/a"
@@ -359,7 +384,7 @@ function ReadoutRow({ data }: { data: CurveCanary }) {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value }: { label: ReactNode; value: string }) {
   return (
     <div className="rounded border border-panelborder bg-slate-900/40 px-3 py-2">
       <p className="text-[10px] uppercase tracking-wide text-slate-500">

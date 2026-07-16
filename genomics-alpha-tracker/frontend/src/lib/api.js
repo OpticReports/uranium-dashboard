@@ -60,6 +60,16 @@ export const api = {
   treemap: () => req("/views/treemap"),
   movers: (limit = 10) => req(`/views/movers?limit=${limit}`),
   deepDive: (symbol, days = 365) => req(`/views/deep-dive/${symbol}?days=${days}`),
+  today: () => req("/views/today"),
+  regime: () => req("/views/regime"),
+
+  // Signal track record (uncensored flag forward returns)
+  flagTrackRecord: () => req("/flags/track-record"),
+
+  // Decision journal (append-only)
+  journal: (symbol) => req(`/journal${symbol ? `?symbol=${symbol}` : ""}`),
+  addJournal: (payload) =>
+    req("/journal", { method: "POST", body: JSON.stringify(payload) }),
 
   // Market
   refreshMarket: (symbol) =>
@@ -68,4 +78,21 @@ export const api = {
   // Chat analyst
   chatStatus: () => req("/chat/status"),
   chat: (payload) => req("/chat", { method: "POST", body: JSON.stringify(payload) }),
+
+  // Trade calls (the tracker's own logged track record)
+  calls: ({ status, symbol } = {}) => {
+    const q = new URLSearchParams();
+    if (status) q.set("status", status);
+    if (symbol) q.set("symbol", symbol);
+    const qs = q.toString();
+    return req(`/calls${qs ? `?${qs}` : ""}`);
+  },
+  callsScorecard: () => req("/calls/scorecard"),
+  callsPerformance: () => req("/calls/performance"),
+  createCall: (payload) =>
+    req("/calls", { method: "POST", body: JSON.stringify(payload) }),
+  closeCall: (id, payload = {}) =>
+    req(`/calls/${id}/close`, { method: "POST", body: JSON.stringify(payload) }),
+  evaluateCalls: () => req("/calls/evaluate", { method: "POST" }),
+  generateCalls: () => req("/calls/generate", { method: "POST" }),
 };

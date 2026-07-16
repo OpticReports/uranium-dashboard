@@ -21,7 +21,18 @@ from sqlmodel import Session, select
 from .config import settings
 from .db import engine, init_db
 from .models import ScoreSnapshot
-from .routers import catalysts, chat, market, scores, social, universe, views
+from .routers import (
+    calls,
+    catalysts,
+    chat,
+    journal,
+    market,
+    scores,
+    social,
+    today,
+    universe,
+    views,
+)
 from .scheduler import shutdown_scheduler, start_scheduler
 from .universe.manager import sync_from_yaml
 
@@ -128,6 +139,9 @@ app.include_router(scores.router)
 app.include_router(views.router)
 app.include_router(chat.router)
 app.include_router(social.router)
+app.include_router(calls.router)
+app.include_router(today.router)
+app.include_router(journal.router)
 
 
 @app.get("/health", tags=["meta"])
@@ -178,8 +192,13 @@ async def _canary_proxy(path: str, request: Request):
     except Exception as exc:  # noqa: BLE001
         return Response(f"Canary upstream unavailable: {exc}", status_code=502)
     headers = {k: v for k, v in up.headers.items() if k.lower() not in _CANARY_HOP_HEADERS}
+    # Never let browsers cache the HTML shell: after a redeploy a cached index.html
+    # keeps serving the OLD app (hashed .js assets remain safely cacheable).
+    ctype = up.headers.get("content-type", "")
+    if ctype.startswith("text/html"):
+        headers["cache-control"] = "no-cache"
     return Response(content=up.content, status_code=up.status_code, headers=headers,
-                    media_type=up.headers.get("content-type"))
+                    media_type=ctype or None)
 
 
 # Single-service deployment: if a built frontend is present, serve it at "/".

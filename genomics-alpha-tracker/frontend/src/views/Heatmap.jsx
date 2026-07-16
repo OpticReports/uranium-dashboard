@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
-import { scoreColor, fmtNum, severityColor } from "../lib/format";
+import { scoreColor, fmtNum, severityColor, fmtScore10, eventLabel } from "../lib/format";
 import Treemap from "./Treemap";
 
 // Sector heatmap, rebuilt for decisions: color by momentum OR level, with a
@@ -121,7 +121,7 @@ function Grid({ tiles, colorFor, open, setOpen, onPick }) {
             <div className="flex items-end justify-between mt-2">
               <div>
                 <div className="text-2xl font-bold leading-none" style={{ color: scoreColor(t.avg_composite) }}>
-                  {fmtNum(t.avg_composite, 0)}
+                  {fmtScore10(t.avg_composite)}
                 </div>
                 <div className="text-xs mt-1">
                   <MomArrow v={t.momentum} /> <span className="text-gray-500">7d</span>
@@ -193,7 +193,7 @@ function DrillDown({ tile, onPick }) {
       <div className="flex items-center justify-between mb-3">
         <div className="font-semibold capitalize">{tile.subsector} — names</div>
         <div className="text-xs text-gray-400">
-          level {fmtNum(tile.avg_composite, 0)} · momentum <MomArrow v={tile.momentum} /> ·{" "}
+          level {fmtScore10(tile.avg_composite)} · momentum <MomArrow v={tile.momentum} /> ·{" "}
           {tile.catalysts_90d} catalyst(s) ≤90d
         </div>
       </div>
@@ -203,14 +203,14 @@ function DrillDown({ tile, onPick }) {
             <button onClick={() => onPick?.(m.symbol)} className="font-semibold text-sky-400 hover:underline w-16 text-left">
               {m.symbol}
             </button>
-            <span className="font-bold w-10" style={{ color: scoreColor(m.composite) }}>{fmtNum(m.composite, 0)}</span>
+            <span className="font-bold w-10" style={{ color: scoreColor(m.composite) }}>{fmtScore10(m.composite)}</span>
             <span className="w-20 text-xs"><MomArrow v={m.momentum} /></span>
             <span className="text-xs text-gray-400 flex-1 min-w-[140px]">
               {m.driver ? `↳ ${m.driver}` : "↳ —"}
             </span>
             {m.next_catalyst && (
               <span className="text-[11px] text-amber-300">
-                🗓 {m.next_catalyst.event_type} in {m.next_catalyst.days_until}d
+                🗓 {eventLabel(m.next_catalyst.event_type)} in {m.next_catalyst.days_until}d
               </span>
             )}
             {m.flags.map((f) => (

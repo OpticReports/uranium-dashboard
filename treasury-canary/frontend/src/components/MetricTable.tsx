@@ -21,6 +21,7 @@ import {
   formatPercentile,
   errorMessage,
 } from "../lib/format";
+import InfoTip from "./InfoTip";
 
 const ALL_STATUSES: MetricStatus[] = [
   "CRITICAL",
@@ -143,8 +144,11 @@ export default function MetricTable({
     }
   };
 
+  // Category "K" (leading stack) has a dedicated panel; keep it out of the
+  // master table so it isn't double-rendered.
   const filtered = useMemo(
-    () => metrics.filter((m) => activeStatuses.has(m.status)),
+    () =>
+      metrics.filter((m) => m.category !== "K" && activeStatuses.has(m.status)),
     [metrics, activeStatuses],
   );
 
@@ -177,8 +181,9 @@ export default function MetricTable({
     };
   }, [sortKey, sortDir]);
 
-  // Group by category, preserving category map ordering (A..I).
-  const catKeys = Object.keys(categories);
+  // Group by category, preserving category map ordering (A..I). "K" lives in
+  // its own panel and is excluded here.
+  const catKeys = Object.keys(categories).filter((c) => c !== "K");
   const grouped = useMemo(() => {
     const map = new Map<string, Metric[]>();
     for (const m of filtered) {
@@ -235,15 +240,18 @@ export default function MetricTable({
               </Th>
               <Th onClick={() => setSort("delta_1d")} active={sortKey === "delta_1d"} dir={sortDir} right>
                 1d Δ
+                <InfoTip term="deltas" />
               </Th>
               <Th onClick={() => setSort("delta_20d")} active={sortKey === "delta_20d"} dir={sortDir} right>
                 20d Δ
               </Th>
               <Th onClick={() => setSort("percentile")} active={sortKey === "percentile"} dir={sortDir} right>
                 %ile
+                <InfoTip term="percentile" />
               </Th>
               <Th onClick={() => setSort("status")} active={sortKey === "status"} dir={sortDir}>
                 Status
+                <InfoTip term="status_lights" />
               </Th>
               <th className="px-2 py-2 font-semibold">Signal / note</th>
             </tr>
@@ -328,7 +336,10 @@ function GroupBody({
                     <span className="w-3 text-[10px] text-slate-600">
                       {expanded ? "▾" : "▸"}
                     </span>
-                    <span className="text-slate-200">{m.label}</span>
+                    <span className="text-slate-200">
+                      {m.label}
+                      <InfoTip metricId={m.metric_id} />
+                    </span>
                   </div>
                 </td>
                 <td className="px-2 py-2 text-right font-mono text-slate-100">

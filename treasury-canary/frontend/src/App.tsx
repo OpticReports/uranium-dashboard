@@ -6,11 +6,29 @@ import { InlineError } from "./components/ui";
 import StressGauge from "./components/StressGauge";
 import MetricTable from "./components/MetricTable";
 import ReSteepenAlert from "./components/ReSteepenAlert";
+import SahmChart from "./components/SahmChart";
+import LaborPanel from "./components/LaborPanel";
 import FlightToQuality from "./components/FlightToQuality";
+import FlowCompass from "./components/FlowCompass";
 import EventFeed from "./components/EventFeed";
 import NewsPanel from "./components/NewsPanel";
+import LeadingStack from "./components/LeadingStack";
+import PinBoard from "./components/PinBoard";
+import AlertBeacon from "./components/AlertBeacon";
+import PlaybookTab from "./components/PlaybookTab";
+import SeverityTab from "./components/SeverityTab";
+import TrackRecordTab from "./components/TrackRecordTab";
 
 const POLL_MS = 60_000;
+
+type Tab = "monitor" | "playbook" | "severity" | "track";
+
+const TABS: Array<{ id: Tab; label: string }> = [
+  { id: "monitor", label: "Monitor" },
+  { id: "playbook", label: "Playbook" },
+  { id: "severity", label: "Severity" },
+  { id: "track", label: "Track record" },
+];
 
 export default function App() {
   const [metrics, setMetrics] = useState<MetricsResponse | null>(null);
@@ -20,6 +38,7 @@ export default function App() {
   const [lastRefresh, setLastRefresh] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [tab, setTab] = useState<Tab>("monitor");
 
   const loadCore = useCallback(async () => {
     try {
@@ -69,6 +88,7 @@ export default function App() {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            <AlertBeacon composite={composite} />
             <HealthBadge health={health} lastRefresh={lastRefresh} />
             <button
               onClick={() => void handleRefresh()}
@@ -79,6 +99,23 @@ export default function App() {
             </button>
           </div>
         </header>
+
+        {/* Tab bar (segmented control) */}
+        <div className="mb-4 inline-flex overflow-hidden rounded-lg border border-panelborder">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`border-r px-4 py-1.5 text-xs font-semibold transition-colors last:border-r-0 ${
+                tab === t.id
+                  ? "border-sky-500 bg-sky-500/10 text-sky-300"
+                  : "border-panelborder text-slate-400 hover:bg-slate-800/50 hover:text-slate-200"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
 
         {showFredBanner && (
           <div className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-canary-yellow/50 bg-canary-yellow/12 px-4 py-2.5">
@@ -97,6 +134,8 @@ export default function App() {
           </div>
         )}
 
+        {/* Monitor tab stays mounted (hidden) so polling/state persist across tabs. */}
+        <div className={tab === "monitor" ? "" : "hidden"}>
         {metricsError && (
           <div className="mb-4">
             <InlineError message={`Failed to load metrics: ${metricsError}`} />
@@ -107,6 +146,18 @@ export default function App() {
           <StressGauge composite={composite} />
 
           <ReSteepenAlert />
+
+          <SahmChart />
+
+          {metrics ? (
+            <LeadingStack metrics={metrics.metrics} />
+          ) : (
+            !metricsError && (
+              <div className="rounded-lg border border-panelborder bg-panel/60 p-6 text-center text-xs text-slate-500">
+                Loading leading stack…
+              </div>
+            )
+          )}
 
           {metrics ? (
             <MetricTable
@@ -129,11 +180,30 @@ export default function App() {
                 Loading…
               </div>
             )}
+            {metrics ? (
+              <LaborPanel metrics={metrics.metrics} />
+            ) : (
+              <div className="rounded-lg border border-panelborder bg-panel/60 p-6 text-center text-xs text-slate-500">
+                Loading…
+              </div>
+            )}
+          </div>
+
+          <FlowCompass />
+
+          <PinBoard />
+
+          <div id="event-feed">
             <EventFeed />
           </div>
 
           <NewsPanel />
         </div>
+        </div>
+
+        {tab === "playbook" && <PlaybookTab />}
+        {tab === "severity" && <SeverityTab />}
+        {tab === "track" && <TrackRecordTab />}
 
         <footer className="mt-8 border-t border-panelborder pt-4 text-center text-[10px] text-slate-600">
           Association, not causation. Signals are decision inputs, not

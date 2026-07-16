@@ -27,11 +27,33 @@ export function scoreColor(v) {
   return `rgb(${r}, ${g}, 70)`;
 }
 
+// Composite is stored 0-100 (cross-sectional vs the universe) but displayed
+// as 0-10 with one decimal — the desk's preferred granularity. Render-layer
+// conversion ONLY: configs, APIs and stored values stay 0-100.
+export const fmtScore10 = (v) =>
+  v === null || v === undefined ? "n/a" : (Number(v) / 10).toFixed(1);
+
 export const severityColor = {
   high: "bg-emerald-600/20 text-emerald-300 border-emerald-700",
   warn: "bg-amber-600/20 text-amber-300 border-amber-700",
   info: "bg-sky-600/20 text-sky-300 border-sky-700",
 };
+
+// Catalyst event codes -> plain English. Never show a raw code to the desk.
+export const EVENT_LABELS = {
+  pdufa: "FDA decision (PDUFA)",
+  adcom: "FDA advisory committee",
+  phase3_readout: "Phase 3 trial results",
+  phase2_readout: "Phase 2 trial results",
+  phase1_readout: "Phase 1 trial results",
+  data_presentation: "Data presentation (medical conference)",
+  earnings: "Earnings report",
+  conference: "Investor conference",
+  other: "Corporate event",
+};
+
+export const eventLabel = (t) =>
+  t ? EVENT_LABELS[t] || t.replace(/_/g, " ") : "event";
 
 export const FLAG_LABELS = {
   pre_catalyst_sentiment_ramp: "Pre-catalyst sentiment ramp",
@@ -39,4 +61,7 @@ export const FLAG_LABELS = {
   unusual_options_social_spike: "Unusual options + social spike",
   runway_cliff_approaching: "Runway cliff approaching",
   binary_event_within_n_days: "Binary event imminent",
+  pullback_into_catalyst: "Pullback into catalyst",
+  volume_anomaly: "Volume anomaly",
+  insider_buying_cluster: "Insider buying cluster",
 };

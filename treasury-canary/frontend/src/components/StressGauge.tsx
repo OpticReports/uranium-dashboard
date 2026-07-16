@@ -1,8 +1,19 @@
-import { useEffect, useState } from "react";
-import type { Composite, RecessionProb } from "../lib/api";
+import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
+import type { Composite, HorizonStat, RecessionModel } from "../lib/api";
 import { api } from "../lib/api";
 import { Panel, InlineError } from "./ui";
 import { errorMessage } from "../lib/format";
+import InfoTip from "./InfoTip";
+
+const HORIZONS = [6, 12, 18, 24] as const;
+
+// Short names for the ensemble's driver-category readout.
+const CAT_SHORT: Record<string, string> = {
+  A: "curve", B: "volatility", C: "term premium", D: "funding", E: "auctions",
+  F: "foreign flows", G: "liquidity", H: "cross-asset", I: "recession model",
+  J: "labor",
+};
 
 const BAND_COLOR: Record<string, string> = {
   LOW: "#10b981",
@@ -113,15 +124,18 @@ export default function StressGauge({
 }: {
   composite: Composite | null;
 }) {
-  const [recession, setRecession] = useState<RecessionProb | null>(null);
+  const [recModel, setRecModel] = useState<RecessionModel | null>(null);
   const [recError, setRecError] = useState<string | null>(null);
+  const [horizon, setHorizon] = useState<number>(12);
 
   useEffect(() => {
     let alive = true;
     api
-      .recessionProb()
+      .recessionModel()
       .then((r) => {
-        if (alive) setRecession(r);
+        if (!alive) return;
+        setRecModel(r);
+        if (r.default_horizon) setHorizon(r.default_horizon);
       })
       .catch((e) => {
         if (alive) setRecError(errorMessage(e));
@@ -130,6 +144,11 @@ export default function StressGauge({
       alive = false;
     };
   }, []);
+
+  const horizonStat: HorizonStat | null = useMemo(() => {
+    if (!recModel) return null;
+    return recModel.horizons[String(horizon)] ?? null;
+  }, [recModel, horizon]);
 
   const contributions = composite?.contributions ?? {};
   const contribEntries = Object.entries(contributions).sort(
@@ -146,7 +165,12 @@ export default function StressGauge({
 
   return (
     <Panel
-      title="Composite Stress"
+      title={
+        <>
+          Composite Stress
+          <InfoTip term="composite_score" />
+        </>
+      }
       subtitle="Aggregate market-stress index across nine metric families"
     >
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
@@ -165,24 +189,53 @@ export default function StressGauge({
             </span>
           </div>
           <p className="mt-1 text-[11px] text-slate-500">0 = calm · 100 = severe</p>
+          {composite?.ensemble && (
+            <p className="mt-1 text-center text-[10px] leading-snug text-slate-500">
+              weighting band{" "}
+              <span className="font-mono text-slate-300">
+                {Math.round(composite.ensemble.band_low)}–
+                {Math.round(composite.ensemble.band_high)}
+              </span>
+              {composite.ensemble.equal_weight_score !== null && (
+                <>
+                  {" · equal-mix "}
+                  <span className="font-mono text-slate-300">
+                    {Math.round(composite.ensemble.equal_weight_score)}
+                  </span>
+                </>
+              )}
+              {composite.ensemble.driver_category && (
+                <>
+                  {" · driver: "}
+                  {CAT_SHORT[composite.ensemble.driver_category] ??
+                    composite.ensemble.driver_category}{" "}
+                  ({composite.ensemble.driver_direction})
+                </>
+              )}
+              <InfoTip term="weight_band" />
+            </p>
+          )}
         </div>
 
         {/* Key readouts */}
         <div className="flex flex-col justify-center gap-3">
-          <Readout label="Coverage" value={`${coveragePct.toFixed(0)}%`} />
           <Readout
-            label="Recession prob. (Estrella–Mishkin)"
-            value={
-              recError
-                ? "err"
-                : recession?.probability_pct === null ||
-                    recession?.probability_pct === undefined
-                  ? "n/a"
-                  : `${recession.probability_pct.toFixed(1)}%`
+            label={
+              <>
+                Coverage
+                <InfoTip term="coverage" />
+              </>
             }
-            hint={recession?.model}
+            value={`${coveragePct.toFixed(0)}%`}
           />
-          <div className="flex gap-3">
+          <RecessionDial
+            model={recModel}
+            stat={horizonStat}
+            horizon={horizon}
+            onSelect={setHorizon}
+            error={recError}
+          />
+          <div className="flex items-center gap-3">
             <CountPill
               label="RED"
               count={composite?.n_red ?? 0}
@@ -194,6 +247,7 @@ export default function StressGauge({
               color="#dc2626"
               pulse
             />
+            <InfoTip term="status_lights" />
           </div>
         </div>
 
@@ -201,6 +255,7 @@ export default function StressGauge({
         <div className="flex flex-col justify-center">
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
             Component contributions
+            <InfoTip term="contributions" />
           </p>
           {contribEntries.length === 0 ? (
             <p className="text-xs text-slate-500">No contribution data.</p>
@@ -227,12 +282,135 @@ export default function StressGauge({
   );
 }
 
+function fmtPct(v: number | null | undefined, digits = 1): string {
+  return v === null || v === undefined || Number.isNaN(v)
+    ? "n/a"
+    : `${v.toFixed(digits)}%`;
+}
+
+function RecessionDial({
+  model,
+  stat,
+  horizon,
+  onSelect,
+  error,
+}: {
+  model: RecessionModel | null;
+  stat: HorizonStat | null;
+  horizon: number;
+  onSelect: (h: number) => void;
+  error: string | null;
+}) {
+  const prob = stat?.probability_pct ?? null;
+  const hasProb = prob !== null && prob !== undefined && !Number.isNaN(prob);
+
+  // Context line: band + AUC + n.
+  const band =
+    stat &&
+    stat.ci_low_pct !== null &&
+    stat.ci_high_pct !== null &&
+    !Number.isNaN(stat.ci_low_pct) &&
+    !Number.isNaN(stat.ci_high_pct)
+      ? `band ${Math.round(stat.ci_low_pct)}–${Math.round(stat.ci_high_pct)}%`
+      : null;
+  const auc =
+    stat && stat.auc !== null && !Number.isNaN(stat.auc)
+      ? `AUC ${stat.auc.toFixed(2)} (n=${stat.n_obs})`
+      : null;
+  const hasContext = band !== null || auc !== null;
+
+  // Term-premium-adjusted probability for the selected horizon (may be absent).
+  const adj = model?.adjusted?.horizons?.[String(horizon)] ?? null;
+  const adjProb =
+    adj && adj.probability_pct !== null && !Number.isNaN(adj.probability_pct)
+      ? adj.probability_pct
+      : null;
+  const adjBand =
+    adj &&
+    adj.ci_low_pct !== null &&
+    adj.ci_high_pct !== null &&
+    !Number.isNaN(adj.ci_low_pct) &&
+    !Number.isNaN(adj.ci_high_pct)
+      ? ` (band ${Math.round(adj.ci_low_pct)}–${Math.round(adj.ci_high_pct)}%)`
+      : "";
+
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] uppercase tracking-wide text-slate-500">
+          Recession prob. · {horizon}mo
+          <InfoTip term="recession_prob" />
+        </p>
+        <div className="flex items-center gap-1">
+          {HORIZONS.map((h) => (
+            <button
+              key={h}
+              onClick={() => onSelect(h)}
+              className={`rounded border px-1.5 py-0.5 text-[10px] font-mono transition-colors ${
+                h === horizon
+                  ? "border-sky-500 bg-sky-500/15 text-sky-300"
+                  : "border-panelborder text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              {h}
+            </button>
+          ))}
+          <InfoTip term="horizon" />
+        </div>
+      </div>
+      <p className="font-mono text-xl text-slate-100">
+        {error ? "err" : !model ? "…" : hasProb ? fmtPct(prob) : "n/a"}
+      </p>
+      <p className="text-[11px] text-slate-400">
+        TP-adjusted: {adjProb !== null ? `${fmtPct(adjProb)}${adjBand}` : "n/a"}
+        <InfoTip term="adjusted_prob" />
+      </p>
+      {hasContext ? (
+        <p className="text-[10px] text-slate-500">
+          {band !== null && (
+            <span>
+              {band}
+              <InfoTip term="confidence_band" />
+            </span>
+          )}
+          {band !== null && auc !== null && <span>{"  ·  "}</span>}
+          {auc !== null && (
+            <span>
+              {auc}
+              <InfoTip term="auc" />
+            </span>
+          )}
+        </p>
+      ) : (
+        <p className="text-[10px] text-slate-600">
+          {model?.method ?? "Estrella–Mishkin probit"}
+        </p>
+      )}
+      <p className="mt-1 text-[10px] leading-snug text-slate-600">
+        Model estimate with a confidence band, not a forecast. Curve predictive
+        power peaks ~12–18mo.
+      </p>
+      {model?.transmission?.active && (
+        <div className="mt-2 rounded border border-amber-600/60 bg-amber-500/10 px-2 py-1.5">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-400">
+            ⚠ Transmission watch
+            <InfoTip term="transmission_note" />
+          </p>
+          <p className="mt-0.5 text-[10px] leading-snug text-amber-200/90">
+            {model.transmission.message}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Readout({
   label,
   value,
   hint,
 }: {
-  label: string;
+  label: ReactNode;
   value: string;
   hint?: string;
 }) {

@@ -13,6 +13,7 @@ from datetime import date
 
 from ..config import flags_config
 from ..models import FlagEvent, Security
+from ..utils.labels import event_label
 
 
 def evaluate_flags(
@@ -135,10 +136,132 @@ def evaluate_flags(
                 flag_type="binary_event_within_n_days",
                 severity="high",
                 message=(
-                    f"High-impact {nearest.event_type} in "
-                    f"{(nearest.date - asof).days}d"
+                    f"High-impact {event_label(nearest.event_type)} in "
+                    f"{(nearest.date - asof).days} days"
                 ),
                 evidence={"catalysts": [_cat_ev(c, asof) for c in imminent]},
+            )
+        )
+
+    # 6) Pullback into catalyst -----------------------------------------------
+    # The desk's confirmed setup, hardened against being a downtrend detector:
+    # depth must be meaningful in BOTH percent and ATR terms, capped (30%+ off
+    # the high is a breakdown, not a pullback), and occurring WITHIN strength
+    # (above the 50dma) — a pullback in an uptrend, not a falling knife.
+    f = cfg.get("pullback_into_catalyst", {})
+    pullback = raw.get("pullback_pct")
+    last_close = raw.get("last_close")
+    atr14 = raw.get("atr14")
+    if (
+        pullback is not None
+        and last_close
+        and f.get("min_pullback_pct", 0.10) <= pullback <= f.get("max_pullback_pct", 0.30)
+    ):
+        # Depth in ATRs (volatility-normalized): (peak - close) / ATR.
+        peak = last_close / (1.0 - pullback) if pullback < 1.0 else None
+        depth_atr = (
+            (peak - last_close) / atr14
+            if peak is not None and atr14 not in (None, 0) else None
+        )
+        atr_ok = depth_atr is not None and depth_atr >= f.get("min_pullback_atr", 1.5)
+        trend_ok = (
+            raw.get("above_50dma") is True
+            if f.get("require_above_50dma", True)
+            else True
+        )
+        lo, hi = f.get("catalyst_min_days", 10), f.get("catalyst_max_days", 45)
+        tradeable = [
+            c
+            for c in catalysts
+            if lo <= (c.date - asof).days <= hi
+            and c.effective_impact >= f.get("min_catalyst_impact", 0.7)
+        ]
+        if atr_ok and trend_ok and tradeable:
+            nearest = min(tradeable, key=lambda c: (c.date - asof).days)
+            flags.append(
+                FlagEvent(
+                    symbol=sec.symbol,
+                    flag_type="pullback_into_catalyst",
+                    severity="high",
+                    message=(
+                        f"Pulled back {pullback:.0%} ({depth_atr:.1f} ATRs) from its "
+                        f"{f.get('high_lookback_days', 30)}-day high, still above the "
+                        f"50-day average, with a high-impact "
+                        f"{event_label(nearest.event_type)} in "
+                        f"{(nearest.date - asof).days} days"
+                    ),
+                    evidence={
+                        "pullback_pct": pullback,
+                        "depth_atr": depth_atr,
+                        "above_50dma": raw.get("above_50dma"),
+                        "last_close": last_close,
+                        "catalysts": [_cat_ev(c, asof) for c in tradeable],
+                    },
+                )
+            )
+
+    # 7) Volume anomaly --------------------------------------------------------
+    # log-volume z-score with a dollar floor so Tier-C noise can't fire it.
+    f = cfg.get("volume_anomaly", {})
+    vol_z = raw.get("volume_z")
+    dollar_vol = raw.get("last_dollar_volume")
+    if (
+        vol_z is not None
+        and vol_z >= f.get("min_volume_z", 2.5)
+        and dollar_vol is not None
+        and dollar_vol >= f.get("min_dollar_volume", 1_000_000)
+    ):
+        flags.append(
+            FlagEvent(
+                symbol=sec.symbol,
+                flag_type="volume_anomaly",
+                severity="warn",
+                message=(
+                    f"Daily volume {vol_z:.1f}σ above its "
+                    f"{f.get('lookback_days', 60)}d norm "
+                    f"(${dollar_vol/1e6:.1f}M traded)"
+                ),
+                evidence={"volume_z": vol_z, "dollar_volume": dollar_vol},
+            )
+        )
+
+    # 8) Insider buying cluster ------------------------------------------------
+    # CLUSTER = multiple DISTINCT insiders with meaningful aggregate value.
+    # One officer's 10b5-1 plan printing twice in a month is not a signal.
+    f = cfg.get("insider_buying_cluster", {})
+    buys = raw.get("insider_buys") or []
+    distinct = {b.insider for b in buys if b.insider}
+    total_value = sum(b.value for b in buys if b.value is not None)
+    if (
+        len(buys) >= f.get("min_buys", 2)
+        and len(distinct) >= f.get("min_distinct_insiders", 2)
+        and total_value >= f.get("min_total_value", 25_000)
+    ):
+        flags.append(
+            FlagEvent(
+                symbol=sec.symbol,
+                flag_type="insider_buying_cluster",
+                severity="high",
+                message=(
+                    f"{len(distinct)} distinct insiders bought "
+                    f"(~${total_value/1000:.0f}k total) in "
+                    f"{f.get('window_days', 30)}d"
+                ),
+                evidence={
+                    "count": len(buys),
+                    "distinct_insiders": len(distinct),
+                    "total_value": total_value,
+                    "buys": [
+                        {
+                            "date": b.date.isoformat(),
+                            "insider": b.insider,
+                            "title": b.title,
+                            "shares": b.shares,
+                            "value": b.value,
+                        }
+                        for b in buys
+                    ],
+                },
             )
         )
 

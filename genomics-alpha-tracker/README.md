@@ -156,13 +156,77 @@ links back to the underlying rows (which catalysts, revisions, posts):
 ---
 
 ## Dashboard views
+- **Today** (default) — what's actionable right now, readable by a first-time
+  viewer: sector regime strip (XBI/ARKG/IBB), fresh flags as tradeable cards
+  (why it fired, that signal's real hit rate, reference levels, liquidity tier,
+  binary-event framing), open calls with signal-decay hints, this week's
+  catalysts, and a pre-market digest (EST/NYSE framing, data-freshness stamped).
 - **Sector Heatmap** — color = composite signal by subsector; click to drill in.
 - **Watchlist** — sortable by any signal component; inline add/deactivate/remove.
 - **Catalyst Calendar** — next 90 days, filterable by impact & subsector.
 - **Movers in Narrative** — largest hype acceleration this week + active flags.
+- **Calls Log** — the tracker's own exact trade calls, logged and graded (below).
 - **Per-name Deep Dive** — price chart with catalyst markers, estimate-revision
   timeline, hype timeline, runway gauge, auditable score breakdown, science feed.
 - **Analyst Chat** — natural-language Q&A grounded in your data.
+
+---
+
+## Calls Log — the tracker grades itself
+
+The tracker doesn't just flag names — it makes **exact trade calls** and keeps
+score. When a trigger signal fires (pre-catalyst sentiment ramp, upward analyst
+revision cluster, unusual options + social spike) on a name whose composite
+clears the conviction bar, a call is logged with:
+
+- **entry** (latest close), **stop** (2×ATR, %-fallback), **target** (2R), and a
+  **time-stop** — which lands the day *before* the nearest binary catalyst, so
+  auto-calls sell into events rather than holding through binaries.
+
+Levels are **frozen at fire-time and never edited**. A scheduled evaluator then
+grades every open call against subsequent daily bars — target hit, stopped out
+(a bar spanning both levels grades as stopped, the conservative reading), or
+time-stop expiry — and records return % and **R-multiple**. The *Calls Log* tab
+shows open calls with live unrealized P&L, the closed-call history, and a
+**scorecard by signal type** (win rate, avg return, avg R) — so "which signals
+actually pay" is answered with evidence, and weights/thresholds get retuned
+from the record, not intuition.
+
+Manual calls (the desk's own takes, or a chat memo worth tracking) are logged
+via the same tab or `POST /calls` — missing levels are auto-filled the same way
+so every call is gradeable. Tuning lives in
+[`config/calls.yaml`](backend/config/calls.yaml) (triggers, conviction gate,
+cooldown, risk unit, horizon); the engine is deliberately conservative because
+false positives are the main failure mode.
+
+**Evidence-based defaults.** The stop/target/time-stop defaults come from a
+real-data backtest of the exit mechanics
+([`docs/BACKTEST_CALLS.md`](../docs/BACKTEST_CALLS.md), ~2y adjusted bars,
+30 names): a **genuinely paired** exit-config grid (identical entries in every
+cell), open-first gap-aware fills, cluster-bootstrap CIs, regime split, and
+**slippage-adjusted plateau selection**. Headline findings: tight (1.5–2×ATR)
+stops look best frictionless but lose their edge to trading costs, and
+3×ATR / 3:1 / 45d is robust net of slippage in both XBI regimes (net avg R
+0.190; the 2:1 neighbor is statistically indistinguishable). Rerun with
+`python -m scripts.backtest_calls --refresh`.
+
+**Every closed call gets a post-mortem — the WHY, not just the outcome.**
+Computed from the data, never hand-written: path excursions (did it ever work,
+or did we round-trip a +2R winner?), sector attribution (name alpha vs XBI
+beta over the trade window), signal decay (did the composite fade before the
+exit?), catalyst discipline, and — ~10 bars after exit — a **hindsight
+verdict**: a stop that kept falling *protected capital*; one that snapped back
+above entry was a *shakeout* (a pattern of shakeouts means widen the stop, not
+blame the signal). Shown under each closed call in the Calls Log.
+
+**The flags grade themselves too.** Every flag — including ones that never
+became calls — is graded from its fire-time close against forward 1w/1m/3m
+returns, raw and XBI-excess (`GET /flags/track-record`). Flag cards on the
+Today tab show that signal's live hit rate (with n, and an "insufficient
+history" warning below n=10). New signal ideas (pullback-into-catalyst,
+insider clusters) ship **observe-only** and are promoted to call triggers only
+when their record earns it. This is the loop that turns the equal starting
+weights into evidence-based ones.
 
 ---
 
@@ -202,6 +266,7 @@ the savings are visible.
 | `config/watchlist.yaml` | the universe (symbol, name, subsector tags, active) |
 | `config/scoring.yaml` | component weights & parameters |
 | `config/flags.yaml` | flag thresholds |
+| `config/calls.yaml` | trade-call triggers, conviction gate, risk unit, horizon |
 | `config/intervals.yaml` | scheduler refresh intervals per module |
 
 Reload at runtime: `POST /universe/reload`, `POST /scores/reload`.
@@ -210,13 +275,17 @@ Reload at runtime: `POST /universe/reload`, `POST /scores/reload`.
 
 ## Testing
 ```bash
-cd backend && pytest          # 38 tests
+cd backend && pytest          # 80 tests
 ```
 Coverage includes the **scoring math with known inputs/outputs**
 (`tests/test_scoring.py`), an offline end-to-end engine run
 (`tests/test_engine.py`), universe sync/history-safety
-(`tests/test_universe.py`), and catalyst normalization + override preservation
-(`tests/test_catalysts.py`).
+(`tests/test_universe.py`), catalyst normalization + override preservation
+(`tests/test_catalysts.py`), the **trade-call level math, grading rules,
+generation gates, and scorecard** (`tests/test_calls.py`), and the
+**review-hardening pass** — gap-aware fills, binary-expiry refusal, liquidity
+tiers, hardened flags, re-fire suppression, flag forward-return grading
+(`tests/test_review_hardening.py`).
 
 ---
 

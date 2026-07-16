@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
-import { fmtNum, scoreColor } from "../lib/format";
+import { fmtNum, scoreColor, fmtScore10 } from "../lib/format";
 
 // "Movers in narrative": names with the largest hype acceleration this week.
 export default function Movers({ onPick }) {
@@ -32,7 +32,7 @@ export default function Movers({ onPick }) {
                   accel <b>{fmtNum(m.mention_acceleration, 2)}</b>
                 </span>
                 <span className="font-bold" style={{ color: scoreColor(m.composite) }}>
-                  {fmtNum(m.composite, 0)}
+                  {fmtScore10(m.composite)}
                 </span>
               </div>
             </button>

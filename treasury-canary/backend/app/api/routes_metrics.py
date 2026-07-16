@@ -15,13 +15,15 @@ router = APIRouter(prefix="/metrics", tags=["metrics"])
 _CATEGORY_LABELS = {
     "A": "Yield curve", "B": "Volatility", "C": "Term premium & real rates",
     "D": "Funding / plumbing", "E": "Auctions", "F": "Foreign / flows",
-    "G": "Liquidity", "H": "Cross-asset", "I": "Recession model",
+    "G": "Liquidity", "H": "Cross-asset", "I": "Recession model", "J": "Labor",
+    "K": "Leading stack (additive, not in composite)",
 }
 
 
 @router.get("")
 def list_metrics():
     """The master traffic-light table — computed live from the (cached) bundle."""
+    from ..scoring.ensemble import weight_ensemble
     bundle = fetch_bundle()
     metrics, _, composite, _ = compute_all(bundle)
     return {
@@ -32,6 +34,7 @@ def list_metrics():
             "coverage": composite.coverage, "category_scores": composite.category_scores,
             "contributions": composite.contributions,
             "n_red": composite.n_red, "n_critical": composite.n_critical,
+            "ensemble": weight_ensemble(metrics),
         },
     }
 

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
+import { eventLabel } from "../lib/format";
 
 const IMPACT_COLOR = (i) =>
   i >= 0.85 ? "#ef4444" : i >= 0.6 ? "#f59e0b" : i >= 0.4 ? "#eab308" : "#64748b";
@@ -88,7 +89,7 @@ export default function CatalystCalendar({ onPick }) {
                     {c.symbol}
                   </button>
                 </td>
-                <td className="px-3 py-2">{c.event_type}</td>
+                <td className="px-3 py-2">{eventLabel(c.event_type)}</td>
                 <td className="px-3 py-2 text-gray-300 max-w-md truncate" title={c.title}>
                   {c.url ? (
                     <a href={c.url} target="_blank" rel="noreferrer" className="hover:underline">

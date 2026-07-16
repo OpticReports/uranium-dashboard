@@ -32,8 +32,12 @@ DEFAULTS: dict[str, Threshold] = {
     # D. Funding / plumbing (bps)
     "funding.sofr_effr": Threshold(yellow=5.0, red=15.0, higher_is_worse=True),
     "funding.sofr_iorb": Threshold(yellow=5.0, red=15.0, higher_is_worse=True),
-    # E. Auctions
+    # E. Auctions (trailing-8 coupon-auction averages)
     "auctions.bid_to_cover": Threshold(yellow=2.4, red=2.2, higher_is_worse=False),
+    "auctions.dealer_takedown": Threshold(yellow=15.0, red=20.0, higher_is_worse=True),
+    "auctions.indirect_share": Threshold(yellow=60.0, red=50.0, higher_is_worse=False),
+    # F. Foreign flows
+    "foreign.custody_26w": Threshold(yellow=-2.0, red=-5.0, higher_is_worse=False),
     # G. Liquidity
     "liquidity.on_off_run": Threshold(yellow=5.0, red=12.0, higher_is_worse=True),
     "liquidity.ofr_fsi": Threshold(yellow=1.0, red=3.0, higher_is_worse=True),
@@ -46,6 +50,20 @@ DEFAULTS: dict[str, Threshold] = {
     # I. Recession model (%)
     "recession.prob": Threshold(yellow=30.0, red=50.0, higher_is_worse=True),
     "recession.nfci": Threshold(yellow=0.0, red=0.7, higher_is_worse=True),
+    # J. Labor (Sahm gap in pp; claims YoY in %). Sahm rule triggers at 0.50.
+    "labor.sahm": Threshold(yellow=0.30, red=0.50, higher_is_worse=True),
+    "labor.claims_yoy": Threshold(yellow=10.0, red=25.0, higher_is_worse=True),
+    # K. Leading stack (each vs its OWN historical rule; display-only — never
+    # jointly fitted and never in the composite, by design).
+    "leading.permits_yoy": Threshold(yellow=-10.0, red=-20.0, higher_is_worse=False),
+    "leading.sloos": Threshold(yellow=10.0, red=20.0, higher_is_worse=True),
+    "leading.temp_help_yoy": Threshold(yellow=-2.0, red=-8.0, higher_is_worse=False),
+    "leading.trucks_off_peak": Threshold(yellow=-10.0, red=-20.0, higher_is_worse=False),
+    "leading.core_capex_yoy": Threshold(yellow=0.0, red=-5.0, higher_is_worse=False),
+    "leading.cfnai_ma3": Threshold(yellow=-0.35, red=-0.70, higher_is_worse=False),
+    "leading.gdpnow": Threshold(yellow=1.0, red=0.0, higher_is_worse=False),
+    "leading.cp_prob": Threshold(yellow=20.0, red=50.0, higher_is_worse=True),
+    "leading.wei": Threshold(yellow=1.0, red=0.0, higher_is_worse=False),
 }
 
 
