@@ -52,8 +52,11 @@ def main():
 
     prev = None
     older = sorted(glob.glob(os.path.join(DIR, "snapshot-*.json")))
+    last_path = os.path.join(DIR, "last-snapshot.json")  # git-tracked baseline
     if older:
         prev = json.load(open(older[-1]))
+    elif os.path.exists(last_path):
+        prev = json.load(open(last_path))
 
     now = datetime.datetime.now(datetime.timezone.utc)
     snap = {"taken_at": now.isoformat(timespec="seconds"),
@@ -119,6 +122,8 @@ def main():
     stamp = now.strftime("%Y%m%dT%H%M%SZ")
     snap_path = os.path.join(DIR, f"snapshot-{stamp}.json")
     with open(snap_path, "w") as f:
+        json.dump(snap, f, indent=2)
+    with open(last_path, "w") as f:  # tracked copy — survives fresh clones
         json.dump(snap, f, indent=2)
     with open(state_path, "w") as f:
         json.dump(state, f, indent=2)

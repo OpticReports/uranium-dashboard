@@ -1,0 +1,62 @@
+{
+  "taken_at": "2026-07-16T00:19:19+00:00",
+  "total_stats": {
+    "pending_deploys_cash": 0,
+    "total_cash": 17248.77801189,
+    "time_weighted_return": 0.5578204455161924,
+    "total_unallocated_cash": 17010.94801189,
+    "portfolio_value": 254585.79,
+    "net_deposits": 247000.0,
+    "pending_net_deposits": 0.0,
+    "todays_percent_change": 0.0018910233978387096,
+    "simple_return": 0.030711709420468303,
+    "todays_dollar_change": 455.02812485468,
+    "metrics": {
+      "annualized_rate_of_return": 1.0955,
+      "max_drawdown": 0.2006,
+      "sharpe_ratio": 1.9748,
+      "standard_deviation": 0.4227
+    },
+    "pending_withdrawals": 0.0
+  },
+  "symphonies": {
+    "mbkiXcuNDjueXpiox5Av": {
+      "name": "The Holy Grail w Sorts & Safe Sectors  139 | 38 | 2015 (Modified #1)",
+      "value": 116420.06,
+      "deposit_adjusted_value": 1701.67,
+      "cash": 116.46,
+      "holdings": {
+        "TLT": 0.999
+      },
+      "next_rebalance_on": "2026-07-16",
+      "has_queued_deploy": null,
+      "last_percent_change": 0.003
+    },
+    "nNdBk7hc5NiBzeRvbI5T": {
+      "name": "Crash Convexity Sleeve \u2014 InverseHold + Bond Frontrunner 50/50",
+      "value": 53513.72,
+      "deposit_adjusted_value": 22839.68,
+      "cash": 53.54,
+      "holdings": {
+        "BIL": 0.999
+      },
+      "next_rebalance_on": "2026-07-16",
+      "has_queued_deploy": null,
+      "last_percent_change": -0.0045
+    },
+    "YPTSJFJwD2ZKfAeYJUbW": {
+      "name": "KMLM switcher + VIX sleeve 75/25",
+      "value": 67641.07,
+      "deposit_adjusted_value": 27072.63,
+      "cash": 67.83,
+      "holdings": {
+        "PULS": 0.2503,
+        "SQQQ": 0.7486
+      },
+      "next_rebalance_on": "2026-07-16",
+      "has_queued_deploy": null,
+      "last_percent_change": 0.0052
+    }
+  },
+  "sleeve_weight": 0.2252
+}
