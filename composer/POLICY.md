@@ -21,9 +21,11 @@ in `CHANGELOG.md` with deploy IDs, and pushed.
     Band: **7% – 15%** of the same measure.
   - Operationally, monitor.py's band check runs on Composer-visible values;
     the dollar target is recorded here and updated on owner reports.
-- LATER: TAIL sale proceeds (~$17k) may arrive as a second deposit; that
-  one goes to the most underweight engine (HG 55 / P5 35 targets) and
-  still requires an owner "it landed" message (not pre-authorized).
+- 2026-07-16: TAIL proceeds ($17,011) arrived and were deployed to the
+  SLEEVE on the owner's direction ("use this additional capital as a
+  correlation hedge against my broader portfolio") — sleeve now ~11.8% of
+  crash-exposed assets: above the 10% target, inside the 7–15% band, so no
+  auto-trim fires. The Jan-2027 review still governs any further scale-up.
 - Trigger: at the daily post-close check, sleeve outside the band (7–15% of
   crash-exposed assets; dollar equivalents recorded above).
 - Action: rebalance the sleeve back to the 10% target:

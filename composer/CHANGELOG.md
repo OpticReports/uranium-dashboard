@@ -19,6 +19,17 @@ Format per entry:
 
 <!-- New entries go below this line, newest first. -->
 
+## 2026-07-16 — TAIL proceeds deployed to crash sleeve (owner-directed)
+
+- Change (capital): invested $16,900 into sleeve `nNdBk7hc5NiBzeRvbI5T`
+  (deploy d71a27c5, executes today 19:50Z window). Owner redirected from
+  the engine plan: purpose = correlation hedge for the IBKR book. Data:
+  sleeve~SPY corr −0.14 (15y) and +30.5% avg crash capture, vs P5~SPY
+  +0.28 and −24.5% in the Jan–Feb 2025 episode. Sleeve lands ~$71k ≈
+  11.8% of family crash-exposed assets (in-band). Monitor band alert
+  also fixed today to use the POLICY.md family denominator.
+
+
 ## 2026-07-14 — residual cash swept to P5
 
 - Change (capital, owner-directed): invested $140 residual cash into P5
