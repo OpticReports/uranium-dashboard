@@ -3,12 +3,15 @@
 # host. For local dev with hot-reload use docker-compose.yml instead.
 
 # --- 1. Build the frontend (same-origin API: VITE_API_BASE="") ---
+# VITE_BASE="/genomics/" because the SPA is served under /genomics/
+# (research.optic.capital/genomics); API calls stay at the root paths.
 FROM node:20-alpine AS frontend
 WORKDIR /fe
 COPY frontend/package.json ./
 RUN npm install
 COPY frontend/ ./
 ENV VITE_API_BASE=""
+ENV VITE_BASE="/genomics/"
 RUN npm run build
 
 # --- 2. Backend + bundled frontend ---

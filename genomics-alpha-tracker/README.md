@@ -48,8 +48,10 @@ repository root** (Render requires it there for Blueprint auto-detection).
    in git): **`FMP_API_KEY`**, and a **`DASHBOARD_USER`** / **`DASHBOARD_PASSWORD`**
    login of your choice (the app is password-gated when both are set).
 3. **Deploy.** Your dashboard will be at `https://<service-name>.onrender.com`.
-   Add a custom domain (e.g. `genomics.optic.capital`) under
-   **Settings → Custom Domains**, then CNAME it at your DNS provider.
+   Add a custom domain (e.g. `research.optic.capital`) under
+   **Settings → Custom Domains**, then CNAME it at your DNS provider. The
+   dashboard itself lives at `/genomics/` (the root `/` redirects there), with
+   the Treasury Canary at `/canary/`.
 
 The blueprint uses the **Starter plan with a 1 GB persistent disk** so the service
 stays always-on (the ingestion scheduler actually runs) and your history survives

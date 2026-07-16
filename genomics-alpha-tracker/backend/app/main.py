@@ -163,7 +163,7 @@ def health():
 
 # --- Treasury Canary reverse proxy -------------------------------------------
 # Serve the separate Treasury Canary service under this domain at /canary/* so it
-# lives at genomics.optic.capital/canary. Sits behind the same login gate above.
+# lives at research.optic.capital/canary. Sits behind the same login gate above.
 # The Canary's SPA is built with base "/canary/" + API base "/canary", so browser
 # requests arrive under /canary and we strip that prefix before forwarding.
 _CANARY_UPSTREAM = os.environ.get(
@@ -201,11 +201,23 @@ async def _canary_proxy(path: str, request: Request):
                     media_type=ctype or None)
 
 
-# Single-service deployment: if a built frontend is present, serve it at "/".
-# (Mounted AFTER the API routers so /universe, /scores, /views, etc. win.)
+# Single-service deployment: if a built frontend is present, serve it under
+# /genomics/ (research.optic.capital/genomics), with "/" redirecting there. The
+# SPA's API calls stay at the root paths (/universe, /scores, ...), so the
+# routers above are unaffected. The frontend must be built with
+# VITE_BASE="/genomics/" (see Dockerfile) so its hashed assets resolve.
 if settings.frontend_dist and os.path.isdir(settings.frontend_dist):
-    app.mount("/", StaticFiles(directory=settings.frontend_dist, html=True), name="frontend")
-    logger.info("Serving frontend from %s", settings.frontend_dist)
+    @app.get("/", include_in_schema=False)
+    def _root_to_genomics():
+        return RedirectResponse(url="/genomics/")
+
+    @app.get("/genomics", include_in_schema=False)
+    def _genomics_trailing_slash():
+        return RedirectResponse(url="/genomics/")
+
+    app.mount("/genomics", StaticFiles(directory=settings.frontend_dist, html=True),
+              name="frontend")
+    logger.info("Serving frontend at /genomics/ from %s", settings.frontend_dist)
 else:
     @app.get("/", tags=["meta"])
     def root():
