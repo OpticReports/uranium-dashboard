@@ -261,6 +261,17 @@ export interface PinChannel {
   leverage: string;
 }
 
+export interface PinAccidentGauge {
+  status: "GREEN" | "YELLOW" | "RED" | "STALE";
+  fast_red: boolean;
+  fast_red_channels: string[];
+  curve_flat: boolean;
+  curve_threshold_pp: number;
+  spread_3m10y_now: number | null;
+  spread_3m10y_min_6m: number | null;
+  basis: string;
+}
+
 export interface PinExposure {
   red_trillions: number;
   yellow_trillions: number;
@@ -273,6 +284,7 @@ export interface PinExposure {
 export interface PinBoard {
   channels: PinChannel[];
   exposure?: PinExposure;
+  accident_gauge?: PinAccidentGauge;
   overall: PinStatus;
   n_red: number;
   n_yellow: number;
