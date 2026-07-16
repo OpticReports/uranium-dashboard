@@ -9,7 +9,11 @@ import {
 import { InlineError, Loading, Panel, StatusPill } from "./ui";
 import { formatValue, STATUS_COLOR } from "../lib/format";
 import InfoTip from "./InfoTip";
-import { ChannelHistoryChart, CollectiveHistoryChart } from "./PinHistoryChart";
+import {
+  ChannelHistoryChart,
+  CollectiveHistoryChart,
+  ConfluenceReadout,
+} from "./PinHistoryChart";
 
 // Dalio pin board — the gun is the debt buildup; the pin is the trigger.
 // Six measurable spark channels, each scored from live data, never a forecast.
@@ -262,6 +266,12 @@ export default function PinBoard() {
             Every red episode above casts its channel&apos;s documented damage window
             forward. This counts how many are open at once — the convergence view.
           </p>
+          {history.confluence && (
+            <ConfluenceReadout
+              conf={history.confluence}
+              channelLabels={channelLabels}
+            />
+          )}
           <CollectiveHistoryChart history={history} channelLabels={channelLabels} />
         </div>
       )}

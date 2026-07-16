@@ -285,7 +285,13 @@ def _score_series(label: str, dates: list[date], vals: list[float]
 
 
 def _episodes(months: list[str], scores: list[float], cid: str) -> list[dict]:
-    """Contiguous calendar-month runs at RED. Peak month casts the lag window."""
+    """Contiguous calendar-month runs at RED, casting the lag-window envelope.
+
+    Damage can land [lag_lo, lag_hi] months after ANY red month in the run, so
+    the window spans peak+lag_lo .. last_red_month+lag_hi. Anchoring the end to
+    the LAST red month (not the peak) keeps the window open while an episode is
+    still firing — a channel red today is never shown with an expired window.
+    """
     lag_lo, lag_hi, _basis = LAG_WINDOWS[cid]
     eps: list[dict] = []
     run: list[tuple[str, float]] = []
@@ -298,7 +304,7 @@ def _episodes(months: list[str], scores: list[float], cid: str) -> list[dict]:
             "start": run[0][0], "end": run[-1][0],
             "peak_date": peak_m, "peak_score": round(peak_s, 1),
             "window_start": _add_months(peak_m, lag_lo),
-            "window_end": _add_months(peak_m, lag_hi),
+            "window_end": _add_months(run[-1][0], lag_hi),
         })
         run.clear()
 
@@ -347,7 +353,8 @@ def build_pin_history(bundle: dict) -> dict:
 
     if not all_months:
         return {"channels": channels_out,
-                "collective": {"series": [], "last_data_month": None}}
+                "collective": {"series": [], "last_data_month": None},
+                "confluence": None}
 
     last_data = max(all_months)
     # extend through the farthest projected window so convergence AHEAD of us
@@ -370,9 +377,86 @@ def build_pin_history(bundle: dict) -> dict:
     return {
         "channels": channels_out,
         "collective": {"series": collective, "last_data_month": last_data},
+        "confluence": _confluence(collective, last_data, bundle),
         "framing": "Each channel's severity, recomputed monthly over full source "
                    "history (monthly max, expanding percentiles — no lookahead). "
                    "A red episode casts that channel's documented damage window "
                    "forward; the bottom series counts overlapping open windows. "
                    "One spark is a data point — several open windows is a regime.",
+    }
+
+
+# --- confluence: the refined forward window ------------------------------------
+# Two deliberately different kinds of statement, kept apart:
+#   1. The FORWARD WINDOW is arithmetic, not statistics: the months from now on
+#      where the most already-cast damage windows overlap. Documented lags in,
+#      an intersection out — nothing is estimated.
+#   2. The HINDCAST VALIDATION is descriptive: for each overlap level k, how
+#      often a month like that was followed by an NBER recession onset within
+#      12 months, vs. the unconditional base rate. With ~7 onsets inside the
+#      collective's coverage and serially-correlated months, this is CONTEXT
+#      for reading the chart — never a calibrated probability (the same reason
+#      the transmission note is worded, not numbered).
+
+def _confluence(collective: list[dict], last_data: str, bundle: dict) -> dict:
+    ahead = [r for r in collective if r["date"] >= last_data]
+    now_row = next((r for r in collective if r["date"] == last_data), None)
+    peak = max((r["windows_open"] for r in ahead), default=0)
+    peak_months = [r["date"] for r in ahead if r["windows_open"] == peak] if peak else []
+    return {
+        "open_now": now_row["windows_open"] if now_row else 0,
+        "channels_now": now_row["window_channels"] if now_row else [],
+        "peak_ahead": peak,
+        "peak_window": [peak_months[0], peak_months[-1]] if peak_months else None,
+        "peak_channels": sorted({c for r in ahead for c in r["window_channels"]
+                                 if r["windows_open"] == peak}) if peak else [],
+        "validation": _overlap_validation(collective, bundle),
+        "caveat": "The forward window is set arithmetic over documented lags, "
+                  "not a forecast. The hindcast hit rates are descriptive context "
+                  "from a handful of recessions with serially-correlated months — "
+                  "never a calibrated probability.",
+    }
+
+
+def _overlap_validation(collective: list[dict], bundle: dict) -> dict | None:
+    """Descriptive hindcast: P(NBER onset within 12m | windows_open >= k)."""
+    from ..sources.fred import recession_start_dates
+
+    rec_d, rec_v = bundle.get("recession", ([], []))
+    if not rec_d:
+        return None
+    onsets = sorted(_ym(d) for d in recession_start_dates(rec_d, rec_v))
+    if not onsets:
+        return None
+    last_cov = _ym(max(rec_d))
+    # only months whose 12m-forward outcome is fully observable
+    rows = [r for r in collective
+            if not r["projected"] and _add_months(r["date"], 12) <= last_cov]
+    if len(rows) < 24:
+        return None
+
+    def hit(m: str) -> bool:
+        h = _add_months(m, 12)
+        return any(m < o <= h for o in onsets)
+
+    base_hits = sum(1 for r in rows if hit(r["date"]))
+    # onsets inside the outcome coverage: any onset a row could have "hit"
+    onsets_covered = sum(1 for o in onsets
+                         if rows[0]["date"] < o <= _add_months(rows[-1]["date"], 12))
+    thresholds = []
+    for k in (1, 2, 3, 4):
+        sel = [r for r in rows if r["windows_open"] >= k]
+        if len(sel) < 3:
+            continue
+        thresholds.append({
+            "k": k,
+            "n_months": len(sel),
+            "hit_rate": round(sum(1 for r in sel if hit(r["date"])) / len(sel), 3),
+        })
+    return {
+        "n_months": len(rows),
+        "n_onsets_covered": onsets_covered,
+        "base_rate": round(base_hits / len(rows), 3),
+        "horizon_months": 12,
+        "thresholds": thresholds,
     }
