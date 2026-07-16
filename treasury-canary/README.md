@@ -64,7 +64,7 @@ Trigger an immediate pull/compute: `curl -X POST localhost:8000/refresh`.
 The app ships a single-service `Dockerfile` and a standalone `render.yaml` (kept
 separate from the genomics app's root blueprint so the live deploy is untouched).
 To surface it under the existing domain as a new section, either:
-- **Path route** `genomics.optic.capital/canary/*` via a reverse-proxy rule to the
+- **Path route** `research.optic.capital/canary/*` via a reverse-proxy rule to the
   canary service, or
 - **Subdomain** `canary.optic.capital` (own Render service) plus a nav link from the
   genomics dashboard.

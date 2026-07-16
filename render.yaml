@@ -58,7 +58,8 @@ services:
       - key: LOG_LEVEL
         value: INFO
       # Reverse-proxy /canary/* to the Canary service so it lives at
-      # genomics.optic.capital/canary (behind this app's login gate).
+      # research.optic.capital/canary (behind this app's login gate). The
+      # genomics SPA itself is served at research.optic.capital/genomics/.
       - key: CANARY_UPSTREAM
         value: https://treasury-canary.onrender.com
 
