@@ -1,2 +1,2 @@
-results/monitor/
+results/monitor/snapshot-*.json
 scripts/__pycache__/
