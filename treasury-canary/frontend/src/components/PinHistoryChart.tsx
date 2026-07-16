@@ -158,15 +158,16 @@ function drawdownStrip(drawdowns: DrawdownSpan[], first: string, last: string,
 
 // Episode-outcome dot styling: the measured record, visible per episode.
 // Filled red = the window caught a recession or >=15% drawdown; hollow = a
-// miss that keeps us honest; gray = the window is still running.
+// miss that keeps us honest; gray = window still running OR unjudged (no
+// ground-truth data) — an unjudged episode must never render as a hit.
 function peakDotProps(outcome: PinHistoryEpisode["outcome"]) {
+  if (outcome === "hit_recession" || outcome === "hit_drawdown") {
+    return { fill: RED, stroke: "#0f172a", strokeWidth: 1 };
+  }
   if (outcome === "miss") {
     return { fill: "#0f172a", stroke: RED, strokeWidth: 1.5 };
   }
-  if (outcome === "open") {
-    return { fill: MUTED, stroke: "#0f172a", strokeWidth: 1 };
-  }
-  return { fill: RED, stroke: "#0f172a", strokeWidth: 1 }; // hit (or unjudged)
+  return { fill: MUTED, stroke: "#0f172a", strokeWidth: 1 }; // open/unjudged
 }
 
 // NBER recessions, clipped to the visible range — the ground truth the

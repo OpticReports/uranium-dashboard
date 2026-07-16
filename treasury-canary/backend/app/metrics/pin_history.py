@@ -14,7 +14,9 @@ regime.
 Methodology guarantees (same contract as the live board):
   - Percentile parts use EXPANDING percentiles — each date's value is ranked
     only against history known AT that date, so the hindcast has no lookahead.
-    The latest point therefore reproduces the live board's reading exactly.
+    The latest point closely tracks the live board; it can legitimately read
+    HIGHER than today's board when a spike earlier in the current month has
+    since faded (monthly-max sampling keeps the spike; the board shows now).
   - Anchors and lag windows are documented/episode-calibrated, never fitted.
   - Where a source is shallow (FMP dailies, NDFI 2015+, FRED SP500 ~10y) the
     line is simply shorter; a per-channel note says so. The demand-strike
@@ -100,6 +102,25 @@ def _expanding_percentile(dates: list[date], vals: list[float], min_obs: int
         if len(seen) >= min_obs:
             out_d.append(d)
             out_v.append(100.0 * bisect.bisect_right(seen, v) / len(seen))
+    return out_d, out_v
+
+
+def _expanding_pctl_vs_raw(dates: list[date], vals: list[float], window: int,
+                           min_obs: int) -> tuple[list[date], list[float]]:
+    """Rolling mean ranked against the RAW series' expanding history — the
+    live board's uncertainty definition (_percentile(epu_v, epu30)), so the
+    hindcast's latest point agrees with the board."""
+    out_d, out_v, seen = [], [], []
+    run = 0.0
+    for i, (d, v) in enumerate(zip(dates, vals)):
+        bisect.insort(seen, v)
+        run += v
+        if i >= window:
+            run -= vals[i - window]
+        if i >= window - 1 and len(seen) >= min_obs:
+            avg = run / window
+            out_d.append(d)
+            out_v.append(100.0 * bisect.bisect_right(seen, avg) / len(seen))
     return out_d, out_v
 
 
@@ -214,8 +235,8 @@ def _parts_for_channel(cid: str, bundle: dict) -> list[tuple[str, tuple[list[dat
 
     if cid == "uncertainty":
         d, v = _series(bundle, "epu")
-        md, mv = _roll_mean(d, v, 30)
-        return [("EPU index, 30d avg (percentile)", _expanding_percentile(md, mv, 1260))]
+        return [("EPU index, 30d avg (percentile)",
+                 _expanding_pctl_vs_raw(d, v, 30, 1260))]
 
     if cid == "demand_strike":
         d, v = _series(bundle, "custody")
@@ -395,16 +416,18 @@ def build_pin_history(bundle: dict) -> dict:
         # script there to refresh). Kept as documented text, like kill rates —
         # never auto-fitted into a probability.
         "measured_roles": (
-            "Measured division of labor (hindcast 1985–2026, "
-            "studies/pin-rule-hindcast): recession onsets belong to the yield "
-            "curve — 38% precision, 4/4 onsets caught, and nothing built from "
-            "pin reds improved on it; raw convergence counts scored BELOW base "
-            "rate (6% vs 12%). Pin reds earn their keep on market accidents: a "
-            "fast-channel red on a flat/inverted curve preceded a ≥15% drawdown "
-            "within 12m in 41% of months vs a 20% base (2007 caught 12 months "
-            "early; the 2019 repo spasm 6 months early; 2024-09 12 months "
-            "early). Read the curve model for recession odds; read this board "
-            "as an accident radar."
+            "Measured division of labor (hindcast 1981–2026, "
+            "studies/pin-rule-hindcast v2): recession onsets belong to the "
+            "yield curve — 31% precision, 4/4 onsets caught — and nothing "
+            "built from pin reds reliably improved on it; raw convergence "
+            "counts scored BELOW base rate (6% vs 12%). Pin reds earn their "
+            "keep on market accidents: fast-channel red on a flat/inverted "
+            "curve preceded a ≥15% drawdown start within 12m in 44% of months "
+            "vs a 20% base (5 of 11 signal-clusters hit: 1998 LTCM 4m early, "
+            "2007 up to 12m, 2019 11m, 2025 12m; missed 2018 and 2021). "
+            "Oil/policy-window+curve scores the same within noise — ~11 "
+            "clusters is a small sample; treat as context. Read the curve "
+            "model for recession odds; read this board as an accident radar."
         ),
     }
 
@@ -418,30 +441,40 @@ def _drawdown_spans(dates: list[date], closes: list[float | None],
 
     start = the peak month (decline begins), trough = the depth month. Depth is
     measured running-peak-of-closes vs monthly LOWS so intra-month troughs keep
-    their real size. An episode closes when the close regains the prior peak.
+    their real size — the low is evaluated BEFORE the close can reset the peak,
+    so a crash-and-recover month still registers. An episode closes when the
+    close regains the prior peak. Known definitional choice: a correction
+    nested inside a longer underwater stretch (2011's -21% inside the
+    2007->2013 recovery) is absorbed into the parent episode, not listed twice.
     """
     spans: list[dict] = []
     peak: float | None = None
     peak_d: date | None = None
     active: dict | None = None
+    depth_max = 0.0
     for d, c, l in zip(dates, closes, lows):
         if c is None:
             continue
+        # evaluate this month's low against the PRIOR peak first, so a deep
+        # intra-month dip is never erased by a same-month recovery close
+        if peak is not None and peak > 0:
+            low = l if l is not None else c
+            depth = (peak - low) / peak * 100.0
+            if depth >= threshold_pct:
+                if active is None:
+                    active = {"start": _ym(peak_d), "trough": _ym(d),
+                              "depth_pct": round(depth, 1)}
+                    depth_max = depth
+                elif depth > depth_max:
+                    active["trough"] = _ym(d)
+                    active["depth_pct"] = round(depth, 1)
+                    depth_max = depth
         if peak is None or c >= peak:
             if active is not None:
                 spans.append(active)
                 active = None
+                depth_max = 0.0
             peak, peak_d = c, d
-            continue
-        low = l if l is not None else c
-        depth = (peak - low) / peak * 100.0
-        if depth >= threshold_pct:
-            if active is None:
-                active = {"start": _ym(peak_d), "trough": _ym(d),
-                          "depth_pct": round(depth, 1)}
-            elif depth > active["depth_pct"]:
-                active["trough"] = _ym(d)
-                active["depth_pct"] = round(depth, 1)
     if active is not None:
         spans.append(active)
     return spans
@@ -450,9 +483,17 @@ def _drawdown_spans(dates: list[date], closes: list[float | None],
 def _annotate_outcomes(channels_out: list[dict], recessions: list[dict],
                        drawdowns: list[dict], last_data: str) -> None:
     """Judge every red episode against its own window: did a recession onset OR
-    a >=15% drawdown land inside it? hit / miss / open (window still running).
-    The measured kill rate, next to the documented one — misses stay visible."""
+    the START of a >=15% drawdown land inside it? hit / miss / open (window
+    still running). A hit requires the event to BEGIN inside the window — a red
+    that fires mid-collapse gets no credit for "catching" the crash it is
+    reacting to. With no ground truth available at all (both source fetches
+    failed), episodes stay unjudged rather than being scored as misses."""
+    if not recessions and not drawdowns:
+        for ch in channels_out:
+            ch["outcomes"] = None
+        return
     onsets = [r["start"] for r in recessions]
+    dd_starts = [dd["start"] for dd in drawdowns]
     for ch in channels_out:
         counts = {"hit": 0, "miss": 0, "open": 0}
         for e in ch["episodes"]:
@@ -460,7 +501,7 @@ def _annotate_outcomes(channels_out: list[dict], recessions: list[dict],
             if any(ws <= o <= we for o in onsets):
                 e["outcome"] = "hit_recession"
                 counts["hit"] += 1
-            elif any(not (dd["trough"] < ws or dd["start"] > we) for dd in drawdowns):
+            elif any(ws <= s <= we for s in dd_starts):
                 e["outcome"] = "hit_drawdown"
                 counts["hit"] += 1
             elif we > last_data:
@@ -519,7 +560,10 @@ def _confluence(collective: list[dict], last_data: str, bundle: dict) -> dict:
         "caveat": "The forward window is set arithmetic over documented lags, "
                   "not a forecast. The hindcast hit rates are descriptive context "
                   "from a handful of recessions with serially-correlated months — "
-                  "never a calibrated probability.",
+                  "never a calibrated probability. Channel coverage also grows "
+                  "over time (1 channel reporting in 1977 vs 12 now), so "
+                  "high-overlap months cluster in the modern era and the "
+                  "threshold rows are era-confounded, not like-for-like.",
     }
 
 
@@ -533,8 +577,10 @@ def _overlap_validation(collective: list[dict], bundle: dict) -> dict | None:
     onsets = sorted(_ym(d) for d in recession_start_dates(rec_d, rec_v))
     if not onsets:
         return None
-    last_cov = _ym(max(rec_d))
-    # only months whose 12m-forward outcome is fully observable
+    # only months whose 12m-forward outcome is fully observable — with a
+    # further 12m haircut because NBER declares onsets up to ~a year late,
+    # so trailing USREC zeros are "undeclared", not confirmed non-recessions
+    last_cov = _add_months(_ym(max(rec_d)), -12)
     rows = [r for r in collective
             if not r["projected"] and _add_months(r["date"], 12) <= last_cov]
     if len(rows) < 24:

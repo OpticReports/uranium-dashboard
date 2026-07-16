@@ -132,6 +132,40 @@ def test_drawdown_spans_peak_to_trough():
     assert spans[0]["depth_pct"] == round((105 - 62) / 105 * 100, 1)
 
 
+def test_no_credit_for_reverse_causality():
+    # a red firing MID-collapse (window overlaps the decline span but the
+    # drawdown STARTED before the window opened) must be a miss, not a hit
+    from app.metrics.pin_history import _annotate_outcomes
+    channels = [{"channel_id": "x", "episodes": [
+        {"window_start": "2002-08", "window_end": "2002-11"},
+    ]}]
+    drawdowns = [{"start": "2000-03", "trough": "2002-10", "depth_pct": 49.4}]
+    _annotate_outcomes(channels, [], drawdowns, last_data="2026-07")
+    assert channels[0]["episodes"][0]["outcome"] == "miss"
+
+
+def test_unjudged_when_no_ground_truth():
+    from app.metrics.pin_history import _annotate_outcomes
+    channels = [{"channel_id": "x", "episodes": [
+        {"window_start": "2014-01", "window_end": "2014-06"},
+    ]}]
+    _annotate_outcomes(channels, [], [], last_data="2026-07")
+    assert channels[0]["outcomes"] is None
+    assert "outcome" not in channels[0]["episodes"][0]
+
+
+def test_drawdown_crash_and_recover_month_still_registers():
+    # low dips -20% intra-month but the close prints a NEW HIGH: the low is
+    # evaluated against the prior peak before the close resets it
+    from app.metrics.pin_history import _drawdown_spans
+    dates = [date(2020, m, 1) for m in range(1, 5)]
+    closes = [100.0, 101.0, 103.0, 104.0]
+    lows = [99.0, 100.0, 80.0, 103.0]  # March: -20.8% vs Feb close, then recovered
+    spans = _drawdown_spans(dates, closes, lows)
+    assert len(spans) == 1
+    assert spans[0]["start"] == "2020-02" and spans[0]["trough"] == "2020-03"
+
+
 def test_episode_outcomes_hit_miss_open():
     from app.metrics.pin_history import _annotate_outcomes
     channels = [{

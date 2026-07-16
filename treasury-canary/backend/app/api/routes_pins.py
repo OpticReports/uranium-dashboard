@@ -40,19 +40,29 @@ def pin_board():
 
 # The hindcast walks ~50y of daily series with expanding percentiles — cheap
 # but not free (~1s), so memoize it on the same clock as the bundle cache.
-_HIST_TTL = 6 * 3600
-_hist_cache: dict[str, object] = {"ts": 0.0, "data": None}
+# Degraded builds (a source fetch failed) get a SHORT TTL so a FRED/Yahoo
+# hiccup can't pin an empty/partial hindcast on screen for 6 hours.
+_HIST_TTL_OK = 6 * 3600
+_HIST_TTL_FAIL = 600
+_hist_cache: dict[str, object] = {"ts": 0.0, "data": None, "ok": False}
 _hist_lock = threading.Lock()
+
+
+def _hist_complete(data: dict) -> bool:
+    return bool(data.get("collective", {}).get("series")
+                and data.get("recessions") and data.get("drawdowns"))
 
 
 @router.get("/pins/history")
 def pin_history():
     now = time.time()
-    if _hist_cache["data"] is not None and now - float(_hist_cache["ts"]) < _HIST_TTL:
+    ttl = _HIST_TTL_OK if _hist_cache["ok"] else _HIST_TTL_FAIL
+    if _hist_cache["data"] is not None and now - float(_hist_cache["ts"]) < ttl:
         return _hist_cache["data"]
     with _hist_lock:
         now = time.time()
-        if _hist_cache["data"] is not None and now - float(_hist_cache["ts"]) < _HIST_TTL:
+        ttl = _HIST_TTL_OK if _hist_cache["ok"] else _HIST_TTL_FAIL
+        if _hist_cache["data"] is not None and now - float(_hist_cache["ts"]) < ttl:
             return _hist_cache["data"]
         bundle = _assemble_bundle(with_auctions=False)
         # SPX drawdown ground truth (Yahoo, keyless) — history endpoint only
@@ -61,4 +71,5 @@ def pin_history():
         data = build_pin_history(bundle)
         _hist_cache["data"] = data
         _hist_cache["ts"] = time.time()
+        _hist_cache["ok"] = _hist_complete(data)
         return data
