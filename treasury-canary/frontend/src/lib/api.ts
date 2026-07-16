@@ -298,9 +298,28 @@ export interface PinCollectivePoint {
   projected: boolean;
 }
 
+export interface PinOverlapValidation {
+  n_months: number;
+  n_onsets_covered: number;
+  base_rate: number;
+  horizon_months: number;
+  thresholds: { k: number; n_months: number; hit_rate: number }[];
+}
+
+export interface PinConfluence {
+  open_now: number;
+  channels_now: string[];
+  peak_ahead: number;
+  peak_window: [string, string] | null;
+  peak_channels: string[];
+  validation: PinOverlapValidation | null;
+  caveat: string;
+}
+
 export interface PinHistory {
   channels: PinHistoryChannel[];
   collective: { series: PinCollectivePoint[]; last_data_month: string | null };
+  confluence: PinConfluence | null;
   framing?: string;
 }
 

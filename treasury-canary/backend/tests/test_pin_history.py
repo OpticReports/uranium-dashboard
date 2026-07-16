@@ -47,8 +47,21 @@ def test_episode_detection_and_lag_window():
     assert (e["start"], e["end"]) == ("2026-03", "2026-04")
     assert e["peak_date"] == "2026-04" and e["peak_score"] == 92.0
     lo, hi, _ = LAG_WINDOWS["oil_shock"]
-    assert e["window_start"] == _add_months("2026-04", lo)
-    assert e["window_end"] == _add_months("2026-04", hi)
+    assert e["window_start"] == _add_months("2026-04", lo)      # from the peak
+    assert e["window_end"] == _add_months("2026-04", hi)        # last red month
+
+
+def test_ongoing_episode_window_stays_open():
+    # a run still red at the latest month: window end anchors to the LAST red
+    # month, so a channel red today never shows an already-expired window
+    months = [f"2026-{m:02d}" for m in range(1, 7)]
+    scores = [85.0, 90.0, 85.0, 85.0, 85.0, 85.0]  # peak in month 2, still red
+    eps = _episodes(months, scores, "basis_trade")
+    assert len(eps) == 1
+    lo, hi, _ = LAG_WINDOWS["basis_trade"]
+    assert eps[0]["peak_date"] == "2026-02"
+    assert eps[0]["window_start"] == _add_months("2026-02", lo)
+    assert eps[0]["window_end"] == _add_months("2026-06", hi)
 
 
 def test_separate_red_runs_are_separate_episodes():
@@ -102,3 +115,43 @@ def test_empty_bundle_degrades_gracefully():
     hist = build_pin_history({})
     assert len(hist["channels"]) == len(LAG_WINDOWS)
     assert hist["collective"]["series"] == []
+    assert hist["confluence"] is None
+
+
+def test_confluence_forward_window_is_intersection_arithmetic():
+    # oil red episode -> its 3-12m damage window ahead must be the peak window
+    flat = [50.0] * 504
+    spike = [100.0] * 63
+    bundle = {"oil": _daily(date(2024, 1, 1), flat + spike)}
+    conf = build_pin_history(bundle)["confluence"]
+    assert conf is not None
+    assert conf["peak_ahead"] >= 1
+    assert conf["peak_window"] is not None
+    assert "oil_shock" in conf["peak_channels"]
+    # without a recession series there is no validation block
+    assert conf["validation"] is None
+
+
+def test_overlap_validation_counts_hits_vs_base_rate():
+    # a +100% oil spike in the MIDDLE of history, so its 3-12m damage window
+    # falls inside observed months, plus a synthetic USREC onset inside it
+    vals = [50.0] * 504 + [100.0] * 63 + [50.0] * 504
+    oil_dates = [date(2022, 1, 1) + timedelta(days=i) for i in range(len(vals))]
+    # spike ~2023-05..07 -> red peak ~2023-07 -> window ~2023-10..2024-07;
+    # recession onset 2024-01 sits inside it
+    rec_dates, rec_vals = [], []
+    d = date(2020, 1, 1)
+    while d <= date(2027, 12, 1):
+        rec_dates.append(d)
+        rec_vals.append(1.0 if date(2024, 1, 1) <= d <= date(2024, 6, 1) else 0.0)
+        d = date(d.year + (d.month == 12), d.month % 12 + 1, 1)
+    bundle = {"oil": (oil_dates, vals), "recession": (rec_dates, rec_vals)}
+    conf = build_pin_history(bundle)["confluence"]
+    v = conf["validation"]
+    assert v is not None
+    assert v["n_onsets_covered"] >= 1
+    k1 = next((t for t in v["thresholds"] if t["k"] == 1), None)
+    assert k1 is not None and 0.0 <= k1["hit_rate"] <= 1.0
+    assert 0.0 <= v["base_rate"] <= 1.0
+    # conditional months are few; the caveat must always ride along
+    assert "never a calibrated probability" in conf["caveat"]
