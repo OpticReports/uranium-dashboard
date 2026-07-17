@@ -73,3 +73,23 @@ class TestBookLive:
         from barbell.portfolio.book import book_frame
         with pytest.raises(ValueError):
             book_frame(self._con(), bot_frac=1.0)
+
+
+class TestChatBackends:
+    def test_openai_tool_conversion_shape(self):
+        from barbell.chat.agent import TOOLS, _openai_tools
+        conv = _openai_tools()
+        assert len(conv) == len(TOOLS)
+        for t in conv:
+            assert t["type"] == "function"
+            f = t["function"]
+            assert set(f) == {"name", "description", "parameters"}
+            assert f["parameters"]["type"] == "object"
+
+    def test_no_keys_raises_clear_error(self, monkeypatch):
+        import pytest as _pytest
+        from barbell.chat import agent
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        with _pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY or"):
+            agent.answer([{"role": "user", "content": "hi"}])
