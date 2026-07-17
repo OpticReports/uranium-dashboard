@@ -89,7 +89,7 @@ def _llm_score(text: str) -> float:
         from .openrouter import chat_completion
 
         payload = chat_completion(
-            "anthropic/claude-haiku-4.5",
+            settings.openrouter_sentiment_model,
             [{"role": "user", "content": _SENTIMENT_PROMPT + text[:1500]}],
             max_tokens=8, timeout=30.0,
         )

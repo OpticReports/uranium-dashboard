@@ -97,7 +97,7 @@ services:
       - key: ANTHROPIC_API_KEY
         sync: false            # chat analyst, native key (preferred if set)
       - key: OPENROUTER_API_KEY
-        sync: false            # chat analyst via OpenRouter (anthropic/claude-opus-4.8); used when no native key. Chat is disabled if both are unset
+        sync: false            # chat analyst via OpenRouter (default moonshotai/kimi-k3, override with BARBELL_CHAT_MODEL_OPENROUTER); used when no native key. Chat disabled if both unset
       - key: RUN_SCHEDULER
         value: "true"
       - key: INGEST_ON_STARTUP

@@ -318,8 +318,10 @@ def _answer_anthropic(messages: list[dict], max_turns: int) -> dict:
 
 
 # ------------------------------------------------------------- OpenRouter
+# Default model for the OpenRouter path (override with the env var; any
+# OpenRouter model id with tool support works, e.g. anthropic/claude-opus-4.8).
 OPENROUTER_MODEL = os.environ.get("BARBELL_CHAT_MODEL_OPENROUTER",
-                                  "anthropic/claude-opus-4.8")
+                                  "moonshotai/kimi-k3")
 _OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 
