@@ -266,11 +266,21 @@ def _execute(con, name: str, args: dict) -> tuple[str, bool]:
 def answer(messages: list[dict], max_turns: int = 12) -> dict:
     """Run the grounded agent loop. `messages` is the prior conversation as
     [{"role": "user"|"assistant", "content": str}]. Returns final text +
-    the tool calls made (for UI display)."""
+    the tool calls made (for UI display).
+
+    Backend selection: a native ANTHROPIC_API_KEY is preferred; otherwise an
+    OPENROUTER_API_KEY routes the same Claude model through OpenRouter's
+    OpenAI-format API. Same tools, same grounding rules either way."""
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return _answer_anthropic(messages, max_turns)
+    if os.environ.get("OPENROUTER_API_KEY"):
+        return _answer_openrouter(messages, max_turns)
+    raise RuntimeError("chat analyst disabled — set ANTHROPIC_API_KEY or "
+                       "OPENROUTER_API_KEY on the service")
+
+
+def _answer_anthropic(messages: list[dict], max_turns: int) -> dict:
     import anthropic
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        raise RuntimeError("ANTHROPIC_API_KEY not configured — the chat analyst is "
-                           "disabled until the key is set on the service")
     client = anthropic.Anthropic()
     con = db.connect()
     convo = list(messages)
@@ -300,6 +310,65 @@ def answer(messages: list[dict], max_turns: int = 12) -> dict:
                 results.append({"type": "tool_result", "tool_use_id": block.id,
                                 "content": out[:60_000], "is_error": is_err})
             convo.append({"role": "user", "content": results})
+        return {"text": "(analysis exceeded the tool-call budget — ask a narrower "
+                        "question or run the CLI command directly)",
+                "tool_trace": tool_trace}
+    finally:
+        con.close()
+
+
+# ------------------------------------------------------------- OpenRouter
+OPENROUTER_MODEL = os.environ.get("BARBELL_CHAT_MODEL_OPENROUTER",
+                                  "anthropic/claude-opus-4.8")
+_OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+
+def _openai_tools() -> list[dict]:
+    """Our Anthropic-format tool defs converted to OpenAI/OpenRouter format."""
+    return [{"type": "function",
+             "function": {"name": t["name"], "description": t["description"],
+                          "parameters": t["input_schema"]}} for t in TOOLS]
+
+
+def _answer_openrouter(messages: list[dict], max_turns: int) -> dict:
+    import httpx
+    key = os.environ["OPENROUTER_API_KEY"]
+    con = db.connect()
+    convo: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}] + list(messages)
+    tool_trace: list[dict] = []
+    try:
+        for _ in range(max_turns):
+            try:
+                r = httpx.post(
+                    _OPENROUTER_URL,
+                    headers={"Authorization": f"Bearer {key}",
+                             "X-Title": "Barbell Lab"},
+                    json={"model": OPENROUTER_MODEL, "max_tokens": 8192,
+                          "messages": convo, "tools": _openai_tools()},
+                    timeout=300.0,
+                )
+                r.raise_for_status()
+                payload = r.json()
+            except httpx.HTTPStatusError as exc:
+                detail = exc.response.text[:300]
+                raise RuntimeError(f"OpenRouter error {exc.response.status_code}: "
+                                   f"{detail}") from None
+            msg = payload["choices"][0]["message"]
+            calls = msg.get("tool_calls") or []
+            if not calls:
+                return {"text": msg.get("content") or "", "tool_trace": tool_trace}
+            convo.append({"role": "assistant", "content": msg.get("content"),
+                          "tool_calls": calls})
+            for call in calls:
+                fn = call["function"]
+                try:
+                    args = json.loads(fn.get("arguments") or "{}")
+                except json.JSONDecodeError:
+                    args = {}
+                out, is_err = _execute(con, fn["name"], args)
+                tool_trace.append({"tool": fn["name"], "input": args, "error": is_err})
+                convo.append({"role": "tool", "tool_call_id": call["id"],
+                              "content": out[:60_000]})
         return {"text": "(analysis exceeded the tool-call budget — ask a narrower "
                         "question or run the CLI command directly)",
                 "tool_trace": tool_trace}
