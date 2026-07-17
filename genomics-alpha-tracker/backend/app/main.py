@@ -161,44 +161,55 @@ def health():
     }
 
 
-# --- Treasury Canary reverse proxy -------------------------------------------
-# Serve the separate Treasury Canary service under this domain at /canary/* so it
-# lives at research.optic.capital/canary. Sits behind the same login gate above.
-# The Canary's SPA is built with base "/canary/" + API base "/canary", so browser
-# requests arrive under /canary and we strip that prefix before forwarding.
-_CANARY_UPSTREAM = os.environ.get(
-    "CANARY_UPSTREAM", "https://treasury-canary.onrender.com").rstrip("/")
-_CANARY_HOP_HEADERS = {"content-encoding", "transfer-encoding", "connection", "content-length"}
+# --- Sibling-service reverse proxies ------------------------------------------
+# This service is the GATE HUB for research.optic.capital: sibling Render
+# services are exposed under path prefixes here so they all sit behind the one
+# login gate above. The prefix is stripped before forwarding, so upstreams
+# serve from "/" (SPAs that need absolute asset paths must be built with the
+# matching base, as the Canary is with "/canary/").
+_HOP_HEADERS = {"content-encoding", "transfer-encoding", "connection", "content-length"}
 
 
-@app.get("/canary", include_in_schema=False)
-def _canary_root():
-    return RedirectResponse(url="/canary/")
+def _mount_proxy(prefix: str, upstream_env: str, default_upstream: str, label: str) -> None:
+    upstream = os.environ.get(upstream_env, default_upstream).rstrip("/")
+
+    @app.get(f"/{prefix}", include_in_schema=False)
+    def _root():
+        return RedirectResponse(url=f"/{prefix}/")
+
+    @app.api_route(f"/{prefix}/{{path:path}}", methods=["GET", "POST", "HEAD"],
+                   include_in_schema=False)
+    async def _proxy(path: str, request: Request):
+        url = f"{upstream}/{path}"
+        body = await request.body()
+        fwd = {k: v for k, v in request.headers.items()
+               if k.lower() not in ("host", "authorization", "content-length", "accept-encoding")}
+        # Request an uncompressed upstream response so we never forward compressed
+        # bytes with the encoding header stripped (renders as garbage otherwise).
+        fwd["accept-encoding"] = "identity"
+        try:
+            async with httpx.AsyncClient(timeout=90.0, follow_redirects=True) as client:
+                up = await client.request(request.method, url,
+                                          params=dict(request.query_params),
+                                          content=body, headers=fwd)
+        except Exception as exc:  # noqa: BLE001
+            return Response(f"{label} upstream unavailable: {exc}", status_code=502)
+        headers = {k: v for k, v in up.headers.items() if k.lower() not in _HOP_HEADERS}
+        # Never let browsers cache the HTML shell: after a redeploy a cached
+        # index.html keeps serving the OLD app (hashed .js assets stay cacheable).
+        ctype = up.headers.get("content-type", "")
+        if ctype.startswith("text/html"):
+            headers["cache-control"] = "no-cache"
+        return Response(content=up.content, status_code=up.status_code, headers=headers,
+                        media_type=ctype or None)
 
 
-@app.api_route("/canary/{path:path}", methods=["GET", "POST", "HEAD"], include_in_schema=False)
-async def _canary_proxy(path: str, request: Request):
-    url = f"{_CANARY_UPSTREAM}/{path}"
-    body = await request.body()
-    fwd = {k: v for k, v in request.headers.items()
-           if k.lower() not in ("host", "authorization", "content-length", "accept-encoding")}
-    # Request an uncompressed upstream response so we never forward compressed bytes
-    # with the encoding header stripped (which renders as garbage in the browser).
-    fwd["accept-encoding"] = "identity"
-    try:
-        async with httpx.AsyncClient(timeout=90.0, follow_redirects=True) as client:
-            up = await client.request(request.method, url,
-                                      params=dict(request.query_params), content=body, headers=fwd)
-    except Exception as exc:  # noqa: BLE001
-        return Response(f"Canary upstream unavailable: {exc}", status_code=502)
-    headers = {k: v for k, v in up.headers.items() if k.lower() not in _CANARY_HOP_HEADERS}
-    # Never let browsers cache the HTML shell: after a redeploy a cached index.html
-    # keeps serving the OLD app (hashed .js assets remain safely cacheable).
-    ctype = up.headers.get("content-type", "")
-    if ctype.startswith("text/html"):
-        headers["cache-control"] = "no-cache"
-    return Response(content=up.content, status_code=up.status_code, headers=headers,
-                    media_type=ctype or None)
+# research.optic.capital/canary — Treasury Market Health Monitor
+_mount_proxy("canary", "CANARY_UPSTREAM",
+             "https://treasury-canary.onrender.com", "Canary")
+# research.optic.capital/portfolio-optimizer — Barbell Lab quant platform
+_mount_proxy("portfolio-optimizer", "BARBELL_UPSTREAM",
+             "https://barbell-lab.onrender.com", "Barbell Lab")
 
 
 # Single-service deployment: if a built frontend is present, serve it under

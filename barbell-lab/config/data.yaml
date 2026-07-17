@@ -1,0 +1,93 @@
+# Data layer configuration.
+#
+# PROVENANCE RULES (integrity requirements — override convenience):
+#   * Nothing is ever spliced silently. A ticker gets pre-inception history
+#     ONLY if a proxy is declared here with an explicit splice_date, and every
+#     row produced from the proxy carries provenance="proxy:<TICKER>".
+#   * A proxy of null means: no extension — the series simply starts at the
+#     live ETF's first trade date and downstream consumers must handle the
+#     short history (e.g. block bootstrap over the joint period only).
+#   * If a feed fails, the run fails visibly. No cached-stale fallbacks.
+providers:
+  # Priority order for equity/ETF closes. Adapters are interchangeable behind
+  # ingest.base.PriceProvider. Yahoo needs no key; FMP/Tiingo read keys from
+  # .env / environment (FMP_API_KEY, TIINGO_API_KEY) — never hardcode.
+  price_priority: [yahoo, fmp, tiingo]
+  cross_check:
+    # Validation compares these two providers where both have data.
+    primary: yahoo
+    secondary: fmp             # skipped with a WARNING if FMP_API_KEY unset
+    tolerance_bps: 50          # max abs diff on daily returns before flagging
+
+tickers:
+  AVUV: {proxy: DFSVX, splice_date: 2019-10-01}   # DFA US Small Cap Value (1993) — closest live predecessor for AV US SCV
+  AVDV: {proxy: DISVX, splice_date: 2019-10-01}   # DFA Intl Small Cap Value (1995)
+  PHYS: {proxy: GLD,   splice_date: 2010-03-01}   # gold bullion; PHYS is a closed-end bullion trust (premium/discount noise)
+  KMLM: {proxy: ASFYX, splice_date: 2020-12-02}   # AlphaSimplex Managed Futures mutual fund (2010) — imperfect trend proxy; KMLM tracks the KFA MLM index. Treat pre-2020 KMLM results as indicative only.
+  AVEM: {proxy: DFEMX, splice_date: 2019-10-01}   # DFA Emerging Markets (1994)
+  QUAL: {proxy: null}                             # live since 2013-07 — long enough, no splice
+  MTUM: {proxy: null}                             # live since 2013-04
+  TAIL: {proxy: null}                             # live since 2017-04; no honest predecessor exists
+  CAOS: {proxy: null}                             # ETF since 2023-03 (converted from a mutual fund; predecessor ticker unconfirmed — DO NOT splice until confirmed with the manager)
+  BTAL: {proxy: null}                             # live since 2011-05
+  PSLV: {proxy: null}                             # live since 2010-10
+  SPY:  {proxy: null}
+  GLD:  {proxy: null}                             # ingested standalone too (acceptance test + PHYS proxy)
+  DFSVX: {proxy: null}
+  DISVX: {proxy: null}
+  DFEMX: {proxy: null}
+  ASFYX: {proxy: null}
+
+indices:
+  # Yahoo index symbols (no FRED equivalent with live updates).
+  # ^VIX3M vs ^VIX gives the term-structure backwardation trigger.
+  - "^VIX"
+  - "^VIX3M"
+
+fred:
+  # series_id: purpose
+  ICSA: initial jobless claims (labor regime pillar)
+  T5YIE: 5y breakeven inflation (inflation regime pillar)
+  BAMLH0A0HYM2: HY OAS (credit stress pillar + trigger)
+  DTWEXBGS: broad dollar index (dollar trend pillar + AVEM trigger)
+  VIXCLS: VIX close (bot kill-switch context)
+
+bot:
+  # The short-vol bot's own SQLite (ib_insync fills/P&L). Path + table/column
+  # mapping are config because the bot schema is owned by the bot project.
+  # CONFIRM these against the actual bot DB before first import; the importer
+  # fails loudly if the table/columns are absent.
+  sqlite_path: ~/bots/shortvol/pnl.db
+  table: daily_pnl
+  columns: {date: date, realized: realized_pnl, unrealized: unrealized_pnl}
+  # Capital the P&L is earned on (converts $ P&L to returns). REQUIRED before
+  # the combined-book simulator will touch real bot data — no guessing.
+  capital_base: null
+
+history_start: 1995-01-01
+# Documented VENDOR ERRORS in distribution data, each verified against >=2
+# independent published sources. Corrections rebuild the adjusted series from
+# the vendor's own raw closes + the true amount; they are applied at ingest
+# and logged. This is error correction with citations — NOT data fabrication.
+distribution_corrections:
+  - ticker: KMLM
+    vendor: yahoo
+    ex_date: 2022-12-28
+    vendor_amount: 2.481       # Yahoo carries only the income component
+    true_amount: 4.0377        # income + capital-gains distribution
+    sources:
+      - "stockanalysis.com/etf/kmlm/dividend (S&P Global Market Intelligence)"
+      - "divvydiary.com KMLM distribution history (ex 2022-12-28, $4.0377)"
+
+validation:
+  max_overnight_gap: 0.15      # unexplained >15% overnight move fails validation
+  calendar_reference: SPY      # NYSE trading days inferred from SPY's dates
+  max_missing_days: 3          # per ticker vs reference calendar (excl. pre-inception)
+  # Moves that breached the gap check and were VERIFIED as market-real (never
+  # loosen the threshold — explain the specific event or fix the data):
+  explained_gaps:
+    - {ticker: PSLV, date: 2011-09-23, note: "Sept-2011 silver crash (futures limit-down week) + CEF premium compression"}
+    - {ticker: BTAL, date: 2015-04-29, note: "dislocated closing print on thin ETF (109k shr day vs ~1k typical); reverts fully next session"}
+    - {ticker: BTAL, date: 2015-04-30, note: "reversion of 2015-04-29 dislocated print"}
+    - {ticker: PSLV, date: 2026-01-30, note: "silver crash -28.5% verified against SLV same day"}
+    - {ticker: PSLV, date: 2026-02-05, note: "silver crash continuation -15.8% verified against SLV same day"}
