@@ -61,7 +61,10 @@ class Settings(BaseSettings):
 
     # --- Optional LLM sentiment ---
     anthropic_api_key: str | None = None
-    sentiment_engine: str = "lexicon"        # lexicon | anthropic
+    # OpenRouter fallback for ALL LLM features (chat + sentiment) when no
+    # native Anthropic key is set. Same Claude models via openrouter.ai.
+    openrouter_api_key: str | None = None
+    sentiment_engine: str = "lexicon"        # lexicon | anthropic (any Claude backend)
 
     # --- Chat analyst (grounded LLM over the dashboard's data) ---
     chat_model_default: str = "claude-sonnet-4-6"   # fast/cheap default

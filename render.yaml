@@ -45,6 +45,10 @@ services:
         sync: false
       - key: DASHBOARD_PASSWORD
         sync: false
+      # LLM features (chat analyst, optional LLM sentiment): native Anthropic
+      # key preferred; OpenRouter key drives the same Claude models otherwise.
+      - key: OPENROUTER_API_KEY
+        sync: false
       - key: RUN_SCHEDULER
         value: "true"
       - key: BACKFILL_ON_STARTUP

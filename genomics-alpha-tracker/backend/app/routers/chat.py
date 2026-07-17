@@ -43,7 +43,9 @@ class ChatResponse(BaseModel):
 @router.get("/status")
 def status():
     return {
-        "enabled": bool(settings.anthropic_api_key),
+        "enabled": bool(settings.anthropic_api_key or settings.openrouter_api_key),
+        "backend": "anthropic" if settings.anthropic_api_key
+        else ("openrouter" if settings.openrouter_api_key else None),
         "model_default": settings.chat_model_default,
         "model_deep": settings.chat_model_deep,
     }
@@ -51,9 +53,9 @@ def status():
 
 @router.post("", response_model=ChatResponse)
 def chat(payload: ChatRequest, session: Session = Depends(get_session)):
-    if not settings.anthropic_api_key:
+    if not (settings.anthropic_api_key or settings.openrouter_api_key):
         raise HTTPException(
-            503, "Chat is disabled: ANTHROPIC_API_KEY not set in the environment."
+            503, "Chat is disabled: set ANTHROPIC_API_KEY or OPENROUTER_API_KEY."
         )
     try:
         result = run_chat(
