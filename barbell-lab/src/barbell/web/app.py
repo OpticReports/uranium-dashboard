@@ -259,63 +259,159 @@ def health():
     return {"status": "ok", "app": "barbell-lab"}
 
 
+def _pct(v, signed=True):
+    if v is None:
+        return "n/a"
+    return f"{v:+.2%}" if signed else f"{v:.2%}"
+
+
+def _badge(ok: bool) -> str:
+    return "<span class='ok'>PASS</span>" if ok else "<span class='bad'>BREACH</span>"
+
+
 @app.get("/", response_class=HTMLResponse)
 def index():
+    from ..portfolio import registry
+    from ..portfolio.tearsheet import risk_contributions
+    from ..ingest.series import returns_matrix
+
     con = db.connect()
     try:
-        trials = con.execute("SELECT COUNT(*) FROM trials").fetchone()[0]
+        live = registry.get_live(con)
+        m = registry.version_metrics(con, live)
+        weights = live["weights"]
+        try:
+            mat = returns_matrix(con, list(weights.keys()), spliced=True).dropna()
+            rc = risk_contributions(mat, weights)
+        except Exception:  # noqa: BLE001
+            rc = None
+        rows = "".join(
+            f"<tr><td>{t}</td><td>{w:.1%}</td>"
+            f"<td>{(f'{rc[t]:.1%}' if rc is not None else 'n/a')}</td></tr>"
+            for t, w in sorted(weights.items(), key=lambda kv: -kv[1]))
+
         regime = con.execute(
             "SELECT date, quadrant, labor_z, inflation_z, credit_z, dollar_z "
             "FROM regime_log ORDER BY date DESC LIMIT 1").fetchone()
-        alerts = con.execute(
-            "SELECT ts_utc, kind, message FROM alerts ORDER BY id DESC LIMIT 10").fetchall()
-        vrows = con.execute(
-            "SELECT check_name, COUNT(*), SUM(passed) FROM validation_log "
-            "WHERE ts_utc >= (SELECT MAX(ts_utc) FROM validation_log) "
-            "GROUP BY check_name").fetchall()
-        gates_html = ""
+        regime_html = "n/a"
+        if regime:
+            regime_html = (f"<b>{html.escape(regime[1].upper())}</b> ({regime[0]})<br>"
+                           f"<small>labor {regime[2]:+.2f} · infl {regime[3]:+.2f} · "
+                           f"credit {regime[4]:+.2f} · dollar {regime[5]:+.2f}</small>")
+
+        cons = m["constraints"]
+        tiles = f"""
+<div class="tiles">
+ <div class="tile"><small>realized CAGR (since {m['history_start'][:4]})</small>
+   <b>{_pct(m['cagr_realized'])}</b></div>
+ <div class="tile"><small>CAGR 1y / 3y</small>
+   <b>{_pct(m['cagr_1y'])} / {_pct(m['cagr_3y'])}</b></div>
+ <div class="tile"><small>expected CAGR (MC 10y median)</small>
+   <b>{_pct(m['cagr_expected_10y'])}</b></div>
+ <div class="tile"><small>Sharpe (ann.)</small><b>{m['sharpe']:.2f}</b></div>
+ <div class="tile"><small>max drawdown (realized)</small>
+   <b>{_pct(m['maxdd_realized'])}</b></div>
+ <div class="tile"><small>regime</small><b style="font-size:1rem">{regime_html}</b></div>
+</div>
+<div class="tiles">
+ <div class="tile">{_badge(cons['cvar5']['pass'])}<small>CVaR(5%, 1y) vs floor</small>
+   <b>{_pct(cons['cvar5']['value'])} <small>/ {_pct(cons['cvar5']['floor'])}</small></b></div>
+ <div class="tile">{_badge(cons['maxdd_p5']['pass'])}<small>p5 max drawdown vs floor</small>
+   <b>{_pct(cons['maxdd_p5']['value'])} <small>/ {_pct(cons['maxdd_p5']['floor'])}</small></b></div>
+ <div class="tile">{_badge(cons['max_position']['pass'])}<small>largest position vs cap</small>
+   <b>{_pct(cons['max_position']['value'], False)} <small>/ {_pct(cons['max_position']['cap'], False)}</small></b></div>
+ <div class="tile"><small>p5 one-year outcome</small><b>{_pct(m['p5_1y'])}</b></div>
+</div>"""
+
+        led_rows = ""
+        for r in registry.ledger(con):
+            d = r["deltas"] or {}
+            delta_txt = (f"ΔE[CAGR] {_pct(d.get('cagr_expected_10y'))} · "
+                         f"ΔCVaR {_pct(d.get('cvar5_mc'))}"
+                         if d else "—")
+            led_rows += (f"<tr><td><b>{r['label']}</b></td><td>{r['status']}</td>"
+                         f"<td>{r['adopted_at'] or r['created_at']}</td>"
+                         f"<td>{html.escape((r['rationale'] or '')[:80])}</td>"
+                         f"<td>{r['verdict'] or '—'}</td><td>{delta_txt}</td></tr>")
+
+        trials = con.execute("SELECT COUNT(*) FROM trials").fetchone()[0]
+        gates_ok, gates_n = 0, 0
         try:
             from ..validate.acceptance import run_gates
-            gates = run_gates(con)
-            gates_html = "".join(
-                f"<div class='{'ok' if g.passed else 'bad'}'>{html.escape(str(g))}</div>"
-                for g in gates)
-        except Exception as exc:  # noqa: BLE001
-            gates_html = f"<div class='bad'>gates unavailable: {html.escape(str(exc))}</div>"
+            gs = run_gates(con)
+            gates_n, gates_ok = len(gs), sum(g.passed for g in gs)
+        except Exception:  # noqa: BLE001
+            pass
+        alerts = con.execute(
+            "SELECT ts_utc, kind, message FROM alerts ORDER BY id DESC LIMIT 5").fetchall()
+        alerts_html = "".join(
+            f"<div><code>{a[0][:10]}</code> <b>{html.escape(a[1])}</b> "
+            f"{html.escape(a[2][:90])}</div>" for a in alerts) or "<div class='ok'>none</div>"
+        bot_note = ("" if m["bot_provenance"] in ("real", "none") else
+                    "<span class='warn'>⚠ bot stream is the parameterized model — "
+                    "import real P&L for final numbers</span>")
     finally:
         con.close()
 
     reports = sorted(REPORT_DIR.glob("latest-*.md")) if REPORT_DIR.exists() else []
-    rep_links = "".join(
-        f"<li><a href='reports/{r.name}'>{r.name.removeprefix('latest-').removesuffix('.md')}</a></li>"
-        for r in reports) or "<li>none yet — run the CLI</li>"
-
-    regime_html = "<div class='warn'>no regime snapshot yet</div>"
-    if regime:
-        d, q, lz, iz, cz, dz = regime
-        regime_html = (f"<b>{html.escape(q.upper())}</b> ({d}) — labor z {lz:+.2f}, "
-                       f"inflation z {iz:+.2f}, credit z {cz:+.2f}, dollar z {dz:+.2f}")
-    alerts_html = "".join(
-        f"<div><code>{a[0][:19]}</code> <b>{html.escape(a[1])}</b> {html.escape(a[2])}</div>"
-        for a in alerts) or "<div class='ok'>no alerts</div>"
-    val_html = "".join(
-        f"<div>{html.escape(c)}: {int(p)}/{int(n)} passed</div>" for c, n, p in vrows) \
-        or "<div class='warn'>no validation runs recorded</div>"
+    rep_links = " · ".join(
+        f"<a href='reports/{r.name}'>{r.name.removeprefix('latest-').removesuffix('.md')}</a>"
+        for r in reports) or "none yet"
 
     body = f"""
-<h1>⚖️ Barbell Lab</h1>
-<p>Personal quant research platform — B.5 Enhanced sleeve + short-vol bot.
-CLI-first; this page is the read-only view. <b>Cumulative trials: {trials}</b>
-&nbsp;·&nbsp; <a href="lab">🧪 workbench</a>
-&nbsp;·&nbsp; <a href="chat">💬 analyst chat</a></p>
-<div class="card"><h2>Acceptance gates (platform trust)</h2>{gates_html}</div>
-<div class="card"><h2>Regime</h2>{regime_html}</div>
-<div class="card"><h2>Latest validation</h2>{val_html}</div>
-<div class="card"><h2>Reports</h2><ul>{rep_links}</ul></div>
-<div class="card"><h2>Recent alerts</h2>{alerts_html}</div>
-"""
-    return HTMLResponse(f"<!doctype html><html><head><title>Barbell Lab</title>"
-                        f"{_STYLE}</head><body>{body}</body></html>")
+<h1>⚖️ {html.escape(live['name'])} — {live['label']} <small style="color:#7ce38b">LIVE</small></h1>
+<p>adopted {(live['adopted_at'] or live['created_at'])[:10]} · metrics as of {m['as_of']}
+· MC {m['n_paths']} paths {bot_note}<br>
+<a href="lab">🧪 workbench</a> · <a href="chat">💬 analyst chat</a>
+· <a href="versions">📒 full ledger</a></p>
+
+{tiles}
+
+<div class="row">
+<div class="card" style="flex:1;min-width:300px"><h2>Holdings ({1 - live['bot_frac']:.0%} sleeve · {live['bot_frac']:.0%} bot)</h2>
+<table><tr><th>ticker</th><th>weight</th><th>risk contrib</th></tr>{rows}</table></div>
+<div class="card" style="flex:2;min-width:420px"><h2>Equity curve vs SPY</h2>
+<div id="chartwrap" style="position:relative"><svg id="chart" width="100%" height="260"></svg></div>
+<div class="legend"><span><span class="chip" style="background:#3987e5"></span>book</span>
+<span><span class="chip" style="background:#008300"></span>SPY</span></div></div>
+</div>
+
+<div class="card"><h2>Improvement ledger</h2>
+<table><tr><th>version</th><th>status</th><th>date</th><th>rationale</th><th>verdict</th><th>vs parent</th></tr>
+{led_rows}</table>
+<p><small>Propose candidates from the <a href="lab">workbench</a> or
+<a href="chat">chat</a>; promotion always requires typed confirmation.</small></p></div>
+
+<div class="card"><h2>Platform health</h2>
+<div>acceptance gates: <b class="{'ok' if gates_ok == gates_n and gates_n else 'bad'}">{gates_ok}/{gates_n}</b>
+ · cumulative trials: <b>{trials}</b> · reports: {rep_links}</div>
+<div style="margin-top:.4rem">{alerts_html}</div></div>
+
+<script>
+fetch('api/equity?version=live').then(r=>r.json()).then(j=>{{
+ const svg=document.getElementById('chart'),W=svg.clientWidth,H=260,L=44,R=10,T=10,B=22;
+ const xs=j.dates.map(d=>new Date(d).getTime()),all=j.book.concat(j.spy);
+ const ymin=Math.min(...all),ymax=Math.max(...all);
+ const X=t=>L+(t-xs[0])/(xs[xs.length-1]-xs[0])*(W-L-R);
+ const Y=v=>T+(1-(v-ymin)/(ymax-ymin))*(H-T-B);
+ const path=a=>a.map((v,i)=>(i?'L':'M')+X(xs[i]).toFixed(1)+' '+Y(v).toFixed(1)).join('');
+ let g='';
+ for(let i=0;i<=4;i++){{const v=ymin+(ymax-ymin)*i/4,y=Y(v);
+  g+=`<line x1="${{L}}" x2="${{W-R}}" y1="${{y}}" y2="${{y}}" stroke="#26324d"/>`+
+     `<text x="${{L-5}}" y="${{y+3}}" fill="#898781" font-size="10" text-anchor="end">${{v.toFixed(1)}}x</text>`;}}
+ g+=`<path d="${{path(j.spy)}}" fill="none" stroke="#008300" stroke-width="2"/>`;
+ g+=`<path d="${{path(j.book)}}" fill="none" stroke="#3987e5" stroke-width="2"/>`;
+ svg.innerHTML=g;
+}});
+</script>"""
+    return HTMLResponse(f"<!doctype html><html><head><title>{html.escape(live['name'])} — Barbell Lab</title>"
+                        f"{_STYLE}<style>.tiles{{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));"
+                        f"gap:.6rem;margin:.8rem 0}}.tile{{background:#111a2e;border:1px solid #2a3a58;"
+                        f"border-radius:8px;padding:.7rem}}.tile small{{display:block;color:#8ea3c0;font-size:.72rem}}"
+                        f".tile b{{font-size:1.25rem}}.row{{display:flex;gap:1rem;flex-wrap:wrap}}"
+                        f".legend{{font-size:.8rem;color:#c3c2b7}}.chip{{display:inline-block;width:14px;height:3px;"
+                        f"border-radius:2px;vertical-align:middle;margin-right:4px}}</style>"
+                        f"</head><body>{body}</body></html>")
 
 
 @app.get("/reports/{name}", response_class=HTMLResponse)
@@ -445,13 +541,22 @@ def api_run_window(payload: dict):
 
 @app.get("/api/equity")
 def api_equity(tail: str = "TAIL", bot_frac: float = 0.0,
-               kill_switch: str = "perfect"):
-    """Weekly wealth curves for the configured book and SPY (chart data)."""
+               kill_switch: str = "perfect", version: str | None = None):
+    """Weekly wealth curves for the book and SPY. version='live' or a numeric
+    register id uses that portfolio version's explicit weights instead of the
+    tail/bot_frac parameters."""
     from ..portfolio.book import book_frame
+    from ..portfolio import registry
     con = _lab_con()
     try:
-        joint = book_frame(con, bot_frac, tail=tail, allow_bot_model=True,
-                           kill_switch=kill_switch)
+        if version is not None:
+            v = (registry.get_live(con) if version == "live"
+                 else registry.get_version(con, int(version)))
+            joint = registry.version_book(con, v, kill_switch=kill_switch)
+            bot_frac = v["bot_frac"]
+        else:
+            joint = book_frame(con, bot_frac, tail=tail, allow_bot_model=True,
+                               kill_switch=kill_switch)
         book = (1 + joint["combined"]).cumprod()
         spy_px = db.read_prices(con, "SPY")["close_adj"]
         spy = spy_px.loc[joint.index.min():joint.index.max()]
@@ -475,6 +580,147 @@ def api_equity(tail: str = "TAIL", bot_frac: float = 0.0,
 @app.get("/lab", response_class=HTMLResponse)
 def lab_page():
     return HTMLResponse(_LAB_HTML)
+
+
+# ------------------------------------------------------------------ register
+@app.get("/api/portfolio")
+def api_portfolio():
+    from ..portfolio import registry
+    con = _lab_con()
+    try:
+        live = registry.get_live(con)
+        return {"version": live, "metrics": registry.version_metrics(con, live)}
+    finally:
+        con.close()
+
+
+@app.get("/api/versions")
+def api_versions():
+    from ..portfolio import registry
+    con = _lab_con()
+    try:
+        return registry.ledger(con)
+    finally:
+        con.close()
+
+
+@app.post("/api/propose")
+def api_propose(payload: dict):
+    """File a candidate: {"weights": {..}?, "bot_frac": f?, "rationale": str}."""
+    from ..portfolio import registry
+    con = _lab_con()
+    try:
+        cand = registry.propose_candidate(
+            con,
+            weights={str(k).upper(): float(v) for k, v in (payload.get("weights") or {}).items()} or None,
+            bot_frac=payload.get("bot_frac"),
+            rationale=str(payload.get("rationale") or ""))
+        return cand
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from None
+    finally:
+        con.close()
+
+
+@app.get("/api/compare")
+def api_compare(a: int, b: int):
+    from ..portfolio import registry
+    con = _lab_con()
+    try:
+        return registry.compare(con, a, b)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from None
+    finally:
+        con.close()
+
+
+@app.post("/api/promote")
+def api_promote(payload: dict):
+    """Promote a candidate: {"version_id": n, "confirm": "<exact label>"}.
+    Typed confirmation is mandatory — this changes the live book's targets."""
+    from ..portfolio import registry
+    con = _lab_con()
+    try:
+        return registry.promote(con, int(payload["version_id"]),
+                                str(payload.get("confirm", "")))
+    except (KeyError, ValueError) as exc:
+        raise HTTPException(422, str(exc)) from None
+    finally:
+        con.close()
+
+
+@app.get("/versions", response_class=HTMLResponse)
+def versions_page():
+    from ..portfolio import registry
+    con = _lab_con()
+    try:
+        versions = registry.list_versions(con)
+    finally:
+        con.close()
+    rows = ""
+    for v in versions:
+        ev = v["evidence"] or {}
+        w = " ".join(f"{t}:{x:.0%}" for t, x in
+                     sorted(v["weights"].items(), key=lambda kv: -kv[1]))
+        btn = ""
+        if v["status"] == "CANDIDATE":
+            btn = (f"<button class='pbtn' data-id='{v['id']}' "
+                   f"data-label='{v['label']}'>promote</button>")
+        rows += (f"<tr><td><b>{v['label']}</b></td><td>{v['status']}</td>"
+                 f"<td>{v['created_at'][:10]}</td>"
+                 f"<td style='font-size:.75rem'>{html.escape(w)} · bot {v['bot_frac']:.0%}</td>"
+                 f"<td>{html.escape((v['rationale'] or '')[:70])}</td>"
+                 f"<td>{ev.get('verdict') or '—'}</td>"
+                 f"<td>{btn}</td></tr>")
+    body = f"""
+<h1>📒 Portfolio ledger</h1>
+<p><a href="./">&larr; dashboard</a> · every version of the book, forever.
+Promotion requires typing the exact version label.</p>
+<div class="card"><table>
+<tr><th>version</th><th>status</th><th>created</th><th>weights</th><th>rationale</th><th>verdict</th><th></th></tr>
+{rows}</table></div>
+<div class="card"><h2>Propose a candidate</h2>
+<p><small>JSON weights (must sum to 1). Leave weights empty to only change the bot fraction.</small></p>
+<textarea id="w" style="width:100%;height:90px;background:#0b1120;color:#d8e1ef;
+ border:1px solid #2a3a58;border-radius:6px;padding:.5rem"
+ placeholder='{{"AVUV":0.22,"AVDV":0.19,"PHYS":0.18,"KMLM":0.16,"AVEM":0.10,"QUAL":0.10,"TAIL":0.05}}'></textarea>
+<div style="display:flex;gap:.5rem;margin-top:.4rem">
+ <input id="bf" type="number" min="0" max="0.45" step="0.05" placeholder="bot frac (blank = keep)"
+  style="background:#0b1120;color:#d8e1ef;border:1px solid #2a3a58;border-radius:6px;padding:.5rem"/>
+ <input id="why" placeholder="rationale (why this change?)" style="flex:1;background:#0b1120;
+  color:#d8e1ef;border:1px solid #2a3a58;border-radius:6px;padding:.5rem"/>
+ <button id="go" style="background:#1f6feb;color:#fff;border:0;border-radius:6px;padding:.5rem 1.2rem">
+  Propose &amp; evaluate</button>
+</div><div id="out" style="margin-top:.6rem"></div></div>
+<script>
+document.getElementById('go').onclick=async()=>{{
+ const out=document.getElementById('out'); out.innerHTML='<span class="warn">evaluating…</span>';
+ let w=null; const raw=document.getElementById('w').value.trim();
+ if(raw){{ try{{w=JSON.parse(raw);}}catch(e){{out.innerHTML='<span class="bad">bad JSON</span>';return;}} }}
+ const bf=document.getElementById('bf').value;
+ try{{
+  const r=await fetch('api/propose',{{method:'POST',headers:{{'Content-Type':'application/json'}},
+   body:JSON.stringify({{weights:w, bot_frac: bf===''?null:parseFloat(bf),
+    rationale:document.getElementById('why').value}})}});
+  const j=await r.json(); if(!r.ok) throw new Error(j.detail||r.status);
+  const ev=j.evidence||{{}};
+  out.innerHTML='<b>'+j.label+'</b> filed — verdict <b>'+(ev.verdict||'?')+'</b>: '+
+   (ev.basis||'')+' <a href="versions">reload ledger</a>';
+ }}catch(e){{out.innerHTML='<span class="bad">'+e.message+'</span>';}}
+}};
+document.querySelectorAll('.pbtn').forEach(b=>b.onclick=async()=>{{
+ const label=b.dataset.label;
+ const typed=prompt('Type the exact label to promote to LIVE (this changes the book targets): '+label);
+ if(typed===null) return;
+ const r=await fetch('api/promote',{{method:'POST',headers:{{'Content-Type':'application/json'}},
+  body:JSON.stringify({{version_id:parseInt(b.dataset.id), confirm:typed}})}});
+ const j=await r.json();
+ alert(r.ok? (j.label+' is now LIVE') : ('refused: '+(j.detail||r.status)));
+ if(r.ok) location.reload();
+}}));
+</script>"""
+    return HTMLResponse(f"<!doctype html><html><head><title>Portfolio ledger</title>"
+                        f"{_STYLE}</head><body>{body}</body></html>")
 
 
 # ------------------------------------------------------------------ chat

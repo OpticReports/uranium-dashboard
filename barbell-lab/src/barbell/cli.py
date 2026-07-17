@@ -183,6 +183,59 @@ def analyze(
 
 
 @app.command()
+def portfolio(
+    action: str = typer.Argument("show", help="show | versions | propose | promote | compare"),
+    weights_json: str = typer.Option(None, "--weights", help='JSON dict, e.g. \'{"AVUV":0.22,...}\' (sums to 1)'),
+    bot_frac: float = typer.Option(None, "--bot-frac"),
+    rationale: str = typer.Option("", "--why", help="rationale for the ledger"),
+    version_id: int = typer.Option(None, "--id"),
+    confirm: str = typer.Option(None, "--confirm", help="exact label, required to promote"),
+    other: int = typer.Option(None, "--vs", help="second version id for compare"),
+    paths: int = typer.Option(20000, help="MC paths for evaluation"),
+) -> None:
+    """The Portfolio Register: show the LIVE book, the improvement ledger,
+    propose/evaluate candidates, promote with typed confirmation."""
+    import json as _json
+    from .portfolio import registry
+    con = db.connect()
+    if action == "show":
+        live = registry.get_live(con)
+        m = registry.version_metrics(con, live, n_paths=paths)
+        console.print(f"[bold]{live['name']} {live['label']} (LIVE)[/bold] "
+                      f"adopted {(live['adopted_at'] or '')[:10]}")
+        for t, w in sorted(live["weights"].items(), key=lambda kv: -kv[1]):
+            console.print(f"  {t:6s} {w:.1%}")
+        console.print(f"  bot    {live['bot_frac']:.1%}")
+        for k, v in m.items():
+            if isinstance(v, float):
+                console.print(f"{k}: {v:+.2%}" if abs(v) < 3 else f"{k}: {v:.2f}")
+        for name, c in m["constraints"].items():
+            badge = "PASS" if c["pass"] else "BREACH"
+            console.print(f"constraint {name}: {badge}")
+    elif action == "versions":
+        for r in registry.ledger(con):
+            console.print(f"{r['label']:6s} {r['status']:9s} {r['adopted_at'] or r['created_at']} "
+                          f"verdict={r['verdict'] or '—'} :: {r['rationale']}")
+    elif action == "propose":
+        w = _json.loads(weights_json) if weights_json else None
+        cand = registry.propose_candidate(con, weights=w, bot_frac=bot_frac,
+                                          rationale=rationale, n_paths=paths)
+        console.print(f"[green]filed {cand['label']}[/green] — "
+                      f"verdict {cand['evidence']['verdict']}: {cand['evidence']['basis']}")
+    elif action == "promote":
+        if version_id is None or confirm is None:
+            raise typer.BadParameter("promote needs --id and --confirm '<label>'")
+        v = registry.promote(con, version_id, confirm)
+        console.print(f"[green]{v['label']} is now LIVE[/green]")
+    elif action == "compare":
+        if version_id is None or other is None:
+            raise typer.BadParameter("compare needs --id and --vs")
+        console.print(_json.dumps(registry.compare(con, version_id, other), indent=1))
+    else:
+        raise typer.BadParameter(f"unknown action {action}")
+
+
+@app.command()
 def chat() -> None:
     """Interactive grounded quant analyst (Claude with platform tools)."""
     from .chat.agent import answer
