@@ -90,6 +90,8 @@ services:
         sync: false            # optional; public CSV fallback works without it
       - key: TIINGO_API_KEY
         sync: false            # optional third feed
+      - key: ANTHROPIC_API_KEY
+        sync: false            # chat analyst (same key the genomics chat uses); chat is disabled if unset
       - key: RUN_SCHEDULER
         value: "true"
       - key: INGEST_ON_STARTUP

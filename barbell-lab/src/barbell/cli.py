@@ -141,6 +141,70 @@ def optimize(
 
 
 @app.command()
+def book(
+    bot_frac: float = typer.Option(0.20, help="bot capital fraction in [0,1); 0 = sleeve only"),
+    sweep: bool = typer.Option(False, "--sweep", help="sweep fractions and find the growth-optimal admissible split"),
+    tail: str = typer.Option("TAIL", help="tail-sleeve instrument"),
+    kill_switch: str = typer.Option("perfect", help="perfect | lag1 | fails"),
+    bot_model: bool = typer.Option(False, "--bot-model", help="EXPLICITLY allow the parameterized bot model"),
+    paths: int = typer.Option(20000, help="MC paths"),
+) -> None:
+    """The book, decoupled from 80/20: sleeve in isolation, bot toggled at any
+    fraction, or a full fraction sweep under the hard constraints."""
+    from .portfolio.book import book_frame, evaluate_fraction, sweep_bot_fraction
+    from .config import load
+    con = db.connect()
+    if sweep:
+        console.print(sweep_bot_fraction(con, tail=tail, allow_bot_model=bot_model,
+                                         kill_switch=kill_switch, n_paths=paths))
+    else:
+        mc = load("backtest")["monte_carlo"]
+        joint = book_frame(con, bot_frac, tail=tail, allow_bot_model=bot_model,
+                           kill_switch=kill_switch)
+        r = evaluate_fraction(joint, bot_frac, paths, int(mc["block_len_days"]),
+                              int(mc["seed"]))
+        for k, v in r.items():
+            console.print(f"{k}: {v:+.2%}" if isinstance(v, float) and k != "bot_frac"
+                          else f"{k}: {v}")
+
+
+@app.command()
+def analyze(
+    tail: str = typer.Option("TAIL", help="tail-sleeve instrument"),
+    bot_frac: float = typer.Option(0.0, help="bot overlay fraction; 0 = sleeve only"),
+    bot_model: bool = typer.Option(False, "--bot-model", help="allow parameterized bot model"),
+) -> None:
+    """Fund-grade tearsheet: drawdown anatomy, correlations, risk contributions,
+    crisis-episode stress table."""
+    from .portfolio.tearsheet import build_tearsheet
+    con = db.connect()
+    console.print(build_tearsheet(con, tail=tail, bot_frac=bot_frac,
+                                  allow_bot_model=bot_model))
+
+
+@app.command()
+def chat() -> None:
+    """Interactive grounded quant analyst (Claude with platform tools)."""
+    from .chat.agent import answer
+    console.print("[bold]Barbell Lab analyst[/bold] — grounded in the platform's own "
+                  "data. Ctrl-D to exit.")
+    history: list[dict] = []
+    while True:
+        try:
+            q = console.input("[cyan]you>[/cyan] ")
+        except (EOFError, KeyboardInterrupt):
+            break
+        if not q.strip():
+            continue
+        history.append({"role": "user", "content": q})
+        res = answer(history)
+        for t in res["tool_trace"]:
+            console.print(f"[dim]  ⚙ {t['tool']}({t['input']})[/dim]")
+        console.print(res["text"])
+        history.append({"role": "assistant", "content": res["text"]})
+
+
+@app.command()
 def walkforward(
     tail: str = typer.Option("TAIL", help="tail-sleeve instrument for both arms"),
     engine: str = typer.Option("bootstrap", help="scenario engine for refits: bootstrap | mvt"),

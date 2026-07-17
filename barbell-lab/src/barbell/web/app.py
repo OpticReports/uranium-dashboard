@@ -183,7 +183,8 @@ def index():
     body = f"""
 <h1>⚖️ Barbell Lab</h1>
 <p>Personal quant research platform — B.5 Enhanced sleeve + short-vol bot.
-CLI-first; this page is a read-only view. <b>Cumulative trials: {trials}</b></p>
+CLI-first; this page is a read-only view. <b>Cumulative trials: {trials}</b>
+&nbsp;·&nbsp; <a href="chat">💬 analyst chat</a></p>
 <div class="card"><h2>Acceptance gates (platform trust)</h2>{gates_html}</div>
 <div class="card"><h2>Regime</h2>{regime_html}</div>
 <div class="card"><h2>Latest validation</h2>{val_html}</div>
@@ -255,3 +256,65 @@ def reports_index():
     if not REPORT_DIR.exists():
         return ""
     return "\n".join(sorted(p.name for p in REPORT_DIR.glob("*.md")))
+
+
+# ------------------------------------------------------------------ chat
+@app.post("/api/chat")
+def api_chat(payload: dict):
+    """Grounded quant analyst. Body: {"messages": [{"role","content"}...]}.
+    Runs the platform-tool agent loop; heavy sims are exploratory-path and
+    register trials like everything else."""
+    msgs = payload.get("messages")
+    if not isinstance(msgs, list) or not msgs:
+        raise HTTPException(400, "messages must be a non-empty list")
+    if any(m.get("role") not in ("user", "assistant") or not isinstance(m.get("content"), str)
+           for m in msgs):
+        raise HTTPException(400, "each message needs role user|assistant and string content")
+    from ..chat.agent import answer
+    try:
+        return answer([{"role": m["role"], "content": m["content"]} for m in msgs])
+    except RuntimeError as exc:  # e.g. missing ANTHROPIC_API_KEY
+        raise HTTPException(503, str(exc)) from None
+
+
+@app.get("/chat", response_class=HTMLResponse)
+def chat_page():
+    body = """
+<h1>⚖️ Barbell Lab — analyst chat</h1>
+<p><a href="./">&larr; dashboard</a> · Grounded in the platform's own data; heavy
+simulations run at exploratory path counts and register trials. Slow answers are
+normal — the analyst is running real computations.</p>
+<div id="log"></div>
+<div class="card" style="display:flex;gap:.5rem">
+ <input id="q" style="flex:1;background:#0b1120;color:#d8e1ef;border:1px solid #2a3a58;
+  border-radius:6px;padding:.6rem" placeholder="e.g. sweep the bot fraction under a failing kill-switch"/>
+ <button id="send" style="background:#1f6feb;color:#fff;border:0;border-radius:6px;
+  padding:.6rem 1.2rem;cursor:pointer">Ask</button>
+</div>
+<script>
+const log = document.getElementById('log'), q = document.getElementById('q'),
+      send = document.getElementById('send'); let history = [];
+function add(cls, html){const d=document.createElement('div');d.className='card '+cls;
+  d.innerHTML=html;log.appendChild(d);d.scrollIntoView();}
+async function ask(){
+  const text = q.value.trim(); if(!text) return;
+  q.value=''; add('', '<b>you</b><br>'+text.replace(/</g,'&lt;'));
+  history.push({role:'user', content:text});
+  send.disabled=true; send.textContent='…';
+  try{
+    const r = await fetch('api/chat', {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({messages: history})});
+    const j = await r.json();
+    if(!r.ok) throw new Error(j.detail || r.status);
+    const tools = (j.tool_trace||[]).map(t=>'⚙ '+t.tool).join(' · ');
+    add('', (tools?'<div class="warn">'+tools+'</div>':'') +
+        '<b>analyst</b><br>'+ j.text.replace(/</g,'&lt;').replace(/\\n/g,'<br>'));
+    history.push({role:'assistant', content:j.text});
+  }catch(e){ add('bad', 'error: '+e.message); history.pop(); }
+  send.disabled=false; send.textContent='Ask'; q.focus();
+}
+send.onclick=ask; q.addEventListener('keydown', e=>{if(e.key==='Enter')ask();});
+</script>"""
+    return HTMLResponse(f"<!doctype html><html><head><title>Barbell Lab chat</title>"
+                        f"{_STYLE}</head><body>{body}</body></html>")
