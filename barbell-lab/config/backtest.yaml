@@ -1,0 +1,42 @@
+# Backtest engine configuration. NO ZERO-COST BACKTESTS: every simulated
+# trade pays half-spread + fee estimate below (one-way, in bps of notional).
+costs_bps:
+  default: 10
+  AVUV: 5
+  AVDV: 10
+  PHYS: 8
+  KMLM: 10
+  AVEM: 8
+  QUAL: 3
+  MTUM: 3
+  TAIL: 12
+  CAOS: 15
+  BTAL: 10
+  PSLV: 10
+  SPY: 1
+  # Mutual-fund proxies trade at NAV (no spread) but we still charge the
+  # live ETF's cost so proxy-era backtests aren't flattered:
+  DFSVX: 5
+  DISVX: 10
+  DFEMX: 8
+  ASFYX: 10
+
+walk_forward:
+  scheme: expanding            # expanding | rolling
+  rolling_years: 5
+  min_train_years: 3
+  test_months: 12
+  step_months: 12
+
+rebalance:
+  granularity: monthly         # decisions evaluated at month-end
+  mode: threshold              # threshold | calendar | none
+  band_relative: 0.20
+  calendar_months: 12
+
+monte_carlo:
+  n_paths: 20000
+  horizon_years: 10
+  student_t_df: 5              # spec: df 4–6; report both MVT and bootstrap
+  block_len_days: 21           # stationary bootstrap mean block ≈ 1 month
+  seed: 7

@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "barbell-lab"
+version = "0.1.0"
+description = "Personal quant research platform for a barbell portfolio: data layer with hard acceptance gates, walk-forward backtests with honest statistics (DSR/PBO), geometric-CAGR portfolio lab, combined-book simulator, and regime/rebalance monitors."
+requires-python = ">=3.11"
+dependencies = [
+    "pandas>=2.0",
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "PyYAML>=6.0",
+    "pyarrow>=14.0",
+    "typer>=0.9",
+    "rich>=13.0",
+    "httpx>=0.25",
+    # Web layer: read-only report/status UI served behind the optic.capital
+    # gate hub at /portfolio-optimizer (reuses the existing FastAPI infra).
+    "fastapi>=0.104",
+    "uvicorn>=0.24",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4"]
+
+[project.scripts]
+barbell = "barbell.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "network: tests that hit live data providers (acceptance gates; deselect with -m 'not network')",
+]
