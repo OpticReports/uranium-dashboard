@@ -141,6 +141,19 @@ def optimize(
 
 
 @app.command()
+def walkforward(
+    tail: str = typer.Option("TAIL", help="tail-sleeve instrument for both arms"),
+    engine: str = typer.Option("bootstrap", help="scenario engine for refits: bootstrap | mvt"),
+    paths: int = typer.Option(20000, help="MC paths per refit (>=20000 per spec)"),
+) -> None:
+    """M5: 'beat the benchmark' — optimizer refit yearly vs current targets,
+    out-of-sample, costs paid, corrected stats, verdict."""
+    from .portfolio.evaluation import walkforward_eval
+    con = db.connect()
+    console.print(walkforward_eval(con, tail=tail, n_paths=paths, engine=engine))
+
+
+@app.command()
 def monitor(
     what: str = typer.Argument("all", help="rebalance | regime | triggers | all"),
 ) -> None:
