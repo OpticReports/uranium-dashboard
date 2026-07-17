@@ -62,6 +62,44 @@ services:
       # genomics SPA itself is served at research.optic.capital/genomics/.
       - key: CANARY_UPSTREAM
         value: https://treasury-canary.onrender.com
+      # Same pattern: /portfolio-optimizer/* -> Barbell Lab quant platform.
+      - key: BARBELL_UPSTREAM
+        value: https://barbell-lab.onrender.com
+
+  # --- Barbell Lab (personal quant research platform) ------------------------
+  # Lives at research.optic.capital/portfolio-optimizer behind the genomics
+  # service's login gate (see BARBELL_UPSTREAM above). Starter plan + disk:
+  # the nightly job (ingest -> validation -> acceptance gates -> monitors)
+  # needs an always-on instance, and SQLite/parquet/reports must persist.
+  - type: web
+    name: barbell-lab
+    runtime: docker
+    dockerfilePath: barbell-lab/Dockerfile
+    dockerContext: barbell-lab
+    plan: starter
+    healthCheckPath: /health
+    autoDeploy: true
+    disk:
+      name: data
+      mountPath: /app/data
+      sizeGB: 1
+    envVars:
+      - key: FMP_API_KEY
+        sync: false            # cross-provider validation feed (same key as genomics)
+      - key: FRED_API_KEY
+        sync: false            # optional; public CSV fallback works without it
+      - key: TIINGO_API_KEY
+        sync: false            # optional third feed
+      - key: RUN_SCHEDULER
+        value: "true"
+      - key: INGEST_ON_STARTUP
+        value: "true"
+      - key: MONITOR_UTC_HOUR
+        value: "9"             # 05:00 America/Puerto_Rico
+      - key: BARBELL_DATA_DIR
+        value: /app/data
+      - key: LOG_LEVEL
+        value: INFO
 
   # --- Treasury Market Health Monitor ("The Canary") -------------------------
   # FREE plan = $0, isolated from the genomics service (its own URL). The dashboard
