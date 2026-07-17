@@ -69,6 +69,26 @@ CREATE TABLE IF NOT EXISTS alerts (
     message TEXT NOT NULL,
     details TEXT
 );
+CREATE TABLE IF NOT EXISTS portfolio_versions (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    name       TEXT NOT NULL,
+    label      TEXT NOT NULL,
+    status     TEXT NOT NULL CHECK(status IN ('LIVE','CANDIDATE','RETIRED')),
+    weights    TEXT NOT NULL,           -- json {ticker: weight}, tail resolved
+    bot_frac   REAL NOT NULL DEFAULT 0.20,
+    parent_id  INTEGER,
+    rationale  TEXT,
+    evidence   TEXT,                    -- json: evaluation battery vs parent/live
+    created_at TEXT NOT NULL,
+    adopted_at TEXT,
+    retired_at TEXT
+);
+CREATE TABLE IF NOT EXISTS portfolio_metrics (
+    version_id  INTEGER NOT NULL,
+    computed_at TEXT NOT NULL,
+    metrics     TEXT NOT NULL,          -- json snapshot (realized + MC + constraints)
+    PRIMARY KEY (version_id, computed_at)
+);
 CREATE TABLE IF NOT EXISTS validation_log (
     id      INTEGER PRIMARY KEY AUTOINCREMENT,
     ts_utc  TEXT NOT NULL,

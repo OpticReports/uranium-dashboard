@@ -144,6 +144,47 @@ TOOLS = [
         "the most recent registered trials.",
         "input_schema": {"type": "object", "properties": {}},
     },
+    {
+        "name": "get_portfolio",
+        "description": "The LIVE portfolio version (B.5 Enhanced): explicit weights, bot "
+        "fraction, and the full metrics snapshot (realized CAGR/Sharpe/maxDD, expected "
+        "CAGR, CVaR, constraint pass/breach). START HERE for any question about 'the "
+        "portfolio'.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "list_portfolio_versions",
+        "description": "The improvement ledger: every version of the portfolio (LIVE, "
+        "CANDIDATE, RETIRED) with rationale, verdict and deltas vs parent.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "propose_candidate",
+        "description": "File a CANDIDATE portfolio version and run the evaluation battery "
+        "vs LIVE (registers trials). weights = full explicit dict summing to 1 (omit to "
+        "keep live weights and only change bot_frac). NEVER promotes — promotion requires "
+        "the investor's typed confirmation in the ledger UI.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "weights": {"type": "object",
+                            "description": "ticker -> weight, sums to 1.0"},
+                "bot_frac": {"type": "number", "description": "bot fraction in [0,1)"},
+                "rationale": {"type": "string",
+                              "description": "why this change (goes in the ledger)"},
+            },
+            "required": ["rationale"],
+        },
+    },
+    {
+        "name": "compare_versions",
+        "description": "Side-by-side metrics for two versions from the ledger (by id).",
+        "input_schema": {
+            "type": "object",
+            "properties": {"a": {"type": "integer"}, "b": {"type": "integer"}},
+            "required": ["a", "b"],
+        },
+    },
 ]
 
 
@@ -241,6 +282,36 @@ def _tool_get_trials(con) -> str:
     return trial_summary(con)
 
 
+def _tool_get_portfolio(con) -> str:
+    from ..portfolio import registry
+    live = registry.get_live(con)
+    return json.dumps({"version": {k: live[k] for k in
+                                   ("id", "name", "label", "status", "weights",
+                                    "bot_frac", "adopted_at", "rationale")},
+                       "metrics": registry.version_metrics(con, live)})
+
+
+def _tool_list_portfolio_versions(con) -> str:
+    from ..portfolio import registry
+    return json.dumps(registry.ledger(con))
+
+
+def _tool_propose_candidate(con, rationale: str, weights=None, bot_frac=None) -> str:
+    from ..portfolio import registry
+    w = ({str(k).upper(): float(v) for k, v in weights.items()} if weights else None)
+    cand = registry.propose_candidate(con, weights=w, bot_frac=bot_frac,
+                                      rationale=str(rationale))
+    return json.dumps({"filed": cand["label"], "id": cand["id"],
+                       "evidence": cand["evidence"],
+                       "note": "CANDIDATE only — the investor promotes via the "
+                               "ledger UI with typed confirmation"})
+
+
+def _tool_compare_versions(con, a: int, b: int) -> str:
+    from ..portfolio import registry
+    return json.dumps(registry.compare(con, int(a), int(b)))
+
+
 _HANDLERS = {
     "get_platform_status": _tool_get_platform_status,
     "get_tearsheet": _tool_get_tearsheet,
@@ -249,6 +320,10 @@ _HANDLERS = {
     "window_stats": _tool_window_stats,
     "get_report": _tool_get_report,
     "get_trials": _tool_get_trials,
+    "get_portfolio": _tool_get_portfolio,
+    "list_portfolio_versions": _tool_list_portfolio_versions,
+    "propose_candidate": _tool_propose_candidate,
+    "compare_versions": _tool_compare_versions,
 }
 
 
