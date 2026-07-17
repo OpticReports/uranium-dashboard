@@ -105,3 +105,23 @@ class TestWalkForward:
         # test windows are disjoint and forward-only
         starts = [rec["train_end"] for rec in recs]
         assert starts == sorted(starts)
+
+
+class TestWalkforwardEvalWindows:
+    def test_windows_are_leak_free_and_forward_only(self):
+        from barbell.portfolio.evaluation import _windows
+        idx = pd.bdate_range("2015-01-01", periods=252 * 8)
+        wins = _windows(idx)
+        assert len(wins) >= 3
+        for tr, te in wins:
+            # train strictly precedes test; no overlap
+            assert tr.stop == te.start
+            assert te.stop <= len(idx)
+        # test windows are sequential and non-overlapping
+        for (_, t1), (_, t2) in zip(wins, wins[1:]):
+            assert t2.start >= t1.start + 1
+
+    def test_too_short_history_raises(self):
+        from barbell.portfolio.evaluation import _windows
+        with pytest.raises(ValueError):
+            _windows(pd.bdate_range("2020-01-01", periods=300))

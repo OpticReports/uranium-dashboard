@@ -56,7 +56,16 @@ barbell optimize --method all  # geo-CAGR (both MC engines) + HRP + NCO cross-ch
 barbell monitor              # rebalance bands + regime + triggers (the nightly job)
 barbell trials               # cumulative trial registry
 barbell import-bot           # pull the bot's P&L from its SQLite
+barbell walkforward          # M5: optimizer refit yearly vs current targets, OOS
+barbell analyze [--bot-frac] # fund-grade tearsheet (sleeve alone or bot overlaid)
+barbell book --sweep         # sleeve/bot fraction frontier — 80/20 is a variable, not an axiom
+barbell chat                 # grounded quant analyst (Claude + platform tools; needs ANTHROPIC_API_KEY)
 ```
+
+The web app serves the same analyst at `/portfolio-optimizer/chat` behind the
+gate. Chat simulations run at exploratory path counts, register trials like
+everything else, and point to the full-rigor CLI command before anything is
+treated as a result.
 
 ## Trust chain
 

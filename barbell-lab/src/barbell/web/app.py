@@ -132,6 +132,128 @@ def _md_table_to_html(md: str) -> str:
     return text
 
 
+_LAB_HTML = """<!doctype html><html><head><title>Barbell Lab — workbench</title>
+""" + _STYLE + """
+<style>
+ .controls{display:flex;flex-wrap:wrap;gap:.6rem;align-items:end}
+ .controls label{display:flex;flex-direction:column;font-size:.8rem;color:#8ea3c0;gap:2px}
+ .controls select,.controls input{background:#0b1120;color:#d8e1ef;border:1px solid #2a3a58;
+   border-radius:6px;padding:.45rem}
+ .controls button{background:#1f6feb;color:#fff;border:0;border-radius:6px;
+   padding:.55rem 1rem;cursor:pointer}
+ .controls button.alt{background:#26324d}
+ #chartwrap{position:relative}
+ #tip{position:absolute;pointer-events:none;background:#0b1120;border:1px solid #2a3a58;
+   border-radius:6px;padding:4px 8px;font-size:.75rem;display:none;white-space:nowrap}
+ .legend{display:flex;gap:1rem;font-size:.8rem;color:#c3c2b7;margin:.3rem 0}
+ .chip{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:4px}
+</style></head><body>
+<h1>⚖️ Barbell Lab — workbench</h1>
+<p><a href="./">&larr; dashboard</a> · <a href="chat">💬 analyst chat</a> ·
+Interactive runs use exploratory Monte Carlo paths and register trials; the CLI
+runs the ≥20k-path versions. Numbers using the modeled bot are flagged.</p>
+
+<div class="card"><div class="controls">
+ <label>tail sleeve <select id="tail">
+   <option>TAIL</option><option>CAOS</option><option>BTAL</option><option>NONE</option>
+   <option>TAIL+CAOS</option><option>TAIL+BTAL</option><option>CAOS+BTAL</option></select></label>
+ <label>bot % <input id="frac" type="number" min="0" max="0.45" step="0.05" value="0"/></label>
+ <label>kill-switch <select id="ks">
+   <option>perfect</option><option>lag1</option><option>fails</option></select></label>
+ <button id="b-curve">Equity curve</button>
+ <button id="b-sim" class="alt">Simulate</button>
+ <button id="b-sweep" class="alt">Sweep fractions</button>
+ <button id="b-tear" class="alt">Tearsheet</button>
+</div></div>
+
+<div class="card" id="chartcard">
+ <div class="legend"><span><span class="chip" style="background:#3987e5"></span>book</span>
+  <span><span class="chip" style="background:#008300"></span>SPY (total return)</span>
+  <span id="prov" class="warn"></span></div>
+ <div id="chartwrap"><svg id="chart" width="100%" height="320"></svg><div id="tip"></div></div>
+</div>
+<div class="card" id="out"><div class="warn">Pick parameters and run something.</div></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const params=()=>({tail:$('tail').value, bot_frac:parseFloat($('frac').value)||0,
+                   kill_switch:$('ks').value});
+function busy(b){for(const id of['b-curve','b-sim','b-sweep','b-tear'])
+  $(id).disabled=b;}
+async function post(url,body){const r=await fetch(url,{method:'POST',
+  headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const j=await r.json(); if(!r.ok) throw new Error(j.detail||r.status); return j;}
+
+async function run(kind){
+  busy(true); $('out').innerHTML='<div class="warn">running…</div>';
+  try{
+    if(kind==='sim') $('out').innerHTML=(await post('api/run/book',params())).html;
+    else if(kind==='sweep') $('out').innerHTML=(await post('api/run/book',
+      {...params(), sweep:true})).html;
+    else $('out').innerHTML=(await post('api/run/tearsheet',params())).html;
+  }catch(e){$('out').innerHTML='<div class="bad">'+e.message+'</div>';}
+  busy(false);
+}
+$('b-sim').onclick=()=>run('sim'); $('b-sweep').onclick=()=>run('sweep');
+$('b-tear').onclick=()=>run('tear');
+
+let series=null;
+$('b-curve').onclick=async()=>{
+  busy(true);
+  try{
+    const p=params();
+    const r=await fetch('api/equity?tail='+encodeURIComponent(p.tail)
+      +'&bot_frac='+p.bot_frac+'&kill_switch='+p.kill_switch);
+    const j=await r.json(); if(!r.ok) throw new Error(j.detail||r.status);
+    series=j; $('prov').textContent = j.bot_provenance.startsWith('model')
+      ? '⚠ bot stream is the parameterized MODEL' : '';
+    draw();
+  }catch(e){$('out').innerHTML='<div class="bad">'+e.message+'</div>';}
+  busy(false);
+};
+
+function draw(){
+  if(!series) return;
+  const svg=$('chart'), W=svg.clientWidth, H=320, L=52, R=14, T=12, B=26;
+  const xs=series.dates.map(d=>new Date(d).getTime());
+  const all=series.book.concat(series.spy);
+  const ymin=Math.min(...all), ymax=Math.max(...all);
+  const X=t=>L+(t-xs[0])/(xs[xs.length-1]-xs[0])*(W-L-R);
+  const Y=v=>T+(1-(v-ymin)/(ymax-ymin))*(H-T-B);
+  const path=a=>a.map((v,i)=>(i?'L':'M')+X(xs[i]).toFixed(1)+' '+Y(v).toFixed(1)).join('');
+  let g='';
+  const ticks=5;
+  for(let i=0;i<=ticks;i++){const v=ymin+(ymax-ymin)*i/ticks, y=Y(v);
+    g+=`<line x1="${L}" x2="${W-R}" y1="${y}" y2="${y}" stroke="#26324d" stroke-width="1"/>`
+      +`<text x="${L-6}" y="${y+3}" fill="#898781" font-size="10" text-anchor="end">${v.toFixed(1)}x</text>`;}
+  const y0=new Date(xs[0]).getFullYear(), y1=new Date(xs[xs.length-1]).getFullYear();
+  for(let y=y0;y<=y1;y++){const t=new Date(y,0,1).getTime();
+    if(t<xs[0]||t>xs[xs.length-1])continue;
+    g+=`<text x="${X(t)}" y="${H-8}" fill="#898781" font-size="10" text-anchor="middle">${y}</text>`;}
+  g+=`<path d="${path(series.spy)}" fill="none" stroke="#008300" stroke-width="2"/>`;
+  g+=`<path d="${path(series.book)}" fill="none" stroke="#3987e5" stroke-width="2"/>`;
+  g+=`<text x="${W-R}" y="${Y(series.book[series.book.length-1])-5}" fill="#3987e5" font-size="10" text-anchor="end">book ${series.book[series.book.length-1].toFixed(2)}x</text>`;
+  g+=`<text x="${W-R}" y="${Y(series.spy[series.spy.length-1])+12}" fill="#008300" font-size="10" text-anchor="end">SPY ${series.spy[series.spy.length-1].toFixed(2)}x</text>`;
+  g+=`<line id="xh" x1="0" x2="0" y1="${T}" y2="${H-B}" stroke="#8ea3c0" stroke-width="1" opacity="0"/>`;
+  svg.innerHTML=g;
+  svg.onmousemove=e=>{
+    const r=svg.getBoundingClientRect(), px=e.clientX-r.left;
+    if(px<L||px>W-R){$('tip').style.display='none';$('xh').setAttribute('opacity',0);return;}
+    const t=xs[0]+(px-L)/(W-L-R)*(xs[xs.length-1]-xs[0]);
+    let i=xs.findIndex(x=>x>=t); if(i<0)i=xs.length-1; if(i>0&&t-xs[i-1]<xs[i]-t)i--;
+    const xh=$('xh'); xh.setAttribute('x1',X(xs[i])); xh.setAttribute('x2',X(xs[i]));
+    xh.setAttribute('opacity',.5);
+    const tip=$('tip'); tip.style.display='block';
+    tip.style.left=Math.min(px+10, W-170)+'px'; tip.style.top='10px';
+    tip.innerHTML=`<b>${series.dates[i]}</b><br>book ${series.book[i].toFixed(2)}x · SPY ${series.spy[i].toFixed(2)}x`;
+  };
+  svg.onmouseleave=()=>{$('tip').style.display='none';$('xh').setAttribute('opacity',0);};
+}
+window.addEventListener('resize',draw);
+$('b-curve').click();
+</script></body></html>"""
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "app": "barbell-lab"}
@@ -183,7 +305,9 @@ def index():
     body = f"""
 <h1>⚖️ Barbell Lab</h1>
 <p>Personal quant research platform — B.5 Enhanced sleeve + short-vol bot.
-CLI-first; this page is a read-only view. <b>Cumulative trials: {trials}</b></p>
+CLI-first; this page is the read-only view. <b>Cumulative trials: {trials}</b>
+&nbsp;·&nbsp; <a href="lab">🧪 workbench</a>
+&nbsp;·&nbsp; <a href="chat">💬 analyst chat</a></p>
 <div class="card"><h2>Acceptance gates (platform trust)</h2>{gates_html}</div>
 <div class="card"><h2>Regime</h2>{regime_html}</div>
 <div class="card"><h2>Latest validation</h2>{val_html}</div>
@@ -255,3 +379,161 @@ def reports_index():
     if not REPORT_DIR.exists():
         return ""
     return "\n".join(sorted(p.name for p in REPORT_DIR.glob("*.md")))
+
+
+# ------------------------------------------------------------------ lab
+# Interactive workbench: the same grounded functions the chat analyst uses,
+# driven by form controls. Runs are exploratory-path and register trials.
+
+def _lab_con():
+    return db.connect()
+
+
+@app.post("/api/run/tearsheet")
+def api_run_tearsheet(payload: dict):
+    from ..chat.agent import _tool_get_tearsheet
+    con = _lab_con()
+    try:
+        md = _tool_get_tearsheet(con, tail=str(payload.get("tail", "TAIL")),
+                                 bot_frac=float(payload.get("bot_frac", 0.0)))
+        return {"html": _md_table_to_html(md)}
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(422, str(exc)) from None
+    finally:
+        con.close()
+
+
+@app.post("/api/run/book")
+def api_run_book(payload: dict):
+    from ..chat.agent import _tool_simulate_book, _tool_sweep_bot_fraction
+    con = _lab_con()
+    try:
+        if payload.get("sweep"):
+            md = _tool_sweep_bot_fraction(
+                con, tail=str(payload.get("tail", "TAIL")),
+                kill_switch=str(payload.get("kill_switch", "perfect")))
+            return {"html": _md_table_to_html(md)}
+        out = _tool_simulate_book(
+            con, bot_frac=float(payload.get("bot_frac", 0.2)),
+            tail=str(payload.get("tail", "TAIL")),
+            kill_switch=str(payload.get("kill_switch", "perfect")))
+        r = json.loads(out)
+        rows = "".join(
+            f"<tr><td>{k}</td><td>{v:+.2%}</td></tr>" if isinstance(v, float) and k != "bot_frac"
+            else f"<tr><td>{k}</td><td>{html.escape(str(v))}</td></tr>"
+            for k, v in r.items())
+        return {"html": f"<table><tr><th>metric</th><th>value</th></tr>{rows}</table>"}
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(422, str(exc)) from None
+    finally:
+        con.close()
+
+
+@app.post("/api/run/window")
+def api_run_window(payload: dict):
+    from ..chat.agent import _tool_window_stats
+    con = _lab_con()
+    try:
+        out = _tool_window_stats(con, payload.get("tickers", []),
+                                 str(payload.get("start")), str(payload.get("end")))
+        return json.loads(out)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(422, str(exc)) from None
+    finally:
+        con.close()
+
+
+@app.get("/api/equity")
+def api_equity(tail: str = "TAIL", bot_frac: float = 0.0,
+               kill_switch: str = "perfect"):
+    """Weekly wealth curves for the configured book and SPY (chart data)."""
+    from ..portfolio.book import book_frame
+    con = _lab_con()
+    try:
+        joint = book_frame(con, bot_frac, tail=tail, allow_bot_model=True,
+                           kill_switch=kill_switch)
+        book = (1 + joint["combined"]).cumprod()
+        spy_px = db.read_prices(con, "SPY")["close_adj"]
+        spy = spy_px.loc[joint.index.min():joint.index.max()]
+        spy = spy / spy.iloc[0]
+        bw = book.resample("W").last().dropna()
+        sw = spy.resample("W").last().reindex(bw.index).ffill()
+        return {
+            "dates": [d.strftime("%Y-%m-%d") for d in bw.index],
+            "book": [round(float(v), 4) for v in bw.values],
+            "spy": [round(float(v), 4) for v in sw.values],
+            "label": ("sleeve only" if bot_frac == 0
+                      else f"{1 - bot_frac:.0%} sleeve + {bot_frac:.0%} bot"),
+            "bot_provenance": joint.attrs.get("bot_provenance", "none"),
+        }
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(422, str(exc)) from None
+    finally:
+        con.close()
+
+
+@app.get("/lab", response_class=HTMLResponse)
+def lab_page():
+    return HTMLResponse(_LAB_HTML)
+
+
+# ------------------------------------------------------------------ chat
+@app.post("/api/chat")
+def api_chat(payload: dict):
+    """Grounded quant analyst. Body: {"messages": [{"role","content"}...]}.
+    Runs the platform-tool agent loop; heavy sims are exploratory-path and
+    register trials like everything else."""
+    msgs = payload.get("messages")
+    if not isinstance(msgs, list) or not msgs:
+        raise HTTPException(400, "messages must be a non-empty list")
+    if any(m.get("role") not in ("user", "assistant") or not isinstance(m.get("content"), str)
+           for m in msgs):
+        raise HTTPException(400, "each message needs role user|assistant and string content")
+    from ..chat.agent import answer
+    try:
+        return answer([{"role": m["role"], "content": m["content"]} for m in msgs])
+    except RuntimeError as exc:  # e.g. missing ANTHROPIC_API_KEY
+        raise HTTPException(503, str(exc)) from None
+
+
+@app.get("/chat", response_class=HTMLResponse)
+def chat_page():
+    body = """
+<h1>⚖️ Barbell Lab — analyst chat</h1>
+<p><a href="./">&larr; dashboard</a> · Grounded in the platform's own data; heavy
+simulations run at exploratory path counts and register trials. Slow answers are
+normal — the analyst is running real computations.</p>
+<div id="log"></div>
+<div class="card" style="display:flex;gap:.5rem">
+ <input id="q" style="flex:1;background:#0b1120;color:#d8e1ef;border:1px solid #2a3a58;
+  border-radius:6px;padding:.6rem" placeholder="e.g. sweep the bot fraction under a failing kill-switch"/>
+ <button id="send" style="background:#1f6feb;color:#fff;border:0;border-radius:6px;
+  padding:.6rem 1.2rem;cursor:pointer">Ask</button>
+</div>
+<script>
+const log = document.getElementById('log'), q = document.getElementById('q'),
+      send = document.getElementById('send'); let history = [];
+function add(cls, html){const d=document.createElement('div');d.className='card '+cls;
+  d.innerHTML=html;log.appendChild(d);d.scrollIntoView();}
+async function ask(){
+  const text = q.value.trim(); if(!text) return;
+  q.value=''; add('', '<b>you</b><br>'+text.replace(/</g,'&lt;'));
+  history.push({role:'user', content:text});
+  send.disabled=true; send.textContent='…';
+  try{
+    const r = await fetch('api/chat', {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({messages: history})});
+    const j = await r.json();
+    if(!r.ok) throw new Error(j.detail || r.status);
+    const tools = (j.tool_trace||[]).map(t=>'⚙ '+t.tool).join(' · ');
+    add('', (tools?'<div class="warn">'+tools+'</div>':'') +
+        '<b>analyst</b><br>'+ j.text.replace(/</g,'&lt;').replace(/\\n/g,'<br>'));
+    history.push({role:'assistant', content:j.text});
+  }catch(e){ add('bad', 'error: '+e.message); history.pop(); }
+  send.disabled=false; send.textContent='Ask'; q.focus();
+}
+send.onclick=ask; q.addEventListener('keydown', e=>{if(e.key==='Enter')ask();});
+</script>"""
+    return HTMLResponse(f"<!doctype html><html><head><title>Barbell Lab chat</title>"
+                        f"{_STYLE}</head><body>{body}</body></html>")

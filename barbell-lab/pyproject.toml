@@ -20,6 +20,9 @@ dependencies = [
     # gate hub at /portfolio-optimizer (reuses the existing FastAPI infra).
     "fastapi>=0.104",
     "uvicorn>=0.24",
+    # Chat analyst (grounded Claude agent over the platform's own tools —
+    # same pattern as the genomics Analyst Chat).
+    "anthropic>=0.40",
 ]
 
 [project.optional-dependencies]
