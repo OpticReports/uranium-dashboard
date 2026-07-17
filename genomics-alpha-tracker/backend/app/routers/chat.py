@@ -46,8 +46,10 @@ def status():
         "enabled": bool(settings.anthropic_api_key or settings.openrouter_api_key),
         "backend": "anthropic" if settings.anthropic_api_key
         else ("openrouter" if settings.openrouter_api_key else None),
-        "model_default": settings.chat_model_default,
-        "model_deep": settings.chat_model_deep,
+        "model_default": (settings.chat_model_default if settings.anthropic_api_key
+                          else settings.openrouter_chat_model_default),
+        "model_deep": (settings.chat_model_deep if settings.anthropic_api_key
+                       else settings.openrouter_chat_model_deep),
     }
 
 

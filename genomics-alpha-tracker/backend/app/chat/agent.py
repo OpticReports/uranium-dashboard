@@ -383,14 +383,10 @@ def run_chat(session: Session, message: str, history: list[dict] | None = None,
 
 def _run_chat_openrouter(session: Session, messages: list[dict], deep: bool) -> dict:
     """Same grounded tool loop via OpenRouter's OpenAI-format API."""
-    from ..utils.openrouter import (
-        anthropic_tools_to_openai,
-        chat_completion,
-        openrouter_model,
-    )
+    from ..utils.openrouter import anthropic_tools_to_openai, chat_completion
 
-    model = openrouter_model(settings.chat_model_deep if deep
-                             else settings.chat_model_default)
+    model = (settings.openrouter_chat_model_deep if deep
+             else settings.openrouter_chat_model_default)
     convo: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}] + messages
     oa_tools = anthropic_tools_to_openai(TOOLS)
     tools_used: list[str] = []

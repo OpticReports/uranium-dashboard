@@ -62,8 +62,12 @@ class Settings(BaseSettings):
     # --- Optional LLM sentiment ---
     anthropic_api_key: str | None = None
     # OpenRouter fallback for ALL LLM features (chat + sentiment) when no
-    # native Anthropic key is set. Same Claude models via openrouter.ai.
+    # native Anthropic key is set. Model choices below are env-overridable
+    # (OPENROUTER_CHAT_MODEL_DEFAULT etc.); any tool-capable OpenRouter id works.
     openrouter_api_key: str | None = None
+    openrouter_chat_model_default: str = "moonshotai/kimi-k3"
+    openrouter_chat_model_deep: str = "moonshotai/kimi-k3"
+    openrouter_sentiment_model: str = "moonshotai/kimi-k3"
     sentiment_engine: str = "lexicon"        # lexicon | anthropic (any Claude backend)
 
     # --- Chat analyst (grounded LLM over the dashboard's data) ---
