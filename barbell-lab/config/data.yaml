@@ -60,6 +60,9 @@ bot:
   sqlite_path: ~/bots/shortvol/pnl.db
   table: daily_pnl
   columns: {date: date, realized: realized_pnl, unrealized: unrealized_pnl}
+  # Capital the P&L is earned on (converts $ P&L to returns). REQUIRED before
+  # the combined-book simulator will touch real bot data — no guessing.
+  capital_base: null
 
 history_start: 1995-01-01
 # Documented VENDOR ERRORS in distribution data, each verified against >=2

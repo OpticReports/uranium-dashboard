@@ -26,3 +26,13 @@ constraints:
 rebalance:
   band_relative: 0.20          # ±20% relative threshold bands (Act 60: no tax cost)
   calendar_fallback_months: 12
+
+# Parameterized short-vol bot model — used ONLY where real P&L history is
+# thin AND the caller passes --bot-model. Shape per spec: positive carry,
+# -20%..-30% in VIX-spike months, kill-switch flattening on VIX backwardation.
+bot_model:
+  carry_annual: 0.20           # net carry in benign states (CONFIRM vs bot's realized run-rate)
+  spike_month_return: -0.25    # midpoint of the -20%..-30% spike-month range
+  vix_spike_threshold: 30      # month counts as a spike if VIX >= this ...
+  vix_spike_month_rise: 1.30   # ... and max/first-of-month >= this ratio
+  kill_switch_mode: perfect    # perfect | lag1 | fails (Q1 sweeps all three)
