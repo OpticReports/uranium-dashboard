@@ -60,11 +60,13 @@ def score_text(text: str) -> float:
     """Return sentiment in [-1, 1] for a single piece of text."""
     if not text:
         return 0.0
-    if settings.sentiment_engine == "anthropic" and settings.anthropic_api_key:
+    if settings.sentiment_engine == "anthropic" and (
+        settings.anthropic_api_key or settings.openrouter_api_key
+    ):
         try:
-            return _anthropic_score(text)
+            return _llm_score(text)
         except Exception as exc:  # noqa: BLE001
-            logger.warning("Anthropic sentiment failed (%s); using lexicon", exc)
+            logger.warning("LLM sentiment failed (%s); using lexicon", exc)
     return _lexicon_score(text)
 
 
@@ -75,8 +77,25 @@ def score_many(texts: list[str]) -> float:
     return sum(score_text(t) for t in texts) / len(texts)
 
 
-def _anthropic_score(text: str) -> float:
-    """Optional LLM scorer. Imported lazily so the dep is not required."""
+_SENTIMENT_PROMPT = (
+    "Rate the investor sentiment of this text from -1 (very "
+    "bearish) to 1 (very bullish). Reply with ONLY the number.\n\n"
+)
+
+
+def _llm_score(text: str) -> float:
+    """Optional LLM scorer: native Anthropic key preferred, OpenRouter fallback."""
+    if not settings.anthropic_api_key:
+        from .openrouter import chat_completion
+
+        payload = chat_completion(
+            "anthropic/claude-haiku-4.5",
+            [{"role": "user", "content": _SENTIMENT_PROMPT + text[:1500]}],
+            max_tokens=8, timeout=30.0,
+        )
+        raw = (payload["choices"][0]["message"].get("content") or "").strip()
+        return max(-1.0, min(1.0, float(raw)))
+
     import anthropic  # type: ignore
 
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)

@@ -156,7 +156,8 @@ def health():
             "tiingo": bool(settings.tiingo_api_key),
             "x_twitter": bool(settings.x_bearer_token),
             "reddit": bool(settings.reddit_client_id),
-            "anthropic_sentiment": bool(settings.anthropic_api_key),
+            "llm_backend": ("anthropic" if settings.anthropic_api_key else
+                            "openrouter" if settings.openrouter_api_key else None),
         },
     }
 
