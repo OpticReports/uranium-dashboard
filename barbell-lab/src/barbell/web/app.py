@@ -722,7 +722,7 @@ document.querySelectorAll('.pbtn').forEach(b=>b.onclick=async()=>{{
  const j=await r.json();
  alert(r.ok? (j.label+' is now LIVE') : ('refused: '+(j.detail||r.status)));
  if(r.ok) location.reload();
-}}));
+}});
 </script>"""
     return HTMLResponse(f"<!doctype html><html><head><title>Portfolio ledger</title>"
                         f"{_STYLE}</head><body>{body}</body></html>")
@@ -858,8 +858,8 @@ async function openConvo(id){
 }
 document.getElementById('newc').onclick=()=>{cid=null;
   localStorage.removeItem('barbell_cid'); log.innerHTML='';
-  add('','<span style="color:#7d8aa5">new conversation — memory notes and past-conversation
-  context carry over automatically</span>'); loadConvos(); q.focus();};
+  add('','<span style="color:#7d8aa5">new conversation — memory notes and past-conversation context carry over automatically</span>');
+  loadConvos(); q.focus();};
 async function ask(){
   const text=q.value.trim(); if(!text) return;
   q.value=''; renderMsg({role:'user', content:text});
