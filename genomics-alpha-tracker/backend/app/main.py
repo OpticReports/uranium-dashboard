@@ -159,6 +159,25 @@ def health():
             "llm_backend": ("anthropic" if settings.anthropic_api_key else
                             "openrouter" if settings.openrouter_api_key else None),
         },
+        "openrouter_key": _openrouter_key_diag(),
+    }
+
+
+def _openrouter_key_diag() -> dict:
+    """Same partial fingerprint OpenRouter shows on its own keys page (first
+    12 + last 3 chars) — enough to match a key by eye, never the key itself."""
+    from .utils.openrouter import _key
+    raw = settings.openrouter_api_key or ""
+    clean = _key()
+    if not clean:
+        return {"present": False}
+    return {
+        "present": True,
+        "raw_length": len(raw),
+        "clean_length": len(clean),
+        "prefix_ok": clean.startswith("sk-or-"),
+        "had_whitespace_or_quotes": raw != clean,
+        "fingerprint": f"{clean[:12]}…{clean[-3:]}",
     }
 
 
