@@ -14,7 +14,7 @@ from contextlib import asynccontextmanager
 import httpx
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session, select
 
@@ -205,23 +205,43 @@ def _mount_proxy(prefix: str, upstream_env: str, default_upstream: str, label: s
         fwd = {k: v for k, v in request.headers.items()
                if k.lower() not in ("host", "authorization", "content-length", "accept-encoding")}
         # Request an uncompressed upstream response so we never forward compressed
-        # bytes with the encoding header stripped (renders as garbage otherwise).
+        # bytes with the encoding header stripped (renders as garbage otherwise),
+        # and so streamed chunks pass through unbuffered.
         fwd["accept-encoding"] = "identity"
+        # Stream the upstream response through instead of buffering it: the
+        # barbell analyst chat holds requests open for minutes and emits
+        # NDJSON progress events; buffering would both time out and destroy
+        # the live feedback. read=600s tolerates long LLM turns.
+        client = httpx.AsyncClient(
+            timeout=httpx.Timeout(connect=10.0, read=600.0, write=60.0, pool=10.0),
+            follow_redirects=True)
         try:
-            async with httpx.AsyncClient(timeout=90.0, follow_redirects=True) as client:
-                up = await client.request(request.method, url,
-                                          params=dict(request.query_params),
-                                          content=body, headers=fwd)
+            up = await client.send(
+                client.build_request(request.method, url,
+                                     params=dict(request.query_params),
+                                     content=body, headers=fwd),
+                stream=True)
         except Exception as exc:  # noqa: BLE001
-            return Response(f"{label} upstream unavailable: {exc}", status_code=502)
+            await client.aclose()
+            return Response(f"{label} upstream unavailable: {exc}", status_code=502,
+                            media_type="text/plain")
         headers = {k: v for k, v in up.headers.items() if k.lower() not in _HOP_HEADERS}
         # Never let browsers cache the HTML shell: after a redeploy a cached
         # index.html keeps serving the OLD app (hashed .js assets stay cacheable).
         ctype = up.headers.get("content-type", "")
         if ctype.startswith("text/html"):
             headers["cache-control"] = "no-cache"
-        return Response(content=up.content, status_code=up.status_code, headers=headers,
-                        media_type=ctype or None)
+
+        async def _relay():
+            try:
+                async for chunk in up.aiter_bytes():
+                    yield chunk
+            finally:
+                await up.aclose()
+                await client.aclose()
+
+        return StreamingResponse(_relay(), status_code=up.status_code,
+                                 headers=headers, media_type=ctype or None)
 
 
 # research.optic.capital/canary — Treasury Market Health Monitor

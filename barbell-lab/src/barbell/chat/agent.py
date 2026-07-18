@@ -395,26 +395,38 @@ def _execute(con, name: str, args: dict) -> tuple[str, bool]:
         return f"tool error: {exc}", True
 
 
+def _emit(on_event, kind: str, detail: dict) -> None:
+    """Progress callback, best-effort — a broken listener never kills a turn."""
+    if on_event is None:
+        return
+    try:
+        on_event(kind, detail)
+    except Exception:  # noqa: BLE001
+        logger.debug("chat progress listener failed", exc_info=True)
+
+
 def answer(messages: list[dict], max_turns: int = 12,
-           extra_system: str = "") -> dict:
+           extra_system: str = "", on_event=None) -> dict:
     """Run the grounded agent loop. `messages` is the prior conversation as
     [{"role": "user"|"assistant", "content": str}]. Returns final text +
     the tool calls made (for UI display). `extra_system` is appended to the
-    system prompt (used for the persistent-memory block).
+    system prompt (used for the persistent-memory block). `on_event(kind,
+    detail)` receives live progress: ("thinking", {"turn": n}) before each
+    LLM call, ("tool", {"tool","input"}) / ("tool_done", ...) around tools.
 
     Backend selection: a native ANTHROPIC_API_KEY is preferred; otherwise an
     OPENROUTER_API_KEY routes the same Claude model through OpenRouter's
     OpenAI-format API. Same tools, same grounding rules either way."""
     if os.environ.get("ANTHROPIC_API_KEY"):
-        return _answer_anthropic(messages, max_turns, extra_system)
+        return _answer_anthropic(messages, max_turns, extra_system, on_event)
     if os.environ.get("OPENROUTER_API_KEY"):
-        return _answer_openrouter(messages, max_turns, extra_system)
+        return _answer_openrouter(messages, max_turns, extra_system, on_event)
     raise RuntimeError("chat analyst disabled — set ANTHROPIC_API_KEY or "
                        "OPENROUTER_API_KEY on the service")
 
 
 def answer_in_conversation(con, conversation_id: int | None, user_text: str,
-                           max_turns: int = 12) -> dict:
+                           max_turns: int = 12, on_event=None) -> dict:
     """Memory-backed entry point: persist the user turn, build the context
     window (durable notes + past-conversation digests + rolling summary +
     verbatim tail), run the agent, persist the reply. Returns the usual
@@ -424,10 +436,12 @@ def answer_in_conversation(con, conversation_id: int | None, user_text: str,
     token = _CURRENT_CID.set(cid)
     try:
         memory.append_message(con, cid, "user", user_text)
+        _emit(on_event, "memory", {"detail": "building context window"})
         summary_ctx = memory.conversation_window(con, cid, summarize)
         _, tail = summary_ctx
         extra = memory.context_block(con, cid)  # includes updated rolling summary
-        res = answer(tail, max_turns=max_turns, extra_system=extra)
+        res = answer(tail, max_turns=max_turns, extra_system=extra,
+                     on_event=on_event)
         memory.append_message(con, cid, "assistant", res["text"],
                               tool_trace=res["tool_trace"])
         return dict(res, conversation_id=cid)
@@ -460,7 +474,7 @@ def summarize(prompt: str) -> str:
 
 
 def _answer_anthropic(messages: list[dict], max_turns: int,
-                      extra_system: str = "") -> dict:
+                      extra_system: str = "", on_event=None) -> dict:
     import anthropic
     client = anthropic.Anthropic()
     con = db.connect()
@@ -473,7 +487,8 @@ def _answer_anthropic(messages: list[dict], max_turns: int,
     if extra_system:
         system.append({"type": "text", "text": extra_system})
     try:
-        for _ in range(max_turns):
+        for turn in range(max_turns):
+            _emit(on_event, "thinking", {"turn": turn + 1})
             response = client.messages.create(
                 model=MODEL,
                 max_tokens=8192,
@@ -490,7 +505,9 @@ def _answer_anthropic(messages: list[dict], max_turns: int,
             for block in response.content:
                 if block.type != "tool_use":
                     continue
+                _emit(on_event, "tool", {"tool": block.name, "input": dict(block.input)})
                 out, is_err = _execute(con, block.name, dict(block.input))
+                _emit(on_event, "tool_done", {"tool": block.name, "error": is_err})
                 tool_trace.append({"tool": block.name, "input": dict(block.input),
                                    "error": is_err})
                 results.append({"type": "tool_result", "tool_use_id": block.id,
@@ -540,7 +557,7 @@ def openrouter_key_diagnostics() -> dict:
 
 
 def _answer_openrouter(messages: list[dict], max_turns: int,
-                       extra_system: str = "") -> dict:
+                       extra_system: str = "", on_event=None) -> dict:
     import httpx
     key = _openrouter_key()
     con = db.connect()
@@ -548,7 +565,8 @@ def _answer_openrouter(messages: list[dict], max_turns: int,
                           "content": SYSTEM_PROMPT + extra_system}] + list(messages)
     tool_trace: list[dict] = []
     try:
-        for _ in range(max_turns):
+        for turn in range(max_turns):
+            _emit(on_event, "thinking", {"turn": turn + 1})
             try:
                 r = httpx.post(
                     _OPENROUTER_URL,
@@ -576,7 +594,9 @@ def _answer_openrouter(messages: list[dict], max_turns: int,
                     args = json.loads(fn.get("arguments") or "{}")
                 except json.JSONDecodeError:
                     args = {}
+                _emit(on_event, "tool", {"tool": fn["name"], "input": args})
                 out, is_err = _execute(con, fn["name"], args)
+                _emit(on_event, "tool_done", {"tool": fn["name"], "error": is_err})
                 tool_trace.append({"tool": fn["name"], "input": args, "error": is_err})
                 convo.append({"role": "tool", "tool_call_id": call["id"],
                               "content": out[:60_000]})
