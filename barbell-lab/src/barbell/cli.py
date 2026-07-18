@@ -236,12 +236,34 @@ def portfolio(
 
 
 @app.command()
-def chat() -> None:
-    """Interactive grounded quant analyst (Claude with platform tools)."""
-    from .chat.agent import answer
+def chat(
+    resume: int = typer.Option(None, "--resume", help="conversation id to continue (see --list)"),
+    new: bool = typer.Option(False, "--new", help="force a fresh conversation"),
+    list_convos: bool = typer.Option(False, "--list", help="list stored conversations and exit"),
+) -> None:
+    """Interactive grounded quant analyst with persistent memory. Conversations
+    are stored server-side (shared with the web UI): by default the most recent
+    one is resumed; durable memory notes carry across all conversations."""
+    from .chat import memory
+    from .chat.agent import answer_in_conversation
+    con = db.connect()
+    if list_convos:
+        for c in memory.list_conversations(con):
+            console.print(f"[cyan]{c['id']:4d}[/cyan] {c['updated_at'][:10]} "
+                          f"({c['n_messages']:3d} msgs) {c['title']}")
+        return
+    cid: int | None = resume
+    if cid is None and not new:
+        recent = memory.list_conversations(con, limit=1)
+        cid = recent[0]["id"] if recent else None
+    if cid is not None:
+        try:
+            title = memory.get_conversation(con, cid)["title"] or "(untitled)"
+            console.print(f"[dim]resuming conversation {cid}: {title}[/dim]")
+        except ValueError:
+            raise typer.BadParameter(f"no conversation {cid}") from None
     console.print("[bold]Barbell Lab analyst[/bold] — grounded in the platform's own "
-                  "data. Ctrl-D to exit.")
-    history: list[dict] = []
+                  "data; conversations persist with memory. Ctrl-D to exit.")
     while True:
         try:
             q = console.input("[cyan]you>[/cyan] ")
@@ -249,12 +271,11 @@ def chat() -> None:
             break
         if not q.strip():
             continue
-        history.append({"role": "user", "content": q})
-        res = answer(history)
+        res = answer_in_conversation(con, cid, q)
+        cid = res["conversation_id"]
         for t in res["tool_trace"]:
             console.print(f"[dim]  ⚙ {t['tool']}({t['input']})[/dim]")
         console.print(res["text"])
-        history.append({"role": "assistant", "content": res["text"]})
 
 
 @app.command()

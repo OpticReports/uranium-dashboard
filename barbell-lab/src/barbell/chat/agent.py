@@ -17,6 +17,7 @@ v1 is a non-streaming manual tool loop (mirrors the genomics agent).
 """
 from __future__ import annotations
 
+import contextvars
 import json
 import logging
 import os
@@ -24,6 +25,11 @@ import os
 from .. import db
 
 logger = logging.getLogger(__name__)
+
+# conversation id for the currently-running agent loop (lets memory tools
+# attribute notes/searches without threading it through every handler)
+_CURRENT_CID: contextvars.ContextVar[int | None] = contextvars.ContextVar(
+    "barbell_chat_cid", default=None)
 
 MODEL = os.environ.get("BARBELL_CHAT_MODEL", "claude-opus-4-8")
 EXPLORATORY_PATHS = 5000
@@ -57,6 +63,15 @@ You help the investor tinker: compare tail-sleeve instruments, toggle the bot
 overlay at any fraction, stress specific windows, read the platform's reports,
 and design the next properly-registered experiment. Be direct, quantitative,
 and adversarial with your own hypotheses (state what would refute them).
+
+MEMORY: conversations are persisted server-side. A PERSISTENT MEMORY block
+(durable notes, past-conversation digests, this conversation's rolling summary)
+may be appended below. Use it for continuity; when the investor states a
+durable preference, decision, or hard-won conclusion worth keeping across
+conversations, save it with remember_note (one dense sentence — don't save
+transient numbers, they go stale). Use search_past_conversations when the
+investor references earlier work you can't see. Memory is context, not
+evidence: numeric claims still require tool calls in THIS conversation.
 
 End every substantive analysis with: "Research, not investment advice."\
 """
@@ -183,6 +198,30 @@ TOOLS = [
             "type": "object",
             "properties": {"a": {"type": "integer"}, "b": {"type": "integer"}},
             "required": ["a", "b"],
+        },
+    },
+    {
+        "name": "remember_note",
+        "description": "Save ONE durable memory note that persists across all future "
+        "conversations (investor preferences, standing decisions, hard-won conclusions). "
+        "Dense single sentence. Do NOT save transient metrics — they go stale; the "
+        "platform tools always have fresh numbers.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"content": {"type": "string",
+                                       "description": "the note, one dense sentence"}},
+            "required": ["content"],
+        },
+    },
+    {
+        "name": "search_past_conversations",
+        "description": "Search the persistent chat memory (past conversation "
+        "transcripts, rolling summaries, durable notes) by substring. Use when the "
+        "investor references earlier discussions not visible in this conversation.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
+            "required": ["query"],
         },
     },
 ]
@@ -312,6 +351,22 @@ def _tool_compare_versions(con, a: int, b: int) -> str:
     return json.dumps(registry.compare(con, int(a), int(b)))
 
 
+def _tool_remember_note(con, content: str) -> str:
+    from . import memory
+    nid = memory.add_note(con, content, source_conversation_id=_CURRENT_CID.get())
+    return json.dumps({"saved": True, "note_id": nid,
+                       "note": "will be in context of all future conversations"})
+
+
+def _tool_search_past_conversations(con, query: str) -> str:
+    from . import memory
+    hits = memory.search_history(con, query,
+                                 exclude_conversation=_CURRENT_CID.get())
+    return json.dumps({"query": query, "hits": hits} if hits
+                      else {"query": query, "hits": [],
+                            "note": "nothing in memory matches"})
+
+
 _HANDLERS = {
     "get_platform_status": _tool_get_platform_status,
     "get_tearsheet": _tool_get_tearsheet,
@@ -324,6 +379,8 @@ _HANDLERS = {
     "list_portfolio_versions": _tool_list_portfolio_versions,
     "propose_candidate": _tool_propose_candidate,
     "compare_versions": _tool_compare_versions,
+    "remember_note": _tool_remember_note,
+    "search_past_conversations": _tool_search_past_conversations,
 }
 
 
@@ -338,36 +395,90 @@ def _execute(con, name: str, args: dict) -> tuple[str, bool]:
         return f"tool error: {exc}", True
 
 
-def answer(messages: list[dict], max_turns: int = 12) -> dict:
+def answer(messages: list[dict], max_turns: int = 12,
+           extra_system: str = "") -> dict:
     """Run the grounded agent loop. `messages` is the prior conversation as
     [{"role": "user"|"assistant", "content": str}]. Returns final text +
-    the tool calls made (for UI display).
+    the tool calls made (for UI display). `extra_system` is appended to the
+    system prompt (used for the persistent-memory block).
 
     Backend selection: a native ANTHROPIC_API_KEY is preferred; otherwise an
     OPENROUTER_API_KEY routes the same Claude model through OpenRouter's
     OpenAI-format API. Same tools, same grounding rules either way."""
     if os.environ.get("ANTHROPIC_API_KEY"):
-        return _answer_anthropic(messages, max_turns)
+        return _answer_anthropic(messages, max_turns, extra_system)
     if os.environ.get("OPENROUTER_API_KEY"):
-        return _answer_openrouter(messages, max_turns)
+        return _answer_openrouter(messages, max_turns, extra_system)
     raise RuntimeError("chat analyst disabled — set ANTHROPIC_API_KEY or "
                        "OPENROUTER_API_KEY on the service")
 
 
-def _answer_anthropic(messages: list[dict], max_turns: int) -> dict:
+def answer_in_conversation(con, conversation_id: int | None, user_text: str,
+                           max_turns: int = 12) -> dict:
+    """Memory-backed entry point: persist the user turn, build the context
+    window (durable notes + past-conversation digests + rolling summary +
+    verbatim tail), run the agent, persist the reply. Returns the usual
+    answer() dict plus conversation_id."""
+    from . import memory
+    cid = int(conversation_id) if conversation_id else memory.create_conversation(con)
+    token = _CURRENT_CID.set(cid)
+    try:
+        memory.append_message(con, cid, "user", user_text)
+        summary_ctx = memory.conversation_window(con, cid, summarize)
+        _, tail = summary_ctx
+        extra = memory.context_block(con, cid)  # includes updated rolling summary
+        res = answer(tail, max_turns=max_turns, extra_system=extra)
+        memory.append_message(con, cid, "assistant", res["text"],
+                              tool_trace=res["tool_trace"])
+        return dict(res, conversation_id=cid)
+    finally:
+        _CURRENT_CID.reset(token)
+
+
+def summarize(prompt: str) -> str:
+    """One plain completion (no tools) — used to fold old turns into a
+    conversation's rolling summary. Raises on failure; the caller has an
+    extractive fallback."""
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        import anthropic
+        r = anthropic.Anthropic().messages.create(
+            model=MODEL, max_tokens=2048,
+            messages=[{"role": "user", "content": prompt}])
+        return "".join(b.text for b in r.content if b.type == "text")
+    if os.environ.get("OPENROUTER_API_KEY"):
+        import httpx
+        r = httpx.post(
+            _OPENROUTER_URL,
+            headers={"Authorization": f"Bearer {_openrouter_key()}",
+                     "X-Title": "Barbell Lab"},
+            json={"model": OPENROUTER_MODEL, "max_tokens": 2048,
+                  "messages": [{"role": "user", "content": prompt}]},
+            timeout=120.0)
+        r.raise_for_status()
+        return r.json()["choices"][0]["message"].get("content") or ""
+    raise RuntimeError("no LLM key for summarization")
+
+
+def _answer_anthropic(messages: list[dict], max_turns: int,
+                      extra_system: str = "") -> dict:
     import anthropic
     client = anthropic.Anthropic()
     con = db.connect()
     convo = list(messages)
     tool_trace: list[dict] = []
+    # static prompt stays its own cacheable block; the volatile memory block
+    # rides separately so prompt caching keeps working
+    system = [{"type": "text", "text": SYSTEM_PROMPT,
+               "cache_control": {"type": "ephemeral"}}]
+    if extra_system:
+        system.append({"type": "text", "text": extra_system})
     try:
         for _ in range(max_turns):
             response = client.messages.create(
                 model=MODEL,
                 max_tokens=8192,
                 thinking={"type": "adaptive"},
-                system=[{"type": "text", "text": SYSTEM_PROMPT,
-                         "cache_control": {"type": "ephemeral"}}],
+                system=system,
                 tools=TOOLS,
                 messages=convo,
             )
@@ -428,11 +539,13 @@ def openrouter_key_diagnostics() -> dict:
     }
 
 
-def _answer_openrouter(messages: list[dict], max_turns: int) -> dict:
+def _answer_openrouter(messages: list[dict], max_turns: int,
+                       extra_system: str = "") -> dict:
     import httpx
     key = _openrouter_key()
     con = db.connect()
-    convo: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}] + list(messages)
+    convo: list[dict] = [{"role": "system",
+                          "content": SYSTEM_PROMPT + extra_system}] + list(messages)
     tool_trace: list[dict] = []
     try:
         for _ in range(max_turns):
