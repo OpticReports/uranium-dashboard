@@ -13,6 +13,10 @@ trials(...)         -- append-only trial registry (see stats.trials)
 regime_log(...)     -- daily regime dashboard snapshots
 alerts(...)         -- monitor alert log (alerting mode "log")
 validation_log(...) -- every ingest validation outcome, pass or fail
+chat_conversations / chat_messages / chat_memory
+                    -- persistent analyst-chat memory: full conversation
+                       transcripts, per-conversation rolling summaries
+                       (context-window management), durable memory notes
 """
 from __future__ import annotations
 
@@ -96,6 +100,30 @@ CREATE TABLE IF NOT EXISTS validation_log (
     ticker  TEXT,
     passed  INTEGER NOT NULL,
     detail  TEXT
+);
+CREATE TABLE IF NOT EXISTS chat_conversations (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    title           TEXT,
+    summary         TEXT NOT NULL DEFAULT '',   -- rolling summary of folded-away turns
+    summary_upto_id INTEGER NOT NULL DEFAULT 0, -- last message id folded into summary
+    created_at      TEXT NOT NULL,
+    updated_at      TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id INTEGER NOT NULL REFERENCES chat_conversations(id),
+    role            TEXT NOT NULL CHECK(role IN ('user','assistant')),
+    content         TEXT NOT NULL,
+    tool_trace      TEXT,                       -- json list of tool calls (assistant rows)
+    created_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_convo
+    ON chat_messages(conversation_id, id);
+CREATE TABLE IF NOT EXISTS chat_memory (
+    id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+    content                TEXT NOT NULL,       -- one durable note
+    source_conversation_id INTEGER,
+    created_at             TEXT NOT NULL
 );
 """
 

@@ -731,20 +731,68 @@ document.querySelectorAll('.pbtn').forEach(b=>b.onclick=async()=>{{
 # ------------------------------------------------------------------ chat
 @app.post("/api/chat")
 def api_chat(payload: dict):
-    """Grounded quant analyst. Body: {"messages": [{"role","content"}...]}.
-    Runs the platform-tool agent loop; heavy sims are exploratory-path and
-    register trials like everything else."""
+    """Grounded quant analyst with persistent memory.
+
+    Preferred body: {"message": str, "conversation_id": int|null} — the server
+    persists both turns, manages the context window (rolling summaries) and
+    injects durable memory. Returns {conversation_id, text, tool_trace}.
+
+    Legacy body {"messages": [...]} still works (stateless, no memory)."""
+    text = payload.get("message")
+    if isinstance(text, str) and text.strip():
+        con = _lab_con()
+        try:
+            from ..chat.agent import answer_in_conversation
+            cid = payload.get("conversation_id")
+            return answer_in_conversation(con, int(cid) if cid else None, text.strip())
+        except RuntimeError as exc:  # e.g. missing LLM key
+            raise HTTPException(503, str(exc)) from None
+        finally:
+            con.close()
     msgs = payload.get("messages")
     if not isinstance(msgs, list) or not msgs:
-        raise HTTPException(400, "messages must be a non-empty list")
+        raise HTTPException(400, "body needs 'message' (preferred) or 'messages'")
     if any(m.get("role") not in ("user", "assistant") or not isinstance(m.get("content"), str)
            for m in msgs):
         raise HTTPException(400, "each message needs role user|assistant and string content")
     from ..chat.agent import answer
     try:
         return answer([{"role": m["role"], "content": m["content"]} for m in msgs])
-    except RuntimeError as exc:  # e.g. missing ANTHROPIC_API_KEY
+    except RuntimeError as exc:
         raise HTTPException(503, str(exc)) from None
+
+
+@app.get("/api/conversations")
+def api_conversations():
+    from ..chat import memory
+    con = _lab_con()
+    try:
+        return {"conversations": memory.list_conversations(con)}
+    finally:
+        con.close()
+
+
+@app.get("/api/conversations/{cid}")
+def api_conversation(cid: int):
+    from ..chat import memory
+    con = _lab_con()
+    try:
+        convo = memory.get_conversation(con, cid)
+        return {"conversation": convo, "messages": memory.get_messages(con, cid)}
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from None
+    finally:
+        con.close()
+
+
+@app.get("/api/memory")
+def api_memory():
+    from ..chat import memory
+    con = _lab_con()
+    try:
+        return {"notes": memory.list_notes(con, limit=100)}
+    finally:
+        con.close()
 
 
 @app.get("/chat", response_class=HTMLResponse)
@@ -752,39 +800,84 @@ def chat_page():
     body = """
 <h1>⚖️ Barbell Lab — analyst chat</h1>
 <p><a href="./">&larr; dashboard</a> · Grounded in the platform's own data; heavy
-simulations run at exploratory path counts and register trials. Slow answers are
-normal — the analyst is running real computations.</p>
-<div id="log"></div>
-<div class="card" style="display:flex;gap:.5rem">
- <input id="q" style="flex:1;background:#0b1120;color:#d8e1ef;border:1px solid #2a3a58;
-  border-radius:6px;padding:.6rem" placeholder="e.g. sweep the bot fraction under a failing kill-switch"/>
- <button id="send" style="background:#1f6feb;color:#fff;border:0;border-radius:6px;
-  padding:.6rem 1.2rem;cursor:pointer">Ask</button>
+simulations run at exploratory path counts and register trials. Conversations
+are <b>persisted with memory</b>: the analyst carries durable notes and can
+recall past conversations. Slow answers are normal — it runs real computations.</p>
+<div style="display:flex;gap:1rem;align-items:flex-start">
+ <div style="flex:0 0 240px">
+  <div class="card">
+   <button id="newc" style="width:100%;background:#1f6feb;color:#fff;border:0;
+    border-radius:6px;padding:.5rem;cursor:pointer">+ New conversation</button>
+   <div id="convos" style="margin-top:.5rem"></div>
+  </div>
+ </div>
+ <div style="flex:1;min-width:0">
+  <div id="log"></div>
+  <div class="card" style="display:flex;gap:.5rem">
+   <input id="q" style="flex:1;background:#0b1120;color:#d8e1ef;border:1px solid #2a3a58;
+    border-radius:6px;padding:.6rem" placeholder="e.g. sweep the bot fraction under a failing kill-switch"/>
+   <button id="send" style="background:#1f6feb;color:#fff;border:0;border-radius:6px;
+    padding:.6rem 1.2rem;cursor:pointer">Ask</button>
+  </div>
+ </div>
 </div>
 <script>
-const log = document.getElementById('log'), q = document.getElementById('q'),
-      send = document.getElementById('send'); let history = [];
+const log=document.getElementById('log'), q=document.getElementById('q'),
+      send=document.getElementById('send'), convos=document.getElementById('convos');
+let cid = parseInt(localStorage.getItem('barbell_cid')) || null;
+function esc(s){return s.replace(/</g,'&lt;');}
 function add(cls, html){const d=document.createElement('div');d.className='card '+cls;
   d.innerHTML=html;log.appendChild(d);d.scrollIntoView();}
+function renderMsg(m){
+  if(m.role==='user') add('', '<b>you</b><br>'+esc(m.content).replace(/\\n/g,'<br>'));
+  else {
+    const tools=(m.tool_trace||[]).map(t=>'⚙ '+t.tool).join(' · ');
+    add('', (tools?'<div class="warn">'+tools+'</div>':'') +
+      '<b>analyst</b><br>'+esc(m.content).replace(/\\n/g,'<br>'));
+  }
+}
+async function loadConvos(){
+  try{
+    const j = await (await fetch('api/conversations')).json();
+    convos.innerHTML = (j.conversations||[]).map(c=>
+      `<div class="convo" data-id="${c.id}" style="padding:.35rem;border-radius:6px;cursor:pointer;
+        margin-top:.2rem;font-size:.85rem;${c.id===cid?'background:#1c2b47':''}">
+        ${esc(c.title||'(untitled)').slice(0,60)}<br>
+        <span style="color:#7d8aa5;font-size:.75rem">${(c.updated_at||'').slice(0,10)} · ${c.n_messages} msgs</span>
+       </div>`).join('') || '<div style="color:#7d8aa5;font-size:.85rem">no conversations yet</div>';
+    convos.querySelectorAll('.convo').forEach(el=>el.onclick=()=>openConvo(parseInt(el.dataset.id)));
+  }catch(e){}
+}
+async function openConvo(id){
+  cid=id; localStorage.setItem('barbell_cid', id); log.innerHTML='';
+  try{
+    const j = await (await fetch('api/conversations/'+id)).json();
+    (j.messages||[]).forEach(renderMsg);
+  }catch(e){ add('bad','could not load conversation'); }
+  loadConvos();
+}
+document.getElementById('newc').onclick=()=>{cid=null;
+  localStorage.removeItem('barbell_cid'); log.innerHTML='';
+  add('','<span style="color:#7d8aa5">new conversation — memory notes and past-conversation
+  context carry over automatically</span>'); loadConvos(); q.focus();};
 async function ask(){
-  const text = q.value.trim(); if(!text) return;
-  q.value=''; add('', '<b>you</b><br>'+text.replace(/</g,'&lt;'));
-  history.push({role:'user', content:text});
+  const text=q.value.trim(); if(!text) return;
+  q.value=''; renderMsg({role:'user', content:text});
   send.disabled=true; send.textContent='…';
   try{
     const r = await fetch('api/chat', {method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({messages: history})});
+      body: JSON.stringify({message:text, conversation_id:cid})});
     const j = await r.json();
     if(!r.ok) throw new Error(j.detail || r.status);
-    const tools = (j.tool_trace||[]).map(t=>'⚙ '+t.tool).join(' · ');
-    add('', (tools?'<div class="warn">'+tools+'</div>':'') +
-        '<b>analyst</b><br>'+ j.text.replace(/</g,'&lt;').replace(/\\n/g,'<br>'));
-    history.push({role:'assistant', content:j.text});
-  }catch(e){ add('bad', 'error: '+e.message); history.pop(); }
+    cid = j.conversation_id; localStorage.setItem('barbell_cid', cid);
+    renderMsg({role:'assistant', content:j.text, tool_trace:j.tool_trace});
+    loadConvos();
+  }catch(e){ add('bad', 'error: '+e.message); }
   send.disabled=false; send.textContent='Ask'; q.focus();
 }
 send.onclick=ask; q.addEventListener('keydown', e=>{if(e.key==='Enter')ask();});
+if(cid) openConvo(cid); else loadConvos();
 </script>"""
     return HTMLResponse(f"<!doctype html><html><head><title>Barbell Lab chat</title>"
                         f"{_STYLE}</head><body>{body}</body></html>")
