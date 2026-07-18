@@ -22,7 +22,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, StreamingResponse
 
 from .. import db
 from ..config import REPORT_DIR, ensure_dirs
@@ -762,6 +762,57 @@ def api_chat(payload: dict):
         raise HTTPException(503, str(exc)) from None
 
 
+@app.post("/api/chat/stream")
+def api_chat_stream(payload: dict):
+    """Streaming variant: NDJSON progress events while the analyst works.
+
+    Lines: {"event":"memory"|"thinking"|"tool"|"tool_done"|"hb"} then a final
+    {"event":"done","conversation_id","text","tool_trace"} or
+    {"event":"error","detail"}. Heartbeats every 10s keep proxies from timing
+    out during long LLM turns."""
+    text = payload.get("message")
+    if not isinstance(text, str) or not text.strip():
+        raise HTTPException(400, "body needs 'message' (string)")
+    cid = payload.get("conversation_id")
+    import queue
+    from ..chat.agent import answer_in_conversation
+    events: queue.Queue = queue.Queue()
+
+    def on_event(kind: str, detail: dict) -> None:
+        events.put({"event": kind, **{k: v for k, v in detail.items()
+                                      if k in ("turn", "tool", "detail", "error")}})
+
+    def run() -> None:
+        con = _lab_con()
+        try:
+            res = answer_in_conversation(con, int(cid) if cid else None,
+                                         text.strip(), on_event=on_event)
+            events.put({"event": "done", "conversation_id": res["conversation_id"],
+                        "text": res["text"], "tool_trace": res["tool_trace"]})
+        except Exception as exc:  # noqa: BLE001 — surfaced as an error event
+            events.put({"event": "error", "detail": str(exc)})
+        finally:
+            con.close()
+            events.put(None)
+
+    threading.Thread(target=run, daemon=True).start()
+
+    def gen():
+        while True:
+            try:
+                item = events.get(timeout=10)
+            except queue.Empty:
+                yield json.dumps({"event": "hb"}) + "\n"
+                continue
+            if item is None:
+                break
+            yield json.dumps(item) + "\n"
+
+    return StreamingResponse(gen(), media_type="application/x-ndjson",
+                             headers={"cache-control": "no-cache",
+                                      "x-accel-buffering": "no"})
+
+
 @app.get("/api/conversations")
 def api_conversations():
     from ..chat import memory
@@ -864,16 +915,52 @@ async function ask(){
   const text=q.value.trim(); if(!text) return;
   q.value=''; renderMsg({role:'user', content:text});
   send.disabled=true; send.textContent='…';
+  const st=document.createElement('div'); st.className='card';
+  log.appendChild(st); st.scrollIntoView();
+  const t0=Date.now(); let acts=['🧠 analyst thinking…'];
+  const paint=()=>{st.innerHTML='<span class="warn">'+acts.map(esc).join('<br>')+
+    '</span><br><span style="color:#7d8aa5;font-size:.8rem">'+
+    Math.round((Date.now()-t0)/1000)+'s — long runs are normal, real computations</span>';};
+  paint(); const tick=setInterval(paint, 1000);
+  let finished=false;
   try{
-    const r = await fetch('api/chat', {method:'POST',
+    const r = await fetch('api/chat/stream', {method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({message:text, conversation_id:cid})});
-    const j = await r.json();
-    if(!r.ok) throw new Error(j.detail || r.status);
-    cid = j.conversation_id; localStorage.setItem('barbell_cid', cid);
-    renderMsg({role:'assistant', content:j.text, tool_trace:j.tool_trace});
-    loadConvos();
-  }catch(e){ add('bad', 'error: '+e.message); }
+    if(!r.ok || !r.body){
+      const t=await r.text(); let d=t;
+      try{d=JSON.parse(t).detail||t;}catch(_e){}
+      throw new Error(String(d).slice(0,300));
+    }
+    const rd=r.body.getReader(), dec=new TextDecoder(); let buf='';
+    while(true){
+      const {value, done}=await rd.read(); if(done) break;
+      buf+=dec.decode(value,{stream:true});
+      let nl;
+      while((nl=buf.indexOf('\\n'))>=0){
+        const line=buf.slice(0,nl).trim(); buf=buf.slice(nl+1);
+        if(!line) continue;
+        let j; try{j=JSON.parse(line);}catch(_e){continue;}
+        if(j.event==='memory') acts.push('📚 recalling memory…');
+        else if(j.event==='thinking') acts.push('🧠 thinking (round '+j.turn+')…');
+        else if(j.event==='tool') acts.push('⚙ running '+j.tool+'…');
+        else if(j.event==='tool_done' && j.error) acts.push('⚠ '+j.tool+' errored — analyst will handle it');
+        else if(j.event==='error') throw new Error(String(j.detail).slice(0,300));
+        else if(j.event==='done'){
+          finished=true; cid=j.conversation_id; localStorage.setItem('barbell_cid', cid);
+          clearInterval(tick); st.remove();
+          renderMsg({role:'assistant', content:j.text, tool_trace:j.tool_trace});
+          loadConvos();
+        }
+        if(!finished) paint();
+      }
+    }
+    if(!finished) throw new Error('stream ended without a final answer — check the conversation list; the reply may have been saved');
+  }catch(e){
+    clearInterval(tick); st.remove();
+    if(!finished) add('bad', 'error: '+esc(String(e.message||e)));
+  }
+  clearInterval(tick);
   send.disabled=false; send.textContent='Ask'; q.focus();
 }
 send.onclick=ask; q.addEventListener('keydown', e=>{if(e.key==='Enter')ask();});
