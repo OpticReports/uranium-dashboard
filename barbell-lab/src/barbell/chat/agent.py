@@ -407,9 +407,27 @@ def _openai_tools() -> list[dict]:
                           "parameters": t["input_schema"]}} for t in TOOLS]
 
 
+def _openrouter_key() -> str:
+    """Env value hardened against paste artifacts (whitespace, wrapping quotes)."""
+    return os.environ.get("OPENROUTER_API_KEY", "").strip().strip('"').strip("'").strip()
+
+
+def openrouter_key_diagnostics() -> dict:
+    """Safe key introspection for /health — never reveals the key itself."""
+    raw = os.environ.get("OPENROUTER_API_KEY", "")
+    clean = _openrouter_key()
+    return {
+        "present": bool(raw),
+        "raw_length": len(raw),
+        "clean_length": len(clean),
+        "prefix_ok": clean.startswith("sk-or-v1-"),
+        "had_whitespace_or_quotes": raw != clean,
+    }
+
+
 def _answer_openrouter(messages: list[dict], max_turns: int) -> dict:
     import httpx
-    key = os.environ["OPENROUTER_API_KEY"]
+    key = _openrouter_key()
     con = db.connect()
     convo: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}] + list(messages)
     tool_trace: list[dict] = []

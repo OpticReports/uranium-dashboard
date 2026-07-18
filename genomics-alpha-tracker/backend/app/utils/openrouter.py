@@ -22,8 +22,13 @@ _MODEL_MAP = {
 }
 
 
+def _key() -> str:
+    """Key hardened against paste artifacts (whitespace, wrapping quotes)."""
+    return (settings.openrouter_api_key or "").strip().strip('"').strip("'").strip()
+
+
 def available() -> bool:
-    return bool(settings.openrouter_api_key)
+    return bool(_key())
 
 
 def openrouter_model(native_id: str) -> str:
@@ -46,7 +51,7 @@ def chat_completion(model: str, messages: list[dict], tools: list[dict] | None =
     try:
         r = httpx.post(
             _URL,
-            headers={"Authorization": f"Bearer {settings.openrouter_api_key}",
+            headers={"Authorization": f"Bearer {_key()}",
                      "X-Title": "Genomics Alpha Tracker"},
             json=body, timeout=timeout,
         )
