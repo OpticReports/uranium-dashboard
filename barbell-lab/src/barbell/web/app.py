@@ -256,7 +256,12 @@ $('b-curve').click();
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "app": "barbell-lab"}
+    from ..chat.agent import openrouter_key_diagnostics
+    return {"status": "ok", "app": "barbell-lab",
+            "chat_backend": ("anthropic" if os.environ.get("ANTHROPIC_API_KEY")
+                             else "openrouter" if os.environ.get("OPENROUTER_API_KEY")
+                             else None),
+            "openrouter_key": openrouter_key_diagnostics()}
 
 
 def _pct(v, signed=True):
