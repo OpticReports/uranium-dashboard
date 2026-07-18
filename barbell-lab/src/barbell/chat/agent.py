@@ -422,6 +422,9 @@ def openrouter_key_diagnostics() -> dict:
         "clean_length": len(clean),
         "prefix_ok": clean.startswith("sk-or-v1-"),
         "had_whitespace_or_quotes": raw != clean,
+        # same partial display OpenRouter's own dashboard shows (sk-or-v1-XXX…XXX)
+        # so the stored key can be visually matched to the one on openrouter.ai
+        "fingerprint": (f"{clean[:12]}…{clean[-3:]}" if len(clean) > 20 else None),
     }
 
 
