@@ -63,6 +63,33 @@ def fetch_fred(series_id: str, force: bool = False) -> pd.Series:
     return s
 
 
+def fetch_yahoo_adjclose(symbol: str, force: bool = False) -> pd.Series:
+    """
+    Real ETF adjusted-close series from Yahoo (split/dividend adjusted), cached.
+    Used ONLY to validate the synthetic reconstruction against the actual ETF on
+    the overlap window -- never as a strategy input.
+    """
+    import json
+    path = os.path.join(CACHE, f"{symbol}_yahoo.json")
+    if force or not os.path.exists(path):
+        url = (f"https://query2.finance.yahoo.com/v8/finance/chart/{symbol}"
+               f"?period1=1265000000&period2=1784000000&interval=1d")
+        out = subprocess.run(
+            ["curl", "-sS", "--max-time", "60", "-H", "User-Agent: Mozilla/5.0", url],
+            capture_output=True, text=True, check=True,
+        ).stdout
+        if not out.strip().startswith("{"):
+            raise RuntimeError(f"Yahoo fetch for {symbol} did not return JSON")
+        with open(path, "w") as f:
+            f.write(out)
+    j = json.load(open(path))
+    r = j["chart"]["result"][0]
+    ts = pd.to_datetime(r["timestamp"], unit="s").normalize()
+    adj = r["indicators"]["adjclose"][0]["adjclose"]
+    s = pd.Series(adj, index=ts, name=symbol).dropna()
+    return s
+
+
 def load_panel(force: bool = False) -> pd.DataFrame:
     """Load all series aligned on a business-day index (raw levels, NaNs kept)."""
     cols = {name: fetch_fred(sid, force=force) for name, sid in FRED_SERIES.items()}

@@ -11,28 +11,24 @@
         "years": 40.53,
         "cagr": 0.1421,
         "vol": 0.2614,
-        "sharpe": 0.639,
-        "sortino": 0.855,
+        "sharpe": 0.516,
+        "sortino": 0.691,
         "max_drawdown": -0.829,
         "skew": 0.09,
-        "excess_kurtosis": 7.68
+        "excess_kurtosis": 7.68,
+        "rf_adjusted": true
       },
       "synthetic_tqqq_buy_hold": {
         "n": 10214,
         "years": 40.53,
         "cagr": 0.137,
         "vol": 0.7843,
-        "sharpe": 0.559,
-        "sortino": 0.748,
+        "sharpe": 0.518,
+        "sortino": 0.694,
         "max_drawdown": -0.9998,
         "skew": 0.09,
-        "excess_kurtosis": 7.679
-      },
-      "volatility_drag_check": {
-        "note": "3x buy-hold Sharpe should be <= 1x Sharpe due to daily-reset drag; if synthetic 3x shows HIGHER Sharpe than 1x, the engine is wrong.",
-        "ndx_sharpe": 0.639,
-        "tqqq_sharpe": 0.559,
-        "engine_sane": true
+        "excess_kurtosis": 7.679,
+        "rf_adjusted": true
       }
     },
     "tier2_uvxy_like_from_vix_spot": {
@@ -46,106 +42,338 @@
         "years": 36.63,
         "cagr": -0.5017,
         "vol": 0.945,
-        "sharpe": -0.288,
-        "sortino": -0.546,
+        "sharpe": -0.318,
+        "sortino": -0.602,
         "max_drawdown": -1.0,
         "skew": 1.927,
-        "excess_kurtosis": 17.28
+        "excess_kurtosis": 17.28,
+        "rf_adjusted": true
       }
     }
   },
-  "engine_demo": {
-    "watchdog_on_tqqq_buy_hold": {
-      "label": "synthetic_TQQQ_buy_and_hold",
+  "engine_validation": {
+    "synthetic_vs_real_tqqq": {
+      "overlap": [
+        "2010-02-12",
+        "2026-07-13"
+      ],
+      "overlap_days": 4127,
+      "daily_return_corr": 0.9986,
+      "beta_vs_real": 1.0209,
+      "annualized_tracking_error": 0.0355,
+      "passed": true,
+      "criteria": "corr>=0.95 and |beta-1|<=0.15"
+    },
+    "negative_control_sign_flipped": {
+      "expect": "FAIL (corr<0)",
+      "overlap": [
+        "2010-02-12",
+        "2026-07-13"
+      ],
+      "overlap_days": 4127,
+      "daily_return_corr": -0.9986,
+      "beta_vs_real": -1.0208,
+      "annualized_tracking_error": 1.2366,
+      "passed": false,
+      "criteria": "corr>=0.95 and |beta-1|<=0.15"
+    }
+  },
+  "watchdog_discrimination": {
+    "causal_gate": {
+      "label": "causal_gate",
       "stats": {
         "n": 10214,
         "years": 40.53,
-        "cagr": 0.137,
-        "vol": 0.7843,
-        "sharpe": 0.559,
-        "sortino": 0.748,
-        "max_drawdown": -0.9998,
-        "skew": 0.09,
-        "excess_kurtosis": 7.679
+        "cagr": 0.1119,
+        "vol": 0.1814,
+        "sharpe": 0.499,
+        "sortino": 0.641,
+        "max_drawdown": -0.6058,
+        "skew": -0.289,
+        "excess_kurtosis": 5.786,
+        "rf_adjusted": true
       },
-      "probabilistic_sharpe": 0.9998,
-      "deflated_sharpe": 1.0,
+      "probabilistic_sharpe": 0.9992,
+      "deflated_sharpe": 0.9992,
       "bootstrap": {
         "cagr_ci95": [
-          -0.0914,
-          0.4439
+          0.0548,
+          0.1726
         ],
         "sharpe_ci95": [
-          0.2883,
-          0.8662
+          0.3832,
+          0.9861
         ],
         "sharpe_p_gt_0": 1.0
       },
       "leave_one_year_out": {
-        "base_sharpe": 0.559,
+        "base_sharpe": 0.675,
         "delta_sharpe_if_year_removed": {
-          "1986": 0.005,
-          "1987": 0.007,
-          "1988": 0.001,
-          "1989": -0.009,
-          "1990": 0.025,
-          "1991": -0.035,
-          "1992": 0.003,
-          "1993": 0.001,
-          "1994": 0.01,
-          "1995": -0.021,
-          "1996": -0.021,
-          "1997": -0.004,
-          "1998": -0.044,
-          "1999": -0.052,
-          "2000": 0.078,
-          "2001": 0.068,
-          "2002": 0.065,
-          "2003": -0.025,
-          "2004": 0.001,
-          "2005": 0.009,
-          "2006": 0.005,
-          "2007": -0.005,
-          "2008": 0.072,
-          "2009": -0.031,
-          "2010": -0.008,
-          "2011": 0.007,
-          "2012": -0.007,
-          "2013": -0.021,
+          "1986": 0.01,
+          "1987": -0.011,
+          "1988": 0.024,
+          "1989": -0.016,
+          "1990": 0.021,
+          "1991": -0.047,
+          "1992": 0.015,
+          "1993": 0.009,
+          "1994": 0.016,
+          "1995": -0.032,
+          "1996": -0.01,
+          "1997": 0.001,
+          "1998": -0.037,
+          "1999": -0.07,
+          "2000": 0.088,
+          "2001": 0.031,
+          "2002": 0.025,
+          "2003": -0.007,
+          "2004": 0.023,
+          "2005": 0.025,
+          "2006": 0.006,
+          "2007": -0.008,
+          "2008": 0.037,
+          "2009": -0.021,
+          "2010": 0.008,
+          "2011": 0.029,
+          "2012": 0.003,
+          "2013": -0.026,
           "2014": -0.008,
-          "2015": 0.001,
-          "2016": 0.003,
-          "2017": -0.018,
-          "2018": 0.012,
-          "2019": -0.021,
-          "2020": -0.023,
-          "2021": -0.014,
-          "2022": 0.053,
+          "2015": 0.009,
+          "2016": 0.014,
+          "2017": -0.027,
+          "2018": 0.016,
+          "2019": -0.013,
+          "2020": -0.022,
+          "2021": -0.017,
+          "2022": 0.037,
           "2023": -0.029,
-          "2024": -0.009,
-          "2025": -0.005,
-          "2026": -0.006
+          "2024": -0.016,
+          "2025": -0.007,
+          "2026": -0.003
         },
         "most_load_bearing_year": 1999,
-        "max_single_year_dependence": -0.052
+        "max_single_year_dependence": -0.07
       },
       "walk_forward": {
         "per_fold_sharpe": [
-          0.6,
-          0.545,
-          0.206,
-          0.975,
-          0.766
+          0.721,
+          0.751,
+          0.343,
+          0.686,
+          0.941
         ],
-        "in_sample_mean_sharpe": 0.573,
-        "out_of_sample_mean_sharpe": 0.649,
-        "degradation": -0.077
+        "in_sample_mean_sharpe": 0.736,
+        "out_of_sample_mean_sharpe": 0.657,
+        "degradation": 0.079
       },
-      "lookahead": {},
+      "lookahead": {
+        "checkpoints_tested": 40,
+        "same_bar_included": true,
+        "lookahead_violations": 0,
+        "causal": true
+      },
       "sensitivity": {},
       "flags": []
     },
-    "assumption_sensitivity_tqqq": {
+    "same_bar_leak": {
+      "label": "same_bar_leak",
+      "stats": {
+        "n": 10214,
+        "years": 40.53,
+        "cagr": 0.2801,
+        "vol": 0.1798,
+        "sharpe": 1.286,
+        "sortino": 1.744,
+        "max_drawdown": -0.3181,
+        "skew": 0.067,
+        "excess_kurtosis": 5.836,
+        "rf_adjusted": true
+      },
+      "probabilistic_sharpe": 1.0,
+      "deflated_sharpe": 1.0,
+      "bootstrap": {
+        "cagr_ci95": [
+          0.221,
+          0.3461
+        ],
+        "sharpe_ci95": [
+          1.1914,
+          1.7701
+        ],
+        "sharpe_p_gt_0": 1.0
+      },
+      "leave_one_year_out": {
+        "base_sharpe": 1.464,
+        "delta_sharpe_if_year_removed": {
+          "1986": 0.017,
+          "1987": -0.006,
+          "1988": 0.001,
+          "1989": -0.009,
+          "1990": 0.018,
+          "1991": -0.03,
+          "1992": 0.016,
+          "1993": 0.007,
+          "1994": 0.006,
+          "1995": -0.007,
+          "1996": -0.028,
+          "1997": 0.021,
+          "1998": -0.058,
+          "1999": -0.024,
+          "2000": 0.075,
+          "2001": 0.015,
+          "2002": 0.011,
+          "2003": -0.011,
+          "2004": -0.005,
+          "2005": 0.014,
+          "2006": 0.011,
+          "2007": 0.012,
+          "2008": 0.001,
+          "2009": -0.014,
+          "2010": -0.013,
+          "2011": 0.007,
+          "2012": 0.0,
+          "2013": -0.016,
+          "2014": 0.004,
+          "2015": 0.016,
+          "2016": 0.003,
+          "2017": -0.015,
+          "2018": 0.012,
+          "2019": -0.01,
+          "2020": -0.02,
+          "2021": 0.003,
+          "2022": 0.023,
+          "2023": -0.022,
+          "2024": 0.004,
+          "2025": 0.0,
+          "2026": 0.002
+        },
+        "most_load_bearing_year": 1998,
+        "max_single_year_dependence": -0.058
+      },
+      "walk_forward": {
+        "per_fold_sharpe": [
+          1.455,
+          1.579,
+          1.398,
+          1.55,
+          1.537
+        ],
+        "in_sample_mean_sharpe": 1.517,
+        "out_of_sample_mean_sharpe": 1.495,
+        "degradation": 0.022
+      },
+      "lookahead": {
+        "checkpoints_tested": 40,
+        "same_bar_included": true,
+        "lookahead_violations": 8,
+        "causal": false
+      },
+      "sensitivity": {},
+      "flags": [
+        "LOOK-AHEAD: 8 causality violations -> strategy peeks at current/future data. Result is INVALID."
+      ]
+    },
+    "centered_future_leak": {
+      "label": "centered_future_leak",
+      "stats": {
+        "n": 10214,
+        "years": 40.53,
+        "cagr": 0.2575,
+        "vol": 0.1528,
+        "sharpe": 1.366,
+        "sortino": 1.954,
+        "max_drawdown": -0.2222,
+        "skew": 0.558,
+        "excess_kurtosis": 12.582,
+        "rf_adjusted": true
+      },
+      "probabilistic_sharpe": 1.0,
+      "deflated_sharpe": 1.0,
+      "bootstrap": {
+        "cagr_ci95": [
+          0.2023,
+          0.3107
+        ],
+        "sharpe_ci95": [
+          1.2753,
+          1.866
+        ],
+        "sharpe_p_gt_0": 1.0
+      },
+      "leave_one_year_out": {
+        "base_sharpe": 1.576,
+        "delta_sharpe_if_year_removed": {
+          "1986": 0.03,
+          "1987": 0.006,
+          "1988": 0.008,
+          "1989": -0.009,
+          "1990": 0.026,
+          "1991": -0.031,
+          "1992": 0.008,
+          "1993": -0.01,
+          "1994": 0.005,
+          "1995": -0.001,
+          "1996": -0.015,
+          "1997": 0.004,
+          "1998": -0.032,
+          "1999": -0.04,
+          "2000": 0.111,
+          "2001": 0.051,
+          "2002": 0.053,
+          "2003": -0.061,
+          "2004": 0.0,
+          "2005": 0.0,
+          "2006": 0.017,
+          "2007": -0.01,
+          "2008": 0.066,
+          "2009": -0.044,
+          "2010": -0.002,
+          "2011": 0.001,
+          "2012": 0.007,
+          "2013": -0.018,
+          "2014": -0.01,
+          "2015": -0.004,
+          "2016": 0.007,
+          "2017": -0.013,
+          "2018": -0.015,
+          "2019": -0.01,
+          "2020": -0.049,
+          "2021": -0.017,
+          "2022": 0.041,
+          "2023": -0.017,
+          "2024": -0.023,
+          "2025": -0.001,
+          "2026": 0.005
+        },
+        "most_load_bearing_year": 2003,
+        "max_single_year_dependence": -0.061
+      },
+      "walk_forward": {
+        "per_fold_sharpe": [
+          1.478,
+          1.458,
+          1.541,
+          2.004,
+          2.055
+        ],
+        "in_sample_mean_sharpe": 1.468,
+        "out_of_sample_mean_sharpe": 1.867,
+        "degradation": -0.399
+      },
+      "lookahead": {
+        "checkpoints_tested": 40,
+        "same_bar_included": true,
+        "lookahead_violations": 11,
+        "causal": false
+      },
+      "sensitivity": {},
+      "flags": [
+        "LOOK-AHEAD: 11 causality violations -> strategy peeks at current/future data. Result is INVALID."
+      ]
+    }
+  },
+  "assumption_sensitivity": {
+    "tqqq": {
       "runs": [
         {
           "expense_ratio": 0.007,
@@ -371,24 +599,11 @@
       "sharpe_spread": 0.036
     }
   },
-  "lookahead_demo": {
-    "causal_200d_gate": {
-      "checkpoints_tested": 30,
-      "lookahead_violations": 0,
-      "causal": true
-    },
-    "leaky_centered_gate": {
-      "checkpoints_tested": 30,
-      "lookahead_violations": 4,
-      "causal": false
-    },
-    "probe_works": true,
-    "interpretation": "The probe must PASS the causal gate and FAIL the leaky one. If probe_works is true, the look-ahead detector is functioning."
-  },
   "notes": [
-    "Tier-1 (NDX->TQQQ) is data-grounded to 1986 and is the trustworthy engine demo.",
-    "Tier-2 (vol sleeve) is MODELLED from VIX spot -- illustrative only, do not quote.",
-    "No result here validates the actual crash-convexity SLEEVE: the real symphony definition (Step D) and real VIX-futures/SPVXSTR data are both still required.",
-    "The watchdog raised the flags listed under engine_demo.watchdog_on_tqqq_buy_hold.flags."
+    "Sharpe/PSR/DSR are RISK-FREE-ADJUSTED (excess over 3M T-bill).",
+    "Engine validated against REAL TQQQ on 2010+ overlap; sign-flipped negative control fails as it must.",
+    "Tier-2 vol sleeve is MODELLED from VIX spot -- illustrative only, never quoted.",
+    "KNOWN UNMODELLED BIASES: NDX survivorship/quarterly reconstitution is inside the Tier-1 index; no transaction-cost/turnover/slippage on traded strategies; walk_forward here measures early-vs-late regime stability, not refit-per-fold.",
+    "No result validates the actual crash-convexity SLEEVE: needs the real symphony definition (Step D) and real VIX-futures/SPVXSTR data."
   ]
 }

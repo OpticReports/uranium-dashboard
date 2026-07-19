@@ -45,67 +45,135 @@ TD = 252
 # --------------------------------------------------------------------------- #
 # Baseline performance
 # --------------------------------------------------------------------------- #
-def perf_stats(daily: pd.Series) -> dict:
+def _excess(daily: pd.Series, rf_annual) -> pd.Series:
+    """Subtract the risk-free rate so Sharpe measures excess (not total) return.
+    rf_annual may be a scalar (%/yr as decimal) or a Series of annualized %/yr."""
+    d = daily.dropna()
+    if rf_annual is None:
+        return d
+    if isinstance(rf_annual, pd.Series):
+        rf_d = (rf_annual.reindex(d.index).ffill() / 100.0) / TD
+    else:
+        rf_d = float(rf_annual) / TD
+    return (d - rf_d).dropna()
+
+
+def perf_stats(daily: pd.Series, rf_annual=None) -> dict:
+    """Performance stats. Sharpe/Sortino are computed on EXCESS returns when a
+    risk-free series/scalar is supplied (rf as %/yr); total-return CAGR is kept."""
     d = daily.dropna()
     n = len(d)
     if n < 2:
         return {"n": n}
+    ex = _excess(d, rf_annual)
     ann_ret = (1 + d).prod() ** (TD / n) - 1
     ann_vol = d.std(ddof=1) * np.sqrt(TD)
-    sharpe = (d.mean() / d.std(ddof=1)) * np.sqrt(TD) if d.std(ddof=1) > 0 else np.nan
+    sharpe = (ex.mean() / ex.std(ddof=1)) * np.sqrt(TD) if ex.std(ddof=1) > 0 else np.nan
     curve = (1 + d).cumprod()
     dd = (curve / curve.cummax() - 1).min()
-    downside = d[d < 0].std(ddof=1) * np.sqrt(TD)
-    sortino = (d.mean() * TD) / downside if downside > 0 else np.nan
+    downside = ex[ex < 0].std(ddof=1) * np.sqrt(TD)
+    sortino = (ex.mean() * TD) / downside if downside > 0 else np.nan
     return {
         "n": n,
         "years": round(n / TD, 2),
         "cagr": round(float(ann_ret), 4),
         "vol": round(float(ann_vol), 4),
-        "sharpe": round(float(sharpe), 3),
+        "sharpe": round(float(sharpe), 3),  # excess-return Sharpe when rf given
         "sortino": round(float(sortino), 3),
         "max_drawdown": round(float(dd), 4),
         "skew": round(float(stats.skew(d)), 3),
         "excess_kurtosis": round(float(stats.kurtosis(d)), 3),
+        "rf_adjusted": rf_annual is not None,
+    }
+
+
+def reconstruction_tracking(synth_ret: pd.Series, real_ret: pd.Series,
+                            min_corr: float = 0.95, beta_tol: float = 0.15) -> dict:
+    """
+    REAL engine-correctness test (replaces the old tautological Sharpe check).
+    Compare synthetic daily returns to the ACTUAL ETF's daily returns on their
+    overlap: daily-return correlation, OLS beta (should be ~1), and annualized
+    tracking error. Catches sign flips (corr<0), scale/leverage errors (beta off
+    1), and gross mis-specification (high tracking error) that a Sharpe-ordering
+    check cannot.
+    """
+    a, b = synth_ret.dropna().align(real_ret.dropna(), join="inner")
+    if len(a) < TD:
+        return {"overlap_days": len(a), "sufficient": False}
+    corr = float(np.corrcoef(a, b)[0, 1])
+    beta = float(np.cov(a, b, ddof=1)[0, 1] / np.var(b, ddof=1))
+    te = float((a - b).std(ddof=1) * np.sqrt(TD))
+    passed = (corr >= min_corr) and (abs(beta - 1.0) <= beta_tol)
+    return {
+        "overlap": [str(a.index.min().date()), str(a.index.max().date())],
+        "overlap_days": len(a),
+        "daily_return_corr": round(corr, 4),
+        "beta_vs_real": round(beta, 4),
+        "annualized_tracking_error": round(te, 4),
+        "passed": bool(passed),
+        "criteria": f"corr>={min_corr} and |beta-1|<={beta_tol}",
     }
 
 
 # --------------------------------------------------------------------------- #
 # Is the Sharpe even real?
 # --------------------------------------------------------------------------- #
-def probabilistic_sharpe(daily: pd.Series, sr_benchmark: float = 0.0) -> float:
-    """P(true Sharpe > benchmark), correcting for sample length, skew, kurtosis."""
-    d = daily.dropna()
+def _sharpe_se(d: pd.Series, sr_daily: float) -> float:
+    """Std error of the (daily) Sharpe estimate, skew/kurtosis-adjusted (Lo 2002 /
+    Bailey-LdP). This is the natural dispersion scale for the DSR benchmark."""
     n = len(d)
-    sr = (d.mean() / d.std(ddof=1)) * np.sqrt(TD)
-    sr_daily = sr / np.sqrt(TD)
-    bench_daily = sr_benchmark / np.sqrt(TD)
     g3 = stats.skew(d)
-    g4 = stats.kurtosis(d, fisher=False)  # non-excess
-    denom = np.sqrt(1 - g3 * sr_daily + (g4 - 1) / 4 * sr_daily**2)
-    psr = stats.norm.cdf((sr_daily - bench_daily) * np.sqrt(n - 1) / denom)
+    g4 = stats.kurtosis(d, fisher=False)
+    return float(np.sqrt((1 - g3 * sr_daily + (g4 - 1) / 4 * sr_daily**2) / (n - 1)))
+
+
+def probabilistic_sharpe(daily: pd.Series, sr_benchmark: float = 0.0, rf_annual=None) -> float:
+    """P(true Sharpe > benchmark), correcting for sample length, skew, kurtosis.
+    Operates on EXCESS returns when rf is supplied so it answers 'Sharpe > rf'."""
+    d = _excess(daily, rf_annual)
+    n = len(d)
+    sr_daily = (d.mean() / d.std(ddof=1)) if d.std(ddof=1) > 0 else 0.0
+    bench_daily = sr_benchmark / np.sqrt(TD)
+    se = _sharpe_se(d, sr_daily)
+    if se == 0:
+        return float("nan")
+    psr = stats.norm.cdf((sr_daily - bench_daily) / se)
     return round(float(psr), 4)
 
 
-def deflated_sharpe(daily: pd.Series, n_trials: int) -> float:
+def expected_max_sharpe_z(n_trials: int) -> float:
+    """Expected maximum of n_trials i.i.d. standard normals (Bailey & Lopez de
+    Prado 2014). Zero for a single trial -> no deflation when nothing was searched."""
+    if n_trials <= 1:
+        return 0.0
+    emc = 0.5772156649015329
+    z1 = stats.norm.ppf(1 - 1.0 / n_trials)
+    z2 = stats.norm.ppf(1 - 1.0 / (n_trials * np.e))
+    return float((1 - emc) * z1 + emc * z2)
+
+
+def deflated_sharpe(daily: pd.Series, n_trials: int, sr_dispersion_annual: float = None,
+                    rf_annual=None) -> float:
     """
     Deflated Sharpe Ratio: PSR against a benchmark Sharpe inflated by how many
-    independent strategy variants were tried. Answers "is this Sharpe still
-    significant once we admit we went looking for it?"
+    strategy variants were tried. Answers "is this Sharpe still significant once
+    we admit we went looking for it across n_trials configurations?"
+
+    FIX (was a no-op at n_trials=1): the benchmark is
+        SR* = sr_dispersion_annual * E[max of n_trials N(0,1)]
+    with E[max]=0 at n_trials<=1, so DSR reduces to PSR-vs-0 (no deflation) rather
+    than the old norm.ppf(0)=-inf degeneracy that returned 1.0 for ANY series,
+    losers included. `sr_dispersion_annual` is the spread of Sharpes across the
+    trials; with a single evaluated series it defaults to that series' own
+    annualized Sharpe standard error (a conservative dispersion proxy).
     """
-    d = daily.dropna()
-    if n_trials < 1:
-        n_trials = 1
-    sr = (d.mean() / d.std(ddof=1)) * np.sqrt(TD)
-    var_sr = d.std(ddof=1)  # placeholder; we estimate cross-trial sigma below
-    # Expected max Sharpe under the null of `n_trials` zero-skill trials
-    # (Bailey & Lopez de Prado 2014). Uses an estimate of dispersion of trial SRs;
-    # with a single series we assume unit dispersion (sr units) -> conservative.
-    emc = 0.5772156649
-    z1 = stats.norm.ppf(1 - 1.0 / n_trials)
-    z2 = stats.norm.ppf(1 - 1.0 / n_trials * np.e ** -1)
-    sr0 = z1 * (1 - emc) + z2 * emc  # expected max of n_trials standard normals
-    return probabilistic_sharpe(d, sr_benchmark=float(sr0))
+    d = _excess(daily, rf_annual)
+    n_trials = max(int(n_trials), 1)
+    sr_daily = (d.mean() / d.std(ddof=1)) if d.std(ddof=1) > 0 else 0.0
+    if sr_dispersion_annual is None:
+        sr_dispersion_annual = _sharpe_se(d, sr_daily) * np.sqrt(TD)
+    sr0 = expected_max_sharpe_z(n_trials) * sr_dispersion_annual  # annualized benchmark
+    return probabilistic_sharpe(daily, sr_benchmark=float(sr0), rf_annual=rf_annual)
 
 
 # --------------------------------------------------------------------------- #
@@ -171,26 +239,40 @@ def walk_forward_degradation(daily: pd.Series, folds: int = 5) -> dict:
 # Structural correctness
 # --------------------------------------------------------------------------- #
 def lookahead_probe(strategy_fn: Callable[[pd.DataFrame], pd.Series],
-                    inputs: pd.DataFrame, test_dates: int = 30, seed: int = 3) -> dict:
+                    inputs: pd.DataFrame, test_dates: int = 40, seed: int = 3,
+                    include_same_bar: bool = True) -> dict:
     """
-    Prove a strategy function is causal. For several dates t, corrupt ALL input
-    rows strictly after t, re-run, and assert the position AT t did not change.
-    A single change means the function peeks at the future -> instant red flag.
+    Prove a strategy function is causal: the position decided FOR bar t may use
+    information only through t-1. For several dates t, corrupt input rows from t
+    onward (t inclusive by default) and assert the position at t is unchanged.
+    Any change means the function used bar t's own data or later -> look-ahead.
+
+    Two fixes over the naive version:
+      * `include_same_bar=True` corrupts row t itself, so a strategy that trades
+        on TODAY's close (unimplementable live) is caught -- the old >t-only probe
+        certified same-bar peeking as causal.
+      * corruption is a LARGE deterministic level shift plus noise, so leaks that
+        depend on the mean of many future points can't average back to ~no-change.
     """
     rng = np.random.default_rng(seed)
     pos_ref = strategy_fn(inputs)
     idx = inputs.index
-    checkpoints = idx[max(20, len(idx) // 3):-2][:: max(1, (len(idx) // 3) // test_dates)]
+    lo = max(220, len(idx) // 4)  # leave warm-up room for long look-backs
+    span = idx[lo:-2]
+    step = max(1, len(span) // test_dates)
+    checkpoints = span[::step][:test_dates]
     violations = 0
-    for t in checkpoints[:test_dates]:
+    for t in checkpoints:
         corrupted = inputs.copy()
-        future = corrupted.index > t
-        corrupted.loc[future] = corrupted.loc[future] * (1 + rng.normal(0, 0.5, corrupted.loc[future].shape))
+        mask = corrupted.index >= t if include_same_bar else corrupted.index > t
+        # large deterministic shift (x3) + noise -> defeats mean-averaging leaks
+        corrupted.loc[mask] = corrupted.loc[mask] * (3.0 + rng.normal(0, 0.5, corrupted.loc[mask].shape))
         pos_c = strategy_fn(corrupted)
         if not np.isclose(pos_ref.get(t, np.nan), pos_c.get(t, np.nan), equal_nan=True):
             violations += 1
-    return {"checkpoints_tested": int(min(test_dates, len(checkpoints))),
-            "lookahead_violations": violations,
+    return {"checkpoints_tested": int(len(checkpoints)),
+            "same_bar_included": include_same_bar,
+            "lookahead_violations": int(violations),
             "causal": violations == 0}
 
 
@@ -231,29 +313,43 @@ class WatchdogReport:
         return asdict(self)
 
 
-def evaluate(daily: pd.Series, label: str, n_trials: int = 1) -> WatchdogReport:
-    """Run the full skeptic battery on a return series and raise flags."""
+def evaluate(daily: pd.Series, label: str, n_trials: int = 1, rf_annual=None,
+             strategy_fn: Callable = None, strategy_inputs: pd.DataFrame = None) -> WatchdogReport:
+    """Run the full skeptic battery on a return series and raise flags.
+
+    n_trials: number of strategy configurations searched to arrive at this one
+              (drives the deflated Sharpe). Pass the TRUE count when optimizing.
+    rf_annual: risk-free (%/yr scalar or Series) -> excess-return Sharpe/PSR/DSR.
+    strategy_fn/strategy_inputs: if given, also run the causality probe and flag
+              look-ahead. Omit for a parameter-free series (e.g. buy & hold)."""
     rep = WatchdogReport(label=label)
-    rep.stats = perf_stats(daily)
-    rep.probabilistic_sharpe = probabilistic_sharpe(daily)
-    rep.deflated_sharpe = deflated_sharpe(daily, n_trials=n_trials)
+    rep.stats = perf_stats(daily, rf_annual=rf_annual)
+    rep.probabilistic_sharpe = probabilistic_sharpe(daily, rf_annual=rf_annual)
+    rep.deflated_sharpe = deflated_sharpe(daily, n_trials=n_trials, rf_annual=rf_annual)
     rep.bootstrap = block_bootstrap_ci(daily)
     rep.leave_one_year_out = leave_one_year_out(daily)
     rep.walk_forward = walk_forward_degradation(daily)
+    if strategy_fn is not None and strategy_inputs is not None:
+        rep.lookahead = lookahead_probe(strategy_fn, strategy_inputs)
 
     # Flagging heuristics -- these are the automatic "false positive" alarms.
     if rep.probabilistic_sharpe is not None and rep.probabilistic_sharpe < 0.95:
-        rep.flags.append(f"PSR<0.95 ({rep.probabilistic_sharpe}): Sharpe not statistically > 0.")
+        rep.flags.append(f"PSR<0.95 ({rep.probabilistic_sharpe}): Sharpe not statistically > rf.")
     if rep.deflated_sharpe is not None and rep.deflated_sharpe < 0.95:
-        rep.flags.append(f"DSR<0.95 ({rep.deflated_sharpe}): Sharpe may be a multiple-testing artefact.")
+        rep.flags.append(f"DSR<0.95 ({rep.deflated_sharpe}): Sharpe may be a multiple-testing artefact "
+                         f"(n_trials={n_trials}).")
     if rep.bootstrap.get("sharpe_p_gt_0", 1) < 0.95:
         rep.flags.append("Bootstrap: >5% of resamples have Sharpe<=0 (edge not robust to luck).")
     wf = rep.walk_forward.get("degradation")
     if wf is not None and wf > 0.5:
-        rep.flags.append(f"Walk-forward degradation {wf}: large in->out-of-sample Sharpe drop.")
+        rep.flags.append(f"Walk-forward degradation {wf}: large early->late Sharpe drop.")
     loyo = rep.leave_one_year_out.get("max_single_year_dependence")
     if loyo is not None and loyo < -0.4:
         rep.flags.append(
             f"Single-year dependence: removing {rep.leave_one_year_out.get('most_load_bearing_year')} "
             f"cuts Sharpe by {abs(loyo)} -> result may rest on one regime.")
+    if rep.lookahead and not rep.lookahead.get("causal", True):
+        rep.flags.append(
+            f"LOOK-AHEAD: {rep.lookahead.get('lookahead_violations')} causality violations "
+            f"-> strategy peeks at current/future data. Result is INVALID.")
     return rep
