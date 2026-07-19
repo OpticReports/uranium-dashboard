@@ -1,0 +1,394 @@
+{
+  "tiers": {
+    "tier1_tqqq_3x_ndx": {
+      "trust": "DATA-GROUNDED (reconstructed from real NDX index, 1986+)",
+      "span": [
+        "1986-01-03",
+        "2026-07-17"
+      ],
+      "underlying_ndx_buy_hold": {
+        "n": 10214,
+        "years": 40.53,
+        "cagr": 0.1421,
+        "vol": 0.2614,
+        "sharpe": 0.639,
+        "sortino": 0.855,
+        "max_drawdown": -0.829,
+        "skew": 0.09,
+        "excess_kurtosis": 7.68
+      },
+      "synthetic_tqqq_buy_hold": {
+        "n": 10214,
+        "years": 40.53,
+        "cagr": 0.137,
+        "vol": 0.7843,
+        "sharpe": 0.559,
+        "sortino": 0.748,
+        "max_drawdown": -0.9998,
+        "skew": 0.09,
+        "excess_kurtosis": 7.679
+      },
+      "volatility_drag_check": {
+        "note": "3x buy-hold Sharpe should be <= 1x Sharpe due to daily-reset drag; if synthetic 3x shows HIGHER Sharpe than 1x, the engine is wrong.",
+        "ndx_sharpe": 0.639,
+        "tqqq_sharpe": 0.559,
+        "engine_sane": true
+      }
+    },
+    "tier2_uvxy_like_from_vix_spot": {
+      "trust": "MODELLED / ILLUSTRATIVE -- built from VIX SPOT, not futures. NOT valid for performance claims. Replace with real SPVXSTR/futures.",
+      "span": [
+        "1990-01-03",
+        "2026-07-16"
+      ],
+      "stats_do_not_quote": {
+        "n": 9230,
+        "years": 36.63,
+        "cagr": -0.5017,
+        "vol": 0.945,
+        "sharpe": -0.288,
+        "sortino": -0.546,
+        "max_drawdown": -1.0,
+        "skew": 1.927,
+        "excess_kurtosis": 17.28
+      }
+    }
+  },
+  "engine_demo": {
+    "watchdog_on_tqqq_buy_hold": {
+      "label": "synthetic_TQQQ_buy_and_hold",
+      "stats": {
+        "n": 10214,
+        "years": 40.53,
+        "cagr": 0.137,
+        "vol": 0.7843,
+        "sharpe": 0.559,
+        "sortino": 0.748,
+        "max_drawdown": -0.9998,
+        "skew": 0.09,
+        "excess_kurtosis": 7.679
+      },
+      "probabilistic_sharpe": 0.9998,
+      "deflated_sharpe": 1.0,
+      "bootstrap": {
+        "cagr_ci95": [
+          -0.0914,
+          0.4439
+        ],
+        "sharpe_ci95": [
+          0.2883,
+          0.8662
+        ],
+        "sharpe_p_gt_0": 1.0
+      },
+      "leave_one_year_out": {
+        "base_sharpe": 0.559,
+        "delta_sharpe_if_year_removed": {
+          "1986": 0.005,
+          "1987": 0.007,
+          "1988": 0.001,
+          "1989": -0.009,
+          "1990": 0.025,
+          "1991": -0.035,
+          "1992": 0.003,
+          "1993": 0.001,
+          "1994": 0.01,
+          "1995": -0.021,
+          "1996": -0.021,
+          "1997": -0.004,
+          "1998": -0.044,
+          "1999": -0.052,
+          "2000": 0.078,
+          "2001": 0.068,
+          "2002": 0.065,
+          "2003": -0.025,
+          "2004": 0.001,
+          "2005": 0.009,
+          "2006": 0.005,
+          "2007": -0.005,
+          "2008": 0.072,
+          "2009": -0.031,
+          "2010": -0.008,
+          "2011": 0.007,
+          "2012": -0.007,
+          "2013": -0.021,
+          "2014": -0.008,
+          "2015": 0.001,
+          "2016": 0.003,
+          "2017": -0.018,
+          "2018": 0.012,
+          "2019": -0.021,
+          "2020": -0.023,
+          "2021": -0.014,
+          "2022": 0.053,
+          "2023": -0.029,
+          "2024": -0.009,
+          "2025": -0.005,
+          "2026": -0.006
+        },
+        "most_load_bearing_year": 1999,
+        "max_single_year_dependence": -0.052
+      },
+      "walk_forward": {
+        "per_fold_sharpe": [
+          0.6,
+          0.545,
+          0.206,
+          0.975,
+          0.766
+        ],
+        "in_sample_mean_sharpe": 0.573,
+        "out_of_sample_mean_sharpe": 0.649,
+        "degradation": -0.077
+      },
+      "lookahead": {},
+      "sensitivity": {},
+      "flags": []
+    },
+    "assumption_sensitivity_tqqq": {
+      "runs": [
+        {
+          "expense_ratio": 0.007,
+          "borrow_spread": 0.002,
+          "div_yield": 0.004,
+          "cagr": 0.1366,
+          "sharpe": 0.558,
+          "max_drawdown": -0.9998
+        },
+        {
+          "expense_ratio": 0.007,
+          "borrow_spread": 0.002,
+          "div_yield": 0.006,
+          "cagr": 0.1434,
+          "sharpe": 0.566,
+          "max_drawdown": -0.9998
+        },
+        {
+          "expense_ratio": 0.007,
+          "borrow_spread": 0.002,
+          "div_yield": 0.008,
+          "cagr": 0.1503,
+          "sharpe": 0.574,
+          "max_drawdown": -0.9998
+        },
+        {
+          "expense_ratio": 0.007,
+          "borrow_spread": 0.004,
+          "div_yield": 0.004,
+          "cagr": 0.132,
+          "sharpe": 0.553,
+          "max_drawdown": -0.9998
+        },
+        {
+          "expense_ratio": 0.007,
+          "borrow_spread": 0.004,
+          "div_yield": 0.006,
+          "cagr": 0.1389,
+          "sharpe": 0.561,
+          "max_drawdown": -0.9998
+        },
+        {
+          "expense_ratio": 0.007,
+          "borrow_spread": 0.004,
+          "div_yield": 0.008,
+          "cagr": 0.1457,
+          "sharpe": 0.569,
+          "max_drawdown": -0.9998
+        },
+        {
+          "expense_ratio": 0.007,
+          "borrow_spread": 0.008,
+          "div_yield": 0.004,
+          "cagr": 0.123,
+          "sharpe": 0.543,
+          "max_drawdown": -0.9998
+        },
+        {
+          "expense_ratio": 0.007,
+          "borrow_spread": 0.008,
+          "div_yield": 0.006,
+          "cagr": 0.1298,
+          "sharpe": 0.551,
+          "max_drawdown": -0.9998
+        },
+        {
+          "expense_ratio": 0.007,
+          "borrow_spread": 0.008,
+          "div_yield": 0.008,
+          "cagr": 0.1366,
+          "sharpe": 0.558,
+          "max_drawdown": -0.9998
+        },
+        {
+          "expense_ratio": 0.0086,
+          "borrow_spread": 0.002,
+          "div_yield": 0.004,
+          "cagr": 0.1348,
+          "sharpe": 0.556,
+          "max_drawdown": -0.9998
+        },
+        {
+          "expense_ratio": 0.0086,
+          "borrow_spread": 0.002,
+          "div_yield": 0.006,
+          "cagr": 0.1416,
+          "sharpe": 0.564,
+          "max_drawdown": -0.9998
+        },
+        {
+          "expense_ratio": 0.0086,
+          "borrow_spread": 0.002,
+          "div_yield": 0.008,
+          "cagr": 0.1485,
+          "sharpe": 0.572,
+          "max_drawdown": -0.9998
+        },
+        {
+          "expense_ratio": 0.0086,
+          "borrow_spread": 0.004,
+          "div_yield": 0.004,
+          "cagr": 0.1302,
+          "sharpe": 0.551,
+          "max_drawdown": -0.9998
+        },
+        {
+          "expense_ratio": 0.0086,
+          "borrow_spread": 0.004,
+          "div_yield": 0.006,
+          "cagr": 0.137,
+          "sharpe": 0.559,
+          "max_drawdown": -0.9998
+        },
+        {
+          "expense_ratio": 0.0086,
+          "borrow_spread": 0.004,
+          "div_yield": 0.008,
+          "cagr": 0.1439,
+          "sharpe": 0.567,
+          "max_drawdown": -0.9998
+        },
+        {
+          "expense_ratio": 0.0086,
+          "borrow_spread": 0.008,
+          "div_yield": 0.004,
+          "cagr": 0.1212,
+          "sharpe": 0.541,
+          "max_drawdown": -0.9998
+        },
+        {
+          "expense_ratio": 0.0086,
+          "borrow_spread": 0.008,
+          "div_yield": 0.006,
+          "cagr": 0.128,
+          "sharpe": 0.549,
+          "max_drawdown": -0.9998
+        },
+        {
+          "expense_ratio": 0.0086,
+          "borrow_spread": 0.008,
+          "div_yield": 0.008,
+          "cagr": 0.1348,
+          "sharpe": 0.556,
+          "max_drawdown": -0.9998
+        },
+        {
+          "expense_ratio": 0.011,
+          "borrow_spread": 0.002,
+          "div_yield": 0.004,
+          "cagr": 0.132,
+          "sharpe": 0.553,
+          "max_drawdown": -0.9998
+        },
+        {
+          "expense_ratio": 0.011,
+          "borrow_spread": 0.002,
+          "div_yield": 0.006,
+          "cagr": 0.1389,
+          "sharpe": 0.561,
+          "max_drawdown": -0.9998
+        },
+        {
+          "expense_ratio": 0.011,
+          "borrow_spread": 0.002,
+          "div_yield": 0.008,
+          "cagr": 0.1457,
+          "sharpe": 0.569,
+          "max_drawdown": -0.9998
+        },
+        {
+          "expense_ratio": 0.011,
+          "borrow_spread": 0.004,
+          "div_yield": 0.004,
+          "cagr": 0.1275,
+          "sharpe": 0.548,
+          "max_drawdown": -0.9998
+        },
+        {
+          "expense_ratio": 0.011,
+          "borrow_spread": 0.004,
+          "div_yield": 0.006,
+          "cagr": 0.1343,
+          "sharpe": 0.556,
+          "max_drawdown": -0.9998
+        },
+        {
+          "expense_ratio": 0.011,
+          "borrow_spread": 0.004,
+          "div_yield": 0.008,
+          "cagr": 0.1411,
+          "sharpe": 0.564,
+          "max_drawdown": -0.9998
+        },
+        {
+          "expense_ratio": 0.011,
+          "borrow_spread": 0.008,
+          "div_yield": 0.004,
+          "cagr": 0.1185,
+          "sharpe": 0.538,
+          "max_drawdown": -0.9998
+        },
+        {
+          "expense_ratio": 0.011,
+          "borrow_spread": 0.008,
+          "div_yield": 0.006,
+          "cagr": 0.1253,
+          "sharpe": 0.546,
+          "max_drawdown": -0.9998
+        },
+        {
+          "expense_ratio": 0.011,
+          "borrow_spread": 0.008,
+          "div_yield": 0.008,
+          "cagr": 0.132,
+          "sharpe": 0.553,
+          "max_drawdown": -0.9998
+        }
+      ],
+      "sharpe_range": [
+        0.538,
+        0.574
+      ],
+      "sharpe_spread": 0.036
+    }
+  },
+  "lookahead_demo": {
+    "causal_200d_gate": {
+      "checkpoints_tested": 30,
+      "lookahead_violations": 0,
+      "causal": true
+    },
+    "leaky_centered_gate": {
+      "checkpoints_tested": 30,
+      "lookahead_violations": 4,
+      "causal": false
+    },
+    "probe_works": true,
+    "interpretation": "The probe must PASS the causal gate and FAIL the leaky one. If probe_works is true, the look-ahead detector is functioning."
+  },
+  "notes": [
+    "Tier-1 (NDX->TQQQ) is data-grounded to 1986 and is the trustworthy engine demo.",
+    "Tier-2 (vol sleeve) is MODELLED from VIX spot -- illustrative only, do not quote.",
+    "No result here validates the actual crash-convexity SLEEVE: the real symphony definition (Step D) and real VIX-futures/SPVXSTR data are both still required.",
+    "The watchdog raised the flags listed under engine_demo.watchdog_on_tqqq_buy_hold.flags."
+  ]
+}
