@@ -98,6 +98,18 @@ export const GLOSSARY = {
     calc: "Each cohort's calls were made under that month's signals and settings. If retuning from evidence works, later cohorts should grade better than earlier ones.",
     read: "Compare avg R across months, not within them. 'low n' cohorts are anecdotes — wait for n ≥ 10 before reading a trend.",
   },
+  confidence: {
+    title: "Confidence (0–100)",
+    what: "How hard the book bets a trade — the conviction score that drives position size. Higher confidence = a bigger position.",
+    calc: "Starts as the peer-relative setup quality (composite Alpha Signal), then is ADJUSTED by evidence: the signal's own graded track record bends it up if the signal has proven it pays (down if it hasn't), shrunk toward neutral when the record is thin; multiple distinct flags on one name nudge it up. With no track record yet, confidence ≈ the composite.",
+    read: "This is deliberately evidence-weighted so 'bet big on conviction' can't become 'bet big on a guess'. As the learning loop grades signals, proven ones earn larger positions. 75+ = high conviction (top sizing), 60–75 = solid, below 60 = a smaller starter position.",
+  },
+  conviction_sizing: {
+    title: "Position size (conviction-based)",
+    what: "The share of the paper account put into each call — scaled by its confidence, not equal across trades.",
+    calc: "size% = min% + (max% − min%) × (confidence/100)^concentration, convex so capital piles onto the very best setups. Then capped by liquidity tier (thin names get little or nothing), a portfolio gross-exposure limit (keeps dry powder), and a portfolio-heat limit (total risk if every stop hit at once). Tunable in config/calls.yaml.",
+    read: "A concentrated book: the highest-confidence names get the biggest positions (up to the max %), low-confidence ones get starter sizes or are skipped. The row shows position % of the account and, on hover, the dollar cost and the risk-at-stop.",
+  },
   postmortem: {
     title: "Post-mortem (\"why\")",
     what: "An automated attribution of why the call won or lost, computed from what price actually did — never hand-written.",

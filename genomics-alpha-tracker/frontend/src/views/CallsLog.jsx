@@ -30,6 +30,16 @@ const STATUS_LABEL = {
 const signalLabel = (c) =>
   c.flag_type ? FLAG_LABELS[c.flag_type] || c.flag_type : c.source;
 
+// Confidence 0-100 -> a compact colored badge (how hard the book bets it).
+function ConfidenceBadge({ value }) {
+  if (value === null || value === undefined) return <span className="text-gray-600 text-xs">—</span>;
+  const v = Math.round(value);
+  const cls = v >= 75 ? "bg-emerald-600/20 text-emerald-300 border-emerald-700"
+    : v >= 60 ? "bg-sky-600/20 text-sky-300 border-sky-700"
+    : "bg-gray-600/20 text-gray-300 border-gray-600";
+  return <span className={`text-xs px-1.5 py-0.5 rounded border font-semibold ${cls}`}>{v}</span>;
+}
+
 const retColor = (v) =>
   v === null || v === undefined ? "" : v > 0 ? "text-emerald-400" : v < 0 ? "text-rose-400" : "";
 
@@ -141,8 +151,9 @@ export default function CallsLog({ onPick }) {
                 <tr className="text-left text-xs text-gray-400 border-b border-edge">
                   <th className="py-2 pr-3">Name</th>
                   <th className="py-2 pr-3">Signal</th>
+                  <th className="py-2 pr-3 text-center">Conf<InfoTip term="confidence" /></th>
                   <th className="py-2 pr-3">Called</th>
-                  <th className="py-2 pr-3 text-right">Size</th>
+                  <th className="py-2 pr-3 text-right">Size<InfoTip term="conviction_sizing" /></th>
                   <th className="py-2 pr-3 text-right">Entry</th>
                   <th className="py-2 pr-3 text-right">Stop</th>
                   <th className="py-2 pr-3 text-right">Target</th>
@@ -162,11 +173,13 @@ export default function CallsLog({ onPick }) {
                       <span className="text-gray-500 text-xs ml-2">{c.direction}</span>
                     </td>
                     <td className="py-2 pr-3 text-xs text-gray-300">{signalLabel(c)}</td>
+                    <td className="py-2 pr-3 text-center"><ConfidenceBadge value={c.confidence} /></td>
                     <td className="py-2 pr-3 text-xs text-gray-400">{c.call_date}</td>
                     <td className="py-2 pr-3 text-right text-xs">
                       {pos[c.id] ? (
-                        <span title={`${pos[c.id].shares} sh · cost ${fmtMoney(pos[c.id].cost_basis)}`}>
-                          {pos[c.id].shares}sh<br /><span className="text-gray-500">{fmtMoney(pos[c.id].market_value)}</span>
+                        <span title={`${pos[c.id].shares} sh · cost ${fmtMoney(pos[c.id].cost_basis)} · risk ${fmtMoney(pos[c.id].risk_at_stop)} at stop`}>
+                          {fmtPct(pos[c.id].position_pct, 0)}<br />
+                          <span className="text-gray-500">{fmtMoney(pos[c.id].market_value)}</span>
                         </span>
                       ) : "—"}
                     </td>
@@ -211,6 +224,7 @@ export default function CallsLog({ onPick }) {
                 <tr className="text-left text-xs text-gray-400 border-b border-edge">
                   <th className="py-2 pr-3">Name</th>
                   <th className="py-2 pr-3">Signal</th>
+                  <th className="py-2 pr-3 text-center">Conf<InfoTip term="confidence" /></th>
                   <th className="py-2 pr-3">Called → Exited</th>
                   <th className="py-2 pr-3 text-right">Entry → Exit</th>
                   <th className="py-2 pr-3">Outcome</th>
@@ -229,6 +243,7 @@ export default function CallsLog({ onPick }) {
                         </button>
                       </td>
                       <td className="py-2 pr-3 text-xs text-gray-300">{signalLabel(c)}</td>
+                      <td className="py-2 pr-3 text-center"><ConfidenceBadge value={c.confidence} /></td>
                       <td className="py-2 pr-3 text-xs text-gray-400">
                         {c.call_date} → {c.exit_date || "—"}
                       </td>
@@ -248,7 +263,7 @@ export default function CallsLog({ onPick }) {
                     </tr>
                     {c.postmortem?.summary && (
                       <tr className="border-b border-edge/50">
-                        <td colSpan={8} className="pb-2 pl-3 pr-3">
+                        <td colSpan={9} className="pb-2 pl-3 pr-3">
                           <div className="text-xs text-gray-400 bg-ink/60 border border-edge/60 rounded px-2 py-1.5">
                             <span className="text-gray-500 uppercase text-[9px] tracking-wide mr-2">why</span>
                             {c.postmortem.summary}
@@ -279,23 +294,29 @@ export default function CallsLog({ onPick }) {
 function PaperAccount({ paper }) {
   const rp = paper.total_return_pct;
   const col = (v) => (v > 0 ? "text-emerald-400" : v < 0 ? "text-rose-400" : "text-gray-200");
+  const heatHot = paper.portfolio_heat_pct > 0.85 * paper.max_portfolio_heat_pct;
   const tiles = [
     { label: "Realized P&L", value: fmtMoney(paper.realized_pnl), c: col(paper.realized_pnl) },
     { label: "Open P&L", value: fmtMoney(paper.open_pnl), c: col(paper.open_pnl) },
-    { label: "Cash", value: fmtMoney(paper.cash) },
     { label: "Invested", value: fmtMoney(paper.invested) },
+    { label: "Gross exposure", value: fmtPct(paper.gross_exposure_pct, 0),
+      sub: `cap ${fmtPct(paper.max_gross_exposure_pct, 0)}` },
+    { label: "Portfolio heat", value: fmtPct(paper.portfolio_heat_pct, 0),
+      sub: `cap ${fmtPct(paper.max_portfolio_heat_pct, 0)}`, c: heatHot ? "text-amber-400" : "" },
     { label: "Open / Closed", value: `${paper.n_open} / ${paper.n_closed}` },
   ];
   return (
     <div className="bg-panel border border-edge rounded-xl p-4">
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
-          <h3 className="font-semibold">💼 Paper account</h3>
+          <h3 className="font-semibold">💼 Paper account — conviction book</h3>
           <p className="text-xs text-gray-500 mt-1 max-w-xl">
-            Every call sized into a simulated book — {fmtMoney(paper.starting_capital)} starting
-            capital, risking {fmtPct(paper.risk_per_trade_pct, 0)} of equity per call at its stop.
-            That makes <b>1R = {fmtPct(paper.risk_per_trade_pct, 0)} of the account</b>, so the R
-            figures below map straight to account moves. Simulated — no real orders.
+            {fmtMoney(paper.starting_capital)} starting capital, concentrated by conviction: each
+            call is sized by its <b>confidence score</b> (bigger positions on higher-confidence
+            setups), capped by liquidity, a {fmtPct(paper.max_gross_exposure_pct, 0)} gross-exposure
+            limit, and a {fmtPct(paper.max_portfolio_heat_pct, 0)} portfolio-heat limit
+            (total risk if every stop hit at once). Not an index — capital piles onto the best
+            bets. Simulated — no real orders.
           </p>
         </div>
         <div className="text-right">
@@ -306,11 +327,12 @@ function PaperAccount({ paper }) {
           <div className="text-[10px] text-gray-500">account value</div>
         </div>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mt-3">
+      <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 mt-3">
         {tiles.map((t) => (
           <div key={t.label} className="bg-ink border border-edge rounded-lg p-2 text-center">
             <div className={`text-sm font-bold ${t.c || "text-gray-200"}`}>{t.value}</div>
             <div className="text-[10px] uppercase tracking-wide text-gray-500">{t.label}</div>
+            {t.sub && <div className="text-[9px] text-gray-600">{t.sub}</div>}
           </div>
         ))}
       </div>

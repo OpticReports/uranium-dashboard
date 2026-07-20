@@ -125,6 +125,7 @@ class TradeCallOut(BaseModel):
     target_price: float
     expires_on: Date
     composite_at_call: Optional[float]
+    confidence: Optional[float] = None
     status: str
     exit_date: Optional[Date]
     exit_price: Optional[float]

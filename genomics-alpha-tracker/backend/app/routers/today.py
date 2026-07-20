@@ -145,6 +145,23 @@ def implied_move(iv: float | None, days_until: int | None) -> float | None:
 
 # --- endpoint -------------------------------------------------------------------
 
+def _card_confidence(snap, flags: dict, track: dict) -> float | None:
+    """Conviction score for a Today card: composite bent by the best fresh
+    flag's track record and corroboration (same logic the calls engine uses)."""
+    from ..calls.confidence import compute_confidence
+    from ..scoring.outcomes import outcome_key
+
+    if snap is None or snap.composite is None:
+        return None
+    best_hit, best_n = None, 0
+    for f in flags.values():
+        h = track.get(outcome_key(f.flag_type, f.evidence), {}).get("horizons", {}).get("1m", {})
+        if h.get("hit_rate") is not None and (h.get("n") or 0) > best_n:
+            best_hit, best_n = h["hit_rate"], h["n"]
+    return compute_confidence(snap.composite, hit_rate_1m=best_hit, n_1m=best_n,
+                              n_distinct_flags=len(flags))
+
+
 @router.get("/regime")
 def regime(session: Session = Depends(get_session)):
     return regime_payload(session)
@@ -277,6 +294,7 @@ def today_view(session: Session = Depends(get_session)):
             "symbol": sym,
             "name": sec.name,
             "composite": snap.composite if snap else None,
+            "confidence": _card_confidence(snap, flags, track),
             "score_missing": snap.missing if snap else None,
             "flags": [
                 {"type": f.flag_type, "severity": f.severity,
