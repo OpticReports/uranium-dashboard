@@ -85,6 +85,12 @@ def main():
     p.add_argument("--ibkr-equities", type=float, default=346000)
     p.add_argument("--canary-url", default="https://treasury-canary.onrender.com",
                    help="public canary API for the accident-composite check")
+    # The vol harvester's known failure mode is a SLOW BLEED (sim: -20.9% across
+    # 2018->19 echo-spike chop) while its modern-era max DD is only 9.5% — a
+    # tighter threshold flags "entered the 2018 regime" a month+ before the
+    # generic --dd-alert would (results.md addendum 12).
+    p.add_argument("--harv-symphony", default="ORQNCfZnA18wmsMWVhf8")
+    p.add_argument("--harv-dd-alert", type=float, default=0.12)
     a = p.parse_args()
     acct = a.account or cl.default_account()
 
@@ -131,8 +137,12 @@ def main():
         state["peaks"][sid] = peak
         if peak > 0:
             dd = 1.0 - dep_val / peak
-            if dd > a.dd_alert:
-                alerts.append(f"DRAWDOWN {dd:.1%} from tracked peak — {label}")
+            dd_thresh = a.harv_dd_alert if sid == a.harv_symphony else a.dd_alert
+            if dd > dd_thresh:
+                extra = (" — harvester past its modern-era max DD (9.5%): possible "
+                         "2018-style slow-bleed regime, review addendum 12"
+                         if sid == a.harv_symphony else "")
+                alerts.append(f"DRAWDOWN {dd:.1%} from tracked peak — {label}{extra}")
 
         if prev and sid in prev.get("symphonies", {}):
             pv = prev["symphonies"][sid].get("deposit_adjusted_value")

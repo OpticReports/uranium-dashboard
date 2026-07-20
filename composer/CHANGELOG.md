@@ -241,3 +241,14 @@ Format per entry:
 - Owner approved the tripwire from addendum 13: monthly KMLM divergence
   check starting ~2026-08-07; on fail (corr < 0.90 or gap < −15%/yr),
   pre-authorized one-time shift of 10 book points KMLM→HG (→ 29/29/27/15).
+
+
+## 2026-07-20 — Research follow-through builds (owner-approved)
+
+- monitor.py: harvester-specific drawdown alert at 12% (its known failure
+  mode is a slow bleed; modern-era max DD 9.5% vs sim-era 20.9%).
+- regime_boot.py refactored self-contained + POLICY standing analysis
+  cadence: quarterly 55y regime-bootstrap re-run; convergence of the
+  AS-MEASURED vs CONSERVATIVE-KMLM gap is the tracked finding.
+- Canary gains the statistical-regime strip (validated Treasury HMM,
+  descriptive only, never feeds alerts) — see canary commits.

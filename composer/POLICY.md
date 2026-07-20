@@ -90,6 +90,16 @@ converts that uncertainty into a monitored contingency.
 - Sunset: if passed every month through 2027-01, retire this operation at
   the Jan-2027 review alongside Operation 2.
 
+## Standing analysis cadence (not a capital operation)
+
+- QUARTERLY (first daily check of Oct/Jan/Apr/Jul), and mandatorily at the
+  Jan-2027 review: re-run `composer/research/regime_boot.py` (55y
+  regime-bootstrap, addendum 13) with fresh live data. Report the allocation
+  ranking and the AS-MEASURED vs CONSERVATIVE-KMLM gap vs the prior run —
+  convergence as live hostile-regime months accumulate is the finding.
+  Any reallocation it suggests requires owner approval (except where an
+  existing pre-authorized operation already covers the move).
+
 ## Standing exclusions
 
 Never auto-executed under any circumstances: changes to symphony logic,
