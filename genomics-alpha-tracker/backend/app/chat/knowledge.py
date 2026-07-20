@@ -103,6 +103,9 @@ def topics() -> list[dict]:
     return [{"file": stem, "title": title} for stem, title in titles.items()]
 
 
+_BIBLIO = ("sources", "references", "bibliography", "how to use", "caveats")
+
+
 def _score(query: str, section: Section) -> float:
     q = query.lower()
     terms = [t for t in re.findall(r"[a-z0-9\-]+", q) if len(t) > 2]
@@ -110,6 +113,12 @@ def _score(query: str, section: Section) -> float:
     score = 0.0
     for t in terms:
         score += hay.count(t)
+    # Length-normalize so a long bibliography can't win on raw keyword volume,
+    # and hard-demote non-substantive sections (Sources/References/caveats).
+    heading_l = section.heading.lower()
+    if any(b in heading_l for b in _BIBLIO):
+        return score * 0.05
+    score = score / (1 + len(section.body) / 2000.0)
     # Topic-hint boost: if the query trips a file's hints, favor that file.
     for stem, hints in TOPIC_HINTS.items():
         if section.file == stem and any(h in q for h in hints):
