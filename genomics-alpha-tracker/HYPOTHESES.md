@@ -60,19 +60,37 @@ call trigger · `retired` → failed the gate or decayed; kept for the record.
   thesis is negative-EV without a specific spark.
 - **Prediction:** negative average forward excess for high-SI names absent a
   co-occurring catalyst/flow trigger.
-- **Implement:** grade a `high_short_interest` observe-only flag; if the sign
-  is negative (as the literature predicts), that's a REASON to down-weight the
-  positioning component's squeeze reading — a demotion-style finding.
+- **Evidence (10y historical backtest, `docs/BACKTEST_SIGNALS.md`):** neither
+  confirmed nor refuted — FINRA days-to-cover ≥ 10 fires earned +1.24%/1m vs
+  XBI, statistically indistinguishable from the +1.08% survivorship baseline.
+  In THIS (surviving) universe, high SI was neither headwind nor squeeze fuel.
+  Keeps the positioning component's squeeze reading on a short leash.
 - **Source:** `knowledge/market_structure.md` (short-interest studies).
-- **Status:** proposed.
+- **Status:** tested-historical (no edge either way); revisit with live data.
 
 ### H3 — Pullback-into-catalyst still needs its own proof
 - **Hypothesis:** the current `pullback_into_catalyst` flag (ATR-normalized dip
   + trend qualifier + tradeable catalyst window) beats the systematic baseline.
-- **Prediction:** positive 1m excess; the backtest's price-only variant showed
-  NO edge, so the catalyst-conditioning is the part on trial.
-- **Implement:** already observe-only — just needs outcomes to accrue to n≥20.
-- **Source:** `docs/BACKTEST_CALLS.md`, `knowledge/fda_catalyst_stats.md`.
+- **Prediction:** positive 1m excess; the catalyst-conditioning is on trial.
+- **Evidence (10y historical backtest):** the PRICE half alone graded WEAK —
+  +1.66%/1m, above the +1.08% baseline but CI-overlapping it (could be drift).
+  The catalyst half remains untestable historically — live record decides.
+- **Source:** `docs/BACKTEST_CALLS.md`, `docs/BACKTEST_SIGNALS.md`,
+  `knowledge/fda_catalyst_stats.md`.
+- **Status:** observing.
+
+### H6 — Relative-strength leadership persists (SUPPORTED historically)
+- **Hypothesis:** names beating XBI by ≥15 points over 60 trading days keep
+  outperforming (sector-relative momentum).
+- **Evidence (10y historical backtest):** the ONLY signal to clear the
+  survivorship baseline decisively — +2.55%/1m vs XBI (n=2,819, 1,107
+  clusters), +1.47% over baseline, CI90 low clears the baseline mean, and
+  consistent across 1w/1m/3m horizons.
+- **Implement:** `relative_strength_leader` observe-only flag is now LIVE
+  (flags.yaml `min_rs_60d: 0.15`) — its live track record must confirm the
+  backtest before the promotion gate can make it a call trigger.
+- **Source:** `docs/BACKTEST_SIGNALS.md`, `knowledge/market_structure.md`
+  (momentum literature).
 - **Status:** observing.
 
 ### H4 — Post-CRL drift

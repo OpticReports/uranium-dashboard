@@ -58,6 +58,13 @@ flags:
     min_volume_z: 2.5
     min_dollar_volume: 1000000    # spike day must trade >= $1M
 
+  relative_strength_leader:
+    # The one signal the 10y historical backtest SUPPORTED (see
+    # docs/BACKTEST_SIGNALS.md): names beating XBI by >=15 points over 60
+    # bars went on to beat it again (+1.47%/1m over baseline, CI-cleared).
+    # OBSERVE-ONLY until its LIVE track record confirms the backtest.
+    min_rs_60d: 0.15
+
   insider_buying_cluster:
     # CLUSTER buying = multiple DISTINCT insiders buying in the open market in
     # a short window (one officer's 10b5-1 plan printing twice is not a signal).

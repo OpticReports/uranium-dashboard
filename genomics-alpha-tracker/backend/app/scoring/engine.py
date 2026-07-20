@@ -132,6 +132,19 @@ def _gather_raw(session: Session, sec: Security, asof: date, cfg: dict) -> dict:
     va_since = asof - timedelta(days=va_cfg.get("lookback_days", 60))
     volume_z = C.volume_zscore_raw([b.volume for b in bars if b.date >= va_since])
 
+    # 60-bar relative strength vs XBI (for the relative_strength_leader flag —
+    # the one signal the historical backtest supported). Benchmark closes are
+    # fetched once per engine run and passed in via the cfg dict.
+    bench_closes = cfg.get("_bench_closes") or {}
+    rs_60d = None
+    closes_for_rs = [(b.date, b.close) for b in bars if b.close is not None]
+    if len(closes_for_rs) > 60:
+        d0, c0 = closes_for_rs[-61]
+        d1, c1 = closes_for_rs[-1]
+        k0, k1 = bench_closes.get(d0), bench_closes.get(d1)
+        if c0 and k0 and k1:
+            rs_60d = (c1 - c0) / c0 - (k1 - k0) / k0
+
     # Trend/volatility context for the hardened pullback flag + volume floor.
     from ..calls.rules import BarLike, atr as _atr
 
@@ -174,6 +187,7 @@ def _gather_raw(session: Session, sec: Security, asof: date, cfg: dict) -> dict:
         "atr14": atr14,
         "above_50dma": above_50dma,
         "last_dollar_volume": last_dollar_volume,
+        "rs_60d": rs_60d,
         "rev_raw": rev_raw,
         "cat_raw": cat_raw,
         "mention_accel": mention_accel,
@@ -220,6 +234,17 @@ def compute_scores(session: Session, asof: date | None = None) -> list[ScoreSnap
     suppressed: set[tuple[str, str]] = {
         (f.symbol, outcome_key(f.flag_type, f.evidence))
         for f in session.exec(select(FlagEvent).where(FlagEvent.asof >= recent_cutoff)).all()
+    }
+
+    # Benchmark closes fetched ONCE per run for relative-strength (rs_60d).
+    cfg = dict(cfg)
+    cfg["_bench_closes"] = {
+        b.date: b.close
+        for b in session.exec(
+            select(PriceBar).where(PriceBar.symbol == "XBI")
+            .where(PriceBar.close != None)  # noqa: E711
+            .where(PriceBar.date >= asof - timedelta(days=120))
+        ).all()
     }
 
     raws = {sec.symbol: _gather_raw(session, sec, asof, cfg) for sec in securities}
