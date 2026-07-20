@@ -89,6 +89,7 @@ export const api = {
   },
   callsScorecard: () => req("/calls/scorecard"),
   callsPerformance: () => req("/calls/performance"),
+  callsPaper: () => req("/calls/paper"),
   createCall: (payload) =>
     req("/calls", { method: "POST", body: JSON.stringify(payload) }),
   closeCall: (id, payload = {}) =>

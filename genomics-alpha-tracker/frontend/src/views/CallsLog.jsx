@@ -4,7 +4,7 @@ import {
   Tooltip, XAxis, YAxis,
 } from "recharts";
 import { api } from "../lib/api";
-import { fmtNum, fmtPct, FLAG_LABELS } from "../lib/format";
+import { fmtNum, fmtPct, fmtMoney, FLAG_LABELS } from "../lib/format";
 import InfoTip from "../components/InfoTip";
 
 // Calls Log: every exact trade call the tracker (or the desk) has made, graded
@@ -37,6 +37,7 @@ export default function CallsLog({ onPick }) {
   const [calls, setCalls] = useState([]);
   const [card, setCard] = useState(null);
   const [perf, setPerf] = useState(null);
+  const [paper, setPaper] = useState(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -45,6 +46,7 @@ export default function CallsLog({ onPick }) {
     api.calls().then(setCalls).catch(() => setCalls([]));
     api.callsScorecard().then(setCard).catch(() => setCard(null));
     api.callsPerformance().then(setPerf).catch(() => setPerf(null));
+    api.callsPaper().then(setPaper).catch(() => setPaper(null));
   }, []);
   useEffect(load, [load]);
 
@@ -74,6 +76,7 @@ export default function CallsLog({ onPick }) {
 
   const open = calls.filter((c) => c.status === "open");
   const closed = calls.filter((c) => c.status !== "open");
+  const pos = paper?.positions || {};
 
   return (
     <div className="space-y-4">
@@ -123,6 +126,8 @@ export default function CallsLog({ onPick }) {
         )}
       </div>
 
+      {paper?.enabled && <PaperAccount paper={paper} />}
+
       {card && <Scorecard card={card} />}
 
       {perf && <PerformanceOverTime perf={perf} />}
@@ -137,6 +142,7 @@ export default function CallsLog({ onPick }) {
                   <th className="py-2 pr-3">Name</th>
                   <th className="py-2 pr-3">Signal</th>
                   <th className="py-2 pr-3">Called</th>
+                  <th className="py-2 pr-3 text-right">Size</th>
                   <th className="py-2 pr-3 text-right">Entry</th>
                   <th className="py-2 pr-3 text-right">Stop</th>
                   <th className="py-2 pr-3 text-right">Target</th>
@@ -157,6 +163,13 @@ export default function CallsLog({ onPick }) {
                     </td>
                     <td className="py-2 pr-3 text-xs text-gray-300">{signalLabel(c)}</td>
                     <td className="py-2 pr-3 text-xs text-gray-400">{c.call_date}</td>
+                    <td className="py-2 pr-3 text-right text-xs">
+                      {pos[c.id] ? (
+                        <span title={`${pos[c.id].shares} sh · cost ${fmtMoney(pos[c.id].cost_basis)}`}>
+                          {pos[c.id].shares}sh<br /><span className="text-gray-500">{fmtMoney(pos[c.id].market_value)}</span>
+                        </span>
+                      ) : "—"}
+                    </td>
                     <td className="py-2 pr-3 text-right">{fmtNum(c.entry_price, 2)}</td>
                     <td className="py-2 pr-3 text-right text-rose-300">{fmtNum(c.stop_price, 2)}</td>
                     <td className="py-2 pr-3 text-right text-emerald-300">{fmtNum(c.target_price, 2)}</td>
@@ -201,6 +214,7 @@ export default function CallsLog({ onPick }) {
                   <th className="py-2 pr-3">Called → Exited</th>
                   <th className="py-2 pr-3 text-right">Entry → Exit</th>
                   <th className="py-2 pr-3">Outcome</th>
+                  <th className="py-2 pr-3 text-right">P&amp;L</th>
                   <th className="py-2 pr-3 text-right">Return</th>
                   <th className="py-2 text-right">R<InfoTip term="avg_r" /></th>
                 </tr>
@@ -226,12 +240,15 @@ export default function CallsLog({ onPick }) {
                           {STATUS_LABEL[c.status] || c.status}
                         </span>
                       </td>
+                      <td className={`py-2 pr-3 text-right ${retColor(pos[c.id]?.realized_pnl)}`}>
+                        {pos[c.id] ? fmtMoney(pos[c.id].realized_pnl) : "—"}
+                      </td>
                       <td className={`py-2 pr-3 text-right ${retColor(c.return_pct)}`}>{fmtPct(c.return_pct)}</td>
                       <td className={`py-2 text-right ${retColor(c.r_multiple)}`}>{fmtNum(c.r_multiple, 2)}</td>
                     </tr>
                     {c.postmortem?.summary && (
                       <tr className="border-b border-edge/50">
-                        <td colSpan={7} className="pb-2 pl-3 pr-3">
+                        <td colSpan={8} className="pb-2 pl-3 pr-3">
                           <div className="text-xs text-gray-400 bg-ink/60 border border-edge/60 rounded px-2 py-1.5">
                             <span className="text-gray-500 uppercase text-[9px] tracking-wide mr-2">why</span>
                             {c.postmortem.summary}
@@ -253,6 +270,67 @@ export default function CallsLog({ onPick }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// Paper-trading account: the calls sized into a simulated $100k book so the
+// desk can watch account value, not just win rates.
+function PaperAccount({ paper }) {
+  const rp = paper.total_return_pct;
+  const col = (v) => (v > 0 ? "text-emerald-400" : v < 0 ? "text-rose-400" : "text-gray-200");
+  const tiles = [
+    { label: "Realized P&L", value: fmtMoney(paper.realized_pnl), c: col(paper.realized_pnl) },
+    { label: "Open P&L", value: fmtMoney(paper.open_pnl), c: col(paper.open_pnl) },
+    { label: "Cash", value: fmtMoney(paper.cash) },
+    { label: "Invested", value: fmtMoney(paper.invested) },
+    { label: "Open / Closed", value: `${paper.n_open} / ${paper.n_closed}` },
+  ];
+  return (
+    <div className="bg-panel border border-edge rounded-xl p-4">
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <h3 className="font-semibold">💼 Paper account</h3>
+          <p className="text-xs text-gray-500 mt-1 max-w-xl">
+            Every call sized into a simulated book — {fmtMoney(paper.starting_capital)} starting
+            capital, risking {fmtPct(paper.risk_per_trade_pct, 0)} of equity per call at its stop.
+            That makes <b>1R = {fmtPct(paper.risk_per_trade_pct, 0)} of the account</b>, so the R
+            figures below map straight to account moves. Simulated — no real orders.
+          </p>
+        </div>
+        <div className="text-right">
+          <div className="text-3xl font-bold">{fmtMoney(paper.account_value)}</div>
+          <div className={`text-sm font-semibold ${col(rp)}`}>
+            {rp >= 0 ? "+" : ""}{fmtPct(rp)} vs start
+          </div>
+          <div className="text-[10px] text-gray-500">account value</div>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mt-3">
+        {tiles.map((t) => (
+          <div key={t.label} className="bg-ink border border-edge rounded-lg p-2 text-center">
+            <div className={`text-sm font-bold ${t.c || "text-gray-200"}`}>{t.value}</div>
+            <div className="text-[10px] uppercase tracking-wide text-gray-500">{t.label}</div>
+          </div>
+        ))}
+      </div>
+      {paper.equity_curve?.length > 2 && (
+        <div className="mt-3">
+          <div className="text-xs text-gray-400 mb-1">Account value over time</div>
+          <ResponsiveContainer width="100%" height={140}>
+            <LineChart data={paper.equity_curve} margin={{ left: 6, right: 10, top: 5 }}>
+              <CartesianGrid stroke="#1f2937" />
+              <XAxis dataKey="date" tick={{ fontSize: 9, fill: "#94a3b8" }} minTickGap={40} />
+              <YAxis tick={{ fontSize: 9, fill: "#94a3b8" }} domain={["auto", "auto"]}
+                tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} width={40} />
+              <Tooltip contentStyle={{ background: "#121826", border: "1px solid #1f2937", fontSize: 12 }}
+                formatter={(v) => fmtMoney(v)} />
+              <ReferenceLine y={paper.starting_capital} stroke="#4b5563" strokeDasharray="3 3" />
+              <Line type="stepAfter" dataKey="equity" stroke="#38bdf8" dot={false} strokeWidth={2} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
     </div>
   );
 }

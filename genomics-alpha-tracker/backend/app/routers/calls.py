@@ -82,6 +82,15 @@ def get_scorecard(session: Session = Depends(get_session)):
     return manager.scorecard(session)
 
 
+@router.get("/paper")
+def get_paper(session: Session = Depends(get_session)):
+    """Paper-trading account: starting balance, account value, realized/open
+    P&L, per-position sizing, and the equity curve in dollars."""
+    from ..calls.paper import paper_account
+
+    return paper_account(session)
+
+
 @router.get("/performance")
 def get_performance(session: Session = Depends(get_session)):
     """Call accuracy/strength over time: equity curve (cumulative R), rolling
