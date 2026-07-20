@@ -503,3 +503,46 @@ the assumption, and the earlier divergence study (HG live +13.4% ABOVE its
 model over 142 days) independently confirms no alpha leak to execution. The
 2.6%/yr aggregate cost is the price of strategies that turn over ~90×/yr and
 is already priced into every net backtest number we've used for decisions.
+
+
+---
+
+## Addendum 11 — Community sweep for a CAGR-additive fourth engine (2026-07-20)
+
+**Ask:** find a public symphony that raises book CAGR and complements HG /
+KMLM-switcher / sleeve. Method: 3 ranked searches (41 unique candidates) ->
+8 structurally distinct shortlisted -> independent re-backtests (ALL 8
+reproduced claims; these are post-creation OOS records, 500-1300 td) ->
+correlation vs live engines -> blend test on the book (45/27/27 base,
+common 2y window 2024-07..2026-07).
+
+| add @ best size | book CAGR | Sharpe | maxDD | corr (HG/KMLM/SLV) |
+|---|---|---|---|---|
+| CURRENT BOOK | +111.9% | 2.46 | 11.0% | — |
+| WashSale3 WM74 @25% | **+117.2%** | **2.57** | 12.3% | .52/.68/.02 |
+| Battleship III @15% | +108.7% | 2.45 | 11.2% | .49/.33/.03 |
+| VIX midterm fut @25% | +87.3% | **2.62** | **9.6%** | .14/.08/.10 |
+
+**Findings:**
+1. **Correlation intuition INVERTED by the math.** Battleship III (global
+   multi-asset momentum, 100+ tickers — the most genuinely different
+   strategy found) DILUTES CAGR: its 78% < book's 112%, and 0.49 corr isn't
+   low enough to compensate. Diversifying and accretive are different things.
+2. **WashSale3 WM74 is the only CAGR-accretive add** (+5.3pp CAGR, +0.11
+   Sharpe, +1.3pp DD) — but tree inspection shows it is KMLM-switcher FAMILY
+   (74 RSI conditions incl. KMLM/PSQ/QQQE gates, wash-sale ticker variants).
+   Adding it raises same-family exposure from 27% to ~45%: family-crowding
+   risk in the regime where that signal breaks. Note our own KMLM variant
+   out-earned it over the window (+181% vs +127%) — no swap case.
+3. **VIX midterm fut** (VXZ/ZVOL/PULS on SPY-RSI): pure stabilizer — best
+   Sharpe/DD, costs CAGR. Candidate for lower-vol capital, not this goal.
+4. All figures are in-backtest over a favorable 2y window; live drag per our
+   TCA runs ~2-4pp/yr on high-turnover symphonies.
+
+**Decision path (loop-improve next):** WashSale3 copied to drafts as
+"CANDIDATE: WashSale3 WM74 (loop base)" [LtwtYauWdTCO9kyO7edT]. Loop plan
+per our OOS discipline: (a) walk-forward IS/OOS sweep of its key thresholds
+(expect signal tweaks to die — verify robustness, not to tune); (b) test
+family-neutral funding: add via trimming KMLM (not pro-rata) so family
+exposure stays ~flat; (c) 30-day paper watch vs live divergence before any
+capital. No investment without owner sign-off per POLICY.md.
