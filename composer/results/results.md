@@ -613,3 +613,46 @@ FREE in the 2023+ regime (guarded Composer backtest identical: +26.2%/2.16/
 **Open decisions (owner):** fund guarded HARV at ~15%? Funded via HG->KMLM
 shift (all-metrics win, family concentration cost) or HG-only (conservative,
 -11pp CAGR)? Nothing executed; POLICY.md sign-off required.
+
+
+## Addendum 13 — 55-year synthetic blend test + low-return-decade Monte Carlo (2026-07-20)
+
+**Method (owner-directed):** full-fidelity reconstruction to 1971 is not
+honestly possible (no VIX before 1990, no vol futures before 2004, no KMLM
+index before the late 80s). Instead: REGIME-BOOTSTRAP — real S&P dailies
+1971-2026 classified monthly (TREND-UP 32% / CHOP 54% / CRASH 14% of 666
+months); each engine's regime-conditional monthly return distribution taken
+from its LONGEST real record (HG 2015+ incl. 2018/2020/2022; SLEEVE 2021+;
+HARV guarded-sim 2018+ stitched to real; KMLM 2023+ only); joint月 sampling
+preserves cross-correlations where data overlaps. CONSERVATIVE variant
+replaces KMLM's CHOP/CRASH buckets with HG's (its 814td record contains no
+hostile regime). All CAGRs are backtest-derived and inflated — RANKING tool,
+not forecast.
+
+**55y spine result:** chosen 19/39/27/15 ~ties current on median CAGR with
+2-4pp better drawdowns (as-measured), but under CONSERVATIVE-KMLM the
+ranking flips and HG-fund 30/27/27/15 dominates it — the 39% KMLM weight
+rests on unverified hostile-regime behavior.
+
+**Published forward projections (researched):** next-decade S&P annualized:
+Shiller model -0.7% nominal (+1.3% w/ divs), Research Affiliates ~3.1%,
+Vanguard ~5.3%, Goldman base 6.5% (27th pctile since 1900). CAPE 41.1.
+Owner's ±2% thesis sits in the pessimistic half of the published cluster.
+
+**Forward 10y MC calibrated to +2% SPX decade (TREND-UP share 32%->22%):**
+| allocation | as-measured p05/med/dd95 | conservative p05/med/dd95 |
+|---|---|---|
+| current 45/27/27/0 | +91/+121/17% | +55/+78/29% |
+| chosen 19/39/27/15 | **+101/+126/12%** | +48/+67/22% |
+| HG-fund 30/27/27/15 | +85/+107/11% | +50/+68/21% |
+| defensive 15/25/27/33 | +75/+90/7% | +44/+57/14% |
+
+**Verdict:** in the low-return decade the chosen 19/39/27/15 is the BEST
+allocation if KMLM's measured behavior holds, and statistically TIED with
+HG-fund 30/27/27/15 in the conservative worst case (67.1 vs 67.6 med; 22.3
+vs 20.8 dd95). Current 45/27/27/0 only beats them in the conservative case
+by carrying 7-8pp more drawdown (it is simply more HG beta). DECISION:
+phase 2 proceeds unchanged (19/39/27/15). RECOMMENDED TRIPWIRE (owner to
+approve): if KMLM's August divergence check fails (live corr < 0.90 or gap
+worse than -15%/yr), shift 10pp KMLM->HG — converting the KMLM-bucket
+uncertainty into a monitored contingency instead of a pre-emptive haircut.
