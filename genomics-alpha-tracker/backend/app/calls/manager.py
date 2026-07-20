@@ -128,6 +128,22 @@ def symbol_liquidity(session: Session, symbol: str) -> dict:
     return {"addv": value, "tier": tier, "warning": warning}
 
 
+def _confidence_for(session, symbol, flag_type, composite, fresh_flags):
+    """Fire-time confidence: setup quality × graded-edge × corroboration."""
+    from ..scoring.outcomes import flag_track_record
+    from .confidence import compute_confidence
+
+    rec = flag_track_record(session).get("by_flag_type", {}).get(flag_type, {})
+    h1m = rec.get("horizons", {}).get("1m", {})
+    n_distinct = len({f.flag_type for f in fresh_flags if f.symbol == symbol}) or 1
+    return compute_confidence(
+        composite,
+        hit_rate_1m=h1m.get("hit_rate"),
+        n_1m=h1m.get("n") or 0,
+        n_distinct_flags=n_distinct,
+    )
+
+
 def _flag_triggers_call(flag: FlagEvent, trigger_cfg: dict) -> bool:
     cond = trigger_cfg.get(flag.flag_type)
     if cond is None:
@@ -225,6 +241,12 @@ def generate_calls(session: Session, asof: date | None = None) -> list[TradeCall
         if expires_on is None:
             logger.info("Skipping %s: binary catalyst too close to trade into", sym)
             continue
+
+        # Confidence, frozen at fire-time: setup quality bent by this flag
+        # type's graded track record and corroborated by any other fresh flags
+        # on the same name.
+        confidence = _confidence_for(session, sym, flag.flag_type, composite, fresh)
+
         call = TradeCall(
             symbol=sym,
             call_date=bar_date,
@@ -241,6 +263,7 @@ def generate_calls(session: Session, asof: date | None = None) -> list[TradeCall
             target_price=round(levels.target, 4),
             expires_on=expires_on,
             composite_at_call=composite,
+            confidence=confidence,
             evidence={
                 "flag_id": flag.id,
                 "flag_type": flag.flag_type,

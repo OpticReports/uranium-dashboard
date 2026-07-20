@@ -192,6 +192,13 @@ function ActionCard({ c, onPick }) {
             {fmtScore10(c.composite)}<span className="text-xs text-gray-500">/10</span>
           </div>
           <div className="text-[10px] text-gray-500">signal vs universe<InfoTip term="composite" /></div>
+          {c.confidence !== null && c.confidence !== undefined && (
+            <div className="text-[10px] text-gray-400 mt-0.5">
+              conviction <b className={c.confidence >= 75 ? "text-emerald-400" : c.confidence >= 60 ? "text-sky-300" : "text-gray-300"}>
+                {Math.round(c.confidence)}
+              </b><InfoTip term="confidence" />
+            </div>
+          )}
         </div>
       </div>
 

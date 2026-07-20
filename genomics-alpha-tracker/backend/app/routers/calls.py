@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
 
 from ..calls import manager
+from ..calls.confidence import display_confidence
 from ..calls.postmortem import update_postmortems
 from ..calls.rules import atr, build_levels, call_r_multiple, call_return
 from ..config import calls_config
@@ -31,6 +32,7 @@ def _to_out(session: Session, call: TradeCall) -> TradeCallOut:
         thesis=call.thesis, entry_price=call.entry_price,
         stop_price=call.stop_price, target_price=call.target_price,
         expires_on=call.expires_on, composite_at_call=call.composite_at_call,
+        confidence=display_confidence(call),
         status=call.status, exit_date=call.exit_date, exit_price=call.exit_price,
         return_pct=call.return_pct, r_multiple=call.r_multiple,
     )
