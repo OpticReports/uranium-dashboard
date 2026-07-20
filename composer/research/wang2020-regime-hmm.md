@@ -70,3 +70,40 @@ insignificant (they say so).
 Keep the *third-state* idea and the allocation-tilt framing; distrust the
 headline OOS result. Nothing here justifies touching live symphonies without
 B1→B3 passing our standard walk-forward gates.
+
+---
+
+## B1 RESULT (run 2026-07-20): FAIL — thread closed
+
+Walk-forward replication (their spec; monthly refit, 2707d window, states
+labeled by in-window mean return, decision at month-end posterior; 547
+month-ends 1980-09 → 2026-07; script in scratchpad `b1_hmm.py`, states in
+`b1_states.json`):
+
+**Detection (mixed, honest):** persistent BEAR flags through 2000-02 and
+2008 (from Jan-2008), catches 1987 / 2011 / 2020-03; only 2 false-alarm BEAR
+month-ends across nine strong bull years. BUT: **2022 never reads BEAR**
+(CHOP all year — the orderly grind their vol-keyed spec cannot see, exactly
+as predicted), 1990 missed, 2015-16 and 2018-Q4 only CHOP, Aug-2024 invisible
+at month-end granularity, 2025 flagged late.
+
+**The kill shot — no forward return edge at actionable granularity:**
+next-month SPY return conditional on month-end state:
+BULL +0.75% (n=282) · CHOP +0.95% (n=179) · BEAR +0.87% (n=85).
+The states carry ZERO mean-return information one month ahead — BEAR's
+next-month mean exceeds BULL's. Only the tails differ (BEAR worst month
+-21.8% vs BULL -9.2%): the HMM is a *descriptive tail-risk labeler*, not a
+return timer. Parking defensive on CHOP would have SACRIFICED the highest
+conditional mean of the three states, killing B2's premise; tilting
+allocation on states with no mean edge cannot beat static allocation after
+turnover, killing B3's premise. (Caveat: daily-granularity switching might
+time 2020-style crashes faster, but daily inter-symphony switching is not
+executable in our world — monthly actionability is the relevant test.)
+
+**Standing conclusion:** consistent with every prior experiment — regime
+*description* is cheap, regime *prediction* is not, and our tail exposure is
+already handled at the allocation level by the sleeve + band policy. The
+kangaroo-state insight survives only as the qualitative caution already
+documented in the engine summaries (chop is the shared weakness; no
+tradeable detector found). Do not reopen without a materially different
+method AND a plan that survives the dumb-filter benchmark.
