@@ -19,6 +19,38 @@ These figures calibrate the **probability** and **expected-move** sections of a 
 - Ranges are given where sources disagree. When a memo needs a point estimate, state the range and pick a value with a one-line rationale — do not invent a false-precision number.
 - Re-pull the numbers before leaning on any specific figure: PDUFA cycles, annual novel-drug counts, and yearly concordance all move year to year. This note was researched 2026-07-20.
 
+**Interpretation guardrails (read before quoting any number in a memo):**
+
+- A high approval prior is **not** a long thesis by itself — if it is priced in, the payoff is asymmetric to the downside (reflexivity).
+- "Met PDUFA goal date" is a *punctuality* metric, never an approval probability [1][2] — do not substitute one for the other.
+- Positive and negative AdComm votes are **not** symmetric signals — weight a positive vote much more heavily than a negative one [3].
+- Practitioner **[HEURISTIC]** magnitude bands are for framing scenarios, not for stating probabilities; only **[STUDY]**-tagged figures should anchor a stated likelihood.
+- Always pair an approval/failure move estimate with the **financing overlay** — dilution risk is a near-constant for pre-profit biotech [11][13][14].
+
+---
+
+## Quick-reference priors (one number per line)
+
+Each line is a base rate with its source tag; full context and caveats are in the sections below. Use as a fast lookup when drafting the probability line of a memo.
+
+- Novel drug reaches PDUFA and is approved first cycle: **~74-90%** [1][6]
+- All-application first-cycle approval (implied by CRL rate): **~60-63%** [7]
+- Filed NDA/BLA approved *eventually* (after any resubmissions): **~90%** [11]
+- Original NDA/BLA receives a CRL at first action: **~37%** [7]
+- FDA follows its AdComm overall: **~88%** (2010-2021) / **~86%** (2017-2022) [3][4]
+- FDA follows a **positive** initial-approval vote: **~97%** [3]
+- FDA follows a **negative** initial-approval vote (i.e., does not approve): **~67%** [3]
+- FDA acted *against* its AdComm in 2025: **43%** (3 of 7), vs ~16% in 2020-2024 [5]
+- Phase 3 asset ultimately approved: **~55-60%** [11]
+- Phase 1 asset ultimately approved (all modalities): **~7.9%** [11]
+- Positive clinical-trial event, large-firm day 0-1 CAR: **+0.5% to +6.4%** [8][9]
+- Negative clinical-trial event, large-firm day 0-1 CAR: **−0.8% to −2.7%** [8][9]
+- Single-name CRL drop — small-cap / mid-cap / large-cap: **~40-75% / ~20-45% / ~5-20%** [10, HEURISTIC]
+- Pre-PDUFA run-up: **~20-40%**, starting ~4-8 weeks out [12, HEURISTIC]
+- Pre-event implied volatility: **~150-300%** annualized, collapses on resolution [15, HEURISTIC]
+
+Direction to always encode: **downside on failure tends to exceed upside on approval** [8][9][12], and **positive AdComm votes are stronger signals than negative ones** [3].
+
 ---
 
 ## The regulatory calendar, defined plainly
@@ -313,6 +345,25 @@ Corollary asymmetries a memo should encode:
 8. **Reflexivity of "priced in."** The more a catalyst is anticipated (designations, positive AdComm, strong data), the smaller the approval surprise and the larger the *relative* downside if it fails. A "high approval probability" name is not automatically a good long into the print.
 9. **Small denominators.** Several concordance sub-rates rest on modest samples (e.g., 60 negative initial-approval votes [3]; 7 AdComms in 2025 [5]). Treat sub-bucket percentages as noisy.
 10. **Numbers age.** Cycles (PDUFA VI vs VII), annual novel-drug counts, and yearly concordance all move. Re-pull before relying on a specific figure; this note was researched 2026-07-20.
+
+---
+
+## Scope notes and re-pull checklist
+
+**Scope boundaries of these numbers.**
+
+- These statistics are **U.S. FDA / CDER-centric**. Biologics reviewed by CBER (many vaccines, cell/gene therapies) and device pathways (CDRH, PMA/510(k)) have their own timelines and are *not* covered by the CDER novel-drug and PDUFA figures [1][6].
+- Approval and concordance rates describe *drugs that reached filing or AdComm* — they say nothing about the ~92% of Phase-1 assets that never get there [11].
+- Price and financing patterns are drawn from the *U.S.-listed small/mid-cap biotech* universe, where single catalysts dominate valuation; they attenuate sharply for diversified large-cap pharma [12][10].
+
+**Re-pull checklist (what ages fastest).**
+
+- **Annual novel-drug counts and first-cycle %** — refresh from the current-year CDER "New Drug Therapy Approvals" report each January [1][6].
+- **CRL frequency** — tied to the PDUFA cycle (VI = 2018-2022); re-check against PDUFA VII data as it publishes [7].
+- **AdComm concordance** — the 2025 regime shift [5] means the decade-average [3] is stale for current-year events; refresh the trailing-12-month discordance rate before use.
+- **Price/financing heuristics** — verify against recent comparable events rather than relying on the bands here, which are practitioner consensus, not tracked series [10][12][14][15][16].
+
+**One-line disclaimer to carry into any memo built on this note:** base rates set the prior; the specific asset's facts (indication, prior CRLs, cash runway, float, label risk) routinely move the outcome far from the average.
 
 ---
 
