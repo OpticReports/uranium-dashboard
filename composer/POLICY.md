@@ -62,6 +62,34 @@ in `CHANGELOG.md` with deploy IDs, and pushed.
 - Scale-up beyond 15% (to 20%) requires a fresh owner decision — not
   pre-authorized.
 
+## Pre-authorized operation 3 — KMLM hostile-regime tripwire
+
+Owner-approved 2026-07-20 (chat; analysis in results.md addendum 13). The
+19/39/27/15 allocation's single fragile assumption is the KMLM switcher's
+behavior in hostile regimes — untested in its 814-td record. This operation
+converts that uncertainty into a monitored contingency.
+
+- Check date: first daily check on or after **2026-08-07** (~30 live days for
+  the current allocation), then MONTHLY through at least 2027-01.
+- Measurement: `divergence.py YPTSJFJwD2ZKfAeYJUbW` (KMLM switcher,
+  deposit-adjusted live vs same-window backtest).
+- FAIL criteria (either):
+  - live~backtest daily-return correlation **< 0.90**, OR
+  - annualized live-vs-model gap worse than **−15%/yr**.
+- Action on FAIL: shift **10 points of total book** from KMLM to HG
+  (target allocation becomes 29/29/27/15). Execute via guarded CLI:
+  withdraw from KMLM [YPTSJFJwD2ZKfAeYJUbW], invest proceeds into HG
+  [mbkiXcuNDjueXpiox5Av]; recompute dollar amounts from live values;
+  25% single-move guard applies; two trading windows as needed. Write a
+  CHANGELOG entry and notify the owner prominently (this is a tripwire
+  FIRING, not routine rebalancing). This operation authorizes ONLY this
+  specific KMLM->HG shift, once; a second shift requires fresh owner
+  approval.
+- Action on PASS: keep 19/39/27/15, report the numbers in the daily
+  summary, re-check monthly.
+- Sunset: if passed every month through 2027-01, retire this operation at
+  the Jan-2027 review alongside Operation 2.
+
 ## Standing exclusions
 
 Never auto-executed under any circumstances: changes to symphony logic,

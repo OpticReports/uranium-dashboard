@@ -234,3 +234,10 @@ Format per entry:
 - Phase 2 (pending cash settlement): residual HG trim, KMLM top-up to 39%,
   guarded-harvester deploy to 15% [ORQNCfZnA18wmsMWVhf8]. Authorized in
   POLICY.md PENDING REALLOCATION block.
+
+
+## 2026-07-20 — Operation 3 authorized: KMLM hostile-regime tripwire
+
+- Owner approved the tripwire from addendum 13: monthly KMLM divergence
+  check starting ~2026-08-07; on fail (corr < 0.90 or gap < −15%/yr),
+  pre-authorized one-time shift of 10 book points KMLM→HG (→ 29/29/27/15).
