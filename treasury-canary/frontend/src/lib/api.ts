@@ -364,7 +364,30 @@ export interface PinHistory {
   measured_roles?: string;
 }
 
+export interface StatRegimeCurrent {
+  state: "CALM" | "ELEVATED" | "STRESS";
+  direction: "selloff" | "rally" | "";
+  confidence: number;
+  asof: string;
+  n_obs: number;
+}
+
+export interface StatRegimeMonth {
+  month: string;
+  state: "CALM" | "ELEV" | "STRESS";
+  dir: string;
+  conf: number;
+}
+
+export interface StatRegime {
+  current: StatRegimeCurrent | null;
+  hindcast: StatRegimeMonth[];
+  validated: string;
+  framing: string;
+}
+
 export interface TrackRecordRow {
+
   asof: string;
   composite_score: number | null;
   composite_band: string | null;
@@ -507,6 +530,7 @@ export const api = {
   alerts: () => getJson<CanaryEvent[]>("/alerts"),
   news: (limit = 40) => getJson<NewsResponse>(`/news?limit=${limit}`),
   pins: () => getJson<PinBoard>("/pins"),
+  statRegime: () => getJson<StatRegime>("/stat-regime"),
   pinsHistory: () => getJson<PinHistory>("/pins/history"),
   trackRecord: () => getJson<TrackRecord>("/track-record"),
   severity: () => getJson<SeverityIndex>("/severity"),

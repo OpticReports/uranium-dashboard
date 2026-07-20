@@ -14,6 +14,7 @@ import EventFeed from "./components/EventFeed";
 import NewsPanel from "./components/NewsPanel";
 import LeadingStack from "./components/LeadingStack";
 import PinBoard from "./components/PinBoard";
+import StatRegimeStrip from "./components/StatRegimeStrip";
 import AlertBeacon from "./components/AlertBeacon";
 import PlaybookTab from "./components/PlaybookTab";
 import SeverityTab from "./components/SeverityTab";
@@ -192,6 +193,7 @@ export default function App() {
           <FlowCompass />
 
           <PinBoard />
+          <StatRegimeStrip />
 
           <div id="event-feed">
             <EventFeed />

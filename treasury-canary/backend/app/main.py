@@ -71,7 +71,7 @@ app.add_middleware(
 
 from .api import (  # noqa: E402
     routes_composite, routes_events, routes_flows, routes_labor, routes_metrics,
-    routes_news, routes_pins, routes_severity, routes_track,
+    routes_news, routes_pins, routes_severity, routes_statregime, routes_track,
 )
 
 app.include_router(routes_metrics.router)
@@ -83,6 +83,7 @@ app.include_router(routes_flows.router)
 app.include_router(routes_pins.router)
 app.include_router(routes_track.router)
 app.include_router(routes_severity.router)
+app.include_router(routes_statregime.router)
 
 
 @app.get("/health")
