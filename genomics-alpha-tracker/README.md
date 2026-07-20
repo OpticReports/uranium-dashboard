@@ -219,6 +219,17 @@ verdict**: a stop that kept falling *protected capital*; one that snapped back
 above entry was a *shakeout* (a pattern of shakeouts means widen the stop, not
 blame the signal). Shown under each closed call in the Calls Log.
 
+**The improvement loop is itself a system** ([`TUNING.md`](TUNING.md)). On a
+monthly cadence an agent reads the aggregate evidence (`GET /tuning/evidence`),
+checks per-lane sufficiency (`scripts/tune_proposal.py`), and may propose ONE
+config change — which must first pass a statistical gate
+(`evals/replay.py`): weights changes need a bootstrap-confirmed rank-IC
+improvement on forward XBI-excess returns; trigger promotions need n ≥ 20 with
+a Wilson 90% lower-bound hit rate above 50%; exit-parameter changes rerun the
+slippage-adjusted backtest. Passing proposals arrive as pull requests with the
+evidence and gate output attached — **a human merges, always**. "No proposal
+this cycle" is the expected output until the record fattens.
+
 **The flags grade themselves too.** Every flag — including ones that never
 became calls — is graded from its fire-time close against forward 1w/1m/3m
 returns, raw and XBI-excess (`GET /flags/track-record`). Flag cards on the
