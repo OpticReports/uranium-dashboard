@@ -546,3 +546,28 @@ per our OOS discipline: (a) walk-forward IS/OOS sweep of its key thresholds
 family-neutral funding: add via trimming KMLM (not pro-rata) so family
 exposure stays ~flat; (c) 30-day paper watch vs live divergence before any
 capital. No investment without owner sign-off per POLICY.md.
+
+
+### Addendum 11b — WS3 loop results + owner challenge resolution (2026-07-20)
+
+Walk-forward sweeps (IS 2022-06..2025-01 / OOS 2025-01..now):
+- Core XLK/KMLM switch windows: OOS plateau (1.87-2.07 Sharpe across 9
+  variants) with IS/OOS rank INVERSION (IS-best 14/14 is OOS mid-pack) —
+  parameter not tunable, robustness acceptable.
+- Pop threshold (75/79/83): dead parameter — zero OOS effect.
+- **DD-sort window: fragile.** OOS CAGR 120% (w=8) vs 106% (w=5 baseline)
+  vs 56% (w=3). One parameter swings OOS results 2x. The w=8 "improvement"
+  is a single-split win — exactly the class that has died on re-splits in
+  every prior panel; not actionable without multi-split confirmation.
+
+**Owner challenge (correct):** "why add a same-family underperformer?"
+Resolution: the blend-test +5.3pp CAGR came from shifting weight OUT of
+lower-CAGR HG/sleeve INTO a high-CAGR family — an effect dominated by simply
+upweighting our OWN switcher (+181% vs WS3's +127%). Family-neutral funding
+(split KMLM 27% -> 13.5/13.5) BUYS implementation diversification but COSTS
+~27pp of CAGR on that slice. Since the goal was CAGR, WS3 is dominated in
+both framings. VERDICT: do not fund. Draft parked as bench candidate for
+implementation-diversification only. The community sweep's real conclusion:
+the highest verified public CAGR lives in the family we already own, and our
+variant is the strongest member found; the CAGR lever is WEIGHTS among
+existing engines (an owner risk decision), not a fourth engine.

@@ -1,0 +1,189 @@
+{
+  "symphony_id": "LtwtYauWdTCO9kyO7edT",
+  "split": "2025-01-01",
+  "start": "2022-06-01",
+  "end": null,
+  "capital": 10000,
+  "results": [
+    {
+      "params": {
+        "f4614198:lhs-fn-params.window": 8,
+        "f4614198:rhs-fn-params.window": 10
+      },
+      "in_sample": {
+        "cagr": 1.8007,
+        "sharpe": 3.327,
+        "max_drawdown": 0.1456,
+        "cumulative_return": 13.24,
+        "days": 649
+      },
+      "out_of_sample": {
+        "cagr": 1.1255,
+        "sharpe": 2.068,
+        "max_drawdown": 0.1772,
+        "cumulative_return": 2.16,
+        "days": 384
+      }
+    },
+    {
+      "params": {
+        "f4614198:lhs-fn-params.window": 8,
+        "f4614198:rhs-fn-params.window": 8
+      },
+      "in_sample": {
+        "cagr": 1.7755,
+        "sharpe": 3.302,
+        "max_drawdown": 0.1457,
+        "cumulative_return": 12.92,
+        "days": 649
+      },
+      "out_of_sample": {
+        "cagr": 1.1204,
+        "sharpe": 2.063,
+        "max_drawdown": 0.1772,
+        "cumulative_return": 2.15,
+        "days": 384
+      }
+    },
+    {
+      "params": {
+        "f4614198:lhs-fn-params.window": 8,
+        "f4614198:rhs-fn-params.window": 14
+      },
+      "in_sample": {
+        "cagr": 1.8843,
+        "sharpe": 3.416,
+        "max_drawdown": 0.1456,
+        "cumulative_return": 14.37,
+        "days": 649
+      },
+      "out_of_sample": {
+        "cagr": 1.1137,
+        "sharpe": 2.034,
+        "max_drawdown": 0.1785,
+        "cumulative_return": 2.14,
+        "days": 384
+      }
+    },
+    {
+      "params": {
+        "f4614198:lhs-fn-params.window": 10,
+        "f4614198:rhs-fn-params.window": 14
+      },
+      "in_sample": {
+        "cagr": 1.9925,
+        "sharpe": 3.528,
+        "max_drawdown": 0.1457,
+        "cumulative_return": 15.9,
+        "days": 649
+      },
+      "out_of_sample": {
+        "cagr": 1.0768,
+        "sharpe": 1.997,
+        "max_drawdown": 0.1881,
+        "cumulative_return": 2.05,
+        "days": 384
+      }
+    },
+    {
+      "params": {
+        "f4614198:lhs-fn-params.window": 10,
+        "f4614198:rhs-fn-params.window": 10
+      },
+      "in_sample": {
+        "cagr": 2.1257,
+        "sharpe": 3.689,
+        "max_drawdown": 0.1457,
+        "cumulative_return": 17.91,
+        "days": 649
+      },
+      "out_of_sample": {
+        "cagr": 1.0628,
+        "sharpe": 1.993,
+        "max_drawdown": 0.1801,
+        "cumulative_return": 2.02,
+        "days": 384
+      }
+    },
+    {
+      "params": {
+        "f4614198:lhs-fn-params.window": 14,
+        "f4614198:rhs-fn-params.window": 14
+      },
+      "in_sample": {
+        "cagr": 2.2704,
+        "sharpe": 3.807,
+        "max_drawdown": 0.155,
+        "cumulative_return": 20.25,
+        "days": 649
+      },
+      "out_of_sample": {
+        "cagr": 1.0272,
+        "sharpe": 1.949,
+        "max_drawdown": 0.1772,
+        "cumulative_return": 1.94,
+        "days": 384
+      }
+    },
+    {
+      "params": {
+        "f4614198:lhs-fn-params.window": 10,
+        "f4614198:rhs-fn-params.window": 8
+      },
+      "in_sample": {
+        "cagr": 1.8988,
+        "sharpe": 3.438,
+        "max_drawdown": 0.1456,
+        "cumulative_return": 14.57,
+        "days": 649
+      },
+      "out_of_sample": {
+        "cagr": 1.0033,
+        "sharpe": 1.919,
+        "max_drawdown": 0.1772,
+        "cumulative_return": 1.89,
+        "days": 384
+      }
+    },
+    {
+      "params": {
+        "f4614198:lhs-fn-params.window": 14,
+        "f4614198:rhs-fn-params.window": 10
+      },
+      "in_sample": {
+        "cagr": 2.1745,
+        "sharpe": 3.729,
+        "max_drawdown": 0.155,
+        "cumulative_return": 18.68,
+        "days": 649
+      },
+      "out_of_sample": {
+        "cagr": 0.9904,
+        "sharpe": 1.901,
+        "max_drawdown": 0.1827,
+        "cumulative_return": 1.86,
+        "days": 384
+      }
+    },
+    {
+      "params": {
+        "f4614198:lhs-fn-params.window": 14,
+        "f4614198:rhs-fn-params.window": 8
+      },
+      "in_sample": {
+        "cagr": 1.9084,
+        "sharpe": 3.442,
+        "max_drawdown": 0.155,
+        "cumulative_return": 14.7,
+        "days": 649
+      },
+      "out_of_sample": {
+        "cagr": 0.9688,
+        "sharpe": 1.874,
+        "max_drawdown": 0.1859,
+        "cumulative_return": 1.81,
+        "days": 384
+      }
+    }
+  ]
+}

@@ -1,0 +1,189 @@
+{
+  "symphony_id": "LtwtYauWdTCO9kyO7edT",
+  "split": "2025-01-01",
+  "start": "2022-06-01",
+  "end": null,
+  "capital": 10000,
+  "results": [
+    {
+      "params": {
+        "87add7a1:rhs-val": 79,
+        "0139cc31:sort-by-fn-params.window": 8
+      },
+      "in_sample": {
+        "cagr": 1.9229,
+        "sharpe": 3.349,
+        "max_drawdown": 0.1547,
+        "cumulative_return": 14.9,
+        "days": 649
+      },
+      "out_of_sample": {
+        "cagr": 1.1978,
+        "sharpe": 2.11,
+        "max_drawdown": 0.1797,
+        "cumulative_return": 2.33,
+        "days": 384
+      }
+    },
+    {
+      "params": {
+        "87add7a1:rhs-val": 83,
+        "0139cc31:sort-by-fn-params.window": 8
+      },
+      "in_sample": {
+        "cagr": 1.9229,
+        "sharpe": 3.349,
+        "max_drawdown": 0.1547,
+        "cumulative_return": 14.9,
+        "days": 649
+      },
+      "out_of_sample": {
+        "cagr": 1.1978,
+        "sharpe": 2.11,
+        "max_drawdown": 0.1797,
+        "cumulative_return": 2.33,
+        "days": 384
+      }
+    },
+    {
+      "params": {
+        "87add7a1:rhs-val": 75,
+        "0139cc31:sort-by-fn-params.window": 8
+      },
+      "in_sample": {
+        "cagr": 1.8157,
+        "sharpe": 3.247,
+        "max_drawdown": 0.1547,
+        "cumulative_return": 13.44,
+        "days": 649
+      },
+      "out_of_sample": {
+        "cagr": 1.1579,
+        "sharpe": 2.066,
+        "max_drawdown": 0.1797,
+        "cumulative_return": 2.24,
+        "days": 384
+      }
+    },
+    {
+      "params": {
+        "87add7a1:rhs-val": 79,
+        "0139cc31:sort-by-fn-params.window": 5
+      },
+      "in_sample": {
+        "cagr": 2.1257,
+        "sharpe": 3.689,
+        "max_drawdown": 0.1457,
+        "cumulative_return": 17.91,
+        "days": 649
+      },
+      "out_of_sample": {
+        "cagr": 1.0628,
+        "sharpe": 1.993,
+        "max_drawdown": 0.1801,
+        "cumulative_return": 2.02,
+        "days": 384
+      }
+    },
+    {
+      "params": {
+        "87add7a1:rhs-val": 83,
+        "0139cc31:sort-by-fn-params.window": 5
+      },
+      "in_sample": {
+        "cagr": 2.1342,
+        "sharpe": 3.698,
+        "max_drawdown": 0.1457,
+        "cumulative_return": 18.04,
+        "days": 649
+      },
+      "out_of_sample": {
+        "cagr": 1.0628,
+        "sharpe": 1.993,
+        "max_drawdown": 0.1801,
+        "cumulative_return": 2.02,
+        "days": 384
+      }
+    },
+    {
+      "params": {
+        "87add7a1:rhs-val": 75,
+        "0139cc31:sort-by-fn-params.window": 5
+      },
+      "in_sample": {
+        "cagr": 2.0618,
+        "sharpe": 3.63,
+        "max_drawdown": 0.1457,
+        "cumulative_return": 16.93,
+        "days": 649
+      },
+      "out_of_sample": {
+        "cagr": 0.9707,
+        "sharpe": 1.882,
+        "max_drawdown": 0.1801,
+        "cumulative_return": 1.82,
+        "days": 384
+      }
+    },
+    {
+      "params": {
+        "87add7a1:rhs-val": 79,
+        "0139cc31:sort-by-fn-params.window": 3
+      },
+      "in_sample": {
+        "cagr": 1.5497,
+        "sharpe": 3.026,
+        "max_drawdown": 0.1381,
+        "cumulative_return": 10.18,
+        "days": 649
+      },
+      "out_of_sample": {
+        "cagr": 0.5606,
+        "sharpe": 1.315,
+        "max_drawdown": 0.2187,
+        "cumulative_return": 0.97,
+        "days": 384
+      }
+    },
+    {
+      "params": {
+        "87add7a1:rhs-val": 83,
+        "0139cc31:sort-by-fn-params.window": 3
+      },
+      "in_sample": {
+        "cagr": 1.5573,
+        "sharpe": 3.035,
+        "max_drawdown": 0.1381,
+        "cumulative_return": 10.27,
+        "days": 649
+      },
+      "out_of_sample": {
+        "cagr": 0.5606,
+        "sharpe": 1.315,
+        "max_drawdown": 0.2187,
+        "cumulative_return": 0.97,
+        "days": 384
+      }
+    },
+    {
+      "params": {
+        "87add7a1:rhs-val": 75,
+        "0139cc31:sort-by-fn-params.window": 3
+      },
+      "in_sample": {
+        "cagr": 1.4898,
+        "sharpe": 2.958,
+        "max_drawdown": 0.1381,
+        "cumulative_return": 9.52,
+        "days": 649
+      },
+      "out_of_sample": {
+        "cagr": 0.4936,
+        "sharpe": 1.206,
+        "max_drawdown": 0.2187,
+        "cumulative_return": 0.85,
+        "days": 384
+      }
+    }
+  ]
+}
