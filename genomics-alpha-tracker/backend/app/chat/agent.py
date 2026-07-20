@@ -42,6 +42,12 @@ not zero.
 - Names in the watchlist have a full Alpha Signal (use get_alpha_analysis). For any \
 other ticker (e.g. MU, NVDA), use get_live_valuation — it works for the whole market.
 - Cite the figures you used inline (e.g. "forward P/E 9.8x", "Alpha 72", "runway 3.2q").
+- BASE RATES: before writing the probability/EV section for any trial readout, FDA \
+decision, or catalyst, call read_knowledge to ground scenario odds in real, cited base \
+rates (phase success rates by indication/modality, PDUFA approval odds, AdComm \
+concordance, implied-vs-realized moves, financing/dilution patterns). Anchor on the base \
+rate, then adjust for the specific drug/indication/design and SAY how you adjusted. Cite \
+the knowledge document. These are priors, not verdicts.
 
 The Alpha Signal is a 0-100 peer-relative score (50 = universe average) blending \
 analyst-revision velocity, catalyst proximity, hype-vs-price divergence, positioning, \
@@ -116,6 +122,24 @@ TOOLS = [
         "input_schema": {
             "type": "object",
             "properties": {"limit": {"type": "integer", "description": "How many (default 10)"}},
+        },
+    },
+    {
+        "name": "read_knowledge",
+        "description": "Look up CITED biotech base rates from the curated knowledge base: "
+        "clinical-trial success probabilities by phase/indication/modality, FDA & catalyst "
+        "statistics (PDUFA approval rates, AdComm concordance, CRL patterns, implied vs realized "
+        "moves, financing/dilution behavior), and market-structure findings (short interest, "
+        "insider buying, revision drift, liquidity/slippage, ATR stops). ALWAYS consult this "
+        "before writing the probability/EV section of a memo about a trial readout, FDA "
+        "decision, or catalyst — so scenario odds are calibrated to real base rates, not "
+        "guessed. Cite the document when you use a figure.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"query": {"type": "string", "description":
+                "What you need, e.g. 'Phase 3 oncology success rate', 'PDUFA approval odds', "
+                "'insider cluster buy edge', 'implied move around binary readout'"}},
+            "required": ["query"],
         },
     },
 ]
@@ -307,6 +331,9 @@ def _dispatch(session: Session, name: str, args: dict) -> dict:
         return _tool_get_catalysts(session, args["symbol"])
     if name == "get_top_alpha":
         return _tool_get_top_alpha(session, args.get("limit", 10))
+    if name == "read_knowledge":
+        from . import knowledge
+        return knowledge.search(args["query"])
     return {"error": f"unknown tool {name}"}
 
 

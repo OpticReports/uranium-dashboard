@@ -40,8 +40,19 @@ class ChatResponse(BaseModel):
     usage: ChatUsage | None = None
 
 
+@router.post("/reload-knowledge")
+def reload_knowledge():
+    """Re-index knowledge/*.md after editing the notes (no redeploy needed)."""
+    from ..chat import knowledge
+
+    knowledge.reload()
+    return {"status": "reloaded", "topics": knowledge.topics()}
+
+
 @router.get("/status")
 def status():
+    from ..chat import knowledge
+
     return {
         "enabled": bool(settings.anthropic_api_key or settings.openrouter_api_key),
         "backend": "anthropic" if settings.anthropic_api_key
@@ -50,6 +61,7 @@ def status():
                           else settings.openrouter_chat_model_default),
         "model_deep": (settings.chat_model_deep if settings.anthropic_api_key
                        else settings.openrouter_chat_model_deep),
+        "knowledge_base": knowledge.topics() if knowledge.available() else [],
     }
 
 
