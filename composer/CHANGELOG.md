@@ -223,3 +223,14 @@ Format per entry:
     `invest-composer/composer-trade-mcp` GitHub repo is gone. The deny-list
     reconciliation against the live MCP tool manifest (README §2) is
     therefore still pending; no trading/deploy REST endpoint was called.
+
+
+## 2026-07-20 — Owner-directed reallocation to 19/39/27/15 (phase 1)
+
+- Community sweep + loop (addenda 11-12) concluded with owner approving the
+  guarded VIX harvester at 15%, funded via HG->KMLM shift (19/39/27/15).
+- Phase 1: withdraw $64,900 from HG [deploy c71227ac-1d1a-4d3a-ac16-d93454cdc24f]
+  — capped at POLICY 25% single-move guard.
+- Phase 2 (pending cash settlement): residual HG trim, KMLM top-up to 39%,
+  guarded-harvester deploy to 15% [ORQNCfZnA18wmsMWVhf8]. Authorized in
+  POLICY.md PENDING REALLOCATION block.

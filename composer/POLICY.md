@@ -71,3 +71,28 @@ above. During a suspected regime break (e.g., sleeve above 20% of book in a
 crash), the band still executes its mechanical trim, but the owner is
 notified prominently that discretionary harvesting beyond the band is their
 call (results.md addendum 7).
+
+
+## PENDING REALLOCATION — owner-directed 2026-07-20 (phase 2 of 2)
+
+Owner approved target allocation **HG 19% / KMLM 39% / SLEEVE 27% / HARV 15%**
+(chat, 2026-07-20; analysis in results.md addendum 12). Phase 1 executed
+2026-07-20: withdraw $64,900 from HG [deploy c71227ac] (capped at the 25%
+single-move guard; full HG trim need was $66,927).
+
+Phase 2 — EXECUTE when unallocated cash ≥ $60,000 (proceeds settled):
+1. Withdraw the RESIDUAL from HG to reach 19% of book (~$2,000; recompute
+   from live values at execution).
+2. Invest into KMLM switcher [YPTSJFJwD2ZKfAeYJUbW] up to 39% of book
+   (~$28,600; recompute).
+3. Invest remaining cash into the GUARDED harvester
+   "CANDIDATE: VIX harvester + HYG credit guard (loop)"
+   [ORQNCfZnA18wmsMWVhf8] to reach 15% of book (~$39,000; recompute) — this
+   deploys it live; it is owner-approved (this block overrides the
+   new-symphony standing exclusion for THIS symphony id only).
+4. SLEEVE untouched (in band). All moves via guarded CLI; 25% single-move
+   guard applies per move. Delete this block + write CHANGELOG entry when
+   complete. If cash has not settled by 2026-07-23, alert the owner.
+
+Renaming note: after deployment, rename the harvester to drop the
+"CANDIDATE" prefix (e.g. "VIX Harvester + HYG guard 15%").
