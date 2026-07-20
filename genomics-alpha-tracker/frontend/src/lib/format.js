@@ -62,6 +62,7 @@ export const FLAG_LABELS = {
   runway_cliff_approaching: "Runway cliff approaching",
   binary_event_within_n_days: "Binary event imminent",
   pullback_into_catalyst: "Pullback into catalyst",
+  relative_strength_leader: "Relative-strength leader",
   volume_anomaly: "Volume anomaly",
   insider_buying_cluster: "Insider buying cluster",
 };

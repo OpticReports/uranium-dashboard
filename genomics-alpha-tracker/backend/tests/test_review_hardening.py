@@ -217,6 +217,19 @@ def test_pullback_flag_respects_catalyst_min_days():
                    for f in evaluate_flags(_sec(), asof, raw, {}))
 
 
+def test_relative_strength_leader_flag():
+    asof = date.today()
+    hot = _base_raw(rs_60d=0.22)
+    assert any(f.flag_type == "relative_strength_leader"
+               for f in evaluate_flags(_sec(), asof, hot, {}))
+    cold = _base_raw(rs_60d=0.08)
+    assert not any(f.flag_type == "relative_strength_leader"
+                   for f in evaluate_flags(_sec(), asof, cold, {}))
+    missing = _base_raw(rs_60d=None)
+    assert not any(f.flag_type == "relative_strength_leader"
+                   for f in evaluate_flags(_sec(), asof, missing, {}))
+
+
 def test_volume_anomaly_needs_dollar_floor():
     asof = date.today()
     quiet = _base_raw(volume_z=3.0, last_dollar_volume=200_000)
