@@ -1,62 +1,65 @@
 {
-  "taken_at": "2026-07-16T20:05:24+00:00",
+  "taken_at": "2026-07-20T21:51:22+00:00",
   "total_stats": {
-    "pending_deploys_cash": 0,
-    "total_cash": 362.597011915,
-    "time_weighted_return": 0.5731287236542566,
-    "total_unallocated_cash": 110.947011915,
-    "portfolio_value": 257080.29,
+    "pending_deploys_cash": -64900.0,
+    "total_cash": 367.170989359,
+    "time_weighted_return": 0.5892765439382208,
+    "total_unallocated_cash": 110.950989359,
+    "portfolio_value": 259719.17,
     "net_deposits": 247000.0,
     "pending_net_deposits": 0.0,
-    "todays_percent_change": 0.009793392965959987,
-    "simple_return": 0.0408109181423284,
-    "todays_dollar_change": 2493.26990182111,
+    "todays_percent_change": -0.0013988783537605852,
+    "simple_return": 0.051494616921183844,
+    "todays_dollar_change": -363.82447167858,
     "metrics": {
-      "annualized_rate_of_return": 1.1194,
+      "annualized_rate_of_return": 1.1342,
       "max_drawdown": 0.2006,
-      "sharpe_ratio": 2.0069,
-      "standard_deviation": 0.4213
+      "sharpe_ratio": 2.0334,
+      "standard_deviation": 0.4187
     },
     "pending_withdrawals": 0.0
   },
   "symphonies": {
     "mbkiXcuNDjueXpiox5Av": {
       "name": "The Holy Grail w Sorts & Safe Sectors  139 | 38 | 2015 (Modified #1)",
-      "value": 116378.64,
-      "deposit_adjusted_value": 1701.06,
-      "cash": 116.46,
+      "value": 116273.28,
+      "deposit_adjusted_value": 1699.52,
+      "cash": 116.39,
       "holdings": {
         "TLT": 0.999
       },
-      "next_rebalance_on": "2026-07-17",
+      "next_rebalance_on": "2026-07-21",
       "has_queued_deploy": null,
-      "last_percent_change": -0.0004
+      "last_percent_change": -0.0045
     },
     "nNdBk7hc5NiBzeRvbI5T": {
       "name": "Crash Convexity Sleeve \u2014 InverseHold + Bond Frontrunner 50/50",
-      "value": 70418.56,
-      "deposit_adjusted_value": 22841.48,
-      "cash": 70.44,
+      "value": 70678.75,
+      "deposit_adjusted_value": 22925.88,
+      "cash": 70.51,
       "holdings": {
-        "BIL": 0.999
+        "BIL": 0.4979,
+        "TMV": 0.2492,
+        "LABD": 0.252
       },
-      "next_rebalance_on": "2026-07-17",
+      "next_rebalance_on": "2026-07-21",
       "has_queued_deploy": null,
-      "last_percent_change": 0.0
+      "last_percent_change": 0.0034
     },
     "YPTSJFJwD2ZKfAeYJUbW": {
       "name": "KMLM switcher + VIX sleeve 75/25",
-      "value": 70172.15,
-      "deposit_adjusted_value": 28085.67,
-      "cash": 64.75,
+      "value": 72656.2,
+      "deposit_adjusted_value": 29079.89,
+      "cash": 69.32,
       "holdings": {
-        "PULS": 0.2413,
-        "SQQQ": 0.7578
+        "PULS": 0.1191,
+        "SQQQ": 0.7487,
+        "ZVOL": 0.1313
       },
-      "next_rebalance_on": "2026-07-17",
+      "next_rebalance_on": "2026-07-21",
       "has_queued_deploy": null,
-      "last_percent_change": 0.0375
+      "last_percent_change": -0.001
     }
   },
-  "sleeve_weight": 0.1168
+  "sleeve_weight": 0.1167
 }
