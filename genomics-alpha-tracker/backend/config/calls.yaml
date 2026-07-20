@@ -7,6 +7,16 @@
 calls:
   enabled: true
 
+  # Paper-trading account: sizes every call and tracks account value over time,
+  # so the Calls Log reads like a real (simulated) book. Risk-based sizing —
+  # each call risks `risk_per_trade_pct` of current equity at its stop — which
+  # makes 1R exactly equal to that % of the account (default 1R = 1%).
+  paper:
+    enabled: true
+    starting_capital: 100000
+    risk_per_trade_pct: 0.01     # risk 1% of equity per call at the stop
+    max_position_pct: 0.20       # never let one position exceed 20% of equity (notional)
+
   # Only these flag types auto-generate a call. Long-side setups only for now
   # (the desk is usually long). A flag type may require extra conditions.
   triggers:
