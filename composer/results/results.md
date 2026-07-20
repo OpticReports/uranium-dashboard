@@ -571,3 +571,45 @@ implementation-diversification only. The community sweep's real conclusion:
 the highest verified public CAGR lives in the family we already own, and our
 variant is the strongest member found; the CAGR lever is WEIGHTS among
 existing engines (an owner risk decision), not a fourth engine.
+
+
+## Addendum 12 — Vol-harvester loop: allocation, attribution, crash-hardening (2026-07-20)
+
+**Window** 2023-04-19..2026-07-17 (814 td — ZVOL inception bound; sleeve fixed
+27.4% per policy band). Engine CAGRs this window: HG +82% / KMLM +235% /
+SLEEVE +36% / HARV +26%.
+
+**Allocation grid (HG/KMLM/SLV/HARV):**
+| allocation | CAGR | Sharpe | maxDD |
+|---|---|---|---|
+| current 45/27/27/0 | +108.8% | 2.68 | 11.0% |
+| 19/39/27/15 | **+112.3%** | **2.98** | **10.8%** |
+| 30/27/27/15 (HG-funded) | +97.5% | 2.95 | 10.0% |
+| max-Sharpe 10/15/27/48 | +58.7% | 3.40 | 6.9% |
+
+**Attribution (owner asked "is HG the one that suffers?"):** inverted — the
+CAGR drop comes from whatever KMLM weight is trimmed (-30pp if funded from
+KMLM vs -11pp from HG), because KMLM towers at +235% this window. 25 grid
+points add HARV with NO CAGR loss — all work by shifting HG->KMLM weight
+(family concentration 27->39%: the same lever as Addendum 11b, now paired
+with uncorrelated ballast).
+
+**Crash simulation (offline reconstruction, ZVOL = -1x VXZ - drag; validated
+vs Composer backtest at 0.934 daily corr, CAGR 27.5% vs 26.3%):**
+2018-01..2023-04: BASE +19.1%/1.62/maxDD 20.9%. Episodes: Volmageddon -1.5%,
+Dec-2018 -4.0%, COVID crash -5.5%, 2022 +24.4%. The 20.9% maxDD is a SLOW
+BLEED (Feb-2018 -> Feb-2019 echo-spike chop), not a crash gap — the honest
+risk: its bad year is a 2018-style vol-chop year, and its 2023+ DD (9.5%)
+understates true risk.
+
+**Protection panel:** GUARD (block ZVOL when HYG 1d < -1%) cuts COVID crash
+to -1.5% (from -5.5%), IMPROVES 2022 (+28.0%), costs 1.5pp sim-CAGR — and is
+FREE in the 2023+ regime (guarded Composer backtest identical: +26.2%/2.16/
+9.5%; the gate never fired). RIDER (stand-aside -> long VXZ) killed: COVID
+-13%, worse Sharpe. Guarded symphony built + saved to drafts:
+"CANDIDATE: VIX harvester + HYG credit guard (loop)" [ORQNCfZnA18wmsMWVhf8],
+9 ZVOL legs wrapped.
+
+**Open decisions (owner):** fund guarded HARV at ~15%? Funded via HG->KMLM
+shift (all-metrics win, family concentration cost) or HG-only (conservative,
+-11pp CAGR)? Nothing executed; POLICY.md sign-off required.
