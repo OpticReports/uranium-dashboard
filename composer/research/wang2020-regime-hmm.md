@@ -107,3 +107,34 @@ kangaroo-state insight survives only as the qualitative caution already
 documented in the engine summaries (chop is the shared weakness; no
 tradeable detector found). Do not reopen without a materially different
 method AND a plan that survives the dumb-filter benchmark.
+
+
+---
+
+## B1-T RESULT (run 2026-07-20): PASS as a descriptive labeler — on TREASURY features
+
+Same walk-forward protocol, features = daily Δ10y (bp) + 10d realized vol of
+changes (^TNX daily 1970+, window 1890d, 588 month-ends 1977-2026; script
+`b1t_hmm.py`, timeline `b1t_states.json`). Night-and-day vs equity features:
+
+**Catches (7/9 episodes at STRESS, 9/9 at least ELEVATED):** 1994 hike
+massacre, 1998 LTCM, 2003 convexity selloff, 2008 (persistent Sep-Dec),
+2020-03 (correctly labeled RALLY-stress — flight-to-quality flavor),
+**2022 bond bear (STRESS nearly all year, selloff-labeled — the episode the
+equity-feature HMM was blind to)**, 2023-Q3 term-premium repricing.
+Partial: 2013 taper + 2025-April read only ELEVATED. **False alarms: 2
+month-ends in nine calm years** — both early-1996, which was a real ~80bp
+payrolls-driven selloff, so arguably zero.
+
+**Bonus taxonomy:** the mean-change sign splits stress into SELLOFF-stress
+(1994/2022/2023 — debasement/fiscal flavor, hurts duration havens) vs
+RALLY-stress (2020 — accident/flight-to-quality flavor). Opposite portfolio
+implications; no pin channel currently makes that distinction.
+
+**Why this passes where B1 failed:** the canary's job is DESCRIPTION of the
+present, not return prediction — exactly what B1 proved HMMs are good at.
+Candidate application: a clearly-labeled "statistical regime" strip on the
+canary (unsupervised, hypothesis-free — the unknown-unknowns lens a
+rule-based pin board structurally lacks), display + hindcast only, NEVER
+feeding alerts/severity until a stability record exists. Deps note: needs
+numpy+hmmlearn in the canary image (~150MB, monthly refit, cached).
