@@ -17,7 +17,8 @@ COPY backend/pyproject.toml ./
 RUN pip install --upgrade pip && pip install \
     "fastapi==0.115.5" "uvicorn[standard]==0.32.1" "pydantic==2.10.3" \
     "pydantic-settings==2.6.1" "sqlalchemy==2.0.36" "httpx==0.28.1" \
-    "apscheduler==3.11.0" "python-dateutil==2.9.0.post0"
+    "apscheduler==3.11.0" "python-dateutil==2.9.0.post0" \
+    "numpy==2.2.6" "hmmlearn==0.3.3"
 COPY backend/ ./
 COPY --from=frontend /fe/dist ./frontend_dist
 ENV FRONTEND_DIST=/app/frontend_dist
