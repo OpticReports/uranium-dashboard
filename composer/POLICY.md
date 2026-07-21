@@ -111,6 +111,65 @@ notified prominently that discretionary harvesting beyond the band is their
 call (results.md addendum 7).
 
 
+## PENDING REALLOCATION TAIL — harvester top-up (last leg)
+
+Phase 2 executed 2026-07-21: KMLM +$30,000 [6327f1d5], harvester (VIX
+Harvester + HYG Credit Guard, ORQNCfZnA18wmsMWVhf8) +$34,900 [4ab9f0b2],
+residual HG trim $2,570 [aea856ef] — all fill in the 2026-07-22 window.
+LAST LEG: when the HG trim's cash settles (~$2,600 unallocated, expected
+2026-07-22 evening), invest ALL remaining unallocated cash into the
+harvester [ORQNCfZnA18wmsMWVhf8] via guarded CLI, then DELETE this block
+and log in CHANGELOG. If not settled by 2026-07-24, alert the owner.
+
+## Pre-authorized operation 3 — KMLM hostile-regime tripwire
+
+Owner-approved 2026-07-20 (chat; analysis in results.md addendum 13). The
+19/39/27/15 allocation's single fragile assumption is the KMLM switcher's
+behavior in hostile regimes — untested in its 814-td record. This operation
+converts that uncertainty into a monitored contingency.
+
+- Check date: first daily check on or after **2026-08-07** (~30 live days for
+  the current allocation), then MONTHLY through at least 2027-01.
+- Measurement: `divergence.py YPTSJFJwD2ZKfAeYJUbW` (KMLM switcher,
+  deposit-adjusted live vs same-window backtest).
+- FAIL criteria (either):
+  - live~backtest daily-return correlation **< 0.90**, OR
+  - annualized live-vs-model gap worse than **−15%/yr**.
+- Action on FAIL: shift **10 points of total book** from KMLM to HG
+  (target allocation becomes 29/29/27/15). Execute via guarded CLI:
+  withdraw from KMLM [YPTSJFJwD2ZKfAeYJUbW], invest proceeds into HG
+  [mbkiXcuNDjueXpiox5Av]; recompute dollar amounts from live values;
+  25% single-move guard applies; two trading windows as needed. Write a
+  CHANGELOG entry and notify the owner prominently (this is a tripwire
+  FIRING, not routine rebalancing). This operation authorizes ONLY this
+  specific KMLM->HG shift, once; a second shift requires fresh owner
+  approval.
+- Action on PASS: keep 19/39/27/15, report the numbers in the daily
+  summary, re-check monthly.
+- Sunset: if passed every month through 2027-01, retire this operation at
+  the Jan-2027 review alongside Operation 2.
+
+## Standing analysis cadence (not a capital operation)
+
+- QUARTERLY (first daily check of Oct/Jan/Apr/Jul), and mandatorily at the
+  Jan-2027 review: re-run `composer/research/regime_boot.py` (55y
+  regime-bootstrap, addendum 13) with fresh live data. Report the allocation
+  ranking and the AS-MEASURED vs CONSERVATIVE-KMLM gap vs the prior run —
+  convergence as live hostile-regime months accumulate is the finding.
+  Any reallocation it suggests requires owner approval (except where an
+  existing pre-authorized operation already covers the move).
+
+## Standing exclusions
+
+Never auto-executed under any circumstances: changes to symphony logic,
+investing in new/unapproved symphonies, liquidations, go-to-cash, direct
+single-asset trades, bank transfers, or any trade outside the two operations
+above. During a suspected regime break (e.g., sleeve above 20% of book in a
+crash), the band still executes its mechanical trim, but the owner is
+notified prominently that discretionary harvesting beyond the band is their
+call (results.md addendum 7).
+
+
 ## PENDING REALLOCATION — owner-directed 2026-07-20 (phase 2 of 2)
 
 Owner approved target allocation **HG 19% / KMLM 39% / SLEEVE 27% / HARV 15%**

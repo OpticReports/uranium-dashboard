@@ -252,3 +252,15 @@ Format per entry:
   AS-MEASURED vs CONSERVATIVE-KMLM gap is the tracked finding.
 - Canary gains the statistical-regime strip (validated Treasury HMM,
   descriptive only, never feeds alerts) — see canary commits.
+
+
+## 2026-07-21 — Reallocation phase 2 executed (target 19/39/27/15)
+
+- HG withdrawal $64,900 [c71227ac] FILLED 2026-07-21 window; cash settled.
+- Executed: KMLM switcher +$30,000 [6327f1d5-ec68-4dbc-bc1a-3d8c34b2dea4]
+  (to ~39%); VIX Harvester + HYG Credit Guard first deploy +$34,900
+  [4ab9f0b2-2c95-4ff9-891e-fba6aa94ba66] (to ~13.7%, final ~15% after last
+  leg); residual HG trim $2,570 [aea856ef-c8ed-4bef-8b25-e55965f45500]
+  (to ~19%). All fill 2026-07-22 window.
+- Harvester renamed from CANDIDATE prefix. Last leg (trim proceeds ~$2.6k →
+  harvester) authorized in POLICY.md PENDING REALLOCATION TAIL.
