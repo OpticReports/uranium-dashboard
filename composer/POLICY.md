@@ -62,6 +62,68 @@ in `CHANGELOG.md` with deploy IDs, and pushed.
 - Scale-up beyond 15% (to 20%) requires a fresh owner decision — not
   pre-authorized.
 
+## Pre-authorized operation 3 — KMLM earn-back monitor (rewritten 2026-07-22)
+
+Owner moved the book to 29/29/27/15 after adversarial QA — the tripwire's
+target allocation is now the DEFAULT, so this operation inverts: it now
+monitors whether KMLM EARNS BACK the higher 19/39/27/15 weight.
+
+- Check date: first daily check on or after **2026-08-07**, then MONTHLY.
+- Measurement: `divergence.py YPTSJFJwD2ZKfAeYJUbW` (live vs backtest) plus
+  the quarterly regime-bootstrap convergence read (Standing analysis cadence).
+- On PASS (live corr >= 0.90 AND gap >= -15%/yr, sustained 2 consecutive
+  monthly checks, AND at least one live hostile-regime month in the record):
+  REPORT to the owner that the 19/39 upgrade is statistically earned — do
+  NOT execute; the upshift is an owner decision.
+- On FAIL: no action needed (the book already holds the defensive weight);
+  note it in the daily summary.
+- No auto-trades under this operation in either direction.
+
+## Standing analysis cadence (not a capital operation)
+
+- QUARTERLY (first daily check of Oct/Jan/Apr/Jul), and mandatorily at the
+  Jan-2027 review: re-run `composer/research/regime_boot.py` (55y
+  regime-bootstrap, addendum 13) with fresh live data. Report the allocation
+  ranking and the AS-MEASURED vs CONSERVATIVE-KMLM gap vs the prior run —
+  convergence as live hostile-regime months accumulate is the finding.
+  Any reallocation it suggests requires owner approval (except where an
+  existing pre-authorized operation already covers the move).
+
+## Standing exclusions
+
+Never auto-executed under any circumstances: changes to symphony logic,
+investing in new/unapproved symphonies, liquidations, go-to-cash, direct
+single-asset trades, bank transfers, or any trade outside the two operations
+above. During a suspected regime break (e.g., sleeve above 20% of book in a
+crash), the band still executes its mechanical trim, but the owner is
+notified prominently that discretionary harvesting beyond the band is their
+call (results.md addendum 7).
+
+
+## PENDING REALLOCATION B — owner-approved 2026-07-22 (target 29/29/27/15)
+
+After adversarial QA (results.md addendum 13b), owner chose allocation B:
+HG 29% / KMLM 29% / SLEEVE 27% / HARV 15%. This supersedes the 19/39/27/15
+plan mid-flight. Sleeve untouched. Execute via guarded CLI, 25% single-move
+guard per move, recompute all amounts from live values.
+
+State when written: pending fills for today's window — KMLM +$30,000
+[6327f1d5] (owner may CANCEL in-app before the window), HARV +$34,900
+[4ab9f0b2], HG trim -$2,570 [aea856ef].
+
+EXECUTE at the first evening check where pendings have resolved, branching
+on what actually happened:
+- IF the KMLM +$30k was CANCELED (unallocated cash ≈ $32k): invest HG to
+  29% of book (~$25.5k), invest KMLM to 29% (~$4.5k), invest remaining cash
+  into HARV. One window. Done.
+- IF the KMLM +$30k FILLED (cash ≈ $2.6k): invest the ~$2.6k residual into
+  HARV now; queue withdraw from KMLM down to 29% of book (~$25.5k); at the
+  NEXT evening check after that withdrawal's cash settles, invest all
+  unallocated cash into HG (to ~29%). Two windows. Done.
+- When final state ≈ 29/29/27/15: DELETE this block, log in CHANGELOG,
+  and notify the owner with the final allocation.
+- If stuck (pendings unresolved or cash missing) by 2026-07-27: alert owner.
+
 ## Pre-authorized operation 3 — KMLM hostile-regime tripwire
 
 Owner-approved 2026-07-20 (chat; analysis in results.md addendum 13). The

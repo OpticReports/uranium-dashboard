@@ -264,3 +264,12 @@ Format per entry:
   (to ~19%). All fill 2026-07-22 window.
 - Harvester renamed from CANDIDATE prefix. Last leg (trim proceeds ~$2.6k →
   harvester) authorized in POLICY.md PENDING REALLOCATION TAIL.
+
+
+## 2026-07-22 — Owner selects allocation B (29/29/27/15) after adversarial QA
+
+- Two counter-agents (addendum 13b) stress-tested the 19/39/27/15 choice;
+  owner chose the robust allocation B: HG 29 / KMLM 29 / SLEEVE 27 / HARV 15.
+- PENDING REALLOCATION B block written (handles both cancel/fill paths of
+  the in-flight KMLM +$30k). Operation 3 rewritten as the KMLM earn-back
+  monitor (report-only; upshift back to 19/39 requires owner sign-off).
