@@ -104,7 +104,7 @@ def main():
     buckets = {k: {"TREND-UP": [], "CHOP": [], "CRASH": []} for k in eng}
     for k, m in eng.items():
         for ym, ret in m.items():
-            if ym in regime:
+            if ym in regime and ym < this_m:   # exclude the partial current month
                 buckets[k][regime[ym]].append((ym, ret))
     for k in eng:
         print(f"  {k} bucket sizes:", {r: len(v) for r, v in buckets[k].items()})
@@ -116,7 +116,11 @@ def main():
         out = {}
         for k in eng:
             if conservative and k == "KMLM" and regm in ("CRASH", "CHOP"):
-                out[k] = rng.choice(buckets["HG"][regm])[1]
+                # SAME-month HG draw (hostile-QA finding: an independent draw
+                # makes the KMLM slice a second uncorrelated HG, which cancels
+                # vol and understates conservative drawdowns by ~9pp dd95)
+                hit_hg = dict(buckets["HG"][regm]).get(m_star)
+                out[k] = hit_hg if hit_hg is not None else rng.choice(buckets["HG"][regm])[1]
                 continue
             hit = dict(buckets[k][regm]).get(m_star)
             out[k] = hit if hit is not None else rng.choice(buckets[k][regm])[1]

@@ -656,3 +656,44 @@ phase 2 proceeds unchanged (19/39/27/15). RECOMMENDED TRIPWIRE (owner to
 approve): if KMLM's August divergence check fails (live corr < 0.90 or gap
 worse than -15%/yr), shift 10pp KMLM->HG — converting the KMLM-bucket
 uncertainty into a monitored contingency instead of a pre-emptive haircut.
+
+
+## Addendum 13b — Adversarial QA of the allocation study (2026-07-22)
+
+Owner-commissioned. Two independent agents: a hostile methodology QA and an
+independent re-optimizer (124 allocations x 6 stress specs). Full outputs
+preserved in scratchpad qa2/ and opt/; scripts reproducible.
+
+**Both agents confirmed:** computations honest and reproducible; regime
+classifier robust to threshold choices; KMLM above ~40% unjustified (its
+apparent optimum collapses when the n=3 crash bucket is discounted); the
+Aug tripwire is correctly constructed insurance.
+
+**Hostile QA broke three things (all CONFIRMED by computation):**
+1. The addendum-13 "conservative tie" that justified 19/39 was a
+   construction artifact — replacing KMLM's hostile buckets with HG draws
+   makes chosen and fallback ~identical by construction. Under HARSHER
+   degradation modes (KMLM flat / SPX-beta / inverted in crashes), 19/39
+   ranks LAST of the candidate books; inversion tail: median crash-year
+   -14% to -34%, dd_p95 66% of book.
+2. Phantom diversification in the conservative variant (independent HG
+   draws) understated conservative dd_p95 by ~9pp (22 -> 31%). FIXED in
+   regime_boot.py (same-month draws).
+3. The T12 crash scenario's -28% acceptance filter RAISED KMLM's effective
+   crash mean (its n=3 bucket contains no severe months) — the crash
+   scenario contained no downside information for a 39%-KMLM book. The
+   +179%/+74% crash-year medians in the prior chat table are unreliable
+   for the KMLM leg.
+
+**Re-optimizer's verdict:** incumbent 19/39/27/15 = rank 9/124, best
+crash-tail book tested; dominated on all its specs by 25/40/27/8 (trim
+HARV into HG, ~+7-10pp/yr in every world incl. KMLM-dead-flat). Note its
+conservative lenses were milder than the hostile QA's (flat, not inverted).
+
+**Where the agents disagree:** KMLM weight now. Re-optimizer (KMLM-dead =
+flat) keeps 40%; hostile QA (KMLM adversely correlated/inverted in a crash)
+favors 29% now with 19/39 as the EARNED upgrade after live hostile months
+accumulate. The decision variable is the owner's prior on an unmeasured
+engine's crash behavior + their explicit 2-year crash thesis. Escalated to
+owner; no auto-action (Op 3 authorizes the 29/29 shift only on divergence
+failure, not on QA findings).
