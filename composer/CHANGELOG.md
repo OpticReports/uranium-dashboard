@@ -273,3 +273,22 @@ Format per entry:
 - PENDING REALLOCATION B block written (handles both cancel/fill paths of
   the in-flight KMLM +$30k). Operation 3 rewritten as the KMLM earn-back
   monitor (report-only; upshift back to 19/39 requires owner sign-off).
+
+
+## 2026-07-22 — Allocation B executed (cancel branch) — final leg queued
+
+- State at the evening check: owner CANCELED the KMLM +$30k [6327f1d5]
+  in-app before the window; HARV +$34,900 [4ab9f0b2] and HG trim −$2,570
+  [aea856ef] FILLED. Unallocated cash $32,680.96, pendings clear — the
+  PENDING REALLOCATION B cancel branch applied.
+- Executed (one window, recomputed from live values; book $256,865):
+  - HG +$26,124 [f34bcc6b-7cf0-4488-adf7-9ee110fc1872] → 29.0%
+  - KMLM +$4,130 [5b9b236c-b2e5-42cc-af56-9fb480d32676] → 29.0%
+  - HARV +$2,426 remainder [2d275a37-997e-44d2-b62b-fcb782bd0737] → ~14.5%
+  All three fill the 2026-07-23 window; largest move 10.2% of book
+  (25% guard OK). Projected final book: HG $74.5k / KMLM $74.5k /
+  SLEEVE $70.6k (27.5%) / HARV $37.3k ≈ 29/29/27.5/14.5, cash ~$1.
+- POLICY.md: PENDING REALLOCATION B block deleted (executed); also removed
+  stale superseded blocks left from the 19/39 plan (phase-2 block, TAIL
+  block, and two outdated copies of the old tripwire Operation 3 that
+  contradicted the rewritten earn-back monitor).
