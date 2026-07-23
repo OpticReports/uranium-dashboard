@@ -110,27 +110,33 @@ services:
         value: INFO
 
   # --- Treasury Market Health Monitor ("The Canary") -------------------------
-  # FREE plan = $0, isolated from the genomics service (its own URL). The dashboard
-  # computes live on each request, so it works without a persistent disk; the
-  # tradeoffs are cold starts after idle and no persisted history/scheduled alerts.
-  # Bump `plan` to `starter` + re-add a disk later if you want those.
+  # Starter plan + PERSISTENT DISK. This root blueprint is the one Render
+  # actually manages the service from — the service was bumped to starter but
+  # the disk was never re-added here, so the DB sat on the container's
+  # ephemeral filesystem and ALL metric history wiped on every deploy (the
+  # 2026-07 "NO DATA" incident). The disk ends that failure class: history
+  # survives deploys and the startup backfill becomes a first-boot-only event.
   - type: web
     name: treasury-canary
     runtime: docker
     dockerfilePath: treasury-canary/Dockerfile
     dockerContext: treasury-canary
-    plan: free
+    plan: starter
     healthCheckPath: /health
     autoDeploy: true
+    disk:
+      name: canary-data
+      mountPath: /app/data
+      sizeGB: 1
     envVars:
       - key: FRED_API_KEY
         sync: false            # <- enter your free FRED key on THIS service
       - key: FMP_API_KEY
         sync: false            # optional: enables gold (GLD) in the flow compass
       - key: DATABASE_URL
-        value: sqlite:///./data/canary.db   # ephemeral on free tier (OK; live compute)
+        value: sqlite:////app/data/canary.db   # on the persistent disk
       - key: CACHE_DIR
-        value: ./data/cache
+        value: /app/data/cache
       - key: RUN_SCHEDULER
         value: "true"
       - key: BACKFILL_ON_STARTUP
