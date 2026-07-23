@@ -16,6 +16,9 @@ from .sources.fred import fred_key_error
 from .store.db import init_db, session_scope
 
 logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
+# httpx logs full request URLs at INFO — which include the FMP apikey query
+# param. Silence to WARNING so secrets never land in stdout/host logs.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
