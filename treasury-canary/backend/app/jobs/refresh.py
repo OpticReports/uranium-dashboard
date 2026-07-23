@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..config import FRED_TENORS, settings
+from ..sources.fred import fred_key_error
 from ..metrics.auctions import build_auction_metrics
 from ..metrics.crossasset import build_crossasset_metrics
 from ..metrics.curve import build_curve_metrics
@@ -205,6 +206,7 @@ def run_refresh(session: Session) -> dict:
         "n_stale": sum(1 for m in metrics if m.status.value == "STALE"),
         "events_logged": fired,
         "fred_key_present": bool(settings.fred_api_key),
+        "fred_key_error": fred_key_error(),
     }
 
 
