@@ -72,6 +72,13 @@ FRED_LABOR: dict[str, str] = {
     "unrate": "UNRATE",            # lagging context
     "claims_4wk": "IC4WSA",        # initial jobless claims, 4-week MA (leading)
     "sahm": "SAHMREALTIME",        # official real-time Sahm recession indicator
+    # Labor DEMAND — the front of the deterioration chain (openings fall months
+    # before layoffs/claims/Sahm). Read via the V/U ratio: falling openings
+    # from V/U ~2 was benign normalization (2022-24 soft landing); falling
+    # openings at V/U <= ~1 bites employment directly.
+    "openings": "JTSJOL",          # JOLTS job openings, thousands (monthly, ~5wk lag)
+    "unemployed": "UNEMPLOY",      # unemployed persons, thousands (monthly)
+    "indeed_postings": "IHLIDXUS", # Indeed postings index, Feb-2020=100 (near-daily, timely)
 }
 # Flow-compass discriminators: where money hides when the stock-bond hedge breaks.
 # (Gold comes from FMP — FRED's LBMA gold series were discontinued.)

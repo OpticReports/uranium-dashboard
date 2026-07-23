@@ -53,6 +53,15 @@ DEFAULTS: dict[str, Threshold] = {
     # J. Labor (Sahm gap in pp; claims YoY in %). Sahm rule triggers at 0.50.
     "labor.sahm": Threshold(yellow=0.30, red=0.50, higher_is_worse=True),
     "labor.claims_yoy": Threshold(yellow=10.0, red=25.0, higher_is_worse=True),
+    # Vacancies per unemployed person (JOLTS starts 2000-12: fell decisively
+    # under ~1.0 into both the 2001 and 2008 recessions; ~1.2 pre-COVID 2019).
+    "labor.vu_ratio": Threshold(yellow=1.10, red=0.90, higher_is_worse=False),
+    # Openings YoY %: sustained double-digit contraction = labor demand rolling
+    # over. (Status is additionally capped at YELLOW while V/U >= 1.2 — falling
+    # from excess-demand levels is normalization, not deterioration.)
+    "labor.openings_yoy": Threshold(yellow=-5.0, red=-15.0, higher_is_worse=False),
+    # Indeed postings YoY (informational: series starts 2020 — no full cycle).
+    "labor.indeed_yoy": Threshold(yellow=-5.0, red=-15.0, higher_is_worse=False),
     # K. Leading stack (each vs its OWN historical rule; display-only — never
     # jointly fitted and never in the composite, by design).
     "leading.permits_yoy": Threshold(yellow=-10.0, red=-20.0, higher_is_worse=False),
