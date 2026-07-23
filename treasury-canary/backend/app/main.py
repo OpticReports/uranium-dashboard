@@ -133,6 +133,18 @@ def manual_refresh():
         return run_refresh(s)
 
 
+@app.post("/backfill")
+def manual_backfill():
+    """Rebuild metric HISTORY from source archives (z-scores/percentiles need
+    it). Previously backfill only ran at startup — a quiet boot-time failure
+    (or an ephemeral-disk wipe on redeploy) left the service healthy but the
+    dashboard empty, with no way to recover short of another deploy. Runs
+    synchronously; can take a couple of minutes."""
+    from .jobs.refresh import run_backfill
+    with session_scope() as s:
+        return run_backfill(s)
+
+
 # --- Single-service SPA serving (set FRONTEND_DIST in the deploy image) --------
 if settings.frontend_dist:
     import os
