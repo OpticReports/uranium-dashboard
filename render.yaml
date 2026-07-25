@@ -69,6 +69,8 @@ services:
       # Same pattern: /portfolio-optimizer/* -> Barbell Lab quant platform.
       - key: BARBELL_UPSTREAM
         value: https://barbell-lab.onrender.com
+      - key: BTC_UPSTREAM
+        value: https://btc-paper-engine.onrender.com
 
   # --- Barbell Lab (personal quant research platform) ------------------------
   # Lives at research.optic.capital/portfolio-optimizer behind the genomics
@@ -145,5 +147,35 @@ services:
         value: "720"
       - key: DISPLAY_TZ
         value: America/Puerto_Rico
+      - key: LOG_LEVEL
+        value: INFO
+
+  # --- BTC Pullback Paper Engine (research.optic.capital/btc) ---------------
+  # Paper trading only — three virtual books, replay-verified against the
+  # 2024-2026 research backtest. Persistent disk: the books' equity history
+  # and trade log must survive deploys (same lesson as the canary's disk).
+  - type: web
+    name: btc-paper-engine
+    runtime: docker
+    dockerfilePath: btc-paper-engine/Dockerfile
+    dockerContext: btc-paper-engine
+    plan: starter            # always-on: the engine polls 24/7
+    healthCheckPath: /health
+    autoDeploy: true
+    disk:
+      name: btc-data
+      mountPath: /app/data
+      sizeGB: 1
+    envVars:
+      - key: DATABASE_URL
+        value: sqlite:////app/data/paperengine.db
+      - key: CACHE_DIR
+        value: /app/data/cache
+      - key: RUN_ENGINE
+        value: "true"
+      - key: POLL_SECONDS
+        value: "60"
+      - key: FRONTEND_DIST
+        value: /app/frontend_dist
       - key: LOG_LEVEL
         value: INFO
