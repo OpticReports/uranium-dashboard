@@ -158,23 +158,25 @@ def resume_data():
     return {"data_halt": False}
 
 
-def _blend_stats(b1, b4) -> dict:
-    """S5 = 50/50 S1+S4, trade-close basis: step both books' equity ratios
-    through time-ordered exits, average, track dd."""
-    evs = sorted([(t.exit_ts, "S1", t.equity_after / b1.cfg.start_equity) for t in b1.trades]
-                 + [(t.exit_ts, "S4", t.equity_after / b4.cfg.start_equity) for t in b4.trades])
-    r1 = r4 = 1.0
+def _blend_stats(name: str, b3, b4, w_trend: float, lev: float) -> dict:
+    """Continuously-rebalanced levered blend of the 1x books, stepped through
+    time-ordered trade exits (approximates the frontier's daily rebalance)."""
+    evs = sorted([(t.exit_ts, "P", t.equity_after / b3.cfg.start_equity) for t in b3.trades]
+                 + [(t.exit_ts, "T", t.equity_after / b4.cfg.start_equity) for t in b4.trades])
+    p3 = p4 = 1.0
     eq = peak = 1.0
     mdd = 0.0
     for _, which, ratio in evs:
-        if which == "S1":
-            r1 = ratio
+        if which == "P":
+            r = (ratio / p3 - 1) * (1 - w_trend)
+            p3 = ratio
         else:
-            r4 = ratio
-        eq = 0.5 * (r1 + r4)
+            r = (ratio / p4 - 1) * w_trend
+            p4 = ratio
+        eq *= 1 + lev * r
         peak = max(peak, eq)
         mdd = min(mdd, eq / peak - 1)
-    return {"book": "S5", "synthetic": True, "trades": len(evs),
+    return {"book": name, "synthetic": True, "trades": len(evs),
             "total_return_pct": round(100 * (eq - 1), 1),
             "max_dd_pct": round(100 * mdd, 1), "win_rate": None,
             "profit_factor": None, "exit_mix": {}, "equity": round(100000 * eq, 2)}
@@ -212,8 +214,9 @@ def replay_compare(window: str = "2y", start: str | None = None,
     res = run_replay(bars_, ENGINE.books_cfg, ENGINE.scfg, ENGINE.tcfg,
                      start_ts=t0, end_ts=t1)
     out = {n: book_stats(b) for n, b in res.books.items()}
-    if "S1" in res.books and "S4" in res.books:
-        out["S5"] = _blend_stats(res.books["S1"], res.books["S4"])
+    if "S3" in res.books and "S4" in res.books:
+        out["S5"] = _blend_stats("S5", res.books["S3"], res.books["S4"], 0.25, 1.5)
+        out["S6"] = _blend_stats("S6", res.books["S3"], res.books["S4"], 0.25, 2.0)
     i0 = next((i for i, b in enumerate(bars_) if b.ts >= t0), 0)
     bh = bars_[-1].close / bars_[i0].close - 1 if bars_ else 0
     return {"window": {"from": _iso(t0), "to": _iso(t1)},

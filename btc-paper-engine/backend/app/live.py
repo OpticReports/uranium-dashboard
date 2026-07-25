@@ -44,6 +44,7 @@ class Engine:
         self.data_halt = False            # price-sanity halt (manual resume)
         self.cur_price: float | None = None
         self._persisted_trades: dict[str, int] = {c.name: 0 for c in self.books_cfg}
+        self._blend_state: dict[str, dict] = {}
         self._lock = threading.Lock()
 
     # ---------- persistence ----------
@@ -123,6 +124,10 @@ class Engine:
                             "fees_usd", "pnl_usd", "pnl_pct", "equity_before",
                             "equity_after")}))
                 self._persisted_trades[name] = len(b.trades)
+            for bn in self.BLENDS:
+                row = s.get(BookStateRow, bn)
+                if row is not None:
+                    self._blend_state[bn] = json.loads(row.state_json)
         self.refresh_bars()
         with session_scope() as s:
             self.catch_up(s)
@@ -180,6 +185,7 @@ class Engine:
                                    sigs[b.cfg.strategy])
             self.last_processed = bar.ts
             self._persist(s, snapshot_ts=bar.ts + BAR_SECONDS)
+            self._blend_step(bar.ts + BAR_SECONDS, s)
 
     # ---------- poll ----------
 
@@ -233,7 +239,7 @@ class Engine:
             "last_processed_bar": self.last_processed,
             "bars_cached": len(self.bars),
             "price": self.cur_price,
-            "books": {**self._s5_synthetic(), **{n: {**book_stats(b),
+            "books": {**self._blend_status(), **{n: {**book_stats(b),
                           "state": ("HALTED" if b.halted else
                                     b.position.side if b.position else
                                     "PENDING" if b.pending else "FLAT"),
@@ -242,27 +248,50 @@ class Engine:
                       for n, b in self.books.items()}},
         }
 
-    def _s5_synthetic(self) -> dict:
-        """S5 = 50/50 blend of S1 (pullback, vol-target) and S4 (trend).
-        Display-only synthetic book: equal capital in each, no rebalance yet
-        (rebalancing needs its own accounting; documented in RESEARCH_S4.md)."""
-        s1, s4 = self.books.get("S1"), self.books.get("S4")
-        if not s1 or not s4:
-            return {}
-        u1 = self._unrealized(s1, self.cur_price) or 0.0
-        u4 = self._unrealized(s4, self.cur_price) or 0.0
-        ratio = 0.5 * ((s1.equity + u1) / s1.cfg.start_equity
-                       + (s4.equity + u4) / s4.cfg.start_equity)
-        eq = round(100_000.0 * ratio, 2)
-        return {"S5": {
-            "book": "S5", "synthetic": True, "equity": eq,
-            "trades": len(s1.trades) + len(s4.trades),
-            "win_rate": None, "profit_factor": None, "expectancy_pct": None,
-            "total_return_pct": round(100 * (ratio - 1), 1),
-            "cagr_pct": None, "max_dd_pct": None,
-            "exit_mix": {}, "fees_usd": None, "halted": False,
-            "state": "BLEND", "position": None, "unrealized": None, "open": False,
-        }}
+    # Derived blend books: continuously-rebalanced weighted mix of the 1x
+    # pullback book (S3) and the 1x trend book (S4), levered. Weights/leverage
+    # from the RESEARCH_S4.md sizing frontier (75/25 @ 1.5x dominates the pure
+    # pullback at equal CAGR with half the DD; 2x is the aggressive seat).
+    BLENDS = {"S5": (0.25, 1.5), "S6": (0.25, 2.0)}   # (w_trend, leverage)
+
+    def _blend_step(self, snapshot_ts: int, s) -> None:
+        """Advance blend equities one snapshot using S3/S4 marked returns."""
+        s3, s4 = self.books.get("S3"), self.books.get("S4")
+        if not s3 or not s4:
+            return
+        cur3 = s3.equity + (self._unrealized(s3, self.bars[-1].close if self.bars else None) or 0.0)
+        cur4 = s4.equity + (self._unrealized(s4, self.bars[-1].close if self.bars else None) or 0.0)
+        for name, (w, lev) in self.BLENDS.items():
+            st = self._blend_state.setdefault(
+                name, {"eq": 100_000.0, "peak": 100_000.0, "p3": cur3, "p4": cur4})
+            r3 = cur3 / st["p3"] - 1 if st["p3"] else 0.0
+            r4 = cur4 / st["p4"] - 1 if st["p4"] else 0.0
+            st["eq"] *= 1 + lev * ((1 - w) * r3 + w * r4)
+            st["p3"], st["p4"] = cur3, cur4
+            st["peak"] = max(st["peak"], st["eq"])
+            s.merge(BookStateRow(book=name, state_json=json.dumps(st),
+                                 last_processed_bar=self.last_processed))
+            s.merge(EquitySnapRow(ts=snapshot_ts, book=name, equity=st["eq"],
+                                  unrealized=0.0, peak_equity=st["peak"],
+                                  drawdown=st["eq"] / st["peak"] - 1))
+
+    def _blend_status(self) -> dict:
+        out = {}
+        for name, (w, lev) in self.BLENDS.items():
+            st = self._blend_state.get(name)
+            if not st:
+                continue
+            out[name] = {
+                "book": name, "synthetic": True, "equity": round(st["eq"], 2),
+                "trades": len(self.books["S3"].trades) + len(self.books["S4"].trades),
+                "win_rate": None, "profit_factor": None, "expectancy_pct": None,
+                "total_return_pct": round(100 * (st["eq"] / 100_000.0 - 1), 1),
+                "cagr_pct": None,
+                "max_dd_pct": round(100 * (st["eq"] / st["peak"] - 1), 1),
+                "exit_mix": {}, "fees_usd": None, "halted": False,
+                "state": "BLEND", "position": None, "unrealized": None, "open": False,
+            }
+        return out
 
 
 ENGINE = Engine()
