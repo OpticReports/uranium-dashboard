@@ -122,7 +122,12 @@ def build_severity(bundle: dict) -> dict:
     _, hh = _clean(g("hh_debt_gdp", ([], [])))
     _, pc_ratio = _ratio_series(g("priv_credit", ([], [])), g("gdp", ([], [])), 1.0)
     _, corp_ratio = _ratio_series(g("corp_debt", ([], [])), g("gdp", ([], [])), 100.0)
-    _, margin_ratio = _ratio_series(g("margin_debt", ([], [])), g("gdp", ([], [])), 0.1)
+    # Margin debt: prefer FINRA's monthly stats (both $mm, ~one quarter timelier)
+    # over the quarterly Z.1 security-credit series; fall back if unavailable.
+    finra_margin = g("margin_debit", ([], []))
+    margin_monthly = bool(finra_margin[0])
+    margin_pair = finra_margin if margin_monthly else g("margin_debt", ([], []))
+    _, margin_ratio = _ratio_series(margin_pair, g("gdp", ([], [])), 0.1)
     _, b50_ratio = _ratio_series(g("bottom50_nw", ([], [])), g("gdp", ([], [])), 0.1)
     A = Block("A", "Private leverage excess", [
         _delta_comp("hh_debt_3y", "Household debt/GDP, 3y change", hh, Q3Y, "pp",
@@ -135,8 +140,10 @@ def build_severity(bundle: dict) -> dict:
                     "The FLOW burden that forces deleveraging. 2007: record high. Low = firewall."),
         _level_comp("saving_rate", "Personal saving rate", g("saving_rate", ([], [])), "%",
                     "The shock absorber: low savings = consumption cuts transmit 1:1.", invert=True),
-        _delta_comp("margin_3y", "Margin debt/GDP, 3y change", margin_ratio, Q3Y, "pp",
-                    "Speculative leverage on the equity stock (Z.1 security credit)."),
+        _delta_comp("margin_3y", "Margin debt/GDP, 3y change", margin_ratio,
+                    36 if margin_monthly else Q3Y, "pp",
+                    "Speculative leverage on the equity stock (FINRA margin debt; "
+                    "Z.1 security credit as fallback)."),
         _delta_comp("bottom50_3y", "Bottom-50% net worth/GDP, 3y change", b50_ratio, Q3Y, "pp",
                     "Distributional buffer: the marginal consumer's balance sheet.", invert=True),
     ])

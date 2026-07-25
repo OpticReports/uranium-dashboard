@@ -9,7 +9,7 @@ from __future__ import annotations
 import math
 
 from .assemble import simple_metric
-from .base import MetricResult, Status
+from .base import MetricResult, Status, last_valid
 from ..scoring import thresholds as T
 
 
@@ -81,4 +81,81 @@ def build_crossasset_metrics(bundle: dict[str, tuple[list, list]]) -> list[Metri
     out.append(simple_metric(
         "crossasset.ig_oas", "H", "IG OAS", ig[0], ig[1], unit="bps", scale=100.0,
         source="FRED:BAMLC0A0CM", note="Investment-grade credit spread trend."))
+    out.extend(_margin_metrics(bundle, sp))
+    return out
+
+
+def _month_end_closes(sp: tuple[list, list]) -> dict[str, float]:
+    """'YYYY-MM' -> last close in that month (daily series in, monthly map out)."""
+    out: dict[str, float] = {}
+    for d, v in zip(sp[0], sp[1]):
+        if v is not None:
+            out[str(d)[:7]] = v
+    return out
+
+
+def _margin_metrics(bundle: dict, sp: tuple[list, list]) -> list[MetricResult]:
+    """FINRA margin-debt gauges. Backtest (1997-2026, MARGIN_DEBT.md at the
+    project root): margin growth in EXCESS of the market's own growth is the
+    validated leading cell — YoY excess > +25pp preceded negative 12m S&P
+    returns in 16 of 17 months (the 1999-2000 / 2007 / 2021 clusters). The raw
+    level, and the viral "record net debit balance" framing, do NOT backtest:
+    the credit/debit coverage ratio trends structurally lower, so record lows
+    carry no timing signal — that context ships on the tiles on purpose."""
+    md, mdv = bundle.get("margin_debit", ([], []))
+    _, mcv = bundle.get("margin_credit", ([], []))
+    pts = [(d, v) for d, v in zip(md, mdv) if v is not None]
+
+    yoy_dates: list = []
+    yoy_vals: list[float | None] = []
+    excess_vals: list[float | None] = []
+    spx_me = _month_end_closes(sp)
+    for i, (d, v) in enumerate(pts):
+        yoy_dates.append(d)
+        base = pts[i - 12][1] if i >= 12 else None
+        y = round((v / base - 1) * 100, 1) if base else None
+        yoy_vals.append(y)
+        ym, ym12 = f"{d.year:04d}-{d.month:02d}", f"{d.year - 1:04d}-{d.month:02d}"
+        s_now, s_then = spx_me.get(ym), spx_me.get(ym12)
+        spx_yoy = (s_now / s_then - 1) * 100 if (s_now and s_then) else None
+        excess_vals.append(round(y - spx_yoy, 1) if (y is not None and spx_yoy is not None) else None)
+
+    out: list[MetricResult] = []
+    debit_now = last_valid([v for _, v in pts] or [None])
+    out.append(simple_metric(
+        "crossasset.margin_excess_yoy", "H", "Margin debt excess growth",
+        yoy_dates, excess_vals, unit="pp", source="FINRA margin stats / FRED:SP500",
+        note="Margin-debt YoY minus S&P YoY: leverage building FASTER than the market. "
+             ">+25pp preceded negative 12m returns in 16 of 17 months (2000/2007/2021 "
+             "clusters — n=3 independent episodes). Slow signal: 12m horizon, no "
+             "monthly timing power."))
+
+    m = simple_metric(
+        "crossasset.margin_yoy", "H", "Margin debt growth (YoY)",
+        yoy_dates, yoy_vals, unit="%", source="FINRA margin stats",
+        note="Context for the excess gauge. Peaks LED the S&P peak in all five major "
+             "drawdowns since 1997 (by 1-9 months). CONTRACTION is historically a "
+             "buy-zone, not a warning — post-contraction 12m returns beat baseline.")
+    m.informational = True
+    if debit_now is not None:
+        m.extra["debit_usd_bn"] = round(debit_now / 1e3, 0)
+    out.append(m)
+
+    cov_dates = [d for d, _ in pts]
+    cov_vals: list[float | None] = []
+    mc_by_date = {d: c for d, c in zip(md, mcv) if c is not None}
+    for d, v in pts:
+        c = mc_by_date.get(d)
+        cov_vals.append(round(c / v, 2) if (c and v) else None)
+    cm = simple_metric(
+        "crossasset.margin_coverage", "H", "Investor cash coverage (credit/debit)",
+        cov_dates, cov_vals, unit="x", source="FINRA margin stats",
+        note="The viral 'record net debit balance' metric, normalized. Trends "
+             "structurally lower (portfolio margin, cash swept outside brokerage), so "
+             "record lows recur by construction and carry NO timing signal — bottom-"
+             "decile months actually preceded ABOVE-baseline 12m returns. Watch the "
+             "excess-growth gauge instead.")
+    cm.informational = True
+    cm.status = Status.GREEN if cm.value is not None else Status.STALE
+    out.append(cm)
     return out
