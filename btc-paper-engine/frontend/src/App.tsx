@@ -225,7 +225,7 @@ export default function App() {
         </Panel>
 
         {/* Books table */}
-        <Panel title="Books">
+        <Panel title={<span>Books <BooksReset onDone={() => void load()} /></span>}>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
@@ -359,6 +359,35 @@ export default function App() {
         </footer>
       </div>
     </div>
+  );
+}
+
+function BooksReset({ onDone }: { onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [custom, setCustom] = useState("");
+  const fire = (q: string, label: string) => {
+    if (!window.confirm(
+      `Re-baseline ALL books from a common ${label} inception? Current book state and trade history are replaced by a replay from that date; live trading then continues as normal.`)) return;
+    setBusy(true);
+    fetch(`${BASE}/books/reset?${q}`, { method: "POST" })
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then(() => onDone())
+      .catch((e) => window.alert(`reset failed: ${e}`))
+      .finally(() => setBusy(false));
+  };
+  return (
+    <span className="ml-3 inline-flex items-center gap-1 normal-case tracking-normal">
+      <span className="text-[10px] text-slate-500">common inception:</span>
+      {["2y", "1y", "6m", "3m", "1m"].map((w) => (
+        <button key={w} disabled={busy} onClick={() => fire(`window=${w}`, w)}
+          className="rounded-full border border-panelborder px-2 py-0.5 text-[10px] text-slate-400 hover:border-sky-500 hover:text-sky-300 disabled:opacity-50">{w}</button>
+      ))}
+      <input value={custom} onChange={(e) => setCustom(e.target.value)} placeholder="YYYY-MM-DD"
+        className="w-24 rounded border border-panelborder bg-slate-900 px-1.5 py-0.5 text-[10px] font-mono" />
+      <button disabled={busy || !custom} onClick={() => fire(`start=${custom}`, custom)}
+        className="rounded border border-sky-500/60 bg-sky-500/10 px-2 py-0.5 text-[10px] text-sky-300 disabled:opacity-40">
+        {busy ? "…" : "reset"}</button>
+    </span>
   );
 }
 

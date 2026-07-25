@@ -236,6 +236,87 @@ class Engine:
                 with session_scope() as s:
                     self.catch_up(s)
 
+    def reset_books(self, start_ts: int) -> dict:
+        """Re-baseline ALL books from one common inception: wipe state, replay
+        start_ts -> now through the identical engine code path, install the
+        resulting books (open positions included), and continue live. The
+        fixture provides deep history; DB bars supply the live tail."""
+        import csv as _csv
+        import os as _os
+        from .engine.core import Bar as _Bar
+        from .engine.replay import run_replay
+        with self._lock:
+            fix = _os.path.join(_os.path.dirname(__file__), "..", "tests",
+                                "fixtures", "bars_4h_btcusd.csv")
+            by_ts = {}
+            for r in _csv.DictReader(open(fix)):
+                t = int(r["ts_open_unix"])
+                by_ts[t] = _Bar(ts=t, open=float(r["open"]), high=float(r["high"]),
+                                low=float(r["low"]), close=float(r["close"]),
+                                volume=float(r["volume"]))
+            with session_scope() as s:
+                for row in s.query(BarRow).all():
+                    by_ts[row.ts_open] = _Bar(ts=row.ts_open, open=row.open,
+                                              high=row.high, low=row.low,
+                                              close=row.close, volume=row.volume)
+            all_bars = [by_ts[t] for t in sorted(by_ts)]
+            now = time.time()
+            closed = [b for b in all_bars if b.ts + BAR_SECONDS <= now]
+            res = run_replay(closed, self.books_cfg, self.scfg, self.tcfg,
+                             start_ts=start_ts)
+            with session_scope() as s:
+                s.query(TradeRow).delete()
+                s.query(EquitySnapRow).delete()
+                s.query(BookStateRow).delete()
+                self.books = res.books
+                self.bars = all_bars[-max(settings.history_bars, 400):]
+                self.last_processed = closed[-1].ts if closed else 0
+                self._persisted_trades = {n: 0 for n in self.books}
+                self._blend_state = {}
+                # seed equity snapshots at each trade exit for the curves
+                for name, b in self.books.items():
+                    for t in b.trades:
+                        s.merge(EquitySnapRow(ts=t.exit_ts, book=name,
+                                              equity=t.equity_after, unrealized=0.0,
+                                              peak_equity=t.equity_after,
+                                              drawdown=0.0))
+                self._persist(s, snapshot_ts=self.last_processed + BAR_SECONDS)
+                # blends: step through merged ingredient exits from inception
+                s3b, s4b = self.books.get("S3"), self.books.get("S4")
+                if s3b and s4b:
+                    evs = sorted(
+                        [(t.exit_ts, "P", t.equity_after / s3b.cfg.start_equity)
+                         for t in s3b.trades]
+                        + [(t.exit_ts, "T", t.equity_after / s4b.cfg.start_equity)
+                           for t in s4b.trades])
+                    for bn, (w, lev) in self.BLENDS.items():
+                        p3 = p4 = 1.0
+                        eq = peak = 100_000.0
+                        for ts_, which, ratio in evs:
+                            if which == "P":
+                                r = (ratio / p3 - 1) * (1 - w)
+                                p3 = ratio
+                            else:
+                                r = (ratio / p4 - 1) * w
+                                p4 = ratio
+                            eq *= 1 + lev * r
+                            peak = max(peak, eq)
+                            s.merge(EquitySnapRow(ts=ts_, book=bn, equity=eq,
+                                                  unrealized=0.0, peak_equity=peak,
+                                                  drawdown=eq / peak - 1))
+                        # prev marks = ingredients' current closed equity; the
+                        # next live _blend_step continues from here
+                        self._blend_state[bn] = {"eq": eq, "peak": peak,
+                                                 "p3": s3b.equity, "p4": s4b.equity}
+                        s.merge(BookStateRow(book=bn,
+                                             state_json=json.dumps(self._blend_state[bn]),
+                                             last_processed_bar=self.last_processed))
+                log_event(s, "INFO", "books_reset",
+                          f"inception={start_ts} trades={ {n: len(b.trades) for n, b in self.books.items()} }")
+            return {"inception": start_ts,
+                    "books": {n: {"equity": round(b.equity, 2), "trades": len(b.trades)}
+                              for n, b in self.books.items()}}
+
     def status(self) -> dict:
         return {
             "degraded": self.degraded, "data_halt": self.data_halt,
