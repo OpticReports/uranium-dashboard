@@ -138,6 +138,25 @@ def test_margin_series_shared_builder():
     assert yoy[0] is None  # no 12m base yet
 
 
+def test_margin_leverage_endpoint_price_overlays():
+    from unittest.mock import patch
+    margin = [1000.0] * 12 + [1500.0] * 12
+    b = _bundle(margin, [500.0] * 24, [100.0] * 12 + [110.0] * 12)
+    ms = b["margin_debit"][0]
+    b["btc"] = ([d for d in b["sp500"][0]], [200.0 + i for i in range(len(ms))])
+    b["recession"] = ([], [])
+    with patch("app.api.routes_margin.fetch_bundle", return_value=b):
+        from app.api.routes_margin import margin_leverage
+        r = margin_leverage()
+    first, last = r["series"][0], r["series"][-1]
+    # overlays: raw month-end price passthrough + indexed-to-100-at-first-month
+    assert first["spx"] == 110.0 and first["spx_idx"] == 100.0
+    assert first["btc_idx"] == 100.0
+    assert last["btc_idx"] > 100.0          # btc ramps -> index rises
+    assert r["current"]["state"] == "BLOWOFF"
+    assert "CBBTCUSD" in r["source"]
+
+
 def test_parse_margin_workbook(tmp_path):
     import openpyxl
     wb = openpyxl.Workbook()
