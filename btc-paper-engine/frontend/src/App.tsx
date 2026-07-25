@@ -257,12 +257,12 @@ export default function App() {
                     </td>
                     <td className="pr-4 font-mono text-slate-400">{b.max_dd_pct}%</td>
                     <td className="pr-4 font-mono">{b.trades}</td>
-                    <td className="pr-4 font-mono">{b.win_rate ?? "—"}%</td>
+                    <td className="pr-4 font-mono">{b.win_rate != null ? `${b.win_rate}%` : "—"}</td>
                     <td className="pr-4 font-mono">{b.profit_factor ?? "—"}</td>
                     <td className="pr-4 font-mono text-[10px] text-slate-400">
                       {b.position
                         ? `${b.position.side} @ ${b.position.entry_price.toLocaleString()} stop ${b.position.stop_price.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
-                        : "—"}
+                        : (b as any).blend_desc ?? "—"}
                     </td>
                   </tr>
                 ))}
