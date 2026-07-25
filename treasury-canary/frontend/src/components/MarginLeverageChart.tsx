@@ -43,12 +43,21 @@ function toTs(dateStr: string): number {
   return Number.isNaN(d.getTime()) ? 0 : d.getTime();
 }
 
+// Pre-1997 margin data is quarterly Z.1; FINRA monthly after. BTC exists 2014+.
+const RANGES: Array<{ id: string; label: string; from: number | null }> = [
+  { id: "all", label: "All (1946+)", from: null },
+  { id: "1971", label: "1971+", from: 1971 },
+  { id: "1997", label: "1997+", from: 1997 },
+  { id: "10y", label: "10y", from: new Date().getFullYear() - 10 },
+];
+
 export default function MarginLeverageChart() {
   const [data, setData] = useState<MarginLeverage | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showSpx, setShowSpx] = useState(false);
   const [showBtc, setShowBtc] = useState(false);
+  const [range, setRange] = useState("1997");
 
   useEffect(() => {
     let alive = true;
@@ -73,17 +82,34 @@ export default function MarginLeverageChart() {
 
   const rows: ChartRow[] = useMemo(() => {
     if (!data?.series) return [];
-    return data.series.map((p) => ({
-      ts: toTs(p.date),
-      date: p.date,
-      margin_yoy: p.margin_yoy,
-      excess_yoy: p.excess_yoy,
-      spx: p.spx,
-      btc: p.btc,
-      spx_idx: p.spx_idx,
-      btc_idx: p.btc_idx,
-    }));
-  }, [data]);
+    const fromYear = RANGES.find((r) => r.id === range)?.from ?? null;
+    const minTs = fromYear === null ? -Infinity : Date.UTC(fromYear, 0, 1);
+    const win = data.series
+      .map((p) => ({
+        ts: toTs(p.date),
+        date: p.date,
+        margin_yoy: p.margin_yoy,
+        excess_yoy: p.excess_yoy,
+        spx: p.spx,
+        btc: p.btc,
+        spx_idx: null as number | null,
+        btc_idx: null as number | null,
+      }))
+      .filter((r) => r.ts >= minTs);
+    // Re-index overlays to 100 at their first point INSIDE the selected window
+    // so every range starts comparably at 100.
+    let spxBase: number | null = null;
+    let btcBase: number | null = null;
+    for (const r of win) {
+      if (r.spx != null && spxBase === null) spxBase = r.spx;
+      if (r.btc != null && btcBase === null) btcBase = r.btc;
+      r.spx_idx =
+        r.spx != null && spxBase ? Math.round((1000 * r.spx) / spxBase) / 10 : null;
+      r.btc_idx =
+        r.btc != null && btcBase ? Math.round((1000 * r.btc) / btcBase) / 10 : null;
+    }
+    return win;
+  }, [data, range]);
 
   const domain: [number, number] | undefined =
     rows.length > 0 ? [rows[0].ts, rows[rows.length - 1].ts] : undefined;
@@ -118,7 +144,22 @@ export default function MarginLeverageChart() {
             </div>
           ) : (
             <>
-            <div className="mt-3 flex items-center justify-end gap-2">
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] uppercase tracking-wide text-slate-500">
+                  range
+                </span>
+                {RANGES.map((r) => (
+                  <ToggleChip
+                    key={r.id}
+                    label={r.label}
+                    color="#38bdf8"
+                    active={range === r.id}
+                    onClick={() => setRange(r.id)}
+                  />
+                ))}
+              </div>
+              <div className="flex items-center gap-2">
               <span className="text-[10px] uppercase tracking-wide text-slate-500">
                 price overlay
               </span>
@@ -134,6 +175,7 @@ export default function MarginLeverageChart() {
                 active={showBtc}
                 onClick={() => setShowBtc((v) => !v)}
               />
+              </div>
             </div>
             <div className="mt-2 h-64">
               <ResponsiveContainer width="100%" height="100%">
@@ -306,10 +348,13 @@ export default function MarginLeverageChart() {
           <p className="mt-2 text-[10px] leading-relaxed text-slate-500">
             <span className="text-sky-400">Blue</span>: excess growth (margin YoY
             − S&P YoY, the scored signal; spans FRED's ~10y S&P history).{" "}
-            <span className="text-slate-400">Grey</span>: raw margin YoY (full
-            FINRA history, 1997+). Shaded bands: NBER recessions. Yearly margin
-            contraction below zero = the squeeze; watch it after a crash to see
-            the leverage reset complete.
+            <span className="text-slate-400">Grey</span>: raw margin YoY —
+            FINRA monthly from 1997, spliced onto quarterly Fed Z.1 security
+            credit before that (context, not part of the backtest; the two track
+            near-1:1 at the splice). Shaded bands: NBER recessions. Yearly
+            margin contraction below zero = the squeeze; watch it after a crash
+            to see the leverage reset complete. BTC data exists from 2014 — no
+            earlier price exists to show.
             {(showSpx || showBtc) && (
               <>
                 {" "}Overlays (<span className="text-amber-400">S&P</span>

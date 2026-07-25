@@ -117,7 +117,12 @@ FRED_SEVERITY: dict[str, str] = {
     "dsr": "TDSP",                     # household debt-service ratio
     "for_ratio": "FODSP",              # financial obligations ratio
     "saving_rate": "PSAVERT",          # personal saving rate (buffer)
-    "margin_debt": "BOGZ1FL153166006Q",  # households: security credit (margin), $mm
+    # Households security credit LIABILITY, $mm, 1945-2015 (discontinued Z.1
+    # mnemonic — tracks FINRA margin debt near-1:1 where they overlap; used as
+    # the pre-1997 history leg + emergency fallback). The previous id here,
+    # BOGZ1FL153166006Q, is actually consumer credit as a % of disposable
+    # income — wrong series, wrong units.
+    "margin_debt": "HNOSCIQ027S",
     "bottom50_nw": "WFRBLB50107",      # DFA: bottom-50% net worth, $mm
     # B. wealth at risk
     "equity_liab": "NCBEILQ027S",      # corporate equities liability, $mm (cap/GDP num.)
