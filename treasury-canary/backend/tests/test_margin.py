@@ -145,16 +145,50 @@ def test_margin_leverage_endpoint_price_overlays():
     ms = b["margin_debit"][0]
     b["btc"] = ([d for d in b["sp500"][0]], [200.0 + i for i in range(len(ms))])
     b["recession"] = ([], [])
-    with patch("app.api.routes_margin.fetch_bundle", return_value=b):
+    # no FRED key / no FMP key in tests -> Z.1 and long-S&P fetches degrade empty
+    with patch("app.api.routes_margin.fetch_bundle", return_value=b), \
+         patch("app.api.routes_margin.fetch_series", return_value=([], [])), \
+         patch("app.api.routes_margin.fetch_spx_long", return_value=([], [])):
         from app.api.routes_margin import margin_leverage
         r = margin_leverage()
     first, last = r["series"][0], r["series"][-1]
     # overlays: raw month-end price passthrough + indexed-to-100-at-first-month
-    assert first["spx"] == 110.0 and first["spx_idx"] == 100.0
+    assert first["spx"] == 100.0 and first["spx_idx"] == 100.0
     assert first["btc_idx"] == 100.0
     assert last["btc_idx"] > 100.0          # btc ramps -> index rises
+    # rows exist before margin YoY does (price-only months), then YoY kicks in
+    assert first["margin_yoy"] is None
+    yoy_rows = [p for p in r["series"] if p["margin_yoy"] is not None]
+    assert yoy_rows[0]["margin_yoy"] == 50.0 and yoy_rows[0]["excess_yoy"] == 40.0
     assert r["current"]["state"] == "BLOWOFF"
     assert "CBBTCUSD" in r["source"]
+
+
+def test_margin_leverage_long_view_splices_z1_before_finra():
+    from unittest.mock import patch
+    # FINRA era: 1997-01 monthly. Z.1: quarterly 1994-01..1997-04 — points at or
+    # after the first FINRA month must be dropped, earlier ones spliced in.
+    ms = _months(24, start=(1997, 1))
+    finra_debit = (ms, [100000.0] * 24)
+    z1_dates = _months(14 * 3, start=(1994, 1))[::3]        # quarterly, 14 pts
+    z1_vals = [50000.0 + 1000.0 * i for i in range(len(z1_dates))]
+
+    def fake_fetch_series(sid, start="1976-01-01", **kw):
+        return (z1_dates, z1_vals) if sid == "HNOSCIQ027S" else ([], [])
+
+    b = {"margin_debit": finra_debit, "margin_credit": (ms, [50000.0] * 24),
+         "sp500": ([], []), "btc": ([], []), "recession": ([], [])}
+    with patch("app.api.routes_margin.fetch_bundle", return_value=b), \
+         patch("app.api.routes_margin.fetch_series", side_effect=fake_fetch_series), \
+         patch("app.api.routes_margin.fetch_spx_long", return_value=([], [])):
+        from app.api.routes_margin import margin_leverage
+        r = margin_leverage()
+    assert r["z1_points"] == 12              # 1994-01..1996-10 kept, 1997+ dropped
+    yoy_months = {p["date"][:7] for p in r["series"] if p["margin_yoy"] is not None}
+    assert "1995-01" in yoy_months           # quarterly YoY computes pre-FINRA
+    assert "1996-10" in yoy_months
+    # splice-boundary months come from FINRA, not Z.1 (Z.1 1997+ dropped)
+    assert "1998-01" in yoy_months
 
 
 def test_parse_margin_workbook(tmp_path):

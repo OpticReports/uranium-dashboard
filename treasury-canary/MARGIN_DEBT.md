@@ -90,6 +90,28 @@ cells reproduced below.
   `crossasset.LEVERAGE_PLAYBOOK` — if the state definitions change, recompute
   the table (script pattern preserved here + FINRA xlsx + SPY closes).
 
+## Long view (added after the chart shipped)
+
+The chart's series now reaches back to the 1940s-50s via two splices, both
+**context-only** (the playbook stats remain validated on the FINRA era):
+
+- Margin leg: FINRA monthly (1997+) spliced onto **FRED:HNOSCIQ027S** —
+  households security credit liability, $mm, quarterly, 1945-2015 (discontinued
+  mnemonic). It tracks FINRA near-1:1 where they overlap (1997-Q1: $101B vs
+  FINRA $103B). Points at/after the first FINRA month are dropped.
+  While wiring this up we found the severity catalog's old "margin_debt" id
+  (BOGZ1FL153166006Q) was actually *consumer credit as % of disposable income*
+  — wrong series, wrong units. Config now points at HNOSCIQ027S.
+- S&P leg: FMP ^GSPC daily (~1951+, paginated 5,000 rows/call, 24h cache),
+  FRED SP500 (~10y) as no-key fallback. Excess YoY computable from ~1952.
+- BTC: FRED:CBBTCUSD starts 2014 — no earlier price exists.
+- NBER bands fetched from 1945 for the deep view (the shared bundle starts
+  1976).
+- YoY on the spliced series is DATE-matched with a 20-day tolerance — looser
+  tolerances let series edges slip to an 11-month base and fabricate a YoY.
+- UI: range chips (All 1946+ · 1971+ · 1997+ · 10y); overlays re-index to 100
+  at the first month inside the selected window.
+
 ## Limits (stated on the tiles)
 
 Three independent historical episodes; 12-month horizon (slow-burning); ~3-4
