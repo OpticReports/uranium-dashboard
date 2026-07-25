@@ -365,7 +365,7 @@ function ComparePanel() {
       </div>
       <table className="w-full text-xs">
         <thead><tr className="text-left text-slate-500 border-b border-panelborder">
-          {["book", "return", "max DD", "trades", "win rate", "PF"].map((h) => (
+          {["book", "return", "CAGR", "max DD", "MAR", "Sharpe", "Sortino", "trades", "win rate", "PF"].map((h) => (
             <th key={h} className="py-1 pr-4 font-medium">{h}</th>))}
         </tr></thead>
         <tbody>{rows.map(([n, b]) => (
@@ -373,7 +373,11 @@ function ComparePanel() {
             <td className="py-1.5 pr-4 font-semibold" style={{ color: BOOK_COLORS[n] }}>{BOOK_LABEL[n] ?? n}<Tip id={n} /></td>
             <td className={`pr-4 font-mono ${b.total_return_pct >= 0 ? "text-emerald-400" : "text-red-400"}`}>
               {b.total_return_pct >= 0 ? "+" : ""}{b.total_return_pct}%</td>
+            <td className="pr-4 font-mono text-slate-300">{b.cagr_pct != null ? `${b.cagr_pct >= 0 ? "+" : ""}${b.cagr_pct}%` : "—"}</td>
             <td className="pr-4 font-mono text-slate-400">{b.max_dd_pct}%</td>
+            <td className="pr-4 font-mono">{b.mar ?? "—"}</td>
+            <td className="pr-4 font-mono">{b.sharpe ?? "—"}</td>
+            <td className="pr-4 font-mono">{b.sortino ?? "—"}</td>
             <td className="pr-4 font-mono">{b.trades}</td>
             <td className="pr-4 font-mono">{b.win_rate != null ? `${b.win_rate}%` : "—"}</td>
             <td className="pr-4 font-mono">{b.profit_factor ?? "—"}</td>

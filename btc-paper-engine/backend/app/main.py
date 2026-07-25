@@ -158,6 +158,30 @@ def resume_data():
     return {"data_halt": False}
 
 
+def _risk_stats(steps: list[float], years: float | None, total_ret: float,
+                max_dd: float) -> dict:
+    """Sharpe/Sortino annualized from per-step returns (steps-per-year pace),
+    rf=0; MAR = CAGR/|maxDD|. Trade-step basis — consistent across real books
+    and blends (both step at trade exits)."""
+    out = {"sharpe": None, "sortino": None, "mar": None, "cagr_pct": None}
+    n = len(steps)
+    if n < 8 or not years or years <= 0.15:
+        return out
+    per_year = n / years
+    mean = sum(steps) / n
+    var = sum((x - mean) ** 2 for x in steps) / n
+    dvar = sum(min(x, 0.0) ** 2 for x in steps) / n
+    cagr = (1 + total_ret) ** (1 / years) - 1
+    out["cagr_pct"] = round(100 * cagr, 1)
+    if var > 0:
+        out["sharpe"] = round(mean / var ** 0.5 * per_year ** 0.5, 2)
+    if dvar > 0:
+        out["sortino"] = round(mean / dvar ** 0.5 * per_year ** 0.5, 2)
+    if max_dd < -0.005:
+        out["mar"] = round(cagr / abs(max_dd), 2)
+    return out
+
+
 def _blend_stats(name: str, b3, b4, w_trend: float, lev: float) -> dict:
     """Continuously-rebalanced levered blend of the 1x books, stepped through
     time-ordered trade exits (approximates the frontier's daily rebalance)."""
@@ -180,13 +204,15 @@ def _blend_stats(name: str, b3, b4, w_trend: float, lev: float) -> dict:
         mdd = min(mdd, eq / peak - 1)
     wins = [x for x in steps if x > 0]
     losses = [-x for x in steps if x <= 0]
+    years = ((evs[-1][0] - evs[0][0]) / (365.25 * 86400)) if len(evs) >= 2 else None
     return {"book": name, "synthetic": True, "trades": len(evs),
             "total_return_pct": round(100 * (eq - 1), 1),
             "max_dd_pct": round(100 * mdd, 1),
             "win_rate": round(100 * len(wins) / len(steps), 1) if steps else None,
             "profit_factor": (round(sum(wins) / sum(losses), 2)
                               if losses and sum(losses) > 0 else None),
-            "exit_mix": {}, "equity": round(100000 * eq, 2)}
+            "exit_mix": {}, "equity": round(100000 * eq, 2),
+            **_risk_stats(steps, years, eq - 1, mdd)}
 
 
 @app.get("/replay/compare")
@@ -220,7 +246,16 @@ def replay_compare(window: str = "2y", start: str | None = None,
               .replace(tzinfo=timezone.utc).timestamp()) if end else now)
     res = run_replay(bars_, ENGINE.books_cfg, ENGINE.scfg, ENGINE.tcfg,
                      start_ts=t0, end_ts=t1)
-    out = {n: book_stats(b) for n, b in res.books.items()}
+    out = {}
+    for n, b in res.books.items():
+        st = book_stats(b)
+        steps = [(t.equity_after / t.equity_before - 1) for t in b.trades
+                 if t.equity_before]
+        yrs = ((b.trades[-1].exit_ts - b.trades[0].entry_ts) / (365.25 * 86400)
+               if len(b.trades) >= 2 else None)
+        st.update(_risk_stats(steps, yrs, b.equity / b.cfg.start_equity - 1,
+                              st["max_dd_pct"] / 100.0))
+        out[n] = st
     if "S3" in res.books and "S4" in res.books:
         out["S5"] = _blend_stats("S5", res.books["S3"], res.books["S4"], 0.25, 1.5)
         out["S6"] = _blend_stats("S6", res.books["S3"], res.books["S4"], 0.25, 2.0)
