@@ -365,7 +365,7 @@ function ComparePanel() {
       </div>
       <table className="w-full text-xs">
         <thead><tr className="text-left text-slate-500 border-b border-panelborder">
-          {["book", "return", "max DD", "trades", "win rate"].map((h) => (
+          {["book", "return", "max DD", "trades", "win rate", "PF"].map((h) => (
             <th key={h} className="py-1 pr-4 font-medium">{h}</th>))}
         </tr></thead>
         <tbody>{rows.map(([n, b]) => (
@@ -375,7 +375,8 @@ function ComparePanel() {
               {b.total_return_pct >= 0 ? "+" : ""}{b.total_return_pct}%</td>
             <td className="pr-4 font-mono text-slate-400">{b.max_dd_pct}%</td>
             <td className="pr-4 font-mono">{b.trades}</td>
-            <td className="pr-4 font-mono">{b.win_rate ?? "—"}</td>
+            <td className="pr-4 font-mono">{b.win_rate != null ? `${b.win_rate}%` : "—"}</td>
+            <td className="pr-4 font-mono">{b.profit_factor ?? "—"}</td>
           </tr>))}
         </tbody>
       </table>
