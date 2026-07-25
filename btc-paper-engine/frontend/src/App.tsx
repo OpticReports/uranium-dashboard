@@ -36,9 +36,10 @@ interface TradeRow2 {
 }
 interface EqPoint { ts: number; equity: number }
 
-const BOOK_COLORS: Record<string, string> = { S1: "#38bdf8", S2: "#f97316", S3: "#94a3b8" };
+const BOOK_COLORS: Record<string, string> = { S1: "#38bdf8", S2: "#f97316", S3: "#94a3b8", S4: "#c084fc", S5: "#34d399" };
 const BOOK_LABEL: Record<string, string> = {
   S1: "S1 · vol-target 5.5%", S2: "S2 · 1.95x aggressive", S3: "S3 · 1x control",
+  S4: "S4 · Donchian trend", S5: "S5 · blend S1+S4",
 };
 
 export default function App() {
@@ -166,7 +167,7 @@ export default function App() {
                     <td className="pr-4">
                       <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
                         b.state === "HALTED" ? "bg-red-500/20 text-red-300"
-                        : b.state === "FLAT" ? "bg-slate-700/50 text-slate-300"
+                        : b.state === "FLAT" || b.state === "BLEND" ? "bg-slate-700/50 text-slate-300"
                         : "bg-sky-500/20 text-sky-300"}`}>{b.state}</span>
                     </td>
                     <td className="pr-4 font-mono">${b.equity.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>

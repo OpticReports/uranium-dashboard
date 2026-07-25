@@ -46,6 +46,8 @@ class Ind:
     rsi14: float | None
     atr14: float | None
     vol_sma20: float | None
+    hi20: float | None = None    # max high of PRIOR 20 bars (Donchian channel)
+    lo20: float | None = None    # min low of PRIOR 20 bars
 
 
 @dataclass(frozen=True)
@@ -68,6 +70,8 @@ class TradeCfg:
 class BookCfg:
     name: str
     sizing: Literal["vol_target", "fixed"]
+    strategy: Literal["pullback", "donchian"] = "pullback"
+    trail_atr: float = 5.0       # donchian only: chandelier trail multiple
     risk: float = 0.055          # vol_target: equity-risk fraction per trade
     leverage: float = 1.0        # fixed: notional multiple of equity
     long_mult: float = 1.0
@@ -86,6 +90,8 @@ class Position:
     stop_price: float
     atr_at_entry: float
     signal_ts: int               # signal bar open ts
+    fee_bps: float = 6.0         # round-trip taker bps charged at exit
+    trail: float | None = None   # donchian chandelier level (ratchets)
 
 
 @dataclass
@@ -151,6 +157,16 @@ def eval_signal(bar: Bar, ind: Ind, cfg: SignalCfg) -> Side | None:
     return None
 
 
+def eval_donchian(bar: Bar, ind: Ind) -> Side | None:
+    if ind.hi20 is None or ind.lo20 is None:
+        return None
+    if bar.close > ind.hi20:
+        return "L"
+    if bar.close < ind.lo20:
+        return "S"
+    return None
+
+
 def _size(book: Book, side: Side, entry: float, a_e: float, tcfg: TradeCfg) -> tuple[float, float]:
     """(qty, notional) for a fill at `entry` with entry-bar ATR a_e."""
     cfg = book.cfg
@@ -169,7 +185,7 @@ def _size(book: Book, side: Side, entry: float, a_e: float, tcfg: TradeCfg) -> t
 def _close_position(book: Book, pos: Position, exit_ts: int, exit_price: float,
                     reason: str, tcfg: TradeCfg) -> None:
     sgn = 1.0 if pos.side == "L" else -1.0
-    fees = pos.notional * tcfg.taker_fee_bps / 10_000.0
+    fees = pos.notional * pos.fee_bps / 10_000.0
     pnl = pos.qty * (exit_price - pos.entry_price) * sgn - fees
     eq_before = book.equity
     book.equity += pnl
@@ -189,11 +205,48 @@ def _close_position(book: Book, pos: Position, exit_ts: int, exit_price: float,
         book.halted = True
 
 
+def _process_donchian(book: Book, bar: Bar, ind: Ind, tcfg: TradeCfg,
+                      signal: Side | None) -> None:
+    """S4 family: market entry at next open after a 20-bar channel break;
+    exit ONLY via a ratcheting chandelier trail (cfg.trail_atr x rolling ATR).
+    Round-trip taker fees (both sides) charged at exit on entry notional."""
+    if book.pending is not None:
+        p = book.pending
+        book.pending = None
+        if ind.atr14 is not None:
+            qty, notional = _size(book, p.side, bar.open, ind.atr14, tcfg)
+            if qty > 0:
+                book.position = Position(
+                    side=p.side, entry_ts=bar.ts, entry_price=bar.open,
+                    qty=qty, notional=notional, stop_price=0.0,
+                    atr_at_entry=ind.atr14, signal_ts=p.signal_ts,
+                    fee_bps=2 * tcfg.taker_fee_bps)
+    pos = book.position
+    if pos is not None:
+        if ind.atr14 is not None:
+            lvl = (bar.close - book.cfg.trail_atr * ind.atr14 if pos.side == "L"
+                   else bar.close + book.cfg.trail_atr * ind.atr14)
+            pos.trail = (lvl if pos.trail is None else
+                         (max(pos.trail, lvl) if pos.side == "L" else min(pos.trail, lvl)))
+            pos.stop_price = pos.trail
+        if pos.trail is not None and bar.ts > pos.entry_ts:
+            hit = (bar.low <= pos.trail if pos.side == "L" else bar.high >= pos.trail)
+            if hit:
+                _close_position(book, pos, bar.ts, pos.trail, "STOP", tcfg)
+    if (book.position is None and book.pending is None and not book.halted
+            and signal is not None):
+        book.pending = Pending(side=signal, limit=-1.0, signal_ts=bar.ts,
+                               atr_signal=ind.atr14 or 0.0)
+
+
 def process_closed_bar(book: Book, bar: Bar, ind: Ind,
                        scfg: SignalCfg, tcfg: TradeCfg,
                        signal: Side | None) -> None:
-    """Advance one book through one newly-closed bar. `signal` is the shared
-    signal evaluated on THIS bar's close (None if rules not met)."""
+    """Advance one book through one newly-closed bar. `signal` is THIS BOOK'S
+    strategy signal evaluated on this bar's close (None if rules not met)."""
+    if book.cfg.strategy == "donchian":
+        _process_donchian(book, bar, ind, tcfg, signal)
+        return
     # 1) pending limit entry resolves against this bar
     if book.pending is not None:
         p = book.pending
