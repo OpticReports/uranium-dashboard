@@ -166,6 +166,7 @@ def _blend_stats(name: str, b3, b4, w_trend: float, lev: float) -> dict:
     p3 = p4 = 1.0
     eq = peak = 1.0
     mdd = 0.0
+    steps = []
     for _, which, ratio in evs:
         if which == "P":
             r = (ratio / p3 - 1) * (1 - w_trend)
@@ -173,13 +174,19 @@ def _blend_stats(name: str, b3, b4, w_trend: float, lev: float) -> dict:
         else:
             r = (ratio / p4 - 1) * w_trend
             p4 = ratio
+        steps.append(lev * r)
         eq *= 1 + lev * r
         peak = max(peak, eq)
         mdd = min(mdd, eq / peak - 1)
+    wins = [x for x in steps if x > 0]
+    losses = [-x for x in steps if x <= 0]
     return {"book": name, "synthetic": True, "trades": len(evs),
             "total_return_pct": round(100 * (eq - 1), 1),
-            "max_dd_pct": round(100 * mdd, 1), "win_rate": None,
-            "profit_factor": None, "exit_mix": {}, "equity": round(100000 * eq, 2)}
+            "max_dd_pct": round(100 * mdd, 1),
+            "win_rate": round(100 * len(wins) / len(steps), 1) if steps else None,
+            "profit_factor": (round(sum(wins) / sum(losses), 2)
+                              if losses and sum(losses) > 0 else None),
+            "exit_mix": {}, "equity": round(100000 * eq, 2)}
 
 
 @app.get("/replay/compare")
