@@ -361,17 +361,9 @@ class Engine:
                 name, {"eq": 100_000.0, "peak": 100_000.0, "p3": cur3, "p4": cur4})
             r3 = cur3 / st["p3"] - 1 if st["p3"] else 0.0
             r4 = cur4 / st["p4"] - 1 if st["p4"] else 0.0
-            step = lev * ((1 - w) * r3 + w * r4)
-            st["eq"] *= 1 + step
+            st["eq"] *= 1 + lev * ((1 - w) * r3 + w * r4)
             st["p3"], st["p4"] = cur3, cur4
             st["peak"] = max(st["peak"], st["eq"])
-            if abs(step) > 1e-12:
-                if step > 0:
-                    st["nw"] = st.get("nw", 0) + 1
-                    st["sw"] = st.get("sw", 0.0) + step
-                else:
-                    st["nl"] = st.get("nl", 0) + 1
-                    st["sl"] = st.get("sl", 0.0) - step
             s.merge(BookStateRow(book=name, state_json=json.dumps(st),
                                  last_processed_bar=self.last_processed))
             s.merge(EquitySnapRow(ts=snapshot_ts, book=name, equity=st["eq"],
@@ -381,12 +373,34 @@ class Engine:
     def _blend_status(self) -> dict:
         out = {}
         px = self.cur_price
+        s3b, s4b = self.books.get("S3"), self.books.get("S4")
+        evs = []
+        if s3b and s4b:
+            evs = sorted(
+                [(t.exit_ts, "P", t.equity_after / s3b.cfg.start_equity)
+                 for t in s3b.trades]
+                + [(t.exit_ts, "T", t.equity_after / s4b.cfg.start_equity)
+                   for t in s4b.trades])
         for name, (w, lev) in self.BLENDS.items():
             st = self._blend_state.get(name)
             if not st:
                 continue
-            nw, nl = st.get("nw", 0), st.get("nl", 0)
-            sw, sl = st.get("sw", 0.0), st.get("sl", 0.0)
+            p3m = p4m = 1.0
+            nw = nl = 0
+            sw = sl = 0.0
+            for _, which, ratio in evs:
+                if which == "P":
+                    r = (ratio / p3m - 1) * (1 - w)
+                    p3m = ratio
+                else:
+                    r = (ratio / p4m - 1) * w
+                    p4m = ratio
+                if r > 0:
+                    nw += 1
+                    sw += lev * r
+                elif r < 0:
+                    nl += 1
+                    sl -= lev * r
             s3, s4 = self.books.get("S3"), self.books.get("S4")
             u3 = (self._unrealized(s3, px) or 0.0) if s3 else 0.0
             u4 = (self._unrealized(s4, px) or 0.0) if s4 else 0.0
