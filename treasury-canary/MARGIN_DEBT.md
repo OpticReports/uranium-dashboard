@@ -112,6 +112,33 @@ The chart's series now reaches back to the 1940s-50s via two splices, both
 - UI: range chips (All 1946+ · 1971+ · 1997+ · 10y); overlays re-index to 100
   at the first month inside the selected window.
 
+## Blowoff-peak study (75y, added 2026-07)
+
+Hypothesis tested: "margin-YoY peaks in the 40-60% range reliably lead S&P
+declines by 6-9 months." Method: all local peaks of the long margin-YoY series
+≥35% (deduped to 18 episodes, 1949-2026) vs all >15% S&P drawdowns since 1951.
+
+- **Hit rate: 8/17** peaks were followed by a >15% decline starting within 18
+  months, vs a 28% unconditional base rate — blowoffs roughly DOUBLE the odds,
+  nothing like a reliable trigger.
+- **False positives include the two highest readings ever**: 1983-04 (+71.5%,
+  nothing) and 1986-01 (+72.6%, S&P +29% the next 12m; the '87 crash came 19m
+  later). Also fizzled: 1963, 1976, 1978, 1992, 2004, 2010.
+- **Lead time when it hits**: 1-19 months, median ~9-10 (2000: 5m · 2007: 3m ·
+  2021: 9m · 1972: 11m · 1968: 13m). Post-peak melt-ups are common (2021:
+  +20% after the margin peak before the top) — selling on rollover forfeits
+  the melt-up about as often as it dodges the bear.
+- **Coverage (the strong side): 9/13** major declines were preceded by a
+  blowoff, including every generational bear (1968-70, 1973-74, 2000, 2008,
+  2022). Missed: 1962, 1966, 1990, 2020 (exogenous). Asymmetric truth: big
+  bears almost always follow blowoffs; blowoffs produce big bears ~half the
+  time.
+
+Confirms the playbook framing: BLOWOFF is a risk-elevation dial (de-risk over
+quarters), not a timing trigger — and the excess-vs-market cut exists exactly
+because raw-YoY false positives (1983/1986) were margin keeping pace with a
+ripping tape.
+
 ## Limits (stated on the tiles)
 
 Three independent historical episodes; 12-month horizon (slow-burning); ~3-4
