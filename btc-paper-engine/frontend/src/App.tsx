@@ -366,8 +366,21 @@ function ComparePanel() {
   const [win, setWin] = useState("2y");
   const [from, setFrom] = useState(""); const [to, setTo] = useState("");
   const [data, setData] = useState<any>(null);
+  const [busy, setBusy] = useState(false);
+  const [cErr, setCErr] = useState<string | null>(null);
   const load = useCallback((q: string) => {
-    get<any>(`/replay/compare?${q}`).then(setData).catch(() => {});
+    setBusy(true);
+    setCErr(null);
+    // cache-buster: replayed windows must never be served stale by any
+    // intermediate cache, and failures must be VISIBLE, never silent
+    fetch(`${BASE}/replay/compare?${q}&_=${Date.now()}`, { cache: "no-store" })
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((d) => setData(d))
+      .catch((e) => setCErr(`window fetch failed (${String(e.message ?? e)}) — showing last loaded data; retry in a moment`))
+      .finally(() => setBusy(false));
   }, []);
   useEffect(() => { load(`window=${win}`); }, [win, load]);
   const rows = data ? Object.entries(data.books) as Array<[string, any]> : [];
@@ -387,6 +400,8 @@ function ComparePanel() {
           className="w-24 rounded border border-panelborder bg-slate-900 px-1.5 py-0.5 font-mono" />
         <button onClick={() => from && load(`start=${from}${to ? `&end=${to}` : ""}`)}
           className="rounded border border-sky-500/60 bg-sky-500/10 px-2 py-0.5 text-sky-300">run</button>
+        {busy && <span className="text-sky-400">loading…</span>}
+        {cErr && <span className="text-amber-400">{cErr}</span>}
         {data && <span className="ml-auto text-slate-500">
           {data.window.from.slice(0, 10)} → {data.window.to.slice(0, 10)} · B&H {data.buy_hold_pct >= 0 ? "+" : ""}{data.buy_hold_pct}%</span>}
       </div>
