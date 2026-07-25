@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from ..indicators import atr, rsi, sma
 from .core import (
     Bar, Book, BookCfg, Ind, SignalCfg, TradeCfg,
-    eval_signal, process_closed_bar, resolve_open_exit,
+    eval_donchian, eval_signal, process_closed_bar, resolve_open_exit,
 )
 
 
@@ -29,8 +29,14 @@ def compute_indicators(bars: list[Bar]) -> list[Ind]:
     r14 = rsi(closes, 14)
     a14 = atr(highs, lows, closes, 14)
     v20 = sma(vols, 20)
+    n = len(bars)
+    hi20: list[float | None] = [None] * n
+    lo20: list[float | None] = [None] * n
+    for i in range(20, n):
+        hi20[i] = max(highs[i - 20:i])
+        lo20[i] = min(lows[i - 20:i])
     return [Ind(sma50=s50[i], sma200=s200[i], rsi14=r14[i], atr14=a14[i],
-                vol_sma20=v20[i]) for i in range(len(bars))]
+                vol_sma20=v20[i], hi20=hi20[i], lo20=lo20[i]) for i in range(n)]
 
 
 def run_replay(bars: list[Bar], books_cfg: list[BookCfg],
@@ -56,12 +62,14 @@ def run_replay(bars: list[Bar], books_cfg: list[BookCfg],
         # 1) exits flagged at the previous close execute at THIS bar's open
         for book in books.values():
             resolve_open_exit(book, bar, tcfg)
-        # 2) shared signal on this close (books act on it only if flat)
-        sig = eval_signal(bar, ind, scfg)
-        if sig is not None:
-            signals.append((bar.ts, sig))
+        # 2) per-strategy signals on this close (books act only if flat)
+        sigs = {"pullback": eval_signal(bar, ind, scfg),
+                "donchian": eval_donchian(bar, ind)}
+        if sigs["pullback"] is not None:
+            signals.append((bar.ts, sigs["pullback"]))
         for book in books.values():
-            process_closed_bar(book, bar, ind, scfg, tcfg, sig)
+            process_closed_bar(book, bar, ind, scfg, tcfg,
+                               sigs[book.cfg.strategy])
     return ReplayResult(books=books, signals=signals, n_bars=n)
 
 

@@ -21,7 +21,7 @@ from dataclasses import asdict
 from .config import load_strategy, settings
 from .engine.core import (
     BAR_SECONDS, Bar, Book, Pending, Position,
-    eval_signal, process_closed_bar, resolve_open_exit,
+    eval_donchian, eval_signal, process_closed_bar, resolve_open_exit,
 )
 from .engine.replay import book_stats, compute_indicators
 from .sources.bitstamp import fetch_4h_bars, kraken_price, last_price
@@ -162,9 +162,12 @@ class Engine:
             warm = i >= min(settings.warmup_bars, len(self.bars) - 1) or ind.sma200 is not None
             for b in self.books.values():
                 resolve_open_exit(b, bar, self.tcfg)
-            sig = eval_signal(bar, ind, self.scfg) if warm else None
+            sigs = ({"pullback": eval_signal(bar, ind, self.scfg),
+                     "donchian": eval_donchian(bar, ind)} if warm
+                    else {"pullback": None, "donchian": None})
             if self.degraded or self.data_halt:
-                sig = None                      # block NEW entries; exits still run
+                sigs = {k: None for k in sigs}  # block NEW entries; exits still run
+            sig = sigs["pullback"]
             if sig is not None:
                 s.merge(SignalRow(ts_bar=bar.ts, direction=sig, close=bar.close,
                                   rsi=ind.rsi14, depth_atr=(
@@ -173,7 +176,8 @@ class Engine:
                                   vol_ratio=(bar.volume / ind.vol_sma20
                                              if ind.vol_sma20 else None)))
             for b in self.books.values():
-                process_closed_bar(b, bar, ind, self.scfg, self.tcfg, sig)
+                process_closed_bar(b, bar, ind, self.scfg, self.tcfg,
+                                   sigs[b.cfg.strategy])
             self.last_processed = bar.ts
             self._persist(s, snapshot_ts=bar.ts + BAR_SECONDS)
 
@@ -229,14 +233,36 @@ class Engine:
             "last_processed_bar": self.last_processed,
             "bars_cached": len(self.bars),
             "price": self.cur_price,
-            "books": {n: {**book_stats(b),
+            "books": {**self._s5_synthetic(), **{n: {**book_stats(b),
                           "state": ("HALTED" if b.halted else
                                     b.position.side if b.position else
                                     "PENDING" if b.pending else "FLAT"),
                           "position": (asdict(b.position) if b.position else None),
                           "unrealized": self._unrealized(b, self.cur_price)}
-                      for n, b in self.books.items()},
+                      for n, b in self.books.items()}},
         }
+
+    def _s5_synthetic(self) -> dict:
+        """S5 = 50/50 blend of S1 (pullback, vol-target) and S4 (trend).
+        Display-only synthetic book: equal capital in each, no rebalance yet
+        (rebalancing needs its own accounting; documented in RESEARCH_S4.md)."""
+        s1, s4 = self.books.get("S1"), self.books.get("S4")
+        if not s1 or not s4:
+            return {}
+        u1 = self._unrealized(s1, self.cur_price) or 0.0
+        u4 = self._unrealized(s4, self.cur_price) or 0.0
+        ratio = 0.5 * ((s1.equity + u1) / s1.cfg.start_equity
+                       + (s4.equity + u4) / s4.cfg.start_equity)
+        eq = round(100_000.0 * ratio, 2)
+        return {"S5": {
+            "book": "S5", "synthetic": True, "equity": eq,
+            "trades": len(s1.trades) + len(s4.trades),
+            "win_rate": None, "profit_factor": None, "expectancy_pct": None,
+            "total_return_pct": round(100 * (ratio - 1), 1),
+            "cagr_pct": None, "max_dd_pct": None,
+            "exit_mix": {}, "fees_usd": None, "halted": False,
+            "state": "BLEND", "position": None, "unrealized": None, "open": False,
+        }}
 
 
 ENGINE = Engine()

@@ -47,6 +47,13 @@ RESEARCH_BOOKS = [
             start_equity=100_000.0, dd_halt=0.45),
     BookCfg(name="S3", sizing="fixed", leverage=1.0, long_mult=1.0, cap=1.0,
             start_equity=100_000.0, dd_halt=0.30),
+    # S4: Donchian-20 trend book (RESEARCH_S4.md) — the diversifier. 12y of
+    # validated trend edge, corr -0.15 to the pullback; expected to bleed in
+    # chop and print in sustained trends. dd_halt is wide by design (trend
+    # strategies live through -40% book drawdowns).
+    BookCfg(name="S4", sizing="fixed", strategy="donchian", trail_atr=5.0,
+            leverage=1.0, long_mult=1.0, cap=1.0,
+            start_equity=100_000.0, dd_halt=0.50),
 ]
 RESEARCH_SIGNAL = SignalCfg()
 RESEARCH_TRADE = TradeCfg()

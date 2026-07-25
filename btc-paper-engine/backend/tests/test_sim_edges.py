@@ -95,3 +95,26 @@ def test_dd_halt_blocks_new_entries():
     assert b.halted and b.position is None
     process_closed_bar(b, _bar(3, 95, 96, 94, 95), _ind(atr14=2.0), SC, TC, "L")
     assert b.pending is None  # halted book refuses the signal
+
+
+def test_donchian_book_matches_lab_shape():
+    """S4 on the 2024-26 window: trade count/win-rate/DD must match the
+    RESEARCH_S4.md lab run (returns differ by documented short accounting)."""
+    import csv, os
+    from datetime import datetime, timezone
+    from app.config import RESEARCH_BOOKS
+    from app.engine.replay import run_replay, book_stats
+    fix = os.path.join(os.path.dirname(__file__), "fixtures", "bars_4h_btcusd.csv")
+    bars = [Bar(ts=int(r["ts_open_unix"]), open=float(r["open"]), high=float(r["high"]),
+                low=float(r["low"]), close=float(r["close"]), volume=float(r["volume"]))
+            for r in csv.DictReader(open(fix))]
+    def ts(s): return int(datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp())
+    res = run_replay(bars, RESEARCH_BOOKS, SC, TC,
+                     start_ts=ts("2024-07-24"), end_ts=ts("2026-07-24"))
+    st = book_stats(res.books["S4"])
+    assert abs(st["trades"] - 59) <= 3
+    assert abs(st["win_rate"] - 33.9) <= 3
+    assert abs(st["max_dd_pct"] - -44.3) <= 4
+    assert st["exit_mix"]["STOP"] == st["trades"]  # trail-only exits
+    # S1-S3 acceptance numbers untouched by the S4 addition
+    assert book_stats(res.books["S3"])["trades"] == 89
