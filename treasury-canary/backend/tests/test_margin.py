@@ -109,6 +109,35 @@ def test_severity_prefers_finra_monthly_margin():
     assert abs(m3["value"] - 0.14) < 0.011
 
 
+def test_leverage_state_machine():
+    from app.metrics.crossasset import LEVERAGE_PLAYBOOK, leverage_state
+    assert leverage_state(None, None) is None
+    assert leverage_state(-20.0, None) == "WASHOUT"
+    assert leverage_state(-5.0, None) == "SQUEEZE"
+    assert leverage_state(49.0, 28.2) == "BLOWOFF"      # June-2026 reading
+    assert leverage_state(45.0, None) == "BLOWOFF"      # excess stale -> raw fallback
+    assert leverage_state(20.0, 18.0) == "ELEVATED"
+    assert leverage_state(32.0, None) == "ELEVATED"
+    assert leverage_state(10.0, 2.0) == "NEUTRAL"
+    # contraction outranks blowoff bands (can't be both)
+    assert leverage_state(-1.0, 30.0) == "SQUEEZE"
+    # every reachable state has a playbook entry with 12m stats + action
+    for s in ("BLOWOFF", "ELEVATED", "NEUTRAL", "SQUEEZE", "WASHOUT"):
+        pb = LEVERAGE_PLAYBOOK[s]
+        assert pb["stats"]["fwd12"]["n"] > 0
+        assert pb["action"]
+
+
+def test_margin_series_shared_builder():
+    from app.metrics.crossasset import margin_series
+    margin = [1000.0] * 12 + [1500.0] * 12
+    b = _bundle(margin, [450.0] * 24, [100.0] * 12 + [110.0] * 12)
+    dates, yoy, excess, cov = margin_series(b, b["sp500"])
+    assert len(dates) == len(yoy) == len(excess) == len(cov) == 24
+    assert yoy[-1] == 50.0 and excess[-1] == 40.0 and cov[-1] == 0.3
+    assert yoy[0] is None  # no 12m base yet
+
+
 def test_parse_margin_workbook(tmp_path):
     import openpyxl
     wb = openpyxl.Workbook()

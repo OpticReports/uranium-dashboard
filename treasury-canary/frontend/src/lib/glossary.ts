@@ -190,6 +190,34 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     calc: "ICE BofA IG option-adjusted spread, bps (FRED).",
     read: "Moves later and less than HY; IG widening means stress has reached the quality end — a later-cycle, more serious confirmation.",
   },
+  "crossasset.margin_excess_yoy": {
+    title: "Margin debt excess growth",
+    what: "How much faster investors' margin debt is growing than the market itself — leverage building beyond what rising prices alone explain. The one margin-debt cut that actually backtests as a leading indicator.",
+    calc: "FINRA margin-debt YoY % minus S&P 500 YoY %, in percentage points. Monthly FINRA data (~3–4 week lag); S&P leg from FRED.",
+    read: "Above +25pp: in 1997–2026, 21 of 27 such months saw the S&P LOWER 12 months later (median −12%, worst −37%) — the 2000/2007/2021 pattern. Above +15pp: forward returns compress toward zero. Around 0: leverage merely tracking the market, no signal.",
+    caveat: "A 12-MONTH-horizon signal from ~3 independent historical episodes. It has essentially no monthly timing power (only 39% of blowoff months were down 3 months later) — treat it as a regime dial, not a sell trigger. See the Leverage Cycle chart for the full state machine.",
+  },
+  "crossasset.margin_yoy": {
+    title: "Margin debt growth (YoY)",
+    what: "Raw year-over-year growth in FINRA margin debt — context for the excess-growth gauge.",
+    calc: "Total debit balances in customers' margin accounts, YoY % (FINRA monthly).",
+    read: "Peaks in margin debt led the S&P peak in all five major drawdowns since 1997 (by 1–9 months). CONTRACTION (negative YoY) is historically a BUY zone, not a warning: after contraction months, 12-month forward returns ran +9 to +12% with ~79% positive.",
+    caveat: "Informational tile — the composite uses excess growth instead, because raw growth double-counts the market's own rise.",
+  },
+  "crossasset.margin_coverage": {
+    title: "Investor cash coverage (credit/debit)",
+    what: "Cash in brokerage accounts ÷ margin debt — the normalized version of the viral 'record negative net credit balance' chart.",
+    calc: "FINRA free credit balances (cash + margin accounts) divided by margin debit balances.",
+    read: "It is deliberately NOT scored. The ratio trends structurally lower (portfolio margin, cash swept outside brokerage free-credit), so it sets 'records' by construction: coverage at the 2000 top was 0.56, at the 2007 top 1.04, today ~0.29. Bottom-decile coverage months actually preceded ABOVE-baseline returns.",
+    caveat: "When the scary net-credit-balance chart goes viral, this tile is the antidote: check the excess-growth gauge instead — that's the cut with signal.",
+  },
+  margin_leverage: {
+    title: "Leverage Cycle (margin debt)",
+    what: "Tracks where speculative leverage sits in its build → blowoff → crash → squeeze-out cycle, using FINRA margin debt vs the S&P. Its two jobs: warn when leverage builds dangerously fast, and show — in near-real-time after a crash — when the leverage has been SQUEEZED OUT and forced selling is spent.",
+    calc: "States, checked in order: WASHOUT margin YoY ≤ −15% · SQUEEZE YoY < 0 · BLOWOFF excess ≥ +25pp (or YoY ≥ +40%) · ELEVATED excess ≥ +15pp (or YoY ≥ +30%) · else NEUTRAL. Historical stats: monthly states 1997–2026 vs forward SPY returns.",
+    read: "BLOWOFF: 78% of months saw the S&P lower a year later (median −12%) — de-risk over quarters. NEUTRAL: best regime (88% higher a year later). WASHOUT: crash in progress — bottoms form here, scale in staged. SQUEEZE: the reset is done, forward returns back to baseline — historically the re-entry zone.",
+    caveat: "Slow signal, overlapping windows, ~3 independent blowoff episodes in the sample. The excess line only spans FRED's S&P history (~10y); the YoY line covers 1997+. Read jointly with stock-bond correlation: a blowoff unwinding while that correlation is positive (2022-style) has no Treasury shock absorber.",
+  },
 
   // ── Auctions (E) / Liquidity (G) / Foreign (F) ────────────────────────────
   "auctions.bid_to_cover": {

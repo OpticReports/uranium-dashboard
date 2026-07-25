@@ -94,6 +94,108 @@ def _month_end_closes(sp: tuple[list, list]) -> dict[str, float]:
     return out
 
 
+def margin_series(bundle: dict, sp: tuple[list, list]
+                  ) -> tuple[list, list[float | None], list[float | None], list[float | None]]:
+    """(dates, margin_yoy %, excess_yoy pp, coverage x) from the FINRA series.
+    Excess is only populated where the S&P leg exists (FRED SP500 ~10y)."""
+    md, mdv = bundle.get("margin_debit", ([], []))
+    _, mcv = bundle.get("margin_credit", ([], []))
+    mc_by_date = {d: c for d, c in zip(md, mcv) if c is not None}
+    pts = [(d, v) for d, v in zip(md, mdv) if v is not None]
+
+    spx_me = _month_end_closes(sp)
+    dates: list = []
+    yoy_vals: list[float | None] = []
+    excess_vals: list[float | None] = []
+    cov_vals: list[float | None] = []
+    for i, (d, v) in enumerate(pts):
+        dates.append(d)
+        base = pts[i - 12][1] if i >= 12 else None
+        y = round((v / base - 1) * 100, 1) if base else None
+        yoy_vals.append(y)
+        ym, ym12 = f"{d.year:04d}-{d.month:02d}", f"{d.year - 1:04d}-{d.month:02d}"
+        s_now, s_then = spx_me.get(ym), spx_me.get(ym12)
+        spx_yoy = (s_now / s_then - 1) * 100 if (s_now and s_then) else None
+        excess_vals.append(round(y - spx_yoy, 1) if (y is not None and spx_yoy is not None) else None)
+        c = mc_by_date.get(d)
+        cov_vals.append(round(c / v, 2) if (c and v) else None)
+    return dates, yoy_vals, excess_vals, cov_vals
+
+
+# Leverage-cycle state machine + what happened next, historically. Stats from
+# the 1997-2026 SPY study (MARGIN_DEBT.md): mutually-exclusive monthly states,
+# forward S&P returns (overlapping windows — treat as descriptive, not iid).
+def leverage_state(yoy: float | None, excess: float | None) -> str | None:
+    if yoy is None:
+        return None
+    if yoy <= -15:
+        return "WASHOUT"
+    if yoy < 0:
+        return "SQUEEZE"
+    if (excess is not None and excess >= 25) or yoy >= 40:
+        return "BLOWOFF"
+    if (excess is not None and excess >= 15) or yoy >= 30:
+        return "ELEVATED"
+    return "NEUTRAL"
+
+
+LEVERAGE_PLAYBOOK: dict[str, dict] = {
+    "BLOWOFF": {
+        "label": "Blowoff — leverage building far faster than the market",
+        "stats": {"fwd3": {"n": 28, "mean": 0.7, "median": 0.9, "pct_lower": 39, "worst": -13.2},
+                  "fwd6": {"n": 28, "mean": -0.4, "median": -1.2, "pct_lower": 61, "worst": -18.8},
+                  "fwd12": {"n": 27, "mean": -7.3, "median": -11.8, "pct_lower": 78, "worst": -37.4}},
+        "read": "21 of 27 months here (78%) saw the S&P LOWER 12 months later — median "
+                "−12%, worst −37%. But only 39% were lower 3 months out: this signal "
+                "burns slow. Historically the 1999-2000, 2007 and 2021 tops.",
+        "action": "Not a sell-this-month trigger — a reduce-and-hedge-over-quarters "
+                  "regime. Tighten stops, trim leverage, demand more edge per position.",
+    },
+    "ELEVATED": {
+        "label": "Elevated build — leverage outpacing the market",
+        "stats": {"fwd3": {"n": 42, "mean": 1.5, "median": 1.3, "pct_lower": 40, "worst": -14.3},
+                  "fwd6": {"n": 39, "mean": 1.8, "median": 2.6, "pct_lower": 46, "worst": -13.5},
+                  "fwd12": {"n": 35, "mean": 1.6, "median": 5.5, "pct_lower": 31, "worst": -44.8}},
+        "read": "Forward returns compress well below baseline (12m mean +1.6% vs +11.6% "
+                "in NEUTRAL) with a fat left tail (worst −45%). The staging area for "
+                "blowoffs.",
+        "action": "Normal positioning, but stop adding leverage-sensitive risk and "
+                  "watch for the push into BLOWOFF.",
+    },
+    "NEUTRAL": {
+        "label": "Neutral — leverage tracking the market",
+        "stats": {"fwd3": {"n": 165, "mean": 3.1, "median": 3.7, "pct_lower": 24, "worst": -19.9},
+                  "fwd6": {"n": 165, "mean": 6.5, "median": 6.9, "pct_lower": 16, "worst": -20.6},
+                  "fwd12": {"n": 164, "mean": 11.6, "median": 11.9, "pct_lower": 12, "worst": -38.3}},
+        "read": "The best regime: 88% of months here saw the S&P higher 12 months later "
+                "(mean +11.6%). Margin risk is not the binding constraint.",
+        "action": "No leverage-cycle adjustment needed. Trade the other signals.",
+    },
+    "SQUEEZE": {
+        "label": "Squeeze — leverage contracting (0 to −15% YoY)",
+        "stats": {"fwd3": {"n": 62, "mean": 0.8, "median": 2.7, "pct_lower": 39, "worst": -30.0},
+                  "fwd6": {"n": 62, "mean": 2.3, "median": 5.1, "pct_lower": 26, "worst": -42.6},
+                  "fwd12": {"n": 62, "mean": 11.7, "median": 14.0, "pct_lower": 21, "worst": -36.8}},
+        "read": "The squeeze-out: 12m forward returns back to full-baseline (+11.7% mean, "
+                "79% higher) — the excess leverage is largely behind you. Near-term still "
+                "choppy (worst 3m: −30%).",
+        "action": "Historically a re-entry zone for scaling in, NOT a reason to sell. "
+                  "Selling on 'margin debt collapsing' headlines here = selling the low.",
+    },
+    "WASHOUT": {
+        "label": "Washout — deep deleveraging (YoY ≤ −15%)",
+        "stats": {"fwd3": {"n": 42, "mean": 1.0, "median": 2.4, "pct_lower": 43, "worst": -23.7},
+                  "fwd6": {"n": 42, "mean": 1.9, "median": 1.9, "pct_lower": 43, "worst": -34.7},
+                  "fwd12": {"n": 42, "mean": 5.8, "median": 10.5, "pct_lower": 38, "worst": -28.2}},
+        "read": "Crash in progress: forced selling is happening NOW. Bimodal outcomes — "
+                "median 12m +10.5% (bottoms form inside washouts) but 38% of months "
+                "still had more downside (2001-02, 2008-09 mid-crash reads).",
+        "action": "Scale in staged, don't lump in — and don't sell into it. The move to "
+                  "SQUEEZE (contraction easing) marks the leverage reset completing.",
+    },
+}
+
+
 def _margin_metrics(bundle: dict, sp: tuple[list, list]) -> list[MetricResult]:
     """FINRA margin-debt gauges. Backtest (1997-2026, MARGIN_DEBT.md at the
     project root): margin growth in EXCESS of the market's own growth is the
@@ -102,26 +204,11 @@ def _margin_metrics(bundle: dict, sp: tuple[list, list]) -> list[MetricResult]:
     level, and the viral "record net debit balance" framing, do NOT backtest:
     the credit/debit coverage ratio trends structurally lower, so record lows
     carry no timing signal — that context ships on the tiles on purpose."""
-    md, mdv = bundle.get("margin_debit", ([], []))
-    _, mcv = bundle.get("margin_credit", ([], []))
-    pts = [(d, v) for d, v in zip(md, mdv) if v is not None]
-
-    yoy_dates: list = []
-    yoy_vals: list[float | None] = []
-    excess_vals: list[float | None] = []
-    spx_me = _month_end_closes(sp)
-    for i, (d, v) in enumerate(pts):
-        yoy_dates.append(d)
-        base = pts[i - 12][1] if i >= 12 else None
-        y = round((v / base - 1) * 100, 1) if base else None
-        yoy_vals.append(y)
-        ym, ym12 = f"{d.year:04d}-{d.month:02d}", f"{d.year - 1:04d}-{d.month:02d}"
-        s_now, s_then = spx_me.get(ym), spx_me.get(ym12)
-        spx_yoy = (s_now / s_then - 1) * 100 if (s_now and s_then) else None
-        excess_vals.append(round(y - spx_yoy, 1) if (y is not None and spx_yoy is not None) else None)
+    yoy_dates, yoy_vals, excess_vals, cov_vals = margin_series(bundle, sp)
+    _, mdv = bundle.get("margin_debit", ([], []))
 
     out: list[MetricResult] = []
-    debit_now = last_valid([v for _, v in pts] or [None])
+    debit_now = last_valid(list(mdv) or [None])
     out.append(simple_metric(
         "crossasset.margin_excess_yoy", "H", "Margin debt excess growth",
         yoy_dates, excess_vals, unit="pp", source="FINRA margin stats / FRED:SP500",
@@ -141,15 +228,9 @@ def _margin_metrics(bundle: dict, sp: tuple[list, list]) -> list[MetricResult]:
         m.extra["debit_usd_bn"] = round(debit_now / 1e3, 0)
     out.append(m)
 
-    cov_dates = [d for d, _ in pts]
-    cov_vals: list[float | None] = []
-    mc_by_date = {d: c for d, c in zip(md, mcv) if c is not None}
-    for d, v in pts:
-        c = mc_by_date.get(d)
-        cov_vals.append(round(c / v, 2) if (c and v) else None)
     cm = simple_metric(
         "crossasset.margin_coverage", "H", "Investor cash coverage (credit/debit)",
-        cov_dates, cov_vals, unit="x", source="FINRA margin stats",
+        yoy_dates, cov_vals, unit="x", source="FINRA margin stats",
         note="The viral 'record net debit balance' metric, normalized. Trends "
              "structurally lower (portfolio margin, cash swept outside brokerage), so "
              "record lows recur by construction and carry NO timing signal — bottom-"

@@ -409,6 +409,51 @@ export interface TrackRecord {
   caveat: string;
 }
 
+export type LeverageState =
+  | "BLOWOFF"
+  | "ELEVATED"
+  | "NEUTRAL"
+  | "SQUEEZE"
+  | "WASHOUT";
+
+export interface MarginPoint {
+  date: string;
+  margin_yoy: number | null;
+  excess_yoy: number | null;
+  coverage: number | null;
+}
+
+export interface LeverageStats {
+  n: number;
+  mean: number;
+  median: number;
+  pct_lower: number;
+  worst: number;
+}
+
+export interface LeveragePlaybookEntry {
+  label: string;
+  stats: { fwd3: LeverageStats; fwd6: LeverageStats; fwd12: LeverageStats };
+  read: string;
+  action: string;
+}
+
+export interface MarginLeverage {
+  series: MarginPoint[];
+  recessions: Array<{ start: string; end: string }>;
+  current: {
+    date: string | null;
+    margin_yoy: number | null;
+    excess_yoy: number | null;
+    coverage: number | null;
+    state: LeverageState | null;
+  };
+  playbook: Record<LeverageState, LeveragePlaybookEntry>;
+  thresholds: Record<string, number>;
+  source: string;
+  note: string;
+}
+
 export interface CorrPoint {
   date: string;
   corr: number;
@@ -522,6 +567,7 @@ export const api = {
     ),
   recessionModel: () => getJson<RecessionModel>("/recession-model"),
   laborSahm: () => getJson<SahmSeries>("/labor/sahm"),
+  marginLeverage: () => getJson<MarginLeverage>("/margin/leverage"),
   flowDestinations: () => getJson<FlowDestinations>("/flows/destinations"),
   corrSeries: () => getJson<CorrSeries>("/crossasset/corr"),
   curveCanary: (pair: string) =>
