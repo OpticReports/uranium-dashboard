@@ -302,7 +302,7 @@ export default function App() {
         <Panel title={
           <span>Trade log
             <span className="ml-3 inline-flex gap-1">
-              {Object.keys(BOOK_COLORS).map((b) => (
+              {["S1", "S2", "S3", "S4"].map((b) => (
                 <button key={b} onClick={() => setBookFilter(b)}
                   className={`rounded-full border px-2 py-0.5 text-[10px] ${
                     bookFilter === b ? "border-sky-500 text-sky-300 bg-sky-500/10"
