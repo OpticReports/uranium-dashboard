@@ -74,8 +74,9 @@ app.add_middleware(
 )
 
 from .api import (  # noqa: E402
-    routes_composite, routes_events, routes_flows, routes_labor, routes_metrics,
-    routes_news, routes_pins, routes_severity, routes_statregime, routes_track,
+    routes_composite, routes_events, routes_flows, routes_labor, routes_margin,
+    routes_metrics, routes_news, routes_pins, routes_severity, routes_statregime,
+    routes_track,
 )
 
 app.include_router(routes_metrics.router)
@@ -83,6 +84,7 @@ app.include_router(routes_composite.router)
 app.include_router(routes_events.router)
 app.include_router(routes_news.router)
 app.include_router(routes_labor.router)
+app.include_router(routes_margin.router)
 app.include_router(routes_flows.router)
 app.include_router(routes_pins.router)
 app.include_router(routes_track.router)

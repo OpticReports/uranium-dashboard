@@ -68,6 +68,27 @@ cells reproduced below.
   exists to defuse the recurring viral chart with finding 4.
 - Severity index block A now prefers FINRA monthly margin (lag 36) over
   quarterly Z.1 security credit (lag 12), ~one quarter timelier.
+- **Leverage Cycle chart** (`GET /margin/leverage` + `MarginLeverageChart`):
+  full margin-YoY history (1997+) and excess-vs-S&P line with NBER bands, a
+  five-state machine (checked in order: WASHOUT YoY ≤ −15% · SQUEEZE YoY < 0 ·
+  BLOWOFF excess ≥ +25pp or YoY ≥ +40% · ELEVATED excess ≥ +15pp or YoY ≥
+  +30% · NEUTRAL), and a prescriptive banner per state. Per-state forward-SPY
+  stats (mutually exclusive monthly states, 1997-2026):
+
+  | State | n (fwd12) | fwd-12m mean | median | % lower | worst |
+  |---|---|---|---|---|---|
+  | BLOWOFF | 27 | −7.3% | −11.8% | 78% | −37.4% |
+  | ELEVATED | 35 | +1.6% | +5.5% | 31% | −44.8% |
+  | NEUTRAL | 164 | +11.6% | +11.9% | 12% | −38.3% |
+  | SQUEEZE | 62 | +11.7% | +14.0% | 21% | −36.8% |
+  | WASHOUT | 42 | +5.8% | +10.5% | 38% | −28.2% |
+
+  The post-crash read the chart exists for: WASHOUT = forced selling in
+  progress (bimodal — bottoms form here but 38% of months had more downside);
+  the transition to SQUEEZE = the leverage reset completing, forward returns
+  back to full baseline. These constants live in
+  `crossasset.LEVERAGE_PLAYBOOK` — if the state definitions change, recompute
+  the table (script pattern preserved here + FINRA xlsx + SPY closes).
 
 ## Limits (stated on the tiles)
 
