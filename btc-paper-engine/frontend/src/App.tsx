@@ -71,8 +71,35 @@ const BOOK_GLOSSARY: Record<string, { title: string; body: string[] }> = {
     "Higher leverage on a diversification assumption is the specific risk here: in a crash where both books lose together, 2× doubles the damage. Watch S5 vs S6 divergence as the stress gauge." ] },
 };
 
+const METRIC_GLOSSARY: Record<string, { title: string; body: string[] }> = {
+  m_return: { title: "Return", body: [
+    "Total compounded gain over the selected window, net of fees. What $100k became, as a percentage." ] },
+  m_cagr: { title: "CAGR — compound annual growth rate", body: [
+    "The window's total return converted to a per-year pace: the constant yearly rate that would compound to the same result. Lets you compare a 3-month window against a 2-year window on equal footing.",
+    "Short windows annualize noisily — a lucky month annualizes to a silly number. Trust CAGR more as the window grows." ] },
+  m_dd: { title: "Max drawdown", body: [
+    "The deepest peak-to-trough fall in the book's equity during the window — the worst moment for someone who invested at the top.",
+    "This is the metric that determines whether you'd actually stick with a strategy: a +60%/yr book with −45% drawdowns gets abandoned in practice. Computed on trade-close equity." ] },
+  m_mar: { title: "MAR ratio — CAGR ÷ max drawdown", body: [
+    "Growth per unit of worst-case pain: CAGR divided by the absolute max drawdown. MAR 2.0 = the book earns 2% per year for every 1% of maximum drawdown it inflicted.",
+    "Rule of thumb: below ~0.5 is poor, ~1 is decent, 2+ is excellent for a directional strategy. It's the single best number for 'is the return worth the ride?' — but it's driven by ONE event (the worst drawdown), so it's noisy on short windows." ] },
+  m_sharpe: { title: "Sharpe ratio", body: [
+    "Average return divided by the VOLATILITY of returns, annualized (risk-free rate taken as 0). Measures how smooth the ride is per unit of return — higher = more return per unit of wobble.",
+    "Computed here on per-trade steps, not daily marks, so figures run lower than the daily-basis Sharpes funds quote (fewer, chunkier observations). Compare books against each other in this column, not against outside benchmarks.",
+    "Sharpe's known flaw: it punishes upside volatility just as hard as downside — a strategy with occasional huge WINS scores worse than it deserves. That's what Sortino fixes." ] },
+  m_sortino: { title: "Sortino ratio", body: [
+    "Like Sharpe, but the denominator only counts DOWNSIDE volatility — losing steps. Big winning trades don't count against the score.",
+    "When Sortino runs well above Sharpe (see the S5/S6 blends), the volatility is concentrated on the upside: fat winning tails, controlled losses. For asymmetric strategies like trend-following, Sortino is the fairer measure." ] },
+  m_trades: { title: "Trades", body: [
+    "Number of closed trades in the window (for blends: rebalance steps from both ingredient books). Small counts mean every other metric is statistically fragile — treat sub-20 windows as anecdotes, not evidence." ] },
+  m_wr: { title: "Win rate", body: [
+    "Share of trades that closed profitable. NOT a quality measure by itself: the trend book wins ~34% of the time and can still be valuable (small losses, big wins), while a 90% win rate with occasional catastrophic losses is a blowup pattern. Read it with PF." ] },
+  m_pf: { title: "PF — profit factor", body: [
+    "Gross profits ÷ gross losses. 1.0 = breakeven before compounding; 1.3 = every $1 lost was answered by $1.30 won. Combines win rate and win size into one durability number — above ~1.25 with decent trade count is a real edge after fees." ] },
+};
+
 function Tip({ id }: { id: string }) {
-  const g = BOOK_GLOSSARY[id];
+  const g = BOOK_GLOSSARY[id] ?? METRIC_GLOSSARY[id];
   const [open, setOpen] = useState(false);
   if (!g) return null;
   return (
@@ -365,8 +392,10 @@ function ComparePanel() {
       </div>
       <table className="w-full text-xs">
         <thead><tr className="text-left text-slate-500 border-b border-panelborder">
-          {["book", "return", "CAGR", "max DD", "MAR", "Sharpe", "Sortino", "trades", "win rate", "PF"].map((h) => (
-            <th key={h} className="py-1 pr-4 font-medium">{h}</th>))}
+          {[["book", ""], ["return", "m_return"], ["CAGR", "m_cagr"], ["max DD", "m_dd"],
+            ["MAR", "m_mar"], ["Sharpe", "m_sharpe"], ["Sortino", "m_sortino"],
+            ["trades", "m_trades"], ["win rate", "m_wr"], ["PF", "m_pf"]].map(([h, t]) => (
+            <th key={h} className="py-1 pr-4 font-medium">{h}{t && <Tip id={t} />}</th>))}
         </tr></thead>
         <tbody>{rows.map(([n, b]) => (
           <tr key={n} className="border-b border-panelborder/40">
