@@ -131,6 +131,10 @@ class Engine:
         self.refresh_bars()
         with session_scope() as s:
             self.catch_up(s)
+            # Seed blend books immediately so S5/S6 show up on the dashboard
+            # from first boot rather than waiting for the next 4h bar close.
+            if self.bars:
+                self._blend_step(self.bars[-1].ts + BAR_SECONDS, s)
             log_event(s, "INFO", "boot",
                       f"bars={len(self.bars)} last_processed={self.last_processed}")
 
