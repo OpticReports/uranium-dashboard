@@ -36,11 +36,62 @@ interface TradeRow2 {
 }
 interface EqPoint { ts: number; equity: number }
 
-const BOOK_COLORS: Record<string, string> = { S1: "#38bdf8", S2: "#f97316", S3: "#94a3b8", S4: "#c084fc", S5: "#34d399" };
+const BOOK_COLORS: Record<string, string> = { S1: "#38bdf8", S2: "#f97316", S3: "#94a3b8", S4: "#c084fc", S5: "#34d399", S6: "#fbbf24" };
 const BOOK_LABEL: Record<string, string> = {
   S1: "S1 · vol-target 5.5%", S2: "S2 · 1.95x aggressive", S3: "S3 · 1x control",
-  S4: "S4 · Donchian trend", S5: "S5 · blend S1+S4",
+  S4: "S4 · Donchian trend", S5: "S5 · blend 75/25 @1.5x", S6: "S6 · blend 75/25 @2x",
 };
+
+const BOOK_GLOSSARY: Record<string, { title: string; body: string[] }> = {
+  S1: { title: "S1 — Pullback, vol-target 5.5% (base case)", body: [
+    "SIGNAL (4h close, all 6 required): price above SMA200 with SMA50>SMA200 (uptrend); price pulled back BELOW SMA50 by at least 0.5×ATR(14); RSI(14)<45; volume above its 20-bar average. Shorts are the exact mirror in downtrends (RSI>55).",
+    "ENTRY: limit order at the signal bar's close, working for one bar; unfilled → cancelled. ~95% fill rate, zero entry fee.",
+    "EXIT: protective stop 2.5×ATR (frozen at entry); otherwise all-out when price recloses across SMA50 ('the reclaim IS the move'); 60-bar (10-day) time stop. Stop beats signal within a bar.",
+    "SIZING: risks 5.5% of equity per trade — notional = equity×0.055/stop-distance, capped at 3× equity. Longs at 0.75× (shorts carried the research P&L). Halts new entries at −30% drawdown.",
+    "PROVENANCE: 2024-26 backtest +64.5%, max DD −22.3%, 62.9% win rate over 89 trades; validated out-of-sample. Modern-era (2022+) support ~190 trades at MAR ~1.5; did NOT work pre-2022." ] },
+  S2: { title: "S2 — Pullback, 1.95× leverage (aggressive)", body: [
+    "Identical signal, entries and exits to S1 — only the sizing differs.",
+    "SIZING: fixed notional = 1.95× equity every trade (half of the estimated growth-optimal ~4× Kelly), longs 0.75×, cap 2.5×. Halts at −45% drawdown.",
+    "PROVENANCE: 2024-26 backtest +101.4% with −22.9% max DD. Leverage scales both the wins and the losing streaks — this book exists to show what the same edge looks like at higher risk." ] },
+  S3: { title: "S3 — Pullback, unlevered 1× (control)", body: [
+    "Identical signal, entries and exits to S1/S2 at exactly 1× equity notional, no long haircut.",
+    "This is the experiment's control: the strategy's raw edge with no sizing opinion. 2024-26 backtest +48.1%, max DD −14.2%. Also the pullback ingredient inside the S5/S6 blends." ] },
+  S4: { title: "S4 — Donchian-20 trend (the diversifier)", body: [
+    "SIGNAL: close above the prior 20 bars' highest high → long; below the lowest low → short. No other filters.",
+    "ENTRY: market at next bar's open (taker fees both sides). EXIT: only via a 5×ATR chandelier trail that ratchets behind the best close — no target, no time stop. Cuts losers fast, holds winners for weeks.",
+    "SIZING: 1× equity. Halt at −50% (trend books breathe deep by design).",
+    "WHY IT'S HERE despite weak recent standalone numbers: 12 years of validated trend edge (2013-2021 MAR 3.2; 2022-24 +205%), monthly correlation −0.15 to the pullback. It earns in exactly the regime that starves the pullback — sustained trends and crashes (last 6 months: +30% while BTC fell 28%). Judged as a portfolio member on ≥12 months; pre-registered retirement rule in RESEARCH_S4.md." ] },
+  S5: { title: "S5 — 75/25 blend @ 1.5× (production candidate)", body: [
+    "A derived book: 75% weight on S3 (1× pullback) + 25% on S4 (1× trend), continuously rebalanced each 4h snapshot, levered 1.5×. No trades of its own — it holds the two books in fixed proportion.",
+    "WHY: the two strategies' −0.15 correlation makes the blend smoother than either parent; leverage converts that smoothness into growth. Sizing-frontier result (2022-2026): ~+44%/yr at −21% max DD — the pure pullback needs 2× leverage and −38% drawdowns to match that CAGR.",
+    "CAVEATS: frontier computed on 4.6y of modern-era data; the 75/25 weighting is itself a mild selection; correlations converge in crises. The live curve, not the frontier table, gets the final vote." ] },
+  S6: { title: "S6 — 75/25 blend @ 2× (aggressive seat)", body: [
+    "Same 75/25 pullback/trend blend as S5, levered 2×.",
+    "Frontier (2022-2026): ~+60%/yr at −27% max DD — roughly double S2's growth rate at similar drawdown, IF the correlation structure holds live.",
+    "Higher leverage on a diversification assumption is the specific risk here: in a crash where both books lose together, 2× doubles the damage. Watch S5 vs S6 divergence as the stress gauge." ] },
+};
+
+function Tip({ id }: { id: string }) {
+  const g = BOOK_GLOSSARY[id];
+  const [open, setOpen] = useState(false);
+  if (!g) return null;
+  return (
+    <span className="relative inline-block align-middle"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}>
+      <button type="button" onClick={() => setOpen((v) => !v)}
+        className="ml-1 h-4 w-4 inline-flex items-center justify-center rounded-full border border-slate-600 text-[10px] leading-none text-slate-400 hover:text-sky-300 hover:border-sky-500 cursor-help">?</button>
+      {open && (
+        <div className="absolute z-[100] left-0 top-5 w-80 max-h-72 overflow-y-auto scroll-thin rounded-lg border border-slate-700 bg-slate-900 p-3 text-left shadow-2xl text-[11px] font-normal normal-case tracking-normal leading-relaxed">
+          <div className="mb-1 font-semibold text-slate-100">{g.title}</div>
+          {g.body.map((b, i) => (
+            <p key={i} className="mt-1.5 text-slate-300">{b}</p>
+          ))}
+        </div>
+      )}
+    </span>
+  );
+}
 
 export default function App() {
   const [st, setSt] = useState<Status | null>(null);
@@ -162,7 +213,7 @@ export default function App() {
                 {st && Object.entries(st.books).map(([name, b]) => (
                   <tr key={name} className="border-b border-panelborder/50">
                     <td className="py-2 pr-4 font-semibold" style={{ color: BOOK_COLORS[name] }}>
-                      {BOOK_LABEL[name] ?? name}
+                      {BOOK_LABEL[name] ?? name}<Tip id={name} />
                     </td>
                     <td className="pr-4">
                       <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
@@ -319,7 +370,7 @@ function ComparePanel() {
         </tr></thead>
         <tbody>{rows.map(([n, b]) => (
           <tr key={n} className="border-b border-panelborder/40">
-            <td className="py-1.5 pr-4 font-semibold" style={{ color: BOOK_COLORS[n] }}>{BOOK_LABEL[n] ?? n}</td>
+            <td className="py-1.5 pr-4 font-semibold" style={{ color: BOOK_COLORS[n] }}>{BOOK_LABEL[n] ?? n}<Tip id={n} /></td>
             <td className={`pr-4 font-mono ${b.total_return_pct >= 0 ? "text-emerald-400" : "text-red-400"}`}>
               {b.total_return_pct >= 0 ? "+" : ""}{b.total_return_pct}%</td>
             <td className="pr-4 font-mono text-slate-400">{b.max_dd_pct}%</td>
