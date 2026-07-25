@@ -47,6 +47,14 @@ DEFAULTS: dict[str, Threshold] = {
     "crossasset.hy_oas": Threshold(yellow=350.0, red=550.0, higher_is_worse=True),
     "crossasset.ig_oas": Threshold(yellow=130.0, red=180.0, higher_is_worse=True),
     "crossasset.erp": Threshold(yellow=1.0, red=0.0, higher_is_worse=False),
+    # Margin-debt excess growth (FINRA margin YoY minus S&P YoY, pp). Backtest
+    # 1997-2026: >+25pp preceded negative 12m S&P returns in 16/17 months
+    # (2000/2007/2021 clusters). Composite member; 12m-horizon signal.
+    "crossasset.margin_excess_yoy": Threshold(yellow=15.0, red=25.0, higher_is_worse=True),
+    # Raw margin YoY (informational context; blowoff bands from the same study).
+    "crossasset.margin_yoy": Threshold(yellow=30.0, red=40.0, higher_is_worse=True),
+    # (crossasset.margin_coverage is deliberately unthresholded — the ratio
+    # trends structurally lower, so its "record lows" are not a signal.)
     # I. Recession model (%)
     "recession.prob": Threshold(yellow=30.0, red=50.0, higher_is_worse=True),
     "recession.nfci": Threshold(yellow=0.0, red=0.7, higher_is_worse=True),

@@ -185,11 +185,13 @@ def _fetch_bundle_uncached(start: str) -> dict[str, tuple[list[date], list[float
     bundle = {key: series for key, series in results}
     # Non-FRED series ride along in the same bundle (each gracefully []).
     from .cftc import fetch_lev_net_short
+    from .finra_margin import fetch_margin_stats
     from .fmp import fetch_gold
     from .ofr import fetch_fsi
     bundle["gold"] = fetch_gold()
     bundle["ofr_fsi"] = fetch_fsi()
     bundle["cot_net_short"] = fetch_lev_net_short()
+    bundle.update(fetch_margin_stats())
     return bundle
 
 
