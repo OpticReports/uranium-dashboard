@@ -139,6 +139,44 @@ quarters), not a timing trigger — and the excess-vs-market cut exists exactly
 because raw-YoY false positives (1983/1986) were margin keeping pace with a
 ripping tape.
 
+### What separates real blowoffs from false positives (corroboration study)
+
+Snapshot of macro conditions at each of the 16 scoreable peaks (FRED: GS10,
+TB3MS, CPIAUCSL, UNRATE, BAA/AAA, USREC; plus our own excess and S&P series):
+
+| condition at peak | bears (n=8) | fizzles (n=8) |
+|---|---|---|
+| curve slope (10y−3m, pp) | **1.00** | **2.54** |
+| unemployment rate | **5.2%** | **7.4%** |
+| S&P trailing 3y return | **+50%** | **+17%** |
+| months since recession end | **47** | **22** |
+| margin excess YoY (pp) | 32 | 30 (no separation) |
+| CPI YoY / credit spread | ~equal | ~equal |
+
+The story is one sentence: **false positives are early-cycle re-leveraging
+after a bust** (steep curve, high-but-falling unemployment, un-extended
+market, Fed easing — 1963/1976/1983/1986/1992/2004/2010), while **real
+blowoffs are late-cycle speculation** (flat curve, low unemployment, extended
+market, long expansion — 1967/1998/2000/2007). Same normalization-vs-
+deterioration logic as the labor V/U conditioning.
+
+Six pre-specified late-cycle flags (curve <1pp · Fed hiked >0.5pp/12m ·
+expansion ≥48m · unemployment <5% · S&P 3y >+50% · excess ≥+25pp):
+
+- **≥4 flags: 4/4 became bears** (1967, 1998, 2000, 2007)
+- **≤2 flags: 4/12 became bears** (~the unconditional blowoff rate)
+- Caveat: low flags ≠ safe — 1955/1972/1980/2021 were bears with ≤2 flags
+  (2021's snapshot looked early-cycle because COVID reset the clock).
+  High flags has no false positive yet, but n=4; treat "4/4" as ~65-85%
+  (Laplace ~83%, wide small-n band), not certainty. Thresholds were chosen
+  with the data in view — n=16 overfit risk is real even though each flag is
+  macro-logical.
+
+**2026-06 reading: 5 of 6 flags** (curve +0.81 · 74m expansion · unemployment
+4.2% · S&P 3y +69% · excess +28pp; only missing fed_tightened — the Fed eased
+−0.57pp over the past year). Today's configuration matches the 1967/1998/2000/
+2007 cluster, not the fizzle cluster.
+
 ## Limits (stated on the tiles)
 
 Three independent historical episodes; 12-month horizon (slow-burning); ~3-4
