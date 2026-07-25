@@ -158,6 +158,68 @@ def resume_data():
     return {"data_halt": False}
 
 
+def _blend_stats(b1, b4) -> dict:
+    """S5 = 50/50 S1+S4, trade-close basis: step both books' equity ratios
+    through time-ordered exits, average, track dd."""
+    evs = sorted([(t.exit_ts, "S1", t.equity_after / b1.cfg.start_equity) for t in b1.trades]
+                 + [(t.exit_ts, "S4", t.equity_after / b4.cfg.start_equity) for t in b4.trades])
+    r1 = r4 = 1.0
+    eq = peak = 1.0
+    mdd = 0.0
+    for _, which, ratio in evs:
+        if which == "S1":
+            r1 = ratio
+        else:
+            r4 = ratio
+        eq = 0.5 * (r1 + r4)
+        peak = max(peak, eq)
+        mdd = min(mdd, eq / peak - 1)
+    return {"book": "S5", "synthetic": True, "trades": len(evs),
+            "total_return_pct": round(100 * (eq - 1), 1),
+            "max_dd_pct": round(100 * mdd, 1), "win_rate": None,
+            "profit_factor": None, "exit_mix": {}, "equity": round(100000 * eq, 2)}
+
+
+@app.get("/replay/compare")
+def replay_compare(window: str = "2y", start: str | None = None,
+                   end: str | None = None):
+    """All books replayed over one window: 2y|1y|6m|3m|1m or custom start/end
+    (YYYY-MM-DD). Bars = repo fixture merged with DB-accumulated live bars."""
+    import os
+    from .engine.core import Bar
+    from .engine.replay import book_stats, run_replay
+    fix = os.path.join(os.path.dirname(__file__), "..", "tests", "fixtures",
+                       "bars_4h_btcusd.csv")
+    by_ts = {}
+    for r in csv.DictReader(open(fix)):
+        by_ts[int(r["ts_open_unix"])] = Bar(
+            ts=int(r["ts_open_unix"]), open=float(r["open"]), high=float(r["high"]),
+            low=float(r["low"]), close=float(r["close"]), volume=float(r["volume"]))
+    with session_scope() as s:
+        for r in s.query(BarRow).all():
+            by_ts[r.ts_open] = Bar(ts=r.ts_open, open=r.open, high=r.high,
+                                   low=r.low, close=r.close, volume=r.volume)
+    bars_ = [by_ts[t] for t in sorted(by_ts)]
+    now = bars_[-1].ts
+    spans = {"2y": 730, "1y": 365, "6m": 182, "3m": 91, "1m": 30}
+    if start:
+        t0 = int(datetime.strptime(start, "%Y-%m-%d")
+                 .replace(tzinfo=timezone.utc).timestamp())
+    else:
+        t0 = now - spans.get(window, 730) * 86400
+    t1 = (int(datetime.strptime(end, "%Y-%m-%d")
+              .replace(tzinfo=timezone.utc).timestamp()) if end else now)
+    res = run_replay(bars_, ENGINE.books_cfg, ENGINE.scfg, ENGINE.tcfg,
+                     start_ts=t0, end_ts=t1)
+    out = {n: book_stats(b) for n, b in res.books.items()}
+    if "S1" in res.books and "S4" in res.books:
+        out["S5"] = _blend_stats(res.books["S1"], res.books["S4"])
+    i0 = next((i for i, b in enumerate(bars_) if b.ts >= t0), 0)
+    bh = bars_[-1].close / bars_[i0].close - 1 if bars_ else 0
+    return {"window": {"from": _iso(t0), "to": _iso(t1)},
+            "books": out, "buy_hold_pct": round(100 * bh, 1)}
+
+
 @app.post("/replay")
 def replay():
     """Run the §6 acceptance replay on the persisted+fixture bar history."""

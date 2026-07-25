@@ -218,6 +218,8 @@ export default function App() {
           </div>
         </Panel>
 
+        <ComparePanel />
+
         {/* Trade log */}
         <Panel title={
           <span>Trade log
@@ -279,6 +281,54 @@ export default function App() {
         </footer>
       </div>
     </div>
+  );
+}
+
+function ComparePanel() {
+  const [win, setWin] = useState("2y");
+  const [from, setFrom] = useState(""); const [to, setTo] = useState("");
+  const [data, setData] = useState<any>(null);
+  const load = useCallback((q: string) => {
+    get<any>(`/replay/compare?${q}`).then(setData).catch(() => {});
+  }, []);
+  useEffect(() => { load(`window=${win}`); }, [win, load]);
+  const rows = data ? Object.entries(data.books) as Array<[string, any]> : [];
+  return (
+    <Panel title="Backtest comparison — all books, same window">
+      <div className="mb-3 flex flex-wrap items-center gap-1.5 text-[10px]">
+        {["2y", "1y", "6m", "3m", "1m"].map((w) => (
+          <button key={w} onClick={() => setWin(w)}
+            className={`rounded-full border px-2.5 py-0.5 font-semibold ${
+              win === w ? "border-sky-500 text-sky-300 bg-sky-500/10"
+              : "border-panelborder text-slate-500"}`}>{w}</button>
+        ))}
+        <span className="ml-2 text-slate-500">custom:</span>
+        <input value={from} onChange={(e) => setFrom(e.target.value)} placeholder="YYYY-MM-DD"
+          className="w-24 rounded border border-panelborder bg-slate-900 px-1.5 py-0.5 font-mono" />
+        <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="YYYY-MM-DD"
+          className="w-24 rounded border border-panelborder bg-slate-900 px-1.5 py-0.5 font-mono" />
+        <button onClick={() => from && load(`start=${from}${to ? `&end=${to}` : ""}`)}
+          className="rounded border border-sky-500/60 bg-sky-500/10 px-2 py-0.5 text-sky-300">run</button>
+        {data && <span className="ml-auto text-slate-500">
+          {data.window.from.slice(0, 10)} → {data.window.to.slice(0, 10)} · B&H {data.buy_hold_pct >= 0 ? "+" : ""}{data.buy_hold_pct}%</span>}
+      </div>
+      <table className="w-full text-xs">
+        <thead><tr className="text-left text-slate-500 border-b border-panelborder">
+          {["book", "return", "max DD", "trades", "win rate"].map((h) => (
+            <th key={h} className="py-1 pr-4 font-medium">{h}</th>))}
+        </tr></thead>
+        <tbody>{rows.map(([n, b]) => (
+          <tr key={n} className="border-b border-panelborder/40">
+            <td className="py-1.5 pr-4 font-semibold" style={{ color: BOOK_COLORS[n] }}>{BOOK_LABEL[n] ?? n}</td>
+            <td className={`pr-4 font-mono ${b.total_return_pct >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+              {b.total_return_pct >= 0 ? "+" : ""}{b.total_return_pct}%</td>
+            <td className="pr-4 font-mono text-slate-400">{b.max_dd_pct}%</td>
+            <td className="pr-4 font-mono">{b.trades}</td>
+            <td className="pr-4 font-mono">{b.win_rate ?? "—"}</td>
+          </tr>))}
+        </tbody>
+      </table>
+    </Panel>
   );
 }
 
