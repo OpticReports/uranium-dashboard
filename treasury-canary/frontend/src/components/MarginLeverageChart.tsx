@@ -21,6 +21,10 @@ interface ChartRow {
   date: string;
   margin_yoy: number | null;
   excess_yoy: number | null;
+  spx: number | null;
+  btc: number | null;
+  spx_idx: number | null;
+  btc_idx: number | null;
 }
 
 const STATE_STYLE: Record<
@@ -43,6 +47,8 @@ export default function MarginLeverageChart() {
   const [data, setData] = useState<MarginLeverage | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showSpx, setShowSpx] = useState(false);
+  const [showBtc, setShowBtc] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -72,6 +78,10 @@ export default function MarginLeverageChart() {
       date: p.date,
       margin_yoy: p.margin_yoy,
       excess_yoy: p.excess_yoy,
+      spx: p.spx,
+      btc: p.btc,
+      spx_idx: p.spx_idx,
+      btc_idx: p.btc_idx,
     }));
   }, [data]);
 
@@ -107,7 +117,25 @@ export default function MarginLeverageChart() {
               </div>
             </div>
           ) : (
-            <div className="mt-3 h-64">
+            <>
+            <div className="mt-3 flex items-center justify-end gap-2">
+              <span className="text-[10px] uppercase tracking-wide text-slate-500">
+                price overlay
+              </span>
+              <ToggleChip
+                label="S&P 500"
+                color="#fbbf24"
+                active={showSpx}
+                onClick={() => setShowSpx((v) => !v)}
+              />
+              <ToggleChip
+                label="BTC"
+                color="#f97316"
+                active={showBtc}
+                onClick={() => setShowBtc((v) => !v)}
+              />
+            </div>
+            <div className="mt-2 h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart
                   data={rows}
@@ -157,12 +185,31 @@ export default function MarginLeverageChart() {
                     labelFormatter={(t) =>
                       new Date(Number(t)).toISOString().slice(0, 7)
                     }
-                    formatter={(v: number, name: string) => [
-                      `${Number(v).toFixed(1)}${name.includes("excess") ? "pp" : "%"}`,
-                      name === "excess_yoy"
-                        ? "Excess growth (vs S&P)"
-                        : "Margin debt YoY",
-                    ]}
+                    formatter={(v: number, name: string, item: { payload?: ChartRow }) => {
+                      if (name === "excess_yoy")
+                        return [`${Number(v).toFixed(1)}pp`, "Excess growth (vs S&P)"];
+                      if (name === "margin_yoy")
+                        return [`${Number(v).toFixed(1)}%`, "Margin debt YoY"];
+                      if (name === "spx_idx") {
+                        const raw = item.payload?.spx;
+                        return [
+                          raw != null
+                            ? `${Math.round(raw).toLocaleString()} (idx ${Number(v).toFixed(0)})`
+                            : `idx ${Number(v).toFixed(0)}`,
+                          "S&P 500",
+                        ];
+                      }
+                      if (name === "btc_idx") {
+                        const raw = item.payload?.btc;
+                        return [
+                          raw != null
+                            ? `$${Math.round(raw).toLocaleString()} (idx ${Number(v).toFixed(0)})`
+                            : `idx ${Number(v).toFixed(0)}`,
+                          "BTC",
+                        ];
+                      }
+                      return [String(v), name];
+                    }}
                   />
                   {/* Blowoff / elevated bands on the EXCESS scale */}
                   <ReferenceLine
@@ -204,9 +251,56 @@ export default function MarginLeverageChart() {
                     connectNulls
                     isAnimationActive={false}
                   />
+                  {(showSpx || showBtc) && (
+                    <YAxis
+                      yAxisId="price"
+                      orientation="right"
+                      scale="log"
+                      domain={["auto", "auto"]}
+                      stroke="#475569"
+                      tick={{ fontSize: 10 }}
+                      width={42}
+                      tickFormatter={(v: number) =>
+                        v >= 1000
+                          ? `${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k`
+                          : `${Math.round(v)}`
+                      }
+                      label={{
+                        value: "start = 100 (log)",
+                        angle: 90,
+                        position: "insideRight",
+                        style: { fill: "#475569", fontSize: 9 },
+                      }}
+                    />
+                  )}
+                  {showSpx && (
+                    <Line
+                      yAxisId="price"
+                      dataKey="spx_idx"
+                      name="spx_idx"
+                      stroke="#fbbf24"
+                      dot={false}
+                      strokeWidth={1.4}
+                      connectNulls
+                      isAnimationActive={false}
+                    />
+                  )}
+                  {showBtc && (
+                    <Line
+                      yAxisId="price"
+                      dataKey="btc_idx"
+                      name="btc_idx"
+                      stroke="#f97316"
+                      dot={false}
+                      strokeWidth={1.4}
+                      connectNulls
+                      isAnimationActive={false}
+                    />
+                  )}
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
+            </>
           )}
 
           <p className="mt-2 text-[10px] leading-relaxed text-slate-500">
@@ -216,10 +310,54 @@ export default function MarginLeverageChart() {
             FINRA history, 1997+). Shaded bands: NBER recessions. Yearly margin
             contraction below zero = the squeeze; watch it after a crash to see
             the leverage reset complete.
+            {(showSpx || showBtc) && (
+              <>
+                {" "}Overlays (<span className="text-amber-400">S&P</span>
+                {showBtc && (
+                  <>
+                    , <span className="text-orange-400">BTC</span>
+                  </>
+                )}
+                ): month-end prices indexed to 100 at their first charted month,
+                log scale on the right axis — shapes are comparable, levels are
+                not. Leverage blowoffs and crypto blowoffs share the same
+                risk-appetite cycle; watch them peak and unwind together.
+              </>
+            )}
           </p>
         </>
       )}
     </Panel>
+  );
+}
+
+function ToggleChip({
+  label,
+  color,
+  active,
+  onClick,
+}: {
+  label: string;
+  color: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`rounded-full border px-2.5 py-0.5 text-[10px] font-semibold transition-colors ${
+        active ? "" : "border-panelborder text-slate-500 hover:text-slate-300"
+      }`}
+      style={
+        active
+          ? { color, borderColor: color, backgroundColor: `${color}1a` }
+          : undefined
+      }
+    >
+      {label}
+    </button>
   );
 }
 

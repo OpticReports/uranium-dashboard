@@ -421,6 +421,10 @@ export interface MarginPoint {
   margin_yoy: number | null;
   excess_yoy: number | null;
   coverage: number | null;
+  spx: number | null;
+  btc: number | null;
+  spx_idx: number | null;
+  btc_idx: number | null;
 }
 
 export interface LeverageStats {
