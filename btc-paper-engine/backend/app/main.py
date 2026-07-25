@@ -152,6 +152,20 @@ def resume(book: str):
     return {"book": book, "halted": False}
 
 
+@app.post("/books/reset")
+def books_reset(window: str = "2y", start: str | None = None):
+    """Re-baseline ALL books from one common inception (2y|1y|6m|3m|1m or
+    custom start=YYYY-MM-DD), replaying history through the live code path;
+    live trading continues from now. Destructive: wipes current book state."""
+    spans = {"2y": 730, "1y": 365, "6m": 182, "3m": 91, "1m": 30}
+    if start:
+        t0 = int(datetime.strptime(start, "%Y-%m-%d")
+                 .replace(tzinfo=timezone.utc).timestamp())
+    else:
+        t0 = int(datetime.now(timezone.utc).timestamp()) - spans.get(window, 730) * 86400
+    return ENGINE.reset_books(t0)
+
+
 @app.post("/resume-data")
 def resume_data():
     ENGINE.data_halt = False
