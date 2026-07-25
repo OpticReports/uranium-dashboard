@@ -252,6 +252,9 @@ _mount_proxy("canary", "CANARY_UPSTREAM",
 # research.optic.capital/portfolio-optimizer — Barbell Lab quant platform
 _mount_proxy("portfolio-optimizer", "BARBELL_UPSTREAM",
              "https://barbell-lab.onrender.com", "Barbell Lab")
+# research.optic.capital/btc — BTC Pullback Paper Engine
+_mount_proxy("btc", "BTC_UPSTREAM",
+             "https://btc-paper-engine.onrender.com", "BTC Paper Engine")
 
 
 # Single-service deployment: if a built frontend is present, serve it under
