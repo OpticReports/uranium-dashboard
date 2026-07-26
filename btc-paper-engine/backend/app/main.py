@@ -58,6 +58,25 @@ def books():
 @app.get("/books/{book}/trades")
 def trades(book: str, limit: int = 100):
     with session_scope() as s:
+        if book in ENGINE.BLENDS:
+            # Blend ledger: the ingredient trades the blend participates in,
+            # annotated with source book and the trade's weighted impact on
+            # the blend (lev * weight * ingredient equity step).
+            w, lev = ENGINE.BLENDS[book]
+            rows = (s.query(TradeRow).filter(TradeRow.book.in_(["S3", "S4"]))
+                    .order_by(TradeRow.entry_ts.desc()).limit(limit).all())
+            out = []
+            for r in rows:
+                wt = w if r.book == "S4" else (1 - w)
+                step = ((r.equity_after / r.equity_before - 1)
+                        if r.equity_before else 0.0)
+                out.append({**{c.name: getattr(r, c.name)
+                               for c in TradeRow.__table__.columns},
+                            "src": r.book, "blend_weight": wt,
+                            "pnl_pct": round(100 * lev * wt * step, 3),
+                            "pnl_usd": round(lev * wt * step * ENGINE.start_capital, 2),
+                            "entry_iso": _iso(r.entry_ts), "exit_iso": _iso(r.exit_ts)})
+            return out
         rows = (s.query(TradeRow).filter(TradeRow.book == book)
                 .order_by(TradeRow.entry_ts.desc()).limit(limit).all())
         return [{**{c.name: getattr(r, c.name) for c in TradeRow.__table__.columns},

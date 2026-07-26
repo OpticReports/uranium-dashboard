@@ -304,7 +304,7 @@ export default function App() {
         <Panel title={
           <span>Trade log
             <span className="ml-3 inline-flex gap-1">
-              {["S1", "S2", "S3", "S4"].map((b) => (
+              {Object.keys(BOOK_COLORS).map((b) => (
                 <button key={b} onClick={() => setBookFilter(b)}
                   className={`rounded-full border px-2 py-0.5 text-[10px] ${
                     bookFilter === b ? "border-sky-500 text-sky-300 bg-sky-500/10"
@@ -324,7 +324,9 @@ export default function App() {
               <tbody>
                 {trades.map((t) => (
                   <tr key={t.id} className="border-b border-panelborder/40 font-mono">
-                    <td className={`py-1 pr-3 font-bold ${t.side === "L" ? "text-emerald-400" : "text-red-400"}`}>{t.side}</td>
+                    <td className={`py-1 pr-3 font-bold ${t.side === "L" ? "text-emerald-400" : "text-red-400"}`}>
+                      {t.side}{(t as any).src && <span className="ml-1 font-normal text-slate-500">·{(t as any).src}</span>}
+                    </td>
                     <td className="pr-3 text-slate-400">{t.entry_iso?.slice(0, 16)}</td>
                     <td className="pr-3 text-slate-400">{t.exit_iso?.slice(0, 16)}</td>
                     <td className="pr-3">{t.entry_price?.toLocaleString()}</td>
