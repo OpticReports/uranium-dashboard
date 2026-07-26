@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
 class Engine:
     def __init__(self) -> None:
         self.books_cfg, self.scfg, self.tcfg, self.is_research = load_strategy()
+        self.start_capital: float = self.books_cfg[0].start_equity
         self.books: dict[str, Book] = {c.name: Book(cfg=c) for c in self.books_cfg}
         self.bars: list[Bar] = []
         self.last_processed: int = 0
@@ -98,6 +99,15 @@ class Engine:
         sgn = 1.0 if b.position.side == "L" else -1.0
         return b.position.qty * (price - b.position.entry_price) * sgn
 
+    def _apply_capital(self, capital: float) -> None:
+        """Rebuild book configs at a chosen starting capital (percent-based
+        sizing makes this a clean linear rescale of every book)."""
+        from dataclasses import replace as _replace
+        self.start_capital = capital
+        self.books_cfg = [_replace(c, start_equity=capital) for c in self.books_cfg]
+        for name, b in self.books.items():
+            b.cfg = next(c for c in self.books_cfg if c.name == name)
+
     # ---------- boot / catch-up ----------
 
     def boot(self) -> None:
@@ -128,6 +138,11 @@ class Engine:
                 row = s.get(BookStateRow, bn)
                 if row is not None:
                     self._blend_state[bn] = json.loads(row.state_json)
+            meta = s.get(BookStateRow, "_meta")
+            if meta is not None:
+                cap = json.loads(meta.state_json).get("capital")
+                if cap:
+                    self._apply_capital(cap)
         self.refresh_bars()
         with session_scope() as s:
             self.catch_up(s)
@@ -236,7 +251,7 @@ class Engine:
                 with session_scope() as s:
                     self.catch_up(s)
 
-    def reset_books(self, start_ts: int) -> dict:
+    def reset_books(self, start_ts: int, capital: float | None = None) -> dict:
         """Re-baseline ALL books from one common inception: wipe state, replay
         start_ts -> now through the identical engine code path, install the
         resulting books (open positions included), and continue live. The
@@ -262,12 +277,17 @@ class Engine:
             all_bars = [by_ts[t] for t in sorted(by_ts)]
             now = time.time()
             closed = [b for b in all_bars if b.ts + BAR_SECONDS <= now]
+            if capital:
+                self._apply_capital(capital)
             res = run_replay(closed, self.books_cfg, self.scfg, self.tcfg,
                              start_ts=start_ts)
             with session_scope() as s:
                 s.query(TradeRow).delete()
                 s.query(EquitySnapRow).delete()
                 s.query(BookStateRow).delete()
+                s.merge(BookStateRow(book="_meta",
+                                     state_json=json.dumps({"capital": self.start_capital}),
+                                     last_processed_bar=0))
                 self.books = res.books
                 self.bars = all_bars[-max(settings.history_bars, 400):]
                 self.last_processed = closed[-1].ts if closed else 0
@@ -291,7 +311,7 @@ class Engine:
                            for t in s4b.trades])
                     for bn, (w, lev) in self.BLENDS.items():
                         p3 = p4 = 1.0
-                        eq = peak = 100_000.0
+                        eq = peak = self.start_capital
                         nw = nl = 0
                         sw = sl = 0.0
                         for ts_, which, ratio in evs:
@@ -358,7 +378,8 @@ class Engine:
         cur4 = s4.equity + (self._unrealized(s4, self.bars[-1].close if self.bars else None) or 0.0)
         for name, (w, lev) in self.BLENDS.items():
             st = self._blend_state.setdefault(
-                name, {"eq": 100_000.0, "peak": 100_000.0, "p3": cur3, "p4": cur4})
+                name, {"eq": self.start_capital, "peak": self.start_capital,
+                       "p3": cur3, "p4": cur4})
             r3 = cur3 / st["p3"] - 1 if st["p3"] else 0.0
             r4 = cur4 / st["p4"] - 1 if st["p4"] else 0.0
             st["eq"] *= 1 + lev * ((1 - w) * r3 + w * r4)
@@ -414,7 +435,7 @@ class Engine:
                 "win_rate": round(100 * nw / (nw + nl), 1) if nw + nl else None,
                 "profit_factor": round(sw / sl, 2) if sl > 1e-12 else None,
                 "expectancy_pct": None,
-                "total_return_pct": round(100 * (st["eq"] / 100_000.0 - 1), 1),
+                "total_return_pct": round(100 * (st["eq"] / self.start_capital - 1), 1),
                 "cagr_pct": None,
                 "max_dd_pct": round(100 * (st["eq"] / st["peak"] - 1), 1),
                 "exit_mix": {}, "fees_usd": None, "halted": False,
