@@ -93,7 +93,8 @@ const METRIC_GLOSSARY: Record<string, { title: string; body: string[] }> = {
   m_trades: { title: "Trades", body: [
     "Number of closed trades in the window (for blends: rebalance steps from both ingredient books). Small counts mean every other metric is statistically fragile — treat sub-20 windows as anecdotes, not evidence." ] },
   m_wr: { title: "Win rate", body: [
-    "For strategy books (S1-S4): share of trades that closed profitable. For blends (S5/S6): share of ACTIVE DAYS that finished positive — the meaningful equivalent, since blends hold books rather than making discrete trades (counting per ingredient-trade would double-weight the trend sleeve's many small losers).",
+    "STRICT definition for every book: profitable trades ÷ total trades. 60 winners out of 100 trades = 60%. For blends (S5/S6), every ingredient trade the blend participates in counts once — the 75/25 weights scale each trade's P&L contribution but never change whether it was a win or a loss.",
+    "Context for blends: the trend sleeve wins only ~34% of its trades by design (small losses, big wins), which pulls the blend's combined rate below the pullback's 62%. That is the arithmetic of holding both, not a defect — read win rate together with PF.",
     "Share of trades that closed profitable. NOT a quality measure by itself: the trend book wins ~34% of the time and can still be valuable (small losses, big wins), while a 90% win rate with occasional catastrophic losses is a blowup pattern. Read it with PF." ] },
   m_pf: { title: "PF — profit factor", body: [
     "Gross profits ÷ gross losses. 1.0 = breakeven before compounding; 1.3 = every $1 lost was answered by $1.30 won. Combines win rate and win size into one durability number — above ~1.25 with decent trade count is a real edge after fees." ] },
