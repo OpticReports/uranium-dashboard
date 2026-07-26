@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     stale_seconds: int = 600
     price_sanity_pct: float = 5.0        # Bitstamp-vs-Kraken deviation halt
     warmup_bars: int = 210
+    cash_apy: float = 0.04           # idle capital earns T-bill-ish yield
     history_bars: int = 800              # indicator window kept in memory/DB
 
     frontend_dist: str | None = None

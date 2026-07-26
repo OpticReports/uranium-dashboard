@@ -23,7 +23,7 @@ from .engine.core import (
     BAR_SECONDS, Bar, Book, Pending, Position,
     eval_donchian, eval_signal, process_closed_bar, resolve_open_exit,
 )
-from .engine.replay import book_stats, compute_indicators
+from .engine.replay import accrue_cash_yield, book_stats, compute_indicators
 from .sources.bitstamp import fetch_4h_bars, kraken_price, last_price
 from .store.db import (
     BarRow, BookStateRow, EquitySnapRow, SignalRow, TradeRow,
@@ -202,6 +202,7 @@ class Engine:
             for b in self.books.values():
                 process_closed_bar(b, bar, ind, self.scfg, self.tcfg,
                                    sigs[b.cfg.strategy])
+                accrue_cash_yield(b, settings.cash_apy)
             self.last_processed = bar.ts
             self._persist(s, snapshot_ts=bar.ts + BAR_SECONDS)
             self._blend_step(bar.ts + BAR_SECONDS, s)
@@ -280,7 +281,7 @@ class Engine:
             if capital:
                 self._apply_capital(capital)
             res = run_replay(closed, self.books_cfg, self.scfg, self.tcfg,
-                             start_ts=start_ts)
+                             start_ts=start_ts, cash_apy=settings.cash_apy)
             with session_scope() as s:
                 s.query(TradeRow).delete()
                 s.query(EquitySnapRow).delete()
@@ -351,6 +352,7 @@ class Engine:
         return {
             "degraded": self.degraded, "data_halt": self.data_halt,
             "is_research_config": self.is_research,
+            "cash_apy": settings.cash_apy,
             "last_processed_bar": self.last_processed,
             "bars_cached": len(self.bars),
             "price": self.cur_price,

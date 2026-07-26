@@ -265,7 +265,7 @@ def replay_compare(window: str = "2y", start: str | None = None,
     t1 = (int(datetime.strptime(end, "%Y-%m-%d")
               .replace(tzinfo=timezone.utc).timestamp()) if end else now)
     res = run_replay(bars_, ENGINE.books_cfg, ENGINE.scfg, ENGINE.tcfg,
-                     start_ts=t0, end_ts=t1)
+                     start_ts=t0, end_ts=t1, cash_apy=settings.cash_apy)
     out = {}
     for n, b in res.books.items():
         st = book_stats(b)

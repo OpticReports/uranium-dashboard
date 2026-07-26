@@ -118,3 +118,23 @@ def test_donchian_book_matches_lab_shape():
     assert st["exit_mix"]["STOP"] == st["trades"]  # trail-only exits
     # S1-S3 acceptance numbers untouched by the S4 addition
     assert book_stats(res.books["S3"])["trades"] == 89
+
+
+def test_cash_yield_accrues_only_on_idle_capital():
+    from app.engine.replay import BARS_PER_YEAR, accrue_cash_yield
+    b = _book()
+    e0 = b.equity
+    accrue_cash_yield(b, 0.04)                    # flat -> full idle
+    assert abs(b.equity - e0 * (1 + 0.04 / BARS_PER_YEAR)) < 1e-9
+    # levered position (notional >= equity) -> no idle, no yield
+    process_closed_bar(b, _bar(0, 100, 101, 99, 100), _ind(atr14=2.0), SC, TC, "L")
+    process_closed_bar(b, _bar(1, 100, 100.5, 99.9, 100), _ind(atr14=2.0), SC, TC, None)
+    assert b.position is not None
+    e1 = b.equity
+    accrue_cash_yield(b, 0.04)
+    assert b.equity == e1
+    # acceptance harness default (cash_apy=0) is a no-op
+    b2 = _book()
+    e2 = b2.equity
+    accrue_cash_yield(b2, 0.0)
+    assert b2.equity == e2
