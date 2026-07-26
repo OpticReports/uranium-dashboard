@@ -406,20 +406,25 @@ class Engine:
             st = self._blend_state.get(name)
             if not st:
                 continue
+            # STRICT per-trade win rate: every ingredient trade the blend
+            # participates in counts once; profitable is profitable regardless
+            # of weight (weights scale P&L size, never the win/loss sign).
             p3m = p4m = 1.0
-            day_pnl: dict = {}
-            for ts_, which, ratio in evs:
+            nw = nl = 0
+            sw = sl = 0.0
+            for _, which, ratio in evs:
                 if which == "P":
                     r = (ratio / p3m - 1) * (1 - w)
                     p3m = ratio
                 else:
                     r = (ratio / p4m - 1) * w
                     p4m = ratio
-                day_pnl[ts_ // 86400] = day_pnl.get(ts_ // 86400, 0.0) + lev * r
-            nw = sum(1 for v in day_pnl.values() if v > 0)
-            nl = sum(1 for v in day_pnl.values() if v < 0)
-            sw = sum(v for v in day_pnl.values() if v > 0)
-            sl = -sum(v for v in day_pnl.values() if v < 0)
+                if r > 0:
+                    nw += 1
+                    sw += lev * r
+                elif r < 0:
+                    nl += 1
+                    sl -= lev * r
             s3, s4 = self.books.get("S3"), self.books.get("S4")
             u3 = (self._unrealized(s3, px) or 0.0) if s3 else 0.0
             u4 = (self._unrealized(s4, px) or 0.0) if s4 else 0.0

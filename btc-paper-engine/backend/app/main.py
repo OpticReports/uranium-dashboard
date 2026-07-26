@@ -208,8 +208,7 @@ def _blend_stats(name: str, b3, b4, w_trend: float, lev: float) -> dict:
     eq = peak = 1.0
     mdd = 0.0
     steps = []
-    day_pnl: dict = {}
-    for ts_, which, ratio in evs:
+    for _, which, ratio in evs:
         if which == "P":
             r = (ratio / p3 - 1) * (1 - w_trend)
             p3 = ratio
@@ -217,14 +216,13 @@ def _blend_stats(name: str, b3, b4, w_trend: float, lev: float) -> dict:
             r = (ratio / p4 - 1) * w_trend
             p4 = ratio
         steps.append(lev * r)
-        day_pnl[ts_ // 86400] = day_pnl.get(ts_ // 86400, 0.0) + lev * r
         eq *= 1 + lev * r
         peak = max(peak, eq)
         mdd = min(mdd, eq / peak - 1)
-    # win rate/PF on DAILY basis: share of active days positive (per-event
-    # counting double-weights the trend sleeve's many small losers)
-    wins = [v for v in day_pnl.values() if v > 0]
-    losses = [-v for v in day_pnl.values() if v < 0]
+    # STRICT per-trade basis: each ingredient trade counts once; weights scale
+    # P&L, never the win/loss sign
+    wins = [x for x in steps if x > 0]
+    losses = [-x for x in steps if x < 0]
     years = ((evs[-1][0] - evs[0][0]) / (365.25 * 86400)) if len(evs) >= 2 else None
     return {"book": name, "synthetic": True, "trades": len(evs),
             "total_return_pct": round(100 * (eq - 1), 1),
