@@ -153,7 +153,8 @@ def resume(book: str):
 
 
 @app.post("/books/reset")
-def books_reset(window: str = "2y", start: str | None = None):
+def books_reset(window: str = "2y", start: str | None = None,
+                capital: float | None = None):
     """Re-baseline ALL books from one common inception (2y|1y|6m|3m|1m or
     custom start=YYYY-MM-DD), replaying history through the live code path;
     live trading continues from now. Destructive: wipes current book state."""
@@ -163,7 +164,9 @@ def books_reset(window: str = "2y", start: str | None = None):
                  .replace(tzinfo=timezone.utc).timestamp())
     else:
         t0 = int(datetime.now(timezone.utc).timestamp()) - spans.get(window, 730) * 86400
-    return ENGINE.reset_books(t0)
+    if capital is not None:
+        capital = max(1_000.0, min(100_000_000.0, capital))
+    return ENGINE.reset_books(t0, capital=capital)
 
 
 @app.post("/resume-data")

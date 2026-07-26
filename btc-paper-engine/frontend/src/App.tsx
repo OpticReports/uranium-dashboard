@@ -272,7 +272,7 @@ export default function App() {
         </Panel>
 
         {/* Equity curves */}
-        <Panel title="Equity curves (paper, $100k start each)">
+        <Panel title="Equity curves (paper, common start per reset)">
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={merged} margin={{ top: 8, right: 12, bottom: 4, left: 0 }}>
@@ -365,9 +365,13 @@ export default function App() {
 function BooksReset({ onDone }: { onDone: () => void }) {
   const [busy, setBusy] = useState(false);
   const [custom, setCustom] = useState("");
-  const fire = (q: string, label: string) => {
+  const [capital, setCapital] = useState("100000");
+  const fire = (q0: string, label: string) => {
+    const cap = Number(capital.replace(/[^0-9.]/g, ""));
+    const q = cap >= 1000 ? `${q0}&capital=${cap}` : q0;
+    const capLabel = cap >= 1000 ? ` at $${cap.toLocaleString()} per book` : "";
     if (!window.confirm(
-      `Re-baseline ALL books from a common ${label} inception? Current book state and trade history are replaced by a replay from that date; live trading then continues as normal.`)) return;
+      `Re-baseline ALL books from a common ${label} inception${capLabel}? Current book state and trade history are replaced by a replay from that date; live trading then continues as normal.`)) return;
     setBusy(true);
     fetch(`${BASE}/books/reset?${q}`, { method: "POST" })
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
@@ -377,7 +381,10 @@ function BooksReset({ onDone }: { onDone: () => void }) {
   };
   return (
     <span className="ml-3 inline-flex items-center gap-1 normal-case tracking-normal">
-      <span className="text-[10px] text-slate-500">common inception:</span>
+      <span className="text-[10px] text-slate-500">capital $</span>
+      <input value={capital} onChange={(e) => setCapital(e.target.value)}
+        className="w-20 rounded border border-panelborder bg-slate-900 px-1.5 py-0.5 text-[10px] font-mono" />
+      <span className="text-[10px] text-slate-500 ml-1">inception:</span>
       {["2y", "1y", "6m", "3m", "1m"].map((w) => (
         <button key={w} disabled={busy} onClick={() => fire(`window=${w}`, w)}
           className="rounded-full border border-panelborder px-2 py-0.5 text-[10px] text-slate-400 hover:border-sky-500 hover:text-sky-300 disabled:opacity-50">{w}</button>
