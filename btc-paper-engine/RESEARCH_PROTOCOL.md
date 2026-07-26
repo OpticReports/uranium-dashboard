@@ -12,7 +12,8 @@ future test batch — an uncounted trial silently lowers the evidence bar.
 | 14.5y strategy lab (5 families) | 28 | RESEARCH_S4.md |
 | Blend weight × leverage frontier | 20 | RESEARCH_S4.md |
 | Blend weight/win-rate scan | 5 | session notes 2026-07 |
-| **Total** | **~1,553** | |
+| ETH transfer test (frozen BTC params) | 1 | §10 below |
+| **Total** | **~1,554** | |
 
 ## 2. Deflated Sharpe audit (barbell-lab stats, modern era 2022-2026)
 
@@ -93,3 +94,26 @@ trigger. Ties break toward NOT deploying.
    as the "n needed" context) — surfaces automatically when the gate matures.
 4. DSR/trial-count wired into /replay/compare output so every window shows
    its deflation context.
+
+## 10. ETH transfer test — pre-registered, executed 2026-07-26: DO NOT ADOPT
+
+Hypothesis: the pullback edge is a crypto-microstructure property, not
+BTC-specific. Design: ONE trial, BTC parameters frozen, engine code path,
+Bitstamp ETH/USD 4h, 1x unlevered. Rule (fixed before running): adopt an
+observe book iff expectancy > 0 AND MAR >= 0.7 on BOTH windows, >=100 trades.
+
+| Window | n | expectancy | return | max DD | MAR | verdict |
+|---|---|---|---|---|---|---|
+| 2022-01..2024-06 | 101 | −0.24% | −28.1% | −43.7% | −0.29 | FAIL |
+| 2024-07..2026-07 | 85 | +0.58% | +50.5% | −23.0% | 1.02 | pass |
+
+**Decision: not adopted. No refits run** (an ETH-tuned variant would be a new
+batch with its own registration).
+
+The informative part: ETH PASSES on exactly the window the BTC research was
+fit on, and FAILS the earlier one — while BTC's pullback made +79% in that
+earlier window. So the edge did NOT transfer across assets in the same
+period, which weakens the microstructure rationale and raises the
+probability that part of BTC's own edge is period-specific. This is a
+Bayesian update DOWN on the pullback family, consistent with the DSR audit
+(§2), and further justification for the live gate + small-first rule.

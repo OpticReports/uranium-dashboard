@@ -39,10 +39,29 @@ def compute_indicators(bars: list[Bar]) -> list[Ind]:
                 vol_sma20=v20[i], hi20=hi20[i], lo20=lo20[i]) for i in range(n)]
 
 
+BARS_PER_YEAR = 2190  # 4h bars
+
+
+def accrue_cash_yield(book: Book, cash_apy: float) -> None:
+    """Idle capital earns cash_apy, accrued per closed 4h bar. Fully idle when
+    flat; when positioned, the un-deployed fraction (1 - notional/equity,
+    floored at 0 for levered books) earns. Yield is real equity: peak updates
+    so drawdown stats stay honest."""
+    if cash_apy <= 0:
+        return
+    if book.position is None:
+        idle = 1.0
+    else:
+        idle = max(0.0, 1.0 - book.position.notional / book.equity) if book.equity > 0 else 0.0
+    if idle > 0:
+        book.equity *= 1.0 + cash_apy / BARS_PER_YEAR * idle
+        book.peak_equity = max(book.peak_equity, book.equity)
+
+
 def run_replay(bars: list[Bar], books_cfg: list[BookCfg],
                scfg: SignalCfg, tcfg: TradeCfg,
                start_ts: int | None = None, end_ts: int | None = None,
-               warmup_bars: int = 210) -> ReplayResult:
+               warmup_bars: int = 210, cash_apy: float = 0.0) -> ReplayResult:
     """Process bars in order. Indicators use FULL history (so the first
     tradeable bar has a correct SMA200); trading is gated to
     [start_ts, end_ts] and to bars past the warmup."""
@@ -70,6 +89,7 @@ def run_replay(bars: list[Bar], books_cfg: list[BookCfg],
         for book in books.values():
             process_closed_bar(book, bar, ind, scfg, tcfg,
                                sigs[book.cfg.strategy])
+            accrue_cash_yield(book, cash_apy)
     return ReplayResult(books=books, signals=signals, n_bars=n)
 
 
