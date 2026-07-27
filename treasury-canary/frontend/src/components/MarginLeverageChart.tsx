@@ -457,6 +457,11 @@ function StateBanner({ data }: { data: MarginLeverage }) {
       <p className="mt-1 text-xs font-medium leading-relaxed text-slate-200">
         → {pb.action}
       </p>
+      <p className="mt-1 text-[10px] text-slate-500">
+        Stats: all blowoff episodes in the full 1951–2026 record (8 episodes, ~3
+        independent) — fixed by design. The range chips window the chart only;
+        sub-window stats would rest on 1–2 episodes and mislead.
+      </p>
     </div>
   );
 }
