@@ -218,6 +218,13 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     read: "BLOWOFF: 78% of months saw the S&P lower a year later (median −12%) — de-risk over quarters. NEUTRAL: best regime (88% higher a year later). WASHOUT: crash in progress — bottoms form here, scale in staged. SQUEEZE: the reset is done, forward returns back to baseline — historically the re-entry zone. The range chips (All/1971+/1997+/10y) just window the same series.",
     caveat: "Slow signal, overlapping windows, ~3 independent blowoff episodes in the sample. The playbook stats are validated on the FINRA era (1997+) only — the pre-1997 stretch is historical context, quarterly and from a different (spliced) source. BTC exists from 2014; no earlier price can be shown. Read jointly with stock-bond correlation: a blowoff unwinding while that correlation is positive (2022-style) has no Treasury shock absorber.",
   },
+  leverage_corroboration: {
+    title: "True bear vs false positive (corroboration flags)",
+    what: "The blowoff signal's biggest weakness is false positives: across 1951–2026, only about half of margin blowoffs preceded a major bear — the rest fizzled (1955, 1983, 1997, 2013…). This panel checks WHICH KIND of blowoff today looks like, using six late-cycle conditions that separated the real bears from the fizzles in the historical record.",
+    calc: "Six flags, each computed live from current data: flat yield curve (10y−3mo < 1.0pp) · Fed tightened (3mo rate up >0.5pp in 12 months) · late expansion (≥48 months since the last recession) · low unemployment (<5%) · extended market (S&P up >50% over 3 years) · high excess (margin excess ≥ +25pp). Flags with missing data are excluded from the denominator, not counted false.",
+    read: "The historical split: every blowoff with ≥4 flags lit (1967, 1998, 2000, 2007) was followed by a major bear — 4 of 4, est. 65–85% forward odds given the tiny sample. Blowoffs with ≤2 flags — the early-cycle re-leveraging kind, coming off a fresh recession with a steep curve — fizzled two-thirds of the time (4 of 12 became bears, ~33%). Unconditional base rate: 8 of 16 (~50%).",
+    caveat: "Only ~16 blowoff episodes in 75 years, so these are small-sample estimates, not calibrated probabilities — treat the flag count as a lean, not a forecast. The flags are descriptive of past cycles; a genuinely new regime (fiscal-dominance inflation, AI capex boom) can break the pattern in either direction.",
+  },
 
   // ── Auctions (E) / Liquidity (G) / Foreign (F) ────────────────────────────
   "auctions.bid_to_cover": {

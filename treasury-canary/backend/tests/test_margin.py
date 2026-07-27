@@ -208,3 +208,30 @@ def test_parse_margin_workbook(tmp_path):
     cd, cv = out["margin_credit"]
     assert cv[-1] == 217441.0 + 223412.0
     assert cv[0] == 68856.0   # cash-only months still count
+
+
+def test_late_cycle_flags_live_computation():
+    from datetime import date, timedelta
+    from app.api.routes_margin import late_cycle_flags
+    days = [date(2023, 1, 1) + timedelta(days=i) for i in range(1300)]
+    bundle = {
+        "10y": (days, [4.2] * 1300),
+        "3mo": (days, [3.0] * 700 + [3.4] * 600),      # +0.4 in past year: NOT tightened
+        "unrate": ([date(2026, 6, 1)], [4.2]),
+        "sp500": (days, [100 + i * 0.06 for i in range(1300)]),  # 3y ~+59%
+        "recession": ([date(2020, 4, 1), date(2020, 5, 1), date(2026, 6, 1)],
+                      [1.0, 1.0, 0.0]),
+    }
+    c = late_cycle_flags(bundle, cur_excess=28.0)
+    f = c["flags"]
+    assert f["flat_curve"] is True          # 4.2-3.4 = 0.8 < 1.0
+    assert f["fed_tightened"] is False
+    assert f["late_expansion"] is True      # 73 months since 2020-05
+    assert f["low_unemployment"] is True
+    assert f["extended_market"] is True
+    assert f["high_excess"] is True
+    assert c["n_true"] == 5 and c["n_known"] == 6
+    assert "late-cycle" in c["reading"]
+    # missing data -> excluded from denominator, not counted false
+    c2 = late_cycle_flags({"recession": ([], [])}, None)
+    assert c2["n_known"] == 0

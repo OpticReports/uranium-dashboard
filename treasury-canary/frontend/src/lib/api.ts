@@ -442,8 +442,18 @@ export interface LeveragePlaybookEntry {
   action: string;
 }
 
+export interface LeverageCorroboration {
+  flags: Record<string, boolean | null>;
+  n_true: number;
+  n_known: number;
+  values: Record<string, number | null>;
+  stats: Record<string, { label: string; bears: number; n: number; prob_note: string }>;
+  reading: string;
+}
+
 export interface MarginLeverage {
   series: MarginPoint[];
+  corroboration?: LeverageCorroboration;
   recessions: Array<{ start: string; end: string }>;
   current: {
     date: string | null;
