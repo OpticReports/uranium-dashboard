@@ -462,6 +462,92 @@ function StateBanner({ data }: { data: MarginLeverage }) {
         independent) — fixed by design. The range chips window the chart only;
         sub-window stats would rest on 1–2 episodes and mislead.
       </p>
+      {data.corroboration && (
+        <CorroborationLine
+          c={data.corroboration}
+          prominent={state === "BLOWOFF" || state === "ELEVATED"}
+        />
+      )}
+    </div>
+  );
+}
+
+const FLAG_LABELS: Record<string, string> = {
+  flat_curve: "flat curve",
+  fed_tightened: "Fed tightened",
+  late_expansion: "late expansion",
+  low_unemployment: "low unemployment",
+  extended_market: "extended market",
+  high_excess: "high excess",
+};
+
+function CorroborationLine({
+  c,
+  prominent,
+}: {
+  c: NonNullable<MarginLeverage["corroboration"]>;
+  prominent: boolean;
+}) {
+  if (c.n_known === 0) return null;
+  const stats =
+    c.n_true >= 4
+      ? c.stats.high_flags
+      : c.n_true <= 2
+        ? c.stats.low_flags
+        : c.stats.unconditional;
+  const countColor =
+    c.n_true >= 4 ? "#f87171" : c.n_true <= 2 ? "#34d399" : "#fbbf24";
+  return (
+    <div className="mt-2 border-t border-slate-700/50 pt-2">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+          True bear or false positive?
+        </span>
+        <InfoTip term="leverage_corroboration" />
+        <span
+          className="font-mono text-[11px] font-bold"
+          style={{ color: countColor }}
+        >
+          {c.n_true}/{c.n_known} late-cycle flags
+        </span>
+        <span className="flex flex-wrap gap-1">
+          {Object.entries(c.flags).map(([k, v]) =>
+            v === null ? null : (
+              <span
+                key={k}
+                className="rounded-full border px-1.5 py-px text-[9px]"
+                style={
+                  v
+                    ? {
+                        color: countColor,
+                        borderColor: `${countColor}80`,
+                        backgroundColor: `${countColor}14`,
+                      }
+                    : {
+                        color: "#64748b",
+                        borderColor: "#33415580",
+                        textDecoration: "line-through",
+                      }
+                }
+              >
+                {FLAG_LABELS[k] ?? k}
+              </span>
+            ),
+          )}
+        </span>
+      </div>
+      <p
+        className={`mt-1 text-[11px] leading-relaxed ${
+          prominent ? "text-slate-300" : "text-slate-400"
+        }`}
+      >
+        Only ~half of historical blowoffs preceded a major bear — the rest
+        fizzled. Today reads as a{" "}
+        <span className="font-semibold" style={{ color: countColor }}>
+          {c.reading}
+        </span>
+        . Historically, {stats.label}: {stats.prob_note}.
+      </p>
     </div>
   );
 }

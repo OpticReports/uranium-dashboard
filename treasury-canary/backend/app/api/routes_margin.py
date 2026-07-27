@@ -26,6 +26,77 @@ router = APIRouter(tags=["margin"])
 THRESHOLDS = {"blowoff_excess": 25.0, "elevated_excess": 15.0,
               "squeeze_yoy": 0.0, "washout_yoy": -15.0}
 
+# Blowoff corroboration (MARGIN_DEBT.md study): six late-cycle flags separate
+# real blowoffs from false positives. Historical outcomes are FROZEN study
+# constants; the flags themselves compute LIVE so the count moves with data.
+CORROBORATION_STATS = {
+    "high_flags": {"label": ">=4 flags (late-cycle: 1967/1998/2000/2007)",
+                   "bears": 4, "n": 4, "prob_note": "4/4 became bears — est. 65-85% (small n)"},
+    "low_flags": {"label": "<=2 flags (early-cycle re-leveraging)",
+                  "bears": 4, "n": 12, "prob_note": "4/12 became bears (~33%)"},
+    "unconditional": {"label": "any blowoff", "bears": 8, "n": 16,
+                      "prob_note": "8/16 (~50%)"},
+}
+
+
+def _last(series):
+    d, v = series
+    for x in reversed(v):
+        if x is not None:
+            return x
+    return None
+
+
+def _value_days_ago(series, days):
+    from datetime import timedelta
+    d, v = series
+    pts = [(dd, vv) for dd, vv in zip(d, v) if vv is not None]
+    if not pts:
+        return None
+    target = pts[-1][0] - timedelta(days=days)
+    best = min(pts, key=lambda t: abs((t[0] - target).days))
+    return best[1] if abs((best[0] - target).days) <= 45 else None
+
+
+def late_cycle_flags(bundle, cur_excess) -> dict:
+    """The six corroboration flags, computed live. None = data unavailable
+    (excluded from the count denominator)."""
+    y10, m3 = _last(bundle.get("10y", ([], []))), _last(bundle.get("3mo", ([], [])))
+    curve = (y10 - m3) if (y10 is not None and m3 is not None) else None
+    m3_ago = _value_days_ago(bundle.get("3mo", ([], [])), 365)
+    d_rate = (m3 - m3_ago) if (m3 is not None and m3_ago is not None) else None
+    un = _last(bundle.get("unrate", ([], [])))
+    sp = bundle.get("sp500", ([], []))
+    sp_now, sp_3y = _last(sp), _value_days_ago(sp, 1095)
+    spx3y = (sp_now / sp_3y - 1) * 100 if (sp_now and sp_3y) else None
+    rd, rv = bundle.get("recession", ([], []))
+    mo_since = None
+    ends = [d for d, v in zip(rd, rv) if v == 1.0]
+    if ends and rd:
+        mo_since = (rd[-1].year - ends[-1].year) * 12 + rd[-1].month - ends[-1].month
+    flags = {
+        "flat_curve": (curve < 1.0) if curve is not None else None,
+        "fed_tightened": (d_rate > 0.5) if d_rate is not None else None,
+        "late_expansion": (mo_since >= 48) if mo_since is not None else None,
+        "low_unemployment": (un < 5.0) if un is not None else None,
+        "extended_market": (spx3y > 50) if spx3y is not None else None,
+        "high_excess": (cur_excess >= 25) if cur_excess is not None else None,
+    }
+    known = {k: v for k, v in flags.items() if v is not None}
+    n_true = sum(1 for v in known.values() if v)
+    return {"flags": flags, "n_true": n_true, "n_known": len(known),
+            "values": {"curve_10y3m": curve and round(curve, 2),
+                       "d_rate_12m": d_rate and round(d_rate, 2),
+                       "months_since_recession": mo_since,
+                       "unemployment": un, "spx_3y_pct": spx3y and round(spx3y),
+                       "excess": cur_excess},
+            "stats": CORROBORATION_STATS,
+            "reading": ("late-cycle configuration — matches the 1967/1998/2000/"
+                        "2007 bear cluster" if n_true >= 4 else
+                        "early/mid-cycle configuration — matches the false-"
+                        "positive (fizzle) cluster" if n_true <= 2 else
+                        "mixed configuration")}
+
 # Dollar-level households security credit (see config FRED_SEVERITY note).
 _Z1_MARGIN = "HNOSCIQ027S"
 _DEEP_START = "1945-01-01"
@@ -130,6 +201,7 @@ def margin_leverage():
 
     return {
         "series": series,
+        "corroboration": late_cycle_flags(bundle, cur_excess),
         "recessions": bands,
         "current": {
             "date": cur_date, "margin_yoy": cur_yoy, "excess_yoy": cur_excess,
