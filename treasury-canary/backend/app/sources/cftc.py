@@ -66,6 +66,75 @@ def fetch_lev_net_short() -> tuple[list[date], list[float | None]]:
         return result
 
 
+# ── E-mini S&P leveraged funds (fast-leverage strip) ─────────────────────────
+# Same dataset, equity complex: hedge funds' net e-mini positioning as % of open
+# interest. The group is STRUCTURALLY net short (short futures against long
+# cash/swap books), so the raw sign means nothing — the signal lives in the
+# %-of-OI z-score, computed by the caller.
+_EMINI = "E-MINI S&P 500"
+_ecache: dict[str, object] = {"ts": 0.0, "data": None, "ok": False}
+_elock = threading.Lock()
+
+
+def fetch_emini_leveraged() -> tuple[list[date], list[float]]:
+    """Full weekly history (2006+) of leveraged-fund net position as % of OI,
+    oldest->newest. ([], []) on failure."""
+    now = time.time()
+    ttl = _TTL_OK if _ecache["ok"] else _TTL_FAIL
+    if _ecache["data"] is not None and now - float(_ecache["ts"]) < ttl:
+        return _ecache["data"]  # type: ignore[return-value]
+    with _elock:
+        now = time.time()
+        ttl = _TTL_OK if _ecache["ok"] else _TTL_FAIL
+        if _ecache["data"] is not None and now - float(_ecache["ts"]) < ttl:
+            return _ecache["data"]  # type: ignore[return-value]
+        result: tuple[list[date], list[float]] = ([], [])
+        ok = False
+        try:
+            rows: list = []
+            for off in range(0, 20000, 5000):
+                r = httpx.get(_URL, params={
+                    "$select": ("report_date_as_yyyy_mm_dd,lev_money_positions_long,"
+                                "lev_money_positions_short,open_interest_all"),
+                    "$where": f"contract_market_name='{_EMINI}'",
+                    "$order": "report_date_as_yyyy_mm_dd ASC",
+                    "$limit": "5000", "$offset": str(off),
+                }, timeout=settings.http_timeout_seconds)
+                r.raise_for_status()
+                chunk = r.json()
+                rows.extend(chunk)
+                if len(chunk) < 5000:
+                    break
+            result = parse_emini_pct_oi(rows)
+            ok = True
+            logger.info("CFTC e-mini TFF: %d weekly observations", len(result[0]))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("CFTC e-mini TFF fetch failed: %s", exc)
+        _ecache["data"] = result
+        _ecache["ts"] = time.time()
+        _ecache["ok"] = ok
+        return result
+
+
+def parse_emini_pct_oi(rows: list[dict]) -> tuple[list[date], list[float]]:
+    """(long - short) / open_interest * 100 per report date, ascending."""
+    out = []
+    for r in rows:
+        ds = str(r.get("report_date_as_yyyy_mm_dd") or "")[:10]
+        try:
+            d = datetime.strptime(ds, "%Y-%m-%d").date()
+            oi = float(r["open_interest_all"])
+            if oi <= 0:
+                continue
+            net = (float(r["lev_money_positions_long"])
+                   - float(r["lev_money_positions_short"]))
+            out.append((d, net / oi * 100.0))
+        except (KeyError, TypeError, ValueError):
+            continue
+    out.sort(key=lambda t: t[0])
+    return [t[0] for t in out], [t[1] for t in out]
+
+
 def aggregate_net_short(rows: list[dict]) -> tuple[list[date], list[float | None]]:
     """Sum (short - long) across contracts per report date -> millions of contracts."""
     by_date: dict[date, float] = defaultdict(float)
