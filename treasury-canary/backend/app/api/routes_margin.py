@@ -5,9 +5,10 @@ current leverage-cycle state (BLOWOFF/ELEVATED/NEUTRAL/SQUEEZE/WASHOUT) and
 what happened after each state historically, so the chart answers both "is
 leverage building dangerously?" and "has the leverage been squeezed out yet?"
 
-Long view: the margin leg splices Fed Z.1 household security credit (quarterly,
-1945-1997, tracks FINRA near-1:1 at the splice) onto FINRA monthly (1997+);
-the S&P leg uses FMP ^GSPC daily (~1951+) with FRED's ~10y SP500 as fallback.
+Long view: the margin leg splices Fed Z.1 household security credit (annual
+1945-51, quarterly 1952-1997; ~2% level gap vs FINRA at the splice) onto FINRA
+monthly (1997+); the S&P leg uses FMP ^GSPC daily (1927+) with FRED's ~10y
+SP500 as fallback. First-FINRA-year YoY is suppressed (cross-source base).
 BTC exists from 2014 (Coinbase series) — there is no earlier price to show.
 """
 from __future__ import annotations
@@ -134,6 +135,16 @@ def margin_leverage():
     # days of an exact year back; anything looser lets series edges slip to an
     # 11-month base and fabricate a YoY.
     yd, yv = _yoy_by_date(mdates, mvals, tol_days=20)
+    # Splice-year suppression (QA finding): months in the first FINRA year have
+    # a FINRA numerator over a Z.1 base — sources differ by up to ~7% in level,
+    # distorting those YoY by up to ~8pp. Null them rather than show a
+    # cross-source artifact.
+    first_finra = mdates[n_z1] if 0 < n_z1 < len(mdates) else None
+    if first_finra is not None:
+        from datetime import timedelta
+        cutoff = first_finra + timedelta(days=360)
+        yv = [None if (v is not None and first_finra <= d < cutoff) else v
+              for d, v in zip(yd, yv)]
     yoy_by_month = {f"{d.year:04d}-{d.month:02d}": v for d, v in zip(yd, yv)}
 
     # coverage (cash/debt) exists only in the FINRA era
@@ -181,6 +192,15 @@ def margin_leverage():
     cur_date = next((p["date"] for p in reversed(series)
                      if p["margin_yoy"] is not None), None)
     state = leverage_state(cur_yoy, cur_excess)
+    # Staleness guard (QA finding): if FINRA fails cold (no cache), the series
+    # tail is the 2015 Z.1 splice end — presenting an 11-year-old state as
+    # "current" with playbook advice would mislead. FINRA publishes ~3-4 weeks
+    # after month-end; 120 days = clearly broken, not just lagging.
+    from datetime import date as _date, datetime as _datetime
+    if cur_date is not None:
+        age = (_date.today() - _datetime.strptime(cur_date, "%Y-%m-%d").date()).days
+        if age > 120:
+            state = None
 
     # NBER recession bands — fetched from 1945 so the deep view has them too
     # (the shared bundle starts at 1976).
@@ -209,8 +229,8 @@ def margin_leverage():
         },
         "playbook": LEVERAGE_PLAYBOOK,
         "thresholds": THRESHOLDS,
-        "source": f"FINRA margin stats (1997+) / FRED:{_Z1_MARGIN} (1945-1997, quarterly) "
-                  f"/ {spx_source} / FRED:CBBTCUSD",
+        "source": f"FINRA margin stats (1997+) / FRED:{_Z1_MARGIN} (1945-1997, "
+                  f"annual then quarterly) / {spx_source} / FRED:CBBTCUSD",
         "z1_points": n_z1,
         "note": "Excess YoY (margin growth minus S&P growth) is the validated gauge — "
                 "validated on the FINRA era (1997-2026, MARGIN_DEBT.md); the pre-1997 "

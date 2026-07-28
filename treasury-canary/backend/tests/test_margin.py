@@ -141,7 +141,11 @@ def test_margin_series_shared_builder():
 def test_margin_leverage_endpoint_price_overlays():
     from unittest.mock import patch
     margin = [1000.0] * 12 + [1500.0] * 12
-    b = _bundle(margin, [500.0] * 24, [100.0] * 12 + [110.0] * 12)
+    # recent months: a "current" older than 120 days is deliberately un-stated
+    # by the staleness guard, so the fixture must end near today
+    t = date.today()
+    b = _bundle(margin, [500.0] * 24, [100.0] * 12 + [110.0] * 12,
+                months=_months(24, start=(t.year - 1, t.month)))
     ms = b["margin_debit"][0]
     b["btc"] = ([d for d in b["sp500"][0]], [200.0 + i for i in range(len(ms))])
     b["recession"] = ([], [])
@@ -189,6 +193,12 @@ def test_margin_leverage_long_view_splices_z1_before_finra():
     assert "1996-10" in yoy_months
     # splice-boundary months come from FINRA, not Z.1 (Z.1 1997+ dropped)
     assert "1998-01" in yoy_months
+    # first-FINRA-year YoY suppressed: FINRA numerator over Z.1 base would
+    # show a cross-source artifact (QA finding: up to ~8pp distortion)
+    assert "1997-04" not in yoy_months
+    assert "1997-07" not in yoy_months
+    # decade-old tail -> staleness guard refuses to present a "current" state
+    assert r["current"]["state"] is None
 
 
 def test_parse_margin_workbook(tmp_path):
@@ -216,7 +226,10 @@ def test_late_cycle_flags_live_computation():
     days = [date(2023, 1, 1) + timedelta(days=i) for i in range(1300)]
     bundle = {
         "10y": (days, [4.2] * 1300),
-        "3mo": (days, [3.0] * 700 + [3.4] * 600),      # +0.4 in past year: NOT tightened
+        # step at day 1100 (within the past year): d_rate_12m = +0.4 < 0.5, so
+        # this genuinely pins the tightening boundary (QA finding: the old
+        # fixture stepped >1y back, making d_rate 0.0 and the pin vacuous)
+        "3mo": (days, [3.0] * 1100 + [3.4] * 200),
         "unrate": ([date(2026, 6, 1)], [4.2]),
         "sp500": (days, [100 + i * 0.06 for i in range(1300)]),  # 3y ~+59%
         "recession": ([date(2020, 4, 1), date(2020, 5, 1), date(2026, 6, 1)],
