@@ -52,7 +52,9 @@ def test_fast_state_pre_registered_rules():
 
 def test_margin_fast_endpoint_shape():
     # 60 weeks of COT (flat then a plunge), 300 days of VIX & HY
-    weeks = [date(2024, 1, 2) + timedelta(weeks=i) for i in range(60)]
+    # weeks chosen so the plunge weeks overlap the VIX range below — the
+    # historical state_series needs both legs alignable per report date
+    weeks = [date(2024, 10, 7) + timedelta(weeks=i) for i in range(60)]
     # noisy base (sd ~2) then a 5-week plunge: dz4 << -0.5 with a sane z scale
     cot_vals = ([-10.0 + (2.0 if i % 2 else -2.0) for i in range(55)]
                 + [-13.0, -16.0, -19.0, -22.0, -25.0])
@@ -74,6 +76,11 @@ def test_margin_fast_endpoint_shape():
         r = margin_fast()
     # plunging positioning + spiking vol -> FLUSH under pre-registered rules
     assert r["state"] == "FLUSH"
+    # historical band series uses VIX AS-OF each report date — the fixture's
+    # VIX was still calm on the plunge weeks' dates, so those weeks read
+    # WASHED_OUT even though the CURRENT composite (today's spiking VIX +
+    # latest COT) reads FLUSH. Pins the as-of semantics.
+    assert r["state_series"] and r["state_series"][-1]["state"] == "WASHED_OUT"
     assert r["cot"]["z"] is not None and r["cot"]["dz4"] < -0.5
     assert r["vix"]["d20"] >= 8
     assert r["hy"]["current_bp"] == 300

@@ -411,9 +411,26 @@ def margin_fast():
         "note": DEEP_NOTE,
     }
 
+    # Historical composite state per COT week — the chart shades these bands
+    # (FLUSH can't be drawn as a level line: it triggers on 20d CHANGES).
+    vix_days = [d for d, _ in vix_pts]
+    state_series = []
+    import bisect as _bisect
+    for i, d in enumerate(cd):
+        if zs[i] is None or i < 4 or zs[i - 4] is None:
+            continue
+        vi = _bisect.bisect_right(vix_days, d) - 1
+        if vi < 20:
+            continue
+        v20 = vix_pts[vi][1] - vix_pts[vi - 20][1]
+        st_i = fast_state(zs[i], round(zs[i] - zs[i - 4], 2), round(v20, 1))
+        if st_i:
+            state_series.append({"date": d.isoformat(), "state": st_i})
+
     state = fast_state(cot_z, cot_dz4, vix20)
     return {
         "state": state,
+        "state_series": state_series,
         "playbook": FAST_PLAYBOOK,
         "cross_read": CROSS_READ,
         "deep": deep,
