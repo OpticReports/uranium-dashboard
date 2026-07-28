@@ -468,6 +468,66 @@ export interface MarginLeverage {
   note: string;
 }
 
+export type FastLeverageState = "FLUSH" | "WASHED_OUT" | "RISK_BUILD" | "CALM";
+
+export interface FastStats {
+  n: number;
+  median: number;
+  pct_pos: number;
+  worst: number;
+}
+
+export interface FastPlaybookEntry {
+  label: string;
+  stats: { fwd1m: FastStats; fwd3m: FastStats; fwd12m: FastStats };
+  episodes: number;
+  read: string;
+  action: string;
+}
+
+export interface MarginFast {
+  state: FastLeverageState | null;
+  playbook: Record<FastLeverageState, FastPlaybookEntry>;
+  cross_read: Record<FastLeverageState, Record<LeverageState, string>>;
+  relationship: string;
+  thresholds: Record<string, number>;
+  cot: {
+    series: Array<{ date: string; pct: number; z: number | null }>;
+    z: number | null;
+    dz4: number | null;
+    pct: number | null;
+    date: string | null;
+    cadence: string;
+  };
+  vix: {
+    series: Array<{ date: string; vix: number }>;
+    d20: number | null;
+    current: number | null;
+    date: string | null;
+    cadence: string;
+  };
+  hy: {
+    series: Array<{ date: string; bp: number }>;
+    d20_bp: number | null;
+    current_bp: number | null;
+    date: string | null;
+    cadence: string;
+  };
+  btc: {
+    perp: {
+      mark_price: number;
+      oi_usd: number;
+      funding_8h: number;
+      funding_ann_pct: number;
+    } | null;
+    funding_series: Array<{ date: string; ann_pct: number }>;
+    oi_series: Array<{ date: string; oi_usd: number | null }>;
+    cadence: string;
+  };
+  baseline: Record<string, { median: number; pct_pos: number }>;
+  note: string;
+}
+
 export interface CorrPoint {
   date: string;
   corr: number;
@@ -582,6 +642,7 @@ export const api = {
   recessionModel: () => getJson<RecessionModel>("/recession-model"),
   laborSahm: () => getJson<SahmSeries>("/labor/sahm"),
   marginLeverage: () => getJson<MarginLeverage>("/margin/leverage"),
+  marginFast: () => getJson<MarginFast>("/margin/fast"),
   flowDestinations: () => getJson<FlowDestinations>("/flows/destinations"),
   corrSeries: () => getJson<CorrSeries>("/crossasset/corr"),
   curveCanary: (pair: string) =>

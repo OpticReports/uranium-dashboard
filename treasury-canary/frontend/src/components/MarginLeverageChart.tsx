@@ -15,6 +15,7 @@ import { api } from "../lib/api";
 import { Panel, InlineError, Loading } from "./ui";
 import { errorMessage } from "../lib/format";
 import InfoTip from "./InfoTip";
+import FastLeverageStrip from "./FastLeverageStrip";
 
 interface ChartRow {
   ts: number;
@@ -115,6 +116,11 @@ export default function MarginLeverageChart() {
     rows.length > 0 ? [rows[0].ts, rows[rows.length - 1].ts] : undefined;
 
   return (
+    <div className="space-y-4">
+    {/* fast nowcast strip rides above the slow monthly chart so the two
+        leverage clocks read as one unit; it needs the slow state for the
+        cross-reading line */}
+    <FastLeverageStrip slowState={data?.current.state} />
     <Panel
       title={
         <>
@@ -373,6 +379,7 @@ export default function MarginLeverageChart() {
         </>
       )}
     </Panel>
+    </div>
   );
 }
 

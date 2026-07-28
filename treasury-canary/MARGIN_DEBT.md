@@ -183,3 +183,57 @@ Three independent historical episodes; 12-month horizon (slow-burning); ~3-4
 week publication lag; no monthly timing power; SPX leg of the excess gauge
 uses FRED's SP500 series (~10y history), which bounds the excess series'
 percentile window — status comes from the fixed thresholds, not percentiles.
+
+## Fast-leverage nowcast study (added 2026-07)
+
+Motivation: FINRA is monthly with a ~3-4 week lag and the state machine runs
+on YoY, so a violent washout (e.g. the 2026-07 Korea/US deleveraging) reaches
+the chart 1-2 prints late. The strip above the chart reads the FLOW — is
+leverage being forced out right now — from faster legs.
+
+**Legs.** COT: CFTC TFF leveraged funds, E-mini S&P 500, net position as % of
+open interest (funds are structurally net short via the basis trade — raw sign
+is meaningless; z-score vs trailing 156w, min 52w). VIX: 20-business-day level
+change. Display-only (not scored): BTC-PERPETUAL funding + open interest
+(Deribit; Binance/Bybit return HTTP 451 from US hosting), HY OAS Δ20d (FRED
+now caps ICE BofA history at ~3y — discovered in this build; too short to
+backtest, so it was dropped from the composite in favor of VIX).
+
+**Pre-registration.** Rules and thresholds fixed before forward returns were
+computed; evaluated ONCE (single variant, trial count 1, no tuning loop):
+
+- FLUSH: vix20 ≥ +8 AND Δz(4w) ≤ −0.5
+- WASHED_OUT: z ≤ −1.0 AND vix20 ≤ 0
+- RISK_BUILD: z ≥ +1.0 AND vix20 ≤ +4
+- CALM: otherwise
+
+**Results** (2006-06..2026-07, 995 weekly obs; fwd S&P price returns; baseline
+1m +1.4% med / 65% pos · 3m +3.7% / 71% · 12m +13.1% / 81%, worst −46.3%):
+
+| state | weeks | episodes | 1m med (%pos) | 3m med | 12m med (%pos) | 12m worst |
+|---|---|---|---|---|---|---|
+| FLUSH | 5 | 3 | +7.4 (100%) | +2.2 | +7.5 (60%) | −7.5 |
+| WASHED_OUT | 115 | 22 | +2.0 (63%) | +2.5 | **+15.6 (95%)** | −12.5 |
+| RISK_BUILD | 134 | 16 | +1.5 (70%) | +3.7 | +12.9 (78%) | **−40.3** |
+| CALM | 741 | 23 | +1.3 (64%) | +3.7 | +13.1 (80%) | −46.3 |
+
+FLUSH episodes: 2015-09-15 · 2022-03-01/08 · 2025-04-08/15 — all near-bottom
+capitulation weeks, hence the positive 1m forward: by the time BOTH legs
+confirm, the flush is late-stage. FLUSH is therefore a "don't panic-sell"
+state, not a sell signal. WASHED_OUT is the fast analog of the monthly SQUEEZE
+re-entry zone, arriving 1-2 months sooner. RISK_BUILD does not time tops but
+owns the study's worst left tail. 2008 began from CALM — the strip reads flow
+stress, not slow-building cycles; that remains the monthly chart's job.
+
+**Honesty box.** Weekly observations overlap; episode counts are the true n
+(FLUSH rests on 3). One evaluation, but the *thresholds* (+8 VIX pts, −0.5 Δz,
+±1 z) were chosen by judgment, not swept — still selection-adjacent. The strip
+is deliberately unscored in the composite; it exists to sequence the monthly
+signal, not replace it. Deribit OI history accrues from first deploy
+(SeriesObs `deribit_btc_oi`, one snapshot/day).
+
+**2026-07 reading:** CALM — the US institutional flush already ran in early
+June (COT z hit −1.9 on 2026-06-02 = WASHED_OUT; e-mini OI −25% June→July);
+positioning has re-normalized since (z −0.11 on 2026-07-21). The strip would
+have shown the June washout in week one; the FINRA chart won't show the July
+echo until the late-August print.
