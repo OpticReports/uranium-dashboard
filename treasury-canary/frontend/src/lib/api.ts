@@ -485,10 +485,48 @@ export interface FastPlaybookEntry {
   action: string;
 }
 
+export type StressState = "SHOCK" | "AFTERSHOCK" | "COMPLACENT" | "NORMAL";
+
+export interface DeepCell {
+  n: number;
+  episodes: number;
+  fwd3m: { median: number; pct_pos: number; worst: number };
+  fwd12m: { median: number; pct_pos: number; worst: number };
+}
+
+export interface MarginFastDeep {
+  live: {
+    state: StressState;
+    rvol: number;
+    vz: number;
+    dv20: number;
+    date: string;
+  } | null;
+  states: Record<
+    StressState,
+    {
+      label: string;
+      episodes: number;
+      fwd1m: { median: number; pct_pos: number; worst: number };
+      fwd12m: { median: number; pct_pos: number; worst: number };
+    }
+  >;
+  matrix: Record<StressState, Record<LeverageState, DeepCell>>;
+  baseline: {
+    n: number;
+    fwd1m: { median: number; pct_pos: number };
+    fwd3m: { median: number; pct_pos: number };
+    fwd12m: { median: number; pct_pos: number };
+  };
+  thresholds: Record<string, number>;
+  note: string;
+}
+
 export interface MarginFast {
   state: FastLeverageState | null;
   playbook: Record<FastLeverageState, FastPlaybookEntry>;
   cross_read: Record<FastLeverageState, Record<LeverageState, string>>;
+  deep: MarginFastDeep;
   relationship: string;
   thresholds: Record<string, number>;
   cot: {

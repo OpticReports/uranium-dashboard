@@ -150,6 +150,9 @@ export default function InfoTip({
                 {g.read}
               </div>
             )}
+            {g.read2 && (
+              <div className="mt-1.5 text-slate-400">{g.read2}</div>
+            )}
             {g.caveat && (
               <div className="mt-1.5 text-amber-400/90">
                 <span className="font-semibold">Caveat: </span>
