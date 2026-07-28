@@ -527,6 +527,7 @@ export interface MarginFastDeep {
 
 export interface MarginFast {
   state: FastLeverageState | null;
+  state_series: Array<{ date: string; state: FastLeverageState }>;
   playbook: Record<FastLeverageState, FastPlaybookEntry>;
   cross_read: Record<FastLeverageState, Record<LeverageState, string>>;
   deep: MarginFastDeep;

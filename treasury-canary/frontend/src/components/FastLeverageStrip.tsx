@@ -3,6 +3,7 @@ import {
   CartesianGrid,
   ComposedChart,
   Line,
+  ReferenceArea,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -165,6 +166,23 @@ export default function FastLeverageStrip({
   const domain: [number, number] | undefined =
     win.length > 1 ? [win[0].ts, win[win.length - 1].ts] : undefined;
 
+  // Historical composite-state bands (contiguous non-CALM runs). FLUSH has no
+  // level-line representation — it triggers on 20d CHANGES — so bands are the
+  // accurate analog of the monthly chart's threshold lines.
+  const bands = useMemo(() => {
+    const ss = data?.state_series ?? [];
+    const out: Array<{ x1: number; x2: number; state: FastLeverageState }> = [];
+    for (let i = 0; i < ss.length; i++) {
+      const ts = toTs(ss[i].date);
+      const next = i + 1 < ss.length ? toTs(ss[i + 1].date) : ts + 7 * 86_400_000;
+      if (ss[i].state === "CALM") continue;
+      const last = out[out.length - 1];
+      if (last && last.state === ss[i].state && last.x2 >= ts) last.x2 = next;
+      else out.push({ x1: ts, x2: next, state: ss[i].state });
+    }
+    return out;
+  }, [data]);
+
   return (
     <Panel
       title={
@@ -229,6 +247,16 @@ export default function FastLeverageStrip({
                   margin={{ top: 8, right: 12, bottom: 4, left: 0 }}
                 >
                   <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" />
+                  {bands.map((b) => (
+                    <ReferenceArea
+                      key={`${b.state}-${b.x1}`}
+                      x1={b.x1}
+                      x2={b.x2}
+                      fill={FAST_STYLE[b.state].color}
+                      fillOpacity={0.09}
+                      ifOverflow="hidden"
+                    />
+                  ))}
                   <XAxis
                     dataKey="ts"
                     type="number"
@@ -300,6 +328,34 @@ export default function FastLeverageStrip({
                   <ReferenceLine y={0} stroke="#475569" />
                   <ReferenceLine y={2} stroke="#334155" strokeDasharray="4 4" />
                   <ReferenceLine y={-2} stroke="#334155" strokeDasharray="4 4" />
+                  {/* These two ARE state thresholds — but ONLY for the blue
+                      positioning leg (its plotted z is the signal z). */}
+                  {on.cot && (
+                    <ReferenceLine
+                      y={1}
+                      stroke="#38bdf8"
+                      strokeDasharray="5 4"
+                      strokeOpacity={0.55}
+                      label={{
+                        value: "funds crowded (z +1)",
+                        position: "insideTopRight",
+                        style: { fill: "#38bdf8", fontSize: 9 },
+                      }}
+                    />
+                  )}
+                  {on.cot && (
+                    <ReferenceLine
+                      y={-1}
+                      stroke="#38bdf8"
+                      strokeDasharray="5 4"
+                      strokeOpacity={0.55}
+                      label={{
+                        value: "funds washed out (z −1)",
+                        position: "insideBottomRight",
+                        style: { fill: "#38bdf8", fontSize: 9 },
+                      }}
+                    />
+                  )}
                   {(Object.keys(LEGS) as LegKey[]).map(
                     (k) =>
                       on[k] && (
@@ -321,8 +377,15 @@ export default function FastLeverageStrip({
           )}
 
           <p className="mt-2 text-[10px] leading-relaxed text-slate-500">
-            One σ scale, four clocks: each leg is z-scored against its own
-            served history (
+            Shaded bands = the composite state at each week (
+            <span className="text-orange-400">FLUSH</span> ·{" "}
+            <span className="text-purple-400">WASHED OUT</span> ·{" "}
+            <span className="text-amber-400">RISK BUILD</span>; unshaded =
+            CALM). The dashed blue ±1σ lines are real state thresholds but
+            apply ONLY to the blue positioning leg — FLUSH triggers on 20-day
+            changes and has no level-line representation, hence bands. One σ
+            scale, four clocks: each leg is z-scored against its own served
+            history (
             <span className="text-sky-400">futures positioning</span> vs 3y
             trailing — the actual signal z;{" "}
             <span className="text-amber-400">VIX</span> and{" "}
