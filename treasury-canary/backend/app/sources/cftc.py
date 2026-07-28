@@ -110,6 +110,13 @@ def fetch_emini_leveraged() -> tuple[list[date], list[float]]:
             logger.info("CFTC e-mini TFF: %d weekly observations", len(result[0]))
         except Exception as exc:  # noqa: BLE001
             logger.warning("CFTC e-mini TFF fetch failed: %s", exc)
+            # stale-preferred (QA finding): a transient Socrata failure must
+            # not overwrite a good full history with ([], []) and null the
+            # composite state for the fail-TTL window.
+            if _ecache["data"] is not None and _ecache["data"][0]:  # type: ignore[index]
+                _ecache["ts"] = time.time()
+                _ecache["ok"] = False
+                return _ecache["data"]  # type: ignore[return-value]
         _ecache["data"] = result
         _ecache["ts"] = time.time()
         _ecache["ok"] = ok

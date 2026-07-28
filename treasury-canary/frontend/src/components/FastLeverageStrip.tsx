@@ -517,7 +517,8 @@ function DeepLine({
           In {live.state} × monthly {slowState} weeks (
           {cell.episodes} episodes, n={cell.n}):{" "}
           <span className="font-semibold" style={{ color }}>
-            {cell.fwd12m.pct_pos}% saw the S&amp;P higher 12 months later
+            {cell.fwd12m.pct_pos}% of forward-measurable weeks saw the
+            S&amp;P higher 12 months later
           </span>{" "}
           — median {cell.fwd12m.median > 0 ? "+" : ""}
           {cell.fwd12m.median}%, worst {cell.fwd12m.worst}%; 3 months out:{" "}

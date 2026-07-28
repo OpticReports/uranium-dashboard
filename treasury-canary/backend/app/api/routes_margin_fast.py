@@ -211,7 +211,9 @@ DEEP_MATRIX = {
 
 DEEP_BASELINE = {"n": 3803,
                  "fwd1m": {"median": 1.1, "pct_pos": 62, "worst": -28.8},
-                 "fwd3m": {"median": 2.5, "pct_pos": 63, "worst": -43.9},
+                 # fwd3m corrected by adversarial QA: the first shipped values
+                 # were transcribed from the unrestricted 1929+ run.
+                 "fwd3m": {"median": 2.6, "pct_pos": 66, "worst": -41.8},
                  "fwd12m": {"median": 10.3, "pct_pos": 74, "worst": -46.3}}
 
 DEEP_NOTE = (
@@ -286,12 +288,6 @@ def _z_series(vals: list[float], window: int = 156, min_n: int = 52
     return out
 
 
-def _d20(dates: list[date], vals: list[float | None]) -> float | None:
-    """Change over the last 20 non-None observations (~20 business days)."""
-    pts = [v for v in vals if v is not None]
-    return round(pts[-1] - pts[-21], 2) if len(pts) >= 21 else None
-
-
 def _display_z(vals: list[float]) -> list[float | None]:
     """Full-sample z per point — the combined chart's shared sigma scale.
 
@@ -308,7 +304,8 @@ def _display_z(vals: list[float]) -> list[float | None]:
 
 def fast_state(z: float | None, dz4: float | None, vix20: float | None
                ) -> str | None:
-    """Pre-registered composite rules — order matters."""
+    """Pre-registered composite rules (mutually exclusive given the
+    thresholds; checked in study order for faithfulness)."""
     t = FAST_THRESHOLDS
     if z is None or dz4 is None or vix20 is None:
         return None
