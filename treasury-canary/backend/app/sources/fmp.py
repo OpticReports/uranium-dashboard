@@ -48,7 +48,7 @@ def fetch_gold(symbol: str = "GLD") -> tuple[list[date], list[float | None]]:
 
 
 def fetch_spx_long(symbol: str = "^GSPC") -> tuple[list[date], list[float | None]]:
-    """Daily S&P index closes back to ~1951 for the leverage chart's long view.
+    """Daily S&P index closes back to 1927 for the leverage chart's long view.
 
     FMP caps each call at 5,000 rows (most recent first within the window), so
     paginate BACKWARDS: each pass re-requests with `to` = day before the

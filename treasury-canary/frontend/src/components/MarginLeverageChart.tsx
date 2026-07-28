@@ -46,7 +46,7 @@ function toTs(dateStr: string): number {
 
 // Pre-1997 margin data is quarterly Z.1; FINRA monthly after. BTC exists 2014+.
 const RANGES: Array<{ id: string; label: string; from: number | null }> = [
-  { id: "all", label: "All (1946+)", from: null },
+  { id: "all", label: "All (1927+)", from: null },
   { id: "1971", label: "1971+", from: 1971 },
   { id: "1997", label: "1997+", from: 1997 },
   { id: "10y", label: "10y", from: new Date().getFullYear() - 10 },
@@ -465,9 +465,11 @@ function StateBanner({ data }: { data: MarginLeverage }) {
         → {pb.action}
       </p>
       <p className="mt-1 text-[10px] text-slate-500">
-        Stats: all blowoff episodes in the full 1951–2026 record (8 episodes, ~3
-        independent) — fixed by design. The range chips window the chart only;
-        sub-window stats would rest on 1–2 episodes and mislead.
+        Stats: monthly states in the FINRA era (1997–2026, ~3 independent
+        blowoff episodes) — fixed by design; the separate 75y blowoff-peak
+        study (8 bears / 16 peaks) feeds the corroboration line below. The
+        range chips window the chart only; sub-window stats would rest on 1–2
+        episodes and mislead.
       </p>
       {data.corroboration && (
         <CorroborationLine
