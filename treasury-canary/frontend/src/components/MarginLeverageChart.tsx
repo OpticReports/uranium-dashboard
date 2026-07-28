@@ -464,6 +464,11 @@ function StateBanner({ data }: { data: MarginLeverage }) {
       <p className="mt-1 text-xs font-medium leading-relaxed text-slate-200">
         → {pb.action}
       </p>
+      {pb.evidence && (
+        <p className="mt-1 text-[10px] leading-relaxed text-amber-400/80">
+          Evidence: {pb.evidence}
+        </p>
+      )}
       <p className="mt-1 text-[10px] text-slate-500">
         Stats: monthly states in the FINRA era (1997–2026, ~3 independent
         blowoff episodes) — fixed by design; the separate 75y blowoff-peak

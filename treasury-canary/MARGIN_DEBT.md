@@ -315,3 +315,56 @@ data (~3 untradeable days inside every measured forward return), and matrix
 pct_pos values are over forward-measurable weeks (smaller than n for 7 cells).
 Boundary semantics (>=/<=) proven identical between study and live code;
 live z rounding to 2dp changes 0 of 995 historical state calls.
+
+## Usefulness evaluation of the prescriptive analytics (2026-07)
+
+Pre-declared criteria, run once: a quoted stat is REAL only if its
+episode-level bootstrap CI (2,000 resamples, episodes as the block unit)
+excludes baseline — matrix cells additionally need Benjamini-Hochberg FDR
+q=0.10 across all 20 tests; a claim is STABLE only if its vs-baseline
+direction agrees in both split halves (75y: 1951-88 / 1989-2026; modern:
+2006-16 / 2017-26); a prescriptive rule is USEFUL only if mechanically
+following its action text at honest publication lags (FINRA +1 month, COT at
+Friday close, vol state next day; idle cash earns TB3MS) improves MAR vs
+buy-and-hold.
+
+**(a) Significance.** Validated: modern WASHED_OUT (p=0.011, CI90 87-99 vs
+81) and retail NEUTRAL best-regime (p=0.007, CI90 82-95 vs 76). Suggestive:
+retail BLOWOFF (p=0.058, CI90 12-58 vs 76, 8 episodes), COMPLACENT×BLOWOFF
+(p=0.06), AFTERSHOCK×SQUEEZE (p=0.067) — none survive FDR. FDR-significant:
+only COMPLACENT×WASHOUT (p=0.002; all 6 episodes post-1989). Noise at 12m:
+SHOCK×BLOWOFF (p=0.87). All four 75y states ALONE are baseline (p>0.74) —
+the stress gauge only means something crossed with the leverage cycle.
+Corroboration flags, exact 95% CIs: 4/4 → [0.40, 1.00]; 4/12 → [0.10, 0.65];
+8/16 → [0.25, 0.75] — the "est. 65-85%" is inside the interval, but so is a
+coin flip.
+
+**(b) Split-half.** Stable: WASHED_OUT (94/95), COMPLACENT×BLOWOFF (47 vs 69
+| 56 vs 80 — below baseline both halves). Unstable → DEMOTED:
+SHOCK×BLOWOFF 12m (100% pre-89, 58% after) and NORMAL×BLOWOFF — today's live
+cell — (75 vs 69 pre-89, 45 vs 80 after): its cautionary read is entirely a
+modern-era phenomenon. RISK_BUILD halves disagree (87/72 vs baseline 81).
+
+**(c) Decision rules** (CAGR% / MaxDD% / MAR):
+| rule | result | verdict |
+|---|---|---|
+| buy-hold 1998-2026 | 7.38 / 56.8 / 0.130 | — |
+| R1 BLOWOFF 0.5, ELEVATED 0.75 | 6.92 / 55.4 / 0.125 | FAILS |
+| R2 BLOWOFF 0.0 | 6.67 / 56.3 / 0.119 | FAILS |
+| buy-hold 2007-2026 | 8.85 / 56.8 / 0.156 | — |
+| R3 RISK_BUILD 0.75 | 8.78 / 53.6 / 0.164 | PASSES |
+| buy-hold 1951-2026 | 8.10 / 56.8 / 0.143 | — |
+| R4 COMPLACENT×{BLOWOFF,WASHOUT} 0.5 | 8.32 / 56.8 / 0.146 | PASSES (CAGR +0.22pp) |
+
+The retail BLOWOFF de-risk rules FAIL because the drawdowns land after
+BLOWOFF ends — by the time margin YoY confirms the top, the state has rolled
+to SQUEEZE/WASHOUT and the rule is fully invested again for the crash. The
+BLOWOFF signal is a warning, not a timing rule, and its banner now says so.
+
+**Product changes.** Every playbook state and headline matrix cell now
+carries an `evidence` field rendered in the banners: VALIDATED (WASHED_OUT,
+NEUTRAL), suggestive (BLOWOFF, C×B, A×S), UNPROVEN (FLUSH, WASHOUT-retail,
+corroboration probabilities), DEMOTED (S×B "100% at 3m" headline, N×B
+stability). RISK_BUILD's evidence notes the successful sizing rule.
+Eval script: scratchpad eval_usefulness.py; results frozen in
+usefulness_eval.json.
