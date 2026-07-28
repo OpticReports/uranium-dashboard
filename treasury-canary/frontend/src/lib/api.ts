@@ -437,6 +437,7 @@ export interface LeverageStats {
 
 export interface LeveragePlaybookEntry {
   label: string;
+  evidence?: string;
   stats: { fwd3: LeverageStats; fwd6: LeverageStats; fwd12: LeverageStats };
   read: string;
   action: string;
@@ -479,6 +480,7 @@ export interface FastStats {
 
 export interface FastPlaybookEntry {
   label: string;
+  evidence?: string;
   stats: { fwd1m: FastStats; fwd3m: FastStats; fwd12m: FastStats };
   episodes: number;
   read: string;
@@ -490,6 +492,7 @@ export type StressState = "SHOCK" | "AFTERSHOCK" | "COMPLACENT" | "NORMAL";
 export interface DeepCell {
   n: number;
   episodes: number;
+  evidence?: string;
   fwd3m: { median: number; pct_pos: number; worst: number };
   fwd12m: { median: number; pct_pos: number; worst: number };
 }

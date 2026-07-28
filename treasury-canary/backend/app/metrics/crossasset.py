@@ -142,6 +142,7 @@ def leverage_state(yoy: float | None, excess: float | None) -> str | None:
 LEVERAGE_PLAYBOOK: dict[str, dict] = {
     "BLOWOFF": {
         "label": "Blowoff — leverage building far faster than the market",
+        "evidence": "SUGGESTIVE, not proven: episode-level bootstrap p=0.058 (8 episodes). And the decision test failed: mechanically de-risking on this state (50% or 0% exposure, acted at publication lag, 1998-2026) REDUCED risk-adjusted returns vs holding — historical crash damage lands after BLOWOFF ends, in SQUEEZE/WASHOUT months. Treat as risk-awareness, not a timing rule.",
         "stats": {"fwd3": {"n": 28, "mean": 0.7, "median": 0.9, "pct_lower": 39, "worst": -13.2},
                   "fwd6": {"n": 28, "mean": -0.4, "median": -1.2, "pct_lower": 61, "worst": -18.8},
                   "fwd12": {"n": 27, "mean": -7.3, "median": -11.8, "pct_lower": 78, "worst": -37.4}},
@@ -153,6 +154,7 @@ LEVERAGE_PLAYBOOK: dict[str, dict] = {
     },
     "ELEVATED": {
         "label": "Elevated build — leverage outpacing the market",
+        "evidence": "Not statistically distinguishable from baseline (bootstrap p=0.69, 18 episodes).",
         "stats": {"fwd3": {"n": 42, "mean": 1.5, "median": 1.3, "pct_lower": 40, "worst": -14.3},
                   "fwd6": {"n": 39, "mean": 1.8, "median": 2.6, "pct_lower": 46, "worst": -13.5},
                   "fwd12": {"n": 35, "mean": 1.6, "median": 5.5, "pct_lower": 31, "worst": -44.8}},
@@ -164,6 +166,7 @@ LEVERAGE_PLAYBOOK: dict[str, dict] = {
     },
     "NEUTRAL": {
         "label": "Neutral — leverage tracking the market",
+        "evidence": "VALIDATED: best-regime claim holds under episode-level bootstrap (p=0.007, CI90 82-95% positive vs 76% baseline).",
         "stats": {"fwd3": {"n": 165, "mean": 3.1, "median": 3.7, "pct_lower": 24, "worst": -19.9},
                   "fwd6": {"n": 165, "mean": 6.5, "median": 6.9, "pct_lower": 16, "worst": -20.6},
                   "fwd12": {"n": 164, "mean": 11.6, "median": 11.9, "pct_lower": 12, "worst": -38.3}},
@@ -173,6 +176,7 @@ LEVERAGE_PLAYBOOK: dict[str, dict] = {
     },
     "SQUEEZE": {
         "label": "Squeeze — leverage contracting (0 to −15% YoY)",
+        "evidence": "Not statistically distinguishable from baseline (bootstrap p=0.82, 14 episodes) — the re-entry read rests on direction and the fast strip's validated WASHED_OUT analog, not this sample alone.",
         "stats": {"fwd3": {"n": 62, "mean": 0.8, "median": 2.7, "pct_lower": 39, "worst": -30.0},
                   "fwd6": {"n": 62, "mean": 2.3, "median": 5.1, "pct_lower": 26, "worst": -42.6},
                   "fwd12": {"n": 62, "mean": 11.7, "median": 14.0, "pct_lower": 21, "worst": -36.8}},
@@ -184,6 +188,7 @@ LEVERAGE_PLAYBOOK: dict[str, dict] = {
     },
     "WASHOUT": {
         "label": "Washout — deep deleveraging (YoY ≤ −15%)",
+        "evidence": "Unprovable at this n (7 episodes, bootstrap CI90 22-100%): direction only.",
         "stats": {"fwd3": {"n": 42, "mean": 1.0, "median": 2.4, "pct_lower": 43, "worst": -23.7},
                   "fwd6": {"n": 42, "mean": 1.9, "median": 1.9, "pct_lower": 43, "worst": -34.7},
                   "fwd12": {"n": 42, "mean": 5.8, "median": 10.5, "pct_lower": 38, "worst": -28.2}},

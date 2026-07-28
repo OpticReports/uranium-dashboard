@@ -36,6 +36,7 @@ FAST_THRESHOLDS = {"flush_vix20": 8.0, "flush_dz4": -0.5, "washed_z": -1.0,
 FAST_PLAYBOOK = {
     "FLUSH": {
         "label": "Forced deleveraging underway — VIX spiking while funds dump exposure",
+        "evidence": "UNPROVEN: 3 episodes — bootstrap CI90 spans 20-100%. Direction only; the 5/5 one-month bounce is an anecdote, not a statistic.",
         "stats": {
             "fwd1m": {"n": 5, "median": 7.4, "pct_pos": 100, "worst": 0.8},
             "fwd3m": {"n": 5, "median": 2.2, "pct_pos": 60, "worst": -4.0},
@@ -51,6 +52,7 @@ FAST_PLAYBOOK = {
     },
     "WASHED_OUT": {
         "label": "Positioning flushed, vol stabilized — the fast re-entry zone",
+        "evidence": "VALIDATED — the one fully-proven claim in either monitor: episode bootstrap p=0.011 (CI90 87-99% vs 81% baseline), stable across split halves (94% pre-2017, 95% after).",
         "stats": {
             "fwd1m": {"n": 115, "median": 2.0, "pct_pos": 63, "worst": -9.4},
             "fwd3m": {"n": 109, "median": 2.5, "pct_pos": 65, "worst": -17.5},
@@ -65,6 +67,7 @@ FAST_PLAYBOOK = {
     },
     "RISK_BUILD": {
         "label": "Crowded leverage, calm vol — fragility building",
+        "evidence": "Stats not distinguishable from baseline (p=0.84; halves disagree on direction). BUT the mechanical rule built on it — trim to 75% exposure in this state — improved MAR 0.156->0.164 and cut max drawdown 56.8%->53.6% (2007-2026): useful as sizing discipline, not prediction.",
         "stats": {
             "fwd1m": {"n": 134, "median": 1.5, "pct_pos": 70, "worst": -18.6},
             "fwd3m": {"n": 134, "median": 3.7, "pct_pos": 78, "worst": -15.9},
@@ -80,6 +83,7 @@ FAST_PLAYBOOK = {
     },
     "CALM": {
         "label": "No leverage stress signal either direction",
+        "evidence": "Baseline by construction.",
         "stats": {
             "fwd1m": {"n": 737, "median": 1.3, "pct_pos": 64, "worst": -28.8},
             "fwd3m": {"n": 734, "median": 3.7, "pct_pos": 71, "worst": -36.1},
@@ -180,7 +184,7 @@ DEEP_STATES = {
 # SHOCK x BLOWOFF (climax weeks: 3m was positive in all 18).
 DEEP_MATRIX = {
     "SHOCK": {
-        "BLOWOFF": {"n": 18, "episodes": 10, "fwd3m": {"median": 6.2, "pct_pos": 100, "worst": 0.1}, "fwd12m": {"median": 19.3, "pct_pos": 71, "worst": -12.5}},
+        "BLOWOFF": {"n": 18, "episodes": 10, "evidence": "DEMOTED: 12m p=0.87 and split halves flip (100% vs 58%) — the 3m 18/18 is descriptive of a small sample, not a validated edge", "fwd3m": {"median": 6.2, "pct_pos": 100, "worst": 0.1}, "fwd12m": {"median": 19.3, "pct_pos": 71, "worst": -12.5}},
         "ELEVATED": {"n": 20, "episodes": 9, "fwd3m": {"median": 3.5, "pct_pos": 60, "worst": -11.3}, "fwd12m": {"median": 13.1, "pct_pos": 70, "worst": -44.0}},
         "NEUTRAL": {"n": 75, "episodes": 32, "fwd3m": {"median": 4.6, "pct_pos": 72, "worst": -13.5}, "fwd12m": {"median": 13.6, "pct_pos": 80, "worst": -43.1}},
         "SQUEEZE": {"n": 42, "episodes": 19, "fwd3m": {"median": 3.8, "pct_pos": 69, "worst": -26.4}, "fwd12m": {"median": 16.1, "pct_pos": 76, "worst": -40.7}},
@@ -190,18 +194,18 @@ DEEP_MATRIX = {
         "BLOWOFF": {"n": 13, "episodes": 8, "fwd3m": {"median": 2.1, "pct_pos": 77, "worst": -6.4}, "fwd12m": {"median": 8.5, "pct_pos": 54, "worst": -24.9}},
         "ELEVATED": {"n": 20, "episodes": 7, "fwd3m": {"median": 2.0, "pct_pos": 60, "worst": -6.9}, "fwd12m": {"median": -3.1, "pct_pos": 50, "worst": -46.3}},
         "NEUTRAL": {"n": 39, "episodes": 15, "fwd3m": {"median": 8.7, "pct_pos": 87, "worst": -10.4}, "fwd12m": {"median": 18.5, "pct_pos": 79, "worst": -40.9}},
-        "SQUEEZE": {"n": 36, "episodes": 15, "fwd3m": {"median": 7.0, "pct_pos": 81, "worst": -30.1}, "fwd12m": {"median": 22.7, "pct_pos": 89, "worst": -38.3}},
+        "SQUEEZE": {"n": 36, "episodes": 15, "evidence": "suggestive: p=0.067; above baseline in half 1 (100% vs 69), roughly at baseline in half 2 (78% vs 80)", "fwd3m": {"median": 7.0, "pct_pos": 81, "worst": -30.1}, "fwd12m": {"median": 22.7, "pct_pos": 89, "worst": -38.3}},
         "WASHOUT": {"n": 36, "episodes": 9, "fwd3m": {"median": 3.9, "pct_pos": 61, "worst": -19.6}, "fwd12m": {"median": 14.2, "pct_pos": 64, "worst": -26.8}},
     },
     "COMPLACENT": {
-        "BLOWOFF": {"n": 152, "episodes": 30, "fwd3m": {"median": 0.5, "pct_pos": 55, "worst": -13.9}, "fwd12m": {"median": -0.2, "pct_pos": 49, "worst": -33.5}},
+        "BLOWOFF": {"n": 152, "episodes": 30, "evidence": "suggestive: p=0.06 (misses FDR q=0.10) but below baseline in BOTH split halves (47% vs 69; 56% vs 80), and the sizing rule using it edged out buy-and-hold", "fwd3m": {"median": 0.5, "pct_pos": 55, "worst": -13.9}, "fwd12m": {"median": -0.2, "pct_pos": 49, "worst": -33.5}},
         "ELEVATED": {"n": 129, "episodes": 29, "fwd3m": {"median": 0.3, "pct_pos": 52, "worst": -15.1}, "fwd12m": {"median": 3.9, "pct_pos": 71, "worst": -20.3}},
         "NEUTRAL": {"n": 454, "episodes": 77, "fwd3m": {"median": 2.8, "pct_pos": 70, "worst": -23.9}, "fwd12m": {"median": 9.6, "pct_pos": 81, "worst": -17.6}},
         "SQUEEZE": {"n": 141, "episodes": 34, "fwd3m": {"median": 2.6, "pct_pos": 68, "worst": -18.6}, "fwd12m": {"median": 12.6, "pct_pos": 78, "worst": -23.4}},
-        "WASHOUT": {"n": 19, "episodes": 6, "fwd3m": {"median": -2.4, "pct_pos": 32, "worst": -20.1}, "fwd12m": {"median": -19.6, "pct_pos": 11, "worst": -24.3}},
+        "WASHOUT": {"n": 19, "episodes": 6, "evidence": "the only FDR-significant cell (p=0.002) — but all 6 episodes post-1989: no out-of-sample half exists", "fwd3m": {"median": -2.4, "pct_pos": 32, "worst": -20.1}, "fwd12m": {"median": -19.6, "pct_pos": 11, "worst": -24.3}},
     },
     "NORMAL": {
-        "BLOWOFF": {"n": 396, "episodes": 34, "fwd3m": {"median": 2.7, "pct_pos": 71, "worst": -11.8}, "fwd12m": {"median": 6.6, "pct_pos": 64, "worst": -41.0}},
+        "BLOWOFF": {"n": 396, "episodes": 34, "evidence": "UNSTABLE across halves: above baseline 1951-88 (75% vs 69), well below after 1989 (45% vs 80) — the cautionary read rests entirely on the modern era", "fwd3m": {"median": 2.7, "pct_pos": 71, "worst": -11.8}, "fwd12m": {"median": 6.6, "pct_pos": 64, "worst": -41.0}},
         "ELEVATED": {"n": 279, "episodes": 46, "fwd3m": {"median": 3.1, "pct_pos": 68, "worst": -15.5}, "fwd12m": {"median": 12.6, "pct_pos": 87, "worst": -40.3}},
         "NEUTRAL": {"n": 983, "episodes": 94, "fwd3m": {"median": 3.1, "pct_pos": 70, "worst": -28.3}, "fwd12m": {"median": 9.8, "pct_pos": 74, "worst": -41.2}},
         "SQUEEZE": {"n": 599, "episodes": 48, "fwd3m": {"median": 3.0, "pct_pos": 68, "worst": -41.8}, "fwd12m": {"median": 14.3, "pct_pos": 83, "worst": -39.1}},
@@ -217,6 +221,11 @@ DEEP_BASELINE = {"n": 3803,
                  "fwd12m": {"median": 10.3, "pct_pos": 74, "worst": -46.3}}
 
 DEEP_NOTE = (
+    "USEFULNESS EVAL 2026-07 (MARGIN_DEBT.md): of 20 matrix cells, only "
+    "COMPLACENT x WASHOUT survives FDR; COMPLACENT x BLOWOFF and AFTERSHOCK x "
+    "SQUEEZE are suggestive with stable direction; SHOCK x BLOWOFF and the "
+    "current NORMAL x BLOWOFF cell did not replicate across halves. Cell "
+    "evidence fields carry the verdicts. "
     "75y stress-cycle proxy (1951-2026): realized 20d vol of daily S&P stands "
     "in for the VIX/positioning legs, which don't exist before 1990/2006. "
     "States pre-registered mirroring the modern thresholds, evaluated once; "

@@ -456,6 +456,11 @@ function FastBanner({
       <p className="mt-1 text-xs font-medium leading-relaxed text-slate-200">
         → {pb.action}
       </p>
+      {pb.evidence && (
+        <p className="mt-1 text-[10px] leading-relaxed text-amber-400/80">
+          Evidence: {pb.evidence}
+        </p>
+      )}
       {cross && (
         <p className="mt-1.5 border-t border-slate-700/50 pt-1.5 text-xs leading-relaxed text-slate-300">
           <span
@@ -527,6 +532,9 @@ function DeepLine({
           {cell.fwd3m.median}%. Baseline all-weeks: {b12.pct_pos}% /{" "}
           {b12.median > 0 ? "+" : ""}
           {b12.median}%.
+          {cell.evidence && (
+            <span className="text-amber-400/80"> Evidence: {cell.evidence}.</span>
+          )}
         </>
       ) : (
         <>
