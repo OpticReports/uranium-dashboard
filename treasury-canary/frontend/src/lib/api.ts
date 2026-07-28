@@ -500,14 +500,14 @@ export interface MarginFast {
     cadence: string;
   };
   vix: {
-    series: Array<{ date: string; vix: number }>;
+    series: Array<{ date: string; vix: number; z: number | null }>;
     d20: number | null;
     current: number | null;
     date: string | null;
     cadence: string;
   };
   hy: {
-    series: Array<{ date: string; bp: number }>;
+    series: Array<{ date: string; bp: number; z: number | null }>;
     d20_bp: number | null;
     current_bp: number | null;
     date: string | null;
@@ -520,7 +520,7 @@ export interface MarginFast {
       funding_8h: number;
       funding_ann_pct: number;
     } | null;
-    funding_series: Array<{ date: string; ann_pct: number }>;
+    funding_series: Array<{ date: string; ann_pct: number; z: number | null }>;
     oi_series: Array<{ date: string; oi_usd: number | null }>;
     cadence: string;
   };

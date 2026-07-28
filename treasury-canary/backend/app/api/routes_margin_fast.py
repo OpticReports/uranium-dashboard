@@ -177,6 +177,20 @@ def _d20(dates: list[date], vals: list[float | None]) -> float | None:
     return round(pts[-1] - pts[-21], 2) if len(pts) >= 21 else None
 
 
+def _display_z(vals: list[float]) -> list[float | None]:
+    """Full-sample z per point — the combined chart's shared sigma scale.
+
+    Display normalization only (mean/sd of the whole served series); the COT
+    signal z stays trailing-window and is computed separately."""
+    from statistics import mean, pstdev
+    if len(vals) < 2:
+        return [None] * len(vals)
+    m, sd = mean(vals), pstdev(vals)
+    if sd <= 1e-9:
+        return [0.0] * len(vals)
+    return [round((v - m) / sd, 2) for v in vals]
+
+
 def fast_state(z: float | None, dz4: float | None, vix20: float | None
                ) -> str | None:
     """Pre-registered composite rules — order matters."""
@@ -224,32 +238,41 @@ def margin_fast():
     bundle = fetch_bundle()
 
     # --- COT leg (weekly) ----------------------------------------------------
+    # Full history goes to the client (2006+, ~1050 pts): the combined chart
+    # offers 2y windows and custom ranges. z here is the TRAILING signal z.
     cd, cv = fetch_emini_leveraged()
     zs = _z_series(cv, FAST_THRESHOLDS["z_window_weeks"], FAST_THRESHOLDS["z_min_weeks"])
     cot_series = [{"date": d.isoformat(), "pct": round(p, 1), "z": z}
-                  for d, p, z in zip(cd, cv, zs)][-104:]  # 2y of weeks
+                  for d, p, z in zip(cd, cv, zs)]
     cot_z = next((z for z in reversed(zs) if z is not None), None)
     known_z = [z for z in zs if z is not None]
     cot_dz4 = (round(known_z[-1] - known_z[-5], 2) if len(known_z) >= 5 else None)
 
     # --- VIX leg (daily) -----------------------------------------------------
+    # ~3y so daily legs cover the same windows HY can (its history cap). Chart z
+    # is full-sample (vs the whole fetched history) — a display normalization,
+    # distinct from the COT trailing signal z.
     vd, vv = bundle.get("vix", ([], []))
     vix_pts = [(d, v) for d, v in zip(vd, vv) if v is not None]
     vix20 = (round(vix_pts[-1][1] - vix_pts[-21][1], 1)
              if len(vix_pts) >= 21 else None)
-    vix_series = [{"date": d.isoformat(), "vix": v} for d, v in vix_pts[-252:]]
+    vix_series = [{"date": d.isoformat(), "vix": v, "z": z}
+                  for (d, v), z in zip(vix_pts[-780:],
+                                       _display_z([v for _, v in vix_pts[-780:]]))]
 
     # --- HY OAS (daily, display-only: FRED caps ICE BofA history at ~3y) -----
     hd, hv = bundle.get("hy_oas", ([], []))
     hy_pts = [(d, v * 100.0) for d, v in zip(hd, hv) if v is not None]  # bp
     hy20 = (round(hy_pts[-1][1] - hy_pts[-21][1]) if len(hy_pts) >= 21 else None)
-    hy_series = [{"date": d.isoformat(), "bp": round(v)} for d, v in hy_pts[-252:]]
+    hy_series = [{"date": d.isoformat(), "bp": round(v), "z": z}
+                 for (d, v), z in zip(hy_pts[-780:],
+                                      _display_z([v for _, v in hy_pts[-780:]]))]
 
     # --- BTC leg (hourly funding, OI snapshots) ------------------------------
     perp = fetch_btc_perp()
-    fdates, fvals = fetch_funding_history(days=30)
-    funding_series = [{"date": d.isoformat(), "ann_pct": v}
-                      for d, v in zip(fdates, fvals)]
+    fdates, fvals = fetch_funding_history(days=180)
+    funding_series = [{"date": d.isoformat(), "ann_pct": v, "z": z}
+                      for (d, v), z in zip(zip(fdates, fvals), _display_z(fvals))]
     oi_series = _persist_oi_snapshot(perp["oi_usd"] if perp else None)
 
     state = fast_state(cot_z, cot_dz4, vix20)

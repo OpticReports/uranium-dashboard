@@ -1,5 +1,14 @@
-import { useEffect, useState } from "react";
-import { Line, LineChart, ReferenceLine, ResponsiveContainer, YAxis } from "recharts";
+import { useEffect, useMemo, useState } from "react";
+import {
+  CartesianGrid,
+  ComposedChart,
+  Line,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import type { FastLeverageState, LeverageState, MarginFast } from "../lib/api";
 import { api } from "../lib/api";
 import { errorMessage } from "../lib/format";
@@ -16,6 +25,41 @@ const FAST_STYLE: Record<
   CALM: { color: "#34d399", bg: "rgba(52,211,153,0.08)", border: "rgba(52,211,153,0.4)" },
 };
 
+// One shared sigma scale; each leg z-scored against its own served history.
+const LEGS = {
+  cot: { label: "Hedge-fund S&P futures", color: "#38bdf8", cadence: "weekly" },
+  vix: { label: "VIX", color: "#fbbf24", cadence: "daily" },
+  funding: { label: "BTC funding", color: "#f97316", cadence: "hourly" },
+  hy: { label: "HY spread", color: "#f87171", cadence: "daily" },
+} as const;
+type LegKey = keyof typeof LEGS;
+
+const RANGES = [
+  { id: "2y", label: "2y", days: 730 },
+  { id: "1y", label: "1y", days: 365 },
+  { id: "6m", label: "6m", days: 183 },
+  { id: "3m", label: "3m", days: 91 },
+  { id: "1m", label: "1m", days: 31 },
+  { id: "custom", label: "Custom", days: 0 },
+] as const;
+
+interface Row {
+  ts: number;
+  cot: number | null;
+  vix: number | null;
+  funding: number | null;
+  hy: number | null;
+  cot_native: number | null;
+  vix_native: number | null;
+  funding_native: number | null;
+  hy_native: number | null;
+}
+
+function toTs(s: string): number {
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? 0 : d.getTime();
+}
+
 export default function FastLeverageStrip({
   slowState,
 }: {
@@ -24,6 +68,15 @@ export default function FastLeverageStrip({
   const [data, setData] = useState<MarginFast | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [on, setOn] = useState<Record<LegKey, boolean>>({
+    cot: true,
+    vix: true,
+    funding: true,
+    hy: true,
+  });
+  const [range, setRange] = useState<string>("6m");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
 
   useEffect(() => {
     let alive = true;
@@ -46,6 +99,72 @@ export default function FastLeverageStrip({
     };
   }, []);
 
+  // Merge the four legs into one time-indexed table (σ values + natives).
+  const rows: Row[] = useMemo(() => {
+    if (!data) return [];
+    const by = new Map<number, Row>();
+    const row = (ts: number): Row => {
+      let r = by.get(ts);
+      if (!r) {
+        r = {
+          ts,
+          cot: null, vix: null, funding: null, hy: null,
+          cot_native: null, vix_native: null, funding_native: null, hy_native: null,
+        };
+        by.set(ts, r);
+      }
+      return r;
+    };
+    for (const p of data.cot.series) {
+      if (p.z != null) {
+        const r = row(toTs(p.date));
+        r.cot = p.z;
+        r.cot_native = p.pct;
+      }
+    }
+    for (const p of data.vix.series) {
+      if (p.z != null) {
+        const r = row(toTs(p.date));
+        r.vix = p.z;
+        r.vix_native = p.vix;
+      }
+    }
+    for (const p of data.btc.funding_series) {
+      if (p.z != null) {
+        const r = row(toTs(p.date));
+        r.funding = p.z;
+        r.funding_native = p.ann_pct;
+      }
+    }
+    for (const p of data.hy.series) {
+      if (p.z != null) {
+        const r = row(toTs(p.date));
+        r.hy = p.z;
+        r.hy_native = p.bp;
+      }
+    }
+    return [...by.values()].sort((a, b) => a.ts - b.ts);
+  }, [data]);
+
+  const win: Row[] = useMemo(() => {
+    if (rows.length === 0) return [];
+    let minTs: number;
+    let maxTs = Infinity;
+    if (range === "custom") {
+      minTs = from ? Date.parse(from) : -Infinity;
+      maxTs = to ? Date.parse(to) + 86_400_000 : Infinity;
+      if (Number.isNaN(minTs)) minTs = -Infinity;
+      if (Number.isNaN(maxTs)) maxTs = Infinity;
+    } else {
+      const days = RANGES.find((r) => r.id === range)?.days ?? 183;
+      minTs = rows[rows.length - 1].ts - days * 86_400_000;
+    }
+    return rows.filter((r) => r.ts >= minTs && r.ts <= maxTs);
+  }, [rows, range, from, to]);
+
+  const domain: [number, number] | undefined =
+    win.length > 1 ? [win[0].ts, win[win.length - 1].ts] : undefined;
+
   return (
     <Panel
       title={
@@ -63,89 +182,163 @@ export default function FastLeverageStrip({
         <>
           <FastBanner data={data} slowState={slowState} />
 
-          <div className="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-4">
-            <GaugeTile
-              label="Hedge-fund S&P futures"
-              cadence="weekly · 3d lag"
-              value={
-                data.cot.z != null
-                  ? `z ${data.cot.z > 0 ? "+" : ""}${data.cot.z.toFixed(2)}`
-                  : "—"
-              }
-              sub={
-                data.cot.pct != null
-                  ? `net ${data.cot.pct}% of OI · Δ4w z ${
-                      data.cot.dz4 != null && data.cot.dz4 > 0 ? "+" : ""
-                    }${data.cot.dz4 ?? "—"}`
-                  : "unavailable"
-              }
-              tone={tone(data.cot.z, -1, 1)}
-              data={data.cot.series
-                .filter((p) => p.z != null)
-                .map((p) => ({ x: p.date, y: p.z as number }))}
-              zeroLine
-            />
-            <GaugeTile
-              label="VIX 20-day change"
-              cadence="daily"
-              value={
-                data.vix.d20 != null
-                  ? `${data.vix.d20 > 0 ? "+" : ""}${data.vix.d20.toFixed(1)} pts`
-                  : "—"
-              }
-              sub={
-                data.vix.current != null
-                  ? `VIX ${data.vix.current.toFixed(1)}`
-                  : "unavailable"
-              }
-              tone={tone(data.vix.d20, null, 8, true)}
-              data={data.vix.series.map((p) => ({ x: p.date, y: p.vix }))}
-            />
-            <GaugeTile
-              label="BTC perp funding"
-              cadence="hourly"
-              value={
-                data.btc.perp
-                  ? `${data.btc.perp.funding_ann_pct > 0 ? "+" : ""}${data.btc.perp.funding_ann_pct}%/yr`
-                  : "—"
-              }
-              sub={
-                data.btc.perp
-                  ? `OI $${(data.btc.perp.oi_usd / 1e9).toFixed(2)}B · $${Math.round(
-                      data.btc.perp.mark_price,
-                    ).toLocaleString()}`
-                  : "unavailable"
-              }
-              tone={
-                data.btc.perp == null
-                  ? "muted"
-                  : data.btc.perp.funding_ann_pct < -5
-                    ? "hot"
-                    : data.btc.perp.funding_ann_pct > 15
-                      ? "warm"
-                      : "ok"
-              }
-              data={data.btc.funding_series.map((p) => ({
-                x: p.date,
-                y: p.ann_pct,
-              }))}
-              zeroLine
-            />
-            <GaugeTile
-              label="HY credit spread"
-              cadence="daily"
-              value={data.hy.current_bp != null ? `${data.hy.current_bp}bp` : "—"}
-              sub={
-                data.hy.d20_bp != null
-                  ? `${data.hy.d20_bp > 0 ? "+" : ""}${data.hy.d20_bp}bp / 20d`
-                  : "unavailable"
-              }
-              tone={tone(data.hy.d20_bp, null, 50, true)}
-              data={data.hy.series.map((p) => ({ x: p.date, y: p.bp }))}
-            />
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] uppercase tracking-wide text-slate-500">
+                range
+              </span>
+              {RANGES.map((r) => (
+                <ToggleChip
+                  key={r.id}
+                  label={r.label}
+                  color="#38bdf8"
+                  active={range === r.id}
+                  onClick={() => setRange(r.id)}
+                />
+              ))}
+              {range === "custom" && (
+                <span className="flex items-center gap-1">
+                  <DateInput value={from} onChange={setFrom} />
+                  <span className="text-[10px] text-slate-500">→</span>
+                  <DateInput value={to} onChange={setTo} />
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {(Object.keys(LEGS) as LegKey[]).map((k) => (
+                <ToggleChip
+                  key={k}
+                  label={`${LEGS[k].label} ${legValue(data, k)}`}
+                  color={LEGS[k].color}
+                  active={on[k]}
+                  onClick={() => setOn((o) => ({ ...o, [k]: !o[k] }))}
+                />
+              ))}
+            </div>
           </div>
 
-          <p className="mt-3 text-[10px] leading-relaxed text-slate-500">
+          {win.length < 2 ? (
+            <div className="mt-2 flex h-56 items-center justify-center rounded border border-dashed border-panelborder text-xs text-slate-500">
+              No data in this window — widen the range.
+            </div>
+          ) : (
+            <div className="mt-2 h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart
+                  data={win}
+                  margin={{ top: 8, right: 12, bottom: 4, left: 0 }}
+                >
+                  <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="ts"
+                    type="number"
+                    scale="time"
+                    domain={domain}
+                    tickFormatter={(t: number) => {
+                      const d = new Date(t);
+                      return win[win.length - 1].ts - win[0].ts > 400 * 86_400_000
+                        ? String(d.getFullYear())
+                        : d.toISOString().slice(5, 10);
+                    }}
+                    stroke="#475569"
+                    tick={{ fontSize: 10 }}
+                  />
+                  <YAxis
+                    stroke="#475569"
+                    tick={{ fontSize: 10 }}
+                    width={34}
+                    tickFormatter={(v: number) => `${v}σ`}
+                    label={{
+                      value: "σ vs each leg's own history",
+                      angle: -90,
+                      position: "insideLeft",
+                      style: { fill: "#475569", fontSize: 9 },
+                    }}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#0f172a",
+                      border: "1px solid #334155",
+                      borderRadius: 6,
+                      fontSize: 11,
+                    }}
+                    labelFormatter={(t) =>
+                      new Date(Number(t)).toISOString().slice(0, 10)
+                    }
+                    formatter={(v: number, name: string, item: { payload?: Row }) => {
+                      const p = item.payload;
+                      const sig = `${Number(v) > 0 ? "+" : ""}${Number(v).toFixed(1)}σ`;
+                      if (name === "cot")
+                        return [
+                          p?.cot_native != null
+                            ? `${p.cot_native}% of OI (${sig})`
+                            : sig,
+                          "Hedge-fund S&P futures",
+                        ];
+                      if (name === "vix")
+                        return [
+                          p?.vix_native != null
+                            ? `${p.vix_native.toFixed(1)} (${sig})`
+                            : sig,
+                          "VIX",
+                        ];
+                      if (name === "funding")
+                        return [
+                          p?.funding_native != null
+                            ? `${p.funding_native > 0 ? "+" : ""}${p.funding_native}%/yr (${sig})`
+                            : sig,
+                          "BTC funding",
+                        ];
+                      if (name === "hy")
+                        return [
+                          p?.hy_native != null ? `${p.hy_native}bp (${sig})` : sig,
+                          "HY spread",
+                        ];
+                      return [String(v), name];
+                    }}
+                  />
+                  <ReferenceLine y={0} stroke="#475569" />
+                  <ReferenceLine y={2} stroke="#334155" strokeDasharray="4 4" />
+                  <ReferenceLine y={-2} stroke="#334155" strokeDasharray="4 4" />
+                  {(Object.keys(LEGS) as LegKey[]).map(
+                    (k) =>
+                      on[k] && (
+                        <Line
+                          key={k}
+                          dataKey={k}
+                          name={k}
+                          stroke={LEGS[k].color}
+                          dot={false}
+                          strokeWidth={k === "cot" ? 2 : 1.3}
+                          connectNulls
+                          isAnimationActive={false}
+                        />
+                      ),
+                  )}
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          <p className="mt-2 text-[10px] leading-relaxed text-slate-500">
+            One σ scale, four clocks: each leg is z-scored against its own
+            served history (
+            <span className="text-sky-400">futures positioning</span> vs 3y
+            trailing — the actual signal z;{" "}
+            <span className="text-amber-400">VIX</span> and{" "}
+            <span className="text-red-400">HY spread</span> vs ~3y;{" "}
+            <span className="text-orange-400">BTC funding</span> vs ~6m).
+            Hover for native values. Below −2σ on positioning = flushed; above
+            +2σ on VIX/HY = active stress. Legs update at different speeds —
+            that ordering (funding → futures → spreads → monthly FINRA) IS the
+            signal.
+            {data.btc.perp && (
+              <>
+                {" "}BTC perp now: ${(data.btc.perp.oi_usd / 1e9).toFixed(2)}B
+                open interest at $
+                {Math.round(data.btc.perp.mark_price).toLocaleString()}.
+              </>
+            )}{" "}
             {data.relationship}
           </p>
         </>
@@ -154,76 +347,63 @@ export default function FastLeverageStrip({
   );
 }
 
-/** muted = no data · ok = benign · warm = watch · hot = stress */
-function tone(
-  v: number | null | undefined,
-  lowHot: number | null,
-  hiWarm: number,
-  hiIsHot = false,
-): "muted" | "ok" | "warm" | "hot" {
-  if (v == null) return "muted";
-  if (lowHot != null && v <= lowHot) return "hot";
-  if (v >= hiWarm) return hiIsHot ? "hot" : "warm";
-  return "ok";
+function legValue(data: MarginFast, k: LegKey): string {
+  if (k === "cot") return data.cot.z != null ? `z ${fmtSigned(data.cot.z)}` : "—";
+  if (k === "vix")
+    return data.vix.current != null ? data.vix.current.toFixed(1) : "—";
+  if (k === "funding")
+    return data.btc.perp ? `${fmtSigned(data.btc.perp.funding_ann_pct)}%/yr` : "—";
+  return data.hy.current_bp != null ? `${data.hy.current_bp}bp` : "—";
 }
 
-const TONE_COLOR = {
-  muted: "#475569",
-  ok: "#34d399",
-  warm: "#fbbf24",
-  hot: "#fb923c",
-} as const;
+function fmtSigned(v: number): string {
+  return `${v > 0 ? "+" : ""}${v}`;
+}
 
-function GaugeTile({
-  label,
-  cadence,
+function DateInput({
   value,
-  sub,
-  tone,
-  data,
-  zeroLine,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <input
+      type="date"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="rounded border border-panelborder bg-slate-900/60 px-1.5 py-0.5 font-mono text-[10px] text-slate-300 [color-scheme:dark]"
+    />
+  );
+}
+
+function ToggleChip({
+  label,
+  color,
+  active,
+  onClick,
 }: {
   label: string;
-  cadence: string;
-  value: string;
-  sub: string;
-  tone: keyof typeof TONE_COLOR;
-  data: Array<{ x: string; y: number }>;
-  zeroLine?: boolean;
+  color: string;
+  active: boolean;
+  onClick: () => void;
 }) {
-  const color = TONE_COLOR[tone];
   return (
-    <div className="rounded border border-panelborder bg-slate-900/40 px-2.5 py-2">
-      <div className="flex items-baseline justify-between gap-1">
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-          {label}
-        </span>
-        <span className="whitespace-nowrap text-[9px] text-slate-600">{cadence}</span>
-      </div>
-      <div className="mt-0.5 font-mono text-sm font-bold" style={{ color }}>
-        {value}
-      </div>
-      <div className="text-[10px] text-slate-500">{sub}</div>
-      <div className="mt-1 h-9">
-        {data.length > 1 && (
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
-              <YAxis hide domain={["auto", "auto"]} />
-              {zeroLine && (
-                <ReferenceLine y={0} stroke="#334155" strokeDasharray="2 2" />
-              )}
-              <Line
-                dataKey="y"
-                stroke={color}
-                dot={false}
-                strokeWidth={1.2}
-                isAnimationActive={false}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        )}
-      </div>
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`rounded-full border px-2.5 py-0.5 text-[10px] font-semibold transition-colors ${
+        active ? "" : "border-panelborder text-slate-500 hover:text-slate-300"
+      }`}
+      style={
+        active
+          ? { color, borderColor: color, backgroundColor: `${color}1a` }
+          : undefined
+      }
+    >
+      {label}
+    </button>
   );
 }
 
@@ -238,8 +418,8 @@ function FastBanner({
   if (!state) {
     return (
       <div className="rounded border border-panelborder bg-slate-900/50 px-3 py-2 text-xs text-slate-500">
-        Fast-leverage state unavailable (COT or VIX source missing) — the tiles
-        below still show whatever legs are live.
+        Fast-leverage state unavailable (COT or VIX source missing) — the chart
+        below still shows whatever legs are live.
       </div>
     );
   }
