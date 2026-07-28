@@ -142,6 +142,121 @@ CROSS_READ = {
     },
 }
 
+# ── 75-year stress-cycle x leverage-cycle study (MARGIN_DEBT.md §deep) ───────
+# The positioning leg can't extend past 2006 (leveraged-fund COT starts there;
+# equity futures 1982). The STRESS leg can: realized 20d vol of daily ^GSPC
+# proxies the VIX leg back to 1951. States pre-registered to mirror the modern
+# thresholds, evaluated once, crossed with the monthly leverage state.
+# 3,803 weekly obs 1951-2026. Baseline: 12m median +10.3% / 74% pos / worst
+# -46.3; 1m median +1.1% / 62%.
+DEEP_THRESHOLDS = {"shock_dv20": 8.0, "aftershock_vz": 1.0, "aftershock_dv20": 0.0,
+                   "complacent_vz": -0.75, "complacent_dv20": 2.0,
+                   "vz_window_days": 756, "vz_min_days": 252}
+
+DEEP_STATES = {
+    "SHOCK": {"label": "vol spiking — deleveraging shock in progress",
+              "fwd1m": {"n": 202, "median": 1.6, "pct_pos": 65, "worst": -20.9},
+              "fwd12m": {"n": 201, "median": 14.5, "pct_pos": 76, "worst": -44.0},
+              "episodes": 76},
+    "AFTERSHOCK": {"label": "vol elevated but fading — stress clearing",
+                   "fwd1m": {"n": 144, "median": 2.3, "pct_pos": 69, "worst": -14.0},
+                   "fwd12m": {"n": 144, "median": 17.1, "pct_pos": 72, "worst": -46.3},
+                   "episodes": 45},
+    "COMPLACENT": {"label": "vol bottom-decile quiet — leverage builds silently",
+                   "fwd1m": {"n": 895, "median": 0.7, "pct_pos": 60, "worst": -14.4},
+                   "fwd12m": {"n": 889, "median": 7.7, "pct_pos": 72, "worst": -33.5},
+                   "episodes": 139},
+    "NORMAL": {"label": "vol unremarkable",
+               "fwd1m": {"n": 2558, "median": 1.1, "pct_pos": 62, "worst": -28.8},
+               "fwd12m": {"n": 2519, "median": 10.9, "pct_pos": 75, "worst": -42.6},
+               "episodes": 107},
+}
+
+# matrix[stress][slow] — fwd S&P from each weekly obs; episode counts are the
+# honest n. Headline cells: COMPLACENT x BLOWOFF (calm vol on a blown-off cycle
+# = the fragile combo, 49% pos 12m vs 74% baseline over 30 episodes),
+# COMPLACENT x WASHOUT (bear-market lull — 11% pos, median -19.6%),
+# AFTERSHOCK x SQUEEZE (the re-entry cell — 89% pos, median +22.7%),
+# SHOCK x BLOWOFF (climax weeks: 3m was positive in all 18).
+DEEP_MATRIX = {
+    "SHOCK": {
+        "BLOWOFF": {"n": 18, "episodes": 10, "fwd3m": {"median": 6.2, "pct_pos": 100, "worst": 0.1}, "fwd12m": {"median": 19.3, "pct_pos": 71, "worst": -12.5}},
+        "ELEVATED": {"n": 20, "episodes": 9, "fwd3m": {"median": 3.5, "pct_pos": 60, "worst": -11.3}, "fwd12m": {"median": 13.1, "pct_pos": 70, "worst": -44.0}},
+        "NEUTRAL": {"n": 75, "episodes": 32, "fwd3m": {"median": 4.6, "pct_pos": 72, "worst": -13.5}, "fwd12m": {"median": 13.6, "pct_pos": 80, "worst": -43.1}},
+        "SQUEEZE": {"n": 42, "episodes": 19, "fwd3m": {"median": 3.8, "pct_pos": 69, "worst": -26.4}, "fwd12m": {"median": 16.1, "pct_pos": 76, "worst": -40.7}},
+        "WASHOUT": {"n": 47, "episodes": 17, "fwd3m": {"median": 3.7, "pct_pos": 70, "worst": -14.7}, "fwd12m": {"median": 13.0, "pct_pos": 72, "worst": -32.6}},
+    },
+    "AFTERSHOCK": {
+        "BLOWOFF": {"n": 13, "episodes": 8, "fwd3m": {"median": 2.1, "pct_pos": 77, "worst": -6.4}, "fwd12m": {"median": 8.5, "pct_pos": 54, "worst": -24.9}},
+        "ELEVATED": {"n": 20, "episodes": 7, "fwd3m": {"median": 2.0, "pct_pos": 60, "worst": -6.9}, "fwd12m": {"median": -3.1, "pct_pos": 50, "worst": -46.3}},
+        "NEUTRAL": {"n": 39, "episodes": 15, "fwd3m": {"median": 8.7, "pct_pos": 87, "worst": -10.4}, "fwd12m": {"median": 18.5, "pct_pos": 79, "worst": -40.9}},
+        "SQUEEZE": {"n": 36, "episodes": 15, "fwd3m": {"median": 7.0, "pct_pos": 81, "worst": -30.1}, "fwd12m": {"median": 22.7, "pct_pos": 89, "worst": -38.3}},
+        "WASHOUT": {"n": 36, "episodes": 9, "fwd3m": {"median": 3.9, "pct_pos": 61, "worst": -19.6}, "fwd12m": {"median": 14.2, "pct_pos": 64, "worst": -26.8}},
+    },
+    "COMPLACENT": {
+        "BLOWOFF": {"n": 152, "episodes": 30, "fwd3m": {"median": 0.5, "pct_pos": 55, "worst": -13.9}, "fwd12m": {"median": -0.2, "pct_pos": 49, "worst": -33.5}},
+        "ELEVATED": {"n": 129, "episodes": 29, "fwd3m": {"median": 0.3, "pct_pos": 52, "worst": -15.1}, "fwd12m": {"median": 3.9, "pct_pos": 71, "worst": -20.3}},
+        "NEUTRAL": {"n": 454, "episodes": 77, "fwd3m": {"median": 2.8, "pct_pos": 70, "worst": -23.9}, "fwd12m": {"median": 9.6, "pct_pos": 81, "worst": -17.6}},
+        "SQUEEZE": {"n": 141, "episodes": 34, "fwd3m": {"median": 2.6, "pct_pos": 68, "worst": -18.6}, "fwd12m": {"median": 12.6, "pct_pos": 78, "worst": -23.4}},
+        "WASHOUT": {"n": 19, "episodes": 6, "fwd3m": {"median": -2.4, "pct_pos": 32, "worst": -20.1}, "fwd12m": {"median": -19.6, "pct_pos": 11, "worst": -24.3}},
+    },
+    "NORMAL": {
+        "BLOWOFF": {"n": 396, "episodes": 34, "fwd3m": {"median": 2.7, "pct_pos": 71, "worst": -11.8}, "fwd12m": {"median": 6.6, "pct_pos": 64, "worst": -41.0}},
+        "ELEVATED": {"n": 279, "episodes": 46, "fwd3m": {"median": 3.1, "pct_pos": 68, "worst": -15.5}, "fwd12m": {"median": 12.6, "pct_pos": 87, "worst": -40.3}},
+        "NEUTRAL": {"n": 983, "episodes": 94, "fwd3m": {"median": 3.1, "pct_pos": 70, "worst": -28.3}, "fwd12m": {"median": 9.8, "pct_pos": 74, "worst": -41.2}},
+        "SQUEEZE": {"n": 599, "episodes": 48, "fwd3m": {"median": 3.0, "pct_pos": 68, "worst": -41.8}, "fwd12m": {"median": 14.3, "pct_pos": 83, "worst": -39.1}},
+        "WASHOUT": {"n": 305, "episodes": 17, "fwd3m": {"median": -0.8, "pct_pos": 46, "worst": -28.6}, "fwd12m": {"median": 10.1, "pct_pos": 64, "worst": -42.6}},
+    },
+}
+
+DEEP_BASELINE = {"n": 3803,
+                 "fwd1m": {"median": 1.1, "pct_pos": 62, "worst": -28.8},
+                 "fwd3m": {"median": 2.5, "pct_pos": 63, "worst": -43.9},
+                 "fwd12m": {"median": 10.3, "pct_pos": 74, "worst": -46.3}}
+
+DEEP_NOTE = (
+    "75y stress-cycle proxy (1951-2026): realized 20d vol of daily S&P stands "
+    "in for the VIX/positioning legs, which don't exist before 1990/2006. "
+    "States pre-registered mirroring the modern thresholds, evaluated once; "
+    "weekly obs overlap — episode counts are the honest n. On the 2007-2026 "
+    "overlap the proxy agrees with the modern COT+VIX composite 53% of weeks "
+    "(it reads the stress half, not the positioning half) — treat the two as "
+    "complementary, not interchangeable."
+)
+
+
+def stress_state(closes: list[float]) -> dict | None:
+    """Live 75y-study stress state from daily closes (needs ~300+, uses last
+    ~1100). Returns {state, rvol, vz, dv20} or None if too short."""
+    from math import log, sqrt
+    from statistics import mean, pstdev
+    t = DEEP_THRESHOLDS
+    px = [c for c in closes if c is not None][-1100:]
+    if len(px) < t["vz_min_days"] + 42:
+        return None
+    rets = [log(px[i] / px[i - 1]) for i in range(1, len(px))]
+    rvol = [None] * len(px)
+    for i in range(21, len(px)):
+        rvol[i] = pstdev(rets[i - 20:i]) * sqrt(252) * 100
+    known = [v for v in rvol if v is not None]
+    w = known[-t["vz_window_days"]:]
+    if len(w) < t["vz_min_days"]:
+        return None
+    sd = pstdev(w)
+    vz = (rvol[-1] - mean(w)) / sd if sd > 1e-9 else 0.0
+    dv20 = rvol[-1] - rvol[-21]
+    if dv20 >= t["shock_dv20"]:
+        st = "SHOCK"
+    elif vz >= t["aftershock_vz"] and dv20 <= t["aftershock_dv20"]:
+        st = "AFTERSHOCK"
+    elif vz <= t["complacent_vz"] and dv20 <= t["complacent_dv20"]:
+        st = "COMPLACENT"
+    else:
+        st = "NORMAL"
+    return {"state": st, "rvol": round(rvol[-1], 1), "vz": round(vz, 2),
+            "dv20": round(dv20, 1)}
+
+
 RELATIONSHIP = (
     "Same leverage animal, three clocks. The monthly chart below (FINRA, ~3-4 "
     "week lag) reads the CYCLE: how much borrowed money the whole market has "
@@ -275,11 +390,27 @@ def margin_fast():
                       for (d, v), z in zip(zip(fdates, fvals), _display_z(fvals))]
     oi_series = _persist_oi_snapshot(perp["oi_usd"] if perp else None)
 
+    # --- 75y stress-cycle leg (live state + frozen matrix) -------------------
+    from ..sources.fmp import fetch_spx_long
+    spx_d, spx_v = fetch_spx_long()
+    if not spx_d:  # no FMP key -> FRED's ~10y SP500 still feeds the live state
+        spx_d, spx_v = bundle.get("sp500", ([], []))
+    deep_live = stress_state(spx_v)
+    deep = {
+        "live": (dict(deep_live, date=spx_d[-1].isoformat()) if deep_live else None),
+        "states": DEEP_STATES,
+        "matrix": DEEP_MATRIX,
+        "baseline": DEEP_BASELINE,
+        "thresholds": DEEP_THRESHOLDS,
+        "note": DEEP_NOTE,
+    }
+
     state = fast_state(cot_z, cot_dz4, vix20)
     return {
         "state": state,
         "playbook": FAST_PLAYBOOK,
         "cross_read": CROSS_READ,
+        "deep": deep,
         "relationship": RELATIONSHIP,
         "thresholds": FAST_THRESHOLDS,
         "cot": {"series": cot_series, "z": cot_z, "dz4": cot_dz4,

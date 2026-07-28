@@ -237,3 +237,59 @@ June (COT z hit −1.9 on 2026-06-02 = WASHED_OUT; e-mini OI −25% June→July)
 positioning has re-normalized since (z −0.11 on 2026-07-21). The strip would
 have shown the June washout in week one; the FINRA chart won't show the July
 echo until the late-August print.
+
+## 75-year stress-cycle × leverage-cycle matrix (added 2026-07)
+
+The user asked for the same 70y depth behind the fast strip that the retail
+chart has. Hard limit: the positioning leg cannot exist before 2006 (COT
+leveraged-funds category; equity futures at all only from 1982). What CAN
+extend: the stress leg — realized 20d vol of daily ^GSPC (FMP serves closes
+from 1927; stats frozen on 1951+ to match the retail chart's record).
+
+**Pre-registered proxy states** (mirror the modern thresholds; evaluated once):
+rvol = 20d stdev of daily log returns, annualized; vz = z vs trailing 756
+trading days (min 252, no lookahead); dv20 = rvol − rvol 20 days earlier.
+SHOCK dv20 ≥ +8 · AFTERSHOCK vz ≥ +1 and dv20 ≤ 0 · COMPLACENT vz ≤ −0.75 and
+dv20 ≤ +2 · NORMAL else. Weekly obs (every 5th trading day), crossed with the
+monthly leverage state (data-date aligned, same convention as the playbook).
+
+**Results** (3,803 weekly obs 1951–2026; baseline 12m median +10.3% / 74% pos
+/ worst −46.3):
+
+| cell | wk / eps | fwd 3m med (%pos) | fwd 12m med (%pos) | 12m worst |
+|---|---|---|---|---|
+| **COMPLACENT × BLOWOFF** | 152 / 30 | +0.5 (55%) | **−0.2 (49%)** | −33.5 |
+| **COMPLACENT × WASHOUT** | 19 / 6 | −2.4 (32%) | **−19.6 (11%)** | −24.3 |
+| **AFTERSHOCK × SQUEEZE** | 36 / 15 | +7.0 (81%) | **+22.7 (89%)** | −38.3 |
+| **SHOCK × BLOWOFF** | 18 / 10 | **+6.2 (100%)** | +19.3 (71%) | −12.5 |
+| NORMAL × BLOWOFF (today) | 396 / 34 | +2.7 (71%) | +6.6 (64%) | −41.0 |
+| NORMAL × ELEVATED | 279 / 46 | +3.1 (68%) | +12.6 (87%) | −40.3 |
+| NORMAL × SQUEEZE | 599 / 48 | +3.0 (68%) | +14.3 (83%) | −39.1 |
+| AFTERSHOCK × ELEVATED | 20 / 7 | +2.0 (60%) | −3.1 (50%) | −46.3 |
+
+(full 4×5 matrix frozen in routes_margin_fast.DEEP_MATRIX)
+
+**Interpretation.** The quant story is coherent across both studies: vol
+shocks mean-revert (SHOCK × BLOWOFF = climax weeks, 3m positive 18/18);
+post-stress fading vol in a squeezed cycle is the re-entry cell; and the
+DANGEROUS configuration is not the shock — it's the QUIET: complacent vol
+sitting on a blown-off leverage cycle cuts 12m odds from 74% to 49% (median
+−0.2%) over 30 distinct episodes, and complacency during a washout (the
+bear-market lull) preceded further losses 89% of the time. Fragility hides in
+calm, resolution comes through stress — the same asymmetry the modern
+RISK_BUILD tail (−40%) showed at weekly resolution.
+
+**Validation vs the modern composite.** On 2007–2026 overlap the proxy agrees
+with the mapped COT+VIX state 53% of weeks — the proxy reads the stress half
+only, so the two are complementary, not interchangeable (FLUSH weeks were a
+strict subset of SHOCK weeks). Live wiring: /margin/fast computes today's
+stress state from FMP closes (FRED SP500 fallback) and the banner shows the
+matching matrix cell vs the current monthly state, with baseline alongside.
+
+**Honesty box.** Overlapping weekly windows; episode counts are the true n
+(COMPLACENT × WASHOUT rests on 6). Thresholds chosen by judgment to mirror the
+modern rules, one evaluation, no sweep — selection-adjacent, same standing as
+the strip's other stats. Realized vol is price-derived, so state and forward
+return share an instrument (vol clustering); the margin leg is the independent
+conditioning variable. 2026-07-28 live reading: NORMAL (rvol 9.3%, vz −0.58,
+Δ20d −7.8) × monthly BLOWOFF.

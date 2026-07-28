@@ -467,11 +467,75 @@ function FastBanner({
           {cross}
         </p>
       )}
+      <DeepLine deep={data.deep} slowState={slowState} />
+
       <p className="mt-1 text-[10px] text-slate-500">
         Stats frozen from one pre-registered evaluation (2006–2026, weekly obs
         overlap — episode counts are the honest n). Composite state = COT + VIX;
         BTC funding and HY spread are faster confirmation legs, not scored.
       </p>
     </div>
+  );
+}
+
+const STRESS_COLOR: Record<string, string> = {
+  SHOCK: "#fb923c",
+  AFTERSHOCK: "#c084fc",
+  COMPLACENT: "#fbbf24",
+  NORMAL: "#34d399",
+};
+
+/** The 75-year line: live realized-vol stress state crossed with the monthly
+ *  leverage state, with the frozen 1951-2026 matrix stats for that cell. */
+function DeepLine({
+  deep,
+  slowState,
+}: {
+  deep: MarginFast["deep"];
+  slowState: LeverageState | null | undefined;
+}) {
+  const live = deep?.live;
+  if (!live) return null;
+  const color = STRESS_COLOR[live.state] ?? "#94a3b8";
+  const cell = slowState ? deep.matrix[live.state]?.[slowState] : null;
+  const solo = deep.states[live.state];
+  const b12 = deep.baseline.fwd12m;
+  return (
+    <p className="mt-1.5 border-t border-slate-700/50 pt-1.5 text-xs leading-relaxed text-slate-300">
+      <span className="font-semibold uppercase tracking-wide text-[10px] text-slate-400">
+        75y record (1951–2026):
+      </span>{" "}
+      vol stress-cycle now reads{" "}
+      <span className="font-semibold" style={{ color }}>
+        {live.state}
+      </span>{" "}
+      ({solo.label}; realized vol {live.rvol}%, z {live.vz > 0 ? "+" : ""}
+      {live.vz}, Δ20d {live.dv20 > 0 ? "+" : ""}
+      {live.dv20}pts).{" "}
+      {cell && slowState ? (
+        <>
+          In {live.state} × monthly {slowState} weeks (
+          {cell.episodes} episodes, n={cell.n}):{" "}
+          <span className="font-semibold" style={{ color }}>
+            {cell.fwd12m.pct_pos}% saw the S&amp;P higher 12 months later
+          </span>{" "}
+          — median {cell.fwd12m.median > 0 ? "+" : ""}
+          {cell.fwd12m.median}%, worst {cell.fwd12m.worst}%; 3 months out:{" "}
+          {cell.fwd3m.pct_pos}% higher, median{" "}
+          {cell.fwd3m.median > 0 ? "+" : ""}
+          {cell.fwd3m.median}%. Baseline all-weeks: {b12.pct_pos}% /{" "}
+          {b12.median > 0 ? "+" : ""}
+          {b12.median}%.
+        </>
+      ) : (
+        <>
+          This state alone: {solo.fwd12m.pct_pos}% of weeks higher 12 months
+          later (median {solo.fwd12m.median > 0 ? "+" : ""}
+          {solo.fwd12m.median}%, {solo.episodes} episodes) vs baseline{" "}
+          {b12.pct_pos}% / {b12.median > 0 ? "+" : ""}
+          {b12.median}%.
+        </>
+      )}
+    </p>
   );
 }

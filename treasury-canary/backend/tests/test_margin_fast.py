@@ -94,3 +94,60 @@ def test_margin_fast_endpoint_degrades_when_sources_missing():
     assert r["state"] is None
     assert r["cot"]["z"] is None and r["vix"]["d20"] is None
     assert r["btc"]["perp"] is None
+
+
+def test_stress_state_75y_proxy():
+    import math
+    import random
+    from app.api.routes_margin_fast import DEEP_MATRIX, stress_state
+
+    def mk(*segments):
+        """Fresh seeded walk per fixture — a shared stream would let one
+        case's draws shift the next case's classification."""
+        rng = random.Random(7)
+        px, out = 100.0, []
+        for n, sigma in segments:
+            for _ in range(n):
+                px *= math.exp(rng.gauss(0, sigma))
+                out.append(px)
+        return out
+
+    assert stress_state([100.0] * 100) is None      # too short
+
+    # quiet half-year after a normal stretch -> vol bottom-decile -> COMPLACENT
+    assert stress_state(mk((500, 0.012), (500, 0.003)))["state"] == "COMPLACENT"
+
+    # a violent 21-day stretch at the end -> 20d vol jumps >> 8 ann pts -> SHOCK
+    # (21 not 30: the comparison window 41..21 days back must stay pre-shock)
+    s = stress_state(mk((709, 0.006), (21, 0.05)))
+    assert s["state"] == "SHOCK" and s["dv20"] >= 8
+
+    # moderate crash then a month calming: vol z still high, 20d change <= 0
+    a = stress_state(mk((650, 0.006), (50, 0.03), (30, 0.018)))
+    assert a["state"] == "AFTERSHOCK" and a["vz"] >= 1 and a["dv20"] <= 0
+
+    # every matrix cell carries the frozen fields
+    for fs, row in DEEP_MATRIX.items():
+        for ss, c in row.items():
+            assert c["episodes"] > 0 and "fwd12m" in c and "fwd3m" in c
+
+
+def test_margin_fast_includes_deep_block():
+    from unittest.mock import patch
+    from datetime import date, timedelta
+    days = [date(2022, 1, 1) + timedelta(days=i) for i in range(1200)]
+    closes = [100.0 * (1.0003 ** i) for i in range(1200)]  # gentle steady drift
+    with patch("app.api.routes_margin_fast.fetch_bundle", return_value={}), \
+         patch("app.api.routes_margin_fast.fetch_emini_leveraged",
+               return_value=([], [])), \
+         patch("app.api.routes_margin_fast.fetch_btc_perp", return_value=None), \
+         patch("app.api.routes_margin_fast.fetch_funding_history",
+               return_value=([], [])), \
+         patch("app.api.routes_margin_fast._persist_oi_snapshot", return_value=[]), \
+         patch("app.sources.fmp.fetch_spx_long", return_value=(days, closes)):
+        r = margin_fast()
+    d = r["deep"]
+    assert d["live"] is not None and d["live"]["state"] in (
+        "SHOCK", "AFTERSHOCK", "COMPLACENT", "NORMAL")
+    assert d["baseline"]["fwd12m"]["pct_pos"] == 74
+    assert d["matrix"]["COMPLACENT"]["BLOWOFF"]["fwd12m"]["pct_pos"] == 49
