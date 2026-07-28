@@ -233,7 +233,8 @@ signal, not replace it. Deribit OI history accrues from first deploy
 (SeriesObs `deribit_btc_oi`, one snapshot/day).
 
 **2026-07 reading:** CALM — the US institutional flush already ran in early
-June (COT z hit −1.9 on 2026-06-02 = WASHED_OUT; e-mini OI −25% June→July);
+June (COT z hit −1.9 on 2026-06-02 = WASHED_OUT; e-mini OI −25% from the
+June-16 peak, 2.58M→1.94M contracts);
 positioning has re-normalized since (z −0.11 on 2026-07-21). The strip would
 have shown the June washout in week one; the FINRA chart won't show the July
 echo until the late-August print.
@@ -281,8 +282,9 @@ RISK_BUILD tail (−40%) showed at weekly resolution.
 
 **Validation vs the modern composite.** On 2007–2026 overlap the proxy agrees
 with the mapped COT+VIX state 53% of weeks — the proxy reads the stress half
-only, so the two are complementary, not interchangeable (FLUSH weeks were a
-strict subset of SHOCK weeks). Live wiring: /margin/fast computes today's
+only, so the two are complementary, not interchangeable (3 of the 5 modern
+FLUSH weeks were SHOCK weeks — Mar-2022's VIX-driven FLUSH never moved
+realized 20d vol by ≥8pts; corrected by adversarial QA). Live wiring: /margin/fast computes today's
 stress state from FMP closes (FRED SP500 fallback) and the banner shows the
 matching matrix cell vs the current monthly state, with baseline alongside.
 
@@ -293,3 +295,23 @@ the strip's other stats. Realized vol is price-derived, so state and forward
 return share an instrument (vol clustering); the margin leg is the independent
 conditioning variable. 2026-07-28 live reading: NORMAL (rvol 9.3%, vz −0.58,
 Δ20d −7.8) × monthly BLOWOFF.
+
+## Adversarial QA round (2026-07)
+
+Two counter-agents independently recomputed both monitors from raw sources.
+Retail monitor: 0 substantive diffs across 1,184 rows; fixes shipped for a
+cold-outage staleness edge (state now nulled past 120 days), 1997 splice-year
+YoY suppression (cross-source base distorted up to ~8pp), and a banner
+footnote that conflated the FINRA-era playbook with the 75y peak study.
+Fast strip: all 32 frozen stat blocks of FAST_PLAYBOOK + DEEP_STATES +
+DEEP_MATRIX reproduced bit-for-bit; corrections shipped for DEEP_BASELINE
+fwd3m (had been transcribed from the unrestricted 1929+ run: 2.5/63/−43.9 →
+correct 1951+ values 2.6/66/−41.8), the Deribit funding window (the API caps
+~744 hourly points per call, so the '180d' fetch actually returned ~30d — now
+fetched in 30-day windows), a shared cache timestamp that froze the funding
+history at process start, and CFTC stale-preferred caching. Standing caveats
+confirmed and now documented in the tooltip: COT publishes Friday for Tuesday
+data (~3 untradeable days inside every measured forward return), and matrix
+pct_pos values are over forward-measurable weeks (smaller than n for 7 cells).
+Boundary semantics (>=/<=) proven identical between study and live code;
+live z rounding to 2dp changes 0 of 995 historical state calls.

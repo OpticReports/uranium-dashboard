@@ -151,3 +151,73 @@ def test_margin_fast_includes_deep_block():
         "SHOCK", "AFTERSHOCK", "COMPLACENT", "NORMAL")
     assert d["baseline"]["fwd12m"]["pct_pos"] == 74
     assert d["matrix"]["COMPLACENT"]["BLOWOFF"]["fwd12m"]["pct_pos"] == 49
+
+
+def test_fast_state_exact_boundaries():
+    # thresholds are INCLUSIVE exactly as backtested (>= / <=); a >= -> >
+    # regression must fail here (QA: old cases sat 0.5 units inside regions)
+    assert fast_state(-2.0, -0.5, 8.0) == "FLUSH"      # dz4, vix20 at bounds
+    assert fast_state(-2.0, -0.49, 8.0) == "CALM"
+    assert fast_state(-1.0, 0.2, 0.0) == "WASHED_OUT"  # z, vix20 at bounds
+    assert fast_state(-0.99, 0.2, 0.0) == "CALM"
+    assert fast_state(1.0, 0.2, 4.0) == "RISK_BUILD"   # z, vix20 at bounds
+    assert fast_state(1.0, 0.2, 4.01) == "CALM"
+
+
+def test_frozen_constants_pinned():
+    # transcription guards: QA round 2 caught DEEP_BASELINE fwd3m pasted from
+    # the wrong (1929-unrestricted) study run. Pin the corrected values plus
+    # the headline cells so any future re-freeze must consciously update these.
+    from app.api.routes_margin_fast import (
+        DEEP_BASELINE, DEEP_MATRIX, FAST_PLAYBOOK,
+    )
+    assert DEEP_BASELINE["fwd3m"] == {"median": 2.6, "pct_pos": 66, "worst": -41.8}
+    assert DEEP_BASELINE["n"] == 3803
+    assert DEEP_BASELINE["fwd12m"] == {"median": 10.3, "pct_pos": 74, "worst": -46.3}
+    assert FAST_PLAYBOOK["FLUSH"]["stats"]["fwd1m"] == {
+        "n": 5, "median": 7.4, "pct_pos": 100, "worst": 0.8}
+    assert FAST_PLAYBOOK["WASHED_OUT"]["stats"]["fwd12m"] == {
+        "n": 99, "median": 15.6, "pct_pos": 95, "worst": -12.5}
+    assert FAST_PLAYBOOK["RISK_BUILD"]["stats"]["fwd12m"]["worst"] == -40.3
+    assert DEEP_MATRIX["AFTERSHOCK"]["SQUEEZE"]["fwd12m"] == {
+        "median": 22.7, "pct_pos": 89, "worst": -38.3}
+    assert DEEP_MATRIX["COMPLACENT"]["BLOWOFF"]["fwd12m"]["pct_pos"] == 49
+    assert DEEP_MATRIX["COMPLACENT"]["WASHOUT"]["fwd12m"]["pct_pos"] == 11
+    assert DEEP_MATRIX["SHOCK"]["BLOWOFF"]["fwd3m"]["pct_pos"] == 100
+
+
+def test_deribit_caches_are_independent(monkeypatch):
+    # QA finding: a shared cache timestamp let every summary refresh mark the
+    # funding history fresh, freezing the funding chart at process start.
+    from app.sources import deribit
+    calls = {"summary": 0, "funding": 0}
+
+    class R:
+        def __init__(self, j):
+            self._j = j
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return self._j
+
+    def fake_get(url, params=None, timeout=None):
+        if "book_summary" in url:
+            calls["summary"] += 1
+            return R({"result": [{"mark_price": 60000.0, "open_interest": 7e8,
+                                  "funding_8h": 1e-5}]})
+        calls["funding"] += 1
+        return R({"result": [{"timestamp": int(params["end_timestamp"]) - 1000,
+                              "interest_8h": 1e-5}]})
+
+    monkeypatch.setattr(deribit, "httpx",
+                        type("H", (), {"get": staticmethod(fake_get)}))
+    deribit._scache.update({"ts": 0.0, "data": None})
+    deribit._fcache.update({"ts": 0.0, "data": None})
+    assert deribit.fetch_btc_perp() is not None       # summary cache now fresh
+    d, v = deribit.fetch_funding_history(days=60)
+    assert calls["funding"] >= 1 and d and v          # funding STILL fetched
+    n = calls["funding"]
+    deribit.fetch_funding_history(days=60)
+    assert calls["funding"] == n                      # its own TTL now caches
