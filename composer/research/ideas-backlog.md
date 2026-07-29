@@ -55,6 +55,23 @@ Validation bar before ANY of these trade real money (the standing rule):
   "responsiveness" benefit tested at ~zero on daily data — retest with real
   intraday data if the IBKR stack gets built.
 
+## Capacity at $1M+ (owner plans ~12mo scale-up; measured 2026-07-29)
+
+p95 daily one-way trade at a $1M book vs 6-month avg daily $ volume:
+ZVOL 32.6% of ADV (!), VBF 31.4% (!), VXZ 12.8%, VIXM 5.9%, ANGL 1.2%.
+Composer batches MARKET orders into a 15-minute window and cannot work
+orders — 30% of screen ADV in 15 minutes is 50-150bps impact territory on
+those names, not the engine's 5bps (ETF create/redeem softens this — true
+capacity is the underlying's depth — but batch market orders don't access
+it well). ZVOL is already ~8% of ADV at the current $250k book: the
+harvester's live divergence is the canary; watch its monthly numbers.
+Scale path BEFORE any IBKR migration: swap thin tickers for deep
+equivalents inside Composer (VBF->LQD/VCIT, VIXM/VXZ->VIXY-based mid-term
+structures, ZVOL->deeper short-vol implementation) — same exposures,
+penny-wide instruments; removes most of the capacity problem natively.
+Migration gate at ~$500-750k: build the IBKR stack only if measured live
+slippage trends >5bps/side or the ticker swaps prove unavailable.
+
 ## Trigger to revisit
 
 Owner starts building the IBKR execution project (or equivalent
