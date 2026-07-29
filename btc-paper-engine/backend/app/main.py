@@ -250,7 +250,7 @@ def _blend_stats(name: str, b3, b4, w_trend: float, lev: float) -> dict:
                          if wins or losses else None),
             "profit_factor": (round(sum(wins) / sum(losses), 2)
                               if losses and sum(losses) > 0 else None),
-            "exit_mix": {}, "equity": round(100000 * eq, 2),
+            "exit_mix": {}, "equity": round(b3.cfg.start_equity * eq, 2),
             **_risk_stats(steps, years, eq - 1, mdd)}
 
 
@@ -263,13 +263,15 @@ def _hold_stats(bars_win, start_equity: float, taker_bps: float) -> dict | None:
         return None
     fee = taker_bps / 10000.0
     qty = start_equity * (1 - fee) / bars_win[0].open
-    steps, peak, mdd, prev = [], None, 0.0, None
+    # peak seeded at the ENTRY value so a first-bar open->close decline counts
+    # (QA nit: seeding at the first close hid it)
+    steps, peak, mdd, prev = [], qty * bars_win[0].open, 0.0, None
     for b in bars_win:
         v = qty * b.close
         if prev:
             steps.append(v / prev - 1)
         prev = v
-        peak = v if peak is None else max(peak, v)
+        peak = max(peak, v)
         mdd = min(mdd, v / peak - 1)
     total = prev / start_equity - 1
     years = (bars_win[-1].ts - bars_win[0].ts) / (365.25 * 86400)
@@ -315,12 +317,19 @@ def replay_compare(window: str = "2y", start: str | None = None,
     out = {}
     for n, b in res.books.items():
         st = book_stats(b)
+        # Like-for-like vs the HOLD row (QA finding): value open positions and
+        # measure drawdown at every 4h close, not just trade exits — exit-only
+        # DD flattered the books by 1-4pp and dropped end-of-window unrealized
+        # P&L. Trade-level stats (win rate, PF, exit mix) stay exit-based.
+        total = b.mtm_equity / b.cfg.start_equity - 1
+        st["total_return_pct"] = round(100 * total, 1)
+        st["equity"] = round(b.mtm_equity, 2)
+        st["max_dd_pct"] = round(100 * b.mtm_max_dd, 1)
         steps = [(t.equity_after / t.equity_before - 1) for t in b.trades
                  if t.equity_before]
         yrs = ((b.trades[-1].exit_ts - b.trades[0].entry_ts) / (365.25 * 86400)
                if len(b.trades) >= 2 else None)
-        st.update(_risk_stats(steps, yrs, b.equity / b.cfg.start_equity - 1,
-                              st["max_dd_pct"] / 100.0))
+        st.update(_risk_stats(steps, yrs, total, b.mtm_max_dd))
         out[n] = st
     if "S3" in res.books and "S4" in res.books:
         out["S5"] = _blend_stats("S5", res.books["S3"], res.books["S4"], 0.25, 1.5)

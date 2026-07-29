@@ -84,7 +84,7 @@ const METRIC_GLOSSARY: Record<string, { title: string; body: string[] }> = {
     "Short windows annualize noisily — a lucky month annualizes to a silly number. Trust CAGR more as the window grows." ] },
   m_dd: { title: "Max drawdown", body: [
     "The deepest peak-to-trough fall in the book's equity during the window — the worst moment for someone who invested at the top.",
-    "This is the metric that determines whether you'd actually stick with a strategy: a +60%/yr book with −45% drawdowns gets abandoned in practice. Computed on trade-close equity." ] },
+    "This is the metric that determines whether you'd actually stick with a strategy: a +60%/yr book with −45% drawdowns gets abandoned in practice. In THIS comparison table, book drawdowns (and returns) are marked to market at every 4h close with open positions valued — the same basis as the HOLD row, so the side-by-side is fair. Blend rows (S5/S6) are synthesized from ingredient trade exits and remain exit-marked — their DD reads slightly shallow. The live Books table above still shows realized (trade-close) figures." ] },
   m_mar: { title: "MAR ratio — CAGR ÷ max drawdown", body: [
     "Growth per unit of worst-case pain: CAGR divided by the absolute max drawdown. MAR 2.0 = the book earns 2% per year for every 1% of maximum drawdown it inflicted.",
     "Rule of thumb: below ~0.5 is poor, ~1 is decent, 2+ is excellent for a directional strategy. It's the single best number for 'is the return worth the ride?' — but it's driven by ONE event (the worst drawdown), so it's noisy on short windows." ] },
