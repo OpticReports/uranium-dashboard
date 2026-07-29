@@ -36,10 +36,11 @@ interface TradeRow2 {
 }
 interface EqPoint { ts: number; equity: number }
 
-const BOOK_COLORS: Record<string, string> = { S1: "#38bdf8", S2: "#f97316", S3: "#94a3b8", S4: "#c084fc", S5: "#34d399", S6: "#fbbf24" };
+const BOOK_COLORS: Record<string, string> = { S1: "#38bdf8", S2: "#f97316", S3: "#94a3b8", S4: "#c084fc", S5: "#34d399", S6: "#fbbf24", HOLD: "#e2e8f0" };
 const BOOK_LABEL: Record<string, string> = {
   S1: "S1 · vol-target 5.5%", S2: "S2 · 1.95x aggressive", S3: "S3 · 1x control",
   S4: "S4 · Donchian trend", S5: "S5 · blend 75/25 @1.5x", S6: "S6 · blend 75/25 @2x",
+  HOLD: "Buy & hold BTC",
 };
 
 const BOOK_GLOSSARY: Record<string, { title: string; body: string[] }> = {
@@ -69,6 +70,10 @@ const BOOK_GLOSSARY: Record<string, { title: string; body: string[] }> = {
     "Same 75/25 pullback/trend blend as S5, levered 2×.",
     "Frontier (2022-2026): ~+60%/yr at −27% max DD — roughly double S2's growth rate at similar drawdown, IF the correlation structure holds live.",
     "Higher leverage on a diversification assumption is the specific risk here: in a crash where both books lose together, 2× doubles the damage. Watch S5 vs S6 divergence as the stress gauge." ] },
+  HOLD: { title: "Buy & hold BTC — the benchmark every book must beat", body: [
+    "Buys BTC at the window's first 4h open with the full starting capital (one taker fee), then does nothing — marked to market at every 4h close.",
+    "This is the null strategy: any book that returns less than HOLD over a window did worse than no strategy at all. But compare MAR and max DD too — the books' entire pitch is capturing a chunk of BTC's upside at a fraction of its drawdown.",
+    "Basis note: HOLD's Sharpe/Sortino are computed on 4h-bar steps while the books step at trade exits — comparable in spirit, not identical in basis. Short windows (~1m) suppress CAGR/Sharpe for everything, HOLD included." ] },
 };
 
 const METRIC_GLOSSARY: Record<string, { title: string; body: string[] }> = {
