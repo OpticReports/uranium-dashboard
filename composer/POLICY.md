@@ -88,6 +88,11 @@ monitors whether KMLM EARNS BACK the higher 19/39/27/15 weight.
   convergence as live hostile-regime months accumulate is the finding.
   Any reallocation it suggests requires owner approval (except where an
   existing pre-authorized operation already covers the move).
+- QUARTERLY (same runs): `composer/scripts/slippage_measure.py` — realized
+  fill slippage vs the 5bps engine assumption (addendum 14b; baseline
+  2026-07-29: +2.9bps/side on $10.0M). Report the trend, especially the
+  thin names (ZVOL/VBF/VXZ/VIXM), against the scale gates in
+  research/ideas-backlog.md. Analysis only — no trades.
 
 ## Standing exclusions
 

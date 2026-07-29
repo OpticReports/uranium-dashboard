@@ -733,3 +733,29 @@ persistently >5bps/side (divergence.py tracks this), a 10x larger book
 (the gap scales linearly with AUM), or strategies redesigned for lower
 turnover where IBKR's fixed costs amortize differently. Parked in
 research/ideas-backlog.md alongside the IBKR/HF build triggers.
+
+
+## Addendum 14b — MEASURED Composer slippage from real fills (2026-07-29)
+
+The addendum-14 sensitivity question ("what does Composer actually cost per
+side?") is now measured, not assumed. The API's trade-activity report
+exposes every real fill (avg fill price, qty, side, timestamp; fills run
+~15:53 ET). Benchmarking all 253 account fills since inception ($10.0M
+traded notional) against same-day official closes (the price the backtest
+engine credits):
+
+- REALIZED SLIPPAGE: +2.94 bps/side notional-weighted
+  (equal-weighted -1.8 +/- 3.1 — statistically ~zero; median +0.9).
+- vs the engine's 5.0bps assumption: Composer's live execution BEATS its
+  own model at the current book size. Batch market orders on liquid ETFs
+  minutes before the close are cheap.
+- Platform verdict updated: at ~2.9bps measured, blended Composer drag
+  ~380bps/yr vs modeled IBKR ~433bps/yr — IBKR is ~$1.3k/yr WORSE at
+  $250k. The migration case at current scale is now CLOSED by measurement.
+- The $1M question stays open: thin names carry small samples but point
+  the expected direction (VBF +33bps/side n=7; ZVOL -24bps n=6 = noise),
+  and today's fills say nothing about 5-30%-of-ADV orders. The quarterly
+  re-measurement (scripts/slippage_measure.py, now in the standing
+  cadence) builds the evidence curve as the book grows; sustained >5bps
+  or deteriorating thin-name fills triggers the backlog's swap/migration
+  gates.
