@@ -25,3 +25,33 @@ def test_hold_stats_benchmark():
 def test_hold_stats_needs_two_bars():
     assert _hold_stats([_bar(0, 100.0, 100.0)], 100_000.0, 6.0) is None
     assert _hold_stats([], 100_000.0, 6.0) is None
+
+
+def test_hold_dd_counts_first_bar_decline():
+    # QA nit: peak seeded at the first CLOSE hid an open->close drop on bar 1
+    bars = [_bar(0, 100.0, 80.0), _bar(14400, 80.0, 90.0)]
+    h = _hold_stats(bars, 100_000.0, 6.0)
+    assert h["max_dd_pct"] == -20.0
+
+
+def test_mark_to_market_values_open_positions():
+    # QA finding: exit-only DD flattered books vs HOLD; MTM must see the
+    # trough an open position rides through even if the trade later closes
+    # at a profit.
+    from app.engine.core import Book, BookCfg, Position, _mark_to_market
+    b = Book(cfg=BookCfg(name="T", sizing="fixed", start_equity=100_000.0))
+    b.position = Position(side="L", entry_ts=0, entry_price=100.0, qty=1000.0,
+                          notional=100_000.0, stop_price=0.0, atr_at_entry=1.0,
+                          signal_ts=0)
+    _mark_to_market(b, 80.0)     # -20% trough while open
+    _mark_to_market(b, 120.0)    # recovers to +20%
+    assert abs(b.mtm_max_dd + 0.2) < 1e-9
+    assert b.mtm_equity == 120_000.0
+    assert b.mtm_peak == 120_000.0
+    # short side: price falling is a gain
+    b2 = Book(cfg=BookCfg(name="T2", sizing="fixed", start_equity=100_000.0))
+    b2.position = Position(side="S", entry_ts=0, entry_price=100.0, qty=1000.0,
+                           notional=100_000.0, stop_price=0.0, atr_at_entry=1.0,
+                           signal_ts=0)
+    _mark_to_market(b2, 90.0)
+    assert b2.mtm_equity == 110_000.0 and b2.mtm_max_dd == 0.0

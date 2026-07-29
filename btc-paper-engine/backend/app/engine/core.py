@@ -133,11 +133,21 @@ class Book:
     position: Position | None = None
     pending: Pending | None = None
     trades: list[ClosedTrade] = field(default_factory=list)
+    # Marked-to-market view, updated every closed bar (open positions valued
+    # at the close). QA: exit-only DD flattered books vs the HOLD benchmark
+    # by 1-4pp; /replay/compare uses these for a like-for-like basis. Not
+    # persisted — meaningful only within one replay/process lifetime.
+    mtm_equity: float = 0.0
+    mtm_peak: float = 0.0
+    mtm_max_dd: float = 0.0
 
     def __post_init__(self):
         if self.equity == 0.0:
             self.equity = self.cfg.start_equity
             self.peak_equity = self.cfg.start_equity
+        if self.mtm_equity == 0.0:
+            self.mtm_equity = self.equity
+            self.mtm_peak = self.equity
 
 
 def eval_signal(bar: Bar, ind: Ind, cfg: SignalCfg) -> Side | None:
@@ -239,6 +249,20 @@ def _process_donchian(book: Book, bar: Bar, ind: Ind, tcfg: TradeCfg,
                                atr_signal=ind.atr14 or 0.0)
 
 
+def _mark_to_market(book: Book, close: float) -> None:
+    """Value the book at this bar's close, open position included."""
+    unreal = 0.0
+    pos = book.position
+    if pos is not None:
+        sgn = 1.0 if pos.side == "L" else -1.0
+        unreal = pos.qty * (close - pos.entry_price) * sgn
+    book.mtm_equity = book.equity + unreal
+    book.mtm_peak = max(book.mtm_peak, book.mtm_equity)
+    if book.mtm_peak > 0:
+        book.mtm_max_dd = min(book.mtm_max_dd,
+                              book.mtm_equity / book.mtm_peak - 1)
+
+
 def process_closed_bar(book: Book, bar: Bar, ind: Ind,
                        scfg: SignalCfg, tcfg: TradeCfg,
                        signal: Side | None) -> None:
@@ -246,7 +270,14 @@ def process_closed_bar(book: Book, bar: Bar, ind: Ind,
     strategy signal evaluated on this bar's close (None if rules not met)."""
     if book.cfg.strategy == "donchian":
         _process_donchian(book, bar, ind, tcfg, signal)
-        return
+    else:
+        _process_pullback(book, bar, ind, scfg, tcfg, signal)
+    _mark_to_market(book, bar.close)
+
+
+def _process_pullback(book: Book, bar: Bar, ind: Ind,
+                      scfg: SignalCfg, tcfg: TradeCfg,
+                      signal: Side | None) -> None:
     # 1) pending limit entry resolves against this bar
     if book.pending is not None:
         p = book.pending
