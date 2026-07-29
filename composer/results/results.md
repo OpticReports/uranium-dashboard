@@ -697,3 +697,39 @@ accumulate. The decision variable is the owner's prior on an unmeasured
 engine's crash behavior + their explicit 2-year crash thesis. Escalated to
 owner; no auto-action (Op 3 authorizes the 29/29 shift only on divergence
 failure, not on QA findings).
+
+
+## Addendum 14 — Composer vs IBKR execution study (2026-07-29)
+
+Owner question: would the same strategies on IBKR (responsive, better fills)
+beat Composer's once-daily 3:45-4:00 PM window over 5 years? Study in
+`research/exec_study/` (scripts + full entry/exit ledgers trades-*.csv);
+v1/v2 were BROKEN twice by the owner-requested hostile QA agent (double-
+counted Composer slippage — dvm_capital is already net; guard "episodes" on
+stale gap-day closes; split-adjusted phantom prices in commissions) and
+v3 incorporates every finding. QA's independent recomputation matches v3.
+
+Measured (trade ledger validated against Composer's engine at 4.99-5.03bps):
+- Two-sided turnover/yr: HG 180x, KMLM 147x, SLEEVE 55x, HARV 135x —
+  blended ~130x: the book trades its own value every ~2 days. Execution is
+  a first-order cost for BOTH platforms (4-9%/yr), dwarfed only by strategy
+  selection itself. Turnover, not venue, is the dominant lever.
+- Drag/yr vs reconstructed true gross: Composer 705bps blended (their own
+  5bps/side engine assumption + illiquid surcharge) vs IBKR 433bps
+  (half-spread x 0.5 + $0.0065/sh all-in) -> IBKR edge 272bps/yr =
+  ~$6.8k/yr on the $250k book (~$34k over 5y at current scale).
+- SENSITIVITY (the honest headline): the gap is assumption-driven. If
+  Composer's real fills are 2.5bps/side (live divergence suggests fills at
+  or better than model: HG live beat its backtest), IBKR is WORSE by
+  ~$1.3k/yr. Range: -$1.3k to +$15k/yr. Not decision-grade either way.
+- Responsiveness (intraday HYG guard vs 3:45 evaluation): NO meaningful
+  edge — +1.09pp over 3.27y on the ZVOL sleeve, from ONE whipsaw episode,
+  est-range 0..+2.2pp, worst-case negative. v1's +6.99pp was refuted by QA
+  (8 of 9 episodes were gap-day artifacts).
+
+Verdict: the data does NOT support migrating for execution reasons at
+current scale. What WOULD change it: measured live Composer slippage
+persistently >5bps/side (divergence.py tracks this), a 10x larger book
+(the gap scales linearly with AUM), or strategies redesigned for lower
+turnover where IBKR's fixed costs amortize differently. Parked in
+research/ideas-backlog.md alongside the IBKR/HF build triggers.

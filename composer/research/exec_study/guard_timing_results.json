@@ -1,0 +1,18 @@
+{
+ "pairs": 74,
+ "episodes": [
+  {
+   "date": "2026-03-20",
+   "close_confirmed": false,
+   "zvol_fullday_pct": -2.13,
+   "ibkr_est_pct": -1.06,
+   "est_range_pct": [
+    -0.0,
+    -2.13
+   ],
+   "worst_case_low_pct": -2.36
+  }
+ ],
+ "ret_composer": -0.2423,
+ "ret_ibkr": -0.2341
+}
