@@ -45,6 +45,16 @@ Validation bar before ANY of these trade real money (the standing rule):
   (realized vol, microstructure) have forward edge where daily bars had
   none.
 
+## From the execution study (addendum 14, 2026-07-29)
+
+- Composer-vs-IBKR execution gap measured at -$1.3k..+$15k/yr on $250k —
+  assumption-bound, not decision-grade. Revisit the migration case when:
+  (a) divergence.py shows live Composer slippage persistently >5bps/side,
+  (b) the book approaches ~$1M+ (gap scales with AUM), or (c) strategies
+  are redesigned for materially lower turnover. The intraday-guard
+  "responsiveness" benefit tested at ~zero on daily data — retest with real
+  intraday data if the IBKR stack gets built.
+
 ## Trigger to revisit
 
 Owner starts building the IBKR execution project (or equivalent
