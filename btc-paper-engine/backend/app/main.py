@@ -254,6 +254,33 @@ def _blend_stats(name: str, b3, b4, w_trend: float, lev: float) -> dict:
             **_risk_stats(steps, years, eq - 1, mdd)}
 
 
+def _hold_stats(bars_win, start_equity: float, taker_bps: float) -> dict | None:
+    """Buy-and-hold BTC benchmark for the same window: buy at the first bar's
+    open (one taker fee), mark to market at every 4h close. Risk stats are on
+    4h-bar steps — finer than the books' trade-step basis, so Sharpe/Sortino
+    are comparable in spirit, not identical in basis."""
+    if len(bars_win) < 2:
+        return None
+    fee = taker_bps / 10000.0
+    qty = start_equity * (1 - fee) / bars_win[0].open
+    steps, peak, mdd, prev = [], None, 0.0, None
+    for b in bars_win:
+        v = qty * b.close
+        if prev:
+            steps.append(v / prev - 1)
+        prev = v
+        peak = v if peak is None else max(peak, v)
+        mdd = min(mdd, v / peak - 1)
+    total = prev / start_equity - 1
+    years = (bars_win[-1].ts - bars_win[0].ts) / (365.25 * 86400)
+    return {"book": "HOLD", "synthetic": True, "trades": 1,
+            "total_return_pct": round(100 * total, 1),
+            "max_dd_pct": round(100 * mdd, 1),
+            "win_rate": None, "profit_factor": None, "exit_mix": {},
+            "equity": round(prev, 2),
+            **_risk_stats(steps, years, total, mdd)}
+
+
 @app.get("/replay/compare")
 def replay_compare(window: str = "2y", start: str | None = None,
                    end: str | None = None):
@@ -298,10 +325,14 @@ def replay_compare(window: str = "2y", start: str | None = None,
     if "S3" in res.books and "S4" in res.books:
         out["S5"] = _blend_stats("S5", res.books["S3"], res.books["S4"], 0.25, 1.5)
         out["S6"] = _blend_stats("S6", res.books["S3"], res.books["S4"], 0.25, 2.0)
-    i0 = next((i for i, b in enumerate(bars_) if b.ts >= t0), 0)
-    bh = bars_[-1].close / bars_[i0].close - 1 if bars_ else 0
+    bars_win = [b for b in bars_ if t0 <= b.ts <= t1]
+    hold = _hold_stats(bars_win, ENGINE.books_cfg[0].start_equity,
+                       ENGINE.tcfg.taker_fee_bps)
+    if hold:
+        out["HOLD"] = hold
+    bh = hold["total_return_pct"] if hold else 0.0
     return {"window": {"from": _iso(t0), "to": _iso(t1)},
-            "books": out, "buy_hold_pct": round(100 * bh, 1)}
+            "books": out, "buy_hold_pct": bh}
 
 
 @app.post("/replay")
