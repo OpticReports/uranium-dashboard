@@ -470,6 +470,58 @@ function ToggleChip({
   );
 }
 
+// When the two banners' headline stats point in opposite directions, render a
+// one-line reconciliation so the reader doesn't mistake a posture/trigger
+// split for a contradiction. Direction taxonomy: monthly BLOWOFF/ELEVATED
+// read bearish, NEUTRAL/SQUEEZE/WASHOUT read constructive; the strip's CALM/
+// WASHED_OUT/FLUSH banners read benign-to-bullish, RISK_BUILD cautionary.
+function reconcile(
+  fast: FastLeverageState,
+  slow: LeverageState,
+): string | null {
+  const slowBearish = slow === "BLOWOFF" || slow === "ELEVATED";
+  if (slowBearish && fast === "CALM") {
+    return (
+      "These banners answer different questions — they are not in conflict. " +
+      `The monthly gauge sets POSTURE: a ${slow === "BLOWOFF" ? "blown-off" : "stretched"}, ` +
+      "late-cycle market offering worse-than-normal forward odds over quarters. " +
+      "The strip sets TIMING: no forced selling this week, so nothing to act on yet. " +
+      "CALM's ~80%-higher stat is just the market's base rate (the strip has no " +
+      "information this week), not a bullish call — 2008 began from CALM. The 75y " +
+      "line below multiplies the two conditions together; historically this " +
+      "wait-state resolved mildly below baseline, and the moves to watch for are " +
+      "COMPLACENT (fragility) or FLUSH (the unwind starting)."
+    );
+  }
+  if (slowBearish && fast === "WASHED_OUT") {
+    return (
+      "Not a contradiction — a lag. Weekly positioning has already flushed while " +
+      "the monthly gauge still reads hot; the monthly line usually confirms 1-2 " +
+      "prints later. The strip is the leading read here, and WASHED_OUT is the " +
+      "best-validated signal on the board (95% higher 12 months later)."
+    );
+  }
+  if (slowBearish && fast === "FLUSH") {
+    return (
+      "Not a contradiction — the trigger firing into a stretched cycle. The " +
+      "unwind the monthly gauge warned about may be starting; the monthly line " +
+      "will confirm 1-2 prints later. FLUSH's short-term bounce stat is about " +
+      "climax weeks, not an all-clear for the cycle."
+    );
+  }
+  if (!slowBearish && fast === "RISK_BUILD") {
+    return (
+      "Not a contradiction — different subjects. The strip's caution is about " +
+      "this week's CROWDING (leveraged funds piling in on calm vol — the state " +
+      "with the study's worst tail); the monthly gauge's benign read is about " +
+      "CYCLE position. Both can be true: supportive backdrop, crowded moment. " +
+      "The action text differs accordingly: don't add leverage, but no cycle " +
+      "alarm."
+    );
+  }
+  return null;
+}
+
 function FastBanner({
   data,
   slowState,
@@ -533,6 +585,14 @@ function FastBanner({
             × monthly {slowState}:
           </span>{" "}
           {cross}
+        </p>
+      )}
+      {slowState && reconcile(state, slowState) && (
+        <p className="mt-1.5 rounded border border-sky-500/30 bg-sky-500/5 px-2.5 py-1.5 text-[11px] leading-relaxed text-slate-300">
+          <span className="font-semibold uppercase tracking-wide text-[10px] text-sky-400">
+            Reconciliation:
+          </span>{" "}
+          {reconcile(state, slowState)}
         </p>
       )}
       <DeepLine deep={data.deep} slowState={slowState} />
