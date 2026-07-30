@@ -228,3 +228,41 @@ def test_deribit_caches_are_independent(monkeypatch):
     n = calls["funding"]
     deribit.fetch_funding_history(days=60)
     assert calls["funding"] == n                      # its own TTL now caches
+
+
+def test_rate_shock_states_and_endpoint():
+    from datetime import date, timedelta
+    from unittest.mock import patch
+    from app.api.routes_rates import (
+        RATE_MATRIX, corr_regime, rates_shock, shock_state,
+    )
+    # boundary semantics match the pre-registered rules (inclusive)
+    assert shock_state(75.0) == "SPIKE" and shock_state(74.9) == "NEUTRAL"
+    assert shock_state(-75.0) == "PLUNGE" and shock_state(None) is None
+    assert corr_regime(0.2) == "POS" and corr_regime(-0.2) == "NEG"
+    assert corr_regime(0.19) == "MIXED" and corr_regime(None) is None
+    # headline frozen cells pinned (transcription guard)
+    assert RATE_MATRIX["PLUNGE"]["POS"]["fwd12m"]["pct_pos"] == 100
+    assert RATE_MATRIX["SPIKE"]["POS"]["rec_12m_pct"] == 47
+    assert RATE_MATRIX["SPIKE"]["NEG"]["episodes"] == 2
+    # endpoint: 30y spiking +1pp over 60 obs, corr strongly positive
+    days = [date(2024, 1, 1) + timedelta(days=i) for i in range(400)]
+    y30 = [4.0] * 340 + [4.0 + (i + 1) * 1.0 / 60 for i in range(60)]
+    sp = [100.0 * (1.001 ** i) for i in range(400)]
+    # yields DOWN when stocks up -> bond PRICES move WITH stocks -> corr POS
+    # (the no-hedge regime; same sign convention as the corr tile)
+    y10 = [3.0 - 0.3 * (sp[i] / sp[i - 1] - 1) / 0.001 if i else 3.0
+           for i in range(400)]
+    bundle = {"30y": (days, y30), "sp500": (days, sp), "10y": (days, y10)}
+    with patch("app.api.routes_rates.fetch_bundle", return_value=bundle):
+        r = rates_shock()
+    assert r["current"]["state"] == "SPIKE"
+    assert r["current"]["regime"] == "POS"
+    assert r["cell"]["rec_12m_pct"] == 47
+    assert any("double" in p or "47%" in p for p in r["summary"])
+    assert r["series"][-1]["d60_bp"] == 100
+    # degradation: empty bundle -> nulls + graceful summary
+    with patch("app.api.routes_rates.fetch_bundle", return_value={}):
+        r2 = rates_shock()
+    assert r2["current"]["state"] is None and r2["cell"] is None
+    assert r2["summary"]

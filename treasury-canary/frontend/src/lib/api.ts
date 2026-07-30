@@ -570,6 +570,40 @@ export interface MarginFast {
   note: string;
 }
 
+export type RateShockState = "SPIKE" | "PLUNGE" | "NEUTRAL";
+export type CorrRegime = "POS" | "MIXED" | "NEG";
+
+export interface RateShockCell {
+  n: number;
+  episodes: number;
+  rec_12m_pct: number;
+  fwd12m: { median: number; pct_pos: number; worst: number };
+  evidence: string;
+}
+
+export interface RateShock {
+  current: {
+    yield_30y: number | null;
+    d60_bp: number | null;
+    state: RateShockState | null;
+    corr: number | null;
+    regime: CorrRegime | null;
+    date: string | null;
+  };
+  cell: RateShockCell | null;
+  summary: string[];
+  series: Array<{ date: string; yield: number; d60_bp: number | null }>;
+  baseline: {
+    n: number;
+    rec_12m_pct: number;
+    fwd12m: { median: number; pct_pos: number; worst: number };
+  };
+  shock_stats: Record<RateShockState, RateShockCell & { label: string }>;
+  matrix: Record<RateShockState, Record<CorrRegime, RateShockCell>>;
+  thresholds: Record<string, number>;
+  note: string;
+}
+
 export interface CorrPoint {
   date: string;
   corr: number;
@@ -685,6 +719,7 @@ export const api = {
   laborSahm: () => getJson<SahmSeries>("/labor/sahm"),
   marginLeverage: () => getJson<MarginLeverage>("/margin/leverage"),
   marginFast: () => getJson<MarginFast>("/margin/fast"),
+  ratesShock: () => getJson<RateShock>("/rates/shock"),
   flowDestinations: () => getJson<FlowDestinations>("/flows/destinations"),
   corrSeries: () => getJson<CorrSeries>("/crossasset/corr"),
   curveCanary: (pair: string) =>
