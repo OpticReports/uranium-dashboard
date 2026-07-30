@@ -759,3 +759,48 @@ engine credits):
   cadence) builds the evidence curve as the book grows; sustained >5bps
   or deteriorating thin-name fills triggers the backlog's swap/migration
   gates.
+
+
+## Addendum 15 — Portfolio capacity analysis (owner question, 2026-07-30)
+
+"How big can the book get before slippage/liquidity hurts?" Analysis in
+research/exec_study/capacity.py + capacity_results.json, from the actual
+trade ledgers (p95 daily traded fraction of book per ticker) x 6-month
+median daily $ volume, with participation caps set vs full-day ADV
+(Composer's 15-min window carries only ~10-20% of a day's volume):
+1% of ADV = invisible, 5% = tolerable, >10% = moving the market.
+
+Screen-ADV ceilings (model-free) split the instruments into three tiers:
+- UNCONSTRAINED (ceilings $3.5M-$2.7B): all leveraged index ETFs (TQQQ,
+  SQQQ, SOXL, TECL, UPRO...), TLT, LQD, BIL, PULS, SVIX, SVXY, UVXY,
+  LABD/LABU, TMV/TMF, ANGL, SPAB. Never the binding constraint.
+- DERIVATIVE-BASED THIN NAMES (ZVOL, VXZ, VIXM): screen ceilings $20k-750k
+  are ALREADY exceeded — but screen ADV understates VIX-futures ETFs,
+  whose true depth is the futures curve ($200M+/day) via market-maker
+  create/redeem; measured fills confirm no strain yet (ZVOL -24bps/side,
+  n=6). Practical adjusted ceilings ~10-20x screen: ZVOL ~$0.8-1.6M,
+  VXZ ~$1.5-3M, VIXM several $M. These bind SECOND.
+- VBF — THE REAL CONSTRAINT. Corporate-bond ETF, $0.9M ADV, p95 trade
+  29% of book, and no fast AP arbitrage for batch market orders. Already
+  measured at +33bps/side (n=7) at the current $280k. Screen ceiling
+  (tolerable) ~$150k — the book is PAST it. Swap candidate: LQD/VCIT
+  (same exposure, 1000-4000x the volume). This is HG's safe-sector leg.
+
+Impact scaling, calibrated to measurement (the naive sqrt model
+overpredicts current-size impact ~100x vs our +2.9bps/side measured, so
+model RATES are rejected; sqrt SCALING is kept): excess impact grows
+~sqrt(book). Measured excess-over-spread today ~0-2bps/side -> ~0-4bps at
+$1M, ~0-6bps at $2.25M — concentrated entirely in the thin tier.
+
+CAPACITY VERDICT (current exact instruments):
+- to ~$500k: no action needed; VBF the only name past its comfort zone
+  (watch its fills in the quarterly slippage runs).
+- $500k-$1M: swap VBF -> LQD/VCIT (removes the binding constraint);
+  thin VIX-names fine on adjusted depth.
+- $1M-$5M: ZVOL/VXZ/VIXM approach even adjusted ceilings at p95 trade
+  sizes — re-implement those legs on deeper instruments (or accept
+  measured-then-rising impact; quarterly slippage_measure.py is the gauge).
+- ~$5-10M: practical ceiling of the CURRENT strategy set even with swaps
+  (window-batched market orders in vol products at $1M+ single prints).
+Escalation of the measured slippage trend past 5bps/side triggers the
+backlog gates (swaps first, IBKR-with-worked-orders second).
