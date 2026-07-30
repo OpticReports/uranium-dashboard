@@ -804,3 +804,33 @@ CAPACITY VERDICT (current exact instruments):
   (window-batched market orders in vol products at $1M+ single prints).
 Escalation of the measured slippage trend past 5bps/side triggers the
 backlog gates (swaps first, IBKR-with-worked-orders second).
+
+
+## Addendum 15b — VBF->VCIT swap study (scale prep, 2026-07-30)
+
+Follow-through on addendum 15's binding constraint. VBF appears in HG's
+tree exactly twice, both as pure ASSET nodes inside two identical
+bottom-1-RSI bond baskets {BSV, TLT, LQD, VBF, SPAB, ANGL} — never in a
+condition, so a swap changes no signal logic. LQD is already in the
+basket, so the replacement is VCIT (closest duration/credit profile,
+~500x VBF's volume).
+
+Backtests 2015-06-11..2026-07-30 (11.1y, same engine/settings):
+- BASELINE   CAGR +105.5%, maxDD 36.2%
+- VBF->VCIT  CAGR +103.2%, maxDD 36.4% — daily corr 0.9979 vs baseline,
+  differs on 9.4% of days, modeled gap -1.17%/yr
+- DROP-VBF   CAGR +101.1% — corr 0.9974, gap -2.13%/yr (VCIT swap is
+  strictly better than dropping the slot)
+
+Read: behavior preserved (0.998 corr); the modeled -1.2%/yr gap is what
+VBF's oversold-bounce picks earn IN-MODEL at zero assumed impact. At a
+$1M+ book VBF's real execution cost (measured +33bps/side already at
+$280k; sqrt-scaling worse at size, on $290k+ p95 prints into $0.9M ADV)
+erodes that edge; beyond ~$1-2M the swap dominates.
+
+DECISION RULE (owner sign-off required to deploy — logic changes are
+never auto-executed): swap when book >= ~$750k, OR earlier if VBF's
+measured fills degrade past ~50bps/side in a quarterly slippage run.
+BENCHED DRAFT ready: symphony 5CbBgpP9T8KcnCCwBGno ("BENCH: HG scale
+variant (VBF->VCIT)") — deployment is: owner approves, invest switches
+from HG to the variant (or HG's live tree is edited identically in-app).
