@@ -932,3 +932,18 @@ PROPOSED to owner (needs approval — new capital operation): POLICY
 symphony exceeds 40% of Composer book value, rebalance all four to
 29/29/27/15 targets via guarded CLI (25% single-move guard, staged
 windows as needed). Mechanically identical in spirit to the sleeve band.
+
+
+## Addendum 18b — With/without Holy Grail attribution (owner question 2026-07-31)
+
+Daily 3.26y (all four): WITH +101.7%/DD 10.0%/Sh 2.98/So 5.64; WITHOUT-HG
+(41/38/21) +104.9%/9.6%/2.94/5.44; HG alone +82.4%/27.9%/1.57/2.80.
+10y daily (only HG+SLEEVE exist pre-2023): HG alone +108.8%/35.8%/1.75;
+HG+SLEEVE 52/48 +62.9%/11.5%/2.13; SLEEVE alone +40.0%/14.9%/1.51.
+55y bootstrap: AS-MEASURED with vs without HG: +114.2% vs +114.1% (wash;
+KMLM's backtest is the CAGR machine in that lens). CONSERVATIVE: +70.1%
+vs +57.6% — removing HG costs 12.5pp/yr; HG is the only VALIDATED trend
+engine (6mo live beating model). HG-only in both lenses: ~+96% CAGR at
+54% median / 69% p95 DD — it is simultaneously the largest validated
+CAGR source AND the largest DD source; the other three engines are what
+turn its 54% drawdowns into the book's ~27%.
