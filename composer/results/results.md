@@ -834,3 +834,32 @@ measured fills degrade past ~50bps/side in a quarterly slippage run.
 BENCHED DRAFT ready: symphony 5CbBgpP9T8KcnCCwBGno ("BENCH: HG scale
 variant (VBF->VCIT)") — deployment is: owner approves, invest switches
 from HG to the variant (or HG's live tree is edited identically in-app).
+
+
+## Addendum 16 — Harvester keep/kill/resize re-test (owner question, 2026-07-31)
+
+Fresh 55y regime bootstrap + NEW 10y forward MC (block-bootstrap 120-month
+regime windows) comparing KEEP 29/29/27/15, KILL->all-three 34/34/32/0,
+KILL->engines 36.5/36.5/27/0, DOUBLE 25/25/27/23. Script:
+scratchpad harv_decision.py (regime_boot method, QA-fixed draws).
+
+CONSERVATIVE-KMLM lens (the decision lens; AS-MEASURED is dominated by
+KMLM's overfit backtest — same distortion hostile QA flagged in 13b):
+- 55y: KEEP CAGRmed +71.4% / DDp95 38.5%; KILL->all +80.4% / 45.6%;
+  KILL->engines +81.7% / 49.9%; DOUBLE +65.8% / 32.0%.
+- 10y fwd MC: KEEP DDp95 31.3%; KILL 37.3-41.5%; DOUBLE 25.8%.
+(Levels are backtest-inflated; RATIOS are the finding.)
+
+What HARV does, measured per regime (median monthly): CHOP (54% of all
+months) +2.77% while HG does -0.20%; TREND-UP +1.64% (lags engines — its
+cost); CRASH +1.46% guarded (only engine besides sleeve positive in all
+three regimes). Role: chop-specialist stabilizer. Removing it re-opens
+the third-regime gap and raises tail drawdown ~15-20% relative; keeping
+it costs ~10-12% relative CAGR in model-world.
+
+VERDICT REPORTED: KEEP at 15%. Killing it only "wins" in the world where
+KMLM's untested backtest is real — the exact bet the owner already
+declined at the 39%-KMLM decision. The honest CAGR lever is Operation
+3's KMLM earn-back (live-data test), not deleting the chop engine.
+DOUBLE not recommended (concentrates 2018-slow-bleed failure mode; the
+12% bleed alert guards the current size). Decision remains the owner's.
