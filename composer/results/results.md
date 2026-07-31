@@ -973,3 +973,52 @@ pipeline: regime-gate the two top-RSI trend branches (e.g. allow only
 when SPY > 200d SMA; else route to the BIL node) — a real-time gate will
 capture only part of the label-based bound, and the whole idea must
 survive backtest + adversarial QA before any live edit. NOT built yet.
+
+
+## Addendum 19b — Gate builds + three-agent adversarial panel: NEGATIVE result;
+## addendum 19's conclusion is RETRACTED (2026-07-31)
+
+Built 5 gated HG variants (trend leg wrapped in regime gates: SPY/QQQ
+200d SMA, SPY 60d momentum, 150/250d sensitivity), backtested 2015-06..
+2026-07 + 25y regime resample. Then a 3-agent hostile panel (statistical
+critic, implementation auditor, market-logic critic) reviewed everything.
+Artifacts: scratchpad gates/ (trees, curves, CASE_FILE.md, audit scripts).
+
+RESULTS (CAGR by window; DD = max drawdown over window):
+              1y     3y     5y    10y   11.1y  DD-11y  25y-model DDp95
+  BASELINE  +65.3% +84.6% +68.8% +108.4% +104.9%  35.8%   66.5%
+  best gate +62.8% +74.9% +59.4% +100.0%  +95.8%  32.0%   57.6%
+  SMA gates +65.3% +72.9% +51.0%  +89.1%  +87.0%  35.8%   63.7%
+Every gate reduces CAGR in every multi-year window; SMA gates RAISED 5y
+DD (30.7->34.9%).
+
+PANEL FINDINGS (all three reports preserved in session transcript):
+- STATISTICAL (critical): addendum 19's "-79pp uncompensated bleed" was
+  100% lookahead artifact — real-time labelings FLIP THE SIGN (+67 to
+  +144pp: the trend leg EARNS in real-time-identifiable non-up periods).
+  The leg's money is made in post-crash rebound days no causal trend
+  signal can pre-identify (10 gate-off days = 89% of V1's 11y shortfall).
+  V3's DD "improvement" is ONE knife-edge day (SPY 60d mom -0.78% on
+  2020-02-26) that vanishes at 55d/65d lookbacks; best-of-5 selection
+  noise. Episode attribution conditioned on outcome (peak-to-RECOVERY
+  windows: TREND only -18.7pp, DIP +96.2pp).
+- IMPLEMENTATION (pass): trees exact, engine honored every gate, all 42
+  table cells verified — the negative result is a real measurement.
+- MARKET-LOGIC (kill all designs): below-SMA days are the trend leg's
+  BEST state (+0.81pp/day vs +0.12 above); gates are phase-inverted (ON
+  in the decline, OFF in the V-recovery); every redesign family
+  (dip-routing, single-branch, vol gates, hysteresis) killed by
+  mechanism; book already pays for below-SMA protection (KMLM/sleeve/
+  HARV positive there) and gating would delete HG's recovery convexity —
+  the book's only rebound engine.
+
+DECISIONS: (1) addendum 19's "uncompensated risk" conclusion RETRACTED —
+the trend leg's chop/crash losses are the unavoidable price of its
+rebound harvesting, which is where HG's edge lives; (2) NO gate ships;
+none benched; drawdown management stays at book level (sleeve, cap,
+allocation); (3) METHODOLOGY STANDARD adopted for all future attribution
+work: real-time labels only, outcome-independent windows, compounded
+counterfactuals — no same-period regime labels in any decision analysis;
+(4) the one flagged curiosity (overextension trim, >+9% above SMA) is
+parked in ideas-backlog as in-sample dredging unless it survives
+pre-2021 out-of-window validation.
