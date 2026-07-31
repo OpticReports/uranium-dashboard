@@ -165,6 +165,17 @@ def main():
                       "for a PENDING DEPOSIT block (deployment may be pre-authorized)")
 
 
+    # POLICY.md operation 5: engine concentration cap (pre-authorized reset)
+    book_total = sum(s["value"] for s in meta) + idle + pending
+    if book_total > 0:
+        for s in meta:
+            share = s["value"] / book_total
+            if share > 0.40:
+                alerts.append(f"CONCENTRATION CAP BREACH: {s['name'][:40]} "
+                              f"[{s['id'][:8]}] at {share:.1%} of book (> 40%) — "
+                              "POLICY.md operation 5: rebalance ALL engines to "
+                              "29/29/27/15 targets (guarded CLI, staged windows)")
+
     total_value = sum(s["value"] for s in meta)
     band = next((s for s in meta if s["id"] == a.band_symphony), None)
     if band and total_value > 0:

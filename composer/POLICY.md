@@ -79,6 +79,28 @@ monitors whether KMLM EARNS BACK the higher 19/39/27/15 weight.
   note it in the daily summary.
 - No auto-trades under this operation in either direction.
 
+## Pre-authorized operation 5 — engine concentration cap (armed 2026-07-31)
+
+Owner-approved (chat, addendum 18). Purpose: delete the unmanaged-drift
+tail where one engine's hot streak concentrates the book (bootstrapped
+conservative DD p95 68.6% unmanaged vs 37.5% capped; expected CAGR
+unchanged vs disciplined manual resets).
+
+- Trigger: at the daily post-close check, ANY symphony's value exceeds
+  **40% of total Composer book value** (symphonies + unallocated cash).
+- Action: mechanically rebalance ALL FOUR symphonies back to target
+  weights **HG 29 / KMLM 29 / SLEEVE 27 / HARV 15** via the guarded CLI:
+  withdraw from overweights first; invest proceeds into underweights when
+  the cash settles (typically next evening; complete pending legs at the
+  next daily check). Recompute all amounts from live values at execution.
+- Error guards (unchanged): 25% single-move cap per move (stage larger
+  resets across windows), >50% one-day-change data-anomaly no-trade rule.
+- Every firing: CHANGELOG entry with deploy IDs, push notification, and
+  report to the owner. Expected frequency ~once every 1-2 years.
+- The target weights above are the same allocation-B targets; if the
+  owner changes the book's target allocation, update this block in the
+  same decision.
+
 ## Standing analysis cadence (not a capital operation)
 
 - QUARTERLY (first daily check of Oct/Jan/Apr/Jul), and mandatorily at the

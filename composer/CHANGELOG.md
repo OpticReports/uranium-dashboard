@@ -343,3 +343,16 @@ Format per entry:
   Owner to confirm BOXX treatment with accountant (newer instrument).
 - Both were logic changes explicitly approved in-session (AskUserQuestion:
   "Both"). No capital moved at edit time.
+
+
+## 2026-07-31 — Operation 5 armed: 40% engine concentration cap
+
+- Owner approved (addendum 18) the recommended option: pre-authorized full
+  reset of all four symphonies to 29/29/27/15 whenever any engine exceeds
+  40% of Composer book value at the daily check. monitor.py enforces the
+  trigger; POLICY.md operation 5 documents mechanics (25% single-move
+  guard, staged windows, per-firing CHANGELOG + notification).
+- Rationale: deletes the unmanaged-concentration tail (conservative-lens
+  DD p95 68.6% -> 37.5%) at ~zero expected CAGR cost vs disciplined
+  manual resets. Expected firing rate ~once every 1-2 years; nearest
+  observed approach: KMLM at 30.3% of book on 2026-07-30.
