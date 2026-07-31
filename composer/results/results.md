@@ -863,3 +863,35 @@ declined at the 39%-KMLM decision. The honest CAGR lever is Operation
 3's KMLM earn-back (live-data test), not deleting the chop engine.
 DOUBLE not recommended (concentrates 2018-slow-bleed failure mode; the
 12% bleed alert guards the current size). Decision remains the owner's.
+
+
+## Addendum 17 — Cash/BOXX defensive legs vs bond baskets (2026-07-31)
+
+Owner hypothesis: symphonies go risk-off into bonds; bonds get wrecked in
+some downturns (2022) — would cash (BIL, or BOXX for tax) improve DD?
+Mapping: duration risk lives ONLY in HG's two bottom-1-RSI bond baskets
+(TLT/LQD/VCIT/BSV/SPAB/ANGL). KMLM + HARV already defend in PULS
+(cash-like); sleeve base is 50% BIL with TMV short-bonds. Variants
+backtested 2015-06..2026-07 then fed through the 55y regime bootstrap
+(script: scratchpad cash_def.py):
+- HG-CASH (baskets -> BIL): CAGR +105.3% vs +103.2%, maxDD 35.9 vs 36.4,
+  daily corr 0.991. 2022: +45.2% vs +15.4% (+30pp in the bonds-wrecked
+  year); 2022 maxDD identical 30.2% (HG's DD comes from its leveraged
+  risk-ON legs, not the bond leg).
+- HG-SHORTDUR (baskets -> bottom-1 RSI of BIL/BSV): between the two.
+- Book-level 55y bootstrap (conservative lens): DD p95 36.2% (CASH) vs
+  37.8% (CURRENT); DD med 26.0 vs 26.9; CAGR med +72.1 vs +71.4 — cash
+  defense is uniformly (modestly) better at book level.
+Structural read: the bond basket only pays in DEFLATIONARY crashes
+(2008/2020, TLT rallies) and bleeds in inflationary ones (2022); cash is
+regime-neutral. The book already has a dedicated deflation-crash engine
+(sleeve, 27%), so HG's bond leg duplicates that role at duration risk.
+Caveat: bootstrap buckets are 2015+ resampled — a 1970s-style inflation
+decade would favor cash MORE than these numbers show.
+BOXX note (taxable a/c): return-equivalent to BIL (box spreads ~T-bill);
+edge is tax deferral (no distributions; LTCG if held >1y) — sensible for
+the SLEEVE's standing 50% BIL base (months-long holds), NOT for
+fast-rotating legs (short holds forfeit the tax edge; BOXX spread ~5-10bp
+vs BIL ~1bp). RECOMMENDED to owner: adopt HG-CASH (BIL) in the two
+baskets; consider sleeve BIL->BOXX separately. Logic changes — owner
+approval required; nothing executed.
