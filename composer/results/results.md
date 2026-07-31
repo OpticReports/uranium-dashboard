@@ -895,3 +895,40 @@ fast-rotating legs (short holds forfeit the tax edge; BOXX spread ~5-10bp
 vs BIL ~1bp). RECOMMENDED to owner: adopt HG-CASH (BIL) in the two
 baskets; consider sleeve BIL->BOXX separately. Logic changes — owner
 approval required; nothing executed.
+
+
+## Addendum 18 — DD-reduction levers, backtested (owner question 2026-07-31)
+
+Question: cut max DD without giving up CAGR. Tested at daily resolution
+(3.26y common window, all 4 engines) and in the 55y regime bootstrap
+(both lenses; scripts: scratchpad rebal_boot.py, dd-*.json curves).
+
+Daily window (as-measured): B&H CAGR +154.9%/DD 19.9%/Sharpe 2.42;
+monthly rebal +101.7%/10.0%/2.98; threshold-10% +104.4%/10.3%/2.99;
+vol-target 20/15/12% cut DD to 8.8/7.8/6.7% but CAGR to 85/68/56%
+(Sharpe up to 3.16 — best risk-adjusted, worst for the stated goal).
+
+55y bootstrap (CONSERVATIVE lens — decision lens):
+  monthly-rebal   CAGR +70.1%  DDp95 38.5%
+  annual-rebal    CAGR +71.7%  DDp95 37.6%
+  CAP-40 (trim only when any engine >40% of book)
+                  CAGR +71.9%  DDp95 37.5%   <- dominates monthly
+  cap-50          CAGR +75.5%  DDp95 47.1%
+  buy-and-hold    CAGR +91.6%  DDp95 68.6%   <- the unmanaged-drift bound
+(As-measured ordering identical: cap-40 +122.1%/14.6% beats monthly
++114.2%/13.8% on CAGR at ~equal DD.)
+
+FINDINGS: (1) no zero-cost lever exists — every DD cut works by trimming
+the compounding winner; (2) the efficient point for the owner's goal is
+the 40% CONCENTRATION CAP: vs unmanaged drift it roughly HALVES tail DD
+(68.6->37.5 p95 conservative) while keeping more CAGR than
+monthly/quarterly rebalancing; it fires rarely (only after ~40% relative
+runs) so turnover cost is negligible; (3) vol-targeting rejected for this
+goal (real CAGR cost); (4) canary-gated de-risking remains report-only
+(~11 signal clusters — too few to validate as a trading rule).
+
+PROPOSED to owner (needs approval — new capital operation): POLICY
+"Operation 5 — engine concentration cap": at the daily check, if any
+symphony exceeds 40% of Composer book value, rebalance all four to
+29/29/27/15 targets via guarded CLI (25% single-move guard, staged
+windows as needed). Mechanically identical in spirit to the sleeve band.
