@@ -164,6 +164,14 @@ def main():
         alerts.append(f"IDLE CASH ${idle:,.0f} unallocated — check POLICY.md "
                       "for a PENDING DEPOSIT block (deployment may be pre-authorized)")
 
+    # POLICY.md armed operation 4: VBF->VCIT swap trigger (report-only)
+    book_value = sum(s["value"] for s in meta) + idle + pending
+    if book_value >= 750_000 and not state.get("vbf_swap_alerted"):
+        state["vbf_swap_alerted"] = True
+        alerts.append(f"VBF SWAP TRIGGER FIRED — book ${book_value:,.0f} >= $750k "
+                      "(POLICY.md armed operation 4): ask the owner for go, then "
+                      "apply the VBF->VCIT edit to live HG (blueprint 5CbBgpP9T8KcnCCwBGno)")
+
     total_value = sum(s["value"] for s in meta)
     band = next((s for s in meta if s["id"] == a.band_symphony), None)
     if band and total_value > 0:

@@ -79,6 +79,24 @@ monitors whether KMLM EARNS BACK the higher 19/39/27/15 weight.
   note it in the daily summary.
 - No auto-trades under this operation in either direction.
 
+## Armed operation 4 — VBF->VCIT scale swap (owner-approved plan 2026-07-30)
+
+Scale-prep for the ~12mo path to $1M+ (addenda 15/15b). VBF is the book's
+binding liquidity constraint (HG's bond basket; $0.9M ADV; measured
++33bps/side at the current size). The validated fix is a two-node asset
+swap VBF->VCIT in HG's tree (daily corr 0.9979 to baseline over 11.1y;
+blueprint benched as draft symphony `5CbBgpP9T8KcnCCwBGno`).
+
+- TRIGGER (either): (a) Composer book value >= $750,000 at a daily check,
+  or (b) a quarterly slippage run measures VBF fills worse than 50bps/side.
+- ACTION on trigger: REPORT to the owner ("VBF swap trigger fired — say
+  go") — the tree edit is NOT auto-executed (standing exclusion applies).
+  On the owner's go: apply the identical two-node edit to live HG
+  `mbkiXcuNDjueXpiox5Av` in place via PUT (no capital switch, no
+  liquidation; the draft stays as archive/rollback), CHANGELOG it, and
+  verify the next window's rebalance.
+- Until then: quarterly slippage runs report VBF's fill trend.
+
 ## Standing analysis cadence (not a capital operation)
 
 - QUARTERLY (first daily check of Oct/Jan/Apr/Jul), and mandatorily at the

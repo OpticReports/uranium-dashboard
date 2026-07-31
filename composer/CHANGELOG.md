@@ -292,3 +292,15 @@ Format per entry:
   stale superseded blocks left from the 19/39 plan (phase-2 block, TAIL
   block, and two outdated copies of the old tripwire Operation 3 that
   contradicted the rewritten earn-back monitor).
+
+
+## 2026-07-30 — VBF->VCIT scale swap armed (operation 4; no live change)
+
+- Owner approved the scale-prep plan (addenda 15/15b): VBF is the binding
+  liquidity constraint on the path to $1M+. Validated two-node swap
+  VBF->VCIT (corr 0.9979, 11.1y) benched as draft 5CbBgpP9T8KcnCCwBGno.
+- POLICY.md gains "Armed operation 4": trigger = book >= $750k OR VBF
+  fills measured worse than 50bps/side (quarterly). Action = report and
+  request owner go; the live-HG tree edit is applied in place only after
+  that go. monitor.py now checks the $750k trigger daily (one-shot alert).
+- No live symphony was modified; no capital moved.

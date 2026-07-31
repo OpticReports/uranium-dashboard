@@ -1,20 +1,20 @@
 {
-  "taken_at": "2026-07-30T21:36:11+00:00",
+  "taken_at": "2026-07-31T00:49:32+00:00",
   "total_stats": {
     "pending_deploys_cash": 0,
-    "total_cash": 281.213017129,
-    "time_weighted_return": 0.7146335068410896,
+    "total_cash": 275.483017129,
+    "time_weighted_return": 0.7145984437589787,
     "total_unallocated_cash": 0.973017129,
-    "portfolio_value": 280204.97,
+    "portfolio_value": 280199.24,
     "net_deposits": 247000.0,
     "pending_net_deposits": 0.0,
-    "todays_percent_change": 0.052763244405704866,
-    "simple_return": 0.13443309115128987,
-    "todays_dollar_change": 14043.5407294056,
+    "todays_percent_change": 0.052741716117627874,
+    "simple_return": 0.13440989277072313,
+    "todays_dollar_change": 14037.8107294056,
     "metrics": {
-      "annualized_rate_of_return": 1.3135,
+      "annualized_rate_of_return": 1.3134,
       "max_drawdown": 0.2006,
-      "sharpe_ratio": 2.2488,
+      "sharpe_ratio": 2.2487,
       "standard_deviation": 0.4138
     },
     "pending_withdrawals": 0.0
@@ -22,15 +22,15 @@
   "symphonies": {
     "mbkiXcuNDjueXpiox5Av": {
       "name": "The Holy Grail w Sorts & Safe Sectors  139 | 38 | 2015 (Modified #1)",
-      "value": 78274.8,
-      "deposit_adjusted_value": 1770.49,
-      "cash": 78.33,
+      "value": 78269.07,
+      "deposit_adjusted_value": 1770.36,
+      "cash": 72.6,
       "holdings": {
-        "TLT": 0.999
+        "TLT": 0.9991
       },
       "next_rebalance_on": "2026-07-31",
       "has_queued_deploy": null,
-      "last_percent_change": 0.0643
+      "last_percent_change": 0.0642
     },
     "ORQNCfZnA18wmsMWVhf8": {
       "name": "VIX Harvester + HYG Credit Guard",
