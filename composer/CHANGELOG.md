@@ -304,3 +304,24 @@ Format per entry:
   request owner go; the live-HG tree edit is applied in place only after
   that go. monitor.py now checks the $750k trigger daily (one-shot alert).
 - No live symphony was modified; no capital moved.
+
+
+## 2026-07-30 — EXECUTED: VBF->VCIT swap on live Holy Grail (owner go)
+
+- Owner: "execute the plan" (in-place edit). Applied the validated two-node
+  asset swap VBF->VCIT to live HG [mbkiXcuNDjueXpiox5Av] via PUT
+  (new version bI6tlUMw7DF7R7DVIU1a); verified post-edit tree: VBF x0,
+  VCIT x2, name and symphony id unchanged.
+- Zero-cost timing: HG held 100% TLT at execution — no position touched;
+  pure logic change, effective from the next rebalance evaluation.
+- Basis: addenda 15/15b (VBF = binding liquidity constraint, $0.9M ADV,
+  +33bps/side measured; VCIT variant corr 0.9979 over 11.1y).
+- Blueprint draft 5CbBgpP9T8KcnCCwBGno updated to match and renamed
+  "BENCH blueprint: HG VBF->VCIT (executed 2026-07-30)" — kept as
+  archive/rollback template.
+- Armed operation 4 removed from POLICY.md (purpose fulfilled); monitor's
+  $750k one-shot trigger removed. Quarterly slippage runs continue to
+  track the remaining thin names (ZVOL/VXZ/VIXM).
+- First-fix note for the API log: PUT body must be
+  {"symphony": {"raw_value": tree}} — a {"tree": ...} wrapper is silently
+  ignored (returns existing_version_id only, no version_id).
