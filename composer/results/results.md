@@ -947,3 +947,29 @@ engine (6mo live beating model). HG-only in both lenses: ~+96% CAGR at
 54% median / 69% p95 DD — it is simultaneously the largest validated
 CAGR source AND the largest DD source; the other three engines are what
 turn its 54% drawdowns into the book's ~27%.
+
+
+## Addendum 19 — HG drawdown attribution by branch (2026-07-31)
+
+Branch-level daily contribution decomposition, 2021-07..2026-07 (exec-study
+ledger + adjcloses; branches: TREND = top-RSI {TQQQ,UPRO,UDOW,SSO,TNA},
+DIP-BUY = bottom-RSI {TECL,QLD,LABU,USD,SMH}, VOL-SPIKE = {UVXY,VIXY,VIXM},
+DEFENSIVE = bond baskets, now BIL).
+
+FINDING — the drawdown engine is the TREND leg, not the dip-buy leg:
+- TREND: +179.7pp total contribution, but -216.3pp inside the 12 >10%
+  drawdown episodes — it loses more inside drawdowns than it contributes
+  in total. Its value is entirely trend-up months (+258.4pp); it BLEEDS
+  in chop (-32.6pp) and crash (-46.0pp). All 12 episodes are
+  TREND-dominated.
+- DIP-BUY (the leg both of us suspected): +131.1pp total, only -22.9pp
+  inside episodes, and POSITIVE in all three regimes (+14.2 trend-up,
+  +47.3 chop, +69.6 crash). It is the compensated all-weather alpha.
+- VOL-SPIKE +25.3pp benign; DEFENSIVE ~flat (duration risk now removed).
+
+Target identified: the TREND leg's -78.6pp of chop+crash bleed
+(~12pp/yr) is the uncompensated risk. Candidate fix for the bench
+pipeline: regime-gate the two top-RSI trend branches (e.g. allow only
+when SPY > 200d SMA; else route to the BIL node) — a real-time gate will
+capture only part of the label-based bound, and the whole idea must
+survive backtest + adversarial QA before any live edit. NOT built yet.
