@@ -325,3 +325,21 @@ Format per entry:
 - First-fix note for the API log: PUT body must be
   {"symphony": {"raw_value": tree}} — a {"tree": ...} wrapper is silently
   ignored (returns existing_version_id only, no version_id).
+
+
+## 2026-07-31 — EXECUTED: cash-defense + BOXX edits (owner-approved, Act 60)
+
+- HG [mbkiXcuNDjueXpiox5Av] v bP4mvRy6YHHejuPGUBNY: both bottom-1-RSI bond
+  baskets {BSV,TLT,LQD,VCIT,SPAB,ANGL} replaced by single BIL asset nodes
+  (addendum 17: +30pp in 2022-style stagflation years, book DDp95
+  37.8->36.2, no measured cost; kills duration risk + drops ANGL from the
+  capacity list). HG held TLT 100% at edit — next defensive evaluation
+  routes to BIL (one ~$74k TLT->BIL trade if still defensive, ~3bps).
+- SLEEVE [nNdBk7hc5NiBzeRvbI5T] v yHJkdePZUWBT6eMCgO9m: all 4 BIL asset
+  nodes -> BOXX (signal conditions untouched). Owner is PR Act 60: BOXX
+  converts federally-taxable RIC distributions (~$1.6k/yr at current
+  size) into untaxed capital gains — ~$590/yr saved now, ~$2k+/yr at $1M.
+  Engine validated BOXX (identical behavior over the 2023+ window).
+  Owner to confirm BOXX treatment with accountant (newer instrument).
+- Both were logic changes explicitly approved in-session (AskUserQuestion:
+  "Both"). No capital moved at edit time.
