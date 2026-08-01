@@ -604,6 +604,50 @@ export interface RateShock {
   note: string;
 }
 
+export interface ShockScenarios {
+  span: [number, number];
+  meetings: Array<{ date: string; idx: number }>;
+  implied: Record<string, number>;
+  live_inputs: Record<string, number | null>;
+  note: string;
+}
+
+export type ShockAsset = "SPX" | "QQQ" | "SOXX" | "HYG";
+
+export interface ShockRun {
+  months: string[];
+  bands: Record<ShockAsset, Record<"5" | "25" | "50" | "75" | "95", number[]>>;
+  probs: Record<ShockAsset, { dd_gt_10: number; dd_gt_20: number }>;
+  terminal: Record<ShockAsset, { counts: number[]; edges: number[] }>;
+  stress_prob: number[];
+  rate_path: {
+    implied_bp: number[];
+    scenario_bp: number[];
+    cum_surprise_bp: number[];
+    dy10_pp: number[];
+  };
+  meta: {
+    kappa_used: number;
+    seed: number;
+    n_paths: number;
+    canary01: number;
+    oas0: number;
+    hikes: number;
+    params_used: Record<string, number>;
+    override_warnings: string[];
+  };
+}
+
+export interface ShockCalibration {
+  params: Record<
+    string,
+    { default: number; range: [number, number]; source: string; note: string }
+  >;
+  amendments: string[];
+  estimation_windows: Record<string, string>;
+  epistemic_note: string;
+}
+
 export interface CorrPoint {
   date: string;
   corr: number;
@@ -720,6 +764,14 @@ export const api = {
   marginLeverage: () => getJson<MarginLeverage>("/margin/leverage"),
   marginFast: () => getJson<MarginFast>("/margin/fast"),
   ratesShock: () => getJson<RateShock>("/rates/shock"),
+  shockScenarios: () => getJson<ShockScenarios>("/shock-sim/scenarios"),
+  shockRun: (body: { hikes: number; seed?: number; overrides?: Record<string, number> }) =>
+    getJson<ShockRun>("/shock-sim/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  shockCalibration: () => getJson<ShockCalibration>("/shock-sim/calibration"),
   flowDestinations: () => getJson<FlowDestinations>("/flows/destinations"),
   corrSeries: () => getJson<CorrSeries>("/crossasset/corr"),
   curveCanary: (pair: string) =>

@@ -12,6 +12,7 @@ import FlightToQuality from "./components/FlightToQuality";
 import FlowCompass from "./components/FlowCompass";
 import MarginLeverageChart from "./components/MarginLeverageChart";
 import RateShockPanel from "./components/RateShockPanel";
+import RateShockSimulator from "./components/RateShockSimulator";
 import EventFeed from "./components/EventFeed";
 import NewsPanel from "./components/NewsPanel";
 import LeadingStack from "./components/LeadingStack";
@@ -195,6 +196,8 @@ export default function App() {
           <FlowCompass />
 
           <RateShockPanel />
+
+          <RateShockSimulator />
 
           <MarginLeverageChart />
 
