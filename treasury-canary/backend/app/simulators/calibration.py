@@ -26,6 +26,15 @@ AMENDMENTS_SUMMARY = [
     "VIX haircut 0.9 -> 0.8 (realized/VIX median 0.75)",
     "scenario span widened to -2..+4 (cut scenarios; Stage 1 linear in S)",
     "SPEC GAP filled: stress_exit_monthly=0.25 (spec defined no exit prob)",
+    "QA ROUND (P4): crack + OAS entry jump now fire ONCE per path (re-entry "
+    "re-firing made softer stress deepen the median and inflated G1; "
+    "post-fix G1 medians SPX 81.1 / HYG 90.7 — in-band honestly)",
+    "QA ROUND: HYG idio vol made per-path (cross-path mean starved "
+    "normal-state paths of 39% of vol at high stress share)",
+    "QA ROUND: stress attractor floored at theta_normal_path + "
+    "oas_stress_premium (stress could otherwise be spread-tightening after "
+    "a big grind); oas_theta_normal marked fallback-only (live oas0 anchors "
+    "the attractor); 14 params flagged high_sensitivity from the tornado",
 ]
 
 ESTIMATION_WINDOWS = {

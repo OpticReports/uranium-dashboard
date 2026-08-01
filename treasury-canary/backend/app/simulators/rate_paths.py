@@ -53,11 +53,13 @@ def build_paths(hikes: int, params: dict[str, float]) -> dict[str, np.ndarray]:
 
 
 def kappa_live(kappa_base: float, tp_coeff: float,
-               d_acm_tp_6m_pp: float | None) -> float:
-    """Amendment A1: kappa_t = clip(base + coeff * 6m ACM TP change, .25, .65)."""
+               d_acm_tp_6m_pp: float | None,
+               bounds: tuple[float, float] = (0.25, 0.65)) -> float:
+    """Amendment A1: kappa_t = clip(base + coeff * 6m ACM TP change, bounds).
+    Bounds come from the kappa_base registry range (QA finding 8)."""
     if d_acm_tp_6m_pp is None:
         return kappa_base
-    return float(np.clip(kappa_base + tp_coeff * d_acm_tp_6m_pp, 0.25, 0.65))
+    return float(np.clip(kappa_base + tp_coeff * d_acm_tp_6m_pp, *bounds))
 
 
 def rate_legs(surprise_bp: np.ndarray, kappa: float, rho_real: float

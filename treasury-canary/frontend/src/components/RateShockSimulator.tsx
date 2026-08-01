@@ -29,6 +29,10 @@ const FOMC_MONTHS = ["2026-09", "2026-10", "2026-12", "2027-01", "2027-03", "202
 // param drawer: the sensitivity surface — key params only, grouped
 const DRAWER_PARAMS: Array<{ key: string; label: string }> = [
   { key: "kappa_base", label: "κ pass-through" },
+  { key: "drift_spx", label: "SPX drift /yr" },
+  { key: "hyg_carry", label: "HYG carry /yr" },
+  { key: "implied_prob_oct", label: "Oct hike priced" },
+  { key: "implied_prob_dec", label: "Dec hike priced" },
   { key: "rho_real", label: "ρ real share" },
   { key: "beta_spx", label: "β SPX" },
   { key: "beta_qqq", label: "β QQQ" },
@@ -188,6 +192,12 @@ export default function RateShockSimulator() {
             if (!meta) return null;
             return (
               <label key={key} className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                {meta.high_sensitivity && (
+                  <span
+                    className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-400"
+                    title="HIGH-SENSITIVITY: ±50% of this param moves the terminal median by >30% (QA tornado)"
+                  />
+                )}
                 {meta.source === "judgment" && (
                   <span
                     className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400"

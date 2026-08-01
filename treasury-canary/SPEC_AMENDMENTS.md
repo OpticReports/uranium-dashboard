@@ -196,3 +196,36 @@ across assets). Switch.
 | 7d | θ_normal=310, HYG D/SD/carry, FOMC dates | ACCEPT (verified) |
 | 7e | Scenario span | AMEND 0..4 → −2..+4 hikes |
 | 7f | Drift label | ACCEPT values; rename earnings→total-return baseline |
+
+---
+
+## QA-QUANT ROUND (P4, 2026-08-01) — implementation findings & resolutions
+
+Verdict: core layers sound (Stage-1 arithmetic, all unit conversions, t-copula
+scaling/shared-mixing, antithetic alignment, vectorization, 0.05s runtime; no
+divisor errors). Three real bugs found and FIXED:
+
+1. **Crack/OAS-jump re-fired on stress re-entry** (mean 2.08 entries/path in
+   the 2022 replay; raising stress_exit_monthly perversely DEEPENED the
+   median: 0.1→77.0, 0.25→72.0, 0.5→65.9). Fixed: one-time-per-path via
+   ever_entered flag. Post-fix G1 medians: SPX 81.1, HYG 90.7 — in-band
+   (70-82 / 85-92) for honest reasons; regression test pins the monotone
+   exit sensitivity.
+2. **HYG idio vol used a cross-path mean** — normal-state paths ran 39% below
+   the vol blend target when stress share was high. Fixed: per-path top-up.
+3. **Unit-variance test was a sham** (asserted only n_paths). Replaced with a
+   real check on the extracted copula transform: var [0.994-1.000]→~1,
+   corr targets hit, W shared (joint co-crash +27% vs Gaussian, matching A6).
+
+Also: stress attractor now floored at theta_normal_path + oas_stress_premium
+(100bp, judgment) so stress can't become spread-tightening after a big grind;
+oas_theta_normal documented as fallback-only (live oas0 anchors the normal
+attractor — its tornado bar is legitimately zero); seed=0 no longer coerced
+to 42; kappa clip bounds read from the registry. Crack/vol-mult continuing
+through a quick exit is INTENDED (phased jump) and now documented.
+
+**Tornado (+3 hikes, ±50% sweeps): top movers** logistic_a (dominant, ±8.5
+index pts on SPX), drift baselines, logistic_b, hyg_carry, crack sizes,
+implied probs, betas, kappa. 14 params carry high_sensitivity=true in
+params.json and render a red dot in the drawer. Full table:
+scratchpad qa_sim/tornado.json.

@@ -41,10 +41,12 @@ def hyg_vol_monthly(move_level: float | None, realized_ann: float | None,
     return float(ann / np.sqrt(12.0))
 
 
-def hyg_idio_sigma(blend_monthly: float, sigma_spread_bp: float,
-                   params: dict[str, float]) -> float:
-    """The per-path OAS innovation already produces SD·σ_spread of price vol;
-    the idiosyncratic residual tops the total up to the blend target (floored
-    at zero — if the spread state alone exceeds the blend, spread vol rules)."""
-    spread_leg = params["hyg_spread_dur"] * sigma_spread_bp / 1e4
-    return float(max(blend_monthly - spread_leg, 0.0))
+def hyg_idio_sigma(blend_monthly: float, sigma_spread_bp,
+                   params: dict[str, float]):
+    """Per-PATH residual (QA finding 2): the OAS innovation already produces
+    SD·σ_spread of price vol on each path; the idiosyncratic residual tops
+    each path up to the blend target (floored at zero). Linear, not
+    quadrature, because the residual reuses the same shock draw. Accepts a
+    scalar or an (n,) array of per-path spread sigmas."""
+    spread_leg = params["hyg_spread_dur"] * np.asarray(sigma_spread_bp) / 1e4
+    return np.maximum(blend_monthly - spread_leg, 0.0)

@@ -1,43 +1,394 @@
 {
-  "kappa_base":         {"default": 0.45,  "range": [0.25, 0.65],  "source": "estimated", "note": "front-to-long pass-through; episode-total mean 0.43 across 5 hiking cycles (A1)"},
-  "kappa_tp_coeff":     {"default": 0.40,  "range": [0.0, 0.8],    "source": "estimated", "note": "kappa sensitivity to 6m ACM term-premium change; n=5 episodes R2=0.58 (A1)"},
-  "rho_real":           {"default": 0.90,  "range": [0.7, 1.1],    "source": "estimated", "note": "real share of nominal surprise; 2022 realized 1.00 (A7b)"},
-  "beta_spx":           {"default": 8.0,   "range": [4.0, 14.0],   "source": "estimated", "note": "% per 100bp real surprise, 2020-26 regression (A4); spec's 5.5 failed G1 by 15x"},
-  "beta_qqq":           {"default": 11.0,  "range": [5.0, 19.0],   "source": "estimated", "note": "A4"},
-  "beta_soxx":          {"default": 14.0,  "range": [6.0, 25.0],   "source": "estimated", "note": "A4; aggressive edge with crack_soxx — do not raise both"},
-  "drift_spx":          {"default": 0.07,  "range": [0.0, 0.12],   "source": "judgment",  "note": "expected total-return baseline /yr (renamed from 'earnings drift', A7f)"},
-  "drift_qqq":          {"default": 0.10,  "range": [0.0, 0.16],   "source": "judgment",  "note": ""},
-  "drift_soxx":         {"default": 0.10,  "range": [0.0, 0.16],   "source": "judgment",  "note": ""},
-  "hyg_duration":       {"default": 3.2,   "range": [2.5, 4.0],    "source": "literature","note": "HYG effective duration"},
-  "hyg_spread_dur":     {"default": 3.5,   "range": [3.0, 4.5],    "source": "literature","note": "HYG spread duration"},
-  "hyg_carry":          {"default": 0.065, "range": [0.05, 0.08],  "source": "judgment",  "note": "dist yield /yr; FMP light endpoint has no yield history (D)"},
-  "oas_theta_normal":   {"default": 310.0, "range": [250.0, 450.0],"source": "estimated", "note": "3y HY OAS median = 310 exactly; REGIME-CONDITIONAL (full-history ~430) (A7d5)"},
-  "oas_theta_stress":   {"default": 500.0, "range": [400.0, 700.0],"source": "judgment",  "note": ""},
-  "oas_sig_normal":     {"default": 25.0,  "range": [10.0, 40.0],  "source": "judgment",  "note": "bp/mo"},
-  "oas_sig_stress":     {"default": 60.0,  "range": [30.0, 100.0], "source": "judgment",  "note": "bp/mo"},
-  "oas_jump_entry":     {"default": 120.0, "range": [60.0, 200.0], "source": "judgment",  "note": "instantaneous bp on stress entry; G1 re-check required if raised (A3)"},
-  "oas_mr_speed":       {"default": 0.15,  "range": [0.05, 0.4],   "source": "judgment",  "note": "monthly mean-reversion toward theta"},
-  "oas_dtheta_priced":  {"default": -4.0,  "range": [-10.0, 0.0],  "source": "estimated", "note": "bp per priced hike, 2015-18 via BaaAaa proxy (A2); spec's -8 was 2x too big"},
-  "oas_dtheta_surprise":{"default": 15.0,  "range": [5.0, 30.0],   "source": "estimated", "note": "bp per surprise 25bp; reproduces 2022 grind: 18 x 15 = 270bp (A3)"},
-  "oas_taper_hikes":    {"default": 4.0,   "range": [2.0, 8.0],    "source": "judgment",  "note": "priced-hike tightening tapers to 0 after this many delivered (A2)"},
-  "logistic_a":         {"default": -4.65, "range": [-6.0, -3.0],  "source": "estimated", "note": "calibrated to spec's own targets; spec's -4.0 gave 89% vs target 35-50% (A7a)"},
-  "logistic_b":         {"default": 2.6,   "range": [1.0, 4.0],    "source": "estimated", "note": "per 100bp cum surprise (A7a)"},
-  "logistic_c":         {"default": 0.8,   "range": [0.0, 2.0],    "source": "judgment",  "note": "x normalized canary composite"},
-  "stress_exit_monthly":{"default": 0.25,  "range": [0.1, 0.5],    "source": "judgment",  "note": "SPEC GAP: spec defined no stress-exit prob; ~4mo mean stress duration"},
-  "cs_lag_months":      {"default": 1.0,   "range": [0.0, 2.0],    "source": "judgment",  "note": "lag on CS input to stress transition (spec 4.3)"},
-  "vix_haircut":        {"default": 0.8,   "range": [0.7, 0.95],   "source": "estimated", "note": "realized/VIX median 0.75, mean 0.78 (A7c); spec's 0.9 = 75th pct"},
-  "hyg_vol_w_move":     {"default": 0.4,   "range": [0.0, 1.0],    "source": "judgment",  "note": "MOVE-mapped weight in HYG vol blend; rest = realized 60d"},
-  "eq_corr":            {"default": 0.85,  "range": [0.6, 0.95],   "source": "judgment",  "note": "pairwise equity shock corr"},
-  "corr_normal":        {"default": 0.6,   "range": [0.3, 0.8],    "source": "judgment",  "note": "equity-HYG corr, normal state"},
-  "corr_stress":        {"default": 0.85,  "range": [0.6, 0.95],   "source": "judgment",  "note": "equity-HYG corr, stress state"},
-  "t_nu":               {"default": 4.0,   "range": [3.0, 8.0],    "source": "literature","note": "Student-t dof; t-COPULA per A6 (+29% co-crash vs Gaussian at rho=0.6)"},
-  "crack_spx":          {"default": -0.12, "range": [-0.25, 0.0],  "source": "judgment",  "note": "capex-crack drift shock (log-total), phased over crack_months"},
-  "crack_qqq":          {"default": -0.18, "range": [-0.35, 0.0],  "source": "judgment",  "note": ""},
-  "crack_soxx":         {"default": -0.25, "range": [-0.45, 0.0],  "source": "judgment",  "note": ""},
-  "crack_months":       {"default": 2.0,   "range": [1.0, 4.0],    "source": "judgment",  "note": ""},
-  "stress_vol_mult":    {"default": 1.6,   "range": [1.0, 2.5],    "source": "judgment",  "note": "equity vol multiplier for stress_vol_months after entry"},
-  "stress_vol_months":  {"default": 4.0,   "range": [1.0, 8.0],    "source": "judgment",  "note": ""},
-  "implied_prob_oct":   {"default": 0.70,  "range": [0.0, 1.0],    "source": "market",    "note": "manual-config market-implied +25bp prob, Oct 2026 FOMC (spec 4.1)"},
-  "implied_prob_dec":   {"default": 0.45,  "range": [0.0, 1.0],    "source": "market",    "note": "Dec 2026 FOMC"},
-  "n_paths":            {"default": 10000, "range": [1000, 50000], "source": "judgment",  "note": "MC paths (antithetic pairs)"}
+ "kappa_base": {
+  "default": 0.45,
+  "range": [
+   0.25,
+   0.65
+  ],
+  "source": "estimated",
+  "note": "front-to-long pass-through; episode-total mean 0.43 across 5 hiking cycles (A1)"
+ },
+ "kappa_tp_coeff": {
+  "default": 0.4,
+  "range": [
+   0.0,
+   0.8
+  ],
+  "source": "estimated",
+  "note": "kappa sensitivity to 6m ACM term-premium change; n=5 episodes R2=0.58 (A1)"
+ },
+ "rho_real": {
+  "default": 0.9,
+  "range": [
+   0.7,
+   1.1
+  ],
+  "source": "estimated",
+  "note": "real share of nominal surprise; 2022 realized 1.00 (A7b)"
+ },
+ "beta_spx": {
+  "default": 8.0,
+  "range": [
+   4.0,
+   14.0
+  ],
+  "source": "estimated",
+  "note": "% per 100bp real surprise, 2020-26 regression (A4); spec's 5.5 failed G1 by 15x",
+  "high_sensitivity": true
+ },
+ "beta_qqq": {
+  "default": 11.0,
+  "range": [
+   5.0,
+   19.0
+  ],
+  "source": "estimated",
+  "note": "A4",
+  "high_sensitivity": true
+ },
+ "beta_soxx": {
+  "default": 14.0,
+  "range": [
+   6.0,
+   25.0
+  ],
+  "source": "estimated",
+  "note": "A4; aggressive edge with crack_soxx \u2014 do not raise both",
+  "high_sensitivity": true
+ },
+ "drift_spx": {
+  "default": 0.07,
+  "range": [
+   0.0,
+   0.12
+  ],
+  "source": "judgment",
+  "note": "expected total-return baseline /yr (renamed from 'earnings drift', A7f)",
+  "high_sensitivity": true
+ },
+ "drift_qqq": {
+  "default": 0.1,
+  "range": [
+   0.0,
+   0.16
+  ],
+  "source": "judgment",
+  "note": "",
+  "high_sensitivity": true
+ },
+ "drift_soxx": {
+  "default": 0.1,
+  "range": [
+   0.0,
+   0.16
+  ],
+  "source": "judgment",
+  "note": "",
+  "high_sensitivity": true
+ },
+ "hyg_duration": {
+  "default": 3.2,
+  "range": [
+   2.5,
+   4.0
+  ],
+  "source": "literature",
+  "note": "HYG effective duration"
+ },
+ "hyg_spread_dur": {
+  "default": 3.5,
+  "range": [
+   3.0,
+   4.5
+  ],
+  "source": "literature",
+  "note": "HYG spread duration"
+ },
+ "hyg_carry": {
+  "default": 0.065,
+  "range": [
+   0.05,
+   0.08
+  ],
+  "source": "judgment",
+  "note": "dist yield /yr; FMP light endpoint has no yield history (D)",
+  "high_sensitivity": true
+ },
+ "oas_theta_normal": {
+  "default": 310.0,
+  "range": [
+   250.0,
+   450.0
+  ],
+  "source": "estimated",
+  "note": "3y HY OAS median = 310 exactly; REGIME-CONDITIONAL (full-history ~430) (A7d5) \u2014 FALLBACK-ONLY in production: live oas0 anchors the normal attractor (QA finding 4)"
+ },
+ "oas_theta_stress": {
+  "default": 500.0,
+  "range": [
+   400.0,
+   700.0
+  ],
+  "source": "judgment",
+  "note": ""
+ },
+ "oas_sig_normal": {
+  "default": 25.0,
+  "range": [
+   10.0,
+   40.0
+  ],
+  "source": "judgment",
+  "note": "bp/mo"
+ },
+ "oas_sig_stress": {
+  "default": 60.0,
+  "range": [
+   30.0,
+   100.0
+  ],
+  "source": "judgment",
+  "note": "bp/mo"
+ },
+ "oas_jump_entry": {
+  "default": 120.0,
+  "range": [
+   60.0,
+   200.0
+  ],
+  "source": "judgment",
+  "note": "instantaneous bp on stress entry; G1 re-check required if raised (A3)"
+ },
+ "oas_mr_speed": {
+  "default": 0.15,
+  "range": [
+   0.05,
+   0.4
+  ],
+  "source": "judgment",
+  "note": "monthly mean-reversion toward theta"
+ },
+ "oas_dtheta_priced": {
+  "default": -4.0,
+  "range": [
+   -10.0,
+   0.0
+  ],
+  "source": "estimated",
+  "note": "bp per priced hike, 2015-18 via BaaAaa proxy (A2); spec's -8 was 2x too big"
+ },
+ "oas_dtheta_surprise": {
+  "default": 15.0,
+  "range": [
+   5.0,
+   30.0
+  ],
+  "source": "estimated",
+  "note": "bp per surprise 25bp; reproduces 2022 grind: 18 x 15 = 270bp (A3)"
+ },
+ "oas_taper_hikes": {
+  "default": 4.0,
+  "range": [
+   2.0,
+   8.0
+  ],
+  "source": "judgment",
+  "note": "priced-hike tightening tapers to 0 after this many delivered (A2)"
+ },
+ "logistic_a": {
+  "default": -4.65,
+  "range": [
+   -6.0,
+   -3.0
+  ],
+  "source": "estimated",
+  "note": "calibrated to spec's own targets; spec's -4.0 gave 89% vs target 35-50% (A7a)",
+  "high_sensitivity": true
+ },
+ "logistic_b": {
+  "default": 2.6,
+  "range": [
+   1.0,
+   4.0
+  ],
+  "source": "estimated",
+  "note": "per 100bp cum surprise (A7a)",
+  "high_sensitivity": true
+ },
+ "logistic_c": {
+  "default": 0.8,
+  "range": [
+   0.0,
+   2.0
+  ],
+  "source": "judgment",
+  "note": "x normalized canary composite"
+ },
+ "stress_exit_monthly": {
+  "default": 0.25,
+  "range": [
+   0.1,
+   0.5
+  ],
+  "source": "judgment",
+  "note": "SPEC GAP: spec defined no stress-exit prob; ~4mo mean stress duration"
+ },
+ "cs_lag_months": {
+  "default": 1.0,
+  "range": [
+   0.0,
+   2.0
+  ],
+  "source": "judgment",
+  "note": "lag on CS input to stress transition (spec 4.3)"
+ },
+ "vix_haircut": {
+  "default": 0.8,
+  "range": [
+   0.7,
+   0.95
+  ],
+  "source": "estimated",
+  "note": "realized/VIX median 0.75, mean 0.78 (A7c); spec's 0.9 = 75th pct"
+ },
+ "hyg_vol_w_move": {
+  "default": 0.4,
+  "range": [
+   0.0,
+   1.0
+  ],
+  "source": "judgment",
+  "note": "MOVE-mapped weight in HYG vol blend; rest = realized 60d"
+ },
+ "eq_corr": {
+  "default": 0.85,
+  "range": [
+   0.6,
+   0.95
+  ],
+  "source": "judgment",
+  "note": "pairwise equity shock corr"
+ },
+ "corr_normal": {
+  "default": 0.6,
+  "range": [
+   0.3,
+   0.8
+  ],
+  "source": "judgment",
+  "note": "equity-HYG corr, normal state"
+ },
+ "corr_stress": {
+  "default": 0.85,
+  "range": [
+   0.6,
+   0.95
+  ],
+  "source": "judgment",
+  "note": "equity-HYG corr, stress state"
+ },
+ "t_nu": {
+  "default": 4.0,
+  "range": [
+   3.0,
+   8.0
+  ],
+  "source": "literature",
+  "note": "Student-t dof; t-COPULA per A6 (+29% co-crash vs Gaussian at rho=0.6)"
+ },
+ "crack_spx": {
+  "default": -0.12,
+  "range": [
+   -0.25,
+   0.0
+  ],
+  "source": "judgment",
+  "note": "capex-crack drift shock (log-total), phased over crack_months",
+  "high_sensitivity": true
+ },
+ "crack_qqq": {
+  "default": -0.18,
+  "range": [
+   -0.35,
+   0.0
+  ],
+  "source": "judgment",
+  "note": "",
+  "high_sensitivity": true
+ },
+ "crack_soxx": {
+  "default": -0.25,
+  "range": [
+   -0.45,
+   0.0
+  ],
+  "source": "judgment",
+  "note": "",
+  "high_sensitivity": true
+ },
+ "crack_months": {
+  "default": 2.0,
+  "range": [
+   1.0,
+   4.0
+  ],
+  "source": "judgment",
+  "note": ""
+ },
+ "stress_vol_mult": {
+  "default": 1.6,
+  "range": [
+   1.0,
+   2.5
+  ],
+  "source": "judgment",
+  "note": "equity vol multiplier for stress_vol_months after entry"
+ },
+ "stress_vol_months": {
+  "default": 4.0,
+  "range": [
+   1.0,
+   8.0
+  ],
+  "source": "judgment",
+  "note": ""
+ },
+ "implied_prob_oct": {
+  "default": 0.7,
+  "range": [
+   0.0,
+   1.0
+  ],
+  "source": "market",
+  "note": "manual-config market-implied +25bp prob, Oct 2026 FOMC (spec 4.1)",
+  "high_sensitivity": true
+ },
+ "implied_prob_dec": {
+  "default": 0.45,
+  "range": [
+   0.0,
+   1.0
+  ],
+  "source": "market",
+  "note": "Dec 2026 FOMC",
+  "high_sensitivity": true
+ },
+ "n_paths": {
+  "default": 10000,
+  "range": [
+   1000,
+   50000
+  ],
+  "source": "judgment",
+  "note": "MC paths (antithetic pairs)"
+ },
+ "oas_stress_premium": {
+  "default": 100.0,
+  "range": [
+   0.0,
+   300.0
+  ],
+  "source": "judgment",
+  "note": "stress attractor floor = theta_normal_path + this premium (QA finding 5: prevents stress becoming spread-tightening after a big grind)"
+ }
 }

@@ -130,12 +130,13 @@ def run(body: RunBody):
     if not SCENARIO_SPAN[0] <= body.hikes <= SCENARIO_SPAN[1]:
         raise HTTPException(422, f"hikes must be within {SCENARIO_SPAN}")
     inputs = _live_inputs()
-    key = params_hash(params, {"hikes": body.hikes, "seed": body.seed,
+    # QA finding 7: `or 42` mapped seed=0 to 42 and let seed:null/42 collide
+    seed = 42 if body.seed is None else int(body.seed)
+    key = params_hash(params, {"hikes": body.hikes, "seed": seed,
                                "inputs": inputs})
     if key in _cache:
         return _cache[key]
-    result = mc_core.simulate(body.hikes, params, inputs,
-                              seed=int(body.seed or 42))
+    result = mc_core.simulate(body.hikes, params, inputs, seed=seed)
     result["meta"]["override_warnings"] = warnings
     result["meta"]["params_used"] = {k: round(v, 6) for k, v in params.items()}
     if len(_cache) >= _CACHE_MAX:

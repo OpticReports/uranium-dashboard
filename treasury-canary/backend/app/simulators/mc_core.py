@@ -19,6 +19,14 @@ ASSETS = ("SPX", "QQQ", "SOXX", "HYG")
 PCTS = (5, 25, 50, 75, 95)
 
 
+def _apply_copula(z_m: np.ndarray, w_m: np.ndarray, chol: np.ndarray,
+                  nu: float) -> np.ndarray:
+    """One month of correlated unit-variance t shocks: (z @ chol.T) / sqrt(W)
+    / sqrt(nu/(nu-2)). Extracted so tests can pin variance/correlation on the
+    REAL code path (QA finding 3: the old test was a sham)."""
+    return (z_m @ chol.T) / np.sqrt(w_m) / np.sqrt(nu / (nu - 2.0))
+
+
 def _chol(rho_eq: float, rho_x: float) -> np.ndarray:
     """4x4 correlation (SPX,QQQ,SOXX,HYG): equities pairwise rho_eq, each
     equity vs HYG rho_x. Repaired to nearest PSD if needed."""
@@ -44,7 +52,6 @@ def simulate(hikes: int, params: dict[str, float], inputs: dict,
     half = max(n // 2, 1)
     n = half * 2
     nu = params["t_nu"]
-    t_scale = np.sqrt(nu / (nu - 2.0))          # t variance = ν/(ν−2)
 
     # ---- Stage 1 ----
     paths = build_paths(hikes, params)
@@ -57,9 +64,11 @@ def simulate(hikes: int, params: dict[str, float], inputs: dict,
         paths["surprise_hikes"] = s / 25.0
     kappa = inputs.get("kappa")
     if kappa is None:
+        from .params import registry
         from .rate_paths import kappa_live
+        lo, hi = registry()["kappa_base"]["range"]
         kappa = kappa_live(params["kappa_base"], params["kappa_tp_coeff"],
-                           inputs.get("d_acm_tp_6m"))
+                           inputs.get("d_acm_tp_6m"), (float(lo), float(hi)))
     dy10_pp, dreal_pp = rate_legs(paths["surprise_bp"], kappa, params["rho_real"])
 
     # ---- Stage 2 deterministic pieces ----
@@ -94,6 +103,7 @@ def simulate(hikes: int, params: dict[str, float], inputs: dict,
 
     # ---- state machine over months (vectorized across paths) ----
     in_stress = np.zeros(n, dtype=bool)
+    ever_entered = np.zeros(n, dtype=bool)
     since_entry = np.full(n, 99)
     oas = np.full(n, oas0)
     log_eq = {a: np.zeros(n) for a in EQUITY_ASSETS}
@@ -107,29 +117,42 @@ def simulate(hikes: int, params: dict[str, float], inputs: dict,
                                         + params["logistic_b"] * cs_lagged[m] / 100.0
                                         + params["logistic_c"] * canary)))
         entering = (~in_stress) & (u[0, m] < p_enter)
+        # QA finding 1: the capex-crack and OAS entry jump are ONE-TIME cycle
+        # events — re-entries after a brief exit must not re-fire them (they
+        # made softer stress DEEPEN the median, an economically backwards
+        # sensitivity, and inflated G1 with ~2 cracks/path).
+        first_entry = entering & ~ever_entered
+        ever_entered = ever_entered | entering
         exiting = in_stress & (u[1, m] < params["stress_exit_monthly"])
         in_stress = (in_stress | entering) & ~exiting
-        since_entry = np.where(entering, 0, since_entry)
+        since_entry = np.where(first_entry, 0, since_entry)
 
         # correlated t shocks for this month, state-dependent correlation
-        tn = (z[m] @ chol_n.T) / np.sqrt(w[m]) / t_scale       # unit-variance t
-        ts = (z[m] @ chol_s.T) / np.sqrt(w[m]) / t_scale
+        tn = _apply_copula(z[m], w[m], chol_n, nu)
+        ts = _apply_copula(z[m], w[m], chol_s, nu)
         shock = np.where(in_stress[:, None], ts, tn)           # (n, 4)
 
         # OAS evolution (per path): mean-revert to state theta + entry jump;
         # innovation sign: shock>0 = risk-on = spreads tighten
-        theta = np.where(in_stress, params["oas_theta_stress"], theta_n[m])
+        # QA finding 5: in big-surprise scenarios the grinding normal
+        # attractor can exceed theta_stress, making stress spread-TIGHTENING;
+        # the stress attractor keeps a premium over wherever normal has ground.
+        theta_stress_eff = max(params["oas_theta_stress"],
+                               theta_n[m] + params["oas_stress_premium"])
+        theta = np.where(in_stress, theta_stress_eff, theta_n[m])
         sig_sp = np.where(in_stress, params["oas_sig_stress"],
                           params["oas_sig_normal"])
         d_oas = (params["oas_mr_speed"] * (theta - oas)
-                 + params["oas_jump_entry"] * entering
+                 + params["oas_jump_entry"] * first_entry
                  - sig_sp * shock[:, 3])
         oas = np.clip(oas + d_oas, 50.0, 2500.0)
 
         # HYG return: duration leg (scenario-deterministic) + spread leg +
         # carry + idiosyncratic residual topping vol up to the blend target
-        sig_idio = hyg_idio_sigma(hyg_blend_m,
-                                  float(np.mean(sig_sp)), params)
+        # QA finding 2: per-PATH residual top-up — the old cross-path mean
+        # starved normal-state paths of 39% of their vol when stress share
+        # was high.
+        sig_idio = hyg_idio_sigma(hyg_blend_m, sig_sp, params)
         r_hyg = (-params["hyg_duration"] * dy10_pp[m] / 100.0
                  - params["hyg_spread_dur"] * d_oas / 1e4
                  + params["hyg_carry"] / 12.0

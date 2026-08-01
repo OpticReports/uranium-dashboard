@@ -41,12 +41,32 @@ def test_overrides_validated_and_clipped():
     assert any("nope" in w for w in warn) and any("clipped" in w for w in warn)
 
 
-def test_t_shock_unit_variance():
-    # the copula layer must deliver ~unit-variance marginals after the
-    # nu/(nu-2) scaling (QA mandate: t variance accounting)
-    r = _run(0, n_paths=20000, seed=7,
-             inputs={"vix": 16.0, "canary01": 0.0})
-    assert r["meta"]["n_paths"] == 20000
+def test_t_shock_unit_variance_and_correlation():
+    # REAL check on the actual code path (QA finding 3: the old test was a
+    # sham): variance ~1 per asset, correlation ~ the target matrix, and the
+    # mixing W is genuinely shared (t-copula, not Gaussian).
+    rng = np.random.default_rng(123)
+    n = 200_000
+    nu = 4.0
+    chol = mc_core._chol(0.85, 0.6)
+    z = rng.standard_normal((n, 4))
+    w = rng.chisquare(nu, (n, 1)) / nu
+    t = mc_core._apply_copula(z, w, chol, nu)
+    assert np.allclose(t.var(axis=0), 1.0, atol=0.03)
+    c = np.corrcoef(t.T)
+    assert abs(c[0, 1] - 0.85) < 0.02 and abs(c[0, 3] - 0.6) < 0.02
+
+
+def test_stress_exit_sensitivity_not_backwards():
+    # QA finding 1 regression: with the crack firing once per path, a SOFTER
+    # stress state (higher exit prob) must NOT deepen the median.
+    surprise = [450.0 / N_MONTHS] * N_MONTHS
+    inputs = {"surprise_override_bp": surprise, "kappa": 0.45, "vix": 25.0,
+              "oas0": 310.0, "canary01": 0.6, "hyg_realized_ann": 0.10,
+              "move": 120.0}
+    lo = _run(0, n_paths=20000, seed=5, inputs=inputs, stress_exit_monthly=0.1)
+    hi = _run(0, n_paths=20000, seed=5, inputs=inputs, stress_exit_monthly=0.5)
+    assert hi["bands"]["SPX"]["50"][-1] >= lo["bands"]["SPX"]["50"][-1] - 0.5
 
 
 def test_gate_G4_monotonic_nan_deterministic():

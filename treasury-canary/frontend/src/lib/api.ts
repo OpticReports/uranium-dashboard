@@ -641,7 +641,7 @@ export interface ShockRun {
 export interface ShockCalibration {
   params: Record<
     string,
-    { default: number; range: [number, number]; source: string; note: string }
+    { default: number; range: [number, number]; source: string; note: string; high_sensitivity?: boolean }
   >;
   amendments: string[];
   estimation_windows: Record<string, string>;
