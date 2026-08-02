@@ -77,7 +77,7 @@ canvas{width:100%;max-width:100%;background:#0b1120;border:1px solid #1e293b;bor
 
 <div class="panel"><span class="lbl">Monte Carlo valuation fan — toggle shocks, engine reprices the whole path</span>
 <div class="tgl">
-<label class="lbl" style="display:flex;flex-direction:column;gap:3px">Rate path<select id="t_force"><option value="">probabilistic (cohort weights)</option><option value="0">force 0 hikes</option><option value="1">force 1 hike</option><option value="2">force 2 hikes</option><option value="3">force 3 hikes</option><option value="4">force 4 hikes</option></select></label>
+<label class="lbl" style="display:flex;flex-direction:column;gap:3px">Rate path<select id="t_force"><option value="">probabilistic (cohort weights)</option><option value="-1">force rate cut(s)</option><option value="0">force 0 hikes</option><option value="1">force 1 hike</option><option value="2">force 2 hikes</option><option value="3">force 3 hikes</option><option value="4">force 4 hikes</option></select></label>
 <label class="lbl" style="display:flex;flex-direction:column;gap:3px">Stock crash<select id="t_crash"><option value="none">none</option><option value="moderate">moderate (&minus;20% SPX)</option><option value="severe">severe (&minus;35% SPX)</option></select></label>
 <label class="lbl" style="display:flex;flex-direction:column;gap:3px">50bp regime<select id="t_reg"><option value="">off</option><option value="1">on (off-cohort gap)</option></select></label>
 <label class="lbl" style="display:flex;flex-direction:column;gap:3px">Extra stall hazard (pp)<input id="t_stall" type="number" value="0" min="0" max="30" step="1" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:5px;padding:5px 8px;font:inherit;width:70px"></label>
@@ -139,6 +139,7 @@ function render(b){
     return `<th>${m}<span class="tag">${t}</span></th>`}).join('')+'</tr>';
   b.surface.scenarios.forEach((sc,i)=>{
     html+=`<tr><td>${sc.label}${sc.modal?' <span class=star>&#9733;</span>':''}`+
+      `${sc.source&&sc.source!=='report-v6'?' <span class="crng" title="extension row — not in the operator report; benign easing only (recession-forced cuts = crash/50bp toggles)">(ext)</span>':''}`+
       `${sc.stall_p?` <span class=stall>&#9888;${Math.round(sc.stall_p*100)}% stall</span>`:''}</td>`+
       `<td>${Math.round(sc.weight*100)}%</td>`+
       COLS.map(m=>{const c=byM[m].cells[i];

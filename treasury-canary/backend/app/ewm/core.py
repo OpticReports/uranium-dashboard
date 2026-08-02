@@ -40,11 +40,29 @@ CPI = MONTHS                                              # monthly release
 
 REV_BASIS = float(_COHORT["deal_profile"]["revenue_m"])   # 105 — report's basis
 
-# per-scenario multiple ranges = report value cells / report revenue basis
+# v2.1 EXTENSION row (NOT in the report): benign-easing cut scenario. The
+# report's futures context prices ~30-35% odds of NO hike by December; cuts
+# are a small slice of that mass, so 5pp is carved from the holds row
+# (judgment-tagged). Values reverse the report's debt-capacity anchor
+# (~$10M per 50bp) for a 25-50bp easing, with the same +5M Q1->Q2 dove
+# drift as the holds row. A recession-FORCED cut is NOT this row — that is
+# the crash / 50bp-regime stress machinery (shock-sim finding: cut
+# scenarios carry MORE tail risk, but through the deterioration that
+# forces them, which the cohort conditions away).
+EXT_CUT = {"hike_path": "1+ cuts (benign easing)", "probability": 0.05,
+           "id": -1, "fed_funds_q1_2027_pct": [3.25, 3.50],
+           "value_close_end_q1_2027_m": [205, 218],
+           "value_close_end_q2_2027_m": [210, 223]}
+CUT_CARVE = EXT_CUT["probability"]                        # funded from the holds row
+
+# per-scenario multiple ranges = value cells / report revenue basis
 SCEN = []
-for _s in _COHORT["scenarios"]:
+for _src, _s in [("extension-v2", EXT_CUT)] + [("report-v6", s)
+                                               for s in _COHORT["scenarios"]]:
     SCEN.append({
         "label": _s["hike_path"],
+        "hikes": _s["id"],
+        "source": _src,
         "modal": bool(_s.get("modal", False)),
         "q1": tuple(v / REV_BASIS for v in _s["value_close_end_q1_2027_m"]),
         "q2": tuple(v / REV_BASIS for v in _s["value_close_end_q2_2027_m"]),
@@ -53,9 +71,14 @@ for _s in _COHORT["scenarios"]:
         "fed_funds": _s["fed_funds_q1_2027_pct"],
     })
 MODAL_S = next(i for i, s in enumerate(SCEN) if s["modal"])
+HIKES = [s["hikes"] for s in SCEN]                        # [-1, 0, 1, 2, 3, 4]
+IDX = {h: i for i, h in enumerate(HIKES)}
+NS = len(SCEN)
 
 PARAMS = {
-    "hike_weights": [s["probability"] for s in _COHORT["scenarios"]],
+    "hike_weights": [CUT_CARVE] + [
+        s["probability"] - (CUT_CARVE if s["id"] == 0 else 0.0)
+        for s in _COHORT["scenarios"]],                   # [.05,.25,.35,.25,.07,.03]
     # --- dynamic ramp (operator premise: evenly scaling, on pace) ---
     "revenue_dec2026": REV_BASIS,                         # editable run-rate waypoint
     "target_value": [200.0, 225.0],                       # editable valuation target
@@ -88,10 +111,11 @@ def scenario_weights(p: dict, dissent_cluster: bool) -> list[float]:
     w = list(p["hike_weights"])
     if dissent_cluster:                                   # tail-only bump (A1)
         bump = p["dissent_bump_pp"] / 100.0
-        w[3] += bump * 0.7
-        w[4] += bump * 0.3
-        w[0] -= bump * 0.6
-        w[1] -= bump * 0.4
+        w[IDX[3]] += bump * 0.7
+        w[IDX[4]] += bump * 0.3
+        w[IDX[-1]] -= bump * 0.2                          # funded from the dove rows
+        w[IDX[0]] -= bump * 0.5
+        w[IDX[1]] -= bump * 0.3
     s = sum(w)
     return [max(x, 0.0) / s for x in w]
 
@@ -163,7 +187,7 @@ def cohort_surface(p: dict, dissent_cluster: bool = False,
     for m in MONTHS:
         rev = REV_BASIS if pin_report else ramp["revenue"][m]
         cells = []
-        for s in range(5):
+        for s in range(NS):
             lo, mid, hi = (x * rev for x in multiple_range(s, m, p))
             cells.append({"lo": round(lo, 1), "mid": round(mid, 1),
                           "hi": round(hi, 1),
@@ -173,9 +197,10 @@ def cohort_surface(p: dict, dissent_cluster: bool = False,
         ev_hi = sum(wi * c["hi"] for wi, c in zip(w, cells))
         ev_adj = sum(wi * c["mid"] * (1 - _stall_cost_frac(s, m, p))
                      for s, (wi, c) in enumerate(zip(w, cells)))
-        hawk_mass = sum(w[2:])
+        hawk_i = [i for i, h in enumerate(HIKES) if h >= 2]
+        hawk_mass = sum(w[i] for i in hawk_i)
         ev_hawk = (sum(w[s] * cells[s]["mid"] * (1 - _stall_cost_frac(s, m, p))
-                       for s in (2, 3, 4)) / hawk_mass) if hawk_mass > 0 else 0.0
+                       for s in hawk_i) / hawk_mass) if hawk_mass > 0 else 0.0
         rows.append({"month": m, "revenue": round(rev, 1),
                      "ev": round(ev, 1), "ev_lo": round(ev_lo, 1),
                      "ev_hi": round(ev_hi, 1), "ev_stall_adj": round(ev_adj, 1),
@@ -188,6 +213,7 @@ def cohort_surface(p: dict, dissent_cluster: bool = False,
     return {"months": MONTHS, "surface": rows, "weights": w, "ramp": ramp,
             "pin_report": pin_report,
             "scenarios": [{"label": s["label"], "modal": s["modal"],
+                           "hikes": s["hikes"], "source": s["source"],
                            "stall_p": s["stall_p"], "fed_funds": s["fed_funds"],
                            "weight": round(wi, 3)}
                           for s, wi in zip(SCEN, w)],
@@ -206,11 +232,11 @@ def breakeven(p: dict, dissent_cluster: bool = False,
     ramp = revenue_ramp(p)
     r1 = REV_BASIS if pin_report else ramp["revenue"][Q1END]
     r2 = REV_BASIS if pin_report else ramp["revenue"][Q2END]
-    q1 = [multiple_range(s, Q1END, p)[1] * r1 for s in range(5)]
-    q2 = [multiple_range(s, Q2END, p)[1] * r2 for s in range(5)]
+    q1 = [multiple_range(s, Q1END, p)[1] * r1 for s in range(NS)]
+    q2 = [multiple_range(s, Q2END, p)[1] * r2 for s in range(NS)]
     d = [a - b for a, b in zip(q1, q2)]
     dev = sum(wi * di for wi, di in zip(w, d))
-    hawk_q1 = sum(w[s] * q1[s] for s in (3, 4))
+    hawk_q1 = sum(w[s] * q1[s] for s in (IDX[3], IDX[4]))
 
     def _shift(frm: int, to: int) -> float | None:
         denom = d[to] - d[frm]
@@ -220,7 +246,8 @@ def breakeven(p: dict, dissent_cluster: bool = False,
         return round(x, 4) if 0 < x <= min(w[frm], 1.0) + 0.25 else None
 
     stall_h = round(-dev / hawk_q1, 4) if dev < 0 and hawk_q1 > 0 else 0.0
-    flips = {"shift_s1_to_s2_pp": _shift(1, 2), "shift_s0_to_s3_pp": _shift(0, 3),
+    flips = {"shift_s1_to_s2_pp": _shift(IDX[1], IDX[2]),
+             "shift_s0_to_s3_pp": _shift(IDX[0], IDX[3]),
              "extra_stall_pp": stall_h if dev < 0 else None}
     dists = [v for v in (flips["shift_s1_to_s2_pp"], flips["shift_s0_to_s3_pp"],
                          flips["extra_stall_pp"]) if v]
@@ -254,13 +281,19 @@ def weight_draws(p: dict, dissent_cluster: bool, n: int,
     tail split ~ Dirichlet(kappa_lo*tailsplit). E[w] = base weights, but the
     futures-identified head is tight and the judged tail is loose."""
     base = np.asarray(scenario_weights(p, dissent_cluster))
-    tmass = base[3:].sum()
-    head = base[:3] / base[:3].sum()
-    tail = base[3:] / tmass
-    t = rng.beta(p["kappa_lo"] * tmass, p["kappa_lo"] * (1 - tmass), n)
-    h = rng.dirichlet(p["kappa_hi"] * head, n)
-    tl = rng.dirichlet(np.maximum(p["kappa_lo"] * tail, 0.05), n)
-    return np.hstack([h * (1 - t)[:, None], tl * t[:, None]])
+    # judged block = extension rows + the >=3-hike tail; identified block =
+    # the futures-priced 0-2 hike region
+    J = np.array([i for i, s in enumerate(SCEN)
+                  if s["hikes"] >= 3 or s["source"] != "report-v6"])
+    K = np.array([i for i in range(NS) if i not in set(J.tolist())])
+    jm = base[J].sum()
+    t = rng.beta(p["kappa_lo"] * jm, p["kappa_lo"] * (1 - jm), n)
+    h = rng.dirichlet(p["kappa_hi"] * base[K] / base[K].sum(), n)
+    j = rng.dirichlet(np.maximum(p["kappa_lo"] * base[J] / jm, 0.05), n)
+    w = np.empty((n, NS))
+    w[:, K] = h * (1 - t)[:, None]
+    w[:, J] = j * t[:, None]
+    return w
 
 
 def dirichlet_band(p: dict, dissent_cluster: bool = False,
@@ -273,7 +306,7 @@ def dirichlet_band(p: dict, dissent_cluster: bool = False,
     out = []
     for m in MONTHS:
         rev = REV_BASIS if pin_report else ramp["revenue"][m]
-        mids = np.array([multiple_range(s, m, p)[1] * rev for s in range(5)])
+        mids = np.array([multiple_range(s, m, p)[1] * rev for s in range(NS)])
         ev = w @ mids
         out.append({"month": m, "p10": round(float(np.percentile(ev, 10)), 1),
                     "p90": round(float(np.percentile(ev, 90)), 1)})
@@ -296,14 +329,14 @@ def hold_premium(surface_rows: list[dict]) -> list[dict]:
 def rate_risk(m: str, p: dict, hike_w: list[float]) -> float:
     """0..1 risk: prob-weighted surprise hikes landing by m + event density in
     the (tilt-dependent) signing-to-close gap ending at m. Higher = worse."""
-    hawk_tilt = sum(hike_w[2:])
+    hawk_tilt = sum(wi for wi, h in zip(hike_w, HIKES) if h >= 2)
     gap = p["gap_months_hawkish"] if hawk_tilt > 0.3 else p["gap_months_dovish"]
     gi = max(0, _mi(m) - int(round(gap)))
     window = MONTHS[gi:_mi(m) + 1]
     ev_density = (sum(p["event_w_fomc"] for x in FOMC if x in window)
                   + sum(p["event_w_cpi"] for x in CPI if x in window))
     ev_density /= (len(window) * 1.4)                     # normalize ~0..1
-    exp_hikes = sum(wi * s for s, wi in enumerate(hike_w))
+    exp_hikes = sum(wi * max(h, 0) for wi, h in zip(hike_w, HIKES))
     # hikes land Oct'26..Apr'27: exposure share of that span occurring <= m
     span = [x for x in MONTHS if "2026-10" <= x <= "2027-04"]
     landed = len([x for x in span if x <= m]) / len(span)
@@ -381,14 +414,15 @@ def action_cards(p: dict, ctx: dict) -> list[dict]:
                       "trigger": f"fcix_z={ctx['fcix_z']:.2f}>0.75",
                       "rationale": "Financing tight: sponsor leverage constrained",
                       "confidence": "medium"})
-    if hw[2] + hw[3] + hw[4] > 0.40:
+    p2 = sum(wi for wi, h in zip(hw, HIKES) if h >= 2)
+    if p2 > 0.40:
         cards.append({"rank": 3, "action": "Negotiate rate-contingent collar / earnout now",
-                      "trigger": f"P(>=2 hikes)={hw[2]+hw[3]+hw[4]:.2f}>0.40",
+                      "trigger": f"P(>=2 hikes)={p2:.2f}>0.40",
                       "rationale": "Bridge bid-ask across rate scenarios",
                       "confidence": "medium"})
     if ctx.get("revenue_delta", 0) > 0:
         d = ctx["revenue_delta"]
-        lo, hi = SCEN[4]["q1"][0], SCEN[0]["q1"][1]
+        lo, hi = SCEN[IDX[4]]["q1"][0], SCEN[IDX[0]]["q1"][1]  # report rows: 1.38-2.00x
         cards.append({"rank": 4, "action": f"Re-anchor ask: +${d:.1f}M revenue run-rate "
                       f"~ +${lo*d:.1f}-{hi*d:.1f}M value (1.38-2.00x revenue)",
                       "trigger": f"revenue_raised+{d}",

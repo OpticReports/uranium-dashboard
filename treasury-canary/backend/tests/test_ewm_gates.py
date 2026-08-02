@@ -11,10 +11,10 @@ import os
 import numpy as np
 
 from app.ewm.core import (
-    MONTHS, PARAMS, Q1END, Q2END, REV_BASIS, SCEN, TARGET_M, action_cards,
-    breakeven, cohort_surface, cost_of_delay, dirichlet_band, hold_premium,
-    multiple_range, rate_risk, revenue_ramp, scenario_weights, weight_draws,
-    window_scores,
+    HIKES, IDX, MODAL_S, MONTHS, PARAMS, Q1END, Q2END, REV_BASIS, SCEN,
+    TARGET_M, action_cards, breakeven, cohort_surface, cost_of_delay,
+    dirichlet_band, hold_premium, multiple_range, rate_risk, revenue_ramp,
+    scenario_weights, weight_draws, window_scores,
 )
 from app.ewm.mc import simulate
 
@@ -28,14 +28,15 @@ def test_gate1_report_fidelity_pinned():
     s = cohort_surface(PARAMS, dissent_cluster=False, pin_report=True)
     q1 = next(r for r in s["surface"] if r["month"] == Q1END)
     q2 = next(r for r in s["surface"] if r["month"] == Q2END)
-    for i, row in enumerate(COHORT["scenarios"]):
+    for row in COHORT["scenarios"]:
+        i = IDX[row["id"]]                                # report rows via hike count
         lo, hi = row["value_close_end_q1_2027_m"]
         assert abs(q1["cells"][i]["lo"] - lo) < 0.1 and abs(q1["cells"][i]["hi"] - hi) < 0.1, (i, q1["cells"][i])
         lo2, hi2 = row["value_close_end_q2_2027_m"]
         assert abs(q2["cells"][i]["lo"] - lo2) < 0.1 and abs(q2["cells"][i]["hi"] - hi2) < 0.1
     # report aggregates: weighted EV ~$186-193M, modal cell $192-200M
     assert 186.0 <= q1["ev"] <= 193.0, q1["ev"]
-    assert q1["cells"][1]["lo"] == 192.0 and q1["cells"][1]["hi"] == 200.0
+    assert q1["cells"][MODAL_S]["lo"] == 192.0 and q1["cells"][MODAL_S]["hi"] == 200.0
     # Q1'27 green-amber under calm inputs, process in market (4-month lead)
     ws = window_scores(PARAMS, PARAMS["hike_weights"], fcix_z=0.1, dmhi01=0.55,
                        canary01=0.25, stage="in_market", today_month="2026-09")
@@ -71,7 +72,9 @@ def test_gate1d_ranges_hawk_skewed_not_flat():
     s = cohort_surface(PARAMS, pin_report=True)
     q1 = next(r for r in s["surface"] if r["month"] == Q1END)
     widths = [c["hi"] - c["lo"] for c in q1["cells"]]
-    assert max(widths[2:]) > max(widths[:2]) + 5, widths      # s2-s4 wider than s0-s1
+    hawk_w = [widths[i] for i, h in enumerate(HIKES) if h >= 2]
+    dove_w = [widths[i] for i, h in enumerate(HIKES) if h <= 1]
+    assert max(hawk_w) > max(dove_w) + 5, widths              # hawk rows widest
     assert q1["ev_lo"] < q1["ev"] < q1["ev_hi"]
 
 
@@ -120,7 +123,7 @@ def test_gate1g_scenario_count_stress():
 
     q1 = [sum(s["value_close_end_q1_2027_m"]) / 2 for s in COHORT["scenarios"]]
     q2 = [sum(s["value_close_end_q2_2027_m"]) / 2 for s in COHORT["scenarios"]]
-    w = PARAMS["hike_weights"]
+    w = [s["probability"] for s in COHORT["scenarios"]]
     base = pref(w, q1, q2)
     # (i) tail merged at weight-average value
     wt = w[3] + w[4]
@@ -151,11 +154,11 @@ def _replay(tag):
         hy_z = (hy_hist[-1] - mu) / sd
         # map to engine inputs: hawkish surprise pressure -> tail-heavy weights
         if d2_chg_3m > 0.75:
-            hw = [0.05, 0.10, 0.25, 0.35, 0.25]
+            hw = [0.00, 0.05, 0.10, 0.25, 0.35, 0.25]
         elif d2_chg_3m > 0.25:
-            hw = [0.15, 0.30, 0.30, 0.15, 0.10]
+            hw = [0.00, 0.15, 0.30, 0.30, 0.15, 0.10]
         else:
-            hw = [0.35, 0.35, 0.20, 0.07, 0.03]
+            hw = [0.05, 0.30, 0.35, 0.20, 0.07, 0.03]
         fcix = max(-1.0, min(2.0, hy_z + (0.5 if d2_chg_3m > 0.75 else 0.0)))
         vix01 = min(1.0, max(0.0, (f["vix"][i] - 12) / 25))
         dmhi01 = max(0.0, 0.5 - 0.2 * max(hy_z, 0.0))
@@ -200,7 +203,7 @@ def test_gate4_feasibility_and_trigger_logging():
         infeasible = [w["month"] for w in ws if not w["feasible"]]
         assert len(infeasible) == min(lead, len(MONTHS)), (stage, infeasible)
     # every card carries a machine-checkable trigger string
-    cards = action_cards(PARAMS, {"hike_weights": [0.1, 0.1, 0.3, 0.3, 0.2],
+    cards = action_cards(PARAMS, {"hike_weights": [0.0, 0.1, 0.1, 0.3, 0.3, 0.2],
                                   "fcix_z": 1.0, "dissent_cluster": True,
                                   "stress_prob": 0.3, "revenue_delta": 1.0,
                                   "breakeven": {"within_5pp_of_flip": True,
@@ -211,8 +214,8 @@ def test_gate4_feasibility_and_trigger_logging():
 def test_dissent_bump_tail_only_and_gate1_safe():
     w0 = scenario_weights(PARAMS, False)
     w1 = scenario_weights(PARAMS, True)
-    assert w1[3] > w0[3] and w1[4] > w0[4]               # tail up
-    assert w1[0] < w0[0] and w1[1] < w0[1]               # funded from doves
+    assert w1[IDX[3]] > w0[IDX[3]] and w1[IDX[4]] > w0[IDX[4]]   # tail up
+    assert all(w1[IDX[h]] < w0[IDX[h]] for h in (-1, 0, 1))      # funded from doves
     assert abs(sum(w1) - 1.0) < 1e-9
     s = cohort_surface(PARAMS, dissent_cluster=True, pin_report=True)
     q1 = next(r for r in s["surface"] if r["month"] == Q1END)
@@ -232,3 +235,26 @@ def test_cost_of_delay_and_hold_premium():
     # with the ramp on, holding toward the target carries positive premium
     q1p = next(h for h in hp if h["month"] == Q1END)
     assert q1p["premium"] > 0
+
+
+def test_cut_extension_row():
+    """v2.1: benign-easing cut row is an EXTENSION (tagged, not report), 5pp
+    carved from the holds row; report probabilities otherwise preserved."""
+    cut = SCEN[IDX[-1]]
+    assert cut["source"] != "report-v6" and cut["stall_p"] == 0.0
+    w = PARAMS["hike_weights"]
+    assert abs(sum(w) - 1.0) < 1e-9
+    assert w[IDX[-1]] == 0.05 and w[IDX[0]] == 0.25          # carve from holds
+    for row in COHORT["scenarios"][1:]:                      # other rows untouched
+        assert w[IDX[row["id"]]] == row["probability"]
+    # cut row sits above the holds row and keeps the +5M dove drift
+    s = cohort_surface(PARAMS, pin_report=True)
+    q1 = next(r for r in s["surface"] if r["month"] == Q1END)
+    q2 = next(r for r in s["surface"] if r["month"] == Q2END)
+    assert q1["cells"][IDX[-1]]["mid"] > q1["cells"][IDX[0]]["mid"]
+    assert q2["cells"][IDX[-1]]["mid"] > q1["cells"][IDX[-1]]["mid"]
+    # forced-cut MC fan lands inside the cut cell at Q1-end (pinned)
+    fcut = next(r for r in simulate(PARAMS, {"today_month": "2026-09"},
+                                    {"force_hikes": -1, "pin_report": True})["fan"]
+                if r["month"] == Q1END)
+    assert 205 * 0.93 <= fcut["p10"] and fcut["p90"] <= 218.5, fcut

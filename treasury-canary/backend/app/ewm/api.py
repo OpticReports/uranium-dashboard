@@ -12,9 +12,9 @@ from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
-from .core import (FOMC, MONTHS, PARAMS, Q1END, Q2END, TARGET_M, action_cards,
-                   breakeven, cohort_surface, cost_of_delay, dirichlet_band,
-                   hold_premium, window_scores)
+from .core import (FOMC, MODAL_S, MONTHS, PARAMS, Q1END, Q2END, TARGET_M,
+                   action_cards, breakeven, cohort_surface, cost_of_delay,
+                   dirichlet_band, hold_premium, window_scores)
 from .mc import simulate
 
 router = APIRouter(prefix="/ewm", tags=["ewm"])
@@ -116,7 +116,8 @@ def board():
             "windows": ws, "cost_of_delay": cod, "cards": cards,
             "headline": {"q1_ev": q1["ev"], "q1_lo": q1["ev_lo"], "q1_hi": q1["ev_hi"],
                          "q2_ev": q2["ev"], "target_ev": tgt["ev"],
-                         "modal_cell": [q1["cells"][1]["lo"], q1["cells"][1]["hi"]],
+                         "modal_cell": [q1["cells"][MODAL_S]["lo"],
+                                        q1["cells"][MODAL_S]["hi"]],
                          "today_revenue": surface["ramp"]["today_implied"],
                          "target_revenue": surface["ramp"]["target_revenue"]},
             "anchors": {"q1_end": Q1END, "q2_end": Q2END, "target": TARGET_M},

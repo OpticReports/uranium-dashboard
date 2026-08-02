@@ -396,3 +396,23 @@ METHODOLOGY_RESEARCH.md (shortlist items 1-4, 6).
    waypoints + hawk-skew + Dirichlet determinism + MC toggle bounds +
    scenario-count stress (memo e3: preferred window stable under tail-merge
    and row-2 split). G2/G3/G4 replays unchanged and green. 159 canary tests.
+
+### v2.1 (2026-08-02): rate-cut extension row (operator request)
+
+The report has no easing scenario (dovest row = "0 hikes, holds continue").
+Added "1+ cuts (benign easing)" as a tagged EXTENSION row, NOT a report cell:
+- probability 5pp, carved from the 30% holds row (the report's futures
+  context prices ~30-35% "no hike by December"; cuts are a small slice of
+  that mass — judgment-tagged, rescore after each FOMC);
+- values reverse the report's debt-capacity anchor (~$10M per 50bp) for a
+  25-50bp easing: Q1 $205-218M, Q2 $210-223M at the $105M basis, keeping
+  the holds row's +5M Q1->Q2 dove drift (so the pinned breakeven closed
+  forms are unchanged);
+- a recession-FORCED cut is explicitly NOT this row — the crash and
+  50bp-regime toggles model that path (shock-sim finding: cut scenarios
+  carry more tail risk via the deterioration that forces them);
+- the cut row sits in the LOW-concentration (judged) Dirichlet block with
+  the >=3-hike tail; the futures-identified 0-2-hike block stays tight;
+- engine re-keyed from positional indices to hike counts (-1..4) so rows
+  are extensible; MC gains force_hikes=-1; report-fidelity gate G1
+  unchanged (pinned weighted EV 191.3, still inside $186-193M).

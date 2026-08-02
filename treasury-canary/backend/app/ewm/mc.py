@@ -7,7 +7,7 @@ Dirichlet, weight uncertainty), draw a scenario, draw a within-cell quantile
 apply the toggled shocks, then value every candidate close month.
 
 Toggles (all optional):
-  force_hikes: 0..4      pin the rate path to one cohort row
+  force_hikes: -1..4     pin the rate path to one row (-1 = benign-easing cut)
   crash: none|moderate|severe   equity drawdown mapped to revenue-multiple
          compression with the report's 1-2 quarter transmission lag.
          Calibration anchor: 2022-23 revenue-priced deals compressed 60%+
@@ -29,8 +29,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from .core import (MONTHS, PARAMS, REV_BASIS, SCEN, TARGET_M, _mi,
-                   multiple_range, revenue_ramp, stall_exposure, weight_draws)
+from .core import (HIKES, IDX, MONTHS, NS, PARAMS, REV_BASIS, SCEN, TARGET_M,
+                   _mi, multiple_range, revenue_ramp, stall_exposure,
+                   weight_draws)
 
 CRASH_FACTOR = {"none": 1.0, "moderate": 0.85, "severe": 0.70}
 REGIME_BAND = (145.0, 170.0)                              # report, at $105M basis
@@ -60,8 +61,8 @@ def simulate(p: dict, inputs: dict, toggles: dict, n_paths: int = 4000) -> dict:
 
     # per-path draws
     w = weight_draws(p, dissent, n_paths, rng)            # (n, 5)
-    if tg["force_hikes"] is not None and 0 <= int(tg["force_hikes"]) <= 4:
-        s_idx = np.full(n_paths, int(tg["force_hikes"]))
+    if tg["force_hikes"] is not None and int(tg["force_hikes"]) in IDX:
+        s_idx = np.full(n_paths, IDX[int(tg["force_hikes"])])
     else:
         cum = np.cumsum(w, axis=1)
         s_idx = (rng.uniform(size=(n_paths, 1)) < cum).argmax(axis=1)
@@ -70,10 +71,11 @@ def simulate(p: dict, inputs: dict, toggles: dict, n_paths: int = 4000) -> dict:
     z_death = rng.uniform(size=n_paths)
     u_regime = rng.uniform(size=n_paths)                  # 50bp-branch value draw
 
-    stall_base = np.array([SCEN[s]["stall_p"] for s in range(5)])[s_idx]
-    stall_base = stall_base + extra_stall * (s_idx >= 3)  # hawk rows, matching h*
+    stall_base = np.array([SCEN[s]["stall_p"] for s in range(NS)])[s_idx]
+    hk = np.array(HIKES)[s_idx]                           # hike count per path
+    stall_base = stall_base + extra_stall * (hk >= 3)     # hawk rows, matching h*
     if crash == "severe":
-        stall_base = stall_base + 0.10 * (s_idx >= 2)
+        stall_base = stall_base + 0.10 * (hk >= 2)
     if tg["regime_50bp"]:
         stall_base = np.maximum(stall_base, 0.40)
     stall_base = np.clip(stall_base, 0.0, 0.95)
@@ -87,12 +89,13 @@ def simulate(p: dict, inputs: dict, toggles: dict, n_paths: int = 4000) -> dict:
         cf = 1 - (1 - CRASH_FACTOR[crash]) * phase
         if tg["regime_50bp"]:
             # off-cohort branch: value band gapped, shaped by the row-4 decay
-            shape = multiple_range(4, m, p)[1] / multiple_range(4, "2027-03", p)[1]
+            shape = (multiple_range(IDX[4], m, p)[1]
+                     / multiple_range(IDX[4], "2027-03", p)[1])
             lo, hi = REGIME_BAND
             base = (lo + u_regime * (hi - lo)) * (rev / REV_BASIS) * shape
         else:
             base = np.empty(n_paths)
-            for s in range(5):
+            for s in range(NS):
                 mask = s_idx == s
                 if mask.any():
                     mlo, mmid, mhi = multiple_range(s, m, p)
