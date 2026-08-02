@@ -5,13 +5,15 @@
 <style>
 :root{color-scheme:dark}
 body{margin:0;background:#0b1120;color:#cbd5e1;font:13px/1.5 ui-monospace,Menlo,monospace}
-.wrap{max-width:1100px;margin:0 auto;padding:20px}
+.wrap{max-width:1160px;margin:0 auto;padding:44px 20px 20px}
 h1{font-size:18px;color:#f1f5f9;margin:0}
 .sub{color:#64748b;font-size:11px;margin:2px 0 16px}
 .panel{border:1px solid #1e293b;border-radius:10px;background:#0f172acc;padding:14px 16px;margin-bottom:14px}
 .strip{display:flex;flex-wrap:wrap;gap:24px;align-items:baseline}
 .big{font-size:26px;color:#38bdf8;font-weight:700}
 .lbl{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:#64748b;display:block}
+.plain{border-left:3px solid #38bdf8;background:#0f172a;padding:10px 14px;border-radius:6px;color:#e2e8f0;font-size:12.5px}
+.plain b{color:#7dd3fc}
 .tl{display:flex;gap:4px;flex-wrap:wrap;margin-top:8px}
 .mo{flex:1 1 52px;min-width:52px;text-align:center;border-radius:6px;padding:7px 2px;font-size:10px;border:1px solid transparent}
 .G{background:#065f4633;color:#34d399;border-color:#34d39955}
@@ -19,50 +21,224 @@ h1{font-size:18px;color:#f1f5f9;margin:0}
 .R{background:#7f1d1d33;color:#f87171;border-color:#f8717155}
 .X{background:#1e293b55;color:#475569;text-decoration:line-through}
 .fomc{font-size:8px;color:#94a3b8}
-table{width:100%;border-collapse:collapse;font-size:11px}
-td,th{padding:3px 8px;text-align:right;border-bottom:1px solid #1e293b}
+table{width:100%;border-collapse:collapse;font-size:11.5px}
+td,th{padding:4px 8px;text-align:right;border-bottom:1px solid #1e293b}
 th{color:#64748b;font-weight:600}td:first-child,th:first-child{text-align:left}
+.cmid{color:#e2e8f0;font-weight:600}.crng{color:#64748b;font-size:10px}
+.star{color:#fbbf24}.stall{color:#f87171;font-size:9px}
+.modalcell{background:#1d4ed820;border-radius:4px}
+tr.foot td{border-top:2px solid #334155;color:#94a3b8}
+tr.foot td.cmid{color:#7dd3fc}
+.be{background:#1e293b66;border-radius:6px;padding:8px 12px;margin-top:10px;color:#fbbf24;font-size:12px}
+.tag{font-size:8px;color:#475569;display:block;text-transform:none;letter-spacing:0}
 .card{border:1px solid #334155;border-left:3px solid #38bdf8;border-radius:6px;padding:8px 12px;margin-top:8px}
 .card b{color:#e2e8f0}.trig{color:#64748b;font-size:10px}
 .ep{color:#475569;font-size:10px;margin-top:14px}
 a.nav{position:fixed;top:12px;left:12px;color:#94a3b8;text-decoration:none;border:1px solid #334155;border-radius:6px;padding:4px 8px;font-size:11px;background:#0f172a}
+details{margin-bottom:14px}
+summary{cursor:pointer;color:#94a3b8;font-size:12px;padding:6px 0}
+.form{display:flex;flex-wrap:wrap;gap:14px;padding:10px 0;align-items:end}
+.form label{display:flex;flex-direction:column;gap:3px;font-size:10px;color:#64748b}
+.form input,.form select{background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:5px;padding:5px 8px;font:inherit;width:110px}
+.form input[type=checkbox]{width:auto}
+button{background:#0369a1;color:#e0f2fe;border:0;border-radius:6px;padding:7px 16px;font:inherit;cursor:pointer}
+button:hover{background:#0284c7}
+.tgl{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:10px;align-items:end}
+canvas{width:100%;max-width:100%;background:#0b1120;border:1px solid #1e293b;border-radius:8px}
+.leg{font-size:10px;color:#64748b;margin-top:6px}
+.leg span{margin-right:14px}
+.dim{color:#475569}
 </style></head><body>
 <a class="nav" href="/">&#9776; dashboards</a>
 <div class="wrap">
 <h1>&#128197; Exit Window Monitor</h1>
-<div class="sub">Deal-timing decision support &middot; ~$200M exit &middot; window Q4'26&ndash;Q2'27+</div>
-<div class="panel strip" id="strip">loading&hellip;</div>
+<div class="sub">Deal-timing decision support &middot; ~$200M exit &middot; sell-for-less-now vs hold to Jul 31 2027</div>
+
+<div class="panel plain" id="plain">loading&hellip;</div>
+<div class="panel strip" id="strip"></div>
+
+<details open><summary>&#9881; Settings — revenue ramp &amp; process inputs</summary>
+<div class="panel"><div class="form" id="form">
+<label>Revenue run-rate @ Dec 2026 ($M)<input id="i_rev" type="number" step="0.5"></label>
+<label>Target value low ($M)<input id="i_tlo" type="number" step="1"></label>
+<label>Target value high ($M)<input id="i_thi" type="number" step="1"></label>
+<label>Process stage<select id="i_stage"><option>not_started</option><option>prep</option><option>in_market</option><option>loi</option><option>exclusivity</option><option>close</option></select></label>
+<label>Today (month)<input id="i_today" placeholder="2026-09"></label>
+<label>Dissent cluster<input id="i_dis" type="checkbox"></label>
+<label>Pin to report ($105M, no ramp)<input id="i_pin" type="checkbox"></label>
+<button id="save">Apply</button>
+<span class="dim" id="savemsg"></span>
+</div></div></details>
+
+<div class="panel"><span class="lbl">Scenario cohort &times; close window ($M &middot; cell = central + report range &middot; &#9733; modal)</span>
+<table id="cohort"></table>
+<div class="be" id="beline"></div>
+</div>
+
+<div class="panel"><span class="lbl">Monte Carlo valuation fan — toggle shocks, engine reprices the whole path</span>
+<div class="tgl">
+<label class="lbl" style="display:flex;flex-direction:column;gap:3px">Rate path<select id="t_force"><option value="">probabilistic (cohort weights)</option><option value="0">force 0 hikes</option><option value="1">force 1 hike</option><option value="2">force 2 hikes</option><option value="3">force 3 hikes</option><option value="4">force 4 hikes</option></select></label>
+<label class="lbl" style="display:flex;flex-direction:column;gap:3px">Stock crash<select id="t_crash"><option value="none">none</option><option value="moderate">moderate (&minus;20% SPX)</option><option value="severe">severe (&minus;35% SPX)</option></select></label>
+<label class="lbl" style="display:flex;flex-direction:column;gap:3px">50bp regime<select id="t_reg"><option value="">off</option><option value="1">on (off-cohort gap)</option></select></label>
+<label class="lbl" style="display:flex;flex-direction:column;gap:3px">Extra stall hazard (pp)<input id="t_stall" type="number" value="0" min="0" max="30" step="1" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:5px;padding:5px 8px;font:inherit;width:70px"></label>
+<button id="runsim">Run simulation</button>
+<span class="dim" id="simmsg"></span>
+</div>
+<canvas id="fan" width="1100" height="360"></canvas>
+<div class="leg"><span style="color:#38bdf8">&#9632; p25&ndash;p75</span><span style="color:#1e40af">&#9632; p10&ndash;p90</span><span style="color:#e2e8f0">&mdash; median</span><span style="color:#34d399">&#9476; on-pace ramp value</span><span style="color:#fbbf2488">&#9632; $200&ndash;225M target</span><span id="nodeal"></span></div>
+<div class="dim" id="simassump" style="font-size:10px;margin-top:8px"></div>
+</div>
+
 <div class="panel"><span class="lbl">Safety windows (feasibility-gated)</span><div class="tl" id="tl"></div></div>
-<div class="panel"><span class="lbl">Expected value by close month ($M, weighted / p10&ndash;p90)</span>
-<table id="ev"></table></div>
-<div class="panel"><span class="lbl">Cost of delay (frozen-input counterfactual)</span><table id="cod"></table></div>
+<div class="panel"><span class="lbl">Cost of waiting to launch (stall-adjusted, horizon capped at Jul-27) &mdash; base case vs if the &ge;2-hike world materializes</span><table id="cod"></table>
+<div class="dim" style="font-size:10px;margin-top:6px">Under the ramp the base-case delay cost is ~0 by construction &mdash; the risk of waiting lives in the hawk column and in the stall odds (see breakeven row).</div></div>
 <div class="panel"><span class="lbl">Action cards</span><div id="cards"></div></div>
 <div class="ep" id="ep"></div>
 </div>
 <script>
-fetch('api/ewm/board').then(r=>r.json()).then(b=>{
-  const h=b.headline;
+const COLS=["2026-12","2027-01","2027-03","2027-06","2027-09"];
+const fmt=v=>"$"+Math.round(v)+"M";
+let BOARD=null;
+
+function render(b){
+  BOARD=b;
+  const h=b.headline, be=b.breakeven, ramp=b.surface.ramp;
+  const pref=be.preferred==="Q1"?"end of Q1 2027":"end of Q2 2027";
+  const stall=be.flips.extra_stall_pp?Math.round(be.flips.extra_stall_pp*100):null;
+  document.getElementById('plain').innerHTML=
+    `<b>What this says today:</b> closing at <b>${pref}</b> carries the higher expected value `+
+    `(Q1 ${fmt(h.q1_ev)} vs Q2 ${fmt(h.q2_ev)}; holding to the Jul-2027 scale target ~${fmt(h.target_ev)}). `+
+    (stall?`But the call flips to selling earlier if the odds of the process stalling in the 3&ndash;4 hike world rise by just <b>${stall}pp</b> &mdash; the decision rides on stall risk, not headline EV. `:``)+
+    `Ramp: today&rsquo;s implied run-rate <b>$${h.today_revenue}M</b> &rarr; $${b.inputs.revenue_dec2026}M @ Dec-26 &rarr; $${h.target_revenue}M @ Jul-27 (on pace for $${b.inputs.target_value_lo}&ndash;${b.inputs.target_value_hi}M).`+
+    (b.surface.pin_report?` <b>[report-fidelity mode: revenue pinned at $105M]</b>`:``);
   document.getElementById('strip').innerHTML=
-    `<span><span class="lbl">Weighted EV (Q1'27 close)</span><span class="big">$${h.weighted_ev_q1}M</span></span>`+
-    `<span><span class="lbl">Modal (0-1 hikes)</span>$${h.modal_lo}&ndash;${h.modal_hi}M</span>`+
-    `<span><span class="lbl">10/90 band</span>$${h.p10}&ndash;${h.p90}M</span>`+
+    `<span><span class="lbl">Weighted EV (Q1'27-end)</span><span class="big">${fmt(h.q1_ev)}</span><span class="crng"> ${fmt(h.q1_lo)}&ndash;${fmt(h.q1_hi)}</span></span>`+
+    `<span><span class="lbl">Modal cell (1 hike)</span>${fmt(h.modal_cell[0])}&ndash;${fmt(h.modal_cell[1])}</span>`+
+    `<span><span class="lbl">Q2'27-end EV</span>${fmt(h.q2_ev)}</span>`+
+    `<span><span class="lbl">Hold to Jul-27 EV</span>${fmt(h.target_ev)}</span>`+
     `<span><span class="lbl">Canary composite</span>${Math.round(b.canary01*100)}/100</span>`+
-    `<span><span class="lbl">FCI-X z</span>${b.inputs.fcix_z}</span>`+
     `<span><span class="lbl">Stage</span>${b.inputs.stage}</span>`;
+
+  // settings current values
+  document.getElementById('i_rev').value=b.inputs.revenue_dec2026;
+  document.getElementById('i_tlo').value=b.inputs.target_value_lo;
+  document.getElementById('i_thi').value=b.inputs.target_value_hi;
+  document.getElementById('i_stage').value=b.inputs.stage;
+  document.getElementById('i_today').value=b.inputs.today_month;
+  document.getElementById('i_dis').checked=!!b.inputs.dissent_cluster;
+  document.getElementById('i_pin').checked=!!b.inputs.pin_report;
+
+  // cohort table
+  const rows=b.surface.surface, byM={}; rows.forEach(r=>byM[r.month]=r);
+  const bandBy={}; b.weight_band.band.forEach(x=>bandBy[x.month]=x);
+  const hpBy={}; b.hold_premium.forEach(x=>hpBy[x.month]=x.premium);
+  const anch=b.anchors;
+  let html='<tr><th>scenario</th><th>p</th>'+COLS.map(m=>{
+    const t=m===anch.q1_end?'report &#9733;Q1-end':m===anch.q2_end?'report Q2-end':byM[m].tag;
+    return `<th>${m}<span class="tag">${t}</span></th>`}).join('')+'</tr>';
+  b.surface.scenarios.forEach((sc,i)=>{
+    html+=`<tr><td>${sc.label}${sc.modal?' <span class=star>&#9733;</span>':''}`+
+      `${sc.stall_p?` <span class=stall>&#9888;${Math.round(sc.stall_p*100)}% stall</span>`:''}</td>`+
+      `<td>${Math.round(sc.weight*100)}%</td>`+
+      COLS.map(m=>{const c=byM[m].cells[i];
+        const cls=(sc.modal&&m===anch.q1_end)?' class=modalcell':'';
+        return `<td${cls}><span class="cmid">${fmt(c.mid)}</span> <span class="crng">${Math.round(c.lo)}&ndash;${Math.round(c.hi)}</span></td>`}).join('')+'</tr>';
+  });
+  html+=`<tr class="foot"><td>Weighted EV <span class="crng">(report ranges)</span></td><td></td>`+
+    COLS.map(m=>`<td><span class="cmid">${fmt(byM[m].ev)}</span> <span class="crng">${Math.round(byM[m].ev_lo)}&ndash;${Math.round(byM[m].ev_hi)}</span></td>`).join('')+'</tr>';
+  html+=`<tr class="foot"><td>Weight-uncertainty <span class="crng">(Dirichlet 10&ndash;90)</span></td><td></td>`+
+    COLS.map(m=>`<td><span class="crng">${Math.round(bandBy[m].p10)}&ndash;${Math.round(bandBy[m].p90)}</span></td>`).join('')+'</tr>';
+  html+=`<tr class="foot"><td>Stall-adjusted EV</td><td></td>`+
+    COLS.map(m=>`<td>${fmt(byM[m].ev_stall_adj)}</td>`).join('')+'</tr>';
+  html+=`<tr class="foot"><td>Hold-to-Jul-27 premium</td><td></td>`+
+    COLS.map(m=>{const v=hpBy[m];return `<td style="color:${v>0?'#34d399':'#f87171'}">${v>0?'+':''}${v.toFixed(1)}M</td>`}).join('')+'</tr>';
+  document.getElementById('cohort').innerHTML=html;
+  document.getElementById('beline').innerHTML='<b>BREAKEVEN</b> &middot; '+be.sentence;
+
   document.getElementById('tl').innerHTML=b.windows.map(w=>{
     const cls=!w.feasible?'X':w.band[0];
     return `<div class="mo ${cls}" title="score ${w.score}">${w.month.slice(2)}`+
       `${w.events.fomc?'<div class=fomc>FOMC</div>':''}<div>${w.feasible?w.score:'&mdash;'}</div></div>`;
   }).join('');
-  document.getElementById('ev').innerHTML='<tr><th>month</th><th>weighted</th><th>p10</th><th>p90</th></tr>'+
-    b.surface.surface.map(r=>`<tr><td>${r.month}</td><td>$${r.ev}M</td><td>$${r.p10}M</td><td>$${r.p90}M</td></tr>`).join('');
-  document.getElementById('cod').innerHTML='<tr><th>delay</th><th>best EV</th><th>cost</th><th>$/week</th></tr>'+
-    b.cost_of_delay.curve.map(c=>`<tr><td>${c.delay_months} mo</td><td>$${c.best_ev}M</td>`+
-    `<td>$${c.cost_vs_now}M</td><td>$${(c.cost_per_week*1000).toFixed(0)}k</td></tr>`).join('');
+
+  document.getElementById('cod').innerHTML='<tr><th>delay</th><th>best EV (stall-adj)</th><th>base-case cost</th><th>cost if &ge;2 hikes</th></tr>'+
+    b.cost_of_delay.curve.map(c=>`<tr><td>${c.delay_months} mo</td><td>${fmt(c.best_ev)}</td>`+
+    `<td>$${c.cost_vs_now}M</td><td style="color:${c.hawk_cost>0.05?'#f87171':'#64748b'}">$${c.hawk_cost}M</td></tr>`).join('');
+
   document.getElementById('cards').innerHTML=b.cards.length?b.cards.map(c=>
     `<div class="card"><b>${c.action}</b><div>${c.rationale}</div>`+
     `<div class="trig">trigger: ${c.trigger} &middot; confidence ${c.confidence}</div></div>`).join('')
     :'<div class="trig">no active triggers</div>';
   document.getElementById('ep').textContent=b.epistemic;
-});
+}
+
+function drawFan(sim){
+  const cv=document.getElementById('fan'),ctx=cv.getContext('2d');
+  ctx.clearRect(0,0,cv.width,cv.height);
+  const M=sim.months,f=sim.fan,pad={l:46,r:14,t:14,b:26};
+  const W=cv.width-pad.l-pad.r,H=cv.height-pad.t-pad.b;
+  let lo=Math.min(...f.map(r=>r.p10),sim.target_band[0])-8;
+  let hi=Math.max(...f.map(r=>r.p90),sim.target_band[1])+8;
+  const X=i=>pad.l+W*i/(M.length-1),Y=v=>pad.t+H*(1-(v-lo)/(hi-lo));
+  // target band
+  ctx.fillStyle='#fbbf2418';
+  ctx.fillRect(pad.l,Y(sim.target_band[1]),W,Y(sim.target_band[0])-Y(sim.target_band[1]));
+  // gridlines
+  ctx.strokeStyle='#1e293b';ctx.fillStyle='#475569';ctx.font='10px ui-monospace';
+  for(let v=Math.ceil(lo/20)*20;v<=hi;v+=20){
+    ctx.beginPath();ctx.moveTo(pad.l,Y(v));ctx.lineTo(pad.l+W,Y(v));ctx.stroke();
+    ctx.fillText('$'+v+'M',4,Y(v)+3);
+  }
+  const band=(k1,k2,color)=>{ctx.fillStyle=color;ctx.beginPath();
+    f.forEach((r,i)=>i?ctx.lineTo(X(i),Y(r[k1])):ctx.moveTo(X(0),Y(r[k1])));
+    [...f].reverse().forEach((r,i)=>ctx.lineTo(X(f.length-1-i),Y(r[k2])));
+    ctx.closePath();ctx.fill();};
+  band('p10','p90','#1e40af44');band('p25','p75','#38bdf855');
+  ctx.strokeStyle='#e2e8f0';ctx.lineWidth=1.6;ctx.beginPath();
+  f.forEach((r,i)=>i?ctx.lineTo(X(i),Y(r.p50)):ctx.moveTo(X(0),Y(r.p50)));ctx.stroke();
+  // on-pace ramp line
+  ctx.strokeStyle='#34d399';ctx.setLineDash([5,4]);ctx.lineWidth=1.2;ctx.beginPath();
+  sim.on_pace.forEach((r,i)=>i?ctx.lineTo(X(i),Y(r.value)):ctx.moveTo(X(0),Y(r.value)));
+  ctx.stroke();ctx.setLineDash([]);
+  // month labels + report anchors
+  ctx.fillStyle='#64748b';
+  M.forEach((m,i)=>{if(i%2==0||m==='2027-03'||m==='2027-06')ctx.fillText(m.slice(2),X(i)-14,cv.height-8);});
+  ['2027-03','2027-06'].forEach(m=>{const i=M.indexOf(m);
+    ctx.strokeStyle='#fbbf2466';ctx.setLineDash([2,3]);ctx.beginPath();
+    ctx.moveTo(X(i),pad.t);ctx.lineTo(X(i),pad.t+H);ctx.stroke();ctx.setLineDash([]);});
+  const mx=Math.max(...f.map(r=>r.p_no_deal));
+  document.getElementById('nodeal').textContent=mx>0.005?`P(process dies) up to ${(mx*100).toFixed(1)}%`:'';
+  document.getElementById('simassump').textContent='Assumptions: '+sim.assumptions.join(' · ');
+}
+
+function runSim(){
+  const msg=document.getElementById('simmsg');msg.textContent='running…';
+  const body={
+    force_hikes:document.getElementById('t_force').value===''?null:+document.getElementById('t_force').value,
+    crash:document.getElementById('t_crash').value,
+    regime_50bp:!!document.getElementById('t_reg').value,
+    extra_stall_pp:+document.getElementById('t_stall').value||0};
+  fetch('api/ewm/simulate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+    .then(r=>r.json()).then(s=>{msg.textContent='';drawFan(s);})
+    .catch(()=>msg.textContent='simulation failed');
+}
+
+document.getElementById('runsim').onclick=runSim;
+document.getElementById('save').onclick=()=>{
+  const msg=document.getElementById('savemsg');msg.textContent='saving…';
+  fetch('api/ewm/inputs',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      revenue_dec2026:+document.getElementById('i_rev').value,
+      target_value_lo:+document.getElementById('i_tlo').value,
+      target_value_hi:+document.getElementById('i_thi').value,
+      stage:document.getElementById('i_stage').value,
+      today_month:document.getElementById('i_today').value,
+      dissent_cluster:document.getElementById('i_dis').checked,
+      pin_report:document.getElementById('i_pin').checked})})
+  .then(r=>r.json()).then(()=>fetch('api/ewm/board')).then(r=>r.json())
+  .then(b=>{msg.textContent='applied ✓';render(b);runSim();setTimeout(()=>msg.textContent='',2500);})
+  .catch(()=>msg.textContent='save failed');
+};
+
+fetch('api/ewm/board').then(r=>r.json()).then(b=>{render(b);runSim();});
 </script></body></html>

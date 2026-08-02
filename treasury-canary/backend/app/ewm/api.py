@@ -12,8 +12,10 @@ from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
-from .core import (FOMC, MONTHS, PARAMS, action_cards, cost_of_delay,
-                   ev_surface, window_scores)
+from .core import (FOMC, MONTHS, PARAMS, Q1END, Q2END, TARGET_M, action_cards,
+                   breakeven, cohort_surface, cost_of_delay, dirichlet_band,
+                   hold_premium, window_scores)
+from .mc import simulate
 
 router = APIRouter(prefix="/ewm", tags=["ewm"])
 _DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "ewm")
@@ -21,10 +23,14 @@ os.makedirs(_DIR, exist_ok=True)
 _INPUTS = os.path.join(_DIR, "inputs.json")
 _EVENTS = os.path.join(_DIR, "events.jsonl")
 
-DEFAULT_INPUTS = {"ebitda_run_rate": PARAMS["ebitda_run_rate"], "stage": "prep",
-                  "dissent_cluster": False, "fcix_z": 0.1, "dmhi01": 0.55,
-                  "canary01": None, "stress_prob": 0.1, "qofe_ready": False,
-                  "today_month": "2026-09"}
+DEFAULT_INPUTS = {"revenue_dec2026": PARAMS["revenue_dec2026"],
+                  "target_value_lo": PARAMS["target_value"][0],
+                  "target_value_hi": PARAMS["target_value"][1],
+                  "pin_report": False,
+                  "ebitda_run_rate": 14.0,                # legacy; engine is revenue-basis
+                  "stage": "prep", "dissent_cluster": False, "fcix_z": 0.1,
+                  "dmhi01": 0.55, "canary01": None, "stress_prob": 0.1,
+                  "qofe_ready": False, "today_month": "2026-09"}
 
 
 def load_inputs() -> dict:
@@ -32,6 +38,13 @@ def load_inputs() -> dict:
         return {**DEFAULT_INPUTS, **json.load(open(_INPUTS))}
     except Exception:  # noqa: BLE001
         return dict(DEFAULT_INPUTS)
+
+
+def _params_for(inp: dict) -> dict:
+    p = dict(PARAMS)
+    p["revenue_dec2026"] = float(inp["revenue_dec2026"])
+    p["target_value"] = [float(inp["target_value_lo"]), float(inp["target_value_hi"])]
+    return p
 
 
 def _log(kind: str, detail: dict) -> None:
@@ -54,6 +67,10 @@ def _canary01() -> float | None:
 
 
 class Inputs(BaseModel):
+    revenue_dec2026: float | None = None
+    target_value_lo: float | None = None
+    target_value_hi: float | None = None
+    pin_report: bool | None = None
     ebitda_run_rate: float | None = None
     stage: str | None = None
     dissent_cluster: bool | None = None
@@ -63,43 +80,75 @@ class Inputs(BaseModel):
     today_month: str | None = None
 
 
+class SimToggles(BaseModel):
+    force_hikes: int | None = None
+    crash: str = "none"
+    regime_50bp: bool = False
+    extra_stall_pp: float = 0.0
+    pin_report: bool = False
+
+
 @router.get("/api/ewm/board")
 def board():
     inp = load_inputs()
     canary = inp.get("canary01")
     if canary is None:
         canary = _canary01() or 0.25
-    surface = ev_surface(PARAMS, inp["ebitda_run_rate"], inp["dissent_cluster"])
-    ws = window_scores(PARAMS, surface["weights"], inp["fcix_z"], inp["dmhi01"],
+    p = _params_for(inp)
+    pin = bool(inp.get("pin_report"))
+    surface = cohort_surface(p, inp["dissent_cluster"], pin_report=pin)
+    be = breakeven(p, inp["dissent_cluster"], pin_report=pin)
+    band = dirichlet_band(p, inp["dissent_cluster"], pin_report=pin)
+    hp = hold_premium(surface["surface"])
+    ws = window_scores(p, surface["weights"], inp["fcix_z"], inp["dmhi01"],
                        canary, inp["stage"], inp["today_month"])
     cod = cost_of_delay(surface["surface"], ws)
-    cards = action_cards(PARAMS, {"hike_weights": surface["weights"],
-                                  "fcix_z": inp["fcix_z"],
-                                  "dissent_cluster": inp["dissent_cluster"],
-                                  "stress_prob": inp["stress_prob"]})
-    q1 = next(r for r in surface["surface"] if r["month"] == "2027-01")
+    cards = action_cards(p, {"hike_weights": surface["weights"],
+                             "fcix_z": inp["fcix_z"],
+                             "dissent_cluster": inp["dissent_cluster"],
+                             "stress_prob": inp["stress_prob"],
+                             "breakeven": be})
+    q1 = next(r for r in surface["surface"] if r["month"] == Q1END)
+    q2 = next(r for r in surface["surface"] if r["month"] == Q2END)
+    tgt = next(r for r in surface["surface"] if r["month"] == TARGET_M)
     return {"inputs": inp, "canary01": canary, "surface": surface,
+            "breakeven": be, "weight_band": band, "hold_premium": hp,
             "windows": ws, "cost_of_delay": cod, "cards": cards,
-            "headline": {"weighted_ev_q1": q1["ev"], "p10": q1["p10"],
-                         "p90": q1["p90"], "modal_lo": q1["by_scenario"][1],
-                         "modal_hi": q1["by_scenario"][0]},
+            "headline": {"q1_ev": q1["ev"], "q1_lo": q1["ev_lo"], "q1_hi": q1["ev_hi"],
+                         "q2_ev": q2["ev"], "target_ev": tgt["ev"],
+                         "modal_cell": [q1["cells"][1]["lo"], q1["cells"][1]["hi"]],
+                         "today_revenue": surface["ramp"]["today_implied"],
+                         "target_revenue": surface["ramp"]["target_revenue"]},
+            "anchors": {"q1_end": Q1END, "q2_end": Q2END, "target": TARGET_M},
             "fomc": FOMC, "months": MONTHS,
-            "epistemic": "Estimates condition on ~5 rate cycles and quarterly-"
-                         "lagged deal data. Decision support, not advice. "
-                         "Cohort surface: seeded-from-spec pending report-v6 "
-                         "import."}
+            "epistemic": "Cells are conditional values — the probabilities are "
+                         "the model. Surface: operator report-v6 (revenue-"
+                         "multiple basis, $105M anchor) + the stated even-"
+                         "scaling ramp to the 2027-07-31 target. Estimates "
+                         "condition on ~5 rate cycles and quarterly-lagged "
+                         "deal data. Decision support, not advice."}
+
+
+@router.post("/api/ewm/simulate")
+def run_simulation(body: SimToggles):
+    inp = load_inputs()
+    p = _params_for(inp)
+    toggles = body.model_dump()
+    toggles["pin_report"] = toggles["pin_report"] or bool(inp.get("pin_report"))
+    return simulate(p, inp, toggles)
 
 
 @router.post("/api/ewm/inputs")
 def set_inputs(body: Inputs):
     cur = load_inputs()
     changed = {k: v for k, v in body.model_dump().items() if v is not None}
-    prev = cur.get("ebitda_run_rate")
+    prev_rev = cur.get("revenue_dec2026")
     cur.update(changed)
     json.dump(cur, open(_INPUTS, "w"))
     _log("inputs_changed", changed)
-    if "ebitda_run_rate" in changed and prev is not None and changed["ebitda_run_rate"] > prev:
-        _log("ebitda_raised", {"delta": changed["ebitda_run_rate"] - prev})
+    if ("revenue_dec2026" in changed and prev_rev is not None
+            and changed["revenue_dec2026"] > prev_rev):
+        _log("revenue_raised", {"delta": changed["revenue_dec2026"] - prev_rev})
     return {"ok": True, "inputs": cur}
 
 

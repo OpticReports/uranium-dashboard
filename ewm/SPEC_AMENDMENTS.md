@@ -347,3 +347,52 @@ only — so the stress prob enters the Window Score exactly once, via FCI-X.
 - Challenges 1, 2 (override design), 5, and 6 are reasoned where noted;
   no dissent-reaction tick data or v6 report table was available to this
   session.
+
+---
+
+## v2 amendments (2026-08-02) — report-v6 surface + ramp round
+
+Operator-approved build ("build it and ill take a look for feed back").
+Governing inputs: cohort_v6.json (authoritative report extraction) and
+METHODOLOGY_RESEARCH.md (shortlist items 1-4, 6).
+
+1. **Pricing basis switched to REVENUE multiples.** The seeded EBITDA
+   surface (14.0-14.5x on $14M) is retired; cells are now the report's
+   per-scenario value RANGES at the two report close windows, expressed as
+   revenue multiples on the $105M basis (1.38-2.00x). The re-anchor action
+   card converts +$1M revenue at 1.38-2.00x (was +$13-15M per EBITDA turn).
+2. **Dynamic revenue ramp (operator premise).** Two editable waypoints —
+   run-rate $105M at end-Dec-2026 and the $200-225M valuation target at
+   2027-07-31 — define a linear "evenly scaling" revenue line; the target
+   revenue is back-solved at the modal-path multiple (judgment-tagged) and
+   today's implied run-rate is the same line extrapolated back (~$102M).
+   The report held performance constant; the ramp is the operator's stated
+   scaling premise layered on top, and `pin_report` disables it (gate G1
+   reproduces the report cells exactly in pinned mode).
+3. **Flat 6% exec-noise band retired** in favor of the report's hawk-skewed
+   cell ranges, propagated as perfect-correlation EV_lo/EV_hi bounds.
+4. **Closed-form breakeven row** (memo e2): pinned mode reproduces the memo
+   exactly — Q2 ahead $1.05M pure EV; flips at ~16pp (s1→s2), ~9.5pp
+   (s0→s3), ~7pp extra hawk-row stall hazard. Live (ramp-on) mode shows the
+   real decision: Q2 ahead ~$6M, stall flip ~38pp. Powers a within-5pp
+   action card.
+5. **Split-concentration Dirichlet weight band** (memo e1), mean-preserving
+   via Beta on the tail mass (kappa 15) x Dirichlet head (kappa 60).
+6. **Stall model wired to the report's row-level 25-35% odds**; Q1 closes
+   carry half the hawk-row stall exposure (transmission-window argument),
+   Q2+ carries it all. Stall-adjusted EV and hold-to-Jul-27 premium rows
+   added; cost-of-delay is now stall-adjusted, horizon-capped at the target
+   date, with a hawk-conditional cost column (base-case delay cost is ~0
+   under the ramp by construction — the risk lives there and in stall odds).
+7. **Monte Carlo valuation fan** with operator toggles: force 0-4 hikes,
+   stock crash (moderate x0.85 / severe x0.70 multiple — half the 2022-23
+   revenue-deal gradient, phased over the report's 1-2q transmission lag,
+   judgment-tagged), the report's off-cohort 50bp-regime branch ($145-170M
+   band, 40% stall), and an extra-stall-hazard probe matching the breakeven
+   h* definition. Deterministic seed; dead paths excluded from the fan and
+   surfaced as p_no_deal.
+8. **Gates recut**: G1 is now report-fidelity (pinned cells exact, weighted
+   EV $186-193M, modal $192-200M) + memo-closed-form breakeven + ramp
+   waypoints + hawk-skew + Dirichlet determinism + MC toggle bounds +
+   scenario-count stress (memo e3: preferred window stable under tail-merge
+   and row-2 split). G2/G3/G4 replays unchanged and green. 159 canary tests.
