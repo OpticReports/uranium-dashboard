@@ -42,9 +42,9 @@ def _canary01(bundle) -> float:
     try:
         d10, v10 = bundle.get("10y", ([], []))
         d3, v3 = bundle.get("3mo", ([], []))
-        sd, sv = build_spread(d10, v10, d3, v3)
+        sd, sv = build_spread(d3, v3, d10, v10)           # b - a = 10y - 3m
         spread_last = next((x for x in reversed(sv) if x is not None), None)
-        probit = recession_probability(spread_last) or 0.0
+        probit = (recession_probability(spread_last) or 0.0) / 100.0  # pct -> frac
         _, mv = _move_proxy_series(d10, v10)
         mvals = [x for x in mv if x is not None]
         if len(mvals) > 60:
@@ -53,7 +53,7 @@ def _canary01(bundle) -> float:
             mz = max(0.0, min((mvals[-1] - mean) / sd_ if sd_ > 0 else 0.0, 3.0)) / 3.0
         else:
             mz = 0.0
-        analysis = analyze_spread("3m10y", sd, sv)
+        analysis = analyze_spread(sd, sv)
         resteep = 1.0 if "steep" in str(getattr(analysis, "state", "")).lower() else 0.0
         return max(0.0, min(0.5 * probit + 0.3 * mz + 0.2 * resteep, 1.0))
     except Exception as exc:  # noqa: BLE001

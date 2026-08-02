@@ -54,13 +54,17 @@ def _log(kind: str, detail: dict) -> None:
 
 
 def _canary01() -> float | None:
-    """In-process composite read (no self-HTTP: same service)."""
+    """In-process composite read (no self-HTTP: same service). compute_all
+    takes the FRED bundle and returns (metrics, analyses, composite,
+    recession_starts); auctions=[] keeps this call fully offline beyond the
+    6h-cached bundle."""
     try:
         from ..jobs.refresh import compute_all
-        from ..store.db import session_scope
-        with session_scope() as s:
-            comp = compute_all(s).get("composite")
-        score = comp.get("score") if isinstance(comp, dict) else getattr(comp, "score", None)
+        from ..sources.fred import fetch_bundle
+        _, _, composite, _ = compute_all(fetch_bundle(), auctions=[])
+        score = getattr(composite, "score", None)
+        if getattr(composite, "coverage", 0.0) < 0.3:     # degraded feed: a
+            return None                                    # near-empty bundle
         return round(score / 100.0, 3) if score is not None else None
     except Exception:  # noqa: BLE001
         return None
