@@ -1,3 +1,4 @@
+import OpticNav from "./components/OpticNav";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
@@ -10,6 +11,6 @@ if (!rootEl) {
 
 ReactDOM.createRoot(rootEl).render(
   <React.StrictMode>
-    <App />
+    <><OpticNav /><App /></>
   </React.StrictMode>,
 );
