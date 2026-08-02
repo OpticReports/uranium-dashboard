@@ -255,6 +255,8 @@ _mount_proxy("portfolio-optimizer", "BARBELL_UPSTREAM",
 # research.optic.capital/btc — BTC Pullback Paper Engine
 _mount_proxy("btc", "BTC_UPSTREAM",
              "https://btc-paper-engine.onrender.com", "BTC Paper Engine")
+_mount_proxy("exit", "EWM_UPSTREAM",
+              "https://ewm.onrender.com", "Exit Window Monitor")
 
 
 # Single-service deployment: if a built frontend is present, serve it under

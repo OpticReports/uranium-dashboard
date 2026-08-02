@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Exit Window Monitor</title>
+<style>
+:root{color-scheme:dark}
+body{margin:0;background:#0b1120;color:#cbd5e1;font:13px/1.5 ui-monospace,Menlo,monospace}
+.wrap{max-width:1100px;margin:0 auto;padding:20px}
+h1{font-size:18px;color:#f1f5f9;margin:0}
+.sub{color:#64748b;font-size:11px;margin:2px 0 16px}
+.panel{border:1px solid #1e293b;border-radius:10px;background:#0f172acc;padding:14px 16px;margin-bottom:14px}
+.strip{display:flex;flex-wrap:wrap;gap:24px;align-items:baseline}
+.big{font-size:26px;color:#38bdf8;font-weight:700}
+.lbl{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:#64748b;display:block}
+.tl{display:flex;gap:4px;flex-wrap:wrap;margin-top:8px}
+.mo{flex:1 1 52px;min-width:52px;text-align:center;border-radius:6px;padding:7px 2px;font-size:10px;border:1px solid transparent}
+.G{background:#065f4633;color:#34d399;border-color:#34d39955}
+.A{background:#78350f33;color:#fbbf24;border-color:#fbbf2455}
+.R{background:#7f1d1d33;color:#f87171;border-color:#f8717155}
+.X{background:#1e293b55;color:#475569;text-decoration:line-through}
+.fomc{font-size:8px;color:#94a3b8}
+table{width:100%;border-collapse:collapse;font-size:11px}
+td,th{padding:3px 8px;text-align:right;border-bottom:1px solid #1e293b}
+th{color:#64748b;font-weight:600}td:first-child,th:first-child{text-align:left}
+.card{border:1px solid #334155;border-left:3px solid #38bdf8;border-radius:6px;padding:8px 12px;margin-top:8px}
+.card b{color:#e2e8f0}.trig{color:#64748b;font-size:10px}
+.ep{color:#475569;font-size:10px;margin-top:14px}
+a.nav{position:fixed;top:12px;left:12px;color:#94a3b8;text-decoration:none;border:1px solid #334155;border-radius:6px;padding:4px 8px;font-size:11px;background:#0f172a}
+</style></head><body>
+<a class="nav" href="/">&#9776; dashboards</a>
+<div class="wrap">
+<h1>&#128197; Exit Window Monitor</h1>
+<div class="sub">Deal-timing decision support &middot; ~$200M exit &middot; window Q4'26&ndash;Q2'27+</div>
+<div class="panel strip" id="strip">loading&hellip;</div>
+<div class="panel"><span class="lbl">Safety windows (feasibility-gated)</span><div class="tl" id="tl"></div></div>
+<div class="panel"><span class="lbl">Expected value by close month ($M, weighted / p10&ndash;p90)</span>
+<table id="ev"></table></div>
+<div class="panel"><span class="lbl">Cost of delay (frozen-input counterfactual)</span><table id="cod"></table></div>
+<div class="panel"><span class="lbl">Action cards</span><div id="cards"></div></div>
+<div class="ep" id="ep"></div>
+</div>
+<script>
+fetch('api/ewm/board').then(r=>r.json()).then(b=>{
+  const h=b.headline;
+  document.getElementById('strip').innerHTML=
+    `<span><span class="lbl">Weighted EV (Q1'27 close)</span><span class="big">$${h.weighted_ev_q1}M</span></span>`+
+    `<span><span class="lbl">Modal (0-1 hikes)</span>$${h.modal_lo}&ndash;${h.modal_hi}M</span>`+
+    `<span><span class="lbl">10/90 band</span>$${h.p10}&ndash;${h.p90}M</span>`+
+    `<span><span class="lbl">Canary composite</span>${Math.round(b.canary01*100)}/100</span>`+
+    `<span><span class="lbl">FCI-X z</span>${b.inputs.fcix_z}</span>`+
+    `<span><span class="lbl">Stage</span>${b.inputs.stage}</span>`;
+  document.getElementById('tl').innerHTML=b.windows.map(w=>{
+    const cls=!w.feasible?'X':w.band[0];
+    return `<div class="mo ${cls}" title="score ${w.score}">${w.month.slice(2)}`+
+      `${w.events.fomc?'<div class=fomc>FOMC</div>':''}<div>${w.feasible?w.score:'&mdash;'}</div></div>`;
+  }).join('');
+  document.getElementById('ev').innerHTML='<tr><th>month</th><th>weighted</th><th>p10</th><th>p90</th></tr>'+
+    b.surface.surface.map(r=>`<tr><td>${r.month}</td><td>$${r.ev}M</td><td>$${r.p10}M</td><td>$${r.p90}M</td></tr>`).join('');
+  document.getElementById('cod').innerHTML='<tr><th>delay</th><th>best EV</th><th>cost</th><th>$/week</th></tr>'+
+    b.cost_of_delay.curve.map(c=>`<tr><td>${c.delay_months} mo</td><td>$${c.best_ev}M</td>`+
+    `<td>$${c.cost_vs_now}M</td><td>$${(c.cost_per_week*1000).toFixed(0)}k</td></tr>`).join('');
+  document.getElementById('cards').innerHTML=b.cards.length?b.cards.map(c=>
+    `<div class="card"><b>${c.action}</b><div>${c.rationale}</div>`+
+    `<div class="trig">trigger: ${c.trigger} &middot; confidence ${c.confidence}</div></div>`).join('')
+    :'<div class="trig">no active triggers</div>';
+  document.getElementById('ep').textContent=b.epistemic;
+});
+</script></body></html>

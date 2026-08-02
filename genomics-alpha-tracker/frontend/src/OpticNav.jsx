@@ -7,6 +7,7 @@ const APPS = [
   { path: "/canary/", label: "Treasury Canary", icon: "\u{1F424}" },
   { path: "/portfolio-optimizer/", label: "Portfolio Optimizer", icon: "\u2696\uFE0F" },
   { path: "/btc/", label: "BTC Paper Engine", icon: "\u20BF" },
+  { path: "/exit/", label: "Exit Window Monitor", icon: "\u{1F4C5}" },
 ];
 
 export default function OpticNav() {
