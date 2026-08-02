@@ -73,7 +73,9 @@ export default function RateShockSimulator() {
     // during a slow POST read as "not dynamic")
     Promise.all([
       api.shockRun({ hikes, seed, overrides: ov }),
-      api.shockRun({ hikes: 0, seed, overrides: ov }),
+      // delta baseline = PURE market-implied path (zero surprise): hikes=0
+      // embeds a -29bp dovish surprise and is not the honest zero (QA F4)
+      api.shockRun({ hikes: 0, seed, overrides: ov, implied_baseline: true }),
     ])
       .then(([d, b]) => {
         if (alive) {
@@ -267,9 +269,9 @@ export default function RateShockSimulator() {
                 {a}
               </span>
               <span className="font-mono text-slate-400">
-                median {fmtPct(data.bands[a]["50"][data.months.length - 1])} · P(dd&gt;10%){" "}
-                {Math.round(data.probs[a].dd_gt_10 * 100)}% · P(dd&gt;20%){" "}
-                {Math.round(data.probs[a].dd_gt_20 * 100)}%
+                median {fmtPct(data.bands[a]["50"][data.months.length - 1])} · P(touch −10%){" "}
+                {Math.round((data.probs[a].dd_gt_10_touch_est ?? data.probs[a].dd_gt_10) * 100)}% · P(touch −20%){" "}
+                {Math.round((data.probs[a].dd_gt_20_touch_est ?? data.probs[a].dd_gt_20) * 100)}%
               </span>
               {base && data.meta.hikes !== 0 && (
                 <DeltaChip
@@ -393,7 +395,14 @@ export default function RateShockSimulator() {
       )}
 
       <p className="mt-2 text-[10px] leading-relaxed text-slate-500">
-        Two-stage conditional engine, not a naive Monte Carlo: your scenario minus
+        All fans are TOTAL-RETURN indices (dividends/carry included) — do not
+        overlay on price charts. Drawdown chips are daily-touch estimates
+        scaled from the sim's month-end grid (realism QA R4). Cut scenarios
+        carry MORE tail risk than baseline by design: cuts beyond pricing
+        historically arrived with recessions (2 of 3 deep-cut episodes ended
+        lower; all three touched −20%) — the dovish-surprise stress channel
+        encodes that, so cut medians rise while cut tails widen. Two-stage
+        conditional engine, not a naive Monte Carlo: your scenario minus
         the market-implied path (Oct ~70% / Dec ~45% priced, editable) makes a
         surprise vector; surprises map through a term-premium-dependent κ to the
         10y, then through estimated duration betas (with a regime-switching
@@ -415,7 +424,7 @@ function DeltaChip({ delta }: { delta: number }) {
           ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300"
           : "border-red-500/50 bg-red-500/10 text-red-300"
       }`}
-      title="terminal median vs the priced-path scenario (same seed & params)"
+      title="terminal median vs the pure market-implied path (zero surprise, same seed & params)"
     >
       vs priced {good ? "+" : ""}
       {delta.toFixed(1)}pp

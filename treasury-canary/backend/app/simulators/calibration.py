@@ -35,6 +35,12 @@ AMENDMENTS_SUMMARY = [
     "oas_stress_premium (stress could otherwise be spread-tightening after "
     "a big grind); oas_theta_normal marked fallback-only (live oas0 anchors "
     "the attractor); 14 params flagged high_sensitivity from the tornado",
+    "REALISM ROUND: HYG stress made crisis-capable (theta 750/jump 180); "
+    "one-sided dovish stress channel b_cut=1.5 (cut scenarios now carry MORE "
+    "tail risk than baseline, matching 2001/2007/2020); vol scales with "
+    "|surprise| capped at 2022's 1.6x; fans are TOTAL-RETURN indices; "
+    "drawdown chips are daily-touch estimates from the month-end grid; "
+    "delta baseline = pure implied path; per-path kappa/beta uncertainty",
 ]
 
 ESTIMATION_WINDOWS = {

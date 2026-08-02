@@ -617,7 +617,7 @@ export type ShockAsset = "SPX" | "QQQ" | "SOXX" | "HYG";
 export interface ShockRun {
   months: string[];
   bands: Record<ShockAsset, Record<"5" | "25" | "50" | "75" | "95", number[]>>;
-  probs: Record<ShockAsset, { dd_gt_10: number; dd_gt_20: number }>;
+  probs: Record<ShockAsset, { dd_gt_10: number; dd_gt_20: number; dd_gt_10_touch_est: number; dd_gt_20_touch_est: number; basis: string }>;
   terminal: Record<ShockAsset, { counts: number[]; edges: number[] }>;
   stress_prob: number[];
   rate_path: {
@@ -765,7 +765,7 @@ export const api = {
   marginFast: () => getJson<MarginFast>("/margin/fast"),
   ratesShock: () => getJson<RateShock>("/rates/shock"),
   shockScenarios: () => getJson<ShockScenarios>("/shock-sim/scenarios"),
-  shockRun: (body: { hikes: number; seed?: number; overrides?: Record<string, number> }) =>
+  shockRun: (body: { hikes: number; seed?: number; overrides?: Record<string, number>; implied_baseline?: boolean }) =>
     getJson<ShockRun>("/shock-sim/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

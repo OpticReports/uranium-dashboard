@@ -229,3 +229,38 @@ index pts on SPX), drift baselines, logistic_b, hyg_carry, crack sizes,
 implied probs, betas, kappa. 14 params carry high_sensitivity=true in
 params.json and render a red dot in the drawer. Full table:
 scratchpad qa_sim/tornado.json.
+
+---
+
+## PRICE-PREDICTION REALISM ROUND (post-ship QA, 2026-08-01) — findings & resolutions
+
+Independent agent evaluated the OUTPUT DISTRIBUTIONS against 2006-2026 history.
+Passed: unconditional drawdown calibration (engine P(month-end dd>10) 0.348 vs
+historical 0.351 — near exact), cone widths (49.9pp vs 51.6pp historical 5-95),
+HYG normal state (median/p95 within 0.3pp of calm-year history), scenario
+deltas per 100bp inside the event-study band (Bernanke-Kuttner -4..-5%,
+2022 realized -8..-13%). Two CRITICALs and fixes:
+
+1. **HYG had no credit-event tail** (0.5th pct ≈ -11% even at +4 hikes;
+   crisis history: OAS 900-1900bp, -15..-25% returns). Fixed: theta_stress
+   500→750, entry jump 120→180 (R1). Post-fix +4-hikes HYG p5 ≈ -9% uncond.,
+   stress-conditional tail now reaches credit-event territory; G1 re-checked
+   (HYG median -12.5%, in band).
+2. **Cut scenarios were riskless-er than baseline in every statistic** while
+   history's deep-cut episodes (2001/2007/2020) were recession-driven: 2 of 3
+   ended lower, 3 of 3 touched -20%. Fixed: one-sided logistic channels —
+   b·max(CS,0) + b_cut·max(-CS,0), b_cut=1.5 (R2). Post-fix: -2 cuts has
+   P(stress) 11.9% vs baseline 6.3% and P(dd>20) 18.5% vs 11.6%, while the
+   median keeps its modest rate-relief benefit — the U-shaped risk profile
+   the history shows.
+
+Also fixed: scenario-invariant vol (R3: sigma scales with |cum surprise|,
+capped at the 2022 realized ratio 1.6x; G1 now runs at the cap), drawdown
+metric mislabeling (R4: month-end basis declared; UI shows daily-touch
+estimates at 1.7x/1.2x historical scaling), mixed TR/price basis (R5: fans
+labeled TOTAL-RETURN indices; delta baseline switched from hikes=0 — which
+embeds a -29bp dovish surprise — to the pure market-implied path via
+implied_baseline), and false scenario-delta precision (R6: per-path kappa and
+beta drawn from symmetric triangulars within registry ranges,
+param_uncertainty dial). Drift baselines are deliberately conservative vs the
+2006-26 realized CAGRs (~5-9pp below); documented rather than raised.

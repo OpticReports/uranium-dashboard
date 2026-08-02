@@ -130,3 +130,37 @@ def test_runtime_budget():
     t0 = time.time()
     _run(3, n_paths=10000, seed=1, inputs={"vix": 18.0})
     assert time.time() - t0 < 1.5                     # spec §5 budget
+
+
+def test_cut_scenarios_carry_more_tail_risk_than_baseline():
+    # realism QA R2: cuts beyond pricing are recession-correlated — the -2
+    # scenario must show HIGHER stress and drawdown risk than hikes=0, while
+    # keeping its modest median rate-relief benefit (U-shaped risk profile)
+    bi = {"vix": 18.0, "oas0": 285.0, "canary01": 0.3,
+          "hyg_realized_ann": 0.08, "move": 100.0, "kappa": 0.45}
+    cut = _run(-2, n_paths=20000, seed=42, inputs=bi)
+    flat = _run(0, n_paths=20000, seed=42, inputs=bi)
+    assert cut["stress_prob"][-1] > flat["stress_prob"][-1]
+    assert cut["probs"]["SPX"]["dd_gt_20"] > flat["probs"]["SPX"]["dd_gt_20"]
+    assert cut["bands"]["SPX"]["50"][-1] >= flat["bands"]["SPX"]["50"][-1] - 0.5
+
+
+def test_scenario_vol_scaling_and_touch_estimates():
+    bi = {"vix": 18.0, "canary01": 0.0, "oas0": 300.0}
+    r4 = _run(4, n_paths=4000, seed=1, inputs=bi)
+    r0 = _run(0, n_paths=4000, seed=1,
+              inputs=dict(bi, surprise_override_bp=[0.0] * N_MONTHS))
+    assert r4["meta"]["vol_factor"] > r0["meta"]["vol_factor"] == 1.0
+    p = r4["probs"]["SPX"]
+    assert p["basis"] == "month_end"
+    assert p["dd_gt_10_touch_est"] >= p["dd_gt_10"]
+
+
+def test_hyg_stress_tail_is_a_credit_event():
+    # realism QA R1: theta_stress 750 + jump 180 must produce a real credit
+    # tail — at +4 hikes the HYG 5th percentile should be well below the old
+    # ~-6% ceiling
+    bi = {"vix": 18.0, "oas0": 285.0, "canary01": 0.3,
+          "hyg_realized_ann": 0.08, "move": 100.0, "kappa": 0.45}
+    r = _run(4, n_paths=20000, seed=42, inputs=bi)
+    assert r["bands"]["HYG"]["5"][-1] < 92.5

@@ -124,13 +124,13 @@
   "note": "3y HY OAS median = 310 exactly; REGIME-CONDITIONAL (full-history ~430) (A7d5) \u2014 FALLBACK-ONLY in production: live oas0 anchors the normal attractor (QA finding 4)"
  },
  "oas_theta_stress": {
-  "default": 500.0,
+  "default": 750.0,
   "range": [
    400.0,
-   700.0
+   1200.0
   ],
-  "source": "judgment",
-  "note": ""
+  "source": "estimated",
+  "note": "R1 (realism QA): 500 modeled a 2016-style scare; crisis OAS peaks ran 900-1900bp (2008/2011/2020). 750 + bigger jump makes the stress tail a credit event"
  },
  "oas_sig_normal": {
   "default": 25.0,
@@ -151,13 +151,13 @@
   "note": "bp/mo"
  },
  "oas_jump_entry": {
-  "default": 120.0,
+  "default": 180.0,
   "range": [
    60.0,
-   200.0
+   300.0
   ],
   "source": "judgment",
-  "note": "instantaneous bp on stress entry; G1 re-check required if raised (A3)"
+  "note": "instantaneous bp on stress entry; raised 120->180 in the realism round (R1); G1 re-checked"
  },
  "oas_mr_speed": {
   "default": 0.15,
@@ -390,5 +390,42 @@
   ],
   "source": "judgment",
   "note": "stress attractor floor = theta_normal_path + this premium (QA finding 5: prevents stress becoming spread-tightening after a big grind)"
+ },
+ "logistic_b_cut": {
+  "default": 1.5,
+  "range": [
+   0.0,
+   3.0
+  ],
+  "source": "judgment",
+  "note": "R2: dovish-surprise stress channel, per 100bp of NEGATIVE cum surprise \u2014 cuts beyond pricing historically arrive with recessions (2 of 3 deep-cut episodes ended lower; all 3 saw >=20% drawdowns)",
+  "high_sensitivity": true
+ },
+ "vol_scenario_scale": {
+  "default": 0.35,
+  "range": [
+   0.0,
+   0.8
+  ],
+  "source": "judgment",
+  "note": "R3: equity + normal-OAS vol scale per 100bp of |cum surprise| \u2014 big-surprise worlds are high-vol worlds (2022 realized 23% vs VIX-18 base 14.4%)"
+ },
+ "vol_scale_cap": {
+  "default": 1.6,
+  "range": [
+   1.0,
+   2.5
+  ],
+  "source": "estimated",
+  "note": "cap on the scenario vol multiplier; 1.6 = 2022 realized/base ratio exactly"
+ },
+ "param_uncertainty": {
+  "default": 1.0,
+  "range": [
+   0.0,
+   1.0
+  ],
+  "source": "judgment",
+  "note": "R6: draw beta/kappa per path from symmetric triangulars within their registry ranges (0 = point estimates). Gives scenario deltas honest dispersion"
  }
 }

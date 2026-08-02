@@ -124,6 +124,10 @@ class RunBody(BaseModel):
     hikes: int
     seed: int | None = 42
     overrides: dict | None = None
+    # true = pure market-implied path (zero surprise), the honest delta
+    # baseline: hikes=0 is NOT the priced path — it embeds a -29bp dovish
+    # surprise (realism QA F4)
+    implied_baseline: bool = False
 
 
 @router.get("/shock-sim/scenarios")
@@ -147,7 +151,9 @@ def run(body: RunBody):
     params, warnings = apply_overrides(body.overrides)
     if not SCENARIO_SPAN[0] <= body.hikes <= SCENARIO_SPAN[1]:
         raise HTTPException(422, f"hikes must be within {SCENARIO_SPAN}")
-    inputs = _live_inputs()
+    inputs = dict(_live_inputs())
+    if body.implied_baseline:
+        inputs["surprise_override_bp"] = [0.0] * 11
     # QA finding 7: `or 42` mapped seed=0 to 42 and let seed:null/42 collide
     seed = 42 if body.seed is None else int(body.seed)
     key = params_hash(params, {"hikes": body.hikes, "seed": seed,
