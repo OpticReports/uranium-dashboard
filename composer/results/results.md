@@ -1093,3 +1093,60 @@ structural finding: HG earns BECAUSE of turbulence, not despite it;
 every within-strategy de-risking family (gates 19b, vol targets 20b,
 drawdown rules) amputates the edge. HG risk management stays at book
 level (sleeve, cap, weights) — now triply confirmed.
+
+
+## Addendum 21 — Per-engine + ops-layer corpus evaluation, dual-agent QA
+## (2026-08-01)
+
+Owner commission: every engine individually vs the Man/AHL corpus, plus
+the ops layer (band, earn-back, cap, monitor cadence), PhD-grade, with a
+verifier agent and a counter-agent. Case file + scripts: scratchpad
+lens_case.md, verify_lens.py, attack.py.
+
+WHAT SURVIVED VERIFICATION (both agents):
+- DD-exit rules destroy value on these curves (HG 82->45, KMLM 255->111
+  CAGR; robust to re-entry design) — but REGIME-CONDITIONAL: at Sharpe 0
+  the same rule wins 57-61% of paths. Restated as: no mechanical
+  price-level exits WHILE live-vs-model health checks pass; breakage
+  response is de-allocation at the ops layer.
+- Alarm-fatigue math is robust across 4 bootstrap methods: the generic
+  15% DD alert fires in 86-97% of ordinary years for HG/KMLM = noise.
+- Vol-targeting degrades Sharpe on 3 of 4 engines (direct Moreira-Muir
+  test: HG 1.59->1.25, SLEEVE 1.41->0.51, HARV 2.11->1.87, KMLM flat).
+  NOTE my original rationale ("papers require negative vol-return
+  relation") was a literature error — the true mechanism is that these
+  are convexity-long engines that earn in high vol.
+- Op3 earn-back gap measurement MUST be paired (live vs concurrent
+  model, as divergence.py already does): unpaired it false-fails 47% of
+  genuine years. POLICY wording clarified.
+WHAT WAS STRUCK FROM MY DRAFT:
+- L1 quartile "vol-harvester" patterns: not robust (window/tercile
+  reshuffles); lagged vol->return relation is ~0.00 all engines.
+- L3 "all engines positive in both stress windows": ENDPOINT ARTIFACT —
+  peak-to-trough spring-2025, HG was -18.5%, KMLM +6.9%. Corrected.
+- L4 autocorrs: only SLEEVE's +0.40 is significant (n=39).
+- S1 (raise HG/KMLM DD alerts to ~31%): REJECTED by counter-agent — it
+  trades breakage-detection latency for comfort (~$13-34k extra loss
+  before alarm on a Sharpe-0 engine); p90 numbers carry +/-5pp method
+  noise; thresholds calibrated on a golden regime stop meaning
+  "anomaly" exactly when it matters.
+- S5 "band corpus-endorsed": label rejected (n=2 in-sample windows
+  endorse nothing); band retained on ex-ante rationale; band-vs-fixed
+  study queued.
+
+FINAL SUGGESTION SET (owner decision):
+G1. TWO-TIER DD alerts: keep 15% (12% HARV) as an AUTOMATED tier — on
+    breach, monitor auto-runs divergence diagnostics and logs, no page;
+    HUMAN page only on DD>p90 (documented method sensitivity), failed
+    diagnostics, or time-under-water >1.5x engine's historical max
+    (~225d HG, ~165d KMLM; zero in-sample false positives).
+G2. BOOK-LEVEL DD alert at ~12-14% (p90 of book bootstrap; ~3-6% ordinary
+    -year false-positive rate) — closes the coincidence-risk blind spot
+    (HG+KMLM corr +0.31, 58% of book; no book alarm exists today).
+G3. Earn-back (Op3) criteria addition: live-vs-model beta in [0.9,1.1]
+    AND live/model vol ratio <1.15 as fast fat-tail detectors; live
+    maxDD<p90 as backstop; gap criterion explicitly paired. ~20% chance
+    of a temporary false BLOCK over 2y (delays upshift only — cheap).
+G4. Cap-drift protocol note: post-upshift KMLM at 39% sits 1pp under the
+    40% cap; specify that a drift breach follows Op5 mechanics (full
+    reset) — no ambiguity when it happens within days.
