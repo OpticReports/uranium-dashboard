@@ -133,6 +133,24 @@ async def basic_auth(request: Request, call_next):
             )
     return await call_next(request)
 
+
+# Canonical domain: this hub answers on several custom domains; redirect the
+# aliases to CANONICAL_HOST so bookmarks and the relative OpticNav links all
+# consolidate on one address. Registered after basic_auth so it runs FIRST
+# (Starlette middleware is LIFO) — no login prompt on a non-canonical host.
+_CANONICAL_HOST = os.environ.get("CANONICAL_HOST", "research.optic.capital")
+_REDIRECT_HOSTS = {h.strip().lower() for h in os.environ.get(
+    "REDIRECT_HOSTS", "genomics.optic.capital").split(",") if h.strip()}
+
+
+@app.middleware("http")
+async def canonical_host(request: Request, call_next):
+    host = request.headers.get("host", "").split(":")[0].lower()
+    if host in _REDIRECT_HOSTS and request.url.path != "/health":
+        return RedirectResponse(
+            url=str(request.url.replace(netloc=_CANONICAL_HOST)), status_code=308)
+    return await call_next(request)
+
 app.include_router(universe.router)
 app.include_router(market.router)
 app.include_router(catalysts.router)
