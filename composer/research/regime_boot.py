@@ -34,10 +34,16 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "scripts"))
 import composerlib as cl  # noqa: E402
 
-ENGINES = {  # label: (symphony id, earliest sensible backtest start)
+ENGINES = {  # label: (symphony id or TREE:<file in this dir>, backtest start)
     "HG": ("mbkiXcuNDjueXpiox5Av", "2011-10-05"),
     "KMLM": ("YPTSJFJwD2ZKfAeYJUbW", "2021-01-01"),
-    "SLEEVE": ("nNdBk7hc5NiBzeRvbI5T", "2011-10-05"),
+    # SLEEVE research backtests use the ARCHIVED pre-BOXX tree (BIL cash
+    # base): the live tree holds BOXX (inception 2022-12), which clamps the
+    # engine's backtest window to ~2023 and would silently shrink the
+    # sleeve's regime buckets from 15y to 3.5y (addendum 21b). BIL and BOXX
+    # are return-equivalent (both ~T-bill), so the archived tree is the
+    # correct long-history twin.
+    "SLEEVE": ("TREE:sleeve_tree_bil.json", "2011-10-05"),
     "HARV": ("ORQNCfZnA18wmsMWVhf8", "2023-04-19"),  # guarded harvester
 }
 ALLOCS = {
@@ -91,7 +97,11 @@ def main():
 
     eng = {}
     for label, (sid, start) in ENGINES.items():
-        bt = cl.backtest_by_id(sid, start=start)
+        if sid.startswith("TREE:"):
+            tree = json.load(open(os.path.join(HERE, sid[5:])))
+            bt = cl.backtest_tree(tree, start=start)
+        else:
+            bt = cl.backtest_by_id(sid, start=start)
         d, v = cl.equity_curve(bt)
         eng[label] = monthly_from_curve(
             {cl.epoch_day_to_date(x).isoformat(): y for x, y in zip(d, v)})

@@ -1,30 +1,30 @@
 {
-  "taken_at": "2026-07-31T21:36:13+00:00",
+  "taken_at": "2026-08-02T19:48:59+00:00",
   "total_stats": {
     "pending_deploys_cash": 0,
-    "total_cash": 313.249520606,
-    "time_weighted_return": 0.7105999608939708,
+    "total_cash": 311.069520606,
+    "time_weighted_return": 0.7105866210128187,
     "total_unallocated_cash": 0.989520606,
-    "portfolio_value": 279545.81,
+    "portfolio_value": 279543.63,
     "net_deposits": 247000.0,
     "pending_net_deposits": 0.0,
-    "todays_percent_change": -0.0024428859786960176,
-    "simple_return": 0.13176442290330037,
-    "todays_dollar_change": -684.570874244785,
+    "todays_percent_change": -0.0024506652921811485,
+    "simple_return": 0.13175559699236938,
+    "todays_dollar_change": -686.750874244785,
     "metrics": {
-      "annualized_rate_of_return": 1.2932,
+      "annualized_rate_of_return": 1.3138,
       "max_drawdown": 0.2006,
-      "sharpe_ratio": 2.2325,
-      "standard_deviation": 0.4126
+      "sharpe_ratio": 2.249,
+      "standard_deviation": 0.4138
     },
     "pending_withdrawals": 0.0
   },
   "symphonies": {
     "mbkiXcuNDjueXpiox5Av": {
       "name": "The Holy Grail w Sorts & Safe Sectors  139 | 38 | 2015 (Modified #1)",
-      "value": 77650.49,
-      "deposit_adjusted_value": 1756.37,
-      "cash": 77.67,
+      "value": 77650.22,
+      "deposit_adjusted_value": 1756.36,
+      "cash": 77.4,
       "holdings": {
         "BIL": 0.999
       },
@@ -34,9 +34,9 @@
     },
     "ORQNCfZnA18wmsMWVhf8": {
       "name": "VIX Harvester + HYG Credit Guard",
-      "value": 37565.83,
-      "deposit_adjusted_value": 35124.37,
-      "cash": 68.85,
+      "value": 37565.82,
+      "deposit_adjusted_value": 35124.36,
+      "cash": 68.84,
       "holdings": {
         "VXZ": 0.359,
         "PULS": 0.6392
@@ -60,9 +60,9 @@
     },
     "YPTSJFJwD2ZKfAeYJUbW": {
       "name": "KMLM switcher + VIX sleeve 75/25",
-      "value": 93078.5,
-      "deposit_adjusted_value": 35188.33,
-      "cash": 94.52,
+      "value": 93076.6,
+      "deposit_adjusted_value": 35187.61,
+      "cash": 92.62,
       "holdings": {
         "PULS": 0.2528,
         "SQQQ": 0.7462
@@ -72,5 +72,6 @@
       "last_percent_change": -0.0157
     }
   },
+  "book_drawdown": 0.0,
   "sleeve_weight": 0.1139
 }

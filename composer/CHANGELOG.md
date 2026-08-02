@@ -356,3 +356,30 @@ Format per entry:
   DD p95 68.6% -> 37.5%) at ~zero expected CAGR cost vs disciplined
   manual resets. Expected firing rate ~once every 1-2 years; nearest
   observed approach: KMLM at 30.3% of book on 2026-07-30.
+
+
+## 2026-08-02 — Ops hardening package (G1-G4 + regime_boot fix; owner-approved)
+
+Per addenda 21/21b (dual-agent QA + full-regime recalibration):
+- monitor.py: TWO-TIER drawdown alerts — 15% (12% HARV) is now an
+  automated tier (runs live-vs-model diagnostics, logs, no page); human
+  alarm only on conservative-p90 anomaly (HG 40%/KMLM 39%/SLEEVE 20%),
+  failed diagnostics (corr<0.90 or vol-ratio>1.30), or time-under-water
+  beyond 1.5x historical max (420/165/305/123 td). HARV's 12% tripwire
+  unchanged (immediate alarm by design).
+- monitor.py: NEW book-level drawdown alarm at 17% (conservative p90) —
+  closes the correlated-decay blind spot.
+- divergence.py: adds live-beta-to-model, live/model vol ratio, and live
+  maxDD to output (earn-back fat-tail detectors).
+- POLICY Op3 earn-back HARDENED: adds beta [0.9,1.1], vol-ratio <1.15,
+  live-maxDD <39% (conservative p90) to corr/paired-gap criteria; paired
+  measurement made explicit.
+- POLICY Op5: drift-protocol note (upshifted targets still governed by
+  the 40% cap's full reset).
+- regime_boot.py: SLEEVE research backtests now use the archived
+  pre-BOXX tree (research/sleeve_tree_bil.json) — the live BOXX tree
+  clamps engine backtests to ~2023 and would have silently shrunk the
+  Oct-1 quarterly run's sleeve buckets from 15y to 3.5y.
+Expected effect on returns when engines are healthy: ZERO (identical
+trades). Value is conditional: breakage-injection MC measured ~4-5% of
+terminal wealth preserved per breakage event (addendum 21 discussion).

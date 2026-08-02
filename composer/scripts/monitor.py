@@ -30,6 +30,30 @@ import composerlib as cl
 
 DIR = "composer/results/monitor"
 
+# Two-tier drawdown config (results.md addenda 21/21b): sid -> (routine
+# tier: auto-diagnostic+log only; anomaly tier: conservative-calibration
+# p90, human alarm; time-under-water limit in trading days ~1.5x historical
+# max). HARV keeps its single tight tripwire by design (addendum 12).
+DD_TIERS = {
+    "mbkiXcuNDjueXpiox5Av": (0.15, 0.40, 420),   # HG (11y full-history cal.)
+    "YPTSJFJwD2ZKfAeYJUbW": (0.15, 0.39, 165),   # KMLM (55y conservative cal.)
+    "nNdBk7hc5NiBzeRvbI5T": (0.15, 0.20, 305),   # SLEEVE
+    "ORQNCfZnA18wmsMWVhf8": (0.12, 0.12, 123),   # HARV (immediate alarm)
+}
+BOOK_DD_ALERT = 0.17    # 55y-conservative p90 of book 12m maxDD (add. 21b)
+
+
+def run_diagnostic(acct, sid, name):
+    """Tier-1 auto-diagnostic: live-vs-model divergence for a breached engine.
+    Returns the divergence dict or None (unreachable/too new — never blocks)."""
+    try:
+        import divergence
+        r = divergence.analyze(acct, sid, name)
+        return None if "error" in r else r
+    except Exception as e:  # noqa: BLE001
+        print(f"  (diagnostic unavailable for {name[:30]}: {e})")
+        return None
+
 
 def check_accident_gauge(state, alerts, url, now):
     """Poll the canary's accident composite. Alert on a NEW trip, weekly
@@ -133,16 +157,44 @@ def main():
         }
         label = f"{s['name'][:45]} [{sid[:8]}]"
 
-        peak = max(state["peaks"].get(sid, 0.0), dep_val)
+        prev_peak = state["peaks"].get(sid, 0.0)
+        peak = max(prev_peak, dep_val)
         state["peaks"][sid] = peak
+        pk_dates = state.setdefault("peak_dates", {})
+        if dep_val >= prev_peak:
+            pk_dates[sid] = now.date().isoformat()
         if peak > 0:
             dd = 1.0 - dep_val / peak
-            dd_thresh = a.harv_dd_alert if sid == a.harv_symphony else a.dd_alert
-            if dd > dd_thresh:
-                extra = (" — harvester past its modern-era max DD (9.5%): possible "
-                         "2018-style slow-bleed regime, review addendum 12"
-                         if sid == a.harv_symphony else "")
-                alerts.append(f"DRAWDOWN {dd:.1%} from tracked peak — {label}{extra}")
+            routine, anomaly, tuw_limit = DD_TIERS.get(
+                sid, (a.dd_alert, 0.40, 420))
+            tuw_td = 0
+            if sid in pk_dates:
+                cal = (now.date() - datetime.date.fromisoformat(pk_dates[sid])).days
+                tuw_td = int(cal * 5 / 7)
+            if dd > routine:
+                # TIER 1 (routine): auto-diagnostic, log only — no human alarm.
+                # Escalate on statistical anomaly, failed live-vs-model
+                # diagnostics, or time-under-water beyond historical range
+                # (results.md addenda 21/21b: thresholds from full-history +
+                # 55y-conservative calibration; bare thresholds are backstops).
+                diag = run_diagnostic(acct, sid, s["name"])
+                reason = []
+                if dd > anomaly:
+                    reason.append(f"DD {dd:.1%} > anomaly p90 {anomaly:.0%}")
+                if diag is not None and diag.get("daily_return_correlation", 1.0) < 0.90:
+                    reason.append(f"live~model corr {diag['daily_return_correlation']:.2f} < 0.90")
+                if diag is not None and diag.get("live_model_vol_ratio", 1.0) > 1.30:
+                    reason.append(f"live/model vol ratio {diag['live_model_vol_ratio']:.2f} > 1.30")
+                if tuw_td > tuw_limit:
+                    reason.append(f"underwater {tuw_td}td > {tuw_limit}td")
+                if reason:
+                    alerts.append(f"DRAWDOWN ANOMALY — {label}: dd {dd:.1%}; "
+                                  + "; ".join(reason))
+                else:
+                    print(f"  (tier-1 DD {dd:.1%} on {label} — within expected "
+                          f"range; diagnostics pass"
+                          + (f", corr {diag['daily_return_correlation']:.2f}"
+                             if diag else "") + f", TUW {tuw_td}td — logged, no alarm)")
 
         if prev and sid in prev.get("symphonies", {}):
             pv = prev["symphonies"][sid].get("deposit_adjusted_value")
@@ -163,6 +215,19 @@ def main():
     if idle > 5000 and pending == 0:
         alerts.append(f"IDLE CASH ${idle:,.0f} unallocated — check POLICY.md "
                       "for a PENDING DEPOSIT block (deployment may be pre-authorized)")
+
+    # book-level drawdown alarm (addendum 21: coincidence risk across
+    # correlated engines has no per-engine alarm; conservative p90 = 17%)
+    book_dep = sum((s.get("deposit_adjusted_value") or s["value"]) for s in meta)
+    book_peak = max(state.get("book_peak", 0.0), book_dep)
+    state["book_peak"] = book_peak
+    if book_peak > 0:
+        book_dd = 1.0 - book_dep / book_peak
+        snap["book_drawdown"] = round(book_dd, 4)
+        if book_dd > BOOK_DD_ALERT:
+            alerts.append(f"BOOK DRAWDOWN {book_dd:.1%} > {BOOK_DD_ALERT:.0%} "
+                          "(conservative p90) — correlated decay across engines; "
+                          "review all live-vs-model diagnostics")
 
 
     # POLICY.md operation 5: engine concentration cap (pre-authorized reset)

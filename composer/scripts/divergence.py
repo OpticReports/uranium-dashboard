@@ -54,7 +54,29 @@ def analyze(acct, sym_id, sym_name):
         "worst_daily_gap_bps": round(min(gaps) * 1e4, 1),
         "best_daily_gap_bps": round(max(gaps) * 1e4, 1),
         "daily_return_correlation": round(cl.pearson(lr, mr) or 0.0, 3),
+        # earn-back fat-tail detectors (results.md addendum 21): live beta to
+        # model, live/model vol ratio, and live max drawdown over the window
+        "live_beta_to_model": round(_beta(lr, mr), 3),
+        "live_model_vol_ratio": round(_vol_ratio(lr, mr), 3),
+        "live_max_drawdown": round(cl.max_drawdown(lv), 4),
     }
+
+
+def _beta(lr, mr):
+    n = len(mr)
+    if n < 3:
+        return 0.0
+    ma = sum(lr) / n
+    mb = sum(mr) / n
+    var = sum((y - mb) ** 2 for y in mr) / n
+    cov = sum((x - ma) * (y - mb) for x, y in zip(lr, mr)) / n
+    return cov / var if var else 0.0
+
+
+def _vol_ratio(lr, mr):
+    import statistics
+    sm = statistics.pstdev(mr)
+    return statistics.pstdev(lr) / sm if sm else 0.0
 
 
 def show(r):
@@ -66,6 +88,8 @@ def show(r):
     print(f"      cumulative: live {r['live_cumulative_return']:+7.2%}  "
           f"model {r['model_cumulative_return']:+7.2%}  "
           f"gap {r['cumulative_gap']:+7.2%}")
+    print(f"      beta {r['live_beta_to_model']:.2f}  vol-ratio "
+          f"{r['live_model_vol_ratio']:.2f}  live maxDD {r['live_max_drawdown']:.1%}")
     print(f"      daily gap: mean {r['mean_daily_gap_bps']:+6.1f} bps "
           f"(~{r['annualized_gap']:+.1%}/yr)  "
           f"range [{r['worst_daily_gap_bps']:+.0f}, {r['best_daily_gap_bps']:+.0f}] bps")

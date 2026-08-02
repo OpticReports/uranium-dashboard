@@ -71,10 +71,21 @@ monitors whether KMLM EARNS BACK the higher 19/39/27/15 weight.
 - Check date: first daily check on or after **2026-08-07**, then MONTHLY.
 - Measurement: `divergence.py YPTSJFJwD2ZKfAeYJUbW` (live vs backtest) plus
   the quarterly regime-bootstrap convergence read (Standing analysis cadence).
-- On PASS (live corr >= 0.90 AND gap >= -15%/yr, sustained 2 consecutive
-  monthly checks, AND at least one live hostile-regime month in the record):
-  REPORT to the owner that the 19/39 upgrade is statistically earned — do
-  NOT execute; the upshift is an owner decision.
+- On PASS (ALL criteria, sustained 2 consecutive monthly checks, AND at
+  least one live hostile-regime month in the record — hardened 2026-08-01,
+  results.md addendum 21):
+  - live~model daily correlation >= 0.90;
+  - annualized gap >= -15%/yr, measured PAIRED (live vs the concurrent
+    same-window model run, as divergence.py computes it — an unpaired
+    comparison false-fails ~47% of genuine years);
+  - live beta to model in [0.9, 1.1] AND live/model vol ratio < 1.15
+    (fast detectors for a live tail fatter than modeled);
+  - live max drawdown within model expectation (backstop: < 39%, the 55y
+    conservative p90; method sensitivity ±5pp documented in add. 21b).
+  Then REPORT to the owner that the 19/39 upgrade is statistically
+  earned — do NOT execute; the upshift is an owner decision. A criteria
+  miss only delays the report (~20% false-block chance over 2y of
+  monthly checks — acceptable; it never forces a downshift).
 - On FAIL: no action needed (the book already holds the defensive weight);
   note it in the daily summary.
 - No auto-trades under this operation in either direction.
@@ -100,6 +111,11 @@ unchanged vs disciplined manual resets).
 - The target weights above are the same allocation-B targets; if the
   owner changes the book's target allocation, update this block in the
   same decision.
+- Drift-protocol note (2026-08-01, addendum 21): if a future owner
+  decision raises any engine's TARGET near the cap (e.g., KMLM to 39%
+  via the earn-back), a subsequent drift breach of 40% still triggers
+  THIS operation's full reset to the then-current targets — no
+  ambiguity, no special case.
 
 ## Standing analysis cadence (not a capital operation)
 
