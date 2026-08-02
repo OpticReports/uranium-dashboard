@@ -92,7 +92,7 @@ export default function EventFeed() {
   return (
     <Panel
       title="Event & Alert Feed"
-      subtitle="Machine-generated signals, newest first"
+      subtitle="Machine-generated signals, newest first. Active alerts = RED transitions logged since the last deploy; the metric grid above is the live source of truth"
     >
       {alertError && (
         <div className="mb-2">
