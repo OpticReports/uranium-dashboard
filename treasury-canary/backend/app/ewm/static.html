@@ -65,6 +65,19 @@ canvas{width:100%;max-width:100%;background:#0b1120;border:1px solid #1e293b;bor
 
 
 
+<details><summary>&#9881; Settings — revenue ramp &amp; process inputs <span class="hq" data-h="settings">?</span></summary>
+<div class="panel"><div class="form" id="form">
+<label>Revenue run-rate @ Dec 2026 ($M)<span class="hq" data-h="set_rev">?</span><input id="i_rev" type="number" step="0.5"></label>
+<label>Target value low ($M)<span class="hq" data-h="set_target">?</span><input id="i_tlo" type="number" step="1"></label>
+<label>Target value high ($M)<span class="hq" data-h="set_target">?</span><input id="i_thi" type="number" step="1"></label>
+<label>Process stage<span class="hq" data-h="strip_stage">?</span><select id="i_stage"><option>not_started</option><option>prep</option><option>in_market</option><option>loi</option><option>exclusivity</option><option>close</option></select></label>
+<label>Today (month)<input id="i_today" placeholder="2026-09"></label>
+<label>Dissent cluster<span class="hq" data-h="set_dis">?</span><input id="i_dis" type="checkbox"></label>
+<label>Pin to report ($105M, no ramp)<span class="hq" data-h="set_pin">?</span><input id="i_pin" type="checkbox"></label>
+<button id="save">Apply</button>
+<span class="dim" id="savemsg"></span>
+</div></div></details>
+
 <div class="panel"><span class="lbl">Monte Carlo valuation fan — toggle shocks, engine reprices the whole path<span class="hq" data-h="fan">?</span></span>
 <div class="tgl">
 <label class="lbl" style="display:flex;flex-direction:column;gap:3px">Rate path<span class="hq" data-h="t_force">?</span><select id="t_force"><option value="">probabilistic (cohort weights)</option><option value="-1">force rate cut(s)</option><option value="0">force 0 hikes</option><option value="1">force 1 hike</option><option value="2">force 2 hikes</option><option value="3">force 3 hikes</option><option value="4">force 4 hikes</option></select></label>
@@ -86,18 +99,6 @@ canvas{width:100%;max-width:100%;background:#0b1120;border:1px solid #1e293b;bor
 </div>
 
 
-<details open><summary>&#9881; Settings — revenue ramp &amp; process inputs <span class="hq" data-h="settings">?</span></summary>
-<div class="panel"><div class="form" id="form">
-<label>Revenue run-rate @ Dec 2026 ($M)<span class="hq" data-h="set_rev">?</span><input id="i_rev" type="number" step="0.5"></label>
-<label>Target value low ($M)<span class="hq" data-h="set_target">?</span><input id="i_tlo" type="number" step="1"></label>
-<label>Target value high ($M)<span class="hq" data-h="set_target">?</span><input id="i_thi" type="number" step="1"></label>
-<label>Process stage<span class="hq" data-h="strip_stage">?</span><select id="i_stage"><option>not_started</option><option>prep</option><option>in_market</option><option>loi</option><option>exclusivity</option><option>close</option></select></label>
-<label>Today (month)<input id="i_today" placeholder="2026-09"></label>
-<label>Dissent cluster<span class="hq" data-h="set_dis">?</span><input id="i_dis" type="checkbox"></label>
-<label>Pin to report ($105M, no ramp)<span class="hq" data-h="set_pin">?</span><input id="i_pin" type="checkbox"></label>
-<button id="save">Apply</button>
-<span class="dim" id="savemsg"></span>
-</div></div></details>
 
 <div class="panel"><span class="lbl">Live market couplings (canary &rarr; exit model &middot; evidence-graded per CANARY_COUPLING memo)<span class="hq" data-h="live">?</span></span>
 <table id="livesig"></table>
