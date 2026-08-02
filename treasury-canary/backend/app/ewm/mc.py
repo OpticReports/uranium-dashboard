@@ -71,7 +71,8 @@ def simulate(p: dict, inputs: dict, toggles: dict, n_paths: int = 4000) -> dict:
     z_death = rng.uniform(size=n_paths)
     u_regime = rng.uniform(size=n_paths)                  # 50bp-branch value draw
 
-    stall_base = np.array([SCEN[s]["stall_p"] for s in range(NS)])[s_idx]
+    stall_base = (np.array([SCEN[s]["stall_p"] for s in range(NS)])[s_idx]
+                  * p.get("stall_mult", 1.0))             # live financing state
     hk = np.array(HIKES)[s_idx]                           # hike count per path
     stall_base = stall_base + extra_stall * (hk >= 3)     # hawk rows, matching h*
     if crash == "severe":

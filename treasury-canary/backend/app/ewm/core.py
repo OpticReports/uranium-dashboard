@@ -167,12 +167,34 @@ def stall_exposure(m: str, p: dict = PARAMS) -> float:
 
 def _stall_cost_frac(s: int, m: str, p: dict) -> float:
     """Expected fractional value cost of stall risk for scenario s closing at
-    m: P(stall)·exposure·(recut haircut + death tail · unrecovered value)."""
-    sp = SCEN[s]["stall_p"]
+    m: P(stall)·exposure·(recut haircut + death tail · unrecovered value).
+    stall_mult scales the hawk-row hazard from the live HY financing state
+    (BENIGN x1 / TIGHT x1.33 / SHUT x1.67 — CANARY_COUPLING memo §3)."""
+    sp = min(0.95, SCEN[s]["stall_p"] * p.get("stall_mult", 1.0))
     if sp == 0.0:
         return 0.0
     per_event = abs(p["stall_value_pct"]) / 100 + p["stall_death_tail"] * (1 - p["stall_death_recovery"])
     return sp * stall_exposure(m, p) * per_event
+
+
+def apply_weight_tilt(p: dict, tilt: dict | None) -> dict:
+    """Bounded market-nowcast tilt: move `pp` (capped ±5pp) of weight toward
+    the hikes-row `toward`, funded proportionally from the other rows. Only
+    ever applied via the operator's Apply button — never silently."""
+    if not tilt or not tilt.get("pp"):
+        return p
+    toward = int(tilt.get("toward", 1))
+    if toward not in IDX:
+        return p
+    pp = max(0.0, min(0.05, float(tilt["pp"])))
+    w = list(p["hike_weights"])
+    ti = IDX[toward]
+    others = sum(x for i, x in enumerate(w) if i != ti)
+    if others <= 0:
+        return p
+    w = [x - pp * x / others if i != ti else x + pp for i, x in enumerate(w)]
+    s = sum(w)
+    return {**p, "hike_weights": [max(x, 0.0) / s for x in w]}
 
 
 def cohort_surface(p: dict, dissent_cluster: bool = False,
@@ -428,6 +450,19 @@ def action_cards(p: dict, ctx: dict) -> list[dict]:
                       "trigger": f"revenue_raised+{d}",
                       "rationale": "Growth trajectory offsets multiple compression",
                       "confidence": "high"})
+    fin = ctx.get("financing") or {}
+    if fin.get("state") in ("TIGHT", "SHUT"):
+        sev = fin["state"]
+        cards.append({"rank": 3, "action": (
+            "Financing window " + ("SHUT — assume syndicated debt unavailable; "
+            "committed-capital or all-equity buyers only; expect retrades"
+            if sev == "SHUT" else
+            "tightening — lock committed financing early; expect retrade "
+            "attempts and +1-2 quarters of process risk")),
+            "trigger": f"hy_state={sev} hy={fin.get('hy_bp')}bp d90={fin.get('d90_bp')}bp",
+            "rationale": "2022 precedent: spreads 310->583bp shut the LBO loan "
+                         f"market; hawk-row stall odds scaled x{fin.get('stall_mult')}",
+            "confidence": "high" if sev == "SHUT" else "medium"})
     if ctx.get("stress_prob", 0) > 0.25:
         cards.append({"rank": 5, "action": "Treat Q1'27 close as hard deadline",
                       "trigger": f"stress_prob={ctx['stress_prob']:.2f}>0.25",

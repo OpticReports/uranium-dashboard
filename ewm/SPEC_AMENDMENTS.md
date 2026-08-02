@@ -416,3 +416,35 @@ Added "1+ cuts (benign easing)" as a tagged EXTENSION row, NOT a report cell:
 - engine re-keyed from positional indices to hike counts (-1..4) so rows
   are extensible; MC gains force_hikes=-1; report-fidelity gate G1
   unchanged (pinned weighted EV 191.3, still inside $186-193M).
+
+### v2.2 (2026-08-02): canary live-coupling build (operator: "Yes build it")
+
+Implements CANARY_COUPLING_RESEARCH.md shortlist 1-5 (app/ewm/live.py):
+1. Live-inputs autopilot: fcix_z <- NFCI trailing-z (260w); dmhi01 <- mean of
+   inverted SLOOS C&I and the inverted private-credit pin channel; the
+   SPIKExPOS deny-Green override wired to the rate-shock panel (labeled
+   recession-risk caution per the frozen study). Per-field AUTO/MANUAL flags;
+   a manual POST flips AUTO off (event-logged); dead feeds fall back to
+   stored values with visible provenance.
+2. HY financing state (BENIGN/TIGHT/SHUT; enter 400/500bp or +150bp/90d,
+   exit 375/425 or <100bp/90d — dual-threshold hysteresis, state persisted)
+   -> stall-hazard multiplier x1 / x4/3 / x5/3 on the hawk rows (surface,
+   breakeven context, MC fan) + a financing action card. Evidence basis:
+   2022 episode + stall-not-death termination data.
+3. AJSW financing-headwind chip: -4.8%/100bp purchase-multiple elasticity x
+   HY OAS move vs the report date (284bp, 2026-07-30). Display-only; report
+   cells are never touched by live data.
+4. Market path nowcast: DGS2 3m change (0.40pp = the gate-validated
+   accelerate proxy) + financing state -> voting cohort row, release-side
+   hysteresis; suggested tilt capped +/-5pp, applied ONLY via the operator's
+   Apply button (apply_tilt/clear_tilt, event-logged), funded
+   proportionally and renormalized.
+5. Simulator stress bridge: per-cohort-scenario runs, cohort-weighted max
+   monthly stress occupancy (labeled: understates cumulative P(ever-stress);
+   sim horizon ends 2027-06); feeds the hard-deadline card. Uses the FIXED
+   canary01 hook, never the broken route-local one.
+Snapshot TTL 300s; hysteresis state in data/ewm/live_state.json. Seven new
+offline gates (test_ewm_live_coupling.py): financing hysteresis, stall-mult
+monotonicity into breakeven+fan, tilt bounds/normalization, nowcast votes +
+release hysteresis, mapper units, AUTO/MANUAL precedence + dead-feed
+fallback. 170 canary tests green.

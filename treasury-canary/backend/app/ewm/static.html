@@ -70,6 +70,11 @@ canvas{width:100%;max-width:100%;background:#0b1120;border:1px solid #1e293b;bor
 <span class="dim" id="savemsg"></span>
 </div></div></details>
 
+<div class="panel"><span class="lbl">Live market couplings (canary &rarr; exit model &middot; evidence-graded per CANARY_COUPLING memo)</span>
+<table id="livesig"></table>
+<div class="dim" id="liveft" style="font-size:10px;margin-top:6px"></div>
+</div>
+
 <div class="panel"><span class="lbl">Scenario cohort &times; close window ($M &middot; cell = central + report range &middot; &#9733; modal)</span>
 <table id="cohort"></table>
 <div class="be" id="beline"></div>
@@ -128,6 +133,31 @@ function render(b){
   document.getElementById('i_today').value=b.inputs.today_month;
   document.getElementById('i_dis').checked=!!b.inputs.dissent_cluster;
   document.getElementById('i_pin').checked=!!b.inputs.pin_report;
+
+  // live couplings panel
+  const lv=b.live||{}, rz=b.resolved||{}, prov=rz.provenance||{}, auto=rz.auto||{};
+  const fin=lv.financing, hw=lv.headwind, nc=lv.nowcast;
+  const aBtn=(f)=>`<button style="padding:2px 8px;font-size:10px;background:${auto[f]?'#065f46':'#334155'}" onclick="setAuto('${f}',${!auto[f]})">${auto[f]?'AUTO':'MANUAL'}</button>`;
+  const finCol=fin?{BENIGN:'#34d399',TIGHT:'#fbbf24',SHUT:'#f87171'}[fin.state]:'#64748b';
+  let lh='<tr><th>signal</th><th>value</th><th>feeds</th><th>source</th><th></th></tr>';
+  lh+=`<tr><td>Canary composite</td><td class="cmid">${Math.round(b.canary01*100)}/100</td><td>window score (20%)</td><td class="crng">live composite (in-process)</td><td></td></tr>`;
+  lh+=`<tr><td>Financing conditions (FCI-X)</td><td class="cmid">${(+rz.fcix_z).toFixed(2)}z</td><td>window score (25%)</td><td class="crng">${prov.fcix_z||''}</td><td>${aBtn('fcix_z')}</td></tr>`;
+  lh+=`<tr><td>Deal-market health</td><td class="cmid">${(+rz.dmhi01).toFixed(2)}</td><td>window score (20%)</td><td class="crng">${prov.dmhi01||''}</td><td>${aBtn('dmhi01')}</td></tr>`;
+  lh+=`<tr><td>HY financing state</td><td class="cmid" style="color:${finCol}">${fin?`${fin.state} (${fin.hy_bp}bp, 90d ${fin.d90_bp>0?'+':''}${fin.d90_bp}bp)`:'n/a'}</td><td>stall hazard &times;${fin?fin.stall_mult:1}</td><td class="crng">${fin?fin.source:'feed unavailable'}</td><td>${aBtn('stall_mult')}</td></tr>`;
+  lh+=`<tr><td>Yield-shock &times; corr (SPIKE&times;POS)</td><td class="cmid">${lv.spike_pos?(rz.spike_pos?'ACTIVE':`${lv.spike_pos.state}/${lv.spike_pos.regime}`):'n/a'}</td><td>deny-GREEN cap (recession-risk caution, not a stock call)</td><td class="crng">${lv.spike_pos?lv.spike_pos.source:''}</td><td>${aBtn('spike_pos')}</td></tr>`;
+  lh+=`<tr><td>Simulator stress odds</td><td class="cmid">${(+rz.stress_prob*100).toFixed(0)}%</td><td>hard-deadline card (&gt;25%)</td><td class="crng">${prov.stress_prob||''}</td><td>${aBtn('stress_prob')}</td></tr>`;
+  lh+=`<tr><td>Financing headwind vs report</td><td class="cmid" style="color:${hw&&hw.multiple_pct<-0.5?'#f87171':'#94a3b8'}">${hw?`${hw.multiple_pct>0?'+':''}${hw.multiple_pct}% multiple (HY ${hw.delta_bp>0?'+':''}${hw.delta_bp}bp)`:'n/a'}</td><td>display only &mdash; report cells untouched</td><td class="crng">${hw?hw.source:''}</td><td></td></tr>`;
+  const tiltOn=b.inputs.weight_tilt;
+  lh+=`<tr><td>Market path nowcast</td><td class="cmid">${nc?`voting row: ${nc.voting_row===-1?'cuts':nc.voting_row+' hikes'} (2y ${nc.d2_chg_3m_pp>0?'+':''}${nc.d2_chg_3m_pp}pp/3m)`:'n/a'}</td>`+
+    `<td>${tiltOn?`tilt APPLIED: +${(tiltOn.pp*100).toFixed(0)}pp &rarr; ${tiltOn.toward===-1?'cuts':tiltOn.toward+'h'} <button style="padding:2px 8px;font-size:10px;background:#7f1d1d" onclick="tilt(false)">clear</button>`:
+      (nc&&nc.suggested_tilt_pp?`suggests &plusmn;${Math.abs(nc.suggested_tilt_pp*100).toFixed(0)}pp <button style="padding:2px 8px;font-size:10px" onclick="tilt(true)">apply</button>`:'no tilt suggested')}</td>`+
+    `<td class="crng">${nc?nc.source:''}</td><td></td></tr>`;
+  document.getElementById('livesig').innerHTML=lh;
+  document.getElementById('liveft').textContent='One primary trigger per channel (double-counting rule). VIX is display-only: documented null for private-target deals. Manual overrides win and are event-logged. Snapshot '+(lv.asof||'')+'.';
+  if(fin&&fin.state!=='BENIGN')document.getElementById('plain').innerHTML+=
+    ` <b style="color:${finCol}">Financing ${fin.state}</b>: HY at ${fin.hy_bp}bp &mdash; hawk-row stall odds scaled &times;${fin.stall_mult}; lock committed financing early.`;
+  if(hw&&Math.abs(hw.multiple_pct)>=1)document.getElementById('plain').innerHTML+=
+    ` Credit markets have moved ${hw.delta_bp>0?'against':'in favor of'} you since the report: ~${hw.multiple_pct}% on the multiple (AJSW elasticity).`;
 
   // cohort table
   const rows=b.surface.surface, byM={}; rows.forEach(r=>byM[r.month]=r);
@@ -235,6 +265,9 @@ function runSim(){
 
 document.getElementById('runsim').onclick=runSim;
 document.getElementById('t_hz').onchange=()=>{if(LASTSIM)drawFan(LASTSIM);};
+function refreshBoard(){return fetch('api/ewm/board').then(r=>r.json()).then(b=>{render(b);runSim();});}
+window.setAuto=(f,v)=>{fetch('api/ewm/inputs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({auto:{[f]:v}})}).then(refreshBoard);};
+window.tilt=(on)=>{fetch('api/ewm/inputs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(on?{apply_tilt:true}:{clear_tilt:true})}).then(refreshBoard);};
 document.getElementById('save').onclick=()=>{
   const msg=document.getElementById('savemsg');msg.textContent='saving…';
   fetch('api/ewm/inputs',{method:'POST',headers:{'Content-Type':'application/json'},
