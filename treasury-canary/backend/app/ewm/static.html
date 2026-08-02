@@ -122,7 +122,7 @@ function render(b){
     `<span><span class="lbl">Modal cell (1 hike)</span>${fmt(h.modal_cell[0])}&ndash;${fmt(h.modal_cell[1])}</span>`+
     `<span><span class="lbl">Q2'27-end EV</span>${fmt(h.q2_ev)}</span>`+
     `<span><span class="lbl">Hold to Jul-27 EV</span>${fmt(h.target_ev)}</span>`+
-    `<span><span class="lbl">Canary composite</span>${Math.round(b.canary01*100)}/100</span>`+
+    `<span><span class="lbl">Canary stress (lower = calmer)</span>${Math.round(b.canary01*100)}/100</span>`+
     `<span><span class="lbl">Stage</span>${b.inputs.stage}</span>`;
 
   // settings current values
@@ -140,7 +140,9 @@ function render(b){
   const aBtn=(f)=>`<button style="padding:2px 8px;font-size:10px;background:${auto[f]?'#065f46':'#334155'}" onclick="setAuto('${f}',${!auto[f]})">${auto[f]?'AUTO':'MANUAL'}</button>`;
   const finCol=fin?{BENIGN:'#34d399',TIGHT:'#fbbf24',SHUT:'#f87171'}[fin.state]:'#64748b';
   let lh='<tr><th>signal</th><th>value</th><th>feeds</th><th>source</th><th></th></tr>';
-  lh+=`<tr><td>Canary composite</td><td class="cmid">${Math.round(b.canary01*100)}/100</td><td>window score (20%)</td><td class="crng">live composite (in-process)</td><td></td></tr>`;
+  const cv=Math.round(b.canary01*100);
+  const cband=cv<25?['LOW stress','#34d399']:cv<50?['ELEVATED','#fbbf24']:cv<75?['HIGH','#fb923c']:['SEVERE','#f87171'];
+  lh+=`<tr><td>Canary composite <span class="crng">(stress 0&ndash;100, lower = calmer)</span></td><td class="cmid">${cv}/100 <span style="color:${cband[1]};font-size:10px">${cband[0]}</span></td><td>window score (20%, inverted &mdash; calm helps)</td><td class="crng">live composite (in-process)</td><td></td></tr>`;
   lh+=`<tr><td>Financing conditions (FCI-X)</td><td class="cmid">${(+rz.fcix_z).toFixed(2)}z</td><td>window score (25%)</td><td class="crng">${prov.fcix_z||''}</td><td>${aBtn('fcix_z')}</td></tr>`;
   lh+=`<tr><td>Deal-market health</td><td class="cmid">${(+rz.dmhi01).toFixed(2)}</td><td>window score (20%)</td><td class="crng">${prov.dmhi01||''}</td><td>${aBtn('dmhi01')}</td></tr>`;
   lh+=`<tr><td>HY financing state</td><td class="cmid" style="color:${finCol}">${fin?`${fin.state} (${fin.hy_bp}bp, 90d ${fin.d90_bp>0?'+':''}${fin.d90_bp}bp)`:'n/a'}</td><td>stall hazard &times;${fin?fin.stall_mult:1}</td><td class="crng">${fin?fin.source:'feed unavailable'}</td><td>${aBtn('stall_mult')}</td></tr>`;
