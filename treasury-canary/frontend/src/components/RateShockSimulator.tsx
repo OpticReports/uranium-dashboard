@@ -55,6 +55,7 @@ export default function RateShockSimulator() {
   const [overrides, setOverrides] = useState<Record<string, number>>({});
   const [calib, setCalib] = useState<ShockCalibration | null>(null);
   const [data, setData] = useState<ShockRun | null>(null);
+  const [base, setBase] = useState<ShockRun | null>(null); // priced-path run
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,11 +67,18 @@ export default function RateShockSimulator() {
     let alive = true;
     setBusy(true);
     setError(null);
-    api
-      .shockRun({ hikes, seed, overrides: Object.keys(overrides).length ? overrides : undefined })
-      .then((d) => {
+    const ov = Object.keys(overrides).length ? overrides : undefined;
+    // fetch the scenario AND the priced-path baseline together: the delta
+    // readout is what makes scenario differences legible (QA: a stale chart
+    // during a slow POST read as "not dynamic")
+    Promise.all([
+      api.shockRun({ hikes, seed, overrides: ov }),
+      api.shockRun({ hikes: 0, seed, overrides: ov }),
+    ])
+      .then(([d, b]) => {
         if (alive) {
           setData(d);
+          setBase(b);
           setBusy(false);
         }
       })
@@ -246,9 +254,14 @@ export default function RateShockSimulator() {
       {error && <div className="mt-2"><InlineError message={error} /></div>}
       {!data && !error && <Loading label="Running simulator…" />}
 
+      {data && busy && (
+        <div className="mt-2 rounded border border-sky-500/40 bg-sky-500/10 px-3 py-1.5 text-[11px] text-sky-300">
+          Updating scenario — charts below still show the PREVIOUS run…
+        </div>
+      )}
       {data &&
         assets.map((a) => (
-          <div key={a} className="mt-3">
+          <div key={a} className={`mt-3 ${busy ? "opacity-40" : ""}`}>
             <div className="flex items-baseline gap-3 text-[11px]">
               <span className="font-bold" style={{ color: ASSET_COLORS[a] }}>
                 {a}
@@ -258,6 +271,14 @@ export default function RateShockSimulator() {
                 {Math.round(data.probs[a].dd_gt_10 * 100)}% · P(dd&gt;20%){" "}
                 {Math.round(data.probs[a].dd_gt_20 * 100)}%
               </span>
+              {base && data.meta.hikes !== 0 && (
+                <DeltaChip
+                  delta={
+                    data.bands[a]["50"][data.months.length - 1] -
+                    base.bands[a]["50"][data.months.length - 1]
+                  }
+                />
+              )}
             </div>
             <div className="h-44">
               <ResponsiveContainer width="100%" height="100%">
@@ -268,7 +289,11 @@ export default function RateShockSimulator() {
                     stroke="#475569"
                     tick={{ fontSize: 9 }}
                     width={40}
-                    domain={["auto", "auto"]}
+                    allowDataOverflow
+                    domain={[
+                      Math.floor(Math.min(...data.bands[a]["5"]) - 4),
+                      Math.ceil(Math.max(...data.bands[a]["95"]) + 4),
+                    ]}
                     tickFormatter={(v: number) => `${v}`}
                   />
                   <Tooltip
@@ -378,6 +403,23 @@ export default function RateShockSimulator() {
         {calib && <> {calib.epistemic_note}</>}
       </p>
     </Panel>
+  );
+}
+
+function DeltaChip({ delta }: { delta: number }) {
+  const good = delta >= 0;
+  return (
+    <span
+      className={`rounded-full border px-2 py-px font-mono text-[10px] font-bold ${
+        good
+          ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300"
+          : "border-red-500/50 bg-red-500/10 text-red-300"
+      }`}
+      title="terminal median vs the priced-path scenario (same seed & params)"
+    >
+      vs priced {good ? "+" : ""}
+      {delta.toFixed(1)}pp
+    </span>
   );
 }
 

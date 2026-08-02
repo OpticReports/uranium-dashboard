@@ -61,7 +61,25 @@ def _canary01(bundle) -> float:
         return 0.3
 
 
+_inputs_cache: dict = {"ts": 0.0, "data": None}
+_INPUTS_TTL = 300.0
+
+
 def _live_inputs() -> dict:
+    """Live inputs, TTL-cached: every /run POST calls this, and the FMP legs
+    (^MOVE, HYG) can be slow on a cold instance — a stale-chart UX report
+    traced back to multi-second POSTs while these fetched."""
+    import time as _time
+    now = _time.time()
+    if _inputs_cache["data"] is not None and now - _inputs_cache["ts"] < _INPUTS_TTL:
+        return _inputs_cache["data"]
+    out = _live_inputs_uncached()
+    _inputs_cache["data"] = out
+    _inputs_cache["ts"] = now
+    return out
+
+
+def _live_inputs_uncached() -> dict:
     bundle = fetch_bundle()
     out = {"vix": _last(bundle.get("vix", ([], [])))}
     # ACM term premium 6m change for kappa_t (amendment A1)
