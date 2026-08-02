@@ -1150,3 +1150,33 @@ G3. Earn-back (Op3) criteria addition: live-vs-model beta in [0.9,1.1]
 G4. Cap-drift protocol note: post-upshift KMLM at 39% sits 1pp under the
     40% cap; specify that a drift breach follows Op5 mechanics (full
     reset) — no ambiguity when it happens within days.
+
+
+## Addendum 21b — Extended (full-history + 55y-synthetic) alert calibration
+## (2026-08-01; owner challenge: "you've only tested in a bull regime" — correct)
+
+Recalibrated G1/G2 thresholds using full real history where it exists and
+the 55y conservative regime bootstrap where it doesn't:
+- HG (11.1y real, incl. 2018/2020/2022): realized rolling 1y-maxDD p50
+  27.9% / p90 35.4%; full-history bootstrap p90 39.7% / p99 53.3%; worst
+  time-under-water 282td (golden-window calibration had said p90 32%,
+  TUW 150td). The 15% alert is BELOW HG's ordinary p50 — even noisier
+  than first measured.
+- KMLM (55y conservative bootstrap, daily-adjusted x1.11): 12m-maxDD p90
+  39.4% / p99 57.6% (golden-window: 31%).
+- HARV: p90 7.9% / p99 13.1% — the existing 12% alert sits ~p98: well
+  placed by design.
+- BOOK (conservative): p50 7.7% / p90 17.1% / p99 28.2% (golden-window
+  p90 was 12.6%).
+IMPLICATION: bare DD thresholds are regime-dependent by +/-5-8pp — which
+REINFORCES the counter-agent's G1 design (diagnostics + time-under-water
+carry the detection load; thresholds are backstops, documented with both
+golden and conservative values).
+
+SIDE-DISCOVERY (material): the 2026-07-31 BOXX edit TRUNCATED the
+sleeve's backtestable window to ~2023-01 (engine clamps to youngest
+asset; BOXX inception Dec-2022). Sleeve full-history research backtests
+(regime_boot buckets, divergence baselines beyond 2023) must use the
+archived pre-BOXX tree (BIL version) via backtest_tree. regime_boot.py
+quarterly run needs this fix BEFORE Oct 1 or its SLEEVE buckets silently
+shrink from 15y to 3.5y.
