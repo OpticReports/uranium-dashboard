@@ -57,6 +57,29 @@ canvas{width:100%;max-width:100%;background:#0b1120;border:1px solid #1e293b;bor
 <div class="panel plain" id="plain">loading&hellip;</div>
 <div class="panel strip" id="strip"></div>
 
+
+
+<div class="panel"><span class="lbl">Monte Carlo valuation fan — toggle shocks, engine reprices the whole path</span>
+<div class="tgl">
+<label class="lbl" style="display:flex;flex-direction:column;gap:3px">Rate path<select id="t_force"><option value="">probabilistic (cohort weights)</option><option value="-1">force rate cut(s)</option><option value="0">force 0 hikes</option><option value="1">force 1 hike</option><option value="2">force 2 hikes</option><option value="3">force 3 hikes</option><option value="4">force 4 hikes</option></select></label>
+<label class="lbl" style="display:flex;flex-direction:column;gap:3px">Stock crash<select id="t_crash"><option value="none">none</option><option value="moderate">moderate (&minus;20% SPX)</option><option value="severe">severe (&minus;35% SPX)</option></select></label>
+<label class="lbl" style="display:flex;flex-direction:column;gap:3px">50bp regime<select id="t_reg"><option value="">off</option><option value="1">on (off-cohort gap)</option></select></label>
+<label class="lbl" style="display:flex;flex-direction:column;gap:3px">Extra stall hazard (pp)<input id="t_stall" type="number" value="0" min="0" max="30" step="1" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:5px;padding:5px 8px;font:inherit;width:70px"></label>
+<label class="lbl" style="display:flex;flex-direction:column;gap:3px">Horizon<select id="t_hz"><option value="2027-07">to sale goal (Jul 31 '27)</option><option value="2027-12">extended (Dec '27)</option></select></label>
+<button id="runsim">Run simulation</button>
+<span class="dim" id="simmsg"></span>
+</div>
+<canvas id="fan" width="1100" height="360"></canvas>
+<div class="leg"><span style="color:#38bdf8">&#9632; p25&ndash;p75</span><span style="color:#1e40af">&#9632; p10&ndash;p90</span><span style="color:#e2e8f0">&mdash; median</span><span style="color:#34d399">&#9476; on-pace ramp value</span><span style="color:#fbbf2488">&#9632; $200&ndash;225M target</span><span id="nodeal"></span></div>
+<div class="dim" id="simassump" style="font-size:10px;margin-top:8px"></div>
+</div>
+
+<div class="panel"><span class="lbl">Scenario cohort &times; close window ($M &middot; cell = central + report range &middot; &#9733; modal)</span>
+<table id="cohort"></table>
+<div class="be" id="beline"></div>
+</div>
+
+
 <details open><summary>&#9881; Settings — revenue ramp &amp; process inputs</summary>
 <div class="panel"><div class="form" id="form">
 <label>Revenue run-rate @ Dec 2026 ($M)<input id="i_rev" type="number" step="0.5"></label>
@@ -73,26 +96,6 @@ canvas{width:100%;max-width:100%;background:#0b1120;border:1px solid #1e293b;bor
 <div class="panel"><span class="lbl">Live market couplings (canary &rarr; exit model &middot; evidence-graded per CANARY_COUPLING memo)</span>
 <table id="livesig"></table>
 <div class="dim" id="liveft" style="font-size:10px;margin-top:6px"></div>
-</div>
-
-<div class="panel"><span class="lbl">Scenario cohort &times; close window ($M &middot; cell = central + report range &middot; &#9733; modal)</span>
-<table id="cohort"></table>
-<div class="be" id="beline"></div>
-</div>
-
-<div class="panel"><span class="lbl">Monte Carlo valuation fan — toggle shocks, engine reprices the whole path</span>
-<div class="tgl">
-<label class="lbl" style="display:flex;flex-direction:column;gap:3px">Rate path<select id="t_force"><option value="">probabilistic (cohort weights)</option><option value="-1">force rate cut(s)</option><option value="0">force 0 hikes</option><option value="1">force 1 hike</option><option value="2">force 2 hikes</option><option value="3">force 3 hikes</option><option value="4">force 4 hikes</option></select></label>
-<label class="lbl" style="display:flex;flex-direction:column;gap:3px">Stock crash<select id="t_crash"><option value="none">none</option><option value="moderate">moderate (&minus;20% SPX)</option><option value="severe">severe (&minus;35% SPX)</option></select></label>
-<label class="lbl" style="display:flex;flex-direction:column;gap:3px">50bp regime<select id="t_reg"><option value="">off</option><option value="1">on (off-cohort gap)</option></select></label>
-<label class="lbl" style="display:flex;flex-direction:column;gap:3px">Extra stall hazard (pp)<input id="t_stall" type="number" value="0" min="0" max="30" step="1" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:5px;padding:5px 8px;font:inherit;width:70px"></label>
-<label class="lbl" style="display:flex;flex-direction:column;gap:3px">Horizon<select id="t_hz"><option value="2027-07">to sale goal (Jul 31 '27)</option><option value="2027-12">extended (Dec '27)</option></select></label>
-<button id="runsim">Run simulation</button>
-<span class="dim" id="simmsg"></span>
-</div>
-<canvas id="fan" width="1100" height="360"></canvas>
-<div class="leg"><span style="color:#38bdf8">&#9632; p25&ndash;p75</span><span style="color:#1e40af">&#9632; p10&ndash;p90</span><span style="color:#e2e8f0">&mdash; median</span><span style="color:#34d399">&#9476; on-pace ramp value</span><span style="color:#fbbf2488">&#9632; $200&ndash;225M target</span><span id="nodeal"></span></div>
-<div class="dim" id="simassump" style="font-size:10px;margin-top:8px"></div>
 </div>
 
 <div class="panel"><span class="lbl">Safety windows (feasibility-gated)</span><div class="tl" id="tl"></div></div>
