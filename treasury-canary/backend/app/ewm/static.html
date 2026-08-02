@@ -48,8 +48,13 @@ canvas{width:100%;max-width:100%;background:#0b1120;border:1px solid #1e293b;bor
 .leg{font-size:10px;color:#64748b;margin-top:6px}
 .leg span{margin-right:14px}
 .dim{color:#475569}
+.hq{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;border:1px solid #475569;color:#94a3b8;font-size:9px;cursor:help;margin-left:5px;vertical-align:middle;user-select:none;flex:0 0 auto}
+.hq:hover{border-color:#38bdf8;color:#38bdf8}
+#hpop{position:absolute;z-index:50;max-width:430px;max-height:280px;overflow-y:auto;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px 14px;font-size:11.5px;line-height:1.55;color:#cbd5e1;box-shadow:0 8px 30px #000c;display:none}
+#hpop b{color:#7dd3fc}
 </style></head><body>
 <a class="nav" href="/">&#9776; dashboards</a>
+<div id="hpop"></div>
 <div class="wrap">
 <h1>&#128197; Exit Window Monitor</h1>
 <div class="sub">Deal-timing decision support &middot; ~$200M exit &middot; sell-for-less-now vs hold to Jul 31 2027</div>
@@ -59,13 +64,13 @@ canvas{width:100%;max-width:100%;background:#0b1120;border:1px solid #1e293b;bor
 
 
 
-<div class="panel"><span class="lbl">Monte Carlo valuation fan — toggle shocks, engine reprices the whole path</span>
+<div class="panel"><span class="lbl">Monte Carlo valuation fan — toggle shocks, engine reprices the whole path<span class="hq" data-h="fan">?</span></span>
 <div class="tgl">
-<label class="lbl" style="display:flex;flex-direction:column;gap:3px">Rate path<select id="t_force"><option value="">probabilistic (cohort weights)</option><option value="-1">force rate cut(s)</option><option value="0">force 0 hikes</option><option value="1">force 1 hike</option><option value="2">force 2 hikes</option><option value="3">force 3 hikes</option><option value="4">force 4 hikes</option></select></label>
-<label class="lbl" style="display:flex;flex-direction:column;gap:3px">Stock crash<select id="t_crash"><option value="none">none</option><option value="moderate">moderate (&minus;20% SPX)</option><option value="severe">severe (&minus;35% SPX)</option></select></label>
-<label class="lbl" style="display:flex;flex-direction:column;gap:3px">50bp regime<select id="t_reg"><option value="">off</option><option value="1">on (off-cohort gap)</option></select></label>
-<label class="lbl" style="display:flex;flex-direction:column;gap:3px">Extra stall hazard (pp)<input id="t_stall" type="number" value="0" min="0" max="30" step="1" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:5px;padding:5px 8px;font:inherit;width:70px"></label>
-<label class="lbl" style="display:flex;flex-direction:column;gap:3px">Horizon<select id="t_hz"><option value="2027-07">to sale goal (Jul 31 '27)</option><option value="2027-12">extended (Dec '27)</option></select></label>
+<label class="lbl" style="display:flex;flex-direction:column;gap:3px">Rate path<span class="hq" data-h="t_force">?</span><select id="t_force"><option value="">probabilistic (cohort weights)</option><option value="-1">force rate cut(s)</option><option value="0">force 0 hikes</option><option value="1">force 1 hike</option><option value="2">force 2 hikes</option><option value="3">force 3 hikes</option><option value="4">force 4 hikes</option></select></label>
+<label class="lbl" style="display:flex;flex-direction:column;gap:3px">Stock crash<span class="hq" data-h="t_crash">?</span><select id="t_crash"><option value="none">none</option><option value="moderate">moderate (&minus;20% SPX)</option><option value="severe">severe (&minus;35% SPX)</option></select></label>
+<label class="lbl" style="display:flex;flex-direction:column;gap:3px">50bp regime<span class="hq" data-h="t_reg">?</span><select id="t_reg"><option value="">off</option><option value="1">on (off-cohort gap)</option></select></label>
+<label class="lbl" style="display:flex;flex-direction:column;gap:3px">Extra stall hazard (pp)<span class="hq" data-h="t_stall">?</span><input id="t_stall" type="number" value="0" min="0" max="30" step="1" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:5px;padding:5px 8px;font:inherit;width:70px"></label>
+<label class="lbl" style="display:flex;flex-direction:column;gap:3px">Horizon<span class="hq" data-h="t_hz">?</span><select id="t_hz"><option value="2027-07">to sale goal (Jul 31 '27)</option><option value="2027-12">extended (Dec '27)</option></select></label>
 <button id="runsim">Run simulation</button>
 <span class="dim" id="simmsg"></span>
 </div>
@@ -74,37 +79,86 @@ canvas{width:100%;max-width:100%;background:#0b1120;border:1px solid #1e293b;bor
 <div class="dim" id="simassump" style="font-size:10px;margin-top:8px"></div>
 </div>
 
-<div class="panel"><span class="lbl">Scenario cohort &times; close window ($M &middot; cell = central + report range &middot; &#9733; modal)</span>
+<div class="panel"><span class="lbl">Scenario cohort &times; close window ($M &middot; cell = central + report range &middot; &#9733; modal)<span class="hq" data-h="cohort">?</span></span>
 <table id="cohort"></table>
 <div class="be" id="beline"></div>
 </div>
 
 
-<details open><summary>&#9881; Settings — revenue ramp &amp; process inputs</summary>
+<details open><summary>&#9881; Settings — revenue ramp &amp; process inputs <span class="hq" data-h="settings">?</span></summary>
 <div class="panel"><div class="form" id="form">
-<label>Revenue run-rate @ Dec 2026 ($M)<input id="i_rev" type="number" step="0.5"></label>
-<label>Target value low ($M)<input id="i_tlo" type="number" step="1"></label>
-<label>Target value high ($M)<input id="i_thi" type="number" step="1"></label>
-<label>Process stage<select id="i_stage"><option>not_started</option><option>prep</option><option>in_market</option><option>loi</option><option>exclusivity</option><option>close</option></select></label>
+<label>Revenue run-rate @ Dec 2026 ($M)<span class="hq" data-h="set_rev">?</span><input id="i_rev" type="number" step="0.5"></label>
+<label>Target value low ($M)<span class="hq" data-h="set_target">?</span><input id="i_tlo" type="number" step="1"></label>
+<label>Target value high ($M)<span class="hq" data-h="set_target">?</span><input id="i_thi" type="number" step="1"></label>
+<label>Process stage<span class="hq" data-h="strip_stage">?</span><select id="i_stage"><option>not_started</option><option>prep</option><option>in_market</option><option>loi</option><option>exclusivity</option><option>close</option></select></label>
 <label>Today (month)<input id="i_today" placeholder="2026-09"></label>
-<label>Dissent cluster<input id="i_dis" type="checkbox"></label>
-<label>Pin to report ($105M, no ramp)<input id="i_pin" type="checkbox"></label>
+<label>Dissent cluster<span class="hq" data-h="set_dis">?</span><input id="i_dis" type="checkbox"></label>
+<label>Pin to report ($105M, no ramp)<span class="hq" data-h="set_pin">?</span><input id="i_pin" type="checkbox"></label>
 <button id="save">Apply</button>
 <span class="dim" id="savemsg"></span>
 </div></div></details>
 
-<div class="panel"><span class="lbl">Live market couplings (canary &rarr; exit model &middot; evidence-graded per CANARY_COUPLING memo)</span>
+<div class="panel"><span class="lbl">Live market couplings (canary &rarr; exit model &middot; evidence-graded per CANARY_COUPLING memo)<span class="hq" data-h="live">?</span></span>
 <table id="livesig"></table>
 <div class="dim" id="liveft" style="font-size:10px;margin-top:6px"></div>
 </div>
 
-<div class="panel"><span class="lbl">Safety windows (feasibility-gated)</span><div class="tl" id="tl"></div></div>
-<div class="panel"><span class="lbl">Cost of waiting to launch (stall-adjusted, horizon capped at Jul-27) &mdash; base case vs if the &ge;2-hike world materializes</span><table id="cod"></table>
+<div class="panel"><span class="lbl">Safety windows (feasibility-gated)<span class="hq" data-h="safety">?</span></span><div class="tl" id="tl"></div></div>
+<div class="panel"><span class="lbl">Cost of waiting to launch (stall-adjusted, horizon capped at Jul-27) &mdash; base case vs if the &ge;2-hike world materializes<span class="hq" data-h="cod">?</span></span><table id="cod"></table>
 <div class="dim" style="font-size:10px;margin-top:6px">Under the ramp the base-case delay cost is ~0 by construction &mdash; the risk of waiting lives in the hawk column and in the stall odds (see breakeven row).</div></div>
-<div class="panel"><span class="lbl">Action cards</span><div id="cards"></div></div>
+<div class="panel"><span class="lbl">Action cards<span class="hq" data-h="cards">?</span></span><div id="cards"></div></div>
 <div class="ep" id="ep"></div>
 </div>
 <script>
+
+const HELP={
+fan:"<b>Monte Carlo valuation fan.</b> The engine simulates 4,000 possible futures: each run draws a rate scenario from the cohort probabilities (with weight uncertainty), a value inside that scenario's report range, and stall events. The bands show where the sale price lands if you close in a given month — wider band = more uncertainty. The dashed green line is the on-pace value if the company scales as planned under the modal 1-hike path.",
+t_force:"<b>Rate path.</b> Pin the simulation to one scenario instead of drawing from the probabilities. 'Force 4 hikes' answers: what is the sale worth if the worst cohort row happens for sure?",
+t_crash:"<b>Stock crash.</b> Maps a &minus;20%/&minus;35% SPX drawdown to revenue-multiple compression (&times;0.85 / &times;0.70), phased in over 1&ndash;2 quarters (the report's transmission lag). Calibrated to half the 2022&ndash;23 revenue-deal repricing, since that episode bundled a crash with 525bp of hikes. Severe also adds +10pp stall odds to the &ge;2-hike rows.",
+t_reg:"<b>50bp regime.</b> The report's off-cohort branch: the Fed shifts to 50bp increments (behind the curve). Values gap to the $145&ndash;170M band and stall odds jump to 40%. It is a different model, not a sixth weighted scenario.",
+t_stall:"<b>Extra stall hazard.</b> Adds percentage points of stall probability to the 3&ndash;4 hike rows. This is the breakeven's h* knob — the summary sentence tells you how many pp flips the Q1-vs-Q2 call.",
+t_hz:"<b>Horizon.</b> Chart end date. Defaults to the July 31 2027 sale goal; 'extended' shows the model's extrapolation to Dec 2027 — beyond the report's windows, so hawk multiples keep decaying while the ramp keeps growing.",
+strip_wev:"<b>Weighted EV (Q1'27-end).</b> Each scenario's value &times; its probability, for a close at end of Q1 2027. The small range propagates the report's per-scenario ranges (all-pessimistic to all-optimistic).",
+strip_modal:"<b>Modal cell.</b> The single most likely outcome: the 1-hike scenario (35%) closing end-Q1 2027 — the report's starred cell.",
+strip_q2:"<b>Q2'27-end EV.</b> The same weighted EV for a close at end of Q2 2027. With the growth ramp on, later closes carry more revenue — but also more hawk-scenario and stall exposure.",
+strip_hold:"<b>Hold to Jul-27 EV.</b> The stall-adjusted, probability-weighted value if you hold to the July 31 2027 scale target instead of closing earlier.",
+strip_canary:"<b>Canary stress.</b> The treasury canary's composite, 0&ndash;100, <b>higher = more market stress</b>. LOW &lt;25, ELEVATED 25&ndash;50, HIGH 50&ndash;75, SEVERE 75+. Feeds 20% of each month's window score, inverted — calm markets help every window.",
+strip_stage:"<b>Process stage.</b> Where the sale process stands. Stage sets remaining lead time (prep = 6 months to close, in-market = 4, LOI = 2, exclusivity = 1), which determines which close months are feasible at all.",
+cohort:"<b>The cohort table.</b> Rows are your report's rate scenarios with probabilities; columns are close windows. Each cell: central value + the report's range. Only 2027-03 and 2027-06 are report anchors — other columns are interpolated/extrapolated by the engine and tagged. Cells are conditional values; the probabilities are the model.",
+col_p:"<b>Probability.</b> The 0&ndash;2-hike rows are priced by fed funds futures (tight); the 3&ndash;4-hike tail and the cut row are judgment (loose). The weight-uncertainty row shows how much the answer moves if these are wrong.",
+row_wev:"<b>Weighted EV.</b> Probability-weighted average across the scenario rows, per close month. The band comes from the report's cell ranges, aligned all-pessimistic / all-optimistic (one common driver — conservative and honest).",
+row_band:"<b>Weight-uncertainty (Dirichlet 10&ndash;90).</b> 4,000 redraws of the scenario probabilities — tight on the futures-priced rows, loose on the judged tail — and the 10&ndash;90 range of the resulting weighted EV. A separate uncertainty layer from the value ranges above.",
+row_stall:"<b>Stall-adjusted EV.</b> Weighted EV after charging the hawk rows their process-stall risk: ~30% stall odds &times; exposure &times; (&minus;6.5% recut + a 13% death tail). Closing by Q1-end dodges half the stall window; Q2+ carries it all. The live HY financing state scales these odds up when credit tightens.",
+row_hold:"<b>Hold-to-Jul-27 premium.</b> What holding to July 31 2027 is worth versus closing in this month, on stall-adjusted numbers. Green = holding carries more EV; the risk side of that trade lives in the stall odds and hawk rows.",
+breakeven:"<b>Breakeven.</b> The decision surface. Expected value is linear in the probabilities, so every flip has an exact formula. This sentence tells you precisely how much extra stall risk — or how big a probability shift — reverses the Q1-vs-Q2 call. Argue with this line, not the whole table.",
+settings:"<b>Settings.</b> The editable premises: your revenue waypoint, the valuation target, process stage and date. Apply re-runs the whole board. 'Pin to report' freezes revenue at $105M so the table reproduces your report exactly.",
+set_rev:"<b>Revenue run-rate @ Dec 2026.</b> Your stated waypoint: ~$105M run-rate by end of December 2026. The ramp draws a straight line through this and the back-solved July-2027 target revenue; today's implied run-rate is the same line extended backward.",
+set_target:"<b>Target value.</b> The valuation you expect at July 31 2027 if the company stays on pace ($200&ndash;225M). The engine back-solves the revenue needed at the modal-path multiple and builds the growth ramp to hit it.",
+set_dis:"<b>Dissent cluster.</b> The Jul 29 2026 FOMC hold passed 9-3 with three hawkish dissents — the first unified three-way dissent since Sept 2016 (which preceded a December hike). Toggling this shifts +3pp of probability into the 3&ndash;4-hike tail, funded from the dove rows.",
+set_pin:"<b>Pin to report.</b> Report-fidelity mode: revenue pinned at the report's $105M basis, ramp off. The table then reproduces your report cell-for-cell — useful for checking the engine against the source document.",
+live:"<b>Live market couplings.</b> Canary data feeding the exit model, one primary trigger per channel to avoid counting the same stress twice. AUTO = live feed; MANUAL = your stored value wins; every override is logged. VIX is deliberately absent: the research found a documented null for private-target deals.",
+lv_fcix:"<b>Financing conditions (FCI-X).</b> Chicago Fed National Financial Conditions Index, z-scored: 0 = average, positive = tighter than average. Feeds 25% of the window score. Tighter financing = worse close windows.",
+lv_dmhi:"<b>Deal-market health.</b> 0&ndash;1, 1 = healthy. Blends how aggressively banks are tightening business lending (SLOOS survey, quarterly) with the private-credit pin channel (daily) — the closest live read on whether a sponsor can finance a ~$200M deal.",
+lv_fin:"<b>HY financing state.</b> The strongest evidence-backed coupling: when high-yield spreads pass ~400bp (TIGHT) or ~500bp / a fast +150bp move (SHUT), LBO financing historically chokes (2022: loan issuance &minus;63%). TIGHT scales hawk-row stall odds &times;1.33, SHUT &times;1.67 — feeding the stall-adjusted row, the breakeven and the fan. Dual thresholds prevent flapping.",
+lv_spike:"<b>Yield-shock &times; correlation.</b> A +75bp/60-day spike in long yields while stocks and bonds fall together — nothing hedges. When ACTIVE, no close month can score GREEN. Honesty label: historically a recession-odds signal (47% vs 21% baseline), not a stock-sell signal.",
+lv_stress:"<b>Simulator stress odds.</b> The rate-shock simulator run once per cohort scenario, weighted by the probabilities. Above 25% it fires the 'treat Q1 as hard deadline' card. Conservative: it is the max monthly stress share (not cumulative) and the sim ends June 2027.",
+lv_head:"<b>Financing headwind.</b> How far credit markets have moved your multiple since the report was written (HY at 284bp on Jul 30 2026), at the published elasticity of &minus;4.8% per 100bp of spread widening. Display-only — the report's cells are never modified by live data.",
+lv_now:"<b>Market path nowcast.</b> Which scenario row the market is pricing right now. The 2-year yield's 3-month move is the early-warning signal (+0.40pp repricing preceded the 2022 hiking cycle; stayed quiet in 2019). If it disagrees with the report weights you get an Apply button for a capped &plusmn;5pp tilt — nothing ever shifts silently.",
+lv_auto:"<b>AUTO / MANUAL.</b> AUTO reads the live feed each refresh. Click to MANUAL to freeze the field at your stored value (typing a value also flips it). If a data feed dies, the board falls back to stored values and says so in the source column — it never silently reads an empty feed as calm.",
+safety:"<b>Safety windows.</b> A 0&ndash;100 quality score per close month: rate risk (35%) + financing conditions (25%) + deal-market health (20%) + canary calm (20%). GREEN &ge;70, AMBER &ge;45, RED below. Struck-through months are infeasible given your stage's lead time. FOMC marks meeting months — event risk inside a signing-to-close gap.",
+cod:"<b>Cost of waiting.</b> If you delay the launch decision k months with today's information frozen: the best stall-adjusted EV still reachable (capped at the July-2027 goal). Under the growth ramp the base-case cost is ~0 by construction — the real cost of waiting appears in the '&ge;2 hikes' column and the stall odds.",
+cards:"<b>Action cards.</b> Rule-driven prescriptions. Each card shows the machine-checkable trigger that fired it, so you can audit why it appeared. No card = no active trigger."};
+function hq(k){return `<span class="hq" data-h="${k}">?</span>`}
+document.addEventListener('click',e=>{
+  const pop=document.getElementById('hpop');
+  const t=e.target.closest('.hq');
+  if(t){e.preventDefault();pop.innerHTML=HELP[t.dataset.h]||'';pop.style.display='block';
+    const r=t.getBoundingClientRect();
+    pop.style.left=Math.max(8,Math.min(r.left+window.scrollX,window.scrollX+document.documentElement.clientWidth-450))+'px';
+    pop.style.top=(r.bottom+window.scrollY+6)+'px';e.stopPropagation();}
+  else if(!e.target.closest('#hpop'))pop.style.display='none';
+});
+
 const COLS=["2026-12","2027-01","2027-03","2027-06","2027-09"];
 const fmt=v=>"$"+Math.round(v)+"M";
 let BOARD=null;
@@ -121,12 +175,12 @@ function render(b){
     `Ramp: today&rsquo;s implied run-rate <b>$${h.today_revenue}M</b> &rarr; $${b.inputs.revenue_dec2026}M @ Dec-26 &rarr; $${h.target_revenue}M @ Jul-27 (on pace for $${b.inputs.target_value_lo}&ndash;${b.inputs.target_value_hi}M).`+
     (b.surface.pin_report?` <b>[report-fidelity mode: revenue pinned at $105M]</b>`:``);
   document.getElementById('strip').innerHTML=
-    `<span><span class="lbl">Weighted EV (Q1'27-end)</span><span class="big">${fmt(h.q1_ev)}</span><span class="crng"> ${fmt(h.q1_lo)}&ndash;${fmt(h.q1_hi)}</span></span>`+
-    `<span><span class="lbl">Modal cell (1 hike)</span>${fmt(h.modal_cell[0])}&ndash;${fmt(h.modal_cell[1])}</span>`+
-    `<span><span class="lbl">Q2'27-end EV</span>${fmt(h.q2_ev)}</span>`+
-    `<span><span class="lbl">Hold to Jul-27 EV</span>${fmt(h.target_ev)}</span>`+
-    `<span><span class="lbl">Canary stress (lower = calmer)</span>${Math.round(b.canary01*100)}/100</span>`+
-    `<span><span class="lbl">Stage</span>${b.inputs.stage}</span>`;
+    `<span><span class="lbl">Weighted EV (Q1'27-end)${hq('strip_wev')}</span><span class="big">${fmt(h.q1_ev)}</span><span class="crng"> ${fmt(h.q1_lo)}&ndash;${fmt(h.q1_hi)}</span></span>`+
+    `<span><span class="lbl">Modal cell (1 hike)${hq('strip_modal')}</span>${fmt(h.modal_cell[0])}&ndash;${fmt(h.modal_cell[1])}</span>`+
+    `<span><span class="lbl">Q2'27-end EV${hq('strip_q2')}</span>${fmt(h.q2_ev)}</span>`+
+    `<span><span class="lbl">Hold to Jul-27 EV${hq('strip_hold')}</span>${fmt(h.target_ev)}</span>`+
+    `<span><span class="lbl">Canary stress (lower = calmer)${hq('strip_canary')}</span>${Math.round(b.canary01*100)}/100</span>`+
+    `<span><span class="lbl">Stage${hq('strip_stage')}</span>${b.inputs.stage}</span>`;
 
   // settings current values
   document.getElementById('i_rev').value=b.inputs.revenue_dec2026;
@@ -142,18 +196,18 @@ function render(b){
   const fin=lv.financing, hw=lv.headwind, nc=lv.nowcast;
   const aBtn=(f)=>`<button style="padding:2px 8px;font-size:10px;background:${auto[f]?'#065f46':'#334155'}" onclick="setAuto('${f}',${!auto[f]})">${auto[f]?'AUTO':'MANUAL'}</button>`;
   const finCol=fin?{BENIGN:'#34d399',TIGHT:'#fbbf24',SHUT:'#f87171'}[fin.state]:'#64748b';
-  let lh='<tr><th>signal</th><th>value</th><th>feeds</th><th>source</th><th></th></tr>';
+  let lh=`<tr><th>signal</th><th>value</th><th>feeds</th><th>source</th><th>${hq('lv_auto')}</th></tr>`;
   const cv=Math.round(b.canary01*100);
   const cband=cv<25?['LOW stress','#34d399']:cv<50?['ELEVATED','#fbbf24']:cv<75?['HIGH','#fb923c']:['SEVERE','#f87171'];
   lh+=`<tr><td>Canary composite <span class="crng">(stress 0&ndash;100, lower = calmer)</span></td><td class="cmid">${cv}/100 <span style="color:${cband[1]};font-size:10px">${cband[0]}</span></td><td>window score (20%, inverted &mdash; calm helps)</td><td class="crng">live composite (in-process)</td><td></td></tr>`;
-  lh+=`<tr><td>Financing conditions (FCI-X)</td><td class="cmid">${(+rz.fcix_z).toFixed(2)}z</td><td>window score (25%)</td><td class="crng">${prov.fcix_z||''}</td><td>${aBtn('fcix_z')}</td></tr>`;
-  lh+=`<tr><td>Deal-market health</td><td class="cmid">${(+rz.dmhi01).toFixed(2)}</td><td>window score (20%)</td><td class="crng">${prov.dmhi01||''}</td><td>${aBtn('dmhi01')}</td></tr>`;
-  lh+=`<tr><td>HY financing state</td><td class="cmid" style="color:${finCol}">${fin?`${fin.state} (${fin.hy_bp}bp, 90d ${fin.d90_bp>0?'+':''}${fin.d90_bp}bp)`:'n/a'}</td><td>stall hazard &times;${fin?fin.stall_mult:1}</td><td class="crng">${fin?fin.source:'feed unavailable'}</td><td>${aBtn('stall_mult')}</td></tr>`;
-  lh+=`<tr><td>Yield-shock &times; corr (SPIKE&times;POS)</td><td class="cmid">${lv.spike_pos?(rz.spike_pos?'ACTIVE':`${lv.spike_pos.state}/${lv.spike_pos.regime}`):'n/a'}</td><td>deny-GREEN cap (recession-risk caution, not a stock call)</td><td class="crng">${lv.spike_pos?lv.spike_pos.source:''}</td><td>${aBtn('spike_pos')}</td></tr>`;
-  lh+=`<tr><td>Simulator stress odds</td><td class="cmid">${(+rz.stress_prob*100).toFixed(0)}%</td><td>hard-deadline card (&gt;25%)</td><td class="crng">${prov.stress_prob||''}</td><td>${aBtn('stress_prob')}</td></tr>`;
-  lh+=`<tr><td>Financing headwind vs report</td><td class="cmid" style="color:${hw&&hw.multiple_pct<-0.5?'#f87171':'#94a3b8'}">${hw?`${hw.multiple_pct>0?'+':''}${hw.multiple_pct}% multiple (HY ${hw.delta_bp>0?'+':''}${hw.delta_bp}bp)`:'n/a'}</td><td>display only &mdash; report cells untouched</td><td class="crng">${hw?hw.source:''}</td><td></td></tr>`;
+  lh+=`<tr><td>Financing conditions (FCI-X)${hq('lv_fcix')}</td><td class="cmid">${(+rz.fcix_z).toFixed(2)}z</td><td>window score (25%)</td><td class="crng">${prov.fcix_z||''}</td><td>${aBtn('fcix_z')}</td></tr>`;
+  lh+=`<tr><td>Deal-market health${hq('lv_dmhi')}</td><td class="cmid">${(+rz.dmhi01).toFixed(2)}</td><td>window score (20%)</td><td class="crng">${prov.dmhi01||''}</td><td>${aBtn('dmhi01')}</td></tr>`;
+  lh+=`<tr><td>HY financing state${hq('lv_fin')}</td><td class="cmid" style="color:${finCol}">${fin?`${fin.state} (${fin.hy_bp}bp, 90d ${fin.d90_bp>0?'+':''}${fin.d90_bp}bp)`:'n/a'}</td><td>stall hazard &times;${fin?fin.stall_mult:1}</td><td class="crng">${fin?fin.source:'feed unavailable'}</td><td>${aBtn('stall_mult')}</td></tr>`;
+  lh+=`<tr><td>Yield-shock &times; corr (SPIKE&times;POS)${hq('lv_spike')}</td><td class="cmid">${lv.spike_pos?(rz.spike_pos?'ACTIVE':`${lv.spike_pos.state}/${lv.spike_pos.regime}`):'n/a'}</td><td>deny-GREEN cap (recession-risk caution, not a stock call)</td><td class="crng">${lv.spike_pos?lv.spike_pos.source:''}</td><td>${aBtn('spike_pos')}</td></tr>`;
+  lh+=`<tr><td>Simulator stress odds${hq('lv_stress')}</td><td class="cmid">${(+rz.stress_prob*100).toFixed(0)}%</td><td>hard-deadline card (&gt;25%)</td><td class="crng">${prov.stress_prob||''}</td><td>${aBtn('stress_prob')}</td></tr>`;
+  lh+=`<tr><td>Financing headwind vs report${hq('lv_head')}</td><td class="cmid" style="color:${hw&&hw.multiple_pct<-0.5?'#f87171':'#94a3b8'}">${hw?`${hw.multiple_pct>0?'+':''}${hw.multiple_pct}% multiple (HY ${hw.delta_bp>0?'+':''}${hw.delta_bp}bp)`:'n/a'}</td><td>display only &mdash; report cells untouched</td><td class="crng">${hw?hw.source:''}</td><td></td></tr>`;
   const tiltOn=b.inputs.weight_tilt;
-  lh+=`<tr><td>Market path nowcast</td><td class="cmid">${nc?`voting row: ${nc.voting_row===-1?'cuts':nc.voting_row+' hikes'} (2y ${nc.d2_chg_3m_pp>0?'+':''}${nc.d2_chg_3m_pp}pp/3m)`:'n/a'}</td>`+
+  lh+=`<tr><td>Market path nowcast${hq('lv_now')}</td><td class="cmid">${nc?`voting row: ${nc.voting_row===-1?'cuts':nc.voting_row+' hikes'} (2y ${nc.d2_chg_3m_pp>0?'+':''}${nc.d2_chg_3m_pp}pp/3m)`:'n/a'}</td>`+
     `<td>${tiltOn?`tilt APPLIED: +${(tiltOn.pp*100).toFixed(0)}pp &rarr; ${tiltOn.toward===-1?'cuts':tiltOn.toward+'h'} <button style="padding:2px 8px;font-size:10px;background:#7f1d1d" onclick="tilt(false)">clear</button>`:
       (nc&&nc.suggested_tilt_pp?`suggests &plusmn;${Math.abs(nc.suggested_tilt_pp*100).toFixed(0)}pp <button style="padding:2px 8px;font-size:10px" onclick="tilt(true)">apply</button>`:'no tilt suggested')}</td>`+
     `<td class="crng">${nc?nc.source:''}</td><td></td></tr>`;
@@ -169,7 +223,7 @@ function render(b){
   const bandBy={}; b.weight_band.band.forEach(x=>bandBy[x.month]=x);
   const hpBy={}; b.hold_premium.forEach(x=>hpBy[x.month]=x.premium);
   const anch=b.anchors;
-  let html='<tr><th>scenario</th><th>p</th>'+COLS.map(m=>{
+  let html=`<tr><th>scenario</th><th>p${hq('col_p')}</th>`+COLS.map(m=>{
     const t=m===anch.q1_end?'report &#9733;Q1-end':m===anch.q2_end?'report Q2-end':byM[m].tag;
     return `<th>${m}<span class="tag">${t}</span></th>`}).join('')+'</tr>';
   b.surface.scenarios.forEach((sc,i)=>{
@@ -181,16 +235,16 @@ function render(b){
         const cls=(sc.modal&&m===anch.q1_end)?' class=modalcell':'';
         return `<td${cls}><span class="cmid">${fmt(c.mid)}</span> <span class="crng">${Math.round(c.lo)}&ndash;${Math.round(c.hi)}</span></td>`}).join('')+'</tr>';
   });
-  html+=`<tr class="foot"><td>Weighted EV <span class="crng">(report ranges)</span></td><td></td>`+
+  html+=`<tr class="foot"><td>Weighted EV <span class="crng">(report ranges)</span>${hq('row_wev')}</td><td></td>`+
     COLS.map(m=>`<td><span class="cmid">${fmt(byM[m].ev)}</span> <span class="crng">${Math.round(byM[m].ev_lo)}&ndash;${Math.round(byM[m].ev_hi)}</span></td>`).join('')+'</tr>';
-  html+=`<tr class="foot"><td>Weight-uncertainty <span class="crng">(Dirichlet 10&ndash;90)</span></td><td></td>`+
+  html+=`<tr class="foot"><td>Weight-uncertainty <span class="crng">(Dirichlet 10&ndash;90)</span>${hq('row_band')}</td><td></td>`+
     COLS.map(m=>`<td><span class="crng">${Math.round(bandBy[m].p10)}&ndash;${Math.round(bandBy[m].p90)}</span></td>`).join('')+'</tr>';
-  html+=`<tr class="foot"><td>Stall-adjusted EV</td><td></td>`+
+  html+=`<tr class="foot"><td>Stall-adjusted EV${hq('row_stall')}</td><td></td>`+
     COLS.map(m=>`<td>${fmt(byM[m].ev_stall_adj)}</td>`).join('')+'</tr>';
-  html+=`<tr class="foot"><td>Hold-to-Jul-27 premium</td><td></td>`+
+  html+=`<tr class="foot"><td>Hold-to-Jul-27 premium${hq('row_hold')}</td><td></td>`+
     COLS.map(m=>{const v=hpBy[m];return `<td style="color:${v>0?'#34d399':'#f87171'}">${v>0?'+':''}${v.toFixed(1)}M</td>`}).join('')+'</tr>';
   document.getElementById('cohort').innerHTML=html;
-  document.getElementById('beline').innerHTML='<b>BREAKEVEN</b> &middot; '+be.sentence;
+  document.getElementById('beline').innerHTML='<b>BREAKEVEN</b>'+hq('breakeven')+' &middot; '+be.sentence;
 
   document.getElementById('tl').innerHTML=b.windows.map(w=>{
     const cls=!w.feasible?'X':w.band[0];
