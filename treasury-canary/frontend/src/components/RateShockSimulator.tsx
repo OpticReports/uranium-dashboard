@@ -195,6 +195,8 @@ export default function RateShockSimulator() {
         )}
       </div>
 
+      {data && base && <PlainSummary data={data} base={base} hikes={hikes} />}
+
       {drawerOpen && calib && (
         <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 rounded border border-panelborder bg-slate-900/40 p-3 md:grid-cols-4">
           {DRAWER_PARAMS.map(({ key, label }) => {
@@ -412,6 +414,80 @@ export default function RateShockSimulator() {
         {calib && <> {calib.epistemic_note}</>}
       </p>
     </Panel>
+  );
+}
+
+/** The "what is this actually telling me" box — plain sentences, rewritten
+ *  for whatever scenario is selected. No chart literacy assumed. */
+function PlainSummary({
+  data,
+  base,
+  hikes,
+}: {
+  data: ShockRun;
+  base: ShockRun;
+  hikes: number;
+}) {
+  const last = data.months.length - 1;
+  const spx = data.bands.SPX;
+  const med = spx["50"][last] - 100;
+  const lo = spx["5"][last] - 100;
+  const hi = spx["95"][last] - 100;
+  const delta = spx["50"][last] - base.bands.SPX["50"][last];
+  const touch10 = Math.round(
+    (data.probs.SPX.dd_gt_10_touch_est ?? data.probs.SPX.dd_gt_10) * 100,
+  );
+  const stressPk = Math.round(Math.max(...data.stress_prob) * 100);
+  const hygMed = data.bands.HYG["50"][last] - 100;
+  const scenarioTxt =
+    hikes > 0
+      ? `the Fed hikes ${hikes} more time${hikes > 1 ? "s" : ""} than markets expect`
+      : hikes < 0
+        ? `the Fed cuts ${-hikes} more time${hikes < -1 ? "s" : ""} than markets expect`
+        : "the Fed does roughly what markets already expect";
+  const s = (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
+  return (
+    <div className="mt-2 rounded-lg border border-panelborder bg-slate-900/50 px-4 py-3 text-xs leading-relaxed text-slate-300">
+      <p>
+        <span className="font-semibold text-slate-200">
+          What this is telling you:
+        </span>{" "}
+        this panel simulates 10,000 possible futures under one assumption —{" "}
+        {scenarioTxt} — and shows where prices could plausibly be by June 2027.
+        In each chart, the <span className="text-slate-200">solid line</span>{" "}
+        is the middle (most typical) outcome, the{" "}
+        <span className="text-slate-200">dark band</span> covers the middle
+        half of outcomes, and the{" "}
+        <span className="text-slate-200">light band</span> covers 90% of them —
+        anything outside it is a 1-in-20 surprise.
+      </p>
+      <p className="mt-1.5">
+        Under this scenario the S&amp;P&apos;s typical outcome is{" "}
+        <span className="font-semibold text-slate-100">{s(med)}</span> including
+        dividends
+        {hikes !== 0 && (
+          <>
+            {" "}(
+            <span className={delta >= 0 ? "text-emerald-300" : "text-red-300"}>
+              {s(delta)}
+            </span>{" "}
+            vs the Fed just doing what&apos;s priced)
+          </>
+        )}
+        . The realistic bad case (1-in-20) is{" "}
+        <span className="font-semibold text-red-300">{s(lo)}</span>, the good
+        case {s(hi)}. Odds of at least a 10% dip somewhere along the way: ~
+        {touch10}% (dips are normal — history says most years touch one). High-yield
+        credit (HYG) typically ends {s(hygMed)}. Peak odds of a credit-market
+        break in this scenario: {stressPk}% (amber chart below).
+      </p>
+      <p className="mt-1.5 text-[10px] text-slate-500">
+        Only surprises move markets here: a fully expected hike or cut does
+        little, so mild scenarios produce similar fans — that is honesty, not a
+        bug. Cut scenarios show wider downside tails on purpose: when the Fed
+        cuts more than expected, it is usually because something broke.
+      </p>
+    </div>
   );
 }
 

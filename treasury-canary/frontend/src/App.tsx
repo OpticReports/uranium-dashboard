@@ -197,12 +197,12 @@ export default function App() {
 
           <RateShockPanel />
 
-          <RateShockSimulator />
-
           <MarginLeverageChart />
 
           <PinBoard />
           <StatRegimeStrip />
+
+          <RateShockSimulator />
 
           <div id="event-feed">
             <EventFeed />
