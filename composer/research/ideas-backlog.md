@@ -72,6 +72,20 @@ penny-wide instruments; removes most of the capacity problem natively.
 Migration gate at ~$500-750k: build the IBKR stack only if measured live
 slippage trends >5bps/side or the ticker swaps prove unavailable.
 
+## TSMOM shelf candidate (addendum 20, 2026-08-01 — CLOSED with reopen conditions)
+
+Literature-faithful multi-asset trend engine (Man/AHL corpus), QA-validated
+spec: sleeves SPY/TLT/GLD/DBC; signal = majority vote of 63/126/252d
+cumulative returns; inverse-vol (63d) sleeve weights; long asset on
+positive vote, else SH (for SPY) / TBF (for TLT) short legs, BIL for
+GLD/DBC (no viable inverse). 19y frictionless: CAGR ~+6.5%, maxDD ~13%,
+2008 +26.5%, 2022 +3.7%, corr to live blend 0.10. Composer-expressible
+(nested ifs + wt-inverse-vol). DO NOT BUILD while: KMLM holds its ~29%
+trend slot AND live-engine Sharpes stay >>1. REOPEN if KMLM is removed,
+or engine Sharpes decay toward ~1 during a developing multi-quarter
+inflation/trend regime. Prototype tree + QA data: session scratchpad
+gates/tsmom_tree.json, agents' variant tables in session transcript.
+
 ## Trigger to revisit
 
 Owner starts building the IBKR execution project (or equivalent

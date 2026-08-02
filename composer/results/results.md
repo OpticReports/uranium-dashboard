@@ -1022,3 +1022,47 @@ counterfactuals — no same-period regime labels in any decision analysis;
 (4) the one flagged curiosity (overextension trim, >+9% above SMA) is
 parked in ideas-backlog as in-sample dredging unless it survives
 pre-2021 out-of-window validation.
+
+
+## Addendum 20 — Man/AHL corpus review: tests, QA panel, new-symphony verdict
+## (2026-08-01)
+
+Corpus (owner-provided): Strategic Rebalancing (Rattray/Granger/Harvey/
+van Hemert), Best Strategies for Inflationary Times (Neville et al 2021),
+vol-targeting + drawdowns + crisis-alpha papers, Strategic Risk Management
+book. Two applications tested; each hostile-QA'd by a dedicated agent.
+
+TEST 1 — Strategic rebalancing on the book (daily, 2023-04..2026-07):
+trend-gated top-ups added nothing (+0.2pp; robust per QA block-bootstrap,
+P(gate better)=10%). QA CORRECTIONS to my framing: (a) the full mechanism
+is HUGE in return space on this book — never-rebalance beat monthly by
+~52 CAGR pts (KMLM divergence = the paper's short-straddle cost) at 2x
+maxDD; (b) cap-40 (Operation 5, already armed) captures most of the
+less-rebalancing benefit ~8 CAGR pts cheaper than monthly at equal risk —
+INDEPENDENTLY RE-VALIDATED; (c) my "internally-defended engines have no
+falling knives" reasoning was false (25 episodes; gate misses 72% of
+them; blocked engines mean-revert) — right verdict, wrong mechanism;
+(d) whole window is one KMLM super-trend — regime caveat on everything.
+Own-drawdown gate variant (+1.5 CAGR pts, +0.07 Sharpe) = within noise,
+not shipped. NO CHANGES.
+
+TEST 2 — TSMOM new-symphony candidate (SPY/TLT/GLD/DBC, 19y backtest):
+my 200d-single-lag prototype STRAWMANNED the papers (QA): the
+literature-faithful build (63/126/252d majority vote + inverse-vol
+weights + SH/TBF short legs) doubles Sharpe, fixes 2008 (+26.5%) and
+2022 (+3.7%), corr to blend 0.10. STILL CLOSED: its crisis lane is
+already occupied — in both live-window stress events (Aug-24 vol spike,
+Feb-Apr-25 crash) TSMOM lost money while KMLM/sleeve made +9..+30%; its
+2022-regime role duplicates KMLM (2022 +24.2%, corr +0.44 to variant);
+90/10 blend adds SR +0.03 for -12 CAGR pts. The corpus's trend
+prescription is already embodied by KMLM 29% + sleeve 27%.
+REOPEN CONDITIONS (recorded in ideas-backlog): KMLM removed from the
+book, OR live-engine Sharpes decay toward ~1 while a 2022-style
+multi-quarter inflation-trend regime develops. The shelf artifact is the
+A+B+LS spec, NOT the naive prototype.
+
+CORPUS VERDICT: no new symphony, no changes — the literature
+independently validates the existing architecture: dedicated trend
+allocation (KMLM), crisis convexity (sleeve), cash defense (2026-07-31
+edits), vol-targeting rejected for CAGR goals (matches addendum 18),
+rebalancing-as-insurance with a wide cap (Operation 5).
