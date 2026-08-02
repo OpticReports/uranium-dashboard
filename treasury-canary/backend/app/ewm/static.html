@@ -53,6 +53,8 @@ canvas{width:100%;max-width:100%;background:#0b1120;border:1px solid #1e293b;bor
 .hq:hover{border-color:#38bdf8;color:#38bdf8}
 #hpop{position:absolute;z-index:50;max-width:430px;max-height:280px;overflow-y:auto;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px 14px;font-size:11.5px;line-height:1.55;color:#cbd5e1;box-shadow:0 8px 30px #000c;display:none}
 #hpop b{color:#7dd3fc}
+#fantip{position:absolute;display:none;pointer-events:none;background:#0f172aee;border:1px solid #334155;border-radius:7px;padding:7px 11px;font-size:11px;line-height:1.5;color:#cbd5e1;box-shadow:0 6px 20px #000a;white-space:nowrap}
+#fantip b{color:#7dd3fc}
 </style></head><body>
 <a class="nav" href="/">&#9776; dashboards</a>
 <div id="hpop"></div>
@@ -88,7 +90,8 @@ canvas{width:100%;max-width:100%;background:#0b1120;border:1px solid #1e293b;bor
 <button id="runsim">Run simulation</button>
 <span class="dim" id="simmsg"></span>
 </div>
-<canvas id="fan" width="1100" height="360"></canvas>
+<div style="position:relative"><canvas id="fan" width="1100" height="380"></canvas>
+<div id="fantip"></div></div>
 <div class="leg"><span style="color:#38bdf8">&#9632; p25&ndash;p75</span><span style="color:#1e40af">&#9632; p10&ndash;p90</span><span style="color:#e2e8f0">&mdash; median</span><span style="color:#34d399">&#9476; on-pace ramp value</span><span style="color:#fbbf2488">&#9632; $200&ndash;225M target</span><span id="nodeal"></span></div>
 <div class="dim" id="simassump" style="font-size:10px;margin-top:8px"></div>
 </div>
@@ -289,14 +292,21 @@ function render(b){
 }
 
 let LASTSIM=null;
+let FANGEO=null;
 function drawFan(sim){
   LASTSIM=sim;
   const cv=document.getElementById('fan'),ctx=cv.getContext('2d');
-  ctx.clearRect(0,0,cv.width,cv.height);
+  // crisp on high-DPI: back the canvas at devicePixelRatio, draw in CSS px
+  const dpr=window.devicePixelRatio||1, cw=cv.clientWidth||1100, ch=380;
+  if(cv.width!==Math.round(cw*dpr)||cv.height!==Math.round(ch*dpr)){
+    cv.width=Math.round(cw*dpr);cv.height=Math.round(ch*dpr);cv.style.height=ch+'px';
+  }
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,cw,ch);
   const hz=document.getElementById('t_hz').value;
   const cut=sim.months.indexOf(hz)+1||sim.months.length;
   const M=sim.months.slice(0,cut),f=sim.fan.slice(0,cut),pad={l:46,r:14,t:14,b:26};
-  const W=cv.width-pad.l-pad.r,H=cv.height-pad.t-pad.b;
+  const W=cw-pad.l-pad.r,H=ch-pad.t-pad.b;
   let lo=Math.min(...f.map(r=>r.p10),sim.target_band[0])-8;
   let hi=Math.max(...f.map(r=>r.p90),sim.target_band[1])+8;
   const X=i=>pad.l+W*i/(M.length-1),Y=v=>pad.t+H*(1-(v-lo)/(hi-lo));
@@ -322,7 +332,7 @@ function drawFan(sim){
   ctx.stroke();ctx.setLineDash([]);
   // month labels + report anchors + sale-goal marker
   ctx.fillStyle='#64748b';
-  M.forEach((m,i)=>{if(M.length<=12||i%2==0||m==='2027-03'||m==='2027-06')ctx.fillText(m.slice(2),X(i)-14,cv.height-8);});
+  M.forEach((m,i)=>{if(M.length<=12||i%2==0||m==='2027-03'||m==='2027-06')ctx.fillText(m.slice(2),X(i)-14,ch-8);});
   ['2027-03','2027-06'].forEach(m=>{const i=M.indexOf(m);if(i<0)return;
     ctx.strokeStyle='#fbbf2466';ctx.setLineDash([2,3]);ctx.beginPath();
     ctx.moveTo(X(i),pad.t);ctx.lineTo(X(i),pad.t+H);ctx.stroke();ctx.setLineDash([]);});
@@ -333,7 +343,38 @@ function drawFan(sim){
   const mx=Math.max(...f.map(r=>r.p_no_deal));
   document.getElementById('nodeal').textContent=mx>0.005?`P(process dies) up to ${(mx*100).toFixed(1)}%`:'';
   document.getElementById('simassump').textContent='Assumptions: '+sim.assumptions.join(' · ');
+  FANGEO={M,f,on_pace:sim.on_pace,pad,W,H,X,Y,cw,ch};
 }
+
+// hover crosshair + price readout
+(function(){
+  const cv=document.getElementById('fan'),tip=document.getElementById('fantip');
+  cv.addEventListener('mousemove',e=>{
+    if(!FANGEO||!LASTSIM)return;
+    const g=FANGEO,r=cv.getBoundingClientRect();
+    const x=e.clientX-r.left;
+    let i=Math.round((x-g.pad.l)/(g.W/(g.M.length-1)));
+    i=Math.max(0,Math.min(g.M.length-1,i));
+    drawFan(LASTSIM);                                   // repaint, then overlay
+    const ctx=cv.getContext('2d'),row=g.f[i],xp=g.X(i);
+    ctx.strokeStyle='#94a3b8aa';ctx.setLineDash([3,3]);ctx.beginPath();
+    ctx.moveTo(xp,g.pad.t);ctx.lineTo(xp,g.pad.t+g.H);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='#e2e8f0';
+    ctx.beginPath();ctx.arc(xp,g.Y(row.p50),3,0,7);ctx.fill();
+    const op=g.on_pace[i]?g.on_pace[i].value:null;
+    tip.innerHTML=`<b>${g.M[i]}</b> &middot; close-month valuation<br>`+
+      `median <b>$${row.p50}M</b> &middot; likely $${row.p25}&ndash;${row.p75}M<br>`+
+      `full band (10/90) $${row.p10}&ndash;${row.p90}M`+
+      (op?`<br><span style="color:#34d399">on-pace ramp $${op}M</span>`:'')+
+      (row.p_no_deal>0.004?`<br><span style="color:#f87171">P(no deal) ${(row.p_no_deal*100).toFixed(1)}%</span>`:'');
+    tip.style.display='block';
+    const tw=tip.offsetWidth||190;
+    tip.style.left=Math.min(Math.max(xp+14,g.pad.l),g.cw-tw-8)+'px';
+    tip.style.top=(g.pad.t+8)+'px';
+  });
+  cv.addEventListener('mouseleave',()=>{tip.style.display='none';if(LASTSIM)drawFan(LASTSIM);});
+  window.addEventListener('resize',()=>{if(LASTSIM)drawFan(LASTSIM);});
+})();
 
 function runSim(){
   const msg=document.getElementById('simmsg');msg.textContent='running…';
