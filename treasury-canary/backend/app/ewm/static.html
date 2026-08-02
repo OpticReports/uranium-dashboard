@@ -150,6 +150,28 @@ safety:"<b>Safety windows.</b> A 0&ndash;100 quality score per close month: rate
 cod:"<b>Cost of waiting.</b> If you delay the launch decision k months with today's information frozen: the best stall-adjusted EV still reachable (capped at the July-2027 goal). Under the growth ramp the base-case cost is ~0 by construction — the real cost of waiting appears in the '&ge;2 hikes' column and the stall odds.",
 cards:"<b>Action cards.</b> Rule-driven prescriptions. Each card shows the machine-checkable trigger that fired it, so you can audit why it appeared. No card = no active trigger."};
 function hq(k){return `<span class="hq" data-h="${k}">?</span>`}
+function beText(be){
+  const d=Math.abs(be.dev_q1_minus_q2).toFixed(1), f=be.flips||{};
+  const pp=x=>Math.round(x*100);
+  let t=`<b>BREAKEVEN &mdash; what would change the answer</b>${hq('breakeven')}<br>`;
+  if(be.preferred==='Q2'){
+    t+=`Right now <b>waiting pays</b>: closing at the end of Q2 2027 (Jun 30) is worth about <b>$${d}M more</b> than closing at the end of Q1 (Mar 31), on expected value alone.`;
+    if(f.extra_stall_pp)t+=` The main thing that would reverse this is <b>the process stalling</b>: if you believe the odds of a 3&ndash;4-hike world stalling the sale are about <b>${pp(f.extra_stall_pp)} points higher</b> than the model assumes, closing earlier (Q1) becomes the better call.`;
+    const s=[];
+    if(f.shift_s1_to_s2_pp)s.push(`${pp(f.shift_s1_to_s2_pp)} points of probability moved from &ldquo;1 hike&rdquo; to &ldquo;2 hikes&rdquo;`);
+    if(f.shift_s0_to_s3_pp)s.push(`${pp(f.shift_s0_to_s3_pp)} points from &ldquo;0 hikes&rdquo; to &ldquo;3 hikes&rdquo;`);
+    if(s.length)t+=` It would also flip if the rate outlook turns much more hawkish than the report &mdash; roughly ${s.join(', or ')}.`;
+    t+=` In short: <b>lean Q2, but watch stall risk</b> &mdash; the HY financing state and market nowcast above are the live versions of exactly these risks.`;
+  }else{
+    t+=`Right now <b>closing earlier pays</b>: the end of Q1 2027 (Mar 31) is worth about <b>$${d}M more</b> than waiting to the end of Q2 (Jun 30), on expected value alone.`;
+    const s=[];
+    if(f.shift_s1_to_s2_pp)s.push(`${pp(f.shift_s1_to_s2_pp)} points of probability moved back toward the dove rows`);
+    if(f.shift_s0_to_s3_pp)s.push(`${pp(f.shift_s0_to_s3_pp)} points toward &ldquo;0 hikes&rdquo;`);
+    if(s.length)t+=` Waiting would win again only if the rate outlook turns clearly friendlier &mdash; roughly ${s.join(', or ')}.`;
+    t+=` In short: <b>lean Q1</b> &mdash; delay only if hikes come off the table.`;
+  }
+  return t;
+}
 document.addEventListener('click',e=>{
   const pop=document.getElementById('hpop');
   const t=e.target.closest('.hq');
@@ -245,7 +267,8 @@ function render(b){
   html+=`<tr class="foot"><td>Hold-to-Jul-27 premium${hq('row_hold')}</td><td></td>`+
     COLS.map(m=>{const v=hpBy[m];return `<td style="color:${v>0?'#34d399':'#f87171'}">${v>0?'+':''}${v.toFixed(1)}M</td>`}).join('')+'</tr>';
   document.getElementById('cohort').innerHTML=html;
-  document.getElementById('beline').innerHTML='<b>BREAKEVEN</b>'+hq('breakeven')+' &middot; '+be.sentence;
+  document.getElementById('beline').innerHTML=beText(be)+
+    `<div class="dim" style="font-size:10px;margin-top:6px">model shorthand: ${be.sentence}</div>`;
 
   document.getElementById('tl').innerHTML=b.windows.map(w=>{
     const cls=!w.feasible?'X':w.band[0];
