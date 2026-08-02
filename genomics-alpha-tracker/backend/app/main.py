@@ -256,7 +256,7 @@ _mount_proxy("portfolio-optimizer", "BARBELL_UPSTREAM",
 _mount_proxy("btc", "BTC_UPSTREAM",
              "https://btc-paper-engine.onrender.com", "BTC Paper Engine")
 _mount_proxy("exit", "EWM_UPSTREAM",
-              "https://ewm.onrender.com", "Exit Window Monitor")
+              "https://treasury-canary.onrender.com/ewm", "Exit Window Monitor")
 
 
 # Single-service deployment: if a built frontend is present, serve it under

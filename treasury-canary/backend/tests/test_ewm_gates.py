@@ -3,13 +3,12 @@ as-of fixtures generated at build time — no look-ahead, no test-time fetches."
 import json
 import os
 
-from app.engine.core import (
+from app.ewm.core import (
     MONTHS, PARAMS, action_cards, cost_of_delay, ev_surface, month_shape,
     rate_risk, scenario_weights, window_scores,
 )
 
-FIX = json.load(open(os.path.join(os.path.dirname(__file__),
-                                  "fixtures", "replays.json")))
+FIX = json.load(open(os.path.join(os.path.dirname(__file__), "fixtures_ewm_replays.json")))
 
 
 def test_gate1_static_reproduction_july_2026():

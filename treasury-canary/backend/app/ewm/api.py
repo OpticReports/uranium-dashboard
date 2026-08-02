@@ -1,33 +1,30 @@
-"""EWM API — serves the engine + a v1 single-page UI (deal-sensitive: deploy
-behind the genomics login-gate proxy only)."""
+"""EWM sub-app (folded into the canary service — zero extra hosting cost).
+
+Served under /ewm/* on this service; the genomics proxy exposes it at /exit/
+behind the login gate. Canary composite is read IN-PROCESS (no self-HTTP)."""
 from __future__ import annotations
 
 import json
 import os
 from datetime import datetime, timezone
 
-import httpx
-from fastapi import FastAPI
+from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
-from .engine.core import (
-    FOMC, MONTHS, PARAMS, action_cards, cost_of_delay, ev_surface,
-    window_scores,
-)
+from .core import (FOMC, MONTHS, PARAMS, action_cards, cost_of_delay,
+                   ev_surface, window_scores)
 
-app = FastAPI(title="Exit Window Monitor", version="0.1.0")
-DATA = os.environ.get("EWM_DATA_DIR", "./data")
-os.makedirs(DATA, exist_ok=True)
-_INPUTS = os.path.join(DATA, "inputs.json")
-_EVENTS = os.path.join(DATA, "events.jsonl")
+router = APIRouter(prefix="/ewm", tags=["ewm"])
+_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "ewm")
+os.makedirs(_DIR, exist_ok=True)
+_INPUTS = os.path.join(_DIR, "inputs.json")
+_EVENTS = os.path.join(_DIR, "events.jsonl")
 
-DEFAULT_INPUTS = {
-    "ebitda_run_rate": PARAMS["ebitda_run_rate"], "stage": "prep",
-    "dissent_cluster": False, "fcix_z": 0.1, "dmhi01": 0.55,
-    "canary01": None, "stress_prob": 0.1, "qofe_ready": False,
-    "today_month": "2026-09",
-}
+DEFAULT_INPUTS = {"ebitda_run_rate": PARAMS["ebitda_run_rate"], "stage": "prep",
+                  "dissent_cluster": False, "fcix_z": 0.1, "dmhi01": 0.55,
+                  "canary01": None, "stress_prob": 0.1, "qofe_ready": False,
+                  "today_month": "2026-09"}
 
 
 def load_inputs() -> dict:
@@ -37,19 +34,20 @@ def load_inputs() -> dict:
         return dict(DEFAULT_INPUTS)
 
 
-def _log_event(kind: str, detail: dict) -> None:
+def _log(kind: str, detail: dict) -> None:
     with open(_EVENTS, "a") as f:
         f.write(json.dumps({"ts": datetime.now(timezone.utc).isoformat(),
                             "kind": kind, "detail": detail}) + "\n")
 
 
-def _canary01_live() -> float | None:
-    base = os.environ.get("CANARY_UPSTREAM")
-    if not base:
-        return None
+def _canary01() -> float | None:
+    """In-process composite read (no self-HTTP: same service)."""
     try:
-        r = httpx.get(f"{base.rstrip('/')}/composite", timeout=15)
-        score = r.json().get("score")
+        from ..jobs.refresh import compute_all
+        from ..store.db import session_scope
+        with session_scope() as s:
+            comp = compute_all(s).get("composite")
+        score = comp.get("score") if isinstance(comp, dict) else getattr(comp, "score", None)
         return round(score / 100.0, 3) if score is not None else None
     except Exception:  # noqa: BLE001
         return None
@@ -65,13 +63,12 @@ class Inputs(BaseModel):
     today_month: str | None = None
 
 
-@app.get("/api/ewm/board")
+@router.get("/api/ewm/board")
 def board():
-    """Everything the v1 UI needs in one call."""
     inp = load_inputs()
     canary = inp.get("canary01")
     if canary is None:
-        canary = _canary01_live() or 0.25
+        canary = _canary01() or 0.25
     surface = ev_surface(PARAMS, inp["ebitda_run_rate"], inp["dissent_cluster"])
     ws = window_scores(PARAMS, surface["weights"], inp["fcix_z"], inp["dmhi01"],
                        canary, inp["stage"], inp["today_month"])
@@ -93,22 +90,20 @@ def board():
                          "import."}
 
 
-@app.post("/api/ewm/inputs")
+@router.post("/api/ewm/inputs")
 def set_inputs(body: Inputs):
     cur = load_inputs()
     changed = {k: v for k, v in body.model_dump().items() if v is not None}
-    prev_e = cur.get("ebitda_run_rate")
+    prev = cur.get("ebitda_run_rate")
     cur.update(changed)
     json.dump(cur, open(_INPUTS, "w"))
-    _log_event("inputs_changed", changed)
-    if "ebitda_run_rate" in changed and prev_e is not None:
-        d = changed["ebitda_run_rate"] - prev_e
-        if d > 0:
-            _log_event("ebitda_raised", {"delta": d})
+    _log("inputs_changed", changed)
+    if "ebitda_run_rate" in changed and prev is not None and changed["ebitda_run_rate"] > prev:
+        _log("ebitda_raised", {"delta": changed["ebitda_run_rate"] - prev})
     return {"ok": True, "inputs": cur}
 
 
-@app.get("/api/ewm/events")
+@router.get("/api/ewm/events")
 def events(limit: int = 50):
     try:
         lines = open(_EVENTS).read().strip().split("\n")[-limit:]
@@ -117,11 +112,7 @@ def events(limit: int = 50):
         return []
 
 
-@app.get("/health")
-def health():
-    return {"status": "ok", "service": "ewm"}
-
-
-@app.get("/", response_class=HTMLResponse)
+@router.get("/", response_class=HTMLResponse)
+@router.get("", response_class=HTMLResponse, include_in_schema=False)
 def index():
     return open(os.path.join(os.path.dirname(__file__), "static.html")).read()

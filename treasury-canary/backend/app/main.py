@@ -89,6 +89,8 @@ app.include_router(routes_margin.router)
 app.include_router(routes_margin_fast.router)
 app.include_router(routes_rates.router)
 app.include_router(routes_shock_sim.router)
+from .ewm.api import router as ewm_router  # noqa: E402
+app.include_router(ewm_router)
 app.include_router(routes_flows.router)
 app.include_router(routes_pins.router)
 app.include_router(routes_track.router)

@@ -179,18 +179,3 @@ services:
         value: /app/frontend_dist
       - key: LOG_LEVEL
         value: INFO
-
-  - type: web
-    name: ewm
-    runtime: docker
-    dockerfilePath: ./ewm/Dockerfile
-    dockerContext: ./ewm
-    plan: starter
-    autoDeploy: true
-    disk:
-      name: ewm-data
-      mountPath: /data
-      sizeGB: 1
-    envVars:
-      - key: CANARY_UPSTREAM
-        value: https://treasury-canary.onrender.com
