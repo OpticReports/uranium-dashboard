@@ -1066,3 +1066,30 @@ independently validates the existing architecture: dedicated trend
 allocation (KMLM), crisis convexity (sleeve), cash defense (2026-07-31
 edits), vol-targeting rejected for CAGR goals (matches addendum 18),
 rebalancing-as-insurance with a wide cap (Operation 5).
+
+
+## Addendum 20b — HG evaluated against the Man/AHL corpus (2026-08-01)
+
+Owner follow-up: the corpus review (add. 20) was KMLM/book-centric — HG
+now evaluated against each applicable corpus lens:
+1. Drawdowns paper (de-risking rules cost return): resolved by the gate
+   study (19b) BEFORE the corpus was read — identical conclusion reached
+   independently on HG. Aligned; no action.
+2. Momentum speed (fast signals own crisis alpha): HG's 10d-RSI machinery
+   is the fast end; attribution showed its edge IS fast rebound capture.
+   Aligned; no action.
+3. Volatility targeting (their strongest claim for leveraged equities):
+   TESTED on HG with a pre-registered prediction of failure. Result:
+   vol-target at median vol cuts CAGR 105.3->78.2% with Sharpe FLAT
+   (1.74->1.72) — the literature's Sharpe improvement does not appear.
+   Mechanism (measured): HG's P&L is MONOTONICALLY INCREASING in its own
+   volatility — Q1 +145pp, Q2 +182pp, Q3 +259pp, Q4 (highest vol)
+   +343pp. The papers' precondition (negative vol->return relation,
+   leverage effect) is INVERTED for HG: it is a volatility-harvesting
+   strategy. Vol targeting would amputate the edge, same mechanism as
+   the gates. Corpus, correctly applied, says DO NOT vol-target HG.
+CONCLUSION: all three HG-applicable corpus lenses close with one
+structural finding: HG earns BECAUSE of turbulence, not despite it;
+every within-strategy de-risking family (gates 19b, vol targets 20b,
+drawdown rules) amputates the edge. HG risk management stays at book
+level (sleeve, cap, weights) — now triply confirmed.
