@@ -18,6 +18,7 @@ body{margin:0;background:var(--bg);color:var(--txt);font:13.5px/1.55 Roboto,syst
 table,.big,.trig,.mo,.leg,#fantip,.fomc{font-family:'Roboto Mono',ui-monospace,monospace}
 .appbar{position:fixed;top:0;left:0;right:0;z-index:40;display:flex;align-items:center;gap:12px;height:56px;padding:0 16px;background:#0e1626ee;backdrop-filter:blur(8px);box-shadow:0 1px 0 var(--outline),0 2px 10px #0009}
 .abt{font-size:16px;font-weight:500;color:#f1f5f9}
+.mark{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,#0ea5e9,#38bdf8);color:#082f49;font:700 13px 'Roboto Mono',monospace;letter-spacing:-.06em;vertical-align:-5px;margin-right:2px}
 .abs{font-size:11px;color:var(--txt3);margin-top:-2px}
 a.nav{display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:50%;color:var(--txt2);text-decoration:none;font-size:16px;transition:background .15s,color .15s;flex:0 0 auto}
 a.nav:hover{background:#ffffff14;color:var(--pri)}
@@ -86,7 +87,7 @@ canvas{width:100%;max-width:100%;background:#0d1526;border-radius:12px}
 #fantip b{color:var(--pri)}
 </style></head><body>
 <header class="appbar"><a class="nav" href="/" title="All dashboards">&#9776;</a>
-<div><div class="abt">&#128197; Exit Window Monitor</div>
+<div><div class="abt"><span class="mark">$$</span> Exit Window Monitor</div>
 <div class="abs">Deal-timing decision support &middot; ~$200M exit &middot; sell-for-less-now vs hold to Jul 31 2027</div></div></header>
 <div id="hpop"></div>
 <div class="wrap">
