@@ -1180,3 +1180,44 @@ asset; BOXX inception Dec-2022). Sleeve full-history research backtests
 archived pre-BOXX tree (BIL version) via backtest_tree. regime_boot.py
 quarterly run needs this fix BEFORE Oct 1 or its SLEEVE buckets silently
 shrink from 15y to 3.5y.
+
+
+## Addendum 22 — Iran-news force-run proposal: tested, counter-audited, NO-BUILD
+## (2026-08-03)
+
+Owner proposal: monitor news (weekend Trump Iran posts), use Composer's
+immediate-rebalance to flip before the daily window. Tested on 8 dated
+flips (Mar-Aug 2026, from the public record) with gap/drift decomposition;
+hostile counter-agent audited (nt_attack/ in scratchpad).
+
+MY STUDY'S FLAWS (caught by the counter-agent, for the record): Apr-8
+event-time bookkeeping error (news broke overnight Apr 7-8; my t0 was a
+day late — the error FLATTERED the proposal); convention-fragile gap
+numbers; "no edge" overclaimed where honest phrasing is "cannot detect at
+n=8" (MDE ~0.6%/event on SPY); my book event-day mean didn't reproduce
+exactly (+0.22% corrected, still positive).
+
+WHY NO-BUILD IS STRONGER THAN MY VERSION:
+1. Post-actionable drift: ~0 in equities, NEGATIVE in the actual war
+   trades (USO -1.0%, XLE -1.0% aligned) — oil FADES the announcements;
+   multi-day drift negative everywhere (TQQQ -2.0%, UVXY -2.5% by t+2).
+   The system would buy reaction tops.
+2. The two worst book event-days (May-27 -0.9%, Jul-9 -1.3%) were
+   DIRECTION-wrong, not timing-wrong: the book was already positioned
+   war-on and the market shrugged; a news-triggered flip would have
+   produced the same or deeper losses on both.
+3. The 3:45 window ALREADY reacts same-day: KMLM rotated at 3:45 on 5 of
+   8 event days — including Apr-8, capturing the overnight move my study
+   had booked as "uncapturable." Hourly tape: intraday spikes complete in
+   1-2h and partially reverse by 15:30 — the arrival->3:45 increment is
+   ~zero or negative.
+4. Composer's force-run re-executes the strategy's OWN logic — it cannot
+   express "trade the news direction" at all.
+5. Costs: ~8-12bp of engine NAV per forced flip, with an ex-ante trigger
+   rule firing far more often than the 8 salient events.
+6. Unreported positive: the book was cumulatively positive in 6 of 7
+   event-to-event windows INCLUDING both escalation regimes — it profits
+   through this news cycle without timing it.
+DECISION: no news-trading job, no force-runs. The only defensible
+recurring artifact would be an informational news-flag in the daily
+report (no trades) — marginal value, built only if the owner wants it.
