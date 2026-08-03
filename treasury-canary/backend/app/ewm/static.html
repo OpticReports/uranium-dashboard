@@ -114,7 +114,9 @@ canvas{width:100%;max-width:100%;background:#0b1120;border:1px solid #1e293b;bor
 <div class="panel"><span class="lbl">Safety windows (feasibility-gated)<span class="hq" data-h="safety">?</span></span><div class="tl" id="tl"></div></div>
 <div class="panel"><span class="lbl">Cost of waiting to launch (stall-adjusted, horizon capped at Jul-27) &mdash; base case vs if the &ge;2-hike world materializes<span class="hq" data-h="cod">?</span></span><table id="cod"></table>
 <div class="dim" style="font-size:10px;margin-top:6px">Under the ramp the base-case delay cost is ~0 by construction &mdash; the risk of waiting lives in the hawk column and in the stall odds (see breakeven row).</div></div>
-<div class="panel"><span class="lbl">Action cards<span class="hq" data-h="cards">?</span></span><div id="cards"></div></div>
+<div class="panel"><span class="lbl">Action cards<span class="hq" data-h="cards">?</span></span>
+<div class="plain" id="cardsrec" style="font-size:11.5px;margin-top:8px;border-left-color:#64748b"></div>
+<div id="cards"></div></div>
 <div class="ep" id="ep"></div>
 </div>
 <script>
@@ -157,6 +159,30 @@ safety:"<b>Safety windows.</b> A 0&ndash;100 quality score per close month: rate
 cod:"<b>Cost of waiting.</b> If you delay the launch decision k months with today's information frozen: the best stall-adjusted EV still reachable (capped at the July-2027 goal). Under the growth ramp the base-case cost is ~0 by construction — the real cost of waiting appears in the '&ge;2 hikes' column and the stall odds.",
 cards:"<b>Action cards.</b> Rule-driven prescriptions. Each card shows the machine-checkable trigger that fired it, so you can audit why it appeared. No card = no active trigger."};
 function hq(k){return `<span class="hq" data-h="${k}">?</span>`}
+function cardsReconcile(b){
+  const be=b.breakeven, acts=(b.cards||[]).map(c=>c.action).join(' ');
+  const accel=/Accelerate|hard deadline|Financing window/.test(acts);
+  const pref=be.preferred;
+  let t='<b>How the cards fit the table:</b> the cohort table chooses the <b>close window</b>; '+
+    'the cards govern <b>process speed and structure</b>. &ldquo;Accelerate&rdquo; means <b>sign early, not close early</b> '+
+    '&mdash; stall and repricing risk concentrates in the UNSIGNED phase (2022&ndash;23: stress stalled launches, '+
+    'signed deals closed), while the ramp&rsquo;s extra value is collected at close. ';
+  if(!b.cards||!b.cards.length){
+    return t+'No process triggers are active today, so run the process at normal cadence and pick the window per the breakeven above.';
+  }
+  if(pref==='Q2'&&accel){
+    t+='So today&rsquo;s combined advice is <b>sign early, close late</b>: lock LOI + committed financing on the cards&rsquo; '+
+      'timeline, and let the close land at the Q2-end window the breakeven prefers (+$'+Math.abs(be.dev_q1_minus_q2).toFixed(1)+'M). '+
+      'Where a card names a Q1 deadline while the table leans Q2, the card is a deliberate <b>risk override</b>: it trips at '+
+      'lower stress than the pure-EV flip because being late costs more than the EV gap. Both surfaces read the same '+
+      'financing/stall data &mdash; if conditions worsen they will converge on Q1 together.';
+  }else if(pref==='Q1'&&accel){
+    t+='Today the two surfaces <b>agree</b>: the table leans Q1-end and the cards say compress &mdash; sign early AND close early.';
+  }else{
+    t+='Pick the close window per the breakeven above; the active cards address structure (pricing protection, buyer mix), not timing.';
+  }
+  return t;
+}
 function beText(be){
   const d=Math.abs(be.dev_q1_minus_q2).toFixed(1), f=be.flips||{};
   const pp=x=>Math.round(x*100);
@@ -287,6 +313,7 @@ function render(b){
     b.cost_of_delay.curve.map(c=>`<tr><td>${c.delay_months} mo</td><td>${fmt(c.best_ev)}</td>`+
     `<td>$${c.cost_vs_now}M</td><td style="color:${c.hawk_cost>0.05?'#f87171':'#64748b'}">$${c.hawk_cost}M</td></tr>`).join('');
 
+  document.getElementById('cardsrec').innerHTML=cardsReconcile(b);
   document.getElementById('cards').innerHTML=b.cards.length?b.cards.map(c=>
     `<div class="card"><b>${c.action}</b><div style="margin-top:4px">${c.rationale}</div>`+
     (c.evidence&&c.evidence.length?`<div class="cev"><span class="cevh">Evidence</span><ul>${c.evidence.map(e=>`<li>${e}</li>`).join('')}</ul></div>`:'')+
