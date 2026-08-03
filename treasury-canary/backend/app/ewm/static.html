@@ -3,67 +3,93 @@
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>Exit Window Monitor</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='0.9em' font-size='90'%3E%F0%9F%93%85%3C/text%3E%3C/svg%3E"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
 <style>
-:root{color-scheme:dark}
-body{margin:0;background:#0b1120;color:#cbd5e1;font:13px/1.5 ui-monospace,Menlo,monospace}
-.wrap{max-width:1160px;margin:0 auto;padding:44px 20px 20px}
-h1{font-size:18px;color:#f1f5f9;margin:0}
-.sub{color:#64748b;font-size:11px;margin:2px 0 16px}
-.panel{border:1px solid #1e293b;border-radius:10px;background:#0f172acc;padding:14px 16px;margin-bottom:14px}
-.strip{display:flex;flex-wrap:wrap;gap:24px;align-items:baseline}
-.big{font-size:26px;color:#38bdf8;font-weight:700}
-.lbl{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:#64748b;display:block}
-.plain{border-left:3px solid #38bdf8;background:#0f172a;padding:10px 14px;border-radius:6px;color:#e2e8f0;font-size:12.5px}
-.plain b{color:#7dd3fc}
-.tl{display:flex;gap:4px;flex-wrap:wrap;margin-top:8px}
-.mo{flex:1 1 52px;min-width:52px;text-align:center;border-radius:6px;padding:7px 2px;font-size:10px;border:1px solid transparent}
-.G{background:#065f4633;color:#34d399;border-color:#34d39955}
-.A{background:#78350f33;color:#fbbf24;border-color:#fbbf2455}
-.R{background:#7f1d1d33;color:#f87171;border-color:#f8717155}
-.X{background:#1e293b55;color:#475569;text-decoration:line-through}
-.fomc{font-size:8px;color:#94a3b8}
+:root{color-scheme:dark;
+ --bg:#0b1120;--surf1:#111a2e;--surf2:#17223c;--surf3:#1d2a49;
+ --outline:#26334e;--outline2:#3b4a6b;
+ --txt:#dbe4f0;--txt2:#93a4bd;--txt3:#5f6f8a;
+ --pri:#7dd3fc;--pri2:#38bdf8;--onpri:#082f49;
+ --green:#34d399;--amber:#fbbf24;--red:#f87171}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font:13.5px/1.55 Roboto,system-ui,-apple-system,sans-serif}
+table,.big,.trig,.mo,.leg,#fantip,.fomc{font-family:'Roboto Mono',ui-monospace,monospace}
+.appbar{position:fixed;top:0;left:0;right:0;z-index:40;display:flex;align-items:center;gap:12px;height:56px;padding:0 16px;background:#0e1626ee;backdrop-filter:blur(8px);box-shadow:0 1px 0 var(--outline),0 2px 10px #0009}
+.abt{font-size:16px;font-weight:500;color:#f1f5f9}
+.abs{font-size:11px;color:var(--txt3);margin-top:-2px}
+a.nav{display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:50%;color:var(--txt2);text-decoration:none;font-size:16px;transition:background .15s,color .15s;flex:0 0 auto}
+a.nav:hover{background:#ffffff14;color:var(--pri)}
+.wrap{max-width:1180px;margin:0 auto;padding:74px 20px 28px}
+.panel{background:var(--surf1);border-radius:14px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 2px #0007,0 2px 8px #0004}
+.strip{display:flex;flex-wrap:wrap;gap:26px;align-items:baseline}
+.big{font-size:27px;color:var(--pri2);font-weight:700}
+.lbl{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.12em;color:var(--txt2);display:block;margin-bottom:4px}
+.plain{background:var(--surf2);border-left:3px solid var(--pri2);padding:12px 16px;border-radius:10px;color:#e7eef8;font-size:13px;box-shadow:0 1px 2px #0005}
+.plain b{color:var(--pri)}
+.tl{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.mo{flex:1 1 54px;min-width:54px;text-align:center;border-radius:10px;padding:8px 2px;font-size:10px;border:1px solid transparent}
+.G{background:#065f4633;color:var(--green);border-color:#34d39944}
+.A{background:#78350f33;color:var(--amber);border-color:#fbbf2444}
+.R{background:#7f1d1d33;color:var(--red);border-color:#f8717144}
+.X{background:#1e293b55;color:var(--txt3);text-decoration:line-through}
+.fomc{font-size:8px;color:var(--txt2)}
 table{width:100%;border-collapse:collapse;font-size:11.5px}
-td,th{padding:4px 8px;text-align:right;border-bottom:1px solid #1e293b}
-th{color:#64748b;font-weight:600}td:first-child,th:first-child{text-align:left}
-.cmid{color:#e2e8f0;font-weight:600}.crng{color:#64748b;font-size:10px}
-.star{color:#fbbf24}.stall{color:#f87171;font-size:9px}
-.modalcell{background:#1d4ed820;border-radius:4px}
-tr.foot td{border-top:2px solid #334155;color:#94a3b8}
-tr.foot td.cmid{color:#7dd3fc}
-.be{background:#1e293b66;border-radius:6px;padding:8px 12px;margin-top:10px;color:#fbbf24;font-size:12px}
-.tag{font-size:8px;color:#475569;display:block;text-transform:none;letter-spacing:0}
-.card{border:1px solid #334155;border-left:3px solid #38bdf8;border-radius:6px;padding:8px 12px;margin-top:8px}
-.card b{color:#e2e8f0}.trig{color:#64748b;font-size:10px;margin-top:6px}
-.cev{margin-top:6px;font-size:11px;color:#94a3b8}
-.cevh{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#64748b}
-.cev ul{margin:2px 0 0;padding-left:18px}.cev li{margin:1px 0}
-.ep{color:#475569;font-size:10px;margin-top:14px}
-a.nav{position:fixed;top:12px;left:12px;color:#94a3b8;text-decoration:none;border:1px solid #334155;border-radius:6px;padding:4px 8px;font-size:11px;background:#0f172a}
-details{margin-bottom:14px}
-summary{cursor:pointer;color:#94a3b8;font-size:12px;padding:6px 0}
-.form{display:flex;flex-wrap:wrap;gap:14px;padding:10px 0;align-items:end}
-.form label{display:flex;flex-direction:column;gap:3px;font-size:10px;color:#64748b}
-.form input,.form select{background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:5px;padding:5px 8px;font:inherit;width:110px}
-.form input[type=checkbox]{width:auto}
-button{background:#0369a1;color:#e0f2fe;border:0;border-radius:6px;padding:7px 16px;font:inherit;cursor:pointer}
-button:hover{background:#0284c7}
-.tgl{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:10px;align-items:end}
-canvas{width:100%;max-width:100%;background:#0b1120;border:1px solid #1e293b;border-radius:8px}
-.leg{font-size:10px;color:#64748b;margin-top:6px}
+td,th{padding:7px 10px;text-align:right;border-bottom:1px solid #ffffff0c}
+th{color:var(--txt3);font-weight:500;font-size:10px;text-transform:uppercase;letter-spacing:.07em}
+td:first-child,th:first-child{text-align:left}
+tbody tr:hover td,table tr:hover td{background:#ffffff05}
+.cmid{color:#eef3fa;font-weight:600}.crng{color:var(--txt3);font-size:10px}
+.star{color:var(--amber)}.stall{color:var(--red);font-size:9px}
+.modalcell{background:#1d4ed826;border-radius:6px}
+tr.foot td{border-top:1px solid var(--outline2);color:var(--txt2)}
+tr.foot td.cmid{color:var(--pri)}
+.be{background:var(--surf2);border-left:3px solid var(--amber);border-radius:10px;padding:12px 16px;margin-top:12px;color:#fcd34d;font-size:12.5px;box-shadow:0 1px 2px #0005}
+.be b{color:var(--amber)}
+.tag{font-size:8px;color:var(--txt3);display:block;text-transform:none;letter-spacing:0}
+.card{background:var(--surf2);border-left:3px solid var(--pri2);border-radius:10px;padding:12px 16px;margin-top:10px;box-shadow:0 1px 2px #0005}
+.card b{color:#eef3fa}.trig{color:var(--txt3);font-size:10px;margin-top:8px}
+.cev{margin-top:8px;font-size:11.5px;color:var(--txt2)}
+.cevh{font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--txt3)}
+.cev ul{margin:3px 0 0;padding-left:18px}.cev li{margin:2px 0}
+.ep{color:var(--txt3);font-size:10.5px;margin-top:16px}
+details{margin-bottom:16px}
+summary{cursor:pointer;color:var(--txt2);font-size:12.5px;font-weight:500;padding:12px 20px;background:var(--surf1);border-radius:14px;box-shadow:0 1px 2px #0007,0 2px 8px #0004;list-style:none;transition:background .15s}
+summary:hover{background:var(--surf2)}
+summary::-webkit-details-marker{display:none}
+summary::before{content:'\25B8';display:inline-block;margin-right:8px;color:var(--txt3);transition:transform .15s}
+details[open] summary{border-radius:14px 14px 0 0}
+details[open] summary::before{transform:rotate(90deg)}
+details[open] .panel{border-radius:0 0 14px 14px;margin-top:1px}
+.form{display:flex;flex-wrap:wrap;gap:16px;padding:8px 0 2px;align-items:end}
+.form label,.tgl label{display:flex;flex-direction:column;gap:5px;color:var(--txt2)}
+.ltxt{display:inline-flex;align-items:center;font-size:9.5px;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--txt2);white-space:nowrap}
+.form select,.form input:not([type=checkbox]),.tgl select,.tgl input{background:var(--surf3);color:var(--txt);border:1px solid transparent;border-bottom:1px solid var(--outline2);border-radius:8px 8px 4px 4px;height:36px;padding:6px 12px;font:inherit;font-size:12.5px;width:150px;transition:background .15s,border-color .15s}
+.form select,.tgl select{appearance:none;-webkit-appearance:none;background:var(--surf3) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M1 1l4 4 4-4' stroke='%2394a3b8' stroke-width='1.5' fill='none' stroke-linecap='round'/></svg>") no-repeat right 10px center;padding-right:28px;cursor:pointer;width:auto;min-width:158px}
+.form select:hover,.tgl select:hover,.form input:hover,.tgl input:hover{background-color:#22304f}
+.form select:focus,.tgl select:focus,.form input:focus,.tgl input:focus{border-color:var(--pri2);border-bottom-color:var(--pri2);outline:none}
+.form input[type=checkbox]{width:18px;height:18px;accent-color:var(--pri2);margin:9px 0;cursor:pointer}
+.tgl input[type=number]{width:96px}
+button{background:var(--pri);color:var(--onpri);border:0;border-radius:20px;padding:9px 20px;font:500 12px Roboto,system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;box-shadow:0 1px 3px #0007;transition:filter .15s,box-shadow .15s}
+button:hover{filter:brightness(1.08);box-shadow:0 2px 8px #0008}
+.tgl{display:flex;flex-wrap:wrap;gap:16px;margin-bottom:12px;align-items:end}
+canvas{width:100%;max-width:100%;background:#0d1526;border-radius:12px}
+.leg{font-size:10px;color:var(--txt3);margin-top:8px}
 .leg span{margin-right:14px}
-.dim{color:#475569}
-.hq{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;border:1px solid #475569;color:#94a3b8;font-size:9px;cursor:help;margin-left:5px;vertical-align:middle;user-select:none;flex:0 0 auto}
-.hq:hover{border-color:#38bdf8;color:#38bdf8}
-#hpop{position:absolute;z-index:50;max-width:430px;max-height:280px;overflow-y:auto;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px 14px;font-size:11.5px;line-height:1.55;color:#cbd5e1;box-shadow:0 8px 30px #000c;display:none}
-#hpop b{color:#7dd3fc}
-#fantip{position:absolute;display:none;pointer-events:none;background:#0f172aee;border:1px solid #334155;border-radius:7px;padding:7px 11px;font-size:11px;line-height:1.5;color:#cbd5e1;box-shadow:0 6px 20px #000a;white-space:nowrap}
-#fantip b{color:#7dd3fc}
+.dim{color:var(--txt3)}
+.hq{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;background:#ffffff0d;color:var(--txt2);font-size:9px;font-family:Roboto;cursor:help;margin-left:6px;vertical-align:middle;user-select:none;flex:0 0 auto;transition:background .15s,color .15s}
+.hq:hover{background:var(--pri2);color:var(--onpri)}
+#hpop{position:absolute;z-index:50;max-width:430px;max-height:280px;overflow-y:auto;background:var(--surf3);border-radius:12px;padding:12px 16px;font-size:11.5px;line-height:1.6;color:var(--txt);box-shadow:0 4px 10px #0008,0 12px 32px #000a;display:none}
+#hpop b{color:var(--pri)}
+#fantip{position:absolute;display:none;pointer-events:none;background:#1d2a49f2;border-radius:10px;padding:8px 12px;font-size:11px;line-height:1.55;color:var(--txt);box-shadow:0 4px 14px #000a;white-space:nowrap}
+#fantip b{color:var(--pri)}
 </style></head><body>
-<a class="nav" href="/">&#9776; dashboards</a>
+<header class="appbar"><a class="nav" href="/" title="All dashboards">&#9776;</a>
+<div><div class="abt">&#128197; Exit Window Monitor</div>
+<div class="abs">Deal-timing decision support &middot; ~$200M exit &middot; sell-for-less-now vs hold to Jul 31 2027</div></div></header>
 <div id="hpop"></div>
 <div class="wrap">
-<h1>&#128197; Exit Window Monitor</h1>
-<div class="sub">Deal-timing decision support &middot; ~$200M exit &middot; sell-for-less-now vs hold to Jul 31 2027</div>
 
 <div class="panel plain" id="plain">loading&hellip;</div>
 <div class="panel strip" id="strip"></div>
@@ -72,24 +98,24 @@ canvas{width:100%;max-width:100%;background:#0b1120;border:1px solid #1e293b;bor
 
 <details><summary>&#9881; Settings — revenue ramp &amp; process inputs <span class="hq" data-h="settings">?</span></summary>
 <div class="panel"><div class="form" id="form">
-<label>Revenue run-rate @ Dec 2026 ($M)<span class="hq" data-h="set_rev">?</span><input id="i_rev" type="number" step="0.5"></label>
-<label>Target value low ($M)<span class="hq" data-h="set_target">?</span><input id="i_tlo" type="number" step="1"></label>
-<label>Target value high ($M)<span class="hq" data-h="set_target">?</span><input id="i_thi" type="number" step="1"></label>
-<label>Process stage<span class="hq" data-h="strip_stage">?</span><select id="i_stage"><option>not_started</option><option>prep</option><option>in_market</option><option>loi</option><option>exclusivity</option><option>close</option></select></label>
-<label>Today (month)<input id="i_today" placeholder="2026-09"></label>
-<label>Dissent cluster<span class="hq" data-h="set_dis">?</span><input id="i_dis" type="checkbox"></label>
-<label>Pin to report ($105M, no ramp)<span class="hq" data-h="set_pin">?</span><input id="i_pin" type="checkbox"></label>
+<label><span class="ltxt">Revenue run-rate @ Dec 2026 ($M)<span class="hq" data-h="set_rev">?</span></span><input id="i_rev" type="number" step="0.5"></label>
+<label><span class="ltxt">Target value low ($M)<span class="hq" data-h="set_target">?</span></span><input id="i_tlo" type="number" step="1"></label>
+<label><span class="ltxt">Target value high ($M)<span class="hq" data-h="set_target">?</span></span><input id="i_thi" type="number" step="1"></label>
+<label><span class="ltxt">Process stage<span class="hq" data-h="strip_stage">?</span></span><select id="i_stage"><option>not_started</option><option>prep</option><option>in_market</option><option>loi</option><option>exclusivity</option><option>close</option></select></label>
+<label><span class="ltxt">Today (month)</span><input id="i_today" placeholder="2026-09"></label>
+<label><span class="ltxt">Dissent cluster<span class="hq" data-h="set_dis">?</span></span><input id="i_dis" type="checkbox"></label>
+<label><span class="ltxt">Pin to report ($105M, no ramp)<span class="hq" data-h="set_pin">?</span></span><input id="i_pin" type="checkbox"></label>
 <button id="save">Apply</button>
 <span class="dim" id="savemsg"></span>
 </div></div></details>
 
 <div class="panel"><span class="lbl">Monte Carlo valuation fan — toggle shocks, engine reprices the whole path<span class="hq" data-h="fan">?</span></span>
 <div class="tgl">
-<label class="lbl" style="display:flex;flex-direction:column;gap:3px">Rate path<span class="hq" data-h="t_force">?</span><select id="t_force"><option value="">probabilistic (cohort weights)</option><option value="-1">force rate cut(s)</option><option value="0">force 0 hikes</option><option value="1">force 1 hike</option><option value="2">force 2 hikes</option><option value="3">force 3 hikes</option><option value="4">force 4 hikes</option></select></label>
-<label class="lbl" style="display:flex;flex-direction:column;gap:3px">Stock crash<span class="hq" data-h="t_crash">?</span><select id="t_crash"><option value="none">none</option><option value="moderate">moderate (&minus;20% SPX)</option><option value="severe">severe (&minus;35% SPX)</option></select></label>
-<label class="lbl" style="display:flex;flex-direction:column;gap:3px">50bp regime<span class="hq" data-h="t_reg">?</span><select id="t_reg"><option value="">off</option><option value="1">on (off-cohort gap)</option></select></label>
-<label class="lbl" style="display:flex;flex-direction:column;gap:3px">Extra stall hazard (pp)<span class="hq" data-h="t_stall">?</span><input id="t_stall" type="number" value="0" min="0" max="30" step="1" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:5px;padding:5px 8px;font:inherit;width:70px"></label>
-<label class="lbl" style="display:flex;flex-direction:column;gap:3px">Horizon<span class="hq" data-h="t_hz">?</span><select id="t_hz"><option value="2027-07">to sale goal (Jul 31 '27)</option><option value="2027-12">extended (Dec '27)</option></select></label>
+<label><span class="ltxt">Rate path<span class="hq" data-h="t_force">?</span></span><select id="t_force"><option value="">probabilistic (cohort weights)</option><option value="-1">force rate cut(s)</option><option value="0">force 0 hikes</option><option value="1">force 1 hike</option><option value="2">force 2 hikes</option><option value="3">force 3 hikes</option><option value="4">force 4 hikes</option></select></label>
+<label><span class="ltxt">Stock crash<span class="hq" data-h="t_crash">?</span></span><select id="t_crash"><option value="none">none</option><option value="moderate">moderate (&minus;20% SPX)</option><option value="severe">severe (&minus;35% SPX)</option></select></label>
+<label><span class="ltxt">50bp regime<span class="hq" data-h="t_reg">?</span></span><select id="t_reg"><option value="">off</option><option value="1">on (off-cohort gap)</option></select></label>
+<label><span class="ltxt">Extra stall hazard (pp)<span class="hq" data-h="t_stall">?</span></span><input id="t_stall" type="number" value="0" min="0" max="30" step="1"></label>
+<label><span class="ltxt">Horizon<span class="hq" data-h="t_hz">?</span></span><select id="t_hz"><option value="2027-07">to sale goal (Jul 31 '27)</option><option value="2027-12">extended (Dec '27)</option></select></label>
 <button id="runsim">Run simulation</button>
 <span class="dim" id="simmsg"></span>
 </div>
