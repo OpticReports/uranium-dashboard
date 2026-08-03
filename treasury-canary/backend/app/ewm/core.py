@@ -421,59 +421,227 @@ def cost_of_delay(surface: list[dict], scores: list[dict]) -> dict:
 
 
 def action_cards(p: dict, ctx: dict) -> list[dict]:
-    """Rule table (amended: every card logs its trigger values; hysteresis is
-    applied by the caller via trigger persistence)."""
+    """Rule table. Every card carries the full argued case: rationale (the
+    mechanism), evidence (numbered facts from the frozen studies and the
+    coupling research), and a concrete playbook — plus the machine-checkable
+    trigger that fired it. Hysteresis is applied by the caller via trigger
+    persistence."""
     cards = []
     hw = ctx["hike_weights"]
     if ctx.get("dissent_cluster"):
-        cards.append({"rank": 1, "action": "Accelerate: compress prep; target LOI pre-Dec-FOMC",
-                      "trigger": "dissent_cluster>=3",
-                      "rationale": "Tail hike odds under-priced when dissents cluster; "
-                                   "cost-of-delay curve applies", "confidence": "medium"})
+        cards.append({
+            "rank": 1,
+            "action": "Accelerate: compress prep; target a signed LOI with "
+                      "committed financing before the December FOMC",
+            "trigger": "dissent_cluster>=3",
+            "confidence": "medium",
+            "rationale": (
+                "The Jul 29 2026 hold passed 9-3 with Hammack, Kashkari and "
+                "Logan dissenting for an immediate hike — the first unified "
+                "three-way directional dissent since September 2016, and that "
+                "one resolved with a hike two meetings later (Dec 2016). "
+                "Clustered dissents are evidence the committee's center is "
+                "shifting before futures fully price it, so the 3-4-hike tail "
+                "(~10% in the cohort) is likely understated. Those tail rows "
+                "price this deal at $150-177M with 25-35% odds the process "
+                "stalls entirely — and hikes hit private-market pricing with "
+                "a 1-2 quarter lag, so terms locked before December close on "
+                "pre-hike pricing even if the hikes come."),
+            "evidence": [
+                "Sept 2016 precedent: three-way dissent -> hike within two "
+                "meetings; the Fed historically moves in the dissent "
+                "direction within 1-2 meetings",
+                "model mechanics: this trigger shifts +3pp of probability "
+                "into the 3-4 hike rows (funded from the dove rows)",
+                "report transmission lag: Q4 hikes land on private deal "
+                "pricing in Q1-Q2 2027 — the target close window",
+                "Sept CPI and the Sept 16 dot plot are the last cheap "
+                "information events before the December meeting"],
+            "playbook": [
+                "compress diligence/QofE now; run buyer meetings in parallel "
+                "rather than sequence",
+                "target LOI + committed financing before the Dec 9 FOMC",
+                "reassess at Sept CPI and the Sept 16 dot plot — further "
+                "hawkish dot migration or a fourth dissenter = accelerate "
+                "harder"]})
     if ctx.get("fcix_z", 0) > 0.75:
-        cards.append({"rank": 2, "action": "Prioritize committed-capital buyers; expect "
-                      "financing outs in LOIs; weigh strategics",
-                      "trigger": f"fcix_z={ctx['fcix_z']:.2f}>0.75",
-                      "rationale": "Financing tight: sponsor leverage constrained",
-                      "confidence": "medium"})
+        cards.append({
+            "rank": 2,
+            "action": "Prioritize committed-capital buyers; expect financing "
+                      "outs in LOIs; weigh strategics",
+            "trigger": f"fcix_z={ctx['fcix_z']:.2f}>0.75",
+            "confidence": "medium",
+            "rationale": (
+                "Financing conditions are tighter than average (NFCI z above "
+                "+0.75). Sponsor leverage is the first casualty: the buyout "
+                "literature's most robust result is that credit conditions — "
+                "not deal quality — set LBO leverage and price. A buyer who "
+                "must raise debt at close is a buyer whose bid can shrink "
+                "between LOI and signing."),
+            "evidence": [
+                "Axelson et al. (J. Finance): each 100bp of HY widening cuts "
+                "LBO leverage ~5.9% and purchase price ~4.8% — and private "
+                "deals are MORE credit-sensitive than public comps",
+                "2022: LBO equity checks exceeded 50% for the first time on "
+                "record as debt became scarce",
+                "direct lenders funded 54-59% of LBO volume in 2023 — a "
+                "~$200M deal prices in that market, so committed private "
+                "credit or cash buyers dodge the syndication window entirely"],
+            "playbook": [
+                "rank the buyer list by certainty of funds, not headline bid",
+                "push for reverse termination fees where financing outs "
+                "appear in LOIs",
+                "keep at least one strategic (no leverage needed) warm as "
+                "the pricing floor"]})
     p2 = sum(wi for wi, h in zip(hw, HIKES) if h >= 2)
     if p2 > 0.40:
-        cards.append({"rank": 3, "action": "Negotiate rate-contingent collar / earnout now",
-                      "trigger": f"P(>=2 hikes)={p2:.2f}>0.40",
-                      "rationale": "Bridge bid-ask across rate scenarios",
-                      "confidence": "medium"})
+        cards.append({
+            "rank": 3,
+            "action": "Negotiate a rate-contingent collar / earnout now",
+            "trigger": f"P(>=2 hikes)={p2:.2f}>0.40",
+            "confidence": "medium",
+            "rationale": (
+                f"With P(>=2 hikes) at {p2:.0%}, buyer and seller are "
+                "pricing different worlds: the cohort spans roughly $211M "
+                "(holds continue) down to $154M (4 hikes) for the same "
+                "Q1-end close — a spread no single fixed price can bridge "
+                "honestly. A rate-contingent structure converts disagreement "
+                "about the Fed into a shared instrument instead of a "
+                "negotiation stalemate, and pre-agreeing the adjustment "
+                "beats being retraded after an adverse FOMC."),
+            "evidence": [
+                "Denis-Macias (JFQA): material-adverse-event disputes drive "
+                "80% of renegotiations; the average renegotiated cut is -15%",
+                "SRS Acquiom: >90% of private deals already carry "
+                "purchase-price-adjustment mechanisms — this adds a rate leg",
+                "~30-40% of lower-middle-market deals get retraded between "
+                "LOI and close in normal times (~7% typical haircut); "
+                "pre-agreed formulas remove the retrade pretext"],
+            "playbook": [
+                "propose a collar keyed to an observable (fed funds target "
+                "or BSL spread at close), symmetric so the buyer shares "
+                "upside if hikes don't land",
+                "cap the collar's width near the report's per-scenario "
+                "range (~$8-22M) so it prices the disagreement, not the deal"]})
     if ctx.get("revenue_delta", 0) > 0:
         d = ctx["revenue_delta"]
         lo, hi = SCEN[IDX[4]]["q1"][0], SCEN[IDX[0]]["q1"][1]  # report rows: 1.38-2.00x
-        cards.append({"rank": 4, "action": f"Re-anchor ask: +${d:.1f}M revenue run-rate "
-                      f"~ +${lo*d:.1f}-{hi*d:.1f}M value (1.38-2.00x revenue)",
-                      "trigger": f"revenue_raised+{d}",
-                      "rationale": "Growth trajectory offsets multiple compression",
-                      "confidence": "high"})
+        cards.append({
+            "rank": 4,
+            "action": f"Re-anchor the ask: +${d:.1f}M revenue run-rate "
+                      f"~ +${lo*d:.1f}-{hi*d:.1f}M of value (1.38-2.00x revenue)",
+            "trigger": f"revenue_raised+{d}",
+            "confidence": "high",
+            "rationale": (
+                "This deal prices on a revenue multiple, so every dollar of "
+                "run-rate flows straight through the 1.38-2.00x grid. Growth "
+                "is the seller's compounding asset in this process: staying "
+                "on the ramp adds roughly $0.9M of revenue (~$1.8M of value "
+                "at the modal multiple) every month, which is what funds the "
+                "hold-vs-sell tension in the first place. A raised run-rate "
+                "is the one input that lifts every scenario row at once — "
+                "including the hawk rows."),
+            "evidence": [
+                f"report multiples: +$1M revenue = +$1.38M value even in the "
+                f"4-hike row, +$2.00M in the holds row",
+                "the ramp premise: evenly scaling toward $200-225M by "
+                "Jul 31 2027 — beating the ramp re-rates the whole table"],
+            "playbook": [
+                "refresh the CIM and management case with the new run-rate "
+                "before the next buyer touchpoint",
+                "re-anchor the ask off the updated table, not the old one"]})
     fin = ctx.get("financing") or {}
     if fin.get("state") in ("TIGHT", "SHUT"):
         sev = fin["state"]
-        cards.append({"rank": 3, "action": (
-            "Financing window " + ("SHUT — assume syndicated debt unavailable; "
-            "committed-capital or all-equity buyers only; expect retrades"
-            if sev == "SHUT" else
-            "tightening — lock committed financing early; expect retrade "
-            "attempts and +1-2 quarters of process risk")),
-            "trigger": f"hy_state={sev} hy={fin.get('hy_bp')}bp d90={fin.get('d90_bp')}bp",
-            "rationale": "2022 precedent: spreads 310->583bp shut the LBO loan "
-                         f"market; hawk-row stall odds scaled x{fin.get('stall_mult')}",
-            "confidence": "high" if sev == "SHUT" else "medium"})
+        cards.append({
+            "rank": 3,
+            "action": (
+                "Financing window " + ("SHUT — assume syndicated debt is "
+                "unavailable; committed-capital or all-equity buyers only; "
+                "expect retrades" if sev == "SHUT" else
+                "tightening — lock committed financing early; expect retrade "
+                "attempts and +1-2 quarters of process risk")),
+            "trigger": f"hy_state={sev} hy={fin.get('hy_bp')}bp "
+                       f"d90={fin.get('d90_bp')}bp",
+            "confidence": "high" if sev == "SHUT" else "medium",
+            "rationale": (
+                "High-yield spreads are the strongest evidence-backed "
+                "predictor of whether this deal can be financed. The state "
+                "machine has crossed into " + sev + " on level and/or speed "
+                "of widening — historically the point where lenders resize, "
+                "ICs pause, and LOIs grow financing outs. The engine has "
+                f"already scaled the hawk-row stall odds x{fin.get('stall_mult')} "
+                "to reflect it; the breakeven row above shows how much of "
+                "that risk flips the Q1-vs-Q2 call."),
+            "evidence": [
+                "2022 episode: HY 310->583bp shut the market — leveraged-loan "
+                "issuance -63%, HY issuance -76%, LBO count 147->51",
+                "the shutdown happened at only ~500-600bp because the MOVE "
+                "was fast — level AND speed both trigger this state",
+                "2022-23 stress stalled processes (fewer launches, longer "
+                "timelines) rather than killing signed deals — being SIGNED "
+                "is the protection"],
+            "playbook": [
+                "lock rate/spread terms with lenders now; committed paper "
+                "over best-efforts syndication",
+                "advance any buyer who does not need the debt market",
+                "expect and pre-empt the retrade conversation"]})
     if ctx.get("stress_prob", 0) > 0.25:
-        cards.append({"rank": 5, "action": "Treat Q1'27 close as hard deadline",
-                      "trigger": f"stress_prob={ctx['stress_prob']:.2f}>0.25",
-                      "rationale": "Q2'27 window degrading under simulator stress odds",
-                      "confidence": "medium"})
+        cards.append({
+            "rank": 5,
+            "action": "Treat the Q1'27 close as a hard deadline",
+            "trigger": f"stress_prob={ctx['stress_prob']:.2f}>0.25",
+            "confidence": "medium",
+            "rationale": (
+                f"The rate-shock simulator, run across the cohort scenarios "
+                f"and weighted by their probabilities, puts "
+                f"{ctx['stress_prob']:.0%} odds on the market entering a "
+                "stress regime inside the window — above the 25% line where "
+                "the Q2 option stops being cheap. A Q2-end close carries "
+                "the FULL hawk-row stall exposure; closing by Q1-end dodges "
+                "half of it. The evidence says stress mainly stalls and "
+                "delays processes rather than breaking signed deals, so the "
+                "protection is to be signed and closed before the stress "
+                "window, not to hope it misses."),
+            "evidence": [
+                "stall exposure model: Q1-end close carries 50% of hawk-row "
+                "stall risk, Q2-end carries 100%",
+                "2022-23: deal terminations stayed ~3% by count even in "
+                "stress — but launches fell and timelines stretched; "
+                "unsigned processes bore the damage",
+                "the simulator figure understates cumulative risk (it is "
+                "max monthly stress occupancy and its horizon ends Jun-27)"],
+            "playbook": [
+                "build the calendar backwards from Mar 31 2027: exclusivity "
+                "by January, LOI by early December, management meetings "
+                "Oct-Nov",
+                "treat any slip past those gates as a decision point, not a "
+                "drift"]})
     be = ctx.get("breakeven")
     if be and be.get("within_5pp_of_flip"):
-        cards.append({"rank": 6, "action": "Window choice is LIVE: Q1-vs-Q2 within 5pp "
-                      "of flipping — decide on stall risk, not headline EV",
-                      "trigger": f"breakeven_margin<=5pp (dEV={be['dev_q1_minus_q2']})",
-                      "rationale": "EV is linear in weights; the call rides on "
-                                   "tail drift and stall hazard",
-                      "confidence": "high"})
+        cards.append({
+            "rank": 6,
+            "action": "Window choice is LIVE: Q1-vs-Q2 is within 5pp of "
+                      "flipping — decide on stall risk, not headline EV",
+            "trigger": f"breakeven_margin<=5pp (dEV={be['dev_q1_minus_q2']})",
+            "confidence": "high",
+            "rationale": (
+                "Expected value is linear in the scenario probabilities, so "
+                "the Q1-vs-Q2 preference has an exact flipping point — and "
+                "the current margin is inside 5 percentage points of it. At "
+                "this distance the headline EV difference is noise relative "
+                "to the uncertainty in the stall odds and the tail weights; "
+                "the honest basis for the window choice is your read on "
+                "process-stall risk, which the table cannot settle for you."),
+            "evidence": [
+                f"current margin: dEV = {be['dev_q1_minus_q2']}M between "
+                "the two report windows",
+                "the Dirichlet weight-uncertainty band (table above) is "
+                "wider than the EV gap at this margin"],
+            "playbook": [
+                "fix the decision criterion now (e.g. 'close Q1 unless "
+                "financing stays BENIGN through the Dec FOMC') so the call "
+                "is not re-litigated weekly",
+                "watch the HY financing state — it moves the stall odds "
+                "that decide this"]})
     return cards

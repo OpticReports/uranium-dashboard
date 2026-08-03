@@ -33,7 +33,10 @@ tr.foot td.cmid{color:#7dd3fc}
 .be{background:#1e293b66;border-radius:6px;padding:8px 12px;margin-top:10px;color:#fbbf24;font-size:12px}
 .tag{font-size:8px;color:#475569;display:block;text-transform:none;letter-spacing:0}
 .card{border:1px solid #334155;border-left:3px solid #38bdf8;border-radius:6px;padding:8px 12px;margin-top:8px}
-.card b{color:#e2e8f0}.trig{color:#64748b;font-size:10px}
+.card b{color:#e2e8f0}.trig{color:#64748b;font-size:10px;margin-top:6px}
+.cev{margin-top:6px;font-size:11px;color:#94a3b8}
+.cevh{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#64748b}
+.cev ul{margin:2px 0 0;padding-left:18px}.cev li{margin:1px 0}
 .ep{color:#475569;font-size:10px;margin-top:14px}
 a.nav{position:fixed;top:12px;left:12px;color:#94a3b8;text-decoration:none;border:1px solid #334155;border-radius:6px;padding:4px 8px;font-size:11px;background:#0f172a}
 details{margin-bottom:14px}
@@ -285,7 +288,9 @@ function render(b){
     `<td>$${c.cost_vs_now}M</td><td style="color:${c.hawk_cost>0.05?'#f87171':'#64748b'}">$${c.hawk_cost}M</td></tr>`).join('');
 
   document.getElementById('cards').innerHTML=b.cards.length?b.cards.map(c=>
-    `<div class="card"><b>${c.action}</b><div>${c.rationale}</div>`+
+    `<div class="card"><b>${c.action}</b><div style="margin-top:4px">${c.rationale}</div>`+
+    (c.evidence&&c.evidence.length?`<div class="cev"><span class="cevh">Evidence</span><ul>${c.evidence.map(e=>`<li>${e}</li>`).join('')}</ul></div>`:'')+
+    (c.playbook&&c.playbook.length?`<div class="cev"><span class="cevh">Do</span><ul>${c.playbook.map(e=>`<li>${e}</li>`).join('')}</ul></div>`:'')+
     `<div class="trig">trigger: ${c.trigger} &middot; confidence ${c.confidence}</div></div>`).join('')
     :'<div class="trig">no active triggers</div>';
   document.getElementById('ep').textContent=b.epistemic;
