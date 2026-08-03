@@ -368,3 +368,39 @@ corroboration probabilities), DEMOTED (S×B "100% at 3m" headline, N×B
 stability). RISK_BUILD's evidence notes the successful sizing rule.
 Eval script: scratchpad eval_usefulness.py; results frozen in
 usefulness_eval.json.
+
+---
+
+## Nowcast layer (2026-08-03) — estimating the months FINRA hasn't printed
+
+FINRA publishes ~3-4 weeks after month-end, so the confirmed line is always
+4-7 weeks stale. The panel now draws a DISPLAY-ONLY dashed extension:
+
+- **Price model**: dlog(margin) ~ spx_ret + spx_ret_lag + d(realized vol),
+  fit on the full FINRA history at runtime.
+- **Schwab anchor**: Schwab files its Monthly Activity Report as an 8-K on
+  SEC EDGAR ~2-3 weeks before FINRA prints, with a trailing 13-month table of
+  client margin balances (app/sources/schwab_margin.py; keyless, official,
+  fair-use UA, budgeted incremental backfill). When Schwab's print exists for
+  an unprinted FINRA month, the estimate is precision-weighted toward the
+  regression of FINRA-on-Schwab monthly changes.
+
+### Honesty box (frozen pseudo-OOS backtest, 2026-08-03)
+
+Expanding-window, every month predicted using only prior data; 140 scored
+months ~2007-2026:
+
+| metric | value |
+|---|---|
+| OOS R2 (monthly dlog) | 0.49 |
+| direction hit | 74.3% |
+| YoY-line error sd | 3.1pp (p90 abs 4.8pp) |
+| state classification | 86.4% overall |
+| state-TRANSITION months | **54.5% (18/33)** — the honest number |
+
+Persistence scores 0% on transition months by definition, so the nowcast's
+value-add is exactly there: it catches about half of regime turns a month
+early. Misses cluster at band boundaries (SQUEEZE/NEUTRAL confusions
+dominate). RULES: the nowcast never feeds the composite, the corroboration
+flags, or the playbook — those run on confirmed prints only; the chip
+renders the transition hit rate so the estimate is never mistaken for data.

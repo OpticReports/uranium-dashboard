@@ -22,6 +22,9 @@ interface ChartRow {
   date: string;
   margin_yoy: number | null;
   excess_yoy: number | null;
+  excess_nc: number | null;
+  nc_lo: number | null;
+  nc_hi: number | null;
   spx: number | null;
   btc: number | null;
   spx_idx: number | null;
@@ -38,6 +41,50 @@ const STATE_STYLE: Record<
   SQUEEZE: { color: "#38bdf8", bg: "rgba(56,189,248,0.10)", border: "rgba(56,189,248,0.5)" },
   WASHOUT: { color: "#c084fc", bg: "rgba(192,132,252,0.10)", border: "rgba(192,132,252,0.5)" },
 };
+
+function NowcastChip({ nowcast }: { nowcast?: import("../lib/api").MarginNowcast | null }) {
+  if (!nowcast?.months?.length) return null;
+  const m = nowcast.months[nowcast.months.length - 1];
+  if (m.excess_pp == null || !m.state_est) return null;
+  const st = STATE_STYLE[m.state_est];
+  const bt = nowcast.backtest as Record<string, number | string>;
+  return (
+    <div
+      className="mt-2 rounded border px-3 py-2 text-xs"
+      style={{ background: "rgba(125,211,252,0.06)", borderColor: "rgba(125,211,252,0.3)" }}
+    >
+      <span className="font-mono text-[10px] uppercase tracking-wide text-sky-300">
+        Nowcast (est) · {m.month}
+        {m.partial_month ? " · partial month" : ""} ·{" "}
+        {m.basis.startsWith("schwab") ? "Schwab-anchored" : "price model"}
+      </span>{" "}
+      <span className="font-semibold" style={{ color: st.color }}>
+        {m.state_est}
+        {m.near_boundary ? " (near boundary)" : ""}
+      </span>{" "}
+      <span className="text-slate-300">
+        est excess {m.excess_pp > 0 ? "+" : ""}
+        {m.excess_pp.toFixed(1)}pp ±{(m.band_pp ?? 3.1).toFixed(1)}
+        {m.yoy_pct != null ? ` · margin YoY ~${m.yoy_pct.toFixed(0)}%` : ""}
+      </span>
+      {nowcast.schwab?.yoy_pct != null && (
+        <span className="text-slate-500">
+          {" "}· Schwab client margin {nowcast.schwab.latest_month}: $
+          {nowcast.schwab.margin_bn.toFixed(0)}B ({nowcast.schwab.yoy_pct > 0 ? "+" : ""}
+          {nowcast.schwab.yoy_pct.toFixed(0)}% YoY, files ~3wk before FINRA)
+        </span>
+      )}
+      <div className="mt-1 text-[10px] leading-relaxed text-slate-500">
+        Estimate of the months FINRA hasn&apos;t printed — display-only, never feeds
+        the composite or the corroboration flags. Backtest (pseudo-OOS, {String(bt.transitions)}
+        {" "}transitions): direction {String(bt.direction_hit_pct)}% · state {String(bt.state_hit_pct)}%
+        overall but regime-TURN months only {String(bt.transition_hit_pct)}% — it catches about half
+        of state changes a month early; misses cluster at band boundaries. YoY error sd ±
+        {String(bt.yoy_err_sd_pp)}pp.
+      </div>
+    </div>
+  );
+}
 
 function toTs(dateStr: string): number {
   const d = new Date(dateStr);
@@ -91,12 +138,34 @@ export default function MarginLeverageChart() {
         date: p.date,
         margin_yoy: p.margin_yoy,
         excess_yoy: p.excess_yoy,
+        excess_nc: null as number | null,
+        nc_lo: null as number | null,
+        nc_hi: null as number | null,
         spx: p.spx,
         btc: p.btc,
         spx_idx: null as number | null,
         btc_idx: null as number | null,
       }))
       .filter((r) => r.ts >= minTs);
+    // Nowcast (display-only estimate): dashed extension of the excess line
+    // over the months FINRA hasn't printed, anchored at the last real point.
+    if (data.nowcast?.months?.length) {
+      const lastReal = [...win].reverse().find((r) => r.excess_yoy != null);
+      if (lastReal) lastReal.excess_nc = lastReal.excess_yoy;
+      for (const m of data.nowcast.months) {
+        if (m.excess_pp == null) continue;
+        const ts = Date.UTC(+m.month.slice(0, 4), +m.month.slice(5, 7) - 1, 1);
+        if (ts < minTs) continue;
+        win.push({
+          ts, date: `${m.month}-01 (est)`,
+          margin_yoy: null, excess_yoy: null,
+          excess_nc: m.excess_pp,
+          nc_lo: m.excess_pp - (m.band_pp ?? 3.1),
+          nc_hi: m.excess_pp + (m.band_pp ?? 3.1),
+          spx: null, btc: null, spx_idx: null, btc_idx: null,
+        });
+      }
+    }
     // Re-index overlays to 100 at their first point INSIDE the selected window
     // so every range starts comparably at 100.
     let spxBase: number | null = null;
@@ -136,6 +205,7 @@ export default function MarginLeverageChart() {
       {!loading && !error && data && (
         <>
           <StateBanner data={data} />
+          <NowcastChip nowcast={data.nowcast} />
 
           {rows.length === 0 ? (
             <div className="mt-4 flex h-56 items-center justify-center rounded border border-dashed border-panelborder text-center text-sm text-slate-500">
@@ -298,6 +368,39 @@ export default function MarginLeverageChart() {
                     strokeWidth={2}
                     connectNulls
                     isAnimationActive={false}
+                  />
+                  {/* nowcast: dashed estimate + band over unprinted months */}
+                  <Line
+                    dataKey="excess_nc"
+                    name="excess nowcast (est)"
+                    stroke="#7dd3fc"
+                    strokeDasharray="6 4"
+                    dot={{ r: 3, fill: "#7dd3fc" }}
+                    strokeWidth={2}
+                    connectNulls
+                    isAnimationActive={false}
+                  />
+                  <Line
+                    dataKey="nc_hi"
+                    name="nowcast band hi"
+                    stroke="rgba(125,211,252,0.35)"
+                    strokeDasharray="2 4"
+                    dot={false}
+                    strokeWidth={1}
+                    connectNulls
+                    isAnimationActive={false}
+                    legendType="none"
+                  />
+                  <Line
+                    dataKey="nc_lo"
+                    name="nowcast band lo"
+                    stroke="rgba(125,211,252,0.35)"
+                    strokeDasharray="2 4"
+                    dot={false}
+                    strokeWidth={1}
+                    connectNulls
+                    isAnimationActive={false}
+                    legendType="none"
                   />
                   {(showSpx || showBtc) && (
                     <YAxis

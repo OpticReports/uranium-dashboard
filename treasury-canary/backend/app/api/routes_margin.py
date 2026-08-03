@@ -219,8 +219,23 @@ def margin_leverage():
     if run_start and rd:
         bands.append({"start": run_start.isoformat(), "end": rd[-1].isoformat()})
 
+    # --- nowcast (display-only): estimate the months FINRA hasn't printed ---
+    nowcast = None
+    try:
+        from ..metrics.margin_nowcast import build_margin_nowcast
+        from ..sources.schwab_margin import fetch_schwab_margin
+        try:
+            schwab = fetch_schwab_margin()
+        except Exception:  # noqa: BLE001
+            schwab = None
+        nowcast = build_margin_nowcast(bundle.get("margin_debit", ([], [])),
+                                       spx_pair, schwab)
+    except Exception:  # noqa: BLE001
+        nowcast = None
+
     return {
         "series": series,
+        "nowcast": nowcast,
         "corroboration": late_cycle_flags(bundle, cur_excess),
         "recessions": bands,
         "current": {

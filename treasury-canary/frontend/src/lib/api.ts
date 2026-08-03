@@ -452,8 +452,29 @@ export interface LeverageCorroboration {
   reading: string;
 }
 
+export interface MarginNowcastMonth {
+  month: string;
+  margin_bn: number;
+  basis: string;
+  yoy_pct?: number;
+  excess_pp?: number;
+  band_pp?: number;
+  state_est?: LeverageState;
+  near_boundary?: boolean;
+  partial_month?: boolean;
+}
+
+export interface MarginNowcast {
+  months: MarginNowcastMonth[];
+  last_print: string;
+  schwab: { latest_month: string; margin_bn: number; yoy_pct: number | null } | null;
+  backtest: Record<string, string | number>;
+  display_only: string;
+}
+
 export interface MarginLeverage {
   series: MarginPoint[];
+  nowcast?: MarginNowcast | null;
   corroboration?: LeverageCorroboration;
   recessions: Array<{ start: string; end: string }>;
   current: {
