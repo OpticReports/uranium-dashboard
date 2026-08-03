@@ -388,36 +388,73 @@ def window_scores(p: dict, hike_w: list[float], fcix_z: float, dmhi01: float,
     return out
 
 
-def cost_of_delay(surface: list[dict], scores: list[dict]) -> dict:
-    """Amended A6a: frozen-input decision-delay counterfactual — the cost of
-    WAITING k months to launch, holding today's information fixed. v2: values
-    are STALL-ADJUSTED, the horizon is capped at the 2027-07-31 scale target
-    (extrapolated months beyond the operator's stated horizon can't win
-    'best EV'), and a hawk-conditional column (P-weighted on the >=2-hike
-    rows) shows what the same delay costs if the hawkish world materializes —
-    under the ramp the base-case delay cost is ~0 by construction; the risk
-    lives in the hawk column."""
-    feas = [s["month"] for s in scores
-            if s["feasible"] and _mi(s["month"]) <= _mi(TARGET_M)]
-    if not feas:
-        return {"curve": [], "note": "no feasible months inside the horizon"}
-    adj_by = {r["month"]: r["ev_stall_adj"] for r in surface}
-    hawk_by = {r["month"]: r["ev_hawk_adj"] for r in surface}
-    best_now = max(adj_by[m] for m in feas)
-    hawk_now = max(hawk_by[m] for m in feas)
-    curve = []
+def slip_costs(p: dict, surface_rows: list[dict], stage: str,
+               today_month: str, hike_w: list[float]) -> dict:
+    """Cost of PROCESS SLIPPAGE — replaces the frozen-input cost-of-delay
+    table, whose answer was ~$0 by construction under the ramp. The real,
+    non-zero costs of slipping are calendar-mechanical:
+      1. the Q1-option cliff: with the current stage's lead time, slipping
+         k* months pushes the earliest feasible close past Q1-end 2027 and
+         forfeits the early-close option outright;
+      2. unsigned event exposure: every month of slip is another FOMC/CPI
+         faced without locked terms (stall and repricing risk live in the
+         unsigned phase);
+      3. the hawk-conditional cost: what the forfeited early close was worth
+         if the >=2-hike world materializes (stall-adjusted).
+    """
+    lead = p["lead_by_stage"].get(stage, 6)
+    ti = _mi(today_month) if today_month in MONTHS else 0
+    hawk_tilt = sum(wi for wi, h in zip(hike_w, HIKES) if h >= 2)
+    gap = p["gap_months_hawkish"] if hawk_tilt > 0.3 else p["gap_months_dovish"]
+    adj = {r["month"]: r["ev_stall_adj"] for r in surface_rows}
+    hawk = {r["month"]: r["ev_hawk_adj"] for r in surface_rows}
+    horizon = [m for m in MONTHS if _mi(m) <= _mi(TARGET_M)]
+
+    def _sign_by(close_m: str) -> str:
+        return MONTHS[max(ti, _mi(close_m) - int(round(gap)))]
+
+    def _events(a: str, b: str, cal: list[str]) -> int:
+        return len([m for m in cal if a <= m <= b])
+
+    rows, cliff = [], None
+    base_hawk = None
     for k in range(0, 7):
-        remaining = feas[k:]
-        if not remaining:
+        ei = ti + lead + k
+        if ei >= len(MONTHS):
             break
-        best_k = max(adj_by[m] for m in remaining)
-        hawk_k = max(hawk_by[m] for m in remaining)
-        curve.append({"delay_months": k, "best_ev": round(best_k, 1),
-                      "cost_vs_now": round(best_now - best_k, 2),
-                      "hawk_cost": round(hawk_now - hawk_k, 2),
-                      "cost_per_week": round((best_now - best_k) / max(k * 4.33, 1), 3)})
-    return {"curve": curve, "best_feasible_ev": round(best_now, 1),
-            "note": "stall-adjusted, horizon capped at " + TARGET_M}
+        earliest = MONTHS[ei]
+        feas = [m for m in horizon if _mi(m) >= ei]
+        if not feas:
+            break
+        q1_open = _mi(earliest) <= _mi(Q1END)
+        if not q1_open and cliff is None:
+            cliff = k
+        sign_by = _sign_by(earliest)
+        hawk_best = max(hawk[m] for m in feas)
+        if base_hawk is None:
+            base_hawk = hawk_best
+        rows.append({
+            "slip_months": k, "earliest_close": earliest,
+            "q1_open": q1_open, "sign_by": sign_by,
+            "fomc_unsigned": _events(today_month, sign_by, FOMC),
+            "hawk_cost": round(base_hawk - hawk_best, 2)})
+    # what the cliff forfeits, valued in the hawk-conditional world
+    later = [m for m in horizon if _mi(m) > _mi(Q1END)]
+    forfeit = (round(max(0.0, hawk.get(Q1END, 0.0)
+                         - max(hawk[m] for m in later)), 2) if later else 0.0)
+    q1_sign, q2_sign = _sign_by(Q1END), _sign_by(Q2END)
+    return {"rows": rows, "cliff_months": cliff,
+            "gap_months": gap,
+            "q1": {"close": Q1END, "sign_by": q1_sign,
+                   "fomc_to_sign": _events(today_month, q1_sign, FOMC),
+                   "stall_exposure_pct": int(p["stall_exposure_q1"] * 100)},
+            "q2": {"close": Q2END, "sign_by": q2_sign,
+                   "fomc_to_sign": _events(today_month, q2_sign, FOMC),
+                   "stall_exposure_pct": 100},
+            "forfeit_hawk_value": forfeit,
+            "note": "slippage costs are calendar-mechanical: the Q1-option "
+                    "cliff, unsigned event exposure, and the hawk-conditional "
+                    "value of the early close"}
 
 
 def action_cards(p: dict, ctx: dict) -> list[dict]:

@@ -12,9 +12,9 @@ import numpy as np
 
 from app.ewm.core import (
     HIKES, IDX, MODAL_S, MONTHS, PARAMS, Q1END, Q2END, REV_BASIS, SCEN,
-    TARGET_M, action_cards, breakeven, cohort_surface, cost_of_delay,
-    dirichlet_band, hold_premium, multiple_range, rate_risk, revenue_ramp,
-    scenario_weights, weight_draws, window_scores,
+    TARGET_M, action_cards, breakeven, cohort_surface, dirichlet_band,
+    hold_premium, multiple_range, rate_risk, revenue_ramp, scenario_weights,
+    slip_costs, weight_draws, window_scores,
 )
 from app.ewm.mc import simulate
 
@@ -222,17 +222,31 @@ def test_dissent_bump_tail_only_and_gate1_safe():
     assert 184.0 <= q1["ev"] <= 193.0                     # tail bump stays in band
 
 
-def test_cost_of_delay_and_hold_premium():
+def test_slip_costs_cliff_and_hold_premium():
     s = cohort_surface(PARAMS)
-    ws = window_scores(PARAMS, PARAMS["hike_weights"], 0.1, 0.55, 0.25,
-                       "prep", "2026-09")
-    cod = cost_of_delay(s["surface"], ws)
-    assert cod["curve"][0]["cost_vs_now"] == 0.0
-    assert all(c["cost_vs_now"] >= 0 for c in cod["curve"])  # delay never pays here
+    w = scenario_weights(PARAMS, False)
+    sl = slip_costs(PARAMS, s["surface"], "prep", "2026-09", w)
+    # stage prep (6mo lead) from Sep-26: earliest close IS Q1-end -> the
+    # Q1 option dies after ONE month of slippage
+    assert sl["rows"][0]["earliest_close"] == Q1END and sl["rows"][0]["q1_open"]
+    assert sl["cliff_months"] == 1 and not sl["rows"][1]["q1_open"]
+    # hawk-conditional slip costs are monotone non-decreasing
+    hc = [r["hawk_cost"] for r in sl["rows"]]
+    assert all(b >= a for a, b in zip(hc, hc[1:])) and hc[0] == 0.0
+    # sign-by precedes the close by the tilt-dependent gap; hawk tilt >30%
+    # at base weights -> 4.5-month gap
+    assert sl["gap_months"] == PARAMS["gap_months_hawkish"]
+    assert sl["q1"]["sign_by"] < Q1END and sl["q2"]["sign_by"] < Q2END
+    # unsigned event exposure grows with the later window
+    assert sl["q2"]["fomc_to_sign"] > sl["q1"]["fomc_to_sign"]
+    assert sl["forfeit_hawk_value"] >= 0.0
+    # a later stage relaxes the cliff: in_market (4mo lead) tolerates 2 slips
+    sl2 = slip_costs(PARAMS, s["surface"], "in_market", "2026-09", w)
+    assert sl2["cliff_months"] == 3 and sl2["rows"][2]["q1_open"]
+    # hold premium unchanged by the slip refactor
     hp = hold_premium(s["surface"])
     tgt = next(h for h in hp if h["month"] == TARGET_M)
     assert tgt["premium"] == 0.0
-    # with the ramp on, holding toward the target carries positive premium
     q1p = next(h for h in hp if h["month"] == Q1END)
     assert q1p["premium"] > 0
 

@@ -14,7 +14,7 @@ from pydantic import BaseModel
 
 from .core import (FOMC, HIKES, MODAL_S, MONTHS, PARAMS, Q1END, Q2END,
                    TARGET_M, action_cards, apply_weight_tilt, breakeven,
-                   cohort_surface, cost_of_delay, dirichlet_band, hold_premium,
+                   cohort_surface, dirichlet_band, hold_premium, slip_costs,
                    scenario_weights, window_scores)
 from .live import live_snapshot
 from .mc import simulate
@@ -153,7 +153,8 @@ def board():
     ws = window_scores(p, surface["weights"], res["fcix_z"], res["dmhi01"],
                        canary, inp["stage"], inp["today_month"],
                        spike_pos_override=res["spike_pos"])
-    cod = cost_of_delay(surface["surface"], ws)
+    slip = slip_costs(p, surface["surface"], inp["stage"],
+                      inp["today_month"], surface["weights"])
     cards = action_cards(p, {"hike_weights": surface["weights"],
                              "fcix_z": res["fcix_z"],
                              "dissent_cluster": inp["dissent_cluster"],
@@ -166,7 +167,7 @@ def board():
     return {"inputs": inp, "canary01": canary, "surface": surface,
             "live": live, "resolved": res,
             "breakeven": be, "weight_band": band, "hold_premium": hp,
-            "windows": ws, "cost_of_delay": cod, "cards": cards,
+            "windows": ws, "slip": slip, "cards": cards,
             "headline": {"q1_ev": q1["ev"], "q1_lo": q1["ev_lo"], "q1_hi": q1["ev_hi"],
                          "q2_ev": q2["ev"], "target_ev": tgt["ev"],
                          "modal_cell": [q1["cells"][MODAL_S]["lo"],

@@ -138,9 +138,14 @@ canvas{width:100%;max-width:100%;background:#0d1526;border-radius:12px}
 <div class="dim" id="liveft" style="font-size:10px;margin-top:6px"></div>
 </div>
 
-<div class="panel"><span class="lbl">Safety windows (feasibility-gated)<span class="hq" data-h="safety">?</span></span><div class="tl" id="tl"></div></div>
-<div class="panel"><span class="lbl">Cost of waiting to launch (stall-adjusted, horizon capped at Jul-27) &mdash; base case vs if the &ge;2-hike world materializes<span class="hq" data-h="cod">?</span></span><table id="cod"></table>
-<div class="dim" style="font-size:10px;margin-top:6px">Under the ramp the base-case delay cost is ~0 by construction &mdash; the risk of waiting lives in the hawk column and in the stall odds (see breakeven row).</div></div>
+<div class="panel"><span class="lbl">Close calendar &mdash; feasibility, sign-by deadlines &amp; the event gauntlet<span class="hq" data-h="safety">?</span></span>
+<div class="tl" id="tl"></div>
+<div id="calsum" style="margin-top:12px;font-size:12px;line-height:1.7"></div>
+</div>
+<div class="panel"><span class="lbl">Cost of slipping the process<span class="hq" data-h="cod">?</span></span>
+<div class="plain" id="slipline" style="font-size:12.5px;border-left-color:#fbbf24;margin-top:8px"></div>
+<table id="slip" style="margin-top:10px"></table>
+</div>
 <div class="panel"><span class="lbl">Action cards<span class="hq" data-h="cards">?</span></span>
 <div class="plain" id="cardsrec" style="font-size:11.5px;margin-top:8px;border-left-color:#64748b"></div>
 <div id="cards"></div></div>
@@ -182,8 +187,8 @@ lv_stress:"<b>Simulator stress odds.</b> The rate-shock simulator run once per c
 lv_head:"<b>Financing headwind.</b> How far credit markets have moved your multiple since the report was written (HY at 284bp on Jul 30 2026), at the published elasticity of &minus;4.8% per 100bp of spread widening. Display-only — the report's cells are never modified by live data.",
 lv_now:"<b>Market path nowcast.</b> Which scenario row the market is pricing right now. The 2-year yield's 3-month move is the early-warning signal (+0.40pp repricing preceded the 2022 hiking cycle; stayed quiet in 2019). If it disagrees with the report weights you get an Apply button for a capped &plusmn;5pp tilt — nothing ever shifts silently.",
 lv_auto:"<b>AUTO / MANUAL.</b> AUTO reads the live feed each refresh. Click to MANUAL to freeze the field at your stored value (typing a value also flips it). If a data feed dies, the board falls back to stored values and says so in the source column — it never silently reads an empty feed as calm.",
-safety:"<b>Safety windows.</b> A 0&ndash;100 quality score per close month: rate risk (35%) + financing conditions (25%) + deal-market health (20%) + canary calm (20%). GREEN &ge;70, AMBER &ge;45, RED below. Struck-through months are infeasible given your stage's lead time. FOMC marks meeting months — event risk inside a signing-to-close gap.",
-cod:"<b>Cost of waiting.</b> If you delay the launch decision k months with today's information frozen: the best stall-adjusted EV still reachable (capped at the July-2027 goal). Under the growth ramp the base-case cost is ~0 by construction — the real cost of waiting appears in the '&ge;2 hikes' column and the stall odds.",
+safety:"<b>Close calendar.</b> Struck-through months are infeasible from your current stage\u2019s lead time. The green <b>SIGN</b> markers are the real deadlines: to close in a report window you must sign (LOI/definitive) earlier by the signing\u2192close gap \u2014 currently hawk-tilted at 4.5 months. FOMC tags mark meeting months. The 0\u2013100 scores blend rate risk, financing, deal-market health and canary calm \u2014 they cluster tightly when markets are calm, so read the structure (feasibility + deadlines + events), not small score differences.",
+cod:"<b>Cost of slipping.</b> Under the growth ramp, simply waiting costs ~nothing in expected value \u2014 so this table prices what slippage ACTUALLY costs: (1) the <b>cliff</b> \u2014 slip enough months and closing by end-Q1 2027 becomes infeasible, forfeiting the early-close option (valued under the \u2265 2-hike world, where it matters); (2) every month of slip is another <b>FOMC faced unsigned</b> \u2014 stall and repricing risk concentrates in the unsigned phase; (3) the last column: what delay costs if the hawkish world materializes.",
 cards:"<b>Action cards.</b> Rule-driven prescriptions. Each card shows the machine-checkable trigger that fired it, so you can audit why it appeared. No card = no active trigger."};
 function hq(k){return `<span class="hq" data-h="${k}">?</span>`}
 function cardsReconcile(b){
@@ -332,13 +337,33 @@ function render(b){
 
   document.getElementById('tl').innerHTML=b.windows.map(w=>{
     const cls=!w.feasible?'X':w.band[0];
+    const sign=w.month===b.slip.q1.sign_by?'<div class="fomc" style="color:#34d399;font-weight:700"><span style="display:inline-block;text-decoration:none">SIGN &#9733;Q1</span></div>'
+      :w.month===b.slip.q2.sign_by?'<div class="fomc" style="color:#7dd3fc;font-weight:700"><span style="display:inline-block;text-decoration:none">SIGN Q2</span></div>':'';
+    const goal=w.month==='2027-07'?'<div class="fomc" style="color:#34d399">GOAL</div>':'';
     return `<div class="mo ${cls}" title="score ${w.score}">${w.month.slice(2)}`+
-      `${w.events.fomc?'<div class=fomc>FOMC</div>':''}<div>${w.feasible?w.score:'&mdash;'}</div></div>`;
+      `${w.events.fomc?'<div class=fomc>FOMC</div>':''}${sign}${goal}<div>${w.feasible?w.score:'&mdash;'}</div></div>`;
   }).join('');
 
-  document.getElementById('cod').innerHTML='<tr><th>delay</th><th>best EV (stall-adj)</th><th>base-case cost</th><th>cost if &ge;2 hikes</th></tr>'+
-    b.cost_of_delay.curve.map(c=>`<tr><td>${c.delay_months} mo</td><td>${fmt(c.best_ev)}</td>`+
-    `<td>$${c.cost_vs_now}M</td><td style="color:${c.hawk_cost>0.05?'#f87171':'#64748b'}">$${c.hawk_cost}M</td></tr>`).join('');
+  const sl=b.slip, wsBy={}; b.windows.forEach(w=>wsBy[w.month]=w);
+  const line=(tag,star,o)=>{const w=wsBy[o.close]||{};
+    return `<div>${star?'<span class="star">&#9733;</span> ':''}<b>Close end-${tag}</b> (${o.close}): `+
+      `sign by <b style="color:#34d399">${o.sign_by}</b> &middot; ${o.fomc_to_sign} FOMC between now and signing &middot; `+
+      `stall exposure ${o.stall_exposure_pct}% &middot; window ${w.score??'&mdash;'} ${w.band??''}</div>`};
+  document.getElementById('calsum').innerHTML=line('Q1',true,sl.q1)+line('Q2',false,sl.q2)+
+    `<div class="dim" style="font-size:10.5px">Signing&rarr;close gap currently ${sl.gap_months} months (hawk-tilted market). Stall & repricing risk lives in the UNSIGNED phase &mdash; the sign-by date is the real deadline, the close date follows.</div>`;
+  const cliff=sl.cliff_months;
+  document.getElementById('slipline').innerHTML=cliff===0?
+    `<b style="color:#f87171">The Q1-end close is already infeasible from your current stage.</b> Earliest close: ${sl.rows[0].earliest_close}.`
+    :cliff===1?
+    `<b style="color:#f87171">&#9888; Any slippage kills the Q1-end option.</b> From your current stage the earliest feasible close is already ${sl.rows[0].earliest_close} &mdash; slip one month and closing by end-Q1 becomes impossible, forfeiting ~$${sl.forfeit_hawk_value}M of hawk-case protection and adding another FOMC faced unsigned.`
+    :cliff!=null?
+    `You can slip up to <b>${cliff-1} month${cliff-1>1?'s':''}</b> before the Q1-end close becomes impossible (forfeiting ~$${sl.forfeit_hawk_value}M of hawk-case protection). Each month of slip &asymp; one more FOMC faced without locked terms.`
+    :`The Q1-end close stays feasible across the modeled slippage range.`;
+  document.getElementById('slip').innerHTML='<tr><th>process slips by</th><th>earliest close</th><th>Q1-end option</th><th>sign-by moves to</th><th>FOMC unsigned</th><th>cost if &ge;2 hikes</th></tr>'+
+    sl.rows.map(r=>`<tr><td>${r.slip_months} mo</td><td>${r.earliest_close}</td>`+
+    `<td style="color:${r.q1_open?'#34d399':'#f87171'}">${r.q1_open?'OPEN':'LOST'}</td>`+
+    `<td>${r.sign_by}</td><td>${r.fomc_unsigned}</td>`+
+    `<td style="color:${r.hawk_cost>0.05?'#f87171':'#64748b'}">$${r.hawk_cost}M</td></tr>`).join('');
 
   document.getElementById('cardsrec').innerHTML=cardsReconcile(b);
   document.getElementById('cards').innerHTML=b.cards.length?b.cards.map(c=>
