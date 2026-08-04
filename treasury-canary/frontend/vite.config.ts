@@ -13,6 +13,11 @@ const proxied = [
   "/news",
   "/health",
   "/refresh",
+  "/margin",
+  "/rates",
+  "/shock-sim",
+  "/pins",
+  "/severity",
 ];
 
 export default defineConfig({

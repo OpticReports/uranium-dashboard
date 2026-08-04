@@ -92,11 +92,16 @@ function toTs(dateStr: string): number {
 }
 
 // Pre-1997 margin data is quarterly Z.1; FINRA monthly after. BTC exists 2014+.
-const RANGES: Array<{ id: string; label: string; from: number | null }> = [
-  { id: "all", label: "All (1927+)", from: null },
-  { id: "1971", label: "1971+", from: 1971 },
-  { id: "1997", label: "1997+", from: 1997 },
-  { id: "10y", label: "10y", from: new Date().getFullYear() - 10 },
+// Data is MONTHLY, so 1y (~12 points + nowcast) is the useful floor; custom
+// covers anything tighter.
+const YEAR_MS = 365.25 * 864e5;
+const RANGES: Array<{ id: string; label: string; fromTs: () => number | null }> = [
+  { id: "all", label: "All (1927+)", fromTs: () => null },
+  { id: "1971", label: "1971+", fromTs: () => Date.UTC(1971, 0, 1) },
+  { id: "1997", label: "1997+", fromTs: () => Date.UTC(1997, 0, 1) },
+  { id: "10y", label: "10y", fromTs: () => Date.now() - 10 * YEAR_MS },
+  { id: "3y", label: "3y", fromTs: () => Date.now() - 3 * YEAR_MS },
+  { id: "1y", label: "1y", fromTs: () => Date.now() - 1 * YEAR_MS },
 ];
 
 export default function MarginLeverageChart() {
@@ -106,6 +111,8 @@ export default function MarginLeverageChart() {
   const [showSpx, setShowSpx] = useState(false);
   const [showBtc, setShowBtc] = useState(false);
   const [range, setRange] = useState("1997");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
 
   useEffect(() => {
     let alive = true;
@@ -130,8 +137,14 @@ export default function MarginLeverageChart() {
 
   const rows: ChartRow[] = useMemo(() => {
     if (!data?.series) return [];
-    const fromYear = RANGES.find((r) => r.id === range)?.from ?? null;
-    const minTs = fromYear === null ? -Infinity : Date.UTC(fromYear, 0, 1);
+    let minTs = -Infinity;
+    let maxTs = Infinity;
+    if (range === "custom") {
+      if (customFrom) minTs = toTs(`${customFrom}-01`);
+      if (customTo) maxTs = toTs(`${customTo}-28`);
+    } else {
+      minTs = RANGES.find((r) => r.id === range)?.fromTs() ?? -Infinity;
+    }
     const win = data.series
       .map((p) => ({
         ts: toTs(p.date),
@@ -146,7 +159,7 @@ export default function MarginLeverageChart() {
         spx_idx: null as number | null,
         btc_idx: null as number | null,
       }))
-      .filter((r) => r.ts >= minTs);
+      .filter((r) => r.ts >= minTs && r.ts <= maxTs);
     // Nowcast (display-only estimate): dashed extension of the excess line
     // over the months FINRA hasn't printed, anchored at the last real point.
     if (data.nowcast?.months?.length) {
@@ -155,7 +168,7 @@ export default function MarginLeverageChart() {
       for (const m of data.nowcast.months) {
         if (m.excess_pp == null) continue;
         const ts = Date.UTC(+m.month.slice(0, 4), +m.month.slice(5, 7) - 1, 1);
-        if (ts < minTs) continue;
+        if (ts < minTs || ts > maxTs) continue;
         win.push({
           ts, date: `${m.month}-01 (est)`,
           margin_yoy: null, excess_yoy: null,
@@ -179,7 +192,7 @@ export default function MarginLeverageChart() {
         r.btc != null && btcBase ? Math.round((1000 * r.btc) / btcBase) / 10 : null;
     }
     return win;
-  }, [data, range]);
+  }, [data, range, customFrom, customTo]);
 
   const domain: [number, number] | undefined =
     rows.length > 0 ? [rows[0].ts, rows[rows.length - 1].ts] : undefined;
@@ -234,6 +247,29 @@ export default function MarginLeverageChart() {
                     onClick={() => setRange(r.id)}
                   />
                 ))}
+                <ToggleChip
+                  label="custom"
+                  color="#34d399"
+                  active={range === "custom"}
+                  onClick={() => setRange("custom")}
+                />
+                {range === "custom" && (
+                  <span className="flex items-center gap-1 text-[10px] text-slate-400">
+                    <input
+                      type="month"
+                      value={customFrom}
+                      onChange={(e) => setCustomFrom(e.target.value)}
+                      className="rounded border border-slate-600 bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-200"
+                    />
+                    &ndash;
+                    <input
+                      type="month"
+                      value={customTo}
+                      onChange={(e) => setCustomTo(e.target.value)}
+                      className="rounded border border-slate-600 bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-200"
+                    />
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-2">
               <span className="text-[10px] uppercase tracking-wide text-slate-500">
@@ -275,9 +311,19 @@ export default function MarginLeverageChart() {
                     type="number"
                     scale="time"
                     domain={domain}
-                    tickFormatter={(t: number) =>
-                      new Date(t).getFullYear().toString()
-                    }
+                    tickFormatter={(t: number) => {
+                      const d = new Date(t);
+                      const spanYears = domain
+                        ? (domain[1] - domain[0]) / YEAR_MS
+                        : 99;
+                      return spanYears <= 4
+                        ? d.toLocaleDateString("en-US", {
+                            month: "short",
+                            year: "2-digit",
+                            timeZone: "UTC",
+                          })
+                        : d.getFullYear().toString();
+                    }}
                     stroke="#475569"
                     tick={{ fontSize: 10 }}
                   />
@@ -364,7 +410,7 @@ export default function MarginLeverageChart() {
                     dataKey="excess_yoy"
                     name="excess_yoy"
                     stroke="#38bdf8"
-                    dot={false}
+                    dot={rows.length < 48 ? { r: 2.5, fill: "#38bdf8" } : false}
                     strokeWidth={2}
                     connectNulls
                     isAnimationActive={false}
