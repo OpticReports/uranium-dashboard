@@ -179,3 +179,49 @@ services:
         value: /app/frontend_dist
       - key: LOG_LEVEL
         value: INFO
+      # Shared secret for /exec/target (live-executor feed). Same value goes
+      # on the btc-executor service. Enter once in the Render dashboard.
+      - key: EXEC_TOKEN
+        sync: false
+
+  # --- S5 Live Executor (Coinbase perps) ------------------------------------
+  # Mirrors the paper engine's S5 blend onto a real Coinbase Advanced account.
+  # SAFETY: ships with DRY_RUN=true — it cannot place an order until that env
+  # is flipped to "false" by hand AFTER the dry-run shadow period checks out.
+  # The API key must be created trade-only (view + trade; NO transfers).
+  # Full runbook: btc-executor/EXECUTOR.md
+  - type: web
+    name: btc-executor
+    runtime: docker
+    dockerfilePath: btc-executor/Dockerfile
+    dockerContext: btc-executor
+    plan: starter            # always-on: mirrors stops 24/7
+    healthCheckPath: /health
+    autoDeploy: true
+    disk:
+      name: btc-exec-data
+      mountPath: /app/data
+      sizeGB: 1
+    envVars:
+      - key: ENGINE_URL
+        value: https://btc-paper-engine.onrender.com
+      - key: EXEC_TOKEN
+        sync: false            # must match btc-paper-engine's EXEC_TOKEN
+      - key: CB_API_KEY_NAME
+        sync: false            # CDP key name (trade-only key)
+      - key: CB_API_PRIVATE_KEY
+        sync: false            # CDP EC private key PEM
+      - key: CB_PRODUCT_ID
+        value: BTC-PERP-INTX   # adjust after boot-log product discovery
+      - key: DRY_RUN
+        value: "true"          # flip to "false" ONLY after the shadow period
+      - key: KELLY_M
+        value: "0.56"          # start the live phase at 0.05 (token size)
+      - key: MAX_NOTIONAL_USD
+        value: "25000"
+      - key: MAX_ACCOUNT_LEV
+        value: "2.0"
+      - key: STATE_PATH
+        value: /app/data/executor_state.json
+      - key: LOG_LEVEL
+        value: INFO

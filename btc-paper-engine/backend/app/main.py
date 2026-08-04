@@ -7,7 +7,7 @@ import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
@@ -48,6 +48,45 @@ def health():
 @app.get("/status")
 def status():
     return ENGINE.status()
+
+
+@app.get("/exec/target")
+def exec_target(x_exec_token: str | None = Header(default=None)):
+    """Machine-readable desired state for the live executor: the S3 (pullback)
+    and S4 (trend) legs of the S5 blend — pending limit orders, open positions
+    with current protective levels, and data-health flags. The executor mirrors
+    this; the paper engine itself never touches an exchange."""
+    if settings.exec_token and x_exec_token != settings.exec_token:
+        raise HTTPException(status_code=401, detail="bad exec token")
+
+    def _leg(book):
+        b = ENGINE.books.get(book)
+        if b is None:
+            return None
+        pos = None
+        if b.position is not None:
+            p = b.position
+            stop = p.trail if p.trail is not None else p.stop_price
+            pos = {"side": p.side, "entry_price": p.entry_price,
+                   "entry_ts": p.entry_ts, "signal_ts": p.signal_ts,
+                   "stop": (round(stop, 2) if stop else None),
+                   "exit_flag": getattr(p, "exit_flag", None)}
+        pend = None
+        if b.pending is not None:
+            pend = {"side": b.pending.side, "limit": b.pending.limit,
+                    "signal_ts": b.pending.signal_ts}
+        return {"book": book, "halted": b.halted,
+                "state": ("HALTED" if b.halted else
+                          b.position.side if b.position else
+                          "PENDING" if b.pending else "FLAT"),
+                "pending": pend, "position": pos}
+
+    return {"bar_ts": ENGINE.last_processed,
+            "bar_iso": _iso(ENGINE.last_processed or None),
+            "price": ENGINE.cur_price,
+            "degraded": ENGINE.degraded, "data_halt": ENGINE.data_halt,
+            "blend": {"w_trend": 0.25, "lev": 1.5},
+            "legs": {"pullback": _leg("S3"), "trend": _leg("S4")}}
 
 
 @app.get("/books")

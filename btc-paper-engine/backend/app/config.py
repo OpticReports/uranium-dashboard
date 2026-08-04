@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     frontend_dist: str | None = None
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
     log_level: str = "INFO"
+    # Shared secret for /exec/target (the live-executor signal feed). Empty =
+    # endpoint open (dev); set in production so book state isn't public.
+    exec_token: str = ""
 
     @property
     def cors_list(self) -> list[str]:
