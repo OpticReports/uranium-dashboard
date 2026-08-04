@@ -369,6 +369,87 @@ def replay():
     return out
 
 
+_KELLY_CACHE: dict = {}
+
+
+@app.get("/kelly/compare")
+def kelly_compare(window: str = "2y"):
+    """Kelly sizing analysis per book over the replay window. Empirical
+    log-growth Kelly on realized per-step equity returns; m = multiplier ON
+    CURRENT SIZING. Display/decision support — the engine never resizes
+    anything by itself."""
+    import time as _time
+    key = window
+    hit = _KELLY_CACHE.get(key)
+    if hit and _time.time() - hit[0] < 6 * 3600:
+        return hit[1]
+    from .engine.core import Bar
+    from .engine.kelly import M_CAP, analyze
+    from .engine.replay import run_replay
+    import os as _os
+    fix = _os.path.join(_os.path.dirname(__file__), "..", "tests", "fixtures",
+                        "bars_4h_btcusd.csv")
+    by_ts = {}
+    for r in csv.DictReader(open(fix)):
+        by_ts[int(r["ts_open_unix"])] = Bar(
+            ts=int(r["ts_open_unix"]), open=float(r["open"]), high=float(r["high"]),
+            low=float(r["low"]), close=float(r["close"]), volume=float(r["volume"]))
+    with session_scope() as s:
+        for r in s.query(BarRow).all():
+            by_ts[r.ts_open] = Bar(ts=r.ts_open, open=r.open, high=r.high,
+                                   low=r.low, close=r.close, volume=r.volume)
+    bars_ = [by_ts[t] for t in sorted(by_ts)]
+    now = bars_[-1].ts
+    spans = {"2y": 730, "1y": 365, "6m": 182}
+    t0 = now - spans.get(window, 730) * 86400
+    res = run_replay(bars_, ENGINE.books_cfg, ENGINE.scfg, ENGINE.tcfg,
+                     start_ts=t0, end_ts=now, cash_apy=settings.cash_apy)
+
+    def _blend_steps(b3, b4, w_trend, lev):
+        evs = sorted([(t.exit_ts, "P", t.equity_after / b3.cfg.start_equity)
+                      for t in b3.trades]
+                     + [(t.exit_ts, "T", t.equity_after / b4.cfg.start_equity)
+                        for t in b4.trades])
+        p3 = p4 = 1.0
+        steps = []
+        for _, which, ratio in evs:
+            if which == "P":
+                steps.append(lev * (ratio / p3 - 1) * (1 - w_trend)); p3 = ratio
+            else:
+                steps.append(lev * (ratio / p4 - 1) * w_trend); p4 = ratio
+        return steps
+
+    streams = {n: [t.equity_after / t.equity_before - 1 for t in b.trades
+                   if t.equity_before > 0]
+               for n, b in res.books.items()}
+    descs = {n: b.cfg.strategy for n, b in res.books.items()}
+    if "S3" in res.books and "S4" in res.books:
+        streams["S5"] = _blend_steps(res.books["S3"], res.books["S4"], 0.25, 1.5)
+        streams["S6"] = _blend_steps(res.books["S3"], res.books["S4"], 0.25, 2.0)
+        descs["S5"], descs["S6"] = "blend 75/25 @1.5x", "blend 75/25 @2.0x"
+    books = {n: analyze(streams[n], n, descs.get(n, ""))
+             for n in sorted(streams)}
+    out = {"window": window, "books": books, "m_cap": M_CAP,
+           "method": {
+               "frame": "m multiplies CURRENT sizing; m=1 is what runs today. "
+                        "Empirical log-growth Kelly (argmax E[log(1+m R)]) on "
+                        "realized per-step equity returns — NOT the binary "
+                        "win-rate formula, which mis-sizes fat-tailed streams.",
+               "robustness": "stationary block bootstrap (2000 draws) for the "
+                             "sampling distribution of m*; recommendation = "
+                             "min(half-Kelly, bootstrap p10, largest m with "
+                             "P(maxDD>30%)<=10%) — estimation error dominates "
+                             "at n~60-150 trades, so the conservative envelope "
+                             "is the honest size.",
+               "caveats": "linear size-scaling approximation (stops/halts live "
+                          "in equity terms); one 2y window, same window the "
+                          "strategies were selected on (multiple-comparison "
+                          "optimism); paper fills. Treat as sizing GUIDANCE, "
+                          "never as a claim the edge itself is proven."}}
+    _KELLY_CACHE[key] = (_time.time(), out)
+    return out
+
+
 @app.get("/export/trades.csv")
 def export_trades():
     with session_scope() as s:

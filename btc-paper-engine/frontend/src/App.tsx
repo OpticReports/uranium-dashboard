@@ -304,6 +304,7 @@ export default function App() {
         </Panel>
 
         <ComparePanel />
+        <KellyPanel />
 
         {/* Trade log */}
         <Panel title={
@@ -404,6 +405,55 @@ function BooksReset({ onDone }: { onDone: () => void }) {
         className="rounded border border-sky-500/60 bg-sky-500/10 px-2 py-0.5 text-[10px] text-sky-300 disabled:opacity-40">
         {busy ? "…" : "reset"}</button>
     </span>
+  );
+}
+
+function KellyPanel() {
+  const [data, setData] = useState<any>(null);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    fetch(`${BASE}/kelly/compare?window=2y`)
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then(setData)
+      .catch((e) => setErr(String(e.message ?? e)));
+  }, []);
+  if (err) return <Panel title="Kelly sizing — how big should each book trade?"><p className="text-xs text-amber-400">{err}</p></Panel>;
+  if (!data) return <Panel title="Kelly sizing — how big should each book trade?"><p className="text-xs text-slate-500">loading…</p></Panel>;
+  const rows = Object.entries(data.books) as Array<[string, any]>;
+  const vColor = (v: string) =>
+    v.startsWith("OVERSIZED") || v.startsWith("NEGATIVE") ? "#f87171"
+    : v.startsWith("UNDERSIZED") ? "#fbbf24" : "#34d399";
+  return (
+    <Panel title={<>Kelly sizing — how big should each book trade? (m = multiple of CURRENT size)</>}>
+      <table className="w-full text-xs">
+        <thead><tr className="text-left text-slate-500 border-b border-panelborder">
+          {["book", "n", "growth-optimal m*", "boot p10–p90", "half-Kelly",
+            "m @ maxDD≤30% (90% conf)", "P(DD>20%) at current", "recommended m", "verdict"].map((h) => (
+            <th key={h} className="py-1 pr-3 font-medium">{h}</th>))}
+        </tr></thead>
+        <tbody>{rows.map(([n, b]) => b.kelly_m == null ? (
+          <tr key={n}><td className="py-1.5 pr-3 font-semibold" style={{ color: BOOK_COLORS[n] }}>{BOOK_LABEL[n] ?? n}</td>
+            <td colSpan={8} className="text-slate-500">{b.verdict}</td></tr>
+        ) : (
+          <tr key={n} className="border-b border-panelborder/40">
+            <td className="py-1.5 pr-3 font-semibold" style={{ color: BOOK_COLORS[n] }}>{BOOK_LABEL[n] ?? n}</td>
+            <td className="pr-3 font-mono">{b.n}</td>
+            <td className="pr-3 font-mono text-slate-300">{b.kelly_m}x</td>
+            <td className="pr-3 font-mono text-slate-500">{b.bootstrap.p10}–{b.bootstrap.p90}</td>
+            <td className="pr-3 font-mono">{b.half_kelly_m}x</td>
+            <td className="pr-3 font-mono">{b.dd_constrained.p_maxdd30_le_10pct}x</td>
+            <td className="pr-3 font-mono" style={{ color: b.dd_at_current.p_dd_gt_20 > 0.5 ? "#f87171" : "#94a3b8" }}>
+              {Math.round(b.dd_at_current.p_dd_gt_20 * 100)}%</td>
+            <td className="pr-3 font-mono font-bold text-sky-300">{b.recommended_m}x</td>
+            <td className="pr-3" style={{ color: vColor(b.verdict) }}>{b.verdict}</td>
+          </tr>))}
+        </tbody>
+      </table>
+      <div className="mt-3 rounded border border-panelborder bg-slate-900/50 p-2.5 text-[10px] leading-relaxed text-slate-500">
+        <span className="font-semibold text-slate-400">Method &amp; honesty box.</span>{" "}
+        {data.method.frame} {data.method.robustness} Caveats: {data.method.caveats}
+      </div>
+    </Panel>
   );
 }
 
