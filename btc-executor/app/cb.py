@@ -54,16 +54,35 @@ class CoinbaseVenue:
                 "contract_multiplier": mult}   # None => sizes are plain BTC
 
     def list_perp_candidates(self) -> list[str]:
-        """All FUTURE products this account can see - used at boot to help
-        pick the right CB_PRODUCT_ID for the account's venue (INTX vs CFM)."""
-        try:
-            out = self.client.get_products(product_type="FUTURE").to_dict()
-            return [p["product_id"] for p in out.get("products", [])
-                    if "BTC" in p["product_id"].upper()
-                    or "BIT" in p["product_id"].upper()]
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("product discovery failed: %s", exc)
-            return []
+        """BTC futures/perp products this account can see, across query
+        variants - used at boot to pick the right CB_PRODUCT_ID (INTX vs CFM
+        dated vs US perpetual-style)."""
+        found: dict[str, str] = {}
+        for kw in ({"product_type": "FUTURE"},
+                   {"product_type": "FUTURE", "contract_expiry_type": "PERPETUAL"}):
+            try:
+                out = self.client.get_products(**kw).to_dict()
+                for p in out.get("products", []):
+                    pid = p.get("product_id", "")
+                    if "BTC" in pid.upper() or "BIT" in pid.upper():
+                        found.setdefault(
+                            pid, f"{pid} [{p.get('product_venue')}"
+                                 f"{' view_only' if p.get('view_only') else ''}]")
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("product discovery %s failed: %s", kw, exc)
+        # direct probes for ids the listings sometimes omit
+        for pid in ("BTC-PERP-CDE", "BTC-PERP-INTX"):
+            if pid in found:
+                continue
+            try:
+                p = self.client.get_product(pid).to_dict()
+                if p.get("product_id"):
+                    found[pid] = (f"{pid} [{p.get('product_venue')}"
+                                  f"{' view_only' if p.get('view_only') else ''}"
+                                  f"{' DISABLED' if p.get('trading_disabled') else ''}]")
+            except Exception:  # noqa: BLE001
+                pass
+        return sorted(found.values())
 
     # ---------- size/price rounding ----------
 
@@ -249,7 +268,11 @@ class DryRunVenue:
     def equity(self) -> float:
         if self.inner:
             try:
-                return self.inner.equity()
+                v = self.inner.equity()
+                if v > 0:
+                    return v
+                # unfunded account: shadow on the simulated stake so the
+                # dry run still rehearses realistically-sized orders
             except Exception:  # noqa: BLE001
                 pass
         return self._equity
