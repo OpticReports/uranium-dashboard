@@ -59,7 +59,8 @@ class CoinbaseVenue:
         dated vs US perpetual-style)."""
         found: dict[str, str] = {}
         for kw in ({"product_type": "FUTURE"},
-                   {"product_type": "FUTURE", "contract_expiry_type": "PERPETUAL"}):
+                   {"product_type": "FUTURE", "contract_expiry_type": "PERPETUAL"},
+                   {"product_type": "FUTURE", "product_venue": "FCM"}):
             try:
                 out = self.client.get_products(**kw).to_dict()
                 for p in out.get("products", []):

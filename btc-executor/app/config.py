@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     # venue (Coinbase Advanced Trade / INTX perps)
     cb_api_key_name: str = ""             # CDP key name ("organizations/...")
     cb_api_private_key: str = ""          # CDP EC private key PEM
-    cb_product_id: str = "BTC-PERP-INTX"
+    cb_product_id: str = "BIP-20DEC30-CDE"   # US perp-style BTC future (CDE)
     cb_portfolio: str = ""                # INTX portfolio uuid (auto-detected if empty)
 
     # sizing: leg exposure fraction = kelly_m * blend_lev * leg_weight
