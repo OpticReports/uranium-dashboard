@@ -143,13 +143,27 @@ def analyze(returns: list[float], label: str, current_desc: str = "",
     star = kelly_star(r, cap)
     unc = kelly_uncertainty(r, seed=seed, cap=cap)
     half = round(star / 2, 2)
-    conservative = min(half, unc["p10"])                  # shrinkage: the lesser of
-    dd20 = dd_constrained_m(r, 0.20, 0.10, cap, seed)     # half-Kelly and p10 boot
+    # principled shrinkage fraction (verifier: Rising-Wyner/Baker-McHale form):
+    # c* = n SR^2 / (n SR^2 + 1) — the fraction of Kelly that maximizes
+    # expected OOS growth given mean-estimation error; an UPPER bound
+    sr = float(r.mean() / r.std()) if r.std() > 0 else 0.0
+    c_star = n * sr ** 2 / (n * sr ** 2 + 1) if sr > 0 else 0.0
+    conservative = min(half, unc["p10"], round(c_star * star, 2))
+    dd20 = dd_constrained_m(r, 0.20, 0.10, cap, seed)
     dd30 = dd_constrained_m(r, 0.30, 0.10, cap, seed)
     rec = round(max(0.0, min(conservative, dd30)), 2)
+    # kill rule (verifier): if >25% of bootstrap resamples say the edge is
+    # non-positive, the honest allocation is zero regardless of the point est.
+    killed = unc["prob_negative_edge"] > 0.25
+    if killed:
+        rec = 0.0
     if star == 0.0:
         verdict = ("NEGATIVE EDGE at current sizing — Kelly says the correct "
                    "size is zero until the edge itself improves")
+    elif killed:
+        verdict = (f"EDGE NOT DISTINGUISHABLE FROM ZERO ({unc['prob_negative_edge']:.0%} "
+                   "of bootstrap resamples non-positive) — kill rule: size zero "
+                   "standalone; value, if any, is as a diversifier")
     elif rec >= 1.25:
         verdict = f"UNDERSIZED: engine supports ~{rec:.1f}x current size"
     elif rec <= 0.8:
@@ -168,8 +182,13 @@ def analyze(returns: list[float], label: str, current_desc: str = "",
         "bootstrap": unc,
         "half_kelly_m": half,
         "conservative_m": round(conservative, 2),
+        "shrinkage_c_star": round(c_star, 2),
         "dd_constrained": {"p_maxdd20_le_10pct": dd20,
-                           "p_maxdd30_le_10pct": dd30},
+                           "p_maxdd30_le_10pct": dd30,
+                           # Thorp infinite-horizon law cross-check:
+                           # c_max = 2/(1 + ln p / ln(1-d)) of full Kelly
+                           "analytic_dd20": round(star * 2 / (1 + math.log(0.10) / math.log(0.80)), 2),
+                           "analytic_dd30": round(star * 2 / (1 + math.log(0.10) / math.log(0.70)), 2)},
         "dd_at_current": {"p_dd_gt_20": round(dd_prob(r, 1.0, 0.20, seed=seed), 3),
                           "p_dd_gt_30": round(dd_prob(r, 1.0, 0.30, seed=seed), 3)},
         "recommended_m": rec,

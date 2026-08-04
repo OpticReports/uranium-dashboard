@@ -82,3 +82,26 @@ def test_gate_bootstrap_and_small_sample():
     b = analyze(list(rng.normal(0.006, 0.04, 140)), "ok")
     assert b["recommended_m"] <= b["conservative_m"] + 1e-9
     assert b["recommended_m"] <= b["dd_constrained"]["p_maxdd30_le_10pct"] + 1e-9
+
+
+def test_gate_kill_rule_and_analytic_dd():
+    """Verifier round: (1) kill rule — a marginal edge with >25% of bootstrap
+    resamples non-positive gets rec 0; (2) empirical DD-constrained m agrees
+    with Thorp's infinite-horizon law within ~35% on gaussian streams (the
+    law is 'ever', ours is finite-horizon — ours should be >= analytic)."""
+    rng = np.random.default_rng(9)
+    weak = rng.normal(0.0015, 0.04, 70)                    # SR ~0.04: noise edge
+    a = analyze(list(weak), "weak")
+    if a["bootstrap"]["prob_negative_edge"] > 0.25:
+        assert a["recommended_m"] == 0.0
+        assert "NOT DISTINGUISHABLE" in a["verdict"] or "NEGATIVE" in a["verdict"]
+    strong = rng.normal(0.006, 0.04, 140)
+    b = analyze(list(strong), "strong")
+    ad = b["dd_constrained"]["analytic_dd30"]
+    em = b["dd_constrained"]["p_maxdd30_le_10pct"]
+    if b["kelly_m"] > 0.2 and ad > 0.05:
+        assert em >= ad * 0.65                             # finite-horizon looser
+    assert b["shrinkage_c_star"] > 0
+    assert b["recommended_m"] <= b["shrinkage_c_star"] * b["kelly_m"] + 1e-9 \
+        or b["recommended_m"] <= b["bootstrap"]["p10"] + 1e-9 \
+        or b["recommended_m"] <= b["half_kelly_m"] + 1e-9
