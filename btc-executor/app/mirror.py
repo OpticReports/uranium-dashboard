@@ -118,6 +118,9 @@ class Executor:
         os.replace(tmp, self.state_path)
 
     def _event(self, level: str, kind: str, msg: str) -> None:
+        last = self.state.events[-1] if self.state.events else None
+        if last and last["kind"] == kind and last["msg"] == msg:
+            return                       # dedupe: don't spam repeats every poll
         self.state.events.append(
             {"ts": int(time.time()), "level": level, "kind": kind, "msg": msg})
         logger.log(logging.WARNING if level in ("WARN", "RED") else logging.INFO,
@@ -339,6 +342,8 @@ class Executor:
     # ---------- drift ----------
 
     def _check_drift(self, equity: float) -> None:
+        if getattr(self.venue, "log", None) is not None:
+            return          # dry-run venue: simulated fills, drift meaningless
         try:
             net = self.venue.position()
         except Exception:  # noqa: BLE001

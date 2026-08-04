@@ -28,23 +28,32 @@ EXEC: Executor | None = None
 
 
 def _build_executor() -> Executor:
+    import os
     inner = None
-    if settings.cb_api_key_name and settings.cb_api_private_key:
+    LAST["venue_init_error"] = None
+    LAST["venue_products"] = None
+    if not (settings.cb_api_key_name and settings.cb_api_private_key):
+        LAST["venue_init_error"] = "no CB_API_KEY_NAME / CB_API_PRIVATE_KEY set"
+    else:
         try:
             from .cb import CoinbaseVenue
             inner = CoinbaseVenue(settings)
-            cands = inner.list_perp_candidates()
-            logger.info("BTC futures products visible to this key: %s", cands)
+            LAST["venue_products"] = inner.list_perp_candidates()
+            logger.info("BTC futures products visible to this key: %s",
+                        LAST["venue_products"])
         except Exception as exc:  # noqa: BLE001
+            LAST["venue_init_error"] = f"{type(exc).__name__}: {exc}"
             logger.error("coinbase venue init failed: %s", exc)
             inner = None
     if settings.dry_run or inner is None:
         from .cb import DryRunVenue
-        venue = DryRunVenue(inner)
+        venue = DryRunVenue(inner, persist_path=os.path.join(
+            os.path.dirname(settings.state_path) or ".", "dryrun_book.json"))
         logger.warning("DRY RUN mode: no orders will be sent (inner=%s)",
                        type(inner).__name__ if inner else None)
     else:
         venue = inner
+    LAST["venue_inner"] = type(inner).__name__ if inner else None
     return Executor(venue, settings)
 
 
@@ -89,6 +98,9 @@ def status():
     venue = EXEC.venue
     dry_log = getattr(venue, "log", None)
     out = {"ready": True, "dry_run": settings.dry_run,
+           "venue_inner": LAST.get("venue_inner"),
+           "venue_init_error": LAST.get("venue_init_error"),
+           "venue_products": LAST.get("venue_products"),
            "product": settings.cb_product_id,
            "kelly_m": settings.kelly_m,
            "halted": st.halted,

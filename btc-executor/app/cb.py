@@ -211,18 +211,40 @@ class CoinbaseVenue:
 class DryRunVenue:
     """Wraps a real (or absent) venue: reads pass through when available,
     mutations only log and simulate naive fills so the state machine cycles.
-    With no inner venue (no API key yet), synthesizes a small test account."""
+    With no inner venue (no API key yet), synthesizes a small test account.
+    Simulated orders + the intent log persist to disk so a service restart
+    keeps the shadow book consistent with the persisted executor ledger."""
 
-    def __init__(self, inner=None, equity_fallback: float = 10_000.0):
+    def __init__(self, inner=None, equity_fallback: float = 10_000.0,
+                 persist_path: str | None = None):
         self.inner = inner
         self._equity = equity_fallback
+        self.persist_path = persist_path
         self.orders: dict[str, dict] = {}
         self.log: list[dict] = []
+        if persist_path:
+            try:
+                d = json.load(open(persist_path))
+                self.orders = d.get("orders", {})
+                self.log = d.get("log", [])[-500:]
+            except Exception:  # noqa: BLE001
+                pass
+
+    def _persist(self) -> None:
+        if not self.persist_path:
+            return
+        try:
+            os.makedirs(os.path.dirname(self.persist_path) or ".", exist_ok=True)
+            json.dump({"orders": self.orders, "log": self.log[-500:]},
+                      open(self.persist_path, "w"))
+        except Exception:  # noqa: BLE001
+            pass
 
     def _rec(self, action: str, **kw) -> None:
         entry = {"ts": int(time.time()), "action": action, **kw}
         self.log.append(entry)
         logger.info("DRY-RUN %s", entry)
+        self._persist()
 
     def equity(self) -> float:
         if self.inner:
