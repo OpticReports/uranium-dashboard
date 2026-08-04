@@ -1284,3 +1284,35 @@ expressible in Composer); IBKR-only ideas per backlog.
 VERDICT REPORTED: no lens-robust free CAGR found; the highest-value
 CAGR lever remains the evidence-gated KMLM upshift (earn-back), worth
 ~+8pp/yr model-CAGR if KMLM proves live.
+
+
+## Addendum 25 — Queued studies run: sleeve-band tuning + VRP harvester
+## sizing (2026-08-05)
+
+STUDY 1 — Sleeve-band monetization tuning (55y conservative bootstrap,
+book-share bands, shared 400-path panel): CURRENT band (~[15,33]% of
+book = family [7,15]%) sits on the FLAT TOP of the frontier — all sane
+variants within +/-0.4pp CAGR; tight [22,32] buys 2.4pp tail-DD for
+-1.2pp CAGR at 2.6x the firing rate; deep-harvest (reset to 22) is
+strictly worse (+0.4pp CAGR, +1.8pp DD). No-band drift bound re-confirmed
+(DD p95 71%). VERDICT: keep the current band unchanged — it was
+near-optimal as designed. Band study CLOSED.
+
+STUDY 2 — VRP-conditioned harvester sizing (prior-day VIX3M/VIX contango,
+814 live-era days, lagged conditioning only): the literature's
+prescription INVERTS on this harvester — its BEST quartile is
+LOW/NEGATIVE contango (Q1 +18.5bp/day vs Q2/Q3 ~+5bp): the strategy is
+not naive short-vol; its ZVOL/VXZ switching already earns through
+backwardation (long mid-term vol + rebound normalization). All sizing
+gates tested reduce CAGR with maxDD unchanged (9.5% everywhere); the
+one Sharpe bump (2.16->2.30, halve-if-backwardation) de-levers the
+strategy's best state — vol-reduction artifact, not edge. VERDICT: no
+VRP overlay; the harvester's internal switching is already the
+conditioning layer. Study CLOSED.
+
+Running theme now measured five ways (gates 19b, vol-target 20b, DD
+rules 21, VRP 25, band 25): every engine in this book is convexity-
+aware internally; external de-risking overlays systematically amputate
+their best states. The ops layer's job is detection and allocation, not
+signal overrides — now empirically settled across every overlay family
+in the literature we could express.
