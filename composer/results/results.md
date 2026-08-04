@@ -1247,3 +1247,40 @@ Findings:
    (earn-back reads start 2026-08-07); swapping resets that record.
 VERDICT REPORTED: keep the live 75/25. The unwrapped Simons variant is
 the same engine with the seatbelt removed.
+
+
+## Addendum 24 — CAGR-up-at-same-DD optimization sweep (owner ask, 2026-08-05)
+
+Two untested levers from the quant literature, both run on house machinery:
+
+A. GROWTH-OPTIMAL (Kelly-style) ALLOCATION under a DD constraint —
+   grid-search of weight space on the 55y conservative bootstrap found
+   101 allocations "dominating" 29/29/27/15 (up to +11.5pp CAGR at equal
+   DD p95), ALL of them HG+SLEEVE barbells that gut KMLM/HARV. DUAL-LENS
+   CHECK EXPOSED CIRCULARITY: under AS-MEASURED the same barbells lose
+   -26pp CAGR at +15pp DD. The conservative lens strips KMLM's edge BY
+   CONSTRUCTION, so optimizing under it just deletes KMLM. No allocation
+   dominates in BOTH lenses. CONCLUSION: 29/29/27/15 remains the
+   two-lens compromise; the frontier unlocks only as earn-back evidence
+   (starts 2026-08-07) resolves which lens is real. (Footnote: SLV-UP
+   27/27/31/15 improves DD in both lenses at ~equal CAGR — a defensive
+   tilt candidate, not a CAGR lever.)
+
+B. PARAMETER-ENSEMBLE TRANCHING of the KMLM switcher — the Simons design
+   already ensembles entry WINDOWS (RSI 2..10 ladder); tested threshold
+   tranching (all RSI thresholds ±3, equal-weight blend of 3 clones,
+   2023-04..2026-08): ENSEMBLE +205.1%/DD 22.0%/Sharpe 2.49 vs BASE
+   +247.9%/24.5%/2.53. Ensemble cuts DD 2.5pp at 43pp CAGR cost, Sharpe
+   ~flat — NOT shipped. DIAGNOSTIC VALUE (important): the live
+   thresholds sit on an in-sample performance PEAK (neighbors at -63 and
+   -84pp CAGR) — textbook overfit signature; forward performance should
+   be expected nearer the neighborhood mean than the peak. This is
+   precisely what the earn-back's live-vs-model tracking measures.
+
+REMAINING UNTESTED (queued, not run): sleeve-band monetization tuning
+(band edges/aggressiveness in bootstrap); VRP-conditioned harvester
+sizing (contango-depth scaling); options-based structures (not
+expressible in Composer); IBKR-only ideas per backlog.
+VERDICT REPORTED: no lens-robust free CAGR found; the highest-value
+CAGR lever remains the evidence-gated KMLM upshift (earn-back), worth
+~+8pp/yr model-CAGR if KMLM proves live.
