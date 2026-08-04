@@ -54,6 +54,8 @@ def _build_executor() -> Executor:
     else:
         venue = inner
     LAST["venue_inner"] = type(inner).__name__ if inner else None
+    LAST["_inner"] = inner
+    LAST["venue_products_ts"] = time.time()
     return Executor(venue, settings)
 
 
@@ -94,6 +96,15 @@ def health():
 def status():
     if EXEC is None:
         return {"ready": False}
+    inner = LAST.get("_inner")
+    if inner and time.time() - (LAST.get("venue_products_ts") or 0) > 600:
+        # refresh discovery so newly-enabled products (e.g. after the
+        # account's derivatives onboarding) show up without a restart
+        try:
+            LAST["venue_products"] = inner.list_perp_candidates()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("product re-discovery failed: %s", exc)
+        LAST["venue_products_ts"] = time.time()
     st = EXEC.state
     venue = EXEC.venue
     dry_log = getattr(venue, "log", None)
