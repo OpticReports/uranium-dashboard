@@ -1221,3 +1221,29 @@ WHY NO-BUILD IS STRONGER THAN MY VERSION:
 DECISION: no news-trading job, no force-runs. The only defensible
 recurring artifact would be an informational news-flag in the daily
 report (no trades) — marginal value, built only if the owner wants it.
+
+
+## Addendum 23 — Live KMLM switcher vs "Simons IMPROVED" draft (owner
+## question, 2026-08-05)
+
+Head-to-head over the max common window (2023-04-19..2026-08-03, 825d):
+              CAGR     maxDD   Sharpe  Sortino
+  LIVE 75/25  +247.9%  24.5%   2.53    4.28
+  IMPROVED    +354.4%  32.0%   2.43    4.08
+  ORIGINAL    +354.4%  32.0%   2.43    4.08
+Findings:
+1. IMPROVED == ORIGINAL in behavior (identical daily curves; tree diffs
+   exist but only in branches never taken post-2023). The "IMPROVED"
+   label carries no measurable improvement.
+2. The live 75/25 wrapper WINS risk-adjusted on every measure: +0.10
+   Sharpe, +0.20 Sortino, 7.5pp less maxDD. Its only "loss" is raw CAGR
+   — the metric this family's overfit backtests inflate most (the
+   unwrapped variant printed "+1667%" in its advertised 2022 window,
+   which STARTS exactly at its advertised backtest date: curve-fit
+   evidence, not hostile-regime skill).
+3. Single-day comparisons (+17.4% vs +13.1% on 2026-08-04) are the 25%
+   vol sleeve damping a monster day — the wrapper doing its designed job.
+4. The live version carries accumulating live-vs-model validation
+   (earn-back reads start 2026-08-07); swapping resets that record.
+VERDICT REPORTED: keep the live 75/25. The unwrapped Simons variant is
+the same engine with the seatbelt removed.
