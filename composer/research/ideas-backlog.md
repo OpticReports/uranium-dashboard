@@ -86,6 +86,19 @@ or engine Sharpes decay toward ~1 during a developing multi-quarter
 inflation/trend regime. Prototype tree + QA data: session scratchpad
 gates/tsmom_tree.json, agents' variant tables in session transcript.
 
+## SETTLED QUESTIONS — do not re-study without new evidence (2026-08-05)
+
+External de-risking overlays on the current engines are REJECTED as a
+class, measured five independent ways: trend gates (add. 19b), strategy
+vol-targeting (20b), DD-exit rules (21), VRP sizing (25), band-edge
+variants (25). Mechanism, replicated: every engine is internally
+convexity-aware and earns disproportionately in its own high-vol/stress
+state; overlays de-risk exactly those states. Any new overlay proposal
+must first show the ENGINES' character changed (e.g., live divergence
+shows an engine losing its stress-state earnings) — otherwise cite this
+entry and decline. Allocation-layer detection (two-tier alerts, book DD
+alarm, cap, earn-back) remains the sanctioned risk machinery.
+
 ## Trigger to revisit
 
 Owner starts building the IBKR execution project (or equivalent
