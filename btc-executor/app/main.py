@@ -13,11 +13,19 @@ import threading
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Query, Header
 
 from .config import settings
 from .feed import EngineFeed
 from .mirror import Executor
+
+
+def _auth(x_exec_token: str | None, token_q: str | None) -> None:
+    """Control/status endpoints share the EXEC_TOKEN secret. Header for
+    tools, ?token= for a browser. No token configured -> open (dev only)."""
+    if settings.exec_token and x_exec_token != settings.exec_token \
+            and token_q != settings.exec_token:
+        raise HTTPException(status_code=401, detail="bad exec token")
 
 logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
 logger = logging.getLogger(__name__)
@@ -93,7 +101,9 @@ def health():
 
 
 @app.get("/status")
-def status():
+def status(x_exec_token: str | None = Header(default=None),
+           token: str | None = Query(default=None)):
+    _auth(x_exec_token, token)
     if EXEC is None:
         return {"ready": False}
     inner = LAST.get("_inner")
@@ -133,7 +143,9 @@ def status():
 
 
 @app.post("/kill")
-def kill():
+def kill(x_exec_token: str | None = Header(default=None),
+         token: str | None = Query(default=None)):
+    _auth(x_exec_token, token)
     if EXEC is None:
         return {"ok": False}
     EXEC.halt("KILL", "manual kill switch")
@@ -141,7 +153,9 @@ def kill():
 
 
 @app.post("/resume")
-def resume():
+def resume(x_exec_token: str | None = Header(default=None),
+           token: str | None = Query(default=None)):
+    _auth(x_exec_token, token)
     if EXEC is None:
         return {"ok": False}
     EXEC.resume()
