@@ -23,9 +23,17 @@ btc-executor  --Coinbase Advanced API-->  BTC perp product
   trail mirrored as a venue stop, replaced when the trail ratchets >5bp.
 - **Exits**: engine position vanishes -> cancel stop, close at market. If the
   venue stop fired first, the ledger reconciles without double-closing.
-- **Sizing**: leg notional = KELLY_M x 1.5 x weight x account equity, read
-  from the live account each cycle. Every order passes MAX_NOTIONAL_USD and
-  MAX_ACCOUNT_LEV caps.
+- **Sizing**: leg notional = KELLY_M x 1.5 x weight x sizing base. The base
+  is live account equity by default, or the fixed SIZING_BASE_USD when set —
+  the small-deposit construction (e.g. ~$40k USDC trading a $128k base; the
+  deposit is the hard max loss, positions are sized to the base). Halt
+  percentages anchor to the base so routine strategy swings against a small
+  account don't false-trigger. Every order passes MAX_NOTIONAL_USD and
+  MAX_ACCOUNT_LEV (of the base) caps.
+- **Telemetry**: one equity/position mark per UTC day persists in state
+  (/status "marks") — the raw series for live-vs-paper tracking error and
+  funding-cost decomposition during the token phase. /pulse is a public,
+  non-sensitive heartbeat (flags only) for automated monitoring.
 
 ## Safety rails
 

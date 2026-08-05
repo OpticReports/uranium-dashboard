@@ -219,6 +219,11 @@ services:
         value: "true"          # flip to "false" ONLY after the shadow period
       - key: KELLY_M
         value: "0.56"          # start the live phase at 0.05 (token size)
+      - key: SIZING_BASE_USD
+        # Fixed sizing base (USD). 0 = size on live account equity. For the
+        # small-deposit construction (~$40k USDC trading a $128k base) set
+        # 128000; halts re-anchor to the base automatically.
+        value: "0"
       - key: MAX_NOTIONAL_USD
         value: "25000"
       - key: MAX_ACCOUNT_LEV

@@ -24,6 +24,19 @@ def test_control_endpoints_require_token():
         settings.exec_token = old
 
 
+def test_pulse_is_public_and_minimal():
+    old = settings.exec_token
+    settings.exec_token = "sekrit"
+    try:
+        with TestClient(app) as c:
+            r = c.get("/pulse")                 # no token needed
+            assert r.status_code == 200
+            body = r.json()
+            assert "equity" not in body and "venue_position_btc" not in body
+    finally:
+        settings.exec_token = old
+
+
 def test_open_when_no_token_configured():
     old = settings.exec_token
     settings.exec_token = ""

@@ -9,6 +9,7 @@ from app.mirror import Executor, ExecState
 
 class Cfg:
     kelly_m = 0.56
+    sizing_base_usd = 0.0
     max_notional_usd = 25_000.0
     max_account_lev = 2.0
     dry_run = True
@@ -273,6 +274,38 @@ def test_gate_drift_detection(tmp_path):
                          "px": 60_000.0, "status": "FILLED"}
     ex.step(target())
     assert any(e["kind"] == "position_drift" for e in ex.state.events)
+
+
+def test_gate_sizing_base_overrides_equity(tmp_path):
+    """SIZING_BASE_USD: a $25k account trading a $128k base sizes positions
+    on the base, and halt thresholds anchor to the base too."""
+    v = FakeVenue(equity=25_000.0)
+    ex = mkexec(tmp_path, v)
+    ex.cfg.sizing_base_usd = 128_000.0
+    ex.cfg.max_notional_usd = 500_000.0        # keep caps out of the way
+    pend = {"pending": {"side": "L", "limit": 59_000.0, "signal_ts": NOW},
+            "position": None}
+    ex.step(target(pull=pend))
+    _, _, qty, _ = v.calls[0]
+    assert qty == pytest.approx(0.56 * 1.5 * 0.75 * 128_000 / 59_000, abs=1e-4)
+    # -6% of the ACCOUNT (=$1.5k) must NOT halt: threshold is 6% of base
+    v._equity = 23_400.0
+    ex.step(target(pull=pend))
+    assert ex.state.halted is None
+    # -6% of the BASE (=$7.7k) does halt
+    v._equity = 25_000.0 - 0.06 * 128_000 - 1
+    ex.step(target(pull=pend))
+    assert ex.state.halted == "DAILY_LOSS"
+
+
+def test_gate_daily_marks_recorded(tmp_path):
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    ex.step(target())
+    assert len(ex.state.marks) == 1
+    assert ex.state.marks[0]["equity"] == 10_000.0
+    ex.step(target())                          # same UTC day -> no new mark
+    assert len(ex.state.marks) == 1
 
 
 def test_gate_dry_run_venue_never_touches_inner():

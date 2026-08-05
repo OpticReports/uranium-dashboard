@@ -100,6 +100,26 @@ def health():
             if LAST["loop_ok"] else None}
 
 
+@app.get("/pulse")
+def pulse():
+    """Public minimal heartbeat for automated monitoring: state flags only —
+    no equity, no position sizes, no order details."""
+    if EXEC is None:
+        return {"ready": False}
+    st = EXEC.state
+    now = time.time()
+    red_24h = sum(1 for e in st.events
+                  if e.get("level") == "RED" and now - e.get("ts", 0) < 86_400)
+    return {"ready": True, "dry_run": settings.dry_run,
+            "halted": st.halted, "red_events_24h": red_24h,
+            "last_target_age_s": round(now - LAST["target_ts"], 1)
+            if LAST["target_ts"] else None,
+            "legs": {n: {"in_position": l.qty != 0.0,
+                         "entry_open": l.entry_cloid is not None,
+                         "stop_placed": l.stop_cloid is not None}
+                     for n, l in st.legs.items()}}
+
+
 @app.get("/status")
 def status(x_exec_token: str | None = Header(default=None),
            token: str | None = Query(default=None)):
@@ -128,6 +148,7 @@ def status(x_exec_token: str | None = Header(default=None),
            "day_start_equity": st.day_start_equity,
            "high_water": st.high_water,
            "legs": {n: vars(l) for n, l in st.legs.items()},
+           "marks": st.marks[-30:],
            "events": st.events[-50:],
            "last_target": LAST["target"],
            "last_target_age_s": round(time.time() - LAST["target_ts"], 1)

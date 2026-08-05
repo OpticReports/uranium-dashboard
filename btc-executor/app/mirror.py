@@ -70,6 +70,9 @@ class ExecState:
     day_start_equity: float = 0.0
     high_water: float = 0.0
     events: list = field(default_factory=list)
+    # one mark per UTC day: {d, equity, position_btc} — the raw series for
+    # live-vs-paper tracking-error and funding-cost decomposition
+    marks: list = field(default_factory=list)
 
 
 def _side_sign(side: str) -> float:
@@ -102,6 +105,7 @@ class Executor:
             st.legs = {n: LegLedger(**raw.get("legs", {}).get(n, {}))
                        for n in LEGS}
             st.events = raw.get("events", [])[-200:]
+            st.marks = raw.get("marks", [])[-400:]
             return st
         except Exception:  # noqa: BLE001
             return ExecState()
@@ -112,7 +116,8 @@ class Executor:
              "day_start_equity": self.state.day_start_equity,
              "high_water": self.state.high_water,
              "legs": {n: asdict(l) for n, l in self.state.legs.items()},
-             "events": self.state.events[-200:]}
+             "events": self.state.events[-200:],
+             "marks": self.state.marks[-400:]}
         tmp = self.state_path + ".tmp"
         json.dump(d, open(tmp, "w"))
         os.replace(tmp, self.state_path)
@@ -134,13 +139,19 @@ class Executor:
         weight = w if leg == "trend" else 1.0 - w
         return self.cfg.kelly_m * lev * weight
 
+    def _base(self, equity: float) -> float:
+        """Sizing base: fixed SIZING_BASE_USD when configured, else account
+        equity (the classic fully-funded construction)."""
+        return getattr(self.cfg, "sizing_base_usd", 0.0) or equity
+
     def _leg_qty(self, leg: str, blend: dict, px: float, equity: float) -> float:
         """Unsigned BTC qty for a fresh leg entry, capped so the whole account
-        stays inside max_notional_usd and max_account_lev."""
-        want = self._leg_frac(leg, blend) * equity / px
+        stays inside max_notional_usd and max_account_lev (of the base)."""
+        base = self._base(equity)
+        want = self._leg_frac(leg, blend) * base / px
         other = sum(abs(l.qty) for n, l in self.state.legs.items() if n != leg)
         cap_notional = min(self.cfg.max_notional_usd,
-                           self.cfg.max_account_lev * equity)
+                           self.cfg.max_account_lev * base)
         room = max(0.0, cap_notional / px - other)
         if want > room:
             self._event("WARN", "cap_clamp",
@@ -155,22 +166,36 @@ class Executor:
         if day != self.state.day_key:
             self.state.day_key = day
             self.state.day_start_equity = equity
+            try:
+                pos = self.venue.position()
+            except Exception:  # noqa: BLE001
+                pos = None
+            self.state.marks.append(
+                {"d": day, "equity": round(equity, 2),
+                 "position_btc": round(pos, 5) if pos is not None else None})
         self.state.high_water = max(self.state.high_water, equity)
 
     def _check_halts(self, equity: float) -> None:
+        """Loss thresholds are percentages OF THE SIZING BASE: with a fixed
+        base and a small account, a -6%-of-base day is the same dollar event
+        it would be fully funded — anchoring to account equity instead would
+        false-trigger on routine swings (or, worse, never trigger as the
+        account shrinks)."""
         if self.state.halted:
             return
         st = self.state
+        base_d = self._base(st.day_start_equity)
+        base_h = self._base(st.high_water)
         if st.day_start_equity > 0 and \
-                equity < st.day_start_equity * (1 - self.cfg.daily_loss_halt_pct):
+                equity < st.day_start_equity - self.cfg.daily_loss_halt_pct * base_d:
             self.halt("DAILY_LOSS",
                       f"equity {equity:.0f} < day start {st.day_start_equity:.0f}"
-                      f" - {self.cfg.daily_loss_halt_pct:.0%}")
+                      f" - {self.cfg.daily_loss_halt_pct:.0%} of base {base_d:.0f}")
         elif st.high_water > 0 and \
-                equity < st.high_water * (1 - self.cfg.dd_halt_pct):
+                equity < st.high_water - self.cfg.dd_halt_pct * base_h:
             self.halt("DRAWDOWN",
                       f"equity {equity:.0f} < HWM {st.high_water:.0f}"
-                      f" - {self.cfg.dd_halt_pct:.0%}")
+                      f" - {self.cfg.dd_halt_pct:.0%} of base {base_h:.0f}")
 
     def halt(self, reason: str, msg: str = "") -> None:
         """Cancel everything, flatten everything, block until resume()."""

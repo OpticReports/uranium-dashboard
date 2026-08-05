@@ -20,8 +20,14 @@ class Settings(BaseSettings):
 
     # sizing: leg exposure fraction = kelly_m * blend_lev * leg_weight
     kelly_m: float = 0.56                 # Kelly-recommended multiplier on S5
+    # Fixed capital base for position sizing (USD). 0 = size on live account
+    # equity. Set (e.g. 128000) to run the small-deposit construction: a
+    # ~$40k USDC account trading positions sized to a $128k base. Halt
+    # percentages re-anchor to this base so routine strategy swings against
+    # a small account don't false-trigger.
+    sizing_base_usd: float = 0.0
     max_notional_usd: float = 25_000.0    # hard cap, whole account
-    max_account_lev: float = 2.0          # notional / equity ceiling
+    max_account_lev: float = 2.0          # notional / sizing-base ceiling
 
     # safety rails
     dry_run: bool = True                  # log intended orders, send nothing
