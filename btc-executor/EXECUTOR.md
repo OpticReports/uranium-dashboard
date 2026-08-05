@@ -60,8 +60,11 @@ btc-executor  --Coinbase Advanced API-->  BTC perp product
    same stops, sane sizes, no drift/RED events.
 2. **Token size**: DRY_RUN=false with KELLY_M=0.05 (~7% notional). Let 15-20
    trades complete; compare live fills vs paper (fees, slippage, funding).
-3. **Kelly size**: raise KELLY_M to 0.56 (current recommendation; re-run the
-   Kelly study quarterly and after any 15%+ drawdown).
+3. **Kelly size**: raise KELLY_M to 0.56 (the deliberately-conservative 2y
+   recommendation). The 5y out-of-sample study (RESEARCH_5Y.md) supports a
+   post-validation ceiling of 0.80 — allowed only after 15-20 live trades
+   with tracking error within model and zero halt events. Re-run the Kelly
+   study quarterly and after any 15%+ drawdown.
 
 ## Expectations (measured, 2y window, dashboard basis)
 
