@@ -186,6 +186,14 @@ class Executor:
         st = self.state
         base_d = self._base(st.day_start_equity)
         base_h = self._base(st.high_water)
+        # coherence guard: a DD halt deeper than ~80% of the account can
+        # never fire before wipeout — the deposit/base ratio and DD_HALT_PCT
+        # must be chosen together (see EXECUTOR.md funding phases)
+        if 0 < equity < base_h and self.cfg.dd_halt_pct * base_h > 0.8 * equity:
+            self._event("WARN", "halt_config",
+                        f"DD halt {self.cfg.dd_halt_pct:.0%} of base "
+                        f"{base_h:.0f} exceeds 80% of account {equity:.0f} - "
+                        "lower DD_HALT_PCT or raise the deposit")
         if st.day_start_equity > 0 and \
                 equity < st.day_start_equity - self.cfg.daily_loss_halt_pct * base_d:
             self.halt("DAILY_LOSS",

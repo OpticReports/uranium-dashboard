@@ -228,6 +228,10 @@ services:
         value: "25000"
       - key: MAX_ACCOUNT_LEV
         value: "2.0"
+      - key: DD_HALT_PCT
+        # % OF THE SIZING BASE. Must scale with deposit/base: 0.15 for the
+        # $30k-deposit phase, 0.25 once $50k has landed (EXECUTOR.md table).
+        value: "0.15"
       - key: STATE_PATH
         value: /app/data/executor_state.json
       - key: LOG_LEVEL

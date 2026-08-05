@@ -298,6 +298,24 @@ def test_gate_sizing_base_overrides_equity(tmp_path):
     assert ex.state.halted == "DAILY_LOSS"
 
 
+def test_gate_halt_config_coherence_warning(tmp_path):
+    """$30k account, $128k base, 25% DD halt = $32k > deposit: warn."""
+    v = FakeVenue(equity=30_000.0)
+    ex = mkexec(tmp_path, v)
+    ex.cfg.sizing_base_usd = 128_000.0
+    ex.cfg.dd_halt_pct = 0.25
+    ex.step(target())
+    assert any(e["kind"] == "halt_config" for e in ex.state.events)
+    # coherent config (15% of base = $19.2k, 64% of deposit): no warning
+    v2 = FakeVenue(equity=30_000.0)
+    ex2 = mkexec(tmp_path, v2)
+    ex2.cfg.sizing_base_usd = 128_000.0
+    ex2.cfg.dd_halt_pct = 0.15
+    ex2.state.events.clear()
+    ex2.step(target())
+    assert not any(e["kind"] == "halt_config" for e in ex2.state.events)
+
+
 def test_gate_daily_marks_recorded(tmp_path):
     v = FakeVenue()
     ex = mkexec(tmp_path, v)
