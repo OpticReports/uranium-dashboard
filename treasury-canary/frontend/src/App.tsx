@@ -19,6 +19,7 @@ import LeadingStack from "./components/LeadingStack";
 import PinBoard from "./components/PinBoard";
 import StatRegimeStrip from "./components/StatRegimeStrip";
 import AlertBeacon from "./components/AlertBeacon";
+import RateEnsemble from "./components/RateEnsemble";
 import PlaybookTab from "./components/PlaybookTab";
 import SeverityTab from "./components/SeverityTab";
 import TrackRecordTab from "./components/TrackRecordTab";
@@ -148,6 +149,8 @@ export default function App() {
 
         <div className="flex flex-col gap-5">
           <StressGauge composite={composite} />
+
+          <RateEnsemble />
 
           <ReSteepenAlert />
 

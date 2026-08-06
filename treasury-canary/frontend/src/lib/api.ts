@@ -764,6 +764,27 @@ async function getJson<T>(path: string, init?: RequestInit): Promise<T> {
   throw lastErr;
 }
 
+export interface RateEnsembleSource {
+  weight: number;
+  n: number;
+  brier: number | null;
+}
+
+export interface RateEnsembleMeeting {
+  date: string;
+  sources: Record<string, Record<string, number>>;
+  blend: Record<string, number>;
+}
+
+export interface RateEnsemble {
+  meetings: RateEnsembleMeeting[];
+  weights: Record<string, RateEnsembleSource>;
+  buckets: string[];
+  labels: Record<string, string>;
+  backtest: Record<string, unknown> & { asof?: string; basis?: string };
+  display_only: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // Endpoint bindings
 // ---------------------------------------------------------------------------
@@ -785,6 +806,7 @@ export const api = {
   marginLeverage: () => getJson<MarginLeverage>("/margin/leverage"),
   marginFast: () => getJson<MarginFast>("/margin/fast"),
   ratesShock: () => getJson<RateShock>("/rates/shock"),
+  rateEnsemble: () => getJson<RateEnsemble>("/rates/ensemble"),
   shockScenarios: () => getJson<ShockScenarios>("/shock-sim/scenarios"),
   shockRun: (body: { hikes: number; seed?: number; overrides?: Record<string, number>; implied_baseline?: boolean }) =>
     getJson<ShockRun>("/shock-sim/run", {
