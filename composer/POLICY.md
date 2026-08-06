@@ -116,6 +116,13 @@ unchanged vs disciplined manual resets).
   via the earn-back), a subsequent drift breach of 40% still triggers
   THIS operation's full reset to the then-current targets — no
   ambiguity, no special case.
+- Headroom codicil (2026-08-06, addendum 29 — measured): the cap must
+  keep >=10pp of headroom above the largest engine target (a 40% cap
+  over a 38% target fired 5.4x/yr in simulation — thrash). Any decision
+  raising a target above 30% must reset the cap to target+10pp in the
+  same decision. Verification status: independently recomputed and
+  CONFIRMED (P(cap-40 beats monthly)=99-100% per-path, conservative
+  lens; daily-resolution cross-check consistent; expect ~1.5 fires/yr).
 
 ## Standing analysis cadence (not a capital operation)
 

@@ -1419,3 +1419,25 @@ dual-lens GFC reporting). Owner's planning numbers unchanged.
    VIX contango recorded in every snapshot.
 4. CRASH-DAY RUNBOOK: composer/RUNBOOK.md — pre-decided owner protocol
    assembled from adenda 7/19b/20b/21/21b/22/25/26.
+
+
+## Addendum 29 — Operation 5 (cap-40) independently verified (2026-08-06)
+
+Owner asked how far back the cap was tested and whether agents checked the
+math. Answers: (a) the 55y test IS synthetic (regime-sequence replay
+1971-2026, engine data 3-11y resampled — standing caveat); (b) a
+from-scratch independent agent recomputation now CONFIRMS it: B&H rows
+reproduce exactly; rebalanced/cap rows show a small uniform level offset
+(~2-4pp, month-end convention) with EVERY comparative claim reproduced —
+cap-40 beats monthly rebalancing with P(win)=99-100% per-path across
+seeds and K=2000, at equal-to-lower DD p95 in the conservative lens
+(+0.9pp DD in as-measured: nuance on the published "~equal" wording,
+already visible in the original table). Ambiguity sweep (check timing,
+DD sampling, lens reading, label boundaries): orderings survive all.
+(c) NEW: daily-resolution cross-check on the 19y synthetic history —
+cap-40 again beats monthly at equal DD (post-artifact era: +101.3%/25.9%
+vs +98.3%/26.0%); live firing rate ~1.5x/yr (monthly grid understated).
+DESIGN CODICIL (measured on the ex-KMLM 38%-target case, 5.4 fires/yr
+thrash): the cap requires >=10pp headroom above the largest engine
+target. POLICY Op 5 amended: any owner decision that raises a target
+above 30% must reset the cap to target+10pp in the same decision.
