@@ -1,0 +1,30 @@
+{
+ "created": "2026-08-06",
+ "positions": [
+  {
+   "id": 1,
+   "side": "LONG",
+   "name": "Natural gas",
+   "symbol": "NG=F",
+   "entry": 2.633,
+   "window_end": "2027-02-28",
+   "target_excess_pct": 25,
+   "stop_pct": -15
+  },
+  {
+   "id": 2,
+   "side": "SHORT",
+   "name": "Sugar",
+   "symbol": "SB=F",
+   "entry": 15.58,
+   "window_end": "2027-05-31",
+   "target_excess_pct": -15,
+   "stop_adverse_pct": 12
+  }
+ ],
+ "benchmark": {
+  "symbol": "DBA",
+  "entry": 27.43
+ },
+ "marks": []
+}
