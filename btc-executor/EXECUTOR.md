@@ -61,22 +61,22 @@ btc-executor  --Coinbase Advanced API-->  BTC perp product
    accordingly (INTX perp: `BTC-PERP-INTX`; US CFM contracts appear with a
    `-CDE` suffix and trade in 0.01-BTC contracts — the adapter handles both).
 
-## Funding phases (current plan: $30k now, +$20k later = $50k)
+## Funding phases (current plan: $30k deposited, $50k base -> $100k base)
 
-Halt thresholds are percentages OF THE BASE, so they must be re-chosen as
-the deposit grows (target: DD halt ~= 65% of deposit; the executor warns if
-the DD halt exceeds 80% of the account — it could never fire before wipeout).
+Halt thresholds are percentages OF THE BASE, so they must be re-chosen when
+the base or deposit changes (target: DD halt ~= 60-65% of deposit; the
+executor warns if the DD halt exceeds 80% of the account — it could never
+fire before wipeout).
 
-| phase | deposit | SIZING_BASE_USD | KELLY_M | DD_HALT_PCT | MAX_NOTIONAL_USD | worst-start min equity* |
+| phase | deposit | SIZING_BASE_USD | KELLY_M | DD_HALT_PCT | MAX_NOTIONAL_USD | worst-start stretch* |
 |---|---|---|---|---|---|---|
-| token | $30k | 128000 | 0.05 | 0.15 | 150000 | risk negligible at 5% size |
-| ramp (needs +$20k landed) | $50k | 128000 | 0.56 | 0.25 | 150000 | ~$33k (2021-26 worst stretch −$17.1k) |
-| ceiling (post-validation) | $50k | 128000 | up to 0.80 | 0.25 | 150000 | ~$26k |
+| token | $30k | 50000 | 0.05 | 0.35 | 80000 | risk negligible at 5% size |
+| ramp (post token-phase) | $30k | 50000 | 0.56 | 0.35 | 80000 | ~−$6.7k vs $30k deposit |
+| scale (second wire in) | $50k | 100000 | 0.56 | 0.30 | 160000 | ~−$13.4k vs $50k deposit |
+| ceiling (post-validation) | $50k | 100000 | up to 0.80 | 0.30 | 160000 | ~−$19k vs $50k deposit |
 
-*worst-start = strategy begun at the worst possible date in the 5y replay.
-If the second wire is delayed and you want KELLY_M=0.56 on $30k alone, drop
-SIZING_BASE_USD to ~110000 first (keeps the worst-start trough above 40% of
-the deposit) — or wait.
+*worst peak-to-trough had the strategy started at the worst possible date in
+the 2021-26 replay, scaled to the phase's base and multiplier.
 
 ## Rollout gates (do not skip)
 

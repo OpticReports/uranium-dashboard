@@ -224,18 +224,18 @@ services:
       - key: KELLY_M
         value: "0.56"          # start the live phase at 0.05 (token size)
       - key: SIZING_BASE_USD
-        # Fixed sizing base (USD). 0 = size on live account equity. For the
-        # small-deposit construction (~$40k USDC trading a $128k base) set
-        # 128000; halts re-anchor to the base automatically.
+        # Fixed sizing base (USD). 0 = size on live account equity. Current
+        # plan (EXECUTOR.md funding phases): 50000 now, 100000 after the
+        # second wire. Halts/caps re-anchor to the base automatically.
         value: "0"
       - key: MAX_NOTIONAL_USD
         value: "25000"
       - key: MAX_ACCOUNT_LEV
         value: "2.0"
       - key: DD_HALT_PCT
-        # % OF THE SIZING BASE. Must scale with deposit/base: 0.15 for the
-        # $30k-deposit phase, 0.25 once $50k has landed (EXECUTOR.md table).
-        value: "0.15"
+        # % OF THE SIZING BASE. Current plan: 0.35 at $50k base / $30k
+        # deposit; 0.30 at $100k base / $50k (EXECUTOR.md funding phases).
+        value: "0.35"
       - key: STATE_PATH
         value: /app/data/executor_state.json
       - key: LOG_LEVEL
