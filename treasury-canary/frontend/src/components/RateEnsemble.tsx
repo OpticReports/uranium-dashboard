@@ -92,7 +92,23 @@ export default function RateEnsemble() {
               <tr key={m.date} className="border-b border-panelborder/50 last:border-0">
                 <td className="py-1.5 pr-3 font-medium text-slate-300">{meetingLabel(m.date)}</td>
                 {data.buckets.map((b) => (
-                  <td key={b} className="px-2 py-1.5 text-right tabular-nums">
+                  <td
+                    key={b}
+                    className="px-2 py-1.5 text-right tabular-nums cursor-help"
+                    title={[
+                      ...srcs.map((s) => {
+                        const v = m.sources[s]?.[b];
+                        const w = data.weights[s]?.weight ?? 0;
+                        const name = s === "futures" ? "Fed-funds futures" :
+                          s.charAt(0).toUpperCase() + s.slice(1);
+                        return `${name}: ${v === undefined ? "no market" :
+                          `${(v * 100).toFixed(1)}%`}  (weight ${Math.round(w * 100)}%)`;
+                      }),
+                      `→ blend: ${m.blend[b] !== undefined ?
+                        `${(m.blend[b] * 100).toFixed(1)}%` : "—"}  ` +
+                      `(weighted avg over sources with a market, renormalized)`,
+                    ].join("\n")}
+                  >
                     <Pct v={m.blend[b]} bucket={b} strong />
                     <div className="text-[9px] leading-tight text-slate-500 tabular-nums">
                       {srcs.map((s) => {
