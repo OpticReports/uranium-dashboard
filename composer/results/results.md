@@ -1316,3 +1316,37 @@ aware internally; external de-risking overlays systematically amputate
 their best states. The ops layer's job is detection and allocation, not
 signal overrides — now empirically settled across every overlay family
 in the literature we could express.
+
+
+## Addendum 26 — S&P valuation-conditioned allocation (CAPE / Buffett
+## indicator), tested and CLOSED (2026-08-06)
+
+Owner question: should bands/risk-on-off parameters condition on S&P
+valuation (mktcap/GDP, CAPE, PE)? Design honored the settled no-overlay
+rule (valuation tested at the ALLOCATION layer only), expanding-window
+percentiles only (no full-sample lookahead), forward-PE excluded (no
+honest long history). Data: Shiller CAPE 1871+, FRED corp-equities/GDP
+1952+; spine 1971-2026.
+
+T0 GATEKEEPER (mechanism): >p90 valuation raises 12m-forward crash
+frequency ~1.5x (1.32 -> 1.99 crash-months/yr CAPE; Buffett similar) —
+real but weak, and the signal's DUTY CYCLE is terrible: 300/642 months
+since 1971 are ">p90" under expanding percentiles (the modern era is
+near-permanently "extreme").
+
+T1 TILT SCHEDULES (real CAPE sequence x 55y bootstrap, both lenses):
+every tilt (mild/deep/graduated) trades CAGR for DD along the SAME line
+as unconditional defensive blends — no dominance anywhere. THE KILL
+EXHIBIT: the INVERSE schedule (tilt defensive when CHEAP) performs
+IDENTICALLY to the direct schedule (72.2% vs 72.1% cons CAGR; 114.6% vs
+114.7% meas) — the valuation signal cannot beat its own inverse. The
+T0 crash-frequency lift is too weak and too diluted by the 45% duty
+cycle to differentiate direction. T2/T3 (band/cap conditioning) mooted:
+same signal, finer plumbing cannot rescue a direction-blind input.
+
+VERDICT: NO valuation conditioning anywhere in the stack. Consistent
+with the literature (valuation predicts 10y returns, ~nothing at <=1y).
+Valuation stays what it already is here: a descriptive context metric
+(canary dashboard candidate), never an allocation input. If the owner
+wants more defense, the pre-validated unconditional 27/27/31/15 tilt
+achieves the same frontier point without pretending a signal exists.
