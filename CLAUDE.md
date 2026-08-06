@@ -42,7 +42,9 @@ genuinely meaningless.
 - Honesty rules: state measurement basis (trade-close vs MTM), in-sample
   caveats, and what was NOT modeled. Never present in-sample CAGR as a
   forecast.
-- BTC live trading: the paper engine holds no exchange keys; only
-  btc-executor holds a trade-only Coinbase key. DRY_RUN/rollout gates in
-  btc-executor/EXECUTOR.md are the law. Model IDs never appear in commits,
-  PRs, or code comments.
+- Live trading separation of powers: strategy engines are ALWAYS keyless
+  decision brains; credentials live only in executor services — btc-executor
+  (trade-only Coinbase key) and ibkr-executor (IBKR connection; ALL
+  automated IBKR trading routes through it). DRY_RUN defaults + staged
+  rollout gates (EXECUTOR.md / ibkr-executor/README.md) are the law.
+  Model IDs never appear in commits, PRs, or code comments.
