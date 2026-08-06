@@ -256,6 +256,42 @@ def main():
 
     check_accident_gauge(state, alerts, a.canary_url.rstrip("/"), now)
 
+    # ops-tempo conditioning (addendum 28): when the accident composite is
+    # RED, escalate DIAGNOSTIC tempo (never trades): run live-vs-model
+    # divergence for all engines daily instead of monthly.
+    if state.get("accident_gauge") == "RED":
+        try:
+            import divergence
+            print("  [tempo] gauge RED -> daily divergence sweep:")
+            for s2 in meta:
+                r2 = divergence.analyze(acct, s2["id"], s2["name"])
+                if "error" not in r2:
+                    print(f"    {s2['name'][:30]:32} corr {r2['daily_return_correlation']:+.2f} "
+                          f"beta {r2['live_beta_to_model']:.2f} vol-ratio {r2['live_model_vol_ratio']:.2f}")
+        except Exception as e:  # noqa: BLE001
+            print(f"  [tempo] divergence sweep unavailable: {e}")
+
+    # backwardation-day logging (addendum 27 QA: ZVOL unidentified in
+    # backwardation — capture the first real episode cleanly)
+    try:
+        vreq = urllib.request.Request(
+            "https://query1.finance.yahoo.com/v8/finance/chart/%5EVIX3M?interval=1d&range=5d",
+            headers={"user-agent": "Mozilla/5.0"})
+        v3 = json.load(urllib.request.urlopen(vreq, timeout=30))["chart"]["result"][0]["meta"]["regularMarketPrice"]
+        vreq2 = urllib.request.Request(
+            "https://query1.finance.yahoo.com/v8/finance/chart/%5EVIX?interval=1d&range=5d",
+            headers={"user-agent": "Mozilla/5.0"})
+        v1 = json.load(urllib.request.urlopen(vreq2, timeout=30))["chart"]["result"][0]["meta"]["regularMarketPrice"]
+        contango = v3/v1 - 1
+        snap["vix_contango"] = round(contango, 4)
+        if contango < 0:
+            harv = next((s2 for s2 in meta if s2["id"] == a.harv_symphony), None)
+            alerts.append(f"BACKWARDATION DAY (VIX3M/VIX {contango:+.1%}) — harvester "
+                          f"{(harv or {}).get('last_percent_change', 'n/a')} today; logging for the "
+                          "ZVOL-in-backwardation evidence record (no action)")
+    except Exception:
+        pass
+
     stamp = now.strftime("%Y%m%dT%H%M%SZ")
     snap_path = os.path.join(DIR, f"snapshot-{stamp}.json")
     with open(snap_path, "w") as f:

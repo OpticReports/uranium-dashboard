@@ -1392,3 +1392,30 @@ CONSERVATIVE BOOTSTRAP'S: 1y-DD p50 ~22-27%, p95 ~38%. Fix list for any
 rebuild recorded (missing-data->condition-False never flat-fill; borrow
 drag on inverse recon; short-vol termination rule; preserve builder;
 dual-lens GFC reporting). Owner's planning numbers unchanged.
+
+
+## Addendum 28 — Four exploration areas executed (2026-08-06)
+
+1. BRANCH-LEVEL LIVE ATTRIBUTION (new diagnostic, via the validated tree
+   simulator): KMLM's live P&L 2026-07-16..08-05 matches its model
+   TICKER-FOR-TICKER (TECL +17.7pp live vs +17.8 model; SQQQ +13.6 vs
+   +13.5; SOXL +5.3 vs +5.4), holdings exact-match 11/13 days. The
+   engine earns exactly where its model says — the strongest
+   pro-as-measured evidence to date, at branch resolution. HG/SLEEVE
+   exact-set agreement lower (42%/40%) — knife-edge bottom-1-RSI filters
+   + adjusted-price deltas; attribution deltas negligible. Preview for
+   the earn-back: live fidelity currently looks HIGH.
+2. 5TH-ENGINE PROFILE SCIENCE: archetype grid (crisis-alpha, chop-earner,
+   all-weather, anti-trend, intl-trend at realistic vol) added at 10%:
+   EVERY archetype trades ~7pp CAGR for 3-5pp DD — no dominance; the
+   best DD-per-CAGR profile is crisis-alpha, i.e. "more sleeve", which
+   the pre-validated 27/27/31/15 tilt already offers. CONCLUSION: the
+   5th slot is closed to "diversifiers"; only a genuine alpha engine
+   (community-sweep bar) earns entry.
+3. OPS-TEMPO CONDITIONING (built): accident-gauge RED now escalates
+   DIAGNOSTIC tempo — daily divergence sweep across all engines (never
+   trades). Plus: backwardation-day logging (captures the first real
+   ZVOL-in-backwardation episode for the add-27 evidence gap) and
+   VIX contango recorded in every snapshot.
+4. CRASH-DAY RUNBOOK: composer/RUNBOOK.md — pre-decided owner protocol
+   assembled from adenda 7/19b/20b/21/21b/22/25/26.
