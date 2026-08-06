@@ -6,11 +6,17 @@ proportional to its demonstrated forecast skill — Brier score of its price at
 T-7d before each resolved FOMC meeting vs the realized outcome. Weights are
 the OUTPUT of a backtest, not an opinion.
 
-FROZEN BACKTEST (2026-08-05, T-7d prices, buckets cut50p/cut25/hold/hike25p):
-  Polymarket  n=7 resolved meetings (2025-03 .. 2026-01)  mean Brier 0.0110
-  Kalshi      n=2 resolved meetings (2026-06, 2026-07)    mean Brier 0.0600
-Weights use inverse-Brier with small-sample shrinkage toward a 0.05 prior
-(2 pseudo-meetings): shrunk Brier PM ~0.0197, KA ~0.0550 -> ~74% / 26%.
+FROZEN BACKTEST (2026-08-07, T-7d prices, buckets cut50p/cut25/hold/hike25p):
+  Polymarket  n=12 resolved meetings (2025-03 .. 2026-07)  mean Brier 0.0114
+  Kalshi      n=2  resolved meetings (2026-06, 2026-07)    mean Brier 0.0602
+  futures     n=0  (expired ZQ contracts unfetchable — prior weight)
+Weight-sweep note (2026-08-07): on the n=2 PM/KA overlap the measured
+optimum is 100% PM (both sources erred hawkish into the Jul-2026 hold, PM
+less; no diversification benefit visible yet) — the shrinkage prior is what
+keeps KA/futures alive against overfitting a 2-meeting sample, exactly the
+c*-style discipline used in the Kelly engine.
+Weights: inverse shrunk-Brier (0.05 prior x 2 pseudo-meetings) -> PM ~61%,
+futures ~21%, KA ~19%.
 Every fetch snapshots forecasts to disk; after each meeting resolves the
 archive re-scores and the weights update — the blend keeps earning itself.
 
@@ -40,8 +46,8 @@ LABELS = {"cut50p": "Cut ≥50", "cut25": "Cut 25", "hold": "Hold",
 # fetchable so it has NO backtest history — it enters at the shrinkage prior
 # (n=0) and earns weight as meetings resolve.
 PRIOR_BRIER, PRIOR_N = 0.05, 2
-BACKTEST = {"polymarket": {"brier": 0.0110, "n": 7},
-            "kalshi": {"brier": 0.0600, "n": 2},
+BACKTEST = {"polymarket": {"brier": 0.0114, "n": 12},
+            "kalshi": {"brier": 0.0602, "n": 2},
             "futures": {"brier": None, "n": 0}}
 
 _STORE = os.path.join(os.environ.get("CACHE_DIR", "./data"), "rate_ensemble.json")
