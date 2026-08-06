@@ -63,6 +63,36 @@ Weekly mark records: NG=F, SB=F, DBA, weekly Niño3.4/1+2, and Open-Meteo
 precipitation anomalies for confirm regions (US Gulf coast; Indian sugar
 belt). Thesis upgrades/downgrades logged, never resized mid-flight.
 
+## Layer 3b — equities (vs SPY, events 1997/2009/2014/2023, n=3-4)
+
+The insurance intuition INVERTS: El Niño's dominant insurer effect is
+Atlantic hurricane suppression (benign cat years), while the California
+damage everyone pictures is mostly NOT private-insured (mudslide = earth-
+movement exclusion; flood = federal NFIP). Private-lines leakage is auto
+comprehensive (flooded vehicles) — real but small.
+
+| ticker | +6m median (pos/n) | +12m median | verdict |
+|---|---|---|---|
+| ACGL (reinsurer) | +4.9 (3/4) | **+10.7 (4/4)** | only suggestive LONG; watchlist |
+| ALL (Allstate) | +3.8 (4/4) | −3.1 (1/4) | 6m pop fades; no trade |
+| RNR (cat reinsurer) | −1.4 (1/4) | +0.2 (2/4) | hurricane benefit NOT systematic — cat-pricing cycle dominates |
+| MTN (Vail) | +3.3 (2/4) | +5.9 (2/4) | mixed (2023: −24); no signal |
+| BG (Bunge) | −5.9 (0/3) | **−22.5 (0/3)** | crush-margin story REJECTED — if anything a fade |
+
+MCY/PGR/TRV/EQT/GNRC: keyless history only reaches ~2012 (2 events) — no
+verdict possible; qualitative map only:
+- Plausible winners (unbacktested): natgas producers (EQT/AR/RRC — the
+  equity expression of the commodity signal), CA repair/aggregates
+  (VMC/MLM post-storm rebuild), CA hydro-exposed utilities.
+- Plausible losers (unbacktested): GNRC (quiet Atlantic = fewer outage-
+  driven generator sales), heating-oil/propane distributors (warm north
+  winter), PNW-weighted ski (MTN's Whistler), salmon farmers (fishmeal
+  feed-cost spike if Peru anchovy season fails).
+
+Equity verdict: NO paper positions added. n=4 with sector cycles
+overwhelming the ENSO signal in most names; ACGL is the single watch
+candidate (4/4 at 12m), reviewed at the Layer-4 weekly marks.
+
 ## Honesty box
 
 - n=9 events (5 in the modern era for natgas). These are S4-grade
