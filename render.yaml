@@ -251,3 +251,47 @@ services:
         sync: false
       - key: TELEGRAM_CHAT_ID
         sync: false
+
+  # --- IBKR Executor (El Nino options ladder first) --------------------------
+  # ALL automated IBKR trading routes through this one service (CLAUDE.md
+  # separation-of-powers rule). Ships OFFLINE: with no TWS credentials it
+  # runs the full decision loop against a dry adapter and places nothing.
+  # Adding PAPER credentials moves it to DRY (paper); LIVE requires
+  # TRADING_MODE=live AND DRY_RUN=false, only after the paper rehearsal.
+  # Runbook: ibkr-executor/README.md
+  - type: web
+    name: ibkr-executor
+    runtime: docker
+    dockerfilePath: ibkr-executor/Dockerfile
+    dockerContext: ibkr-executor
+    plan: standard           # IB Gateway is Java; needs 2GB (won't fit starter)
+    healthCheckPath: /health
+    autoDeploy: true
+    disk:
+      name: ibkr-data
+      mountPath: /app/data
+      sizeGB: 1
+    envVars:
+      - key: TWS_USERID
+        sync: false          # PAPER username first (usually starts with 'D')
+      - key: TWS_PASSWORD
+        sync: false
+      - key: TRADING_MODE
+        value: paper         # paper | live — read by gateway AND executor
+      - key: DRY_RUN
+        value: "true"        # flip to "false" ONLY after paper rehearsal
+      - key: READ_ONLY_API
+        value: "no"          # gateway must accept orders (paper account)
+      - key: EXEC_TOKEN
+        sync: false          # /status /kill /resume auth (reuse existing)
+      - key: LEG_BUDGET_USD
+        value: "10000"       # $10k per ladder leg, house-money banked
+      - key: STATE_PATH
+        value: /app/data/ladder_state.json
+      - key: LOG_LEVEL
+        value: INFO
+      # Same Canary Optics bot as btc-executor/canary. Unset = silent no-op.
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false

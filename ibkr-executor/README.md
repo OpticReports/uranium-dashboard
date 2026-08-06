@@ -24,7 +24,20 @@ strategy managers (keyless decision brains)     ibkr-executor
 
 | module | book | status |
 |---|---|---|
-| manager.py (El Nino ladder) | NG call spread -> SB put spread -> SLV call spread, triggered + sequential, house-money rolling (see elnino-lab/ELNINO.md) | manager built + gated; IB adapter in progress; live target Nov 2026 window |
+| manager.py (El Nino ladder) | NG call spread -> SB put spread -> SLV call spread, triggered + sequential, house-money rolling (see elnino-lab/ELNINO.md) | infra deployed OFFLINE; combo placement lands with paper phase; live target Nov 2026 window |
+
+## Service modes (auto-selected at boot)
+
+| mode | condition | behavior |
+|---|---|---|
+| OFFLINE | no TWS credentials | full decision loop, DryAdapter, no gateway |
+| DRY | credentials present, DRY_RUN=true | gateway boots; mutations still simulated |
+| PAPER | TRADING_MODE=paper, DRY_RUN=false | real combo orders on the paper account |
+| LIVE | TRADING_MODE=live, DRY_RUN=false | real money (Nov gate, per-leg cutover) |
+
+Control surface: `/health` (public), `/status`, `/kill` (closes all open
+legs, halts), `/resume` — token-gated via `X-Exec-Token` header or
+`?token=`, same pattern as btc-executor.
 
 ## Rollout gates
 
