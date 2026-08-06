@@ -1350,3 +1350,45 @@ Valuation stays what it already is here: a descriptive context metric
 (canary dashboard candidate), never an allocation input. If the owner
 wants more defense, the pre-validated unconditional 27/27/31/15 tilt
 achieves the same frontier point without pretending a signal exists.
+
+
+## Addendum 27 — Synthetic-history build (Phases A-D): pipeline delivered,
+## GFC headline numbers KILLED by QA panel (2026-08-06)
+
+BUILT AND VALIDATED (durable assets):
+- Instrument reconstruction recipes: 11 leveraged ETFs at 0.995-0.999
+  daily fidelity (unconditional); vol-complex regressions 0.91-0.97;
+  VXZ->VIXM mapping verified sound by audit.
+- research/synth/tree_sim.py: generic Composer-tree simulator validated
+  at 1.000/1.000/0.999/0.999 daily corr vs Composer's own engine across
+  all four live trees (Wilder RSI). An exact offline engine replica —
+  permanently useful.
+PANEL FINDINGS (two hostile agents; full reports in session transcript):
+- MY BUG (critical): the splice builder FLAT-FILLED pre-inception series
+  (VOOG/VOOV pop tickers) -> zero losses -> RSI=100 -> the KMLM engine
+  "held" 75% UVXY every day 2007-10..2010-09 including the entire GFC.
+  The with-KMLM GFC (+73%/DD 21.5%) is that accident's payoff, not
+  strategy behavior. (tree_sim RSI al==0 branch + unpreserved builder.)
+- Reconstruction biases ALL point one way (synthetic 2008 too kind):
+  crisis-day tracking error 1.6-5.6x with positive return bias
+  (~10-25%/3x-leg/crisis-yr); unmodeled 2008 borrow on inverse funds
+  (6-26pp); ZVOL contango-beta unidentified in backwardation (41% of GFC
+  days vs 6% of its fit era) -> HARV's 2008 +79% is artifact-grade;
+  UVXY/SVXY splice seams are structural product changes (2x/-1x eras).
+- 2022 "+240%" is in-sample by construction (switcher authored 4/13/22).
+- The GFC-era HG~KMLM corr -0.55 was artifact-driven; real-era measured
+  corr is +0.30 — the diversification exhibit does NOT survive.
+- Auditor's substitute-KMLM table (the honest bottom line): synthetic
+  GFC DD spans ~19% to ~39% depending entirely on the unmeasurable KMLM
+  leg; under the SAME conservative lens the bootstrap uses, synthetic
+  GFC DD = 38.8% — the bootstrap's p95, not its p50.
+DECISION-GRADE RESIDUE: book arithmetic verified exact; simulator
+semantics exact; SLEEVE's 2022 (+128%, real tickers) the most honest
+large number; the qualitative claim "the book carries genuine
+crash-convex legs" stands.
+VERDICT: the synthetic study provides NO independent confirmation of
+central drawdown estimates. THE BINDING RISK NUMBERS REMAIN THE
+CONSERVATIVE BOOTSTRAP'S: 1y-DD p50 ~22-27%, p95 ~38%. Fix list for any
+rebuild recorded (missing-data->condition-False never flat-fill; borrow
+drag on inverse recon; short-vol termination rule; preserve builder;
+dual-lens GFC reporting). Owner's planning numbers unchanged.
