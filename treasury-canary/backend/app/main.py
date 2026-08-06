@@ -8,7 +8,7 @@ import logging
 import threading
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
@@ -64,6 +64,8 @@ async def lifespan(app: FastAPI):
         _start_scheduler(app)
     else:
         logger.info("Scheduler disabled (RUN_SCHEDULER=false)")
+    from .telegram_chat import register_webhook
+    threading.Thread(target=register_webhook, daemon=True).start()
     yield
 
 
@@ -97,6 +99,18 @@ app.include_router(routes_pins.router)
 app.include_router(routes_track.router)
 app.include_router(routes_severity.router)
 app.include_router(routes_statregime.router)
+
+
+@app.post("/telegram/webhook")
+async def telegram_webhook(request: Request):
+    """Inbound Telegram messages -> canary analyst replies. Authenticity via
+    the secret token Telegram echoes back; non-owner chats are ignored."""
+    from .telegram_chat import handle_update, webhook_secret
+    if request.headers.get("X-Telegram-Bot-Api-Secret-Token") != webhook_secret():
+        raise HTTPException(status_code=403, detail="bad webhook secret")
+    update = await request.json()
+    threading.Thread(target=handle_update, args=(update,), daemon=True).start()
+    return {"ok": True}
 
 
 _TEST_ALERT_TS = {"t": 0.0}

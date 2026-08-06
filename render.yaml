@@ -145,6 +145,11 @@ services:
         value: "true"
       - key: REFRESH_INTERVAL_MINUTES
         value: "720"
+      # Telegram two-way analyst (ask the canary questions in Telegram):
+      # needs the same TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID as alerts PLUS
+      # this OpenRouter key. CHAT_MODEL defaults to moonshotai/kimi-k3.
+      - key: OPENROUTER_API_KEY
+        sync: false
       - key: DISPLAY_TZ
         value: America/Puerto_Rico
       - key: LOG_LEVEL
