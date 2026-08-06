@@ -228,6 +228,10 @@ def test_gate_daily_loss_halt_flattens_and_blocks(tmp_path):
     ex.step(target(pull=pos))
     v._equity = 9_000.0                                   # -10% on the day
     ex.step(target(pull=pos))
+    assert ex.state.halted is None                        # debounce: 1/3
+    assert any(e["kind"] == "halt_pending" for e in ex.state.events)
+    ex.step(target(pull=pos))                             # 2/3
+    ex.step(target(pull=pos))                             # 3/3 -> halt
     assert ex.state.halted == "DAILY_LOSS"
     assert ("CANCEL_ALL", None, None, None) in v.calls
     n = len(v.calls)
@@ -292,9 +296,10 @@ def test_gate_sizing_base_overrides_equity(tmp_path):
     v._equity = 23_400.0
     ex.step(target(pull=pend))
     assert ex.state.halted is None
-    # -6% of the BASE (=$7.7k) does halt
+    # -6% of the BASE (=$7.7k) does halt (after debounce confirms)
     v._equity = 25_000.0 - 0.06 * 128_000 - 1
-    ex.step(target(pull=pend))
+    for _ in range(ex.HALT_CONFIRM_POLLS):
+        ex.step(target(pull=pend))
     assert ex.state.halted == "DAILY_LOSS"
 
 
@@ -343,6 +348,45 @@ def test_gate_telegram_alerts_on_halt_and_live_trades(tmp_path, monkeypatch):
     ex.resume()
     ex.step(target(pull=pos))
     assert any("entry" in s for s in sent)
+
+
+def test_gate_transient_bad_equity_read_no_halt(tmp_path):
+    """The 2026-08-06 false halt: one failed balance read (fallback value)
+    must not trigger a drawdown halt — debounce + recovery clears it."""
+    v = FakeVenue(equity=30_000.0)
+    ex = mkexec(tmp_path, v)
+    ex.step(target())                                     # HWM = 30k
+    v._equity = 10_000.0                                  # one bad read
+    ex.step(target())
+    assert ex.state.halted is None
+    v._equity = 30_000.0                                  # read recovers
+    ex.step(target())
+    ex.step(target())
+    assert ex.state.halted is None
+    assert ex._breach_count == 0
+
+
+def test_gate_dryrun_equity_last_known_good():
+    from app.cb import DryRunVenue
+
+    class Flaky:
+        def __init__(self):
+            self.ok = True
+
+        def equity(self):
+            if self.ok:
+                return 29_990.0
+            raise RuntimeError("api down")
+
+        def mid(self):
+            return 60_000.0
+
+    inner = Flaky()
+    v = DryRunVenue(inner)
+    assert v.equity() == 29_990.0                         # real read
+    inner.ok = False
+    assert v.equity() == 29_990.0                         # last-known-good,
+    assert v.equity() != 10_000.0                         # never the stand-in
 
 
 def test_gate_dry_run_venue_never_touches_inner():

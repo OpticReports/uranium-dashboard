@@ -88,11 +88,15 @@ def _close_side(qty: float) -> str:
 
 
 class Executor:
+    HALT_CONFIRM_POLLS = 3   # breach must persist this many polls (~1 min)
+                             # so one bad balance read can't flatten the book
+
     def __init__(self, venue: Venue, cfg, state_path: str | None = None):
         self.venue = venue
         self.cfg = cfg
         self.state_path = state_path or cfg.state_path
         self.state = self._load_state()
+        self._breach_count = 0
 
     # ---------- persistence ----------
 
@@ -202,16 +206,28 @@ class Executor:
                         f"DD halt {self.cfg.dd_halt_pct:.0%} of base "
                         f"{base_h:.0f} exceeds 80% of account {equity:.0f} - "
                         "lower DD_HALT_PCT or raise the deposit")
+        breach = None
         if st.day_start_equity > 0 and \
                 equity < st.day_start_equity - self.cfg.daily_loss_halt_pct * base_d:
-            self.halt("DAILY_LOSS",
+            breach = ("DAILY_LOSS",
                       f"equity {equity:.0f} < day start {st.day_start_equity:.0f}"
                       f" - {self.cfg.daily_loss_halt_pct:.0%} of base {base_d:.0f}")
         elif st.high_water > 0 and \
                 equity < st.high_water - self.cfg.dd_halt_pct * base_h:
-            self.halt("DRAWDOWN",
+            breach = ("DRAWDOWN",
                       f"equity {equity:.0f} < HWM {st.high_water:.0f}"
                       f" - {self.cfg.dd_halt_pct:.0%} of base {base_h:.0f}")
+        if breach is None:
+            self._breach_count = 0
+            return
+        # debounce: a real drawdown persists across polls; a transient bad
+        # balance read (the 2026-08-06 false DRAWDOWN halt) does not
+        self._breach_count += 1
+        if self._breach_count == 1:
+            self._event("WARN", "halt_pending",
+                        f"{breach[0]} breach 1/{self.HALT_CONFIRM_POLLS}: {breach[1]}")
+        if self._breach_count >= self.HALT_CONFIRM_POLLS:
+            self.halt(*breach)
 
     def halt(self, reason: str, msg: str = "") -> None:
         """Cancel everything, flatten everything, block until resume()."""

@@ -187,9 +187,10 @@ def test_alert(x_exec_token: str | None = Header(default=None),
             "set TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID env vars"}
 
 
-@app.post("/kill")
+@app.api_route("/kill", methods=["GET", "POST"])
 def kill(x_exec_token: str | None = Header(default=None),
          token: str | None = Query(default=None)):
+    """GET allowed so the kill switch works from any browser (token-gated)."""
     _auth(x_exec_token, token)
     if EXEC is None:
         return {"ok": False}
@@ -197,11 +198,11 @@ def kill(x_exec_token: str | None = Header(default=None),
     return {"ok": True, "halted": EXEC.state.halted}
 
 
-@app.post("/resume")
+@app.api_route("/resume", methods=["GET", "POST"])
 def resume(x_exec_token: str | None = Header(default=None),
            token: str | None = Query(default=None)):
     _auth(x_exec_token, token)
     if EXEC is None:
         return {"ok": False}
     EXEC.resume()
-    return {"ok": True}
+    return {"ok": True, "halted": EXEC.state.halted}

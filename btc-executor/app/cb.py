@@ -239,6 +239,7 @@ class DryRunVenue:
                  persist_path: str | None = None):
         self.inner = inner
         self._equity = equity_fallback
+        self._last_good: float | None = None
         self.persist_path = persist_path
         self.orders: dict[str, dict] = {}
         self.log: list[dict] = []
@@ -247,6 +248,7 @@ class DryRunVenue:
                 d = json.load(open(persist_path))
                 self.orders = d.get("orders", {})
                 self.log = d.get("log", [])[-500:]
+                self._last_good = d.get("last_good_equity")
             except Exception:  # noqa: BLE001
                 pass
 
@@ -255,7 +257,8 @@ class DryRunVenue:
             return
         try:
             os.makedirs(os.path.dirname(self.persist_path) or ".", exist_ok=True)
-            json.dump({"orders": self.orders, "log": self.log[-500:]},
+            json.dump({"orders": self.orders, "log": self.log[-500:],
+                       "last_good_equity": self._last_good},
                       open(self.persist_path, "w"))
         except Exception:  # noqa: BLE001
             pass
@@ -267,15 +270,22 @@ class DryRunVenue:
         self._persist()
 
     def equity(self) -> float:
+        """Real read when possible; a FAILED or zero read falls back to the
+        last-known-good value, never a made-up number — a transient API
+        hiccup must not read as a drawdown (the false DRAWDOWN halt of
+        2026-08-06). Static fallback only before any real read succeeds."""
         if self.inner:
             try:
                 v = self.inner.equity()
                 if v > 0:
+                    if v != self._last_good:
+                        self._last_good = v
+                        self._persist()
                     return v
-                # unfunded account: shadow on the simulated stake so the
-                # dry run still rehearses realistically-sized orders
             except Exception:  # noqa: BLE001
                 pass
+        if self._last_good and self._last_good > 0:
+            return self._last_good
         return self._equity
 
     def position(self) -> float:
