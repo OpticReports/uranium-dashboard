@@ -236,3 +236,9 @@ services:
         value: /app/data/executor_state.json
       - key: LOG_LEVEL
         value: INFO
+      # Telegram alerts (halts/REDs always; live trades when DRY_RUN=false).
+      # Setup steps in btc-executor/app/alerts.py. Unset = silent no-op.
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false

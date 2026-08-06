@@ -326,6 +326,25 @@ def test_gate_daily_marks_recorded(tmp_path):
     assert len(ex.state.marks) == 1
 
 
+def test_gate_telegram_alerts_on_halt_and_live_trades(tmp_path, monkeypatch):
+    sent = []
+    import app.alerts as alerts
+    monkeypatch.setattr(alerts, "send", lambda t: sent.append(t))
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    pos = {"pending": None,
+           "position": {"side": "L", "entry_price": 59_000.0, "entry_ts": NOW,
+                        "signal_ts": NOW, "stop": 56_500.0, "exit_flag": None}}
+    ex.step(target(pull=pos))                 # dry-run entry -> no alert
+    assert not [s for s in sent if "entry" in s]
+    ex.halt("KILL", "test")                   # halt -> alert always
+    assert any("halt" in s for s in sent)
+    ex.cfg.dry_run = False                    # live: entries alert too
+    ex.resume()
+    ex.step(target(pull=pos))
+    assert any("entry" in s for s in sent)
+
+
 def test_gate_dry_run_venue_never_touches_inner():
     from app.cb import DryRunVenue
 

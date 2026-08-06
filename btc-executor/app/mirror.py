@@ -130,6 +130,14 @@ class Executor:
             {"ts": int(time.time()), "level": level, "kind": kind, "msg": msg})
         logger.log(logging.WARNING if level in ("WARN", "RED") else logging.INFO,
                    "%s %s", kind, msg)
+        # phone-worthy events only: halts and REDs, plus live trade entries/
+        # exits (INFO order noise in dry-run stays out of Telegram)
+        from .alerts import send
+        if level == "RED" or kind in ("halt", "resume"):
+            send(f"🚨 executor {kind}: {msg}")
+        elif kind in ("entry_order", "leg_closed", "entry_chase") \
+                and not getattr(self.cfg, "dry_run", True):
+            send(f"⚡ executor {kind}: {msg}")
 
     # ---------- sizing ----------
 
