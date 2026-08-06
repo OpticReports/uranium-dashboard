@@ -63,6 +63,42 @@ Weekly mark records: NG=F, SB=F, DBA, weekly Niño3.4/1+2, and Open-Meteo
 precipitation anomalies for confirm regions (US Gulf coast; Indian sugar
 belt). Thesis upgrades/downgrades logged, never resized mid-flight.
 
+## Layer 3c — wide sweep: the uncrowded universe (2026-08-06)
+
+Same machinery over 23 Pink-Sheet series nobody puts in an El Nino listicle
+(ag vs Agriculture index; metals vs Base Metals index; silver vs gold), all
+9 strong events plus an EP-flavor subset (1972/82/97/2023, n=4, descriptive).
+
+**Survivors (consistent + mechanism + uncrowded):**
+
+1. **SHORT nickel — the tightest signal in the entire study**: 12m median
+   −16.2% vs base metals, **0/8 events positive**; monotone decay from +6m.
+   Mechanism: El Nino DROUGHT is good weather for Indonesian/Philippine
+   laterite mining (the wet disruptions are La Nina's problem) -> relative
+   supply tailwind while peers get Peru-flood squeezed. Instrument problem:
+   no clean retail vehicle (LME futures; equity proxies impure) — flagged
+   as the signal without a seat.
+2. **LONG lauric-oil complex (coconut/palm-kernel) at 12m**: coconut oil
+   +24.2% median, 7/8 positive; palm-kernel oil 4/4 at every horizon.
+   Mechanism: Philippine coconut-belt drought + typhoon tree damage hits
+   copra supply with a 9-15 month tree-stress lag — the market prices palm
+   and soy oil, not laurics. Instrument problem: cash markets only.
+3. **LONG silver / SHORT gold (the tradable one)**: EP subset +17-22% at
+   6-12m (3/4); full sample milder (+5.2 at 6m, 4/8). Mechanism: Peru is
+   the world's #1-2 silver producer and EP-event coastal floods hit mines
+   and haulage; gold has no Peru concentration -> the ratio isolates the
+   supply shock from monetary noise. Fully liquid (SLV/GLD).
+   **Added as paper position #3** (entry ratio 0.14333, window to 2027-05,
+   +15% target / −10% stop) — explicitly an n=4-grade EP-conditional bet.
+
+Honorable mentions: zinc 7/8 positive at 6m vs base metals (Peru flood
+exposure; zinc/copper spread is the pure Peru-vs-Chile expression, futures
+only); DAP fertilizer mildly positive 5/7; Tea Colombo EP subset +17-28%
+(Sri Lanka drought — real but the instrument is a Colombo auction lot).
+Rejected: bananas/shrimp (Ecuador thesis DOES NOT show up — 1-3/8),
+Malaysian logs short (0/4 EP at 12m but illiquid), orange (+3m pop 6/8 but
+sign-flips by 9m).
+
 ## Layer 3b — equities (vs SPY, events 1997/2009/2014/2023, n=3-4)
 
 The insurance intuition INVERTS: El Niño's dominant insurer effect is

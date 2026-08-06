@@ -20,6 +20,21 @@
    "window_end": "2027-05-31",
    "target_excess_pct": -15,
    "stop_adverse_pct": 12
+  },
+  {
+   "id": 3,
+   "side": "LONG-RATIO",
+   "name": "Silver/Gold (Peru EP-flood thesis)",
+   "symbol": "SLV/GLD",
+   "entry": 0.14333,
+   "entry_legs": {
+    "SLV": 55.85,
+    "GLD": 389.67
+   },
+   "window_end": "2027-05-31",
+   "target_ratio_pct": 15,
+   "stop_ratio_pct": -10,
+   "basis": "EP subset 3/4 positive +17-22% at 6-12m; full sample 4/8 +5.2 at 6m - n=4 grade"
   }
  ],
  "benchmark": {
