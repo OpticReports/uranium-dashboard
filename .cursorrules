@@ -1,4 +1,7 @@
-# CLAUDE.md — working conventions for this repo
+<!-- MIRROR of CLAUDE.md — canonical source. Do not edit here; edit CLAUDE.md
+     and re-copy (all three files ship in the same commit). -->
+
+# Working conventions for this repo (agent rules)
 
 > SYNC RULE: this file is the CANONICAL copy. AGENTS.md and .cursorrules at
 > the repo root are byte-for-byte mirrors (plus a provenance header) so
