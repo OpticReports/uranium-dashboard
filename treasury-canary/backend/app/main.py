@@ -99,6 +99,29 @@ app.include_router(routes_severity.router)
 app.include_router(routes_statregime.router)
 
 
+_TEST_ALERT_TS = {"t": 0.0}
+
+
+@app.get("/alerts/test")
+def alerts_test():
+    """Browser-friendly Telegram wiring check. Fixed message + 60s rate limit
+    (worst-case abuse on this open endpoint = one canned ping a minute)."""
+    import os
+    import time as _t
+
+    from .alerts import send
+    if _t.time() - _TEST_ALERT_TS["t"] < 60:
+        return {"rate_limited": True, "retry_in_s": 60}
+    configured = bool(os.environ.get("TELEGRAM_BOT_TOKEN")
+                      and os.environ.get("TELEGRAM_CHAT_ID"))
+    if configured:
+        _TEST_ALERT_TS["t"] = _t.time()
+        send("✅ test: treasury-canary → Telegram wiring works")
+    return {"telegram_configured": configured, "sent": configured,
+            "hint": None if configured else
+            "set TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID env vars"}
+
+
 @app.get("/health")
 def health():
     return {

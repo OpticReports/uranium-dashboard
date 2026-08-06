@@ -163,6 +163,23 @@ def status(x_exec_token: str | None = Header(default=None),
     return out
 
 
+@app.get("/test-alert")
+def test_alert(x_exec_token: str | None = Header(default=None),
+               token: str | None = Query(default=None)):
+    """Browser-friendly Telegram wiring check (token-gated)."""
+    _auth(x_exec_token, token)
+    import os
+    from .alerts import send
+    configured = bool(os.environ.get("TELEGRAM_BOT_TOKEN")
+                      and os.environ.get("TELEGRAM_CHAT_ID"))
+    if configured:
+        send("✅ test: btc-executor → Telegram wiring works")
+    return {"telegram_configured": configured,
+            "sent": configured,
+            "hint": None if configured else
+            "set TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID env vars"}
+
+
 @app.post("/kill")
 def kill(x_exec_token: str | None = Header(default=None),
          token: str | None = Query(default=None)):
