@@ -10,6 +10,7 @@ import logging
 
 import httpx
 from sqlalchemy import select
+from sqlalchemy import update as sa_update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -161,12 +162,44 @@ def run_refresh(session: Session) -> dict:
         if fe:
             new_events.append(fe)
 
+    # --- rate-path probability shifts (prediction-market ensemble) ---------
+    try:
+        from ..sources.rate_markets import (detect_shifts, ensemble,
+                                            mark_alerted, shift_state)
+        ens = ensemble()
+        front = (ens.get("meetings") or [{}])[0]
+        prev_front, store = shift_state()
+        shifts = detect_shifts(prev_front, front)
+        for sh in shifts:
+            lvl = int(sh["to"] * 10)   # quantized level -> one alert per band
+            new_events.append(Event(
+                event_type="rate_path_shift", severity=sh["severity"],
+                asof=today,
+                dedup_key=f"{sh['meeting']}:{sh['bucket']}:{lvl}",
+                rationale=(f"Fed {sh['meeting']}: P({sh['bucket']}) moved "
+                           f"{sh['from']:.0%} -> {sh['to']:.0%} "
+                           "(accuracy-weighted Polymarket+Kalshi blend)"),
+                detail=sh))
+        if shifts or (prev_front or {}).get("date") != front.get("date"):
+            mark_alerted(store, front)   # re-anchor on shift OR rollover
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("rate ensemble shift check failed: %s", exc)
+
+    from ..alerts import format_event, should_send
+    from ..alerts import send as _tg_send
     fired = 0
     for ev in new_events:
         if _persist_event(session, ev):
             fired += 1
             if ev.severity in ("RED", "CRITICAL"):
                 _fire_webhook(ev)
+            if should_send(ev.severity):
+                _tg_send(format_event(ev.event_type, ev.severity, ev.rationale))
+                session.execute(
+                    sa_update(EventLog)
+                    .where(EventLog.event_type == ev.event_type,
+                           EventLog.dedup_key == ev.dedup_key)
+                    .values(alert_sent=True))
 
     # --- prediction log (track record): one row/day, idempotent -----------------
     try:

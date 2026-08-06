@@ -184,6 +184,10 @@ services:
       - key: EXEC_TOKEN
         sync: false
 
+  # NOTE: treasury-canary Telegram alerts — add the same TELEGRAM_BOT_TOKEN /
+  # TELEGRAM_CHAT_ID secrets (plus optional TELEGRAM_MIN_SEVERITY, default
+  # WARN) to the treasury-canary service env in the Render dashboard.
+
   # --- S5 Live Executor (Coinbase perps) ------------------------------------
   # Mirrors the paper engine's S5 blend onto a real Coinbase Advanced account.
   # SAFETY: ships with DRY_RUN=true — it cannot place an order until that env

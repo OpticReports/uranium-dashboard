@@ -65,6 +65,46 @@ def test_gate_brier_and_norm_guards():
     assert abs(sum(n.values()) - 1.0) < 1e-6
 
 
+def test_gate_shift_detection():
+    from app.sources.rate_markets import detect_shifts
+    prev = {"date": "2026-09-16",
+            "blend": {"cut50p": 0.01, "cut25": 0.01, "hold": 0.52, "hike25p": 0.45}}
+    # quiet drift (<10pp): no events
+    cur = {"date": "2026-09-16",
+           "blend": {"cut50p": 0.01, "cut25": 0.02, "hold": 0.48, "hike25p": 0.49}}
+    assert detect_shifts(prev, cur) == []
+    # 15pp hold->hike swing: WARN on both buckets
+    cur2 = {"date": "2026-09-16",
+            "blend": {"cut50p": 0.01, "cut25": 0.01, "hold": 0.37, "hike25p": 0.60}}
+    evs = detect_shifts(prev, cur2)
+    assert {e["bucket"] for e in evs} == {"hold", "hike25p"}
+    assert all(e["severity"] == "WARN" for e in evs)
+    # 25pp move: RED
+    cur3 = {"date": "2026-09-16",
+            "blend": {"cut50p": 0.01, "cut25": 0.01, "hold": 0.27, "hike25p": 0.70}}
+    assert any(e["severity"] == "RED" for e in detect_shifts(prev, cur3))
+    # meeting rolled over (new front meeting): baseline resets, no false alarm
+    cur4 = {"date": "2026-10-28",
+            "blend": {"cut50p": 0.02, "cut25": 0.05, "hold": 0.68, "hike25p": 0.25}}
+    assert detect_shifts(prev, cur4) == []
+    # cold start: nothing to compare
+    assert detect_shifts(None, cur2) == []
+
+
+def test_gate_telegram_policy(monkeypatch):
+    from app import alerts
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
+    assert not alerts.should_send("CRITICAL")          # unset env -> never
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "t")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "c")
+    assert alerts.should_send("WARN")                  # default floor WARN
+    assert alerts.should_send("RED")
+    assert not alerts.should_send("INFO")
+    monkeypatch.setenv("TELEGRAM_MIN_SEVERITY", "RED")
+    assert not alerts.should_send("WARN")
+    assert "🔴" in alerts.format_event("band_cross", "RED", "x")
+
+
 def test_gate_buckets_stable():
     # frontend contract: exactly these four, in this order
     assert BUCKETS == ["cut50p", "cut25", "hold", "hike25p"]

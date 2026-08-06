@@ -221,6 +221,48 @@ def blend(per_source: dict[str, dict], weights: dict) -> dict:
     return {b: round(v / wtot, 4) for b, v in acc.items()}
 
 
+# ---------- shift detection (feeds the canary event log) ----------
+
+SHIFT_WARN_PP = 0.10     # any front-meeting bucket moves >=10pp -> WARN event
+SHIFT_RED_PP = 0.20      # >=20pp -> RED
+
+
+def detect_shifts(prev: dict | None, cur: dict | None) -> list[dict]:
+    """Compare the current front-meeting blend to the last ALERTED one.
+    Returns [{severity, bucket, from, to, meeting}] — empty when quiet.
+    Levels are quantized in the dedup key upstream so a slow drift alerts
+    once per 10pp band, not once per refresh."""
+    if not cur or not cur.get("blend"):
+        return []
+    if prev is None or prev.get("date") != cur.get("date"):
+        return []          # cold start / meeting rollover: reset baseline
+                           # quietly (caller re-anchors via mark_alerted)
+    pb = prev.get("blend") or {}
+    out = []
+    for b in BUCKETS:
+        new = cur["blend"].get(b, 0.0)
+        old = pb.get(b, 0.0)
+        d = abs(new - old)
+        if d < SHIFT_WARN_PP:
+            continue
+        sev = "RED" if d >= SHIFT_RED_PP else "WARN"
+        out.append({"severity": sev, "bucket": b, "from": round(old, 3),
+                    "to": round(new, 3), "meeting": cur.get("date")})
+    return out
+
+
+def shift_state() -> tuple[dict | None, dict]:
+    """(last_alerted_front_meeting, store) for the caller to update."""
+    store = _load_store()
+    return store.get("last_alerted_front"), store
+
+
+def mark_alerted(store: dict, front: dict) -> None:
+    store["last_alerted_front"] = {"date": front.get("date"),
+                                   "blend": front.get("blend")}
+    _save_store(store)
+
+
 # ---------- assembly ----------
 
 def ensemble(now: float | None = None) -> dict:
