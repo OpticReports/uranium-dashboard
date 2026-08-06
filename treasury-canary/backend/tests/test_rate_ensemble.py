@@ -27,10 +27,11 @@ def test_gate_bucket_parsers():
 
 def test_gate_weights_earned_from_accuracy():
     w = source_weights()
-    # backtest: PM brier 0.011 (n=7) beats Kalshi 0.060 (n=2) -> PM majority,
-    # but shrinkage keeps Kalshi meaningfully represented
+    # backtest: PM brier 0.011 (n=7) beats Kalshi 0.060 (n=2) and the
+    # no-history futures prior -> PM plurality, others meaningfully present
     assert w["polymarket"]["weight"] > w["kalshi"]["weight"]
-    assert 0.60 < w["polymarket"]["weight"] < 0.90
+    assert w["polymarket"]["weight"] > w["futures"]["weight"]
+    assert 0.45 < w["polymarket"]["weight"] < 0.90
     assert abs(sum(v["weight"] for v in w.values()) - 1.0) < 0.01
     assert w["polymarket"]["n"] == BACKTEST["polymarket"]["n"]
     # new scored meetings shift the weights: feed Kalshi perfect scores
@@ -103,6 +104,41 @@ def test_gate_telegram_policy(monkeypatch):
     monkeypatch.setenv("TELEGRAM_MIN_SEVERITY", "RED")
     assert not alerts.should_send("WARN")
     assert "🔴" in alerts.format_event("band_cross", "RED", "x")
+
+
+def test_gate_futures_implied_math():
+    from app.sources.fed_futures import implied_probs
+    # Sep 16 2026 meeting, 30-day month. Anchor Aug (meeting-free) at 96.40
+    # -> r_start 3.60. Sep contract 96.325 -> r_month 3.675:
+    # 3.675 = (16/30)*3.60 + (14/30)*r_end -> r_end 3.7607 -> delta +0.161
+    # -> steps +0.643 -> P(hold)=0.357, P(hike25p)=0.643
+    prices = {(2026, 8): 96.40, (2026, 9): 96.325}
+    out = implied_probs(["2026-09-16"], prices=prices)
+    p = out["2026-09-16"]
+    assert abs(p["hike25p"] - 0.643) < 0.01
+    assert abs(p["hold"] - 0.357) < 0.01
+    assert p["cut25"] == 0 and p["cut50p"] == 0
+    # a cut-priced curve maps to the cut buckets
+    prices2 = {(2026, 8): 96.40, (2026, 9): 96.47}   # r_month 3.53 < r_start
+    p2 = implied_probs(["2026-09-16"], prices=prices2)["2026-09-16"]
+    assert p2["cut25"] > 0.5 and p2["hike25p"] == 0
+    # chaining: Oct meeting anchors off Sep's implied r_end, not raw Sep avg
+    prices3 = {(2026, 8): 96.40, (2026, 9): 96.325, (2026, 10): 96.20}
+    out3 = implied_probs(["2026-09-16", "2026-10-28"], prices=prices3)
+    assert "2026-10-28" in out3
+    assert abs(sum(out3["2026-10-28"].values()) - 1.0) < 0.01
+    # missing contract -> meeting skipped, no fake numbers
+    assert implied_probs(["2026-09-16"], prices={(2026, 9): 96.3}) == {}
+
+
+def test_gate_futures_prior_weight():
+    w = source_weights()
+    assert "futures" in w
+    assert w["futures"]["n"] == 0 and w["futures"]["brier"] is None
+    # no history -> pure prior: weight must sit below both scored sources'
+    # combined... specifically below polymarket, and > 0
+    assert 0 < w["futures"]["weight"] < w["polymarket"]["weight"]
+    assert abs(sum(v["weight"] for v in w.values()) - 1.0) < 0.01
 
 
 def test_gate_buckets_stable():

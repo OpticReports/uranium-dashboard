@@ -35,10 +35,14 @@ BUCKETS = ["cut50p", "cut25", "hold", "hike25p"]
 LABELS = {"cut50p": "Cut ≥50", "cut25": "Cut 25", "hold": "Hold",
           "hike25p": "Hike ≥25"}
 
-# frozen backtest constants (see module docstring)
+# frozen backtest constants (see module docstring). futures = FedWatch-style
+# ZQ-implied probabilities (fed_futures.py): expired contracts aren't
+# fetchable so it has NO backtest history — it enters at the shrinkage prior
+# (n=0) and earns weight as meetings resolve.
 PRIOR_BRIER, PRIOR_N = 0.05, 2
 BACKTEST = {"polymarket": {"brier": 0.0110, "n": 7},
-            "kalshi": {"brier": 0.0600, "n": 2}}
+            "kalshi": {"brier": 0.0600, "n": 2},
+            "futures": {"brier": None, "n": 0}}
 
 _STORE = os.path.join(os.environ.get("CACHE_DIR", "./data"), "rate_ensemble.json")
 _UA = {"User-Agent": "optic-research canary tool (casey.rondin@gmail.com)"}
@@ -195,7 +199,7 @@ def source_weights(scored: dict | None = None) -> dict:
     for src, base in BACKTEST.items():
         extra = (scored or {}).get(src, [])
         n = base["n"] + len(extra)
-        tot = base["brier"] * base["n"] + sum(extra)
+        tot = (base["brier"] or 0.0) * base["n"] + sum(extra)
         shrunk = (tot + PRIOR_BRIER * PRIOR_N) / (n + PRIOR_N)
         stats[src] = {"n": n, "brier": round(tot / n, 4) if n else None,
                       "shrunk": shrunk}
@@ -296,12 +300,20 @@ def ensemble(now: float | None = None) -> dict:
             else:
                 hit["sources"][src] = probs
                 hit["date"] = min(hit["date"], d)
+    upcoming = sorted(m["date"] for m in merged if m["date"] >= today)
+    try:
+        from .fed_futures import implied_probs
+        fut = implied_probs(upcoming[:6])
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("futures-implied probs failed: %s", exc)
+        fut = {}
     meetings = []
     for m in sorted(merged, key=lambda x: x["date"]):
         if m["date"] < today:
             continue
         per = {"polymarket": m["sources"].get("polymarket") or {},
-               "kalshi": m["sources"].get("kalshi") or {}}
+               "kalshi": m["sources"].get("kalshi") or {},
+               "futures": fut.get(m["date"]) or {}}
         meetings.append({"date": m["date"], "sources": per,
                          "blend": blend(per, weights)})
     return {"meetings": meetings[:6], "weights": weights,

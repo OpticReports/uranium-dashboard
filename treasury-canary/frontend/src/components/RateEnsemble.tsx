@@ -97,9 +97,12 @@ export default function RateEnsemble() {
                     <div className="text-[9px] leading-tight text-slate-500 tabular-nums">
                       {srcs.map((s) => {
                         const v = m.sources[s]?.[b];
+                        const letter =
+                          s === "polymarket" ? "P" : s === "kalshi" ? "K" :
+                          s === "futures" ? "F" : s[0].toUpperCase();
                         return (
                           <span key={s} className="ml-1">
-                            {s === "polymarket" ? "P" : "K"}:{v === undefined ? "—" : `${Math.round(v * 100)}`}
+                            {letter}:{v === undefined ? "—" : `${Math.round(v * 100)}`}
                           </span>
                         );
                       })}
@@ -115,13 +118,23 @@ export default function RateEnsemble() {
         </table>
       </div>
       <p className="mt-2 text-[10px] leading-relaxed text-slate-500">
-        Accuracy-weighted blend: Polymarket{" "}
-        <span className="text-slate-300">{Math.round((wPm?.weight ?? 0) * 100)}%</span>{" "}
-        (Brier {wPm?.brier}, n={wPm?.n}) · Kalshi{" "}
-        <span className="text-slate-300">{Math.round((wKa?.weight ?? 0) * 100)}%</span>{" "}
-        (Brier {wKa?.brier}, n={wKa?.n}) — scored at T-7d vs resolved outcomes;
-        weights re-learn after each meeting. Small print under each number =
-        per-source %. Display-only.
+        Accuracy-weighted blend:{" "}
+        {srcs.map((s, i) => {
+          const w = data.weights[s];
+          const name = s === "futures" ? "Fed-funds futures (FedWatch-style)"
+            : s.charAt(0).toUpperCase() + s.slice(1);
+          return (
+            <span key={s}>
+              {i > 0 && " · "}
+              {name}{" "}
+              <span className="text-slate-300">{Math.round((w?.weight ?? 0) * 100)}%</span>{" "}
+              ({w?.brier != null ? `Brier ${w.brier}, n=${w.n}` : "no history yet — prior weight, earns in"})
+            </span>
+          );
+        })}{" "}
+        — scored at T-7d vs resolved outcomes; weights re-learn after each
+        meeting. Small print under each number = per-source % (P/K/F).
+        Display-only.
       </p>
     </Panel>
   );
