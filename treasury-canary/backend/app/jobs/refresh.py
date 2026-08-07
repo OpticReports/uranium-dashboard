@@ -185,6 +185,21 @@ def run_refresh(session: Session) -> dict:
     except Exception as exc:  # noqa: BLE001
         logger.warning("rate ensemble shift check failed: %s", exc)
 
+    # business-cycle phase change (monthly-cadence signal; the routes cache
+    # keeps this from hammering FRED on every refresh)
+    try:
+        from ..api.routes_cycle import cycle as _cycle_board
+        from ..sources.business_cycle import phase_change
+        msg = phase_change(_cycle_board())
+        if msg:
+            new_events.append(Event(
+                event_type="cycle_phase_change", severity="WARN", asof=today,
+                dedup_key=f"cycle:{msg.split('->')[1].strip().split()[0]}:"
+                          f"{today.strftime('%Y-%m')}",
+                rationale=msg, detail={"source": "business_cycle"}))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("cycle phase check failed: %s", exc)
+
     from ..alerts import format_event, should_send
     from ..alerts import send as _tg_send
     fired = 0

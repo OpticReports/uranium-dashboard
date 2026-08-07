@@ -7,6 +7,7 @@ import StressGauge from "./components/StressGauge";
 import MetricTable from "./components/MetricTable";
 import ReSteepenAlert from "./components/ReSteepenAlert";
 import SahmChart from "./components/SahmChart";
+import CycleTracker from "./components/CycleTracker";
 import LaborPanel from "./components/LaborPanel";
 import FlightToQuality from "./components/FlightToQuality";
 import FlowCompass from "./components/FlowCompass";
@@ -154,6 +155,7 @@ export default function App() {
 
           <ReSteepenAlert />
 
+          <CycleTracker />
           <SahmChart />
 
           {metrics ? (

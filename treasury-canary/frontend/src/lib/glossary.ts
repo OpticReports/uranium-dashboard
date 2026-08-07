@@ -12,6 +12,29 @@ export interface GlossaryEntry {
 }
 
 export const GLOSSARY: Record<string, GlossaryEntry> = {
+  // ── Business cycle ────────────────────────────────────────────────────────
+  cycle_phase: {
+    title: "Business-cycle phase",
+    what: "Where the US economy sits in the cycle, classified from two composites: COINCIDENT (where we are — the four series NBER's dating committee uses) and LEADING (where we're heading). Phases: EXPANSION, LATE CYCLE (leading rolling over while growth still positive), STALL (growth below trend, leading OK), SLOWDOWN (both deteriorating), CONTRACTION (coincident below the recession-consistent line).",
+    calc: "Coincident < −0.75 → CONTRACTION; < 0 with leading < −0.3 → SLOWDOWN; < 0 → STALL; leading < −0.5 → LATE CYCLE; else EXPANSION. Thresholds validated on 1960–2026 NBER dating, not fitted to look good.",
+    read: "Phase CHANGES matter more than levels — a STALL→SLOWDOWN transition fires a canary alert. Cross-check with the stress composite: cycle position says where you are, stress says how fragile the ride is.",
+    caveat: "Monthly data with ~1-month publication lag; validation uses revised data, so live precision runs below the backtest stats. This tracks the cycle — it does not day-trade it.",
+  },
+  cycle_composite: {
+    title: "Coincident & leading composites (z-scores)",
+    what: "Coincident: mean expanding-window z of 6-month annualized growth of payrolls, industrial production, real income ex transfers, real business sales. Leading: same treatment of yield curve, building permits, jobless claims (inverted), factory hours, credit spreads (inverted), consumer-sentiment change.",
+    calc: "Expanding-window z-scores (min 10y history) — no full-sample lookahead. Leading is 3-month smoothed. Recession-consistent line at −0.75: ~65% precision / ~92% recall on monthly NBER labels; every recession since 1970 bottomed below −1.65. Leading crossing −0.5 preceded 6 of 7 recessions (median 6 months); 3 of 14 warning spells were false.",
+    read: "Coincident below zero but above −0.75 with leading positive = a stall, not a recession call. Both below their lines together is the combination that has never been a false alarm for long.",
+    caveat: "Revised-data validation (live vintages noisier); ~1-month lag. The 2020 recession arrived faster than any monthly indicator could lead.",
+  },
+  cycle_payrolls: {
+    title: "Payrolls momentum (12-month MA of monthly change)",
+    what: "The single-series framing (popularized by Zeberg): average monthly nonfarm-payroll change over the trailing 12 months, in thousands of jobs. Smooth enough to see the cycle, simple enough to argue with.",
+    calc: "12-month moving average of month-over-month PAYEMS change. The panel checks the claim that today's level sits below every level at which a post-1970 recession STARTED — computed from the data, not quoted from the tweet.",
+    read: "Falling through ~50k/mo historically means the labor cycle is late; crossing zero has essentially always coincided with recession. But it LAGS the composites — use it as confirmation, not as the early warning.",
+    caveat: "One series, benchmark-revision-prone (annual BLS revisions can move the whole recent curve). The composite view is the primary instrument; this is the cross-check.",
+  },
+
   // ── Composite ─────────────────────────────────────────────────────────────
   composite_score: {
     title: "Treasury Stress Score (0–100)",
