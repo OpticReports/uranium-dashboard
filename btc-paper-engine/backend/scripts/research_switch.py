@@ -48,21 +48,26 @@ closes = np.array([b.close for b in bars]); bts = np.array([b.ts for b in bars])
 def bar_idx(t):
     return int(np.searchsorted(bts, t, side="right") - 1)
 
-# --- signal library: value known AT ts (uses bars strictly before/at ts) ---
+# --- signal library ---------------------------------------------------------
+# QA FIX (counter-agent audit, 2026-08-07): exit_ts is a bar-OPEN timestamp,
+# so the bar at bar_idx(t) CLOSES 4h in the future. Signals must use only
+# CLOSED bars: window ends at index i-1 (the bar ending exactly at t).
 def sig_vol(t, look=120):                                         # 20d realized vol
     i = bar_idx(t)
-    w = closes[max(0, i - look):i + 1]
+    w = closes[max(0, i - look):i]                                # closed bars only
     rr = np.diff(np.log(w))
     return float(np.std(rr) * np.sqrt(6 * 365)) if len(rr) > 10 else np.nan
 
-def sig_trend(t, look):                                           # close vs SMA
+def sig_trend(t, look):                                           # last close vs SMA
     i = bar_idx(t)
-    w = closes[max(0, i - look):i + 1]
-    return float(closes[i] / np.mean(w) - 1)
+    w = closes[max(0, i - look):i]
+    return float(w[-1] / np.mean(w) - 1) if len(w) else 0.0
 
 def sig_eff(t, look=180):                                         # efficiency ratio
     i = bar_idx(t)
-    w = closes[max(0, i - look):i + 1]
+    w = closes[max(0, i - look):i]
+    if len(w) < 10:
+        return 0.0
     path = np.sum(np.abs(np.diff(w)))
     return float(abs(w[-1] - w[0]) / path) if path > 0 else 0.0
 
@@ -72,11 +77,15 @@ TR200 = np.array([sig_trend(t, 1200) for t in ts_arr])            # 200d SMA
 EFF = np.array([sig_eff(t) for t in ts_arr])
 
 def run_rule(lev_fn):
-    """lev_fn(k, own_dd, own_eq) -> 1.5 or 2.0 using info through step k-1."""
+    """lev_fn(j, own_dd, own_eq) -> 1.5 or 2.0. QA FIX: the decision for step
+    k is made at step k-1's EXIT (the executor resizes at the previous flat),
+    so signal-indexed rules receive j = k-1. j = -1 on the first step (no
+    prior exit): rules must default to 1.5 there. Combined with closed-bar
+    signal windows above, no part of step k's own path can reach its lever."""
     eq = peak = 1.0; mdd = 0.0
     occ2 = 0; levs = []
     for k in range(len(r_arr)):
-        m = lev_fn(k, eq / peak - 1, eq)
+        m = lev_fn(k - 1, eq / peak - 1, eq) if k > 0 else 1.5
         levs.append(m)
         occ2 += (m == 2.0)
         eq *= 1 + m * r_arr[k]
