@@ -106,3 +106,18 @@ during the token-size phase.
 - Executor state: `/app/data/executor_state.json` (persistent disk)
 - The engine's `/exec/target` is token-protected; set EXEC_TOKEN on BOTH
   services or the feed 401s.
+
+## Halt automation (2026-08-07)
+
+- **DAILY_LOSS auto-rearms** at the UTC day rollover (informational ✅
+  alert). It is a rate limiter, not a model-falsification event.
+- **DRAWDOWN and KILL remain manual-resume**, deliberately: a circuit
+  breaker with automatic reset is a retry loop, and the −35%-of-base floor
+  is only a floor because a human stands behind it. Resume is a
+  capital-allocation decision (same size / smaller / stop).
+- **Transfer reconciliation:** when the whole book is flat (ledger empty,
+  venue confirms no exposure), a material equity jump can only be a
+  deposit/withdrawal — the halt anchors (day start, HWM) shift by the jump
+  instead of tripping the breaker. Any equity move while positions are
+  open takes the normal halt path. Limitation: a transfer landing during a
+  service restart is absorbed as baseline, not detected as a jump.

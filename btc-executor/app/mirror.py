@@ -97,6 +97,7 @@ class Executor:
         self.state_path = state_path or cfg.state_path
         self.state = self._load_state()
         self._breach_count = 0
+        self._last_flat_equity = None      # transfer-reconciliation baseline
 
     # ---------- persistence ----------
 
@@ -158,9 +159,8 @@ class Executor:
         elif level == "RED":
             send(f"🚨 executor {kind}: {msg}\n"
                  f"→ no action needed from you — forward this to Claude")
-        elif kind == "resume":
-            send(f"✅ executor resume: {msg} — trading re-armed, "
-                 f"no action needed")
+        elif kind in ("resume", "auto_rearm", "transfer_reconciled"):
+            send(f"✅ executor {kind}: {msg} — no action needed")
         elif kind in ("entry_order", "leg_closed", "entry_chase") \
                 and not getattr(self.cfg, "dry_run", True):
             send(f"⚡ executor {kind}: {msg}")
@@ -198,6 +198,15 @@ class Executor:
     def _roll_day(self, equity: float) -> None:
         day = time.strftime("%Y-%m-%d", time.gmtime())
         if day != self.state.day_key:
+            # DAILY_LOSS is a rate limiter ("stop for today"), not a
+            # model-falsification event: it re-arms itself at the UTC day
+            # boundary. DRAWDOWN and KILL stay manual-resume by design —
+            # the circuit breaker with automatic reset is a retry loop.
+            if self.state.day_key and self.state.halted == "DAILY_LOSS":
+                self.state.halted = None
+                self._breach_count = 0
+                self._event("INFO", "auto_rearm",
+                            f"DAILY_LOSS cleared at UTC day rollover {day}")
             self.state.day_key = day
             self.state.day_start_equity = equity
             try:
@@ -208,6 +217,45 @@ class Executor:
                 {"d": day, "equity": round(equity, 2),
                  "position_btc": round(pos, 5) if pos is not None else None})
         self.state.high_water = max(self.state.high_water, equity)
+
+    def _reconcile_transfers(self, equity: float) -> None:
+        """Deposits/withdrawals are not P&L. When the WHOLE book is flat (our
+        ledger has no qty and no working orders), account equity can only
+        move materially via a transfer — so shift the halt anchors
+        (day-start, high-water) by the jump instead of letting it hit the
+        halt math. This kills the false-halt category (the 2026-08 deposit
+        halt) without touching genuine-loss detection: any move while a
+        position is open, or while the venue still reports exposure, goes
+        through the normal halt path untouched. Limitation: a transfer that
+        lands during a restart window is seen as a baseline, not a jump."""
+        prev = self._last_flat_equity
+        flat = all(l.qty == 0 and not l.entry_cloid and not l.stop_cloid
+                   for l in self.state.legs.values())
+        if not flat:
+            self._last_flat_equity = None
+            return
+        if prev is None or equity <= 0:
+            self._last_flat_equity = equity if equity > 0 else None
+            return
+        delta = equity - prev
+        floor = max(0.002 * self._base(equity), 50.0)
+        if abs(delta) >= floor:
+            try:                       # orphan guard: venue must agree we're flat
+                if abs(self.venue.position() or 0.0) > 1e-6:
+                    return             # exposure exists -> not a transfer
+            except Exception:  # noqa: BLE001
+                return                 # can't verify -> don't touch anchors
+            if self.state.day_start_equity > 0:
+                self.state.day_start_equity += delta
+            if self.state.high_water > 0:
+                self.state.high_water = max(self.state.high_water + delta, equity)
+            self._breach_count = 0
+            self._event("INFO", "transfer_reconciled",
+                        f"flat-book equity moved {delta:+.0f} (no fills) - "
+                        f"treated as transfer; halt anchors shifted, day start "
+                        f"{self.state.day_start_equity:.0f}, HWM "
+                        f"{self.state.high_water:.0f}")
+        self._last_flat_equity = equity
 
     def _check_halts(self, equity: float) -> None:
         """Loss thresholds are percentages OF THE SIZING BASE: with a fixed
@@ -277,6 +325,7 @@ class Executor:
 
     def step(self, target: dict) -> None:
         equity = self.venue.equity()
+        self._reconcile_transfers(equity)
         self._roll_day(equity)
         self._check_halts(equity)
         if self.state.halted:

@@ -431,3 +431,57 @@ def test_gate_alert_tier_labels(tmp_path, monkeypatch):
     sent.clear()
     ex._event("WARN", "cap_clamp", "clamped")                   # ordinary WARN
     assert sent == []                                           # stays quiet
+
+
+def test_gate_daily_loss_auto_rearms_drawdown_does_not(tmp_path):
+    """DAILY_LOSS is a rate limiter: it clears itself at the UTC day
+    rollover. DRAWDOWN stays manual — auto-reset there would turn the
+    floor into a retry loop."""
+    v = FakeVenue(equity=30_000.0)
+    ex = mkexec(tmp_path, v)
+    ex.step(target())
+    ex.halt("DAILY_LOSS", "test")
+    ex.state.day_key = "2000-01-01"                       # force a rollover
+    ex.step(target())
+    assert ex.state.halted is None
+    assert any(e["kind"] == "auto_rearm" for e in ex.state.events)
+    ex.halt("DRAWDOWN", "test")
+    ex.state.day_key = "2000-01-02"
+    ex.step(target())
+    assert ex.state.halted == "DRAWDOWN"                  # still waiting on human
+
+
+def test_gate_transfer_reconciliation_flat_book(tmp_path):
+    """Deposits/withdrawals while flat shift the halt anchors instead of
+    tripping the breaker (the 2026-08 deposit false-halt category)."""
+    v = FakeVenue(equity=30_000.0)
+    ex = mkexec(tmp_path, v)
+    ex.step(target()); ex.step(target())                  # baseline, HWM 30k
+    v._equity = 50_000.0                                  # $20k deposit lands
+    ex.step(target()); ex.step(target()); ex.step(target())
+    assert ex.state.halted is None
+    assert any(e["kind"] == "transfer_reconciled" for e in ex.state.events)
+    assert ex.state.high_water == pytest.approx(50_000.0)
+    # withdrawal back out while flat: anchors follow, NO drawdown halt
+    v._equity = 30_000.0
+    for _ in range(5):
+        ex.step(target())
+    assert ex.state.halted is None
+    assert ex.state.high_water == pytest.approx(30_000.0)
+    assert not any(e["kind"] == "halt" for e in ex.state.events)
+
+
+def test_gate_transfer_reconciliation_never_masks_real_losses(tmp_path):
+    """The reconciler must NOT fire while a position is open (equity moves
+    are P&L) — a genuine loss still halts through the normal path."""
+    v = FakeVenue(equity=30_000.0)
+    ex = mkexec(tmp_path, v)
+    pos = {"pending": None,
+           "position": {"side": "L", "entry_price": 59_000.0, "entry_ts": NOW,
+                        "signal_ts": NOW, "stop": 56_500.0, "exit_flag": None}}
+    ex.step(target(pull=pos))                             # leg has qty now
+    v._equity = 8_000.0                                   # catastrophic slide
+    for _ in range(ex.HALT_CONFIRM_POLLS + 1):
+        ex.step(target(pull=pos))
+    assert ex.state.halted in ("DAILY_LOSS", "DRAWDOWN")  # daily line trips first
+    assert not any(e["kind"] == "transfer_reconciled" for e in ex.state.events)
