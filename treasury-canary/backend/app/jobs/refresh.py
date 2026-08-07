@@ -190,12 +190,15 @@ def run_refresh(session: Session) -> dict:
     try:
         from ..api.routes_cycle import cycle as _cycle_board
         from ..sources.business_cycle import phase_change
-        msg = phase_change(_cycle_board())
+        cycle_board = _cycle_board()
+        msg = phase_change(cycle_board)
         if msg:
+            new_phase = cycle_board["current"]["phase"]   # not parsed from msg
             new_events.append(Event(
-                event_type="cycle_phase_change", severity="WARN", asof=today,
-                dedup_key=f"cycle:{msg.split('->')[1].strip().split()[0]}:"
-                          f"{today.strftime('%Y-%m')}",
+                event_type="cycle_phase_change",
+                severity="RED" if new_phase == "CONTRACTION" else "WARN",
+                asof=today,
+                dedup_key=f"cycle:{new_phase}:{cycle_board['current']['month']}",
                 rationale=msg, detail={"source": "business_cycle"}))
     except Exception as exc:  # noqa: BLE001
         logger.warning("cycle phase check failed: %s", exc)

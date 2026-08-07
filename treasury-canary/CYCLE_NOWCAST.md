@@ -180,3 +180,44 @@ genuine false positives in 54 years).
    timing asymmetry** — using payrolls/claims/rates for month M that are already published before
    the composite for M prints. That is the honest core finding, and it is exactly the edge a
    dashboard can exploit every month.
+
+---
+
+# COUNTER-AGENT QA OUTCOME (2026-08-07, 3-agent adversarial panel)
+
+**Panel verdict: the mechanism survives; the advertised numbers were
+corrected.** No fatal look-ahead (unlike RESEARCH_SWITCH round 1 — the
+timing audit specifically hunted that bug class and cleared it: the
+publication-asymmetry edge survives every honest re-run at −24% to −30%
+RMSE vs persistence depending on deployment form).
+
+Corrections applied to the shipped module/panel:
+1. **Study honesty-box #4 was wrong in the pessimistic direction**:
+   CMRMTSPL(M−2) IS available at payrolls day (the study's own same-day
+   fixture contains it). Lag-3 re-run: −1.7% RMSE, immaterial.
+2. **COIN(M−1)-as-known caveat was materially understated**: the gap RMSE
+   is 0.126 (~38% of the nowcast's own error) and it moves the onset
+   table. Restated per deployment form; the deployed estimator (ENS_BC_S,
+   available-inputs-only) quotes ITS OWN walk-forward numbers: RMSE
+   −24.2% vs persistence (−7.0% ex-2020, DM −2.76), onsets earlier 5/7,
+   tie 1, later 1, never missed. Upgrade path: ENS_BC_HH (self-consistent
+   bridge-completed COIN training) is both honest and the best variant
+   (RMSE −29.8%, ex-2020 −12.5%, transitions 30.7%, onsets 4/1/2) — not
+   yet implemented.
+3. **Statistical haircuts** (displayed everywhere): composite precision
+   ~58% post-1990 (65% was era-mixed); "bottomed < −1.5" (−1.65 was
+   knife-edged on 2001's −1.69); leading strictly-early on 4/7 (median 3m
+   ex-early-80s), 3/15 false spells including two RECENT ones (2023-04/05,
+   2024-07) now surfaced in the glossary; transitions ~25% [CI 18–34%].
+   The current STALL reading is the panel's most robust claim: zero flips
+   across 80 threshold perturbations; next-month 90% band ≈ [−0.65, −0.13].
+4. **Engine fixes** (all gate-tested): phase-change alerts now require an
+   8h confirmation (> the 6h cache TTL — kills glitch flapping and the
+   cache-self-confirmation trap); a degenerate board can no longer erase
+   the phase baseline; compute() refuses to serve a partial board when a
+   FRED series comes back empty (stale-honest beats fresh-wrong; a
+   W875RX1 outage silently moved the composite +0.31σ pre-fix); nowcast
+   bails to None when any bridge input is staler than its trained lag
+   (pre-fix it silently applied coefficients at unfitted lags); dedup
+   keys off board fields, CONTRACTION alerts at RED; gate bounds
+   tightened ±0.05 so the stale-lag failure mode can't pass again.

@@ -23,7 +23,7 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
   cycle_composite: {
     title: "Coincident & leading composites (z-scores)",
     what: "Coincident: mean expanding-window z of 6-month annualized growth of payrolls, industrial production, real income ex transfers, real business sales. Leading: same treatment of yield curve, building permits, jobless claims (inverted), factory hours, credit spreads (inverted), consumer-sentiment change.",
-    calc: "Expanding-window z-scores (min 10y history) — no full-sample lookahead. Leading is 3-month smoothed. Recession-consistent line at −0.75: ~65% precision / ~92% recall on monthly NBER labels; every recession since 1970 bottomed below −1.65. Leading crossing −0.5 preceded 6 of 7 recessions (median 6 months); 3 of 14 warning spells were false.",
+    calc: "Expanding-window z-scores (min 10y history) — no full-sample lookahead. Leading is 3-month smoothed. Recession-consistent line at −0.75: ~65% precision full-sample, ~58% post-1990 / ~93% recall on monthly NBER labels; every recession since 1970 bottomed below −1.5. Leading crossing −0.5 was strictly early on 4 of 7 recessions (median 3 months outside the early-80s pair; 1990/2020 crossed at onset, 2008 a month after); 3 of 15 spells false — two of them recent (2023, 2024), visible in the 5y view. Numbers adversarially re-counted by counter-agent QA, 2026-08-07.",
     read: "Coincident below zero but above −0.75 with leading positive = a stall, not a recession call. Both below their lines together is the combination that has never been a false alarm for long.",
     caveat: "Revised-data validation (live vintages noisier); ~1-month lag. The 2020 recession arrived faster than any monthly indicator could lead.",
   },

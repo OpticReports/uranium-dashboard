@@ -3,6 +3,7 @@ import {
   ResponsiveContainer, ComposedChart, Line, XAxis, YAxis, Tooltip,
   ReferenceLine, ReferenceArea, CartesianGrid,
 } from "recharts";
+import { api } from "../lib/api";
 import { Panel, InlineError, Loading } from "./ui";
 import InfoTip from "./InfoTip";
 
@@ -24,7 +25,6 @@ const PHASE_COLOR: Record<string, string> = {
   EXPANSION: "#34d399", LATE_CYCLE: "#fbbf24", STALL: "#fb923c",
   SLOWDOWN: "#f87171", CONTRACTION: "#dc2626",
 };
-const API = (import.meta as any).env?.VITE_API_BASE ?? "";
 
 export default function CycleTracker() {
   const [board, setBoard] = useState<CycleBoard | null>(null);
@@ -35,8 +35,7 @@ export default function CycleTracker() {
     () => (localStorage.getItem("cycleRange") as any) || "5y");
 
   useEffect(() => {
-    fetch(`${API}/cycle`)
-      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+    api.cycle()                     // getJson: 4-retry cold-boot handling
       .then(setBoard)
       .catch((e) => setErr(String(e?.message ?? e)));
   }, []);
@@ -54,12 +53,12 @@ export default function CycleTracker() {
       phase: board.phase[cut + i],
     }));
     const nc = (board as any).nowcast;
-    if (nc && out.length) {
+    if (nc && out.length && view === "composite") {
       out[out.length - 1].proj = out[out.length - 1].coin;   // dashed connector
       out.push({ m: `${nc.month}*`, proj: nc.value });
     }
     return out;
-  }, [board, range]);
+  }, [board, range, view]);
 
   const recAreas = useMemo(() => {
     if (!board || rows.length === 0) return [];
@@ -143,9 +142,9 @@ export default function CycleTracker() {
           {" "}{Math.round((board.stats.recall ?? 0) * 100)}% recall vs NBER months (grey).
           {(board as any).nowcast && (
             <> Amber* = <b>next-month nowcast</b> {(board as any).nowcast.value.toFixed(2)} ({(board as any).nowcast.phase}) —
-            payrolls/claims/rates print ~1 month before the composite; walk-forward 1972–2026:
-            RMSE −28.5% vs persistence, 25% of phase transitions called a month early,
-            recession onsets earlier 3/7 · never missed.</>
+            payrolls/claims/rates print ~1 month before the composite; walk-forward 1972–2026
+            (QA-corrected): RMSE −24% vs persistence (−7% ex-2020), ~25% of phase transitions
+            called a month early [CI 18–34%], recession onsets earlier 5/7 · never missed.</>
           )}
           <InfoTip term="cycle_composite" /></>
         ) : (

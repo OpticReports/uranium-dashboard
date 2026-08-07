@@ -790,6 +790,7 @@ export interface RateEnsemble {
 // ---------------------------------------------------------------------------
 
 export const api = {
+  cycle: () => getJson<any>("/cycle"),
   health: () => getJson<Health>("/health"),
   metrics: () => getJson<MetricsResponse>("/metrics"),
   metricHistory: (metricId: string) =>

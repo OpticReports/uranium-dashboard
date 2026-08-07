@@ -7,13 +7,16 @@ shipping (validation stats recomputed from live data by the gates):
   series the NBER dating committee uses: payrolls (PAYEMS), industrial
   production (INDPRO), real income ex transfers (W875RX1), real mfg &
   trade sales (CMRMTSPL). Below -0.75 is the recession-consistent zone
-  (~65% precision / ~92% recall on monthly NBER labels; every recession
-  since 1970 bottomed below -1.65).
+  (~65% precision full-sample but ~58% post-1990 / ~93% recall on monthly
+  NBER labels; every recession since 1970 bottomed below -1.5 [2001:
+  -1.69 - the -1.65 version was knife-edged, QA 2026-08-07]).
 
   LEADING — mean expanding z of: yield curve (T10Y3M; GS10-TB3MS before
   1982), permits 6m growth, -claims 6m growth, factory hours, sentiment
-  change, -Baa spread. Crossing -0.5 preceded 6 of 7 recessions (median
-  6m); 3 of 14 warning spells were false.
+  change, -Baa spread. Crossing -0.5 was STRICTLY EARLY on 4 of 7
+  recessions (median 3m outside the early-80s pair; 1990/2020 crossed AT
+  onset, 2008 one month after); 3 of 15 spells false, TWO of them recent
+  (2023-04/05, 2024-07) - counter-agent recount, 2026-08-07.
 
 Phases: CONTRACTION coin<-0.75 · SLOWDOWN coin<0 & lead<-0.3 · STALL
 coin<0 · LATE CYCLE lead<-0.5 · EXPANSION otherwise.
@@ -112,6 +115,12 @@ def _fetch_all(raw_override: dict | None = None) -> dict[str, dict[str, float]]:
         else:
             dates, vals = fetch_series(s, start=START)
         out[s] = _monthly(dates, vals, "mean" if s in _MEAN_COLLAPSE else "last")
+    missing = [s for s in SERIES if not out.get(s)]
+    if missing:
+        # fetch_series degrades to empty on FRED failure; a partial board would
+        # silently recompute composites from fewer members (and can flip the
+        # phase). Refuse instead - the route serves its stale cache / 503s.
+        raise RuntimeError(f"cycle: no data for {missing}; refusing partial board")
     return out
 
 
@@ -211,23 +220,47 @@ def compute(raw_override: dict | None = None) -> dict:
 
 # ---------- phase-change detection (called from the refresh job) ----------
 
+PHASE_CONFIRM_S = 8 * 3600   # > the 6h route cache TTL: a change only alerts
+                             # once a FRESH recompute (not the cached board)
+                             # still shows it - kills data-glitch flapping.
+
+
 def phase_change(board: dict) -> str | None:
     """Compare current phase vs the persisted last-seen phase; persist and
-    return a change message the caller can event/alert on (None = no change)."""
-    path = os.path.join(settings.cache_dir, "cycle_phase.json")
+    return a change message the caller can event/alert on (None = no change).
+    A change must persist for PHASE_CONFIRM_S before it fires; a None phase
+    (degenerate board) never touches state."""
     cur = board["current"]["phase"]
-    prev = None
+    if cur is None:
+        return None
+    path = os.path.join(settings.cache_dir, "cycle_phase.json")
+    state: dict = {}
     try:
-        prev = json.load(open(path)).get("phase")
+        state = json.load(open(path))
     except Exception:  # noqa: BLE001
         pass
+    prev = state.get("phase")
+    now = int(time.time())
+    fire = False
+    if prev is None:
+        state = {"phase": cur}                      # first sight: adopt quietly
+    elif cur == prev:
+        state.pop("candidate", None)                # back to baseline: reset
+        state.pop("candidate_ts", None)
+    elif state.get("candidate") == cur:
+        if now - int(state.get("candidate_ts", now)) >= PHASE_CONFIRM_S:
+            fire = True
+            state = {"phase": cur}
+    else:                                           # new candidate: start clock
+        state["candidate"] = cur
+        state["candidate_ts"] = now
+    state.update({"month": board["current"]["month"], "ts": now})
     try:
         os.makedirs(settings.cache_dir, exist_ok=True)
-        json.dump({"phase": cur, "month": board["current"]["month"],
-                   "ts": int(time.time())}, open(path, "w"))
+        json.dump(state, open(path, "w"))
     except Exception:  # noqa: BLE001
         pass
-    if prev and cur and prev != cur:
+    if fire:
         return (f"business-cycle phase change: {prev} -> {cur} "
                 f"(coincident {board['current']['coincident']:+.2f}, "
                 f"leading {board['current']['leading']:+.2f})")
@@ -275,6 +308,12 @@ def nowcast(M: dict, months: list, coin: list) -> dict | None:
         if months[last_realized] >= tgt:
             return None                           # composite already caught up
 
+        def mdiff(a, b):                          # calendar months a - b
+            return (int(a[:4]) - int(b[:4])) * 12 + int(a[5:7]) - int(b[5:7])
+
+        if mdiff(tgt, months[last_realized]) != 1:
+            return None   # one-step model; a wider gap was never validated
+
         def g6_at(ser, m, lag=0):
             ms = sorted(M[ser])
             if m not in ms:
@@ -295,6 +334,9 @@ def nowcast(M: dict, months: list, coin: list) -> dict | None:
         # bridged components
         for ser, lag in (("INDPRO", 1), ("W875RX1", 1), ("CMRMTSPL", 2)):
             ms = sorted(M[ser])
+            if mdiff(tgt, ms[-1]) != lag:
+                return None   # series staler than the trained bridge lag:
+                              # gl_t below would no longer mean g6(tgt-lag)
             X, y = [], []
             for m in ms:
                 g0, gl, gpm = g6_at(ser, m), g6_at(ser, m, lag), g6_at("PAYEMS", m)
@@ -362,13 +404,24 @@ def nowcast(M: dict, months: list, coin: list) -> dict | None:
                 "bridge": round(bridge, 3), "claims": round(claims, 3),
                 "phase": ph,
                 "claims_trigger": bool(claims < COIN_RECESSION),
-                "stats": {"rmse_vs_persistence_pct": -28.5,
-                          "rmse_ex2020_pct": -14.7,
-                          "transitions_called_early_pct": 25.4,
-                          "onsets_earlier": "3/7 (never missed; 1 late by 1m)"},
-                "basis": ("ENS_BC walk-forward spec 2026-08-07; edge = "
-                          "publication-timing (payrolls/claims/rates print "
-                          "~1m before the composite); final-vintage "
-                          "validation - live vintages noisier")}
+                "inputs_asof": {"PAYEMS": tgt,
+                                "INDPRO": sorted(M["INDPRO"])[-1],
+                                "W875RX1": sorted(M["W875RX1"])[-1],
+                                "CMRMTSPL": sorted(M["CMRMTSPL"])[-1]},
+                # honest numbers for THIS estimator (ENS_BC_S: COIN(M-1)
+                # = available 3-component mean), from the timing audit's
+                # walk-forward re-run - NOT the study baseline's headline,
+                # which used a regressor unavailable at issue time
+                "stats": {"rmse_vs_persistence_pct": -24.2,
+                          "rmse_ex2020_pct": -7.0,
+                          "dm_ex2020": -2.76,
+                          "transitions_called_early_pct": "~25 (CI 18-34)",
+                          "onsets_earlier": "5/7 earlier, 1 tie, 1 later "
+                                            "(calendar basis; never missed)"},
+                "basis": ("ENS_BC_S walk-forward, QA-corrected 2026-08-07; "
+                          "edge = publication-timing (payrolls/claims/rates "
+                          "print ~1m before the composite); final-vintage "
+                          "validation - live vintages noisier; upgrade path "
+                          "ENS_BC_HH in CYCLE_NOWCAST.md")}
     except Exception:  # noqa: BLE001
         return None
