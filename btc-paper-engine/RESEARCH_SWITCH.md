@@ -84,3 +84,67 @@ change.
 `backend/scripts/research_switch.py` (QA-fixed). Statistical counter-agent
 findings preserved in the study history; basis: trade-step, research fees,
 4y fixture window 2022-08→2026-07, 284 steps.*
+
+---
+
+# ROUND 2 (2026-08-07): pre-registered re-search on the leak-free harness + second counter-agent panel
+
+Search: 16 pre-registered rules (5 families incl. blend-WEIGHT switching) +
+6 static baselines, extended 5.6y data (2021-01→2026-07, 383 steps),
+closed-bar signals, k−1 decisions, IS = first 60% / OOS = last 40%,
+promotion bar registered before running. Script:
+`backend/scripts/research_switch2.py`.
+
+**Fifteen rules failed** (every weight-switcher — the best IS performer,
+MAR 4.6, collapsed to 1.12 OOS — and the whole vol-target family). One
+cleared the bar: **continuous bear-lever**, lev = clip(1.75 − 2.0×dist
+from 200d SMA, 1.0, 2.2), zero tuned parameters.
+
+## Second panel verdicts
+
+- **Timestamp audit: SOUND.** Anti-leak signature present (the unlagged
+  leak-probe scores WORSE, 3.02 vs 3.20); lag-insensitive (±0.2 OOS MAR
+  across extra lags); statics reproduce `_blend_stats` to the decimal.
+- **Mechanics: DEPLOYABLE, engine-side only.** Entry-time-frozen lever
+  (what the executor does today) retains the edge: full 3.18 / OOS 2.26.
+  Capping lev at 2.0 costs −0.02 OOS and IMPROVES full MAR to 3.41 via
+  shallower DD → deployable form is clip(…, 1.0, **2.0**). Do not build
+  mid-position resizing (143 orders/yr for 0.11 MAR). Required guardrail:
+  `mirror.py _leg_frac` must clip/reject out-of-bounds lev with a WARN.
+- **Statistics: WEAKENED — promote only with this framing:**
+  - **The full-window MAR 3.20 is NOT evidence** (best-of-57 same-form
+    selection null: p = 0.83 — this rule family is a generic full-window
+    MAR machine). Never quote it.
+  - **The OOS stat is the real one:** 2.37 beats ALL 343 possible signal
+    shifts (p ≈ 0.000 at search burden 57, both null classes). But ~1/3
+    of it is ONE episode (the Dec-2024 blowoff, where the overlay
+    de-levered to ~1.0x and took −15.4% vs −21/−28% statics). Ex-2025
+    OOS: 1.60 vs 0.98/0.92 — still wins, and that is the honest quote:
+    **forward MAR edge ≈ +0.6 vs best static, not +0.9.**
+  - **Zero return alpha.** The signal has no forward step-return power
+    (Welch-t ≈ 0.6). This is a DRAWDOWN-SHAPING overlay: it never beats
+    static 2.0x on raw return in any year; 100% of its advantage over S6
+    is drawdown reduction. LOYO: 5/6 cuts pass; dropping 2024 fails.
+  - Parameter surface robust (25-cell sweep all beat statics; no
+    knife-edge — the shape does the work, especially the sub-1.5x
+    delever-when-extended leg).
+  - Halt-race: strictly dominates S5 (P(−35% halt) 1.37% vs 2.79%,
+    median 2.44x vs 2.24x, p10 1.50x vs 1.38x) at 10x less halt risk
+    than S6.
+
+## Standing risk note
+
+The overlay is currently (Aug 2026) ~2.0x — price sits below the 200d
+SMA — i.e., it is max-levered into whatever comes next, and its
+protracted-bear behavior rests on ONE historical bear (2022, where the
+blend was profitable). The overlay inherits, not fixes, the blend's
+crash exposure.
+
+## Disposition (agreed protocol)
+
+NOT wired to live sizing. Path if promoted: (1) engine computes and
+shadow-logs the would-be lever alongside live S5 through the KELLY_M
+ramp; (2) review the live shadow record vs statics after ≥1 quarter;
+(3) if it holds, engine-side dynamic `lev` in `/exec/target` behind an
+env flag + the mirror.py bounds guardrail, entry-time application only.
+Expectation set at +0.6 MAR (drawdown shaping), not the headline.
