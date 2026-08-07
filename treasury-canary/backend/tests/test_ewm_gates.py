@@ -274,8 +274,8 @@ def test_cut_extension_row():
     assert 205 * 0.93 <= fcut["p10"] and fcut["p90"] <= 218.5, fcut
 
 
-def test_gate_banker_plan_track():
-    """Plan track (Ray, Aug 2026): defaults reproduce the email EVs exactly;
+def test_gate_company_plan_track():
+    """Company plan track (Aug 2026): defaults reproduce the email EVs exactly;
     margin/multiple edits flow through; monthly line hits quarter-ends and
     clamps outside the plan span; it never touches the cohort surface."""
     from app.ewm.core import company_plan
@@ -316,3 +316,36 @@ def test_gate_target_band_tracks_plan():
     ramp = revenue_ramp(PARAMS)
     v = multiple_range(PARAMS["ramp_scenario"], TARGET_M)[1] * ramp["revenue"][TARGET_M]
     assert PARAMS["target_value"][0] <= v <= PARAMS["target_value"][1]
+
+
+def test_gate_plan_anchored_surface():
+    """anchor_plan mode: the company plan EV track IS the central line —
+    base-weighted EV reproduces the plan at every plan quarter; margin edits
+    re-level the whole surface; report-fidelity pin is unaffected; the MC fan
+    median tracks the plan level (bands = scenario dispersion around it)."""
+    from app.ewm.core import company_plan
+    p = {**PARAMS, "anchor_plan": True}
+    s = cohort_surface(p)
+    plan = company_plan()
+    by = {r["month"]: r["ev"] for r in s["surface"]}
+    for r in plan["rows"]:
+        assert abs(by[r["month"]] - r["ev_m"]) < 0.15, (r["month"], by[r["month"]], r["ev_m"])
+    # margin edit re-levels: Q1'27 margin 20% lifts plan EV 165.7 -> 199.1
+    p2 = {**p, "plan_margins": {"Q1 2027": 20.0}}
+    ev2 = next(r["ev"] for r in cohort_surface(p2)["surface"] if r["month"] == "2027-03")
+    assert abs(ev2 - 199.1) < 0.15, ev2
+    # report-fidelity pin still reproduces the report regardless of anchoring
+    q1 = next(r for r in cohort_surface(p, pin_report=True)["surface"]
+              if r["month"] == Q1END)
+    assert 186.0 <= q1["ev"] <= 193.0
+    # dissent still moves value AROUND the plan (not absorbed by the anchor)
+    ev_d = next(r["ev"] for r in cohort_surface(p, dissent_cluster=True)["surface"]
+                if r["month"] == Q1END)
+    assert ev_d < by[Q1END] - 0.3, (ev_d, by[Q1END])
+    # MC fan median lands near the plan level at the report windows
+    fan = simulate(p, {"today_month": "2026-09"}, {})["fan"]
+    for m in (Q1END, Q2END):
+        row = next(r for r in fan if r["month"] == m)
+        pv = plan["ev_by_month"][m]
+        assert row["p10"] < pv < row["p90"], (m, row, pv)
+        assert abs(row["p50"] - pv) / pv < 0.10, (m, row["p50"], pv)

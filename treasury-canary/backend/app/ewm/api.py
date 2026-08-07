@@ -38,9 +38,12 @@ DEFAULT_INPUTS = {"revenue_dec2026": PARAMS["revenue_dec2026"],
                   "auto": {"fcix_z": True, "dmhi01": True, "spike_pos": True,
                            "stress_prob": True, "stall_mult": True},
                   "weight_tilt": None,                    # {"toward": h, "pp": x}
-                  # banker-plan overrides, keyed by period label ("Q1 2027"):
-                  # empty = Ray's Aug-2026 defaults (plan_aug2026.json)
-                  "plan_margins": {}, "plan_multiples": {}}
+                  # company-plan overrides, keyed by period label ("Q1 2027"):
+                  # empty = the Aug-2026 plan defaults (plan_aug2026.json).
+                  # anchor_plan: the plan EV track IS the central line; the
+                  # cohort grid supplies scenario dispersion around it.
+                  "plan_margins": {}, "plan_multiples": {},
+                  "anchor_plan": True}
 
 
 def _resolve(inp: dict, live: dict) -> dict:
@@ -85,6 +88,9 @@ def _params_for(inp: dict) -> dict:
     p = dict(PARAMS)
     p["revenue_dec2026"] = float(inp["revenue_dec2026"])
     p["target_value"] = [float(inp["target_value_lo"]), float(inp["target_value_hi"])]
+    p["anchor_plan"] = bool(inp.get("anchor_plan", True))
+    p["plan_margins"] = inp.get("plan_margins") or {}
+    p["plan_multiples"] = inp.get("plan_multiples") or {}
     return p
 
 
@@ -125,6 +131,7 @@ class Inputs(BaseModel):
     today_month: str | None = None
     plan_margins: dict | None = None                      # {"Q1 2027": 16.6, ...}
     plan_multiples: dict | None = None                    # {"Q1 2027": 11, ...}
+    anchor_plan: bool | None = None                       # plan = central line
     auto: dict | None = None                              # per-field AUTO flags
     apply_tilt: bool | None = None                        # accept the nowcast tilt
     clear_tilt: bool | None = None

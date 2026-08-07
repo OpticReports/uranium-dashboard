@@ -82,10 +82,15 @@ PARAMS = {
         for s in _COHORT["scenarios"]],                   # [.05,.25,.35,.25,.07,.03]
     # --- dynamic ramp (operator premise: evenly scaling, on pace) ---
     "revenue_dec2026": REV_BASIS,                         # editable run-rate waypoint
-    # valuation target = the banker plan's Q2'27 -> Q3'27 EV band (Ray,
+    # valuation target = the company plan's Q2'27 -> Q3'27 EV band (Ray,
     # Aug 2026; was [200, 225] from the operator report). The Jul-31-27
     # scale target sits inside this window on the plan's own interpolation.
     "target_value": [226.7, 241.6],                       # editable valuation target
+    # --- company-plan anchoring (Casey: the plan quarters ARE the actual
+    # values at those close dates — the central line, with the cohort grid
+    # supplying scenario dispersion AROUND it). False here keeps the pure
+    # engine on the legacy ramp; the live board flips it on via inputs.
+    "anchor_plan": False, "plan_margins": {}, "plan_multiples": {},
     "ramp_scenario": MODAL_S,                             # 'on pace' priced on the modal path (judgment)
     # --- multiple extrapolation guards beyond the report's two windows ---
     "mult_floor": 1.20, "mult_cap": 2.10,
@@ -141,10 +146,35 @@ def multiple_range(s: int, m: str, p: dict = PARAMS) -> tuple[float, float, floa
 
 
 def revenue_ramp(p: dict) -> dict:
-    """Linear revenue line through two waypoints: run-rate at end-Dec-2026
-    (editable) and the back-solved revenue that puts value on target at
-    2027-07-31 under the modal path. Extrapolated both directions —
-    today's implied run-rate falls out of the same line."""
+    """Monthly revenue line feeding the whole surface (cells, breakeven,
+    Dirichlet band, MC fan all read this — one source of level truth).
+
+    anchor_plan mode (the live default): the company plan's EV track is the
+    CENTRAL line. Effective revenue r(m) = plan_EV(m) / base-weighted mid
+    multiple, so the base-weighted EV reproduces the plan by construction
+    and the cohort grid contributes scenario DISPERSION around it. The
+    anchor uses the frozen cohort base weights — dissent, tilt and stall
+    still move value around the plan rather than being absorbed into it.
+
+    Legacy mode: linear line through the editable Dec-2026 run-rate
+    waypoint and the revenue back-solved to hit the valuation target at
+    2027-07-31 under the modal path."""
+    if p.get("anchor_plan"):
+        plan = company_plan(p.get("plan_margins"), p.get("plan_multiples"))
+        bw = [max(x, 0.0) for x in PARAMS["hike_weights"]]
+        bw = [x / sum(bw) for x in bw]
+        rev = {}
+        for m in MONTHS:
+            wm = sum(wi * multiple_range(s, m, p)[1] for s, wi in enumerate(bw))
+            rev[m] = round(plan["ev_by_month"][m] / wm, 2)
+        return {"revenue": rev, "target_revenue": rev[TARGET_M],
+                "slope_per_month": round((rev[MONTHS[-1]] - rev[MONTHS[0]])
+                                         / (len(MONTHS) - 1), 4),
+                "today_implied": rev[MONTHS[0]], "anchored": True,
+                "basis_note": "surface anchored to the company plan EV track "
+                              "(EV = TTM EBITDA x multiple); base-weighted EV "
+                              "reproduces the plan by construction — weights, "
+                              "dissent and stall move value AROUND it"}
     mult_t = multiple_range(p["ramp_scenario"], TARGET_M, p)[1]
     r_target = (sum(p["target_value"]) / 2) / mult_t
     r0, i0, it = p["revenue_dec2026"], _mi("2026-12"), _mi(TARGET_M)
@@ -153,6 +183,7 @@ def revenue_ramp(p: dict) -> dict:
             "target_revenue": round(r_target, 2),
             "slope_per_month": round(slope, 4),
             "today_implied": round(r0 + slope * (0 - i0), 2),
+            "anchored": False,
             "basis_note": f"on-pace target priced at the modal-path multiple "
                           f"{mult_t:.2f}x at {TARGET_M} (judgment)"}
 
