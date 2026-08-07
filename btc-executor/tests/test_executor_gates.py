@@ -485,3 +485,38 @@ def test_gate_transfer_reconciliation_never_masks_real_losses(tmp_path):
         ex.step(target(pull=pos))
     assert ex.state.halted in ("DAILY_LOSS", "DRAWDOWN")  # daily line trips first
     assert not any(e["kind"] == "transfer_reconciled" for e in ex.state.events)
+
+
+def test_gate_trend_exit_no_double_close(tmp_path):
+    """QA rehearsal find (2026-08-07): a trend MARKET entry keeps its
+    entry_cloid for the position's life; on engine exit the old code both
+    orphan-unwound the fill AND closed led.qty — same BTC twice — leaving a
+    naked reverse position on the venue. Engine-exit must produce exactly
+    one closing order and a flat venue."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    tr_pend = {"pending": {"side": "S", "limit": -1.0, "signal_ts": NOW},
+               "position": None}
+    ex.step(target(trend=tr_pend))                       # market entry (sentinel)
+    v.orders[f"T-{NOW}-E"]["status"] = "FILLED"
+    tr_pos = {"pending": None,
+              "position": {"side": "S", "entry_price": 60_000.0, "entry_ts": NOW,
+                           "signal_ts": NOW, "stop": 63_000.0, "exit_flag": None}}
+    ex.step(target(trend=tr_pos))                        # position ack + stop
+    ex.step(target())                                    # engine exits
+    unwinds = [c for c in v.orders if c.endswith("-UNWIND")]
+    assert not unwinds, unwinds                          # no orphan unwind
+    assert abs(v.position()) < 1e-9                      # venue truly flat
+    assert ex.state.legs["trend"].qty == 0.0
+    # branch-2 variant: position -> directly to a NEW pending (no flat step)
+    ex.step(target(trend=tr_pend))
+    v.orders[f"T-{NOW}-E"]["status"] = "FILLED"
+    ex.step(target(trend=tr_pos))
+    new_pend = {"pending": {"side": "L", "limit": -1.0, "signal_ts": NOW + 14_400},
+                "position": None}
+    ex.step(target(trend=new_pend))
+    unwinds = [c for c in v.orders if c.endswith("-UNWIND")]
+    assert not unwinds, unwinds
+    # old short closed + new long entry = net long exactly the new entry qty
+    new_e = v.orders.get(f"T-{NOW + 14_400}-E")
+    assert new_e is not None

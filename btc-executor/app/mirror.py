@@ -364,14 +364,19 @@ class Executor:
 
         # 2) no position; engine holds a pending entry
         if pend is not None:
-            if led.qty != 0.0:
+            # A fill already carried in led.qty is closed by _close_leg —
+            # unwinding it again in _cancel_entry would double-close and leave
+            # a naked reverse position (QA rehearsal find, 2026-08-07).
+            had_qty = led.qty != 0.0
+            if had_qty:
                 # engine flat but we still hold - close before new cycle
                 self._close_leg(leg, led, "engine_flat")
             cloid = f"{leg[0].upper()}-{pend['signal_ts']}-E"
             if led.entry_cloid == cloid or not entries_ok:
                 return
             if led.entry_cloid:
-                self._cancel_entry(led, filled_action="flatten")
+                self._cancel_entry(led, filled_action="ignore" if had_qty
+                                   else "flatten")
             limit_px = pend.get("limit")
             if not limit_px or limit_px <= 0:      # -1.0 = market-entry sentinel
                 limit_px = self.venue.mid()
@@ -393,7 +398,13 @@ class Executor:
 
         # 3) engine is flat with no pending
         if led.entry_cloid:
-            self._cancel_entry(led, filled_action="flatten")
+            # orphan-unwind ONLY for an unabsorbed fill (led.qty still 0):
+            # a fill living in led.qty is closed once, below. The old
+            # unconditional flatten double-closed trend exits — market entry
+            # keeps entry_cloid for the position's life — leaving a naked
+            # reverse position on the venue (QA rehearsal find, 2026-08-07).
+            self._cancel_entry(led, filled_action="flatten" if led.qty == 0.0
+                               else "ignore")
         if led.qty != 0.0:
             self._close_leg(leg, led, "engine_exit")
 
