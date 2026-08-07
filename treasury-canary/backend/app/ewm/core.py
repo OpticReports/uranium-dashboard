@@ -28,6 +28,7 @@ import os
 import numpy as np
 
 _COHORT = json.load(open(os.path.join(os.path.dirname(__file__), "cohort_v6.json")))
+_PLAN = json.load(open(os.path.join(os.path.dirname(__file__), "plan_aug2026.json")))
 
 MONTHS = [f"{y}-{m:02d}" for y, ms in ((2026, range(9, 13)), (2027, range(1, 13)))
           for m in ms]                                    # 2026-09 .. 2027-12
@@ -81,7 +82,10 @@ PARAMS = {
         for s in _COHORT["scenarios"]],                   # [.05,.25,.35,.25,.07,.03]
     # --- dynamic ramp (operator premise: evenly scaling, on pace) ---
     "revenue_dec2026": REV_BASIS,                         # editable run-rate waypoint
-    "target_value": [200.0, 225.0],                       # editable valuation target
+    # valuation target = the banker plan's Q2'27 -> Q3'27 EV band (Ray,
+    # Aug 2026; was [200, 225] from the operator report). The Jul-31-27
+    # scale target sits inside this window on the plan's own interpolation.
+    "target_value": [226.7, 241.6],                       # editable valuation target
     "ramp_scenario": MODAL_S,                             # 'on pace' priced on the modal path (judgment)
     # --- multiple extrapolation guards beyond the report's two windows ---
     "mult_floor": 1.20, "mult_cap": 2.10,
@@ -151,6 +155,64 @@ def revenue_ramp(p: dict) -> dict:
             "today_implied": round(r0 + slope * (0 - i0), 2),
             "basis_note": f"on-pace target priced at the modal-path multiple "
                           f"{mult_t:.2f}x at {TARGET_M} (judgment)"}
+
+
+def company_plan(margin_overrides: dict | None = None,
+                 multiple_overrides: dict | None = None) -> dict:
+    """The banker plan track (Ray, Aug 2026): EV = TTM EBITDA x EBITDA
+    multiple per quarter. Margin %% and multiple are editable per quarter
+    (keyed by period label, e.g. "Q1 2027"); a margin edit recomputes EBITDA
+    off the plan's TTM revenue, so revenue stays the fixed premise and
+    margin/multiple are the two levers. This is a SEPARATE LENS from the
+    cohort surface (rate scenarios on the report's revenue basis) — shown
+    side by side, never blended into the scenario math."""
+    mo = margin_overrides or {}
+    xo = multiple_overrides or {}
+    rows = []
+    for q in _PLAN["quarters"]:
+        rev = float(q["ttm_revenue"])
+        base_margin = 100.0 * q["ttm_ebitda"] / rev
+        try:
+            margin = float(mo.get(q["period"], base_margin))
+        except (TypeError, ValueError):
+            margin = base_margin
+        margin = min(max(margin, 0.0), 60.0)
+        try:
+            mult = float(xo.get(q["period"], q["ebitda_multiple"]))
+        except (TypeError, ValueError):
+            mult = float(q["ebitda_multiple"])
+        mult = min(max(mult, 0.0), 30.0)
+        ebitda = rev * margin / 100.0
+        rows.append({"period": q["period"], "month": q["month"],
+                     "revenue_m": round(rev / 1e6, 2),
+                     "margin_pct": round(margin, 2),
+                     "margin_default_pct": round(base_margin, 2),
+                     "margin_overridden": q["period"] in mo,
+                     "ebitda_m": round(ebitda / 1e6, 2),
+                     "multiple_x": round(mult, 2),
+                     "multiple_default_x": float(q["ebitda_multiple"]),
+                     "multiple_overridden": q["period"] in xo,
+                     "ev_m": round(ebitda * mult / 1e6, 1)})
+    # monthly EV line for chart overlays: linear between quarter-end months,
+    # clamped flat outside the plan's span (no extrapolation beyond Ray's table)
+    pts = [(_mi(r["month"]), r["ev_m"]) for r in rows]
+    ev_by_month = {}
+    for m in MONTHS:
+        i = _mi(m)
+        if i <= pts[0][0]:
+            v = pts[0][1]
+        elif i >= pts[-1][0]:
+            v = pts[-1][1]
+        else:
+            v = pts[-1][1]
+            for (a, va), (b, vb) in zip(pts, pts[1:]):
+                if a <= i <= b:
+                    v = va + (vb - va) * (i - a) / (b - a)
+                    break
+        ev_by_month[m] = round(v, 1)
+    return {"rows": rows, "ev_by_month": ev_by_month,
+            "source": _PLAN["source_tag"], "received": _PLAN["received"],
+            "basis": _PLAN["basis"]}
 
 
 def stall_exposure(m: str, p: dict = PARAMS) -> float:

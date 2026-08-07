@@ -14,8 +14,8 @@ from pydantic import BaseModel
 
 from .core import (FOMC, HIKES, MODAL_S, MONTHS, PARAMS, Q1END, Q2END,
                    TARGET_M, action_cards, apply_weight_tilt, breakeven,
-                   cohort_surface, dirichlet_band, hold_premium, slip_costs,
-                   scenario_weights, window_scores)
+                   cohort_surface, company_plan, dirichlet_band, hold_premium,
+                   slip_costs, scenario_weights, window_scores)
 from .live import live_snapshot
 from .mc import simulate
 
@@ -37,7 +37,10 @@ DEFAULT_INPUTS = {"revenue_dec2026": PARAMS["revenue_dec2026"],
                   # AUTO flags; a manual POST of the field flips it to False
                   "auto": {"fcix_z": True, "dmhi01": True, "spike_pos": True,
                            "stress_prob": True, "stall_mult": True},
-                  "weight_tilt": None}                    # {"toward": h, "pp": x}
+                  "weight_tilt": None,                    # {"toward": h, "pp": x}
+                  # banker-plan overrides, keyed by period label ("Q1 2027"):
+                  # empty = Ray's Aug-2026 defaults (plan_aug2026.json)
+                  "plan_margins": {}, "plan_multiples": {}}
 
 
 def _resolve(inp: dict, live: dict) -> dict:
@@ -120,6 +123,8 @@ class Inputs(BaseModel):
     dmhi01: float | None = None
     stress_prob: float | None = None
     today_month: str | None = None
+    plan_margins: dict | None = None                      # {"Q1 2027": 16.6, ...}
+    plan_multiples: dict | None = None                    # {"Q1 2027": 11, ...}
     auto: dict | None = None                              # per-field AUTO flags
     apply_tilt: bool | None = None                        # accept the nowcast tilt
     clear_tilt: bool | None = None
@@ -164,12 +169,23 @@ def board():
     q1 = next(r for r in surface["surface"] if r["month"] == Q1END)
     q2 = next(r for r in surface["surface"] if r["month"] == Q2END)
     tgt = next(r for r in surface["surface"] if r["month"] == TARGET_M)
-    return {"inputs": inp, "canary01": canary, "surface": surface,
+    plan = company_plan(inp.get("plan_margins"), inp.get("plan_multiples"))
+    # cohort weighted EV vs banker plan EV at each plan quarter (both $M)
+    ev_by = {r["month"]: r["ev"] for r in surface["surface"]}
+    plan["vs_cohort"] = [{"period": r["period"], "month": r["month"],
+                          "plan_ev": r["ev_m"],
+                          "cohort_ev": ev_by.get(r["month"]),
+                          "delta": (round(r["ev_m"] - ev_by[r["month"]], 1)
+                                    if r["month"] in ev_by else None)}
+                         for r in plan["rows"]]
+    return {"inputs": inp, "canary01": canary, "surface": surface, "plan": plan,
             "live": live, "resolved": res,
             "breakeven": be, "weight_band": band, "hold_premium": hp,
             "windows": ws, "slip": slip, "cards": cards,
             "headline": {"q1_ev": q1["ev"], "q1_lo": q1["ev_lo"], "q1_hi": q1["ev_hi"],
                          "q2_ev": q2["ev"], "target_ev": tgt["ev"],
+                         "plan_q1_ev": plan["ev_by_month"].get(Q1END),
+                         "plan_q2_ev": plan["ev_by_month"].get(Q2END),
                          "modal_cell": [q1["cells"][MODAL_S]["lo"],
                                         q1["cells"][MODAL_S]["hi"]],
                          "today_revenue": surface["ramp"]["today_implied"],

@@ -1,0 +1,18 @@
+{
+  "source": "Banker projections (Ray, email received 2026-08-07): 'Enterprise Value Inputs to Exit Window Simulation'. Quarterly TTM figures; EV = TTM EBITDA x EBITDA multiple.",
+  "source_tag": "plan-aug2026",
+  "received": "2026-08-07",
+  "basis": "TTM (trailing-twelve-month) revenue and EBITDA — an EBITDA-multiple lens. The report-v6 cohort instead prices RATE SCENARIOS as revenue multiples on the $105M basis; the two tracks answer different questions (what the banker projects vs what rate paths do to pricing) and are shown side by side, never blended.",
+  "quarters": [
+    {"period": "Q3 2026", "month": "2026-09", "ttm_revenue": 69090635, "ttm_ebitda": 9677369, "ebitda_multiple": 10},
+    {"period": "Q4 2026", "month": "2026-12", "ttm_revenue": 77692150, "ttm_ebitda": 11331047, "ebitda_multiple": 11},
+    {"period": "Q1 2027", "month": "2027-03", "ttm_revenue": 90501083, "ttm_ebitda": 15064328, "ebitda_multiple": 11},
+    {"period": "Q2 2027", "month": "2027-06", "ttm_revenue": 106282241, "ttm_ebitda": 18888533, "ebitda_multiple": 12},
+    {"period": "Q3 2027", "month": "2027-09", "ttm_revenue": 111858431, "ttm_ebitda": 20134518, "ebitda_multiple": 12}
+  ],
+  "email_reference": {
+    "ebitda_margin_pct_as_printed": [14.0, 14.6, 16.6, 17.8, 18.0],
+    "enterprise_value": [96773691, 124641517, 165707608, 226662400, 241614211],
+    "note": "ttm_ebitda is authoritative (the printed margin % is rounded to 1dp); default margins are derived as ebitda/revenue so default EVs reproduce the email to <$0.01M."
+  }
+}

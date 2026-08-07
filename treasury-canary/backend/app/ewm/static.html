@@ -76,6 +76,9 @@ button{background:var(--pri);color:var(--onpri);border:0;border-radius:20px;padd
 button:hover{filter:brightness(1.08);box-shadow:0 2px 8px #0008}
 .tgl{display:flex;flex-wrap:wrap;gap:16px;margin-bottom:12px;align-items:end}
 canvas{width:100%;max-width:100%;background:#0d1526;border-radius:12px}
+input.pin{width:72px;height:28px;padding:2px 8px;background:var(--surf3);color:var(--txt);border:1px solid transparent;border-bottom:1px solid var(--outline2);border-radius:6px;font:inherit;font-size:11.5px;text-align:right}
+input.pin.ovr{color:var(--amber);border-color:#fbbf2466}
+input.pin:focus{border-color:var(--pri2);outline:none}
 .leg{font-size:10px;color:var(--txt3);margin-top:8px}
 .leg span{margin-right:14px}
 .dim{color:var(--txt3)}
@@ -88,7 +91,7 @@ canvas{width:100%;max-width:100%;background:#0d1526;border-radius:12px}
 </style></head><body>
 <header class="appbar"><a class="nav" href="/" title="All dashboards">&#9776;</a>
 <div><div class="abt"><svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="5" width="28" height="25" rx="5" fill="#e7eef8"/><path d="M2 10a5 5 0 0 1 5-5h18a5 5 0 0 1 5 5v4H2z" fill="#ef4444"/><rect x="8" y="2" width="3.2" height="6" rx="1.6" fill="#64748b"/><rect x="20.8" y="2" width="3.2" height="6" rx="1.6" fill="#64748b"/><text x="16" y="26.5" text-anchor="middle" font-family="Roboto Mono,ui-monospace,monospace" font-weight="700" font-size="11.5" letter-spacing="-1" fill="#0f172a">$$</text></svg> Exit Window Monitor</div>
-<div class="abs">Deal-timing decision support &middot; ~$200M exit &middot; sell-for-less-now vs hold to Jul 31 2027</div></div></header>
+<div class="abs">Deal-timing decision support &middot; ~$200&ndash;240M exit &middot; sell-for-less-now vs hold to Jul 31 2027</div></div></header>
 <div id="hpop"></div>
 <div class="wrap">
 
@@ -122,13 +125,22 @@ canvas{width:100%;max-width:100%;background:#0d1526;border-radius:12px}
 </div>
 <div style="position:relative"><canvas id="fan" width="1100" height="380"></canvas>
 <div id="fantip"></div></div>
-<div class="leg"><span style="color:#38bdf8">&#9632; p25&ndash;p75</span><span style="color:#1e40af">&#9632; p10&ndash;p90</span><span style="color:#e2e8f0">&mdash; median</span><span style="color:#34d399">&#9476; on-pace ramp value</span><span style="color:#fbbf2488">&#9632; $200&ndash;225M target</span><span id="nodeal"></span></div>
+<div class="leg"><span style="color:#38bdf8">&#9632; p25&ndash;p75</span><span style="color:#1e40af">&#9632; p10&ndash;p90</span><span style="color:#e2e8f0">&mdash; median</span><span style="color:#34d399">&#9476; on-pace ramp value</span><span style="color:#c084fc">&#9476; banker plan EV (TTM EBITDA basis)</span><span style="color:#fbbf2488">&#9632; <span id="legtgt">target</span></span><span id="nodeal"></span></div>
 <div class="dim" id="simassump" style="font-size:10px;margin-top:8px"></div>
 </div>
 
 <div class="panel"><span class="lbl">Scenario cohort &times; close window ($M &middot; cell = central + report range &middot; &#9733; modal)<span class="hq" data-h="cohort">?</span></span>
 <table id="cohort"></table>
 <div class="be" id="beline"></div>
+</div>
+
+<div class="panel"><span class="lbl">Company plan &mdash; banker projections (Ray &middot; Aug 2026 &middot; EV = TTM EBITDA &times; multiple)<span class="hq" data-h="plan">?</span></span>
+<table id="plan"></table>
+<div style="margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+<button id="plansave">Apply plan changes</button>
+<button id="planreset" style="background:#334155;color:#dbe4f0">Reset to banker numbers</button>
+<span class="dim" id="planmsg"></span></div>
+<div class="dim" id="planft" style="font-size:10px;margin-top:8px"></div>
 </div>
 
 
@@ -175,7 +187,7 @@ row_hold:"<b>Hold-to-Jul-27 premium.</b> What holding to July 31 2027 is worth v
 breakeven:"<b>Breakeven.</b> The decision surface. Expected value is linear in the probabilities, so every flip has an exact formula. This sentence tells you precisely how much extra stall risk — or how big a probability shift — reverses the Q1-vs-Q2 call. Argue with this line, not the whole table.",
 settings:"<b>Settings.</b> The editable premises: your revenue waypoint, the valuation target, process stage and date. Apply re-runs the whole board. 'Pin to report' freezes revenue at $105M so the table reproduces your report exactly.",
 set_rev:"<b>Revenue run-rate @ Dec 2026.</b> Your stated waypoint: ~$105M run-rate by end of December 2026. The ramp draws a straight line through this and the back-solved July-2027 target revenue; today's implied run-rate is the same line extended backward.",
-set_target:"<b>Target value.</b> The valuation you expect at July 31 2027 if the company stays on pace ($200&ndash;225M). The engine back-solves the revenue needed at the modal-path multiple and builds the growth ramp to hit it.",
+set_target:"<b>Target value.</b> The valuation you expect at July 31 2027 if the company stays on pace. Default now tracks the banker plan's Q2'27&rarr;Q3'27 EV band ($227&ndash;242M, Aug 2026; previously $200&ndash;225M from the operator report). The engine back-solves the revenue needed at the modal-path multiple and builds the growth ramp to hit it.",
 set_dis:"<b>Dissent cluster.</b> The Jul 29 2026 FOMC hold passed 9-3 with three hawkish dissents — the first unified three-way dissent since Sept 2016 (which preceded a December hike). Toggling this shifts +3pp of probability into the 3&ndash;4-hike tail, funded from the dove rows.",
 set_pin:"<b>Pin to report.</b> Report-fidelity mode: revenue pinned at the report's $105M basis, ramp off. The table then reproduces your report cell-for-cell — useful for checking the engine against the source document.",
 live:"<b>Live market couplings.</b> Canary data feeding the exit model, one primary trigger per channel to avoid counting the same stress twice. AUTO = live feed; MANUAL = your stored value wins; every override is logged. VIX is deliberately absent: the research found a documented null for private-target deals.",
@@ -189,7 +201,12 @@ lv_now:"<b>Market path nowcast.</b> Which scenario row the market is pricing rig
 lv_auto:"<b>AUTO / MANUAL.</b> AUTO reads the live feed each refresh. Click to MANUAL to freeze the field at your stored value (typing a value also flips it). If a data feed dies, the board falls back to stored values and says so in the source column — it never silently reads an empty feed as calm.",
 safety:"<b>Close calendar.</b> Struck-through months are infeasible from your current stage\u2019s lead time. The green <b>SIGN</b> markers are the real deadlines: to close in a report window you must sign (LOI/definitive) earlier by the signing\u2192close gap \u2014 currently hawk-tilted at 4.5 months. FOMC tags mark meeting months. The 0\u2013100 scores blend rate risk, financing, deal-market health and canary calm \u2014 they cluster tightly when markets are calm, so read the structure (feasibility + deadlines + events), not small score differences.",
 cod:"<b>Cost of slipping.</b> Under the growth ramp, simply waiting costs ~nothing in expected value \u2014 so this table prices what slippage ACTUALLY costs: (1) the <b>cliff</b> \u2014 slip enough months and closing by end-Q1 2027 becomes infeasible, forfeiting the early-close option (valued under the \u2265 2-hike world, where it matters); (2) every month of slip is another <b>FOMC faced unsigned</b> \u2014 stall and repricing risk concentrates in the unsigned phase; (3) the last column: what delay costs if the hawkish world materializes.",
-cards:"<b>Action cards.</b> Rule-driven prescriptions. Each card shows the machine-checkable trigger that fired it, so you can audit why it appeared. No card = no active trigger."};
+cards:"<b>Action cards.</b> Rule-driven prescriptions. Each card shows the machine-checkable trigger that fired it, so you can audit why it appeared. No card = no active trigger.",
+plan:"<b>Company plan (banker projections, Aug 2026).</b> The banker's quarterly targets: TTM revenue &times; EBITDA margin = TTM EBITDA, times the EBITDA multiple = enterprise value. This is a <b>different lens</b> from the cohort table above: the plan says what the company projects to EARN (EBITDA basis, trailing-twelve-month); the cohort says what rate scenarios do to PRICING (revenue-multiple basis on the report's $105M anchor). Early on the plan values BELOW the cohort (TTM lags run-rate); by Q2&ndash;Q3 2027 it values ABOVE (margin expansion 14&rarr;18% and multiple expansion 10&rarr;12&times; compound). Margin % and multiple are editable per quarter &mdash; revenue stays the fixed premise.",
+plan_margin:"<b>EBITDA margin %.</b> Editable per quarter. A margin edit recomputes TTM EBITDA off the plan's fixed TTM revenue, and EV follows (EBITDA &times; multiple). Amber = you have overridden the banker's default (shown in parentheses). Defaults are derived from the banker's EBITDA figures, so unedited rows reproduce the email exactly.",
+plan_mult:"<b>EBITDA multiple.</b> Editable per quarter. The banker assumes multiple expansion 10&times; &rarr; 12&times; as margins scale &mdash; a premise worth stress-testing: hold it at 10&times; flat to see EV without the re-rating.",
+plan_vs:"<b>vs cohort EV.</b> Plan EV minus the rate-scenario weighted EV for a close in the same month. Negative early (TTM basis lags), positive late (margin + multiple expansion). Where the sign flips is where the two lenses change places &mdash; a big positive gap late is the banker's re-rating premise doing the work, not the rate model.",
+strip_plan:"<b>Plan EV @ Q2'27-end.</b> The banker plan's enterprise value for the quarter ending Jun 30 2027 (TTM EBITDA &times; multiple), with your margin/multiple edits applied. Compare against the rate-scenario weighted EV chip on the left &mdash; the gap is basis + premise, not a contradiction."};
 function hq(k){return `<span class="hq" data-h="${k}">?</span>`}
 function cardsReconcile(b){
   const be=b.breakeven, acts=(b.cards||[]).map(c=>c.action).join(' ');
@@ -267,6 +284,7 @@ function render(b){
     `<span><span class="lbl">Modal cell (1 hike)${hq('strip_modal')}</span>${fmt(h.modal_cell[0])}&ndash;${fmt(h.modal_cell[1])}</span>`+
     `<span><span class="lbl">Q2'27-end EV${hq('strip_q2')}</span>${fmt(h.q2_ev)}</span>`+
     `<span><span class="lbl">Hold to Jul-27 EV${hq('strip_hold')}</span>${fmt(h.target_ev)}</span>`+
+    (h.plan_q2_ev!=null?`<span><span class="lbl">Plan EV Q2'27 (banker)${hq('strip_plan')}</span>${fmt(h.plan_q2_ev)}</span>`:``)+
     `<span><span class="lbl">Canary stress (lower = calmer)${hq('strip_canary')}</span>${Math.round(b.canary01*100)}/100</span>`+
     `<span><span class="lbl">Stage${hq('strip_stage')}</span>${b.inputs.stage}</span>`;
 
@@ -335,6 +353,27 @@ function render(b){
   document.getElementById('beline').innerHTML=beText(be)+
     `<div class="dim" style="font-size:10px;margin-top:6px">model shorthand: ${be.sentence}</div>`;
 
+  // banker plan table (editable margins & multiples)
+  const pl=b.plan;
+  if(pl){
+    const vsBy={};(pl.vs_cohort||[]).forEach(x=>vsBy[x.period]=x);
+    let ph=`<tr><th>period</th><th>TTM revenue</th><th>EBITDA margin %${hq('plan_margin')}</th><th>TTM EBITDA</th><th>EBITDA multiple${hq('plan_mult')}</th><th>enterprise value</th><th>vs cohort EV${hq('plan_vs')}</th></tr>`;
+    pl.rows.forEach(r=>{
+      const vs=vsBy[r.period]||{};
+      ph+=`<tr><td>${r.period}<span class="tag">${r.month}</span></td>`+
+        `<td>$${r.revenue_m.toFixed(1)}M</td>`+
+        `<td><input class="pin${r.margin_overridden?' ovr':''}" data-q="${r.period}" data-k="m" type="number" step="0.1" min="0" max="60" value="${r.margin_pct}">`+
+        `${r.margin_overridden?` <span class="crng" title="banker default">(${r.margin_default_pct})</span>`:''}</td>`+
+        `<td class="cmid">$${r.ebitda_m.toFixed(2)}M</td>`+
+        `<td><input class="pin${r.multiple_overridden?' ovr':''}" data-q="${r.period}" data-k="x" type="number" step="0.5" min="0" max="30" value="${r.multiple_x}">`+
+        `${r.multiple_overridden?` <span class="crng" title="banker default">(${r.multiple_default_x})</span>`:''}</td>`+
+        `<td class="cmid">$${r.ev_m.toFixed(1)}M</td>`+
+        `<td style="color:${vs.delta==null?'#64748b':vs.delta>=0?'#34d399':'#f87171'}">${vs.delta!=null?(vs.delta>0?'+':'')+vs.delta.toFixed(1)+'M':'&mdash;'}</td></tr>`;
+    });
+    document.getElementById('plan').innerHTML=ph;
+    document.getElementById('planft').textContent='Basis: '+pl.basis+' Received '+pl.received+'. Margin edits recompute EBITDA off the fixed TTM revenue; amber = overridden (banker default in parentheses).';
+  }
+
   document.getElementById('tl').innerHTML=b.windows.map(w=>{
     const cls=!w.feasible?'X':w.band[0];
     const sign=w.month===b.slip.q1.sign_by?'<div class="fomc" style="color:#34d399;font-weight:700"><span style="display:inline-block;text-decoration:none">SIGN &#9733;Q1</span></div>'
@@ -391,8 +430,9 @@ function drawFan(sim){
   const cut=sim.months.indexOf(hz)+1||sim.months.length;
   const M=sim.months.slice(0,cut),f=sim.fan.slice(0,cut),pad={l:46,r:14,t:14,b:26};
   const W=cw-pad.l-pad.r,H=ch-pad.t-pad.b;
-  let lo=Math.min(...f.map(r=>r.p10),sim.target_band[0])-8;
-  let hi=Math.max(...f.map(r=>r.p90),sim.target_band[1])+8;
+  const plan=(BOARD&&BOARD.plan)?M.map(m=>BOARD.plan.ev_by_month[m]).filter(v=>v!=null):[];
+  let lo=Math.min(...f.map(r=>r.p10),sim.target_band[0],...plan)-8;
+  let hi=Math.max(...f.map(r=>r.p90),sim.target_band[1],...plan)+8;
   const X=i=>pad.l+W*i/(M.length-1),Y=v=>pad.t+H*(1-(v-lo)/(hi-lo));
   // target band
   ctx.fillStyle='#fbbf2418';
@@ -414,6 +454,16 @@ function drawFan(sim){
   ctx.strokeStyle='#34d399';ctx.setLineDash([5,4]);ctx.lineWidth=1.2;ctx.beginPath();
   sim.on_pace.slice(0,M.length).forEach((r,i)=>i?ctx.lineTo(X(i),Y(r.value)):ctx.moveTo(X(0),Y(r.value)));
   ctx.stroke();ctx.setLineDash([]);
+  // banker plan EV line (TTM EBITDA x multiple; flat-clamped past Q3'27)
+  if(BOARD&&BOARD.plan){
+    ctx.strokeStyle='#c084fc';ctx.setLineDash([2,3]);ctx.lineWidth=1.4;ctx.beginPath();
+    let started=false;
+    M.forEach((m,i)=>{const v=BOARD.plan.ev_by_month[m];if(v==null)return;
+      started?ctx.lineTo(X(i),Y(v)):ctx.moveTo(X(i),Y(v));started=true;});
+    ctx.stroke();ctx.setLineDash([]);
+  }
+  const lt=document.getElementById('legtgt');
+  if(lt)lt.textContent=`$${Math.round(sim.target_band[0])}–${Math.round(sim.target_band[1])}M target`;
   // month labels + report anchors + sale-goal marker
   ctx.fillStyle='#64748b';
   M.forEach((m,i)=>{if(M.length<=12||i%2==0||m==='2027-03'||m==='2027-06')ctx.fillText(m.slice(2),X(i)-14,ch-8);});
@@ -446,10 +496,12 @@ function drawFan(sim){
     ctx.fillStyle='#e2e8f0';
     ctx.beginPath();ctx.arc(xp,g.Y(row.p50),3,0,7);ctx.fill();
     const op=g.on_pace[i]?g.on_pace[i].value:null;
+    const pv=(BOARD&&BOARD.plan)?BOARD.plan.ev_by_month[g.M[i]]:null;
     tip.innerHTML=`<b>${g.M[i]}</b> &middot; close-month valuation<br>`+
       `median <b>$${row.p50}M</b> &middot; likely $${row.p25}&ndash;${row.p75}M<br>`+
       `full band (10/90) $${row.p10}&ndash;${row.p90}M`+
       (op?`<br><span style="color:#34d399">on-pace ramp $${op}M</span>`:'')+
+      (pv!=null?`<br><span style="color:#c084fc">banker plan $${pv}M</span>`:'')+
       (row.p_no_deal>0.004?`<br><span style="color:#f87171">P(no deal) ${(row.p_no_deal*100).toFixed(1)}%</span>`:'');
     tip.style.display='block';
     const tw=tip.offsetWidth||190;
@@ -491,6 +543,28 @@ document.getElementById('save').onclick=()=>{
   .then(r=>r.json()).then(()=>fetch('api/ewm/board')).then(r=>r.json())
   .then(b=>{msg.textContent='applied ✓';render(b);runSim();setTimeout(()=>msg.textContent='',2500);})
   .catch(()=>msg.textContent='save failed');
+};
+
+document.getElementById('plansave').onclick=()=>{
+  const msg=document.getElementById('planmsg');msg.textContent='saving…';
+  const margins={},mults={};
+  const defs={};(BOARD.plan?BOARD.plan.rows:[]).forEach(r=>defs[r.period]=r);
+  document.querySelectorAll('#plan input.pin').forEach(el=>{
+    const q=el.dataset.q,v=+el.value,d=defs[q];if(!d||isNaN(v))return;
+    if(el.dataset.k==='m'&&Math.abs(v-d.margin_default_pct)>0.005)margins[q]=v;
+    if(el.dataset.k==='x'&&Math.abs(v-d.multiple_default_x)>0.005)mults[q]=v;
+  });
+  fetch('api/ewm/inputs',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({plan_margins:margins,plan_multiples:mults})})
+  .then(()=>refreshBoard()).then(()=>{msg.textContent='applied ✓';setTimeout(()=>msg.textContent='',2500);})
+  .catch(()=>msg.textContent='save failed');
+};
+document.getElementById('planreset').onclick=()=>{
+  const msg=document.getElementById('planmsg');msg.textContent='resetting…';
+  fetch('api/ewm/inputs',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({plan_margins:{},plan_multiples:{}})})
+  .then(()=>refreshBoard()).then(()=>{msg.textContent='reset ✓';setTimeout(()=>msg.textContent='',2500);})
+  .catch(()=>msg.textContent='reset failed');
 };
 
 fetch('api/ewm/board').then(r=>r.json()).then(b=>{render(b);runSim();});

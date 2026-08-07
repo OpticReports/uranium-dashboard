@@ -272,3 +272,47 @@ def test_cut_extension_row():
                                     {"force_hikes": -1, "pin_report": True})["fan"]
                 if r["month"] == Q1END)
     assert 205 * 0.93 <= fcut["p10"] and fcut["p90"] <= 218.5, fcut
+
+
+def test_gate_banker_plan_track():
+    """Plan track (Ray, Aug 2026): defaults reproduce the email EVs exactly;
+    margin/multiple edits flow through; monthly line hits quarter-ends and
+    clamps outside the plan span; it never touches the cohort surface."""
+    from app.ewm.core import company_plan
+    plan = company_plan()
+    email_ev = [96.8, 124.6, 165.7, 226.7, 241.6]           # $M, email exact/1e6
+    assert [r["ev_m"] for r in plan["rows"]] == email_ev
+    assert [r["margin_pct"] for r in plan["rows"]] == [14.01, 14.58, 16.65, 17.77, 18.0]
+    assert [r["multiple_x"] for r in plan["rows"]] == [10.0, 11.0, 11.0, 12.0, 12.0]
+    # monthly line: exact at quarter ends, clamped flat past Q3'27
+    ev = plan["ev_by_month"]
+    assert ev["2026-09"] == 96.8 and ev["2027-03"] == 165.7 and ev["2027-09"] == 241.6
+    assert ev["2027-12"] == 241.6                            # no extrapolation
+    assert ev["2027-03"] < ev["2027-04"] < ev["2027-06"]     # interpolated rise
+    # margin edit: 20% on Q1 2027 -> EBITDA 18.10, EV x11 = 199.1
+    p2 = company_plan({"Q1 2027": 20.0}, None)
+    r = next(x for x in p2["rows"] if x["period"] == "Q1 2027")
+    assert r["margin_overridden"] and r["ebitda_m"] == 18.1 and r["ev_m"] == 199.1
+    # multiple edit: hold Q3'27 at 10x (kill the re-rating premise)
+    p3 = company_plan(None, {"Q3 2027": 10})
+    r3 = next(x for x in p3["rows"] if x["period"] == "Q3 2027")
+    assert r3["multiple_overridden"] and r3["ev_m"] == 201.3
+    # junk overrides degrade to defaults, never crash
+    p4 = company_plan({"Q1 2027": "junk"}, {"Q2 2027": None})
+    assert [r["ev_m"] for r in p4["rows"]] == email_ev
+    # separate lens: cohort surface identical with or without plan edits
+    s = cohort_surface(PARAMS, pin_report=True)
+    assert s["surface"][0]["ev"] == cohort_surface(PARAMS, pin_report=True)["surface"][0]["ev"]
+
+
+def test_gate_target_band_tracks_plan():
+    """Valuation-target default = the plan's Q2'27->Q3'27 EV band; the ramp's
+    on-pace value still lands inside it (gate1c invariant preserved)."""
+    assert PARAMS["target_value"] == [226.7, 241.6]
+    from app.ewm.core import company_plan, multiple_range, revenue_ramp
+    plan = company_plan()
+    evs = [r["ev_m"] for r in plan["rows"]]
+    assert PARAMS["target_value"] == [evs[3], evs[4]]
+    ramp = revenue_ramp(PARAMS)
+    v = multiple_range(PARAMS["ramp_scenario"], TARGET_M)[1] * ramp["revenue"][TARGET_M]
+    assert PARAMS["target_value"][0] <= v <= PARAMS["target_value"][1]
