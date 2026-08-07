@@ -55,3 +55,21 @@ def test_mark_to_market_values_open_positions():
                            signal_ts=0)
     _mark_to_market(b2, 90.0)
     assert b2.mtm_equity == 110_000.0 and b2.mtm_max_dd == 0.0
+
+
+def test_replay_compare_4y_window():
+    """4y preset: fixture must reach back far enough (2022-01 Bitstamp merge)
+    that the window starts ~2022-08 with indicator warmup before it, and all
+    books + HOLD replay across the 2022 bear."""
+    from fastapi.testclient import TestClient
+    from app.main import app
+    with TestClient(app) as c:
+        r = c.get("/replay/compare", params={"window": "4y"})
+        assert r.status_code == 200
+        body = r.json()
+        assert body["window"]["from"][:4] == "2022"
+        for k in ("S1", "S2", "S3", "S4", "S5", "S6", "HOLD"):
+            assert k in body["books"], k
+        # window spans the -64% 2022 bear: books traded through it
+        assert body["books"]["S1"]["trades"] > 100
+        assert body["books"]["HOLD"]["max_dd_pct"] < -40

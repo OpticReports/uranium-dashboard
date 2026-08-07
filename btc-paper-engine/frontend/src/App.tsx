@@ -482,7 +482,7 @@ function ComparePanel() {
   return (
     <Panel title="Backtest comparison — all books, same window">
       <div className="mb-3 flex flex-wrap items-center gap-1.5 text-[10px]">
-        {["2y", "1y", "6m", "3m", "1m"].map((w) => (
+        {["4y", "2y", "1y", "6m", "3m", "1m"].map((w) => (
           <button key={w} onClick={() => setWin(w)}
             className={`rounded-full border px-2.5 py-0.5 font-semibold ${
               win === w ? "border-sky-500 text-sky-300 bg-sky-500/10"

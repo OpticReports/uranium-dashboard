@@ -213,10 +213,10 @@ def resume(book: str):
 @app.post("/books/reset")
 def books_reset(window: str = "2y", start: str | None = None,
                 capital: float | None = None):
-    """Re-baseline ALL books from one common inception (2y|1y|6m|3m|1m or
+    """Re-baseline ALL books from one common inception (4y|2y|1y|6m|3m|1m or
     custom start=YYYY-MM-DD), replaying history through the live code path;
     live trading continues from now. Destructive: wipes current book state."""
-    spans = {"2y": 730, "1y": 365, "6m": 182, "3m": 91, "1m": 30}
+    spans = {"4y": 1461, "2y": 730, "1y": 365, "6m": 182, "3m": 91, "1m": 30}
     if start:
         t0 = int(datetime.strptime(start, "%Y-%m-%d")
                  .replace(tzinfo=timezone.utc).timestamp())
@@ -325,8 +325,10 @@ def _hold_stats(bars_win, start_equity: float, taker_bps: float) -> dict | None:
 @app.get("/replay/compare")
 def replay_compare(window: str = "2y", start: str | None = None,
                    end: str | None = None):
-    """All books replayed over one window: 2y|1y|6m|3m|1m or custom start/end
-    (YYYY-MM-DD). Bars = repo fixture merged with DB-accumulated live bars."""
+    """All books replayed over one window: 4y|2y|1y|6m|3m|1m or custom
+    start/end (YYYY-MM-DD). Bars = repo fixture merged with DB-accumulated
+    live bars; the fixture reaches back to 2022-01 (Bitstamp), so 4y windows
+    (and custom starts from ~mid-2022) replay with full indicator warmup."""
     import os
     from .engine.core import Bar
     from .engine.replay import book_stats, run_replay
@@ -343,7 +345,7 @@ def replay_compare(window: str = "2y", start: str | None = None,
                                    low=r.low, close=r.close, volume=r.volume)
     bars_ = [by_ts[t] for t in sorted(by_ts)]
     now = bars_[-1].ts
-    spans = {"2y": 730, "1y": 365, "6m": 182, "3m": 91, "1m": 30}
+    spans = {"4y": 1461, "2y": 730, "1y": 365, "6m": 182, "3m": 91, "1m": 30}
     if start:
         t0 = int(datetime.strptime(start, "%Y-%m-%d")
                  .replace(tzinfo=timezone.utc).timestamp())
