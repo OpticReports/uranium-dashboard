@@ -405,3 +405,29 @@ def test_gate_dry_run_venue_never_touches_inner():
     v.cancel_all()
     assert len(v.log) == 4
     assert v.orders["x"]["status"] == "CANCELLED"
+
+
+def test_gate_alert_tier_labels(tmp_path, monkeypatch):
+    """Casey-facing alert contract: halts carry the ACTION NEEDED label +
+    resume instruction; non-halt REDs say forward-to-Claude / no action;
+    resume reads as all-clear. (Casey: 'make sure all the Tier 3 ones are
+    labeled clearly that I need to do something to fix it.')"""
+    sent = []
+    import app.alerts as alerts
+    monkeypatch.setattr(alerts, "send", lambda t: sent.append(t))
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    ex.halt("DRAWDOWN", "test halt")
+    assert any("ACTION NEEDED" in s and "/resume" in s for s in sent), sent
+    ex.resume()
+    assert any("no action needed" in s and "resume" in s for s in sent)
+    sent.clear()
+    ex._event("RED", "position_drift", "test drift")
+    assert len(sent) == 1
+    assert "forward this to Claude" in sent[0] and "ACTION NEEDED" not in sent[0]
+    sent.clear()
+    ex._event("WARN", "halt_config", "dd_halt unreachable")
+    assert len(sent) == 1 and "ACTION NEEDED" in sent[0]        # tier-3 WARN
+    sent.clear()
+    ex._event("WARN", "cap_clamp", "clamped")                   # ordinary WARN
+    assert sent == []                                           # stays quiet

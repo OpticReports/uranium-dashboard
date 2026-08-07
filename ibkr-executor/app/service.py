@@ -85,7 +85,9 @@ def _loop():
                              f"-> ${r['value']:,.0f}")
                 except Exception as exc:  # noqa: BLE001
                     logger.exception("intent %s failed: %s", it, exc)
-                    send(f"🚨 ibkr intent failed ({it['action']} {it['leg']}): {exc}")
+                    send(f"🚨 ibkr intent failed ({it['action']} {it['leg']}): {exc}\n"
+                         f"→ no action needed from you — forward this to Claude "
+                         f"(if it repeats, gateway/credentials may need you)")
             MGR.save()
             LAST["loop_ok"] = time.time()
         except Exception as exc:  # noqa: BLE001
@@ -143,7 +145,8 @@ def kill(x_exec_token: str | None = Header(default=None),
                 logger.exception("kill close %s failed: %s", key, exc)
     MGR.state.halted = "KILL"
     MGR.save()
-    send("🚨 ibkr ladder KILLED manually - all legs closed, ladder halted")
+    send("🔴 ACTION NEEDED (you) — ibkr ladder KILLED: all legs closed, "
+         "ladder halted\n→ it stays halted until you hit /resume?token=YOUR_TOKEN")
     return {"ok": True, "halted": "KILL"}
 
 

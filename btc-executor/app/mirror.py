@@ -135,10 +135,32 @@ class Executor:
         logger.log(logging.WARNING if level in ("WARN", "RED") else logging.INFO,
                    "%s %s", kind, msg)
         # phone-worthy events only: halts and REDs, plus live trade entries/
-        # exits (INFO order noise in dry-run stays out of Telegram)
+        # exits (INFO order noise in dry-run stays out of Telegram).
+        # Tier labels (Casey): 🔴 ACTION NEEDED = trading stays stopped or
+        # misconfigured until YOU act; 🚨 forward-to-Claude = code/venue issue
+        # that needs no user action beyond forwarding; ⚡/✅ informational.
         from .alerts import send
-        if level == "RED" or kind in ("halt", "resume"):
-            send(f"🚨 executor {kind}: {msg}")
+        ACTION = {
+            "halt": "trading is STOPPED until you check /status and hit "
+                    "/resume?token=YOUR_TOKEN (verify the cause first — "
+                    "deposits/transfers can trip this falsely)",
+            "halt_config": "fix the Render env (DD_HALT_PCT / "
+                           "SIZING_BASE_USD) — as configured the halt line "
+                           "can't work; trading logic continues but the "
+                           "circuit breaker is miscalibrated",
+            "halt_error": "closing positions during the halt FAILED — open "
+                          "Coinbase NOW, check positions, flatten manually "
+                          "if any remain",
+        }
+        if kind in ACTION:
+            send(f"🔴 ACTION NEEDED (you) — executor {kind}: {msg}\n"
+                 f"→ {ACTION[kind]}")
+        elif level == "RED":
+            send(f"🚨 executor {kind}: {msg}\n"
+                 f"→ no action needed from you — forward this to Claude")
+        elif kind == "resume":
+            send(f"✅ executor resume: {msg} — trading re-armed, "
+                 f"no action needed")
         elif kind in ("entry_order", "leg_closed", "entry_chase") \
                 and not getattr(self.cfg, "dry_run", True):
             send(f"⚡ executor {kind}: {msg}")
