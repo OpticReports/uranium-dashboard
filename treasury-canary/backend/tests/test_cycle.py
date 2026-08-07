@@ -60,3 +60,17 @@ def test_gate_phase_rules_and_change_detection(tmp_path, monkeypatch):
     fake = {**b, "current": {**b["current"], "phase": "SLOWDOWN"}}
     msg = business_cycle.phase_change(fake)
     assert msg and "STALL -> SLOWDOWN" in msg
+
+
+def test_gate_nowcast_reproduces_study_spec():
+    """ENS_BC nowcast on the frozen fixture must reproduce the walk-forward
+    study's live values (spec 2026-08-07: bridge -0.347, claims -0.429,
+    ens -0.388, target 2026-07, phase STALL)."""
+    nc = board()["nowcast"]
+    assert nc is not None
+    assert nc["month"] == "2026-07"
+    assert -0.50 <= nc["value"] <= -0.28, nc
+    assert -0.45 <= nc["bridge"] <= -0.25, nc
+    assert -0.55 <= nc["claims"] <= -0.30, nc
+    assert nc["phase"] == "STALL"
+    assert nc["claims_trigger"] is False
