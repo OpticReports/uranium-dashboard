@@ -8,11 +8,16 @@ see Open Items). Panel: 5 independent scorers + red team, fixed rubric v1.
 
 ## Page 1 — synthesis
 
-**Verdict: Not investable as presented. Two of the five conditions the bull
-case requires are heroic by the sponsor's own evidence base, the deal is
-literally unpriceable (no valuation/round/ownership data reached this run),
-and the SPV fee structure needs ~12.5x gross for a 10x net. A defined,
-checkable path to yes exists — see Conditional Flip below.**
+**Verdict (updated 2026-08-08 after sponsor stated ≈$30M valuation):
+Conditional — one gate remaining. At ~$30M the price sits exactly at the
+red-team's flip threshold: the specialty-only success path (Zoltek-class
+$200–400M acquisition in ~10 yrs) nets only ~2–3x after fees and dilution
+(~7–12% IRR, below venture bar), so the deal rises or falls on the
+copper-replacement tail. The remaining gate: at least one NAMED, SIGNED
+aerospace/defense development agreement with committed volumes, plus
+confirmation of round size/instrument/ownership from the model. Without
+the agreement, pass; with it, this is a defensible tail bet at a
+borderline-fair price.**
 
 **Thesis being sold:** carbon-nanotube fiber ("Galvorn") replaces copper
 wire; today sells into weight-critical aerospace niches at premium prices;
@@ -108,14 +113,23 @@ as presented.
 ### Conditional flip (steelman)
 
 Invest becomes defensible if the sponsor materials show BOTH:
-1. **Priced round at sub-$30M valuation** — you're buying the mass-basis
-   specialty business that already works, with the copper moonshot free;
+1. **Priced round at sub-$30M valuation** — ⚠ **BORDERLINE-MET** (sponsor
+   states ≈$30M, at the threshold, not below it; pre/post and instrument
+   unconfirmed). At exactly $30M the specialty base case pays ~2–3x net,
+   so this condition no longer carries the deal alone;
 2. **At least one named, signed aerospace/defense development agreement
    with committed volumes** on the EMI-braid wedge (the only
-   inside-fund-life revenue path).
+   inside-fund-life revenue path) — **UNMET / UNKNOWN — now the sole
+   gating item.**
 
 Either alone is insufficient. Also required before any wire: the actual
 round terms (see Open Items).
+
+**Scorecard adjustment note:** deal & price mechanically revised 2 → 3 on
+the stated valuation (price known and borderline-fair; ownership,
+instrument, round size still unknown); weighted total 3.15 → 3.20. This is
+a marked post-run adjustment, not a panel re-run; the full panel re-runs
+when the documents arrive.
 
 ---
 
@@ -142,6 +156,20 @@ SPV: 2% one-time + 20% carry + pro-rata admin/compliance (5 yrs, then
 re-invoiced — open-ended on a likely 10–15 yr hold). Net-of-fees:
 breakeven ≈ 1.02x gross · 3x gross → 2.55x net · 10x gross → 8.04x net ·
 **10x net requires ≈ 12.5x gross.**
+
+At the sponsor-stated ≈$30M valuation (pre/post unspecified; instrument,
+round size, ownership still unknown):
+
+| Net target | Gross needed | Exit value (pre-dilution) | With 50–70% dilution |
+|---|---|---|---|
+| 1x (breakeven) | 1.02x | ~$31M | ~$60–100M |
+| 3x | ~3.9x | ~$117M | ~$230–390M |
+| 10x | ~12.5x | ~$375M | ~$750M–1.25B |
+
+Read: the modal *successful* specialty-materials outcome ($200–400M
+acquisition, ~10 yrs — Zoltek exited at $584M after 26 yrs) lands at
+~2–3x net ≈ 7–12% IRR. The entry price is not cheap enough to be paid by
+the specialty business alone; the tail is the investment case.
 
 ## Forecast ledger entry (logged)
 

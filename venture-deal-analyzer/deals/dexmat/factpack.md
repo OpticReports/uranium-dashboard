@@ -112,6 +112,16 @@ document delivery.
 - [CLAIMED] SPV structure: 2% one-time fee + 20% carried interest + pro-rata
   admin/compliance for 5 years (re-invoiced after). Fee-drag math: 10x gross
   ≈ 8.0x net; 3x gross ≈ 2.55x net; breakeven ≈ 1.02x gross.
-- [UNKNOWN — REQUIRED] Round size, entry valuation, instrument (SAFE/priced),
-  ownership offered, use of funds, runway, sponsor's model assumptions.
-  These are in the DocSend model, which is inaccessible to this run.
+- [CLAIMED — sponsor, verbal 2026-08-08] Round valuation ≈ $30M (pre/post
+  unspecified).
+- [UNKNOWN — REQUIRED] Round size, instrument (SAFE/priced), ownership
+  offered, use of funds, runway, sponsor's model assumptions. These are in
+  the DocSend model, which is inaccessible to this run.
+- Return math at $30M post (pre-dilution → with ~50–70% dilution over the
+  3–4 scale-up rounds materials cos typically need):
+  - 10x net (≈12.5x gross): exit ≈ $375M → $750M–$1.25B diluted.
+  - 3x net (≈3.9x gross): exit ≈ $117M → $230–390M diluted — i.e., the
+    Zoltek-class specialty outcome ($584M after 26 yrs) ≈ 3–5x net.
+  - Modal specialty-acquisition success ($200–400M in ~10 yrs) ≈ 2–3x net
+    ≈ 7–12% IRR — below venture bar. At $30M the deal still rises or
+    falls on the copper-replacement tail, not the specialty base case.
