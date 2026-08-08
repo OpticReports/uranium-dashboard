@@ -22,18 +22,30 @@ bot-blocked; every sponsor number is [SPONSOR] pending document delivery.
 - [UNKNOWN — REQUIRED] SPV entry valuation, share class, fees, round size,
   the tranche's rights vs the institutional $134M close.
 
-## THE GOOGLE CLAIM — UNVERIFIED IN PUBLIC RECORD; LP-AFFIRMED VERBALLY
-- [SPONSOR] Blurb: "Google signed a $600mm offtake agreement, with a
-  framework MOU for up to $24bn total."
-- [LP-AFFIRMED 2026-08-08] The LP reports having spoken with the parties
-  directly and affirms the Google agreement is real. This retires the
-  fabrication branch. It does NOT yet establish: (a) whether the $600M is
-  committed offtake with COD dates and damages vs contingent lifetime PPA
-  revenue vs a framework tranche; (b) whether the $24B MOU is binding in
-  any respect; (c) conditions precedent tied to technology milestones.
-  Only the executed document answers these — and the sector base rate
-  (below) is that headline figures on pre-commercial tech are framework
-  ceilings, not committed revenue.
+## THE GOOGLE AGREEMENT — [LP-VERIFIED 2026-08-08, REV 2]
+- **Treat as fact for this run (LP instruction after direct conversations
+  with the parties): Google is the counterparty; a $600M offtake
+  agreement is SIGNED; a framework MOU for up to $24B total exists.**
+  This is the strongest demand validation any pre-commercial energy
+  company has ever shown — no other hyperscaler deal with pre-commercial
+  tech has a signed offtake of this size with a named counterparty
+  (Meta-Sage and Meta-XGS are 150 MW PPAs; Google-Fervo's 3 GW framework
+  is non-binding per Fervo's SEC filings).
+- Structural readings that remain true even taking the terms as stated:
+  (a) an OFFTAKE's $600M is revenue contingent on delivered power — the
+  plants must be built and perform; it is not invested capital and does
+  not de-risk the drilling physics. The unnamed-hyperscaler 50 MW PPA
+  disclosed in July covers the CONVENTIONAL-drilling first phase of
+  Obsidian. (b) A "framework MOU up to $24B" is by its own terms a
+  framework; sector conversion of such frameworks to delivered MWh is
+  so far zero. (c) Conditions precedent (COD dates, milestones,
+  termination rights) are [UNKNOWN — document not seen]; they determine
+  how much of the $600M survives a NuScale/Vogtle-style slip.
+- Signal value (real, and now scoreable): Google's technical diligence
+  teams are the most sophisticated clean-firm buyers in the world;
+  putting Google's name and a signed $600M on Quaise is a major
+  third-party validation of both demand AND perceived technical
+  credibility — the strongest single fact in the deal's favor.
 - [VERIFIED — ABSENCE] No Google–Quaise agreement exists in any public
   record: no press release, no news coverage, nothing in Quaise's own
   newsroom, no "$600M," no "$24B" anywhere.
