@@ -1,192 +1,141 @@
-# Investment memo — DexMat (Galvorn) SPV
+# Investment memo — DexMat (Galvorn) SPV — rev 2
 
-Run: 2026-08-08 · Analyzer v1 · Sector overlay: materials/deep tech ·
-Inputs: public-source fact pack (sponsor DocSend materials inaccessible —
-see Open Items). Panel: 5 independent scorers + red team, fixed rubric v1.
+Run: 2026-08-08 (rev 2, full panel re-run after receipt of all four sponsor
+documents) · Analyzer v1 · Sector overlay: materials/deep tech · Panel: 5
+independent scorers + red team, fixed rubric v1. Rev 1 (public-source only)
+retained in git history for the before/after record.
 
 ---
 
 ## Page 1 — synthesis
 
-**Verdict (updated 2026-08-08 after sponsor stated ≈$30M valuation):
-Conditional — one gate remaining. At ~$30M the price sits exactly at the
-red-team's flip threshold: the specialty-only success path (Zoltek-class
-$200–400M acquisition in ~10 yrs) nets only ~2–3x after fees and dilution
-(~7–12% IRR, below venture bar), so the deal rises or falls on the
-copper-replacement tail. The remaining gate: at least one NAMED, SIGNED
-aerospace/defense development agreement with committed volumes, plus
-confirmation of round size/instrument/ownership from the model. Without
-the agreement, pass; with it, this is a defensible tail bet at a
-borderline-fair price.**
+**Verdict: BORDERLINE PASS / WATCH — one verification call decides it.**
+The documents materially improved traction (named customers, a $2M USAF
+production-transition contract, one signed multi-year offtake) but the
+price moved faster than the evidence: $45M post on a ~$800K–1M run rate
+(~45–55x), a 55% step-up in three months, sold with a return model whose
+"base case" is a $10B IPO and which contains no downside scenario at all.
+The probability-weighted expected value at this entry is ≈2.5–3x net,
+entirely tail-driven. **The flip trigger: confirm the signed multi-year
+contract's counterparty and binding committed volumes (or an executed
+Tokai Rika PO at ~$3M/yr). Binding + named → defensible tail bet.
+Frame agreement / unnamed → pass.**
 
-**Thesis being sold:** carbon-nanotube fiber ("Galvorn") replaces copper
-wire; today sells into weight-critical aerospace niches at premium prices;
-cost parity with copper claimed by EOY 2030.
+**Round (from documents):** $10M at $35M pre / $45M post ($15M interest;
+oversubscribed case $50M post). Prior seed $6M at $23M pre/$29M post
+closed ~Apr 2026, 2x oversubscribed. SPV: 2% one-time + 20% carry +
+admin. $1M ⇒ 2.18% at close → ~1.27% at exit on the sponsor's own
+dilution (50–70% dilution realistic ⇒ 10x net needs a $1.2–1.5B exit).
 
-**What's real (verified):** world-class Rice/Pasquali science lineage;
-83–85% lighter than copper; ~75–80% of copper's conductivity *per unit
-mass*; a beachhead (mil-spec wire, EMI shielding, space) that already pays
-10–100x copper metal prices and values saved weight at $2,500–$200,000/kg;
-record copper prices and a projected ~30% supply gap by 2035; the only
-serious direct competitor (Nanocomp/Huntsman) stalled — the lane is empty.
+### Scorecard (5 independent scorers, median [IQR]) — rev 2 vs rev 1
 
-**What's not (verified conflicts):** "approximately equal conductivity" is
-true only per mass — per volume, commercial Galvorn is ~11% of copper and
-the best lab result ever is ~19%. The "20x conductivity improvement" exceeds
-every published result by any group; at the field's observed
-doubling-every-3-years rate it arrives ~2039. "Cheaper than copper by 2030"
-has no precedent in any advanced fiber (carbon fiber: ~50 years, ~40x).
-Company age is ~11 years (site says 2019; verifiable operations 2015–16) —
-the sponsor blurb also overstates the company's own marketing (1,000x flex
-claimed vs company's 100x).
-
-### Scorecard (5 independent scorers, median [IQR])
-
-| Dimension (weight) | Score | IQR |
-|---|---|---|
-| Market & why-now (30) | **4** | 0 |
-| Team (30) | **3** | 0 |
-| Product & moat trajectory (15) | **3** | 0 |
-| Traction vs benchmarks (10) | **2** | 0 |
-| Competition (10) | **3** | 0 |
-| Deal & price (5) | **2** | 0 |
-| **Weighted total** | **3.15 / 5** | |
-
-Reliability gate: PASS — zero dimension dispersion across 5 runs;
-probability spread ≤5pp. (Consistency ≠ accuracy; validity accrues via the
-ledger.)
-
-### Probabilities (panel median vs base rate)
-
-| Event | Panel | Base rate |
-|---|---|---|
-| Raises next priced round ≤ 24 mo | 40% | ~50–65% for funded seeds |
-| Returns < 1x | 72% | ~65% |
-| Returns ≥ 10x | 5% | ~4% |
-
-Read: slightly worse-than-base downside (11-year-old company at seed, no
-offtakes, qualification wall), roughly base-rate tail (the mass-basis
-beachhead is real and the lane is uncontested) — but the tail is *gross*;
-fee drag thins it further (10x gross ≈ 8.0x net; 3x → 2.55x).
-
-### What would have to be true (red-team graded)
-
-| Condition (sponsor) | Grade |
-|---|---|
-| 80% further cost reduction by ~2027 | PLAUSIBLE — barely; % of an undisclosed number |
-| $5M revenue run rate end 2027 | PLAUSIBLE→HEROIC — implies 10–25x growth in 24 mo, zero named customers |
-| Cheaper than copper wire by EOY 2030 | HEROIC — no advanced-fiber precedent; $30/kg proof requires a 144 t/yr plant nobody has built |
-| 20x conductivity improvement | HEROIC — exceeds copper absolute; ~2039 at observed field trend |
-| Aerospace design wins inside fund life | HEROIC for wire (AS22759 spec creation, 5–15 yrs); PLAUSIBLE for EMI braid only |
-
-The bull case is conjunctive — it needs nearly all of these. Two-plus
-heroics compound to a thin joint probability; that is where the deal dies
-as presented.
-
-### Top 3 risks (pre-mortem, ranked)
-
-1. **Conductivity ceiling holds** → Galvorn stays a specialty EMI/space
-   material (tens-of-$M market) while the entry price capitalized the
-   copper-killer story; dilution through 3–4 scale-up rounds does the rest.
-2. **Qualification wall** → wire revenue needs a nonexistent AS22759 slash
-   sheet; primes wait for the spec, the spec waits for a prime; bridges
-   price flat-to-down past 2030.
-3. **Aluminum eats the use case** → the customer's job (cut harness weight)
-   is 40–50% solved by Al/CCA at commodity prices through incumbents'
-   qualified channels; high copper prices accelerate aluminum, not CNT.
-
-### Red team's strongest pass case (verbatim)
-
-> This is an 11-year-old company disguised as a 2019 seed-stage startup,
-> whose core sales metric is misrepresented: "approximately equal
-> conductivity" is true only per unit mass — per volume, commercial Galvorn
-> carries ~11% of copper's conductivity, and no lab anywhere has exceeded
-> 19%. The wire-replacement thesis rests on a "20x improvement" that
-> exceeds every published result and, at Rice's own observed
-> doubling-every-3-years trend, arrives around 2039 — outside any fund
-> life. The only serious predecessor went quiet after 6+ years without
-> shipping commercial CNT wire, the near-term aerospace market requires
-> creating an AS22759 slash sheet that doesn't exist, and after ~$10M
-> equity plus claimed $20M in grants over 11 years, revenue is likely
-> low-hundreds-of-thousands. Time-value alone kills the SPV math.
-
-### Conditional flip (steelman)
-
-Invest becomes defensible if the sponsor materials show BOTH:
-1. **Priced round at sub-$30M valuation** — ⚠ **BORDERLINE-MET** (sponsor
-   states ≈$30M, at the threshold, not below it; pre/post and instrument
-   unconfirmed). At exactly $30M the specialty base case pays ~2–3x net,
-   so this condition no longer carries the deal alone;
-2. **At least one named, signed aerospace/defense development agreement
-   with committed volumes** on the EMI-braid wedge (the only
-   inside-fund-life revenue path) — **UNMET / UNKNOWN — now the sole
-   gating item.**
-
-Either alone is insufficient. Also required before any wire: the actual
-round terms (see Open Items).
-
-**Scorecard adjustment note:** deal & price mechanically revised 2 → 3 on
-the stated valuation (price known and borderline-fair; ownership,
-instrument, round size still unknown); weighted total 3.15 → 3.20. This is
-a marked post-run adjustment, not a panel re-run; the full panel re-runs
-when the documents arrive.
-
----
-
-## Open items — required from sponsor
-
-1. Deck, DD-call notes, comp set, revenue/dilution model (DocSend
-   bot-blocked this run; export to PDF/XLSX).
-2. Round size, valuation/cap, instrument, ownership offered, use of funds,
-   runway. The deal cannot be priced without these.
-3. Absolute numbers behind the percentages: current $/kg, kg/yr capacity,
-   2025 revenue base underlying "2.5x growth."
-4. IP position: what Rice licenses DexMat holds, exclusivity, and
-   composition-of-matter vs process coverage.
-5. Named-customer evidence: any signed development agreement, LOI, or
-   offtake (not "advancing toward").
-6. Why the deck says founded 2019 when operations verifiably date to
-   2015–16; reconcile "1,000x more flexible" vs company's published 100x
-   flex life; state the conductivity basis (mass vs volume) used in
-   sponsor materials.
-
-## Deal & fee math (as disclosed)
-
-SPV: 2% one-time + 20% carry + pro-rata admin/compliance (5 yrs, then
-re-invoiced — open-ended on a likely 10–15 yr hold). Net-of-fees:
-breakeven ≈ 1.02x gross · 3x gross → 2.55x net · 10x gross → 8.04x net ·
-**10x net requires ≈ 12.5x gross.**
-
-At the sponsor-stated ≈$30M valuation (pre/post unspecified; instrument,
-round size, ownership still unknown):
-
-| Net target | Gross needed | Exit value (pre-dilution) | With 50–70% dilution |
+| Dimension (weight) | Rev 1 | Rev 2 | IQR |
 |---|---|---|---|
-| 1x (breakeven) | 1.02x | ~$31M | ~$60–100M |
-| 3x | ~3.9x | ~$117M | ~$230–390M |
-| 10x | ~12.5x | ~$375M | ~$750M–1.25B |
+| Market & why-now (30) | 4 | **4** | 0 |
+| Team (30) | 3 | **3** | 0 |
+| Product & moat trajectory (15) | 3 | **3** | 1 (two scorers at 4) |
+| Traction vs benchmarks (10) | 2 | **3** ↑ | 0 |
+| Competition (10) | 3 | **3** | 0 |
+| Deal & price (5) | 2 | **2** | 0 |
+| **Weighted total** | 3.15 | **3.25** | |
 
-Read: the modal *successful* specialty-materials outcome ($200–400M
-acquisition, ~10 yrs — Zoltek exited at $584M after 26 yrs) lands at
-~2–3x net ≈ 7–12% IRR. The entry price is not cheap enough to be paid by
-the specialty business alone; the tail is the investment case.
+### Probabilities (panel median vs base rate; red-team tree alongside)
 
-## Forecast ledger entry (logged)
+| Event | Panel | Red team | Base rate |
+|---|---|---|---|
+| Raises next priced round ≤ 24 mo | 70% ↑ (was 40) | — | ~50–65% |
+| Returns < 1x (net) | 60% ↓ (was 72) | 50% | ~65% |
+| Returns 1–3x (net) | — | 25% | — |
+| Returns 3–10x (net) | — | 15% | — |
+| Returns ≥ 10x (net) | 4% | 10% | ~4% |
 
-P(next priced round ≤ 24 mo) = 40% · P(<1x) = 72% · P(≥10x) = 5% ·
-Predicted modal outcome: specialty-materials survival without
-copper-replacement breakout. Resolve: 2028-08 (round proxy), 2033+
-(multiple). Prompt/rubric version: v1.
+Panel–red-team disagreement on the tail (4% vs 10%) is the honest range;
+both agree the EV is ~2–3x net and tail-driven.
+
+### The sponsor model, autopsied
+
+The Delta4 model's Base Case nets LPs **102x** ($10B IPO, yr 10); Bull
+nets **1,091x** ($91.8B). Five compounding assumptions, no downside branch:
+
+1. **Share ramp** 0.05% (2028) → **30% of global copper wire by 2040** —
+   no advanced material has ever done anything like this (carbon fiber:
+   50 years, never 30% of anything).
+2. **"3x cheaper than copper by 2031"** — contradicted by the sponsor's
+   own deck, whose roadmap reaches copper *parity* only at the 3kt plant
+   in 2030–31.
+3. **10x P/S at exit** — the sponsor's own comp set prices wire makers at
+   1–2x; at 2x the "$10B base case" is ~$2B.
+4. **0% option-pool refresh across 5 rounds** — realistic pools push
+   dilution from the modeled 32–42% to 50–70%.
+5. **Series A at $100M post within 1 year** of a $45M entry on ~$1M
+   run rate.
+
+The model's base case sits above the red team's 90th percentile.
+
+### The aluminum ceiling (from the deck's own spec table)
+
+Aluminum: specific conductivity 12,200 S·m²/kg — **2x Galvorn's 6,150 at
+~1/100th the price**. Every bulk application where mass-per-conductance
+is the buying criterion goes to Al/CCA (where incumbent lightweighting
+dollars already flow). Galvorn's defensible ground: strength + flex +
+high-frequency skin-effect + corrosion niches — aero signal cable
+($1.9–2.9B), EMI ($7.4–9B), high-frequency DAC, defense cathodes,
+medical. Success there ≈ a $1–3B-revenue company at maturity — a great
+outcome that is still not "30% of copper wire."
+
+### What the documents changed (honest ledger)
+
+Better: named customers exist (AFRL $3.5M cumulative + $2M production
+transition; Tokai Rika audited production, Q4 launch, $3M/yr PO in
+negotiation; Safran testing; NeuroBionics $1M/yr PO in negotiation); one
+multi-year offtake signed; capex far lighter than assumed (30t demo
+$2–5M; 3kt ~$40M); beachhead cost parity today vs silver-plated aero
+cable is credible; $30M non-dilutive; 2026 volume already = all of 2025.
+Worse: price $45M post vs the ~$30M verbal; model quality (no downside
+case) reflects on sponsor underwriting; candor pattern persists ("founded
+3 years ago" in the DD call vs verifiable 2015–16 operations; 1,000x vs
+100x flex inside their own materials; conductivity-basis elision).
+
+### Top 3 risks (updated pre-mortem)
+
+1. **Specialty-trap at a story price**: conductivity/cost ceilings confine
+   Galvorn to niches; the entry price capitalized the copper story;
+   outcome $400–585M ⇒ 1.5–3x net.
+2. **Scale-up gap between the $2–5M demo plant and the ~$40M 3kt plant**
+   plus 10x-heavier feedstock integration — the classic materials capex
+   wall, with demand a decade late.
+3. **Anchor evaporation**: the signed offtake proves to be a frame
+   agreement, Tokai Rika PO slips, and the round's momentum narrative
+   resets down.
+
+## Required verifications (in priority order)
+
+1. **The signed multi-year contract**: counterparty identity, committed
+   minimum volumes, binding vs frame. This is the deal decider.
+2. Executed status and volumes of Tokai Rika and NeuroBionics POs.
+3. Whether "50% margins ad infinitum" is gross or EBITDA (sponsor's own
+   comp doc flags this).
+4. IP: Rice license scope/exclusivity; the "4 new licenses + 1 patent."
+5. Reconcile founding-date narrative and flex-life figures directly with
+   the CEO — the answer's quality is itself diligence data.
+
+## Forecast ledger entry (rev 2, supersedes rev 1)
+
+P(next priced round ≤24mo)=70% · P(<1x net)=60% · P(≥10x net)=4% (panel) /
+10% (red team) · Predicted modal outcome: specialty-materials company,
+niche success, exit below $600M. Resolve 2028-08 / 2033+. Rubric v1.
 
 ## Honesty box
 
-- This run had NO access to sponsor materials; every sponsor number is
-  [CLAIMED]. The verdict is conditional on public evidence and could move
-  on the model/deck — that is what the Conditional Flip section is for.
-- The company is in the analyzer's training-data horizon; scores could be
-  contaminated by prior knowledge of DexMat. Mitigation: every load-bearing
-  fact was re-sourced and cited this run; the ledger entry, not this
-  memo, is the validity test.
-- Panel consistency (IQR 0) is a precision statement only.
-- Not modeled: syndicate quality/reserves, secondary-market paths, grant
-  pipeline continuation, methane-pyrolysis upside optionality.
+- All traction figures are sponsor-document provenance ([DECK]/[DD-NOTES]),
+  not independently verified; the two POs are negotiations, not contracts.
+- DexMat is inside the model's training-data horizon; mitigated by
+  re-sourcing, not eliminated.
+- Panel consistency: IQR 0 on five of six dimensions, 1 on moat. Rev-1 →
+  rev-2 movement (traction 2→3, P(<1x) 72→60, P(next round) 40→70) was
+  driven by document evidence, which is the system behaving as designed.
+- The red team's 10% tail vs panel's 4% is unresolved judgment, not error;
+  both were logged.
+- Not modeled: secondary opportunities, grant-pipeline continuation,
+  methane-pyrolysis optionality, strategic-acquirer dynamics (Shell,
+  metals/mining strategic on cap table).
