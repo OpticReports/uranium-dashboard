@@ -1,0 +1,202 @@
+<title>Quaise Energy — Investment Memo</title>
+<style>
+  :root {
+    --paper: #F7F8F7; --card: #FFFFFF; --ink: #1A2422; --muted: #56675F;
+    --line: #DCE3DF; --accent: #0E7E53; --accent-ink: #0B6A46;
+    --data-1: #0E7E53; --data-2: #A85F00; --data-mute: #ADBCB4;
+    --wash: #EEF3F0; --warn-wash: #F6EEE2; --danger: #9E3B1E;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #131A18; --card: #1A2320; --ink: #E4EBE7; --muted: #92A29A;
+      --line: #2A3733; --accent: #45C69E; --accent-ink: #5ED2AC;
+      --data-1: #279B79; --data-2: #C56F33; --data-mute: #46554F;
+      --wash: #1F2A26; --warn-wash: #2A2119; --danger: #E0805F;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #131A18; --card: #1A2320; --ink: #E4EBE7; --muted: #92A29A;
+    --line: #2A3733; --accent: #45C69E; --accent-ink: #5ED2AC;
+    --data-1: #279B79; --data-2: #C56F33; --data-mute: #46554F;
+    --wash: #1F2A26; --warn-wash: #2A2119; --danger: #E0805F;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--paper); color: var(--ink); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 16px; line-height: 1.6; margin: 0; }
+  .sheet { max-width: 860px; margin: 0 auto; padding: 48px 24px 80px; }
+  h1, h2, h3 { font-family: Charter, "Bitstream Charter", Cambria, Georgia, serif; text-wrap: balance; }
+  h1 { font-size: 2.2rem; line-height: 1.15; margin: 10px 0 8px; }
+  h2 { font-size: 1.4rem; margin: 0 0 6px; }
+  p { max-width: 68ch; margin: 0 0 14px; }
+  .eyebrow, .lbl { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .eyebrow b { color: var(--accent); font-weight: 600; }
+  .rule { border: 0; border-top: 1px solid var(--line); margin: 38px 0 30px; }
+  .memo { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 24px 26px; margin: 26px 0 6px; box-shadow: 0 1px 3px rgba(10,20,16,.05); }
+  .verdict { font-size: 1.15rem; font-weight: 650; margin: 6px 0 12px; font-family: Charter, Georgia, serif; }
+  .memo ul, .memo ol { margin: 0 0 6px; padding-left: 1.1em; }
+  .memo li { margin-bottom: 6px; max-width: 72ch; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+  @media (max-width: 680px) { .grid2 { grid-template-columns: 1fr; } }
+  .score-rows { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 2px; }
+  .srow { display: grid; grid-template-columns: 200px 1fr 74px; gap: 10px; align-items: center; font-size: .84rem; }
+  .srow .name { color: var(--muted); }
+  .track { background: var(--wash); border-radius: 4px; height: 12px; position: relative; overflow: hidden; }
+  .fill { position: absolute; inset: 0 auto 0 0; background: var(--data-1); border-radius: 4px 3px 3px 4px; }
+  .srow .val { font-family: ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; }
+  .srow .val small { color: var(--muted); font-weight: 400; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 14px 0 4px; }
+  .tile { background: var(--wash); border-radius: 8px; padding: 12px 14px; }
+  .tile .num { font-family: ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; font-size: 1.4rem; font-weight: 600; color: var(--accent-ink); line-height: 1.15; display: block; }
+  .tile .cap { font-size: .76rem; color: var(--muted); line-height: 1.35; }
+  figure { margin: 20px 0; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px 18px 10px; overflow-x: auto; }
+  figcaption { font-size: .82rem; color: var(--muted); margin-top: 8px; max-width: 70ch; }
+  svg text { font-family: ui-monospace, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
+  .axlbl { fill: var(--muted); font-size: 12px; }
+  .vallbl { fill: var(--ink); font-size: 12.5px; font-weight: 600; }
+  .note { fill: var(--muted); font-size: 11.5px; }
+  .grp { fill: var(--ink); font-size: 12.5px; font-weight: 700; }
+  .b1 { fill: var(--data-1); } .b2 { fill: var(--data-2); } .bm { fill: var(--data-mute); }
+  .bar:hover { filter: brightness(1.12); }
+  .tbl-wrap { overflow-x: auto; margin: 14px 0; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+  table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: .86rem; }
+  th, td { text-align: left; padding: 10px 14px; vertical-align: top; border-top: 1px solid var(--line); line-height: 1.45; }
+  thead th { border-top: 0; font-family: ui-monospace, Menlo, monospace; font-size: .7rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  td.num { font-family: ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; }
+  blockquote { border-left: 3px solid var(--data-2); margin: 16px 0; padding: 4px 0 4px 18px; color: var(--muted); font-size: .93rem; max-width: 70ch; }
+  .panel { border-radius: 10px; padding: 16px 18px; border: 1px solid var(--line); background: var(--card); }
+  .panel.flip { border-left: 4px solid var(--data-1); }
+  .panel h3 { font-family: system-ui, sans-serif; font-size: .95rem; margin: 0 0 6px; }
+  .panel p, .panel li { font-size: .88rem; }
+  .panel ol, .panel ul { padding-left: 1.2em; margin: 6px 0 0; }
+  .panel li { margin-bottom: 5px; }
+  .honesty { background: var(--warn-wash); border: 1px solid var(--line); border-radius: 10px; padding: 18px 22px; margin-top: 26px; }
+  .honesty p, .honesty li { font-size: .87rem; }
+  .honesty ul { padding-left: 1.1em; margin: 6px 0 0; }
+  .honesty li { margin-bottom: 5px; max-width: 75ch; }
+  .foot { color: var(--muted); font-size: .8rem; margin-top: 36px; max-width: 72ch; }
+</style>
+
+<div class="sheet">
+  <div class="eyebrow"><b>OpticReports</b> · Deal memo #2 · Analyzer v1 · 2026-08-08</div>
+  <h1>Quaise Energy — SPV, Series B first tranche</h1>
+  <p style="color:var(--muted); max-width:66ch">Millimeter-wave gyrotron drilling to 10–20 km for superhot-rock geothermal. Panel: 5 independent scorers + red team on a provenance-tagged public-source fact pack. Sponsor DocSend materials bot-blocked. <b>Entry valuation, fees, and share class: all undisclosed.</b></p>
+
+  <div class="memo">
+    <div class="lbl">Page-one synthesis</div>
+    <div class="verdict">Pass as pitched — two documents can flip it. A real, seriously-backed frontier company ($134M Series B first close; Prelude, JERA, Idemitsu, Mitsubishi, Nabors) — but the SPV fails on three independent grounds: the widest technology gap the rubric has scored, an entry that cannot be priced, and a headline claim that could not be verified as stated.</div>
+    <ul>
+      <li><b>Flip document #1 — the executed Google agreement.</b> The LP has spoken with the parties and affirms it exists; that retires fabrication. What the document must show: binding-offtake vs framework language, dollar commitments, conditions precedent, COD dates. Sector base rate: every hyperscaler "up to $X" framework on pre-commercial tech — including Google–Fervo, non-binding per Fervo's own SEC filings — has converted to <b>zero delivered MWh</b>. A named, binding $600M Google offtake would be sector-unique and re-scores traction immediately.</li>
+      <li><b>Flip document #2 — SPV entry price and class vs the July 7 institutional close.</b> The steelman is exact: rational only at/below the institutional Series B price, same or senior class, fees ≤2/20 — buying alongside JERA's diligence. Against a 4x spread in secondary marks ($5.31–$22.32/sh), the SPV can be priced anywhere.</li>
+      <li><b>Structural flags:</b> deadline + first-come-first-served + "last round before pre-IPO" urgency mechanics; "IPO in 2–4 years" for a pre-revenue company (the pre-revenue energy-listing reference class is dominated by &gt;80–90% drawdowns — Fervo IPO'd <em>with</em> revenue).</li>
+    </ul>
+    <div class="grid2">
+      <div>
+        <div class="lbl" style="margin-bottom:8px">Scorecard — 5 scorers, median</div>
+        <div class="score-rows">
+          <div class="srow"><span class="name">Market &amp; why-now (30)</span><span class="track"><span class="fill" style="width:80%"></span></span><span class="val">4</span></div>
+          <div class="srow"><span class="name">Team (30)</span><span class="track"><span class="fill" style="width:60%"></span></span><span class="val">3</span></div>
+          <div class="srow"><span class="name">Product &amp; moat (15)</span><span class="track"><span class="fill" style="width:40%"></span></span><span class="val">2</span></div>
+          <div class="srow"><span class="name">Traction (10)</span><span class="track"><span class="fill" style="width:40%"></span></span><span class="val">2 <small>IQR 1</small></span></div>
+          <div class="srow"><span class="name">Competition (10)</span><span class="track"><span class="fill" style="width:40%"></span></span><span class="val">2</span></div>
+          <div class="srow"><span class="name">Deal &amp; price (5)</span><span class="track"><span class="fill" style="width:20%"></span></span><span class="val">1</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="lbl" style="margin-bottom:8px">Probabilities (panel · red team)</div>
+        <div class="tiles" style="grid-template-columns:1fr">
+          <div class="tile"><span class="num">2.85 / 5</span><span class="cap">weighted total (DexMat scored 3.25 on the same rubric)</span></div>
+          <div class="tile"><span class="num">78% <span style="font-size:.85rem;color:var(--muted)">· RT 65% · base 65%</span></span><span class="cap">P(returns &lt; 1x net)</span></div>
+          <div class="tile"><span class="num">3% <span style="font-size:.85rem;color:var(--muted)">· RT 3% · base ~4%</span></span><span class="cap">P(returns ≥ 10x net) — below base rate, driven by unknown entry price</span></div>
+          <div class="tile"><span class="num">65%</span><span class="cap">P(raises next round ≤ 24 months) — the company itself is well-backed and capital-hungry</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="rule">
+
+  <h2>The load-bearing fact: the depth gap</h2>
+  <p>Every published demonstration is ≤118 m, 4-inch bore, vertical, dry granite. The commercial thesis requires 10–20 km, directional, through wet and varied formations — with casing, completions, logging tools, and cement rated for 400–500°C that <b>do not commercially exist</b>. The flagship Project Obsidian's first 50 MW uses conventional drilling: the money being raised does not validate the technology being sold.</p>
+  <figure>
+    <svg viewBox="0 0 660 190" width="660" role="img" aria-label="Demonstrated versus required drilling depth">
+      <text class="grp" x="16" y="22">Drilling depth: demonstrated vs required (meters)</text>
+      <g class="bar"><rect class="b1" x="190" y="38" width="5" height="20" rx="2"><title>Deepest millimeter-wave hole ever: 118 m (Sept 2025 public demo; missed its ~130 m target)</title></rect>
+        <text class="axlbl" x="182" y="53" text-anchor="end">Demonstrated</text><text class="vallbl" x="203" y="53">118 m</text></g>
+      <g class="bar"><rect class="bm" x="190" y="70" width="24" height="20" rx="3"><title>Company claim, July 2026: "approaching 1 km" — unverified</title></rect>
+        <text class="axlbl" x="182" y="85" text-anchor="end">Claimed</text><text class="vallbl" x="222" y="85">~1,000 m [CLAIMED]</text></g>
+      <g class="bar"><rect class="b2" x="190" y="102" width="238" height="20" rx="3"><title>Lower bound of commercial requirement: 10,000 m</title></rect>
+        <text class="axlbl" x="182" y="117" text-anchor="end">Required (min)</text><text class="vallbl" x="434" y="117">10,000 m</text></g>
+      <g class="bar"><rect class="b2" x="190" y="134" width="476" height="20" rx="3" opacity=".55"><title>Upper bound of commercial requirement: 20,000 m</title></rect>
+        <text class="axlbl" x="182" y="149" text-anchor="end">Required (max)</text><text class="vallbl" x="560" y="149" style="fill:#fff"> </text><text class="vallbl" x="590" y="149" text-anchor="end">20,000 m</text></g>
+      <text class="note" x="190" y="176">~100–200x scale-up, plus directional capability and</text>
+      <text class="note" x="190" y="190">400–500°C completions that don't exist yet.</text>
+    </svg>
+    <figcaption>Named independent skeptics on record: Roland Horne (Stanford): "burning holes in rocks is impressive. However, that's not the whole of what's involved in drilling." Jefferson Tester (Cornell): well completion at depth "may be something very, very far off." Timeline record: 2022 promised 500°C energy wells by 2026; reality is zero energy produced, first power now 2030 — via conventional drilling.</figcaption>
+  </figure>
+
+  <h2>Competitive position: last among the funded players</h2>
+  <figure>
+    <svg viewBox="0 0 660 230" width="660" role="img" aria-label="Contracted offtake by next-generation geothermal company">
+      <text class="grp" x="16" y="22">Contracted offtake, next-gen geothermal (MW)</text>
+      <g class="bar"><rect class="bm" x="190" y="36" width="380" height="18" rx="3"><title>Fervo: ~466 MW PPAs (SCE 320 + Google/NV 115 + Shell 31); ~100 MW online Oct 2026; IPO'd May 2026 with revenue</title></rect>
+        <text class="axlbl" x="182" y="50" text-anchor="end">Fervo</text><text class="vallbl" x="404" y="50" style="fill:#fff">~466 · IPO'd, revenue</text></g>
+      <g class="bar"><rect class="bm" x="190" y="60" width="122" height="18" rx="3"><title>Sage Geosystems: 150 MW Meta PPA; first commercial facility announced Jan 2026</title></rect>
+        <text class="axlbl" x="182" y="74" text-anchor="end">Sage</text><text class="vallbl" x="318" y="74">150 (Meta)</text></g>
+      <g class="bar"><rect class="bm" x="190" y="84" width="122" height="18" rx="3"><title>XGS Energy: 150 MW Meta PPA, New Mexico; first 5 MW ~2027</title></rect>
+        <text class="axlbl" x="182" y="98" text-anchor="end">XGS</text><text class="vallbl" x="318" y="98">150 (Meta)</text></g>
+      <g class="bar"><rect class="bm" x="190" y="108" width="16" height="18" rx="2"><title>Eavor: 20 MW NV Energy PPA; German project in construction</title></rect>
+        <text class="axlbl" x="182" y="122" text-anchor="end">Eavor</text><text class="vallbl" x="214" y="122">20</text></g>
+      <g class="bar"><rect class="b1" x="190" y="132" width="41" height="18" rx="3"><title>Quaise: 50 MW PPA, unnamed hyperscaler, contingent on Project Obsidian — whose first phase uses conventional drilling</title></rect>
+        <text class="axlbl" x="182" y="146" text-anchor="end">Quaise</text><text class="vallbl" x="239" y="146">50 · unnamed, contingent</text></g>
+      <text class="note" x="190" y="182">Mazama (pre-PPA, not shown) drills toward superhot at the</text>
+      <text class="note" x="190" y="198">SAME volcano as Obsidian — with conventional rigs.</text>
+      <text class="note" x="190" y="220">Sources: company/press disclosures 2024–2026 (fact pack).</text>
+    </svg>
+    <figcaption>The hyperscaler premium is real (data-center power demand +26–27% YoY; Meta signed two 150 MW PPAs with pre-commercial startups) — but it pays for delivery in the 2027–2030 window, which Quaise's full-technology timeline misses. Demand validates the sector; it does not differentiate Quaise.</figcaption>
+  </figure>
+
+  <h2>The Google claim, resolved into a decision tree</h2>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Branch</th><th>Status</th><th>Verdict impact</th></tr></thead>
+    <tbody>
+      <tr><td>(a) Real, unannounced, <b>binding</b> Google offtake at stated figures</td><td>LP affirms the agreement exists (verbal, 2026-08-08); binding nature unestablished</td><td>Would be sector-unique — no hyperscaler framework on pre-commercial tech has delivered a MWh. Traction re-scores 2 → 3–4; verdict re-runs. Proof: the executed document — counterparty page, binding language, conditions precedent, damages.</td></tr>
+      <tr><td>(b) Conflation of the unnamed 50 MW PPA + a Fervo-style non-binding framework</td><td>Most consistent with the public record (50 MW × ~$90/MWh × ~15 yrs ≈ $500–650M contingent lifetime revenue matches "$600M")</td><td>Deal remains a pass; sponsor's presentation of contingent/framework figures as committed offtake is a material-accuracy flag on everything else in the pitch.</td></tr>
+      <tr><td>(c) Fabrication</td><td><b>Retired</b> by the LP's direct conversation with the parties</td><td>—</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="panel flip">
+    <h3>The one demand that decides this deal (red team, verbatim)</h3>
+    <p>"Provide the executed Google agreement — counterparty page, binding-vs-framework language, dollar commitments, conditions precedent — and the SPV's entry price/share class versus the July 7 institutional close. One demand, two documents: the first tests the pitch's accuracy; the second tests whether even truth is investable. A sponsor who can produce neither has answered the question."</p>
+  </div>
+
+  <h2>Red-team outcome tree (net to SPV LPs)</h2>
+  <figure>
+    <svg viewBox="0 0 660 210" width="660" role="img" aria-label="Probability-weighted outcome tree">
+      <g class="bar"><rect class="b2" x="190" y="16" width="429" height="20" rx="3"><title>Below 1x: 65% — physics-frontier FOAK base rate × likely entry markup × story-stock IPO base rate</title></rect>
+        <text class="axlbl" x="182" y="31" text-anchor="end">&lt; 1x</text><text class="vallbl" x="625" y="31" text-anchor="end" style="fill:#fff">65%</text></g>
+      <g class="bar"><rect class="b1" x="190" y="50" width="145" height="20" rx="3"><title>1–3x: 22% — Obsidian's conventional phase works; story-stock IPO exits before full-tech proof</title></rect>
+        <text class="axlbl" x="182" y="65" text-anchor="end">1–3x</text><text class="vallbl" x="341" y="65">22%</text></g>
+      <g class="bar"><rect class="b1" x="190" y="84" width="66" height="20" rx="3"><title>3–10x: 10% — km-scale mm-wave demo by ~2028 re-rates Quaise as the only 10–20 km player</title></rect>
+        <text class="axlbl" x="182" y="99" text-anchor="end">3–10x</text><text class="vallbl" x="262" y="99">10%</text></g>
+      <g class="bar"><rect class="b1" x="190" y="118" width="20" height="20" rx="2"><title>≥10x: 3% — full tech works AND the SPV entered near institutional price; both currently unverifiable</title></rect>
+        <text class="axlbl" x="182" y="133" text-anchor="end">≥ 10x</text><text class="vallbl" x="216" y="133">3%</text></g>
+      <text class="note" x="190" y="170">"A 4x entry markup mechanically shifts ~half the 1–3x mass</text>
+      <text class="note" x="190" y="186">into &lt;1x. No verdict is defensible until price and class</text>
+      <text class="note" x="190" y="202">are disclosed." — red team</text>
+    </svg>
+    <figcaption>Both panel and red team put the ≥10x tail at or below the ~4% base rate — rare for a deep-tech deal, and driven by structure: an unknown entry against a 4x secondary-mark spread, unknown fees, and 20% carry stacked on a physics-frontier timeline.</figcaption>
+  </figure>
+
+  <div class="honesty">
+    <div class="lbl">Honesty box</div>
+    <ul>
+      <li>The panel scored before the LP's verbal affirmation of the Google agreement arrived; the affirmation retires fabrication but leaves binding-vs-framework — the value question — open. A verified binding offtake re-runs the panel.</li>
+      <li>No sponsor documents reached this run (DocSend bot-block); all sponsor figures are [SPONSOR]-tagged. The company-level facts ($134M close, 118 m record, timeline history) are independently sourced.</li>
+      <li>Quaise is inside the model's training-data horizon; every load-bearing fact was re-sourced 2026-08-08.</li>
+      <li>Panel dispersion: traction IQR 1 (two scorers took the failed-verification anchor to a 1); one market dissent at 3 (timing-window argument); all else IQR 0.</li>
+      <li>The company-vs-deal distinction matters here more than anywhere: this is a legitimate, well-backed company doing hard, worthwhile physics. The PASS is about the SPV's price opacity, structure, and claim inflation — not about whether superhot geothermal matters.</li>
+    </ul>
+  </div>
+
+  <p class="foot">Ledger entry #2, logged 2026-08-08: P(next round ≤24mo)=65% · P(&lt;1x net)=78% panel / 65% red team · P(≥10x net)=3% · predicted modal outcome: technology stalls at demo scale or FOAK overrun; conventional-phase Obsidian does not rescue SPV economics at unknown entry. Resolves 2028-08 / 2034+. Fact pack with per-claim provenance and sources: <code>venture-deal-analyzer/deals/quaise/factpack.md</code>.</p>
+</div>
