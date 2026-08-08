@@ -140,6 +140,52 @@ Ranked by evidence weight:
   (Bessemer institutionalized the confession; the lesson from their Airbnb
   pass: anchoring on price while underestimating growth slope).
 
+### 2.7 The non-founder dimensions: timing > market elasticity > moat trajectory > price
+
+- **Timing is the strongest under-weighted predictor.** Bill Gross's Idealab
+  analysis (200 companies): timing explained **42%** of success/failure
+  variance, ahead of team (32%), idea (28%), model (24%), funding (14%) —
+  directional, not precise (retrospective, subjectively coded). The
+  peer-reviewed anchor: GKLS *JFE* 2010 — serial-founder persistence is
+  substantially **market-timing skill** (industry-year choice), and vintage
+  effects are huge: **52% of 1983 computer startups IPO'd vs 18% of the 1985
+  cohort**. "Why now" must be a falsifiable claim: name the enabling
+  inflection, its date, and evidence the cost/behavior curve crossed.
+- **Market sizing: top-down TAM systematically rejects the biggest winners.**
+  Damodaran valued Uber at $5.9B off taxi-market TAM; Gurley's rebuttal
+  (price/convenience improvements expand the market) proved right by ~15x.
+  For market-creating companies, current TAM is a floor. Require bottom-up
+  builds; score **market elasticity** (does a 5–10x price/convenience
+  improvement expand usage?). Empirical pull signals at seed: Sean Ellis
+  PMF survey (≥40% "very disappointed"), organic acquisition share, cohort
+  retention flattening.
+- **Moats: score trajectory, not existence.** Helmer's 7 Powers stage
+  mapping: at seed only **counter-positioning** (is the incumbent's rational
+  response self-harming?) and **cornered resource** are assessable;
+  scale/network/switching powers are built later — ask for the credible
+  *sequence*. NFX: ~70% of digital value creation since 1994 came from the
+  ~35% of $1B+ companies with core network effects (practitioner study,
+  thesis-driven fund). Switching costs price in: SaaS NRR >120% → ~9.3x
+  EV/rev vs ~3.1x below 100%.
+- **Competition: crowded ≠ disqualified.** Pioneers fail ~47% of the time
+  and hold ~10% long-run share (Golder & Tellis); Google was ~the 12th
+  search engine. ~74% of incumbents respond only **after year two** of a
+  disruption. Module maps three rings (direct, adjacent, incumbent
+  response), scores counter-positioning, response lag vs the ~2-year base
+  rate, and whether the wedge compounds within that window.
+- **Entry price at seed is a second-order return driver.** Othman/AngelList
+  2023: across a 5x valuation spread in seed deals, **no difference in
+  markup rates or multiples by entry price**. Treat seed valuation mainly as
+  an ownership/dilution input and round-quality signal; explicit
+  entry-multiple discipline switches on at Series B+ where distributions
+  tighten. (Tension with Bessemer's Airbnb anti-portfolio lesson: don't
+  anchor on price when the growth slope is extreme.)
+- **Portfolio construction context** (informs how the analyzer scores, even
+  if it doesn't size checks): power-law math favors 50–150+ seed positions;
+  follow-on reserves are a mean-increasing, variance-increasing bet
+  (Othman: never-follow-on wins 54% of simulated runs on median,
+  always-follow-on wins on mean); challenge reserve assumptions >30–50%.
+
 ## 3. Architecture
 
 Pipeline of specialized agents; deterministic orchestration; every stage
@@ -225,18 +271,73 @@ before discussion. The Michigan result (§2.2) pressures even this split at
 the screening stage; the forecast log will tell us where the line belongs
 for our book.
 
-## 5. Build roadmap
+## 5. Proving the analyzer works — the eval loop
 
-- **v1 (weeks):** memo generator — intake w/ provenance tags, shared spine,
-  structured founder rubric, red-team + pre-mortem, page-1 synthesis,
-  scorecard with fixed weights. Manual sector selection.
+**Casey's question: is running the same deal over and over a smart
+self-improvement strategy?** Half of it is. The literature splits it cleanly:
+
+- **Re-running the same deal measures *reliability*, not accuracy.** LLM
+  judges are measurably inconsistent on identical inputs ("Rating Roulette,"
+  2025; multi-model replications), so a reliability harness is genuinely
+  needed: **7–10 runs per deal, report median + IQR, alert when the spread
+  exceeds 1 rubric point** (wide spread usually means the rubric, not the
+  deal, is ambiguous). But a system can be perfectly repeatable and
+  consistently wrong — the documented "consistency–bias paradox"
+  ("Reliability without Validity," 2026): high test-retest reliability
+  coexists with severe systematic bias. Same-deal repetition is a **quality
+  gate, never a training signal**.
+- **Accuracy requires outcome-labeled ground truth.** Three components:
+  1. **Golden set**: 150–300 historical deals from OUR pipeline — invested
+     AND passed, including dead companies (survivorship control) — labeled
+     with staged proxies: raised-next-round-within-24mo (~30–50% base rate,
+     resolves fast, usable power at n≈100–300), alive-at-3y, multiple where
+     resolved. **Anonymize/entity-neuter everything**: LLMs have memorized
+     famous outcomes (lookahead bias is detectable and pervasive — arXiv
+     2512.23847), so Bessemer's public memos are contaminated eval data
+     unless stripped, and even then imperfectly. Prefer post-model-cutoff
+     deals as they accumulate.
+  2. **Splits**: ~40% dev (iterate prompts freely), ~40% held-out test
+     (touched only at release gates), ~20% temporal holdout (most recent
+     resolved cohort, refreshed quarterly). Iterating against one fixed set
+     is ordinary overfitting — the prompt memorizes the set's quirks.
+  3. **Prospective forecast ledger** (the real engine): every live deal gets
+     logged probabilities (P(next round ≤24mo), P(<1x), P(≥10x)) at decision
+     time; resolve and score with **Brier scores + pairwise rank correlation
+     per prompt/model version**. Contamination-proof by construction;
+     compounds forever. Pairwise "which of these two outperforms?" scoring
+     extracts far more signal than absolute labels (the Michigan tournament
+     design — where Gemini 2.5 Pro hit 0.74 rank correlation vs 0.04–0.45
+     for trained humans, on post-cutoff ventures).
+- **Bias battery on every prompt change**: position-swap test, verbosity
+  test (same deal, padded vs terse memo), sycophancy test (same deal framed
+  bullish/bearish/neutral by the "partner" — RLHF sycophancy is systematic,
+  Sharma et al. 2023). Pass = deltas within the noise band from the
+  reliability harness.
+- **Calibration**: verbalized probabilities beat token logprobs and improve
+  >50% with prompting + scaling ("Just Ask for Calibration," EMNLP 2023),
+  but stay overconfident by default — hence the Brier ledger.
+
+**Iteration rule:** change prompts against dev; promote only if held-out
+pairwise accuracy and Brier improve; never iterate against the temporal
+holdout or the live ledger.
+
+## 6. Build roadmap
+
+- **v1 (build around a real example deal):** memo generator — intake w/
+  provenance tags, shared spine, structured founder rubric, red-team +
+  pre-mortem, page-1 synthesis, scorecard with fixed weights, **reliability
+  harness (7–10 runs, median + IQR gate)**. Manual sector selection. The
+  forecast ledger starts at deal #1 — it's a log file, not infrastructure.
 - **v2:** sector overlays with benchmark tables; competition agent w/ live
-  search; deal/valuation module with ownership + reserves math.
-- **v3:** forecast log + calibration dashboard; anti-portfolio tracker;
-  weight tuning from accumulated outcomes (expect years, not months, for
-  significance — say so in every report until then).
+  search; deal/valuation module with ownership + reserves math; bias
+  battery in CI for prompt changes.
+- **v3:** golden set from our historical pipeline (anonymized, split
+  dev/test/temporal); calibration dashboard (Brier by sector, by score
+  band); anti-portfolio tracker; weight tuning from accumulated outcomes
+  (expect years, not months, for significance — say so in every report
+  until then).
 
-## 6. Honesty box
+## 7. Honesty box
 
 - Almost all founder-personality evidence is **correlational**, on
   VC-visible survivor samples. The classifier accuracies (82.5%) do not
@@ -251,3 +352,9 @@ for our book.
   system improves judgment and error rates; it does not manufacture access.
 - Nothing here is modeled on our own book yet — the forecast log (§3 stage
   7) exists precisely because none of these priors are proven on our data.
+- Any backtest on famous historical deals is contaminated by LLM training
+  data (the model already knows Airbnb won). Backtest claims from this
+  system are only valid on anonymized or post-cutoff deals.
+- The Bill Gross 42%-timing figure is retrospective and subjectively coded;
+  treat as directional. The NFX 70% network-effects figure comes from a
+  network-effects-thesis fund.

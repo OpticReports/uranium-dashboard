@@ -1,0 +1,253 @@
+<title>The Evidence-Based Deal Analyzer</title>
+<style>
+  :root {
+    --paper: #F7F8F7; --card: #FFFFFF; --ink: #1A2422; --muted: #56675F;
+    --line: #DCE3DF; --accent: #0E7E53; --accent-ink: #0B6A46;
+    --data-1: #0E7E53; --data-2: #A85F00; --data-mute: #ADBCB4;
+    --wash: #EEF3F0; --warn-wash: #F6EEE2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #131A18; --card: #1A2320; --ink: #E4EBE7; --muted: #92A29A;
+      --line: #2A3733; --accent: #45C69E; --accent-ink: #5ED2AC;
+      --data-1: #279B79; --data-2: #C56F33; --data-mute: #46554F;
+      --wash: #1F2A26; --warn-wash: #2A2119;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #131A18; --card: #1A2320; --ink: #E4EBE7; --muted: #92A29A;
+    --line: #2A3733; --accent: #45C69E; --accent-ink: #5ED2AC;
+    --data-1: #279B79; --data-2: #C56F33; --data-mute: #46554F;
+    --wash: #1F2A26; --warn-wash: #2A2119;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--paper); color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 16px; line-height: 1.6; margin: 0;
+  }
+  .sheet { max-width: 860px; margin: 0 auto; padding: 48px 24px 80px; }
+  .display, h1, h2, h3 { font-family: Charter, "Bitstream Charter", Cambria, Georgia, serif; text-wrap: balance; }
+  h1 { font-size: 2.4rem; line-height: 1.15; margin: 10px 0 12px; font-weight: 700; }
+  h2 { font-size: 1.5rem; margin: 0 0 6px; }
+  h3 { font-size: 1.12rem; margin: 0 0 4px; }
+  p { max-width: 68ch; margin: 0 0 14px; }
+  .eyebrow, .lbl {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: .72rem; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--muted);
+  }
+  .eyebrow b { color: var(--accent); font-weight: 600; }
+  .dek { color: var(--muted); font-size: 1.08rem; max-width: 62ch; }
+  .rule { border: 0; border-top: 1px solid var(--line); margin: 40px 0 32px; }
+  section { margin-top: 8px; }
+  .sechead { display: flex; flex-direction: column; gap: 2px; margin-bottom: 14px; }
+
+  .memo {
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 24px 26px; margin: 30px 0 6px;
+    box-shadow: 0 1px 3px rgba(10,20,16,.05);
+  }
+  .memo .verdict { font-size: 1.15rem; font-weight: 650; margin: 4px 0 10px; font-family: Charter, Georgia, serif; }
+  .memo ul { margin: 0 0 6px; padding-left: 1.1em; }
+  .memo li { margin-bottom: 6px; max-width: 72ch; }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 18px 0 4px; }
+  .tile { background: var(--wash); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; }
+  .tile .num { font-family: ui-monospace, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; font-size: 1.45rem; font-weight: 600; color: var(--accent-ink); line-height: 1.1; }
+  .tile .cap { font-size: .78rem; color: var(--muted); line-height: 1.35; }
+
+  figure { margin: 22px 0; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px 18px 10px; overflow-x: auto; }
+  figcaption { font-size: .82rem; color: var(--muted); margin-top: 8px; max-width: 70ch; }
+  svg text { font-family: ui-monospace, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
+  .axlbl { fill: var(--muted); font-size: 12px; }
+  .vallbl { fill: var(--ink); font-size: 12.5px; font-weight: 600; }
+  .note { fill: var(--muted); font-size: 11.5px; }
+  .b1 { fill: var(--data-1); } .b2 { fill: var(--data-2); } .bm { fill: var(--data-mute); }
+  .bar:hover { filter: brightness(1.15); }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: .8rem; color: var(--muted); margin: 6px 2px 0; }
+  .legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+
+  .flow { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; margin: 18px 0; }
+  .stage { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; flex: 1 1 180px; min-width: 172px; }
+  .stage .n { font-family: ui-monospace, Menlo, monospace; font-size: .7rem; color: var(--accent); letter-spacing: .1em; }
+  .stage b { display: block; font-size: .92rem; margin: 2px 0 3px; }
+  .stage span { font-size: .8rem; color: var(--muted); line-height: 1.4; display: block; }
+
+  .twocol { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 18px 0; }
+  @media (max-width: 640px) { .twocol { grid-template-columns: 1fr; } }
+  .panel { border-radius: 10px; padding: 16px 18px; border: 1px solid var(--line); background: var(--card); }
+  .panel.good { border-left: 4px solid var(--data-1); }
+  .panel.warn { border-left: 4px solid var(--data-2); }
+  .panel h3 { font-family: system-ui, sans-serif; font-size: .95rem; }
+  .panel p, .panel li { font-size: .88rem; }
+  .panel ul { padding-left: 1.1em; margin: 8px 0 0; }
+  .panel li { margin-bottom: 5px; }
+
+  .tbl-wrap { overflow-x: auto; margin: 16px 0; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+  table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: .86rem; }
+  th, td { text-align: left; padding: 10px 14px; vertical-align: top; border-top: 1px solid var(--line); line-height: 1.45; }
+  thead th { border-top: 0; font-family: ui-monospace, Menlo, monospace; font-size: .7rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  td:first-child { font-weight: 600; white-space: nowrap; }
+
+  .honesty { background: var(--warn-wash); border: 1px solid var(--line); border-radius: 10px; padding: 18px 22px; margin-top: 26px; }
+  .honesty p, .honesty li { font-size: .88rem; }
+  .honesty ul { padding-left: 1.1em; margin: 6px 0 0; }
+  .honesty li { margin-bottom: 5px; max-width: 75ch; }
+  .foot { color: var(--muted); font-size: .8rem; margin-top: 40px; max-width: 72ch; }
+  a { color: var(--accent-ink); }
+</style>
+
+<div class="sheet">
+  <div class="eyebrow"><b>OpticReports</b> · Research brief · 2026-08-08</div>
+  <h1>The Evidence-Based Deal Analyzer</h1>
+  <p class="dek">What sixty years of decision science, the VC returns literature, and the 2025–26 LLM-evaluation research say about building a deal-analysis system that is fast, sector-flexible, and provably improving.</p>
+
+  <!-- Page-1 synthesis, in the format the system itself would produce -->
+  <div class="memo">
+    <div class="lbl">Page-one synthesis — the format every memo will open with</div>
+    <div class="verdict">Build it — as a disqualifier of predictably-bad deals and a detector of outlier upside, wrapped in a forecast ledger that makes the methodology provable on our own book.</div>
+    <ul>
+      <li><b>The power law dictates the design.</b> ~65% of deals return &lt;1x and ~6% of deals produce ~60% of returns. At seed, a missed winner costs more than any number of small losses — so the analyzer's two verdicts are a kill-list score and an outlier thesis, never a single "rating."</li>
+      <li><b>Structure is the biggest free win.</b> Mechanical combination of structured scores beats holistic gut across 136 studies; structured interviews predict at r≈.42 vs r≈.19 for the unstructured meetings VCs actually run.</li>
+      <li><b>Self-improvement works, but not by re-running one deal.</b> Repeat runs measure consistency, not correctness — a judge can be perfectly repeatable and consistently wrong. The engine is a golden set of resolved deals plus a prospective probability ledger scored over time.</li>
+    </ul>
+    <div class="tiles">
+      <div class="tile"><span class="num">42%</span><span class="cap">of success variance attributed to timing (Idealab, 200 cos — directional)</span></div>
+      <div class="tile"><span class="num">6% → 60%</span><span class="cap">of deals produce the majority of returns (Horsley Bridge, ~7,000 deals)</span></div>
+      <div class="tile"><span class="num">+9pp</span><span class="cap">success rate for founders with a prior successful exit (JFE 2010)</span></div>
+      <div class="tile"><span class="num">~50%</span><span class="cap">of follow-on investments were "predictably bad" per ML on info known at the time (Davenport 2022)</span></div>
+      <div class="tile"><span class="num">0.74 vs 0.45</span><span class="cap">rank correlation with outcomes: best LLM vs best humans, prospective tournament (Michigan 2026)</span></div>
+    </div>
+  </div>
+
+  <hr class="rule">
+
+  <section>
+    <div class="sechead"><span class="lbl">01 · The shape of the problem</span><h2>Venture returns are a power law, so analysis errors are asymmetric</h2></div>
+    <p>Across 21,640 US financings (Correlation Ventures, 2004–2013), most deals lose money and virtually all the return lives in a thin tail. The best funds don't have fewer misses — Horsley Bridge data shows top funds hold <em>more</em> sub-1x deals than average funds, and win on bigger hits.</p>
+    <figure>
+      <svg viewBox="0 0 660 208" width="660" role="img" aria-label="Distribution of venture outcomes by return multiple">
+        <g class="bar"><rect class="bm" x="112" y="10" width="437" height="20" rx="3"><title>&lt;1x: 65% of deals</title></rect>
+          <text class="axlbl" x="104" y="25" text-anchor="end">&lt; 1x</text><text class="vallbl" x="555" y="25">65%</text></g>
+        <g class="bar"><rect class="bm" x="112" y="44" width="168" height="20" rx="3"><title>1–5x: 25% of deals</title></rect>
+          <text class="axlbl" x="104" y="59" text-anchor="end">1–5x</text><text class="vallbl" x="286" y="59">25%</text></g>
+        <g class="bar"><rect class="b1" x="112" y="78" width="40" height="20" rx="3"><title>5–10x: ~6% of deals</title></rect>
+          <text class="axlbl" x="104" y="93" text-anchor="end">5–10x</text><text class="vallbl" x="158" y="93">5.9%</text></g>
+        <g class="bar"><rect class="b1" x="112" y="112" width="24" height="20" rx="3"><title>10–50x: ~3.6% of deals</title></rect>
+          <text class="axlbl" x="104" y="127" text-anchor="end">10–50x</text><text class="vallbl" x="142" y="127">3.6%</text></g>
+        <g class="bar"><rect class="b1" x="112" y="146" width="4" height="20" rx="2"><title>≥50x: 0.4% of deals</title></rect>
+          <text class="axlbl" x="104" y="161" text-anchor="end">≥ 50x</text><text class="vallbl" x="122" y="161">0.4%</text></g>
+        <text class="note" x="180" y="128">← the ~4% that pay for the fund</text>
+        <text class="note" x="112" y="196">Share of 21,640 US financings by realized multiple · Correlation Ventures 2004–2013</text>
+      </svg>
+      <figcaption>Design consequence: tune the system to kill <em>predictably bad</em> deals and to articulate the evidenced path to ≥10x — never to reject a live outlier thesis over fixable flaws. Rejecting a possible winner is the costliest error class (seed power-law α&lt;2 → effectively unbounded miss cost, AngelList/Othman).</figcaption>
+    </figure>
+  </section>
+
+  <hr class="rule">
+
+  <section>
+    <div class="sechead"><span class="lbl">02 · The judgment layer</span><h2>Structure beats gut — and the industry runs on gut</h2></div>
+    <p>The most robust finding in all of selection science: mechanically combining structured scores outperforms holistic expert judgment (Meehl/Grove, 136-study meta-analysis; clinical judgment wins in only 6–16% of studies). Yet the modal VC founder meeting is an unstructured conversation — close to the worst validated assessment method.</p>
+    <figure>
+      <svg viewBox="0 0 660 148" width="660" role="img" aria-label="Predictive validity of assessment methods">
+        <g class="bar"><rect class="b1" x="216" y="12" width="308" height="20" rx="3"><title>Structured interview: r ≈ 0.42 (Sackett et al. 2022)</title></rect>
+          <text class="axlbl" x="208" y="27" text-anchor="end">Structured interview</text><text class="vallbl" x="530" y="27">r ≈ .42</text></g>
+        <g class="bar"><rect class="b2" x="216" y="46" width="139" height="20" rx="3"><title>Unstructured interview: r ≈ 0.19 (Sackett et al. 2022)</title></rect>
+          <text class="axlbl" x="208" y="61" text-anchor="end">Unstructured interview</text><text class="vallbl" x="361" y="61">r ≈ .19</text></g>
+        <text class="note" x="365" y="61" dx="52">← the typical founder meeting</text>
+        <text class="note" x="216" y="100">Predictive validity of job performance, Sackett et al. 2022 re-analysis;</text>
+        <text class="note" x="216" y="116">structured methods rank top of ALL selection instruments.</text>
+        <text class="note" x="216" y="138">Mechanical score combination adds ~10% over holistic aggregation (Grove et al. 2000).</text>
+      </svg>
+      <figcaption>Design consequence: fixed question sets, anchored 1–5 rubrics, pre-committed weights, partner scores entered independently <em>before</em> discussion, mechanically combined. The system enforces the structure; humans supply judgment inside it.</figcaption>
+    </figure>
+    <p><b>And weight the horse, not just the jockey.</b> VCs say team is everything (47% rank it #1; 96% attribute success to it). Outcome data disagrees: from business plan to IPO, business lines almost never change while management usually does (Kaplan-Sensoy-Strömberg). The scorecard gives market/business parity with team — and the founder module scores what the evidence supports: execution track record (+9pp for a prior exit), team trait diversity, equity-split process, and conflict red flags (65% of high-potential failures are people problems) — not charisma, not youth (mean age of the fastest-growing 0.1% of founders: 45), and not grit scales (a jangle-fallacy rebrand of conscientiousness).</p>
+  </section>
+
+  <hr class="rule">
+
+  <section>
+    <div class="sechead"><span class="lbl">03 · The blueprint</span><h2>One spine, sector overlays, an adversarial layer</h2></div>
+    <div class="flow">
+      <div class="stage"><span class="n">STAGE 1</span><b>Intake &amp; grounding</b><span>Every number provenance-tagged: founder-claimed / verified / estimated. Kills hallucinated quant and deck-narrative garbage-in.</span></div>
+      <div class="stage"><span class="n">STAGE 2</span><b>Sector router</b><span>Shared memo spine + sector overlay: key questions, benchmarks, kill criteria.</span></div>
+      <div class="stage"><span class="n">STAGE 3</span><b>Parallel analysts</b><span>Market &amp; why-now · competition (3 rings) · product · traction vs benchmarks · founder rubric · deal &amp; ownership math.</span></div>
+      <div class="stage"><span class="n">STAGE 4</span><b>Adversarial layer</b><span>Red-team agent paid to kill the deal · pre-mortem · "what would have to be true," each condition graded evidenced / plausible / heroic.</span></div>
+      <div class="stage"><span class="n">STAGE 5</span><b>Mechanical synthesis</b><span>Pre-committed weights · base-rate-anchored P(&lt;1x), P(≥10x) · kill-list score + outlier thesis strength.</span></div>
+      <div class="stage"><span class="n">STAGE 6</span><b>Tiered memo</b><span>Page-1 synthesis (like the top of this report) → full depth sections.</span></div>
+      <div class="stage"><span class="n">STAGE 7</span><b>Forecast ledger</b><span>Every memo logs probabilities; passes log reasons. Scored against outcomes forever.</span></div>
+    </div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Sector</th><th>Organizing question</th><th>Benchmarks &amp; gates</th></tr></thead>
+      <tbody>
+        <tr><td>Robotics / hardware</td><td>Is technical risk retired before market risk is bought?</td><td>TRL 7–8 + paid pilots before conviction checks · BOM/COGS glide path EVT→NOAK · services-drag check · RaaS vs capex economics</td></tr>
+        <tr><td>Materials / deep tech</td><td>Does the process survive 1000× volume (lab-to-fab)?</td><td>TRL staging · composition-of-matter vs process IP · offtake/paid pilots as demand proof · years-to-revenue vs fund life</td></tr>
+        <tr><td>Consumer</td><td>Do cohort curves flatten by month 6–12, or decline forever?</td><td>LTV:CAC ≥3:1 (marketplaces 4x+ both sides) · organic vs paid-treadmill mix · whale concentration · reactivation ("smile") curves</td></tr>
+        <tr><td>SaaS</td><td>Is growth efficient?</td><td>Burn multiple 1.0–1.5x at A (&lt;1x elite) · NDR &gt;100% floor, 120%+ elite · magic number &gt;0.75 · Rule of 40</td></tr>
+        <tr><td>Bio / climate</td><td>Does each tranche buy a killable experiment?</td><td>Milestone-gated tranching on regulatory value-inflection points · syndicate reserves to next gate</td></tr>
+      </tbody>
+    </table></div>
+    <p>Cross-sector, the non-founder evidence hierarchy is: <b>timing</b> (industry-vintage effects are enormous: 52% of 1983-founded computer startups IPO'd vs 18% of the 1985 cohort) &gt; <b>market elasticity</b> (top-down TAM rejected Uber by ~15x; require bottom-up builds) &gt; <b>moat trajectory</b> (at seed only counter-positioning and cornered resources are assessable — score the sequence to scale/network/switching power, not today's moat) &gt; <b>entry price</b> (across a 5x seed valuation spread, no difference in outcomes — price is an ownership input at seed, a first-order driver only at B+).</p>
+  </section>
+
+  <hr class="rule">
+
+  <section>
+    <div class="sechead"><span class="lbl">04 · The self-improvement loop</span><h2>Re-running one deal is a gate, not an engine</h2></div>
+    <p>The question on the table: is running the analyzer on the same deal over and over a smart self-improvement strategy? The literature splits it exactly in half:</p>
+    <div class="twocol">
+      <div class="panel good">
+        <h3>✓ As a reliability gate — yes, mandatory</h3>
+        <ul>
+          <li>LLM judges give different scores to identical inputs across runs ("Rating Roulette," 2025).</li>
+          <li>Run each deal <b>7–10 times</b>, report <b>median + IQR</b>; alert when spread exceeds one rubric point.</li>
+          <li>A wide spread usually indicts the rubric, not the deal — that's the useful signal.</li>
+        </ul>
+      </div>
+      <div class="panel warn">
+        <h3>✗ As a training signal — no, provably insufficient</h3>
+        <ul>
+          <li>Consistency ≠ accuracy: judges with <em>high</em> test-retest reliability still carry severe systematic bias — repeatable and wrong ("Reliability without Validity," 2026).</li>
+          <li>Agreement with itself contains zero information about outcomes.</li>
+          <li>Sycophancy is systematic: framed bullish, the model drifts bullish — and re-running amplifies the same bias 10 times.</li>
+        </ul>
+      </div>
+    </div>
+    <p>The actual engine has three parts, in increasing order of value:</p>
+    <ul style="max-width:72ch">
+      <li><b>Golden set</b> — 150–300 resolved deals from our own pipeline (invested <em>and</em> passed, including dead companies), anonymized so the model can't recognize famous outcomes from training data, labeled with fast proxies (next round ≤24mo, alive at 3y). Split dev / held-out / temporal holdout; iterate prompts only against dev.</li>
+      <li><b>Bias battery</b> on every prompt change — position-swap, verbosity (padded vs terse memo), sycophancy (bullish/bearish/neutral framing); pass = deltas inside the reliability noise band.</li>
+      <li><b>Prospective forecast ledger</b> — every live deal logs P(next round ≤24mo), P(&lt;1x), P(≥10x) at decision time; scored with Brier + pairwise rank correlation per prompt version. Contamination-proof by construction and compounds forever. This is where "proven methodology" stops being a claim and becomes a chart.</li>
+    </ul>
+  </section>
+
+  <hr class="rule">
+
+  <section>
+    <div class="sechead"><span class="lbl">05 · Roadmap</span><h2>Build v1 around a real deal</h2></div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Version</th><th>Scope</th></tr></thead>
+      <tbody>
+        <tr><td>v1 — weeks</td><td>Memo generator built around one real example company: provenance-tagged intake, shared spine, structured founder rubric, red-team + pre-mortem, page-1 synthesis, fixed-weight scorecard, reliability harness. Forecast ledger starts at deal #1 — it's a log file, not infrastructure.</td></tr>
+        <tr><td>v2</td><td>Sector overlays with live benchmark tables · competition agent with live search · ownership/reserves math · bias battery in CI.</td></tr>
+        <tr><td>v3</td><td>Golden set from our historical pipeline · calibration dashboard (Brier by sector, by score band) · anti-portfolio tracker · outcome-driven weight tuning (years to significance — every report says so until then).</td></tr>
+      </tbody>
+    </table></div>
+    <p><b>Needed to start v1:</b> one example company (deck + any data-room material), plus — when convenient — a rough list of historical deals seen (invested and passed) with what happened to them, which seeds the golden set.</p>
+
+    <div class="honesty">
+      <div class="lbl">Honesty box</div>
+      <ul>
+        <li>Founder-personality evidence is correlational, on VC-visible survivor samples; classifier accuracies don't transfer to our deal flow at face value.</li>
+        <li>Rebel Fund's backtested IRR and ghSMART's hit rates are self-published/vendor-reported — treated as existence proofs only.</li>
+        <li>LLM-vs-human results cover <em>screening</em>, not allocation or check sizing; datasets skew toward observable signals.</li>
+        <li>Any backtest on famous deals is contaminated — the model already knows Airbnb won. Valid backtests need anonymized or post-cutoff deals.</li>
+        <li>VC return persistence is substantially deal <em>access</em>, not judgment (early lucky wins compound into better deal flow). This system improves judgment and error rates; it does not manufacture access.</li>
+        <li>The 42%-timing figure is retrospective and subjectively coded; the NFX 70% network-effects figure comes from a network-effects-thesis fund. Directional, both.</li>
+      </ul>
+    </div>
+    <p class="foot">Sources: Gompers, Gornall, Kaplan &amp; Strebulaev (JFE 2020) · Kaplan, Sensoy &amp; Strömberg (JF 2009) · Gompers, Kovner, Lerner &amp; Scharfstein (JFE 2010) · Korteweg &amp; Sorensen (JFE 2017) · Grove et al. (2000) · Schmidt &amp; Hunter (1998) / Sackett et al. (2022) · Davenport (SSRN 2022) · Kaplan, Klebanov &amp; Sorensen (JF 2012) · McCarthy et al. (Sci. Reports 2023) · Azoulay et al. (AER: Insights 2020) · Wasserman, <i>Founder's Dilemmas</i> · Hellmann &amp; Wasserman (Mgmt Sci 2017) · Correlation Ventures · Horsley Bridge via a16z · Othman/AngelList (2019, 2023) · Nanda, Samila &amp; Sorenson (JFE 2020) · Mellers et al. (Psych Sci 2014) · Helmer, <i>7 Powers</i> · NFX (2017) · Golder &amp; Tellis (JMR 1993) · Bessemer memo archive &amp; anti-portfolio · Sequoia YouTube memo (2005) · MT-Bench (2023) · Sharma et al. (2023) · Wang et al. (2022) · Anthropic "Adding Error Bars to Evals" (2024) · Michigan/Ross prospective tournament (2026). Full citations with links in <code>venture-deal-analyzer/DESIGN.md</code>.</p>
+  </section>
+</div>
