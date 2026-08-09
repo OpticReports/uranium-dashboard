@@ -1,0 +1,638 @@
+<title>Quaise SPV — Red Team rev 3</title>
+<style>
+  :root {
+    color-scheme: light;
+    --paper:#f3f4f7; --surface:#fbfbfc; --surface-2:#eaecf1;
+    --ink:#13151b; --ink-2:#525865; --ink-3:#878e9c; --rule:#dcdee5;
+    --accent:#2a78d6; --crit:#a92f2c; --crit-mark:#d64a45; --crit-soft:#f6e6e4;
+    --series-1:#2a78d6; --series-2:#eb6834; --series-3:#1baf7a;
+    --serif: Charter, "Bitstream Charter", "Iowan Old Style", "Source Serif Pro", Georgia, serif;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --paper:#101216; --surface:#181a1f; --surface-2:#212530;
+      --ink:#eef0f4; --ink-2:#a5abb8; --ink-3:#737a88; --rule:#282c34;
+      --accent:#5b9ceb; --crit:#e79490; --crit-mark:#d95a55; --crit-soft:#2c1b1a;
+      --series-1:#3987e5; --series-2:#d95926; --series-3:#199e70;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --paper:#101216; --surface:#181a1f; --surface-2:#212530;
+    --ink:#eef0f4; --ink-2:#a5abb8; --ink-3:#737a88; --rule:#282c34;
+    --accent:#5b9ceb; --crit:#e79490; --crit-mark:#d95a55; --crit-soft:#2c1b1a;
+    --series-1:#3987e5; --series-2:#d95926; --series-3:#199e70;
+  }
+
+  body { background:var(--paper); color:var(--ink); font-family:var(--serif);
+         font-size:17px; line-height:1.62; margin:0; padding:0 20px 96px;
+         -webkit-font-smoothing:antialiased; }
+  .wrap { max-width:860px; margin:0 auto; }
+  .prose { max-width:65ch; }
+  h1,h2,h3 { text-wrap:balance; margin:0; font-weight:600; }
+  h1 { font-size:2.05rem; line-height:1.16; letter-spacing:-0.015em; }
+  h2 { font-size:1.28rem; letter-spacing:-0.008em; margin-top:0; }
+  p { margin:0 0 1em; }
+  a { color:var(--accent); }
+  strong { font-weight:650; }
+  .lbl { font-family:var(--mono); font-size:.685rem; letter-spacing:.13em;
+         text-transform:uppercase; color:var(--ink-3); }
+  .num { font-variant-numeric:tabular-nums; }
+
+  header { padding:44px 0 26px; border-bottom:1px solid var(--rule); }
+  header .lbl { display:block; margin-bottom:14px; }
+  .dek { color:var(--ink-2); font-size:1.08rem; max-width:60ch; margin-top:14px; }
+
+  .verdict { display:flex; gap:14px; align-items:flex-start; margin:26px 0 0;
+             background:var(--crit-soft); border-left:3px solid var(--crit-mark);
+             padding:15px 18px; border-radius:0 5px 5px 0; }
+  .verdict .tag { font-family:var(--mono); font-size:.7rem; letter-spacing:.13em;
+                  text-transform:uppercase; color:var(--crit); font-weight:700;
+                  white-space:nowrap; padding-top:.28em; }
+  .verdict p { margin:0; font-size:.96rem; color:var(--ink); }
+
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+           gap:1px; background:var(--rule); border:1px solid var(--rule);
+           border-radius:6px; overflow:hidden; margin:30px 0 4px; }
+  .stat { background:var(--surface); padding:14px 16px 15px; }
+  .stat .k { display:block; margin-bottom:7px; }
+  .stat .v { font-family:var(--mono); font-size:1.62rem; font-weight:600;
+             letter-spacing:-.02em; font-variant-numeric:tabular-nums; line-height:1.05; }
+  .stat .n { display:block; font-size:.82rem; color:var(--ink-2); margin-top:5px; line-height:1.4; }
+  .stat.bad .v { color:var(--crit); }
+
+  section { margin-top:52px; }
+  section > .lbl { display:block; margin-bottom:9px; }
+
+  figure { margin:26px 0 0; background:var(--surface); border:1px solid var(--rule);
+           border-radius:7px; padding:20px 20px 16px; }
+  figcaption { font-size:.88rem; color:var(--ink-2); margin-top:12px;
+               padding-top:12px; border-top:1px solid var(--rule); max-width:72ch; }
+  figcaption b { color:var(--ink); font-weight:650; }
+  .figtitle { font-weight:650; font-size:1.02rem; margin-bottom:2px; }
+  .figsub { font-size:.85rem; color:var(--ink-3); margin-bottom:14px; }
+  .scroller { overflow-x:auto; }
+  svg { display:block; width:100%; height:auto; min-width:520px; touch-action:pan-y; }
+
+  .legend { display:flex; flex-wrap:wrap; gap:16px; margin:0 0 12px; }
+  .legend span { display:inline-flex; align-items:center; gap:7px;
+                 font-family:var(--mono); font-size:.72rem; color:var(--ink-2);
+                 letter-spacing:.03em; }
+  .swatch { width:13px; height:3px; border-radius:2px; flex:none; }
+
+  text { font-family:var(--mono); font-variant-numeric:tabular-nums; }
+  .tick { font-size:11px; fill:var(--ink-3); }
+  .catlbl { font-size:11.5px; fill:var(--ink-2); }
+  .val { font-size:11.5px; fill:var(--ink); font-weight:600; }
+  .anno { font-size:10.5px; fill:var(--ink-3); }
+  .grid { stroke:var(--rule); stroke-width:1; }
+  .axis { stroke:var(--rule); stroke-width:1.5; }
+  .s1 { fill:var(--series-1); } .s2 { fill:var(--series-2); } .s3 { fill:var(--series-3); }
+  .l1 { stroke:var(--series-1); } .l2 { stroke:var(--series-2); } .l3 { stroke:var(--series-3); }
+  .line { fill:none; stroke-width:2; stroke-linejoin:round; stroke-linecap:round; }
+  .refline { stroke:var(--ink-3); stroke-width:1.25; stroke-dasharray:4 4; fill:none; }
+  .critfill { fill:var(--crit-mark); }
+  .hit { fill:transparent; }
+
+  details { margin-top:12px; }
+  summary { font-family:var(--mono); font-size:.7rem; letter-spacing:.1em;
+            text-transform:uppercase; color:var(--ink-3); cursor:pointer; padding:4px 0; }
+  summary:hover { color:var(--ink-2); }
+  table { border-collapse:collapse; width:100%; font-size:.85rem; margin-top:8px; }
+  th,td { text-align:right; padding:6px 10px; border-bottom:1px solid var(--rule);
+          font-variant-numeric:tabular-nums; }
+  th:first-child, td:first-child { text-align:left; font-family:var(--serif); }
+  th { font-family:var(--mono); font-size:.68rem; letter-spacing:.09em;
+       text-transform:uppercase; color:var(--ink-3); font-weight:500; }
+  td { font-family:var(--mono); color:var(--ink-2); }
+
+  ol.demands { list-style:none; counter-reset:d; padding:0; margin:20px 0 0; }
+  ol.demands li { counter-increment:d; position:relative; padding:14px 0 14px 46px;
+                  border-top:1px solid var(--rule); }
+  ol.demands li::before { content:counter(d,decimal-leading-zero);
+      position:absolute; left:0; top:15px; font-family:var(--mono); font-size:.74rem;
+      color:var(--ink-3); letter-spacing:.06em; }
+  ol.demands li b { display:block; font-weight:650; margin-bottom:2px; }
+  ol.demands li span { font-size:.92rem; color:var(--ink-2); }
+
+  .tip { position:fixed; pointer-events:none; opacity:0; transition:opacity .1s;
+         background:var(--surface-2); color:var(--ink); border:1px solid var(--rule);
+         border-radius:5px; padding:7px 10px; font-family:var(--mono); font-size:11.5px;
+         line-height:1.5; box-shadow:0 4px 14px rgba(0,0,0,.14); z-index:50;
+         font-variant-numeric:tabular-nums; max-width:230px; }
+  .tip b { color:var(--ink); font-weight:700; }
+  :focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  @media (prefers-reduced-motion:reduce) { .tip { transition:none; } }
+  footer { margin-top:58px; padding-top:18px; border-top:1px solid var(--rule);
+           font-size:.85rem; color:var(--ink-3); max-width:70ch; }
+</style>
+
+<div class="wrap">
+<header>
+  <span class="lbl">Standing red team · rev 3 · 2026-08-09</span>
+  <h1>Quaise Energy Series B SPV: the price was never the binding constraint</h1>
+  <p class="dek">Delta4 Capital “Energy Fund I Coinvest SPV” · $293mm pre / $443–493mm post ·
+     2% one-time + 20% carry · target close 2026-08-12. Three of the four prior flip
+     conditions are genuinely met. The deal still fails — on duration and on a
+     tail that is the same bet counted twice.</p>
+  <div class="verdict">
+    <span class="tag">Kill</span>
+    <p><b>Do not close on Aug 12.</b> The disclosure removed the objection the last review
+       happened to write down. It did not remove the two that decide the outcome: an expected
+       hold long enough to crush the IRR, and an upside branch that requires Quaise to be worth
+       more in 2033 than Fervo is worth today at peak mania — with zero electrons delivered.</p>
+  </div>
+</header>
+
+<div class="stats">
+  <div class="stat bad"><span class="k lbl">p below 1×</span><span class="v">64</span>
+    <span class="n">Between the panel’s 65 and the prior red team’s 55.</span></div>
+  <div class="stat bad"><span class="k lbl">p 10×+</span><span class="v">3</span>
+    <span class="n">Half the prior 6. Requires a ~$10.5B exit.</span></div>
+  <div class="stat"><span class="k lbl">EV net</span><span class="v">1.05×</span>
+    <span class="n">Undiscounted. ≈1%/yr at a 7-year hold.</span></div>
+  <div class="stat bad"><span class="k lbl">Breakeven needs</span><span class="v">$855M</span>
+    <span class="n">Company value at exit just to return 1×.</span></div>
+</div>
+
+<section>
+  <span class="lbl">Attack 1 — the price</span>
+  <h2>“Cheap” is a statement about Fervo, not about Quaise</h2>
+  <div class="prose">
+    <p>$293mm pre only reads cheap against a comparable that is itself the anomaly: Fervo
+    listed in May 2026 on <b>$138,000 of revenue</b> and carries a $7.7–10bn mark. Price the
+    SPV forward instead. At a $470mm post, with a realistic 45% cumulative dilution to a
+    2029–30 listing, here is the company value each LP outcome actually requires.</p>
+  </div>
+
+  <figure>
+    <div class="figtitle">What Quaise has to be worth for the SPV to pay off</div>
+    <div class="figsub">Required exit equity value, $ billions · $470mm post · 0.55 retained through Series C + IPO primary · net of 20% carry</div>
+    <div class="scroller"><svg id="f1" viewBox="0 0 760 300" role="img"
+      aria-label="Required Quaise exit equity value rises from $0.85B for a 1x LP net return to $15.8B for 15x; Fervo's current $7.7-10bn mark sits between the 5x and 10x requirements."></svg></div>
+    <figcaption>The prior red-team tree assigns 6% to a branch worth 15× net. That branch is a
+      claim that Quaise reaches <b>$15.8bn</b> — roughly twice Fervo’s peak mark — while its
+      flagship technology is still unproven. Even 10× net needs <b>$10.5bn</b>, above the top of
+      Fervo’s range. Meanwhile mere breakeven needs the company to roughly double.</figcaption>
+    <details><summary>Table view</summary>
+      <table><thead><tr><th>LP net</th><th>Gross</th><th>Required exit equity</th></tr></thead>
+      <tbody>
+        <tr><td>1×</td><td>1.00×</td><td>$0.85B</td></tr>
+        <tr><td>2×</td><td>2.25×</td><td>$1.92B</td></tr>
+        <tr><td>3×</td><td>3.50×</td><td>$2.99B</td></tr>
+        <tr><td>5×</td><td>6.00×</td><td>$5.13B</td></tr>
+        <tr><td>10×</td><td>12.25×</td><td>$10.47B</td></tr>
+        <tr><td>15×</td><td>18.50×</td><td>$15.81B</td></tr>
+      </tbody></table></details>
+  </figure>
+</section>
+
+<section>
+  <span class="lbl">Attack 2 — duration</span>
+  <h2>The flip condition was written in multiples. The deal fails in IRR.</h2>
+  <div class="prose">
+    <p>The logged EV trees explicitly do not discount time — the honesty box says so.
+    Restate the same multiples as annualised returns and the conclusion inverts. A 2%
+    one-time fee looks cheap precisely because it removes the sponsor’s clock; it does
+    nothing for the LP’s.</p>
+  </div>
+
+  <figure>
+    <div class="figtitle">Net IRR by exit year</div>
+    <div class="figsub">Same net multiples, annualised from Aug 2026 · shaded band = sponsor’s “2029 ± 1” hold estimate</div>
+    <div class="legend">
+      <span><i class="swatch" style="background:var(--series-1)"></i>1.90× — prior red-team tree</span>
+      <span><i class="swatch" style="background:var(--series-2)"></i>1.40× — exit comps de-rate 50%</span>
+      <span><i class="swatch" style="background:var(--series-3)"></i>1.05× — this review</span>
+    </div>
+    <div class="scroller"><svg id="f2" viewBox="0 0 760 336" role="img"
+      aria-label="Net IRR falls steeply with exit year. The 1.90x case clears a 25% venture hurdle only if exit lands before mid-2029, reaching 10.5% by 2033. The 1.40x case never clears 16%. The 1.05x case is flat near 1%."></svg></div>
+    <figcaption>Even the sponsor-friendly 1.90× clears a 25% venture hurdle <b>only if the exit
+      lands before July 2029</b> — 2.9 years away, with zero slack, from a team whose 2022 plan
+      promised 500°C wells by 2026 and delivered 118 metres in dry granite. Slip to 2033, the
+      first plausible date for a proven mm-wave well, and the same 1.90× is a <b>10.5% IRR</b>
+      for illiquid, undiversified, first-of-a-kind energy risk.</figcaption>
+    <details><summary>Table view</summary>
+      <table><thead><tr><th>Exit</th><th>1.90×</th><th>1.40×</th><th>1.05×</th></tr></thead>
+      <tbody id="t2"></tbody></table></details>
+  </figure>
+</section>
+
+<section>
+  <span class="lbl">Attack 3 — the floor</span>
+  <h2>The 50 MW “floor” is a project that costs more to build than it is worth</h2>
+  <div class="prose">
+    <p>The bounded-bear case values a not-yet-built 50 MW contract at 10–15× hypothetical
+    EBITDA and calls the result a $250mm floor under Quaise’s equity. That arithmetic never
+    subtracts the plant.</p>
+  </div>
+
+  <figure>
+    <div class="figtitle">Decomposing the $250mm floor</div>
+    <div class="figsub">50 MW at 90% capacity factor = 394 GWh/yr · $90–115/MWh · ~$25/MWh opex · $ millions</div>
+    <div class="scroller"><svg id="f3" viewBox="0 0 760 226" role="img"
+      aria-label="Capex to build 50 MW is $350-600M; project enterprise value at 10-15x mature EBITDA is $256-532M; the sponsor's claimed $250M floor sits inside the enterprise value range, leaving nothing after construction cost."></svg></div>
+    <figcaption>At the midpoints the plant costs <b>$475mm</b> to build and is worth
+      <b>$394mm</b> — the project destroys value before anyone argues about drilling physics.
+      For the floor to be real you need FOAK superhot capex at or below mature conventional
+      geothermal, a top-of-market PPA price, <b>100% retained project equity</b> (contradicted
+      by Quaise’s own “project-level equity and debt to be announced”), and the offtake
+      surviving to COD. Jointly, that is not a floor; it is a bull case wearing a floor’s
+      clothing.</figcaption>
+    <details><summary>Table view</summary>
+      <table><thead><tr><th>Component</th><th>Low</th><th>High</th></tr></thead><tbody>
+        <tr><td>Capex, 50 MW superhot FOAK ($7–12k/kW)</td><td>$350M</td><td>$600M</td></tr>
+        <tr><td>Project EV at 10–15× mature EBITDA</td><td>$256M</td><td>$532M</td></tr>
+        <tr><td>Sponsor’s claimed equity floor</td><td colspan="2">$250M</td></tr>
+      </tbody></table></details>
+  </figure>
+</section>
+
+<section>
+  <span class="lbl">Attack 4 — the tail</span>
+  <h2>The tail probability and the tail multiple are the same bet, counted twice</h2>
+  <div class="prose">
+    <p>This is the modelling error, not a rhetorical point. The tree treats P(tail fires) and
+    the tail’s exit multiple as independent. Both are functions of one variable — sector
+    sentiment in 2029–33. A de-rating simultaneously shrinks the multiple <em>and</em> makes
+    the financing that gets Quaise there harder to raise. Apply both together and the audited
+    EV crosses below 1.0×.</p>
+  </div>
+
+  <figure>
+    <div class="figtitle">EV bridge: from the logged tree to the correlated tree</div>
+    <div class="figsub">Net multiple to the LP, undiscounted · red team’s logged 55/25/14/6 split as the starting point</div>
+    <div class="scroller"><svg id="f4" viewBox="0 0 760 292" role="img"
+      aria-label="The red team's logged EV of 1.90x net falls to 1.15x when exit comparables de-rate 50%, then to 0.94x when the same de-rating is allowed to raise failure probability — below the 1.0x breakeven line. This review's independent tree lands at 1.05x."></svg></div>
+    <figcaption>The counter-agent audit already found this EV to be tail-fragile: the panel
+      version crosses 1.0× at a tail probability of <b>1.8%</b>, against a logged 4%. Correlating
+      the tail’s size with its likelihood — which is what a sector de-rating does — is enough on
+      its own. <b>No view on the physics is required to get below breakeven.</b></figcaption>
+    <details><summary>Table view</summary>
+      <table><thead><tr><th>Step</th><th>Δ</th><th>EV net</th></tr></thead><tbody>
+        <tr><td>Red-team logged tree (55/25/14/6)</td><td>—</td><td>1.90×</td></tr>
+        <tr><td>2029–33 exit comps de-rate 50%</td><td>−0.75</td><td>1.15×</td></tr>
+        <tr><td>De-rating also tightens financing (5 pts → failure)</td><td>−0.21</td><td>0.94×</td></tr>
+        <tr><td>This review’s independent tree (64/24/9/3)</td><td>—</td><td>1.05×</td></tr>
+      </tbody></table></details>
+  </figure>
+</section>
+
+<section>
+  <span class="lbl">Attack 5 — what the disclosure also revealed</span>
+  <h2>Two new negatives arrived in the same document as the three positives</h2>
+  <div class="prose">
+    <p><b>The offtaker holds warrants.</b> A customer paid in equity to sign is not an
+    arm’s-length validator. The single strongest fact in the deal — a sophisticated buyer’s
+    technical diligence — becomes a free call option written by Quaise, and the PPA’s pricing
+    is now presumptively below market because part of the consideration was paid in stock.
+    Confirm whether those warrants sit inside the $293mm pre; if not, the real entry price is
+    3–7% higher than quoted and they convert precisely at the IPO.</p>
+    <p><b>The hold ends before the proof.</b> IPO 2029, first power 2030, first plausible
+    mm-wave well later still. Obsidian Phase 1 uses conventional rigs, so Series B money buys a
+    me-too superhot developer competing with Mazama on the same volcano with the same
+    equipment — plus an R&amp;D option. The exit is scheduled ahead of the evidence. That is
+    not an accident of the plan; it <em>is</em> the plan, and it makes the LP’s return a bet on
+    2029 public-market appetite rather than on drilling.</p>
+    <p><b>And the governance does not compensate.</b> A board <em>observer</em> seat belongs to
+    Delta4, not to the LP, carries no vote, is typically revocable and excludable from
+    executive session, and usually comes with confidentiality that bars passing anything to
+    LPs. The LP gets no pro-rata, no vote, no transfer rights, and a 20% carry with no
+    disclosed hurdle — meaning the sponsor takes a fifth of a 7% IRR.</p>
+  </div>
+</section>
+
+<section>
+  <span class="lbl">The loss path</span>
+  <h2>How the money most likely goes away</h2>
+  <div class="prose">
+    <p>Not an explosion. Obsidian Phase 1 gets built with conventional rigs and broadly works,
+    late and dear — first power 2032–33 rather than 2030. Millimetre-wave never reaches
+    commercial depth <em>with completions</em>. The 2029 IPO does not happen. Quaise raises a
+    large Series C in 2028–29 at flat-to-down with a senior liquidation preference and
+    pay-to-play; the SPV holds no reserves and its LPs have no pro-rata, so it cannot follow
+    and is subordinated. The company sells to Nabors, JERA or Mitsubishi in 2033–35 for
+    $400–700mm, the senior money clears, and Series B nets <b>0.3–0.8×</b> after eight years.
+    <b>Death by dilution and duration, not by physics.</b></p>
+  </div>
+</section>
+
+<section>
+  <span class="lbl">Before Aug 12 — ranked</span>
+  <h2>What must be answered in three days</h2>
+  <ol class="demands">
+    <li><b>Price per share, in writing, versus the July 7 first close — with a fully diluted cap table.</b>
+      <span>“Same round” is not “same price.” The table must show the offtaker’s warrants, any
+      SAFEs or converts, and the option-pool refresh <em>inside</em> the $293mm pre. One email.
+      If the sponsor cannot produce this in 72 hours, that is the answer.</span></li>
+    <li><b>Offtake conditions precedent: COD long-stop, termination-for-delay, and the warrant vesting trigger.</b>
+      <span>A redacted extract suffices. If the warrants vest on signature while the PPA
+      terminates on a 2031 COD miss, the offtaker holds a free option and the “$600M” is not
+      bankable — no flip at any price.</span></li>
+    <li><b>Charter and stock purchase agreement: preference stack, anti-dilution, pay-to-play.</b>
+      <span>Is Series B pari passu with A/A1, 1× non-participating, broad-based weighted
+      average? The “50% downside cap” is a preference claim, and a preference is junior to
+      whatever prices next.</span></li>
+    <li><b>The SPV’s LPA: carry hurdle, voting proxy, term, and ongoing costs.</b>
+      <span>Demand an 8% preferred return before carry. Confirm who votes the shares and
+      whether the sponsor may sign a pay-to-play amendment without LP consent. Ten years of
+      fund administration is not $1,000 — find the annual line.</span></li>
+    <li><b>Delta4 itself: prior SPV realisations, GP commitment, and any fee from the issuer.</b>
+      <span>“Energy Fund I” implies no DPI. How much of the $25mm is the GP’s own money, and is
+      Delta4 receiving placement economics from Quaise or the lead?</span></li>
+    <li><b>Second-tranche and side-letter parity.</b>
+      <span>Written confirmation that no later tranche prices differently, plus disclosure of
+      MFN, information and ROFR rights granted to Prelude, JERA and Idemitsu.</span></li>
+  </ol>
+  <div class="prose" style="margin-top:26px">
+    <p><b>Recommended action:</b> request a two-to-four week extension. A company that closed
+    $134mm five weeks ago does not need a $100k–$25mm cheque in 72 hours. If the extension is
+    refused, that refusal has answered item 4 by itself.</p>
+  </div>
+</section>
+
+<section>
+  <span class="lbl">Flip conditions</span>
+  <h2>What would make me a buyer</h2>
+  <div class="prose">
+    <p>All four, checkable: <b>(1)</b> price per share equal to the July 7 close on a fully
+    diluted basis with warrants inside the pre; <b>(2)</b> offtake CPs showing a COD long-stop
+    no earlier than 2033 and warrants vesting on delivery, not signature; <b>(3)</b> an 8%
+    preferred return ahead of the 20% carry, plus a written wind-up or distribution-in-kind
+    obligation if no liquidity by 2033 — this converts the duration risk from unbounded to
+    priced; <b>(4)</b> one named third-party engineering review, commissioned by neither Quaise
+    nor Delta4, of the Newberry resource and the 400–500°C completion path.</p>
+    <p>With all four, my tree moves to roughly 55/25/14/6 with a 2033 wind-up floor, EV ≈ 1.6×
+    net at a bounded ~6.5-year hold — a 7–8% IRR. Still below a venture hurdle, so even then
+    this is a small, deliberately undersized position, not a $25mm allocation. <b>Absent
+    condition (3), I am a seller of this structure at any price.</b></p>
+  </div>
+</section>
+
+<footer>
+  Method: net(g) = 0.8g + 0.2 above 1×; $470mm post midpoint; 0.55 retained to exit; the 2%
+  one-time fee and admin are <em>not</em> deducted (charitable). Probability trees are logged
+  subjective forecasts, not frequencies — decision support, not a return forecast. Not modelled:
+  partial secondaries, follow-on reserves, portfolio correlation, tax. Capex band from
+  conventional geothermal $4.5–7k/kW escalated for FOAK superhot conditions; treat as an
+  order-of-magnitude bracket, not an engineering estimate. Company facts carried from the
+  2026-08-08 fact pack; the Google agreement is treated as LP-verified per instruction, and its
+  executed text remains unseen by this analyst.
+</footer>
+</div>
+<div class="tip" id="tip" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+  const tip = document.getElementById('tip');
+  const NS = 'http://www.w3.org/2000/svg';
+  function el(n, a){ const e = document.createElementNS(NS, n);
+    for (const k in a) e.setAttribute(k, a[k]); return e; }
+  function show(evt, html){
+    tip.innerHTML = html; tip.style.opacity = 1;
+    const r = tip.getBoundingClientRect();
+    let x = evt.clientX + 14, y = evt.clientY - r.height - 10;
+    if (x + r.width > innerWidth - 8) x = evt.clientX - r.width - 14;
+    if (y < 8) y = evt.clientY + 18;
+    tip.style.left = x + 'px'; tip.style.top = y + 'px';
+  }
+  function hide(){ tip.style.opacity = 0; }
+  function bind(node, html){
+    node.addEventListener('pointermove', e => show(e, html));
+    node.addEventListener('pointerleave', hide);
+  }
+  // rounded far-end horizontal bar
+  function hbar(x0, y, w, h, r){
+    r = Math.min(r, Math.max(w - 0.5, 0));
+    return `M${x0},${y} H${x0+w-r} A${r},${r} 0 0 1 ${x0+w},${y+r}
+            V${y+h-r} A${r},${r} 0 0 1 ${x0+w-r},${y+h} H${x0} Z`;
+  }
+
+  /* ---------- Figure 1 : required exit value ---------- */
+  (function(){
+    const svg = document.getElementById('f1');
+    const L = 96, R = 704, T = 40, B = 262;
+    const data = [
+      ['1×',  0.855, '1.00×'], ['2×',  1.918, '2.25×'], ['3×',  2.985, '3.50×'],
+      ['5×',  5.127, '6.00×'], ['10×', 10.468, '12.25×'], ['15×', 15.809, '18.50×']
+    ];
+    const max = 17.5, sx = v => L + (v / max) * (R - L);
+    const band = (B - T) / data.length, bh = 17;
+
+    // Fervo reference band
+    svg.appendChild(el('rect', {x: sx(7.7), y: T - 12, width: sx(10) - sx(7.7),
+      height: (B - T) + 12, fill: 'var(--ink-3)', opacity: .105}));
+    svg.appendChild(el('line', {x1: sx(7.7), x2: sx(7.7), y1: T - 12, y2: B, class: 'refline'}));
+    svg.appendChild(el('line', {x1: sx(10), x2: sx(10), y1: T - 12, y2: B, class: 'refline'}));
+    let ft = el('text', {x: sx(8.85), y: T - 19, class: 'anno', 'text-anchor': 'middle'});
+    ft.textContent = 'Fervo today  $7.7–10bn'; svg.appendChild(ft);
+
+    // x grid
+    [0, 5, 10, 15].forEach(v => {
+      svg.appendChild(el('line', {x1: sx(v), x2: sx(v), y1: T - 12, y2: B, class: 'grid'}));
+      const t = el('text', {x: sx(v), y: B + 18, class: 'tick', 'text-anchor': 'middle'});
+      t.textContent = '$' + v + 'B'; svg.appendChild(t);
+    });
+
+    data.forEach((d, i) => {
+      const y = T + i * band + (band - bh) / 2;
+      const w = sx(d[1]) - L;
+      const p = el('path', {d: hbar(L, y, w, bh, 4), class: 's1'});
+      svg.appendChild(p);
+      const c = el('text', {x: L - 12, y: y + bh - 4, class: 'catlbl', 'text-anchor': 'end'});
+      c.textContent = 'LP net ' + d[0]; svg.appendChild(c);
+      const v = el('text', {x: L + w + 9, y: y + bh - 4, class: 'val'});
+      v.textContent = '$' + d[1].toFixed(2) + 'B'; svg.appendChild(v);
+      const hit = el('rect', {x: L, y: y - 5, width: (R - L), height: bh + 10, class: 'hit'});
+      svg.appendChild(hit);
+      bind(hit, `<b>LP net ${d[0]}</b><br>gross ${d[2]}<br>needs <b>$${d[1].toFixed(2)}B</b> exit value`);
+    });
+
+    svg.appendChild(el('line', {x1: L, x2: L, y1: T - 12, y2: B, class: 'axis'}));
+    const q = el('text', {x: L + 6, y: B + 34, class: 'anno'});
+    q.textContent = 'Quaise post-money today: $0.47B'; svg.appendChild(q);
+  })();
+
+  /* ---------- Figure 2 : IRR by exit year ---------- */
+  (function(){
+    const svg = document.getElementById('f2');
+    const L = 56, R = 618, T = 22, B = 268;
+    const years = [2029, 2030, 2031, 2032, 2033, 2034, 2035, 2036];
+    const mults = [[1.90, 'l1', '1.90×'], [1.40, 'l2', '1.40×'], [1.05, 'l3', '1.05×']];
+    const ymax = 35;
+    const sx = y => L + ((y - 2029) / 7) * (R - L);
+    const sy = v => B - (v / ymax) * (B - T);
+    const irr = (m, y) => (Math.pow(m, 1 / (y - 2026.6)) - 1) * 100;
+
+    // sponsor hold band 2028-2030 -> visible portion 2029-2030
+    svg.appendChild(el('rect', {x: sx(2029), y: T, width: sx(2030) - sx(2029),
+      height: B - T, fill: 'var(--ink-3)', opacity: .09}));
+    const hb = el('text', {x: sx(2029.5), y: T - 6, class: 'anno', 'text-anchor': 'middle'});
+    hb.textContent = 'sponsor’s hold estimate'; svg.appendChild(hb);
+
+    [0, 10, 20, 30].forEach(v => {
+      svg.appendChild(el('line', {x1: L, x2: R, y1: sy(v), y2: sy(v), class: 'grid'}));
+      const t = el('text', {x: L - 10, y: sy(v) + 4, class: 'tick', 'text-anchor': 'end'});
+      t.textContent = v + '%'; svg.appendChild(t);
+    });
+    // hurdle references
+    [[25, 'venture hurdle 25%'], [8, 'public-equity alternative ~8%']].forEach(h => {
+      svg.appendChild(el('line', {x1: L, x2: R, y1: sy(h[0]), y2: sy(h[0]), class: 'refline'}));
+      const t = el('text', {x: R - 4, y: sy(h[0]) - 7, class: 'anno', 'text-anchor': 'end'});
+      t.textContent = h[1]; svg.appendChild(t);
+    });
+    years.forEach(y => {
+      const t = el('text', {x: sx(y), y: B + 19, class: 'tick', 'text-anchor': 'middle'});
+      t.textContent = y; svg.appendChild(t);
+    });
+    svg.appendChild(el('line', {x1: L, x2: R, y1: B, y2: B, class: 'axis'}));
+
+    mults.forEach(m => {
+      const pts = years.map(y => [sx(y), sy(irr(m[0], y))]);
+      const d = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+      svg.appendChild(el('path', {d: d, class: 'line ' + m[1]}));
+      pts.forEach((p, i) => {
+        const c = el('circle', {cx: p[0], cy: p[1], r: 4, fill: 'var(--surface)',
+          stroke: 'currentColor', 'stroke-width': 2, class: m[1]});
+        svg.appendChild(c);
+      });
+      // direct label at line end (relief for contrast WARN on series 3)
+      const last = pts[pts.length - 1];
+      const t = el('text', {x: R + 10, y: last[1] + 4, class: 'val'});
+      t.textContent = m[2] + '  ' + irr(m[0], 2036).toFixed(1) + '%';
+      svg.appendChild(t);
+    });
+
+    // crosshair + shared tooltip per year
+    const cross = el('line', {x1: 0, x2: 0, y1: T, y2: B, class: 'refline', opacity: 0});
+    svg.appendChild(cross);
+    years.forEach(y => {
+      const w = (R - L) / 7;
+      const hit = el('rect', {x: sx(y) - w / 2, y: T, width: w, height: B - T, class: 'hit'});
+      svg.appendChild(hit);
+      const rows = mults.map(m =>
+        `${m[2]} → <b>${irr(m[0], y).toFixed(1)}%</b>`).join('<br>');
+      hit.addEventListener('pointermove', e => {
+        cross.setAttribute('x1', sx(y)); cross.setAttribute('x2', sx(y));
+        cross.setAttribute('opacity', 1);
+        show(e, `<b>Exit ${y}</b> · ${(y - 2026.6).toFixed(1)} yr hold<br>${rows}`);
+      });
+      hit.addEventListener('pointerleave', () => { cross.setAttribute('opacity', 0); hide(); });
+    });
+
+    const tb = document.getElementById('t2');
+    years.forEach(y => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${y}</td>` + mults.map(m =>
+        `<td>${irr(m[0], y).toFixed(1)}%</td>`).join('');
+      tb.appendChild(tr);
+    });
+  })();
+
+  /* ---------- Figure 3 : the floor decomposed ---------- */
+  (function(){
+    const svg = document.getElementById('f3');
+    const L = 250, R = 626, T = 30, B = 176;
+    const max = 660, sx = v => L + (v / max) * (R - L);
+    const rows = [
+      ['Capex to build 50 MW', 350, 600, 's1', '$7–12k/kW, FOAK superhot'],
+      ['Project EV at 10–15× EBITDA', 256, 532, 's3', '$90–115/MWh, ~$25/MWh opex'],
+    ];
+    [0, 200, 400, 600].forEach(v => {
+      svg.appendChild(el('line', {x1: sx(v), x2: sx(v), y1: T - 10, y2: B, class: 'grid'}));
+      const t = el('text', {x: sx(v), y: B + 18, class: 'tick', 'text-anchor': 'middle'});
+      t.textContent = '$' + v + 'M'; svg.appendChild(t);
+    });
+    const bh = 19;
+    rows.forEach((r, i) => {
+      const y = T + i * 46;
+      const p = el('rect', {x: sx(r[1]), y: y, width: sx(r[2]) - sx(r[1]),
+        height: bh, rx: 4, class: r[3]});
+      svg.appendChild(p);
+      const c = el('text', {x: L - 14, y: y + bh - 5, class: 'catlbl', 'text-anchor': 'end'});
+      c.textContent = r[0]; svg.appendChild(c);
+      const v = el('text', {x: sx(r[2]) + 9, y: y + bh - 5, class: 'val'});
+      v.textContent = '$' + r[1] + '–' + r[2] + 'M'; svg.appendChild(v);
+      bind(p, `<b>${r[0]}</b><br>$${r[1]}M – $${r[2]}M<br>${r[4]}`);
+    });
+    // claimed floor marker
+    const fy = T + 2 * 46 + 2;
+    const m = el('path', {d: `M${sx(250)},${fy - 8} l6,10 l-12,0 Z`, class: 'critfill'});
+    svg.appendChild(m);
+    svg.appendChild(el('line', {x1: sx(250), x2: sx(250), y1: T - 10, y2: fy - 8,
+      stroke: 'var(--crit-mark)', 'stroke-width': 1.5, 'stroke-dasharray': '3 3'}));
+    const ml = el('text', {x: sx(250) + 12, y: fy + 5, class: 'val', fill: 'var(--crit)'});
+    ml.textContent = 'sponsor’s claimed $250M floor'; svg.appendChild(ml);
+    const cl = el('text', {x: L - 14, y: fy + 5, class: 'catlbl', 'text-anchor': 'end',
+      fill: 'var(--crit)'});
+    cl.textContent = 'Claimed equity floor'; svg.appendChild(cl);
+
+    svg.appendChild(el('line', {x1: L, x2: L, y1: T - 10, y2: B, class: 'axis'}));
+    const note = el('text', {x: 10, y: B + 40, class: 'anno'});
+    note.textContent = 'Midpoints: build for $475M, worth $394M — before any drilling-physics argument.';
+    svg.appendChild(note);
+  })();
+
+  /* ---------- Figure 4 : EV bridge ---------- */
+  (function(){
+    const svg = document.getElementById('f4');
+    const L = 62, R = 720, T = 26, B = 214;
+    const max = 2.0, sy = v => B - (v / max) * (B - T);
+    const steps = [
+      {l: ['Red-team', 'logged tree'], type: 'total', v: 1.90, note: '55/25/14/6 split, audited'},
+      {l: ['Exit comps', 'de-rate 50%'], type: 'down', from: 1.90, to: 1.153, note: '2029–33 geothermal multiple halves'},
+      {l: ['Financing', 'correlation'], type: 'down', from: 1.153, to: 0.935, note: 'same de-rating shifts 5 pts to failure'},
+      {l: ['Correlated', 'tree'], type: 'total', v: 0.935, note: 'below breakeven — no physics view needed'},
+      {l: ['This review’s', 'own tree'], type: 'total', v: 1.081, note: '64/24/9/3 on 0.10/1.30/4.5/10×'}
+    ];
+    const n = steps.length, band = (R - L) / n, bw = 62;
+
+    [0, 0.5, 1.0, 1.5, 2.0].forEach(v => {
+      svg.appendChild(el('line', {x1: L, x2: R, y1: sy(v), y2: sy(v), class: 'grid'}));
+      const t = el('text', {x: L - 10, y: sy(v) + 4, class: 'tick', 'text-anchor': 'end'});
+      t.textContent = v.toFixed(1) + '×'; svg.appendChild(t);
+    });
+    // breakeven
+    svg.appendChild(el('line', {x1: L, x2: R, y1: sy(1), y2: sy(1),
+      stroke: 'var(--crit-mark)', 'stroke-width': 1.5, 'stroke-dasharray': '5 4'}));
+    const bl = el('text', {x: R - 2, y: sy(1) - 8, class: 'anno', 'text-anchor': 'end',
+      fill: 'var(--crit)'});
+    bl.textContent = 'breakeven 1.0×'; svg.appendChild(bl);
+
+    steps.forEach((s, i) => {
+      const cx = L + band * i + band / 2, x = cx - bw / 2;
+      let top, h, cls, valTxt, valY;
+      if (s.type === 'total') {
+        top = sy(s.v); h = B - top; cls = 's1'; valTxt = s.v.toFixed(2) + '×'; valY = top - 8;
+      } else {
+        top = sy(s.from); h = sy(s.to) - sy(s.from); cls = 'critfill';
+        valTxt = '−' + (s.from - s.to).toFixed(2); valY = top - 8;
+      }
+      const r = el('rect', {x: x, y: top, width: bw, height: Math.max(h, 2), rx: 3, class: cls});
+      svg.appendChild(r);
+      const v = el('text', {x: cx, y: valY, class: 'val', 'text-anchor': 'middle',
+        fill: s.type === 'total' ? 'var(--ink)' : 'var(--crit)'});
+      v.textContent = valTxt; svg.appendChild(v);
+      s.l.forEach((line, j) => {
+        const t = el('text', {x: cx, y: B + 20 + j * 13, class: 'catlbl', 'text-anchor': 'middle'});
+        t.textContent = line; svg.appendChild(t);
+      });
+      // connector
+      if (i < n - 2) {
+        const yEnd = sy(s.type === 'total' ? s.v : s.to);
+        svg.appendChild(el('line', {x1: x + bw, x2: L + band * (i + 1) + band / 2 - bw / 2,
+          y1: yEnd, y2: yEnd, stroke: 'var(--ink-3)', 'stroke-width': 1, 'stroke-dasharray': '2 3'}));
+      }
+      bind(r, `<b>${s.l.join(' ')}</b><br>${s.type === 'total'
+        ? 'EV <b>' + s.v.toFixed(2) + '×</b> net' :
+          s.from.toFixed(2) + '× → <b>' + s.to.toFixed(2) + '×</b>'}<br>${s.note}`);
+    });
+    svg.appendChild(el('line', {x1: L, x2: R, y1: B, y2: B, class: 'axis'}));
+    const sep = L + band * 4;
+    svg.appendChild(el('line', {x1: sep, x2: sep, y1: T - 8, y2: B + 46,
+      stroke: 'var(--rule)', 'stroke-width': 1}));
+  })();
+})();
+</script>
