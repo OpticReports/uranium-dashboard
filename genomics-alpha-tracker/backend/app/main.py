@@ -276,6 +276,25 @@ _mount_proxy("btc", "BTC_UPSTREAM",
 _mount_proxy("exit", "EWM_UPSTREAM",
               "https://treasury-canary.onrender.com/ewm", "Exit Window Monitor")
 
+# research.optic.capital/deals — Venture Deal Analyzer ledger dashboard.
+# Self-contained static page. CANONICAL copy: venture-deal-analyzer/
+# dashboard.html at the repo root; app/deal_analyzer.html is its mirror
+# inside this service's Docker context (see that file's header comment).
+# Update both in the same commit.
+_DEALS_HTML = os.path.join(os.path.dirname(__file__), "deal_analyzer.html")
+
+
+@app.get("/deals", include_in_schema=False)
+def _deals_noslash():
+    return RedirectResponse(url="/deals/")
+
+
+@app.get("/deals/", include_in_schema=False)
+def _deals_page():
+    with open(_DEALS_HTML, encoding="utf-8") as fh:
+        return Response(fh.read(), media_type="text/html",
+                        headers={"cache-control": "no-cache"})
+
 
 # Single-service deployment: if a built frontend is present, serve it under
 # /genomics/ (research.optic.capital/genomics), with "/" redirecting there. The

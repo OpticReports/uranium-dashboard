@@ -1,0 +1,230 @@
+<!-- MIRROR: canonical copy is venture-deal-analyzer/dashboard.html (repo root).
+     This file = doctype wrapper + byte-for-byte canonical content, served at
+     research.optic.capital/deals/ by the genomics backend. Regenerate BOTH in
+     the same commit whenever the analyzer dashboard updates:
+       { head -6 <this-file>; cat venture-deal-analyzer/dashboard.html; } -->
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- CANONICAL copy of the analyzer dashboard (published as a claude.ai artifact
+     from this path). MIRROR: genomics-alpha-tracker/backend/app/deal_analyzer.html
+     (doctype wrapper + this file's content), served at research.optic.capital/deals/.
+     Whenever this file changes, regenerate the mirror IN THE SAME COMMIT:
+       { head -6 genomics-alpha-tracker/backend/app/deal_analyzer.html; \
+         cat venture-deal-analyzer/dashboard.html; } \
+         > genomics-alpha-tracker/backend/app/deal_analyzer.html.tmp && \
+         mv genomics-alpha-tracker/backend/app/deal_analyzer.html.tmp \
+            genomics-alpha-tracker/backend/app/deal_analyzer.html -->
+<title>Deal Analyzer — Ledger Dashboard</title>
+<style>
+  :root {
+    --paper: #F7F8F7; --card: #FFFFFF; --ink: #1A2422; --muted: #56675F;
+    --line: #DCE3DF; --accent: #0E7E53; --accent-ink: #0B6A46;
+    --data-1: #0E7E53; --data-2: #A85F00; --data-mute: #ADBCB4;
+    --wash: #EEF3F0; --warn-wash: #F6EEE2; --danger: #9E3B1E;
+    --tipbg: #22302B; --tipink: #EDF3EF;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #131A18; --card: #1A2320; --ink: #E4EBE7; --muted: #92A29A;
+      --line: #2A3733; --accent: #45C69E; --accent-ink: #5ED2AC;
+      --data-1: #279B79; --data-2: #C56F33; --data-mute: #46554F;
+      --wash: #1F2A26; --warn-wash: #2A2119; --danger: #E0805F;
+      --tipbg: #0C1210; --tipink: #DCE7E1;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #131A18; --card: #1A2320; --ink: #E4EBE7; --muted: #92A29A;
+    --line: #2A3733; --accent: #45C69E; --accent-ink: #5ED2AC;
+    --data-1: #279B79; --data-2: #C56F33; --data-mute: #46554F;
+    --wash: #1F2A26; --warn-wash: #2A2119; --danger: #E0805F;
+    --tipbg: #0C1210; --tipink: #DCE7E1;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--paper); color: var(--ink); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 15.5px; line-height: 1.55; margin: 0; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 40px 22px 80px; }
+  h1, h2 { font-family: Charter, "Bitstream Charter", Cambria, Georgia, serif; text-wrap: balance; }
+  h1 { font-size: 1.9rem; margin: 8px 0 4px; }
+  h2 { font-size: 1.25rem; margin: 0 0 4px; }
+  .eyebrow, .lbl { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .eyebrow b { color: var(--accent); font-weight: 600; }
+  .sub { color: var(--muted); max-width: 76ch; margin: 0 0 20px; }
+  .rule { border: 0; border-top: 1px solid var(--line); margin: 32px 0 26px; }
+  .num { font-family: ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; }
+
+  /* tooltips */
+  .tt { position: relative; cursor: help; border-bottom: 1px dotted var(--muted); }
+  .tt:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .tt .box { visibility: hidden; opacity: 0; transition: opacity .12s; position: absolute; z-index: 30; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); width: min(340px, 82vw); background: var(--tipbg); color: var(--tipink); border-radius: 8px; padding: 10px 12px; font-size: .78rem; line-height: 1.5; font-family: system-ui, sans-serif; font-weight: 400; letter-spacing: 0; text-transform: none; box-shadow: 0 4px 16px rgba(0,0,0,.25); pointer-events: none; }
+  .tt .box b { color: #fff; }
+  :root[data-theme="dark"] .tt .box b, .tt .box b { color: var(--tipink); font-weight: 700; }
+  .tt:hover .box, .tt:focus .box { visibility: visible; opacity: 1; }
+  .cardish .tt .box { text-align: left; }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 18px 0; }
+  .tile { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .tile .big { font-family: ui-monospace, Menlo, monospace; font-size: 1.5rem; font-weight: 650; color: var(--accent-ink); display: block; line-height: 1.2; }
+  .tile .cap { font-size: .76rem; color: var(--muted); line-height: 1.4; }
+
+  .weights { display: flex; width: 100%; border-radius: 8px; overflow: hidden; margin: 10px 0 6px; height: 34px; }
+  .wseg { display: flex; align-items: center; justify-content: center; color: #fff; font-family: ui-monospace, Menlo, monospace; font-size: .72rem; font-weight: 600; border-right: 2px solid var(--paper); }
+  .wseg:last-child { border-right: 0; }
+  .wseg .box { font-weight: 400; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+  .chip { display: inline-flex; align-items: center; font-family: ui-monospace, Menlo, monospace; font-size: .72rem; padding: 4px 10px; border-radius: 999px; background: var(--wash); border: 1px solid var(--line); color: var(--accent-ink); }
+  .chip.warn { background: var(--warn-wash); color: var(--danger); }
+
+  .deals { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+  @media (max-width: 840px) { .deals { grid-template-columns: 1fr; } }
+  .deal { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; box-shadow: 0 1px 3px rgba(10,20,16,.05); }
+  .deal h3 { font-family: Charter, Georgia, serif; font-size: 1.2rem; margin: 2px 0 2px; }
+  .deal .meta { font-size: .76rem; color: var(--muted); margin-bottom: 10px; }
+  .vchip { display: inline-block; font-family: ui-monospace, Menlo, monospace; font-size: .7rem; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); margin-bottom: 8px; }
+  .v-watch { background: var(--warn-wash); color: var(--danger); }
+  .v-cond { background: var(--wash); color: var(--accent-ink); }
+  .srow { display: grid; grid-template-columns: 118px 1fr 66px; gap: 8px; align-items: center; font-size: .8rem; margin-bottom: 6px; }
+  .srow .name { color: var(--muted); }
+  .track { background: var(--wash); border-radius: 4px; height: 11px; position: relative; overflow: hidden; }
+  .fill { position: absolute; inset: 0 auto 0 0; background: var(--data-1); border-radius: 4px 3px 3px 4px; }
+  .deal.d2 .fill { background: var(--data-2); }
+  .srow .val { font-family: ui-monospace, Menlo, monospace; font-weight: 600; text-align: right; font-size: .8rem; }
+  .srow .val small { color: var(--muted); font-weight: 400; }
+  .pchips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 8px; }
+  .pchip { font-family: ui-monospace, Menlo, monospace; font-size: .72rem; padding: 3px 9px; border-radius: 6px; background: var(--wash); border: 1px solid var(--line); }
+  .decider { font-size: .82rem; background: var(--wash); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; padding: 8px 12px; margin: 10px 0 8px; }
+  .deal a { color: var(--accent-ink); font-size: .8rem; }
+
+  figure { margin: 18px 0; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 16px 8px; overflow-x: auto; }
+  figcaption { font-size: .8rem; color: var(--muted); margin-top: 6px; max-width: 76ch; }
+  svg text { font-family: ui-monospace, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
+  .axlbl { fill: var(--muted); font-size: 12px; }
+  .vallbl { fill: var(--ink); font-size: 12px; font-weight: 600; }
+  .b1 { fill: var(--data-1); } .b2 { fill: var(--data-2); }
+  .bar:hover { filter: brightness(1.12); }
+  .legend { display: flex; gap: 16px; font-size: .78rem; color: var(--muted); margin: 2px 0 8px; }
+  .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: baseline; }
+
+  .tbl-wrap { overflow-x: auto; margin: 12px 0; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+  table { border-collapse: collapse; width: 100%; min-width: 720px; font-size: .82rem; }
+  th, td { text-align: left; padding: 9px 13px; vertical-align: top; border-top: 1px solid var(--line); line-height: 1.45; }
+  thead th { border-top: 0; font-family: ui-monospace, Menlo, monospace; font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .pending { color: var(--muted); font-style: italic; }
+  .empty { background: var(--warn-wash); border: 1px dashed var(--line); border-radius: 12px; padding: 16px 20px; font-size: .85rem; color: var(--muted); max-width: 76ch; }
+  .foot { color: var(--muted); font-size: .78rem; margin-top: 30px; max-width: 80ch; }
+</style>
+
+<div class="wrap">
+  <div class="eyebrow"><b>OpticReports</b> · Venture Deal Analyzer · v1 · updated 2026-08-08</div>
+  <h1>Ledger Dashboard</h1>
+  <p class="sub">Every deal scored on the same fixed rubric by a 5-scorer independent panel plus a red team; every verdict logged with probability forecasts that resolve against reality. Hover (or tab to) any dotted element for the evidence and reasoning behind it.</p>
+
+  <div class="tiles">
+    <div class="tile"><span class="big">2</span><span class="cap">deals scored (both 2026-08-08, rubric v1)</span></div>
+    <div class="tile"><span class="big">3.18</span><span class="cap">average weighted score — <span class="tt" tabindex="0">scale<span class="box"><b>Weighted total</b> = Σ(weight × panel-median score)/100 on a 1–5 scale. Pre-committed weights; medians from 5 independent scorers who never see each other's scores. Mechanical aggregation beats holistic judgment by ~10% on average (Grove et&nbsp;al. 2000 meta-analysis, 136 studies).</span></span></span></div>
+    <div class="tile"><span class="big">6</span><span class="cap"><span class="tt" tabindex="0">probability forecasts pending<span class="box"><b>The improvement engine.</b> Each run logs P(next round ≤24mo), P(&lt;1x), P(≥10x). First resolutions land 2028-08 (next-round proxies), then 2033–34 (multiples). Scored with Brier scores per rubric version — the only contamination-proof validity signal (calibration training improved forecast accuracy ~10% in the Good Judgment Project; consistency alone ≠ accuracy).</span></span></span></div>
+    <div class="tile"><span class="big">0</span><span class="cap">forecasts resolved — calibration panel activates with the first resolution</span></div>
+  </div>
+
+  <h2>The instrument</h2>
+  <p class="sub" style="margin-bottom:8px">Fixed weights, anchored 1–5 scales, scores committed independently before any aggregation. Hover each segment for why it's weighted that way.</p>
+  <div class="weights">
+    <span class="wseg tt" tabindex="0" style="width:30%; background:var(--data-1)">Market 30<span class="box"><b>Market &amp; why-now — 30.</b> Outcome data says weight the horse: tracking firms from business plan → IPO, business lines almost never change while most founder-CEOs are replaced (Kaplan-Sensoy-Strömberg, J. Finance 2009). "Why now" must be falsifiable — timing explained ~42% of outcome variance in Bill Gross's 200-company analysis, and industry-vintage effects are huge (52% of 1983 computer startups IPO'd vs 18% of the 1985 cohort).</span></span>
+    <span class="wseg tt" tabindex="0" style="width:30%; background:var(--data-1); filter:brightness(1.18)">Team 30<span class="box"><b>Team — 30.</b> VCs rank team #1 (47% call it the single most important factor — Gompers et&nbsp;al. 2020, 885 VCs), but this rubric scores execution evidence, not charisma: performance loads on general ability + execution skills, not interpersonal traits (Kaplan-Klebanov-Sorensen, J. Finance 2012). Structured, anchored scoring predicts at r≈.42 vs r≈.19 for the unstructured meetings VCs actually run (Sackett et&nbsp;al. 2022).</span></span>
+    <span class="wseg tt" tabindex="0" style="width:15%; background:var(--data-2)">Moat 15<span class="box"><b>Product &amp; moat trajectory — 15.</b> At early stage only counter-positioning and cornered resources are assessable; scale/network/switching powers get built later (Helmer's 7 Powers stage mapping). So the rubric scores the moat <b>sequence</b>, not today's moat — and asks whether the incumbent's rational response is self-harming.</span></span>
+    <span class="wseg tt" tabindex="0" style="width:10%; background:var(--data-2); filter:brightness(1.15)">Trac 10<span class="box"><b>Traction — 10.</b> Provenance-weighted: verified &gt; claimed, and sector-overlay gates apply (paid offtakes for deep tech, flattening cohorts for consumer, burn multiple/NDR for SaaS). Sponsor-sourced numbers are scored skeptically until documents verify them.</span></span>
+    <span class="wseg tt" tabindex="0" style="width:10%; background:var(--data-mute)">Comp 10<span class="box"><b>Competition — 10.</b> Three rings: direct, adjacent, incumbent response. ~74% of incumbents respond only after year two — the question is whether the wedge compounds inside that window. Crowded ≠ disqualified: market pioneers fail ~47% of the time and hold ~10% long-run share; Google was ~the 12th search engine.</span></span>
+    <span class="wseg tt" tabindex="0" style="width:5%; background:var(--data-mute); filter:brightness(0.85)">5<span class="box"><b>Deal &amp; price — 5 at seed.</b> Seed entry price is a second-order return driver (AngelList: across a 5x valuation spread in seed deals, no difference in markup rates or multiples) — so it's mainly an ownership/fee-drag input. But the rubric switches on full entry-multiple discipline at Series B+, which is why Quaise's unpriced entry scored a unanimous 1.</span></span>
+  </div>
+  <div class="chips">
+    <span class="chip tt" tabindex="0">fact pack + provenance tags<span class="box">Every number is tagged VERIFIED / CLAIMED / SPONSOR / CONFLICT / UNKNOWN. Defense against the two documented LLM failure modes: hallucinated quant (~8–15% on unsourced financial claims) and garbage-in from founder-provided data.</span></span>
+    <span class="chip tt" tabindex="0">5-scorer independent panel<span class="box">Same fact pack + rubric, five independent runs, median + IQR reported. This is a <b>reliability gate</b> (IQR &gt; 1 on any dimension = rubric ambiguity, fix and re-run) — never a training signal. A system can be perfectly repeatable and consistently wrong ("reliability without validity").</span></span>
+    <span class="chip tt" tabindex="0">red team<span class="box">A standing adversary prompted to kill the deal — a genuinely adversarial dissenter, not an assigned role (assigned devil's advocates measurably underperform authentic dissent). Counters LLM sycophancy toward the pitch narrative, observed in ~58% of cases across frontier models. Red-team and panel disagreements are logged, not averaged away.</span></span>
+    <span class="chip tt" tabindex="0">pre-mortem + WWHTBT<span class="box">"It returned &lt;1x — why?" Prospective hindsight improves risk identification ~30% (Mitchell-Russo-Pennington 1989). The bull case is decomposed into what-would-have-to-be-true conditions graded evidenced / plausible / heroic — conjunctive heroics are where deals die.</span></span>
+    <span class="chip tt" tabindex="0">forecast ledger<span class="box">Probabilities anchored to base rates (~65% of venture deals return &lt;1x; ~4% return ≥10x — Correlation Ventures, 21,640 financings) and logged before the decision. Resolved on schedule; Brier-scored per rubric version. This is how the methodology becomes provably good rather than plausibly good.</span></span>
+  </div>
+
+  <hr class="rule">
+
+  <h2>Deals</h2>
+  <div class="deals">
+    <div class="deal cardish">
+      <span class="vchip v-watch tt" tabindex="0">BORDERLINE PASS / WATCH<span class="box"><b>Decider:</b> the signed multi-year offtake's counterparty + binding committed volumes (or an executed Tokai Rika PO at ~$3M/yr). Binding + named → defensible tail bet despite the price. Frame agreement / unnamed → pass. At $45M post, the specialty-only success (Zoltek-class $400–585M exit) nets just 1.5–3x after 2/20 — the copper tail is what you'd be buying.</span></span>
+      <h3>DexMat (Galvorn)</h3>
+      <div class="meta">Materials/deep tech · CNT conductor · $10M at $35M pre / $45M post · SPV 2/20 · scored 2026-08-08 · rev 2 of 2</div>
+      <div class="srow"><span class="name">Market (30)</span><span class="track"><span class="fill" style="width:80%"></span></span><span class="val tt" tabindex="0">4<span class="box"><b>4/5, IQR 0.</b> Verified why-now: record copper prices, IEA ~30% supply-gap projection by 2035, industrialized CNT feedstock, and a beachhead (mil-spec aerospace wire) already paying 10–100x copper metal price. Capped below 5: aluminum has 2x Galvorn's specific conductivity at ~1/100th the price — bulk lightweighting dollars flow to Al/CCA, confining the market to signal/EMI/harsh-environment niches.</span></span></div>
+      <div class="srow"><span class="name">Team (30)</span><span class="track"><span class="fill" style="width:60%"></span></span><span class="val tt" tabindex="0">3<span class="box"><b>3/5, IQR 0.</b> Complementary Pasquali-lab CTO + commercial CEO, real execution (20x capacity, 96% cost cut, ~$30M non-dilutive). Capped by: 11 years to $400K revenue, quiet co-founder departure, unverified "$400M+ exits" bio claim, and a candor pattern — "founded 3 years ago" vs verifiable 2015–16 operations; 1,000x flex claimed vs the company's own 100x.</span></span></div>
+      <div class="srow"><span class="name">Moat (15)</span><span class="track"><span class="fill" style="width:60%"></span></span><span class="val tt" tabindex="0">3 <small>IQR 1</small><span class="box"><b>3/5, IQR 1</b> (two scorers at 4). Exclusive Rice chlorosulfonic-acid wet-spinning lineage; the only serious predecessor (Nanocomp/Huntsman) stalled 6+ years post-acquisition — a near-cornered resource. Held down by: upstream CNT feedstock dependence, no plant of the modeled 144&nbsp;t/yr class built by anyone, and the incumbent response (aluminum) being effective rather than self-harming.</span></span></div>
+      <div class="srow"><span class="name">Traction (10)</span><span class="track"><span class="fill" style="width:60%"></span></span><span class="val tt" tabindex="0">3 <small>↑2</small><span class="box"><b>3/5 (rev 1: 2).</b> Moved on documents: $2M USAF contract transitioning Galvorn cathodes to mass production, one signed multi-year offtake (unnamed), Tokai Rika audited production with a $3M/yr PO in negotiation, 50+ paying customers, $400K 2025 revenue growing ~2x. Still capped: nearly all sponsor-sourced, anchor contract unnamed, POs are negotiations.</span></span></div>
+      <div class="srow"><span class="name">Competition (10)</span><span class="track"><span class="fill" style="width:60%"></span></span><span class="val tt" tabindex="0">3<span class="box"><b>3/5, IQR 0.</b> The CNT-conductor lane is nearly empty (competitor graveyard cuts both ways), but the real substitution rival is aluminum through incumbents' qualified channels — cheap, adequate, already winning EV/aero lightweighting dollars. Wedge compounds only in niches where strength/flex/frequency dominate.</span></span></div>
+      <div class="srow"><span class="name">Deal (5)</span><span class="track"><span class="fill" style="width:40%"></span></span><span class="val tt" tabindex="0">2<span class="box"><b>2/5, IQR 0.</b> $45M post ≈ 45–55x run-rate revenue after a 55% step-up in 3 months. Sponsor model has NO downside case (base = $10B IPO, 102x net), 0% option pools, 10x P/S vs its own 1–2x comps. Fee math: 10x net needs ≈12.5x gross ≈ $1.2–1.5B exit at realistic dilution. Redeemed slightly by oversubscription + strategic metals/mining investor.</span></span></div>
+      <div class="pchips">
+        <span class="pchip tt" tabindex="0">W 3.25 <small>↑3.15</small><span class="box">Weighted total, rev 1 → rev 2. Moved by document evidence (traction 2→3), not drift — the fact pack gained named customers and real round terms between revisions.</span></span>
+        <span class="pchip tt" tabindex="0">P(&lt;1x) 60%<span class="box">Panel median (rev 1: 72%; base rate ~65%). Below base because: real revenue, defense anchor, light near-term capex ($2–5M demo plant), empty competitive lane. Red team: 50%.</span></span>
+        <span class="pchip tt" tabindex="0">P(≥10x) 4–10%<span class="box">Panel 4% (≈base rate) vs red team 10% — the honest disagreement range, both logged. The tail requires the copper-parity cost curve (graded HEROIC: no advanced fiber has fallen that far that fast; carbon fiber took ~50 years).</span></span>
+        <span class="pchip tt" tabindex="0">next rd 70%<span class="box">P(raises next priced round ≤24mo). High: round oversubscribed ($15M interest vs $10M cap), planned Series A at $100M post within a year, $30M non-dilutive pipeline.</span></span>
+      </div>
+      <div class="decider"><b>Waiting on:</b> offtake counterparty + binding volumes; Tokai Rika PO execution; gross-vs-EBITDA on "50% margins"; Rice license scope. Resolves: 2028-08 (round), 2033+ (multiple).</div>
+      <a href="https://claude.ai/code/artifact/567b7ac1-e9a0-4812-b36c-2045f836f279">Full memo →</a>
+    </div>
+
+    <div class="deal d2 cardish">
+      <span class="vchip v-cond tt" tabindex="0">CONDITIONAL PASS → BUY ON PRICE<span class="box"><b>Decider (red team, verbatim):</b> "At or below the Series B institutional price, same preferred class, fees ≤2/20, with the executed Google agreement's conditions precedent visible — I flip to buy: that is co-investing alongside Prelude/JERA with the sector's strongest demand validation at a positive-EV tree. At any undisclosed markup ≥~1.5x institutional, PASS stands."</span></span>
+      <h3>Quaise Energy</h3>
+      <div class="meta">Deep tech / energy frontier · mm-wave superhot geothermal · Series B tranche, entry price UNDISCLOSED · scored 2026-08-08 · rev 2 of 2</div>
+      <div class="srow"><span class="name">Market (30)</span><span class="track"><span class="fill" style="width:80%"></span></span><span class="val tt" tabindex="0">4<span class="box"><b>4/5, IQR 0.</b> Best-validated demand in the pre-commercial class: data-center power demand +26–27% YoY, hyperscalers demonstrably underwriting tech risk, and the LP-verified signed $600M Google offtake + $24B framework. Capped below 5: the premium window is 2027–2030 delivery, which Quaise's realistic full-tech timeline misses.</span></span></div>
+      <div class="srow"><span class="name">Team (30)</span><span class="track"><span class="fill" style="width:60%"></span></span><span class="val tt" tabindex="0">3<span class="box"><b>3/5, IQR 0.</b> Credible founder-market fit (Araque: MIT + 15 yrs oil &amp; gas + The Engine) and an elite syndicate (Prelude repeat lead, JERA, Idemitsu, Mitsubishi, Nabors, Khosla first backer). Capped by: wholesale slippage of 2022 promises (500°C wells by 2026 → zero energy produced), a Series A1 that closed $4M under target, no shipped-at-scale evidence.</span></span></div>
+      <div class="srow"><span class="name">Moat (15)</span><span class="track"><span class="fill" style="width:60%"></span></span><span class="val tt" tabindex="0">3 <small>↑2</small><span class="box"><b>3/5 (rev 1: 2; one rev-2 dissent at 2).</b> Genuine cornered resource (MIT PSFC gyrotron IP) — IF full-depth works. Demonstrated 118 m vs required 10–20 km (~100–200x gap), vertical-only, dry granite; 400–500°C completions don't commercially exist; at accessible superhot depths (Newberry — where its own flagship sits) conventional rigs get similar physics.</span></span></div>
+      <div class="srow"><span class="name">Traction (10)</span><span class="track"><span class="fill" style="width:60%"></span></span><span class="val tt" tabindex="0">3 <small>↑2</small><span class="box"><b>3/5 (rev 1: 2).</b> The split score: offtake quality is anchor-5 (signed, named, $600M — Google) while technical traction is anchor-1 (zero energy produced, flagship phase 1 uses conventional drilling and never validates mm-wave). Offtake dollars are contingent revenue, not capital; conditions precedent unseen.</span></span></div>
+      <div class="srow"><span class="name">Competition (10)</span><span class="track"><span class="fill" style="width:40%"></span></span><span class="val tt" tabindex="0">2<span class="box"><b>2/5, IQR 0.</b> Last among funded next-gen geothermal players on deployment: Fervo IPO'd May 2026 with revenue and operating megawatts; Sage and XGS hold 150 MW Meta PPAs; Mazama drills toward superhot at the same volcano with proven rigs. Quaise's wedge exists only past a depth threshold it hasn't approached.</span></span></div>
+      <div class="srow"><span class="name">Deal (5)</span><span class="track"><span class="fill" style="width:20%"></span></span><span class="val tt" tabindex="0">1<span class="box"><b>1/5, unanimous in BOTH revisions.</b> Series B+ switches on entry-multiple discipline and every input is missing: no disclosed valuation anywhere, ~4x spread between secondary marks ($5.31–$22.32/sh), unknown share class and fees, urgency/scarcity mechanics, "IPO in 2–4 years" pre-revenue framing (reference class: &gt;80–90% drawdowns). The unknown price rescales every outcome branch at once.</span></span></div>
+      <div class="pchips">
+        <span class="pchip tt" tabindex="0">W 3.10 <small>↑2.85</small><span class="box">Weighted total, rev 1 → rev 2. Moved by the LP's verification of the Google agreement (traction 2→3, moat 2→3) — verification-driven movement is the system working as designed.</span></span>
+        <span class="pchip tt" tabindex="0">P(&lt;1x) 65%<span class="box">Panel median (rev 1: 78%; base ~65%). Red team: 55% — fabrication branch deleted, financing gravity cuts near-term death risk; physics failure still pays the offtake nothing.</span></span>
+        <span class="pchip tt" tabindex="0">P(≥10x) 4–6%<span class="box">Panel 4% vs red team 6%, both conditional on institutional-price entry. Red-team EV ≈ 1.7x net of 2/20 at that entry — positive, tail-driven. At a Hiive-mark entry (~4x institutional) the tree collapses to rev-1 numbers.</span></span>
+        <span class="pchip tt" tabindex="0">next rd 70%<span class="box">P(raises ≤24mo): $134M first close just landed (Prelude, JERA, Idemitsu), project-level financing teed up for late 2026.</span></span>
+      </div>
+      <div class="decider"><b>Waiting on:</b> SPV entry valuation/class/fees vs the July 7 institutional close (the entire decision), and the executed Google agreement's conditions precedent. Resolves: 2028-08 (round), 2034+ (multiple).</div>
+      <a href="https://claude.ai/code/artifact/0125607b-819f-4599-905a-0abb477eca56">Full memo →</a>
+    </div>
+  </div>
+
+  <h2>Side-by-side on the fixed rubric</h2>
+  <div class="legend"><span><span class="sw" style="background:var(--data-1)"></span>DexMat</span><span><span class="sw" style="background:var(--data-2)"></span>Quaise</span></div>
+  <figure>
+    <svg viewBox="0 0 700 330" width="700" role="img" aria-label="Dimension scores, DexMat vs Quaise">
+      <g class="bar"><rect class="b1" x="150" y="14" width="416" height="14" rx="3"><title>DexMat market: 4/5 — verified why-now, aluminum-capped</title></rect><text class="vallbl" x="572" y="26">4</text></g>
+      <g class="bar"><rect class="b2" x="150" y="32" width="416" height="14" rx="3"><title>Quaise market: 4/5 — elite demand validation, timing-window capped</title></rect><text class="vallbl" x="572" y="44">4</text>
+        <text class="axlbl" x="142" y="33" text-anchor="end">Market</text></g>
+      <g class="bar"><rect class="b1" x="150" y="66" width="312" height="14" rx="3"><title>DexMat team: 3/5 — real execution, candor flags</title></rect><text class="vallbl" x="468" y="78">3</text></g>
+      <g class="bar"><rect class="b2" x="150" y="84" width="312" height="14" rx="3"><title>Quaise team: 3/5 — elite syndicate, slipped promises</title></rect><text class="vallbl" x="468" y="96">3</text>
+        <text class="axlbl" x="142" y="85" text-anchor="end">Team</text></g>
+      <g class="bar"><rect class="b1" x="150" y="118" width="312" height="14" rx="3"><title>DexMat moat: 3/5, IQR 1 — near-cornered process, feedstock-dependent</title></rect><text class="vallbl" x="468" y="130">3</text></g>
+      <g class="bar"><rect class="b2" x="150" y="136" width="312" height="14" rx="3"><title>Quaise moat: 3/5 — cornered IP if full-depth works; 100–200x scale gap</title></rect><text class="vallbl" x="468" y="148">3</text>
+        <text class="axlbl" x="142" y="137" text-anchor="end">Moat</text></g>
+      <g class="bar"><rect class="b1" x="150" y="170" width="312" height="14" rx="3"><title>DexMat traction: 3/5 — USAF production contract, signed unnamed offtake</title></rect><text class="vallbl" x="468" y="182">3</text></g>
+      <g class="bar"><rect class="b2" x="150" y="188" width="312" height="14" rx="3"><title>Quaise traction: 3/5 — anchor-5 offtake, anchor-1 technical traction</title></rect><text class="vallbl" x="468" y="200">3</text>
+        <text class="axlbl" x="142" y="189" text-anchor="end">Traction</text></g>
+      <g class="bar"><rect class="b1" x="150" y="222" width="312" height="14" rx="3"><title>DexMat competition: 3/5 — empty lane, aluminum caps it</title></rect><text class="vallbl" x="468" y="234">3</text></g>
+      <g class="bar"><rect class="b2" x="150" y="240" width="208" height="14" rx="3"><title>Quaise competition: 2/5 — last among funded players on deployment</title></rect><text class="vallbl" x="364" y="252">2</text>
+        <text class="axlbl" x="142" y="241" text-anchor="end">Competition</text></g>
+      <g class="bar"><rect class="b1" x="150" y="274" width="208" height="14" rx="3"><title>DexMat deal &amp; price: 2/5 — $45M post at 45–55x run-rate, model with no downside case</title></rect><text class="vallbl" x="364" y="286">2</text></g>
+      <g class="bar"><rect class="b2" x="150" y="292" width="104" height="14" rx="3"><title>Quaise deal &amp; price: 1/5 unanimous — entry price undisclosed against a 4x secondary spread</title></rect><text class="vallbl" x="260" y="304">1</text>
+        <text class="axlbl" x="142" y="293" text-anchor="end">Deal &amp; price</text></g>
+      <text class="axlbl" x="150" y="324">0</text><text class="axlbl" x="566" y="324">5 · panel medians</text>
+    </svg>
+    <figcaption>Same rubric, same weights, same panel protocol — so the scores are comparable across deals, not one-off judgments. Both deals converged on a single decisive disclosure the sponsor hadn't volunteered: DexMat's offtake counterparty and Quaise's entry price.</figcaption>
+  </figure>
+
+  <h2>Forecast ledger</h2>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Date</th><th>Deal</th><th>Verdict</th><th><span class="tt" tabindex="0">P(next rd ≤24mo)<span class="box">Fast-resolving proxy — raised a priced round within 24 months. Resolves 2028-08 for both deals. Chosen because exits take 7–10 years; graduation-rate proxies give usable signal at n this small.</span></span></th><th><span class="tt" tabindex="0">P(&lt;1x)<span class="box">Probability the SPV returns less than invested capital, net of fees. Base rate ~65% of venture financings return &lt;1x (Correlation Ventures, 21,640 financings 2004–13).</span></span></th><th><span class="tt" tabindex="0">P(≥10x)<span class="box">The tail. Base rate ~4% of financings return &gt;10x. Where panel and red team disagree, both are logged — the spread is information, not noise.</span></span></th><th>W</th><th>Resolves</th><th>Outcome</th></tr></thead>
+    <tbody>
+      <tr><td class="num">2026-08-08</td><td>DexMat <span class="num" style="color:var(--muted)">rev 2</span></td><td>borderline pass / watch</td><td class="num">70%</td><td class="num">60%</td><td class="num">4% / RT 10%</td><td class="num">3.25</td><td class="num">2028-08 · 2033+</td><td class="pending">pending</td></tr>
+      <tr><td class="num">2026-08-08</td><td>Quaise <span class="num" style="color:var(--muted)">rev 2</span></td><td>conditional pass → buy on price</td><td class="num">70%</td><td class="num">65%</td><td class="num">4% / RT 6%</td><td class="num">3.10</td><td class="num">2028-08 · 2034+</td><td class="pending">pending</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>Calibration &amp; validation</h2>
+  <div class="empty"><b>Live forecasts:</b> none resolved yet — first resolutions August 2028. <b>Retrospective pilot (2026-08-09, n=12 YC W21/S21, blinded &amp; QA-audited):</b> pairwise c-stat 0.585, 95% CI [−0.44, 0.67] — <span class="tt" tabindex="0">indistinguishable from chance at this n, as pre-registered<span class="box">A shakedown run, not a verdict: 8/12 blind scorers flagged possible recognition of the company (training-data contamination), the label spread failed stratification (only 1 of 12 raised beyond seed), and scores compressed around 3 — three protocol findings now locked as fixes for the n=60 run (obscurer sampling frame stratified on funding outcomes, harder neutering, forced pairwise scoring). Full report: venture-deal-analyzer/validation/pilot-2026-08-09.md.</span></span>. The honest statement stands: the process is evidence-based (instrument choices verified by counter-agents 2026-08-09 — see validation/DECISION-2026-08-09.md); the <em>track record</em> does not exist yet.</div>
+
+  <p class="foot">Process: provenance-tagged fact pack → 5 independent scorers (median + IQR, reliability gate) → red team → tiered memo → ledger entry. Rubric v1 weights and anchors: <code>venture-deal-analyzer/templates/rubric.md</code> · design + evidence base: <code>venture-deal-analyzer/DESIGN.md</code> · this file: <code>venture-deal-analyzer/dashboard.html</code> — updated by each deal run; superseded revisions live in git history.</p>
+</div>
