@@ -217,8 +217,8 @@
     </tbody>
   </table></div>
 
-  <h2>Calibration</h2>
-  <div class="empty">No forecasts have resolved yet — the first resolutions arrive August 2028 (next-round proxies for both deals). When they do, this panel shows Brier scores by rubric version, panel-vs-red-team accuracy, and base-rate drift. Until then the honest statement is: the analyzer's process is evidence-based; its <em>track record</em> does not exist yet. Superseded revisions (DexMat rev 1, Quaise rev 1) are preserved in git history and count toward reliability analysis, not calibration.</div>
+  <h2>Calibration &amp; validation</h2>
+  <div class="empty"><b>Live forecasts:</b> none resolved yet — first resolutions August 2028. <b>Retrospective pilot (2026-08-09, n=12 YC W21/S21, blinded &amp; QA-audited):</b> pairwise c-stat 0.585, 95% CI [−0.44, 0.67] — <span class="tt" tabindex="0">indistinguishable from chance at this n, as pre-registered<span class="box">A shakedown run, not a verdict: 8/12 blind scorers flagged possible recognition of the company (training-data contamination), the label spread failed stratification (only 1 of 12 raised beyond seed), and scores compressed around 3 — three protocol findings now locked as fixes for the n=60 run (obscurer sampling frame stratified on funding outcomes, harder neutering, forced pairwise scoring). Full report: venture-deal-analyzer/validation/pilot-2026-08-09.md.</span></span>. The honest statement stands: the process is evidence-based (instrument choices verified by counter-agents 2026-08-09 — see validation/DECISION-2026-08-09.md); the <em>track record</em> does not exist yet.</div>
 
   <p class="foot">Process: provenance-tagged fact pack → 5 independent scorers (median + IQR, reliability gate) → red team → tiered memo → ledger entry. Rubric v1 weights and anchors: <code>venture-deal-analyzer/templates/rubric.md</code> · design + evidence base: <code>venture-deal-analyzer/DESIGN.md</code> · this file: <code>venture-deal-analyzer/dashboard.html</code> — updated by each deal run; superseded revisions live in git history.</p>
 </div>
