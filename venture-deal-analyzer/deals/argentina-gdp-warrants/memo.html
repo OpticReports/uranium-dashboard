@@ -1,0 +1,104 @@
+<title>Argentina GDP Warrants — Analyzer Memo</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚖️</text></svg>">
+<style>
+  :root { --paper:#F7F8F7; --card:#FFF; --ink:#1A2422; --muted:#56675F; --line:#DCE3DF; --accent:#0E7E53; --accent-ink:#0B6A46; --d1:#0E7E53; --d2:#A85F00; --danger:#9E3B1E; --wash:#EEF3F0; --warn:#F6EEE2; --tipbg:#22302B; --tipink:#EDF3EF; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --paper:#131A18; --card:#1A2320; --ink:#E4EBE7; --muted:#92A29A; --line:#2A3733; --accent:#45C69E; --accent-ink:#5ED2AC; --d1:#279B79; --d2:#C56F33; --danger:#E0805F; --wash:#1F2A26; --warn:#2A2119; --tipbg:#0C1210; --tipink:#DCE7E1; } }
+  :root[data-theme="dark"] { --paper:#131A18; --card:#1A2320; --ink:#E4EBE7; --muted:#92A29A; --line:#2A3733; --accent:#45C69E; --accent-ink:#5ED2AC; --d1:#279B79; --d2:#C56F33; --danger:#E0805F; --wash:#1F2A26; --warn:#2A2119; --tipbg:#0C1210; --tipink:#DCE7E1; }
+  * { box-sizing:border-box; } body { background:var(--paper); color:var(--ink); font-family:system-ui,sans-serif; font-size:15.5px; line-height:1.55; margin:0; }
+  .wrap { max-width:920px; margin:0 auto; padding:36px 22px 70px; }
+  h1,h2 { font-family:Charter,Georgia,serif; } h1 { font-size:1.7rem; margin:6px 0 4px; } h2 { font-size:1.15rem; margin:26px 0 6px; }
+  .eyebrow { font-family:ui-monospace,Menlo,monospace; font-size:.7rem; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); } .eyebrow b { color:var(--accent); }
+  .verdict { background:var(--warn); border-left:4px solid var(--danger); border-radius:0 10px 10px 0; padding:12px 16px; margin:14px 0; font-size:.95rem; }
+  .num { font-family:ui-monospace,Menlo,monospace; font-variant-numeric:tabular-nums; }
+  .cols { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:12px 0; } @media (max-width:760px){ .cols{grid-template-columns:1fr;} }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; font-size:.86rem; }
+  .card h3 { margin:0 0 6px; font-size:.95rem; font-family:Charter,Georgia,serif; }
+  ul { margin:6px 0; padding-left:20px; } li { margin-bottom:5px; }
+  figure { margin:14px 0; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 14px 6px; overflow-x:auto; }
+  figcaption { font-size:.78rem; color:var(--muted); margin-top:4px; }
+  svg text { font-family:ui-monospace,Menlo,monospace; font-variant-numeric:tabular-nums; }
+  .ax { fill:var(--muted); font-size:11.5px; } .vl { fill:var(--ink); font-size:12px; font-weight:600; }
+  .good { fill:var(--d1); } .bad { fill:var(--danger); } .mid { fill:var(--d2); }
+  .broken { background:var(--warn); border:1px solid var(--line); border-radius:12px; padding:12px 16px; font-size:.85rem; margin:12px 0; }
+  .audit { display:inline-block; font-family:ui-monospace,Menlo,monospace; font-size:.7rem; padding:3px 10px; border-radius:999px; background:var(--wash); border:1px solid var(--accent); color:var(--accent-ink); margin:2px 0 8px; }
+  .foot { color:var(--muted); font-size:.78rem; margin-top:26px; }
+</style>
+<div class="wrap">
+  <div class="eyebrow"><b>OpticReports</b> · Deal Analyzer · non-venture ledger entry · rev 1 · 2026-08-09</div>
+  <h1>Argentina USD GDP Warrants — "Project Patagonia" SPV</h1>
+  <div class="eyebrow">sovereign litigation claim · ISIN US040114GM64 · fund: Project Patagonia LLC ($15.27M, exempt adviser) · blind fresh-underwriting basis</div>
+
+  <div class="verdict"><b>Verdict: PASS for fresh money at ~$5 (pre-ruling).</b> The litigation skeleton is real, but the price has caught up with the hope: audited EV ≈ <b class="num">1.15x net</b> over 2–3+ years (≈5–7% IRR) for a coin-flip-adjacent court ruling that is already overdue, in a no-redemption vehicle whose 12–24-month life is shorter than its own base-case litigation clock. The R1 offer at $3.60 (EV ≈ 1.56x net) was a defensible small speculative buy; the ~35% inter-round markup consumed most of the edge. <b>Revisit trigger:</b> MTD denied and price &lt;$8 → the tree likely clears 1.5x net.</div>
+  <span class="audit">✓ legal claims verified (10-point adversarial pass) · EV tree counter-agent audited: APPROVED WITH CORRECTIONS</span>
+
+  <h2>Probability-weighted payout tree — $5.00 entry, net of 20% carry</h2>
+  <figure>
+    <svg viewBox="0 0 860 240" width="860" role="img" aria-label="EV branches">
+      <text class="ax" x="8" y="30">MTD granted — claim dies again</text>
+      <rect class="bad" x="330" y="18" width="34" height="15" rx="3"/><text class="vl" x="372" y="31">0.35x</text>
+      <text class="ax" x="640" y="30">p .40 · contributes 0.14</text>
+      <text class="ax" x="8" y="65">Tender / settlement (~$11, 31% off claim)</text>
+      <rect class="good" x="330" y="53" width="192" height="15" rx="3"/><text class="vl" x="530" y="66">1.96x</text>
+      <text class="ax" x="640" y="65">p .25 · contributes 0.49</text>
+      <text class="ax" x="8" y="100">MTD survives → merits win → slow collection</text>
+      <rect class="good" x="330" y="88" width="223" height="15" rx="3"/><text class="vl" x="561" y="101">2.28x</text>
+      <text class="ax" x="640" y="100">p .20 · contributes 0.46</text>
+      <text class="ax" x="8" y="135">MTD survives → merits loss</text>
+      <rect class="bad" x="330" y="123" width="39" height="15" rx="3"/><text class="vl" x="377" y="136">0.40x</text>
+      <text class="ax" x="640" y="135">p .15 · contributes 0.06</text>
+      <line x1="330" y1="10" x2="330" y2="150" stroke="var(--line)"/>
+      <line x1="428" y1="10" x2="428" y2="150" stroke="var(--muted)" stroke-dasharray="3 3"/>
+      <text class="ax" x="428" y="163" text-anchor="middle">1.0x</text>
+      <rect class="mid" x="330" y="180" width="113" height="17" rx="3"/><text class="vl" x="451" y="194">EV 1.15x net · panel base</text>
+      <text class="ax" x="8" y="194">Σ p × net multiple</text>
+      <text class="ax" x="8" y="222">Sensitivity: P(dismiss) .25 → EV 1.35x · .55 → EV 0.95x (auditor: .40 is the optimistic edge of the defensible range)</text>
+    </svg>
+    <figcaption>Audited tree at ~R2/current basis. Same payouts from the $3.60 R1 basis: EV ≈ 1.56x net — entry price, not the legal case, is what changed between rounds.</figcaption>
+  </figure>
+
+  <h2>Entry price vs claim value ladder</h2>
+  <figure>
+    <svg viewBox="0 0 860 210" width="860" role="img" aria-label="price ladder">
+      <line x1="70" y1="170" x2="830" y2="170" stroke="var(--line)"/>
+      <rect class="mid" x="70" y="150" width="14" height="20" rx="2"/><text class="ax" x="70" y="188">$0.38</text><text class="ax" x="70" y="200">2020</text>
+      <rect class="mid" x="150" y="130" width="14" height="40" rx="2"/><text class="ax" x="150" y="188">~$1</text><text class="ax" x="150" y="200">Dec 21</text>
+      <rect class="good" x="260" y="98" width="14" height="72" rx="2"/><text class="vl" x="243" y="90">$3.60</text><text class="ax" x="250" y="188">R1 entry</text><text class="ax" x="248" y="200">Q1 26</text>
+      <rect class="good" x="380" y="73" width="14" height="97" rx="2"/><text class="vl" x="363" y="65">$4.85</text><text class="ax" x="368" y="188">R2 entry</text><text class="ax" x="362" y="200">late Jun 26</text>
+      <rect class="bad" x="530" y="150" width="14" height="20" rx="2"/><text class="ax" x="512" y="188">~$1.75</text><text class="ax" x="508" y="200">if MTD granted</text>
+      <rect class="mid" x="650" y="0" width="14" height="170" rx="2"/><text class="vl" x="633" y="14">$11</text><text class="ax" x="630" y="188">settlement</text><text class="ax" x="632" y="200">31% off claim</text>
+      <rect class="mid" x="780" y="0" width="14" height="170" rx="2"/><text class="vl" x="757" y="14">$16+</text><text class="ax" x="762" y="188">full claim</text><text class="ax" x="748" y="200">simple 9% int.</text>
+    </svg>
+    <figcaption>Per $100 notional. The claim value ($16, simple interest only — the deck's compounded scenarios are legally unavailable) hasn't changed between rounds; the distance to it has. Settlement bar shown at the audited 31% discount midpoint.</figcaption>
+  </figure>
+
+  <h2>What verification established</h2>
+  <div class="cols">
+    <div class="card"><h3>Solid (manager accurate)</h3><ul>
+      <li>Refiled USD action 26-cv-337 (SDNY, Preska), filed 2026-01-15 inside the CPLR 205(a) window; ~$1.3B claim</li>
+      <li>EUR judgment final: €1.33B + interest, UKSC refusal Oct 2024; DC recognition action pending; UK Later Years claim €1.58B (Mar 2026)</li>
+      <li>SDNY Later Years case: trustee claims survived Sept 2025 (funds' claims dismissed)</li>
+      <li>Warrant mechanics: $0.48/unit cap, 2035 expiry, ~$0.30/unit USD capacity plausible</li>
+      <li>Vehicle exists: SEC exempt-reporting adviser CRD 335981; principals Kyle Wang &amp; Xiaoyue Dai; fund $15.27M, 26 investors</li>
+    </ul></div>
+    <div class="card"><h3>Broken (wrong or misleading)</h3><ul>
+      <li><b>Compounded 9% scenarios (656–767%)</b>: NY prejudgment interest is simple — a legal error, not a modeling choice</li>
+      <li><b>Gold-at-NY-Fed seizure lever</b>: refuted by NML v. BCRA central-bank immunity; gold likely in London</li>
+      <li><b>"$377M collected"</b>: a forfeited €330M appeal security; the EUR judgment is substantially UNPAID after ~22 months</li>
+      <li><b>Bear case −14% floor</b>: indefensible; MTD granted ≈ 0.35x</li>
+      <li><b>Omitted</b>: the USD claims already LOST TWICE on the no-action clause (2024; 2d Cir. affirmed Jul 2025) — the refiling exists because of those losses; Sept 2025 prescription ruling threatens 2013-vintage claims</li>
+      <li><b>GP commit "10–20%"</b> vs Form ADV ~8% insider ownership</li>
+    </ul></div>
+  </div>
+
+  <div class="broken"><b>The structural read:</b> liability is only half this trade — the manager's own EUR precedent shows a final, unappealable judgment producing essentially no voluntary payment in 22 months. The genuinely attractive path is a tender/settlement as Argentina cleans its curve for NY-law market re-entry (macro leg: normalization is real — EMBI ~425, B3/B− ratings, funded through 2026). But Argentina is also litigating from strength (YPF $16.1B judgment reversed Mar 2026) and settles selectively. Fresh money at $5 is buying the hope premium in front of an overdue binary ruling, inside a two-person $15M vehicle with no redemption and a fund life shorter than its own litigation clock.</div>
+
+  <h2>Questions for the manager (answers would re-open the verdict)</h2>
+  <ul style="font-size:.88rem">
+    <li>The fund's actual blended cost basis, R1-vs-R2 investor treatment, current mark and mark policy, and the setup fee amount</li>
+    <li>Reconcile the ADV's ~8% insider stake with the pitched "10–20% GP commitment"; disclose the GP's personal position and any purchases from/sales to the fund</li>
+    <li>What happens at month 24 if merits are mid-appeal — extension mechanics, who votes, what fees continue</li>
+    <li>Their MTD-loss plan: does the fund hold through a refiled-again scenario, sell the residual, or dissolve?</li>
+  </ul>
+
+  <p class="foot">Process: provenance fact pack (3 manager docs, all extracted incl. gated deck) → blind macro leg → 10-point adversarial legal verification → EV tree → independent audit (APPROVED WITH CORRECTIONS; corrections applied pre-display). Files: factpack.md · verification.md · memo.md · this visual. Analysis run blind to any existing LP position per instruction. Probabilities are judgment, not frequencies; prices partially LP-recalled pending statement confirmation. Ledger: forecast logged 2026-08-09, resolution on MTD ruling + fund outcome.</p>
+</div>

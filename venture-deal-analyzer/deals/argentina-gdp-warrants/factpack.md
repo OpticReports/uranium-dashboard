@@ -66,10 +66,13 @@ verification (pending at rev 1 close — see verification.md).
 - Later Years USD case No. 23-cv-10838: years 2017/18/21/22 survived in
   part; ~$5–6B pre-interest; Answer Nov 2025, 15 defenses incl.
   champerty.
-- EUR: English judgment final (UKSC refused permission 2024-10-08);
-  €1.33B + interest (sources conflict: €1.56B / "$1.75B"); ~$377M
-  collected; ~€1.6B outstanding; DC enforcement pending; new UK Later
-  Years claim 2026-03-13 (~€1.58B).
+- EUR: English judgment final (UKSC refused permission 2024-10-14 —
+  pitch's 10-08 date wrong); €1.33B + interest (sources conflict:
+  €1.56B / "$1.75B"); "~$377M collected" [BROKEN per verification:
+  actually a forfeited €330M appeal security; holders state the
+  judgment remains substantially unpaid]; ~€1.6B outstanding; DC
+  enforcement pending; new UK Later Years claim 2026-03-13 (~€1.58B,
+  years 2017/2021/2022 — not 2018).
 - Context: first Milei-era holdout settlement (Attestor/Bainbridge,
   terms undisclosed); YPF $16.1B judgment REVERSED 2026-03-27 (2d Cir,
   2-1) — cuts against the "Argentina always loses and pays" narrative;
