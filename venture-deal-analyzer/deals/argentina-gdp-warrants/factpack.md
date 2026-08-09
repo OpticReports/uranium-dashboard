@@ -22,14 +22,14 @@ verification (pending at rev 1 close — see verification.md).
   listing "ETLX" — the USD GDP-linked securities.
 - TWO OFFERING ROUNDS [LP-PROVIDED, corrected 2026-08-09]:
   Round 1 offered mid-Q1 2026, entry ~$3.60/100 (matches the deck's
-  scenario basis). Round 2 offered late June 2026 at a higher basis —
-  "lower to mid $5 range" (~$5.00–5.50/100). The warrant price rose
-  ~40–50% between rounds (consistent with the Substack's Mar 2026
-  $4–5 market drifting up post-refiling).
+  scenario basis). Round 2 offered late June 2026 at ~35% above R1
+  (LP-corrected 2026-08-09): ≈$4.85/100, consistent with the
+  Substack's Mar 2026 $4–5 market drifting up post-refiling.
   Return math consequence: the deck's headline scenarios (550% base)
-  hold only for Round 1 money. At a $5.25 R2 basis the same $20.22
-  blended-base payout is ~285%; the bull $23.08 is ~340%; the "bear
-  −14%" floor rescales too. Any current entry is at/above R2 basis.
+  hold only for Round 1 money. At a ~$4.85 R2 basis the same $20.22
+  blended-base payout is ~315%; the bull $23.08 is ~375%; the "bear
+  −14%" floor rescales too. Any current entry is at/around R2 basis.
+  Both figures remain LP-recalled — confirm against subscription docs.
 - ANALYSIS BASIS RULE (LP instruction, 2026-08-09): the LP holds
   positions from BOTH rounds but has directed the analysis to run
   BLIND to that — a fresh underwriting decision at today's price and
