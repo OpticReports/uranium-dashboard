@@ -1,0 +1,172 @@
+<title>Where the expectancy comes from — DexMat vs Quaise</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚖️</text></svg>">
+<style>
+  :root {
+    --paper:#F7F8F7; --card:#FFFFFF; --ink:#1A2422; --muted:#56675F; --line:#DCE3DF;
+    --accent:#0E7E53; --accent-ink:#0B6A46; --dex:#0E7E53; --qua:#A85F00;
+    --dex-soft:#7FBFA4; --qua-soft:#D6B489; --danger:#9E3B1E; --wash:#EEF3F0; --warn:#F6EEE2;
+    --grid:#C9D6CE;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:#131A18; --card:#1A2320; --ink:#E4EBE7; --muted:#92A29A; --line:#2A3733;
+      --accent:#45C69E; --accent-ink:#5ED2AC; --dex:#279B79; --qua:#C56F33;
+      --dex-soft:#1C5F4B; --qua-soft:#7A4520; --danger:#E0805F; --wash:#1F2A26; --warn:#2A2119;
+      --grid:#3A4A44;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:#131A18; --card:#1A2320; --ink:#E4EBE7; --muted:#92A29A; --line:#2A3733;
+    --accent:#45C69E; --accent-ink:#5ED2AC; --dex:#279B79; --qua:#C56F33;
+    --dex-soft:#1C5F4B; --qua-soft:#7A4520; --danger:#E0805F; --wash:#1F2A26; --warn:#2A2119;
+    --grid:#3A4A44;
+  }
+  * { box-sizing:border-box; }
+  body { background:var(--paper); color:var(--ink); margin:0;
+    font-family:system-ui,-apple-system,"Segoe UI",sans-serif; font-size:16px; line-height:1.6; }
+  .wrap { max-width:880px; margin:0 auto; padding:40px 22px 72px; display:flex; flex-direction:column; gap:6px; }
+  h1,h2 { font-family:Charter,"Bitstream Charter",Cambria,Georgia,serif; text-wrap:balance; margin:0; }
+  h1 { font-size:1.85rem; line-height:1.25; }
+  h2 { font-size:1.2rem; margin-top:30px; }
+  .eyebrow { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:.7rem; letter-spacing:.13em;
+    text-transform:uppercase; color:var(--muted); }
+  p { margin:10px 0; max-width:66ch; }
+  .lede { font-size:1.02rem; color:var(--muted); max-width:68ch; }
+  .num { font-family:ui-monospace,Menlo,monospace; font-variant-numeric:tabular-nums; }
+  figure { margin:16px 0 6px; background:var(--card); border:1px solid var(--line);
+    border-radius:12px; padding:18px 18px 10px; overflow-x:auto; }
+  figcaption { font-size:.8rem; color:var(--muted); margin-top:8px; max-width:70ch; }
+  svg text { font-family:ui-monospace,Menlo,Consolas,monospace; font-variant-numeric:tabular-nums; }
+  .lbl { fill:var(--muted); font-size:11.5px; }
+  .val { fill:var(--ink); font-size:12.5px; font-weight:700; }
+  .valneg { fill:var(--danger); font-size:12.5px; font-weight:700; }
+  .seg-lbl { fill:#fff; font-size:10.5px; font-weight:600; }
+  .waterline { stroke:var(--danger); stroke-width:1.5; stroke-dasharray:4 3; }
+  .wl-txt { fill:var(--danger); font-size:10.5px; }
+  .legend { display:flex; flex-wrap:wrap; gap:6px 18px; font-size:.76rem; color:var(--muted); margin:2px 0 10px; }
+  .sw { display:inline-block; width:11px; height:11px; border-radius:3px; margin-right:6px; vertical-align:-1px; }
+  .callout { background:var(--wash); border-left:3px solid var(--accent); border-radius:0 10px 10px 0;
+    padding:12px 16px; margin:16px 0; font-size:.93rem; }
+  .callout.warn { background:var(--warn); border-left-color:var(--danger); }
+  .callout p { margin:6px 0; }
+  table { border-collapse:collapse; width:100%; font-size:.85rem; margin:10px 0; }
+  th,td { text-align:left; padding:7px 12px 7px 0; border-bottom:1px solid var(--line); }
+  th { font-family:ui-monospace,Menlo,monospace; font-size:.68rem; letter-spacing:.09em;
+    text-transform:uppercase; color:var(--muted); font-weight:600; }
+  td.n { font-family:ui-monospace,Menlo,monospace; font-variant-numeric:tabular-nums; text-align:right; }
+  .tbl-wrap { overflow-x:auto; }
+  strong { font-weight:650; }
+</style>
+
+<div class="wrap">
+  <div class="eyebrow">OpticReports · Deal Analyzer · method note · 2026-08-09</div>
+  <h1>Where the expectancy actually comes from</h1>
+  <p class="lede">Both deals run through the same sponsor on the same terms. So the head-to-head reduces to one question: if you strip out the moonshot, is there still a business underneath? For one of them there is.</p>
+
+  <h2>1. Every dollar of expected value, traced to its source</h2>
+  <p>Expected value is just each outcome's payoff multiplied by its probability, summed. Breaking that sum apart shows which outcomes are actually carrying the number.</p>
+
+  <figure>
+    <div class="legend">
+      <span><span class="sw" style="background:var(--danger)"></span>failure branch</span>
+      <span><span class="sw" style="background:var(--dex-soft)"></span>base case (DexMat) / partial (Quaise)</span>
+      <span><span class="sw" style="background:var(--dex)"></span>mid success</span>
+      <span><span class="sw" style="background:var(--qua)"></span>the tail</span>
+    </div>
+    <svg viewBox="0 0 760 200" width="760" role="img" aria-label="Expected value contribution by outcome branch">
+      <line class="waterline" x1="470" y1="16" x2="470" y2="150"></line>
+      <text class="wl-txt" x="470" y="166" text-anchor="middle">1.0x — break even</text>
+
+      <text class="lbl" x="0" y="46">DexMat</text>
+      <rect x="150" y="30" width="28.8" height="26" rx="2" fill="var(--danger)"></rect>
+      <rect x="178.8" y="30" width="145.6" height="26" fill="var(--dex-soft)"></rect>
+      <text class="seg-lbl" x="251" y="47" text-anchor="middle" style="fill:var(--ink)">0.46</text>
+      <rect x="324.4" y="30" width="160" height="26" fill="var(--dex)"></rect>
+      <text class="seg-lbl" x="404" y="47" text-anchor="middle">0.50</text>
+      <rect x="484.4" y="30" width="192" height="26" rx="2" fill="var(--qua)"></rect>
+      <text class="seg-lbl" x="580" y="47" text-anchor="middle">0.60</text>
+      <text class="val" x="686" y="48">1.65x</text>
+
+      <text class="lbl" x="0" y="106">Quaise</text>
+      <rect x="150" y="90" width="20.5" height="26" rx="2" fill="var(--danger)"></rect>
+      <rect x="170.5" y="90" width="99.8" height="26" fill="var(--qua-soft)"></rect>
+      <text class="seg-lbl" x="220" y="107" text-anchor="middle" style="fill:var(--ink)">0.31</text>
+      <rect x="270.3" y="90" width="129.6" height="26" fill="var(--dex)"></rect>
+      <text class="seg-lbl" x="335" y="107" text-anchor="middle">0.41</text>
+      <rect x="399.9" y="90" width="96" height="26" rx="2" fill="var(--qua)"></rect>
+      <text class="seg-lbl" x="448" y="107" text-anchor="middle">0.30</text>
+      <text class="val" x="686" y="108">1.08x</text>
+
+      <text class="lbl" x="150" y="186">0</text>
+      <text class="lbl" x="310" y="186">0.5x</text>
+      <text class="lbl" x="630" y="186">1.5x · net multiple</text>
+    </svg>
+    <figcaption>DexMat on the audited panel tree; Quaise on the red team's post-verification rev-3 tree. Segments are probability × net payoff, so the bar length <em>is</em> the expected value.</figcaption>
+  </figure>
+
+  <p>Notice the trap in reading this chart: Quaise's tail contributes 0.30 of 1.08 (28%), and DexMat's contributes 0.60 of 1.65 (36%). By that measure DexMat looks <em>more</em> tail-dependent. That measure is wrong, and here is the one that matters.</p>
+
+  <h2>2. The test that actually separates them: delete the tail</h2>
+  <p>Set the moonshot probability to zero, redistribute that probability across the remaining outcomes, and ask what's left. This is the honest question, because a 3–4% probability estimate is the least knowable number in either model — nobody can defend 3% over 1.5% with real evidence.</p>
+
+  <figure>
+    <svg viewBox="0 0 760 230" width="760" role="img" aria-label="Expected value with and without the tail branch">
+      <line class="waterline" x1="470" y1="14" x2="470" y2="182"></line>
+      <text class="wl-txt" x="470" y="198" text-anchor="middle">1.0x — break even</text>
+
+      <text class="lbl" x="0" y="38">DexMat · full tree</text>
+      <rect x="150" y="24" width="526" height="22" rx="3" fill="var(--dex)"></rect>
+      <text class="val" x="686" y="40">1.65x</text>
+
+      <text class="lbl" x="0" y="80">DexMat · tail deleted</text>
+      <rect x="150" y="66" width="348" height="22" rx="3" fill="var(--dex-soft)"></rect>
+      <text class="val" x="508" y="82">1.09x</text>
+
+      <text class="lbl" x="0" y="128">Quaise · full tree</text>
+      <rect x="150" y="114" width="346" height="22" rx="3" fill="var(--qua)"></rect>
+      <text class="val" x="506" y="130">1.08x</text>
+
+      <text class="lbl" x="0" y="170">Quaise · tail deleted</text>
+      <rect x="150" y="156" width="258" height="22" rx="3" fill="var(--qua-soft)"></rect>
+      <text class="valneg" x="418" y="172">0.81x</text>
+
+      <text class="lbl" x="150" y="220">0</text>
+      <text class="lbl" x="620" y="220">1.5x · net multiple</text>
+    </svg>
+    <figcaption>Tail deleted = that branch's probability set to zero and redistributed proportionally across the remaining outcomes.</figcaption>
+  </figure>
+
+  <div class="callout">
+    <p><strong>DexMat without any moonshot: 1.09x — still above water.</strong> The Zoltek-class specialty exit is a 26%-probability outcome that already pays 1.75x net. You are underwritten by a business that exists: ~$400K of revenue growing 2x, 50+ paying customers, product shipping today. The copper-parity tail is upside you aren't paying for.</p>
+  </div>
+  <div class="callout warn">
+    <p><strong>Quaise without the moonshot: 0.81x — a 19% loss.</strong> Its two non-failure branches are a 24%-probability IP/pivot at 1.30x and a 9% commercial success at 4.5x. Together they don't reach break-even. Everything above water comes from a 3% branch.</p>
+  </div>
+
+  <h2>3. How much of the tail do you need just to break even?</h2>
+  <p>Turn the question around. Solve for the tail probability at which each deal exactly returns your capital.</p>
+
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>&nbsp;</th><th style="text-align:right">Tail probability needed to break even</th><th style="text-align:right">Tail probability actually carried</th><th style="text-align:right">Margin</th></tr></thead>
+    <tbody>
+      <tr><td>DexMat</td><td class="n">0% — none required</td><td class="n">4%</td><td class="n">entire tail is surplus</td></tr>
+      <tr><td>Quaise</td><td class="n">2.1%</td><td class="n">3%</td><td class="n">0.9 points</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>Quaise's whole case rests on a 3% estimate being right when 2.1% is the break-even line. Nobody — not the sponsor, not the panel, not me — can distinguish 3% from 2% from 1.5% for an event like "millimeter-wave drilling reaches commercial depth with survivable completions and lists above Fervo's peak." The margin is inside the noise of the estimate.</p>
+
+  <h2>4. And the tail is worse than it looks, because the two variables aren't independent</h2>
+  <p>My original tree made an error the red team caught: it treated the <em>probability</em> the tail fires and the <em>size</em> of the tail as separate inputs. They aren't. Both are driven by the same thing — the state of the geothermal and climate-tech listing market in 2029–33.</p>
+  <p>If that window is open and hot, Quaise is both more likely to get financed all the way to an exit <em>and</em> more likely to exit at a rich multiple. If it's shut, the company is less likely to reach an exit <em>and</em> any exit is cheaper. The good case and the good price arrive together; so do the bad ones. That correlation removes the diversification you get from assuming "low probability but high payoff" are independent draws. Applying it: <span class="num">1.90x → 1.15x → <strong>0.94x</strong></span>. Below water without forming any view on drilling physics. Fervo, the comp the whole case leans on, is already 21% below its debut.</p>
+
+  <h2>5. Why the shared sponsor drops out of the comparison — but not the decision</h2>
+  <p>Both vehicles are Delta4 Capital SPVs: same manager, same 2% one-time plus 20% carry, same absent hurdle, same ~$887k of lifetime raises behind them, same missing Form ADV. In a head-to-head, a factor identical on both sides cancels — it cannot tell you which to pick.</p>
+  <p>It emphatically does not cancel for the question <em>should I invest at all</em>, or <em>how much</em>. Two identical faulty brakes don't help you choose between two cars; they might still tell you to walk. And if you hold both, you don't have two positions — you have one manager bet expressed twice, in illiquid vehicles you can't redeem from.</p>
+
+  <div class="callout">
+    <p><strong>The practical difference, in one line.</strong> DexMat's expectancy rests on claims diligence can settle — is the offtake real, is the counterparty named, are the volumes binding. Quaise's rests on a 3% probability estimate that no amount of diligence can sharpen. Prefer the bet whose crux is a fact you can go get.</p>
+  </div>
+
+  <p class="lede" style="margin-top:22px; font-size:.86rem">Sources: audited EV trees in <span class="num">deals/dexmat/memo.md</span>, <span class="num">deals/quaise/verification-spv-2026-08-09.md</span>, and the rev-3 red-team review. Probabilities are panel and red-team judgment, not measured frequencies — the trees make the structure of each bet explicit; they do not make it precise.</p>
+</div>
