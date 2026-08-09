@@ -103,7 +103,10 @@ Ranked by evidence weight:
    higher. Code track record as company-success signal, not returns signal.
 3. **Team composition & trait diversity**: 3+ founders >2x solo success odds;
    diverse founder archetypes 8–10x solo (McCarthy et al. 2023, *Sci Rep*,
-   n≈21k, 82.5% classifier accuracy — correlational, Twitter-inferred).
+   n≈21k — correlational, Twitter-inferred. CORRECTED 2026-08-09 by
+   counter-agent verification: the paper's 82.5% classifier separates
+   founders from EMPLOYEES, not successful from unsuccessful startups;
+   do not cite it as success-prediction accuracy).
    Technical+commercial mix matters for enterprise (First Round: technical
    cofounders +230% enterprise, no benefit consumer). Counter-evidence
    (Greenberg-Mollick): solo founders survive better — solo is a

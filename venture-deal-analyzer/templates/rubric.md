@@ -75,6 +75,10 @@ academic-spinout founders with deep domain lineage but no industrial
 scale-up score here, not higher, absent scale evidence). 5:
 shipped-at-scale in this domain's hard part; prior outcome in the same
 industry-year class; clean structure.
+Pedigree earns capped credit: prior EXIT outcomes count; degrees and
+brand-name employers alone do not (verified 2026-08-09: Rebel disclosure
+— master's/PhD uncorrelated with success; Davenport — founder
+backgrounds are systematically over-weighted relative to optimum).
 
 ### Moat trajectory
 1: feature-level edge; incumbent's rational response kills it. 3: real
