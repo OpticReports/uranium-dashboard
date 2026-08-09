@@ -42,6 +42,16 @@ genuinely meaningless.
 - Agent-governed pattern for studies/builds: research or counter-agent pass
   -> build with merge-blocking gate tests -> honesty box with frozen
   backtest numbers -> commit/push -> note which service to redeploy.
+- MISSING KEY INPUTS: ASK, DON'T ANALYZE AROUND THEM (Casey, 2026-08-09).
+  If a decision hinges on an input we don't have, STOP and ask for it —
+  never record it as UNKNOWN and publish a verdict conditioned on it.
+  If a supplied document can't be opened/parsed (PDF, DocSend, gated
+  link), say so explicitly in the reply and request it another way;
+  never let an unread document become a silent gap. Before any memo
+  ships, re-read every artifact the LP provided and diff it against the
+  fact pack's UNKNOWN list. Origin: the Quaise SPV terms (valuation,
+  class, fees) sat on page 1 of the Delta4 teaser while the dashboard
+  said "waiting on valuation" for two revisions.
 - Counter-agent verification is MANDATORY (Casey, 2026-08-09): every
   research pass, dataset, scoring instrument, and analytical artifact gets
   an adversarial counter-agent review BEFORE its findings are acted on,
