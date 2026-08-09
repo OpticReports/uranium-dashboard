@@ -1,78 +1,130 @@
-# Deal scoring rubric — v1 (fixed instrument)
+# Deal scoring rubric — v1.1 (fixed instrument)
 
-Every scorer receives: the grounded fact pack (provenance-tagged), the sector
-overlay, and this rubric. Scores are integers 1–5 per dimension, anchored
-below. Scorers work independently and must not see other scores. Weights are
-pre-committed and may only change between deals, never during one.
+Version: **1.1** (2026-08-08). v1 in git history. Changes from v1 were
+adopted on the strength of a counter-agent review of the instrument
+itself (see `templates/rubric-review-v1.md`): gates added, traction and
+deal split into their components, timing promoted to its own axis,
+stage-dependent weight vectors, sensitivity-band reporting, and the
+weighted total demoted from headline to tiebreaker. Weight *tuning*
+beyond these coarse vectors waits for ledger outcomes (Dawes 1979:
+improper linear models are weight-insensitive; precision now is theater).
+Stamp `rubric_version` on every ledger entry.
 
-Weights: market/business 30 · team 30 · product/moat 15 · traction 10 ·
-competition 10 · deal/price 5.
+## 0. GATES — evaluated first, pass/fail, before any scoring
 
-## Dimensions and anchors
+A failed gate is a kill regardless of scores. Gates are disjunctive
+because the downside decision is disjunctive: one fatal flaw kills.
 
-### 1. Market & why-now (weight 30)
-- 1: No falsifiable why-now; static or shrinking market; top-down TAM only.
-- 3: Real market with plausible-but-unproven inflection; bottom-up sizing
-  possible but thin; timing risk material.
-- 5: Named enabling inflection with evidence the cost/behavior curve crossed;
-  bottom-up demand build; market expands if price/performance improves 5–10x
-  (elasticity); favorable industry-vintage cohort.
+- **G1 Verification**: a material sponsor/company metric remains false or
+  misrepresented after diligence and query (basis-switching, invented
+  counterparties, fabricated figures). Honest-error corrections and
+  puffery resolved on questioning do not trip the gate; refusal or
+  persistence does.
+- **G2 Vehicle math**: ownership after fees/structure cannot plausibly
+  return the vehicle even in the EVIDENCED tail case (anchor: "ownership
+  too small to matter even in the tail" is a kill, not a 1/5).
+- **G3 Horizon fit**: years-to-liquidity under base rates exceeds the
+  vehicle's realistic horizon with no interim-exit path.
+- **G4 (SPV only) Price visibility**: entry price/class/fees undisclosed
+  after request ⇒ the deal is un-underwritable — verdict is automatically
+  "conditional: pass until disclosed," never a buy.
 
-### 2. Team (weight 30)
-Score execution evidence, not charisma. Inputs: track record (prior
-successful exit ≈ +9pp base), structured evidence of persistence/execution,
-technical+commercial composition, equity/role clarity, replaceability risk.
-- 1: Solo non-technical founder in deep tech; unresolved roles; no shipping
-  history; king-over-rich signals.
-- 3: Competent team, first-timers, some execution evidence; gaps in
-  commercial or technical leadership.
-- 5: Complementary team with shipped-at-scale evidence, domain-specific
-  execution history, clean role/equity structure, hiring magnetism.
+## 1. Scored dimensions and stage weight vectors
 
-### 3. Product & moat trajectory (weight 15)
-At seed, score counter-positioning + cornered resource + the credible
-sequence to scale/network/switching power — not today's moat.
-- 1: Feature-level differentiation; incumbent's rational response kills it.
-- 3: Real technical edge; moat sequence plausible but unproven.
-- 5: Cornered resource (IP/exclusive process/data) + incumbent response is
-  self-harming + compounding sequence already visible.
+Scores 1–5, anchored below. Two pre-committed vectors; pick by stage of
+the round being priced (seed/A vs B+). No mid-deal changes.
 
-### 4. Traction vs sector benchmarks (weight 10)
-Use the sector overlay's gates. Provenance matters: verified > claimed.
-- 1: Pre-everything, or claimed metrics that fail verification.
-- 3: At-benchmark for stage per overlay; some independent verification.
-- 5: Above-benchmark on verified data; paid pilots/offtakes (deep tech) or
-  flattening cohorts (consumer) or elite efficiency (SaaS).
+| Dimension | Seed/A | Series B+ |
+|---|---|---|
+| Market size & elasticity | 20 | 15 |
+| Timing / why-now (own axis) | 15 | 10 |
+| Team & founder-market fit | 25 | 20 |
+| Moat trajectory | 15 | 10 |
+| Demand evidence | 10 | 20 |
+| Delivery evidence | 10 | 10 |
+| Deal price & terms | 0 (gate-only via G2/G4) | 10 |
+| Syndicate & sponsor quality | 5 | 5 |
 
-### 5. Competition — three rings (weight 10)
-- 1: Crowded with no defensible wedge, or "no competitors" (= no market or
-  no diligence).
-- 3: Identifiable wedge; incumbent response expected within base-rate ~2yr
-  window; edge may or may not compound in time.
-- 5: Wedge compounds faster than the response window; direct competitors
-  structurally disadvantaged; crowdedness validates demand.
+Rationale anchors (direction-level evidence, not number-level — stated
+plainly): market≥team (Kaplan-Sensoy-Strömberg); timing as its own axis
+(Gross 42%; GKLS vintage effects — the evidence base's strongest
+under-weighted predictor); founder-market fit folded into team (GKLS:
+serial persistence is industry-year choice); price scored only at B+
+(Othman: second-order at seed); syndicate scored because access drives
+persistence (Nanda-Samila-Sorenson).
 
-### 6. Deal & price (weight 5)
-At seed: ownership/dilution math, round quality, fee drag. Entry multiple
-discipline switches on at Series B+.
-- 1: Ownership too small to matter at fund level even in the tail case;
-  heavy fee/structure drag; weak syndicate.
-- 3: Standard terms; adequate ownership; fee drag noted and modeled.
-- 5: Clean terms, strong syndicate with reserves to next gate, ownership
-  sufficient for tail case to return the book.
+## 2. Anchors
 
-## Required non-score outputs (every scorer)
-- P(raises next priced round ≤ 24 months) — %
-- P(returns < 1x) — % (base rate ~65%)
-- P(returns ≥ 10x) — % (base rate ~4%)
-- One-sentence strongest reason to pass.
-- One-sentence strongest reason the tail case is real.
+### Market size & elasticity
+1: static/shrinking; top-down TAM only. 3: real market, bottom-up
+possible but thin. 5: bottom-up build + demonstrated elasticity (5–10x
+price/performance improvement expands usage).
 
-## Aggregation
-Median per dimension across scorers; IQR reported next to every median;
-IQR > 1 point on any dimension = rubric ambiguity flag (fix the rubric or
-the fact pack, then re-run). Weighted total = Σ(weight × median)/100.
-Verdicts derive from the two-sided framing:
-- Kill-list score: driven by dimensions 1, 4, 5 failures on verified data.
-- Outlier thesis: requires ≥1 dimension at 5 with the WWHTBT conditions
-  graded (evidenced / plausible / heroic).
+### Timing / why-now
+1: no falsifiable enabler; "why wasn't this built 5 years ago" has no
+answer. 3: plausible inflection, evidence incomplete; OR enabler real but
+the monetization window (who pays, when) likely opens after the vehicle's
+horizon. 5: named enabler with dated evidence the cost/behavior curve
+crossed, favorable industry-vintage cohort, window open now.
+
+### Team & founder-market fit
+Score execution evidence + fit of THIS team to THIS market's failure
+modes. 1: no shipping history; roles unresolved; fit generic. 3:
+competent, first-time-at-this-scale; partial fit; (explicit ruling:
+academic-spinout founders with deep domain lineage but no industrial
+scale-up score here, not higher, absent scale evidence). 5:
+shipped-at-scale in this domain's hard part; prior outcome in the same
+industry-year class; clean structure.
+
+### Moat trajectory
+1: feature-level edge; incumbent's rational response kills it. 3: real
+edge, sequence to durable power plausible but unproven. 5:
+cornered resource/counter-positioning NOW + first compounding evidence.
+
+### Demand evidence (split from v1 "traction")
+Provenance-weighted willingness-to-pay. 1: none/claims fail checks. 3:
+paying customers or signed conditional offtakes with named counterparties.
+5: binding committed volumes/POs from named buyers, verified.
+
+### Delivery evidence (split from v1 "traction")
+Can they build/ship the thing the demand is for? 1: demonstrated scale
+≥50x below required (record the gap multiple). 3: at-benchmark for stage
+per sector overlay. 5: above-benchmark, independently verified.
+**Report demand and delivery separately always; never average them.**
+
+### Deal price & terms (B+ only; seed handled by gates)
+1: >2x the last clean institutional mark, or structure that consumes the
+tail. 3: at institutional mark, standard class, fees ≤2/20. 5: at/below
+mark with rights.
+
+### Syndicate & sponsor quality
+1: no repeat institutional lead; sponsor opacity, stacked fees, urgency
+mechanics. 3: credible lead + standard SPV. 5: top-decile repeat lead,
+strategics with domain diligence, clean sponsor with track record.
+
+## 3. Required non-score outputs (unchanged from v1)
+P(next priced round ≤24mo), P(<1x net), P(≥10x net) — base-rate anchored
+(~65% / ~4%); strongest pass reason; strongest tail reason.
+
+## 4. Aggregation and reporting — v1.1 rules
+
+1. **Gates first.** Any fail ⇒ verdict states the gate, scores become
+   diagnostic only.
+2. Median + IQR per dimension across 5 independent scorers (unchanged).
+   IQR > 1 ⇒ ambiguity flag ⇒ fix rubric/fact pack, re-run.
+3. **Headline verdicts are the kill-list and outlier-thesis calls**, not
+   the total: kill-list = gates + fatal-flaw dimensions at 1 on verified
+   data; outlier thesis = ≥1 dimension at 5 with WWHTBT conditions graded
+   evidenced/plausible/heroic.
+4. Weighted total = tiebreaker among gate-passers only. **Always report
+   its sensitivity band**: [min, max] across {stage vector, unit weights,
+   ±50% perturbation of each weight}. If the band crosses a decision
+   threshold, the band is the verdict ("weight-sensitive — decide on
+   gates and outlier thesis, not the total").
+5. Panel vs red-team probability disagreements are logged, never averaged.
+
+## 5. What must wait for data (do not change on argument alone)
+Weight magnitudes beyond these coarse vectors; stage-modifier sizes;
+anchor recalibration (driven by observed IQR flags); any claim that the
+instrument predicts — that is the ledger's job (first resolutions
+2028-08; Brier by rubric_version).
