@@ -39,6 +39,14 @@ genuinely meaningless.
 - Agent-governed pattern for studies/builds: research or counter-agent pass
   -> build with merge-blocking gate tests -> honesty box with frozen
   backtest numbers -> commit/push -> note which service to redeploy.
+- Counter-agent verification is MANDATORY (Casey, 2026-08-09): every
+  research pass, dataset, scoring instrument, and analytical artifact gets
+  an adversarial counter-agent review BEFORE its findings are acted on,
+  merged, or presented — data-integrity checks, citation/number
+  spot-checks, QA of computations. Log the counter-agent's verdict
+  alongside the work (deal analyzer: templates/rubric-review-v1.md is the
+  pattern). Applies to the venture-deal-analyzer pipeline and all research
+  dashboards alike.
 - Honesty rules: state measurement basis (trade-close vs MTM), in-sample
   caveats, and what was NOT modeled. Never present in-sample CAGR as a
   forecast.
