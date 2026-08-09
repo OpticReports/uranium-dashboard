@@ -19,8 +19,29 @@ bot-blocked; every sponsor number is [SPONSOR] pending document delivery.
   headline says $144M — unresolved $10M discrepancy.)
 - [VERIFIED] Secondary marketplaces list Quaise with a ~4x spread between
   marks (Hiive ~$22.32/sh vs Notice $5.31–6.32/sh) — no price discovery.
-- [UNKNOWN — REQUIRED] SPV entry valuation, share class, fees, round size,
-  the tranche's rights vs the institutional $134M close.
+- [RESOLVED 2026-08-09 — WAS WRONGLY CARRIED AS UNKNOWN THROUGH REVS 1-2.
+  Source: Delta4 Capital teaser, July 2026, supplied by LP; the terms were
+  on page 1 of a document already in hand. Process failure logged in
+  CLAUDE.md.] SPV TERMS:
+  * Instrument: Quaise Energy, Inc. Series B PREFERRED equity — the same
+    class as the institutional round, NOT a junior or synthetic exposure.
+  * Round: $150-200mm raise · $293mm PRE-money · $443-493mm post-money.
+    The 2026-07-07 $134M first close is the first tranche of this same
+    round, so the SPV appears to be buying at the institutional price
+    with no share-price markup (VERIFY: confirm no markup vs first close).
+  * Sponsor: Delta4 Capital, "Energy Fund I Coinvest SPV" — allocation up
+    to $25mm, minimum check $100,000, seeking a BOARD OBSERVER seat.
+  * Fees: 2% TOTAL ONE-TIME management fee + 20% carried interest +
+    ~$1,000 per-investor admin fee billed pro rata. One-time, not annual —
+    materially CHEAPER than the 2/20-annual assumed in revs 1-2.
+  * TARGET CLOSE 2026-08-12. Expected hold "2029 ± 1 year to a potential
+    IPO" (sponsor estimate).
+  * Listed round investors: Vinod Khosla, The Engine, Prelude, Safar,
+    Nabors, Mitsubishi, plus the major technology company as offtaker AND
+    WARRANT HOLDER (new fact — offtaker holds equity upside).
+  Effect: the red team's three price-side flip conditions (at/below
+  institutional price · same preferred class · fees ≤2/20) all appear MET.
+  Remaining open item is the executed offtake's conditions precedent.
 
 ## THE GOOGLE AGREEMENT — [LP-VERIFIED 2026-08-08, REV 2]
 - **Treat as fact for this run (LP instruction after direct conversations
