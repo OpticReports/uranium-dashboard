@@ -8,6 +8,7 @@ const APPS = [
   { path: "/portfolio-optimizer/", label: "Portfolio Optimizer", icon: "\u2696\uFE0F" },
   { path: "/btc/", label: "BTC Paper Engine", icon: "\u20BF" },
   { path: "/exit/", label: "Exit Window Monitor", icon: "$$" },
+  { path: "/deals/", label: "Deal Analyzer", icon: "\u{1F4D2}" },
 ];
 
 export default function OpticNav() {
