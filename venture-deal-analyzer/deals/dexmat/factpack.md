@@ -7,6 +7,42 @@ obtainable. Rev 2 adds the four sponsor documents: pitch deck (June 2026),
 DD-call notes (2026-06-23), comp set (sponsor-side, ChatGPT-sourced), and
 the Delta4 Capital dilution/return model.
 
+## SPONSOR IDENTITY — SHARED WITH THE QUAISE SPV [added 2026-08-09]
+
+**The sponsor of this SPV is Delta4 Capital — the same sponsor as the
+Quaise Series B coinvest SPV.** Established here by the sponsor document
+set (the "Delta4 Capital dilution/return model"). Everything the
+2026-08-09 adversarial verification found about Delta4 therefore applies
+to THIS deal as well:
+
+- Delta4 Capital Master SPV LLC, CIK 0002113791, DE, formed 2025, mass
+  registered-agent address; sole listed related person Alexander Golding
+  (San Juan PR). **No Form ADV of any kind** (IAPD: zero hits).
+- Entire SEC-visible history: three micro-SPVs, ~$887k total, ~13
+  investors (Copper Royalty $250k · unnamed $350k · unnamed $287k).
+- Fee terms are essentially IDENTICAL across both deals: 2% one-time +
+  20% carry + pro-rata admin (DexMat: admin for 5 years, re-invoiced
+  after; Quaise: ~$1,000/investor).
+
+**Cross-deal behaviour pattern (the ledger's first such finding):** the
+same sponsor produced a DexMat model whose Base Case nets LPs 102x and
+Bull Case 1,091x with NO downside branch at all, 0% option pools and
+comps at 10x P/S against its own comp set's 1–2x; and a Quaise teaser
+stating 500m of mm-wave drilling as fact (verified: ~100m) with
+$600M/$24B offtake figures that match Fervo's Google agreement rather
+than any findable Quaise deal. Two deals, one sponsor, the same
+directional optimism in the numbers presented.
+
+**Consequences for comparison and sizing:** sponsor/vehicle risk is a
+COMMON factor, not a differentiator between these two deals. Any
+head-to-head must be decided on asset-level merits alone, and total
+exposure across both should be sized as a single manager bet.
+
+**Open (not yet verified for this SPV specifically):** who is the named
+GP entity on the DexMat vehicle, GP commitment, administrator, custodian,
+auditor, term/extension mechanics, hurdle (none disclosed on either
+deal), and whether the 2% is genuinely one-time.
+
 ## THE ROUND (from sponsor docs — resolves prior UNKNOWNs)
 - [DD-NOTES/MODEL] Fast-follow round: $10M cap ($15M interest), **$35M pre /
   $45M post** (oversubscribed case $15M at $50M post). Prior seed: went out
