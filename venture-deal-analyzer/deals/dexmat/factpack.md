@@ -117,18 +117,60 @@ deal), and whether the 2% is genuinely one-time.
 - [DD-NOTES] "$30M of non-dilutive funding" (vs ">$20M" in 2023 press).
 
 ## TECHNOLOGY (deck spec table vs independent record)
-- [DECK spec table] Galvorn fiber: density 1.6; absolute conductivity
-  **10 MS/m** (≈17% of copper's 58) — matches best published lab record;
-  specific conductivity **6,150 vs copper 6,300 S·m²/kg (≈98%)** — "equal
-  conductivity weight-for-weight" is fair per the deck's own table;
-  strength 3 GPa; flex life 1M cycles vs copper 10K (table ⇒ 100x, deck
-  headline says 1,000x —**internal inconsistency**).
-- [DECK spec table — NOTABLE] **Aluminum's specific conductivity is 12,200
-  — 2x Galvorn's.** On pure weight-for-weight conductivity, aluminum beats
-  Galvorn today at ~1/100th the price; Galvorn's edge over Al is strength
-  (3 vs 0.41 GPa), flex life, thinness/skin-effect at high frequency, and
-  corrosion — i.e. signal/EMI/harsh-environment niches, not bulk
-  conductance per dollar or per kg.
+- [CORRECTED 2026-08-09 — supersedes the deck-transcribed figures below.
+  Independent verification; prompted by Casey asking whether "copper is
+  5.8x more conductive pound for pound." Prior revs quoted the deck's
+  BEST SINGLE FILAMENT as if it were the product, and the pack carried
+  two different values for the same quantity (6,150 and 5,000).]
+
+  SPECIFIC (gravimetric) CONDUCTIVITY, σ/ρ in S·m²/kg — the honest table:
+
+  | Material | σ (MS/m) | ρ (g/cc) | σ/ρ | vs Cu (wt) | vs Cu (vol) |
+  |---|---|---|---|---|---|
+  | Copper, annealed (100% IACS) | 58.0 | 8.96 | 6,473 | 1.00x | 1.00x |
+  | Aluminum 1350-H19 (61% IACS) | 35.0 | 2.70 | 12,963 | 2.00x | 0.60x |
+  | Galvorn single filament (DECK) | 10.0 | 1.60 | 6,250 | 0.97x | 0.17x |
+  | **Galvorn 1000 tow — SHIPPING SKU** | **6.5** | **1.30** | **5,000** | **0.77x** | **0.11x** |
+  | Galvorn 800 tow | 4.8 | 1.30 | 3,700 | 0.57x | 0.08x |
+  | Galvorn 1000 ANNEALED (high-purity) | ~1.6 | 1.30 | ~1,250 | 0.19x | 0.03x |
+
+  * The deck's "equal conductivity weight-for-weight" is true ONLY of the
+    best single filament (0.97x). **Against the tow DexMat actually
+    ships, copper leads 1.29x by weight and 8.9x by volume.**
+  * **Aluminum leads the shipping Galvorn 1000 by 2.6–2.8x per weight**
+    (not the 2.0x previously recorded, which used the single filament),
+    and Galvorn 800 by 3.5–3.8x — at ~1/100th the price.
+  * Two further thumbs on the deck's scale: it uses ρ_Cu = 9.0 g/cc
+    (understating copper ~2%) and σ_Al = 33 MS/m (below every
+    conductor-grade aluminum).
+  * To match copper's DC resistance, Galvorn needs **8.9x the
+    cross-section (~3x diameter, ~9.5 AWG sizes larger) AND 1.29x the
+    mass** — it loses on both axes at once. The deck's "30% of global
+    copper wire" TAM rests on a volumetric parity never demonstrated.
+  * Adjudication of Casey's 5.8x: RIGHT NUMBER, WRONG BASIS. 58 ÷ 10 is
+    the deck's own copper-over-single-filament VOLUMETRIC ratio. It is
+    not a weight-basis figure — and as a volumetric figure it is
+    generous, since the shipping tow's real gap is 8.9x.
+- [DATASHEET — NEW MATERIAL RISK, absent from the deck] DexMat's own
+  Galvorn 1000 datasheet states that annealing to remove trace
+  impurities "may increase the electrical resistance by as much as a
+  factor of four." Headline conductivity therefore depends on RETAINED
+  PROCESSING RESIDUE. A high-purity / low-outgassing qualification path —
+  exactly what aerospace and space applications typically demand, and
+  DexMat's stated beachhead — drops specific conductivity to ~1,250
+  S·m²/kg, **19% of copper**. This threatens the beachhead market
+  specifically and is not surfaced in any sponsor document.
+- [DECK spec table] strength 3 GPa; flex life 1M cycles vs copper 10K
+  (table ⇒ 100x, deck headline says 1,000x — **internal inconsistency**).
+- Where the value actually is (unchanged by the above, and arguably
+  clarified): NOT conductivity. EMI shielding (skin-depth governed —
+  hence MIL-C-17 on RG-316 at 53% weight reduction), signal/data cable
+  where the resistance budget is loose, flex life, corrosion, flame and
+  cut resistance, and 450 W/m·K thermal conduction in a textile form —
+  all delivered at *acceptable* rather than competitive conductivity.
+- [UNVERIFIED — flagged, not filled] Behabtu et al., Science 339:182
+  (2013) exact σ and ρ: full text paywalled; figures not published here
+  rather than quoted from memory.
 - [DD-NOTES] "About parity with copper in conductivity" (mass basis
   implied) and "only 6% of the maximum theoretical limit"; "Pasquali's
   law": conductivity doubling every ~3 years (jagged). High-frequency
