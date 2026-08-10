@@ -227,7 +227,12 @@ services:
       - key: DRY_RUN
         value: "true"          # flip to "false" ONLY after the shadow period
       - key: KELLY_M
-        value: "0.56"          # start the live phase at 0.05 (token size)
+        # TOKEN PHASE = 0.05. Blueprint default must match the live intent:
+        # a blueprint re-sync would otherwise silently reset the account to
+        # 11x token size. Ramp path (EXECUTOR.md): 0.05 -> 0.56 after 15-20
+        # clean live trades -> 0.80 ceiling. Change here AND in the Render
+        # dashboard together.
+        value: "0.05"
       - key: SIZING_BASE_USD
         # Fixed sizing base (USD). 0 = size on live account equity. Current
         # plan (EXECUTOR.md funding phases): 50000 now, 100000 after the
