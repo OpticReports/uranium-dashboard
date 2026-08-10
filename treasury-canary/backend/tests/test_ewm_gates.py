@@ -349,3 +349,20 @@ def test_gate_plan_anchored_surface():
         pv = plan["ev_by_month"][m]
         assert row["p10"] < pv < row["p90"], (m, row, pv)
         assert abs(row["p50"] - pv) / pv < 0.10, (m, row["p50"], pv)
+
+
+def test_gate_ewm_serves_rate_table():
+    """The FOMC probability table is mirrored onto the exit dashboard (Casey:
+    'table should be on both canary and exit dashboards'). Pin the markup,
+    the fetch path (../rates/ensemble must resolve to the canary root under
+    both the direct URL and the /canary proxy prefix), and the help entry."""
+    import os
+    html = open(os.path.join(os.path.dirname(__file__), "..", "app", "ewm",
+                             "static.html")).read()
+    assert 'id="ratetbl"' in html and 'id="ratefoot"' in html
+    assert "fetch('../rates/ensemble')" in html          # NOT 'rates/ensemble'
+    assert 'data-h="rate_table"' in html and "rate_table:" in html
+    # renders every meeting the API returns - no slice/filter that could hide
+    # the front meeting (the Sept-2026 report that prompted this)
+    assert "d.meetings.forEach" in html
+    assert ".slice(" not in html.split("d.meetings.forEach")[1][:400]

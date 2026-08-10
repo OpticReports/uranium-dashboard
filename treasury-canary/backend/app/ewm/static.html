@@ -135,6 +135,11 @@ input.pin:focus{border-color:var(--pri2);outline:none}
 <div class="be" id="beline"></div>
 </div>
 
+<div class="panel"><span class="lbl">FOMC meeting probabilities &mdash; live market (accuracy-weighted Polymarket + Kalshi + futures)<span class="hq" data-h="rate_table">?</span></span>
+<table id="ratetbl"></table>
+<div class="dim" id="ratefoot" style="font-size:10px;margin-top:6px"></div>
+</div>
+
 <div class="panel"><span class="lbl">Company plan &mdash; actual target values by quarter (Aug 2026 &middot; EV = TTM EBITDA &times; multiple)<span class="hq" data-h="plan">?</span></span>
 <table id="plan"></table>
 <div style="margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
@@ -203,6 +208,7 @@ lv_auto:"<b>AUTO / MANUAL.</b> AUTO reads the live feed each refresh. Click to M
 safety:"<b>Close calendar.</b> Struck-through months are infeasible from your current stage\u2019s lead time. The green <b>SIGN</b> markers are the real deadlines: to close in a report window you must sign (LOI/definitive) earlier by the signing\u2192close gap \u2014 currently hawk-tilted at 4.5 months. FOMC tags mark meeting months. The 0\u2013100 scores blend rate risk, financing, deal-market health and canary calm \u2014 they cluster tightly when markets are calm, so read the structure (feasibility + deadlines + events), not small score differences.",
 cod:"<b>Cost of slipping.</b> Under the growth ramp, simply waiting costs ~nothing in expected value \u2014 so this table prices what slippage ACTUALLY costs: (1) the <b>cliff</b> \u2014 slip enough months and closing by end-Q1 2027 becomes infeasible, forfeiting the early-close option (valued under the \u2265 2-hike world, where it matters); (2) every month of slip is another <b>FOMC faced unsigned</b> \u2014 stall and repricing risk concentrates in the unsigned phase; (3) the last column: what delay costs if the hawkish world materializes.",
 cards:"<b>Action cards.</b> Rule-driven prescriptions. Each card shows the machine-checkable trigger that fired it, so you can audit why it appeared. No card = no active trigger.",
+rate_table:"<b>FOMC meeting probabilities.</b> The same accuracy-weighted ensemble the canary runs, mirrored here because it is the live market check on the cohort table above: the cohort assigns JUDGMENT probabilities to hike paths, this row assigns MARKET probabilities to each meeting. Sources are weighted by their measured accuracy (inverse shrunk-Brier at T-7d on resolved meetings), so a source that misprices loses influence automatically. Hover any cell for each source&rsquo;s individual number and its weight. Read it against the cohort: if the market is pricing materially more hikes than the cohort&rsquo;s weights assume, the EV table above is optimistic.",
 plan:"<b>Company plan (Aug 2026).</b> The actual target values by quarter: TTM revenue &times; EBITDA margin = TTM EBITDA, times the EBITDA multiple = enterprise value. With <b>plan anchoring on</b> (the default), this track IS the board's central line: the base-weighted EV reproduces the plan by construction, and the rate-scenario cohort contributes the <b>bands around it</b> &mdash; how far a hawkish or dovish world moves you off the plan. Margin % and multiple are editable per quarter; edits re-anchor the whole surface (tables, fan, breakeven).",
 plan_margin:"<b>EBITDA margin %.</b> Editable per quarter. A margin edit recomputes TTM EBITDA off the plan's fixed TTM revenue, and EV follows (EBITDA &times; multiple) &mdash; with anchoring on, the whole surface re-levels. Amber = overridden (plan default in parentheses). Defaults are derived from the plan's EBITDA figures, so unedited rows reproduce the source table exactly.",
 plan_mult:"<b>EBITDA multiple.</b> Editable per quarter. The plan assumes multiple expansion 10&times; &rarr; 12&times; as margins scale &mdash; a premise worth stress-testing: hold it at 10&times; flat to see EV without the re-rating.",
@@ -531,7 +537,32 @@ function runSim(){
 
 document.getElementById('runsim').onclick=runSim;
 document.getElementById('t_hz').onchange=()=>{if(LASTSIM)drawFan(LASTSIM);};
-function refreshBoard(){return fetch('api/ewm/board').then(r=>r.json()).then(b=>{render(b);runSim();});}
+function refreshBoard(){return fetch('api/ewm/board').then(r=>r.json()).then(b=>{render(b);runSim();});
+
+fetch('../rates/ensemble').then(r=>r.json()).then(d=>{
+  const srcs=['polymarket','kalshi','futures'], W=d.weights||{};
+  const lbl=(iso)=>new Date(iso+'T12:00:00Z').toLocaleDateString('en-US',
+    {month:'short',day:'numeric',year:'2-digit',timeZone:'UTC'});
+  let h='<tr><th>meeting</th>'+d.buckets.map(b=>`<th>${d.labels[b]||b}</th>`).join('')
+        +'<th>sources</th></tr>';
+  d.meetings.forEach(m=>{
+    h+=`<tr><td>${lbl(m.date)}</td>`+d.buckets.map(b=>{
+      const v=(m.blend||{})[b];
+      const tip=srcs.map(sx=>{const x=(m.sources[sx]||{})[b];
+        return x==null?null:`${sx}: ${(x*100).toFixed(0)}% (weight ${Math.round((W[sx]||0)*100)}%)`;})
+        .filter(Boolean).join('\n')
+        +'\n(weighted avg over sources with a market, renormalized)';
+      return `<td class="cmid" title="${tip}">${v==null?'&mdash;':(v*100).toFixed(1)+'%'}</td>`;
+    }).join('')
+    +`<td class="crng">${srcs.filter(sx=>m.sources[sx]&&Object.keys(m.sources[sx]).length).length}/${srcs.length}</td></tr>`;
+  });
+  document.getElementById('ratetbl').innerHTML=h;
+  document.getElementById('ratefoot').textContent=
+    'Weights (accuracy-earned, inverse shrunk-Brier): '
+    + srcs.map(sx=>`${sx} ${Math.round((W[sx]||0)*100)}%`).join(' · ')
+    + '. Hover a cell for each source. Same ensemble as the canary panel.';
+}).catch(()=>{const el=document.getElementById('ratefoot');
+  if(el)el.textContent='rate ensemble unavailable';});}
 window.setAuto=(f,v)=>{fetch('api/ewm/inputs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({auto:{[f]:v}})}).then(refreshBoard);};
 window.tilt=(on)=>{fetch('api/ewm/inputs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(on?{apply_tilt:true}:{clear_tilt:true})}).then(refreshBoard);};
 document.getElementById('save').onclick=()=>{
