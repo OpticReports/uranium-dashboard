@@ -229,9 +229,10 @@ services:
       - key: KELLY_M
         # TOKEN PHASE = 0.05. Blueprint default must match the live intent:
         # a blueprint re-sync would otherwise silently reset the account to
-        # 11x token size. Ramp path (EXECUTOR.md): 0.05 -> 0.56 after 15-20
-        # clean live trades -> 0.80 ceiling. Change here AND in the Render
-        # dashboard together.
+        # 11x token size. Ramp is a STAIRCASE (EXECUTOR.md "Ramp schedule"):
+        # 0.05 -> 0.15 -> 0.30 -> 0.45 -> 0.56, advancing every 4 clean
+        # trades, then 0.80 ceiling. Change here AND in the Render dashboard
+        # together, one step at a time, never alongside SIZING_BASE_USD.
         value: "0.05"
       - key: SIZING_BASE_USD
         # Fixed sizing base (USD). 0 = size on live account equity. Current
