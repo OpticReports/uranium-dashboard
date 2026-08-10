@@ -400,15 +400,23 @@ class Executor:
 
         # 2) no position; engine holds a pending entry
         if pend is not None:
-            # A fill already carried in led.qty is closed by _close_leg —
-            # unwinding it again in _cancel_entry would double-close and leave
-            # a naked reverse position (QA rehearsal find, 2026-08-07).
+            cloid = f"{leg[0].upper()}-{pend['signal_ts']}-E"
+            # Identity check FIRST. The trend leg fills at market and sets
+            # led.qty immediately, but the engine keeps reporting `pending`
+            # until its own next bar close. A qty check ahead of this one
+            # read that as "engine flat but we still hold" and closed the
+            # position on the very next poll — the trend leg could never
+            # hold a position (live find, first trade 2026-08-10).
+            if led.entry_cloid == cloid:
+                return
+            # Different signal: any qty here is from an older cycle. A fill
+            # already carried in led.qty is closed by _close_leg — unwinding
+            # it again in _cancel_entry would double-close and leave a naked
+            # reverse position (QA rehearsal find, 2026-08-07).
             had_qty = led.qty != 0.0
             if had_qty:
-                # engine flat but we still hold - close before new cycle
                 self._close_leg(leg, led, "engine_flat")
-            cloid = f"{leg[0].upper()}-{pend['signal_ts']}-E"
-            if led.entry_cloid == cloid or not entries_ok:
+            if not entries_ok:
                 return
             if led.entry_cloid:
                 self._cancel_entry(led, filled_action="ignore" if had_qty

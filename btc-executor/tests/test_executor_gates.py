@@ -158,6 +158,40 @@ def test_gate_trend_market_entry_and_trail_ratchet(tmp_path):
     assert len([c for c in v.calls if c[0] == "STOP"]) == 2
 
 
+def test_gate_trend_holds_through_repeated_pending(tmp_path):
+    """The engine reports `pending` until its own next bar close, but the
+    trend leg has already filled at market and carries led.qty. Polling
+    again inside that window must be a no-op — the live executor closed the
+    position it had just opened (first live trade, 2026-08-10)."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    pend = {"pending": {"side": "S", "limit": -1.0, "signal_ts": NOW},
+            "position": None}
+    ex.step(target(trend=pend))
+    qty = ex.state.legs["trend"].qty
+    assert qty < 0
+    n = len(v.calls)
+    for _ in range(3):                                    # same pending again
+        ex.step(target(trend=pend))
+    assert ex.state.legs["trend"].qty == qty              # still holding
+    assert len(v.calls) == n                              # no close, no re-entry
+    assert not any(e["kind"] == "leg_closed" for e in ex.state.events)
+
+
+def test_gate_trend_new_signal_closes_stale_qty(tmp_path):
+    """...but a DIFFERENT pending signal still flattens the stale fill."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    ex.step(target(trend={"pending": {"side": "S", "limit": -1.0,
+                                      "signal_ts": NOW}, "position": None}))
+    ex.step(target(trend={"pending": {"side": "L", "limit": -1.0,
+                                      "signal_ts": NOW + 14_400},
+                          "position": None}))
+    assert any(e["kind"] == "leg_closed" for e in ex.state.events)
+    assert ex.state.legs["trend"].qty > 0                 # re-entered long
+    assert ex.state.legs["trend"].entry_cloid == f"T-{NOW + 14_400}-E"
+
+
 def test_gate_venue_stop_fill_no_double_close(tmp_path):
     v = FakeVenue()
     ex = mkexec(tmp_path, v)
