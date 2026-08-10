@@ -171,6 +171,36 @@ deal), and whether the 2% is genuinely one-time.
 - [UNVERIFIED — flagged, not filled] Behabtu et al., Science 339:182
   (2013) exact σ and ρ: full text paywalled; figures not published here
   rather than quoted from memory.
+
+- [ANALYSIS 2026-08-09] APPLICATION MATRIX — which physical property
+  governs, and therefore where Galvorn wins. The organising principle:
+  **Galvorn wins wherever bulk conductivity is NOT the binding
+  constraint, and loses wherever it is.** Weight sensitivity alone does
+  not favour it; the mechanism has to be something other than σ.
+
+  | Application | What actually governs | Galvorn vs best incumbent | Verdict |
+  |---|---|---|---|
+  | Bulk power wiring (harness, busbar) | σ per volume AND σ/ρ per mass | 8.9x more cross-section AND 1.29x mass vs Cu; 2.6–2.8x worse per kg than Al at ~100x the price | **LOSES on both axes** |
+  | EMI shielding / coax braid | Skin depth — surface conduction, cross-section nearly irrelevant | MIL-C-17 met on RG-316 at **53% weight reduction** | **WINS** — qualified |
+  | Signal / data cable | Loose resistance budget + weight + flex | Adequate σ; large mass saving at the shield/jacket | **WINS** conditionally |
+  | Structural / tethered cable | Tensile strength | 3 GPa vs Cu ~0.2 (15x), Al 0.41 (7x) | **WINS** decisively |
+  | Moving / flexing conductors (robotics, deployables) | Flex-fatigue life | 1M cycles vs Cu 10K (100x; deck headline claims 1,000x — inconsistent) | **WINS** |
+  | Thermal management in textile form | Thermal conductivity per mass | 450 W/m·K at 1/7 Cu density ⇒ ~7x per kg | **WINS** |
+  | Battery cathodes (the $2M USAF award) | Not a conductor application at all | Their single largest defence contract is NOT wire | **WINS** — and note it |
+  | Corrosive / marine / high-temp | Corrosion, flame, cut resistance | No galvanic corrosion; non-melting | **WINS** |
+  | **Space with outgassing qualification** | Purity (NASA ASTM E595) → forces annealing | Annealing raises resistance up to 4x ⇒ ~1,250 S·m²/kg = **19% of Cu** | **LOSES / compromised** |
+
+  Consequence for the market score: the winnable set is defence and
+  aerospace EMI, specialty signal cable, harsh-environment and moving
+  applications, plus non-conductor products. Real, defensible,
+  high-margin — and nothing like "30% of global copper wire." It is the
+  Zoltek-class specialty business ($400–585M exit class), i.e. exactly
+  the EV tree's base-case branch, NOT the copper-adjacency tail. The
+  mechanism that wins these customers (skin depth, strength, flex) is
+  the one that does NOT scale into bulk wire.
+  Cost side: mil-spec qualification runs years per application — a
+  coherent explanation for 11 years to ~$400K revenue, and a reason to
+  discount any hockey-stick in the sponsor's model.
 - [DD-NOTES] "About parity with copper in conductivity" (mass basis
   implied) and "only 6% of the maximum theoretical limit"; "Pasquali's
   law": conductivity doubling every ~3 years (jagged). High-frequency
