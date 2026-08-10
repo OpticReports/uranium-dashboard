@@ -258,6 +258,19 @@ def set_inputs(body: Inputs):
     return {"ok": True, "inputs": cur}
 
 
+@router.get("/api/ewm/rates")
+def ewm_rates():
+    """FOMC probability ensemble, re-served under the EWM prefix.
+
+    The exit dashboard is proxied at /exit/ (genomics `_mount_proxy("exit")`),
+    so a relative '../rates/ensemble' escapes the prefix and 404s against the
+    genomics root. Anything the EWM page fetches must live under /ewm/api/...
+    like the board does. In-process call - no self-HTTP, shares the route's
+    10-min cache."""
+    from ..api.routes_rate_ensemble import rate_ensemble
+    return rate_ensemble()
+
+
 @router.get("/api/ewm/events")
 def events(limit: int = 50):
     try:

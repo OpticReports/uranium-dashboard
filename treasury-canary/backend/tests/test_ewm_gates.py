@@ -360,9 +360,22 @@ def test_gate_ewm_serves_rate_table():
     html = open(os.path.join(os.path.dirname(__file__), "..", "app", "ewm",
                              "static.html")).read()
     assert 'id="ratetbl"' in html and 'id="ratefoot"' in html
-    assert "fetch('../rates/ensemble')" in html          # NOT 'rates/ensemble'
+    # MUST stay inside the proxied /exit/ prefix: '../rates/ensemble' escapes
+    # it and 404s against the genomics root in production (caught 2026-08-10)
+    assert "fetch('api/ewm/rates')" in html
+    assert "../rates/ensemble" not in html
     assert 'data-h="rate_table"' in html and "rate_table:" in html
     # renders every meeting the API returns - no slice/filter that could hide
     # the front meeting (the Sept-2026 report that prompted this)
     assert "d.meetings.forEach" in html
     assert ".slice(" not in html.split("d.meetings.forEach")[1][:400]
+
+
+def test_gate_ewm_rates_endpoint_served_under_prefix():
+    """Every EWM fetch must resolve under /ewm/api/... - the exit dashboard is
+    proxied at /exit/, so anything relative that escapes the prefix hits the
+    genomics root instead of the canary."""
+    from app.ewm import api as ewm_api
+    paths = {r.path for r in ewm_api.router.routes}
+    assert "/ewm/api/ewm/rates" in paths, sorted(paths)
+    assert "/ewm/api/ewm/board" in paths
