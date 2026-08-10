@@ -1,5 +1,6 @@
 """Executor gates: the mirror state machine against a scripted fake venue.
 No network, no Coinbase SDK — pure logic validation."""
+import os
 import time
 
 import pytest
@@ -520,3 +521,57 @@ def test_gate_trend_exit_no_double_close(tmp_path):
     # old short closed + new long entry = net long exactly the new entry qty
     new_e = v.orders.get(f"T-{NOW + 14_400}-E")
     assert new_e is not None
+
+
+def test_gate_ramp_config_coherence():
+    """QA 2026-08-10: the blueprint clamped steps C/D via MAX_NOTIONAL_USD and
+    re-anchored sizing via SIZING_BASE_USD=0. Any shipped config must clear
+    the top ramp step with headroom, or the account silently runs a lower
+    effective KELLY_M than the step it believes it is on."""
+    import re
+    src = open(os.path.join(os.path.dirname(__file__), "..", "..",
+                            "render.yaml")).read()
+    blk = src[src.index("name: btc-executor"):]
+    blk = blk[:blk.index("ibkr-executor")] if "ibkr-executor" in blk else blk
+    def val(key):
+        m = re.search(rf'key: {key}\n(?:\s*#.*\n)*\s*value: "([^"]+)"', blk)
+        return float(m.group(1)) if m else None
+    base, cap = val("SIZING_BASE_USD"), val("MAX_NOTIONAL_USD")
+    assert base == 50_000, base            # 0 would re-anchor to live equity
+    top_leg = 0.56 * 1.5 * 0.75 * base     # step D pullback entry
+    assert cap >= top_leg * 1.1, (cap, top_leg)
+
+
+def test_gate_fills_recorded_and_persisted(tmp_path):
+    """Execution prices must survive restarts: without them the ramp's
+    slippage statistic has sample size zero (the QA blocking finding)."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    ex.state.fills.append({"ts": 1, "leg": "pullback", "role": "entry",
+                           "cloid": "X", "px": 60_000.0, "ref_px": 59_970.0,
+                           "slip_bps": 5.0})
+    ex._save_state()
+    ex2 = mkexec(tmp_path, v)
+    assert ex2.state.fills and ex2.state.fills[-1]["slip_bps"] == 5.0
+
+
+def test_gate_leg_error_isolated_and_capclamp_red(tmp_path):
+    """One leg's venue error must not skip the other leg (post-only
+    rejections were doing exactly that, invisibly), and cap_clamp is a
+    silent size reduction -> must be RED so it alerts."""
+    class Boom(FakeVenue):
+        def place_limit(self, *a, **k):
+            raise RuntimeError("post-only rejected")
+    v = Boom()
+    ex = mkexec(tmp_path, v)
+    pend = {"pending": {"side": "L", "limit": 59_000.0, "signal_ts": NOW},
+            "position": None}
+    tr = {"pending": {"side": "S", "limit": -1.0, "signal_ts": NOW},
+          "position": None}
+    ex.step(target(pull=pend, trend=tr))
+    assert any(e["kind"] == "leg_sync_error" for e in ex.state.events)
+    # the trend leg still got its market order despite the pullback blowing up
+    assert any(c.startswith("T-") for c in v.orders), v.orders
+    src = open(os.path.join(os.path.dirname(__file__), "..",
+                            "app", "mirror.py")).read()
+    assert '"RED", "cap_clamp"' in src

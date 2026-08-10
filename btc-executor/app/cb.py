@@ -167,7 +167,9 @@ class CoinbaseVenue:
             filled = float(o.get("filled_size") or 0)
             if self._meta["contract_multiplier"]:
                 filled *= mult
-            return {"status": status, "filled_qty": filled}
+            avg = o.get("average_filled_price")
+            return {"status": status, "filled_qty": filled,
+                    "avg_price": float(avg) if avg else None}
         except Exception as exc:  # noqa: BLE001
             logger.warning("order_status(%s) failed: %s", cloid, exc)
             return None
@@ -184,11 +186,34 @@ class CoinbaseVenue:
 
     def place_limit(self, side: str, qty: float, px: float, cloid: str,
                     post_only: bool = True) -> None:
-        r = self.client.limit_order_gtc(
-            client_order_id=cloid, product_id=self.product_id, side=side,
-            base_size=self._to_venue_size(qty), limit_price=self._to_venue_px(px),
-            post_only=post_only)
+        def _send(po: bool):
+            return self.client.limit_order_gtc(
+                client_order_id=cloid, product_id=self.product_id, side=side,
+                base_size=self._to_venue_size(qty),
+                limit_price=self._to_venue_px(px), post_only=po)
+        r = _send(post_only)
+        if post_only and self._rejected_post_only(r):
+            # The engine prices signals off Bitstamp SPOT; we trade the CDE
+            # FUTURE. At a positive basis a short limit sits below the future's
+            # bid -> marketable -> post-only REJECTED (measured 2026-08-10:
+            # basis +4.9bp, 100% of short entries rejected). Crossing fills at
+            # our limit or BETTER, so retry as a normal limit and pay taker.
+            logger.warning("post-only rejected (basis); retrying marketable: %s",
+                           cloid)
+            self.post_only_crosses.append(cloid)
+            r = _send(False)
         self._remember(cloid, r)
+
+    @staticmethod
+    def _rejected_post_only(resp) -> bool:
+        try:
+            d = resp.to_dict() if hasattr(resp, "to_dict") else dict(resp)
+        except Exception:  # noqa: BLE001
+            return False
+        if d.get("success", True):
+            return False
+        blob = json.dumps(d).upper()
+        return "POST_ONLY" in blob or "WOULD_CROSS" in blob or "CROSS" in blob
 
     def place_stop(self, side: str, qty: float, trigger_px: float,
                    cloid: str) -> None:

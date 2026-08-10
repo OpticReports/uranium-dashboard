@@ -61,66 +61,102 @@ btc-executor  --Coinbase Advanced API-->  BTC perp product
    accordingly (INTX perp: `BTC-PERP-INTX`; US CFM contracts appear with a
    `-CDE` suffix and trade in 0.01-BTC contracts — the adapter handles both).
 
-## Ramp schedule — STAIRCASE (revised 2026-08-10; replaces the single-cliff plan)
+## Ramp schedule — v3 (2026-08-10, post counter-agent panel)
 
-Halt thresholds are percentages OF THE BASE, so they must be re-chosen when
-the base or deposit changes (target: DD halt ~= 60-65% of deposit; the
-executor warns if the DD halt exceeds 80% of the account — it could never
-fire before wipeout).
+Two adversarial reviews (statistical adequacy; risk sequencing) demolished
+most of the v2 staircase's reasoning. What they established, with numbers:
 
-**Why a staircase.** The original plan held KELLY_M at 0.05 for 15-20 trades
-then jumped straight to 0.56 — an 11.2x step. Two problems: (1) slippage
-measured on a ~$2.8k order does not generalize to a ~$31.5k order, so the
-big jump was validated by extrapolation, not measurement; (2) at a measured
-1.34 trades/week (318 historical trades, both legs) the account sits at
-token size for ~11 weeks earning ~nothing. The staircase reaches 0.56 at the
-SAME time (~week 12) while deploying ~4.7x more capital on the way and never
-taking a step larger than 3x — safer per step AND a better experiment,
-because slippage gets measured at each size before the next one.
+- **The slippage justification is dead.** Live book measurement on
+  BIP-20DEC30-CDE: spread 1.54bp, level-1 depth 50 contracts ($32.5k). Every
+  step through 0.56 (48.5 contracts) fills INSIDE level 1 at one price; the
+  0.80 ceiling takes 19 contracts from level 2 for ~$1 of extra cost. Modelled
+  size-dependence across the whole range is ~0.5bp — roughly **10x below the
+  per-fill noise floor**. There is no size-dependent execution risk here to
+  discover gradually. (Casey called this before the agents did.)
+- **v2 was RISKIER, not safer.** Simulated over 382 possible start dates:
+  v2 carried 4.55x the notional of the cliff plan but **8.06x the worst-case
+  drawdown** and a deeper drawdown at 100% of start dates — because the big
+  rungs stacked in the back half, landing losses on an already-drawn book.
+  "Small steps" measured jump size; risk is set by POSITION size.
+- **The latent-bug case is decisive.** Cumulative notional carried before a
+  bug is discovered at trade 10: cliff $20.5k vs v2 $50.8k. A 100%-loss
+  defect at that point costs the cliff a survivable $20.5k and v2 **the whole
+  deposit**. Bounding that number IS the token phase's purpose.
+- **Gates were underpowered or unfalsifiable.** 4 trades = ~5.6 informative
+  fills; the "within 2x of 6bp" test fails a truly-12bp venue exactly 50% of
+  the time at any n. Worse, `cb.py` discarded `average_filled_price`
+  entirely — the slippage criterion had sample size ZERO. (Fixed; fills are
+  now recorded.)
 
-| step | KELLY_M | advance at | ~week | pullback entry | step size |
-|---|---|---|---|---|---|
-| token (live now) | 0.05 | — | 0 | $2,813 | — |
-| A | 0.15 | 4 trades (8 fills) | ~3 | $8,438 | 3.0x |
-| B | 0.30 | 8 cumulative | ~6 | $16,875 | 2.0x |
-| C | 0.45 | 12 cumulative | ~9 | $25,313 | 1.5x |
-| D | 0.56 | 16 cumulative | ~12 | $31,500 | 1.2x |
-| ceiling | up to 0.80 | +15-20 more at 0.56, quarterly Kelly re-run | ~Feb 2027 | $45,000 | 1.4x |
+### The schedule
 
-Sizes shown at SIZING_BASE_USD=50000 (fully funded against the $50k
-deposit). Trend-leg entries are 1/3 of the pullback figures (25% vs 75%
-weight). DD_HALT_PCT stays 0.35 and MAX_NOTIONAL_USD stays 80000 through
-step D. Timing is a median from a 20k-path block bootstrap of the real
-inter-trade gaps (p10/p90 on the 16-trade gate: ~wk 9 / ~wk 16) — the
-schedule advances on TRADE COUNT, never on the calendar.
+| step | KELLY_M | advance at | pullback entry | max step |
+|---|---|---|---|---|
+| token (live) | 0.05 | — | $2,813 | — |
+| A | 0.10 | 4 trades | $5,625 | 2.0x |
+| B | 0.20 | 8 cumulative | $11,250 | 2.0x |
+| C | 0.35 | 12 cumulative | $19,688 | 1.75x |
+| D | 0.56 | 16 cumulative | $31,500 | 1.6x |
+| ceiling | up to 0.80 | +15-20 at 0.56, quarterly Kelly re-run | $45,000 | 1.4x |
 
-**Advance criteria (all must hold at each step):**
-1. the step's trade count is complete (count FILLS — entry and exit are two
-   independent slippage observations; 4 trades = 8 fills);
-2. realized slippage within 2x the 6bp research assumption;
-3. annualized funding cost under ~15%;
+Tested against the alternatives: this rung shape cuts deployed notional 25%
+and worst-trade loss 22% vs v2 at identical timing, and **strictly dominates
+it** on every risk metric. Sizes at SIZING_BASE_USD=50000; trend-leg entries
+are 1/3 of these.
+
+### Advance criteria (ALL must hold)
+
+1. the step's trade count is complete;
+2. **cumulative ramp P&L >= 0** — the v2 hole: every other criterion could
+   pass while the account sat at its ramp trough, and losing trades bought
+   step credit. With this gate: p05 drawdown improves 47%, P(halt) 5.0% ->
+   2.4%. Cost: median time to 0.56 goes ~12.6 -> ~18.7 weeks. Worth it;
+3. **fill quality** (the primary execution metric, replacing slippage):
+   zero post-only rejections unhandled, `entry_chase` rate <= 25%;
 4. zero RED events and zero halts since the previous step;
 5. leg states reconciled against the paper engine across the whole step.
 
-**Step-BACK rules (the staircase must run both directions):**
-- any criterion above fails -> HOLD at the current step, diagnose first;
+Slippage is now RECORDED (state.fills: venue price vs engine reference) but
+is **pooled across all steps** and reported as a one-sided 90% upper bound —
+never as a per-step pass/fail, which the sample size cannot support.
+
+### Step-BACK / circuit rules
+
+- any criterion fails -> HOLD at the current step, diagnose first;
+- **ramp drawdown <= -$5,000 -> step DOWN one.** The $17,500 DRAWDOWN halt
+  fired in 0 of 382 simulated ramps — at step D it needs a 41.7% adverse
+  move, i.e. it is unreachable during the ramp and cannot do this job;
+- **above KELLY_M 0.30 the daily-loss halt reverts to MANUAL resume.** At
+  steps C/D a single ordinary-bad trade (-15.6% on notional, the worst in six
+  years) trips the $3,000 daily rail — and auto-rearm would silently clear
+  the only breaker that is actually reachable during the ramp;
 - two consecutive steps with degrading fill quality -> step DOWN one;
-- any halt -> hold at the current step for a full extra step's worth of
-  trades after resuming.
+- any halt -> hold for a full extra step's worth of trades after resuming.
 
-**Discipline:** never move SIZING_BASE_USD and KELLY_M in the same step —
-two levers at once and the attribution is lost. Never automate the ramp:
-size increases stay a human decision, the same separation-of-powers rule
-that keeps DRAWDOWN halts manual. Verify `/status` sizing_config after every
-step (a blueprint default once contradicted the live env by 11x — caught
-2026-08-10).
+### Discipline
 
-**Later: the base step.** Raising SIZING_BASE_USD 50000 -> 100000 doubles
-notional again WITHOUT adding cash (sizing against 2x the deposit). It is
-independent of the KELLY_M ramp and gated separately: only after step D has
+Never move SIZING_BASE_USD and KELLY_M in the same step. Never automate the
+ramp. Verify `/status` sizing_config after every step — the blueprint has now
+contradicted the live env on THREE variables (KELLY_M 11x, SIZING_BASE_USD,
+MAX_NOTIONAL_USD clamping steps C and D); all three are fixed in render.yaml
+and gate-tested.
+
+### Funding: off the ramp
+
+Funding cannot be gated on a ramp step. At realistic autocorrelation it needs
+**~197 days** to estimate an annualized rate to +/-5pp; 3 weeks gives +/-15pp.
+Worse, the book is 46% long / 48% short so the funding LEVEL nearly cancels —
+the real cost is the correlation between signed exposure and momentum
+(corr +0.51), which needs a bull AND a bear to estimate. Price it offline
+against the replay's exposure path; carry a live dollar budget per step
+instead.
+
+### Later: the base step
+
+Raising SIZING_BASE_USD 50000 -> 100000 doubles notional again WITHOUT adding
+cash. Independent of the KELLY_M ramp, gated separately: only after step D has
 run clean, with DD_HALT_PCT re-cut to 0.30 and MAX_NOTIONAL_USD to 160000 in
-the same change. Worst-start stretch at that configuration: ~-$13.4k against
-a $50k deposit (~-$19k at the 0.80 ceiling), from the 2021-26 replay.
+the same change.
 
 ## Expectations (measured, 2y window, dashboard basis)
 

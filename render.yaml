@@ -235,12 +235,17 @@ services:
         # together, one step at a time, never alongside SIZING_BASE_USD.
         value: "0.05"
       - key: SIZING_BASE_USD
-        # Fixed sizing base (USD). 0 = size on live account equity. Current
-        # plan (EXECUTOR.md funding phases): 50000 now, 100000 after the
-        # second wire. Halts/caps re-anchor to the base automatically.
-        value: "0"
+        # Fixed sizing base (USD). 0 = size on live account equity. MUST
+        # match the live env: a re-sync at "0" silently re-anchors sizing to
+        # equity mid-ramp and destroys step attribution (QA 2026-08-10).
+        # Plan (EXECUTOR.md ramp schedule): 50000 now, 100000 later.
+        value: "50000"
       - key: MAX_NOTIONAL_USD
-        value: "25000"
+        # Must clear the top ramp step with headroom, else _leg_qty silently
+        # clamps the position and the account runs a lower effective KELLY_M
+        # than the step it believes it is on (QA 2026-08-10: at "25000" the
+        # 0.35 and 0.56 steps were both clamped).
+        value: "80000"
       - key: MAX_ACCOUNT_LEV
         value: "2.0"
       - key: DD_HALT_PCT

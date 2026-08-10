@@ -73,6 +73,10 @@ class ExecState:
     # one mark per UTC day: {d, equity, position_btc} — the raw series for
     # live-vs-paper tracking-error and funding-cost decomposition
     marks: list = field(default_factory=list)
+    # per-order execution prices vs the engine's reference price — the raw
+    # slippage dataset (previously never captured, so the ramp's slippage
+    # gate was unfalsifiable)
+    fills: list = field(default_factory=list)
 
 
 def _side_sign(side: str) -> float:
@@ -111,6 +115,7 @@ class Executor:
                        for n in LEGS}
             st.events = raw.get("events", [])[-200:]
             st.marks = raw.get("marks", [])[-400:]
+            st.fills = raw.get("fills", [])[-400:]
             return st
         except Exception:  # noqa: BLE001
             return ExecState()
@@ -122,7 +127,8 @@ class Executor:
              "high_water": self.state.high_water,
              "legs": {n: asdict(l) for n, l in self.state.legs.items()},
              "events": self.state.events[-200:],
-             "marks": self.state.marks[-400:]}
+             "marks": self.state.marks[-400:],
+             "fills": getattr(self.state, "fills", [])[-400:]}
         tmp = self.state_path + ".tmp"
         json.dump(d, open(tmp, "w"))
         os.replace(tmp, self.state_path)
@@ -188,7 +194,7 @@ class Executor:
                            self.cfg.max_account_lev * base)
         room = max(0.0, cap_notional / px - other)
         if want > room:
-            self._event("WARN", "cap_clamp",
+            self._event("RED", "cap_clamp",
                         f"{leg} qty {want:.5f}->{room:.5f} BTC (cap)")
             want = room
         return round(want, 5)
@@ -342,8 +348,16 @@ class Executor:
         blend = target.get("blend", {})
         for leg in LEGS:
             tl = (target.get("legs") or {}).get(leg)
-            if tl is not None:
+            if tl is None:
+                continue
+            try:
                 self._sync_leg(leg, tl, blend, equity, entries_ok)
+            except Exception as exc:  # noqa: BLE001
+                # isolate: a venue error on one leg used to unwind the whole
+                # step via the loop's bare except, silently skipping the other
+                # leg on every poll it occurred (QA 2026-08-10).
+                self._event("RED", "leg_sync_error", f"{leg}: {exc}")
+        self._report_post_only_crosses()
         self._check_drift(equity)
         self._save_state()
 
@@ -477,6 +491,38 @@ class Executor:
                                     f"{leg[0].upper()}-{int(time.time())}-X")
             self._event("INFO", "leg_closed", f"{leg} {why} qty={led.qty}")
             led.qty = 0.0
+
+    def _report_post_only_crosses(self) -> None:
+        """The engine prices signals off SPOT but we trade a FUTURE; at a
+        positive basis short limits are marketable and post-only is rejected.
+        cb.py retries them as marketable limits (fills at our price or better,
+        taker fee). Surface each one: it is a maker->taker cost change and a
+        tracking-error source, and it was previously invisible."""
+        seen = getattr(self.venue, "post_only_crosses", None)
+        if not seen:
+            return
+        for cloid in list(seen):
+            self._event("WARN", "post_only_cross",
+                        f"{cloid} rejected as marketable (spot/future basis) "
+                        f"- refilled as taker")
+        seen.clear()
+
+    def _record_fill(self, leg: str, role: str, cloid: str, st: dict,
+                     ref_px: float) -> None:
+        """Persist execution prices so slippage is MEASURABLE. Before this the
+        venue's average_filled_price was discarded and the ramp's slippage
+        gate had a sample size of zero (QA 2026-08-10)."""
+        px = (st or {}).get("avg_price")
+        if not px or not ref_px:
+            return
+        sign = 1.0 if st.get("side_sign", 1) > 0 else 1.0
+        bps = (px - ref_px) / ref_px * 10_000 * sign
+        self.state.fills = (getattr(self.state, "fills", None) or [])[-400:]
+        self.state.fills.append({"ts": int(time.time()), "leg": leg,
+                                 "role": role, "cloid": cloid,
+                                 "px": round(float(px), 2),
+                                 "ref_px": round(float(ref_px), 2),
+                                 "slip_bps": round(bps, 2)})
 
     # ---------- drift ----------
 
