@@ -77,6 +77,7 @@ class ExecState:
     # slippage dataset (previously never captured, so the ramp's slippage
     # gate was unfalsifiable)
     fills: list = field(default_factory=list)
+    last_dry_run: bool | None = None      # detects silent mode flips
 
 
 def _side_sign(side: str) -> float:
@@ -116,6 +117,7 @@ class Executor:
             st.events = raw.get("events", [])[-200:]
             st.marks = raw.get("marks", [])[-400:]
             st.fills = raw.get("fills", [])[-400:]
+            st.last_dry_run = raw.get("last_dry_run")
             return st
         except Exception:  # noqa: BLE001
             return ExecState()
@@ -128,7 +130,8 @@ class Executor:
              "legs": {n: asdict(l) for n, l in self.state.legs.items()},
              "events": self.state.events[-200:],
              "marks": self.state.marks[-400:],
-             "fills": getattr(self.state, "fills", [])[-400:]}
+             "fills": getattr(self.state, "fills", [])[-400:],
+             "last_dry_run": getattr(self.state, "last_dry_run", None)}
         tmp = self.state_path + ".tmp"
         json.dump(d, open(tmp, "w"))
         os.replace(tmp, self.state_path)
@@ -155,6 +158,10 @@ class Executor:
                            "SIZING_BASE_USD) — as configured the halt line "
                            "can't work; trading logic continues but the "
                            "circuit breaker is miscalibrated",
+            "mode_change": "if you did NOT change this, a blueprint sync "
+                           "overwrote it - reset DRY_RUN in the Render "
+                           "dashboard (it is sync:false now, so this should "
+                           "not recur)",
             "halt_error": "closing positions during the halt FAILED — open "
                           "Coinbase NOW, check positions, flatten manually "
                           "if any remain",
@@ -329,7 +336,22 @@ class Executor:
 
     # ---------- main step ----------
 
+    def _check_mode_change(self) -> None:
+        """A blueprint sync silently reset DRY_RUN to true on a LIVE account
+        (2026-08-10) - the executor kept reporting healthy while placing
+        nothing. Any mode flip now pages the operator."""
+        cur = bool(getattr(self.cfg, "dry_run", True))
+        prev = getattr(self.state, "last_dry_run", None)
+        if prev is not None and prev != cur:
+            self._event("RED", "mode_change",
+                        f"DRY_RUN {prev} -> {cur}: trading is now "
+                        f"{'SIMULATED (no real orders)' if cur else 'LIVE'} - "
+                        f"verify this was intentional (a blueprint sync can "
+                        f"reset it)")
+        self.state.last_dry_run = cur
+
     def step(self, target: dict) -> None:
+        self._check_mode_change()
         equity = self.venue.equity()
         self._reconcile_transfers(equity)
         self._roll_day(equity)

@@ -225,7 +225,11 @@ services:
         # 0.01-BTC contracts, $5 tick, Dec-2030 expiry, display "BTC PERP".
         value: BIP-20DEC30-CDE
       - key: DRY_RUN
-        value: "true"          # flip to "false" ONLY after the shadow period
+        # NEVER a blueprint value. On 2026-08-10 an unrelated render.yaml edit
+        # triggered a sync that reset this to "true" and silently un-armed a
+        # LIVE account. sync:false keeps the dashboard as the single source of
+        # truth; if unset, the code default (True) fails safe.
+        sync: false
       - key: KELLY_M
         # TOKEN PHASE = 0.05. Blueprint default must match the live intent:
         # a blueprint re-sync would otherwise silently reset the account to
@@ -290,7 +294,8 @@ services:
       - key: TRADING_MODE
         value: paper         # paper | live — read by gateway AND executor
       - key: DRY_RUN
-        value: "true"        # flip to "false" ONLY after paper rehearsal
+        # never blueprint-managed (see btc-executor note); dashboard owns it
+        sync: false
       - key: READ_ONLY_API
         value: "no"          # gateway must accept orders (paper account)
       - key: EXEC_TOKEN

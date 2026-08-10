@@ -19,7 +19,9 @@ class Settings(BaseSettings):
     cb_portfolio: str = ""                # INTX portfolio uuid (auto-detected if empty)
 
     # sizing: leg exposure fraction = kelly_m * blend_lev * leg_weight
-    kelly_m: float = 0.56                 # Kelly-recommended multiplier on S5
+    kelly_m: float = 0.05                 # FAIL-SAFE token size; the
+    # ramp target lives in the Render env, never here (a missing env
+    # must under-size, never over-size). Ramp: EXECUTOR.md v3.
     # Fixed capital base for position sizing (USD). 0 = size on live account
     # equity. Set (e.g. 128000) to run the small-deposit construction: a
     # ~$40k USDC account trading positions sized to a $128k base. Halt

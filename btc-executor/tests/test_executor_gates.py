@@ -575,3 +575,30 @@ def test_gate_leg_error_isolated_and_capclamp_red(tmp_path):
     src = open(os.path.join(os.path.dirname(__file__), "..",
                             "app", "mirror.py")).read()
     assert '"RED", "cap_clamp"' in src
+
+
+def test_gate_mode_change_alerts(tmp_path, monkeypatch):
+    """A silent DRY_RUN flip (blueprint sync reset a LIVE account on
+    2026-08-10) must page the operator, not pass unnoticed."""
+    sent = []
+    import app.alerts as alerts
+    monkeypatch.setattr(alerts, "send", lambda t: sent.append(t))
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    ex.cfg.dry_run = False                       # boots LIVE
+    ex.step(target())
+    assert not [s for s in sent if "mode_change" in s]   # first sight: quiet
+    ex._save_state()
+    ex2 = mkexec(tmp_path, v)
+    ex2.cfg.dry_run = True                       # sync silently un-arms it
+    ex2.step(target())
+    assert any("ACTION NEEDED" in s and "DRY_RUN" in s for s in sent), sent
+    assert any(e["kind"] == "mode_change" for e in ex2.state.events)
+
+
+def test_gate_config_defaults_fail_safe():
+    """A missing env must UNDER-size, never over-size."""
+    from app.config import Settings
+    d = Settings()
+    assert d.kelly_m <= 0.05, d.kelly_m
+    assert d.dry_run is True
