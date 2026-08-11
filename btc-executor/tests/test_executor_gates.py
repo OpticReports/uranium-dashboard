@@ -24,10 +24,16 @@ class Cfg:
 
 
 class FakeVenue:
-    def __init__(self, equity=10_000.0, mid=60_000.0):
+    def __init__(self, equity=10_000.0, mid=60_000.0, mult=None):
         self._equity, self._mid = equity, mid
+        self._mult = mult              # None = continuous; 0.01 = CDE nano
         self.orders = {}
         self.calls = []
+
+    def quantize(self, qty):
+        if not self._mult:
+            return qty
+        return int(qty / self._mult + 1e-9) * self._mult
 
     def equity(self):
         return self._equity
@@ -190,6 +196,66 @@ def test_gate_trend_new_signal_closes_stale_qty(tmp_path):
     assert any(e["kind"] == "leg_closed" for e in ex.state.events)
     assert ex.state.legs["trend"].qty > 0                 # re-entered long
     assert ex.state.legs["trend"].entry_cloid == f"T-{NOW + 14_400}-E"
+
+
+def test_gate_size_quantized_to_contracts(tmp_path):
+    """CDE nano futures fill in whole 0.01-BTC contracts. Sizes must be
+    rounded DOWN before ordering so the ledger equals the real position —
+    ordering 0.01466 BTC and recording 0.01466 while the venue filled 0.01
+    desynchronises every stop and exit that follows (live find, 2026-08-10)."""
+    v = FakeVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    ex.step(target(trend={"pending": {"side": "S", "limit": -1.0,
+                                      "signal_ts": NOW}, "position": None}))
+    kind, side, qty, _ = v.calls[0]
+    assert (kind, side) == ("MARKET", "SELL")
+    assert qty == pytest.approx(0.03)                     # 0.035 -> 3 contracts
+    assert ex.state.legs["trend"].qty == pytest.approx(-0.03)
+    assert v.position() == pytest.approx(-0.03)           # ledger == venue
+
+
+def test_gate_sub_contract_chase_not_sent(tmp_path):
+    """A shortfall under one contract is not chaseable. The old code sent it
+    and the venue's max(1, ...) floor rounded it up to a FULL contract,
+    overshooting the target instead of under-filling it."""
+    v = FakeVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    pos = {"pending": None,
+           "position": {"side": "S", "entry_price": 60_000.0, "entry_ts": NOW,
+                        "signal_ts": NOW, "stop": 63_000.0, "exit_flag": None}}
+    ex.state.legs["trend"].entry_cloid = f"T-{NOW}-E"
+    v.orders[f"T-{NOW}-E"] = {"type": "MARKET", "side": "SELL", "qty": 0.02,
+                              "px": 60_000.0, "status": "FILLED"}
+    ex.step(target(trend=pos))                            # want 0.03, have 0.02
+    chases = [c for c in v.calls if c[3].endswith("-C")]
+    assert len(chases) == 1 and chases[0][2] == pytest.approx(0.01)
+    assert ex.state.legs["trend"].qty == pytest.approx(-0.03)
+    # now the same setup with a sub-contract shortfall: no chase at all
+    v2 = FakeVenue(mult=0.01)
+    ex2 = mkexec(tmp_path / "b", v2)
+    ex2.state.legs["trend"].entry_cloid = f"T-{NOW}-E"
+    v2.orders[f"T-{NOW}-E"] = {"type": "MARKET", "side": "SELL", "qty": 0.028,
+                               "px": 60_000.0, "status": "FILLED"}
+    ex2.step(target(trend=pos))                           # want 0.03, have 0.028
+    assert not [c for c in v2.calls if c[3].endswith("-C")]
+    assert ex2.state.legs["trend"].qty == pytest.approx(-0.028)   # truth, not 0.03
+
+
+def test_gate_venue_size_never_rounds_up(tmp_path):
+    """_to_venue_size must refuse a sub-minimum order rather than inflate it."""
+    from app.cb import CoinbaseVenue
+    v = object.__new__(CoinbaseVenue)
+    v._meta = {"base_increment": 0.0001, "price_increment": 0.1,
+               "contract_multiplier": 0.01}
+    assert v.quantize(0.01466) == pytest.approx(0.01)
+    assert v.quantize(0.00466) == 0.0
+    assert v._to_venue_size(0.03) == "3"
+    with pytest.raises(ValueError):
+        v._to_venue_size(0.00466)                         # used to become "1"
+    v._meta["contract_multiplier"] = None                 # INTX perp path
+    assert v.quantize(0.014663) == pytest.approx(0.0146)
+    with pytest.raises(ValueError):
+        v._to_venue_size(0.00001)
 
 
 def test_gate_venue_stop_fill_no_double_close(tmp_path):

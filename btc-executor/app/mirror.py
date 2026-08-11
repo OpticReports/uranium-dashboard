@@ -41,6 +41,7 @@ class Venue(Protocol):
     def equity(self) -> float: ...
     def position(self) -> float: ...          # signed base qty (BTC)
     def mid(self) -> float: ...
+    def quantize(self, qty: float) -> float: ...   # -> tradable size, rounds DOWN
     def order_status(self, cloid: str) -> dict | None: ...
     def place_limit(self, side: str, qty: float, px: float, cloid: str,
                     post_only: bool = True) -> None: ...
@@ -204,7 +205,16 @@ class Executor:
             self._event("RED", "cap_clamp",
                         f"{leg} qty {want:.5f}->{room:.5f} BTC (cap)")
             want = room
-        return round(want, 5)
+        # Quantize to the venue's tradable increment (whole 0.01-BTC contracts
+        # on CDE) BEFORE the ledger sees it. Ordering in continuous BTC while
+        # the venue fills in contracts made led.qty drift from the real
+        # position on every entry (live find, 2026-08-10).
+        qty = self.venue.quantize(round(want, 8))
+        if qty <= 0.0 and want > 0.0:
+            self._event("WARN", "sub_min_size",
+                        f"{leg} target {want:.5f} BTC is below the venue "
+                        f"minimum - leg not entered this cycle")
+        return round(qty, 8)
 
     # ---------- halts ----------
 
@@ -463,14 +473,20 @@ class Executor:
             filled = (st or {}).get("filled_qty", 0.0)
             if st and st.get("status") == "OPEN" and filled < want:
                 self.venue.cancel(led.entry_cloid)
-        missing = max(0.0, round(want - filled, 5))
-        if missing > 0 and want > 0:
+        # A remainder below one contract is NOT chaseable — the old code sent
+        # it anyway and the venue rounded it up to a full contract, overshooting
+        # the target (live find, 2026-08-10). Round the shortfall down and
+        # accept the tracking error instead.
+        missing = self.venue.quantize(max(0.0, round(want - filled, 8)))
+        if missing > 0:
             side = _order_side(pos["side"])
             self.venue.place_market(side, missing,
                                     f"{leg[0].upper()}-{pos['entry_ts']}-C")
             self._event("WARN", "entry_chase",
                         f"{leg} missed {missing} of {want} BTC - chased at market")
-        led.qty = _side_sign(pos["side"]) * want
+        # Record what the venue HOLDS (filled + whatever we could chase), not
+        # the target. Anything else desynchronises stops and exits.
+        led.qty = _side_sign(pos["side"]) * round(filled + missing, 8)
         led.entry_cloid = None
         led.signal_ts = pos.get("signal_ts")
 

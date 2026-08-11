@@ -87,12 +87,35 @@ class CoinbaseVenue:
 
     # ---------- size/price rounding ----------
 
+    def quantize(self, qty_btc: float) -> float:
+        """Largest venue-representable size <= qty_btc, in BTC.
+
+        CDE nano futures trade in whole 0.01-BTC contracts, so anything under
+        one contract quantizes to ZERO. Rounding down is deliberate: the
+        executor may under-fill its target but must never size above it.
+        Callers quantize BEFORE ordering so the ledger records what the venue
+        will actually hold, not what we wished for."""
+        mult = self._meta["contract_multiplier"] or self._meta["base_increment"]
+        return int(qty_btc / mult + 1e-9) * mult
+
     def _to_venue_size(self, qty_btc: float) -> str:
+        # No max(1, ...) floor here. It used to turn any sub-contract order
+        # into a FULL contract — a 0.466-contract entry chase became 1.0
+        # contract, more than double the intent (live find, 2026-08-10).
+        # Sizes arrive pre-quantized; a sub-minimum request is a caller bug
+        # and must fail loudly rather than silently inflate.
         mult = self._meta["contract_multiplier"]
         if mult:                                  # contract-based (CDE)
-            return str(max(1, round(qty_btc / mult)))
+            n = int(round(qty_btc / mult))
+            if n < 1:
+                raise ValueError(
+                    f"size {qty_btc} BTC is below one contract ({mult} BTC)")
+            return str(n)
         inc = self._meta["base_increment"]
-        steps = max(1, int(qty_btc / inc))
+        steps = int(round(qty_btc / inc))
+        if steps < 1:
+            raise ValueError(
+                f"size {qty_btc} BTC is below base_increment {inc}")
         return f"{steps * inc:.8f}".rstrip("0").rstrip(".")
 
     def _to_venue_px(self, px: float) -> str:
@@ -324,6 +347,17 @@ class DryRunVenue:
             except Exception:  # noqa: BLE001
                 pass
         return 60_000.0
+
+    def quantize(self, qty_btc: float) -> float:
+        """Delegate to the real venue so shadow sizing carries the same
+        granularity as live. Shadow mode missed the contract-rounding bug
+        precisely because it simulated continuous fills."""
+        if self.inner:
+            try:
+                return self.inner.quantize(qty_btc)
+            except Exception:  # noqa: BLE001
+                pass
+        return qty_btc
 
     def order_status(self, cloid: str) -> dict | None:
         o = self.orders.get(cloid)
