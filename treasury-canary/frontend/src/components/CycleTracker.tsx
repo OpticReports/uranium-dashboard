@@ -29,8 +29,10 @@ const PHASE_COLOR: Record<string, string> = {
 export default function CycleTracker() {
   const [board, setBoard] = useState<CycleBoard | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [view, setView] = useState<"composite" | "payrolls">(
+  const [view, setView] = useState<"composite" | "payrolls" | "analogs">(
     () => (localStorage.getItem("cycleView") as any) || "composite");
+  const [analog, setAnalog] = useState<any | null>(null);
+  const [analogErr, setAnalogErr] = useState<string | null>(null);
   const [range, setRange] = useState<"5y" | "full">(
     () => (localStorage.getItem("cycleRange") as any) || "5y");
 
@@ -40,6 +42,11 @@ export default function CycleTracker() {
       .catch((e) => setErr(String(e?.message ?? e)));
   }, []);
   useEffect(() => { localStorage.setItem("cycleView", view); }, [view]);
+  useEffect(() => {
+    if (view === "analogs" && !analog && !analogErr)
+      api.cycleAnalog().then(setAnalog)
+        .catch((e) => setAnalogErr(String(e?.message ?? e)));
+  }, [view, analog, analogErr]);
   useEffect(() => { localStorage.setItem("cycleRange", range); }, [range]);
 
   const rows = useMemo(() => {
@@ -75,12 +82,12 @@ export default function CycleTracker() {
   return (
     <Panel title="Business cycle — where we are, where we're heading">
       <div className="mb-2 flex flex-wrap items-center gap-2 text-[10px]">
-        {(["composite", "payrolls"] as const).map((v) => (
+        {(["composite", "payrolls", "analogs"] as const).map((v) => (
           <button key={v} onClick={() => setView(v)}
             className={`rounded-full border px-2.5 py-0.5 font-semibold ${
               view === v ? "border-sky-500 text-sky-300 bg-sky-500/10"
                          : "border-panelborder text-slate-500"}`}>
-            {v === "composite" ? "composites" : "payrolls 12m MA"}
+            {v === "composite" ? "composites" : v === "payrolls" ? "payrolls 12m MA" : "historical analogs"}
           </button>
         ))}
         <span className="mx-1 text-slate-600">|</span>
@@ -96,6 +103,9 @@ export default function CycleTracker() {
           <InfoTip term="cycle_phase" />
         </span>
       </div>
+      {view === "analogs" ? (
+        <AnalogView analog={analog} err={analogErr} />
+      ) : (
       <ResponsiveContainer width="100%" height={230}>
         <ComposedChart data={rows} margin={{ top: 4, right: 8, bottom: 0, left: -14 }}>
           <CartesianGrid stroke="#1e293b" strokeWidth={0.5} />
@@ -134,6 +144,8 @@ export default function CycleTracker() {
           )}
         </ComposedChart>
       </ResponsiveContainer>
+      )}
+      {view !== "analogs" && (
       <div className="mt-1.5 text-[10px] leading-relaxed text-slate-500">
         {view === "composite" ? (
           <>Blue = coincident (NBER four: jobs·output·income·sales, 6m growth z).
@@ -158,6 +170,81 @@ export default function CycleTracker() {
         )}
         {" "}{board.basis}
       </div>
+      )}
     </Panel>
+  );
+}
+
+function AnalogView({ analog, err }: { analog: any; err: string | null }) {
+  if (err) return <InlineError message={err} />;
+  if (!analog) return <Loading />;
+  const paths = analog.analogs.map((a: any, k: number) => ({ a, k }));
+  const rows = Array.from({ length: 19 }, (_, h) => {
+    const r: any = { h };
+    paths.forEach(({ a, k }: any) => { r[`a${k}`] = a.spx_path_fwd18[h]; });
+    return r;
+  });
+  const COLORS = ["#f87171", "#fb923c", "#fbbf24", "#c084fc", "#38bdf8"];
+  const s = analog.skill;
+  return (
+    <div>
+      <div className="mb-1 text-[10px] text-slate-400">
+        Months since 1960 most similar to <b>{analog.asof}</b> (13-dim macro
+        state; match = closer than N% of all history). S&P path next 18 months:
+      </div>
+      <ResponsiveContainer width="100%" height={180}>
+        <ComposedChart data={rows} margin={{ top: 4, right: 8, bottom: 0, left: -14 }}>
+          <CartesianGrid stroke="#1e293b" strokeWidth={0.5} />
+          <XAxis dataKey="h" tick={{ fontSize: 9, fill: "#64748b" }}
+            label={{ value: "months ahead", fontSize: 9, fill: "#64748b", position: "insideBottom", offset: -2 }} />
+          <YAxis tick={{ fontSize: 9, fill: "#64748b" }} unit="%" />
+          <Tooltip contentStyle={{ background: "#111a2e", border: "1px solid #26334e", fontSize: 11 }}
+            labelStyle={{ color: "#93a4bd" }}
+            formatter={(v: any, n: any) => {
+              const i = Number(String(n).slice(1));
+              return [`${Number(v).toFixed(1)}%`, `${analog.analogs[i].month}`];
+            }} />
+          <ReferenceLine y={0} stroke="#26334e" />
+          {paths.map(({ a, k }: any) => (
+            <Line key={k} dataKey={`a${k}`} stroke={COLORS[k % COLORS.length]}
+              dot={false} strokeWidth={a.recession_within_12m ? 1.8 : 1.2}
+              strokeDasharray={a.recession_within_12m ? undefined : "4 3"} />
+          ))}
+        </ComposedChart>
+      </ResponsiveContainer>
+      <table className="mt-2 w-full text-[10px]">
+        <thead><tr className="text-slate-500">
+          <th className="text-left font-normal">analog</th>
+          <th className="text-left font-normal">phase then</th>
+          <th className="text-right font-normal">match</th>
+          <th className="text-right font-normal">fwd 6m</th>
+          <th className="text-right font-normal">fwd 12m</th>
+          <th className="text-right font-normal">fwd 18m</th>
+          <th className="text-right font-normal">recession &le;12m</th>
+        </tr></thead>
+        <tbody>
+          {analog.analogs.map((a: any, k: number) => (
+            <tr key={a.month} className="border-t border-panelborder/40">
+              <td className="py-0.5 font-mono" style={{ color: COLORS[k % COLORS.length] }}>{a.month}</td>
+              <td>{(a.phase_then || "").replace("_", " ")}</td>
+              <td className="text-right font-mono">{a.closer_than_pct}%</td>
+              {[a.fwd_spx_6m_pct, a.fwd_spx_12m_pct, a.fwd_spx_18m_pct].map((v, j) => (
+                <td key={j} className={`text-right font-mono ${v == null ? "text-slate-600" : v < 0 ? "text-rose-400" : "text-emerald-400"}`}>
+                  {v == null ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(1)}%`}</td>
+              ))}
+              <td className="text-right">{a.recession_within_12m == null ? "—" : a.recession_within_12m ? "YES" : "no"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="mt-1.5 text-[10px] leading-relaxed text-slate-500">
+        Top-10 analogs: <b>{analog.analog_recession_within_12m_pct}%</b> saw a
+        recession within 12 months vs <b>{analog.climatology_recession_within_12m_pct}%</b> unconditionally.
+        Walk-forward skill ({s.n_months} months): recession Brier <b>{s.brier_analog}</b> vs
+        base rate {s.brier_base_rate} — analogs help; return MAE {s.ret_mae_analog_pp}pp vs
+        climatology {s.ret_mae_climatology_pp}pp — analogs do NOT beat climatology on return
+        magnitude. Read the paths as scenario texture, not a forecast. {analog.basis}
+      </div>
+    </div>
   );
 }
