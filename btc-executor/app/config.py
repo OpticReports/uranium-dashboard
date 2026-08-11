@@ -36,7 +36,10 @@ class Settings(BaseSettings):
     daily_loss_halt_pct: float = 0.06     # flatten + halt if day loss exceeds
     dd_halt_pct: float = 0.25             # flatten + halt below high-water mark
     stale_bars_max: int = 2               # engine this stale -> entries blocked
-    drift_tol_frac: float = 0.02          # |venue - ledger| notional tolerance
+    # |venue - ledger| notional tolerance. 0.01 of $50k = $500, BELOW one CDE
+    # contract (~$640): a single-contract divergence must alert. The old 0.02
+    # ($1,000) sat above it and swallowed the 2026-08-10 ledger overstatement.
+    drift_tol_frac: float = 0.01
     stop_replace_bps: float = 5.0         # move stop only if >5bp from current
     stop_limit_offset_pct: float = 0.5    # stop-limit band below/above trigger
 

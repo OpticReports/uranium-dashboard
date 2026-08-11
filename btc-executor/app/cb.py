@@ -41,6 +41,11 @@ class CoinbaseVenue:
             self._orders = {}
         self._meta = self._product_meta()
         self._mid_cache: tuple[float, float] | None = None
+        # counter-agent find 2026-08-11: this was referenced in place_limit
+        # but never initialized - the first post-only rejection raised
+        # AttributeError BEFORE the marketable retry, so every short entry
+        # at positive basis crash-looped instead of filling.
+        self.post_only_crosses: list[str] = []
         logger.info("coinbase venue ready: %s meta=%s", self.product_id, self._meta)
 
     # ---------- discovery / meta ----------
@@ -104,15 +109,20 @@ class CoinbaseVenue:
         # contract, more than double the intent (live find, 2026-08-10).
         # Sizes arrive pre-quantized; a sub-minimum request is a caller bug
         # and must fail loudly rather than silently inflate.
+        # FLOOR, not round: round() still inflated 0.5-1.0-contract requests
+        # to a full contract, so "never rounds up" held only below half a
+        # contract (counter-agent find 2026-08-11). Callers pre-quantize, so
+        # a fractional request here is a bug - floor to what quantize would
+        # have produced and raise if that is nothing.
         mult = self._meta["contract_multiplier"]
         if mult:                                  # contract-based (CDE)
-            n = int(round(qty_btc / mult))
+            n = int(qty_btc / mult + 1e-9)
             if n < 1:
                 raise ValueError(
                     f"size {qty_btc} BTC is below one contract ({mult} BTC)")
             return str(n)
         inc = self._meta["base_increment"]
-        steps = int(round(qty_btc / inc))
+        steps = int(qty_btc / inc + 1e-9)
         if steps < 1:
             raise ValueError(
                 f"size {qty_btc} BTC is below base_increment {inc}")
@@ -162,8 +172,14 @@ class CoinbaseVenue:
                                               self.product_id).to_dict()
             n = float(p.get("position", {}).get("net_size") or 0)
             return n
-        except Exception:  # noqa: BLE001
-            return 0.0
+        except Exception as exc:  # noqa: BLE001
+            # Fail LOUD, not flat. Returning 0.0 on a dual API failure told
+            # the halt-flatten path "already flat" and let the transfer
+            # reconciler reclassify a naked position's bleed as withdrawals
+            # (counter-agent find 2026-08-11). Callers that can tolerate an
+            # unknown position catch this; the ones that cannot must not be
+            # fed a fabricated zero.
+            raise RuntimeError(f"position read failed (both APIs): {exc}")
 
     def mid(self) -> float:
         now = time.time()
@@ -184,8 +200,19 @@ class CoinbaseVenue:
             return None
         try:
             o = self.client.get_order(oid).to_dict().get("order", {})
-            status = {"OPEN": "OPEN", "FILLED": "FILLED"}.get(
-                o.get("status"), "CANCELLED")
+            # Unknown/transitional statuses (QUEUED, PENDING, CANCEL_QUEUED -
+            # CDE futures can queue orders through maintenance windows) map to
+            # OPEN, not CANCELLED: reporting a queued order as cancelled made
+            # _enter_from_fill skip the cancel and chase at full size, risking
+            # a doubled position at session reopen (counter-agent 2026-08-11).
+            # Only terminal states map to CANCELLED.
+            raw = o.get("status")
+            if raw == "FILLED":
+                status = "FILLED"
+            elif raw in ("CANCELLED", "EXPIRED", "FAILED"):
+                status = "CANCELLED"
+            else:
+                status = "OPEN"
             mult = self._meta["contract_multiplier"] or 1.0
             filled = float(o.get("filled_size") or 0)
             if self._meta["contract_multiplier"]:
@@ -235,8 +262,16 @@ class CoinbaseVenue:
             return False
         if d.get("success", True):
             return False
-        blob = json.dumps(d).upper()
-        return "POST_ONLY" in blob or "WOULD_CROSS" in blob or "CROSS" in blob
+        # Match only the failure fields, and never bare "CROSS" - INTX perps
+        # are cross-margin, so an unrelated rejection that echoes
+        # margin_type "CROSS" would have been retried WITHOUT maker
+        # protection (counter-agent find 2026-08-11).
+        err = (d.get("error_response") or {})
+        blob = " ".join(str(err.get(k, "")) for k in
+                        ("error", "message", "error_details",
+                         "preview_failure_reason", "new_order_failure_reason")
+                        ).upper()
+        return "POST_ONLY" in blob or "WOULD_CROSS" in blob
 
     def place_stop(self, side: str, qty: float, trigger_px: float,
                    cloid: str) -> None:

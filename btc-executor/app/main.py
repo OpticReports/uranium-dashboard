@@ -53,7 +53,22 @@ def _build_executor() -> Executor:
             LAST["venue_init_error"] = f"{type(exc).__name__}: {exc}"
             logger.error("coinbase venue init failed: %s", exc)
             inner = None
-    if settings.dry_run or inner is None:
+    if not settings.dry_run and inner is None:
+        # LIVE mode must never silently demote to a shadow book: the old
+        # fall-through ran DryRunVenue over a real account - synthetic $10k
+        # equity, continuous fills, and NOBODY maintaining real positions or
+        # stops, while /health stayed green (counter-agent find 2026-08-11,
+        # same phenotype as the DRY_RUN blueprint incident). Alert and raise;
+        # _loop retries with backoff so a transient Coinbase outage self-heals.
+        from .alerts import send
+        send("🔴 ACTION NEEDED (you) — executor venue_init_failed: LIVE mode "
+             f"cannot connect to Coinbase ({LAST['venue_init_error']}). "
+             "No orders are being managed; any open positions/stops are "
+             "untouched on the venue. Retrying automatically - if this "
+             "repeats, check Coinbase status and the API key in Render.")
+        raise RuntimeError(f"live venue init failed: "
+                           f"{LAST['venue_init_error']}")
+    if settings.dry_run:
         from .cb import DryRunVenue
         venue = DryRunVenue(inner, persist_path=os.path.join(
             os.path.dirname(settings.state_path) or ".", "dryrun_book.json"))

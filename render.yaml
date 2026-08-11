@@ -223,39 +223,41 @@ services:
       - key: CB_PRODUCT_ID
         # US perpetual-style BTC future on Coinbase Derivatives (CDE/FCM):
         # 0.01-BTC contracts, $5 tick, Dec-2030 expiry, display "BTC PERP".
-        value: BIP-20DEC30-CDE
+        # sync:false: a sync during a future product migration would point the
+        # executor at the OLD product while a position sits on the new one -
+        # position() reads only CB_PRODUCT_ID, so the real exposure would
+        # vanish from drift checks and halt-flattens (QA 2026-08-11).
+        sync: false
       - key: DRY_RUN
         # NEVER a blueprint value. On 2026-08-10 an unrelated render.yaml edit
         # triggered a sync that reset this to "true" and silently un-armed a
         # LIVE account. sync:false keeps the dashboard as the single source of
         # truth; if unset, the code default (True) fails safe.
         sync: false
+      # EVERY trading-behavior variable below is sync:false (QA 2026-08-11):
+      # the DRY_RUN incident generalizes - a blueprint literal is a pending
+      # silent reset on the next unrelated commit, in whichever direction the
+      # dashboard has since moved (a re-sync would UNDO a defensive cut, or
+      # REVERT a ramp step-down taken while losing). The Render dashboard is
+      # the single source of truth; the executor pages on any change via the
+      # config_change guard, and code defaults fail safe (kelly 0.05).
+      # Ramp is a STAIRCASE - v3, EXECUTOR.md "Ramp schedule": 0.05 -> 0.10
+      # -> 0.20 -> 0.35 -> 0.56, advance after 4 trades at a rung AND
+      # cumulative ramp P&L >= 0; step DOWN a rung at -$5,000 ramp drawdown.
+      # Change KELLY_M one step at a time, never alongside SIZING_BASE_USD.
+      # Current dashboard values (2026-08-11): KELLY_M 0.05,
+      # SIZING_BASE_USD 50000, MAX_NOTIONAL_USD 80000, MAX_ACCOUNT_LEV 2.0,
+      # DD_HALT_PCT 0.35 (% of sizing base; 0.30 at the $100k phase).
       - key: KELLY_M
-        # TOKEN PHASE = 0.05. Blueprint default must match the live intent:
-        # a blueprint re-sync would otherwise silently reset the account to
-        # 11x token size. Ramp is a STAIRCASE (EXECUTOR.md "Ramp schedule"):
-        # 0.05 -> 0.15 -> 0.30 -> 0.45 -> 0.56, advancing every 4 clean
-        # trades, then 0.80 ceiling. Change here AND in the Render dashboard
-        # together, one step at a time, never alongside SIZING_BASE_USD.
-        value: "0.05"
+        sync: false
       - key: SIZING_BASE_USD
-        # Fixed sizing base (USD). 0 = size on live account equity. MUST
-        # match the live env: a re-sync at "0" silently re-anchors sizing to
-        # equity mid-ramp and destroys step attribution (QA 2026-08-10).
-        # Plan (EXECUTOR.md ramp schedule): 50000 now, 100000 later.
-        value: "50000"
+        sync: false
       - key: MAX_NOTIONAL_USD
-        # Must clear the top ramp step with headroom, else _leg_qty silently
-        # clamps the position and the account runs a lower effective KELLY_M
-        # than the step it believes it is on (QA 2026-08-10: at "25000" the
-        # 0.35 and 0.56 steps were both clamped).
-        value: "80000"
+        sync: false
       - key: MAX_ACCOUNT_LEV
-        value: "2.0"
+        sync: false
       - key: DD_HALT_PCT
-        # % OF THE SIZING BASE. Current plan: 0.35 at $50k base / $30k
-        # deposit; 0.30 at $100k base / $50k (EXECUTOR.md funding phases).
-        value: "0.35"
+        sync: false
       - key: STATE_PATH
         value: /app/data/executor_state.json
       - key: LOG_LEVEL
@@ -292,16 +294,22 @@ services:
       - key: TWS_PASSWORD
         sync: false
       - key: TRADING_MODE
-        value: paper         # paper | live — read by gateway AND executor
+        # paper | live — read by gateway AND executor. sync:false: this is
+        # HALF of the ibkr live gate (with DRY_RUN); as a blueprint literal a
+        # sync would flip a LIVE deployment back to paper while it reports
+        # healthy — the DRY_RUN incident on the other executor (QA 2026-08-11).
+        sync: false
       - key: DRY_RUN
         # never blueprint-managed (see btc-executor note); dashboard owns it
         sync: false
       - key: READ_ONLY_API
-        value: "no"          # gateway must accept orders (paper account)
+        # "no" = gateway accepts orders. sync:false so a defensive dashboard
+        # flip to "yes" mid-incident cannot be silently reverted by a sync.
+        sync: false
       - key: EXEC_TOKEN
         sync: false          # /status /kill /resume auth (reuse existing)
       - key: LEG_BUDGET_USD
-        value: "10000"       # $10k per ladder leg, house-money banked
+        sync: false          # $10k per ladder leg now; dashboard owns ramps
       - key: STATE_PATH
         value: /app/data/ladder_state.json
       - key: LOG_LEVEL

@@ -61,6 +61,12 @@ class LegLedger:
     stop_cloid: str | None = None
     stop_px: float | None = None
     signal_ts: int | None = None
+    # entry_ts of an engine position whose protective stop FILLED on-venue.
+    # While the engine (which only updates on 4h bar closes) keeps reporting
+    # that position, case 1 must NOT re-enter from the stale entry order -
+    # doing so resurrected a phantom ledger position and armed a live stop on
+    # a flat venue (counter-agent find 2026-08-11, pre-existing FATAL class).
+    stopped_entry_ts: int | None = None
 
 
 @dataclass
@@ -79,6 +85,7 @@ class ExecState:
     # gate was unfalsifiable)
     fills: list = field(default_factory=list)
     last_dry_run: bool | None = None      # detects silent mode flips
+    last_config: dict | None = None       # detects silent sizing/risk resets
 
 
 def _side_sign(side: str) -> float:
@@ -104,6 +111,29 @@ class Executor:
         self.state = self._load_state()
         self._breach_count = 0
         self._last_flat_equity = None      # transfer-reconciliation baseline
+        self._fill_watch: list[dict] = []  # orders pending a fill-price read
+        self._sent_at: dict[str, float] = {}   # per-kind Telegram cooldown
+        self._migrate_ledger_granularity()
+
+    def _migrate_ledger_granularity(self) -> None:
+        """Persisted state written before 8e27c01 recorded REQUESTED sizes
+        (e.g. -0.01466 BTC) while the venue holds whole contracts. Snap each
+        leg to the venue's granularity once at load, so every later stop /
+        close / cap computation matches reality. A residue that quantizes to
+        zero is dust the venue cannot hold - zero it and say so."""
+        for name, led in self.state.legs.items():
+            if led.qty == 0.0:
+                continue
+            try:
+                q = self.venue.quantize(abs(led.qty))
+            except Exception:  # noqa: BLE001
+                continue
+            snapped = q if led.qty > 0 else -q
+            if snapped != led.qty:
+                self._event("WARN", "ledger_migrated",
+                            f"{name} qty {led.qty} -> {snapped} "
+                            f"(venue granularity)")
+                led.qty = snapped
 
     # ---------- persistence ----------
 
@@ -119,6 +149,7 @@ class Executor:
             st.marks = raw.get("marks", [])[-400:]
             st.fills = raw.get("fills", [])[-400:]
             st.last_dry_run = raw.get("last_dry_run")
+            st.last_config = raw.get("last_config")
             return st
         except Exception:  # noqa: BLE001
             return ExecState()
@@ -132,7 +163,8 @@ class Executor:
              "events": self.state.events[-200:],
              "marks": self.state.marks[-400:],
              "fills": getattr(self.state, "fills", [])[-400:],
-             "last_dry_run": getattr(self.state, "last_dry_run", None)}
+             "last_dry_run": getattr(self.state, "last_dry_run", None),
+             "last_config": getattr(self.state, "last_config", None)}
         tmp = self.state_path + ".tmp"
         json.dump(d, open(tmp, "w"))
         os.replace(tmp, self.state_path)
@@ -166,7 +198,24 @@ class Executor:
             "halt_error": "closing positions during the halt FAILED — open "
                           "Coinbase NOW, check positions, flatten manually "
                           "if any remain",
+            "config_change": "sizing/risk config changed - if this was you "
+                             "(ramp step, base change), ignore; if NOT, a "
+                             "sync or fat-finger altered live risk limits - "
+                             "check the Render env vars now",
         }
+        # Per-kind Telegram cooldown for conditions that persist across polls
+        # (their msg embeds a changing float, so kind+msg dedupe never fires).
+        # halt_config alone was ~180 pages/hour while equity sat below the
+        # miscalibration line (counter-agent find 2026-08-11). Events are all
+        # still LOGGED - only the phone pings are rate-limited. Halts, mode
+        # changes and live-trade events are never suppressed.
+        RATE_LIMITED = {"halt_config", "cap_clamp", "leg_sync_error",
+                        "position_drift", "entries_blocked", "sub_min_size"}
+        if kind in RATE_LIMITED:
+            now = time.time()
+            if now - self._sent_at.get(kind, 0.0) < 1800:
+                return
+            self._sent_at[kind] = now
         if kind in ACTION:
             send(f"🔴 ACTION NEEDED (you) — executor {kind}: {msg}\n"
                  f"→ {ACTION[kind]}")
@@ -175,8 +224,12 @@ class Executor:
                  f"→ no action needed from you — forward this to Claude")
         elif kind in ("resume", "auto_rearm", "transfer_reconciled"):
             send(f"✅ executor {kind}: {msg} — no action needed")
-        elif kind in ("entry_order", "leg_closed", "entry_chase") \
+        elif kind in ("entry_order", "leg_closed", "entry_chase",
+                      "stop_filled_on_venue", "orphan_fill_unwound") \
                 and not getattr(self.cfg, "dry_run", True):
+            # stop_filled_on_venue is a REAL money exit and orphan_fill_unwound
+            # places a real order - both were log-only while routine engine
+            # exits pinged the phone (counter-agent find 2026-08-11)
             send(f"⚡ executor {kind}: {msg}")
 
     # ---------- sizing ----------
@@ -211,7 +264,10 @@ class Executor:
         # position on every entry (live find, 2026-08-10).
         qty = self.venue.quantize(round(want, 8))
         if qty <= 0.0 and want > 0.0:
-            self._event("WARN", "sub_min_size",
+            # RED, not WARN: a leg silently never trading is the "healthy
+            # while doing nothing" phenotype - it must reach the phone
+            # (rate-limited to one ping per 30 min)
+            self._event("RED", "sub_min_size",
                         f"{leg} target {want:.5f} BTC is below the venue "
                         f"minimum - leg not entered this cycle")
         return round(qty, 8)
@@ -225,11 +281,22 @@ class Executor:
             # model-falsification event: it re-arms itself at the UTC day
             # boundary. DRAWDOWN and KILL stay manual-resume by design —
             # the circuit breaker with automatic reset is a retry loop.
+            # ABOVE KELLY_M 0.30 the rule flips to manual (EXECUTOR.md ramp
+            # v3): at that size a breach is meaningful evidence and auto-
+            # rearm would clear the only breaker reachable during the ramp,
+            # granting a fresh full budget at 00:00 UTC mid-move. This rule
+            # was doc-only until 2026-08-11 (counter-agent find).
             if self.state.day_key and self.state.halted == "DAILY_LOSS":
-                self.state.halted = None
-                self._breach_count = 0
-                self._event("INFO", "auto_rearm",
-                            f"DAILY_LOSS cleared at UTC day rollover {day}")
+                if getattr(self.cfg, "kelly_m", 0.0) > 0.30:
+                    self._event("RED", "halt",
+                                f"DAILY_LOSS held through UTC rollover {day}: "
+                                f"KELLY_M {self.cfg.kelly_m} > 0.30 requires "
+                                f"MANUAL resume (ramp v3 rule)")
+                else:
+                    self.state.halted = None
+                    self._breach_count = 0
+                    self._event("INFO", "auto_rearm",
+                                f"DAILY_LOSS cleared at UTC day rollover {day}")
             self.state.day_key = day
             self.state.day_start_equity = equity
             try:
@@ -272,7 +339,9 @@ class Executor:
                 self.state.day_start_equity += delta
             if self.state.high_water > 0:
                 self.state.high_water = max(self.state.high_water + delta, equity)
-            self._breach_count = 0
+            # NOTE: deliberately NOT resetting _breach_count here - a flat-book
+            # equity wobble must not cancel a halt confirmation in progress
+            # (counter-agent find 2026-08-11)
             self._event("INFO", "transfer_reconciled",
                         f"flat-book equity moved {delta:+.0f} (no fills) - "
                         f"treated as transfer; halt anchors shifted, day start "
@@ -332,11 +401,15 @@ class Executor:
             if abs(net) > 1e-6:
                 self.venue.place_market(_close_side(net), abs(net),
                                         f"halt-{int(time.time())}")
+            for l in self.state.legs.values():
+                l.qty = 0.0
+                l.entry_cloid = l.stop_cloid = None
         except Exception as exc:  # noqa: BLE001
+            # Flatten FAILED: keep the ledger as-is - it is the only record
+            # of what we believe we hold. Zeroing it here made the transfer
+            # reconciler read a naked position's bleed as withdrawals
+            # (counter-agent find 2026-08-11). halt_error already pages.
             self._event("RED", "halt_error", str(exc))
-        for l in self.state.legs.values():
-            l.qty = 0.0
-            l.entry_cloid = l.stop_cloid = None
         self._save_state()
 
     def resume(self) -> None:
@@ -359,6 +432,20 @@ class Executor:
                         f"verify this was intentional (a blueprint sync can "
                         f"reset it)")
         self.state.last_dry_run = cur
+        # Same incident class, other variables: a blueprint sync can reset any
+        # literal-valued env silently (they are sync:false now, but belt AND
+        # suspenders - a dashboard fat-finger pages too). Snapshot the whole
+        # sizing config and page on ANY change (counter-agent find 2026-08-11).
+        snap = {k: getattr(self.cfg, k, None) for k in
+                ("kelly_m", "sizing_base_usd", "max_notional_usd",
+                 "max_account_lev", "dd_halt_pct", "daily_loss_halt_pct",
+                 "cb_product_id")}
+        prev_snap = getattr(self.state, "last_config", None)
+        if prev_snap is not None and prev_snap != snap:
+            diffs = [f"{k}: {prev_snap.get(k)} -> {v}"
+                     for k, v in snap.items() if prev_snap.get(k) != v]
+            self._event("RED", "config_change", "; ".join(diffs))
+        self.state.last_config = snap
 
     def step(self, target: dict) -> None:
         self._check_mode_change()
@@ -374,7 +461,10 @@ class Executor:
         entries_ok = not (stale or target.get("degraded")
                           or target.get("data_halt"))
         if not entries_ok:
-            self._event("WARN", "entries_blocked",
+            # RED: a stale/degraded engine feed silently stopping all entries
+            # for days while /health stays green is the DRY_RUN-incident
+            # phenotype (rate-limited to one ping per 30 min)
+            self._event("RED", "entries_blocked",
                         f"stale={stale} degraded={target.get('degraded')} "
                         f"data_halt={target.get('data_halt')}")
         blend = target.get("blend", {})
@@ -390,6 +480,7 @@ class Executor:
                 # leg on every poll it occurred (QA 2026-08-10).
                 self._event("RED", "leg_sync_error", f"{leg}: {exc}")
         self._report_post_only_crosses()
+        self._poll_fill_watch()
         self._check_drift(equity)
         self._save_state()
 
@@ -402,6 +493,13 @@ class Executor:
 
         # 1) engine has an open position
         if pos is not None:
+            if led.stopped_entry_ts == pos.get("entry_ts"):
+                # our venue stop already closed THIS position; the engine just
+                # hasn't seen it yet (it updates on 4h closes). Re-entering
+                # from the stale entry order here resurrected a phantom
+                # position (counter-agent find 2026-08-11). Wait it out.
+                return
+            led.stopped_entry_ts = None
             if led.qty == 0.0:
                 self._enter_from_fill(leg, led, pos, blend, equity)
             if led.qty != 0.0:
@@ -444,6 +542,7 @@ class Executor:
             else:
                 self.venue.place_market(side, qty, cloid)
                 led.qty = _side_sign(pend["side"]) * qty
+            self._watch_fill(leg, "entry", cloid, limit_px, side)
             led.entry_cloid, led.entry_side = cloid, pend["side"]
             led.entry_qty, led.signal_ts = qty, pend["signal_ts"]
             self._event("INFO", "entry_order",
@@ -482,6 +581,8 @@ class Executor:
             side = _order_side(pos["side"])
             self.venue.place_market(side, missing,
                                     f"{leg[0].upper()}-{pos['entry_ts']}-C")
+            self._watch_fill(leg, "chase", f"{leg[0].upper()}-{pos['entry_ts']}-C",
+                             pos["entry_price"], side)
             self._event("WARN", "entry_chase",
                         f"{leg} missed {missing} of {want} BTC - chased at market")
         # Record what the venue HOLDS (filled + whatever we could chase), not
@@ -494,20 +595,35 @@ class Executor:
         trigger = pos.get("stop")
         if not trigger or led.qty == 0.0:
             return
+        # Check for an on-venue stop FILL before the churn guard: the old
+        # order hid a fired stop for as long as the trail moved < 5bp, then
+        # the flat ledger + engine-still-reports-position window resurrected
+        # the position from the stale entry order and armed a live stop on a
+        # flat venue (counter-agent find 2026-08-11, reproduced end-to-end).
+        if led.stop_cloid:
+            st = self.venue.order_status(led.stop_cloid)
+            if st and st.get("status") == "FILLED":
+                # protective stop fired on-venue; ledger goes flat, and
+                # stopped_entry_ts blocks re-entry from this same engine
+                # position until the engine catches up at its own stop logic
+                self._event("INFO", "stop_filled_on_venue", f"{leg}")
+                led.qty, led.stop_cloid, led.stop_px = 0.0, None, None
+                led.stopped_entry_ts = pos.get("entry_ts")
+                # the entry order is consumed - its fill was closed BY the
+                # stop. Trend keeps entry_cloid for the position's life, so
+                # without this, case 3's orphan-flatten would re-close the
+                # filled entry and open a naked reverse position.
+                led.entry_cloid = led.entry_side = None
+                led.entry_qty = 0.0
+                return
         if led.stop_px and abs(trigger - led.stop_px) / led.stop_px \
                 < self.cfg.stop_replace_bps / 10_000.0:
             return
         cloid = f"{leg[0].upper()}-{pos['entry_ts']}-S{int(trigger)}"
         if led.stop_cloid:
-            st = self.venue.order_status(led.stop_cloid)
-            if st and st.get("status") == "FILLED":
-                # protective stop already fired on-venue; ledger goes flat and
-                # the engine will catch up at its own stop logic
-                self._event("INFO", "stop_filled_on_venue", f"{leg}")
-                led.qty, led.stop_cloid, led.stop_px = 0.0, None, None
-                return
             self.venue.cancel(led.stop_cloid)
         self.venue.place_stop(_close_side(led.qty), abs(led.qty), trigger, cloid)
+        self._watch_fill(leg, "stop", cloid, trigger, _close_side(led.qty))
         led.stop_cloid, led.stop_px = cloid, trigger
 
     def _cancel_entry(self, led: LegLedger, filled_action: str) -> None:
@@ -533,8 +649,29 @@ class Executor:
                 self.venue.cancel(led.stop_cloid)
             led.stop_cloid, led.stop_px = None, None
         if led.qty != 0.0:
-            self.venue.place_market(_close_side(led.qty), abs(led.qty),
-                                    f"{leg[0].upper()}-{int(time.time())}-X")
+            # Quantize the close: a stale sub-contract residue (old-format
+            # persisted state) would make place_market raise AFTER the stop
+            # was already cancelled - a permanent naked, stopless loop
+            # (counter-agent find 2026-08-11). A residue the venue cannot
+            # hold is ledger dust, not a position: zero it and say so.
+            qty = abs(led.qty)
+            try:
+                qty = self.venue.quantize(qty)
+            except Exception:  # noqa: BLE001
+                pass
+            if qty <= 0.0:
+                self._event("RED", "ledger_dust_cleared",
+                            f"{leg} qty {led.qty} below venue minimum - "
+                            f"cleared without an order (verify flat on venue)")
+                led.qty = 0.0
+                return
+            cloid = f"{leg[0].upper()}-{int(time.time())}-X"
+            try:
+                ref = self.venue.mid()
+            except Exception:  # noqa: BLE001
+                ref = 0.0
+            self.venue.place_market(_close_side(led.qty), qty, cloid)
+            self._watch_fill(leg, "close", cloid, ref, _close_side(led.qty))
             self._event("INFO", "leg_closed", f"{leg} {why} qty={led.qty}")
             led.qty = 0.0
 
@@ -553,19 +690,52 @@ class Executor:
                         f"- refilled as taker")
         seen.clear()
 
+    def _watch_fill(self, leg: str, role: str, cloid: str, ref_px: float,
+                    side: str) -> None:
+        """Queue an order for fill-price capture. _record_fill existed since
+        9fd498f but had ZERO call sites - the ramp's primary 'fill quality'
+        criterion ran on a dataset of size zero (counter-agent find
+        2026-08-11). Every order placed now enters this queue; _poll_fill_watch
+        drains it as statuses resolve."""
+        if not ref_px or ref_px <= 0:
+            return
+        self._fill_watch.append({"ts": time.time(), "leg": leg, "role": role,
+                                 "cloid": cloid, "ref_px": float(ref_px),
+                                 "side": side})
+        del self._fill_watch[:-64]
+
+    def _poll_fill_watch(self) -> None:
+        keep = []
+        for w in self._fill_watch:
+            st = None
+            try:
+                st = self.venue.order_status(w["cloid"])
+            except Exception:  # noqa: BLE001
+                pass
+            if st is None or st.get("status") == "OPEN":
+                if time.time() - w["ts"] < 48 * 3600:
+                    keep.append(w)
+                continue
+            if st.get("status") == "FILLED":
+                self._record_fill(w["leg"], w["role"], w["cloid"], st,
+                                  w["ref_px"], w["side"])
+        self._fill_watch = keep
+
     def _record_fill(self, leg: str, role: str, cloid: str, st: dict,
-                     ref_px: float) -> None:
-        """Persist execution prices so slippage is MEASURABLE. Before this the
-        venue's average_filled_price was discarded and the ramp's slippage
-        gate had a sample size of zero (QA 2026-08-10)."""
+                     ref_px: float, side: str) -> None:
+        """Persist execution prices so slippage is MEASURABLE. slip_bps is
+        signed ADVERSE-POSITIVE: paying up on a BUY and getting hit down on a
+        SELL are both positive. (The original expression evaluated to +1.0 on
+        both branches, which would have sign-flipped every SELL - counter-agent
+        find 2026-08-11.)"""
         px = (st or {}).get("avg_price")
         if not px or not ref_px:
             return
-        sign = 1.0 if st.get("side_sign", 1) > 0 else 1.0
-        bps = (px - ref_px) / ref_px * 10_000 * sign
+        sign = 1.0 if side == "BUY" else -1.0
+        bps = (float(px) - ref_px) / ref_px * 10_000 * sign
         self.state.fills = (getattr(self.state, "fills", None) or [])[-400:]
         self.state.fills.append({"ts": int(time.time()), "leg": leg,
-                                 "role": role, "cloid": cloid,
+                                 "role": role, "cloid": cloid, "side": side,
                                  "px": round(float(px), 2),
                                  "ref_px": round(float(ref_px), 2),
                                  "slip_bps": round(bps, 2)})

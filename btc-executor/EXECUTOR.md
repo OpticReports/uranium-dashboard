@@ -40,11 +40,11 @@ btc-executor  --Coinbase Advanced API-->  BTC perp product
 | rail | behavior |
 |---|---|
 | DRY_RUN (default ON) | full state machine runs; orders only logged |
-| daily-loss halt | equity < day-start x (1-6%) -> cancel all, flatten, halt |
-| drawdown halt | equity < high-water x (1-25%) -> same |
+| daily-loss halt | day loss > DAILY_LOSS_HALT_PCT (6%) **of the sizing base** -> cancel all, flatten, halt. Auto-rearms at UTC rollover at KELLY_M <= 0.30; MANUAL above. Boundary caveat: a rearm grants a fresh full day budget, so worst-case loss across a UTC boundary is ~2x the daily rail |
+| drawdown halt | equity below high-water minus DD_HALT_PCT (live: 0.35) **of the sizing base** -> same, manual resume |
 | kill switch | POST /kill -> same; POST /resume to clear (manual only) |
-| stale engine | feed stale/degraded -> new entries blocked, exits still run |
-| drift check | venue vs ledger position mismatch > 2% equity -> RED event |
+| stale engine | feed stale/degraded -> new entries blocked (RED alert, rate-limited), exits still run |
+| drift check | venue vs ledger position mismatch > 1% of equity (below one CDE contract) -> RED event |
 | orphan fills | our limit filled but paper cancelled -> unwound at market |
 | restart | ledger + order map persisted; reboot re-places nothing |
 
@@ -116,9 +116,14 @@ are 1/3 of these.
 4. zero RED events and zero halts since the previous step;
 5. leg states reconciled against the paper engine across the whole step.
 
-Slippage is now RECORDED (state.fills: venue price vs engine reference) but
-is **pooled across all steps** and reported as a one-sided 90% upper bound —
-never as a per-step pass/fail, which the sample size cannot support.
+Slippage is RECORDED via a fill-watch queue (every order placed - entries,
+chases, stops, closes - is polled until its status resolves, then its
+average fill price lands in state.fills as adverse-positive slip_bps vs the
+engine reference). NOTE (2026-08-11 counter-agent audit): the 2026-08-10
+commit CLAIMED this and shipped a function with zero call sites and a sign
+bug - the dataset was empty until today. Sample count starts now. Pooled
+across all steps, one-sided 90% upper bound - never a per-step pass/fail,
+which the sample size cannot support.
 
 ### Step-BACK / circuit rules
 
@@ -129,7 +134,10 @@ never as a per-step pass/fail, which the sample size cannot support.
 - **above KELLY_M 0.30 the daily-loss halt reverts to MANUAL resume.** At
   steps C/D a single ordinary-bad trade (-15.6% on notional, the worst in six
   years) trips the $3,000 daily rail — and auto-rearm would silently clear
-  the only breaker that is actually reachable during the ramp;
+  the only breaker that is actually reachable during the ramp. IMPLEMENTED
+  in `_roll_day` as of 2026-08-11 - it was doc-only for a day (counter-agent
+  find); the -$5,000 step-down remains deliberately manual ("never automate
+  the ramp");
 - two consecutive steps with degrading fill quality -> step DOWN one;
 - any halt -> hold for a full extra step's worth of trades after resuming.
 
@@ -178,7 +186,12 @@ so it is measured identically regardless of how fast the size ramps).
 ## Halt automation (2026-08-07)
 
 - **DAILY_LOSS auto-rearms** at the UTC day rollover (informational ✅
-  alert). It is a rate limiter, not a model-falsification event.
+  alert) while KELLY_M <= 0.30; above that it holds for manual resume (ramp
+  v3 rule, enforced in code). Rearm caveat, disclosed: the new day gets a
+  fresh full budget anchored at post-loss equity, and if the engine still
+  holds its position the mirror re-enters it - worst case across a boundary
+  is roughly 2x the daily rail. Below 0.30 the dollar amounts are small and
+  this is accepted; above 0.30 the manual gate closes it.
 - **DRAWDOWN and KILL remain manual-resume**, deliberately: a circuit
   breaker with automatic reset is a retry loop, and the −35%-of-base floor
   is only a floor because a human stands behind it. Resume is a
