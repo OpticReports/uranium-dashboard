@@ -167,7 +167,17 @@ def board() -> dict:
                             "approximate modern equivalents, NOT tradeable "
                             "parity). Same conventions and caveats as the "
                             "asset table; ranked by month-counted edge vs "
-                            "each industry's own base rate."),
+                            "each industry's own base rate. Verifier notes "
+                            "(2026-08-11): Telcm's 1935-2000 record is "
+                            "regulated-era telephone (the AT&T system); "
+                            "today's XLC is mostly Meta/Alphabet, which the "
+                            "French scheme files under BusEq - read Telcm "
+                            "as telecom carriers (T/VZ/TMUS), not an XLC "
+                            "signal. Durbl and Shops both approximate XLY "
+                            "(autos/durables vs retail). Enrgy's -3pp STALL "
+                            "edge is dominated by 3 long oil-bear episodes "
+                            "(1986, the 90s glut, 2015-20 shale) - by "
+                            "episode it is 12/20, mid-pack."),
         "canary_reachable": cyc is not None,
     }
     return out
