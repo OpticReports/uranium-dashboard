@@ -160,8 +160,35 @@ deal), and whether the 2% is genuinely one-time.
   DexMat's stated beachhead — drops specific conductivity to ~1,250
   S·m²/kg, **19% of copper**. This threatens the beachhead market
   specifically and is not surfaced in any sponsor document.
-- [DECK spec table] strength 3 GPa; flex life 1M cycles vs copper 10K
-  (table ⇒ 100x, deck headline says 1,000x — **internal inconsistency**).
+- [DECK spec table — CORRECTED 2026-08-09 from a full transcription of
+  the slide] strength 3 GPa. **FLEX LIFE: Galvorn 1,000,000 cycles vs
+  COPPER 100,000 and aluminium 10,000.** Prior revs of this pack recorded
+  copper at 10K — that is aluminium's figure, misattributed. The table
+  therefore supports **10x copper**, not the 100x previously recorded.
+  The deck headline claims **1,000x**, so the headline overstates the
+  deck's OWN table by ~100x — a materially larger internal inconsistency
+  than we had logged, and on the metric that may be the most
+  commercially differentiating claim in the deck.
+- [DECK spec table, full transcription 2026-08-09] Galvorn / Cu / Al /
+  steel / carbon fibre / aramid / Dyneema:
+  specific conductivity (S·m²/kg) 6,150 / 6,300 / 12,200 / 400 / 50 / — / —;
+  conductivity (MS/m) 10 / 58 / 33 / 3.4 / 0.1 / insulating / insulating;
+  strength (GPa) 3.0 / 0.38 / 0.41 / 1.0 / 6.4 / 3.0 / 3.9;
+  density (g/cc) 1.6 / 9.0 / 2.7 / 8.0 / 2.1 / 1.4 / 0.98;
+  thermal (W/m·K) 450 / 385 / 237 / 50 / 200–1,000 / 0.04 / 20;
+  Young's (GPa) 200 / 100 / 68 / 200 / 200–400 / 130 / 132;
+  tenacity (N/tex) 2.0 / 0.04 / 0.15 / 0.13 / 3.0 / 2.1 / 3.9;
+  flex life (cycles) 1e6 / 1e5 / 1e4 / 1e4 / 1e4 / 1e6 / —.
+  Slide footnote: "Properties are based on tests performed on
+  single-filament fibre or solid-metal wire."
+  Three small thumbs on the scale, all in Galvorn's favour: copper
+  density entered as 9.0 (true 8.96); aluminium conductivity entered as
+  33 MS/m (conductor-grade 1350-H19 is 35); copper specific conductivity
+  printed as 6,300 when 58/8.96 gives 6,473. None individually material;
+  the direction is consistent.
+  Genuinely strong on the table's own terms: **tenacity 2.0 vs copper
+  0.04 N/tex = 50x specific strength**, and steel-class stiffness
+  (200 GPa) at one-fifth steel's density.
 - Where the value actually is (unchanged by the above, and arguably
   clarified): NOT conductivity. EMI shielding (skin-depth governed —
   hence MIL-C-17 on RG-316 at 53% weight reduction), signal/data cable
@@ -318,6 +345,48 @@ deal), and whether the 2% is genuinely one-time.
   to first (niche) revenue; Boston Metal ~12 yrs to first industrial run;
   Zoltek 26 years to exit ($584M). Modal failure: scale-up capex wall,
   demand a decade late, single-anchor dependence.
+
+## CALL NOTES — Casey x DexMat, 2026-08-09 [CALL — CLAIMED, no documents]
+
+Logged per revision policy: verbal claims do NOT trigger a re-score;
+they define what the Monday site visit must document. Rev 3 runs when
+documents exist.
+
+- (a) Diameter framing: ~2.4x diameter (not "6x") to match a copper
+  conductor — TRUE per deck filament math (√5.8 = 2.41); shipping tow
+  is √8.9 = 2.99x. Their stronger point: buyers speccing ≤77% of
+  copper's conductance already get Galvorn LIGHTER than copper (mass
+  breakeven at 0.77 relative conductance). Legitimate segment framing;
+  volume penalty (5.8–8.9x) still governs conduit/connector/bend-radius.
+- (b) Conductivity additive, 2–2.5x claimed, "testing soon, will know
+  soon." Almost certainly the IMDEA route (de Isidro-Gómez et al.,
+  Science, Apr 2026: AlCl4- intercalated FCCVD DWCNT, 24.5 MS/m,
+  17,351 S·m²/kg = 2.68x Cu gravimetric) + convergent Chinese result.
+  VERIFIED the science exists; UNVERIFIED it transfers to wet-spun
+  chlorosulfonic-acid fiber; intercalation is moisture-sensitive —
+  humidity/thermal-cycling stability is the qualification gate.
+  MOAT NOTE (cuts against DexMat): the additive is PUBLISHED SCIENCE
+  from a third party, available to every entrant, demonstrated on a
+  competing process lineage. If the industry's next conductivity step
+  comes from open literature, the wet-spinning cornered resource does
+  not corner it.
+- (c) "Conductivity as good as copper's in 5–7 years without the
+  additive" — BASIS UNSTATED (the standing [CONFLICT — BASIS] flag).
+  Specific basis: needs 1.3x from 0.77x — plausible. Volumetric basis:
+  needs 8.9x from the shipping tow when the best published result
+  anywhere is 24.5 MS/m — not credible without a roadmap. Ask which,
+  and demand the historical year-by-year conductivity curve.
+
+SITE VISIT DELIVERABLES (what converts CLAIMED → scoreable):
+1. Offtake counterparty + binding volumes (still item #1, pre-dates call).
+2. Additive test protocol + any data on THEIR fiber; humidity/cycling
+   stability plan; licensing/IP position on the intercalation chemistry.
+3. Basis of the 5–7yr parity projection + historical conductivity curve.
+4. Which spec-table figures are guaranteed shipping minimums vs best
+   single-filament results; annealed/purified-grade conductivity in
+   writing.
+5. What fraction of copper's conductance actual design wins spec (the
+   ≤77% segment thesis, evidenced from real POs).
 
 ## Deal terms (sponsor)
 - [CLAIMED] SPV structure: 2% one-time fee + 20% carried interest + pro-rata
