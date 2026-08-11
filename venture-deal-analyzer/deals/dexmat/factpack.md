@@ -160,8 +160,35 @@ deal), and whether the 2% is genuinely one-time.
   DexMat's stated beachhead — drops specific conductivity to ~1,250
   S·m²/kg, **19% of copper**. This threatens the beachhead market
   specifically and is not surfaced in any sponsor document.
-- [DECK spec table] strength 3 GPa; flex life 1M cycles vs copper 10K
-  (table ⇒ 100x, deck headline says 1,000x — **internal inconsistency**).
+- [DECK spec table — CORRECTED 2026-08-09 from a full transcription of
+  the slide] strength 3 GPa. **FLEX LIFE: Galvorn 1,000,000 cycles vs
+  COPPER 100,000 and aluminium 10,000.** Prior revs of this pack recorded
+  copper at 10K — that is aluminium's figure, misattributed. The table
+  therefore supports **10x copper**, not the 100x previously recorded.
+  The deck headline claims **1,000x**, so the headline overstates the
+  deck's OWN table by ~100x — a materially larger internal inconsistency
+  than we had logged, and on the metric that may be the most
+  commercially differentiating claim in the deck.
+- [DECK spec table, full transcription 2026-08-09] Galvorn / Cu / Al /
+  steel / carbon fibre / aramid / Dyneema:
+  specific conductivity (S·m²/kg) 6,150 / 6,300 / 12,200 / 400 / 50 / — / —;
+  conductivity (MS/m) 10 / 58 / 33 / 3.4 / 0.1 / insulating / insulating;
+  strength (GPa) 3.0 / 0.38 / 0.41 / 1.0 / 6.4 / 3.0 / 3.9;
+  density (g/cc) 1.6 / 9.0 / 2.7 / 8.0 / 2.1 / 1.4 / 0.98;
+  thermal (W/m·K) 450 / 385 / 237 / 50 / 200–1,000 / 0.04 / 20;
+  Young's (GPa) 200 / 100 / 68 / 200 / 200–400 / 130 / 132;
+  tenacity (N/tex) 2.0 / 0.04 / 0.15 / 0.13 / 3.0 / 2.1 / 3.9;
+  flex life (cycles) 1e6 / 1e5 / 1e4 / 1e4 / 1e4 / 1e6 / —.
+  Slide footnote: "Properties are based on tests performed on
+  single-filament fibre or solid-metal wire."
+  Three small thumbs on the scale, all in Galvorn's favour: copper
+  density entered as 9.0 (true 8.96); aluminium conductivity entered as
+  33 MS/m (conductor-grade 1350-H19 is 35); copper specific conductivity
+  printed as 6,300 when 58/8.96 gives 6,473. None individually material;
+  the direction is consistent.
+  Genuinely strong on the table's own terms: **tenacity 2.0 vs copper
+  0.04 N/tex = 50x specific strength**, and steel-class stiffness
+  (200 GPa) at one-fifth steel's density.
 - Where the value actually is (unchanged by the above, and arguably
   clarified): NOT conductivity. EMI shielding (skin-depth governed —
   hence MIL-C-17 on RG-316 at 53% weight reduction), signal/data cable
