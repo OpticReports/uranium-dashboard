@@ -98,7 +98,11 @@ export default function CycleTracker() {
                           : "border-panelborder text-slate-500"}`}>{r}</button>
         ))}
         <span className="ml-auto font-mono text-[11px]" style={{ color: PHASE_COLOR[cur.phase] }}>
-          {cur.phase.replace("_", " ")} · coin {cur.coincident >= 0 ? "+" : ""}{cur.coincident.toFixed(2)}
+          {cur.phase.replace("_", " ")}
+          {(board as any).realtime?.provisional && (
+            <span className="ml-1 rounded border border-amber-500/60 px-1 text-[9px] text-amber-400"
+              title={(board as any).realtime.provisional_note}>PROVISIONAL</span>
+          )} · coin {cur.coincident >= 0 ? "+" : ""}{cur.coincident.toFixed(2)}
           {" "}· lead {cur.leading >= 0 ? "+" : ""}{cur.leading.toFixed(2)} · {cur.month}
           <InfoTip term="cycle_phase" />
         </span>

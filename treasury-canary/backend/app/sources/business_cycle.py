@@ -24,10 +24,20 @@ coin<0 · LATE CYCLE lead<-0.5 · EXPANSION otherwise.
 Also serves the payrolls-momentum view (12m MA of monthly payroll change,
 the Zeberg chart) so the panel can toggle between framings.
 
-Honesty: monthly cadence with ~1-month publication lag; validation uses
-REVISED data — live vintages are noisier, so real-time precision runs
-below the backtest stats. Expanding-window z-scores avoid full-sample
-lookahead but revisions cannot be un-baked without ALFRED vintages.
+Honesty: monthly cadence with ~1-month publication lag. Real-time
+reliability MEASURED on ALFRED vintages (160 as-of dates 2000-2026,
+study 2026-08-11): latest-month phase label matches the revised label
+82% overall — CONTRACTION 98% (recall 41/42, precision 41/46, the 5
+false alarms all knife-edge), SLOWDOWN 89%, STALL 81%, EXPANSION 64%;
+disagreements are almost all EXPANSION<->STALL sign flips at
+|coin| < ~0.5, so that boundary renders as PROVISIONAL. Edge-month
+coincident z MAE 0.24 sigma (p90 0.46; bias -0.05, not exploitable).
+Recession entries 2001/2008/2020 were all labeled at the
+publication-limited minimum (2008: Jan-08 CONTRACTION on the Feb-08
+vintage, ~9 months before NBER announced). Worst real-time failure:
+2022 printed EXPANSION live all year but is a 10-month STALL after
+benchmark revisions - the optimistic direction. Pre-2010 income/sales/
+claims vintages are spliced approximations (lower-bound degradation).
 """
 from __future__ import annotations
 
@@ -198,6 +208,26 @@ def compute(raw_override: dict | None = None) -> dict:
 
     rnd = lambda x: round(x, 3) if x is not None else None
     nc = nowcast(M, months, coin)
+    # ALFRED vintage study 2026-08-11: the EXPANSION<->STALL boundary flips
+    # ~1-in-3 on revision when |coin| < 0.5, and the p90 edge error (0.46)
+    # exceeds a sub-0.5 gap to the -0.75 contraction line - render such
+    # labels as provisional.
+    cur_coin, cur_phase = coin[-1], phases[-1]
+    provisional = bool(cur_coin is not None and cur_phase in
+                       ("EXPANSION", "STALL") and abs(cur_coin) < 0.5)
+    realtime = {"study": "ALFRED vintages, 160 as-of dates 2000-2026 "
+                         "(2026-08-11)",
+                "label_agreement_pct": 82.5,
+                "by_phase_pct": {"CONTRACTION": 98, "SLOWDOWN": 89,
+                                 "STALL": 81, "EXPANSION": 64},
+                "edge_mae_z": 0.24, "edge_p90_z": 0.46,
+                "provisional": provisional,
+                "provisional_note": ("EXPANSION vs STALL flips ~1-in-3 on "
+                                     "revision at |coin|<0.5; a CONTRACTION "
+                                     "print could appear or vanish on "
+                                     "revision alone when the gap to -0.75 "
+                                     "is under ~0.46") if provisional
+                else None}
     return {"months": months,
             "nowcast": nc,
             "coincident": [rnd(x) for x in coin],
@@ -213,9 +243,14 @@ def compute(raw_override: dict | None = None) -> dict:
             "stats": stats,
             "current": {"month": months[-1], "coincident": rnd(coin[-1]),
                         "leading": rnd(lead[-1]), "phase": phases[-1]},
+            "realtime": realtime,
             "basis": ("monthly FRED, ~1m publication lag; expanding-window "
-                      "z (no full-sample lookahead); validation on revised "
-                      "data - live vintages noisier")}
+                      "z (no full-sample lookahead). Real-time reliability "
+                      "measured on ALFRED vintages (2026-08-11): labels "
+                      "match revised 82% (CONTRACTION 98%, EXPANSION 64%); "
+                      "nowcast phase 7/7 correct under vintages incl. "
+                      "2020-04 CONTRACTION while realized data still read "
+                      "-0.22")}
 
 
 # ---------- phase-change detection (called from the refresh job) ----------

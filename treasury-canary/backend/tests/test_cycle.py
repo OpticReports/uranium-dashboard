@@ -139,3 +139,23 @@ def test_gate_nowcast_reproduces_study_spec():
     assert -0.50 <= nc["claims"] <= -0.40, nc
     assert nc["phase"] == "STALL"
     assert nc["claims_trigger"] is False
+
+
+def test_gate_realtime_block_and_provisional_rule():
+    """ALFRED vintage study (2026-08-11) wired in: measured agreement stats
+    served, and the EXPANSION/STALL boundary renders provisional when
+    |coin| < 0.5 (it flips ~1-in-3 on revision there)."""
+    b = board()
+    rt = b["realtime"]
+    assert rt["label_agreement_pct"] == 82.5
+    assert rt["by_phase_pct"]["CONTRACTION"] == 98
+    assert rt["by_phase_pct"]["EXPANSION"] == 64
+    cur = b["current"]
+    expect = (cur["phase"] in ("EXPANSION", "STALL")
+              and cur["coincident"] is not None
+              and abs(cur["coincident"]) < 0.5)
+    assert rt["provisional"] == expect
+    if rt["provisional"]:
+        assert "1-in-3" in rt["provisional_note"]
+    assert "MEASURED on ALFRED vintages" in __import__(
+        "app.sources.business_cycle", fromlist=["x"]).__doc__
