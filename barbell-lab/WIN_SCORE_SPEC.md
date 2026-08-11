@@ -54,3 +54,23 @@ Wilson formula pin, episode-chaining pin, closed-window-only pin (no
 outcome window may extend past the fixture edge), display-field presence,
 and the mandatory caveat sentence. Counter-agent verification of the
 computed table BEFORE the cards ship.
+
+## ADDENDUM: industry-level win scores (frozen 2026-08-11, before computation)
+
+Owner request: sector granularity a la the Zeberg industry list. SPDR ETF
+data (1999->) spans ~3 recessions - exactly the fake-sample-size hazard
+this spec exists to avoid - so industries use the Ken French 12-industry
+VALUE-WEIGHTED monthly portfolios (1926->, CRSP; NoDur, Durbl, Manuf,
+Enrgy, Chems, BusEq, Telcm, Utils, Shops, Hlth, Money, Other), aligned to
+the same 1935-01 start and identical conventions as the asset table: win =
+industry total return beats CASH (TB3MS) over 6m/12m; same episode
+chaining, first-month outcome, Wilson-95 on episodes, month + episode
+rates both displayed, per-industry month-counted base rate. -99.99/-999
+are missing and disqualify a window. Display: all 12 industries ranked by
+month-counted edge vs own base for the CURRENT phase, episode counts
+always visible; cells with < 4 episodes print "insufficient episodes".
+Modern SPDR tickers shown as approximate reference mapping only (NoDur~XLP,
+Durbl/Shops~XLY, Manuf~XLI, Enrgy~XLE, Chems~XLB, BusEq~XLK, Telcm~XLC,
+Utils~XLU, Hlth~XLV, Money~XLF; Other unmapped) - NOT tradeable parity.
+Same ship gates (recompute parity, conventions) + independent verification
+of parsing and a sample of cells before the panel goes live.
