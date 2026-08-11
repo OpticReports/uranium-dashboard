@@ -253,6 +253,13 @@ function AnalogView({ analog, err }: { analog: any; err: string | null }) {
           {ep.top10_distinct_episode_pct != null ? ` (${ep.top10_distinct_episode_pct}% over the 10 nearest distinct episodes)` : ""},
           vs {analog.climatology_recession_within_12m_pct}% unconditionally.{" "}</>
         )}
+        {analog.ebp_context && (
+          <>Credit check (descriptive, not a model input): Fed excess bond
+          premium {analog.ebp_context.value} ({analog.ebp_context.month},
+          {" "}{analog.ebp_context.percentile}th percentile) vs {analog.ebp_context.at_2007_06}
+          {" "}at the matched 2007-06 month and a {analog.ebp_context.peak_2007_09} peak
+          into 2008 — credit is currently <b>not confirming</b> the 2007 rhyme.{" "}</>
+        )}
         {calib && (
           <>Calibration warning: analog p(recession) has read {calib} with no recession
           observed through {analog.asof} — treat the level as a regime read, not a

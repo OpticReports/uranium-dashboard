@@ -298,6 +298,57 @@ def _recent_calibration(V: dict, years: int = 4) -> dict:
             for yr, o in sorted(out.items())}
 
 
+EBP_URL = ("https://www.federalreserve.gov/econres/notes/feds-notes/"
+           "ebp_csv.csv")
+
+
+def _ebp_context(raw_override: dict | None = None) -> dict | None:
+    """DESCRIPTIVE side panel only. The 2026-08-11 referee REJECTED EBP as
+    an analog dimension (no skill, full-history re-estimation risk, and the
+    2007 narrative failed at the matched month: EBP at 2007-06 was -0.35,
+    MORE benign than today). What survives is the plain fact: where the
+    excess bond premium sits now vs its run-up through 2008. Never enters
+    the distance metric."""
+    try:
+        if raw_override is not None:
+            if "EBP" not in raw_override:
+                return None
+            pairs = [(str(d)[:7], float(v)) for d, v in raw_override["EBP"]]
+        else:
+            r = httpx.get(EBP_URL, timeout=30)
+            r.raise_for_status()
+            pairs = []
+            for ln in r.text.strip().splitlines()[1:]:
+                cols = ln.split(",")
+                try:
+                    mth, _d, yr = cols[0].split("/")
+                    pairs.append((f"{yr}-{int(mth):02d}", float(cols[2])))
+                except (ValueError, IndexError):
+                    continue
+        if not pairs:
+            return None
+        pairs.sort()
+        vals = dict(pairs)
+        cur_m, cur_v = pairs[-1]
+        hist = [v for _, v in pairs]
+        pct = round(100 * sum(1 for v in hist if v < cur_v) / len(hist), 1)
+        peak0708 = max((v for m, v in pairs if "2007-01" <= m <= "2009-06"),
+                       default=None)
+        return {"month": cur_m, "value": round(cur_v, 2),
+                "percentile": pct,
+                "at_2007_06": round(vals["2007-06"], 2)
+                if "2007-06" in vals else None,
+                "peak_2007_09": round(peak0708, 2)
+                if peak0708 is not None else None,
+                "note": ("descriptive only - rejected as a model input "
+                         "(2026-08-11 referee: no skill, history "
+                         "re-estimated); shown because it tempers the 2007 "
+                         "analog: credit is not confirming the rhyme")}
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("analog: EBP context unavailable (%s)", exc)
+        return None
+
+
 def board(raw_override: dict | None = None) -> dict:
     V = build_vectors(raw_override)
     months, spx, rec = V["months"], V["spx"], V["rec"]
@@ -379,6 +430,7 @@ def board(raw_override: dict | None = None) -> dict:
                      round(100 * sum(de_rec) / len(de_rec), 1)
                      if de_rec else None},
         "recent_calibration": _recent_calibration(V),
+        "ebp_context": _ebp_context(raw_override),
         "current_missing_dims": [DIM_NAMES[d] for d in range(len(DIM_NAMES))
                                  if V["matrix"][t][d] is None],
         "climatology_recession_within_12m_pct":

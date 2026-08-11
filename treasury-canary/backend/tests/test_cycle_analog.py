@@ -150,3 +150,20 @@ def test_gate_recent_overprediction_disclosed():
 def test_gate_missing_dims_disclosed():
     b = board()
     assert b["current_missing_dims"] == ["mfg_sales"]   # CMRMTSPL lag
+
+
+def test_gate_ebp_descriptive_only():
+    """EBP ships as CONTEXT, never as a dimension (referee 2026-08-11:
+    REJECT as dim - no skill, history re-estimated, narrative failed at
+    the matched month). Pin: 13 dims exactly, EBP absent from the matrix,
+    context block present when data is supplied and None when not."""
+    assert len(cycle_analog.DIM_NAMES) == 13
+    assert "ebp" not in [d.lower() for d in cycle_analog.DIM_NAMES]
+    fx = {**FIX, "EBP": [["2007-06-01", -0.35], ["2008-10-01", 1.8],
+                         ["2026-06-01", -0.29]]}
+    b = cycle_analog.board(raw_override=fx)
+    ctx = b["ebp_context"]
+    assert ctx["month"] == "2026-06" and ctx["value"] == -0.29
+    assert ctx["at_2007_06"] == -0.35 and ctx["peak_2007_09"] == 1.8
+    assert "descriptive" in ctx["note"]
+    assert board()["ebp_context"] is None      # no EBP in base fixture
