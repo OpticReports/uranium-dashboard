@@ -223,10 +223,16 @@ def stock_returns(F) -> list:
     Shiller Dividend is a trailing ANNUAL rate at monthly frequency."""
     px, div = F["px"], F["div"]
     out = [None] * len(px)
+    last_div = 0.0
     for i in range(1, len(px)):
+        # forward-fill the trailing annual dividend rate: the source zero-
+        # fills recent months (36 as of 2026-06), which stripped ~1.3%/yr
+        # of SPX return exactly where the strategy is defensive (QA find).
+        # Flat-dollar carry-forward is conservative but honest.
+        if div[i]:
+            last_div = div[i]
         if px[i] and px[i - 1]:
-            d = (div[i] or 0.0) / 12.0
-            out[i] = (px[i] + d) / px[i - 1] - 1
+            out[i] = (px[i] + last_div / 12.0) / px[i - 1] - 1
     return out
 
 
@@ -241,9 +247,12 @@ def bond_returns(F) -> list:
         y0, y1 = y[i - 1] / 100.0, y[i] / 100.0
         dy = y1 - y0
         n = 10
-        dmac = (1 + y0) / y0 * (1 - (1 + y0) ** -n) + n * (1 + y0) ** -n \
-            if y0 > 0 else n
-        # Macaulay of a par bond above simplifies; use modified duration
+        # Par-bond Macaulay duration: (1+y)/y * (1 - (1+y)^-n). The first
+        # implementation ADDED n(1+y)^-n on top - double-counting the
+        # principal and doubling duration (counter-agent find 2026-08-11;
+        # the corr/CAGR validation was structurally blind to a volatility
+        # scale error - a vol-ratio gate now guards it).
+        dmac = (1 + y0) / y0 * (1 - (1 + y0) ** -n) if y0 > 0 else n
         dmod = dmac / (1 + y0) if y0 > 0 else n
         conv = dmod * dmod * 1.1          # par-bond convexity approximation
         out[i] = y0 / 12.0 - dmod * dy + 0.5 * conv * dy * dy
@@ -290,6 +299,8 @@ def validate_bonds(data: dict, F) -> dict:
         return {"ok": False, "reason": f"only {len(common)} common years"}
     xs = [ann[y] for y in common]
     ys = [dam[y] for y in common]
+    sx = (sum((a - sum(xs) / len(xs)) ** 2 for a in xs) / len(xs)) ** 0.5
+    sy = (sum((b - sum(ys) / len(ys)) ** 2 for b in ys) / len(ys)) ** 0.5
     mx, my = sum(xs) / len(xs), sum(ys) / len(ys)
     cov = sum((a - mx) * (b - my) for a, b in zip(xs, ys))
     vx = sum((a - mx) ** 2 for a in xs)
@@ -298,8 +309,11 @@ def validate_bonds(data: dict, F) -> dict:
     cagr_s = math.prod(1 + a for a in xs) ** (1 / len(xs)) - 1
     cagr_d = math.prod(1 + b for b in ys) ** (1 / len(ys)) - 1
     gap_bp = (cagr_s - cagr_d) * 1e4
-    return {"ok": bool(corr >= 0.95 and abs(gap_bp) <= 50),
+    vol_ratio = sx / sy if sy else None
+    return {"ok": bool(corr >= 0.95 and abs(gap_bp) <= 50
+                       and vol_ratio and 0.8 <= vol_ratio <= 1.2),
             "corr": round(corr, 4), "cagr_gap_bp": round(gap_bp, 1),
+            "vol_ratio": round(vol_ratio, 3) if vol_ratio else None,
             "years": [common[0], common[-1]], "n_years": len(common)}
 
 
@@ -381,17 +395,23 @@ def run(F, labs, risk: float = 1.0, start: str = "1935-01") -> dict:
     R = {"stocks": stock_returns(F), "bonds": bond_returns(F),
          "gold": gold_returns(F), "cash": cash_returns(F)}
     i0 = next(i for i, m in enumerate(months)
-              if m >= start and labs[i] is not None
+              if m >= start and labs[i - 1] is not None
               and all(R[k][i] is not None for k in ("stocks", "bonds",
                                                     "cash")))
     eq, hist = 1.0, []
     w_prev: dict | None = None
     phase_series = []
     for t in range(i0, len(months)):
-        if labs[t] is None or R["stocks"][t] is None or \
+        # SPEC TIMING: the label computed at month-end t-1 (data through
+        # t-2) earns month t's return - "allocation changes take effect at
+        # the NEXT month's open". The first implementation applied labs[t]
+        # (data through t-1) to month t - one month faster than any real
+        # investor could trade, worth +0.23pp CAGR (counter-agent find
+        # 2026-08-11).
+        if labs[t - 1] is None or R["stocks"][t] is None or \
                 R["bonds"][t] is None or R["cash"][t] is None:
             break
-        tier, ph = labs[t]
+        tier, ph = labs[t - 1]
         w = weights_for(ph, risk, months[t])
         turn = (sum(abs(w[k] - w_prev[k]) for k in w) if w_prev else
                 sum(w.values()))

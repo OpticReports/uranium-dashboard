@@ -49,10 +49,50 @@ def test_gate_phase_rules_parity_with_canary():
 
 def test_gate_bond_synthesis_validates():
     """Spec bounds: corr >= 0.95, |CAGR gap| <= 50bp/yr vs Damodaran
-    actual 10y T-bond annual returns."""
+    actual 10y T-bond annual returns - PLUS a volatility-ratio bound
+    [0.8, 1.2]. The original duration formula doubled duration and still
+    passed corr/CAGR (sign of dy dominates corr; carry dominates CAGR) -
+    those two stats are structurally blind to a vol-scale error
+    (counter-agent find 2026-08-11)."""
     v = pb.validate_bonds(data(), frames())
     assert v["ok"], v
     assert v["n_years"] >= 70
+    assert 0.9 <= v["vol_ratio"] <= 1.1, v
+
+
+def test_gate_bond_duration_magnitude():
+    """Par-bond 10y Macaulay duration at 6% is ~7.80y; the doubled-duration
+    bug produced 13.4y. Pin the closed form against exact cash-flow math."""
+    y0 = 0.06
+    exact = sum(t * 0.06 / 1.06 ** t for t in range(1, 11)) + 10 / 1.06 ** 10
+    exact /= sum(0.06 / 1.06 ** t for t in range(1, 11)) + 1 / 1.06 ** 10
+    code = (1 + y0) / y0 * (1 - (1 + y0) ** -10)
+    assert abs(code - exact) < 0.01, (code, exact)
+
+
+def test_gate_run_timing_matches_spec():
+    """Spec: label at month-end t-1 (data through t-2) earns month t's
+    return. The label gates only tested labels(); run() applied labs[t]
+    - one month faster than tradeable (counter-agent find 2026-08-11).
+    Perturbing month k's macro data must NOT change month k+1's strategy
+    return (label for k+1 was computed at end of k from data through k-1)
+    but MUST be able to change month k+2's."""
+    F = frames()
+    labs = pb.labels(F)
+    res = pb.run(F, labs, risk=1.0)
+    months = [m for m, _, _ in res["curve"]]
+    k = len(F["months"]) - 30
+    F2 = {key: (list(v) if isinstance(v, list) else v) for key, v in F.items()}
+    # label-ONLY series (tb3ms excluded: its end-of-k yield legitimately
+    # IS month k+1's cash return - that is data flow, not label lookahead)
+    for key in ("indpro", "payems", "w875rx1", "cmrmtspl", "permit",
+                "icsa", "awhman", "umcsent", "t10y3m", "baa10ym"):
+        F2[key][k] = (F2[key][k] or 100.0) * 3    # violent perturbation
+    res2 = pb.run(F2, pb.labels(F2), risk=1.0)
+    r1 = {m: r for m, _, r in res["curve"]}
+    r2 = {m: r for m, _, r in res2["curve"]}
+    mk1 = F["months"][k + 1]
+    assert abs(r1[mk1] - r2[mk1]) < 1e-9, "month k+1 must be unaffected"
 
 
 def test_gate_no_lookahead_in_labels():
@@ -122,8 +162,11 @@ def test_gate_frozen_results_pin():
               zip(F["months"][i0:], pb.cash_returns(F)[i0:])]
     m = pb.metrics(res["curve"], cash_h)
     spx = pb.metrics(pb.run_benchmark(F, "spx", i0, res["end"]), cash_h)
-    assert m["cagr_pct"] == pytest.approx(8.63, abs=0.15)
-    assert m["max_dd_pct"] == pytest.approx(-21.6, abs=1.0)
+    # corrected 2026-08-11 after the counter-agent panel: duration fix,
+    # spec-correct one-month-later timing, dividend forward-fill
+    assert m["cagr_pct"] == pytest.approx(8.39, abs=0.15)
+    assert m["max_dd_pct"] == pytest.approx(-20.9, abs=1.0)
+    assert m["worst_36m_pct"] == pytest.approx(-14.3, abs=1.0)
     assert spx["max_dd_pct"] < -45
     assert m["max_dd_pct"] > spx["max_dd_pct"] + 20   # the edge under test
-    assert abs(m["cagr_pct"] - 8.84) < 1.0            # ~60/40 CAGR class
+    assert abs(m["cagr_pct"] - 8.89) < 1.0            # ~60/40 CAGR class
