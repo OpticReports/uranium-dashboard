@@ -537,9 +537,9 @@ function runSim(){
 
 document.getElementById('runsim').onclick=runSim;
 document.getElementById('t_hz').onchange=()=>{if(LASTSIM)drawFan(LASTSIM);};
-function refreshBoard(){return fetch('api/ewm/board').then(r=>r.json()).then(b=>{render(b);runSim();});
+function refreshBoard(){return fetch('api/ewm/board').then(r=>r.json()).then(b=>{render(b);runSim();});}
 
-fetch('api/ewm/rates').then(r=>r.json()).then(d=>{
+function loadRates(){fetch('api/ewm/rates').then(r=>r.json()).then(d=>{
   const srcs=['polymarket','kalshi','futures'], W=d.weights||{};
   const lbl=(iso)=>new Date(iso+'T12:00:00Z').toLocaleDateString('en-US',
     {month:'short',day:'numeric',year:'2-digit',timeZone:'UTC'});
@@ -605,4 +605,5 @@ document.getElementById('planreset').onclick=()=>{
 };
 
 fetch('api/ewm/board').then(r=>r.json()).then(b=>{render(b);runSim();});
+loadRates();
 </script></body></html>

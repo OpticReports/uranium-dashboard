@@ -354,8 +354,7 @@ def test_gate_plan_anchored_surface():
 def test_gate_ewm_serves_rate_table():
     """The FOMC probability table is mirrored onto the exit dashboard (Casey:
     'table should be on both canary and exit dashboards'). Pin the markup,
-    the fetch path (../rates/ensemble must resolve to the canary root under
-    both the direct URL and the /canary proxy prefix), and the help entry."""
+    the fetch path, and the help entry."""
     import os
     html = open(os.path.join(os.path.dirname(__file__), "..", "app", "ewm",
                              "static.html")).read()
@@ -369,6 +368,31 @@ def test_gate_ewm_serves_rate_table():
     # the front meeting (the Sept-2026 report that prompted this)
     assert "d.meetings.forEach" in html
     assert ".slice(" not in html.split("d.meetings.forEach")[1][:400]
+
+
+def test_gate_ewm_rate_table_fetch_is_reachable():
+    """Counter-agent find 2026-08-11: the rates fetch shipped INSIDE
+    refreshBoard() after its `return` statement - syntactically present,
+    never executed, table empty on every surface while the string gates
+    above passed. String presence is not reachability. Pin the structure:
+    the fetch lives in loadRates(), refreshBoard() is a closed one-liner
+    that cannot swallow trailing statements, and loadRates() is invoked
+    at page load. (Full behavioral check: scripts/verify_rates_table.py
+    runs the page in headless chromium; not wired into CI to avoid a node
+    dependency.)"""
+    import os
+    html = open(os.path.join(os.path.dirname(__file__), "..", "app", "ewm",
+                             "static.html")).read()
+    # refreshBoard is exactly this closed form - no room for dead trailers
+    assert ("function refreshBoard(){return fetch('api/ewm/board')"
+            ".then(r=>r.json()).then(b=>{render(b);runSim();});}") in html
+    # the rates fetch is owned by loadRates() ...
+    assert "function loadRates(){fetch('api/ewm/rates')" in html
+    # ... which is CALLED as a top-level statement (start of line, not just
+    # defined or mentioned in a comment)
+    import re
+    assert re.search(r"^loadRates\(\);", html, re.M), \
+        "loadRates() defined but never invoked at page load"
 
 
 def test_gate_ewm_rates_endpoint_served_under_prefix():
