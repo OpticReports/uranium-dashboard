@@ -15,6 +15,8 @@ import time
 
 import httpx
 
+from .win_scores import WIN_SCORES
+
 CANARY = "https://treasury-canary.onrender.com"
 
 MAPPING = {
@@ -109,6 +111,16 @@ def board() -> dict:
             "recent_calibration": (ana or {}).get("recent_calibration"),
         },
         "study": STUDY,
+        "win_scores": {
+            f"{a}|{h}": WIN_SCORES.get(f"{phase}|{a}|{h}")
+            for a in ("stocks", "bonds", "gold") for h in (6, 12)
+        } if phase else None,
+        "win_score_caveat": ("Conditional win rates are descriptive "
+                             "statistics of a small number of historical "
+                             "episodes, not forecasts. Episode-counted "
+                             "headline (a decision per label spell); "
+                             "month counts overstate precision. Shiller "
+                             "monthly-average total-return basis."),
         "canary_reachable": cyc is not None,
     }
     return out

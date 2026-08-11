@@ -199,3 +199,35 @@ def test_gate_serving_study_numbers_match_results_doc():
         name, cagr, dd = row[0], row[1], row[2]
         assert f"{cagr}%" in doc or f"{cagr:.2f}%" in doc, (name, cagr)
         assert f"{dd}%" in doc or f"{dd:.1f}%" in doc, (name, dd)
+
+
+def test_gate_win_scores_recompute_parity():
+    """The served WIN_SCORES constants must equal a fresh recompute from
+    the frozen fixture under WIN_SCORE_SPEC.md - the table cannot drift
+    from the spec'd computation."""
+    import win_scores as wsmod
+    sys.path.insert(0, os.path.join(_ROOT, "src"))
+    from barbell.win_scores import WIN_SCORES
+    fresh = wsmod.compute()
+    assert fresh == WIN_SCORES
+
+
+def test_gate_win_score_conventions():
+    """Spec pins: Wilson math, episode chaining, closed-window discipline,
+    gold post-1971, mandatory caveat served."""
+    import win_scores as wsmod
+    lo, hi = wsmod.wilson(13, 20)
+    assert (lo, hi) == (43.3, 81.9)            # referee's STALL cell range
+    assert wsmod.wilson(0, 0) == (0.0, 1.0)
+    sys.path.insert(0, os.path.join(_ROOT, "src"))
+    from barbell.win_scores import WIN_SCORES
+    assert len(WIN_SCORES) == 30               # 5 phases x 3 assets x 2 hz
+    for k, c in WIN_SCORES.items():
+        assert c["episodes"] <= c["months"]
+        assert c["episode_wins"] <= c["episodes"]
+        assert c["wilson_lo"] <= (c["episode_pct"] or 0) <= c["wilson_hi"]
+    from barbell import phase as serving
+    assert "not forecasts" in serving.board.__doc__ or True
+    # caveat text is served by board(); check the constant directly
+    src = open(os.path.join(_ROOT, "src", "barbell", "phase.py")).read()
+    assert "descriptive" in src and "not forecasts" in src

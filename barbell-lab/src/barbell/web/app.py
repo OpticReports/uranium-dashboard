@@ -625,7 +625,10 @@ study (PHASE_BARBELL_SPEC.md); nothing here trades</span></h1>
 <span class="pill" data-r="defensive">defensive ×0.5</span>
 <span class="pill on" data-r="balanced">balanced ×1.0</span>
 <span class="pill" data-r="aggressive">aggressive ×1.5</span></div>
-<div class="grid" id="wts"></div></div>
+<div class="grid" id="wts"></div>
+<h2 style="margin-top:14px">Position win scores — beats cash, conditioned on <span id="wslbl">this phase</span></h2>
+<table id="wstbl"></table>
+<div class="small" id="wscaveat" style="margin-top:6px"></div></div>
 <div class="card"><h2>Scenario: what if today is really one of its analogs?</h2>
 <div class="small" style="margin-bottom:6px">Top matches from the cycle
 tracker's analog layer. Click one to see the allocation ITS phase implies;
@@ -673,6 +676,19 @@ function draw(){
   document.querySelectorAll('.an').forEach(tr=>tr.onclick=()=>{
     const a=B.analogs[+tr.dataset.i];
     scen = (scen&&scen.month===a.month)?null:a; draw();});
+  const ws = B.win_scores;
+  if(ws){
+    let w='<tr><th>position</th><th>12m win</th><th>episodes</th><th>95% range</th><th>by month</th><th>base</th><th>edge</th></tr>';
+    ['stocks','bonds','gold'].forEach(a=>{
+      const c=ws[a+'|12']; if(!c)return;
+      const d=(c.episode_pct-c.base_pct).toFixed(1);
+      w+=`<tr><td>${a.toUpperCase()}</td><td><b>${c.episode_pct}%</b></td>
+      <td>${c.episode_wins} of ${c.episodes}</td>
+      <td>${c.wilson_lo}–${c.wilson_hi}%</td><td>${c.month_pct}%</td>
+      <td>${c.base_pct}%</td><td class="${d>=0?'EXPANSION':'SLOWDOWN'}">${d>0?'+':''}${d}pp</td></tr>`;});
+    document.getElementById('wstbl').innerHTML=w;
+    document.getElementById('wscaveat').textContent=B.win_score_caveat;
+  }
   let s='<tr><th></th><th>CAGR</th><th>max DD</th><th>Sharpe</th><th>worst 36m</th></tr>';
   B.study.rows.forEach(r=>{s+=`<tr><td>${esc(r[0])}</td><td>${r[1]}%</td>
     <td>${r[2]}%</td><td>${r[3]}</td><td>${r[4]}%</td></tr>`;});
