@@ -218,7 +218,7 @@ def test_gate_win_score_conventions():
     import win_scores as wsmod
     lo, hi = wsmod.wilson(13, 20)
     assert (lo, hi) == (43.3, 81.9)            # referee's STALL cell range
-    assert wsmod.wilson(0, 0) == (0.0, 1.0)
+    assert wsmod.wilson(0, 0) == (0.0, 100.0)   # verifier fix: was "0-1%"
     sys.path.insert(0, os.path.join(_ROOT, "src"))
     from barbell.win_scores import WIN_SCORES
     assert len(WIN_SCORES) == 30               # 5 phases x 3 assets x 2 hz

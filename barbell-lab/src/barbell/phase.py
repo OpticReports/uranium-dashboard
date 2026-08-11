@@ -28,6 +28,29 @@ MAPPING = {
 }
 RISK_LEVELS = {"defensive": 0.5, "balanced": 1.0, "aggressive": 1.5}
 
+# verifier-mandated captions (2026-08-11) for cells where the episode
+# convention is >15pp sensitive or the story needs saying
+CELL_NOTES = {
+    "STALL|stocks|12": ("Convention-sensitive: 70% of 20 episode starts "
+                        "beat cash, but 85% of all STALL months did - long "
+                        "stalls mostly won; a fresh STALL signal's first "
+                        "month won 14 of 20 times."),
+    "CONTRACTION|stocks|6": ("50% is the first-signal-month rate; 13 of 14 "
+                             "contraction episodes had a majority of "
+                             "winning months. The signal fires "
+                             "mid-drawdown, so 6-month windows from the "
+                             "first month often sit inside the crash."),
+    "CONTRACTION|stocks|12": ("Mostly recession-bottom rebounds (1958, "
+                              "1982, 1990, 2020). The 3 losses came when "
+                              "the signal fired early in a long bear "
+                              "(1974, 2001, 2008). Descriptive, not a "
+                              "bottom-timing forecast."),
+    "LATE_CYCLE|bonds|12": ("10 of 12 late-cycle onsets came with rising "
+                            "yields, mostly pre-1982; counting all episode "
+                            "months gives 42%, and the base rate leans on "
+                            "the post-1982 bond bull."),
+}
+
 # corrected, panel-approved study numbers (PHASE_BARBELL.md, 2026-08-11)
 STUDY = {
     "window": "1935-01 → 2026-06 (91.5y, monthly, 10bp costs)",
@@ -117,10 +140,18 @@ def board() -> dict:
         } if phase else None,
         "win_score_caveat": ("Conditional win rates are descriptive "
                              "statistics of a small number of historical "
-                             "episodes, not forecasts. Episode-counted "
-                             "headline (a decision per label spell); "
-                             "month counts overstate precision. Shiller "
-                             "monthly-average total-return basis."),
+                             "episodes, not forecasts. Episode rate = the "
+                             "FIRST month of each label spell (what a "
+                             "decision-maker traded on); in 10 of 30 cells "
+                             "it differs >15pp from counting every episode "
+                             "month, so read it with its range, never "
+                             "alone. Base rate is month-counted - compare "
+                             "it with the month rate (the edge column "
+                             "does); episode rates use a different "
+                             "denominator and can sit on the other side "
+                             "of base. Shiller monthly-average "
+                             "total-return basis."),
+        "win_score_notes": CELL_NOTES,
         "canary_reachable": cyc is not None,
     }
     return out

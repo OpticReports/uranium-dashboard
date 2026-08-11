@@ -5,8 +5,8 @@ statistics of historical episodes, not forecasts."""
 
 WIN_SCORES = {
  "CONTRACTION|bonds|12": {
-  "base_months": 1098,
-  "base_pct": 58.0,
+  "base_months": 1086,
+  "base_pct": 57.6,
   "episode_pct": 57.1,
   "episode_wins": 8,
   "episodes": 14,
@@ -17,8 +17,8 @@ WIN_SCORES = {
   "wilson_lo": 32.6
  },
  "CONTRACTION|bonds|6": {
-  "base_months": 1104,
-  "base_pct": 58.4,
+  "base_months": 1092,
+  "base_pct": 58.0,
   "episode_pct": 50.0,
   "episode_wins": 7,
   "episodes": 14,
@@ -53,8 +53,8 @@ WIN_SCORES = {
   "wilson_lo": 6.3
  },
  "CONTRACTION|stocks|12": {
-  "base_months": 1098,
-  "base_pct": 72.5,
+  "base_months": 1086,
+  "base_pct": 72.6,
   "episode_pct": 78.6,
   "episode_wins": 11,
   "episodes": 14,
@@ -65,8 +65,8 @@ WIN_SCORES = {
   "wilson_lo": 52.4
  },
  "CONTRACTION|stocks|6": {
-  "base_months": 1104,
-  "base_pct": 68.3,
+  "base_months": 1092,
+  "base_pct": 68.6,
   "episode_pct": 50.0,
   "episode_wins": 7,
   "episodes": 14,
@@ -77,26 +77,26 @@ WIN_SCORES = {
   "wilson_lo": 26.8
  },
  "EXPANSION|bonds|12": {
-  "base_months": 1098,
-  "base_pct": 58.0,
+  "base_months": 1086,
+  "base_pct": 57.6,
   "episode_pct": 68.8,
   "episode_wins": 11,
   "episodes": 16,
-  "month_pct": 59.5,
-  "month_wins": 226,
-  "months": 380,
+  "month_pct": 58.8,
+  "month_wins": 220,
+  "months": 374,
   "wilson_hi": 85.8,
   "wilson_lo": 44.4
  },
  "EXPANSION|bonds|6": {
-  "base_months": 1104,
-  "base_pct": 58.4,
+  "base_months": 1092,
+  "base_pct": 58.0,
   "episode_pct": 56.2,
   "episode_wins": 9,
   "episodes": 16,
-  "month_pct": 58.4,
-  "month_wins": 222,
-  "months": 380,
+  "month_pct": 57.8,
+  "month_wins": 216,
+  "months": 374,
   "wilson_hi": 76.9,
   "wilson_lo": 33.2
  },
@@ -125,32 +125,32 @@ WIN_SCORES = {
   "wilson_lo": 15.2
  },
  "EXPANSION|stocks|12": {
-  "base_months": 1098,
-  "base_pct": 72.5,
-  "episode_pct": 68.8,
-  "episode_wins": 11,
+  "base_months": 1086,
+  "base_pct": 72.6,
+  "episode_pct": 75.0,
+  "episode_wins": 12,
   "episodes": 16,
-  "month_pct": 64.5,
-  "month_wins": 245,
-  "months": 380,
-  "wilson_hi": 85.8,
-  "wilson_lo": 44.4
+  "month_pct": 64.7,
+  "month_wins": 242,
+  "months": 374,
+  "wilson_hi": 89.8,
+  "wilson_lo": 50.5
  },
  "EXPANSION|stocks|6": {
-  "base_months": 1104,
-  "base_pct": 68.3,
-  "episode_pct": 68.8,
-  "episode_wins": 11,
+  "base_months": 1092,
+  "base_pct": 68.6,
+  "episode_pct": 75.0,
+  "episode_wins": 12,
   "episodes": 16,
-  "month_pct": 66.8,
-  "month_wins": 254,
-  "months": 380,
-  "wilson_hi": 85.8,
-  "wilson_lo": 44.4
+  "month_pct": 67.6,
+  "month_wins": 253,
+  "months": 374,
+  "wilson_hi": 89.8,
+  "wilson_lo": 50.5
  },
  "LATE_CYCLE|bonds|12": {
-  "base_months": 1098,
-  "base_pct": 58.0,
+  "base_months": 1086,
+  "base_pct": 57.6,
   "episode_pct": 16.7,
   "episode_wins": 2,
   "episodes": 12,
@@ -161,8 +161,8 @@ WIN_SCORES = {
   "wilson_lo": 4.7
  },
  "LATE_CYCLE|bonds|6": {
-  "base_months": 1104,
-  "base_pct": 58.4,
+  "base_months": 1092,
+  "base_pct": 58.0,
   "episode_pct": 41.7,
   "episode_wins": 5,
   "episodes": 12,
@@ -197,8 +197,8 @@ WIN_SCORES = {
   "wilson_lo": 18.8
  },
  "LATE_CYCLE|stocks|12": {
-  "base_months": 1098,
-  "base_pct": 72.5,
+  "base_months": 1086,
+  "base_pct": 72.6,
   "episode_pct": 58.3,
   "episode_wins": 7,
   "episodes": 12,
@@ -209,8 +209,8 @@ WIN_SCORES = {
   "wilson_lo": 32.0
  },
  "LATE_CYCLE|stocks|6": {
-  "base_months": 1104,
-  "base_pct": 68.3,
+  "base_months": 1092,
+  "base_pct": 68.6,
   "episode_pct": 66.7,
   "episode_wins": 8,
   "episodes": 12,
@@ -221,8 +221,8 @@ WIN_SCORES = {
   "wilson_lo": 39.1
  },
  "SLOWDOWN|bonds|12": {
-  "base_months": 1098,
-  "base_pct": 58.0,
+  "base_months": 1086,
+  "base_pct": 57.6,
   "episode_pct": 47.4,
   "episode_wins": 9,
   "episodes": 19,
@@ -233,8 +233,8 @@ WIN_SCORES = {
   "wilson_lo": 27.3
  },
  "SLOWDOWN|bonds|6": {
-  "base_months": 1104,
-  "base_pct": 58.4,
+  "base_months": 1092,
+  "base_pct": 58.0,
   "episode_pct": 57.9,
   "episode_wins": 11,
   "episodes": 19,
@@ -269,8 +269,8 @@ WIN_SCORES = {
   "wilson_lo": 39.1
  },
  "SLOWDOWN|stocks|12": {
-  "base_months": 1098,
-  "base_pct": 72.5,
+  "base_months": 1086,
+  "base_pct": 72.6,
   "episode_pct": 57.9,
   "episode_wins": 11,
   "episodes": 19,
@@ -281,8 +281,8 @@ WIN_SCORES = {
   "wilson_lo": 36.3
  },
  "SLOWDOWN|stocks|6": {
-  "base_months": 1104,
-  "base_pct": 68.3,
+  "base_months": 1092,
+  "base_pct": 68.6,
   "episode_pct": 57.9,
   "episode_wins": 11,
   "episodes": 19,
@@ -293,26 +293,26 @@ WIN_SCORES = {
   "wilson_lo": 36.3
  },
  "STALL|bonds|12": {
-  "base_months": 1098,
-  "base_pct": 58.0,
+  "base_months": 1086,
+  "base_pct": 57.6,
   "episode_pct": 70.0,
   "episode_wins": 14,
   "episodes": 20,
-  "month_pct": 60.4,
-  "month_wins": 136,
-  "months": 225,
+  "month_pct": 59.4,
+  "month_wins": 130,
+  "months": 219,
   "wilson_hi": 85.5,
   "wilson_lo": 48.1
  },
  "STALL|bonds|6": {
-  "base_months": 1104,
-  "base_pct": 58.4,
+  "base_months": 1092,
+  "base_pct": 58.0,
   "episode_pct": 65.0,
   "episode_wins": 13,
   "episodes": 20,
-  "month_pct": 67.5,
-  "month_wins": 156,
-  "months": 231,
+  "month_pct": 66.7,
+  "month_wins": 150,
+  "months": 225,
   "wilson_hi": 81.9,
   "wilson_lo": 43.3
  },
@@ -341,27 +341,27 @@ WIN_SCORES = {
   "wilson_lo": 23.2
  },
  "STALL|stocks|12": {
-  "base_months": 1098,
-  "base_pct": 72.5,
-  "episode_pct": 65.0,
-  "episode_wins": 13,
+  "base_months": 1086,
+  "base_pct": 72.6,
+  "episode_pct": 70.0,
+  "episode_wins": 14,
   "episodes": 20,
-  "month_pct": 85.3,
-  "month_wins": 192,
-  "months": 225,
-  "wilson_hi": 81.9,
-  "wilson_lo": 43.3
+  "month_pct": 85.4,
+  "month_wins": 187,
+  "months": 219,
+  "wilson_hi": 85.5,
+  "wilson_lo": 48.1
  },
  "STALL|stocks|6": {
-  "base_months": 1104,
-  "base_pct": 68.3,
-  "episode_pct": 50.0,
-  "episode_wins": 10,
+  "base_months": 1092,
+  "base_pct": 68.6,
+  "episode_pct": 55.0,
+  "episode_wins": 11,
   "episodes": 20,
-  "month_pct": 73.6,
-  "month_wins": 170,
-  "months": 231,
-  "wilson_hi": 70.1,
-  "wilson_lo": 29.9
+  "month_pct": 73.8,
+  "month_wins": 166,
+  "months": 225,
+  "wilson_hi": 74.2,
+  "wilson_lo": 34.2
  }
 }

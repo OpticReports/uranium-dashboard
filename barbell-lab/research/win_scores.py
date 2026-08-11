@@ -29,7 +29,7 @@ def _cum(rets, i, h):
 
 def wilson(w: int, n: int, z: float = 1.96) -> tuple[float, float]:
     if n == 0:
-        return (0.0, 1.0)
+        return (0.0, 100.0)   # verifier find: (0.0, 1.0) would render "0-1%"
     p = w / n
     d = 1 + z * z / n
     c = (p + z * z / (2 * n)) / d
@@ -56,8 +56,11 @@ def compute() -> dict:
 
         for asset in ASSETS:
             # eligible months: labeled, asset live (gold post-1971)
+            # spec says months 1935-> ; eligibility previously crept to
+            # 1934 via TB3MS start (verifier find - 4 stocks cells moved
+            # 5-6.3pp). Spec text is canonical.
             idx = [i for i in range(len(months))
-                   if labs[i] is not None
+                   if months[i] >= "1935-01" and labs[i] is not None
                    and (asset != "gold" or months[i] >= GOLD_FROM)
                    and win(asset, i) is not None]
             base_w = sum(1 for i in idx if win(asset, i))

@@ -1,15 +1,15 @@
 {
  "EXPANSION|stocks|6": {
-  "months": 380,
-  "month_wins": 254,
-  "month_pct": 66.8,
+  "months": 374,
+  "month_wins": 253,
+  "month_pct": 67.6,
   "episodes": 16,
-  "episode_wins": 11,
-  "episode_pct": 68.8,
-  "wilson_lo": 44.4,
-  "wilson_hi": 85.8,
-  "base_pct": 68.3,
-  "base_months": 1104
+  "episode_wins": 12,
+  "episode_pct": 75.0,
+  "wilson_lo": 50.5,
+  "wilson_hi": 89.8,
+  "base_pct": 68.6,
+  "base_months": 1092
  },
  "LATE_CYCLE|stocks|6": {
   "months": 142,
@@ -20,20 +20,20 @@
   "episode_pct": 66.7,
   "wilson_lo": 39.1,
   "wilson_hi": 86.2,
-  "base_pct": 68.3,
-  "base_months": 1104
+  "base_pct": 68.6,
+  "base_months": 1092
  },
  "STALL|stocks|6": {
-  "months": 231,
-  "month_wins": 170,
-  "month_pct": 73.6,
+  "months": 225,
+  "month_wins": 166,
+  "month_pct": 73.8,
   "episodes": 20,
-  "episode_wins": 10,
-  "episode_pct": 50.0,
-  "wilson_lo": 29.9,
-  "wilson_hi": 70.1,
-  "base_pct": 68.3,
-  "base_months": 1104
+  "episode_wins": 11,
+  "episode_pct": 55.0,
+  "wilson_lo": 34.2,
+  "wilson_hi": 74.2,
+  "base_pct": 68.6,
+  "base_months": 1092
  },
  "SLOWDOWN|stocks|6": {
   "months": 237,
@@ -44,8 +44,8 @@
   "episode_pct": 57.9,
   "wilson_lo": 36.3,
   "wilson_hi": 76.9,
-  "base_pct": 68.3,
-  "base_months": 1104
+  "base_pct": 68.6,
+  "base_months": 1092
  },
  "CONTRACTION|stocks|6": {
   "months": 114,
@@ -56,20 +56,20 @@
   "episode_pct": 50.0,
   "wilson_lo": 26.8,
   "wilson_hi": 73.2,
-  "base_pct": 68.3,
-  "base_months": 1104
+  "base_pct": 68.6,
+  "base_months": 1092
  },
  "EXPANSION|bonds|6": {
-  "months": 380,
-  "month_wins": 222,
-  "month_pct": 58.4,
+  "months": 374,
+  "month_wins": 216,
+  "month_pct": 57.8,
   "episodes": 16,
   "episode_wins": 9,
   "episode_pct": 56.2,
   "wilson_lo": 33.2,
   "wilson_hi": 76.9,
-  "base_pct": 58.4,
-  "base_months": 1104
+  "base_pct": 58.0,
+  "base_months": 1092
  },
  "LATE_CYCLE|bonds|6": {
   "months": 142,
@@ -80,20 +80,20 @@
   "episode_pct": 41.7,
   "wilson_lo": 19.3,
   "wilson_hi": 68.0,
-  "base_pct": 58.4,
-  "base_months": 1104
+  "base_pct": 58.0,
+  "base_months": 1092
  },
  "STALL|bonds|6": {
-  "months": 231,
-  "month_wins": 156,
-  "month_pct": 67.5,
+  "months": 225,
+  "month_wins": 150,
+  "month_pct": 66.7,
   "episodes": 20,
   "episode_wins": 13,
   "episode_pct": 65.0,
   "wilson_lo": 43.3,
   "wilson_hi": 81.9,
-  "base_pct": 58.4,
-  "base_months": 1104
+  "base_pct": 58.0,
+  "base_months": 1092
  },
  "SLOWDOWN|bonds|6": {
   "months": 237,
@@ -104,8 +104,8 @@
   "episode_pct": 57.9,
   "wilson_lo": 36.3,
   "wilson_hi": 76.9,
-  "base_pct": 58.4,
-  "base_months": 1104
+  "base_pct": 58.0,
+  "base_months": 1092
  },
  "CONTRACTION|bonds|6": {
   "months": 114,
@@ -116,8 +116,8 @@
   "episode_pct": 50.0,
   "wilson_lo": 26.8,
   "wilson_hi": 73.2,
-  "base_pct": 58.4,
-  "base_months": 1104
+  "base_pct": 58.0,
+  "base_months": 1092
  },
  "EXPANSION|gold|6": {
   "months": 262,
@@ -180,16 +180,16 @@
   "base_months": 653
  },
  "EXPANSION|stocks|12": {
-  "months": 380,
-  "month_wins": 245,
-  "month_pct": 64.5,
+  "months": 374,
+  "month_wins": 242,
+  "month_pct": 64.7,
   "episodes": 16,
-  "episode_wins": 11,
-  "episode_pct": 68.8,
-  "wilson_lo": 44.4,
-  "wilson_hi": 85.8,
-  "base_pct": 72.5,
-  "base_months": 1098
+  "episode_wins": 12,
+  "episode_pct": 75.0,
+  "wilson_lo": 50.5,
+  "wilson_hi": 89.8,
+  "base_pct": 72.6,
+  "base_months": 1086
  },
  "LATE_CYCLE|stocks|12": {
   "months": 142,
@@ -200,20 +200,20 @@
   "episode_pct": 58.3,
   "wilson_lo": 32.0,
   "wilson_hi": 80.7,
-  "base_pct": 72.5,
-  "base_months": 1098
+  "base_pct": 72.6,
+  "base_months": 1086
  },
  "STALL|stocks|12": {
-  "months": 225,
-  "month_wins": 192,
-  "month_pct": 85.3,
+  "months": 219,
+  "month_wins": 187,
+  "month_pct": 85.4,
   "episodes": 20,
-  "episode_wins": 13,
-  "episode_pct": 65.0,
-  "wilson_lo": 43.3,
-  "wilson_hi": 81.9,
-  "base_pct": 72.5,
-  "base_months": 1098
+  "episode_wins": 14,
+  "episode_pct": 70.0,
+  "wilson_lo": 48.1,
+  "wilson_hi": 85.5,
+  "base_pct": 72.6,
+  "base_months": 1086
  },
  "SLOWDOWN|stocks|12": {
   "months": 237,
@@ -224,8 +224,8 @@
   "episode_pct": 57.9,
   "wilson_lo": 36.3,
   "wilson_hi": 76.9,
-  "base_pct": 72.5,
-  "base_months": 1098
+  "base_pct": 72.6,
+  "base_months": 1086
  },
  "CONTRACTION|stocks|12": {
   "months": 114,
@@ -236,20 +236,20 @@
   "episode_pct": 78.6,
   "wilson_lo": 52.4,
   "wilson_hi": 92.4,
-  "base_pct": 72.5,
-  "base_months": 1098
+  "base_pct": 72.6,
+  "base_months": 1086
  },
  "EXPANSION|bonds|12": {
-  "months": 380,
-  "month_wins": 226,
-  "month_pct": 59.5,
+  "months": 374,
+  "month_wins": 220,
+  "month_pct": 58.8,
   "episodes": 16,
   "episode_wins": 11,
   "episode_pct": 68.8,
   "wilson_lo": 44.4,
   "wilson_hi": 85.8,
-  "base_pct": 58.0,
-  "base_months": 1098
+  "base_pct": 57.6,
+  "base_months": 1086
  },
  "LATE_CYCLE|bonds|12": {
   "months": 142,
@@ -260,20 +260,20 @@
   "episode_pct": 16.7,
   "wilson_lo": 4.7,
   "wilson_hi": 44.8,
-  "base_pct": 58.0,
-  "base_months": 1098
+  "base_pct": 57.6,
+  "base_months": 1086
  },
  "STALL|bonds|12": {
-  "months": 225,
-  "month_wins": 136,
-  "month_pct": 60.4,
+  "months": 219,
+  "month_wins": 130,
+  "month_pct": 59.4,
   "episodes": 20,
   "episode_wins": 14,
   "episode_pct": 70.0,
   "wilson_lo": 48.1,
   "wilson_hi": 85.5,
-  "base_pct": 58.0,
-  "base_months": 1098
+  "base_pct": 57.6,
+  "base_months": 1086
  },
  "SLOWDOWN|bonds|12": {
   "months": 237,
@@ -284,8 +284,8 @@
   "episode_pct": 47.4,
   "wilson_lo": 27.3,
   "wilson_hi": 68.3,
-  "base_pct": 58.0,
-  "base_months": 1098
+  "base_pct": 57.6,
+  "base_months": 1086
  },
  "CONTRACTION|bonds|12": {
   "months": 114,
@@ -296,8 +296,8 @@
   "episode_pct": 57.1,
   "wilson_lo": 32.6,
   "wilson_hi": 78.6,
-  "base_pct": 58.0,
-  "base_months": 1098
+  "base_pct": 57.6,
+  "base_months": 1086
  },
  "EXPANSION|gold|12": {
   "months": 262,

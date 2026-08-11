@@ -678,16 +678,20 @@ function draw(){
     scen = (scen&&scen.month===a.month)?null:a; draw();});
   const ws = B.win_scores;
   if(ws){
-    let w='<tr><th>position</th><th>12m win</th><th>episodes</th><th>95% range</th><th>by month</th><th>base</th><th>edge</th></tr>';
+    let w='<tr><th>position</th><th>12m win</th><th>episodes</th><th>95% range</th><th>by month</th><th>base</th><th>edge (mo−base)</th></tr>';
     ['stocks','bonds','gold'].forEach(a=>{
       const c=ws[a+'|12']; if(!c)return;
-      const d=(c.episode_pct-c.base_pct).toFixed(1);
+      const d=(c.month_pct-c.base_pct).toFixed(1);
       w+=`<tr><td>${a.toUpperCase()}</td><td><b>${c.episode_pct}%</b></td>
       <td>${c.episode_wins} of ${c.episodes}</td>
       <td>${c.wilson_lo}–${c.wilson_hi}%</td><td>${c.month_pct}%</td>
       <td>${c.base_pct}%</td><td class="${d>=0?'EXPANSION':'SLOWDOWN'}">${d>0?'+':''}${d}pp</td></tr>`;});
     document.getElementById('wstbl').innerHTML=w;
-    document.getElementById('wscaveat').textContent=B.win_score_caveat;
+    const ph2 = scen ? scen.phase_then : B.phase;
+    const notes = ['stocks','bonds','gold'].map(a=>{
+      const n=(B.win_score_notes||{})[`${ph2}|${a}|12`]||(B.win_score_notes||{})[`${ph2}|${a}|6`];
+      return n?`${a.toUpperCase()}: ${n}`:null;}).filter(Boolean).join(' ');
+    document.getElementById('wscaveat').textContent=(notes?notes+' — ':'')+B.win_score_caveat;
   }
   let s='<tr><th></th><th>CAGR</th><th>max DD</th><th>Sharpe</th><th>worst 36m</th></tr>';
   B.study.rows.forEach(r=>{s+=`<tr><td>${esc(r[0])}</td><td>${r[1]}%</td>
