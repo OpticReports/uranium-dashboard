@@ -626,6 +626,9 @@ study (PHASE_BARBELL_SPEC.md); nothing here trades</span></h1>
 <span class="pill on" data-r="balanced">balanced ×1.0</span>
 <span class="pill" data-r="aggressive">aggressive ×1.5</span></div>
 <div class="grid" id="wts"></div>
+<h2 style="margin-top:14px">Industry win scores — <span id="indlbl"></span> (French 12, 1935→)</h2>
+<table id="indtbl"></table>
+<div class="small" id="indcaveat" style="margin-top:6px"></div>
 <h2 style="margin-top:14px">Position win scores — beats cash, conditioned on <span id="wslbl">this phase</span></h2>
 <table id="wstbl"></table>
 <div class="small" id="wscaveat" style="margin-top:6px"></div></div>
@@ -676,6 +679,20 @@ function draw(){
   document.querySelectorAll('.an').forEach(tr=>tr.onclick=()=>{
     const a=B.analogs[+tr.dataset.i];
     scen = (scen&&scen.month===a.month)?null:a; draw();});
+  const iw = B.industry_win_scores;
+  if(iw){
+    document.getElementById('indlbl').textContent =
+      (scen?scen.phase_then:B.phase||'').replace('_',' ');
+    let g='<tr><th>industry</th><th>≈ETF</th><th>12m win (episodes)</th><th>95% range</th><th>by month</th><th>base</th><th>edge</th></tr>';
+    iw.forEach(c=>{
+      const d=(c.month_pct-c.base_pct).toFixed(1);
+      g+=`<tr><td>${c.industry}</td><td class="small">${c.spdr||'—'}</td>
+      <td>${c.sufficient?`<b>${c.episode_pct}%</b> (${c.episode_wins} of ${c.episodes})`:'insufficient episodes'}</td>
+      <td>${c.wilson_lo}–${c.wilson_hi}%</td><td>${c.month_pct}%</td><td>${c.base_pct}%</td>
+      <td class="${d>=0?'EXPANSION':'SLOWDOWN'}">${d>0?'+':''}${d}pp</td></tr>`;});
+    document.getElementById('indtbl').innerHTML=g;
+    document.getElementById('indcaveat').textContent=B.industry_caveat;
+  }
   const ws = B.win_scores;
   if(ws){
     let w='<tr><th>position</th><th>12m win</th><th>episodes</th><th>95% range</th><th>by month</th><th>base</th><th>edge (mo−base)</th></tr>';

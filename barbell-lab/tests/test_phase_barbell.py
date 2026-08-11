@@ -231,3 +231,24 @@ def test_gate_win_score_conventions():
     # caveat text is served by board(); check the constant directly
     src = open(os.path.join(_ROOT, "src", "barbell", "phase.py")).read()
     assert "descriptive" in src and "not forecasts" in src
+
+
+def test_gate_industry_win_scores_parity_and_conventions():
+    """ADDENDUM gates: served industry constants == fresh recompute; 120
+    cells (5 phases x 12 industries x 2 horizons); every episode count is
+    honest sample size; SPDR mapping matches the spec text."""
+    import win_scores as wsmod
+    sys.path.insert(0, os.path.join(_ROOT, "src"))
+    from barbell.win_scores_industries import INDUSTRY_WIN_SCORES
+    fresh = wsmod.compute_industries()
+    assert fresh == INDUSTRY_WIN_SCORES
+    assert len(INDUSTRY_WIN_SCORES) == 120
+    spec = open(os.path.join(_ROOT, "WIN_SCORE_SPEC.md")).read()
+    for name, tk in wsmod.SPDR_MAP.items():
+        assert name in spec
+        if tk:
+            assert tk.lstrip("~") in spec
+    for k, c in INDUSTRY_WIN_SCORES.items():
+        assert c["episodes"] >= 12          # French depth: no sparse cells
+        assert c["sufficient"] is True
+        assert c["wilson_lo"] <= c["episode_pct"] <= c["wilson_hi"]

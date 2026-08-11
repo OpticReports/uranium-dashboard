@@ -110,3 +110,71 @@ if __name__ == "__main__":
                            f"base {c['base_pct']}%)")
             print(f"{phase:>12}: " + " | ".join(row))
     sys.exit(0)
+
+
+# ---------------- industry layer (spec ADDENDUM, frozen 7602b87) ----------
+
+INDUSTRIES = ["NoDur", "Durbl", "Manuf", "Enrgy", "Chems", "BusEq",
+              "Telcm", "Utils", "Shops", "Hlth", "Money", "Other"]
+SPDR_MAP = {"NoDur": "~XLP", "Durbl": "~XLY", "Shops": "~XLY",
+            "Manuf": "~XLI", "Enrgy": "~XLE", "Chems": "~XLB",
+            "BusEq": "~XLK", "Telcm": "~XLC", "Utils": "~XLU",
+            "Hlth": "~XLV", "Money": "~XLF", "Other": ""}
+MIN_EPISODES = 4
+
+
+def compute_industries() -> dict:
+    import json as _json
+    import os as _os
+    fr = _json.load(open(_os.path.join(_os.path.dirname(__file__),
+                                       "fixtures", "french12.json")))
+    F = pb.build_frames(pb.load())
+    labs = pb.labels(F)
+    months = F["months"]
+    cash = pb.cash_returns(F)
+    ind_r = {name: [None] * len(months) for name in INDUSTRIES}
+    for i, m in enumerate(months):
+        row = fr["rows"].get(m)
+        if row is None:
+            continue
+        for j, name in enumerate(fr["names"]):
+            v = row[j]
+            if v not in (-99.99, -999):
+                ind_r[name][i] = v / 100.0
+    out: dict = {}
+    for h in HORIZONS:
+        def win(name, i):
+            a = _cum(ind_r[name], i, h)
+            c = _cum(cash, i, h)
+            if a is None or c is None:
+                return None
+            return a > c
+
+        for name in INDUSTRIES:
+            idx = [i for i in range(len(months))
+                   if months[i] >= "1935-01" and labs[i] is not None
+                   and win(name, i) is not None]
+            base_w = sum(1 for i in idx if win(name, i))
+            base_pct = round(100 * base_w / len(idx), 1) if idx else None
+            for phase in pb.MAPPING:
+                mi = [i for i in idx if labs[i][1] == phase]
+                m_w = sum(1 for i in mi if win(name, i))
+                eps: list[list[int]] = []
+                for i in mi:
+                    if eps and i - eps[-1][-1] <= 12:
+                        eps[-1].append(i)
+                    else:
+                        eps.append([i])
+                e_w = sum(1 for ep in eps if win(name, ep[0]))
+                lo, hi = wilson(e_w, len(eps))
+                out[f"{phase}|{name}|{h}"] = {
+                    "months": len(mi), "month_wins": m_w,
+                    "month_pct": round(100 * m_w / len(mi), 1) if mi else None,
+                    "episodes": len(eps), "episode_wins": e_w,
+                    "episode_pct": round(100 * e_w / len(eps), 1)
+                    if eps else None,
+                    "wilson_lo": lo, "wilson_hi": hi,
+                    "base_pct": base_pct, "spdr": SPDR_MAP.get(name, ""),
+                    "sufficient": len(eps) >= MIN_EPISODES,
+                }
+    return out

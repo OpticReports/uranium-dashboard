@@ -16,6 +16,10 @@ import time
 import httpx
 
 from .win_scores import WIN_SCORES
+from .win_scores_industries import INDUSTRY_WIN_SCORES
+
+INDUSTRY_ORDER = ["NoDur", "Durbl", "Manuf", "Enrgy", "Chems", "BusEq",
+                  "Telcm", "Utils", "Shops", "Hlth", "Money", "Other"]
 
 CANARY = "https://treasury-canary.onrender.com"
 
@@ -152,6 +156,18 @@ def board() -> dict:
                              "of base. Shiller monthly-average "
                              "total-return basis."),
         "win_score_notes": CELL_NOTES,
+        "industry_win_scores": sorted(
+            [{"industry": n, **INDUSTRY_WIN_SCORES[f"{phase}|{n}|12"],
+              "h6": INDUSTRY_WIN_SCORES[f"{phase}|{n}|6"]}
+             for n in INDUSTRY_ORDER],
+            key=lambda c: -(c["month_pct"] - c["base_pct"]))
+        if phase else None,
+        "industry_caveat": ("Ken French 12-industry value-weighted "
+                            "portfolios 1935-2026 (~XL tickers are "
+                            "approximate modern equivalents, NOT tradeable "
+                            "parity). Same conventions and caveats as the "
+                            "asset table; ranked by month-counted edge vs "
+                            "each industry's own base rate."),
         "canary_reachable": cyc is not None,
     }
     return out
