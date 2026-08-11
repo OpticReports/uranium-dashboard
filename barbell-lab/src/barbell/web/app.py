@@ -587,6 +587,111 @@ def lab_page():
     return HTMLResponse(_LAB_HTML)
 
 
+@app.get("/api/phase")
+def api_phase():
+    from .. import phase
+    return phase.board()
+
+
+_PHASE_HTML = """<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Phase allocation — Barbell Lab</title><style>
+body{background:#0b0f17;color:#e2e8f0;font:14px/1.5 -apple-system,Segoe UI,
+Roboto,sans-serif;margin:0;padding:24px;max-width:980px;margin:auto}
+h1{font-size:18px} h2{font-size:14px;color:#93a4bd;margin:18px 0 6px}
+.card{background:#111a2e;border:1px solid #26334e;border-radius:10px;
+padding:14px 16px;margin:10px 0}
+table{border-collapse:collapse;width:100%;font-size:13px}
+td,th{padding:4px 8px;text-align:right;border-top:1px solid #1e293b}
+td:first-child,th:first-child{text-align:left}
+.pill{display:inline-block;border-radius:99px;padding:2px 12px;
+font-weight:600;font-size:12px;cursor:pointer;border:1px solid #26334e;
+color:#64748b;margin-right:6px}
+.pill.on{border-color:#38bdf8;color:#7dd3fc;background:#0c4a6e33}
+.phase{font-size:22px;font-weight:700}
+.EXPANSION{color:#34d399}.LATE_CYCLE{color:#fbbf24}.STALL{color:#fb923c}
+.SLOWDOWN{color:#f87171}.CONTRACTION{color:#dc2626}
+.w{font-size:26px;font-weight:700}.wl{font-size:11px;color:#64748b}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;text-align:center}
+.small{font-size:11px;color:#64748b;line-height:1.55}
+.warn{color:#fbbf24}.an{cursor:pointer}
+.an.sel{outline:1px solid #38bdf8;border-radius:6px}
+a{color:#7dd3fc}</style></head><body>
+<h1>Phase-aware allocation <span class="small">— suggestion from the frozen
+study (PHASE_BARBELL_SPEC.md); nothing here trades</span></h1>
+<div class="card" id="cur">loading…</div>
+<div class="card"><h2>Suggested weights — <span id="scenlbl">current phase</span></h2>
+<div style="margin:6px 0">
+<span class="pill" data-r="defensive">defensive ×0.5</span>
+<span class="pill on" data-r="balanced">balanced ×1.0</span>
+<span class="pill" data-r="aggressive">aggressive ×1.5</span></div>
+<div class="grid" id="wts"></div></div>
+<div class="card"><h2>Scenario: what if today is really one of its analogs?</h2>
+<div class="small" style="margin-bottom:6px">Top matches from the cycle
+tracker's analog layer. Click one to see the allocation ITS phase implies;
+click again to return to today. Caveats: top-10 spans few distinct
+episodes; the analog has over-predicted recession since 2023.</div>
+<table id="antbl"></table></div>
+<div class="card"><h2>What the 91-year study says (corrected, panel-approved)</h2>
+<table id="study"></table>
+<div class="small" id="caveat" style="margin-top:8px"></div></div>
+<script>
+let B=null, risk="balanced", scen=null;
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function wcards(w){
+  const C={stocks:'#4c9be8',bonds:'#8a93a5',gold:'#fbbf24',cash:'#34d399'};
+  return Object.entries(w).map(([k,v])=>
+    `<div><div class="w" style="color:${C[k]}">${v}%</div>
+     <div class="wl">${k.toUpperCase()}</div></div>`).join('');
+}
+function draw(){
+  if(!B)return;
+  const ph = scen ? scen.phase_then : B.phase;
+  const src = scen ? scen : B;
+  document.getElementById('scenlbl').textContent =
+    scen ? `analog ${scen.month} (${scen.phase_then})` : `current phase`;
+  document.getElementById('wts').innerHTML =
+    src.weights ? wcards(src.weights[risk]) : 'canary unreachable';
+  document.getElementById('cur').innerHTML = B.phase ?
+    `<span class="phase ${B.phase}">${B.phase.replace('_',' ')}</span>
+     <span class="small">as of ${B.phase_month} · coincident ${B.coincident}
+     · leading ${B.leading}</span>` +
+    (B.nowcast_phase ? `<div class="small">nowcast ${B.nowcast_month}:
+     <b class="${B.nowcast_phase}">${B.nowcast_phase}</b> — acting on the
+     nowcast is the one-month-early variant; the study's headline uses the
+     slower label</div>` : '') +
+    (B.canary_reachable ? '' : '<div class="warn">showing cached canary data</div>')
+    : '<span class="warn">cycle feed unreachable</span>';
+  let h='<tr><th>analog</th><th>phase then</th><th>match</th><th>rec ≤12m</th><th></th></tr>';
+  (B.analogs||[]).forEach((a,i)=>{
+    h+=`<tr class="an ${scen&&scen.month===a.month?'sel':''}" data-i="${i}">
+    <td>${esc(a.month)}</td><td class="${a.phase_then}">${esc(a.phase_then||'—')}</td>
+    <td>${a.closer_than_pct}%</td>
+    <td>${a.recession_within_12m==null?'—':a.recession_within_12m?'YES':'no'}</td>
+    <td class="small">view →</td></tr>`;});
+  document.getElementById('antbl').innerHTML=h;
+  document.querySelectorAll('.an').forEach(tr=>tr.onclick=()=>{
+    const a=B.analogs[+tr.dataset.i];
+    scen = (scen&&scen.month===a.month)?null:a; draw();});
+  let s='<tr><th></th><th>CAGR</th><th>max DD</th><th>Sharpe</th><th>worst 36m</th></tr>';
+  B.study.rows.forEach(r=>{s+=`<tr><td>${esc(r[0])}</td><td>${r[1]}%</td>
+    <td>${r[2]}%</td><td>${r[3]}</td><td>${r[4]}%</td></tr>`;});
+  document.getElementById('study').innerHTML=s;
+  document.getElementById('caveat').textContent=B.study.window+'. '+B.study.caveat;
+}
+document.querySelectorAll('.pill').forEach(p=>p.onclick=()=>{
+  document.querySelectorAll('.pill').forEach(q=>q.classList.remove('on'));
+  p.classList.add('on'); risk=p.dataset.r; draw();});
+fetch('api/phase').then(r=>r.json()).then(b=>{B=b;draw();})
+  .catch(()=>document.getElementById('cur').textContent='phase api failed');
+</script></body></html>"""
+
+
+@app.get("/phase", response_class=HTMLResponse)
+def phase_page():
+    return HTMLResponse(_PHASE_HTML)
+
+
 # ------------------------------------------------------------------ register
 @app.get("/api/portfolio")
 def api_portfolio():

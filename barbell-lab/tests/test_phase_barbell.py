@@ -170,3 +170,32 @@ def test_gate_frozen_results_pin():
     assert spx["max_dd_pct"] < -45
     assert m["max_dd_pct"] > spx["max_dd_pct"] + 20   # the edge under test
     assert abs(m["cagr_pct"] - 8.89) < 1.0            # ~60/40 CAGR class
+
+
+def test_gate_serving_mapping_parity():
+    """The dashboard serves src/barbell/phase.py; the study runs
+    research/phase_barbell.py; the spec md is canonical. All three must
+    agree, and the serving weight rule must match the research rule."""
+    sys.path.insert(0, os.path.join(_ROOT, "src"))
+    from barbell import phase as serving
+    assert serving.MAPPING == pb.MAPPING
+    for ph in pb.MAPPING:
+        for name, rv in serving.RISK_LEVELS.items():
+            sw = serving.weights_for(ph, rv)
+            rw = pb.weights_for(ph, rv, "1995-01")
+            for k in sw:
+                assert sw[k] == pytest.approx(rw[k] * 100, abs=0.05), \
+                    (ph, name, k)
+
+
+def test_gate_serving_study_numbers_match_results_doc():
+    """STUDY rows served to the page must match PHASE_BARBELL.md's table -
+    stops the dashboard drifting from the honesty-boxed record."""
+    sys.path.insert(0, os.path.join(_ROOT, "src"))
+    from barbell import phase as serving
+    doc = open(os.path.join(_ROOT, "PHASE_BARBELL.md")).read()
+    doc = doc.replace("**", "").replace("−", "-")
+    for row in serving.STUDY["rows"]:
+        name, cagr, dd = row[0], row[1], row[2]
+        assert f"{cagr}%" in doc or f"{cagr:.2f}%" in doc, (name, cagr)
+        assert f"{dd}%" in doc or f"{dd:.1f}%" in doc, (name, dd)
