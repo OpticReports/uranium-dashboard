@@ -124,3 +124,29 @@ def test_gate_spx_paths_anchored_at_zero():
     for a in board()["analogs"]:
         assert a["spx_path_fwd18"][0] == 0.0
         assert len(a["spx_path_fwd18"]) == 19
+
+
+def test_gate_episode_dedupe_caveats():
+    """QA 2026-08-11 (caveat a): the top-10 span only 6 distinct episodes,
+    3/6 recession (one COVID) - 50% by episode, 30% over the 10 nearest
+    DISTINCT episodes, vs the 60% overlapping-month headline. All three
+    framings ship together; if an edit moves these, rerun the study."""
+    ep = board()["episodes"]
+    assert ep["n"] == 6 and ep["recession"] == 3
+    assert ep["includes_covid"] is True
+    assert ep["by_episode_pct"] == 50.0
+    assert ep["top10_distinct_episode_pct"] == 30.0
+
+
+def test_gate_recent_overprediction_disclosed():
+    """QA 2026-08-11 (caveat b): the analog has read 45-87% p(recession)
+    since 2023 with none observed - the board must carry that record."""
+    rc = board()["recent_calibration"]
+    assert len(rc) >= 3
+    assert all(v["recession_observed"] in (False, None) for v in rc.values())
+    assert max(v["mean_p_pct"] for v in rc.values()) > 60
+
+
+def test_gate_missing_dims_disclosed():
+    b = board()
+    assert b["current_missing_dims"] == ["mfg_sales"]   # CMRMTSPL lag

@@ -186,6 +186,13 @@ function AnalogView({ analog, err }: { analog: any; err: string | null }) {
   });
   const COLORS = ["#f87171", "#fb923c", "#fbbf24", "#c084fc", "#38bdf8"];
   const s = analog.skill;
+  const ep = analog.episodes;
+  const rc = analog.recent_calibration || {};
+  const years = Object.keys(rc).sort();
+  const calib = years.length >= 2 && years.every((y) => rc[y].recession_observed !== true)
+    ? `${Math.min(...years.map((y) => rc[y].mean_p_pct))}–${Math.max(...years.map((y) => rc[y].mean_p_pct))}% across ${years[0]}–${years[years.length - 1]}`
+    : null;
+  const missing = (analog.current_missing_dims || []).join(", ");
   return (
     <div>
       <div className="mb-1 text-[10px] text-slate-400">
@@ -238,12 +245,28 @@ function AnalogView({ analog, err }: { analog: any; err: string | null }) {
         </tbody>
       </table>
       <div className="mt-1.5 text-[10px] leading-relaxed text-slate-500">
-        Top-10 analogs: <b>{analog.analog_recession_within_12m_pct}%</b> saw a
-        recession within 12 months vs <b>{analog.climatology_recession_within_12m_pct}%</b> unconditionally.
+        {ep && (
+          <>Top-10 analogs span <b>{ep.n} distinct episodes</b>; {ep.recession} of {ep.n}
+          {ep.includes_covid ? " (one being COVID)" : ""} saw recession within 12m —
+          {" "}{analog.analog_recession_within_12m_pct}% counting overlapping months,
+          {" "}{ep.by_episode_pct}% counting episodes
+          {ep.top10_distinct_episode_pct != null ? ` (${ep.top10_distinct_episode_pct}% over the 10 nearest distinct episodes)` : ""},
+          vs {analog.climatology_recession_within_12m_pct}% unconditionally.{" "}</>
+        )}
+        {calib && (
+          <>Calibration warning: analog p(recession) has read {calib} with no recession
+          observed through {analog.asof} — treat the level as a regime read, not a
+          calibrated probability.{" "}</>
+        )}
         Walk-forward skill ({s.n_months} months): recession Brier <b>{s.brier_analog}</b> vs
-        base rate {s.brier_base_rate} — analogs help; return MAE {s.ret_mae_analog_pp}pp vs
-        climatology {s.ret_mae_climatology_pp}pp — analogs do NOT beat climatology on return
-        magnitude. Read the paths as scenario texture, not a forecast. {analog.basis}
+        base rate {s.brier_base_rate} — {s.brier_analog < s.brier_base_rate
+          ? "analogs help on this sample (edge concentrated in 2008/1979/2001; borderline under year-block resampling)"
+          : "analogs do NOT beat the base rate on this sample"}; return MAE {s.ret_mae_analog_pp}pp vs
+        climatology {s.ret_mae_climatology_pp}pp — {s.ret_mae_analog_pp > s.ret_mae_climatology_pp
+          ? "analogs do NOT beat climatology on return magnitude"
+          : "analogs edge climatology on return magnitude"}.
+        {missing ? ` Current vector is missing: ${missing} (publication lag).` : ""}
+        {" "}Read the paths as scenario texture, not a forecast. {analog.basis}
       </div>
     </div>
   );

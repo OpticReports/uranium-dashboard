@@ -251,6 +251,53 @@ def skill_test(V: dict) -> dict:
     }
 
 
+def _episodes(idxs: list[int]) -> list[list[int]]:
+    """Group neighbor indices into distinct historical episodes (members
+    within 12 months chain together). Top-10 neighbors are often 3 months
+    of the same event - counting them separately inflated the headline
+    recession probability (counter-agent QA, 2026-08-11)."""
+    eps: list[list[int]] = []
+    for i in sorted(idxs):
+        if eps and i - eps[-1][-1] <= 12:
+            eps[-1].append(i)
+        else:
+            eps.append([i])
+    return eps
+
+
+def _recent_calibration(V: dict, years: int = 4) -> dict:
+    """Mean analog p(recession-within-12m) per calendar year for the recent
+    past, with the observed outcome where the window has closed. The analog
+    has over-predicted continuously since 2024 (QA find) - the panel must
+    show that streak, not just the long-sample Brier win."""
+    months, rec = V["months"], V["rec"]
+    y0 = int(months[-1][:4]) - years + 1
+    out: dict[str, dict] = {}
+    for t in range(len(months)):
+        yr = months[t][:4]
+        if int(yr) < y0:
+            continue
+        nbrs = _neighbors(V, t, known_by=t)[:TOP_K]
+        if len(nbrs) < TOP_K:
+            continue
+        ps = [x for x in (_rec_within(rec, i) for _, i in nbrs)
+              if x is not None]
+        if not ps:
+            continue
+        o = out.setdefault(yr, {"p_sum": 0.0, "n": 0, "rec_observed": False,
+                                "windows_closed": 0})
+        o["p_sum"] += sum(ps) / len(ps)
+        o["n"] += 1
+        y = _rec_within(rec, t)
+        if y is not None:
+            o["windows_closed"] += 1
+            o["rec_observed"] = o["rec_observed"] or y
+    return {yr: {"mean_p_pct": round(100 * o["p_sum"] / o["n"], 1),
+                 "recession_observed": o["rec_observed"]
+                 if o["windows_closed"] else None}
+            for yr, o in sorted(out.items())}
+
+
 def board(raw_override: dict | None = None) -> dict:
     V = build_vectors(raw_override)
     months, spx, rec = V["months"], V["spx"], V["rec"]
@@ -283,6 +330,32 @@ def board(raw_override: dict | None = None) -> dict:
         })
     rec_probs = [x for x in (_rec_within(rec, i) for _, i in top)
                  if x is not None]
+    # episode-level view of the SAME top-10 (QA caveat a)
+    eps = _episodes([i for _, i in top])
+    ep_rec, covid = [], False
+    for members in eps:
+        best = min(members, key=lambda i: _dist(V["matrix"][t],
+                                                V["matrix"][i]) or 9e9)
+        r = _rec_within(rec, best)
+        if r is not None:
+            ep_rec.append(r)
+            if r and "2019-01" <= months[best] <= "2020-02":
+                covid = True
+    # top-10 DISTINCT episodes walking down the full ranking
+    seen_eps: list[list[int]] = []
+    de_rec = []
+    for d, i in nbrs:
+        if any(abs(i - m) <= 12 for ep in seen_eps for m in ep):
+            for ep in seen_eps:
+                if any(abs(i - m) <= 12 for m in ep):
+                    ep.append(i)
+            continue
+        seen_eps.append([i])
+        r = _rec_within(rec, i)
+        if r is not None:
+            de_rec.append(r)
+        if len(seen_eps) == TOP_K:
+            break
     clim = [x for x in (_rec_within(rec, j) for j in range(len(months) - 12))
             if x is not None]
     fwd12 = sorted(x for x in (_fwd_ret(spx, j, 12)
@@ -298,6 +371,16 @@ def board(raw_override: dict | None = None) -> dict:
         "analog_recession_within_12m_pct":
             round(100 * sum(rec_probs) / len(rec_probs), 1)
             if rec_probs else None,
+        "episodes": {"n": len(eps), "recession": sum(ep_rec),
+                     "includes_covid": covid,
+                     "by_episode_pct": round(100 * sum(ep_rec) / len(ep_rec), 1)
+                     if ep_rec else None,
+                     "top10_distinct_episode_pct":
+                     round(100 * sum(de_rec) / len(de_rec), 1)
+                     if de_rec else None},
+        "recent_calibration": _recent_calibration(V),
+        "current_missing_dims": [DIM_NAMES[d] for d in range(len(DIM_NAMES))
+                                 if V["matrix"][t][d] is None],
         "climatology_recession_within_12m_pct":
             round(100 * sum(clim) / len(clim), 1) if clim else None,
         "climatology_fwd12_median_pct":
@@ -306,8 +389,15 @@ def board(raw_override: dict | None = None) -> dict:
         "basis": ("13-dim expanding-z vector; RMS distance over shared dims; "
                   "match strength = distance percentile vs ALL candidate "
                   "months (no invented 0-100 score). SPX = Shiller monthly "
-                  "price level (no dividends) + FMP live month. NBER labels "
+                  "price average (no dividends) + FMP live month. NBER labels "
                   "hindsight-final in the skill scoring (real-time dating "
-                  "lags ~1y). DESCRIPTIVE unless the skill box shows the "
-                  "analog beating the baseline."),
+                  "lags ~1y). Each month is z-scored on its own expanding "
+                  "stats (as seen at the time); QA 2026-08-11: under a "
+                  "single common-yardstick normalization the 1990 analogs "
+                  "drop out of the top-10 while 2007-07 remains #1 - treat "
+                  "the #1 as robust and the supporting cast as "
+                  "convention-sensitive. Skill edge is concentrated in "
+                  "2008/1979/2001 and borderline under year-block resampling "
+                  "(90% CI touches zero). DESCRIPTIVE - a regime read, not "
+                  "a calibrated probability."),
     }
