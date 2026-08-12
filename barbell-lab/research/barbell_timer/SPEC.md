@@ -80,3 +80,16 @@ Guardrails: no live orders; flag all approximations/splices; Sharpe>1.2
 on a timing rule = assume bug/leak first, audit timestamps; no tax
 penalty (Act 60) but report turnover; prefer boring conclusions that
 survive every check.
+
+## AMENDMENT A5 (owner, 2026-08-12, logged before Phase 2-3 results seen)
+
+Owner's underlying decision question: "find a way to make owning GDE
+better than owning SPY." The verdict page must therefore answer TWO
+questions, separately: (Q1, original) does any rule beat the static
+50/50 null on Calmar/ulcer OOS after multiple-testing adjustment; (Q2,
+owner) does any GDE-containing portfolio (static blend or rule) dominate
+B&H SPY - defined as: >= SPY CAGR AND better maxDD/Calmar/Sortino, with
+the comparison ALSO shown leverage-aware (GDE is ~180% notional; a
+90/90 stack beating 100% SPY on raw CAGR is expected, not evidence).
+Every rule table gains a vs-SPY column set. Phase 4's drop-single-year
+test is decisive for Q2 (prior: the 51y CAGR edge may be 1979 alone).
