@@ -352,6 +352,18 @@ export default function MarginLeverageChart() {
                     formatter={(v: number, name: string, item: { payload?: ChartRow }) => {
                       if (name === "excess_yoy")
                         return [`${Number(v).toFixed(1)}pp`, "Excess growth (vs S&P)"];
+                      if (name === "excess nowcast (est)") {
+                        const row = item.payload as any;
+                        const band = row?.nc_hi != null && row?.nc_lo != null
+                          ? ` (band ${Number(row.nc_lo).toFixed(1)}–${Number(row.nc_hi).toFixed(1)})`
+                          : "";
+                        return [
+                          `${Number(v).toFixed(1)}pp est${band}`,
+                          "NOWCAST — months FINRA hasn't printed yet: price-model estimate ±3.1pp, display-only (never feeds the composite or flags); replaced by the real print when FINRA files",
+                        ];
+                      }
+                      if (name === "nowcast band hi" || name === "nowcast band lo")
+                        return [`${Number(v).toFixed(1)}pp`, name === "nowcast band hi" ? "nowcast upper (±1sd)" : "nowcast lower (±1sd)"];
                       if (name === "margin_yoy")
                         return [`${Number(v).toFixed(1)}%`, "Margin debt YoY"];
                       if (name === "spx_idx") {
