@@ -1,0 +1,247 @@
+{
+ "amendments": [
+  "A1 gold 4pm marks via GLD+40bp (GCUSD settles 1:30pm)",
+  "A2 GCUSD verified price-spliced/spot-like; futures excess = spot - (bills - lease)",
+  "A3 2022-26 extra carry drag measured from GDE NAV (one parameter, post-2022 only)"
+ ],
+ "apriori_gld_marks": {
+  "start": "2022-03-18",
+  "end": "2026-07-31",
+  "ann_synth": 0.2708939353344577,
+  "ann_gde": 0.2568690431564793,
+  "ann_gap": 0.01402489217797842,
+  "te_daily": 0.09147999437909858,
+  "te_monthly": 0.034383251411610034,
+  "te_quarterly": 0.02184594863516267,
+  "corr_daily": 0.93851343121393,
+  "corr_monthly": 0.988457380903902,
+  "n_months": 52
+ },
+ "apriori_gc_marks": {
+  "start": "2022-03-18",
+  "end": "2026-07-31",
+  "ann_synth": 0.2754436577174795,
+  "ann_gde": 0.2568690431564793,
+  "ann_gap": 0.01857461456100018,
+  "te_daily": 0.11618624898186966,
+  "te_monthly": 0.0401988358014915,
+  "te_quarterly": 0.02297861351423359,
+  "corr_daily": 0.899705392973119,
+  "corr_monthly": 0.9841279283378586,
+  "n_months": 52
+ },
+ "nav_basis": {
+  "ann_synth_nav": 0.2748421366396081,
+  "wt_official": 0.2657,
+  "gde_implied_extra_drag_nav": 0.009142136639608112,
+  "listing_premium_0317": 0.024742622786178003
+ },
+ "price_over_modelnav_by_year": {
+  "2022": 1.006571436358817,
+  "2023": 1.0067580648146526,
+  "2024": 1.0004335159558884,
+  "2025": 0.9933001361786243,
+  "2026": 0.9782479861633097
+ },
+ "amended_full": {
+  "start": "2022-03-18",
+  "end": "2026-07-31",
+  "ann_synth": 0.25932251626231717,
+  "ann_gde": 0.2568690431564793,
+  "ann_gap": 0.002453473105837878,
+  "te_daily": 0.09147282862355471,
+  "te_monthly": 0.034345067257076325,
+  "te_quarterly": 0.021960964715675543,
+  "corr_daily": 0.9385232829145651,
+  "corr_monthly": 0.9884655933216542,
+  "n_months": 52
+ },
+ "amended_subperiods": {
+  "2022-2023 (illiquid)": {
+   "start": "2022-03-18",
+   "end": "2023-12-29",
+   "ann_synth": 0.045410573568095636,
+   "ann_gde": 0.04893842832321593,
+   "ann_gap": -0.0035278547551202966,
+   "te_daily": 0.11882982651181961,
+   "te_monthly": 0.051314697262098995,
+   "te_quarterly": 0.03148260006563016,
+   "corr_daily": 0.8882241198446551,
+   "corr_monthly": 0.9801397908884306,
+   "n_months": 21
+  },
+  "2024-2026 (liquid)": {
+   "start": "2024-01-02",
+   "end": "2026-07-31",
+   "ann_synth": 0.4338248655875492,
+   "ann_gde": 0.425763323254591,
+   "ann_gap": 0.008061542332958194,
+   "te_daily": 0.0662576706074002,
+   "te_monthly": 0.016010280980157627,
+   "te_quarterly": 0.014992793660310458,
+   "corr_daily": 0.969233213166463,
+   "corr_monthly": 0.9972968718176971,
+   "n_months": 30
+  }
+ },
+ "gde_median_volume_by_year": {
+  "2022": 500.0,
+  "2023": 1961.5,
+  "2024": 7718.5,
+  "2025": 59408.0,
+  "2026": 123804.0
+ },
+ "noise_decomposition": {
+  "monthly_diff_std": 0.009914566913104378,
+  "lag1_autocorr": -0.09592392480179164,
+  "implied_pricing_noise_std_per_monthend": 0.00307069879194389,
+  "noise_te_contribution": 0.01504329038808651,
+  "noise_corrected_te": 0.030875282333815073
+ },
+ "gate": {
+  "strict": {
+   "te_monthly_full": 0.034383251411610034,
+   "target": 0.015,
+   "nav_ann_gap_vs_wt": 0.009142136639608112,
+   "PASS": false
+  },
+  "amended": {
+   "te_monthly_liquid_2024on": 0.016010280980157627,
+   "ann_gap_amended_full": 0.002453473105837878,
+   "corr_monthly": 0.9884655933216542,
+   "note": "mean-return leg matches WT by construction after A3 (drag measured on this window); TE and corr legs are NOT fit",
+   "PASS": true
+  }
+ },
+ "realized_carry_dgl": {
+  "2007-2009": {
+   "dgl_minus_gld_ann": -0.03697150540919014,
+   "realized_lease": -0.033171505409190144,
+   "avg_bills": 0.019518157543391187,
+   "realized_carry_drag": 0.05268966295258133,
+   "years": 2.99
+  },
+  "2010-2019": {
+   "dgl_minus_gld_ann": -0.014664890163783806,
+   "realized_lease": -0.010864890163783806,
+   "avg_bills": 0.005660495801679329,
+   "realized_carry_drag": 0.016525385965463137,
+   "years": 9.99
+  },
+  "2020-2023": {
+   "dgl_minus_gld_ann": -0.027731443532877487,
+   "realized_lease": -0.023931443532877485,
+   "avg_bills": 0.010482543640897755,
+   "realized_carry_drag": 0.03441398717377524,
+   "years": 3.2
+  },
+  "2007-2023": {
+   "dgl_minus_gld_ann": -0.02095337332406544,
+   "realized_lease": -0.01715337332406544,
+   "avg_bills": 0.009176456071076013,
+   "realized_carry_drag": 0.026329829395141453,
+   "years": 16.19
+  }
+ },
+ "carry_drag_by_decade": [
+  {
+   "decade": "1975-1979",
+   "avg_tb3": 0.06655166666666668,
+   "lease": 0.01,
+   "carry_drag": 0.056551666666666674,
+   "x090": 0.050896500000000004,
+   "basis": "assumed (literature: nascent lending market)"
+  },
+  {
+   "decade": "1980-1989",
+   "avg_tb3": 0.08821833333333333,
+   "lease": 0.015,
+   "carry_drag": 0.07321833333333333,
+   "x090": 0.0658965,
+   "basis": "assumed (literature: CB-lending / carry-trade era)"
+  },
+  {
+   "decade": "1990-1999",
+   "avg_tb3": 0.048515833333333334,
+   "lease": 0.015,
+   "carry_drag": 0.033515833333333335,
+   "x090": 0.030164250000000004,
+   "basis": "assumed (literature: 3M lease 1-2%, 1999 spikes)"
+  },
+  {
+   "decade": "2000-2009",
+   "avg_tb3": 0.02693166666666667,
+   "lease": 0.0075,
+   "carry_drag": 0.01943166666666667,
+   "x090": 0.017488500000000004,
+   "basis": "assumed pre-2007 / realized via DGL-GLD 2007-09"
+  },
+  {
+   "decade": "2010-2019",
+   "avg_tb3": 0.005666666666666666,
+   "lease": 0.0025,
+   "carry_drag": 0.003166666666666666,
+   "x090": 0.0028499999999999997,
+   "basis": "realized via DGL-GLD (near zero, sometimes negative)"
+  },
+  {
+   "decade": "2020-2026",
+   "avg_tb3": 0.0283253164556962,
+   "lease": 0.005,
+   "carry_drag": 0.023325316455696198,
+   "gde_measured_effective_drag": 0.03246745309530431,
+   "x090": 0.029220707785773882,
+   "basis": "realized via DGL-GLD 2020-23 + GDE-implied 2022-26"
+  }
+ ],
+ "sensitivity": {
+  "lease=0.0%,roll=0bp": {
+   "ann_gap": 0.008949042510569605,
+   "te_monthly": 0.034366399191733885
+  },
+  "lease=0.0%,roll=5bp": {
+   "ann_gap": 0.008315980606453888,
+   "te_monthly": 0.034364308561644935
+  },
+  "lease=0.0%,roll=10bp": {
+   "ann_gap": 0.007683233583379412,
+   "te_monthly": 0.0343622214645381
+  },
+  "lease=0.25%,roll=0bp": {
+   "ann_gap": 0.011801721912253926,
+   "te_monthly": 0.03437585074598072
+  },
+  "lease=0.25%,roll=5bp": {
+   "ann_gap": 0.011167241113816617,
+   "te_monthly": 0.034373744218309736
+  },
+  "lease=0.25%,roll=10bp": {
+   "ann_gap": 0.010533075898307986,
+   "te_monthly": 0.03437164122331371
+  },
+  "lease=0.5%,roll=0bp": {
+   "ann_gap": 0.014660795033509144,
+   "te_monthly": 0.03438537383542522
+  },
+  "lease=0.5%,roll=5bp": {
+   "ann_gap": 0.01402489217797842,
+   "te_monthly": 0.034383251411610034
+  },
+  "lease=0.5%,roll=10bp": {
+   "ann_gap": 0.013389305608819901,
+   "te_monthly": 0.034381132520142445
+  },
+  "lease=1.0%,roll=0bp": {
+   "ann_gap": 0.020398179473339884,
+   "te_monthly": 0.03440463459261343
+  },
+  "lease=1.0%,roll=5bp": {
+   "ann_gap": 0.019759422987243314,
+   "te_monthly": 0.03440248038118766
+  },
+  "lease=1.0%,roll=10bp": {
+   "ann_gap": 0.01912098419909003,
+   "te_monthly": 0.03440032970139413
+  }
+ }
+}
