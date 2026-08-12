@@ -23,6 +23,7 @@ fetch time.
 - longhist_shiller_spx.json: px 1871-01 -> 2026-07, div -> 2023-06. MONTHLY-AVERAGE price convention FLAGGED. div series ends 2023-06 — post-1993 uses SPY adj so no gap in the spliced series.
 - longhist_gold_monthly.json: 1833-01 -> 2026-07 (2323 obs). MONTHLY-AVERAGE convention FLAGGED.
 
+- fred_dgs10.json: DGS10 1962-01-02 -> 2026-08-10 (16136 obs, 719 missing-value rows dropped-and-logged). 10Y Treasury constant-maturity NOMINAL yield, daily, 1962-> — fetched in Phase 2 (2026-08-12) solely for the pre-2003 TIPS real-yield splice proxy (DGS10 month-end minus trailing-12m CPI inflation). FLAGGED: proxy mixes a nominal-minus-realized-inflation construct with true market real yields at the 2003 splice.
 ## Standing approximations (fixed at fetch time)
 1. GCUSD is a price-spliced continuous front-month: its returns are
    spot-like; futures-position excess return must be built as
