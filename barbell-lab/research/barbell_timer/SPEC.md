@@ -93,3 +93,24 @@ the comparison ALSO shown leverage-aware (GDE is ~180% notional; a
 90/90 stack beating 100% SPY on raw CAGR is expected, not evidence).
 Every rule table gains a vs-SPY column set. Phase 4's drop-single-year
 test is decisive for Q2 (prior: the 51y CAGR edge may be 1979 alone).
+
+## AMENDMENT A12 (owner, 2026-08-12, frozen before computation)
+
+Owner clarification: the objective is a GDE-ANCHORED entry/exit engine -
+default position IS GDE; exits are regime/vol-triggered; success = GDE's
+DD materially reduced while CAGR stays above B&H SPY. Pre-registered
+exit-engine family (each <=3 params, same costs/timing, walk-forward):
+ 6. VOL-EXIT: hold GDE; exit to cash when trailing 63d realized vol of
+    the GDE synthetic exceeds its expanding Pth percentile (P=85);
+    re-enter below the Qth (Q=70). Variant 6b: exit destination SPY
+    when SPY's own 10m trend is positive, else cash.
+ 7. CORR-SPIKE EXIT: hold GDE; exit to cash when trailing 63d
+    gold-equity correlation exceeds its expanding 90th percentile AND
+    GDE 3m return is negative (the Oct-2008 phenotype); re-enter when
+    either condition clears.
+ 8. DUAL-TRIGGER: exit on (6) OR (7); re-enter when both clear.
+Context carried: GDE-sleeve TREND exits already failed twice (prior
+study; Phase 2 killed sma10_gde/tsmom at <=50% OOS) - the vol/corr
+family is the genuinely untested branch. Multiple-testing family grows
+by 4 variants (logged; adjusted bars recomputed). Killed variants are
+reported, not hidden.
