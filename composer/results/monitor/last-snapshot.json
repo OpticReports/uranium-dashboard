@@ -1,77 +1,77 @@
 {
-  "taken_at": "2026-08-11T21:36:07+00:00",
+  "taken_at": "2026-08-12T21:35:48+00:00",
   "total_stats": {
     "pending_deploys_cash": 0,
-    "total_cash": 513.272376619,
-    "time_weighted_return": 0.7311447725818891,
+    "total_cash": 512.422376619,
+    "time_weighted_return": 0.7588794064831257,
     "total_unallocated_cash": 231.962376619,
-    "portfolio_value": 282903.24,
+    "portfolio_value": 287435.62,
     "net_deposits": 247000.0,
     "pending_net_deposits": 0.0,
-    "todays_percent_change": 0.0005211366573746033,
-    "simple_return": 0.14535724850506138,
-    "todays_dollar_change": 147.35445724318,
+    "todays_percent_change": 0.016372482976126913,
+    "simple_return": 0.1637069928338586,
+    "todays_dollar_change": 4630.226607252085,
     "metrics": {
-      "annualized_rate_of_return": 1.2558,
+      "annualized_rate_of_return": 1.2983,
       "max_drawdown": 0.2006,
-      "sharpe_ratio": 2.2083,
-      "standard_deviation": 0.4088
+      "sharpe_ratio": 2.2585,
+      "standard_deviation": 0.4079
     },
     "pending_withdrawals": 0.0
   },
   "symphonies": {
     "mbkiXcuNDjueXpiox5Av": {
       "name": "The Holy Grail w Sorts & Safe Sectors  139 | 38 | 2015 (Modified #1)",
-      "value": 75062.14,
-      "deposit_adjusted_value": 1697.82,
-      "cash": 74.61,
+      "value": 75441.33,
+      "deposit_adjusted_value": 1706.4,
+      "cash": 74.6,
       "holdings": {
         "SSO": 0.999
       },
       "next_rebalance_on": "2026-08-12",
       "has_queued_deploy": null,
-      "last_percent_change": -0.0066
+      "last_percent_change": 0.0055
     },
     "ORQNCfZnA18wmsMWVhf8": {
       "name": "VIX Harvester + HYG Credit Guard",
-      "value": 37293.6,
-      "deposit_adjusted_value": 34869.83,
+      "value": 37297.36,
+      "deposit_adjusted_value": 34873.34,
       "cash": 37.31,
       "holdings": {
         "PULS": 0.999
       },
       "next_rebalance_on": "2026-08-12",
       "has_queued_deploy": null,
-      "last_percent_change": 0.0
+      "last_percent_change": 0.0001
     },
     "nNdBk7hc5NiBzeRvbI5T": {
       "name": "Crash Convexity Sleeve \u2014 InverseHold + Bond Frontrunner 50/50",
-      "value": 71077.23,
-      "deposit_adjusted_value": 23055.14,
-      "cash": 71.07,
+      "value": 71091.83,
+      "deposit_adjusted_value": 23059.87,
+      "cash": 70.6,
       "holdings": {
         "BOXX": 0.999
       },
       "next_rebalance_on": "2026-08-12",
       "has_queued_deploy": null,
-      "last_percent_change": -0.0012
+      "last_percent_change": 0.0001
     },
     "YPTSJFJwD2ZKfAeYJUbW": {
       "name": "KMLM switcher + VIX sleeve 75/25",
-      "value": 99238.31,
-      "deposit_adjusted_value": 37517.04,
-      "cash": 98.32,
+      "value": 103373.14,
+      "deposit_adjusted_value": 39080.21,
+      "cash": 97.95,
       "holdings": {
-        "PULS": 0.2503,
-        "SOXL": 0.3772,
-        "TECL": 0.3716
+        "PULS": 0.2403,
+        "SOXL": 0.3867,
+        "TECL": 0.3721
       },
       "next_rebalance_on": "2026-08-12",
       "has_queued_deploy": null,
-      "last_percent_change": 0.0074
+      "last_percent_change": 0.0424
     }
   },
-  "book_drawdown": 0.0111,
-  "sleeve_weight": 0.1131,
-  "vix_contango": 0.2376
+  "book_drawdown": 0.0,
+  "sleeve_weight": 0.1123,
+  "vix_contango": 0.2735
 }
