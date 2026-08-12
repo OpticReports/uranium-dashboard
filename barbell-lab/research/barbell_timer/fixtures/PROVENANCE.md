@@ -36,3 +36,18 @@ fetch time.
 3. FRED daily series have holiday gaps ('.' rows dropped here);
    downstream alignment forward-fills RATES only (never prices),
    which is standard for yields and flagged in code.
+
+- fred_baa10ym.json: BAA10YM 1959-01 -> 2026-07 (811 obs). Moody's Baa
+  yield minus 10Y Treasury CM (spread, pp), monthly average. Frozen
+  2026-08-12 for amendment A17 as a verbatim COPY of the repo's existing
+  frozen fixture treasury-canary/backend/tests/fixtures_cycle_fred.json
+  (key BAA10YM) — dates truncated to YYYY-MM, values cast to float,
+  nothing re-fetched. Availability treated like FEDFUNDS (underlying
+  Moody's daily yields are public in real time, so the month-t average
+  is knowable at month-end t) — logged in A17_INTERNALS.md; the
+  mandatory 1-month lag stress bounds the cost of that assumption.
+  A17 also reads research/fixtures/french12.json (Ken French 12-industry
+  value-weighted monthly returns, percent units, frozen earlier at repo
+  level) — the SPEC A17 text says "industries 1935->" while that fixture
+  actually starts 1926-07; per the literal spec the A17 signals use
+  1935-01 onward (amendment A18 in A17_INTERNALS.md).
