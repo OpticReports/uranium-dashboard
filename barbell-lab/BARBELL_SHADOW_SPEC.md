@@ -43,7 +43,14 @@ never to skip ahead of V1):
   we substitute XLU (cap-weighted utilities ETF) and SPY (cap-weighted
   market). This proxy choice is frozen here, before evidence; the study's
   Telcm≠XLC lesson says sector-fund proxies can invert — that risk is
-  accepted and disclosed, not hidden.
+  accepted and disclosed, not hidden. QUANTIFIED (counter-agent referee,
+  2026-08-12): swapping only the market leg from equal-weight to the
+  cap-weighted market flips the s16 sign in 43/437 OOS months (9.8%) and
+  degrades the in-sample gated backtest from Calmar 0.55 / −18.8% maxDD
+  (study construction) to 0.38 / −25.0% — roughly a third of the gate's
+  drawdown benefit. The XLU-for-French-Utils substitution is an ADDITIONAL
+  unmeasured basis on top. V2 is therefore strictly evidence-earning; it
+  never jumps the queue ahead of V1.
 
 Benchmarks recorded alongside: B&H GDE, B&H SPY, static 50/50
 (monthly-drift-rebalanced, same cost model).
@@ -104,3 +111,24 @@ Benchmarks recorded alongside: B&H GDE, B&H SPY, static 50/50
   11.03% / −50.8% / 0.22; lag-stressed relmom_cash 12.90% / −49.3% (KILL).
   Live results will differ: real GDE ≠ synthetic (TE ±1%/yr band), and
   36 months is weather, not climate.
+
+## Amendment log
+
+- **2026-08-12 (pre-live, same day as freeze; counter-agent referee
+  findings on commit a252aa2).** Surveillance hardening only — no
+  pre-registered rule, timing, or cost changed; nothing accrued is
+  re-scored:
+  1. **Missing-log tripwire**: a live-scored held month with no logged row
+     past its day-5 deadline is a RED board failure (wall-clock based, so a
+     stale feed or dead scheduler cannot hide a month). The referee showed
+     the original build let a stale-DTB3 month vanish silently — the exact
+     Oct-2008 failure class the tracker exists to catch.
+  2. **Tri-state recompute check**: a logged decision month absent from the
+     recomputed frame (vendor truncated history) is now an explicit
+     UNRECOMPUTABLE warning, never a silent pass.
+  3. **Per-variant benchmark windows**: benchmark equity is computed over
+     exactly each variant's scored months, never a longer window.
+  4. **Contiguity assertion** on every monthly input series (positional
+     12-1 windows would silently misalign across a gap month; DTB3 had no
+     other continuity validation).
+  5. s16 proxy risk quantified in the deviation flag above.

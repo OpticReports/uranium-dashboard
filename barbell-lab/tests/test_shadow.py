@@ -138,10 +138,10 @@ def test_gate_truncation_invariance():
 
 
 # ------------------------------------------------------------ log + board --
-def _seed(con, months=20):
+def _seed(con, months=20, end="2026-08-06"):
     """Synthetic daily prices for all four tickers + DTB3, `months` COMPLETE
-    months ending 2026-07 plus a few August days (so July is complete)."""
-    days = pd.bdate_range(end="2026-08-06", periods=months * 22)
+    months ending just before `end` (default: July complete, August partial)."""
+    days = pd.bdate_range(end=end, periods=months * 22)
     rng = np.random.default_rng(11)
     for tkr in ("GDE", "SPY", "BOXX", "XLU"):
         px = 100 * np.cumprod(1 + rng.normal(0.0004, 0.01, len(days)))
@@ -184,6 +184,93 @@ def test_gate_board_flags_revision_mismatch(tmp_path):
     con.commit()
     b1 = shadow.board(con)
     assert len(b1["mismatches"]) == 1
+    con.close()
+
+
+def test_gate_missing_log_tripwire(tmp_path):
+    """Referee 2026-08-12 (Oct-2008 class): a live month past day 5 with no
+    logged row must scream — wall-clock based, so stale feeds can't hide it."""
+    con = db.connect(tmp_path / "t.db")
+    _seed(con)   # data ends 2026-08; nothing has been logged at all
+    # pretend it is Nov 10: live held months 2026-09..2026-11 all past day 5
+    b = shadow.board(con, now=datetime(2026, 11, 10, tzinfo=timezone.utc))
+    missing = {(m["held_month"], m["variant"]) for m in b["missing_logs"]}
+    assert ("2026-09", "relmom_cash") in missing
+    assert ("2026-10", "relmom_s16gated") in missing
+    assert ("2026-11", "relmom_cash") in missing
+    # within the current month's grace window, that month is NOT yet missing
+    b2 = shadow.board(con, now=datetime(2026, 9, 3, tzinfo=timezone.utc))
+    assert all(m["held_month"] != "2026-09" for m in b2["missing_logs"])
+    # and before any live month exists there is nothing to miss
+    b3 = shadow.board(con, now=datetime(2026, 8, 12, tzinfo=timezone.utc))
+    assert b3["missing_logs"] == []
+    con.close()
+
+
+def test_gate_unrecomputable_is_flagged_not_ok(tmp_path):
+    """Referee hole A: vendor TRUNCATES history so a logged decision month
+    falls out of the recomputed frame -> explicit warning, never a silent
+    recompute_ok=True."""
+    con = db.connect(tmp_path / "t.db")
+    _seed(con)
+    shadow.log_decisions(con, now=datetime(2026, 8, 3, tzinfo=timezone.utc))
+    # vendor regression: GDE history now ends in June -> July decision
+    # (and July's complete month) no longer recomputable
+    con.execute("DELETE FROM prices WHERE ticker='GDE' AND date >= '2026-07-01'")
+    con.commit()
+    b = shadow.board(con, now=datetime(2026, 8, 12, tzinfo=timezone.utc))
+    assert len(b["unrecomputable"]) == len(shadow.VARIANTS)
+    assert all(r["recompute_ok"] is None for r in b["ledger"])
+    assert b["mismatches"] == []
+    con.close()
+
+
+def test_gate_contiguity_assertion(tmp_path):
+    """Referee hardening: a whole missing month in any input (positional
+    mom121 / shift(1) would silently misalign) must raise loudly."""
+    con = db.connect(tmp_path / "t.db")
+    _seed(con)
+    con.execute("DELETE FROM prices WHERE ticker='XLU' "
+                "AND date >= '2026-03-01' AND date < '2026-04-01'")
+    con.commit()
+    with pytest.raises(shadow.ShadowDataError, match="xlu.*gap"):
+        shadow.load_inputs(con)
+    con.close()
+
+
+def test_gate_benchmarks_align_to_variant_months(tmp_path):
+    """Referee hole B: benchmark equity spans exactly the variant's scored
+    months — a ragged log (one live month logged, data running months longer)
+    is never compared against the longer data window."""
+    con = db.connect(tmp_path / "t.db")
+    _seed(con, months=26, end="2026-11-06")   # complete months through 2026-10
+    x = shadow.load_inputs(con)
+    dec = shadow.decisions_frame(x["gde"], x["spy"], x["bills"], x["xlu"])
+    shadow.ensure_schema(con)
+    # log ONLY the first live decision (2026-08 -> held 2026-09); data also
+    # contains a complete 2026-10 that must NOT enter any benchmark
+    t = pd.Period("2026-08", "M")
+    for v in shadow.VARIANTS:
+        con.execute("INSERT INTO shadow_log VALUES (?,?,?,?,?)",
+                    (str(t + 1), v, str(dec.loc[t, v]), str(t),
+                     "2026-09-02T09:00:00+00:00"))
+    con.commit()
+    b = shadow.board(con, now=datetime(2026, 9, 12, tzinfo=timezone.utc))
+    assets = pd.concat({k: x[k] for k in ("gde", "spy", "boxx")}, axis=1).dropna()
+    sep = pd.Period("2026-09", "M")
+    scored_any = 0
+    for v, lv in b["live"].items():
+        assert lv["months"] == 1
+        assert lv["held_months"] == ["2026-09"]
+        # benchmark = that single month's return only, NOT Sep*Oct
+        assert lv["benchmarks"]["bh_gde"] == pytest.approx(
+            1.0 + float(assets.loc[sep, "gde"]))
+        one_m = 1.0 + float(assets.loc[sep, "spy"])
+        two_m = float((1 + assets.loc[[sep, sep + 1], "spy"]).prod())
+        assert lv["benchmarks"]["bh_spy"] == pytest.approx(one_m)
+        assert lv["benchmarks"]["bh_spy"] != pytest.approx(two_m)
+        scored_any += 1
+    assert scored_any == len(shadow.VARIANTS)   # gate must not pass vacuously
     con.close()
 
 

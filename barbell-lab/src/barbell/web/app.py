@@ -788,16 +788,29 @@ fetch('api/shadow').then(r=>r.json()).then(b=>{
   ${(100*b.current.mom121.gde).toFixed(1)}% · SPY ${(100*b.current.mom121.spy).toFixed(1)}%
   · bills ${(100*b.current.mom121.bills).toFixed(1)}% · XLU ${(100*b.current.mom121.xlu).toFixed(1)}%
   · data as of GDE ${esc(b.data_asof.gde)}</div></div>`;
+ if(b.missing_logs&&b.missing_logs.length)
+  h+=`<div class="card bad"><b>🚨 MISSING DECISION LOG</b> — ${b.missing_logs.length}
+   live month(s) passed day 5 with NO logged decision
+   (${b.missing_logs.map(m=>m.held_month+'/'+m.variant).join(', ')}). This is
+   the Oct-2008 failure mode: a stale feed or dead scheduler. Fix the ingest
+   before trusting anything below.</div>`;
  if(b.mismatches.length)
   h+=`<div class="card bad"><b>⚠ RECOMPUTE-vs-LOG MISMATCH</b> — vendor data
    revised history; logged decisions stand, investigate before trusting the
    feed. ${b.mismatches.length} row(s).</div>`;
+ if(b.unrecomputable&&b.unrecomputable.length)
+  h+=`<div class="card warn"><b>⚠ UNRECOMPUTABLE</b> — ${b.unrecomputable.length}
+   logged decision(s) whose month is no longer in the recomputed frame
+   (vendor truncated history?). The log stands; the tripwire is blind for
+   those rows until the data is restored.</div>`;
  h+='<div class="card"><h2>Decision ledger (append-only; LIVE = decided after the 2026-08 freeze)</h2>'
   +'<table><tr><th>held month</th><th>variant</th><th>state</th><th>decided</th><th>logged (UTC)</th><th>flags</th></tr>';
  (b.ledger||[]).slice().reverse().forEach(r=>{
   const f=[r.live?'<span class="ok">LIVE</span>':'<span class="small">pre-freeze</span>',
            r.late?'<span class="bad">LATE</span>':'',
-           r.recompute_ok?'':'<span class="bad">MISMATCH</span>'].filter(Boolean).join(' ');
+           r.recompute_ok===false?'<span class="bad">MISMATCH</span>':'',
+           r.recompute_ok===null?'<span class="warn">NO-RECOMPUTE</span>':''
+          ].filter(Boolean).join(' ');
   h+=`<tr><td>${esc(r.held_month)}</td><td>${esc(r.variant)}</td>
    <td class="${esc(r.state)}"><b>${esc(r.state)}</b></td><td>${esc(r.decision_month)}</td>
    <td class="small">${esc(r.logged_at_utc.slice(0,16))}</td><td>${f}</td></tr>`;});
@@ -807,12 +820,17 @@ fetch('api/shadow').then(r=>r.json()).then(b=>{
  const lv=b.live||{}; const anyLive=Object.values(lv).some(v=>v.months>0);
  h+='<div class="card"><h2>Live record since freeze (logged decisions only)</h2>';
  if(anyLive){
-  h+='<table><tr><th>track</th><th>live months</th><th>growth of 1</th><th>one-way turnover</th></tr>';
-  for(const [k,v] of Object.entries(lv))
-   h+=`<tr><td>${esc(k)}</td><td>${v.months}</td><td>${v.equity?v.equity.toFixed(4)+'x':'—'}</td><td>${v.turnover!=null?v.turnover.toFixed(2):'—'}</td></tr>`;
-  for(const [k,v] of Object.entries(b.benchmarks||{}))
-   h+=`<tr><td class="small">${esc(k)}</td><td></td><td>${v.equity.toFixed(4)}x</td><td></td></tr>`;
-  h+='</table>';
+  h+=`<table><tr><th>track</th><th>live months</th><th>growth of 1</th>
+   <th>B&amp;H GDE (same months)</th><th>B&amp;H SPY</th><th>50/50</th><th>one-way turnover</th></tr>`;
+  for(const [k,v] of Object.entries(lv)){
+   const bm=v.benchmarks||{};
+   h+=`<tr><td>${esc(k)}</td><td>${v.months}</td><td><b>${v.equity?v.equity.toFixed(4)+'x':'—'}</b></td>
+    <td>${bm.bh_gde?bm.bh_gde.toFixed(4)+'x':'—'}</td><td>${bm.bh_spy?bm.bh_spy.toFixed(4)+'x':'—'}</td>
+    <td>${bm.static_5050?bm.static_5050.toFixed(4)+'x':'—'}</td>
+    <td>${v.turnover!=null?v.turnover.toFixed(2):'—'}</td></tr>`;}
+  h+=`</table><div class="small" style="margin-top:6px">Benchmarks are computed
+   over exactly each track's scored months — a ragged log is never compared
+   against a longer benchmark window.</div>`;
  } else h+=`<div class="small">No complete live months yet — the first scored
   month is the first full month held after the 2026-08 freeze. This section
   fills in monthly. 36 months is weather, not climate; the graduation bar to

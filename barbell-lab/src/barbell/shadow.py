@@ -169,6 +169,20 @@ def shadow_backtest(states: pd.Series, assets: pd.DataFrame) -> tuple[pd.Series,
 
 
 # ------------------------------------------------------------ data access --
+def _assert_contiguous(name: str, s: pd.Series) -> None:
+    """mom121 and shift(1) are POSITIONAL — a whole missing month would make
+    them silently span 12+ calendar months (referee finding, 2026-08-12).
+    Monthly inputs must therefore be gap-free or the run dies loudly."""
+    if s.empty:
+        return
+    want = pd.period_range(s.index.min(), s.index.max(), freq="M")
+    gaps = want.difference(s.index)
+    if len(gaps):
+        raise ShadowDataError(
+            f"{name}: monthly series has gap months {[str(g) for g in gaps[:6]]}"
+            " — positional 12-1 windows would silently misalign; fix the feed")
+
+
 def load_inputs(con: sqlite3.Connection) -> dict:
     """Live inputs from the ingest DB. Missing feeds raise loudly — a shadow
     decision computed from partial data is worse than none."""
@@ -187,6 +201,8 @@ def load_inputs(con: sqlite3.Connection) -> dict:
             f"shadow inputs missing: {missing} — run `barbell ingest` "
             "(config/data.yaml declares them)")
     rets["bills"] = bill_monthly_returns(dtb3)
+    for k, v in rets.items():
+        _assert_contiguous(k, v)
     return rets
 
 
@@ -225,11 +241,12 @@ def _late(held_month: pd.Period, logged_at_utc: str) -> bool:
     return (ts.replace(tzinfo=None) - start).days + 1 > LATE_DAY
 
 
-def board(con: sqlite3.Connection) -> dict:
+def board(con: sqlite3.Connection, now: datetime | None = None) -> dict:
     """Everything the /shadow page shows. Live evidence = LOGGED states only;
     recomputed history is used solely to (a) show current posture and (b)
     tripwire-diff against the log (data-revision detection)."""
     ensure_schema(con)
+    now = now or datetime.now(timezone.utc)
     x = load_inputs(con)
     dec = decisions_frame(x["gde"], x["spy"], x["bills"], x["xlu"])
     if dec.empty:
@@ -240,22 +257,49 @@ def board(con: sqlite3.Connection) -> dict:
         "SELECT held_month, variant, state, decision_month, logged_at_utc "
         "FROM shadow_log ORDER BY held_month", con)
 
-    # tripwire: recomputed state vs logged state for every logged month
-    mismatches, ledger = [], []
+    # tripwire 1: recomputed state vs logged state for every logged month.
+    # recompute_ok is TRI-STATE (referee 2026-08-12): True = matches, False =
+    # MISMATCH (vendor revised history), None = UNRECOMPUTABLE (decision month
+    # no longer in the recomputed frame — e.g. vendor truncated history).
+    # Unrecomputable is a warning, never a silent pass.
+    mismatches, unrecomputable, ledger = [], [], []
     for _, r in logged.iterrows():
         d = pd.Period(r["decision_month"], "M")
         recomputed = str(dec.loc[d, r["variant"]]) if d in dec.index else None
-        if recomputed is not None and recomputed != r["state"]:
+        ok: bool | None = None if recomputed is None else recomputed == r["state"]
+        if ok is False:
             mismatches.append({**r.to_dict(), "recomputed": recomputed})
+        if ok is None:
+            unrecomputable.append(r.to_dict())
         ledger.append({
             **r.to_dict(),
             "live": bool(d >= FREEZE_DECISION),
             "late": _late(pd.Period(r["held_month"], "M"), r["logged_at_utc"]),
-            "recompute_ok": recomputed is None or recomputed == r["state"],
+            "recompute_ok": ok,
         })
 
+    # tripwire 2 (referee 2026-08-12, the Oct-2008 class): a live-scored month
+    # with NO logged row past its day-LATE_DAY deadline is a RED failure —
+    # stale feeds or a dead scheduler must scream, not vanish. Wall-clock
+    # based on purpose: stale data cannot hide a month by shrinking dec.
+    have = {(r["held_month"], r["variant"]) for _, r in logged.iterrows()}
+    now_naive = now.replace(tzinfo=None)
+    cur_m = pd.Period(f"{now.year}-{now.month:02d}", "M")
+    missing_logs = []
+    first_live_held = FREEZE_DECISION + 1
+    if cur_m >= first_live_held:
+        for h in pd.period_range(first_live_held, cur_m, freq="M"):
+            past_deadline = (now_naive - h.to_timestamp()).days + 1 > LATE_DAY
+            if not past_deadline:
+                continue
+            for v in VARIANTS:
+                if (str(h), v) not in have:
+                    missing_logs.append({"held_month": str(h), "variant": v})
+
     # live shadow performance from LOGGED states (held months since freeze
-    # whose returns are complete)
+    # whose returns are complete). Benchmarks are computed over EXACTLY each
+    # variant's own scored held months (referee: a ragged log must not be
+    # compared against a longer benchmark window).
     assets = pd.concat({k: x[k] for k in ("gde", "spy", "boxx")}, axis=1).dropna()
     live: dict[str, dict] = {}
     for v in VARIANTS:
@@ -269,24 +313,24 @@ def board(con: sqlite3.Connection) -> dict:
             live[v] = {"months": 0}
             continue
         r_live, to = shadow_backtest(states, assets)
-        eq = float((1.0 + r_live).prod()) if len(r_live) else 1.0
-        live[v] = {"months": int(len(r_live)), "equity": eq,
-                   "returns": {str(k): float(vv) for k, vv in r_live.items()},
-                   "turnover": float(to.sum())}
-    # benchmarks over the same live window
-    bench: dict[str, dict] = {}
-    live_months = max((v.get("months", 0) for v in live.values()), default=0)
-    if live_months:
-        h0 = min(pd.Period(m, "M")
-                 for v in live.values() if v.get("returns")
-                 for m in v["returns"])
-        win = assets[assets.index >= h0]
-        const = pd.Series("5050", index=win.index - 1)
-        r5050, _ = shadow_backtest(const, assets)
-        r5050 = r5050[r5050.index >= h0]
-        bench = {"bh_gde": {"equity": float((1 + win["gde"]).prod())},
-                 "bh_spy": {"equity": float((1 + win["spy"]).prod())},
-                 "static_5050": {"equity": float((1 + r5050).prod())}}
+        if not len(r_live):
+            live[v] = {"months": 0}
+            continue
+        held = r_live.index
+        win = assets.loc[held]
+        r5050, _ = shadow_backtest(pd.Series("5050", index=held - 1), assets)
+        live[v] = {
+            "months": int(len(r_live)),
+            "equity": float((1.0 + r_live).prod()),
+            "returns": {str(k): float(vv) for k, vv in r_live.items()},
+            "turnover": float(to.sum()),
+            "held_months": [str(h) for h in held],
+            "benchmarks": {
+                "bh_gde": float((1 + win["gde"]).prod()),
+                "bh_spy": float((1 + win["spy"]).prod()),
+                "static_5050": float((1 + r5050.loc[held]).prod()),
+            },
+        }
 
     d_row = dec.loc[t]
     return {
@@ -303,8 +347,9 @@ def board(con: sqlite3.Connection) -> dict:
         },
         "ledger": ledger,
         "mismatches": mismatches,
+        "unrecomputable": unrecomputable,
+        "missing_logs": missing_logs,
         "live": live,
-        "benchmarks": bench,
         "study_reference": STUDY_REFERENCE,
         "data_asof": {k: str(x[k].index.max()) for k in
                       ("gde", "spy", "boxx", "xlu", "bills")},
