@@ -33,6 +33,9 @@ tickers:
   PSLV: {proxy: null}                             # live since 2010-10
   SPY:  {proxy: null}
   GLD:  {proxy: null}                             # ingested standalone too (acceptance test + PHYS proxy)
+  GDE:  {proxy: null}                             # BARBELL-SHADOW held asset; live since 2023-03, NO synthetic splice — shadow signals need only 13 months
+  BOXX: {proxy: null}                             # BARBELL-SHADOW cash leg; live since 2022-12
+  XLU:  {proxy: null}                             # BARBELL-SHADOW s16 utilities proxy (signal only, never held)
   DFSVX: {proxy: null}
   DISVX: {proxy: null}
   DFEMX: {proxy: null}
@@ -51,6 +54,7 @@ fred:
   BAMLH0A0HYM2: HY OAS (credit stress pillar + trigger)
   DTWEXBGS: broad dollar index (dollar trend pillar + AVEM trigger)
   VIXCLS: VIX close (bot kill-switch context)
+  DTB3: 3m T-bill discount yield (BARBELL-SHADOW absolute-filter hurdle)
 
 bot:
   # The short-vol bot's own SQLite (ib_insync fills/P&L). Path + table/column

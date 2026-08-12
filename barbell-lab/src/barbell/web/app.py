@@ -39,8 +39,12 @@ def _nightly_job() -> None:
     try:
         from ..ingest.runner import full_ingest
         from ..monitor.run import run_monitors
+        from ..shadow import log_decisions
         full_ingest(con, datetime.now(timezone.utc).date().isoformat(), gate=True)
         run_monitors(con, "all")
+        for row in log_decisions(con):
+            logger.info("shadow logged: %s holds %s (decided %s)",
+                        row["variant"], row["state"], row["decision_month"])
         logger.info("nightly job complete")
     except Exception as exc:  # noqa: BLE001 — fail LOUDLY, keep serving
         logger.critical("NIGHTLY JOB FAILED: %s", exc)
@@ -368,7 +372,8 @@ def index():
 <p>adopted {(live['adopted_at'] or live['created_at'])[:10]} · metrics as of {m['as_of']}
 · MC {m['n_paths']} paths {bot_note}<br>
 <a href="lab">🧪 workbench</a> · <a href="chat">💬 analyst chat</a>
-· <a href="versions">📒 full ledger</a></p>
+· <a href="versions">📒 full ledger</a> · <a href="phase">🧭 phase</a>
+· <a href="shadow">👥 shadow tracker</a></p>
 
 {tiles}
 
@@ -727,6 +732,112 @@ fetch('api/phase').then(r=>r.json()).then(b=>{B=b;draw();})
 @app.get("/phase", response_class=HTMLResponse)
 def phase_page():
     return HTMLResponse(_PHASE_HTML)
+
+
+@app.get("/api/shadow")
+def api_shadow():
+    from .. import shadow
+    con = db.connect()
+    try:
+        return shadow.board(con)
+    except shadow.ShadowDataError as exc:
+        return {"unavailable": str(exc),
+                "spec": "BARBELL_SHADOW_SPEC.md (frozen 2026-08-12)"}
+    finally:
+        con.close()
+
+
+_SHADOW_HTML = """<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BARBELL-SHADOW — Barbell Lab</title><style>
+body{background:#0b0f17;color:#e2e8f0;font:14px/1.5 -apple-system,Segoe UI,
+Roboto,sans-serif;margin:0;padding:24px;max-width:980px;margin:auto}
+h1{font-size:18px} h2{font-size:14px;color:#93a4bd;margin:18px 0 6px}
+.card{background:#111a2e;border:1px solid #26334e;border-radius:10px;
+padding:14px 16px;margin:10px 0}
+table{border-collapse:collapse;width:100%;font-size:13px}
+td,th{padding:4px 8px;text-align:right;border-top:1px solid #1e293b}
+td:first-child,th:first-child{text-align:left}
+.state{font-size:24px;font-weight:700}
+.gde{color:#fbbf24}.spy{color:#4c9be8}.boxx{color:#34d399}
+.small{font-size:11px;color:#64748b;line-height:1.55}
+.warn{color:#fbbf24}.bad{color:#f87171}.ok{color:#34d399}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+a{color:#7dd3fc}</style></head><body>
+<h1>BARBELL-SHADOW <span class="small">— keyless shadow tracker for the
+BARBELL-TIMER champion. Decisions are recorded, never traded; the IBKR path
+is a separate, gated build (BARBELL_SHADOW_SPEC.md, frozen 2026-08-12).</span></h1>
+<div id="root">loading…</div>
+<script>
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function st(s){return `<span class="state ${esc(s)}">${esc(s).toUpperCase()}</span>`}
+fetch('api/shadow').then(r=>r.json()).then(b=>{
+ const R=document.getElementById('root');
+ if(b.unavailable){R.innerHTML=`<div class="card warn">shadow feed not ready:
+   ${esc(b.unavailable)}</div>`;return;}
+ let h=`<div class="card"><div class="grid">
+  <div><div class="small">V1 relmom_cash — holds for ${esc(b.held_month)}</div>
+   ${st(b.current.relmom_cash)}</div>
+  <div><div class="small">V2 relmom_s16gated — holds for ${esc(b.held_month)}</div>
+   ${st(b.current.relmom_s16gated)}</div>
+  <div><div class="small">s16 (XLU−SPY 12-1)</div>
+   <b class="${b.current.s16_riskoff?'warn':'ok'}">${b.current.s16_riskoff?'RISK-OFF':'benign'}</b></div>
+  <div><div class="small">decided from month-end</div><b>${esc(b.decision_month)}</b></div>
+ </div>
+ <div class="small" style="margin-top:8px">mom121 — GDE
+  ${(100*b.current.mom121.gde).toFixed(1)}% · SPY ${(100*b.current.mom121.spy).toFixed(1)}%
+  · bills ${(100*b.current.mom121.bills).toFixed(1)}% · XLU ${(100*b.current.mom121.xlu).toFixed(1)}%
+  · data as of GDE ${esc(b.data_asof.gde)}</div></div>`;
+ if(b.mismatches.length)
+  h+=`<div class="card bad"><b>⚠ RECOMPUTE-vs-LOG MISMATCH</b> — vendor data
+   revised history; logged decisions stand, investigate before trusting the
+   feed. ${b.mismatches.length} row(s).</div>`;
+ h+='<div class="card"><h2>Decision ledger (append-only; LIVE = decided after the 2026-08 freeze)</h2>'
+  +'<table><tr><th>held month</th><th>variant</th><th>state</th><th>decided</th><th>logged (UTC)</th><th>flags</th></tr>';
+ (b.ledger||[]).slice().reverse().forEach(r=>{
+  const f=[r.live?'<span class="ok">LIVE</span>':'<span class="small">pre-freeze</span>',
+           r.late?'<span class="bad">LATE</span>':'',
+           r.recompute_ok?'':'<span class="bad">MISMATCH</span>'].filter(Boolean).join(' ');
+  h+=`<tr><td>${esc(r.held_month)}</td><td>${esc(r.variant)}</td>
+   <td class="${esc(r.state)}"><b>${esc(r.state)}</b></td><td>${esc(r.decision_month)}</td>
+   <td class="small">${esc(r.logged_at_utc.slice(0,16))}</td><td>${f}</td></tr>`;});
+ h+=`</table><div class="small" style="margin-top:6px">A decision logged after
+  day 5 of its held month is stamped LATE — in the study, ONE late month
+  (Oct-2008) erased the entire drawdown edge. Discipline is data here.</div></div>`;
+ const lv=b.live||{}; const anyLive=Object.values(lv).some(v=>v.months>0);
+ h+='<div class="card"><h2>Live record since freeze (logged decisions only)</h2>';
+ if(anyLive){
+  h+='<table><tr><th>track</th><th>live months</th><th>growth of 1</th><th>one-way turnover</th></tr>';
+  for(const [k,v] of Object.entries(lv))
+   h+=`<tr><td>${esc(k)}</td><td>${v.months}</td><td>${v.equity?v.equity.toFixed(4)+'x':'—'}</td><td>${v.turnover!=null?v.turnover.toFixed(2):'—'}</td></tr>`;
+  for(const [k,v] of Object.entries(b.benchmarks||{}))
+   h+=`<tr><td class="small">${esc(k)}</td><td></td><td>${v.equity.toFixed(4)}x</td><td></td></tr>`;
+  h+='</table>';
+ } else h+=`<div class="small">No complete live months yet — the first scored
+  month is the first full month held after the 2026-08 freeze. This section
+  fills in monthly. 36 months is weather, not climate; the graduation bar to
+  IBKR paper is operational (no mismatches, no LATE months), not a
+  short-sample performance claim.</div>`;
+ h+='</div>';
+ const s=b.study_reference;
+ h+=`<div class="card"><h2>Frozen study reference — ${esc(s.window)}</h2>
+ <table><tr><th></th><th>CAGR</th><th>max DD</th><th>Calmar</th></tr>
+ ${['relmom_cash','relmom_cash_lagged_1m','bh_gde_synth','bh_spy','static_5050'].map(k=>
+  `<tr><td>${esc(k)}${s[k].note?` <span class="small">${esc(s[k].note)}</span>`:''}</td>
+   <td>${(100*s[k].cagr).toFixed(2)}%</td><td>${(100*s[k].maxdd).toFixed(1)}%</td>
+   <td>${s[k].calmar.toFixed(2)}</td></tr>`).join('')}
+ </table><div class="small" style="margin-top:6px">s16 isolation:
+  ${(100*s.s16_isolation.hit_rate).toFixed(1)}% OOS hit rate, p_adj≈${s.s16_isolation.p_adj}
+  — ${esc(s.s16_isolation.note)}. Live results will differ from the synthetic
+  study (real GDE, TE ±1%/yr band).</div></div>`;
+ R.innerHTML=h;
+}).catch(()=>document.getElementById('root').textContent='shadow api failed');
+</script></body></html>"""
+
+
+@app.get("/shadow", response_class=HTMLResponse)
+def shadow_page():
+    return HTMLResponse(_SHADOW_HTML)
 
 
 # ------------------------------------------------------------------ register
