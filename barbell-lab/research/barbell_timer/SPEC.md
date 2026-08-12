@@ -114,3 +114,25 @@ study; Phase 2 killed sma10_gde/tsmom at <=50% OOS) - the vol/corr
 family is the genuinely untested branch. Multiple-testing family grows
 by 4 variants (logged; adjusted bars recomputed). Killed variants are
 reported, not hidden.
+
+## AMENDMENT A17 (owner, 2026-08-12, frozen before computation)
+
+Owner direction: test MICRO / cross-equity-internals timing signals -
+correlations and relative behavior across OTHER equities as the regime
+detector, rather than GDE's own behavior (A12, failed) or slow macro
+prints (rules 3-4, beaten). Pre-registered signal set (isolation OOS
+first, same kill bar; data = frozen french12.json industries 1935-> +
+Baa spread from cycle fixtures + panel dailies):
+ s15 DEFENSIVE/CYCLICAL: 12-1 relative momentum of (Utils+NoDur+Hlth)
+     vs (Durbl+Manuf+Money) equal-weight - risk-off leadership.
+ s16 UTILS/MARKET: Utils minus market 12-1 relative momentum.
+ s17 BAA SPREAD 3m CHANGE (widening = stress).
+ s18 INTRA-EQUITY CORRELATION: trailing 12m mean pairwise correlation
+     of the 12 French industries (monthly), expanding z - dispersion
+     collapse = systemic regime.
+Rules (only if >=1 signal survives the kill bar): 9. GDE default, exit
+to cash on risk-off (surviving signal(s) adverse) - the owner's exit
+engine with EXTERNAL eyes; 10. relmom_cash gated by s-signal (stay in
+GDE only if internals benign) - can internals fix the one-month-lag
+fragility (the Oct-2008 miss)? Success bar unchanged (A12 criterion +
+lag stress mandatory). Family grows to 26+2; adjusted bars recomputed.
