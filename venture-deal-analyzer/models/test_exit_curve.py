@@ -23,10 +23,25 @@ def test_fit_reproduces_published_buckets_series_b():
 
 
 def test_tail_alpha_in_literature_range():
+    """Survival-exponent convention: CSN density alpha = this alpha + 1.
+    Published ranges (validation brief 2026-08-09): seed CSN 2.0-2.7,
+    Series B CSN 2.5-3.0."""
     cal = ec._load_calibration()
+    ranges = {"seed": (1.0, 1.7), "series_b": (1.5, 2.0)}
     for stage, spec in cal["stages"].items():
         a = spec["fitted_params"]["alpha"]
-        assert 1.4 <= a <= 2.6, f"{stage} tail alpha {a} outside published venture range"
+        lo, hi = ranges[stage]
+        assert lo <= a <= hi, f"{stage} survival alpha {a} outside published range {ranges[stage]}"
+
+
+def test_series_b_tail_thinner_than_seed():
+    """Stage conditioning must be directionally right: B-round tail thinner."""
+    for t in (20, 50):
+        xs_s, ps_s = ec.base_distribution("seed")
+        xs_b, ps_b = ec.base_distribution("series_b")
+        p_s = sum(p for x, p in zip(xs_s, ps_s) if x >= t)
+        p_b = sum(p for x, p in zip(xs_b, ps_b) if x >= t)
+        assert p_b < p_s, (t, p_b, p_s)
 
 
 def test_tilt_matches_logged_forecasts_exactly():
@@ -69,3 +84,26 @@ def test_fee_mapping_matches_audited_ev_tree_model():
     assert abs(ec.net_multiple(12.25) - 10.0) < 0.01  # "10x net needs ~12.25x gross"
     assert ec.net_multiple(1.0) == 0.95
     assert abs(ec.net_multiple(2.2) - 1.96) < 1e-9
+
+
+def test_truncation_mass_bounded():
+    """Audit finding 4: silently truncated mass must be < 0.5% per stage."""
+    for stage in ("seed", "series_b"):
+        assert ec.truncation_mass(stage) < 0.005, stage
+
+
+def test_input_validation():
+    """Audit finding 5: impossible forecasts must raise, not produce garbage."""
+    xs, ps = ec.base_distribution("seed")
+    import pytest
+    for bad in [(-0.1, 0.04), (1.1, 0.04), (0.6, 0.5), (0.7, 0.35)]:
+        with pytest.raises(ValueError):
+            ec.tilt_to_forecasts(xs, ps, *bad)
+
+
+def test_ev_reconciles_with_audited_tree():
+    """Audit finding 12: the curve's EV may exceed the audited discrete
+    tree's (assumed loss recovery + uncapped tail) but must stay within
+    a documented band; the TREE headlines on any display."""
+    out = ec.exceedance_curve("seed", 0.60, 0.04)
+    assert abs(out["ev_net"] - 1.645) < 0.35, out["ev_net"]
