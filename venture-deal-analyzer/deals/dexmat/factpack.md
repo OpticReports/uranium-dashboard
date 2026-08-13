@@ -387,6 +387,13 @@ SITE VISIT DELIVERABLES (what converts CLAIMED → scoreable):
    writing.
 5. What fraction of copper's conductance actual design wins spec (the
    ≤77% segment thesis, evidenced from real POs).
+6. [FROM FOUNDER SWEEP] The exit math behind the CEO's "$400M+ exits"
+   bio (his own 2022 claim was "$100M+"); the founding-history rewrite
+   (Mirri, Goenaga); ask directly — answer quality is diligence data.
+7. [FROM FOUNDER SWEEP — MOAT-MATERIAL] Freedom-to-operate vs the
+   TEIJIN ARAMID low-resistivity fiber patent family (WO2013034672
+   lineage) and Nitto Denko coating IP; exact scope/economics of the
+   two exclusive Rice licenses. See founder-sweep-2026-08-09.md.
 
 ## Deal terms (sponsor)
 - [CLAIMED] SPV structure: 2% one-time fee + 20% carried interest + pro-rata

@@ -1,0 +1,48 @@
+{
+ "_provenance": "PROVISIONAL calibration pending validation brief. Targets: Correlation Ventures US venture financing outcome frequencies (n=21,640, 2004-2013) as widely cited; to be confirmed/updated with exact published figures and stage-conditional data. Fit: lognormal body + Pareto tail, grid-search least-max-error on bucket masses. Tail alpha must remain in published venture power-law range (~1.5-2.5, AngelList/Othman lineage).",
+ "bucket_edges": [
+  0.0,
+  1,
+  5,
+  10,
+  20,
+  50,
+  1000000000.0
+ ],
+ "stages": {
+  "seed": {
+   "target_buckets": {
+    "lt1": 0.648,
+    "1_5": 0.253,
+    "5_10": 0.059,
+    "10_20": 0.025,
+    "20_50": 0.011,
+    "gt50": 0.004
+   },
+   "fitted_params": {
+    "mu": -0.7,
+    "sigma": 1.8,
+    "x_tail": 12,
+    "alpha": 1.7
+   },
+   "_note": "PROVISIONAL: same all-financings anchor for both stages until stage-conditional data lands"
+  },
+  "series_b": {
+   "target_buckets": {
+    "lt1": 0.648,
+    "1_5": 0.253,
+    "5_10": 0.059,
+    "10_20": 0.025,
+    "20_50": 0.011,
+    "gt50": 0.004
+   },
+   "fitted_params": {
+    "mu": -0.7,
+    "sigma": 1.8,
+    "x_tail": 12,
+    "alpha": 1.7
+   },
+   "_note": "PROVISIONAL"
+  }
+ }
+}
