@@ -23,10 +23,25 @@ def test_fit_reproduces_published_buckets_series_b():
 
 
 def test_tail_alpha_in_literature_range():
+    """Survival-exponent convention: CSN density alpha = this alpha + 1.
+    Published ranges (validation brief 2026-08-09): seed CSN 2.0-2.7,
+    Series B CSN 2.5-3.0."""
     cal = ec._load_calibration()
+    ranges = {"seed": (1.0, 1.7), "series_b": (1.5, 2.0)}
     for stage, spec in cal["stages"].items():
         a = spec["fitted_params"]["alpha"]
-        assert 1.4 <= a <= 2.6, f"{stage} tail alpha {a} outside published venture range"
+        lo, hi = ranges[stage]
+        assert lo <= a <= hi, f"{stage} survival alpha {a} outside published range {ranges[stage]}"
+
+
+def test_series_b_tail_thinner_than_seed():
+    """Stage conditioning must be directionally right: B-round tail thinner."""
+    for t in (20, 50):
+        xs_s, ps_s = ec.base_distribution("seed")
+        xs_b, ps_b = ec.base_distribution("series_b")
+        p_s = sum(p for x, p in zip(xs_s, ps_s) if x >= t)
+        p_b = sum(p for x, p in zip(xs_b, ps_b) if x >= t)
+        assert p_b < p_s, (t, p_b, p_s)
 
 
 def test_tilt_matches_logged_forecasts_exactly():
