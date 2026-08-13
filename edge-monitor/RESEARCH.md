@@ -18,16 +18,19 @@ against that reality, not against a fund's data.*
    — with ~5 live days minimum. Already proven in-house (BARBELL-TIMER QA).
 3. **ARL-calibrated CUSUM on standardized daily returns**. The earliest
    *statistical* mean-decay detector with a controlled false-alarm rate.
-   Honest headline from our gates: at 1 false alarm/~2yrs, a *fully dead*
-   edge (SR 1.2→0) takes a median ~5–7 months of daily data to flag.
+   Honest headline from our gates + referee re-runs: at 1 false alarm/~2yrs,
+   a *fully dead* edge (SR 1.2→0) takes median ~8 months of daily data to
+   flag (~120–330d across calibration draws; p90 can reach ~2.5y).
    Nothing legitimate is faster on returns alone; distrust anything that
    claims to be.
 4. **PSR/MinTRL discipline** (Bailey–López de Prado). Not a detector — a
    *license to conclude*. MinTRL tells you when a live Sharpe verdict is
-   even possible (for an SR~1.2 daily strategy vs 0: ~1 year; monthly
-   strategies: decades — so for relmom_cash-class systems only layers 1–2
-   apply and the honest posture is "structurally unverifiable in-sample,
-   watch process not performance"). PSR with skew/kurt corrections is the
+   even possible (SR~1.2 daily strategy vs 0: 476 trading days ≈ 1.9y;
+   monthly SR~0.8 book: ~53 months ≈ 4.4y — slow but NOT impossible, so
+   relmom_cash-class systems get process-monitoring first and a real PSR
+   verdict on a ~4–5y clock). [Corrected 2026-08-13: first draft said ~1y
+   and 'decades' — a 2× and a 9× error the referee caught; the monthly
+   policy was re-decided on the true figure.] PSR with skew/kurt corrections is the
    verdict itself; DSR deflates it by the trials actually run (our trials
    registry / family counts are the input — family=28 for BARBELL-TIMER).
 5. **Regime attribution before verdict** (rolling beta/correlation drift +
@@ -60,8 +63,9 @@ calibration (PSR ~U(0,1) under H0) and skew-penalty direction gates.
 **MinTRL**: invert PSR for n at a target confidence:
 `n* = 1 + (1 − γ₃SR + (γ₄−1)/4·SR²)·(z_α/(SR−SR*))²`. Infinite when
 SR_hat ≤ SR*. This is the small-sample honesty engine: it PRINTS when a
-verdict is impossible. Examples (95%, vs SR*=0): daily SR 1.2 → ~230
-trading days; daily SR 0.7 → ~700; monthly SR 0.8 → ~40 *years*.
+verdict is impossible. Examples (95%, vs SR*=0, Gaussian
+moments, computed with this module's `min_trl`): daily SR 1.2 → 476
+trading days; daily SR 0.7 → 1394 (~5.5y); monthly SR 0.8 → ~53 months.
 
 **Backtest-as-null**: we frame H0 as "live returns drawn from the backtest
 distribution" and test three moments separately (mean via CUSUM/PSR, vol via
@@ -84,12 +88,15 @@ standardized returns), alarm at `S_t > h`. Two design choices dominate:
   near-blind to the thing we care about. (Pinned by a gate.)
 - *Calibrate h by Monte Carlo on the strategy's own backtest* (circular
   block bootstrap → simulate null run lengths → bisect h to the target
-  ARL). Gaussian/Siegmund closed forms are optimistic under fat tails.
+  ARL). At SR-sized k the Gaussian closed form is often adequate even on t(3)
+  returns (referee-verified); calibrating on the strategy's own distribution
+  costs nothing and removes the assumption.
   Implementation: `cusum.py::calibrate_h`, with explicit censoring
   disclosure.
 
-Honest speed limit (our gate pins it): target ARL 500d → dead edge flagged
-at median ~150–250 trading days. Detection speed and false-alarm rate trade
+Honest speed limit (multi-seed gate pins it): target ARL 500d → dead edge
+flagged at median ~120–330 trading days depending on the calibration draw
+(median-of-medians ≈ 8 months). Detection speed and false-alarm rate trade
 off directly; there is no free lunch on daily returns.
 
 **SPRT** (Wald 1945): sequential test of H0: p=p₀ vs H1: p=p₁ on trade wins,
@@ -114,7 +121,7 @@ the underwater statistic fixes that). Length-matching pinned by gate.
 
 ## C. Multiple testing & overfitting guards
 
-**PBO/CSCV** (Bailey, Borwein, LdP, Zhu 2015): split the trial matrix into
+**PBO/CSCV** (Bailey, Borwein, LdP, Zhu; SSRN 2013, J. Comput. Finance 2017): split the trial matrix into
 S combinatorial train/test halves; PBO = fraction of splits where the
 in-sample winner falls in the out-of-sample bottom half. Requires the FULL
 variant matrix from development — only computable where we kept every trial
@@ -180,8 +187,9 @@ k=0.5σ_slip on per-trade slippage detects a 1σ drift in ~15 trades.
   (his "no peeking then act" discipline); treat live-vs-backtest gap as
   expected (~30% Sharpe haircut rule of thumb from selection bias).
 - **AQR** (Israel et al. on factor decay; "Craftsmanship Alpha"): published
-  factor premia decay ~⅓–½ post-publication (McLean & Pontiff 2016: ~32%
-  post-publication decay, ~26% post-sample); crowding shows as correlation
+  factor premia decay ~⅓–½ post-publication (McLean & Pontiff 2016: returns ~26%
+  lower post-sample, ~58% lower post-publication; the ~32pp gap is the
+  publication-attributable increment); crowding shows as correlation
   to known factors before Sharpe visibly dies → our beta-drift check.
 - **Man AHL** (published process notes): capital scaling is graduated and
   rule-based; retirement is a committee decision *informed* by sequential
@@ -217,6 +225,7 @@ k=0.5σ_slip on per-trade slippage detects a 1σ drift in ~15 trades.
 
 ## Referee note
 
-Counter-agent review executed the module gates and attacked formulas,
-calibration claims, citation accuracy, and the small-sample claims; verdict
-and any corrections are logged in `REFEREE.md` alongside this report.
+Counter-agent review (2026-08-13) executed the gates, re-derived the null
+calibrations under t(3)/AR(1)/crash-skew, audited every formula against the
+source papers (all clean), and falsified four doc claims — all corrected in
+place and logged with the full verdict in `REFEREE.md`.

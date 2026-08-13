@@ -69,9 +69,17 @@ class Bocd:
         self.alpha = np.concatenate([[self.alpha0], self.alpha + 0.5])
         self.beta = np.concatenate([[self.beta0], beta_n])
 
-        if len(self.rl) > self.r_max:        # truncate tail, renormalize
+        if len(self.rl) > self.r_max:
+            # Collapse TAIL mass into the last kept bin (referee 2026-08-13:
+            # plain truncation deletes the longest-run bin, which holds nearly
+            # all mass on a stable series — map_run_length became garbage
+            # after ~r_max points). The merged bin keeps bin r_max-1's
+            # sufficient stats: adjacent long runs are near-identical, so the
+            # approximation error is negligible; MAP saturates at r_max-1.
             keep = self.r_max
-            self.rl = self.rl[:keep] / self.rl[:keep].sum()
+            rl = self.rl.copy()
+            rl[keep - 1] = rl[keep - 1:].sum()
+            self.rl = rl[:keep]
             self.mu, self.kappa = self.mu[:keep], self.kappa[:keep]
             self.alpha, self.beta = self.alpha[:keep], self.beta[:keep]
 
@@ -79,14 +87,20 @@ class Bocd:
                 "map_run_length": int(self.rl.argmax()), "reset": False}
 
 
-def standardize(returns: np.ndarray, halflife: int = 20) -> np.ndarray:
+def standardize(returns: np.ndarray, halflife: int = 20,
+                burn: int = 10) -> np.ndarray:
     """Divide by a LAGGED EWMA vol so the standardization at t uses only
-    data through t-1 (no contemporaneous leakage)."""
+    data through t-1. The first `burn` values are NaN (referee 2026-08-13:
+    the old seed used var(r[:20]) — a lookahead over the warmup window;
+    now the EWMA seeds from r[0]^2 alone and the burn-in is refused rather
+    than emitted). Consumers must skip NaNs."""
     r = np.asarray(returns, dtype=float)
     lam = 0.5 ** (1.0 / halflife)
     var = np.empty(len(r))
-    v = r[: min(20, len(r))].var() or 1e-8
+    v = max(float(r[0]) ** 2, 1e-12) if len(r) else 1e-12
     for i in range(len(r)):
         var[i] = v                     # var known BEFORE observing r[i]
         v = lam * v + (1 - lam) * r[i] ** 2
-    return r / np.sqrt(np.maximum(var, 1e-12))
+    z = r / np.sqrt(np.maximum(var, 1e-12))
+    z[:burn] = np.nan
+    return z

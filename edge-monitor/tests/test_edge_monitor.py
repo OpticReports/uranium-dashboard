@@ -84,22 +84,26 @@ def test_gate_cusum_calibration_and_detection():
     year median) to flag from daily returns. Nothing statistical beats that
     at this signal-to-noise; faster answers come from per-trade slippage
     charts, where shifts are many sigma."""
-    bt = _daily(1500, 1.2)
     shift = 1.2 / math.sqrt(252.0)            # dead edge, in daily sigma
-    cal = cusum.calibrate_h(bt, target_arl=500.0, k=shift / 2, n_sims=800, seed=3)
-    assert not cal["censoring_binds"]
-    assert 0.7 * 500 < cal["achieved_arl"] < 1.4 * 500
-
-    mu, sd = bt.mean(), bt.std(ddof=1)
-    rng = np.random.default_rng(9)
-    detect = []
-    for _ in range(200):
-        dead = rng.normal(0.0, sd, 2000)      # mean gone, vol unchanged
-        z = (dead - mu) / sd
-        detect.append(cusum.run_length(z, cal["k"], cal["h"]))
-    med = float(np.median(detect))
-    assert med < 250            # ~months, not the 2y false-alarm horizon
-    assert med < 0.55 * cal["achieved_arl"]
+    meds = []
+    for seed in (3, 7, 11):                   # multi-seed: calibration draws
+        bt = _daily(1500, 1.2, rng=np.random.default_rng(100 + seed))
+        cal = cusum.calibrate_h(bt, target_arl=500.0, k=shift / 2,
+                                n_sims=800, seed=seed)
+        assert not cal["censoring_binds"]
+        assert 0.7 * 500 < cal["achieved_arl"] < 1.4 * 500
+        mu, sd = bt.mean(), bt.std(ddof=1)
+        rng = np.random.default_rng(9)
+        detect = []
+        for _ in range(150):
+            dead = rng.normal(0.0, sd, 2000)  # mean gone, vol unchanged
+            z = (dead - mu) / sd
+            detect.append(cusum.run_length(z, cal["k"], cal["h"]))
+        meds.append(float(np.median(detect)))
+    # every calibration draw beats the false-alarm horizon decisively, and
+    # the typical draw detects in months (referee band: ~120-330d)
+    assert all(m < 0.75 * 500 for m in meds)
+    assert float(np.median(meds)) < 260
 
 
 def test_gate_cusum_state_machine():
@@ -199,12 +203,33 @@ def test_gate_bocd_quiet_on_null():
 
 
 def test_gate_standardize_no_lookahead():
-    """Vol standardization at t must not use r[t]: perturbing r[t] must not
-    change z[t]'s denominator (only later ones)."""
+    """Vol standardization at t must not use r[t] or anything after it:
+    perturbing r[t] leaves z[t]'s denominator unchanged, perturbing r[t']
+    for t'>t leaves z[..t] unchanged entirely, and the burn-in is NaN
+    (refused) rather than emitted from a lookahead seed."""
     r = RNG.normal(0, 0.01, 100)
     z1 = bocd.standardize(r)
+    assert np.isnan(z1[:10]).all() and not np.isnan(z1[10:]).any()
     r2 = r.copy()
     r2[50] *= 100.0
     z2 = bocd.standardize(r2)
     assert z2[50] == pytest.approx(z1[50] * 100.0)   # same denominator at t
     assert not np.allclose(z1[51:], z2[51:])          # affects only t+1..
+    r3 = r.copy()
+    r3[80] *= 100.0                                   # future perturbation
+    z3 = bocd.standardize(r3)
+    np.testing.assert_allclose(z3[10:80], z1[10:80])  # past unchanged
+
+
+def test_gate_bocd_map_saturates_not_garbage():
+    """Referee 2026-08-13: plain truncation deleted the longest-run bin, so
+    map_run_length collapsed to noise after ~r_max stable points. With tail
+    collapse, MAP must SATURATE at r_max-1 on a stable series and the
+    changepoint posterior must stay quiet."""
+    rng = np.random.default_rng(8)
+    det = bocd.Bocd(hazard=1 / 250, r_max=300)
+    for x in rng.normal(0.05, 1.0, 1500):
+        out = det.update(float(x))
+    assert out["map_run_length"] == 299
+    assert out["p_change_recent"] < 0.1
+    assert np.isfinite(det.rl).all() and det.rl.sum() == pytest.approx(1.0)
