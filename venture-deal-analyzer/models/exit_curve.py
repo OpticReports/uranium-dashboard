@@ -40,7 +40,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 # Multiple-axis grid: log-spaced 0.01x .. 1000x, dense enough that
 # bucket integrals are stable.
 GRID_N = 4000
-GRID_LO, GRID_HI = 0.01, 1000.0
+GRID_LO, GRID_HI = 0.001, 1000.0
 
 
 def _load_calibration():
@@ -116,7 +116,23 @@ def fit_check(stage, tol=0.015):
     return ok, details
 
 
+def truncation_mass(stage):
+    """Audit gate: lognormal mass lying outside [GRID_LO, GRID_HI] that
+    renormalization silently redistributes. Must stay < 0.5%."""
+    cal = _load_calibration()
+    p = cal["stages"][stage]["fitted_params"]
+    def Phi(z):
+        return 0.5 * (1 + math.erf(z / math.sqrt(2)))
+    below = Phi((math.log(GRID_LO) - p["mu"]) / p["sigma"])
+    above = 1 - Phi((math.log(GRID_HI) - p["mu"]) / p["sigma"])
+    return below + above
+
+
 def tilt_to_forecasts(xs, ps, p_below_1x, p_ge_10x, iters=200):
+    if not (0.0 < p_below_1x < 1.0 and 0.0 <= p_ge_10x < 1.0):
+        raise ValueError("forecast probabilities out of range")
+    if p_below_1x + p_ge_10x >= 1.0:
+        raise ValueError("P(<1x) + P(>=10x) must be < 1")
     """KL-minimal exponential tilt: reweight ps with
     w(x) = exp(a*I[x<1] + b*I[x>=10]) choosing a, b so the tilted
     distribution matches the two logged constraints exactly.

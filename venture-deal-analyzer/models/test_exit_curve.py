@@ -84,3 +84,26 @@ def test_fee_mapping_matches_audited_ev_tree_model():
     assert abs(ec.net_multiple(12.25) - 10.0) < 0.01  # "10x net needs ~12.25x gross"
     assert ec.net_multiple(1.0) == 0.95
     assert abs(ec.net_multiple(2.2) - 1.96) < 1e-9
+
+
+def test_truncation_mass_bounded():
+    """Audit finding 4: silently truncated mass must be < 0.5% per stage."""
+    for stage in ("seed", "series_b"):
+        assert ec.truncation_mass(stage) < 0.005, stage
+
+
+def test_input_validation():
+    """Audit finding 5: impossible forecasts must raise, not produce garbage."""
+    xs, ps = ec.base_distribution("seed")
+    import pytest
+    for bad in [(-0.1, 0.04), (1.1, 0.04), (0.6, 0.5), (0.7, 0.35)]:
+        with pytest.raises(ValueError):
+            ec.tilt_to_forecasts(xs, ps, *bad)
+
+
+def test_ev_reconciles_with_audited_tree():
+    """Audit finding 12: the curve's EV may exceed the audited discrete
+    tree's (assumed loss recovery + uncapped tail) but must stay within
+    a documented band; the TREE headlines on any display."""
+    out = ec.exceedance_curve("seed", 0.60, 0.04)
+    assert abs(out["ev_net"] - 1.645) < 0.35, out["ev_net"]
