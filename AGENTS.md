@@ -37,6 +37,10 @@ learn faster." Default to including a visual whenever a study produces a
 time series, distribution, or comparison — ask only when a visual would be
 genuinely meaningless.
 
+SUCCINCTNESS (Casey, 2026-08-13): "cut to the meat." Results first, minimal
+prose, tables/bullets over paragraphs. Keep the honesty caveats but compress
+them to one line each. No restating context Casey already has.
+
 ## Standing engineering conventions
 
 - Agent-governed pattern for studies/builds: research or counter-agent pass
