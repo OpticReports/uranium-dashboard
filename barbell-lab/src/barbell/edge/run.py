@@ -24,7 +24,11 @@ def ensure_registered(con: sqlite3.Connection) -> None:
     con.execute("INSERT OR IGNORE INTO edge_strategies "
                 "(strategy_id, venue, cadence) VALUES (?,?,?)",
                 (adapter_coinbase.STRATEGY_ID, "coinbase", "per_trade"))
-    if baseline.load(con, adapter_coinbase.STRATEGY_ID) is None:
+    base = baseline.load(con, adapter_coinbase.STRATEGY_ID)
+    stale = base is not None and "periods_per_year" not in base
+    if base is None or stale:
+        # stale = registered by a pre-fix deploy (old dd statistic/calendar);
+        # re-register so the frozen null matches the machine actually running
         fx = json.load(open(os.path.normpath(FIXTURE)))
         bid = baseline.register(con, adapter_coinbase.STRATEGY_ID, fx)
         con.execute("INSERT INTO alerts (ts_utc, kind, message, details) "

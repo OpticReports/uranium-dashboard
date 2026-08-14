@@ -50,6 +50,15 @@ REL_TOL = 1e-9
 
 def ensure_schema(con: sqlite3.Connection) -> None:
     con.executescript(_SCHEMA)
+    # migration: pre-2026-08-14-fix deploys created edge_revisions without
+    # the resolution columns (CREATE IF NOT EXISTS never adds columns; the
+    # live disk 500'd on `WHERE resolved=0`)
+    cols = {r[1] for r in con.execute("PRAGMA table_info(edge_revisions)")}
+    if "resolved" not in cols:
+        con.execute("ALTER TABLE edge_revisions ADD COLUMN resolved INTEGER "
+                    "NOT NULL DEFAULT 0")
+        con.execute("ALTER TABLE edge_revisions ADD COLUMN resolution_note TEXT")
+        con.commit()
 
 
 def _now() -> str:
