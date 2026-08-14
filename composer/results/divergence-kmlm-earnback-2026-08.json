@@ -1,0 +1,24 @@
+{
+  "results": [
+    {
+      "symphony": "YPTSJFJwD2ZKfAeYJUbW",
+      "name": "KMLM switcher + VIX sleeve 75/25",
+      "window": [
+        "2026-07-07",
+        "2026-08-06"
+      ],
+      "n_days": 22,
+      "live_cumulative_return": 0.3386,
+      "model_cumulative_return": 0.3793,
+      "cumulative_gap": -0.0408,
+      "mean_daily_gap_bps": -13.78,
+      "annualized_gap": -0.3472,
+      "worst_daily_gap_bps": -182.8,
+      "best_daily_gap_bps": 19.0,
+      "daily_return_correlation": 0.996,
+      "live_beta_to_model": 0.999,
+      "live_model_vol_ratio": 1.003,
+      "live_max_drawdown": 0.0607
+    }
+  ]
+}

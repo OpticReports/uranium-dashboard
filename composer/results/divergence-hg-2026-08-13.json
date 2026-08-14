@@ -1,0 +1,24 @@
+{
+  "results": [
+    {
+      "symphony": "mbkiXcuNDjueXpiox5Av",
+      "name": "The Holy Grail w Sorts & Safe Sectors  139 | 38 | 2015 (Modified #1)",
+      "window": [
+        "2025-12-05",
+        "2026-08-13"
+      ],
+      "n_days": 171,
+      "live_cumulative_return": 0.7295,
+      "model_cumulative_return": 0.6791,
+      "cumulative_gap": 0.0504,
+      "mean_daily_gap_bps": 1.91,
+      "annualized_gap": 0.0482,
+      "worst_daily_gap_bps": -377.6,
+      "best_daily_gap_bps": 380.3,
+      "daily_return_correlation": 0.959,
+      "live_beta_to_model": 0.987,
+      "live_model_vol_ratio": 1.029,
+      "live_max_drawdown": 0.2105
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+[
+ {
+  "label": "HG",
+  "window": "2021-07-28..2026-07-28",
+  "years": 5.0,
+  "turnover_2sided_x_yr": 180.0,
+  "true_gross_x": 17.71,
+  "engine_curve_x": 11.29,
+  "drag_composer_bps_yr": 870.0,
+  "drag_ibkr_bps_yr": 411.0,
+  "edge_bps_yr": 459.0
+ },
+ {
+  "label": "KMLM",
+  "window": "2023-04-19..2026-07-28",
+  "years": 3.27,
+  "turnover_2sided_x_yr": 147.3,
+  "true_gross_x": 67.54,
+  "engine_curve_x": 53.06,
+  "drag_composer_bps_yr": 802.0,
+  "drag_ibkr_bps_yr": 573.0,
+  "edge_bps_yr": 228.0
+ },
+ {
+  "label": "SLEEVE",
+  "window": "2021-07-28..2026-07-28",
+  "years": 5.0,
+  "turnover_2sided_x_yr": 55.2,
+  "true_gross_x": 8.28,
+  "engine_curve_x": 7.21,
+  "drag_composer_bps_yr": 287.0,
+  "drag_ibkr_bps_yr": 190.0,
+  "edge_bps_yr": 98.0
+ },
+ {
+  "label": "HARV",
+  "window": "2023-04-19..2026-07-28",
+  "years": 3.27,
+  "turnover_2sided_x_yr": 135.3,
+  "true_gross_x": 2.63,
+  "engine_curve_x": 2.11,
+  "drag_composer_bps_yr": 950.0,
+  "drag_ibkr_bps_yr": 641.0,
+  "edge_bps_yr": 308.0
+ }
+]

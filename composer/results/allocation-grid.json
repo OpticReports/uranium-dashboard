@@ -1,0 +1,15 @@
+{
+  "window": [
+    "2023-04-19",
+    "2026-07-02"
+  ],
+  "correlations": {
+    "HG~ORIG": 0.302,
+    "HG~VIXstrat": 0.121,
+    "HG~P5": 0.305,
+    "ORIG~VIXstrat": 0.063,
+    "ORIG~P5": 0.999,
+    "VIXstrat~P5": 0.107
+  },
+  "note": "daily-rebalanced blend grid; see results.md addendum 3"
+}

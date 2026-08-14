@@ -1,0 +1,84 @@
+{
+  "params": {
+    "sims": 5000,
+    "horizon_days": 252,
+    "mean_block_length": 10,
+    "seed": 1
+  },
+  "historical_sample": {
+    "symphony": "rhZ9oDAUvN26v5Ra5qql",
+    "n_days": 1057,
+    "daily_mean": 0.008936,
+    "daily_stdev": 0.049099,
+    "annualized_return": 8.4108,
+    "annualized_vol": 0.7794,
+    "worst_day": -0.2188,
+    "best_day": 0.387,
+    "historical_max_drawdown": 0.3205
+  },
+  "methods": {
+    "iid": {
+      "terminal_multiple": {
+        "p05": 2.0075,
+        "p25": 4.272,
+        "p50": 6.94,
+        "p75": 11.5598,
+        "p95": 25.1066
+      },
+      "cagr": {
+        "p05": 1.0075,
+        "p25": 3.272,
+        "p50": 5.94,
+        "p75": 10.5598,
+        "p95": 24.1066
+      },
+      "max_drawdown": {
+        "p05": 0.209,
+        "p25": 0.2696,
+        "p50": 0.3273,
+        "p75": 0.3982,
+        "p95": 0.5174
+      },
+      "prob_loss": 0.0044,
+      "prob_max_drawdown_gt": {
+        "20pct": 0.9658,
+        "30pct": 0.617,
+        "50pct": 0.0668
+      },
+      "horizon_return_var95": 1.0075,
+      "horizon_return_cvar95": 0.5115
+    },
+    "block10": {
+      "terminal_multiple": {
+        "p05": 2.2725,
+        "p25": 4.2977,
+        "p50": 6.7232,
+        "p75": 11.1649,
+        "p95": 22.6063
+      },
+      "cagr": {
+        "p05": 1.2725,
+        "p25": 3.2977,
+        "p50": 5.7232,
+        "p75": 10.1649,
+        "p95": 21.6063
+      },
+      "max_drawdown": {
+        "p05": 0.1976,
+        "p25": 0.2517,
+        "p50": 0.2858,
+        "p75": 0.3399,
+        "p95": 0.4452
+      },
+      "prob_loss": 0.003,
+      "prob_max_drawdown_gt": {
+        "20pct": 0.9456,
+        "30pct": 0.4358,
+        "50pct": 0.0192
+      },
+      "horizon_return_var95": 1.2725,
+      "horizon_return_cvar95": 0.7517
+    }
+  },
+  "caveat": "Bootstrap of historical strategy returns; assumes the sampled regime persists. Not a forecast."
+}

@@ -1,0 +1,216 @@
+{
+  "captured_at": "2026-07-05",
+  "symphony_id": "rhZ9oDAUvN26v5Ra5qql",
+  "symphony_name": "Simons KMLM switcher (single pops)| BT 4/13/22 = A.R. 466% / D.D. 22% V2 (Buy Copy)",
+  "method": "POST /api/v0.1/symphonies/{id}/backtest (Composer REST API; MCP endpoint offline)",
+  "request_params": {
+    "capital": 10000,
+    "apply_reg_fee": true,
+    "apply_taf_fee": true,
+    "slippage_percent": 0.0005,
+    "broker": "ALPACA_WHITE_LABEL",
+    "backtest_version": "v2",
+    "start_date": "2000-01-01",
+    "end_date": "2026-07-03"
+  },
+  "period": {
+    "first_day": "2022-04-13",
+    "last_market_day": "2026-07-03",
+    "trading_days": 1057
+  },
+  "stats": {
+    "skewness": 0.8607608185718704,
+    "min": -0.21878731314072786,
+    "top_five_percent_day_contribution": 0.8009820934479137,
+    "annualized_rate_of_return": 6.008026447934369,
+    "mean": 0.008935443238035442,
+    "herfindahl_index": 0.7568422517173322,
+    "top_ten_percent_day_contribution": 1.2732621007993052,
+    "top_one_day_contribution": 0.04002061928609868,
+    "calmar_ratio": 18.74680732725639,
+    "sortino_ratio": 5.116338509389609,
+    "win_rate": 0.5695364238410596,
+    "sharpe_ratio": 2.8890119057750803,
+    "tail_ratio": 1.4337213937103914,
+    "trailing_two_week_return": -0.20921329354926432,
+    "trailing_one_day_return": -0.12317010526281813,
+    "size": 1057,
+    "cumulative_return": 3548.440167,
+    "trailing_one_year_return": 0.5963829050581151,
+    "annualized_turnover": 81.52058586144764,
+    "trailing_one_month_return": -0.14941449213004676,
+    "max_drawdown": 0.3204826476879169,
+    "median": 0.004816715164126295,
+    "max": 0.38701001247953815,
+    "standard_deviation": 0.779412397534175,
+    "kurtosis": 6.682493550941773,
+    "trailing_one_week_return": -0.1817295627540757,
+    "trailing_three_month_return": 0.23837416861297722
+  },
+  "data_warnings": {
+    "SOXL": [
+      {
+        "recommended_start_date": "2010-03-11",
+        "message": "Close price data is not available for SOXL until 2010-03-11"
+      },
+      {
+        "recommended_start_date": "2010-03-25",
+        "message": "Window functions on Close price data for SOXL are not available until 2010-03-25"
+      }
+    ],
+    "VOX": [
+      {
+        "recommended_start_date": "2004-09-29",
+        "message": "Close price data is not available for VOX until 2004-09-29"
+      },
+      {
+        "recommended_start_date": "2004-10-13",
+        "message": "Window functions on Close price data for VOX are not available until 2004-10-13"
+      }
+    ],
+    "SVIX": [
+      {
+        "recommended_start_date": "2022-03-30",
+        "message": "Close price data is not available for SVIX until 2022-03-30"
+      },
+      {
+        "recommended_start_date": "2022-04-13",
+        "message": "Window functions on Close price data for SVIX are not available until 2022-04-13"
+      }
+    ],
+    "LABU": [
+      {
+        "recommended_start_date": "2015-05-28",
+        "message": "Close price data is not available for LABU until 2015-05-28"
+      },
+      {
+        "recommended_start_date": "2015-06-11",
+        "message": "Window functions on Close price data for LABU are not available until 2015-06-11"
+      }
+    ],
+    "VOOG": [
+      {
+        "recommended_start_date": "2010-09-09",
+        "message": "Close price data is not available for VOOG until 2010-09-09"
+      },
+      {
+        "recommended_start_date": "2010-09-23",
+        "message": "Window functions on Close price data for VOOG are not available until 2010-09-23"
+      }
+    ],
+    "SPXL": [
+      {
+        "recommended_start_date": "2008-11-05",
+        "message": "Close price data is not available for SPXL until 2008-11-05"
+      },
+      {
+        "recommended_start_date": "2008-11-19",
+        "message": "Window functions on Close price data for SPXL are not available until 2008-11-19"
+      }
+    ],
+    "TECL": [
+      {
+        "recommended_start_date": "2008-12-17",
+        "message": "Close price data is not available for TECL until 2008-12-17"
+      },
+      {
+        "recommended_start_date": "2009-01-02",
+        "message": "Window functions on Close price data for TECL are not available until 2009-01-02"
+      }
+    ],
+    "TQQQ": [
+      {
+        "recommended_start_date": "2010-02-11",
+        "message": "Close price data is not available for TQQQ until 2010-02-11"
+      },
+      {
+        "recommended_start_date": "2010-02-26",
+        "message": "Window functions on Close price data for TQQQ are not available until 2010-02-26"
+      }
+    ],
+    "FAS": [
+      {
+        "recommended_start_date": "2008-11-06",
+        "message": "Close price data is not available for FAS until 2008-11-06"
+      },
+      {
+        "recommended_start_date": "2008-11-20",
+        "message": "Window functions on Close price data for FAS are not available until 2008-11-20"
+      }
+    ],
+    "TLT": [
+      {
+        "recommended_start_date": "2002-07-26",
+        "message": "Close price data is not available for TLT until 2002-07-26"
+      },
+      {
+        "recommended_start_date": "2002-08-09",
+        "message": "Window functions on Close price data for TLT are not available until 2002-08-09"
+      }
+    ],
+    "UVXY": [
+      {
+        "recommended_start_date": "2011-10-04",
+        "message": "Close price data is not available for UVXY until 2011-10-04"
+      }
+    ],
+    "QQQE": [
+      {
+        "recommended_start_date": "2012-03-21",
+        "message": "Close price data is not available for QQQE until 2012-03-21"
+      },
+      {
+        "recommended_start_date": "2012-04-04",
+        "message": "Window functions on Close price data for QQQE are not available until 2012-04-04"
+      }
+    ],
+    "SQQQ": [
+      {
+        "recommended_start_date": "2010-02-11",
+        "message": "Close price data is not available for SQQQ until 2010-02-11"
+      },
+      {
+        "recommended_start_date": "2010-02-26",
+        "message": "Window functions on Close price data for SQQQ are not available until 2010-02-26"
+      }
+    ],
+    "VOOV": [
+      {
+        "recommended_start_date": "2010-09-09",
+        "message": "Close price data is not available for VOOV until 2010-09-09"
+      },
+      {
+        "recommended_start_date": "2010-09-23",
+        "message": "Window functions on Close price data for VOOV are not available until 2010-09-23"
+      }
+    ],
+    "KMLM": [
+      {
+        "recommended_start_date": "2020-12-02",
+        "message": "Close price data is not available for KMLM until 2020-12-02"
+      },
+      {
+        "recommended_start_date": "2020-12-16",
+        "message": "Window functions on Close price data for KMLM are not available until 2020-12-16"
+      }
+    ],
+    "VTV": [
+      {
+        "recommended_start_date": "2004-01-30",
+        "message": "Close price data is not available for VTV until 2004-01-30"
+      },
+      {
+        "recommended_start_date": "2004-02-13",
+        "message": "Window functions on Close price data for VTV are not available until 2004-02-13"
+      }
+    ]
+  },
+  "costs": {
+    "reg_fee": 67360.04,
+    "taf_fee": 1861.87,
+    "cat_fee": 396.04,
+    "slippage": 3268151.55,
+    "spread_markup": 0.0,
+    "subscription": 0.0
+  }
+}

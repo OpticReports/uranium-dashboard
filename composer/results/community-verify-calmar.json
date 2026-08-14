@@ -1,0 +1,74 @@
+{
+  "filters": {
+    "min_sharpe": 1.5,
+    "min_days": 504,
+    "max_drawdown": null,
+    "order": "oos_calmar_ratio"
+  },
+  "results": [
+    {
+      "sid": "u5iBJE751BM5FKPRJvKf",
+      "name": "Simons KMLM switcher (single pops)| BT 4/13/22 = A.R. 466% / D.D. 22% V2",
+      "claimed": {
+        "cagr": 2.47591,
+        "sharpe": 1.906609,
+        "max_drawdown": 0.314232
+      },
+      "ours": {
+        "cagr": 3.4576,
+        "sharpe": 2.355,
+        "max_drawdown": 0.3205,
+        "days": 685
+      },
+      "verdict": "ok"
+    },
+    {
+      "sid": "vxb8SEHlsk7Gh3nLIykW",
+      "name": "Interesting RSI Note Collection",
+      "claimed": {
+        "cagr": 0.177455,
+        "sharpe": 1.928469,
+        "max_drawdown": 0.0229
+      },
+      "ours": {
+        "cagr": 0.1416,
+        "sharpe": 1.751,
+        "max_drawdown": 0.0239,
+        "days": 617
+      },
+      "verdict": "ok"
+    },
+    {
+      "sid": "7G4Ce2BGKlKkAoDZceob",
+      "name": "Wash Sale 3 Sorted by 5 day Max DD WM 74",
+      "claimed": {
+        "cagr": 1.292274,
+        "sharpe": 2.288911,
+        "max_drawdown": 0.174955
+      },
+      "ours": {
+        "cagr": 1.2165,
+        "sharpe": 2.333,
+        "max_drawdown": 0.1801,
+        "days": 594
+      },
+      "verdict": "ok"
+    },
+    {
+      "sid": "wTwEvJFnBorxsRLKL7AE",
+      "name": "Frontrunner: KMLM",
+      "claimed": {
+        "cagr": 1.634675,
+        "sharpe": 1.825132,
+        "max_drawdown": 0.235445
+      },
+      "ours": {
+        "cagr": 1.6518,
+        "sharpe": 1.971,
+        "max_drawdown": 0.2373,
+        "days": 565
+      },
+      "verdict": "ok"
+    }
+  ]
+}

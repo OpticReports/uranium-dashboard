@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "deny": [
+      "mcp__composer__invest_in_symphony",
+      "mcp__composer__withdraw_from_symphony",
+      "mcp__composer__liquidate_symphony",
+      "mcp__composer__go_to_cash_for_symphony",
+      "mcp__composer__rebalance_symphony_now",
+      "mcp__composer__skip_automated_rebalance_for_symphony",
+      "mcp__composer__execute_single_trade",
+      "mcp__composer__cancel_invest_or_withdraw"
+    ],
+    "allow": [
+      "mcp__composer__create_symphony",
+      "mcp__composer__backtest_symphony",
+      "mcp__composer__backtest_symphony_by_id",
+      "mcp__composer__search_symphonies",
+      "mcp__composer__get_saved_symphony",
+      "mcp__composer__save_symphony",
+      "mcp__composer__copy_symphony",
+      "mcp__composer__update_saved_symphony",
+      "mcp__composer__update_symphony",
+      "mcp__composer__list_brokerage_accounts",
+      "mcp__composer__get_brokerage_account_holdings",
+      "mcp__composer__get_portfolio_aggregate_stats",
+      "mcp__composer__get_all_symphony_stats",
+      "mcp__composer__get_symphony_daily_performance",
+      "mcp__composer__get_portfolio_daily_performance"
+    ]
+  }
+}

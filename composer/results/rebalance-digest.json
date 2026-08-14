@@ -1,0 +1,44 @@
+{
+  "market_hours": [
+    {
+      "is_market_open": false,
+      "nyse_market_date": "2026-07-05"
+    },
+    {
+      "is_market_open": true,
+      "nyse_market_date": "2026-07-06",
+      "market_open": "2026-07-06T13:30:00Z",
+      "market_close": "2026-07-06T20:00:00Z"
+    },
+    {
+      "is_market_open": true,
+      "nyse_market_date": "2026-07-07",
+      "market_open": "2026-07-07T13:30:00Z",
+      "market_close": "2026-07-07T20:00:00Z"
+    }
+  ],
+  "symphonies": [
+    {
+      "id": "mbkiXcuNDjueXpiox5Av",
+      "name": "The Holy Grail w Sorts & Safe Sectors  139 | 38 | 2015 (Modified #1)",
+      "value": 167647.6,
+      "rebalance_frequency": "daily",
+      "next_rebalance_on": "2026-07-03",
+      "may_rebalance_today": false,
+      "skip_rebalance_today": false,
+      "has_queued_deploy": null
+    },
+    {
+      "id": "rhZ9oDAUvN26v5Ra5qql",
+      "name": "Simons KMLM switcher (single pops)| BT 4/13/22 = A.R. 466% / D.D. 22% V2 (Buy Copy)",
+      "value": 43462.99,
+      "rebalance_frequency": "threshold",
+      "next_rebalance_on": "2026-07-03",
+      "may_rebalance_today": false,
+      "skip_rebalance_today": false,
+      "has_queued_deploy": null
+    }
+  ],
+  "dry_run": [],
+  "previews": {}
+}
