@@ -1441,3 +1441,44 @@ DESIGN CODICIL (measured on the ex-KMLM 38%-target case, 5.4 fires/yr
 thrash): the cap requires >=10pp headroom above the largest engine
 target. POLICY Op 5 amended: any owner decision that raises a target
 above 30% must reset the cap to target+10pp in the same decision.
+
+
+## Addendum 30 — HG flat-stretch autopsy + cash-gate counterfactuals (owner question 2026-08-14)
+
+Question: HG flat ~2 months in a "bullish" tape — what happened; was cash
+right; would the original (pre-edit) HG or another structure have done
+better?
+
+Facts (model + live + tree): live BEATS model (+5.0pp cum since Dec,
+corr 0.959) — flatness is the strategy, not execution. Apr 8-Jun 15
++43.6% (rebound harvested), Jun 15-Aug 13 +1.8%. Of 41 trading days, 27
+(66%) in BIL via the cash route (TQQQ 10<20d MA, no RSI<30 dip, price
+<20d MA). Tape during the stretch: SPY +2.0%, QQQ -3.9%, SMH -11.1% —
+no bullish leadership existed in HG's universe; the bullish move is the
+last ~2 weeks (HG re-entered Aug 4). One dip-buy day (Jul 29, QLD +6.5%)
+= the period's whole profit; 4 UDOW whipsaw days -4.0%.
+
+Counterfactual variants (tree surgery, engine backtests; NOTE: the API
+silently ignores every version_id param on /score — "original" rebuilt
+from addendum 16/17 documented basket composition {BSV,TLT,LQD,VBF,
+SPAB,ANGL} bottom-1-RSI):
+
+              May13-Aug13      Jun15-Aug13      11.2y full
+  CURRENT     +0.9% / 22.2%    +1.8% /  5.2%    +104.9% / 35.8%  (19b)
+  ORIGINAL    -0.6% / 22.2%    +0.3% /  6.9%    +103.2% / 36.4%  (17)
+  NO-CASH     +2.4% / 22.2%    +3.4% / 14.6%    +67.6%  / 78.0%  (new)
+
+FINDINGS: (1) owner's read confirmed — the pre-edit HG was break-even-
+to-negative over 3mo; the Jul-31 BIL edit added ~+1.5pp and cut the
+flat-window DD (bond legs lost while BIL held flat). The 22.2% 3-mo DD
+(mid-May..June) lives in the shared equity legs — identical across all
+variants. (2) YES, cash was right: staying invested (NO-CASH) picks up
+only +1.6pp in this window — entirely from the final-days rally — at 3x
+the in-window DD, and is catastrophic at full history: the cash route is
+worth ~37 CAGR points and HALF the max DD over 11.2y (78% unmanaged).
+(3) No superior rotation target existed: everything HG can buy was
+flat-to-down during the stretch. The "HG is TQQQ-keyed and misses
+non-Nasdaq leadership" hypothesis is NOT supported for this window
+(SMH -11%). (4) Historical precedent (same session): 6 prior >=60%-BIL
+2-mo stretches in 11y; forward 3mo positive 6/6 (+5% to +68%).
+NO CHANGES; consistent with 19b/20b and the no-overlay rule.
