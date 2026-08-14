@@ -139,7 +139,59 @@ def leverage_state(yoy: float | None, excess: float | None) -> str | None:
     return "NEUTRAL"
 
 
+POST_BLOWOFF_W = 6      # months; pre-registered (study_post_blowoff.py)
+
+
+def leverage_states_path(yoy_vals: list, excess_vals: list) -> list:
+    """Path-aware monthly states: identical to leverage_state except that
+    ELEVATED/NEUTRAL months within POST_BLOWOFF_W months AFTER a BLOWOFF
+    month are labeled POST_BLOWOFF — the rollover leg. A memoryless snapshot
+    read the historically dangerous transition (blowoff subsiding) as
+    de-escalation (user finding, 2026-08-15). Rules, frozen a priori:
+    - BLOWOFF and SQUEEZE/WASHOUT always win: re-inflation (excess >= +25pp
+      or YoY >= 40) returns to BLOWOFF and re-anchors; YoY < 0 hands off to
+      the squeeze states.
+    - Beyond W months with no re-entry the rollover FIZZLES to its plain
+      level state (roughly half of blowoffs fizzle).
+    Anchor uses only PAST months — no lookahead (gate-tested)."""
+    out, last_blow = [], None
+    for i, (y, e) in enumerate(zip(yoy_vals, excess_vals)):
+        lvl = leverage_state(y, e)
+        if lvl == "BLOWOFF":
+            last_blow = i
+        if (lvl in ("ELEVATED", "NEUTRAL") and last_blow is not None
+                and 1 <= i - last_blow <= POST_BLOWOFF_W):
+            out.append("POST_BLOWOFF")
+        else:
+            out.append(lvl)
+    return out
+
+
 LEVERAGE_PLAYBOOK: dict[str, dict] = {
+    "POST_BLOWOFF": {
+        "label": "Post-blowoff rollover — leverage peaked and is unwinding",
+        "evidence": "Episode-level permutation p=0.028 vs all-months baseline "
+                    "(fwd12 mean -3.8% vs +8.4%; 10 episodes incl. the current "
+                    "one) - SHARPER separation than BLOWOFF itself (p=0.058), "
+                    "consistent with the decision-test finding that crash "
+                    "damage lands AFTER the blowoff ends. Basis: ^GSPC price, "
+                    "1997+, rule frozen before scoring (scripts/"
+                    "study_post_blowoff.py, 2026-08-15).",
+        "stats": {"fwd3": {"n": 31, "mean": 2.1, "median": 0.4, "pct_lower": 48, "worst": -12.2},
+                  "fwd6": {"n": 30, "mean": 4.7, "median": 7.3, "pct_lower": 40, "worst": -20.6},
+                  "fwd12": {"n": 26, "mean": -3.8, "median": -7.6, "pct_lower": 58, "worst": -44.8}},
+        "read": "The dangerous leg of the cycle: leverage has peaked and is "
+                "unwinding, but hasn't squeezed yet. 58% of months here saw "
+                "the S&P LOWER 12 months later - median -7.6%, worst -44.8% "
+                "(baseline +8.4%). Burns slow: 3m median +0.4%. Past episodes: "
+                "1998, the 2000 top, 2007-09..2008-03, 2010 (fizzled), "
+                "2021-22, 2025-11..2026-03 (re-inflated).",
+        "action": "Treat as BLOWOFF-or-worse, NOT de-escalation: keep reducing "
+                  "leverage-sensitive risk over quarters, tighten stops. "
+                  "Re-inflation (excess >= +25pp) returns to BLOWOFF; margin "
+                  "YoY < 0 starts the SQUEEZE - where crash damage "
+                  "historically lands.",
+    },
     "BLOWOFF": {
         "label": "Blowoff — leverage building far faster than the market",
         "evidence": "SUGGESTIVE, not proven: episode-level bootstrap p=0.058 (8 episodes). And the decision test failed: mechanically de-risking on this state (50% or 0% exposure, acted at publication lag, 1998-2026) REDUCED risk-adjusted returns vs holding — historical crash damage lands after BLOWOFF ends, in SQUEEZE/WASHOUT months. Treat as risk-awareness, not a timing rule.",

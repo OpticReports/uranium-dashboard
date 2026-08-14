@@ -16,7 +16,8 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from ..metrics.crossasset import (
-    LEVERAGE_PLAYBOOK, _month_end_closes, leverage_state, margin_series,
+    LEVERAGE_PLAYBOOK, POST_BLOWOFF_W, _month_end_closes, leverage_state,
+    leverage_states_path, margin_series,
 )
 from ..metrics.labor import _yoy_by_date
 from ..sources.fmp import fetch_spx_long
@@ -191,7 +192,32 @@ def margin_leverage():
                     if p["coverage"] is not None), None)
     cur_date = next((p["date"] for p in reversed(series)
                      if p["margin_yoy"] is not None), None)
-    state = leverage_state(cur_yoy, cur_excess)
+    # path-aware state over the WHOLE monthly history (user finding
+    # 2026-08-15: a snapshot classifier read the blowoff rollover - the
+    # historically dangerous transition - as de-escalation)
+    path = leverage_states_path([p["margin_yoy"] for p in series],
+                                [p["excess_yoy"] for p in series])
+    cur_i = next((i for i in range(len(series) - 1, -1, -1)
+                  if series[i]["margin_yoy"] is not None), None)
+    state = path[cur_i] if cur_i is not None else None
+    path_ctx = None
+    if state == "POST_BLOWOFF":
+        j = max(i for i in range(cur_i) if path[i] == "BLOWOFF")
+        k = j
+        while k >= 0 and path[k] == "BLOWOFF":
+            k -= 1
+        run = series[k + 1:j + 1]
+        peak = max((p["excess_yoy"] for p in run if p["excess_yoy"] is not None),
+                   default=None)
+        path_ctx = {
+            "last_blowoff_month": series[j]["date"][:7],
+            "blowoff_peak_excess_pp": peak,
+            "months_since_blowoff": cur_i - j,
+            "window_m": POST_BLOWOFF_W,
+            "reinflate_rule": "excess >= +25pp or YoY >= 40% -> back to BLOWOFF",
+            "squeeze_rule": "margin YoY < 0 -> SQUEEZE (post-crash reset leg)",
+            "fizzle_rule": f"no re-entry within {POST_BLOWOFF_W}m -> plain level state",
+        }
     # Staleness guard (QA finding): if FINRA fails cold (no cache), the series
     # tail is the 2015 Z.1 splice end — presenting an 11-year-old state as
     # "current" with playbook advice would mislead. FINRA publishes ~3-4 weeks
@@ -240,7 +266,7 @@ def margin_leverage():
         "recessions": bands,
         "current": {
             "date": cur_date, "margin_yoy": cur_yoy, "excess_yoy": cur_excess,
-            "coverage": cur_cov, "state": state,
+            "coverage": cur_cov, "state": state, "path": path_ctx,
         },
         "playbook": LEVERAGE_PLAYBOOK,
         "thresholds": THRESHOLDS,

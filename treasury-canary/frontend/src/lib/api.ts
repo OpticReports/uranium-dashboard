@@ -411,10 +411,21 @@ export interface TrackRecord {
 
 export type LeverageState =
   | "BLOWOFF"
+  | "POST_BLOWOFF"
   | "ELEVATED"
   | "NEUTRAL"
   | "SQUEEZE"
   | "WASHOUT";
+
+export interface LeveragePathCtx {
+  last_blowoff_month: string;
+  blowoff_peak_excess_pp: number | null;
+  months_since_blowoff: number;
+  window_m: number;
+  reinflate_rule: string;
+  squeeze_rule: string;
+  fizzle_rule: string;
+}
 
 export interface MarginPoint {
   date: string;
@@ -483,6 +494,7 @@ export interface MarginLeverage {
     excess_yoy: number | null;
     coverage: number | null;
     state: LeverageState | null;
+    path?: LeveragePathCtx | null;
   };
   playbook: Record<LeverageState, LeveragePlaybookEntry>;
   thresholds: Record<string, number>;

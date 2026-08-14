@@ -36,6 +36,7 @@ const STATE_STYLE: Record<
   { color: string; bg: string; border: string }
 > = {
   BLOWOFF: { color: "#f87171", bg: "rgba(248,113,113,0.10)", border: "rgba(248,113,113,0.5)" },
+  POST_BLOWOFF: { color: "#fb923c", bg: "rgba(251,146,60,0.12)", border: "rgba(251,146,60,0.55)" },
   ELEVATED: { color: "#fbbf24", bg: "rgba(251,191,36,0.10)", border: "rgba(251,191,36,0.5)" },
   NEUTRAL: { color: "#34d399", bg: "rgba(52,211,153,0.08)", border: "rgba(52,211,153,0.4)" },
   SQUEEZE: { color: "#38bdf8", bg: "rgba(56,189,248,0.10)", border: "rgba(56,189,248,0.5)" },
@@ -612,6 +613,17 @@ function StateBanner({ data }: { data: MarginLeverage }) {
           · {data.current.date?.slice(0, 7) ?? ""}
         </span>
       </div>
+      {data.current.path && (
+        <p className="mt-1 text-xs font-semibold leading-relaxed" style={{ color: st.color }}>
+          What's going on: leverage blew off (peak +
+          {data.current.path.blowoff_peak_excess_pp?.toFixed(1)}pp,{" "}
+          {data.current.path.last_blowoff_month}) and is now unwinding —{" "}
+          {data.current.path.months_since_blowoff}m into the rollover. This is
+          NOT de-escalation: historically the damage lands in this leg. Excess
+          back ≥ +25pp → re-inflated BLOWOFF · margin YoY &lt; 0 → SQUEEZE ·
+          no re-entry within {data.current.path.window_m}m → fizzled.
+        </p>
+      )}
       {/* The prescriptive line: what this level meant historically */}
       <p className="mt-1.5 text-xs leading-relaxed text-slate-300">
         <span className="font-semibold" style={{ color: st.color }}>
@@ -640,7 +652,7 @@ function StateBanner({ data }: { data: MarginLeverage }) {
       {data.corroboration && (
         <CorroborationLine
           c={data.corroboration}
-          prominent={state === "BLOWOFF" || state === "ELEVATED"}
+          prominent={state === "BLOWOFF" || state === "POST_BLOWOFF" || state === "ELEVATED"}
         />
       )}
     </div>

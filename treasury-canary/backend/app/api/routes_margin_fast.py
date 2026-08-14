@@ -176,6 +176,17 @@ DEEP_STATES = {
                "episodes": 107},
 }
 
+# Path-aware slow state (2026-08-15): POST_BLOWOFF inherits each fast-state
+# COMBO line from BLOWOFF (risk-equivalent interpretation; the rollover leg).
+# DEEP_MATRIX deliberately has NO POST_BLOWOFF cells - that 1951-2026 study
+# predates the state and re-labeling its cells would fake stats; the strip
+# hides the cell instead.
+for _fast in CROSS_READ.values():
+    if isinstance(_fast, dict) and "BLOWOFF" in _fast:
+        _fast.setdefault("POST_BLOWOFF",
+                         _fast["BLOWOFF"] + " (Rollover leg of the cycle - "
+                         "risk-treated as BLOWOFF; see the monthly panel.)")
+
 # matrix[stress][slow] — fwd S&P from each weekly obs; episode counts are the
 # honest n. Headline cells: COMPLACENT x BLOWOFF (calm vol on a blown-off cycle
 # = the fragile combo, 49% pos 12m vs 74% baseline over 30 episodes),

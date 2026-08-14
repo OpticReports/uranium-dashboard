@@ -248,3 +248,54 @@ def test_late_cycle_flags_live_computation():
     # missing data -> excluded from denominator, not counted false
     c2 = late_cycle_flags({"recession": ([], [])}, None)
     assert c2["n_known"] == 0
+
+
+# ---------------------------------------------------------------------------
+# POST_BLOWOFF path-aware state (rule frozen 2026-08-15, study_post_blowoff.py)
+def test_gate_post_blowoff_transitions():
+    from app.metrics.crossasset import leverage_states_path
+    # yoy stays positive (no squeeze); excess drives the levels
+    ex = [16, 26, 27, 20, 18, 26, 20, 16, 16, 16, 16, 16, 16, 16]
+    yoy = [20] * len(ex)
+    p = leverage_states_path(yoy, ex)
+    assert p[0] == "ELEVATED"                     # pre-blowoff: plain level
+    assert p[1] == p[2] == "BLOWOFF"
+    assert p[3] == p[4] == "POST_BLOWOFF"          # rollover
+    assert p[5] == "BLOWOFF"                       # RE-INFLATION re-anchors
+    assert p[6:12] == ["POST_BLOWOFF"] * 6         # 6m window from idx 5
+    assert p[12] == p[13] == "ELEVATED"            # FIZZLE beyond window
+
+
+def test_gate_post_blowoff_squeeze_precedence():
+    from app.metrics.crossasset import leverage_states_path
+    p = leverage_states_path([20, 20, -5, 5], [26, 20, 0, 16])
+    assert p == ["BLOWOFF", "POST_BLOWOFF", "SQUEEZE", "POST_BLOWOFF"]
+
+
+def test_gate_post_blowoff_no_lookahead():
+    from app.metrics.crossasset import leverage_states_path
+    yoy = [20.0] * 10
+    ex = [26, 20, 18, 16, 16, 16, 16, 16, 16, 26]
+    full = leverage_states_path(yoy, ex)
+    for cut in range(2, 10):
+        assert leverage_states_path(yoy[:cut], ex[:cut]) == full[:cut]
+
+
+def test_gate_post_blowoff_playbook_frozen_pins():
+    from app.metrics.crossasset import LEVERAGE_PLAYBOOK, POST_BLOWOFF_W
+    pb = LEVERAGE_PLAYBOOK["POST_BLOWOFF"]
+    assert POST_BLOWOFF_W == 6
+    assert pb["stats"]["fwd12"] == {"n": 26, "mean": -3.8, "median": -7.6,
+                                    "pct_lower": 58, "worst": -44.8}
+    assert "p=0.028" in pb["evidence"]
+    assert "NOT de-escalation" in pb["action"]
+
+
+def test_gate_fast_combos_cover_post_blowoff():
+    from app.api.routes_margin_fast import CROSS_READ, DEEP_MATRIX
+    for fast, d in CROSS_READ.items():
+        if isinstance(d, dict) and "BLOWOFF" in d:
+            assert "POST_BLOWOFF" in d, f"COMBOS[{fast}] missing POST_BLOWOFF"
+    # matrix intentionally has NO fabricated POST_BLOWOFF cells
+    for cells in DEEP_MATRIX.values():
+        assert "POST_BLOWOFF" not in cells
