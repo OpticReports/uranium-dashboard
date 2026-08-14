@@ -63,13 +63,44 @@ def test_gate_adapter_sync_and_idempotence(tmp_path):
     con = _con(tmp_path)
     st = _status()
     rep = adapter_coinbase.sync(con, status=st)
-    assert rep["nav"] >= 90 and rep["trades"] == 15 and rep["revisions"] == 0
+    assert rep["nav"] == 90 and rep["trades"] == 15 and rep["revisions"] == 0
+    # mark of day d is recorded as the CLOSE of d-1; intraday equity is
+    # info-only and NEVER a nav row (referee bug 1: same-date mixing)
+    first = con.execute("SELECT MIN(date) FROM edge_nav_daily").fetchone()[0]
+    assert first == "2026-04-30"
+    assert con.execute("SELECT COUNT(*) FROM edge_nav_daily WHERE "
+                       "source='executor_live'").fetchone()[0] == 0
     rep2 = adapter_coinbase.sync(con, status=st)
     assert rep2["nav"] <= 1 and rep2["trades"] == 0 and rep2["revisions"] == 0
     # vendor rewrites an old mark -> revision, not overwrite
     st["marks"][0]["equity"] += 50.0
     rep3 = adapter_coinbase.sync(con, status=st)
     assert rep3["revisions"] == 1
+
+
+def test_gate_no_deadlock_when_live_equity_differs(tmp_path):
+    """Referee bug 1 (blocks-deploy, closed): live intraday equity that
+    differs from the day's mark must produce ZERO revisions on repeated
+    syncs — the old design revised itself into permanent YELLOW."""
+    con = _con(tmp_path)
+    st = _status()
+    st["equity"] = st["marks"][-1]["equity"] + 137.5   # intraday <> mark
+    for _ in range(3):
+        rep = adapter_coinbase.sync(con, status=st)
+        assert rep["revisions"] == 0
+    assert edb.unresolved_revisions(con, adapter_coinbase.STRATEGY_ID) == 0
+
+
+def test_gate_revision_resolution_is_human_gated(tmp_path):
+    con = _con(tmp_path)
+    edb.record_nav(con, "X", "2026-08-01", 100.0, "t")
+    edb.record_nav(con, "X", "2026-08-01", 101.0, "t")
+    assert edb.unresolved_revisions(con, "X") == 1
+    with pytest.raises(ValueError):
+        edb.resolve_revisions(con, "X", "ok")
+    assert edb.resolve_revisions(con, "X",
+                                 "verified vs venue statement 2026-08") == 1
+    assert edb.unresolved_revisions(con, "X") == 0
 
 
 def test_gate_adapter_blind_without_token(tmp_path, monkeypatch):
@@ -154,9 +185,11 @@ def _mk(metric, status, **kw):
 
 def test_gate_green_to_yellow_and_cusum_reset(tmp_path):
     con = _register_min(tmp_path)
+    t0 = datetime(2026, 5, 15, tzinfo=timezone.utc)
     for i in range(70):
-        edb.record_nav(con, "S5-live", f"2026-06-{i % 30 + 1:02d}" if i < 30
-                       else f"2026-07-{i - 29:02d}", 100.0 + i * 0.01, "t")
+        edb.record_nav(con, "S5-live",
+                       (t0 + timedelta(days=i)).date().isoformat(),
+                       100.0 + i * 0.01, "t")
     sm = statemachine.step(con, "S5-live",
                            [_mk("return_cusum", "breach", half_threshold_ok=False)],
                            today="2026-08-01")
@@ -202,6 +235,75 @@ def test_gate_dual_confirmation_red_and_human_only_repromote(tmp_path):
     statemachine.re_promote(con, "S5-live", "false alarm: vendor NAV restatement, verified vs venue")
     row = con.execute("SELECT state, size_mult FROM edge_strategies").fetchone()
     assert row == ("GREEN", 0.25)            # ramp re-entry, not full size
+
+
+def test_gate_no_cross_episode_dual_red(tmp_path):
+    """Referee bug 2 (closed): a resolved YELLOW episode's breach stamp must
+    not combine with a later unrelated breach into a phantom RED."""
+    con = _register_min(tmp_path)
+    statemachine.step(con, "S5-live",
+                      [_mk("return_cusum", "breach", half_threshold_ok=False)],
+                      today="2026-08-01")
+    for i in range(20):
+        statemachine.step(con, "S5-live",
+                          [_mk("freshness", "ok"),
+                           _mk("return_cusum", "ok", half_threshold_ok=True)],
+                          today=f"2026-08-{i + 2:02d}")
+    assert con.execute("SELECT state FROM edge_strategies").fetchone()[0] == "GREEN"
+    sm = statemachine.step(con, "S5-live", [_mk("slip_cusum", "breach")],
+                           today="2026-08-25")
+    assert sm["state"] == "YELLOW"          # NOT RED — episode was closed
+
+
+def test_gate_dd_red_recovery_e2e(tmp_path):
+    """Referee bug 3 (closed): crash -> dd RED -> equity recovers ->
+    re-promotion sticks (next runs stay GREEN) and ramps 0.25->0.5->1.0
+    without a YELLOW ever exceeding the ramp cap."""
+    con = _register_min(tmp_path)
+    t0 = datetime(2026, 5, 1, tzinfo=timezone.utc)
+    nav, navs = 10_000.0, []
+    for i in range(30):
+        nav *= 0.994 if i < 25 else 0.9      # slow bleed then crash
+        navs.append(((t0 + timedelta(days=i)).date().isoformat(), nav))
+    for d, v in navs:
+        edb.record_nav(con, "S5-live", d, v, "t")
+    checks = layers.run_daily(con, "S5-live", today="2026-05-31")
+    sm = statemachine.step(con, "S5-live", checks, today="2026-05-31")
+    assert sm["state"] == "RED"
+    # equity recovers to a new high
+    for i in range(30, 45):
+        nav *= 1.06
+        edb.record_nav(con, "S5-live",
+                       (t0 + timedelta(days=i)).date().isoformat(), nav, "t")
+    statemachine.re_promote(con, "S5-live",
+                            "reviewed: vol event, venue confirmed, re-entering at ramp")
+    edb.kv_set(con, "S5-live", "last_sync_utc", "2026-06-15T09:00:00+00:00")
+    checks = layers.run_daily(con, "S5-live", today="2026-06-15")
+    sm = statemachine.step(con, "S5-live", checks, today="2026-06-15")
+    assert sm["state"] == "GREEN"            # dd statistic recovered with equity
+    assert con.execute("SELECT size_mult FROM edge_strategies").fetchone()[0] == 0.25
+    # a YELLOW during ramp must NOT double size (referee F2)
+    sm = statemachine.step(con, "S5-live",
+                           [_mk("slip_cusum", "breach")], today="2026-06-16")
+    assert sm["state"] == "YELLOW" and sm["size_mult"] == 0.125
+
+
+def test_gate_day_one_crash_is_visible(tmp_path):
+    """Referee note (closed): a first-day crash must register in check_dd
+    (equity is anchored at 1.0)."""
+    con = _register_min(tmp_path)
+    t0 = datetime(2026, 5, 1, tzinfo=timezone.utc)
+    for i, v in enumerate([8_600.0, 8_580.0, 8_560.0, 8_590.0, 8_570.0, 8_540.0]):
+        edb.record_nav(con, "S5-live",
+                       (t0 + timedelta(days=i)).date().isoformat(), v, "t")
+    # returns exist only from day 2; a -14% first PRINT is invisible by
+    # construction (nav starts at first row) — but a -14% move INSIDE the
+    # series must show:
+    edb.record_nav(con, "S5-live", "2026-05-07", 8_540.0 * 0.86, "t")
+    c = {x["metric"]: x for x in layers.run_daily(con, "S5-live",
+                                                  today="2026-05-08")}
+    assert c["dd_percentile"]["value"] <= -0.13
+    assert c["dd_percentile"]["red"] is True
 
 
 def test_gate_dd_p99_is_immediate_red(tmp_path):

@@ -5,9 +5,15 @@ shared secret, sync:false env). Without it the feed is BLIND — reported as
 a first-class condition, never a crash.
 
 Sources inside /status:
-- equity            -> today's NAV sample (one point per nightly run)
-- marks[]           -> {d, equity} daily history: NAV BACKFILL (append-only;
-                       disagreements with stored rows land in edge_revisions)
+- marks[]           -> {d, equity}: executor _roll_day stamps equity at the
+                       START (00:00 UTC) of day d, so mark[d] IS the CLOSE of
+                       day d-1 -> nav_daily row for date d-1. Marks are the
+                       ONLY NAV source (referee 2026-08-14 bug 1: mixing
+                       midnight marks with intraday /status equity produced a
+                       same-date revision every day -> permanent-YELLOW
+                       deadlock, and contaminated returns with mixed bases).
+                       Today's NAV therefore lands tomorrow: one day of lag,
+                       inside the freshness budget, single coherent basis.
 - fills[]           -> {ts, leg, role, cloid, side, px, ref_px, slip_bps}
                        (adverse-positive) -> edge_trades rows, trade_id=cloid+role
 """
@@ -15,7 +21,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import httpx
 
@@ -49,17 +55,13 @@ def sync(con: sqlite3.Connection, status: dict | None = None) -> dict:
     """Pull once, append-only. Returns a sync report incl. revision count."""
     db.ensure_schema(con)
     status = status or fetch_status()
-    today = datetime.now(timezone.utc).date().isoformat()
-    rep = {"nav": 0, "trades": 0, "revisions": 0, "blind": False}
+    rep = {"nav": 0, "trades": 0, "revisions": 0, "blind": False,
+           "live_equity_info": status.get("equity")}
 
     for m in status.get("marks", []):
-        out = db.record_nav(con, STRATEGY_ID, m["d"], float(m["equity"]),
+        d = date.fromisoformat(m["d"]) - timedelta(days=1)   # mark = prior close
+        out = db.record_nav(con, STRATEGY_ID, d.isoformat(), float(m["equity"]),
                             "executor_marks")
-        rep["nav"] += out == "inserted"
-        rep["revisions"] += out == "REVISION"
-    eq = status.get("equity")
-    if eq is not None:
-        out = db.record_nav(con, STRATEGY_ID, today, float(eq), "executor_live")
         rep["nav"] += out == "inserted"
         rep["revisions"] += out == "REVISION"
 

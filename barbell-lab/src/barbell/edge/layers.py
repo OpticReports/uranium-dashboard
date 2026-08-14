@@ -82,16 +82,24 @@ def check_dd(con, sid, base) -> dict:
                 "note": f"n={len(r)} of {MIN_DD_DAYS}"}
     grid = base["dd_grid"]
     Ls = sorted(int(g) for g in grid if not g.startswith("_"))
-    L = max([l for l in Ls if l <= len(r)] or [Ls[0]])
-    eq = np.cumprod(1 + r)
+    # CEILING match (referee: floor was anti-conservative between steps)
+    L = min([l for l in Ls if l >= len(r)] or [Ls[-1]])
+    # equity anchored at 1.0 (referee: unanchored cumprod made a first-day
+    # crash invisible), and the escalation statistic is the CURRENT
+    # underwater depth — recoverable, and the SAME statistic the certified
+    # policy MC triggers on (referee bug 3 / F1: all-time worst was
+    # permanent, so dd-REDs could never be re-promoted and the budget
+    # certified a different machine than shipped)
+    eq = np.concatenate([[1.0], np.cumprod(1 + r)])
     dd = eq / np.maximum.accumulate(eq) - 1.0
     cur, worst = float(dd[-1]), float(dd.min())
     g = grid[str(L)]
-    status = "breach" if worst <= g["p95"] else "ok"
+    status = "breach" if cur <= g["p95"] else "ok"
     return {"metric": "dd_percentile", "status": status,
-            "value": round(worst, 4), "threshold": g["p95"], "escalates": True,
-            "red": bool(worst <= g["p99"]), "underwater": round(cur, 4),
-            "note": f"vs length-matched grid L={L} (p99 {g['p99']:.3f})"}
+            "value": round(cur, 4), "threshold": g["p95"], "escalates": True,
+            "red": bool(cur <= g["p99"]), "all_time_worst": round(worst, 4),
+            "note": f"current underwater vs length-matched grid L={L} "
+                    f"(p99 {g['p99']:.3f}; all-time worst {worst:.3f} info-only)"}
 
 
 def check_slippage(con, sid, base) -> dict:
@@ -112,8 +120,10 @@ def check_slippage(con, sid, base) -> dict:
         base["slip"] = slip
         db.kv_set(con, sid, "slip_norms", slip)
     z = (slips - slip["mean"]) / slip["sd"]
-    # one-sided upward CUSUM (slippage worse = higher adverse bps)
-    s, h = 0.0, 6.0     # h from ARL~200 trades at k=0.5 (Gaussian, per-trade)
+    # one-sided upward CUSUM (slippage worse = higher adverse bps).
+    # h=3.5: referee-measured ARL0 ~= 200 trades at k=0.5 on Gaussian slips
+    # (the first-shipped h=6.0 actually gave ARL0 ~2,447 — 12x the claim)
+    s, h = 0.0, 3.5
     for zi in z[len(z) - min(len(z), 400):]:
         s = max(0.0, s + zi - SLIP_K_SIGMA)
     return {"metric": "slip_cusum", "status": "breach" if s > h else "ok",
@@ -127,7 +137,8 @@ def check_vol_band(con, sid, base) -> dict:
     if len(r) < 20:
         return {"metric": "vol_band", "status": "insufficient", "value": len(r),
                 "threshold": 20, "note": "needs 20d"}
-    v = float(np.std(r[-20:], ddof=1) * math.sqrt(252))
+    ppy = base.get("periods_per_year", 252)
+    v = float(np.std(r[-20:], ddof=1) * math.sqrt(ppy))
     band = base["dd_grid"]["_vol_band_ann"]
     out = not (band["p01"] <= v <= band["p99"])
     return {"metric": "vol_band", "status": "breach" if out else "ok",
@@ -144,7 +155,8 @@ def check_behavior(con, sid, base) -> dict:
         "SELECT COUNT(*) FROM edge_trades WHERE strategy_id=?", (sid,)).fetchone()[0]
     n_days = con.execute(
         "SELECT COUNT(*) FROM edge_nav_daily WHERE strategy_id=?", (sid,)).fetchone()[0]
-    exp = base.get("expected_trades_per_day")
+    exp = base.get("expected_trades_per_day") or \
+        (base.get("source_fixture") or {}).get("expected_trades_per_day")
     if not exp or n_days < 30:
         return {"metric": "behavior_drift", "status": "insufficient",
                 "value": n_tr, "note": "needs expected rate + 30 days"}

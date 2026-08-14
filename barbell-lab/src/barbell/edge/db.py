@@ -41,7 +41,8 @@ CREATE TABLE IF NOT EXISTS edge_kv (
     PRIMARY KEY (strategy_id, key));
 CREATE TABLE IF NOT EXISTS edge_revisions (
     strategy_id TEXT NOT NULL, table_name TEXT NOT NULL, row_key TEXT NOT NULL,
-    stored TEXT NOT NULL, incoming TEXT NOT NULL, seen_at TEXT NOT NULL);
+    stored TEXT NOT NULL, incoming TEXT NOT NULL, seen_at TEXT NOT NULL,
+    resolved INTEGER NOT NULL DEFAULT 0, resolution_note TEXT);
 """
 
 REL_TOL = 1e-9
@@ -70,7 +71,8 @@ def record_nav(con: sqlite3.Connection, strategy_id: str, date: str,
         return "inserted"
     if abs(row[0] - nav) <= REL_TOL * max(abs(row[0]), 1.0):
         return "unchanged"
-    con.execute("INSERT INTO edge_revisions VALUES (?,?,?,?,?,?)",
+    con.execute("INSERT INTO edge_revisions (strategy_id, table_name, "
+                "row_key, stored, incoming, seen_at) VALUES (?,?,?,?,?,?)",
                 (strategy_id, "edge_nav_daily", date,
                  json.dumps({"nav": row[0]}), json.dumps({"nav": nav}), _now()))
     return "REVISION"
@@ -91,7 +93,8 @@ def record_trade(con: sqlite3.Connection, strategy_id: str, t: dict) -> str:
     if (abs((row[0] or 0) - (t.get("slip_bps") or 0)) <= 1e-6
             and abs((row[1] or 0) - (t.get("fill_px") or 0)) <= 1e-6):
         return "unchanged"
-    con.execute("INSERT INTO edge_revisions VALUES (?,?,?,?,?,?)",
+    con.execute("INSERT INTO edge_revisions (strategy_id, table_name, "
+                "row_key, stored, incoming, seen_at) VALUES (?,?,?,?,?,?)",
                 (strategy_id, "edge_trades", t["trade_id"],
                  json.dumps({"slip_bps": row[0], "fill_px": row[1]}),
                  json.dumps({"slip_bps": t.get("slip_bps"),
@@ -100,8 +103,21 @@ def record_trade(con: sqlite3.Connection, strategy_id: str, t: dict) -> str:
 
 
 def unresolved_revisions(con: sqlite3.Connection, strategy_id: str) -> int:
-    return con.execute("SELECT COUNT(*) FROM edge_revisions WHERE strategy_id=?",
-                       (strategy_id,)).fetchone()[0]
+    return con.execute("SELECT COUNT(*) FROM edge_revisions WHERE strategy_id=? "
+                       "AND resolved=0", (strategy_id,)).fetchone()[0]
+
+
+def resolve_revisions(con: sqlite3.Connection, strategy_id: str,
+                      note: str) -> int:
+    """HUMAN-ONLY acknowledgement of investigated revisions (like
+    re_promote: a written rationale is mandatory — this is the only exit
+    from a data-integrity YELLOW, so it must never be automatic)."""
+    if not note or len(note) < 10:
+        raise ValueError("revision resolution requires a written rationale")
+    cur = con.execute("UPDATE edge_revisions SET resolved=1, resolution_note=? "
+                      "WHERE strategy_id=? AND resolved=0", (note, strategy_id))
+    con.commit()
+    return cur.rowcount
 
 
 def kv_get(con: sqlite3.Connection, strategy_id: str, key: str, default=None):

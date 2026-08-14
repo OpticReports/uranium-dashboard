@@ -37,13 +37,19 @@ def step(con: sqlite3.Connection, sid: str, checks: list[dict],
         c.get("freshness", {}).get("status") == "breach"
     dd_red = c.get("dd_percentile", {}).get("red", False)
 
-    # dual confirmation window bookkeeping
-    for m in ("return_cusum", "slip_cusum", "dd_percentile"):
-        if c.get(m, {}).get("status") == "breach":
-            db.kv_set(con, sid, f"last_breach_{m}", today)
+    # dual-confirmation bookkeeping. Stamps use the strategy's latest DATA
+    # date, never the run date (referee: run-date stamps kept refreshing on
+    # frozen data through blind outages), and are not written while RED.
+    data_date = con.execute(
+        "SELECT MAX(date) FROM edge_nav_daily WHERE strategy_id=?",
+        (sid,)).fetchone()[0] or today
+    if state != "RED":
+        for m in ("return_cusum", "slip_cusum", "dd_percentile"):
+            if c.get(m, {}).get("status") == "breach":
+                db.kv_set(con, sid, f"last_breach_{m}", data_date)
     def _days_since(m):
         d = db.kv_get(con, sid, f"last_breach_{m}")
-        if d is None:
+        if not d:
             return 10_000
         return (datetime.fromisoformat(today).date()
                 - datetime.fromisoformat(d).date()).days
@@ -56,7 +62,8 @@ def step(con: sqlite3.Connection, sid: str, checks: list[dict],
             new_state, new_size = "RED", 0.0
             trigger = "dd_p99" if dd_red else "dual_confirmation"
         elif state == "GREEN" and (esc_breaches or blind):
-            new_state, new_size = "YELLOW", 0.5
+            ramp = float(db.kv_get(con, sid, "ramp_level", 1.0))
+            new_state, new_size = "YELLOW", round(0.5 * ramp, 4)
             trigger = "blind_feed" if blind and not esc_breaches else \
                 esc_breaches[0]["metric"]
             # pinned rule: return-CUSUM resets on entering YELLOW
@@ -70,7 +77,27 @@ def step(con: sqlite3.Connection, sid: str, checks: list[dict],
             clean = db.kv_get(con, sid, "clean_days", 0) + 1 if clean_today else 0
             db.kv_set(con, sid, "clean_days", clean)
             if clean >= CLEAN_DAYS:
-                new_state, new_size, trigger = "GREEN", 1.0, "20_clean_days_feeds_fresh"
+                ramp = float(db.kv_get(con, sid, "ramp_level", 1.0))
+                new_state, new_size = "GREEN", ramp
+                trigger = "20_clean_days_feeds_fresh"
+                for m in ("return_cusum", "slip_cusum", "dd_percentile"):
+                    db.kv_set(con, sid, f"last_breach_{m}", None)
+
+    if state == "GREEN" and new_state == "GREEN":
+        ramp = float(db.kv_get(con, sid, "ramp_level", 1.0))
+        if ramp < 1.0:
+            ok_day = not esc_breaches and not blind
+            g = db.kv_get(con, sid, "green_clean", 0) + 1 if ok_day else 0
+            db.kv_set(con, sid, "green_clean", g)
+            if g >= CLEAN_DAYS:
+                ramp = min(1.0, ramp * 2)
+                db.kv_set(con, sid, "ramp_level", ramp)
+                db.kv_set(con, sid, "green_clean", 0)
+                new_size = ramp
+                con.execute("UPDATE edge_strategies SET size_mult=? "
+                            "WHERE strategy_id=?", (ramp, sid))
+                _log(con, sid, "GREEN", "GREEN", "ramp_advance",
+                     f"ramp -> {ramp}")
 
     if new_state != state:
         con.execute("UPDATE edge_strategies SET state=?, size_mult=? "
@@ -93,6 +120,10 @@ def re_promote(con: sqlite3.Connection, sid: str, note: str) -> None:
         raise ValueError("re_promote only applies to RED strategies")
     con.execute("UPDATE edge_strategies SET state='GREEN', size_mult=0.25 "
                 "WHERE strategy_id=?", (sid,))
+    db.kv_set(con, sid, "ramp_level", 0.25)
+    db.kv_set(con, sid, "green_clean", 0)
+    for m in ("return_cusum", "slip_cusum", "dd_percentile"):
+        db.kv_set(con, sid, f"last_breach_{m}", None)
     n = con.execute("SELECT COUNT(*) FROM edge_nav_daily WHERE strategy_id=? "
                     "AND ret IS NOT NULL", (sid,)).fetchone()[0]
     db.kv_set(con, sid, "cusum_reset_i", n)

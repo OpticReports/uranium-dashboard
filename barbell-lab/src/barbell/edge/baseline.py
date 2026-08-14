@@ -23,7 +23,7 @@ POLICY_PATHS = 200               # joint policy MC (registration-time only)
 
 
 def _dd_grid(returns: np.ndarray, max_len: int, n_mc: int = 1500,
-             block: int = 20, seed: int = 7) -> dict:
+             block: int = 20, seed: int = 7, ppy: int = 252) -> dict:
     rng = np.random.default_rng(seed)
     n = len(returns)
     nblk = int(np.ceil(max_len / block))
@@ -40,7 +40,7 @@ def _dd_grid(returns: np.ndarray, max_len: int, n_mc: int = 1500,
     # 20d realized-vol band (annualized) for the regime flag
     w = 20
     k = (eq[:, w:] / eq[:, :-w])
-    vols = np.array([returns[idx][i][j:j + w].std(ddof=1) * math.sqrt(252)
+    vols = np.array([returns[idx][i][j:j + w].std(ddof=1) * math.sqrt(ppy)
                      for i in range(0, n_mc, 25) for j in range(0, max_len - w, 63)])
     grid["_vol_band_ann"] = {"p01": float(np.percentile(vols, 1)),
                              "p99": float(np.percentile(vols, 99))}
@@ -49,7 +49,7 @@ def _dd_grid(returns: np.ndarray, max_len: int, n_mc: int = 1500,
 
 def _policy_mc(returns: np.ndarray, k: float, h: float, grid: dict,
                n_paths: int = POLICY_PATHS, horizon: int = 1260,
-               seed: int = 13) -> dict:
+               ppy: int = 252, seed: int = 13) -> dict:
     """Joint state-machine MC under the null: false-RED rate, YELLOW share,
     and null return drag — the policy's real budget numbers."""
     rng = np.random.default_rng(seed)
@@ -76,8 +76,9 @@ def _policy_mc(returns: np.ndarray, k: float, h: float, grid: dict,
             dd = eqty / peak - 1.0
             z = (r[t] - mu) / sd
             s = max(0.0, s + (-z) - k)
-            L = str(min(max(DD_GRID_STEP, (t + 1) // DD_GRID_STEP * DD_GRID_STEP),
-                        max(int(g) for g in grid if not g.startswith("_"))))
+            # CEILING match, same as production check_dd (referee F1)
+            maxL = max(int(g) for g in grid if not g.startswith("_"))
+            L = str(min(-(-(t + 1) // DD_GRID_STEP) * DD_GRID_STEP, maxL))
             c_al, d95 = s > h, dd <= grid[L]["p95"]
             d99 = dd <= grid[L]["p99"]
             if c_al:
@@ -102,8 +103,9 @@ def _policy_mc(returns: np.ndarray, k: float, h: float, grid: dict,
         reds += red
         lw_m.append(math.log(w_m))
         lw_r.append(math.log(w_r))
-    yrs = horizon / 252.0
+    yrs = horizon / ppy
     return {"false_red_per_5y": reds / n_paths,
+            "horizon_periods": horizon, "periods_per_year": ppy,
             "yellow_day_share": yell_days / (n_paths * horizon),
             "null_drag_pp_terminal_red": round(
                 (math.exp(np.mean(lw_m) / yrs) - math.exp(np.mean(lw_r) / yrs)) * 100, 2),
@@ -119,18 +121,25 @@ def register(con: sqlite3.Connection, strategy_id: str, fixture: dict,
     db.ensure_schema(con)
     r = np.asarray(fixture["returns"], dtype=float)
     s = psr.sharpe_stats(r)
+    d0 = datetime.fromisoformat(fixture["dates"][0]).date() \
+        if "T" not in fixture["dates"][0] else None
+    span_days = (datetime.fromisoformat(fixture["dates"][-1]).date()
+                 - datetime.fromisoformat(fixture["dates"][0]).date()).days
+    ppy = round(len(r) / max(span_days, 1) * 365.25) if span_days else 252
     trials = n_trials if n_trials is not None else DECLARED_PENALTY_TRIALS
     cal = cusum.calibrate_h(r, target_arl=TARGET_ARL,
                             k=(s.sr / 2.0) if s.sr > 0 else 0.02,
                             n_sims=800, seed=5)
-    grid = _dd_grid(r, max_len=1260)
-    policy = _policy_mc(r, cal["k"], cal["h"], grid)
+    grid = _dd_grid(r, max_len=5 * ppy, ppy=ppy)
+    policy = _policy_mc(r, cal["k"], cal["h"], grid, horizon=5 * ppy, ppy=ppy)
     mintrl = psr.min_trl(s.sr, 0.0, s.skew, s.kurt, CONFIDENCE)
     payload = {
         "strategy_id": strategy_id,
         "source_provenance": fixture.get("provenance"),
         "n_backtest_days": s.n,
-        "sr_daily": s.sr, "sr_annual": s.sr * math.sqrt(252),
+        "sr_daily": s.sr, "sr_annual": s.sr * math.sqrt(ppy),
+        "periods_per_year": ppy,
+        "expected_trades_per_day": fixture.get("expected_trades_per_day"),
         "mu_daily": float(r.mean()), "std_daily": float(r.std(ddof=1)),
         "skew": s.skew, "kurt": s.kurt,
         "n_trials": trials,

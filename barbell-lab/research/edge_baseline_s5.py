@@ -77,6 +77,7 @@ def main() -> None:
         day = datetime.fromtimestamp(bar.ts, tz=timezone.utc).date().isoformat()
         daily[day] = eq5
 
+    n_trades = sum(len(b.trades) for b in books.values())
     days = sorted(daily)
     rets = [daily[days[i]] / daily[days[i - 1]] - 1.0 for i in range(1, len(days))]
     bars_hash = hashlib.sha256(open(FIX, "rb").read()).hexdigest()[:16]
@@ -86,6 +87,8 @@ def main() -> None:
                           "blend": f"{1-W_TREND:.0%} S3 + {W_TREND:.0%} S4 @ {LEV}x, mtm per 4h bar",
                           "cash_apy": CASH_APY, "warmup_bars": WARMUP,
                           "window": [START, END]},
+           "n_trades": n_trades,
+           "expected_trades_per_day": round(n_trades / max(len(days) - 1, 1), 4),
            "dates": days[1:], "returns": rets}
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     json.dump(out, open(OUT, "w"))
