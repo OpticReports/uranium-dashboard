@@ -1,0 +1,32 @@
+{
+  "lookahead": {
+    "base_cagr": 0.0722136812920473,
+    "lagged_cagr": 0.06010602688211519
+  },
+  "survivorship": {
+    "honest_cagr": 0.0722136812920473,
+    "survivor_only_cagr": 0.07285196432312069,
+    "bias_pp": 0.0006382830310733834,
+    "dead_names_used": 20
+  },
+  "max_internal_gap_days": 1,
+  "reconciliation": {
+    "closed_form": 0.04084747275159656,
+    "engine": 0.03535086113747421,
+    "alpha": 0.052878798572394956,
+    "beta": -0.047403711699713504
+  },
+  "through_2025": {
+    "cagr": 0.08110242020636638,
+    "sharpe": 0.9774764565145863
+  },
+  "full": {
+    "cagr": 0.0722136812920473,
+    "sharpe": 0.8316175235260963
+  },
+  "actual_soxx_version": {
+    "cagr": 0.027228813645734595,
+    "sharpe": 1.0680435143279423
+  },
+  "failures": []
+}
