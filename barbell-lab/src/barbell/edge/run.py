@@ -9,11 +9,12 @@ import os
 import sqlite3
 from datetime import datetime, timezone
 
+from ..config import ROOT
 from . import adapter_coinbase, baseline, db, layers, statemachine
 
-FIXTURE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                       "..", "..", "..", "research", "fixtures",
-                       "s5_backtest_daily.json")
+# resolve via BARBELL_ROOT (container: /app) — a __file__-relative path
+# pointed into site-packages in the image and broke the nightly job
+FIXTURE = str(ROOT / "research" / "fixtures" / "s5_backtest_daily.json")
 STRATEGIES = (adapter_coinbase.STRATEGY_ID,)
 
 
