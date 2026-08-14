@@ -227,6 +227,7 @@ def margin_leverage():
         age = (_date.today() - _datetime.strptime(cur_date, "%Y-%m-%d").date()).days
         if age > 120:
             state = None
+            path_ctx = None      # referee: stale payload must not carry path
 
     # NBER recession bands — fetched from 1945 so the deep view has them too
     # (the shared bundle starts at 1976).

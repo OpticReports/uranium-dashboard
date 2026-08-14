@@ -153,7 +153,11 @@ def leverage_states_path(yoy_vals: list, excess_vals: list) -> list:
       the squeeze states.
     - Beyond W months with no re-entry the rollover FIZZLES to its plain
       level state (roughly half of blowoffs fizzle).
-    Anchor uses only PAST months — no lookahead (gate-tested)."""
+    Anchor uses only PAST months — no lookahead (gate-tested).
+    UNTESTED BRANCH (referee 2026-08-15): BLOWOFF -> SQUEEZE -> ELEVATED
+    within W reads POST_BLOWOFF per the frozen rule text; it never occurs
+    in-sample, so the stats are silent on it. Left frozen rather than tuned
+    post-hoc; revisit only at an annual re-freeze."""
     out, last_blow = [], None
     for i, (y, e) in enumerate(zip(yoy_vals, excess_vals)):
         lvl = leverage_state(y, e)
@@ -170,9 +174,13 @@ def leverage_states_path(yoy_vals: list, excess_vals: list) -> list:
 LEVERAGE_PLAYBOOK: dict[str, dict] = {
     "POST_BLOWOFF": {
         "label": "Post-blowoff rollover — leverage peaked and is unwinding",
-        "evidence": "Episode-level permutation p=0.028 vs all-months baseline "
-                    "(fwd12 mean -3.8% vs +8.4%; 10 episodes incl. the current "
-                    "one) - SHARPER separation than BLOWOFF itself (p=0.058), "
+        "evidence": "Episode-level permutation p=0.028 as shipped; "
+                    "counter-agent QA 2026-08: sizing null blocks to the 26 "
+                    "scored months and merging episodes <3 months apart "
+                    "(2007/2021 re-inflation gaps) puts it at p~0.04-0.05 - "
+                    "same evidence tier as BLOWOFF (p=0.058), not sharper. "
+                    "~5 independent macro episodes carry the fwd12 stats "
+                    "(1998, 2000, 2007-08, 2010 fizzled positive, 2021-22); "
                     "consistent with the decision-test finding that crash "
                     "damage lands AFTER the blowoff ends. Basis: ^GSPC price, "
                     "1997+, rule frozen before scoring (scripts/"

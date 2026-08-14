@@ -287,7 +287,8 @@ def test_gate_post_blowoff_playbook_frozen_pins():
     assert POST_BLOWOFF_W == 6
     assert pb["stats"]["fwd12"] == {"n": 26, "mean": -3.8, "median": -7.6,
                                     "pct_lower": 58, "worst": -44.8}
-    assert "p=0.028" in pb["evidence"]
+    assert "p~0.04-0.05" in pb["evidence"]
+    assert "not sharper" in pb["evidence"]
     assert "NOT de-escalation" in pb["action"]
 
 
