@@ -71,6 +71,7 @@ def step(con: sqlite3.Connection, sid: str, checks: list[dict],
                             "strategy_id=? AND ret IS NOT NULL", (sid,)).fetchone()[0]
             db.kv_set(con, sid, "cusum_reset_i", n)
             db.kv_set(con, sid, "clean_days", 0)
+            db.kv_set(con, sid, "green_clean", 0)   # ramp clock restarts too
         elif state == "YELLOW":
             half_ok = c.get("return_cusum", {}).get("half_threshold_ok", True)
             clean_today = (not esc_breaches) and (not blind) and half_ok
@@ -98,6 +99,7 @@ def step(con: sqlite3.Connection, sid: str, checks: list[dict],
                             "WHERE strategy_id=?", (ramp, sid))
                 _log(con, sid, "GREEN", "GREEN", "ramp_advance",
                      f"ramp -> {ramp}")
+                ramp_advanced = ramp
 
     if new_state != state:
         con.execute("UPDATE edge_strategies SET state=?, size_mult=? "
@@ -105,8 +107,12 @@ def step(con: sqlite3.Connection, sid: str, checks: list[dict],
         _log(con, sid, state, new_state, trigger or "?",
              "; ".join(f"{x['metric']}={x['status']}" for x in checks))
     con.commit()
-    return {"state": new_state, "size_mult": new_size, "changed": new_state != state,
-            "trigger": trigger, "blind": blind}
+    adv = locals().get("ramp_advanced")
+    return {"state": new_state, "size_mult": new_size,
+            "changed": new_state != state or adv is not None,
+            "trigger": trigger if new_state != state else
+            (f"ramp_advance_{adv}" if adv is not None else trigger),
+            "blind": blind}
 
 
 def re_promote(con: sqlite3.Connection, sid: str, note: str) -> None:
