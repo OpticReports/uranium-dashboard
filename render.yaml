@@ -45,6 +45,10 @@ services:
         sync: false
       - key: DASHBOARD_PASSWORD
         sync: false
+      # LLM features (chat analyst, optional LLM sentiment): native Anthropic
+      # key preferred; OpenRouter key drives the same Claude models otherwise.
+      - key: OPENROUTER_API_KEY
+        sync: false
       - key: RUN_SCHEDULER
         value: "true"
       - key: BACKFILL_ON_STARTUP
@@ -62,36 +66,256 @@ services:
       # genomics SPA itself is served at research.optic.capital/genomics/.
       - key: CANARY_UPSTREAM
         value: https://treasury-canary.onrender.com
+      # Same pattern: /portfolio-optimizer/* -> Barbell Lab quant platform.
+      - key: BARBELL_UPSTREAM
+        value: https://barbell-lab.onrender.com
+      - key: BTC_UPSTREAM
+        value: https://btc-paper-engine.onrender.com
+
+  # --- Barbell Lab (personal quant research platform) ------------------------
+  # Lives at research.optic.capital/portfolio-optimizer behind the genomics
+  # service's login gate (see BARBELL_UPSTREAM above). Starter plan + disk:
+  # the nightly job (ingest -> validation -> acceptance gates -> monitors)
+  # needs an always-on instance, and SQLite/parquet/reports must persist.
+  - type: web
+    name: barbell-lab
+    runtime: docker
+    dockerfilePath: barbell-lab/Dockerfile
+    dockerContext: barbell-lab
+    plan: starter
+    healthCheckPath: /health
+    autoDeploy: true
+    disk:
+      name: data
+      mountPath: /app/data
+      sizeGB: 1
+    envVars:
+      - key: FMP_API_KEY
+        sync: false            # cross-provider validation feed (same key as genomics)
+      - key: FRED_API_KEY
+        sync: false            # optional; public CSV fallback works without it
+      - key: TIINGO_API_KEY
+        sync: false            # optional third feed
+      - key: ANTHROPIC_API_KEY
+        sync: false            # chat analyst, native key (preferred if set)
+      - key: OPENROUTER_API_KEY
+        sync: false            # chat analyst via OpenRouter (default moonshotai/kimi-k3, override with BARBELL_CHAT_MODEL_OPENROUTER); used when no native key. Chat disabled if both unset
+      - key: RUN_SCHEDULER
+        value: "true"
+      - key: INGEST_ON_STARTUP
+        value: "true"
+      - key: MONITOR_UTC_HOUR
+        value: "9"             # 05:00 America/Puerto_Rico
+      - key: BARBELL_DATA_DIR
+        value: /app/data
+      - key: LOG_LEVEL
+        value: INFO
 
   # --- Treasury Market Health Monitor ("The Canary") -------------------------
-  # FREE plan = $0, isolated from the genomics service (its own URL). The dashboard
-  # computes live on each request, so it works without a persistent disk; the
-  # tradeoffs are cold starts after idle and no persisted history/scheduled alerts.
-  # Bump `plan` to `starter` + re-add a disk later if you want those.
+  # Starter plan + PERSISTENT DISK. This root blueprint is the one Render
+  # actually manages the service from — the service was bumped to starter but
+  # the disk was never re-added here, so the DB sat on the container's
+  # ephemeral filesystem and ALL metric history wiped on every deploy (the
+  # 2026-07 "NO DATA" incident). The disk ends that failure class: history
+  # survives deploys and the startup backfill becomes a first-boot-only event.
   - type: web
     name: treasury-canary
     runtime: docker
     dockerfilePath: treasury-canary/Dockerfile
     dockerContext: treasury-canary
-    plan: free
+    plan: starter
     healthCheckPath: /health
     autoDeploy: true
+    disk:
+      name: canary-data
+      mountPath: /app/data
+      sizeGB: 1
     envVars:
       - key: FRED_API_KEY
         sync: false            # <- enter your free FRED key on THIS service
       - key: FMP_API_KEY
         sync: false            # optional: enables gold (GLD) in the flow compass
       - key: DATABASE_URL
-        value: sqlite:///./data/canary.db   # ephemeral on free tier (OK; live compute)
+        value: sqlite:////app/data/canary.db   # on the persistent disk
       - key: CACHE_DIR
-        value: ./data/cache
+        value: /app/data/cache
       - key: RUN_SCHEDULER
         value: "true"
       - key: BACKFILL_ON_STARTUP
         value: "true"
       - key: REFRESH_INTERVAL_MINUTES
         value: "720"
+      # Telegram two-way analyst (ask the canary questions in Telegram):
+      # needs the same TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID as alerts PLUS
+      # this OpenRouter key. CHAT_MODEL defaults to moonshotai/kimi-k3.
+      - key: OPENROUTER_API_KEY
+        sync: false
       - key: DISPLAY_TZ
         value: America/Puerto_Rico
       - key: LOG_LEVEL
         value: INFO
+
+  # --- BTC Pullback Paper Engine (research.optic.capital/btc) ---------------
+  # Paper trading only — three virtual books, replay-verified against the
+  # 2024-2026 research backtest. Persistent disk: the books' equity history
+  # and trade log must survive deploys (same lesson as the canary's disk).
+  - type: web
+    name: btc-paper-engine
+    runtime: docker
+    dockerfilePath: btc-paper-engine/Dockerfile
+    dockerContext: btc-paper-engine
+    plan: starter            # always-on: the engine polls 24/7
+    healthCheckPath: /health
+    autoDeploy: true
+    disk:
+      name: btc-data
+      mountPath: /app/data
+      sizeGB: 1
+    envVars:
+      - key: DATABASE_URL
+        value: sqlite:////app/data/paperengine.db
+      - key: CACHE_DIR
+        value: /app/data/cache
+      - key: RUN_ENGINE
+        value: "true"
+      - key: POLL_SECONDS
+        value: "60"
+      - key: FRONTEND_DIST
+        value: /app/frontend_dist
+      - key: LOG_LEVEL
+        value: INFO
+      # Shared secret for /exec/target (live-executor feed). Same value goes
+      # on the btc-executor service. Enter once in the Render dashboard.
+      - key: EXEC_TOKEN
+        sync: false
+
+  # NOTE: treasury-canary Telegram alerts — add the same TELEGRAM_BOT_TOKEN /
+  # TELEGRAM_CHAT_ID secrets (plus optional TELEGRAM_MIN_SEVERITY, default
+  # WARN) to the treasury-canary service env in the Render dashboard.
+
+  # --- S5 Live Executor (Coinbase perps) ------------------------------------
+  # Mirrors the paper engine's S5 blend onto a real Coinbase Advanced account.
+  # SAFETY: ships with DRY_RUN=true — it cannot place an order until that env
+  # is flipped to "false" by hand AFTER the dry-run shadow period checks out.
+  # The API key must be created trade-only (view + trade; NO transfers).
+  # Full runbook: btc-executor/EXECUTOR.md
+  - type: web
+    name: btc-executor
+    runtime: docker
+    dockerfilePath: btc-executor/Dockerfile
+    dockerContext: btc-executor
+    plan: starter            # always-on: mirrors stops 24/7
+    healthCheckPath: /health
+    autoDeploy: true
+    disk:
+      name: btc-exec-data
+      mountPath: /app/data
+      sizeGB: 1
+    envVars:
+      - key: ENGINE_URL
+        value: https://btc-paper-engine.onrender.com
+      - key: EXEC_TOKEN
+        sync: false            # must match btc-paper-engine's EXEC_TOKEN
+      - key: CB_API_KEY_NAME
+        sync: false            # CDP key name (trade-only key)
+      - key: CB_API_PRIVATE_KEY
+        sync: false            # CDP EC private key PEM
+      - key: CB_PRODUCT_ID
+        # US perpetual-style BTC future on Coinbase Derivatives (CDE/FCM):
+        # 0.01-BTC contracts, $5 tick, Dec-2030 expiry, display "BTC PERP".
+        # sync:false: a sync during a future product migration would point the
+        # executor at the OLD product while a position sits on the new one -
+        # position() reads only CB_PRODUCT_ID, so the real exposure would
+        # vanish from drift checks and halt-flattens (QA 2026-08-11).
+        sync: false
+      - key: DRY_RUN
+        # NEVER a blueprint value. On 2026-08-10 an unrelated render.yaml edit
+        # triggered a sync that reset this to "true" and silently un-armed a
+        # LIVE account. sync:false keeps the dashboard as the single source of
+        # truth; if unset, the code default (True) fails safe.
+        sync: false
+      # EVERY trading-behavior variable below is sync:false (QA 2026-08-11):
+      # the DRY_RUN incident generalizes - a blueprint literal is a pending
+      # silent reset on the next unrelated commit, in whichever direction the
+      # dashboard has since moved (a re-sync would UNDO a defensive cut, or
+      # REVERT a ramp step-down taken while losing). The Render dashboard is
+      # the single source of truth; the executor pages on any change via the
+      # config_change guard, and code defaults fail safe (kelly 0.05).
+      # Ramp is a STAIRCASE - v3, EXECUTOR.md "Ramp schedule": 0.05 -> 0.10
+      # -> 0.20 -> 0.35 -> 0.56, advance after 4 trades at a rung AND
+      # cumulative ramp P&L >= 0; step DOWN a rung at -$5,000 ramp drawdown.
+      # Change KELLY_M one step at a time, never alongside SIZING_BASE_USD.
+      # Current dashboard values (2026-08-11): KELLY_M 0.05,
+      # SIZING_BASE_USD 50000, MAX_NOTIONAL_USD 80000, MAX_ACCOUNT_LEV 2.0,
+      # DD_HALT_PCT 0.35 (% of sizing base; 0.30 at the $100k phase).
+      - key: KELLY_M
+        sync: false
+      - key: SIZING_BASE_USD
+        sync: false
+      - key: MAX_NOTIONAL_USD
+        sync: false
+      - key: MAX_ACCOUNT_LEV
+        sync: false
+      - key: DD_HALT_PCT
+        sync: false
+      - key: STATE_PATH
+        value: /app/data/executor_state.json
+      - key: LOG_LEVEL
+        value: INFO
+      # Telegram alerts (halts/REDs always; live trades when DRY_RUN=false).
+      # Setup steps in btc-executor/app/alerts.py. Unset = silent no-op.
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+
+  # --- IBKR Executor (El Nino options ladder first) --------------------------
+  # ALL automated IBKR trading routes through this one service (CLAUDE.md
+  # separation-of-powers rule). Ships OFFLINE: with no TWS credentials it
+  # runs the full decision loop against a dry adapter and places nothing.
+  # Adding PAPER credentials moves it to DRY (paper); LIVE requires
+  # TRADING_MODE=live AND DRY_RUN=false, only after the paper rehearsal.
+  # Runbook: ibkr-executor/README.md
+  - type: web
+    name: ibkr-executor
+    runtime: docker
+    dockerfilePath: ibkr-executor/Dockerfile
+    dockerContext: ibkr-executor
+    plan: standard           # IB Gateway is Java; needs 2GB (won't fit starter)
+    healthCheckPath: /health
+    autoDeploy: true
+    disk:
+      name: ibkr-data
+      mountPath: /app/data
+      sizeGB: 1
+    envVars:
+      - key: TWS_USERID
+        sync: false          # PAPER username first (usually starts with 'D')
+      - key: TWS_PASSWORD
+        sync: false
+      - key: TRADING_MODE
+        # paper | live — read by gateway AND executor. sync:false: this is
+        # HALF of the ibkr live gate (with DRY_RUN); as a blueprint literal a
+        # sync would flip a LIVE deployment back to paper while it reports
+        # healthy — the DRY_RUN incident on the other executor (QA 2026-08-11).
+        sync: false
+      - key: DRY_RUN
+        # never blueprint-managed (see btc-executor note); dashboard owns it
+        sync: false
+      - key: READ_ONLY_API
+        # "no" = gateway accepts orders. sync:false so a defensive dashboard
+        # flip to "yes" mid-incident cannot be silently reverted by a sync.
+        sync: false
+      - key: EXEC_TOKEN
+        sync: false          # /status /kill /resume auth (reuse existing)
+      - key: LEG_BUDGET_USD
+        sync: false          # $10k per ladder leg now; dashboard owns ramps
+      - key: STATE_PATH
+        value: /app/data/ladder_state.json
+      - key: LOG_LEVEL
+        value: INFO
+      # Same Canary Optics bot as btc-executor/canary. Unset = silent no-op.
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false

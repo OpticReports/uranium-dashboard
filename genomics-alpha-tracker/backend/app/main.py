@@ -14,7 +14,7 @@ from contextlib import asynccontextmanager
 import httpx
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session, select
 
@@ -30,6 +30,7 @@ from .routers import (
     scores,
     social,
     today,
+    tuning,
     universe,
     views,
 )
@@ -132,6 +133,24 @@ async def basic_auth(request: Request, call_next):
             )
     return await call_next(request)
 
+
+# Canonical domain: this hub answers on several custom domains; redirect the
+# aliases to CANONICAL_HOST so bookmarks and the relative OpticNav links all
+# consolidate on one address. Registered after basic_auth so it runs FIRST
+# (Starlette middleware is LIFO) — no login prompt on a non-canonical host.
+_CANONICAL_HOST = os.environ.get("CANONICAL_HOST", "research.optic.capital")
+_REDIRECT_HOSTS = {h.strip().lower() for h in os.environ.get(
+    "REDIRECT_HOSTS", "genomics.optic.capital").split(",") if h.strip()}
+
+
+@app.middleware("http")
+async def canonical_host(request: Request, call_next):
+    host = request.headers.get("host", "").split(":")[0].lower()
+    if host in _REDIRECT_HOSTS and request.url.path != "/health":
+        return RedirectResponse(
+            url=str(request.url.replace(netloc=_CANONICAL_HOST)), status_code=308)
+    return await call_next(request)
+
 app.include_router(universe.router)
 app.include_router(market.router)
 app.include_router(catalysts.router)
@@ -142,6 +161,7 @@ app.include_router(social.router)
 app.include_router(calls.router)
 app.include_router(today.router)
 app.include_router(journal.router)
+app.include_router(tuning.router)
 
 
 @app.get("/health", tags=["meta"])
@@ -156,49 +176,124 @@ def health():
             "tiingo": bool(settings.tiingo_api_key),
             "x_twitter": bool(settings.x_bearer_token),
             "reddit": bool(settings.reddit_client_id),
-            "anthropic_sentiment": bool(settings.anthropic_api_key),
+            "llm_backend": ("anthropic" if settings.anthropic_api_key else
+                            "openrouter" if settings.openrouter_api_key else None),
         },
+        "openrouter_key": _openrouter_key_diag(),
     }
 
 
-# --- Treasury Canary reverse proxy -------------------------------------------
-# Serve the separate Treasury Canary service under this domain at /canary/* so it
-# lives at research.optic.capital/canary. Sits behind the same login gate above.
-# The Canary's SPA is built with base "/canary/" + API base "/canary", so browser
-# requests arrive under /canary and we strip that prefix before forwarding.
-_CANARY_UPSTREAM = os.environ.get(
-    "CANARY_UPSTREAM", "https://treasury-canary.onrender.com").rstrip("/")
-_CANARY_HOP_HEADERS = {"content-encoding", "transfer-encoding", "connection", "content-length"}
+def _openrouter_key_diag() -> dict:
+    """Same partial fingerprint OpenRouter shows on its own keys page (first
+    12 + last 3 chars) — enough to match a key by eye, never the key itself."""
+    from .utils.openrouter import _key
+    raw = settings.openrouter_api_key or ""
+    clean = _key()
+    if not clean:
+        return {"present": False}
+    return {
+        "present": True,
+        "raw_length": len(raw),
+        "clean_length": len(clean),
+        "prefix_ok": clean.startswith("sk-or-"),
+        "had_whitespace_or_quotes": raw != clean,
+        "fingerprint": f"{clean[:12]}…{clean[-3:]}",
+    }
 
 
-@app.get("/canary", include_in_schema=False)
-def _canary_root():
-    return RedirectResponse(url="/canary/")
+# --- Sibling-service reverse proxies ------------------------------------------
+# This service is the GATE HUB for research.optic.capital: sibling Render
+# services are exposed under path prefixes here so they all sit behind the one
+# login gate above. The prefix is stripped before forwarding, so upstreams
+# serve from "/" (SPAs that need absolute asset paths must be built with the
+# matching base, as the Canary is with "/canary/").
+_HOP_HEADERS = {"content-encoding", "transfer-encoding", "connection", "content-length"}
 
 
-@app.api_route("/canary/{path:path}", methods=["GET", "POST", "HEAD"], include_in_schema=False)
-async def _canary_proxy(path: str, request: Request):
-    url = f"{_CANARY_UPSTREAM}/{path}"
-    body = await request.body()
-    fwd = {k: v for k, v in request.headers.items()
-           if k.lower() not in ("host", "authorization", "content-length", "accept-encoding")}
-    # Request an uncompressed upstream response so we never forward compressed bytes
-    # with the encoding header stripped (which renders as garbage in the browser).
-    fwd["accept-encoding"] = "identity"
-    try:
-        async with httpx.AsyncClient(timeout=90.0, follow_redirects=True) as client:
-            up = await client.request(request.method, url,
-                                      params=dict(request.query_params), content=body, headers=fwd)
-    except Exception as exc:  # noqa: BLE001
-        return Response(f"Canary upstream unavailable: {exc}", status_code=502)
-    headers = {k: v for k, v in up.headers.items() if k.lower() not in _CANARY_HOP_HEADERS}
-    # Never let browsers cache the HTML shell: after a redeploy a cached index.html
-    # keeps serving the OLD app (hashed .js assets remain safely cacheable).
-    ctype = up.headers.get("content-type", "")
-    if ctype.startswith("text/html"):
-        headers["cache-control"] = "no-cache"
-    return Response(content=up.content, status_code=up.status_code, headers=headers,
-                    media_type=ctype or None)
+def _mount_proxy(prefix: str, upstream_env: str, default_upstream: str, label: str) -> None:
+    upstream = os.environ.get(upstream_env, default_upstream).rstrip("/")
+
+    @app.get(f"/{prefix}", include_in_schema=False)
+    def _root():
+        return RedirectResponse(url=f"/{prefix}/")
+
+    @app.api_route(f"/{prefix}/{{path:path}}", methods=["GET", "POST", "HEAD"],
+                   include_in_schema=False)
+    async def _proxy(path: str, request: Request):
+        url = f"{upstream}/{path}"
+        body = await request.body()
+        fwd = {k: v for k, v in request.headers.items()
+               if k.lower() not in ("host", "authorization", "content-length", "accept-encoding")}
+        # Request an uncompressed upstream response so we never forward compressed
+        # bytes with the encoding header stripped (renders as garbage otherwise),
+        # and so streamed chunks pass through unbuffered.
+        fwd["accept-encoding"] = "identity"
+        # Stream the upstream response through instead of buffering it: the
+        # barbell analyst chat holds requests open for minutes and emits
+        # NDJSON progress events; buffering would both time out and destroy
+        # the live feedback. read=600s tolerates long LLM turns.
+        client = httpx.AsyncClient(
+            timeout=httpx.Timeout(connect=10.0, read=600.0, write=60.0, pool=10.0),
+            follow_redirects=True)
+        try:
+            up = await client.send(
+                client.build_request(request.method, url,
+                                     params=dict(request.query_params),
+                                     content=body, headers=fwd),
+                stream=True)
+        except Exception as exc:  # noqa: BLE001
+            await client.aclose()
+            return Response(f"{label} upstream unavailable: {exc}", status_code=502,
+                            media_type="text/plain")
+        headers = {k: v for k, v in up.headers.items() if k.lower() not in _HOP_HEADERS}
+        # Never let browsers cache the HTML shell: after a redeploy a cached
+        # index.html keeps serving the OLD app (hashed .js assets stay cacheable).
+        ctype = up.headers.get("content-type", "")
+        if ctype.startswith("text/html"):
+            headers["cache-control"] = "no-cache"
+
+        async def _relay():
+            try:
+                async for chunk in up.aiter_bytes():
+                    yield chunk
+            finally:
+                await up.aclose()
+                await client.aclose()
+
+        return StreamingResponse(_relay(), status_code=up.status_code,
+                                 headers=headers, media_type=ctype or None)
+
+
+# research.optic.capital/canary — Treasury Market Health Monitor
+_mount_proxy("canary", "CANARY_UPSTREAM",
+             "https://treasury-canary.onrender.com", "Canary")
+# research.optic.capital/portfolio-optimizer — Barbell Lab quant platform
+_mount_proxy("portfolio-optimizer", "BARBELL_UPSTREAM",
+             "https://barbell-lab.onrender.com", "Barbell Lab")
+# research.optic.capital/btc — BTC Pullback Paper Engine
+_mount_proxy("btc", "BTC_UPSTREAM",
+             "https://btc-paper-engine.onrender.com", "BTC Paper Engine")
+_mount_proxy("exit", "EWM_UPSTREAM",
+              "https://treasury-canary.onrender.com/ewm", "Exit Window Monitor")
+
+# research.optic.capital/deals — Venture Deal Analyzer ledger dashboard.
+# Self-contained static page. CANONICAL copy: venture-deal-analyzer/
+# dashboard.html at the repo root; app/deal_analyzer.html is its mirror
+# inside this service's Docker context (see that file's header comment).
+# Update both in the same commit.
+_DEALS_HTML = os.path.join(os.path.dirname(__file__), "deal_analyzer.html")
+
+
+@app.get("/deals", include_in_schema=False)
+def _deals_noslash():
+    return RedirectResponse(url="/deals/")
+
+
+@app.get("/deals/", include_in_schema=False)
+def _deals_page():
+    with open(_DEALS_HTML, encoding="utf-8") as fh:
+        return Response(fh.read(), media_type="text/html",
+                        headers={"cache-control": "no-cache"})
 
 
 # Single-service deployment: if a built frontend is present, serve it under

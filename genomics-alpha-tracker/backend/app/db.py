@@ -23,11 +23,34 @@ if settings.database_url.startswith("sqlite"):
 engine = create_engine(settings.database_url, echo=False, connect_args=_connect_args)
 
 
+# Columns added to tables that may PRE-EXIST in a deployed DB. create_all
+# creates missing tables but NEVER adds columns to existing ones — without
+# this, adding a model field 500s every query on that table in production.
+_LIGHT_MIGRATIONS: list[tuple[str, str, str]] = [
+    ("trade_call", "confidence", "FLOAT"),
+]
+
+
+def _light_migrate() -> None:
+    from sqlalchemy import inspect, text
+
+    insp = inspect(engine)
+    existing_tables = set(insp.get_table_names())
+    for table, column, ddl_type in _LIGHT_MIGRATIONS:
+        if table not in existing_tables:
+            continue  # create_all will make it with the column included
+        cols = {c["name"] for c in insp.get_columns(table)}
+        if column not in cols:
+            with engine.begin() as conn:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl_type}"))
+
+
 def init_db() -> None:
     # Import models so SQLModel.metadata is populated before create_all.
     from . import models  # noqa: F401
 
     SQLModel.metadata.create_all(engine)
+    _light_migrate()
 
 
 def get_session() -> Iterator[Session]:

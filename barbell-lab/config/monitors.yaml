@@ -1,0 +1,38 @@
+# Monitors: nightly rebalance check, regime dashboard, trigger rules.
+alerting:
+  mode: log                    # log | email | push (log-only until preference confirmed)
+  email_to: null
+
+rebalance_alert:
+  band_relative: 0.20          # alert when |live/target - 1| > 20% for any sleeve
+  # Live positions source: broker export or manual snapshot. The monitor reads
+  # the most recent snapshot from data/positions.json (schema in monitor/rebalance.py)
+  positions_path: data/positions.json
+
+regime:
+  zscore_window_days: 756      # 3y of trading days
+  pillars:
+    labor: ICSA
+    inflation: T5YIE
+    credit: BAMLH0A0HYM2
+    dollar: DTWEXBGS
+  # 4-quadrant classification: growth (labor, inverted ICSA) x inflation (T5YIE)
+  quadrants:
+    - {name: reflation,   growth: up,   inflation: up}
+    - {name: goldilocks,  growth: up,   inflation: down}
+    - {name: stagflation, growth: down, inflation: up}
+    - {name: deflation_bust, growth: down, inflation: down}
+
+triggers:
+  # Config-driven rules from prior research. Each fires an alert with the
+  # stated action flag; monitors never trade automatically.
+  - id: avem_reverse_trim
+    when: {DTWEXBGS_level_below: 98, fed_dovish_pivot: manual_flag}
+    action: "reverse AVEM trim"
+    note: "dovish-pivot leg is a manual flag in data/flags.json until an automated Fed-speak classifier is trusted"
+  - id: bot_kill_switch_zone
+    when: {vix_term_structure: backwardation}   # ^VIX > ^VIX3M at close
+    action: "bot kill-switch zone"
+  - id: credit_stress
+    when: {BAMLH0A0HYM2_above_bp: 400}
+    action: "credit stress — recheck sleeve CVaR"

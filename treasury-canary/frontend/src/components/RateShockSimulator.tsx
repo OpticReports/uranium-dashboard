@@ -1,0 +1,514 @@
+import { useEffect, useMemo, useState } from "react";
+import {
+  Area,
+  CartesianGrid,
+  ComposedChart,
+  Line,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import type { ShockAsset, ShockCalibration, ShockRun } from "../lib/api";
+import { api } from "../lib/api";
+import { errorMessage } from "../lib/format";
+import InfoTip from "./InfoTip";
+import { InlineError, Loading, Panel } from "./ui";
+
+const ASSET_COLORS: Record<ShockAsset, string> = {
+  SPX: "#38bdf8",
+  QQQ: "#c084fc",
+  SOXX: "#f97316",
+  HYG: "#34d399",
+};
+const ALL_ASSETS: ShockAsset[] = ["SPX", "QQQ", "SOXX", "HYG"];
+// FOMC decision months on the Aug-2026..Jun-2027 grid (rate_paths.MEETINGS)
+const FOMC_MONTHS = ["2026-09", "2026-10", "2026-12", "2027-01", "2027-03", "2027-04"];
+
+// param drawer: the sensitivity surface — key params only, grouped
+const DRAWER_PARAMS: Array<{ key: string; label: string }> = [
+  { key: "kappa_base", label: "κ pass-through" },
+  { key: "drift_spx", label: "SPX drift /yr" },
+  { key: "hyg_carry", label: "HYG carry /yr" },
+  { key: "implied_prob_oct", label: "Oct hike priced" },
+  { key: "implied_prob_dec", label: "Dec hike priced" },
+  { key: "rho_real", label: "ρ real share" },
+  { key: "beta_spx", label: "β SPX" },
+  { key: "beta_qqq", label: "β QQQ" },
+  { key: "beta_soxx", label: "β SOXX" },
+  { key: "logistic_a", label: "stress logistic a" },
+  { key: "logistic_b", label: "stress logistic b" },
+  { key: "oas_jump_entry", label: "OAS entry jump" },
+  { key: "oas_dtheta_surprise", label: "OAS bp/surprise hike" },
+  { key: "crack_soxx", label: "SOXX crack" },
+  { key: "vix_haircut", label: "VIX haircut" },
+  { key: "stress_exit_monthly", label: "stress exit p" },
+];
+
+export default function RateShockSimulator() {
+  const [hikes, setHikes] = useState(0);
+  const [seed, setSeed] = useState(42);
+  const [assets, setAssets] = useState<ShockAsset[]>(["SPX", "HYG"]);
+  const [showStress, setShowStress] = useState(true);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [overrides, setOverrides] = useState<Record<string, number>>({});
+  const [calib, setCalib] = useState<ShockCalibration | null>(null);
+  const [data, setData] = useState<ShockRun | null>(null);
+  const [base, setBase] = useState<ShockRun | null>(null); // priced-path run
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.shockCalibration().then(setCalib).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    setBusy(true);
+    setError(null);
+    const ov = Object.keys(overrides).length ? overrides : undefined;
+    // fetch the scenario AND the priced-path baseline together: the delta
+    // readout is what makes scenario differences legible (QA: a stale chart
+    // during a slow POST read as "not dynamic")
+    Promise.all([
+      api.shockRun({ hikes, seed, overrides: ov }),
+      // delta baseline = PURE market-implied path (zero surprise): hikes=0
+      // embeds a -29bp dovish surprise and is not the honest zero (QA F4)
+      api.shockRun({ hikes: 0, seed, overrides: ov, implied_baseline: true }),
+    ])
+      .then(([d, b]) => {
+        if (alive) {
+          setData(d);
+          setBase(b);
+          setBusy(false);
+        }
+      })
+      .catch((e) => {
+        if (alive) {
+          setError(errorMessage(e));
+          setBusy(false);
+        }
+      });
+    return () => {
+      alive = false;
+    };
+  }, [hikes, seed, overrides]);
+
+  const rows = useMemo(() => {
+    if (!data) return {} as Record<ShockAsset, Array<Record<string, number | string>>>;
+    const out: Record<string, Array<Record<string, number | string>>> = {};
+    for (const a of ALL_ASSETS) {
+      const b = data.bands[a];
+      out[a] = data.months.map((m, i) => ({
+        month: m,
+        p5: b["5"][i],
+        d5_95: b["95"][i] - b["5"][i],
+        p25: b["25"][i],
+        d25_75: b["75"][i] - b["25"][i],
+        p50: b["50"][i],
+        stress: Math.round(data.stress_prob[i] * 100),
+      }));
+    }
+    return out as Record<ShockAsset, Array<Record<string, number | string>>>;
+  }, [data]);
+
+  return (
+    <Panel
+      title={
+        <>
+          Rate-Shock Simulator — Scenario Fan Charts
+          <InfoTip term="rate_shock_sim" />
+        </>
+      }
+      subtitle="Given N Fed moves vs the priced path, what do equity / HY credit distributions look like out to Q2 2027? Scenario visualization, not prediction"
+    >
+      <div className="flex flex-wrap items-center gap-2 text-[10px]">
+        <span className="uppercase tracking-wide text-slate-500">scenario</span>
+        {[-2, -1, 0, 1, 2, 3, 4].map((h) => (
+          <button
+            key={h}
+            onClick={() => setHikes(h)}
+            className={`rounded-full border px-2.5 py-0.5 font-semibold ${
+              hikes === h
+                ? "border-sky-500 bg-sky-500/10 text-sky-300"
+                : "border-panelborder text-slate-500 hover:text-slate-300"
+            }`}
+          >
+            {h > 0 ? `+${h} hike${h > 1 ? "s" : ""}` : h < 0 ? `${h} cut${h < -1 ? "s" : ""}` : "priced path"}
+          </button>
+        ))}
+        <span className="ml-3 uppercase tracking-wide text-slate-500">assets</span>
+        {ALL_ASSETS.map((a) => (
+          <button
+            key={a}
+            onClick={() =>
+              setAssets((cur) =>
+                cur.includes(a) ? cur.filter((x) => x !== a) : [...cur, a],
+              )
+            }
+            className={`rounded-full border px-2 py-0.5 font-semibold ${
+              assets.includes(a) ? "" : "border-panelborder text-slate-500"
+            }`}
+            style={
+              assets.includes(a)
+                ? {
+                    color: ASSET_COLORS[a],
+                    borderColor: ASSET_COLORS[a],
+                    backgroundColor: `${ASSET_COLORS[a]}1a`,
+                  }
+                : undefined
+            }
+          >
+            {a}
+          </button>
+        ))}
+        <button
+          onClick={() => setSeed(Math.floor(Math.random() * 1e6))}
+          className="ml-3 rounded border border-panelborder px-2 py-0.5 text-slate-400 hover:text-slate-200"
+          title="re-draw Monte Carlo noise"
+        >
+          ↻ seed {seed}
+        </button>
+        <button
+          onClick={() => setShowStress((v) => !v)}
+          className={`rounded border px-2 py-0.5 ${
+            showStress
+              ? "border-amber-500/60 text-amber-300"
+              : "border-panelborder text-slate-500"
+          }`}
+        >
+          stress prob
+        </button>
+        <button
+          onClick={() => setDrawerOpen((v) => !v)}
+          className="rounded border border-panelborder px-2 py-0.5 text-slate-400 hover:text-slate-200"
+        >
+          {drawerOpen ? "▾ params" : "▸ params"}
+        </button>
+        {busy && <span className="text-sky-400">running…</span>}
+        {data && (
+          <span className="ml-auto font-mono text-slate-500">
+            κ {data.meta.kappa_used} · canary {data.meta.canary01} · OAS₀{" "}
+            {Math.round(data.meta.oas0)}bp · {data.meta.n_paths.toLocaleString()} paths
+          </span>
+        )}
+      </div>
+
+      {data && base && <PlainSummary data={data} base={base} hikes={hikes} />}
+
+      {drawerOpen && calib && (
+        <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 rounded border border-panelborder bg-slate-900/40 p-3 md:grid-cols-4">
+          {DRAWER_PARAMS.map(({ key, label }) => {
+            const meta = calib.params[key];
+            if (!meta) return null;
+            return (
+              <label key={key} className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                {meta.high_sensitivity && (
+                  <span
+                    className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-400"
+                    title="HIGH-SENSITIVITY: ±50% of this param moves the terminal median by >30% (QA tornado)"
+                  />
+                )}
+                {meta.source === "judgment" && (
+                  <span
+                    className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400"
+                    title="judgment-tagged parameter"
+                  />
+                )}
+                <span className="w-28 truncate" title={`${meta.note} [${meta.range}]`}>
+                  {label}
+                </span>
+                <input
+                  type="number"
+                  step="any"
+                  defaultValue={overrides[key] ?? meta.default}
+                  onBlur={(e) => {
+                    const v = parseFloat(e.target.value);
+                    if (!Number.isNaN(v) && v !== meta.default)
+                      setOverrides((o) => ({ ...o, [key]: v }));
+                    else
+                      setOverrides((o) => {
+                        const { [key]: _drop, ...rest } = o;
+                        return rest;
+                      });
+                  }}
+                  className="w-20 rounded border border-panelborder bg-slate-900 px-1 py-0.5 font-mono text-[10px] text-slate-200"
+                />
+              </label>
+            );
+          })}
+          <button
+            onClick={() => setOverrides({})}
+            className="text-left text-[10px] text-sky-400 hover:text-sky-300"
+          >
+            reset all
+          </button>
+          <a
+            href="#"
+            onClick={(e) => e.preventDefault()}
+            className="text-[10px] text-slate-500"
+            title={calib.amendments.join("\n")}
+          >
+            {calib.amendments.length} counter-agent amendments (hover)
+          </a>
+        </div>
+      )}
+
+      {error && <div className="mt-2"><InlineError message={error} /></div>}
+      {!data && !error && <Loading label="Running simulator…" />}
+
+      {data && busy && (
+        <div className="mt-2 rounded border border-sky-500/40 bg-sky-500/10 px-3 py-1.5 text-[11px] text-sky-300">
+          Updating scenario — charts below still show the PREVIOUS run…
+        </div>
+      )}
+      {data &&
+        assets.map((a) => (
+          <div key={a} className={`mt-3 ${busy ? "opacity-40" : ""}`}>
+            <div className="flex items-baseline gap-3 text-[11px]">
+              <span className="font-bold" style={{ color: ASSET_COLORS[a] }}>
+                {a}
+              </span>
+              <span className="font-mono text-slate-400">
+                median {fmtPct(data.bands[a]["50"][data.months.length - 1])} · P(touch −10%){" "}
+                {Math.round((data.probs[a].dd_gt_10_touch_est ?? data.probs[a].dd_gt_10) * 100)}% · P(touch −20%){" "}
+                {Math.round((data.probs[a].dd_gt_20_touch_est ?? data.probs[a].dd_gt_20) * 100)}%
+              </span>
+              {base && data.meta.hikes !== 0 && (
+                <DeltaChip
+                  delta={
+                    data.bands[a]["50"][data.months.length - 1] -
+                    base.bands[a]["50"][data.months.length - 1]
+                  }
+                />
+              )}
+            </div>
+            <div className="h-44">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={rows[a]} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
+                  <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" />
+                  <XAxis dataKey="month" stroke="#475569" tick={{ fontSize: 9 }} minTickGap={20} />
+                  <YAxis
+                    stroke="#475569"
+                    tick={{ fontSize: 9 }}
+                    width={40}
+                    allowDataOverflow
+                    domain={[
+                      Math.floor(Math.min(...data.bands[a]["5"]) - 4),
+                      Math.ceil(Math.max(...data.bands[a]["95"]) + 4),
+                    ]}
+                    tickFormatter={(v: number) => `${v}`}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#0f172a",
+                      border: "1px solid #334155",
+                      borderRadius: 6,
+                      fontSize: 11,
+                    }}
+                    formatter={(v: number, name: string, item: { payload?: Record<string, number> }) => {
+                      const p = item.payload;
+                      if (name === "d5_95" && p)
+                        return [`${p.p5.toFixed(1)} – ${(p.p5 + p.d5_95).toFixed(1)}`, "5–95%"];
+                      if (name === "d25_75" && p)
+                        return [`${p.p25.toFixed(1)} – ${(p.p25 + p.d25_75).toFixed(1)}`, "25–75%"];
+                      if (name === "p50") return [Number(v).toFixed(1), "median"];
+                      return null as unknown as [string, string];
+                    }}
+                  />
+                  {FOMC_MONTHS.map((m) => (
+                    <ReferenceLine key={m} x={m} stroke="#334155" strokeDasharray="2 3" />
+                  ))}
+                  <ReferenceLine y={100} stroke="#475569" strokeDasharray="4 4" />
+                  <Area dataKey="p5" stackId="w" stroke="none" fill="transparent" isAnimationActive={false} />
+                  <Area
+                    dataKey="d5_95"
+                    stackId="w"
+                    stroke="none"
+                    fill={ASSET_COLORS[a]}
+                    fillOpacity={0.1}
+                    isAnimationActive={false}
+                  />
+                  <Area dataKey="p25" stackId="n" stroke="none" fill="transparent" isAnimationActive={false} />
+                  <Area
+                    dataKey="d25_75"
+                    stackId="n"
+                    stroke="none"
+                    fill={ASSET_COLORS[a]}
+                    fillOpacity={0.22}
+                    isAnimationActive={false}
+                  />
+                  <Line
+                    dataKey="p50"
+                    stroke={ASSET_COLORS[a]}
+                    strokeWidth={2}
+                    dot={false}
+                    isAnimationActive={false}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        ))}
+
+      {data && showStress && (
+        <div className="mt-2">
+          <span className="text-[10px] uppercase tracking-wide text-slate-500">
+            P(stress state) by month
+          </span>
+          <div className="h-14">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart
+                data={data.months.map((m, i) => ({
+                  month: m,
+                  stress: Math.round(data.stress_prob[i] * 100),
+                }))}
+                margin={{ top: 2, right: 8, bottom: 0, left: 0 }}
+              >
+                <XAxis dataKey="month" hide />
+                <YAxis
+                  stroke="#475569"
+                  tick={{ fontSize: 8 }}
+                  width={30}
+                  domain={[0, 100]}
+                  tickFormatter={(v: number) => `${v}%`}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "#0f172a",
+                    border: "1px solid #334155",
+                    borderRadius: 6,
+                    fontSize: 10,
+                  }}
+                  formatter={(v: number) => [`${v}%`, "P(stress)"]}
+                />
+                <Area
+                  dataKey="stress"
+                  stroke="#fbbf24"
+                  fill="#fbbf24"
+                  fillOpacity={0.15}
+                  isAnimationActive={false}
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      <p className="mt-2 text-[10px] leading-relaxed text-slate-500">
+        All fans are TOTAL-RETURN indices (dividends/carry included) — do not
+        overlay on price charts. Drawdown chips are daily-touch estimates
+        scaled from the sim's month-end grid (realism QA R4). Cut scenarios
+        carry MORE tail risk than baseline by design: cuts beyond pricing
+        historically arrived with recessions (2 of 3 deep-cut episodes ended
+        lower; all three touched −20%) — the dovish-surprise stress channel
+        encodes that, so cut medians rise while cut tails widen. Two-stage
+        conditional engine, not a naive Monte Carlo: your scenario minus
+        the market-implied path (Oct ~70% / Dec ~45% priced, editable) makes a
+        surprise vector; surprises map through a term-premium-dependent κ to the
+        10y, then through estimated duration betas (with a regime-switching
+        credit-stress state) into asset drifts; the Monte Carlo simulates only the
+        residual noise (Student-t, t-copula). Bands are 5/25/50/75/95 percentiles
+        of 10,000 paths, indexed to 100 today. Dashed verticals = FOMC decisions.
+        {calib && <> {calib.epistemic_note}</>}
+      </p>
+    </Panel>
+  );
+}
+
+/** The "what is this actually telling me" box — plain sentences, rewritten
+ *  for whatever scenario is selected. No chart literacy assumed. */
+function PlainSummary({
+  data,
+  base,
+  hikes,
+}: {
+  data: ShockRun;
+  base: ShockRun;
+  hikes: number;
+}) {
+  const last = data.months.length - 1;
+  const spx = data.bands.SPX;
+  const med = spx["50"][last] - 100;
+  const lo = spx["5"][last] - 100;
+  const hi = spx["95"][last] - 100;
+  const delta = spx["50"][last] - base.bands.SPX["50"][last];
+  const touch10 = Math.round(
+    (data.probs.SPX.dd_gt_10_touch_est ?? data.probs.SPX.dd_gt_10) * 100,
+  );
+  const stressPk = Math.round(Math.max(...data.stress_prob) * 100);
+  const hygMed = data.bands.HYG["50"][last] - 100;
+  const scenarioTxt =
+    hikes > 0
+      ? `the Fed hikes ${hikes} more time${hikes > 1 ? "s" : ""} than markets expect`
+      : hikes < 0
+        ? `the Fed cuts ${-hikes} more time${hikes < -1 ? "s" : ""} than markets expect`
+        : "the Fed does roughly what markets already expect";
+  const s = (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
+  return (
+    <div className="mt-2 rounded-lg border border-panelborder bg-slate-900/50 px-4 py-3 text-xs leading-relaxed text-slate-300">
+      <p>
+        <span className="font-semibold text-slate-200">
+          What this is telling you:
+        </span>{" "}
+        this panel simulates 10,000 possible futures under one assumption —{" "}
+        {scenarioTxt} — and shows where prices could plausibly be by June 2027.
+        In each chart, the <span className="text-slate-200">solid line</span>{" "}
+        is the middle (most typical) outcome, the{" "}
+        <span className="text-slate-200">dark band</span> covers the middle
+        half of outcomes, and the{" "}
+        <span className="text-slate-200">light band</span> covers 90% of them —
+        anything outside it is a 1-in-20 surprise.
+      </p>
+      <p className="mt-1.5">
+        Under this scenario the S&amp;P&apos;s typical outcome is{" "}
+        <span className="font-semibold text-slate-100">{s(med)}</span> including
+        dividends
+        {hikes !== 0 && (
+          <>
+            {" "}(
+            <span className={delta >= 0 ? "text-emerald-300" : "text-red-300"}>
+              {s(delta)}
+            </span>{" "}
+            vs the Fed just doing what&apos;s priced)
+          </>
+        )}
+        . The realistic bad case (1-in-20) is{" "}
+        <span className="font-semibold text-red-300">{s(lo)}</span>, the good
+        case {s(hi)}. Odds of at least a 10% dip somewhere along the way: ~
+        {touch10}% (dips are normal — history says most years touch one). High-yield
+        credit (HYG) typically ends {s(hygMed)}. Peak odds of a credit-market
+        break in this scenario: {stressPk}% (amber chart below).
+      </p>
+      <p className="mt-1.5 text-[10px] text-slate-500">
+        Only surprises move markets here: a fully expected hike or cut does
+        little, so mild scenarios produce similar fans — that is honesty, not a
+        bug. Cut scenarios show wider downside tails on purpose: when the Fed
+        cuts more than expected, it is usually because something broke.
+      </p>
+    </div>
+  );
+}
+
+function DeltaChip({ delta }: { delta: number }) {
+  const good = delta >= 0;
+  return (
+    <span
+      className={`rounded-full border px-2 py-px font-mono text-[10px] font-bold ${
+        good
+          ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300"
+          : "border-red-500/50 bg-red-500/10 text-red-300"
+      }`}
+      title="terminal median vs the pure market-implied path (zero surprise, same seed & params)"
+    >
+      vs priced {good ? "+" : ""}
+      {delta.toFixed(1)}pp
+    </span>
+  );
+}
+
+function fmtPct(idx: number): string {
+  const pct = idx - 100;
+  return `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`;
+}

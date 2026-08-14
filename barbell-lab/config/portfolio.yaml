@@ -1,0 +1,38 @@
+# B.5 Enhanced defensive sleeve — target weights and hard constraints.
+# The sleeve objective is NOT Sharpe: maximize long-horizon geometric CAGR
+# subject to the constraints below. Constraints are hard gates in the
+# optimizer, not penalties.
+name: b5-enhanced
+sleeve_fraction: 0.80          # of total book; the bot is the other 0.20
+targets:
+  AVUV: 0.25
+  AVDV: 0.19
+  PHYS: 0.18
+  KMLM: 0.14
+  AVEM: 0.10
+  QUAL: 0.09
+  TAIL_SLEEVE: 0.05            # instrument TBD — resolved by Question #1
+tail_sleeve:
+  # Candidate instruments the platform must adjudicate with data (Question #1).
+  # "NONE" reallocates the 5% pro-rata to the other sleeves.
+  candidates: [TAIL, CAOS, BTAL, NONE]
+  splits: [[TAIL, CAOS], [TAIL, BTAL], [CAOS, BTAL]]   # tested as 50/50
+  current: TAIL                # placeholder until Question #1 is answered
+constraints:
+  cvar_5_annual_min: -0.15     # CVaR(5%, annual) >= -15%
+  p5_max_drawdown_min: -0.20   # 5th-percentile max drawdown >= -20%
+  bot_corr_max: 0.10           # corr(sleeve daily ret, bot daily P&L) <= 0.10
+  max_position: 0.25           # no single position above 25%
+rebalance:
+  band_relative: 0.20          # ±20% relative threshold bands (Act 60: no tax cost)
+  calendar_fallback_months: 12
+
+# Parameterized short-vol bot model — used ONLY where real P&L history is
+# thin AND the caller passes --bot-model. Shape per spec: positive carry,
+# -20%..-30% in VIX-spike months, kill-switch flattening on VIX backwardation.
+bot_model:
+  carry_annual: 0.20           # net carry in benign states (CONFIRM vs bot's realized run-rate)
+  spike_month_return: -0.25    # midpoint of the -20%..-30% spike-month range
+  vix_spike_threshold: 30      # month counts as a spike if VIX >= this ...
+  vix_spike_month_rise: 1.30   # ... and max/first-of-month >= this ratio
+  kill_switch_mode: perfect    # perfect | lag1 | fails (Q1 sweeps all three)

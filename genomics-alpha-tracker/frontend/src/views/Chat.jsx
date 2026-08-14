@@ -142,7 +142,10 @@ export default function Chat({ onPick }) {
     <div className="flex flex-col h-[calc(100vh-13rem)]">
       <div className="flex items-center justify-between mb-2 text-sm">
         <div className="text-gray-400">
-          Ask about any ticker — answers are grounded in your Alpha data + live valuation.
+          Ask about any ticker — answers are grounded in your Alpha data + live valuation
+          {status?.knowledge_base?.length > 0 && (
+            <span className="text-emerald-500/80"> + {status.knowledge_base.length} cited base-rate notes</span>
+          )}.
         </div>
         <label className="flex items-center gap-2 cursor-pointer">
           <input type="checkbox" checked={deep} onChange={(e) => setDeep(e.target.checked)} />

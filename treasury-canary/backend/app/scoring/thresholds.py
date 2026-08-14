@@ -47,12 +47,29 @@ DEFAULTS: dict[str, Threshold] = {
     "crossasset.hy_oas": Threshold(yellow=350.0, red=550.0, higher_is_worse=True),
     "crossasset.ig_oas": Threshold(yellow=130.0, red=180.0, higher_is_worse=True),
     "crossasset.erp": Threshold(yellow=1.0, red=0.0, higher_is_worse=False),
+    # Margin-debt excess growth (FINRA margin YoY minus S&P YoY, pp). Backtest
+    # 1997-2026: >+25pp preceded negative 12m S&P returns in 16/17 months
+    # (2000/2007/2021 clusters). Composite member; 12m-horizon signal.
+    "crossasset.margin_excess_yoy": Threshold(yellow=15.0, red=25.0, higher_is_worse=True),
+    # Raw margin YoY (informational context; blowoff bands from the same study).
+    "crossasset.margin_yoy": Threshold(yellow=30.0, red=40.0, higher_is_worse=True),
+    # (crossasset.margin_coverage is deliberately unthresholded — the ratio
+    # trends structurally lower, so its "record lows" are not a signal.)
     # I. Recession model (%)
     "recession.prob": Threshold(yellow=30.0, red=50.0, higher_is_worse=True),
     "recession.nfci": Threshold(yellow=0.0, red=0.7, higher_is_worse=True),
     # J. Labor (Sahm gap in pp; claims YoY in %). Sahm rule triggers at 0.50.
     "labor.sahm": Threshold(yellow=0.30, red=0.50, higher_is_worse=True),
     "labor.claims_yoy": Threshold(yellow=10.0, red=25.0, higher_is_worse=True),
+    # Vacancies per unemployed person (JOLTS starts 2000-12: fell decisively
+    # under ~1.0 into both the 2001 and 2008 recessions; ~1.2 pre-COVID 2019).
+    "labor.vu_ratio": Threshold(yellow=1.10, red=0.90, higher_is_worse=False),
+    # Openings YoY %: sustained double-digit contraction = labor demand rolling
+    # over. (Status is additionally capped at YELLOW while V/U >= 1.2 — falling
+    # from excess-demand levels is normalization, not deterioration.)
+    "labor.openings_yoy": Threshold(yellow=-5.0, red=-15.0, higher_is_worse=False),
+    # Indeed postings YoY (informational: series starts 2020 — no full cycle).
+    "labor.indeed_yoy": Threshold(yellow=-5.0, red=-15.0, higher_is_worse=False),
     # K. Leading stack (each vs its OWN historical rule; display-only — never
     # jointly fitted and never in the composite, by design).
     "leading.permits_yoy": Threshold(yellow=-10.0, red=-20.0, higher_is_worse=False),

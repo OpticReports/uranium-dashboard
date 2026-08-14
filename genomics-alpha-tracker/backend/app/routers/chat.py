@@ -40,20 +40,36 @@ class ChatResponse(BaseModel):
     usage: ChatUsage | None = None
 
 
+@router.post("/reload-knowledge")
+def reload_knowledge():
+    """Re-index knowledge/*.md after editing the notes (no redeploy needed)."""
+    from ..chat import knowledge
+
+    knowledge.reload()
+    return {"status": "reloaded", "topics": knowledge.topics()}
+
+
 @router.get("/status")
 def status():
+    from ..chat import knowledge
+
     return {
-        "enabled": bool(settings.anthropic_api_key),
-        "model_default": settings.chat_model_default,
-        "model_deep": settings.chat_model_deep,
+        "enabled": bool(settings.anthropic_api_key or settings.openrouter_api_key),
+        "backend": "anthropic" if settings.anthropic_api_key
+        else ("openrouter" if settings.openrouter_api_key else None),
+        "model_default": (settings.chat_model_default if settings.anthropic_api_key
+                          else settings.openrouter_chat_model_default),
+        "model_deep": (settings.chat_model_deep if settings.anthropic_api_key
+                       else settings.openrouter_chat_model_deep),
+        "knowledge_base": knowledge.topics() if knowledge.available() else [],
     }
 
 
 @router.post("", response_model=ChatResponse)
 def chat(payload: ChatRequest, session: Session = Depends(get_session)):
-    if not settings.anthropic_api_key:
+    if not (settings.anthropic_api_key or settings.openrouter_api_key):
         raise HTTPException(
-            503, "Chat is disabled: ANTHROPIC_API_KEY not set in the environment."
+            503, "Chat is disabled: set ANTHROPIC_API_KEY or OPENROUTER_API_KEY."
         )
     try:
         result = run_chat(

@@ -1,0 +1,428 @@
+{
+ "conventions": "see module docstring; decision month t earns t+1; CPI/DXY carry an extra availability-lag month",
+ "eval_window": "signal months 1990-01..2025-07 (15y warmup), single-rule returns 1990-02 -> 2026-07",
+ "base_rate_gde_beats_spy_12m": 0.5480093676814989,
+ "real10y_splice_diag": {
+  "real10y_overlap_2003_2007_mean_diff_pp": -0.5099897122417958,
+  "real10y_2002_12_proxy": 1.5764788732394397,
+  "real10y_2003_01_dfii10": 2.19
+ },
+ "signals": {
+  "sma10_gde": {
+   "desc": "GDE-synth index vs 10m SMA",
+   "mapping": {
+    "1": "gde",
+    "-1": "boxx"
+   },
+   "oos_hit": {
+    "n": 427,
+    "hit_rate": 0.4566744730679157,
+    "p_naive": 0.9633176731318865,
+    "p_overlap_adj": 0.6973831240606075,
+    "killed": true
+   },
+   "killed": true,
+   "single_rule_oos": {
+    "months": 438.0,
+    "CAGR": 0.10214938776265758,
+    "Vol": 0.15594901468314776,
+    "Sharpe": 0.532442154628867,
+    "Sortino": 0.8482411286192101,
+    "MaxDD_m": -0.3176266707639632,
+    "UnderwaterMax_m": 93.0,
+    "Calmar": 0.3216020478285575,
+    "Ulcer": 13.567981274840015,
+    "Worst12m": -0.24824185601586868,
+    "PctPos": 0.6438356164383562,
+    "n_switches_oos": 69.0
+   }
+  },
+  "sma10_spy": {
+   "desc": "SPY index vs 10m SMA (strong SPY -> -1)",
+   "mapping": {
+    "1": "boxx",
+    "-1": "spy"
+   },
+   "oos_hit": {
+    "n": 427,
+    "hit_rate": 0.5620608899297423,
+    "p_naive": 0.005161024314526572,
+    "p_overlap_adj": 0.22952612626377958,
+    "killed": false
+   },
+   "killed": false,
+   "single_rule_oos": {
+    "months": 438.0,
+    "CAGR": 0.0951398228987741,
+    "Vol": 0.1062508630391148,
+    "Sharpe": 0.6609625178274565,
+    "Sortino": 1.0158858961942285,
+    "MaxDD_m": -0.21744056324924932,
+    "UnderwaterMax_m": 33.0,
+    "Calmar": 0.43754404181576984,
+    "Ulcer": 6.145080502677641,
+    "Worst12m": -0.19938480951901794,
+    "PctPos": 0.7168949771689498,
+    "n_switches_oos": 54.0
+   }
+  },
+  "mom12_1_abs_gde": {
+   "desc": "GDE 12-1 vs bills",
+   "mapping": {
+    "1": "gde",
+    "-1": "boxx"
+   },
+   "oos_hit": {
+    "n": 427,
+    "hit_rate": 0.47306791569086654,
+    "p_naive": 0.8671560952367905,
+    "p_overlap_adj": 0.6260119895552366,
+    "killed": true
+   },
+   "killed": true,
+   "single_rule_oos": {
+    "months": 438.0,
+    "CAGR": 0.11970435267609925,
+    "Vol": 0.16077602760468274,
+    "Sharpe": 0.6200932486958225,
+    "Sortino": 1.0300516216456395,
+    "MaxDD_m": -0.2741586775494501,
+    "UnderwaterMax_m": 55.0,
+    "Calmar": 0.4366243437780959,
+    "Ulcer": 7.987338536896572,
+    "Worst12m": -0.21242503530006218,
+    "PctPos": 0.682648401826484,
+    "n_switches_oos": 48.0
+   }
+  },
+  "mom12_1_abs_spy": {
+   "desc": "SPY 12-1 vs bills (strong SPY -> -1)",
+   "mapping": {
+    "1": "boxx",
+    "-1": "spy"
+   },
+   "oos_hit": {
+    "n": 427,
+    "hit_rate": 0.5644028103044496,
+    "p_naive": 0.003888089623567596,
+    "p_overlap_adj": 0.22114014635451923,
+    "killed": false
+   },
+   "killed": false,
+   "single_rule_oos": {
+    "months": 438.0,
+    "CAGR": 0.11473880806172576,
+    "Vol": 0.1167155781358266,
+    "Sharpe": 0.7651451780622898,
+    "Sortino": 1.2541871246211564,
+    "MaxDD_m": -0.19445107195200917,
+    "UnderwaterMax_m": 39.0,
+    "Calmar": 0.5900651866297938,
+    "Ulcer": 5.289961242058793,
+    "Worst12m": -0.11302579412029401,
+    "PctPos": 0.730593607305936,
+    "n_switches_oos": 36.0
+   }
+  },
+  "mom12_1_rel": {
+   "desc": "GDE 12-1 minus SPY 12-1",
+   "mapping": {
+    "1": "gde",
+    "-1": "spy"
+   },
+   "oos_hit": {
+    "n": 427,
+    "hit_rate": 0.6627634660421545,
+    "p_naive": 8.678807067331536e-12,
+    "p_overlap_adj": 0.026079103605063977,
+    "killed": false
+   },
+   "killed": false,
+   "single_rule_oos": {
+    "months": 438.0,
+    "CAGR": 0.15571453771653787,
+    "Vol": 0.18538556253061375,
+    "Sharpe": 0.7354688339619713,
+    "Sortino": 1.1365717468244592,
+    "MaxDD_m": -0.48240693396610834,
+    "UnderwaterMax_m": 44.0,
+    "Calmar": 0.3227866905567275,
+    "Ulcer": 11.860766848946234,
+    "Worst12m": -0.48240693396610823,
+    "PctPos": 0.6438356164383562,
+    "n_switches_oos": 53.0
+   }
+  },
+  "ratio_sma10": {
+   "desc": "gold-spot/SPY TR ratio vs 10m SMA",
+   "mapping": {
+    "1": "gde",
+    "-1": "spy"
+   },
+   "oos_hit": {
+    "n": 427,
+    "hit_rate": 0.6065573770491803,
+    "p_naive": 5.318583626727251e-06,
+    "p_overlap_adj": 0.10181680872230395,
+    "killed": false
+   },
+   "killed": false,
+   "single_rule_oos": {
+    "months": 438.0,
+    "CAGR": 0.12302043658501871,
+    "Vol": 0.17467609563859893,
+    "Sharpe": 0.6042283784643712,
+    "Sortino": 0.9025770445183061,
+    "MaxDD_m": -0.47630217525396246,
+    "UnderwaterMax_m": 70.0,
+    "Calmar": 0.2582823320498688,
+    "Ulcer": 12.204519435366146,
+    "Worst12m": -0.4653518439769623,
+    "PctPos": 0.6415525114155252,
+    "n_switches_oos": 78.0
+   }
+  },
+  "tsmom_3_gde": {
+   "desc": "GDE 3m TSMOM vs bills",
+   "mapping": {
+    "1": "gde",
+    "-1": "boxx"
+   },
+   "oos_hit": {
+    "n": 427,
+    "hit_rate": 0.5081967213114754,
+    "p_naive": 0.36739762536972853,
+    "p_overlap_adj": 0.46104961050328663,
+    "killed": false
+   },
+   "killed": false,
+   "single_rule_oos": {
+    "months": 438.0,
+    "CAGR": 0.08119266433847794,
+    "Vol": 0.1427120083521255,
+    "Sharpe": 0.43323211648481236,
+    "Sortino": 0.6921428381957149,
+    "MaxDD_m": -0.30789094016371443,
+    "UnderwaterMax_m": 82.0,
+    "Calmar": 0.2637059222830833,
+    "Ulcer": 11.46143939204437,
+    "Worst12m": -0.18020409685368333,
+    "PctPos": 0.6643835616438356,
+    "n_switches_oos": 121.0
+   }
+  },
+  "tsmom_6_gde": {
+   "desc": "GDE 6m TSMOM vs bills",
+   "mapping": {
+    "1": "gde",
+    "-1": "boxx"
+   },
+   "oos_hit": {
+    "n": 427,
+    "hit_rate": 0.48009367681498827,
+    "p_naive": 0.7946571831672973,
+    "p_overlap_adj": 0.5938614568958845,
+    "killed": true
+   },
+   "killed": true,
+   "single_rule_oos": {
+    "months": 438.0,
+    "CAGR": 0.09388784002001271,
+    "Vol": 0.15376605615075148,
+    "Sharpe": 0.4880740369881434,
+    "Sortino": 0.7837565270678596,
+    "MaxDD_m": -0.31978945411072,
+    "UnderwaterMax_m": 93.0,
+    "Calmar": 0.29359267109385706,
+    "Ulcer": 13.7994163709141,
+    "Worst12m": -0.29154471733249965,
+    "PctPos": 0.6643835616438356,
+    "n_switches_oos": 85.0
+   }
+  },
+  "tsmom_12_gde": {
+   "desc": "GDE 12m TSMOM vs bills",
+   "mapping": {
+    "1": "gde",
+    "-1": "boxx"
+   },
+   "oos_hit": {
+    "n": 427,
+    "hit_rate": 0.45901639344262296,
+    "p_naive": 0.9548453793944273,
+    "p_overlap_adj": 0.6875610668238346,
+    "killed": true
+   },
+   "killed": true,
+   "single_rule_oos": {
+    "months": 438.0,
+    "CAGR": 0.11042263231507587,
+    "Vol": 0.15745065238383416,
+    "Sharpe": 0.5767408496754115,
+    "Sortino": 0.9551738379341324,
+    "MaxDD_m": -0.23613111503448125,
+    "UnderwaterMax_m": 62.0,
+    "Calmar": 0.4676327060876806,
+    "Ulcer": 9.256657309950878,
+    "Worst12m": -0.18489146741880724,
+    "PctPos": 0.6735159817351598,
+    "n_switches_oos": 58.0
+   }
+  },
+  "tips_level": {
+   "desc": "real 10y vs expanding median (spliced pre-2003)",
+   "mapping": {
+    "1": "gde",
+    "-1": "spy"
+   },
+   "oos_hit": {
+    "n": 427,
+    "hit_rate": 0.6018735362997658,
+    "p_naive": 1.2755819223759038e-05,
+    "p_overlap_adj": 0.11210920574824738,
+    "killed": false
+   },
+   "killed": false,
+   "single_rule_oos": {
+    "months": 438.0,
+    "CAGR": 0.13751656402341417,
+    "Vol": 0.1921085936351977,
+    "Sharpe": 0.632054948191269,
+    "Sortino": 0.9950123482653916,
+    "MaxDD_m": -0.4444642945668599,
+    "UnderwaterMax_m": 66.0,
+    "Calmar": 0.3093984504591692,
+    "Ulcer": 12.289453361601844,
+    "Worst12m": -0.4308054231195999,
+    "PctPos": 0.593607305936073,
+    "n_switches_oos": 39.0
+   }
+  },
+  "tips_chg3": {
+   "desc": "real 10y 3m change (<=0 gold-fav)",
+   "mapping": {
+    "1": "gde",
+    "-1": "spy"
+   },
+   "oos_hit": {
+    "n": 427,
+    "hit_rate": 0.5152224824355972,
+    "p_naive": 0.26463718201957886,
+    "p_overlap_adj": 0.42794455887400085,
+    "killed": false
+   },
+   "killed": false,
+   "single_rule_oos": {
+    "months": 438.0,
+    "CAGR": 0.12761325035102478,
+    "Vol": 0.17727716549753053,
+    "Sharpe": 0.6184055728319051,
+    "Sortino": 0.9825130487580059,
+    "MaxDD_m": -0.45328752429459074,
+    "UnderwaterMax_m": 50.0,
+    "Calmar": 0.2815282651990421,
+    "Ulcer": 12.298899440017903,
+    "Worst12m": -0.4514221777579521,
+    "PctPos": 0.6232876712328768,
+    "n_switches_oos": 113.0
+   }
+  },
+  "tips_trend12": {
+   "desc": "real 10y 12m change (<=0 gold-fav)",
+   "mapping": {
+    "1": "gde",
+    "-1": "spy"
+   },
+   "oos_hit": {
+    "n": 427,
+    "hit_rate": 0.5035128805620609,
+    "p_naive": 0.442284308857125,
+    "p_overlap_adj": 0.4832852594599979,
+    "killed": false
+   },
+   "killed": false,
+   "single_rule_oos": {
+    "months": 438.0,
+    "CAGR": 0.11691553791559373,
+    "Vol": 0.18171556407171616,
+    "Sharpe": 0.5564313514158857,
+    "Sortino": 0.8356042637531578,
+    "MaxDD_m": -0.5710563234293673,
+    "UnderwaterMax_m": 47.0,
+    "Calmar": 0.2047355630587895,
+    "Ulcer": 13.565256893914693,
+    "Worst12m": -0.5710563234293671,
+    "PctPos": 0.6301369863013698,
+    "n_switches_oos": 61.0
+   }
+  },
+  "real_ffr": {
+   "desc": "FEDFUNDS minus 12m CPI infl vs 0",
+   "mapping": {
+    "1": "gde",
+    "-1": "spy"
+   },
+   "oos_hit": {
+    "n": 427,
+    "hit_rate": 0.5386416861826698,
+    "p_naive": 0.05513486749994576,
+    "p_overlap_adj": 0.3223960833995933,
+    "killed": false
+   },
+   "killed": false,
+   "single_rule_oos": {
+    "months": 437.0,
+    "CAGR": 0.134858028570368,
+    "Vol": 0.1789353926251749,
+    "Sharpe": 0.6529152982750807,
+    "Sortino": 0.9967500784456595,
+    "MaxDD_m": -0.4478933465430498,
+    "UnderwaterMax_m": 42.0,
+    "Calmar": 0.30109406538684974,
+    "Ulcer": 11.343379328821856,
+    "Worst12m": -0.4458405095623561,
+    "PctPos": 0.6247139588100686,
+    "n_switches_oos": 21.0
+   }
+  },
+  "dxy_trend12": {
+   "desc": "trade-weighted USD 12m change (rising -> -1)",
+   "mapping": {
+    "1": "gde",
+    "-1": "spy"
+   },
+   "oos_hit": {
+    "n": 427,
+    "hit_rate": 0.550351288056206,
+    "p_naive": 0.018720804576232524,
+    "p_overlap_adj": 0.2740170240385063,
+    "killed": false
+   },
+   "killed": false,
+   "single_rule_oos": {
+    "months": 438.0,
+    "CAGR": 0.1269818207022022,
+    "Vol": 0.1758388690353156,
+    "Sharpe": 0.621802309285561,
+    "Sortino": 0.929822350288361,
+    "MaxDD_m": -0.5710563234293671,
+    "UnderwaterMax_m": 42.0,
+    "Calmar": 0.22236304107384314,
+    "Ulcer": 13.432568449197,
+    "Worst12m": -0.5710563234293671,
+    "PctPos": 0.6210045662100456,
+    "n_switches_oos": 62.0
+   }
+  }
+ },
+ "kill_list": [
+  "sma10_gde",
+  "mom12_1_abs_gde",
+  "tsmom_6_gde",
+  "tsmom_12_gde"
+ ],
+ "infeasible": {
+  "futures_term_structure": "INFEASIBLE with frozen fixtures (amendment A7): fmp_gcusd_light is a price-spliced FRONT-MONTH-only continuous series \u2014 no deferred contracts, so no curve slope exists in the data. A GLD-minus-GCUSD 'basis' surrogate was considered and rejected: it would mix a 1:30pm COMEX settle against a 4pm NYSE close and a 40bp/yr fee against a price-spliced roll, so day-to-day 'slope' would be mark noise, not term structure. Logged as not-tested rather than faked."
+ },
+ "n_signal_variants_tested": 14
+}

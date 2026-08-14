@@ -44,6 +44,30 @@ _ape_cache: dict[str, object] = {"ts": 0.0, "by_ticker": {}}
 # ~12x for the same window. Resets on process restart (at worst a few extra pulls/day).
 _x_fetch_day: dict[str, str] = {}
 
+# Circuit breaker: on an auth/payment error, stop calling twitterapi.io for the
+# rest of the cycle (all 32 names) instead of hammering the dead endpoint per
+# symbol. 402 = out of credits -> back off ~a day (topping up is a human action);
+# 401/403 = bad key -> back off ~1h so a fixed key recovers on its own.
+_x_breaker: dict[str, float] = {"until": 0.0}
+
+
+def _x_breaker_open() -> bool:
+    return time.monotonic() < _x_breaker["until"]
+
+
+def _trip_x_breaker(status: int) -> None:
+    cooldown = 86400 if status == 402 else 3600
+    _x_breaker["until"] = time.monotonic() + cooldown
+    if status == 402:
+        logger.warning(
+            "twitterapi.io out of credits (HTTP 402) — X ingestion paused ~24h. "
+            "Top up at twitterapi.io or unset TWITTERAPI_IO_KEY to silence this "
+            "(ApeWisdom remains the free social primary).")
+    else:
+        logger.warning(
+            "twitterapi.io auth failed (HTTP %s) — X ingestion paused ~1h. "
+            "Check TWITTERAPI_IO_KEY.", status)
+
 
 def _apewisdom_snapshot() -> dict[str, dict]:
     """Market-wide {TICKER: row} from ApeWisdom (all stock subreddits). Cached."""
@@ -215,6 +239,8 @@ class SocialIngestion(IngestionSource):
         Cashtag query, English, no retweets.
         """
         sym = symbol.upper()
+        if _x_breaker_open():
+            return []  # source paused this cycle (credits/auth) — logged once
         today = datetime.utcnow().date().isoformat()
         if _x_fetch_day.get(sym) == today:
             return []  # already pulled X for this symbol today — don't re-pay
@@ -237,10 +263,9 @@ class SocialIngestion(IngestionSource):
                 r = with_backoff(lambda p=dict(params): httpx.get(
                     base, headers=headers, params=p,
                     timeout=settings.http_timeout_seconds))
-                if r.status_code in (401, 403):
-                    logger.warning("twitterapi.io auth failed (HTTP %s) — check TWITTERAPI_IO_KEY",
-                                   r.status_code)
-                    break  # don't mark fetched: let a fixed key retry next cycle
+                if r.status_code in (401, 402, 403):
+                    _trip_x_breaker(r.status_code)  # pause the whole source, not just this name
+                    break  # don't mark fetched: retry after the cooldown
                 r.raise_for_status()
                 got_response = True
                 j = r.json()

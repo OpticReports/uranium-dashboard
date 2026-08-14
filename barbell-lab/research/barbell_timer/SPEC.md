@@ -1,0 +1,138 @@
+# BARBELL-TIMER — frozen research brief (owner-authored, 2026-08-12)
+
+Owner's brief committed VERBATIM below as the pre-registration. The rule
+set (5 candidates), signal library, QA battery, cost model, and verdict
+criterion (Calmar/ulcer vs static 50/50 OOS, p<0.10 after multiple-testing
+adjustment) are frozen before any data is pulled. Additions after this
+commit are reported as amendments, never silently.
+
+Execution notes (implementation choices that the brief leaves open, fixed
+now): data via FMP (GDE/SPY/GLD/GCUSD dailies) + FRED (TB3MS, DFII10,
+DTWEXM/DTWEXBGS, CPIAUCSL, FEDFUNDS) + repo Shiller/datahub fixtures
+(SPX TR pre-1993 splice, gold monthly pre-futures). Gold futures excess
+return pre-FMP-history is approximated as spot return minus a documented
+carry/lease adjustment - FLAGGED per the guardrail, quantified by decade
+per Phase 0. Signals monthly, computed on month-end data, executed at the
+NEXT month's open (repo standing timing convention). All fixtures frozen
+under research/barbell_timer/fixtures/.
+
+---
+
+[Owner brief follows verbatim]
+
+EXPLORATORY: Gold/Equity Regime-Rotation Research Engine ("BARBELL-TIMER")
+Research-grade exploration - NOT production, NOT live trading.
+Three sleeves: GDE (stacked ~90/90 gold-futures + S&P) or synthetic
+replication; SPY; BOXX (bills proxy, bills minus 5bp).
+Primary objective: maximize drawdown reduction per unit of CAGR
+sacrificed, vs buy-and-hold GDE and vs static 50/50 GDE/SPY. Alpha is NOT
+the goal. Prior findings internalized: regime-dominated (lost 1980-1999,
+won 2001-2011, rolling 10y win rate ~48%, Sharpe diff CI straddles zero);
+B&H synthetic maxDD ~-47% annual (assume -55/-60 true); naive gold-trend
+timing was the WORST rule tested; best simple rule = relative momentum
+GDE/SPY + absolute cash filter (annual: DD -47->-30, underwater 6y->3y,
+Sortino 1.0->1.7) - must revalidate monthly; static 50/50 captured most
+available Sharpe improvement and is the null.
+
+Phase 0: SPX TR to 1970 (splice SPY post-1993); gold spot AND front-month
+futures; 3M bills (BOXX proxy pre-2022, actual BOXX after); GDE actual NAV
+from 2022-03-17; 10Y TIPS real yield (2003->, spliced proxy before);
+optional lease rates/DXY/term structure. VALIDATION GATE: replication =
+0.90xSPX_TR + 0.10xbills + 0.90x(gold futures excess) - 20bp fee -
+realistic roll cost must track actual GDE 2022-present within ~1.5%/yr TE
+and match WisdomTree since-inception 26.57% ann. (as of 7/31/2026) - else
+STOP and fix. Report TE explicitly. Compute realized gold carry drag by
+decade - quantify, don't assume.
+
+Phase 1: monthly 1975->: B&H GDE-synth, B&H SPY, static 25/75-50/50-75/25
+(monthly + quarterly rebal). Full stats: CAGR, vol, Sharpe (excess bills),
+Sortino (MAR=rf, conventions stated), monthly maxDD, longest underwater,
+Calmar, ulcer, worst 12m, %positive. Rolling 10y spreads vs SPY and 50/50.
+Report intramonth-blind bias; estimate daily where possible.
+
+Phase 2 signals (isolation first, kill <coin-flip OOS): 10m SMA per
+sleeve; 12-1 momentum abs+rel; gold/SPY ratio 10m SMA; TSMOM 3/6/12m;
+TIPS real yield level/3m change/12m trend; real FFR; futures term
+structure state+slope; DXY 12m trend.
+
+Phase 3 rules (pre-registered, walk-forward only, expanding window, no
+full-sample optimization; <=3 free params; 5bp/switch, BOXX=bills-5bp;
+report turnover/decade; per-regime blocks 1980-99, 2001-11, 2012-18,
+2022->; must be at worst mildly negative in bad regime):
+ 1. Static 50/50 (null)
+ 2. Rel momentum GDE/SPY + abs cash filter (monthly)
+ 3. Real-rate gate: GDE when TIPS trend down/flat, SPY rising, BOXX both neg
+ 4. Composite: momentum AND real-rate agree -> GDE; disagree -> 50/50;
+    both neg -> BOXX
+ 5. Vol-targeted #4 (60d trailing, 15% target)
+
+Phase 4 adversarial QA: start-date sensitivity (all years, min/max);
+drop-single-year; signal noise 15%/30% flips x2000 trials; bootstrap CIs
+vs 50/50; 1-month lag stress; oracle gap.
+
+Deliverables: data-validation report (go/no-go), master stats table,
+rolling 10y spread charts, drawdown overlay with switch dates, QA appendix
+including failures, one-page honest verdict: does ANY rule improve
+Calmar/ulcer vs 50/50 OOS with p<0.10 after multiple-testing adjustment?
+"No" is a valid finding.
+
+Guardrails: no live orders; flag all approximations/splices; Sharpe>1.2
+on a timing rule = assume bug/leak first, audit timestamps; no tax
+penalty (Act 60) but report turnover; prefer boring conclusions that
+survive every check.
+
+## AMENDMENT A5 (owner, 2026-08-12, logged before Phase 2-3 results seen)
+
+Owner's underlying decision question: "find a way to make owning GDE
+better than owning SPY." The verdict page must therefore answer TWO
+questions, separately: (Q1, original) does any rule beat the static
+50/50 null on Calmar/ulcer OOS after multiple-testing adjustment; (Q2,
+owner) does any GDE-containing portfolio (static blend or rule) dominate
+B&H SPY - defined as: >= SPY CAGR AND better maxDD/Calmar/Sortino, with
+the comparison ALSO shown leverage-aware (GDE is ~180% notional; a
+90/90 stack beating 100% SPY on raw CAGR is expected, not evidence).
+Every rule table gains a vs-SPY column set. Phase 4's drop-single-year
+test is decisive for Q2 (prior: the 51y CAGR edge may be 1979 alone).
+
+## AMENDMENT A12 (owner, 2026-08-12, frozen before computation)
+
+Owner clarification: the objective is a GDE-ANCHORED entry/exit engine -
+default position IS GDE; exits are regime/vol-triggered; success = GDE's
+DD materially reduced while CAGR stays above B&H SPY. Pre-registered
+exit-engine family (each <=3 params, same costs/timing, walk-forward):
+ 6. VOL-EXIT: hold GDE; exit to cash when trailing 63d realized vol of
+    the GDE synthetic exceeds its expanding Pth percentile (P=85);
+    re-enter below the Qth (Q=70). Variant 6b: exit destination SPY
+    when SPY's own 10m trend is positive, else cash.
+ 7. CORR-SPIKE EXIT: hold GDE; exit to cash when trailing 63d
+    gold-equity correlation exceeds its expanding 90th percentile AND
+    GDE 3m return is negative (the Oct-2008 phenotype); re-enter when
+    either condition clears.
+ 8. DUAL-TRIGGER: exit on (6) OR (7); re-enter when both clear.
+Context carried: GDE-sleeve TREND exits already failed twice (prior
+study; Phase 2 killed sma10_gde/tsmom at <=50% OOS) - the vol/corr
+family is the genuinely untested branch. Multiple-testing family grows
+by 4 variants (logged; adjusted bars recomputed). Killed variants are
+reported, not hidden.
+
+## AMENDMENT A17 (owner, 2026-08-12, frozen before computation)
+
+Owner direction: test MICRO / cross-equity-internals timing signals -
+correlations and relative behavior across OTHER equities as the regime
+detector, rather than GDE's own behavior (A12, failed) or slow macro
+prints (rules 3-4, beaten). Pre-registered signal set (isolation OOS
+first, same kill bar; data = frozen french12.json industries 1935-> +
+Baa spread from cycle fixtures + panel dailies):
+ s15 DEFENSIVE/CYCLICAL: 12-1 relative momentum of (Utils+NoDur+Hlth)
+     vs (Durbl+Manuf+Money) equal-weight - risk-off leadership.
+ s16 UTILS/MARKET: Utils minus market 12-1 relative momentum.
+ s17 BAA SPREAD 3m CHANGE (widening = stress).
+ s18 INTRA-EQUITY CORRELATION: trailing 12m mean pairwise correlation
+     of the 12 French industries (monthly), expanding z - dispersion
+     collapse = systemic regime.
+Rules (only if >=1 signal survives the kill bar): 9. GDE default, exit
+to cash on risk-off (surviving signal(s) adverse) - the owner's exit
+engine with EXTERNAL eyes; 10. relmom_cash gated by s-signal (stay in
+GDE only if internals benign) - can internals fix the one-month-lag
+fragility (the Oct-2008 miss)? Success bar unchanged (A12 criterion +
+lag stress mandatory). Family grows to 26+2; adjusted bars recomputed.

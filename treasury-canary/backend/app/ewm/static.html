@@ -1,0 +1,609 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Exit Window Monitor</title>
+<link rel="icon" type="image/png" href="data:image/png;base64,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"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+<style>
+:root{color-scheme:dark;
+ --bg:#0b1120;--surf1:#111a2e;--surf2:#17223c;--surf3:#1d2a49;
+ --outline:#26334e;--outline2:#3b4a6b;
+ --txt:#dbe4f0;--txt2:#93a4bd;--txt3:#5f6f8a;
+ --pri:#7dd3fc;--pri2:#38bdf8;--onpri:#082f49;
+ --green:#34d399;--amber:#fbbf24;--red:#f87171}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font:13.5px/1.55 Roboto,system-ui,-apple-system,sans-serif}
+table,.big,.trig,.mo,.leg,#fantip,.fomc{font-family:'Roboto Mono',ui-monospace,monospace}
+.appbar{position:fixed;top:0;left:0;right:0;z-index:40;display:flex;align-items:center;gap:12px;height:56px;padding:0 16px;background:#0e1626ee;backdrop-filter:blur(8px);box-shadow:0 1px 0 var(--outline),0 2px 10px #0009}
+.abt{font-size:16px;font-weight:500;color:#f1f5f9}
+.mark{width:26px;height:26px;vertical-align:-6px;margin-right:3px}
+.abs{font-size:11px;color:var(--txt3);margin-top:-2px}
+a.nav{display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:50%;color:var(--txt2);text-decoration:none;font-size:16px;transition:background .15s,color .15s;flex:0 0 auto}
+a.nav:hover{background:#ffffff14;color:var(--pri)}
+.wrap{max-width:1180px;margin:0 auto;padding:74px 20px 28px}
+.panel{background:var(--surf1);border-radius:14px;padding:16px 20px;margin-bottom:16px;box-shadow:0 1px 2px #0007,0 2px 8px #0004}
+.strip{display:flex;flex-wrap:wrap;gap:26px;align-items:baseline}
+.big{font-size:27px;color:var(--pri2);font-weight:700}
+.lbl{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.12em;color:var(--txt2);display:block;margin-bottom:4px}
+.plain{background:var(--surf2);border-left:3px solid var(--pri2);padding:12px 16px;border-radius:10px;color:#e7eef8;font-size:13px;box-shadow:0 1px 2px #0005}
+.plain b{color:var(--pri)}
+.tl{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.mo{flex:1 1 54px;min-width:54px;text-align:center;border-radius:10px;padding:8px 2px;font-size:10px;border:1px solid transparent}
+.G{background:#065f4633;color:var(--green);border-color:#34d39944}
+.A{background:#78350f33;color:var(--amber);border-color:#fbbf2444}
+.R{background:#7f1d1d33;color:var(--red);border-color:#f8717144}
+.X{background:#1e293b55;color:var(--txt3);text-decoration:line-through}
+.fomc{font-size:8px;color:var(--txt2)}
+table{width:100%;border-collapse:collapse;font-size:11.5px}
+td,th{padding:7px 10px;text-align:right;border-bottom:1px solid #ffffff0c}
+th{color:var(--txt3);font-weight:500;font-size:10px;text-transform:uppercase;letter-spacing:.07em}
+td:first-child,th:first-child{text-align:left}
+tbody tr:hover td,table tr:hover td{background:#ffffff05}
+.cmid{color:#eef3fa;font-weight:600}.crng{color:var(--txt3);font-size:10px}
+.star{color:var(--amber)}.stall{color:var(--red);font-size:9px}
+.modalcell{background:#1d4ed826;border-radius:6px}
+tr.foot td{border-top:1px solid var(--outline2);color:var(--txt2)}
+tr.foot td.cmid{color:var(--pri)}
+.be{background:var(--surf2);border-left:3px solid var(--amber);border-radius:10px;padding:12px 16px;margin-top:12px;color:#fcd34d;font-size:12.5px;box-shadow:0 1px 2px #0005}
+.be b{color:var(--amber)}
+.tag{font-size:8px;color:var(--txt3);display:block;text-transform:none;letter-spacing:0}
+.card{background:var(--surf2);border-left:3px solid var(--pri2);border-radius:10px;padding:12px 16px;margin-top:10px;box-shadow:0 1px 2px #0005}
+.card b{color:#eef3fa}.trig{color:var(--txt3);font-size:10px;margin-top:8px}
+.cev{margin-top:8px;font-size:11.5px;color:var(--txt2)}
+.cevh{font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--txt3)}
+.cev ul{margin:3px 0 0;padding-left:18px}.cev li{margin:2px 0}
+.ep{color:var(--txt3);font-size:10.5px;margin-top:16px}
+details{margin-bottom:16px}
+summary{cursor:pointer;color:var(--txt2);font-size:12.5px;font-weight:500;padding:12px 20px;background:var(--surf1);border-radius:14px;box-shadow:0 1px 2px #0007,0 2px 8px #0004;list-style:none;transition:background .15s}
+summary:hover{background:var(--surf2)}
+summary::-webkit-details-marker{display:none}
+summary::before{content:'\25B8';display:inline-block;margin-right:8px;color:var(--txt3);transition:transform .15s}
+details[open] summary{border-radius:14px 14px 0 0}
+details[open] summary::before{transform:rotate(90deg)}
+details[open] .panel{border-radius:0 0 14px 14px;margin-top:1px}
+.form{display:flex;flex-wrap:wrap;gap:16px;padding:8px 0 2px;align-items:end}
+.form label,.tgl label{display:flex;flex-direction:column;gap:5px;color:var(--txt2)}
+.ltxt{display:inline-flex;align-items:center;font-size:9.5px;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--txt2);white-space:nowrap}
+.form select,.form input:not([type=checkbox]),.tgl select,.tgl input{background:var(--surf3);color:var(--txt);border:1px solid transparent;border-bottom:1px solid var(--outline2);border-radius:8px 8px 4px 4px;height:36px;padding:6px 12px;font:inherit;font-size:12.5px;width:150px;transition:background .15s,border-color .15s}
+.form select,.tgl select{appearance:none;-webkit-appearance:none;background:var(--surf3) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M1 1l4 4 4-4' stroke='%2394a3b8' stroke-width='1.5' fill='none' stroke-linecap='round'/></svg>") no-repeat right 10px center;padding-right:28px;cursor:pointer;width:auto;min-width:158px}
+.form select:hover,.tgl select:hover,.form input:hover,.tgl input:hover{background-color:#22304f}
+.form select:focus,.tgl select:focus,.form input:focus,.tgl input:focus{border-color:var(--pri2);border-bottom-color:var(--pri2);outline:none}
+.form input[type=checkbox]{width:18px;height:18px;accent-color:var(--pri2);margin:9px 0;cursor:pointer}
+.tgl input[type=number]{width:96px}
+button{background:var(--pri);color:var(--onpri);border:0;border-radius:20px;padding:9px 20px;font:500 12px Roboto,system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;box-shadow:0 1px 3px #0007;transition:filter .15s,box-shadow .15s}
+button:hover{filter:brightness(1.08);box-shadow:0 2px 8px #0008}
+.tgl{display:flex;flex-wrap:wrap;gap:16px;margin-bottom:12px;align-items:end}
+canvas{width:100%;max-width:100%;background:#0d1526;border-radius:12px}
+input.pin{width:72px;height:28px;padding:2px 8px;background:var(--surf3);color:var(--txt);border:1px solid transparent;border-bottom:1px solid var(--outline2);border-radius:6px;font:inherit;font-size:11.5px;text-align:right}
+input.pin.ovr{color:var(--amber);border-color:#fbbf2466}
+input.pin:focus{border-color:var(--pri2);outline:none}
+.leg{font-size:10px;color:var(--txt3);margin-top:8px}
+.leg span{margin-right:14px}
+.dim{color:var(--txt3)}
+.hq{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;background:#ffffff0d;color:var(--txt2);font-size:9px;font-family:Roboto;cursor:help;margin-left:6px;vertical-align:middle;user-select:none;flex:0 0 auto;transition:background .15s,color .15s}
+.hq:hover{background:var(--pri2);color:var(--onpri)}
+#hpop{position:absolute;z-index:50;max-width:430px;max-height:280px;overflow-y:auto;background:var(--surf3);border-radius:12px;padding:12px 16px;font-size:11.5px;line-height:1.6;color:var(--txt);box-shadow:0 4px 10px #0008,0 12px 32px #000a;display:none}
+#hpop b{color:var(--pri)}
+#fantip{position:absolute;display:none;pointer-events:none;background:#1d2a49f2;border-radius:10px;padding:8px 12px;font-size:11px;line-height:1.55;color:var(--txt);box-shadow:0 4px 14px #000a;white-space:nowrap}
+#fantip b{color:var(--pri)}
+</style></head><body>
+<header class="appbar"><a class="nav" href="/" title="All dashboards">&#9776;</a>
+<div><div class="abt"><svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="5" width="28" height="25" rx="5" fill="#e7eef8"/><path d="M2 10a5 5 0 0 1 5-5h18a5 5 0 0 1 5 5v4H2z" fill="#ef4444"/><rect x="8" y="2" width="3.2" height="6" rx="1.6" fill="#64748b"/><rect x="20.8" y="2" width="3.2" height="6" rx="1.6" fill="#64748b"/><text x="16" y="26.5" text-anchor="middle" font-family="Roboto Mono,ui-monospace,monospace" font-weight="700" font-size="11.5" letter-spacing="-1" fill="#0f172a">$$</text></svg> Exit Window Monitor</div>
+<div class="abs">Deal-timing decision support &middot; ~$200&ndash;240M exit &middot; sell-for-less-now vs hold to Jul 31 2027</div></div></header>
+<div id="hpop"></div>
+<div class="wrap">
+
+<div class="panel plain" id="plain">loading&hellip;</div>
+<div class="panel strip" id="strip"></div>
+
+
+
+<details><summary>&#9881; Settings — revenue ramp &amp; process inputs <span class="hq" data-h="settings">?</span></summary>
+<div class="panel"><div class="form" id="form">
+<label><span class="ltxt">Revenue run-rate @ Dec 2026 ($M)<span class="hq" data-h="set_rev">?</span></span><input id="i_rev" type="number" step="0.5"></label>
+<label><span class="ltxt">Target value low ($M)<span class="hq" data-h="set_target">?</span></span><input id="i_tlo" type="number" step="1"></label>
+<label><span class="ltxt">Target value high ($M)<span class="hq" data-h="set_target">?</span></span><input id="i_thi" type="number" step="1"></label>
+<label><span class="ltxt">Process stage<span class="hq" data-h="strip_stage">?</span></span><select id="i_stage"><option>not_started</option><option>prep</option><option>in_market</option><option>loi</option><option>exclusivity</option><option>close</option></select></label>
+<label><span class="ltxt">Today (month)</span><input id="i_today" placeholder="2026-09"></label>
+<label><span class="ltxt">Dissent cluster<span class="hq" data-h="set_dis">?</span></span><input id="i_dis" type="checkbox"></label>
+<label><span class="ltxt">Anchor to company plan<span class="hq" data-h="set_anchor">?</span></span><input id="i_anchor" type="checkbox"></label>
+<label><span class="ltxt">Pin to report ($105M, no ramp)<span class="hq" data-h="set_pin">?</span></span><input id="i_pin" type="checkbox"></label>
+<button id="save">Apply</button>
+<span class="dim" id="savemsg"></span>
+</div></div></details>
+
+<div class="panel"><span class="lbl">Monte Carlo valuation fan — toggle shocks, engine reprices the whole path<span class="hq" data-h="fan">?</span></span>
+<div class="tgl">
+<label><span class="ltxt">Rate path<span class="hq" data-h="t_force">?</span></span><select id="t_force"><option value="">probabilistic (cohort weights)</option><option value="-1">force rate cut(s)</option><option value="0">force 0 hikes</option><option value="1">force 1 hike</option><option value="2">force 2 hikes</option><option value="3">force 3 hikes</option><option value="4">force 4 hikes</option></select></label>
+<label><span class="ltxt">Stock crash<span class="hq" data-h="t_crash">?</span></span><select id="t_crash"><option value="none">none</option><option value="moderate">moderate (&minus;20% SPX)</option><option value="severe">severe (&minus;35% SPX)</option></select></label>
+<label><span class="ltxt">50bp regime<span class="hq" data-h="t_reg">?</span></span><select id="t_reg"><option value="">off</option><option value="1">on (off-cohort gap)</option></select></label>
+<label><span class="ltxt">Extra stall hazard (pp)<span class="hq" data-h="t_stall">?</span></span><input id="t_stall" type="number" value="0" min="0" max="30" step="1"></label>
+<label><span class="ltxt">Horizon<span class="hq" data-h="t_hz">?</span></span><select id="t_hz"><option value="2027-07">to sale goal (Jul 31 '27)</option><option value="2027-12">extended (Dec '27)</option></select></label>
+<button id="runsim">Run simulation</button>
+<span class="dim" id="simmsg"></span>
+</div>
+<div style="position:relative"><canvas id="fan" width="1100" height="380"></canvas>
+<div id="fantip"></div></div>
+<div class="leg"><span style="color:#38bdf8">&#9632; p25&ndash;p75</span><span style="color:#1e40af">&#9632; p10&ndash;p90</span><span style="color:#e2e8f0">&mdash; median</span><span style="color:#34d399">&#9476; on-pace ramp value</span><span style="color:#c084fc">&#9476; company plan EV (central goal track)</span><span style="color:#fbbf2488">&#9632; <span id="legtgt">target</span></span><span id="nodeal"></span></div>
+<div class="dim" id="simassump" style="font-size:10px;margin-top:8px"></div>
+</div>
+
+<div class="panel"><span class="lbl">Scenario cohort &times; close window ($M &middot; cell = central + report range &middot; &#9733; modal)<span class="hq" data-h="cohort">?</span></span>
+<table id="cohort"></table>
+<div class="be" id="beline"></div>
+</div>
+
+<div class="panel"><span class="lbl">FOMC meeting probabilities &mdash; live market (accuracy-weighted Polymarket + Kalshi + futures)<span class="hq" data-h="rate_table">?</span></span>
+<table id="ratetbl"></table>
+<div class="dim" id="ratefoot" style="font-size:10px;margin-top:6px"></div>
+</div>
+
+<div class="panel"><span class="lbl">Company plan &mdash; actual target values by quarter (Aug 2026 &middot; EV = TTM EBITDA &times; multiple)<span class="hq" data-h="plan">?</span></span>
+<table id="plan"></table>
+<div style="margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+<button id="plansave">Apply plan changes</button>
+<button id="planreset" style="background:#334155;color:#dbe4f0">Reset to plan defaults</button>
+<span class="dim" id="planmsg"></span></div>
+<div class="dim" id="planft" style="font-size:10px;margin-top:8px"></div>
+</div>
+
+
+
+<div class="panel"><span class="lbl">Live market couplings (canary &rarr; exit model &middot; evidence-graded per CANARY_COUPLING memo)<span class="hq" data-h="live">?</span></span>
+<table id="livesig"></table>
+<div class="dim" id="liveft" style="font-size:10px;margin-top:6px"></div>
+</div>
+
+<div class="panel"><span class="lbl">Close calendar &mdash; feasibility, sign-by deadlines &amp; the event gauntlet<span class="hq" data-h="safety">?</span></span>
+<div class="tl" id="tl"></div>
+<div id="calsum" style="margin-top:12px;font-size:12px;line-height:1.7"></div>
+</div>
+<div class="panel"><span class="lbl">Cost of slipping the process<span class="hq" data-h="cod">?</span></span>
+<div class="plain" id="slipline" style="font-size:12.5px;border-left-color:#fbbf24;margin-top:8px"></div>
+<table id="slip" style="margin-top:10px"></table>
+</div>
+<div class="panel"><span class="lbl">Action cards<span class="hq" data-h="cards">?</span></span>
+<div class="plain" id="cardsrec" style="font-size:11.5px;margin-top:8px;border-left-color:#64748b"></div>
+<div id="cards"></div></div>
+<div class="ep" id="ep"></div>
+</div>
+<script>
+
+const HELP={
+fan:"<b>Monte Carlo valuation fan.</b> The engine simulates 4,000 possible futures: each run draws a rate scenario from the cohort probabilities (with weight uncertainty), a value inside that scenario's report range, and stall events. The bands show where the sale price lands if you close in a given month — wider band = more uncertainty. The dashed green line is the on-pace value if the company scales as planned under the modal 1-hike path.",
+t_force:"<b>Rate path.</b> Pin the simulation to one scenario instead of drawing from the probabilities. 'Force 4 hikes' answers: what is the sale worth if the worst cohort row happens for sure?",
+t_crash:"<b>Stock crash.</b> Maps a &minus;20%/&minus;35% SPX drawdown to revenue-multiple compression (&times;0.85 / &times;0.70), phased in over 1&ndash;2 quarters (the report's transmission lag). Calibrated to half the 2022&ndash;23 revenue-deal repricing, since that episode bundled a crash with 525bp of hikes. Severe also adds +10pp stall odds to the &ge;2-hike rows.",
+t_reg:"<b>50bp regime.</b> The report's off-cohort branch: the Fed shifts to 50bp increments (behind the curve). Values gap to the $145&ndash;170M band and stall odds jump to 40%. It is a different model, not a sixth weighted scenario.",
+t_stall:"<b>Extra stall hazard.</b> Adds percentage points of stall probability to the 3&ndash;4 hike rows. This is the breakeven's h* knob — the summary sentence tells you how many pp flips the Q1-vs-Q2 call.",
+t_hz:"<b>Horizon.</b> Chart end date. Defaults to the July 31 2027 sale goal; 'extended' shows the model's extrapolation to Dec 2027 — beyond the report's windows, so hawk multiples keep decaying while the ramp keeps growing.",
+strip_wev:"<b>Weighted EV (Q1'27-end).</b> Each scenario's value &times; its probability, for a close at end of Q1 2027. The small range propagates the report's per-scenario ranges (all-pessimistic to all-optimistic).",
+strip_modal:"<b>Modal cell.</b> The single most likely outcome: the 1-hike scenario (35%) closing end-Q1 2027 — the report's starred cell.",
+strip_q2:"<b>Q2'27-end EV.</b> The same weighted EV for a close at end of Q2 2027. With the growth ramp on, later closes carry more revenue — but also more hawk-scenario and stall exposure.",
+strip_hold:"<b>Hold to Jul-27 EV.</b> The stall-adjusted, probability-weighted value if you hold to the July 31 2027 scale target instead of closing earlier.",
+strip_canary:"<b>Canary stress.</b> The treasury canary's composite, 0&ndash;100, <b>higher = more market stress</b>. LOW &lt;25, ELEVATED 25&ndash;50, HIGH 50&ndash;75, SEVERE 75+. Feeds 20% of each month's window score, inverted — calm markets help every window.",
+strip_stage:"<b>Process stage.</b> Where the sale process stands. Stage sets remaining lead time (prep = 6 months to close, in-market = 4, LOI = 2, exclusivity = 1), which determines which close months are feasible at all.",
+cohort:"<b>The cohort table.</b> Rows are your report's rate scenarios with probabilities; columns are close windows. Each cell: central value + the report's range. Only 2027-03 and 2027-06 are report anchors — other columns are interpolated/extrapolated by the engine and tagged. Cells are conditional values; the probabilities are the model.",
+col_p:"<b>Probability.</b> The 0&ndash;2-hike rows are priced by fed funds futures (tight); the 3&ndash;4-hike tail and the cut row are judgment (loose). The weight-uncertainty row shows how much the answer moves if these are wrong.",
+row_wev:"<b>Weighted EV.</b> Probability-weighted average across the scenario rows, per close month. The band comes from the report's cell ranges, aligned all-pessimistic / all-optimistic (one common driver — conservative and honest).",
+row_band:"<b>Weight-uncertainty (Dirichlet 10&ndash;90).</b> 4,000 redraws of the scenario probabilities — tight on the futures-priced rows, loose on the judged tail — and the 10&ndash;90 range of the resulting weighted EV. A separate uncertainty layer from the value ranges above.",
+row_stall:"<b>Stall-adjusted EV.</b> Weighted EV after charging the hawk rows their process-stall risk: ~30% stall odds &times; exposure &times; (&minus;6.5% recut + a 13% death tail). Closing by Q1-end dodges half the stall window; Q2+ carries it all. The live HY financing state scales these odds up when credit tightens.",
+row_hold:"<b>Hold-to-Jul-27 premium.</b> What holding to July 31 2027 is worth versus closing in this month, on stall-adjusted numbers. Green = holding carries more EV; the risk side of that trade lives in the stall odds and hawk rows.",
+breakeven:"<b>Breakeven.</b> The decision surface. Expected value is linear in the probabilities, so every flip has an exact formula. This sentence tells you precisely how much extra stall risk — or how big a probability shift — reverses the Q1-vs-Q2 call. Argue with this line, not the whole table.",
+settings:"<b>Settings.</b> The editable premises: your revenue waypoint, the valuation target, process stage and date. Apply re-runs the whole board. 'Pin to report' freezes revenue at $105M so the table reproduces your report exactly.",
+set_rev:"<b>Revenue run-rate @ Dec 2026.</b> Your stated waypoint: ~$105M run-rate by end of December 2026. The ramp draws a straight line through this and the back-solved July-2027 target revenue; today's implied run-rate is the same line extended backward.",
+set_target:"<b>Target value.</b> The valuation you expect at July 31 2027 if the company stays on pace. Default now tracks the company plan's Q2'27&rarr;Q3'27 EV band ($227&ndash;242M, Aug 2026; previously $200&ndash;225M from the operator report). Legacy-mode only (anchoring off): the engine back-solves the revenue needed at the modal-path multiple and builds the growth ramp to hit it.",
+set_dis:"<b>Dissent cluster.</b> The Jul 29 2026 FOMC hold passed 9-3 with three hawkish dissents — the first unified three-way dissent since Sept 2016 (which preceded a December hike). Toggling this shifts +3pp of probability into the 3&ndash;4-hike tail, funded from the dove rows.",
+set_pin:"<b>Pin to report.</b> Report-fidelity mode: revenue pinned at the report's $105M basis, ramp off. The table then reproduces your report cell-for-cell — useful for checking the engine against the source document.",
+live:"<b>Live market couplings.</b> Canary data feeding the exit model, one primary trigger per channel to avoid counting the same stress twice. AUTO = live feed; MANUAL = your stored value wins; every override is logged. VIX is deliberately absent: the research found a documented null for private-target deals.",
+lv_fcix:"<b>Financing conditions (FCI-X).</b> Chicago Fed National Financial Conditions Index, z-scored: 0 = average, positive = tighter than average. Feeds 25% of the window score. Tighter financing = worse close windows.",
+lv_dmhi:"<b>Deal-market health.</b> 0&ndash;1, 1 = healthy. Blends how aggressively banks are tightening business lending (SLOOS survey, quarterly) with the private-credit pin channel (daily) — the closest live read on whether a sponsor can finance a ~$200M deal.",
+lv_fin:"<b>HY financing state.</b> The strongest evidence-backed coupling: when high-yield spreads pass ~400bp (TIGHT) or ~500bp / a fast +150bp move (SHUT), LBO financing historically chokes (2022: loan issuance &minus;63%). TIGHT scales hawk-row stall odds &times;1.33, SHUT &times;1.67 — feeding the stall-adjusted row, the breakeven and the fan. Dual thresholds prevent flapping.",
+lv_spike:"<b>Yield-shock &times; correlation.</b> A +75bp/60-day spike in long yields while stocks and bonds fall together — nothing hedges. When ACTIVE, no close month can score GREEN. Honesty label: historically a recession-odds signal (47% vs 21% baseline), not a stock-sell signal.",
+lv_stress:"<b>Simulator stress odds.</b> The rate-shock simulator run once per cohort scenario, weighted by the probabilities. Above 25% it fires the 'treat Q1 as hard deadline' card. Conservative: it is the max monthly stress share (not cumulative) and the sim ends June 2027.",
+lv_head:"<b>Financing headwind.</b> How far credit markets have moved your multiple since the report was written (HY at 284bp on Jul 30 2026), at the published elasticity of &minus;4.8% per 100bp of spread widening. Display-only — the report's cells are never modified by live data.",
+lv_now:"<b>Market path nowcast.</b> Which scenario row the market is pricing right now. The 2-year yield's 3-month move is the early-warning signal (+0.40pp repricing preceded the 2022 hiking cycle; stayed quiet in 2019). If it disagrees with the report weights you get an Apply button for a capped &plusmn;5pp tilt — nothing ever shifts silently.",
+lv_auto:"<b>AUTO / MANUAL.</b> AUTO reads the live feed each refresh. Click to MANUAL to freeze the field at your stored value (typing a value also flips it). If a data feed dies, the board falls back to stored values and says so in the source column — it never silently reads an empty feed as calm.",
+safety:"<b>Close calendar.</b> Struck-through months are infeasible from your current stage\u2019s lead time. The green <b>SIGN</b> markers are the real deadlines: to close in a report window you must sign (LOI/definitive) earlier by the signing\u2192close gap \u2014 currently hawk-tilted at 4.5 months. FOMC tags mark meeting months. The 0\u2013100 scores blend rate risk, financing, deal-market health and canary calm \u2014 they cluster tightly when markets are calm, so read the structure (feasibility + deadlines + events), not small score differences.",
+cod:"<b>Cost of slipping.</b> Under the growth ramp, simply waiting costs ~nothing in expected value \u2014 so this table prices what slippage ACTUALLY costs: (1) the <b>cliff</b> \u2014 slip enough months and closing by end-Q1 2027 becomes infeasible, forfeiting the early-close option (valued under the \u2265 2-hike world, where it matters); (2) every month of slip is another <b>FOMC faced unsigned</b> \u2014 stall and repricing risk concentrates in the unsigned phase; (3) the last column: what delay costs if the hawkish world materializes.",
+cards:"<b>Action cards.</b> Rule-driven prescriptions. Each card shows the machine-checkable trigger that fired it, so you can audit why it appeared. No card = no active trigger.",
+rate_table:"<b>FOMC meeting probabilities.</b> The same accuracy-weighted ensemble the canary runs, mirrored here because it is the live market check on the cohort table above: the cohort assigns JUDGMENT probabilities to hike paths, this row assigns MARKET probabilities to each meeting. Sources are weighted by their measured accuracy (inverse shrunk-Brier at T-7d on resolved meetings), so a source that misprices loses influence automatically. Hover any cell for each source&rsquo;s individual number and its weight. Read it against the cohort: if the market is pricing materially more hikes than the cohort&rsquo;s weights assume, the EV table above is optimistic.",
+plan:"<b>Company plan (Aug 2026).</b> The actual target values by quarter: TTM revenue &times; EBITDA margin = TTM EBITDA, times the EBITDA multiple = enterprise value. With <b>plan anchoring on</b> (the default), this track IS the board's central line: the base-weighted EV reproduces the plan by construction, and the rate-scenario cohort contributes the <b>bands around it</b> &mdash; how far a hawkish or dovish world moves you off the plan. Margin % and multiple are editable per quarter; edits re-anchor the whole surface (tables, fan, breakeven).",
+plan_margin:"<b>EBITDA margin %.</b> Editable per quarter. A margin edit recomputes TTM EBITDA off the plan's fixed TTM revenue, and EV follows (EBITDA &times; multiple) &mdash; with anchoring on, the whole surface re-levels. Amber = overridden (plan default in parentheses). Defaults are derived from the plan's EBITDA figures, so unedited rows reproduce the source table exactly.",
+plan_mult:"<b>EBITDA multiple.</b> Editable per quarter. The plan assumes multiple expansion 10&times; &rarr; 12&times; as margins scale &mdash; a premise worth stress-testing: hold it at 10&times; flat to see EV without the re-rating.",
+plan_vs:"<b>vs weighted EV.</b> Plan EV minus the live-weighted scenario EV for a close in the same month. With anchoring on this is ~0 at the plan quarters by construction &mdash; it moves only when dissent, a nowcast tilt or a stall-state change shifts the live weights off the frozen base. A growing negative number = the rate machinery is pulling value below plan.",
+strip_plan:"<b>Plan EV @ Q2'27-end.</b> The company plan's enterprise value for the quarter ending Jun 30 2027 (TTM EBITDA &times; multiple), with your margin/multiple edits applied. With anchoring on, the weighted-EV chips track this by construction; gaps are the live weights at work.",
+set_anchor:"<b>Anchor to company plan.</b> ON (default): the plan's quarterly EV track is the central line and the cohort grid supplies scenario dispersion around it &mdash; the plan values are treated as the actual values at those dates. OFF: legacy mode &mdash; revenue ramp through the Dec-2026 waypoint, back-solved to the valuation target (the revenue/target fields below only matter in this mode). 'Pin to report' overrides both for report-fidelity checking."};
+function hq(k){return `<span class="hq" data-h="${k}">?</span>`}
+function cardsReconcile(b){
+  const be=b.breakeven, acts=(b.cards||[]).map(c=>c.action).join(' ');
+  const accel=/Accelerate|hard deadline|Financing window/.test(acts);
+  const pref=be.preferred;
+  let t='<b>How the cards fit the table:</b> the cohort table chooses the <b>close window</b>; '+
+    'the cards govern <b>process speed and structure</b>. &ldquo;Accelerate&rdquo; means <b>sign early, not close early</b> '+
+    '&mdash; stall and repricing risk concentrates in the UNSIGNED phase (2022&ndash;23: stress stalled launches, '+
+    'signed deals closed), while the ramp&rsquo;s extra value is collected at close. ';
+  if(!b.cards||!b.cards.length){
+    return t+'No process triggers are active today, so run the process at normal cadence and pick the window per the breakeven above.';
+  }
+  if(pref==='Q2'&&accel){
+    t+='So today&rsquo;s combined advice is <b>sign early, close late</b>: lock LOI + committed financing on the cards&rsquo; '+
+      'timeline, and let the close land at the Q2-end window the breakeven prefers (+$'+Math.abs(be.dev_q1_minus_q2).toFixed(1)+'M). '+
+      'Where a card names a Q1 deadline while the table leans Q2, the card is a deliberate <b>risk override</b>: it trips at '+
+      'lower stress than the pure-EV flip because being late costs more than the EV gap. Both surfaces read the same '+
+      'financing/stall data &mdash; if conditions worsen they will converge on Q1 together.';
+  }else if(pref==='Q1'&&accel){
+    t+='Today the two surfaces <b>agree</b>: the table leans Q1-end and the cards say compress &mdash; sign early AND close early.';
+  }else{
+    t+='Pick the close window per the breakeven above; the active cards address structure (pricing protection, buyer mix), not timing.';
+  }
+  return t;
+}
+function beText(be){
+  const d=Math.abs(be.dev_q1_minus_q2).toFixed(1), f=be.flips||{};
+  const pp=x=>Math.round(x*100);
+  let t=`<b>BREAKEVEN &mdash; what would change the answer</b>${hq('breakeven')}<br>`;
+  if(be.preferred==='Q2'){
+    t+=`Right now <b>waiting pays</b>: closing at the end of Q2 2027 (Jun 30) is worth about <b>$${d}M more</b> than closing at the end of Q1 (Mar 31), on expected value alone.`;
+    if(f.extra_stall_pp)t+=` The main thing that would reverse this is <b>the process stalling</b>: if you believe the odds of a 3&ndash;4-hike world stalling the sale are about <b>${pp(f.extra_stall_pp)} points higher</b> than the model assumes, closing earlier (Q1) becomes the better call.`;
+    const s=[];
+    if(f.shift_s1_to_s2_pp)s.push(`${pp(f.shift_s1_to_s2_pp)} points of probability moved from &ldquo;1 hike&rdquo; to &ldquo;2 hikes&rdquo;`);
+    if(f.shift_s0_to_s3_pp)s.push(`${pp(f.shift_s0_to_s3_pp)} points from &ldquo;0 hikes&rdquo; to &ldquo;3 hikes&rdquo;`);
+    if(s.length)t+=` It would also flip if the rate outlook turns much more hawkish than the report &mdash; roughly ${s.join(', or ')}.`;
+    t+=` In short: <b>lean Q2, but watch stall risk</b> &mdash; the HY financing state and market nowcast above are the live versions of exactly these risks.`;
+  }else{
+    t+=`Right now <b>closing earlier pays</b>: the end of Q1 2027 (Mar 31) is worth about <b>$${d}M more</b> than waiting to the end of Q2 (Jun 30), on expected value alone.`;
+    const s=[];
+    if(f.shift_s1_to_s2_pp)s.push(`${pp(f.shift_s1_to_s2_pp)} points of probability moved back toward the dove rows`);
+    if(f.shift_s0_to_s3_pp)s.push(`${pp(f.shift_s0_to_s3_pp)} points toward &ldquo;0 hikes&rdquo;`);
+    if(s.length)t+=` Waiting would win again only if the rate outlook turns clearly friendlier &mdash; roughly ${s.join(', or ')}.`;
+    t+=` In short: <b>lean Q1</b> &mdash; delay only if hikes come off the table.`;
+  }
+  return t;
+}
+document.addEventListener('click',e=>{
+  const pop=document.getElementById('hpop');
+  const t=e.target.closest('.hq');
+  if(t){e.preventDefault();pop.innerHTML=HELP[t.dataset.h]||'';pop.style.display='block';
+    const r=t.getBoundingClientRect();
+    pop.style.left=Math.max(8,Math.min(r.left+window.scrollX,window.scrollX+document.documentElement.clientWidth-450))+'px';
+    pop.style.top=(r.bottom+window.scrollY+6)+'px';e.stopPropagation();}
+  else if(!e.target.closest('#hpop'))pop.style.display='none';
+});
+
+const COLS=["2026-12","2027-01","2027-03","2027-06","2027-09"];
+const fmt=v=>"$"+Math.round(v)+"M";
+let BOARD=null;
+
+function render(b){
+  BOARD=b;
+  const h=b.headline, be=b.breakeven, ramp=b.surface.ramp;
+  const pref=be.preferred==="Q1"?"end of Q1 2027":"end of Q2 2027";
+  const stall=be.flips.extra_stall_pp?Math.round(be.flips.extra_stall_pp*100):null;
+  document.getElementById('plain').innerHTML=
+    `<b>What this says today:</b> closing at <b>${pref}</b> carries the higher expected value `+
+    `(Q1 ${fmt(h.q1_ev)} vs Q2 ${fmt(h.q2_ev)}; holding to the Jul-2027 scale target ~${fmt(h.target_ev)}). `+
+    (stall?`But the call flips to selling earlier if the odds of the process stalling in the 3&ndash;4 hike world rise by just <b>${stall}pp</b> &mdash; the decision rides on stall risk, not headline EV. `:``)+
+    (ramp.anchored?
+      `Surface <b>anchored to the company plan</b>: the plan&rsquo;s quarterly EV track (TTM EBITDA &times; multiple) is the central line; scenario weights, dissent and stall move value around it.`:
+      `Ramp: today&rsquo;s implied run-rate <b>$${h.today_revenue}M</b> &rarr; $${b.inputs.revenue_dec2026}M @ Dec-26 &rarr; $${h.target_revenue}M @ Jul-27 (on pace for $${b.inputs.target_value_lo}&ndash;${b.inputs.target_value_hi}M).`)+
+    (b.surface.pin_report?` <b>[report-fidelity mode: revenue pinned at $105M]</b>`:``);
+  document.getElementById('strip').innerHTML=
+    `<span><span class="lbl">Weighted EV (Q1'27-end)${hq('strip_wev')}</span><span class="big">${fmt(h.q1_ev)}</span><span class="crng"> ${fmt(h.q1_lo)}&ndash;${fmt(h.q1_hi)}</span></span>`+
+    `<span><span class="lbl">Modal cell (1 hike)${hq('strip_modal')}</span>${fmt(h.modal_cell[0])}&ndash;${fmt(h.modal_cell[1])}</span>`+
+    `<span><span class="lbl">Q2'27-end EV${hq('strip_q2')}</span>${fmt(h.q2_ev)}</span>`+
+    `<span><span class="lbl">Hold to Jul-27 EV${hq('strip_hold')}</span>${fmt(h.target_ev)}</span>`+
+    (h.plan_q2_ev!=null?`<span><span class="lbl">Plan EV Q2'27 (company plan)${hq('strip_plan')}</span>${fmt(h.plan_q2_ev)}</span>`:``)+
+    `<span><span class="lbl">Canary stress (lower = calmer)${hq('strip_canary')}</span>${Math.round(b.canary01*100)}/100</span>`+
+    `<span><span class="lbl">Stage${hq('strip_stage')}</span>${b.inputs.stage}</span>`;
+
+  // settings current values
+  document.getElementById('i_rev').value=b.inputs.revenue_dec2026;
+  document.getElementById('i_tlo').value=b.inputs.target_value_lo;
+  document.getElementById('i_thi').value=b.inputs.target_value_hi;
+  document.getElementById('i_stage').value=b.inputs.stage;
+  document.getElementById('i_today').value=b.inputs.today_month;
+  document.getElementById('i_dis').checked=!!b.inputs.dissent_cluster;
+  document.getElementById('i_anchor').checked=b.inputs.anchor_plan!==false;
+  document.getElementById('i_pin').checked=!!b.inputs.pin_report;
+
+  // live couplings panel
+  const lv=b.live||{}, rz=b.resolved||{}, prov=rz.provenance||{}, auto=rz.auto||{};
+  const fin=lv.financing, hw=lv.headwind, nc=lv.nowcast;
+  const aBtn=(f)=>`<button style="padding:2px 8px;font-size:10px;background:${auto[f]?'#065f46':'#334155'}" onclick="setAuto('${f}',${!auto[f]})">${auto[f]?'AUTO':'MANUAL'}</button>`;
+  const finCol=fin?{BENIGN:'#34d399',TIGHT:'#fbbf24',SHUT:'#f87171'}[fin.state]:'#64748b';
+  let lh=`<tr><th>signal</th><th>value</th><th>feeds</th><th>source</th><th>${hq('lv_auto')}</th></tr>`;
+  const cv=Math.round(b.canary01*100);
+  const cband=cv<25?['LOW stress','#34d399']:cv<50?['ELEVATED','#fbbf24']:cv<75?['HIGH','#fb923c']:['SEVERE','#f87171'];
+  lh+=`<tr><td>Canary composite <span class="crng">(stress 0&ndash;100, lower = calmer)</span></td><td class="cmid">${cv}/100 <span style="color:${cband[1]};font-size:10px">${cband[0]}</span></td><td>window score (20%, inverted &mdash; calm helps)</td><td class="crng">live composite (in-process)</td><td></td></tr>`;
+  lh+=`<tr><td>Financing conditions (FCI-X)${hq('lv_fcix')}</td><td class="cmid">${(+rz.fcix_z).toFixed(2)}z</td><td>window score (25%)</td><td class="crng">${prov.fcix_z||''}</td><td>${aBtn('fcix_z')}</td></tr>`;
+  lh+=`<tr><td>Deal-market health${hq('lv_dmhi')}</td><td class="cmid">${(+rz.dmhi01).toFixed(2)}</td><td>window score (20%)</td><td class="crng">${prov.dmhi01||''}</td><td>${aBtn('dmhi01')}</td></tr>`;
+  lh+=`<tr><td>HY financing state${hq('lv_fin')}</td><td class="cmid" style="color:${finCol}">${fin?`${fin.state} (${fin.hy_bp}bp, 90d ${fin.d90_bp>0?'+':''}${fin.d90_bp}bp)`:'n/a'}</td><td>stall hazard &times;${fin?fin.stall_mult:1}</td><td class="crng">${fin?fin.source:'feed unavailable'}</td><td>${aBtn('stall_mult')}</td></tr>`;
+  lh+=`<tr><td>Yield-shock &times; corr (SPIKE&times;POS)${hq('lv_spike')}</td><td class="cmid">${lv.spike_pos?(rz.spike_pos?'ACTIVE':`${lv.spike_pos.state}/${lv.spike_pos.regime}`):'n/a'}</td><td>deny-GREEN cap (recession-risk caution, not a stock call)</td><td class="crng">${lv.spike_pos?lv.spike_pos.source:''}</td><td>${aBtn('spike_pos')}</td></tr>`;
+  lh+=`<tr><td>Simulator stress odds${hq('lv_stress')}</td><td class="cmid">${(+rz.stress_prob*100).toFixed(0)}%</td><td>hard-deadline card (&gt;25%)</td><td class="crng">${prov.stress_prob||''}</td><td>${aBtn('stress_prob')}</td></tr>`;
+  lh+=`<tr><td>Financing headwind vs report${hq('lv_head')}</td><td class="cmid" style="color:${hw&&hw.multiple_pct<-0.5?'#f87171':'#94a3b8'}">${hw?`${hw.multiple_pct>0?'+':''}${hw.multiple_pct}% multiple (HY ${hw.delta_bp>0?'+':''}${hw.delta_bp}bp)`:'n/a'}</td><td>display only &mdash; report cells untouched</td><td class="crng">${hw?hw.source:''}</td><td></td></tr>`;
+  const tiltOn=b.inputs.weight_tilt;
+  lh+=`<tr><td>Market path nowcast${hq('lv_now')}</td><td class="cmid">${nc?`voting row: ${nc.voting_row===-1?'cuts':nc.voting_row+' hikes'} (2y ${nc.d2_chg_3m_pp>0?'+':''}${nc.d2_chg_3m_pp}pp/3m)`:'n/a'}</td>`+
+    `<td>${tiltOn?`tilt APPLIED: +${(tiltOn.pp*100).toFixed(0)}pp &rarr; ${tiltOn.toward===-1?'cuts':tiltOn.toward+'h'} <button style="padding:2px 8px;font-size:10px;background:#7f1d1d" onclick="tilt(false)">clear</button>`:
+      (nc&&nc.suggested_tilt_pp?`suggests &plusmn;${Math.abs(nc.suggested_tilt_pp*100).toFixed(0)}pp <button style="padding:2px 8px;font-size:10px" onclick="tilt(true)">apply</button>`:'no tilt suggested')}</td>`+
+    `<td class="crng">${nc?nc.source:''}</td><td></td></tr>`;
+  document.getElementById('livesig').innerHTML=lh;
+  document.getElementById('liveft').textContent='One primary trigger per channel (double-counting rule). VIX is display-only: documented null for private-target deals. Manual overrides win and are event-logged. Snapshot '+(lv.asof||'')+'.';
+  if(fin&&fin.state!=='BENIGN')document.getElementById('plain').innerHTML+=
+    ` <b style="color:${finCol}">Financing ${fin.state}</b>: HY at ${fin.hy_bp}bp &mdash; hawk-row stall odds scaled &times;${fin.stall_mult}; lock committed financing early.`;
+  if(hw&&Math.abs(hw.multiple_pct)>=1)document.getElementById('plain').innerHTML+=
+    ` Credit markets have moved ${hw.delta_bp>0?'against':'in favor of'} you since the report: ~${hw.multiple_pct}% on the multiple (AJSW elasticity).`;
+
+  // cohort table
+  const rows=b.surface.surface, byM={}; rows.forEach(r=>byM[r.month]=r);
+  const bandBy={}; b.weight_band.band.forEach(x=>bandBy[x.month]=x);
+  const hpBy={}; b.hold_premium.forEach(x=>hpBy[x.month]=x.premium);
+  const anch=b.anchors;
+  let html=`<tr><th>scenario</th><th>p${hq('col_p')}</th>`+COLS.map(m=>{
+    const t=m===anch.q1_end?'report &#9733;Q1-end':m===anch.q2_end?'report Q2-end':byM[m].tag;
+    return `<th>${m}<span class="tag">${t}</span></th>`}).join('')+'</tr>';
+  b.surface.scenarios.forEach((sc,i)=>{
+    html+=`<tr><td>${sc.label}${sc.modal?' <span class=star>&#9733;</span>':''}`+
+      `${sc.source&&sc.source!=='report-v6'?' <span class="crng" title="extension row — not in the operator report; benign easing only (recession-forced cuts = crash/50bp toggles)">(ext)</span>':''}`+
+      `${sc.stall_p?` <span class=stall>&#9888;${Math.round(sc.stall_p*100)}% stall</span>`:''}</td>`+
+      `<td>${Math.round(sc.weight*100)}%</td>`+
+      COLS.map(m=>{const c=byM[m].cells[i];
+        const cls=(sc.modal&&m===anch.q1_end)?' class=modalcell':'';
+        return `<td${cls}><span class="cmid">${fmt(c.mid)}</span> <span class="crng">${Math.round(c.lo)}&ndash;${Math.round(c.hi)}</span></td>`}).join('')+'</tr>';
+  });
+  html+=`<tr class="foot"><td>Weighted EV <span class="crng">(report ranges)</span>${hq('row_wev')}</td><td></td>`+
+    COLS.map(m=>`<td><span class="cmid">${fmt(byM[m].ev)}</span> <span class="crng">${Math.round(byM[m].ev_lo)}&ndash;${Math.round(byM[m].ev_hi)}</span></td>`).join('')+'</tr>';
+  html+=`<tr class="foot"><td>Weight-uncertainty <span class="crng">(Dirichlet 10&ndash;90)</span>${hq('row_band')}</td><td></td>`+
+    COLS.map(m=>`<td><span class="crng">${Math.round(bandBy[m].p10)}&ndash;${Math.round(bandBy[m].p90)}</span></td>`).join('')+'</tr>';
+  html+=`<tr class="foot"><td>Stall-adjusted EV${hq('row_stall')}</td><td></td>`+
+    COLS.map(m=>`<td>${fmt(byM[m].ev_stall_adj)}</td>`).join('')+'</tr>';
+  html+=`<tr class="foot"><td>Hold-to-Jul-27 premium${hq('row_hold')}</td><td></td>`+
+    COLS.map(m=>{const v=hpBy[m];return `<td style="color:${v>0?'#34d399':'#f87171'}">${v>0?'+':''}${v.toFixed(1)}M</td>`}).join('')+'</tr>';
+  document.getElementById('cohort').innerHTML=html;
+  document.getElementById('beline').innerHTML=beText(be)+
+    `<div class="dim" style="font-size:10px;margin-top:6px">model shorthand: ${be.sentence}</div>`;
+
+  // company plan table (editable margins & multiples)
+  const pl=b.plan;
+  if(pl){
+    const vsBy={};(pl.vs_cohort||[]).forEach(x=>vsBy[x.period]=x);
+    let ph=`<tr><th>period</th><th>TTM revenue</th><th>EBITDA margin %${hq('plan_margin')}</th><th>TTM EBITDA</th><th>EBITDA multiple${hq('plan_mult')}</th><th>enterprise value</th><th>vs weighted EV${hq('plan_vs')}</th></tr>`;
+    pl.rows.forEach(r=>{
+      const vs=vsBy[r.period]||{};
+      ph+=`<tr><td>${r.period}<span class="tag">${r.month}</span></td>`+
+        `<td>$${r.revenue_m.toFixed(1)}M</td>`+
+        `<td><input class="pin${r.margin_overridden?' ovr':''}" data-q="${r.period}" data-k="m" type="number" step="0.1" min="0" max="60" value="${r.margin_pct}">`+
+        `${r.margin_overridden?` <span class="crng" title="plan default">(${r.margin_default_pct})</span>`:''}</td>`+
+        `<td class="cmid">$${r.ebitda_m.toFixed(2)}M</td>`+
+        `<td><input class="pin${r.multiple_overridden?' ovr':''}" data-q="${r.period}" data-k="x" type="number" step="0.5" min="0" max="30" value="${r.multiple_x}">`+
+        `${r.multiple_overridden?` <span class="crng" title="plan default">(${r.multiple_default_x})</span>`:''}</td>`+
+        `<td class="cmid">$${r.ev_m.toFixed(1)}M</td>`+
+        `<td style="color:${vs.delta==null?'#64748b':vs.delta>=0?'#34d399':'#f87171'}">${vs.delta!=null?(vs.delta>0?'+':'')+vs.delta.toFixed(1)+'M':'&mdash;'}</td></tr>`;
+    });
+    document.getElementById('plan').innerHTML=ph;
+    document.getElementById('planft').textContent='Basis: '+pl.basis+' Received '+pl.received+'. Margin edits recompute EBITDA off the fixed TTM revenue; amber = overridden (plan default in parentheses).';
+  }
+
+  document.getElementById('tl').innerHTML=b.windows.map(w=>{
+    const cls=!w.feasible?'X':w.band[0];
+    const sign=w.month===b.slip.q1.sign_by?'<div class="fomc" style="color:#34d399;font-weight:700"><span style="display:inline-block;text-decoration:none">SIGN &#9733;Q1</span></div>'
+      :w.month===b.slip.q2.sign_by?'<div class="fomc" style="color:#7dd3fc;font-weight:700"><span style="display:inline-block;text-decoration:none">SIGN Q2</span></div>':'';
+    const goal=w.month==='2027-07'?'<div class="fomc" style="color:#34d399">GOAL</div>':'';
+    return `<div class="mo ${cls}" title="score ${w.score}">${w.month.slice(2)}`+
+      `${w.events.fomc?'<div class=fomc>FOMC</div>':''}${sign}${goal}<div>${w.feasible?w.score:'&mdash;'}</div></div>`;
+  }).join('');
+
+  const sl=b.slip, wsBy={}; b.windows.forEach(w=>wsBy[w.month]=w);
+  const line=(tag,star,o)=>{const w=wsBy[o.close]||{};
+    return `<div>${star?'<span class="star">&#9733;</span> ':''}<b>Close end-${tag}</b> (${o.close}): `+
+      `sign by <b style="color:#34d399">${o.sign_by}</b> &middot; ${o.fomc_to_sign} FOMC between now and signing &middot; `+
+      `stall exposure ${o.stall_exposure_pct}% &middot; window ${w.score??'&mdash;'} ${w.band??''}</div>`};
+  document.getElementById('calsum').innerHTML=line('Q1',true,sl.q1)+line('Q2',false,sl.q2)+
+    `<div class="dim" style="font-size:10.5px">Signing&rarr;close gap currently ${sl.gap_months} months (hawk-tilted market). Stall & repricing risk lives in the UNSIGNED phase &mdash; the sign-by date is the real deadline, the close date follows.</div>`;
+  const cliff=sl.cliff_months;
+  document.getElementById('slipline').innerHTML=cliff===0?
+    `<b style="color:#f87171">The Q1-end close is already infeasible from your current stage.</b> Earliest close: ${sl.rows[0].earliest_close}.`
+    :cliff===1?
+    `<b style="color:#f87171">&#9888; Any slippage kills the Q1-end option.</b> From your current stage the earliest feasible close is already ${sl.rows[0].earliest_close} &mdash; slip one month and closing by end-Q1 becomes impossible, forfeiting ~$${sl.forfeit_hawk_value}M of hawk-case protection and adding another FOMC faced unsigned.`
+    :cliff!=null?
+    `You can slip up to <b>${cliff-1} month${cliff-1>1?'s':''}</b> before the Q1-end close becomes impossible (forfeiting ~$${sl.forfeit_hawk_value}M of hawk-case protection). Each month of slip &asymp; one more FOMC faced without locked terms.`
+    :`The Q1-end close stays feasible across the modeled slippage range.`;
+  document.getElementById('slip').innerHTML='<tr><th>process slips by</th><th>earliest close</th><th>Q1-end option</th><th>sign-by moves to</th><th>FOMC unsigned</th><th>cost if &ge;2 hikes</th></tr>'+
+    sl.rows.map(r=>`<tr><td>${r.slip_months} mo</td><td>${r.earliest_close}</td>`+
+    `<td style="color:${r.q1_open?'#34d399':'#f87171'}">${r.q1_open?'OPEN':'LOST'}</td>`+
+    `<td>${r.sign_by}</td><td>${r.fomc_unsigned}</td>`+
+    `<td style="color:${r.hawk_cost>0.05?'#f87171':'#64748b'}">$${r.hawk_cost}M</td></tr>`).join('');
+
+  document.getElementById('cardsrec').innerHTML=cardsReconcile(b);
+  document.getElementById('cards').innerHTML=b.cards.length?b.cards.map(c=>
+    `<div class="card"><b>${c.action}</b><div style="margin-top:4px">${c.rationale}</div>`+
+    (c.evidence&&c.evidence.length?`<div class="cev"><span class="cevh">Evidence</span><ul>${c.evidence.map(e=>`<li>${e}</li>`).join('')}</ul></div>`:'')+
+    (c.playbook&&c.playbook.length?`<div class="cev"><span class="cevh">Do</span><ul>${c.playbook.map(e=>`<li>${e}</li>`).join('')}</ul></div>`:'')+
+    `<div class="trig">trigger: ${c.trigger} &middot; confidence ${c.confidence}</div></div>`).join('')
+    :'<div class="trig">no active triggers</div>';
+  document.getElementById('ep').textContent=b.epistemic;
+}
+
+let LASTSIM=null;
+let FANGEO=null;
+function drawFan(sim){
+  LASTSIM=sim;
+  const cv=document.getElementById('fan'),ctx=cv.getContext('2d');
+  // crisp on high-DPI: back the canvas at devicePixelRatio, draw in CSS px
+  const dpr=window.devicePixelRatio||1, cw=cv.clientWidth||1100, ch=380;
+  if(cv.width!==Math.round(cw*dpr)||cv.height!==Math.round(ch*dpr)){
+    cv.width=Math.round(cw*dpr);cv.height=Math.round(ch*dpr);cv.style.height=ch+'px';
+  }
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,cw,ch);
+  const hz=document.getElementById('t_hz').value;
+  const cut=sim.months.indexOf(hz)+1||sim.months.length;
+  const M=sim.months.slice(0,cut),f=sim.fan.slice(0,cut),pad={l:46,r:14,t:14,b:26};
+  const W=cw-pad.l-pad.r,H=ch-pad.t-pad.b;
+  const plan=(BOARD&&BOARD.plan)?M.map(m=>BOARD.plan.ev_by_month[m]).filter(v=>v!=null):[];
+  let lo=Math.min(...f.map(r=>r.p10),sim.target_band[0],...plan)-8;
+  let hi=Math.max(...f.map(r=>r.p90),sim.target_band[1],...plan)+8;
+  const X=i=>pad.l+W*i/(M.length-1),Y=v=>pad.t+H*(1-(v-lo)/(hi-lo));
+  // target band
+  ctx.fillStyle='#fbbf2418';
+  ctx.fillRect(pad.l,Y(sim.target_band[1]),W,Y(sim.target_band[0])-Y(sim.target_band[1]));
+  // gridlines
+  ctx.strokeStyle='#1e293b';ctx.fillStyle='#475569';ctx.font='10px ui-monospace';
+  for(let v=Math.ceil(lo/20)*20;v<=hi;v+=20){
+    ctx.beginPath();ctx.moveTo(pad.l,Y(v));ctx.lineTo(pad.l+W,Y(v));ctx.stroke();
+    ctx.fillText('$'+v+'M',4,Y(v)+3);
+  }
+  const band=(k1,k2,color)=>{ctx.fillStyle=color;ctx.beginPath();
+    f.forEach((r,i)=>i?ctx.lineTo(X(i),Y(r[k1])):ctx.moveTo(X(0),Y(r[k1])));
+    [...f].reverse().forEach((r,i)=>ctx.lineTo(X(f.length-1-i),Y(r[k2])));
+    ctx.closePath();ctx.fill();};
+  band('p10','p90','#1e40af44');band('p25','p75','#38bdf855');
+  ctx.strokeStyle='#e2e8f0';ctx.lineWidth=1.6;ctx.beginPath();
+  f.forEach((r,i)=>i?ctx.lineTo(X(i),Y(r.p50)):ctx.moveTo(X(0),Y(r.p50)));ctx.stroke();
+  // on-pace ramp line
+  ctx.strokeStyle='#34d399';ctx.setLineDash([5,4]);ctx.lineWidth=1.2;ctx.beginPath();
+  sim.on_pace.slice(0,M.length).forEach((r,i)=>i?ctx.lineTo(X(i),Y(r.value)):ctx.moveTo(X(0),Y(r.value)));
+  ctx.stroke();ctx.setLineDash([]);
+  // company plan EV line (TTM EBITDA x multiple; flat-clamped past Q3'27)
+  if(BOARD&&BOARD.plan){
+    ctx.strokeStyle='#c084fc';ctx.setLineDash([2,3]);ctx.lineWidth=1.4;ctx.beginPath();
+    let started=false;
+    M.forEach((m,i)=>{const v=BOARD.plan.ev_by_month[m];if(v==null)return;
+      started?ctx.lineTo(X(i),Y(v)):ctx.moveTo(X(i),Y(v));started=true;});
+    ctx.stroke();ctx.setLineDash([]);
+  }
+  const lt=document.getElementById('legtgt');
+  if(lt)lt.textContent=`$${Math.round(sim.target_band[0])}–${Math.round(sim.target_band[1])}M target`;
+  // month labels + report anchors + sale-goal marker
+  ctx.fillStyle='#64748b';
+  M.forEach((m,i)=>{if(M.length<=12||i%2==0||m==='2027-03'||m==='2027-06')ctx.fillText(m.slice(2),X(i)-14,ch-8);});
+  ['2027-03','2027-06'].forEach(m=>{const i=M.indexOf(m);if(i<0)return;
+    ctx.strokeStyle='#fbbf2466';ctx.setLineDash([2,3]);ctx.beginPath();
+    ctx.moveTo(X(i),pad.t);ctx.lineTo(X(i),pad.t+H);ctx.stroke();ctx.setLineDash([]);});
+  const gi=M.indexOf(sim.target_month);
+  if(gi>=0){ctx.strokeStyle='#34d399aa';ctx.lineWidth=1.4;ctx.beginPath();
+    ctx.moveTo(X(gi),pad.t);ctx.lineTo(X(gi),pad.t+H);ctx.stroke();
+    ctx.fillStyle='#34d399';ctx.fillText('SALE GOAL 07-31-27',Math.min(X(gi)+5,pad.l+W-110),pad.t+12);}
+  const mx=Math.max(...f.map(r=>r.p_no_deal));
+  document.getElementById('nodeal').textContent=mx>0.005?`P(process dies) up to ${(mx*100).toFixed(1)}%`:'';
+  document.getElementById('simassump').textContent='Assumptions: '+sim.assumptions.join(' · ');
+  FANGEO={M,f,on_pace:sim.on_pace,pad,W,H,X,Y,cw,ch};
+}
+
+// hover crosshair + price readout
+(function(){
+  const cv=document.getElementById('fan'),tip=document.getElementById('fantip');
+  cv.addEventListener('mousemove',e=>{
+    if(!FANGEO||!LASTSIM)return;
+    const g=FANGEO,r=cv.getBoundingClientRect();
+    const x=e.clientX-r.left;
+    let i=Math.round((x-g.pad.l)/(g.W/(g.M.length-1)));
+    i=Math.max(0,Math.min(g.M.length-1,i));
+    drawFan(LASTSIM);                                   // repaint, then overlay
+    const ctx=cv.getContext('2d'),row=g.f[i],xp=g.X(i);
+    ctx.strokeStyle='#94a3b8aa';ctx.setLineDash([3,3]);ctx.beginPath();
+    ctx.moveTo(xp,g.pad.t);ctx.lineTo(xp,g.pad.t+g.H);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='#e2e8f0';
+    ctx.beginPath();ctx.arc(xp,g.Y(row.p50),3,0,7);ctx.fill();
+    const op=g.on_pace[i]?g.on_pace[i].value:null;
+    const pv=(BOARD&&BOARD.plan)?BOARD.plan.ev_by_month[g.M[i]]:null;
+    tip.innerHTML=`<b>${g.M[i]}</b> &middot; close-month valuation<br>`+
+      `median <b>$${row.p50}M</b> &middot; likely $${row.p25}&ndash;${row.p75}M<br>`+
+      `full band (10/90) $${row.p10}&ndash;${row.p90}M`+
+      (op?`<br><span style="color:#34d399">on-pace ramp $${op}M</span>`:'')+
+      (pv!=null?`<br><span style="color:#c084fc">company plan $${pv}M</span>`:'')+
+      (row.p_no_deal>0.004?`<br><span style="color:#f87171">P(no deal) ${(row.p_no_deal*100).toFixed(1)}%</span>`:'');
+    tip.style.display='block';
+    const tw=tip.offsetWidth||190;
+    tip.style.left=Math.min(Math.max(xp+14,g.pad.l),g.cw-tw-8)+'px';
+    tip.style.top=(g.pad.t+8)+'px';
+  });
+  cv.addEventListener('mouseleave',()=>{tip.style.display='none';if(LASTSIM)drawFan(LASTSIM);});
+  window.addEventListener('resize',()=>{if(LASTSIM)drawFan(LASTSIM);});
+})();
+
+function runSim(){
+  const msg=document.getElementById('simmsg');msg.textContent='running…';
+  const body={
+    force_hikes:document.getElementById('t_force').value===''?null:+document.getElementById('t_force').value,
+    crash:document.getElementById('t_crash').value,
+    regime_50bp:!!document.getElementById('t_reg').value,
+    extra_stall_pp:+document.getElementById('t_stall').value||0};
+  fetch('api/ewm/simulate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+    .then(r=>r.json()).then(s=>{msg.textContent='';drawFan(s);})
+    .catch(()=>msg.textContent='simulation failed');
+}
+
+document.getElementById('runsim').onclick=runSim;
+document.getElementById('t_hz').onchange=()=>{if(LASTSIM)drawFan(LASTSIM);};
+function refreshBoard(){return fetch('api/ewm/board').then(r=>r.json()).then(b=>{render(b);runSim();});}
+
+function loadRates(){fetch('api/ewm/rates').then(r=>r.json()).then(d=>{
+  const srcs=['polymarket','kalshi','futures'], W=d.weights||{};
+  const lbl=(iso)=>new Date(iso+'T12:00:00Z').toLocaleDateString('en-US',
+    {month:'short',day:'numeric',year:'2-digit',timeZone:'UTC'});
+  let h='<tr><th>meeting</th>'+d.buckets.map(b=>`<th>${d.labels[b]||b}</th>`).join('')
+        +'<th>sources</th></tr>';
+  d.meetings.forEach(m=>{
+    h+=`<tr><td>${lbl(m.date)}</td>`+d.buckets.map(b=>{
+      const v=(m.blend||{})[b];
+      const tip=srcs.map(sx=>{const x=(m.sources[sx]||{})[b];
+        return x==null?null:`${sx}: ${(x*100).toFixed(0)}% (weight ${Math.round((W[sx]||0)*100)}%)`;})
+        .filter(Boolean).join('\n')
+        +'\n(weighted avg over sources with a market, renormalized)';
+      return `<td class="cmid" title="${tip}">${v==null?'&mdash;':(v*100).toFixed(1)+'%'}</td>`;
+    }).join('')
+    +`<td class="crng">${srcs.filter(sx=>m.sources[sx]&&Object.keys(m.sources[sx]).length).length}/${srcs.length}</td></tr>`;
+  });
+  document.getElementById('ratetbl').innerHTML=h;
+  document.getElementById('ratefoot').textContent=
+    'Weights (accuracy-earned, inverse shrunk-Brier): '
+    + srcs.map(sx=>`${sx} ${Math.round((W[sx]||0)*100)}%`).join(' · ')
+    + '. Hover a cell for each source. Same ensemble as the canary panel.';
+}).catch(()=>{const el=document.getElementById('ratefoot');
+  if(el)el.textContent='rate ensemble unavailable';});}
+window.setAuto=(f,v)=>{fetch('api/ewm/inputs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({auto:{[f]:v}})}).then(refreshBoard);};
+window.tilt=(on)=>{fetch('api/ewm/inputs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(on?{apply_tilt:true}:{clear_tilt:true})}).then(refreshBoard);};
+document.getElementById('save').onclick=()=>{
+  const msg=document.getElementById('savemsg');msg.textContent='saving…';
+  fetch('api/ewm/inputs',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      revenue_dec2026:+document.getElementById('i_rev').value,
+      target_value_lo:+document.getElementById('i_tlo').value,
+      target_value_hi:+document.getElementById('i_thi').value,
+      stage:document.getElementById('i_stage').value,
+      today_month:document.getElementById('i_today').value,
+      dissent_cluster:document.getElementById('i_dis').checked,
+      anchor_plan:document.getElementById('i_anchor').checked,
+      pin_report:document.getElementById('i_pin').checked})})
+  .then(r=>r.json()).then(()=>fetch('api/ewm/board')).then(r=>r.json())
+  .then(b=>{msg.textContent='applied ✓';render(b);runSim();setTimeout(()=>msg.textContent='',2500);})
+  .catch(()=>msg.textContent='save failed');
+};
+
+document.getElementById('plansave').onclick=()=>{
+  const msg=document.getElementById('planmsg');msg.textContent='saving…';
+  const margins={},mults={};
+  const defs={};(BOARD.plan?BOARD.plan.rows:[]).forEach(r=>defs[r.period]=r);
+  document.querySelectorAll('#plan input.pin').forEach(el=>{
+    const q=el.dataset.q,v=+el.value,d=defs[q];if(!d||isNaN(v))return;
+    if(el.dataset.k==='m'&&Math.abs(v-d.margin_default_pct)>0.005)margins[q]=v;
+    if(el.dataset.k==='x'&&Math.abs(v-d.multiple_default_x)>0.005)mults[q]=v;
+  });
+  fetch('api/ewm/inputs',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({plan_margins:margins,plan_multiples:mults})})
+  .then(()=>refreshBoard()).then(()=>{msg.textContent='applied ✓';setTimeout(()=>msg.textContent='',2500);})
+  .catch(()=>msg.textContent='save failed');
+};
+document.getElementById('planreset').onclick=()=>{
+  const msg=document.getElementById('planmsg');msg.textContent='resetting…';
+  fetch('api/ewm/inputs',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({plan_margins:{},plan_multiples:{}})})
+  .then(()=>refreshBoard()).then(()=>{msg.textContent='reset ✓';setTimeout(()=>msg.textContent='',2500);})
+  .catch(()=>msg.textContent='reset failed');
+};
+
+fetch('api/ewm/board').then(r=>r.json()).then(b=>{render(b);runSim();});
+loadRates();
+</script></body></html>

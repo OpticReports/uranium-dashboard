@@ -7,10 +7,34 @@ export interface GlossaryEntry {
   what: string;
   calc?: string;
   read?: string;
+  read2?: string;
   caveat?: string;
 }
 
 export const GLOSSARY: Record<string, GlossaryEntry> = {
+  // ── Business cycle ────────────────────────────────────────────────────────
+  cycle_phase: {
+    title: "Business-cycle phase",
+    what: "Where the US economy sits in the cycle, classified from two composites: COINCIDENT (where we are — the four series NBER's dating committee uses) and LEADING (where we're heading). Phases: EXPANSION, LATE CYCLE (leading rolling over while growth still positive), STALL (growth below trend, leading OK), SLOWDOWN (both deteriorating), CONTRACTION (coincident below the recession-consistent line).",
+    calc: "Coincident < −0.75 → CONTRACTION; < 0 with leading < −0.3 → SLOWDOWN; < 0 → STALL; leading < −0.5 → LATE CYCLE; else EXPANSION. Thresholds validated on 1960–2026 NBER dating, not fitted to look good.",
+    read: "Phase CHANGES matter more than levels — a STALL→SLOWDOWN transition fires a canary alert. Cross-check with the stress composite: cycle position says where you are, stress says how fragile the ride is.",
+    caveat: "Monthly data with ~1-month publication lag; validation uses revised data, so live precision runs below the backtest stats. This tracks the cycle — it does not day-trade it.",
+  },
+  cycle_composite: {
+    title: "Coincident & leading composites (z-scores)",
+    what: "Coincident: mean expanding-window z of 6-month annualized growth of payrolls, industrial production, real income ex transfers, real business sales. Leading: same treatment of yield curve, building permits, jobless claims (inverted), factory hours, credit spreads (inverted), consumer-sentiment change.",
+    calc: "Expanding-window z-scores (min 10y history) — no full-sample lookahead. Leading is 3-month smoothed. Recession-consistent line at −0.75: ~65% precision full-sample, ~58% post-1990 / ~93% recall on monthly NBER labels; every recession since 1970 bottomed below −1.5. Leading crossing −0.5 was strictly early on 4 of 7 recessions (median 3 months outside the early-80s pair; 1990/2020 crossed at onset, 2008 a month after); 3 of 15 spells false — two of them recent (2023, 2024), visible in the 5y view. Numbers adversarially re-counted by counter-agent QA, 2026-08-07.",
+    read: "Coincident below zero but above −0.75 with leading positive = a stall, not a recession call. Both below their lines together is the combination that has never been a false alarm for long.",
+    caveat: "Revised-data validation (live vintages noisier); ~1-month lag. The 2020 recession arrived faster than any monthly indicator could lead.",
+  },
+  cycle_payrolls: {
+    title: "Payrolls momentum (12-month MA of monthly change)",
+    what: "The single-series framing (popularized by Zeberg): average monthly nonfarm-payroll change over the trailing 12 months, in thousands of jobs. Smooth enough to see the cycle, simple enough to argue with.",
+    calc: "12-month moving average of month-over-month PAYEMS change. The panel checks the claim that today's level sits below every level at which a post-1970 recession STARTED — computed from the data, not quoted from the tweet.",
+    read: "Falling through ~50k/mo historically means the labor cycle is late; crossing zero has essentially always coincided with recession. But it LAGS the composites — use it as confirmation, not as the early warning.",
+    caveat: "One series, benchmark-revision-prone (annual BLS revisions can move the whole recent curve). The composite view is the primary instrument; this is the cross-check.",
+  },
+
   // ── Composite ─────────────────────────────────────────────────────────────
   composite_score: {
     title: "Treasury Stress Score (0–100)",
@@ -189,6 +213,63 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     what: "Spread on high-quality corporate debt.",
     calc: "ICE BofA IG option-adjusted spread, bps (FRED).",
     read: "Moves later and less than HY; IG widening means stress has reached the quality end — a later-cycle, more serious confirmation.",
+  },
+  "crossasset.margin_excess_yoy": {
+    title: "Margin debt excess growth",
+    what: "How much faster investors' margin debt is growing than the market itself — leverage building beyond what rising prices alone explain. The one margin-debt cut that actually backtests as a leading indicator.",
+    calc: "FINRA margin-debt YoY % minus S&P 500 YoY %, in percentage points. Monthly FINRA data (~3–4 week lag); S&P leg from FRED.",
+    read: "Above +25pp: in 1997–2026, 21 of 27 such months saw the S&P LOWER 12 months later (median −12%, worst −37%) — the 2000/2007/2021 pattern. Above +15pp: forward returns compress toward zero. Around 0: leverage merely tracking the market, no signal.",
+    caveat: "A 12-MONTH-horizon signal from ~3 independent historical episodes. It has essentially no monthly timing power (only 39% of blowoff months were down 3 months later) — treat it as a regime dial, not a sell trigger. See the Leverage Cycle chart for the full state machine.",
+  },
+  "crossasset.margin_yoy": {
+    title: "Margin debt growth (YoY)",
+    what: "Raw year-over-year growth in FINRA margin debt — context for the excess-growth gauge.",
+    calc: "Total debit balances in customers' margin accounts, YoY % (FINRA monthly).",
+    read: "Peaks in margin debt led the S&P peak in all five major drawdowns since 1997 (by 1–9 months). CONTRACTION (negative YoY) is historically a BUY zone, not a warning: after contraction months, 12-month forward returns ran +9 to +12% with ~79% positive.",
+    caveat: "Informational tile — the composite uses excess growth instead, because raw growth double-counts the market's own rise.",
+  },
+  "crossasset.margin_coverage": {
+    title: "Investor cash coverage (credit/debit)",
+    what: "Cash in brokerage accounts ÷ margin debt — the normalized version of the viral 'record negative net credit balance' chart.",
+    calc: "FINRA free credit balances (cash + margin accounts) divided by margin debit balances.",
+    read: "It is deliberately NOT scored. The ratio trends structurally lower (portfolio margin, cash swept outside brokerage free-credit), so it sets 'records' by construction: coverage at the 2000 top was 0.56, at the 2007 top 1.04, today ~0.29. Bottom-decile coverage months actually preceded ABOVE-baseline returns.",
+    caveat: "When the scary net-credit-balance chart goes viral, this tile is the antidote: check the excess-growth gauge instead — that's the cut with signal.",
+  },
+  margin_leverage: {
+    title: "Leverage Cycle (margin debt)",
+    what: "Tracks where speculative leverage sits in its build → blowoff → crash → squeeze-out cycle, using FINRA margin debt vs the S&P. Its two jobs: warn when leverage builds dangerously fast, and show — in near-real-time after a crash — when the leverage has been SQUEEZED OUT and forced selling is spent.",
+    calc: "States, checked in order: WASHOUT margin YoY ≤ −15% · SQUEEZE YoY < 0 · BLOWOFF excess ≥ +25pp (or YoY ≥ +40%) · ELEVATED excess ≥ +15pp (or YoY ≥ +30%) · else NEUTRAL. Historical stats: monthly states 1997–2026 vs forward SPY returns. Long view: margin is FINRA monthly from 1997 spliced onto quarterly Fed Z.1 security credit back to 1946 (they track near-1:1 at the splice); the S&P leg is the ^GSPC index back to ~1951. Price overlays re-index to 100 at the first month of whatever range is selected.",
+    read: "BLOWOFF: 78% of months saw the S&P lower a year later (median −12%) — de-risk over quarters. NEUTRAL: best regime (88% higher a year later). WASHOUT: crash in progress — bottoms form here, scale in staged. SQUEEZE: the reset is done, forward returns back to baseline — historically the re-entry zone. The range chips (All/1971+/1997+/10y) just window the same series.",
+    caveat: "Slow signal, overlapping windows, ~3 independent blowoff episodes in the sample. The playbook stats are validated on the FINRA era (1997+) only — the pre-1997 stretch is historical context, quarterly and from a different (spliced) source. BTC exists from 2014; no earlier price can be shown. Read jointly with stock-bond correlation: a blowoff unwinding while that correlation is positive (2022-style) has no Treasury shock absorber. USEFULNESS EVAL (2026-07, MARGIN_DEBT.md): NEUTRAL's best-regime claim is bootstrap-validated (p=0.007); BLOWOFF is suggestive only (p=0.058, 8 episodes) and mechanically de-risking on it did NOT improve risk-adjusted returns 1998-2026 (crash damage historically lands after BLOWOFF ends) — each state's banner now carries its evidence verdict.",
+  },
+  rate_shock_sim: {
+    title: "Rate-Shock Simulator — scenario fan charts",
+    what: "Forward-looking WHAT-IF panel: pick a Fed scenario (-2 cuts to +4 hikes at the next FOMC meetings) and see the simulated price distribution for SPX, QQQ, SOXX (the AI-capex proxy) and HYG out to Q2 2027. This is NOT a naive Monte Carlo cone: scenarios are measured as SURPRISE vs the market-implied path (a fully priced hike moves nothing), surprises pass through an estimated front-to-long kappa into 10y and real yields, then through duration betas and a regime-switching credit-stress state into asset drifts — the Monte Carlo only adds residual noise (Student-t, t-copula for realistic joint crashes).",
+    calc: "Stage 1: surprise = scenario path - implied path (Oct-2026 ~70%, Dec ~45% priced; editable params). kappa_t = clip(0.45 + 0.40*(6m ACM term-premium change), 0.25, 0.65). Stage 2: equity dlog = drift/12 - beta*d(real yield); betas SPX 8, QQQ 11, SOXX 14 per 100bp (2020-26 estimates); HYG = -3.2*dy - 3.5*dOAS + carry, with a 2-state OAS Markov (normal theta 310bp; stress theta 500bp, +120bp entry jump; entry probability = logistic in lagged cumulative surprise + the live canary composite). Stress triggers a phased capex-crack (-12/-18/-25%) and 1.6x vol for 4 months. Stage 3: 10,000 antithetic paths, monthly to Jun-2027, t(4) shocks via shared-mixing t-copula, vols from live VIX (x0.8) and MOVE/realized blend.",
+    read: "Compare scenarios, not levels: the difference between the '+4 hikes' and 'priced path' fans IS the model's estimate of what unpriced tightening costs. The stress sparkline shows when the credit regime is likely to break — calibrated so 0-1 hikes gives ~5-10% stress odds by Q2-27 and 3-4 hikes ~30-50%. P(dd>10/20%) chips quantify drawdown risk per scenario. The param drawer (amber dot = judgment-tagged) re-runs the engine live — it is the sensitivity surface, use it.",
+    caveat: "Validation gates passed: 2022 replay lands SPX -20%/HYG -14% (in-band), telegraphed-hike replay does NOT crash, zero-surprise reproduces a plain cone. But: conditional betas rest on ~5 hiking cycles, regime probabilities are judgment encoded as parameters, and the market-implied path is manual config. Scenario visualization, not prediction. Full parameter provenance: /shock-sim/calibration; counter-agent amendments in SPEC_AMENDMENTS.md.",
+  },
+  rate_shock: {
+    title: "Rate Shock — long-yield moves × hedge regime",
+    what: "Answers 'the 20y/30y just moved — does that mean recession, and should I sell stocks?' The folk model says rising yields make investors sell stocks to buy bonds. Historically that's only half true, and WHICH half depends on the stock-bond correlation regime: when correlation is positive (2022-style), bonds aren't hedging stocks and yield moves transmit straight into equity valuations; when negative, yield swings largely reflect growth news and rotations.",
+    calc: "Long yield = 30y Treasury (DGS30, spliced with DGS20 over the 2002-06 discontinuation). Shock = change over 60 trading days: SPIKE ≥ +75bp · PLUNGE ≤ −75bp · else NEUTRAL. Regime = rolling 60d correlation of daily S&P returns vs bond-price returns (same convention as the stock-bond correlation tile): POS ≥ +0.2 · NEG ≤ −0.2 · else MIXED. Backtest: pre-registered thresholds, 2,480 weekly obs 1977-2026, forward S&P at 1/3/12 months plus recession-within-12-months odds, episode-level bootstrap with FDR across the 9 cells.",
+    read: "The two validated findings: (1) SPIKES are a RECESSION signal, not a stock signal — recession began within 12 months after 44% of spike weeks vs 21% baseline (47% in the no-hedge regime), yet 12-month stock returns after spikes ran near baseline with MILDER worst cases (−17% vs −46%), because crashes historically started from calm-rate weeks. Mechanically selling stocks on a yield spike was not supported. (2) PLUNGES are the validated equity BUY: yield relief in the no-hedge regime saw the S&P higher 12 months later in 102 of 102 weeks (13 episodes, p<0.001), and 97% in the hedge-intact regime (p=0.029). Caveat cell: a plunge in a MIXED regime carried 60% recession odds — sometimes the plunge IS the recession arriving; read it with the curve canary.",
+    caveat: "Weekly observations overlap; episode counts are the honest n. SPIKE × NEG's spectacular numbers rest on 2 Volcker-era episodes — ignore them. The recession-odds column is descriptive conditioning, not the recession MODEL (that's the curve-based one, which remains the validated predictor). Frozen from one pre-registered evaluation; thresholds chosen by judgment, not swept.",
+  },
+  fast_leverage: {
+    title: "Fast Leverage — Nowcast strip",
+    what: "The monthly Leverage Cycle chart below answers 'where are we in the leverage CYCLE?' but publishes with a ~3-4 week lag. This strip answers 'is leverage being forced out RIGHT NOW?' using the three fastest leverage gauges that exist: hedge-fund S&P futures positioning (CFTC, weekly with a 3-day lag), the VIX 20-day change (daily), and BTC perpetual funding + open interest (hourly). HY credit spreads ride along as a daily confirmation leg. In a fast washout the sequence runs: crypto funding flips (hours) → futures positioning unwinds (weeks) → HY spreads widen (days) → the monthly FINRA line confirms 1-2 months later.",
+    calc: "COT leg: leveraged funds' net E-mini S&P position as % of open interest, z-scored against the trailing 3 years (funds are STRUCTURALLY net short e-minis via the basis trade, so only the z-score means anything). Composite state, rules pre-registered before the backtest was run: FLUSH = VIX up ≥8pts in 20 days AND positioning z falling ≥0.5 in 4 weeks · WASHED_OUT = z ≤ −1 AND VIX 20d change ≤ 0 · RISK_BUILD = z ≥ +1 AND VIX 20d change ≤ +4 · else CALM. Evaluated ONCE on 2006-2026 weekly data (single variant, no tuning loop); the stats shown are frozen from that run.",
+    read: "FLUSH is rare (3 episodes: Sep-2015, Mar-2022, Apr-2025) and LATE — all 5 historical weeks resolved higher a month later (median +7.4%): don't panic-sell a climax. WASHED_OUT is the fast re-entry zone: 95% of weeks saw the S&P higher 12 months later (median +15.6%). RISK_BUILD isn't a sell signal (78% positive 3m) but owns the worst left tail (−40% worst 12m): don't ADD leverage there. CALM = baseline. The × line at the bottom of the banner crosses the fast state with the monthly state — the dangerous combo is monthly BLOWOFF × fast RISK_BUILD; the constructive one is fast WASHED_OUT front-running the monthly SQUEEZE.",
+    read2: "THE 75-YEAR LINE: positioning data can't exist before 2006 (COT leveraged-funds category) or 1982 (equity futures), but the STRESS leg extends to 1951 via realized 20-day vol of daily S&P closes. Four stress states (pre-registered mirroring the modern thresholds, evaluated once): SHOCK = vol up ≥8pts/20d · AFTERSHOCK = vol z ≥ +1 and fading · COMPLACENT = vol z ≤ −0.75 and quiet · NORMAL. Crossed with the monthly leverage state over 3,803 weekly obs, the matrix's headline cells: COMPLACENT × BLOWOFF (quiet vol on a blown-off cycle — the fragile combo): 49% of weeks higher 12m later, median −0.2% vs baseline 74%/+10.3%, across 30 episodes. COMPLACENT × WASHOUT (the bear-market lull): 11% higher, median −19.6% — calm during a washout historically meant the crash wasn't over. AFTERSHOCK × SQUEEZE (the re-entry cell): 89% higher, median +22.7%. SHOCK × BLOWOFF (climax weeks): 3 months later positive in all 18 weeks. The banner's 75y line shows today's live cell.",
+    caveat: "Weekly observations overlap heavily — episode counts (3/22/16/23) are the honest sample sizes, and FLUSH's stats rest on 3 episodes. Tradeability gap: COT stats are computed from Tuesday DATA dates, but the report publishes Friday — each state's forward return includes ~3 days you couldn't have traded on it, so the stats modestly overstate the actionable edge (matters most for FLUSH's 1-month bounce). The banner shows both dates. USEFULNESS EVAL (2026-07): WASHED_OUT is the one fully-validated claim (bootstrap p=0.011, stable across halves); FLUSH is unprovable at 3 episodes; RISK_BUILD's stats are baseline-indistinguishable but its 75%-sizing rule improved MAR 0.156→0.164 and cut max drawdown 3.2pp; in the 75y matrix only COMPLACENT × WASHOUT survives FDR, COMPLACENT × BLOWOFF is suggestive-and-stable, and SHOCK × BLOWOFF plus today's NORMAL × BLOWOFF cell failed split-half replication — evidence verdicts render inline. These are mean-reversion signals at weeks-to-months horizons, NOT cycle calls: 2008 started from CALM. The 75y stress proxy agrees with the modern COT+VIX composite only ~53% of overlap weeks — it reads the stress half, not the positioning half; treat the two lines as complementary evidence, not the same gauge. BTC funding/OI and HY spreads are display legs with no backtested stats(FRED now caps ICE BofA spread history at ~3y — too short to backtest honestly). The combined chart plots every leg on one σ scale — each series z-scored against its own served history (positioning vs trailing 3y = the signal z; VIX/HY vs ~3y; funding vs ~6m) — because the native units (z, points, %/yr, bp) can't share an axis. Hover for native values. Deribit open-interest snapshots accrue daily from first deploy.",
+  },
+  leverage_corroboration: {
+    title: "True bear vs false positive (corroboration flags)",
+    what: "The blowoff signal's biggest weakness is false positives: across 1951–2026, only about half of margin blowoffs preceded a major bear — the rest fizzled (1955, 1983, 1997, 2013…). This panel checks WHICH KIND of blowoff today looks like, using six late-cycle conditions that separated the real bears from the fizzles in the historical record.",
+    calc: "Six flags, each computed live from current data: flat yield curve (10y−3mo < 1.0pp) · Fed tightened (3mo rate up >0.5pp in 12 months) · late expansion (≥48 months since the last recession) · low unemployment (<5%) · extended market (S&P up >50% over 3 years) · high excess (margin excess ≥ +25pp). Flags with missing data are excluded from the denominator, not counted false.",
+    read: "The historical split: every blowoff with ≥4 flags lit (1967, 1998, 2000, 2007) was followed by a major bear — 4 of 4, est. 65–85% forward odds given the tiny sample. Blowoffs with ≤2 flags — the early-cycle re-leveraging kind, coming off a fresh recession with a steep curve — fizzled two-thirds of the time (4 of 12 became bears, ~33%). Unconditional base rate: 8 of 16 (~50%).",
+    caveat: "Only ~16 blowoff episodes in 75 years, so these are small-sample estimates, not calibrated probabilities — treat the flag count as a lean, not a forecast. The flags are descriptive of past cycles; a genuinely new regime (fiscal-dominance inflation, AI capex boom) can break the pattern in either direction.",
   },
 
   // ── Auctions (E) / Liquidity (G) / Foreign (F) ────────────────────────────

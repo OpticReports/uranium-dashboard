@@ -26,16 +26,37 @@ def _cache_path(series_id: str, start: str) -> str:
     return os.path.join(settings.cache_dir, f"fred_{series_id}_{start}.json")
 
 
+# FRED uses HTTP 400 BOTH for "series doesn't exist" AND for a bad/unregistered
+# api_key. Conflating them once turned an invalid key on a fresh deploy into 33
+# silently-STALE metrics while /health said fred_key_present=true. A detected
+# key error is recorded here and surfaced by /health and /refresh.
+_key_error: dict[str, str | None] = {"msg": None}
+
+
+def fred_key_error() -> str | None:
+    """The last detected FRED api_key error, or None once a call succeeds."""
+    return _key_error["msg"]
+
+
 def _get_with_backoff(params: dict, tries: int = 4) -> dict | None:
     delay = 1.0
     for attempt in range(tries):
         try:
             r = httpx.get(_BASE, params=params, timeout=settings.http_timeout_seconds)
             if r.status_code == 400:
-                logger.warning("FRED 400 for %s (series may not exist): %s",
-                               params.get("series_id"), r.text[:160])
+                body = r.text[:200]
+                if "api_key" in body:
+                    _key_error["msg"] = body
+                    logger.error(
+                        "FRED REJECTED THE API KEY (not a missing series) — every "
+                        "FRED-based metric will be STALE until FRED_API_KEY is fixed: %s",
+                        body)
+                else:
+                    logger.warning("FRED 400 for %s (series may not exist): %s",
+                                   params.get("series_id"), body)
                 return None
             r.raise_for_status()
+            _key_error["msg"] = None  # a successful call proves the key works
             return r.json()
         except Exception as exc:  # noqa: BLE001
             if attempt == tries - 1:
@@ -164,11 +185,13 @@ def _fetch_bundle_uncached(start: str) -> dict[str, tuple[list[date], list[float
     bundle = {key: series for key, series in results}
     # Non-FRED series ride along in the same bundle (each gracefully []).
     from .cftc import fetch_lev_net_short
+    from .finra_margin import fetch_margin_stats
     from .fmp import fetch_gold
     from .ofr import fetch_fsi
     bundle["gold"] = fetch_gold()
     bundle["ofr_fsi"] = fetch_fsi()
     bundle["cot_net_short"] = fetch_lev_net_short()
+    bundle.update(fetch_margin_stats())
     return bundle
 
 

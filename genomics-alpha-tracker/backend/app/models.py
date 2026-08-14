@@ -292,6 +292,7 @@ class TradeCall(SQLModel, table=True):
 
     # Context snapshotted at fire-time for later attribution.
     composite_at_call: Optional[float] = None
+    confidence: Optional[float] = None  # 0-100 conviction score, frozen at fire-time
     evidence: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
 
     # Outcome (filled by the evaluator; NULL while the call is open).

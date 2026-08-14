@@ -70,8 +70,15 @@ export default function AlertBeacon({
     level = "GREEN";
   }
 
-  const n =
-    (composite?.n_critical ?? 0) + (composite?.n_red ?? 0) + nCritAlerts + nRedAlerts;
+  // Count ONE population, not two: the badge previously summed currently-RED
+  // metric tiles PLUS logged alert events — overlapping facts counted twice
+  // (user report: badge said 12, feed showed 7). The live metric grid is the
+  // source of truth for "how many things are red right now"; the feed is the
+  // transition LOG (resets on redeploy). Fall back to event counts only when
+  // the composite hasn't loaded.
+  const n = composite
+    ? (composite.n_critical ?? 0) + (composite.n_red ?? 0)
+    : nCritAlerts + nRedAlerts;
   const label =
     level === "UNKNOWN"
       ? "NO DATA"
@@ -103,7 +110,7 @@ export default function AlertBeacon({
         }
       }}
       className={`flex cursor-pointer items-center gap-2 rounded border bg-slate-900/50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide transition-colors hover:bg-slate-800/60 ${s.border} ${s.text}`}
-      title="Jump to event feed"
+      title="Currently-RED metrics on the board (live state). The event feed below logs when each went red — it resets on redeploys, so its row count can be lower."
     >
       <span
         className={`h-1.5 w-1.5 rounded-full ${pulse ? "animate-pulse" : ""}`}

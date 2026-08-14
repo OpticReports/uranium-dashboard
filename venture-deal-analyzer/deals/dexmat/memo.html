@@ -1,0 +1,218 @@
+<title>DexMat — Investment Memo</title>
+<style>
+  :root {
+    --paper: #F7F8F7; --card: #FFFFFF; --ink: #1A2422; --muted: #56675F;
+    --line: #DCE3DF; --accent: #0E7E53; --accent-ink: #0B6A46;
+    --data-1: #0E7E53; --data-2: #A85F00; --data-mute: #ADBCB4;
+    --wash: #EEF3F0; --warn-wash: #F6EEE2; --danger: #9E3B1E;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #131A18; --card: #1A2320; --ink: #E4EBE7; --muted: #92A29A;
+      --line: #2A3733; --accent: #45C69E; --accent-ink: #5ED2AC;
+      --data-1: #279B79; --data-2: #C56F33; --data-mute: #46554F;
+      --wash: #1F2A26; --warn-wash: #2A2119; --danger: #E0805F;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #131A18; --card: #1A2320; --ink: #E4EBE7; --muted: #92A29A;
+    --line: #2A3733; --accent: #45C69E; --accent-ink: #5ED2AC;
+    --data-1: #279B79; --data-2: #C56F33; --data-mute: #46554F;
+    --wash: #1F2A26; --warn-wash: #2A2119; --danger: #E0805F;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--paper); color: var(--ink); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 16px; line-height: 1.6; margin: 0; }
+  .sheet { max-width: 860px; margin: 0 auto; padding: 48px 24px 80px; }
+  h1, h2, h3 { font-family: Charter, "Bitstream Charter", Cambria, Georgia, serif; text-wrap: balance; }
+  h1 { font-size: 2.2rem; line-height: 1.15; margin: 10px 0 8px; }
+  h2 { font-size: 1.4rem; margin: 0 0 6px; }
+  p { max-width: 68ch; margin: 0 0 14px; }
+  .eyebrow, .lbl { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .eyebrow b { color: var(--accent); font-weight: 600; }
+  .rule { border: 0; border-top: 1px solid var(--line); margin: 38px 0 30px; }
+  .memo { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 24px 26px; margin: 26px 0 6px; box-shadow: 0 1px 3px rgba(10,20,16,.05); }
+  .verdict { font-size: 1.15rem; font-weight: 650; margin: 6px 0 12px; font-family: Charter, Georgia, serif; }
+  .memo ul { margin: 0 0 6px; padding-left: 1.1em; }
+  .memo li { margin-bottom: 6px; max-width: 72ch; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+  @media (max-width: 680px) { .grid2 { grid-template-columns: 1fr; } }
+  .score-rows { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 2px; }
+  .srow { display: grid; grid-template-columns: 200px 1fr 74px; gap: 10px; align-items: center; font-size: .84rem; }
+  .srow .name { color: var(--muted); }
+  .track { background: var(--wash); border-radius: 4px; height: 12px; position: relative; overflow: hidden; }
+  .fill { position: absolute; inset: 0 auto 0 0; background: var(--data-1); border-radius: 4px 3px 3px 4px; }
+  .srow .val { font-family: ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; }
+  .srow .val small { color: var(--muted); font-weight: 400; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 14px 0 4px; }
+  .tile { background: var(--wash); border-radius: 8px; padding: 12px 14px; }
+  .tile .num { font-family: ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; font-size: 1.4rem; font-weight: 600; color: var(--accent-ink); line-height: 1.15; display: block; }
+  .tile .cap { font-size: .76rem; color: var(--muted); line-height: 1.35; }
+  figure { margin: 20px 0; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px 18px 10px; overflow-x: auto; }
+  figcaption { font-size: .82rem; color: var(--muted); margin-top: 8px; max-width: 70ch; }
+  svg text { font-family: ui-monospace, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
+  .axlbl { fill: var(--muted); font-size: 12px; }
+  .vallbl { fill: var(--ink); font-size: 12.5px; font-weight: 600; }
+  .note { fill: var(--muted); font-size: 11.5px; }
+  .grp { fill: var(--ink); font-size: 12.5px; font-weight: 700; }
+  .b1 { fill: var(--data-1); } .b2 { fill: var(--data-2); } .bm { fill: var(--data-mute); }
+  .bar:hover { filter: brightness(1.12); }
+  .tbl-wrap { overflow-x: auto; margin: 14px 0; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+  table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: .86rem; }
+  th, td { text-align: left; padding: 10px 14px; vertical-align: top; border-top: 1px solid var(--line); line-height: 1.45; }
+  thead th { border-top: 0; font-family: ui-monospace, Menlo, monospace; font-size: .7rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  td.num { font-family: ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; }
+  .chip { display: inline-block; font-family: ui-monospace, Menlo, monospace; font-size: .68rem; letter-spacing: .06em; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+  .chip.heroic { background: var(--warn-wash); color: var(--danger); border: 1px solid var(--line); }
+  .chip.plaus { background: var(--wash); color: var(--accent-ink); border: 1px solid var(--line); }
+  blockquote { border-left: 3px solid var(--data-2); margin: 16px 0; padding: 4px 0 4px 18px; color: var(--muted); font-size: .93rem; max-width: 70ch; }
+  .panel { border-radius: 10px; padding: 16px 18px; border: 1px solid var(--line); background: var(--card); }
+  .panel.flip { border-left: 4px solid var(--data-1); }
+  .panel h3 { font-family: system-ui, sans-serif; font-size: .95rem; margin: 0 0 6px; }
+  .panel p, .panel li { font-size: .88rem; }
+  .panel ol, .panel ul { padding-left: 1.2em; margin: 6px 0 0; }
+  .panel li { margin-bottom: 5px; }
+  .honesty { background: var(--warn-wash); border: 1px solid var(--line); border-radius: 10px; padding: 18px 22px; margin-top: 26px; }
+  .honesty p, .honesty li { font-size: .87rem; }
+  .honesty ul { padding-left: 1.1em; margin: 6px 0 0; }
+  .honesty li { margin-bottom: 5px; max-width: 75ch; }
+  .foot { color: var(--muted); font-size: .8rem; margin-top: 36px; max-width: 72ch; }
+</style>
+
+<div class="sheet">
+  <div class="eyebrow"><b>OpticReports</b> · Deal memo · Analyzer v1 · rev 2 — 2026-08-08</div>
+  <h1>DexMat (Galvorn) — SPV</h1>
+  <p style="color:var(--muted); max-width:66ch">Carbon-nanotube fiber positioned to replace copper wire. Rev 2: full panel re-run after receipt of all four sponsor documents (deck, DD-call notes, comp set, Delta4 dilution/return model). Round: <b>$10M at $35M pre / $45M post</b> · SPV terms 2% + 20% carry.</p>
+
+  <div class="memo">
+    <div class="lbl">Page-one synthesis — rev 2</div>
+    <div class="verdict">Borderline pass / watch — one verification call decides it. The documents materially improved traction, but the price moved faster than the evidence: $45M post on a ~$800K–1M run rate, a 55% step-up in three months, sold with a model whose "base case" is a $10B IPO and which contains no downside scenario. Expected value ≈ 2.5–3x net, entirely tail-driven.</div>
+    <ul>
+      <li><b>The flip trigger:</b> confirm the signed multi-year contract's counterparty and binding committed volumes (or an executed Tokai Rika PO at ~$3M/yr). Binding + named → defensible tail bet. Frame agreement / unnamed → pass.</li>
+      <li><b>What improved:</b> named customers (AFRL $3.5M cumulative + $2M USAF production-transition contract; Tokai Rika audited production, Q4 launch, $3M/yr PO in negotiation; Safran; NeuroBionics); one signed multi-year offtake; capex lighter than assumed (30t demo: $2–5M); credible beachhead cost parity vs silver-plated aero cable today.</li>
+      <li><b>What didn't:</b> deal &amp; price — 10x net needs ≈12.5x gross ≈ a $1.2–1.5B exit at realistic dilution; the most likely non-zero outcome (Zoltek-class specialty exit, $400–585M) nets ~1.5–3x. The candor pattern persists ("founded 3 years ago" vs verifiable 2015–16 operations; 1,000x vs 100x flex in their own materials).</li>
+    </ul>
+    <div class="grid2">
+      <div>
+        <div class="lbl" style="margin-bottom:8px">Scorecard — 5 scorers, median (rev 1 → rev 2)</div>
+        <div class="score-rows">
+          <div class="srow"><span class="name">Market &amp; why-now (30)</span><span class="track"><span class="fill" style="width:80%"></span></span><span class="val">4</span></div>
+          <div class="srow"><span class="name">Team (30)</span><span class="track"><span class="fill" style="width:60%"></span></span><span class="val">3</span></div>
+          <div class="srow"><span class="name">Product &amp; moat (15)</span><span class="track"><span class="fill" style="width:60%"></span></span><span class="val">3 <small>IQR 1</small></span></div>
+          <div class="srow"><span class="name">Traction (10)</span><span class="track"><span class="fill" style="width:60%"></span></span><span class="val">3 <small>↑ 2</small></span></div>
+          <div class="srow"><span class="name">Competition (10)</span><span class="track"><span class="fill" style="width:60%"></span></span><span class="val">3</span></div>
+          <div class="srow"><span class="name">Deal &amp; price (5)</span><span class="track"><span class="fill" style="width:40%"></span></span><span class="val">2</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="lbl" style="margin-bottom:8px">Probabilities (panel median · red team)</div>
+        <div class="tiles" style="grid-template-columns:1fr">
+          <div class="tile"><span class="num">3.25 / 5</span><span class="cap">weighted total (rev 1: 3.15) · IQR 0 on five of six dimensions</span></div>
+          <div class="tile"><span class="num">60% <span style="font-size:.85rem;color:var(--muted)">· RT 50% · base 65%</span></span><span class="cap">P(returns &lt; 1x net)</span></div>
+          <div class="tile"><span class="num">4% <span style="font-size:.85rem;color:var(--muted)">· RT 10% · base ~4%</span></span><span class="cap">P(returns ≥ 10x net) — the panel/red-team spread is the honest range</span></div>
+          <div class="tile"><span class="num">70% <span style="font-size:.85rem;color:var(--muted)">(rev 1: 40%)</span></span><span class="cap">P(raises next priced round ≤ 24 months) — round is oversubscribed</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="rule">
+
+  <h2>The sponsor model, autopsied</h2>
+  <p>The Delta4 model's "Base Case" nets LPs <b>102x</b> ($10B IPO, year 10); its "Bull Case" nets <b>1,091x</b> ($91.8B). Five compounding assumptions produce those numbers, and the downside branch is simply absent:</p>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Model assumption</th><th>The problem</th></tr></thead>
+    <tbody>
+      <tr><td>0.05% (2028) → <b>30% of global copper wire by 2040</b></td><td>No advanced material has ever done anything like this. Carbon fiber: 50 years, never 30% of anything.</td></tr>
+      <tr><td>Share ramp triggers on "3x cheaper than copper by 2031"</td><td>Contradicted by the sponsor's own deck — its cost roadmap reaches copper <em>parity</em> only at the 3kt plant in 2030–31.</td></tr>
+      <tr><td>10x P/S multiple at exit</td><td>The sponsor's own comp set prices wire makers at 1–2x (Belden 1.9x); at 2x, the "$10B base case" is ~$2B.</td></tr>
+      <tr><td>0% option-pool refresh across 5 rounds</td><td>Realistic pools push dilution from the modeled 32–42% to 50–70% — cutting exit ownership up to ~2x.</td></tr>
+      <tr><td>Series A at $100M post within 1 year</td><td>A 2.2x markup on a ~$1M run rate, assumed rather than argued.</td></tr>
+    </tbody>
+  </table></div>
+
+  <figure>
+    <svg viewBox="0 0 660 224" width="660" role="img" aria-label="Red-team probability-weighted outcome tree vs sponsor model">
+      <text class="grp" x="16" y="22">Red-team outcome tree (net to LPs, probability-weighted)</text>
+      <g class="bar"><rect class="b2" x="190" y="36" width="330" height="20" rx="3"><title>Below 1x: 50% — modal advanced-materials failure: scale-up wall, demand a decade late</title></rect>
+        <text class="axlbl" x="182" y="51" text-anchor="end">&lt; 1x</text><text class="vallbl" x="526" y="51">50%</text></g>
+      <g class="bar"><rect class="b1" x="190" y="70" width="165" height="20" rx="3"><title>1–3x: 25% — Zoltek-class specialty exit, $400–585M</title></rect>
+        <text class="axlbl" x="182" y="85" text-anchor="end">1–3x</text><text class="vallbl" x="361" y="85">25%</text></g>
+      <g class="bar"><rect class="b1" x="190" y="104" width="99" height="20" rx="3"><title>3–10x: 15% — beachhead wins compound; $500M–1.5B exit</title></rect>
+        <text class="axlbl" x="182" y="119" text-anchor="end">3–10x</text><text class="vallbl" x="295" y="119">15%</text></g>
+      <g class="bar"><rect class="b1" x="190" y="138" width="66" height="20" rx="3"><title>≥10x: 10% — real wire displacement in high-frequency/defense; ≥$1.5B exit</title></rect>
+        <text class="axlbl" x="182" y="153" text-anchor="end">≥ 10x</text><text class="vallbl" x="262" y="153">10%</text></g>
+      <text class="note" x="190" y="190">EV ≈ 2.5–3x net, entirely tail-driven. The sponsor model's "base case" (102x net)</text>
+      <text class="note" x="190" y="206">sits above this tree's 90th percentile. Panel's tail estimate is lower still (4%).</text>
+    </svg>
+    <figcaption>The panel (4% tail) and red team (10% tail) disagree; both were logged. Both agree the specialty outcome — the most likely non-zero branch — nets only ~1.5–3x at this entry price.</figcaption>
+  </figure>
+
+  <h2>The load-bearing fact: which conductivity basis?</h2>
+  <p>Per unit <em>mass</em> (what matters when weight is the cost), Galvorn is essentially at parity — the deck's own table shows 6,150 vs copper's 6,300 S·m²/kg. Per unit <em>volume</em> (what matters for general wiring), it is not close, anywhere, ever. And the same table contains the ceiling: <b>aluminum's specific conductivity is 12,200 — 2x Galvorn's at ~1/100th the price.</b></p>
+  <figure>
+    <svg viewBox="0 0 660 268" width="660" role="img" aria-label="Specific and absolute conductivity: Galvorn vs copper vs aluminum">
+      <text class="grp" x="16" y="22">Per unit mass — specific conductivity (S·m²/kg, deck's own table)</text>
+      <g class="bar"><rect class="bm" x="190" y="34" width="380" height="18" rx="3"><title>Aluminum: 12,200 S·m²/kg — 2x Galvorn, ~1/100th the price</title></rect>
+        <text class="axlbl" x="182" y="48" text-anchor="end">Aluminum</text><text class="vallbl" x="576" y="48">12,200</text></g>
+      <g class="bar"><rect class="bm" x="190" y="58" width="196" height="18" rx="3"><title>Copper: 6,300 S·m²/kg</title></rect>
+        <text class="axlbl" x="182" y="72" text-anchor="end">Copper</text><text class="vallbl" x="392" y="72">6,300</text></g>
+      <g class="bar"><rect class="b1" x="190" y="82" width="192" height="18" rx="3"><title>Galvorn: 6,150 S·m²/kg — ~98% of copper per unit mass</title></rect>
+        <text class="axlbl" x="182" y="96" text-anchor="end">Galvorn</text><text class="vallbl" x="388" y="96">6,150 · 98% of Cu</text></g>
+      <text class="grp" x="16" y="140">Per unit volume — absolute conductivity (MS/m)</text>
+      <g class="bar"><rect class="bm" x="190" y="152" width="380" height="18" rx="3"><title>Copper: 58 MS/m</title></rect>
+        <text class="axlbl" x="182" y="166" text-anchor="end">Copper</text><text class="vallbl" x="576" y="166">58</text></g>
+      <g class="bar"><rect class="bm" x="190" y="176" width="216" height="18" rx="3"><title>Aluminum: 33 MS/m</title></rect>
+        <text class="axlbl" x="182" y="190" text-anchor="end">Aluminum</text><text class="vallbl" x="412" y="190">33</text></g>
+      <g class="bar"><rect class="b1" x="190" y="200" width="66" height="18" rx="3"><title>Galvorn (deck): 10 MS/m — ~17% of copper by volume</title></rect>
+        <text class="axlbl" x="182" y="214" text-anchor="end">Galvorn</text><text class="vallbl" x="262" y="214">10 · 17%</text></g>
+      <text class="note" x="190" y="246">Source: sponsor deck spec table. Galvorn's defensible ground vs BOTH metals: strength (3 GPa),</text>
+      <text class="note" x="190" y="262">flex life, high-frequency skin effect, corrosion — signal/EMI/harsh-environment niches.</text>
+    </svg>
+    <figcaption>Consequence: bulk conductance-per-dollar goes to aluminum; the wire-replacement thesis survives only in niches where strength, flexibility, frequency, or environment dominate — aero signal ($1.9–2.9B), EMI ($7.4–9B), high-frequency DAC, defense, medical. Success there supports a $1–3B-revenue company, not 30% of copper wire.</figcaption>
+  </figure>
+
+  <h2>What would have to be true (rev 2 grading)</h2>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Sponsor condition</th><th>Grade</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>80% further cost reduction by ~2027</td><td><span class="chip plaus">PLAUSIBLE</span></td><td>Now quantified: $5.11/m → $1.33/m at the 3t pilot; the 20x/96% track record makes the next step credible, though sponsor-sourced.</td></tr>
+      <tr><td>$5M revenue run rate end 2027</td><td><span class="chip plaus">PLAUSIBLE</span></td><td>Upgraded: ≈5–6x from the now-known ~$800K–1M run rate, with named POs of $1–4M/yr in negotiation. Needs the anchor contracts to execute.</td></tr>
+      <tr><td>Cheaper than copper wire by EOY 2030</td><td><span class="chip heroic">HEROIC</span></td><td>Unchanged: requires the 3kt plant on schedule; no advanced fiber has ever fallen this far this fast.</td></tr>
+      <tr><td>20x conductivity improvement</td><td><span class="chip heroic">HEROIC</span></td><td>Unchanged: exceeds copper absolute and every published result; ~13 years at the claimed doubling rate.</td></tr>
+      <tr><td>Aerospace design wins inside fund life</td><td><span class="chip plaus">PLAUSIBLE for EMI/cathodes</span> <span class="chip heroic">HEROIC for wire</span></td><td>USAF cathode production transition is real committed demand; powered-wire wins still require AS22759 spec creation (5–15 yrs).</td></tr>
+    </tbody>
+  </table></div>
+  <p>Rev 1 had two-plus heroics on five conditions; rev 2 has two — the documents genuinely de-risked the near-term conditions while leaving the copper-replacement physics untouched. The tail bet is better-evidenced but the price now demands it.</p>
+
+  <div class="panel flip">
+    <h3>The one verification call that decides this deal</h3>
+    <ol>
+      <li><b>The signed multi-year Galvorn purchase contract:</b> counterparty identity, committed minimum volumes, binding offtake vs frame agreement. Binding + named → the offtake gate is met and the EV's left tail thins → defensible tail bet despite the price. Frame agreement or refused disclosure → pass.</li>
+      <li>Secondary: executed status and volumes of the Tokai Rika ($3M/yr) and NeuroBionics ($1M/yr) POs; whether "50% margins" is gross or EBITDA; Rice license scope/exclusivity; and ask the CEO directly about the founding-date narrative — the quality of the answer is itself diligence data.</li>
+    </ol>
+  </div>
+
+  <h2>Return math at $45M post (2/20, model's own dilution)</h2>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Net target</th><th>Gross needed</th><th>Exit (model dilution, ~1.27%/$1M)</th><th>Exit (realistic 50–70% dilution)</th></tr></thead>
+    <tbody>
+      <tr><td>1x — breakeven</td><td class="num">1.02x</td><td class="num">~$80M</td><td class="num">~$100–140M</td></tr>
+      <tr><td>3x</td><td class="num">~3.9x</td><td class="num">~$310M</td><td class="num">~$400–550M</td></tr>
+      <tr><td>10x</td><td class="num">~12.5x</td><td class="num">~$985M</td><td class="num">~$1.2–1.5B</td></tr>
+    </tbody>
+  </table></div>
+  <p>Benchmark: Zoltek — the best specialty-fiber exit — reached $584M after 26 years. The specialty outcome pays 1.5–3x net here; the copper tail pays the fund. Size the position accordingly.</p>
+
+  <div class="honesty">
+    <div class="lbl">Honesty box</div>
+    <ul>
+      <li>All traction and cost figures are sponsor-document provenance (deck / DD notes), not independently verified; the two POs are negotiations, not contracts; the signed offtake is unnamed.</li>
+      <li>DexMat is inside the model's training-data horizon; mitigated by re-sourcing every load-bearing fact, not eliminated.</li>
+      <li>Panel reliability: IQR 0 on five of six dimensions, 1 on moat. The rev-1 → rev-2 movement (traction 2→3, P(&lt;1x) 72→60, P(next round) 40→70) was driven by document evidence — the system moving on evidence is the design working, not drift.</li>
+      <li>The red team's 10% tail vs the panel's 4% is unresolved judgment; both logged in the ledger.</li>
+      <li>Not modeled: secondaries, grant-pipeline continuation, methane-pyrolysis optionality, strategic-acquirer dynamics (Shell lineage, metals/mining strategic on the cap table).</li>
+    </ul>
+  </div>
+
+  <p class="foot">Ledger rev 2 (supersedes rev 1): P(next round ≤24mo)=70% · P(&lt;1x net)=60% · P(≥10x net)=4% panel / 10% red team · predicted modal outcome: specialty-materials company, niche success, exit &lt; $600M. Resolves 2028-08 (round proxy), 2033+ (multiple). Full provenance-tagged fact pack: <code>venture-deal-analyzer/deals/dexmat/factpack.md</code> · rev-1 memo in git history.</p>
+</div>

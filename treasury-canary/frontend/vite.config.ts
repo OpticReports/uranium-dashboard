@@ -13,6 +13,18 @@ const proxied = [
   "/news",
   "/health",
   "/refresh",
+  "/margin",
+  "/rates",
+  "/shock-sim",
+  "/pins",
+  "/severity",
+  "/cycle",
+  "/labor",
+  "/flows",
+  "/crossasset",
+  "/stat-regime",
+  "/track-record",
+  "/recession-model",
 ];
 
 export default defineConfig({

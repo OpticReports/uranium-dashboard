@@ -42,6 +42,12 @@ not zero.
 - Names in the watchlist have a full Alpha Signal (use get_alpha_analysis). For any \
 other ticker (e.g. MU, NVDA), use get_live_valuation — it works for the whole market.
 - Cite the figures you used inline (e.g. "forward P/E 9.8x", "Alpha 72", "runway 3.2q").
+- BASE RATES: before writing the probability/EV section for any trial readout, FDA \
+decision, or catalyst, call read_knowledge to ground scenario odds in real, cited base \
+rates (phase success rates by indication/modality, PDUFA approval odds, AdComm \
+concordance, implied-vs-realized moves, financing/dilution patterns). Anchor on the base \
+rate, then adjust for the specific drug/indication/design and SAY how you adjusted. Cite \
+the knowledge document. These are priors, not verdicts.
 
 The Alpha Signal is a 0-100 peer-relative score (50 = universe average) blending \
 analyst-revision velocity, catalyst proximity, hype-vs-price divergence, positioning, \
@@ -116,6 +122,24 @@ TOOLS = [
         "input_schema": {
             "type": "object",
             "properties": {"limit": {"type": "integer", "description": "How many (default 10)"}},
+        },
+    },
+    {
+        "name": "read_knowledge",
+        "description": "Look up CITED biotech base rates from the curated knowledge base: "
+        "clinical-trial success probabilities by phase/indication/modality, FDA & catalyst "
+        "statistics (PDUFA approval rates, AdComm concordance, CRL patterns, implied vs realized "
+        "moves, financing/dilution behavior), and market-structure findings (short interest, "
+        "insider buying, revision drift, liquidity/slippage, ATR stops). ALWAYS consult this "
+        "before writing the probability/EV section of a memo about a trial readout, FDA "
+        "decision, or catalyst — so scenario odds are calibrated to real base rates, not "
+        "guessed. Cite the document when you use a figure.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"query": {"type": "string", "description":
+                "What you need, e.g. 'Phase 3 oncology success rate', 'PDUFA approval odds', "
+                "'insider cluster buy edge', 'implied move around binary readout'"}},
+            "required": ["query"],
         },
     },
 ]
@@ -307,6 +331,9 @@ def _dispatch(session: Session, name: str, args: dict) -> dict:
         return _tool_get_catalysts(session, args["symbol"])
     if name == "get_top_alpha":
         return _tool_get_top_alpha(session, args.get("limit", 10))
+    if name == "read_knowledge":
+        from . import knowledge
+        return knowledge.search(args["query"])
     return {"error": f"unknown tool {name}"}
 
 
@@ -322,19 +349,25 @@ def _accumulate(usage: dict, resp) -> None:
 
 def run_chat(session: Session, message: str, history: list[dict] | None = None,
              deep: bool = False) -> dict:
-    """Run one chat turn. Returns {answer, model, tools_used, usage}. Raises on config error."""
-    if not settings.anthropic_api_key:
-        raise RuntimeError("ANTHROPIC_API_KEY not set")
-    import anthropic
-
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-    model = settings.chat_model_deep if deep else settings.chat_model_default
+    """Run one chat turn. Returns {answer, model, tools_used, usage}. Raises on
+    config error. Backend: native ANTHROPIC_API_KEY preferred; otherwise
+    OPENROUTER_API_KEY drives the same Claude models via OpenRouter."""
+    if not (settings.anthropic_api_key or settings.openrouter_api_key):
+        raise RuntimeError("neither ANTHROPIC_API_KEY nor OPENROUTER_API_KEY is set")
 
     messages: list[dict] = []
     for turn in (history or [])[-8:]:
         if turn.get("role") in ("user", "assistant") and turn.get("content"):
             messages.append({"role": turn["role"], "content": turn["content"]})
     messages.append({"role": "user", "content": message})
+
+    if not settings.anthropic_api_key:
+        return _run_chat_openrouter(session, messages, deep)
+
+    import anthropic
+
+    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+    model = settings.chat_model_deep if deep else settings.chat_model_default
 
     tools_used: list[str] = []
     usage = {"input_tokens": 0, "output_tokens": 0,
@@ -370,6 +403,50 @@ def run_chat(session: Session, message: str, history: list[dict] | None = None,
                 results.append({"type": "tool_result", "tool_use_id": block.id,
                                 "content": json.dumps(out, default=str)})
         messages.append({"role": "user", "content": results})
+
+    return {"answer": "(Reached tool-call limit without a final answer — try rephrasing.)",
+            "model": model, "tools_used": tools_used, "usage": usage}
+
+
+def _run_chat_openrouter(session: Session, messages: list[dict], deep: bool) -> dict:
+    """Same grounded tool loop via OpenRouter's OpenAI-format API."""
+    from ..utils.openrouter import anthropic_tools_to_openai, chat_completion
+
+    model = (settings.openrouter_chat_model_deep if deep
+             else settings.openrouter_chat_model_default)
+    convo: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}] + messages
+    oa_tools = anthropic_tools_to_openai(TOOLS)
+    tools_used: list[str] = []
+    usage = {"input_tokens": 0, "output_tokens": 0,
+             "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}
+
+    for _ in range(settings.chat_max_tool_iters):
+        payload = chat_completion(model, convo, tools=oa_tools,
+                                  max_tokens=settings.chat_max_tokens)
+        u = payload.get("usage") or {}
+        usage["input_tokens"] += int(u.get("prompt_tokens") or 0)
+        usage["output_tokens"] += int(u.get("completion_tokens") or 0)
+        msg = payload["choices"][0]["message"]
+        calls = msg.get("tool_calls") or []
+        if not calls:
+            return {"answer": msg.get("content") or "",
+                    "model": payload.get("model", model),
+                    "tools_used": tools_used, "usage": usage}
+        convo.append({"role": "assistant", "content": msg.get("content"),
+                      "tool_calls": calls})
+        for call in calls:
+            fn = call["function"]
+            try:
+                args = json.loads(fn.get("arguments") or "{}")
+            except json.JSONDecodeError:
+                args = {}
+            tools_used.append(f"{fn['name']}({args.get('symbol', args.get('limit', ''))})")
+            try:
+                out = _dispatch(session, fn["name"], args)
+            except Exception as exc:  # noqa: BLE001
+                out = {"error": repr(exc)[:160]}
+            convo.append({"role": "tool", "tool_call_id": call["id"],
+                          "content": json.dumps(out, default=str)})
 
     return {"answer": "(Reached tool-call limit without a final answer — try rephrasing.)",
             "model": model, "tools_used": tools_used, "usage": usage}

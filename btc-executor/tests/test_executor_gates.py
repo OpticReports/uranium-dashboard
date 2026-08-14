@@ -1,0 +1,1006 @@
+"""Executor gates: the mirror state machine against a scripted fake venue.
+No network, no Coinbase SDK — pure logic validation."""
+import os
+import time
+
+import pytest
+
+from app.mirror import Executor, ExecState
+
+
+class Cfg:
+    kelly_m = 0.56
+    sizing_base_usd = 0.0
+    max_notional_usd = 25_000.0
+    max_account_lev = 2.0
+    dry_run = True
+    daily_loss_halt_pct = 0.06
+    dd_halt_pct = 0.25
+    stale_bars_max = 2
+    drift_tol_frac = 0.02
+    stop_replace_bps = 5.0
+    stop_limit_offset_pct = 0.5
+    state_path = ""
+
+
+class FakeVenue:
+    def __init__(self, equity=10_000.0, mid=60_000.0, mult=None):
+        self._equity, self._mid = equity, mid
+        self._mult = mult              # None = continuous; 0.01 = CDE nano
+        self.orders = {}
+        self.calls = []
+
+    def quantize(self, qty):
+        if not self._mult:
+            return qty
+        return int(qty / self._mult + 1e-9) * self._mult
+
+    def equity(self):
+        return self._equity
+
+    def position(self):
+        net = 0.0
+        for o in self.orders.values():
+            if o["status"] == "FILLED":
+                net += (1 if o["side"] == "BUY" else -1) * o["qty"]
+        return net
+
+    def mid(self):
+        return self._mid
+
+    def order_status(self, cloid):
+        o = self.orders.get(cloid)
+        return ({"status": o["status"],
+                 "filled_qty": o["qty"] if o["status"] == "FILLED" else
+                 o.get("part", 0.0),
+                 "avg_price": (o.get("px") or self._mid)
+                 if o["status"] == "FILLED" else None} if o else None)
+
+    def _add(self, kind, side, qty, cloid, px=None):
+        self.orders[cloid] = {"type": kind, "side": side, "qty": qty,
+                              "px": px, "status": "FILLED" if kind == "MARKET"
+                              else "OPEN"}
+        self.calls.append((kind, side, round(qty, 5), cloid))
+
+    def place_limit(self, side, qty, px, cloid, post_only=True):
+        assert post_only, "pullback entries must be maker"
+        self._add("LIMIT", side, qty, cloid, px)
+
+    def place_stop(self, side, qty, trigger_px, cloid):
+        self._add("STOP", side, qty, cloid, trigger_px)
+
+    def place_market(self, side, qty, cloid):
+        self._add("MARKET", side, qty, cloid, px=self._mid)
+
+    def cancel(self, cloid):
+        if cloid in self.orders and self.orders[cloid]["status"] == "OPEN":
+            self.orders[cloid]["status"] = "CANCELLED"
+        self.calls.append(("CANCEL", None, None, cloid))
+
+    def cancel_all(self):
+        for o in self.orders.values():
+            if o["status"] == "OPEN":
+                o["status"] = "CANCELLED"
+        self.calls.append(("CANCEL_ALL", None, None, None))
+
+
+NOW = int(time.time()) // 14_400 * 14_400
+BLEND = {"w_trend": 0.25, "lev": 1.5}
+
+
+def target(pull=None, trend=None, bar_ts=None, degraded=False, data_halt=False):
+    return {"bar_ts": bar_ts if bar_ts is not None else NOW,
+            "degraded": degraded, "data_halt": data_halt, "blend": BLEND,
+            "legs": {"pullback": pull or {"pending": None, "position": None},
+                     "trend": trend or {"pending": None, "position": None}}}
+
+
+def mkexec(tmp_path, venue):
+    cfg = Cfg()
+    cfg.state_path = str(tmp_path / "state.json")
+    return Executor(venue, cfg, cfg.state_path)
+
+
+def test_gate_pullback_entry_sizing_and_lifecycle(tmp_path):
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    pend = {"pending": {"side": "L", "limit": 59_000.0, "signal_ts": NOW},
+            "position": None}
+    ex.step(target(pull=pend))
+    kind, side, qty, cloid = v.calls[0]
+    assert (kind, side) == ("LIMIT", "BUY") and cloid == f"P-{NOW}-E"
+    # 0.56 * 1.5 * 0.75 * 10k / 59k = 0.10678 BTC
+    assert qty == pytest.approx(0.56 * 1.5 * 0.75 * 10_000 / 59_000, abs=1e-4)
+    # same pending again -> no duplicate order
+    ex.step(target(pull=pend))
+    assert len([c for c in v.calls if c[0] == "LIMIT"]) == 1
+    # engine cancels (flat, no position) -> our order cancelled
+    ex.step(target())
+    assert v.orders[f"P-{NOW}-E"]["status"] == "CANCELLED"
+
+
+def test_gate_fill_places_stop_and_exit_closes(tmp_path):
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    pend = {"pending": {"side": "L", "limit": 59_000.0, "signal_ts": NOW},
+            "position": None}
+    ex.step(target(pull=pend))
+    v.orders[f"P-{NOW}-E"]["status"] = "FILLED"           # limit filled
+    pos = {"pending": None,
+           "position": {"side": "L", "entry_price": 59_000.0, "entry_ts": NOW,
+                        "signal_ts": NOW, "stop": 56_500.0, "exit_flag": None}}
+    ex.step(target(pull=pos))
+    stops = [c for c in v.calls if c[0] == "STOP"]
+    assert stops and stops[0][1] == "SELL"
+    assert ex.state.legs["pullback"].qty > 0
+    # no chase happened (order filled exactly)
+    assert not [c for c in v.calls if c[0] == "MARKET"]
+    # engine exits -> stop cancelled, market close
+    ex.step(target())
+    assert ex.state.legs["pullback"].qty == 0.0
+    mkts = [c for c in v.calls if c[0] == "MARKET"]
+    assert mkts and mkts[-1][1] == "SELL"
+
+
+def test_gate_trend_market_entry_and_trail_ratchet(tmp_path):
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    pend = {"pending": {"side": "S", "limit": -1.0, "signal_ts": NOW},
+            "position": None}
+    ex.step(target(trend=pend))
+    kind, side, qty, _ = v.calls[0]
+    assert (kind, side) == ("MARKET", "SELL")             # trend enters at market
+    assert qty == pytest.approx(0.56 * 1.5 * 0.25 * 10_000 / 60_000, abs=1e-4)
+    pos = {"pending": None,
+           "position": {"side": "S", "entry_price": 60_000.0, "entry_ts": NOW,
+                        "signal_ts": NOW, "stop": 63_000.0, "exit_flag": None}}
+    ex.step(target(trend=pos))
+    s1 = [c for c in v.calls if c[0] == "STOP"]
+    assert len(s1) == 1 and s1[0][1] == "BUY"
+    # trail ratchets down -> stop replaced; tiny move -> no churn
+    pos["position"]["stop"] = 62_000.0
+    ex.step(target(trend=pos))
+    assert len([c for c in v.calls if c[0] == "STOP"]) == 2
+    pos["position"]["stop"] = 62_001.0                    # < 5bp move
+    ex.step(target(trend=pos))
+    assert len([c for c in v.calls if c[0] == "STOP"]) == 2
+
+
+def test_gate_trend_holds_through_repeated_pending(tmp_path):
+    """The engine reports `pending` until its own next bar close, but the
+    trend leg has already filled at market and carries led.qty. Polling
+    again inside that window must be a no-op — the live executor closed the
+    position it had just opened (first live trade, 2026-08-10)."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    pend = {"pending": {"side": "S", "limit": -1.0, "signal_ts": NOW},
+            "position": None}
+    ex.step(target(trend=pend))
+    qty = ex.state.legs["trend"].qty
+    assert qty < 0
+    n = len(v.calls)
+    for _ in range(3):                                    # same pending again
+        ex.step(target(trend=pend))
+    assert ex.state.legs["trend"].qty == qty              # still holding
+    assert len(v.calls) == n                              # no close, no re-entry
+    assert not any(e["kind"] == "leg_closed" for e in ex.state.events)
+
+
+def test_gate_trend_new_signal_closes_stale_qty(tmp_path):
+    """...but a DIFFERENT pending signal still flattens the stale fill."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    ex.step(target(trend={"pending": {"side": "S", "limit": -1.0,
+                                      "signal_ts": NOW}, "position": None}))
+    ex.step(target(trend={"pending": {"side": "L", "limit": -1.0,
+                                      "signal_ts": NOW + 14_400},
+                          "position": None}))
+    assert any(e["kind"] == "leg_closed" for e in ex.state.events)
+    assert ex.state.legs["trend"].qty > 0                 # re-entered long
+    assert ex.state.legs["trend"].entry_cloid == f"T-{NOW + 14_400}-E"
+
+
+def test_gate_size_quantized_to_contracts(tmp_path):
+    """CDE nano futures fill in whole 0.01-BTC contracts. Sizes must be
+    rounded DOWN before ordering so the ledger equals the real position —
+    ordering 0.01466 BTC and recording 0.01466 while the venue filled 0.01
+    desynchronises every stop and exit that follows (live find, 2026-08-10)."""
+    v = FakeVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    ex.step(target(trend={"pending": {"side": "S", "limit": -1.0,
+                                      "signal_ts": NOW}, "position": None}))
+    kind, side, qty, _ = v.calls[0]
+    assert (kind, side) == ("MARKET", "SELL")
+    assert qty == pytest.approx(0.03)                     # 0.035 -> 3 contracts
+    assert ex.state.legs["trend"].qty == pytest.approx(-0.03)
+    assert v.position() == pytest.approx(-0.03)           # ledger == venue
+
+
+def test_gate_sub_contract_chase_not_sent(tmp_path):
+    """A shortfall under one contract is not chaseable. The old code sent it
+    and the venue's max(1, ...) floor rounded it up to a FULL contract,
+    overshooting the target instead of under-filling it."""
+    v = FakeVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    pos = {"pending": None,
+           "position": {"side": "S", "entry_price": 60_000.0, "entry_ts": NOW,
+                        "signal_ts": NOW, "stop": 63_000.0, "exit_flag": None}}
+    ex.state.legs["trend"].entry_cloid = f"T-{NOW}-E"
+    v.orders[f"T-{NOW}-E"] = {"type": "MARKET", "side": "SELL", "qty": 0.02,
+                              "px": 60_000.0, "status": "FILLED"}
+    ex.step(target(trend=pos))                            # want 0.03, have 0.02
+    chases = [c for c in v.calls if c[3].endswith("-C")]
+    assert len(chases) == 1 and chases[0][2] == pytest.approx(0.01)
+    assert ex.state.legs["trend"].qty == pytest.approx(-0.03)
+    # now the same setup with a sub-contract shortfall: no chase at all
+    v2 = FakeVenue(mult=0.01)
+    ex2 = mkexec(tmp_path / "b", v2)
+    ex2.state.legs["trend"].entry_cloid = f"T-{NOW}-E"
+    v2.orders[f"T-{NOW}-E"] = {"type": "MARKET", "side": "SELL", "qty": 0.028,
+                               "px": 60_000.0, "status": "FILLED"}
+    ex2.step(target(trend=pos))                           # want 0.03, have 0.028
+    assert not [c for c in v2.calls if c[3].endswith("-C")]
+    assert ex2.state.legs["trend"].qty == pytest.approx(-0.028)   # truth, not 0.03
+
+
+def test_gate_venue_size_never_rounds_up(tmp_path):
+    """_to_venue_size must refuse a sub-minimum order rather than inflate it."""
+    from app.cb import CoinbaseVenue
+    v = object.__new__(CoinbaseVenue)
+    v._meta = {"base_increment": 0.0001, "price_increment": 0.1,
+               "contract_multiplier": 0.01}
+    assert v.quantize(0.01466) == pytest.approx(0.01)
+    assert v.quantize(0.00466) == 0.0
+    assert v._to_venue_size(0.03) == "3"
+    with pytest.raises(ValueError):
+        v._to_venue_size(0.00466)                         # used to become "1"
+    v._meta["contract_multiplier"] = None                 # INTX perp path
+    assert v.quantize(0.014663) == pytest.approx(0.0146)
+    with pytest.raises(ValueError):
+        v._to_venue_size(0.00001)
+
+
+def test_gate_venue_stop_fill_no_double_close(tmp_path):
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    pos = {"pending": None,
+           "position": {"side": "L", "entry_price": 59_000.0, "entry_ts": NOW,
+                        "signal_ts": NOW, "stop": 56_500.0, "exit_flag": None}}
+    ex.step(target(pull=pos))                             # chase entry + stop
+    stop_cloid = ex.state.legs["pullback"].stop_cloid
+    v.orders[stop_cloid]["status"] = "FILLED"             # stop fired on venue
+    ex.step(target())                                     # engine flat next
+    # exactly one closing MARKET would double the exit; the chase entry is
+    # the only market order allowed here
+    closes = [c for c in v.calls if c[0] == "MARKET" and c[1] == "SELL"]
+    assert not closes
+    assert ex.state.legs["pullback"].qty == 0.0
+
+
+def test_gate_orphan_fill_unwound(tmp_path):
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    pend = {"pending": {"side": "L", "limit": 59_000.0, "signal_ts": NOW},
+            "position": None}
+    ex.step(target(pull=pend))
+    v.orders[f"P-{NOW}-E"]["status"] = "FILLED"           # we filled...
+    ex.step(target())                                     # ...paper cancelled
+    mkts = [c for c in v.calls if c[0] == "MARKET"]
+    assert mkts and mkts[-1][1] == "SELL"                 # unwound
+    assert ex.state.legs["pullback"].qty == 0.0
+    assert any(e["kind"] == "orphan_fill_unwound" for e in ex.state.events)
+
+
+def test_gate_caps_clamp(tmp_path):
+    v = FakeVenue(equity=1_000_000.0)                     # lev cap not binding
+    ex = mkexec(tmp_path, v)
+    pend = {"pending": {"side": "L", "limit": 59_000.0, "signal_ts": NOW},
+            "position": None}
+    ex.step(target(pull=pend))
+    _, _, qty, _ = v.calls[0]
+    assert qty * 59_000 <= 25_000 * 1.01                  # max_notional respected
+    assert any(e["kind"] == "cap_clamp" for e in ex.state.events)
+
+
+def test_gate_stale_engine_blocks_entries_not_exits(tmp_path):
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    pos = {"pending": None,
+           "position": {"side": "L", "entry_price": 59_000.0, "entry_ts": NOW,
+                        "signal_ts": NOW, "stop": 56_500.0, "exit_flag": None}}
+    ex.step(target(pull=pos))
+    assert ex.state.legs["pullback"].qty > 0
+    stale_ts = NOW - 5 * 14_400
+    pend = {"pending": {"side": "S", "limit": 61_000.0, "signal_ts": stale_ts},
+            "position": None}
+    n_orders = len(v.calls)
+    # stale feed: new trend entry must NOT fire...
+    ex.step(target(pull=pos, trend=pend, bar_ts=stale_ts))
+    assert not [c for c in v.calls[n_orders:] if c[0] in ("LIMIT",)]
+    # ...but an engine exit still closes our leg even while stale
+    ex.step(target(bar_ts=stale_ts))
+    assert ex.state.legs["pullback"].qty == 0.0
+
+
+def test_gate_daily_loss_halt_flattens_and_blocks(tmp_path):
+    v = FakeVenue(equity=10_000.0)
+    ex = mkexec(tmp_path, v)
+    pos = {"pending": None,
+           "position": {"side": "L", "entry_price": 59_000.0, "entry_ts": NOW,
+                        "signal_ts": NOW, "stop": 56_500.0, "exit_flag": None}}
+    ex.step(target(pull=pos))
+    v._equity = 9_000.0                                   # -10% on the day
+    ex.step(target(pull=pos))
+    assert ex.state.halted is None                        # debounce: 1/3
+    assert any(e["kind"] == "halt_pending" for e in ex.state.events)
+    ex.step(target(pull=pos))                             # 2/3
+    ex.step(target(pull=pos))                             # 3/3 -> halt
+    assert ex.state.halted == "DAILY_LOSS"
+    assert ("CANCEL_ALL", None, None, None) in v.calls
+    n = len(v.calls)
+    ex.step(target(pull=pos))                             # halted -> inert
+    assert len(v.calls) == n
+    ex.resume()
+    assert ex.state.halted is None
+
+
+def test_gate_kill_switch(tmp_path):
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    pos = {"pending": None,
+           "position": {"side": "S", "entry_price": 60_000.0, "entry_ts": NOW,
+                        "signal_ts": NOW, "stop": 63_000.0, "exit_flag": None}}
+    ex.step(target(trend=pos))
+    ex.halt("KILL", "test")
+    assert ex.state.halted == "KILL"
+    assert ("CANCEL_ALL", None, None, None) in v.calls
+    # venue flattened: net short was closed with a BUY market
+    assert [c for c in v.calls if c[0] == "MARKET" and c[1] == "BUY"]
+    assert all(l.qty == 0.0 for l in ex.state.legs.values())
+
+
+def test_gate_restart_resumes_ledger(tmp_path):
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    pend = {"pending": {"side": "L", "limit": 59_000.0, "signal_ts": NOW},
+            "position": None}
+    ex.step(target(pull=pend))
+    n_orders = len(v.calls)
+    # new process, same state file + same venue
+    ex2 = Executor(v, ex.cfg, ex.cfg.state_path)
+    assert ex2.state.legs["pullback"].entry_cloid == f"P-{NOW}-E"
+    ex2.step(target(pull=pend))                           # no duplicate order
+    assert len([c for c in v.calls[n_orders:] if c[0] == "LIMIT"]) == 0
+
+
+def test_gate_drift_detection(tmp_path):
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    # venue shows a position our ledger doesn't know about
+    v.orders["ghost"] = {"type": "MARKET", "side": "BUY", "qty": 0.5,
+                         "px": 60_000.0, "status": "FILLED"}
+    ex.step(target())
+    assert any(e["kind"] == "position_drift" for e in ex.state.events)
+
+
+def test_gate_sizing_base_overrides_equity(tmp_path):
+    """SIZING_BASE_USD: a $25k account trading a $128k base sizes positions
+    on the base, and halt thresholds anchor to the base too."""
+    v = FakeVenue(equity=25_000.0)
+    ex = mkexec(tmp_path, v)
+    ex.cfg.sizing_base_usd = 128_000.0
+    ex.cfg.max_notional_usd = 500_000.0        # keep caps out of the way
+    pend = {"pending": {"side": "L", "limit": 59_000.0, "signal_ts": NOW},
+            "position": None}
+    ex.step(target(pull=pend))
+    _, _, qty, _ = v.calls[0]
+    assert qty == pytest.approx(0.56 * 1.5 * 0.75 * 128_000 / 59_000, abs=1e-4)
+    # -6% of the ACCOUNT (=$1.5k) must NOT halt: threshold is 6% of base
+    v._equity = 23_400.0
+    ex.step(target(pull=pend))
+    assert ex.state.halted is None
+    # -6% of the BASE (=$7.7k) does halt (after debounce confirms)
+    v._equity = 25_000.0 - 0.06 * 128_000 - 1
+    for _ in range(ex.HALT_CONFIRM_POLLS):
+        ex.step(target(pull=pend))
+    assert ex.state.halted == "DAILY_LOSS"
+
+
+def test_gate_halt_config_coherence_warning(tmp_path):
+    """$30k account, $128k base, 25% DD halt = $32k > deposit: warn."""
+    v = FakeVenue(equity=30_000.0)
+    ex = mkexec(tmp_path, v)
+    ex.cfg.sizing_base_usd = 128_000.0
+    ex.cfg.dd_halt_pct = 0.25
+    ex.step(target())
+    assert any(e["kind"] == "halt_config" for e in ex.state.events)
+    # coherent config (15% of base = $19.2k, 64% of deposit): no warning
+    v2 = FakeVenue(equity=30_000.0)
+    ex2 = mkexec(tmp_path, v2)
+    ex2.cfg.sizing_base_usd = 128_000.0
+    ex2.cfg.dd_halt_pct = 0.15
+    ex2.state.events.clear()
+    ex2.step(target())
+    assert not any(e["kind"] == "halt_config" for e in ex2.state.events)
+
+
+def test_gate_daily_marks_recorded(tmp_path):
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    ex.step(target())
+    assert len(ex.state.marks) == 1
+    assert ex.state.marks[0]["equity"] == 10_000.0
+    ex.step(target())                          # same UTC day -> no new mark
+    assert len(ex.state.marks) == 1
+
+
+def test_gate_telegram_alerts_on_halt_and_live_trades(tmp_path, monkeypatch):
+    sent = []
+    import app.alerts as alerts
+    monkeypatch.setattr(alerts, "send", lambda t: sent.append(t))
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    pos = {"pending": None,
+           "position": {"side": "L", "entry_price": 59_000.0, "entry_ts": NOW,
+                        "signal_ts": NOW, "stop": 56_500.0, "exit_flag": None}}
+    ex.step(target(pull=pos))                 # dry-run entry -> no alert
+    assert not [s for s in sent if "entry" in s]
+    ex.halt("KILL", "test")                   # halt -> alert always
+    assert any("halt" in s for s in sent)
+    ex.cfg.dry_run = False                    # live: entries alert too
+    ex.resume()
+    ex.step(target(pull=pos))
+    assert any("entry" in s for s in sent)
+
+
+def test_gate_transient_bad_equity_read_no_halt(tmp_path):
+    """The 2026-08-06 false halt: one failed balance read (fallback value)
+    must not trigger a drawdown halt — debounce + recovery clears it."""
+    v = FakeVenue(equity=30_000.0)
+    ex = mkexec(tmp_path, v)
+    ex.step(target())                                     # HWM = 30k
+    v._equity = 10_000.0                                  # one bad read
+    ex.step(target())
+    assert ex.state.halted is None
+    v._equity = 30_000.0                                  # read recovers
+    ex.step(target())
+    ex.step(target())
+    assert ex.state.halted is None
+    assert ex._breach_count == 0
+
+
+def test_gate_dryrun_equity_last_known_good():
+    from app.cb import DryRunVenue
+
+    class Flaky:
+        def __init__(self):
+            self.ok = True
+
+        def equity(self):
+            if self.ok:
+                return 29_990.0
+            raise RuntimeError("api down")
+
+        def mid(self):
+            return 60_000.0
+
+    inner = Flaky()
+    v = DryRunVenue(inner)
+    assert v.equity() == 29_990.0                         # real read
+    inner.ok = False
+    assert v.equity() == 29_990.0                         # last-known-good,
+    assert v.equity() != 10_000.0                         # never the stand-in
+
+
+def test_gate_dry_run_venue_never_touches_inner():
+    from app.cb import DryRunVenue
+
+    class Boom:
+        def __getattr__(self, name):
+            if name in ("equity", "mid"):
+                return lambda: 10_000.0
+            raise AssertionError(f"mutation {name} reached inner venue")
+
+    v = DryRunVenue(Boom())
+    v.place_limit("BUY", 0.1, 59_000.0, "x")
+    v.place_market("SELL", 0.1, "y")
+    v.cancel("x")
+    v.cancel_all()
+    assert len(v.log) == 4
+    assert v.orders["x"]["status"] == "CANCELLED"
+
+
+def test_gate_alert_tier_labels(tmp_path, monkeypatch):
+    """Casey-facing alert contract: halts carry the ACTION NEEDED label +
+    resume instruction; non-halt REDs say forward-to-Claude / no action;
+    resume reads as all-clear. (Casey: 'make sure all the Tier 3 ones are
+    labeled clearly that I need to do something to fix it.')"""
+    sent = []
+    import app.alerts as alerts
+    monkeypatch.setattr(alerts, "send", lambda t: sent.append(t))
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    ex.halt("DRAWDOWN", "test halt")
+    assert any("ACTION NEEDED" in s and "/resume" in s for s in sent), sent
+    ex.resume()
+    assert any("no action needed" in s and "resume" in s for s in sent)
+    sent.clear()
+    ex._event("RED", "position_drift", "test drift")
+    assert len(sent) == 1
+    assert "forward this to Claude" in sent[0] and "ACTION NEEDED" not in sent[0]
+    sent.clear()
+    ex._event("WARN", "halt_config", "dd_halt unreachable")
+    assert len(sent) == 1 and "ACTION NEEDED" in sent[0]        # tier-3 WARN
+    sent.clear()
+    ex._event("WARN", "cap_clamp", "clamped")                   # ordinary WARN
+    assert sent == []                                           # stays quiet
+
+
+def test_gate_daily_loss_auto_rearms_drawdown_does_not(tmp_path):
+    """DAILY_LOSS is a rate limiter: it clears itself at the UTC day
+    rollover WHILE KELLY_M <= 0.30 (above that: manual, ramp v3 rule).
+    DRAWDOWN stays manual — auto-reset there would turn the floor into a
+    retry loop."""
+    v = FakeVenue(equity=30_000.0)
+    ex = mkexec(tmp_path, v)
+    ex.cfg.kelly_m = 0.20                                 # below manual line
+    ex.step(target())
+    ex.halt("DAILY_LOSS", "test")
+    ex.state.day_key = "2000-01-01"                       # force a rollover
+    ex.step(target())
+    assert ex.state.halted is None
+    assert any(e["kind"] == "auto_rearm" for e in ex.state.events)
+    ex.halt("DRAWDOWN", "test")
+    ex.state.day_key = "2000-01-02"
+    ex.step(target())
+    assert ex.state.halted == "DRAWDOWN"                  # still waiting on human
+
+
+def test_gate_transfer_reconciliation_flat_book(tmp_path):
+    """Deposits/withdrawals while flat shift the halt anchors instead of
+    tripping the breaker (the 2026-08 deposit false-halt category)."""
+    v = FakeVenue(equity=30_000.0)
+    ex = mkexec(tmp_path, v)
+    ex.step(target()); ex.step(target())                  # baseline, HWM 30k
+    v._equity = 50_000.0                                  # $20k deposit lands
+    ex.step(target()); ex.step(target()); ex.step(target())
+    assert ex.state.halted is None
+    assert any(e["kind"] == "transfer_reconciled" for e in ex.state.events)
+    assert ex.state.high_water == pytest.approx(50_000.0)
+    # withdrawal back out while flat: anchors follow, NO drawdown halt
+    v._equity = 30_000.0
+    for _ in range(5):
+        ex.step(target())
+    assert ex.state.halted is None
+    assert ex.state.high_water == pytest.approx(30_000.0)
+    assert not any(e["kind"] == "halt" for e in ex.state.events)
+
+
+def test_gate_transfer_reconciliation_never_masks_real_losses(tmp_path):
+    """The reconciler must NOT fire while a position is open (equity moves
+    are P&L) — a genuine loss still halts through the normal path."""
+    v = FakeVenue(equity=30_000.0)
+    ex = mkexec(tmp_path, v)
+    pos = {"pending": None,
+           "position": {"side": "L", "entry_price": 59_000.0, "entry_ts": NOW,
+                        "signal_ts": NOW, "stop": 56_500.0, "exit_flag": None}}
+    ex.step(target(pull=pos))                             # leg has qty now
+    v._equity = 8_000.0                                   # catastrophic slide
+    for _ in range(ex.HALT_CONFIRM_POLLS + 1):
+        ex.step(target(pull=pos))
+    assert ex.state.halted in ("DAILY_LOSS", "DRAWDOWN")  # daily line trips first
+    assert not any(e["kind"] == "transfer_reconciled" for e in ex.state.events)
+
+
+def test_gate_trend_exit_no_double_close(tmp_path):
+    """QA rehearsal find (2026-08-07): a trend MARKET entry keeps its
+    entry_cloid for the position's life; on engine exit the old code both
+    orphan-unwound the fill AND closed led.qty — same BTC twice — leaving a
+    naked reverse position on the venue. Engine-exit must produce exactly
+    one closing order and a flat venue."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    tr_pend = {"pending": {"side": "S", "limit": -1.0, "signal_ts": NOW},
+               "position": None}
+    ex.step(target(trend=tr_pend))                       # market entry (sentinel)
+    v.orders[f"T-{NOW}-E"]["status"] = "FILLED"
+    tr_pos = {"pending": None,
+              "position": {"side": "S", "entry_price": 60_000.0, "entry_ts": NOW,
+                           "signal_ts": NOW, "stop": 63_000.0, "exit_flag": None}}
+    ex.step(target(trend=tr_pos))                        # position ack + stop
+    ex.step(target())                                    # engine exits
+    unwinds = [c for c in v.orders if c.endswith("-UNWIND")]
+    assert not unwinds, unwinds                          # no orphan unwind
+    assert abs(v.position()) < 1e-9                      # venue truly flat
+    assert ex.state.legs["trend"].qty == 0.0
+    # branch-2 variant: position -> directly to a NEW pending (no flat step)
+    ex.step(target(trend=tr_pend))
+    v.orders[f"T-{NOW}-E"]["status"] = "FILLED"
+    ex.step(target(trend=tr_pos))
+    new_pend = {"pending": {"side": "L", "limit": -1.0, "signal_ts": NOW + 14_400},
+                "position": None}
+    ex.step(target(trend=new_pend))
+    unwinds = [c for c in v.orders if c.endswith("-UNWIND")]
+    assert not unwinds, unwinds
+    # old short closed + new long entry = net long exactly the new entry qty
+    new_e = v.orders.get(f"T-{NOW + 14_400}-E")
+    assert new_e is not None
+
+
+def test_gate_no_blueprint_managed_trading_vars():
+    """The DRY_RUN incident, generalized (QA 2026-08-11): ANY trading-
+    behavior env var with a literal value: in render.yaml is a pending
+    silent reset on the next unrelated commit. All of them must be
+    sync:false on BOTH executors; the dashboard owns the values and the
+    config_change guard pages on drift."""
+    import re
+    src = open(os.path.join(os.path.dirname(__file__), "..", "..",
+                            "render.yaml")).read()
+
+    def keys_with_literals(service):
+        blk = src[src.index(f"name: {service}"):]
+        nxt = re.search(r"\n  - type: ", blk[10:])
+        blk = blk[:nxt.start() + 10] if nxt else blk
+        out = {}
+        for m in re.finditer(
+                r"- key: (\w+)\n(?:\s*#.*\n)*\s*(value|sync)", blk):
+            out[m.group(1)] = m.group(2)
+        return out
+
+    exec_vars = keys_with_literals("btc-executor")
+    for k in ("DRY_RUN", "KELLY_M", "SIZING_BASE_USD", "MAX_NOTIONAL_USD",
+              "MAX_ACCOUNT_LEV", "DD_HALT_PCT", "CB_PRODUCT_ID"):
+        assert exec_vars.get(k) == "sync", (k, exec_vars.get(k))
+    ibkr_vars = keys_with_literals("ibkr-executor")
+    for k in ("DRY_RUN", "TRADING_MODE", "READ_ONLY_API", "LEG_BUDGET_USD"):
+        assert ibkr_vars.get(k) == "sync", (k, ibkr_vars.get(k))
+
+
+def test_gate_fills_recorded_and_persisted(tmp_path):
+    """Execution prices must survive restarts: without them the ramp's
+    slippage statistic has sample size zero (the QA blocking finding)."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    ex.state.fills.append({"ts": 1, "leg": "pullback", "role": "entry",
+                           "cloid": "X", "px": 60_000.0, "ref_px": 59_970.0,
+                           "slip_bps": 5.0})
+    ex._save_state()
+    ex2 = mkexec(tmp_path, v)
+    assert ex2.state.fills and ex2.state.fills[-1]["slip_bps"] == 5.0
+
+
+def test_gate_leg_error_isolated_and_capclamp_red(tmp_path):
+    """One leg's venue error must not skip the other leg (post-only
+    rejections were doing exactly that, invisibly), and cap_clamp is a
+    silent size reduction -> must be RED so it alerts."""
+    class Boom(FakeVenue):
+        def place_limit(self, *a, **k):
+            raise RuntimeError("post-only rejected")
+    v = Boom()
+    ex = mkexec(tmp_path, v)
+    pend = {"pending": {"side": "L", "limit": 59_000.0, "signal_ts": NOW},
+            "position": None}
+    tr = {"pending": {"side": "S", "limit": -1.0, "signal_ts": NOW},
+          "position": None}
+    ex.step(target(pull=pend, trend=tr))
+    assert any(e["kind"] == "leg_sync_error" for e in ex.state.events)
+    # the trend leg still got its market order despite the pullback blowing up
+    assert any(c.startswith("T-") for c in v.orders), v.orders
+    src = open(os.path.join(os.path.dirname(__file__), "..",
+                            "app", "mirror.py")).read()
+    assert '"RED", "cap_clamp"' in src
+
+
+def test_gate_mode_change_alerts(tmp_path, monkeypatch):
+    """A silent DRY_RUN flip (blueprint sync reset a LIVE account on
+    2026-08-10) must page the operator, not pass unnoticed."""
+    sent = []
+    import app.alerts as alerts
+    monkeypatch.setattr(alerts, "send", lambda t: sent.append(t))
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    ex.cfg.dry_run = False                       # boots LIVE
+    ex.step(target())
+    assert not [s for s in sent if "mode_change" in s]   # first sight: quiet
+    ex._save_state()
+    ex2 = mkexec(tmp_path, v)
+    ex2.cfg.dry_run = True                       # sync silently un-arms it
+    ex2.step(target())
+    assert any("ACTION NEEDED" in s and "DRY_RUN" in s for s in sent), sent
+    assert any(e["kind"] == "mode_change" for e in ex2.state.events)
+
+
+def test_gate_config_defaults_fail_safe():
+    """A missing env must UNDER-size, never over-size."""
+    from app.config import Settings
+    d = Settings()
+    assert d.kelly_m <= 0.05, d.kelly_m
+    assert d.dry_run is True
+
+
+# ---------- 2026-08-11 counter-agent panel gates ----------
+
+class _StubResp:
+    def __init__(self, d):
+        self._d = d
+
+    def to_dict(self):
+        return self._d
+
+
+class _StubClient:
+    """Coinbase RESTClient stand-in: rejects the first post-only limit as
+    marketable, accepts the resend."""
+    def __init__(self):
+        self.limit_calls = []
+
+    def get_product(self, product_id=None):
+        return _StubResp({"base_increment": "0.0001",
+                          "quote_increment": "0.1",
+                          "price_increment": "0.1",
+                          "future_product_details": {"contract_size": "0.01"}})
+
+    def limit_order_gtc(self, **kw):
+        self.limit_calls.append(kw)
+        if kw.get("post_only"):
+            return _StubResp({"success": False, "error_response": {
+                "error": "INVALID_LIMIT_PRICE_POST_ONLY",
+                "message": "Post only order would cross",
+                "preview_failure_reason": "PREVIEW_POST_ONLY_WOULD_CROSS"}})
+        return _StubResp({"success": True,
+                          "success_response": {"order_id": "oid-1"}})
+
+
+def _mk_cb_venue(tmp_path, monkeypatch, client):
+    """Build CoinbaseVenue through its REAL __init__ (a stubbed coinbase.rest
+    module) - the missing post_only_crosses init lived in __init__ and a
+    test that bypasses it cannot catch that class of bug."""
+    import sys, types
+    mod = types.ModuleType("coinbase.rest")
+    mod.RESTClient = lambda api_key=None, api_secret=None: client
+    pkg = types.ModuleType("coinbase")
+    pkg.rest = mod
+    monkeypatch.setitem(sys.modules, "coinbase", pkg)
+    monkeypatch.setitem(sys.modules, "coinbase.rest", mod)
+    from app.cb import CoinbaseVenue
+
+    class VCfg:
+        cb_api_key_name = "k"
+        cb_api_private_key = "s"
+        cb_product_id = "BIP-20DEC30-CDE"
+        state_path = str(tmp_path / "state.json")
+        stop_limit_offset_pct = 0.5
+
+    return CoinbaseVenue(VCfg())
+
+
+def test_gate_post_only_reject_actually_resends(tmp_path, monkeypatch):
+    """FATAL find 2026-08-11: post_only_crosses was referenced in place_limit
+    but never initialized, so the first live post-only rejection raised
+    AttributeError BEFORE the marketable resend - every short pullback entry
+    at positive basis crash-looped. This walks the real __init__ + the real
+    rejection path."""
+    client = _StubClient()
+    v = _mk_cb_venue(tmp_path, monkeypatch, client)
+    v.place_limit("SELL", 0.03, 64_000.0, "P-1-E", post_only=True)
+    assert len(client.limit_calls) == 2                   # reject + resend
+    assert client.limit_calls[0]["post_only"] is True
+    assert client.limit_calls[1]["post_only"] is False
+    assert v.post_only_crosses == ["P-1-E"]
+    assert v._orders["P-1-E"] == "oid-1"
+
+
+def test_gate_post_only_detector_ignores_cross_margin(tmp_path, monkeypatch):
+    """The old detector matched bare "CROSS" anywhere in the response - an
+    insufficient-funds rejection echoing margin_type CROSS would have been
+    resent WITHOUT maker protection."""
+    client = _StubClient()
+    v = _mk_cb_venue(tmp_path, monkeypatch, client)
+    bad = _StubResp({"success": False, "error_response": {
+        "error": "INSUFFICIENT_FUND",
+        "message": "insufficient funds"},
+        "order_configuration": {"margin_type": "CROSS"}})
+    assert not v._rejected_post_only(bad)
+    good = _StubResp({"success": False, "error_response": {
+        "error": "INVALID_LIMIT_PRICE_POST_ONLY",
+        "message": "would cross"}})
+    assert v._rejected_post_only(good)
+
+
+def test_gate_venue_size_floors_not_rounds(tmp_path, monkeypatch):
+    """round() honored "never rounds up" only below HALF a contract: 0.006
+    became a full contract (counter-agent find 2026-08-11). Floor everywhere."""
+    v = _mk_cb_venue(tmp_path, monkeypatch, _StubClient())
+    assert v._to_venue_size(0.014) == "1"                 # floor(1.4) = 1
+    assert v._to_venue_size(0.03) == "3"                  # exact
+    for sub in (0.006, 0.0099, 0.00466):
+        with pytest.raises(ValueError):
+            v._to_venue_size(sub)
+
+
+def test_gate_order_status_unknown_maps_open(tmp_path, monkeypatch):
+    """QUEUED/PENDING must not read as CANCELLED: that skipped the cancel and
+    chased full size -> doubled position at session reopen."""
+    client = _StubClient()
+
+    class _O:
+        def __init__(self, status):
+            self.s = status
+
+        def to_dict(self):
+            return {"order": {"status": self.s, "filled_size": "0",
+                              "average_filled_price": None}}
+    v = _mk_cb_venue(tmp_path, monkeypatch, client)
+    v._orders["X"] = "oid-x"
+    for raw, want in [("QUEUED", "OPEN"), ("PENDING", "OPEN"),
+                      ("CANCEL_QUEUED", "OPEN"), ("OPEN", "OPEN"),
+                      ("CANCELLED", "CANCELLED"), ("EXPIRED", "CANCELLED"),
+                      ("FAILED", "CANCELLED")]:
+        client.get_order = lambda oid, _r=raw: _O(_r)
+        assert v.order_status("X")["status"] == want, raw
+
+
+def test_gate_stop_fill_never_resurrects_position(tmp_path):
+    """Pre-existing FATAL class (counter-agent 2026-08-11): venue stop fires
+    intrabar; engine keeps reporting the position until its next 4h close.
+    The flat ledger + still-FILLED entry order re-entered a phantom position
+    and armed a live stop on a flat venue. Also: trail moving < 5bp must not
+    hide the fill (the churn guard ran first)."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    ex.step(target(trend={"pending": {"side": "S", "limit": -1.0,
+                                      "signal_ts": NOW}, "position": None}))
+    pos = {"pending": None,
+           "position": {"side": "S", "entry_price": 60_000.0, "entry_ts": NOW,
+                        "signal_ts": NOW, "stop": 63_000.0, "exit_flag": None}}
+    ex.step(target(trend=pos))
+    stop_cloid = ex.state.legs["trend"].stop_cloid
+    v.orders[stop_cloid]["status"] = "FILLED"             # stop fired on venue
+    pos["position"]["stop"] = 62_999.0                    # < 5bp trail move
+    ex.step(target(trend=pos))                            # must SEE the fill
+    assert ex.state.legs["trend"].qty == 0.0
+    assert any(e["kind"] == "stop_filled_on_venue" for e in ex.state.events)
+    n = len(v.calls)
+    for _ in range(3):                                    # engine still lagging
+        ex.step(target(trend=pos))
+    assert ex.state.legs["trend"].qty == 0.0              # no phantom re-entry
+    assert len(v.calls) == n                              # no orders at all
+    ex.step(target())                                     # engine catches up
+    # entry was consumed by the stop: no orphan-flatten reverse position
+    assert not [c for c in v.calls[n:] if c[0] == "MARKET"]
+    # next signal (new entry_ts) trades normally again
+    ex.step(target(trend={"pending": {"side": "L", "limit": -1.0,
+                                      "signal_ts": NOW + 14_400},
+                          "position": None}))
+    assert ex.state.legs["trend"].qty > 0
+
+
+def test_gate_fills_recorded_from_real_orders(tmp_path):
+    """_record_fill existed with ZERO call sites - the ramp's primary fill-
+    quality criterion ran on an empty dataset (counter-agent 2026-08-11).
+    Every order now enters a watch queue and lands in state.fills when its
+    status resolves. Trend market entry fills instantly in FakeVenue."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    ex.step(target(trend={"pending": {"side": "S", "limit": -1.0,
+                                      "signal_ts": NOW}, "position": None}))
+    fills = [f for f in ex.state.fills if f["role"] == "entry"]
+    assert len(fills) == 1
+    f = fills[0]
+    assert f["leg"] == "trend" and f["side"] == "SELL"
+    assert f["px"] == 60_000.0 and f["slip_bps"] == 0.0
+
+
+def test_gate_slippage_sign_adverse_positive(tmp_path):
+    """The original expression evaluated to +1.0 on BOTH branches - every
+    SELL's slippage would have been sign-flipped."""
+    ex = mkexec(tmp_path, FakeVenue())
+    ex._record_fill("trend", "entry", "c1", {"avg_price": 59_940.0},
+                    60_000.0, "SELL")                     # sold 10bp LOW = bad
+    ex._record_fill("trend", "entry", "c2", {"avg_price": 60_060.0},
+                    60_000.0, "BUY")                      # paid 10bp UP = bad
+    s1, s2 = ex.state.fills[-2]["slip_bps"], ex.state.fills[-1]["slip_bps"]
+    assert s1 == pytest.approx(10.0) and s2 == pytest.approx(10.0)
+
+
+def test_gate_daily_loss_manual_resume_above_030(tmp_path):
+    """Ramp v3's "manual resume above KELLY_M 0.30" was doc-only (counter-
+    agent 2026-08-11): _roll_day cleared DAILY_LOSS unconditionally."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)                              # Cfg.kelly_m = 0.56
+    ex.state.halted = "DAILY_LOSS"
+    ex.state.day_key = "2020-01-01"                       # force a rollover
+    ex.step(target())
+    assert ex.state.halted == "DAILY_LOSS"                # NOT auto-cleared
+    assert not any(e["kind"] == "auto_rearm" for e in ex.state.events)
+    ex2 = mkexec(tmp_path / "b", FakeVenue())
+    ex2.cfg.kelly_m = 0.05
+    ex2.state.halted = "DAILY_LOSS"
+    ex2.state.day_key = "2020-01-01"
+    ex2.step(target())
+    assert ex2.state.halted is None                       # token size: rearms
+    assert any(e["kind"] == "auto_rearm" for e in ex2.state.events)
+
+
+def test_gate_config_change_pages(tmp_path):
+    """The DRY_RUN blueprint incident, generalized: ANY sizing/risk config
+    change between polls must produce a config_change event."""
+    ex = mkexec(tmp_path, FakeVenue())
+    ex.step(target())                                     # snapshot stored
+    ex.cfg.kelly_m = 0.20
+    ex.step(target())
+    ev = [e for e in ex.state.events if e["kind"] == "config_change"]
+    assert len(ev) == 1 and "kelly_m: 0.56 -> 0.2" in ev[0]["msg"]
+    ex.step(target())                                     # stable -> no repeat
+    assert len([e for e in ex.state.events
+                if e["kind"] == "config_change"]) == 1
+
+
+def test_gate_stale_ledger_migrated_at_load(tmp_path):
+    """Pre-8e27c01 state recorded requested sizes (-0.01466) while the venue
+    holds whole contracts. Snap at load; sub-contract residue is dust."""
+    import json
+    sp = tmp_path / "state.json"
+    st = ExecState()
+    from dataclasses import asdict
+    d = {"halted": None, "day_key": "", "day_start_equity": 0.0,
+         "high_water": 0.0, "events": [], "marks": [], "fills": [],
+         "last_dry_run": None,
+         "legs": {"pullback": {"qty": 0.004},                 # dust
+                  "trend": {"qty": -0.01466}}}                # old format
+    sp.write_text(json.dumps(d))
+    cfg = Cfg()
+    cfg.state_path = str(sp)
+    ex = Executor(FakeVenue(mult=0.01), cfg, cfg.state_path)
+    assert ex.state.legs["trend"].qty == pytest.approx(-0.01)
+    assert ex.state.legs["pullback"].qty == 0.0
+    assert len([e for e in ex.state.events
+                if e["kind"] == "ledger_migrated"]) == 2
+
+
+def test_gate_halt_keeps_ledger_on_flatten_failure(tmp_path):
+    """halt() zeroed the ledger even when the flatten FAILED - the transfer
+    reconciler then read a naked position's bleed as withdrawals."""
+    class BoomVenue(FakeVenue):
+        def place_market(self, side, qty, cloid):
+            if cloid.startswith("halt-"):
+                raise RuntimeError("venue down")
+            super().place_market(side, qty, cloid)
+    v = BoomVenue()
+    ex = mkexec(tmp_path, v)
+    ex.step(target(trend={"pending": {"side": "S", "limit": -1.0,
+                                      "signal_ts": NOW}, "position": None}))
+    assert ex.state.legs["trend"].qty < 0
+    ex.halt("KILL", "test")
+    assert any(e["kind"] == "halt_error" for e in ex.state.events)
+    assert ex.state.legs["trend"].qty < 0                 # ledger = truth
+
+
+def test_gate_close_dust_cleared_not_looped(tmp_path):
+    """A stale sub-contract residue made _close_leg cancel the stop then
+    raise from _to_venue_size forever: permanent naked stopless loop."""
+    v = FakeVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    ex.state.legs["trend"].qty = -0.004                   # unholdable dust
+    ex.step(target())                                     # engine flat
+    assert ex.state.legs["trend"].qty == 0.0
+    assert any(e["kind"] == "ledger_dust_cleared" for e in ex.state.events)
+    assert not [c for c in v.calls if c[0] == "MARKET"]
+
+
+def test_gate_alert_cooldown_limits_repeat_pages(tmp_path, monkeypatch):
+    """halt_config embeds a changing equity float, defeating kind+msg dedupe:
+    ~180 pages/hour while the condition persisted. Rate-limit sends per kind;
+    never rate-limit halts or live-trade events. Events always logged."""
+    sent = []
+    import app.alerts as alerts
+    monkeypatch.setattr(alerts, "send", lambda m: sent.append(m))
+    ex = mkexec(tmp_path, FakeVenue())
+    ex._event("RED", "cap_clamp", "qty 1")
+    ex._event("RED", "cap_clamp", "qty 2")                # different msg
+    assert len([m for m in sent if "cap_clamp" in m]) == 1
+    assert len([e for e in ex.state.events
+                if e["kind"] == "cap_clamp"]) == 2        # both logged
+    ex._event("RED", "halt", "DAILY_LOSS a")
+    ex._event("RED", "halt", "DAILY_LOSS b")
+    assert len([m for m in sent if "halt" in m and "DAILY_LOSS" in m]) == 2

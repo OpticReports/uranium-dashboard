@@ -409,6 +409,266 @@ export interface TrackRecord {
   caveat: string;
 }
 
+export type LeverageState =
+  | "BLOWOFF"
+  | "ELEVATED"
+  | "NEUTRAL"
+  | "SQUEEZE"
+  | "WASHOUT";
+
+export interface MarginPoint {
+  date: string;
+  margin_yoy: number | null;
+  excess_yoy: number | null;
+  coverage: number | null;
+  spx: number | null;
+  btc: number | null;
+  spx_idx: number | null;
+  btc_idx: number | null;
+}
+
+export interface LeverageStats {
+  n: number;
+  mean: number;
+  median: number;
+  pct_lower: number;
+  worst: number;
+}
+
+export interface LeveragePlaybookEntry {
+  label: string;
+  evidence?: string;
+  stats: { fwd3: LeverageStats; fwd6: LeverageStats; fwd12: LeverageStats };
+  read: string;
+  action: string;
+}
+
+export interface LeverageCorroboration {
+  flags: Record<string, boolean | null>;
+  n_true: number;
+  n_known: number;
+  values: Record<string, number | null>;
+  stats: Record<string, { label: string; bears: number; n: number; prob_note: string }>;
+  reading: string;
+}
+
+export interface MarginNowcastMonth {
+  month: string;
+  margin_bn: number;
+  basis: string;
+  yoy_pct?: number;
+  excess_pp?: number;
+  band_pp?: number;
+  state_est?: LeverageState;
+  near_boundary?: boolean;
+  partial_month?: boolean;
+}
+
+export interface MarginNowcast {
+  months: MarginNowcastMonth[];
+  last_print: string;
+  schwab: { latest_month: string; margin_bn: number; yoy_pct: number | null } | null;
+  backtest: Record<string, string | number>;
+  display_only: string;
+}
+
+export interface MarginLeverage {
+  series: MarginPoint[];
+  nowcast?: MarginNowcast | null;
+  corroboration?: LeverageCorroboration;
+  recessions: Array<{ start: string; end: string }>;
+  current: {
+    date: string | null;
+    margin_yoy: number | null;
+    excess_yoy: number | null;
+    coverage: number | null;
+    state: LeverageState | null;
+  };
+  playbook: Record<LeverageState, LeveragePlaybookEntry>;
+  thresholds: Record<string, number>;
+  source: string;
+  note: string;
+}
+
+export type FastLeverageState = "FLUSH" | "WASHED_OUT" | "RISK_BUILD" | "CALM";
+
+export interface FastStats {
+  n: number;
+  median: number;
+  pct_pos: number;
+  worst: number;
+}
+
+export interface FastPlaybookEntry {
+  label: string;
+  evidence?: string;
+  stats: { fwd1m: FastStats; fwd3m: FastStats; fwd12m: FastStats };
+  episodes: number;
+  read: string;
+  action: string;
+}
+
+export type StressState = "SHOCK" | "AFTERSHOCK" | "COMPLACENT" | "NORMAL";
+
+export interface DeepCell {
+  n: number;
+  episodes: number;
+  evidence?: string;
+  fwd3m: { median: number; pct_pos: number; worst: number };
+  fwd12m: { median: number; pct_pos: number; worst: number };
+}
+
+export interface MarginFastDeep {
+  live: {
+    state: StressState;
+    rvol: number;
+    vz: number;
+    dv20: number;
+    date: string;
+  } | null;
+  states: Record<
+    StressState,
+    {
+      label: string;
+      episodes: number;
+      fwd1m: { median: number; pct_pos: number; worst: number };
+      fwd12m: { median: number; pct_pos: number; worst: number };
+    }
+  >;
+  matrix: Record<StressState, Record<LeverageState, DeepCell>>;
+  baseline: {
+    n: number;
+    fwd1m: { median: number; pct_pos: number };
+    fwd3m: { median: number; pct_pos: number };
+    fwd12m: { median: number; pct_pos: number };
+  };
+  thresholds: Record<string, number>;
+  note: string;
+}
+
+export interface MarginFast {
+  state: FastLeverageState | null;
+  state_series: Array<{ date: string; state: FastLeverageState }>;
+  playbook: Record<FastLeverageState, FastPlaybookEntry>;
+  cross_read: Record<FastLeverageState, Record<LeverageState, string>>;
+  deep: MarginFastDeep;
+  relationship: string;
+  thresholds: Record<string, number>;
+  cot: {
+    series: Array<{ date: string; pct: number; z: number | null }>;
+    z: number | null;
+    dz4: number | null;
+    pct: number | null;
+    date: string | null;
+    cadence: string;
+  };
+  vix: {
+    series: Array<{ date: string; vix: number; z: number | null }>;
+    d20: number | null;
+    current: number | null;
+    date: string | null;
+    cadence: string;
+  };
+  hy: {
+    series: Array<{ date: string; bp: number; z: number | null }>;
+    d20_bp: number | null;
+    current_bp: number | null;
+    date: string | null;
+    cadence: string;
+  };
+  btc: {
+    perp: {
+      mark_price: number;
+      oi_usd: number;
+      funding_8h: number;
+      funding_ann_pct: number;
+    } | null;
+    funding_series: Array<{ date: string; ann_pct: number; z: number | null }>;
+    oi_series: Array<{ date: string; oi_usd: number | null }>;
+    cadence: string;
+  };
+  baseline: Record<string, { median: number; pct_pos: number }>;
+  note: string;
+}
+
+export type RateShockState = "SPIKE" | "PLUNGE" | "NEUTRAL";
+export type CorrRegime = "POS" | "MIXED" | "NEG";
+
+export interface RateShockCell {
+  n: number;
+  episodes: number;
+  rec_12m_pct: number;
+  fwd12m: { median: number; pct_pos: number; worst: number };
+  evidence: string;
+}
+
+export interface RateShock {
+  current: {
+    yield_30y: number | null;
+    d60_bp: number | null;
+    state: RateShockState | null;
+    corr: number | null;
+    regime: CorrRegime | null;
+    date: string | null;
+  };
+  cell: RateShockCell | null;
+  summary: string[];
+  series: Array<{ date: string; yield: number; d60_bp: number | null }>;
+  baseline: {
+    n: number;
+    rec_12m_pct: number;
+    fwd12m: { median: number; pct_pos: number; worst: number };
+  };
+  shock_stats: Record<RateShockState, RateShockCell & { label: string }>;
+  matrix: Record<RateShockState, Record<CorrRegime, RateShockCell>>;
+  thresholds: Record<string, number>;
+  note: string;
+}
+
+export interface ShockScenarios {
+  span: [number, number];
+  meetings: Array<{ date: string; idx: number }>;
+  implied: Record<string, number>;
+  live_inputs: Record<string, number | null>;
+  note: string;
+}
+
+export type ShockAsset = "SPX" | "QQQ" | "SOXX" | "HYG";
+
+export interface ShockRun {
+  months: string[];
+  bands: Record<ShockAsset, Record<"5" | "25" | "50" | "75" | "95", number[]>>;
+  probs: Record<ShockAsset, { dd_gt_10: number; dd_gt_20: number; dd_gt_10_touch_est: number; dd_gt_20_touch_est: number; basis: string }>;
+  terminal: Record<ShockAsset, { counts: number[]; edges: number[] }>;
+  stress_prob: number[];
+  rate_path: {
+    implied_bp: number[];
+    scenario_bp: number[];
+    cum_surprise_bp: number[];
+    dy10_pp: number[];
+  };
+  meta: {
+    kappa_used: number;
+    seed: number;
+    n_paths: number;
+    canary01: number;
+    oas0: number;
+    hikes: number;
+    params_used: Record<string, number>;
+    override_warnings: string[];
+  };
+}
+
+export interface ShockCalibration {
+  params: Record<
+    string,
+    { default: number; range: [number, number]; source: string; note: string; high_sensitivity?: boolean }
+  >;
+  amendments: string[];
+  estimation_windows: Record<string, string>;
+  epistemic_note: string;
+}
+
 export interface CorrPoint {
   date: string;
   corr: number;
@@ -504,11 +764,34 @@ async function getJson<T>(path: string, init?: RequestInit): Promise<T> {
   throw lastErr;
 }
 
+export interface RateEnsembleSource {
+  weight: number;
+  n: number;
+  brier: number | null;
+}
+
+export interface RateEnsembleMeeting {
+  date: string;
+  sources: Record<string, Record<string, number>>;
+  blend: Record<string, number>;
+}
+
+export interface RateEnsemble {
+  meetings: RateEnsembleMeeting[];
+  weights: Record<string, RateEnsembleSource>;
+  buckets: string[];
+  labels: Record<string, string>;
+  backtest: Record<string, unknown> & { asof?: string; basis?: string };
+  display_only: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // Endpoint bindings
 // ---------------------------------------------------------------------------
 
 export const api = {
+  cycle: () => getJson<any>("/cycle"),
+  cycleAnalog: () => getJson<any>("/cycle/analog"),
   health: () => getJson<Health>("/health"),
   metrics: () => getJson<MetricsResponse>("/metrics"),
   metricHistory: (metricId: string) =>
@@ -522,6 +805,18 @@ export const api = {
     ),
   recessionModel: () => getJson<RecessionModel>("/recession-model"),
   laborSahm: () => getJson<SahmSeries>("/labor/sahm"),
+  marginLeverage: () => getJson<MarginLeverage>("/margin/leverage"),
+  marginFast: () => getJson<MarginFast>("/margin/fast"),
+  ratesShock: () => getJson<RateShock>("/rates/shock"),
+  rateEnsemble: () => getJson<RateEnsemble>("/rates/ensemble"),
+  shockScenarios: () => getJson<ShockScenarios>("/shock-sim/scenarios"),
+  shockRun: (body: { hikes: number; seed?: number; overrides?: Record<string, number>; implied_baseline?: boolean }) =>
+    getJson<ShockRun>("/shock-sim/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  shockCalibration: () => getJson<ShockCalibration>("/shock-sim/calibration"),
   flowDestinations: () => getJson<FlowDestinations>("/flows/destinations"),
   corrSeries: () => getJson<CorrSeries>("/crossasset/corr"),
   curveCanary: (pair: string) =>

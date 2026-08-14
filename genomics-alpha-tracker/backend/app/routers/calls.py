@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
 
 from ..calls import manager
+from ..calls.confidence import display_confidence
 from ..calls.postmortem import update_postmortems
 from ..calls.rules import atr, build_levels, call_r_multiple, call_return
 from ..config import calls_config
@@ -31,6 +32,7 @@ def _to_out(session: Session, call: TradeCall) -> TradeCallOut:
         thesis=call.thesis, entry_price=call.entry_price,
         stop_price=call.stop_price, target_price=call.target_price,
         expires_on=call.expires_on, composite_at_call=call.composite_at_call,
+        confidence=display_confidence(call),
         status=call.status, exit_date=call.exit_date, exit_price=call.exit_price,
         return_pct=call.return_pct, r_multiple=call.r_multiple,
     )
@@ -80,6 +82,15 @@ def list_calls(
 @router.get("/scorecard", response_model=CallsScorecardOut)
 def get_scorecard(session: Session = Depends(get_session)):
     return manager.scorecard(session)
+
+
+@router.get("/paper")
+def get_paper(session: Session = Depends(get_session)):
+    """Paper-trading account: starting balance, account value, realized/open
+    P&L, per-position sizing, and the equity curve in dollars."""
+    from ..calls.paper import paper_account
+
+    return paper_account(session)
 
 
 @router.get("/performance")

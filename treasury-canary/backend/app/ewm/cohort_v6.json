@@ -1,0 +1,112 @@
+{
+  "source": "Rate Cycle & Exit Timing — Scenario Cohort (operator report, August 2026; PDF aef819cd-Rate_Cycle_Scenario_Cohort.pdf). Basis per report: CME FedWatch futures pricing (Jul 2026); Jun 2026 FOMC SEP & minutes; Jul 29 2026 FOMC statement (9-3 hold, three hawkish dissents); Sept-Dec 2016 dissent precedent; 1994/1999-2000/2004-08/2022 cycle history; 2022-23 middle-market multiple data; company financials per management.",
+  "source_tag": "report-v6",
+  "extracted": "2026-08-02",
+  "deal_profile": {
+    "revenue_m": 105,
+    "ebitda": "double-digit (not stated numerically; report implies ~10-13x EBITDA at $200M, i.e. ~$15-20M EBITDA — NOT the 14.0 used by the seed)",
+    "target_price_m": 200,
+    "pricing_basis": "REVENUE multiple (~1.9x on $105M revenue). Report stresses revenue-multiple pricing is longer-duration and MORE rate-sensitive than mature EBITDA pricing; downside cells are widened accordingly.",
+    "implied_revenue_multiple_x": 1.9,
+    "implied_ebitda_multiple_range_x": [10, 13],
+    "transmission_lag": "Rate hikes hit private-market valuations with a 1-2 quarter lag; Q4 2026 hikes land on private deal pricing in Q1-Q2 2027 (the target close window).",
+    "performance_assumption": "constant company performance (management figures)"
+  },
+  "close_windows": ["2027-Q1-end", "2027-Q2-end"],
+  "close_window_note": "The report's month/quarter dimension is exactly two close dates (end Q1 '27, end Q2 '27) — no monthly axis. Any monthly surface must interpolate/extrapolate beyond the report.",
+  "scenarios": [
+    {
+      "id": 0,
+      "hike_path": "0 hikes (holds continue)",
+      "probability": 0.30,
+      "fed_funds_q1_2027_pct": [3.50, 3.75],
+      "revenue_multiple_x": [1.90, 2.00],
+      "value_close_end_q1_2027_m": [200, 210],
+      "value_close_end_q2_2027_m": [205, 215]
+    },
+    {
+      "id": 1,
+      "hike_path": "1 hike (Oct only)",
+      "probability": 0.35,
+      "modal": true,
+      "fed_funds_q1_2027_pct": [3.75, 4.00],
+      "revenue_multiple_x": [1.83, 1.90],
+      "value_close_end_q1_2027_m": [192, 200],
+      "value_close_end_q2_2027_m": [194, 204]
+    },
+    {
+      "id": 2,
+      "hike_path": "2 hikes (Oct + Dec)",
+      "probability": 0.25,
+      "fed_funds_q1_2027_pct": [4.00, 4.25],
+      "revenue_multiple_x": [1.62, 1.81],
+      "value_close_end_q1_2027_m": [170, 190],
+      "value_close_end_q2_2027_m": [165, 188]
+    },
+    {
+      "id": 3,
+      "hike_path": "3 hikes (Oct + Dec + Jan/Mar '27)",
+      "probability": 0.07,
+      "fed_funds_q1_2027_pct": [4.25, 4.50],
+      "revenue_multiple_x": [1.43, 1.64],
+      "value_close_end_q1_2027_m": [150, 172],
+      "value_close_end_q2_2027_m": [142, 168],
+      "process_stall_probability": [0.25, 0.35]
+    },
+    {
+      "id": 4,
+      "hike_path": "4 hikes (Oct + Dec + Jan + Mar '27)",
+      "probability": 0.03,
+      "fed_funds_q1_2027_pct": [4.50, 4.75],
+      "revenue_multiple_x": [1.38, 1.54],
+      "value_close_end_q1_2027_m": [145, 162],
+      "value_close_end_q2_2027_m": [135, 158],
+      "process_stall_probability": [0.25, 0.35]
+    }
+  ],
+  "aggregates": {
+    "modal_outcome": "1 hike (Oct), hold in Dec, close end Q1 2027 at $192-200M (~35%)",
+    "prob_at_most_one_hike": 0.65,
+    "value_floor_at_most_one_hike_q1_close_m": 192,
+    "probability_weighted_ev_m": [186, 193],
+    "left_tail_m": [135, 150],
+    "hike3_regime_break": "Beyond two hikes buyer behavior shifts categorically: ICs pause, financing gets outs, LOIs get retraded; ~25-35% odds the process stalls entirely in the 3-4 hike rows.",
+    "increment_assumption": "All scenarios assume 25bp increments (the priced, telegraphed path).",
+    "regime_change_50bp": "A shift to 50bp increments (Fed behind the curve) is a regime change: values gap toward $145-170M and process completion itself is at risk."
+  },
+  "mechanisms": {
+    "debt_capacity": "Dominant channel. Lenders size to coverage ratios: each ~50bp cuts ~a quarter-turn of leverage ~= $10M less buyer debt, straight out of price.",
+    "revenue_multiple_duration": "2022-23 precedent: revenue-priced deals compressed 60%+ peak-to-trough vs ~20% for mature EBITDA deals; at ~1.9x revenue this deal carries the longer-duration sensitivity (wider downside cells).",
+    "two_speed_2026": "Speed one (immediate): 2022-style equity duration at 1999-style valuations — hawkish surprises transmit same-day but are small (50-100bp, two-thirds priced): 3-7% air pockets, not a cascade. Speed two (lagged): real leverage sits in AI capex commitments and private credit (2000-style topology); if tightening cracks that, damage arrives 2-4 quarters later (mid-to-late 2027, after target close). Strongest structural argument for Q1 over Q2 close."
+  },
+  "rate_path_context": {
+    "futures": "First 25bp hike priced late October; ~65-70% odds of at least one hike by December; coin-flip on a second in December.",
+    "dissent_cluster": "Jul 29 2026 hold passed 9-3; Hammack, Kashkari, Logan dissented for an immediate hike — first unified three-way directional dissent since September 2016 (which was followed by a hike that December). Fed historically moves in the dissent direction within 1-2 meetings.",
+    "dot_plot": "Jun 2026 median end-2026 rate jumped 3.4% -> 3.8%; 9 of 19 officials projected at least one hike.",
+    "catalysts": "September CPI and Sept 16 dot plot reveal the path before October; further hawkish dot migration or a fourth dissenter => accelerate hard."
+  },
+  "recommended_posture": [
+    "Move left: LOI with committed financing before the December FOMC locks today's terms, neutralizes most cohort downside, and front-runs the lagged transmission channel.",
+    "Watch September CPI and the Sept 16 dot plot."
+  ],
+  "comparison_to_seeded_surface": {
+    "seed_reference": "treasury-canary/backend/app/ewm/core.py PARAMS: multiples [14.5, 14.0, 13.4, 11.8, 11.2] x EBITDA 14.0 => point values [203.0, 196.0, 187.6, 165.2, 156.8]; weights [0.30, 0.35, 0.25, 0.07, 0.03]; weighted EV 192.7 at Q1'27 anchor.",
+    "agreements": [
+      "Scenario probabilities MATCH exactly: report ~30/35/25/7/3 vs seed [0.30, 0.35, 0.25, 0.07, 0.03].",
+      "Five cumulative-hike scenarios (0-4), 25bp increments — same scenario set.",
+      "Modal outcome MATCHES: seed modal 196 at Q1'27 sits inside the report's modal cell $192-200M (1 hike, Q1 close); report midpoint 196 equals the seed exactly for scenario 1.",
+      "Hike-3 cliff present in both: seed drops 1.6 turns (187.6 -> 165.2, -22.4M); report drops ~19M at midpoints (180 -> 161) AND adds an explicit 25-35% process-stall probability the seed handles separately via DMHI stall modeling.",
+      "Seed Q1 values fall INSIDE every report Q1 range: 203 in [200,210]; 196 in [192,200]; 187.6 in [170,190]; 165.2 in [150,172]; 156.8 in [145,162].",
+      "Month-axis direction matches amendment A5's asymmetric shape: report dove rows GAIN Q1->Q2 (s0 +5M, s1 +2M at midpoints) while hawk rows LOSE (s3 -6M, s4 -7M)."
+    ],
+    "disagreements": [
+      "PRICING BASIS: report prices on REVENUE multiples (1.38-2.00x on $105M revenue) and states the implied EBITDA multiple is only 10-13x; the seed uses 14.0-14.5x EBITDA multiples on EBITDA 14.0. Same dollar values, different basis — the seed's EBITDA-multiple framing (and the spec's +$1M EBITDA ~ +$13-15M rule) overstates the report's implied EBITDA multiple and understates its implied EBITDA (~$15-20M).",
+      "LEVEL SKEW: seed scenario values sit ABOVE report midpoints for hawk scenarios — s2: 187.6 vs midpoint 180 (+7.6M, seed near the top of the report's widest range 170-190); s3: 165.2 vs 161 (+4.2M); s4: 156.8 vs 153.5 (+3.3M). Seed weighted EV 192.7 sits at the very top of the report's ~$186-193M band; report midpoints give ~191.0.",
+      "RANGES vs POINTS: the report gives per-scenario value RANGES (width $8-22M, widest in hawk rows per the revenue-duration argument); the seed collapses these to points and layers a flat 6% exec-noise band (exec_noise_pct), which does not reproduce the report's hawk-skewed widening.",
+      "MONTH AXIS MAGNITUDE: seed shape terms are -0.15x/q hawk (-2.1M/q) and +0.10x/q dove (+1.4M/q, s0 only, s1/s2 flat); the report's Q1->Q2 midpoint moves are roughly 3x larger and hit ALL rows: s0 +5M, s1 +2M, s2 -3.5M, s3 -6M, s4 -7M. Notably the seed treats scenario 2 as flat while the report has it declining into Q2.",
+      "MISSING IN SEED: fed-funds range per scenario; explicit 25-35% stall odds attached to rows 3-4; the 50bp-increment regime-change branch (values gap to $145-170M) — the seed has no out-of-cohort regime branch; the ~$10M-per-50bp debt-capacity anchor.",
+      "WEIGHTED EV BAND: report states ~$186-193M vs spec G1 gate 189-194M — overlapping but not identical; the report's band extends 3M lower."
+    ],
+    "wiring_notes": "When replacing the seed: keep weights as-is; take per-scenario Q1/Q2 value ranges as the authoritative V(s,m) at the two report close windows (midpoints as central, range as scenario band replacing flat exec noise); refit the monthly shape so Q1'27-end and Q2'27-end reproduce the report cells (hawk decay ~3x current, s1/s2 no longer flat); carry the 25-35% row-level stall probability into the DMHI stall layer rather than into V; add the 50bp regime-change branch as a flagged off-cohort stress case, not a sixth weighted scenario."
+  }
+}

@@ -225,6 +225,25 @@ def evaluate_flags(
             )
         )
 
+    # 8b) Relative-strength leader (OBSERVE-ONLY) ------------------------------
+    # The one signal the 10y historical backtest supported (BACKTEST_SIGNALS.md);
+    # fires here so its LIVE track record can confirm or refute the backtest.
+    f = cfg.get("relative_strength_leader", {})
+    rs = raw.get("rs_60d")
+    if rs is not None and rs >= f.get("min_rs_60d", 0.15):
+        flags.append(
+            FlagEvent(
+                symbol=sec.symbol,
+                flag_type="relative_strength_leader",
+                severity="info",
+                message=(
+                    f"Beating the sector (XBI) by {rs:+.0%} over the last 60 "
+                    "trading days — momentum leadership"
+                ),
+                evidence={"rs_60d": rs},
+            )
+        )
+
     # 8) Insider buying cluster ------------------------------------------------
     # CLUSTER = multiple DISTINCT insiders with meaningful aggregate value.
     # One officer's 10b5-1 plan printing twice in a month is not a signal.

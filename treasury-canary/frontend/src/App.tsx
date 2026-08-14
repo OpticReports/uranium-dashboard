@@ -7,15 +7,20 @@ import StressGauge from "./components/StressGauge";
 import MetricTable from "./components/MetricTable";
 import ReSteepenAlert from "./components/ReSteepenAlert";
 import SahmChart from "./components/SahmChart";
+import CycleTracker from "./components/CycleTracker";
 import LaborPanel from "./components/LaborPanel";
 import FlightToQuality from "./components/FlightToQuality";
 import FlowCompass from "./components/FlowCompass";
+import MarginLeverageChart from "./components/MarginLeverageChart";
+import RateShockPanel from "./components/RateShockPanel";
+import RateShockSimulator from "./components/RateShockSimulator";
 import EventFeed from "./components/EventFeed";
 import NewsPanel from "./components/NewsPanel";
 import LeadingStack from "./components/LeadingStack";
 import PinBoard from "./components/PinBoard";
 import StatRegimeStrip from "./components/StatRegimeStrip";
 import AlertBeacon from "./components/AlertBeacon";
+import RateEnsemble from "./components/RateEnsemble";
 import PlaybookTab from "./components/PlaybookTab";
 import SeverityTab from "./components/SeverityTab";
 import TrackRecordTab from "./components/TrackRecordTab";
@@ -146,8 +151,11 @@ export default function App() {
         <div className="flex flex-col gap-5">
           <StressGauge composite={composite} />
 
+          <RateEnsemble />
+
           <ReSteepenAlert />
 
+          <CycleTracker />
           <SahmChart />
 
           {metrics ? (
@@ -192,8 +200,14 @@ export default function App() {
 
           <FlowCompass />
 
+          <RateShockPanel />
+
+          <MarginLeverageChart />
+
           <PinBoard />
           <StatRegimeStrip />
+
+          <RateShockSimulator />
 
           <div id="event-feed">
             <EventFeed />

@@ -1,0 +1,61 @@
+{
+  "method": "ENS_BC",
+  "definition": "nowcast(M) = 0.5*BRIDGE(M) + 0.5*CLAIMS(M); target = coincident composite for month M (mean expanding-z, min 120 obs, of 6m annualized log growth of PAYEMS, INDPRO, W875RX1, CMRMTSPL); issued at the payrolls release ~1 week after month M ends, ~1 month before the composite for M prints (~2 months before CMRMTSPL completes it)",
+  "refit_policy": "all regressions OLS, expanding window, refit monthly; coefficients below are the current full-history fit and will drift slightly each refit",
+  "components": {
+    "BRIDGE": {
+      "description": "mean of the four coincident z-scores: PAYEMS actual (published at nowcast date); INDPRO/W875RX1/CMRMTSPL growth projected then z-scored with expanding stats (min 120 obs) through each component's last actual month",
+      "growth_transform": "g(x,M) = 2*ln(x_M / x_{M-6})",
+      "projections": {
+        "INDPRO":   {"form": "g(M) ~ 1 + g(M-1) + g_PAYEMS(M)", "coef": [-0.0016782, 0.7448147, 0.4465418], "n": 803},
+        "W875RX1":  {"form": "g(M) ~ 1 + g(M-1) + g_PAYEMS(M)", "coef": [0.0045349, 0.7025804, 0.2379391], "n": 803},
+        "CMRMTSPL": {"form": "g(M) ~ 1 + g(M-2) + g_PAYEMS(M)", "coef": [0.0042636, 0.5146865, 0.5229790], "n": 705}
+      }
+    },
+    "CLAIMS": {
+      "description": "regression on current-month weekly-claims and yield-curve z plus last composite; z_claims6 = expanding z of -2*ln(ICSA_M/ICSA_{M-6}) on monthly-mean ICSA; z_curve = expanding z of T10Y3M monthly mean (GS10-TB3MS before 1982)",
+      "form": "COIN(M) ~ 1 + COIN(M-1) + z_claims6(M) + (z_claims6(M) - z_claims6(M-3)) + z_curve(M)",
+      "coef": [-0.0618642, 0.7609849, 0.1231412, 0.1178304, -0.0189434],
+      "n": 587
+    }
+  },
+  "weights": {"BRIDGE": 0.5, "CLAIMS": 0.5, "note": "fixed, not fitted; ex-ante walk-forward grid selector (ENS_GRID) chose exactly this combo in 354/630 months and matches its RMSE (0.3319)"},
+  "stats": {
+    "eval_window_full": "targets 1972-01..2026-06, n=654",
+    "eval_window_sub": "targets 1990-01..2026-06, n=438",
+    "rmse": {"full": 0.3344, "sub1990": 0.3692, "full_ex2020": 0.2202},
+    "rmse_persistence": {"full": 0.4674, "sub1990": 0.5316, "full_ex2020": 0.2582},
+    "rmse_improvement_pct": {"full": -28.5, "sub1990": -30.6, "full_ex2020": -14.7},
+    "directional_accuracy": {"full": 0.698, "sub1990": 0.680, "persistence": null},
+    "phase_accuracy": {"full": 0.838, "sub1990": 0.838, "persistence_full": 0.826},
+    "phase_transition_accuracy": {"full": 0.254, "sub1990": 0.267, "n_transitions_full": 114, "persistence": 0.0},
+    "dm_stat_vs_persistence": {"full": -1.63, "full_ex2020": -5.33, "note": "Newey-West lag 6; negative = better than persistence; full-sample significance diluted by 2020 tail"},
+    "recession_onsets": {
+      "count_evaluated": 7,
+      "caught_earlier_than_lagged_composite": 3,
+      "ties": 3,
+      "later": 1,
+      "missed": 0,
+      "detail": {
+        "1973-12": {"realized_cross": "1974-01", "nowcast_cross": "1974-03", "calendar_advantage_months": -1},
+        "1980-02": {"realized_cross": "1979-09", "nowcast_cross": "1979-10", "calendar_advantage_months": 0},
+        "1981-08": {"realized_cross": "1981-11", "nowcast_cross": "1981-06", "calendar_advantage_months": 6},
+        "1990-08": {"realized_cross": "1990-09", "nowcast_cross": "1990-10", "calendar_advantage_months": 0},
+        "2001-04": {"realized_cross": "2001-03", "nowcast_cross": "2001-03", "calendar_advantage_months": 1},
+        "2008-01": {"realized_cross": "2008-02", "nowcast_cross": "2008-03", "calendar_advantage_months": 0},
+        "2020-03": {"realized_cross": "2020-03", "nowcast_cross": "2020-03", "calendar_advantage_months": 1}
+      }
+    },
+    "false_alarm_months": ["1981-06"],
+    "false_alarm_note": "1981-06 preceded the 1981-08 recession (realized crossing 1981-11); no genuine false positives 1972-2026"
+  },
+  "early_warning_channel": {
+    "method": "CLAIMS member alone",
+    "onsets_caught_earlier": 4, "ties": 3, "later": 0,
+    "rmse_full": 0.3930,
+    "note": "display as separate trigger line; earlier on 1981(+6m), 2001(+2m), 2008(+3m), 2020(+1m); never later; only pre-recession 'false' alarms (1981-06/07)"
+  },
+  "live_nowcast": {"target_month": "2026-07", "BRIDGE": -0.347, "CLAIMS": -0.429, "ENS_BC": -0.388, "phase": "STALL", "last_realized_COIN": {"month": "2026-06", "value": -0.492}},
+  "phase_rules": {"CONTRACTION": "< -0.75", "STALL": "< 0", "EXPANSION": ">= 0"},
+  "caveats": ["final-vintage data throughout (revisions not modeled; applies to all methods incl. baseline)", "50/50 combo membership chosen with knowledge of member results; validated by ex-ante ENS_GRID convergence to same combo", "CMRMTSPL(M-2) release lands ~1 week after payrolls-day nowcast; use mid-month issue or lag-3 bridge in production", "COIN(M-1) regressor treated as fully known; in production use bridge-completed COIN(M-1)"]
+}
