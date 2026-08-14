@@ -45,6 +45,8 @@ def _nightly_job() -> None:
         for row in log_decisions(con):
             logger.info("shadow logged: %s holds %s (decided %s)",
                         row["variant"], row["state"], row["decision_month"])
+        from ..edge.run import run_nightly as edge_nightly
+        logger.info("edge-monitor: %s", edge_nightly(con))
         logger.info("nightly job complete")
     except Exception as exc:  # noqa: BLE001 — fail LOUDLY, keep serving
         logger.critical("NIGHTLY JOB FAILED: %s", exc)
@@ -732,6 +734,16 @@ fetch('api/phase').then(r=>r.json()).then(b=>{B=b;draw();})
 @app.get("/phase", response_class=HTMLResponse)
 def phase_page():
     return HTMLResponse(_PHASE_HTML)
+
+
+@app.get("/api/edge")
+def api_edge():
+    from ..edge import run as edge_run
+    con = db.connect()
+    try:
+        return edge_run.board(con)
+    finally:
+        con.close()
 
 
 @app.get("/api/shadow")

@@ -27,8 +27,9 @@ import math
 import numpy as np
 
 import sys
-sys.path.insert(0, "/home/user/uranium-dashboard/edge-monitor/src")
-from edge_monitor import cusum  # noqa: E402
+
+import sys; sys.path.insert(0, "/home/user/uranium-dashboard/barbell-lab/src")
+from barbell.edge import cusum  # noqa: E402
 
 VOL = 0.15 / math.sqrt(252)
 MU = 1.2 * VOL / math.sqrt(252) * math.sqrt(252) / 252 * 252  # = 1.2*vol_d

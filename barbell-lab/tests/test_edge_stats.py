@@ -8,7 +8,7 @@ import math
 import numpy as np
 import pytest
 
-from edge_monitor import bocd, cusum, dd_percentile, psr
+from barbell.edge import bocd, cusum, dd_percentile, psr
 
 RNG = np.random.default_rng(42)
 
