@@ -1004,3 +1004,142 @@ def test_gate_alert_cooldown_limits_repeat_pages(tmp_path, monkeypatch):
     ex._event("RED", "halt", "DAILY_LOSS a")
     ex._event("RED", "halt", "DAILY_LOSS b")
     assert len([m for m in sent if "halt" in m and "DAILY_LOSS" in m]) == 2
+
+
+# ---------------------------------------------------------------------------
+# RAMP v4 (RAMP_V4.md, frozen 2026-08-15): coverage counters + drills
+def _drill_exec(tmp_path):
+    from app.cb import DryRunVenue
+    from app.mirror import Executor
+    cfg = Cfg()
+    cfg.state_path = str(tmp_path / "state.json")
+    venue = DryRunVenue(None)
+    return Executor(venue, cfg), venue
+
+
+def test_gate_drill_cycle_full_path(tmp_path):
+    ex, venue = _drill_exec(tmp_path)
+    rec = ex.drill("cycle")
+    assert rec["ok"], rec
+    s = rec["steps"]
+    assert s["stop_open"] and s["stop_cancelled"] and s["venue_flat_end"]
+    assert ex.state.coverage.get("drill_cycle") == 1
+    assert ex.state.coverage.get("stop_placed") == 1
+    # fills recorded under leg='drill' (feed slippage, excluded from P&L)
+    legs = {f["leg"] for f in ex.state.fills}
+    assert legs == {"drill"}
+    # drill orders are all D- prefixed and the venue ends flat
+    assert all(c.startswith("D-") for c in venue.orders)
+    assert venue.position() == 0.0
+
+
+def test_gate_drill_stopfill_fallback_never_leaves_position(tmp_path):
+    """DryRun stops never auto-fill -> the fallback path must cancel and
+    flatten; the drill reports UNVERIFIED, never leaves exposure."""
+    ex, venue = _drill_exec(tmp_path)
+    ex.cfg.drill_cooldown_s = 0
+    rec = ex.drill("stopfill")
+    assert rec["ok"] is False
+    assert rec["steps"]["stop_filled"] is False
+    assert rec["steps"]["fallback_flatten"] is True
+    assert venue.position() == 0.0
+    assert ex.state.coverage.get("stop_filled") is None   # not faked
+
+
+def test_gate_drill_stopfill_verified_path(tmp_path, monkeypatch):
+    ex, venue = _drill_exec(tmp_path)
+    ex.cfg.drill_cooldown_s = 0
+    real_place_stop = venue.place_stop
+    def filling_stop(side, qty, trigger_px, cloid):
+        real_place_stop(side, qty, trigger_px, cloid)
+        venue.orders[cloid]["status"] = "FILLED"   # venue fires instantly
+    monkeypatch.setattr(venue, "place_stop", filling_stop)
+    rec = ex.drill("stopfill")
+    assert rec["ok"], rec
+    assert ex.state.coverage.get("stop_filled") == 1
+    assert ex.state.coverage.get("drill_stopfill") == 1
+    assert venue.position() == 0.0
+
+
+def test_gate_drill_refusals(tmp_path):
+    ex, venue = _drill_exec(tmp_path)
+    ex.cfg.drill_cooldown_s = 0
+    # refused while a leg holds anything
+    ex.state.legs["trend"].qty = 0.01
+    assert "leg_not_flat" in ex.drill("cycle")["refused"]
+    ex.state.legs["trend"].qty = 0.0
+    # refused while halted
+    ex.state.halted = "KILL"
+    assert "halted" in ex.drill("cycle")["refused"]
+    ex.state.halted = None
+    # refused when the venue holds a position we don't ledger
+    venue.orders["X"] = {"type": "MARKET", "side": "BUY", "qty": 0.02,
+                         "px": 60_000.0, "status": "FILLED"}
+    assert "venue_not_flat" in ex.drill("cycle")["refused"]
+    del venue.orders["X"]
+    # daily budget: cap reached -> refused
+    ex.cfg.drill_max_per_day = 2
+    assert ex.drill("cycle")["ok"]
+    assert ex.drill("cycle")["ok"]
+    assert ex.drill("cycle")["refused"] == "daily_budget_exhausted"
+    # unknown kind
+    assert "unknown" in ex.drill("nope")["refused"]
+
+
+def test_gate_drill_cooldown(tmp_path):
+    ex, _ = _drill_exec(tmp_path)
+    assert ex.drill("cycle")["ok"]
+    assert ex.drill("cycle")["refused"] == "cooldown"
+
+
+def test_gate_drill_size_is_always_min_contract(tmp_path):
+    """No parameter can raise drill size; with a quantizing venue the drill
+    trades exactly one contract."""
+    ex, venue = _drill_exec(tmp_path)
+    venue.quantize = lambda q: (int(q / 0.01 + 1e-9)) * 0.01
+    rec = ex.drill("cycle")
+    assert rec["steps"]["qty"] == 0.01
+
+
+def test_gate_coverage_persists_and_restart_counter(tmp_path):
+    from app.cb import DryRunVenue
+    from app.mirror import Executor
+    cfg = Cfg()
+    cfg.state_path = str(tmp_path / "state.json")
+    ex = Executor(DryRunVenue(None), cfg)
+    ex._cov("entry_long")
+    ex._save_state()
+    # reboot flat: no restart_with_position increment
+    ex2 = Executor(DryRunVenue(None), cfg)
+    assert ex2.state.coverage.get("entry_long") == 1
+    assert ex2.state.coverage.get("restart_with_position") is None
+    # reboot with an open leg: counted
+    ex2.state.legs["trend"].qty = 0.01
+    ex2._save_state()
+    ex3 = Executor(DryRunVenue(None), cfg)
+    assert ex3.state.coverage.get("restart_with_position") == 1
+
+
+def test_gate_ramp_v4_readiness_block():
+    from app.main import RAMP_V4_REQUIRED, _ramp_v4
+    from app.mirror import ExecState
+    st = ExecState()
+    r = _ramp_v4(st)
+    assert r["coverage_complete"] is False
+    st.coverage = {k: v for k, v in RAMP_V4_REQUIRED.items()}
+    st.fills = [{"slip_bps": 1.0}] * 10
+    r2 = _ramp_v4(st)
+    assert r2["coverage_complete"] is True
+    assert r2["rows"]["slippage_sample"]["met"] is True
+
+
+def test_gate_spec_pins_ramp_v4():
+    spec = open(os.path.join(os.path.dirname(__file__), "..", "RAMP_V4.md")).read()
+    assert "frozen 2026-08-15" in spec
+    assert "P&L is explicitly NOT a gate" in spec
+    from app.main import RAMP_V4_REQUIRED
+    # every spec row that names a counter exists in the code's requirement map
+    for key in ("entry_long", "entry_short", "stop_placed", "stop_filled",
+                "signal_exit", "chase", "post_only_cross",
+                "restart_with_position", "config_change", "drill_cycle"):
+        assert key in RAMP_V4_REQUIRED and key in spec

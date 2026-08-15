@@ -45,6 +45,9 @@ class Settings(BaseSettings):
 
     poll_seconds: int = 20
     state_path: str = "./data/executor_state.json"
+    # RAMP v4 drills (RAMP_V4.md): min-size test round trips, endpoint-only
+    drill_max_per_day: int = 6
+    drill_cooldown_s: int = 300
     log_level: str = "INFO"
 
 

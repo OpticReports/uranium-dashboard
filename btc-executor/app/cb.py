@@ -405,7 +405,8 @@ class DryRunVenue:
                     (o["side"] == "SELL" and m >= o["px"]):
                 o["status"] = "FILLED"
         return {"status": o["status"],
-                "filled_qty": o["qty"] if o["status"] == "FILLED" else 0.0}
+                "filled_qty": o["qty"] if o["status"] == "FILLED" else 0.0,
+                "avg_price": o["px"] if o["status"] == "FILLED" else None}
 
     def place_limit(self, side, qty, px, cloid, post_only=True):
         self.orders[cloid] = {"type": "LIMIT", "side": side, "qty": qty,

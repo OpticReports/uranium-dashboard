@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 import os
 import time
 from dataclasses import asdict, dataclass, field
@@ -86,6 +87,10 @@ class ExecState:
     fills: list = field(default_factory=list)
     last_dry_run: bool | None = None      # detects silent mode flips
     last_config: dict | None = None       # detects silent sizing/risk resets
+    # RAMP v4: event-class counters incremented INSIDE the real code paths
+    # (never by hand) + the drill audit trail. See RAMP_V4.md.
+    coverage: dict = field(default_factory=dict)
+    drills: list = field(default_factory=list)
 
 
 def _side_sign(side: str) -> float:
@@ -113,7 +118,20 @@ class Executor:
         self._last_flat_equity = None      # transfer-reconciliation baseline
         self._fill_watch: list[dict] = []  # orders pending a fill-price read
         self._sent_at: dict[str, float] = {}   # per-kind Telegram cooldown
+        # step() and drill() must never interleave venue mutations: a drill
+        # mid-step (or vice versa) would trip the drift check and could
+        # entangle drill orders with leg management (RAMP v4)
+        self._venue_lock = threading.Lock()
         self._migrate_ledger_granularity()
+        if any(l.qty != 0.0 for l in self.state.legs.values()):
+            self._cov("restart_with_position")
+
+    def _cov(self, key: str) -> None:
+        """RAMP v4 coverage counter (RAMP_V4.md) — persisted with state."""
+        cov = getattr(self.state, "coverage", None)
+        if cov is None:
+            cov = self.state.coverage = {}
+        cov[key] = cov.get(key, 0) + 1
 
     def _migrate_ledger_granularity(self) -> None:
         """Persisted state written before 8e27c01 recorded REQUESTED sizes
@@ -150,6 +168,8 @@ class Executor:
             st.fills = raw.get("fills", [])[-400:]
             st.last_dry_run = raw.get("last_dry_run")
             st.last_config = raw.get("last_config")
+            st.coverage = raw.get("coverage", {})
+            st.drills = raw.get("drills", [])[-50:]
             return st
         except Exception:  # noqa: BLE001
             return ExecState()
@@ -164,7 +184,9 @@ class Executor:
              "marks": self.state.marks[-400:],
              "fills": getattr(self.state, "fills", [])[-400:],
              "last_dry_run": getattr(self.state, "last_dry_run", None),
-             "last_config": getattr(self.state, "last_config", None)}
+             "last_config": getattr(self.state, "last_config", None),
+             "coverage": getattr(self.state, "coverage", {}),
+             "drills": getattr(self.state, "drills", [])[-50:]}
         tmp = self.state_path + ".tmp"
         json.dump(d, open(tmp, "w"))
         os.replace(tmp, self.state_path)
@@ -392,6 +414,7 @@ class Executor:
             self.halt(*breach)
 
     def halt(self, reason: str, msg: str = "") -> None:
+        self._cov("halt")
         """Cancel everything, flatten everything, block until resume()."""
         self.state.halted = reason
         self._event("RED", "halt", f"{reason} {msg}")
@@ -413,6 +436,7 @@ class Executor:
         self._save_state()
 
     def resume(self) -> None:
+        self._cov("resume")
         self._event("INFO", "resume", f"cleared {self.state.halted}")
         self.state.halted = None
         self._save_state()
@@ -445,9 +469,14 @@ class Executor:
             diffs = [f"{k}: {prev_snap.get(k)} -> {v}"
                      for k, v in snap.items() if prev_snap.get(k) != v]
             self._event("RED", "config_change", "; ".join(diffs))
+            self._cov("config_change")
         self.state.last_config = snap
 
     def step(self, target: dict) -> None:
+        with self._venue_lock:
+            self._step_locked(target)
+
+    def _step_locked(self, target: dict) -> None:
         self._check_mode_change()
         equity = self.venue.equity()
         self._reconcile_transfers(equity)
@@ -588,6 +617,10 @@ class Executor:
         # Record what the venue HOLDS (filled + whatever we could chase), not
         # the target. Anything else desynchronises stops and exits.
         led.qty = _side_sign(pos["side"]) * round(filled + missing, 8)
+        if led.qty != 0.0:
+            self._cov("entry_long" if pos["side"] == "L" else "entry_short")
+        if missing > 0:
+            self._cov("chase")
         led.entry_cloid = None
         led.signal_ts = pos.get("signal_ts")
 
@@ -607,6 +640,7 @@ class Executor:
                 # stopped_entry_ts blocks re-entry from this same engine
                 # position until the engine catches up at its own stop logic
                 self._event("INFO", "stop_filled_on_venue", f"{leg}")
+                self._cov("stop_filled")
                 led.qty, led.stop_cloid, led.stop_px = 0.0, None, None
                 led.stopped_entry_ts = pos.get("entry_ts")
                 # the entry order is consumed - its fill was closed BY the
@@ -625,6 +659,7 @@ class Executor:
         self.venue.place_stop(_close_side(led.qty), abs(led.qty), trigger, cloid)
         self._watch_fill(leg, "stop", cloid, trigger, _close_side(led.qty))
         led.stop_cloid, led.stop_px = cloid, trigger
+        self._cov("stop_placed")
 
     def _cancel_entry(self, led: LegLedger, filled_action: str) -> None:
         st = self.venue.order_status(led.entry_cloid)
@@ -673,6 +708,7 @@ class Executor:
             self.venue.place_market(_close_side(led.qty), qty, cloid)
             self._watch_fill(leg, "close", cloid, ref, _close_side(led.qty))
             self._event("INFO", "leg_closed", f"{leg} {why} qty={led.qty}")
+            self._cov("signal_exit")
             led.qty = 0.0
 
     def _report_post_only_crosses(self) -> None:
@@ -688,6 +724,7 @@ class Executor:
             self._event("WARN", "post_only_cross",
                         f"{cloid} rejected as marketable (spot/future basis) "
                         f"- refilled as taker")
+            self._cov("post_only_cross")
         seen.clear()
 
     def _watch_fill(self, leg: str, role: str, cloid: str, ref_px: float,
@@ -741,6 +778,136 @@ class Executor:
                                  "slip_bps": round(bps, 2)})
 
     # ---------- drift ----------
+
+    # ---------- RAMP v4 drills (RAMP_V4.md, frozen 2026-08-15) ----------
+
+    def _min_contract(self) -> float:
+        """Smallest tradable size: first candidate the venue quantizes to a
+        nonzero amount (quantize floors to contract multiples)."""
+        for x in (1e-6, 1e-5, 1e-4, 1e-3, 0.005, 0.01, 0.02, 0.05, 0.1):
+            try:
+                q = self.venue.quantize(x * 1.0000001)
+            except Exception:  # noqa: BLE001
+                continue
+            if q and q > 0:
+                return q
+        return 0.0
+
+    def _drill_refusal(self) -> str | None:
+        if self.state.halted:
+            return f"halted:{self.state.halted}"
+        for name, led in self.state.legs.items():
+            if led.qty != 0.0 or led.entry_cloid or led.stop_cloid:
+                return f"leg_not_flat:{name}"
+        try:
+            pos = self.venue.position()
+        except Exception as exc:  # noqa: BLE001
+            return f"position_unreadable:{exc}"
+        if abs(pos) > 1e-9:
+            return f"venue_not_flat:{pos}"
+        day = time.strftime("%Y-%m-%d", time.gmtime())
+        rec = [d for d in self.state.drills if d.get("day") == day]
+        if len(rec) >= getattr(self.cfg, "drill_max_per_day", 6):
+            return "daily_budget_exhausted"
+        if self.state.drills and time.time() - self.state.drills[-1]["ts"] \
+                < getattr(self.cfg, "drill_cooldown_s", 300):
+            return "cooldown"
+        return None
+
+    def drill(self, kind: str) -> dict:
+        """One deliberate min-size round trip through the REAL live order
+        paths. Size is ALWAYS one venue contract - no parameter can raise
+        it. Endpoint-only (token-gated); never called by any scheduler.
+        Fills are recorded (leg='drill') so they feed slippage stats, and
+        are excluded from every P&L metric by that tag."""
+        if kind not in ("cycle", "stopfill"):
+            return {"ok": False, "refused": f"unknown kind {kind}"}
+        if not self._venue_lock.acquire(timeout=30):
+            return {"ok": False, "refused": "executor busy (step running)"}
+        try:
+            return self._drill_locked(kind)
+        finally:
+            self._venue_lock.release()
+
+    def _drill_locked(self, kind: str) -> dict:
+        refusal = self._drill_refusal()
+        if refusal:
+            return {"ok": False, "refused": refusal}
+        q = self._min_contract()
+        if q <= 0:
+            return {"ok": False, "refused": "no tradable minimum size"}
+        ts = int(time.time())
+        base = f"D-{ts}"
+        steps: dict = {"qty": q}
+        ok = True
+        try:
+            mid = self.venue.mid()
+            self.venue.place_market("BUY", q, f"{base}-E")
+            self._watch_fill("drill", "drill_entry", f"{base}-E", mid, "BUY")
+            steps["entry"] = "sent"
+            if kind == "cycle":
+                trig = mid * 0.99
+                self.venue.place_stop("SELL", q, trig, f"{base}-S")
+                self._cov("stop_placed")
+                st = self.venue.order_status(f"{base}-S")
+                steps["stop_open"] = bool(st and st.get("status") == "OPEN")
+                self.venue.cancel(f"{base}-S")
+                st2 = self.venue.order_status(f"{base}-S")
+                steps["stop_cancelled"] = bool(
+                    st2 and st2.get("status") != "FILLED")
+                self.venue.place_market("SELL", q, f"{base}-X")
+                self._watch_fill("drill", "drill_exit", f"{base}-X", mid, "SELL")
+                steps["exit"] = "sent"
+                ok = steps["stop_open"] and steps["stop_cancelled"]
+                if ok:
+                    self._cov("drill_cycle")
+            else:  # stopfill: trigger just above market -> fires immediately
+                trig = mid * 1.005
+                filled = False
+                try:
+                    self.venue.place_stop("SELL", q, trig, f"{base}-S")
+                    self._cov("stop_placed")
+                    self._watch_fill("drill", "drill_stop", f"{base}-S",
+                                     trig, "SELL")
+                    for _ in range(6):
+                        st = self.venue.order_status(f"{base}-S")
+                        if st and st.get("status") == "FILLED":
+                            filled = True
+                            break
+                        time.sleep(2)
+                except Exception as exc:  # noqa: BLE001
+                    steps["stop_error"] = str(exc)[:120]
+                steps["stop_filled"] = filled
+                if filled:
+                    self._cov("stop_filled")
+                    self._cov("drill_stopfill")
+                else:
+                    # never leave a drill position open: cancel + flatten
+                    try:
+                        self.venue.cancel(f"{base}-S")
+                    except Exception:  # noqa: BLE001
+                        pass
+                    self.venue.place_market("SELL", q, f"{base}-X")
+                    self._watch_fill("drill", "drill_exit", f"{base}-X",
+                                     mid, "SELL")
+                    steps["fallback_flatten"] = True
+                    ok = False
+            try:
+                steps["venue_flat_end"] = abs(self.venue.position()) <= 1e-9
+                ok = ok and steps["venue_flat_end"]
+            except Exception:  # noqa: BLE001
+                steps["venue_flat_end"] = None
+        except Exception as exc:  # noqa: BLE001
+            ok = False
+            steps["error"] = str(exc)[:200]
+        rec = {"ts": ts, "day": time.strftime("%Y-%m-%d", time.gmtime(ts)),
+               "kind": kind, "ok": ok, "steps": steps}
+        self.state.drills = (self.state.drills or [])[-50:] + [rec]
+        self._event("INFO" if ok else "WARN", "drill",
+                    f"{kind} {'ok' if ok else 'UNVERIFIED'} q={q}")
+        self._poll_fill_watch()
+        self._save_state()
+        return rec
 
     def _check_drift(self, equity: float) -> None:
         if getattr(self.venue, "log", None) is not None:

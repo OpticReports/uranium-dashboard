@@ -125,8 +125,10 @@ def pulse():
     now = time.time()
     red_24h = sum(1 for e in st.events
                   if e.get("level") == "RED" and now - e.get("ts", 0) < 86_400)
+    rv = _ramp_v4(st)["rows"]
     return {"ready": True, "dry_run": settings.dry_run,
             "halted": st.halted, "red_events_24h": red_24h,
+            "ramp_v4_met": f"{sum(r['met'] for r in rv.values())}/{len(rv)}",
             "last_target_age_s": round(now - LAST["target_ts"], 1)
             if LAST["target_ts"] else None,
             "legs": {n: {"in_position": l.qty != 0.0,
@@ -175,7 +177,10 @@ def status(x_exec_token: str | None = Header(default=None),
            "events": st.events[-50:],
            "last_target": LAST["target"],
            "last_target_age_s": round(time.time() - LAST["target_ts"], 1)
-           if LAST["target_ts"] else None}
+           if LAST["target_ts"] else None,
+           "coverage": getattr(st, "coverage", {}),
+           "drills": getattr(st, "drills", [])[-10:],
+           "ramp_v4": _ramp_v4(st)}
     try:
         out["equity"] = venue.equity()
         out["venue_position_btc"] = venue.position()
@@ -184,6 +189,39 @@ def status(x_exec_token: str | None = Header(default=None),
     if dry_log is not None:
         out["dry_run_intents"] = dry_log[-50:]
     return out
+
+
+RAMP_V4_REQUIRED = {"entry_long": 2, "entry_short": 2, "stop_placed": 2,
+                    "stop_filled": 1, "signal_exit": 2, "chase": 1,
+                    "post_only_cross": 1, "restart_with_position": 1,
+                    "config_change": 1, "drill_cycle": 3}
+
+
+def _ramp_v4(st) -> dict:
+    cov = getattr(st, "coverage", {}) or {}
+    n_fills = len(getattr(st, "fills", []) or [])
+    rows = {k: {"have": cov.get(k, 0), "need": v,
+                "met": cov.get(k, 0) >= v}
+            for k, v in RAMP_V4_REQUIRED.items()}
+    rows["slippage_sample"] = {"have": n_fills, "need": 10,
+                               "met": n_fills >= 10}
+    return {"spec": "RAMP_V4.md (frozen 2026-08-15)", "rows": rows,
+            "coverage_complete": all(r["met"] for r in rows.values()),
+            "note": "advance KELLY_M per spec only when coverage_complete "
+                    "AND slippage sane (edge-monitor slip CUSUM quiet)"}
+
+
+@app.post("/drill")
+def drill(kind: str = Query("cycle"),
+          x_exec_token: str | None = Header(default=None),
+          token: str | None = Query(default=None)):
+    """RAMP v4 drill (RAMP_V4.md): ONE min-size round trip through the real
+    order paths. Token-gated, budgeted, refuses unless the whole book is
+    flat. Never scheduled - a human calls this."""
+    _auth(x_exec_token, token)
+    if EXEC is None:
+        return {"ok": False, "refused": "executor not ready"}
+    return EXEC.drill(kind)
 
 
 @app.get("/test-alert")
