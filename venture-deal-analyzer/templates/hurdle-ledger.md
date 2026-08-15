@@ -1,10 +1,14 @@
-# Hurdle ledger — venture risk vs execution risk (DRAFT v0.9)
+# Hurdle ledger — venture risk vs execution risk (v1.0)
 
-STATUS: DRAFT pending counter-agent verification of the research brief
-(2026-08-09). Do not use for a shipped verdict until this header is
-replaced with the verification verdict. Origin: Casey's proposal to
-decompose deal risk into venture vs execution hurdles for more granular
-probability analysis.
+STATUS: VERIFIED — counter-agent verdict "ENCODE WITH CORRECTIONS"
+(2026-08-09), all corrections applied below. Confirmed exactly: BIO
+phase-transition rates, RAND pioneer plants, Merrow megaprojects,
+Flyvbjerg overrun table, KSS 2009, KNR-K 55%, Gompers survey, Korver
+architecture (and its lack of published calibration). Corrected: GAO
+maturity numbers, aleatory/epistemic framing, CB Insights versioning,
+Leadership IQ demoted, ARPA-E derivation labeled, Bernstein et al.
+counter-evidence added. Origin: Casey's proposal to decompose deal
+risk into venture vs execution hurdles.
 
 ## Definitions (from the literature, not invented)
 
@@ -24,9 +28,13 @@ probability analysis.
   (late/over-budget >> never); PARTIALLY RECOVERABLE at a cost
   (jockeys are replaceable); CORRELATED across hurdles via the
   organizational common cause.
-- Formal framing per verification (see verdict when appended): both
-  hurdle families are largely epistemic; the operative distinction is
-  CONTROLLABILITY and CORRELATION STRUCTURE, not aleatory-vs-epistemic.
+- Formal framing (verification-corrected): at single-deal level BOTH
+  families are mostly EPISTEMIC — reducible by experiments; that
+  reducibility is the whole thesis of staged venture investing
+  (Kerr-Nanda-Rhodes-Kropf). "Venture ≈ aleatory" holds only as a
+  portfolio-frequency abstraction. The operative distinction is
+  CONTROLLABILITY (who can move the probability) and CORRELATION
+  STRUCTURE (what fails together), not chance-vs-knowledge.
 
 ## The template industry
 
@@ -42,11 +50,11 @@ as a modeling assumption, never as a measured base rate.
 
 | Type | Hurdle class | Anchor | Source |
 |---|---|---|---|
-| V1 | Science/tech works at next scale | grade by TRL; pre-TRL4 ≈ ~50% per major step, TRL4-6 ≈ 30-60% (phase-transition ANALOGY) | BIO 2021; GAO TRL |
-| V2 | Market/demand materializes | ~35-42% of startup deaths = no market need; 55% overall VC failure | CB Insights; KNR-K 2014 |
+| V1 | Science/tech works at next scale | grade by TRL; pre-TRL4 ≈ ~50% per major step, TRL4-6 ≈ 30-60% (phase-transition ANALOGY). Maturity cost signal: immature-start programs average ~35% RDT&E cost growth vs ~5% mature (GAO-06-391/07-406SP — corrected from the brief's 56/7) | BIO 2021; GAO |
+| V2 | Market/demand materializes | no-market-need = 42% (2019 20-reason list) / 35% (2021 12-reason list — versions must not be mixed; self-reported, attribution-biased); 55% overall VC failure | CB Insights; KNR-K 2014 |
 | V3 | Regulatory / strategic-partner event | late formal gates ~90% (analogy); policy markets graded down | BIO 2021 |
 | E1 | FOAK plant / production ramp | expect ~2x cost, 50-75% of nameplate yr-1; 65% of megaprojects miss; overrun by project type (solar +1% … nuclear +120%) | RAND 1981; Merrow 2011; Flyvbjerg |
-| E2 | Key-talent assembly | 40-50% failure per critical external senior hire (18mo) | Heidrick; DDI 2021 |
+| E2 | Key-talent assembly | 40-50% failure per critical external senior hire (18mo) — Heidrick (20k searches) + DDI 2021; Leadership IQ excluded (all-hires stat, not executive) | Heidrick; DDI 2021 |
 | E3 | Ops scale-up + cash bridge | per-round survival (staging); protracted-development is the modal hardware death | Gompers 1995; hardware data |
 
 ## Structural rules
@@ -90,6 +98,22 @@ as a modeling assumption, never as a measured base rate.
 - Same weighted scores, opposite risk types — a distinction the W
   total cannot see and the EV tree only sees implicitly. The hurdle
   ledger makes it the headline.
+
+## Counter-evidence and caveats (verification-mandated)
+
+- Bernstein, Korteweg & Laws (JF 2017, AngelList field experiment):
+  early-stage INVESTORS respond to founding-team information over
+  traction — in tension with horse-over-jockey. Read jointly: team
+  information moves investor demand at seed; business line stability
+  (KSS) governs what the company becomes. Both belong in the model:
+  team drives E-correlation AND financing-hurdle probabilities.
+- The multiplication of staged risks assumes independence that the
+  β-factor citation itself undermines — this is exactly why rule 2
+  exists; never present Πp as the E-side estimate.
+- ARPA-E "~14% graduation" is fair arithmetic (200/1,415 with >$11B
+  follow-on) but the denominator includes academic projects and
+  follow-on funding ≠ market validation — a loose upper anchor only.
+- β range widened per IEC 61508 practice: 0.5–10%.
 
 ## Limits
 
