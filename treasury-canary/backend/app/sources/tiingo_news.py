@@ -75,8 +75,13 @@ def fetch_articles(tickers: list[str] | None, start: str,
         params["tickers"] = ",".join(tickers)
     try:
         r = httpx.get(_API, params=params, timeout=30.0)
+        if r.status_code == 403:
+            raise PermissionError("tiingo news 403 - key lacks the News "
+                                  "add-on (paid Power feature)")
         r.raise_for_status()
         raw = r.json()
+    except PermissionError:
+        raise
     except Exception as exc:  # noqa: BLE001
         raise RuntimeError(f"tiingo news failed: {_redact(str(exc))}") from exc
     out = []
@@ -132,6 +137,12 @@ def news_pulse(now: datetime | None = None) -> dict:
     if not _key():
         return {"available": False,
                 "note": "TIINGO_API_KEY unset on this service"}
+    until = _CACHE.get("unavailable_until", 0)
+    if time.time() < until:
+        return {"available": False,
+                "note": "Tiingo key lacks the News add-on (403; Power plan "
+                        "required). Rechecking every 6h - no errors, no "
+                        "retries in between."}
     hit = _CACHE.get("pulse")
     if hit and time.time() - hit[0] < _CACHE_TTL_S:
         return hit[1]
@@ -153,12 +164,19 @@ def news_pulse(now: datetime | None = None) -> dict:
     all_tickers = sorted({t for sp in THEMES.values() for t in sp["tickers"]})
     try:
         by_ticker = fetch_articles(all_tickers, start)
-    except Exception as exc:  # noqa: BLE001
-        by_ticker, themes["_ticker_error"] = [], {"error": _redact(str(exc))}
-    try:
         broad = fetch_articles(None, start, limit=1000)
+    except PermissionError as exc:
+        _CACHE["unavailable_until"] = time.time() + 6 * 3600
+        logger.info("news pulse: %s - backing off 6h", exc)
+        return {"available": False, "note": str(exc) + " - rechecking in 6h"}
     except Exception as exc:  # noqa: BLE001
-        broad, themes["_broad_error"] = [], {"error": _redact(str(exc))}
+        logger.warning("news pulse fetch failed: %s", _redact(str(exc)))
+        stale = _CACHE.get("pulse")
+        if stale:
+            out = dict(stale[1]); out["stale"] = True
+            return out
+        return {"available": True, "themes": {},
+                "note": f"fetch failed ({_redact(str(exc))[:80]}), no cache yet"}
     for name, spec in THEMES.items():
         if spec["tickers"]:
             want = set(spec["tickers"])

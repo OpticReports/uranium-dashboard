@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 _API = "https://api.tiingo.com/tiingo/news"
 _CHUNK = 50
 _BUDGET = {"day": None, "used": 0}
+_DISABLED_UNTIL = {"ts": 0.0}
 
 
 def _cap() -> int:
@@ -56,10 +57,13 @@ def _spend() -> bool:
 
 
 def run_news(session: Session, symbols: list[str] | None = None) -> int:
+    import time as _time
     key = os.environ.get("TIINGO_API_KEY")
     if not key:
         logger.info("news_tiingo: TIINGO_API_KEY unset - skipping")
         return 0
+    if _time.time() < _DISABLED_UNTIL["ts"]:
+        return 0            # known-403 backoff: stay quiet, no log spam
     symbols = symbols or [s.symbol for s in list_securities(session,
                                                            include_inactive=False)]
     start = (datetime.now(timezone.utc) - timedelta(days=7)).date().isoformat()
@@ -76,8 +80,9 @@ def run_news(session: Session, symbols: list[str] | None = None) -> int:
                                         "tickers": ",".join(t.lower() for t in chunk)},
                           timeout=30.0)
             if r.status_code == 403:
+                _DISABLED_UNTIL["ts"] = _time.time() + 6 * 3600
                 logger.warning("news_tiingo: 403 - key has no News add-on "
-                               "(paid Power feature); skipping until upgraded")
+                               "(paid Power feature); backing off 6h")
                 return inserted
             r.raise_for_status()
             arts = r.json()
