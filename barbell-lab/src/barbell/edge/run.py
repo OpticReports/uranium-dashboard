@@ -63,12 +63,26 @@ def run_nightly(con: sqlite3.Connection) -> str:
                 + (" ".join(bits) or "all ok"))
         lines.append(line)
         if sm.get("changed"):
+            news = ""
+            try:
+                # descriptive context only (canary news pulse; Tiingo lane) -
+                # helps the human triage, feeds NO decision
+                import httpx
+                pulse = httpx.get("https://treasury-canary.onrender.com"
+                                  "/news/pulse", timeout=10).json()
+                btc = (pulse.get("themes") or {}).get("btc") or {}
+                heads = [h["title"] for h in btc.get("latest", [])[:3]]
+                if heads:
+                    news = (f" | btc news 24h n={btc.get('n_24h')} "
+                            f"z={btc.get('velocity_z')}: " + " / ".join(heads))
+            except Exception:  # noqa: BLE001
+                pass
             con.execute("INSERT INTO alerts (ts_utc, kind, message, details) "
                         "VALUES (?,?,?,?)",
                         (datetime.now(timezone.utc).isoformat(), "edge_state",
                          f"{sid} -> {sm['state']} (trigger {sm['trigger']}); "
                          f"apply size_mult {sm['size_mult']} via the "
-                         "executor's own controls", json.dumps(sm)))
+                         f"executor's own controls{news}", json.dumps(sm)))
             con.commit()
     return " | ".join(lines)
 

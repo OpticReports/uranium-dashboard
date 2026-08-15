@@ -133,6 +133,8 @@ services:
       mountPath: /app/data
       sizeGB: 1
     envVars:
+      - key: TIINGO_API_KEY
+        sync: false            # Tiingo NEWS add-on (news pulse lane; absent = pulse reports unavailable, never crashes)
       - key: FRED_API_KEY
         sync: false            # <- enter your free FRED key on THIS service
       - key: FMP_API_KEY
