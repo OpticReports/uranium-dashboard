@@ -37,3 +37,6 @@ jobs:
     # Benchmark ETF bars for relative strength + the regime strip.
     enabled: true
     interval_minutes: 360
+  news:
+    enabled: true
+    interval_minutes: 120    # ~12 runs/day x 1 req/50 tickers - far under Tiingo limits

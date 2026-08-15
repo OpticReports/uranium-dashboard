@@ -26,7 +26,9 @@ logger = logging.getLogger(__name__)
 
 _API = "https://api.tiingo.com/tiingo/news"
 _CACHE: dict = {}
-_CACHE_TTL_S = 900
+_CACHE_TTL_S = 3600          # free/Power tiers are rate-limited: 1h refresh
+_DAILY_CAP = 100             # hard in-proc cap on Tiingo calls per UTC day
+_BUDGET = {"day": None, "used": 0}
 
 # Themes mapped to the products that already exist. Tickers are Tiingo news
 # ticker filters; kw are title/description keyword filters applied on top
@@ -48,6 +50,17 @@ def _redact(msg: str) -> str:
 
 def _key() -> str | None:
     return os.environ.get("TIINGO_API_KEY") or None
+
+
+def _spend() -> bool:
+    from datetime import date
+    today = date.today().isoformat()
+    if _BUDGET["day"] != today:
+        _BUDGET["day"], _BUDGET["used"] = today, 0
+    if _BUDGET["used"] >= _DAILY_CAP:
+        return False
+    _BUDGET["used"] += 1
+    return True
 
 
 def fetch_articles(tickers: list[str] | None, start: str,
@@ -124,14 +137,35 @@ def news_pulse(now: datetime | None = None) -> dict:
         return hit[1]
     now = now or datetime.now(timezone.utc)
     start = (now - timedelta(days=35)).date().isoformat()
-    themes = {}
+    themes: dict = {}
+    # RATE BUDGET (small Tiingo plan): exactly TWO API calls per refresh -
+    # one combined tickers call split locally by theme membership, one
+    # broad no-ticker call for the rates_fed keyword theme. Cached 1h and
+    # capped per day; at the cap we serve the stale cache rather than call.
+    if not _spend() or not _spend():
+        stale = _CACHE.get("pulse")
+        if stale:
+            out = dict(stale[1])
+            out["stale"] = True
+            return out
+        return {"available": True, "themes": {},
+                "note": "daily Tiingo budget exhausted, no cache yet"}
+    all_tickers = sorted({t for sp in THEMES.values() for t in sp["tickers"]})
+    try:
+        by_ticker = fetch_articles(all_tickers, start)
+    except Exception as exc:  # noqa: BLE001
+        by_ticker, themes["_ticker_error"] = [], {"error": _redact(str(exc))}
+    try:
+        broad = fetch_articles(None, start, limit=1000)
+    except Exception as exc:  # noqa: BLE001
+        broad, themes["_broad_error"] = [], {"error": _redact(str(exc))}
     for name, spec in THEMES.items():
-        try:
-            arts = fetch_articles(spec["tickers"] or None, start)
-            themes[name] = theme_pulse(arts, spec["kw"], now)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("news pulse %s failed: %s", name, _redact(str(exc)))
-            themes[name] = {"error": _redact(str(exc))}
+        if spec["tickers"]:
+            want = set(spec["tickers"])
+            arts = [a for a in by_ticker if want & set(a["tickers"])]
+        else:
+            arts = broad
+        themes[name] = theme_pulse(arts, spec["kw"], now)
     out = {"available": True, "asof": now.isoformat(), "themes": themes,
            "note": "DESCRIPTIVE context only - article velocity vs 30d "
                    "baseline; no backtested signal, feeds nothing downstream. "

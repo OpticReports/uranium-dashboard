@@ -39,6 +39,8 @@ services:
         value: fmp
       - key: FMP_API_KEY
         sync: false            # <- you enter this secret in the Render dashboard
+      - key: TIINGO_API_KEY
+        sync: false            # Tiingo news lane (rate-budgeted; needs the paid News add-on - free-tier keys get 403 and the job skips gracefully)
       # Login gate (protects your proprietary signals on a public URL).
       # Enter both in the Render dashboard when prompted.
       - key: DASHBOARD_USER

@@ -302,3 +302,16 @@ class TradeCall(SQLModel, table=True):
     exit_price: Optional[float] = None
     return_pct: Optional[float] = None             # fractional, direction-aware
     r_multiple: Optional[float] = None             # (exit-entry)/(entry-stop) for longs
+
+
+class NewsArticle(SQLModel, table=True):
+    """Tiingo news article (rate-budgeted ingestion; descriptive only)."""
+    __tablename__ = "news_article"
+
+    id: int = Field(primary_key=True)          # Tiingo article id
+    published: str | None = Field(default=None, index=True)
+    title: str | None = None
+    source: str | None = None
+    url: str | None = None
+    tickers: str | None = Field(default=None, index=True)   # comma-joined, lower
+    description: str | None = None
