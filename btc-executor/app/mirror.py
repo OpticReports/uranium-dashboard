@@ -121,7 +121,8 @@ class Executor:
         # step() and drill() must never interleave venue mutations: a drill
         # mid-step (or vice versa) would trip the drift check and could
         # entangle drill orders with leg management (RAMP v4)
-        self._venue_lock = threading.Lock()
+        self._venue_lock = threading.RLock()   # reentrant: halt() runs
+        # inside _step_locked's _check_halts AND from the /kill API thread
         self._migrate_ledger_granularity()
         if any(l.qty != 0.0 for l in self.state.legs.values()):
             self._cov("restart_with_position")
@@ -414,6 +415,13 @@ class Executor:
             self.halt(*breach)
 
     def halt(self, reason: str, msg: str = "") -> None:
+        # /kill arrives on the API thread: serialize behind any in-flight
+        # drill/step (referee: an unserialized kill mid-drill left a naked
+        # short on a HALTED book, undetected until manual resume)
+        with self._venue_lock:
+            self._halt_locked(reason, msg)
+
+    def _halt_locked(self, reason: str, msg: str = "") -> None:
         self._cov("halt")
         """Cancel everything, flatten everything, block until resume()."""
         self.state.halted = reason
@@ -436,6 +444,10 @@ class Executor:
         self._save_state()
 
     def resume(self) -> None:
+        with self._venue_lock:
+            self._resume_locked()
+
+    def _resume_locked(self) -> None:
         self._cov("resume")
         self._event("INFO", "resume", f"cleared {self.state.halted}")
         self.state.halted = None
@@ -571,6 +583,10 @@ class Executor:
             else:
                 self.venue.place_market(side, qty, cloid)
                 led.qty = _side_sign(pend["side"]) * qty
+                # trend's organic entry IS the market path - count it here
+                # (referee 2026-08-15: _enter_from_fill never runs for trend)
+                self._cov("entry_long" if pend["side"] == "L"
+                          else "entry_short")
             self._watch_fill(leg, "entry", cloid, limit_px, side)
             led.entry_cloid, led.entry_side = cloid, pend["side"]
             led.entry_qty, led.signal_ts = qty, pend["signal_ts"]
@@ -837,7 +853,10 @@ class Executor:
         if q <= 0:
             return {"ok": False, "refused": "no tradable minimum size"}
         ts = int(time.time())
-        base = f"D-{ts}"
+        # ns-unique cloid base: second-resolution collided when two drills ran
+        # inside one second (dup client order ids — Coinbase rejects them, and
+        # the DryRun book silently overwrote, orphaning the repair order)
+        base = f"D-{time.time_ns()}"
         steps: dict = {"qty": q}
         ok = True
         try:
@@ -855,9 +874,16 @@ class Executor:
                 st2 = self.venue.order_status(f"{base}-S")
                 steps["stop_cancelled"] = bool(
                     st2 and st2.get("status") != "FILLED")
-                self.venue.place_market("SELL", q, f"{base}-X")
-                self._watch_fill("drill", "drill_exit", f"{base}-X", mid, "SELL")
-                steps["exit"] = "sent"
+                # exit ONLY if the stop did not fill in the cancel window -
+                # unconditional exit after a filled stop sold us short
+                # (referee 2026-08-15, executed repro)
+                if steps["stop_cancelled"]:
+                    self.venue.place_market("SELL", q, f"{base}-X")
+                    self._watch_fill("drill", "drill_exit", f"{base}-X",
+                                     mid, "SELL")
+                    steps["exit"] = "sent"
+                else:
+                    steps["exit"] = "skipped_stop_filled"
                 ok = steps["stop_open"] and steps["stop_cancelled"]
                 if ok:
                     self._cov("drill_cycle")
@@ -892,19 +918,37 @@ class Executor:
                                      mid, "SELL")
                     steps["fallback_flatten"] = True
                     ok = False
-            try:
-                steps["venue_flat_end"] = abs(self.venue.position()) <= 1e-9
-                ok = ok and steps["venue_flat_end"]
-            except Exception:  # noqa: BLE001
-                steps["venue_flat_end"] = None
         except Exception as exc:  # noqa: BLE001
             ok = False
             steps["error"] = str(exc)[:200]
+        # AUTO-REPAIR (referee 2026-08-15, mandatory): a drill must NEVER
+        # leave exposure. Fill-beats-cancel races and any exception path land
+        # here; residual position is flattened with a reducing market order,
+        # recorded, and the drill escalates to RED (which pages).
+        try:
+            pos_end = self.venue.position()
+            if abs(pos_end) > 1e-9:
+                rq = 0.0
+                try:
+                    rq = self.venue.quantize(abs(pos_end))
+                except Exception:  # noqa: BLE001
+                    pass
+                rq = rq or abs(pos_end)
+                self.venue.place_market(_close_side(pos_end), rq, f"{base}-R")
+                steps["auto_repair"] = pos_end
+                ok = False
+                pos_end = self.venue.position()
+            steps["venue_flat_end"] = abs(pos_end) <= 1e-9
+            ok = ok and bool(steps["venue_flat_end"])
+        except Exception as exc:  # noqa: BLE001
+            steps["venue_flat_end"] = None
+            steps["repair_error"] = str(exc)[:200]
+            ok = False
         rec = {"ts": ts, "day": time.strftime("%Y-%m-%d", time.gmtime(ts)),
                "kind": kind, "ok": ok, "steps": steps}
-        self.state.drills = (self.state.drills or [])[-50:] + [rec]
-        self._event("INFO" if ok else "WARN", "drill",
-                    f"{kind} {'ok' if ok else 'UNVERIFIED'} q={q}")
+        self.state.drills = (self.state.drills or [])[-49:] + [rec]
+        self._event("INFO" if ok else "RED", "drill",
+                    f"{kind} {'ok' if ok else 'UNVERIFIED - check venue'} q={q}")
         self._poll_fill_watch()
         self._save_state()
         return rec

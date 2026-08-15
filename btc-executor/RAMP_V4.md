@@ -49,6 +49,17 @@ Token-gated `POST /drill?kind=cycle|stopfill` — one deliberate min-size
   (fires immediately) → stop FILL verified → flat. If the venue rejects or
   the fill doesn't confirm within the poll budget: cancel + market flatten
   fallback, drill marked `unverified`, never left open.
+  LIVE-SEMANTICS CAVEAT (referee 2026-08-15): Coinbase validates stop
+  price vs last trade and may REJECT an above-market STOP_DOWN sell — the
+  first live stopfill drill is therefore also a venue experiment; if
+  rejected, the fallback flattens safely and stopfill gets redesigned
+  (below-market trigger + longer poll budget) before the stop_filled row
+  relies on it.
+- AUTO-REPAIR tail (all kinds, all exception paths): residual venue
+  position after a drill is flattened immediately with a reducing market
+  order, recorded as `auto_repair`, and the drill event escalates to RED
+  (pages Telegram). Trend organic entries (market path) count toward entry
+  coverage; pullback entries prove the limit/post-only path.
 
 Hard bounds (all enforced in code, not convention):
 - size is ALWAYS exactly one venue contract; no parameter can raise it

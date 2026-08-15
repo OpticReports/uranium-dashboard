@@ -194,7 +194,8 @@ def status(x_exec_token: str | None = Header(default=None),
 RAMP_V4_REQUIRED = {"entry_long": 2, "entry_short": 2, "stop_placed": 2,
                     "stop_filled": 1, "signal_exit": 2, "chase": 1,
                     "post_only_cross": 1, "restart_with_position": 1,
-                    "config_change": 1, "drill_cycle": 3}
+                    "config_change": 1, "drill_cycle": 3,
+                    "halt": 1, "resume": 1}
 
 
 def _ramp_v4(st) -> dict:

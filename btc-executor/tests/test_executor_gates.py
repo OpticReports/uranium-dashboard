@@ -1143,3 +1143,101 @@ def test_gate_spec_pins_ramp_v4():
                 "signal_exit", "chase", "post_only_cross",
                 "restart_with_position", "config_change", "drill_cycle"):
         assert key in RAMP_V4_REQUIRED and key in spec
+
+
+# --- referee-mandated drill-safety gates (2026-08-15) ----------------------
+def test_gate_drill_fill_beats_cancel_auto_repairs(tmp_path):
+    """Stop fills in the cancel window -> exit must be SKIPPED and any
+    residue auto-repaired; drill reports UNVERIFIED, venue ends flat."""
+    ex, venue = _drill_exec(tmp_path)
+    real_cancel = venue.cancel
+    def racing_cancel(cloid):
+        if cloid.endswith("-S") and venue.orders.get(cloid, {}).get("status") == "OPEN":
+            venue.orders[cloid]["status"] = "FILLED"   # fill beats the cancel
+            return
+        real_cancel(cloid)
+    venue.cancel = racing_cancel
+    rec = ex.drill("cycle")
+    assert rec["ok"] is False
+    assert rec["steps"]["stop_cancelled"] is False
+    assert rec["steps"]["exit"] == "skipped_stop_filled"
+    assert rec["steps"]["venue_flat_end"] is True
+    assert venue.position() == 0.0
+
+
+def test_gate_drill_exception_path_auto_repairs(tmp_path):
+    """place_stop raising after the entry (the likeliest real-Coinbase
+    outcome for an above-market STOP_DOWN) must never leave the entry
+    position open — auto-repair flattens and the drill pages RED."""
+    ex, venue = _drill_exec(tmp_path)
+    ex.cfg.drill_cooldown_s = 0
+    def raising_stop(side, qty, trigger_px, cloid):
+        raise RuntimeError("PREVIEW_STOP_PRICE_ABOVE_LAST_TRADE_PRICE")
+    venue.place_stop = raising_stop
+    for kind in ("cycle", "stopfill"):
+        rec = ex.drill(kind)
+        assert rec["ok"] is False, kind
+        assert venue.position() == 0.0, kind
+        assert rec["steps"].get("auto_repair") is not None or \
+            rec["steps"].get("fallback_flatten") or \
+            rec["steps"]["venue_flat_end"] is True
+    # unverified drills page: last drill events are RED
+    reds = [e for e in ex.state.events if e["kind"] == "drill"]
+    assert reds and all(e["level"] == "RED" for e in reds)
+
+
+def test_gate_kill_serializes_behind_drill(tmp_path):
+    """/kill (halt) must take the venue lock: it may not interleave with an
+    in-flight drill."""
+    import threading as th
+    ex, venue = _drill_exec(tmp_path)
+    started, order = th.Event(), []
+    real_status = venue.order_status
+    def slow_status(cloid):
+        started.set()
+        time.sleep(0.3)
+        return real_status(cloid)
+    venue.order_status = slow_status
+    def run_drill():
+        order.append(("drill", ex.drill("cycle")))
+    t = th.Thread(target=run_drill)
+    t.start()
+    started.wait(5)
+    ex.halt("KILL", "operator")          # must BLOCK until the drill exits
+    order.append(("halt_done", None))
+    t.join(10)
+    assert order[0][0] == "drill"        # drill completed before halt ran
+    assert ex.state.halted == "KILL"
+    assert venue.position() == 0.0
+
+
+def test_gate_ramp_v4_requires_halt_resume():
+    """Referee: coverage_complete was reachable without ever exercising the
+    kill switch. Spec's halt+resume row must be enforced in code."""
+    from app.main import RAMP_V4_REQUIRED, _ramp_v4
+    from app.mirror import ExecState
+    st = ExecState()
+    st.coverage = {k: v for k, v in RAMP_V4_REQUIRED.items()
+                   if k not in ("halt", "resume")}
+    st.fills = [{"slip_bps": 1.0}] * 10
+    assert _ramp_v4(st)["coverage_complete"] is False
+    st.coverage.update({"halt": 1, "resume": 1})
+    assert _ramp_v4(st)["coverage_complete"] is True
+
+
+def test_gate_spec_rows_covered_by_code():
+    """Both directions: every counter-named row in the spec table exists in
+    RAMP_V4_REQUIRED (the direction that was broken), and vice versa."""
+    import re
+    from app.main import RAMP_V4_REQUIRED
+    spec = open(os.path.join(os.path.dirname(__file__), "..", "RAMP_V4.md")).read()
+    table = spec[spec.index("| event class"):spec.index("Honesty note")]
+    spec_rows = set(re.findall(r"^\| (\w+)", table, re.M)) - {"event"}
+    aliases = {"halt": {"halt", "resume"}, "drill_cycle": {"drill_cycle"},
+               "signal_exit": {"signal_exit"}, "slippage": set()}
+    covered = set()
+    for row in spec_rows:
+        covered |= aliases.get(row, {row})
+    covered.discard("slippage")
+    assert covered <= set(RAMP_V4_REQUIRED), covered - set(RAMP_V4_REQUIRED)
+    assert set(RAMP_V4_REQUIRED) <= covered, set(RAMP_V4_REQUIRED) - covered
