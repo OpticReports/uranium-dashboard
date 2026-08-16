@@ -19,7 +19,7 @@ inventory-only — **no changes to outside systems until Casey approves this aud
 | btc-paper-engine | BTC pullback paper trader, 3 virtual books, replay-verified | Render, /btc |
 | btc-executor | S5 live executor (Coinbase perps), mirrors paper engine | Render; DRY_RUN dashboard-owned |
 | ibkr-executor | IBKR executor (El Niño options ladder), OFFLINE→paper→live | Render (standard plan) |
-| edge-monitor | Edge-decay/risk-regime stats library (PSR/CUSUM/BOCD/DD) | Library; adapters not yet built |
+| edge-monitor | Edge-decay/risk-regime referee (PSR/CUSUM/BOCD/DD) | Relocated into `barbell-lab/src/barbell/edge/` (2026-08-14) and wired into the nightly job + `/api/edge`; `edge-monitor/` dir is now docs only |
 | composer/ | Composer symphony workspace (REST API, guarded capital CLI) | Local scripts; MCP endpoint dead since 2026-07-05 |
 | venture-deal-analyzer | Deal factpacks/memos/verification + rubrics + EV models | Repo-native (docs + models) |
 | elnino-lab, ewm | Research studies (El Niño thesis; exit-window monitor spec) | Feed ibkr nino ladder / canary ewm module |
@@ -44,7 +44,7 @@ Legend: ✅ has it · 🟡 partial · ❌ missing. Numbers reference the 8-point
 ### 3.1 genomics-alpha-tracker — **REUSE; closest thing we have to PAT**
 - **Owner:** Casey · **Inputs:** FMP/Polygon/Tiingo/yfinance prices+fundamentals, Tiingo news, insiders, short interest, social · **Outputs:** scores, flags, paper calls + postmortems, chat answers · **Data:** SQLite on Render disk + cache
 - **Tools:** scoring engine (`scoring/engine.py`, YAML weights), call rules, chat agent (`chat/agent.py`, Anthropic/OpenRouter)
-- **Evals:** `evals/replay.py`, `scripts/backtest_calls.py`/`backtest_signals.py`, ~20 gate-test files, **`scripts/tune_proposal.py` — IC gate + Wilson promotion gate, "may only open a PR on exit 0"** — this is a real teach loop (⑧✅ for scoring weights)
+- **Evals:** `scripts/backtest_calls.py`/`backtest_signals.py`, 16 gate-test files (143 test fns), **`evals/replay.py` — IC gate + Wilson promotion gate, "The tuner may only open a PR on exit 0" (surfaced via `scripts/tune_proposal.py`)** — this is a real teach loop (⑧✅ for scoring weights)
 - **Rubric:** ①🟡 (searches only its own DB) ②✅ ③🟡 (logs, no persisted agent traces) ④✅ (`knowledge/` dir: clinical base rates, FDA catalyst stats — codified-knowledge moat in miniature) ⑤🟡 (tuning gates yes; chat never learns) ⑥✅ (gates) ⑦🟡 (calls/postmortems persist; chat answers vanish) ⑧🟡
 - **Failure modes:** provider rate limits (mitigated by FMP-on-cloud choice); chat quality unmeasured — **no benchmark exists for the chat analyst**
 - **Verdict:** the template. Its tune-gate + knowledge-dir + postmortem trio is the pattern to replicate everywhere.
@@ -68,12 +68,14 @@ Legend: ✅ has it · 🟡 partial · ❌ missing. Numbers reference the 8-point
 - **Rubric relevance:** ⑥✅ exemplary. Research agents get **read-only** engine state (the EXEC_TOKEN status feed) and nothing else. Add a standing **permission-leak test**: any research/chat process attempting executor credentials or order endpoints must fail closed.
 - **Verdict:** reuse untouched. The lesson flows FROM these systems TO the agent layer, not the reverse.
 
-### 3.5 edge-monitor — **BUILD-OUT (finish adapters); it is our referee organ**
-- Stats library complete + 13 honesty-gate tests (null calibration, power, BOCD blindness, no-lookahead); `REFEREE.md` = counter-agent verdict pattern. Missing: `db.py`, coinbase/composer/shadow adapters, state machine wiring (signatures frozen in BLUEPRINT §7 — plan-locked, PAT A5/A6 ready).
-- **Verdict:** highest-leverage unfinished build. It is the "agents reading the traces and checking every calculation" ([05:55]) role for our live strategies.
+### 3.5 edge-monitor — **LARGELY BUILT (relocated); finish the last two adapters**
+- Correction from counter-agent review: as of commit `a62588c` (2026-08-14) the pipeline lives at `barbell-lab/src/barbell/edge/` — `db.py`, `adapter_coinbase.py` (EXEC_TOKEN read of executor `/status`), `statemachine.py`, `layers.py`, `run.py` (`run_nightly` called from the barbell nightly job; `/api/edge` endpoint) are BUILT and deployed with barbell-lab. `edge-monitor/` retains only the docs (`REFEREE.md` counter-agent verdict pattern, BLUEPRINT §7 frozen signatures — a plan-locked build, PAT A5/A6 in practice).
+- **Evals:** 14 relocated stats gates (`test_edge_stats.py`) + 13 pipeline gates (`test_edge_pipeline.py`): null calibration, power on injected decay, BOCD blindness, no-lookahead.
+- **Still missing:** composer + shadow adapters; operational validation over real executor data (first daily-lines in production).
+- **Verdict:** it is the "agents reading the traces and checking every calculation" ([05:55]) role for our live strategies — nearly delivered; close the gap via R4.
 
 ### 3.6 composer/ — **REUSE with guard intact**
-- Guarded capital CLI (explicit human request + dry-run preview only), POLICY/RUNBOOK docs, regime research. MCP endpoint dead → REST. Rubric: ⑥✅ (guards in code) ⑦🟡 ⑧❌.
+- Guarded capital CLI (explicit human request + dry-run preview only), POLICY/RUNBOOK docs, regime research. MCP endpoint dead as of 2026-07-05 → REST. Rubric: ⑥✅ (guards in code) ⑦🟡 ⑧❌.
 - **Verdict:** reuse; fold its account/rebalance digests into the same write-back store.
 
 ### 3.7 venture-deal-analyzer — **REUSE; our teach-loop prototype for research**
@@ -108,18 +110,26 @@ Priority order; all confined to existing infra per Casey's steer. No new externa
 | R1 | Stand up the **Optic series store** (one DB, `series`+`provenance`); first writers: canary composite history, barbell nightly results, btc book equity | % of study outputs written back (target: 100% of new studies); one cross-service query demo (e.g. canary severity vs btc book DD) | agent-infra builds; Casey approves schema |
 | R2 | **Benchmark the three chat analysts** (genomics, canary Telegram, barbell): 10 frozen Q/A cases each from real usage, scored vs Casey's answer, rerun ×3 for determinism | accuracy vs human benchmark; determinism on rerun; latency; cost/run | agent-infra drafts cases; Casey grades gold answers |
 | R3 | **Permission-leak test suite**: research/chat processes must fail closed on executor credentials, order endpoints, composer capital ops | permission-leak tests: 0 leaks, run in CI | agent-infra |
-| R4 | **Finish edge-monitor adapters** (coinbase→executor_state first; signatures frozen) so live S5 gets automated referee checks | its own 13 gates + first daily-line over real executor data | agent-infra; Casey redeploys barbell/edge service |
+| R4 | **Close out the edge referee**: coinbase adapter already built+wired (2026-08-14); remaining = composer + shadow adapters and first daily-lines validated over real executor data | 14 stats + 13 pipeline gates green + first production daily-line matches hand-checked numbers | agent-infra; Casey redeploys barbell-lab |
 | R5 | **Generalize the teach loop**: template = miss → executable regression case → fix context/harness → full suite green → PR. Apply first to venture-deal-analyzer and canary SPEC_AMENDMENTS backlog | # misses converted to regression cases; suite stays green | agent-infra; Casey supplies miss list |
 | R6 | **Quarantine root uranium dashboards** (ARCHIVED banner + stop citing) | zero references to 2024-05-04 numbers in future memos | agent-infra (banner); Casey (decision to rebuild later) |
 | R7 | **Shared study-runner** extracted from barbell fixtures/PROVENANCE pattern (cached inputs, hashed intermediates, forced final sensibility pass per A10) | rerun of an existing study is byte-identical & near-instant on 2nd run | agent-infra |
 
-Deferred by Casey's instruction: research.optic agent/sub-agent build (OPTIC_AGENT_ARCHITECTURE.md, BENCHMARK_SUITE.md, IMPLEMENTATION_PLAN.md, AGENT_OPS_RUNBOOK.md) — R1–R3 are prerequisites for it anyway; outside-agent token programs.
+Deferred by Casey's instruction: research.optic agent/sub-agent build — planned doc names, not yet written: OPTIC_AGENT_ARCHITECTURE.md, BENCHMARK_SUITE.md, IMPLEMENTATION_PLAN.md, AGENT_OPS_RUNBOOK.md — R1–R3 are prerequisites for it anyway; outside-agent token programs.
 
 ---
 
 ## Counter-agent verdict (mandatory per CLAUDE.md)
 
-- Reviewer: adversarial counter-agent, independent pass, 2026-08-16
-- Scope: citation spot-checks vs transcript/frames; repo-claim spot-checks vs files;
-  rubric-score challenges
-- Verdict: **PENDING — filled after review runs; do not act on this audit until PASS**
+- Reviewer: adversarial counter-agent, independent subagent pass, 2026-08-16
+- Scope: all transcript citations; 3 frames re-read; 10+ repo claims verified with
+  file reads/greps; rubric-score challenges
+- Verdict: **PASS-WITH-CORRECTIONS — all corrections applied in this revision.**
+  HIGH findings fixed: edge-monitor status was stale (pipeline was relocated into
+  `barbell-lab/src/barbell/edge/` and largely built on 2026-08-14; §3.5, inventory,
+  and R4 rewritten). MED: teach-loop gates live in genomics `evals/replay.py`, not
+  `tune_proposal.py` alone. LOW: genomics test-file count 16 (not ~20); edge gate
+  counts 14+13 (not 13); composer MCP "dead as of 2026-07-05"; deferred docs marked
+  as planned, not existing. Verified-correct list retained in review log: render.yaml
+  incident notes, root-dashboard staleness (2024-05-04), barbell fixtures/PROVENANCE,
+  rubric-review-v1 template, canary studies/tests, executor staging gates.
