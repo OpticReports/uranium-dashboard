@@ -180,6 +180,10 @@ def status(x_exec_token: str | None = Header(default=None),
            if LAST["target_ts"] else None,
            "coverage": getattr(st, "coverage", {}),
            "drills": getattr(st, "drills", [])[-10:],
+           "auto_drill": {"enabled": settings.auto_drill,
+                          "spacing_s": settings.auto_drill_spacing_s,
+                          "off": getattr(st, "auto_drill_off", None),
+                          "next_needed": EXEC._needed_auto_drill()},
            "ramp_v4": _ramp_v4(st)}
     try:
         out["equity"] = venue.equity()

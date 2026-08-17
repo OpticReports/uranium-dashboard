@@ -266,6 +266,13 @@ services:
         sync: false
       - key: STATE_PATH
         value: /app/data/executor_state.json
+      - key: AUTO_DRILL
+        # RAMP v4 auto-drill (RAMP_V4.md amendment 2026-08-17): executor runs
+        # its own min-size drills in flat windows until drill coverage is met.
+        # sync:false like every trading-behavior var - a blueprint literal
+        # could silently re-arm self-trading drills after Casey turns them
+        # off. Set "true" in the dashboard to arm; code default is off.
+        sync: false
       - key: LOG_LEVEL
         value: INFO
       # Telegram alerts (halts/REDs always; live trades when DRY_RUN=false).

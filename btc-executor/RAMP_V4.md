@@ -68,8 +68,27 @@ Hard bounds (all enforced in code, not convention):
 - budget: `DRILL_MAX_PER_DAY` (default 6) + 5-minute cooldown
 - every drill order carries a `D-` cloid prefix; fills recorded with
   leg="drill" — included in slippage stats, EXCLUDED from all P&L
-- endpoint-only: no scheduler ever calls it; Casey triggers with the token
+- triggered by the token-gated endpoint, or by AUTO-DRILL (below)
 - expected cost ≈ spread + taker fees ≈ $1–2 per drill
+
+## AUTO-DRILL (amendment 2026-08-17, Casey: zero-touch drill QA)
+
+Supersedes the original "endpoint-only, no scheduler" rule. Flat windows
+between S4 trades are short (1–5 days), unpredictable, and were being
+missed — so the executor now runs its own drills inside the step loop when
+ALL of: `AUTO_DRILL=true` (Render env, sync:false, default off), LIVE mode
+(dry-run drills would fake live coverage), engine feed healthy, book+venue
+flat (the same refusal preconditions), drill coverage rows still unmet, and
+≥ `AUTO_DRILL_SPACING_S` (default 1h) since the last drill. Order: 3
+cycles, then stopfill (skipped if an organic stop fill already covered the
+row). Every manual-drill hard bound applies unchanged — size, budget,
+cooldown, auto-repair tail, RED paging.
+
+Circuit breaker: ONE failed auto drill sets `auto_drill_off` (persisted,
+shown in /status.auto_drill) and pages — it never retries into a venue that
+just failed. Manual `/drill` remains for the supervised re-run. The
+halt+resume coverage pair stays a HUMAN test by design: it proves the
+operator's kill switch, so automating it would prove nothing.
 
 ## Rung advancement (after coverage complete)
 

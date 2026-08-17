@@ -91,6 +91,10 @@ class ExecState:
     # (never by hand) + the drill audit trail. See RAMP_V4.md.
     coverage: dict = field(default_factory=dict)
     drills: list = field(default_factory=list)
+    # auto-drill circuit breaker: reason string once ANY auto drill fails;
+    # no further auto drills until a human clears it (manual /drill still
+    # works). Never set by refusals - only by a drill that ran and failed.
+    auto_drill_off: str | None = None
 
 
 def _side_sign(side: str) -> float:
@@ -171,6 +175,7 @@ class Executor:
             st.last_config = raw.get("last_config")
             st.coverage = raw.get("coverage", {})
             st.drills = raw.get("drills", [])[-50:]
+            st.auto_drill_off = raw.get("auto_drill_off")
             return st
         except Exception:  # noqa: BLE001
             return ExecState()
@@ -187,7 +192,8 @@ class Executor:
              "last_dry_run": getattr(self.state, "last_dry_run", None),
              "last_config": getattr(self.state, "last_config", None),
              "coverage": getattr(self.state, "coverage", {}),
-             "drills": getattr(self.state, "drills", [])[-50:]}
+             "drills": getattr(self.state, "drills", [])[-50:],
+             "auto_drill_off": getattr(self.state, "auto_drill_off", None)}
         tmp = self.state_path + ".tmp"
         json.dump(d, open(tmp, "w"))
         os.replace(tmp, self.state_path)
@@ -523,6 +529,7 @@ class Executor:
         self._report_post_only_crosses()
         self._poll_fill_watch()
         self._check_drift(equity)
+        self._maybe_auto_drill(entries_ok)
         self._save_state()
 
     # ---------- per-leg reconciliation ----------
@@ -952,6 +959,57 @@ class Executor:
         self._poll_fill_watch()
         self._save_state()
         return rec
+
+    def _needed_auto_drill(self) -> str | None:
+        """Next drill kind coverage still needs, cycles before stopfill.
+        stop_filled can also be satisfied organically - then no stopfill
+        drill ever runs."""
+        cov = getattr(self.state, "coverage", {}) or {}
+        if cov.get("drill_cycle", 0) < 3:
+            return "cycle"
+        if cov.get("stop_filled", 0) < 1:
+            return "stopfill"
+        return None
+
+    def _maybe_auto_drill(self, entries_ok: bool) -> None:
+        """RAMP_V4.md amendment 2026-08-17 (Casey: zero-touch drill QA):
+        in a flat window the executor runs its OWN drills - one per spacing
+        interval - until the drill coverage rows are met. Runs inside the
+        step lock; every manual-drill hard bound still applies via
+        _drill_locked (size, flat-book refusals, daily budget, cooldown,
+        auto-repair tail). LIVE only: dry-run drills would mark live
+        coverage rows met with simulated fills. One failed auto drill trips
+        auto_drill_off (persisted) - it never retries into a venue that
+        just failed; manual /drill remains for the re-run."""
+        if not getattr(self.cfg, "auto_drill", False) \
+                or getattr(self.cfg, "dry_run", True) \
+                or not entries_ok \
+                or getattr(self.state, "auto_drill_off", None):
+            return
+        kind = self._needed_auto_drill()
+        if kind is None:
+            return
+        last = self.state.drills[-1]["ts"] if self.state.drills else 0
+        if time.time() - last < getattr(self.cfg, "auto_drill_spacing_s", 3600):
+            return
+        if self._drill_refusal():
+            return              # not flat / budget / cooldown: quietly wait
+        rec = self._drill_locked(kind)
+        if rec.get("refused"):
+            return
+        from .alerts import send
+        if rec["ok"]:
+            cov = self.state.coverage
+            send(f"✅ auto-drill {kind} ok "
+                 f"(cycle {cov.get('drill_cycle', 0)}/3, "
+                 f"stop_filled {cov.get('stop_filled', 0)}/1)"
+                 + ("" if self._needed_auto_drill()
+                    else " — drill coverage COMPLETE"))
+        else:
+            self.state.auto_drill_off = f"{kind} failed at {rec['day']}"
+            send(f"🚨 auto-drill {kind} FAILED - auto-drill disabled until "
+                 "reviewed (book verified flat by auto-repair; forward the "
+                 "drill record to Claude)")
 
     def _check_drift(self, equity: float) -> None:
         if getattr(self.venue, "log", None) is not None:

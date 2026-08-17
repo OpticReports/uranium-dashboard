@@ -1241,3 +1241,102 @@ def test_gate_spec_rows_covered_by_code():
     covered.discard("slippage")
     assert covered <= set(RAMP_V4_REQUIRED), covered - set(RAMP_V4_REQUIRED)
     assert set(RAMP_V4_REQUIRED) <= covered, set(RAMP_V4_REQUIRED) - covered
+
+
+# ---------------------------------------------------------------------------
+# AUTO-DRILL (RAMP_V4.md amendment 2026-08-17): executor self-runs drills
+def _auto_exec(tmp_path, monkeypatch):
+    """Live-mode executor over a DryRunVenue with auto-drill armed and all
+    pacing zeroed; captures Telegram sends."""
+    ex, venue = _drill_exec(tmp_path)
+    ex.cfg.auto_drill = True
+    ex.cfg.dry_run = False
+    ex.cfg.auto_drill_spacing_s = 0
+    ex.cfg.drill_cooldown_s = 0
+    sent = []
+    from app import alerts
+    monkeypatch.setattr(alerts, "send", lambda m: sent.append(m))
+    return ex, venue, sent
+
+
+def test_gate_auto_drill_runs_cycles_in_flat_window(tmp_path, monkeypatch):
+    ex, venue, sent = _auto_exec(tmp_path, monkeypatch)
+    for _ in range(3):
+        ex.step(target())
+    assert ex.state.coverage.get("drill_cycle") == 3
+    assert all(d["kind"] == "cycle" and d["ok"] for d in ex.state.drills)
+    assert venue.position() == 0.0
+    assert ex.state.auto_drill_off is None
+    assert sum("auto-drill cycle ok" in m for m in sent) == 3
+    # next need is the stopfill row, cycles never over-run
+    assert ex._needed_auto_drill() == "stopfill"
+
+
+def test_gate_auto_drill_ordering_and_organic_satisfaction(tmp_path):
+    ex, _ = _drill_exec(tmp_path)
+    assert ex._needed_auto_drill() == "cycle"
+    ex.state.coverage = {"drill_cycle": 3}
+    assert ex._needed_auto_drill() == "stopfill"
+    # an ORGANIC stop fill satisfies the row: no stopfill drill ever runs
+    ex.state.coverage = {"drill_cycle": 3, "stop_filled": 1}
+    assert ex._needed_auto_drill() is None
+
+
+def test_gate_auto_drill_respects_spacing(tmp_path, monkeypatch):
+    ex, venue, sent = _auto_exec(tmp_path, monkeypatch)
+    ex.cfg.auto_drill_spacing_s = 3600
+    ex.step(target())
+    ex.step(target())
+    assert len(ex.state.drills) == 1
+
+
+def test_gate_auto_drill_gated_off_dry_run_stale_and_flag(tmp_path, monkeypatch):
+    """No auto drill when: disarmed, dry-run, degraded feed, or breaker set.
+    Coverage integrity: dry-run fills must never mark live rows met."""
+    ex, venue, sent = _auto_exec(tmp_path, monkeypatch)
+    ex.cfg.auto_drill = False
+    ex.step(target())
+    ex.cfg.auto_drill = True
+    ex.cfg.dry_run = True
+    ex.step(target())
+    ex.cfg.dry_run = False
+    ex.step(target(degraded=True))
+    ex.state.auto_drill_off = "stopfill failed at 2026-08-17"
+    ex.step(target())
+    assert ex.state.drills == []
+
+
+def test_gate_auto_drill_waits_for_flat_book(tmp_path, monkeypatch):
+    ex, venue, sent = _auto_exec(tmp_path, monkeypatch)
+    ex.state.legs["trend"].qty = -0.01
+    ex.step(target(trend={"pending": None, "position": {
+        "side": "S", "entry_ts": NOW, "entry_price": 60_000.0,
+        "qty": 0.01, "stop_price": 61_000.0}}))
+    assert ex.state.drills == []          # refusal, silent - no breaker trip
+    assert ex.state.auto_drill_off is None
+
+
+def test_gate_auto_drill_breaker_trips_on_failure(tmp_path, monkeypatch):
+    """One failed auto drill (venue rejects the stop) must auto-repair,
+    disable auto-drill persistently, and page - never retry next poll."""
+    ex, venue, sent = _auto_exec(tmp_path, monkeypatch)
+    def raising_stop(side, qty, trigger_px, cloid):
+        raise RuntimeError("PREVIEW_STOP_PRICE_ABOVE_LAST_TRADE_PRICE")
+    venue.place_stop = raising_stop
+    ex.step(target())
+    assert len(ex.state.drills) == 1 and ex.state.drills[0]["ok"] is False
+    assert venue.position() == 0.0        # auto-repair flattened
+    assert ex.state.auto_drill_off
+    assert any("auto-drill cycle FAILED" in m for m in sent)
+    ex.step(target())
+    assert len(ex.state.drills) == 1      # breaker holds
+    # breaker survives restart (persisted)
+    ex2 = Executor(venue, ex.cfg)
+    assert ex2.state.auto_drill_off
+
+
+def test_gate_auto_drill_stops_at_coverage_complete(tmp_path, monkeypatch):
+    ex, venue, sent = _auto_exec(tmp_path, monkeypatch)
+    ex.state.coverage = {"drill_cycle": 3, "stop_filled": 1}
+    ex.step(target())
+    assert ex.state.drills == []
