@@ -121,6 +121,11 @@ class ExecState:
     # no further auto drills until a human clears it (manual /drill still
     # works). Never set by refusals - only by a drill that ran and failed.
     auto_drill_off: str | None = None
+    # fill-price capture queue. PERSISTED: in-memory it silently dropped
+    # every order whose fill landed across a restart - the live pullback
+    # entry of 2026-08-17 left fills[] empty after two env-change redeploys,
+    # starving the ramp's slippage sample (live find).
+    fill_watch: list = field(default_factory=list)
 
 
 def _side_sign(side: str) -> float:
@@ -146,7 +151,6 @@ class Executor:
         self.state = self._load_state()
         self._breach_count = 0
         self._last_flat_equity = None      # transfer-reconciliation baseline
-        self._fill_watch: list[dict] = []  # orders pending a fill-price read
         self._sent_at: dict[str, float] = {}   # per-kind Telegram cooldown
         # step() and drill() must never interleave venue mutations: a drill
         # mid-step (or vice versa) would trip the drift check and could
@@ -388,6 +392,7 @@ class Executor:
             st.unwitnessed_coverage = raw.get("unwitnessed_coverage", {})
             st.drills = raw.get("drills", [])[-50:]
             st.auto_drill_off = raw.get("auto_drill_off")
+            st.fill_watch = raw.get("fill_watch", [])[-64:]
             return st
         except Exception:  # noqa: BLE001
             return ExecState()
@@ -412,7 +417,8 @@ class Executor:
              "unwitnessed_coverage": getattr(self.state,
                                              "unwitnessed_coverage", {}),
              "drills": getattr(self.state, "drills", [])[-50:],
-             "auto_drill_off": getattr(self.state, "auto_drill_off", None)}
+             "auto_drill_off": getattr(self.state, "auto_drill_off", None),
+             "fill_watch": getattr(self.state, "fill_watch", [])[-64:]}
         # per-thread tmp: a shared tmp path was safe only while every writer
         # sat behind _venue_lock (counter-agent 2026-08-21). Auto-drill adds
         # another writer, so this matters more, not less.
@@ -1027,14 +1033,16 @@ class Executor:
         drains it as statuses resolve."""
         if not ref_px or ref_px <= 0:
             return
-        self._fill_watch.append({"ts": time.time(), "leg": leg, "role": role,
-                                 "cloid": cloid, "ref_px": float(ref_px),
-                                 "side": side})
-        del self._fill_watch[:-64]
+        wl = getattr(self.state, "fill_watch", None)
+        if wl is None:
+            wl = self.state.fill_watch = []
+        wl.append({"ts": time.time(), "leg": leg, "role": role,
+                   "cloid": cloid, "ref_px": float(ref_px), "side": side})
+        del wl[:-64]
 
     def _poll_fill_watch(self) -> None:
         keep = []
-        for w in self._fill_watch:
+        for w in getattr(self.state, "fill_watch", []) or []:
             st = None
             try:
                 st = self.venue.order_status(w["cloid"])
@@ -1047,7 +1055,7 @@ class Executor:
             if st.get("status") == "FILLED":
                 self._record_fill(w["leg"], w["role"], w["cloid"], st,
                                   w["ref_px"], w["side"])
-        self._fill_watch = keep
+        self.state.fill_watch = keep
 
     def _record_fill(self, leg: str, role: str, cloid: str, st: dict,
                      ref_px: float, side: str) -> None:
@@ -1325,6 +1333,20 @@ class Executor:
         except Exception:  # noqa: BLE001
             return
         want = sum(l.qty for l in self.state.legs.values())
+        # In-flight entry fills: a limit that FILLED on the venue but whose
+        # engine confirmation waits for the next 4h close is real exposure
+        # the ledger deliberately hasn't booked yet (mirror design). Without
+        # this term the check paged 🚨 for up to 4h on every organically
+        # filled pullback entry (live false positive 2026-08-17: SELL 0.04
+        # filled, engine PENDING, "venue=-0.05 ledger=-0.01").
+        for led in self.state.legs.values():
+            if led.qty == 0.0 and led.entry_cloid:
+                try:
+                    st = self.venue.order_status(led.entry_cloid)
+                except Exception:  # noqa: BLE001
+                    continue
+                filled = (st or {}).get("filled_qty", 0.0) or 0.0
+                want += filled * _side_sign(led.entry_side or "L")
         px = self.venue.mid()
         if abs(net - want) * px > self.cfg.drift_tol_frac * max(equity, 1.0):
             self._event("RED", "position_drift",

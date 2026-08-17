@@ -2099,3 +2099,42 @@ def test_gate_churn_guard_cannot_block_first_placement(tmp_path):
     led.qty, led.stop_cloid, led.stop_px = 0.01, None, 71_520.89
     ex._maintain_stop("trend", led, {"entry_ts": NOW, "stop": 71_520.89})
     assert led.stop_cloid, "churn guard blocked the FIRST stop placement"
+
+# ---------------------------------------------------------------------------
+# Live finds 2026-08-17: drift false-positive on unconfirmed entry fills,
+# and fill-watch lost across restarts (slippage sample starved)
+def test_gate_drift_counts_inflight_entry_fill(tmp_path):
+    """A pullback limit that FILLED on the venue while the engine is still
+    PENDING is real exposure the ledger hasn't booked - the drift check
+    must count it, not page. A truly foreign position must still page."""
+    v = FakeVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    led = ex.state.legs["pullback"]
+    led.entry_cloid, led.entry_side = "P-1786968000-E", "S"
+    v._add("LIMIT", "SELL", 0.04, "P-1786968000-E", px=64_139.89)
+    v.orders["P-1786968000-E"]["status"] = "FILLED"
+    ex._check_drift(50_000.0)
+    assert not any(e["kind"] == "position_drift" for e in ex.state.events)
+    # foreign short the executor knows nothing about -> still pages
+    v._add("MARKET", "SELL", 0.05, "foreign", px=64_000.0)
+    v.orders["foreign"]["status"] = "FILLED"
+    ex._check_drift(50_000.0)
+    assert any(e["kind"] == "position_drift" for e in ex.state.events)
+
+
+def test_gate_fill_watch_survives_restart(tmp_path):
+    """The 2026-08-17 live sequence: order placed, service restarts (env
+    change), order fills AFTER the restart. The fill must still land in
+    state.fills - in-memory watch silently dropped it."""
+    v = FakeVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    v._add("LIMIT", "SELL", 0.04, "P-1-E", px=64_139.89)
+    ex._watch_fill("pullback", "entry", "P-1-E", 64_139.89, "SELL")
+    ex._save_state()
+    ex2 = mkexec(tmp_path, v)               # restart: fresh process, same disk
+    assert ex2.state.fill_watch, "watch queue must persist"
+    v.orders["P-1-E"]["status"] = "FILLED"  # fills after the restart
+    ex2._poll_fill_watch()
+    assert len(ex2.state.fills) == 1
+    assert ex2.state.fills[0]["cloid"] == "P-1-E"
+    assert ex2.state.fill_watch == []       # drained, not re-recorded
