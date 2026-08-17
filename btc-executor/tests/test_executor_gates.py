@@ -649,7 +649,8 @@ def test_gate_no_blueprint_managed_trading_vars():
 
     exec_vars = keys_with_literals("btc-executor")
     for k in ("DRY_RUN", "KELLY_M", "SIZING_BASE_USD", "MAX_NOTIONAL_USD",
-              "MAX_ACCOUNT_LEV", "DD_HALT_PCT", "CB_PRODUCT_ID"):
+              "MAX_ACCOUNT_LEV", "DD_HALT_PCT", "CB_PRODUCT_ID",
+              "AUTO_DRILL"):
         assert exec_vars.get(k) == "sync", (k, exec_vars.get(k))
     ibkr_vars = keys_with_literals("ibkr-executor")
     for k in ("DRY_RUN", "TRADING_MODE", "READ_ONLY_API", "LEG_BUDGET_USD"):
@@ -1268,17 +1269,17 @@ def test_gate_auto_drill_runs_cycles_in_flat_window(tmp_path, monkeypatch):
     assert venue.position() == 0.0
     assert ex.state.auto_drill_off is None
     assert sum("auto-drill cycle ok" in m for m in sent) == 3
-    # next need is the stopfill row, cycles never over-run
-    assert ex._needed_auto_drill() == "stopfill"
+    # cycles complete -> auto-drill is DONE; it never over-runs and never
+    # schedules stopfill (deterministic live rejection, referee 2026-08-17)
+    assert ex._needed_auto_drill() is None
 
 
-def test_gate_auto_drill_ordering_and_organic_satisfaction(tmp_path):
+def test_gate_auto_drill_never_schedules_stopfill(tmp_path):
+    """stopfill stays manual/organic: Coinbase preview-rejects an
+    above-market STOP_DOWN, so an auto stopfill = guaranteed breaker trip."""
     ex, _ = _drill_exec(tmp_path)
     assert ex._needed_auto_drill() == "cycle"
-    ex.state.coverage = {"drill_cycle": 3}
-    assert ex._needed_auto_drill() == "stopfill"
-    # an ORGANIC stop fill satisfies the row: no stopfill drill ever runs
-    ex.state.coverage = {"drill_cycle": 3, "stop_filled": 1}
+    ex.state.coverage = {"drill_cycle": 3}          # stop_filled still unmet
     assert ex._needed_auto_drill() is None
 
 
@@ -1340,3 +1341,55 @@ def test_gate_auto_drill_stops_at_coverage_complete(tmp_path, monkeypatch):
     ex.state.coverage = {"drill_cycle": 3, "stop_filled": 1}
     ex.step(target())
     assert ex.state.drills == []
+
+
+def test_gate_failed_drill_credits_no_coverage(tmp_path, monkeypatch):
+    """Referee 2026-08-17: coverage rows authorize the ramp, so a drill
+    that ends unverified must advance NOTHING (previously stop_placed /
+    drill counters incremented before the repair tail knew the outcome)."""
+    ex, venue = _drill_exec(tmp_path)
+    orig_place_stop = venue.place_stop
+    def raising_stop(side, qty, trigger_px, cloid):
+        raise RuntimeError("PREVIEW_STOP_PRICE_ABOVE_LAST_TRADE_PRICE")
+    venue.place_stop = raising_stop
+    rec = ex.drill("cycle")
+    assert rec["ok"] is False
+    assert ex.state.coverage == {}
+    # and a verified drill still credits normally
+    venue.place_stop = orig_place_stop
+    ex.cfg.drill_cooldown_s = 0
+    rec2 = ex.drill("cycle")
+    assert rec2["ok"] and ex.state.coverage.get("drill_cycle") == 1
+    assert ex.state.coverage.get("stop_placed") == 1
+
+
+def test_gate_verified_manual_drill_rearms_breaker(tmp_path):
+    """The breaker's only re-arm path: a human-supervised drill that fully
+    verifies. There was previously NO way to clear auto_drill_off short of
+    editing the state file on the Render disk."""
+    ex, venue = _drill_exec(tmp_path)
+    ex.cfg.drill_cooldown_s = 0
+    ex.state.auto_drill_off = "cycle failed at 2026-08-17"
+    rec = ex.drill("cycle")
+    assert rec["ok"] is True
+    assert ex.state.auto_drill_off is None
+    assert any(e["kind"] == "auto_drill_rearmed" for e in ex.state.events)
+    # a FAILED manual drill must NOT re-arm
+    ex.state.auto_drill_off = "cycle failed again"
+    def raising_stop(side, qty, trigger_px, cloid):
+        raise RuntimeError("boom")
+    venue.place_stop = raising_stop
+    rec2 = ex.drill("cycle")
+    assert rec2["ok"] is False and ex.state.auto_drill_off
+
+
+def test_gate_auto_drill_flip_pages_config_change(tmp_path, monkeypatch):
+    """AUTO_DRILL is a trading-behavior var: a silent flip (sync /
+    fat-finger) must page like KELLY_M would (referee 2026-08-17)."""
+    ex, venue, sent = _auto_exec(tmp_path, monkeypatch)
+    ex.cfg.auto_drill = False
+    ex.step(target())
+    ex.cfg.auto_drill = True
+    ex.step(target())
+    assert any(e["kind"] == "config_change" and "auto_drill" in e["msg"]
+               for e in ex.state.events)
