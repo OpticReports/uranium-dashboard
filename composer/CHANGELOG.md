@@ -7,6 +7,16 @@ history is a complete audit trail. Newest first.
 Format per entry:
 
 ```
+## 2026-08-17 — EXECUTED: cash remainder deployed per target split (owner-directed)
+
+- Owner instruction (chat): "fully deploy the remainder into our approved
+  balance set up". Unallocated cash $231.96 split per 29/29/27/15:
+  - HG    [mbkiXcuN] +$67.25 [deploy 737b254f-3936-46c5-9220-36099d722201]
+  - KMLM  [YPTSJFJw] +$67.25 [deploy a8c70b50-17f6-41d3-bac2-7e7bd1a673dc]
+  - SLEEVE[nNdBk7hc] +$62.65 [deploy f58b30ac-527c-455e-9b32-b5ebf02d1765]
+  - HARV  [ORQNCfZn] +$34.75 [deploy 1c090b34-dad0-4267-97bf-97dd5869efc2]
+- Queued for the 2026-08-17 trading window; ~$0.06 dust remains.
+
 ## YYYY-MM-DD — <symphony name / id> — <short title>
 - Change: <what changed in the logic tree>
 - Why:    <rationale>
