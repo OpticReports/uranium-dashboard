@@ -1,0 +1,3991 @@
+{
+ "summary": {
+  "n_events": 37,
+  "n_skipped": 1,
+  "skipped": [
+   [
+    "SAVA",
+    "2024-11-25",
+    "unverified"
+   ]
+  ],
+  "n_pos": 22,
+  "n_neg": 15,
+  "median_abs_event_move": 0.398503463269124,
+  "mean_abs_event_move": 0.8045008672844769,
+  "median_abs_move_pos": 0.45677198198281244,
+  "median_abs_move_neg": 0.3331624807790877,
+  "median_pre_r10": 0.01641137855579844,
+  "spearman_absdrift_vs_absmove": 0.24727358937885255,
+  "spearman_drift_vs_move": -0.17757230915125652,
+  "quiet": {
+   "n": 12,
+   "median_abs_move": 0.40099578065648045,
+   "mean_abs_move": 0.4775996874324674
+  },
+  "running": {
+   "n": 25,
+   "median_abs_move": 0.37473293079424064,
+   "mean_abs_move": 0.9614134336134414
+  }
+ },
+ "portfolio": {
+  "0.6": {
+   "straddle": {
+    "n": 37,
+    "mean_mult": 6.703143140579809,
+    "median_mult": 3.5726966690731756,
+    "pct_total_loss": 0.0,
+    "pct_profitable": 0.8918918918918919,
+    "max_mult": 61.43363211320271,
+    "mean_ci90": [
+     4.21934363102,
+     9.80925481353276
+    ]
+   },
+   "atm_call_all_events": {
+    "n": 37,
+    "mean_mult": 9.989521032566556,
+    "median_mult": 1.2420460966251468,
+    "pct_total_loss": 0.43243243243243246,
+    "pct_profitable": 0.5405405405405406,
+    "max_mult": 92.13539813946721,
+    "mean_ci90": [
+     5.286689896099438,
+     15.439318587349135
+    ]
+   },
+   "otm_call_all_events": {
+    "n": 35,
+    "mean_mult": 60.85426033560514,
+    "median_mult": 0.0,
+    "pct_total_loss": 0.6,
+    "pct_profitable": 0.4,
+    "max_mult": 867.7749515577906,
+    "mean_ci90": [
+     25.54201202920068,
+     106.58208297740558
+    ]
+   },
+   "straddle_quiet_LOOKAHEAD_CONTAMINATED": {
+    "n": 12,
+    "mean_mult": 3.7614469154162897,
+    "median_mult": 3.2352320670906227,
+    "pct_total_loss": 0.0,
+    "pct_profitable": 0.9166666666666666,
+    "max_mult": 6.998202254748705,
+    "mean_ci90": [
+     2.6753801281729004,
+     4.789847240707924
+    ]
+   },
+   "straddle_running_LOOKAHEAD_CONTAMINATED": {
+    "n": 25,
+    "mean_mult": 8.115157328658299,
+    "median_mult": 3.7321914150415645,
+    "pct_total_loss": 0.0,
+    "pct_profitable": 0.88,
+    "max_mult": 61.43363211320271,
+    "mean_ci90": [
+     4.573472829399775,
+     12.843899217809547
+    ]
+   }
+  },
+  "0.8": {
+   "straddle": {
+    "n": 37,
+    "mean_mult": 5.0682209630703285,
+    "median_mult": 2.740786517565541,
+    "pct_total_loss": 0.0,
+    "pct_profitable": 0.8378378378378378,
+    "max_mult": 46.851871036380686,
+    "mean_ci90": [
+     3.177761671574814,
+     7.435134911265524
+    ]
+   },
+   "atm_call_all_events": {
+    "n": 37,
+    "mean_mult": 7.574064246292481,
+    "median_mult": 0.9470305897059065,
+    "pct_total_loss": 0.43243243243243246,
+    "pct_profitable": 0.4864864864864865,
+    "max_mult": 74.70123357900047,
+    "mean_ci90": [
+     3.9831379665936866,
+     11.762711535355361
+    ]
+   },
+   "otm_call_all_events": {
+    "n": 36,
+    "mean_mult": 24.4989795224321,
+    "median_mult": 0.0,
+    "pct_total_loss": 0.6111111111111112,
+    "pct_profitable": 0.3888888888888889,
+    "max_mult": 352.11137540537345,
+    "mean_ci90": [
+     10.07767564686054,
+     43.092058311882994
+    ]
+   },
+   "straddle_quiet_LOOKAHEAD_CONTAMINATED": {
+    "n": 12,
+    "mean_mult": 2.832807773395043,
+    "median_mult": 2.4305411573305307,
+    "pct_total_loss": 0.0,
+    "pct_profitable": 0.75,
+    "max_mult": 5.268166869231276,
+    "mean_ci90": [
+     2.019065616748472,
+     3.608027653412299
+    ]
+   },
+   "straddle_running_LOOKAHEAD_CONTAMINATED": {
+    "n": 25,
+    "mean_mult": 6.141219294114465,
+    "median_mult": 2.801095270717701,
+    "pct_total_loss": 0.0,
+    "pct_profitable": 0.88,
+    "max_mult": 46.851871036380686,
+    "mean_ci90": [
+     3.4503745570124353,
+     9.751745662936226
+    ]
+   }
+  },
+  "1.0": {
+   "straddle": {
+    "n": 37,
+    "mean_mult": 4.072468546256278,
+    "median_mult": 2.2415573600300718,
+    "pct_total_loss": 0.0,
+    "pct_profitable": 0.7567567567567568,
+    "max_mult": 37.798629324912774,
+    "mean_ci90": [
+     2.5485255163114875,
+     5.986841281511798
+    ]
+   },
+   "atm_call_all_events": {
+    "n": 37,
+    "mean_mult": 6.113639194116748,
+    "median_mult": 0.7722818222386159,
+    "pct_total_loss": 0.43243243243243246,
+    "pct_profitable": 0.4864864864864865,
+    "max_mult": 62.724552744495526,
+    "mean_ci90": [
+     3.192200815707871,
+     9.590494160393801
+    ]
+   },
+   "otm_call_all_events": {
+    "n": 37,
+    "mean_mult": 14.622189018417206,
+    "median_mult": 0.0,
+    "pct_total_loss": 0.5945945945945946,
+    "pct_profitable": 0.40540540540540543,
+    "max_mult": 201.64246789213996,
+    "mean_ci90": [
+     6.460649151021092,
+     24.903072200104035
+    ]
+   },
+   "straddle_quiet_LOOKAHEAD_CONTAMINATED": {
+    "n": 12,
+    "mean_mult": 2.271983283340819,
+    "median_mult": 1.9470708656183084,
+    "pct_total_loss": 0.0,
+    "pct_profitable": 0.75,
+    "max_mult": 4.224205078029438,
+    "mean_ci90": [
+     1.6194864322435876,
+     2.895401734529031
+    ]
+   },
+   "straddle_running_LOOKAHEAD_CONTAMINATED": {
+    "n": 25,
+    "mean_mult": 4.936701472455699,
+    "median_mult": 2.2428780138476982,
+    "pct_total_loss": 0.0,
+    "pct_profitable": 0.76,
+    "max_mult": 37.798629324912774,
+    "mean_ci90": [
+     2.766969891915299,
+     7.844802380216703
+    ]
+   }
+  },
+  "1.2": {
+   "straddle": {
+    "n": 37,
+    "mean_mult": 3.403988007132959,
+    "median_mult": 1.8711023714630366,
+    "pct_total_loss": 0.0,
+    "pct_profitable": 0.6756756756756757,
+    "max_mult": 31.66349756460026,
+    "mean_ci90": [
+     2.1294551304944824,
+     5.007367389700517
+    ]
+   },
+   "atm_call_all_events": {
+    "n": 37,
+    "mean_mult": 5.131795020419491,
+    "median_mult": 0.6522023693860828,
+    "pct_total_loss": 0.43243243243243246,
+    "pct_profitable": 0.4864864864864865,
+    "max_mult": 54.03716697933785,
+    "mean_ci90": [
+     2.6703545415621806,
+     8.076662675973116
+    ]
+   },
+   "otm_call_all_events": {
+    "n": 37,
+    "mean_mult": 9.782393316830035,
+    "median_mult": 0.0,
+    "pct_total_loss": 0.5945945945945946,
+    "pct_profitable": 0.40540540540540543,
+    "max_mult": 136.37827280861836,
+    "mean_ci90": [
+     4.208122196576599,
+     16.78835933972855
+    ]
+   },
+   "straddle_quiet_LOOKAHEAD_CONTAMINATED": {
+    "n": 12,
+    "mean_mult": 1.8970879338948112,
+    "median_mult": 1.6247364644807756,
+    "pct_total_loss": 0.0,
+    "pct_profitable": 0.75,
+    "max_mult": 3.526691507277983,
+    "mean_ci90": [
+     1.3536140890736241,
+     2.4187372598716723
+    ]
+   },
+   "straddle_running_LOOKAHEAD_CONTAMINATED": {
+    "n": 25,
+    "mean_mult": 4.12730004228727,
+    "median_mult": 1.8927154103693726,
+    "pct_total_loss": 0.0,
+    "pct_profitable": 0.64,
+    "max_mult": 31.66349756460026,
+    "mean_ci90": [
+     2.309786466175702,
+     6.560370582654549
+    ]
+   }
+  },
+  "1.5": {
+   "straddle": {
+    "n": 37,
+    "mean_mult": 2.7329963231259957,
+    "median_mult": 1.4998820367754866,
+    "pct_total_loss": 0.0,
+    "pct_profitable": 0.6216216216216216,
+    "max_mult": 25.46778118497855,
+    "mean_ci90": [
+     1.7095292190772144,
+     4.022249027708103
+    ]
+   },
+   "atm_call_all_events": {
+    "n": 37,
+    "mean_mult": 4.141745393783021,
+    "median_mult": 0.529264935542184,
+    "pct_total_loss": 0.43243243243243246,
+    "pct_profitable": 0.4594594594594595,
+    "max_mult": 44.74798282503874,
+    "mean_ci90": [
+     2.1344621162932125,
+     6.558467114462873
+    ]
+   },
+   "otm_call_all_events": {
+    "n": 37,
+    "mean_mult": 6.403808559150527,
+    "median_mult": 0.0,
+    "pct_total_loss": 0.5945945945945946,
+    "pct_profitable": 0.40540540540540543,
+    "max_mult": 89.58241489269608,
+    "mean_ci90": [
+     2.731079665132255,
+     11.024811757116032
+    ]
+   },
+   "straddle_quiet_LOOKAHEAD_CONTAMINATED": {
+    "n": 12,
+    "mean_mult": 1.5218397565627366,
+    "median_mult": 1.302662561662756,
+    "pct_total_loss": 0.0,
+    "pct_profitable": 0.6666666666666666,
+    "max_mult": 2.8287707237930078,
+    "mean_ci90": [
+     1.0862118192426675,
+     1.9398390615887833
+    ]
+   },
+   "straddle_running_LOOKAHEAD_CONTAMINATED": {
+    "n": 25,
+    "mean_mult": 3.31435147507636,
+    "median_mult": 1.532495443543083,
+    "pct_total_loss": 0.0,
+    "pct_profitable": 0.6,
+    "max_mult": 25.46778118497855,
+    "mean_ci90": [
+     1.8532506845159935,
+     5.269357698711272
+    ]
+   }
+  },
+  "2.0": {
+   "straddle": {
+    "n": 37,
+    "mean_mult": 2.061176173239108,
+    "median_mult": 1.1327656824952197,
+    "pct_total_loss": 0.0,
+    "pct_profitable": 0.5405405405405406,
+    "max_mult": 19.234277288848297,
+    "mean_ci90": [
+     1.2892016769359633,
+     3.03326377178956
+    ]
+   },
+   "atm_call_all_events": {
+    "n": 37,
+    "mean_mult": 3.1429989539362966,
+    "median_mult": 0.4035966378532835,
+    "pct_total_loss": 0.43243243243243246,
+    "pct_profitable": 0.43243243243243246,
+    "max_mult": 34.8310870582098,
+    "mean_ci90": [
+     1.6030976762591356,
+     5.005757836612429
+    ]
+   },
+   "otm_call_all_events": {
+    "n": 37,
+    "mean_mult": 3.997739192365162,
+    "median_mult": 0.0,
+    "pct_total_loss": 0.5945945945945946,
+    "pct_profitable": 0.40540540540540543,
+    "max_mult": 55.88547695561293,
+    "mean_ci90": [
+     1.6865339494577862,
+     6.90808654285681
+    ]
+   },
+   "straddle_quiet_LOOKAHEAD_CONTAMINATED": {
+    "n": 12,
+    "mean_mult": 1.1469794276115515,
+    "median_mult": 0.9813779937536635,
+    "pct_total_loss": 0.0,
+    "pct_profitable": 0.4166666666666667,
+    "max_mult": 2.1317842128792885,
+    "mean_ci90": [
+     0.8188591963179138,
+     1.4617020279713282
+    ]
+   },
+   "straddle_running_LOOKAHEAD_CONTAMINATED": {
+    "n": 25,
+    "mean_mult": 2.499990611140335,
+    "median_mult": 1.1634866449135353,
+    "pct_total_loss": 0.0,
+    "pct_profitable": 0.6,
+    "max_mult": 19.234277288848297,
+    "mean_ci90": [
+     1.3983117375761862,
+     3.9753314820697905
+    ]
+   }
+  },
+  "3.0": {
+   "straddle": {
+    "n": 37,
+    "mean_mult": 1.3922874765009208,
+    "median_mult": 0.7664916054952674,
+    "pct_total_loss": 0.0,
+    "pct_profitable": 0.3783783783783784,
+    "max_mult": 13.005436798755879,
+    "mean_ci90": [
+     0.8702357471190834,
+     2.0487956514555052
+    ]
+   },
+   "atm_call_all_events": {
+    "n": 37,
+    "mean_mult": 2.138204283282474,
+    "median_mult": 0.2757378847979974,
+    "pct_total_loss": 0.43243243243243246,
+    "pct_profitable": 0.40540540540540543,
+    "max_mult": 24.295321851340027,
+    "mean_ci90": [
+     1.078059971896633,
+     3.4243296864332495
+    ]
+   },
+   "otm_call_all_events": {
+    "n": 37,
+    "mean_mult": 2.2659048333902145,
+    "median_mult": 0.0,
+    "pct_total_loss": 0.5945945945945946,
+    "pct_profitable": 0.32432432432432434,
+    "max_mult": 31.583820682335723,
+    "mean_ci90": [
+     0.946930511425417,
+     3.9226067357123875
+    ]
+   },
+   "straddle_quiet_LOOKAHEAD_CONTAMINATED": {
+    "n": 12,
+    "mean_mult": 0.7743935775170703,
+    "median_mult": 0.6623864020706828,
+    "pct_total_loss": 0.0,
+    "pct_profitable": 0.4166666666666667,
+    "max_mult": 1.4391934355237628,
+    "mean_ci90": [
+     0.5529973511660847,
+     0.98672784754703
+    ]
+   },
+   "straddle_running_LOOKAHEAD_CONTAMINATED": {
+    "n": 25,
+    "mean_mult": 1.6888765480131689,
+    "median_mult": 0.789689986538498,
+    "pct_total_loss": 0.0,
+    "pct_profitable": 0.36,
+    "max_mult": 13.005436798755879,
+    "mean_ci90": [
+     0.9448424841998855,
+     2.6858846313552607
+    ]
+   }
+  }
+ },
+ "bias_guard": {
+  "0.6": {
+   "median_straddle_cost_pct": 0.11664161284890372,
+   "breakeven_abs_move": 0.11664161284890372,
+   "mean_mult_selected": 6.703143140579809,
+   "median_mult_selected": 3.5726966690731756,
+   "assumed_fizzle_move": 0.08,
+   "fizzle_mult": 0.6858615724358265,
+   "breakeven_sharp_share_mean": 0.05220603756142143,
+   "breakeven_sharp_share_median": 0.10881758640460243
+  },
+  "0.8": {
+   "median_straddle_cost_pct": 0.1553429853175099,
+   "breakeven_abs_move": 0.1553429853175099,
+   "mean_mult_selected": 5.0682209630703285,
+   "median_mult_selected": 2.740786517565541,
+   "assumed_fizzle_move": 0.08,
+   "fizzle_mult": 0.5149894592052918,
+   "breakeven_sharp_share_mean": 0.10652007050004028,
+   "breakeven_sharp_share_median": 0.21790420603395746
+  },
+  "1.0": {
+   "median_straddle_cost_pct": 0.19396047436605535,
+   "breakeven_abs_move": 0.19396047436605535,
+   "mean_mult_selected": 4.072468546256278,
+   "median_mult_selected": 2.2415573600300718,
+   "assumed_fizzle_move": 0.08,
+   "fizzle_mult": 0.41245516779371544,
+   "breakeven_sharp_share_mean": 0.16053078812872826,
+   "breakeven_sharp_share_median": 0.32122034225322393
+  },
+  "1.2": {
+   "median_straddle_cost_pct": 0.23249594287150305,
+   "breakeven_abs_move": 0.23249594287150305,
+   "mean_mult_selected": 3.403988007132959,
+   "median_mult_selected": 1.8711023714630366,
+   "assumed_fizzle_move": 0.08,
+   "fizzle_mult": 0.344092025916404,
+   "breakeven_sharp_share_mean": 0.21435629776631157,
+   "breakeven_sharp_share_median": 0.4295373479272643
+  },
+  "1.5": {
+   "median_straddle_cost_pct": 0.29003535750503445,
+   "breakeven_abs_move": 0.29003535750503445,
+   "mean_mult_selected": 2.7329963231259957,
+   "median_mult_selected": 1.4998820367754866,
+   "assumed_fizzle_move": 0.08,
+   "fizzle_mult": 0.2758284392916176,
+   "breakeven_sharp_share_mean": 0.2947179822236331,
+   "breakeven_sharp_share_median": 0.5916175257333254
+  },
+  "2.0": {
+   "median_straddle_cost_pct": 0.3850457754581819,
+   "breakeven_abs_move": 0.3850457754581819,
+   "mean_mult_selected": 2.061176173239108,
+   "median_mult_selected": 1.1327656824952197,
+   "assumed_fizzle_move": 0.08,
+   "fizzle_mult": 0.20776750479811054,
+   "breakeven_sharp_share_mean": 0.42744620152676804,
+   "breakeven_sharp_share_median": 0.8564692496738152
+  },
+  "3.0": {
+   "median_straddle_cost_pct": 0.5705376033811926,
+   "breakeven_abs_move": 0.5705376033811926,
+   "mean_mult_selected": 1.3922874765009208,
+   "median_mult_selected": 0.7664916054952674,
+   "assumed_fizzle_move": 0.08,
+   "fizzle_mult": 0.1402186280551778,
+   "breakeven_sharp_share_mean": 0.6866885738848248,
+   "breakeven_sharp_share_median": 1.0
+  }
+ },
+ "events": [
+  {
+   "ticker": "BIIB",
+   "event_trading_date": "2022-09-28",
+   "event_type": "phase3_readout",
+   "direction": "positive",
+   "description": "Lecanemab (with Eisai) Clarity AD Phase 3 in early Alzheimer's met primary and all key secondary endpoints (announced 2022-09-27 after US close)",
+   "source_url": "https://media-us.eisai.com/2022-09-27-LECANEMAB-CONFIRMATORY-PHASE-3-CLARITY-AD-STUDY-MET-PRIMARY-ENDPOINT,-SHOWING-HIGHLY-STATISTICALLY-SIGNIFICANT-REDUCTION-OF-CLINICAL-DECLINE-IN-LARGE-GLOBAL-CLINICAL-STUDY-OF-1,795-PARTICIPANTS-WITH-EARLY-ALZHEIMERS-DISEASE",
+   "day_move_pct": 39.85,
+   "verified": true,
+   "event_idx": 1537,
+   "pre_close": 197.79,
+   "event_close": 276.61,
+   "r5": -0.03139079333986283,
+   "r10": -0.030013241135795177,
+   "r20": 0.0034498503373749934,
+   "r60": -0.06095997721122348,
+   "vol20_ann": 0.30192409085177263,
+   "drift_z10": -0.499017068579188,
+   "event_ret": 0.398503463269124,
+   "open_gap": 0.43060822084028505,
+   "sims": {
+    "0.6": {
+     "atm_call_mult": 5.955648150884791,
+     "atm_call_cost_pct": 0.059731458808457996,
+     "straddle_mult": 3.0523229440711566,
+     "straddle_cost_pct": 0.11654715399405353,
+     "otm_call_mult": 18.408565710948846,
+     "otm_call_cost_pct": 0.00841279412274277,
+     "entry_spot": 204.11,
+     "event_spot": 276.61
+    },
+    "0.8": {
+     "atm_call_mult": 4.497604262189973,
+     "atm_call_cost_pct": 0.07909534309028497,
+     "straddle_mult": 2.2910302986629065,
+     "straddle_cost_pct": 0.15527492255770736,
+     "otm_call_mult": 7.5590103255076455,
+     "otm_call_cost_pct": 0.02048779757564281,
+     "entry_spot": 204.11,
+     "event_spot": 276.61
+    },
+    "1.0": {
+     "atm_call_mult": 3.614712824892272,
+     "atm_call_cost_pct": 0.09841433315324181,
+     "straddle_mult": 1.834532655017038,
+     "straddle_cost_pct": 0.1939129026836211,
+     "otm_call_mult": 4.355469296820791,
+     "otm_call_cost_pct": 0.03555701185501128,
+     "entry_spot": 204.11,
+     "event_spot": 276.61
+    },
+    "1.2": {
+     "atm_call_mult": 3.0230299521516897,
+     "atm_call_cost_pct": 0.11767648942711952,
+     "straddle_mult": 1.5304758829094032,
+     "straddle_cost_pct": 0.2324372152313765,
+     "otm_call_mult": 2.956672667536813,
+     "otm_call_cost_pct": 0.052378971511315014,
+     "entry_spot": 204.11,
+     "event_spot": 276.61
+    },
+    "1.5": {
+     "atm_call_mult": 2.4292834316549694,
+     "atm_call_cost_pct": 0.14643805970384174,
+     "straddle_mult": 1.2268558273746826,
+     "straddle_cost_pct": 0.28996035578482104,
+     "otm_call_mult": 1.9487293442696256,
+     "otm_call_cost_pct": 0.07947100190008075,
+     "entry_spot": 204.11,
+     "event_spot": 276.61
+    },
+    "2.0": {
+     "atm_call_mult": 1.8343701063632558,
+     "atm_call_cost_pct": 0.19393008584702573,
+     "straddle_mult": 0.9241322766181237,
+     "straddle_cost_pct": 0.384944408071189,
+     "otm_call_mult": 1.2194594510837689,
+     "otm_call_cost_pct": 0.12699682083201644,
+     "entry_spot": 204.11,
+     "event_spot": 276.61
+    },
+    "3.0": {
+     "atm_call_mult": 1.241021338219024,
+     "atm_call_cost_pct": 0.2866506330284069,
+     "straddle_mult": 0.6236826684483227,
+     "straddle_cost_pct": 0.5703855024339511,
+     "otm_call_mult": 0.6911025533812781,
+     "otm_call_cost_pct": 0.22408754339495954,
+     "entry_spot": 204.11,
+     "event_spot": 276.61
+    }
+   }
+  },
+  {
+   "ticker": "MRNA",
+   "event_trading_date": "2022-12-13",
+   "event_type": "phase2_readout",
+   "direction": "positive",
+   "description": "mRNA-4157/V940 + Keytruda met primary endpoint in Phase 2b KEYNOTE-942 adjuvant melanoma (44% reduction in recurrence/death risk), announced pre-market",
+   "source_url": "https://www.merck.com/news/moderna-and-merck-announce-mrna-4157-v940-an-investigational-personalized-mrna-cancer-vaccine-in-combination-with-keytruda-pembrolizumab-met-primary-efficacy-endpoint-in-phase-2b-keynote-94/",
+   "day_move_pct": 19.63,
+   "verified": true,
+   "event_idx": 1010,
+   "pre_close": 165.13,
+   "event_close": 197.54,
+   "r5": -0.06138805206616271,
+   "r10": -0.05844452046983695,
+   "r20": -0.03545560747663545,
+   "r60": 0.19885291128212557,
+   "vol20_ann": 0.4522559669313927,
+   "drift_z10": -0.6487237001494285,
+   "event_ret": 0.19626960576515473,
+   "open_gap": 0.13443953248955376,
+   "sims": {
+    "0.6": {
+     "atm_call_mult": 2.3665325306962903,
+     "atm_call_cost_pct": 0.05988796883740894,
+     "straddle_mult": 1.2161887617360094,
+     "straddle_cost_pct": 0.11653357678519456,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.008323381063906723,
+     "entry_spot": 173.15,
+     "event_spot": 197.54
+    },
+    "0.8": {
+     "atm_call_mult": 1.7883963259985372,
+     "atm_call_cost_pct": 0.07924799687335629,
+     "straddle_mult": 0.9128728509787155,
+     "straddle_cost_pct": 0.15525363285708935,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.020344554473784457,
+     "entry_spot": 173.15,
+     "event_spot": 197.54
+    },
+    "1.0": {
+     "atm_call_mult": 1.4379253148202287,
+     "atm_call_cost_pct": 0.0985634128492778,
+     "straddle_mult": 0.7309859848272099,
+     "straddle_cost_pct": 0.19388446480893237,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.035375330605771874,
+     "entry_spot": 173.15,
+     "event_spot": 197.54
+    },
+    "1.2": {
+     "atm_call_mult": 1.2028878811222345,
+     "atm_call_cost_pct": 0.11782214176006982,
+     "straddle_mult": 0.6098349998436888,
+     "straddle_cost_pct": 0.2324019226305164,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.05217075290320847,
+     "entry_spot": 173.15,
+     "event_spot": 197.54
+    },
+    "1.5": {
+     "atm_call_mult": 0.9668989932879772,
+     "atm_call_cost_pct": 0.14657872997582347,
+     "straddle_mult": 0.4888563131399144,
+     "straddle_cost_pct": 0.2899150990620237,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.07923780031403538,
+     "entry_spot": 173.15,
+     "event_spot": 197.54
+    },
+    "2.0": {
+     "atm_call_mult": 0.7303145847383633,
+     "atm_call_cost_pct": 0.194062708609096,
+     "straddle_mult": 0.36823347798938677,
+     "straddle_cost_pct": 0.3848830563285688,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.12674472072129586,
+     "entry_spot": 173.15,
+     "event_spot": 197.54
+    },
+    "3.0": {
+     "atm_call_mult": 0.4942215387092245,
+     "atm_call_cost_pct": 0.286767806237678,
+     "straddle_mult": 0.2485156996983122,
+     "straddle_cost_pct": 0.5702932515857326,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.22383501313714158,
+     "entry_spot": 173.15,
+     "event_spot": 197.54
+    }
+   }
+  },
+  {
+   "ticker": "LLY",
+   "event_trading_date": "2023-05-03",
+   "event_type": "phase3_readout",
+   "direction": "positive",
+   "description": "Donanemab TRAILBLAZER-ALZ 2 Phase 3 in early Alzheimer's met primary endpoint, slowing decline ~35%, announced pre-market",
+   "source_url": "https://www.prnewswire.com/news-releases/lillys-donanemab-significantly-slowed-cognitive-and-functional-decline-in-phase-3-study-of-early-alzheimers-disease-301814001.html",
+   "day_move_pct": 6.68,
+   "verified": true,
+   "event_idx": 1687,
+   "pre_close": 394.085766,
+   "event_close": 420.4004,
+   "r5": 0.05030662172176292,
+   "r10": 0.09269822498112656,
+   "r20": 0.15242059746571712,
+   "r60": 0.19590573242264164,
+   "vol20_ann": 0.22660779722100616,
+   "drift_z10": 2.0535100819165018,
+   "event_ret": 0.06677387581666672,
+   "open_gap": 0.026793666501731872,
+   "sims": {
+    "0.6": {
+     "atm_call_mult": 2.7528938545182617,
+     "atm_call_cost_pct": 0.05973823922431321,
+     "straddle_mult": 1.4110501523712622,
+     "straddle_cost_pct": 0.11654655319230942,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.00856256369084723,
+     "entry_spot": 361.199787,
+     "event_spot": 420.4004
+    },
+    "0.8": {
+     "atm_call_mult": 2.079000775527287,
+     "atm_call_cost_pct": 0.07910195781367335,
+     "straddle_mult": 1.0591151244802197,
+     "straddle_cost_pct": 0.15527399037102976,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.02072668713913312,
+     "entry_spot": 361.199787,
+     "event_spot": 420.4004
+    },
+    "1.0": {
+     "atm_call_mult": 1.6709175497167434,
+     "atm_call_cost_pct": 0.09842079381369354,
+     "straddle_mult": 0.848082212433699,
+     "straddle_cost_pct": 0.19391166237107013,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.03585934628840782,
+     "entry_spot": 361.199787,
+     "event_spot": 420.4004
+    },
+    "1.2": {
+     "atm_call_mult": 1.3974262061070346,
+     "atm_call_cost_pct": 0.11768280208404613,
+     "straddle_mult": 0.7075206027331733,
+     "straddle_cost_pct": 0.23243567891177533,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.05272502566532213,
+     "entry_spot": 361.199787,
+     "event_spot": 420.4004
+    },
+    "1.5": {
+     "atm_call_mult": 1.1229743478296645,
+     "atm_call_cost_pct": 0.1464441569464045,
+     "straddle_mult": 0.5671607999122973,
+     "straddle_cost_pct": 0.28995838863649204,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.0798581376427513,
+     "entry_spot": 361.199787,
+     "event_spot": 420.4004
+    },
+    "2.0": {
+     "atm_call_mult": 0.8479765064808055,
+     "atm_call_cost_pct": 0.1939358347589741,
+     "straddle_mult": 0.427215375032386,
+     "straddle_cost_pct": 0.3849417442616313,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.12741491158347443,
+     "entry_spot": 361.199787,
+     "event_spot": 420.4004
+    },
+    "3.0": {
+     "atm_call_mult": 0.5736952880299341,
+     "atm_call_cost_pct": 0.28665571266078244,
+     "straddle_mult": 0.28832111774582675,
+     "straddle_cost_pct": 0.5703815000652479,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.22450598395685017,
+     "entry_spot": 361.199787,
+     "event_spot": 420.4004
+    }
+   }
+  },
+  {
+   "ticker": "LLY",
+   "event_trading_date": "2025-08-07",
+   "event_type": "phase3_readout",
+   "direction": "negative",
+   "description": "Oral GLP-1 orforglipron ATTAIN-1 Phase 3 obesity: met endpoints but ~12.4% weight loss underwhelmed vs expectations; stock sold off hard",
+   "source_url": "https://investor.lilly.com/news-releases/news-release-details/lillys-oral-glp-1-orforglipron-delivers-weight-loss-average-273",
+   "day_move_pct": -14.14,
+   "verified": true,
+   "event_idx": 2254,
+   "pre_close": 740.066732,
+   "event_close": 635.447789,
+   "r5": -0.0180375751670232,
+   "r10": -0.06574121664258858,
+   "r20": -0.05153001596189999,
+   "r60": 0.018146514245753753,
+   "vol20_ann": 0.36189806097205407,
+   "drift_z10": -0.9119095235741194,
+   "event_ret": -0.14136420200550248,
+   "open_gap": -0.09473853450701397,
+   "sims": {
+    "0.6": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.05925291757795758,
+     "straddle_mult": 1.7564728664751295,
+     "straddle_cost_pct": 0.11659245985255771,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.008487438820106982,
+     "entry_spot": 798.627957,
+     "event_spot": 635.447789
+    },
+    "0.8": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.07862818031043367,
+     "straddle_mult": 1.3183182475090809,
+     "straddle_cost_pct": 0.1553429853175099,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.02060702178460151,
+     "entry_spot": 798.627957,
+     "event_spot": 635.447789
+    },
+    "1.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.09795786497673564,
+     "straddle_mult": 1.0556134359088216,
+     "straddle_cost_pct": 0.1940023546501139,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.03570800232656344,
+     "entry_spot": 798.627957,
+     "event_spot": 635.447789
+    },
+    "1.2": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.11723035663274126,
+     "straddle_mult": 0.8806443193942853,
+     "straddle_cost_pct": 0.23254733796212507,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.052551864827878964,
+     "entry_spot": 798.627957,
+     "event_spot": 635.447789
+    },
+    "1.5": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.14600703315575375,
+     "straddle_mult": 0.7059324521252349,
+     "straddle_cost_pct": 0.2901006910081501,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.07966448848006298,
+     "entry_spot": 798.627957,
+     "event_spot": 635.447789
+    },
+    "2.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.1935235724373543,
+     "straddle_mult": 0.5317411983751483,
+     "straddle_cost_pct": 0.38513376957135115,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.12720584348404076,
+     "entry_spot": 798.627957,
+     "event_spot": 635.447789
+    },
+    "3.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.28629134736370376,
+     "straddle_mult": 0.3588619279082586,
+     "straddle_cost_pct": 0.5706693194240502,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.22429679751420364,
+     "entry_spot": 798.627957,
+     "event_spot": 635.447789
+    }
+   }
+  },
+  {
+   "ticker": "NVO",
+   "event_trading_date": "2024-12-20",
+   "event_type": "phase3_readout",
+   "direction": "negative",
+   "description": "CagriSema REDEFINE-1 Phase 3 obesity: ~20.4% actual weight loss vs ~25% expected; ADR fell sharply (announced pre-US-market)",
+   "source_url": "https://www.globenewswire.com/news-release/2024/12/20/3000444/0/en/Novo-Nordisk-A-S-CagriSema-demonstrates-superior-weight-loss-in-adults-with-obesity-or-overweight-in-the-REDEFINE-1-trial.html",
+   "day_move_pct": -17.83,
+   "verified": true,
+   "event_idx": 2099,
+   "pre_close": 98.077819,
+   "event_close": 80.593722,
+   "r5": -0.04760151343835206,
+   "r10": -0.04943944562013669,
+   "r20": -0.017383865825672307,
+   "r60": -0.18519101755472211,
+   "vol20_ann": 0.25084529813851386,
+   "drift_z10": -0.989390868188396,
+   "event_ret": -0.1782675958567146,
+   "open_gap": -0.20030935808197992,
+   "sims": {
+    "0.6": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.05960076961200123,
+     "straddle_mult": 1.9936616542746777,
+     "straddle_cost_pct": 0.11655895786907526,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.008475413059012496,
+     "entry_spot": 105.027842,
+     "event_spot": 80.593722
+    },
+    "0.8": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.07896782321383715,
+     "straddle_mult": 1.4963908701070132,
+     "straddle_cost_pct": 0.1552930650727471,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.020587835877395676,
+     "entry_spot": 105.027842,
+     "event_spot": 80.593722
+    },
+    "1.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.09828976899440135,
+     "straddle_mult": 1.1982199205306225,
+     "straddle_cost_pct": 0.19393695663387545,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.03568371832066475,
+     "entry_spot": 105.027842,
+     "event_spot": 80.593722
+    },
+    "1.2": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.11755476946707492,
+     "straddle_mult": 0.9996221707620551,
+     "straddle_cost_pct": 0.2324669575792226,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.05252406740828255,
+     "entry_spot": 105.027842,
+     "event_spot": 80.593722
+    },
+    "1.5": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.1463204842714802,
+     "straddle_mult": 0.8013117832104351,
+     "straddle_cost_pct": 0.28999838718803317,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.07963338934502195,
+     "entry_spot": 105.027842,
+     "event_spot": 80.593722
+    },
+    "2.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.19381921884656836,
+     "straddle_mult": 0.603588638527199,
+     "straddle_cost_pct": 0.3849958563382096,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.12717225601642698,
+     "entry_spot": 105.027842,
+     "event_spot": 80.593722
+    },
+    "3.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.2865526654487339,
+     "straddle_mult": 0.40735196987382616,
+     "straddle_cost_pct": 0.5704627495425406,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.22426318049028768,
+     "entry_spot": 105.027842,
+     "event_spot": 80.593722
+    }
+   }
+  },
+  {
+   "ticker": "VKTX",
+   "event_trading_date": "2024-02-27",
+   "event_type": "phase2_readout",
+   "direction": "positive",
+   "description": "VK2735 (GLP-1/GIP) Phase 2 VENTURE obesity trial: up to 14.7% weight loss at 13 weeks, announced pre-market",
+   "source_url": "https://ir.vikingtherapeutics.com/2024-02-27-Viking-Therapeutics-Announces-Positive-Top-Line-Results-from-Phase-2-VENTURE-Trial-of-Dual-GLP-1-GIP-Receptor-Agonist-VK2735-in-Patients-with-Obesity",
+   "day_move_pct": 121.02,
+   "verified": true,
+   "event_idx": 1892,
+   "pre_close": 38.48,
+   "event_close": 85.05,
+   "r5": 0.06298342541436441,
+   "r10": 0.2583387835186397,
+   "r20": 0.8006551240056152,
+   "r60": 2.283276450511945,
+   "vol20_ann": 0.8311406702185882,
+   "drift_z10": 1.5603260041406066,
+   "event_ret": 1.2102390852390852,
+   "open_gap": 0.8131496881496882,
+   "sims": {
+    "0.6": {
+     "atm_call_mult": 30.157424545360595,
+     "atm_call_cost_pct": 0.05544846240446746,
+     "straddle_mult": 14.271859055114668,
+     "straddle_cost_pct": 0.11716643323489967,
+     "otm_call_mult": 171.26723766887437,
+     "otm_call_cost_pct": 0.008659318301600912,
+     "entry_spot": 31.725,
+     "event_spot": 85.05
+    },
+    "0.8": {
+     "atm_call_mult": 22.328239044739654,
+     "atm_call_cost_pct": 0.07489094047087173,
+     "straddle_mult": 10.715590728761672,
+     "straddle_cost_pct": 0.15605138936770815,
+     "otm_call_mult": 71.02653248447334,
+     "otm_call_cost_pct": 0.02088033124712823,
+     "entry_spot": 31.725,
+     "event_spot": 85.05
+    },
+    "1.0": {
+     "atm_call_mult": 17.73399810655852,
+     "atm_call_cost_pct": 0.09429248898479199,
+     "straddle_mult": 8.581700386022986,
+     "straddle_cost_pct": 0.19485448639554873,
+     "otm_call_mult": 41.13506493774918,
+     "otm_call_cost_pct": 0.036053365367359175,
+     "entry_spot": 31.725,
+     "event_spot": 85.05
+    },
+    "1.2": {
+     "atm_call_mult": 14.714863745907042,
+     "atm_call_cost_pct": 0.11363902853562684,
+     "straddle_mult": 7.159924007595392,
+     "straddle_cost_pct": 0.2335475654972184,
+     "otm_call_mult": 28.010326216098044,
+     "otm_call_cost_pct": 0.05294681376321768,
+     "entry_spot": 31.725,
+     "event_spot": 85.05
+    },
+    "1.5": {
+     "atm_call_mult": 11.732257083771925,
+     "atm_call_cost_pct": 0.14252865490238506,
+     "straddle_mult": 5.739886328606381,
+     "straddle_cost_pct": 0.29132681823073486,
+     "otm_call_mult": 18.51369565934879,
+     "otm_call_cost_pct": 0.08010596873249469,
+     "entry_spot": 31.725,
+     "event_spot": 85.05
+    },
+    "2.0": {
+     "atm_call_mult": 8.79009721793065,
+     "atm_call_cost_pct": 0.1902348494744696,
+     "straddle_mult": 4.323799576643341,
+     "straddle_cost_pct": 0.38673920737490397,
+     "otm_call_mult": 11.615217472611278,
+     "otm_call_cost_pct": 0.12768228654416255,
+     "entry_spot": 31.725,
+     "event_spot": 85.05
+    },
+    "3.0": {
+     "atm_call_mult": 5.900901816105942,
+     "atm_call_cost_pct": 0.28337750283438534,
+     "straddle_mult": 2.9181697815506324,
+     "straddle_cost_pct": 0.5730245140947354,
+     "otm_call_mult": 6.5980133011366915,
+     "otm_call_cost_pct": 0.22477334584263706,
+     "entry_spot": 31.725,
+     "event_spot": 85.05
+    }
+   }
+  },
+  {
+   "ticker": "ALNY",
+   "event_trading_date": "2024-06-24",
+   "event_type": "phase3_readout",
+   "direction": "positive",
+   "description": "Vutrisiran HELIOS-B Phase 3 in ATTR cardiomyopathy met primary and all secondary endpoints, announced pre-market",
+   "source_url": "https://www.businesswire.com/news/home/20240624263080/en/Alnylam-Reports-Positive-Topline-Results-from-HELIOS-B-Phase-3-Study-of-Vutrisiran-Achieving-Statistical-Significance-on-Primary-and-All-Secondary-Endpoints-in-Both-Overall-and-Monotherapy-Populations",
+   "day_move_pct": 34.52,
+   "verified": true,
+   "event_idx": 1972,
+   "pre_close": 165.7,
+   "event_close": 222.9,
+   "r5": 0.035301468291158766,
+   "r10": 0.1098459477561955,
+   "r20": 0.09807819748177593,
+   "r60": 0.09034677896953336,
+   "vol20_ann": 0.2980286227863317,
+   "drift_z10": 1.8502326260840096,
+   "event_ret": 0.3452021726010863,
+   "open_gap": 0.32389861194930614,
+   "sims": {
+    "0.6": {
+     "atm_call_mult": 7.782076043701502,
+     "atm_call_cost_pct": 0.05879158919967384,
+     "straddle_mult": 3.922447630028822,
+     "straddle_cost_pct": 0.11664161284890372,
+     "otm_call_mult": 30.16187202266535,
+     "otm_call_cost_pct": 0.008658608374136659,
+     "entry_spot": 152.78,
+     "event_spot": 222.9
+    },
+    "0.8": {
+     "atm_call_mult": 5.8523516825260975,
+     "atm_call_cost_pct": 0.07817722561820455,
+     "straddle_mult": 2.9439040132515815,
+     "straddle_cost_pct": 0.15541288568596504,
+     "otm_call_mult": 12.508130808853448,
+     "otm_call_cost_pct": 0.020879205827479472,
+     "entry_spot": 152.78,
+     "event_spot": 222.9
+    },
+    "1.0": {
+     "atm_call_mult": 4.691706742259401,
+     "atm_call_cost_pct": 0.09751688309094783,
+     "straddle_mult": 2.3572333993506343,
+     "straddle_cost_pct": 0.1940922006314515,
+     "otm_call_mult": 7.243987380646561,
+     "otm_call_cost_pct": 0.036051945420669494,
+     "entry_spot": 152.78,
+     "event_spot": 222.9
+    },
+    "1.2": {
+     "atm_call_mult": 3.9171577429147213,
+     "atm_call_cost_pct": 0.11679913036677579,
+     "straddle_mult": 1.9665052730240136,
+     "straddle_cost_pct": 0.2326566951831076,
+     "otm_call_mult": 4.932645076571804,
+     "otm_call_cost_pct": 0.0529451913975118,
+     "entry_spot": 152.78,
+     "event_spot": 222.9
+    },
+    "1.5": {
+     "atm_call_mult": 3.142523739140411,
+     "atm_call_cost_pct": 0.14559018669722745,
+     "straddle_mult": 1.5763592101295307,
+     "straddle_cost_pct": 0.29023880784401096,
+     "otm_call_mult": 3.2602532568262497,
+     "otm_call_cost_pct": 0.08010415667196327,
+     "entry_spot": 152.78,
+     "event_spot": 222.9
+    },
+    "2.0": {
+     "atm_call_mult": 2.368974723900159,
+     "atm_call_cost_pct": 0.1931302234954551,
+     "straddle_mult": 1.1873817762875736,
+     "straddle_cost_pct": 0.3853188814404662,
+     "otm_call_mult": 2.0454194695501844,
+     "otm_call_cost_pct": 0.1276803323537939,
+     "entry_spot": 152.78,
+     "event_spot": 222.9
+    },
+    "3.0": {
+     "atm_call_mult": 1.600038462460182,
+     "atm_call_cost_pct": 0.28594351236935184,
+     "straddle_mult": 0.8013385701191155,
+     "straddle_cost_pct": 0.5709454591882596,
+     "otm_call_mult": 1.1618909099958412,
+     "otm_call_cost_pct": 0.22477139241585353,
+     "entry_spot": 152.78,
+     "event_spot": 222.9
+    }
+   }
+  },
+  {
+   "ticker": "MDGL",
+   "event_trading_date": "2022-12-19",
+   "event_type": "phase3_readout",
+   "direction": "positive",
+   "description": "Resmetirom MAESTRO-NASH Phase 3 hit both liver-histology primary endpoints (first successful NASH Phase 3), announced pre-market",
+   "source_url": "https://www.globenewswire.com/news-release/2022/12/19/2576163/0/en/Madrigal-Announces-Positive-Topline-Results-from-the-Pivotal-Phase-3-MAESTRO-NASH-Clinical-Trial-of-Resmetirom-for-the-Treatment-of-NASH-and-Liver-Fibrosis.html",
+   "day_move_pct": 268.07,
+   "verified": true,
+   "event_idx": 1595,
+   "pre_close": 63.8,
+   "event_close": 234.83,
+   "r5": -0.046480346734419364,
+   "r10": -0.20409181636726548,
+   "r20": -0.08609081793439344,
+   "r60": 0.020963354136661838,
+   "vol20_ann": 0.8461416934014158,
+   "drift_z10": -1.2108288658662023,
+   "event_ret": 2.6807210031347966,
+   "open_gap": 2.18166144200627,
+   "sims": {
+    "0.6": {
+     "atm_call_mult": 37.878754316496384,
+     "atm_call_cost_pct": 0.05862928208401104,
+     "straddle_mult": 19.0365194407145,
+     "straddle_cost_pct": 0.11666020034434739,
+     "otm_call_mult": 224.18899962832987,
+     "otm_call_cost_pct": 0.009048977498817909,
+     "entry_spot": 72.87,
+     "event_spot": 234.83
+    },
+    "0.8": {
+     "atm_call_mult": 28.46512347154005,
+     "atm_call_cost_pct": 0.07801842749894333,
+     "straddle_mult": 14.287350289085024,
+     "straddle_cost_pct": 0.15543849117421196,
+     "otm_call_mult": 94.38425657848686,
+     "otm_call_cost_pct": 0.021493851693711954,
+     "entry_spot": 72.87,
+     "event_spot": 234.83
+    },
+    "1.0": {
+     "atm_call_mult": 22.80987713441526,
+     "atm_call_cost_pct": 0.09736151399351888,
+     "straddle_mult": 11.440092794926507,
+     "straddle_cost_pct": 0.19412466416336305,
+     "otm_call_mult": 55.090041245494135,
+     "otm_call_cost_pct": 0.03682482654313099,
+     "entry_spot": 72.87,
+     "event_spot": 234.83
+    },
+    "1.2": {
+     "atm_call_mult": 19.038650139085615,
+     "atm_call_cost_pct": 0.11664714439253192,
+     "straddle_mult": 9.54380345157016,
+     "straddle_cost_pct": 0.23269592496138922,
+     "otm_call_mult": 37.68926216482478,
+     "otm_call_cost_pct": 0.05382650379960509,
+     "entry_spot": 72.87,
+     "event_spot": 234.83
+    },
+    "1.5": {
+     "atm_call_mult": 15.269217932830248,
+     "atm_call_cost_pct": 0.14544321664555462,
+     "straddle_mult": 7.650346002462752,
+     "straddle_cost_pct": 0.2902880694674345,
+     "otm_call_mult": 25.018642884867845,
+     "otm_call_cost_pct": 0.08108678086397209,
+     "entry_spot": 72.87,
+     "event_spot": 234.83
+    },
+    "2.0": {
+     "atm_call_mult": 11.507264829441775,
+     "atm_call_cost_pct": 0.1929914888315428,
+     "straddle_mult": 5.76256573838784,
+     "straddle_cost_pct": 0.3853846138394109,
+     "otm_call_mult": 15.758169365961027,
+     "otm_call_cost_pct": 0.1287383810902157,
+     "entry_spot": 72.87,
+     "event_spot": 234.83
+    },
+    "3.0": {
+     "atm_call_mult": 7.769918325955306,
+     "atm_call_cost_pct": 0.2858207871238815,
+     "straddle_mult": 3.889029991554449,
+     "straddle_cost_pct": 0.5710432104240882,
+     "otm_call_mult": 8.983318415980403,
+     "otm_call_cost_pct": 0.22582759723961665,
+     "entry_spot": 72.87,
+     "event_spot": 234.83
+    }
+   }
+  },
+  {
+   "ticker": "MDGL",
+   "event_trading_date": "2024-03-15",
+   "event_type": "pdufa",
+   "direction": "positive",
+   "description": "FDA accelerated approval of Rezdiffra (resmetirom), first NASH/MASH drug (approval announced 2024-03-14 after close)",
+   "source_url": "https://ir.madrigalpharma.com/news-releases/news-release-details/madrigal-pharmaceuticals-announces-fda-approval-rezdiffratm",
+   "day_move_pct": 11,
+   "verified": true,
+   "event_idx": 1905,
+   "pre_close": 243.57,
+   "event_close": 270.37,
+   "r5": -0.029717563637812194,
+   "r10": 0.031202370872142282,
+   "r20": 0.11739609138453067,
+   "r60": 0.027158098933074637,
+   "vol20_ann": 0.74124588386198,
+   "drift_z10": 0.21131268592655164,
+   "event_ret": 0.110029970850269,
+   "open_gap": 0.20663464301843404,
+   "sims": {
+    "0.6": {
+     "atm_call_mult": 1.2420460966251468,
+     "atm_call_cost_pct": 0.05877721771212358,
+     "straddle_mult": 0.6258744119483082,
+     "straddle_cost_pct": 0.1166432313514345,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.008427976220881567,
+     "entry_spot": 251.63,
+     "event_spot": 270.37
+    },
+    "0.8": {
+     "atm_call_mult": 0.9339950756675061,
+     "atm_call_cost_pct": 0.07816316780648457,
+     "straddle_mult": 0.46973555989280635,
+     "straddle_cost_pct": 0.15541513154015643,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.020512073107386022,
+     "entry_spot": 251.63,
+     "event_spot": 270.37
+    },
+    "1.0": {
+     "atm_call_mult": 0.7487350754010464,
+     "atm_call_cost_pct": 0.09750313058424069,
+     "straddle_mult": 0.3761250539927255,
+     "straddle_cost_pct": 0.1940950570956687,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.03558777201950384,
+     "entry_spot": 251.63,
+     "event_spot": 270.37
+    },
+    "1.2": {
+     "atm_call_mult": 0.6251110135641476,
+     "atm_call_cost_pct": 0.11678567845667627,
+     "straddle_mult": 0.31377961777522273,
+     "straddle_cost_pct": 0.23266015284053995,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.05241420491296624,
+     "entry_spot": 251.63,
+     "event_spot": 270.37
+    },
+    "1.5": {
+     "atm_call_mult": 0.5014797917660091,
+     "atm_call_cost_pct": 0.14557717983558002,
+     "straddle_mult": 0.2515270814201595,
+     "straddle_cost_pct": 0.29024315559834735,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.07951044304605243,
+     "entry_spot": 251.63,
+     "event_spot": 270.37
+    },
+    "2.0": {
+     "atm_call_mult": 0.3780281177965894,
+     "atm_call_cost_pct": 0.19311794650447606,
+     "straddle_mult": 0.1894610335802506,
+     "straddle_cost_pct": 0.3853246889361394,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.1270394394942776,
+     "entry_spot": 251.63,
+     "event_spot": 270.37
+    },
+    "3.0": {
+     "atm_call_mult": 0.2553189118553166,
+     "atm_call_cost_pct": 0.28593265300769904,
+     "straddle_mult": 0.12786319177223587,
+     "straddle_cost_pct": 0.5709541019425856,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.22413021845032094,
+     "entry_spot": 251.63,
+     "event_spot": 270.37
+    }
+   }
+  },
+  {
+   "ticker": "SRPT",
+   "event_trading_date": "2023-10-31",
+   "event_type": "phase3_readout",
+   "direction": "negative",
+   "description": "Elevidys EMBARK Phase 3 DMD gene therapy missed primary endpoint (NSAA at 52 weeks); announced 2023-10-30 after close",
+   "source_url": "https://www.businesswire.com/news/home/20231030875867/en/Sarepta-Therapeutics-Announces-Topline-Results-from-EMBARK-a-Global-Pivotal-Study-of-ELEVIDYS-Gene-Therapy-for-Duchenne-Muscular-Dystrophy",
+   "day_move_pct": -37.47,
+   "verified": true,
+   "event_idx": 1811,
+   "pre_close": 107.65,
+   "event_close": 67.31,
+   "r5": -0.03366247755834828,
+   "r10": -0.08421948107188426,
+   "r20": -0.09225061135002954,
+   "r60": 0.02222011205013774,
+   "vol20_ann": 0.4342209616856558,
+   "drift_z10": -0.9736481582291581,
+   "event_ret": -0.37473293079424064,
+   "open_gap": -0.4646539712029726,
+   "sims": {
+    "0.6": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.05808161928684806,
+     "straddle_mult": 3.7321914150415645,
+     "straddle_cost_pct": 0.11672795581527694,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.008757757022339333,
+     "entry_spot": 118.65,
+     "event_spot": 67.31
+    },
+    "0.8": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.07748205716744953,
+     "straddle_mult": 2.801095270717701,
+     "straddle_cost_pct": 0.1555288315764799,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.021036109063340604,
+     "entry_spot": 118.65,
+     "event_spot": 67.31
+    },
+    "1.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.09683640394663072,
+     "straddle_mult": 2.2428780138476982,
+     "straddle_cost_pct": 0.19423752513484235,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.036249739309602444,
+     "entry_spot": 118.65,
+     "event_spot": 67.31
+    },
+    "1.2": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.11613325851310458,
+     "straddle_mult": 1.8711023714630366,
+     "straddle_cost_pct": 0.23283123426778998,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.053171066982083334,
+     "entry_spot": 118.65,
+     "event_spot": 67.31
+    },
+    "1.5": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.14494608731943487,
+     "straddle_mult": 1.4998820367754866,
+     "straddle_cost_pct": 0.29045689188045065,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.08035632862402065,
+     "entry_spot": 118.65,
+     "event_spot": 67.31
+    },
+    "2.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.1925220245321583,
+     "straddle_mult": 1.1297748201178923,
+     "straddle_cost_pct": 0.3856087663058974,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.1279521750476192,
+     "entry_spot": 118.65,
+     "event_spot": 67.31
+    },
+    "3.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.2854053285917219,
+     "straddle_mult": 0.7624603615924531,
+     "straddle_cost_pct": 0.5713753744250247,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.22504303462893802,
+     "entry_spot": 118.65,
+     "event_spot": 67.31
+    }
+   }
+  },
+  {
+   "ticker": "SRPT",
+   "event_trading_date": "2024-06-21",
+   "event_type": "pdufa",
+   "direction": "positive",
+   "description": "FDA expanded Elevidys label to DMD ages 4+ incl. non-ambulatory (traditional + accelerated approval); announced 2024-06-20 after close",
+   "source_url": "https://investorrelations.sarepta.com/news-releases/news-release-details/sarepta-therapeutics-announces-expanded-us-fda-approval-elevidys",
+   "day_move_pct": 30.14,
+   "verified": true,
+   "event_idx": 1971,
+   "pre_close": 123.5,
+   "event_close": 160.72,
+   "r5": 0.029338223037172817,
+   "r10": 0.03097086568160945,
+   "r20": -0.043525402726146245,
+   "r60": -0.03470376739096448,
+   "vol20_ann": 0.6012977768359596,
+   "drift_z10": 0.2585615942833703,
+   "event_ret": 0.30137651821862343,
+   "open_gap": 0.3114979757085019,
+   "sims": {
+    "0.6": {
+     "atm_call_mult": 6.075231712540147,
+     "atm_call_cost_pct": 0.061277531783889616,
+     "straddle_mult": 3.197162252270756,
+     "straddle_cost_pct": 0.11643925925100232,
+     "otm_call_mult": 20.023303135226545,
+     "otm_call_cost_pct": 0.00838600555568376,
+     "entry_spot": 117.44,
+     "event_spot": 160.72
+    },
+    "0.8": {
+     "atm_call_mult": 4.6187720090068005,
+     "atm_call_cost_pct": 0.0806004720808303,
+     "straddle_mult": 2.400456966618614,
+     "straddle_cost_pct": 0.15508513984488367,
+     "otm_call_mult": 8.213064303399081,
+     "otm_call_cost_pct": 0.020444930799537988,
+     "entry_spot": 117.44,
+     "event_spot": 160.72
+    },
+    "1.0": {
+     "atm_call_mult": 3.7271298694833894,
+     "atm_call_cost_pct": 0.09988254163283916,
+     "straddle_mult": 1.9224197806484267,
+     "straddle_cost_pct": 0.1936492789489014,
+     "otm_call_mult": 4.7296587910509755,
+     "otm_call_cost_pct": 0.03550267339641163,
+     "entry_spot": 117.44,
+     "event_spot": 160.72
+    },
+    "1.2": {
+     "atm_call_mult": 3.1254780399240323,
+     "atm_call_cost_pct": 0.11910984483151944,
+     "straddle_mult": 1.6039162972403405,
+     "straddle_cost_pct": 0.23210388534626197,
+     "otm_call_mult": 3.209596107556172,
+     "otm_call_cost_pct": 0.052316717028611716,
+     "entry_spot": 117.44,
+     "event_spot": 160.72
+    },
+    "1.5": {
+     "atm_call_mult": 2.518413419668021,
+     "atm_call_cost_pct": 0.14782132331900716,
+     "straddle_mult": 1.2858054934561962,
+     "straddle_cost_pct": 0.28952684232123743,
+     "otm_call_mult": 2.1147705889756003,
+     "otm_call_cost_pct": 0.07940129875576174,
+     "entry_spot": 117.44,
+     "event_spot": 160.72
+    },
+    "2.0": {
+     "atm_call_mult": 1.9068231371192972,
+     "atm_call_cost_pct": 0.19523321125738063,
+     "straddle_mult": 0.9685822963029785,
+     "straddle_cost_pct": 0.38435061819798433,
+     "otm_call_mult": 1.322987405830765,
+     "otm_call_cost_pct": 0.12692148889331864,
+     "entry_spot": 117.44,
+     "event_spot": 160.72
+    },
+    "3.0": {
+     "atm_call_mult": 1.2935157118773237,
+     "atm_call_cost_pct": 0.2878010687781884,
+     "straddle_mult": 0.6537034914287323,
+     "straddle_cost_pct": 0.5694863332396,
+     "otm_call_mult": 0.7495824161152315,
+     "otm_call_cost_pct": 0.22401210023760298,
+     "entry_spot": 117.44,
+     "event_spot": 160.72
+    }
+   }
+  },
+  {
+   "ticker": "AMLX",
+   "event_trading_date": "2022-09-08",
+   "event_type": "adcom",
+   "direction": "positive",
+   "description": "FDA PCNS advisory committee reconvened and voted 7-2 that AMX0035 (Relyvrio) evidence supports approval in ALS (vote 2022-09-07 evening)",
+   "source_url": "https://investors.amylyx.com/news-releases/news-release-details/amylyx-pharmaceuticals-announces-fda-advisory-committee-supports",
+   "day_move_pct": 51.01,
+   "verified": true,
+   "event_idx": 165,
+   "pre_close": 17.9,
+   "event_close": 27.03,
+   "r5": -0.2550977944236372,
+   "r10": -0.2894005557761017,
+   "r20": -0.29803921568627456,
+   "r60": 0.3229859571322986,
+   "vol20_ann": 1.0619384526016773,
+   "drift_z10": -1.3680446889256586,
+   "event_ret": 0.510055865921788,
+   "open_gap": 0.7486033519553075,
+   "sims": {
+    "0.6": {
+     "atm_call_mult": 1.22430069154236,
+     "atm_call_cost_pct": 0.06551123669571539,
+     "straddle_mult": 0.6889002029752308,
+     "straddle_cost_pct": 0.11642535746682507,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.009967172019288144,
+     "entry_spot": 25.31,
+     "event_spot": 27.03
+    },
+    "0.8": {
+     "atm_call_mult": 0.9470305897059065,
+     "atm_call_cost_pct": 0.08469151182884896,
+     "straddle_mult": 0.5181702492494551,
+     "straddle_cost_pct": 0.15478590773309228,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.0229086471433474,
+     "entry_spot": 25.31,
+     "event_spot": 27.03
+    },
+    "1.0": {
+     "atm_call_mult": 0.7722818222386159,
+     "atm_call_cost_pct": 0.10385516022877216,
+     "straddle_mult": 0.4153286803165198,
+     "straddle_cost_pct": 0.19311320453293868,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.038584766859694745,
+     "entry_spot": 25.31,
+     "event_spot": 27.03
+    },
+    "1.2": {
+     "atm_call_mult": 0.6522023693860828,
+     "atm_call_cost_pct": 0.12297632783189193,
+     "straddle_mult": 0.34667616985000793,
+     "straddle_cost_pct": 0.23135553973917816,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.05582072372485433,
+     "entry_spot": 25.31,
+     "event_spot": 27.03
+    },
+    "1.5": {
+     "atm_call_mult": 0.529264935542184,
+     "atm_call_cost_pct": 0.15154121689205874,
+     "straddle_mult": 0.27802264942099575,
+     "straddle_cost_pct": 0.2884853178595118,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.08329775098671156,
+     "entry_spot": 25.31,
+     "event_spot": 27.03
+    },
+    "2.0": {
+     "atm_call_mult": 0.4035966378532835,
+     "atm_call_cost_pct": 0.19872676050268806,
+     "straddle_mult": 0.20949225695581303,
+     "straddle_cost_pct": 0.3828564050807704,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.13110723921587172,
+     "entry_spot": 25.31,
+     "event_spot": 27.03
+    },
+    "3.0": {
+     "atm_call_mult": 0.2757378847979974,
+     "atm_call_cost_pct": 0.29087570773641513,
+     "straddle_mult": 0.14141733996242023,
+     "straddle_cost_pct": 0.5671542995482246,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.22818209412500268,
+     "entry_spot": 25.31,
+     "event_spot": 27.03
+    }
+   }
+  },
+  {
+   "ticker": "AMLX",
+   "event_trading_date": "2024-03-08",
+   "event_type": "phase3_readout",
+   "direction": "negative",
+   "description": "Relyvrio/AMX0035 PHOENIX Phase 3 in ALS failed primary and secondary endpoints; drug later withdrawn from market",
+   "source_url": "https://investors.amylyx.com/news-releases/news-release-details/amylyx-pharmaceuticals-announces-topline-results-global-phase-3",
+   "day_move_pct": -82.29,
+   "verified": true,
+   "event_idx": 541,
+   "pre_close": 18.97,
+   "event_close": 3.36,
+   "r5": 0.006366047745357983,
+   "r10": 0.023193096008629954,
+   "r20": 0.25462962962962954,
+   "r60": 0.355,
+   "vol20_ann": 0.8791500574753649,
+   "drift_z10": 0.13243292989853292,
+   "event_ret": -0.8228782287822878,
+   "open_gap": -0.8423827095413812,
+   "sims": {
+    "0.6": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.05056011316090918,
+     "straddle_mult": 6.998202254748705,
+     "straddle_cost_pct": 0.1185249762981768,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.009477298812644419,
+     "entry_spot": 17.65,
+     "event_spot": 3.36
+    },
+    "0.8": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.07002156988327213,
+     "straddle_mult": 5.268166869231276,
+     "straddle_cost_pct": 0.1574478897429025,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.02215900334064935,
+     "entry_spot": 17.65,
+     "event_spot": 3.36
+    },
+    "1.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.08947725183534572,
+     "straddle_mult": 4.224205078029438,
+     "straddle_cost_pct": 0.19635925364704973,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.037655466491950444,
+     "entry_spot": 17.65,
+     "event_spot": 3.36
+    },
+    "1.2": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.10889534438452317,
+     "straddle_mult": 3.526691507277983,
+     "straddle_cost_pct": 0.2351954387454047,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.05476985894593774,
+     "entry_spot": 17.65,
+     "event_spot": 3.36
+    },
+    "1.5": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.13790932270037357,
+     "straddle_mult": 2.8287707237930078,
+     "straddle_cost_pct": 0.2932233953771054,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.08213479225320972,
+     "entry_spot": 17.65,
+     "event_spot": 3.36
+    },
+    "2.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.185843994049245,
+     "straddle_mult": 2.1317842128792885,
+     "straddle_cost_pct": 0.38909273807484834,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.1298632456035042,
+     "entry_spot": 17.65,
+     "event_spot": 3.36
+    },
+    "3.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.2794665868414978,
+     "straddle_mult": 1.4391934355237628,
+     "straddle_cost_pct": 0.576337923659354,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.22694738881192072,
+     "entry_spot": 17.65,
+     "event_spot": 3.36
+    }
+   }
+  },
+  {
+   "ticker": "GERN",
+   "event_trading_date": "2024-03-15",
+   "event_type": "adcom",
+   "direction": "positive",
+   "description": "FDA ODAC voted 12-2 that imetelstat benefit/risk is favorable in lower-risk MDS (vote 2024-03-14; stock halted that day)",
+   "source_url": "https://ir.geron.com/investors/press-releases/press-release-details/2024/Geron-Announces-FDA-Oncologic-Drugs-Advisory-Committee-Votes-in-Favor-of-the-Clinical-BenefitRisk-Profile-of-Imetelstat-for-the-Treatment-of-Transfusion-Dependent-Anemia-in-Patients-with-Lower-Risk-MDS/default.aspx",
+   "day_move_pct": 92,
+   "verified": true,
+   "event_idx": 1904,
+   "pre_close": 1.75,
+   "event_close": 3.36,
+   "r5": -0.16666666666666674,
+   "r10": -0.10256410256410253,
+   "r20": -0.15458937198067624,
+   "r60": -0.20814479638009054,
+   "vol20_ann": 0.8679148646608132,
+   "drift_z10": -0.5932237476282511,
+   "event_ret": 0.9199999999999999,
+   "open_gap": 0.7142857142857142,
+   "sims": {
+    "0.6": {
+     "atm_call_mult": 11.433481771192316,
+     "atm_call_cost_pct": 0.05947444650791511,
+     "straddle_mult": 5.833366146187218,
+     "straddle_cost_pct": 0.11657077285375939,
+     "entry_spot": 2,
+     "event_spot": 3.36
+    },
+    "0.8": {
+     "atm_call_mult": 8.624569020004564,
+     "atm_call_cost_pct": 0.07884451946790033,
+     "straddle_mult": 4.378314193032891,
+     "straddle_cost_pct": 0.15531091877372988,
+     "entry_spot": 2,
+     "event_spot": 3.36
+    },
+    "1.0": {
+     "atm_call_mult": 6.926809287132669,
+     "atm_call_cost_pct": 0.0981692972640631,
+     "straddle_mult": 3.5058689262465808,
+     "straddle_cost_pct": 0.19396047436605535,
+     "otm_call_mult": 29.539306159836187,
+     "otm_call_cost_pct": 0.006093575760582393,
+     "entry_spot": 2,
+     "event_spot": 3.36
+    },
+    "1.2": {
+     "atm_call_mult": 5.79033709569539,
+     "atm_call_cost_pct": 0.11743703151678692,
+     "straddle_mult": 2.9247822202894334,
+     "straddle_cost_pct": 0.23249594287150305,
+     "otm_call_mult": 13.124948578070555,
+     "otm_call_cost_pct": 0.013714339445165355,
+     "entry_spot": 2,
+     "event_spot": 3.36
+    },
+    "1.5": {
+     "atm_call_mult": 4.65094841335691,
+     "atm_call_cost_pct": 0.14620673883355267,
+     "straddle_mult": 2.3445417339787493,
+     "straddle_cost_pct": 0.29003535750503445,
+     "otm_call_mult": 5.940916912145055,
+     "otm_call_cost_pct": 0.03029835337909284,
+     "entry_spot": 2,
+     "event_spot": 3.36
+    },
+    "2.0": {
+     "atm_call_mult": 3.510366849785259,
+     "atm_call_cost_pct": 0.1937119478101264,
+     "straddle_mult": 1.7660237907839393,
+     "straddle_cost_pct": 0.3850457754581819,
+     "otm_call_mult": 2.674206883322397,
+     "otm_call_cost_pct": 0.06730967642128363,
+     "entry_spot": 2,
+     "event_spot": 3.36
+    },
+    "3.0": {
+     "atm_call_mult": 2.373822089554329,
+     "atm_call_cost_pct": 0.28645786177163174,
+     "straddle_mult": 1.1918583384690111,
+     "straddle_cost_pct": 0.5705376033811926,
+     "otm_call_mult": 1.1401878416723785,
+     "otm_call_cost_pct": 0.15786872427615406,
+     "entry_spot": 2,
+     "event_spot": 3.36
+    }
+   }
+  },
+  {
+   "ticker": "SMMT",
+   "event_trading_date": "2024-09-09",
+   "event_type": "phase3_readout",
+   "direction": "positive",
+   "description": "Ivonescimab HARMONi-2 Phase 3 (China): PFS superiority vs pembrolizumab in PD-L1+ NSCLC, presented at WCLC 2024-09-08 (Sunday)",
+   "source_url": "https://www.medthority.com/news/2024/9/summit-therapeutics-inc.-announced-data-from-the-primary-analysis-of-the-phase-iii-harmoni-2-trial-featuring-the-novel-potential-first-in-class-investigational-bispecific-antibody-ivonescimab",
+   "day_move_pct": 55.99,
+   "verified": true,
+   "event_idx": 2023,
+   "pre_close": 12.27,
+   "event_close": 19.14,
+   "r5": -0.045878693623639166,
+   "r10": -0.0924556213017752,
+   "r20": 0.1982421875,
+   "r60": 0.6273209549071617,
+   "vol20_ann": 0.5553635696668359,
+   "drift_z10": -0.8357111643240033,
+   "event_ret": 0.5599022004889977,
+   "open_gap": 0.308883455582722,
+   "sims": {
+    "0.6": {
+     "atm_call_mult": 7.5181991440175695,
+     "atm_call_cost_pct": 0.062437686373096074,
+     "straddle_mult": 4.03296174204033,
+     "straddle_cost_pct": 0.11639558971049473,
+     "otm_call_mult": 37.185759997461545,
+     "otm_call_cost_pct": 0.006455728270604079,
+     "entry_spot": 13.08,
+     "event_spot": 19.14
+    },
+    "0.8": {
+     "atm_call_mult": 5.743824596117326,
+     "atm_call_cost_pct": 0.08172585224172117,
+     "straddle_mult": 3.029058140722168,
+     "straddle_cost_pct": 0.154971921447745,
+     "otm_call_mult": 13.932080550563215,
+     "otm_call_cost_pct": 0.017230819274139646,
+     "entry_spot": 13.08,
+     "event_spot": 19.14
+    },
+    "1.0": {
+     "atm_call_mult": 4.648728650752306,
+     "atm_call_cost_pct": 0.10097792224734005,
+     "straddle_mult": 2.4262379371629184,
+     "straddle_cost_pct": 0.19347606145898275,
+     "otm_call_mult": 7.658363730257272,
+     "otm_call_cost_pct": 0.03134627324255416,
+     "entry_spot": 13.08,
+     "event_spot": 19.14
+    },
+    "1.2": {
+     "atm_call_mult": 3.9060419168922325,
+     "atm_call_cost_pct": 0.12017765559928567,
+     "straddle_mult": 2.024443734808095,
+     "straddle_cost_pct": 0.23187552816287407,
+     "otm_call_mult": 5.054053814213715,
+     "otm_call_cost_pct": 0.047498734858021745,
+     "entry_spot": 13.08,
+     "event_spot": 19.14
+    },
+    "1.5": {
+     "atm_call_mult": 3.153631296334424,
+     "atm_call_cost_pct": 0.1488502986351862,
+     "straddle_mult": 1.623046949393344,
+     "straddle_cost_pct": 0.28922081423467505,
+     "otm_call_mult": 3.246254792700332,
+     "otm_call_cost_pct": 0.07395019103839988,
+     "entry_spot": 13.08,
+     "event_spot": 19.14
+    },
+    "2.0": {
+     "atm_call_mult": 2.392539422465314,
+     "atm_call_cost_pct": 0.19620113918998708,
+     "straddle_mult": 1.2226919910585181,
+     "straddle_cost_pct": 0.38392249534427675,
+     "otm_call_mult": 1.984375841683341,
+     "otm_call_cost_pct": 0.12097565241263342,
+     "entry_spot": 13.08,
+     "event_spot": 19.14
+    },
+    "3.0": {
+     "atm_call_mult": 1.6262322548551635,
+     "atm_call_cost_pct": 0.2886543166532237,
+     "straddle_mult": 0.8252376088540785,
+     "straddle_cost_pct": 0.56882885027075,
+     "otm_call_mult": 1.1011491839473104,
+     "otm_call_cost_pct": 0.21800966261352428,
+     "entry_spot": 13.08,
+     "event_spot": 19.14
+    }
+   }
+  },
+  {
+   "ticker": "SMMT",
+   "event_trading_date": "2025-05-30",
+   "event_type": "phase3_readout",
+   "direction": "negative",
+   "description": "Ivonescimab HARMONi Phase 3 (EGFRm NSCLC) met PFS but overall survival missed statistical significance",
+   "source_url": "https://www.fool.com/investing/2025/05/30/why-summit-therapeutics-plunged-today/",
+   "day_move_pct": -30.5,
+   "verified": true,
+   "event_idx": 2204,
+   "pre_close": 26.21,
+   "event_close": 18.215,
+   "r5": 0.031483667847304275,
+   "r10": 0.15208791208791217,
+   "r20": 0.08665008291873955,
+   "r60": 0.3729701414353066,
+   "vol20_ann": 0.8041682284122433,
+   "drift_z10": 0.9493974424795675,
+   "event_ret": -0.3050362457077451,
+   "open_gap": -0.19114841663487225,
+   "sims": {
+    "0.6": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.0613510995005947,
+     "straddle_mult": 1.779804842649512,
+     "straddle_cost_pct": 0.11643555700345747,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.007303682323286321,
+     "entry_spot": 23.09,
+     "event_spot": 18.215
+    },
+    "0.8": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.0806719359790776,
+     "straddle_mult": 1.336318479922772,
+     "straddle_cost_pct": 0.1550772299604232,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.01867534438057686,
+     "entry_spot": 23.09,
+     "event_spot": 18.215
+    },
+    "1.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.09995216060868875,
+     "straddle_mult": 1.0702078699067683,
+     "straddle_cost_pct": 0.1936376792196455,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.03323525962745931,
+     "entry_spot": 23.09,
+     "event_spot": 18.215
+    },
+    "1.2": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.11917775099091149,
+     "straddle_mult": 0.8929018317619897,
+     "straddle_cost_pct": 0.23208885998409112,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.049702570708134365,
+     "entry_spot": 23.09,
+     "event_spot": 18.215
+    },
+    "1.5": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.14788679805489544,
+     "straddle_mult": 0.715812056559905,
+     "straddle_cost_pct": 0.28950695411205885,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.07645788507231838,
+     "entry_spot": 23.09,
+     "event_spot": 18.215
+    },
+    "2.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.19529483770034387,
+     "straddle_mult": 0.5392145414143504,
+     "straddle_cost_pct": 0.3843230334029558,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.12372459251185385,
+     "entry_spot": 23.09,
+     "event_spot": 18.215
+    },
+    "3.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.2878554257335225,
+     "straddle_mult": 0.3639207577586484,
+     "straddle_cost_pct": 0.5694442094693131,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.22079668923638993,
+     "entry_spot": 23.09,
+     "event_spot": 18.215
+    }
+   }
+  },
+  {
+   "ticker": "CYTK",
+   "event_trading_date": "2023-12-27",
+   "event_type": "phase3_readout",
+   "direction": "positive",
+   "description": "Aficamten SEQUOIA-HCM Phase 3 in obstructive HCM met primary endpoint (pVO2) and all 10 secondary endpoints, announced pre-market",
+   "source_url": "https://ir.cytokinetics.com/press-releases/press-release-details/2023/Cytokinetics-Announces-Positive-Results-From-SEQUOIA-HCM-the-Pivotal-Phase-3-Clinical-Trial-of-Aficamten-in-Patients-With-Obstructive-Hypertrophic-Cardiomyopathy-12-27-2023/default.aspx",
+   "day_move_pct": 82.54,
+   "verified": true,
+   "event_idx": 1850,
+   "pre_close": 45.71,
+   "event_close": 83.44,
+   "r5": 0.26655583264062055,
+   "r10": 0.287605633802817,
+   "r20": 0.4360666038328622,
+   "r60": 0.5515953835709437,
+   "vol20_ann": 0.8750835814727578,
+   "drift_z10": 1.6498639145109282,
+   "event_ret": 0.8254211332312404,
+   "open_gap": 0.611244804200394,
+   "sims": {
+    "0.6": {
+     "atm_call_mult": 22.624999555500363,
+     "atm_call_cost_pct": 0.06097962168045972,
+     "straddle_mult": 11.847127555714316,
+     "straddle_cost_pct": 0.11645556333606938,
+     "otm_call_mult": 133.922786816967,
+     "otm_call_cost_pct": 0.008813216507626535,
+     "entry_spot": 35.11,
+     "event_spot": 83.44
+    },
+    "0.8": {
+     "atm_call_mult": 17.179028579929046,
+     "atm_call_cost_pct": 0.08031093882845615,
+     "straddle_mult": 8.89427503978302,
+     "straddle_cost_pct": 0.15511819763206233,
+     "otm_call_mult": 55.87534810351462,
+     "otm_call_cost_pct": 0.02112363601450926,
+     "entry_spot": 35.11,
+     "event_spot": 83.44
+    },
+    "1.0": {
+     "atm_call_mult": 13.851991887113751,
+     "atm_call_cost_pct": 0.09960039860393342,
+     "straddle_mult": 7.1227901244982945,
+     "straddle_cost_pct": 0.19369711718301688,
+     "otm_call_mult": 32.4613001569869,
+     "otm_call_cost_pct": 0.036359927353944874,
+     "entry_spot": 35.11,
+     "event_spot": 83.44
+    },
+    "1.2": {
+     "atm_call_mult": 11.609952430792637,
+     "atm_call_cost_pct": 0.11883458796573111,
+     "straddle_mult": 5.9425881009034445,
+     "straddle_cost_pct": 0.23216549590661226,
+     "otm_call_mult": 22.145617246675293,
+     "otm_call_cost_pct": 0.05329679919848878,
+     "entry_spot": 35.11,
+     "event_spot": 83.44
+    },
+    "1.5": {
+     "atm_call_mult": 9.350112109910306,
+     "atm_call_cost_pct": 0.1475558685497105,
+     "straddle_mult": 4.76390031186091,
+     "straddle_cost_pct": 0.28960805707457105,
+     "otm_call_mult": 14.662613399782602,
+     "otm_call_cost_pct": 0.0804965992992861,
+     "entry_spot": 35.11,
+     "event_spot": 83.44
+    },
+    "2.0": {
+     "atm_call_mult": 7.075805247791263,
+     "atm_call_cost_pct": 0.19498330792041632,
+     "straddle_mult": 3.5885485566685067,
+     "straddle_cost_pct": 0.3844629358159827,
+     "otm_call_mult": 9.213584489263594,
+     "otm_call_cost_pct": 0.12810329322947134,
+     "entry_spot": 35.11,
+     "event_spot": 83.44
+    },
+    "3.0": {
+     "atm_call_mult": 4.79748604918119,
+     "atm_call_cost_pct": 0.2875805993537918,
+     "straddle_mult": 2.42191820201951,
+     "straddle_cost_pct": 0.5696575186827336,
+     "otm_call_mult": 5.241217476086388,
+     "otm_call_cost_pct": 0.22519395940119716,
+     "entry_spot": 35.11,
+     "event_spot": 83.44
+    }
+   }
+  },
+  {
+   "ticker": "INSM",
+   "event_trading_date": "2024-05-28",
+   "event_type": "phase3_readout",
+   "direction": "positive",
+   "description": "Brensocatib ASPEN Phase 3 in bronchiectasis met primary endpoint (pulmonary exacerbation reduction), announced pre-market",
+   "source_url": "https://investor.insmed.com/2024-05-28-Insmed-Announces-Positive-Topline-Results-from-Landmark-ASPEN-Study-of-Brensocatib-in-Patients-with-Bronchiectasis",
+   "day_move_pct": 118.45,
+   "verified": true,
+   "event_idx": 1954,
+   "pre_close": 22,
+   "event_close": 48.06,
+   "r5": -0.11182882519176418,
+   "r10": -0.1528686946476704,
+   "r20": -0.11290322580645162,
+   "r60": -0.20634920634920628,
+   "vol20_ann": 0.365439039439489,
+   "drift_z10": -2.099925497554743,
+   "event_ret": 1.1845454545454546,
+   "open_gap": 1.2568181818181818,
+   "sims": {
+    "0.6": {
+     "atm_call_mult": 15.142879315895934,
+     "atm_call_cost_pct": 0.056399160654833906,
+     "straddle_mult": 7.300406565443368,
+     "straddle_cost_pct": 0.1169860439494726,
+     "otm_call_mult": 78.34880725183108,
+     "otm_call_cost_pct": 0.008429896282734651,
+     "entry_spot": 25.83,
+     "event_spot": 48.06
+    },
+    "0.8": {
+     "atm_call_mult": 11.26280529106679,
+     "atm_call_cost_pct": 0.07582885979493681,
+     "straddle_mult": 5.48008123365789,
+     "straddle_cost_pct": 0.15584544222967853,
+     "otm_call_mult": 32.19438165043338,
+     "otm_call_cost_pct": 0.0205151422437714,
+     "entry_spot": 25.83,
+     "event_spot": 48.06
+    },
+    "1.0": {
+     "atm_call_mult": 8.969680722329574,
+     "atm_call_cost_pct": 0.09521472499995143,
+     "straddle_mult": 4.388336711144498,
+     "straddle_cost_pct": 0.19461717263970776,
+     "otm_call_mult": 18.556940352206823,
+     "otm_call_cost_pct": 0.03559166039623337,
+     "entry_spot": 25.83,
+     "event_spot": 48.06
+    },
+    "1.2": {
+     "atm_call_mult": 7.456038359171857,
+     "atm_call_cost_pct": 0.11454416436355822,
+     "straddle_mult": 3.661094562898969,
+     "straddle_cost_pct": 0.23327605136692128,
+     "otm_call_mult": 12.599947039579781,
+     "otm_call_cost_pct": 0.0524186583431014,
+     "entry_spot": 25.83,
+     "event_spot": 48.06
+    },
+    "1.5": {
+     "atm_call_mult": 5.955405715487097,
+     "atm_call_cost_pct": 0.14340680116772248,
+     "straddle_mult": 2.9348515282073513,
+     "straddle_cost_pct": 0.2910013249752499,
+     "otm_call_mult": 8.306215991981425,
+     "otm_call_cost_pct": 0.07951542792127064,
+     "entry_spot": 25.83,
+     "event_spot": 48.06
+    },
+    "2.0": {
+     "atm_call_mult": 4.469886948757362,
+     "atm_call_cost_pct": 0.1910665064026737,
+     "straddle_mult": 2.2107166531712843,
+     "straddle_cost_pct": 0.3863207354451522,
+     "otm_call_mult": 5.198734509495636,
+     "otm_call_cost_pct": 0.1270448255825592,
+     "entry_spot": 25.83,
+     "event_spot": 48.06
+    },
+    "3.0": {
+     "atm_call_mult": 3.0059797309192824,
+     "atm_call_cost_pct": 0.2841155828595004,
+     "straddle_mult": 1.491994238279992,
+     "straddle_cost_pct": 0.5724188883588057,
+     "otm_call_mult": 2.946753151317803,
+     "otm_call_cost_pct": 0.22413561132989301,
+     "entry_spot": 25.83,
+     "event_spot": 48.06
+    }
+   }
+  },
+  {
+   "ticker": "VRTX",
+   "event_trading_date": "2024-12-19",
+   "event_type": "phase2_readout",
+   "direction": "negative",
+   "description": "Suzetrigine Phase 2 in painful lumbosacral radiculopathy showed no meaningful separation from placebo (2.02 vs 1.98 point NPRS reduction)",
+   "source_url": "https://investors.vrtx.com/news-releases/news-release-details/vertex-announces-results-phase-2-study-suzetrigine-treatment",
+   "day_move_pct": -11.37,
+   "verified": true,
+   "event_idx": 2098,
+   "pre_close": 447.5,
+   "event_close": 396.64,
+   "r5": -0.044395566849601775,
+   "r10": -0.03551877236087764,
+   "r20": -0.0011383674471552307,
+   "r60": -0.03345644614354526,
+   "vol20_ann": 0.24398751430581997,
+   "drift_z10": -0.730786666124107,
+   "event_ret": -0.11365363128491623,
+   "open_gap": -0.1262569832402235,
+   "sims": {
+    "0.6": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.059391661617632055,
+     "straddle_mult": 1.1817171625638867,
+     "straddle_cost_pct": 0.11657873270962354,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.0084247254828255,
+     "entry_spot": 459.92,
+     "event_spot": 396.64
+    },
+    "0.8": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.07876368969881099,
+     "straddle_mult": 0.8869470490029364,
+     "straddle_cost_pct": 0.15532278887198148,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.020506876450576434,
+     "entry_spot": 459.92,
+     "event_spot": 396.64
+    },
+    "1.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.09809031007824923,
+     "straddle_mult": 0.7102067688212674,
+     "straddle_cost_pct": 0.19397602963085803,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.0355811879158836,
+     "entry_spot": 459.92,
+     "event_spot": 396.64
+    },
+    "1.2": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.11735982765163516,
+     "straddle_mult": 0.5924910257520838,
+     "straddle_cost_pct": 0.23251506477762982,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.05240666380888701,
+     "entry_spot": 459.92,
+     "event_spot": 396.64
+    },
+    "1.5": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.14613214417731352,
+     "straddle_mult": 0.4749473651942246,
+     "straddle_cost_pct": 0.2900596978289865,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.07950200182546262,
+     "entry_spot": 459.92,
+     "event_spot": 396.64
+    },
+    "2.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.19364159079840346,
+     "straddle_mult": 0.3577531766949103,
+     "straddle_cost_pct": 0.3850785910711664,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.12703031867550482,
+     "entry_spot": 459.92,
+     "event_spot": 396.64
+    },
+    "3.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.28639567455309234,
+     "straddle_mult": 0.24144109052867796,
+     "straddle_cost_pct": 0.5705867585805442,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.22412108595944516,
+     "entry_spot": 459.92,
+     "event_spot": 396.64
+    }
+   }
+  },
+  {
+   "ticker": "KRTX",
+   "event_trading_date": "2022-08-08",
+   "event_type": "phase3_readout",
+   "direction": "positive",
+   "description": "KarXT (xanomeline-trospium) EMERGENT-2 Phase 3 in schizophrenia met primary endpoint (-9.6 PANSS vs placebo), announced pre-market",
+   "source_url": "https://www.globenewswire.com/news-release/2022/08/08/2493729/0/en/Zai-Lab-Partner-Karuna-Therapeutics-Announces-Positive-Results-from-Phase-3-EMERGENT-2-Trial-of-KarXT-in-Schizophrenia.html",
+   "day_move_pct": 71.84,
+   "verified": true,
+   "event_idx": 782,
+   "pre_close": 140.36,
+   "event_close": 241.19,
+   "r5": 0.07761996161228413,
+   "r10": 0.08992079515452711,
+   "r20": 0.025423728813559476,
+   "r60": 0.39025356576862147,
+   "vol20_ann": 0.5156836299420458,
+   "drift_z10": 0.8753405827725046,
+   "event_ret": 0.7183670561413507,
+   "open_gap": 0.5739526930749499,
+   "sims": {
+    "0.6": {
+     "atm_call_mult": 14.952550976652082,
+     "atm_call_cost_pct": 0.059177187061460856,
+     "straddle_mult": 7.588753948452878,
+     "straddle_cost_pct": 0.11660015757550873,
+     "otm_call_mult": 84.36505332978277,
+     "otm_call_cost_pct": 0.008079149443628988,
+     "entry_spot": 127.92,
+     "event_spot": 241.19
+    },
+    "0.8": {
+     "atm_call_mult": 11.264197004192267,
+     "atm_call_cost_pct": 0.07855419306516474,
+     "straddle_mult": 5.695694609079047,
+     "straddle_cost_pct": 0.15535416958291648,
+     "otm_call_mult": 34.163872120639255,
+     "otm_call_cost_pct": 0.01995083786943676,
+     "entry_spot": 127.92,
+     "event_spot": 241.19
+    },
+    "1.0": {
+     "atm_call_mult": 9.039638818018101,
+     "atm_call_cost_pct": 0.09788553768626884,
+     "straddle_mult": 4.560685661800766,
+     "straddle_cost_pct": 0.1940168588251247,
+     "otm_call_mult": 19.544356402293552,
+     "otm_call_cost_pct": 0.03487440873678798,
+     "entry_spot": 127.92,
+     "event_spot": 241.19
+    },
+    "1.2": {
+     "atm_call_mult": 7.552514408730452,
+     "atm_call_cost_pct": 0.11715964489501841,
+     "straddle_mult": 3.8047411584810447,
+     "straddle_cost_pct": 0.23256507324262382,
+     "otm_call_mult": 13.210382570077067,
+     "otm_call_cost_pct": 0.0515956195859866,
+     "entry_spot": 127.92,
+     "event_spot": 241.19
+    },
+    "1.5": {
+     "atm_call_mult": 6.063161726721458,
+     "atm_call_cost_pct": 0.14593869437651233,
+     "straddle_mult": 3.0499111789811546,
+     "straddle_cost_pct": 0.2901231722056117,
+     "otm_call_mult": 8.67254336698385,
+     "otm_call_cost_pct": 0.07859261635587433,
+     "entry_spot": 127.92,
+     "event_spot": 241.19
+    },
+    "2.0": {
+     "atm_call_mult": 4.573834500827966,
+     "atm_call_cost_pct": 0.19345910002454003,
+     "straddle_mult": 2.2973329389390833,
+     "straddle_cost_pct": 0.38516398350166714,
+     "otm_call_mult": 5.407521774963735,
+     "otm_call_cost_pct": 0.12604625594422417,
+     "entry_spot": 127.92,
+     "event_spot": 241.19
+    },
+    "3.0": {
+     "atm_call_mult": 3.091347751061269,
+     "atm_call_cost_pct": 0.28623434742584297,
+     "straddle_mult": 1.5504248443468038,
+     "straddle_cost_pct": 0.5707144783042729,
+     "otm_call_mult": 3.0546504688888643,
+     "otm_call_cost_pct": 0.2231344897273884,
+     "entry_spot": 127.92,
+     "event_spot": 241.19
+    }
+   }
+  },
+  {
+   "ticker": "ABVX",
+   "event_trading_date": "2025-07-23",
+   "event_type": "phase3_readout",
+   "direction": "positive",
+   "description": "Obefazimod ABTECT-1/-2 Phase 3 induction trials in ulcerative colitis met primary endpoint (announced 2025-07-22 after US close / pre-market 7-23)",
+   "source_url": "https://www.globenewswire.com/news-release/2025/07/22/3119843/0/en/Abivax-Announces-Positive-Phase-3-Results-from-Both-ABTECT-8-Week-Induction-Trials-Investigating-Obefazimod-its-First-in-Class-Oral-miR-124-Enhancer-in-Moderate-to-Severely-Active-.html",
+   "day_move_pct": 586,
+   "verified": true,
+   "event_idx": 437,
+   "pre_close": 10,
+   "event_close": 68.6,
+   "r5": 0.12994350282485878,
+   "r10": 0.29032258064516125,
+   "r20": 0.6366612111292962,
+   "r60": 0.44300144300144306,
+   "vol20_ann": 0.5904235042391965,
+   "drift_z10": 2.4684108571085885,
+   "event_ret": 5.859999999999999,
+   "open_gap": 5.3100000000000005,
+   "sims": {
+    "0.6": {
+     "atm_call_mult": 92.13539813946721,
+     "atm_call_cost_pct": 0.07914893645463489,
+     "straddle_mult": 61.43363211320271,
+     "straddle_cost_pct": 0.1187040147508381,
+     "otm_call_mult": 867.7749515577906,
+     "otm_call_cost_pct": 0.008126236961577339,
+     "entry_spot": 8.31,
+     "event_spot": 68.6
+    },
+    "0.8": {
+     "atm_call_mult": 74.70123357900047,
+     "atm_call_cost_pct": 0.09762112917253314,
+     "straddle_mult": 46.851871036380686,
+     "straddle_cost_pct": 0.15564840018663462,
+     "otm_call_mult": 352.11137540537345,
+     "otm_call_cost_pct": 0.020027029452148418,
+     "entry_spot": 8.31,
+     "event_spot": 68.6
+    },
+    "1.0": {
+     "atm_call_mult": 62.724552744495526,
+     "atm_call_cost_pct": 0.11626099276097479,
+     "straddle_mult": 37.798629324912774,
+     "straddle_cost_pct": 0.19292812736351792,
+     "otm_call_mult": 201.64246789213996,
+     "otm_call_cost_pct": 0.034971526382289335,
+     "entry_spot": 8.31,
+     "event_spot": 68.6
+    },
+    "1.2": {
+     "atm_call_mult": 54.03716697933785,
+     "atm_call_cost_pct": 0.13495190773697616,
+     "straddle_mult": 31.66349756460026,
+     "straddle_cost_pct": 0.2303099573155206,
+     "otm_call_mult": 136.37827280861836,
+     "otm_call_cost_pct": 0.05170724588641565,
+     "entry_spot": 8.31,
+     "event_spot": 68.6
+    },
+    "1.5": {
+     "atm_call_mult": 44.74798282503874,
+     "atm_call_cost_pct": 0.16296642467831426,
+     "straddle_mult": 25.46778118497855,
+     "straddle_cost_pct": 0.28633899119819683,
+     "otm_call_mult": 89.58241489269608,
+     "otm_call_cost_pct": 0.07871795925714493,
+     "entry_spot": 8.31,
+     "event_spot": 68.6
+    },
+    "2.0": {
+     "atm_call_mult": 34.8310870582098,
+     "atm_call_cost_pct": 0.2093652363010108,
+     "straddle_mult": 19.234277288848297,
+     "straddle_cost_pct": 0.37913661444359,
+     "otm_call_mult": 55.88547695561293,
+     "otm_call_cost_pct": 0.12618206499840298,
+     "entry_spot": 8.31,
+     "event_spot": 68.6
+    },
+    "3.0": {
+     "atm_call_mult": 24.295321851340027,
+     "atm_call_cost_pct": 0.30015732317458294,
+     "straddle_mult": 13.005436798755879,
+     "straddle_cost_pct": 0.5607207881907342,
+     "otm_call_mult": 31.583820682335723,
+     "otm_call_cost_pct": 0.22327079920460097,
+     "entry_spot": 8.31,
+     "event_spot": 68.6
+    }
+   }
+  },
+  {
+   "ticker": "AXSM",
+   "event_trading_date": "2022-08-19",
+   "event_type": "pdufa",
+   "direction": "positive",
+   "description": "FDA approved Auvelity (AXS-05, dextromethorphan-bupropion) for major depressive disorder, announced that morning",
+   "source_url": "https://www.globenewswire.com/news-release/2022/08/19/2501453/33090/en/Axsome-Therapeutics-Announces-FDA-Approval-of-AUVELITY-the-First-and-Only-Oral-NMDA-Receptor-Antagonist-for-the-Treatment-of-Major-Depressive-Disorder-in-Adults.html",
+   "day_move_pct": 40.35,
+   "verified": true,
+   "event_idx": 1511,
+   "pre_close": 42.43,
+   "event_close": 59.55,
+   "r5": -0.06376875551632832,
+   "r10": 0.06048487878030495,
+   "r20": -0.004458000938526441,
+   "r60": 0.5067471590909092,
+   "vol20_ann": 0.7093953239809421,
+   "drift_z10": 0.4280147774410743,
+   "event_ret": 0.4034880980438369,
+   "open_gap": 0.22295545604525113,
+   "sims": {
+    "0.6": {
+     "atm_call_mult": 5.9124923684314705,
+     "atm_call_cost_pct": 0.06443733763939938,
+     "straddle_mult": 3.27330188191049,
+     "straddle_cost_pct": 0.1163917294461779,
+     "otm_call_mult": 19.90332554115429,
+     "otm_call_cost_pct": 0.008732357124623613,
+     "entry_spot": 43.44,
+     "event_spot": 59.55
+    },
+    "0.8": {
+     "atm_call_mult": 4.5540901388252575,
+     "atm_call_cost_pct": 0.08365782306040766,
+     "straddle_mult": 2.4606253480424467,
+     "straddle_cost_pct": 0.15483270028819465,
+     "otm_call_mult": 8.27792101302344,
+     "otm_call_cost_pct": 0.020995965813102358,
+     "entry_spot": 43.44,
+     "event_spot": 59.55
+    },
+    "1.0": {
+     "atm_call_mult": 3.7041440423268126,
+     "atm_call_cost_pct": 0.10285379366501882,
+     "straddle_mult": 1.9717219505881902,
+     "straddle_cost_pct": 0.19322464149741694,
+     "otm_call_mult": 4.801296837158803,
+     "otm_call_cost_pct": 0.03619916711832604,
+     "entry_spot": 43.44,
+     "event_spot": 59.55
+    },
+    "1.2": {
+     "atm_call_mult": 3.1227457259040463,
+     "atm_call_cost_pct": 0.12200329468858503,
+     "straddle_mult": 1.6455566317212107,
+     "straddle_cost_pct": 0.2315236435445493,
+     "otm_call_mult": 3.272303289875635,
+     "otm_call_cost_pct": 0.05311333675296559,
+     "entry_spot": 43.44,
+     "event_spot": 59.55
+    },
+    "1.5": {
+     "atm_call_mult": 2.5296716034336324,
+     "atm_call_cost_pct": 0.1506066109600404,
+     "straddle_mult": 1.319519629869316,
+     "straddle_cost_pct": 0.2887302760874601,
+     "otm_call_mult": 2.1646386264520365,
+     "otm_call_cost_pct": 0.08029189928938602,
+     "entry_spot": 43.44,
+     "event_spot": 59.55
+    },
+    "2.0": {
+     "atm_call_mult": 1.9256221549748649,
+     "atm_call_cost_pct": 0.19785047967521113,
+     "straddle_mult": 0.9941736912043486,
+     "straddle_cost_pct": 0.38321801351780155,
+     "otm_call_mult": 1.359080558616812,
+     "otm_call_cost_pct": 0.12788274064481334,
+     "entry_spot": 43.44,
+     "event_spot": 59.55
+    },
+    "3.0": {
+     "atm_call_mult": 1.3132632216544518,
+     "atm_call_cost_pct": 0.2901057920094836,
+     "straddle_mult": 0.6710693127126333,
+     "straddle_cost_pct": 0.5677286381863464,
+     "otm_call_mult": 0.7725479475003079,
+     "otm_call_cost_pct": 0.22497366947302974,
+     "entry_spot": 43.44,
+     "event_spot": 59.55
+    }
+   }
+  },
+  {
+   "ticker": "SRRK",
+   "event_trading_date": "2024-10-07",
+   "event_type": "phase3_readout",
+   "direction": "positive",
+   "description": "Apitegromab SAPPHIRE Phase 3 in spinal muscular atrophy met primary endpoint (HFMSE motor function), announced pre-market",
+   "source_url": "https://www.businesswire.com/news/home/20241007599288/en/Scholar-Rock-Reports-Apitegromab-Meets-Primary-Endpoint-in-Phase-3-SAPPHIRE-Study-in-Patients-with-Spinal-Muscular-Atrophy-SMA",
+   "day_move_pct": 361.99,
+   "verified": true,
+   "event_idx": 1601,
+   "pre_close": 7.42,
+   "event_close": 34.28,
+   "r5": -0.150057273768614,
+   "r10": -0.20979765708200215,
+   "r20": -0.07596513075965128,
+   "r60": -0.16909294512877937,
+   "vol20_ann": 0.7802948173446739,
+   "drift_z10": -1.3497153340451795,
+   "event_ret": 3.6199460916442048,
+   "open_gap": 2.549865229110512,
+   "sims": {
+    "0.6": {
+     "atm_call_mult": 67.38249348335242,
+     "atm_call_cost_pct": 0.043272391151329734,
+     "straddle_mult": 23.87292545043517,
+     "straddle_cost_pct": 0.12213842919324334,
+     "otm_call_mult": 198.31295639773208,
+     "otm_call_cost_pct": 0.014121424095954935,
+     "entry_spot": 8.67,
+     "event_spot": 34.28
+    },
+    "0.8": {
+     "atm_call_mult": 46.58449354951794,
+     "atm_call_cost_pct": 0.06259167788663715,
+     "straddle_mult": 18.135688353761118,
+     "straddle_cost_pct": 0.16077700266385817,
+     "otm_call_mult": 96.95288496984587,
+     "otm_call_cost_pct": 0.02888476564556062,
+     "entry_spot": 8.67,
+     "event_spot": 34.28
+    },
+    "1.0": {
+     "atm_call_mult": 35.54525593903557,
+     "atm_call_cost_pct": 0.08203068279391508,
+     "straddle_mult": 14.604199406607927,
+     "straddle_cost_pct": 0.19965501247841402,
+     "otm_call_mult": 61.187458239245444,
+     "otm_call_cost_pct": 0.045768551948425065,
+     "entry_spot": 8.67,
+     "event_spot": 34.28
+    },
+    "1.2": {
+     "atm_call_mult": 28.728505648688138,
+     "atm_call_cost_pct": 0.10149506731815339,
+     "straddle_mult": 12.221290131722194,
+     "straddle_cost_pct": 0.23858378152689066,
+     "otm_call_mult": 43.895046963647246,
+     "otm_call_cost_pct": 0.06379902869985,
+     "entry_spot": 8.67,
+     "event_spot": 34.28
+    },
+    "1.5": {
+     "atm_call_mult": 22.319179782239353,
+     "atm_call_cost_pct": 0.13064107387511714,
+     "straddle_mult": 9.821621255081778,
+     "straddle_cost_pct": 0.29687579464081815,
+     "otm_call_mult": 30.444503038087174,
+     "otm_call_cost_pct": 0.09198578007699834,
+     "entry_spot": 8.67,
+     "event_spot": 34.28
+    },
+    "2.0": {
+     "atm_call_mult": 16.3005866062745,
+     "atm_call_cost_pct": 0.17887709719852585,
+     "straddle_mult": 7.412781535087602,
+     "straddle_cost_pct": 0.39334784128763545,
+     "otm_call_mult": 19.964974697673554,
+     "otm_call_cost_pct": 0.14026871575957078,
+     "entry_spot": 8.67,
+     "event_spot": 34.28
+    },
+    "3.0": {
+     "atm_call_mult": 10.67237233936439,
+     "atm_call_cost_pct": 0.27321025935431403,
+     "straddle_mult": 5.009846473000521,
+     "straddle_cost_pct": 0.5820141655992118,
+     "otm_call_mult": 11.808217941215993,
+     "otm_call_cost_pct": 0.23716206585585825,
+     "entry_spot": 8.67,
+     "event_spot": 34.28
+    }
+   }
+  },
+  {
+   "ticker": "QURE",
+   "event_trading_date": "2025-09-24",
+   "event_type": "interim_analysis",
+   "direction": "positive",
+   "description": "AMT-130 pivotal Phase 1/2 Huntington's gene therapy: 75% slowing of progression (cUHDRS) vs external control at 36 months, announced pre-market",
+   "source_url": "https://www.globenewswire.com/news-release/2025/09/24/3155348/0/en/uniQure-Announces-Positive-Topline-Results-from-Pivotal-Phase-I-II-Study-of-AMT-130-in-Patients-with-Huntington-s-Disease.html",
+   "day_move_pct": 247.73,
+   "verified": true,
+   "event_idx": 2287,
+   "pre_close": 13.66,
+   "event_close": 47.5,
+   "r5": -0.05597788527988945,
+   "r10": -0.2189822755860491,
+   "r20": -0.12154340836012867,
+   "r60": -0.014430014430014348,
+   "vol20_ann": 0.5429970793820652,
+   "drift_z10": -2.02447184479314,
+   "event_ret": 2.4773060029282576,
+   "open_gap": 1.8814055636896048,
+   "sims": {
+    "0.6": {
+     "atm_call_mult": 23.71254387744678,
+     "atm_call_cost_pct": 0.07358346989674018,
+     "straddle_mult": 14.863185125288329,
+     "straddle_cost_pct": 0.1173941684688118,
+     "otm_call_mult": 182.35262940661315,
+     "otm_call_cost_pct": 0.00831366299224406,
+     "entry_spot": 17.48,
+     "event_spot": 47.5
+    },
+    "0.8": {
+     "atm_call_mult": 18.886802839589816,
+     "atm_call_cost_pct": 0.09238468116603321,
+     "straddle_mult": 11.257352482661734,
+     "straddle_cost_pct": 0.15499659100739785,
+     "otm_call_mult": 74.57432723618794,
+     "otm_call_cost_pct": 0.020328957200441124,
+     "entry_spot": 17.48,
+     "event_spot": 47.5
+    },
+    "1.0": {
+     "atm_call_mult": 15.682439122665057,
+     "atm_call_cost_pct": 0.11126147182420673,
+     "straddle_mult": 9.052397917707529,
+     "straddle_cost_pct": 0.19275017232374492,
+     "otm_call_mult": 42.87924158256633,
+     "otm_call_cost_pct": 0.0353555298714176,
+     "entry_spot": 17.48,
+     "event_spot": 47.5
+    },
+    "1.2": {
+     "atm_call_mult": 13.407242784097228,
+     "atm_call_cost_pct": 0.1301424376868047,
+     "straddle_mult": 7.5694561280425425,
+     "straddle_cost_pct": 0.23051210404894085,
+     "otm_call_mult": 29.07142968457562,
+     "otm_call_cost_pct": 0.052148047862967915,
+     "entry_spot": 17.48,
+     "event_spot": 47.5
+    },
+    "1.5": {
+     "atm_call_mult": 11.015863576388236,
+     "atm_call_cost_pct": 0.1583944142446723,
+     "straddle_mult": 6.079280984548275,
+     "straddle_cost_pct": 0.28701605716467604,
+     "otm_call_mult": 19.138658750489014,
+     "otm_call_cost_pct": 0.07921235894325247,
+     "entry_spot": 17.48,
+     "event_spot": 47.5
+    },
+    "2.0": {
+     "atm_call_mult": 8.50633141173515,
+     "atm_call_cost_pct": 0.20512382766724518,
+     "straddle_mult": 4.58598275973505,
+     "straddle_cost_pct": 0.38047488400982177,
+     "otm_call_mult": 11.963792080501044,
+     "otm_call_cost_pct": 0.12671720608610448,
+     "entry_spot": 17.48,
+     "event_spot": 47.5
+    },
+    "3.0": {
+     "atm_call_mult": 5.885402518057337,
+     "atm_call_cost_pct": 0.2964710150627351,
+     "straddle_mult": 3.098271489989844,
+     "straddle_cost_pct": 0.5631692588008016,
+     "otm_call_mult": 6.7737618382986,
+     "otm_call_cost_pct": 0.22380744154077634,
+     "entry_spot": 17.48,
+     "event_spot": 47.5
+    }
+   }
+  },
+  {
+   "ticker": "IOVA",
+   "event_trading_date": "2024-02-20",
+   "event_type": "pdufa",
+   "direction": "positive",
+   "description": "FDA accelerated approval of Amtagvi (lifileucel) TIL therapy for advanced melanoma (announced Fri 2024-02-16 after close; Mon holiday)",
+   "source_url": "https://www.globenewswire.com/news-release/2024/02/16/2830923/0/en/Iovance-s-AMTAGVI-lifileucel-Receives-U-S-FDA-Accelerated-Approval-for-Advanced-Melanoma.html",
+   "day_move_pct": 31.48,
+   "verified": true,
+   "event_idx": 1887,
+   "pre_close": 9.15,
+   "event_close": 12.03,
+   "r5": -0.0032679738562090277,
+   "r10": 0.15822784810126578,
+   "r20": 0.17609254498714644,
+   "r60": 0.6666666666666667,
+   "vol20_ann": 0.7681824610442323,
+   "drift_z10": 1.0339958718470041,
+   "event_ret": 0.3147540983606556,
+   "open_gap": 0.2732240437158471,
+   "sims": {
+    "0.6": {
+     "atm_call_mult": 9.284954584168778,
+     "atm_call_cost_pct": 0.054802463407411135,
+     "straddle_mult": 4.337782783347178,
+     "straddle_cost_pct": 0.11730379533798305,
+     "otm_call_mult": 63.68286328080243,
+     "otm_call_cost_pct": 0.004024836794522685,
+     "entry_spot": 7.92,
+     "event_spot": 12.03
+    },
+    "0.8": {
+     "atm_call_mult": 6.852855901436343,
+     "atm_call_cost_pct": 0.07425201859734601,
+     "straddle_mult": 3.2575474924742545,
+     "straddle_cost_pct": 0.1562029057178528,
+     "otm_call_mult": 20.19007725725416,
+     "otm_call_cost_pct": 0.012695004979291977,
+     "entry_spot": 7.92,
+     "event_spot": 12.03
+    },
+    "1.0": {
+     "atm_call_mult": 5.43263271773474,
+     "atm_call_cost_pct": 0.09366331395407777,
+     "straddle_mult": 2.6090864689457938,
+     "straddle_cost_pct": 0.1950254964313164,
+     "otm_call_mult": 10.196040676983724,
+     "otm_call_cost_pct": 0.025138496347089492,
+     "entry_spot": 7.92,
+     "event_spot": 12.03
+    },
+    "1.2": {
+     "atm_call_mult": 4.5021613926838855,
+     "atm_call_cost_pct": 0.11302091139274964,
+     "straddle_mult": 2.1769353936172404,
+     "straddle_cost_pct": 0.23374069130866004,
+     "otm_call_mult": 6.3980484947904,
+     "otm_call_cost_pct": 0.04006114231891705,
+     "entry_spot": 7.92,
+     "event_spot": 12.03
+    },
+    "1.5": {
+     "atm_call_mult": 3.585177076179212,
+     "atm_call_cost_pct": 0.14192838262278024,
+     "straddle_mult": 1.7452531349197786,
+     "straddle_cost_pct": 0.2915556337687213,
+     "otm_call_mult": 3.9260651829638475,
+     "otm_call_cost_pct": 0.06528499130002638,
+     "entry_spot": 7.92,
+     "event_spot": 12.03
+    },
+    "2.0": {
+     "atm_call_mult": 2.6828156207700316,
+     "atm_call_cost_pct": 0.18966580479814527,
+     "straddle_mult": 1.314724324323983,
+     "straddle_cost_pct": 0.3870304781194514,
+     "otm_call_mult": 2.303349161340934,
+     "otm_call_cost_pct": 0.11127845296538288,
+     "entry_spot": 7.92,
+     "event_spot": 12.03
+    },
+    "3.0": {
+     "atm_call_mult": 1.7988290790347736,
+     "atm_call_cost_pct": 0.28287200255369416,
+     "straddle_mult": 0.8873392751693905,
+     "straddle_cost_pct": 0.573442873630549,
+     "otm_call_mult": 1.2322647075651287,
+     "otm_call_cost_pct": 0.20800168157017868,
+     "entry_spot": 7.92,
+     "event_spot": 12.03
+    }
+   }
+  },
+  {
+   "ticker": "ACAD",
+   "event_trading_date": "2022-06-21",
+   "event_type": "adcom",
+   "direction": "negative",
+   "description": "FDA PDAC voted 9-3 that evidence does not support pimavanserin efficacy in Alzheimer's disease psychosis (vote Fri 2022-06-17; Mon Juneteenth holiday)",
+   "source_url": "https://acadia.com/en-us/media/news-releases/acadia-pharmaceuticals-announces-outcome-fda-advisory-committee",
+   "day_move_pct": -33.32,
+   "verified": true,
+   "event_idx": 1468,
+   "pre_close": 19.51,
+   "event_close": 13.01,
+   "r5": 0.1193344807802641,
+   "r10": 0.20357803824799503,
+   "r20": 0.21633416458852883,
+   "r60": -0.26070481242895027,
+   "vol20_ann": 0.8256559921251402,
+   "drift_z10": 1.2377475014304062,
+   "event_ret": -0.3331624807790877,
+   "open_gap": -0.3236801640184521,
+   "sims": {
+    "0.6": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.05685654318546216,
+     "straddle_mult": 2.384527142893244,
+     "straddle_cost_pct": 0.11690827280012683,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.011398690576765362,
+     "entry_spot": 17.9,
+     "event_spot": 13.01
+    },
+    "0.8": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.07627911476669763,
+     "straddle_mult": 1.789822380445342,
+     "straddle_cost_pct": 0.15575341596259787,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.025038618113919824,
+     "entry_spot": 17.9,
+     "event_spot": 13.01
+    },
+    "1.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.09565687991902297,
+     "straddle_mult": 1.4332037424008712,
+     "straddle_cost_pct": 0.19450894626724843,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.04118837607071341,
+     "entry_spot": 17.9,
+     "event_spot": 13.01
+    },
+    "1.2": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.11497774997320864,
+     "straddle_mult": 1.195668578352601,
+     "straddle_cost_pct": 0.23315068637561973,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.058740747724656,
+     "entry_spot": 17.9,
+     "event_spot": 13.01
+    },
+    "1.5": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.1438271006533038,
+     "straddle_mult": 0.9584718465142138,
+     "straddle_cost_pct": 0.2908493877358101,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.08650549421866092,
+     "entry_spot": 17.9,
+     "event_spot": 13.01
+    },
+    "2.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.1914642192918387,
+     "straddle_mult": 0.7219733050816858,
+     "straddle_cost_pct": 0.38612362501288,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.13451613633021695,
+     "entry_spot": 17.9,
+     "event_spot": 13.01
+    },
+    "3.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.2844682508412287,
+     "straddle_mult": 0.4872496236675223,
+     "straddle_cost_pct": 0.5721316881116597,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.23154624515346692,
+     "entry_spot": 17.9,
+     "event_spot": 13.01
+    }
+   }
+  },
+  {
+   "ticker": "KROS",
+   "event_trading_date": "2024-12-12",
+   "event_type": "interim_analysis",
+   "direction": "negative",
+   "description": "Cibotercept (KER-012) Phase 2 TROPOS in PAH: 3.0/4.5 mg-kg arms halted after pericardial effusion safety findings, announced pre-market",
+   "source_url": "https://www.globenewswire.com/news-release/2024/12/12/2995999/0/en/Keros-Therapeutics-Announces-Update-on-the-Phase-2-TROPOS-Trial.html",
+   "day_move_pct": -73.15,
+   "verified": true,
+   "event_idx": 1177,
+   "pre_close": 68.65,
+   "event_close": 18.43,
+   "r5": 0.012686236908098447,
+   "r10": 0.19620142882035196,
+   "r20": 0.058107274969174005,
+   "r60": 0.24727470930232576,
+   "vol20_ann": 0.7051717023615673,
+   "drift_z10": 1.3967142364883907,
+   "event_ret": -0.7315367807720321,
+   "open_gap": -0.7275309541150765,
+   "sims": {
+    "0.6": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.0558946248077342,
+     "straddle_mult": 5.918349698820235,
+     "straddle_cost_pct": 0.11707859052815545,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.008881458262910582,
+     "entry_spot": 58.55,
+     "event_spot": 18.43
+    },
+    "0.8": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.07533145188382608,
+     "straddle_mult": 4.4431039925772975,
+     "straddle_cost_pct": 0.15595224468033914,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.02123110467362942,
+     "entry_spot": 58.55,
+     "event_spot": 18.43
+    },
+    "1.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.09472583629740541,
+     "straddle_mult": 3.55812074976147,
+     "straddle_cost_pct": 0.19474101350749773,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.03649507495251341,
+     "entry_spot": 58.55,
+     "event_spot": 18.43
+    },
+    "1.2": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.11406447174896336,
+     "straddle_mult": 2.9685422576908422,
+     "straddle_cost_pct": 0.2334182844106137,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.05345091513694284,
+     "entry_spot": 58.55,
+     "event_spot": 18.43
+    },
+    "1.5": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.14294153845818736,
+     "straddle_mult": 2.3797310409991974,
+     "straddle_cost_pct": 0.2911724178290617,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.08066843935493867,
+     "entry_spot": 58.55,
+     "event_spot": 18.43
+    },
+    "2.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.1906259935458923,
+     "straddle_mult": 1.7925949718437106,
+     "straddle_cost_pct": 0.38654132800447166,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.12828833056187702,
+     "entry_spot": 58.55,
+     "event_spot": 18.43
+    },
+    "3.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.2837247401136604,
+     "straddle_mult": 1.209822026052643,
+     "straddle_cost_pct": 0.5727388211400076,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.22537868037107772,
+     "entry_spot": 58.55,
+     "event_spot": 18.43
+    }
+   }
+  },
+  {
+   "ticker": "PRTA",
+   "event_trading_date": "2025-05-27",
+   "event_type": "phase3_readout",
+   "direction": "negative",
+   "description": "Birtamimab AFFIRM-AL Phase 3 in Mayo Stage IV AL amyloidosis missed primary endpoint (all-cause mortality, p=0.768); program discontinued (announced Fri 2025-05-23; Mon Memorial Day)",
+   "source_url": "https://www.businesswire.com/news/home/20250523499173/en/Prothena-Announces-Phase-3-AFFIRM-AL-Clinical-Trial-for-Birtamimab-in-Patients-with-AL-Amyloidosis-Did-Not-Meet-Primary-Endpoint",
+   "day_move_pct": -30.4,
+   "verified": true,
+   "event_idx": 2204,
+   "pre_close": 6.58,
+   "event_close": 4.58,
+   "r5": -0.08356545961002781,
+   "r10": -0.11440107671601607,
+   "r20": -0.32164948453608244,
+   "r60": -0.565102445472571,
+   "vol20_ann": 0.6689346899361904,
+   "drift_z10": -0.8585125811598652,
+   "event_ret": -0.30395136778115506,
+   "open_gap": -0.2720364741641338,
+   "sims": {
+    "0.6": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.03852070101812039,
+     "straddle_mult": 3.5726966690731756,
+     "straddle_cost_pct": 0.12578976454654736,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.010265739027308865,
+     "entry_spot": 7.61,
+     "event_spot": 4.58
+    },
+    "0.8": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.0576111667314036,
+     "straddle_mult": 2.740786517565541,
+     "straddle_cost_pct": 0.1639706959731138,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.02336007247215947,
+     "entry_spot": 7.61,
+     "event_spot": 4.58
+    },
+    "1.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.07696037045036969,
+     "straddle_mult": 2.2174503426280756,
+     "straddle_cost_pct": 0.20266910341104594,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.03914101182864598,
+     "entry_spot": 7.61,
+     "event_spot": 4.58
+    },
+    "1.2": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.09640560428095948,
+     "straddle_mult": 1.8604465590170178,
+     "straddle_cost_pct": 0.24155957107222553,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.056447506136406256,
+     "entry_spot": 7.61,
+     "event_spot": 4.58
+    },
+    "1.5": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.12559381316540233,
+     "straddle_mult": 1.4983486127669046,
+     "straddle_cost_pct": 0.2999359888411112,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.0839891923093188,
+     "entry_spot": 7.61,
+     "event_spot": 4.58
+    },
+    "2.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.17399370706620093,
+     "straddle_mult": 1.1327656824952197,
+     "straddle_cost_pct": 0.3967357766427085,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.13184478182241094,
+     "entry_spot": 7.61,
+     "event_spot": 4.58
+    },
+    "3.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.26878537168513233,
+     "straddle_mult": 0.7664916054952674,
+     "straddle_cost_pct": 0.5863191058805712,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.22891233099223637,
+     "entry_spot": 7.61,
+     "event_spot": 4.58
+    }
+   }
+  },
+  {
+   "ticker": "CAPR",
+   "event_trading_date": "2025-07-11",
+   "event_type": "pdufa",
+   "direction": "negative",
+   "description": "FDA issued Complete Response Letter for deramiocel (CAP-1002) BLA in DMD cardiomyopathy, announced pre-market",
+   "source_url": "https://www.parentprojectmd.org/capricor-therapeutics-receives-complete-response-letter-regarding-deramiocel-cap-1002/",
+   "day_move_pct": -32.98,
+   "verified": true,
+   "event_idx": 2235,
+   "pre_close": 11.4,
+   "event_close": 7.64,
+   "r5": 0.13772455089820368,
+   "r10": 0.13432835820895517,
+   "r20": -0.17926565874730027,
+   "r60": 0.22712594187298185,
+   "vol20_ann": 1.8030658144250626,
+   "drift_z10": 0.3739869066705801,
+   "event_ret": -0.3298245614035088,
+   "open_gap": -0.38596491228070173,
+   "sims": {
+    "0.6": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.06832119533558467,
+     "straddle_mult": 1.9878064324644888,
+     "straddle_cost_pct": 0.11662459090489155,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.010716515267351647,
+     "entry_spot": 10.18,
+     "event_spot": 7.64
+    },
+    "0.8": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.08738426693020533,
+     "straddle_mult": 1.4980679306068154,
+     "straddle_cost_pct": 0.1547507340941327,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.024034238868742796,
+     "entry_spot": 10.18,
+     "event_spot": 7.64
+    },
+    "1.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.1064565115440919,
+     "straddle_mult": 1.2018292002876978,
+     "straddle_cost_pct": 0.19289522332190584,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.039967184811422245,
+     "entry_spot": 10.18,
+     "event_spot": 7.64
+    },
+    "1.2": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.12549931388410096,
+     "straddle_mult": 1.003663871108609,
+     "straddle_cost_pct": 0.23098082800192413,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.057375456341906876,
+     "entry_spot": 10.18,
+     "event_spot": 7.64
+    },
+    "1.5": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.15395992277620266,
+     "straddle_mult": 0.8052291235071645,
+     "straddle_cost_pct": 0.28790204578612744,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.08500992356195693,
+     "entry_spot": 10.18,
+     "event_spot": 7.64
+    },
+    "2.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.20099011229530347,
+     "straddle_mult": 0.6069369574530901,
+     "straddle_cost_pct": 0.38196242482432907,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.13293078904817404,
+     "entry_spot": 10.18,
+     "event_spot": 7.64
+    },
+    "3.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.29286041188982204,
+     "straddle_mult": 0.409803557950939,
+     "straddle_cost_pct": 0.5657030240133663,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.2299851763180678,
+     "entry_spot": 10.18,
+     "event_spot": 7.64
+    }
+   }
+  },
+  {
+   "ticker": "ARDX",
+   "event_trading_date": "2023-10-18",
+   "event_type": "pdufa",
+   "direction": "positive",
+   "description": "FDA approved XPHOZAH (tenapanor) for hyperphosphatemia in CKD on dialysis (announced 2023-10-17 after close)",
+   "source_url": "https://ir.ardelyx.com/news-releases/news-release-details/fda-approves-xphozahr-tenapanor-first-class-phosphate-absorption",
+   "day_move_pct": 13.33,
+   "verified": true,
+   "event_idx": 1802,
+   "pre_close": 3.45,
+   "event_close": 3.91,
+   "r5": -0.16666666666666652,
+   "r10": -0.13533834586466165,
+   "r20": -0.13965087281795507,
+   "r60": -0.011461318051575908,
+   "vol20_ann": 0.7665074206935221,
+   "drift_z10": -0.8863490240427571,
+   "event_ret": 0.1333333333333333,
+   "open_gap": 0.13623188405797104,
+   "sims": {
+    "0.6": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.06432257365237472,
+     "straddle_mult": 0.1914022474277504,
+     "straddle_cost_pct": 0.1163895827878476,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.005446129319648058,
+     "entry_spot": 4.04,
+     "event_spot": 3.91
+    },
+    "0.8": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.08354719980853434,
+     "straddle_mult": 0.1438736458354319,
+     "straddle_cost_pct": 0.1548388351001668,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.015429262479657618,
+     "entry_spot": 4.04,
+     "event_spot": 3.91
+    },
+    "1.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.10274653566296402,
+     "straddle_mult": 0.11528418106112545,
+     "straddle_cost_pct": 0.1932375068090262,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.028935675913935366,
+     "entry_spot": 4.04,
+     "event_spot": 3.91
+    },
+    "1.2": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.12189900959683923,
+     "straddle_mult": 0.09621228104310418,
+     "straddle_cost_pct": 0.23154245467677656,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.04464856273375203,
+     "entry_spot": 4.04,
+     "event_spot": 3.91
+    },
+    "1.5": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.1505063839674782,
+     "straddle_mult": 0.07714864758029913,
+     "straddle_cost_pct": 0.2887572034180546,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.07066848314233803,
+     "entry_spot": 4.04,
+     "event_spot": 3.91
+    },
+    "2.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.1977564501251611,
+     "straddle_mult": 0.05812603085637337,
+     "straddle_cost_pct": 0.38325733573342036,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.11734085463926282,
+     "entry_spot": 4.04,
+     "event_spot": 3.91
+    },
+    "3.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.2900231251213518,
+     "straddle_mult": 0.03923492984795173,
+     "straddle_cost_pct": 0.5677906857258018,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.21429158367539086,
+     "entry_spot": 4.04,
+     "event_spot": 3.91
+    }
+   }
+  },
+  {
+   "ticker": "AKRO",
+   "event_trading_date": "2023-10-10",
+   "event_type": "phase2_readout",
+   "direction": "negative",
+   "description": "Efruxifermin Phase 2b SYMMETRY in compensated cirrhosis (F4) due to NASH missed week-36 primary endpoint, announced pre-market",
+   "source_url": "https://www.biopharmadive.com/news/akero-nash-symmetry-trial-results-fibrosis-liver/696109/",
+   "day_move_pct": -62.61,
+   "verified": true,
+   "event_idx": 1083,
+   "pre_close": 48.54,
+   "event_close": 18.15,
+   "r5": 0.0604041507373021,
+   "r10": 0.07010582010582,
+   "r20": -0.016811829045979332,
+   "r60": 0.06517445687952605,
+   "vol20_ann": 0.6071530365791487,
+   "drift_z10": 0.5796370974975655,
+   "event_ret": -0.6260815822002472,
+   "open_gap": -0.5906468891635763,
+   "sims": {
+    "0.6": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.05560191418757593,
+     "straddle_mult": 5.211720168769634,
+     "straddle_cost_pct": 0.1171355791981405,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.007920224338416201,
+     "entry_spot": 45.62,
+     "event_spot": 18.15
+    },
+    "0.8": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.07504251837092381,
+     "straddle_mult": 3.912898541983913,
+     "straddle_cost_pct": 0.15601678756483625,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.019692659560208277,
+     "entry_spot": 45.62,
+     "event_spot": 18.15
+    },
+    "1.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.09444164237183082,
+     "straddle_mult": 3.133628052946686,
+     "straddle_cost_pct": 0.19481503556665028,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.03454466996966532,
+     "entry_spot": 45.62,
+     "event_spot": 18.15
+    },
+    "1.2": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.11378548778259863,
+     "straddle_mult": 2.6144356857425923,
+     "straddle_cost_pct": 0.2335027263881859,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.05121618214258552,
+     "entry_spot": 45.62,
+     "event_spot": 18.15
+    },
+    "1.5": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.14267081587584904,
+     "straddle_mult": 2.095893058236883,
+     "straddle_cost_pct": 0.2912733825746867,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.07816611528779754,
+     "entry_spot": 45.62,
+     "event_spot": 18.15
+    },
+    "2.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.19036954913514514,
+     "straddle_mult": 1.5788049759090903,
+     "straddle_cost_pct": 0.3866708490932789,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.12558372338974158,
+     "entry_spot": 45.62,
+     "event_spot": 18.15
+    },
+    "3.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.2834971031023412,
+     "straddle_mult": 1.065544077902508,
+     "straddle_cost_pct": 0.572925957027671,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.22266988821558722,
+     "entry_spot": 45.62,
+     "event_spot": 18.15
+    }
+   }
+  },
+  {
+   "ticker": "RARE",
+   "event_trading_date": "2025-07-10",
+   "event_type": "interim_analysis",
+   "direction": "negative",
+   "description": "Setrusumab (UX143) Phase 3 Orbit in osteogenesis imperfecta: second interim analysis did not reach early-stop efficacy threshold; study continues to final analysis (announced 2025-07-09 after close)",
+   "source_url": "https://ir.ultragenyx.com/news-releases/news-release-details/ultragenyx-and-mereo-biopharma-announce-ux143-phase-3-orbit",
+   "day_move_pct": -25.11,
+   "verified": true,
+   "event_idx": 2234,
+   "pre_close": 41.44,
+   "event_close": 31.035,
+   "r5": 0.1428571428571428,
+   "r10": 0.11517761033369212,
+   "r20": 0.1187904967602591,
+   "r60": 0.24969843184559726,
+   "vol20_ann": 0.4337560326034404,
+   "drift_z10": 1.332977461171392,
+   "event_ret": -0.2510859073359073,
+   "open_gap": -0.19884169884169878,
+   "sims": {
+    "0.6": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.06512468432169134,
+     "straddle_mult": 1.3689847965429596,
+     "straddle_cost_pct": 0.11641045744924367,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.008231408841270563,
+     "entry_spot": 37.43,
+     "event_spot": 31.035
+    },
+    "0.8": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.08431973523487565,
+     "straddle_mult": 1.0294804305124527,
+     "straddle_cost_pct": 0.1548005592756122,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.020196714671017087,
+     "entry_spot": 37.43,
+     "event_spot": 31.035
+    },
+    "1.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.1034951898330826,
+     "straddle_mult": 0.8250734393443458,
+     "straddle_cost_pct": 0.19315146847202627,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.035187504553699026,
+     "entry_spot": 37.43,
+     "event_spot": 31.035
+    },
+    "1.2": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.12262666234786318,
+     "straddle_mult": 0.6886526383350473,
+     "straddle_cost_pct": 0.2314144135015873,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.051955280934313605,
+     "entry_spot": 37.43,
+     "event_spot": 31.035
+    },
+    "1.5": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.15120547706096119,
+     "straddle_mult": 0.5522508167795984,
+     "straddle_cost_pct": 0.2885720429277834,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.07899626433675538,
+     "entry_spot": 37.43,
+     "event_spot": 31.035
+    },
+    "2.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.19841208366344135,
+     "straddle_mult": 0.416110395517131,
+     "straddle_cost_pct": 0.38298525613274365,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.12648340993807095,
+     "entry_spot": 37.43,
+     "event_spot": 31.035
+    },
+    "3.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.29059932544563494,
+     "straddle_mult": 0.2808873017526724,
+     "straddle_cost_pct": 0.5673597396971309,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.22357308167559137,
+     "entry_spot": 37.43,
+     "event_spot": 31.035
+    }
+   }
+  },
+  {
+   "ticker": "MREO",
+   "event_trading_date": "2025-07-10",
+   "event_type": "interim_analysis",
+   "direction": "negative",
+   "description": "Partnered setrusumab (UX143) Phase 3 Orbit second interim analysis missed early-stop efficacy bar (same announcement as RARE; MREO holds royalty/milestone economics)",
+   "source_url": "https://www.fiercebiotech.com/biotech/lack-early-win-ultragenyxs-bone-disorder-med-dents-stock-analysts-keep-faith",
+   "day_move_pct": -42.52,
+   "verified": true,
+   "event_idx": 1560,
+   "pre_close": 2.94,
+   "event_close": 1.69,
+   "r5": 0.0652173913043479,
+   "r10": 0.0808823529411764,
+   "r20": 0.10943396226415092,
+   "r60": 0.6065573770491803,
+   "vol20_ann": 0.39694968893487553,
+   "drift_z10": 1.0228656191591885,
+   "event_ret": -0.4251700680272109,
+   "open_gap": -0.30952380952380953,
+   "sims": {
+    "0.6": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.030917721826305058,
+     "straddle_mult": 3.489736324333061,
+     "straddle_cost_pct": 0.13454714240307145,
+     "entry_spot": 2.79,
+     "event_spot": 1.69
+    },
+    "0.8": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.049347962992603724,
+     "straddle_mult": 2.7392833364518596,
+     "straddle_cost_pct": 0.17140762473566892,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.0030499040862566108,
+     "entry_spot": 2.79,
+     "event_spot": 1.69
+    },
+    "1.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.06837804201466272,
+     "straddle_mult": 2.2415573600300718,
+     "straddle_cost_pct": 0.20946778277978684,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.009169588057532499,
+     "entry_spot": 2.79,
+     "event_spot": 1.69
+    },
+    "1.2": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.08768130053300079,
+     "straddle_mult": 1.8927154103693726,
+     "straddle_cost_pct": 0.24807429981646298,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.018623594787169146,
+     "entry_spot": 2.79,
+     "event_spot": 1.69
+    },
+    "1.5": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.11683679212902821,
+     "straddle_mult": 1.532495443543083,
+     "straddle_cost_pct": 0.30638528300851775,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.03762722705330184,
+     "entry_spot": 2.79,
+     "event_spot": 1.69
+    },
+    "2.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.16542302459461405,
+     "straddle_mult": 1.1634866449135353,
+     "straddle_cost_pct": 0.4035577479396895,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.07742985995135125,
+     "entry_spot": 2.79,
+     "event_spot": 1.69
+    },
+    "3.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.26093426331655617,
+     "straddle_mult": 0.789689986538498,
+     "straddle_cost_pct": 0.5945802253835738,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.1702944044398718,
+     "entry_spot": 2.79,
+     "event_spot": 1.69
+    }
+   }
+  },
+  {
+   "ticker": "APLT",
+   "event_trading_date": "2024-11-29",
+   "event_type": "pdufa",
+   "direction": "negative",
+   "description": "FDA Complete Response Letter for govorestat NDA in classic galactosemia (announced 2024-11-27 after close; Thanksgiving 11-28; crash printed Fri 11-29)",
+   "source_url": "https://www.globenewswire.com/news-release/2024/11/27/2988438/0/en/Applied-Therapeutics-Receives-Complete-Response-Letter-from-U-S-FDA-Regarding-New-Drug-Application-for-Govorestat-for-Classic-Galactosemia.html",
+   "day_move_pct": -76.31,
+   "verified": true,
+   "event_idx": 1395,
+   "pre_close": 8.57,
+   "event_close": 2.03,
+   "r5": -0.09119830328738066,
+   "r10": -0.039237668161434924,
+   "r20": -0.050941306755260096,
+   "r60": 0.5035087719298246,
+   "vol20_ann": 0.8566928190526787,
+   "drift_z10": -0.22992083805289423,
+   "event_ret": -0.7631271878646442,
+   "open_gap": -0.7456242707117853,
+   "sims": {
+    "0.6": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.060004605766609334,
+     "straddle_mult": 6.638854505197179,
+     "straddle_cost_pct": 0.11652385288076161,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.0066378015495171675,
+     "entry_spot": 9.01,
+     "event_spot": 2.03
+    },
+    "0.8": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.07936171712351556,
+     "straddle_mult": 4.983216280525808,
+     "straddle_cost_pct": 0.15523807559457406,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.01754581147959837,
+     "entry_spot": 9.01,
+     "event_spot": 2.03
+    },
+    "1.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.09867444528997585,
+     "straddle_mult": 3.9903580522287183,
+     "straddle_cost_pct": 0.19386353192749464,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.031761323632859544,
+     "entry_spot": 9.01,
+     "event_spot": 2.03
+    },
+    "1.2": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.11793060502950502,
+     "straddle_mult": 3.3290245134248164,
+     "straddle_cost_pct": 0.23237585140655298,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.047985100190125356,
+     "entry_spot": 9.01,
+     "event_spot": 2.03
+    },
+    "1.5": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.14668346725092352,
+     "straddle_mult": 2.6686239144163446,
+     "straddle_cost_pct": 0.2898815758493899,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.07450577354562604,
+     "entry_spot": 9.01,
+     "event_spot": 2.03
+    },
+    "2.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.19416143894656335,
+     "straddle_mult": 2.010159786880325,
+     "straddle_cost_pct": 0.3848375192406696,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.12158675889106106,
+     "entry_spot": 9.01,
+     "event_spot": 2.03
+    },
+    "3.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.28685502192460416,
+     "straddle_mult": 1.3566317378797073,
+     "straddle_cost_pct": 0.5702246851967512,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.2186310522898247,
+     "entry_spot": 9.01,
+     "event_spot": 2.03
+    }
+   }
+  },
+  {
+   "ticker": "ETNB",
+   "event_trading_date": "2023-03-22",
+   "event_type": "phase2_readout",
+   "direction": "positive",
+   "description": "Pegozafermin ENLIVEN Phase 2b in NASH hit both primary histology endpoints with high statistical significance, announced pre-market",
+   "source_url": "https://ir.89bio.com/news-releases/news-release-details/89bios-phase-2b-enliven-trial-pegozafermin-nonalcoholic",
+   "day_move_pct": 25.16,
+   "verified": true,
+   "event_idx": 844,
+   "pre_close": 10.93,
+   "event_close": 13.68,
+   "r5": -0.22482269503546104,
+   "r10": -0.16309341500765706,
+   "r20": -0.21310295176385896,
+   "r60": -0.06660973526900094,
+   "vol20_ann": 0.8046668699333038,
+   "drift_z10": -1.01746757094013,
+   "event_ret": 0.25160109789569995,
+   "open_gap": 0.3449222323879231,
+   "sims": {
+    "0.6": {
+     "atm_call_mult": 0.7075088561190086,
+     "atm_call_cost_pct": 0.07210192882690404,
+     "straddle_mult": 0.43552839247238934,
+     "straddle_cost_pct": 0.11712842163678466,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.008415964723151379,
+     "entry_spot": 13.33,
+     "event_spot": 13.68
+    },
+    "0.8": {
+     "atm_call_mult": 0.5606901836454099,
+     "atm_call_cost_pct": 0.09098206937854719,
+     "straddle_mult": 0.3293510261617011,
+     "straddle_cost_pct": 0.15488870274007097,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.020492868346998944,
+     "entry_spot": 13.33,
+     "event_spot": 13.68
+    },
+    "1.0": {
+     "atm_call_mult": 0.46410296517204547,
+     "atm_call_cost_pct": 0.10991688701964306,
+     "straddle_mult": 0.26464615596761,
+     "straddle_cost_pct": 0.1927583380222628,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.03556343786703601,
+     "entry_spot": 13.33,
+     "event_spot": 13.68
+    },
+    "1.2": {
+     "atm_call_mult": 0.39592254741472127,
+     "atm_call_cost_pct": 0.1288452843148187,
+     "straddle_mult": 0.22120297402160496,
+     "straddle_cost_pct": 0.23061513261261407,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.05238633248532208,
+     "entry_spot": 13.33,
+     "event_spot": 13.68
+    },
+    "1.5": {
+     "atm_call_mult": 0.32459604224963257,
+     "atm_call_cost_pct": 0.15715765612775212,
+     "straddle_mult": 0.17759634858616816,
+     "straddle_cost_pct": 0.2872398762384809,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.07947924242797122,
+     "entry_spot": 13.33,
+     "event_spot": 13.68
+    },
+    "2.0": {
+     "atm_call_mult": 0.2500956455322369,
+     "atm_call_cost_pct": 0.20397297633765316,
+     "straddle_mult": 0.133937259402165,
+     "straddle_cost_pct": 0.380870516658283,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.12700572569367644,
+     "entry_spot": 13.33,
+     "event_spot": 13.68
+    },
+    "3.0": {
+     "atm_call_mult": 0.17265091487108947,
+     "atm_call_cost_pct": 0.29546761004067623,
+     "straddle_mult": 0.09047063583892188,
+     "straddle_cost_pct": 0.5638597840643291,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.2240964604292836,
+     "entry_spot": 13.33,
+     "event_spot": 13.68
+    }
+   }
+  },
+  {
+   "ticker": "GOSS",
+   "event_trading_date": "2022-12-06",
+   "event_type": "phase2_readout",
+   "direction": "negative",
+   "description": "Seralutinib TORREY Phase 2 in PAH met PVR primary endpoint but 6-minute-walk secondary missed; market treated readout as a failure",
+   "source_url": "https://www.businesswire.com/news/home/20221206005388/en",
+   "day_move_pct": -74.6,
+   "verified": true,
+   "event_idx": 963,
+   "pre_close": 9.29,
+   "event_close": 2.36,
+   "r5": 0.06414662084765155,
+   "r10": 0.01641137855579844,
+   "r20": -0.11692015209125484,
+   "r60": -0.33972992181947415,
+   "vol20_ann": 0.5927687670157503,
+   "drift_z10": 0.13898246853066984,
+   "event_ret": -0.7459634015069967,
+   "open_gap": -0.6297093649085037,
+   "sims": {
+    "0.6": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.08162217402732704,
+     "straddle_mult": 5.920846063127644,
+     "straddle_cost_pct": 0.11943145333062447,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.011616461160047858,
+     "entry_spot": 9.39,
+     "event_spot": 2.36
+    },
+    "0.8": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.09993324649234739,
+     "straddle_mult": 4.531361392161385,
+     "straddle_cost_pct": 0.15605359826066506,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.02535545544860326,
+     "entry_spot": 9.39,
+     "event_spot": 2.36
+    },
+    "1.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.11845902858600058,
+     "straddle_mult": 3.6619178964558494,
+     "straddle_cost_pct": 0.19310516244797146,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.041571304675692665,
+     "entry_spot": 9.39,
+     "event_spot": 2.36
+    },
+    "1.2": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.1370599403954095,
+     "straddle_mult": 3.070402953652352,
+     "straddle_cost_pct": 0.23030698606678923,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.059167349232018024,
+     "entry_spot": 9.39,
+     "event_spot": 2.36
+    },
+    "1.5": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.1649639631568037,
+     "straddle_mult": 2.471506814366196,
+     "straddle_cost_pct": 0.2861150315895777,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.08697131835695698,
+     "entry_spot": 9.39,
+     "event_spot": 2.36
+    },
+    "2.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.21121212485367646,
+     "straddle_mult": 1.8677074550428845,
+     "straddle_cost_pct": 0.3786113549833232,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.1350085258847082,
+     "entry_spot": 9.39,
+     "event_spot": 2.36
+    },
+    "3.0": {
+     "atm_call_mult": 0.0,
+     "atm_call_cost_pct": 0.3017568951741026,
+     "straddle_mult": 1.2634163278900015,
+     "straddle_cost_pct": 0.5597008956241754,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.23202988758681423,
+     "entry_spot": 9.39,
+     "event_spot": 2.36
+    }
+   }
+  },
+  {
+   "ticker": "ITCI",
+   "event_trading_date": "2024-04-16",
+   "event_type": "phase3_readout",
+   "direction": "positive",
+   "description": "Lumateperone (Caplyta) Study 501 Phase 3 as adjunctive therapy in MDD met primary endpoint (MADRS, p<0.0001), announced pre-market",
+   "source_url": "https://www.globenewswire.com/news-release/2024/04/16/2863470/30597/en/Intra-Cellular-Therapies-Announces-Positive-Phase-3-Topline-Results-from-Study-501-Evaluating-Lumateperone-as-Adjunctive-Therapy-in-Patients-with-Major-Depressive-Disorder.html",
+   "day_move_pct": 23.29,
+   "verified": true,
+   "event_idx": 2274,
+   "pre_close": 64.76,
+   "event_close": 79.84,
+   "r5": -0.043426883308714914,
+   "r10": -0.051413505199941256,
+   "r20": -0.0003087372645877995,
+   "r60": -0.005833589192508426,
+   "vol20_ann": 0.2750402631728266,
+   "drift_z10": -0.938385328647603,
+   "event_ret": 0.2328597899938234,
+   "open_gap": 0.16260037059913524,
+   "sims": {
+    "0.6": {
+     "atm_call_mult": 3.3698681903531145,
+     "atm_call_cost_pct": 0.057150713203799,
+     "straddle_mult": 1.6480254013250135,
+     "straddle_cost_pct": 0.11686128765165463,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.00845054629306892,
+     "entry_spot": 66.67,
+     "event_spot": 79.84
+    },
+    "0.8": {
+     "atm_call_mult": 2.5152731925947647,
+     "atm_call_cost_pct": 0.07656837080301368,
+     "straddle_mult": 1.236959361707565,
+     "straddle_cost_pct": 0.15569660285008388,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.020548136784878747,
+     "entry_spot": 66.67,
+     "event_spot": 79.84
+    },
+    "1.0": {
+     "atm_call_mult": 2.007388845758033,
+     "atm_call_cost_pct": 0.09594073957741342,
+     "straddle_mult": 0.9904805741741424,
+     "straddle_cost_pct": 0.1944413403988835,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.03563345353510259,
+     "entry_spot": 66.67,
+     "event_spot": 79.84
+    },
+    "1.2": {
+     "atm_call_mult": 1.6709793759501512,
+     "atm_call_cost_pct": 0.11525598296027163,
+     "straddle_mult": 0.8263133851242558,
+     "straddle_cost_pct": 0.23307182716459984,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.052466519051198666,
+     "entry_spot": 66.67,
+     "event_spot": 79.84
+    },
+    "1.5": {
+     "atm_call_mult": 1.3365357271413467,
+     "atm_call_cost_pct": 0.14409668710719647,
+     "straddle_mult": 0.6623842729653764,
+     "straddle_cost_pct": 0.2907532354584495,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.07956899429755415,
+     "entry_spot": 66.67,
+     "event_spot": 79.84
+    },
+    "2.0": {
+     "atm_call_mult": 1.0045439668950473,
+     "atm_call_cost_pct": 0.19171920476189314,
+     "straddle_mult": 0.4989410188246897,
+     "straddle_cost_pct": 0.3859982707678429,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.12710269784521291,
+     "entry_spot": 66.67,
+     "event_spot": 79.84
+    },
+    "3.0": {
+     "atm_call_mult": 0.6764814035479872,
+     "atm_call_cost_pct": 0.28469425688774946,
+     "straddle_mult": 0.3367268426540964,
+     "straddle_cost_pct": 0.5719483750195554,
+     "otm_call_mult": 0.0,
+     "otm_call_cost_pct": 0.22419355181404743,
+     "entry_spot": 66.67,
+     "event_spot": 79.84
+    }
+   }
+  }
+ ],
+ "params": {
+  "entry_days_before": 10,
+  "quiet_z": 0.75,
+  "iv_scenarios": [
+   0.6,
+   0.8,
+   1.0,
+   1.2,
+   1.5,
+   2.0,
+   3.0
+  ],
+  "exit": "intrinsic at event-day close (time value forfeited)"
+ }
+}

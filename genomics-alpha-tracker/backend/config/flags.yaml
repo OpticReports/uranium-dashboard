@@ -50,6 +50,21 @@ flags:
     catalyst_max_days: 45
     min_catalyst_impact: 0.7
 
+  quiet_before_catalyst:
+    # The MRNA/INTerpath setup: a high-impact binary event approaching while
+    # the price is NOT already running. Fires when a catalyst with impact >=
+    # min_catalyst_impact is due in [catalyst_min_days, catalyst_max_days] AND
+    # the trailing window_days return is small relative to the name's own vol:
+    #   drift_z = r_window / (realized_vol_20d * sqrt(window/252))
+    # |drift_z| <= max_drift_z means the market is not pricing the event yet.
+    # OBSERVE-ONLY until its forward-return track record earns call-trigger
+    # status (docs/PRE_CATALYST_ASYMMETRY_STUDY.md).
+    catalyst_min_days: 5
+    catalyst_max_days: 45
+    min_catalyst_impact: 0.85
+    window_days: 10
+    max_drift_z: 0.75
+
   volume_anomaly:
     # Latest daily volume unusually high vs the name's own trailing history
     # (z-score on log-volume; the current day is excluded from its baseline).

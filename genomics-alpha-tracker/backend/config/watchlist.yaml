@@ -7,10 +7,16 @@
 # default views but RETAINS all of its historical data.
 #
 # Each entry:
-#   symbol     : ticker (uppercase)
-#   name       : company name
-#   subsector  : list of free-form theme tags (first-class; create new ones freely)
-#   active     : whether the name is in active ingestion / default views
+#   symbol      : ticker (uppercase)
+#   name        : company name
+#   subsector   : list of free-form theme tags (first-class; create new ones freely)
+#   active      : whether the name is in active ingestion / default views
+#   ctgov_names : OPTIONAL list of ClinicalTrials.gov REGISTERED sponsor names
+#                 when they differ from the display name. CT.gov matches the
+#                 registered sponsor string, not the brand ("Moderna" returns
+#                 1 trial; the registered sponsor is "ModernaTX" with 40 —
+#                 the miss that hid the INTerpath-001 melanoma readout).
+#                 Omitted => the display name is queried.
 universe:
   # --- Synthetic bio / platforms ---
   - {symbol: TWST, name: Twist Bioscience,            subsector: [synbio, tools],          active: true}
@@ -52,6 +58,8 @@ universe:
 
   # --- Vaccines / mRNA platforms ---
   - {symbol: BNTX, name: BioNTech,                    subsector: [mrna, vaccines],         active: true}
+  - {symbol: MRNA, name: Moderna,                     subsector: [mrna, vaccines, oncology], active: true,
+     ctgov_names: [ModernaTX]}
 
   # --- Neuro / psychedelics ---
   - {symbol: CMPS, name: Compass Pathways,            subsector: [neuro, psychedelics],    active: true}

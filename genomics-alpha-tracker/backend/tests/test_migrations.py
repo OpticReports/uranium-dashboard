@@ -56,6 +56,35 @@ def test_init_db_adds_missing_column_to_preexisting_table(tmp_path, monkeypatch)
     assert display_confidence(calls[0]) == 62.0  # old calls keep a sane conviction
 
 
+def test_init_db_adds_ctgov_names_to_preexisting_security(tmp_path, monkeypatch):
+    db = _fresh_db_module(tmp_path, monkeypatch)
+
+    # Simulate the OLD production schema: security exists WITHOUT ctgov_names.
+    with db.engine.begin() as conn:
+        conn.execute(text(
+            "CREATE TABLE security ("
+            "symbol VARCHAR PRIMARY KEY, name VARCHAR, subsector JSON,"
+            "active BOOLEAN, created_at DATETIME, updated_at DATETIME)"
+        ))
+        conn.execute(text(
+            "INSERT INTO security (symbol, name, subsector, active, created_at,"
+            " updated_at) VALUES ('BNTX', 'BioNTech', '[\"mrna\"]', 1,"
+            " '2026-01-01', '2026-01-01')"
+        ))
+
+    db.init_db()
+
+    from sqlmodel import Session, select
+    from app.models import Security
+
+    with Session(db.engine) as s:
+        secs = s.exec(select(Security)).all()  # would raise before the fix
+    assert len(secs) == 1
+    assert secs[0].symbol == "BNTX"
+    # Backfilled as NULL; consumers read it as "no aliases" (fall back to name).
+    assert (secs[0].ctgov_names or []) == []
+
+
 def test_init_db_idempotent_on_current_schema(tmp_path, monkeypatch):
     db = _fresh_db_module(tmp_path, monkeypatch)
     db.init_db()
@@ -63,3 +92,5 @@ def test_init_db_idempotent_on_current_schema(tmp_path, monkeypatch):
     from sqlalchemy import inspect
     cols = {c["name"] for c in inspect(db.engine).get_columns("trade_call")}
     assert "confidence" in cols
+    sec_cols = {c["name"] for c in inspect(db.engine).get_columns("security")}
+    assert "ctgov_names" in sec_cols

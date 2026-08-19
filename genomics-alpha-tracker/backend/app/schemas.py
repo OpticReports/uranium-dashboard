@@ -14,6 +14,7 @@ class SecurityOut(BaseModel):
     symbol: str
     name: str
     subsector: list[str]
+    ctgov_names: list[str] = Field(default_factory=list)
     active: bool
     updated_at: DateTime
 
@@ -22,6 +23,8 @@ class SecurityCreate(BaseModel):
     symbol: str = Field(..., min_length=1, max_length=12)
     name: Optional[str] = None  # auto-fetched from provider when omitted
     subsector: list[str] = Field(default_factory=list)
+    # ClinicalTrials.gov registered sponsor aliases when they differ from name.
+    ctgov_names: list[str] = Field(default_factory=list)
     active: bool = True
     backfill: bool = True       # kick an immediate backfill on insert
 
@@ -29,6 +32,7 @@ class SecurityCreate(BaseModel):
 class SecurityUpdate(BaseModel):
     name: Optional[str] = None
     subsector: Optional[list[str]] = None
+    ctgov_names: Optional[list[str]] = None
     active: Optional[bool] = None
 
 

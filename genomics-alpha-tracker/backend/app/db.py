@@ -28,6 +28,7 @@ engine = create_engine(settings.database_url, echo=False, connect_args=_connect_
 # this, adding a model field 500s every query on that table in production.
 _LIGHT_MIGRATIONS: list[tuple[str, str, str]] = [
     ("trade_call", "confidence", "FLOAT"),
+    ("security", "ctgov_names", "JSON"),
 ]
 
 

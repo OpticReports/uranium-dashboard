@@ -29,6 +29,9 @@ class Security(SQLModel, table=True):
     symbol: str = Field(primary_key=True)
     name: str = ""
     subsector: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    # ClinicalTrials.gov REGISTERED sponsor aliases when they differ from the
+    # display name (e.g. Moderna -> ["ModernaTX"]). Empty => query `name`.
+    ctgov_names: list[str] = Field(default_factory=list, sa_column=Column(JSON))
     active: bool = True
     created_at: DateTime = Field(default_factory=_utcnow)
     updated_at: DateTime = Field(default_factory=_utcnow)
