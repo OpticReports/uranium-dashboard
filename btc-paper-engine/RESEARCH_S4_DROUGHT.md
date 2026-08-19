@@ -344,6 +344,13 @@ BEFORE any candidate runs.
   C3 "governance gap" reframed as retroactivity question, C4 2023-10 regime
   episode + persistence assumption disclosed, C5 small-N caveat moved to
   §1) — **all applied in this revision**. H1/H2 remain green-lit per §5.
+- **2026-08-19 — adversarial counter-agent verification of the H1/H2 batch
+  (§9; review appended below): APPROVE-WITH-CORRECTIONS.** Independent
+  recomputation reproduced every gate-table cell to the digit, confirmed
+  exact spec fidelity (no silent variants) and the zero-engine-change H2
+  sizing identity; 2 binding corrections (C1 cap-3.0 halt date 2025-04-09,
+  C2 anti-shrinkage arithmetic basis) — **both applied**. All three
+  REJECTIONS stand; H0 + forward-only trigger remain the standing position.
 
 ---
 
@@ -537,8 +544,9 @@ H2 cap 1.0 F2 in-fold S5′ MAR 0.73 vs 0.68 (beats), H2 cap 3.0 F2 in-fold
 **created by the honest per-fold recalibration**: sizing fitted on the fat
 2021-23 ATR distribution (R_tgt 0.0860), carried into the lean-ATR drought
 fold, oversizes exactly there. H2 cap 3.0's validate-direction leg hit
-**dd_halt 0.50** (close-basis) mid-2025 and stopped trading after 44 trades —
-that is the config's real behavior, reported as such.
+**dd_halt 0.50** (close-basis) at the trade exiting **2025-04-09** (close-DD
+−51.9%; batch-verification correction C1) and stopped trading after 44
+trades — that is the config's real behavior, reported as such.
 
 ### Gates (G2 "materially worse" operationalized before reading results as r > −0.10 = baseline −0.22 + 1 SE 0.12)
 
@@ -592,13 +600,135 @@ stitched folds), `s4_batch_drawdown.png` (blend drawdown profiles),
 - G2's "materially worse" threshold (r ≤ −0.10) and the min-100 fold-combined
   reading were fixed before results were read, but were operationalized in
   this batch, not in §5's text.
+- Anti-shrinkage threshold basis (batch-verification correction C2): the
+  +255.9% figure is 0.8 × incumbent leg return compounded from ROUNDED fold
+  returns; unrounded compounding gives +256.1%, and a wealth-basis reading
+  gives +236.1%. All three readings reject both H2 configs here (+228.3% /
+  +218.4%), but at a closer margin the basis choice would decide — future
+  batches must name the basis in the pre-registration itself.
 - NOT modeled: funding, slippage beyond research fees, venue risk; H2's
   dd_halt interaction with live capital (the cap-3.0 halt shows it binds).
 - Holdout (post-2026-08 live-forward) untouched; verdicts are
   REJECTED/ADVANCES only — none advances, so nothing touches it.
-- **Counter-agent verification of this batch: PENDING** (repo convention —
-  required before these results are acted on further; log goes to §8).
+- **Counter-agent verification of this batch: DONE 2026-08-19 —
+  APPROVE-WITH-CORRECTIONS (C1 halt date, C2 anti-shrinkage basis; both
+  applied above; zero number changes; all three rejections stand).** Full
+  review appended at the end of this doc; verifier independently reproduced
+  every gate-table cell, the H2 sizing identity (max deviation 5.9e-7), and
+  ruled the H2 cap-1.0 near-miss (−0.68%) a deterministic honest FAIL that
+  is independently moot on anti-shrinkage.
 
 **Bottom line: a clean 3-rejection batch. H0 (do nothing) remains the
 standing position by default, with the §3 forward-only retirement trigger as
 the only registered exit. Signal-space stays CLOSED (§7 protocol).**
+
+---
+
+## Counter-agent review (batch verification)
+
+**Reviewer: adversarial counter-agent, 2026-08-19. Method: independent
+recomputation (own runner loop, own blend/MAR/monthly-corr/DSR/calibration
+code — script `ca_batch_verify.py`, study scratchpad) over the engine code
+path and `bars_4h_full.csv`; `s4_batch.py` checked line-by-line against §5;
+`_size` (backend/app/engine/core.py) read and the sizing identity
+hand-recomputed on individual trades.**
+
+### VERDICT: APPROVE-WITH-CORRECTIONS (2 binding, both wording-precision —
+### zero number changes; all three REJECTIONS stand as measured)
+
+### Claim-by-claim
+
+1. **Spec fidelity — CONFIRMED, no silent extras.** The batch runs exactly
+   the 3 §5 configs: H1 = 50/50 D-20/trail-5 + D-55/trail-4, monthly
+   rebalance, no weight sweep (verified: single fixed 0.5/0.5, correct
+   constant-mix monthly rebalance); H2 caps 1.0 and 3.0 with
+   stop_dist = 5.0×ATR14_entry/entry and R_tgt = median TRAIN-fold
+   chandelier stop_dist, recalibrated per direction. No other caps, trails,
+   weights, or variants exist in the script; the fidelity anchors and
+   incumbent runs are frozen-config measurements, not trials; H2's
+   calibration reads the incumbent book's entries (sizing-independent entry
+   set — incumbent halted on neither fold, verified). The in-fold-fit
+   direction is the registered vice-versa fold scheme, not an extra config.
+   Two operationalizations were made in-batch and are disclosed in the
+   honesty box (G2 "materially worse" = r > −0.10; min-100 fold-combined);
+   both are immaterial to every verdict (per-fold reading would only add
+   failures; G2 passed everywhere).
+2. **The algebraic identity — EXACT, verified three ways.** `_size`
+   (core.py:180) computes `stop_dist = tcfg.stop_atr·ATR/entry` (2.5) and
+   `notional = eq·risk/stop_dist`, cap as `min(notional, cap·eq)` — so
+   `risk = R_tgt·2.5/5.0` yields `eq·R_tgt/(5·ATR/entry)` identically, and
+   the notional cap equals the exposure cap. Confirmed (i) by reading the
+   code, (ii) by the batch's own per-trade assertion, (iii) by my own
+   hand-recompute on sample trades and all executed trades: max
+   |exposure − min(cap, R_tgt/stop_dist)| = **5.9e-7** (cap 1.0 F2) /
+   **2.4e-7** (cap 3.0 F1) — pure qty-rounding residue. Donchian fills use
+   the fill bar's open and its ATR14, matching the §5 geometry. "Zero
+   engine changes" is true (git shows no engine edits; §5's anticipated
+   "config-level change to `_size`'s inputs" proved unnecessary — route
+   deviation, mathematically equivalent, transparently described in §9).
+3. **Numbers — ALL REPRODUCED to the stated digit.** Incumbent S5 MAR
+   4.0349/0.6839; calibrations 0.0860 (n=76, incl. fold-end open position)
+   / 0.0642 (n=79); every leg/S5′ cell of the §9 table (H1 +188.0/−3.1%,
+   MAR 4.1763/0.5191, n=151/158; H2c1 +190.5/+13.0%, 4.1615/0.6792,
+   n=75/79; H2c3 +342.2/−28.0%, 4.7622/0.3240, n=75/44 halted); in-fold
+   cells 4.62/5.37 and 0.7283/0.7863; G2 corrs −0.198/−0.174/−0.111 with
+   CIs; 2022 legs +33.1/+24.0/+25.3% (floor +15.8% passed) and in-fold
+   +31.5/+32.2%; trade counts 309/154/119; DSR 0.73/0.57/0.59/0.41
+   (S5-inc/H1/H2c1/H2c3 spot-checked). The cap-3.0 dd_halt is real:
+   fires after trade 44, close-DD −51.9% ≥ 0.50 — see C1 for the date.
+4. **Gate logic — APPLIED AS REGISTERED, no relaxation or tightening.**
+   G1 requires beat in all fold×direction cells on unrounded MAR; every
+   config fails F2 and is REJECTED; no post-hoc wiggle found. **The
+   H2-cap-1.0 near-miss is an honest FAIL:** margin 0.6792 vs 0.6839 =
+   **−0.68%**, deterministic under the registered estimator (no sampling
+   noise in a fixed backtest; the wiggle lives only in estimator choices).
+   Rounding cannot rescue it (2-dp both read 0.68 — a tie, still not a
+   beat); dropping the overlapping fold-boundary bar leaves 0.6793 vs
+   0.6840, still a miss. The pre-registration allows no tolerance — a miss
+   is a miss — and the margin IS within estimator-choice noise, which the
+   doc effectively concedes; that cuts both ways and adoption on a
+   coin-flip margin would be the wrong error. Decisive: cap-1.0 also fails
+   anti-shrinkage independently (+228 vs +256 threshold), so G1 was never
+   the only bar. Anti-shrinkage arithmetic verified (see C2).
+5. **Honesty — ACCURATE.** The per-fold-recalibration finding is reported
+   exactly as measured (in-fold sizing would pass F2: 0.7283/0.7863 >
+   0.6839 — reported, not gated; the F2 failures are created by carrying
+   fat-2021-23-ATR sizing into the lean-ATR fold, which is the honest
+   out-of-sample test). The all-rejected conclusion carries no spin; H1's
+   failure is correctly tied to D-55's F2 −22.2% (echoing its −20%
+   holdout); registry ~1,622 landed in RESEARCH_PROTOCOL.md §1 with H3
+   counted-but-blocked; holdout untouched; charts match the JSON curves.
+
+### Binding corrections
+
+- **C1 — halt date (same failure class as D1's C1).** §9 says the cap-3.0
+  validate leg hit dd_halt "mid-2025"; it fires at the trade exiting
+  **2025-04-09** (equity 72,006 vs peak 149,569, close-DD −51.9%). Say
+  April 2025.
+- **C2 — anti-shrinkage arithmetic basis.** The +255.9% threshold is
+  0.8 × the ROUNDED-fold-compounded incumbent total (+319.9%); unrounded
+  it is +256.1%, and the alternative wealth-basis reading of "0.8 ×
+  incumbent's" (0.8×4.20−1) gives +236.1%. Both H2 configs fail under
+  every reading (+228.4/+218.4%), so nothing changes — but the doc should
+  state which arithmetic the gate uses, since at a closer margin the
+  reading would decide.
+
+### Non-binding notes
+
+- H1's D-55 leg is built as prior-55-bars channel (replay.py's 20-bar
+  convention mirrored); "frozen as tested in F1" is not decimal-verifiable
+  against the absent lab script — same caveat class as §2's lab rows.
+  Internally consistent and disclosed-adjacent, no action.
+- F1's calibration median includes the fold-end open position (76th
+  entry), so the realized in-fold F1 median exposure is 0.989, not 1.000
+  (F2: 1.000). Construction is honest (all entries); cosmetic.
+- §9's stitched incumbent total +319.9% compounds rounded fold returns;
+  unrounded is +320.1%. Same class as C2, no verdict impact.
+
+**Bottom line: every load-bearing number in the batch reproduced under
+independent recomputation; the sizing identity is exact to qty-rounding
+(≤6e-7); the gates were applied as pre-registered with no tolerance
+invented and none owed; the near-miss FAIL is honest and independently
+moot. The 3-REJECTED verdict and the H0-by-default conclusion stand.
+Corrections C1-C2 are wording/precision only. §8 log entry and the §9
+"PENDING" line should be updated when C1-C2 land.**
