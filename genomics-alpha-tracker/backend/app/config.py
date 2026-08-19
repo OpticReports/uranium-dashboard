@@ -145,3 +145,7 @@ def watchlist_config() -> dict[str, Any]:
 
 def calls_config() -> dict[str, Any]:
     return load_yaml_config("calls.yaml").get("calls", {})
+
+
+def discovery_config() -> dict[str, Any]:
+    return load_yaml_config("discovery.yaml").get("discovery", {})

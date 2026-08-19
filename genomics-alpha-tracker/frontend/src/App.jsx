@@ -8,11 +8,13 @@ import DeepDive from "./views/DeepDive";
 import Chat from "./views/Chat";
 import CallsLog from "./views/CallsLog";
 import Today from "./views/Today";
+import Discovery from "./views/Discovery";
 
 const TABS = [
   { id: "today", label: "Today" },
   { id: "heatmap", label: "Sector Heatmap" },
   { id: "watchlist", label: "Watchlist" },
+  { id: "discovery", label: "Discovery" },
   { id: "catalysts", label: "Catalyst Calendar" },
   { id: "movers", label: "Movers in Narrative" },
   { id: "calls", label: "Calls Log" },
@@ -74,6 +76,7 @@ export default function App() {
             {tab === "today" && <Today onPick={pick} />}
             {tab === "heatmap" && <Heatmap onPick={pick} />}
             {tab === "watchlist" && <Watchlist onPick={pick} />}
+            {tab === "discovery" && <Discovery onPick={pick} />}
             {tab === "catalysts" && <CatalystCalendar onPick={pick} />}
             {tab === "movers" && <Movers onPick={pick} />}
             {tab === "calls" && <CallsLog onPick={pick} />}

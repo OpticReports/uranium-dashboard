@@ -307,6 +307,34 @@ class TradeCall(SQLModel, table=True):
     r_multiple: Optional[float] = None             # (exit-entry)/(entry-stop) for longs
 
 
+class UniverseCandidate(SQLModel, table=True):
+    """A discovery-proposed name that is NOT (yet) in the coverage universe.
+
+    The dynamic-universe-discovery pipeline (app/ingestion/discovery.py) writes
+    these; the desk reviews them in the Discovery panel. Everything is
+    auditable: sources say which lane found it, evidence carries the raw
+    signal, and status transitions stamp status_changed_at. Rows are never
+    deleted — a dismissed candidate keeps its history and is suppressed from
+    re-entry for a config window (discovery.yaml dismissed_refire_days).
+    """
+
+    __tablename__ = "universe_candidate"
+
+    symbol: str = Field(primary_key=True)
+    name: str = ""
+    market_cap: Optional[float] = None   # None = screener had no cap, not $0
+    last_price: Optional[float] = None
+    score: Optional[float] = None        # 0-100, see discovery.score_candidate
+    status: str = Field(default="new", index=True)  # new | watch | promoted | dismissed
+    status_reason: Optional[str] = None  # why promoted/dismissed ("auto: ...", "manual", operator text)
+    sources: list[str] = Field(default_factory=list, sa_column=Column(JSON))       # ["mover", "catalyst"]
+    genomics_tags: list[str] = Field(default_factory=list, sa_column=Column(JSON))  # keyword-matched themes
+    evidence: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+    first_seen: Date = Field(default_factory=Date.today)
+    last_seen: Date = Field(default_factory=Date.today)
+    status_changed_at: DateTime = Field(default_factory=_utcnow)
+
+
 class NewsArticle(SQLModel, table=True):
     """Tiingo news article (rate-budgeted ingestion; descriptive only)."""
     __tablename__ = "news_article"

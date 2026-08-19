@@ -36,6 +36,36 @@ class SecurityUpdate(BaseModel):
     active: Optional[bool] = None
 
 
+# --- Universe discovery (candidate queue) ------------------------------------
+
+class CandidateOut(BaseModel):
+    symbol: str
+    name: str
+    market_cap: Optional[float]      # None = screener had no cap (not $0)
+    last_price: Optional[float]
+    score: Optional[float]
+    status: str                      # new | watch | promoted | dismissed
+    status_reason: Optional[str]
+    sources: list[str]
+    genomics_tags: list[str]
+    evidence: dict[str, Any]
+    first_seen: Date
+    last_seen: Date
+    status_changed_at: DateTime
+
+
+class CandidateDismiss(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=500)
+
+
+class DiscoverySummaryOut(BaseModel):
+    counts: dict[str, int]                 # candidates by status
+    auto_promote: bool                     # config toggle state
+    auto_promote_per_week: int
+    promoted_this_week: list[str]          # symbols (auto + manual, last 7d)
+    last_run: Optional[dict] = None        # most recent sweep summary
+
+
 # --- Catalysts --------------------------------------------------------------
 
 class CatalystOut(BaseModel):

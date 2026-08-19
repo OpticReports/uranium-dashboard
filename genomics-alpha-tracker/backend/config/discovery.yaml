@@ -1,0 +1,67 @@
+# Dynamic universe discovery — thresholds for app/ingestion/discovery.py.
+#
+# WHY THIS EXISTS: the universe used to be static. MRNA's +130% readout day
+# (2026-08-19) was missed partly because nobody thought to add the name.
+# Discovery proposes candidates into a visible queue with evidence; a
+# conservative, hard-gated auto-promote (togglable below, weekly-capped) can
+# add names to the live universe. Everything is auditable and reversible —
+# a promoted name can be deactivated like any other (history retained).
+discovery:
+  # --- Candidate lanes -------------------------------------------------------
+  # Movers lane (the MISS-DETECTOR): any healthcare-census name moving at
+  # least this much (abs %) in a day that is NOT already in the universe is a
+  # candidate — a big move we can't explain from coverage is exactly the
+  # "somebody forgot to add this company" signal the MRNA miss exposed.
+  mover_min_pct: 10.0
+  # Floor for BOTH lanes: sub-$300M names are too illiquid/noisy for the
+  # desk's process, so they never enter the queue.
+  min_market_cap: 300000000
+  # Catalyst-census lane rotation: the ~1,000-name census is swept for
+  # ClinicalTrials.gov catalysts in deterministic daily buckets (stable
+  # hash(symbol) % rotation_days), so every name is checked once per
+  # rotation_days without hammering CT.gov (~100 queries/day, cached 7 days).
+  rotation_days: 10
+  # A phase-3 primary completion date within this horizon makes a census name
+  # a candidate on its own (matches the tracker's catalyst outlook window).
+  catalyst_horizon_days: 240
+  # A dismissed candidate does NOT re-enter the queue for this many days.
+  # After that, a fresh signal may resurface it as "new" (reason cleared) —
+  # dismissals are judgments, not permanent blacklist entries.
+  dismissed_refire_days: 90
+
+  # --- Auto-promote (hard-gated, capped, togglable) --------------------------
+  # Set false to make discovery propose-only; the queue and manual Promote
+  # keep working. Two ways in, both capped by auto_promote_per_week.
+  #
+  # REPLAY HONESTY (2026-06-17 MRNA, verified against live CT.gov): the
+  # standard path FAILS the MRNA-in-June test — the cleaned screener name
+  # "Moderna" returns one partnered CF trial on CT.gov (registered sponsor is
+  # "ModernaTX"), so the candidate scores 41 (< 70) and +11.6% misses the 15%
+  # mover gate. The mega-cap fast-path below exists precisely for that case:
+  # a double-digit day on a $10B+ healthcare name is rare and coverage is
+  # near-free, so it auto-adds without the CT.gov-dependent score.
+  #
+  # Standard path — ALL gates must hold:
+  #   score >= auto_promote_min_score
+  #   AND market_cap >= auto_promote_min_mcap
+  #   AND (nearest phase-3 PCD <= auto_promote_pcd_days
+  #        OR |latest mover move| >= auto_promote_mover_pct)
+  auto_promote: true
+  auto_promote_min_score: 70
+  # $2B mcap floor: auto-adds are reserved for names too big to be missable;
+  # smaller candidates wait for a human Promote.
+  auto_promote_min_mcap: 2000000000
+  auto_promote_pcd_days: 90
+  auto_promote_mover_pct: 15.0
+  # Mega-cap mover fast-path (score gate skipped; move must be <= 7 days old;
+  # ALSO requires an active DRUG/BIOLOGICAL/GENETIC trial on CT.gov — without
+  # that, a +-10% day on an insurer or hospital system (UNH, HCA are in the
+  # census) would auto-add it to a genomics universe. The check FAILS CLOSED
+  # when CT.gov is unreachable. Known residual: a device maker with one
+  # drug-arm trial (e.g. Intuitive Surgical) can slip through — bounded by
+  # the weekly cap and one-click deactivation.)
+  auto_promote_fastpath_mcap: 10000000000
+  auto_promote_fastpath_mover_pct: 10.0
+  # At most this many promotions per rolling 7 days (auto AND manual both
+  # count — simplest honest reading of "the universe grows slowly").
+  auto_promote_per_week: 3

@@ -85,6 +85,35 @@ def test_init_db_adds_ctgov_names_to_preexisting_security(tmp_path, monkeypatch)
     assert (secs[0].ctgov_names or []) == []
 
 
+def test_init_db_creates_universe_candidate_on_preexisting_db(tmp_path, monkeypatch):
+    db = _fresh_db_module(tmp_path, monkeypatch)
+
+    # Simulate a production DB from BEFORE discovery existed: security is
+    # there, universe_candidate is not. create_all must add the new table
+    # whole (no ALTER entries needed — see the _LIGHT_MIGRATIONS comment).
+    with db.engine.begin() as conn:
+        conn.execute(text(
+            "CREATE TABLE security ("
+            "symbol VARCHAR PRIMARY KEY, name VARCHAR, subsector JSON,"
+            "ctgov_names JSON, active BOOLEAN, created_at DATETIME,"
+            "updated_at DATETIME)"
+        ))
+
+    db.init_db()
+
+    from sqlmodel import Session, select
+    from app.models import UniverseCandidate
+
+    with Session(db.engine) as s:
+        s.add(UniverseCandidate(symbol="MRK", name="Merck", status="new",
+                                sources=["mover"], evidence={"move_pct": 10.5}))
+        s.commit()
+        cands = s.exec(select(UniverseCandidate)).all()  # would raise without the table
+    assert len(cands) == 1
+    assert cands[0].evidence == {"move_pct": 10.5}
+    assert cands[0].market_cap is None  # unset stays NULL (no data), never 0
+
+
 def test_init_db_idempotent_on_current_schema(tmp_path, monkeypatch):
     db = _fresh_db_module(tmp_path, monkeypatch)
     db.init_db()

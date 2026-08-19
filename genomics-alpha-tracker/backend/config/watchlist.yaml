@@ -1,10 +1,13 @@
 # Coverage universe for the Genomics Sector Alpha Tracker.
 #
-# This file is one of THREE ways to edit the universe (the others are the
-# dashboard UI and the REST API). Editing this file and reloading
-# (POST /universe/reload or a restart) UPSERTS into the DB — it never wipes
-# history. Setting active: false drops a name from active ingestion and the
-# default views but RETAINS all of its historical data.
+# This file is one of FOUR ways to edit the universe (the others are the
+# dashboard UI, the REST API, and DISCOVERY: the dynamic-universe pipeline's
+# hard-gated, weekly-capped auto-promote — config/discovery.yaml — which adds
+# names it finds from the healthcare census + ClinicalTrials.gov, auditable
+# in the Discovery panel and reversible like any add). Editing this file and
+# reloading (POST /universe/reload or a restart) UPSERTS into the DB — it
+# never wipes history. Setting active: false drops a name from active
+# ingestion and the default views but RETAINS all of its historical data.
 #
 # Each entry:
 #   symbol      : ticker (uppercase)

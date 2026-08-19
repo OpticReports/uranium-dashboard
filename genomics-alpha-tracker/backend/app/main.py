@@ -25,6 +25,7 @@ from .routers import (
     calls,
     catalysts,
     chat,
+    discovery,
     journal,
     market,
     news,
@@ -164,6 +165,7 @@ app.include_router(today.router)
 app.include_router(journal.router)
 app.include_router(news.router)
 app.include_router(tuning.router)
+app.include_router(discovery.router)
 
 
 @app.get("/health", tags=["meta"])
