@@ -55,7 +55,7 @@ as a modeling assumption, never as a measured base rate.
 | V3 | Regulatory / strategic-partner event | late formal gates ~90% (analogy); policy markets graded down | BIO 2021 |
 | E1 | FOAK plant / production ramp | expect ~2x cost, 50-75% of nameplate yr-1; 65% of megaprojects miss; overrun by project type (solar +1% … nuclear +120%) | RAND 1981; Merrow 2011; Flyvbjerg |
 | E2 | Key-talent assembly | 40-50% failure per critical external senior hire (18mo) — Heidrick (20k searches) + DDI 2021; Leadership IQ excluded (all-hires stat, not executive) | Heidrick; DDI 2021 |
-| E3 | Ops scale-up + cash bridge | per-round survival (staging); protracted-development is the modal hardware death | Gompers 1995; hardware data |
+| E3 | Ops scale-up + cash bridge | per-round survival (staging); protracted-development is the modal hardware death. MEASURED per-series failure brackets (verified 2026-08-15): count basis A 23.6% / B 16.7% / C 13.5% / D+ ~12% (PitchBook III, self-admits undercount) vs stricter US def. seed 38.6% / SaaS seed 27.5% / life-sci seed 42.3% / D+ ~13% (PitchBook IV, incl. 6-yr-no-raise) — use as a bracket, not a point | Gompers 1995; PitchBook III-IV; hardware data |
 
 ## Structural rules
 
