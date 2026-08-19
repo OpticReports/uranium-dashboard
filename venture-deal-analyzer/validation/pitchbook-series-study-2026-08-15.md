@@ -1,6 +1,14 @@
 # Study — PitchBook "VC Returns by Series" (Parts I–V) vs the deal analyzer
 
-DRAFT pending counter-agent verification of the extraction (running).
+VERIFIED — counter-agent verdict "SAFE TO CALIBRATE FROM" (2026-08-15):
+fresh fetches byte-identical, 20+ numbers spot-checked, zero numeric
+errors; the inversion is PitchBook's own language ("Series A goes from
+first to worst"). Carried caveats: Part I's 76.2% <1x bucket is right
+to last-digit rounding (76.1 possible); Parts I–II are exited-only
+(survivor) bases while III–IV include tracked failures — never mix
+series across that discontinuity; annualization holding-period
+convention never stated by PitchBook. Added from verification: Part IV
+seed failure by sector — all-VC 38.6%, SaaS 27.5%, life sci 42.3%.
 Sources: Parts I–IV fully extracted (I 2019 global · II 2020 global ·
 III 2021 global · IV 2024 US-only); **Part V gated — not read, not
 guessed; LP asked to supply if desired.** Prompted by Casey supplying
@@ -88,12 +96,12 @@ ln(total)/ln(1+annualized): Series A ≈ 5.3–5.4 yrs, B ≈ 4.8–5.2, F ≈
 flag as unmodeled. Part IV drops total returns so horizons are not
 recoverable there.
 
-## What changes in the analyzer (pending verification verdict)
+## What changed in the analyzer (applied post-verification, 2026-08-15)
 
 1. calibration.json: series_b provenance upgraded — loss-mass band
    documented as 0.40–0.50 with PB IV C+ as the measured ceiling; new
-   gate test bracketing B loss mass. No refit of deal verdicts needed
-   (Finding 3 sensitivity).
+   gate test bracketing B loss mass (12 gates now pass). No refit of
+   deal verdicts needed (Finding 3 sensitivity). DONE.
 2. hurdle-ledger E3 anchors: add Part III/IV per-series failure-rate
    brackets alongside Carta.
 3. Instrument note: NO stage-preference prior encoded (Finding 1).

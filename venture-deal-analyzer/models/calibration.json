@@ -42,7 +42,7 @@
     "x_tail": 8,
     "alpha": 1.75
    },
-   "_note": "CONSTRUCTED stage-conditional anchor (loss mass 0.40 cited to CV-dollars/Carta; tail survival alpha 1.75 = CSN 2.75 per published B-round range; mid-buckets emerge from fit, not from a published histogram \u2014 labeled as such on any display)."
+   "_note": "CONSTRUCTED stage-conditional anchor (loss mass 0.40 cited to CV-dollars/Carta; tail survival alpha 1.75 = CSN 2.75 per published B-round range; mid-buckets emerge from fit, not from a published histogram \u2014 labeled as such on any display). VALIDATED AGAINST MEASUREMENT 2026-08-15: PitchBook Part IV (US, n=31,642 first rounds 2009-2018) publishes a measured Series C+ MOIC histogram 50/41/6/2/1/0 across these exact buckets - close to this constructed shape; loss-mass band documented as 0.40 (CV-dollars floor) to 0.50 (PB C+ count ceiling); fitted 0.417 sits at the optimistic end, gate-tested within band. Deal verdicts insensitive to anchor choice (tilt pins logged forecasts; sensitivity ~0.05pp on P(net>=20x)). Study: validation/pitchbook-series-study-2026-08-15.md."
   }
  }
 }
