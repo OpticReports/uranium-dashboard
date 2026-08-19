@@ -95,7 +95,7 @@ data on first boot.
 
 ---
 
-## Coverage universe (editable 3 ways)
+## Coverage universe (editable 4 ways)
 
 The watchlist is seeded from [`backend/config/watchlist.yaml`](backend/config/watchlist.yaml)
 (32 names across synbio, AI-drug, gene-editing, sequencing, liquid-biopsy, RNA,
@@ -111,10 +111,56 @@ Edit the universe without code changes via **any** of:
    `DELETE /universe/{symbol}`, `GET /universe`, `POST /universe/reload`.
 3. **File** — edit `watchlist.yaml` and `POST /universe/reload` (or restart).
    Sync is an **upsert — it never wipes history**.
+4. **Discovery** — the dynamic-universe pipeline (below) proposes candidates
+   automatically; a hard-gated, weekly-capped **auto-promote**
+   (`config/discovery.yaml`) can add names on its own.
 
 **Deactivate** (active=false) drops a name from active ingestion & default views
 but **retains all historical data**. **Remove** (DELETE) hard-deletes the
 universe row.
+
+---
+
+## Universe discovery
+
+The universe should never again depend on a human remembering a company exists
+(MRNA's +130% readout day was missed partly because nobody added the name).
+A daily sweep (`app/ingestion/discovery.py`, Discovery tab in the UI) proposes
+candidates into an auditable queue — two keyless lanes:
+
+- **Movers** (the miss-detector): Nasdaq healthcare screener census
+  (~1,100 US-listed names, cached 24h) — any |move| ≥ 10% on a ≥$300M name
+  **not** in the universe.
+- **Catalyst**: deterministic 10-day rotation over the census; ClinicalTrials.gov
+  (cached 7d) — near phase-3 primary completion dates, or active phase 2/3 +
+  genomics keyword match.
+
+Each candidate carries a 0–100 score (mcap band + catalyst proximity +
+genomics relevance + mover recency) and its raw evidence. **Auto-promote** is
+config-togglable and conservative, with two ways in, both capped at 3
+promotions per rolling week (manual promotions count against the cap too):
+
+- **Standard**: score ≥ 70 AND mcap ≥ $2B AND (phase-3 PCD ≤ 90d OR a ≤7-day
+  |move| ≥ 15%).
+- **Mega-cap mover fast-path**: mcap ≥ $10B AND a ≤7-day |move| ≥ 10% AND an
+  active drug/biologic trial on CT.gov (fails closed when CT.gov is dark).
+  Exists because the score under-detects registered-name mismatches — the
+  2026-06-17 MRNA replay scores 41 and only this path would have added it.
+
+Auto-promote only acts on status `new` — a desk `watch` judgment is never
+overridden. Promotion is reversible — deactivate retains history. **Dismiss**
+records a reason and suppresses re-entry for 90 days; set
+`auto_promote: false` in `config/discovery.yaml` to make discovery
+propose-only. Endpoints: `GET /discovery/candidates`, `GET /discovery/summary`,
+`POST /discovery/run`, `POST /discovery/candidates/{sym}/promote|dismiss`.
+
+**Known blind spots** (counter-agent, 2026-08-19): the Nasdaq
+`sector=health_care` census misses genomics *tools/diagnostics* classified
+elsewhere (verified absent: EXAS, TXG, PACB, TEM, TMO, DHR) — tools coverage
+still relies on watchlist curation; slow re-rates that never print a ≥10% day
+only surface via the catalyst lane; CT.gov registered-name mismatches
+under-detect catalysts (mitigated in the tracker by `ctgov_names`, not
+available for names we don't know yet).
 
 ---
 
@@ -281,6 +327,7 @@ the savings are visible.
 | `config/flags.yaml` | flag thresholds |
 | `config/calls.yaml` | trade-call triggers, conviction gate, risk unit, horizon |
 | `config/intervals.yaml` | scheduler refresh intervals per module |
+| `config/discovery.yaml` | universe-discovery lanes, auto-promote gates & weekly cap |
 
 Reload at runtime: `POST /universe/reload`, `POST /scores/reload`.
 

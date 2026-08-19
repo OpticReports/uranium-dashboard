@@ -51,6 +51,33 @@ def test_all_subsectors_are_deduped_and_sorted(session):
     assert manager.all_subsectors(session) == ["x", "y", "z"]
 
 
+def test_ctgov_names_upsert_and_alias_map(session):
+    from app.ingestion.runner import ctgov_alias_map
+
+    manager.upsert_security(session, "MRNA", "Moderna", ["mrna"],
+                            ctgov_names=["ModernaTX"])
+    manager.upsert_security(session, "BNTX", "BioNTech", ["mrna"])
+    sec = manager.get_security(session, "MRNA")
+    assert sec.ctgov_names == ["ModernaTX"]
+
+    # Updating other fields (ctgov_names=None) must not clobber the aliases.
+    manager.upsert_security(session, "MRNA", name="Moderna Inc")
+    assert manager.get_security(session, "MRNA").ctgov_names == ["ModernaTX"]
+
+    # Only names WITH aliases enter the map; the rest fall back to `name`.
+    assert ctgov_alias_map(session) == {"MRNA": ["ModernaTX"]}
+
+
+def test_sync_from_yaml_carries_mrna_and_its_ctgov_alias(session):
+    # The 2026-08-19 radar gap: MRNA absent + "Moderna" != registered
+    # sponsor "ModernaTX". Both fixes must survive a yaml sync.
+    manager.sync_from_yaml(session)
+    mrna = manager.get_security(session, "MRNA")
+    assert mrna is not None and mrna.active
+    assert mrna.ctgov_names == ["ModernaTX"]
+    assert "oncology" in mrna.subsector
+
+
 def test_list_can_exclude_inactive(session):
     manager.upsert_security(session, "ACT", "Active", active=True)
     manager.upsert_security(session, "INACT", "Inactive", active=False)

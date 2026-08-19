@@ -40,3 +40,8 @@ jobs:
   news:
     enabled: true
     interval_minutes: 120    # ~12 runs/day x 1 req/50 tickers - far under Tiingo limits
+  discovery:
+    # Dynamic universe discovery sweep (census + CT.gov rotation lanes).
+    # Daily: the census is cached 24h anyway; thresholds live in discovery.yaml.
+    enabled: true
+    interval_minutes: 1440

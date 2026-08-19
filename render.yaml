@@ -195,6 +195,41 @@ services:
       - key: EXEC_TOKEN
         sync: false
 
+  # --- Catalyst Options Engine (pre-catalyst asymmetry radar) ----------------
+  # PAPER ONLY + KEYLESS decision brain (born from the 2026-08-19 MRNA +130%
+  # melanoma-readout miss). No secrets exist on this service by design — all
+  # data lanes are keyless and degrade gracefully. Any future live options
+  # execution routes through ibkr-executor, never this service (CLAUDE.md
+  # separation-of-powers law). NOTE: the Nasdaq option-chain lane may be
+  # blocked from Render's datacenter IPs; the engine runs fine with that lane
+  # dark (scenario-IV Black-Scholes pricing, flagged on every affected row).
+  - type: web
+    name: catalyst-options-engine
+    runtime: docker
+    dockerfilePath: catalyst-options-engine/Dockerfile
+    dockerContext: catalyst-options-engine
+    plan: starter            # always-on: daily scan + market-hours chain refresh
+    healthCheckPath: /health
+    autoDeploy: true
+    disk:
+      name: options-data     # paper book + catalyst calendar survive deploys
+      mountPath: /app/data
+      sizeGB: 1
+    envVars:
+      - key: DATABASE_URL
+        value: sqlite:////app/data/options.db
+      - key: CACHE_DIR
+        value: /app/data/cache
+      - key: RUN_SCHEDULER
+        value: "true"
+      - key: LOG_LEVEL
+        value: INFO
+      # Future lane (NOT used today): FMP could backstop prices if the
+      # keyless stockanalysis lane ever goes dark from datacenter IPs.
+      # Optional — the service is fully functional without it.
+      - key: FMP_API_KEY
+        sync: false
+
   # NOTE: treasury-canary Telegram alerts — add the same TELEGRAM_BOT_TOKEN /
   # TELEGRAM_CHAT_ID secrets (plus optional TELEGRAM_MIN_SEVERITY, default
   # WARN) to the treasury-canary service env in the Render dashboard.

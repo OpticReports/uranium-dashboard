@@ -10,6 +10,7 @@ from __future__ import annotations
 EVENT_LABELS = {
     "pdufa": "FDA decision (PDUFA)",
     "adcom": "FDA advisory committee",
+    "interim_analysis": "interim analysis readout",
     "phase3_readout": "Phase 3 trial results",
     "phase2_readout": "Phase 2 trial results",
     "phase1_readout": "Phase 1 trial results",

@@ -112,6 +112,23 @@ call trigger · `retired` → failed the gate or decayed; kept for the record.
 - **Source:** `knowledge/fda_catalyst_stats.md` (financing behavior).
 - **Status:** proposed.
 
+### H7 — Quiet-into-catalyst is where convexity pays
+- **Hypothesis:** names entering a high-impact binary window (impact ≥ 0.85,
+  due in 5–45 days) with |drift_z| ≤ 0.75 — trailing 10-bar return small
+  relative to the name's own 20d realized vol — produce larger absolute event
+  moves relative to what the drift predicted; the quiet-into-catalyst subset
+  is where convex (options) structures pay. The MRNA/INTerpath miss is the
+  motivating case: +130% on the readout with no pre-event run.
+- **Prediction:** larger |forward returns| (both tails) for the low-|drift_z|
+  pre-binary subset vs the running-into-the-event subset; the flag's track
+  record should show fat absolute excess even if signed excess is mixed.
+- **Implement:** `quiet_before_catalyst` observe-only flag (flags.yaml),
+  drift_z computed in the scoring engine from closes (None on insufficient
+  data, never a silent zero).
+- **Source:** `docs/PRE_CATALYST_ASYMMETRY_STUDY.md`,
+  `knowledge/fda_catalyst_stats.md`.
+- **Status:** observing.
+
 ---
 
 _Add new hypotheses at the bottom of the backlog. When one changes status,

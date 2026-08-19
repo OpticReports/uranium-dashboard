@@ -26,6 +26,15 @@ def name_map(session: Session) -> dict[str, str]:
     return {s.symbol: s.name for s in session.exec(select(Security)).all()}
 
 
+def ctgov_alias_map(session: Session) -> dict[str, list[str]]:
+    """symbol -> CT.gov registered sponsor aliases (only names that set them)."""
+    return {
+        s.symbol: list(s.ctgov_names)
+        for s in session.exec(select(Security)).all()
+        if s.ctgov_names
+    }
+
+
 def run_market(session: Session, symbols: list[str] | None = None) -> int:
     src = MarketIngestion()
     symbols = symbols or active_symbols(session)
@@ -39,7 +48,7 @@ def run_analyst(session: Session, symbols: list[str] | None = None) -> int:
 
 
 def run_catalysts(session: Session, symbols: list[str] | None = None) -> int:
-    src = CatalystIngestion(name_map=name_map(session))
+    src = CatalystIngestion(name_map=name_map(session), alias_map=ctgov_alias_map(session))
     symbols = symbols or active_symbols(session)
     return sum(src.run(session, sym) for sym in symbols)
 
@@ -108,7 +117,9 @@ def backfill_symbol(session: Session, symbol: str, years: int = 2) -> dict:
     results = {}
     results["market"] = MarketIngestion().backfill(session, symbol, years=years)
     results["analyst"] = AnalystIngestion().run(session, symbol)
-    results["catalysts"] = CatalystIngestion(name_map=nm).run(session, symbol)
+    results["catalysts"] = CatalystIngestion(
+        name_map=nm, alias_map=ctgov_alias_map(session)
+    ).run(session, symbol)
     results["science"] = ScienceIngestion(name_map=nm).run(session, symbol)
     results["social"] = SocialIngestion().run(session, symbol)
     return results

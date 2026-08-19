@@ -96,4 +96,17 @@ export const api = {
     req(`/calls/${id}/close`, { method: "POST", body: JSON.stringify(payload) }),
   evaluateCalls: () => req("/calls/evaluate", { method: "POST" }),
   generateCalls: () => req("/calls/generate", { method: "POST" }),
+
+  // Universe discovery (the candidate queue)
+  discoveryCandidates: (status) =>
+    req(`/discovery/candidates${status ? `?status=${status}` : ""}`),
+  discoverySummary: () => req("/discovery/summary"),
+  runDiscovery: () => req("/discovery/run", { method: "POST" }),
+  promoteCandidate: (symbol) =>
+    req(`/discovery/candidates/${symbol}/promote`, { method: "POST" }),
+  dismissCandidate: (symbol, reason) =>
+    req(`/discovery/candidates/${symbol}/dismiss`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
 };
