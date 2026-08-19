@@ -2,8 +2,11 @@
 
 **Status: descriptive study, ZERO trials added to the registry (~1,622 unchanged).
 No candidate was run; NO H4 pre-registration was written (§5 — evidence too weak).
-Counter-agent verification of this study: PENDING (repo convention: required
-before any finding here is acted on).**
+Counter-agent verification: DONE 2026-08-19 — APPROVE-WITH-CORRECTIONS
+(3 binding: C1 S3 worst-loss/funding-extremes claim rewritten, C2 gap
+accounting, C3 clamp decomposition — all applied in this revision; every
+headline number independently reproduced; the no-H4 null upheld against
+all probes). Full review appended at the end of this doc.**
 
 ## 0. Verdict (results first)
 
@@ -32,10 +35,13 @@ perp-funding drags above are the counterfactual we do NOT pay.
   Documented, not worked around.
 - **Primary: BitMEX XBTUSD perp funding** — public, keyless. **11,206
   settlements, 2016-05-14 → 2026-08-19 (10.3y)**; 8h interval from 2016-06-04
-  (21 daily-interval settlements before that, excluded from analysis); 15
-  non-8h gaps (all documented in `integrity_report.json`); mean +0.89 bp/8h,
-  median +1.00 bp, 70.8% positive; 170 settlements at the ±0.375% clamp; range
-  −0.68% to +1.125% (pre-clamp-regime-era extremes).
+  (23 daily-era rows before that, excluded from analysis; verification C2).
+  **The analyzed 8h era has ZERO gaps** — all 15 non-8h intervals sit in the
+  excluded May-2016 daily era (and only 10 of them appear in
+  `integrity_report.json`; the data is cleaner than the report implied —
+  verification C2). Mean +0.89 bp/8h, median +1.00 bp, 70.8% positive; 170
+  clamp-relevant settlements = 150 exactly AT ±0.375% + 20 ABOVE it from the
+  pre-clamp era, last 2016-08-05 (verification C3); range −0.68% to +1.125%.
 - **Cross-check: Deribit BTC-PERPETUAL** — 63,951 hourly records 2019-04-30 →
   now. Daily-sum agreement vs BitMEX over 2,581 common days: **corr 0.86, means
   +1.9 vs +2.1 bp/day, sign agreement 78%** — the BitMEX series is not a venue
@@ -148,9 +154,18 @@ close (n=22,210 bars, 2016-07→2026-08); forward BTC returns, 95% CI =
   55.8 vs 50.6; during-trade 54.8 vs 48.2), but the entry-quintile table is
   non-monotone (win rate Q4 31%, Q5 43%; mean P&L flat 2.0-3.3% everywhere) —
   consistent with noise on n≈50/bucket.
-- **S3's worst 10 losses** span the whole funding range (entry percentiles 0.6
-  to 99.3; 4 of 10 above the 90th, 3 below the 10th) — extreme funding is not
-  the loss regime.
+- **S3's worst 10 losses — corrected (verification C1):** 4 of 10 entered
+  above the 90th funding percentile AND 4 below the 10th — **8/10 of the
+  worst losses at funding extremes vs a 14% base rate** (binomial p≈1e-4,
+  survives era-conditioning). The honest reading: worst-loss *magnitude*
+  concentrates at funding extremes, but the effect reduces to a
+  volatility proxy — funding extremity correlates with entry ATR (ρ≈0.44),
+  and controlling for ATR the S4 effect vanishes (p=0.72) while S3 is
+  marginal at best (p=0.04 uncorrected); expectancy is flat across all
+  funding regimes. Extreme funding flags big-vol conditions, which the
+  ATR-scaled stops already price — this *strengthens* the no-H4 call
+  (a funding filter would re-enter the vol-switch family, ~63 prior
+  failed rules).
 - **S4's drought is not a funding regime:** drought bars average the 46.6th
   funding percentile; 25% negative-funding bars vs 29% full-sample.
 
@@ -208,8 +223,13 @@ registry — and §7 amended by Casey first.
 - **§7 boundary:** signal-space remains CLOSED; this study ran zero trials,
   registered zero configs, and touches no holdout. Nothing here authorizes a
   funding-based rule; any future H4 requires Casey to amend §7 first.
-- **Counter-agent verification: PENDING** — per repo convention this study's
-  numbers must be independently recomputed before any finding is acted on.
+- **Counter-agent verification: DONE 2026-08-19, APPROVE-WITH-CORRECTIONS**
+  — independent settlement-enumeration attribution reproduced every headline
+  (S4 −$1,341,108 / −20.0%, S3 +$7,516, S5 MAR 1.50→1.36, drought 10.9%
+  deeper / 46.6th pctile, basis rows, Deribit corr 0.863); mechanics attacked
+  and clean (sign convention, MTM notional, settlement alignment {04,12,20}
+  UTC, zero double-counts/drops); C1-C3 applied above; the no-H4 null upheld
+  against all probes (nothing wrongly withheld). Review appended below.
 
 ## 7. Files
 
@@ -221,3 +241,93 @@ Study scratchpad (`/tmp/claude-0/-home-user-uranium-dashboard/12c903ed-4550-5fbe
 `d3_equity_funding.png` (adjusted vs unadjusted equity per book),
 `d3_funding_history.png` (funding history, drought windows shaded),
 `d3_regime_fwd.png` (regime vs forward returns), `d3_basis_by_year.png`.
+
+## Counter-agent review (2026-08-19) — VERDICT: APPROVE WITH CORRECTIONS
+
+Adversarial recompute per repo convention. Method: independent per-trade
+funding attribution (settlement enumeration between fill-bar close and exit,
+NOT the study's per-bar accrual loop), independent curve/MAR/drought math,
+regime table + era split rebuilt from the CSVs, basis + roll drag rebuilt from
+`basis_front_quarter.csv`. Engine replay shared (it is the object under test).
+Verification script: `ca_d3_verify.py` in the study scratchpad.
+
+### Recomputed vs claimed — headline numbers all reproduce EXACTLY
+
+| claim | doc | recomputed |
+|---|---|---|
+| S4 funding vs closed P&L | −20.0% (−$1.34M / +$6.71M) | **−20.0%** (−$1,341,108 / +$6,708,203) |
+| S4 CAGR / 2022→ MAR | 51.7→34.0% / 0.44→0.37 | **51.7→34.0 / 0.44→0.37** |
+| S4 worst trade funding | −$151k, L 2024-01-26, 233 bars, −262 bp, −2.6% eq | **−$151,487 / −262 bp / −2.62%** |
+| S4 long/short funding | −$1.55M / +$0.21M | **−$1,546,506 / +$205,397** |
+| S3 net funding / 2022→ MAR | +$7.5k / 0.86→0.84 | **+$7,516 (L +5,126, S +2,390) / 0.86→0.84** |
+| S5 2022→ / drought | MAR 1.50→1.36; +42.5→+40.3% | **1.50→1.36; 42.5→40.3** |
+| drought funding / depth | −$202k bar-basis (−$328k closed) vs −$1.86M; ~11% deeper | **−$202,497 / −$328,080 / −$1,861,541 = 10.9%** |
+| drought funding percentile | 46th; +0.53 vs +0.74 bp; 25% vs 29% neg | **46.6 / 0.53 / 0.74 / 25% / 29%** ✓ |
+| basis by year | 2024 +10.1 / 2025 +5.7 / 2026 +2.4 (and all others) | **identical to 0.1pp** |
+| roll drag | S4 L −$748k / S +$860k; S3 −2.1 bp/long trade | **−$748,171 / +$860,121 / −2.1 bp** |
+| era split, bottom-5% 1w | +4.75±4.9 (n=1,016) / n=76 / n=18, CI ±17-52% | **+4.75±4.91 / +9.5±16.5 (76) / +16.6±52.2 (18)** |
+| dd_halt verbatim | S3 fires 2017-06-26, S4 never | **confirmed by replay** |
+| Deribit corroboration | daily corr 0.86, 2,581 days | **0.863 recomputed from CSVs** |
+| S4 time in market | 46.4% L / 46.7% S; S3 ~10% L | **46.4 / 46.7 / 10.4** |
+
+Mechanics verified: sign convention correct (longs pay positive funding);
+notional = qty × settle-bar close (MTM — correct linear-perp mechanics,
+stated in §6); settlements land only at 4h bar closes (hour histogram
+{04,12,20} UTC), each maps to exactly one bar — **zero double-counting, zero
+dropped settlements** in the window; partial bars are inherently clean (no
+intra-bar settles; entry-bar close charged only when the position is held at
+that instant — correct); the S5 estimator matches `s4_batch.py`'s stated
+per-bar 75/25 @1.5x constant-mix; charts match the underlying data (S4
+68.08x→19.37x ⇔ 51.7→34.0% CAGR over 10.13y).
+
+### BINDING CORRECTIONS (wording/one descriptive claim; no conclusion changes)
+
+1. **§4 "S3's worst 10 losses" bullet is factually wrong and must be
+   rewritten.** (a) Count error: 4 of the 10 entry percentiles are below the
+   10th (7.0, 1.1, 9.6, 0.6), not 3 — so **8 of 10 sit in the extreme
+   deciles** vs a 14% base rate across all S3 trades (binomial p ≈ 1e-4;
+   survives era-conditioning: pre-2020 8/10 vs 34% base p=0.004, 2020→ 4/10
+   vs 5% base p=0.001; S4 shows the same tilt). "Span the whole funding
+   range … extreme funding is not the loss regime" is the wrong reading.
+   (b) The honest statement: **worst-loss MAGNITUDE concentrates at funding
+   extremes, but it is a volatility proxy, not funding information** —
+   |entry pctile −50| correlates with entry ATR/price at rho≈0.44 among
+   losers; controlling ATR the S4 effect vanishes (p=0.72) and S3's residual
+   is marginal (p=0.04, uncorrected across ~15 probes run in this review);
+   trade EXPECTANCY is flat across regimes (all-trade spearman p=0.39 S3 /
+   0.17 S4; winner-vs-loser extremeness p=0.27/0.97). This **strengthens**
+   the no-H4 decision — a funding-extremeness filter is the vol-switch
+   family (~63 failures) wearing a different hat — but the doc as written
+   buries a real (mechanical) pattern under a miscount.
+2. **§1 gap sentence.** "15 non-8h gaps (all documented in
+   integrity_report.json)" is doubly off: the analyzed 8h era
+   (2016-06-05 →) has **ZERO gaps** — all 15 non-8h intervals are the
+   excluded May-2016 daily-funding era — and the report lists only the first
+   10 (`gap_list_top`). Data is cleaner than the doc implies; restate.
+   Also: 23 pre-8h-era rows are excluded, not 21 (21 is the interval count).
+3. **§1 clamp sentence.** 170 = 150 settlements exactly AT ±0.375% plus 20
+   ABOVE it (pre-clamp regime, last on 2016-08-05); "at the clamp" is
+   imprecise. One clause fixes it.
+
+Non-binding notes: S3 "drag < 30 bp/yr (2022→)" holds only as an average
+(≈27 bp/yr; 2023 −61, 2024 −85 individually); Deribit corroboration samples
+`interest_8h` at 8h boundaries rather than summing hourly accruals — fine for
+a corr-0.86 sanity check, would not be fine for P&L (it isn't used for P&L).
+
+### Null-result attack (§5) — UPHELD
+
+The no-H4 call survives every probe this review ran: era split reproduces
+exactly (modern-era bottom-5% point estimates are larger, +9.5%/+16.6%, but
+n=76/18 with CIs ±17-52% — untestable, and the doc discloses the CIs); S4's
+loser-tilt is t=1.52 (n.s.) and non-monotone as stated; S4 shorts show no
+funding-regime edge (lo/hi split +0.40% vs +0.26% mean P&L); S3 stop-outs are
+UNDER-represented at funding extremes (9/143 vs 14.3 expected); the only
+undisclosed structure (correction 1) reduces to ATR. Nothing here was a
+wrongly-withheld hypothesis. Doc honesty otherwise checks out: venue/geo/
+counterfactual caveats present, §7 boundary stated, zero trials, no
+adopt/reject language in descriptive sections.
+
+**Verdict: APPROVE WITH CORRECTIONS — the three corrections above are
+binding before any finding is cited or acted on; every headline number is
+independently confirmed; conclusions (funding ≈ −20% of S4's paper edge,
+S3 funding-neutral, drought not a funding regime, no H4) stand.**
