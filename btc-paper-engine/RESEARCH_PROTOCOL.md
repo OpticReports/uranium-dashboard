@@ -13,7 +13,16 @@ future test batch — an uncounted trial silently lowers the evidence bar.
 | Blend weight × leverage frontier | 20 | RESEARCH_S4.md |
 | Blend weight/win-rate scan | 5 | session notes 2026-07 |
 | ETH transfer test (frozen BTC params) | 1 | §10 below |
-| **Total** | **~1,554** | |
+| Switch study round 1 (S5↔S6 leverage rules, incl. random benchmark) | ~41 | RESEARCH_SWITCH.md |
+| Switch study round 2 (16 pre-registered rules + 6 statics) | 22 | RESEARCH_SWITCH.md |
+| **Total** | **~1,617** | |
+
+*Note (2026-08-19 registry correction, per the S4 drought study): the two
+switch-study rounds ran 2026-08-07 but were never added here — an uncounted
+trial silently lowers the evidence bar, so they are counted now. The round-1
+count (~41) is inferred from its statistical panel's "best-of-41" selection-
+noise bar; round-2's own panel used burden 57 for its nulls. Treat ~1,617 as
+an estimate with that stated uncertainty. See RESEARCH_S4_DROUGHT.md §6.*
 
 ## 2. Deflated Sharpe audit (barbell-lab stats, modern era 2022-2026)
 
