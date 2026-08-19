@@ -29,9 +29,16 @@ strategy's measured life, by 2.5×:**
 | 6 | 2017-11-29 → 2018-06-10 | 193 d | −53.8% | 1.42 | +222.9% |
 
 - Duration: **0 of 291** completed historical stretches lasted as long as the
-  current one (prior record 360 d, 2013). Depth: only 2013 (−71.7%) and
-  2017-18 (−53.8%) were deeper (a 1-day −56.3% spike on 2013-04-10 is the
-  April-2013 flash crash, a data artifact, not a drought).
+  current one (prior record 360 d, 2013). Small-N honesty, stated where the
+  claim is read (correction C5): most of those 291 are trivial dips — only
+  ~30 stretches ran ≥30 d/≥10% and ~7 ran ≥6 months, so "longest ever" is a
+  record against roughly seven meaningful precedents, not 291. Basis
+  robustness: on the trade-close basis the current drought is 632 d vs a
+  267 d record (2.4×) — the record-length finding survives the basis choice.
+  Depth: three completed stretches were deeper than the current trough —
+  2013 (−71.7%), the April-2013 crash spike (−56.3%, a real 2-day market
+  event, excluded from the duration ranking on duration grounds only —
+  correction C2), and 2017-18 (−53.8%).
 - **Every rolling-2y PF ≤ 1.0 month in 13.6 years sits inside the current
   stretch** (first occurrence 2025-05; none before). Historical droughts were
   drawdowns inside strong 2y windows (PF at trough 1.1–2.2); this one is a
@@ -95,8 +102,10 @@ the drought is resolving** (correction #3).
   and fetch date; the lab script itself is not in the repo, so
   decimal-exact reproduction of those three rows is not possible. All future
   S4 quotes should state basis explicitly.
-- **dd_halt disclosure:** run verbatim, the continuous 2013→ replay halts in
-  Nov 2013 (trade-close DD −50.6% ≥ dd_halt 0.50). No documented study ever
+- **dd_halt disclosure:** run verbatim, the continuous 2013→ replay halts at
+  the trade exiting **2013-07-30** (equity 180,207 vs peak 364,645, close-DD
+  −50.6% ≥ dd_halt 0.50; correction C1 — Nov 2013 is that stretch's trough
+  date, a different event). No documented study ever
   ran S4 continuously (TRAIN/VALIDATE/HOLDOUT and the 5y study were separate
   window runs, none of which halt), so for the descriptive full-history curve
   dd_halt was disabled — disclosed here; nothing else touched. The halt's
@@ -114,13 +123,26 @@ retire it."* Measured, 26-week (1092-bar) close-channel breakouts:
   UP-breakouts 2024-10-29, 2025-01-20, 2025-05-21, 2025-07-09, 2025-08-13,
   2025-10-05; confirmed DOWN-breakouts 2025-11-13, 2026-01-31, 2026-06-04.
   Price is below the 200d SMA today (67.3k vs 69.0k, 2026-08-19).
+  Disclosure (correction C4): the breakout data also contains an earlier UP
+  episode **2023-10-23 → 2024-03-13** — the drought's 2024-03-04 peak sits
+  inside it — followed by a 230-day quiet gap to 2024-10-29; "continuously
+  met since 2024-10-29" rests on an unregistered persistence assumption
+  (quiet gaps ≤121 d bridged, the 230 d gap treated as a regime break).
+  Verified harmless to the conclusion: the first 20 trades after the
+  2023-10-23 entry netted **+23.4%** (earning), so that anchor never arms
+  and 2024-10-29 remains the first not-earning regime entry under any
+  anchor choice.
 - **Earning condition — anchor-dependent, and this matters:**
   - Anchored at the **first** confirmed regime entry (2024-10-29, plain
     reading): the first 20 trades netted **−22.2%** of equity (completed by
     2025-05-30); the full up-regime window 2024-10-29→2025-11-13 was 33
-    trades, **−20.7%**. **The trigger's condition was satisfied around
-    mid-2025 and was never evaluated** — a governance gap, found only by this
-    check.
+    trades, **−20.7%**. Correction C3: the rule itself was written **2026-07**
+    — AFTER that regime entry and after the 20-trade completion — so "the
+    trigger fired in mid-2025" is true only under RETROACTIVE application of
+    a later-written rule; under forward-only application the trigger has
+    never fired (at adoption the prevailing regime was the 2025-11-13
+    down-regime, in which S4 is earning). Not a governance gap — a
+    retroactivity question.
   - Anchored at the **current** regime (down-breakout 2025-11-13): 21 trades
     closed, net **+14.1%** (research basis; the engine is the live code path,
     so the live-basis dollar answer is the same replay: +14.1% closed-trade,
@@ -128,12 +150,16 @@ retire it."* Measured, 26-week (1092-bar) close-channel breakouts:
     trigger does **not** fire on this anchor. Since the 2026-06-04 re-break:
     7 trades, +4.6%.
 - **Plain statement:** the trigger is not firing today on the
-  current-regime anchor, but under the first-entry anchor it already fired in
-  mid-2025. The rule's anchor was never pre-registered precisely.
-  **DECISION NEEDED (Casey): which anchor governs — and does the 2025
-  retroactive fire count?** Per repo convention this is a missing key input:
-  no retirement/retention verdict is published here conditioned on an assumed
-  anchor.
+  current-regime anchor; under the first-entry anchor PLUS retroactive
+  application it fired in mid-2025. The rule's text (verbatim above) is
+  genuinely ambiguous on the anchor — the literal any-entry reading DOES
+  satisfy the condition, so the no-fire reading is the one carrying an
+  extra assumption — and silent on retroactivity.
+  **DECISION NEEDED (Casey), two parts: (i) which anchor governs
+  (first-entry vs current-regime), and (ii) does the rule apply
+  retroactively to a regime entered before its 2026-07 adoption?** Per repo
+  convention this is a missing key input: no retirement/retention verdict is
+  published here conditioned on an assumed answer.
 
 ## 4. S3/S4 correlation — the G2 baseline (correction #5)
 
@@ -304,5 +330,157 @@ BEFORE any candidate runs.
 - **D1 itself:** descriptive characterization of a frozen config, 0 trials
   added to the registry. Its data-integrity checks (fixture cross-verification,
   RESEARCH_5Y decimal-exact reproduction, live-panel reproduction) are
-  documented in §2. Per protocol, this doc should receive its own
-  counter-agent pass before any H1/H2 config runs are green-lit.
+  documented in §2.
+- **2026-08-19 — adversarial counter-agent verification of D1 (review
+  appended below): APPROVE-WITH-CORRECTIONS.** Independent recomputation
+  (own drought decomposition, own breakout detector) confirmed every
+  load-bearing number; 5 binding corrections (C1 halt date, C2 April-2013
+  crash spike mislabeled as data artifact / three-not-two deeper stretches,
+  C3 "governance gap" reframed as retroactivity question, C4 2023-10 regime
+  episode + persistence assumption disclosed, C5 small-N caveat moved to
+  §1) — **all applied in this revision**. H1/H2 remain green-lit per §5.
+
+---
+
+## Counter-agent review (D1 verification)
+
+**Reviewer: adversarial counter-agent, 2026-08-19. Method: independent
+recomputation (own peak-to-recovery decomposition, own breakout detector, own
+percentile/CI/trigger accounting — script `ca_verify.py` in the study
+scratchpad) over the same engine code path and `bars_4h_full.csv` (which was
+itself cross-checked: 32,881 bars, monotonic, zero 4h gaps, 10,002-bar overlap
+with the repo fixture, 1 mismatch = the fixture's still-forming final bar,
+confirmed). External re-fetch from Bitstamp was NOT repeated; the fixture
+cross-check is the data anchor.**
+
+### VERDICT: APPROVE-WITH-CORRECTIONS (5 binding, all wording/framing — no
+### headline number changes; the D1 reversal of the memo's "within norms"
+### hypothesis stands as measured)
+
+### Claim-by-claim
+
+1. **Longest-drought claim — CONFIRMED, recomputed independently.** My own
+   running-max decomposition reproduces every number: 346 trades, 292
+   stretches (291 completed); current stretch peak 2024-03-04, **898 d**
+   elapsed, trough **−50.3%** on 2025-04-12, now **−27.5%**; prior record
+   2013-04-16→2014-04-10, **360 d**, −71.7%; 0/291 completed stretches ≥ 898 d;
+   ranks 2-6 of the table match to the digit, as do all PF2y/ret2y-at-trough
+   values. Sensitivity (my additions): (a) recovery defined as ≥peak vs >peak —
+   no change; (b) near-recovery: the MTM curve came within **1.2%** of the
+   2024-03 peak in Nov–Dec 2024, and on the **trade-close basis equity made a
+   new high on 2024-11-25** — trade-close drought is **632 d vs a 267 d
+   trade-close record (2.4×)**. So "longest ever" is robust across bases and
+   recovery thresholds; the specific "898 d / 2.5×" is MTM-basis-specific (the
+   doc does state its basis). Base-rate honesty: see binding C5.
+2. **PF≤1 signature — CONFIRMED.** First rolling-2y PF≤1.0 grid month
+   2025-05; all 11 such months inside the current stretch; share of history
+   7.7% (~8% as stated); current PF2y 0.976 / ret2y +2.0% / n=60 at the 6th /
+   9th percentile. Robust to switching the 30-day grid to calendar months
+   (7.9%, 5th pct).
+3. **Fidelity + basis reconciliation — CONFIRMED with one clarification.**
+   All RESEARCH_5Y rows I re-ran reproduce **to the decimal on the MTM basis**
+   (2022 +26.4, 2023 +97.8, 2025 −10.8, FULL 5y +239.8; close-basis differs,
+   e.g. 2022 +22.7 — the doc's "to the decimal" means MTM, which is
+   RESEARCH_5Y's stated basis). Live panel reproduced: holdout window run gives
+   n=59, win 33.9%, **−1.4% MTM**, maxDD −45.4% close / −49.7% MTM. Basis
+   wedge is real and measured: same window, price-ratio basis (single 6 bp)
+   **+15.7%** vs engine close **−5.7%** / MTM −1.4% — a ~17-21 pp accounting
+   wedge, with boundary shifts of ±1 wk-1 mo moving the price-ratio figure
+   15.7→27.9%. RESEARCH_S4's +12% sits just below the recomputed price-ratio
+   range; the residual ~4 pp is plausibly lab boundary/fetch differences but is
+   NOT provable (lab script absent) — the doc says exactly this, so the
+   reconciliation is honestly labeled, not a convenient story.
+4. **Retirement trigger — numbers CONFIRMED; framing corrected (C3, C4).**
+   Rule verbatim (RESEARCH_S4.md, Recommendation): *"Revisit trigger: if BTC
+   enters a confirmed trend regime (e.g. 26-week channel breakout) and S4
+   still isn't earning after 20+ trades, retire it."* My independent 26-week
+   detector reproduces every listed episode (UP 2024-10-29 / 2025-01-20 /
+   05-21 / 07-09 / 08-13 / 10-05; DOWN 2025-11-13 / 2026-01-31 / 2026-06-04)
+   and the accounting: first 20 trades after 2024-10-29 **−22.2%** (done
+   2025-05-30); full up-window 33 trades **−20.7%**; current regime since
+   2025-11-13, 21 trades **+14.1%** closed / +6.0% MTM; since 2026-06-04
+   7 trades +4.6%; close 67,348 < 200d SMA 69,027. On the rule's text: the
+   anchor ambiguity is GENUINE — "enters" is event-anchored but the rule
+   specifies nothing about multiple sequential entries, regime end, reset, or
+   the earnings basis; note the literal any-entry reading DOES satisfy the
+   condition (2024-10-29 + 20 trades not earning), so the no-fire reading is
+   the one that needs the extra assumption (only the current regime counts).
+   Two things the doc missed are C3 and C4 below. Neither changes the bottom
+   line: anchor adjudication is Casey's call and no verdict is published — the
+   ask-don't-assume handling is correct.
+5. **S3/S4 correlation — CONFIRMED.** Recomputed r = −0.219, n = 67 months,
+   Fisher 95% CI [−0.437, +0.022]; holdout −0.271 (n=24, CI [−0.61, +0.15]);
+   estimator (calendar-month, month-end MTM, Pearson) implemented as
+   specified; SE ≈ 0.125 as stated. Observation (non-binding): Spearman rank
+   corr on the same 67 months ≈ **−0.02** — the negative Pearson is carried by
+   large-magnitude months. That is the economically relevant estimator for
+   variance reduction, but it doubles the case for §4's CI-not-point-estimate
+   discipline.
+6. **Doc vs results, prior corrections, registry — CONFIRMED.** Every §1-§4
+   number matches d1_results.json and my recomputation; all 10 binding
+   corrections from the memo review are genuinely applied (spot-checked each,
+   incl. the 33.9% below-range fix, deleted "resolving" inference, G2
+   estimator/baseline, H2 trail-geometry + named caps 1.0/3.0, H1 downgrade,
+   §3 trigger measurement); registry arithmetic 1,554+41+22=1,617 → ~1,622
+   correct and landed in RESEARCH_PROTOCOL.md §1 in the same commit; charts
+   match the claimed content. dd_halt disclosure verified (verbatim continuous
+   run halts at −50.6% close-DD; date correction C1). "Longest drought" is
+   presented as measured and the small-N caveat exists — but in §7, not §1
+   (C5).
+
+### Binding corrections
+
+- **C1 — halt date.** §2 says the continuous replay "halts in Nov 2013"; the
+  halt fires at the trade exiting **2013-07-30** (equity 180,207 vs peak
+  364,645, −50.6%). Nov 2013 (2013-11-04) is the 2013 stretch's TROUGH date —
+  different event.
+- **C2 — "data artifact" mislabel.** The −56.3% 1-bar spike on 2013-04-10 is
+  the real April-2013 crash (fetched bars: 2013-04-10 close ~225 →
+  2013-04-12 low ~59 — verified in the data; a documented market event, not
+  bad data). Exclude it from the drought ranking on DURATION grounds, and
+  state that three completed stretches were deeper than the current trough
+  (−71.7%, −56.3% 2-day crash spike, −53.8%), not two.
+- **C3 — "governance gap" overstated.** The rule was pre-registered in
+  RESEARCH_S4.md, dated **2026-07** — AFTER the 2024-10-29 regime entry and
+  after the 20-trade completion (2025-05-30). Nothing existed in mid-2025 to
+  be evaluated; "the trigger fired and was never evaluated" is only true under
+  retroactive application of a later-written rule. Reframe: the open questions
+  for Casey are (i) which anchor governs AND (ii) whether the rule applies
+  retroactively to a regime entered before its adoption. (At adoption,
+  2026-07, the prevailing regime was the 2025-11-13 down-regime, in which S4
+  is earning — under forward-only application the trigger has never fired.)
+- **C4 — missing pre-drought regime episode.** The study's own breakout data
+  contains an UP episode **2023-10-23 → 2024-03-13** (the drought's 2024-03-04
+  peak sits inside it), followed by a **230-day quiet gap** to 2024-10-29; the
+  doc's episode list silently starts at 2024 (the script printed only episodes
+  STARTING ≥2024). Disclose it, and note that "regime condition MET
+  continuously since 2024-10-29" rests on an unregistered persistence
+  assumption (it bridges quiet gaps of up to 121 d but treats the 230 d gap as
+  a regime break). Materially verified harmless to the conclusion: first 20
+  trades after the 2023-10-23 entry netted **+23.4%** (earning → that anchor
+  never arms), so 2024-10-29 remains the first not-earning regime entry under
+  any anchor choice.
+- **C5 — small-N caveat belongs in §1.** "0 of 291" inflates the comparison
+  set: most stretches are trivial dips; there are ~30 stretches ≥30 d/≥10%
+  and only ~7 that ran ≥6 months. The §7 honesty-box line ("longest ever on
+  n≈dozens is weaker than it sounds") must be echoed in one sentence next to
+  the §1 headline, where the claim is actually read.
+
+### Non-binding notes
+
+- The trade-close-basis drought (632 d vs 267 d record) is worth one line in
+  §1: it makes the record-length finding basis-robust, and 2024-11-25 (last
+  trade-close equity high) is arguably the more conservative drought start.
+- `research_basis_stats` charges 6 bp per trade while the engine charges
+  12 bp RT on donchian — over 59 trades that alone is ~3.5 pp of the basis
+  wedge; the doc's "6 bp basis" label is accurate.
+- Claim intake note: the task brief attributed the retirement rule to
+  RESEARCH_SWITCH.md; it lives in RESEARCH_S4.md (the doc cites it
+  correctly).
+
+**Bottom line: every load-bearing number in this study reproduced under
+independent recomputation; the five corrections are framing/precision fixes,
+none reverses the D1 verdict ("within historical norms" REFUTED on duration
+and PF-signature) or the trigger status (anchor- and retroactivity-dependent,
+correctly escalated to Casey as a missing key input). H1/H2 remain green-lit
+per §5 once the C1-C5 edits land.**
