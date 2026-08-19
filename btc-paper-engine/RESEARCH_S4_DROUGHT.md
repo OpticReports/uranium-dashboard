@@ -155,11 +155,15 @@ retire it."* Measured, 26-week (1092-bar) close-channel breakouts:
   genuinely ambiguous on the anchor — the literal any-entry reading DOES
   satisfy the condition, so the no-fire reading is the one carrying an
   extra assumption — and silent on retroactivity.
-  **DECISION NEEDED (Casey), two parts: (i) which anchor governs
-  (first-entry vs current-regime), and (ii) does the rule apply
-  retroactively to a regime entered before its 2026-07 adoption?** Per repo
-  convention this is a missing key input: no retirement/retention verdict is
-  published here conditioned on an assumed answer.
+  **ADJUDICATED (Casey, 2026-08-19): FORWARD-ONLY.** Rules govern from
+  their adoption date; no retroactive application in either direction. The
+  trigger has therefore never fired and S4 stays in the live blend. Anchor
+  fixed precisely going forward: **each confirmed 26-week regime entry from
+  2026-07 onward starts its own 20-trade clock; if any such regime entry
+  sees ≥20 trades without earning (net trade-close P&L ≤ 0 on the leg),
+  S4 retires.** Current status under the fixed rule: down-regime entered
+  2025-11-13 predates adoption; the first post-adoption clock starts at the
+  next confirmed breakout. Price 67.3k vs 200d SMA 69.0k (2026-08-19).
 
 ## 4. S3/S4 correlation — the G2 baseline (correction #5)
 
