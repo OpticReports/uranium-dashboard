@@ -2,8 +2,9 @@
 
 **Status:** descriptive study **D1 executed (ZERO new trials — frozen config, no
 parameter search, no rule changes)**; research memo corrected per the binding
-counter-agent review (verdict log at the end); candidates H1–H3 **pre-registered,
-NOT run**. Charts delivered with this study: `s4_drought_equity.png`,
+counter-agent review (verdict log at the end); candidates H1–H3 pre-registered
+in §5; **H1 + H2 (the 3 runnable configs) RUN 2026-08-19 — all three REJECTED
+at G1 (§9)**; H3 remains §7-blocked, H4 deferred. Charts delivered with this study: `s4_drought_equity.png`,
 `s4_drought_scatter.png`, `s4_s3_corr.png` (study scratchpad; equity + shaded
 droughts, duration/depth scatter with "now", rolling S3/S4 correlation).
 
@@ -488,3 +489,116 @@ none reverses the D1 verdict ("within historical norms" REFUTED on duration
 and PF-signature) or the trigger status (anchor- and retroactivity-dependent,
 correctly escalated to Casey as a missing key input). H1/H2 remain green-lit
 per §5 once the C1-C5 edits land.**
+
+---
+
+## 9. Batch results (2026-08-19) — pre-registered H1/H2 run: **all three REJECTED**
+
+Exactly the 3 §5 configs, nothing else, run 2026-08-19 (registry: +5 →
+~1,622, counted in RESEARCH_PROTOCOL.md §1 before the runs; the 2 H3 configs
+are counted-but-blocked, not run). Engine code path only, **zero engine-code
+changes**; harness reproduced frozen RESEARCH_5Y S4 rows to the decimal
+(2022 +26.4 / 2023 +97.8 / 2025 −10.8) before any candidate math. Scripts +
+raw results: `s4_batch.py`, `s4_batch_results.json` (study scratchpad).
+
+**Estimator (stated once, applies to every row):** folds F1 = 2021-01-01→
+2024-01-01, F2 = 2024-01-01→2026-08-19, fresh books per fold, research fees,
+cash_apy 0, per-bar MTM equity. Blend = per-bar MTM constant-mix 75/25
+S3/leg re-levered 1.5x each bar, applied **identically** to incumbent S5 and
+every S5′ (the repo's exit-step blend basis is ~1-4pp flattering on DD; the
+G1 comparison is relative, so one estimator for both sides). MAR =
+fold-internal CAGR/|maxDD|. Incumbent under this estimator: **S5 MAR 4.03
+(F1) / 0.68 (F2)**; S4 leg +269.6% / +13.6%, 2022 +26.4%, stitched total
++319.9%.
+
+**H2 sizing implementation (no engine edit):** engine `vol_target` sizing
+divides by `tcfg.stop_atr·ATR/entry`, so setting `cfg.risk = R_tgt×(2.5/5.0)`
+yields `notional = equity·R_tgt/(5.0·ATR14_entry/entry)` — the §5 chandelier
+geometry — through the byte-identical engine (algebraic identity, plus a
+per-trade assertion on every executed trade: exposure == min(cap,
+R_tgt/stop_dist)). Calibration (fitted DoF, per fold as registered): R_tgt =
+median TRAIN-fold chandelier stop_dist → fit-on-F1 **0.0860** (n=76 entries),
+fit-on-F2 **0.0642** (n=79); median pre-cap exposure = 1.0x by construction.
+
+### Per-config results (validate direction = sizing fitted on the OTHER fold; H1 has no fitted parameter)
+
+| config | fold | leg ret | leg MAR | leg maxDD | trades | S5′ MAR | S5 MAR | beats? |
+|---|---|---|---|---|---|---|---|---|
+| H1 ensemble | F1 | +188.0% | 0.98 | −43.2% | 151 | **4.18** | 4.03 | yes |
+| H1 ensemble | F2 | −3.1% | −0.02 | −49.0% | 158 | **0.52** | 0.68 | **NO** |
+| H2 cap 1.0 | F1 | +190.5% | 1.75 | −24.4% | 75 | **4.16** | 4.03 | yes |
+| H2 cap 1.0 | F2 | +13.0% | 0.10 | −47.7% | 79 | **0.6792** | 0.6839 | **NO** (unrounded) |
+| H2 cap 3.0 | F1 | +342.2% | 2.22 | −28.9% | 75 | **4.76** | 4.03 | yes |
+| H2 cap 3.0 | F2 | −28.0% | −0.21 | −56.5% | 44 (**halted**) | **0.32** | 0.68 | **NO** |
+
+In-fold-fit direction (reported for completeness; G1 needs BOTH directions):
+H2 cap 1.0 F2 in-fold S5′ MAR 0.73 vs 0.68 (beats), H2 cap 3.0 F2 in-fold
+0.79 vs 0.68 (beats), F1 in-fold 4.62 / 5.37 (beat). So H2's F2 failures are
+**created by the honest per-fold recalibration**: sizing fitted on the fat
+2021-23 ATR distribution (R_tgt 0.0860), carried into the lean-ATR drought
+fold, oversizes exactly there. H2 cap 3.0's validate-direction leg hit
+**dd_halt 0.50** (close-basis) mid-2025 and stopped trading after 44 trades —
+that is the config's real behavior, reported as such.
+
+### Gates (G2 "materially worse" operationalized before reading results as r > −0.10 = baseline −0.22 + 1 SE 0.12)
+
+| config | G1 both-folds-both-directions | ≥100 trades (folds combined) | G2 corr vs S3 (n=67) | 2022 leg (floor +15.8%) | H2 anti-shrinkage (≥0.8×inc = +255.9%) | **verdict** |
+|---|---|---|---|---|---|---|
+| H1 ensemble | **FAIL** (F2: 0.52 < 0.68) | 309 PASS | −0.198 CI [−0.42, +0.04] PASS | +33.1% PASS | n/a | **REJECTED** |
+| H2 cap 1.0 | **FAIL** (F2 val: 0.6792 < 0.6839) | 154 PASS | −0.174 CI [−0.40, +0.07] PASS | +24.0% PASS | +228.3% **FAIL** | **REJECTED** |
+| H2 cap 3.0 | **FAIL** (F2 val: 0.32 < 0.68) | 119 PASS | −0.111 CI [−0.34, +0.13] PASS | +25.3% PASS | +218.4% **FAIL** | **REJECTED** |
+
+- Min-100 read as total across both folds (protocol §4's evaluation-period
+  reading); per-fold counts are 75-79 for H2 — under a per-fold reading H2
+  would fail mechanically as well, so the reading is immaterial to verdicts.
+- H2 2022 floor uses out-of-fold sizing (fit-on-F2); in-fold sizing reads
+  +31.5% / +32.2% — floor passes either way. H1 2022: +33.1%.
+- **The common failure is G1 on the 2024-26 fold — the drought fold itself.**
+  No candidate fixed the thing the batch was probing. H1: D-55 standalone F2
+  = −22.2% (echoes its −20% holdout failure in RESEARCH_S4.md); the ensemble
+  averaged in the loser, exactly the risk §5 named. Diversification was NOT
+  the failure mode: every G2 gate passed.
+
+### G3 — DSR context (registry N≈1,622; monthly stitched-fold returns, T=67; context only, no gate weight)
+
+| book | SR (ann.) | hurdle SR0 | DSR |
+|---|---|---|---|
+| S5 incumbent | 1.69 | 1.45 | 0.73 |
+| S5′ H1 | 1.51 | 1.45 | 0.57 |
+| S5′ H2 cap 1.0 | 1.54 | 1.45 | 0.59 |
+| S5′ H2 cap 3.0 | 1.36 | 1.45 | 0.41 |
+
+(Estimator differs from protocol §2's 2022-2026 audit — window 2021→2026-08,
+expected-max-of-N hurdle on monthly Sharpe; every candidate's DSR sits BELOW
+the incumbent's, consistent with rejection; ties were never in play.)
+
+**Charts (study scratchpad):** `s4_batch_equity.png` (S5 vs each S5′, log,
+stitched folds), `s4_batch_drawdown.png` (blend drawdown profiles),
+`s4_batch_gates.png` (gate matrix).
+
+### Honesty box additions (this batch)
+
+- Calibrated per fold: H2's R_tgt only (median TRAIN-fold chandelier
+  stop_dist; a fitted degree of freedom, recalibrated per direction as
+  registered). H1 had zero fitted parameters, so its two G1 directions are
+  the same run reported once per fold.
+- The blend estimator (per-bar MTM constant-mix, 1.5x re-levered per bar) was
+  chosen for this batch and applied to BOTH incumbent and candidates; it is
+  not the RESEARCH_5Y exit-step basis (which flatters DD ~1-4pp). Incumbent
+  S5 numbers here therefore differ from RESEARCH_5Y's blend rows by basis,
+  not by data.
+- One 4h bar overlaps at the fold boundary (repo end-inclusive window
+  convention), identical on both sides of every comparison.
+- G2's "materially worse" threshold (r ≤ −0.10) and the min-100 fold-combined
+  reading were fixed before results were read, but were operationalized in
+  this batch, not in §5's text.
+- NOT modeled: funding, slippage beyond research fees, venue risk; H2's
+  dd_halt interaction with live capital (the cap-3.0 halt shows it binds).
+- Holdout (post-2026-08 live-forward) untouched; verdicts are
+  REJECTED/ADVANCES only — none advances, so nothing touches it.
+- **Counter-agent verification of this batch: PENDING** (repo convention —
+  required before these results are acted on further; log goes to §8).
+
+**Bottom line: a clean 3-rejection batch. H0 (do nothing) remains the
+standing position by default, with the §3 forward-only retirement trigger as
+the only registered exit. Signal-space stays CLOSED (§7 protocol).**

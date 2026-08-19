@@ -15,7 +15,8 @@ future test batch — an uncounted trial silently lowers the evidence bar.
 | ETH transfer test (frozen BTC params) | 1 | §10 below |
 | Switch study round 1 (S5↔S6 leverage rules, incl. random benchmark) | ~41 | RESEARCH_SWITCH.md |
 | Switch study round 2 (16 pre-registered rules + 6 statics) | 22 | RESEARCH_SWITCH.md |
-| **Total** | **~1,617** | |
+| S4 drought candidate batch (H1 ensemble 1 + H2 sizing 2, **run 2026-08-19**; H3 breakout-confirm 2, registered but §7-blocked, NOT run) | 5 | RESEARCH_S4_DROUGHT.md §5, §9 |
+| **Total** | **~1,622** | |
 
 *Note (2026-08-19 registry correction, per the S4 drought study): the two
 switch-study rounds ran 2026-08-07 but were never added here — an uncounted
