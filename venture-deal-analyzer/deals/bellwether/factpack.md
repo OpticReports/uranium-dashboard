@@ -139,20 +139,31 @@ Two honest qualifications, both load-bearing:
    who prices Bellwether, is there an unaffiliated co-lead, and what is
    the discount measured against?
 
-**CORRECTION (2026-08-20) — an earlier version of this file and of the
-reply to Casey stated that Anori was "the only round in the whole
-pipeline where an outside party set the price." That is WRONG.**
-A comps sweep finds at least four earlier X spinouts with unaffiliated
-leads: Flux (DFJ, 2014), Malta (Breakthrough Energy Ventures, 2018),
-Tidal (Perry Creek Capital, 2024) and Heritable Agriculture
-(FTW/Mythos/SVG, 2025). Anori is distinctive for a narrower reason: it
-is the first round where an unaffiliated lead sat **alongside** Series X
-Capital rather than instead of it. The correction WEAKENS the
-circularity worry — outside parties have priced X spinouts repeatedly —
-while leaving the underlying ask intact, because Series X-led rounds
-(Taara, Chorus, Verily Health) disclose no terms at all.
-[Counter-agent verification of the comps sweep was in flight when this
-was written — treat the four leads as PENDING until that verdict lands.]
+**CORRECTION (2026-08-20), now VERIFIED — see
+`validation/x-spinout-pricing-2026-08-20.md`.** An earlier version of
+this file said Anori was "the only round in the whole pipeline where an
+outside party set the price." WRONG. A revised version said "the fifth."
+ALSO WRONG. Anori is **at least the sixth**: Flux (DFJ, 2014, with
+Google Ventures participating), Dandelion (Collaborative Fund, 2017),
+Malta (Breakthrough Energy Ventures, 2018), 280 Earth (Builders VC +
+Gideon Yu + Alphabet, 2024), Tidal (Perry Creek Capital, 2024). Do NOT
+cite Heritable as unaffiliated-led — X's blog designates no lead.
+
+**But the corrected record STRENGTHENS the circularity worry for this
+deal rather than weakening it.** The unaffiliated-led rounds are mostly
+pre-Series-X-era or not Series X-led. In the Series X era the pattern
+is the opposite: **Series X led and priced Taara, Chorus and Verily
+Health with no unaffiliated lead and no disclosed terms**; only Anori
+had unaffiliated co-leads, and even there X's pages and TechCrunch
+disagree on whether Series X co-led. X states Series X "often acts as
+the sole investor in the initial funding rounds," and what X grants it
+is **first look — an access right, not a price right.**
+
+Counter-agent verdict on what a "20–25% discount" most likely means
+here: **a discount against a price the fund itself sets**, because in
+the base case no unaffiliated party is pricing the round. A discount
+measured against a price you set is not a discount. **This is the single
+most important thing to resolve before wiring $40k.**
 
 ## Structure note — the angel check is the better instrument
 

@@ -13,8 +13,12 @@ sweep (2026-08-15, all claims sourced/dated in session log).
   99 accredited investors**, Rule 506(b)/(c), $0 commissions, GP =
   Series X Capital Fund I GP, LLC, signed Gideon Yu, 601 California St
   Suite 700, SF. Related: Series X Capital Affiliates Fund I, L.P.
-  (Form D 2025-12-12) and SXC Venus, LLC (Form D 2026-03-05 —
-  deal-specific SPV).
+  (Form D 2025-12-12) and SXC Venus, LLC (CIK 0002097915, Form D
+  2026-03-05 — deal-specific SPV, $32,000,000 offering, $0 sold at
+  filing, first sale "yet to occur", GP = Series X Capital Fund I GP
+  LLC, Gideon Yu director. **Probably the Anori vehicle** — filed two
+  weeks before the 2026-03-19 Anori announcement. Codename SPVs do not
+  name their target; this is inference, not a finding).
 - Manager: Series X Capital Management LLC — SEC **exempt reporting
   adviser** (802-132474), not a registered RIA (normal for VC-only;
   noted). First-time fund; no prior funds.
@@ -40,6 +44,12 @@ sweep (2026-08-15, all claims sourced/dated in session log).
   where X sets terms; YC-deal analogue; the discount would be borne by
   Alphabet's retained stake and spinout employees). **Treat both terms
   as marketing claims until located VERBATIM in the LPA/PPM.**
+  **SHARPENED 2026-08-20:** "fund is often sole/lead" cuts BOTH ways and
+  is now the stronger argument AGAINST taking the discount at face
+  value — if Series X sets the price, there is no arm's-length
+  reference for a discount to be measured against. See the
+  pricing-role finding below and
+  `validation/x-spinout-pricing-2026-08-20.md`.
 - [UNKNOWN — REQUIRED, per standing rule ASK]: fees/carry/hurdle, GP
   commit, recycling, selection DISCRETION (may the fund pass on weak
   spinouts, or must it deploy?), what the 20% is contractually measured
@@ -124,13 +134,34 @@ repeated):**
 ## Pipeline track record [VERIFIED, and the core risk]
 
 External-capital X spinouts to date: Malta (alive, slow, "lags
-rivals"), Dandelion ($40M C led by GV 2024), 280 Earth ($50M B 2024 —
-**Gideon Yu invested personally pre-fund: conflict/allocation
-question**; $40M Frontier offtake), iyO (chiefly an OpenAI-litigation
-story now), Taara + Heritable + Chorus (Series-X-led, ALL terms
-undisclosed), Anori ($26M led by Prologis/Builders — the ONLY
-outside-led round; Series X merely participated), Mineral (WOUND DOWN
-2024). Pre-fund internal graduates Loon and Makani both shut down even
+rivals"; $26M Series A 2018 led by Breakthrough Energy Ventures),
+Dandelion ($2M seed 2017 led by Collaborative Fund; $40M C led by GV
+2024), 280 Earth ($50M B 2024 led by Builders VC + Gideon Yu +
+Alphabet — **Yu invested personally pre-fund: conflict/allocation
+question**; $40M Frontier offtake), Tidal (independent 2024, led by
+Perry Creek Capital), iyO (chiefly an OpenAI-litigation story now),
+**Taara + Chorus + Verily Health (Series-X-LED, ALL terms
+undisclosed)**, Heritable (FTW/Mythos/SVG named as funders, NO lead
+designated by X — do not cite as outside-led), Anori ($26M 2026,
+Prologis/Builders VC; X's pages and TechCrunch disagree on whether
+Series X co-led), Mineral (WOUND DOWN 2024; John Deere ACQUIRED a
+technology suite, Driscoll's licensed).
+
+CORRECTION 2026-08-20: an earlier revision of this file described
+**Chorus as the ocean-health moonshot. It is not** — X's blog calls
+Chorus "our moonshot for AI-powered supply chain orchestration." The
+aquaculture/ocean moonshot is **Tidal**. Also corrected: Anori was NOT
+"the ONLY outside-led round" — at least five preceded it. See
+`validation/x-spinout-pricing-2026-08-20.md`.
+
+**Pricing-role finding [VERIFIED]:** in the Series X era the fund
+LEADS AND PRICES the initial round (Taara, Chorus, Verily Health), and
+X says it "often acts as the sole investor in the initial funding
+rounds." What X grants is **first look — an access right, not a price
+right**; no pricing preference of any kind appears anywhere in the X or
+Series X record. This bears directly on the LP-stated "20% discount":
+in the base case there is no unaffiliated party setting a reference
+price for the discount to be measured against. Pre-fund internal graduates Loon and Makani both shut down even
 WITH Alphabet backing.
 
 **Adverse-selection assessment:** historically unambiguous — Alphabet
