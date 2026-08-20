@@ -210,6 +210,23 @@ call trigger · `retired` → failed the gate or decayed; kept for the record.
   warning block's caveats.
 - **Status:** proposed.
 
+### H13 — R2-A as a diversifying sleeve on a core index holding
+- **Hypothesis:** R2-A's low correlation to SPY (0.27 daily / 0.36 monthly,
+  beta 0.34, driven by ~26% all-cash days and idiosyncratic biotech holdings)
+  makes a 10-50% R2-A / SPY blend better than SPY alone on CAGR, max DD,
+  Sharpe AND Calmar — a flat plateau across the whole weight range (daily
+  granularity, optimum ~30-40%), holding in all three sub-periods. Known
+  failure mode: crashes faster than the 200dma gate (Mar 2020: R2-A -11.7%
+  alongside SPY).
+- **Prediction:** with a live R2-A record (H11), the realized blend beats the
+  same-period SPY on Sharpe and max DD.
+- **Implement:** no action until H11's shadow-graded live record exists; then
+  an allocation memo, not an engine change. Weights were swept post-hoc —
+  the claim is the plateau, never a point weight.
+- **Source:** docs/BACKTEST_VARIANTS_R2.md (R2-A) + correlation/blend
+  analysis 2026-08-20 (this entry). Inherits every replay caveat.
+- **Status:** proposed (blocked on H11).
+
 ---
 
 _Add new hypotheses at the bottom of the backlog. When one changes status,
