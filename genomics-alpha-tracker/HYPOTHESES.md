@@ -200,6 +200,10 @@ call trigger · `retired` → failed the gate or decayed; kept for the record.
 - **Status:** observing (shadow-grader live as of 2026-08-20 — every live
   auto-call is re-graded under the R2-A trailing engine, observe-only;
   `GET /shadow/track-record`).
+  ROUND-3 CAVEAT: the trail/time-stop robustness map is NOT a plateau
+  (Sharpe 0.57-0.78; the registered cell's neighbor drops to 0.57) —
+  exit-parameter sensitivity lowers prior confidence in the exact
+  configuration; the live shadow record is the arbiter.
 
 ### H12 — On momentum books, the 200dma gate dominates the 50dma gate (relative claim only)
 - **Hypothesis:** gate choice, not stock selection, drove the largest
@@ -228,7 +232,11 @@ call trigger · `retired` → failed the gate or decayed; kept for the record.
   the claim is the plateau, never a point weight.
 - **Source:** docs/BACKTEST_VARIANTS_R2.md (R2-A) + correlation/blend
   analysis 2026-08-20 (this entry). Inherits every replay caveat.
-- **Status:** proposed (blocked on H11).
+- **Status:** proposed (blocked on H11). Round-3 notes: BIL-on-idle-cash is
+  measurement realism worth ~+0.4pp (fold into the honest baseline); the
+  flag-tilted sizing adds a thin +0.02 Sharpe (3/3 sub-periods); leverage,
+  TSMOM overlay and vol-scaled weights all FAILED the registered bar — the
+  plain 30/70 remains the construction.
 
 ---
 

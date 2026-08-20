@@ -14,7 +14,7 @@ Inherits EVERY caveat of BACKTEST_CALLS_10Y.md and rounds 1-2 — one line each:
 - **Unreplayable live triggers**: sentiment/revision/options lanes absent; this is the
   replayable shadow, not the live book.
 - **R2-A exit-engine overfit risk**: the sleeve descends from V10 (flagged exploratory
-  in round 1); R3-F's plateau map addresses exactly this and is reported below.
+  in round 1); R3-F probes exactly this — and found SENSITIVITY, not a plateau (see below).
 
 Round-3 specific:
 
@@ -142,10 +142,15 @@ idealized-financing caveat.
 | 3.0×ATR | Sharpe 0.77 · +14.6% · DD 33% | Sharpe 0.73 · +14.7% · DD 36% | Sharpe 0.66 · +13.0% · DD 33% |
 | 3.5×ATR | Sharpe 0.78 · +15.0% · DD 32% | Sharpe 0.57 · +10.6% · DD 37% | Sharpe 0.59 · +11.6% · DD 33% |
 
-Sharpe range across the 9 cells: 0.57–0.78 (registered cell
-3.0×ATR / 90d: 0.73). The claim under test is
-plateau-ness — a smooth surface says R2-A is not a knife-edge parameter pick; any
-better cell is a ROUND-4 registration candidate, never adopted from a map.
+Sharpe range across the 9 cells: 0.57–0.78 (registered cell 3.0×ATR / 90d:
+0.73). **COUNTER-AGENT CORRECTION — this map is NOT a plateau.** The
+registered cell's immediate neighbor (3.5×ATR / 90d) drops to 0.57, and the
+surface is rough in the trail direction. The honest reading: R2-A's exit
+parameters are SENSITIVE, which WEAKENS confidence in the exact registered
+configuration (H11) — its live shadow-graded record matters more, not less,
+because of this. One consistent structure does appear (the 60d time-stop
+column beats 90/120d in every trail row: 0.67/0.77/0.78); per the contract
+that is a ROUND-4 registration candidate, never adopted from a map.
 
 ## R3-G — stationary block bootstrap of the 30/70 daily returns (validation, not judged)
 
@@ -206,6 +211,19 @@ cannot manufacture crises longer than its blocks chain together).
   block lengths mean 21d, wrap-around at the series end, fixed seed), horizon =
   the actual window length; percentiles are empirical (no interpolation).
 
+## Counter-agent verdict (round 3)
+
+PASS WITH CORRECTIONS (2026-08-20; 2 material, both framing, zero
+computational). Registration provably predates results; all SURVIVES
+verdicts recomputed independently and match; every convention hunt clean
+(R3-A prior-close cash fraction, R3-B prior-close vols, R3-C financing
+verified to 1e-15, R3-D's 16 risk-off months re-derived exactly, R3-F
+graders diff-identical modulo parameters); rerun byte-identical; reseeded
+bootstrap stable within ~±0.5pp on the p50s. Corrections applied in this
+doc: the R3-F non-plateau warning stated plainly (was boilerplated as
+smooth), R3-A reframed as measurement realism, R3-B failure diagnosed,
+R3-E thin-margin qualifier, bootstrap precision language.
+
 ## Verdict
 
 Survivors under the round-3 bar (beat the 30/70 baseline on Sharpe AND Calmar,
@@ -213,7 +231,19 @@ full period and ≥2/3 sub-periods): **R3-A, R3-E**. Per the contract
 these become HYPOTHESES.md entries / TUNING proposals — never direct config
 changes.
 
-R3-F (map) and R3-G (validation) are not judged: the map's reading is the Sharpe
-plateau above; the bootstrap's reading is the cone around the baseline's headline
-numbers. Counter-agent review before any of this is acted on, per standing
+R3-F (map) and R3-G (validation) are not judged: the map's reading is the
+SENSITIVITY WARNING above (not a plateau — see the corrected R3-F section);
+the bootstrap's reading is the cone around the baseline's headline numbers
+(seed noise on the p50s is ~±0.5pp — quote them to the nearest point, not
+tenth). Counter-agent review before any of this is acted on, per standing
 convention.
+
+**Survivor framing (counter-agent corrections):** R3-A is MEASUREMENT
+REALISM, not a strategy — its entire uplift is BIL carry arithmetic
+(0.30 weight × 0.592 avg cash × 2.13% ≈ +0.38pp predicted vs +0.40pp
+measured); fold it into the honest baseline at a future registration rather
+than counting it as an edge. R3-E's margin is THIN (+0.02 Sharpe/Calmar) —
+consistent across all three sub-periods, but a hair, not a lever. R3-B's
+failure is diagnosed, not mysterious: 35 of 128 months sat at the 0.45 upper
+clamp, 16 of them while the sleeve was ALL-CASH — vol-scaling loads up on
+the sleeve precisely when it is dead weight.
