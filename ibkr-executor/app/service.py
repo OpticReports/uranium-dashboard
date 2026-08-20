@@ -207,26 +207,50 @@ def kill(x_exec_token: str | None = Header(default=None),
                         continue
                     if pos.stop_order_ref:
                         stop_ref = pos.stop_order_ref
+                        cancel_raised = False
                         try:
                             cancelled = ADAPTER.cancel_stock_order(stop_ref)
                         except Exception as exc:  # noqa: BLE001
-                            logger.exception("kill: stop cancel %s failed: %s",
+                            # Pinned adapter contract: a RAISING cancel means
+                            # the stop FILLED. This must never fall through
+                            # to the MKT sell (final-review K-d).
+                            logger.exception("kill: stop cancel %s raised "
+                                             "(stop likely FILLED): %s",
                                              key, exc)
+                            cancel_raised = True
                             cancelled = False
                         if not cancelled:
                             # Ambiguous "already gone"/failed cancel: the
                             # stop may have JUST filled — verify before
                             # selling (idempotent with the stop fill).
+                            verify_ok = True
                             try:
                                 _ingest_fills(BLEND, ADAPTER, send)
                             except Exception as exc:  # noqa: BLE001
+                                verify_ok = False
                                 logger.exception("kill: fill verify failed: "
                                                  "%s", exc)
                             if key not in BLEND.state.positions:
                                 continue     # settled by its stop fill
-                            # Still held with a possibly-resting stop: track
-                            # it so a later fill alerts RED and the cancel
-                            # is retried every reconcile pass.
+                            if cancel_raised or not verify_ok:
+                                # FAIL CLOSED (K-d): the stop signalled
+                                # FILLED and/or venue truth is unverifiable
+                                # — a MKT sell here risks the double-sell
+                                # this whole path exists to prevent. Park
+                                # it loudly; reconcile settles it.
+                                BLEND.record_orphan_stop(
+                                    stop_ref, {"symbol": pos.symbol,
+                                               "qty": -pos.qty,
+                                               "call_id": pos.call_id})
+                                send(f"🚨🚨 blend kill: {pos.symbol} NOT "
+                                     f"flattened — stop cancel "
+                                     f"{'raised (likely filled)' if cancel_raised else 'unverifiable'}; "
+                                     f"position parked for reconcile, "
+                                     f"verify manually")
+                                continue
+                            # Verified still held with a possibly-resting
+                            # stop: track it so a later fill alerts RED and
+                            # the cancel is retried every reconcile pass.
                             BLEND.record_orphan_stop(
                                 stop_ref, {"symbol": pos.symbol,
                                            "qty": -pos.qty,

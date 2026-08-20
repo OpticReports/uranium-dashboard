@@ -1391,3 +1391,54 @@ def test_gate_minor_journaled_order_fill_is_not_unknown_alerted(tmp_path):
     assert pos.qty == 5 and pos.fill_price == 50.0     # adopted once
     moos = [e for e in a.log if e.get("order_type") == "MOO"]
     assert len(moos) == 1
+
+
+def test_gate_kd_kill_raising_cancel_never_market_sells(tmp_path, monkeypatch):
+    """Final-review K-d: a RAISING stop cancel means the stop FILLED (pinned
+    law #8) — /kill must park the position for reconcile, never MKT-sell it
+    (the venue would hold a double sell)."""
+    import time as _time
+
+    from app.config import settings
+    from app import service
+    from app.service import app as service_app
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setattr(settings, "state_path", str(tmp_path / "s.json"))
+    monkeypatch.setattr(settings, "blend_state_path", str(tmp_path / "b.json"))
+    monkeypatch.setattr(settings, "exec_token", "sekrit")
+    monkeypatch.setattr(settings, "tws_userid", "")
+    monkeypatch.setattr(settings, "blend_enabled", True)
+    try:
+        with TestClient(service_app) as c:
+            for _ in range(200):
+                if service.BLEND is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            B, A = service.BLEND, service.ADAPTER
+            _seed_initialized(B, sleeve_cash=2_750.0)
+            _held_position(B, stop_ref=None)
+            pos = B.state.positions["1"]
+            rs = A.place_stock_order("CRSP", -5, "STP", stop_price=44.0,
+                                     tif="GTC",
+                                     client_order_id="blend-1-stp-44.0000")
+            pos.stop_order_ref = rs["order_ref"]
+            B.save()
+
+            def raising_cancel(ref):
+                raise RuntimeError("order already filled")
+            monkeypatch.setattr(A, "cancel_stock_order", raising_cancel)
+
+            r = c.get("/kill", params={"token": "sekrit"})
+            assert r.json()["halted"] == "KILL"
+            # No market sell may be placed against the maybe-filled stop.
+            mkt_sells = [e for e in _executions(A, "CRSP")
+                         if e["action"] != "stop_triggered"]
+            assert mkt_sells == []
+            # Parked, not silently dropped: position retained + orphan tracked
+            # so reconcile settles it on the next pass.
+            assert "1" in B.state.positions
+            assert pos.stop_order_ref in B.state.orphan_stop_refs
+    finally:
+        service.BLEND = None
+        service.MGR = None
