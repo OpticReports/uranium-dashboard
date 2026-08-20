@@ -129,6 +129,59 @@ call trigger · `retired` → failed the gate or decayed; kept for the record.
   `knowledge/fda_catalyst_stats.md`.
 - **Status:** observing.
 
+### H8 — XBI 200dma regime gate on the calls book
+- **Hypothesis:** suppressing call entries while XBI sits below its 200dma
+  (prior trading day's close vs prior-day SMA — the level actionable at the
+  open) improves the book's Sharpe AND Calmar without giving up CAGR.
+- **Evidence (pre-registered 10y variant campaign, counter-agent PASS WITH
+  CORRECTIONS 2026-08-20, prior-day-gate restated numbers):** V2 survived the
+  registered bar — $261,677 / +9.48% CAGR / 33.7% maxDD / Sharpe 0.58 vs V0's
+  $208,760 / +7.17% / 65.5% / 0.42; the 50dma sibling (V1) also survived at
+  $261,417 / 0.57. Caveats: replay evidence on a survivor universe; rf=0
+  understates gated books; XBI buy-and-hold itself cleared the same bar.
+- **Implement:** replay evidence only — needs live observe-only tracking of
+  the gate state and its would-have-suppressed entries BEFORE any calls.yaml
+  change (TUNING.md promotion gate applies as always).
+- **Source:** `docs/BACKTEST_VARIANTS_10Y.md`,
+  `docs/VARIANTS_PREREGISTRATION.md`.
+- **Status:** observing.
+
+### H9 — Cross-sectional momentum ranking adds selection value within the universe (RELATIVE claim only)
+- **Hypothesis:** ranking universe names by trailing 60-bar return vs XBI and
+  holding the top ranks selects better names than the unranked universe —
+  a RELATIVE claim about ranking inside whatever universe the engine tracks.
+- **Evidence (same campaign, V6a/V6b survived the registered bar):** the
+  ABSOLUTE numbers are explicitly unusable — a 24-name survivor-only universe
+  is the worst case of survivorship bias for momentum ("buy the recent winners
+  among known eventual winners"), and V6a's 82.4% maxDD / 5-name concentration
+  is untradeable as a standalone book. Counter-agent robustness: the result is
+  not the tier filter (no-filter $2,177,355) or the costs (tier-true
+  $1,529,190) — only the relative selection-value reading survives.
+- **Implement:** as a ranking overlay/qualifier on existing fires (does the
+  top tercile of 60-bar RS rank outperform the bottom within the live flag
+  stream?), never as the standalone rank-portfolio book.
+- **Source:** `docs/BACKTEST_VARIANTS_10Y.md`,
+  `docs/VARIANTS_PREREGISTRATION.md`.
+- **Status:** proposed.
+
+### H10 — Trailing-stop exit engine (V10, EXPLORATORY)
+- **Hypothesis:** replacing the fixed-stop/fixed-target exit with a
+  3.0×ATR14 trailing stop from peak close (prior-bar levels, 90d time stop)
+  improves risk-adjusted returns on rel_strength entries.
+- **Evidence (same campaign, restated prior-day-gate numbers):** V10 survived
+  the registered bar at $271,941 / +9.88% / 35.3% maxDD / Sharpe 0.55 vs V0's
+  0.42 — but it is FLAGGED EXPLORATORY in the contract itself: a different
+  exit engine carries the campaign's highest overfit risk, and the look-ahead
+  correction cut its end value 22% ($349,081 → $271,941), showing how
+  parameter-sensitive it is. A survival here is a hypothesis to re-derive,
+  not a result.
+- **Implement:** would need its own exit-grid registration round plus
+  observe-only shadow grading of trailing exits alongside live exits; no
+  engine change from this evidence alone.
+- **Source:** `docs/BACKTEST_VARIANTS_10Y.md`,
+  `docs/VARIANTS_PREREGISTRATION.md`.
+- **Status:** proposed (exploratory).
+
 ---
 
 _Add new hypotheses at the bottom of the backlog. When one changes status,

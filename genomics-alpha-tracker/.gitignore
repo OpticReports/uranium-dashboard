@@ -18,6 +18,7 @@ frontend/.env
 backend/data/*
 !backend/data/pit_catalysts.json
 !backend/data/backtest_calls_10y_results.json
+!backend/data/backtest_variants_10y_results.json
 *.db
 *.sqlite3
 
