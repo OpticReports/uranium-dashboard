@@ -102,11 +102,45 @@ def test_input_validation():
 
 
 def test_ev_reconciles_with_audited_tree():
-    """Audit finding 12: the curve's EV may exceed the audited discrete
-    tree's (assumed loss recovery + uncapped tail) but must stay within
-    a documented band; the TREE headlines on any display."""
-    out = ec.exceedance_curve("seed", 0.60, 0.04)
-    assert abs(out["ev_net"] - 1.645) < 0.35, out["ev_net"]
+    """Audit finding 12, REWRITTEN 2026-08-20.
+
+    The old form compared the curve's UNCAPPED EV to the audited
+    discrete tree's 1.645 and allowed a +/-0.35 band. That compares
+    unlike objects: the tree tops out at a finite best-case branch, the
+    curve carries an unbounded Pareto tail. The band had to be wide to
+    accommodate the mismatch - and it was wide enough to conceal a real
+    tail-underfit in the seed base curve (the >50x bucket was fitted
+    39% below its published target while every gate passed).
+
+    Capping the curve at the tree's top branch makes the comparison
+    like-for-like, and the tolerance tightens from 0.35 to 0.10.
+    """
+    capped = ec.ev_capped("seed", 0.60, 0.04, cap=20.0)
+    assert abs(capped - 1.645) < 0.10, capped
+
+
+def test_uncapped_tail_premium_is_disclosed_and_bounded():
+    """The EV the curve earns above the tree's top branch is real but
+    rides on a very small probability mass. It must be reportable, and
+    it must not come to dominate the estimate: cap its share of total
+    EV at 25%. If this fails, the tail is doing too much work and the
+    fitted alpha needs re-examination against the literature range."""
+    premium, mass = ec.uncapped_tail_premium("seed", 0.60, 0.04, cap=20.0)
+    full = ec.exceedance_curve("seed", 0.60, 0.04)["ev_net"]
+    assert premium > 0, premium
+    assert mass < 0.03, mass
+    assert premium / full < 0.25, (premium, full, premium / full)
+
+
+def test_base_curves_fit_published_buckets_in_relative_terms():
+    """The absolute gate is structurally blind to the tail: at tol=0.015
+    a bucket whose published target is 0.004 can be underfit by 375% and
+    pass. Base-rate answers are read straight off these curves with no
+    deal-level tilt to protect them, so the tail must fit in RELATIVE
+    terms too."""
+    for stage in ("seed", "series_b"):
+        ok, details = ec.fit_check_relative(stage, rel_tol=0.10)
+        assert ok, (stage, details)
 
 
 def test_series_b_loss_mass_in_measured_band():
