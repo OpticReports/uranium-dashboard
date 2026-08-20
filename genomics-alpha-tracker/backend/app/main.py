@@ -30,6 +30,7 @@ from .routers import (
     market,
     news,
     scores,
+    shadow,
     social,
     today,
     tuning,
@@ -166,6 +167,7 @@ app.include_router(journal.router)
 app.include_router(news.router)
 app.include_router(tuning.router)
 app.include_router(discovery.router)
+app.include_router(shadow.router)
 
 
 @app.get("/health", tags=["meta"])

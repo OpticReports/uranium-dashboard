@@ -29,9 +29,13 @@ engine = create_engine(settings.database_url, echo=False, connect_args=_connect_
 _LIGHT_MIGRATIONS: list[tuple[str, str, str]] = [
     ("trade_call", "confidence", "FLOAT"),
     ("security", "ctgov_names", "JSON"),
+    # H11 shadow grader: fire-time ATR14 snapshot on calls (observe-only;
+    # NULL on pre-feature rows until the shadow grader backfills it).
+    ("trade_call", "atr_at_entry", "FLOAT"),
     # universe_candidate (discovery queue) is a NEW table: create_all makes it
     # whole on pre-existing DBs, so it needs no column entries here. Future
-    # columns added to it after first deploy WILL need entries.
+    # columns added to it after first deploy WILL need entries. Same for
+    # shadow_grade and regime_log (H11/H8 shadow book).
 ]
 
 

@@ -296,6 +296,10 @@ class TradeCall(SQLModel, table=True):
     # Context snapshotted at fire-time for later attribution.
     composite_at_call: Optional[float] = None
     confidence: Optional[float] = None  # 0-100 conviction score, frozen at fire-time
+    # ATR14 at fire-time (the value build_levels saw). Snapshot only — never
+    # feeds the live levels; the H11 shadow grader seeds its trailing stop
+    # from it. NULL on pre-feature calls until the shadow grader backfills it.
+    atr_at_entry: Optional[float] = None
     evidence: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
 
     # Outcome (filled by the evaluator; NULL while the call is open).
@@ -305,6 +309,53 @@ class TradeCall(SQLModel, table=True):
     exit_price: Optional[float] = None
     return_pct: Optional[float] = None             # fractional, direction-aware
     r_multiple: Optional[float] = None             # (exit-entry)/(entry-stop) for longs
+
+
+class ShadowGrade(SQLModel, table=True):
+    """OBSERVE-ONLY exit grade of a live call under an ALTERNATIVE exit engine.
+
+    The H11/H8 shadow book (docs/BACKTEST_VARIANTS_R2.md, R2-A): every live
+    auto-call is additionally graded under the trailing-stop exit engine so a
+    LIVE per-engine track record accrues BEFORE any calls.yaml change. A row
+    exists only once the shadow engine has EXITED — the live call and its
+    shadow are independent (either may close first). Nothing here ever touches
+    the live call's levels, status, or the paper book.
+    """
+
+    __tablename__ = "shadow_grade"
+    __table_args__ = (
+        UniqueConstraint("call_id", "engine", name="uq_shadow_call_engine"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    call_id: int = Field(index=True, foreign_key="trade_call.id")
+    engine: str = Field(default="trailing_3atr", index=True)  # exit-engine tag
+    status: str = "stopped"                    # stopped | expired
+    exit_date: Date
+    exit_price: float
+    # Same risk unit as the live call (entry - stop, the stored build_levels
+    # risk — the R2-A convention) so R is comparable across engines per call.
+    r_multiple: Optional[float] = None
+    graded_at: DateTime = Field(default_factory=_utcnow)
+
+
+class RegimeLog(SQLModel, table=True):
+    """Daily XBI regime-gate state, logged observe-only (H8/H12).
+
+    PRIOR-CLOSE convention (the counter-agent-corrected form): the flags for
+    date D compare the PREVIOUS trading day's close against the SMA through
+    that previous day — the level actionable at D's open. An undefined SMA
+    logs NULL (a gate that can't be computed never binds). One row per XBI
+    trading day; rows are never rewritten.
+    """
+
+    __tablename__ = "regime_log"
+
+    date: Date = Field(primary_key=True)       # the XBI trading day
+    xbi_close: float                           # that day's own close (context)
+    above_50dma: Optional[bool] = None
+    above_200dma: Optional[bool] = None
+    created_at: DateTime = Field(default_factory=_utcnow)
 
 
 class UniverseCandidate(SQLModel, table=True):

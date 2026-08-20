@@ -144,7 +144,8 @@ call trigger · `retired` → failed the gate or decayed; kept for the record.
   change (TUNING.md promotion gate applies as always).
 - **Source:** `docs/BACKTEST_VARIANTS_10Y.md`,
   `docs/VARIANTS_PREREGISTRATION.md`.
-- **Status:** observing.
+- **Status:** observing (shadow-grader live as of 2026-08-20 — daily
+  RegimeLog of both MAs on the prior-close convention, `GET /shadow/regime`).
 
 ### H9 — Cross-sectional momentum ranking adds selection value within the universe (RELATIVE claim only)
 - **Hypothesis:** ranking universe names by trailing 60-bar return vs XBI and
@@ -196,7 +197,9 @@ call trigger · `retired` → failed the gate or decayed; kept for the record.
   each live auto-call under BOTH exit engines and log the gate state daily.
 - **Source:** docs/BACKTEST_VARIANTS_R2.md + VARIANTS_PREREGISTRATION_R2.md
   (counter-agent PASS WITH CORRECTIONS both rounds).
-- **Status:** proposed.
+- **Status:** observing (shadow-grader live as of 2026-08-20 — every live
+  auto-call is re-graded under the R2-A trailing engine, observe-only;
+  `GET /shadow/track-record`).
 
 ### H12 — On momentum books, the 200dma gate dominates the 50dma gate (relative claim only)
 - **Hypothesis:** gate choice, not stock selection, drove the largest

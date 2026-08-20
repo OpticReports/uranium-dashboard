@@ -287,6 +287,20 @@ insider clusters) ship **observe-only** and are promoted to call triggers only
 when their record earns it. This is the loop that turns the equal starting
 weights into evidence-based ones.
 
+**Exit engines get shadow-graded the same way (H11/H8).** The round-2 variant
+campaign's best construction — R2-A: a 200dma prior-close XBI regime gate plus
+3×ATR trailing exits with a 90-day time stop
+([`docs/BACKTEST_VARIANTS_R2.md`](docs/BACKTEST_VARIANTS_R2.md)) — is replay
+evidence only, so before it can touch `calls.yaml` it must earn a **live**
+record. Every live auto-call is therefore additionally graded under the
+trailing exit engine (independently of the live grade — either book may close
+a call first), and the XBI 50/200dma gate state is logged daily on the
+prior-close convention. `GET /shadow/track-record` compares the two engines on
+the **same closed calls** (n, hit rate, avg/total R) plus the regime summary;
+`GET /shadow/regime` is the daily gate log. This is a pure shadow book: it
+changes **nothing** about live call generation, levels, exits, or the paper
+account.
+
 ---
 
 ## Analyst Chat (grounded LLM)
