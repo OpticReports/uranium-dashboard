@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     # safety
     dry_run: bool = True                  # log intents, never place orders
     exec_token: str = ""                  # /status /kill /resume auth
+    # READ-ONLY feed token for GET /blend/feed (X-Read-Token header,
+    # constant-time compare). SEPARATE from EXEC_TOKEN by design: the feed
+    # holder can see the book but can never kill/resume/see exec surfaces.
+    # Empty (default) = the feed endpoint is disabled (404).
+    read_token: str = ""                  # READ_TOKEN
 
     # ladder economics (manager cfg)
     leg_budget_usd: float = 10_000.0

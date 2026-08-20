@@ -105,6 +105,13 @@ class Settings(BaseSettings):
     # ALTERNATIVE to the Basic gate on GET /blend3070/intents ONLY, so the
     # executor never has to hold the dashboard password. Empty = disabled.
     blend_api_token: str | None = None
+    # Execution tab (the ibkr-executor's blend3070 book behind THIS app's
+    # login gate): the tracker reverse-proxies GET /api/execution/feed to
+    # {BLEND_UPSTREAM}/blend/feed, injecting BLEND_READ_TOKEN server-side as
+    # X-Read-Token (the executor's READ_TOKEN value) — the browser never
+    # sees the token. Both unset = the tab shows its "not connected" card.
+    blend_upstream: str = ""            # BLEND_UPSTREAM (executor base URL)
+    blend_read_token: str = ""          # BLEND_READ_TOKEN
 
 
 @functools.lru_cache

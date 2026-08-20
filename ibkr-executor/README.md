@@ -131,9 +131,24 @@ Env (all optional until the paper gate):
 | `TRACKER_URL` | tracker base URL, e.g. `https://research.optic.capital` |
 | `TRACKER_API_TOKEN` | PREFERRED: the tracker's dedicated read-only `BLEND_API_TOKEN` — valid for GET /blend3070/intents only, so this service never holds the dashboard password. When set, Basic creds are not sent |
 | `TRACKER_USER` / `TRACKER_PASSWORD` | fallback: the tracker's HTTP Basic dashboard login (its DASHBOARD_USER/PASSWORD) — dashboard creds only, no broker credential enters the blend path |
-| `BLEND_BUDGET` | per-strategy gross-exposure cap in USD; 0 (default) = disabled |
+| `BLEND_BUDGET` | per-strategy gross-exposure cap in USD; 0 (default) = disabled. When set, crossing 85% utilization sends a one-time Telegram alert ("review and raise BLEND_BUDGET"), re-armed once utilization drops below 75% |
 | `BLEND_BOOK_USD` | initial paper book (default 10,000), split 30/70 at first boot |
 | `BLEND_STATE_PATH` | persisted book state (default `./data/blend_state.json`) |
+| `READ_TOKEN` | READ-ONLY token gating `GET /blend/feed` (header `X-Read-Token`, constant-time compare). SEPARATE from `EXEC_TOKEN` by design: the feed holder sees book state only — never kill/resume. Empty (default) = the feed endpoint 404s. Set the same value as `BLEND_READ_TOKEN` on the genomics tracker, whose server-side proxy powers the research site's Execution tab |
+
+### Read-only feed: `GET /blend/feed` (the Execution tab)
+
+Public-safe JSON for the research dashboard, gated by `READ_TOKEN`:
+`{mode, halted, gate, book: {sleeve_cash, core_qty, bil_qty,
+equity_estimate, budget_utilization, initial_book_usd}, positions, trades
+(last 200, persisted), equity_curve (one point per cycle day),
+unreconciled (count), last_cycle: {date, ok, error}}`. No credentials, no
+account ids, no order refs — gate-tested against a key blacklist. The
+tracker proxies it at `/api/execution/feed` behind the dashboard login and
+injects the token server-side, so the browser never holds it.
+`/health` additionally reports `blend_loop: {ok, last_error_age_s}` when
+`BLEND_ENABLED` — a silently failing blend cycle is visible from the
+outside.
 
 Casey's paper-credential steps when the paper gate opens:
 

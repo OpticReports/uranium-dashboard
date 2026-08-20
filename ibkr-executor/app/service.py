@@ -10,6 +10,7 @@ while using real market reads once the paper-phase adapter lands.
 from __future__ import annotations
 
 import logging
+import secrets
 import threading
 import time
 from datetime import datetime, timezone
@@ -31,6 +32,10 @@ BLEND_LOCK = threading.Lock()      # /kill (API thread) vs run_cycle (loop
                                    # thread) share per-position stock orders
 ADAPTER = None
 LAST: dict = {"loop_ok": 0.0, "nino34": None, "mode": "OFFLINE"}
+# Last blend cycle outcome (feed's last_cycle + /health blend_loop): a
+# silently failing blend loop must be visible from the outside.
+BLEND_CYCLE: dict = {"date": None, "ok": None, "error": None,
+                     "error_ts": None}
 
 
 def _auth(hdr: str | None, q: str | None) -> None:
@@ -113,8 +118,13 @@ def _loop():
                                        "decisions)")
                     with BLEND_LOCK:
                         run_cycle(BLEND, ADAPTER, payload, today, alert=send)
+                    BLEND_CYCLE.update({"date": today, "ok": True,
+                                        "error": None})
                 except Exception as exc:  # noqa: BLE001
                     logger.exception("blend cycle error: %s", exc)
+                    BLEND_CYCLE.update({"date": today, "ok": False,
+                                        "error": str(exc),
+                                        "error_ts": time.time()})
             LAST["loop_ok"] = time.time()
         except Exception as exc:  # noqa: BLE001
             logger.exception("loop error: %s", exc)
@@ -135,9 +145,19 @@ app = FastAPI(title="IBKR Executor", version="0.1.0", lifespan=lifespan)
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "ibkr-executor", "mode": LAST["mode"],
+    body = {"status": "ok", "service": "ibkr-executor", "mode": LAST["mode"],
             "loop_age_s": round(time.time() - LAST["loop_ok"], 1)
             if LAST["loop_ok"] else None}
+    # The blend_loop section exists ONLY when BLEND_ENABLED (same doctrine as
+    # /status's blend section): a cycle that keeps raising is caught by the
+    # main loop and would otherwise fail silently — surface it here.
+    if BLEND is not None:
+        err_ts = BLEND_CYCLE.get("error_ts")
+        body["blend_loop"] = {
+            "ok": BLEND_CYCLE["ok"] is not False,
+            "last_error_age_s": round(time.time() - err_ts, 1)
+            if err_ts else None}
+    return body
 
 
 @app.get("/status")
@@ -162,6 +182,35 @@ def status(x_exec_token: str | None = Header(default=None),
         except Exception:  # noqa: BLE001
             prices = None
         body["blend"] = BLEND.status_summary(prices)
+    return body
+
+
+@app.get("/blend/feed")
+def blend_feed(x_read_token: str | None = Header(default=None)):
+    """READ-ONLY public-safe blend feed (the research site's Execution tab,
+    reverse-proxied by the tracker). Gated by READ_TOKEN via X-Read-Token —
+    a separate, weaker credential than EXEC_TOKEN: it can only read book
+    state, never kill/resume or see exec surfaces. Empty READ_TOKEN (the
+    default) or BLEND_ENABLED=false keeps the endpoint a 404 — nothing is
+    exposed until Casey explicitly sets the token."""
+    if BLEND is None or not settings.read_token:
+        raise HTTPException(status_code=404, detail="not found")
+    supplied = x_read_token or ""
+    if not secrets.compare_digest(supplied.encode("utf-8"),
+                                  settings.read_token.encode("utf-8")):
+        raise HTTPException(status_code=401, detail="bad read token")
+    from .blend import reference_prices
+    prices: dict = {}
+    if ADAPTER is not None:
+        try:
+            prices = reference_prices(ADAPTER, BLEND, None)
+        except Exception:  # noqa: BLE001
+            prices = {}
+    today = datetime.now(timezone.utc).date().isoformat()
+    body = BLEND.feed(prices, today)
+    body["mode"] = LAST["mode"]
+    body["last_cycle"] = {"date": BLEND_CYCLE["date"], "ok": BLEND_CYCLE["ok"],
+                          "error": BLEND_CYCLE["error"]}
     return body
 
 

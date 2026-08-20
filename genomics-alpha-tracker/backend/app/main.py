@@ -304,6 +304,41 @@ _mount_proxy("btc", "BTC_UPSTREAM",
 _mount_proxy("exit", "EWM_UPSTREAM",
               "https://treasury-canary.onrender.com/ewm", "Exit Window Monitor")
 
+
+# Execution tab feed: single GET reverse-proxied to the ibkr-executor's
+# read-only /blend/feed. Sits behind this app's Basic gate like every other
+# route; the executor's READ_TOKEN (BLEND_READ_TOKEN here) is injected
+# server-side so the browser never sees any token. Upstream status passes
+# through (404 until Casey sets the tokens -> the SPA renders its
+# "not connected" card; 502 on an unreachable executor).
+@app.get("/api/execution/feed", include_in_schema=False)
+async def execution_feed():
+    import json as _json
+
+    upstream = (settings.blend_upstream or "").rstrip("/")
+    if not upstream:
+        return Response(
+            _json.dumps({"detail": "execution feed not configured"}),
+            status_code=404, media_type="application/json",
+            headers={"cache-control": "no-cache"})
+    headers = {}
+    if settings.blend_read_token:
+        headers["X-Read-Token"] = settings.blend_read_token
+    try:
+        async with httpx.AsyncClient(
+                timeout=httpx.Timeout(connect=10.0, read=30.0, write=10.0,
+                                      pool=10.0)) as client:
+            up = await client.get(f"{upstream}/blend/feed", headers=headers)
+    except Exception as exc:  # noqa: BLE001
+        return Response(
+            _json.dumps({"detail": f"execution upstream unavailable: {exc}"}),
+            status_code=502, media_type="application/json",
+            headers={"cache-control": "no-cache"})
+    return Response(up.content, status_code=up.status_code,
+                    media_type=up.headers.get("content-type",
+                                              "application/json"),
+                    headers={"cache-control": "no-cache"})
+
 # research.optic.capital/deals — Venture Deal Analyzer ledger dashboard.
 # Self-contained static page. CANONICAL copy: venture-deal-analyzer/
 # dashboard.html at the repo root; app/deal_analyzer.html is its mirror

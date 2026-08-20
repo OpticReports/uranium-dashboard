@@ -93,10 +93,19 @@ STOP_EPS = 1e-6             # stop cancel/replace only on a real level change
 CASH_EPS = 1e-6             # ledger tolerance
 STOP_RETRY_ATTEMPTS = 3     # in-cycle protective-stop placement retries
 STOP_RETRY_SLEEP_S = 1.0    # backoff base between retries (tests patch to 0)
+TRADE_LOG_MAX = 200         # persisted closed/booked trade rows kept (feed)
+EQUITY_CURVE_MAX = 1500     # daily book-value snapshots kept (~6 years)
+UTIL_ALERT_ON = 0.85        # budget-utilization alert threshold (one-shot)
+UTIL_ALERT_OFF = 0.75       # re-arm threshold once utilization drops back
 STALE_PAYLOAD_DAYS = 5      # as_of older than this vs today -> no decisions
                             # (5, not the review's 2: a Monday poll after a
                             # long holiday weekend legitimately sees a 4-day-
                             # old last trading day; reconciliation still runs)
+
+
+def _utc_today() -> str:
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).date().isoformat()
 
 
 def entry_client_id(call_id: int) -> str:
@@ -124,6 +133,9 @@ class BlendPosition:
     stop_order_ref: str | None = None
     stop_missing: bool = False  # placement failed; retried every cycle and
                                 # blocks ALL new entries until protected
+    risk_per_share: float = 0.0  # entry_ref - day-one trail, frozen at entry
+                                 # (R-multiple denominator; 0.0 on legacy
+                                 # state rows -> R reported as null)
 
 
 @dataclass
@@ -152,6 +164,13 @@ class BlendState:
     core_cash: float = 0.0
     halted: str | None = None   # KILL | None
     events: list = field(default_factory=list)
+    trades: list = field(default_factory=list)   # booked fills, oldest first
+                                                 # (bounded TRADE_LOG_MAX;
+                                                 # feeds the Execution tab)
+    equity_curve: list = field(default_factory=list)  # [[date, book_value]]
+                                                      # one row per cycle day
+    last_gate: bool | None = None    # last tracker gate seen (feed display)
+    util_alert_armed: bool = True    # one-shot 85% budget alert armed?
 
 
 class Blend3070Manager:
@@ -179,6 +198,10 @@ class Blend3070Manager:
                 spy_qty=raw.get("spy_qty", 0),
                 core_cash=raw.get("core_cash", 0.0),
                 halted=raw.get("halted"),
+                trades=raw.get("trades", [])[-TRADE_LOG_MAX:],
+                equity_curve=raw.get("equity_curve", [])[-EQUITY_CURVE_MAX:],
+                last_gate=raw.get("last_gate"),
+                util_alert_armed=raw.get("util_alert_armed", True),
             )
             st.positions = {k: BlendPosition(**v)
                             for k, v in raw.get("positions", {}).items()}
@@ -204,6 +227,10 @@ class Blend3070Manager:
                    "spy_qty": self.state.spy_qty,
                    "core_cash": self.state.core_cash,
                    "halted": self.state.halted,
+                   "trades": self.state.trades[-TRADE_LOG_MAX:],
+                   "equity_curve": self.state.equity_curve[-EQUITY_CURVE_MAX:],
+                   "last_gate": self.state.last_gate,
+                   "util_alert_armed": self.state.util_alert_armed,
                    "events": self.state.events[-300:]},
                   open(self.state_path, "w"), indent=1)
 
@@ -214,6 +241,19 @@ class Blend3070Manager:
         self.state.events.append({"ts": int(time.time()), "level": level,
                                   "msg": msg})
         logger.info("[blend] %s", msg)
+
+    def _record_trade(self, symbol: str, side: str, qty: int,
+                      fill_price: float, when: str, kind: str,
+                      r_multiple: float | None = None,
+                      pnl: float | None = None) -> None:
+        """Append one booked fill to the persisted trade log (feed source).
+        Caller saves — every current call site already saves right after."""
+        self.state.trades.append({
+            "symbol": symbol, "side": side, "qty": abs(qty),
+            "fill_price": round(fill_price, 4), "date": when, "kind": kind,
+            "r_multiple": round(r_multiple, 2) if r_multiple is not None else None,
+            "pnl": round(pnl, 2) if pnl is not None else None})
+        del self.state.trades[:-TRADE_LOG_MAX]
 
     # ---------- valuation (executor-side only; never leaves this service) ----
 
@@ -251,6 +291,49 @@ class Blend3070Manager:
         blocks all new entries until resolved)."""
         return any(p.stop_missing or not p.stop_order_ref
                    for p in self.state.positions.values())
+
+    def budget_utilization(self, prices: dict[str, float]) -> float | None:
+        """Deployed gross notional as a fraction of BLEND_BUDGET; None when
+        no budget cap is configured (0/unset) or no prices are available."""
+        budget = getattr(self.cfg, "blend_budget", 0.0) or 0.0
+        if budget <= 0 or not prices:
+            return None
+        return self.gross_exposure(prices) / budget
+
+    def check_budget_alarm(self, prices: dict[str, float], alert) -> None:
+        """One-shot-per-crossing Telegram alert when gross notional crosses
+        UTIL_ALERT_ON (85%) of BLEND_BUDGET; re-arms once utilization drops
+        below UTIL_ALERT_OFF (75%). Armed flag is persisted so a restart
+        never re-fires an already-sent alert."""
+        util = self.budget_utilization(prices)
+        if util is None:
+            return
+        if self.state.util_alert_armed and util >= UTIL_ALERT_ON:
+            self.state.util_alert_armed = False
+            self._event("WARN", f"budget utilization {util:.0%} of "
+                                f"BLEND_BUDGET (alert sent)")
+            self.save()
+            alert(f"⚠️ blend budget utilization {util:.0%} — review and "
+                  f"raise BLEND_BUDGET")
+        elif not self.state.util_alert_armed and util < UTIL_ALERT_OFF:
+            self.state.util_alert_armed = True
+            self.save()
+
+    def record_equity_snapshot(self, today: str, prices: dict[str, float]) -> None:
+        """Daily book-value point for the Execution tab's equity curve: one
+        row per cycle day (later cycles the same day update it in place)."""
+        if not self.state.initialized or not prices:
+            return
+        value = round(self.book_value(prices), 2)
+        curve = self.state.equity_curve
+        if curve and curve[-1][0] == today:
+            if curve[-1][1] == value:
+                return
+            curve[-1][1] = value
+        else:
+            curve.append([today, value])
+            del curve[:-EQUITY_CURVE_MAX]
+        self.save()
 
     # ---------- the decision step ----------
 
@@ -384,6 +467,7 @@ class Blend3070Manager:
         #    fire's own outflow never feeds its or a sibling's sizing).
         entry_intents: list[dict] = []
         gate_on = (payload.get("gate") or {}).get("xbi_above_200dma_prior") is not False
+        st.last_gate = gate_on          # feed display; persisted on next save
         sleeve_eq = self.sleeve_value(prices)
         open_count = len(st.positions) - len(exiting) + len(st.pending_entries)
         projected_gross = self.gross_exposure(prices)
@@ -610,7 +694,8 @@ class Blend3070Manager:
             fill_price=fill_price, entry_date=today,
             time_stop=(d + timedelta(days=intent.get("time_stop_days",
                                                      TIME_STOP_DAYS))).isoformat(),
-            stop_level=intent["stop_level"])
+            stop_level=intent["stop_level"],
+            risk_per_share=max(intent["entry_ref"] - intent["stop_level"], 0.0))
         key = str(pos.call_id)
         self.state.positions[key] = pos
         self.state.entered_ids.append(pos.call_id)
@@ -622,6 +707,8 @@ class Blend3070Manager:
                                       if k in keep}
         self.state.pending_entries.pop(key, None)   # journal fulfilled
         self.state.sleeve_cash -= pos.qty * fill_price
+        self._record_trade(pos.symbol, "BUY", pos.qty, fill_price, today,
+                           "entry")
         self._event("INFO", f"ENTER {pos.symbol} x{pos.qty} @ {fill_price:.2f} "
                             f"(call {pos.call_id}, stop {pos.stop_level:.2f})")
         self.save()
@@ -662,6 +749,10 @@ class Blend3070Manager:
             return
         pnl = (fill_price - pos.fill_price) * pos.qty
         self.state.sleeve_cash += pos.qty * fill_price
+        r_mult = ((fill_price - pos.fill_price) / pos.risk_per_share
+                  if pos.risk_per_share > 0 else None)
+        self._record_trade(pos.symbol, "SELL", pos.qty, fill_price,
+                           _utc_today(), reason, r_multiple=r_mult, pnl=pnl)
         self._event("INFO", f"EXIT {pos.symbol} x{pos.qty} @ {fill_price:.2f} "
                             f"({reason}) -> P&L ${pnl:+,.0f}")
         self.save()
@@ -684,11 +775,15 @@ class Blend3070Manager:
     def on_core_trade(self, qty_delta: int, price: float) -> None:
         self.state.spy_qty += qty_delta
         self.state.core_cash -= qty_delta * price
+        self._record_trade(CORE, "BUY" if qty_delta > 0 else "SELL",
+                           qty_delta, price, _utc_today(), "core")
         self.save()
 
     def on_sweep(self, qty_delta: int, price: float) -> None:
         self.state.bil_qty += qty_delta
         self.state.sleeve_cash -= qty_delta * price
+        self._record_trade(CASH_VEHICLE, "BUY" if qty_delta > 0 else "SELL",
+                           qty_delta, price, _utc_today(), "sweep")
         self.save()
 
     def on_transfer(self, usd: float) -> None:
@@ -728,6 +823,8 @@ class Blend3070Manager:
             "spy_qty": st.spy_qty,
             "core_cash": round(st.core_cash, 2),
             "budget_cap": getattr(self.cfg, "blend_budget", 0.0) or None,
+            "gate": st.last_gate,
+            "budget_utilization": None,
             "events": st.events[-40:],
         }
         if prices:
@@ -736,7 +833,51 @@ class Blend3070Manager:
             book = self.book_value(prices)
             out["book_value"] = round(book, 2)
             out["sleeve_weight"] = round(self.sleeve_value(prices) / book, 4) if book else None
+            util = self.budget_utilization(prices)
+            out["budget_utilization"] = (round(util, 4)
+                                         if util is not None else None)
         return out
+
+    def feed(self, prices: dict[str, float], today: str) -> dict:
+        """Public-safe read-only feed body for the Execution dashboard.
+        BOOK STATE ONLY — no credentials, no account ids, no token material,
+        no order refs (the caller adds mode + last_cycle)."""
+        st = self.state
+        positions = []
+        for pos in st.positions.values():
+            try:
+                days = (date.fromisoformat(today)
+                        - date.fromisoformat(pos.entry_date)).days
+            except (ValueError, TypeError):
+                days = None
+            positions.append({"symbol": pos.symbol, "qty": pos.qty,
+                              "entry": round(pos.fill_price, 4),
+                              "entry_date": pos.entry_date,
+                              "trail_level": round(pos.stop_level, 4),
+                              "days_held": days})
+        util = self.budget_utilization(prices)
+        book_usd = getattr(self.cfg, "blend_book_usd", 0.0) or 0.0
+        budget = getattr(self.cfg, "blend_budget", 0.0) or 0.0
+        if budget > 0 and book_usd > 0:
+            book_usd = min(book_usd, budget)    # same clamp as first boot
+        return {
+            "halted": st.halted,
+            "gate": st.last_gate,
+            "book": {
+                "sleeve_cash": round(st.sleeve_cash, 2),
+                "core_qty": st.spy_qty,
+                "bil_qty": st.bil_qty,
+                "equity_estimate": (round(self.book_value(prices), 2)
+                                    if prices else None),
+                "budget_utilization": (round(util, 4)
+                                       if util is not None else None),
+                "initial_book_usd": book_usd or None,
+            },
+            "positions": positions,
+            "trades": st.trades[-TRADE_LOG_MAX:],
+            "equity_curve": st.equity_curve,
+            "unreconciled": len(st.unreconciled),
+        }
 
 
 # ---------- tracker poll + cycle execution ------------------------------------
@@ -1260,6 +1401,11 @@ def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
             alert(f"🚨 blend intent failed ({it.get('action')} "
                   f"{it.get('symbol')}): {exc}\n→ no action needed from you — "
                   f"forward this to Claude")
+    # Post-execution marks (fresh quotes for what the book NOW holds): the
+    # pre-cycle price set can miss names entered this cycle.
+    post_prices = reference_prices(adapter, mgr, None)
+    mgr.record_equity_snapshot(today, post_prices)  # daily equity point
+    mgr.check_budget_alarm(post_prices, alert)      # 85% one-shot / 75% re-arm
     mgr.save()
     return intents
 
