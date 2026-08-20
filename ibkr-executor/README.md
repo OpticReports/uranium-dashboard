@@ -53,21 +53,64 @@ This service reconciles intents against its own persisted book
 time-stop exits, band rebalances, and BIL sweeps through the same adapter
 modes as the ladder (OFFLINE -> DRY -> PAPER -> LIVE, DRY_RUN default true).
 
+### Cycle order (reconciliation-first — counter-agent-mandated law)
+
+Every `run_cycle` runs these phases IN ORDER; if the adapter cannot answer
+the reconcile queries (paper IBAdapter until implemented) the cycle FAILS
+CLOSED — no decision is ever taken against unreconciled venue state:
+
+1. **RECONCILE venue truth before any decision**
+   a. ingest resting-stop fills (`poll_stock_fills`) — a stop that filled
+      marks its position CLOSED, so the tracker's later exit signal/echo
+      for it is a no-op (idempotent; never a second sell);
+   b. adopt or clear write-ahead entry intents: the journal is persisted
+      BEFORE any MOO is placed, and venue order history is checked by the
+      deterministic idempotency key `blend-{call_id}-entry` (IB orderRef)
+      before anything re-places — a crash between placement and persist
+      can never duplicate an entry;
+   c. retry cancelling retired stops whose cancel failed (their fills
+      alert RED as possible shorts);
+   d. re-place any missing protective stop — a STOP_MISSING position is
+      alerted loudly every cycle and BLOCKS all new entries until placed.
+2. **Staleness guard**: a payload whose `as_of` is more than 5 calendar
+   days old (long-weekend tolerant) triggers no new decisions — the book
+   is still reconciled and stop-protected.
+3. **step()** plans against ONE per-cycle cash ledger: exits (each must
+   match BOTH call_id AND symbol — a mismatch or a recycled call_id is
+   refused with a RED alert, the tracker-DB-reset tell), the 90d belt,
+   ratchet-only stop adjustments (trail must be > 0), entries, and the
+   band rebalance. All cash needs are funded by AT MOST one BIL sell
+   clamped to holdings; if cash + BIL cannot cover the plan, the
+   rebalance is deferred first, then the newest entries are skipped —
+   the ledger never goes negative and a short-BIL order cannot exist.
+4. **Execute in order**: exits (stop cancel is non-fatal; a RAISING cancel
+   defers the sell rather than risking a double-sell) -> stop adjustments
+   (place the NEW stop FIRST, cancel the old second — never a naked
+   window; a rejected replacement keeps the old stop) -> BIL cash-raise ->
+   entries (write-ahead journal, MOO, protective stop with in-cycle
+   retry/backoff) -> rebalance transfer -> core buy -> BIL sweep.
+5. **No silent zeros** (repo law): any fill without a fill price is
+   UNRECONCILED — the trade is parked in state, nothing books at 0.0,
+   P&L for it is blocked, and Telegram gets a RED alert.
+
 Env (all optional until the paper gate):
 
 | env | meaning |
 |---|---|
 | `BLEND_ENABLED` | default false: service boots exactly as today |
 | `TRACKER_URL` | tracker base URL, e.g. `https://research.optic.capital` |
-| `TRACKER_USER` / `TRACKER_PASSWORD` | the tracker's HTTP Basic dashboard login (its DASHBOARD_USER/PASSWORD) — dashboard creds only, no broker credential enters the blend path |
+| `TRACKER_API_TOKEN` | PREFERRED: the tracker's dedicated read-only `BLEND_API_TOKEN` — valid for GET /blend3070/intents only, so this service never holds the dashboard password. When set, Basic creds are not sent |
+| `TRACKER_USER` / `TRACKER_PASSWORD` | fallback: the tracker's HTTP Basic dashboard login (its DASHBOARD_USER/PASSWORD) — dashboard creds only, no broker credential enters the blend path |
 | `BLEND_BUDGET` | per-strategy gross-exposure cap in USD; 0 (default) = disabled |
 | `BLEND_BOOK_USD` | initial paper book (default 10,000), split 30/70 at first boot |
 | `BLEND_STATE_PATH` | persisted book state (default `./data/blend_state.json`) |
 
 Casey's paper-credential steps when the paper gate opens:
 
-1. Set `TRACKER_URL` + `TRACKER_USER`/`TRACKER_PASSWORD` (same login as the
-   research hub) and flip `BLEND_ENABLED=true` with NO TWS credentials —
+1. Set `TRACKER_URL` + `TRACKER_API_TOKEN` (generate one, set the same
+   value as `BLEND_API_TOKEN` on the tracker; or fall back to
+   `TRACKER_USER`/`TRACKER_PASSWORD`, the research-hub login) and flip
+   `BLEND_ENABLED=true` with NO TWS credentials —
    OFFLINE: full decision loop, DryAdapter, intents logged + Telegram only.
 2. After a clean OFFLINE week, add the PAPER `TWS_USERID`/`TWS_PASSWORD`
    (keep `DRY_RUN=true`): gateway boots, mutations stay simulated.

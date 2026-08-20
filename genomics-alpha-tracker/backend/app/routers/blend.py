@@ -29,6 +29,7 @@ from sqlmodel import Session, select
 
 from ..calls.rules import BarLike
 from ..calls.shadow import (
+    ENGINE_TRAILING,
     TIME_STOP_DAYS,
     TRAIL_MULT,
     _backfill_atr_at_entry,
@@ -107,6 +108,35 @@ def current_trail_level(
 
 # --- DB wiring ----------------------------------------------------------------
 
+# ATR seeds derive from frozen fire-time data (call_date bars), so a computed
+# backfill never changes — memoized per process instead of recomputed on every
+# executor poll (counter-agent perf finding). Keyed on the immutable identity
+# fields; only non-None results are cached (bars may arrive later). Bounded.
+_ATR_SEED_CACHE: dict[tuple, float] = {}
+
+
+def _atr_seed(session: Session, c: TradeCall) -> float | None:
+    """The call's frozen ATR seed: the stored snapshot, else the same
+    backfill (and same config read) as evaluate_shadow_calls, memoized."""
+    if c.atr_at_entry is not None:
+        return c.atr_at_entry
+    key = (c.id, c.symbol, c.call_date.isoformat(), c.entry_price)
+    if key in _ATR_SEED_CACHE:
+        return _ATR_SEED_CACHE[key]
+    from ..config import calls_config
+
+    risk_cfg = calls_config().get("risk", {})
+    value = _backfill_atr_at_entry(
+        session, c,
+        risk_cfg.get("atr_window", _ATR_WINDOW),
+        risk_cfg.get("stop_atr_mult", TRAIL_MULT),
+    )
+    if value is not None:
+        if len(_ATR_SEED_CACHE) > 512:
+            _ATR_SEED_CACHE.clear()
+        _ATR_SEED_CACHE[key] = value
+    return value
+
 def _latest_xbi_date(session: Session) -> date | None:
     from ..scoring.outcomes import BENCH
 
@@ -153,10 +183,15 @@ def _gate(session: Session) -> dict:
 
 
 def _open_shadow_calls(session: Session) -> tuple[list[TradeCall], dict[int, ShadowGrade]]:
-    """Auto calls the tracker's shadow (R2-A) book tracks, split open/graded."""
+    """Auto calls the tracker's shadow (R2-A) book tracks, split open/graded.
+
+    Filtered to the R2-A trailing engine: rows a hypothetical second shadow
+    engine might write must never mark a call closed for THIS book."""
     grades = {
         g.call_id: g
-        for g in session.exec(select(ShadowGrade)).all()
+        for g in session.exec(
+            select(ShadowGrade).where(ShadowGrade.engine == ENGINE_TRAILING)
+        ).all()
     }
     calls = session.exec(
         select(TradeCall)
@@ -202,17 +237,7 @@ def get_intents(session: Session = Depends(get_session)):
     exits: list[dict] = []
     stops: list[dict] = []
     for c in open_calls:
-        atr_seed = c.atr_at_entry
-        if atr_seed is None:
-            # Same backfill (and same config read) as evaluate_shadow_calls.
-            from ..config import calls_config
-
-            risk_cfg = calls_config().get("risk", {})
-            atr_seed = _backfill_atr_at_entry(
-                session, c,
-                risk_cfg.get("atr_window", _ATR_WINDOW),
-                risk_cfg.get("stop_atr_mult", TRAIL_MULT),
-            )
+        atr_seed = _atr_seed(session, c)
         bars = _bars_for(session, c.symbol, c.call_date - timedelta(days=_ATR_WINDOW * 3))
         ex = grade_trailing(bars, c.entry_price, c.call_date, atr_seed)
         if ex is not None:
@@ -230,7 +255,10 @@ def get_intents(session: Session = Depends(get_session)):
                           "reason": "time_stop", "trail_level": None})
             continue
         level = current_trail_level(bars, c.entry_price, c.call_date, atr_seed)
-        if level is not None:
+        # Guard: a bar-poor name whose 3xATR seed exceeds its price yields a
+        # non-positive trail — never publishable (the venue would reject a
+        # STP at <= 0; the executor guards its side too).
+        if level is not None and level > 0:
             stops.append({"symbol": c.symbol, "call_id": c.id, "trail_level": level})
 
     # Echo recently shadow-graded exits so an executor polling after the
@@ -240,8 +268,13 @@ def get_intents(session: Session = Depends(get_session)):
     for call_id, g in grades.items():
         if g.exit_date >= echo_since and call_id not in listed:
             call = session.get(TradeCall, call_id)
+            if call is None:
+                # The TradeCall row is gone: a symbol-less exit is
+                # unverifiable executor-side (its call_id/symbol cross-check
+                # would refuse it anyway) — never publish it.
+                continue
             exits.append({
-                "symbol": call.symbol if call else None,
+                "symbol": call.symbol,
                 "call_id": call_id,
                 "reason": "trail" if g.status == "stopped" else "time_stop",
                 "trail_level": g.exit_price if g.status == "stopped" else None,

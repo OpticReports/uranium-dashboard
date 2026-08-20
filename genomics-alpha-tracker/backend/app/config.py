@@ -100,6 +100,11 @@ class Settings(BaseSettings):
     # Leave unset for local dev (no auth).
     dashboard_user: str | None = None
     dashboard_password: str | None = None
+    # Dedicated READ-ONLY token for the ibkr-executor's blend3070 intents
+    # poll: accepted (as `X-API-Token` or `Authorization: Bearer`) as an
+    # ALTERNATIVE to the Basic gate on GET /blend3070/intents ONLY, so the
+    # executor never has to hold the dashboard password. Empty = disabled.
+    blend_api_token: str | None = None
 
 
 @functools.lru_cache

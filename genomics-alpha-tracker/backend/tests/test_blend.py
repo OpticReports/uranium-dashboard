@@ -244,3 +244,87 @@ def test_endpoint_offline_safe_on_empty_db(session, client):
     assert body["gate"]["since"] is None
     assert body["entries"] == [] and body["stops"] == [] and body["exits"] == []
     assert body["book_params"]["max_open"] == 10
+
+
+# --- counter-agent review hardening -------------------------------------------
+
+def test_nonpositive_trail_is_never_published(session, client):
+    # A bar-poor/cheap name whose 3xATR seed exceeds its price would yield a
+    # trail <= 0 — a STP the venue would reject. Never published.
+    last_bar = _seed_name(session, symbol="PENNY", close=5.0)
+    _seed_xbi(session, above=True, last_date=last_bar)
+    session.add(TradeCall(symbol="PENNY", call_date=last_bar, direction="long",
+                          source="auto_flag", flag_type="pre_catalyst_sentiment_ramp",
+                          entry_price=5.0, stop_price=2.0, target_price=8.0,
+                          expires_on=last_bar + timedelta(days=45),
+                          atr_at_entry=2.0))          # 5 - 3*2 = -1
+    session.commit()
+    out = client.get("/blend3070/intents").json()
+    assert out["stops"] == []
+    assert out["exits"] == []
+
+
+def test_echo_row_for_a_deleted_call_is_skipped(session, client):
+    # A ShadowGrade whose TradeCall row is gone would publish a symbol-less
+    # exit — unverifiable by the executor's call_id/symbol cross-check.
+    last_bar = _seed_name(session)
+    _seed_xbi(session, above=True, last_date=last_bar)
+    session.add(ShadowGrade(call_id=4242, engine="trailing_3atr",
+                            status="stopped", exit_date=last_bar,
+                            exit_price=90.0, r_multiple=1.0))
+    session.commit()
+    out = client.get("/blend3070/intents").json()
+    assert out["exits"] == []
+
+
+def test_foreign_engine_grade_never_closes_the_blend_book(session, client):
+    # A hypothetical second shadow engine's grade rows must neither mark the
+    # call closed (stop keeps publishing) nor echo an exit for this book.
+    last_bar = _seed_name(session)
+    _seed_xbi(session, above=True, last_date=last_bar)
+    call = _fire_call(session)
+    session.add(ShadowGrade(call_id=call.id, engine="hypothetical_v2",
+                            status="stopped", exit_date=last_bar,
+                            exit_price=90.0, r_multiple=-1.0))
+    session.commit()
+    out = client.get("/blend3070/intents").json()
+    assert [s["call_id"] for s in out["stops"]] == [call.id]  # still open here
+    assert out["exits"] == []
+
+
+# --- dedicated read-only intents token (executor never holds the dashboard
+# password) --------------------------------------------------------------------
+
+def test_blend_api_token_accepted_on_intents_route_only(session, client, monkeypatch):
+    from app.config import settings as cfg
+
+    monkeypatch.setattr(cfg, "dashboard_user", "casey")
+    monkeypatch.setattr(cfg, "dashboard_password", "pw")
+    monkeypatch.setattr(cfg, "blend_api_token", "tok-123")
+    # Token accepted on GET /blend3070/intents (header or Bearer form)...
+    assert client.get("/blend3070/intents",
+                      headers={"X-API-Token": "tok-123"}).status_code == 200
+    assert client.get("/blend3070/intents",
+                      headers={"Authorization": "Bearer tok-123"}).status_code == 200
+    # ...but nowhere else: every other route stays Basic-gated.
+    assert client.get("/api/anything",
+                      headers={"X-API-Token": "tok-123"}).status_code == 401
+    # Wrong or absent token (and no Basic) is rejected.
+    assert client.get("/blend3070/intents").status_code == 401
+    assert client.get("/blend3070/intents",
+                      headers={"X-API-Token": "nope"}).status_code == 401
+    # Basic still works on the intents route.
+    assert client.get("/blend3070/intents",
+                      auth=("casey", "pw")).status_code == 200
+
+
+def test_blend_api_token_disabled_when_env_unset(session, client, monkeypatch):
+    from app.config import settings as cfg
+
+    monkeypatch.setattr(cfg, "dashboard_user", "casey")
+    monkeypatch.setattr(cfg, "dashboard_password", "pw")
+    monkeypatch.setattr(cfg, "blend_api_token", None)
+    assert client.get("/blend3070/intents",
+                      headers={"X-API-Token": "tok-123"}).status_code == 401
+    assert client.get("/blend3070/intents",
+                      auth=("casey", "pw")).status_code == 200

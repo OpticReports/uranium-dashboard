@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     # no broker credential is ever read by the blend path.
     tracker_user: str = ""                # TRACKER_USER
     tracker_password: str = ""            # TRACKER_PASSWORD
+    # Preferred: a dedicated READ-ONLY intents token (the tracker's
+    # BLEND_API_TOKEN) so the executor never holds the dashboard password.
+    # When set, the poll authenticates with X-API-Token instead of Basic.
+    tracker_api_token: str = ""           # TRACKER_API_TOKEN
     blend_budget: float = 0.0             # BLEND_BUDGET cap in USD; 0 = disabled
     blend_book_usd: float = 10_000.0      # BLEND_BOOK_USD initial paper book
     blend_state_path: str = "./data/blend_state.json"

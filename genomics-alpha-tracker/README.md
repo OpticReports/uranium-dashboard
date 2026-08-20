@@ -47,6 +47,10 @@ repository root** (Render requires it there for Blueprint auto-detection).
 2. When prompted, enter these secrets (all `sync: false` → stored by Render, never
    in git): **`FMP_API_KEY`**, and a **`DASHBOARD_USER`** / **`DASHBOARD_PASSWORD`**
    login of your choice (the app is password-gated when both are set).
+   Optional: **`BLEND_API_TOKEN`** — a dedicated read-only token the
+   ibkr-executor uses to poll `GET /blend3070/intents` (that one route only;
+   set the same value as `TRACKER_API_TOKEN` on the executor) so the
+   executor never holds the dashboard password.
 3. **Deploy.** Your dashboard will be at `https://<service-name>.onrender.com`.
    Add a custom domain (e.g. `research.optic.capital`) under
    **Settings → Custom Domains**, then CNAME it at your DNS provider. The

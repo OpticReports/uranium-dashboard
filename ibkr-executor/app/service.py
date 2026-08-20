@@ -27,6 +27,8 @@ logger = logging.getLogger(__name__)
 
 MGR: LadderManager | None = None
 BLEND = None                       # Blend3070Manager, ONLY when BLEND_ENABLED
+BLEND_LOCK = threading.Lock()      # /kill (API thread) vs run_cycle (loop
+                                   # thread) share per-position stock orders
 ADAPTER = None
 LAST: dict = {"loop_ok": 0.0, "nino34": None, "mode": "OFFLINE"}
 
@@ -103,7 +105,8 @@ def _loop():
                     if payload is None:
                         logger.warning("blend: tracker unreachable; cycle skipped")
                     else:
-                        run_cycle(BLEND, ADAPTER, payload, today, alert=send)
+                        with BLEND_LOCK:
+                            run_cycle(BLEND, ADAPTER, payload, today, alert=send)
                 except Exception as exc:  # noqa: BLE001
                     logger.exception("blend cycle error: %s", exc)
             LAST["loop_ok"] = time.time()
@@ -173,19 +176,40 @@ def kill(x_exec_token: str | None = Header(default=None),
     MGR.state.halted = "KILL"
     MGR.save()
     if BLEND is not None:
-        for key in list(BLEND.state.positions):
-            pos = BLEND.state.positions[key]
-            try:
+        with BLEND_LOCK:
+            for key in list(BLEND.state.positions):
+                pos = BLEND.state.positions[key]
                 if pos.stop_order_ref:
-                    ADAPTER.cancel_stock_order(pos.stop_order_ref)
-                r = ADAPTER.place_stock_order(pos.symbol, -pos.qty, "MKT")
-                BLEND.on_exited(pos.call_id, r.get("fill_price", 0.0),
-                                "manual kill")
-            except Exception as exc:  # noqa: BLE001
-                logger.exception("kill blend close %s failed: %s", key, exc)
-        BLEND.halt("KILL")
-    send("🔴 ACTION NEEDED (you) — ibkr ladder KILLED: all legs closed, "
-         "ladder halted\n→ it stays halted until you hit /resume?token=YOUR_TOKEN")
+                    try:
+                        ADAPTER.cancel_stock_order(pos.stop_order_ref)
+                    except Exception as exc:  # noqa: BLE001
+                        # Emergency flatten: a failed cancel never blocks
+                        # the close; the reconcile pass catches a stop that
+                        # was already filled.
+                        logger.exception("kill: stop cancel %s failed: %s",
+                                         key, exc)
+                try:
+                    r = ADAPTER.place_stock_order(
+                        pos.symbol, -pos.qty, "MKT",
+                        client_order_id=f"blend-{pos.call_id}-kill")
+                    fill = r.get("fill_price")
+                    if fill is None:
+                        # Repo law: never book at a silent 0.0.
+                        BLEND.on_exit_unreconciled(
+                            pos.call_id, "manual kill: venue ack without a "
+                                         "fill price")
+                        send(f"🚨 blend kill close {pos.symbol} x{pos.qty} "
+                             f"UNRECONCILED: no fill price — proceeds NOT "
+                             f"booked, manual reconciliation needed")
+                    else:
+                        BLEND.on_exited(pos.call_id, fill, "manual kill")
+                except Exception as exc:  # noqa: BLE001
+                    logger.exception("kill blend close %s failed: %s", key, exc)
+            BLEND.halt("KILL")
+    blend_note = " + blend book closed & halted" if BLEND is not None else ""
+    send(f"🔴 ACTION NEEDED (you) — ibkr ladder KILLED: all legs closed, "
+         f"ladder halted{blend_note}\n→ it stays halted until you hit "
+         f"/resume?token=YOUR_TOKEN")
     return {"ok": True, "halted": "KILL"}
 
 

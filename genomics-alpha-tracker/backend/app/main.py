@@ -115,13 +115,26 @@ async def basic_auth(request: Request, call_next):
 
     /health is always exempt so platform health checks pass. Constant-time
     comparison avoids leaking credential length via timing.
+
+    GET /blend3070/intents additionally accepts the dedicated read-only
+    BLEND_API_TOKEN (X-API-Token header or Authorization: Bearer) so the
+    ibkr-executor's poll never holds the dashboard password. The token is
+    valid for that one route only; every other route stays Basic-gated.
     """
     user = settings.dashboard_user
     pwd = settings.dashboard_password
     if user and pwd and request.url.path != "/health":
         header = request.headers.get("authorization", "")
         ok = False
-        if header.startswith("Basic "):
+        token = settings.blend_api_token
+        if (token and request.url.path == "/blend3070/intents"
+                and request.method == "GET"):
+            supplied = request.headers.get("x-api-token", "")
+            if not supplied and header.startswith("Bearer "):
+                supplied = header[7:]
+            if supplied and secrets.compare_digest(supplied, token):
+                ok = True
+        if not ok and header.startswith("Basic "):
             try:
                 decoded = base64.b64decode(header[6:]).decode("utf-8")
                 got_user, _, got_pwd = decoded.partition(":")
