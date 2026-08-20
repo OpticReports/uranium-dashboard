@@ -86,6 +86,43 @@ Orbital Sidekick $3.5M raise after $47.5M lifetime. 10x from $220M
 post, after satellite-era dilution, needs ~$3.5–5B — never achieved by
 a venture-backed EO company.
 
+## Competitor addendum — Bellwether (added 2026-08-20, Casey-sourced)
+
+RBC Insights (June 2026): **Bellwether**, an X/Alphabet moonshot
+commercializing climate intelligence. Models Earth at 100x100m
+resolution across 600 geodata layers + building-level attributes
+(materials, roof type, age); wildfire/hurricane/severe-weather risk;
+built on Google geospatial data + DeepMind models. LIVE COMMERCIAL
+TRACTION: Hiscox uses its wildfire modeling in California;
+reinsurer deployment; Kansas City emergency management; National
+Guard / Defense Innovation Unit.
+
+Competitive read vs Matter:
+- **Direct collision on the insurance budget.** Matter's beachhead
+  memo says carriers' "existing imagery and proxy data can't be seen
+  at the material level" — Bellwether is the strongest possible
+  version of the thesis Matter attacks (better models on existing
+  data, with Google's data moat and distribution), and it is PAYING-
+  CUSTOMER LIVE while Matter is at LOIs and cost-plus codesigns.
+- **Partially different altitude:** Bellwether = portfolio/parcel risk
+  scoring at 100m pixels (underwriting/pricing); Matter = sub-meter
+  material-level sensing (inspection/claims/condition). The segments
+  are adjacent, not identical — but the buyer and budget line
+  (carrier property-intelligence spend) overlap heavily, and
+  Bellwether + EagleView/Nearmap together bracket Matter's insurance
+  wedge from both sides (risk scoring above, inspection imagery
+  below).
+- Score impact: reinforces competition 2·3 (no re-score needed — the
+  scorers already priced incumbent pressure; Bellwether sharpens it).
+
+**Portfolio conflict/synergy note for the LP:** Bellwether is an X
+moonshot heading to market — i.e., squarely in the pipeline that
+**Series X Capital** (which Casey holds) is legally obligated to fund
+if it spins out. If that happens, Casey would be LONG Matter's
+best-resourced competitor through the fund — one more reason the
+Matter pass is portfolio-coherent, and a concrete question for the
+Series X team: is Bellwether in the pipeline?
+
 ## TAM model assessment
 
 Workbook structure professional (readiness ramps, win-rate sensitivity
