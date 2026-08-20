@@ -182,6 +182,34 @@ call trigger · `retired` → failed the gate or decayed; kept for the record.
   `docs/VARIANTS_PREREGISTRATION.md`.
 - **Status:** proposed (exploratory).
 
+### H11 — Gated trailing-exit call book (R2-A) is the engine's best construction
+- **Hypothesis:** the combined-flag call book with a 200dma prior-close XBI
+  regime gate and 3.0xATR trailing exits (no fixed target, 90d time stop)
+  produces materially better risk-adjusted results than the live fixed
+  3:1-target engine — replay: $430,406 / +14.73% CAGR / 35.6% maxDD /
+  0.73 Sharpe vs V0's 0.42 and V2's 0.58 (double-baseline survivor, 2/3
+  sub-periods; its one miss is 2023-2026 vs V2).
+- **Prediction:** live observe-only tracking of the same construction shows
+  higher R expectancy and shallower book drawdown than the production
+  engine's graded record over the same window.
+- **Implement:** observe-only shadow grading (no calls.yaml change): grade
+  each live auto-call under BOTH exit engines and log the gate state daily.
+- **Source:** docs/BACKTEST_VARIANTS_R2.md + VARIANTS_PREREGISTRATION_R2.md
+  (counter-agent PASS WITH CORRECTIONS both rounds).
+- **Status:** proposed.
+
+### H12 — On momentum books, the 200dma gate dominates the 50dma gate (relative claim only)
+- **Hypothesis:** gate choice, not stock selection, drove the largest
+  construction difference in the campaign: identical top-5 momentum books
+  ended $2.05M (200dma) vs $733k (50dma), entirely from 2020-21 exposure.
+  ABSOLUTE momentum-book numbers remain unusable (survivorship worst case).
+- **Prediction:** any live momentum-style overlay should default to the
+  slower gate; the faster gate's whipsaws are the measurable cost.
+- **Implement:** carried with H8's observe-only gate tracking (log both MAs).
+- **Source:** docs/BACKTEST_VARIANTS_R2.md (R2-E vs V6b), with the R2-E
+  warning block's caveats.
+- **Status:** proposed.
+
 ---
 
 _Add new hypotheses at the bottom of the backlog. When one changes status,
