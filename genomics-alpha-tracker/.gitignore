@@ -20,6 +20,7 @@ backend/data/*
 !backend/data/backtest_calls_10y_results.json
 !backend/data/backtest_variants_10y_results.json
 !backend/data/backtest_variants_r2_results.json
+!backend/data/backtest_variants_r3_results.json
 !backend/data/bil_bars_raw.json
 *.db
 *.sqlite3
