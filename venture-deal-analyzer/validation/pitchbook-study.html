@@ -1,0 +1,60 @@
+<title>PitchBook Series Returns — Study</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📐</text></svg>">
+<style>
+:root{--paper:#F7F8F7;--card:#FFF;--ink:#1A2422;--muted:#56675F;--line:#DCE3DF;--accent:#0E7E53;--pos:#0E7E53;--neg:#9E3B1E;--b1:#0E7E53;--b2:#A85F00;--b3:#ADBCB4;--wash:#EEF3F0;--warn:#F6EEE2;}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--paper:#131A18;--card:#1A2320;--ink:#E4EBE7;--muted:#92A29A;--line:#2A3733;--accent:#45C69E;--pos:#279B79;--neg:#E0805F;--b1:#279B79;--b2:#C56F33;--b3:#46554F;--wash:#1F2A26;--warn:#2A2119;}}
+:root[data-theme="dark"]{--paper:#131A18;--card:#1A2320;--ink:#E4EBE7;--muted:#92A29A;--line:#2A3733;--accent:#45C69E;--pos:#279B79;--neg:#E0805F;--b1:#279B79;--b2:#C56F33;--b3:#46554F;--wash:#1F2A26;--warn:#2A2119;}
+*{box-sizing:border-box}body{background:var(--paper);color:var(--ink);font-family:system-ui,sans-serif;font-size:15.5px;line-height:1.55;margin:0}
+.wrap{max-width:880px;margin:0 auto;padding:36px 22px 70px}
+h1,h2{font-family:Charter,Georgia,serif;text-wrap:balance}h1{font-size:1.7rem;margin:6px 0 4px}h2{font-size:1.15rem;margin:26px 0 6px}
+.eyebrow{font-family:ui-monospace,Menlo,monospace;font-size:.7rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}.eyebrow b{color:var(--accent)}
+p{max-width:66ch}.note{background:var(--wash);border-left:3px solid var(--accent);border-radius:0 10px 10px 0;padding:10px 14px;font-size:.9rem;margin:14px 0}
+.warnbox{background:var(--warn);border-left:3px solid var(--neg);border-radius:0 10px 10px 0;padding:10px 14px;font-size:.9rem;margin:14px 0}
+figure{margin:16px 0;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 16px 8px;overflow-x:auto}
+figcaption{font-size:.79rem;color:var(--muted);margin-top:6px;max-width:70ch}
+svg text{font-family:ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums}.ax{fill:var(--muted);font-size:11.5px}.vl{fill:var(--ink);font-size:12px;font-weight:700}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:.76rem;color:var(--muted);margin:2px 0 8px}.sw{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.foot{color:var(--muted);font-size:.78rem;margin-top:24px}
+</style>
+<div class="wrap">
+<div class="eyebrow"><b>OpticReports</b> · Deal Analyzer · study · verified 2026-08-15</div>
+<h1>PitchBook "VC Returns by Series" — what survives contact with its own methodology</h1>
+<p class="eyebrow">Parts I–IV read in full · Part V gated (not read) · counter-agent verdict: SAFE TO CALIBRATE FROM</p>
+
+<h2>1. The headline inverts under PitchBook's own failure adjustment</h2>
+<figure>
+<div class="legend"><span><span class="sw" style="background:var(--b3)"></span>headline (exited companies only)</span><span><span class="sw" style="background:var(--pos)"></span>failure-adjusted, positive</span><span><span class="sw" style="background:var(--neg)"></span>failure-adjusted, negative</span></div>
+<svg viewBox="0 0 840 300" width="840" role="img" aria-label="Headline vs failure-adjusted annualized returns by series, Part I">
+<line x1="70" y1="230" x2="820" y2="230" stroke="var(--line)"/>
+<text class="ax" x="30" y="70">+28%</text><text class="ax" x="30" y="234">0</text><text class="ax" x="30" y="276">-5%</text>
+<g><rect x="90"  y="63.8" width="34" height="166.2" fill="var(--b3)"/><rect x="128" y="230" width="34" height="25.8" fill="var(--neg)"/><text class="vl" x="90" y="56">27.7</text><text class="vl" x="124" y="272" style="fill:var(--neg)">-4.3</text><text class="ax" x="108" y="292">A</text></g>
+<g><rect x="212" y="120.8" width="34" height="109.2" fill="var(--b3)"/><rect x="250" y="230" width="34" height="23.4" fill="var(--neg)"/><text class="vl" x="212" y="113">18.2</text><text class="vl" x="246" y="270" style="fill:var(--neg)">-3.9</text><text class="ax" x="230" y="292">B</text></g>
+<g><rect x="334" y="142.4" width="34" height="87.6" fill="var(--b3)"/><rect x="372" y="230" width="34" height="6.6" fill="var(--neg)"/><text class="vl" x="334" y="135">14.6</text><text class="vl" x="368" y="252" style="fill:var(--neg)">-1.1</text><text class="ax" x="352" y="292">C</text></g>
+<g><rect x="456" y="147.8" width="34" height="82.2" fill="var(--b3)"/><rect x="494" y="213.2" width="34" height="16.8" fill="var(--pos)"/><text class="vl" x="456" y="140">13.7</text><text class="vl" x="492" y="206" style="fill:var(--pos)">+2.8</text><text class="ax" x="474" y="292">D</text></g>
+<g><rect x="578" y="176" width="34" height="54" fill="var(--b3)"/><rect x="616" y="215" width="34" height="15" fill="var(--pos)"/><text class="vl" x="586" y="169">9.0</text><text class="vl" x="614" y="208" style="fill:var(--pos)">+2.5</text><text class="ax" x="596" y="292">E</text></g>
+<g><rect x="700" y="185" width="34" height="45" fill="var(--b3)"/><rect x="738" y="203.6" width="34" height="26.4" fill="var(--pos)"/><text class="vl" x="708" y="178">7.5</text><text class="vl" x="736" y="196" style="fill:var(--pos)">+4.4</text><text class="ax" x="718" y="292">F</text></g>
+</svg>
+<figcaption>Part I (2019, global): annualized return by entry series — the exited-only headline vs the same series after PitchBook charges it for companies that never exit. "Series A goes from first to worst" is PitchBook's own sentence. Part II (2020) keeps late&gt;early (+2.4% A vs +11.3% F); Parts III–IV drop the adjustment methodology and the early-best headline returns. The stage ranking flips on the failure-rate treatment — so the analyzer encodes NO stage-preference prior from this research.</figcaption>
+</figure>
+
+<h2>2. The usable object: measured MOIC histograms vs our anchors</h2>
+<figure>
+<div class="legend"><span><span class="sw" style="background:var(--b1)"></span>our Series B anchor (constructed)</span><span><span class="sw" style="background:var(--b2)"></span>PitchBook Part IV Series C+ (measured)</span></div>
+<svg viewBox="0 0 840 260" width="840" role="img" aria-label="Series B constructed vs PitchBook C+ measured MOIC buckets">
+<line x1="70" y1="220" x2="820" y2="220" stroke="var(--line)"/>
+<g><rect x="90"  y="53.2" width="40" height="166.8" fill="var(--b1)"/><rect x="134" y="20"  width="40" height="200" fill="var(--b2)"/><text class="vl" x="90" y="46">41.7</text><text class="vl" x="140" y="13">50</text><text class="ax" x="112" y="238">&lt;1x</text></g>
+<g><rect x="212" y="21.6" width="40" height="198.4" fill="var(--b1)"/><rect x="256" y="56" width="40" height="164" fill="var(--b2)"/><text class="vl" x="212" y="14">49.6</text><text class="vl" x="262" y="49">41</text><text class="ax" x="230" y="238">1-5x</text></g>
+<g><rect x="334" y="195.6" width="40" height="24.4" fill="var(--b1)"/><rect x="378" y="196" width="40" height="24" fill="var(--b2)"/><text class="vl" x="340" y="188">6.1</text><text class="vl" x="390" y="188">6</text><text class="ax" x="350" y="238">5-10x</text></g>
+<g><rect x="456" y="212.8" width="40" height="7.2" fill="var(--b1)"/><rect x="500" y="212" width="40" height="8" fill="var(--b2)"/><text class="vl" x="462" y="205">1.8</text><text class="vl" x="512" y="205">2</text><text class="ax" x="470" y="238">10-20x</text></g>
+<g><rect x="578" y="217.6" width="40" height="2.4" fill="var(--b1)"/><rect x="622" y="216" width="40" height="4" fill="var(--b2)"/><text class="vl" x="584" y="210">0.6</text><text class="vl" x="634" y="210">1</text><text class="ax" x="596" y="238">20-50x</text></g>
+<g><rect x="700" y="219.2" width="40" height="0.8" fill="var(--b1)"/><rect x="744" y="220" width="40" height="0.5" fill="var(--b2)"/><text class="vl" x="706" y="212">0.2</text><text class="vl" x="756" y="212">~0</text><text class="ax" x="722" y="238">&gt;50x</text></g>
+</svg>
+<figcaption>The Series B anchor we had to CONSTRUCT (no published histogram existed) vs the first measured late-stage histogram found anywhere (PitchBook Part IV, US, n=31,642 first-round companies; Series C+ deals; % of deals per exit-multiple bucket). Shapes agree; the divergence is loss mass (41.7 vs 50). Calibration band widened to 0.40–0.50 with a new gate; deal verdicts move &lt;0.1pp because each deal's curve is pinned to its own logged forecasts. Also measured: 81% of SEED entries return &lt;1x (vs 64.8% all financings pooled) — our seed curve is generous for true first-check seed.</figcaption>
+</figure>
+
+<div class="warnbox"><b>What the famous numbers actually are:</b> Σ(payouts)/Σ(invested) annualized — gross, pre-fee, marked at IPO pre-money, outlier-dominated (Uber alone = 35% of the entire seed payout; seed MOIC 5,230x). Not per-deal averages, not medians (none exist in any part), not IRRs, not distributions. Any pitch citing "Series A returns 26.7%" gets this page.</div>
+
+<div class="note"><b>What the analyzer took:</b> (1) B-curve loss-mass band 0.40–0.50, gate-tested (12 gates pass); (2) per-series failure brackets into the hurdle ledger's cash-bridge anchors (A 23.6% → D+ ~12–13%; seed 38.6% US-strict, SaaS 27.5%, life-sci 42.3%); (3) implied holding periods (Series A ≈ 5.4 yrs, F ≈ 3.5) for the future time-discounting layer; (4) NO stage-preference prior. Part V remains gated — regional layer pending the PDF.</div>
+
+<p class="foot">Verification: fresh fetches byte-identical, 20+ numbers spot-checked, zero errors; caveats carried — Parts I–II are exited-only bases, III–IV include tracked failures (never mix across); holding-period convention unstated by PitchBook. Full study: validation/pitchbook-series-study-2026-08-15.md.</p>
+</div>
