@@ -109,6 +109,15 @@ app.add_middleware(
 )
 
 
+def _ct_eq(supplied: str, expected: str) -> bool:
+    """Constant-time string equality that never raises: compare_digest
+    rejects non-ASCII str with a TypeError, which would turn a garbage
+    credential header into an HTTP 500 instead of a 401 — compare the
+    UTF-8 bytes instead (counter-agent minor)."""
+    return secrets.compare_digest(supplied.encode("utf-8"),
+                                  expected.encode("utf-8"))
+
+
 @app.middleware("http")
 async def basic_auth(request: Request, call_next):
     """Optional HTTP Basic auth gate (active only when creds are configured).
@@ -132,15 +141,13 @@ async def basic_auth(request: Request, call_next):
             supplied = request.headers.get("x-api-token", "")
             if not supplied and header.startswith("Bearer "):
                 supplied = header[7:]
-            if supplied and secrets.compare_digest(supplied, token):
+            if supplied and _ct_eq(supplied, token):
                 ok = True
         if not ok and header.startswith("Basic "):
             try:
                 decoded = base64.b64decode(header[6:]).decode("utf-8")
                 got_user, _, got_pwd = decoded.partition(":")
-                ok = secrets.compare_digest(got_user, user) and secrets.compare_digest(
-                    got_pwd, pwd
-                )
+                ok = _ct_eq(got_user, user) and _ct_eq(got_pwd, pwd)
             except (ValueError, UnicodeDecodeError):
                 ok = False
         if not ok:

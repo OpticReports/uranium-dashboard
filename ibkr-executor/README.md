@@ -55,43 +55,73 @@ modes as the ladder (OFFLINE -> DRY -> PAPER -> LIVE, DRY_RUN default true).
 
 ### Cycle order (reconciliation-first — counter-agent-mandated law)
 
-Every `run_cycle` runs these phases IN ORDER; if the adapter cannot answer
-the reconcile queries (paper IBAdapter until implemented) the cycle FAILS
-CLOSED — no decision is ever taken against unreconciled venue state:
+`run_cycle` runs EVERY loop iteration — a tracker outage does NOT skip it:
+the service calls `run_cycle(payload=None)` when the poll fails, so the
+reconcile pass and the local safety belt are unconditional and only
+tracker-dependent decisions are skipped (re-review N13). If the adapter
+cannot answer the reconcile queries (paper IBAdapter until implemented) the
+cycle FAILS CLOSED — no decision is ever taken against unreconciled venue
+state. Phases IN ORDER:
 
 1. **RECONCILE venue truth before any decision**
    a. ingest resting-stop fills (`poll_stock_fills`) — a stop that filled
       marks its position CLOSED, so the tracker's later exit signal/echo
-      for it is a no-op (idempotent; never a second sell);
-   b. adopt or clear write-ahead entry intents: the journal is persisted
+      for it is a no-op (idempotent; never a second sell). A mid-ingestion
+      failure RE-QUEUES the unprocessed fills on the adapter — a raising
+      save/alert can never lose a venue fill (re-review N3);
+   b. adopt or clear write-ahead ENTRY intents: the journal is persisted
       BEFORE any MOO is placed, and venue order history is checked by the
       deterministic idempotency key `blend-{call_id}-entry` (IB orderRef)
       before anything re-places — a crash between placement and persist
       can never duplicate an entry;
-   c. retry cancelling retired stops whose cancel failed (their fills
+   c. adopt or clear write-ahead BOOK orders the same way — CORE_BUY,
+      the rebalance core-sell, and BIL sweeps are journaled with
+      deterministic ids `blend-{kind}-{date}-{seq}` before placement, so
+      a crash window can never duplicate the book's largest orders
+      (re-review N15);
+   d. retry cancelling retired stops whose cancel failed (their fills
       alert RED as possible shorts);
-   d. re-place any missing protective stop — a STOP_MISSING position is
+   e. re-place any missing protective stop — a STOP_MISSING position is
       alerted loudly every cycle and BLOCKS all new entries until placed.
 2. **Staleness guard**: a payload whose `as_of` is more than 5 calendar
-   days old (long-weekend tolerant) triggers no new decisions — the book
-   is still reconciled and stop-protected.
-3. **step()** plans against ONE per-cycle cash ledger: exits (each must
-   match BOTH call_id AND symbol — a mismatch or a recycled call_id is
-   refused with a RED alert, the tracker-DB-reset tell), the 90d belt,
-   ratchet-only stop adjustments (trail must be > 0), entries, and the
-   band rebalance. All cash needs are funded by AT MOST one BIL sell
-   clamped to holdings; if cash + BIL cannot cover the plan, the
-   rebalance is deferred first, then the newest entries are skipped —
-   the ledger never goes negative and a short-BIL order cannot exist.
+   days old (long-weekend tolerant) — or malformed — triggers no new
+   decisions; the book is still reconciled and stop-protected.
+3. **step()**: with NO usable payload (outage/stale), only the LOCAL
+   90-calendar-day time-stop belt runs — it fires during an outage too.
+   With a payload, step plans against ONE per-cycle cash ledger: exits
+   (each must match BOTH call_id AND symbol — a mismatch or a recycled
+   call_id is refused with a RED alert, the tracker-DB-reset tell), the
+   90d belt, ratchet-only stop adjustments (trail must be > 0), entries,
+   and the band rebalance. All cash needs are funded by AT MOST one BIL
+   sell clamped to holdings; if cash + BIL cannot cover the plan, the
+   rebalance is deferred first, then the newest entries are skipped — the
+   ledger never goes negative and a short-BIL order cannot exist. Under a
+   BLEND_BUDGET the idle-cash BIL sweep is clamped to the remaining gross
+   headroom.
 4. **Execute in order**: exits (stop cancel is non-fatal; a RAISING cancel
-   defers the sell rather than risking a double-sell) -> stop adjustments
-   (place the NEW stop FIRST, cancel the old second — never a naked
-   window; a rejected replacement keeps the old stop) -> BIL cash-raise ->
-   entries (write-ahead journal, MOO, protective stop with in-cycle
-   retry/backoff) -> rebalance transfer -> core buy -> BIL sweep.
+   defers the sell; an ambiguous FALSE cancel is VERIFIED — queued fills
+   are ingested and only a still-held position is sold, re-review N2) ->
+   stop adjustments (place the NEW stop FIRST, cancel the old second —
+   never a naked window; a rejected replacement keeps the old stop) ->
+   BIL cash-raise -> entries (write-ahead journal, MOO, protective stop
+   with in-cycle retry/backoff; an entry is DROPPED when a funding exit
+   deferred/failed to book this cycle, and each entry re-checks SETTLED
+   sleeve cash — phantom proceeds are never spent, re-review N5) ->
+   rebalance transfer -> core buy -> BIL sweep (all journaled per 1c).
 5. **No silent zeros** (repo law): any fill without a fill price is
    UNRECONCILED — the trade is parked in state, nothing books at 0.0,
    P&L for it is blocked, and Telegram gets a RED alert.
+6. **/kill reconciles FIRST** (re-review N14): the emergency flatten runs
+   the same reconcile pass inside the blend lock before closing, then
+   closes only positions STILL actually held (idempotent with a stop fill
+   that already happened); an ambiguous stop cancel is verified before
+   the MKT sell. If reconcile itself fails, the book is halted but NOT
+   blind-flattened — a loud alert asks for manual action.
+
+Adapter contract (pinned for the paper phase): cancelling a FILLED order
+must RAISE (IB errors on it) — bool False is reserved for
+not-found/already-cancelled; fill polling should be venue-history-based
+(idempotent) or support re-queueing.
 
 Env (all optional until the paper gate):
 

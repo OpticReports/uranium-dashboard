@@ -328,3 +328,35 @@ def test_blend_api_token_disabled_when_env_unset(session, client, monkeypatch):
                       headers={"X-API-Token": "tok-123"}).status_code == 401
     assert client.get("/blend3070/intents",
                       auth=("casey", "pw")).status_code == 200
+
+
+def test_auth_non_ascii_credentials_rejected_with_401_not_500(
+        session, client, monkeypatch):
+    """A non-ASCII token or Basic credential must be a clean 401 — never a
+    500 from compare_digest's TypeError (counter-agent re-review minor)."""
+    import base64
+
+    from app.config import settings as cfg
+
+    monkeypatch.setattr(cfg, "dashboard_user", "casey")
+    monkeypatch.setattr(cfg, "dashboard_password", "pw")
+    monkeypatch.setattr(cfg, "blend_api_token", "tok-123")
+    # latin-1 X-API-Token header value (sent as bytes; decoded server-side
+    # to a non-ASCII str that used to explode compare_digest)
+    assert client.get(
+        "/blend3070/intents",
+        headers=[(b"X-API-Token", "t\xf6k-123".encode("latin-1"))],
+    ).status_code == 401
+    assert client.get(
+        "/blend3070/intents",
+        headers=[(b"Authorization", "Bearer t\xf6k".encode("latin-1"))],
+    ).status_code == 401
+    # non-ASCII Basic password decodes fine from base64 but is non-ASCII str
+    creds = base64.b64encode("casey:päss".encode("utf-8")).decode()
+    assert client.get("/blend3070/intents",
+                      headers={"Authorization": f"Basic {creds}"}).status_code == 401
+    # and the right credentials still work
+    assert client.get("/blend3070/intents",
+                      headers={"X-API-Token": "tok-123"}).status_code == 200
+    assert client.get("/blend3070/intents",
+                      auth=("casey", "pw")).status_code == 200

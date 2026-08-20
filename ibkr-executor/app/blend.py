@@ -23,11 +23,17 @@ ORDER-SAFETY LAWS (counter-agent review, merge-blocking):
      fills, orphaned orders from a crash window, failed cancels, missing
      protective stops) BEFORE any new decision. A tracker exit for a
      position the venue's stop already closed is a no-op (idempotent).
+     EVERY cycle means every cycle: a tracker outage never skips the
+     reconcile pass or the local 90-day belt — run_cycle(payload=None) is
+     the outage path, and only tracker-DEPENDENT decisions are skipped.
   2. SINGLE PER-CYCLE CASH LEDGER: all cash needs (entries + rebalance)
      are planned together and funded by AT MOST ONE BIL sell, clamped to
      holdings; if the ledger cannot fund everything, the rebalance is
      deferred first, then the newest entries are skipped — the ledger
      never goes negative and a short-BIL order can never be emitted.
+     Deferred/unreconciled exit proceeds are NOT spendable: if a funding
+     exit does not actually book this cycle, the remaining entries are
+     dropped, and each entry re-checks SETTLED cash before placement.
   3. A position without a working protective stop is STOP_MISSING: alerted
      loudly, retried every cycle, and it BLOCKS all new entries.
   4. Exit/stop instructions must match BOTH call_id AND symbol against the
@@ -35,12 +41,19 @@ ORDER-SAFETY LAWS (counter-agent review, merge-blocking):
      alert, never acted on.
   5. Stop replace is place-NEW-first, cancel-old-second: there is never a
      naked window. A rejected replacement keeps the old stop.
-  6. Entry placement is write-ahead journaled with a deterministic
-     client_order_id (blend-{call_id}-entry); boot/crash reconcile checks
-     venue order history before anything re-places.
+  6. ALL order placement is write-ahead journaled with a deterministic
+     client_order_id — sleeve entries (blend-{call_id}-entry) AND the
+     book-level CORE_BUY / rebalance core-sell / BIL sweep orders
+     (blend-{kind}-{date}-{seq}); boot/crash reconcile checks venue order
+     history before anything re-places.
   7. A fill without a fill price is UNRECONCILED: nothing is ever booked
      at a silent 0.0 — the trade is parked for manual reconciliation and
      alerted RED.
+  8. An ambiguous stop cancel (False / "already gone") is VERIFIED before
+     any market sell: queued fills are ingested and only a position the
+     book still holds is sold — idempotent with a stop fill that won the
+     race. The paper/live adapter contract pins the unambiguous case:
+     cancelling a FILLED order must RAISE, never return False.
 
 Same state-machine idioms as LadderManager: persisted JSON state, step()
 emitting order intents, on_* execution callbacks, deduped event log. The
@@ -118,9 +131,17 @@ class BlendState:
     initialized: bool = False
     positions: dict = field(default_factory=dict)   # str(call_id) -> BlendPosition
     entered_ids: list = field(default_factory=list)  # every call_id ever entered
+                                                     # (bounded at 2000: recycled-id
+                                                     # detection beyond that horizon
+                                                     # is a documented tradeoff)
     entered_symbols: dict = field(default_factory=dict)  # str(call_id) -> symbol
     pending_entries: dict = field(default_factory=dict)  # write-ahead journal:
                                                          # str(call_id) -> {intent, date}
+    pending_book_orders: dict = field(default_factory=dict)  # write-ahead journal for
+                                                             # CORE_BUY / rebalance
+                                                             # core-sell / BIL sweep:
+                                                             # client_id -> record
+    book_order_seq: int = 0     # monotone id sequence for book-level orders
     unreconciled: dict = field(default_factory=dict)     # trades with no fill price:
                                                          # key -> frozen record (manual)
     orphan_stop_refs: dict = field(default_factory=dict)  # retired stops whose
@@ -149,6 +170,8 @@ class Blend3070Manager:
                 entered_ids=raw.get("entered_ids", []),
                 entered_symbols=raw.get("entered_symbols", {}),
                 pending_entries=raw.get("pending_entries", {}),
+                pending_book_orders=raw.get("pending_book_orders", {}),
+                book_order_seq=raw.get("book_order_seq", 0),
                 unreconciled=raw.get("unreconciled", {}),
                 orphan_stop_refs=raw.get("orphan_stop_refs", {}),
                 sleeve_cash=raw.get("sleeve_cash", 0.0),
@@ -172,6 +195,8 @@ class Blend3070Manager:
                    "entered_ids": self.state.entered_ids,
                    "entered_symbols": self.state.entered_symbols,
                    "pending_entries": self.state.pending_entries,
+                   "pending_book_orders": self.state.pending_book_orders,
+                   "book_order_seq": self.state.book_order_seq,
                    "unreconciled": self.state.unreconciled,
                    "orphan_stop_refs": self.state.orphan_stop_refs,
                    "sleeve_cash": self.state.sleeve_cash,
@@ -242,7 +267,19 @@ class Blend3070Manager:
         intents: list[dict] = []
         alerts: list[str] = []
         st = self.state
-        if st.halted or payload is None:
+        if st.halted:
+            return intents
+        if payload is None:
+            # Tracker unreachable or stale: NO tracker-dependent decision is
+            # taken, but the LOCAL safety belt still runs — the 90-calendar-
+            # day time stop is this executor's own clock and must fire even
+            # (especially) during a tracker outage (counter-agent N13).
+            for key, pos in st.positions.items():
+                if today > pos.time_stop:
+                    intents.append({"action": "EXIT", "call_id": pos.call_id,
+                                    "symbol": pos.symbol, "qty": pos.qty,
+                                    "stop_order_ref": pos.stop_order_ref,
+                                    "reason": "time_stop"})
             return intents
 
         params = payload.get("book_params") or {}
@@ -491,11 +528,25 @@ class Blend3070Manager:
                         "reason": "invest idle core cash"}
 
         # 8) BIL sweep of idle sleeve cash (buy) from the resolved ledger.
+        #    Under a budget cap, the sweep is clamped to the remaining gross
+        #    headroom — economically cash, but gross must never drift above
+        #    BLEND_BUDGET via the cash vehicle (counter-agent minor).
         sweep_buy = None
         if bil_px > 0 and projected_cash > max(MIN_ORDER_USD, bil_px):
-            sweep_buy = {"action": "SWEEP", "symbol": CASH_VEHICLE,
-                         "qty": int(projected_cash // bil_px),
-                         "reason": "sweep idle sleeve cash to BIL"}
+            sweep_qty = int(projected_cash // bil_px)
+            if budget > 0:
+                gross_proj = projected_gross
+                if (rebalance_intent is not None
+                        and rebalance_intent["direction"] == "core_to_sleeve"):
+                    gross_proj -= rebalance_intent["usd"]   # SPY sold for cash
+                if core_buy is not None and spy_px > 0:
+                    gross_proj += core_buy["qty"] * spy_px
+                headroom = budget - gross_proj
+                sweep_qty = min(sweep_qty, int(max(headroom, 0.0) // bil_px))
+            if sweep_qty > 0:
+                sweep_buy = {"action": "SWEEP", "symbol": CASH_VEHICLE,
+                             "qty": sweep_qty,
+                             "reason": "sweep idle sleeve cash to BIL"}
 
         # Assemble in EXECUTION order (cash raised before it is spent).
         intents.extend(exit_intents)
@@ -528,6 +579,24 @@ class Blend3070Manager:
 
     def clear_pending_entry(self, call_id: int) -> None:
         if self.state.pending_entries.pop(str(call_id), None) is not None:
+            self.save()
+
+    def record_pending_book_order(self, kind: str, symbol: str, qty: int,
+                                  today: str) -> str:
+        """Write-ahead journal for book-level orders (CORE_BUY, the
+        rebalance core-sell, BIL sweeps) — the same crash-window discipline
+        as sleeve entries (counter-agent N15). Persisted BEFORE placement;
+        returns the deterministic client_order_id. kind in
+        {core-buy, core-rebal-sell, sweep}; qty signed (+buy/-sell)."""
+        self.state.book_order_seq += 1
+        cid = f"blend-{kind}-{today}-{self.state.book_order_seq}"
+        self.state.pending_book_orders[cid] = {
+            "kind": kind, "symbol": symbol, "qty": qty, "date": today}
+        self.save()
+        return cid
+
+    def clear_pending_book_order(self, client_id: str) -> None:
+        if self.state.pending_book_orders.pop(client_id, None) is not None:
             self.save()
 
     def on_entered(self, intent: dict, fill_price: float, order_ref: str,
@@ -651,6 +720,7 @@ class Blend3070Manager:
             "stop_missing": [k for k, v in st.positions.items()
                              if v.stop_missing or not v.stop_order_ref],
             "pending_entries": sorted(st.pending_entries),
+            "pending_book_orders": sorted(st.pending_book_orders),
             "unreconciled": st.unreconciled,
             "orphan_stops": sorted(st.orphan_stop_refs),
             "sleeve_cash": round(st.sleeve_cash, 2),
@@ -707,7 +777,12 @@ def payload_is_stale(payload: dict, today: str) -> bool:
         return (date.fromisoformat(today)
                 - date.fromisoformat(str(as_of))).days > STALE_PAYLOAD_DAYS
     except ValueError:
-        return False
+        # A malformed as_of is a data bug on the tracker side: treat the
+        # payload as STALE (no new decisions), never as fresh
+        # (counter-agent minor).
+        logger.warning("blend: malformed payload as_of %r — treated as stale",
+                       as_of)
+        return True
 
 
 def reference_prices(adapter, mgr: Blend3070Manager, payload: dict | None) -> dict:
@@ -762,14 +837,113 @@ def _ensure_stop(mgr: Blend3070Manager, adapter, pos: BlendPosition,
     return False
 
 
+def _ingest_one_fill(mgr: Blend3070Manager, adapter, f: dict, alert) -> None:
+    """Book a single polled fill event against the book (venue truth)."""
+    st = mgr.state
+    ref = f.get("order_ref")
+    pos = next((p for p in st.positions.values()
+                if p.stop_order_ref == ref), None)
+    if pos is not None:
+        fill = f.get("fill_price")
+        if fill is None:
+            mgr.on_exit_unreconciled(pos.call_id,
+                                     "stop filled WITHOUT a fill price")
+            alert(f"🚨 blend stop fill for {pos.symbol} "
+                  f"(call {pos.call_id}) carried NO fill price — trade "
+                  f"UNRECONCILED, proceeds NOT booked, manual "
+                  f"reconciliation needed")
+        else:
+            mgr.on_exited(pos.call_id, fill, "stop_filled")
+            alert(f"🧬 blend STOP FILLED {pos.symbol} x{pos.qty} @ "
+                  f"{fill:.2f} (call {pos.call_id}) — position closed "
+                  f"at the venue")
+    elif ref in st.orphan_stop_refs:
+        info = st.orphan_stop_refs.pop(ref)
+        st.unreconciled[f"orphan-{ref}"] = {
+            **info, "fill_price": f.get("fill_price"),
+            "reason": "retired stop filled after a failed cancel "
+                      "(possible short at the venue)"}
+        mgr.save()
+        alert(f"🚨🚨 blend: RETIRED stop {ref} FILLED "
+              f"({info.get('symbol')} {info.get('qty')}) — possible "
+              f"short at the venue, manual action needed")
+    elif ref in _journaled_order_refs(mgr, adapter):
+        # A venue that also streams MOO/MKT fills through the fill poll
+        # (real-venue contract note): a fill for a JOURNALED order is
+        # adopted by the journal reconcile passes, not here — no RED noise.
+        logger.info("blend: fill for journaled order %s handled by the "
+                    "journal reconcile", ref)
+    else:
+        alert(f"🚨 blend: fill for UNKNOWN order {ref} ({f}) — manual "
+              f"reconciliation needed")
+
+
+def _journaled_order_refs(mgr: Blend3070Manager, adapter) -> set:
+    """Venue order_refs belonging to journaled (pending) orders — their
+    fills are adopted by the journal passes, never the unknown-order path."""
+    refs = set()
+    ids = [entry_client_id(rec["intent"]["call_id"])
+           for rec in mgr.state.pending_entries.values()]
+    ids.extend(mgr.state.pending_book_orders)
+    for cid in ids:
+        try:
+            o = adapter.find_stock_order(cid)
+        except Exception:  # noqa: BLE001
+            continue
+        if o is not None:
+            refs.add(o.get("order_ref"))
+    return refs
+
+
+def _ingest_fills(mgr: Blend3070Manager, adapter, alert) -> None:
+    """Drain and book queued fill events. A mid-loop failure RE-QUEUES the
+    unprocessed fills on the adapter before re-raising — a raising save()
+    or alert callback can never silently lose a venue fill (counter-agent
+    N3). A fill whose booking completed before the failure may be seen
+    twice; the second pass lands in the detected unknown-order branch
+    (noise, never a double booking)."""
+    fills = adapter.poll_stock_fills()
+    for i, f in enumerate(fills):
+        try:
+            _ingest_one_fill(mgr, adapter, f, alert)
+        except Exception:
+            requeue = getattr(adapter, "requeue_stock_fills", None)
+            if requeue is not None:
+                requeue(fills[i:])
+            else:
+                logger.error("blend: fill ingestion failed and the adapter "
+                             "cannot re-queue — fills at risk: %s", fills[i:])
+            raise
+
+
+def _apply_book_order(mgr: Blend3070Manager, rec: dict, fill: float) -> None:
+    """Book a filled book-level order into the ledgers by journal kind."""
+    kind, qty = rec["kind"], rec["qty"]
+    if kind == "core-buy":
+        mgr.on_core_trade(qty, fill)
+    elif kind == "core-rebal-sell":
+        mgr.on_core_trade(qty, fill)          # qty is negative (a sell)
+        mgr.on_transfer(-qty * fill)          # proceeds move core -> sleeve
+    elif kind == "sweep":
+        mgr.on_sweep(qty, fill)
+    else:  # unknown journal kind: freeze for manual reconciliation
+        mgr.state.unreconciled[f"book-{kind}-{int(time.time())}"] = {
+            **rec, "fill_price": fill,
+            "reason": "unknown book-order journal kind"}
+        mgr.save()
+
+
 def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
-    """Venue-truth-first pass, run BEFORE any decision in every cycle
-    (including the first after a boot/crash):
+    """Venue-truth-first pass, run BEFORE any decision in EVERY cycle —
+    including tracker-outage cycles (payload=None) and /kill:
       1. ingest resting-stop fills — a stop that filled marks its position
          CLOSED, so a later tracker exit/echo for it is a no-op;
       2. adopt or clear write-ahead entry intents (crash between placement
          and persist), checked against venue order history by
          client_order_id — never a duplicate MOO;
+      2b. adopt or clear write-ahead BOOK orders (CORE_BUY / rebalance
+         core-sell / BIL sweep) the same way — never a duplicate SPY/BIL
+         order (counter-agent N15);
       3. retry cancelling retired stops whose cancel failed;
       4. re-place any missing protective stop (STOP_MISSING).
     Raises if the adapter cannot answer (paper IBAdapter until implemented):
@@ -777,37 +951,7 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
     st = mgr.state
 
     # 1) stop fills
-    for f in adapter.poll_stock_fills():
-        ref = f.get("order_ref")
-        pos = next((p for p in st.positions.values()
-                    if p.stop_order_ref == ref), None)
-        if pos is not None:
-            fill = f.get("fill_price")
-            if fill is None:
-                mgr.on_exit_unreconciled(pos.call_id,
-                                         "stop filled WITHOUT a fill price")
-                alert(f"🚨 blend stop fill for {pos.symbol} "
-                      f"(call {pos.call_id}) carried NO fill price — trade "
-                      f"UNRECONCILED, proceeds NOT booked, manual "
-                      f"reconciliation needed")
-            else:
-                mgr.on_exited(pos.call_id, fill, "stop_filled")
-                alert(f"🧬 blend STOP FILLED {pos.symbol} x{pos.qty} @ "
-                      f"{fill:.2f} (call {pos.call_id}) — position closed "
-                      f"at the venue")
-        elif ref in st.orphan_stop_refs:
-            info = st.orphan_stop_refs.pop(ref)
-            st.unreconciled[f"orphan-{ref}"] = {
-                **info, "fill_price": f.get("fill_price"),
-                "reason": "retired stop filled after a failed cancel "
-                          "(possible short at the venue)"}
-            mgr.save()
-            alert(f"🚨🚨 blend: RETIRED stop {ref} FILLED "
-                  f"({info.get('symbol')} {info.get('qty')}) — possible "
-                  f"short at the venue, manual action needed")
-        else:
-            alert(f"🚨 blend: fill for UNKNOWN order {ref} ({f}) — manual "
-                  f"reconciliation needed")
+    _ingest_fills(mgr, adapter, alert)
 
     # 2) write-ahead entry journal
     for key, rec in list(st.pending_entries.items()):
@@ -831,6 +975,37 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
                   f"x{it['qty']} (call {it['call_id']}) from venue order "
                   f"history (crash-window recovery)")
         # status "working": an async MOO awaiting its fill — keep the journal.
+
+    # 2b) write-ahead BOOK-order journal (CORE_BUY / rebalance core-sell /
+    #     BIL sweep): the crash window between placement and the on_* booking
+    #     is closed the same way as entries — venue order history is checked
+    #     by the deterministic client id; a filled orphan is ADOPTED into the
+    #     ledgers, one that never reached the venue is cleared and re-planned
+    #     naturally by step() (counter-agent N15).
+    for cid, rec in list(st.pending_book_orders.items()):
+        o = adapter.find_stock_order(cid)
+        if o is None:
+            mgr.clear_pending_book_order(cid)
+            mgr._event("INFO", f"pending {rec['kind']} {rec['symbol']} "
+                               f"x{rec['qty']} never reached the venue; "
+                               f"journal cleared")
+        elif o.get("status") == "filled":
+            fill = o.get("fill_price")
+            if fill is None:
+                # A real venue holding/lacking SPY or BIL MUST be tracked —
+                # book at the current spot as a PROVISIONAL basis and say so
+                # loudly (same asymmetry as entry adoption: parking would
+                # desync the holdings themselves, worse than a fuzzy basis).
+                fill = adapter.spot(rec["symbol"])
+                alert(f"🚨 blend: reconciled {rec['kind']} {rec['symbol']} "
+                      f"x{rec['qty']} has no venue fill price — booked at "
+                      f"spot {fill:.2f} (basis PROVISIONAL, verify manually)")
+            st.pending_book_orders.pop(cid, None)
+            _apply_book_order(mgr, rec, fill)
+            alert(f"🧬 blend reconciled orphan {rec['kind']} {rec['symbol']} "
+                  f"x{rec['qty']} @ {fill:.2f} from venue order history "
+                  f"(crash-window recovery)")
+        # status "working": async order awaiting its fill — keep the journal.
 
     # 3) retired stops whose cancel failed
     for ref in list(st.orphan_stop_refs):
@@ -913,21 +1088,38 @@ def _execute_adjust_stop(mgr: Blend3070Manager, adapter, it: dict,
 
 
 def _execute_exit(mgr: Blend3070Manager, adapter, it: dict,
-                  prices: dict[str, float], alert) -> None:
+                  prices: dict[str, float], alert) -> bool:
     """Cancel the resting stop (non-fatal), then MKT-sell. If the cancel
     RAISES, the stop's state is unknown — the sell is deferred to the next
     cycle rather than risking a double-sell on top of a possibly-working
-    stop (a fill meanwhile is ingested by the reconcile pass). A sell fill
-    without a price goes to UNRECONCILED — never booked at 0.0."""
+    stop (a fill meanwhile is ingested by the reconcile pass). A FALSE
+    cancel ("already gone") is VERIFIED before selling: queued fills are
+    ingested and only a still-held position is sold — idempotent with a
+    stop fill that won the race (counter-agent N2/N14). A sell fill without
+    a price goes to UNRECONCILED — never booked at 0.0.
+
+    Returns True only when the exit's proceeds actually BOOKED this cycle
+    (directly or via the racing stop fill) — a deferred or UNRECONCILED
+    exit returns False so run_cycle drops the entries its proceeds were
+    meant to fund (counter-agent N5)."""
+    key = str(it["call_id"])
     ref = it.get("stop_order_ref")
     if ref:
         try:
-            adapter.cancel_stock_order(ref)       # False = already gone: fine
+            cancelled = adapter.cancel_stock_order(ref)
         except Exception as exc:  # noqa: BLE001
             alert(f"⚠️ blend EXIT {it['symbol']} deferred: stop cancel "
                   f"failed ({exc}); position kept — retried next cycle "
                   f"(a stop fill meanwhile reconciles first)")
-            return
+            return False
+        if not cancelled:
+            # "Already gone" is ambiguous: the stop may have JUST filled.
+            # Ingest any queued fills and sell only what is still held.
+            _ingest_fills(mgr, adapter, alert)
+            if key not in mgr.state.positions:
+                alert(f"🧬 blend EXIT {it['symbol']} no-op: its stop had "
+                      f"already filled — booked from the venue fill")
+                return key not in mgr.state.unreconciled
     r = adapter.place_stock_order(it["symbol"], -it["qty"], "MKT",
                                   ref_price=prices.get(it["symbol"]),
                                   client_order_id=exit_client_id(it["call_id"]))
@@ -939,9 +1131,10 @@ def _execute_exit(mgr: Blend3070Manager, adapter, it: dict,
         alert(f"🚨 blend EXIT {it['symbol']} x{it['qty']} UNRECONCILED: no "
               f"fill price from the venue — proceeds NOT booked, manual "
               f"reconciliation needed")
-        return
+        return False
     mgr.on_exited(it["call_id"], fill, it["reason"])
     alert(f"🧬 blend EXIT {it['symbol']} x{it['qty']} ({it['reason']})")
+    return True
 
 
 def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
@@ -964,6 +1157,7 @@ def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
 
     prices = reference_prices(adapter, mgr, payload)
     intents = mgr.step(today, payload, prices)
+    exit_unsettled = False     # a funding exit deferred/UNRECONCILED (N5)
     for it in intents:
         try:
             act = it["action"]
@@ -977,13 +1171,30 @@ def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
                           f"position is STOP_MISSING — protect the book "
                           f"before adding risk")
                     continue
+                if exit_unsettled:
+                    # The cycle plan counted an exit's proceeds that did NOT
+                    # book: those funds are phantom — never spend them.
+                    alert(f"⚠️ blend ENTER {it['symbol']} skipped: a funding "
+                          f"exit did not book this cycle — entry re-planned "
+                          f"once the exit settles")
+                    continue
+                if (it["qty"] * it["entry_ref"]
+                        > mgr.state.sleeve_cash + CASH_EPS):
+                    # Belt: entries spend only SETTLED cash (exits + the BIL
+                    # raise have already booked by this point in intent
+                    # order) — the ledger never goes negative.
+                    alert(f"⚠️ blend ENTER {it['symbol']} skipped: settled "
+                          f"sleeve cash ${mgr.state.sleeve_cash:,.2f} cannot "
+                          f"fund ${it['qty'] * it['entry_ref']:,.2f}")
+                    continue
                 _execute_enter(mgr, adapter, it, today, alert)
             elif act == "ADJUST_STOP":
                 _execute_adjust_stop(mgr, adapter, it, alert)
             elif act == "EXIT":
-                _execute_exit(mgr, adapter, it, prices, alert)
+                if not _execute_exit(mgr, adapter, it, prices, alert):
+                    exit_unsettled = True
             elif act == "REBALANCE":
-                if _execute_rebalance(mgr, adapter, it, prices):
+                if _execute_rebalance(mgr, adapter, it, prices, today):
                     alert(f"🧬 blend REBALANCE {it['direction']} "
                           f"${it['usd']:,.0f}: {it['reason']}")
             elif act == "CORE_BUY":
@@ -992,14 +1203,26 @@ def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
                 if px > 0:   # never overdraw core cash on a short transfer
                     qty = min(qty, int(max(mgr.state.core_cash, 0.0) // px))
                 if qty > 0:
+                    # Write-ahead journal + deterministic client id: a crash
+                    # between placement and booking is adopted by reconcile
+                    # pass 2b, never re-bought (counter-agent N15).
+                    cid = mgr.record_pending_book_order("core-buy", CORE,
+                                                        qty, today)
                     r = adapter.place_stock_order(CORE, qty, "MKT",
-                                                  ref_price=px or None)
+                                                  ref_price=px or None,
+                                                  client_order_id=cid)
+                    if r.get("status") != "filled":
+                        alert(f"🧬 blend CORE buy {CORE} x{qty} accepted, "
+                              f"awaiting fill — reconciled next cycle")
+                        continue                # journal stays until adopted
                     fill = r.get("fill_price")
                     if fill is None:
                         fill = px
                     if not fill:
+                        # Journal kept: reconcile adopts at spot, loudly.
                         raise RuntimeError("core buy fill price unknown")
-                    mgr.on_core_trade(qty, fill)
+                    mgr.state.pending_book_orders.pop(cid, None)
+                    mgr.on_core_trade(qty, fill)   # saves journal-pop + booking
                     alert(f"🧬 blend CORE buy {CORE} x{qty}")
             elif act == "SWEEP":
                 qty = it["qty"]
@@ -1013,14 +1236,23 @@ def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
                     if px > 0:
                         qty = min(qty, int(max(mgr.state.sleeve_cash, 0.0) // px))
                 if qty != 0:
+                    cid = mgr.record_pending_book_order("sweep", CASH_VEHICLE,
+                                                        qty, today)
                     r = adapter.place_stock_order(CASH_VEHICLE, qty, "MKT",
-                                                  ref_price=prices.get(CASH_VEHICLE))
+                                                  ref_price=prices.get(CASH_VEHICLE),
+                                                  client_order_id=cid)
+                    if r.get("status") != "filled":
+                        alert(f"🧬 blend SWEEP {CASH_VEHICLE} "
+                              f"{'+' if qty > 0 else ''}{qty} accepted, "
+                              f"awaiting fill — reconciled next cycle")
+                        continue                # journal stays until adopted
                     fill = r.get("fill_price")
                     if fill is None:
                         fill = prices.get(CASH_VEHICLE)
                     if not fill:
                         raise RuntimeError("sweep fill price unknown")
-                    mgr.on_sweep(qty, fill)
+                    mgr.state.pending_book_orders.pop(cid, None)
+                    mgr.on_sweep(qty, fill)        # saves journal-pop + booking
                     alert(f"🧬 blend SWEEP {CASH_VEHICLE} "
                           f"{'+' if qty > 0 else ''}{qty}")
         except Exception as exc:  # noqa: BLE001
@@ -1033,7 +1265,7 @@ def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
 
 
 def _execute_rebalance(mgr: Blend3070Manager, adapter, it: dict,
-                       prices: dict[str, float]) -> bool:
+                       prices: dict[str, float], today: str) -> bool:
     """Returns True only when something actually moved (the REBALANCE alert
     fires only then). sleeve_to_core NEVER sells BIL here — funding was
     raised by this cycle's single BIL SWEEP (executed earlier in intent
@@ -1041,18 +1273,27 @@ def _execute_rebalance(mgr: Blend3070Manager, adapter, it: dict,
     usd = it["usd"]
     spy_px = prices.get(CORE, 0.0)
     if it["direction"] == "core_to_sleeve":
-        # Sell SPY for ~usd, move the proceeds to the sleeve (BIL sweep
-        # picks the cash up next cycle).
+        # Sell SPY for ~usd, move the proceeds to the sleeve (swept to BIL
+        # by this cycle's SWEEP, which executes after the transfer).
         if spy_px <= 0:
             return False
         qty = min(mgr.state.spy_qty, int(round(usd / spy_px)))
         if qty <= 0:
             return False
-        r = adapter.place_stock_order(CORE, -qty, "MKT", ref_price=spy_px)
+        # Write-ahead journal + deterministic client id (counter-agent N15):
+        # a crash after placement is adopted by reconcile pass 2b — the SPY
+        # sell and its core->sleeve transfer are never repeated.
+        cid = mgr.record_pending_book_order("core-rebal-sell", CORE, -qty,
+                                            today)
+        r = adapter.place_stock_order(CORE, -qty, "MKT", ref_price=spy_px,
+                                      client_order_id=cid)
+        if r.get("status") != "filled":
+            return False                    # journal stays until adopted
         fill = r.get("fill_price")
         if fill is None:
             fill = spy_px
-        mgr.on_core_trade(-qty, fill)
+        mgr.state.pending_book_orders.pop(cid, None)
+        mgr.on_core_trade(-qty, fill)       # saves journal-pop + booking
         mgr.on_transfer(qty * fill)
         return True
     moved = min(usd, max(mgr.state.sleeve_cash, 0.0))

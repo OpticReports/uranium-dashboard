@@ -337,7 +337,11 @@ def test_gate_dry_adapter_stock_fills():
     assert s["status"] == "working"
     fill = a.trigger_stop(s["order_ref"])               # STP fills AT the stop
     assert fill["fill_price"] == 44.0
-    assert a.cancel_stock_order(s["order_ref"]) is False  # already gone
+    # Pinned contract (law #8, counter-agent N2): cancelling a FILLED order
+    # RAISES — never an ambiguous False that could mask a fill race.
+    with pytest.raises(RuntimeError):
+        a.cancel_stock_order(s["order_ref"])
+    assert a.cancel_stock_order("never-seen-ref") is False  # not found: False
     with pytest.raises(ValueError):
         a.place_stock_order("SPY", 1, "LMT")
     with pytest.raises(ValueError):
@@ -919,3 +923,471 @@ def test_gate_fetch_prefers_dedicated_readonly_token(monkeypatch):
     assert fetch_intents(C()) == {"ok": True}
     assert set(seen["kwargs"]) == {"headers", "timeout"}
     assert seen["kwargs"]["headers"] == {"X-API-Token": "tok-123"}
+
+
+# --- re-review regression gates (counter-agent N13/N14/N15/N5 + minors) -------
+# Each scenario is derived from the re-review's repro scripts
+# (scratchpad/new_attacks*.py): the attacks that CONFIRMED the defects are
+# now merge-blocking gates asserting the fixed behavior.
+
+
+# N13: a tracker outage must NEVER skip reconcile or the local belt — the
+# cycle runs with payload=None; only tracker-dependent decisions skip.
+
+def test_gate_n13_outage_cycle_still_ingests_fills_and_heals_stops(
+        tmp_path, monkeypatch):
+    monkeypatch.setattr(blend_mod, "STOP_RETRY_SLEEP_S", 0)
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10_000.0)
+    a = _RejectStopAdapter()
+    a.reject_stp = False
+    run_cycle(m, a, payload(entries=[entry(), entry(call_id=2, symbol="NTLA")],
+                            stops=[stop_row(),
+                                   stop_row(call_id=2, symbol="NTLA")]),
+              "2026-08-20", alert=lambda _: None)
+    # Outage begins. Intraday: CRSP's stop fills; NTLA's stop dies venue-side.
+    a.trigger_stop(m.state.positions["1"].stop_order_ref)
+    m.state.positions["2"].stop_missing = True
+    m.state.positions["2"].stop_order_ref = None
+    # Tracker unreachable -> the cycle STILL runs with payload=None:
+    run_cycle(m, a, None, "2026-08-21", alert=lambda _: None)
+    assert "1" not in m.state.positions          # stop fill ingested
+    pos2 = m.state.positions["2"]
+    assert pos2.stop_missing is False            # protective stop re-placed
+    assert pos2.stop_order_ref in a._stops
+
+
+def test_gate_n13_time_stop_belt_fires_during_tracker_outage(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m, time_stop="2026-08-19", stop_ref=None)
+    m.state.positions["1"].stop_missing = True
+    a = _RejectStopAdapter()                     # stop re-place keeps failing
+    run_cycle(m, a, None, "2026-09-01", alert=lambda _: None)
+    assert "1" not in m.state.positions          # belt exited it anyway
+    sells = _executions(a, "CRSP")
+    assert len(sells) == 1
+
+
+def test_gate_n13_time_stop_belt_fires_on_stale_payload(tmp_path):
+    # The re-review's N8b: position past its time stop + stale payload was
+    # still held. The belt must fire whenever the cycle runs.
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m, time_stop="2026-08-25", stop_ref=None)
+    stale = payload()                            # as_of 2026-08-20
+    run_cycle(m, DryAdapter(), stale, "2026-09-01", alert=lambda _: None)
+    assert "1" not in m.state.positions
+
+
+def test_gate_n13_service_loop_runs_cycle_when_tracker_unreachable(
+        tmp_path, monkeypatch):
+    """The service loop calls run_cycle even when fetch_intents returns None
+    (tracker outage) — reconcile + belt are unconditional."""
+    import time as _time
+
+    from app.config import settings
+    from app import service
+    from app.service import app as service_app
+    from fastapi.testclient import TestClient
+
+    calls = []
+
+    def fake_run_cycle(mgr, adapter, payload, today, alert=None):
+        calls.append(payload)
+        return []
+
+    monkeypatch.setattr(blend_mod, "run_cycle", fake_run_cycle)
+    monkeypatch.setattr(settings, "state_path", str(tmp_path / "s.json"))
+    monkeypatch.setattr(settings, "blend_state_path", str(tmp_path / "b.json"))
+    monkeypatch.setattr(settings, "exec_token", "sekrit")
+    monkeypatch.setattr(settings, "tws_userid", "")
+    monkeypatch.setattr(settings, "blend_enabled", True)
+    monkeypatch.setattr(settings, "poll_seconds", 3600)
+    assert settings.tracker_url == ""            # fetch_intents -> None
+    try:
+        with TestClient(service_app):
+            for _ in range(200):
+                if calls:
+                    break
+                _time.sleep(0.05)
+            assert calls, "run_cycle was never called on a tracker outage"
+            assert calls[0] is None              # the outage payload
+    finally:
+        service.BLEND = None
+        service.MGR = None
+
+
+# N14: /kill reconciles FIRST and closes only positions still actually held
+# (idempotent with a stop fill that already happened at the venue).
+
+def test_gate_n14_kill_does_not_double_sell_a_stop_filled_position(
+        tmp_path, monkeypatch):
+    import time as _time
+
+    from app.config import settings
+    from app import service
+    from app.service import app as service_app
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setattr(settings, "state_path", str(tmp_path / "s.json"))
+    monkeypatch.setattr(settings, "blend_state_path", str(tmp_path / "b.json"))
+    monkeypatch.setattr(settings, "exec_token", "sekrit")
+    monkeypatch.setattr(settings, "tws_userid", "")
+    monkeypatch.setattr(settings, "blend_enabled", True)
+    try:
+        with TestClient(service_app) as c:
+            for _ in range(200):
+                if service.BLEND is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            B, A = service.BLEND, service.ADAPTER
+            _seed_initialized(B, sleeve_cash=2_750.0)
+            _held_position(B, stop_ref=None)
+            pos = B.state.positions["1"]
+            rs = A.place_stock_order("CRSP", -5, "STP", stop_price=44.0,
+                                     tif="GTC",
+                                     client_order_id="blend-1-stp-44.0000")
+            pos.stop_order_ref = rs["order_ref"]
+            B.save()
+            A.trigger_stop(pos.stop_order_ref)   # fills; NOT yet polled
+            cash_before = B.state.sleeve_cash
+            r = c.get("/kill", params={"token": "sekrit"})
+            assert r.json()["halted"] == "KILL"
+            sells = _executions(A, "CRSP")
+            assert len(sells) == 1               # the stop fill ONLY
+            assert sells[0]["action"] == "stop_triggered"
+            # proceeds booked exactly once, at the stop fill price
+            assert B.state.sleeve_cash - cash_before == pytest.approx(5 * 44.0)
+            assert B.state.positions == {} and B.state.halted == "KILL"
+            assert A._fills == []                # nothing left unpolled
+    finally:
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_n14_kill_refuses_blind_flatten_when_reconcile_fails(
+        tmp_path, monkeypatch):
+    import time as _time
+
+    from app.config import settings
+    from app import service
+    from app.service import app as service_app
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setattr(settings, "state_path", str(tmp_path / "s.json"))
+    monkeypatch.setattr(settings, "blend_state_path", str(tmp_path / "b.json"))
+    monkeypatch.setattr(settings, "exec_token", "sekrit")
+    monkeypatch.setattr(settings, "tws_userid", "")
+    monkeypatch.setattr(settings, "blend_enabled", True)
+    try:
+        with TestClient(service_app) as c:
+            for _ in range(200):
+                if service.BLEND is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            B, A = service.BLEND, service.ADAPTER
+            _seed_initialized(B, sleeve_cash=2_750.0)
+            _held_position(B)
+
+            def boom():
+                raise RuntimeError("venue unreachable (simulated)")
+
+            monkeypatch.setattr(A, "poll_stock_fills", boom)
+            r = c.get("/kill", params={"token": "sekrit"})
+            assert r.json()["halted"] == "KILL"
+            assert "1" in B.state.positions      # NOT blind-sold
+            assert B.state.halted == "KILL"      # but the book IS halted
+            assert _executions(A, "CRSP") == []
+    finally:
+        service.BLEND = None
+        service.MGR = None
+
+
+# N15: CORE_BUY / rebalance core-sell / BIL sweep are write-ahead journaled
+# with deterministic client ids and adopted from venue history after a crash.
+
+class _CrashAfterPlaceAdapter(DryAdapter):
+    """Simulates the process dying right AFTER the venue accepted+filled
+    one targeted order (the N15 crash window)."""
+
+    def __init__(self, symbol, direction):
+        super().__init__()
+        self.symbol = symbol
+        self.direction = direction               # +1 buy / -1 sell
+        self.armed = True
+
+    def place_stock_order(self, symbol, qty, order_type, **kw):
+        r = super().place_stock_order(symbol, qty, order_type, **kw)
+        if (self.armed and symbol == self.symbol
+                and qty * self.direction > 0 and order_type != "STP"):
+            self.armed = False
+            raise KeyboardInterrupt("crash AFTER venue accept (simulated)")
+        return r
+
+
+def _venue_fills(a, symbol, direction):
+    return [e for e in a.log if e.get("symbol") == symbol
+            and e.get("qty", 0) * direction > 0
+            and e["action"] == "place_stock_order"
+            and e.get("status") == "filled"]
+
+
+def test_gate_n15_core_buy_crash_window_never_duplicates(tmp_path):
+    # The re-review's repro: crash between the boot CORE_BUY fill and
+    # on_core_trade left the venue at 140 SPY vs book 70.
+    m = mk(tmp_path)
+    a = _CrashAfterPlaceAdapter("SPY", +1)
+    with pytest.raises(KeyboardInterrupt):
+        run_cycle(m, a, payload(), "2026-08-20", alert=lambda _: None)
+    m2 = Blend3070Manager(m.cfg, m.state_path)   # restart
+    assert m2.state.pending_book_orders          # journal survived the crash
+    run_cycle(m2, a, payload(), "2026-08-20", alert=lambda _: None)
+    spy_buys = _venue_fills(a, "SPY", +1)
+    assert len(spy_buys) == 1                    # venue holds ONE buy
+    assert m2.state.spy_qty == spy_buys[0]["qty"]  # book == venue
+    assert m2.state.core_cash == pytest.approx(0.0)
+    assert m2.state.pending_book_orders == {}    # journal fulfilled
+
+
+def test_gate_n15_sweep_crash_window_never_duplicates(tmp_path):
+    m = mk(tmp_path)
+    a = _CrashAfterPlaceAdapter("BIL", +1)
+    with pytest.raises(KeyboardInterrupt):
+        run_cycle(m, a, payload(), "2026-08-20", alert=lambda _: None)
+    m2 = Blend3070Manager(m.cfg, m.state_path)
+    run_cycle(m2, a, payload(), "2026-08-20", alert=lambda _: None)
+    bil_buys = _venue_fills(a, "BIL", +1)
+    assert len(bil_buys) == 1
+    assert m2.state.bil_qty == bil_buys[0]["qty"]
+    assert m2.state.sleeve_cash >= -1e-6
+    assert m2.state.pending_book_orders == {}
+
+
+def test_gate_n15_rebalance_core_sell_crash_window_never_duplicates(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=0.0, bil_qty=20, spy_qty=80)  # w = 20%
+    a = _CrashAfterPlaceAdapter("SPY", -1)
+    with pytest.raises(KeyboardInterrupt):
+        run_cycle(m, a, payload(), "2026-08-20", alert=lambda _: None)
+    m2 = Blend3070Manager(m.cfg, m.state_path)
+    run_cycle(m2, a, payload(), "2026-08-20", alert=lambda _: None)
+    spy_sells = _venue_fills(a, "SPY", -1)
+    assert len(spy_sells) == 1                   # the $1,000 sell, ONCE
+    assert m2.state.spy_qty == 70                # booked once
+    # transfer applied exactly once: sleeve got the proceeds (cash or BIL)
+    assert m2.sleeve_value({"SPY": 100.0, "BIL": 100.0}) == pytest.approx(3_000.0)
+    assert m2.state.core_cash == pytest.approx(0.0)
+    assert m2.state.pending_book_orders == {}
+
+
+def test_gate_n15_book_journal_without_venue_order_cleared(tmp_path):
+    # Crash BEFORE placement: journal exists, venue never saw the order —
+    # cleared, then step re-plans naturally (exactly one real order).
+    m = mk(tmp_path)
+    cid = m.record_pending_book_order("core-buy", "SPY", 70, "2026-08-19")
+    a = DryAdapter()
+    run_cycle(m, a, payload(), "2026-08-20", alert=lambda _: None)
+    assert cid not in m.state.pending_book_orders
+    assert len(_venue_fills(a, "SPY", +1)) == 1
+    assert m.state.spy_qty == 70
+
+
+# N5: deferred/unreconciled exit proceeds never fund same-cycle entries.
+
+class _RaisingCancelAdapter(DryAdapter):
+    def cancel_stock_order(self, order_ref):
+        raise RuntimeError("venue cancel error (simulated)")
+
+
+def test_gate_n5_deferred_exit_drops_same_cycle_entries(tmp_path):
+    # The re-review's repro: sleeve_cash 0, a $2,500 exit deferred (raising
+    # cancel), a new entry sized on its proceeds still bought -> ledger -2,500.
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=0.0, bil_qty=0)
+    _held_position(m, call_id=9, symbol="OLD", qty=50, fill=50.0,
+                   time_stop="2099-01-01", stop_ref="old-stop-9")
+    m.state.sleeve_cash = 0.0                    # fixture debit undone: broke
+    a = _RaisingCancelAdapter()
+    newent = entry(call_id=10, symbol="NEW")
+    newstp = stop_row(call_id=10, symbol="NEW", trail=49.0)
+    alerts: list[str] = []
+    run_cycle(m, a,
+              payload(entries=[newent],
+                      stops=[newstp, stop_row(call_id=9, symbol="OLD")],
+                      exits=[{"symbol": "OLD", "call_id": 9, "reason": "trail",
+                              "trail_level": 44.0}]),
+              "2026-08-20", alert=alerts.append)
+    assert "9" in m.state.positions              # exit deferred, kept
+    assert "10" not in m.state.positions         # entry NOT taken
+    assert _executions(a, "NEW") == [] and not [
+        e for e in a.log if e.get("symbol") == "NEW"
+        and e["action"] == "place_stock_order"]
+    assert m.state.sleeve_cash >= -1e-6          # ledger never negative
+    assert any("funding exit did not book" in msg for msg in alerts)
+
+
+def test_gate_n5_unreconciled_exit_drops_same_cycle_entries(tmp_path):
+    # Same law when the exit sells but the venue ack has no fill price:
+    # proceeds are NOT booked -> the planned entry must not spend them.
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=0.0, bil_qty=0)
+    _held_position(m, call_id=9, symbol="OLD", qty=50, fill=50.0,
+                   time_stop="2099-01-01", stop_ref=None)
+    m.state.sleeve_cash = 0.0                    # fixture debit undone: broke
+    m.state.positions["9"].stop_missing = False  # exit path w/o stop cancel
+    a = _NoFillPriceAdapter()
+    alerts: list[str] = []
+    run_cycle(m, a,
+              payload(entries=[entry(call_id=10, symbol="NEW")],
+                      stops=[stop_row(call_id=10, symbol="NEW", trail=49.0)],
+                      exits=[{"symbol": "OLD", "call_id": 9, "reason": "trail",
+                              "trail_level": 44.0}]),
+              "2026-08-20", alert=alerts.append)
+    assert "9" in m.state.unreconciled           # parked, nothing booked
+    assert "10" not in m.state.positions         # entry NOT taken
+    assert m.state.sleeve_cash >= -1e-6
+
+
+# N2 (minor): an ambiguous stop cancel is verified before the market sell.
+
+class _FalseCancelRaceAdapter(DryAdapter):
+    """The stop fills in the instant before the cancel lands, and the venue
+    answers the ambiguous False ('already gone') instead of raising."""
+
+    def cancel_stock_order(self, order_ref):
+        if order_ref in self._stops:
+            self.trigger_stop(order_ref)         # the fill wins the race
+        self._rec("cancel_stock_order", ref=order_ref, found=False)
+        return False
+
+
+def test_gate_n2_false_cancel_verified_never_double_sells(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    a = _FalseCancelRaceAdapter()
+    run_cycle(m, a, payload(entries=[entry()], stops=[stop_row()]),
+              "2026-08-20", alert=lambda _: None)
+    total_before = m.state.sleeve_cash + m.state.bil_qty * 100.0
+    run_cycle(m, a, payload(exits=[{"symbol": "CRSP", "call_id": 1,
+                                    "reason": "trail", "trail_level": 44.0}]),
+              "2026-08-21", alert=lambda _: None)
+    sells = _executions(a, "CRSP")
+    assert len(sells) == 1                       # the racing stop fill ONLY
+    assert sells[0]["action"] == "stop_triggered"
+    assert "1" not in m.state.positions
+    total_after = m.state.sleeve_cash + m.state.bil_qty * 100.0
+    assert total_after - total_before == pytest.approx(5 * 44.0)
+
+
+def test_gate_n2_cancel_of_filled_order_raises_then_reconciles(tmp_path):
+    """Pinned adapter contract: cancel of a FILLED order RAISES — the exit
+    defers, and the next cycle's reconcile books the stop fill (one sell)."""
+
+    class _Race(DryAdapter):
+        def cancel_stock_order(self, order_ref):
+            if order_ref in self._stops:
+                self.trigger_stop(order_ref)
+            return super().cancel_stock_order(order_ref)   # now RAISES
+
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    a = _Race()
+    run_cycle(m, a, payload(entries=[entry()], stops=[stop_row()]),
+              "2026-08-20", alert=lambda _: None)
+    run_cycle(m, a, payload(exits=[{"symbol": "CRSP", "call_id": 1,
+                                    "reason": "trail", "trail_level": 44.0}]),
+              "2026-08-21", alert=lambda _: None)
+    run_cycle(m, a, None, "2026-08-22", alert=lambda _: None)
+    assert len(_executions(a, "CRSP")) == 1
+    assert "1" not in m.state.positions and not m.state.unreconciled
+
+
+# N3 (minor): a mid-ingestion failure re-queues fills — none are ever lost.
+
+def test_gate_n3_ingest_failure_requeues_fills_then_heals(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=6_000.0)
+    a = DryAdapter()
+    run_cycle(m, a, payload(entries=[entry(),
+                                     entry(call_id=2, symbol="NTLA")],
+                            stops=[stop_row(),
+                                   stop_row(call_id=2, symbol="NTLA")]),
+              "2026-08-20", alert=lambda _: None)
+    a.trigger_stop(m.state.positions["1"].stop_order_ref)
+    a.trigger_stop(m.state.positions["2"].stop_order_ref)
+    cash_before = m.state.sleeve_cash
+
+    def bomb(_msg):
+        raise RuntimeError("telegram down (simulated raising alert)")
+
+    with pytest.raises(RuntimeError):
+        run_cycle(m, a, None, "2026-08-21", alert=bomb)
+    assert a._fills                              # unprocessed fills RE-QUEUED
+    # next cycle (alerts healthy) books everything exactly once
+    run_cycle(m, a, None, "2026-08-22", alert=lambda _: None)
+    assert m.state.positions == {}
+    # each entry sized 10 sh (1% of $6,000 sleeve / $6 per-share risk):
+    # both fills booked exactly once at the 44.0 stop
+    assert m.state.sleeve_cash - cash_before == pytest.approx(2 * 10 * 44.0)
+    assert len(_executions(a, "CRSP")) == 1
+    assert len(_executions(a, "NTLA")) == 1
+
+
+# Remaining minors: malformed as_of, sweep-vs-budget drift, journaled-order
+# fills never RED-alerted as unknown.
+
+def test_gate_minor_malformed_as_of_treated_stale_not_fresh(tmp_path):
+    from app.blend import payload_is_stale
+
+    assert payload_is_stale({"as_of": "not-a-date"}, "2026-08-20") is True
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    bad = payload(entries=[entry()], stops=[stop_row()])
+    bad["as_of"] = "garbage"
+    alerts: list[str] = []
+    out = run_cycle(m, DryAdapter(), bad, "2026-08-20", alert=alerts.append)
+    assert out == []                             # no decisions on garbage
+    assert any("stale" in msg for msg in alerts)
+
+
+def test_gate_minor_bil_sweep_respects_budget_cap(tmp_path):
+    # Gross must not drift above BLEND_BUDGET via the cash vehicle: the
+    # idle-cash sweep is clamped to the remaining gross headroom.
+    m = mk(tmp_path, blend_budget=7_500.0)
+    _seed_initialized(m, sleeve_cash=3_000.0, bil_qty=0, spy_qty=70)
+    (sw,) = [o for o in m.step("2026-08-20", payload(), PRICES)
+             if o["action"] == "SWEEP"]
+    assert sw["qty"] == 5                        # $500 headroom, not $3,000
+    # and without a budget the sweep is unclamped as before
+    m2 = mk(tmp_path)
+    _seed_initialized(m2, sleeve_cash=3_000.0, bil_qty=0, spy_qty=70)
+    (sw2,) = [o for o in m2.step("2026-08-20", payload(), PRICES)
+              if o["action"] == "SWEEP"]
+    assert sw2["qty"] == 30
+
+
+def test_gate_minor_journaled_order_fill_is_not_unknown_alerted(tmp_path):
+    # A venue that streams MOO fills through the fill poll: the fill of a
+    # JOURNALED entry is absorbed by the journal reconcile, never the
+    # unknown-order RED alert (real-venue contract note).
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    it = {"action": "ENTER", "call_id": 1, "symbol": "CRSP", "qty": 5,
+          "entry_ref": 50.0, "stop_level": 44.0, "time_stop_days": 90,
+          "reason": "test"}
+    m.record_pending_entry(it, "2026-08-20")
+    a = DryAdapter()
+    r = a.place_stock_order("CRSP", 5, "MOO", tif="OPG", ref_price=50.0,
+                            client_order_id=blend_mod.entry_client_id(1))
+    a._fills.append({"order_ref": r["order_ref"], "symbol": "CRSP", "qty": 5,
+                     "fill_price": 50.0})
+    alerts: list[str] = []
+    m2 = Blend3070Manager(m.cfg, m.state_path)
+    run_cycle(m2, a, payload(stops=[stop_row()]), "2026-08-20",
+              alert=alerts.append)
+    assert not any("UNKNOWN order" in msg for msg in alerts)
+    pos = m2.state.positions["1"]
+    assert pos.qty == 5 and pos.fill_price == 50.0     # adopted once
+    moos = [e for e in a.log if e.get("order_type") == "MOO"]
+    assert len(moos) == 1

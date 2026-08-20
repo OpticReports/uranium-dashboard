@@ -121,12 +121,25 @@ class IBAdapter:
             "OFFLINE/DRY runs never reach this path")
 
     def cancel_stock_order(self, order_ref: str) -> bool:
+        """CONTRACT (order-safety law #8): cancelling an order that has
+        FILLED must RAISE (IB errors on such a cancel — surface it), never
+        return False. False is reserved for 'order not found / already
+        cancelled'. The blend exit path treats False as ambiguous and
+        verifies fills before selling; a silent False on a filled stop
+        would be the double-sell race (counter-agent N2/N14)."""
         raise NotImplementedError
 
     def poll_stock_fills(self) -> list[dict]:
         """Drain fill events for resting stock orders (GTC stops) since the
         last poll: [{order_ref, symbol, qty, fill_price}]. The blend cycle
-        ingests these BEFORE any decision (reconciliation-first law)."""
+        ingests these BEFORE any decision (reconciliation-first law).
+        CONTRACT NOTES for the paper implementation: (a) prefer deriving
+        this from venue order history (idempotent) over drain semantics —
+        if drain semantics are kept, also implement requeue_stock_fills so
+        a mid-ingestion failure can push unprocessed fills back; (b) filter
+        to resting-stop fills, or let reconcile's journaled-order matching
+        absorb MOO/MKT fills — they must not surface as unknown-order
+        alerts."""
         raise NotImplementedError(
             "stock fill polling lands with the blend paper-phase deploy; "
             "the blend cycle fails closed without it")
@@ -241,6 +254,15 @@ class DryAdapter:
         return {"order_ref": ref, "status": "filled", "fill_price": fill}
 
     def cancel_stock_order(self, order_ref: str) -> bool:
+        rec = self._orders.get(order_ref)
+        if rec is not None and rec["status"] == "filled":
+            # Pinned contract (order-safety law #8): a cancel of a FILLED
+            # order RAISES — mirroring IB, which errors on such a cancel —
+            # so the caller's raising-cancel deferral path handles it. A
+            # bool False stays reserved for not-found/already-cancelled.
+            self._rec("cancel_stock_order", ref=order_ref, error="filled")
+            raise RuntimeError(f"cannot cancel {order_ref}: order already "
+                               f"FILLED")
         found = self._stops.pop(order_ref, None) is not None
         if found and order_ref in self._orders:
             self._orders[order_ref]["status"] = "cancelled"
@@ -266,6 +288,12 @@ class DryAdapter:
         """Drain queued stop-fill events (read-only: not logged as an intent)."""
         out, self._fills = self._fills, []
         return out
+
+    def requeue_stock_fills(self, fills: list[dict]) -> None:
+        """Push un-ingested fill events back to the FRONT of the queue —
+        reconcile re-queues on a mid-ingestion failure so a raising save()
+        or alert callback never loses a venue fill (counter-agent N3)."""
+        self._fills[:0] = list(fills)
 
     def find_stock_order(self, client_order_id: str) -> dict | None:
         rec = self._orders.get(self._by_client.get(client_order_id, ""))

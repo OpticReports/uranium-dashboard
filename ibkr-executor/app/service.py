@@ -103,10 +103,16 @@ def _loop():
                     from .blend import fetch_intents, run_cycle
                     payload = fetch_intents(settings)
                     if payload is None:
-                        logger.warning("blend: tracker unreachable; cycle skipped")
-                    else:
-                        with BLEND_LOCK:
-                            run_cycle(BLEND, ADAPTER, payload, today, alert=send)
+                        # Tracker outage: the cycle STILL runs — reconcile
+                        # (stop-fill ingestion, orphan cancel retries,
+                        # STOP_MISSING re-placement) and the local 90-day
+                        # belt are unconditional; only tracker-dependent
+                        # decisions are skipped (counter-agent N13).
+                        logger.warning("blend: tracker unreachable; "
+                                       "reconcile-only cycle (no new "
+                                       "decisions)")
+                    with BLEND_LOCK:
+                        run_cycle(BLEND, ADAPTER, payload, today, alert=send)
                 except Exception as exc:  # noqa: BLE001
                     logger.exception("blend cycle error: %s", exc)
             LAST["loop_ok"] = time.time()
@@ -176,37 +182,80 @@ def kill(x_exec_token: str | None = Header(default=None),
     MGR.state.halted = "KILL"
     MGR.save()
     if BLEND is not None:
+        from .blend import _ingest_fills, reconcile as blend_reconcile
+        today = datetime.now(timezone.utc).date().isoformat()
         with BLEND_LOCK:
-            for key in list(BLEND.state.positions):
-                pos = BLEND.state.positions[key]
-                if pos.stop_order_ref:
+            # RECONCILE FIRST (counter-agent N14): a stop that already
+            # filled at the venue must be booked BEFORE flattening — the
+            # kill then closes only positions still actually held, never
+            # selling a position twice. If venue truth is unavailable the
+            # flatten is refused (fail closed): blind MKT sells against an
+            # unreconciled book are exactly the double-sell this guards.
+            blend_reconcile_ok = True
+            try:
+                blend_reconcile(BLEND, ADAPTER, today, send)
+            except Exception as exc:  # noqa: BLE001
+                blend_reconcile_ok = False
+                logger.exception("kill: blend reconcile failed: %s", exc)
+                send(f"🚨🚨 blend kill: reconcile FAILED ({exc}) — venue "
+                     f"state unverifiable, positions NOT auto-flattened; "
+                     f"book halted, flatten manually")
+            if blend_reconcile_ok:
+                for key in list(BLEND.state.positions):
+                    pos = BLEND.state.positions.get(key)
+                    if pos is None:
+                        continue
+                    if pos.stop_order_ref:
+                        stop_ref = pos.stop_order_ref
+                        try:
+                            cancelled = ADAPTER.cancel_stock_order(stop_ref)
+                        except Exception as exc:  # noqa: BLE001
+                            logger.exception("kill: stop cancel %s failed: %s",
+                                             key, exc)
+                            cancelled = False
+                        if not cancelled:
+                            # Ambiguous "already gone"/failed cancel: the
+                            # stop may have JUST filled — verify before
+                            # selling (idempotent with the stop fill).
+                            try:
+                                _ingest_fills(BLEND, ADAPTER, send)
+                            except Exception as exc:  # noqa: BLE001
+                                logger.exception("kill: fill verify failed: "
+                                                 "%s", exc)
+                            if key not in BLEND.state.positions:
+                                continue     # settled by its stop fill
+                            # Still held with a possibly-resting stop: track
+                            # it so a later fill alerts RED and the cancel
+                            # is retried every reconcile pass.
+                            BLEND.record_orphan_stop(
+                                stop_ref, {"symbol": pos.symbol,
+                                           "qty": -pos.qty,
+                                           "call_id": pos.call_id})
                     try:
-                        ADAPTER.cancel_stock_order(pos.stop_order_ref)
+                        r = ADAPTER.place_stock_order(
+                            pos.symbol, -pos.qty, "MKT",
+                            client_order_id=f"blend-{pos.call_id}-kill")
+                        fill = r.get("fill_price")
+                        if fill is None:
+                            # Repo law: never book at a silent 0.0.
+                            BLEND.on_exit_unreconciled(
+                                pos.call_id, "manual kill: venue ack without "
+                                             "a fill price")
+                            send(f"🚨 blend kill close {pos.symbol} "
+                                 f"x{pos.qty} UNRECONCILED: no fill price — "
+                                 f"proceeds NOT booked, manual "
+                                 f"reconciliation needed")
+                        else:
+                            BLEND.on_exited(pos.call_id, fill, "manual kill")
                     except Exception as exc:  # noqa: BLE001
-                        # Emergency flatten: a failed cancel never blocks
-                        # the close; the reconcile pass catches a stop that
-                        # was already filled.
-                        logger.exception("kill: stop cancel %s failed: %s",
+                        logger.exception("kill blend close %s failed: %s",
                                          key, exc)
-                try:
-                    r = ADAPTER.place_stock_order(
-                        pos.symbol, -pos.qty, "MKT",
-                        client_order_id=f"blend-{pos.call_id}-kill")
-                    fill = r.get("fill_price")
-                    if fill is None:
-                        # Repo law: never book at a silent 0.0.
-                        BLEND.on_exit_unreconciled(
-                            pos.call_id, "manual kill: venue ack without a "
-                                         "fill price")
-                        send(f"🚨 blend kill close {pos.symbol} x{pos.qty} "
-                             f"UNRECONCILED: no fill price — proceeds NOT "
-                             f"booked, manual reconciliation needed")
-                    else:
-                        BLEND.on_exited(pos.call_id, fill, "manual kill")
-                except Exception as exc:  # noqa: BLE001
-                    logger.exception("kill blend close %s failed: %s", key, exc)
             BLEND.halt("KILL")
-    blend_note = " + blend book closed & halted" if BLEND is not None else ""
+    blend_note = ""
+    if BLEND is not None:
+        blend_note = (" + blend book closed & halted" if blend_reconcile_ok
+                      else " + blend HALTED but NOT flattened (reconcile "
+                           "failed — manual action needed)")
     send(f"🔴 ACTION NEEDED (you) — ibkr ladder KILLED: all legs closed, "
          f"ladder halted{blend_note}\n→ it stays halted until you hit "
          f"/resume?token=YOUR_TOKEN")
