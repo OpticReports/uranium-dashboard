@@ -135,11 +135,24 @@ Two honest qualifications, both load-bearing:
    recipient of the discount, then no independent party sets the
    reference price, and "20–25% off" is not a discount — it IS the
    price. The Series X fact pack already flags that neither the 20%
-   discount nor the 10-deal mandate appears in ANY public source. Note
-   the one X spinout with an unaffiliated lead — Anori, led by Prologis
-   and Builders VC — is the only round in the whole pipeline where an
-   outside party set the price. ASK: who prices Bellwether, is there an
-   unaffiliated co-lead, and what is the discount measured against?
+   discount nor the 10-deal mandate appears in ANY public source. ASK:
+   who prices Bellwether, is there an unaffiliated co-lead, and what is
+   the discount measured against?
+
+**CORRECTION (2026-08-20) — an earlier version of this file and of the
+reply to Casey stated that Anori was "the only round in the whole
+pipeline where an outside party set the price." That is WRONG.**
+A comps sweep finds at least four earlier X spinouts with unaffiliated
+leads: Flux (DFJ, 2014), Malta (Breakthrough Energy Ventures, 2018),
+Tidal (Perry Creek Capital, 2024) and Heritable Agriculture
+(FTW/Mythos/SVG, 2025). Anori is distinctive for a narrower reason: it
+is the first round where an unaffiliated lead sat **alongside** Series X
+Capital rather than instead of it. The correction WEAKENS the
+circularity worry — outside parties have priced X spinouts repeatedly —
+while leaving the underlying ask intact, because Series X-led rounds
+(Taara, Chorus, Verily Health) disclose no terms at all.
+[Counter-agent verification of the comps sweep was in flight when this
+was written — treat the four leads as PENDING until that verdict lands.]
 
 ## Structure note — the angel check is the better instrument
 

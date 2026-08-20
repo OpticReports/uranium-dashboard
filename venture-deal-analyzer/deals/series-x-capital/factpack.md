@@ -47,6 +47,80 @@ sweep (2026-08-15, all claims sourced/dated in session log).
   retained rights (ROFR/buyback that could cap exits), allocation
   policy across Fund I / Affiliates Fund / SPVs.
 
+## THIRD-PARTY AUDITED MARK — the first independent valuation of this
+## fund we have ever located [VERIFIED + counter-agent CONFIRMED 2026-08-20]
+
+**CAZ Strategic Opportunities Fund** (SEC-registered, CIK 0001984165,
+FYE March 31) holds a **$10,000,000 commitment** to Series X Capital
+Fund I, acquired **2025-07-03**: $3,575,000 called, $6,425,000 unfunded.
+CAZ's $10M is **1.85% of the $541.7M fund**.
+
+Audited fair value, N-CSR for FY ended 2026-03-31 (acc.
+0001213900-26-066147): **$3,234,741 on $3,575,000 called = 0.9048x.**
+
+| date | basis | value / called | multiple |
+|---|---|---|---|
+| 2025-09-30 | NPORT-P | 2,902,400 / 3,075,000 | 0.944x |
+| 2025-12-31 | NPORT-P | 2,850,161 / 3,075,000 | 0.927x |
+| 2026-03-31 | **N-CSR (audited)** | 3,234,741 / 3,575,000 | **0.905x** |
+
+Counter-agent verification (adversarial, mandatory rule) CONFIRMED the
+audited figures by column-footing: the parsed cost column sums exactly
+to the printed IT subtotal 42,778,644 and the value column to
+60,622,838 — a misaligned parse cannot foot. Corroborated twice more:
+the separate Note 2 table repeats fair value 3,234,741 / unfunded
+6,425,000, and cost + unfunded = exactly $10,000,000 at both dates.
+
+**Corrections the counter-agent forced (logged so they are not
+repeated):**
+1. A fourth data point (0.937x from the 2026-03-31 NPORT-P) was
+   DROPPED: `2,850,161 + 500,000 capital call = 3,350,161` exactly,
+   with unrealized loss identical to 12/31 — it is a stale 12/31 NAV
+   rolled forward, not a mark.
+2. The NPORT `balance` field is `units=NS` (shares) and the fund "does
+   not issue shares"; balance equals audited cost for only **57 of 87**
+   CAZ positions. **val ÷ balance is not a valid "x cost" method** and
+   is not used here except where the audit confirms it.
+3. An apparent $115,420 NPORT-vs-audit discrepancy is a
+   preliminary-vs-final artefact, not an anomaly: 68 of 87 positions
+   differ, total divergence $32.0M, and fund net assets differ by
+   $33.1M (5.0%) for the same date. Series X's gap ranks #35 of 68,
+   below the median.
+
+**WHAT THIS DOES AND DOES NOT SHOW — read this before citing it:**
+
+- It does NOT show the portfolio is underperforming. Footnote (c) on
+  the Series X row says the position is valued "using the Fund's pro
+  rata net asset value... as a practical expedient" — i.e. a
+  **pass-through of Series X's own GP-reported NAV.** CAZ expresses no
+  independent view of the portfolio.
+- The 0.905x is substantially **fee/expense drag ahead of called
+  capital** — CAZ discloses exactly this pattern by footnote on three
+  other positions. Series X's $340,259 shortfall is 3.40% of the $10M
+  commitment over 272 days, annualizing to ~4.6% of committed. That is
+  **above** a plain 2%-on-committed estimate, so it cannot honestly be
+  called all fees either. **UNDETERMINED without the LPA fee terms and
+  a capital account statement** — both non-public (Series X files only
+  Form D). Added to the ask list.
+- Base rate kills any alarm: of CAZ's 87 positions acquired within 12
+  months, **55% are at or below cost and the median multiple is exactly
+  1.000x**; only 12% of positions held >12 months are below cost.
+  Series X ranks #9 of 87 in a crowded 0.68x–0.96x band. Two CAZ
+  positions carry *negative* value.
+- **A REFUTED INFERENCE, logged deliberately.** The first read of this
+  data was: "no upward remark, therefore the advertised 20% entry
+  discount is not producing paper alpha." That is WRONG and was struck
+  by the counter-agent. **ASC 820 presumes transaction price = fair
+  value at initial recognition** — CAZ's own policy says investments
+  "may be valued at acquisition cost initially until the Valuation
+  Designee determines acquisition cost no longer represents fair market
+  value." **An entry discount is structurally invisible in a mark.**
+  The discount claim CANNOT be tested this way, in either direction.
+- **CAZ is the SOLE registered holder** of Series X Fund I (EDGAR FTS,
+  all forms). No second mark exists to corroborate or break this one.
+- Most recent mark available: 2026-03-31. CAZ's 6/30/2026 NPORT-P is
+  due ~2026-08-29 — **watch for it.**
+
 ## Pipeline track record [VERIFIED, and the core risk]
 
 External-capital X spinouts to date: Malta (alive, slow, "lags
