@@ -22,6 +22,7 @@ from .config import settings
 from .db import engine, init_db
 from .models import ScoreSnapshot
 from .routers import (
+    blend,
     calls,
     catalysts,
     chat,
@@ -168,6 +169,7 @@ app.include_router(news.router)
 app.include_router(tuning.router)
 app.include_router(discovery.router)
 app.include_router(shadow.router)
+app.include_router(blend.router)
 
 
 @app.get("/health", tags=["meta"])

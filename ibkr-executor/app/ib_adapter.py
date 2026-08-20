@@ -102,6 +102,22 @@ class IBAdapter:
     def close_spread(self, order_ref: str) -> dict:
         raise NotImplementedError
 
+    # -- stock/ETF orders (blend3070). Same doctrine as open_spread: the real
+    # ib_async implementation (Stock contract; MOO = MKT with tif OPG,
+    # STP = StopOrder GTC) lands with the blend paper phase. OFFLINE/DRY runs
+    # never reach these paths.
+
+    def place_stock_order(self, symbol: str, qty: int, order_type: str,
+                          stop_price: float | None = None, tif: str = "DAY",
+                          ref_price: float | None = None) -> dict:
+        """qty signed (+buy/-sell); order_type in {MOO, MKT, STP}."""
+        raise NotImplementedError(
+            "stock order placement lands with the blend paper-phase deploy; "
+            "OFFLINE/DRY runs never reach this path")
+
+    def cancel_stock_order(self, order_ref: str) -> bool:
+        raise NotImplementedError
+
 
 class DryAdapter:
     """No gateway, no orders: synthesizes fills at the budget and marks flat.
@@ -110,6 +126,7 @@ class DryAdapter:
     def __init__(self):
         self.log: list[dict] = []
         self._open: dict[str, float] = {}
+        self._stops: dict[str, dict] = {}   # working GTC stock stops (blend)
 
     def _rec(self, action, **kw):
         e = {"ts": int(time.time()), "action": action, **kw}
@@ -132,3 +149,42 @@ class DryAdapter:
         v = self._open.pop(order_ref, 0.0)
         self._rec("close_spread", ref=order_ref, value=v)
         return {"value": v}
+
+    # -- stock/ETF orders (blend3070) -----------------------------------------
+    # MOO/MKT fill immediately at the provided reference price (fall back to
+    # spot); STP rests as a working GTC order until cancelled or triggered
+    # via trigger_stop() (tests / simulated stop-outs).
+
+    def place_stock_order(self, symbol: str, qty: int, order_type: str,
+                          stop_price: float | None = None, tif: str = "DAY",
+                          ref_price: float | None = None) -> dict:
+        if order_type not in ("MOO", "MKT", "STP"):
+            raise ValueError(f"unsupported stock order type {order_type}")
+        ref = f"dry-stk-{symbol}-{len(self.log)}-{int(time.time())}"
+        if order_type == "STP":
+            if stop_price is None:
+                raise ValueError("STP order requires stop_price")
+            self._stops[ref] = {"symbol": symbol, "qty": qty,
+                                "stop_price": stop_price, "tif": tif}
+            self._rec("place_stock_order", symbol=symbol, qty=qty,
+                      order_type=order_type, stop_price=stop_price, tif=tif,
+                      ref=ref, status="working")
+            return {"order_ref": ref, "status": "working"}
+        fill = ref_price if ref_price is not None else self.spot(symbol)
+        self._rec("place_stock_order", symbol=symbol, qty=qty,
+                  order_type=order_type, tif=tif, ref=ref, status="filled",
+                  fill_price=fill)
+        return {"order_ref": ref, "status": "filled", "fill_price": fill}
+
+    def cancel_stock_order(self, order_ref: str) -> bool:
+        found = self._stops.pop(order_ref, None) is not None
+        self._rec("cancel_stock_order", ref=order_ref, found=found)
+        return found
+
+    def trigger_stop(self, order_ref: str) -> dict:
+        """Simulate the market touching a resting stop: fills AT the stop."""
+        o = self._stops.pop(order_ref)
+        self._rec("stop_triggered", ref=order_ref, symbol=o["symbol"],
+                  qty=o["qty"], fill_price=o["stop_price"])
+        return {"order_ref": order_ref, "status": "filled",
+                "fill_price": o["stop_price"]}

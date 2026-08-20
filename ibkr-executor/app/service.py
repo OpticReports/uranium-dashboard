@@ -26,6 +26,7 @@ logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.I
 logger = logging.getLogger(__name__)
 
 MGR: LadderManager | None = None
+BLEND = None                       # Blend3070Manager, ONLY when BLEND_ENABLED
 ADAPTER = None
 LAST: dict = {"loop_ok": 0.0, "nino34": None, "mode": "OFFLINE"}
 
@@ -36,8 +37,14 @@ def _auth(hdr: str | None, q: str | None) -> None:
 
 
 def _build():
-    global MGR, ADAPTER
+    global MGR, ADAPTER, BLEND
     MGR = LadderManager(settings, settings.state_path)
+    # blend3070 is opt-in: BLEND_ENABLED=false (the default) leaves the
+    # service byte-for-byte as before — no manager, no polling, no /status
+    # section, no state file.
+    if settings.blend_enabled:
+        from .blend import Blend3070Manager
+        BLEND = Blend3070Manager(settings, settings.blend_state_path)
     if not (settings.tws_userid and settings.tws_password):
         ADAPTER = DryAdapter()
         LAST["mode"] = "OFFLINE"
@@ -89,6 +96,16 @@ def _loop():
                          f"→ no action needed from you — forward this to Claude "
                          f"(if it repeats, gateway/credentials may need you)")
             MGR.save()
+            if BLEND is not None:
+                try:
+                    from .blend import fetch_intents, run_cycle
+                    payload = fetch_intents(settings)
+                    if payload is None:
+                        logger.warning("blend: tracker unreachable; cycle skipped")
+                    else:
+                        run_cycle(BLEND, ADAPTER, payload, today, alert=send)
+                except Exception as exc:  # noqa: BLE001
+                    logger.exception("blend cycle error: %s", exc)
             LAST["loop_ok"] = time.time()
         except Exception as exc:  # noqa: BLE001
             logger.exception("loop error: %s", exc)
@@ -120,13 +137,23 @@ def status(x_exec_token: str | None = Header(default=None),
     _auth(x_exec_token, token)
     if MGR is None:
         return {"ready": False}
-    return {"ready": True, "mode": LAST["mode"], "dry_run": settings.dry_run,
+    body = {"ready": True, "mode": LAST["mode"], "dry_run": settings.dry_run,
             "nino34_weekly": LAST["nino34"],
             "ladder": {k: vars(v) for k, v in MGR.state.legs.items()},
             "banked": MGR.state.banked, "halted": MGR.state.halted,
             "leg_budget": MGR.leg_budget(),
             "events": MGR.state.events[-40:],
             "dry_intents": getattr(ADAPTER, "log", [])[-40:]}
+    # The "blend" section exists ONLY when BLEND_ENABLED: with the flag off,
+    # /status is byte-identical to the pre-blend service.
+    if BLEND is not None:
+        from .blend import reference_prices
+        try:
+            prices = reference_prices(ADAPTER, BLEND, None)
+        except Exception:  # noqa: BLE001
+            prices = None
+        body["blend"] = BLEND.status_summary(prices)
+    return body
 
 
 @app.api_route("/kill", methods=["GET", "POST"])
@@ -145,6 +172,18 @@ def kill(x_exec_token: str | None = Header(default=None),
                 logger.exception("kill close %s failed: %s", key, exc)
     MGR.state.halted = "KILL"
     MGR.save()
+    if BLEND is not None:
+        for key in list(BLEND.state.positions):
+            pos = BLEND.state.positions[key]
+            try:
+                if pos.stop_order_ref:
+                    ADAPTER.cancel_stock_order(pos.stop_order_ref)
+                r = ADAPTER.place_stock_order(pos.symbol, -pos.qty, "MKT")
+                BLEND.on_exited(pos.call_id, r.get("fill_price", 0.0),
+                                "manual kill")
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("kill blend close %s failed: %s", key, exc)
+        BLEND.halt("KILL")
     send("🔴 ACTION NEEDED (you) — ibkr ladder KILLED: all legs closed, "
          "ladder halted\n→ it stays halted until you hit /resume?token=YOUR_TOKEN")
     return {"ok": True, "halted": "KILL"}
@@ -158,5 +197,7 @@ def resume(x_exec_token: str | None = Header(default=None),
         return {"ok": False}
     MGR.state.halted = None
     MGR.save()
+    if BLEND is not None:
+        BLEND.resume()
     send("ibkr ladder resumed")
     return {"ok": True}

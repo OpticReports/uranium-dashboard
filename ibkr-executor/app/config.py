@@ -29,5 +29,18 @@ class Settings(BaseSettings):
     state_path: str = "./data/ladder_state.json"
     log_level: str = "INFO"
 
+    # blend3070 (H13 30/70 R2-A sleeve + SPY core; OFFLINE scaffold).
+    # BLEND_ENABLED=false is the default: the service boots exactly as today.
+    blend_enabled: bool = False           # BLEND_ENABLED
+    tracker_url: str = ""                 # TRACKER_URL (genomics tracker base URL)
+    # The tracker's login gate is HTTP Basic (its DASHBOARD_USER/PASSWORD).
+    # These are DASHBOARD credentials for polling a keyless decision brain —
+    # no broker credential is ever read by the blend path.
+    tracker_user: str = ""                # TRACKER_USER
+    tracker_password: str = ""            # TRACKER_PASSWORD
+    blend_budget: float = 0.0             # BLEND_BUDGET cap in USD; 0 = disabled
+    blend_book_usd: float = 10_000.0      # BLEND_BOOK_USD initial paper book
+    blend_state_path: str = "./data/blend_state.json"
+
 
 settings = Settings()
