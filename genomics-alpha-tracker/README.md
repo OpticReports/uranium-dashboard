@@ -47,6 +47,16 @@ repository root** (Render requires it there for Blueprint auto-detection).
 2. When prompted, enter these secrets (all `sync: false` → stored by Render, never
    in git): **`FMP_API_KEY`**, and a **`DASHBOARD_USER`** / **`DASHBOARD_PASSWORD`**
    login of your choice (the app is password-gated when both are set).
+   Optional: **`BLEND_API_TOKEN`** — a dedicated read-only token the
+   ibkr-executor uses to poll `GET /blend3070/intents` (that one route only;
+   set the same value as `TRACKER_API_TOKEN` on the executor) so the
+   executor never holds the dashboard password.
+   Optional (the Execution tab): **`BLEND_UPSTREAM`** — the ibkr-executor's
+   base URL — and **`BLEND_READ_TOKEN`** — the executor's `READ_TOKEN` value.
+   The tracker reverse-proxies `GET /api/execution/feed` to
+   `{BLEND_UPSTREAM}/blend/feed` behind this app's login gate, injecting the
+   token server-side as `X-Read-Token`, so the browser never sees it. Unset =
+   the Execution tab shows its "not connected" card.
 3. **Deploy.** Your dashboard will be at `https://<service-name>.onrender.com`.
    Add a custom domain (e.g. `research.optic.capital`) under
    **Settings → Custom Domains**, then CNAME it at your DNS provider. The
@@ -214,6 +224,12 @@ links back to the underlying rows (which catalysts, revisions, posts):
 - **Catalyst Calendar** — next 90 days, filterable by impact & subsector.
 - **Movers in Narrative** — largest hype acceleration this week + active flags.
 - **Calls Log** — the tracker's own exact trade calls, logged and graded (below).
+- **Execution** — the ibkr-executor's blend3070 book made visible (read-only):
+  mode/gate/halt banner, equity curve with the initial-book reference line,
+  budget-utilization bar (85% alert marker), open positions, the persisted
+  trade log (R + $ P&L), unreconciled badge, last-cycle status. Data comes via
+  the server-side proxy below; until the tokens are set the tab shows a
+  "not connected" card listing exactly the env vars needed.
 - **Per-name Deep Dive** — price chart with catalyst markers, estimate-revision
   timeline, hype timeline, runway gauge, auditable score breakdown, science feed.
 - **Analyst Chat** — natural-language Q&A grounded in your data.

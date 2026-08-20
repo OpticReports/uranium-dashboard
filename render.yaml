@@ -73,6 +73,15 @@ services:
         value: https://barbell-lab.onrender.com
       - key: BTC_UPSTREAM
         value: https://btc-paper-engine.onrender.com
+      # Execution tab: reverse-proxy GET /api/execution/feed to the
+      # ibkr-executor's read-only /blend/feed. BLEND_READ_TOKEN must equal
+      # the executor's READ_TOKEN (injected server-side as X-Read-Token —
+      # the browser never sees it). Both sync:false: entered in the Render
+      # dashboard; unset = the Execution tab shows its "not connected" card.
+      - key: BLEND_UPSTREAM
+        sync: false
+      - key: BLEND_READ_TOKEN
+        sync: false
 
   # --- Barbell Lab (personal quant research platform) ------------------------
   # Lives at research.optic.capital/portfolio-optimizer behind the genomics
@@ -356,6 +365,11 @@ services:
         sync: false
       - key: EXEC_TOKEN
         sync: false          # /status /kill /resume auth (reuse existing)
+      - key: READ_TOKEN
+        sync: false          # READ-ONLY /blend/feed gate (Execution tab).
+                             # Separate from EXEC_TOKEN by design; same value
+                             # goes on genomics-alpha-tracker as
+                             # BLEND_READ_TOKEN. Unset = feed disabled (404)
       - key: LEG_BUDGET_USD
         sync: false          # $10k per ladder leg now; dashboard owns ramps
       - key: STATE_PATH

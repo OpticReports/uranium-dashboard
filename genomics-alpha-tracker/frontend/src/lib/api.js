@@ -97,6 +97,9 @@ export const api = {
   evaluateCalls: () => req("/calls/evaluate", { method: "POST" }),
   generateCalls: () => req("/calls/generate", { method: "POST" }),
 
+  // Execution (ibkr-executor blend3070 book, reverse-proxied server-side)
+  executionFeed: () => req("/api/execution/feed"),
+
   // Universe discovery (the candidate queue)
   discoveryCandidates: (status) =>
     req(`/discovery/candidates${status ? `?status=${status}` : ""}`),
