@@ -214,3 +214,28 @@ independent source; the pre-registration assertions genuinely compare to
 hardcoded literals. Corrections applied above: the submit-vs-post-date
 look-ahead quantified (conservative direction, verdicts unchanged) and the
 LLY/CERS diagnostic re-attributed.
+
+## Dollar-book translation (addendum, 2026-08-20)
+
+The combined book converted to a $100k account: risk f% of CURRENT equity per
+call, daily mark-to-market on the same adjusted closes the replay graded on,
+realized exits at r_net (slippage included), rf = 0 for Sharpe/Sortino.
+Sizing is FIXED-FRACTION — the live conviction sizing is not replayable.
+
+| book (2016-01 -> 2026-08) | end value | CAGR | max DD | Sharpe | Sortino | Calmar |
+|---|---|---|---|---|---|---|
+| combined @0.5% risk/call | $156,601 | +4.3% | 40.1% | 0.42 | 0.62 | 0.11 |
+| combined @1% risk/call   | $208,764 | +7.2% | 65.5% | 0.42 | 0.61 | 0.11 |
+| combined @2% risk/call   | $233,656 | +8.3% | 89.9% | 0.40 | 0.59 | 0.09 |
+| rel_strength_60d only @1% (<=10 open) | $246,236 | +8.9% | 51.2% | 0.48 | 0.70 | 0.17 |
+| XBI buy & hold           | $254,101 | +9.2% | 63.9% | 0.43 | 0.62 | 0.14 |
+
+READ HONESTLY: at mechanical sizing the replayable engine ~= sector beta over
+the decade — and that is WITH the survivorship tailwind (the book trades
+today's survivors; XBI carries no such bias) and WITHOUT the live engine's
+actual trigger set (hype/analyst/options — unreplayable) or its composite /
+confidence gates. This table measures the mechanical shadow of the engine,
+not the engine; the live paper book's graded record remains the only honest
+measure of the full system. Raising risk/call buys CAGR almost entirely with
+drawdown (2% -> 90% max DD): the edge, where present, is thin per call and
+concentration cannot manufacture more of it.
