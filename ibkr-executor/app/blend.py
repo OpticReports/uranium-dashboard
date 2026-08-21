@@ -73,6 +73,7 @@ import json
 import logging
 import math
 import os
+import tempfile
 import time
 from dataclasses import asdict, dataclass, field
 from datetime import date
@@ -316,8 +317,19 @@ class Blend3070Manager:
         # or two threads racing — must never leave a truncated file that
         # _load silently resolves to a fresh empty book.
         #
-        os.makedirs(os.path.dirname(self.state_path) or ".", exist_ok=True)
-        tmp_path = self.state_path + ".tmp"
+        # x11: the temp file is UNIQUE per write (mkstemp in the state
+        # directory, so os.replace stays a same-filesystem rename). One
+        # shared "<state>.tmp" made the racing-threads half of that promise
+        # false: concurrent savers clobbered each other's partial file and
+        # published truncated JSON (measured: 467 raises + 52 corrupt
+        # published states over 4 unlocked savers on a 132 KB book), and it
+        # flaked the suite with FileNotFoundError on the shared .tmp.
+        # Production writers all hold BLEND_LOCK (service.py: the loop's
+        # run_cycle, /kill's request_flatten, /resume's resume; /status and
+        # /blend/feed are read-only) — this makes save() safe on its own
+        # regardless.
+        directory = os.path.dirname(self.state_path) or "."
+        os.makedirs(directory, exist_ok=True)
         payload = {"initialized": self.state.initialized,
                    "positions": {k: asdict(v)
                                  for k, v in self.state.positions.items()},
@@ -342,11 +354,22 @@ class Blend3070Manager:
                    "last_reconcile_ts": self.state.last_reconcile_ts,
                    "mode": self.state.mode,
                    "events": self.state.events[-300:]}
-        with open(tmp_path, "w") as fh:
-            json.dump(payload, fh, indent=1)
-            fh.flush()
-            os.fsync(fh.fileno())
-        os.replace(tmp_path, self.state_path)
+        fd, tmp_path = tempfile.mkstemp(
+            dir=directory, prefix=os.path.basename(self.state_path) + ".",
+            suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as fh:
+                json.dump(payload, fh, indent=1)
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp_path, self.state_path)
+        except BaseException:
+            # Never leave the scratch file behind on a failed save.
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
 
     def _event(self, level: str, msg: str) -> bool:
         """Log a deduped event. Returns True only when the event was NEWLY

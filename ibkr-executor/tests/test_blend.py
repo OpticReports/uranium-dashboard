@@ -6,6 +6,7 @@ account equity; DRY_RUN defaults true). All offline."""
 from __future__ import annotations
 
 import json
+import os
 import time
 
 import pytest
@@ -2665,6 +2666,65 @@ def test_gate_n3_save_atomic_survives_crash_mid_write(tmp_path, monkeypatch):
     m2 = mk(tmp_path)                      # reload: the LAST GOOD book
     assert m2.state.initialized is True
     assert m2.state.spy_qty == 70          # not 999, and not a fresh book
+
+
+def test_gate_x11_concurrent_saves_never_corrupt_the_published_book(tmp_path):
+    """x11: save()'s docstring promised safety against "two threads racing"
+    while every writer shared ONE "<state>.tmp" path — concurrent savers
+    clobbered each other's partial file and published truncated JSON (which
+    _load's bare except turns into total book amnesia). It also flaked the
+    suite with FileNotFoundError on the shared .tmp.
+
+    Production writers all hold BLEND_LOCK; this gate hammers save()
+    UNLOCKED so the promise holds on its own."""
+    import threading
+
+    m = mk(tmp_path)
+    _seed_initialized(m, spy_qty=70)
+    # a realistically sized book: the corruption window scales with payload
+    m.state.trades = [{"symbol": "CRSP", "side": "SELL", "qty": 5,
+                       "fill_price": 44.0, "date": "2026-08-20",
+                       "kind": "stop_filled", "r_multiple": -1.0,
+                       "pnl": -30.0} for _ in range(200)]
+    m.state.events = [{"ts": 1, "level": "INFO", "msg": f"event {i} " + "x" * 80}
+                      for i in range(300)]
+    m.state.equity_curve = [["2026-08-%02d" % (i % 28 + 1), 10_000.0 + i]
+                            for i in range(1500)]
+    m.save()
+    errors: list[BaseException] = []
+    corrupt: list[str] = []
+    stop = threading.Event()
+
+    def hammer():
+        while not stop.is_set():
+            try:
+                m.save()
+            except BaseException as exc:      # noqa: BLE001
+                errors.append(exc)
+                return
+
+    def reader():
+        while not stop.is_set():
+            try:
+                json.load(open(m.state_path))
+            except FileNotFoundError:
+                corrupt.append("missing")
+            except ValueError:
+                corrupt.append("truncated")
+
+    threads = [threading.Thread(target=hammer) for _ in range(4)]
+    threads.append(threading.Thread(target=reader))
+    for t in threads:
+        t.start()
+    time.sleep(1.0)
+    stop.set()
+    for t in threads:
+        t.join(timeout=10)
+    assert errors == []                       # no writer ever raised
+    assert corrupt == []                      # no truncated published state
+    assert mk(tmp_path).state.spy_qty == 70   # and the book reloads intact
+    # no scratch files accumulate next to the state file
+    assert [f for f in os.listdir(tmp_path) if f.endswith(".tmp")] == []
 
 
 def test_gate_n3_resume_blocks_behind_blend_lock(tmp_path, monkeypatch):
