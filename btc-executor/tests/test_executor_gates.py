@@ -95,9 +95,13 @@ def target(pull=None, trend=None, bar_ts=None, degraded=False, data_halt=False):
                      "trend": trend or {"pending": None, "position": None}}}
 
 
-def mkexec(tmp_path, venue):
+def mkexec(tmp_path, venue, dry_run=None):
     cfg = Cfg()
     cfg.state_path = str(tmp_path / "state.json")
+    if dry_run is not None:
+        # set BEFORE construction: __init__ records the boot mode, so
+        # mutating cfg afterwards reads as a real DRY_RUN flip
+        cfg.dry_run = dry_run
     return Executor(venue, cfg, cfg.state_path)
 
 
@@ -698,13 +702,11 @@ def test_gate_mode_change_alerts(tmp_path, monkeypatch):
     import app.alerts as alerts
     monkeypatch.setattr(alerts, "send", lambda t: sent.append(t))
     v = FakeVenue()
-    ex = mkexec(tmp_path, v)
-    ex.cfg.dry_run = False                       # boots LIVE
+    ex = mkexec(tmp_path, v, dry_run=False)      # boots LIVE
     ex.step(target())
     assert not [s for s in sent if "mode_change" in s]   # first sight: quiet
     ex._save_state()
-    ex2 = mkexec(tmp_path, v)
-    ex2.cfg.dry_run = True                       # sync silently un-arms it
+    ex2 = mkexec(tmp_path, v, dry_run=True)      # sync silently un-arms it
     ex2.step(target())
     assert any("ACTION NEEDED" in s and "DRY_RUN" in s for s in sent), sent
     assert any(e["kind"] == "mode_change" for e in ex2.state.events)
@@ -1561,3 +1563,170 @@ def test_gate_spec_documents_attestation():
     spec = open(os.path.join(os.path.dirname(__file__), "..", "RAMP_V4.md")).read()
     assert "/coverage/attest" in spec
     assert "mode_change" in spec
+
+
+# --- attestation hardening (counter-agent FATAL, 2026-08-21) --------------
+def test_gate_attest_refuses_on_durable_flip_after_log_rotation(tmp_path):
+    """THE fatal find: the event log holds 200 entries and rate-limited
+    conditions fire every poll, so a mode_change ages out in ~67 minutes of
+    ordinary operation. The refusal must rest on a witness that does not
+    rotate."""
+    ex = _attest_ex(tmp_path, {"entry_long": 2})
+    ex.state.mode_flips = 1                       # durable counter
+    ex.state.events = [{"ts": 1, "level": "WARN", "kind": "halt_config",
+                        "msg": "noise"}] * 201    # flip long since rotated
+    assert not [e for e in ex.state.events if e["kind"] == "mode_change"]
+    r = ex.attest_coverage()
+    assert r["ok"] is False and r["refused"] == "mode_flips_recorded"
+    assert ex.state.coverage_live == {}
+
+
+def test_gate_attest_refuses_on_dryrun_fills_in_state(tmp_path):
+    """Second durable witness: fills tagged live=False prove the executor
+    ran against a shadow venue while these counts accrued."""
+    ex = _attest_ex(tmp_path, {"entry_long": 2})
+    ex.state.fills = [{"slip_bps": 1.0, "live": False}]
+    r = ex.attest_coverage()
+    assert r["ok"] is False and r["refused"] == "dryrun_fills_in_state"
+
+
+def test_gate_boot_detects_flip_across_redeploy(tmp_path):
+    """_check_mode_change only ran inside step(), so a flip across a
+    redeploy was never recorded before an operator could act."""
+    from app.mirror import Executor
+    ex = _attest_ex(tmp_path, {"entry_long": 2})   # live venue, dry_run False
+    ex._save_state()
+    assert ex.state.last_dry_run is False
+    cfg2 = ex.cfg
+    cfg2.dry_run = True                            # silent un-arm
+    ex2 = Executor(FakeVenue(), cfg2)              # no step() called
+    assert ex2.state.mode_flips == 1
+    assert any(e["kind"] == "mode_change" for e in ex2.state.events)
+
+
+def test_gate_attest_allowed_with_open_position_at_deploy(tmp_path):
+    """A5: an open leg at deploy fires _cov('restart_with_position') inside
+    __init__, before the operator can call. That must NOT foreclose the
+    migration - but live counts from an EARLIER process must."""
+    import json
+    from app.mirror import Executor
+    cfg = Cfg()
+    cfg.state_path = str(tmp_path / "state.json")
+    cfg.dry_run = False
+    json.dump({"halted": "", "coverage": {"entry_long": 2, "chase": 1},
+               "legs": {"trend": {"qty": 0.05}}, "last_dry_run": False},
+              open(cfg.state_path, "w"))
+    ex = Executor(FakeVenue(), cfg)
+    assert ex.state.coverage_live == {"restart_with_position": 1}
+    r = ex.attest_coverage()
+    assert r["ok"] is True
+    # the boot-observed count is NOT attested - only the pre-split delta
+    assert "restart_with_position" not in r["rows"]
+    assert ex.state.coverage_attested == {"entry_long": 2, "chase": 1}
+    # a later process carrying prior live evidence is refused
+    ex.state.attestation = None
+    ex._cov_since_boot = {}
+    assert ex.attest_coverage()["refused"] == "live_evidence_predates_call"
+
+
+def test_gate_attest_is_atomic_on_persist_failure(tmp_path):
+    """A 500 must not burn the one-shot in memory only."""
+    ex = _attest_ex(tmp_path, {"entry_long": 2})
+
+    def boom():
+        raise OSError("disk full")
+    ex._save_state = boom
+    r = ex.attest_coverage()
+    assert r["ok"] is False and r["refused"].startswith("persist_failed")
+    assert ex.state.coverage_live == {}
+    assert ex.state.attestation is None
+    del ex._save_state
+    assert ex.attest_coverage()["ok"] is True     # retry works
+
+
+def test_gate_attest_serializes_behind_venue_lock(tmp_path):
+    """attest was the only _save_state writer outside _venue_lock, which
+    let it publish a torn ledger mid-step."""
+    ex = _attest_ex(tmp_path, {"entry_long": 2})
+    import threading
+    out = {}
+    ex._venue_lock.acquire()
+    try:
+        t = threading.Thread(
+            target=lambda: out.update(ex.attest_coverage()), daemon=True)
+        t.start()
+        t.join(timeout=2)
+        # still blocked on the lock: nothing mutated, nothing persisted
+        assert t.is_alive(), "attest ran while the venue lock was held"
+        assert out == {}
+        assert ex.state.coverage_live == {}
+        assert ex.state.attestation is None
+    finally:
+        ex._venue_lock.release()
+    t.join(timeout=10)
+    assert out.get("ok") is True          # proceeds once the lock frees
+
+
+def test_gate_attest_sanitizes_promoted_counts(tmp_path):
+    """_load_state accepts any JSON that parses; promoted counts must not
+    carry negatives or strings into a monitored field."""
+    from app.main import _ramp_v4
+    ex = _attest_ex(tmp_path, {"entry_long": -5, "chase": "9",
+                               "stop_placed": 2})
+    r = ex.attest_coverage()
+    assert r["ok"] is True and r["rows"] == ["stop_placed"]
+    rows = _ramp_v4(ex.state)["rows"]
+    assert rows["stop_placed"]["attested"] == 2
+    assert rows["stop_placed"]["observed"] == 0
+    assert "attested" not in rows["entry_long"]
+    assert rows["chase"]["have"] == 0
+
+
+def test_gate_attest_nothing_to_attest(tmp_path):
+    ex = _attest_ex(tmp_path, {})
+    assert ex.attest_coverage()["refused"] == "nothing_to_attest"
+
+
+def test_gate_attest_note_truncated_and_recorded(tmp_path):
+    ex = _attest_ex(tmp_path, {"entry_long": 2})
+    ex.attest_coverage("x" * 500)
+    assert len(ex.state.attestation["note"]) == 200
+    assert ex.state.attestation["limitation"]      # caveat outlives the curl
+
+
+def test_gate_attest_observed_vs_attested_distinguished(tmp_path):
+    """have: 7, attested: 2 is ambiguous without observed."""
+    from app.main import _ramp_v4
+    ex = _attest_ex(tmp_path, {"entry_long": 2})
+    ex.attest_coverage()
+    for _ in range(5):
+        ex._cov("entry_long")
+    row = _ramp_v4(ex.state)["rows"]["entry_long"]
+    assert row["have"] == 7 and row["attested"] == 2 and row["observed"] == 5
+
+
+def test_gate_pulse_reports_attested_rows(tmp_path, monkeypatch):
+    """Attestation drives ramp_v4_unattributed to 0; the heartbeat must not
+    then look identical to observed evidence."""
+    from fastapi.testclient import TestClient
+    import app.main as m
+    ex = _attest_ex(tmp_path, {"entry_long": 2, "chase": 1})
+    ex.attest_coverage()
+    monkeypatch.setattr(m, "EXEC", ex)
+    monkeypatch.setattr(m.settings, "exec_token", "")
+    p = TestClient(m.app).get("/pulse").json()
+    assert p["ramp_v4_unattributed"] == 0
+    assert p["ramp_v4_attested"] == 2
+
+
+def test_gate_attest_cannot_satisfy_slippage_sample(tmp_path):
+    """The strongest bound in the design: attestation can never complete
+    the matrix - 10 genuinely live fills are still required."""
+    from app.main import RAMP_V4_REQUIRED, _ramp_v4
+    ex = _attest_ex(tmp_path, {k: v for k, v in RAMP_V4_REQUIRED.items()})
+    r = ex.attest_coverage()
+    assert r["ok"] is True
+    rv = _ramp_v4(ex.state)
+    assert rv["rows"]["slippage_sample"]["met"] is False
+    assert rv["coverage_complete"] is False
+    assert "slippage_sample" in r["still_required"]

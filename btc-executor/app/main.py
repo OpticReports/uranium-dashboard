@@ -133,6 +133,10 @@ def pulse():
             # without this a 13/13 -> 0/13 drop at the provenance split reads
             # as data loss to whoever is watching the heartbeat
             "ramp_v4_unattributed": _rv["unattributed_total"],
+            # attestation drives unattributed to 0; without this the public
+            # heartbeat reports attested rows identically to observed ones
+            "ramp_v4_attested": sum(1 for r in rv.values()
+                                    if r.get("attested")),
             "last_target_age_s": round(now - LAST["target_ts"], 1)
             if LAST["target_ts"] else None,
             "legs": {n: {"in_position": l.qty != 0.0,
@@ -184,6 +188,8 @@ def status(x_exec_token: str | None = Header(default=None),
            if LAST["target_ts"] else None,
            "coverage": getattr(st, "coverage", {}),
            "coverage_live": getattr(st, "coverage_live", {}),
+           "coverage_attested": getattr(st, "coverage_attested", {}),
+           "mode_flips": getattr(st, "mode_flips", 0),
            "drills": getattr(st, "drills", [])[-10:],
            "ramp_v4": _ramp_v4(st)}
     try:
@@ -244,8 +250,11 @@ def _ramp_v4(st) -> dict:
                 "met": (have >= need) and not corrupt,
                 "all_modes": all_modes,
                 "unattributed": max(0, all_modes - have),
-                # attested != observed: the matrix must keep saying which
-                **({"attested": att[k]} if k in att else {}),
+                # attested != observed: the matrix must keep saying which,
+                # and "have: 7, attested: 2" is ambiguous without observed
+                **({"attested": _n(att, k),
+                    "observed": max(0, have - _n(att, k))}
+                   if _n(att, k) else {}),
                 **({"corrupt": True} if corrupt else {})}
 
     rows = {k: _row(k, v, _n(live, k), _n(cov, k))
@@ -295,7 +304,7 @@ def drill(kind: str = Query("cycle"),
     flat. Never scheduled - a human calls this."""
     _auth(x_exec_token, token)
     if EXEC is None:
-        return {"ok": False, "refused": "executor not ready"}
+        raise HTTPException(status_code=503, detail="executor not ready")
     return EXEC.drill(kind)
 
 

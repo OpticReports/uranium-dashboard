@@ -81,24 +81,46 @@ plus `ramp_v4_unattributed` on `/pulse`.
 For the single migration where counts were genuinely earned live but
 predate provenance recording, a token-gated one-shot promotes `coverage`
 into `coverage_live`. It is a deliberate hole in the guard, so it is
-bounded hard and **none of the bounds are operator-overridable**:
+bounded hard. Refusals:
 
-- refuses once anything is attributed (`already_attributed`) — one-shot,
-  and it can never top up later evidence;
-- refuses unless the executor is live at attestation time (`not_live`);
-- refuses if the retained event log contains ANY `mode_change`
-  (`mode_change_in_log`) — a DRY_RUN flip means a window of unknown mode
-  existed, and counts carry no timestamps, so nothing can be attributed
-  by time. Overriding this check IS the failure mode the guard exists to
-  prevent, so there is no override.
+| refusal | meaning |
+|---|---|
+| `already_attributed` | one-shot; keyed on the `attestation` record, never tops up later evidence |
+| `not_live` | not live at call time — checks the DRY_RUN flag AND the venue object |
+| `mode_flips_recorded` | the durable flip counter is non-zero |
+| `dryrun_fills_in_state` | state holds fills tagged `live: false` |
+| `mode_change_in_log` | a flip is still visible in the retained event log |
+| `live_evidence_predates_call` | `coverage_live` holds counts from an earlier process — the migration window has passed |
+| `nothing_to_attest` | no positive-integer pre-split counts to promote |
+| `persist_failed:*` | rolled back; safe to retry |
 
-Promoted counts stay in `coverage_attested` permanently and every affected
-row renders `"attested": N`: **attested is weaker evidence than observed,
-and the matrix keeps saying so.** The promotion emits a WARN event.
+**Why the bounds read durable state, not the event log** (counter-agent
+2026-08-21, verdict FATAL on the first cut): the log retains 200 entries
+and rate-limited conditions fire every poll, so a `mode_change` ages out in
+roughly **67 minutes of ordinary operation**. A refusal that only scanned
+events therefore self-cleared on a timer — no override needed, just
+patience. The load-bearing witnesses are now `mode_flips` (monotonic,
+persisted) and dry-run-tagged fills; the log scan is kept only as a third
+signal. Flip detection also runs at `__init__`, not just inside `step()`,
+because a flip across a redeploy would otherwise never be recorded before
+an operator could act.
 
-Honesty limit, returned in the response body: events retain to 200
-entries, so a clean log is the best available evidence — not proof that
-DRY_RUN never flipped.
+**Attestation can never complete the matrix.** `slippage_sample` reads
+per-fill `live` tags, is not attestable, and gates `coverage_complete` —
+so 10 genuinely live fills are still required no matter what is attested.
+
+Promoted counts are the pre-split DELTA only; anything observed live in
+the current process stays observed. They persist in `coverage_attested`
+and every affected row renders `"attested": N` alongside `"observed": N`:
+**attested is weaker evidence than observed, and the matrix keeps saying
+so.** `/pulse` carries `ramp_v4_attested` so the drop of
+`ramp_v4_unattributed` to zero is never silent. The promotion emits a WARN
+event and runs under the venue lock (it was the only `_save_state` writer
+outside it, which could publish a torn ledger mid-step).
+
+Operational note: an open leg at deploy fires `_cov("restart_with_position")`
+inside `__init__`. That is expected and does NOT foreclose attestation —
+only live counts from an *earlier* process do.
 
 Counts persisted **before** this amendment have no provenance recorded.
 They are therefore treated as `unattributed`: visible in `all_modes`,

@@ -103,6 +103,11 @@ class ExecState:
     # evidence than "observed live" and the matrix must keep saying so.
     coverage_attested: dict = field(default_factory=dict)
     attestation: dict | None = None
+    # monotonic DRY_RUN flip counter. A safety invariant must NOT live in a
+    # rotating buffer: the event log holds 200 entries and rate-limited
+    # conditions fire every poll, so a mode_change ages out in ~67 minutes
+    # of ordinary operation (counter-agent find 2026-08-21).
+    mode_flips: int = 0
     drills: list = field(default_factory=list)
 
 
@@ -136,6 +141,8 @@ class Executor:
         # entangle drill orders with leg management (RAMP v4)
         self._venue_lock = threading.RLock()   # reentrant: halt() runs
         # inside _step_locked's _check_halts AND from the /kill API thread
+        self._cov_since_boot: dict[str, int] = {}
+        self._check_dry_run_flip()
         self._migrate_ledger_granularity()
         self._warn_unattributed_coverage()
         if any(l.qty != 0.0 for l in self.state.legs.values()):
@@ -145,59 +152,108 @@ class Executor:
         """ONE-SHOT operator attestation: promote pre-split coverage counts
         to live-attributed (RAMP_V4.md).
 
-        This is a deliberate hole in the mode guard, so it is bounded hard:
-
-        - refuses once anything is already attributed (never re-runs, never
-          tops up later evidence);
-        - refuses unless the executor is live RIGHT NOW - attesting that
-          past events were live while sitting in DRY_RUN is incoherent;
-        - refuses if the retained event log contains ANY mode_change. A flip
-          means a window of unknown mode existed, and counts carry no
-          timestamps, so nothing can be attributed. The operator cannot
-          override this: overriding it is the whole failure mode.
-
-        Promoted counts stay recorded in coverage_attested so /status keeps
-        showing them as ATTESTED rather than observed. Honesty limit,
-        stated in the response: events retain to 200, so a clean log is the
-        best available evidence, not proof that no flip ever happened.
+        A deliberate hole in the mode guard, so every bound is enforced here
+        and none is operator-overridable. The bounds read DURABLE state, not
+        the event log: the log holds 200 entries and rotates in ~67 minutes
+        of ordinary operation, so a flip-detection check that only scanned
+        events self-cleared on a timer (counter-agent 2026-08-21, FATAL).
         """
-        cov = dict(getattr(self.state, "coverage", None) or {})
-        live = getattr(self.state, "coverage_live", None) or {}
-        if live:
+        if not self._venue_lock.acquire(timeout=30):
+            return {"ok": False, "refused": "executor busy (step running)"}
+        try:
+            return self._attest_locked(note)
+        finally:
+            self._venue_lock.release()
+
+    def _attest_locked(self, note: str) -> dict:
+        st = self.state
+        if getattr(st, "attestation", None) is not None:
             return {"ok": False, "refused": "already_attributed",
-                    "detail": "coverage_live is non-empty; attestation is "
-                              "one-shot and cannot top up later evidence"}
+                    "detail": "attestation is one-shot and cannot top up "
+                              "later evidence",
+                    "attested_at": st.attestation.get("ts")}
+        cov = dict(getattr(st, "coverage", None) or {})
+        live = dict(getattr(st, "coverage_live", None) or {})
         if not cov:
             return {"ok": False, "refused": "nothing_to_attest"}
         if not self._is_live():
             return {"ok": False, "refused": "not_live",
                     "detail": "executor is in DRY_RUN (or on a shadow "
                               "venue); cannot attest live provenance"}
-        flips = [e for e in (self.state.events or [])
+        # --- durable flip witnesses (none of these rotate) ---------------
+        if getattr(st, "mode_flips", 0):
+            return {"ok": False, "refused": "mode_flips_recorded",
+                    "detail": f"{st.mode_flips} DRY_RUN flip(s) recorded: a "
+                              f"window of unknown mode existed and counts "
+                              f"carry no timestamps. Re-earn live."}
+        if any(isinstance(f, dict) and f.get("live") is False
+               for f in (getattr(st, "fills", None) or [])):
+            return {"ok": False, "refused": "dryrun_fills_in_state",
+                    "detail": "state contains fills recorded against a "
+                              "shadow venue - this executor has run in "
+                              "DRY_RUN since the counts began"}
+        flips = [e for e in (st.events or [])
                  if e.get("kind") == "mode_change"]
         if flips:
             return {"ok": False, "refused": "mode_change_in_log",
-                    "detail": f"{len(flips)} DRY_RUN flip(s) in the retained "
-                              f"log: some counts may be synthetic and none "
-                              f"can be attributed by time. Re-earn live.",
+                    "detail": "DRY_RUN flip(s) in the retained log",
                     "flips": [e.get("msg", "")[:160] for e in flips[-5:]]}
-        n = sum(v for v in cov.values() if isinstance(v, int) and v > 0)
-        self.state.coverage_live = dict(cov)
-        self.state.coverage_attested = dict(cov)
-        self.state.attestation = {"ts": int(time.time()), "events": n,
-                                  "rows": sorted(cov), "note": note[:200]}
+        # Live counts from a PRIOR process mean this is no longer the
+        # migration boot - attesting then would grant the unattributed
+        # delta accrued since. Counts from THIS process are fine: an open
+        # position at deploy fires _cov("restart_with_position") inside
+        # __init__, before the operator can call (counter-agent A5).
+        since_boot = getattr(self, "_cov_since_boot", None) or {}
+        stale = {k: v for k, v in live.items() if v > since_boot.get(k, 0)}
+        if stale:
+            return {"ok": False, "refused": "live_evidence_predates_call",
+                    "detail": "coverage_live holds counts from an earlier "
+                              "process; the provenance migration window has "
+                              "passed",
+                    "rows": sorted(stale)}
+
+        def _pos_int(v):
+            return v if isinstance(v, int) and v > 0 else 0
+
+        promote = {k: _pos_int(v) for k, v in cov.items() if _pos_int(v)}
+        # only the DELTA is attested; anything already observed live this
+        # boot stays observed
+        attested = {k: v - live.get(k, 0) for k, v in promote.items()
+                    if v - live.get(k, 0) > 0}
+        n = sum(attested.values())
+        if not n:
+            return {"ok": False, "refused": "nothing_to_attest"}
+        limitation = ("event log retains 200 entries; the durable witnesses "
+                      "(mode_flips counter, last_dry_run, dry-run fill tags) "
+                      "are what this attestation actually rests on")
+        snap = (dict(live), dict(getattr(st, "coverage_attested", None) or {}),
+                getattr(st, "attestation", None))
+        st.coverage_live = {k: max(promote.get(k, 0), live.get(k, 0))
+                            for k in set(promote) | set(live)}
+        st.coverage_attested = attested
+        st.attestation = {"ts": int(time.time()), "events": n,
+                          "rows": sorted(attested), "note": note[:200],
+                          "limitation": limitation}
+        try:
+            self._save_state()
+        except Exception as exc:  # noqa: BLE001
+            # never burn the one-shot in memory only
+            st.coverage_live, st.coverage_attested, st.attestation = snap
+            return {"ok": False, "refused": f"persist_failed:{exc}",
+                    "detail": "attestation rolled back; safe to retry"}
         self._event("WARN", "coverage_attested",
                     f"operator attested {n} pre-split coverage events as "
-                    f"live across {len(cov)} rows - these rows now satisfy "
-                    f"the ramp gate on ATTESTED, not observed, evidence"
-                    + (f" (note: {note[:120]})" if note else ""))
-        self._save_state()
-        return {"ok": True, "attested_events": n, "rows": sorted(cov),
-                "basis": "no mode_change in retained event log; executor "
-                         "live at attestation time",
-                "limitation": "events retain to 200 entries - a clean log "
-                              "is the best available evidence, not proof "
-                              "that DRY_RUN never flipped"}
+                    f"live across {len(attested)} rows - these rows now "
+                    f"satisfy the ramp gate on ATTESTED, not observed, "
+                    f"evidence" + (f" (note: {note[:120]})" if note else ""))
+        return {"ok": True, "attested_events": n, "rows": sorted(attested),
+                "basis": "no DRY_RUN flip recorded (durable counter), no "
+                         "dry-run fills in state, executor live at "
+                         "attestation time",
+                "limitation": limitation,
+                "still_required": "attestation cannot satisfy "
+                                  "slippage_sample: 10 genuinely live fills "
+                                  "are still needed to complete the matrix"}
 
     def _warn_unattributed_coverage(self) -> None:
         """Pre-split counts have no provenance, so the ramp matrix drops to
@@ -248,6 +304,9 @@ class Executor:
         if live is None:
             live = self.state.coverage_live = {}
         live[key] = live.get(key, 0) + 1
+        sb = getattr(self, "_cov_since_boot", None)
+        if sb is not None:
+            sb[key] = sb.get(key, 0) + 1
 
     def _migrate_ledger_granularity(self) -> None:
         """Persisted state written before 8e27c01 recorded REQUESTED sizes
@@ -290,6 +349,7 @@ class Executor:
             st.coverage_live = raw.get("coverage_live", {})
             st.coverage_attested = raw.get("coverage_attested", {})
             st.attestation = raw.get("attestation")
+            st.mode_flips = raw.get("mode_flips", 0)
             st.drills = raw.get("drills", [])[-50:]
             return st
         except Exception:  # noqa: BLE001
@@ -310,8 +370,11 @@ class Executor:
              "coverage_live": getattr(self.state, "coverage_live", {}),
              "coverage_attested": getattr(self.state, "coverage_attested", {}),
              "attestation": getattr(self.state, "attestation", None),
+             "mode_flips": getattr(self.state, "mode_flips", 0),
              "drills": getattr(self.state, "drills", [])[-50:]}
-        tmp = self.state_path + ".tmp"
+        # per-thread tmp: a shared tmp path was safe only while every writer
+        # sat behind _venue_lock (counter-agent 2026-08-21)
+        tmp = f"{self.state_path}.{os.getpid()}.{threading.get_ident()}.tmp"
         json.dump(d, open(tmp, "w"))
         os.replace(tmp, self.state_path)
 
@@ -578,19 +641,29 @@ class Executor:
 
     # ---------- main step ----------
 
-    def _check_mode_change(self) -> None:
+    def _check_dry_run_flip(self) -> None:
         """A blueprint sync silently reset DRY_RUN to true on a LIVE account
         (2026-08-10) - the executor kept reporting healthy while placing
-        nothing. Any mode flip now pages the operator."""
+        nothing. Any mode flip pages the operator AND bumps the durable
+        mode_flips counter.
+
+        Called at __init__ as well as from step(): a flip that happens
+        across a redeploy would otherwise never be recorded, because step()
+        may not run before an operator acts (counter-agent 2026-08-21).
+        """
         cur = bool(getattr(self.cfg, "dry_run", True))
         prev = getattr(self.state, "last_dry_run", None)
         if prev is not None and prev != cur:
+            self.state.mode_flips = getattr(self.state, "mode_flips", 0) + 1
             self._event("RED", "mode_change",
                         f"DRY_RUN {prev} -> {cur}: trading is now "
                         f"{'SIMULATED (no real orders)' if cur else 'LIVE'} - "
                         f"verify this was intentional (a blueprint sync can "
                         f"reset it)")
         self.state.last_dry_run = cur
+
+    def _check_mode_change(self) -> None:
+        self._check_dry_run_flip()
         # Same incident class, other variables: a blueprint sync can reset any
         # literal-valued env silently (they are sync:false now, but belt AND
         # suspenders - a dashboard fat-finger pages too). Snapshot the whole
