@@ -1,0 +1,52 @@
+# Adversarial-review probes (the record, not the suite)
+
+These six files are the counter-agent probe suites written against the
+blend3070 executor across the review rounds that produced N1/N2, R1/R2, N3,
+X1–X4/Y1, and Z1/Z2/y2. They are committed as the **audit record** of what
+was attacked and what landed — the thing a later reviewer needs in order to
+tell a probe that got HARDER from one that got quietly softened.
+
+Why they are here at all: the Z1 counter-review (finding **Z-M**) could only
+audit one rewritten probe by disassembling its stale `__pycache__` bytecode,
+and a second probe's pre-commit text was **unrecoverable** because the probes
+lived only in a scratch directory and were never versioned. Probes are
+load-bearing gates in this workflow; an unversioned gate is not a gate.
+
+## They are NOT part of the pytest run
+
+`pytest` does not collect them: they are named `attack_*.py` (the default
+`python_files` patterns are `test_*.py` / `*_test.py`), and
+`pyproject.toml` additionally sets `norecursedirs = ["probes"]`. They are
+standalone scripts with their own PASS/FAIL printer — a FAIL is a **landed
+attack**, which is the opposite of the pytest convention, so collecting them
+would invert the meaning of a red run.
+
+Run them by hand from `ibkr-executor/`:
+
+```
+python tests/probes/attack_z1.py
+```
+
+Each prints `N/M probes passed; landed attacks: [...]` on the last line.
+
+## Rules for touching them
+
+1. **Do not "clean them up."** Their current text IS the record. Formatting,
+   renaming and de-duplication all destroy the diff a reviewer needs.
+2. **Any edit to a probe must be justified in the commit message**, naming
+   the check that changed and why the new assertion attacks the contract at
+   least as hard as the old one. A contract that legitimately changed is a
+   reason to make a probe HARDER, never weaker.
+3. A probe that legitimately encodes an OLD contract stays in the file with
+   its result explained in the round's summary, rather than being deleted.
+
+## Standing results at the time of this commit
+
+| probe | result | note |
+|---|---|---|
+| `attack_reround.py` | 9/9 | |
+| `attack_r1r2.py` | 7/7 | |
+| `attack_n3guard.py` | 10/10 | |
+| `attack_n1n2.py` | 14/14 | |
+| `attack_x1x4.py` | 39/40 | `X-B[consequence]` lands BY DESIGN — its author withdrew it (a bounded liquidation at a chosen price beats unbounded naked downside); do not code to it |
+| `attack_z1.py` | 20/21 | `Z-1b` lands and is left landing on purpose: it directly contradicts `Z-1`, the hand-derived allocation table in the same file. `Z-1` pins `held > book` to `{1:2,2:2,3:1}`; `Z-1b` demands every allocation be `<= that position's own qty`. Both cannot hold. `held > book` is unreachable from the only call site (it enters on `held < book_qty`) and every result is capped at `min(alloc, qty)` before it can reach the venue, so the cell is a documentation defect, not a live one — and preserving the reviewer's verified table was judged worth more than silencing a probe about an unreachable input. `Z-1c` (negative/zero qty) WAS fixed. |
