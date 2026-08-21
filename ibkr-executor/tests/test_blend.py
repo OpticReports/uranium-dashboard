@@ -2793,3 +2793,21 @@ def test_gate_mode_guard_creds_pulled_mid_paper_archives_real_book(tmp_path):
     assert m2.state.mode == "dry:paper"
     assert m2.archived_state               # real book preserved in archive
     assert m2.state.spy_qty == 0
+
+
+def test_gate_g3_unreadable_blend_state_is_preserved_and_loud(tmp_path):
+    """G3 (the blend half of the ladder's x12): an unreadable book must not
+    degrade silently to a fresh one — open positions and `halted` would be
+    forgotten and the next save would erase the evidence."""
+    m = mk(tmp_path)
+    _seed_initialized(m, spy_qty=70)
+    _held_position(m)
+    m.state.halted = "KILL"
+    m.save()
+    open(m.state_path, "w").write('{"positions": {"1": {trunc')
+    m2 = mk(tmp_path)
+    assert m2.archived_state and "unreadable" in m2.archived_state
+    assert m2.state.positions == {}          # fresh book, honestly announced
+    assert list(tmp_path.glob("blend.json.corrupt-*"))
+    m2.save()                                # evidence survives the next save
+    assert list(tmp_path.glob("blend.json.corrupt-*"))

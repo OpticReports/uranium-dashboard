@@ -309,7 +309,23 @@ class Blend3070Manager:
             return st
         except FileNotFoundError:
             return BlendState(mode=self._current_mode())
-        except Exception:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
+            # G3, mirroring the ladder's x12 fix: an unreadable book (torn
+            # write from outside our atomic save, schema drift, hand-edit)
+            # used to degrade SILENTLY to a fresh book — open positions and
+            # `halted` forgotten, and the next save() overwrote the
+            # evidence. Preserve it and be loud; the service alerts on
+            # archived_state at build.
+            archive = f"{self.state_path}.corrupt-{int(time.time())}"
+            try:
+                os.replace(self.state_path, archive)
+                note = f"unreadable book preserved at {archive}"
+            except OSError as err:
+                note = (f"PRESERVE FAILED ({err}) — the unreadable book will "
+                        f"be OVERWRITTEN by the next save")
+            self.archived_state = (f"blend state unreadable ({exc}); "
+                                   f"starting a FRESH book; {note}")
+            logger.error("blend: %s", self.archived_state)
             return BlendState(mode=self._current_mode())
 
     def save(self) -> None:
