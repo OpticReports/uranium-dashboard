@@ -435,7 +435,7 @@ Env (all optional until the paper gate):
 | `TRACKER_USER` / `TRACKER_PASSWORD` | fallback: the tracker's HTTP Basic dashboard login (its DASHBOARD_USER/PASSWORD) — dashboard creds only, no broker credential enters the blend path |
 | `BLEND_BUDGET` | per-strategy gross-exposure cap in USD; 0 (default) = disabled. When set, crossing 85% utilization sends a one-time Telegram alert ("review and raise BLEND_BUDGET"), re-armed once utilization drops below 75% |
 | `BLEND_BOOK_USD` | initial paper book (default 10,000), split 30/70 at first boot |
-| `BLEND_STATE_PATH` | persisted book state (default `./data/blend_state.json`). Saves are atomic: a UNIQUE temp file per write (`mkstemp` in the state directory) + fsync + rename, so two threads saving at once can never clobber each other's partial file or publish truncated JSON (counter-review x11 — a single shared `.tmp` made that promise false; the same treatment now covers `STATE_PATH`, the El Niño ladder book; an unreadable ladder book — and a leg-row SCHEMA DRIFT after a deploy rollback — is PRESERVED as `.corrupt-<ts>` and loud, and a drifted book additionally comes back `halted="SCHEMA_DRIFT"` with every leg field this build understands intact, so `step()` cannot re-OPEN a spread that is still live at the venue, counter-review y2). The BLEND book gets the same treatment on its own position rows (counter-review Z-D — Z1 added `stop_cover_qty`, so a rollback to a build without it hit an unfiltered `BlendPosition(**row)` and came back a FRESH, un-halted book with entries UNBLOCKED while real shares and GTC stops rested at the venue): unknown fields are dropped, positions/cash/stop refs are kept, the file is preserved as `.corrupt-<ts>` and the book comes back `halted="SCHEMA_DRIFT"` — reconcile still runs and still protects it, only new decisions stop. Both managers PERSIST that recovered state at load (counter-review Z-J: it used to live in memory until the loop's first save, so a crash in between lost the halt AND the preserved rows). A `SCHEMA_DRIFT` halt is cleared by `/resume` exactly like a KILL — deliberately, because every field this build understands survives the drifted load, so nothing live is re-opened — and the resume alert NAMES the halt it cleared, for the ladder and for the blend book separately (counter-review Z-K). Service writers additionally serialize their read-modify-write under `BLEND_LOCK` (blend) / `MGR_LOCK` (ladder). The state is MODE-TAGGED (`dry:paper` / `real:paper` / `real:live`): on any mode change the previous book is archived alongside and a FRESH book starts, with a Telegram alert — a book's fills are fiction in any other mode (DRY fills at placeholder prices; paper fills aren't live fills), so they must never be reconciled against a venue that never saw them |
+| `BLEND_STATE_PATH` | persisted book state (default `./data/blend_state.json`). Saves are atomic: a UNIQUE temp file per write (`mkstemp` in the state directory) + fsync + rename, so two threads saving at once can never clobber each other's partial file or publish truncated JSON (counter-review x11 — a single shared `.tmp` made that promise false; the same treatment now covers `STATE_PATH`, the El Niño ladder book; an unreadable ladder book — and a leg-row SCHEMA DRIFT after a deploy rollback — is PRESERVED as `.corrupt-<ts>` and loud, and a drifted book additionally comes back `halted="SCHEMA_DRIFT"` with every leg field this build understands intact, so `step()` cannot re-OPEN a spread that is still live at the venue, counter-review y2). The BLEND book gets the same treatment on its own position rows (counter-review Z-D — Z1 added `stop_cover_qty`, so a rollback to a build without it hit an unfiltered `BlendPosition(**row)` and came back a FRESH, un-halted book with entries UNBLOCKED while real shares and GTC stops rested at the venue): unknown fields are dropped, fields the row does not carry are DEFAULTED (a renamed or removed field used to raise inside the handler and fall through to the fresh-book branch — counter-review ZF-4; the ladder never had that hole because every `LegState` field is defaulted), a row that still cannot be rebuilt is NAMED and left to the preserved file rather than dropped in silence (counter-review ZF-6), positions/cash/stop refs are kept, the file is preserved as `.corrupt-<ts>` and the book comes back `halted="SCHEMA_DRIFT"` — reconcile still runs and still protects it, only new decisions stop. **What this protects is the NEXT rollback — a book written by a FUTURE build, read by THIS one. It cannot protect a rollback FROM this build to an older one** (counter-review ZF-3): the reader is the older build, the fix is not in it, and the fix is therefore structurally unreachable from this side — see the deploy note under "Rollout gates". Both managers PERSIST that recovered state at load (counter-review Z-J: it used to live in memory until the loop's first save, so a crash in between lost the halt AND the preserved rows) — but only when the `.corrupt-<ts>` rename actually SUCCEEDED, because when it fails the file still sitting at the state path is the only copy of the evidence and the boot save would destroy it (counter-review ZF-7); the halt then lives in memory only and the alert says so. A `SCHEMA_DRIFT` halt is cleared by `/resume` exactly like a KILL — deliberately, because every field this build understands survives the drifted load, so nothing live is re-opened — and the resume alert NAMES the halt it cleared, for the ladder and for the blend book separately (counter-review Z-K). Service writers additionally serialize their read-modify-write under `BLEND_LOCK` (blend) / `MGR_LOCK` (ladder). The state is MODE-TAGGED (`dry:paper` / `real:paper` / `real:live`): on any mode change the previous book is archived alongside and a FRESH book starts, with a Telegram alert — a book's fills are fiction in any other mode (DRY fills at placeholder prices; paper fills aren't live fills), so they must never be reconciled against a venue that never saw them |
 | `READ_TOKEN` | READ-ONLY token gating `GET /blend/feed` (header `X-Read-Token`, constant-time compare). SEPARATE from `EXEC_TOKEN` by design: the feed holder sees book state only — never kill/resume. Empty (default) = the feed endpoint 404s. Set the same value as `BLEND_READ_TOKEN` on the genomics tracker, whose server-side proxy powers the research site's Execution tab |
 
 ### Read-only feed: `GET /blend/feed` (the Execution tab)
@@ -489,6 +489,32 @@ header or `?token=`, same pattern as btc-executor.
 1. IB adapter vs IBKR PAPER account (free simulated twin, real market data)
 2. Paper rehearsal through at least one full trigger cycle
 3. Live cutover per leg, DRY_RUN flip discipline
+
+### Deploy note: ROLLING BACK IS A BOOK-LOSING OPERATION (counter-review ZF-3)
+
+Once this build has written a blend book, `BLEND_STATE_PATH` carries the
+`stop_cover_qty` field. **Any build that predates that field reads the file,
+raises on the unknown key, and starts a FRESH book** — open positions gone,
+`halted` gone, `has_naked_position()` False and entries UNBLOCKED, while real
+shares and GTC stops still rest at the venue. The schema-drift handler that
+prevents this lives in the build being rolled *away* from, so it cannot help:
+the fix protects the forward direction only (a future build's book read by
+this one). Deploying this build is therefore a **one-way door for the book**,
+and that has to be known before the deploy, not after.
+
+If the executor must be rolled back anyway, do it deliberately, in this
+order:
+
+1. **halt first** — `POST /kill` (token-gated), and confirm `/status` shows
+   the blend book halted and the flatten resolved;
+2. move `BLEND_STATE_PATH` aside by hand (keep it — it is the only record of
+   the book) and **then** roll back;
+3. **verify positions at the venue** in TWS/Client Portal — every open share
+   and every resting GTC stop — and re-seed or reconcile the older build's
+   book against what is actually there before clearing the halt.
+
+Skipping any of these resumes trading against a book that does not know what
+the account holds.
 
 ## Account prerequisites (one-time, in IBKR settings)
 

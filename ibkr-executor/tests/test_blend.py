@@ -3562,3 +3562,20 @@ def test_gate_zf7_a_failed_preserve_is_not_overwritten_by_the_boot_save(
     assert m2.state.halted == "SCHEMA_DRIFT"            # still halted...
     assert "PRESERVE FAILED" in m2.archived_state       # ...and loud about it
     assert "OVERWRITTEN by the next save" in m2.archived_state
+
+
+def test_gate_zf3_the_readme_does_not_overstate_rollback_protection():
+    """ZF-3: the Z-D fix lives in the build being rolled AWAY from, so it
+    cannot protect the rollback it was written about — a book this build
+    wrote, read by an older build, still comes back FRESH and un-halted with
+    entries UNBLOCKED. That is unfixable from this side, so the README may
+    not describe it in the past tense, and the first deploy is a one-way
+    door the operator has to know about BEFORE it happens."""
+    readme = open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               os.pardir, "README.md")).read()
+    assert "ROLLING BACK IS A BOOK-LOSING OPERATION" in readme
+    assert "halt first" in readme and "verify positions at the venue" in readme
+    # what is protected is the NEXT rollback (a future build -> this one),
+    # never the one away from this build
+    assert ("cannot protect a rollback FROM this build to an older one"
+            in readme)
