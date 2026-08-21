@@ -4,8 +4,9 @@ Modes (auto-selected):
   OFFLINE : no TWS credentials -> DryAdapter, full logic, zero broker calls
   PAPER   : credentials + TRADING_MODE=paper -> real gateway, paper account
   LIVE    : TRADING_MODE=live AND DRY_RUN=false -> real orders (Nov gate)
-DRY_RUN=true with credentials still routes all mutations to the DryAdapter
-while using real market reads once the paper-phase adapter lands.
+DRY_RUN=true with credentials still routes everything (mutations AND reads)
+through the DryAdapter; the paper-phase stock/ETF adapter has LANDED and is
+exercised in PAPER mode (DRY_RUN=false, TRADING_MODE=paper).
 """
 from __future__ import annotations
 

@@ -25,7 +25,7 @@ strategy managers (keyless decision brains)     ibkr-executor
 | module | book | status |
 |---|---|---|
 | manager.py (El Nino ladder) | NG call spread -> SB put spread -> SLV call spread, triggered + sequential, house-money rolling (see elnino-lab/ELNINO.md) | infra deployed OFFLINE; combo placement lands with paper phase; live target Nov 2026 window |
-| blend.py (blend3070) | H13 30/70: R2-A sleeve (tracker gate-on fires, 1% sleeve risk, 3xATR GTC trail + 90d time stop, BIL on idle cash) / SPY core, 5pp rebalance band (genomics-alpha-tracker HYPOTHESES.md H11/H13) | OFFLINE scaffold, paper gate pending; BLEND_ENABLED=false default — zero behavior change until flipped |
+| blend.py (blend3070) | H13 30/70: R2-A sleeve (tracker gate-on fires, 1% sleeve risk, 3xATR GTC trail + 90d time stop, BIL on idle cash) / SPY core, 5pp rebalance band (genomics-alpha-tracker HYPOTHESES.md H11/H13) | paper-phase adapter LANDED (real IBAdapter stock surfaces, see below); BLEND_ENABLED=false default — zero behavior change until flipped |
 
 ## blend3070: intents contract + rollout
 
@@ -59,9 +59,9 @@ modes as the ladder (OFFLINE -> DRY -> PAPER -> LIVE, DRY_RUN default true).
 the service calls `run_cycle(payload=None)` when the poll fails, so the
 reconcile pass and the local safety belt are unconditional and only
 tracker-dependent decisions are skipped (re-review N13). If the adapter
-cannot answer the reconcile queries (paper IBAdapter until implemented) the
-cycle FAILS CLOSED — no decision is ever taken against unreconciled venue
-state. Phases IN ORDER:
+cannot answer the reconcile queries (e.g. `ExecutorConnectionError`: the
+gateway is down) the cycle FAILS CLOSED — no decision is ever taken against
+unreconciled venue state. Phases IN ORDER:
 
 1. **RECONCILE venue truth before any decision**
    a. ingest resting-stop fills (`poll_stock_fills`) — a stop that filled
@@ -118,10 +118,68 @@ state. Phases IN ORDER:
    the MKT sell. If reconcile itself fails, the book is halted but NOT
    blind-flattened — a loud alert asks for manual action.
 
-Adapter contract (pinned for the paper phase): cancelling a FILLED order
-must RAISE (IB errors on it) — bool False is reserved for
-not-found/already-cancelled; fill polling should be venue-history-based
-(idempotent) or support re-queueing.
+Adapter contract (pinned, now implemented by BOTH adapters): cancelling a
+FILLED order must RAISE (IB errors on it) — bool False is reserved for
+not-found/already-cancelled; fill polling is venue-history-based and
+supports re-queueing. A shared contract-conformance test suite runs
+identically against DryAdapter and the (mocked) IBAdapter.
+
+### Paper-phase adapter: the real IBAdapter stock/ETF surfaces (LANDED)
+
+`app/ib_adapter.py::IBAdapter` now implements the blend3070 stock surfaces
+against IB Gateway via ib_async (same synchronous-facade pattern as the
+El Nino combo reads):
+
+- `place_stock_order` — SMART/USD stock contracts, qualified once and
+  cached; MOO = MarketOrder `tif=OPG`, MKT = MarketOrder DAY,
+  STP = StopOrder GTC; signed qty maps to BUY/SELL; `client_order_id`
+  maps to IB `orderRef`, and placements DEDUPE against venue order
+  history by orderRef before placing — retries are idempotent.
+- **Async fills (design decision)**: DryAdapter's synchronous MOO/MKT
+  fills are a SIMULATION convenience. The real venue fills a MOO at the
+  next open, so placement returns `working` immediately (never blocks on
+  OPG) and the write-ahead journal + reconcile passes 2/2b adopt the fill
+  from venue order history by orderRef on a later cycle. MKT gets ONE
+  bounded synchronous-fill window (5s — liquid ETFs fill well inside it
+  during RTH) because the exit/kill paths book from the placement result;
+  a MKT that misses the window returns `working` and the exit routes to
+  the loud UNRECONCILED path — proceeds are never booked at a faked or
+  0.0 price.
+- `cancel_stock_order` — the pinned tri-state: FILLED → RAISES (also when
+  the fill wins the race mid-cancel), not-found/already-cancelled →
+  False, venue-acked cancel → True; an ambiguous ack timeout (10s)
+  RAISES — fail closed, the blend defers the dependent sell and the next
+  reconcile settles the truth.
+- `poll_stock_fills` — drain-once events for DONE protective stops,
+  derived from venue order history; partial fills are aggregated per
+  order at the share-weighted average price (qty signed by side); an
+  unknown price is None, never 0.0; MOO/MKT fills are deliberately NOT
+  emitted (the journal reconcile adopts them by orderRef, so they never
+  surface as unknown-order alerts). `requeue_stock_fills` restores
+  un-ingested events after a mid-ingestion failure.
+- `find_stock_order` — orderRef lookup over the session's trades, with a
+  reqAllOpenOrders/reqCompletedOrders refresh fallback for orders from a
+  previous session.
+- Every surface raises `ExecutorConnectionError` while the gateway is
+  down — reconcile raises and the blend cycle FAILS CLOSED.
+- `spot()` quotes any non-ladder symbol (SPY/BIL/sleeve names) as a
+  SMART/USD stock.
+
+SUPERVISED FIRST SESSION: flip `DRY_RUN=false` (with `TRADING_MODE=paper`)
+DURING MARKET HOURS and keep eyes on Telegram + `/status` through the
+session — watch the first MOO entry get adopted by reconcile after the
+open, its GTC stop land, and the first ratchet cancel/replace. Known
+loud-but-safe behaviors on the real venue: an exit MKT that misses the 5s
+fill window parks the trade UNRECONCILED (RED alert, manual booking); a
+service restart can re-emit an already-booked stop fill as an
+unknown-order RED alert (noise, never a double booking); a journaled
+MOO/MKT that the venue REJECTS keeps its journal pending (blend clears
+journals only for never-seen or filled orders) and shows up in `/status`
+`pending_entries`/`pending_book_orders` until manually cleared. VENUE
+HISTORY HORIZON: IB serves current-day executions on connect — an executor
+blackout spanning a day or more while a stop fills can exceed what
+reconcile can see; after any multi-day outage, verify positions against
+the account manually before resuming.
 
 Env (all optional until the paper gate):
 
@@ -168,8 +226,8 @@ Casey's paper-credential steps when the paper gate opens:
 | mode | condition | behavior |
 |---|---|---|
 | OFFLINE | no TWS credentials | full decision loop, DryAdapter, no gateway |
-| DRY | credentials present, DRY_RUN=true | gateway boots; mutations still simulated |
-| PAPER | TRADING_MODE=paper, DRY_RUN=false | real combo orders on the paper account |
+| DRY | credentials present, DRY_RUN=true | gateway boots; mutations (and reads) still simulated via DryAdapter |
+| PAPER | TRADING_MODE=paper, DRY_RUN=false | real market reads + real paper orders — blend stock/ETF surfaces LANDED (see the paper-phase adapter section); combo placement still pending |
 | LIVE | TRADING_MODE=live, DRY_RUN=false | real money (Nov gate, per-leg cutover) |
 
 Control surface: `/health` (public), `/status`, `/kill` (closes all open

@@ -1087,8 +1087,9 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
          order (counter-agent N15);
       3. retry cancelling retired stops whose cancel failed;
       4. re-place any missing protective stop (STOP_MISSING).
-    Raises if the adapter cannot answer (paper IBAdapter until implemented):
-    the cycle FAILS CLOSED — no decision against unreconciled state."""
+    Raises if the adapter cannot answer (ExecutorConnectionError while the
+    gateway is down): the cycle FAILS CLOSED — no decision against
+    unreconciled state."""
     st = mgr.state
 
     # 1) stop fills
