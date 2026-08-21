@@ -1442,3 +1442,246 @@ def test_gate_kd_kill_raising_cancel_never_market_sells(tmp_path, monkeypatch):
     finally:
         service.BLEND = None
         service.MGR = None
+
+
+# --- adapter-review regression gates (M3/M4 + escalated m2/m3/m4 minors) ------
+# Scenarios derived from the failed IB-adapter review's attack notes.
+
+
+# M3: partial-fill-aware cancel/flatten — never oversell.
+
+def test_gate_adapt_m3_partial_stop_then_exit_sells_only_remaining(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    a = DryAdapter()
+    run_cycle(m, a, payload(entries=[entry()], stops=[stop_row()]),
+              "2026-08-20", alert=lambda _: None)       # 5 sh CRSP, stop 44
+    a.trigger_stop_partial(m.state.positions["1"].stop_order_ref, 3)
+    total_before = m.state.sleeve_cash + m.state.bil_qty * 100.0
+    alerts: list[str] = []
+    run_cycle(m, a, payload(exits=[{"symbol": "CRSP", "call_id": 1,
+                                    "reason": "trail", "trail_level": 47.0}]),
+              "2026-08-21", alert=alerts.append)
+    assert "1" not in m.state.positions
+    sold = -sum(e["qty"] for e in _executions(a, "CRSP"))
+    assert sold == 5                      # 3 partial + 2 remainder, NEVER 8
+    total_after = m.state.sleeve_cash + m.state.bil_qty * 100.0
+    assert total_after - total_before == pytest.approx(5 * 44.0)
+    assert any("PARTIAL" in msg for msg in alerts)
+
+
+def test_gate_adapt_m3_partial_stop_remainder_reprotected(tmp_path):
+    # No exit signal: after a partial stop fill the remainder must get a
+    # NEW protective stop from reconcile (the old one is terminal).
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    a = DryAdapter()
+    run_cycle(m, a, payload(entries=[entry()], stops=[stop_row()]),
+              "2026-08-20", alert=lambda _: None)
+    a.trigger_stop_partial(m.state.positions["1"].stop_order_ref, 3)
+    run_cycle(m, a, payload(stops=[stop_row()]), "2026-08-21",
+              alert=lambda _: None)
+    pos = m.state.positions["1"]
+    assert pos.qty == 2                              # partial booked
+    assert pos.stop_missing is False
+    assert pos.stop_order_ref in a._stops            # remainder re-protected
+    assert a._stops[pos.stop_order_ref]["qty"] == -2
+
+
+def test_gate_adapt_m3_kill_after_partial_stop_never_oversells(
+        tmp_path, monkeypatch):
+    import time as _time
+
+    from app.config import settings
+    from app import service
+    from app.service import app as service_app
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setattr(settings, "state_path", str(tmp_path / "s.json"))
+    monkeypatch.setattr(settings, "blend_state_path", str(tmp_path / "b.json"))
+    monkeypatch.setattr(settings, "exec_token", "sekrit")
+    monkeypatch.setattr(settings, "tws_userid", "")
+    monkeypatch.setattr(settings, "blend_enabled", True)
+    try:
+        with TestClient(service_app) as c:
+            for _ in range(200):
+                if service.BLEND is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            B, A = service.BLEND, service.ADAPTER
+            _seed_initialized(B, sleeve_cash=2_750.0)
+            _held_position(B, stop_ref=None)
+            pos = B.state.positions["1"]
+            rs = A.place_stock_order("CRSP", -5, "STP", stop_price=44.0,
+                                     tif="GTC",
+                                     client_order_id="blend-1-stp-44.0000")
+            pos.stop_order_ref = rs["order_ref"]
+            B.save()
+            A.trigger_stop_partial(rs["order_ref"], 3)   # 3 fill, stop dies
+            c.get("/kill", params={"token": "sekrit"})
+            assert B.state.positions == {} and B.state.halted == "KILL"
+            sold = -sum(e["qty"] for e in _executions(A, "CRSP"))
+            assert sold == 5                 # 3 partial + 2 MKT, never 8
+    finally:
+        service.BLEND = None
+        service.MGR = None
+
+
+# M4: a missing SPY/BIL quote must never manufacture a rebalance.
+
+def test_gate_adapt_m4_missing_core_quote_skips_rebalance_alerts_once(
+        tmp_path):
+    # The review's attack: SPY quote missing -> core valued 0 -> sleeve
+    # weight ~1 -> spurious sleeve_to_core transfer booked, unwound later
+    # with REAL trades.
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=0.0, bil_qty=30, spy_qty=70)  # at target
+    no_spy = {"BIL": 100.0}
+    out = m.step("2026-08-20", payload(), no_spy)
+    assert not [o for o in out if o["action"] == "REBALANCE"]
+    (al,) = [o for o in out if o["action"] == "ALERT"]
+    assert "missing quote" in al["msg"]
+    # alert fires ONCE per outage: the next cycle stays quiet
+    out2 = m.step("2026-08-20", payload(), no_spy)
+    assert not [o for o in out2 if o["action"] in ("ALERT", "REBALANCE")]
+    # missing BIL likewise
+    m2 = mk(tmp_path)
+    _seed_initialized(m2, sleeve_cash=0.0, bil_qty=30, spy_qty=70)
+    out3 = m2.step("2026-08-20", payload(), {"SPY": 100.0})
+    assert not [o for o in out3 if o["action"] == "REBALANCE"]
+    assert [o for o in out3 if o["action"] == "ALERT"]
+    # no equity snapshot on absent CORE/BIL quotes (distorted valuation)
+    m.record_equity_snapshot("2026-08-20", no_spy)
+    assert m.state.equity_curve == []
+
+
+class _NoSpyQuoteAdapter(DryAdapter):
+    def spot(self, symbol):
+        if symbol == "SPY":
+            raise RuntimeError("no market price for SPY (simulated)")
+        return super().spot(symbol)
+
+
+def test_gate_adapt_m4_cycle_with_failed_spy_quote_books_nothing(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=0.0, bil_qty=30, spy_qty=70)  # at target
+    a = _NoSpyQuoteAdapter()
+    core_before, sleeve_before = m.state.core_cash, m.state.sleeve_cash
+    run_cycle(m, a, payload(), "2026-08-20", alert=lambda _: None)
+    assert m.state.core_cash == core_before          # no phantom transfer
+    assert m.state.sleeve_cash == sleeve_before
+    assert m.state.pending_book_orders == {}         # no orders either
+    assert m.state.equity_curve == []                # no distorted snapshot
+
+
+# m2 (escalated): multi-day blackout — cancel False + verify-empty +
+# horizon exceeded is UNVERIFIABLE (park + alert), never a MKT sell.
+
+def test_gate_adapt_m2min_blackout_horizon_parks_instead_of_selling(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m)                    # stop ref the venue never saw
+    m.state.last_reconcile_ts = time.time() - 3 * 86_400   # 3-day blackout
+    a = DryAdapter()                     # cancel("old-stop") -> False
+    alerts: list[str] = []
+    run_cycle(m, a, payload(exits=[{"symbol": "CRSP", "call_id": 1,
+                                    "reason": "trail", "trail_level": 47.0}]),
+              "2026-08-21", alert=alerts.append)
+    assert "1" not in m.state.positions
+    assert "1" in m.state.unreconciled           # parked for manual review
+    assert _executions(a, "CRSP") == []          # NOTHING sold (no short)
+    assert any("UNVERIFIABLE" in msg for msg in alerts)
+    # nothing was booked from the unverifiable exit: cash + BIL stay at the
+    # post-entry level (idle cash may have been swept to BIL in-cycle)
+    assert (m.state.sleeve_cash + m.state.bil_qty * 100.0
+            == pytest.approx(2_500.0))
+
+
+def test_gate_adapt_m2min_fresh_history_false_cancel_still_sells(tmp_path):
+    # Control: with a fresh reconcile history the same False cancel remains
+    # the normal verified-sell path (no behavior regression).
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m)
+    m.state.last_reconcile_ts = time.time() - 600     # 10 minutes ago
+    a = DryAdapter()
+    run_cycle(m, a, payload(exits=[{"symbol": "CRSP", "call_id": 1,
+                                    "reason": "trail", "trail_level": 47.0}]),
+              "2026-08-21", alert=lambda _: None)
+    assert "1" not in m.state.positions
+    assert not m.state.unreconciled
+    assert len(_executions(a, "CRSP")) == 1
+
+
+# m3 (minor): cancel-ok-then-place-raise must not leave the position
+# believed protected by a CANCELLED stop.
+
+class _CancelOkPlaceFailAdapter(DryAdapter):
+    """Stop cancel succeeds; the exit MKT sell then raises (venue hiccup)."""
+
+    def place_stock_order(self, symbol, qty, order_type, **kw):
+        if order_type == "MKT" and qty < 0:
+            raise RuntimeError("venue error after cancel (simulated)")
+        return super().place_stock_order(symbol, qty, order_type, **kw)
+
+
+def test_gate_adapt_m3min_cancel_ok_place_fail_marks_stop_missing(
+        tmp_path, monkeypatch):
+    monkeypatch.setattr(blend_mod, "STOP_RETRY_SLEEP_S", 0)
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    a = _CancelOkPlaceFailAdapter()
+    run_cycle(m, a, payload(entries=[entry()], stops=[stop_row()]),
+              "2026-08-20", alert=lambda _: None)
+    alerts: list[str] = []
+    run_cycle(m, a, payload(exits=[{"symbol": "CRSP", "call_id": 1,
+                                    "reason": "trail", "trail_level": 47.0}]),
+              "2026-08-21", alert=alerts.append)
+    pos = m.state.positions["1"]
+    assert pos.stop_missing is True and pos.stop_order_ref is None
+    assert any("UNPROTECTED" in msg for msg in alerts)
+    # next cycle: reconcile re-places the protective stop (covered again
+    # while the exit retries via its deterministic cid)
+    run_cycle(m, a, None, "2026-08-22", alert=lambda _: None)
+    pos = m.state.positions["1"]
+    assert pos.stop_missing is False and pos.stop_order_ref in a._stops
+
+
+# m4 (minor): an IB-initiated GTC cancel (corporate action) must be
+# detected — never a naked position believed protected forever.
+
+def test_gate_adapt_m4min_venue_cancelled_stop_detected_and_replaced(
+        tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    a = DryAdapter()
+    run_cycle(m, a, payload(entries=[entry()], stops=[stop_row()]),
+              "2026-08-20", alert=lambda _: None)
+    ref = m.state.positions["1"].stop_order_ref
+    a.cancel_stock_order(ref)        # IB-initiated GTC cancel, no shares
+    assert ref not in a._stops       # naked at the venue, book unaware
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-21", alert=alerts.append)
+    pos = m.state.positions["1"]
+    assert pos.stop_missing is False
+    assert pos.stop_order_ref != ref and pos.stop_order_ref in a._stops
+    assert any("CANCELLED at the venue" in msg for msg in alerts)
+
+
+# M1 support: pending sweep cash is reserved — entries can never spend it.
+
+def test_gate_adapt_m1_pending_sweep_cash_reserved_from_entries(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m)                     # sleeve_cash 3,000
+    # a working sweep BUY of 29 BIL @ 100 is pending adoption: $2,900 of
+    # the settled cash is already spoken for
+    m.record_pending_book_order("sweep", "BIL", 29, "2026-08-19",
+                                ref_price=100.0)
+    assert m.reserved_sleeve_cash() == pytest.approx(2_900.0)
+    out = m.step("2026-08-20",
+                 payload(entries=[entry()], stops=[stop_row()]),
+                 PRICES)
+    (ent,) = [o for o in out if o["action"] == "ENTER"]
+    # only $100 is spendable -> 2 shares @ 50 (risk sizing alone wants 5)
+    assert ent["qty"] == 2
+    assert not [o for o in out if o["action"] == "SWEEP"]   # kind suppressed

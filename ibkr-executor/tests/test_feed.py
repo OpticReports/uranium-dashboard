@@ -175,7 +175,9 @@ def test_gate_feed_shape(tmp_path, monkeypatch):
     body = r.json()
     assert set(body) == {"mode", "halted", "gate", "book", "positions",
                          "trades", "equity_curve", "unreconciled",
-                         "last_cycle"}
+                         "last_cycle", "marks_age_s"}
+    assert body["marks_age_s"] is not None       # cached-marks staleness
+    assert body["marks_age_s"] < 60.0            # cache just refreshed
     assert set(body["book"]) == {"sleeve_cash", "core_qty", "bil_qty",
                                  "equity_estimate", "budget_utilization",
                                  "initial_book_usd"}
@@ -266,3 +268,65 @@ def test_gate_health_blend_loop_surfaces_cycle_failures(tmp_path, monkeypatch):
     # BLEND disabled -> the section does not exist (byte-identical /health)
     monkeypatch.setattr(service, "BLEND", None)
     assert "blend_loop" not in c.get("/health").json()
+
+
+# --- M2 (adapter review): API threads never touch the adapter -----------------
+# /status and /blend/feed run on FastAPI worker threads; the ib_async event
+# loop belongs to the service loop thread. Both endpoints must serve the
+# loop-thread-refreshed mark cache ONLY.
+
+
+class _NoTouchAdapter(DryAdapter):
+    """Guard adapter: ANY adapter surface call from the API thread fails
+    the test — the endpoints must never reach the (ib_async) adapter."""
+
+    def _boom(self, *a, **kw):
+        raise AssertionError("API thread touched the adapter (M2)")
+
+    spot = _boom
+    place_stock_order = _boom
+    cancel_stock_order = _boom
+    poll_stock_fills = _boom
+    requeue_stock_fills = _boom
+    find_stock_order = _boom
+    mark = _boom
+    open_spread = _boom
+    close_spread = _boom
+
+
+def test_gate_m2_feed_and_status_never_call_adapter(tmp_path, monkeypatch):
+    from app.manager import LadderManager
+
+    m, _ = _entered_book(tmp_path)       # run_cycle populated the mark cache
+    guard = _NoTouchAdapter()
+    monkeypatch.setattr(service, "BLEND", m)
+    monkeypatch.setattr(service, "ADAPTER", guard)
+    monkeypatch.setattr(service, "MGR",
+                        LadderManager(settings, str(tmp_path / "s.json")))
+    monkeypatch.setattr(settings, "read_token", "read-tok")
+    monkeypatch.setattr(settings, "exec_token", "sekrit")
+    c = TestClient(app)
+    body = c.get("/blend/feed", headers={"X-Read-Token": "read-tok"}).json()
+    # served entirely from the cached marks — no adapter call happened
+    assert body["book"]["equity_estimate"] == pytest.approx(10_000.0)
+    assert body["marks_age_s"] is not None
+    body = c.get("/status", params={"token": "sekrit"}).json()
+    assert body["blend"]["book_value"] == pytest.approx(10_000.0)
+    assert body["blend"]["marks_age_s"] is not None
+
+
+def test_gate_m2_marks_staleness_shown_not_hidden(tmp_path, monkeypatch):
+    import time as _time
+
+    m, a = _entered_book(tmp_path)
+    m.mark_cache = {"prices": {"SPY": 100.0, "BIL": 100.0, "CRSP": 50.0},
+                    "ts": _time.time() - 900.0}      # 15-minute-old marks
+    c = _wire(monkeypatch, m, a)
+    body = c.get("/blend/feed", headers={"X-Read-Token": "read-tok"}).json()
+    assert body["marks_age_s"] == pytest.approx(900.0, abs=10.0)
+    # a cache never filled (loop hasn't completed a cycle) serves no marks
+    # and no fake age — nothing pretends to be fresh
+    m.mark_cache = {"prices": {}, "ts": None}
+    body = c.get("/blend/feed", headers={"X-Read-Token": "read-tok"}).json()
+    assert body["marks_age_s"] is None
+    assert body["book"]["equity_estimate"] is None
