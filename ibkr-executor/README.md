@@ -357,7 +357,11 @@ ever rested, against shares whose ownership is unproven (the naked-short
 path probe A1 demonstrated, and the counter-review's N1/N2/X1 variants of
 it). The single exception is the Z1 pro-rata resize above, which only ever
 REPLACES a resting stop with a SMALLER one so that aggregate cover can
-never exceed the shares the venue says the account holds. Such a
+never exceed the shares the venue says the account holds. A stop that DOES
+fill on a flagged position is still booked (a fill is order-scoped venue
+truth) but is never reported green: the alert states that the position was
+UNVERIFIABLE and that under conflation the shares just sold may have been
+the operator's own (counter-review Z2). Such a
 position blocks all new entries (`has_naked_position`), so an unresolved
 conflation wedges the sleeve until it is cleared by hand — the
 deliberate, documented cost of not guessing.

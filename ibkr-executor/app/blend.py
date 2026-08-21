@@ -1338,8 +1338,21 @@ def _ensure_stop(mgr: Blend3070Manager, adapter, pos: BlendPosition,
     return False
 
 
+_UNVERIFIABLE_FILL_NOTE = (
+    " — NOTE: this position was UNVERIFIABLE (a blackout gap the book could "
+    "not close), so the shares it just sold were never PROVEN to be the "
+    "book's: if the account holds other shares of this symbol they may have "
+    "been YOURS — check your own share count at the venue")
+
+
 def _ingest_one_fill(mgr: Blend3070Manager, adapter, f: dict, alert) -> None:
-    """Book a single polled fill event against the book (venue truth)."""
+    """Book a single polled fill event against the book (venue truth).
+
+    Z2: the ACCOUNTING is deliberately unchanged for an UNVERIFIABLE
+    position — a fill is order-scoped venue truth and booking it is right,
+    consistent with reconcile pass 1b-i. Only the ALERT changes: a stop fill
+    on a position the guard could not prove ownership of must never read as
+    a clean green close."""
     st = mgr.state
     ref = f.get("order_ref")
     pos = next((p for p in st.positions.values()
@@ -1347,6 +1360,7 @@ def _ingest_one_fill(mgr: Blend3070Manager, adapter, f: dict, alert) -> None:
     if pos is not None:
         fill = f.get("fill_price")
         held = pos.qty
+        gap_note = _UNVERIFIABLE_FILL_NOTE if pos.history_gap else ""
         filled = abs(int(f.get("qty") or 0))
         if fill is None:
             mgr.on_exit_unreconciled(pos.call_id,
@@ -1363,13 +1377,18 @@ def _ingest_one_fill(mgr: Blend3070Manager, adapter, f: dict, alert) -> None:
             mgr.on_partial_exit(pos.call_id, filled, fill, "stop_filled")
             alert(f"⚠️ blend stop PARTIAL fill {pos.symbol} {filled} of "
                   f"{held} @ {fill:.2f} (call {pos.call_id}) — "
-                  f"{held - filled} remain held, stop re-placed by "
-                  f"reconcile")
+                  f"{held - filled} remain held, "
+                  + ("and NO stop will be re-placed while the position is "
+                     "UNVERIFIABLE" if gap_note else
+                     "stop re-placed by reconcile")
+                  + gap_note)
         else:
             mgr.on_exited(pos.call_id, fill, "stop_filled")
-            alert(f"🧬 blend STOP FILLED {pos.symbol} x{held} @ "
-                  f"{fill:.2f} (call {pos.call_id}) — position closed "
-                  f"at the venue")
+            alert(("🚨 blend stop FILLED " if gap_note
+                   else "🧬 blend STOP FILLED ")
+                  + f"{pos.symbol} x{held} @ {fill:.2f} "
+                    f"(call {pos.call_id}) — position closed at the venue"
+                  + gap_note)
     elif ref in st.orphan_stop_refs:
         info = st.orphan_stop_refs.pop(ref)
         st.unreconciled[f"orphan-{ref}"] = {
@@ -1890,9 +1909,12 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
                   + _venue_share_note(held_now, pos.symbol))
         else:
             mgr.on_exited(pos.call_id, fill, "stop_filled")
-            alert(f"🧬 blend: {pos.symbol} stop fill from the blackout "
+            # Z2: the booking is right (order-scoped venue truth), the
+            # silence was not — this position was never PROVEN to own the
+            # shares its stop just sold.
+            alert(f"🚨 blend: {pos.symbol} stop fill from the blackout "
                   f"window recovered from venue history — booked "
-                  f"x{pos.qty} @ {fill:.2f}")
+                  f"x{pos.qty} @ {fill:.2f}" + _UNVERIFIABLE_FILL_NOTE)
     # 1b-ii) the stop did not (visibly) fill: corroborate ownership against
     #        the account's positions.
     #

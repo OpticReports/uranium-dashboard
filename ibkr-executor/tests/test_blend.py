@@ -2982,3 +2982,49 @@ def test_gate_z1_resized_cover_is_restored_in_full_when_shares_return(tmp_path):
     assert any("RESIZED stop was retired and FULL cover is re-placing" in msg
                for msg in alerts)
 
+
+def test_gate_z2_a_stop_fill_on_an_unverifiable_position_is_never_green(
+        tmp_path):
+    """Z2: `_ingest_one_fill` never read `history_gap`, so a stop fill on a
+    position the guard could not prove ownership of was booked with the same
+    cheerful green alert as a healthy stop-out. The ACCOUNTING stays as it
+    is (order-scoped venue truth, consistent with pass 1b-i) — the ALERT
+    must say the position was UNVERIFIABLE and that under conflation the
+    shares sold may have been the operator's."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    ref = _blackout_stop(m, a)                   # 5 booked, stop resting
+    a._positions["CRSP"] = 12                    # 5 booked + 7 external
+    run_cycle(m, a, None, "2026-08-24", alert=lambda _msg: None)
+    assert m.state.positions["1"].history_gap is True
+    assert ref in a._stops                       # X1: left resting, not naked
+    a.trigger_stop(ref)                          # it sells 5 pooled shares
+    cash_before = m.state.sleeve_cash
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-25", alert=alerts.append)
+    assert "1" not in m.state.positions          # booking unchanged: booked
+    assert m.state.sleeve_cash == cash_before + 5 * 44.0
+    (msg,) = [x for x in alerts if "position closed at the venue" in x]
+    assert not msg.startswith("🧬")               # never a green close
+    assert "UNVERIFIABLE" in msg
+    assert "may have been YOURS" in msg
+    assert "check your own share count" in msg
+
+
+def test_gate_z2_a_blackout_recovered_fill_says_it_was_unverifiable(tmp_path):
+    """Z2's second alert: reconcile pass 1b-i books a stop fill recovered
+    from venue order history. Same rule — the booking is right, the silence
+    was not."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    ref = _blackout_stop(m, a)
+    a.trigger_stop(ref)                          # filled INSIDE the blackout
+    a._fills.clear()                             # ... and the event was lost
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    assert "1" not in m.state.positions
+    (msg,) = [x for x in alerts if "recovered from venue history" in x]
+    assert not msg.startswith("🧬")
+    assert "UNVERIFIABLE" in msg and "may have been YOURS" in msg
