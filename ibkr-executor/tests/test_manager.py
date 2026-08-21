@@ -304,3 +304,50 @@ def test_gate_zj_drift_halt_survives_a_crash_before_the_first_save(tmp_path):
     assert m3.state.banked == 999.0
     assert m3.archived_state is None             # a clean read this time
     assert m3.step("2026-11-20", 2.4, {"NG": 9_000}) == []
+
+
+def test_gate_zf7_ladder_a_failed_preserve_is_not_overwritten_by_the_boot_save(
+        tmp_path):
+    """ZF-7 on the LADDER (the blend half is gated in test_blend.py; the
+    review docked this half for shipping ungated — mf-5). Z-J's boot-time
+    save() ran on `archived_state` alone, so on the one path where the file
+    on disk is the ONLY copy of the evidence — a failed PRESERVE rename —
+    the boot save destroyed it immediately, while the comment claimed "the
+    original file is already archived, so nothing is erased". The save is
+    now conditional on the rename having succeeded; the halt stays in
+    memory, is re-derived from the unchanged file on the next boot, and
+    `archived_state` says so."""
+    m = mk(tmp_path)
+    m.on_opened("NG", 10_000, "live-spread-ref", "2026-11-05")
+    m.state.banked = 999.0
+    m.save()
+    raw = json.load(open(m.state_path))
+    raw["legs"]["NG"]["future_field_from_a_newer_deploy"] = 1
+    with open(m.state_path, "w") as fh:
+        json.dump(raw, fh)
+
+    from app import manager as manager_mod
+    real_replace = os.replace
+
+    def _no_preserve(src, dst):
+        if ".corrupt-" in str(dst):
+            raise OSError("read-only fs")
+        return real_replace(src, dst)
+
+    manager_mod.os.replace = _no_preserve
+    try:
+        m2 = mk(tmp_path)
+    finally:
+        manager_mod.os.replace = real_replace
+    after = json.load(open(m.state_path))
+    assert "future_field_from_a_newer_deploy" in after["legs"]["NG"]  # evidence
+    assert m2.state.halted == "SCHEMA_DRIFT"            # still halted...
+    assert "PRESERVE FAILED" in m2.archived_state       # ...and loud about it
+    assert "OVERWRITTEN by the next save" in m2.archived_state
+    assert m2.step("2026-11-20", 2.4, {"NG": 9_000}) == []
+    # the halt is not lost by staying in memory: the next boot re-derives it
+    # from the file that was never overwritten
+    m3 = LadderManager(Cfg(), str(tmp_path / "ladder.json"))
+    assert m3.state.halted == "SCHEMA_DRIFT"
+    assert m3.state.legs["NG"].order_ref == "live-spread-ref"
+    assert m3.state.banked == 999.0

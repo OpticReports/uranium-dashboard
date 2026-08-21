@@ -27,7 +27,10 @@ Run them by hand from `ibkr-executor/`:
 python tests/probes/attack_z1.py
 ```
 
-Each prints `N/M probes passed; landed attacks: [...]` on the last line.
+Each prints its result on the last line. Five of the seven end with
+`N/M probes passed; landed attacks: [...]`; `attack_reround.py` and
+`attack_r1r2.py` end with `N/M probes passed; failures: [...]` — same
+meaning, older wording, and left as written per rule 1 below.
 
 ## Rules for touching them
 
@@ -41,6 +44,13 @@ Each prints `N/M probes passed; landed attacks: [...]` on the last line.
    its result explained in the round's summary, rather than being deleted.
 
 ## Standing results at the time of this commit
+
+The MF-1/MF-2/MF-3 round (the whole-branch counter-review's three
+MATERIALs) changed no probe file: all seven were re-run from
+`ibkr-executor/` at the marks below, before and after the fixes, and every
+one landed on its documented mark. The reviewer's own re-attack suite for
+that round (`scratchpad/attack_final.py`, 29 checks) went 28/29 -> 29/29,
+the one flip being `F4g` — the MF-3 defect it found.
 
 | probe | result | note |
 |---|---|---|

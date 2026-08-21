@@ -3380,6 +3380,15 @@ def test_gate_zf1_a_book_already_inside_the_invariant_loses_no_cover(tmp_path):
     # (R1's blackout guard flags both peers on the shortfall — that is
     # pre-existing and correct; what the resize may not do is CAP a peer
     # whose cover it never had to touch)
+    # mf-4: this next line is a BELT here and the review was right that it
+    # cannot fail in THIS cell — R1 flips peer 2's `history_gap` False->True
+    # before `_resize_peer_cover` runs, so `newly_capped` excludes it either
+    # way. The claim it is trying to make ("the resize never mothballs a
+    # healthy peer") is gated where it is real, at the unit level, by
+    # test_gate_zf1_the_resize_never_mothballs_a_healthy_peer below. The
+    # load-bearing assertions in this cell are `after == [4]`,
+    # `stop_cover_qty == 0`, the absent "protection were REMOVED" clause and
+    # the invariant check.
     assert not any("UNVERIFIABLE too" in msg for msg in alerts)
     assert not any("share(s) of protection were REMOVED" in msg
                    for msg in alerts)
@@ -3931,3 +3940,39 @@ def test_gate_mf3_a_drifted_stand_in_row_never_exits_as_x0(tmp_path):
     assert m2.status_summary()["unverifiable"] == ["1"]
 
 
+def test_gate_zf1_the_resize_never_mothballs_a_healthy_peer(tmp_path):
+    """mf-4: the non-vacuous half of the ZF-1 gate. Driving
+    `_resize_peer_cover` directly — the way reconcile pass 1b calls it — a
+    HEALTHY, UNFLAGGED peer resting full cover of 4 against 5 held, whose
+    zero-cover peer cannot be restored (its own unACKed orphan), must come
+    out unflagged, uncapped and uncut: at the parent commit it was cut to 2
+    AND mothballed UNVERIFIABLE to satisfy an invariant that already held.
+    (The reviewer's probe F1b, promoted to a gate.)"""
+    from app.blend import _resize_peer_cover
+
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    # call 1: flagged, cover retired, restore blocked by its own orphan
+    _held_position(m, call_id=1, qty=5, stop_level=44.0, stop_ref=None)
+    p1 = m.state.positions["1"]
+    p1.history_gap, p1.stop_missing, p1.stop_order_ref = True, True, None
+    m.record_orphan_stop("ghost-1", {"symbol": "CRSP", "qty": -5,
+                                     "call_id": 1})
+    # call 2: healthy, UNFLAGGED, fully covered by a real resting stop
+    old2 = _blackout_stop(m, a, call_id=2, qty=4, level=43.0)
+    p2 = m.state.positions["2"]
+    p2.history_gap = False
+    a._positions["CRSP"] = 5          # 4 resting <= 5 held: ALREADY compliant
+    alerts: list[str] = []
+    gap_stops = {"1": {"status": "dead", "order_ref": None}}   # flagged peers only
+    _resize_peer_cover(m, a, 5, list(m.state.positions.values()), gap_stops,
+                       alerts.append)
+    assert sum(-o["qty"] for o in a._stops.values()) == 4      # nothing cut
+    assert a._orders[old2]["status"] == "working"
+    assert p2.stop_order_ref == old2 and not p2.stop_missing
+    assert p2.stop_cover_qty == 0                              # not capped
+    assert p2.history_gap is False                             # not mothballed
+    assert not any("UNVERIFIABLE too" in msg for msg in alerts)
+    assert not any("share(s) of protection were REMOVED" in msg
+                   for msg in alerts)
