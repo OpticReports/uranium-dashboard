@@ -269,7 +269,7 @@ def _loop(gen: int, wake: threading.Event):
 from contextlib import asynccontextmanager
 
 
-def _start_loop() -> tuple[threading.Thread, threading.Event]:
+def _start_loop() -> tuple[threading.Thread, threading.Event, int]:
     """Start THE loop thread for this lifespan and publish its wake event."""
     global LOOP_WAKE, LOOP_GEN
     with LOOP_GEN_LOCK:
@@ -280,17 +280,22 @@ def _start_loop() -> tuple[threading.Thread, threading.Event]:
     t = threading.Thread(target=_loop, args=(gen, wake), daemon=True,
                          name=f"exec-loop-{gen}")
     t.start()
-    return t, wake
+    return t, wake, gen
 
 
-def _stop_loop(t: threading.Thread, wake: threading.Event) -> None:
+def _stop_loop(t: threading.Thread, wake: threading.Event, gen: int) -> None:
     """MF-2: supersede this lifespan's loop and wait briefly for it to go.
     Bumping the generation is what actually ends it — the join only avoids
     an overlap window; a loop parked in a feed call exits at its next
-    checkpoint and touches nothing after that."""
+    checkpoint and touches nothing after that.
+
+    The bump happens ONLY while this loop is still the current one: if a
+    newer lifespan has already started its loop, this one is superseded
+    already and bumping again would supersede the LIVE loop instead."""
     global LOOP_GEN
     with LOOP_GEN_LOCK:
-        LOOP_GEN += 1
+        if LOOP_GEN == gen:
+            LOOP_GEN += 1
     wake.set()                  # skip the poll wait, exit now
     t.join(timeout=1.0)         # courtesy only: the generation bump is what
                                 # ends it, and a parked loop exits in <1ms
@@ -301,11 +306,11 @@ def _stop_loop(t: threading.Thread, wake: threading.Event) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    t, wake = _start_loop()
+    t, wake, gen = _start_loop()
     try:
         yield
     finally:
-        _stop_loop(t, wake)
+        _stop_loop(t, wake, gen)
 
 
 app = FastAPI(title="IBKR Executor", version="0.1.0", lifespan=lifespan)

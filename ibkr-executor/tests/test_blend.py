@@ -3976,3 +3976,47 @@ def test_gate_zf1_the_resize_never_mothballs_a_healthy_peer(tmp_path):
     assert not any("UNVERIFIABLE too" in msg for msg in alerts)
     assert not any("share(s) of protection were REMOVED" in msg
                    for msg in alerts)
+
+
+def test_gate_mf2_shutting_down_an_older_lifespan_leaves_the_live_loop_running(
+        tmp_path, monkeypatch):
+    """MF-2, second pass on my own machinery: superseding is generation-based,
+    so a shutdown must bump the generation ONLY while its own loop is still
+    the current one. An unconditional bump at shutdown would supersede a
+    NEWER, live loop — the lifecycle killing the very thing it exists to keep
+    single. Overlapping lifespans, older one shut down second: the live loop
+    must keep cycling."""
+    import time as _time
+
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "poll_seconds", 1)
+    client1, service = _service_client(tmp_path, monkeypatch,
+                                       adapter=_IdentRecordingAdapter)
+    client1.__enter__()
+    try:
+        for _ in range(200):
+            if service.ADAPTER is not None:
+                break
+            _time.sleep(0.05)
+        A = service.ADAPTER
+        assert _wait_until(lambda: A.call_threads)
+        client2, service = _service_client(tmp_path, monkeypatch,
+                                           adapter=_IdentRecordingAdapter)
+        with client2:
+            for _ in range(200):
+                if service.ADAPTER is not None and service.ADAPTER is not A:
+                    break
+                _time.sleep(0.05)
+            B = service.ADAPTER
+            assert _wait_until(lambda: B.call_thread_objs)
+            client1.__exit__(None, None, None)      # the OLDER one shuts down
+            B.call_threads.clear()
+            B.call_thread_objs.clear()
+            assert _wait_until(lambda: B.call_thread_objs, timeout=8.0), (
+                "the LIVE loop stopped when an older lifespan shut down")
+            assert len(B.call_thread_objs) == 1
+    finally:
+        client1.__exit__(None, None, None)
+        service.BLEND = None
+        service.MGR = None
