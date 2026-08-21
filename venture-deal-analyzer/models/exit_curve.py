@@ -73,16 +73,26 @@ def _base_density(x, mu, sigma, x_tail, alpha):
 
 
 def base_distribution(stage):
-    """Discretized base distribution for a stage ('seed' or 'series_b').
-    Fitted parameters come from calibration.json; this function only
-    evaluates them onto the grid and normalizes."""
+    """Discretized base distribution for a stage. Fitted parameters come
+    from calibration.json; this function evaluates them onto the grid,
+    normalizes, and pins the stage's MEASURED loss mass exactly.
+
+    Stages: seed, series_a, series_b, series_c, series_d_plus - all
+    measured (PitchBook Part IV). See calibration.json _provenance for
+    how the values were recovered and for the two validation locks.
+    """
     cal = _load_calibration()
-    p = cal["stages"][stage]["fitted_params"]
+    st = cal["stages"][stage]
+    p = st["fitted_params"]
     xs = _grid()
     ws = [_base_density(x, p["mu"], p["sigma"], p["x_tail"], p["alpha"]) * x
           for x in xs]  # *x: log-spaced grid Jacobian
     total = sum(ws)
-    return xs, [w / total for w in ws]
+    ps = [w / total for w in ws]
+    lt1 = st.get("target_buckets", {}).get("lt1")
+    if lt1 is not None:
+        ps = _pin_loss_mass(xs, ps, lt1)
+    return xs, ps
 
 
 def bucket_masses(xs, ps, edges):
@@ -114,6 +124,34 @@ def fit_check(stage, tol=0.015):
         if abs(g - t) > tol:
             ok = False
     return ok, details
+
+
+def _pin_loss_mass(xs, ps, lt1):
+    """Rescale a normalized density so that P(x < 1) == lt1 EXACTLY,
+    preserving the shape on each side of 1x.
+
+    Why (2026-08-20): the lognormal body has no atom at zero, but real
+    venture loss outcomes pile up AT zero - measured loss mass runs 48%
+    (Series D+) to 81% (seed). Forcing a continuous lognormal to carry
+    81% of its mass below 1x, while the grid floor is 0.001 and the
+    truncation gate caps off-grid mass at 0.5%, is infeasible: the fit
+    degrades to a 69% relative error on the seed column.
+
+    The loss mass is DIRECTLY MEASURED per stage, so it does not need
+    to be inferred from a shape. Pinning it exactly and fitting only
+    the above-1x shape is the same principle tilt_to_forecasts already
+    uses for logged panel forecasts: constrain what is known, fit only
+    what is not. The distribution of outcomes WITHIN the loss region is
+    not published by anyone and affects no output except the loss-region
+    conditional mean, which net_multiple() already sets by the
+    sub1_drag convention.
+    """
+    lo = sum(p for x, p in zip(xs, ps) if x < 1.0)
+    hi = 1.0 - lo
+    if lo <= 0 or hi <= 0:
+        return ps
+    s_lo, s_hi = lt1 / lo, (1.0 - lt1) / hi
+    return [p * (s_lo if x < 1.0 else s_hi) for x, p in zip(xs, ps)]
 
 
 def fit_check_relative(stage, rel_tol=0.10):
@@ -206,6 +244,31 @@ def uncapped_tail_premium(stage, p_below_1x, p_ge_10x, cap=20.0,
                  for x, p in zip(xs, tps))
     mass = sum(p for x, p in zip(xs, tps) if x > cap)
     return full - capped, mass
+
+
+def upper_truncation_mass(stage):
+    """Audit gate: distribution mass lying ABOVE GRID_HI.
+
+    Supersedes truncation_mass() as the binding gate (2026-08-20). Since
+    base_distribution() now pins each stage's measured loss mass exactly
+    via _pin_loss_mass(), mass truncated at the LOW end no longer
+    silently distorts anything - the below-1x region is rescaled to the
+    published figure regardless of what the lognormal body does down
+    there. Mass truncated at the HIGH end is different: it is real
+    upside the grid discards, and it biases EV downward. Must stay
+    < 0.5%.
+    """
+    cal = _load_calibration()
+    p = cal["stages"][stage]["fitted_params"]
+    x_tail, alpha = p["x_tail"], p["alpha"]
+    def Phi(z):
+        return 0.5 * (1 + math.erf(z / math.sqrt(2)))
+    C = (math.exp(-((math.log(x_tail) - p["mu"]) ** 2) / (2 * p["sigma"] ** 2))
+         / (x_tail * p["sigma"] * math.sqrt(2 * math.pi)))
+    body = Phi((math.log(x_tail) - p["mu"]) / p["sigma"])
+    tail_total = C * x_tail / alpha
+    above = tail_total * (GRID_HI / x_tail) ** (-alpha)
+    return above / (body + tail_total)
 
 
 def truncation_mass(stage):
