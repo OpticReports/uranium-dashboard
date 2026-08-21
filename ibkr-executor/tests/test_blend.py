@@ -1776,6 +1776,159 @@ def test_gate_r1_blackout_stop_fill_recovered_from_history_books_at_price(
     assert any("recovered from venue history" in msg for msg in alerts)
 
 
+# N1/N2 (counter-review of the R1 pass): the blackout verification itself
+# must not create the very orders it exists to prevent.
+#   N1 — a position parked UNRECONCILED must have its resting stop RETIRED
+#        first (a -qty stop the book abandons is a naked short waiting to
+#        trigger) and the alert must state the venue's ACTUAL quantity.
+#   N2 — `stock_position` sums EVERY account STK row for the symbol, so
+#        shares held OUTSIDE the blend book must never verify a position
+#        whose own stop actually filled. The stop ORDER's status is
+#        order-scoped evidence and is consulted FIRST; position rows are
+#        corroboration only.
+
+def _blackout_stop(m, a, call_id=1, symbol="CRSP", qty=5, level=44.0):
+    """Held position + its real resting GTC stop at the venue, then a
+    3-day reconcile blackout (the R1 flagging condition)."""
+    _held_position(m, call_id=call_id, symbol=symbol, qty=qty,
+                   stop_level=level)
+    rs = a.place_stock_order(symbol, -qty, "STP", stop_price=level, tif="GTC",
+                             client_order_id=f"blend-{call_id}-stp-{level:.4f}")
+    m.state.positions[str(call_id)].stop_order_ref = rs["order_ref"]
+    m.state.last_reconcile_ts = time.time() - 3 * 86_400
+    return rs["order_ref"]
+
+
+def test_gate_n1_blackout_park_retires_the_resting_stop(tmp_path):
+    """Probe B1: the operator manually sold 3 of the 5 during the blackout
+    (the /kill loop-down alert invites exactly that) while the -5 GTC stop
+    kept resting. The park must RETIRE that stop: left resting it triggers
+    into a 2-share account — short 3, visible to the book only as a
+    post-hoc UNKNOWN-order alert."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    ref = _blackout_stop(m, a)
+    a._positions["CRSP"] = 2                     # manual sale of 3, in the dark
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    assert "1" not in m.state.positions and "1" in m.state.unreconciled
+    assert ref not in a._stops or ref in m.state.orphan_stop_refs
+    assert _executions(a, "CRSP") == []          # nothing sold by the book
+    assert a._positions["CRSP"] == 2             # and no short at the venue
+    # honest wording: the venue holds 2 of the 5 the book claims — the
+    # position is NOT simply "gone"
+    (park,) = [msg for msg in alerts if "parked for manual booking" in msg]
+    assert "holds 2 of the 5" in park and "UNPROTECTED" in park
+    assert "GONE" not in park
+
+
+def test_gate_n1_unretirable_stop_is_orphan_tracked(tmp_path):
+    """The cancel of the abandoned stop RAISES (pinned contract: the stop
+    FILLED) — it must land in orphan_stop_refs (the /kill park pattern) so
+    pass 3 retries it and a fill on it alerts RED, never be forgotten."""
+    class _RaisingCancel(DryAdapter):
+        def cancel_stock_order(self, ref):
+            raise RuntimeError("cancel unavailable (simulated)")
+
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = _RaisingCancel()
+    ref = _blackout_stop(m, a)
+    a._positions["CRSP"] = 0                     # shares gone entirely
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    assert "1" in m.state.unreconciled
+    assert ref in m.state.orphan_stop_refs        # tracked, retried, RED on fill
+    assert any("could NOT be cancelled" in msg for msg in alerts)
+    assert _executions(a, "CRSP") == []
+
+
+def test_gate_n2_external_shares_never_verify_a_stopped_out_position(tmp_path):
+    """Probe B2: the blend's 5 CRSP were stopped out inside the blackout
+    (fill event lost with the restart) while the ACCOUNT holds 6 CRSP
+    bought outside the book. Account rows say 6 >= 5 — but the position's
+    OWN stop is FILLED with a price, and that order-scoped evidence wins:
+    the exit books at the venue price instead of a phantom being unparked
+    and 'protected' by a dead order."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    ref = _blackout_stop(m, a)
+    a._orders[ref]["status"] = "filled"          # filled in the dark
+    a._orders[ref]["fill_price"] = 44.0
+    a._stops.pop(ref, None)
+    a._positions["CRSP"] = 6                     # external/manual shares only
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    assert "1" not in m.state.positions and not m.state.unreconciled
+    assert (m.state.sleeve_cash + m.state.bil_qty * 100.0
+            == pytest.approx(2_500.0 + 5 * 44.0))     # booked AT the stop
+    assert _executions(a, "CRSP") == []
+    assert not any("POSITIVELY verified" in msg for msg in alerts)
+
+
+def test_gate_n2_no_sell_stop_re_placed_on_external_shares(tmp_path):
+    """Probe B2b: same conflation with the blend stop CANCELLED inside the
+    blackout. Order history is silent and the account rows are conflated
+    (6 > 5 booked) — nothing proves the shares are the book's, so the
+    position stays UNVERIFIABLE. Unparking it would let pass 4 place a
+    fresh -5 SELL stop on the OPERATOR's own shares."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    ref = _blackout_stop(m, a)
+    a.cancel_stock_order(ref)                    # cancelled during the blackout
+    a._positions["CRSP"] = 6                     # external/manual shares only
+    run_cycle(m, a, None, "2026-08-24", alert=lambda _: None)
+    assert m.state.positions["1"].history_gap is True     # still parked
+    assert not [e for e in a.log if e["action"] == "place_stock_order"
+                and e.get("order_type") == "STP" and e["ref"] != ref]
+    assert any("conflated with external shares" in e["msg"]
+               for e in m.state.events)
+
+
+def test_gate_n2_working_stop_verifies_despite_external_shares(tmp_path):
+    """The stop is order-scoped-WORKING and the account holds MORE than the
+    book: the position is genuinely held and protected — unpark, keep the
+    venue's own stop, and WARN that the position rows are conflated (they
+    are corroboration, never proof)."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    ref = _blackout_stop(m, a)
+    a._positions["CRSP"] = 6                     # 5 booked + 1 external
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    pos = m.state.positions["1"]
+    assert pos.history_gap is False and pos.stop_missing is False
+    assert pos.stop_order_ref == ref and ref in a._stops   # same stop kept
+    assert any("shares OUTSIDE the blend book" in e["msg"]
+               for e in m.state.events)
+    assert any("POSITIVELY verified" in msg for msg in alerts)
+
+
+def test_gate_n2_filled_stop_without_a_price_parks_never_sells(tmp_path):
+    """Matrix cell filled-but-unpriced with conflated position rows: the
+    order-scoped fill is proof the position closed, the missing price
+    forbids booking it (repo law: no silent 0.0) — park UNRECONCILED, and
+    never treat the account's external shares as the position."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    ref = _blackout_stop(m, a)
+    a._orders[ref]["status"] = "filled"          # filled, price unknown
+    a._stops.pop(ref, None)
+    a._positions["CRSP"] = 6                     # external shares
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    assert "1" not in m.state.positions and "1" in m.state.unreconciled
+    assert (m.state.sleeve_cash + m.state.bil_qty * 100.0
+            == pytest.approx(2_500.0))           # nothing booked at a guess
+    assert _executions(a, "CRSP") == []
+    assert any("NO fill price" in msg for msg in alerts)
+
+
 # R2 (re-review residual): /kill is TWO-STAGE — the handler journals a
 # persisted flatten request and halts; the LOOP thread (owner of the
 # ib_async event loop) executes the flatten with reconcile-first semantics.

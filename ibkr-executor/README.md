@@ -68,14 +68,26 @@ unreconciled venue state. Phases IN ORDER:
       the last successful reconcile exceeds what venue order history can
       serve (1 day), every held position is flagged UNVERIFIABLE
       (persisted) — a stop may have filled invisibly inside the blackout.
-      The flag clears ONLY on positive venue evidence: the account's
-      POSITIONS data confirms the shares are still held (unparked; the
-      stop re-verified or re-placed), or the shares are gone and a priced
-      stop fill from refreshed order history books the exit (no price →
-      parked UNRECONCILED). NEVER cleared by timestamp alone; while
-      flagged, exits and /kill defer (nothing MKT-sells shares whose stop
-      may already have filled — the naked-short path) and no new
-      protective stop is placed for the position;
+      The flag clears ONLY on positive venue evidence, ranked (counter-
+      review N2): the position's OWN stop order FIRST — a lookup by its
+      deterministic client id is ORDER-SCOPED, so same-symbol shares held
+      in the account outside the blend book can neither fake nor hide it
+      (`filled` + price → the exit books AT that price; `filled` without
+      one → parked UNRECONCILED, never a silent 0.0; `working` → the stop
+      never filled). Account POSITIONS (`stock_position` sums EVERY
+      account STK row for the symbol) are CORROBORATION, never proof:
+      held == booked confirms ownership (unparked; the stop re-verified
+      or re-placed), held < booked means something sold inside the
+      blackout (parked UNRECONCILED — and its resting stop is CANCELLED
+      first, or orphan-tracked if the cancel raises: an abandoned -qty
+      stop is a naked short waiting to trigger, counter-review N1), and
+      held > booked is CONFLATION with external shares — WARNed and left
+      UNVERIFIABLE rather than treated as proof. NEVER cleared by
+      timestamp alone; while flagged, exits and /kill defer (nothing
+      MKT-sells shares whose stop may already have filled — the
+      naked-short path) and no new protective stop is placed for the
+      position (a fresh SELL stop on shares that may not be the book's is
+      the same harm);
    a. ingest resting-stop fills (`poll_stock_fills`) — a stop that filled
       marks its position CLOSED, so the tracker's later exit signal/echo
       for it is a no-op (idempotent; never a second sell). A mid-ingestion
@@ -253,14 +265,21 @@ R1): IB serves current-day executions on connect — an executor blackout
 spanning a day or more while a stop fills can exceed what reconcile can
 see FOREVER, not just on the first recovered cycle. The first reconcile
 after such a gap therefore flags every held position UNVERIFIABLE
-(persisted, restart-safe) and only POSITIVE venue evidence clears it:
-`stock_position` (account positions — no history horizon) confirming the
-shares are held unparks the position (stop re-verified/re-placed); shares
-gone with a priced fill in refreshed order history books the exit at that
-price; shares gone with no priced fill parks the trade UNRECONCILED for
-manual booking. While flagged, exits and /kill defer with a RED alert —
-nothing is ever MKT-sold against a possibly-already-filled stop (the
-naked-short path probe A1 demonstrated).
+(persisted, restart-safe) and only POSITIVE venue evidence clears it, in
+rank order: the position's own STOP ORDER (order-scoped, immune to
+same-symbol shares held elsewhere in the account — a priced `filled`
+books the exit at that price, an unpriced one parks it UNRECONCILED, a
+`working` one proves the stop never filled), then `stock_position`
+(account positions — no history horizon) as CORROBORATION that the
+shares are actually there. Fewer shares than booked parks the trade
+UNRECONCILED for manual booking after RETIRING its resting stop (never
+abandoning a -qty order the book no longer tracks); more shares than
+booked is external-share CONFLATION — WARNed, and it verifies nothing on
+its own. While flagged, exits and /kill defer with a RED alert and no
+protective stop is (re-)placed — nothing is ever MKT-sold, and no SELL
+stop is ever rested, against shares whose ownership is unproven (the
+naked-short path probe A1 demonstrated, and the counter-review's N1/N2
+variants of it).
 
 Env (all optional until the paper gate):
 
