@@ -225,3 +225,54 @@ def test_gate_x12_kill_and_resume_serialize_behind_the_ladder_lock(
                 assert not done.wait(0.4)           # blocked on the lock
             assert done.wait(5)                     # released -> completes
             t.join(timeout=5)
+
+
+def test_gate_y2_leg_row_schema_drift_preserves_and_halts(tmp_path):
+    """y2: a leg-row schema drift (a deploy ROLLBACK reading rows a newer
+    build wrote) reset every leg to WAITING/order_ref=None, left the file in
+    place for the loop's next save() to destroy, and left the ladder
+    UNHALTED — so step() re-OPENed a spread that is still live at the venue,
+    with the real one orphaned and never closed. The drifted book must be
+    preserved exactly as the outer corrupt branch does, the live leg's
+    handle kept, and the ladder HALTED before step() can act."""
+    m = mk(tmp_path)
+    m.on_opened("NG", 10_000, "live-spread-ref", "2026-11-05")
+    m.state.banked = 999.0
+    m.save()
+    raw = json.load(open(m.state_path))
+    raw["legs"]["NG"]["future_field_from_a_newer_deploy"] = 1
+    with open(m.state_path, "w") as fh:
+        json.dump(raw, fh)
+
+    m2 = LadderManager(m.cfg, m.state_path)
+    # the leg is inside its window with the event at strength: the old
+    # branch re-OPENed it here, duplicating a live spread
+    assert m2.step("2026-11-20", 2.4, {"NG": 9_000}) == []
+    assert m2.state.halted == "SCHEMA_DRIFT"        # step() cannot act
+    assert m2.state.legs["NG"].status == "OPEN"     # the live leg is not lost
+    assert m2.state.legs["NG"].order_ref == "live-spread-ref"
+    assert [f for f in os.listdir(tmp_path) if ".corrupt-" in f]   # evidence
+    assert m2.state.banked == 999.0
+    assert m2.archived_state and "HALTED" in m2.archived_state
+    m2.save()                                       # never overwrites it
+    assert [f for f in os.listdir(tmp_path) if ".corrupt-" in f]
+    assert json.load(open(m2.state_path))["halted"] == "SCHEMA_DRIFT"
+
+
+def test_gate_y2_schema_drift_keeps_an_existing_halt_reason(tmp_path):
+    """`banked`/`halted` semantics stay intact: a book already halted for a
+    REAL reason keeps that reason (SCHEMA_DRIFT never overwrites it), and
+    the ladder stays halted either way."""
+    m = mk(tmp_path)
+    m.on_opened("NG", 10_000, "live-spread-ref", "2026-11-05")
+    m.state.halted = "EVENT_COLLAPSE"
+    m.save()
+    raw = json.load(open(m.state_path))
+    raw["legs"]["SB"]["unknown_key"] = "x"
+    with open(m.state_path, "w") as fh:
+        json.dump(raw, fh)
+    m2 = LadderManager(m.cfg, m.state_path)
+    assert m2.step("2026-11-20", 2.4, {"NG": 9_000}) == []
+    assert m2.state.legs["NG"].order_ref == "live-spread-ref"
+    assert m2.state.halted == "EVENT_COLLAPSE"
+    assert m2.archived_state and "EVENT_COLLAPSE" in m2.archived_state
