@@ -453,6 +453,13 @@ class Executor:
                              "(ramp step, base change), ignore; if NOT, a "
                              "sync or fat-finger altered live risk limits - "
                              "check the Render env vars now",
+            # Someone with the exec token promoted unverified evidence into
+            # the scaling gate. Same shape as config_change: harmless if it
+            # was you, serious if it was not.
+            "coverage_attested": "if this was you, ignore; if NOT, someone "
+                                 "with the exec token promoted unverified "
+                                 "evidence into the ramp gate - rotate "
+                                 "EXEC_TOKEN and re-check /status.ramp_v4",
         }
         # Per-kind Telegram cooldown for conditions that persist across polls
         # (their msg embeds a changing float, so kind+msg dedupe never fires).
@@ -473,7 +480,11 @@ class Executor:
         elif level == "RED":
             send(f"🚨 executor {kind}: {msg}\n"
                  f"→ no action needed from you — forward this to Claude")
-        elif kind in ("resume", "auto_rearm", "transfer_reconciled"):
+        elif kind in ("resume", "auto_rearm", "transfer_reconciled",
+                      # the provenance reset was WARN-with-no-send-branch:
+                      # logged, never phoned, i.e. silent exactly where the
+                      # operator looks. That defeated its whole purpose.
+                      "coverage_provenance_reset", "auto_drill_rearmed"):
             send(f"✅ executor {kind}: {msg} — no action needed")
         elif kind in ("entry_order", "leg_closed", "entry_chase",
                       "stop_filled_on_venue", "orphan_fill_unwound") \

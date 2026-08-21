@@ -2005,3 +2005,29 @@ def test_gate_auto_drill_reads_gate_source_not_all_modes_total(tmp_path):
     ex.state.coverage_live = {"drill_cycle": 3}
     ex.state.coverage_attested = {"drill_cycle": 3}
     assert ex._needed_auto_drill() is None
+
+
+def test_gate_coverage_events_actually_page(tmp_path, monkeypatch):
+    """The provenance reset and attestation were WARN events whose kind
+    matched no send branch: logged, never phoned. An event meant to stop a
+    silent matrix reset must not itself be silent (found 2026-08-21 when
+    the expected Telegram message never arrived)."""
+    import json
+    from app.mirror import Executor
+    from app import alerts
+    sent = []
+    monkeypatch.setattr(alerts, "send", lambda m: sent.append(m))
+    cfg = Cfg()
+    cfg.state_path = str(tmp_path / "state.json")
+    cfg.dry_run = False
+    json.dump({"halted": "", "legs": {},
+               "coverage": {"entry_long": 2, "chase": 1},
+               "last_dry_run": False}, open(cfg.state_path, "w"))
+    ex = Executor(FakeVenue(), cfg)
+    assert any("coverage_provenance_reset" in m for m in sent), sent
+    sent.clear()
+    ex.attest_coverage("test", acknowledge_unwitnessed=True)
+    msg = [m for m in sent if "coverage_attested" in m]
+    assert msg, sent
+    # attestation is security-relevant: it must say what to do if unexpected
+    assert "ACTION NEEDED" in msg[0] and "EXEC_TOKEN" in msg[0]
