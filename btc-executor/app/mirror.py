@@ -1228,7 +1228,13 @@ class Executor:
         breaker. The stop_filled row is satisfied organically (S4 stops
         fill in the normal course) or by a supervised manual stopfill
         after redesign."""
-        cov = getattr(self.state, "coverage", {}) or {}
+        # MUST read coverage_live, not the all-modes total: after the
+        # provenance split (2026-08-21) the total still carries pre-split
+        # counts, so reading it made auto-drill see drill_cycle as already
+        # satisfied and return None forever - auto-drill silently stopped
+        # advancing the ramp gate, with no error anywhere. Read the same
+        # source the gate reads.
+        cov = getattr(self.state, "coverage_live", {}) or {}
         if cov.get("drill_cycle", 0) < 3:
             return "cycle"
         return None
@@ -1243,8 +1249,12 @@ class Executor:
         coverage rows met with simulated fills. One failed auto drill trips
         auto_drill_off (persisted) - it never retries into a venue that
         just failed; manual /drill remains for the re-run."""
+        # _is_live() rather than the dry_run flag alone: it also rejects a
+        # shadow venue. Without it, evidence would never reach coverage_live
+        # while _needed_auto_drill kept asking for more, so auto-drill would
+        # spend real drills into a gate that can never advance.
         if not getattr(self.cfg, "auto_drill", False) \
-                or getattr(self.cfg, "dry_run", True) \
+                or not self._is_live() \
                 or not entries_ok \
                 or getattr(self.state, "auto_drill_off", None):
             return
@@ -1261,7 +1271,9 @@ class Executor:
             return
         from .alerts import send
         if rec["ok"]:
-            cov = self.state.coverage
+            # gate-relevant counts, not the all-modes total: reporting
+            # "3/3" while the ramp gate reads 0/3 is worse than silence
+            cov = getattr(self.state, "coverage_live", {}) or {}
             send(f"✅ auto-drill {kind} ok "
                  f"(cycle {cov.get('drill_cycle', 0)}/3, "
                  f"stop_filled {cov.get('stop_filled', 0)}/1)"

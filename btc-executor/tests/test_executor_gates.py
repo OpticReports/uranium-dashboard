@@ -1792,11 +1792,20 @@ def test_gate_counts_earned_after_witnessing_need_no_ack(tmp_path):
 # ---------------------------------------------------------------------------
 # AUTO-DRILL (RAMP_V4.md amendment 2026-08-17): executor self-runs drills
 def _auto_exec(tmp_path, monkeypatch):
-    """Live-mode executor over a DryRunVenue with auto-drill armed and all
-    pacing zeroed; captures Telegram sends."""
-    ex, venue = _drill_exec(tmp_path)
+    """Live-mode executor over a REAL-venue double with auto-drill armed and
+    all pacing zeroed; captures Telegram sends.
+
+    FakeVenue, not DryRunVenue: live mode over a shadow venue is a
+    combination production forbids (_build_executor raises), and the
+    coverage guard rejects it, so a DryRunVenue here would model a state
+    that cannot exist and never advance coverage_live."""
+    from app.mirror import Executor
+    cfg = Cfg()
+    cfg.state_path = str(tmp_path / "state.json")
+    cfg.dry_run = False
+    venue = FakeVenue()
+    ex = Executor(venue, cfg)
     ex.cfg.auto_drill = True
-    ex.cfg.dry_run = False
     ex.cfg.auto_drill_spacing_s = 0
     ex.cfg.drill_cooldown_s = 0
     sent = []
@@ -1809,6 +1818,7 @@ def test_gate_auto_drill_runs_cycles_in_flat_window(tmp_path, monkeypatch):
     ex, venue, sent = _auto_exec(tmp_path, monkeypatch)
     for _ in range(3):
         ex.step(target())
+    assert ex.state.coverage_live.get("drill_cycle") == 3
     assert ex.state.coverage.get("drill_cycle") == 3
     assert all(d["kind"] == "cycle" and d["ok"] for d in ex.state.drills)
     assert venue.position() == 0.0
@@ -1824,7 +1834,7 @@ def test_gate_auto_drill_never_schedules_stopfill(tmp_path):
     above-market STOP_DOWN, so an auto stopfill = guaranteed breaker trip."""
     ex, _ = _drill_exec(tmp_path)
     assert ex._needed_auto_drill() == "cycle"
-    ex.state.coverage = {"drill_cycle": 3}          # stop_filled still unmet
+    ex.state.coverage_live = {"drill_cycle": 3}     # stop_filled still unmet
     assert ex._needed_auto_drill() is None
 
 
@@ -1883,7 +1893,7 @@ def test_gate_auto_drill_breaker_trips_on_failure(tmp_path, monkeypatch):
 
 def test_gate_auto_drill_stops_at_coverage_complete(tmp_path, monkeypatch):
     ex, venue, sent = _auto_exec(tmp_path, monkeypatch)
-    ex.state.coverage = {"drill_cycle": 3, "stop_filled": 1}
+    ex.state.coverage_live = {"drill_cycle": 3, "stop_filled": 1}
     ex.step(target())
     assert ex.state.drills == []
 
@@ -1969,3 +1979,29 @@ def test_gate_auto_drill_never_fires_in_dry_run(tmp_path):
     ex._maybe_auto_drill(True)
     assert ex.state.drills == []
     assert ex.state.coverage == {}
+
+
+def test_gate_auto_drill_reads_gate_source_not_all_modes_total(tmp_path):
+    """REGRESSION (2026-08-21): _needed_auto_drill read state.coverage, the
+    all-modes total. After the provenance split that total still carries
+    pre-split counts, so auto-drill saw drill_cycle as satisfied, returned
+    None forever, and silently stopped advancing the ramp gate - the exact
+    failure mode with AUTO_DRILL=true and a matrix stuck at 1/13.
+
+    Auto-drill must want a drill whenever the GATE still wants one."""
+    from app.main import _ramp_v4
+    ex, _ = _drill_exec(tmp_path)
+    # pre-split evidence: audit total satisfied, gate unsatisfied
+    ex.state.coverage = {"drill_cycle": 9, "stop_placed": 9}
+    ex.state.coverage_live = {}
+    assert _ramp_v4(ex.state)["rows"]["drill_cycle"]["met"] is False
+    assert ex._needed_auto_drill() == "cycle", \
+        "auto-drill went blind to an unmet gate row"
+    # once the gate is genuinely satisfied it stops
+    ex.state.coverage_live = {"drill_cycle": 3}
+    assert _ramp_v4(ex.state)["rows"]["drill_cycle"]["met"] is True
+    assert ex._needed_auto_drill() is None
+    # attested evidence counts as satisfied too - no pointless drilling
+    ex.state.coverage_live = {"drill_cycle": 3}
+    ex.state.coverage_attested = {"drill_cycle": 3}
+    assert ex._needed_auto_drill() is None
