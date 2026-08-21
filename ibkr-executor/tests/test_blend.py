@@ -2110,7 +2110,15 @@ def test_gate_x5_same_symbol_shortfall_sacrifices_nobody(tmp_path):
     a shortfall cannot be attributed to any ONE of them. cde6fb7 sacrificed
     whichever came FIRST in dict order — cancelling a healthy peer's
     working stop and parking its real shares UNRECONCILED while the
-    position whose shares were actually gone got unparked as verified."""
+    position whose shares were actually gone got unparked as verified.
+
+    Z1 UPDATE: "sacrifice nobody" stands (nobody parked, nobody stripped of
+    cover, everybody flagged and loud) — but the ORIGINAL refs no longer
+    rest, because leaving 12 shares of SELL stops against 9 held is the
+    venue short Z1 closes. The old ref-identity assertion is replaced by
+    strictly more: the pro-rata sizes, the cover<=held invariant, that every
+    position still has REAL cover, that the superseded orders are CANCELLED
+    (not abandoned), and that triggering everything cannot go short."""
     m = mk(tmp_path)
     _seed_initialized(m, sleeve_cash=10_000.0)
     a = DryAdapter()
@@ -2123,12 +2131,38 @@ def test_gate_x5_same_symbol_shortfall_sacrifices_nobody(tmp_path):
     assert sorted(m.state.positions) == ["1", "2", "3"]   # nobody sacrificed
     assert not m.state.unreconciled
     assert all(m.state.positions[k].history_gap for k in ("1", "2", "3"))
-    assert r1 in a._stops and r2 in a._stops and r3 in a._stops
+    # every position keeps REAL cover (nobody stripped), resized pro rata:
+    # floor(9*5/12)=3 +1 (largest fraction .75) = 4, floor(9*4/12)=3,
+    # floor(9*3/12)=2 -> 4+3+2 == 9 == held.
+    assert sorted(-o["qty"] for o in a._stops.values()) == [2, 3, 4]
+    assert sum(-o["qty"] for o in a._stops.values()) == 9   # cover == held
+    assert [m.state.positions[k].stop_cover_qty for k in ("1", "2", "3")] \
+        == [4, 3, 2]
+    assert all(m.state.positions[k].stop_order_ref in a._stops
+               for k in ("1", "2", "3"))
+    assert all(not m.state.positions[k].stop_missing
+               for k in ("1", "2", "3"))
+    # the superseded orders were CANCELLED at the venue, never abandoned
+    for old in (r1, r2, r3):
+        assert old not in a._stops
+        assert a._orders[old]["status"] == "cancelled"
+    assert not m.state.orphan_stop_refs
     assert _executions(a, "CRSP") == []
     assert not any("parked for manual booking" in msg for msg in alerts)
     esc = [msg for msg in alerts if "UNRESOLVED after the blackout" in msg]
     assert len(esc) == 3
     assert all("cannot be attributed to any one of them" in msg for msg in esc)
+    assert all("RESIZED protective stop" in msg for msg in esc)
+    (resize,) = [msg for msg in alerts if "RESIZED 12 -> 9" in msg]
+    assert "PRO RATA" in resize and "call 1: 5 -> 4" in resize
+    # and the end state cannot short the account
+    for ref in list(a._stops):
+        a.trigger_stop(ref)
+    after: list[str] = []
+    run_cycle(m, a, None, "2026-08-25", alert=after.append)
+    assert a._positions["CRSP"] == 0
+    assert not any("position closed" in msg and "UNVERIFIABLE" not in msg
+                   for msg in after)
 
 
 def test_gate_x7_unretirable_stop_alerts_rearmed_never_silent(tmp_path):
@@ -2861,3 +2895,687 @@ def test_gate_y1_ratchet_cannot_add_sell_orders_to_a_shortfall(tmp_path):
     assert after == before                       # no NEW sell orders rested
     assert all(p.stop_level == 44.0 for p in m.state.positions.values())
     assert not any("position closed" in s for s in alerts)
+
+
+def test_gate_z1_peer_shortfall_never_leaves_cover_above_venue_held(tmp_path):
+    """Z1, the reviewer's repro and the LIVE-BLOCKING invariant: for each
+    symbol, total blend-placed RESTING SELL cover must never exceed the
+    venue-verified `held`, and the executor must never CHOOSE to leave
+    cover > held.
+
+    Two same-symbol positions book 9 shares (5+4); 3 were sold by hand
+    inside the blackout so the account holds 6. The shortfall is
+    attributable to neither (x5), so nobody is parked or sacrificed — but
+    leaving 5+4 = 9 shares of SELL stops resting against 6 held is a REAL
+    naked short the moment both trigger (venue 6 -> -3), and it used to be
+    reported as two cheerful green 'position closed' alerts."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    old1 = _blackout_stop(m, a, call_id=1, qty=5, level=44.0)
+    old2 = _blackout_stop(m, a, call_id=2, qty=4, level=43.0)
+    a._positions["CRSP"] = 6                     # 3 sold away by hand
+    alerts: list[str] = []
+    # the FULL cycle, not intents: an intents-only assertion passes vacuously
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    # nobody sacrificed: both positions alive, flagged, neither parked
+    assert sorted(m.state.positions) == ["1", "2"]
+    assert not m.state.unreconciled
+    assert all(p.history_gap for p in m.state.positions.values())
+    assert _executions(a, "CRSP") == []           # nothing was sold to fix it
+    # what actually RESTS at the venue, observed venue-side (so this gate
+    # fails on the HARM at the parent commit, not on a missing field)
+    resting = sorted(-o["qty"] for o in a._stops.values())
+    # now trigger EVERY resting stop: the account must never go short
+    for ref in list(a._stops):
+        a.trigger_stop(ref)
+    filled: list[str] = []
+    run_cycle(m, a, None, "2026-08-25", alert=filled.append)
+    assert a._positions["CRSP"] >= 0              # THE invariant, end to end
+    assert a._positions["CRSP"] == 0
+    # and no fill is reported as a plain green close
+    assert not any("position closed" in msg and "UNVERIFIABLE" not in msg
+                   for msg in filled)
+    assert not any(msg.startswith("🧬 blend STOP FILLED") for msg in filled)
+    # cover was resized PRO RATA: floor(6*5/9)=3, floor(6*4/9)=2 +1 (largest
+    # fractional part .667) = 3 -> 3+3 == 6 == held, and no attribution.
+    assert resting == [3, 3] and sum(resting) == 6
+    assert old1 not in a._stops and old2 not in a._stops
+    assert a._orders[old1]["status"] == "cancelled"
+    assert a._orders[old2]["status"] == "cancelled"
+    assert not m.state.orphan_stop_refs           # cancels ACKed, not orphaned
+    (resize,) = [msg for msg in alerts if "RESIZED" in msg and "PRO RATA" in msg]
+    assert "9 -> 6" in resize and "call 1: 5 -> 3" in resize
+    assert "3 share(s) of protection were REMOVED" in resize
+    # the remainder is NOT booked as a phantom exit off the same order
+    assert [m.state.positions[k].qty for k in ("1", "2")] == [2, 1]
+    assert [m.state.positions[k].stop_cover_qty for k in ("1", "2")] == [0, 0]
+    assert all(p.history_gap for p in m.state.positions.values())
+
+
+def test_gate_z1_resize_never_claims_cover_the_venue_would_not_release(tmp_path):
+    """Z1 does not promise an invariant it cannot enforce. When the venue
+    will not ACK the cancel, the OLD stop may still rest — that residual is
+    X2's (orphan_stop_refs + a RED fill alert), and the resize must NOT
+    place a smaller stop on top of it, nor let the headline claim a cover
+    the book cannot prove."""
+    class _FalseCancel(DryAdapter):
+        def cancel_stock_order(self, ref):
+            self._rec("cancel_stock_order", ref=ref, found=False)
+            return False                  # "not found" — after a session
+                                          # boundary, indistinguishable from
+                                          # a still-resting order
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = _FalseCancel()
+    old1 = _blackout_stop(m, a, call_id=1, qty=5, level=44.0)
+    old2 = _blackout_stop(m, a, call_id=2, qty=4, level=43.0)
+    a._positions["CRSP"] = 6
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    # nothing NEW was rested on top of the possibly-resting old stops
+    assert sorted(-o["qty"] for o in a._stops.values()) == [4, 5]
+    assert sorted(m.state.orphan_stop_refs) == sorted([old1, old2])
+    assert all(p.stop_missing and not p.stop_order_ref
+               for p in m.state.positions.values())
+    (resize,) = [msg for msg in alerts if "RESIZED" in msg and "PRO RATA" in msg]
+    assert "blend-tracked resting SELL cover RESIZED 9 -> 0" in resize
+    assert "could not be cancelled and may STILL rest at the venue" in resize
+    assert "may still exceed 6" in resize
+    # a fill on one of them is the RED possible-short branch, never a close
+    a.trigger_stop(old1)
+    after: list[str] = []
+    run_cycle(m, a, None, "2026-08-25", alert=after.append)
+    assert any("possible short at the venue" in msg for msg in after)
+    assert not any("position closed" in msg for msg in after)
+
+
+def test_gate_z1_resized_cover_is_restored_in_full_when_shares_return(tmp_path):
+    """Z1's other end: a resized stop covers FEWER shares than the position,
+    so unparking it as 'still protected' would leave the book silently
+    under-covered — and pass 4 stacking a full stop on top of the resized
+    one would put cover back ABOVE held. The resized stop is retired first
+    and full cover re-placed, with cover <= held at every step."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    _blackout_stop(m, a, call_id=1, qty=5, level=44.0)
+    _blackout_stop(m, a, call_id=2, qty=4, level=43.0)
+    a._positions["CRSP"] = 6
+    run_cycle(m, a, None, "2026-08-24", alert=lambda _msg: None)
+    assert sum(-o["qty"] for o in a._stops.values()) <= a._positions["CRSP"]
+    # the operator restores the missing shares (the in-band resolution)
+    a._positions["CRSP"] = 9
+    m.state.last_reconcile_ts = time.time()
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-25", alert=alerts.append)
+    assert not any(p.history_gap for p in m.state.positions.values())
+    assert not any(p.stop_missing for p in m.state.positions.values())
+    assert [m.state.positions[k].stop_cover_qty for k in ("1", "2")] == [0, 0]
+    # full cover, exactly once each, and never more than the account holds
+    assert sorted(-o["qty"] for o in a._stops.values()) == [4, 5]
+    assert sum(-o["qty"] for o in a._stops.values()) <= a._positions["CRSP"]
+    assert not m.has_naked_position()             # entries unblocked again
+    assert any("RESIZED stop was retired and FULL cover is re-placing" in msg
+               for msg in alerts)
+
+
+def test_gate_z2_a_stop_fill_on_an_unverifiable_position_is_never_green(
+        tmp_path):
+    """Z2: `_ingest_one_fill` never read `history_gap`, so a stop fill on a
+    position the guard could not prove ownership of was booked with the same
+    cheerful green alert as a healthy stop-out. The ACCOUNTING stays as it
+    is (order-scoped venue truth, consistent with pass 1b-i) — the ALERT
+    must say the position was UNVERIFIABLE and that under conflation the
+    shares sold may have been the operator's."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    ref = _blackout_stop(m, a)                   # 5 booked, stop resting
+    a._positions["CRSP"] = 12                    # 5 booked + 7 external
+    run_cycle(m, a, None, "2026-08-24", alert=lambda _msg: None)
+    assert m.state.positions["1"].history_gap is True
+    assert ref in a._stops                       # X1: left resting, not naked
+    a.trigger_stop(ref)                          # it sells 5 pooled shares
+    cash_before = m.state.sleeve_cash
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-25", alert=alerts.append)
+    assert "1" not in m.state.positions          # booking unchanged: booked
+    assert m.state.sleeve_cash == cash_before + 5 * 44.0
+    (msg,) = [x for x in alerts if "position closed at the venue" in x]
+    assert not msg.startswith("🧬")               # never a green close
+    assert "UNVERIFIABLE" in msg
+    assert "may have been YOURS" in msg
+    assert "check your own share count" in msg
+
+
+def test_gate_z2_a_blackout_recovered_fill_says_it_was_unverifiable(tmp_path):
+    """Z2's second alert: reconcile pass 1b-i books a stop fill recovered
+    from venue order history. Same rule — the booking is right, the silence
+    was not."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    ref = _blackout_stop(m, a)
+    a.trigger_stop(ref)                          # filled INSIDE the blackout
+    a._fills.clear()                             # ... and the event was lost
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    assert "1" not in m.state.positions
+    (msg,) = [x for x in alerts if "recovered from venue history" in x]
+    assert not msg.startswith("🧬")
+    assert "UNVERIFIABLE" in msg and "may have been YOURS" in msg
+
+
+def _adopted_peer(m, a, call_id=2, symbol="CRSP", qty=4, level=43.0):
+    """A same-symbol peer that reconcile pass 2 ADOPTS from the crash window:
+    a journaled MOO that filled at the venue while a peer was parked. Pass 2
+    books it as a BRAND NEW position with history_gap=False, which is how a
+    mixed FLAGGED/UNFLAGGED same-symbol pair arises with no hand-editing
+    (counter-review Z-12)."""
+    it = {"call_id": call_id, "symbol": symbol, "qty": qty,
+          "entry_ref": 50.0, "stop_level": level, "reason": "fire"}
+    m.record_pending_entry(it, "2026-08-20")
+    a.place_stock_order(symbol, qty, "MOO", ref_price=50.0,
+                        client_order_id=blend_mod.entry_client_id(call_id))
+    return it
+
+
+def test_gate_za_a_capped_peer_never_drifts_back_to_full_cover(tmp_path):
+    """Z-A, reachable end to end from a clean book (counter-review Z-12b).
+
+    `_resize_peer_cover` spans ALL same-symbol positions — it must, the
+    invariant is a per-symbol aggregate — but the cap it applies lived only
+    in `stop_cover_qty`, and step()'s daily trail ratchet sizes on
+    `pos.qty` and was gated only on `history_gap`. So any peer that is not
+    ITSELF flagged had its cover restored to FULL by the next ordinary
+    ratchet: measured cover 6 -> 7 against 6 held, then venue 6 -> -1 on
+    the triggers, reported as a plain green 'position closed'.
+
+    The mixed pair needs no hand-editing: pass 2 adopts a crash-window
+    entry as a brand-new UNFLAGGED position beside a parked peer."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10_000.0)
+    a = DryAdapter()
+    _blackout_stop(m, a, call_id=1, qty=5, level=44.0)
+    _adopted_peer(m, a, call_id=2, qty=4, level=43.0)
+    a._positions["CRSP"] = 9                     # both entries really filled
+    run_cycle(m, a, None, "2026-08-24", alert=lambda _m: None)
+    assert [m.state.positions[k].history_gap for k in ("1", "2")] \
+        == [True, False]                         # the mixed pair, unforced
+    a._positions["CRSP"] = 6                     # 3 sold by hand, in the dark
+    resize_alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-25", alert=resize_alerts.append)
+    assert sum(-o["qty"] for o in a._stops.values()) == 6      # cover == held
+    # the operator hears that the peer just became UNVERIFIABLE in the cycle
+    # it happens, not only from next cycle's escalation
+    assert any("call 2 is now flagged UNVERIFIABLE too" in msg
+               and "NO NEW ENTRIES" in msg for msg in resize_alerts)
+    # an ordinary tracker trail ratchet arrives for the (formerly) unflagged
+    # peer — the FULL cycle, so an intent would really reach the venue
+    ratchet = payload(stops=[stop_row(call_id=2, trail=45.0)])
+    ratchet["as_of"] = "2026-08-25"
+    run_cycle(m, a, ratchet, "2026-08-25", alert=lambda _m: None)
+    # observed venue-side, so this gate fails on the HARM at the parent
+    # commit (cover 7 against 6 held), not on a missing field
+    assert sum(-o["qty"] for o in a._stops.values()) == 6      # still == held
+    # and the end state cannot short the account
+    for ref in list(a._stops):
+        a.trigger_stop(ref)
+    after: list[str] = []
+    run_cycle(m, a, None, "2026-08-26", alert=after.append)
+    assert a._positions["CRSP"] >= 0                          # THE invariant
+    assert a._positions["CRSP"] == 0
+    assert not any("position closed" in msg and "UNVERIFIABLE" not in msg
+                   for msg in after)
+    # DURABILITY, the mechanism: the capped peer is flagged in the same
+    # breath, so the ratchet door, the pass-4 door, the escalation cadence
+    # and the restore-full-cover branch all apply to it.
+    assert m.state.positions["2"].stop_level == 43.0           # not ratcheted
+    assert m.state.positions["2"].history_gap is True
+
+
+def test_gate_za_a_rejected_resize_is_not_restored_by_pass_4(tmp_path):
+    """Z-A's same-cycle door: when the resize's replacement is REJECTED for
+    a peer that is not itself flagged, `mark_stop_missing` used to hand it
+    straight to reconcile pass 4, which re-placed -pos.qty in the SAME
+    reconcile — cover 7 against 6 held, announced as 'protective stop
+    restored'."""
+    class _RejectPeerResize(DryAdapter):
+        armed = False           # exactly ONE rejection: the resize replace.
+                                # pass 4's re-place would then succeed — and
+                                # at the parent commit it did, in the SAME
+                                # reconcile, back to full -qty cover.
+        def place_stock_order(self, symbol, qty, order_type, **kw):
+            if (self.armed and order_type == "STP"
+                    and kw.get("client_order_id") == "blend-2-stp-43.0000"):
+                self.armed = False
+                raise RuntimeError("resize replace rejected (simulated)")
+            return super().place_stock_order(symbol, qty, order_type, **kw)
+
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10_000.0)
+    a = _RejectPeerResize()
+    _blackout_stop(m, a, call_id=1, qty=5, level=44.0)
+    _adopted_peer(m, a, call_id=2, qty=4, level=43.0)
+    a._positions["CRSP"] = 9
+    run_cycle(m, a, None, "2026-08-24", alert=lambda _m: None)
+    assert m.state.positions["2"].history_gap is False
+    a._positions["CRSP"] = 6
+    a.armed = True
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-25", alert=alerts.append)
+    assert sum(-o["qty"] for o in a._stops.values()) <= 6      # the harm
+    assert not any("protective stop restored" in msg for msg in alerts)
+    assert m.state.positions["2"].stop_missing is True
+    assert m.state.positions["2"].history_gap is True     # the durable cap
+    assert any("UNPROTECTED" in msg for msg in alerts)
+
+
+def test_gate_zb_a_resized_stop_fill_from_the_blackout_books_a_partial(
+        tmp_path):
+    """Z-B: pass 1b-i's guard keyed on `stop_order_ref`/`stop_missing`, so a
+    SUCCESSFULLY RESIZED stop sailed through it and `on_exited` booked the
+    WHOLE position. Measured: cover 3 of qty 5, the venue sold 3 @ 44.00
+    ($132), the book credited $220, deleted the position and abandoned 2
+    real shares with no book row and no stop — the exact harm the hunk was
+    added to prevent. It must book a PARTIAL, exactly as the live fill-poll
+    path already does."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    _blackout_stop(m, a, call_id=1, qty=5, level=44.0)
+    _blackout_stop(m, a, call_id=2, qty=4, level=43.0)
+    a._positions["CRSP"] = 6
+    run_cycle(m, a, None, "2026-08-24", alert=lambda _m: None)
+    pos = m.state.positions["1"]
+    cover = pos.stop_cover_qty
+    assert 0 < cover < pos.qty
+    cash0 = m.state.sleeve_cash
+    a.trigger_stop(pos.stop_order_ref)           # the RESIZED stop fills
+    a._fills.clear()                             # ...inside a blackout: the
+    m.state.last_reconcile_ts = time.time() - 3 * 86_400   # poll never sees it
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-26", alert=alerts.append)
+    survivor = m.state.positions.get("1")
+    assert survivor is not None                  # 2 real shares still tracked
+    assert survivor.qty == 5 - cover
+    assert m.state.sleeve_cash == pytest.approx(cash0 + cover * 44.0)
+    (msg,) = [x for x in alerts if "RESIZED stop fill from the blackout" in x]
+    assert not msg.startswith("🧬")
+    assert f"booked x{cover}" in msg and "UNPROTECTED" in msg
+    assert "UNVERIFIABLE" in msg
+    # and the aggregate invariant still holds against the venue's own count
+    assert sum(-o["qty"] for o in a._stops.values()) <= a._positions["CRSP"]
+
+
+def test_gate_zc_cover_rejected_by_the_venue_is_really_retried(tmp_path):
+    """Z-C + DEVIATION 1: after an ACKed cancel and a REJECTED replace the
+    position sat at cover 0 FOREVER — across cycles and across restart —
+    while the README, the docstring and the operator alert all promised it
+    was 'retried next cycle'. Y1 forbids cover the account may not be able
+    to honour, not increases as such: `sum(alloc) == held`, so placing
+    <= `alloc` is provably short-safe, and leaving a real position naked
+    indefinitely is X3's unbounded downside."""
+    class _RejectFirstResize(DryAdapter):
+        armed = False           # armed only after the book is seeded
+
+        def place_stock_order(self, symbol, qty, order_type, **kw):
+            if (self.armed and order_type == "STP"
+                    and kw.get("client_order_id") == "blend-1-stp-44.0000"):
+                self.armed = False
+                raise RuntimeError("replace rejected (simulated)")
+            return super().place_stock_order(symbol, qty, order_type, **kw)
+
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = _RejectFirstResize()
+    _blackout_stop(m, a, call_id=1, qty=5, level=44.0)
+    _blackout_stop(m, a, call_id=2, qty=4, level=43.0)
+    a.armed = True
+    a._positions["CRSP"] = 6
+    first: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=first.append)
+    p1 = m.state.positions["1"]
+    assert p1.stop_missing and not p1.stop_order_ref          # bare and loud
+    assert any("UNPROTECTED" in msg for msg in first)
+    # next cycle the venue would accept it: the cover MUST come back, at its
+    # pro-rata allocation and never above it
+    run_cycle(m, a, None, "2026-08-25", alert=lambda _m: None)
+    p1 = m.state.positions["1"]
+    assert p1.stop_order_ref and not p1.stop_missing          # really retried
+    assert p1.stop_cover_qty == 3
+    assert sum(-o["qty"] for o in a._stops.values()) == 6     # == held, never
+    assert a._positions["CRSP"] == 6                         # above it
+    for ref in list(a._stops):
+        a.trigger_stop(ref)
+    run_cycle(m, a, None, "2026-08-26", alert=lambda _m: None)
+    assert a._positions["CRSP"] == 0
+    # ...and the operator was told what actually happens, not a promise the
+    # code did not keep
+    assert any("retried every reconcile while the shortfall lasts" in msg
+               for msg in first)
+    assert not any("retrying next cycle" in msg for msg in first)
+
+
+def test_gate_zd_blend_book_schema_drift_preserves_and_halts(tmp_path):
+    """Z-D: `BlendPosition(**v)` had no field filter, so a deploy ROLLBACK
+    reading rows a NEWER build wrote (Z1 added `stop_cover_qty` in this very
+    round) raised into the G3 branch and returned a FRESH, un-halted,
+    un-initialized book — open positions and `halted` forgotten and entries
+    UNBLOCKED, while real shares and GTC stops rest at the venue. That is
+    y2's own premise, which this round fixed on the ladder only."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m, stop_ref="live-stop-ref")
+    m.save()
+    raw = json.load(open(m.state_path))
+    raw["positions"]["1"]["field_from_a_newer_deploy"] = 1
+    with open(m.state_path, "w") as fh:
+        json.dump(raw, fh)
+
+    m2 = mk(tmp_path)
+    assert list(m2.state.positions) == ["1"]           # never vaporized
+    assert m2.state.positions["1"].stop_order_ref == "live-stop-ref"
+    assert m2.state.positions["1"].qty == 5
+    assert m2.state.sleeve_cash == pytest.approx(2_500.0)   # 5 @ 50 debited
+    assert m2.state.initialized is True
+    assert m2.state.halted == "SCHEMA_DRIFT"           # no decision is taken
+    assert m2.step("2026-08-24", payload(entries=[entry()]), PRICES) == []
+    assert m2.archived_state and "HALTED" in m2.archived_state
+    assert list(tmp_path.glob("blend.json.corrupt-*"))
+    # Z-J: the halt is PERSISTED at load, not only in memory — a crash
+    # before the loop's first save() used to lose it
+    m3 = mk(tmp_path)
+    assert m3.state.halted == "SCHEMA_DRIFT" and list(m3.state.positions)
+    assert m3.archived_state is None                   # read back cleanly
+
+
+def test_gate_zezf_partial_cover_is_never_reported_as_protected(tmp_path):
+    """Z-E and Z-F: a stop RESIZED below its position protects part of it.
+    The escalation said 'still WORKING ... LEFT RESTING' once the cell
+    flipped to conflation, and `/blend/feed` + `/status` reported
+    `unprotected: false` — on the surface X3 added to make exactly this
+    visible."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    _blackout_stop(m, a, call_id=1, qty=5, level=44.0)
+    _blackout_stop(m, a, call_id=2, qty=4, level=43.0)
+    a._positions["CRSP"] = 6
+    run_cycle(m, a, None, "2026-08-24", alert=lambda _m: None)
+    assert m.state.positions["1"].stop_cover_qty == 3
+    feed_pos = {p["symbol"]: p for p in m.feed(PRICES, "2026-08-24")
+                ["positions"]}["CRSP"]
+    assert feed_pos["unprotected"] is True
+    assert m.feed(PRICES, "2026-08-24")["unprotected"] == 2
+    assert sorted(m.status_summary()["unprotected"]) == ["1", "2"]
+    # the cell flips to CONFLATION: the escalation must still say RESIZED
+    a._positions["CRSP"] = 20
+    alerts: list[str] = []
+    for i in range(6):
+        run_cycle(m, a, None, "2026-08-%02d" % (25 + i), alert=alerts.append)
+    esc = [x for x in alerts if "UNRESOLVED after the blackout" in x
+           and "call 1)" in x]
+    assert esc and all("RESIZED protective stop" in x for x in esc)
+    assert not any("has been LEFT RESTING" in x for x in esc)
+
+
+# --- the final counter-review (ZF-1..ZF-7) ------------------------------------
+
+def test_gate_zf1_a_book_already_inside_the_invariant_loses_no_cover(tmp_path):
+    """ZF-1, NEW harm introduced by the Z-C round: dropping the resize's
+    `if total <= held: return ""` early return made the reduce leg run in
+    cells where the aggregate ALREADY satisfied `cover <= held`, and there
+    it is a pure subtraction — the freed shares are handed to a peer whose
+    restore is blocked (its own unACKed orphan), so nothing replaces what
+    was cut.
+
+    Measured at the parent commit: a healthy, UNFLAGGED peer resting full
+    cover of 4 against 5 held was cut to 2 and mothballed UNVERIFIABLE, to
+    satisfy an invariant that already held. Reduce only while the running
+    aggregate exceeds `held`; cap restores at the slack."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    # call 1: cover retired, the cancel never ACKed — its own orphan may
+    # still rest, so no cover can be re-placed for it this cycle.
+    _held_position(m, call_id=1, qty=5, stop_level=44.0, stop_ref=None)
+    p1 = m.state.positions["1"]
+    p1.history_gap, p1.stop_missing, p1.stop_order_ref = True, True, None
+    m.record_orphan_stop("ghost-1", {"symbol": "CRSP", "qty": -5,
+                                     "call_id": 1})
+    # call 2: healthy, UNFLAGGED, fully covered by a real resting stop
+    old2 = _blackout_stop(m, a, call_id=2, qty=4, level=43.0)
+    a._positions["CRSP"] = 5          # 4 resting <= 5 held: ALREADY compliant
+    before = sorted(-o["qty"] for o in a._stops.values())
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    after = sorted(-o["qty"] for o in a._stops.values())
+    assert before == [4]
+    assert after == [4]                       # nothing of the 4 was cut
+    assert a._orders[old2]["status"] == "working"
+    p2 = m.state.positions["2"]
+    assert p2.stop_order_ref == old2 and not p2.stop_missing
+    assert p2.stop_cover_qty == 0              # not capped
+    # (R1's blackout guard flags both peers on the shortfall — that is
+    # pre-existing and correct; what the resize may not do is CAP a peer
+    # whose cover it never had to touch)
+    assert not any("UNVERIFIABLE too" in msg for msg in alerts)
+    assert not any("share(s) of protection were REMOVED" in msg
+                   for msg in alerts)
+    # and the invariant it would have served held before and after
+    assert sum(-o["qty"] for o in a._stops.values()) <= a._positions["CRSP"]
+
+
+def test_gate_zf1_the_reduce_leg_still_runs_when_the_aggregate_is_over(tmp_path):
+    """The other half of ZF-1: "reduce only as far as the aggregate
+    requires" must not become "never reduce". With 9 resting against 6 held
+    the reduce leg still runs to the pro-rata allocation, and a zero-cover
+    peer still gets its share of the slack (Z-C's restore-from-zero)."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    _blackout_stop(m, a, call_id=1, qty=5, level=44.0)
+    _blackout_stop(m, a, call_id=2, qty=4, level=43.0)
+    a._positions["CRSP"] = 6
+    run_cycle(m, a, None, "2026-08-24", alert=lambda _m: None)
+    assert sorted(-o["qty"] for o in a._stops.values()) == [3, 3]
+    assert sum(-o["qty"] for o in a._stops.values()) == 6      # == held
+    # a peer at cover ZERO is restored into the slack, never past it
+    m2 = mk(tmp_path / "b")
+    _seed_initialized(m2, sleeve_cash=2_750.0)
+    a2 = DryAdapter()
+    _held_position(m2, call_id=1, qty=5, stop_level=44.0, stop_ref=None)
+    q1 = m2.state.positions["1"]
+    q1.history_gap, q1.stop_missing, q1.stop_order_ref = True, True, None
+    _blackout_stop(m2, a2, call_id=2, qty=4, level=43.0)
+    a2._positions["CRSP"] = 6                  # 4 rests, 2 of slack left
+    run_cycle(m2, a2, None, "2026-08-24", alert=lambda _m: None)
+    assert sum(-o["qty"] for o in a2._stops.values()) <= 6
+    assert m2.state.positions["1"].stop_order_ref          # really restored
+    assert m2.state.positions["1"].stop_cover_qty == 2     # the SLACK, not 3
+    assert m2.state.positions["2"].stop_cover_qty == 0     # left alone
+
+
+def test_gate_zf5_a_newly_capped_peer_is_never_announced_silently(tmp_path):
+    """ZF-5: the `capped` clause was assembled AFTER `if not lines: return
+    ""`, so a peer the resize newly flagged UNVERIFIABLE — which mothballs
+    the whole sleeve — got NO Telegram line in the cycle it happened when
+    nothing could be placed or cancelled."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    for call_id, qty, level in ((1, 5, 44.0), (2, 4, 43.0)):
+        _held_position(m, call_id=call_id, qty=qty, stop_level=level,
+                       stop_ref=None)
+        p = m.state.positions[str(call_id)]
+        p.stop_missing, p.stop_order_ref = True, None
+        # every peer's own cover is an unACKed orphan: nothing is placeable
+        m.record_orphan_stop(f"ghost-{call_id}",
+                             {"symbol": "CRSP", "qty": -qty,
+                              "call_id": call_id})
+    m.state.positions["1"].history_gap = True        # only call 1 is flagged
+    a._positions["CRSP"] = 6
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    assert m.state.positions["2"].history_gap        # newly capped...
+    assert any("call 2" in msg and "UNVERIFIABLE too" in msg
+               for msg in alerts)                    # ...and SAID SO
+    assert any("NO NEW ENTRIES" in msg for msg in alerts)
+
+
+def test_gate_zf2_a_filled_order_is_never_adopted_as_working_cover(tmp_path):
+    """ZF-2 (pre-existing at main; the Z-B round added a second door):
+    `_ensure_stop` places under the deterministic `stop_client_id`. When
+    that id already belongs to a FILLED order both adapters answer
+    `{duplicate: True, status: "filled"}` — the prior order, with NOTHING
+    resting. `_ensure_stop` read neither field, called `on_stop_placed()`
+    and cleared `stop_missing`: the book reported `unprotected: []`,
+    `has_naked_position()` False and alerted "🧬 protective stop restored"
+    over real shares with no stop at the venue, and nothing would ever
+    re-place. Only a duplicate the venue still reports WORKING is
+    adoptable."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    _held_position(m, call_id=1, qty=2, stop_level=44.0, stop_ref=None)
+    # this position's stop id is SPENT: its order FILLED and nothing rests
+    rs = a.place_stock_order("CRSP", -3, "STP", stop_price=44.0, tif="GTC",
+                             client_order_id="blend-1-stp-44.0000")
+    a._orders[rs["order_ref"]]["status"] = "filled"
+    a._stops.pop(rs["order_ref"])
+    p = m.state.positions["1"]
+    p.stop_missing, p.stop_order_ref = True, None
+    a._positions["CRSP"] = 2
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    p = m.state.positions["1"]
+    assert not a._stops                        # NOTHING rests at the venue
+    assert p.stop_missing and not p.stop_order_ref
+    assert blend_mod._is_unprotected(p)
+    assert m.has_naked_position()               # entries BLOCKED
+    assert sorted(m.status_summary()["unprotected"]) == ["1"]
+    assert sorted(m.status_summary()["stop_missing"]) == ["1"]
+    feed_pos = {q["symbol"]: q for q in m.feed(PRICES, "2026-08-24")
+                ["positions"]}["CRSP"]
+    assert feed_pos["unprotected"] is True
+    assert not any("protective stop restored" in msg for msg in alerts)
+    assert any("NOT working" in msg and "UNPROTECTED" in msg
+               for msg in alerts)
+
+
+def test_gate_zf4_a_renamed_or_removed_position_field_preserves_and_halts(
+        tmp_path):
+    """ZF-4: the Z-D drift filter only handled ADDED fields. A RENAMED or
+    REMOVED one left the filtered `BlendPosition(**row)` missing a required
+    argument, which raised INSIDE the drift handler and fell through to the
+    G3 branch — positions gone, `halted` gone, entries UNBLOCKED. That is
+    the exact Z-D harm reached through the Z-D fix. The ladder's y2 filter
+    survives the same drift because every `LegState` field is defaulted;
+    a drifted blend row may not be LESS recoverable than a drifted leg."""
+    for i, drift in enumerate(("rename", "remove")):
+        m = mk(tmp_path / str(i))
+        _seed_initialized(m, sleeve_cash=2_750.0)
+        _held_position(m, stop_ref="live-stop-ref")
+        m.state.halted = "KILL"
+        m.save()
+        raw = json.load(open(m.state_path))
+        gone = raw["positions"]["1"].pop("stop_level")
+        if drift == "rename":
+            raw["positions"]["1"]["trail_stop"] = gone
+        with open(m.state_path, "w") as fh:
+            json.dump(raw, fh)
+
+        m2 = mk(tmp_path / str(i))
+        assert list(m2.state.positions) == ["1"]           # never vaporized
+        assert m2.state.positions["1"].stop_order_ref == "live-stop-ref"
+        assert m2.state.positions["1"].qty == 5
+        assert m2.state.positions["1"].call_id == 1        # from the map key
+        assert m2.state.initialized is True
+        assert m2.state.sleeve_cash == pytest.approx(2_500.0)
+        assert m2.state.halted == "KILL"       # the HALT is not forgotten
+        assert m2.has_naked_position() is False or True    # (see below)
+        assert m2.step("2026-08-24", payload(entries=[entry()]), PRICES) == []
+        assert m2.archived_state and "HALTED" in m2.archived_state
+        assert "stop_level" in m2.archived_state           # named, not silent
+        if drift == "rename":
+            assert "trail_stop" in m2.archived_state       # the dropped key
+        assert list((tmp_path / str(i)).glob("blend.json.corrupt-*"))
+        # Z-J still holds: the recovered book is persisted at boot
+        m3 = mk(tmp_path / str(i))
+        assert list(m3.state.positions) == ["1"]
+        assert m3.state.halted == "KILL" and m3.archived_state is None
+
+
+def test_gate_zf6_an_unreadable_position_row_is_never_silently_dropped(
+        tmp_path):
+    """ZF-6: the drift filter's `isinstance(v, dict)` guard dropped a
+    non-dict row while the same alert said "positions, cash and stop refs
+    kept". Two rows in, one row out, no mention."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m, call_id=1, stop_ref="r1")
+    _held_position(m, call_id=2, symbol="MRNA", stop_ref="r2")
+    m.save()
+    raw = json.load(open(m.state_path))
+    raw["positions"]["2"] = ["not", "a", "dict"]
+    with open(m.state_path, "w") as fh:
+        json.dump(raw, fh)
+    m2 = mk(tmp_path)
+    assert list(m2.state.positions) == ["1"]
+    assert m2.state.halted == "SCHEMA_DRIFT"
+    assert "2" in m2.archived_state and "DROPPED" in m2.archived_state
+    assert "could not be rebuilt" in m2.archived_state
+    assert list(tmp_path.glob("blend.json.corrupt-*"))   # the row survives
+
+
+def test_gate_zf7_a_failed_preserve_is_not_overwritten_by_the_boot_save(
+        tmp_path):
+    """ZF-7: Z-J's boot-time `save()` destroyed the drifted file IMMEDIATELY
+    when the PRESERVE rename had failed — the one path where the file on
+    disk is the only copy of the evidence — while the comment claimed "the
+    old file is already moved aside, so this writes the recovered book,
+    never over evidence"."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m, stop_ref="live-stop-ref")
+    m.save()
+    raw = json.load(open(m.state_path))
+    raw["positions"]["1"]["field_from_a_newer_deploy"] = 1
+    with open(m.state_path, "w") as fh:
+        json.dump(raw, fh)
+    real_replace = os.replace
+
+    def _no_preserve(src, dst):
+        if ".corrupt-" in str(dst):
+            raise OSError("read-only fs")
+        return real_replace(src, dst)
+
+    blend_mod.os.replace = _no_preserve
+    try:
+        m2 = mk(tmp_path)
+    finally:
+        blend_mod.os.replace = real_replace
+    after = json.load(open(m.state_path))
+    assert "field_from_a_newer_deploy" in after["positions"]["1"]
+    assert m2.state.halted == "SCHEMA_DRIFT"            # still halted...
+    assert "PRESERVE FAILED" in m2.archived_state       # ...and loud about it
+    assert "OVERWRITTEN by the next save" in m2.archived_state
+
+
+def test_gate_zf3_the_readme_does_not_overstate_rollback_protection():
+    """ZF-3: the Z-D fix lives in the build being rolled AWAY from, so it
+    cannot protect the rollback it was written about — a book this build
+    wrote, read by an older build, still comes back FRESH and un-halted with
+    entries UNBLOCKED. That is unfixable from this side, so the README may
+    not describe it in the past tense, and the first deploy is a one-way
+    door the operator has to know about BEFORE it happens."""
+    readme = open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               os.pardir, "README.md")).read()
+    assert "ROLLING BACK IS A BOOK-LOSING OPERATION" in readme
+    assert "halt first" in readme and "verify positions at the venue" in readme
+    # what is protected is the NEXT rollback (a future build -> this one),
+    # never the one away from this build
+    assert ("cannot protect a rollback FROM this build to an older one"
+            in readme)

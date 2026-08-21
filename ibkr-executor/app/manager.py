@@ -26,7 +26,7 @@ import logging
 import os
 import tempfile
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +93,21 @@ class LadderManager:
         # alert channel at construction time), same doctrine as the blend
         # manager's mode-transition archive.
         self.archived_state: str | None = None
+        # ZF-7: did the preserve rename actually SUCCEED? The Z-J boot save
+        # below is conditional on it.
+        self._evidence_preserved = False
         self.state = self._load()
+        if self.archived_state and self._evidence_preserved:
+            # Z-J: the corrupt/drift branches move the file aside and set
+            # `halted` IN MEMORY; `_build` never saves, so a crash before
+            # the loop's first save() lost the halt AND the preserved legs —
+            # next boot came back `halted: None` with every leg WAITING,
+            # precisely the y2 harm one crash earlier. Persist immediately;
+            # on THIS path the original file is already archived, so nothing
+            # is erased. When the rename FAILED the original is still the
+            # only copy of the drift, so the halt stays in memory rather
+            # than overwriting the evidence at boot (ZF-7).
+            self.save()
 
     def _load(self) -> LadderState:
         try:
@@ -110,6 +124,7 @@ class LadderManager:
             try:
                 os.replace(self.state_path, archive)
                 note = f"unreadable book preserved at {archive}"
+                self._evidence_preserved = True
             except OSError as err:
                 note = (f"PRESERVE FAILED ({err}) — the unreadable book will "
                         f"be OVERWRITTEN by the next save")
@@ -122,12 +137,36 @@ class LadderManager:
         try:
             st.legs = {k: LegState(**v) for k, v in raw.get("legs", {}).items()}
         except TypeError as exc:
-            # Schema drift on a leg row: keep `banked`/`halted` (the safety
-            # -relevant fields) rather than throwing the whole book away.
+            # y2: schema drift on a leg row — a deploy ROLLBACK reading rows
+            # a newer build wrote. This branch used to reset every leg to
+            # WAITING/order_ref=None and leave the file in place: the loop's
+            # next save() destroyed the evidence, and a leg reset to WAITING
+            # inside its window with nino34 >= NINO_ARM was re-OPENed by
+            # step() — a DUPLICATE live spread with the real one orphaned at
+            # the venue. Now, like the outer corrupt branch: PRESERVE the
+            # file, keep every field this build still understands (an OPEN
+            # leg's order_ref is the only handle on a live spread), and HALT
+            # so step() cannot act before the operator looks. `banked` and
+            # an existing `halted` reason are kept as they were.
+            known = {f.name for f in fields(LegState)}
+            st.legs = {k: LegState(**{kk: vv for kk, vv in v.items()
+                                      if kk in known})
+                       for k, v in (raw.get("legs") or {}).items()
+                       if isinstance(v, dict)}
+            archive = f"{self.state_path}.corrupt-{int(time.time())}"
+            try:
+                os.replace(self.state_path, archive)
+                note = f"drifted book preserved at {archive}"
+                self._evidence_preserved = True
+            except OSError as err:
+                note = (f"PRESERVE FAILED ({err}) — the drifted book will "
+                        f"be OVERWRITTEN by the next save")
+            st.halted = st.halted or "SCHEMA_DRIFT"
             self.archived_state = (f"ladder leg rows unreadable ({exc}); "
-                                   f"legs reset, banked/halted kept")
+                                   f"ladder HALTED ({st.halted}) so no leg "
+                                   f"can be opened or closed before you "
+                                   f"look; banked/halted kept; {note}")
             logger.error("[ladder] %s", self.archived_state)
-            st.legs = {}
         for s in LADDER:
             st.legs.setdefault(s.key, LegState())
         st.events = raw.get("events", [])[-300:]

@@ -72,18 +72,26 @@ unreconciled venue state. Phases IN ORDER:
       review N2): the position's OWN stop order FIRST — a lookup by its
       deterministic client id is ORDER-SCOPED, so same-symbol shares held
       in the account outside the blend book can neither fake nor hide it
-      (`filled` + price → the exit books AT that price; `filled` without
-      one → parked UNRECONCILED, never a silent 0.0; `working` → the stop
-      never filled). Account POSITIONS (`stock_position` sums EVERY
-      account STK row for the symbol) are CORROBORATION, never proof, and
-      the full decision matrix is:
+      (`filled` + price → the exit books AT that price, or a PARTIAL of
+      exactly the shares the stop covered when it was RESIZED below the
+      position — counter-review Z-B: this guard keyed on
+      `stop_order_ref`/`stop_missing`, so a resized stop's blackout fill
+      booked the FULL position, credited $220 for a $132 sale and
+      abandoned 2 real shares with no book row and no stop; `filled`
+      without a price → parked UNRECONCILED, never a silent 0.0;
+      `working` → the stop never filled). A stop the book does NOT believe
+      still rests can never settle a position here: pass 1 (the live fill
+      poll) runs first and leaves every booked stop `stop_missing`, so
+      double-booking is impossible in either direction. Account POSITIONS
+      (`stock_position` sums EVERY account STK row for the symbol) are
+      CORROBORATION, never proof, and the full decision matrix is:
 
       | account rows | this position's stop | outcome |
       |---|---|---|
       | held == booked | `working` | UNPARKED; that stop is kept |
       | held == booked | dead/unknown | UNPARKED as STOP_MISSING; pass 1e re-places it |
       | held < booked, no same-symbol peer | any | parked UNRECONCILED, resting stop RETIRED first (counter-review N1) |
-      | held < booked, same-symbol peers exist | any | the shortfall is NOT attributable to one position: NOBODY is parked or stripped, all stay flagged (counter-review x5) |
+      | held < booked, same-symbol peers exist | any | the shortfall is NOT attributable to one position: NOBODY is parked or sacrificed, all stay flagged (counter-review x5) — but resting SELL cover is ALIGNED PRO RATA to `held`, only as far as the aggregate requires (counter-review ZF-1), and every peer whose resized cover ends below its own qty is flagged UNVERIFIABLE too so the cap cannot drift back (counter-review Z1 / Z-A) |
       | held > booked (CONFLATION) | `working` | stays flagged; the working stop is LEFT RESTING |
       | held > booked (CONFLATION) | dead/unknown | stays flagged, marked UNPROTECTED; no new stop is rested |
       | positions unanswerable | any | stays flagged |
@@ -102,6 +110,75 @@ unreconciled venue state. Phases IN ORDER:
       have filled — the naked-short path) and no new protective stop is
       placed for the position (a fresh SELL stop on shares that may not be
       the book's is the same harm);
+   0a. **COVER INVARIANT (counter-review Z1), the one line to check:**
+      for each symbol, the total quantity of blend-placed RESTING SELL
+      stops must never exceed the venue-verified `held` for that symbol,
+      and **the executor must never CHOOSE to leave cover > held**. A
+      single-position shortfall already satisfies it (the stop is retired,
+      cover 0) and conflation satisfies it arithmetically (cover <= booked
+      < held). The peer-shortfall cell did NOT: 9 shares booked across two
+      same-symbol positions with 6 held left 9 shares of SELL stops
+      resting, and when they triggered the account went to **-3, a real
+      naked short**, reported as two green "position closed" alerts.
+      Entries dedupe on `call_id` only, never on symbol, so two calls on
+      one ticker is ordinary. That cell now RESIZES cover instead:
+      `floor(held * qty / book_qty)` per position, the remainder to the
+      largest fractional part (ties: lowest `call_id`), which sums to
+      exactly `held` and makes NO attribution claim — the whole point of
+      x5. A 0 allocation RETIRES that stop and marks the position
+      STOP_MISSING. The reduction is **cancel-old-then-place-smaller** (the
+      opposite of the daily ratchet's place-then-cancel: placing first
+      would transiently rest 9 + 6 = 15 against 6 held, the exact harm);
+      the brief unprotected window is the accepted trade on a position that
+      is already flagged and already blocking entries. A failed replace is
+      RED + STOP_MISSING and the placement is RETRIED on every reconcile
+      that still sees the shortfall — never silently naked, and never
+      restored above the allocation.
+      **Protection is never removed that the aggregate did not require**
+      (counter-review ZF-1): the reduce leg walks the peers only while the
+      RUNNING aggregate still exceeds `held`, and each restore is capped at
+      the remaining slack (`held` minus the cover already resting elsewhere
+      on that symbol). Aligning every peer unconditionally ran the reduce
+      leg in cells that were already compliant, where it is a pure
+      subtraction — measured: cover 4 against 5 held became cover **2**,
+      because the healthy peer was cut and the zero-cover peer's restore
+      was blocked by its own unACKed orphan.
+      **"<= its pro-rata allocation" is the explicit exception** to the
+      rule that no SELL stop is (re-)placed for an UNVERIFIABLE position.
+      Not "strictly reducing": Y1 forbids cover the account may not be able
+      to honour, and since the allocation sums to exactly `held`, cover at
+      or below it is provably short-safe whichever direction an individual
+      peer moved. Cover is
+      only ever restored FROM ZERO (never stacked on a stop that already
+      rests, never while an unACKed orphan of that position's own cover may
+      still rest), because leaving a real position at cover 0 indefinitely
+      is the unbounded naked downside of counter-review X3.
+      **The cap is DURABLE** (counter-review Z-A): a peer whose TARGET
+      cover this round is below its own qty is marked `history_gap` in the
+      same breath — the target, not the bare allocation, so a peer the
+      round leaves alone is never mothballed for a cap it never took. The
+      resize deliberately spans same-symbol peers that are NOT themselves
+      flagged (the invariant is a per-symbol aggregate, so their cover
+      counts) — and a cap recorded only in `stop_cover_qty` was undone for
+      exactly those peers, by pass 4 in the same reconcile when the replace
+      was rejected, or by the next ordinary trail ratchet when it
+      succeeded (measured: cover 6 -> 7 against 6 held, then venue 6 ->
+      **-1**, reported as a plain green "position closed"). The flag buys
+      the Y1 ratchet guard, the pass-4 guard, the escalation cadence and
+      the restore-full-cover branch with no new state machine; the ratchet
+      additionally refuses to touch a stop whose `stop_cover_qty` is below
+      its position, so the door has two locks. A mixed flagged/unflagged
+      same-symbol pair needs no hand-editing to arise: reconcile pass 2
+      adopts a crash-window entry as a brand-new unflagged position beside
+      a parked peer.
+      Where the venue will not ACK the cancel, cover > held can persist and
+      is unpreventable — that residual is tracked in `orphan_stop_refs` and
+      a fill on it alerts RED as a possible short (counter-review X2); the
+      invariant is about what the executor CHOOSES, never a promise about a
+      venue that refuses to answer. When the account is restored to the
+      booked quantity, a resized stop is retired first and FULL cover
+      re-placed, so unparking can never leave the book silently
+      under-covered.
    0b. **fail-closed is never fail-SILENT** (counter-review X3). Only the
       operator can resolve the cells above, so a position that stays
       flagged keeps escalating: a 🚨🚨 Telegram alert on the cycle it is
@@ -109,13 +186,20 @@ unreconciled venue state. Phases IN ORDER:
       reconciles until it is resolved — the re-armed budget-alarm pattern
       rather than order-safety law #3's literal every-cycle alert, which
       for a cell that can never self-heal would be pure spam. The alert
-      states honestly whether a resting stop still protects the shares. A
-      flagged position with no working stop is also marked STOP_MISSING
-      with its dead `stop_order_ref` dropped, so `/status`
-      (`unverifiable` + `stop_missing`) and `/blend/feed` (per-position
-      `unverifiable` / `unprotected` / `unverified_cycles`, plus book-level
-      counts) show it on the Execution tab — pass 1e still refuses to
-      re-place its stop;
+      states honestly whether a resting stop still protects the shares —
+      and HOW MANY of them, read off the position itself so that a stop
+      RESIZED to cover 3 of 5 shares is never re-described as full
+      protection when the cell later flips to conflation (counter-review
+      Z-E). A flagged position with no working stop is also marked
+      STOP_MISSING with its dead `stop_order_ref` dropped, so `/status`
+      (`unverifiable` + `stop_missing` + `unprotected`) and `/blend/feed`
+      (per-position `unverifiable` / `unprotected` / `unverified_cycles`,
+      plus book-level counts) show it on the Execution tab — pass 1e still
+      refuses to re-place its stop. **PARTIAL cover counts as
+      `unprotected`** on both surfaces (counter-review Z-F): a position
+      whose resting stop was resized below it has real shares standing
+      bare, and reporting it as protected is the same silence Z2 removed
+      from the alerts;
    a. ingest resting-stop fills (`poll_stock_fills`) — a stop that filled
       marks its position CLOSED, so the tracker's later exit signal/echo
       for it is a no-op (idempotent; never a second sell). A mid-ingestion
@@ -145,6 +229,14 @@ unreconciled venue state. Phases IN ORDER:
       periodic — never per-cycle spam, never silent;
    e. re-place any missing protective stop — a STOP_MISSING position is
       alerted loudly every cycle and BLOCKS all new entries until placed.
+      Only a duplicate the venue still reports **working** is adopted as
+      that protection (counter-review ZF-2): a deterministic stop id whose
+      prior order already FILLED comes back `{duplicate, status: filled}`
+      with NOTHING resting, and adopting it cleared `stop_missing` and
+      alerted "protective stop restored" over shares with no stop at the
+      venue — reported protected on `/status` and `/blend/feed`, with
+      entries unblocked and no re-placement ever. Nothing is placeable
+      under a spent id, so the position stays STOP_MISSING and says so.
 2. **Staleness guard**: a payload whose `as_of` is more than 5 calendar
    days old (long-weekend tolerant) — or malformed — triggers no new
    decisions; the book is still reconciled and stop-protected.
@@ -319,9 +411,16 @@ on its own **even behind a working stop**, so the position stays flagged
 indefinitely and keeps escalating on a re-armed cadence until the
 operator resolves it (see the matrix in phase 1.0/1.0b). While flagged,
 exits and /kill defer with a RED alert and no protective stop is
-(re-)placed — nothing is ever MKT-sold, and no SELL stop is ever rested,
-against shares whose ownership is unproven (the naked-short path probe A1
-demonstrated, and the counter-review's N1/N2/X1 variants of it). Such a
+(re-)placed — nothing is ever MKT-sold, and no NEW or RAISED SELL stop is
+ever rested, against shares whose ownership is unproven (the naked-short
+path probe A1 demonstrated, and the counter-review's N1/N2/X1 variants of
+it). The single exception is the Z1 pro-rata resize above, which only ever
+rests cover at or below a position's share of what the venue says the
+account holds, so aggregate cover can never exceed it. A stop that DOES
+fill on a flagged position is still booked (a fill is order-scoped venue
+truth) but is never reported green: the alert states that the position was
+UNVERIFIABLE and that under conflation the shares just sold may have been
+the operator's own (counter-review Z2). Such a
 position blocks all new entries (`has_naked_position`), so an unresolved
 conflation wedges the sleeve until it is cleared by hand — the
 deliberate, documented cost of not guessing.
@@ -336,7 +435,7 @@ Env (all optional until the paper gate):
 | `TRACKER_USER` / `TRACKER_PASSWORD` | fallback: the tracker's HTTP Basic dashboard login (its DASHBOARD_USER/PASSWORD) — dashboard creds only, no broker credential enters the blend path |
 | `BLEND_BUDGET` | per-strategy gross-exposure cap in USD; 0 (default) = disabled. When set, crossing 85% utilization sends a one-time Telegram alert ("review and raise BLEND_BUDGET"), re-armed once utilization drops below 75% |
 | `BLEND_BOOK_USD` | initial paper book (default 10,000), split 30/70 at first boot |
-| `BLEND_STATE_PATH` | persisted book state (default `./data/blend_state.json`). Saves are atomic: a UNIQUE temp file per write (`mkstemp` in the state directory) + fsync + rename, so two threads saving at once can never clobber each other's partial file or publish truncated JSON (counter-review x11 — a single shared `.tmp` made that promise false; the same treatment now covers `STATE_PATH`, the El Niño ladder book). Service writers additionally serialize their read-modify-write under `BLEND_LOCK` (blend) / `MGR_LOCK` (ladder). The state is MODE-TAGGED (`dry:paper` / `real:paper` / `real:live`): on any mode change the previous book is archived alongside and a FRESH book starts, with a Telegram alert — a book's fills are fiction in any other mode (DRY fills at placeholder prices; paper fills aren't live fills), so they must never be reconciled against a venue that never saw them |
+| `BLEND_STATE_PATH` | persisted book state (default `./data/blend_state.json`). Saves are atomic: a UNIQUE temp file per write (`mkstemp` in the state directory) + fsync + rename, so two threads saving at once can never clobber each other's partial file or publish truncated JSON (counter-review x11 — a single shared `.tmp` made that promise false; the same treatment now covers `STATE_PATH`, the El Niño ladder book; an unreadable ladder book — and a leg-row SCHEMA DRIFT after a deploy rollback — is PRESERVED as `.corrupt-<ts>` and loud, and a drifted book additionally comes back `halted="SCHEMA_DRIFT"` with every leg field this build understands intact, so `step()` cannot re-OPEN a spread that is still live at the venue, counter-review y2). The BLEND book gets the same treatment on its own position rows (counter-review Z-D — Z1 added `stop_cover_qty`, so a rollback to a build without it hit an unfiltered `BlendPosition(**row)` and came back a FRESH, un-halted book with entries UNBLOCKED while real shares and GTC stops rested at the venue): unknown fields are dropped, fields the row does not carry are DEFAULTED (a renamed or removed field used to raise inside the handler and fall through to the fresh-book branch — counter-review ZF-4; the ladder never had that hole because every `LegState` field is defaulted), a row that still cannot be rebuilt is NAMED and left to the preserved file rather than dropped in silence (counter-review ZF-6), positions/cash/stop refs are kept, the file is preserved as `.corrupt-<ts>` and the book comes back `halted="SCHEMA_DRIFT"` — reconcile still runs and still protects it, only new decisions stop. **What this protects is the NEXT rollback — a book written by a FUTURE build, read by THIS one. It cannot protect a rollback FROM this build to an older one** (counter-review ZF-3): the reader is the older build, the fix is not in it, and the fix is therefore structurally unreachable from this side — see the deploy note under "Rollout gates". Both managers PERSIST that recovered state at load (counter-review Z-J: it used to live in memory until the loop's first save, so a crash in between lost the halt AND the preserved rows) — but only when the `.corrupt-<ts>` rename actually SUCCEEDED, because when it fails the file still sitting at the state path is the only copy of the evidence and the boot save would destroy it (counter-review ZF-7); the halt then lives in memory only and the alert says so. A `SCHEMA_DRIFT` halt is cleared by `/resume` exactly like a KILL — deliberately, because every field this build understands survives the drifted load, so nothing live is re-opened — and the resume alert NAMES the halt it cleared, for the ladder and for the blend book separately (counter-review Z-K). Service writers additionally serialize their read-modify-write under `BLEND_LOCK` (blend) / `MGR_LOCK` (ladder). The state is MODE-TAGGED (`dry:paper` / `real:paper` / `real:live`): on any mode change the previous book is archived alongside and a FRESH book starts, with a Telegram alert — a book's fills are fiction in any other mode (DRY fills at placeholder prices; paper fills aren't live fills), so they must never be reconciled against a venue that never saw them |
 | `READ_TOKEN` | READ-ONLY token gating `GET /blend/feed` (header `X-Read-Token`, constant-time compare). SEPARATE from `EXEC_TOKEN` by design: the feed holder sees book state only — never kill/resume. Empty (default) = the feed endpoint 404s. Set the same value as `BLEND_READ_TOKEN` on the genomics tracker, whose server-side proxy powers the research site's Execution tab |
 
 ### Read-only feed: `GET /blend/feed` (the Execution tab)
@@ -390,6 +489,32 @@ header or `?token=`, same pattern as btc-executor.
 1. IB adapter vs IBKR PAPER account (free simulated twin, real market data)
 2. Paper rehearsal through at least one full trigger cycle
 3. Live cutover per leg, DRY_RUN flip discipline
+
+### Deploy note: ROLLING BACK IS A BOOK-LOSING OPERATION (counter-review ZF-3)
+
+Once this build has written a blend book, `BLEND_STATE_PATH` carries the
+`stop_cover_qty` field. **Any build that predates that field reads the file,
+raises on the unknown key, and starts a FRESH book** — open positions gone,
+`halted` gone, `has_naked_position()` False and entries UNBLOCKED, while real
+shares and GTC stops still rest at the venue. The schema-drift handler that
+prevents this lives in the build being rolled *away* from, so it cannot help:
+the fix protects the forward direction only (a future build's book read by
+this one). Deploying this build is therefore a **one-way door for the book**,
+and that has to be known before the deploy, not after.
+
+If the executor must be rolled back anyway, do it deliberately, in this
+order:
+
+1. **halt first** — `POST /kill` (token-gated), and confirm `/status` shows
+   the blend book halted and the flatten resolved;
+2. move `BLEND_STATE_PATH` aside by hand (keep it — it is the only record of
+   the book) and **then** roll back;
+3. **verify positions at the venue** in TWS/Client Portal — every open share
+   and every resting GTC stop — and re-seed or reconcile the older build's
+   book against what is actually there before clearing the halt.
+
+Skipping any of these resumes trading against a book that does not know what
+the account holds.
 
 ## Account prerequisites (one-time, in IBKR settings)
 

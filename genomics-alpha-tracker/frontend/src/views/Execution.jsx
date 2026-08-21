@@ -192,7 +192,7 @@ export default function Execution() {
                         </span>
                       )}
                       {p.unprotected && (
-                        <span className="text-rose-400 font-semibold" title="No protective stop rests at the venue for this position.">
+                        <span className="text-rose-400 font-semibold" title="Shares of this position rest with no blend stop covering them — either no protective stop is working at the venue, or the stop that is working was resized below the position (a same-symbol shortfall) and covers only part of it.">
                           UNPROTECTED
                         </span>
                       )}
