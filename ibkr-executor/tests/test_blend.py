@@ -1613,6 +1613,135 @@ def test_gate_adapt_m2min_fresh_history_false_cancel_still_sells(tmp_path):
     assert len(_executions(a, "CRSP")) == 1
 
 
+# R1 (re-review residual): the blackout guard must be MORE than one cycle
+# deep — UNVERIFIABLE positions stay parked until a reconcile POSITIVELY
+# verifies them at the venue (positions data), never cleared by timestamp.
+# Scenarios derived from the re-review's probe A1 (scratchpad
+# attack_reround.py): the demonstrated naked short on cycle N+1.
+
+EXIT_CRSP = {"symbol": "CRSP", "call_id": 1, "reason": "trail",
+             "trail_level": 47.0}
+
+
+class _NoVenuePositionsAdapter(DryAdapter):
+    """Venue cannot answer the positions query — verification must stay
+    parked (fail closed), never clear on a fresh reconcile timestamp."""
+
+    def stock_position(self, symbol):
+        raise RuntimeError("positions unavailable (simulated)")
+
+
+def test_gate_r1_blackout_flag_survives_past_first_recovered_cycle(tmp_path):
+    """Probe A1: the stop filled INSIDE a 3-day blackout (history gone, the
+    fill invisible forever). Cycle N (tracker down) reconciles fine and
+    stamps the horizon clock; the exit lands on cycle N+1 — the old code's
+    gap check had reset and MKT-sold shares the venue no longer held (a
+    naked short). With positions data unavailable the flag must persist."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m, stop_ref=None)
+    m.state.positions["1"].stop_missing = True       # stop died in the blackout
+    m.state.last_reconcile_ts = time.time() - 3 * 86_400
+    a = _NoVenuePositionsAdapter()
+    alerts: list[str] = []
+    # cycle N: tracker still down -> reconcile-only; the position gets
+    # flagged and NOTHING (not even a protective stop) is placed for it —
+    # a new SELL stop on shares the account may not hold is a short path.
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    assert m.state.positions["1"].history_gap is True
+    assert not [e for e in a.log if e.get("symbol") == "CRSP"]
+    # cycle N+1: the tracker recovers and publishes the pierced-trail exit.
+    run_cycle(m, a, payload(exits=[EXIT_CRSP], stops=[stop_row()]),
+              "2026-08-24", alert=alerts.append)
+    assert "1" in m.state.positions                  # NOT sold
+    assert m.state.positions["1"].history_gap is True
+    assert not [e for e in a.log if e.get("symbol") == "CRSP"]  # no short
+    assert any("UNVERIFIABLE" in msg for msg in alerts)
+    assert any("deferred" in msg for msg in alerts)
+    # the flag is journaled: a restart cannot lose the parked state
+    m2 = Blend3070Manager(m.cfg, m.state_path)
+    assert m2.state.positions["1"].history_gap is True
+
+
+def test_gate_r1_venue_gone_parks_unreconciled_never_sells(tmp_path):
+    """Probe A1 with the venue answering positions: the shares are GONE
+    (the stop filled invisibly) and no priced fill is served — the position
+    parks UNRECONCILED on the first reconcile; the later exit is a no-op
+    and no MKT sell ever reaches the venue."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m)                    # stop ref the venue never saw
+    m.state.last_reconcile_ts = time.time() - 3 * 86_400
+    a = DryAdapter()                     # stock_position("CRSP") == 0: gone
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)      # cycle N
+    assert "1" not in m.state.positions
+    assert "1" in m.state.unreconciled   # parked for manual booking
+    run_cycle(m, a, payload(exits=[EXIT_CRSP], stops=[stop_row()]),
+              "2026-08-24", alert=alerts.append)                  # cycle N+1
+    assert _executions(a, "CRSP") == []  # NOTHING sold across both cycles
+    assert any("UNVERIFIABLE" in msg for msg in alerts)
+    # nothing booked at a guessed price: cash + BIL stay at the post-entry
+    # level (idle cash may have been swept to BIL in-cycle)
+    assert (m.state.sleeve_cash + m.state.bil_qty * 100.0
+            == pytest.approx(2_500.0))
+
+
+def test_gate_r1_positive_verification_unparks_and_exit_proceeds(tmp_path):
+    """The venue POSITIVELY holds the shares and the stop still works:
+    the flag clears and the next exit executes normally — parking is a
+    guard, not a wedge."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m)
+    a = DryAdapter()
+    rs = a.place_stock_order("CRSP", 5, "MKT", ref_price=50.0)   # venue holds 5
+    rs = a.place_stock_order("CRSP", -5, "STP", stop_price=44.0, tif="GTC",
+                             client_order_id="blend-1-stp-44.0000")
+    m.state.positions["1"].stop_order_ref = rs["order_ref"]
+    m.state.last_reconcile_ts = time.time() - 3 * 86_400
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)      # cycle N
+    pos = m.state.positions["1"]
+    assert pos.history_gap is False                  # unparked on evidence
+    assert pos.stop_order_ref in a._stops            # stop kept working
+    assert any("POSITIVELY verified" in msg for msg in alerts)
+    run_cycle(m, a, payload(exits=[EXIT_CRSP], stops=[stop_row()]),
+              "2026-08-24", alert=alerts.append)                  # cycle N+1
+    assert "1" not in m.state.positions and not m.state.unreconciled
+    sells = _executions(a, "CRSP")
+    assert len(sells) == 1 and sells[0]["qty"] == -5  # exactly one exit sell
+
+
+def test_gate_r1_blackout_stop_fill_recovered_from_history_books_at_price(
+        tmp_path):
+    """The shares are gone AND refreshed order history still serves the
+    priced stop fill (the fill-event stream was lost to a restart): book
+    the exit at the REAL venue price — never a guess, never a sell."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m)
+    a = DryAdapter()
+    rs = a.place_stock_order("CRSP", -5, "STP", stop_price=44.0, tif="GTC",
+                             client_order_id="blend-1-stp-44.0000")
+    m.state.positions["1"].stop_order_ref = rs["order_ref"]
+    # the stop filled during the blackout; the drain-once event stream was
+    # lost with the process, but the order lookup still serves the price
+    a._orders[rs["order_ref"]]["status"] = "filled"
+    a._orders[rs["order_ref"]]["fill_price"] = 44.0
+    a._stops.pop(rs["order_ref"], None)
+    m.state.last_reconcile_ts = time.time() - 3 * 86_400
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    assert "1" not in m.state.positions and not m.state.unreconciled
+    assert (m.state.sleeve_cash + m.state.bil_qty * 100.0
+            == pytest.approx(2_500.0 + 5 * 44.0))    # booked AT the fill
+    assert not [e for e in a.log if e.get("symbol") == "CRSP"
+                and e["action"] == "place_stock_order"
+                and e.get("order_type") != "STP"]    # nothing sold
+    assert any("recovered from venue history" in msg for msg in alerts)
+
+
 # m3 (minor): cancel-ok-then-place-raise must not leave the position
 # believed protected by a CANCELLED stop.
 

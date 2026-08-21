@@ -64,6 +64,18 @@ gateway is down) the cycle FAILS CLOSED — no decision is ever taken against
 unreconciled venue state. Phases IN ORDER:
 
 1. **RECONCILE venue truth before any decision**
+   0. blackout-horizon guard (adapter re-review R1): when the gap since
+      the last successful reconcile exceeds what venue order history can
+      serve (1 day), every held position is flagged UNVERIFIABLE
+      (persisted) — a stop may have filled invisibly inside the blackout.
+      The flag clears ONLY on positive venue evidence: the account's
+      POSITIONS data confirms the shares are still held (unparked; the
+      stop re-verified or re-placed), or the shares are gone and a priced
+      stop fill from refreshed order history books the exit (no price →
+      parked UNRECONCILED). NEVER cleared by timestamp alone; while
+      flagged, exits and /kill defer (nothing MKT-sells shares whose stop
+      may already have filled — the naked-short path) and no new
+      protective stop is placed for the position;
    a. ingest resting-stop fills (`poll_stock_fills`) — a stop that filled
       marks its position CLOSED, so the tracker's later exit signal/echo
       for it is a no-op (idempotent; never a second sell). A mid-ingestion
@@ -224,15 +236,19 @@ service restart can re-emit an already-booked stop fill as an
 unknown-order RED alert (noise, never a double booking); a journaled
 MOO/MKT the venue REJECTS is cleared by the next reconcile with a RED
 alert (entry slot released, book order re-planned — see the
-rejected-order lifecycle above). VENUE HISTORY HORIZON: IB serves
-current-day executions on connect — an executor blackout spanning a day
-or more while a stop fills can exceed what reconcile can see. The
-exit/kill flatten paths guard this automatically: when the gap since the
-last successful reconcile exceeds 1 day and a stop cancel comes back
-"already gone" with nothing verifiable, the position is parked
-UNVERIFIABLE (RED alert, nothing sold — a MKT sell could short
-already-stopped-out shares); after any multi-day outage, verify positions
-against the account manually before booking the parked trades.
+rejected-order lifecycle above). VENUE HISTORY HORIZON (adapter re-review
+R1): IB serves current-day executions on connect — an executor blackout
+spanning a day or more while a stop fills can exceed what reconcile can
+see FOREVER, not just on the first recovered cycle. The first reconcile
+after such a gap therefore flags every held position UNVERIFIABLE
+(persisted, restart-safe) and only POSITIVE venue evidence clears it:
+`stock_position` (account positions — no history horizon) confirming the
+shares are held unparks the position (stop re-verified/re-placed); shares
+gone with a priced fill in refreshed order history books the exit at that
+price; shares gone with no priced fill parks the trade UNRECONCILED for
+manual booking. While flagged, exits and /kill defer with a RED alert —
+nothing is ever MKT-sold against a possibly-already-filled stop (the
+naked-short path probe A1 demonstrated).
 
 Env (all optional until the paper gate):
 

@@ -142,6 +142,13 @@ class BlendPosition:
     risk_per_share: float = 0.0  # entry_ref - day-one trail, frozen at entry
                                  # (R-multiple denominator; 0.0 on legacy
                                  # state rows -> R reported as null)
+    history_gap: bool = False   # R1 blackout guard: a reconcile gap exceeded
+                                # the venue-history horizon, so a stop fill
+                                # inside the blackout may be invisible
+                                # FOREVER — UNVERIFIABLE. Cleared ONLY by
+                                # positive venue evidence (reconcile pass
+                                # 1b), never by timestamp; exits//kill park
+                                # while set
 
 
 @dataclass
@@ -311,9 +318,10 @@ class Blend3070Manager:
         return v
 
     def has_naked_position(self) -> bool:
-        """Any held position without a working protective stop (safety-first:
-        blocks all new entries until resolved)."""
-        return any(p.stop_missing or not p.stop_order_ref
+        """Any held position without a working protective stop — or one
+        that is blackout-UNVERIFIABLE (R1: its stop state is unknown) —
+        (safety-first: blocks all new entries until resolved)."""
+        return any(p.stop_missing or not p.stop_order_ref or p.history_gap
                    for p in self.state.positions.values())
 
     def budget_utilization(self, prices: dict[str, float]) -> float | None:
@@ -928,6 +936,8 @@ class Blend3070Manager:
             "open_count": len(st.positions),
             "stop_missing": [k for k, v in st.positions.items()
                              if v.stop_missing or not v.stop_order_ref],
+            "unverifiable": [k for k, v in st.positions.items()
+                             if v.history_gap],
             "pending_entries": sorted(st.pending_entries),
             "pending_book_orders": sorted(st.pending_book_orders),
             "unreconciled": st.unreconciled,
@@ -1228,8 +1238,106 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
     mgr._reconcile_gap_s = (time.time() - st.last_reconcile_ts
                             if st.last_reconcile_ts else 0.0)
 
+    # 0) blackout-horizon guard (R1): a gap longer than what venue order
+    #    history serves means a stop fill INSIDE the blackout may be
+    #    invisible FOREVER — not just this cycle. Flag every held position
+    #    UNVERIFIABLE (persisted) BEFORE anything acts on it; the flag
+    #    clears ONLY on positive venue evidence (pass 1b), never because
+    #    a later reconcile stamped a fresh timestamp.
+    if mgr._reconcile_gap_s > HISTORY_HORIZON_S:
+        newly = [p for p in st.positions.values() if not p.history_gap]
+        if newly:
+            for pos in newly:
+                pos.history_gap = True
+            mgr.save()
+            names = ", ".join(f"{p.symbol} x{p.qty}" for p in newly)
+            mgr._event("RED", f"blackout gap "
+                              f"{mgr._reconcile_gap_s / 86400.0:.1f}d exceeds "
+                              f"the venue-history horizon: {names} parked "
+                              f"UNVERIFIABLE until venue positions verify")
+            alert(f"🚨🚨 blend: no successful reconcile for "
+                  f"{mgr._reconcile_gap_s / 86400.0:.1f}d — order history "
+                  f"cannot prove what filled during the blackout. {names} "
+                  f"parked UNVERIFIABLE: no exit or /kill will MKT-sell "
+                  f"them until venue POSITIONS positively verify the shares")
+
     # 1) stop fills
     _ingest_fills(mgr, adapter, alert)
+
+    # 1b) positive verification of UNVERIFIABLE positions (R1): venue
+    #     POSITIONS are the strongest evidence — what does the account
+    #     actually hold NOW? Shares held -> unpark (stop re-verified /
+    #     re-placed by passes 3b/4); shares gone -> the stop filled
+    #     invisibly: book it when refreshed order history serves a priced
+    #     fill, else park UNRECONCILED (repo law: no silent zero). An
+    #     unanswerable venue keeps the flag — fail closed, retried every
+    #     cycle.
+    get_held = getattr(adapter, "stock_position", None)
+    for key, pos in list(st.positions.items()):
+        if not pos.history_gap:
+            continue
+        held = None
+        if get_held is not None:
+            try:
+                held = get_held(pos.symbol)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("blackout verify %s: venue positions "
+                               "unavailable (%s)", pos.symbol, exc)
+        if held is None:
+            mgr._event("WARN", f"{pos.symbol} (call {pos.call_id}) still "
+                               f"UNVERIFIABLE: venue positions unavailable")
+            continue
+        book_qty = sum(p.qty for p in st.positions.values()
+                       if p.symbol == pos.symbol)
+        if held >= book_qty:
+            pos.history_gap = False
+            stop = adapter.find_stock_order(
+                stop_client_id(pos.call_id, pos.stop_level))
+            if stop is None or stop.get("status") != "working":
+                pos.stop_missing = True     # pass 4 re-places (same cid:
+                pos.stop_order_ref = None   # a surviving stop is adopted)
+            mgr.save()
+            alert(f"🧬 blend: {pos.symbol} x{pos.qty} (call {pos.call_id}) "
+                  f"POSITIVELY verified still held at the venue after the "
+                  f"blackout — unparked"
+                  + ("" if not pos.stop_missing
+                     else " (protective stop re-placing)"))
+            continue
+        # Shares gone (fully or partly): the stop filled inside the
+        # blackout. Book only at a REAL venue price.
+        gone = book_qty - max(held, 0)
+        o = adapter.find_stock_order(stop_client_id(pos.call_id,
+                                                    pos.stop_level))
+        fill = (o or {}).get("fill_price")
+        peers = [p for p in st.positions.values()
+                 if p.symbol == pos.symbol and p.history_gap]
+        if (len(peers) == 1 and o is not None
+                and o.get("status") == "filled" and fill is not None):
+            if gone >= pos.qty:
+                mgr.on_exited(pos.call_id, fill, "stop_filled")
+                alert(f"🧬 blend: {pos.symbol} stop fill from the blackout "
+                      f"window recovered from venue history — booked "
+                      f"x{pos.qty} @ {fill:.2f}")
+            else:
+                mgr.on_partial_exit(pos.call_id, gone, fill, "stop_filled")
+                rem = st.positions.get(key)
+                if rem is not None:
+                    rem.history_gap = False     # remainder is venue truth
+                    mgr.save()
+                alert(f"⚠️ blend: PARTIAL blackout stop fill {pos.symbol} "
+                      f"{gone} of {pos.qty} @ {fill:.2f} booked — remainder "
+                      f"re-protected by reconcile")
+        else:
+            # No priced fill visible (or ambiguous same-symbol peers):
+            # the shares left the book at an unknowable price.
+            mgr.on_exit_unreconciled(
+                pos.call_id,
+                "blackout: venue no longer holds the shares and no priced "
+                "stop fill is visible — UNVERIFIABLE")
+            alert(f"🚨🚨 blend: {pos.symbol} x{pos.qty} (call "
+                  f"{pos.call_id}) is GONE at the venue after the blackout "
+                  f"and order history serves no priced fill — UNVERIFIABLE, "
+                  f"parked for manual booking; nothing sold")
 
     # 2) write-ahead entry journal
     for key, rec in list(st.pending_entries.items()):
@@ -1331,7 +1439,7 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
     #     the position STOP_MISSING for pass 4 to re-place. An unknown
     #     lookup is left alone.
     for pos in list(st.positions.values()):
-        if pos.stop_missing or not pos.stop_order_ref:
+        if pos.stop_missing or not pos.stop_order_ref or pos.history_gap:
             continue
         o = adapter.find_stock_order(stop_client_id(pos.call_id,
                                                     pos.stop_level))
@@ -1341,8 +1449,12 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
                   f"(call {pos.call_id}) was CANCELLED at the venue — "
                   f"position naked; re-placing now")
 
-    # 4) missing protective stops
+    # 4) missing protective stops. R1: never for an UNVERIFIABLE position —
+    #    a new SELL stop on shares the account may no longer hold is itself
+    #    a short path; pass 1b must positively verify first.
     for pos in list(st.positions.values()):
+        if pos.history_gap:
+            continue
         if pos.stop_missing or not pos.stop_order_ref:
             if _ensure_stop(mgr, adapter, pos, alert):
                 alert(f"🧬 blend: protective stop restored for {pos.symbol} "
@@ -1440,6 +1552,15 @@ def _execute_exit(mgr: Blend3070Manager, adapter, it: dict,
     exit returns False so run_cycle drops the entries its proceeds were
     meant to fund (counter-agent N5)."""
     key = str(it["call_id"])
+    pos0 = mgr.state.positions.get(key)
+    if pos0 is not None and pos0.history_gap:
+        # R1: UNVERIFIABLE since a blackout — its stop may have filled
+        # invisibly, so a MKT sell could short. Defer until reconcile pass
+        # 1b positively verifies the shares at the venue.
+        alert(f"🚨 blend EXIT {it['symbol']} deferred: position is "
+              f"UNVERIFIABLE after a venue-history blackout — nothing sold "
+              f"until venue positions verify it")
+        return False
     ref = it.get("stop_order_ref")
     if ref:
         try:

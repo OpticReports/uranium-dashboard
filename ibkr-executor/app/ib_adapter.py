@@ -532,6 +532,20 @@ class IBAdapter:
                                                   refresh=True)
         return self._trade_result(trade) if trade is not None else None
 
+    def stock_position(self, symbol: str) -> int:
+        """Net venue holding for a SMART/USD stock — what the ACCOUNT
+        actually holds NOW. The R1 blackout guard's positive-verification
+        basis: order history has a horizon, positions do not."""
+        self._require_connected()
+        self._pump()
+        qty = 0
+        for p in self.ib.positions():
+            c = getattr(p, "contract", None)
+            if (c is not None and getattr(c, "symbol", "") == symbol
+                    and getattr(c, "secType", "STK") in ("", "STK")):
+                qty += int(p.position)
+        return qty
+
 
 class DryAdapter:
     """No gateway, no orders: synthesizes fills at the budget and marks flat.
@@ -545,6 +559,8 @@ class DryAdapter:
         self._by_client: dict[str, str] = {}  # client_order_id -> order_ref
         self._fills: list[dict] = []        # stop-fill events awaiting poll
         self._last_px: dict[str, float] = {}  # last ref/fill price per symbol
+        self._positions: dict[str, int] = {}  # net venue holdings from filled
+                                              # orders (stock_position surface)
 
     def _rec(self, action, **kw):
         e = {"ts": int(time.time()), "action": action, **kw}
@@ -622,6 +638,7 @@ class DryAdapter:
             return {"order_ref": ref, "status": "working"}
         fill = ref_price if ref_price is not None else self.spot(symbol)
         self._last_px[symbol] = fill
+        self._positions[symbol] = self._positions.get(symbol, 0) + qty
         rec = {"order_ref": ref, "symbol": symbol, "qty": qty,
                "order_type": order_type, "tif": tif, "status": "filled",
                "fill_price": fill, "client_order_id": client_order_id}
@@ -657,6 +674,8 @@ class DryAdapter:
             self._orders[order_ref]["status"] = "filled"
             self._orders[order_ref]["fill_price"] = o["stop_price"]
         self._last_px[o["symbol"]] = o["stop_price"]
+        self._positions[o["symbol"]] = (self._positions.get(o["symbol"], 0)
+                                        + o["qty"])
         self._fills.append({"order_ref": order_ref, "symbol": o["symbol"],
                             "qty": o["qty"], "fill_price": o["stop_price"]})
         self._rec("stop_triggered", ref=order_ref, symbol=o["symbol"],
@@ -677,6 +696,8 @@ class DryAdapter:
             self._orders[order_ref]["status"] = "cancelled"
             self._orders[order_ref]["fill_price"] = o["stop_price"]
         self._last_px[o["symbol"]] = o["stop_price"]
+        self._positions[o["symbol"]] = (self._positions.get(o["symbol"], 0)
+                                        + sign * shares)
         self._fills.append({"order_ref": order_ref, "symbol": o["symbol"],
                             "qty": sign * shares,
                             "fill_price": o["stop_price"]})
@@ -700,3 +721,9 @@ class DryAdapter:
     def find_stock_order(self, client_order_id: str) -> dict | None:
         rec = self._orders.get(self._by_client.get(client_order_id, ""))
         return self._order_result(rec) if rec is not None else None
+
+    def stock_position(self, symbol: str) -> int:
+        """Net venue holding for symbol, from filled orders — mirrors the
+        IBAdapter positions surface (the R1 blackout guard's positive-
+        verification basis)."""
+        return self._positions.get(symbol, 0)
