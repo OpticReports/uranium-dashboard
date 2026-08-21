@@ -223,7 +223,20 @@ def _position_from_drifted_row(key: str, row: dict) -> tuple[BlendPosition,
             else:
                 kw[name] = fallback
                 defaulted.append(name)
-    return BlendPosition(**kw), dropped, defaulted
+    pos = BlendPosition(**kw)
+    if defaulted:
+        # MF-3: a row carrying STAND-IN values is not a row this build may
+        # act on. Without this it survived the halt: one /resume later a
+        # tracker EXIT booked a `qty` stand-in of 0 as a green
+        # "blend EXIT CRSP x0", DELETED the row, and abandoned the real
+        # shares untracked with has_naked_position() False. `history_gap`
+        # is exactly the existing "UNVERIFIABLE — do not act, do not
+        # unpark on a timestamp" machinery (R1/X3): the exit defers, the
+        # row is kept, reconcile alerts the venue-vs-book discrepancy, and
+        # entries stay blocked. It is cleared only by positive venue
+        # evidence, like every other flagged row.
+        pos.history_gap = True
+    return pos, dropped, defaulted
 
 
 @dataclass
@@ -433,7 +446,10 @@ class Blend3070Manager:
                        if dropped_keys else "")
                     + (f"; fields the rows did not carry were DEFAULTED (the "
                        f"values are stand-ins, read them off the preserved "
-                       f"file): {', '.join(defaulted)}" if defaulted else "")
+                       f"file) and those rows are flagged UNVERIFIABLE — "
+                       f"nothing exits, re-stops or flattens them and they "
+                       f"show up as `unverifiable` on /status and the feed: "
+                       f"{', '.join(defaulted)}" if defaulted else "")
                     + (f"; row(s) {', '.join(unbuildable)} could not be "
                        f"rebuilt at all and were DROPPED from the in-memory "
                        f"book — they exist ONLY in the preserved file and the "

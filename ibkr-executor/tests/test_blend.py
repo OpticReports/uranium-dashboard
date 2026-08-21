@@ -3876,3 +3876,58 @@ def test_gate_mf2_a_superseded_loop_thread_stops_running_cycles(
         service.MGR = None
 
 
+def test_gate_mf3_a_drifted_stand_in_row_never_exits_as_x0(tmp_path):
+    """MF-3 (NEW, introduced by ZF-4, found by the whole-branch review's
+    probe F4g): a drift that REMOVES `qty` rebuilt the row with the stand-in
+    `qty = 0`. The book was halted and the alert named the field — but one
+    /resume later a tracker EXIT booked it as a green `blend EXIT CRSP x0`,
+    DELETED the row, and left 5 REAL shares at the venue untracked with
+    has_naked_position() False.
+
+    A row carrying stand-ins is UNVERIFIABLE by construction: it is flagged
+    `history_gap`, so the existing machinery defers the exit, keeps the row,
+    alerts the 5-vs-0 discrepancy and blocks entries."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    _held_position(m, stop_ref=None)
+    pos = m.state.positions["1"]
+    rs = a.place_stock_order("CRSP", -5, "STP", stop_price=44.0, tif="GTC",
+                             client_order_id="blend-1-stp-44.0000")
+    pos.stop_order_ref = rs["order_ref"]
+    a._positions["CRSP"] = 5
+    m.state.halted = "KILL"
+    m.save()
+    raw = json.load(open(m.state_path))
+    raw["positions"]["1"].pop("qty")            # the drift: `qty` renamed away
+    with open(m.state_path, "w") as fh:
+        json.dump(raw, fh)
+
+    m2 = mk(tmp_path)
+    assert m2.state.halted == "SCHEMA_DRIFT" or m2.state.halted == "KILL"
+    assert "1" in m2.state.positions
+    p = m2.state.positions["1"]
+    assert p.qty == 0 and p.history_gap is True      # the stand-in is flagged
+    assert "flagged UNVERIFIABLE" in m2.archived_state
+    # the stand-in provenance is visible where every other unverifiable row
+    # is visible
+    assert m2.status_summary()["unverifiable"] == ["1"]
+    assert m2.feed(PRICES, "2026-08-22")["unverifiable"] == 1
+    assert m2.feed(PRICES, "2026-08-22")["positions"][0]["unverifiable"] is True
+
+    m2.resume()                                  # the operator clears the halt
+    alerts: list[str] = []
+    run_cycle(m2, a, payload(exits=[{"call_id": 1, "symbol": "CRSP",
+                                     "reason": "exit"}],
+                             stops=[stop_row()]),
+              "2026-08-22", alert=alerts.append)
+    assert "1" in m2.state.positions             # the row is NOT deleted
+    assert a._positions["CRSP"] == 5             # the shares are NOT abandoned
+    assert m2.has_naked_position()               # entries stay BLOCKED
+    assert not any("EXIT CRSP x0" in msg for msg in alerts)
+    assert any("EXIT CRSP deferred" in msg and "UNVERIFIABLE" in msg
+               for msg in alerts)
+    assert any("holds 5 shares vs 0 booked" in msg for msg in alerts)
+    assert m2.status_summary()["unverifiable"] == ["1"]
+
+
