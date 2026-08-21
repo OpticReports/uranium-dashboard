@@ -93,14 +93,20 @@ class LadderManager:
         # alert channel at construction time), same doctrine as the blend
         # manager's mode-transition archive.
         self.archived_state: str | None = None
+        # ZF-7: did the preserve rename actually SUCCEED? The Z-J boot save
+        # below is conditional on it.
+        self._evidence_preserved = False
         self.state = self._load()
-        if self.archived_state:
+        if self.archived_state and self._evidence_preserved:
             # Z-J: the corrupt/drift branches move the file aside and set
             # `halted` IN MEMORY; `_build` never saves, so a crash before
             # the loop's first save() lost the halt AND the preserved legs —
             # next boot came back `halted: None` with every leg WAITING,
             # precisely the y2 harm one crash earlier. Persist immediately;
-            # the original file is already archived, so nothing is erased.
+            # on THIS path the original file is already archived, so nothing
+            # is erased. When the rename FAILED the original is still the
+            # only copy of the drift, so the halt stays in memory rather
+            # than overwriting the evidence at boot (ZF-7).
             self.save()
 
     def _load(self) -> LadderState:
@@ -118,6 +124,7 @@ class LadderManager:
             try:
                 os.replace(self.state_path, archive)
                 note = f"unreadable book preserved at {archive}"
+                self._evidence_preserved = True
             except OSError as err:
                 note = (f"PRESERVE FAILED ({err}) — the unreadable book will "
                         f"be OVERWRITTEN by the next save")
@@ -150,6 +157,7 @@ class LadderManager:
             try:
                 os.replace(self.state_path, archive)
                 note = f"drifted book preserved at {archive}"
+                self._evidence_preserved = True
             except OSError as err:
                 note = (f"PRESERVE FAILED ({err}) — the drifted book will "
                         f"be OVERWRITTEN by the next save")

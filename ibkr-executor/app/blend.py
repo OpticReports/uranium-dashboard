@@ -174,6 +174,48 @@ class BlendPosition:
                                 # case, the stop covers the full qty
 
 
+# ZF-4: fail-closed stand-ins for the eight BlendPosition fields that have
+# NO default, used ONLY by the schema-drift reconstruction below. They are
+# deliberately NOT dataclass defaults: on the ordinary load path a missing
+# required field must still raise, or a removed field would degrade the book
+# SILENTLY (qty 0, stop_level 0.0) with no halt and no alert.
+_DRIFT_FALLBACK = {"call_id": 0, "symbol": "", "qty": 0, "entry_ref": 0.0,
+                   "fill_price": 0.0, "entry_date": "", "time_stop": "",
+                   "stop_level": 0.0}
+
+
+def _position_from_drifted_row(key: str, row: dict) -> tuple[BlendPosition,
+                                                             list[str],
+                                                             list[str]]:
+    """Rebuild one position row written by a build whose schema this one does
+    not share, returning (position, dropped_keys, defaulted_fields).
+
+    The ladder's y2 filter survives the same drift because EVERY `LegState`
+    field is defaulted; `BlendPosition` has eight that are not, so a RENAMED
+    or REMOVED field made the filtered `BlendPosition(**row)` raise INSIDE
+    the drift handler and fall through to `_load`'s outer `except` — a
+    FRESH, un-halted book, which is the exact Z-D harm reached through the
+    Z-D fix. So: drop what this build does not understand, default what the
+    row does not carry, and NAME both to the operator (the book is HALTED
+    either way and the drifted file is preserved, so nothing is lost —
+    an open position's `stop_order_ref` is the only handle on a real
+    resting stop and it survives)."""
+    known = {f.name for f in fields(BlendPosition)}
+    kw = {k: v for k, v in row.items() if k in known}
+    dropped = sorted(k for k in row if k not in known)
+    defaulted = []
+    for name, fallback in _DRIFT_FALLBACK.items():
+        if name not in kw:
+            # call_id is the book's own map key, so it is recoverable even
+            # when the row lost it; the rest can only be stood in for.
+            if name == "call_id" and str(key).lstrip("-").isdigit():
+                kw[name] = int(key)
+            else:
+                kw[name] = fallback
+                defaulted.append(name)
+    return BlendPosition(**kw), dropped, defaulted
+
+
 @dataclass
 class BlendState:
     initialized: bool = False
@@ -238,13 +280,21 @@ class Blend3070Manager:
         self.archived_state_critical = False   # y4: unreadable
                                                # book, not a
                                                # routine mode change
+        # ZF-7: did the archive/preserve rename actually SUCCEED? The Z-J
+        # boot save below is conditional on it.
+        self._evidence_preserved = False
         self.state = self._load()
-        if self.archived_state:
+        if self.archived_state and self._evidence_preserved:
             # Z-J: the archive/drift branches set `halted` and rebuild the
             # book IN MEMORY only — a crash before the loop's first save()
             # lost both and the next boot came back un-halted, which is the
-            # y2 harm one crash earlier. The old file is already moved
-            # aside, so this writes the recovered book, never over evidence.
+            # y2 harm one crash earlier. The old file IS already moved aside
+            # on this path (ZF-7: `_evidence_preserved`), so this writes the
+            # recovered book, never over evidence. When the rename FAILED
+            # the original file is still sitting at `state_path` and is the
+            # only copy of the drift — persisting the halt would destroy it
+            # immediately, so the halt stays in memory (the loop's first
+            # save overwrites it either way, and `archived_state` says so).
             self.save()
         # M2 (thread-safety): API threads (/status, /blend/feed) serve THIS
         # loop-thread-refreshed quote cache — they must never touch the
@@ -285,6 +335,7 @@ class Blend3070Manager:
                 try:
                     os.replace(self.state_path, archive)
                     note = f"previous book archived to {archive}"
+                    self._evidence_preserved = True
                 except OSError as exc:
                     # F2: a failed archive must still be LOUD — the fresh
                     # book's first save will overwrite the old file.
@@ -333,16 +384,30 @@ class Blend3070Manager:
                 # handle on a real resting stop), PRESERVE the file, and
                 # HALT — reconcile still runs and still protects the book
                 # while halted; only new decisions stop.
-                known = {f.name for f in fields(BlendPosition)}
-                st.positions = {
-                    k: BlendPosition(**{kk: vv for kk, vv in v.items()
-                                        if kk in known})
-                    for k, v in (raw.get("positions") or {}).items()
-                    if isinstance(v, dict)}
+                st.positions = {}
+                unbuildable: list[str] = []     # ZF-6: never SILENTLY lost
+                dropped_keys: set[str] = set()
+                defaulted: list[str] = []
+                for k, v in (raw.get("positions") or {}).items():
+                    if not isinstance(v, dict):
+                        unbuildable.append(str(k))
+                        continue
+                    try:
+                        pos, drop, defl = _position_from_drifted_row(k, v)
+                    except Exception:  # noqa: BLE001
+                        # ZF-4: a row this build cannot rebuild at all must
+                        # never take the whole book down to the G3 branch —
+                        # the halt and every OTHER row are worth more.
+                        unbuildable.append(str(k))
+                        continue
+                    st.positions[k] = pos
+                    dropped_keys.update(drop)
+                    defaulted.extend(f"{k}.{d}" for d in defl)
                 archive = f"{self.state_path}.corrupt-{int(time.time())}"
                 try:
                     os.replace(self.state_path, archive)
                     note = f"drifted book preserved at {archive}"
+                    self._evidence_preserved = True
                 except OSError as err:
                     note = (f"PRESERVE FAILED ({err}) — the drifted book "
                             f"will be OVERWRITTEN by the next save")
@@ -352,7 +417,19 @@ class Blend3070Manager:
                     f"blend position rows unreadable ({exc}); book HALTED "
                     f"({st.halted}) so no entry, exit or ratchet is decided "
                     f"before you look — positions, cash and stop refs kept, "
-                    f"reconcile still protects them; {note}")
+                    f"reconcile still protects them"
+                    + (f"; fields this build does not understand were DROPPED "
+                       f"from the rebuilt rows: {', '.join(sorted(dropped_keys))}"
+                       if dropped_keys else "")
+                    + (f"; fields the rows did not carry were DEFAULTED (the "
+                       f"values are stand-ins, read them off the preserved "
+                       f"file): {', '.join(defaulted)}" if defaulted else "")
+                    + (f"; row(s) {', '.join(unbuildable)} could not be "
+                       f"rebuilt at all and were DROPPED from the in-memory "
+                       f"book — they exist ONLY in the preserved file and the "
+                       f"book stays HALTED until you restore them by hand"
+                       if unbuildable else "")
+                    + f"; {note}")
                 logger.error("blend: %s", self.archived_state)
             st.events = raw.get("events", [])[-300:]
             return st
@@ -369,6 +446,7 @@ class Blend3070Manager:
             try:
                 os.replace(self.state_path, archive)
                 note = f"unreadable book preserved at {archive}"
+                self._evidence_preserved = True
             except OSError as err:
                 note = (f"PRESERVE FAILED ({err}) — the unreadable book will "
                         f"be OVERWRITTEN by the next save")
