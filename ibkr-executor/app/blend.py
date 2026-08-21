@@ -97,6 +97,9 @@ TRADE_LOG_MAX = 200         # persisted closed/booked trade rows kept (feed)
 EQUITY_CURVE_MAX = 1500     # daily book-value snapshots kept (~6 years)
 UTIL_ALERT_ON = 0.85        # budget-utilization alert threshold (one-shot)
 UTIL_ALERT_OFF = 0.75       # re-arm threshold once utilization drops back
+BOOK_ORDER_STALE_DAYS = 2   # a pending book-order journal older than this is
+                            # anomalous (real DAY/OPG orders expire same-day)
+                            # -> WARN once per order (r6)
 STALE_PAYLOAD_DAYS = 5      # as_of older than this vs today -> no decisions
                             # (5, not the review's 2: a Monday poll after a
                             # long holiday weekend legitimately sees a 4-day-
@@ -142,6 +145,13 @@ class BlendPosition:
     risk_per_share: float = 0.0  # entry_ref - day-one trail, frozen at entry
                                  # (R-multiple denominator; 0.0 on legacy
                                  # state rows -> R reported as null)
+    history_gap: bool = False   # R1 blackout guard: a reconcile gap exceeded
+                                # the venue-history horizon, so a stop fill
+                                # inside the blackout may be invisible
+                                # FOREVER — UNVERIFIABLE. Cleared ONLY by
+                                # positive venue evidence (reconcile pass
+                                # 1b), never by timestamp; exits//kill park
+                                # while set
 
 
 @dataclass
@@ -169,6 +179,11 @@ class BlendState:
     spy_qty: int = 0
     core_cash: float = 0.0
     halted: str | None = None   # KILL | None
+    flatten_request: dict | None = None  # /kill journal (R2): {ts, date} —
+                                         # persisted like pending_entries so
+                                         # a restart resumes the flatten; the
+                                         # LOOP thread executes it (it owns
+                                         # the ib_async event loop)
     events: list = field(default_factory=list)
     trades: list = field(default_factory=list)   # booked fills, oldest first
                                                  # (bounded TRADE_LOG_MAX;
@@ -177,15 +192,29 @@ class BlendState:
                                                       # one row per cycle day
     last_gate: bool | None = None    # last tracker gate seen (feed display)
     util_alert_armed: bool = True    # one-shot 85% budget alert armed?
+    quote_alert_armed: bool = True   # missing-SPY/BIL alert armed? (r3/r4:
+                                     # alert-once per outage, re-armed on
+                                     # recovery — the budget-alarm pattern)
     last_reconcile_ts: float = 0.0   # wall clock of the last SUCCESSFUL
                                      # reconcile pass (venue-history horizon
                                      # guard, adapter review m2)
+    mode: str = ""      # "dry:paper" | "real:paper" | "real:live" — the mode
+                        # this book's fills belong to. A book built in one
+                        # mode is FICTION in another (DryAdapter fills at
+                        # placeholder prices; paper fills aren't live fills):
+                        # _load archives the file and starts fresh on any
+                        # mismatch rather than reconciling fiction against a
+                        # venue that never saw those orders.
 
 
 class Blend3070Manager:
     def __init__(self, cfg, state_path: str):
         self.cfg = cfg
         self.state_path = state_path
+        # Set by _load when a mode mismatch archived the previous book —
+        # service startup turns it into a Telegram alert (the manager has
+        # no alert channel at construction time).
+        self.archived_state: str | None = None
         self.state = self._load()
         # M2 (thread-safety): API threads (/status, /blend/feed) serve THIS
         # loop-thread-refreshed quote cache — they must never touch the
@@ -199,9 +228,42 @@ class Blend3070Manager:
 
     # ---------- persistence (LadderManager pattern) ----------
 
+    def _current_mode(self) -> str:
+        # Mirrors _build's adapter choice exactly (counter-agent F1): the
+        # DryAdapter runs whenever creds are ABSENT too, not just under
+        # DRY_RUN — placeholder fills must be tagged dry regardless of the
+        # flag, or a creds-missing boot with DRY_RUN=false would tag
+        # fiction as a real book.
+        has_creds = bool(getattr(self.cfg, "tws_userid", "")
+                         and getattr(self.cfg, "tws_password", ""))
+        dry = self.cfg.dry_run or not has_creds
+        return f"{'dry' if dry else 'real'}:{self.cfg.trading_mode}"
+
     def _load(self) -> BlendState:
         try:
             raw = json.load(open(self.state_path))
+            stored_mode = raw.get("mode", "")
+            if stored_mode != self._current_mode():
+                # Mode-transition guard: this book's fills belong to a
+                # different mode (or a pre-guard file of unknown mode) and
+                # the current venue never saw its orders — reconciling
+                # them would mark fictional holdings at real prices and
+                # trade the difference. Archive and start clean.
+                archive = (f"{self.state_path}.archived-"
+                           f"{(stored_mode or 'unknown').replace(':', '_')}"
+                           f"-{int(time.time())}")
+                try:
+                    os.replace(self.state_path, archive)
+                    note = f"previous book archived to {archive}"
+                except OSError as exc:
+                    # F2: a failed archive must still be LOUD — the fresh
+                    # book's first save will overwrite the old file.
+                    note = (f"ARCHIVE FAILED ({exc}) — previous book will "
+                            f"be OVERWRITTEN by the next save")
+                self.archived_state = (f"mode change "
+                                       f"{stored_mode or 'unknown'} -> "
+                                       f"{self._current_mode()}; {note}")
+                return BlendState(mode=self._current_mode())
             st = BlendState(
                 initialized=raw.get("initialized", False),
                 entered_ids=raw.get("entered_ids", []),
@@ -216,22 +278,31 @@ class Blend3070Manager:
                 spy_qty=raw.get("spy_qty", 0),
                 core_cash=raw.get("core_cash", 0.0),
                 halted=raw.get("halted"),
+                flatten_request=raw.get("flatten_request"),
                 trades=raw.get("trades", [])[-TRADE_LOG_MAX:],
                 equity_curve=raw.get("equity_curve", [])[-EQUITY_CURVE_MAX:],
                 last_gate=raw.get("last_gate"),
                 util_alert_armed=raw.get("util_alert_armed", True),
+                quote_alert_armed=raw.get("quote_alert_armed", True),
                 last_reconcile_ts=raw.get("last_reconcile_ts", 0.0),
+                mode=stored_mode,
             )
             st.positions = {k: BlendPosition(**v)
                             for k, v in raw.get("positions", {}).items()}
             st.events = raw.get("events", [])[-300:]
             return st
+        except FileNotFoundError:
+            return BlendState(mode=self._current_mode())
         except Exception:  # noqa: BLE001
-            return BlendState()
+            return BlendState(mode=self._current_mode())
 
     def save(self) -> None:
+        # Atomic write (counter-agent N3): a save interrupted mid-write —
+        # or two threads racing — must never leave a truncated file that
+        # _load silently resolves to a fresh empty book.
         os.makedirs(os.path.dirname(self.state_path) or ".", exist_ok=True)
-        json.dump({"initialized": self.state.initialized,
+        tmp_path = self.state_path + ".tmp"
+        payload = {"initialized": self.state.initialized,
                    "positions": {k: asdict(v)
                                  for k, v in self.state.positions.items()},
                    "entered_ids": self.state.entered_ids,
@@ -246,13 +317,20 @@ class Blend3070Manager:
                    "spy_qty": self.state.spy_qty,
                    "core_cash": self.state.core_cash,
                    "halted": self.state.halted,
+                   "flatten_request": self.state.flatten_request,
                    "trades": self.state.trades[-TRADE_LOG_MAX:],
                    "equity_curve": self.state.equity_curve[-EQUITY_CURVE_MAX:],
                    "last_gate": self.state.last_gate,
                    "util_alert_armed": self.state.util_alert_armed,
+                   "quote_alert_armed": self.state.quote_alert_armed,
                    "last_reconcile_ts": self.state.last_reconcile_ts,
-                   "events": self.state.events[-300:]},
-                  open(self.state_path, "w"), indent=1)
+                   "mode": self.state.mode,
+                   "events": self.state.events[-300:]}
+        with open(tmp_path, "w") as fh:
+            json.dump(payload, fh, indent=1)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp_path, self.state_path)
 
     def _event(self, level: str, msg: str) -> bool:
         """Log a deduped event. Returns True only when the event was NEWLY
@@ -311,9 +389,10 @@ class Blend3070Manager:
         return v
 
     def has_naked_position(self) -> bool:
-        """Any held position without a working protective stop (safety-first:
-        blocks all new entries until resolved)."""
-        return any(p.stop_missing or not p.stop_order_ref
+        """Any held position without a working protective stop — or one
+        that is blackout-UNVERIFIABLE (R1: its stop state is unknown) —
+        (safety-first: blocks all new entries until resolved)."""
+        return any(p.stop_missing or not p.stop_order_ref or p.history_gap
                    for p in self.state.positions.values())
 
     def budget_utilization(self, prices: dict[str, float]) -> float | None:
@@ -430,6 +509,24 @@ class Blend3070Manager:
             self._event("INFO", f"book order(s) pending adoption "
                                 f"({', '.join(kinds)}): no new book-level "
                                 f"orders this cycle")
+            # r6: real DAY/OPG orders expire the same day — a journal this
+            # old means a venue-stuck order is freezing sweep/core-buy/
+            # rebalance. Escalate to WARN + Telegram once per order.
+            for cid, rec in st.pending_book_orders.items():
+                try:
+                    age = (date.fromisoformat(today)
+                           - date.fromisoformat(rec.get("date") or "")).days
+                except ValueError:
+                    age = None
+                if (age is not None and age >= BOOK_ORDER_STALE_DAYS
+                        and not rec.get("stale_alerted")):
+                    rec["stale_alerted"] = True
+                    self.save()
+                    msg = (f"book order {cid} ({rec['kind']}) still working "
+                           f"after {age}d — sweep/core-buy/rebalance frozen; "
+                           f"check the venue order")
+                    self._event("WARN", msg)
+                    alerts.append(msg)
         projected_cash = st.sleeve_cash - self.reserved_sleeve_cash()
         funds = projected_cash + (0.0 if pending_book
                                   else st.bil_qty * bil_px)  # spendable
@@ -520,12 +617,22 @@ class Blend3070Manager:
             pos = st.positions[str(it["call_id"])]
             projected_gross -= pos.qty * self._mark_price(pos, prices)
         naked = self.has_naked_position()
+        # r7: a missing SPY/BIL quote zeroes gross_exposure, so the
+        # BLEND_BUDGET gate (and the 85% alarm) would compute low while
+        # entries proceed — with a cap set, entries wait for the quotes.
+        budget_blind = budget > 0 and (prices.get(CORE, 0.0) <= 0
+                                       or bil_px <= 0)
         if gate_on and naked and payload.get("entries"):
             msg = ("entries BLOCKED: a held position has no working stop "
                    "(STOP_MISSING) — protect the book before adding risk")
             self._event("RED", msg)
             alerts.append(msg)
-        if gate_on and not naked:
+        if gate_on and not naked and budget_blind and payload.get("entries"):
+            self._event("WARN", "entries skipped: missing SPY/BIL quote "
+                                "with BLEND_BUDGET set — gross exposure "
+                                "(the budget gate's basis) is not "
+                                "computable this cycle")
+        if gate_on and not naked and not budget_blind:
             for e in payload.get("entries", []):
                 key = str(e["call_id"])
                 if key in st.positions or key in st.pending_entries:
@@ -596,11 +703,22 @@ class Blend3070Manager:
         #    M1: skipped while any book order is pending adoption.
         rebalance_intent = None
         spy_quote = prices.get(CORE, 0.0)
+        if spy_quote > 0 and bil_px > 0 and not st.quote_alert_armed:
+            st.quote_alert_armed = True     # outage over: re-arm (r3)
+            self.save()
         if spy_quote <= 0 or bil_px <= 0:
             msg = (f"rebalance/valuation SKIPPED: missing quote "
                    f"(SPY={spy_quote or None}, BIL={bil_px or None}) — no "
                    f"weight decision is taken on absent prices")
-            if self._event("WARN", msg):
+            self._event("WARN", msg)
+            if st.quote_alert_armed:
+                # r3/r4: alert-once per OUTAGE via a persisted armed flag
+                # (the budget-alarm pattern). Event-log dedup alone both
+                # missed a NEW outage after a quiet recovery (identical
+                # message, r3) and spammed when another recurring event
+                # interleaved (r4).
+                st.quote_alert_armed = False
+                self.save()
                 alerts.append(msg)
         elif pending_book:
             pass                        # wait for the in-flight book order
@@ -896,6 +1014,13 @@ class Blend3070Manager:
     def on_sweep(self, qty_delta: int, price: float) -> None:
         self.state.bil_qty += qty_delta
         self.state.sleeve_cash -= qty_delta * price
+        if qty_delta > 0 and self.state.sleeve_cash < 0:
+            # r5: a sweep BUY adopted at a venue fill above the journaled
+            # ref_price overdraws the reserved cash by the slippage —
+            # clamp to zero (slippage-bounded magnitude) and log it.
+            self._event("INFO", f"sweep slippage absorbed: sleeve cash "
+                                f"{self.state.sleeve_cash:.2f} clamped to 0")
+            self.state.sleeve_cash = 0.0
         self._record_trade(CASH_VEHICLE, "BUY" if qty_delta > 0 else "SELL",
                            qty_delta, price, _utc_today(), "sweep")
         self.save()
@@ -913,8 +1038,27 @@ class Blend3070Manager:
         self._event("RED", f"blend halted ({reason})")
         self.save()
 
+    def request_flatten(self, today: str) -> None:
+        """/kill stage 1 (R2): journal the flatten request (persisted — a
+        restart resumes it, same doctrine as pending_entries) and halt the
+        book immediately (no new entries). Stage 2 — the actual flatten —
+        runs on the blend LOOP thread's next cycle (execute_flatten): that
+        thread owns the adapter's ib_async event loop, while an API thread
+        pumping a fresh loop against the shared connection would time out
+        every wait and risk session corruption."""
+        self.state.flatten_request = {"ts": int(time.time()), "date": today}
+        self.state.halted = "KILL"
+        self._event("RED", "kill: halt engaged; flatten queued for the "
+                           "execution loop")
+        self.save()
+
     def resume(self) -> None:
         self.state.halted = None
+        if self.state.flatten_request is not None:
+            # A queued kill-flatten must never fire against a RESUMED book.
+            self.state.flatten_request = None
+            self._event("WARN", "resume: queued kill-flatten request "
+                                "cleared before execution")
         self._event("INFO", "blend resumed")
         self.save()
 
@@ -923,11 +1067,14 @@ class Blend3070Manager:
         out = {
             "enabled": True,
             "halted": st.halted,
+            "flatten_pending": st.flatten_request is not None,
             "initialized": st.initialized,
             "positions": {k: asdict(v) for k, v in st.positions.items()},
             "open_count": len(st.positions),
             "stop_missing": [k for k, v in st.positions.items()
                              if v.stop_missing or not v.stop_order_ref],
+            "unverifiable": [k for k, v in st.positions.items()
+                             if v.history_gap],
             "pending_entries": sorted(st.pending_entries),
             "pending_book_orders": sorted(st.pending_book_orders),
             "unreconciled": st.unreconciled,
@@ -1228,8 +1375,106 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
     mgr._reconcile_gap_s = (time.time() - st.last_reconcile_ts
                             if st.last_reconcile_ts else 0.0)
 
+    # 0) blackout-horizon guard (R1): a gap longer than what venue order
+    #    history serves means a stop fill INSIDE the blackout may be
+    #    invisible FOREVER — not just this cycle. Flag every held position
+    #    UNVERIFIABLE (persisted) BEFORE anything acts on it; the flag
+    #    clears ONLY on positive venue evidence (pass 1b), never because
+    #    a later reconcile stamped a fresh timestamp.
+    if mgr._reconcile_gap_s > HISTORY_HORIZON_S:
+        newly = [p for p in st.positions.values() if not p.history_gap]
+        if newly:
+            for pos in newly:
+                pos.history_gap = True
+            mgr.save()
+            names = ", ".join(f"{p.symbol} x{p.qty}" for p in newly)
+            mgr._event("RED", f"blackout gap "
+                              f"{mgr._reconcile_gap_s / 86400.0:.1f}d exceeds "
+                              f"the venue-history horizon: {names} parked "
+                              f"UNVERIFIABLE until venue positions verify")
+            alert(f"🚨🚨 blend: no successful reconcile for "
+                  f"{mgr._reconcile_gap_s / 86400.0:.1f}d — order history "
+                  f"cannot prove what filled during the blackout. {names} "
+                  f"parked UNVERIFIABLE: no exit or /kill will MKT-sell "
+                  f"them until venue POSITIONS positively verify the shares")
+
     # 1) stop fills
     _ingest_fills(mgr, adapter, alert)
+
+    # 1b) positive verification of UNVERIFIABLE positions (R1): venue
+    #     POSITIONS are the strongest evidence — what does the account
+    #     actually hold NOW? Shares held -> unpark (stop re-verified /
+    #     re-placed by passes 3b/4); shares gone -> the stop filled
+    #     invisibly: book it when refreshed order history serves a priced
+    #     fill, else park UNRECONCILED (repo law: no silent zero). An
+    #     unanswerable venue keeps the flag — fail closed, retried every
+    #     cycle.
+    get_held = getattr(adapter, "stock_position", None)
+    for key, pos in list(st.positions.items()):
+        if not pos.history_gap:
+            continue
+        held = None
+        if get_held is not None:
+            try:
+                held = get_held(pos.symbol)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("blackout verify %s: venue positions "
+                               "unavailable (%s)", pos.symbol, exc)
+        if held is None:
+            mgr._event("WARN", f"{pos.symbol} (call {pos.call_id}) still "
+                               f"UNVERIFIABLE: venue positions unavailable")
+            continue
+        book_qty = sum(p.qty for p in st.positions.values()
+                       if p.symbol == pos.symbol)
+        if held >= book_qty:
+            pos.history_gap = False
+            stop = adapter.find_stock_order(
+                stop_client_id(pos.call_id, pos.stop_level))
+            if stop is None or stop.get("status") != "working":
+                pos.stop_missing = True     # pass 4 re-places (same cid:
+                pos.stop_order_ref = None   # a surviving stop is adopted)
+            mgr.save()
+            alert(f"🧬 blend: {pos.symbol} x{pos.qty} (call {pos.call_id}) "
+                  f"POSITIVELY verified still held at the venue after the "
+                  f"blackout — unparked"
+                  + ("" if not pos.stop_missing
+                     else " (protective stop re-placing)"))
+            continue
+        # Shares gone (fully or partly): the stop filled inside the
+        # blackout. Book only at a REAL venue price.
+        gone = book_qty - max(held, 0)
+        o = adapter.find_stock_order(stop_client_id(pos.call_id,
+                                                    pos.stop_level))
+        fill = (o or {}).get("fill_price")
+        peers = [p for p in st.positions.values()
+                 if p.symbol == pos.symbol and p.history_gap]
+        if (len(peers) == 1 and o is not None
+                and o.get("status") == "filled" and fill is not None):
+            if gone >= pos.qty:
+                mgr.on_exited(pos.call_id, fill, "stop_filled")
+                alert(f"🧬 blend: {pos.symbol} stop fill from the blackout "
+                      f"window recovered from venue history — booked "
+                      f"x{pos.qty} @ {fill:.2f}")
+            else:
+                mgr.on_partial_exit(pos.call_id, gone, fill, "stop_filled")
+                rem = st.positions.get(key)
+                if rem is not None:
+                    rem.history_gap = False     # remainder is venue truth
+                    mgr.save()
+                alert(f"⚠️ blend: PARTIAL blackout stop fill {pos.symbol} "
+                      f"{gone} of {pos.qty} @ {fill:.2f} booked — remainder "
+                      f"re-protected by reconcile")
+        else:
+            # No priced fill visible (or ambiguous same-symbol peers):
+            # the shares left the book at an unknowable price.
+            mgr.on_exit_unreconciled(
+                pos.call_id,
+                "blackout: venue no longer holds the shares and no priced "
+                "stop fill is visible — UNVERIFIABLE")
+            alert(f"🚨🚨 blend: {pos.symbol} x{pos.qty} (call "
+                  f"{pos.call_id}) is GONE at the venue after the blackout "
+                  f"and order history serves no priced fill — UNVERIFIABLE, "
+                  f"parked for manual booking; nothing sold")
 
     # 2) write-ahead entry journal
     for key, rec in list(st.pending_entries.items()):
@@ -1331,7 +1576,7 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
     #     the position STOP_MISSING for pass 4 to re-place. An unknown
     #     lookup is left alone.
     for pos in list(st.positions.values()):
-        if pos.stop_missing or not pos.stop_order_ref:
+        if pos.stop_missing or not pos.stop_order_ref or pos.history_gap:
             continue
         o = adapter.find_stock_order(stop_client_id(pos.call_id,
                                                     pos.stop_level))
@@ -1341,8 +1586,12 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
                   f"(call {pos.call_id}) was CANCELLED at the venue — "
                   f"position naked; re-placing now")
 
-    # 4) missing protective stops
+    # 4) missing protective stops. R1: never for an UNVERIFIABLE position —
+    #    a new SELL stop on shares the account may no longer hold is itself
+    #    a short path; pass 1b must positively verify first.
     for pos in list(st.positions.values()):
+        if pos.history_gap:
+            continue
         if pos.stop_missing or not pos.stop_order_ref:
             if _ensure_stop(mgr, adapter, pos, alert):
                 alert(f"🧬 blend: protective stop restored for {pos.symbol} "
@@ -1440,6 +1689,15 @@ def _execute_exit(mgr: Blend3070Manager, adapter, it: dict,
     exit returns False so run_cycle drops the entries its proceeds were
     meant to fund (counter-agent N5)."""
     key = str(it["call_id"])
+    pos0 = mgr.state.positions.get(key)
+    if pos0 is not None and pos0.history_gap:
+        # R1: UNVERIFIABLE since a blackout — its stop may have filled
+        # invisibly, so a MKT sell could short. Defer until reconcile pass
+        # 1b positively verifies the shares at the venue.
+        alert(f"🚨 blend EXIT {it['symbol']} deferred: position is "
+              f"UNVERIFIABLE after a venue-history blackout — nothing sold "
+              f"until venue positions verify it")
+        return False
     ref = it.get("stop_order_ref")
     if ref:
         try:
@@ -1507,6 +1765,141 @@ def _execute_exit(mgr: Blend3070Manager, adapter, it: dict,
     return True
 
 
+def execute_flatten(mgr: Blend3070Manager, adapter, alert) -> None:
+    """/kill stage 2 (R2): the LOOP thread executes a journaled flatten
+    request — it owns the adapter's ib_async event loop, and run_cycle has
+    already reconciled (N14 reconcile-first still holds: stop fills are
+    booked, so only positions STILL actually held are closed). The K-d law
+    survives: a RAISING stop cancel means the stop likely FILLED — park,
+    never a MKT sell on top of it. R1 UNVERIFIABLE (history_gap) positions
+    stay parked untouched. The completion alert states exactly what closed
+    vs what parked — the kill switch never overclaims."""
+    st = mgr.state
+    closed: list[str] = []
+    parked: list[str] = []
+    unrec: list[str] = []
+    for key in list(st.positions):
+        pos = st.positions.get(key)
+        if pos is None:
+            continue
+        sym = pos.symbol
+        if pos.history_gap:
+            # R1: its stop may have filled invisibly inside a blackout —
+            # a MKT sell could short. Stays parked until a reconcile
+            # positively verifies it at the venue.
+            parked.append(sym)
+            alert(f"🚨🚨 blend kill: {sym} NOT flattened — UNVERIFIABLE "
+                  f"after a venue-history blackout; parked until venue "
+                  f"positions verify it, verify the account manually")
+            continue
+        stop_ref = pos.stop_order_ref
+        if stop_ref:
+            cancel_raised = False
+            try:
+                cancelled = adapter.cancel_stock_order(stop_ref)
+            except Exception as exc:  # noqa: BLE001
+                # Pinned adapter contract: a RAISING cancel means the stop
+                # FILLED. Must never fall through to the MKT sell (K-d).
+                logger.exception("kill flatten: stop cancel %s raised "
+                                 "(stop likely FILLED): %s", key, exc)
+                cancel_raised = True
+                cancelled = False
+            # M3: whether the cancel succeeded or found the stop "already
+            # gone", it may have (partially) filled first — ingest venue
+            # fills so the sell below sizes from venue truth.
+            verify_ok = True
+            try:
+                _ingest_fills(mgr, adapter, alert)
+            except Exception as exc:  # noqa: BLE001
+                verify_ok = False
+                logger.exception("kill flatten: fill verify failed: %s", exc)
+            pos = st.positions.get(key)
+            if pos is None:
+                # Settled by its own stop fill (or parked priceless).
+                (unrec if key in st.unreconciled else closed).append(sym)
+                continue
+            if cancel_raised or not verify_ok:
+                # FAIL CLOSED (K-d): the stop signalled FILLED and/or venue
+                # truth is unverifiable — park loudly; reconcile settles it.
+                mgr.record_orphan_stop(stop_ref, {"symbol": sym,
+                                                  "qty": -pos.qty,
+                                                  "call_id": pos.call_id})
+                parked.append(sym)
+                alert(f"🚨🚨 blend kill: {sym} NOT flattened — stop cancel "
+                      f"{'raised (likely filled)' if cancel_raised else 'unverifiable'}; "
+                      f"position parked for reconcile, verify manually")
+                continue
+            if not cancelled:
+                if mgr._reconcile_gap_s > HISTORY_HORIZON_S:
+                    # m2 belt: "already gone" past the venue-history
+                    # horizon — UNVERIFIABLE, park loudly (R1's flag should
+                    # already have caught this; keep the belt).
+                    mgr.record_orphan_stop(stop_ref, {"symbol": sym,
+                                                      "qty": -pos.qty,
+                                                      "call_id": pos.call_id})
+                    parked.append(sym)
+                    alert(f"🚨🚨 blend kill: {sym} NOT flattened — stop "
+                          f"already gone past the venue-history horizon: "
+                          f"UNVERIFIABLE, nothing sold; verify manually")
+                    continue
+                # Verified still held with a possibly-resting stop: track
+                # it so a later fill alerts RED and the cancel retries.
+                mgr.record_orphan_stop(stop_ref, {"symbol": sym,
+                                                  "qty": -pos.qty,
+                                                  "call_id": pos.call_id})
+        try:
+            # M3: -pos.qty is the venue-truth REMAINING qty (a partial
+            # stop fill above already reduced it).
+            r = adapter.place_stock_order(
+                sym, -pos.qty, "MKT",
+                client_order_id=f"blend-{pos.call_id}-kill")
+            fill = r.get("fill_price")
+            if fill is None:
+                # Repo law: never book at a silent 0.0.
+                mgr.on_exit_unreconciled(pos.call_id,
+                                         "manual kill: venue ack without "
+                                         "a fill price")
+                unrec.append(sym)
+                alert(f"🚨 blend kill close {sym} x{pos.qty} UNRECONCILED: "
+                      f"no fill price — proceeds NOT booked, manual "
+                      f"reconciliation needed")
+            else:
+                mgr.on_exited(pos.call_id, fill, "manual kill")
+                closed.append(sym)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("kill flatten close %s failed: %s", key, exc)
+            if stop_ref:
+                # The stop was retired above but the sell failed: the
+                # position must not be believed protected (m3 pattern) —
+                # pass 4 re-places while the book stays halted.
+                mgr.mark_stop_missing(pos.call_id)
+            parked.append(sym)
+            alert(f"🚨 blend kill: MKT close {sym} FAILED ({exc}) — "
+                  f"position still held; book halted, close manually or "
+                  f"wait for reconcile")
+    st.flatten_request = None       # executed (outcomes alerted below)
+    # N3: re-assert the halt. If a /resume slipped in between the request
+    # and this execution, the book must still come out of a flatten HALTED
+    # — the operator resumes a flattened book explicitly, never races one.
+    st.halted = "KILL"
+    mgr.save()
+    # Honest completion summary: exactly what closed vs what did not.
+    if parked or unrec:
+        alert(f"🔴 blend kill flatten finished WITH EXCEPTIONS: "
+              f"{len(closed)} closed ({', '.join(closed) or 'none'})"
+              + (f", {len(unrec)} sold but UNRECONCILED "
+                 f"({', '.join(unrec)})" if unrec else "")
+              + f", {len(parked)} NOT closed ({', '.join(parked)}) — "
+                f"parked positions need manual verification; book stays "
+                f"halted until /resume")
+    elif closed:
+        alert(f"🔴 blend kill flatten complete: {len(closed)} position(s) "
+              f"closed ({', '.join(closed)}); book halted until /resume")
+    else:
+        alert("🔴 blend kill flatten complete: book was already flat; "
+              "halted until /resume")
+
+
 def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
               today: str, alert=None) -> list[dict]:
     """One blend cycle: RECONCILE (venue truth first) -> step -> execute
@@ -1518,6 +1911,12 @@ def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
     # PHASE 0 — reconciliation-first (order-safety law #1). Raises if the
     # adapter cannot reconcile: the cycle fails closed.
     reconcile(mgr, adapter, today, alert)
+
+    # PHASE 0b — a journaled /kill flatten request executes HERE, on the
+    # loop thread that owns the adapter's event loop (R2). Reconcile above
+    # already booked any stop fills; the book stays halted either way.
+    if mgr.state.flatten_request is not None:
+        execute_flatten(mgr, adapter, alert)
 
     if payload is not None and payload_is_stale(payload, today):
         alert(f"⚠️ blend: tracker payload is stale (as_of "

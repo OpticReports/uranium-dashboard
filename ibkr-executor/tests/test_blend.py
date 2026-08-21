@@ -5,6 +5,7 @@ invariants (BLEND_ENABLED=false changes nothing; the tracker never learns
 account equity; DRY_RUN defaults true). All offline."""
 from __future__ import annotations
 
+import json
 import time
 
 import pytest
@@ -20,6 +21,8 @@ class Cfg:
     tracker_url = ""
     tracker_user = ""
     tracker_password = ""
+    dry_run = True              # mode-guard: tests run a "dry:paper" book
+    trading_mode = "paper"
 
 
 def mk(tmp_path, **cfg_over):
@@ -64,6 +67,17 @@ def _seed_initialized(m, sleeve_cash=3_000.0, spy_qty=70, bil_qty=0,
     m.state.spy_qty = spy_qty
     m.state.bil_qty = bil_qty
     m.state.core_cash = core_cash
+
+
+def _wait_until(cond, timeout=10.0):
+    """Poll for an async condition (R2: the loop thread executes the /kill
+    flatten after LOOP_WAKE — service tests wait for it, house idiom)."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if cond():
+            return True
+        time.sleep(0.05)
+    return cond()
 
 
 def _held_position(m, call_id=1, symbol="CRSP", qty=5, fill=50.0,
@@ -396,10 +410,15 @@ def test_gate_blend_enabled_status_and_kill(tmp_path, monkeypatch):
                               "sleeve_cash", "bil_qty", "spy_qty", "core_cash",
                               "budget_cap", "events"}
             assert b["open_count"] == 1
-            # /kill closes blend positions and halts the blend book too
-            c.get("/kill", params={"token": "sekrit"})
-            assert service.BLEND.state.positions == {}
+            # /kill halts the blend book IMMEDIATELY and queues the flatten
+            # for the execution loop (R2 two-stage), which closes positions
+            # within seconds (LOOP_WAKE).
+            r = c.get("/kill", params={"token": "sekrit"})
+            assert r.json()["blend"] == "flatten_queued"
             assert service.BLEND.state.halted == "KILL"
+            assert _wait_until(
+                lambda: service.BLEND.state.positions == {}
+                and service.BLEND.state.flatten_request is None)
             c.get("/resume", params={"token": "sekrit"})
             assert service.BLEND.state.halted is None
     finally:
@@ -1054,6 +1073,8 @@ def test_gate_n14_kill_does_not_double_sell_a_stop_filled_position(
             cash_before = B.state.sleeve_cash
             r = c.get("/kill", params={"token": "sekrit"})
             assert r.json()["halted"] == "KILL"
+            # R2: the loop thread reconciles-first then flattens
+            assert _wait_until(lambda: B.state.flatten_request is None)
             sells = _executions(A, "CRSP")
             assert len(sells) == 1               # the stop fill ONLY
             assert sells[0]["action"] == "stop_triggered"
@@ -1096,9 +1117,15 @@ def test_gate_n14_kill_refuses_blind_flatten_when_reconcile_fails(
             monkeypatch.setattr(A, "poll_stock_fills", boom)
             r = c.get("/kill", params={"token": "sekrit"})
             assert r.json()["halted"] == "KILL"
+            assert B.state.halted == "KILL"      # halt is IMMEDIATE
+            # R2: wait for the loop's flatten attempt — reconcile fails,
+            # so the cycle fails CLOSED and nothing is blind-sold.
+            assert _wait_until(
+                lambda: service.BLEND_CYCLE["ok"] is False)
             assert "1" in B.state.positions      # NOT blind-sold
-            assert B.state.halted == "KILL"      # but the book IS halted
             assert _executions(A, "CRSP") == []
+            # the flatten request survives to retry once the venue answers
+            assert B.state.flatten_request is not None
     finally:
         service.BLEND = None
         service.MGR = None
@@ -1431,6 +1458,8 @@ def test_gate_kd_kill_raising_cancel_never_market_sells(tmp_path, monkeypatch):
 
             r = c.get("/kill", params={"token": "sekrit"})
             assert r.json()["halted"] == "KILL"
+            # R2: the loop thread executes the flatten; K-d must survive.
+            assert _wait_until(lambda: B.state.flatten_request is None)
             # No market sell may be placed against the maybe-filled stop.
             mkt_sells = [e for e in _executions(A, "CRSP")
                          if e["action"] != "stop_triggered"]
@@ -1519,7 +1548,11 @@ def test_gate_adapt_m3_kill_after_partial_stop_never_oversells(
             B.save()
             A.trigger_stop_partial(rs["order_ref"], 3)   # 3 fill, stop dies
             c.get("/kill", params={"token": "sekrit"})
-            assert B.state.positions == {} and B.state.halted == "KILL"
+            # R2: loop-thread flatten — partial booked by reconcile first
+            assert _wait_until(
+                lambda: B.state.positions == {}
+                and B.state.flatten_request is None)
+            assert B.state.halted == "KILL"
             sold = -sum(e["qty"] for e in _executions(A, "CRSP"))
             assert sold == 5                 # 3 partial + 2 MKT, never 8
     finally:
@@ -1544,8 +1577,9 @@ def test_gate_adapt_m4_missing_core_quote_skips_rebalance_alerts_once(
     # alert fires ONCE per outage: the next cycle stays quiet
     out2 = m.step("2026-08-20", payload(), no_spy)
     assert not [o for o in out2 if o["action"] in ("ALERT", "REBALANCE")]
-    # missing BIL likewise
-    m2 = mk(tmp_path)
+    # missing BIL likewise (fresh book: its own state file — the armed
+    # flag is persisted now, r3)
+    m2 = Blend3070Manager(Cfg(), str(tmp_path / "b2.json"))
     _seed_initialized(m2, sleeve_cash=0.0, bil_qty=30, spy_qty=70)
     out3 = m2.step("2026-08-20", payload(), {"SPY": 100.0})
     assert not [o for o in out3 if o["action"] == "REBALANCE"]
@@ -1611,6 +1645,436 @@ def test_gate_adapt_m2min_fresh_history_false_cancel_still_sells(tmp_path):
     assert "1" not in m.state.positions
     assert not m.state.unreconciled
     assert len(_executions(a, "CRSP")) == 1
+
+
+# R1 (re-review residual): the blackout guard must be MORE than one cycle
+# deep — UNVERIFIABLE positions stay parked until a reconcile POSITIVELY
+# verifies them at the venue (positions data), never cleared by timestamp.
+# Scenarios derived from the re-review's probe A1 (scratchpad
+# attack_reround.py): the demonstrated naked short on cycle N+1.
+
+EXIT_CRSP = {"symbol": "CRSP", "call_id": 1, "reason": "trail",
+             "trail_level": 47.0}
+
+
+class _NoVenuePositionsAdapter(DryAdapter):
+    """Venue cannot answer the positions query — verification must stay
+    parked (fail closed), never clear on a fresh reconcile timestamp."""
+
+    def stock_position(self, symbol):
+        raise RuntimeError("positions unavailable (simulated)")
+
+
+def test_gate_r1_blackout_flag_survives_past_first_recovered_cycle(tmp_path):
+    """Probe A1: the stop filled INSIDE a 3-day blackout (history gone, the
+    fill invisible forever). Cycle N (tracker down) reconciles fine and
+    stamps the horizon clock; the exit lands on cycle N+1 — the old code's
+    gap check had reset and MKT-sold shares the venue no longer held (a
+    naked short). With positions data unavailable the flag must persist."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m, stop_ref=None)
+    m.state.positions["1"].stop_missing = True       # stop died in the blackout
+    m.state.last_reconcile_ts = time.time() - 3 * 86_400
+    a = _NoVenuePositionsAdapter()
+    alerts: list[str] = []
+    # cycle N: tracker still down -> reconcile-only; the position gets
+    # flagged and NOTHING (not even a protective stop) is placed for it —
+    # a new SELL stop on shares the account may not hold is a short path.
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    assert m.state.positions["1"].history_gap is True
+    assert not [e for e in a.log if e.get("symbol") == "CRSP"]
+    # cycle N+1: the tracker recovers and publishes the pierced-trail exit.
+    run_cycle(m, a, payload(exits=[EXIT_CRSP], stops=[stop_row()]),
+              "2026-08-24", alert=alerts.append)
+    assert "1" in m.state.positions                  # NOT sold
+    assert m.state.positions["1"].history_gap is True
+    assert not [e for e in a.log if e.get("symbol") == "CRSP"]  # no short
+    assert any("UNVERIFIABLE" in msg for msg in alerts)
+    assert any("deferred" in msg for msg in alerts)
+    # the flag is journaled: a restart cannot lose the parked state
+    m2 = Blend3070Manager(m.cfg, m.state_path)
+    assert m2.state.positions["1"].history_gap is True
+
+
+def test_gate_r1_venue_gone_parks_unreconciled_never_sells(tmp_path):
+    """Probe A1 with the venue answering positions: the shares are GONE
+    (the stop filled invisibly) and no priced fill is served — the position
+    parks UNRECONCILED on the first reconcile; the later exit is a no-op
+    and no MKT sell ever reaches the venue."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m)                    # stop ref the venue never saw
+    m.state.last_reconcile_ts = time.time() - 3 * 86_400
+    a = DryAdapter()                     # stock_position("CRSP") == 0: gone
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)      # cycle N
+    assert "1" not in m.state.positions
+    assert "1" in m.state.unreconciled   # parked for manual booking
+    run_cycle(m, a, payload(exits=[EXIT_CRSP], stops=[stop_row()]),
+              "2026-08-24", alert=alerts.append)                  # cycle N+1
+    assert _executions(a, "CRSP") == []  # NOTHING sold across both cycles
+    assert any("UNVERIFIABLE" in msg for msg in alerts)
+    # nothing booked at a guessed price: cash + BIL stay at the post-entry
+    # level (idle cash may have been swept to BIL in-cycle)
+    assert (m.state.sleeve_cash + m.state.bil_qty * 100.0
+            == pytest.approx(2_500.0))
+
+
+def test_gate_r1_positive_verification_unparks_and_exit_proceeds(tmp_path):
+    """The venue POSITIVELY holds the shares and the stop still works:
+    the flag clears and the next exit executes normally — parking is a
+    guard, not a wedge."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m)
+    a = DryAdapter()
+    rs = a.place_stock_order("CRSP", 5, "MKT", ref_price=50.0)   # venue holds 5
+    rs = a.place_stock_order("CRSP", -5, "STP", stop_price=44.0, tif="GTC",
+                             client_order_id="blend-1-stp-44.0000")
+    m.state.positions["1"].stop_order_ref = rs["order_ref"]
+    m.state.last_reconcile_ts = time.time() - 3 * 86_400
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)      # cycle N
+    pos = m.state.positions["1"]
+    assert pos.history_gap is False                  # unparked on evidence
+    assert pos.stop_order_ref in a._stops            # stop kept working
+    assert any("POSITIVELY verified" in msg for msg in alerts)
+    run_cycle(m, a, payload(exits=[EXIT_CRSP], stops=[stop_row()]),
+              "2026-08-24", alert=alerts.append)                  # cycle N+1
+    assert "1" not in m.state.positions and not m.state.unreconciled
+    sells = _executions(a, "CRSP")
+    assert len(sells) == 1 and sells[0]["qty"] == -5  # exactly one exit sell
+
+
+def test_gate_r1_blackout_stop_fill_recovered_from_history_books_at_price(
+        tmp_path):
+    """The shares are gone AND refreshed order history still serves the
+    priced stop fill (the fill-event stream was lost to a restart): book
+    the exit at the REAL venue price — never a guess, never a sell."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m)
+    a = DryAdapter()
+    rs = a.place_stock_order("CRSP", -5, "STP", stop_price=44.0, tif="GTC",
+                             client_order_id="blend-1-stp-44.0000")
+    m.state.positions["1"].stop_order_ref = rs["order_ref"]
+    # the stop filled during the blackout; the drain-once event stream was
+    # lost with the process, but the order lookup still serves the price
+    a._orders[rs["order_ref"]]["status"] = "filled"
+    a._orders[rs["order_ref"]]["fill_price"] = 44.0
+    a._stops.pop(rs["order_ref"], None)
+    m.state.last_reconcile_ts = time.time() - 3 * 86_400
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    assert "1" not in m.state.positions and not m.state.unreconciled
+    assert (m.state.sleeve_cash + m.state.bil_qty * 100.0
+            == pytest.approx(2_500.0 + 5 * 44.0))    # booked AT the fill
+    assert not [e for e in a.log if e.get("symbol") == "CRSP"
+                and e["action"] == "place_stock_order"
+                and e.get("order_type") != "STP"]    # nothing sold
+    assert any("recovered from venue history" in msg for msg in alerts)
+
+
+# R2 (re-review residual): /kill is TWO-STAGE — the handler journals a
+# persisted flatten request and halts; the LOOP thread (owner of the
+# ib_async event loop) executes the flatten with reconcile-first semantics.
+# FakeIB cannot reproduce the cross-thread asyncio failure, so these gates
+# pin the NEW mechanism: journal persisted, halt immediate, loop executes,
+# honest summaries, restart-resume, no API-thread adapter touch.
+
+
+def test_gate_r2_flatten_request_persists_and_executes_after_restart(
+        tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    a = DryAdapter()
+    run_cycle(m, a, payload(entries=[entry()], stops=[stop_row()]),
+              "2026-08-20", alert=lambda _: None)
+    assert "1" in m.state.positions
+    m.request_flatten("2026-08-20")
+    assert m.state.halted == "KILL"          # halt is immediate
+    assert "1" in m.state.positions          # nothing sold by the request
+    # ...service restarts before the loop ran the flatten...
+    m2 = Blend3070Manager(m.cfg, m.state_path)
+    assert m2.state.flatten_request is not None      # journal survived
+    assert m2.state.halted == "KILL"
+    alerts: list[str] = []
+    run_cycle(m2, a, None, "2026-08-21", alert=alerts.append)
+    assert m2.state.positions == {}          # loop executed the flatten
+    assert m2.state.flatten_request is None
+    assert m2.state.halted == "KILL"         # halted until /resume
+    assert len(_executions(a, "CRSP")) == 1
+    assert any("flatten complete" in msg for msg in alerts)
+
+
+def test_gate_r2_flatten_summary_honest_about_parked_positions(tmp_path):
+    """The completion alert must state what actually closed vs parked —
+    never 'book closed & halted' while an UNVERIFIABLE position is held."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10_000.0)
+    a = _NoVenuePositionsAdapter()           # R1 flag cannot be verified
+    run_cycle(m, a, payload(entries=[entry(),
+                                     entry(call_id=2, symbol="NTLA")],
+                            stops=[stop_row(),
+                                   stop_row(call_id=2, symbol="NTLA")]),
+              "2026-08-20", alert=lambda _: None)
+    m.state.positions["2"].history_gap = True        # blackout-parked
+    m.request_flatten("2026-08-21")
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-21", alert=alerts.append)
+    assert "1" not in m.state.positions              # CRSP closed
+    assert "2" in m.state.positions                  # NTLA parked, NOT sold
+    assert m.state.positions["2"].history_gap is True
+    assert _executions(a, "NTLA") == []
+    (summary,) = [msg for msg in alerts if "flatten finished" in msg]
+    assert "WITH EXCEPTIONS" in summary
+    assert "1 closed" in summary and "CRSP" in summary
+    assert "NOT closed" in summary and "NTLA" in summary
+    assert not any("book closed" in msg for msg in alerts)  # never overclaim
+
+
+def test_gate_r2_flatten_raising_cancel_parks_never_sells(tmp_path):
+    """K-d survives the loop-thread flatten: a RAISING stop cancel (stop
+    likely FILLED) parks the position — never a MKT sell on top of it."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m)
+    a = _RaisingCancelAdapter()
+    m.request_flatten("2026-08-21")
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-21", alert=alerts.append)
+    assert "1" in m.state.positions                  # parked, not sold
+    assert "old-stop" in m.state.orphan_stop_refs    # settled by reconcile
+    assert _executions(a, "CRSP") == []
+    assert m.state.flatten_request is None
+    (summary,) = [msg for msg in alerts if "flatten finished" in msg]
+    assert "0 closed" in summary or "none" in summary
+    assert "NOT closed" in summary and "CRSP" in summary
+
+
+def test_gate_r2_resume_clears_a_queued_flatten(tmp_path):
+    """/resume before the loop ran the flatten must clear the journal — a
+    stale kill request must never flatten a RESUMED book."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m)
+    m.request_flatten("2026-08-21")
+    m.resume()
+    assert m.state.flatten_request is None
+    a = DryAdapter()
+    run_cycle(m, a, payload(stops=[stop_row()]), "2026-08-21",
+              alert=lambda _: None)
+    assert "1" in m.state.positions                  # nothing flattened
+    assert _executions(a, "CRSP") == []
+
+
+class _ThreadRecordingAdapter(DryAdapter):
+    """Records the thread of every adapter call — the R2 law: ONLY the loop
+    thread (owner of the ib_async event loop) may touch the venue."""
+
+    def __init__(self):
+        super().__init__()
+        import threading
+        self.call_threads: set[int] = set()
+        self._ident = threading.get_ident
+
+    def _note(self):
+        self.call_threads.add(self._ident())
+
+    def place_stock_order(self, *a, **kw):
+        self._note()
+        return super().place_stock_order(*a, **kw)
+
+    def cancel_stock_order(self, *a, **kw):
+        self._note()
+        return super().cancel_stock_order(*a, **kw)
+
+    def poll_stock_fills(self):
+        self._note()
+        return super().poll_stock_fills()
+
+    def find_stock_order(self, *a, **kw):
+        self._note()
+        return super().find_stock_order(*a, **kw)
+
+    def stock_position(self, *a, **kw):
+        self._note()
+        return super().stock_position(*a, **kw)
+
+    def spot(self, *a, **kw):
+        self._note()
+        return super().spot(*a, **kw)
+
+
+def test_gate_r2_kill_never_touches_the_adapter_from_the_api_thread(
+        tmp_path, monkeypatch):
+    """The old /kill pumped the adapter from a FastAPI worker thread — on
+    the real IBAdapter every wait timed out (ib_async resolves its loop
+    per thread) and the flatten deterministically failed. Now every
+    adapter call must come from ONE thread: the service loop."""
+    import time as _time
+
+    from app.config import settings
+    from app import service
+    from app.service import app as service_app
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setattr(settings, "state_path", str(tmp_path / "s.json"))
+    monkeypatch.setattr(settings, "blend_state_path", str(tmp_path / "b.json"))
+    monkeypatch.setattr(settings, "exec_token", "sekrit")
+    monkeypatch.setattr(settings, "tws_userid", "")
+    monkeypatch.setattr(settings, "blend_enabled", True)
+    monkeypatch.setattr(service, "DryAdapter", _ThreadRecordingAdapter)
+    try:
+        with TestClient(service_app) as c:
+            for _ in range(200):
+                if service.BLEND is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            B, A = service.BLEND, service.ADAPTER
+            assert _wait_until(lambda: A.call_threads)   # loop cycle 1 ran
+            loop_threads = set(A.call_threads)           # THE loop thread
+            assert len(loop_threads) == 1
+            _seed_initialized(B, sleeve_cash=2_750.0)
+            _held_position(B, stop_ref=None)
+            pos = B.state.positions["1"]
+            rs = A.place_stock_order("CRSP", -5, "STP", stop_price=44.0,
+                                     tif="GTC",
+                                     client_order_id="blend-1-stp-44.0000")
+            pos.stop_order_ref = rs["order_ref"]
+            B.save()
+            A.call_threads.clear()           # only post-kill calls count
+            c.get("/kill", params={"token": "sekrit"})
+            assert _wait_until(
+                lambda: B.state.positions == {}
+                and B.state.flatten_request is None)
+            # the flatten DID run (cancel + MKT sell) — and every adapter
+            # call came from THE loop thread, none from the API thread
+            assert A.call_threads == loop_threads
+    finally:
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_r2_kill_alerts_are_honest_two_stage(tmp_path, monkeypatch):
+    """The immediate /kill reply says QUEUED (never 'book closed'); the
+    loop's completion alert states what actually closed."""
+    import time as _time
+
+    from app.config import settings
+    from app import service
+    from app.service import app as service_app
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setattr(settings, "state_path", str(tmp_path / "s.json"))
+    monkeypatch.setattr(settings, "blend_state_path", str(tmp_path / "b.json"))
+    monkeypatch.setattr(settings, "exec_token", "sekrit")
+    monkeypatch.setattr(settings, "tws_userid", "")
+    monkeypatch.setattr(settings, "blend_enabled", True)
+    try:
+        with TestClient(service_app) as c:
+            for _ in range(200):
+                if service.BLEND is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            B = service.BLEND
+            _seed_initialized(B, sleeve_cash=2_750.0)
+            _held_position(B, stop_ref=None)
+            sent: list[str] = []
+            monkeypatch.setattr(service, "send", sent.append)
+            r = c.get("/kill", params={"token": "sekrit"})
+            assert r.json()["blend"] == "flatten_queued"
+            (kill_msg,) = [msg for msg in sent if "KILLED" in msg]
+            assert "flatten QUEUED" in kill_msg
+            assert "closed & halted" not in kill_msg     # the old overclaim
+            assert _wait_until(lambda: B.state.flatten_request is None)
+            assert any("flatten complete" in msg and "1 position(s) closed"
+                       in msg for msg in sent)
+    finally:
+        service.BLEND = None
+        service.MGR = None
+
+
+# --- re-review minors (r3-r7): alert semantics, ledger cosmetics --------------
+# Scenarios derived from the re-review probes A2/A3/A4/A5 and finding r7.
+
+
+def test_gate_r3_new_quote_outage_after_recovery_realerts(tmp_path):
+    # Probe A2: the outage alert was deduped against the LAST event only,
+    # and the skip message is identical across outages — a genuinely new
+    # outage after a quiet recovery never re-alerted.
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=0.0, bil_qty=30, spy_qty=70)
+    bad = {"BIL": 100.0}
+    out1 = m.step("2026-08-20", payload(), bad)
+    assert len([o for o in out1 if o["action"] == "ALERT"]) == 1
+    out2 = m.step("2026-08-20", payload(), bad)      # same outage: quiet
+    assert not [o for o in out2 if o["action"] == "ALERT"]
+    m.step("2026-08-21", payload(), PRICES)          # QUIET recovery
+    out3 = m.step("2026-08-24", payload(), bad)      # NEW outage days later
+    assert len([o for o in out3 if o["action"] == "ALERT"]) == 1
+
+
+def test_gate_r4_interleaved_pending_event_does_not_spam_quote_alert(
+        tmp_path):
+    # Probe A3: pending-book INFO and missing-quote WARN alternate in the
+    # event log, defeating last-event dedup — the WARN alerted EVERY cycle.
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    m.state.pending_book_orders["blend-sweep-2026-08-20-1"] = {
+        "kind": "sweep", "symbol": "BIL", "qty": 10, "date": "2026-08-20",
+        "ref_price": 100.0}
+    n = 0
+    for _ in range(4):
+        n += len([o for o in m.step("2026-08-20", payload(), {})
+                  if o["action"] == "ALERT"])
+    assert n == 1                                    # once per outage
+
+
+def test_gate_r5_sweep_slippage_never_leaves_negative_sleeve_cash(tmp_path):
+    # Probe A4: reserved sweep cash priced at journal ref_price, adopted at
+    # the venue fill 0.9 above it -> sleeve_cash -27.
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=3_000.0)
+    m.on_sweep(30, 100.9)
+    assert m.state.sleeve_cash == 0.0                # clamped, not negative
+    assert m.state.bil_qty == 30
+    assert any("slippage absorbed" in e["msg"] for e in m.state.events)
+
+
+def test_gate_r6_stuck_book_order_escalates_to_warn_after_age(tmp_path):
+    # Probe A5 follow-up: a venue-stuck 'working' book order froze
+    # sweep/core-buy/rebalance with only a deduped INFO event.
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    m.record_pending_book_order("sweep", "BIL", 10, "2026-08-18",
+                                ref_price=100.0)
+    out = m.step("2026-08-18", payload(), PRICES)
+    assert not [o for o in out if o["action"] == "ALERT"]    # fresh: quiet
+    out = m.step("2026-08-20", payload(), PRICES)            # 2 days old
+    (al,) = [o for o in out if o["action"] == "ALERT"]
+    assert "still working" in al["msg"]
+    out = m.step("2026-08-21", payload(), PRICES)            # alerted ONCE
+    assert not [o for o in out if o["action"] == "ALERT"]
+
+
+def test_gate_r7_budget_cap_entries_wait_for_core_quotes(tmp_path):
+    # r7: a missing SPY quote zeroes gross_exposure -> the BLEND_BUDGET
+    # entry gate computed low while sleeve entries proceeded.
+    m = mk(tmp_path, blend_budget=100_000.0)
+    _seed_initialized(m)
+    no_spy = {"BIL": 100.0, "CRSP": 50.0}
+    out = m.step("2026-08-20",
+                 payload(entries=[entry()], stops=[stop_row()]), no_spy)
+    assert not [o for o in out if o["action"] == "ENTER"]
+    assert any("budget gate" in e["msg"] for e in m.state.events)
+    # without a cap the entry still proceeds (sleeve-only decision)
+    m2 = Blend3070Manager(Cfg(), str(tmp_path / "b2.json"))
+    _seed_initialized(m2)
+    out2 = m2.step("2026-08-20",
+                   payload(entries=[entry()], stops=[stop_row()]), no_spy)
+    assert [o for o in out2 if o["action"] == "ENTER"]
 
 
 # m3 (minor): cancel-ok-then-place-raise must not leave the position
@@ -1685,3 +2149,156 @@ def test_gate_adapt_m1_pending_sweep_cash_reserved_from_entries(tmp_path):
     # only $100 is spendable -> 2 shares @ 50 (risk sizing alone wants 5)
     assert ent["qty"] == 2
     assert not [o for o in out if o["action"] == "SWEEP"]   # kind suppressed
+
+
+# --- mode-transition guard + N3 (resume race / atomic save) -------------------
+
+def test_gate_mode_guard_archives_foreign_mode_book(tmp_path):
+    """A book built under DRY (placeholder fills) must NOT survive into a
+    real mode: the venue never saw those orders, and reconciling them would
+    mark fiction at real prices and trade the difference."""
+    m = mk(tmp_path)                       # dry:paper
+    _seed_initialized(m, spy_qty=700, bil_qty=300)
+    _held_position(m)
+    m.save()
+    m2 = mk(tmp_path, dry_run=False,       # real:paper — same state file
+            tws_userid="u", tws_password="p")
+    assert m2.archived_state               # loud: startup alerts on this
+    assert m2.state.initialized is False
+    assert m2.state.positions == {}
+    assert m2.state.spy_qty == 0 and m2.state.bil_qty == 0
+    assert m2.state.mode == "real:paper"
+    archives = list(tmp_path.glob("blend.json.archived-*"))
+    assert len(archives) == 1              # old book preserved, not deleted
+    old = json.loads(archives[0].read_text())
+    assert old["spy_qty"] == 700
+
+
+def test_gate_mode_guard_archives_legacy_untagged_state(tmp_path):
+    """A pre-guard state file (no mode key) is of UNKNOWN mode — it must be
+    archived even when the current mode happens to match what wrote it."""
+    path = tmp_path / "blend.json"
+    path.write_text(json.dumps({"initialized": True, "spy_qty": 700}))
+    m = mk(tmp_path)                       # dry:paper, same as the writer was
+    assert m.archived_state
+    assert m.state.spy_qty == 0
+    assert list(tmp_path.glob("blend.json.archived-unknown-*"))
+
+
+def test_gate_mode_guard_same_mode_restart_keeps_book(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, spy_qty=70)
+    _held_position(m)
+    m.save()
+    m2 = mk(tmp_path)                      # same mode: no archive, book kept
+    assert m2.archived_state is None
+    assert m2.state.initialized and m2.state.spy_qty == 70
+    assert "1" in m2.state.positions
+
+
+def test_gate_n3_flatten_reasserts_halt_after_raced_resume(tmp_path):
+    """If a /resume raced in between the kill request and the loop's flatten
+    (halted cleared but the request already picked up), the book must come
+    out of the flatten HALTED — never un-halted and entering same-cycle."""
+    from app.blend import execute_flatten
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m, stop_ref=None)
+    m.request_flatten("2026-08-21")
+    m.state.halted = None                  # the race the lock now prevents,
+                                           # kept as defense-in-depth
+    execute_flatten(m, DryAdapter(), alert=lambda s: None)
+    assert m.state.flatten_request is None
+    assert m.state.positions == {}
+    assert m.state.halted == "KILL"
+
+
+def test_gate_n3_save_atomic_survives_crash_mid_write(tmp_path, monkeypatch):
+    """A crash mid-save must never leave a truncated file that _load
+    silently resolves to a fresh empty book (which would re-plan the whole
+    book from scratch against live positions)."""
+    import app.blend as blend_mod
+    m = mk(tmp_path)
+    _seed_initialized(m, spy_qty=70)
+    m.save()
+
+    def bad_dump(obj, fh, **kw):
+        fh.write('{"partial')
+        raise IOError("disk full mid-write")
+
+    monkeypatch.setattr(blend_mod.json, "dump", bad_dump)
+    m.state.spy_qty = 999
+    with pytest.raises(IOError):
+        m.save()
+    monkeypatch.undo()
+    m2 = mk(tmp_path)                      # reload: the LAST GOOD book
+    assert m2.state.initialized is True
+    assert m2.state.spy_qty == 70          # not 999, and not a fresh book
+
+
+def test_gate_n3_resume_blocks_behind_blend_lock(tmp_path, monkeypatch):
+    """/resume must serialize behind the loop's cycle (BLEND_LOCK): a resume
+    racing an in-flight flatten un-halts a book that is being sold."""
+    import threading
+
+    from fastapi.testclient import TestClient
+
+    from app.config import settings
+    from app import service
+    from app.service import app
+
+    monkeypatch.setattr(settings, "state_path", str(tmp_path / "s.json"))
+    monkeypatch.setattr(settings, "blend_state_path", str(tmp_path / "b.json"))
+    monkeypatch.setattr(settings, "exec_token", "sekrit")
+    monkeypatch.setattr(settings, "tws_userid", "")
+    monkeypatch.setattr(settings, "blend_enabled", True)
+    try:
+        with TestClient(app) as c:
+            assert _wait_until(lambda: service.BLEND is not None)
+            service.BLEND.state.halted = "KILL"
+            done = threading.Event()
+            with service.BLEND_LOCK:       # a cycle is "in flight"
+                t = threading.Thread(
+                    target=lambda: (c.get("/resume",
+                                          params={"token": "sekrit"}),
+                                    done.set()))
+                t.start()
+                time.sleep(0.4)
+                assert not done.is_set()   # resume waits for the cycle
+                assert service.BLEND.state.halted == "KILL"
+            assert done.wait(5.0)          # lock released -> resume lands
+            t.join(5.0)
+            assert service.BLEND.state.halted is None
+    finally:
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_mode_guard_creds_absent_is_dry_even_without_dry_run(tmp_path):
+    """F1: _build runs the DryAdapter whenever TWS creds are absent, DRY_RUN
+    or not — the mode tag must mirror that, or a creds-missing boot with
+    DRY_RUN=false would tag placeholder fills as a real book (and the guard
+    would then PRESERVE the fiction when creds arrive)."""
+    m = mk(tmp_path, dry_run=False, tws_userid="", tws_password="")
+    assert m.state.mode == "dry:paper"     # creds absent -> dry, flag or not
+    _seed_initialized(m, spy_qty=700)
+    m.save()
+    # Creds arrive (a real PAPER boot): the placeholder book must be archived.
+    m2 = mk(tmp_path, dry_run=False, tws_userid="u", tws_password="p")
+    assert m2.state.mode == "real:paper"
+    assert m2.archived_state
+    assert m2.state.spy_qty == 0
+
+
+def test_gate_mode_guard_creds_pulled_mid_paper_archives_real_book(tmp_path):
+    """F1 reverse hole: creds pulled mid-PAPER (DRY_RUN still false) boots
+    the DryAdapter — the REAL book must be archived, never traded by the
+    placeholder venue."""
+    m = mk(tmp_path, dry_run=False, tws_userid="u", tws_password="p")
+    assert m.state.mode == "real:paper"
+    _seed_initialized(m, spy_qty=12)
+    m.save()
+    m2 = mk(tmp_path, dry_run=False, tws_userid="", tws_password="")
+    assert m2.state.mode == "dry:paper"
+    assert m2.archived_state               # real book preserved in archive
+    assert m2.state.spy_qty == 0

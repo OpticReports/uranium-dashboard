@@ -64,6 +64,18 @@ gateway is down) the cycle FAILS CLOSED — no decision is ever taken against
 unreconciled venue state. Phases IN ORDER:
 
 1. **RECONCILE venue truth before any decision**
+   0. blackout-horizon guard (adapter re-review R1): when the gap since
+      the last successful reconcile exceeds what venue order history can
+      serve (1 day), every held position is flagged UNVERIFIABLE
+      (persisted) — a stop may have filled invisibly inside the blackout.
+      The flag clears ONLY on positive venue evidence: the account's
+      POSITIONS data confirms the shares are still held (unparked; the
+      stop re-verified or re-placed), or the shares are gone and a priced
+      stop fill from refreshed order history books the exit (no price →
+      parked UNRECONCILED). NEVER cleared by timestamp alone; while
+      flagged, exits and /kill defer (nothing MKT-sells shares whose stop
+      may already have filled — the naked-short path) and no new
+      protective stop is placed for the position;
    a. ingest resting-stop fills (`poll_stock_fills`) — a stop that filled
       marks its position CLOSED, so the tracker's later exit signal/echo
       for it is a no-op (idempotent; never a second sell). A mid-ingestion
@@ -128,12 +140,25 @@ unreconciled venue state. Phases IN ORDER:
 5. **No silent zeros** (repo law): any fill without a fill price is
    UNRECONCILED — the trade is parked in state, nothing books at 0.0,
    P&L for it is blocked, and Telegram gets a RED alert.
-6. **/kill reconciles FIRST** (re-review N14): the emergency flatten runs
-   the same reconcile pass inside the blend lock before closing, then
-   closes only positions STILL actually held (idempotent with a stop fill
-   that already happened); an ambiguous stop cancel is verified before
-   the MKT sell. If reconcile itself fails, the book is halted but NOT
-   blind-flattened — a loud alert asks for manual action.
+6. **/kill is TWO-STAGE** (adapter re-review R2): the HTTP handler never
+   touches the venue — ib_async binds its event loop to the thread that
+   owns the connection (the blend loop thread), so an API-thread flatten
+   would pump a fresh loop against the shared transport, time out every
+   wait, mis-park healthy stops as "likely filled", and risk session
+   corruption. Stage 1 (the handler): journal a persisted flatten request
+   (it survives a restart, same doctrine as `pending_entries`), halt the
+   book immediately (no new entries), wake the loop, and answer honestly:
+   "halt engaged; flatten QUEUED". Stage 2 (the loop thread, seconds
+   later): reconcile FIRST (re-review N14 — stop fills book before
+   anything sells, so only positions STILL actually held close), then
+   flatten with all the standing guards: a RAISING stop cancel parks the
+   position (K-d — never a MKT sell on a likely-filled stop), and
+   R1-UNVERIFIABLE positions stay parked untouched. The completion alert
+   states exactly what closed vs what parked — the kill switch never
+   overclaims. If reconcile fails, the book stays halted, the request
+   stays journaled, and every failing cycle alerts loudly until the
+   flatten lands; /resume clears a still-queued request (a stale kill
+   must never flatten a resumed book).
 
 Adapter contract (pinned, now implemented by BOTH adapters): cancelling a
 FILLED order must RAISE (IB errors on it) — bool False is reserved for
@@ -208,11 +233,10 @@ El Nino combo reads):
   threads and NEVER call the adapter — run_cycle refreshes a mark cache
   (prices + timestamp) once per cycle and both endpoints serve that
   cache, reporting its age as `marks_age_s` (staleness shown, not
-  hidden). The ONE API path allowed to touch the adapter is `/kill`, and
-  only under BLEND_LOCK — the loop thread holds the same lock around
-  run_cycle, so the two never pump the ib_async loop concurrently; the
-  emergency flatten must act on live venue truth and must not queue
-  behind a possibly wedged loop.
+  hidden). NO API path touches the adapter — `/kill` included (adapter
+  re-review R2): it journals a flatten request under BLEND_LOCK and the
+  loop thread, owner of the ib_async event loop, executes it on its next
+  (immediately woken) iteration — see the two-stage `/kill` above.
 
 SUPERVISED FIRST SESSION: flip `DRY_RUN=false` (with `TRADING_MODE=paper`)
 DURING MARKET HOURS and keep eyes on Telegram + `/status` through the
@@ -224,15 +248,19 @@ service restart can re-emit an already-booked stop fill as an
 unknown-order RED alert (noise, never a double booking); a journaled
 MOO/MKT the venue REJECTS is cleared by the next reconcile with a RED
 alert (entry slot released, book order re-planned — see the
-rejected-order lifecycle above). VENUE HISTORY HORIZON: IB serves
-current-day executions on connect — an executor blackout spanning a day
-or more while a stop fills can exceed what reconcile can see. The
-exit/kill flatten paths guard this automatically: when the gap since the
-last successful reconcile exceeds 1 day and a stop cancel comes back
-"already gone" with nothing verifiable, the position is parked
-UNVERIFIABLE (RED alert, nothing sold — a MKT sell could short
-already-stopped-out shares); after any multi-day outage, verify positions
-against the account manually before booking the parked trades.
+rejected-order lifecycle above). VENUE HISTORY HORIZON (adapter re-review
+R1): IB serves current-day executions on connect — an executor blackout
+spanning a day or more while a stop fills can exceed what reconcile can
+see FOREVER, not just on the first recovered cycle. The first reconcile
+after such a gap therefore flags every held position UNVERIFIABLE
+(persisted, restart-safe) and only POSITIVE venue evidence clears it:
+`stock_position` (account positions — no history horizon) confirming the
+shares are held unparks the position (stop re-verified/re-placed); shares
+gone with a priced fill in refreshed order history books the exit at that
+price; shares gone with no priced fill parks the trade UNRECONCILED for
+manual booking. While flagged, exits and /kill defer with a RED alert —
+nothing is ever MKT-sold against a possibly-already-filled stop (the
+naked-short path probe A1 demonstrated).
 
 Env (all optional until the paper gate):
 
@@ -244,7 +272,7 @@ Env (all optional until the paper gate):
 | `TRACKER_USER` / `TRACKER_PASSWORD` | fallback: the tracker's HTTP Basic dashboard login (its DASHBOARD_USER/PASSWORD) — dashboard creds only, no broker credential enters the blend path |
 | `BLEND_BUDGET` | per-strategy gross-exposure cap in USD; 0 (default) = disabled. When set, crossing 85% utilization sends a one-time Telegram alert ("review and raise BLEND_BUDGET"), re-armed once utilization drops below 75% |
 | `BLEND_BOOK_USD` | initial paper book (default 10,000), split 30/70 at first boot |
-| `BLEND_STATE_PATH` | persisted book state (default `./data/blend_state.json`) |
+| `BLEND_STATE_PATH` | persisted book state (default `./data/blend_state.json`). Saves are atomic (temp file + rename). The state is MODE-TAGGED (`dry:paper` / `real:paper` / `real:live`): on any mode change the previous book is archived alongside and a FRESH book starts, with a Telegram alert — a book's fills are fiction in any other mode (DRY fills at placeholder prices; paper fills aren't live fills), so they must never be reconciled against a venue that never saw them |
 | `READ_TOKEN` | READ-ONLY token gating `GET /blend/feed` (header `X-Read-Token`, constant-time compare). SEPARATE from `EXEC_TOKEN` by design: the feed holder sees book state only — never kill/resume. Empty (default) = the feed endpoint 404s. Set the same value as `BLEND_READ_TOKEN` on the genomics tracker, whose server-side proxy powers the research site's Execution tab |
 
 ### Read-only feed: `GET /blend/feed` (the Execution tab)
@@ -274,7 +302,9 @@ Casey's paper-credential steps when the paper gate opens:
 2. After a clean OFFLINE week, add the PAPER `TWS_USERID`/`TWS_PASSWORD`
    (keep `DRY_RUN=true`): gateway boots, mutations stay simulated.
 3. Flip `DRY_RUN=false` with `TRADING_MODE=paper` for real paper orders;
-   `/kill` closes blend positions and halts the book alongside the ladder.
+   `/kill` halts the blend book immediately and queues the flatten for
+   the execution loop (two-stage — the completion alert says what closed
+   vs parked). VERIFY `/kill` EARLY in the paper week (re-review R2).
    Live is a separate, later decision — same per-leg cutover discipline.
 
 ## Service modes (auto-selected at boot)
@@ -287,8 +317,9 @@ Casey's paper-credential steps when the paper gate opens:
 | LIVE | TRADING_MODE=live, DRY_RUN=false | real money (Nov gate, per-leg cutover) |
 
 Control surface: `/health` (public), `/status`, `/kill` (closes all open
-legs, halts), `/resume` — token-gated via `X-Exec-Token` header or
-`?token=`, same pattern as btc-executor.
+ladder legs and halts; the blend flatten is queued to the execution loop
+— two-stage, see above), `/resume` — token-gated via `X-Exec-Token`
+header or `?token=`, same pattern as btc-executor.
 
 ## Rollout gates
 

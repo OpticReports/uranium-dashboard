@@ -65,6 +65,9 @@ export default function Execution() {
 
   return (
     <div className="space-y-4">
+      {/* strategy identity: what this book is actually running */}
+      <StrategyCard />
+
       {/* mode / gate / halt banner */}
       {feed.halted ? (
         <div className="bg-rose-900/30 border border-rose-800 rounded-xl px-4 py-2 text-sm">
@@ -257,6 +260,44 @@ export default function Execution() {
           Refresh
         </button>
       </div>
+    </div>
+  );
+}
+
+function StrategyCard() {
+  return (
+    <div className="bg-panel border border-edge rounded-xl px-4 py-3">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <span className="text-gray-100 font-bold">Blend 30/70</span>
+        <span className="text-xs text-gray-500 uppercase tracking-wide">
+          R2-A genomics sleeve / SPY core · H13
+        </span>
+      </div>
+      <div className="text-sm text-gray-400 mt-1">
+        70% SPY held as the core · 30% sleeve trading the tracker's live
+        signal fires, entries allowed only while XBI is above its 200-day
+        average (prior close) · exits by 3×ATR trailing stop or 90-day time
+        stop · max 10 open, 1% of book risked per position · idle cash
+        parked in BIL · rebalanced on a 5% band.
+      </div>
+      <details className="mt-1">
+        <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-300">
+          evidence & caveats
+        </summary>
+        <div className="text-xs text-gray-500 mt-1 space-y-1">
+          <div>
+            Backtest 2016–2026: ~15.9% CAGR, −29.3% max drawdown, 1.02
+            Sharpe vs SPY's 15.4% / −33.7% / 0.89 (daily MTM, slippage
+            modeled). These are IN-SAMPLE numbers, not a forecast — the
+            live shadow-grader (H11) is accruing the out-of-sample record
+            that decides real sizing.
+          </div>
+          <div>
+            Full construction &amp; review trail: BACKTEST_VARIANTS_R2/R3 +
+            HYPOTHESES.md (H11/H13) in the repo.
+          </div>
+        </div>
+      </details>
     </div>
   );
 }

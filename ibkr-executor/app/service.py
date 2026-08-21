@@ -29,8 +29,12 @@ logger = logging.getLogger(__name__)
 
 MGR: LadderManager | None = None
 BLEND = None                       # Blend3070Manager, ONLY when BLEND_ENABLED
-BLEND_LOCK = threading.Lock()      # /kill (API thread) vs run_cycle (loop
-                                   # thread) share per-position stock orders
+BLEND_LOCK = threading.Lock()      # serializes blend state writes: /kill's
+                                   # request_flatten (API thread) vs
+                                   # run_cycle (loop thread)
+LOOP_WAKE = threading.Event()      # /kill pokes the loop so a queued blend
+                                   # flatten runs within seconds, not a
+                                   # full poll interval (R2)
 ADAPTER = None
 LAST: dict = {"loop_ok": 0.0, "nino34": None, "mode": "OFFLINE"}
 # Last blend cycle outcome (feed's last_cycle + /health blend_loop): a
@@ -53,6 +57,11 @@ def _build():
     if settings.blend_enabled:
         from .blend import Blend3070Manager
         BLEND = Blend3070Manager(settings, settings.blend_state_path)
+        if BLEND.archived_state:
+            # Mode-transition guard fired: the previous book's fills belong
+            # to another mode (e.g. DRY placeholder prices) — starting clean.
+            logger.warning("blend: %s", BLEND.archived_state)
+            send(f"⚠️ blend: starting a FRESH book — {BLEND.archived_state}")
     if not (settings.tws_userid and settings.tws_password):
         ADAPTER = DryAdapter()
         LAST["mode"] = "OFFLINE"
@@ -69,6 +78,11 @@ def _build():
 
 
 def _loop():
+    global LOOP_WAKE
+    # Fresh wake event per loop thread: a superseded loop from an earlier
+    # lifespan (tests spawn several; daemon threads never die) keeps
+    # waiting on its OLD event, so /kill only ever wakes the CURRENT loop.
+    LOOP_WAKE = threading.Event()
     try:
         _build()
     except Exception as exc:  # noqa: BLE001
@@ -135,10 +149,18 @@ def _loop():
                     BLEND_CYCLE.update({"date": today, "ok": False,
                                         "error": str(exc),
                                         "error_ts": time.time()})
+                    if BLEND.state.flatten_request is not None:
+                        # R2: a queued kill-flatten must never fail
+                        # silently — loud every failing cycle until done.
+                        send(f"🚨🚨 blend: cycle FAILED with a /kill "
+                             f"flatten QUEUED ({exc}) — nothing flattened "
+                             f"yet; the loop retries next cycle, book "
+                             f"stays halted")
             LAST["loop_ok"] = time.time()
         except Exception as exc:  # noqa: BLE001
             logger.exception("loop error: %s", exc)
-        time.sleep(settings.poll_seconds)
+        LOOP_WAKE.wait(settings.poll_seconds)   # /kill sets it to skip the
+        LOOP_WAKE.clear()                       # wait (queued flatten)
 
 
 from contextlib import asynccontextmanager
@@ -243,142 +265,37 @@ def kill(x_exec_token: str | None = Header(default=None),
                 logger.exception("kill close %s failed: %s", key, exc)
     MGR.state.halted = "KILL"
     MGR.save()
-    if BLEND is not None:
-        from .blend import (HISTORY_HORIZON_S, _ingest_fills,
-                            reconcile as blend_reconcile)
-        today = datetime.now(timezone.utc).date().isoformat()
-        # M2 exemption (documented): /kill is the ONE API-thread path that
-        # may touch the adapter, and ONLY under BLEND_LOCK — the loop
-        # thread takes the same lock around run_cycle (its only real
-        # adapter use: the ladder's IBAdapter combo surfaces raise
-        # NotImplementedError before any ib_async call), so kill and the
-        # loop never pump the ib_async loop concurrently. The emergency
-        # flatten must act on live venue truth; a cached read would defeat
-        # its purpose. It is NOT enqueued because a wedged loop must never
-        # delay the kill switch.
-        with BLEND_LOCK:
-            # RECONCILE FIRST (counter-agent N14): a stop that already
-            # filled at the venue must be booked BEFORE flattening — the
-            # kill then closes only positions still actually held, never
-            # selling a position twice. If venue truth is unavailable the
-            # flatten is refused (fail closed): blind MKT sells against an
-            # unreconciled book are exactly the double-sell this guards.
-            blend_reconcile_ok = True
-            try:
-                blend_reconcile(BLEND, ADAPTER, today, send)
-            except Exception as exc:  # noqa: BLE001
-                blend_reconcile_ok = False
-                logger.exception("kill: blend reconcile failed: %s", exc)
-                send(f"🚨🚨 blend kill: reconcile FAILED ({exc}) — venue "
-                     f"state unverifiable, positions NOT auto-flattened; "
-                     f"book halted, flatten manually")
-            if blend_reconcile_ok:
-                for key in list(BLEND.state.positions):
-                    pos = BLEND.state.positions.get(key)
-                    if pos is None:
-                        continue
-                    if pos.stop_order_ref:
-                        stop_ref = pos.stop_order_ref
-                        cancel_raised = False
-                        try:
-                            cancelled = ADAPTER.cancel_stock_order(stop_ref)
-                        except Exception as exc:  # noqa: BLE001
-                            # Pinned adapter contract: a RAISING cancel means
-                            # the stop FILLED. This must never fall through
-                            # to the MKT sell (final-review K-d).
-                            logger.exception("kill: stop cancel %s raised "
-                                             "(stop likely FILLED): %s",
-                                             key, exc)
-                            cancel_raised = True
-                            cancelled = False
-                        # M3: whether the cancel succeeded or found the
-                        # stop "already gone", the stop may have
-                        # (partially) filled first — ingest venue fills so
-                        # the flatten below sizes from venue truth.
-                        verify_ok = True
-                        try:
-                            _ingest_fills(BLEND, ADAPTER, send)
-                        except Exception as exc:  # noqa: BLE001
-                            verify_ok = False
-                            logger.exception("kill: fill verify failed: "
-                                             "%s", exc)
-                        pos = BLEND.state.positions.get(key)
-                        if pos is None:
-                            continue     # settled by its stop fill
-                        if cancel_raised or not verify_ok:
-                            # FAIL CLOSED (K-d): the stop signalled
-                            # FILLED and/or venue truth is unverifiable
-                            # — a MKT sell here risks the double-sell
-                            # this whole path exists to prevent. Park
-                            # it loudly; reconcile settles it.
-                            BLEND.record_orphan_stop(
-                                stop_ref, {"symbol": pos.symbol,
-                                           "qty": -pos.qty,
-                                           "call_id": pos.call_id})
-                            send(f"🚨🚨 blend kill: {pos.symbol} NOT "
-                                 f"flattened — stop cancel "
-                                 f"{'raised (likely filled)' if cancel_raised else 'unverifiable'}; "
-                                 f"position parked for reconcile, "
-                                 f"verify manually")
-                            continue
-                        if not cancelled:
-                            if BLEND._reconcile_gap_s > HISTORY_HORIZON_S:
-                                # m2 (venue-history horizon): "already
-                                # gone", verification shows nothing, and
-                                # the last successful reconcile predates
-                                # what venue history serves — the stop may
-                                # have filled INSIDE the blackout. Selling
-                                # MKT could short already-stopped-out
-                                # shares: UNVERIFIABLE, park loudly.
-                                BLEND.record_orphan_stop(
-                                    stop_ref, {"symbol": pos.symbol,
-                                               "qty": -pos.qty,
-                                               "call_id": pos.call_id})
-                                send(f"🚨🚨 blend kill: {pos.symbol} NOT "
-                                     f"flattened — stop already gone and "
-                                     f"the venue-history horizon was "
-                                     f"exceeded (multi-day blackout): "
-                                     f"UNVERIFIABLE, nothing sold; verify "
-                                     f"the account manually")
-                                continue
-                            # Verified still held with a possibly-resting
-                            # stop: track it so a later fill alerts RED and
-                            # the cancel is retried every reconcile pass.
-                            BLEND.record_orphan_stop(
-                                stop_ref, {"symbol": pos.symbol,
-                                           "qty": -pos.qty,
-                                           "call_id": pos.call_id})
-                    try:
-                        # M3: -pos.qty is the venue-truth REMAINING qty
-                        # (a partial stop fill above already reduced it).
-                        r = ADAPTER.place_stock_order(
-                            pos.symbol, -pos.qty, "MKT",
-                            client_order_id=f"blend-{pos.call_id}-kill")
-                        fill = r.get("fill_price")
-                        if fill is None:
-                            # Repo law: never book at a silent 0.0.
-                            BLEND.on_exit_unreconciled(
-                                pos.call_id, "manual kill: venue ack without "
-                                             "a fill price")
-                            send(f"🚨 blend kill close {pos.symbol} "
-                                 f"x{pos.qty} UNRECONCILED: no fill price — "
-                                 f"proceeds NOT booked, manual "
-                                 f"reconciliation needed")
-                        else:
-                            BLEND.on_exited(pos.call_id, fill, "manual kill")
-                    except Exception as exc:  # noqa: BLE001
-                        logger.exception("kill blend close %s failed: %s",
-                                         key, exc)
-            BLEND.halt("KILL")
     blend_note = ""
     if BLEND is not None:
-        blend_note = (" + blend book closed & halted" if blend_reconcile_ok
-                      else " + blend HALTED but NOT flattened (reconcile "
-                           "failed — manual action needed)")
+        # R2 (two-stage kill): this handler runs on a FastAPI worker
+        # thread, but ib_async binds its event loop to the thread that owns
+        # the connection — the blend loop thread. An API-thread flatten
+        # pumps a FRESH loop against the shared transport: every wait times
+        # out, healthy stops get mis-parked as "likely filled", and
+        # cross-thread writes risk session corruption. So /kill only
+        # JOURNALS the flatten request (persisted — survives a restart) and
+        # halts the book immediately; the loop thread executes the flatten
+        # on its next iteration (woken right away below) with
+        # reconcile-first semantics (N14) and alerts what actually closed
+        # vs parked — the summary here claims only what is true NOW.
+        today = datetime.now(timezone.utc).date().isoformat()
+        with BLEND_LOCK:
+            BLEND.request_flatten(today)
+        LOOP_WAKE.set()                 # flatten runs within seconds
+        loop_age = (time.time() - LAST["loop_ok"]) if LAST["loop_ok"] else None
+        loop_warn = ""
+        if loop_age is None or loop_age > 2 * settings.poll_seconds:
+            loop_warn = (" ⚠️ the execution loop looks DOWN (see /health) "
+                         "— the flatten will NOT run until it recovers; "
+                         "flatten manually if urgent")
+        blend_note = (" + blend HALTED, flatten QUEUED for the execution "
+                      "loop (it owns the venue connection); a completion "
+                      "alert will state what closed vs parked" + loop_warn)
     send(f"🔴 ACTION NEEDED (you) — ibkr ladder KILLED: all legs closed, "
          f"ladder halted{blend_note}\n→ it stays halted until you hit "
          f"/resume?token=YOUR_TOKEN")
-    return {"ok": True, "halted": "KILL"}
+    return {"ok": True, "halted": "KILL",
+            "blend": "flatten_queued" if BLEND is not None else None}
 
 
 @app.api_route("/resume", methods=["GET", "POST"])
@@ -390,6 +307,11 @@ def resume(x_exec_token: str | None = Header(default=None),
     MGR.state.halted = None
     MGR.save()
     if BLEND is not None:
-        BLEND.resume()
+        # N3: /resume must not race the loop thread's cycle (a resume
+        # interleaved with execute_flatten un-halts a book that is being
+        # sold and lets the same cycle place fresh entries). BLEND_LOCK
+        # serializes it behind any in-flight cycle, flatten included.
+        with BLEND_LOCK:
+            BLEND.resume()
     send("ibkr ladder resumed")
     return {"ok": True}

@@ -43,10 +43,7 @@ export default function App() {
             <p className="text-xs text-gray-400">Forward-looking signal extraction for the genomics universe</p>
           </div>
           <div className="flex items-center gap-3">
-            {/* Sibling research tools behind this same login gate */}
-            <a href="/canary/" className="text-xs text-gray-400 hover:text-sky-300">🐤 Canary</a>
-            <a href="/portfolio-optimizer/" className="text-xs text-gray-400 hover:text-sky-300">⚖️ Portfolio Optimizer</a>
-            <a href="/btc/" className="text-xs text-gray-400 hover:text-sky-300">₿ Paper Engine</a>
+            {/* Sibling tools live in the OpticNav hamburger (top left) */}
             <HealthBadge health={health} />
           </div>
         </div>

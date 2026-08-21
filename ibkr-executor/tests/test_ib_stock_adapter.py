@@ -91,6 +91,15 @@ class FakeTicker:
         return self._px
 
 
+class FakePosition:
+    """One row of ib_async's account positions (R1 verification basis)."""
+
+    def __init__(self, symbol, position, sec_type="STK"):
+        self.contract = FakeContract(symbol)
+        self.contract.secType = sec_type
+        self.position = position
+
+
 class FakeIB:
     """Scriptable stand-in for ib_async.IB: on_place/on_cancel/on_sleep hooks
     let tests act as the venue (fills, rejects, silent timeouts)."""
@@ -100,6 +109,7 @@ class FakeIB:
         self._next_id = 1
         self.connected = False
         self.prices: dict[str, float] = {}
+        self.position_rows: list[FakePosition] = []
         self.on_place = None
         self.on_cancel = None
         self.on_sleep = None
@@ -160,6 +170,9 @@ class FakeIB:
     def reqCompletedOrders(self, apiOnly=True):
         return []
 
+    def positions(self):
+        return list(self.position_rows)
+
     # venue-side test helpers
     def fill(self, trade, parts):
         """parts: [(shares, price), ...] -> executions + Filled status."""
@@ -199,6 +212,7 @@ def _fill_working_mkt(fake: FakeIB):
 
 class _Cfg:
     trading_mode = "paper"
+    dry_run = True              # mode-guard: tests run a "dry:paper" book
     ib_host = "127.0.0.1"
     ib_client_id = 17
     blend_budget = 0.0
@@ -491,6 +505,35 @@ def test_spot_quotes_arbitrary_symbols_as_smart_usd_stocks(ib_adapter):
     assert ib_adapter.spot("SPY") == 100.0   # not in the El Nino UNDERLYINGS
     with pytest.raises(RuntimeError):
         ib_adapter.spot("NOQUOTE")           # nan price -> raise, never 0
+
+
+# R1 (blackout guard): venue POSITIONS are the positive-verification basis.
+
+def test_gate_r1_stock_position_sums_account_rows(ib_adapter):
+    fake = ib_adapter.ib
+    fake.position_rows = [FakePosition("CRSP", 5), FakePosition("SPY", 70),
+                          FakePosition("CRSP", 2)]
+    assert ib_adapter.stock_position("CRSP") == 7
+    assert ib_adapter.stock_position("SPY") == 70
+    assert ib_adapter.stock_position("BIL") == 0
+    fake.connected = False
+    fake.connect_fails = True               # down: fail closed, never guess
+    with pytest.raises(ExecutorConnectionError):
+        ib_adapter.stock_position("CRSP")
+
+
+def test_gate_r1_dry_adapter_tracks_venue_positions():
+    a = DryAdapter()
+    a.place_stock_order("CRSP", 5, "MKT", ref_price=50.0)
+    assert a.stock_position("CRSP") == 5
+    s = a.place_stock_order("CRSP", -5, "STP", stop_price=44.0, tif="GTC")
+    assert a.stock_position("CRSP") == 5     # resting stop: no change
+    a.trigger_stop(s["order_ref"])
+    assert a.stock_position("CRSP") == 0     # stop fill left the account
+    a.place_stock_order("CRSP", 4, "MKT", ref_price=45.0)
+    s2 = a.place_stock_order("CRSP", -4, "STP", stop_price=40.0, tif="GTC")
+    a.trigger_stop_partial(s2["order_ref"], 3)
+    assert a.stock_position("CRSP") == 1     # partial: only 3 left
 
 
 # --- contract conformance: DryAdapter and (mocked) IBAdapter behave alike -----

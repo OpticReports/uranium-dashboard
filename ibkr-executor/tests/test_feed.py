@@ -21,6 +21,8 @@ class Cfg:
     tracker_url = ""
     tracker_user = ""
     tracker_password = ""
+    dry_run = True              # mode-guard: tests run a "dry:paper" book
+    trading_mode = "paper"
 
 
 def mk(tmp_path, **cfg_over):
