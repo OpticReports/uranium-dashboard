@@ -3066,6 +3066,7 @@ def test_gate_z2_a_blackout_recovered_fill_says_it_was_unverifiable(tmp_path):
     assert not msg.startswith("🧬")
     assert "UNVERIFIABLE" in msg and "may have been YOURS" in msg
 
+
 def _adopted_peer(m, a, call_id=2, symbol="CRSP", qty=4, level=43.0):
     """A same-symbol peer that reconcile pass 2 ADOPTS from the crash window:
     a journaled MOO that filled at the venue while a peer was parked. Pass 2
@@ -3289,3 +3290,32 @@ def test_gate_zd_blend_book_schema_drift_preserves_and_halts(tmp_path):
     assert m3.state.halted == "SCHEMA_DRIFT" and list(m3.state.positions)
     assert m3.archived_state is None                   # read back cleanly
 
+
+def test_gate_zezf_partial_cover_is_never_reported_as_protected(tmp_path):
+    """Z-E and Z-F: a stop RESIZED below its position protects part of it.
+    The escalation said 'still WORKING ... LEFT RESTING' once the cell
+    flipped to conflation, and `/blend/feed` + `/status` reported
+    `unprotected: false` — on the surface X3 added to make exactly this
+    visible."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    _blackout_stop(m, a, call_id=1, qty=5, level=44.0)
+    _blackout_stop(m, a, call_id=2, qty=4, level=43.0)
+    a._positions["CRSP"] = 6
+    run_cycle(m, a, None, "2026-08-24", alert=lambda _m: None)
+    assert m.state.positions["1"].stop_cover_qty == 3
+    feed_pos = {p["symbol"]: p for p in m.feed(PRICES, "2026-08-24")
+                ["positions"]}["CRSP"]
+    assert feed_pos["unprotected"] is True
+    assert m.feed(PRICES, "2026-08-24")["unprotected"] == 2
+    assert sorted(m.status_summary()["unprotected"]) == ["1", "2"]
+    # the cell flips to CONFLATION: the escalation must still say RESIZED
+    a._positions["CRSP"] = 20
+    alerts: list[str] = []
+    for i in range(6):
+        run_cycle(m, a, None, "2026-08-%02d" % (25 + i), alert=alerts.append)
+    esc = [x for x in alerts if "UNRESOLVED after the blackout" in x
+           and "call 1)" in x]
+    assert esc and all("RESIZED protective stop" in x for x in esc)
+    assert not any("has been LEFT RESTING" in x for x in esc)

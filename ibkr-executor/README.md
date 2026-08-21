@@ -175,13 +175,20 @@ unreconciled venue state. Phases IN ORDER:
       reconciles until it is resolved — the re-armed budget-alarm pattern
       rather than order-safety law #3's literal every-cycle alert, which
       for a cell that can never self-heal would be pure spam. The alert
-      states honestly whether a resting stop still protects the shares. A
-      flagged position with no working stop is also marked STOP_MISSING
-      with its dead `stop_order_ref` dropped, so `/status`
-      (`unverifiable` + `stop_missing`) and `/blend/feed` (per-position
-      `unverifiable` / `unprotected` / `unverified_cycles`, plus book-level
-      counts) show it on the Execution tab — pass 1e still refuses to
-      re-place its stop;
+      states honestly whether a resting stop still protects the shares —
+      and HOW MANY of them, read off the position itself so that a stop
+      RESIZED to cover 3 of 5 shares is never re-described as full
+      protection when the cell later flips to conflation (counter-review
+      Z-E). A flagged position with no working stop is also marked
+      STOP_MISSING with its dead `stop_order_ref` dropped, so `/status`
+      (`unverifiable` + `stop_missing` + `unprotected`) and `/blend/feed`
+      (per-position `unverifiable` / `unprotected` / `unverified_cycles`,
+      plus book-level counts) show it on the Execution tab — pass 1e still
+      refuses to re-place its stop. **PARTIAL cover counts as
+      `unprotected`** on both surfaces (counter-review Z-F): a position
+      whose resting stop was resized below it has real shares standing
+      bare, and reporting it as protected is the same silence Z2 removed
+      from the alerts;
    a. ingest resting-stop fills (`poll_stock_fills`) — a stop that filled
       marks its position CLOSED, so the tracker's later exit signal/echo
       for it is a no-op (idempotent; never a second sell). A mid-ingestion
