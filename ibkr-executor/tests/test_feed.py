@@ -177,6 +177,7 @@ def test_gate_feed_shape(tmp_path, monkeypatch):
     body = r.json()
     assert set(body) == {"mode", "halted", "gate", "book", "positions",
                          "trades", "equity_curve", "unreconciled",
+                         "unverifiable", "unprotected",
                          "last_cycle", "marks_age_s"}
     assert body["marks_age_s"] is not None       # cached-marks staleness
     assert body["marks_age_s"] < 60.0            # cache just refreshed
@@ -191,11 +192,13 @@ def test_gate_feed_shape(tmp_path, monkeypatch):
     (pos,) = body["positions"]
     assert pos == {"symbol": "CRSP", "qty": 5, "entry": 50.0,
                    "entry_date": "2026-08-20", "trail_level": 44.0,
-                   "days_held": pos["days_held"]}
+                   "days_held": pos["days_held"], "unverifiable": False,
+                   "unprotected": False, "unverified_cycles": 0}
     assert isinstance(pos["days_held"], int)
     assert any(t["kind"] == "entry" for t in body["trades"])
     assert body["equity_curve"] == [["2026-08-20", 10_000.0]]
     assert body["unreconciled"] == 0
+    assert body["unverifiable"] == 0 and body["unprotected"] == 0
     assert body["last_cycle"] == {"date": "2026-08-20", "ok": True,
                                   "error": None}
 

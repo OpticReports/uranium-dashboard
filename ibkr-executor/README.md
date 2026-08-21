@@ -68,14 +68,54 @@ unreconciled venue state. Phases IN ORDER:
       the last successful reconcile exceeds what venue order history can
       serve (1 day), every held position is flagged UNVERIFIABLE
       (persisted) — a stop may have filled invisibly inside the blackout.
-      The flag clears ONLY on positive venue evidence: the account's
-      POSITIONS data confirms the shares are still held (unparked; the
-      stop re-verified or re-placed), or the shares are gone and a priced
-      stop fill from refreshed order history books the exit (no price →
-      parked UNRECONCILED). NEVER cleared by timestamp alone; while
-      flagged, exits and /kill defer (nothing MKT-sells shares whose stop
-      may already have filled — the naked-short path) and no new
-      protective stop is placed for the position;
+      The flag clears ONLY on positive venue evidence, ranked (counter-
+      review N2): the position's OWN stop order FIRST — a lookup by its
+      deterministic client id is ORDER-SCOPED, so same-symbol shares held
+      in the account outside the blend book can neither fake nor hide it
+      (`filled` + price → the exit books AT that price; `filled` without
+      one → parked UNRECONCILED, never a silent 0.0; `working` → the stop
+      never filled). Account POSITIONS (`stock_position` sums EVERY
+      account STK row for the symbol) are CORROBORATION, never proof, and
+      the full decision matrix is:
+
+      | account rows | this position's stop | outcome |
+      |---|---|---|
+      | held == booked | `working` | UNPARKED; that stop is kept |
+      | held == booked | dead/unknown | UNPARKED as STOP_MISSING; pass 1e re-places it |
+      | held < booked, no same-symbol peer | any | parked UNRECONCILED, resting stop RETIRED first (counter-review N1) |
+      | held < booked, same-symbol peers exist | any | the shortfall is NOT attributable to one position: NOBODY is parked or stripped, all stay flagged (counter-review x5) |
+      | held > booked (CONFLATION) | `working` | stays flagged; the working stop is LEFT RESTING |
+      | held > booked (CONFLATION) | dead/unknown | stays flagged, marked UNPROTECTED; no new stop is rested |
+      | positions unanswerable | any | stays flagged |
+
+      **held > booked is CONFLATION with same-symbol shares held outside
+      the blend book, and it makes ownership of the BOOK's shares
+      UNPROVABLE — including behind a WORKING stop** (counter-review X1):
+      a working stop is order-scoped proof that THAT STOP did not fill, not
+      that the book's shares did not leave by another route (manual sale
+      out of a pooled position, broker liquidation, transfer). The two
+      cases are indistinguishable from here, so the position stays
+      UNVERIFIABLE — but its working stop is LEFT RESTING, because
+      retiring it would strip real protection from shares that may well be
+      the book's. NEVER cleared by timestamp alone; while flagged, exits
+      and /kill defer (nothing MKT-sells shares whose stop may already
+      have filled — the naked-short path) and no new protective stop is
+      placed for the position (a fresh SELL stop on shares that may not be
+      the book's is the same harm);
+   0b. **fail-closed is never fail-SILENT** (counter-review X3). Only the
+      operator can resolve the cells above, so a position that stays
+      flagged keeps escalating: a 🚨🚨 Telegram alert on the cycle it is
+      first detected and then every `UNVERIFIED_REALERT_CYCLES` (4)
+      reconciles until it is resolved — the re-armed budget-alarm pattern
+      rather than order-safety law #3's literal every-cycle alert, which
+      for a cell that can never self-heal would be pure spam. The alert
+      states honestly whether a resting stop still protects the shares. A
+      flagged position with no working stop is also marked STOP_MISSING
+      with its dead `stop_order_ref` dropped, so `/status`
+      (`unverifiable` + `stop_missing`) and `/blend/feed` (per-position
+      `unverifiable` / `unprotected` / `unverified_cycles`, plus book-level
+      counts) show it on the Execution tab — pass 1e still refuses to
+      re-place its stop;
    a. ingest resting-stop fills (`poll_stock_fills`) — a stop that filled
       marks its position CLOSED, so the tracker's later exit signal/echo
       for it is a no-op (idempotent; never a second sell). A mid-ingestion
@@ -91,8 +131,18 @@ unreconciled venue state. Phases IN ORDER:
       deterministic ids `blend-{kind}-{date}-{seq}` before placement, so
       a crash window can never duplicate the book's largest orders
       (re-review N15);
-   d. retry cancelling retired stops whose cancel failed (their fills
-      alert RED as possible shorts);
+   d. retry cancelling retired stops whose cancel never ACKed (their fills
+      alert RED as possible shorts). Tracking is cleared ONLY by a
+      definitively ACKed cancel (`True`): a `False` is the venue saying
+      "not found / already cancelled", which after a session boundary
+      cannot be told apart from a resting order it can no longer resolve
+      by ref — clearing on it is how an abandoned -5 stop was lost and
+      later triggered into a 2-share account (counter-review X2). A ref
+      that is unsafe to cancel (the persisted, session-scoped `orderId` of
+      a stop the venue cannot locate by client id, counter-review x13) is
+      watched but never blind-cancelled. The escalation alert is re-armed
+      every `ORPHAN_REALERT_CYCLES` (4) retries: loud when recorded, then
+      periodic — never per-cycle spam, never silent;
    e. re-place any missing protective stop — a STOP_MISSING position is
       alerted loudly every cycle and BLOCKS all new entries until placed.
 2. **Staleness guard**: a payload whose `as_of` is more than 5 calendar
@@ -253,14 +303,28 @@ R1): IB serves current-day executions on connect — an executor blackout
 spanning a day or more while a stop fills can exceed what reconcile can
 see FOREVER, not just on the first recovered cycle. The first reconcile
 after such a gap therefore flags every held position UNVERIFIABLE
-(persisted, restart-safe) and only POSITIVE venue evidence clears it:
-`stock_position` (account positions — no history horizon) confirming the
-shares are held unparks the position (stop re-verified/re-placed); shares
-gone with a priced fill in refreshed order history books the exit at that
-price; shares gone with no priced fill parks the trade UNRECONCILED for
-manual booking. While flagged, exits and /kill defer with a RED alert —
-nothing is ever MKT-sold against a possibly-already-filled stop (the
-naked-short path probe A1 demonstrated).
+(persisted, restart-safe) and only POSITIVE venue evidence clears it, in
+rank order: the position's own STOP ORDER (order-scoped, immune to
+same-symbol shares held elsewhere in the account — a priced `filled`
+books the exit at that price, an unpriced one parks it UNRECONCILED, a
+`working` one proves the stop never filled), then `stock_position`
+(account positions — no history horizon) as CORROBORATION that the
+shares are actually there. Fewer shares than booked parks the trade
+UNRECONCILED for manual booking after RETIRING its resting stop (never
+abandoning a -qty order the book no longer tracks), and the park alert
+states what the retire ACTUALLY did — cancelled, uncancelled, ambiguous,
+or unlocatable — never a flat "stop retired" (counter-review X4); more
+shares than booked is external-share CONFLATION and it verifies nothing
+on its own **even behind a working stop**, so the position stays flagged
+indefinitely and keeps escalating on a re-armed cadence until the
+operator resolves it (see the matrix in phase 1.0/1.0b). While flagged,
+exits and /kill defer with a RED alert and no protective stop is
+(re-)placed — nothing is ever MKT-sold, and no SELL stop is ever rested,
+against shares whose ownership is unproven (the naked-short path probe A1
+demonstrated, and the counter-review's N1/N2/X1 variants of it). Such a
+position blocks all new entries (`has_naked_position`), so an unresolved
+conflation wedges the sleeve until it is cleared by hand — the
+deliberate, documented cost of not guessing.
 
 Env (all optional until the paper gate):
 
@@ -272,7 +336,7 @@ Env (all optional until the paper gate):
 | `TRACKER_USER` / `TRACKER_PASSWORD` | fallback: the tracker's HTTP Basic dashboard login (its DASHBOARD_USER/PASSWORD) — dashboard creds only, no broker credential enters the blend path |
 | `BLEND_BUDGET` | per-strategy gross-exposure cap in USD; 0 (default) = disabled. When set, crossing 85% utilization sends a one-time Telegram alert ("review and raise BLEND_BUDGET"), re-armed once utilization drops below 75% |
 | `BLEND_BOOK_USD` | initial paper book (default 10,000), split 30/70 at first boot |
-| `BLEND_STATE_PATH` | persisted book state (default `./data/blend_state.json`). Saves are atomic (temp file + rename). The state is MODE-TAGGED (`dry:paper` / `real:paper` / `real:live`): on any mode change the previous book is archived alongside and a FRESH book starts, with a Telegram alert — a book's fills are fiction in any other mode (DRY fills at placeholder prices; paper fills aren't live fills), so they must never be reconciled against a venue that never saw them |
+| `BLEND_STATE_PATH` | persisted book state (default `./data/blend_state.json`). Saves are atomic: a UNIQUE temp file per write (`mkstemp` in the state directory) + fsync + rename, so two threads saving at once can never clobber each other's partial file or publish truncated JSON (counter-review x11 — a single shared `.tmp` made that promise false; the same treatment now covers `STATE_PATH`, the El Niño ladder book). Service writers additionally serialize their read-modify-write under `BLEND_LOCK` (blend) / `MGR_LOCK` (ladder). The state is MODE-TAGGED (`dry:paper` / `real:paper` / `real:live`): on any mode change the previous book is archived alongside and a FRESH book starts, with a Telegram alert — a book's fills are fiction in any other mode (DRY fills at placeholder prices; paper fills aren't live fills), so they must never be reconciled against a venue that never saw them |
 | `READ_TOKEN` | READ-ONLY token gating `GET /blend/feed` (header `X-Read-Token`, constant-time compare). SEPARATE from `EXEC_TOKEN` by design: the feed holder sees book state only — never kill/resume. Empty (default) = the feed endpoint 404s. Set the same value as `BLEND_READ_TOKEN` on the genomics tracker, whose server-side proxy powers the research site's Execution tab |
 
 ### Read-only feed: `GET /blend/feed` (the Execution tab)
