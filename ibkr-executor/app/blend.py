@@ -176,6 +176,11 @@ class BlendState:
     spy_qty: int = 0
     core_cash: float = 0.0
     halted: str | None = None   # KILL | None
+    flatten_request: dict | None = None  # /kill journal (R2): {ts, date} —
+                                         # persisted like pending_entries so
+                                         # a restart resumes the flatten; the
+                                         # LOOP thread executes it (it owns
+                                         # the ib_async event loop)
     events: list = field(default_factory=list)
     trades: list = field(default_factory=list)   # booked fills, oldest first
                                                  # (bounded TRADE_LOG_MAX;
@@ -223,6 +228,7 @@ class Blend3070Manager:
                 spy_qty=raw.get("spy_qty", 0),
                 core_cash=raw.get("core_cash", 0.0),
                 halted=raw.get("halted"),
+                flatten_request=raw.get("flatten_request"),
                 trades=raw.get("trades", [])[-TRADE_LOG_MAX:],
                 equity_curve=raw.get("equity_curve", [])[-EQUITY_CURVE_MAX:],
                 last_gate=raw.get("last_gate"),
@@ -253,6 +259,7 @@ class Blend3070Manager:
                    "spy_qty": self.state.spy_qty,
                    "core_cash": self.state.core_cash,
                    "halted": self.state.halted,
+                   "flatten_request": self.state.flatten_request,
                    "trades": self.state.trades[-TRADE_LOG_MAX:],
                    "equity_curve": self.state.equity_curve[-EQUITY_CURVE_MAX:],
                    "last_gate": self.state.last_gate,
@@ -921,8 +928,27 @@ class Blend3070Manager:
         self._event("RED", f"blend halted ({reason})")
         self.save()
 
+    def request_flatten(self, today: str) -> None:
+        """/kill stage 1 (R2): journal the flatten request (persisted — a
+        restart resumes it, same doctrine as pending_entries) and halt the
+        book immediately (no new entries). Stage 2 — the actual flatten —
+        runs on the blend LOOP thread's next cycle (execute_flatten): that
+        thread owns the adapter's ib_async event loop, while an API thread
+        pumping a fresh loop against the shared connection would time out
+        every wait and risk session corruption."""
+        self.state.flatten_request = {"ts": int(time.time()), "date": today}
+        self.state.halted = "KILL"
+        self._event("RED", "kill: halt engaged; flatten queued for the "
+                           "execution loop")
+        self.save()
+
     def resume(self) -> None:
         self.state.halted = None
+        if self.state.flatten_request is not None:
+            # A queued kill-flatten must never fire against a RESUMED book.
+            self.state.flatten_request = None
+            self._event("WARN", "resume: queued kill-flatten request "
+                                "cleared before execution")
         self._event("INFO", "blend resumed")
         self.save()
 
@@ -931,6 +957,7 @@ class Blend3070Manager:
         out = {
             "enabled": True,
             "halted": st.halted,
+            "flatten_pending": st.flatten_request is not None,
             "initialized": st.initialized,
             "positions": {k: asdict(v) for k, v in st.positions.items()},
             "open_count": len(st.positions),
@@ -1628,6 +1655,137 @@ def _execute_exit(mgr: Blend3070Manager, adapter, it: dict,
     return True
 
 
+def execute_flatten(mgr: Blend3070Manager, adapter, alert) -> None:
+    """/kill stage 2 (R2): the LOOP thread executes a journaled flatten
+    request — it owns the adapter's ib_async event loop, and run_cycle has
+    already reconciled (N14 reconcile-first still holds: stop fills are
+    booked, so only positions STILL actually held are closed). The K-d law
+    survives: a RAISING stop cancel means the stop likely FILLED — park,
+    never a MKT sell on top of it. R1 UNVERIFIABLE (history_gap) positions
+    stay parked untouched. The completion alert states exactly what closed
+    vs what parked — the kill switch never overclaims."""
+    st = mgr.state
+    closed: list[str] = []
+    parked: list[str] = []
+    unrec: list[str] = []
+    for key in list(st.positions):
+        pos = st.positions.get(key)
+        if pos is None:
+            continue
+        sym = pos.symbol
+        if pos.history_gap:
+            # R1: its stop may have filled invisibly inside a blackout —
+            # a MKT sell could short. Stays parked until a reconcile
+            # positively verifies it at the venue.
+            parked.append(sym)
+            alert(f"🚨🚨 blend kill: {sym} NOT flattened — UNVERIFIABLE "
+                  f"after a venue-history blackout; parked until venue "
+                  f"positions verify it, verify the account manually")
+            continue
+        stop_ref = pos.stop_order_ref
+        if stop_ref:
+            cancel_raised = False
+            try:
+                cancelled = adapter.cancel_stock_order(stop_ref)
+            except Exception as exc:  # noqa: BLE001
+                # Pinned adapter contract: a RAISING cancel means the stop
+                # FILLED. Must never fall through to the MKT sell (K-d).
+                logger.exception("kill flatten: stop cancel %s raised "
+                                 "(stop likely FILLED): %s", key, exc)
+                cancel_raised = True
+                cancelled = False
+            # M3: whether the cancel succeeded or found the stop "already
+            # gone", it may have (partially) filled first — ingest venue
+            # fills so the sell below sizes from venue truth.
+            verify_ok = True
+            try:
+                _ingest_fills(mgr, adapter, alert)
+            except Exception as exc:  # noqa: BLE001
+                verify_ok = False
+                logger.exception("kill flatten: fill verify failed: %s", exc)
+            pos = st.positions.get(key)
+            if pos is None:
+                # Settled by its own stop fill (or parked priceless).
+                (unrec if key in st.unreconciled else closed).append(sym)
+                continue
+            if cancel_raised or not verify_ok:
+                # FAIL CLOSED (K-d): the stop signalled FILLED and/or venue
+                # truth is unverifiable — park loudly; reconcile settles it.
+                mgr.record_orphan_stop(stop_ref, {"symbol": sym,
+                                                  "qty": -pos.qty,
+                                                  "call_id": pos.call_id})
+                parked.append(sym)
+                alert(f"🚨🚨 blend kill: {sym} NOT flattened — stop cancel "
+                      f"{'raised (likely filled)' if cancel_raised else 'unverifiable'}; "
+                      f"position parked for reconcile, verify manually")
+                continue
+            if not cancelled:
+                if mgr._reconcile_gap_s > HISTORY_HORIZON_S:
+                    # m2 belt: "already gone" past the venue-history
+                    # horizon — UNVERIFIABLE, park loudly (R1's flag should
+                    # already have caught this; keep the belt).
+                    mgr.record_orphan_stop(stop_ref, {"symbol": sym,
+                                                      "qty": -pos.qty,
+                                                      "call_id": pos.call_id})
+                    parked.append(sym)
+                    alert(f"🚨🚨 blend kill: {sym} NOT flattened — stop "
+                          f"already gone past the venue-history horizon: "
+                          f"UNVERIFIABLE, nothing sold; verify manually")
+                    continue
+                # Verified still held with a possibly-resting stop: track
+                # it so a later fill alerts RED and the cancel retries.
+                mgr.record_orphan_stop(stop_ref, {"symbol": sym,
+                                                  "qty": -pos.qty,
+                                                  "call_id": pos.call_id})
+        try:
+            # M3: -pos.qty is the venue-truth REMAINING qty (a partial
+            # stop fill above already reduced it).
+            r = adapter.place_stock_order(
+                sym, -pos.qty, "MKT",
+                client_order_id=f"blend-{pos.call_id}-kill")
+            fill = r.get("fill_price")
+            if fill is None:
+                # Repo law: never book at a silent 0.0.
+                mgr.on_exit_unreconciled(pos.call_id,
+                                         "manual kill: venue ack without "
+                                         "a fill price")
+                unrec.append(sym)
+                alert(f"🚨 blend kill close {sym} x{pos.qty} UNRECONCILED: "
+                      f"no fill price — proceeds NOT booked, manual "
+                      f"reconciliation needed")
+            else:
+                mgr.on_exited(pos.call_id, fill, "manual kill")
+                closed.append(sym)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("kill flatten close %s failed: %s", key, exc)
+            if stop_ref:
+                # The stop was retired above but the sell failed: the
+                # position must not be believed protected (m3 pattern) —
+                # pass 4 re-places while the book stays halted.
+                mgr.mark_stop_missing(pos.call_id)
+            parked.append(sym)
+            alert(f"🚨 blend kill: MKT close {sym} FAILED ({exc}) — "
+                  f"position still held; book halted, close manually or "
+                  f"wait for reconcile")
+    st.flatten_request = None       # executed (outcomes alerted below)
+    mgr.save()
+    # Honest completion summary: exactly what closed vs what did not.
+    if parked or unrec:
+        alert(f"🔴 blend kill flatten finished WITH EXCEPTIONS: "
+              f"{len(closed)} closed ({', '.join(closed) or 'none'})"
+              + (f", {len(unrec)} sold but UNRECONCILED "
+                 f"({', '.join(unrec)})" if unrec else "")
+              + f", {len(parked)} NOT closed ({', '.join(parked)}) — "
+                f"parked positions need manual verification; book stays "
+                f"halted until /resume")
+    elif closed:
+        alert(f"🔴 blend kill flatten complete: {len(closed)} position(s) "
+              f"closed ({', '.join(closed)}); book halted until /resume")
+    else:
+        alert("🔴 blend kill flatten complete: book was already flat; "
+              "halted until /resume")
+
+
 def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
               today: str, alert=None) -> list[dict]:
     """One blend cycle: RECONCILE (venue truth first) -> step -> execute
@@ -1639,6 +1797,12 @@ def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
     # PHASE 0 — reconciliation-first (order-safety law #1). Raises if the
     # adapter cannot reconcile: the cycle fails closed.
     reconcile(mgr, adapter, today, alert)
+
+    # PHASE 0b — a journaled /kill flatten request executes HERE, on the
+    # loop thread that owns the adapter's event loop (R2). Reconcile above
+    # already booked any stop fills; the book stays halted either way.
+    if mgr.state.flatten_request is not None:
+        execute_flatten(mgr, adapter, alert)
 
     if payload is not None and payload_is_stale(payload, today):
         alert(f"⚠️ blend: tracker payload is stale (as_of "

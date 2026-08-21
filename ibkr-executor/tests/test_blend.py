@@ -66,6 +66,17 @@ def _seed_initialized(m, sleeve_cash=3_000.0, spy_qty=70, bil_qty=0,
     m.state.core_cash = core_cash
 
 
+def _wait_until(cond, timeout=10.0):
+    """Poll for an async condition (R2: the loop thread executes the /kill
+    flatten after LOOP_WAKE — service tests wait for it, house idiom)."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if cond():
+            return True
+        time.sleep(0.05)
+    return cond()
+
+
 def _held_position(m, call_id=1, symbol="CRSP", qty=5, fill=50.0,
                    stop_level=44.0, entry_date="2026-08-01",
                    time_stop="2026-10-30", stop_ref="old-stop"):
@@ -396,10 +407,15 @@ def test_gate_blend_enabled_status_and_kill(tmp_path, monkeypatch):
                               "sleeve_cash", "bil_qty", "spy_qty", "core_cash",
                               "budget_cap", "events"}
             assert b["open_count"] == 1
-            # /kill closes blend positions and halts the blend book too
-            c.get("/kill", params={"token": "sekrit"})
-            assert service.BLEND.state.positions == {}
+            # /kill halts the blend book IMMEDIATELY and queues the flatten
+            # for the execution loop (R2 two-stage), which closes positions
+            # within seconds (LOOP_WAKE).
+            r = c.get("/kill", params={"token": "sekrit"})
+            assert r.json()["blend"] == "flatten_queued"
             assert service.BLEND.state.halted == "KILL"
+            assert _wait_until(
+                lambda: service.BLEND.state.positions == {}
+                and service.BLEND.state.flatten_request is None)
             c.get("/resume", params={"token": "sekrit"})
             assert service.BLEND.state.halted is None
     finally:
@@ -1054,6 +1070,8 @@ def test_gate_n14_kill_does_not_double_sell_a_stop_filled_position(
             cash_before = B.state.sleeve_cash
             r = c.get("/kill", params={"token": "sekrit"})
             assert r.json()["halted"] == "KILL"
+            # R2: the loop thread reconciles-first then flattens
+            assert _wait_until(lambda: B.state.flatten_request is None)
             sells = _executions(A, "CRSP")
             assert len(sells) == 1               # the stop fill ONLY
             assert sells[0]["action"] == "stop_triggered"
@@ -1096,9 +1114,15 @@ def test_gate_n14_kill_refuses_blind_flatten_when_reconcile_fails(
             monkeypatch.setattr(A, "poll_stock_fills", boom)
             r = c.get("/kill", params={"token": "sekrit"})
             assert r.json()["halted"] == "KILL"
+            assert B.state.halted == "KILL"      # halt is IMMEDIATE
+            # R2: wait for the loop's flatten attempt — reconcile fails,
+            # so the cycle fails CLOSED and nothing is blind-sold.
+            assert _wait_until(
+                lambda: service.BLEND_CYCLE["ok"] is False)
             assert "1" in B.state.positions      # NOT blind-sold
-            assert B.state.halted == "KILL"      # but the book IS halted
             assert _executions(A, "CRSP") == []
+            # the flatten request survives to retry once the venue answers
+            assert B.state.flatten_request is not None
     finally:
         service.BLEND = None
         service.MGR = None
@@ -1431,6 +1455,8 @@ def test_gate_kd_kill_raising_cancel_never_market_sells(tmp_path, monkeypatch):
 
             r = c.get("/kill", params={"token": "sekrit"})
             assert r.json()["halted"] == "KILL"
+            # R2: the loop thread executes the flatten; K-d must survive.
+            assert _wait_until(lambda: B.state.flatten_request is None)
             # No market sell may be placed against the maybe-filled stop.
             mkt_sells = [e for e in _executions(A, "CRSP")
                          if e["action"] != "stop_triggered"]
@@ -1519,7 +1545,11 @@ def test_gate_adapt_m3_kill_after_partial_stop_never_oversells(
             B.save()
             A.trigger_stop_partial(rs["order_ref"], 3)   # 3 fill, stop dies
             c.get("/kill", params={"token": "sekrit"})
-            assert B.state.positions == {} and B.state.halted == "KILL"
+            # R2: loop-thread flatten — partial booked by reconcile first
+            assert _wait_until(
+                lambda: B.state.positions == {}
+                and B.state.flatten_request is None)
+            assert B.state.halted == "KILL"
             sold = -sum(e["qty"] for e in _executions(A, "CRSP"))
             assert sold == 5                 # 3 partial + 2 MKT, never 8
     finally:
@@ -1740,6 +1770,226 @@ def test_gate_r1_blackout_stop_fill_recovered_from_history_books_at_price(
                 and e["action"] == "place_stock_order"
                 and e.get("order_type") != "STP"]    # nothing sold
     assert any("recovered from venue history" in msg for msg in alerts)
+
+
+# R2 (re-review residual): /kill is TWO-STAGE — the handler journals a
+# persisted flatten request and halts; the LOOP thread (owner of the
+# ib_async event loop) executes the flatten with reconcile-first semantics.
+# FakeIB cannot reproduce the cross-thread asyncio failure, so these gates
+# pin the NEW mechanism: journal persisted, halt immediate, loop executes,
+# honest summaries, restart-resume, no API-thread adapter touch.
+
+
+def test_gate_r2_flatten_request_persists_and_executes_after_restart(
+        tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    a = DryAdapter()
+    run_cycle(m, a, payload(entries=[entry()], stops=[stop_row()]),
+              "2026-08-20", alert=lambda _: None)
+    assert "1" in m.state.positions
+    m.request_flatten("2026-08-20")
+    assert m.state.halted == "KILL"          # halt is immediate
+    assert "1" in m.state.positions          # nothing sold by the request
+    # ...service restarts before the loop ran the flatten...
+    m2 = Blend3070Manager(m.cfg, m.state_path)
+    assert m2.state.flatten_request is not None      # journal survived
+    assert m2.state.halted == "KILL"
+    alerts: list[str] = []
+    run_cycle(m2, a, None, "2026-08-21", alert=alerts.append)
+    assert m2.state.positions == {}          # loop executed the flatten
+    assert m2.state.flatten_request is None
+    assert m2.state.halted == "KILL"         # halted until /resume
+    assert len(_executions(a, "CRSP")) == 1
+    assert any("flatten complete" in msg for msg in alerts)
+
+
+def test_gate_r2_flatten_summary_honest_about_parked_positions(tmp_path):
+    """The completion alert must state what actually closed vs parked —
+    never 'book closed & halted' while an UNVERIFIABLE position is held."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10_000.0)
+    a = _NoVenuePositionsAdapter()           # R1 flag cannot be verified
+    run_cycle(m, a, payload(entries=[entry(),
+                                     entry(call_id=2, symbol="NTLA")],
+                            stops=[stop_row(),
+                                   stop_row(call_id=2, symbol="NTLA")]),
+              "2026-08-20", alert=lambda _: None)
+    m.state.positions["2"].history_gap = True        # blackout-parked
+    m.request_flatten("2026-08-21")
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-21", alert=alerts.append)
+    assert "1" not in m.state.positions              # CRSP closed
+    assert "2" in m.state.positions                  # NTLA parked, NOT sold
+    assert m.state.positions["2"].history_gap is True
+    assert _executions(a, "NTLA") == []
+    (summary,) = [msg for msg in alerts if "flatten finished" in msg]
+    assert "WITH EXCEPTIONS" in summary
+    assert "1 closed" in summary and "CRSP" in summary
+    assert "NOT closed" in summary and "NTLA" in summary
+    assert not any("book closed" in msg for msg in alerts)  # never overclaim
+
+
+def test_gate_r2_flatten_raising_cancel_parks_never_sells(tmp_path):
+    """K-d survives the loop-thread flatten: a RAISING stop cancel (stop
+    likely FILLED) parks the position — never a MKT sell on top of it."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m)
+    a = _RaisingCancelAdapter()
+    m.request_flatten("2026-08-21")
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-21", alert=alerts.append)
+    assert "1" in m.state.positions                  # parked, not sold
+    assert "old-stop" in m.state.orphan_stop_refs    # settled by reconcile
+    assert _executions(a, "CRSP") == []
+    assert m.state.flatten_request is None
+    (summary,) = [msg for msg in alerts if "flatten finished" in msg]
+    assert "0 closed" in summary or "none" in summary
+    assert "NOT closed" in summary and "CRSP" in summary
+
+
+def test_gate_r2_resume_clears_a_queued_flatten(tmp_path):
+    """/resume before the loop ran the flatten must clear the journal — a
+    stale kill request must never flatten a RESUMED book."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m)
+    m.request_flatten("2026-08-21")
+    m.resume()
+    assert m.state.flatten_request is None
+    a = DryAdapter()
+    run_cycle(m, a, payload(stops=[stop_row()]), "2026-08-21",
+              alert=lambda _: None)
+    assert "1" in m.state.positions                  # nothing flattened
+    assert _executions(a, "CRSP") == []
+
+
+class _ThreadRecordingAdapter(DryAdapter):
+    """Records the thread of every adapter call — the R2 law: ONLY the loop
+    thread (owner of the ib_async event loop) may touch the venue."""
+
+    def __init__(self):
+        super().__init__()
+        import threading
+        self.call_threads: set[int] = set()
+        self._ident = threading.get_ident
+
+    def _note(self):
+        self.call_threads.add(self._ident())
+
+    def place_stock_order(self, *a, **kw):
+        self._note()
+        return super().place_stock_order(*a, **kw)
+
+    def cancel_stock_order(self, *a, **kw):
+        self._note()
+        return super().cancel_stock_order(*a, **kw)
+
+    def poll_stock_fills(self):
+        self._note()
+        return super().poll_stock_fills()
+
+    def find_stock_order(self, *a, **kw):
+        self._note()
+        return super().find_stock_order(*a, **kw)
+
+    def stock_position(self, *a, **kw):
+        self._note()
+        return super().stock_position(*a, **kw)
+
+    def spot(self, *a, **kw):
+        self._note()
+        return super().spot(*a, **kw)
+
+
+def test_gate_r2_kill_never_touches_the_adapter_from_the_api_thread(
+        tmp_path, monkeypatch):
+    """The old /kill pumped the adapter from a FastAPI worker thread — on
+    the real IBAdapter every wait timed out (ib_async resolves its loop
+    per thread) and the flatten deterministically failed. Now every
+    adapter call must come from ONE thread: the service loop."""
+    import time as _time
+
+    from app.config import settings
+    from app import service
+    from app.service import app as service_app
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setattr(settings, "state_path", str(tmp_path / "s.json"))
+    monkeypatch.setattr(settings, "blend_state_path", str(tmp_path / "b.json"))
+    monkeypatch.setattr(settings, "exec_token", "sekrit")
+    monkeypatch.setattr(settings, "tws_userid", "")
+    monkeypatch.setattr(settings, "blend_enabled", True)
+    monkeypatch.setattr(service, "DryAdapter", _ThreadRecordingAdapter)
+    try:
+        with TestClient(service_app) as c:
+            for _ in range(200):
+                if service.BLEND is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            B, A = service.BLEND, service.ADAPTER
+            assert _wait_until(lambda: A.call_threads)   # loop cycle 1 ran
+            loop_threads = set(A.call_threads)           # THE loop thread
+            assert len(loop_threads) == 1
+            _seed_initialized(B, sleeve_cash=2_750.0)
+            _held_position(B, stop_ref=None)
+            pos = B.state.positions["1"]
+            rs = A.place_stock_order("CRSP", -5, "STP", stop_price=44.0,
+                                     tif="GTC",
+                                     client_order_id="blend-1-stp-44.0000")
+            pos.stop_order_ref = rs["order_ref"]
+            B.save()
+            A.call_threads.clear()           # only post-kill calls count
+            c.get("/kill", params={"token": "sekrit"})
+            assert _wait_until(
+                lambda: B.state.positions == {}
+                and B.state.flatten_request is None)
+            # the flatten DID run (cancel + MKT sell) — and every adapter
+            # call came from THE loop thread, none from the API thread
+            assert A.call_threads == loop_threads
+    finally:
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_r2_kill_alerts_are_honest_two_stage(tmp_path, monkeypatch):
+    """The immediate /kill reply says QUEUED (never 'book closed'); the
+    loop's completion alert states what actually closed."""
+    import time as _time
+
+    from app.config import settings
+    from app import service
+    from app.service import app as service_app
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setattr(settings, "state_path", str(tmp_path / "s.json"))
+    monkeypatch.setattr(settings, "blend_state_path", str(tmp_path / "b.json"))
+    monkeypatch.setattr(settings, "exec_token", "sekrit")
+    monkeypatch.setattr(settings, "tws_userid", "")
+    monkeypatch.setattr(settings, "blend_enabled", True)
+    try:
+        with TestClient(service_app) as c:
+            for _ in range(200):
+                if service.BLEND is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            B = service.BLEND
+            _seed_initialized(B, sleeve_cash=2_750.0)
+            _held_position(B, stop_ref=None)
+            sent: list[str] = []
+            monkeypatch.setattr(service, "send", sent.append)
+            r = c.get("/kill", params={"token": "sekrit"})
+            assert r.json()["blend"] == "flatten_queued"
+            (kill_msg,) = [msg for msg in sent if "KILLED" in msg]
+            assert "flatten QUEUED" in kill_msg
+            assert "closed & halted" not in kill_msg     # the old overclaim
+            assert _wait_until(lambda: B.state.flatten_request is None)
+            assert any("flatten complete" in msg and "1 position(s) closed"
+                       in msg for msg in sent)
+    finally:
+        service.BLEND = None
+        service.MGR = None
 
 
 # m3 (minor): cancel-ok-then-place-raise must not leave the position

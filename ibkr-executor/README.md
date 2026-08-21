@@ -140,12 +140,25 @@ unreconciled venue state. Phases IN ORDER:
 5. **No silent zeros** (repo law): any fill without a fill price is
    UNRECONCILED — the trade is parked in state, nothing books at 0.0,
    P&L for it is blocked, and Telegram gets a RED alert.
-6. **/kill reconciles FIRST** (re-review N14): the emergency flatten runs
-   the same reconcile pass inside the blend lock before closing, then
-   closes only positions STILL actually held (idempotent with a stop fill
-   that already happened); an ambiguous stop cancel is verified before
-   the MKT sell. If reconcile itself fails, the book is halted but NOT
-   blind-flattened — a loud alert asks for manual action.
+6. **/kill is TWO-STAGE** (adapter re-review R2): the HTTP handler never
+   touches the venue — ib_async binds its event loop to the thread that
+   owns the connection (the blend loop thread), so an API-thread flatten
+   would pump a fresh loop against the shared transport, time out every
+   wait, mis-park healthy stops as "likely filled", and risk session
+   corruption. Stage 1 (the handler): journal a persisted flatten request
+   (it survives a restart, same doctrine as `pending_entries`), halt the
+   book immediately (no new entries), wake the loop, and answer honestly:
+   "halt engaged; flatten QUEUED". Stage 2 (the loop thread, seconds
+   later): reconcile FIRST (re-review N14 — stop fills book before
+   anything sells, so only positions STILL actually held close), then
+   flatten with all the standing guards: a RAISING stop cancel parks the
+   position (K-d — never a MKT sell on a likely-filled stop), and
+   R1-UNVERIFIABLE positions stay parked untouched. The completion alert
+   states exactly what closed vs what parked — the kill switch never
+   overclaims. If reconcile fails, the book stays halted, the request
+   stays journaled, and every failing cycle alerts loudly until the
+   flatten lands; /resume clears a still-queued request (a stale kill
+   must never flatten a resumed book).
 
 Adapter contract (pinned, now implemented by BOTH adapters): cancelling a
 FILLED order must RAISE (IB errors on it) — bool False is reserved for
@@ -220,11 +233,10 @@ El Nino combo reads):
   threads and NEVER call the adapter — run_cycle refreshes a mark cache
   (prices + timestamp) once per cycle and both endpoints serve that
   cache, reporting its age as `marks_age_s` (staleness shown, not
-  hidden). The ONE API path allowed to touch the adapter is `/kill`, and
-  only under BLEND_LOCK — the loop thread holds the same lock around
-  run_cycle, so the two never pump the ib_async loop concurrently; the
-  emergency flatten must act on live venue truth and must not queue
-  behind a possibly wedged loop.
+  hidden). NO API path touches the adapter — `/kill` included (adapter
+  re-review R2): it journals a flatten request under BLEND_LOCK and the
+  loop thread, owner of the ib_async event loop, executes it on its next
+  (immediately woken) iteration — see the two-stage `/kill` above.
 
 SUPERVISED FIRST SESSION: flip `DRY_RUN=false` (with `TRADING_MODE=paper`)
 DURING MARKET HOURS and keep eyes on Telegram + `/status` through the
@@ -290,7 +302,9 @@ Casey's paper-credential steps when the paper gate opens:
 2. After a clean OFFLINE week, add the PAPER `TWS_USERID`/`TWS_PASSWORD`
    (keep `DRY_RUN=true`): gateway boots, mutations stay simulated.
 3. Flip `DRY_RUN=false` with `TRADING_MODE=paper` for real paper orders;
-   `/kill` closes blend positions and halts the book alongside the ladder.
+   `/kill` halts the blend book immediately and queues the flatten for
+   the execution loop (two-stage — the completion alert says what closed
+   vs parked). VERIFY `/kill` EARLY in the paper week (re-review R2).
    Live is a separate, later decision — same per-leg cutover discipline.
 
 ## Service modes (auto-selected at boot)
@@ -303,8 +317,9 @@ Casey's paper-credential steps when the paper gate opens:
 | LIVE | TRADING_MODE=live, DRY_RUN=false | real money (Nov gate, per-leg cutover) |
 
 Control surface: `/health` (public), `/status`, `/kill` (closes all open
-legs, halts), `/resume` — token-gated via `X-Exec-Token` header or
-`?token=`, same pattern as btc-executor.
+ladder legs and halts; the blend flatten is queued to the execution loop
+— two-stage, see above), `/resume` — token-gated via `X-Exec-Token`
+header or `?token=`, same pattern as btc-executor.
 
 ## Rollout gates
 
