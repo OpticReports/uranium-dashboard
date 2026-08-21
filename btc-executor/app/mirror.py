@@ -98,6 +98,11 @@ class ExecState:
     # promoted).
     coverage: dict = field(default_factory=dict)
     coverage_live: dict = field(default_factory=dict)
+    # counts promoted by a one-shot operator attestation rather than earned
+    # under the guard. Kept SEPARATE forever: "attested live" is weaker
+    # evidence than "observed live" and the matrix must keep saying so.
+    coverage_attested: dict = field(default_factory=dict)
+    attestation: dict | None = None
     drills: list = field(default_factory=list)
 
 
@@ -135,6 +140,64 @@ class Executor:
         self._warn_unattributed_coverage()
         if any(l.qty != 0.0 for l in self.state.legs.values()):
             self._cov("restart_with_position")
+
+    def attest_coverage(self, note: str = "") -> dict:
+        """ONE-SHOT operator attestation: promote pre-split coverage counts
+        to live-attributed (RAMP_V4.md).
+
+        This is a deliberate hole in the mode guard, so it is bounded hard:
+
+        - refuses once anything is already attributed (never re-runs, never
+          tops up later evidence);
+        - refuses unless the executor is live RIGHT NOW - attesting that
+          past events were live while sitting in DRY_RUN is incoherent;
+        - refuses if the retained event log contains ANY mode_change. A flip
+          means a window of unknown mode existed, and counts carry no
+          timestamps, so nothing can be attributed. The operator cannot
+          override this: overriding it is the whole failure mode.
+
+        Promoted counts stay recorded in coverage_attested so /status keeps
+        showing them as ATTESTED rather than observed. Honesty limit,
+        stated in the response: events retain to 200, so a clean log is the
+        best available evidence, not proof that no flip ever happened.
+        """
+        cov = dict(getattr(self.state, "coverage", None) or {})
+        live = getattr(self.state, "coverage_live", None) or {}
+        if live:
+            return {"ok": False, "refused": "already_attributed",
+                    "detail": "coverage_live is non-empty; attestation is "
+                              "one-shot and cannot top up later evidence"}
+        if not cov:
+            return {"ok": False, "refused": "nothing_to_attest"}
+        if not self._is_live():
+            return {"ok": False, "refused": "not_live",
+                    "detail": "executor is in DRY_RUN (or on a shadow "
+                              "venue); cannot attest live provenance"}
+        flips = [e for e in (self.state.events or [])
+                 if e.get("kind") == "mode_change"]
+        if flips:
+            return {"ok": False, "refused": "mode_change_in_log",
+                    "detail": f"{len(flips)} DRY_RUN flip(s) in the retained "
+                              f"log: some counts may be synthetic and none "
+                              f"can be attributed by time. Re-earn live.",
+                    "flips": [e.get("msg", "")[:160] for e in flips[-5:]]}
+        n = sum(v for v in cov.values() if isinstance(v, int) and v > 0)
+        self.state.coverage_live = dict(cov)
+        self.state.coverage_attested = dict(cov)
+        self.state.attestation = {"ts": int(time.time()), "events": n,
+                                  "rows": sorted(cov), "note": note[:200]}
+        self._event("WARN", "coverage_attested",
+                    f"operator attested {n} pre-split coverage events as "
+                    f"live across {len(cov)} rows - these rows now satisfy "
+                    f"the ramp gate on ATTESTED, not observed, evidence"
+                    + (f" (note: {note[:120]})" if note else ""))
+        self._save_state()
+        return {"ok": True, "attested_events": n, "rows": sorted(cov),
+                "basis": "no mode_change in retained event log; executor "
+                         "live at attestation time",
+                "limitation": "events retain to 200 entries - a clean log "
+                              "is the best available evidence, not proof "
+                              "that DRY_RUN never flipped"}
 
     def _warn_unattributed_coverage(self) -> None:
         """Pre-split counts have no provenance, so the ramp matrix drops to
@@ -225,6 +288,8 @@ class Executor:
             # absent on state written before the mode split -> stays empty,
             # so pre-split counts read as unattributed rather than live
             st.coverage_live = raw.get("coverage_live", {})
+            st.coverage_attested = raw.get("coverage_attested", {})
+            st.attestation = raw.get("attestation")
             st.drills = raw.get("drills", [])[-50:]
             return st
         except Exception:  # noqa: BLE001
@@ -243,6 +308,8 @@ class Executor:
              "last_config": getattr(self.state, "last_config", None),
              "coverage": getattr(self.state, "coverage", {}),
              "coverage_live": getattr(self.state, "coverage_live", {}),
+             "coverage_attested": getattr(self.state, "coverage_attested", {}),
+             "attestation": getattr(self.state, "attestation", None),
              "drills": getattr(self.state, "drills", [])[-50:]}
         tmp = self.state_path + ".tmp"
         json.dump(d, open(tmp, "w"))

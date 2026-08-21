@@ -76,6 +76,30 @@ shadow book; this spec's own table corrected (it still pointed operators
 at `/status.coverage`); and the provenance reset now emits a WARN event
 plus `ramp_v4_unattributed` on `/pulse`.
 
+### One-shot attestation (`POST /coverage/attest?confirm=true`)
+
+For the single migration where counts were genuinely earned live but
+predate provenance recording, a token-gated one-shot promotes `coverage`
+into `coverage_live`. It is a deliberate hole in the guard, so it is
+bounded hard and **none of the bounds are operator-overridable**:
+
+- refuses once anything is attributed (`already_attributed`) — one-shot,
+  and it can never top up later evidence;
+- refuses unless the executor is live at attestation time (`not_live`);
+- refuses if the retained event log contains ANY `mode_change`
+  (`mode_change_in_log`) — a DRY_RUN flip means a window of unknown mode
+  existed, and counts carry no timestamps, so nothing can be attributed
+  by time. Overriding this check IS the failure mode the guard exists to
+  prevent, so there is no override.
+
+Promoted counts stay in `coverage_attested` permanently and every affected
+row renders `"attested": N`: **attested is weaker evidence than observed,
+and the matrix keeps saying so.** The promotion emits a WARN event.
+
+Honesty limit, returned in the response body: events retain to 200
+entries, so a clean log is the best available evidence — not proof that
+DRY_RUN never flipped.
+
 Counts persisted **before** this amendment have no provenance recorded.
 They are therefore treated as `unattributed`: visible in `all_modes`,
 never credited to a row. They must be re-earned live. This is deliberately

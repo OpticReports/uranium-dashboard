@@ -1465,3 +1465,99 @@ def test_gate_spec_reads_ramp_rows_not_raw_coverage():
     assert "any LIVE fill" in spec
     head = spec[:spec.index("Honesty note")]
     assert "✅ proven 2026-08-15" not in head
+
+
+# --- one-shot coverage attestation (2026-08-21) ---------------------------
+def _attest_ex(tmp_path, coverage, events=None, live_venue=True):
+    import json
+    from app.cb import DryRunVenue
+    from app.mirror import Executor
+    cfg = Cfg()
+    cfg.state_path = str(tmp_path / "state.json")
+    cfg.dry_run = not live_venue
+    json.dump({"halted": "", "legs": {}, "coverage": coverage,
+               "events": events or []}, open(cfg.state_path, "w"))
+    venue = FakeVenue() if live_venue else DryRunVenue(None)
+    return Executor(venue, cfg)
+
+
+def test_gate_attest_promotes_and_marks_rows_attested(tmp_path):
+    from app.main import _ramp_v4
+    ex = _attest_ex(tmp_path, {"entry_long": 2, "chase": 1})
+    assert _ramp_v4(ex.state)["rows"]["entry_long"]["met"] is False
+    r = ex.attest_coverage("dry_run false since 2026-08-15")
+    assert r["ok"] is True and r["attested_events"] == 3
+    rows = _ramp_v4(ex.state)["rows"]
+    assert rows["entry_long"]["met"] is True
+    # provenance must remain visible: attested != observed
+    assert rows["entry_long"]["attested"] == 2
+    assert rows["entry_long"]["unattributed"] == 0
+    assert _ramp_v4(ex.state)["attestation"]["events"] == 3
+    assert "coverage_attested" in [e["kind"] for e in ex.state.events]
+
+
+def test_gate_attest_is_one_shot(tmp_path):
+    ex = _attest_ex(tmp_path, {"entry_long": 2})
+    assert ex.attest_coverage()["ok"] is True
+    ex.state.coverage["entry_long"] = 9          # later evidence
+    again = ex.attest_coverage()
+    assert again["ok"] is False
+    assert again["refused"] == "already_attributed"
+    assert ex.state.coverage_live["entry_long"] == 2   # not topped up
+
+
+def test_gate_attest_refuses_when_mode_flipped(tmp_path):
+    """The load-bearing refusal: a DRY_RUN flip means a window of unknown
+    mode existed, counts carry no timestamps, so nothing is attributable.
+    Not operator-overridable - overriding it IS the failure mode."""
+    ex = _attest_ex(tmp_path, {"entry_long": 2}, events=[
+        {"ts": 1, "level": "RED", "kind": "mode_change",
+         "msg": "DRY_RUN False -> True: trading is now SIMULATED"}])
+    r = ex.attest_coverage()
+    assert r["ok"] is False and r["refused"] == "mode_change_in_log"
+    assert ex.state.coverage_live == {}
+    assert r["flips"]
+
+
+def test_gate_attest_refuses_in_dry_run(tmp_path):
+    ex = _attest_ex(tmp_path, {"entry_long": 2}, live_venue=False)
+    r = ex.attest_coverage()
+    assert r["ok"] is False and r["refused"] == "not_live"
+    assert ex.state.coverage_live == {}
+
+
+def test_gate_attest_survives_restart(tmp_path):
+    from app.mirror import Executor
+    ex = _attest_ex(tmp_path, {"entry_long": 2})
+    ex.attest_coverage()
+    ex2 = Executor(FakeVenue(), ex.cfg)
+    assert ex2.state.coverage_live["entry_long"] == 2
+    assert ex2.state.coverage_attested["entry_long"] == 2
+    assert ex2.state.attestation["events"] == 2
+    # and it stays one-shot across the reboot
+    assert ex2.attest_coverage()["refused"] == "already_attributed"
+
+
+def test_gate_attest_endpoint_requires_token_and_confirm(monkeypatch):
+    from fastapi.testclient import TestClient
+    import app.main as m
+    monkeypatch.setattr(m.settings, "exec_token", "sekret")
+
+    class _E:
+        def attest_coverage(self, note=""):
+            return {"ok": True, "attested_events": 1}
+    monkeypatch.setattr(m, "EXEC", _E())
+    c = TestClient(m.app)
+    assert c.post("/coverage/attest?confirm=true").status_code == 401
+    # authed but unconfirmed must not fire
+    r = c.post("/coverage/attest", headers={"X-Exec-Token": "sekret"})
+    assert r.status_code == 400
+    ok = c.post("/coverage/attest?confirm=true",
+                headers={"X-Exec-Token": "sekret"})
+    assert ok.status_code == 200 and ok.json()["ok"] is True
+
+
+def test_gate_spec_documents_attestation():
+    spec = open(os.path.join(os.path.dirname(__file__), "..", "RAMP_V4.md")).read()
+    assert "/coverage/attest" in spec
+    assert "mode_change" in spec

@@ -232,6 +232,9 @@ def _ramp_v4(st) -> dict:
         v = d.get(k, 0)
         return v if isinstance(v, int) and v >= 0 else 0
 
+    att = getattr(st, "coverage_attested", {}) or {}
+    att = att if isinstance(att, dict) else {}
+
     def _row(k, need, have, all_modes):
         # live > all_modes is impossible from _cov (which writes both) and
         # can only come from a tampered/rolled-back state file. Never let it
@@ -241,6 +244,8 @@ def _ramp_v4(st) -> dict:
                 "met": (have >= need) and not corrupt,
                 "all_modes": all_modes,
                 "unattributed": max(0, all_modes - have),
+                # attested != observed: the matrix must keep saying which
+                **({"attested": att[k]} if k in att else {}),
                 **({"corrupt": True} if corrupt else {})}
 
     rows = {k: _row(k, v, _n(live, k), _n(cov, k))
@@ -248,6 +253,7 @@ def _ramp_v4(st) -> dict:
     rows["slippage_sample"] = _row("slippage_sample", 10, n_live, len(fills))
     return {"spec": "RAMP_V4.md (frozen 2026-08-15; mode guard 2026-08-21)",
             "basis": "live-mode events only (DRY_RUN=false)",
+            "attestation": getattr(st, "attestation", None),
             "rows": rows,
             "coverage_complete": all(r["met"] for r in rows.values()),
             "unattributed_total": sum(r["unattributed"] for r in rows.values()),
@@ -255,6 +261,29 @@ def _ramp_v4(st) -> dict:
                     "AND slippage sane (edge-monitor slip CUSUM quiet). "
                     "unattributed counts are pre-split or dry-run events - "
                     "they never satisfy a row"}
+
+
+@app.post("/coverage/attest")
+def coverage_attest(confirm: bool = Query(False),
+                    note: str = Query(""),
+                    x_exec_token: str | None = Header(default=None),
+                    token: str | None = Query(default=None)):
+    """ONE-SHOT: promote pre-split coverage counts to live-attributed.
+
+    Deliberate, bounded hole in the mode guard for the single migration
+    where counts were genuinely earned live but predate provenance
+    recording. Refuses if anything is already attributed, if the executor
+    is not live, or if the retained event log shows any DRY_RUN flip.
+    See RAMP_V4.md; requires ?confirm=true.
+    """
+    _auth(x_exec_token, token)
+    if EXEC is None:
+        raise HTTPException(status_code=503, detail="executor not ready")
+    if not confirm:
+        raise HTTPException(status_code=400,
+                            detail="pass confirm=true: this promotes rows to "
+                                   "ATTESTED evidence and cannot be undone")
+    return EXEC.attest_coverage(note)
 
 
 @app.post("/drill")
