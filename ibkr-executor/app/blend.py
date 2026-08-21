@@ -75,7 +75,7 @@ import math
 import os
 import tempfile
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from datetime import date
 
 import httpx
@@ -239,6 +239,13 @@ class Blend3070Manager:
                                                # book, not a
                                                # routine mode change
         self.state = self._load()
+        if self.archived_state:
+            # Z-J: the archive/drift branches set `halted` and rebuild the
+            # book IN MEMORY only — a crash before the loop's first save()
+            # lost both and the next boot came back un-halted, which is the
+            # y2 harm one crash earlier. The old file is already moved
+            # aside, so this writes the recovered book, never over evidence.
+            self.save()
         # M2 (thread-safety): API threads (/status, /blend/feed) serve THIS
         # loop-thread-refreshed quote cache — they must never touch the
         # ib_async event loop themselves. run_cycle republishes it (whole-
@@ -310,8 +317,43 @@ class Blend3070Manager:
                 last_reconcile_ts=raw.get("last_reconcile_ts", 0.0),
                 mode=stored_mode,
             )
-            st.positions = {k: BlendPosition(**v)
-                            for k, v in raw.get("positions", {}).items()}
+            try:
+                st.positions = {k: BlendPosition(**v)
+                                for k, v in raw.get("positions", {}).items()}
+            except TypeError as exc:
+                # Z-D, y2's premise applied to the book that trades stock: a
+                # deploy ROLLBACK reads position rows a NEWER build wrote
+                # (Z1 added `stop_cover_qty` in this very round). Unfiltered,
+                # that raised straight into the G3 branch and returned a
+                # FRESH, un-halted, un-initialized book — open positions and
+                # `halted` forgotten, entries UNBLOCKED, while real shares
+                # and GTC stops rest at the venue. Same treatment the ladder
+                # got (manager.py y2): keep every field this build still
+                # understands (an open position's stop_order_ref is the only
+                # handle on a real resting stop), PRESERVE the file, and
+                # HALT — reconcile still runs and still protects the book
+                # while halted; only new decisions stop.
+                known = {f.name for f in fields(BlendPosition)}
+                st.positions = {
+                    k: BlendPosition(**{kk: vv for kk, vv in v.items()
+                                        if kk in known})
+                    for k, v in (raw.get("positions") or {}).items()
+                    if isinstance(v, dict)}
+                archive = f"{self.state_path}.corrupt-{int(time.time())}"
+                try:
+                    os.replace(self.state_path, archive)
+                    note = f"drifted book preserved at {archive}"
+                except OSError as err:
+                    note = (f"PRESERVE FAILED ({err}) — the drifted book "
+                            f"will be OVERWRITTEN by the next save")
+                st.halted = st.halted or "SCHEMA_DRIFT"
+                self.archived_state_critical = True
+                self.archived_state = (
+                    f"blend position rows unreadable ({exc}); book HALTED "
+                    f"({st.halted}) so no entry, exit or ratchet is decided "
+                    f"before you look — positions, cash and stop refs kept, "
+                    f"reconcile still protects them; {note}")
+                logger.error("blend: %s", self.archived_state)
             st.events = raw.get("events", [])[-300:]
             return st
         except FileNotFoundError:

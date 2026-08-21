@@ -276,3 +276,31 @@ def test_gate_y2_schema_drift_keeps_an_existing_halt_reason(tmp_path):
     assert m2.state.legs["NG"].order_ref == "live-spread-ref"
     assert m2.state.halted == "EVENT_COLLAPSE"
     assert m2.archived_state and "EVENT_COLLAPSE" in m2.archived_state
+
+
+def test_gate_zj_drift_halt_survives_a_crash_before_the_first_save(tmp_path):
+    """Z-J: the drift branch moved the file to `.corrupt-*` and set `halted`
+    IN MEMORY, and `_build` never saved — a crash before the loop's first
+    save() lost both the halt and the preserved legs, so the next boot came
+    back `halted: None` with NG WAITING and no order_ref. That is the y2
+    harm one crash earlier. The recovered book is persisted at load."""
+    m = mk(tmp_path)
+    m.on_opened("NG", 10_000, "live-spread-ref", "2026-11-05")
+    m.state.banked = 999.0
+    m.save()
+    raw = json.load(open(m.state_path))
+    raw["legs"]["NG"]["future_field_from_a_newer_deploy"] = 1
+    with open(m.state_path, "w") as fh:
+        json.dump(raw, fh)
+
+    m2 = LadderManager(m.cfg, m.state_path)      # drift load, then a CRASH:
+    assert m2.state.halted == "SCHEMA_DRIFT"     # nothing else ever saves
+    del m2
+
+    m3 = LadderManager(Cfg(), str(tmp_path / "ladder.json"))
+    assert m3.state.halted == "SCHEMA_DRIFT"
+    assert m3.state.legs["NG"].status == "OPEN"
+    assert m3.state.legs["NG"].order_ref == "live-spread-ref"
+    assert m3.state.banked == 999.0
+    assert m3.archived_state is None             # a clean read this time
+    assert m3.step("2026-11-20", 2.4, {"NG": 9_000}) == []

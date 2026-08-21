@@ -347,14 +347,32 @@ def resume(x_exec_token: str | None = Header(default=None),
     if MGR is None:
         return {"ok": False}
     with MGR_LOCK:                  # x12: same serialization as /kill
+        # Z-K: /resume clears EVERY halt, a data-integrity SCHEMA_DRIFT
+        # exactly like a KILL. That is deliberate — y2 keeps every leg field
+        # this build understands across a drifted load, so a resumed ladder
+        # re-opens only genuinely WAITING legs and an OPEN leg keeps its
+        # order_ref — but the operator must be told WHICH halt they just
+        # cleared, or "resumed" reads like an ordinary un-kill.
+        prior = MGR.state.halted
         MGR.state.halted = None
         MGR.save()
+    blend_prior = None
     if BLEND is not None:
         # N3: /resume must not race the loop thread's cycle (a resume
         # interleaved with execute_flatten un-halts a book that is being
         # sold and lets the same cycle place fresh entries). BLEND_LOCK
         # serializes it behind any in-flight cycle, flatten included.
         with BLEND_LOCK:
+            blend_prior = BLEND.state.halted
             BLEND.resume()
-    send("ibkr ladder resumed")
-    return {"ok": True}
+    drift = "SCHEMA_DRIFT" in (prior, blend_prior)
+    send("ibkr ladder resumed"
+         + (f" (cleared halt: {prior})" if prior else " (was not halted)")
+         + (f"; blend book resumed (cleared halt: {blend_prior})"
+            if blend_prior else "")
+         + ("\n→ SCHEMA_DRIFT was a data-integrity halt, not a kill: those "
+            "rows came from a build this one does not fully understand. "
+            "Every field this build knows was kept and nothing live was "
+            "re-opened — confirm the venue matches the book before trusting "
+            "the next cycle." if drift else ""))
+    return {"ok": True, "cleared": prior, "blend_cleared": blend_prior}

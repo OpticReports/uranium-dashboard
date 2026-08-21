@@ -3065,3 +3065,36 @@ def test_gate_z2_a_blackout_recovered_fill_says_it_was_unverifiable(tmp_path):
     (msg,) = [x for x in alerts if "recovered from venue history" in x]
     assert not msg.startswith("🧬")
     assert "UNVERIFIABLE" in msg and "may have been YOURS" in msg
+
+def test_gate_zd_blend_book_schema_drift_preserves_and_halts(tmp_path):
+    """Z-D: `BlendPosition(**v)` had no field filter, so a deploy ROLLBACK
+    reading rows a NEWER build wrote (Z1 added `stop_cover_qty` in this very
+    round) raised into the G3 branch and returned a FRESH, un-halted,
+    un-initialized book — open positions and `halted` forgotten and entries
+    UNBLOCKED, while real shares and GTC stops rest at the venue. That is
+    y2's own premise, which this round fixed on the ladder only."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m, stop_ref="live-stop-ref")
+    m.save()
+    raw = json.load(open(m.state_path))
+    raw["positions"]["1"]["field_from_a_newer_deploy"] = 1
+    with open(m.state_path, "w") as fh:
+        json.dump(raw, fh)
+
+    m2 = mk(tmp_path)
+    assert list(m2.state.positions) == ["1"]           # never vaporized
+    assert m2.state.positions["1"].stop_order_ref == "live-stop-ref"
+    assert m2.state.positions["1"].qty == 5
+    assert m2.state.sleeve_cash == pytest.approx(2_500.0)   # 5 @ 50 debited
+    assert m2.state.initialized is True
+    assert m2.state.halted == "SCHEMA_DRIFT"           # no decision is taken
+    assert m2.step("2026-08-24", payload(entries=[entry()]), PRICES) == []
+    assert m2.archived_state and "HALTED" in m2.archived_state
+    assert list(tmp_path.glob("blend.json.corrupt-*"))
+    # Z-J: the halt is PERSISTED at load, not only in memory — a crash
+    # before the loop's first save() used to lose it
+    m3 = mk(tmp_path)
+    assert m3.state.halted == "SCHEMA_DRIFT" and list(m3.state.positions)
+    assert m3.archived_state is None                   # read back cleanly
+

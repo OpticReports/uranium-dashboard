@@ -94,6 +94,14 @@ class LadderManager:
         # manager's mode-transition archive.
         self.archived_state: str | None = None
         self.state = self._load()
+        if self.archived_state:
+            # Z-J: the corrupt/drift branches move the file aside and set
+            # `halted` IN MEMORY; `_build` never saves, so a crash before
+            # the loop's first save() lost the halt AND the preserved legs —
+            # next boot came back `halted: None` with every leg WAITING,
+            # precisely the y2 harm one crash earlier. Persist immediately;
+            # the original file is already archived, so nothing is erased.
+            self.save()
 
     def _load(self) -> LadderState:
         try:
