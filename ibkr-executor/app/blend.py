@@ -693,10 +693,22 @@ class Blend3070Manager:
                 # Z1 CARVE-OUT (explicit, so this is not read as a Y1
                 # regression): Y1 forbids NEW or RAISED cover on a flagged
                 # position. It does NOT forbid SHRINKING it. Reconcile pass
-                # 1b's pro-rata peer resize (_resize_peer_cover) replaces a
-                # resting stop with a STRICTLY SMALLER one on positive venue
-                # evidence of a shortfall — that lowers exposure and closes
-                # a short path instead of opening one, so it is exempt.
+                # 1b's pro-rata peer resize (_resize_peer_cover) aligns a
+                # resting stop to at most its share of the shares the venue
+                # actually holds, on positive venue evidence — the aggregate
+                # can never exceed `held`, so it closes a short path instead
+                # of opening one and it is exempt.
+                continue
+            if pos.stop_cover_qty and pos.stop_cover_qty < pos.qty:
+                # Z-A belt (the ratchet is the door that undid the resize):
+                # this stop was CAPPED below the position by a same-symbol
+                # shortfall. A ratchet is a cancel/replace at -pos.qty, so
+                # it would silently restore FULL cover — measured: cover 6
+                # -> 7 against 6 held, then venue -1 on the triggers,
+                # reported as a plain green "position closed". The capped
+                # stop keeps resting where it is; the resize owns its size.
+                # (Capped peers are also flagged history_gap above, so this
+                # is a second lock on the same door, not the only one.)
                 continue
             s = stops_by_id.get(pos.call_id)
             if s is None:
@@ -1639,15 +1651,33 @@ def _resize_peer_cover(mgr: Blend3070Manager, adapter, held: int,
     against 6 held, which is the exact harm. The brief unprotected window is
     the accepted trade on a position that is already flagged UNVERIFIABLE
     and already blocking new entries. A replace that fails leaves the
-    position STOP_MISSING + RED and is retried next cycle — never silently
-    naked, never silently over-covered.
+    position STOP_MISSING + RED and is RETRIED on the next reconcile that
+    still sees the shortfall (see the alignment rule below) — never
+    silently naked, never silently over-covered.
 
-    Y1 CARVE-OUT (explicit): Y1 forbids resting a NEW or RAISED SELL stop on
-    an UNVERIFIABLE position, because that is a short path. A STRICTLY
-    REDUCING resize is the opposite — it lowers venue exposure, and it is
-    only ever reached with positive venue evidence of the shortfall — so it
-    is exempt. Cover is never increased here (`new < cur` is required), so
-    this exemption cannot become a door back into Y1.
+    Y1 CARVE-OUT (explicit): Y1 forbids resting cover the account may not be
+    able to honour on an UNVERIFIABLE position, because that is a short
+    path. Cover is ALIGNED to the pro-rata allocation here and never above
+    it, which is provably short-safe by the same arithmetic the whole
+    function rests on: `sum(alloc) == held` by construction and every peer
+    ends at `min(alloc, qty)`, so the per-symbol aggregate is `<= held`
+    whichever direction an individual peer moved. That is the exemption —
+    "<= its pro-rata allocation", not "strictly reducing" (counter-review
+    Z-C / DEVIATION 1: leaving a real position at cover 0 forever because a
+    re-place would be an *increase* is X3's unbounded naked downside, and
+    this branch already ruled that bounded protection beats that). Cover is
+    only ever RESTORED from ZERO, never stacked on top of something that
+    already rests, and never while an unACKed orphan of this position's own
+    cover may still rest at the venue.
+
+    DURABILITY (counter-review Z-A): a peer whose allocation is BELOW its
+    own qty is CAPPED, and a cap that only lives in `stop_cover_qty` is
+    undone by the first ordinary trail ratchet or pass-4 re-place on any
+    peer that is not itself flagged. Every capped peer is therefore marked
+    `history_gap = True` in the same breath — it is by definition part of
+    an unattributable shortfall, so the flag is honest, and it inherits the
+    Y1 ratchet guard, the pass-4 guard, the escalation cadence and the
+    restore-full-cover branch with no new state machine.
 
     Where the venue will not ACK the cancel, cover > held can persist and is
     unpreventable: that residual belongs to X2's `orphan_stop_refs` + RED
@@ -1655,6 +1685,7 @@ def _resize_peer_cover(mgr: Blend3070Manager, adapter, held: int,
 
     Returns a clause for the caller's escalation alert ('' when nothing was
     resized)."""
+    st = mgr.state
     order = sorted(same_symbol, key=lambda p: p.call_id)
     cover: dict[str, tuple[int, str | None]] = {}
     for p in order:
@@ -1668,15 +1699,101 @@ def _resize_peer_cover(mgr: Blend3070Manager, adapter, held: int,
             ref = p.stop_order_ref
         cover[key] = (_resting_cover(p) if resting else 0, ref)
     total = sum(c for c, _ in cover.values())
-    if total <= held:
-        return ""                       # the invariant already holds
     alloc = _prorata_cover(order, held)
+    # Z-A: make the cap DURABLE before touching a single order — a capped
+    # peer that is not flagged has its cover restored to FULL by the next
+    # ratchet (step() §3) or by pass 4 in this very reconcile.
+    newly_capped = [p for p in order
+                    if alloc[str(p.call_id)] < p.qty and not p.history_gap]
+    for p in newly_capped:
+        p.history_gap = True
+    if newly_capped:
+        mgr._event("RED", f"{order[0].symbol}: "
+                          + ", ".join(f"call {p.call_id}" for p in newly_capped)
+                          + f" flagged UNVERIFIABLE — their cover is CAPPED "
+                            f"below the booked quantity by the same-symbol "
+                            f"shortfall ({held} held), so full cover may "
+                            f"never be restored behind the book's back")
+        mgr.save()
     lines: list[str] = []
     unknown = 0            # old cover the venue would not let us cancel
     for p in order:
         key = str(p.call_id)
         cur, ref = cover[key]
-        new = min(alloc[key], cur)      # NEVER an increase (Y1)
+        new = min(alloc[key], p.qty)    # NEVER above the allocation
+        if new > cur:
+            # Cover BELOW the allocation: restore it, but only from ZERO —
+            # raising a stop that already rests would mean cancelling and
+            # re-placing (churn) or stacking (the exact harm), and the
+            # aggregate is already inside the invariant either way.
+            if cur > 0 or new <= 0:
+                continue
+            if (gap_stops.get(key) or {}).get("status") == "filled":
+                # This position's own stop at this level already FILLED (pass
+                # 1 or 1b-i booked what it covered), so its deterministic
+                # client id is spent: the venue would answer any placement
+                # under it with that same filled order. Nothing rests and
+                # nothing can be placed — the re-armed escalation reports the
+                # remainder as UNPROTECTED every cycle; do not re-alert here.
+                continue
+            if any(i.get("call_id") == p.call_id
+                   for i in st.orphan_stop_refs.values()):
+                # An earlier cover of THIS position was never ACK-cancelled
+                # and may still rest: placing now could put cover above
+                # `held` at the venue. X2's machinery owns that residual —
+                # and it is already alerting on its own re-armed cadence, so
+                # this adds NO line (a line every cycle would re-fire the
+                # headline forever for a cell only the operator can clear).
+                continue
+            try:
+                rs = adapter.place_stock_order(
+                    p.symbol, -new, "STP", stop_price=p.stop_level, tif="GTC",
+                    client_order_id=stop_client_id(p.call_id, p.stop_level))
+            except Exception as exc:  # noqa: BLE001
+                mgr._event("RED", f"cover for {p.symbol} (call {p.call_id}) "
+                                  f"could not be re-placed at its pro-rata "
+                                  f"allocation: {exc}")
+                alert(f"🚨🚨 blend: the {new}-share cover for {p.symbol} "
+                      f"(call {p.call_id}) — its PRO-RATA allocation of the "
+                      f"{held} share(s) the venue holds — was REJECTED "
+                      f"({exc}); the position stays UNPROTECTED and the "
+                      f"placement is retried every reconcile while the "
+                      f"shortfall lasts")
+                lines.append(f"call {p.call_id}: 0 -> 0 (re-place REJECTED, "
+                             f"still UNPROTECTED)")
+                continue
+            if rs.get("duplicate") and rs.get("status") == "filled":
+                # The idempotency key already belongs to a FILLED order —
+                # this position's own stop sold what it covered (pass 1 or
+                # 1b-i booked it). NOTHING rests, so there is no orphan to
+                # track, and no new cover is placeable at this level: say so
+                # instead of inventing an orphan the venue would raise on.
+                alert(f"🚨🚨 blend: no cover can be re-placed for {p.symbol} "
+                      f"(call {p.call_id}) — the venue's order under its "
+                      f"stop id already FILLED, so its remaining {p.qty} "
+                      f"share(s) are UNPROTECTED and only you can resolve "
+                      f"them")
+                lines.append(f"call {p.call_id}: 0 -> 0 (its stop at this "
+                             f"level already FILLED; UNPROTECTED)")
+                continue
+            if rs.get("duplicate"):
+                mgr.record_orphan_stop(rs["order_ref"],
+                                       {"symbol": p.symbol, "qty": -new,
+                                        "call_id": p.call_id})
+                alert(f"🚨🚨 blend: re-placing the {new}-share cover for "
+                      f"{p.symbol} (call {p.call_id}) returned an EXISTING "
+                      f"venue order of UNKNOWN size — not adopted, tracked "
+                      f"instead (a fill on it alerts RED); position "
+                      f"UNPROTECTED")
+                lines.append(f"call {p.call_id}: 0 -> UNKNOWN (venue "
+                             f"returned an existing order)")
+                continue
+            mgr.on_stop_placed(p.call_id, rs["order_ref"], p.stop_level)
+            p.stop_cover_qty = new if new < p.qty else 0
+            mgr.save()
+            lines.append(f"call {p.call_id}: 0 -> {new} (cover RE-PLACED at "
+                         f"its pro-rata allocation)")
+            continue
         if cur <= 0 or new >= cur:
             continue
         why = "while resizing its cover to the shares the venue holds"
@@ -1707,7 +1824,9 @@ def _resize_peer_cover(mgr: Blend3070Manager, adapter, held: int,
             alert(f"🚨🚨 blend: the RESIZED {new}-share stop for {p.symbol} "
                   f"(call {p.call_id}) was REJECTED ({exc}) — the old stop "
                   f"is already cancelled, so the position is UNPROTECTED; "
-                  f"retrying next cycle")
+                  f"the placement is retried every reconcile while the "
+                  f"shortfall lasts (cover is never restored above its "
+                  f"pro-rata allocation)")
             lines.append(f"call {p.call_id}: {cur} -> 0 (replace REJECTED, "
                          f"UNPROTECTED)")
             continue
@@ -1742,6 +1861,18 @@ def _resize_peer_cover(mgr: Blend3070Manager, adapter, held: int,
                 f"cancelled and may STILL rest at the venue (tracked; a fill "
                 f"on them alerts RED), so cover THERE may still exceed "
                 f"{held} — clear them by hand" if unknown else "")
+    # Z-A: a peer that was NOT flagged before now is, which blocks entries
+    # and stops its trail ratcheting. The operator hears that here, in the
+    # cycle it happens, not only from next cycle's escalation.
+    one = len(newly_capped) == 1
+    capped = (". " + ", ".join(f"call {p.call_id}" for p in newly_capped)
+              + (" is now flagged UNVERIFIABLE too: its cover is"
+                 if one else
+                 " are now flagged UNVERIFIABLE too: their cover is")
+              + " CAPPED below the booked quantity, so it may never be "
+                "restored behind the book's back — no trail ratchet, no "
+                "re-stop and NO NEW ENTRIES until you resolve the account"
+              if newly_capped else "")
     mgr._event("RED", f"{sym} resting stop cover RESIZED {total} -> {now} "
                       f"to match the {held} shares the venue holds"
                       + (f" ({unknown} share(s) uncancellable, tracked)"
@@ -1752,7 +1883,7 @@ def _resize_peer_cover(mgr: Blend3070Manager, adapter, held: int,
           f"positions). Allocated PRO RATA, which claims NO attribution: "
           f"{'; '.join(lines)}. {book_qty - held} share(s) of protection "
           f"were REMOVED and the shortfall cannot be attributed to any one "
-          f"position — resolve the account manually" + residual)
+          f"position — resolve the account manually" + residual + capped)
     return (f"; resting SELL cover was resized {total} -> {now} share(s) pro "
             f"rata so it can never exceed the {held} the venue holds"
             + (f" ({unknown} share(s) of old cover uncancellable and tracked)"
@@ -1833,7 +1964,9 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
          CLOSED, so a later tracker exit/echo for it is a no-op;
       1b. verify positions flagged UNVERIFIABLE by the blackout guard —
          the position's OWN stop order first (order-scoped: filled+priced
-         books the exit, working proves it never filled), venue positions
+         books the exit — a PARTIAL of the shares the stop covered when it
+         was resized below the position, Z-B; working proves it never
+         filled), venue positions
          only as corroboration (they sum every account STK row, so they
          can be conflated by shares held outside the book). Anything
          uncertain stays parked; a position parked UNRECONCILED has its
@@ -1855,11 +1988,14 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
     quantity of blend-placed RESTING SELL cover must never exceed the
     venue-verified `held`. The executor must never CHOOSE to leave cover >
     held — a single-position shortfall retires its stop and parks (cover 0),
-    a same-symbol peer shortfall resizes cover PRO RATA down to `held`
-    (_resize_peer_cover), and conflation (held > booked) is already
-    arithmetically safe. Where the venue refuses to ACK a cancel the
-    residual is unpreventable: it is tracked in orphan_stop_refs and a fill
-    on it alerts RED as a possible short (X2), never pretended away.
+    a same-symbol peer shortfall ALIGNS cover PRO RATA to `held`
+    (_resize_peer_cover: down where it is above the allocation, back up from
+    ZERO where the venue rejected an earlier placement, and every capped
+    peer marked `history_gap` so nothing restores it behind the book's
+    back), and conflation (held > booked) is already arithmetically safe.
+    Where the venue refuses to ACK a cancel the residual is unpreventable:
+    it is tracked in orphan_stop_refs and a fill on it alerts RED as a
+    possible short (X2), never pretended away.
 
     Raises if the adapter cannot answer (ExecutorConnectionError while the
     gateway is down): the cycle FAILS CLOSED — no decision against
@@ -1939,16 +2075,35 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
             continue
         if not pos.stop_order_ref or pos.stop_missing:
             # Z1: the book does NOT believe this stop still rests, so a
-            # 'filled' answer about it cannot settle the whole position:
-            # a RESIZED stop covers fewer shares than the position, so its
-            # fill is a PARTIAL exit that pass 1 already booked (and a
-            # RETIRED stop's fill belongs to the orphan/possible-short
-            # branch). Booking the position out here would credit proceeds
-            # for shares the venue never sold. Fall through to the
-            # positions comparison below, which keeps it flagged and loud.
+            # 'filled' answer about it cannot settle the whole position —
+            # pass 1 already booked it (a partial fill leaves exactly this
+            # state), and a RETIRED stop's fill belongs to the orphan /
+            # possible-short branch. Booking the position out here would
+            # credit proceeds for shares the venue never sold. Fall through
+            # to the positions comparison below, which keeps it flagged and
+            # loud. (This guard also makes double-booking impossible: pass 1
+            # runs first and leaves every booked stop `stop_missing`.)
+            continue
+        fill = stop.get("fill_price")
+        covered = _resting_cover(pos)
+        if fill is not None and covered < pos.qty:
+            # Z-B: a RESIZED stop sold only the shares it COVERED. Keying
+            # the guard above on stop_order_ref/stop_missing let this cell
+            # through and booked the FULL position: measured, a 3-of-5
+            # cover credited $220 for a $132 sale, deleted the position and
+            # abandoned 2 real shares with no book row and no stop. Book a
+            # PARTIAL, exactly as the live fill-poll path does, and leave
+            # the position in `gap_stops` so the comparison below keeps it
+            # flagged, re-covers what it may, and stays loud.
+            booked = pos.qty
+            mgr.on_partial_exit(pos.call_id, covered, fill, "stop_filled")
+            alert(f"🚨 blend: {pos.symbol} — a RESIZED stop fill from the "
+                  f"blackout window recovered from venue history: booked "
+                  f"x{covered} @ {fill:.2f} (call {pos.call_id}), the "
+                  f"{booked - covered} share(s) it did NOT cover remain "
+                  f"held and UNPROTECTED" + _UNVERIFIABLE_FILL_NOTE)
             continue
         gap_stops.pop(key, None)
-        fill = stop.get("fill_price")
         if fill is None:
             # x8: state the venue quantity left behind, exactly as the
             # held<booked park does — the shares that remain are
@@ -2318,7 +2473,12 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
     #    a new SELL stop on shares the account may no longer hold is itself
     #    a short path; pass 1b must positively verify first. (Z1's pro-rata
     #    resize is the one exemption to that rule and it lives in pass 1b:
-    #    it only ever REPLACES a resting stop with a smaller one.)
+    #    it never rests cover above a position's share of the shares the
+    #    venue says the account holds, so the aggregate stays <= held.)
+    #    Z-A: this pass is also the door that used to restore a CAPPED
+    #    peer to full -qty cover in the same reconcile that resized it —
+    #    the resize now flags every capped peer, so the guard below covers
+    #    them too.
     for pos in list(st.positions.values()):
         if pos.history_gap:
             continue

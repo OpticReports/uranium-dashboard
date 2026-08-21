@@ -72,18 +72,26 @@ unreconciled venue state. Phases IN ORDER:
       review N2): the position's OWN stop order FIRST — a lookup by its
       deterministic client id is ORDER-SCOPED, so same-symbol shares held
       in the account outside the blend book can neither fake nor hide it
-      (`filled` + price → the exit books AT that price; `filled` without
-      one → parked UNRECONCILED, never a silent 0.0; `working` → the stop
-      never filled). Account POSITIONS (`stock_position` sums EVERY
-      account STK row for the symbol) are CORROBORATION, never proof, and
-      the full decision matrix is:
+      (`filled` + price → the exit books AT that price, or a PARTIAL of
+      exactly the shares the stop covered when it was RESIZED below the
+      position — counter-review Z-B: this guard keyed on
+      `stop_order_ref`/`stop_missing`, so a resized stop's blackout fill
+      booked the FULL position, credited $220 for a $132 sale and
+      abandoned 2 real shares with no book row and no stop; `filled`
+      without a price → parked UNRECONCILED, never a silent 0.0;
+      `working` → the stop never filled). A stop the book does NOT believe
+      still rests can never settle a position here: pass 1 (the live fill
+      poll) runs first and leaves every booked stop `stop_missing`, so
+      double-booking is impossible in either direction. Account POSITIONS
+      (`stock_position` sums EVERY account STK row for the symbol) are
+      CORROBORATION, never proof, and the full decision matrix is:
 
       | account rows | this position's stop | outcome |
       |---|---|---|
       | held == booked | `working` | UNPARKED; that stop is kept |
       | held == booked | dead/unknown | UNPARKED as STOP_MISSING; pass 1e re-places it |
       | held < booked, no same-symbol peer | any | parked UNRECONCILED, resting stop RETIRED first (counter-review N1) |
-      | held < booked, same-symbol peers exist | any | the shortfall is NOT attributable to one position: NOBODY is parked or sacrificed, all stay flagged (counter-review x5) — but resting SELL cover is RESIZED PRO RATA down to `held` (counter-review Z1) |
+      | held < booked, same-symbol peers exist | any | the shortfall is NOT attributable to one position: NOBODY is parked or sacrificed, all stay flagged (counter-review x5) — but resting SELL cover is ALIGNED PRO RATA to `held`, and every peer whose allocation is below its own qty is flagged UNVERIFIABLE too so the cap cannot drift back (counter-review Z1 / Z-A) |
       | held > booked (CONFLATION) | `working` | stays flagged; the working stop is LEFT RESTING |
       | held > booked (CONFLATION) | dead/unknown | stays flagged, marked UNPROTECTED; no new stop is rested |
       | positions unanswerable | any | stays flagged |
@@ -123,10 +131,35 @@ unreconciled venue state. Phases IN ORDER:
       would transiently rest 9 + 6 = 15 against 6 held, the exact harm);
       the brief unprotected window is the accepted trade on a position that
       is already flagged and already blocking entries. A failed replace is
-      RED + STOP_MISSING and is retried next cycle, never silently naked.
-      A strictly-REDUCING resize is the explicit exception to the rule that
-      no SELL stop is (re-)placed for an UNVERIFIABLE position: it lowers
-      venue exposure, so it closes a short path instead of opening one.
+      RED + STOP_MISSING and the placement is RETRIED on every reconcile
+      that still sees the shortfall — never silently naked, and never
+      restored above the allocation.
+      **"<= its pro-rata allocation" is the explicit exception** to the
+      rule that no SELL stop is (re-)placed for an UNVERIFIABLE position.
+      Not "strictly reducing": Y1 forbids cover the account may not be able
+      to honour, and since the allocation sums to exactly `held` and every
+      peer ends at `min(alloc, qty)`, cover at or below it is provably
+      short-safe whichever direction an individual peer moved. Cover is
+      only ever restored FROM ZERO (never stacked on a stop that already
+      rests, never while an unACKed orphan of that position's own cover may
+      still rest), because leaving a real position at cover 0 indefinitely
+      is the unbounded naked downside of counter-review X3.
+      **The cap is DURABLE** (counter-review Z-A): a peer whose allocation
+      is below its own qty is marked `history_gap` in the same breath. The
+      resize deliberately spans same-symbol peers that are NOT themselves
+      flagged (the invariant is a per-symbol aggregate, so their cover
+      counts) — and a cap recorded only in `stop_cover_qty` was undone for
+      exactly those peers, by pass 4 in the same reconcile when the replace
+      was rejected, or by the next ordinary trail ratchet when it
+      succeeded (measured: cover 6 -> 7 against 6 held, then venue 6 ->
+      **-1**, reported as a plain green "position closed"). The flag buys
+      the Y1 ratchet guard, the pass-4 guard, the escalation cadence and
+      the restore-full-cover branch with no new state machine; the ratchet
+      additionally refuses to touch a stop whose `stop_cover_qty` is below
+      its position, so the door has two locks. A mixed flagged/unflagged
+      same-symbol pair needs no hand-editing to arise: reconcile pass 2
+      adopts a crash-window entry as a brand-new unflagged position beside
+      a parked peer.
       Where the venue will not ACK the cancel, cover > held can persist and
       is unpreventable — that residual is tracked in `orphan_stop_refs` and
       a fill on it alerts RED as a possible short (counter-review X2); the
@@ -356,8 +389,8 @@ exits and /kill defer with a RED alert and no protective stop is
 ever rested, against shares whose ownership is unproven (the naked-short
 path probe A1 demonstrated, and the counter-review's N1/N2/X1 variants of
 it). The single exception is the Z1 pro-rata resize above, which only ever
-REPLACES a resting stop with a SMALLER one so that aggregate cover can
-never exceed the shares the venue says the account holds. A stop that DOES
+rests cover at or below a position's share of what the venue says the
+account holds, so aggregate cover can never exceed it. A stop that DOES
 fill on a flagged position is still booked (a fill is order-scoped venue
 truth) but is never reported green: the alert states that the position was
 UNVERIFIABLE and that under conflation the shares just sold may have been

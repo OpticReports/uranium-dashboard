@@ -3066,6 +3066,197 @@ def test_gate_z2_a_blackout_recovered_fill_says_it_was_unverifiable(tmp_path):
     assert not msg.startswith("🧬")
     assert "UNVERIFIABLE" in msg and "may have been YOURS" in msg
 
+def _adopted_peer(m, a, call_id=2, symbol="CRSP", qty=4, level=43.0):
+    """A same-symbol peer that reconcile pass 2 ADOPTS from the crash window:
+    a journaled MOO that filled at the venue while a peer was parked. Pass 2
+    books it as a BRAND NEW position with history_gap=False, which is how a
+    mixed FLAGGED/UNFLAGGED same-symbol pair arises with no hand-editing
+    (counter-review Z-12)."""
+    it = {"call_id": call_id, "symbol": symbol, "qty": qty,
+          "entry_ref": 50.0, "stop_level": level, "reason": "fire"}
+    m.record_pending_entry(it, "2026-08-20")
+    a.place_stock_order(symbol, qty, "MOO", ref_price=50.0,
+                        client_order_id=blend_mod.entry_client_id(call_id))
+    return it
+
+
+def test_gate_za_a_capped_peer_never_drifts_back_to_full_cover(tmp_path):
+    """Z-A, reachable end to end from a clean book (counter-review Z-12b).
+
+    `_resize_peer_cover` spans ALL same-symbol positions — it must, the
+    invariant is a per-symbol aggregate — but the cap it applies lived only
+    in `stop_cover_qty`, and step()'s daily trail ratchet sizes on
+    `pos.qty` and was gated only on `history_gap`. So any peer that is not
+    ITSELF flagged had its cover restored to FULL by the next ordinary
+    ratchet: measured cover 6 -> 7 against 6 held, then venue 6 -> -1 on
+    the triggers, reported as a plain green 'position closed'.
+
+    The mixed pair needs no hand-editing: pass 2 adopts a crash-window
+    entry as a brand-new UNFLAGGED position beside a parked peer."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10_000.0)
+    a = DryAdapter()
+    _blackout_stop(m, a, call_id=1, qty=5, level=44.0)
+    _adopted_peer(m, a, call_id=2, qty=4, level=43.0)
+    a._positions["CRSP"] = 9                     # both entries really filled
+    run_cycle(m, a, None, "2026-08-24", alert=lambda _m: None)
+    assert [m.state.positions[k].history_gap for k in ("1", "2")] \
+        == [True, False]                         # the mixed pair, unforced
+    a._positions["CRSP"] = 6                     # 3 sold by hand, in the dark
+    resize_alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-25", alert=resize_alerts.append)
+    assert sum(-o["qty"] for o in a._stops.values()) == 6      # cover == held
+    # the operator hears that the peer just became UNVERIFIABLE in the cycle
+    # it happens, not only from next cycle's escalation
+    assert any("call 2 is now flagged UNVERIFIABLE too" in msg
+               and "NO NEW ENTRIES" in msg for msg in resize_alerts)
+    # an ordinary tracker trail ratchet arrives for the (formerly) unflagged
+    # peer — the FULL cycle, so an intent would really reach the venue
+    ratchet = payload(stops=[stop_row(call_id=2, trail=45.0)])
+    ratchet["as_of"] = "2026-08-25"
+    run_cycle(m, a, ratchet, "2026-08-25", alert=lambda _m: None)
+    # observed venue-side, so this gate fails on the HARM at the parent
+    # commit (cover 7 against 6 held), not on a missing field
+    assert sum(-o["qty"] for o in a._stops.values()) == 6      # still == held
+    # and the end state cannot short the account
+    for ref in list(a._stops):
+        a.trigger_stop(ref)
+    after: list[str] = []
+    run_cycle(m, a, None, "2026-08-26", alert=after.append)
+    assert a._positions["CRSP"] >= 0                          # THE invariant
+    assert a._positions["CRSP"] == 0
+    assert not any("position closed" in msg and "UNVERIFIABLE" not in msg
+                   for msg in after)
+    # DURABILITY, the mechanism: the capped peer is flagged in the same
+    # breath, so the ratchet door, the pass-4 door, the escalation cadence
+    # and the restore-full-cover branch all apply to it.
+    assert m.state.positions["2"].stop_level == 43.0           # not ratcheted
+    assert m.state.positions["2"].history_gap is True
+
+
+def test_gate_za_a_rejected_resize_is_not_restored_by_pass_4(tmp_path):
+    """Z-A's same-cycle door: when the resize's replacement is REJECTED for
+    a peer that is not itself flagged, `mark_stop_missing` used to hand it
+    straight to reconcile pass 4, which re-placed -pos.qty in the SAME
+    reconcile — cover 7 against 6 held, announced as 'protective stop
+    restored'."""
+    class _RejectPeerResize(DryAdapter):
+        armed = False           # exactly ONE rejection: the resize replace.
+                                # pass 4's re-place would then succeed — and
+                                # at the parent commit it did, in the SAME
+                                # reconcile, back to full -qty cover.
+        def place_stock_order(self, symbol, qty, order_type, **kw):
+            if (self.armed and order_type == "STP"
+                    and kw.get("client_order_id") == "blend-2-stp-43.0000"):
+                self.armed = False
+                raise RuntimeError("resize replace rejected (simulated)")
+            return super().place_stock_order(symbol, qty, order_type, **kw)
+
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10_000.0)
+    a = _RejectPeerResize()
+    _blackout_stop(m, a, call_id=1, qty=5, level=44.0)
+    _adopted_peer(m, a, call_id=2, qty=4, level=43.0)
+    a._positions["CRSP"] = 9
+    run_cycle(m, a, None, "2026-08-24", alert=lambda _m: None)
+    assert m.state.positions["2"].history_gap is False
+    a._positions["CRSP"] = 6
+    a.armed = True
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-25", alert=alerts.append)
+    assert sum(-o["qty"] for o in a._stops.values()) <= 6      # the harm
+    assert not any("protective stop restored" in msg for msg in alerts)
+    assert m.state.positions["2"].stop_missing is True
+    assert m.state.positions["2"].history_gap is True     # the durable cap
+    assert any("UNPROTECTED" in msg for msg in alerts)
+
+
+def test_gate_zb_a_resized_stop_fill_from_the_blackout_books_a_partial(
+        tmp_path):
+    """Z-B: pass 1b-i's guard keyed on `stop_order_ref`/`stop_missing`, so a
+    SUCCESSFULLY RESIZED stop sailed through it and `on_exited` booked the
+    WHOLE position. Measured: cover 3 of qty 5, the venue sold 3 @ 44.00
+    ($132), the book credited $220, deleted the position and abandoned 2
+    real shares with no book row and no stop — the exact harm the hunk was
+    added to prevent. It must book a PARTIAL, exactly as the live fill-poll
+    path already does."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    _blackout_stop(m, a, call_id=1, qty=5, level=44.0)
+    _blackout_stop(m, a, call_id=2, qty=4, level=43.0)
+    a._positions["CRSP"] = 6
+    run_cycle(m, a, None, "2026-08-24", alert=lambda _m: None)
+    pos = m.state.positions["1"]
+    cover = pos.stop_cover_qty
+    assert 0 < cover < pos.qty
+    cash0 = m.state.sleeve_cash
+    a.trigger_stop(pos.stop_order_ref)           # the RESIZED stop fills
+    a._fills.clear()                             # ...inside a blackout: the
+    m.state.last_reconcile_ts = time.time() - 3 * 86_400   # poll never sees it
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-26", alert=alerts.append)
+    survivor = m.state.positions.get("1")
+    assert survivor is not None                  # 2 real shares still tracked
+    assert survivor.qty == 5 - cover
+    assert m.state.sleeve_cash == pytest.approx(cash0 + cover * 44.0)
+    (msg,) = [x for x in alerts if "RESIZED stop fill from the blackout" in x]
+    assert not msg.startswith("🧬")
+    assert f"booked x{cover}" in msg and "UNPROTECTED" in msg
+    assert "UNVERIFIABLE" in msg
+    # and the aggregate invariant still holds against the venue's own count
+    assert sum(-o["qty"] for o in a._stops.values()) <= a._positions["CRSP"]
+
+
+def test_gate_zc_cover_rejected_by_the_venue_is_really_retried(tmp_path):
+    """Z-C + DEVIATION 1: after an ACKed cancel and a REJECTED replace the
+    position sat at cover 0 FOREVER — across cycles and across restart —
+    while the README, the docstring and the operator alert all promised it
+    was 'retried next cycle'. Y1 forbids cover the account may not be able
+    to honour, not increases as such: `sum(alloc) == held`, so placing
+    <= `alloc` is provably short-safe, and leaving a real position naked
+    indefinitely is X3's unbounded downside."""
+    class _RejectFirstResize(DryAdapter):
+        armed = False           # armed only after the book is seeded
+
+        def place_stock_order(self, symbol, qty, order_type, **kw):
+            if (self.armed and order_type == "STP"
+                    and kw.get("client_order_id") == "blend-1-stp-44.0000"):
+                self.armed = False
+                raise RuntimeError("replace rejected (simulated)")
+            return super().place_stock_order(symbol, qty, order_type, **kw)
+
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = _RejectFirstResize()
+    _blackout_stop(m, a, call_id=1, qty=5, level=44.0)
+    _blackout_stop(m, a, call_id=2, qty=4, level=43.0)
+    a.armed = True
+    a._positions["CRSP"] = 6
+    first: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=first.append)
+    p1 = m.state.positions["1"]
+    assert p1.stop_missing and not p1.stop_order_ref          # bare and loud
+    assert any("UNPROTECTED" in msg for msg in first)
+    # next cycle the venue would accept it: the cover MUST come back, at its
+    # pro-rata allocation and never above it
+    run_cycle(m, a, None, "2026-08-25", alert=lambda _m: None)
+    p1 = m.state.positions["1"]
+    assert p1.stop_order_ref and not p1.stop_missing          # really retried
+    assert p1.stop_cover_qty == 3
+    assert sum(-o["qty"] for o in a._stops.values()) == 6     # == held, never
+    assert a._positions["CRSP"] == 6                         # above it
+    for ref in list(a._stops):
+        a.trigger_stop(ref)
+    run_cycle(m, a, None, "2026-08-26", alert=lambda _m: None)
+    assert a._positions["CRSP"] == 0
+    # ...and the operator was told what actually happens, not a promise the
+    # code did not keep
+    assert any("retried every reconcile while the shortfall lasts" in msg
+               for msg in first)
+    assert not any("retrying next cycle" in msg for msg in first)
+
+
 def test_gate_zd_blend_book_schema_drift_preserves_and_halts(tmp_path):
     """Z-D: `BlendPosition(**v)` had no field filter, so a deploy ROLLBACK
     reading rows a NEWER build wrote (Z1 added `stop_cover_qty` in this very
