@@ -47,6 +47,16 @@ repository root** (Render requires it there for Blueprint auto-detection).
 2. When prompted, enter these secrets (all `sync: false` → stored by Render, never
    in git): **`FMP_API_KEY`**, and a **`DASHBOARD_USER`** / **`DASHBOARD_PASSWORD`**
    login of your choice (the app is password-gated when both are set).
+   Optional: **`BLEND_API_TOKEN`** — a dedicated read-only token the
+   ibkr-executor uses to poll `GET /blend3070/intents` (that one route only;
+   set the same value as `TRACKER_API_TOKEN` on the executor) so the
+   executor never holds the dashboard password.
+   Optional (the Execution tab): **`BLEND_UPSTREAM`** — the ibkr-executor's
+   base URL — and **`BLEND_READ_TOKEN`** — the executor's `READ_TOKEN` value.
+   The tracker reverse-proxies `GET /api/execution/feed` to
+   `{BLEND_UPSTREAM}/blend/feed` behind this app's login gate, injecting the
+   token server-side as `X-Read-Token`, so the browser never sees it. Unset =
+   the Execution tab shows its "not connected" card.
 3. **Deploy.** Your dashboard will be at `https://<service-name>.onrender.com`.
    Add a custom domain (e.g. `research.optic.capital`) under
    **Settings → Custom Domains**, then CNAME it at your DNS provider. The
@@ -95,7 +105,7 @@ data on first boot.
 
 ---
 
-## Coverage universe (editable 3 ways)
+## Coverage universe (editable 4 ways)
 
 The watchlist is seeded from [`backend/config/watchlist.yaml`](backend/config/watchlist.yaml)
 (32 names across synbio, AI-drug, gene-editing, sequencing, liquid-biopsy, RNA,
@@ -111,10 +121,56 @@ Edit the universe without code changes via **any** of:
    `DELETE /universe/{symbol}`, `GET /universe`, `POST /universe/reload`.
 3. **File** — edit `watchlist.yaml` and `POST /universe/reload` (or restart).
    Sync is an **upsert — it never wipes history**.
+4. **Discovery** — the dynamic-universe pipeline (below) proposes candidates
+   automatically; a hard-gated, weekly-capped **auto-promote**
+   (`config/discovery.yaml`) can add names on its own.
 
 **Deactivate** (active=false) drops a name from active ingestion & default views
 but **retains all historical data**. **Remove** (DELETE) hard-deletes the
 universe row.
+
+---
+
+## Universe discovery
+
+The universe should never again depend on a human remembering a company exists
+(MRNA's +130% readout day was missed partly because nobody added the name).
+A daily sweep (`app/ingestion/discovery.py`, Discovery tab in the UI) proposes
+candidates into an auditable queue — two keyless lanes:
+
+- **Movers** (the miss-detector): Nasdaq healthcare screener census
+  (~1,100 US-listed names, cached 24h) — any |move| ≥ 10% on a ≥$300M name
+  **not** in the universe.
+- **Catalyst**: deterministic 10-day rotation over the census; ClinicalTrials.gov
+  (cached 7d) — near phase-3 primary completion dates, or active phase 2/3 +
+  genomics keyword match.
+
+Each candidate carries a 0–100 score (mcap band + catalyst proximity +
+genomics relevance + mover recency) and its raw evidence. **Auto-promote** is
+config-togglable and conservative, with two ways in, both capped at 3
+promotions per rolling week (manual promotions count against the cap too):
+
+- **Standard**: score ≥ 70 AND mcap ≥ $2B AND (phase-3 PCD ≤ 90d OR a ≤7-day
+  |move| ≥ 15%).
+- **Mega-cap mover fast-path**: mcap ≥ $10B AND a ≤7-day |move| ≥ 10% AND an
+  active drug/biologic trial on CT.gov (fails closed when CT.gov is dark).
+  Exists because the score under-detects registered-name mismatches — the
+  2026-06-17 MRNA replay scores 41 and only this path would have added it.
+
+Auto-promote only acts on status `new` — a desk `watch` judgment is never
+overridden. Promotion is reversible — deactivate retains history. **Dismiss**
+records a reason and suppresses re-entry for 90 days; set
+`auto_promote: false` in `config/discovery.yaml` to make discovery
+propose-only. Endpoints: `GET /discovery/candidates`, `GET /discovery/summary`,
+`POST /discovery/run`, `POST /discovery/candidates/{sym}/promote|dismiss`.
+
+**Known blind spots** (counter-agent, 2026-08-19): the Nasdaq
+`sector=health_care` census misses genomics *tools/diagnostics* classified
+elsewhere (verified absent: EXAS, TXG, PACB, TEM, TMO, DHR) — tools coverage
+still relies on watchlist curation; slow re-rates that never print a ≥10% day
+only surface via the catalyst lane; CT.gov registered-name mismatches
+under-detect catalysts (mitigated in the tracker by `ctgov_names`, not
+available for names we don't know yet).
 
 ---
 
@@ -168,6 +224,12 @@ links back to the underlying rows (which catalysts, revisions, posts):
 - **Catalyst Calendar** — next 90 days, filterable by impact & subsector.
 - **Movers in Narrative** — largest hype acceleration this week + active flags.
 - **Calls Log** — the tracker's own exact trade calls, logged and graded (below).
+- **Execution** — the ibkr-executor's blend3070 book made visible (read-only):
+  mode/gate/halt banner, equity curve with the initial-book reference line,
+  budget-utilization bar (85% alert marker), open positions, the persisted
+  trade log (R + $ P&L), unreconciled badge, last-cycle status. Data comes via
+  the server-side proxy below; until the tokens are set the tab shows a
+  "not connected" card listing exactly the env vars needed.
 - **Per-name Deep Dive** — price chart with catalyst markers, estimate-revision
   timeline, hype timeline, runway gauge, auditable score breakdown, science feed.
 - **Analyst Chat** — natural-language Q&A grounded in your data.
@@ -241,6 +303,20 @@ insider clusters) ship **observe-only** and are promoted to call triggers only
 when their record earns it. This is the loop that turns the equal starting
 weights into evidence-based ones.
 
+**Exit engines get shadow-graded the same way (H11/H8).** The round-2 variant
+campaign's best construction — R2-A: a 200dma prior-close XBI regime gate plus
+3×ATR trailing exits with a 90-day time stop
+([`docs/BACKTEST_VARIANTS_R2.md`](docs/BACKTEST_VARIANTS_R2.md)) — is replay
+evidence only, so before it can touch `calls.yaml` it must earn a **live**
+record. Every live auto-call is therefore additionally graded under the
+trailing exit engine (independently of the live grade — either book may close
+a call first), and the XBI 50/200dma gate state is logged daily on the
+prior-close convention. `GET /shadow/track-record` compares the two engines on
+the **same closed calls** (n, hit rate, avg/total R) plus the regime summary;
+`GET /shadow/regime` is the daily gate log. This is a pure shadow book: it
+changes **nothing** about live call generation, levels, exits, or the paper
+account.
+
 ---
 
 ## Analyst Chat (grounded LLM)
@@ -281,6 +357,7 @@ the savings are visible.
 | `config/flags.yaml` | flag thresholds |
 | `config/calls.yaml` | trade-call triggers, conviction gate, risk unit, horizon |
 | `config/intervals.yaml` | scheduler refresh intervals per module |
+| `config/discovery.yaml` | universe-discovery lanes, auto-promote gates & weekly cap |
 
 Reload at runtime: `POST /universe/reload`, `POST /scores/reload`.
 

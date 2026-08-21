@@ -22,13 +22,16 @@ from .config import settings
 from .db import engine, init_db
 from .models import ScoreSnapshot
 from .routers import (
+    blend,
     calls,
     catalysts,
     chat,
+    discovery,
     journal,
     market,
     news,
     scores,
+    shadow,
     social,
     today,
     tuning,
@@ -106,25 +109,45 @@ app.add_middleware(
 )
 
 
+def _ct_eq(supplied: str, expected: str) -> bool:
+    """Constant-time string equality that never raises: compare_digest
+    rejects non-ASCII str with a TypeError, which would turn a garbage
+    credential header into an HTTP 500 instead of a 401 — compare the
+    UTF-8 bytes instead (counter-agent minor)."""
+    return secrets.compare_digest(supplied.encode("utf-8"),
+                                  expected.encode("utf-8"))
+
+
 @app.middleware("http")
 async def basic_auth(request: Request, call_next):
     """Optional HTTP Basic auth gate (active only when creds are configured).
 
     /health is always exempt so platform health checks pass. Constant-time
     comparison avoids leaking credential length via timing.
+
+    GET /blend3070/intents additionally accepts the dedicated read-only
+    BLEND_API_TOKEN (X-API-Token header or Authorization: Bearer) so the
+    ibkr-executor's poll never holds the dashboard password. The token is
+    valid for that one route only; every other route stays Basic-gated.
     """
     user = settings.dashboard_user
     pwd = settings.dashboard_password
     if user and pwd and request.url.path != "/health":
         header = request.headers.get("authorization", "")
         ok = False
-        if header.startswith("Basic "):
+        token = settings.blend_api_token
+        if (token and request.url.path == "/blend3070/intents"
+                and request.method == "GET"):
+            supplied = request.headers.get("x-api-token", "")
+            if not supplied and header.startswith("Bearer "):
+                supplied = header[7:]
+            if supplied and _ct_eq(supplied, token):
+                ok = True
+        if not ok and header.startswith("Basic "):
             try:
                 decoded = base64.b64decode(header[6:]).decode("utf-8")
                 got_user, _, got_pwd = decoded.partition(":")
-                ok = secrets.compare_digest(got_user, user) and secrets.compare_digest(
-                    got_pwd, pwd
-                )
+                ok = _ct_eq(got_user, user) and _ct_eq(got_pwd, pwd)
             except (ValueError, UnicodeDecodeError):
                 ok = False
         if not ok:
@@ -164,6 +187,9 @@ app.include_router(today.router)
 app.include_router(journal.router)
 app.include_router(news.router)
 app.include_router(tuning.router)
+app.include_router(discovery.router)
+app.include_router(shadow.router)
+app.include_router(blend.router)
 
 
 @app.get("/health", tags=["meta"])
@@ -277,6 +303,41 @@ _mount_proxy("btc", "BTC_UPSTREAM",
              "https://btc-paper-engine.onrender.com", "BTC Paper Engine")
 _mount_proxy("exit", "EWM_UPSTREAM",
               "https://treasury-canary.onrender.com/ewm", "Exit Window Monitor")
+
+
+# Execution tab feed: single GET reverse-proxied to the ibkr-executor's
+# read-only /blend/feed. Sits behind this app's Basic gate like every other
+# route; the executor's READ_TOKEN (BLEND_READ_TOKEN here) is injected
+# server-side so the browser never sees any token. Upstream status passes
+# through (404 until Casey sets the tokens -> the SPA renders its
+# "not connected" card; 502 on an unreachable executor).
+@app.get("/api/execution/feed", include_in_schema=False)
+async def execution_feed():
+    import json as _json
+
+    upstream = (settings.blend_upstream or "").rstrip("/")
+    if not upstream:
+        return Response(
+            _json.dumps({"detail": "execution feed not configured"}),
+            status_code=404, media_type="application/json",
+            headers={"cache-control": "no-cache"})
+    headers = {}
+    if settings.blend_read_token:
+        headers["X-Read-Token"] = settings.blend_read_token
+    try:
+        async with httpx.AsyncClient(
+                timeout=httpx.Timeout(connect=10.0, read=30.0, write=10.0,
+                                      pool=10.0)) as client:
+            up = await client.get(f"{upstream}/blend/feed", headers=headers)
+    except Exception as exc:  # noqa: BLE001
+        return Response(
+            _json.dumps({"detail": f"execution upstream unavailable: {exc}"}),
+            status_code=502, media_type="application/json",
+            headers={"cache-control": "no-cache"})
+    return Response(up.content, status_code=up.status_code,
+                    media_type=up.headers.get("content-type",
+                                              "application/json"),
+                    headers={"cache-control": "no-cache"})
 
 # research.optic.capital/deals — Venture Deal Analyzer ledger dashboard.
 # Self-contained static page. CANONICAL copy: venture-deal-analyzer/

@@ -112,6 +112,132 @@ call trigger · `retired` → failed the gate or decayed; kept for the record.
 - **Source:** `knowledge/fda_catalyst_stats.md` (financing behavior).
 - **Status:** proposed.
 
+### H7 — Quiet-into-catalyst is where convexity pays
+- **Hypothesis:** names entering a high-impact binary window (impact ≥ 0.85,
+  due in 5–45 days) with |drift_z| ≤ 0.75 — trailing 10-bar return small
+  relative to the name's own 20d realized vol — produce larger absolute event
+  moves relative to what the drift predicted; the quiet-into-catalyst subset
+  is where convex (options) structures pay. The MRNA/INTerpath miss is the
+  motivating case: +130% on the readout with no pre-event run.
+- **Prediction:** larger |forward returns| (both tails) for the low-|drift_z|
+  pre-binary subset vs the running-into-the-event subset; the flag's track
+  record should show fat absolute excess even if signed excess is mixed.
+- **Implement:** `quiet_before_catalyst` observe-only flag (flags.yaml),
+  drift_z computed in the scoring engine from closes (None on insufficient
+  data, never a silent zero).
+- **Source:** `docs/PRE_CATALYST_ASYMMETRY_STUDY.md`,
+  `knowledge/fda_catalyst_stats.md`.
+- **Status:** observing.
+
+### H8 — XBI 200dma regime gate on the calls book
+- **Hypothesis:** suppressing call entries while XBI sits below its 200dma
+  (prior trading day's close vs prior-day SMA — the level actionable at the
+  open) improves the book's Sharpe AND Calmar without giving up CAGR.
+- **Evidence (pre-registered 10y variant campaign, counter-agent PASS WITH
+  CORRECTIONS 2026-08-20, prior-day-gate restated numbers):** V2 survived the
+  registered bar — $261,677 / +9.48% CAGR / 33.7% maxDD / Sharpe 0.58 vs V0's
+  $208,760 / +7.17% / 65.5% / 0.42; the 50dma sibling (V1) also survived at
+  $261,417 / 0.57. Caveats: replay evidence on a survivor universe; rf=0
+  understates gated books; XBI buy-and-hold itself cleared the same bar.
+- **Implement:** replay evidence only — needs live observe-only tracking of
+  the gate state and its would-have-suppressed entries BEFORE any calls.yaml
+  change (TUNING.md promotion gate applies as always).
+- **Source:** `docs/BACKTEST_VARIANTS_10Y.md`,
+  `docs/VARIANTS_PREREGISTRATION.md`.
+- **Status:** observing (shadow-grader live as of 2026-08-20 — daily
+  RegimeLog of both MAs on the prior-close convention, `GET /shadow/regime`).
+
+### H9 — Cross-sectional momentum ranking adds selection value within the universe (RELATIVE claim only)
+- **Hypothesis:** ranking universe names by trailing 60-bar return vs XBI and
+  holding the top ranks selects better names than the unranked universe —
+  a RELATIVE claim about ranking inside whatever universe the engine tracks.
+- **Evidence (same campaign, V6a/V6b survived the registered bar):** the
+  ABSOLUTE numbers are explicitly unusable — a 24-name survivor-only universe
+  is the worst case of survivorship bias for momentum ("buy the recent winners
+  among known eventual winners"), and V6a's 82.4% maxDD / 5-name concentration
+  is untradeable as a standalone book. Counter-agent robustness: the result is
+  not the tier filter (no-filter $2,177,355) or the costs (tier-true
+  $1,529,190) — only the relative selection-value reading survives.
+- **Implement:** as a ranking overlay/qualifier on existing fires (does the
+  top tercile of 60-bar RS rank outperform the bottom within the live flag
+  stream?), never as the standalone rank-portfolio book.
+- **Source:** `docs/BACKTEST_VARIANTS_10Y.md`,
+  `docs/VARIANTS_PREREGISTRATION.md`.
+- **Status:** proposed.
+
+### H10 — Trailing-stop exit engine (V10, EXPLORATORY)
+- **Hypothesis:** replacing the fixed-stop/fixed-target exit with a
+  3.0×ATR14 trailing stop from peak close (prior-bar levels, 90d time stop)
+  improves risk-adjusted returns on rel_strength entries.
+- **Evidence (same campaign, restated prior-day-gate numbers):** V10 survived
+  the registered bar at $271,941 / +9.88% / 35.3% maxDD / Sharpe 0.55 vs V0's
+  0.42 — but it is FLAGGED EXPLORATORY in the contract itself: a different
+  exit engine carries the campaign's highest overfit risk, and the look-ahead
+  correction cut its end value 22% ($349,081 → $271,941), showing how
+  parameter-sensitive it is. A survival here is a hypothesis to re-derive,
+  not a result.
+- **Implement:** would need its own exit-grid registration round plus
+  observe-only shadow grading of trailing exits alongside live exits; no
+  engine change from this evidence alone.
+- **Source:** `docs/BACKTEST_VARIANTS_10Y.md`,
+  `docs/VARIANTS_PREREGISTRATION.md`.
+- **Status:** proposed (exploratory).
+
+### H11 — Gated trailing-exit call book (R2-A) is the engine's best construction
+- **Hypothesis:** the combined-flag call book with a 200dma prior-close XBI
+  regime gate and 3.0xATR trailing exits (no fixed target, 90d time stop)
+  produces materially better risk-adjusted results than the live fixed
+  3:1-target engine — replay: $430,406 / +14.73% CAGR / 35.6% maxDD /
+  0.73 Sharpe vs V0's 0.42 and V2's 0.58 (double-baseline survivor, 2/3
+  sub-periods; its one miss is 2023-2026 vs V2).
+- **Prediction:** live observe-only tracking of the same construction shows
+  higher R expectancy and shallower book drawdown than the production
+  engine's graded record over the same window.
+- **Implement:** observe-only shadow grading (no calls.yaml change): grade
+  each live auto-call under BOTH exit engines and log the gate state daily.
+- **Source:** docs/BACKTEST_VARIANTS_R2.md + VARIANTS_PREREGISTRATION_R2.md
+  (counter-agent PASS WITH CORRECTIONS both rounds).
+- **Status:** observing (shadow-grader live as of 2026-08-20 — every live
+  auto-call is re-graded under the R2-A trailing engine, observe-only;
+  `GET /shadow/track-record`).
+  ROUND-3 CAVEAT: the trail/time-stop robustness map is NOT a plateau
+  (Sharpe 0.57-0.78; the registered cell's neighbor drops to 0.57) —
+  exit-parameter sensitivity lowers prior confidence in the exact
+  configuration; the live shadow record is the arbiter.
+
+### H12 — On momentum books, the 200dma gate dominates the 50dma gate (relative claim only)
+- **Hypothesis:** gate choice, not stock selection, drove the largest
+  construction difference in the campaign: identical top-5 momentum books
+  ended $2.05M (200dma) vs $733k (50dma), entirely from 2020-21 exposure.
+  ABSOLUTE momentum-book numbers remain unusable (survivorship worst case).
+- **Prediction:** any live momentum-style overlay should default to the
+  slower gate; the faster gate's whipsaws are the measurable cost.
+- **Implement:** carried with H8's observe-only gate tracking (log both MAs).
+- **Source:** docs/BACKTEST_VARIANTS_R2.md (R2-E vs V6b), with the R2-E
+  warning block's caveats.
+- **Status:** proposed.
+
+### H13 — R2-A as a diversifying sleeve on a core index holding
+- **Hypothesis:** R2-A's low correlation to SPY (0.27 daily / 0.36 monthly,
+  beta 0.34, driven by ~26% all-cash days and idiosyncratic biotech holdings)
+  makes a 10-50% R2-A / SPY blend better than SPY alone on CAGR, max DD,
+  Sharpe AND Calmar — a flat plateau across the whole weight range (daily
+  granularity, optimum ~30-40%), holding in all three sub-periods. Known
+  failure mode: crashes faster than the 200dma gate (Mar 2020: R2-A -11.7%
+  alongside SPY).
+- **Prediction:** with a live R2-A record (H11), the realized blend beats the
+  same-period SPY on Sharpe and max DD.
+- **Implement:** no action until H11's shadow-graded live record exists; then
+  an allocation memo, not an engine change. Weights were swept post-hoc —
+  the claim is the plateau, never a point weight.
+- **Source:** docs/BACKTEST_VARIANTS_R2.md (R2-A) + correlation/blend
+  analysis 2026-08-20 (this entry). Inherits every replay caveat.
+- **Status:** proposed (blocked on H11). Round-3 notes: BIL-on-idle-cash is
+  measurement realism worth ~+0.4pp (fold into the honest baseline); the
+  flag-tilted sizing adds a thin +0.02 Sharpe (3/3 sub-periods); leverage,
+  TSMOM overlay and vol-scaled weights all FAILED the registered bar — the
+  plain 30/70 remains the construction.
+
 ---
 
 _Add new hypotheses at the bottom of the backlog. When one changes status,

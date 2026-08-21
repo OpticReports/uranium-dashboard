@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import tempfile
 import time
 from dataclasses import asdict, dataclass, field
 
@@ -87,27 +88,79 @@ class LadderManager:
     def __init__(self, cfg, state_path: str):
         self.cfg = cfg
         self.state_path = state_path
+        # Set by _load when an unreadable state file could not be parsed —
+        # service startup turns it into a Telegram alert (the manager has no
+        # alert channel at construction time), same doctrine as the blend
+        # manager's mode-transition archive.
+        self.archived_state: str | None = None
         self.state = self._load()
 
     def _load(self) -> LadderState:
         try:
             raw = json.load(open(self.state_path))
-            st = LadderState(banked=raw.get("banked", 0.0),
-                             halted=raw.get("halted"))
-            st.legs = {k: LegState(**v) for k, v in raw.get("legs", {}).items()}
-            for s in LADDER:
-                st.legs.setdefault(s.key, LegState())
-            st.events = raw.get("events", [])[-300:]
-            return st
-        except Exception:  # noqa: BLE001
+        except FileNotFoundError:
             return LadderState()
+        except Exception as exc:  # noqa: BLE001
+            # x12: a corrupt file used to degrade SILENTLY to a fresh
+            # LadderState() — open legs and `halted` forgotten, and the next
+            # save() overwrote the evidence. Preserve the file and be loud;
+            # a halted ladder that comes back un-halted is the dangerous
+            # direction.
+            archive = f"{self.state_path}.corrupt-{int(time.time())}"
+            try:
+                os.replace(self.state_path, archive)
+                note = f"unreadable book preserved at {archive}"
+            except OSError as err:
+                note = (f"PRESERVE FAILED ({err}) — the unreadable book will "
+                        f"be OVERWRITTEN by the next save")
+            self.archived_state = (f"ladder state unreadable ({exc}); "
+                                   f"starting a FRESH ladder; {note}")
+            logger.error("[ladder] %s", self.archived_state)
+            return LadderState()
+        st = LadderState(banked=raw.get("banked", 0.0),
+                         halted=raw.get("halted"))
+        try:
+            st.legs = {k: LegState(**v) for k, v in raw.get("legs", {}).items()}
+        except TypeError as exc:
+            # Schema drift on a leg row: keep `banked`/`halted` (the safety
+            # -relevant fields) rather than throwing the whole book away.
+            self.archived_state = (f"ladder leg rows unreadable ({exc}); "
+                                   f"legs reset, banked/halted kept")
+            logger.error("[ladder] %s", self.archived_state)
+            st.legs = {}
+        for s in LADDER:
+            st.legs.setdefault(s.key, LegState())
+        st.events = raw.get("events", [])[-300:]
+        return st
 
     def save(self) -> None:
-        os.makedirs(os.path.dirname(self.state_path) or ".", exist_ok=True)
-        json.dump({"legs": {k: asdict(v) for k, v in self.state.legs.items()},
+        """Atomic write with a UNIQUE temp file per writer (x12): the plain
+        json.dump(open(path,"w")) this replaced published a truncated file
+        on any interruption, and `_load` turned that into a fresh ladder —
+        open legs and `halted` forgotten on live paper money. The temp file
+        lives in the state directory so os.replace stays a same-filesystem
+        rename. Callers still serialize their MUTATIONS (service.MGR_LOCK):
+        this makes the WRITE safe, not the read-modify-write above it."""
+        directory = os.path.dirname(self.state_path) or "."
+        os.makedirs(directory, exist_ok=True)
+        payload = {"legs": {k: asdict(v) for k, v in self.state.legs.items()},
                    "banked": self.state.banked, "halted": self.state.halted,
-                   "events": self.state.events[-300:]},
-                  open(self.state_path, "w"), indent=1)
+                   "events": self.state.events[-300:]}
+        fd, tmp_path = tempfile.mkstemp(
+            dir=directory, prefix=os.path.basename(self.state_path) + ".",
+            suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as fh:
+                json.dump(payload, fh, indent=1)
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp_path, self.state_path)
+        except BaseException:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
 
     def _event(self, level: str, msg: str) -> None:
         last = self.state.events[-1] if self.state.events else None

@@ -45,9 +45,14 @@ class Settings(BaseSettings):
 
     poll_seconds: int = 20
     state_path: str = "./data/executor_state.json"
-    # RAMP v4 drills (RAMP_V4.md): min-size test round trips, endpoint-only
+    # RAMP v4 drills (RAMP_V4.md): min-size test round trips
     drill_max_per_day: int = 6
     drill_cooldown_s: int = 300
+    # Auto-drill (RAMP_V4.md amendment 2026-08-17): the executor runs its own
+    # drills in flat windows until drill coverage is met. Default OFF - a
+    # fresh deploy never self-trades drills; Casey arms it in the Render env.
+    auto_drill: bool = False
+    auto_drill_spacing_s: int = 3600
     log_level: str = "INFO"
 
 

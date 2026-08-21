@@ -12,8 +12,16 @@ venv/
 backend/.env
 frontend/.env
 
-# Data / cache (SQLite + per-API cache)
-backend/data/
+# Data / cache (SQLite + per-API cache). `backend/data/*` (not `backend/data/`)
+# so the compiled point-in-time catalyst store and backtest result rows CAN be
+# tracked — the raw pit_ctgov_cache/ (thousands of CT.gov responses) stays out.
+backend/data/*
+!backend/data/pit_catalysts.json
+!backend/data/backtest_calls_10y_results.json
+!backend/data/backtest_variants_10y_results.json
+!backend/data/backtest_variants_r2_results.json
+!backend/data/backtest_variants_r3_results.json
+!backend/data/bil_bars_raw.json
 *.db
 *.sqlite3
 

@@ -154,6 +154,13 @@ def _gather_raw(session: Session, sec: Security, asof: date, cfg: dict) -> dict:
         closes_only[-1] > sum(closes_only[-50:]) / 50
         if len(closes_only) >= 50 else None
     )
+
+    # Trailing drift vs the name's own vol (for the quiet_before_catalyst
+    # flag). None on insufficient data — never a silent zero.
+    qb_cfg = fcfg.get("quiet_before_catalyst", {})
+    drift_z, realized_vol_20d = C.drift_zscore_raw(
+        closes_only, int(qb_cfg.get("window_days", 10))
+    )
     last_bar = bars[-1] if bars else None
     last_dollar_volume = (
         last_bar.close * last_bar.volume
@@ -186,6 +193,8 @@ def _gather_raw(session: Session, sec: Security, asof: date, cfg: dict) -> dict:
         "insider_buys": insider_buys,
         "atr14": atr14,
         "above_50dma": above_50dma,
+        "drift_z": drift_z,
+        "realized_vol_20d": realized_vol_20d,
         "last_dollar_volume": last_dollar_volume,
         "rs_60d": rs_60d,
         "rev_raw": rev_raw,

@@ -73,6 +73,15 @@ services:
         value: https://barbell-lab.onrender.com
       - key: BTC_UPSTREAM
         value: https://btc-paper-engine.onrender.com
+      # Execution tab: reverse-proxy GET /api/execution/feed to the
+      # ibkr-executor's read-only /blend/feed. BLEND_READ_TOKEN must equal
+      # the executor's READ_TOKEN (injected server-side as X-Read-Token —
+      # the browser never sees it). Both sync:false: entered in the Render
+      # dashboard; unset = the Execution tab shows its "not connected" card.
+      - key: BLEND_UPSTREAM
+        sync: false
+      - key: BLEND_READ_TOKEN
+        sync: false
 
   # --- Barbell Lab (personal quant research platform) ------------------------
   # Lives at research.optic.capital/portfolio-optimizer behind the genomics
@@ -195,6 +204,41 @@ services:
       - key: EXEC_TOKEN
         sync: false
 
+  # --- Catalyst Options Engine (pre-catalyst asymmetry radar) ----------------
+  # PAPER ONLY + KEYLESS decision brain (born from the 2026-08-19 MRNA +130%
+  # melanoma-readout miss). No secrets exist on this service by design — all
+  # data lanes are keyless and degrade gracefully. Any future live options
+  # execution routes through ibkr-executor, never this service (CLAUDE.md
+  # separation-of-powers law). NOTE: the Nasdaq option-chain lane may be
+  # blocked from Render's datacenter IPs; the engine runs fine with that lane
+  # dark (scenario-IV Black-Scholes pricing, flagged on every affected row).
+  - type: web
+    name: catalyst-options-engine
+    runtime: docker
+    dockerfilePath: catalyst-options-engine/Dockerfile
+    dockerContext: catalyst-options-engine
+    plan: starter            # always-on: daily scan + market-hours chain refresh
+    healthCheckPath: /health
+    autoDeploy: true
+    disk:
+      name: options-data     # paper book + catalyst calendar survive deploys
+      mountPath: /app/data
+      sizeGB: 1
+    envVars:
+      - key: DATABASE_URL
+        value: sqlite:////app/data/options.db
+      - key: CACHE_DIR
+        value: /app/data/cache
+      - key: RUN_SCHEDULER
+        value: "true"
+      - key: LOG_LEVEL
+        value: INFO
+      # Future lane (NOT used today): FMP could backstop prices if the
+      # keyless stockanalysis lane ever goes dark from datacenter IPs.
+      # Optional — the service is fully functional without it.
+      - key: FMP_API_KEY
+        sync: false
+
   # NOTE: treasury-canary Telegram alerts — add the same TELEGRAM_BOT_TOKEN /
   # TELEGRAM_CHAT_ID secrets (plus optional TELEGRAM_MIN_SEVERITY, default
   # WARN) to the treasury-canary service env in the Render dashboard.
@@ -266,6 +310,13 @@ services:
         sync: false
       - key: STATE_PATH
         value: /app/data/executor_state.json
+      - key: AUTO_DRILL
+        # RAMP v4 auto-drill (RAMP_V4.md amendment 2026-08-17): executor runs
+        # its own min-size drills in flat windows until drill coverage is met.
+        # sync:false like every trading-behavior var - a blueprint literal
+        # could silently re-arm self-trading drills after Casey turns them
+        # off. Set "true" in the dashboard to arm; code default is off.
+        sync: false
       - key: LOG_LEVEL
         value: INFO
       # Telegram alerts (halts/REDs always; live trades when DRY_RUN=false).
@@ -314,6 +365,11 @@ services:
         sync: false
       - key: EXEC_TOKEN
         sync: false          # /status /kill /resume auth (reuse existing)
+      - key: READ_TOKEN
+        sync: false          # READ-ONLY /blend/feed gate (Execution tab).
+                             # Separate from EXEC_TOKEN by design; same value
+                             # goes on genomics-alpha-tracker as
+                             # BLEND_READ_TOKEN. Unset = feed disabled (404)
       - key: LEG_BUDGET_USD
         sync: false          # $10k per ladder leg now; dashboard owns ramps
       - key: STATE_PATH

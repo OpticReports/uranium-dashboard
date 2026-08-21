@@ -117,6 +117,10 @@ class ExecState:
     witnessing_since: int | None = None
     unwitnessed_coverage: dict = field(default_factory=dict)
     drills: list = field(default_factory=list)
+    # auto-drill circuit breaker: reason string once ANY auto drill fails;
+    # no further auto drills until a human clears it (manual /drill still
+    # works). Never set by refusals - only by a drill that ran and failed.
+    auto_drill_off: str | None = None
 
 
 def _side_sign(side: str) -> float:
@@ -383,6 +387,7 @@ class Executor:
             st.witnessing_since = raw.get("witnessing_since")
             st.unwitnessed_coverage = raw.get("unwitnessed_coverage", {})
             st.drills = raw.get("drills", [])[-50:]
+            st.auto_drill_off = raw.get("auto_drill_off")
             return st
         except Exception:  # noqa: BLE001
             return ExecState()
@@ -406,9 +411,11 @@ class Executor:
              "witnessing_since": getattr(self.state, "witnessing_since", None),
              "unwitnessed_coverage": getattr(self.state,
                                              "unwitnessed_coverage", {}),
-             "drills": getattr(self.state, "drills", [])[-50:]}
+             "drills": getattr(self.state, "drills", [])[-50:],
+             "auto_drill_off": getattr(self.state, "auto_drill_off", None)}
         # per-thread tmp: a shared tmp path was safe only while every writer
-        # sat behind _venue_lock (counter-agent 2026-08-21)
+        # sat behind _venue_lock (counter-agent 2026-08-21). Auto-drill adds
+        # another writer, so this matters more, not less.
         tmp = f"{self.state_path}.{os.getpid()}.{threading.get_ident()}.tmp"
         json.dump(d, open(tmp, "w"))
         os.replace(tmp, self.state_path)
@@ -717,7 +724,7 @@ class Executor:
         snap = {k: getattr(self.cfg, k, None) for k in
                 ("kelly_m", "sizing_base_usd", "max_notional_usd",
                  "max_account_lev", "dd_halt_pct", "daily_loss_halt_pct",
-                 "cb_product_id")}
+                 "cb_product_id", "auto_drill")}
         prev_snap = getattr(self.state, "last_config", None)
         if prev_snap is not None and prev_snap != snap:
             diffs = [f"{k}: {prev_snap.get(k)} -> {v}"
@@ -765,6 +772,7 @@ class Executor:
         self._report_post_only_crosses()
         self._poll_fill_watch()
         self._check_drift(equity)
+        self._maybe_auto_drill(entries_ok)
         self._save_state()
 
     # ---------- per-leg reconciliation ----------
@@ -1104,6 +1112,10 @@ class Executor:
         base = f"D-{time.time_ns()}"
         steps: dict = {"qty": q}
         ok = True
+        # coverage is credited only AFTER the repair tail confirms the drill
+        # fully verified — a failed drill advancing ramp-authorizing rows let
+        # broken mechanics count as proven (referee 2026-08-17)
+        covs: list[str] = []
         try:
             mid = self.venue.mid()
             self.venue.place_market("BUY", q, f"{base}-E")
@@ -1112,7 +1124,7 @@ class Executor:
             if kind == "cycle":
                 trig = mid * 0.99
                 self.venue.place_stop("SELL", q, trig, f"{base}-S")
-                self._cov("stop_placed")
+                covs.append("stop_placed")
                 st = self.venue.order_status(f"{base}-S")
                 steps["stop_open"] = bool(st and st.get("status") == "OPEN")
                 self.venue.cancel(f"{base}-S")
@@ -1131,13 +1143,13 @@ class Executor:
                     steps["exit"] = "skipped_stop_filled"
                 ok = steps["stop_open"] and steps["stop_cancelled"]
                 if ok:
-                    self._cov("drill_cycle")
+                    covs.append("drill_cycle")
             else:  # stopfill: trigger just above market -> fires immediately
                 trig = mid * 1.005
                 filled = False
                 try:
                     self.venue.place_stop("SELL", q, trig, f"{base}-S")
-                    self._cov("stop_placed")
+                    covs.append("stop_placed")
                     self._watch_fill("drill", "drill_stop", f"{base}-S",
                                      trig, "SELL")
                     for _ in range(6):
@@ -1150,8 +1162,7 @@ class Executor:
                     steps["stop_error"] = str(exc)[:120]
                 steps["stop_filled"] = filled
                 if filled:
-                    self._cov("stop_filled")
-                    self._cov("drill_stopfill")
+                    covs.extend(("stop_filled", "drill_stopfill"))
                 else:
                     # never leave a drill position open: cancel + flatten
                     try:
@@ -1189,6 +1200,17 @@ class Executor:
             steps["venue_flat_end"] = None
             steps["repair_error"] = str(exc)[:200]
             ok = False
+        if ok:
+            for k in covs:
+                self._cov(k)
+            # a SUCCESSFUL drill is the re-arm path for the auto-drill
+            # breaker: a human ran /drill supervised and the mechanics
+            # verified end-to-end (referee 2026-08-17 - there was no way
+            # to clear auto_drill_off short of editing the state file)
+            if getattr(self.state, "auto_drill_off", None):
+                self.state.auto_drill_off = None
+                self._event("INFO", "auto_drill_rearmed",
+                            f"breaker cleared by verified {kind} drill")
         rec = {"ts": ts, "day": time.strftime("%Y-%m-%d", time.gmtime(ts)),
                "kind": kind, "ok": ok, "steps": steps}
         self.state.drills = (self.state.drills or [])[-49:] + [rec]
@@ -1197,6 +1219,66 @@ class Executor:
         self._poll_fill_watch()
         self._save_state()
         return rec
+
+    def _needed_auto_drill(self) -> str | None:
+        """Next drill kind auto-drill may run: CYCLES ONLY. stopfill is
+        deliberately excluded (referee 2026-08-17): Coinbase maps a SELL
+        stop to STOP_DOWN and preview-rejects an above-market trigger, so
+        an auto stopfill would fail deterministically and latch the
+        breaker. The stop_filled row is satisfied organically (S4 stops
+        fill in the normal course) or by a supervised manual stopfill
+        after redesign."""
+        cov = getattr(self.state, "coverage", {}) or {}
+        if cov.get("drill_cycle", 0) < 3:
+            return "cycle"
+        return None
+
+    def _maybe_auto_drill(self, entries_ok: bool) -> None:
+        """RAMP_V4.md amendment 2026-08-17 (Casey: zero-touch drill QA):
+        in a flat window the executor runs its OWN drills - one per spacing
+        interval - until the drill coverage rows are met. Runs inside the
+        step lock; every manual-drill hard bound still applies via
+        _drill_locked (size, flat-book refusals, daily budget, cooldown,
+        auto-repair tail). LIVE only: dry-run drills would mark live
+        coverage rows met with simulated fills. One failed auto drill trips
+        auto_drill_off (persisted) - it never retries into a venue that
+        just failed; manual /drill remains for the re-run."""
+        if not getattr(self.cfg, "auto_drill", False) \
+                or getattr(self.cfg, "dry_run", True) \
+                or not entries_ok \
+                or getattr(self.state, "auto_drill_off", None):
+            return
+        kind = self._needed_auto_drill()
+        if kind is None:
+            return
+        last = self.state.drills[-1]["ts"] if self.state.drills else 0
+        if time.time() - last < getattr(self.cfg, "auto_drill_spacing_s", 3600):
+            return
+        if self._drill_refusal():
+            return              # not flat / budget / cooldown: quietly wait
+        rec = self._drill_locked(kind)
+        if rec.get("refused"):
+            return
+        from .alerts import send
+        if rec["ok"]:
+            cov = self.state.coverage
+            send(f"✅ auto-drill {kind} ok "
+                 f"(cycle {cov.get('drill_cycle', 0)}/3, "
+                 f"stop_filled {cov.get('stop_filled', 0)}/1)"
+                 + ("" if self._needed_auto_drill()
+                    else " — auto-drill cycles COMPLETE (stop_filled row "
+                         "fills organically from a real S4 stop)"))
+        else:
+            self.state.auto_drill_off = f"{kind} failed at {rec['day']}"
+            if rec["steps"].get("venue_flat_end") is True:
+                send(f"🚨 auto-drill {kind} FAILED - auto-drill disabled "
+                     "until reviewed (book verified flat by auto-repair; "
+                     "forward the drill record to Claude)")
+            else:
+                send(f"🔴 ACTION NEEDED (you) — auto-drill {kind} FAILED and "
+                     "flatness could NOT be verified: open Coinbase NOW and "
+                     "check for a residual position; then forward the drill "
+                     "record to Claude. Auto-drill is disabled.")
 
     def _check_drift(self, equity: float) -> None:
         if getattr(self.venue, "log", None) is not None:

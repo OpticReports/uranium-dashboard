@@ -191,6 +191,10 @@ def status(x_exec_token: str | None = Header(default=None),
            "coverage_attested": getattr(st, "coverage_attested", {}),
            "mode_flips": getattr(st, "mode_flips", 0),
            "drills": getattr(st, "drills", [])[-10:],
+           "auto_drill": {"enabled": settings.auto_drill,
+                          "spacing_s": settings.auto_drill_spacing_s,
+                          "off": getattr(st, "auto_drill_off", None),
+                          "next_needed": EXEC._needed_auto_drill()},
            "ramp_v4": _ramp_v4(st)}
     try:
         out["equity"] = venue.equity()

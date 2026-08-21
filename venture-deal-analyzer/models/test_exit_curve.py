@@ -107,3 +107,12 @@ def test_ev_reconciles_with_audited_tree():
     a documented band; the TREE headlines on any display."""
     out = ec.exceedance_curve("seed", 0.60, 0.04)
     assert abs(out["ev_net"] - 1.645) < 0.35, out["ev_net"]
+
+
+def test_series_b_loss_mass_in_measured_band():
+    """PitchBook study 2026-08-15: B loss mass must sit between the
+    CV-dollar-basis floor (0.40) and the PitchBook Part IV Series C+
+    measured count-basis ceiling (0.50)."""
+    cal = ec._load_calibration()
+    lt1 = cal["stages"]["series_b"]["target_buckets"]["lt1"]
+    assert 0.40 <= lt1 <= 0.50, lt1

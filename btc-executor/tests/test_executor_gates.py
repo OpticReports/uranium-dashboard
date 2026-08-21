@@ -653,7 +653,8 @@ def test_gate_no_blueprint_managed_trading_vars():
 
     exec_vars = keys_with_literals("btc-executor")
     for k in ("DRY_RUN", "KELLY_M", "SIZING_BASE_USD", "MAX_NOTIONAL_USD",
-              "MAX_ACCOUNT_LEV", "DD_HALT_PCT", "CB_PRODUCT_ID"):
+              "MAX_ACCOUNT_LEV", "DD_HALT_PCT", "CB_PRODUCT_ID",
+              "AUTO_DRILL"):
         assert exec_vars.get(k) == "sync", (k, exec_vars.get(k))
     ibkr_vars = keys_with_literals("ibkr-executor")
     for k in ("DRY_RUN", "TRADING_MODE", "READ_ONLY_API", "LEG_BUDGET_USD"):
@@ -1788,3 +1789,183 @@ def test_gate_counts_earned_after_witnessing_need_no_ack(tmp_path):
     r = ex.attest_coverage("post-witnessing")
     assert r["ok"] is True
     assert r["rows"] == ["entry_long"]
+# ---------------------------------------------------------------------------
+# AUTO-DRILL (RAMP_V4.md amendment 2026-08-17): executor self-runs drills
+def _auto_exec(tmp_path, monkeypatch):
+    """Live-mode executor over a DryRunVenue with auto-drill armed and all
+    pacing zeroed; captures Telegram sends."""
+    ex, venue = _drill_exec(tmp_path)
+    ex.cfg.auto_drill = True
+    ex.cfg.dry_run = False
+    ex.cfg.auto_drill_spacing_s = 0
+    ex.cfg.drill_cooldown_s = 0
+    sent = []
+    from app import alerts
+    monkeypatch.setattr(alerts, "send", lambda m: sent.append(m))
+    return ex, venue, sent
+
+
+def test_gate_auto_drill_runs_cycles_in_flat_window(tmp_path, monkeypatch):
+    ex, venue, sent = _auto_exec(tmp_path, monkeypatch)
+    for _ in range(3):
+        ex.step(target())
+    assert ex.state.coverage.get("drill_cycle") == 3
+    assert all(d["kind"] == "cycle" and d["ok"] for d in ex.state.drills)
+    assert venue.position() == 0.0
+    assert ex.state.auto_drill_off is None
+    assert sum("auto-drill cycle ok" in m for m in sent) == 3
+    # cycles complete -> auto-drill is DONE; it never over-runs and never
+    # schedules stopfill (deterministic live rejection, referee 2026-08-17)
+    assert ex._needed_auto_drill() is None
+
+
+def test_gate_auto_drill_never_schedules_stopfill(tmp_path):
+    """stopfill stays manual/organic: Coinbase preview-rejects an
+    above-market STOP_DOWN, so an auto stopfill = guaranteed breaker trip."""
+    ex, _ = _drill_exec(tmp_path)
+    assert ex._needed_auto_drill() == "cycle"
+    ex.state.coverage = {"drill_cycle": 3}          # stop_filled still unmet
+    assert ex._needed_auto_drill() is None
+
+
+def test_gate_auto_drill_respects_spacing(tmp_path, monkeypatch):
+    ex, venue, sent = _auto_exec(tmp_path, monkeypatch)
+    ex.cfg.auto_drill_spacing_s = 3600
+    ex.step(target())
+    ex.step(target())
+    assert len(ex.state.drills) == 1
+
+
+def test_gate_auto_drill_gated_off_dry_run_stale_and_flag(tmp_path, monkeypatch):
+    """No auto drill when: disarmed, dry-run, degraded feed, or breaker set.
+    Coverage integrity: dry-run fills must never mark live rows met."""
+    ex, venue, sent = _auto_exec(tmp_path, monkeypatch)
+    ex.cfg.auto_drill = False
+    ex.step(target())
+    ex.cfg.auto_drill = True
+    ex.cfg.dry_run = True
+    ex.step(target())
+    ex.cfg.dry_run = False
+    ex.step(target(degraded=True))
+    ex.state.auto_drill_off = "stopfill failed at 2026-08-17"
+    ex.step(target())
+    assert ex.state.drills == []
+
+
+def test_gate_auto_drill_waits_for_flat_book(tmp_path, monkeypatch):
+    ex, venue, sent = _auto_exec(tmp_path, monkeypatch)
+    ex.state.legs["trend"].qty = -0.01
+    ex.step(target(trend={"pending": None, "position": {
+        "side": "S", "entry_ts": NOW, "entry_price": 60_000.0,
+        "qty": 0.01, "stop_price": 61_000.0}}))
+    assert ex.state.drills == []          # refusal, silent - no breaker trip
+    assert ex.state.auto_drill_off is None
+
+
+def test_gate_auto_drill_breaker_trips_on_failure(tmp_path, monkeypatch):
+    """One failed auto drill (venue rejects the stop) must auto-repair,
+    disable auto-drill persistently, and page - never retry next poll."""
+    ex, venue, sent = _auto_exec(tmp_path, monkeypatch)
+    def raising_stop(side, qty, trigger_px, cloid):
+        raise RuntimeError("PREVIEW_STOP_PRICE_ABOVE_LAST_TRADE_PRICE")
+    venue.place_stop = raising_stop
+    ex.step(target())
+    assert len(ex.state.drills) == 1 and ex.state.drills[0]["ok"] is False
+    assert venue.position() == 0.0        # auto-repair flattened
+    assert ex.state.auto_drill_off
+    assert any("auto-drill cycle FAILED" in m for m in sent)
+    ex.step(target())
+    assert len(ex.state.drills) == 1      # breaker holds
+    # breaker survives restart (persisted)
+    ex2 = Executor(venue, ex.cfg)
+    assert ex2.state.auto_drill_off
+
+
+def test_gate_auto_drill_stops_at_coverage_complete(tmp_path, monkeypatch):
+    ex, venue, sent = _auto_exec(tmp_path, monkeypatch)
+    ex.state.coverage = {"drill_cycle": 3, "stop_filled": 1}
+    ex.step(target())
+    assert ex.state.drills == []
+
+
+def test_gate_failed_drill_credits_no_coverage(tmp_path, monkeypatch):
+    """Referee 2026-08-17: coverage rows authorize the ramp, so a drill
+    that ends unverified must advance NOTHING (previously stop_placed /
+    drill counters incremented before the repair tail knew the outcome)."""
+    ex, venue = _drill_exec(tmp_path)
+    orig_place_stop = venue.place_stop
+    def raising_stop(side, qty, trigger_px, cloid):
+        raise RuntimeError("PREVIEW_STOP_PRICE_ABOVE_LAST_TRADE_PRICE")
+    venue.place_stop = raising_stop
+    rec = ex.drill("cycle")
+    assert rec["ok"] is False
+    assert ex.state.coverage == {}
+    # and a verified drill still credits normally
+    venue.place_stop = orig_place_stop
+    ex.cfg.drill_cooldown_s = 0
+    rec2 = ex.drill("cycle")
+    assert rec2["ok"] and ex.state.coverage.get("drill_cycle") == 1
+    assert ex.state.coverage.get("stop_placed") == 1
+
+
+def test_gate_verified_manual_drill_rearms_breaker(tmp_path):
+    """The breaker's only re-arm path: a human-supervised drill that fully
+    verifies. There was previously NO way to clear auto_drill_off short of
+    editing the state file on the Render disk."""
+    ex, venue = _drill_exec(tmp_path)
+    ex.cfg.drill_cooldown_s = 0
+    ex.state.auto_drill_off = "cycle failed at 2026-08-17"
+    rec = ex.drill("cycle")
+    assert rec["ok"] is True
+    assert ex.state.auto_drill_off is None
+    assert any(e["kind"] == "auto_drill_rearmed" for e in ex.state.events)
+    # a FAILED manual drill must NOT re-arm
+    ex.state.auto_drill_off = "cycle failed again"
+    def raising_stop(side, qty, trigger_px, cloid):
+        raise RuntimeError("boom")
+    venue.place_stop = raising_stop
+    rec2 = ex.drill("cycle")
+    assert rec2["ok"] is False and ex.state.auto_drill_off
+
+
+def test_gate_auto_drill_flip_pages_config_change(tmp_path, monkeypatch):
+    """AUTO_DRILL is a trading-behavior var: a silent flip (sync /
+    fat-finger) must page like KELLY_M would (referee 2026-08-17)."""
+    ex, venue, sent = _auto_exec(tmp_path, monkeypatch)
+    ex.cfg.auto_drill = False
+    ex.step(target())
+    ex.cfg.auto_drill = True
+    ex.step(target())
+    assert any(e["kind"] == "config_change" and "auto_drill" in e["msg"]
+               for e in ex.state.events)
+
+
+# --- merge integration: auto-drill (2026-08-17) x mode guard (2026-08-21) --
+def test_gate_auto_drill_coverage_still_requires_live_venue(tmp_path):
+    """The two changes must compose: auto-drill credits coverage rows after
+    a VERIFIED drill, and the mode guard credits coverage_live only for real
+    venue evidence. A verified drill against a shadow venue must therefore
+    advance the audit total but NOT the ramp gate - even with dry_run
+    flipped false, which auto-drill's own precondition would allow."""
+    from app.main import _ramp_v4
+    ex, venue = _drill_exec(tmp_path)
+    ex.cfg.dry_run = False                 # flag lies; venue is DryRunVenue
+    r = ex.drill("cycle")
+    assert r.get("ok") is True, r          # drill itself verifies fine
+    assert ex.state.coverage.get("drill_cycle") == 1      # audit trail
+    assert ex.state.coverage_live == {}                   # gate unmoved
+    assert _ramp_v4(ex.state)["rows"]["drill_cycle"]["met"] is False
+    assert all(f["live"] is False for f in ex.state.fills)
+
+
+def test_gate_auto_drill_never_fires_in_dry_run(tmp_path):
+    """Main's own precondition, re-pinned after the merge: a dry-run auto
+    drill would fabricate coverage that the guard would then have to
+    discard."""
+    ex, _ = _drill_exec(tmp_path)
+    ex.cfg.auto_drill = True
+    ex.cfg.auto_drill_spacing_s = 0
+    ex.cfg.dry_run = True
+    ex._maybe_auto_drill(True)
+    assert ex.state.drills == []
+    assert ex.state.coverage == {}

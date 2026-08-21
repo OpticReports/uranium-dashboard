@@ -1,0 +1,20 @@
+# Core API (versions track genomics-alpha-tracker/backend/requirements.txt)
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+pydantic-settings==2.7.1
+sqlmodel==0.0.22
+SQLAlchemy==2.0.36
+
+# Scheduling + config
+APScheduler==3.11.0
+PyYAML==6.0.2
+
+# HTTP (all data lanes are keyless httpx calls)
+httpx==0.28.1
+
+# Tests
+pytest==8.3.4
+
+# NOTE: deliberately NO exchange/broker SDKs and NO API-key-bearing providers —
+# this service is a keyless decision brain (CLAUDE.md separation of powers).

@@ -57,21 +57,45 @@ def _scoring_job():
 
 def _calls_job():
     """Grade open trade calls and flag outcomes, then turn fresh flags into
-    new calls. Evaluate FIRST so a symbol whose call just closed frees its slot."""
+    new calls. Evaluate FIRST so a symbol whose call just closed frees its slot.
+    The H11/H8 shadow pass (trailing-exit re-grade + daily regime log) rides
+    the same cycle right after live grading — OBSERVE-ONLY, it reads the same
+    bars and writes only shadow_grade/regime_log rows; the live book is
+    untouched."""
     from .calls.manager import evaluate_calls, generate_calls
     from .calls.postmortem import update_postmortems
+    from .calls.shadow import evaluate_shadow_calls, log_regime
     from .scoring.outcomes import evaluate_flag_outcomes
 
     try:
         with Session(engine) as session:
             closed = evaluate_calls(session)
+            shadows = evaluate_shadow_calls(session)
+            regime = log_regime(session)
             graded = evaluate_flag_outcomes(session)
             pms = update_postmortems(session)
             made = generate_calls(session)
-        logger.info("Calls job done: %d closed, %d flag outcomes, %d post-mortems, %d generated",
-                    len(closed), graded, pms, len(made))
+        logger.info(
+            "Calls job done: %d closed, %d shadow-graded, regime %s, "
+            "%d flag outcomes, %d post-mortems, %d generated",
+            len(closed), len(shadows), regime.date if regime else None,
+            graded, pms, len(made))
     except Exception as exc:  # noqa: BLE001
         logger.exception("Calls job failed: %s", exc)
+
+
+def _discovery_job():
+    """Daily dynamic-universe-discovery sweep (see ingestion/discovery.py).
+    Runs AFTER the main ingestion cycle has settled — an auto-promoted name is
+    then picked up by the next normal ingestion pass, no special backfill."""
+    from .ingestion.discovery import run_discovery
+
+    try:
+        with Session(engine) as session:
+            summary = run_discovery(session)
+        logger.info("Discovery job done: %s", summary)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Discovery job failed: %s", exc)
 
 
 def start_scheduler() -> BackgroundScheduler:
@@ -116,6 +140,17 @@ def start_scheduler() -> BackgroundScheduler:
                       next_run_time=now + timedelta(minutes=5))
         logger.info("Scheduled 'calls' every %d min (first run in 5 min)",
                     calls_cfg.get("interval_minutes", 60))
+
+    discovery_cfg = cfg.get("discovery", {})
+    if discovery_cfg.get("enabled", True):
+        sched.add_job(_discovery_job, "interval",
+                      minutes=discovery_cfg.get("interval_minutes", 1440),
+                      id="discovery", max_instances=1, coalesce=True,
+                      # after the initial ingestion + scoring sweep, so the
+                      # census cache and universe state are warm
+                      next_run_time=now + timedelta(minutes=10))
+        logger.info("Scheduled 'discovery' every %d min (first run in 10 min)",
+                    discovery_cfg.get("interval_minutes", 1440))
 
     sched.start()
     _scheduler = sched

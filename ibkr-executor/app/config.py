@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     # safety
     dry_run: bool = True                  # log intents, never place orders
     exec_token: str = ""                  # /status /kill /resume auth
+    # READ-ONLY feed token for GET /blend/feed (X-Read-Token header,
+    # constant-time compare). SEPARATE from EXEC_TOKEN by design: the feed
+    # holder can see the book but can never kill/resume/see exec surfaces.
+    # Empty (default) = the feed endpoint is disabled (404).
+    read_token: str = ""                  # READ_TOKEN
 
     # ladder economics (manager cfg)
     leg_budget_usd: float = 10_000.0
@@ -28,6 +33,23 @@ class Settings(BaseSettings):
     poll_seconds: int = 300               # options ladder: 5-min cadence is plenty
     state_path: str = "./data/ladder_state.json"
     log_level: str = "INFO"
+
+    # blend3070 (H13 30/70 R2-A sleeve + SPY core; OFFLINE scaffold).
+    # BLEND_ENABLED=false is the default: the service boots exactly as today.
+    blend_enabled: bool = False           # BLEND_ENABLED
+    tracker_url: str = ""                 # TRACKER_URL (genomics tracker base URL)
+    # The tracker's login gate is HTTP Basic (its DASHBOARD_USER/PASSWORD).
+    # These are DASHBOARD credentials for polling a keyless decision brain —
+    # no broker credential is ever read by the blend path.
+    tracker_user: str = ""                # TRACKER_USER
+    tracker_password: str = ""            # TRACKER_PASSWORD
+    # Preferred: a dedicated READ-ONLY intents token (the tracker's
+    # BLEND_API_TOKEN) so the executor never holds the dashboard password.
+    # When set, the poll authenticates with X-API-Token instead of Basic.
+    tracker_api_token: str = ""           # TRACKER_API_TOKEN
+    blend_budget: float = 0.0             # BLEND_BUDGET cap in USD; 0 = disabled
+    blend_book_usd: float = 10_000.0      # BLEND_BOOK_USD initial paper book
+    blend_state_path: str = "./data/blend_state.json"
 
 
 settings = Settings()

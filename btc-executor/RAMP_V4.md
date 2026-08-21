@@ -170,8 +170,42 @@ Hard bounds (all enforced in code, not convention):
 - budget: `DRILL_MAX_PER_DAY` (default 6) + 5-minute cooldown
 - every drill order carries a `D-` cloid prefix; fills recorded with
   leg="drill" — included in slippage stats, EXCLUDED from all P&L
-- endpoint-only: no scheduler ever calls it; Casey triggers with the token
+- triggered by the token-gated endpoint, or by AUTO-DRILL (below)
 - expected cost ≈ spread + taker fees ≈ $1–2 per drill
+
+## AUTO-DRILL (amendment 2026-08-17, Casey: zero-touch drill QA)
+
+Supersedes the original "endpoint-only, no scheduler" rule. Flat windows
+between S4 trades are short (1–5 days), unpredictable, and were being
+missed — so the executor now runs its own drills inside the step loop when
+ALL of: `AUTO_DRILL=true` (Render env, sync:false, default off), LIVE mode
+(dry-run drills would fake live coverage), engine feed healthy, book+venue
+flat (the same refusal preconditions), drill coverage rows still unmet, and
+≥ `AUTO_DRILL_SPACING_S` (default 1h) since the last drill. Every
+manual-drill hard bound applies unchanged — size, budget, cooldown,
+auto-repair tail, RED paging.
+
+CYCLES ONLY (referee 2026-08-17): auto-drill never schedules `stopfill`.
+Coinbase maps a SELL stop to STOP_DOWN and preview-rejects an above-market
+trigger, so an auto stopfill fails deterministically and would latch the
+breaker on its first attempt. The stop_filled row is covered organically
+(S4's stops fill in the normal course of trading) or by a supervised
+manual stopfill after redesign — never automatically.
+
+Coverage honesty: a drill credits its coverage rows only AFTER the repair
+tail confirms it fully verified (`ok=true`). A failed drill advances
+nothing — broken mechanics must not count as proven.
+
+Circuit breaker: ONE failed auto drill sets `auto_drill_off` (persisted,
+shown in /status.auto_drill) and pages — it never retries into a venue
+that just failed. If the repair tail could not VERIFY flatness the page
+escalates to ACTION-NEEDED (check Coinbase manually). Re-arm path: any
+subsequent VERIFIED drill (a human running `/drill` supervised) clears
+the breaker and logs `auto_drill_rearmed`. `AUTO_DRILL` itself is in the
+config_change snapshot, so a silent flip pages like any other
+trading-behavior var. The halt+resume coverage pair stays a HUMAN test by
+design: it proves the operator's kill switch, so automating it would
+prove nothing.
 
 ## Rung advancement (after coverage complete)
 
