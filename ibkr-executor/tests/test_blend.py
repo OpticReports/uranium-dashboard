@@ -1888,11 +1888,18 @@ def test_gate_n2_no_sell_stop_re_placed_on_external_shares(tmp_path):
                for e in m.state.events)
 
 
-def test_gate_n2_working_stop_verifies_despite_external_shares(tmp_path):
-    """The stop is order-scoped-WORKING and the account holds MORE than the
-    book: the position is genuinely held and protected — unpark, keep the
-    venue's own stop, and WARN that the position rows are conflated (they
-    are corroboration, never proof)."""
+def test_gate_x1_working_stop_never_verifies_conflated_shares(tmp_path):
+    """X1 (supersedes the cde6fb7 gate that pinned the OPPOSITE outcome —
+    this one attacks the same cell strictly harder).
+
+    A WORKING stop is ORDER-scoped proof that THAT STOP did not fill. It
+    proves nothing about whether the book's shares left by another route
+    (manual sale out of a pooled position, broker liquidation, transfer)
+    while same-symbol shares stay in the account. With held > booked the
+    two cases are indistinguishable, so the guard must NOT convert "the
+    stop is alive" into "the shares are ours": the position stays flagged,
+    nothing is sold, no new stop is placed — and the working stop is LEFT
+    RESTING, because retiring it would strip real protection."""
     m = mk(tmp_path)
     _seed_initialized(m, sleeve_cash=2_750.0)
     a = DryAdapter()
@@ -1901,11 +1908,69 @@ def test_gate_n2_working_stop_verifies_despite_external_shares(tmp_path):
     alerts: list[str] = []
     run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
     pos = m.state.positions["1"]
-    assert pos.history_gap is False and pos.stop_missing is False
+    assert pos.history_gap is True               # NOT unparked
     assert pos.stop_order_ref == ref and ref in a._stops   # same stop kept
-    assert any("shares OUTSIDE the blend book" in e["msg"]
+    assert any("conflated with external shares" in e["msg"]
+               and "shares OUTSIDE the blend book" in e["msg"]
                for e in m.state.events)
-    assert any("POSITIVELY verified" in msg for msg in alerts)
+    # the alert must never assert ownership on conflated rows
+    assert not any("POSITIVELY verified" in msg for msg in alerts)
+    assert not any("the shares are held" in msg for msg in alerts)
+    (esc,) = [msg for msg in alerts if "UNRESOLVED after the blackout" in msg]
+    assert "UNPROVABLE" in esc and "LEFT RESTING" in esc
+    # and the tracker's next exit must not MKT-sell the operator's shares
+    run_cycle(m, a, payload(exits=[EXIT_CRSP], stops=[stop_row()]),
+              "2026-08-24", alert=alerts.append)
+    assert "1" in m.state.positions and _executions(a, "CRSP") == []
+    assert a._positions["CRSP"] == 6             # untouched at the venue
+    # ...nor may /kill flatten it (C10)
+    m.request_flatten("2026-08-24")
+    kill_alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=kill_alerts.append)
+    assert "1" in m.state.positions and _executions(a, "CRSP") == []
+    assert a._positions["CRSP"] == 6
+    (summary,) = [msg for msg in kill_alerts if "flatten finished" in msg]
+    assert "NOT closed" in summary and "CRSP" in summary
+
+
+def test_gate_x3_conflated_dead_stop_stays_loud_and_visible(tmp_path):
+    """X3: the fail-closed cell must not fail SILENTLY. Conflated rows
+    (ONE extra same-symbol share is enough) plus a stop the venue cancelled
+    inside the blackout leave a REAL position with zero stops at the venue
+    — cde6fb7 left it stop_missing=False with a stale ref and no alert
+    after cycle 1, indefinitely (law #3's liveness clause). It must stay
+    flagged, drop the dead ref, mark itself unprotected for /status and the
+    feed, and keep escalating on a re-armed cadence."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    ref = _blackout_stop(m, a)
+    a.cancel_stock_order(ref)                    # IB-initiated GTC cancel
+    a._positions["CRSP"] = 6                     # the book's 5 + ONE external
+    placed_before = len([e for e in a.log
+                         if e["action"] == "place_stock_order"])
+    per_cycle: list[int] = []
+    for c in range(2 * blend_mod.UNVERIFIED_REALERT_CYCLES):
+        alerts: list[str] = []
+        run_cycle(m, a, None, "2026-08-%02d" % (24 + c), alert=alerts.append)
+        per_cycle.append(sum(1 for msg in alerts
+                             if "UNRESOLVED after the blackout" in msg))
+        m.state.last_reconcile_ts = time.time()  # normal cadence from here
+    pos = m.state.positions["1"]
+    assert pos.history_gap is True               # never unparked
+    assert pos.stop_missing is True              # law #3 visibility
+    assert pos.stop_order_ref is None            # no stale ref on /status
+    assert not a._stops                          # nothing rests at the venue
+    assert len([e for e in a.log
+                if e["action"] == "place_stock_order"]) == placed_before
+    # loud on cycle 0, re-armed after — never silent, never per-cycle spam
+    assert per_cycle[0] == 1
+    assert sum(per_cycle[1:]) >= 1
+    assert sum(per_cycle) < len(per_cycle)
+    assert m.status_summary()["unverifiable"] == ["1"]
+    assert m.status_summary()["stop_missing"] == ["1"]
+    feed_pos = m.feed({}, "2026-08-30")["positions"][0]
+    assert feed_pos["unverifiable"] is True and feed_pos["unprotected"] is True
 
 
 def test_gate_n2_filled_stop_without_a_price_parks_never_sells(tmp_path):
@@ -1927,6 +1992,219 @@ def test_gate_n2_filled_stop_without_a_price_parks_never_sells(tmp_path):
             == pytest.approx(2_500.0))           # nothing booked at a guess
     assert _executions(a, "CRSP") == []
     assert any("NO fill price" in msg for msg in alerts)
+
+
+class _FalseCancelAdapter(DryAdapter):
+    """The venue answers "not found / already cancelled" (False) while the
+    stop in fact keeps resting — the realistic post-restart case: the
+    session-scoped orderId no longer resolves, and `cancel_stock_order`
+    returns False by contract. Indistinguishable from a gone order."""
+
+    def cancel_stock_order(self, ref):
+        rec = self._orders.get(ref)
+        if rec is not None and rec["status"] == "filled":
+            raise RuntimeError(f"cannot cancel {ref}: order already FILLED")
+        self._rec("cancel_stock_order", ref=ref, found=False)
+        return False
+
+
+def test_gate_x2_ambiguous_cancel_stays_tracked_and_fill_alerts_red(tmp_path):
+    """X2: N1's original naked short, end to end. The park's cancel comes
+    back False (ambiguous), so the -5 stop may still rest. cde6fb7 wrote
+    the ref into orphan_stop_refs and pass 3 POPPED it in the SAME
+    reconcile (it ignored the return value and logged a "cancelled on
+    retry" the venue never said) — tracking survived zero cycles, the stop
+    later triggered into a 2-share account (venue net -3, a real naked
+    short) and surfaced only as "fill for UNKNOWN order".
+
+    Tracking must now be cleared ONLY by a definitively ACKed cancel, and a
+    fill on a retired ref must route to the RED possible-short branch."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = _FalseCancelAdapter()
+    ref = _blackout_stop(m, a)
+    a._positions["CRSP"] = 2                     # manual sale of 3, in the dark
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    assert "1" in m.state.unreconciled
+    assert ref in m.state.orphan_stop_refs        # survives its own cycle
+    assert not any("cancelled on retry" in e["msg"] for e in m.state.events)
+    assert any("would NOT ACK the cancel" in msg for msg in alerts)
+    # it survives further cycles too, and keeps being retried
+    run_cycle(m, a, None, "2026-08-25", alert=lambda _: None)
+    assert ref in m.state.orphan_stop_refs
+    # the abandoned stop now triggers into a 2-share account
+    a.trigger_stop(ref)
+    alerts2: list[str] = []
+    run_cycle(m, a, None, "2026-08-26", alert=alerts2.append)
+    assert any("RETIRED stop" in msg and "possible short" in msg
+               for msg in alerts2)
+    assert not any("UNKNOWN order" in msg for msg in alerts2)
+    assert f"orphan-{ref}" in m.state.unreconciled
+
+
+def test_x2_companion_acked_cancel_still_clears_tracking(tmp_path):
+    """Companion (NOT a gate — it passes at cde6fb7 by construction): the
+    other side of X2. A cancel the venue actually ACKs must still drain the
+    tracking, so tightening the clear condition does not wedge the guard on
+    every orphan forever."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    rs = a.place_stock_order("CRSP", -5, "STP", stop_price=44.0, tif="GTC",
+                             client_order_id="blend-9-stp-44.0000")
+    m.record_orphan_stop(rs["order_ref"], {"symbol": "CRSP", "qty": -5,
+                                           "call_id": 9})
+    run_cycle(m, a, None, "2026-08-24", alert=lambda _: None)
+    assert rs["order_ref"] not in m.state.orphan_stop_refs
+    assert any("cancelled on retry" in e["msg"] for e in m.state.events)
+
+
+def test_gate_x4_park_alert_states_what_the_retire_actually_did(tmp_path):
+    """X4: the park alert appended ", resting stop retired, nothing sold"
+    unconditionally — contradicting the 🚨🚨 "could NOT be cancelled" alert
+    emitted seconds earlier, and overclaiming in the DANGEROUS direction
+    (protection removed when the -5 stop may still be armed)."""
+    class _RaisingCancel(DryAdapter):
+        def cancel_stock_order(self, ref):
+            raise RuntimeError("cancel unavailable (simulated)")
+
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = _RaisingCancel()
+    ref = _blackout_stop(m, a)
+    a._positions["CRSP"] = 2
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    (park,) = [msg for msg in alerts if "parked for manual booking" in msg]
+    assert "stop retired" not in park             # never the false claim
+    assert "could NOT be cancelled and may STILL rest" in park
+    assert "holds 2 of the 5" in park and "UNPROTECTED" in park
+    assert any("could NOT be cancelled" in msg for msg in alerts)
+    # and the ambiguous-False sibling says its own truth, not "retired"
+    m2 = mk(tmp_path / "b")
+    _seed_initialized(m2, sleeve_cash=2_750.0)
+    a2 = _FalseCancelAdapter()
+    _blackout_stop(m2, a2)
+    a2._positions["CRSP"] = 2
+    alerts2: list[str] = []
+    run_cycle(m2, a2, None, "2026-08-24", alert=alerts2.append)
+    (park2,) = [msg for msg in alerts2 if "parked for manual booking" in msg]
+    assert "stop retired" not in park2
+    assert "would not ACK the cancel" in park2
+    # ...and so does a clean, ACKed retire
+    m3 = mk(tmp_path / "c")
+    _seed_initialized(m3, sleeve_cash=2_750.0)
+    a3 = DryAdapter()
+    _blackout_stop(m3, a3)
+    a3._positions["CRSP"] = 2
+    alerts3: list[str] = []
+    run_cycle(m3, a3, None, "2026-08-24", alert=alerts3.append)
+    (park3,) = [msg for msg in alerts3 if "parked for manual booking" in msg]
+    assert "its resting stop was CANCELLED at the venue" in park3
+
+
+def test_gate_x5_same_symbol_shortfall_sacrifices_nobody(tmp_path):
+    """x5: `held` is account-wide and `book_qty` mixes same-symbol peers, so
+    a shortfall cannot be attributed to any ONE of them. cde6fb7 sacrificed
+    whichever came FIRST in dict order — cancelling a healthy peer's
+    working stop and parking its real shares UNRECONCILED while the
+    position whose shares were actually gone got unparked as verified."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10_000.0)
+    a = DryAdapter()
+    r1 = _blackout_stop(m, a, call_id=1, qty=5, level=44.0)
+    r2 = _blackout_stop(m, a, call_id=2, qty=4, level=43.0)
+    r3 = _blackout_stop(m, a, call_id=3, qty=3, level=42.0)
+    a._positions["CRSP"] = 9                     # call 3's 3 sold in the dark
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    assert sorted(m.state.positions) == ["1", "2", "3"]   # nobody sacrificed
+    assert not m.state.unreconciled
+    assert all(m.state.positions[k].history_gap for k in ("1", "2", "3"))
+    assert r1 in a._stops and r2 in a._stops and r3 in a._stops
+    assert _executions(a, "CRSP") == []
+    assert not any("parked for manual booking" in msg for msg in alerts)
+    esc = [msg for msg in alerts if "UNRESOLVED after the blackout" in msg]
+    assert len(esc) == 3
+    assert all("cannot be attributed to any one of them" in msg for msg in esc)
+
+
+def test_gate_x7_unretirable_stop_alerts_rearmed_never_silent(tmp_path):
+    """x7: a raising cancel produced two differently-worded alerts in the
+    SAME cycle and then "STILL uncancelled" every cycle forever. The
+    escalation must be re-armed — loud on record, then periodic — and it
+    must never fall silent (`orphan_stop_refs` never drains for a stop the
+    venue will not ACK)."""
+    class _RaisingCancel(DryAdapter):
+        def cancel_stock_order(self, ref):
+            raise RuntimeError("cancel unavailable (simulated)")
+
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = _RaisingCancel()
+    ref = _blackout_stop(m, a)
+    a._positions["CRSP"] = 0
+    first: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=first.append)
+    # pass 3 must not duplicate the record-time alert in the same cycle;
+    # the only two mentions are the retire alert and the park alert that
+    # now AGREES with it (X4) — never two contradictory claims.
+    assert sum(1 for msg in first if "STILL uncancelled" in msg) == 0
+    assert sum(1 for msg in first
+               if "could NOT be cancelled while parking" in msg) == 1
+    assert sum(1 for msg in first if "could NOT be cancelled" in msg) == 2
+    assert not any("stop retired" in msg for msg in first)
+    per_cycle: list[int] = []
+    for c in range(2 * blend_mod.ORPHAN_REALERT_CYCLES):
+        alerts: list[str] = []
+        run_cycle(m, a, None, "2026-08-%02d" % (25 + c), alert=alerts.append)
+        per_cycle.append(sum(1 for msg in alerts
+                             if "STILL uncancelled" in msg))
+    assert ref in m.state.orphan_stop_refs        # never silently drained
+    assert sum(per_cycle) >= 1                    # never silent
+    assert sum(per_cycle) < len(per_cycle)        # and never every-cycle spam
+
+
+def test_gate_x8_filled_unpriced_park_states_the_venue_quantity(tmp_path):
+    """x8: the filled+unpriced park never said how many shares remain at
+    the venue, unlike its held<booked sibling — inconsistent honesty on the
+    same class of event."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    ref = _blackout_stop(m, a)
+    a._orders[ref]["status"] = "filled"          # filled, price unknown
+    a._stops.pop(ref, None)
+    a._positions["CRSP"] = 3                     # 3 shares STILL at the venue
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    (park,) = [msg for msg in alerts if "NO fill price" in msg]
+    assert "3 CRSP share(s)" in park and "UNPROTECTED" in park
+    assert _executions(a, "CRSP") == []
+
+
+def test_gate_x13_unlocatable_stop_is_never_cancelled_by_a_stale_ref(tmp_path):
+    """x13: with the cid lookup returning None the only ref left is the
+    PERSISTED one, and IB orderIds are session-scoped — after the restart
+    this guard exists for it can address a DIFFERENT order. It must be
+    tracked (a fill on it still alerts RED) and never cancelled blind."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m, stop_ref="stale-session-ref")   # venue never saw the cid
+    m.state.last_reconcile_ts = time.time() - 3 * 86_400
+    a = DryAdapter()
+    a._positions["CRSP"] = 2
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    assert "1" in m.state.unreconciled
+    assert "stale-session-ref" in m.state.orphan_stop_refs
+    assert not [e for e in a.log if e["action"] == "cancel_stock_order"]
+    assert any("may address a DIFFERENT order" in msg for msg in alerts)
+    # pass 3 keeps watching it but never blind-cancels it either
+    run_cycle(m, a, None, "2026-08-25", alert=lambda _: None)
+    assert not [e for e in a.log if e["action"] == "cancel_stock_order"]
+    assert "stale-session-ref" in m.state.orphan_stop_refs
 
 
 # R2 (re-review residual): /kill is TWO-STAGE — the handler journals a
