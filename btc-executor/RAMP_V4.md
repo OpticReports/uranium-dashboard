@@ -105,6 +105,18 @@ signal. Flip detection also runs at `__init__`, not just inside `step()`,
 because a flip across a redeploy would otherwise never be recorded before
 an operator could act.
 
+**The first migration cannot be witnessed, and says so.** `witnessing_since`
+records when durable provenance tracking began; counts that already existed
+at that instant are frozen into `unwitnessed_coverage`. Every refusal above
+is blind to that period by construction — `mode_flips` was not tracked and
+fills were not mode-tagged while those counts accrued. Promoting them
+therefore requires `acknowledge_unwitnessed=true`, an explicit operator
+judgement recorded permanently in the attestation record
+(`operator_acknowledged_unwitnessed`, `unwitnessed_rows`). The stamp is
+frozen across restarts, so a reboot cannot launder unwitnessed history into
+witnessed history. Counts earned after `witnessing_since` are covered by
+the durable checks and need no acknowledgement.
+
 **Attestation can never complete the matrix.** `slippage_sample` reads
 per-fill `live` tags, is not attestable, and gates `coverage_complete` —
 so 10 genuinely live fills are still required no matter what is attested.

@@ -108,6 +108,14 @@ class ExecState:
     # conditions fire every poll, so a mode_change ages out in ~67 minutes
     # of ordinary operation (counter-agent find 2026-08-21).
     mode_flips: int = 0
+    # When durable witnessing began. Counts that already existed at that
+    # moment are UNWITNESSED: mode_flips was not being recorded and fills
+    # were not mode-tagged while they accrued, so no durable evidence about
+    # them can ever exist. Attesting those requires explicit operator
+    # acknowledgement (counter-agent A1: the first migration is precisely
+    # the case the durable witnesses cannot cover).
+    witnessing_since: int | None = None
+    unwitnessed_coverage: dict = field(default_factory=dict)
     drills: list = field(default_factory=list)
 
 
@@ -142,13 +150,15 @@ class Executor:
         self._venue_lock = threading.RLock()   # reentrant: halt() runs
         # inside _step_locked's _check_halts AND from the /kill API thread
         self._cov_since_boot: dict[str, int] = {}
+        self._stamp_witnessing()
         self._check_dry_run_flip()
         self._migrate_ledger_granularity()
         self._warn_unattributed_coverage()
         if any(l.qty != 0.0 for l in self.state.legs.values()):
             self._cov("restart_with_position")
 
-    def attest_coverage(self, note: str = "") -> dict:
+    def attest_coverage(self, note: str = "",
+                        acknowledge_unwitnessed: bool = False) -> dict:
         """ONE-SHOT operator attestation: promote pre-split coverage counts
         to live-attributed (RAMP_V4.md).
 
@@ -161,11 +171,11 @@ class Executor:
         if not self._venue_lock.acquire(timeout=30):
             return {"ok": False, "refused": "executor busy (step running)"}
         try:
-            return self._attest_locked(note)
+            return self._attest_locked(note, acknowledge_unwitnessed)
         finally:
             self._venue_lock.release()
 
-    def _attest_locked(self, note: str) -> dict:
+    def _attest_locked(self, note: str, ack_unwitnessed: bool = False) -> dict:
         st = self.state
         if getattr(st, "attestation", None) is not None:
             return {"ok": False, "refused": "already_attributed",
@@ -223,9 +233,27 @@ class Executor:
         n = sum(attested.values())
         if not n:
             return {"ok": False, "refused": "nothing_to_attest"}
-        limitation = ("event log retains 200 entries; the durable witnesses "
-                      "(mode_flips counter, last_dry_run, dry-run fill tags) "
-                      "are what this attestation actually rests on")
+        unwit = {k: v for k, v in attested.items()
+                 if k in (getattr(st, "unwitnessed_coverage", None) or {})}
+        if unwit and not ack_unwitnessed:
+            return {"ok": False,
+                    "refused": "unwitnessed_history_requires_acknowledgement",
+                    "detail": "these counts accrued BEFORE durable "
+                              "witnessing began: mode_flips was not tracked "
+                              "and fills were not mode-tagged while they "
+                              "were earned, so no durable evidence about "
+                              "them can exist. The refusals above cannot "
+                              "see that period. Re-send with "
+                              "acknowledge_unwitnessed=true only if you can "
+                              "personally attest DRY_RUN was false "
+                              "throughout; the acknowledgement is recorded "
+                              "permanently.",
+                    "unwitnessed_rows": sorted(unwit),
+                    "witnessing_since": getattr(st, "witnessing_since", None)}
+        limitation = ("event log retains 200 entries; durable witnesses "
+                      "(mode_flips, dry-run fill tags) only cover the period "
+                      "since witnessing_since - counts older than that rest "
+                      "on the operator's acknowledgement, not on evidence")
         snap = (dict(live), dict(getattr(st, "coverage_attested", None) or {}),
                 getattr(st, "attestation", None))
         st.coverage_live = {k: max(promote.get(k, 0), live.get(k, 0))
@@ -233,7 +261,9 @@ class Executor:
         st.coverage_attested = attested
         st.attestation = {"ts": int(time.time()), "events": n,
                           "rows": sorted(attested), "note": note[:200],
-                          "limitation": limitation}
+                          "limitation": limitation,
+                          "unwitnessed_rows": sorted(unwit),
+                          "operator_acknowledged_unwitnessed": bool(unwit)}
         try:
             self._save_state()
         except Exception as exc:  # noqa: BLE001
@@ -350,6 +380,8 @@ class Executor:
             st.coverage_attested = raw.get("coverage_attested", {})
             st.attestation = raw.get("attestation")
             st.mode_flips = raw.get("mode_flips", 0)
+            st.witnessing_since = raw.get("witnessing_since")
+            st.unwitnessed_coverage = raw.get("unwitnessed_coverage", {})
             st.drills = raw.get("drills", [])[-50:]
             return st
         except Exception:  # noqa: BLE001
@@ -371,6 +403,9 @@ class Executor:
              "coverage_attested": getattr(self.state, "coverage_attested", {}),
              "attestation": getattr(self.state, "attestation", None),
              "mode_flips": getattr(self.state, "mode_flips", 0),
+             "witnessing_since": getattr(self.state, "witnessing_since", None),
+             "unwitnessed_coverage": getattr(self.state,
+                                             "unwitnessed_coverage", {}),
              "drills": getattr(self.state, "drills", [])[-50:]}
         # per-thread tmp: a shared tmp path was safe only while every writer
         # sat behind _venue_lock (counter-agent 2026-08-21)
@@ -640,6 +675,17 @@ class Executor:
         self._save_state()
 
     # ---------- main step ----------
+
+    def _stamp_witnessing(self) -> None:
+        """Mark when durable provenance witnessing began, and freeze the
+        counts that already existed at that instant. Stamped once, then
+        persisted forever, so a restart cannot quietly convert unwitnessed
+        history into witnessed history."""
+        st = self.state
+        if getattr(st, "witnessing_since", None) is not None:
+            return
+        st.witnessing_since = int(time.time())
+        st.unwitnessed_coverage = dict(getattr(st, "coverage", None) or {})
 
     def _check_dry_run_flip(self) -> None:
         """A blueprint sync silently reset DRY_RUN to true on a LIVE account

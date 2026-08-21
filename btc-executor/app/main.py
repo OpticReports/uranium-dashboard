@@ -275,6 +275,7 @@ def _ramp_v4(st) -> dict:
 @app.post("/coverage/attest")
 def coverage_attest(confirm: bool = Query(False),
                     note: str = Query(""),
+                    acknowledge_unwitnessed: bool = Query(False),
                     x_exec_token: str | None = Header(default=None),
                     token: str | None = Query(default=None)):
     """ONE-SHOT: promote pre-split coverage counts to live-attributed.
@@ -292,7 +293,7 @@ def coverage_attest(confirm: bool = Query(False),
         raise HTTPException(status_code=400,
                             detail="pass confirm=true: this promotes rows to "
                                    "ATTESTED evidence and cannot be undone")
-    return EXEC.attest_coverage(note)
+    return EXEC.attest_coverage(note, acknowledge_unwitnessed)
 
 
 @app.post("/drill")

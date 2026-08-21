@@ -1487,7 +1487,7 @@ def test_gate_attest_promotes_and_marks_rows_attested(tmp_path):
     from app.main import _ramp_v4
     ex = _attest_ex(tmp_path, {"entry_long": 2, "chase": 1})
     assert _ramp_v4(ex.state)["rows"]["entry_long"]["met"] is False
-    r = ex.attest_coverage("dry_run false since 2026-08-15")
+    r = ex.attest_coverage("dry_run false since 2026-08-15", acknowledge_unwitnessed=True)
     assert r["ok"] is True and r["attested_events"] == 3
     rows = _ramp_v4(ex.state)["rows"]
     assert rows["entry_long"]["met"] is True
@@ -1500,9 +1500,9 @@ def test_gate_attest_promotes_and_marks_rows_attested(tmp_path):
 
 def test_gate_attest_is_one_shot(tmp_path):
     ex = _attest_ex(tmp_path, {"entry_long": 2})
-    assert ex.attest_coverage()["ok"] is True
+    assert ex.attest_coverage(acknowledge_unwitnessed=True)["ok"] is True
     ex.state.coverage["entry_long"] = 9          # later evidence
-    again = ex.attest_coverage()
+    again = ex.attest_coverage(acknowledge_unwitnessed=True)
     assert again["ok"] is False
     assert again["refused"] == "already_attributed"
     assert ex.state.coverage_live["entry_long"] == 2   # not topped up
@@ -1515,7 +1515,7 @@ def test_gate_attest_refuses_when_mode_flipped(tmp_path):
     ex = _attest_ex(tmp_path, {"entry_long": 2}, events=[
         {"ts": 1, "level": "RED", "kind": "mode_change",
          "msg": "DRY_RUN False -> True: trading is now SIMULATED"}])
-    r = ex.attest_coverage()
+    r = ex.attest_coverage(acknowledge_unwitnessed=True)
     assert r["ok"] is False and r["refused"] == "mode_change_in_log"
     assert ex.state.coverage_live == {}
     assert r["flips"]
@@ -1523,7 +1523,7 @@ def test_gate_attest_refuses_when_mode_flipped(tmp_path):
 
 def test_gate_attest_refuses_in_dry_run(tmp_path):
     ex = _attest_ex(tmp_path, {"entry_long": 2}, live_venue=False)
-    r = ex.attest_coverage()
+    r = ex.attest_coverage(acknowledge_unwitnessed=True)
     assert r["ok"] is False and r["refused"] == "not_live"
     assert ex.state.coverage_live == {}
 
@@ -1531,13 +1531,13 @@ def test_gate_attest_refuses_in_dry_run(tmp_path):
 def test_gate_attest_survives_restart(tmp_path):
     from app.mirror import Executor
     ex = _attest_ex(tmp_path, {"entry_long": 2})
-    ex.attest_coverage()
+    ex.attest_coverage(acknowledge_unwitnessed=True)
     ex2 = Executor(FakeVenue(), ex.cfg)
     assert ex2.state.coverage_live["entry_long"] == 2
     assert ex2.state.coverage_attested["entry_long"] == 2
     assert ex2.state.attestation["events"] == 2
     # and it stays one-shot across the reboot
-    assert ex2.attest_coverage()["refused"] == "already_attributed"
+    assert ex2.attest_coverage(acknowledge_unwitnessed=True)["refused"] == "already_attributed"
 
 
 def test_gate_attest_endpoint_requires_token_and_confirm(monkeypatch):
@@ -1546,8 +1546,9 @@ def test_gate_attest_endpoint_requires_token_and_confirm(monkeypatch):
     monkeypatch.setattr(m.settings, "exec_token", "sekret")
 
     class _E:
-        def attest_coverage(self, note=""):
-            return {"ok": True, "attested_events": 1}
+        def attest_coverage(self, note="", acknowledge_unwitnessed=False):
+            return {"ok": True, "attested_events": 1,
+                    "ack": acknowledge_unwitnessed}
     monkeypatch.setattr(m, "EXEC", _E())
     c = TestClient(m.app)
     assert c.post("/coverage/attest?confirm=true").status_code == 401
@@ -1557,6 +1558,10 @@ def test_gate_attest_endpoint_requires_token_and_confirm(monkeypatch):
     ok = c.post("/coverage/attest?confirm=true",
                 headers={"X-Exec-Token": "sekret"})
     assert ok.status_code == 200 and ok.json()["ok"] is True
+    assert ok.json()["ack"] is False          # not acknowledged by default
+    ack = c.post("/coverage/attest?confirm=true&acknowledge_unwitnessed=true",
+                 headers={"X-Exec-Token": "sekret"})
+    assert ack.json()["ack"] is True
 
 
 def test_gate_spec_documents_attestation():
@@ -1576,7 +1581,7 @@ def test_gate_attest_refuses_on_durable_flip_after_log_rotation(tmp_path):
     ex.state.events = [{"ts": 1, "level": "WARN", "kind": "halt_config",
                         "msg": "noise"}] * 201    # flip long since rotated
     assert not [e for e in ex.state.events if e["kind"] == "mode_change"]
-    r = ex.attest_coverage()
+    r = ex.attest_coverage(acknowledge_unwitnessed=True)
     assert r["ok"] is False and r["refused"] == "mode_flips_recorded"
     assert ex.state.coverage_live == {}
 
@@ -1586,7 +1591,7 @@ def test_gate_attest_refuses_on_dryrun_fills_in_state(tmp_path):
     ran against a shadow venue while these counts accrued."""
     ex = _attest_ex(tmp_path, {"entry_long": 2})
     ex.state.fills = [{"slip_bps": 1.0, "live": False}]
-    r = ex.attest_coverage()
+    r = ex.attest_coverage(acknowledge_unwitnessed=True)
     assert r["ok"] is False and r["refused"] == "dryrun_fills_in_state"
 
 
@@ -1618,7 +1623,7 @@ def test_gate_attest_allowed_with_open_position_at_deploy(tmp_path):
               open(cfg.state_path, "w"))
     ex = Executor(FakeVenue(), cfg)
     assert ex.state.coverage_live == {"restart_with_position": 1}
-    r = ex.attest_coverage()
+    r = ex.attest_coverage(acknowledge_unwitnessed=True)
     assert r["ok"] is True
     # the boot-observed count is NOT attested - only the pre-split delta
     assert "restart_with_position" not in r["rows"]
@@ -1626,7 +1631,7 @@ def test_gate_attest_allowed_with_open_position_at_deploy(tmp_path):
     # a later process carrying prior live evidence is refused
     ex.state.attestation = None
     ex._cov_since_boot = {}
-    assert ex.attest_coverage()["refused"] == "live_evidence_predates_call"
+    assert ex.attest_coverage(acknowledge_unwitnessed=True)["refused"] == "live_evidence_predates_call"
 
 
 def test_gate_attest_is_atomic_on_persist_failure(tmp_path):
@@ -1636,12 +1641,12 @@ def test_gate_attest_is_atomic_on_persist_failure(tmp_path):
     def boom():
         raise OSError("disk full")
     ex._save_state = boom
-    r = ex.attest_coverage()
+    r = ex.attest_coverage(acknowledge_unwitnessed=True)
     assert r["ok"] is False and r["refused"].startswith("persist_failed")
     assert ex.state.coverage_live == {}
     assert ex.state.attestation is None
     del ex._save_state
-    assert ex.attest_coverage()["ok"] is True     # retry works
+    assert ex.attest_coverage(acknowledge_unwitnessed=True)["ok"] is True     # retry works
 
 
 def test_gate_attest_serializes_behind_venue_lock(tmp_path):
@@ -1653,7 +1658,7 @@ def test_gate_attest_serializes_behind_venue_lock(tmp_path):
     ex._venue_lock.acquire()
     try:
         t = threading.Thread(
-            target=lambda: out.update(ex.attest_coverage()), daemon=True)
+            target=lambda: out.update(ex.attest_coverage(acknowledge_unwitnessed=True)), daemon=True)
         t.start()
         t.join(timeout=2)
         # still blocked on the lock: nothing mutated, nothing persisted
@@ -1673,7 +1678,7 @@ def test_gate_attest_sanitizes_promoted_counts(tmp_path):
     from app.main import _ramp_v4
     ex = _attest_ex(tmp_path, {"entry_long": -5, "chase": "9",
                                "stop_placed": 2})
-    r = ex.attest_coverage()
+    r = ex.attest_coverage(acknowledge_unwitnessed=True)
     assert r["ok"] is True and r["rows"] == ["stop_placed"]
     rows = _ramp_v4(ex.state)["rows"]
     assert rows["stop_placed"]["attested"] == 2
@@ -1684,12 +1689,12 @@ def test_gate_attest_sanitizes_promoted_counts(tmp_path):
 
 def test_gate_attest_nothing_to_attest(tmp_path):
     ex = _attest_ex(tmp_path, {})
-    assert ex.attest_coverage()["refused"] == "nothing_to_attest"
+    assert ex.attest_coverage(acknowledge_unwitnessed=True)["refused"] == "nothing_to_attest"
 
 
 def test_gate_attest_note_truncated_and_recorded(tmp_path):
     ex = _attest_ex(tmp_path, {"entry_long": 2})
-    ex.attest_coverage("x" * 500)
+    ex.attest_coverage("x" * 500, acknowledge_unwitnessed=True)
     assert len(ex.state.attestation["note"]) == 200
     assert ex.state.attestation["limitation"]      # caveat outlives the curl
 
@@ -1698,7 +1703,7 @@ def test_gate_attest_observed_vs_attested_distinguished(tmp_path):
     """have: 7, attested: 2 is ambiguous without observed."""
     from app.main import _ramp_v4
     ex = _attest_ex(tmp_path, {"entry_long": 2})
-    ex.attest_coverage()
+    ex.attest_coverage(acknowledge_unwitnessed=True)
     for _ in range(5):
         ex._cov("entry_long")
     row = _ramp_v4(ex.state)["rows"]["entry_long"]
@@ -1711,7 +1716,7 @@ def test_gate_pulse_reports_attested_rows(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
     import app.main as m
     ex = _attest_ex(tmp_path, {"entry_long": 2, "chase": 1})
-    ex.attest_coverage()
+    ex.attest_coverage(acknowledge_unwitnessed=True)
     monkeypatch.setattr(m, "EXEC", ex)
     monkeypatch.setattr(m.settings, "exec_token", "")
     p = TestClient(m.app).get("/pulse").json()
@@ -1724,9 +1729,62 @@ def test_gate_attest_cannot_satisfy_slippage_sample(tmp_path):
     the matrix - 10 genuinely live fills are still required."""
     from app.main import RAMP_V4_REQUIRED, _ramp_v4
     ex = _attest_ex(tmp_path, {k: v for k, v in RAMP_V4_REQUIRED.items()})
-    r = ex.attest_coverage()
+    r = ex.attest_coverage(acknowledge_unwitnessed=True)
     assert r["ok"] is True
     rv = _ramp_v4(ex.state)
     assert rv["rows"]["slippage_sample"]["met"] is False
     assert rv["coverage_complete"] is False
     assert "slippage_sample" in r["still_required"]
+
+
+def test_gate_attest_requires_ack_for_unwitnessed_history(tmp_path):
+    """A1, the honest residue: the FIRST migration is exactly the case the
+    durable witnesses cannot cover - mode_flips was not tracked and fills
+    were not mode-tagged while those counts accrued. The operator must say
+    so explicitly, and the acknowledgement is recorded permanently."""
+    ex = _attest_ex(tmp_path, {"entry_long": 2, "chase": 1})
+    assert ex.state.unwitnessed_coverage == {"entry_long": 2, "chase": 1}
+    r = ex.attest_coverage("no ack")
+    assert r["ok"] is False
+    assert r["refused"] == "unwitnessed_history_requires_acknowledgement"
+    assert sorted(r["unwitnessed_rows"]) == ["chase", "entry_long"]
+    assert ex.state.attestation is None
+    ok = ex.attest_coverage("DRY_RUN false throughout",
+                            acknowledge_unwitnessed=True)
+    assert ok["ok"] is True
+    assert ex.state.attestation["operator_acknowledged_unwitnessed"] is True
+    assert sorted(ex.state.attestation["unwitnessed_rows"]) == ["chase",
+                                                               "entry_long"]
+
+
+def test_gate_witnessing_stamp_is_frozen_across_restarts(tmp_path):
+    """A restart must not quietly convert unwitnessed history into
+    witnessed history."""
+    from app.mirror import Executor
+    ex = _attest_ex(tmp_path, {"entry_long": 2})
+    stamp = ex.state.witnessing_since
+    assert stamp is not None
+    ex._save_state()
+    ex2 = Executor(FakeVenue(), ex.cfg)
+    assert ex2.state.witnessing_since == stamp
+    assert ex2.state.unwitnessed_coverage == {"entry_long": 2}
+    assert ex2.attest_coverage()["refused"] == \
+        "unwitnessed_history_requires_acknowledgement"
+
+
+def test_gate_counts_earned_after_witnessing_need_no_ack(tmp_path):
+    """Evidence earned under witnessing is covered by the durable checks,
+    so it must not demand an acknowledgement."""
+    import json
+    from app.mirror import Executor
+    cfg = Cfg()
+    cfg.state_path = str(tmp_path / "state.json")
+    cfg.dry_run = False
+    json.dump({"halted": "", "legs": {}, "coverage": {},
+               "witnessing_since": 1000, "unwitnessed_coverage": {},
+               "last_dry_run": False}, open(cfg.state_path, "w"))
+    ex = Executor(FakeVenue(), cfg)
+    ex.state.coverage = {"entry_long": 2}      # accrued under witnessing
+    r = ex.attest_coverage("post-witnessing")
+    assert r["ok"] is True
+    assert r["rows"] == ["entry_long"]
