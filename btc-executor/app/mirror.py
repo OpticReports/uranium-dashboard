@@ -132,8 +132,37 @@ class Executor:
         self._venue_lock = threading.RLock()   # reentrant: halt() runs
         # inside _step_locked's _check_halts AND from the /kill API thread
         self._migrate_ledger_granularity()
+        self._warn_unattributed_coverage()
         if any(l.qty != 0.0 for l in self.state.legs.values()):
             self._cov("restart_with_position")
+
+    def _warn_unattributed_coverage(self) -> None:
+        """Pre-split counts have no provenance, so the ramp matrix drops to
+        0/13 on the deploy that introduces the mode guard. Every other
+        surprising transition here pages; this one must too, or it reads as
+        data loss to whoever is watching (counter-agent find 2026-08-21)."""
+        cov = getattr(self.state, "coverage", None) or {}
+        live = getattr(self.state, "coverage_live", None) or {}
+        if not cov or live:
+            return
+        n = sum(v for v in cov.values() if isinstance(v, int))
+        self._event("WARN", "coverage_provenance_reset",
+                    f"{n} pre-split coverage events carry no DRY_RUN "
+                    f"provenance and are now UNATTRIBUTED - the ramp matrix "
+                    f"reads 0 until they are re-earned live. This is not "
+                    f"data loss: the totals remain in /status.coverage")
+
+    def _is_live(self) -> bool:
+        """Is evidence produced right now real venue evidence?
+
+        Belt AND suspenders: the flag says "live", the venue object proves
+        it. _build_executor raises rather than demoting a live account to
+        DryRunVenue, but that invariant lives in another module - if it ever
+        regresses, live-tagged evidence must NOT accrue against a shadow
+        book (counter-agent find 2026-08-21).
+        """
+        return (not bool(getattr(self.cfg, "dry_run", True))
+                and type(self.venue).__name__ != "DryRunVenue")
 
     def _cov(self, key: str) -> None:
         """RAMP v4 coverage counter (RAMP_V4.md) — persisted with state.
@@ -150,7 +179,7 @@ class Executor:
         if cov is None:
             cov = self.state.coverage = {}
         cov[key] = cov.get(key, 0) + 1
-        if bool(getattr(self.cfg, "dry_run", True)):
+        if not self._is_live():
             return
         live = getattr(self.state, "coverage_live", None)
         if live is None:
@@ -821,8 +850,7 @@ class Executor:
                                  "slip_bps": round(bps, 2),
                                  # a DryRunVenue "fill" is a synthetic price:
                                  # it must not feed the slippage sample
-                                 "live": not bool(getattr(self.cfg,
-                                                          "dry_run", True))})
+                                 "live": self._is_live()})
 
     # ---------- drift ----------
 

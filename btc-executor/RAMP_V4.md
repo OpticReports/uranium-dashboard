@@ -10,8 +10,11 @@ verifies MECHANICS, and mechanics are per-event proofs, not per-week ones.
 ## The gate: event-coverage matrix (pre-registered)
 
 Advance past ramp stage 0 only when every row is met, evidenced by the
-executor's own coverage counters (`/status.coverage`, persisted state,
-incremented inside the real code paths — never by hand):
+executor's own coverage counters (`/status.ramp_v4.rows[*].have`, backed by
+`coverage_live` in persisted state, incremented inside the real code paths
+— never by hand). **Read `ramp_v4.rows`, not `/status.coverage`:** the
+latter is the all-modes total and includes dry-run events, which do not
+satisfy any row (see the mode guard below):
 
 | event class            | required | how it can be produced            |
 |------------------------|----------|-----------------------------------|
@@ -22,11 +25,11 @@ incremented inside the real code paths — never by hand):
 | signal_exit (leg close)| ≥2       | organic only                      |
 | chase                  | ≥1       | organic (entry_chase)             |
 | post_only_cross        | ≥1       | organic short at positive basis   |
-| restart_with_position  | ≥1       | ✅ proven 2026-08-15 (redeploy with open trend short) |
+| restart_with_position  | ≥1       | organic redeploy with a leg open (the 2026-08-15 proof predates the mode guard — unattributed, must be re-earned live) |
 | config_change detected | ≥1       | any env change redeploy           |
 | halt + resume          | ≥1 pair  | operator-triggered manual test    |
 | drill_cycle complete   | ≥3       | drill                             |
-| slippage sample        | ≥10 fills| any (drill fills count — they are real fills) |
+| slippage sample        | ≥10 fills| any LIVE fill (drill fills count — they are real fills) |
 
 Honesty note: drills deliberately do NOT count toward entry/exit/chase
 coverage — drill entries are market orders, organic entries go through the
@@ -57,6 +60,21 @@ synthetic.
 
 Fills carry the same tag — a `DryRunVenue` fill price is synthetic, so the
 10-fill slippage sample counts live fills only.
+
+**Counter-agent verdict (2026-08-21): CONFIRMED.** Differential and
+mutation testing (8 weakening mutations, all caught) established the two
+edited ramp tests are strictly stronger, not relabelled; an end-to-end
+adversarial run accumulated 51 dry-run events through the real paths
+(organic entries both sides, halt/resume, config_change, 4 drills) and
+still produced `coverage_complete: false`, `coverage_live: {}`. Five
+defects were raised and all five are fixed here: `_ramp_v4` shape-hardened
+(a corrupt state file 500'd `/status` AND the public `/pulse`, blinding
+monitoring — regression, now pinned); `coverage_live > coverage` marked
+`corrupt` and never `met`; `_is_live()` ties evidence to the venue OBJECT
+so a regressed `_build_executor` cannot accrue live counts against a
+shadow book; this spec's own table corrected (it still pointed operators
+at `/status.coverage`); and the provenance reset now emits a WARN event
+plus `ramp_v4_unattributed` on `/pulse`.
 
 Counts persisted **before** this amendment have no provenance recorded.
 They are therefore treated as `unattributed`: visible in `all_modes`,

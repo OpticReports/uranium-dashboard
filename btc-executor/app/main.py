@@ -125,10 +125,14 @@ def pulse():
     now = time.time()
     red_24h = sum(1 for e in st.events
                   if e.get("level") == "RED" and now - e.get("ts", 0) < 86_400)
-    rv = _ramp_v4(st)["rows"]
+    _rv = _ramp_v4(st)
+    rv = _rv["rows"]
     return {"ready": True, "dry_run": settings.dry_run,
             "halted": st.halted, "red_events_24h": red_24h,
             "ramp_v4_met": f"{sum(r['met'] for r in rv.values())}/{len(rv)}",
+            # without this a 13/13 -> 0/13 drop at the provenance split reads
+            # as data loss to whoever is watching the heartbeat
+            "ramp_v4_unattributed": _rv["unattributed_total"],
             "last_target_age_s": round(now - LAST["target_ts"], 1)
             if LAST["target_ts"] else None,
             "legs": {n: {"in_position": l.qty != 0.0,
@@ -211,20 +215,37 @@ def _ramp_v4(st) -> dict:
     carry no provenance and are therefore unattributed: they must be
     re-earned live, which is the conservative direction.
     """
+    # Shape-hardened: /status AND the public /pulse both render this, and
+    # _load_state accepts any JSON that parses. A corrupt row must not blind
+    # monitoring with a 500 (counter-agent find 2026-08-21).
     cov = getattr(st, "coverage", {}) or {}
     live = getattr(st, "coverage_live", {}) or {}
+    cov = cov if isinstance(cov, dict) else {}
+    live = live if isinstance(live, dict) else {}
     fills = getattr(st, "fills", []) or []
+    fills = fills if isinstance(fills, list) else []
     # a fill recorded before the split has no "live" key -> unattributed
-    n_live = sum(1 for f in fills if f.get("live") is True)
-    rows = {k: {"have": live.get(k, 0), "need": v,
-                "met": live.get(k, 0) >= v,
-                "all_modes": cov.get(k, 0),
-                "unattributed": max(0, cov.get(k, 0) - live.get(k, 0))}
+    n_live = sum(1 for f in fills
+                 if isinstance(f, dict) and f.get("live") is True)
+
+    def _n(d, k):
+        v = d.get(k, 0)
+        return v if isinstance(v, int) and v >= 0 else 0
+
+    def _row(k, need, have, all_modes):
+        # live > all_modes is impossible from _cov (which writes both) and
+        # can only come from a tampered/rolled-back state file. Never let it
+        # render as satisfied.
+        corrupt = have > all_modes
+        return {"have": have, "need": need,
+                "met": (have >= need) and not corrupt,
+                "all_modes": all_modes,
+                "unattributed": max(0, all_modes - have),
+                **({"corrupt": True} if corrupt else {})}
+
+    rows = {k: _row(k, v, _n(live, k), _n(cov, k))
             for k, v in RAMP_V4_REQUIRED.items()}
-    rows["slippage_sample"] = {"have": n_live, "need": 10,
-                               "met": n_live >= 10,
-                               "all_modes": len(fills),
-                               "unattributed": max(0, len(fills) - n_live)}
+    rows["slippage_sample"] = _row("slippage_sample", 10, n_live, len(fills))
     return {"spec": "RAMP_V4.md (frozen 2026-08-15; mode guard 2026-08-21)",
             "basis": "live-mode events only (DRY_RUN=false)",
             "rows": rows,

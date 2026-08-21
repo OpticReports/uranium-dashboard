@@ -1222,6 +1222,7 @@ def test_gate_ramp_v4_requires_halt_resume():
     from app.main import RAMP_V4_REQUIRED, _ramp_v4
     from app.mirror import ExecState
     st = ExecState()
+    st.coverage = {k: v for k, v in RAMP_V4_REQUIRED.items()}
     st.coverage_live = {k: v for k, v in RAMP_V4_REQUIRED.items()
                         if k not in ("halt", "resume")}
     st.fills = [{"slip_bps": 1.0, "live": True}] * 10
@@ -1283,7 +1284,7 @@ def test_gate_live_events_attributed_and_persist(tmp_path):
     cfg = Cfg()
     cfg.state_path = str(tmp_path / "state.json")
     cfg.dry_run = False
-    ex = Executor(DryRunVenue(None), cfg)
+    ex = Executor(FakeVenue(), cfg)
     ex._cov("entry_long")
     ex._cov("entry_long")
     # flip to dry-run: total keeps climbing, live tally frozen
@@ -1337,9 +1338,11 @@ def test_gate_dry_run_fills_excluded_from_slippage_sample(tmp_path):
     assert all(f["live"] is False for f in ex.state.fills)
     assert _ramp_v4(ex.state)["rows"]["slippage_sample"]["met"] is False
     cfg.dry_run = False
+    live_ex = Executor(FakeVenue(), cfg)
+    live_ex.state = ex.state          # same state, real venue
     for i in range(10):
-        ex._record_fill("pullback", "entry", f"L{i}", {"avg_price": 60_030.0},
-                        60_000.0, "BUY")
+        live_ex._record_fill("pullback", "entry", f"L{i}",
+                             {"avg_price": 60_030.0}, 60_000.0, "BUY")
     r = _ramp_v4(ex.state)
     assert r["rows"]["slippage_sample"]["have"] == 10
     assert r["rows"]["slippage_sample"]["met"] is True
@@ -1351,3 +1354,114 @@ def test_gate_spec_pins_mode_guard():
     spec = open(os.path.join(os.path.dirname(__file__), "..", "RAMP_V4.md")).read()
     assert "coverage_live" in spec
     assert "DRY_RUN" in spec
+
+
+# --- counter-agent fixes to the mode guard (2026-08-21) --------------------
+def test_gate_ramp_v4_survives_shape_corrupt_state(tmp_path):
+    """/status AND the public /pulse both render _ramp_v4, and _load_state
+    accepts any JSON that parses. A corrupt row must not 500 them - that
+    blinds monitoring on exactly the state file worth looking at."""
+    from app.main import _ramp_v4
+
+    class St:
+        coverage = {"halt": "nine"}
+        coverage_live = "all of them"
+        fills = ["corrupt-row", {"slip_bps": 1.0, "live": True}]
+    r = _ramp_v4(St())
+    assert r["coverage_complete"] is False
+    assert r["rows"]["halt"]["all_modes"] == 0
+    assert r["rows"]["slippage_sample"]["have"] == 1
+    assert r["rows"]["slippage_sample"]["all_modes"] == 2
+
+
+def test_gate_impossible_live_excess_marked_corrupt_not_met():
+    """coverage_live > coverage is unreachable via _cov (it writes both) and
+    can only come from a tampered or rolled-back state file. It must never
+    render as satisfied."""
+    from app.main import _ramp_v4
+    from app.mirror import ExecState
+    st = ExecState()
+    st.coverage = {"halt": 1}
+    st.coverage_live = {"halt": 99}
+    row = _ramp_v4(st)["rows"]["halt"]
+    assert row["corrupt"] is True
+    assert row["met"] is False
+
+
+def test_gate_live_flag_alone_cannot_earn_against_dryrun_venue(tmp_path):
+    """The linchpin: _cov trusts cfg.dry_run as a proxy for 'the venue can
+    take an order'. _build_executor enforces that today; if it ever
+    regresses, live evidence must still not accrue against a shadow book."""
+    from app.cb import DryRunVenue
+    from app.mirror import Executor
+    cfg = Cfg()
+    cfg.state_path = str(tmp_path / "state.json")
+    cfg.dry_run = False                      # flag lies
+    ex = Executor(DryRunVenue(None), cfg)    # venue tells the truth
+    ex._cov("entry_long")
+    ex._record_fill("pullback", "entry", "c1", {"avg_price": 60_030.0},
+                    60_000.0, "BUY")
+    assert ex.state.coverage["entry_long"] == 1
+    assert ex.state.coverage_live == {}
+    assert ex.state.fills[0]["live"] is False
+
+
+def test_gate_live_venue_init_failure_never_demotes_to_dryrun(monkeypatch):
+    """The invariant _cov leans on: LIVE mode raises rather than falling
+    through to a shadow book."""
+    import app.main as m
+    monkeypatch.setattr(m.settings, "dry_run", False)
+    monkeypatch.setattr(m.settings, "cb_api_key_name", "")
+    monkeypatch.setattr(m.settings, "cb_api_private_key", "")
+    monkeypatch.setattr(m, "send", lambda *a, **k: None, raising=False)
+    with pytest.raises(RuntimeError):
+        m._build_executor()
+
+
+def test_gate_provenance_reset_is_announced(tmp_path):
+    """The 13/13 -> 0/13 drop must page, not happen silently: every other
+    surprising transition in this service alerts."""
+    import json
+    from app.cb import DryRunVenue
+    from app.mirror import Executor
+    cfg = Cfg()
+    cfg.state_path = str(tmp_path / "state.json")
+    json.dump({"halted": "", "legs": {},
+               "coverage": {"entry_long": 5, "drill_cycle": 3}},
+              open(cfg.state_path, "w"))
+    ex = Executor(DryRunVenue(None), cfg)
+    kinds = [e["kind"] for e in ex.state.events]
+    assert "coverage_provenance_reset" in kinds
+    msg = [e for e in ex.state.events
+           if e["kind"] == "coverage_provenance_reset"][0]["msg"]
+    assert "8" in msg and "not" in msg.lower()
+    # already-split state (live counts present) must NOT re-announce
+    ex._save_state()
+    ex.state.coverage_live["entry_long"] = 1
+    ex._save_state()
+    ex2 = Executor(DryRunVenue(None), cfg)
+    assert "coverage_provenance_reset" not in [
+        e["kind"] for e in ex2.state.events[len(ex.state.events):]]
+
+
+def test_gate_pulse_exposes_unattributed(tmp_path):
+    """/pulse is what gets watched; a 0/13 with no explanation reads as
+    data loss."""
+    from app.main import _ramp_v4
+    from app.mirror import ExecState
+    st = ExecState()
+    st.coverage = {"entry_long": 5}
+    assert _ramp_v4(st)["unattributed_total"] == 5
+    src = open(os.path.join(os.path.dirname(__file__), "..",
+                            "app", "main.py")).read()
+    assert "ramp_v4_unattributed" in src
+
+
+def test_gate_spec_reads_ramp_rows_not_raw_coverage():
+    """D4: the spec table told operators to read /status.coverage, which
+    still shows a complete matrix after the split."""
+    spec = open(os.path.join(os.path.dirname(__file__), "..", "RAMP_V4.md")).read()
+    assert "ramp_v4.rows" in spec
+    assert "any LIVE fill" in spec
+    head = spec[:spec.index("Honesty note")]
+    assert "✅ proven 2026-08-15" not in head
