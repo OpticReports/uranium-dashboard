@@ -391,6 +391,15 @@ El Nino combo reads):
   re-review R2): it journals a flatten request under BLEND_LOCK and the
   loop thread, owner of the ib_async event loop, executes it FIRST in its
   next (immediately woken) iteration — see the two-stage `/kill` above.
+- **The loop has a LIFECYCLE (counter-review MF-2)**: one loop thread per
+  lifespan, started with a generation stamp and its OWN wake event, and
+  superseded (generation bumped, event set, joined) when the lifespan
+  ends. A superseded loop exits at its next checkpoint — after the feed
+  call, before the ladder, before the blend section — and never touches
+  MGR/ADAPTER/BLEND or clears the current loop's wake event again.
+  Production runs one lifespan; this is what keeps the R2 emergency-stop
+  gate deterministic instead of occasionally being satisfied, or failed,
+  by a leaked thread from an earlier lifespan.
 
 SUPERVISED FIRST SESSION: flip `DRY_RUN=false` (with `TRADING_MODE=paper`)
 DURING MARKET HOURS and keep eyes on Telegram + `/status` through the

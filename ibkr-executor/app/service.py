@@ -44,6 +44,19 @@ LOOP_WAKE = threading.Event()      # /kill pokes the loop so a queued blend
                                    # flatten runs at the TOP of the next
                                    # iteration instead of a full poll
                                    # interval later (R2 + MF-1)
+LOOP_GEN = 0                       # MF-2: loop LIFECYCLE. Every lifespan used
+LOOP_GEN_LOCK = threading.Lock()   # to leak a daemon loop thread that never
+                                   # exited and kept reading MGR/ADAPTER/BLEND
+                                   # — a SUPERSEDED loop ran full cycles
+                                   # against the CURRENT globals (it even
+                                   # performed an emergency flatten in a
+                                   # reviewer's reproduction) and its
+                                   # LOOP_WAKE.clear() wiped the CURRENT
+                                   # loop's wake event. Each loop captures its
+                                   # generation at start and its OWN wake
+                                   # event; a bumped generation means "you are
+                                   # superseded: exit at the next checkpoint,
+                                   # touch nothing".
 ADAPTER = None
 LAST: dict = {"loop_ok": 0.0, "nino34": None, "mode": "OFFLINE"}
 # Last blend cycle outcome (feed's last_cycle + /health blend_loop): a
@@ -100,6 +113,17 @@ def _build():
     LAST["mode"] = settings.trading_mode.upper()
 
 
+def _superseded(gen: int) -> bool:
+    """MF-2: has a later lifespan (or shutdown) replaced this loop? A loop
+    that answers True must not touch MGR/ADAPTER/BLEND again and must not
+    clear the CURRENT loop's wake event — it exits at this checkpoint."""
+    if gen == LOOP_GEN:
+        return False
+    logger.info("executor loop gen %s superseded by gen %s — exiting",
+                gen, LOOP_GEN)
+    return True
+
+
 def _blend_cycle(payload: dict | None, today: str) -> None:
     """ONE blend cycle (reconcile-first, N14) with its outcome recorded for
     /health + the feed. Called at most twice per iteration: FIRST, with no
@@ -126,12 +150,10 @@ def _blend_cycle(payload: dict | None, today: str) -> None:
                  f"stays halted")
 
 
-def _loop():
-    global LOOP_WAKE
-    # Fresh wake event per loop thread: a superseded loop from an earlier
-    # lifespan (tests spawn several; daemon threads never die) keeps
-    # waiting on its OLD event, so /kill only ever wakes the CURRENT loop.
-    LOOP_WAKE = threading.Event()
+def _loop(gen: int, wake: threading.Event):
+    # `wake` is THIS loop's own event (created by _start_loop, which also
+    # published it as LOOP_WAKE for /kill). A superseded loop waits on and
+    # clears its OWN event, never the current loop's (MF-2).
     try:
         _build()
     except Exception as exc:  # noqa: BLE001
@@ -145,6 +167,8 @@ def _loop():
     send(f"🌊 ibkr-executor up — mode {LAST['mode']}, "
          f"ladder legs {[k for k in MGR.state.legs]}")
     while True:
+        if _superseded(gen):
+            return
         try:
             today = datetime.now(timezone.utc).date().isoformat()
             # MF-1: a journaled /kill flatten is the FIRST thing an
@@ -163,6 +187,8 @@ def _loop():
                 _blend_cycle(None, today)
                 flatten_ran = True
             nino = nino34_weekly()
+            if _superseded(gen):
+                return          # the feed call is the long park (MF-2)
             LAST["nino34"] = nino
             if (not flatten_ran and BLEND is not None
                     and BLEND.state.flatten_request is not None):
@@ -230,21 +256,56 @@ def _loop():
                     logger.warning("blend: tracker unreachable; "
                                    "reconcile-only cycle (no new "
                                    "decisions)")
+                if _superseded(gen):
+                    return      # the tracker poll is the other park (MF-2)
                 _blend_cycle(payload, today)
             LAST["loop_ok"] = time.time()
         except Exception as exc:  # noqa: BLE001
             logger.exception("loop error: %s", exc)
-        LOOP_WAKE.wait(settings.poll_seconds)   # /kill sets it to skip the
-        LOOP_WAKE.clear()                       # wait (queued flatten)
+        wake.wait(settings.poll_seconds)        # /kill sets it to skip the
+        wake.clear()                            # wait (queued flatten)
 
 
 from contextlib import asynccontextmanager
 
 
+def _start_loop() -> tuple[threading.Thread, threading.Event]:
+    """Start THE loop thread for this lifespan and publish its wake event."""
+    global LOOP_WAKE, LOOP_GEN
+    with LOOP_GEN_LOCK:
+        LOOP_GEN += 1
+        gen = LOOP_GEN
+    wake = threading.Event()
+    LOOP_WAKE = wake            # /kill wakes the CURRENT loop only
+    t = threading.Thread(target=_loop, args=(gen, wake), daemon=True,
+                         name=f"exec-loop-{gen}")
+    t.start()
+    return t, wake
+
+
+def _stop_loop(t: threading.Thread, wake: threading.Event) -> None:
+    """MF-2: supersede this lifespan's loop and wait briefly for it to go.
+    Bumping the generation is what actually ends it — the join only avoids
+    an overlap window; a loop parked in a feed call exits at its next
+    checkpoint and touches nothing after that."""
+    global LOOP_GEN
+    with LOOP_GEN_LOCK:
+        LOOP_GEN += 1
+    wake.set()                  # skip the poll wait, exit now
+    t.join(timeout=1.0)         # courtesy only: the generation bump is what
+                                # ends it, and a parked loop exits in <1ms
+    if t.is_alive():
+        logger.warning("executor loop %s still finishing its cycle at "
+                       "shutdown; it exits at its next checkpoint", t.name)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    threading.Thread(target=_loop, daemon=True).start()
-    yield
+    t, wake = _start_loop()
+    try:
+        yield
+    finally:
+        _stop_loop(t, wake)
 
 
 app = FastAPI(title="IBKR Executor", version="0.1.0", lifespan=lifespan)

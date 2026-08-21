@@ -2378,7 +2378,15 @@ def test_gate_r2_kill_never_touches_the_adapter_from_the_api_thread(
     """The old /kill pumped the adapter from a FastAPI worker thread — on
     the real IBAdapter every wait timed out (ib_async resolves its loop
     per thread) and the flatten deterministically failed. Now every
-    adapter call must come from ONE thread: the service loop."""
+    adapter call must come from ONE thread: the service loop.
+
+    MF-2 added the second assertion below. The set-equality on thread ids is
+    kept exactly as it was — it also excludes any THIRD thread, e.g. the
+    superseded loop that used to satisfy (or fail) this gate for the wrong
+    reason — and on top of it the gate now pins DIRECTLY the thing it exists
+    to pin: no thread that served an API request may appear in the adapter's
+    call set. Strictly additive: nothing was relaxed."""
+    import threading
     import time as _time
 
     from app.config import settings
@@ -2392,6 +2400,14 @@ def test_gate_r2_kill_never_touches_the_adapter_from_the_api_thread(
     monkeypatch.setattr(settings, "tws_userid", "")
     monkeypatch.setattr(settings, "blend_enabled", True)
     monkeypatch.setattr(service, "DryAdapter", _ThreadRecordingAdapter)
+    api_threads: set[int] = set()
+    _real_auth = service._auth
+
+    def _recording_auth(hdr, q):
+        api_threads.add(threading.get_ident())   # every API handler starts here
+        return _real_auth(hdr, q)
+
+    monkeypatch.setattr(service, "_auth", _recording_auth)
     try:
         with TestClient(service_app) as c:
             for _ in range(200):
@@ -2418,6 +2434,9 @@ def test_gate_r2_kill_never_touches_the_adapter_from_the_api_thread(
             # the flatten DID run (cancel + MKT sell) — and every adapter
             # call came from THE loop thread, none from the API thread
             assert A.call_threads == loop_threads
+            assert api_threads                      # /kill really was served
+            assert not (A.call_threads & api_threads), (
+                "an API thread touched the adapter")
     finally:
         service.BLEND = None
         service.MGR = None
@@ -3780,5 +3799,80 @@ def test_gate_mf1_a_failing_feed_is_not_re_paid_every_cycle(monkeypatch):
     blend_mod._INTENTS_FAIL["https://tracker.invalid"] = (   # a SCHEDULED
         time.time() - blend_mod.FEED_FAIL_TTL - 1)           # cycle re-tries
     assert fetch_intents(C()) is None and hits["n"] == 2
+
+
+class _IdentRecordingAdapter(_ThreadRecordingAdapter):
+    """R2's thread recorder plus the THREAD OBJECTS, for the MF-2 lifecycle
+    gate: a thread ident is recycled once the thread really exits, so only
+    the object identifies "the loop thread of lifespan 1" across lifespans."""
+
+    def __init__(self):
+        super().__init__()
+        import threading
+        self.call_thread_objs: set = set()
+        self._cur = threading.current_thread
+
+    def _note(self):
+        super()._note()
+        self.call_thread_objs.add(self._cur())
+
+
+def test_gate_mf2_a_superseded_loop_thread_stops_running_cycles(
+        tmp_path, monkeypatch):
+    """MF-2 (pre-existing at main): `_loop` had NO lifecycle. Every lifespan
+    started a daemon thread that never exited and kept reading the module
+    globals MGR/ADAPTER/BLEND, so a SUPERSEDED loop ran full cycles against
+    the CURRENT test's manager and adapter — in the reviewer's reproduction
+    a stale loop performed the emergency flatten, which is what made the R2
+    gate fail intermittently (I/O latency, never CPU contention).
+
+    Two lifespans, a fast poll so a stale loop would wake repeatedly: the
+    first lifespan's loop thread must be GONE, and the second lifespan's
+    adapter must be touched by exactly one thread — the current loop."""
+    import threading
+    import time as _time
+
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "poll_seconds", 1)
+    client1, service = _service_client(tmp_path, monkeypatch,
+                                       adapter=_IdentRecordingAdapter)
+    try:
+        with client1:
+            for _ in range(200):
+                if service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            A = service.ADAPTER
+            assert _wait_until(lambda: A.call_threads)
+            (stale_loop,) = tuple(A.call_thread_objs)
+            e1 = service.LOOP_WAKE
+        # the lifespan ended: its loop thread must END too (this is the
+        # whole finding — at main it lives forever)
+        assert _wait_until(lambda: not stale_loop.is_alive(), timeout=5.0), (
+            "the superseded loop thread is still alive")
+
+        client2, service = _service_client(tmp_path, monkeypatch,
+                                           adapter=_IdentRecordingAdapter)
+        with client2:
+            for _ in range(200):
+                if service.ADAPTER is not None and service.ADAPTER is not A:
+                    break
+                _time.sleep(0.05)
+            B = service.ADAPTER
+            assert B is not A
+            assert service.LOOP_WAKE is not e1      # a fresh wake event
+            assert _wait_until(lambda: B.call_threads)
+            _time.sleep(2.5)            # >= 2 poll intervals: a stale loop
+                                        # would have woken and cycled twice
+            assert stale_loop not in B.call_thread_objs, (
+                "a SUPERSEDED loop thread ran a cycle against the current "
+                "adapter")
+            assert len(B.call_thread_objs) == 1
+            # the current loop still works: its wake event is the live one
+            assert service.LOOP_WAKE.__class__ is threading.Event
+    finally:
+        service.BLEND = None
+        service.MGR = None
 
 
