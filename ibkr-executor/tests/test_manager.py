@@ -1,5 +1,9 @@
 """Ladder-manager gates: trigger discipline, kill rules, sequencing,
 house-money accounting. Pure state-machine tests — no broker, no network."""
+import json
+import os
+import time
+
 import pytest
 
 from app.manager import LadderManager, LADDER
@@ -87,3 +91,137 @@ def test_gate_house_money_accounting(tmp_path):
     m2 = LadderManager(m.cfg, m.state_path)
     assert m2.state.banked == pytest.approx(18_000)
     assert m2.state.legs["NG"].status == "CLOSED"
+
+
+# --- x12 (counter-review): persistence safety on the LIVE paper ladder --------
+# LadderManager.save() was a plain json.dump(..., open(path,"w")) — no temp
+# file, no fsync — and it IS genuinely raced in production (/kill and /resume
+# mutate from API threads while _loop() saves on the loop thread). A
+# truncated file then fell through _load's bare except to a FRESH
+# LadderState(): open legs and `halted` silently forgotten.
+
+
+def test_gate_x12_ladder_save_is_atomic_under_a_mid_write_crash(tmp_path):
+    import app.manager as manager_mod
+
+    m = mk(tmp_path)
+    m.on_opened("NG", 10_000, "ng-ref", "2026-11-05")
+    m.state.halted = "KILL"
+    m.save()
+    real_dump = manager_mod.json.dump
+
+    def bad_dump(obj, fh, **kw):
+        fh.write('{"partial')
+        raise IOError("disk full mid-write")
+
+    manager_mod.json.dump = bad_dump
+    try:
+        m.state.banked = 999.0
+        with pytest.raises(IOError):
+            m.save()
+    finally:
+        manager_mod.json.dump = real_dump
+    m2 = LadderManager(m.cfg, m.state_path)         # reload: LAST GOOD book
+    assert m2.state.legs["NG"].status == "OPEN"     # open leg not forgotten
+    assert m2.state.legs["NG"].order_ref == "ng-ref"
+    assert m2.state.halted == "KILL"                # and still halted
+    assert m2.state.banked == 0.0                   # not the failed write
+    assert m2.archived_state is None                # nothing was corrupt
+    # no scratch files left behind next to the state file
+    assert [f for f in os.listdir(tmp_path) if f.endswith(".tmp")] == []
+
+
+def test_gate_x12_ladder_concurrent_saves_never_publish_a_torn_file(tmp_path):
+    import threading
+
+    m = mk(tmp_path)
+    m.on_opened("NG", 10_000, "ng-ref", "2026-11-05")
+    m.state.events = [{"ts": 1, "level": "INFO", "msg": f"e{i} " + "x" * 120}
+                      for i in range(300)]
+    m.save()
+    errors: list[BaseException] = []
+    corrupt: list[str] = []
+    stop = threading.Event()
+
+    def hammer():
+        while not stop.is_set():
+            try:
+                m.save()
+            except BaseException as exc:            # noqa: BLE001
+                errors.append(exc)
+                return
+
+    def reader():
+        while not stop.is_set():
+            try:
+                json.load(open(m.state_path))
+            except FileNotFoundError:
+                corrupt.append("missing")
+            except ValueError:
+                corrupt.append("truncated")
+
+    threads = [threading.Thread(target=hammer) for _ in range(4)]
+    threads.append(threading.Thread(target=reader))
+    for t in threads:
+        t.start()
+    time.sleep(1.0)
+    stop.set()
+    for t in threads:
+        t.join(timeout=10)
+    assert errors == []
+    assert corrupt == []
+    assert LadderManager(m.cfg, m.state_path).state.legs["NG"].status == "OPEN"
+
+
+def test_gate_x12_unreadable_ladder_state_is_preserved_and_loud(tmp_path):
+    """A corrupt file must never degrade to a fresh, un-halted ladder in
+    silence: the file is preserved for forensics and the service alerts."""
+    m = mk(tmp_path)
+    m.on_opened("NG", 10_000, "ng-ref", "2026-11-05")
+    m.state.halted = "KILL"
+    m.save()
+    with open(m.state_path, "w") as fh:
+        fh.write('{"legs": {"NG": {"status": "OPE')     # truncated externally
+    m2 = LadderManager(m.cfg, m.state_path)
+    assert m2.archived_state and "unreadable" in m2.archived_state
+    assert [f for f in os.listdir(tmp_path) if ".corrupt-" in f]
+    assert m2.state.legs["NG"].status == "WAITING"      # fresh, but LOUD
+    m2.save()                                           # never overwrites it
+    assert [f for f in os.listdir(tmp_path) if ".corrupt-" in f]
+
+
+def test_gate_x12_kill_and_resume_serialize_behind_the_ladder_lock(
+        tmp_path, monkeypatch):
+    """/kill and /resume mutate legs/halted on API threads with no lock at
+    all while the loop steps and saves. They must serialize behind
+    MGR_LOCK, exactly as the blend's /kill and /resume do behind
+    BLEND_LOCK."""
+    import threading
+
+    from fastapi.testclient import TestClient
+
+    from app import service
+    from app.config import settings
+    from app.service import app
+
+    monkeypatch.setattr(settings, "state_path", str(tmp_path / "s.json"))
+    monkeypatch.setattr(settings, "exec_token", "sekrit")
+    monkeypatch.setattr(settings, "tws_userid", "")
+    monkeypatch.setattr(settings, "blend_enabled", False)
+    monkeypatch.setattr(service, "send", lambda *_a, **_k: None)
+    with TestClient(app) as c:
+        for _ in range(200):
+            if service.MGR is not None:
+                break
+            time.sleep(0.05)
+        assert service.MGR is not None
+        for endpoint in ("/kill", "/resume"):
+            done = threading.Event()
+            with service.MGR_LOCK:                  # a cycle is "in flight"
+                t = threading.Thread(
+                    target=lambda: (c.get(endpoint, params={"token": "sekrit"}),
+                                    done.set()))
+                t.start()
+                assert not done.wait(0.4)           # blocked on the lock
+            assert done.wait(5)                     # released -> completes
+            t.join(timeout=5)

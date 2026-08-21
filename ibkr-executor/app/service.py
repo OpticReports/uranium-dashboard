@@ -28,6 +28,14 @@ logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.I
 logger = logging.getLogger(__name__)
 
 MGR: LadderManager | None = None
+MGR_LOCK = threading.Lock()        # x12: serializes LADDER state writes the
+                                   # same way BLEND_LOCK does for the blend —
+                                   # /kill and /resume mutate legs/halted on
+                                   # API threads while _loop steps and saves
+                                   # on the loop thread. NEVER hold this and
+                                   # BLEND_LOCK at the same time (the two
+                                   # sections are always disjoint): a fixed
+                                   # order is not needed if they never nest.
 BLEND = None                       # Blend3070Manager, ONLY when BLEND_ENABLED
 BLEND_LOCK = threading.Lock()      # serializes blend state writes: /kill's
                                    # request_flatten (API thread) vs
@@ -51,6 +59,12 @@ def _auth(hdr: str | None, q: str | None) -> None:
 def _build():
     global MGR, ADAPTER, BLEND
     MGR = LadderManager(settings, settings.state_path)
+    if MGR.archived_state:
+        # x12: an unreadable ladder file used to become a fresh, un-halted
+        # ladder in silence — open legs and `halted` forgotten.
+        logger.error("ladder: %s", MGR.archived_state)
+        send(f"🚨🚨 ibkr ladder: {MGR.archived_state} — verify open legs at "
+             f"the venue before the ladder trades again")
     # blend3070 is opt-in: BLEND_ENABLED=false (the default) leaves the
     # service byte-for-byte as before — no manager, no polling, no /status
     # section, no state file.
@@ -101,32 +115,43 @@ def _loop():
             nino = nino34_weekly()
             LAST["nino34"] = nino
             marks = {}
-            for key, leg in MGR.state.legs.items():
-                if leg.status == "OPEN" and leg.order_ref:
+            # x12: the ladder block mutates and persists MGR — /kill and
+            # /resume do the same from API threads. Serialize them exactly
+            # as BLEND_LOCK serializes the blend (alerts are sent outside
+            # the lock so a slow Telegram call never holds it).
+            ladder_alerts: list[str] = []
+            with MGR_LOCK:
+                for key, leg in MGR.state.legs.items():
+                    if leg.status == "OPEN" and leg.order_ref:
+                        try:
+                            marks[key] = ADAPTER.mark(leg.order_ref)
+                        except Exception as exc:  # noqa: BLE001
+                            logger.warning("mark %s failed: %s", key, exc)
+                intents = MGR.step(today, nino, marks)
+                for it in intents:
                     try:
-                        marks[key] = ADAPTER.mark(leg.order_ref)
+                        if it["action"] == "OPEN":
+                            r = ADAPTER.open_spread(it["structure"], it["budget"])
+                            MGR.on_opened(it["leg"], r["premium"], r["order_ref"], today)
+                            ladder_alerts.append(
+                                f"⚡ ibkr ladder OPEN {it['leg']}: {it['reason']} "
+                                f"(premium ${r['premium']:,.0f}, mode {LAST['mode']})")
+                        elif it["action"] == "CLOSE":
+                            leg = MGR.state.legs[it["leg"]]
+                            r = ADAPTER.close_spread(leg.order_ref)
+                            MGR.on_closed(it["leg"], r["value"], it["reason"], today)
+                            ladder_alerts.append(
+                                f"⚡ ibkr ladder CLOSE {it['leg']}: {it['reason']} "
+                                f"-> ${r['value']:,.0f}")
                     except Exception as exc:  # noqa: BLE001
-                        logger.warning("mark %s failed: %s", key, exc)
-            intents = MGR.step(today, nino, marks)
-            for it in intents:
-                try:
-                    if it["action"] == "OPEN":
-                        r = ADAPTER.open_spread(it["structure"], it["budget"])
-                        MGR.on_opened(it["leg"], r["premium"], r["order_ref"], today)
-                        send(f"⚡ ibkr ladder OPEN {it['leg']}: {it['reason']} "
-                             f"(premium ${r['premium']:,.0f}, mode {LAST['mode']})")
-                    elif it["action"] == "CLOSE":
-                        leg = MGR.state.legs[it["leg"]]
-                        r = ADAPTER.close_spread(leg.order_ref)
-                        MGR.on_closed(it["leg"], r["value"], it["reason"], today)
-                        send(f"⚡ ibkr ladder CLOSE {it['leg']}: {it['reason']} "
-                             f"-> ${r['value']:,.0f}")
-                except Exception as exc:  # noqa: BLE001
-                    logger.exception("intent %s failed: %s", it, exc)
-                    send(f"🚨 ibkr intent failed ({it['action']} {it['leg']}): {exc}\n"
-                         f"→ no action needed from you — forward this to Claude "
-                         f"(if it repeats, gateway/credentials may need you)")
-            MGR.save()
+                        logger.exception("intent %s failed: %s", it, exc)
+                        ladder_alerts.append(
+                            f"🚨 ibkr intent failed ({it['action']} {it['leg']}): {exc}\n"
+                            f"→ no action needed from you — forward this to Claude "
+                            f"(if it repeats, gateway/credentials may need you)")
+                MGR.save()
+            for msg in ladder_alerts:
+                send(msg)
             if BLEND is not None:
                 try:
                     from .blend import fetch_intents, run_cycle
@@ -255,16 +280,21 @@ def kill(x_exec_token: str | None = Header(default=None),
     _auth(x_exec_token, token)
     if MGR is None:
         return {"ok": False}
-    for key, leg in MGR.state.legs.items():
-        if leg.status == "OPEN" and leg.order_ref:
-            try:
-                r = ADAPTER.close_spread(leg.order_ref)
-                MGR.on_closed(key, r["value"], "manual kill",
-                              datetime.now(timezone.utc).date().isoformat())
-            except Exception as exc:  # noqa: BLE001
-                logger.exception("kill close %s failed: %s", key, exc)
-    MGR.state.halted = "KILL"
-    MGR.save()
+    # x12: mutating legs/halted from this API thread must not interleave
+    # with the loop thread's own ladder step + save (they raced with no
+    # lock at all). MGR_LOCK is released before the blend section below —
+    # the two locks are never held together.
+    with MGR_LOCK:
+        for key, leg in MGR.state.legs.items():
+            if leg.status == "OPEN" and leg.order_ref:
+                try:
+                    r = ADAPTER.close_spread(leg.order_ref)
+                    MGR.on_closed(key, r["value"], "manual kill",
+                                  datetime.now(timezone.utc).date().isoformat())
+                except Exception as exc:  # noqa: BLE001
+                    logger.exception("kill close %s failed: %s", key, exc)
+        MGR.state.halted = "KILL"
+        MGR.save()
     blend_note = ""
     if BLEND is not None:
         # R2 (two-stage kill): this handler runs on a FastAPI worker
@@ -304,8 +334,9 @@ def resume(x_exec_token: str | None = Header(default=None),
     _auth(x_exec_token, token)
     if MGR is None:
         return {"ok": False}
-    MGR.state.halted = None
-    MGR.save()
+    with MGR_LOCK:                  # x12: same serialization as /kill
+        MGR.state.halted = None
+        MGR.save()
     if BLEND is not None:
         # N3: /resume must not race the loop thread's cycle (a resume
         # interleaved with execute_flatten un-halts a book that is being
