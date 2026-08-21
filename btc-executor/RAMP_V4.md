@@ -38,6 +38,32 @@ completes the rest in ~2–3 weeks.
 Slippage sanity gate: |mean slip| < 15bps and no slip-CUSUM alarm
 (edge-monitor). P&L is explicitly NOT a gate at any stage.
 
+### Mode guard: live-mode evidence only (amended 2026-08-21)
+
+Every row above is satisfied by **`coverage_live`** — events produced with
+`DRY_RUN=false`. `_cov()` keeps two tallies: `coverage` (all modes, the
+audit trail) and `coverage_live` (what the gate reads). `/status.ramp_v4`
+reports `have` (live), `all_modes`, and `unattributed` per row, plus
+`unattributed_total`.
+
+Why: the matrix exists to prove **venue** mechanics. A drill or organic
+event in dry-run exercises the state machine against `DryRunVenue` and
+proves nothing about Coinbase — but it incremented the same counter, so a
+full matrix could read `coverage_complete: true` having never placed an
+order. The 2026-08-10 blueprint sync (which silently reset `DRY_RUN` to
+true on a LIVE account) is precisely the flip that produces this: the
+executor keeps reporting healthy while every subsequent "proof" is
+synthetic.
+
+Fills carry the same tag — a `DryRunVenue` fill price is synthetic, so the
+10-fill slippage sample counts live fills only.
+
+Counts persisted **before** this amendment have no provenance recorded.
+They are therefore treated as `unattributed`: visible in `all_modes`,
+never credited to a row. They must be re-earned live. This is deliberately
+the conservative direction — the alternative is granting the gate evidence
+it never actually had.
+
 ## Drills (the accelerator)
 
 Token-gated `POST /drill?kind=cycle|stopfill` — one deliberate min-size

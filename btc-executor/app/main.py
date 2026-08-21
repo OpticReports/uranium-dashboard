@@ -179,6 +179,7 @@ def status(x_exec_token: str | None = Header(default=None),
            "last_target_age_s": round(time.time() - LAST["target_ts"], 1)
            if LAST["target_ts"] else None,
            "coverage": getattr(st, "coverage", {}),
+           "coverage_live": getattr(st, "coverage_live", {}),
            "drills": getattr(st, "drills", [])[-10:],
            "ramp_v4": _ramp_v4(st)}
     try:
@@ -199,17 +200,40 @@ RAMP_V4_REQUIRED = {"entry_long": 2, "entry_short": 2, "stop_placed": 2,
 
 
 def _ramp_v4(st) -> dict:
+    """Ramp gate on LIVE-MODE evidence only.
+
+    `have` reads state.coverage_live (events produced with DRY_RUN=false).
+    The all-modes total and the difference are reported alongside as
+    `all_modes` / `unattributed` so nothing disappears silently — but only
+    live counts can mark a row met. Rationale: the matrix exists to prove
+    venue mechanics, and a dry-run event proves the state machine against
+    DryRunVenue instead. Counts written before the mode split (2026-08-21)
+    carry no provenance and are therefore unattributed: they must be
+    re-earned live, which is the conservative direction.
+    """
     cov = getattr(st, "coverage", {}) or {}
-    n_fills = len(getattr(st, "fills", []) or [])
-    rows = {k: {"have": cov.get(k, 0), "need": v,
-                "met": cov.get(k, 0) >= v}
+    live = getattr(st, "coverage_live", {}) or {}
+    fills = getattr(st, "fills", []) or []
+    # a fill recorded before the split has no "live" key -> unattributed
+    n_live = sum(1 for f in fills if f.get("live") is True)
+    rows = {k: {"have": live.get(k, 0), "need": v,
+                "met": live.get(k, 0) >= v,
+                "all_modes": cov.get(k, 0),
+                "unattributed": max(0, cov.get(k, 0) - live.get(k, 0))}
             for k, v in RAMP_V4_REQUIRED.items()}
-    rows["slippage_sample"] = {"have": n_fills, "need": 10,
-                               "met": n_fills >= 10}
-    return {"spec": "RAMP_V4.md (frozen 2026-08-15)", "rows": rows,
+    rows["slippage_sample"] = {"have": n_live, "need": 10,
+                               "met": n_live >= 10,
+                               "all_modes": len(fills),
+                               "unattributed": max(0, len(fills) - n_live)}
+    return {"spec": "RAMP_V4.md (frozen 2026-08-15; mode guard 2026-08-21)",
+            "basis": "live-mode events only (DRY_RUN=false)",
+            "rows": rows,
             "coverage_complete": all(r["met"] for r in rows.values()),
+            "unattributed_total": sum(r["unattributed"] for r in rows.values()),
             "note": "advance KELLY_M per spec only when coverage_complete "
-                    "AND slippage sane (edge-monitor slip CUSUM quiet)"}
+                    "AND slippage sane (edge-monitor slip CUSUM quiet). "
+                    "unattributed counts are pre-split or dry-run events - "
+                    "they never satisfy a row"}
 
 
 @app.post("/drill")

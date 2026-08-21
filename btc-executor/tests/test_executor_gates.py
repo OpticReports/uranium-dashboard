@@ -1126,8 +1126,13 @@ def test_gate_ramp_v4_readiness_block():
     st = ExecState()
     r = _ramp_v4(st)
     assert r["coverage_complete"] is False
+    # all-modes totals alone must NOT open the gate (mode guard 2026-08-21)
     st.coverage = {k: v for k, v in RAMP_V4_REQUIRED.items()}
     st.fills = [{"slip_bps": 1.0}] * 10
+    assert _ramp_v4(st)["coverage_complete"] is False
+    # the same evidence, produced live, does
+    st.coverage_live = {k: v for k, v in RAMP_V4_REQUIRED.items()}
+    st.fills = [{"slip_bps": 1.0, "live": True}] * 10
     r2 = _ramp_v4(st)
     assert r2["coverage_complete"] is True
     assert r2["rows"]["slippage_sample"]["met"] is True
@@ -1217,11 +1222,11 @@ def test_gate_ramp_v4_requires_halt_resume():
     from app.main import RAMP_V4_REQUIRED, _ramp_v4
     from app.mirror import ExecState
     st = ExecState()
-    st.coverage = {k: v for k, v in RAMP_V4_REQUIRED.items()
-                   if k not in ("halt", "resume")}
-    st.fills = [{"slip_bps": 1.0}] * 10
+    st.coverage_live = {k: v for k, v in RAMP_V4_REQUIRED.items()
+                        if k not in ("halt", "resume")}
+    st.fills = [{"slip_bps": 1.0, "live": True}] * 10
     assert _ramp_v4(st)["coverage_complete"] is False
-    st.coverage.update({"halt": 1, "resume": 1})
+    st.coverage_live.update({"halt": 1, "resume": 1})
     assert _ramp_v4(st)["coverage_complete"] is True
 
 
@@ -1241,3 +1246,108 @@ def test_gate_spec_rows_covered_by_code():
     covered.discard("slippage")
     assert covered <= set(RAMP_V4_REQUIRED), covered - set(RAMP_V4_REQUIRED)
     assert set(RAMP_V4_REQUIRED) <= covered, set(RAMP_V4_REQUIRED) - covered
+
+
+# --- mode guard on coverage counters (2026-08-21) --------------------------
+def test_gate_dry_run_events_never_satisfy_coverage(tmp_path):
+    """A full matrix accumulated in DRY_RUN must NOT open the ramp gate: a
+    DryRunVenue event proves the state machine, not the venue, and the gate
+    exists to prove the venue. Regression guard for the class of failure the
+    2026-08-10 blueprint sync produced (DRY_RUN silently true on a live
+    account) - drills fired in that window would otherwise tick rows."""
+    from app.cb import DryRunVenue
+    from app.main import RAMP_V4_REQUIRED, _ramp_v4
+    from app.mirror import Executor
+    cfg = Cfg()
+    cfg.state_path = str(tmp_path / "state.json")
+    cfg.dry_run = True
+    ex = Executor(DryRunVenue(None), cfg)
+    for key, need in RAMP_V4_REQUIRED.items():
+        for _ in range(need):
+            ex._cov(key)
+    assert ex.state.coverage["entry_long"] == RAMP_V4_REQUIRED["entry_long"]
+    assert ex.state.coverage_live == {}
+    r = _ramp_v4(ex.state)
+    assert r["coverage_complete"] is False
+    assert r["rows"]["entry_long"]["have"] == 0
+    assert r["rows"]["entry_long"]["all_modes"] == RAMP_V4_REQUIRED["entry_long"]
+    assert r["rows"]["entry_long"]["unattributed"] == RAMP_V4_REQUIRED["entry_long"]
+    assert r["unattributed_total"] > 0
+
+
+def test_gate_live_events_attributed_and_persist(tmp_path):
+    """Live-mode counts land in coverage_live, survive a reboot, and a mode
+    flip mid-life keeps the two tallies correctly separated."""
+    from app.cb import DryRunVenue
+    from app.mirror import Executor
+    cfg = Cfg()
+    cfg.state_path = str(tmp_path / "state.json")
+    cfg.dry_run = False
+    ex = Executor(DryRunVenue(None), cfg)
+    ex._cov("entry_long")
+    ex._cov("entry_long")
+    # flip to dry-run: total keeps climbing, live tally frozen
+    cfg.dry_run = True
+    ex._cov("entry_long")
+    ex._save_state()
+    assert ex.state.coverage["entry_long"] == 3
+    assert ex.state.coverage_live["entry_long"] == 2
+    ex2 = Executor(DryRunVenue(None), cfg)
+    assert ex2.state.coverage["entry_long"] == 3
+    assert ex2.state.coverage_live["entry_long"] == 2
+
+
+def test_gate_legacy_coverage_is_unattributed_not_live(tmp_path):
+    """State written before the split has `coverage` but no `coverage_live`.
+    Those counts must read as unattributed - never silently promoted to
+    live evidence, which would hand the gate provenance it never had."""
+    import json
+    from app.cb import DryRunVenue
+    from app.main import _ramp_v4
+    from app.mirror import Executor
+    cfg = Cfg()
+    cfg.state_path = str(tmp_path / "state.json")
+    json.dump({"halted": "", "legs": {},
+               "coverage": {"entry_long": 5, "drill_cycle": 3},
+               "fills": [{"slip_bps": 1.0}] * 12},
+              open(cfg.state_path, "w"))
+    ex = Executor(DryRunVenue(None), cfg)
+    assert ex.state.coverage["entry_long"] == 5
+    assert ex.state.coverage_live == {}
+    r = _ramp_v4(ex.state)
+    assert r["rows"]["entry_long"]["met"] is False
+    assert r["rows"]["entry_long"]["unattributed"] == 5
+    assert r["rows"]["slippage_sample"]["met"] is False
+    assert r["rows"]["slippage_sample"]["all_modes"] == 12
+
+
+def test_gate_dry_run_fills_excluded_from_slippage_sample(tmp_path):
+    """Synthetic DryRunVenue prices must not feed the slippage dataset."""
+    from app.cb import DryRunVenue
+    from app.main import _ramp_v4
+    from app.mirror import Executor
+    cfg = Cfg()
+    cfg.state_path = str(tmp_path / "state.json")
+    cfg.dry_run = True
+    ex = Executor(DryRunVenue(None), cfg)
+    for i in range(11):
+        ex._record_fill("pullback", "entry", f"c{i}", {"avg_price": 60_030.0},
+                        60_000.0, "BUY")
+    assert len(ex.state.fills) == 11
+    assert all(f["live"] is False for f in ex.state.fills)
+    assert _ramp_v4(ex.state)["rows"]["slippage_sample"]["met"] is False
+    cfg.dry_run = False
+    for i in range(10):
+        ex._record_fill("pullback", "entry", f"L{i}", {"avg_price": 60_030.0},
+                        60_000.0, "BUY")
+    r = _ramp_v4(ex.state)
+    assert r["rows"]["slippage_sample"]["have"] == 10
+    assert r["rows"]["slippage_sample"]["met"] is True
+
+
+def test_gate_spec_pins_mode_guard():
+    """The spec must state the live-only basis - doc/code drift on the ramp
+    gate is exactly the failure this repo keeps re-finding."""
+    spec = open(os.path.join(os.path.dirname(__file__), "..", "RAMP_V4.md")).read()
+    assert "coverage_live" in spec
+    assert "DRY_RUN" in spec

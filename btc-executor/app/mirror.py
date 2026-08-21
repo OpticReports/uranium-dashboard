@@ -89,7 +89,15 @@ class ExecState:
     last_config: dict | None = None       # detects silent sizing/risk resets
     # RAMP v4: event-class counters incremented INSIDE the real code paths
     # (never by hand) + the drill audit trail. See RAMP_V4.md.
+    # `coverage` is the ALL-MODES total; `coverage_live` counts only events
+    # produced with DRY_RUN=false. The ramp gate reads coverage_live ONLY:
+    # a dry-run event exercises the state machine against DryRunVenue and
+    # proves nothing about the venue, which is the entire point of the gate.
+    # Counts persisted before this split have unknown provenance and stay
+    # OUT of coverage_live (surfaced as `unattributed`, never silently
+    # promoted).
     coverage: dict = field(default_factory=dict)
+    coverage_live: dict = field(default_factory=dict)
     drills: list = field(default_factory=list)
 
 
@@ -128,11 +136,26 @@ class Executor:
             self._cov("restart_with_position")
 
     def _cov(self, key: str) -> None:
-        """RAMP v4 coverage counter (RAMP_V4.md) — persisted with state."""
+        """RAMP v4 coverage counter (RAMP_V4.md) — persisted with state.
+
+        Counted twice: once in the all-modes total, and — only when
+        DRY_RUN is false — once in coverage_live, which is what the ramp
+        gate actually reads. Without this split a full coverage matrix
+        could be accumulated against DryRunVenue, reporting
+        `coverage_complete: true` having never touched Coinbase. The
+        2026-08-10 blueprint sync (DRY_RUN silently reset to true on a
+        live account) is exactly the flip that would produce it.
+        """
         cov = getattr(self.state, "coverage", None)
         if cov is None:
             cov = self.state.coverage = {}
         cov[key] = cov.get(key, 0) + 1
+        if bool(getattr(self.cfg, "dry_run", True)):
+            return
+        live = getattr(self.state, "coverage_live", None)
+        if live is None:
+            live = self.state.coverage_live = {}
+        live[key] = live.get(key, 0) + 1
 
     def _migrate_ledger_granularity(self) -> None:
         """Persisted state written before 8e27c01 recorded REQUESTED sizes
@@ -170,6 +193,9 @@ class Executor:
             st.last_dry_run = raw.get("last_dry_run")
             st.last_config = raw.get("last_config")
             st.coverage = raw.get("coverage", {})
+            # absent on state written before the mode split -> stays empty,
+            # so pre-split counts read as unattributed rather than live
+            st.coverage_live = raw.get("coverage_live", {})
             st.drills = raw.get("drills", [])[-50:]
             return st
         except Exception:  # noqa: BLE001
@@ -187,6 +213,7 @@ class Executor:
              "last_dry_run": getattr(self.state, "last_dry_run", None),
              "last_config": getattr(self.state, "last_config", None),
              "coverage": getattr(self.state, "coverage", {}),
+             "coverage_live": getattr(self.state, "coverage_live", {}),
              "drills": getattr(self.state, "drills", [])[-50:]}
         tmp = self.state_path + ".tmp"
         json.dump(d, open(tmp, "w"))
@@ -791,7 +818,11 @@ class Executor:
                                  "role": role, "cloid": cloid, "side": side,
                                  "px": round(float(px), 2),
                                  "ref_px": round(float(ref_px), 2),
-                                 "slip_bps": round(bps, 2)})
+                                 "slip_bps": round(bps, 2),
+                                 # a DryRunVenue "fill" is a synthetic price:
+                                 # it must not feed the slippage sample
+                                 "live": not bool(getattr(self.cfg,
+                                                          "dry_run", True))})
 
     # ---------- drift ----------
 
