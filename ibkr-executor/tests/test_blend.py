@@ -2953,6 +2953,43 @@ def test_gate_z1_peer_shortfall_never_leaves_cover_above_venue_held(tmp_path):
     assert all(p.history_gap for p in m.state.positions.values())
 
 
+def test_gate_z1_resize_never_claims_cover_the_venue_would_not_release(tmp_path):
+    """Z1 does not promise an invariant it cannot enforce. When the venue
+    will not ACK the cancel, the OLD stop may still rest — that residual is
+    X2's (orphan_stop_refs + a RED fill alert), and the resize must NOT
+    place a smaller stop on top of it, nor let the headline claim a cover
+    the book cannot prove."""
+    class _FalseCancel(DryAdapter):
+        def cancel_stock_order(self, ref):
+            self._rec("cancel_stock_order", ref=ref, found=False)
+            return False                  # "not found" — after a session
+                                          # boundary, indistinguishable from
+                                          # a still-resting order
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = _FalseCancel()
+    old1 = _blackout_stop(m, a, call_id=1, qty=5, level=44.0)
+    old2 = _blackout_stop(m, a, call_id=2, qty=4, level=43.0)
+    a._positions["CRSP"] = 6
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    # nothing NEW was rested on top of the possibly-resting old stops
+    assert sorted(-o["qty"] for o in a._stops.values()) == [4, 5]
+    assert sorted(m.state.orphan_stop_refs) == sorted([old1, old2])
+    assert all(p.stop_missing and not p.stop_order_ref
+               for p in m.state.positions.values())
+    (resize,) = [msg for msg in alerts if "RESIZED" in msg and "PRO RATA" in msg]
+    assert "blend-tracked resting SELL cover RESIZED 9 -> 0" in resize
+    assert "could not be cancelled and may STILL rest at the venue" in resize
+    assert "may still exceed 6" in resize
+    # a fill on one of them is the RED possible-short branch, never a close
+    a.trigger_stop(old1)
+    after: list[str] = []
+    run_cycle(m, a, None, "2026-08-25", alert=after.append)
+    assert any("possible short at the venue" in msg for msg in after)
+    assert not any("position closed" in msg for msg in after)
+
+
 def test_gate_z1_resized_cover_is_restored_in_full_when_shares_return(tmp_path):
     """Z1's other end: a resized stop covers FEWER shares than the position,
     so unparking it as 'still protected' would leave the book silently

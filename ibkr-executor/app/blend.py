@@ -1630,6 +1630,7 @@ def _resize_peer_cover(mgr: Blend3070Manager, adapter, held: int,
         return ""                       # the invariant already holds
     alloc = _prorata_cover(order, held)
     lines: list[str] = []
+    unknown = 0            # old cover the venue would not let us cancel
     for p in order:
         key = str(p.call_id)
         cur, ref = cover[key]
@@ -1643,10 +1644,12 @@ def _resize_peer_cover(mgr: Blend3070Manager, adapter, held: int,
         if outcome != "retired":
             # The venue would not ACK: the old stop may STILL rest, so a
             # smaller replacement would ADD cover instead of reducing it.
-            # X2's orphan machinery owns the residual; retry next cycle.
+            # X2's orphan machinery owns the residual; pass 3 retries the
+            # cancel every cycle and a fill on it alerts RED.
+            unknown += cur
             lines.append(f"call {p.call_id}: {cur} -> UNKNOWN (the venue "
-                         f"would not ACK the cancel; tracked, retried next "
-                         f"cycle)")
+                         f"would not ACK the cancel; tracked, cancel retried "
+                         f"every cycle)")
             continue
         if new <= 0:
             lines.append(f"call {p.call_id}: {cur} -> 0 (stop RETIRED, this "
@@ -1677,6 +1680,7 @@ def _resize_peer_cover(mgr: Blend3070Manager, adapter, held: int,
                   f"{p.symbol} (call {p.call_id}) returned an EXISTING "
                   f"venue order of UNKNOWN size — not adopted, tracked "
                   f"instead (a fill on it alerts RED); position UNPROTECTED")
+            unknown += cur
             lines.append(f"call {p.call_id}: {cur} -> UNKNOWN (venue "
                          f"returned an existing order)")
             continue
@@ -1690,17 +1694,27 @@ def _resize_peer_cover(mgr: Blend3070Manager, adapter, held: int,
               if p.stop_order_ref and not p.stop_missing)
     book_qty = sum(p.qty for p in order)
     sym = order[0].symbol
+    # X2 residual: a cancel the venue will not ACK may leave the OLD stop
+    # resting, so the headline may not claim a cover the book cannot prove.
+    residual = (f", BUT {unknown} share(s) of the OLD cover could not be "
+                f"cancelled and may STILL rest at the venue (tracked; a fill "
+                f"on them alerts RED), so cover THERE may still exceed "
+                f"{held} — clear them by hand" if unknown else "")
     mgr._event("RED", f"{sym} resting stop cover RESIZED {total} -> {now} "
-                      f"to match the {held} shares the venue holds")
-    alert(f"🚨🚨 blend: {sym} resting SELL cover RESIZED {total} -> {now} "
-          f"share(s) to match the {held} the venue actually holds "
-          f"({book_qty} booked across {len(order)} same-symbol positions). "
-          f"Allocated PRO RATA, which claims NO attribution: "
+                      f"to match the {held} shares the venue holds"
+                      + (f" ({unknown} share(s) uncancellable, tracked)"
+                         if unknown else ""))
+    alert(f"🚨🚨 blend: {sym} blend-tracked resting SELL cover RESIZED "
+          f"{total} -> {now} share(s) to match the {held} the venue actually "
+          f"holds ({book_qty} booked across {len(order)} same-symbol "
+          f"positions). Allocated PRO RATA, which claims NO attribution: "
           f"{'; '.join(lines)}. {book_qty - held} share(s) of protection "
           f"were REMOVED and the shortfall cannot be attributed to any one "
-          f"position — resolve the account manually")
+          f"position — resolve the account manually" + residual)
     return (f"; resting SELL cover was resized {total} -> {now} share(s) pro "
-            f"rata so it can never exceed the {held} the venue holds")
+            f"rata so it can never exceed the {held} the venue holds"
+            + (f" ({unknown} share(s) of old cover uncancellable and tracked)"
+               if unknown else ""))
 
 
 def _venue_held(adapter, symbol: str) -> int | None:
