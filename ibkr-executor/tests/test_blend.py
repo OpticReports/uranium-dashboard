@@ -2110,7 +2110,15 @@ def test_gate_x5_same_symbol_shortfall_sacrifices_nobody(tmp_path):
     a shortfall cannot be attributed to any ONE of them. cde6fb7 sacrificed
     whichever came FIRST in dict order — cancelling a healthy peer's
     working stop and parking its real shares UNRECONCILED while the
-    position whose shares were actually gone got unparked as verified."""
+    position whose shares were actually gone got unparked as verified.
+
+    Z1 UPDATE: "sacrifice nobody" stands (nobody parked, nobody stripped of
+    cover, everybody flagged and loud) — but the ORIGINAL refs no longer
+    rest, because leaving 12 shares of SELL stops against 9 held is the
+    venue short Z1 closes. The old ref-identity assertion is replaced by
+    strictly more: the pro-rata sizes, the cover<=held invariant, that every
+    position still has REAL cover, that the superseded orders are CANCELLED
+    (not abandoned), and that triggering everything cannot go short."""
     m = mk(tmp_path)
     _seed_initialized(m, sleeve_cash=10_000.0)
     a = DryAdapter()
@@ -2123,12 +2131,38 @@ def test_gate_x5_same_symbol_shortfall_sacrifices_nobody(tmp_path):
     assert sorted(m.state.positions) == ["1", "2", "3"]   # nobody sacrificed
     assert not m.state.unreconciled
     assert all(m.state.positions[k].history_gap for k in ("1", "2", "3"))
-    assert r1 in a._stops and r2 in a._stops and r3 in a._stops
+    # every position keeps REAL cover (nobody stripped), resized pro rata:
+    # floor(9*5/12)=3 +1 (largest fraction .75) = 4, floor(9*4/12)=3,
+    # floor(9*3/12)=2 -> 4+3+2 == 9 == held.
+    assert sorted(-o["qty"] for o in a._stops.values()) == [2, 3, 4]
+    assert sum(-o["qty"] for o in a._stops.values()) == 9   # cover == held
+    assert [m.state.positions[k].stop_cover_qty for k in ("1", "2", "3")] \
+        == [4, 3, 2]
+    assert all(m.state.positions[k].stop_order_ref in a._stops
+               for k in ("1", "2", "3"))
+    assert all(not m.state.positions[k].stop_missing
+               for k in ("1", "2", "3"))
+    # the superseded orders were CANCELLED at the venue, never abandoned
+    for old in (r1, r2, r3):
+        assert old not in a._stops
+        assert a._orders[old]["status"] == "cancelled"
+    assert not m.state.orphan_stop_refs
     assert _executions(a, "CRSP") == []
     assert not any("parked for manual booking" in msg for msg in alerts)
     esc = [msg for msg in alerts if "UNRESOLVED after the blackout" in msg]
     assert len(esc) == 3
     assert all("cannot be attributed to any one of them" in msg for msg in esc)
+    assert all("RESIZED protective stop" in msg for msg in esc)
+    (resize,) = [msg for msg in alerts if "RESIZED 12 -> 9" in msg]
+    assert "PRO RATA" in resize and "call 1: 5 -> 4" in resize
+    # and the end state cannot short the account
+    for ref in list(a._stops):
+        a.trigger_stop(ref)
+    after: list[str] = []
+    run_cycle(m, a, None, "2026-08-25", alert=after.append)
+    assert a._positions["CRSP"] == 0
+    assert not any("position closed" in msg and "UNVERIFIABLE" not in msg
+                   for msg in after)
 
 
 def test_gate_x7_unretirable_stop_alerts_rearmed_never_silent(tmp_path):
@@ -2861,3 +2895,90 @@ def test_gate_y1_ratchet_cannot_add_sell_orders_to_a_shortfall(tmp_path):
     assert after == before                       # no NEW sell orders rested
     assert all(p.stop_level == 44.0 for p in m.state.positions.values())
     assert not any("position closed" in s for s in alerts)
+
+
+def test_gate_z1_peer_shortfall_never_leaves_cover_above_venue_held(tmp_path):
+    """Z1, the reviewer's repro and the LIVE-BLOCKING invariant: for each
+    symbol, total blend-placed RESTING SELL cover must never exceed the
+    venue-verified `held`, and the executor must never CHOOSE to leave
+    cover > held.
+
+    Two same-symbol positions book 9 shares (5+4); 3 were sold by hand
+    inside the blackout so the account holds 6. The shortfall is
+    attributable to neither (x5), so nobody is parked or sacrificed — but
+    leaving 5+4 = 9 shares of SELL stops resting against 6 held is a REAL
+    naked short the moment both trigger (venue 6 -> -3), and it used to be
+    reported as two cheerful green 'position closed' alerts."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    old1 = _blackout_stop(m, a, call_id=1, qty=5, level=44.0)
+    old2 = _blackout_stop(m, a, call_id=2, qty=4, level=43.0)
+    a._positions["CRSP"] = 6                     # 3 sold away by hand
+    alerts: list[str] = []
+    # the FULL cycle, not intents: an intents-only assertion passes vacuously
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    # nobody sacrificed: both positions alive, flagged, neither parked
+    assert sorted(m.state.positions) == ["1", "2"]
+    assert not m.state.unreconciled
+    assert all(p.history_gap for p in m.state.positions.values())
+    assert _executions(a, "CRSP") == []           # nothing was sold to fix it
+    # what actually RESTS at the venue, observed venue-side (so this gate
+    # fails on the HARM at the parent commit, not on a missing field)
+    resting = sorted(-o["qty"] for o in a._stops.values())
+    # now trigger EVERY resting stop: the account must never go short
+    for ref in list(a._stops):
+        a.trigger_stop(ref)
+    filled: list[str] = []
+    run_cycle(m, a, None, "2026-08-25", alert=filled.append)
+    assert a._positions["CRSP"] >= 0              # THE invariant, end to end
+    assert a._positions["CRSP"] == 0
+    # and no fill is reported as a plain green close
+    assert not any("position closed" in msg and "UNVERIFIABLE" not in msg
+                   for msg in filled)
+    assert not any(msg.startswith("🧬 blend STOP FILLED") for msg in filled)
+    # cover was resized PRO RATA: floor(6*5/9)=3, floor(6*4/9)=2 +1 (largest
+    # fractional part .667) = 3 -> 3+3 == 6 == held, and no attribution.
+    assert resting == [3, 3] and sum(resting) == 6
+    assert old1 not in a._stops and old2 not in a._stops
+    assert a._orders[old1]["status"] == "cancelled"
+    assert a._orders[old2]["status"] == "cancelled"
+    assert not m.state.orphan_stop_refs           # cancels ACKed, not orphaned
+    (resize,) = [msg for msg in alerts if "RESIZED" in msg and "PRO RATA" in msg]
+    assert "9 -> 6" in resize and "call 1: 5 -> 3" in resize
+    assert "3 share(s) of protection were REMOVED" in resize
+    # the remainder is NOT booked as a phantom exit off the same order
+    assert [m.state.positions[k].qty for k in ("1", "2")] == [2, 1]
+    assert [m.state.positions[k].stop_cover_qty for k in ("1", "2")] == [0, 0]
+    assert all(p.history_gap for p in m.state.positions.values())
+
+
+def test_gate_z1_resized_cover_is_restored_in_full_when_shares_return(tmp_path):
+    """Z1's other end: a resized stop covers FEWER shares than the position,
+    so unparking it as 'still protected' would leave the book silently
+    under-covered — and pass 4 stacking a full stop on top of the resized
+    one would put cover back ABOVE held. The resized stop is retired first
+    and full cover re-placed, with cover <= held at every step."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    _blackout_stop(m, a, call_id=1, qty=5, level=44.0)
+    _blackout_stop(m, a, call_id=2, qty=4, level=43.0)
+    a._positions["CRSP"] = 6
+    run_cycle(m, a, None, "2026-08-24", alert=lambda _msg: None)
+    assert sum(-o["qty"] for o in a._stops.values()) <= a._positions["CRSP"]
+    # the operator restores the missing shares (the in-band resolution)
+    a._positions["CRSP"] = 9
+    m.state.last_reconcile_ts = time.time()
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-25", alert=alerts.append)
+    assert not any(p.history_gap for p in m.state.positions.values())
+    assert not any(p.stop_missing for p in m.state.positions.values())
+    assert [m.state.positions[k].stop_cover_qty for k in ("1", "2")] == [0, 0]
+    # full cover, exactly once each, and never more than the account holds
+    assert sorted(-o["qty"] for o in a._stops.values()) == [4, 5]
+    assert sum(-o["qty"] for o in a._stops.values()) <= a._positions["CRSP"]
+    assert not m.has_naked_position()             # entries unblocked again
+    assert any("RESIZED stop was retired and FULL cover is re-placing" in msg
+               for msg in alerts)
+

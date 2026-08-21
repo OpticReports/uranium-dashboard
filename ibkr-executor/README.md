@@ -83,7 +83,7 @@ unreconciled venue state. Phases IN ORDER:
       | held == booked | `working` | UNPARKED; that stop is kept |
       | held == booked | dead/unknown | UNPARKED as STOP_MISSING; pass 1e re-places it |
       | held < booked, no same-symbol peer | any | parked UNRECONCILED, resting stop RETIRED first (counter-review N1) |
-      | held < booked, same-symbol peers exist | any | the shortfall is NOT attributable to one position: NOBODY is parked or stripped, all stay flagged (counter-review x5) |
+      | held < booked, same-symbol peers exist | any | the shortfall is NOT attributable to one position: NOBODY is parked or sacrificed, all stay flagged (counter-review x5) — but resting SELL cover is RESIZED PRO RATA down to `held` (counter-review Z1) |
       | held > booked (CONFLATION) | `working` | stays flagged; the working stop is LEFT RESTING |
       | held > booked (CONFLATION) | dead/unknown | stays flagged, marked UNPROTECTED; no new stop is rested |
       | positions unanswerable | any | stays flagged |
@@ -102,6 +102,39 @@ unreconciled venue state. Phases IN ORDER:
       have filled — the naked-short path) and no new protective stop is
       placed for the position (a fresh SELL stop on shares that may not be
       the book's is the same harm);
+   0a. **COVER INVARIANT (counter-review Z1), the one line to check:**
+      for each symbol, the total quantity of blend-placed RESTING SELL
+      stops must never exceed the venue-verified `held` for that symbol,
+      and **the executor must never CHOOSE to leave cover > held**. A
+      single-position shortfall already satisfies it (the stop is retired,
+      cover 0) and conflation satisfies it arithmetically (cover <= booked
+      < held). The peer-shortfall cell did NOT: 9 shares booked across two
+      same-symbol positions with 6 held left 9 shares of SELL stops
+      resting, and when they triggered the account went to **-3, a real
+      naked short**, reported as two green "position closed" alerts.
+      Entries dedupe on `call_id` only, never on symbol, so two calls on
+      one ticker is ordinary. That cell now RESIZES cover instead:
+      `floor(held * qty / book_qty)` per position, the remainder to the
+      largest fractional part (ties: lowest `call_id`), which sums to
+      exactly `held` and makes NO attribution claim — the whole point of
+      x5. A 0 allocation RETIRES that stop and marks the position
+      STOP_MISSING. The reduction is **cancel-old-then-place-smaller** (the
+      opposite of the daily ratchet's place-then-cancel: placing first
+      would transiently rest 9 + 6 = 15 against 6 held, the exact harm);
+      the brief unprotected window is the accepted trade on a position that
+      is already flagged and already blocking entries. A failed replace is
+      RED + STOP_MISSING and is retried next cycle, never silently naked.
+      A strictly-REDUCING resize is the explicit exception to the rule that
+      no SELL stop is (re-)placed for an UNVERIFIABLE position: it lowers
+      venue exposure, so it closes a short path instead of opening one.
+      Where the venue will not ACK the cancel, cover > held can persist and
+      is unpreventable — that residual is tracked in `orphan_stop_refs` and
+      a fill on it alerts RED as a possible short (counter-review X2); the
+      invariant is about what the executor CHOOSES, never a promise about a
+      venue that refuses to answer. When the account is restored to the
+      booked quantity, a resized stop is retired first and FULL cover
+      re-placed, so unparking can never leave the book silently
+      under-covered.
    0b. **fail-closed is never fail-SILENT** (counter-review X3). Only the
       operator can resolve the cells above, so a position that stays
       flagged keeps escalating: a 🚨🚨 Telegram alert on the cycle it is
@@ -319,9 +352,12 @@ on its own **even behind a working stop**, so the position stays flagged
 indefinitely and keeps escalating on a re-armed cadence until the
 operator resolves it (see the matrix in phase 1.0/1.0b). While flagged,
 exits and /kill defer with a RED alert and no protective stop is
-(re-)placed — nothing is ever MKT-sold, and no SELL stop is ever rested,
-against shares whose ownership is unproven (the naked-short path probe A1
-demonstrated, and the counter-review's N1/N2/X1 variants of it). Such a
+(re-)placed — nothing is ever MKT-sold, and no NEW or RAISED SELL stop is
+ever rested, against shares whose ownership is unproven (the naked-short
+path probe A1 demonstrated, and the counter-review's N1/N2/X1 variants of
+it). The single exception is the Z1 pro-rata resize above, which only ever
+REPLACES a resting stop with a SMALLER one so that aggregate cover can
+never exceed the shares the venue says the account holds. Such a
 position blocks all new entries (`has_naked_position`), so an unresolved
 conflation wedges the sleeve until it is cleared by hand — the
 deliberate, documented cost of not guessing.
