@@ -280,22 +280,11 @@ def kill(x_exec_token: str | None = Header(default=None),
     _auth(x_exec_token, token)
     if MGR is None:
         return {"ok": False}
-    # x12: mutating legs/halted from this API thread must not interleave
-    # with the loop thread's own ladder step + save (they raced with no
-    # lock at all). MGR_LOCK is released before the blend section below —
-    # the two locks are never held together.
-    with MGR_LOCK:
-        for key, leg in MGR.state.legs.items():
-            if leg.status == "OPEN" and leg.order_ref:
-                try:
-                    r = ADAPTER.close_spread(leg.order_ref)
-                    MGR.on_closed(key, r["value"], "manual kill",
-                                  datetime.now(timezone.utc).date().isoformat())
-                except Exception as exc:  # noqa: BLE001
-                    logger.exception("kill close %s failed: %s", key, exc)
-        MGR.state.halted = "KILL"
-        MGR.save()
     blend_note = ""
+    # The BLEND halt runs FIRST: it is the cheapest and most urgent action
+    # here (a journal write under BLEND_LOCK), and putting the ladder's
+    # adapter round-trips ahead of it would let a slow spread close delay
+    # halting the book (x12 added MGR_LOCK below — never let it gate this).
     if BLEND is not None:
         # R2 (two-stage kill): this handler runs on a FastAPI worker
         # thread, but ib_async binds its event loop to the thread that owns
@@ -321,6 +310,21 @@ def kill(x_exec_token: str | None = Header(default=None),
         blend_note = (" + blend HALTED, flatten QUEUED for the execution "
                       "loop (it owns the venue connection); a completion "
                       "alert will state what closed vs parked" + loop_warn)
+    # x12: mutating legs/halted from this API thread must not interleave
+    # with the loop thread's own ladder step + save (they raced with no
+    # lock at all). MGR_LOCK is taken only AFTER the blend section above
+    # released BLEND_LOCK — the two locks are never held together.
+    with MGR_LOCK:
+        for key, leg in MGR.state.legs.items():
+            if leg.status == "OPEN" and leg.order_ref:
+                try:
+                    r = ADAPTER.close_spread(leg.order_ref)
+                    MGR.on_closed(key, r["value"], "manual kill",
+                                  datetime.now(timezone.utc).date().isoformat())
+                except Exception as exc:  # noqa: BLE001
+                    logger.exception("kill close %s failed: %s", key, exc)
+        MGR.state.halted = "KILL"
+        MGR.save()
     send(f"🔴 ACTION NEEDED (you) — ibkr ladder KILLED: all legs closed, "
          f"ladder halted{blend_note}\n→ it stays halted until you hit "
          f"/resume?token=YOUR_TOKEN")
