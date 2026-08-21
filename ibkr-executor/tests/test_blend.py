@@ -2161,7 +2161,8 @@ def test_gate_mode_guard_archives_foreign_mode_book(tmp_path):
     _seed_initialized(m, spy_qty=700, bil_qty=300)
     _held_position(m)
     m.save()
-    m2 = mk(tmp_path, dry_run=False)       # real:paper — same state file
+    m2 = mk(tmp_path, dry_run=False,       # real:paper — same state file
+            tws_userid="u", tws_password="p")
     assert m2.archived_state               # loud: startup alerts on this
     assert m2.state.initialized is False
     assert m2.state.positions == {}
@@ -2271,3 +2272,33 @@ def test_gate_n3_resume_blocks_behind_blend_lock(tmp_path, monkeypatch):
     finally:
         service.BLEND = None
         service.MGR = None
+
+
+def test_gate_mode_guard_creds_absent_is_dry_even_without_dry_run(tmp_path):
+    """F1: _build runs the DryAdapter whenever TWS creds are absent, DRY_RUN
+    or not — the mode tag must mirror that, or a creds-missing boot with
+    DRY_RUN=false would tag placeholder fills as a real book (and the guard
+    would then PRESERVE the fiction when creds arrive)."""
+    m = mk(tmp_path, dry_run=False, tws_userid="", tws_password="")
+    assert m.state.mode == "dry:paper"     # creds absent -> dry, flag or not
+    _seed_initialized(m, spy_qty=700)
+    m.save()
+    # Creds arrive (a real PAPER boot): the placeholder book must be archived.
+    m2 = mk(tmp_path, dry_run=False, tws_userid="u", tws_password="p")
+    assert m2.state.mode == "real:paper"
+    assert m2.archived_state
+    assert m2.state.spy_qty == 0
+
+
+def test_gate_mode_guard_creds_pulled_mid_paper_archives_real_book(tmp_path):
+    """F1 reverse hole: creds pulled mid-PAPER (DRY_RUN still false) boots
+    the DryAdapter — the REAL book must be archived, never traded by the
+    placeholder venue."""
+    m = mk(tmp_path, dry_run=False, tws_userid="u", tws_password="p")
+    assert m.state.mode == "real:paper"
+    _seed_initialized(m, spy_qty=12)
+    m.save()
+    m2 = mk(tmp_path, dry_run=False, tws_userid="", tws_password="")
+    assert m2.state.mode == "dry:paper"
+    assert m2.archived_state               # real book preserved in archive
+    assert m2.state.spy_qty == 0

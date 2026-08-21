@@ -229,7 +229,15 @@ class Blend3070Manager:
     # ---------- persistence (LadderManager pattern) ----------
 
     def _current_mode(self) -> str:
-        return f"{'dry' if self.cfg.dry_run else 'real'}:{self.cfg.trading_mode}"
+        # Mirrors _build's adapter choice exactly (counter-agent F1): the
+        # DryAdapter runs whenever creds are ABSENT too, not just under
+        # DRY_RUN — placeholder fills must be tagged dry regardless of the
+        # flag, or a creds-missing boot with DRY_RUN=false would tag
+        # fiction as a real book.
+        has_creds = bool(getattr(self.cfg, "tws_userid", "")
+                         and getattr(self.cfg, "tws_password", ""))
+        dry = self.cfg.dry_run or not has_creds
+        return f"{'dry' if dry else 'real'}:{self.cfg.trading_mode}"
 
     def _load(self) -> BlendState:
         try:
@@ -244,11 +252,17 @@ class Blend3070Manager:
                 archive = (f"{self.state_path}.archived-"
                            f"{(stored_mode or 'unknown').replace(':', '_')}"
                            f"-{int(time.time())}")
-                os.replace(self.state_path, archive)
+                try:
+                    os.replace(self.state_path, archive)
+                    note = f"previous book archived to {archive}"
+                except OSError as exc:
+                    # F2: a failed archive must still be LOUD — the fresh
+                    # book's first save will overwrite the old file.
+                    note = (f"ARCHIVE FAILED ({exc}) — previous book will "
+                            f"be OVERWRITTEN by the next save")
                 self.archived_state = (f"mode change "
                                        f"{stored_mode or 'unknown'} -> "
-                                       f"{self._current_mode()}; previous "
-                                       f"book archived to {archive}")
+                                       f"{self._current_mode()}; {note}")
                 return BlendState(mode=self._current_mode())
             st = BlendState(
                 initialized=raw.get("initialized", False),
