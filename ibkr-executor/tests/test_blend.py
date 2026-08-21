@@ -3423,3 +3423,43 @@ def test_gate_zf5_a_newly_capped_peer_is_never_announced_silently(tmp_path):
     assert any("call 2" in msg and "UNVERIFIABLE too" in msg
                for msg in alerts)                    # ...and SAID SO
     assert any("NO NEW ENTRIES" in msg for msg in alerts)
+
+
+def test_gate_zf2_a_filled_order_is_never_adopted_as_working_cover(tmp_path):
+    """ZF-2 (pre-existing at main; the Z-B round added a second door):
+    `_ensure_stop` places under the deterministic `stop_client_id`. When
+    that id already belongs to a FILLED order both adapters answer
+    `{duplicate: True, status: "filled"}` — the prior order, with NOTHING
+    resting. `_ensure_stop` read neither field, called `on_stop_placed()`
+    and cleared `stop_missing`: the book reported `unprotected: []`,
+    `has_naked_position()` False and alerted "🧬 protective stop restored"
+    over real shares with no stop at the venue, and nothing would ever
+    re-place. Only a duplicate the venue still reports WORKING is
+    adoptable."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    _held_position(m, call_id=1, qty=2, stop_level=44.0, stop_ref=None)
+    # this position's stop id is SPENT: its order FILLED and nothing rests
+    rs = a.place_stock_order("CRSP", -3, "STP", stop_price=44.0, tif="GTC",
+                             client_order_id="blend-1-stp-44.0000")
+    a._orders[rs["order_ref"]]["status"] = "filled"
+    a._stops.pop(rs["order_ref"])
+    p = m.state.positions["1"]
+    p.stop_missing, p.stop_order_ref = True, None
+    a._positions["CRSP"] = 2
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    p = m.state.positions["1"]
+    assert not a._stops                        # NOTHING rests at the venue
+    assert p.stop_missing and not p.stop_order_ref
+    assert blend_mod._is_unprotected(p)
+    assert m.has_naked_position()               # entries BLOCKED
+    assert sorted(m.status_summary()["unprotected"]) == ["1"]
+    assert sorted(m.status_summary()["stop_missing"]) == ["1"]
+    feed_pos = {q["symbol"]: q for q in m.feed(PRICES, "2026-08-24")
+                ["positions"]}["CRSP"]
+    assert feed_pos["unprotected"] is True
+    assert not any("protective stop restored" in msg for msg in alerts)
+    assert any("NOT working" in msg and "UNPROTECTED" in msg
+               for msg in alerts)

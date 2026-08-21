@@ -229,6 +229,14 @@ unreconciled venue state. Phases IN ORDER:
       periodic — never per-cycle spam, never silent;
    e. re-place any missing protective stop — a STOP_MISSING position is
       alerted loudly every cycle and BLOCKS all new entries until placed.
+      Only a duplicate the venue still reports **working** is adopted as
+      that protection (counter-review ZF-2): a deterministic stop id whose
+      prior order already FILLED comes back `{duplicate, status: filled}`
+      with NOTHING resting, and adopting it cleared `stop_missing` and
+      alerted "protective stop restored" over shares with no stop at the
+      venue — reported protected on `/status` and `/blend/feed`, with
+      entries unblocked and no re-placement ever. Nothing is placeable
+      under a spent id, so the position stays STOP_MISSING and says so.
 2. **Staleness guard**: a payload whose `as_of` is more than 5 calendar
    days old (long-weekend tolerant) — or malformed — triggers no new
    decisions; the book is still reconciled and stop-protected.

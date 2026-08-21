@@ -1367,7 +1367,18 @@ def _ensure_stop(mgr: Blend3070Manager, adapter, pos: BlendPosition,
     failure the position is marked STOP_MISSING (blocks all new entries,
     retried every cycle) and Telegram is alerted loudly. The deterministic
     client_order_id makes the retry idempotent: a stop that actually reached
-    the venue on a crashed attempt is adopted, not duplicated."""
+    the venue on a crashed attempt is adopted, not duplicated.
+
+    ZF-2: only a duplicate the venue still reports WORKING is adoptable. A
+    deterministic stop id whose prior order already FILLED comes back
+    `{duplicate: True, status: "filled"}` from both adapters (DryAdapter's
+    dedupe covers working AND filled; IBAdapter returns `_trade_result` for
+    any prior that is not cancelled). Adopting that cleared `stop_missing`
+    and reported "protective stop restored" with NOTHING resting at the
+    venue — the position read protected on `/status`, on `/blend/feed` and
+    to `_is_unprotected`, and nothing would ever re-place. Nothing can be
+    placed under a spent id, so the honest end state is STOP_MISSING and
+    loud (the same call `_resize_peer_cover`'s restore path makes)."""
     if pos.stop_level <= 0:
         mgr.mark_stop_missing(pos.call_id)
         alert(f"🚨🚨 blend STOP_MISSING: {pos.symbol} x{pos.qty} "
@@ -1381,6 +1392,16 @@ def _ensure_stop(mgr: Blend3070Manager, adapter, pos: BlendPosition,
                 pos.symbol, -pos.qty, "STP", stop_price=pos.stop_level,
                 tif="GTC",
                 client_order_id=stop_client_id(pos.call_id, pos.stop_level))
+            if rs.get("duplicate") and rs.get("status") != "working":
+                mgr.mark_stop_missing(pos.call_id)
+                alert(f"🚨🚨 blend STOP_MISSING: {pos.symbol} x{pos.qty} "
+                      f"(call {pos.call_id}) — the venue's order under its "
+                      f"stop id is {rs.get('status')}, NOT working, so "
+                      f"nothing rests: the id is spent and no stop is "
+                      f"placeable at {pos.stop_level:.2f}. The position is "
+                      f"UNPROTECTED and new entries are BLOCKED — only you "
+                      f"can resolve it")
+                return False
             mgr.on_stop_placed(pos.call_id, rs["order_ref"], pos.stop_level)
             return True
         except Exception as exc:  # noqa: BLE001
