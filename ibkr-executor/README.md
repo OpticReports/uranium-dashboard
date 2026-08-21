@@ -290,9 +290,21 @@ unreconciled venue state. Phases IN ORDER:
    corruption. Stage 1 (the handler): journal a persisted flatten request
    (it survives a restart, same doctrine as `pending_entries`), halt the
    book immediately (no new entries), wake the loop, and answer honestly:
-   "halt engaged; flatten QUEUED". Stage 2 (the loop thread, seconds
-   later): reconcile FIRST (re-review N14 — stop fills book before
-   anything sells, so only positions STILL actually held close), then
+   "halt engaged; flatten QUEUED". Stage 2 (the loop thread): the queued
+   flatten is the FIRST thing the loop's next iteration does — ahead of
+   the NOAA fetch, the ladder's gateway round-trips and the tracker poll
+   (counter-review MF-1; it used to run at the END of the iteration, so
+   kill-to-flatten was exactly the loop's feed latency: an 8s feed meant
+   8s, a hung feed meant no flatten at all, while the alert said "within
+   seconds"). Measured on a parked loop — the deployed steady state on a
+   300s cadence — kill-to-flatten is ~0.01s with a feed hanging for 3s,
+   8s or 25s. The only thing that can delay it is a cycle ALREADY inside
+   a feed call when the kill lands, and both feeds are capped
+   (`nino.FEED_TIMEOUT`, `blend.FEED_TIMEOUT`, a few seconds each, with a
+   failure negative-cached so a dead dependency is not re-paid every
+   cycle). Reconcile still runs FIRST inside that flatten cycle
+   (re-review N14 — stop fills book before anything sells, so only
+   positions STILL actually held close), then
    flatten with all the standing guards: a RAISING stop cancel parks the
    position (K-d — never a MKT sell on a likely-filled stop), and
    R1-UNVERIFIABLE positions stay parked untouched. The completion alert
@@ -377,8 +389,8 @@ El Nino combo reads):
   cache, reporting its age as `marks_age_s` (staleness shown, not
   hidden). NO API path touches the adapter — `/kill` included (adapter
   re-review R2): it journals a flatten request under BLEND_LOCK and the
-  loop thread, owner of the ib_async event loop, executes it on its next
-  (immediately woken) iteration — see the two-stage `/kill` above.
+  loop thread, owner of the ib_async event loop, executes it FIRST in its
+  next (immediately woken) iteration — see the two-stage `/kill` above.
 
 SUPERVISED FIRST SESSION: flip `DRY_RUN=false` (with `TRADING_MODE=paper`)
 DURING MARKET HOURS and keep eyes on Telegram + `/status` through the

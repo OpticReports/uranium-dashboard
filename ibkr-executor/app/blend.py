@@ -118,6 +118,16 @@ UNVERIFIED_REALERT_CYCLES = 4   # re-armed cadence for a position the blackout
                                 # so they re-alert every N reconciles until
                                 # they do (the budget-alarm / quote_alert_armed
                                 # pattern), instead of one deduped WARN line
+FEED_TIMEOUT = 8.0          # MF-1: the tracker poll is the loop's second 30s
+                            # timeout — capped so one hanging dependency
+                            # cannot stall the cycle (nino.FEED_TIMEOUT caps
+                            # the first)
+FEED_FAIL_TTL = 60.0        # MF-1: negative cache for a FAILING tracker,
+                            # per URL. Shorter than the poll interval, so a
+                            # scheduled cycle always re-tries; it only stops
+                            # a cycle woken seconds later (e.g. by /kill)
+                            # from re-paying the timeout
+_INTENTS_FAIL: dict = {}    # tracker base URL -> ts of its last failure
 ORPHAN_REALERT_CYCLES = 4       # same cadence for a retired stop whose cancel
                                 # never ACKed (x7): loud on record, then every
                                 # N retries — never per-cycle spam, never
@@ -1383,11 +1393,24 @@ def fetch_intents(cfg) -> dict | None:
     """GET the tracker's intent set. A bare authenticated GET: no params, no
     body — the tracker never learns positions or account equity. None on any
     failure (a dead tracker blocks NEW actions; resting GTC stops and the
-    time-stop belt still protect the book)."""
+    time-stop belt still protect the book).
+
+    MF-1: the loop runs one iteration per poll interval, and this is the
+    second of its two feeds. A 30s timeout whose failures were never cached
+    meant a dead tracker cost the loop 30s every cycle on top of NOAA's.
+    The timeout is now a few seconds and a failure is negative-cached per
+    URL for FEED_FAIL_TTL — shorter than the poll interval, so an ordinary
+    cycle is never denied a fetch; what it suppresses is re-paying the
+    timeout on a cycle woken moments later (a /kill wake, a retry)."""
     base = (getattr(cfg, "tracker_url", "") or "").rstrip("/")
     if not base:
         return None
-    kwargs: dict = {"timeout": 30}
+    failed_at = _INTENTS_FAIL.get(base)
+    if failed_at and time.time() - failed_at < FEED_FAIL_TTL:
+        logger.warning("blend intents: %s failed <%ss ago; skipping the "
+                       "fetch this cycle", base, FEED_FAIL_TTL)
+        return None
+    kwargs: dict = {"timeout": FEED_TIMEOUT}
     token = getattr(cfg, "tracker_api_token", "")
     if token:
         # Preferred: the dedicated read-only intents token — the executor
@@ -1398,8 +1421,11 @@ def fetch_intents(cfg) -> dict | None:
     try:
         r = httpx.get(f"{base}/blend3070/intents", **kwargs)
         r.raise_for_status()
-        return r.json()
+        payload = r.json()
+        _INTENTS_FAIL.pop(base, None)
+        return payload
     except Exception as exc:  # noqa: BLE001
+        _INTENTS_FAIL[base] = time.time()
         logger.warning("blend intents fetch failed: %s", exc)
         return None
 

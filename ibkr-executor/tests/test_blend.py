@@ -3579,3 +3579,206 @@ def test_gate_zf3_the_readme_does_not_overstate_rollback_protection():
     # never the one away from this build
     assert ("cannot protect a rollback FROM this build to an older one"
             in readme)
+
+
+# --- the final counter-review's MATERIALS (MF-1..MF-3) ------------------------
+
+def _service_client(tmp_path, monkeypatch, adapter=None):
+    """Boot the real service (one lifespan, one loop thread) the way the R2
+    gates do, and hand back the TestClient context manager unentered."""
+    from app.config import settings
+    from app import service
+    from app.service import app as service_app
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setattr(settings, "state_path", str(tmp_path / "s.json"))
+    monkeypatch.setattr(settings, "blend_state_path", str(tmp_path / "b.json"))
+    monkeypatch.setattr(settings, "exec_token", "sekrit")
+    monkeypatch.setattr(settings, "tws_userid", "")
+    monkeypatch.setattr(settings, "blend_enabled", True)
+    if adapter is not None:
+        monkeypatch.setattr(service, "DryAdapter", adapter)
+    # Earlier service tests leave MGR/BLEND/ADAPTER set on the module, so a
+    # "wait until they are not None" loop would return the PREVIOUS test's
+    # objects. Clear them for the duration (monkeypatch restores them).
+    monkeypatch.setattr(service, "ADAPTER", None)
+    monkeypatch.setattr(service, "BLEND", None)
+    monkeypatch.setattr(service, "MGR", None)
+    return TestClient(service_app), service
+
+
+def _kill_ready_position(B, A):
+    """A held position with a REAL resting stop at the venue — the shape the
+    /kill flatten actually has to close."""
+    _seed_initialized(B, sleeve_cash=2_750.0)
+    _held_position(B, stop_ref=None)
+    pos = B.state.positions["1"]
+    rs = A.place_stock_order("CRSP", -5, "STP", stop_price=44.0, tif="GTC",
+                             client_order_id="blend-1-stp-44.0000")
+    pos.stop_order_ref = rs["order_ref"]
+    B.save()
+
+
+def test_gate_mf1_a_queued_kill_flatten_never_waits_for_a_SLOW_FEED(
+        tmp_path, monkeypatch):
+    """MF-1 (pre-existing at main, live-relevant): the queued /kill flatten
+    ran at the END of the loop iteration — behind `nino34_weekly()`
+    (httpx, 30s, failures never cached) and `fetch_intents` (30s) — so
+    kill-to-flatten was exactly the loop's feed latency: 3s feed -> 3.01s,
+    8s -> 8.01s, 25s -> no flatten inside 20s, while the code comment and
+    the operator alert promised "within seconds". The flatten now runs
+    FIRST in the iteration, ahead of both feeds, with reconcile-first (N14)
+    preserved inside run_cycle.
+
+    Measured here, not argued: both feeds are made to hang for FEED_HANG
+    seconds from the second call on (the first cycle is fast so the loop is
+    parked in its poll wait when /kill lands, which is the deployed shape),
+    and the flatten must complete in a small fraction of that."""
+    import threading
+    import time as _time
+
+    FEED_HANG = 6.0
+    release = threading.Event()          # lets shutdown cut the hang short
+    calls = {"nino": 0, "intents": 0}
+
+    def _hang(which):
+        calls[which] += 1
+        if calls[which] > 1:             # cycle 1 stays fast
+            release.wait(FEED_HANG)
+
+    from app import service
+
+    def slow_nino():
+        _hang("nino")
+        return 2.7
+
+    def slow_intents(_cfg):
+        _hang("intents")
+        return None
+
+    monkeypatch.setattr(service, "nino34_weekly", slow_nino)
+    monkeypatch.setattr(blend_mod, "fetch_intents", slow_intents)
+    client, service = _service_client(tmp_path, monkeypatch)
+    try:
+        with client as c:
+            for _ in range(200):
+                if service.BLEND is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            B, A = service.BLEND, service.ADAPTER
+            # cycle 1 complete -> the loop is parked in its poll wait
+            assert _wait_until(lambda: service.LAST["loop_ok"] > 0)
+            assert _wait_until(lambda: calls["nino"] >= 1)
+            _kill_ready_position(B, A)
+            t0 = _time.time()
+            r = c.get("/kill", params={"token": "sekrit"})
+            assert r.json()["blend"] == "flatten_queued"
+            assert _wait_until(lambda: B.state.flatten_request is None
+                               and B.state.positions == {}, timeout=20.0)
+            latency = _time.time() - t0
+            # the flatten did not wait out a single feed, let alone two
+            assert latency < FEED_HANG / 2, f"kill->flatten took {latency:.2f}s"
+            assert _executions(A, "CRSP")           # it really sold
+        # and the loop DID go on to pay the slow feeds afterwards — the
+        # ordering is what changed, not the feeds being skipped
+        assert calls["nino"] >= 2
+    finally:
+        release.set()
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_mf1_the_kill_alert_states_the_real_bound(tmp_path, monkeypatch):
+    """MF-1's other half: a comment and an alert that promise "within
+    seconds" while the code waits out two 30s timeouts is the defect. The
+    operator text must say what is actually true — the flatten runs FIRST in
+    the loop's next iteration, and the only thing that can precede it is a
+    cycle already in flight, whose feeds are capped."""
+    import time as _time
+
+    client, service = _service_client(tmp_path, monkeypatch)
+    try:
+        with client as c:
+            for _ in range(200):
+                if service.BLEND is not None:
+                    break
+                _time.sleep(0.05)
+            sent: list[str] = []
+            monkeypatch.setattr(service, "send", sent.append)
+            _seed_initialized(service.BLEND, sleeve_cash=2_750.0)
+            _held_position(service.BLEND, stop_ref=None)
+            c.get("/kill", params={"token": "sekrit"})
+            (kill_msg,) = [m for m in sent if "KILLED" in m]
+            assert "flatten QUEUED" in kill_msg
+            assert "runs FIRST in the loop's next iteration" in kill_msg
+            assert "already in flight" in kill_msg
+    finally:
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_mf1_a_failing_feed_is_not_re_paid_every_cycle(monkeypatch):
+    """MF-1's third half: neither feed cached its FAILURES, so an
+    unreachable dependency cost the loop a full 30s timeout EVERY cycle —
+    `nino.py:32` returned the stale value without ever writing `_CACHE`.
+    Both feeds are capped at a few seconds now and a failure is
+    negative-cached, so one hanging dependency cannot pace the loop."""
+    from app import nino as nino_mod
+    from app.nino import nino34_weekly
+
+    assert nino_mod.FEED_TIMEOUT <= 10 and blend_mod.FEED_TIMEOUT <= 10
+    monkeypatch.setattr(nino_mod, "_CACHE", {})
+    seen = {"n": 0, "timeout": None}
+
+    def boom(url, **kw):
+        seen["n"] += 1
+        seen["timeout"] = kw.get("timeout")
+        raise RuntimeError("NOAA unreachable")
+
+    monkeypatch.setattr(nino_mod.httpx, "get", boom)
+    assert nino34_weekly() is None and seen["n"] == 1
+    assert seen["timeout"] == nino_mod.FEED_TIMEOUT     # not 30s
+    assert nino34_weekly() is None and seen["n"] == 1   # negative-cached
+    # a dead feed is RE-TRIED on a schedule, never abandoned
+    nino_mod._CACHE["fail"] = time.time() - nino_mod.FAIL_TTL - 1
+    assert nino34_weekly() is None and seen["n"] == 2
+    # ...and a success clears the negative cache
+    good = {"n": 0}
+
+    class R:
+        text = "\n".join(["x " * 0 + " ".join(["1"] * 9)])
+
+        def __init__(self):
+            good["n"] += 1
+
+    monkeypatch.setattr(nino_mod.httpx, "get", lambda url, **kw: R())
+    nino_mod._CACHE["fail"] = time.time()
+    nino_mod._CACHE.pop("v", None)
+    assert nino34_weekly() is None                      # retry not due yet
+    nino_mod._CACHE["fail"] = time.time() - nino_mod.FAIL_TTL - 1
+    assert nino34_weekly() == 1.0 and "fail" not in nino_mod._CACHE
+
+    # the tracker poll, same treatment — keyed per URL, so one dead tracker
+    # never silences another
+    monkeypatch.setattr(blend_mod, "_INTENTS_FAIL", {})
+    hits = {"n": 0, "timeout": None}
+
+    def boom2(url, **kw):
+        hits["n"] += 1
+        hits["timeout"] = kw.get("timeout")
+        raise RuntimeError("tracker unreachable")
+
+    monkeypatch.setattr(blend_mod.httpx, "get", boom2)
+
+    class C(Cfg):
+        tracker_url = "https://tracker.invalid"
+
+    assert fetch_intents(C()) is None and hits["n"] == 1
+    assert hits["timeout"] == blend_mod.FEED_TIMEOUT    # not 30s
+    assert fetch_intents(C()) is None and hits["n"] == 1     # negative-cached
+    assert blend_mod.FEED_FAIL_TTL < 300                # < the poll interval:
+    blend_mod._INTENTS_FAIL["https://tracker.invalid"] = (   # a SCHEDULED
+        time.time() - blend_mod.FEED_FAIL_TTL - 1)           # cycle re-tries
+    assert fetch_intents(C()) is None and hits["n"] == 2
+
+

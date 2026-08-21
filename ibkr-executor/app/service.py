@@ -22,7 +22,7 @@ from .alerts import send
 from .config import settings
 from .ib_adapter import DryAdapter
 from .manager import LadderManager
-from .nino import nino34_weekly
+from .nino import FEED_TIMEOUT, nino34_weekly
 
 logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
 logger = logging.getLogger(__name__)
@@ -41,8 +41,9 @@ BLEND_LOCK = threading.Lock()      # serializes blend state writes: /kill's
                                    # request_flatten (API thread) vs
                                    # run_cycle (loop thread)
 LOOP_WAKE = threading.Event()      # /kill pokes the loop so a queued blend
-                                   # flatten runs within seconds, not a
-                                   # full poll interval (R2)
+                                   # flatten runs at the TOP of the next
+                                   # iteration instead of a full poll
+                                   # interval later (R2 + MF-1)
 ADAPTER = None
 LAST: dict = {"loop_ok": 0.0, "nino34": None, "mode": "OFFLINE"}
 # Last blend cycle outcome (feed's last_cycle + /health blend_loop): a
@@ -99,6 +100,32 @@ def _build():
     LAST["mode"] = settings.trading_mode.upper()
 
 
+def _blend_cycle(payload: dict | None, today: str) -> None:
+    """ONE blend cycle (reconcile-first, N14) with its outcome recorded for
+    /health + the feed. Called at most twice per iteration: FIRST, with no
+    payload, when a /kill flatten is journaled (MF-1 — the emergency stop
+    must not queue behind a feed), then in the ordinary tracker-driven
+    position."""
+    from .blend import run_cycle
+    try:
+        with BLEND_LOCK:
+            run_cycle(BLEND, ADAPTER, payload, today, alert=send)
+        BLEND_CYCLE.update({"date": today, "ok": True,
+                            "error": None})
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("blend cycle error: %s", exc)
+        BLEND_CYCLE.update({"date": today, "ok": False,
+                            "error": str(exc),
+                            "error_ts": time.time()})
+        if BLEND.state.flatten_request is not None:
+            # R2: a queued kill-flatten must never fail
+            # silently — loud every failing cycle until done.
+            send(f"🚨🚨 blend: cycle FAILED with a /kill "
+                 f"flatten QUEUED ({exc}) — nothing flattened "
+                 f"yet; the loop retries next cycle, book "
+                 f"stays halted")
+
+
 def _loop():
     global LOOP_WAKE
     # Fresh wake event per loop thread: a superseded loop from an earlier
@@ -120,8 +147,32 @@ def _loop():
     while True:
         try:
             today = datetime.now(timezone.utc).date().isoformat()
+            # MF-1: a journaled /kill flatten is the FIRST thing an
+            # iteration does — ahead of the NOAA fetch, the ladder's
+            # gateway round-trips and the tracker poll. It used to run at
+            # the END of the iteration, so kill-to-flatten was exactly the
+            # loop's feed latency (measured: a 3s feed -> 3.01s, an 8s feed
+            # -> 8.01s, a 25s feed -> no flatten at all inside 20s) while
+            # the comment and the operator alert promised "within seconds".
+            # Reconcile-first (N14) is preserved: run_cycle still reconciles
+            # before it flattens, so stop fills book before anything sells.
+            # No payload is fetched for this pass — the emergency stop takes
+            # no tracker decisions, so it waits on no feed.
+            flatten_ran = False
+            if BLEND is not None and BLEND.state.flatten_request is not None:
+                _blend_cycle(None, today)
+                flatten_ran = True
             nino = nino34_weekly()
             LAST["nino34"] = nino
+            if (not flatten_ran and BLEND is not None
+                    and BLEND.state.flatten_request is not None):
+                # A /kill that landed while this iteration was parked inside
+                # the feed call above must not ALSO wait for the ladder's
+                # gateway round-trips and the tracker poll (MF-1). The bound
+                # on a queued flatten is therefore: whatever remains of the
+                # feed call already in flight — capped at FEED_TIMEOUT — and
+                # nothing else.
+                _blend_cycle(None, today)
             marks = {}
             # x12: the ladder block mutates and persists MGR — /kill and
             # /resume do the same from API threads. Serialize them exactly
@@ -161,34 +212,25 @@ def _loop():
             for msg in ladder_alerts:
                 send(msg)
             if BLEND is not None:
+                from .blend import fetch_intents
                 try:
-                    from .blend import fetch_intents, run_cycle
                     payload = fetch_intents(settings)
-                    if payload is None:
-                        # Tracker outage: the cycle STILL runs — reconcile
-                        # (stop-fill ingestion, orphan cancel retries,
-                        # STOP_MISSING re-placement) and the local 90-day
-                        # belt are unconditional; only tracker-dependent
-                        # decisions are skipped (counter-agent N13).
-                        logger.warning("blend: tracker unreachable; "
-                                       "reconcile-only cycle (no new "
-                                       "decisions)")
-                    with BLEND_LOCK:
-                        run_cycle(BLEND, ADAPTER, payload, today, alert=send)
-                    BLEND_CYCLE.update({"date": today, "ok": True,
-                                        "error": None})
                 except Exception as exc:  # noqa: BLE001
-                    logger.exception("blend cycle error: %s", exc)
-                    BLEND_CYCLE.update({"date": today, "ok": False,
-                                        "error": str(exc),
-                                        "error_ts": time.time()})
-                    if BLEND.state.flatten_request is not None:
-                        # R2: a queued kill-flatten must never fail
-                        # silently — loud every failing cycle until done.
-                        send(f"🚨🚨 blend: cycle FAILED with a /kill "
-                             f"flatten QUEUED ({exc}) — nothing flattened "
-                             f"yet; the loop retries next cycle, book "
-                             f"stays halted")
+                    # fetch_intents already swallows transport errors; if it
+                    # ever raises anyway the CYCLE must still run (reconcile
+                    # + a queued flatten are unconditional) and be recorded.
+                    logger.exception("blend intents fetch raised: %s", exc)
+                    payload = None
+                if payload is None:
+                    # Tracker outage: the cycle STILL runs — reconcile
+                    # (stop-fill ingestion, orphan cancel retries,
+                    # STOP_MISSING re-placement) and the local 90-day
+                    # belt are unconditional; only tracker-dependent
+                    # decisions are skipped (counter-agent N13).
+                    logger.warning("blend: tracker unreachable; "
+                                   "reconcile-only cycle (no new "
+                                   "decisions)")
+                _blend_cycle(payload, today)
             LAST["loop_ok"] = time.time()
         except Exception as exc:  # noqa: BLE001
             logger.exception("loop error: %s", exc)
@@ -302,13 +344,19 @@ def kill(x_exec_token: str | None = Header(default=None),
         # cross-thread writes risk session corruption. So /kill only
         # JOURNALS the flatten request (persisted — survives a restart) and
         # halts the book immediately; the loop thread executes the flatten
-        # on its next iteration (woken right away below) with
-        # reconcile-first semantics (N14) and alerts what actually closed
-        # vs parked — the summary here claims only what is true NOW.
+        # as the FIRST act of its next iteration (woken right away below),
+        # ahead of the NOAA fetch, the ladder and the tracker poll (MF-1),
+        # with reconcile-first semantics (N14) and alerts what actually
+        # closed vs parked — the summary here claims only what is true NOW.
+        # The bound is therefore: whatever remains of a cycle ALREADY in
+        # flight, and nothing else. Both of that cycle's feeds are capped
+        # (nino.FEED_TIMEOUT / blend.FEED_TIMEOUT), so the honest worst case
+        # is tens of seconds on a hanging dependency, not a full poll
+        # interval and not two 30s timeouts.
         today = datetime.now(timezone.utc).date().isoformat()
         with BLEND_LOCK:
             BLEND.request_flatten(today)
-        LOOP_WAKE.set()                 # flatten runs within seconds
+        LOOP_WAKE.set()                 # skip the poll wait; flatten first
         loop_age = (time.time() - LAST["loop_ok"]) if LAST["loop_ok"] else None
         loop_warn = ""
         if loop_age is None or loop_age > 2 * settings.poll_seconds:
@@ -316,8 +364,12 @@ def kill(x_exec_token: str | None = Header(default=None),
                          "— the flatten will NOT run until it recovers; "
                          "flatten manually if urgent")
         blend_note = (" + blend HALTED, flatten QUEUED for the execution "
-                      "loop (it owns the venue connection); a completion "
-                      "alert will state what closed vs parked" + loop_warn)
+                      "loop (it owns the venue connection) and it runs "
+                      "FIRST in the loop's next iteration — immediately "
+                      "unless a cycle is already in flight, in which case "
+                      "it waits out that cycle (feeds capped at "
+                      f"{FEED_TIMEOUT:.0f}s each); a completion alert will "
+                      "state what closed vs parked" + loop_warn)
     # x12: mutating legs/halted from this API thread must not interleave
     # with the loop thread's own ladder step + save (they raced with no
     # lock at all). MGR_LOCK is taken only AFTER the blend section above
