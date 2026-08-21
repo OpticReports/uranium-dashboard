@@ -57,6 +57,11 @@ def _build():
     if settings.blend_enabled:
         from .blend import Blend3070Manager
         BLEND = Blend3070Manager(settings, settings.blend_state_path)
+        if BLEND.archived_state:
+            # Mode-transition guard fired: the previous book's fills belong
+            # to another mode (e.g. DRY placeholder prices) — starting clean.
+            logger.warning("blend: %s", BLEND.archived_state)
+            send(f"⚠️ blend: starting a FRESH book — {BLEND.archived_state}")
     if not (settings.tws_userid and settings.tws_password):
         ADAPTER = DryAdapter()
         LAST["mode"] = "OFFLINE"
@@ -302,6 +307,11 @@ def resume(x_exec_token: str | None = Header(default=None),
     MGR.state.halted = None
     MGR.save()
     if BLEND is not None:
-        BLEND.resume()
+        # N3: /resume must not race the loop thread's cycle (a resume
+        # interleaved with execute_flatten un-halts a book that is being
+        # sold and lets the same cycle place fresh entries). BLEND_LOCK
+        # serializes it behind any in-flight cycle, flatten included.
+        with BLEND_LOCK:
+            BLEND.resume()
     send("ibkr ladder resumed")
     return {"ok": True}

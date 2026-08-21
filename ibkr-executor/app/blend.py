@@ -198,12 +198,23 @@ class BlendState:
     last_reconcile_ts: float = 0.0   # wall clock of the last SUCCESSFUL
                                      # reconcile pass (venue-history horizon
                                      # guard, adapter review m2)
+    mode: str = ""      # "dry:paper" | "real:paper" | "real:live" — the mode
+                        # this book's fills belong to. A book built in one
+                        # mode is FICTION in another (DryAdapter fills at
+                        # placeholder prices; paper fills aren't live fills):
+                        # _load archives the file and starts fresh on any
+                        # mismatch rather than reconciling fiction against a
+                        # venue that never saw those orders.
 
 
 class Blend3070Manager:
     def __init__(self, cfg, state_path: str):
         self.cfg = cfg
         self.state_path = state_path
+        # Set by _load when a mode mismatch archived the previous book —
+        # service startup turns it into a Telegram alert (the manager has
+        # no alert channel at construction time).
+        self.archived_state: str | None = None
         self.state = self._load()
         # M2 (thread-safety): API threads (/status, /blend/feed) serve THIS
         # loop-thread-refreshed quote cache — they must never touch the
@@ -217,9 +228,28 @@ class Blend3070Manager:
 
     # ---------- persistence (LadderManager pattern) ----------
 
+    def _current_mode(self) -> str:
+        return f"{'dry' if self.cfg.dry_run else 'real'}:{self.cfg.trading_mode}"
+
     def _load(self) -> BlendState:
         try:
             raw = json.load(open(self.state_path))
+            stored_mode = raw.get("mode", "")
+            if stored_mode != self._current_mode():
+                # Mode-transition guard: this book's fills belong to a
+                # different mode (or a pre-guard file of unknown mode) and
+                # the current venue never saw its orders — reconciling
+                # them would mark fictional holdings at real prices and
+                # trade the difference. Archive and start clean.
+                archive = (f"{self.state_path}.archived-"
+                           f"{(stored_mode or 'unknown').replace(':', '_')}"
+                           f"-{int(time.time())}")
+                os.replace(self.state_path, archive)
+                self.archived_state = (f"mode change "
+                                       f"{stored_mode or 'unknown'} -> "
+                                       f"{self._current_mode()}; previous "
+                                       f"book archived to {archive}")
+                return BlendState(mode=self._current_mode())
             st = BlendState(
                 initialized=raw.get("initialized", False),
                 entered_ids=raw.get("entered_ids", []),
@@ -241,17 +271,24 @@ class Blend3070Manager:
                 util_alert_armed=raw.get("util_alert_armed", True),
                 quote_alert_armed=raw.get("quote_alert_armed", True),
                 last_reconcile_ts=raw.get("last_reconcile_ts", 0.0),
+                mode=stored_mode,
             )
             st.positions = {k: BlendPosition(**v)
                             for k, v in raw.get("positions", {}).items()}
             st.events = raw.get("events", [])[-300:]
             return st
+        except FileNotFoundError:
+            return BlendState(mode=self._current_mode())
         except Exception:  # noqa: BLE001
-            return BlendState()
+            return BlendState(mode=self._current_mode())
 
     def save(self) -> None:
+        # Atomic write (counter-agent N3): a save interrupted mid-write —
+        # or two threads racing — must never leave a truncated file that
+        # _load silently resolves to a fresh empty book.
         os.makedirs(os.path.dirname(self.state_path) or ".", exist_ok=True)
-        json.dump({"initialized": self.state.initialized,
+        tmp_path = self.state_path + ".tmp"
+        payload = {"initialized": self.state.initialized,
                    "positions": {k: asdict(v)
                                  for k, v in self.state.positions.items()},
                    "entered_ids": self.state.entered_ids,
@@ -273,8 +310,13 @@ class Blend3070Manager:
                    "util_alert_armed": self.state.util_alert_armed,
                    "quote_alert_armed": self.state.quote_alert_armed,
                    "last_reconcile_ts": self.state.last_reconcile_ts,
-                   "events": self.state.events[-300:]},
-                  open(self.state_path, "w"), indent=1)
+                   "mode": self.state.mode,
+                   "events": self.state.events[-300:]}
+        with open(tmp_path, "w") as fh:
+            json.dump(payload, fh, indent=1)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp_path, self.state_path)
 
     def _event(self, level: str, msg: str) -> bool:
         """Log a deduped event. Returns True only when the event was NEWLY
@@ -1822,6 +1864,10 @@ def execute_flatten(mgr: Blend3070Manager, adapter, alert) -> None:
                   f"position still held; book halted, close manually or "
                   f"wait for reconcile")
     st.flatten_request = None       # executed (outcomes alerted below)
+    # N3: re-assert the halt. If a /resume slipped in between the request
+    # and this execution, the book must still come out of a flatten HALTED
+    # — the operator resumes a flattened book explicitly, never races one.
+    st.halted = "KILL"
     mgr.save()
     # Honest completion summary: exactly what closed vs what did not.
     if parked or unrec:

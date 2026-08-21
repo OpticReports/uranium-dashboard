@@ -5,6 +5,7 @@ invariants (BLEND_ENABLED=false changes nothing; the tracker never learns
 account equity; DRY_RUN defaults true). All offline."""
 from __future__ import annotations
 
+import json
 import time
 
 import pytest
@@ -20,6 +21,8 @@ class Cfg:
     tracker_url = ""
     tracker_user = ""
     tracker_password = ""
+    dry_run = True              # mode-guard: tests run a "dry:paper" book
+    trading_mode = "paper"
 
 
 def mk(tmp_path, **cfg_over):
@@ -2146,3 +2149,125 @@ def test_gate_adapt_m1_pending_sweep_cash_reserved_from_entries(tmp_path):
     # only $100 is spendable -> 2 shares @ 50 (risk sizing alone wants 5)
     assert ent["qty"] == 2
     assert not [o for o in out if o["action"] == "SWEEP"]   # kind suppressed
+
+
+# --- mode-transition guard + N3 (resume race / atomic save) -------------------
+
+def test_gate_mode_guard_archives_foreign_mode_book(tmp_path):
+    """A book built under DRY (placeholder fills) must NOT survive into a
+    real mode: the venue never saw those orders, and reconciling them would
+    mark fiction at real prices and trade the difference."""
+    m = mk(tmp_path)                       # dry:paper
+    _seed_initialized(m, spy_qty=700, bil_qty=300)
+    _held_position(m)
+    m.save()
+    m2 = mk(tmp_path, dry_run=False)       # real:paper — same state file
+    assert m2.archived_state               # loud: startup alerts on this
+    assert m2.state.initialized is False
+    assert m2.state.positions == {}
+    assert m2.state.spy_qty == 0 and m2.state.bil_qty == 0
+    assert m2.state.mode == "real:paper"
+    archives = list(tmp_path.glob("blend.json.archived-*"))
+    assert len(archives) == 1              # old book preserved, not deleted
+    old = json.loads(archives[0].read_text())
+    assert old["spy_qty"] == 700
+
+
+def test_gate_mode_guard_archives_legacy_untagged_state(tmp_path):
+    """A pre-guard state file (no mode key) is of UNKNOWN mode — it must be
+    archived even when the current mode happens to match what wrote it."""
+    path = tmp_path / "blend.json"
+    path.write_text(json.dumps({"initialized": True, "spy_qty": 700}))
+    m = mk(tmp_path)                       # dry:paper, same as the writer was
+    assert m.archived_state
+    assert m.state.spy_qty == 0
+    assert list(tmp_path.glob("blend.json.archived-unknown-*"))
+
+
+def test_gate_mode_guard_same_mode_restart_keeps_book(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, spy_qty=70)
+    _held_position(m)
+    m.save()
+    m2 = mk(tmp_path)                      # same mode: no archive, book kept
+    assert m2.archived_state is None
+    assert m2.state.initialized and m2.state.spy_qty == 70
+    assert "1" in m2.state.positions
+
+
+def test_gate_n3_flatten_reasserts_halt_after_raced_resume(tmp_path):
+    """If a /resume raced in between the kill request and the loop's flatten
+    (halted cleared but the request already picked up), the book must come
+    out of the flatten HALTED — never un-halted and entering same-cycle."""
+    from app.blend import execute_flatten
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m, stop_ref=None)
+    m.request_flatten("2026-08-21")
+    m.state.halted = None                  # the race the lock now prevents,
+                                           # kept as defense-in-depth
+    execute_flatten(m, DryAdapter(), alert=lambda s: None)
+    assert m.state.flatten_request is None
+    assert m.state.positions == {}
+    assert m.state.halted == "KILL"
+
+
+def test_gate_n3_save_atomic_survives_crash_mid_write(tmp_path, monkeypatch):
+    """A crash mid-save must never leave a truncated file that _load
+    silently resolves to a fresh empty book (which would re-plan the whole
+    book from scratch against live positions)."""
+    import app.blend as blend_mod
+    m = mk(tmp_path)
+    _seed_initialized(m, spy_qty=70)
+    m.save()
+
+    def bad_dump(obj, fh, **kw):
+        fh.write('{"partial')
+        raise IOError("disk full mid-write")
+
+    monkeypatch.setattr(blend_mod.json, "dump", bad_dump)
+    m.state.spy_qty = 999
+    with pytest.raises(IOError):
+        m.save()
+    monkeypatch.undo()
+    m2 = mk(tmp_path)                      # reload: the LAST GOOD book
+    assert m2.state.initialized is True
+    assert m2.state.spy_qty == 70          # not 999, and not a fresh book
+
+
+def test_gate_n3_resume_blocks_behind_blend_lock(tmp_path, monkeypatch):
+    """/resume must serialize behind the loop's cycle (BLEND_LOCK): a resume
+    racing an in-flight flatten un-halts a book that is being sold."""
+    import threading
+
+    from fastapi.testclient import TestClient
+
+    from app.config import settings
+    from app import service
+    from app.service import app
+
+    monkeypatch.setattr(settings, "state_path", str(tmp_path / "s.json"))
+    monkeypatch.setattr(settings, "blend_state_path", str(tmp_path / "b.json"))
+    monkeypatch.setattr(settings, "exec_token", "sekrit")
+    monkeypatch.setattr(settings, "tws_userid", "")
+    monkeypatch.setattr(settings, "blend_enabled", True)
+    try:
+        with TestClient(app) as c:
+            assert _wait_until(lambda: service.BLEND is not None)
+            service.BLEND.state.halted = "KILL"
+            done = threading.Event()
+            with service.BLEND_LOCK:       # a cycle is "in flight"
+                t = threading.Thread(
+                    target=lambda: (c.get("/resume",
+                                          params={"token": "sekrit"}),
+                                    done.set()))
+                t.start()
+                time.sleep(0.4)
+                assert not done.is_set()   # resume waits for the cycle
+                assert service.BLEND.state.halted == "KILL"
+            assert done.wait(5.0)          # lock released -> resume lands
+            t.join(5.0)
+            assert service.BLEND.state.halted is None
+    finally:
+        service.BLEND = None
+        service.MGR = None

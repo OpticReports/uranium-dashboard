@@ -212,6 +212,7 @@ def _fill_working_mkt(fake: FakeIB):
 
 class _Cfg:
     trading_mode = "paper"
+    dry_run = True              # mode-guard: tests run a "dry:paper" book
     ib_host = "127.0.0.1"
     ib_client_id = 17
     blend_budget = 0.0
