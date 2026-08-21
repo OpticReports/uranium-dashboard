@@ -1,8 +1,8 @@
 # Adversarial-review probes (the record, not the suite)
 
-These six files are the counter-agent probe suites written against the
+These files are the counter-agent probe suites written against the
 blend3070 executor across the review rounds that produced N1/N2, R1/R2, N3,
-X1–X4/Y1, and Z1/Z2/y2. They are committed as the **audit record** of what
+X1–X4/Y1, Z1/Z2/y2 and ZF-1..ZF-9. They are committed as the **audit record** of what
 was attacked and what landed — the thing a later reviewer needs in order to
 tell a probe that got HARDER from one that got quietly softened.
 
@@ -49,4 +49,5 @@ Each prints `N/M probes passed; landed attacks: [...]` on the last line.
 | `attack_n3guard.py` | 10/10 | |
 | `attack_n1n2.py` | 14/14 | |
 | `attack_x1x4.py` | 39/40 | `X-B[consequence]` lands BY DESIGN — its author withdrew it (a bounded liquidation at a chosen price beats unbounded naked downside); do not code to it |
+| `attack_zfinal.py` | 41/43 | The whole-branch review's suite, committed byte-identical to the file its author ran. Two land and BOTH are by design. `ZF-A9c` is a recorded SCOPE statement, not a defect: outside a flagged cell reconcile never reads `held`, so the invariant is "cover <= held **in cells where `held` was verified this cycle**" — identical at main, and closing it is a new periodic-sweep feature. `ZF-G4` ASSERTS the ZF-2 defect (pass 4 adopting an already-FILLED order as working protection, `stop_missing=False` with nothing resting): it PASSED while the defect existed and now FAILS because `_ensure_stop` refuses a non-`working` duplicate — its own detail line shows the corrected end state (`stop_missing=True`, `naked=True`). It is left exactly as written, per rule 3 above. `ZF-D3` needs `ZF_MAIN_WORKTREE=<a worktree at e750abd>` to mean anything; without it the subprocess re-imports HEAD and reports a false PASS. The rollback it measures is unfixable from this side — see the deploy note in the executor README (ZF-3). |
 | `attack_z1.py` | 20/21 | `Z-1b` lands and is left landing on purpose: it directly contradicts `Z-1`, the hand-derived allocation table in the same file. `Z-1` pins `held > book` to `{1:2,2:2,3:1}`; `Z-1b` demands every allocation be `<= that position's own qty`. Both cannot hold. `held > book` is unreachable from the only call site (it enters on `held < book_qty`) and every result is capped at `min(alloc, qty)` before it can reach the venue, so the cell is a documentation defect, not a live one — and preserving the reviewer's verified table was judged worth more than silencing a probe about an unreachable input. `Z-1c` (negative/zero qty) WAS fixed. |
