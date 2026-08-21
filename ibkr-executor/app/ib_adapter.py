@@ -36,6 +36,12 @@ MKT_FILL_WAIT_S = 5.0        # bounded wait for a synchronous MKT fill (liquid
                              # still working after it returns 'working'
 CANCEL_ACK_TIMEOUT_S = 10.0  # ambiguous cancel timeout -> RAISE (fail closed)
 WAIT_TICK_S = 0.25           # event-loop pump granularity inside waits
+RECONNECT_BACKOFF_S = 15.0   # first retry delay after the gateway drops
+RECONNECT_BACKOFF_MAX_S = 300.0  # backoff cap (~one attempt per blend cycle)
+OUTAGE_ALERT_S = 30 * 60.0   # alert ONLY when down longer than this — the
+                             # daily IB gateway auto-restart is far shorter
+                             # and must be a non-event (fail closed, then
+                             # auto-recover silently)
 
 # IB order states that mean the order can no longer fill.
 _IB_CANCELLED = ("Cancelled", "ApiCancelled", "Inactive")
@@ -96,6 +102,15 @@ def size_combos(budget: float, net_debit: float, multiplier: int) -> int:
 
 class IBAdapter:
     def __init__(self, cfg):
+        # The adapter is built inside the service's daemon loop thread:
+        # ensure that thread owns an asyncio event loop BEFORE IB() binds
+        # one (review sub-note — a constructor raise here used to kill the
+        # loop thread silently; service._loop also guards the build now).
+        import asyncio
+        try:
+            asyncio.get_event_loop()
+        except RuntimeError:
+            asyncio.set_event_loop(asyncio.new_event_loop())
         from ib_async import IB               # lazy: tests inject a mock module
         self.cfg = cfg
         self.ib = IB()
@@ -105,6 +120,15 @@ class IBAdapter:
         self._stock_contracts: dict[str, object] = {}
         self._emitted_fill_keys: set[str] = set()
         self._requeued_fills: list[dict] = []
+        # M5 reconnect bookkeeping: the gateway's daily auto-restart drops
+        # the session — every surface reconnects with backoff via
+        # _require_connected instead of staying wedged until a manual
+        # container restart. Shared by the stock surfaces AND the combo
+        # path (spot() goes through the same gate).
+        self._reconnect_backoff = RECONNECT_BACKOFF_S
+        self._next_reconnect_ts = 0.0
+        self._disconnected_since: float | None = None
+        self._outage_alerted = False
         self._connect()
 
     def _connect(self):
@@ -187,10 +211,73 @@ class IBAdapter:
     # the service loop thread that built the adapter.
 
     def _require_connected(self) -> None:
+        if self.ib.isConnected():
+            return
+        # M5: the gateway dropped (e.g. its daily auto-restart) — try to
+        # reconnect with backoff instead of staying wedged. Still raises
+        # while down: the blend cycle FAILS CLOSED, then auto-recovers on
+        # a later cycle once the gateway is back.
+        self._reconnect()
         if not self.ib.isConnected():
             raise ExecutorConnectionError(
                 "IB gateway disconnected — stock-order surface unavailable "
-                "(blend cycle fails closed until the connection returns)")
+                "(blend cycle fails closed; auto-reconnect with backoff is "
+                "running)")
+
+    def _reconnect(self) -> None:
+        """One backed-off reconnect attempt. Alerts only when the outage
+        exceeds OUTAGE_ALERT_S (the daily gateway restart stays a
+        non-event); sends a recovery notice after an alerted outage."""
+        now = time.monotonic()
+        if self._disconnected_since is None:
+            self._disconnected_since = now
+            logger.warning("IB gateway connection lost — reconnecting with "
+                           "backoff (alert only if down > %d min)",
+                           int(OUTAGE_ALERT_S // 60))
+        if now < self._next_reconnect_ts:
+            self._maybe_outage_alert(now)
+            return
+        try:
+            try:
+                self.ib.disconnect()
+            except Exception:  # noqa: BLE001
+                pass
+            port = 4002 if self.cfg.trading_mode == "paper" else 4001
+            self.ib.connect(self.cfg.ib_host, port,
+                            clientId=self.cfg.ib_client_id, timeout=15)
+        except Exception as exc:  # noqa: BLE001
+            self._next_reconnect_ts = now + self._reconnect_backoff
+            self._reconnect_backoff = min(self._reconnect_backoff * 2,
+                                          RECONNECT_BACKOFF_MAX_S)
+            logger.warning("IB gateway reconnect failed (next attempt in "
+                           "%.0fs): %s", self._next_reconnect_ts - now, exc)
+            self._maybe_outage_alert(now)
+            return
+        down_s = now - self._disconnected_since
+        logger.info("IB gateway reconnected after %.0fs (same clientId: "
+                    "orderIds stay monotone, drain-once keys persist)",
+                    down_s)
+        if self._outage_alerted:
+            from .alerts import send
+            send(f"🧬 IB gateway RECONNECTED after {down_s / 60:.0f} min — "
+                 f"executor resumed (cycles were failing closed meanwhile; "
+                 f"GTC stops rested at the venue throughout)")
+        self._disconnected_since = None
+        self._outage_alerted = False
+        self._reconnect_backoff = RECONNECT_BACKOFF_S
+        self._next_reconnect_ts = 0.0
+
+    def _maybe_outage_alert(self, now: float) -> None:
+        if (self._outage_alerted or self._disconnected_since is None
+                or now - self._disconnected_since <= OUTAGE_ALERT_S):
+            return
+        self._outage_alerted = True
+        from .alerts import send
+        send(f"🚨 IB gateway DOWN for over {int(OUTAGE_ALERT_S // 60)} min "
+             f"— executor is failing closed (no entries/exits/stop "
+             f"ratchets); GTC stops still rest at the venue. Auto-reconnect "
+             f"keeps retrying with backoff; check the gateway container if "
+             f"this persists")
 
     def _pump(self) -> None:
         """Process pending gateway messages (ib_async sync facade)."""
@@ -575,6 +662,28 @@ class DryAdapter:
         self._rec("stop_triggered", ref=order_ref, symbol=o["symbol"],
                   qty=o["qty"], fill_price=o["stop_price"])
         return {"order_ref": order_ref, "status": "filled",
+                "fill_price": o["stop_price"]}
+
+    def trigger_stop_partial(self, order_ref: str, shares: int) -> dict:
+        """Simulate a PARTIAL fill at the stop followed by a venue cancel
+        (adapter review M3): `shares` fill AT the stop, the remainder is
+        cancelled at the venue; ONE aggregated fill event with the SIGNED
+        PARTIAL qty queues for the poll — mirroring the real adapter's
+        terminal-order emission of a partially-filled-then-cancelled STP."""
+        o = self._stops.pop(order_ref)
+        sign = -1 if o["qty"] < 0 else 1
+        shares = min(shares, abs(o["qty"]))
+        if order_ref in self._orders:
+            self._orders[order_ref]["status"] = "cancelled"
+            self._orders[order_ref]["fill_price"] = o["stop_price"]
+        self._last_px[o["symbol"]] = o["stop_price"]
+        self._fills.append({"order_ref": order_ref, "symbol": o["symbol"],
+                            "qty": sign * shares,
+                            "fill_price": o["stop_price"]})
+        self._rec("stop_triggered", ref=order_ref, symbol=o["symbol"],
+                  qty=sign * shares, fill_price=o["stop_price"],
+                  partial=True)
+        return {"order_ref": order_ref, "status": "cancelled",
                 "fill_price": o["stop_price"]}
 
     def poll_stock_fills(self) -> list[dict]:

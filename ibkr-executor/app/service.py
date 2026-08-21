@@ -69,7 +69,16 @@ def _build():
 
 
 def _loop():
-    _build()
+    try:
+        _build()
+    except Exception as exc:  # noqa: BLE001
+        # A constructor raise (gateway auth, ib_async loop binding) must
+        # never kill the loop thread SILENTLY (adapter review M2 sub-note):
+        # alert loudly and stop — /health then shows loop_age_s as None.
+        logger.exception("executor build failed: %s", exc)
+        send(f"🚨🚨 ibkr-executor FAILED TO BUILD ({exc}) — NO trading "
+             f"loop is running; fix config/gateway and redeploy")
+        return
     send(f"🌊 ibkr-executor up — mode {LAST['mode']}, "
          f"ladder legs {[k for k in MGR.state.legs]}")
     while True:
@@ -177,12 +186,15 @@ def status(x_exec_token: str | None = Header(default=None),
     # The "blend" section exists ONLY when BLEND_ENABLED: with the flag off,
     # /status is byte-identical to the pre-blend service.
     if BLEND is not None:
-        from .blend import reference_prices
-        try:
-            prices = reference_prices(ADAPTER, BLEND, None)
-        except Exception:  # noqa: BLE001
-            prices = None
-        body["blend"] = BLEND.status_summary(prices)
+        # M2 (thread-safety): this handler runs on a FastAPI worker thread;
+        # the ib_async event loop belongs to the service loop thread. Serve
+        # the loop-thread-refreshed mark cache — NEVER call the adapter
+        # from here. Staleness is shown (marks_age_s), not hidden.
+        marks = BLEND.mark_cache
+        body["blend"] = BLEND.status_summary(marks.get("prices") or None)
+        ts = marks.get("ts")
+        body["blend"]["marks_age_s"] = (round(time.time() - ts, 1)
+                                        if ts else None)
     return body
 
 
@@ -200,15 +212,15 @@ def blend_feed(x_read_token: str | None = Header(default=None)):
     if not secrets.compare_digest(supplied.encode("utf-8"),
                                   settings.read_token.encode("utf-8")):
         raise HTTPException(status_code=401, detail="bad read token")
-    from .blend import reference_prices
-    prices: dict = {}
-    if ADAPTER is not None:
-        try:
-            prices = reference_prices(ADAPTER, BLEND, None)
-        except Exception:  # noqa: BLE001
-            prices = {}
+    # M2 (thread-safety): serve the loop-thread-refreshed mark cache only —
+    # this handler runs on a FastAPI worker thread and must NEVER touch the
+    # adapter/ib_async loop. Staleness is shown (marks_age_s), not hidden.
+    marks = BLEND.mark_cache
+    prices: dict = marks.get("prices") or {}
     today = datetime.now(timezone.utc).date().isoformat()
     body = BLEND.feed(prices, today)
+    ts = marks.get("ts")
+    body["marks_age_s"] = round(time.time() - ts, 1) if ts else None
     body["mode"] = LAST["mode"]
     body["last_cycle"] = {"date": BLEND_CYCLE["date"], "ok": BLEND_CYCLE["ok"],
                           "error": BLEND_CYCLE["error"]}
@@ -232,8 +244,18 @@ def kill(x_exec_token: str | None = Header(default=None),
     MGR.state.halted = "KILL"
     MGR.save()
     if BLEND is not None:
-        from .blend import _ingest_fills, reconcile as blend_reconcile
+        from .blend import (HISTORY_HORIZON_S, _ingest_fills,
+                            reconcile as blend_reconcile)
         today = datetime.now(timezone.utc).date().isoformat()
+        # M2 exemption (documented): /kill is the ONE API-thread path that
+        # may touch the adapter, and ONLY under BLEND_LOCK — the loop
+        # thread takes the same lock around run_cycle (its only real
+        # adapter use: the ladder's IBAdapter combo surfaces raise
+        # NotImplementedError before any ib_async call), so kill and the
+        # loop never pump the ib_async loop concurrently. The emergency
+        # flatten must act on live venue truth; a cached read would defeat
+        # its purpose. It is NOT enqueued because a wedged loop must never
+        # delay the kill switch.
         with BLEND_LOCK:
             # RECONCILE FIRST (counter-agent N14): a stop that already
             # filled at the venue must be booked BEFORE flattening — the
@@ -269,34 +291,55 @@ def kill(x_exec_token: str | None = Header(default=None),
                                              key, exc)
                             cancel_raised = True
                             cancelled = False
+                        # M3: whether the cancel succeeded or found the
+                        # stop "already gone", the stop may have
+                        # (partially) filled first — ingest venue fills so
+                        # the flatten below sizes from venue truth.
+                        verify_ok = True
+                        try:
+                            _ingest_fills(BLEND, ADAPTER, send)
+                        except Exception as exc:  # noqa: BLE001
+                            verify_ok = False
+                            logger.exception("kill: fill verify failed: "
+                                             "%s", exc)
+                        pos = BLEND.state.positions.get(key)
+                        if pos is None:
+                            continue     # settled by its stop fill
+                        if cancel_raised or not verify_ok:
+                            # FAIL CLOSED (K-d): the stop signalled
+                            # FILLED and/or venue truth is unverifiable
+                            # — a MKT sell here risks the double-sell
+                            # this whole path exists to prevent. Park
+                            # it loudly; reconcile settles it.
+                            BLEND.record_orphan_stop(
+                                stop_ref, {"symbol": pos.symbol,
+                                           "qty": -pos.qty,
+                                           "call_id": pos.call_id})
+                            send(f"🚨🚨 blend kill: {pos.symbol} NOT "
+                                 f"flattened — stop cancel "
+                                 f"{'raised (likely filled)' if cancel_raised else 'unverifiable'}; "
+                                 f"position parked for reconcile, "
+                                 f"verify manually")
+                            continue
                         if not cancelled:
-                            # Ambiguous "already gone"/failed cancel: the
-                            # stop may have JUST filled — verify before
-                            # selling (idempotent with the stop fill).
-                            verify_ok = True
-                            try:
-                                _ingest_fills(BLEND, ADAPTER, send)
-                            except Exception as exc:  # noqa: BLE001
-                                verify_ok = False
-                                logger.exception("kill: fill verify failed: "
-                                                 "%s", exc)
-                            if key not in BLEND.state.positions:
-                                continue     # settled by its stop fill
-                            if cancel_raised or not verify_ok:
-                                # FAIL CLOSED (K-d): the stop signalled
-                                # FILLED and/or venue truth is unverifiable
-                                # — a MKT sell here risks the double-sell
-                                # this whole path exists to prevent. Park
-                                # it loudly; reconcile settles it.
+                            if BLEND._reconcile_gap_s > HISTORY_HORIZON_S:
+                                # m2 (venue-history horizon): "already
+                                # gone", verification shows nothing, and
+                                # the last successful reconcile predates
+                                # what venue history serves — the stop may
+                                # have filled INSIDE the blackout. Selling
+                                # MKT could short already-stopped-out
+                                # shares: UNVERIFIABLE, park loudly.
                                 BLEND.record_orphan_stop(
                                     stop_ref, {"symbol": pos.symbol,
                                                "qty": -pos.qty,
                                                "call_id": pos.call_id})
                                 send(f"🚨🚨 blend kill: {pos.symbol} NOT "
-                                     f"flattened — stop cancel "
-                                     f"{'raised (likely filled)' if cancel_raised else 'unverifiable'}; "
-                                     f"position parked for reconcile, "
-                                     f"verify manually")
+                                     f"flattened — stop already gone and "
+                                     f"the venue-history horizon was "
+                                     f"exceeded (multi-day blackout): "
+                                     f"UNVERIFIABLE, nothing sold; verify "
+                                     f"the account manually")
                                 continue
                             # Verified still held with a possibly-resting
                             # stop: track it so a later fill alerts RED and
@@ -306,6 +349,8 @@ def kill(x_exec_token: str | None = Header(default=None),
                                            "qty": -pos.qty,
                                            "call_id": pos.call_id})
                     try:
+                        # M3: -pos.qty is the venue-truth REMAINING qty
+                        # (a partial stop fill above already reduced it).
                         r = ADAPTER.place_stock_order(
                             pos.symbol, -pos.qty, "MKT",
                             client_order_id=f"blend-{pos.call_id}-kill")

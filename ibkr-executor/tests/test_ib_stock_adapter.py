@@ -103,10 +103,18 @@ class FakeIB:
         self.on_place = None
         self.on_cancel = None
         self.on_sleep = None
+        self.connect_calls = 0
+        self.connect_fails = False        # M5: gateway down (restart window)
 
     # connection
     def connect(self, host, port, clientId, timeout=15):
+        self.connect_calls += 1
+        if self.connect_fails:
+            raise ConnectionRefusedError("gateway down (simulated)")
         self.connected = True
+
+    def disconnect(self):
+        self.connected = False
 
     def isConnected(self):
         return self.connected
@@ -167,14 +175,26 @@ class FakeIB:
         return next(t for t in self._trades
                     if str(t.order.orderId) == str(order_ref))
 
-    def auto_fill_mkt(self, price_of=None):
-        """Fill DAY market orders synchronously at prices[symbol] (the
-        DryAdapter-like convenience for tests that need a tidy book)."""
-        def _hook(trade):
-            if trade.order.orderType == "MKT" and trade.order.tif == "DAY":
-                px = (price_of or self.prices.get)(trade.contract.symbol)
-                self.fill(trade, [(trade.order.totalQuantity, px)])
-        self.on_place = _hook
+    # NOTE: the old auto_fill_mkt() ambient hook is deliberately GONE — it
+    # filled every book-order MKT synchronously so no book order ever
+    # survived a cycle, masking the M1 duplicate-order defect. Tests that
+    # need the venue to fill a working DAY MKT call _fill_working_mkt()
+    # EXPLICITLY between cycles (the real async path), or set a narrow
+    # on_place hook when the bounded synchronous-fill window itself is
+    # under test.
+
+
+def _fill_working_mkt(fake: FakeIB):
+    """Venue action: fill every still-working DAY market order at the
+    quoted price — an explicit post-placement event, exercised BETWEEN
+    cycles so adoption goes through reconcile pass 2b like on the real
+    venue."""
+    for t in fake.trades():
+        if (t.order.orderType == "MKT" and t.order.tif == "DAY"
+                and t.orderStatus.status not in ("Filled", "Cancelled",
+                                                 "ApiCancelled", "Inactive")):
+            fake.fill(t, [(t.order.totalQuantity,
+                           fake.prices.get(t.contract.symbol, 100.0))])
 
 
 class _Cfg:
@@ -453,6 +473,8 @@ def test_find_prefers_the_live_order_over_a_dead_earlier_attempt(ib_adapter):
 
 def test_every_surface_raises_executor_connection_error_when_down(ib_adapter):
     ib_adapter.ib.connected = False
+    ib_adapter.ib.connect_fails = True      # gateway hard-down: reconnect
+                                            # attempts fail too (M5)
     with pytest.raises(ExecutorConnectionError):
         ib_adapter.place_stock_order("SPY", 1, "MKT")
     with pytest.raises(ExecutorConnectionError):
@@ -488,6 +510,18 @@ class _Venue:
             t = self.a.ib.trade_by_ref(order_ref)
             self.a.ib.fill(t, [(t.order.totalQuantity,
                                 float(t.order.auxPrice))])
+
+    def trigger_stop_partial(self, order_ref, shares):
+        """Partial fill at the stop, remainder cancelled at the venue
+        (adapter review M3)."""
+        if self.kind == "dry":
+            self.a.trigger_stop_partial(order_ref, shares)
+        else:
+            t = self.a.ib.trade_by_ref(order_ref)
+            side = "SLD" if t.order.action == "SELL" else "BOT"
+            t.fills.append(FakeFill(FakeExec(shares,
+                                             float(t.order.auxPrice), side)))
+            t.orderStatus.status = "Cancelled"
 
 
 @pytest.fixture(params=["dry", "ib"])
@@ -536,6 +570,20 @@ def test_contract_requeue_restores_unprocessed_fills(venue):
     a.requeue_stock_fills(fills)
     assert a.poll_stock_fills() == fills
     assert a.poll_stock_fills() == []
+
+
+def test_contract_partial_fill_then_cancel_emits_partial_qty(venue):
+    """M3: a partially-filled-then-cancelled stop emits ONE event with the
+    SIGNED PARTIAL qty (never the full order qty) on BOTH adapters — blend
+    books only the filled shares and re-protects the remainder."""
+    a = venue.a
+    r = a.place_stock_order("CRSP", -5, "STP", stop_price=44.0, tif="GTC")
+    venue.trigger_stop_partial(r["order_ref"], 3)
+    (f,) = a.poll_stock_fills()
+    assert f["order_ref"] == r["order_ref"]
+    assert f["qty"] == -3                    # the PARTIAL qty, signed
+    assert f["fill_price"] == 44.0
+    assert a.poll_stock_fills() == []        # drained once
 
 
 def test_contract_find_stock_order_by_idempotency_key(venue):
@@ -600,7 +648,6 @@ def _mgr(tmp_path):
 
 def test_blend_async_moo_entry_adopted_by_reconcile(tmp_path, ib_adapter):
     fake = ib_adapter.ib
-    fake.auto_fill_mkt()                     # book orders (sweep) fill tidily
     m = _mgr(tmp_path)
     alerts: list[str] = []
     run_cycle(m, ib_adapter, _payload(entries=[ENTRY], stops=[STOP]),
@@ -613,8 +660,10 @@ def test_blend_async_moo_entry_adopted_by_reconcile(tmp_path, ib_adapter):
     moo = fake.trade_by_ref(
         ib_adapter.find_stock_order("blend-1-entry")["order_ref"])
     assert moo.order.tif == "OPG"
-    # the venue fills at the open (at a price != entry_ref)
+    # the venue fills at the open (at a price != entry_ref); the working
+    # sweep MKT fills too and is adopted by reconcile pass 2b
     fake.fill(moo, [(5, 50.3)])
+    _fill_working_mkt(fake)
     run_cycle(m, ib_adapter, _payload(stops=[STOP]), "2026-08-21",
               alert=alerts.append)
     pos = m.state.positions["1"]
@@ -632,13 +681,13 @@ def test_blend_async_moo_entry_adopted_by_reconcile(tmp_path, ib_adapter):
 
 def test_blend_stop_fill_polled_and_booked_once(tmp_path, ib_adapter):
     fake = ib_adapter.ib
-    fake.auto_fill_mkt()
     m = _mgr(tmp_path)
     run_cycle(m, ib_adapter, _payload(entries=[ENTRY], stops=[STOP]),
               "2026-08-20", alert=lambda _: None)
     fake.fill(fake.trade_by_ref(
         ib_adapter.find_stock_order("blend-1-entry")["order_ref"]),
         [(5, 50.0)])
+    _fill_working_mkt(fake)
     run_cycle(m, ib_adapter, _payload(stops=[STOP]), "2026-08-21",
               alert=lambda _: None)
     pos = m.state.positions["1"]
@@ -655,13 +704,13 @@ def test_blend_stop_fill_polled_and_booked_once(tmp_path, ib_adapter):
 
 def test_blend_stop_ratchet_replaces_new_first_on_ib(tmp_path, ib_adapter):
     fake = ib_adapter.ib
-    fake.auto_fill_mkt()
     m = _mgr(tmp_path)
     run_cycle(m, ib_adapter, _payload(entries=[ENTRY], stops=[STOP]),
               "2026-08-20", alert=lambda _: None)
     fake.fill(fake.trade_by_ref(
         ib_adapter.find_stock_order("blend-1-entry")["order_ref"]),
         [(5, 50.0)])
+    _fill_working_mkt(fake)
     run_cycle(m, ib_adapter, _payload(stops=[STOP]), "2026-08-21",
               alert=lambda _: None)
     old_ref = m.state.positions["1"].stop_order_ref
@@ -687,17 +736,16 @@ def test_blend_exit_mkt_without_sync_fill_parks_unreconciled(tmp_path,
     window routes to the LOUD UNRECONCILED path (proceeds not booked, RED
     alert, manual reconciliation) — never a faked or 0.0 price."""
     fake = ib_adapter.ib
-    fake.auto_fill_mkt()
     m = _mgr(tmp_path)
     run_cycle(m, ib_adapter, _payload(entries=[ENTRY], stops=[STOP]),
               "2026-08-20", alert=lambda _: None)
     fake.fill(fake.trade_by_ref(
         ib_adapter.find_stock_order("blend-1-entry")["order_ref"]),
         [(5, 50.0)])
+    _fill_working_mkt(fake)
     run_cycle(m, ib_adapter, _payload(stops=[STOP]), "2026-08-21",
               alert=lambda _: None)
-    fake.on_place = None                     # MKT no longer fills in-window
-    cash_before = m.state.sleeve_cash
+    cash_before = m.state.sleeve_cash        # exit MKT will NOT fill in-window
     alerts: list[str] = []
     run_cycle(m, ib_adapter,
               _payload(exits=[{"symbol": "CRSP", "call_id": 1,
@@ -711,17 +759,24 @@ def test_blend_exit_mkt_without_sync_fill_parks_unreconciled(tmp_path,
 
 def test_blend_exit_with_sync_mkt_fill_books_normally(tmp_path, ib_adapter):
     fake = ib_adapter.ib
-    fake.auto_fill_mkt()
     m = _mgr(tmp_path)
     run_cycle(m, ib_adapter, _payload(entries=[ENTRY], stops=[STOP]),
               "2026-08-20", alert=lambda _: None)
     fake.fill(fake.trade_by_ref(
         ib_adapter.find_stock_order("blend-1-entry")["order_ref"]),
         [(5, 50.0)])
+    _fill_working_mkt(fake)
     run_cycle(m, ib_adapter, _payload(stops=[STOP]), "2026-08-21",
               alert=lambda _: None)
     fake.prices["CRSP"] = 47.5
     total_before = m.state.sleeve_cash + m.state.bil_qty * 100.0
+
+    # the exit MKT fills INSIDE the bounded synchronous window this time
+    def sync_fill(t):
+        if t.order.orderType == "MKT" and t.order.tif == "DAY":
+            fake.fill(t, [(t.order.totalQuantity,
+                           fake.prices.get(t.contract.symbol))])
+    fake.on_place = sync_fill
     run_cycle(m, ib_adapter,
               _payload(exits=[{"symbol": "CRSP", "call_id": 1,
                                "reason": "trail", "trail_level": 47.0}]),
@@ -729,3 +784,295 @@ def test_blend_exit_with_sync_mkt_fill_books_normally(tmp_path, ib_adapter):
     assert "1" not in m.state.positions and not m.state.unreconciled
     total_after = m.state.sleeve_cash + m.state.bil_qty * 100.0
     assert total_after - total_before == pytest.approx(5 * 47.5)
+
+
+# --- adapter-review regression gates (M1/M3/M5 + escalated minors) ------------
+# Each scenario is derived from the failed IB-adapter review's attack notes:
+# the attacks that CONFIRMED the defects are now merge-blocking gates.
+
+
+# M1: a working (unfilled) book-order MKT must NEVER be re-planned/re-placed
+# on later cycles — the journal suppresses its kind until reconcile pass 2b
+# adopts or clears it, and the client id is stable per INTENT.
+
+def test_gate_m1_working_core_buy_places_exactly_one_order_across_cycles(
+        tmp_path, ib_adapter):
+    """THE M1 gate: two consecutive cycles with an unfilled working CORE_BUY
+    (and SWEEP) place exactly ONE venue order each — the old code re-placed
+    every cycle (~12/hour overnight), stacking duplicates that all filled
+    at the open."""
+    fake = ib_adapter.ib
+    m = Blend3070Manager(_Cfg(), str(tmp_path / "blend.json"))  # fresh boot
+    run_cycle(m, ib_adapter, _payload(), "2026-08-20", alert=lambda _: None)
+    # boot plans CORE_BUY 70 SPY + SWEEP 30 BIL; both MKTs stay 'working'
+    # (e.g. placed outside RTH)
+    assert len([t for t in fake.trades() if t.order.orderType == "MKT"]) == 2
+    assert len(m.state.pending_book_orders) == 2
+    cids = set(m.state.pending_book_orders)
+    # cycles 2 and 3: SAME working orders — nothing re-placed, cids stable
+    run_cycle(m, ib_adapter, _payload(), "2026-08-20", alert=lambda _: None)
+    run_cycle(m, ib_adapter, _payload(), "2026-08-21", alert=lambda _: None)
+    assert len([t for t in fake.trades() if t.order.orderType == "MKT"]) == 2
+    assert set(m.state.pending_book_orders) == cids
+    assert m.state.spy_qty == 0 and m.state.bil_qty == 0  # nothing booked yet
+    # the venue fills at the open -> adopted exactly once by pass 2b
+    _fill_working_mkt(fake)
+    run_cycle(m, ib_adapter, _payload(), "2026-08-21", alert=lambda _: None)
+    assert m.state.pending_book_orders == {}
+    assert m.state.spy_qty == 70 and m.state.bil_qty == 30
+    assert m.state.core_cash == pytest.approx(0.0)
+    assert m.state.sleeve_cash == pytest.approx(0.0)
+    assert len([t for t in fake.trades() if t.order.orderType == "MKT"]) == 2
+
+
+def test_gate_m1_working_rebalance_core_sell_not_duplicated(tmp_path,
+                                                            ib_adapter):
+    """The review's worst case: repeated core-rebal-sells clamp to the
+    un-debited spy_qty and can liquidate the entire core. One intent = one
+    venue order, adopted once."""
+    fake = ib_adapter.ib
+    m = _mgr(tmp_path)
+    m.state.sleeve_cash = 0.0
+    m.state.bil_qty = 20
+    m.state.spy_qty = 80          # w = 20% -> core_to_sleeve $1,000 SPY sell
+    run_cycle(m, ib_adapter, _payload(), "2026-08-20", alert=lambda _: None)
+
+    def spy_sells():
+        return [t for t in fake.trades()
+                if t.order.orderType == "MKT" and t.order.action == "SELL"
+                and t.contract.symbol == "SPY"]
+
+    assert len(spy_sells()) == 1 and spy_sells()[0].order.totalQuantity == 10
+    run_cycle(m, ib_adapter, _payload(), "2026-08-20", alert=lambda _: None)
+    run_cycle(m, ib_adapter, _payload(), "2026-08-21", alert=lambda _: None)
+    assert len(spy_sells()) == 1              # never re-placed while working
+    assert m.state.spy_qty == 80              # nothing booked off absent fills
+    _fill_working_mkt(fake)
+    run_cycle(m, ib_adapter, _payload(), "2026-08-21", alert=lambda _: None)
+    assert len(spy_sells()) == 1
+    assert m.state.spy_qty == 70              # booked exactly once
+    # proceeds transferred exactly once (cash or swept BIL)
+    assert m.sleeve_value({"SPY": 100.0, "BIL": 100.0}) == pytest.approx(
+        3_000.0)
+
+
+def test_gate_m1_ack_timeout_retry_adopts_same_intent_not_a_new_order(
+        tmp_path, ib_adapter):
+    """The client id is deterministic per INTENT: a placement whose ack
+    timed out (order actually landed) keeps its journal and cid — the next
+    cycles adopt the SAME venue order, never re-placing under a fresh seq."""
+    fake = ib_adapter.ib
+    m = _mgr(tmp_path)
+
+    def silent(t):
+        t.orderStatus.status = "PendingSubmit"    # venue never acks in-window
+    fake.on_place = silent
+    run_cycle(m, ib_adapter, _payload(), "2026-08-20", alert=lambda _: None)
+    # the sweep placement raised after journaling; the order DID land
+    assert len(m.state.pending_book_orders) == 1
+    (cid,) = m.state.pending_book_orders
+    assert len(fake.trades()) == 1
+    fake.on_place = None
+    # a re-run while the order is still merely working: nothing new placed
+    for t in fake.trades():
+        t.orderStatus.status = "Submitted"
+    run_cycle(m, ib_adapter, _payload(), "2026-08-20", alert=lambda _: None)
+    assert len(fake.trades()) == 1
+    assert list(m.state.pending_book_orders) == [cid]
+    # the venue fills the SAME order -> adopted, no duplicate ever placed
+    _fill_working_mkt(fake)
+    run_cycle(m, ib_adapter, _payload(), "2026-08-21", alert=lambda _: None)
+    assert m.state.pending_book_orders == {}
+    assert m.state.bil_qty == 30
+    assert len(fake.trades()) == 1
+
+
+# M3: partial-fill-then-cancel on the exit path — the MKT sell sizes from
+# the venue-truth REMAINING qty, never the step-time full book qty.
+
+def test_gate_m3_partial_fill_then_cancel_exit_sells_only_remaining(
+        tmp_path, ib_adapter):
+    fake = ib_adapter.ib
+    m = _mgr(tmp_path)
+    run_cycle(m, ib_adapter, _payload(entries=[ENTRY], stops=[STOP]),
+              "2026-08-20", alert=lambda _: None)
+    fake.fill(fake.trade_by_ref(
+        ib_adapter.find_stock_order("blend-1-entry")["order_ref"]),
+        [(5, 50.0)])
+    _fill_working_mkt(fake)
+    run_cycle(m, ib_adapter, _payload(stops=[STOP]), "2026-08-21",
+              alert=lambda _: None)
+    pos = m.state.positions["1"]
+    stop_trade = fake.trade_by_ref(pos.stop_order_ref)
+    # venue: 3 of 5 shares fill at the stop...
+    stop_trade.fills.append(FakeFill(FakeExec(3, 44.0, "SLD")))
+
+    # ...then the cancel wins for the remainder
+    def cancel_partial(t):
+        t.orderStatus.status = "Cancelled"
+    fake.on_cancel = cancel_partial
+
+    # the exit MKT fills synchronously in-window (CRSP at 45.0)
+    def sync_fill(t):
+        if t.order.orderType == "MKT" and t.order.tif == "DAY":
+            px = (45.0 if t.contract.symbol == "CRSP"
+                  else fake.prices.get(t.contract.symbol, 100.0))
+            fake.fill(t, [(t.order.totalQuantity, px)])
+    fake.on_place = sync_fill
+
+    total_before = m.state.sleeve_cash + m.state.bil_qty * 100.0
+    run_cycle(m, ib_adapter,
+              _payload(exits=[{"symbol": "CRSP", "call_id": 1,
+                               "reason": "trail", "trail_level": 47.0}]),
+              "2026-08-22", alert=lambda _: None)
+    assert "1" not in m.state.positions
+    mkt_sells = [t for t in fake.trades()
+                 if t.order.orderType == "MKT" and t.order.tif == "DAY"
+                 and t.order.action == "SELL" and t.contract.symbol == "CRSP"]
+    assert len(mkt_sells) == 1
+    assert mkt_sells[0].order.totalQuantity == 2       # REMAINING, not 5
+    total_after = m.state.sleeve_cash + m.state.bil_qty * 100.0
+    # 3 @ 44 (partial stop) + 2 @ 45 (MKT remainder) — booked exactly once
+    assert total_after - total_before == pytest.approx(3 * 44.0 + 2 * 45.0)
+    partial_rows = [t for t in m.state.trades
+                    if t["kind"].endswith("_partial")]
+    assert len(partial_rows) == 1 and partial_rows[0]["qty"] == 3
+
+
+# M5: gateway reconnect with backoff — the daily restart window is a
+# non-event (fail closed during, auto-recover after, alert only > 30 min).
+
+def test_gate_m5_auto_reconnect_after_gateway_restart(ib_adapter):
+    fake = ib_adapter.ib
+    fake.connected = False                    # daily gateway restart done
+    assert ib_adapter.spot("SPY") == 100.0    # transparently reconnected
+    assert fake.isConnected()
+
+
+def test_gate_m5_reconnect_backoff_limits_attempts(ib_adapter):
+    fake = ib_adapter.ib
+    fake.connected = False
+    fake.connect_fails = True
+    before = fake.connect_calls
+    with pytest.raises(ExecutorConnectionError):
+        ib_adapter.poll_stock_fills()
+    assert fake.connect_calls == before + 1
+    with pytest.raises(ExecutorConnectionError):      # inside backoff window
+        ib_adapter.poll_stock_fills()
+    assert fake.connect_calls == before + 1           # no hammering
+    ib_adapter._next_reconnect_ts = 0.0               # backoff expires
+    with pytest.raises(ExecutorConnectionError):
+        ib_adapter.poll_stock_fills()
+    assert fake.connect_calls == before + 2
+
+
+def test_gate_m5_outage_alert_only_after_30_min_then_recovery(
+        ib_adapter, monkeypatch):
+    import app.alerts as alerts_mod
+    sent: list[str] = []
+    monkeypatch.setattr(alerts_mod, "send", sent.append)
+    fake = ib_adapter.ib
+    fake.connected = False
+    fake.connect_fails = True
+    with pytest.raises(ExecutorConnectionError):
+        ib_adapter.find_stock_order("blend-1-entry")
+    assert sent == []                         # short outage: NO alert
+    # the outage has now lasted > 30 min
+    ib_adapter._disconnected_since -= (ib_mod.OUTAGE_ALERT_S + 60)
+    ib_adapter._next_reconnect_ts = 0.0
+    with pytest.raises(ExecutorConnectionError):
+        ib_adapter.find_stock_order("blend-1-entry")
+    assert len(sent) == 1 and "DOWN" in sent[0]
+    ib_adapter._next_reconnect_ts = 0.0
+    with pytest.raises(ExecutorConnectionError):
+        ib_adapter.find_stock_order("blend-1-entry")
+    assert len(sent) == 1                     # alerted exactly ONCE
+    # gateway back: recovery notice, backoff reset, surfaces work again
+    fake.connect_fails = False
+    ib_adapter._next_reconnect_ts = 0.0
+    assert ib_adapter.find_stock_order("blend-1-entry") is None
+    assert len(sent) == 2 and "RECONNECTED" in sent[1]
+    assert ib_adapter._reconnect_backoff == ib_mod.RECONNECT_BACKOFF_S
+    assert ib_adapter._disconnected_since is None
+
+
+def test_gate_m5_drain_once_survives_reconnect(ib_adapter):
+    fake = ib_adapter.ib
+    r = ib_adapter.place_stock_order("CRSP", -5, "STP", stop_price=44.0)
+    fake.fill(fake.trade_by_ref(r["order_ref"]), [(5, 44.0)])
+    assert len(ib_adapter.poll_stock_fills()) == 1
+    fake.connected = False                    # gateway restart
+    assert ib_adapter.poll_stock_fills() == []  # reconnected, NOT re-emitted
+    assert fake.isConnected()
+
+
+def test_gate_m5_cycle_fails_closed_then_auto_recovers(tmp_path, ib_adapter):
+    """The daily restart window end-to-end: the cycle fails CLOSED while
+    the gateway is down (no orders, no journals), then the next cycle
+    reconnects and proceeds normally."""
+    fake = ib_adapter.ib
+    m = _mgr(tmp_path)
+    fake.connected = False
+    fake.connect_fails = True
+    with pytest.raises(ExecutorConnectionError):
+        run_cycle(m, ib_adapter, _payload(), "2026-08-20",
+                  alert=lambda _: None)
+    assert fake.trades() == []                # nothing reached the venue
+    assert m.state.pending_book_orders == {}
+    # gateway restart completes: the next cycle reconnects and proceeds
+    fake.connect_fails = False
+    ib_adapter._next_reconnect_ts = 0.0
+    run_cycle(m, ib_adapter, _payload(), "2026-08-20", alert=lambda _: None)
+    assert fake.isConnected()
+    assert len(fake.trades()) == 1            # the idle-cash sweep went out
+
+
+# m1 (escalated): a venue-REJECTED journaled order must release its slot
+# and surface loudly — never sit pending forever.
+
+def test_gate_m1min_rejected_entry_releases_slot_and_logs(tmp_path,
+                                                          ib_adapter):
+    fake = ib_adapter.ib
+    m = _mgr(tmp_path)
+    run_cycle(m, ib_adapter, _payload(entries=[ENTRY], stops=[STOP]),
+              "2026-08-20", alert=lambda _: None)
+    assert "1" in m.state.pending_entries
+    moo = fake.trade_by_ref(
+        ib_adapter.find_stock_order("blend-1-entry")["order_ref"])
+    moo.orderStatus.status = "Inactive"       # venue rejects overnight
+    alerts: list[str] = []
+    run_cycle(m, ib_adapter, _payload(stops=[STOP]), "2026-08-21",
+              alert=alerts.append)
+    assert m.state.pending_entries == {}      # max_open slot RELEASED
+    assert "1" not in m.state.positions
+    assert any("REJECTED" in msg for msg in alerts)
+    rows = [t for t in m.state.trades if t["kind"] == "entry_rejected"]
+    assert len(rows) == 1 and rows[0]["symbol"] == "CRSP"
+    # the same fire republished retries cleanly (venue dedupe excludes the
+    # rejected prior)
+    run_cycle(m, ib_adapter, _payload(entries=[ENTRY], stops=[STOP]),
+              "2026-08-21", alert=lambda _: None)
+    assert "1" in m.state.pending_entries
+    moos = [t for t in fake.trades() if t.order.tif == "OPG"]
+    assert len(moos) == 2                     # a fresh retry order
+
+
+def test_gate_m1min_rejected_book_order_cleared_and_replanned(tmp_path,
+                                                              ib_adapter):
+    fake = ib_adapter.ib
+    m = _mgr(tmp_path)                        # idle sleeve cash -> sweep 30
+    run_cycle(m, ib_adapter, _payload(), "2026-08-20", alert=lambda _: None)
+    (cid,) = list(m.state.pending_book_orders)
+    t = fake.trade_by_ref(ib_adapter.find_stock_order(cid)["order_ref"])
+    t.orderStatus.status = "Inactive"         # venue rejects the sweep
+    alerts: list[str] = []
+    run_cycle(m, ib_adapter, _payload(), "2026-08-21", alert=alerts.append)
+    assert cid not in m.state.pending_book_orders
+    assert any("REJECTED" in msg for msg in alerts)
+    # replanned as a FRESH intent (new cid), exactly one live venue order
+    pend = list(m.state.pending_book_orders)
+    assert len(pend) == 1 and pend[0] != cid
+    live = [t for t in fake.trades()
+            if t.orderStatus.status not in ("Inactive", "Cancelled",
+                                            "ApiCancelled", "Filled")]
+    assert len(live) == 1

@@ -99,15 +99,32 @@ unreconciled venue state. Phases IN ORDER:
    BLEND_BUDGET the idle-cash BIL sweep is clamped to the remaining gross
    headroom.
 4. **Execute in order**: exits (stop cancel is non-fatal; a RAISING cancel
-   defers the sell; an ambiguous FALSE cancel is VERIFIED — queued fills
-   are ingested and only a still-held position is sold, re-review N2) ->
+   defers the sell; after ANY non-raising cancel queued fills are ingested
+   FIRST so a PARTIALLY-filled stop books its filled shares and the MKT
+   sell sizes from the venue-truth REMAINING qty — never the step-time
+   full qty (adapter review M3); an ambiguous FALSE cancel sells only a
+   verified still-held position, re-review N2 — and if the venue-history
+   horizon was exceeded (no successful reconcile for > 1 day) that case
+   is UNVERIFIABLE: parked + alerted, never sold, adapter review m2) ->
    stop adjustments (place the NEW stop FIRST, cancel the old second —
    never a naked window; a rejected replacement keeps the old stop) ->
    BIL cash-raise -> entries (write-ahead journal, MOO, protective stop
    with in-cycle retry/backoff; an entry is DROPPED when a funding exit
    deferred/failed to book this cycle, and each entry re-checks SETTLED
-   sleeve cash — phantom proceeds are never spent, re-review N5) ->
+   sleeve cash minus cash reserved by a pending sweep — phantom proceeds
+   are never spent, re-review N5) ->
    rebalance transfer -> core buy -> BIL sweep (all journaled per 1c).
+   **Book-order idempotency (adapter review M1)**: while ANY book-order
+   journal (CORE_BUY / rebalance core-sell / BIL sweep) is pending
+   adoption, step() plans NO new book-level order — a MKT that returns
+   `working` (e.g. placed outside RTH) simply waits for pass 1c to adopt
+   or clear it; the client id is deterministic PER INTENT (a retry reuses
+   the journaled cid), so a working order can never be stacked with
+   duplicates cycle after cycle.
+   **Missing quotes (adapter review M4)**: a missing/None SPY or BIL
+   quote SKIPS the rebalance computation and the equity snapshot that
+   cycle (a zeroed ledger side would manufacture a spurious rebalance —
+   repo law: no silent zero), with a one-shot alert per outage.
 5. **No silent zeros** (repo law): any fill without a fill price is
    UNRECONCILED — the trade is parked in state, nothing books at 0.0,
    P&L for it is blocked, and Telegram gets a RED alert.
@@ -159,11 +176,43 @@ El Nino combo reads):
   un-ingested events after a mid-ingestion failure.
 - `find_stock_order` — orderRef lookup over the session's trades, with a
   reqAllOpenOrders/reqCompletedOrders refresh fallback for orders from a
-  previous session.
-- Every surface raises `ExecutorConnectionError` while the gateway is
-  down — reconcile raises and the blend cycle FAILS CLOSED.
+  previous session. Reconcile also uses it to RE-VERIFY every believed-
+  working protective stop each cycle: a stop the venue reports CANCELLED
+  (an IB-initiated GTC cancel, e.g. corporate action) demotes the
+  position to STOP_MISSING and is re-placed the same pass — never a
+  naked position believed protected (adapter review m4).
+- **Reconnect with backoff (adapter review M5)**: every surface checks the
+  connection and, when the gateway has dropped (its DAILY AUTO-RESTART
+  included), attempts a reconnect with exponential backoff (15s doubling
+  to a 300s cap — about one attempt per cycle). While down, surfaces
+  raise `ExecutorConnectionError` — reconcile raises and the blend cycle
+  FAILS CLOSED; once the gateway is back the next cycle reconnects and
+  proceeds on its own. The daily restart window is a NON-EVENT: Telegram
+  is alerted only when the outage exceeds 30 minutes (one alert, plus a
+  recovery notice when the connection returns). Reconnects reuse the same
+  clientId, so orderIds stay monotone and the drain-once fill keys
+  persist — no re-emission, no double booking. The combo path shares the
+  same gate (`spot()` goes through it).
+- **Rejected-order lifecycle (adapter review m1)**: a journaled order the
+  venue REJECTS (status maps to `cancelled`) is CLEARED by the next
+  reconcile — a rejected ENTRY releases its max_open slot, writes an
+  `entry_rejected` row to the trade log (display-only, fill_price 0 —
+  nothing books) and alerts RED; a rejected BOOK order clears its journal
+  and is re-planned as a fresh intent next cycle. Nothing sits
+  `pending_*` forever; a republished fire retries cleanly because venue
+  dedupe excludes cancelled priors.
 - `spot()` quotes any non-ladder symbol (SPY/BIL/sleeve names) as a
   SMART/USD stock.
+- **Cached quotes (adapter review M2)**: the ib_async loop belongs to the
+  service loop thread. `/status` and `/blend/feed` run on API worker
+  threads and NEVER call the adapter — run_cycle refreshes a mark cache
+  (prices + timestamp) once per cycle and both endpoints serve that
+  cache, reporting its age as `marks_age_s` (staleness shown, not
+  hidden). The ONE API path allowed to touch the adapter is `/kill`, and
+  only under BLEND_LOCK — the loop thread holds the same lock around
+  run_cycle, so the two never pump the ib_async loop concurrently; the
+  emergency flatten must act on live venue truth and must not queue
+  behind a possibly wedged loop.
 
 SUPERVISED FIRST SESSION: flip `DRY_RUN=false` (with `TRADING_MODE=paper`)
 DURING MARKET HOURS and keep eyes on Telegram + `/status` through the
@@ -173,13 +222,17 @@ loud-but-safe behaviors on the real venue: an exit MKT that misses the 5s
 fill window parks the trade UNRECONCILED (RED alert, manual booking); a
 service restart can re-emit an already-booked stop fill as an
 unknown-order RED alert (noise, never a double booking); a journaled
-MOO/MKT that the venue REJECTS keeps its journal pending (blend clears
-journals only for never-seen or filled orders) and shows up in `/status`
-`pending_entries`/`pending_book_orders` until manually cleared. VENUE
-HISTORY HORIZON: IB serves current-day executions on connect — an executor
-blackout spanning a day or more while a stop fills can exceed what
-reconcile can see; after any multi-day outage, verify positions against
-the account manually before resuming.
+MOO/MKT the venue REJECTS is cleared by the next reconcile with a RED
+alert (entry slot released, book order re-planned — see the
+rejected-order lifecycle above). VENUE HISTORY HORIZON: IB serves
+current-day executions on connect — an executor blackout spanning a day
+or more while a stop fills can exceed what reconcile can see. The
+exit/kill flatten paths guard this automatically: when the gap since the
+last successful reconcile exceeds 1 day and a stop cancel comes back
+"already gone" with nothing verifiable, the position is parked
+UNVERIFIABLE (RED alert, nothing sold — a MKT sell could short
+already-stopped-out shares); after any multi-day outage, verify positions
+against the account manually before booking the parked trades.
 
 Env (all optional until the paper gate):
 
@@ -200,8 +253,11 @@ Public-safe JSON for the research dashboard, gated by `READ_TOKEN`:
 `{mode, halted, gate, book: {sleeve_cash, core_qty, bil_qty,
 equity_estimate, budget_utilization, initial_book_usd}, positions, trades
 (last 200, persisted), equity_curve (one point per cycle day),
-unreconciled (count), last_cycle: {date, ok, error}}`. No credentials, no
-account ids, no order refs — gate-tested against a key blacklist. The
+unreconciled (count), last_cycle: {date, ok, error}, marks_age_s}`. Marks
+come from the loop-thread quote cache (adapter review M2 — the feed never
+touches the adapter); `marks_age_s` shows their staleness, null until the
+first cycle completes. No credentials, no account ids, no order refs —
+gate-tested against a key blacklist. The
 tracker proxies it at `/api/execution/feed` behind the dashboard login and
 injects the token server-side, so the browser never holds it.
 `/health` additionally reports `blend_loop: {ok, last_error_age_s}` when
