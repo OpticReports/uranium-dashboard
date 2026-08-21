@@ -2811,3 +2811,53 @@ def test_gate_g3_unreadable_blend_state_is_preserved_and_loud(tmp_path):
     assert list(tmp_path.glob("blend.json.corrupt-*"))
     m2.save()                                # evidence survives the next save
     assert list(tmp_path.glob("blend.json.corrupt-*"))
+
+
+def test_gate_y1_ratchet_never_rests_a_stop_on_an_unverifiable_position(tmp_path):
+    """Y1 (re-review): passes 3b and 4 refuse to rest a stop on a flagged
+    position, but step()'s daily trail RATCHET placed one through a third
+    door — and a ratchet rests a NEW -qty SELL order, so it is the same
+    short path. Reviewer's X-B: venue 12, book 5 → the ratchet's 5-share
+    SELL sells the operator's external shares and books a phantom exit."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    ref = _blackout_stop(m, a)
+    a._positions["CRSP"] = 12                    # 5 booked + 7 external
+    run_cycle(m, a, None, "2026-08-24", alert=lambda _: None)
+    assert m.state.positions["1"].history_gap is True
+    # A ratcheting trail arrives while the position is still unverifiable.
+    out = m.step("2026-08-25", payload(stops=[stop_row(trail=47.0)]),
+                 PRICES)
+    assert not [o for o in out if o["action"] == "ADJUST_STOP"]
+    assert m.state.positions["1"].stop_level == 44.0    # unchanged
+    assert list(a._stops) == [ref]               # no SECOND resting stop
+    assert a._positions["CRSP"] == 12            # nothing sold
+
+
+def test_gate_y1_ratchet_cannot_add_sell_orders_to_a_shortfall(tmp_path):
+    """Reviewer's X-K(d), the sharp end. Two same-symbol positions book 9
+    shares; 3 were sold by hand during the blackout so the account holds 6.
+    The shortfall is not attributable to either position (x5), so both stay
+    flagged with their stops resting. A ratchet then used to rest NEW stops
+    for both — adding SELL orders on top of a book the venue can no longer
+    cover, which ends in a venue short."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    _blackout_stop(m, a, call_id=1, qty=5)
+    _blackout_stop(m, a, call_id=2, qty=4)
+    a._positions["CRSP"] = 6                     # 3 sold away by hand
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    assert all(p.history_gap for p in m.state.positions.values())
+    before = {r: o["qty"] for r, o in a._stops.items()}
+    # Day 2 runs the FULL cycle so a ratchet intent would really be placed —
+    # inspecting intents alone would pass vacuously.
+    run_cycle(m, a, payload(stops=[stop_row(call_id=1, trail=47.0),
+                                   stop_row(call_id=2, trail=47.0)]),
+              "2026-08-25", alert=alerts.append)
+    after = {r: o["qty"] for r, o in a._stops.items()}
+    assert after == before                       # no NEW sell orders rested
+    assert all(p.stop_level == 44.0 for p in m.state.positions.values())
+    assert not any("position closed" in s for s in alerts)

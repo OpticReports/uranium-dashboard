@@ -231,6 +231,9 @@ class Blend3070Manager:
         # service startup turns it into a Telegram alert (the manager has
         # no alert channel at construction time).
         self.archived_state: str | None = None
+        self.archived_state_critical = False   # y4: unreadable
+                                               # book, not a
+                                               # routine mode change
         self.state = self._load()
         # M2 (thread-safety): API threads (/status, /blend/feed) serve THIS
         # loop-thread-refreshed quote cache — they must never touch the
@@ -323,6 +326,7 @@ class Blend3070Manager:
             except OSError as err:
                 note = (f"PRESERVE FAILED ({err}) — the unreadable book will "
                         f"be OVERWRITTEN by the next save")
+            self.archived_state_critical = True
             self.archived_state = (f"blend state unreadable ({exc}); "
                                    f"starting a FRESH book; {note}")
             logger.error("blend: %s", self.archived_state)
@@ -633,6 +637,13 @@ class Blend3070Manager:
         adjust_intents: list[dict] = []
         for key, pos in st.positions.items():
             if key in exiting:
+                continue
+            if pos.history_gap:
+                # Y1: the ratchet rests a NEW -qty SELL stop, so it is a
+                # short path exactly like pass 4 — an UNVERIFIABLE position
+                # may not own the shares it claims. Reconcile pass 1b must
+                # positively verify first; the working stop (if any) stays
+                # where it is until then.
                 continue
             s = stops_by_id.get(pos.call_id)
             if s is None:

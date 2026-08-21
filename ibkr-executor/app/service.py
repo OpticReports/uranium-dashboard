@@ -72,10 +72,18 @@ def _build():
         from .blend import Blend3070Manager
         BLEND = Blend3070Manager(settings, settings.blend_state_path)
         if BLEND.archived_state:
-            # Mode-transition guard fired: the previous book's fills belong
-            # to another mode (e.g. DRY placeholder prices) — starting clean.
-            logger.warning("blend: %s", BLEND.archived_state)
-            send(f"⚠️ blend: starting a FRESH book — {BLEND.archived_state}")
+            if BLEND.archived_state_critical:
+                # y4: an UNREADABLE book is not a routine mode change —
+                # open positions and `halted` were just forgotten. Same
+                # severity as the ladder's sibling path.
+                logger.error("blend: %s", BLEND.archived_state)
+                send(f"🚨🚨 blend: {BLEND.archived_state} — verify open "
+                     f"positions and resting stops at the venue")
+            else:
+                # Mode-transition guard: the previous book's fills belong to
+                # another mode (e.g. DRY placeholder prices) — starting clean.
+                logger.warning("blend: %s", BLEND.archived_state)
+                send(f"⚠️ blend: starting a FRESH book — {BLEND.archived_state}")
     if not (settings.tws_userid and settings.tws_password):
         ADAPTER = DryAdapter()
         LAST["mode"] = "OFFLINE"
