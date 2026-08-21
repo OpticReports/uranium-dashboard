@@ -1574,8 +1574,9 @@ def test_gate_adapt_m4_missing_core_quote_skips_rebalance_alerts_once(
     # alert fires ONCE per outage: the next cycle stays quiet
     out2 = m.step("2026-08-20", payload(), no_spy)
     assert not [o for o in out2 if o["action"] in ("ALERT", "REBALANCE")]
-    # missing BIL likewise
-    m2 = mk(tmp_path)
+    # missing BIL likewise (fresh book: its own state file — the armed
+    # flag is persisted now, r3)
+    m2 = Blend3070Manager(Cfg(), str(tmp_path / "b2.json"))
     _seed_initialized(m2, sleeve_cash=0.0, bil_qty=30, spy_qty=70)
     out3 = m2.step("2026-08-20", payload(), {"SPY": 100.0})
     assert not [o for o in out3 if o["action"] == "REBALANCE"]
@@ -1990,6 +1991,87 @@ def test_gate_r2_kill_alerts_are_honest_two_stage(tmp_path, monkeypatch):
     finally:
         service.BLEND = None
         service.MGR = None
+
+
+# --- re-review minors (r3-r7): alert semantics, ledger cosmetics --------------
+# Scenarios derived from the re-review probes A2/A3/A4/A5 and finding r7.
+
+
+def test_gate_r3_new_quote_outage_after_recovery_realerts(tmp_path):
+    # Probe A2: the outage alert was deduped against the LAST event only,
+    # and the skip message is identical across outages — a genuinely new
+    # outage after a quiet recovery never re-alerted.
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=0.0, bil_qty=30, spy_qty=70)
+    bad = {"BIL": 100.0}
+    out1 = m.step("2026-08-20", payload(), bad)
+    assert len([o for o in out1 if o["action"] == "ALERT"]) == 1
+    out2 = m.step("2026-08-20", payload(), bad)      # same outage: quiet
+    assert not [o for o in out2 if o["action"] == "ALERT"]
+    m.step("2026-08-21", payload(), PRICES)          # QUIET recovery
+    out3 = m.step("2026-08-24", payload(), bad)      # NEW outage days later
+    assert len([o for o in out3 if o["action"] == "ALERT"]) == 1
+
+
+def test_gate_r4_interleaved_pending_event_does_not_spam_quote_alert(
+        tmp_path):
+    # Probe A3: pending-book INFO and missing-quote WARN alternate in the
+    # event log, defeating last-event dedup — the WARN alerted EVERY cycle.
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    m.state.pending_book_orders["blend-sweep-2026-08-20-1"] = {
+        "kind": "sweep", "symbol": "BIL", "qty": 10, "date": "2026-08-20",
+        "ref_price": 100.0}
+    n = 0
+    for _ in range(4):
+        n += len([o for o in m.step("2026-08-20", payload(), {})
+                  if o["action"] == "ALERT"])
+    assert n == 1                                    # once per outage
+
+
+def test_gate_r5_sweep_slippage_never_leaves_negative_sleeve_cash(tmp_path):
+    # Probe A4: reserved sweep cash priced at journal ref_price, adopted at
+    # the venue fill 0.9 above it -> sleeve_cash -27.
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=3_000.0)
+    m.on_sweep(30, 100.9)
+    assert m.state.sleeve_cash == 0.0                # clamped, not negative
+    assert m.state.bil_qty == 30
+    assert any("slippage absorbed" in e["msg"] for e in m.state.events)
+
+
+def test_gate_r6_stuck_book_order_escalates_to_warn_after_age(tmp_path):
+    # Probe A5 follow-up: a venue-stuck 'working' book order froze
+    # sweep/core-buy/rebalance with only a deduped INFO event.
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    m.record_pending_book_order("sweep", "BIL", 10, "2026-08-18",
+                                ref_price=100.0)
+    out = m.step("2026-08-18", payload(), PRICES)
+    assert not [o for o in out if o["action"] == "ALERT"]    # fresh: quiet
+    out = m.step("2026-08-20", payload(), PRICES)            # 2 days old
+    (al,) = [o for o in out if o["action"] == "ALERT"]
+    assert "still working" in al["msg"]
+    out = m.step("2026-08-21", payload(), PRICES)            # alerted ONCE
+    assert not [o for o in out if o["action"] == "ALERT"]
+
+
+def test_gate_r7_budget_cap_entries_wait_for_core_quotes(tmp_path):
+    # r7: a missing SPY quote zeroes gross_exposure -> the BLEND_BUDGET
+    # entry gate computed low while sleeve entries proceeded.
+    m = mk(tmp_path, blend_budget=100_000.0)
+    _seed_initialized(m)
+    no_spy = {"BIL": 100.0, "CRSP": 50.0}
+    out = m.step("2026-08-20",
+                 payload(entries=[entry()], stops=[stop_row()]), no_spy)
+    assert not [o for o in out if o["action"] == "ENTER"]
+    assert any("budget gate" in e["msg"] for e in m.state.events)
+    # without a cap the entry still proceeds (sleeve-only decision)
+    m2 = Blend3070Manager(Cfg(), str(tmp_path / "b2.json"))
+    _seed_initialized(m2)
+    out2 = m2.step("2026-08-20",
+                   payload(entries=[entry()], stops=[stop_row()]), no_spy)
+    assert [o for o in out2 if o["action"] == "ENTER"]
 
 
 # m3 (minor): cancel-ok-then-place-raise must not leave the position

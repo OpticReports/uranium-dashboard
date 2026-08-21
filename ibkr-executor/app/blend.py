@@ -97,6 +97,9 @@ TRADE_LOG_MAX = 200         # persisted closed/booked trade rows kept (feed)
 EQUITY_CURVE_MAX = 1500     # daily book-value snapshots kept (~6 years)
 UTIL_ALERT_ON = 0.85        # budget-utilization alert threshold (one-shot)
 UTIL_ALERT_OFF = 0.75       # re-arm threshold once utilization drops back
+BOOK_ORDER_STALE_DAYS = 2   # a pending book-order journal older than this is
+                            # anomalous (real DAY/OPG orders expire same-day)
+                            # -> WARN once per order (r6)
 STALE_PAYLOAD_DAYS = 5      # as_of older than this vs today -> no decisions
                             # (5, not the review's 2: a Monday poll after a
                             # long holiday weekend legitimately sees a 4-day-
@@ -189,6 +192,9 @@ class BlendState:
                                                       # one row per cycle day
     last_gate: bool | None = None    # last tracker gate seen (feed display)
     util_alert_armed: bool = True    # one-shot 85% budget alert armed?
+    quote_alert_armed: bool = True   # missing-SPY/BIL alert armed? (r3/r4:
+                                     # alert-once per outage, re-armed on
+                                     # recovery — the budget-alarm pattern)
     last_reconcile_ts: float = 0.0   # wall clock of the last SUCCESSFUL
                                      # reconcile pass (venue-history horizon
                                      # guard, adapter review m2)
@@ -233,6 +239,7 @@ class Blend3070Manager:
                 equity_curve=raw.get("equity_curve", [])[-EQUITY_CURVE_MAX:],
                 last_gate=raw.get("last_gate"),
                 util_alert_armed=raw.get("util_alert_armed", True),
+                quote_alert_armed=raw.get("quote_alert_armed", True),
                 last_reconcile_ts=raw.get("last_reconcile_ts", 0.0),
             )
             st.positions = {k: BlendPosition(**v)
@@ -264,6 +271,7 @@ class Blend3070Manager:
                    "equity_curve": self.state.equity_curve[-EQUITY_CURVE_MAX:],
                    "last_gate": self.state.last_gate,
                    "util_alert_armed": self.state.util_alert_armed,
+                   "quote_alert_armed": self.state.quote_alert_armed,
                    "last_reconcile_ts": self.state.last_reconcile_ts,
                    "events": self.state.events[-300:]},
                   open(self.state_path, "w"), indent=1)
@@ -445,6 +453,24 @@ class Blend3070Manager:
             self._event("INFO", f"book order(s) pending adoption "
                                 f"({', '.join(kinds)}): no new book-level "
                                 f"orders this cycle")
+            # r6: real DAY/OPG orders expire the same day — a journal this
+            # old means a venue-stuck order is freezing sweep/core-buy/
+            # rebalance. Escalate to WARN + Telegram once per order.
+            for cid, rec in st.pending_book_orders.items():
+                try:
+                    age = (date.fromisoformat(today)
+                           - date.fromisoformat(rec.get("date") or "")).days
+                except ValueError:
+                    age = None
+                if (age is not None and age >= BOOK_ORDER_STALE_DAYS
+                        and not rec.get("stale_alerted")):
+                    rec["stale_alerted"] = True
+                    self.save()
+                    msg = (f"book order {cid} ({rec['kind']}) still working "
+                           f"after {age}d — sweep/core-buy/rebalance frozen; "
+                           f"check the venue order")
+                    self._event("WARN", msg)
+                    alerts.append(msg)
         projected_cash = st.sleeve_cash - self.reserved_sleeve_cash()
         funds = projected_cash + (0.0 if pending_book
                                   else st.bil_qty * bil_px)  # spendable
@@ -535,12 +561,22 @@ class Blend3070Manager:
             pos = st.positions[str(it["call_id"])]
             projected_gross -= pos.qty * self._mark_price(pos, prices)
         naked = self.has_naked_position()
+        # r7: a missing SPY/BIL quote zeroes gross_exposure, so the
+        # BLEND_BUDGET gate (and the 85% alarm) would compute low while
+        # entries proceed — with a cap set, entries wait for the quotes.
+        budget_blind = budget > 0 and (prices.get(CORE, 0.0) <= 0
+                                       or bil_px <= 0)
         if gate_on and naked and payload.get("entries"):
             msg = ("entries BLOCKED: a held position has no working stop "
                    "(STOP_MISSING) — protect the book before adding risk")
             self._event("RED", msg)
             alerts.append(msg)
-        if gate_on and not naked:
+        if gate_on and not naked and budget_blind and payload.get("entries"):
+            self._event("WARN", "entries skipped: missing SPY/BIL quote "
+                                "with BLEND_BUDGET set — gross exposure "
+                                "(the budget gate's basis) is not "
+                                "computable this cycle")
+        if gate_on and not naked and not budget_blind:
             for e in payload.get("entries", []):
                 key = str(e["call_id"])
                 if key in st.positions or key in st.pending_entries:
@@ -611,11 +647,22 @@ class Blend3070Manager:
         #    M1: skipped while any book order is pending adoption.
         rebalance_intent = None
         spy_quote = prices.get(CORE, 0.0)
+        if spy_quote > 0 and bil_px > 0 and not st.quote_alert_armed:
+            st.quote_alert_armed = True     # outage over: re-arm (r3)
+            self.save()
         if spy_quote <= 0 or bil_px <= 0:
             msg = (f"rebalance/valuation SKIPPED: missing quote "
                    f"(SPY={spy_quote or None}, BIL={bil_px or None}) — no "
                    f"weight decision is taken on absent prices")
-            if self._event("WARN", msg):
+            self._event("WARN", msg)
+            if st.quote_alert_armed:
+                # r3/r4: alert-once per OUTAGE via a persisted armed flag
+                # (the budget-alarm pattern). Event-log dedup alone both
+                # missed a NEW outage after a quiet recovery (identical
+                # message, r3) and spammed when another recurring event
+                # interleaved (r4).
+                st.quote_alert_armed = False
+                self.save()
                 alerts.append(msg)
         elif pending_book:
             pass                        # wait for the in-flight book order
@@ -911,6 +958,13 @@ class Blend3070Manager:
     def on_sweep(self, qty_delta: int, price: float) -> None:
         self.state.bil_qty += qty_delta
         self.state.sleeve_cash -= qty_delta * price
+        if qty_delta > 0 and self.state.sleeve_cash < 0:
+            # r5: a sweep BUY adopted at a venue fill above the journaled
+            # ref_price overdraws the reserved cash by the slippage —
+            # clamp to zero (slippage-bounded magnitude) and log it.
+            self._event("INFO", f"sweep slippage absorbed: sleeve cash "
+                                f"{self.state.sleeve_cash:.2f} clamped to 0")
+            self.state.sleeve_cash = 0.0
         self._record_trade(CASH_VEHICLE, "BUY" if qty_delta > 0 else "SELL",
                            qty_delta, price, _utc_today(), "sweep")
         self.save()
