@@ -3319,3 +3319,107 @@ def test_gate_zezf_partial_cover_is_never_reported_as_protected(tmp_path):
            and "call 1)" in x]
     assert esc and all("RESIZED protective stop" in x for x in esc)
     assert not any("has been LEFT RESTING" in x for x in esc)
+
+
+# --- the final counter-review (ZF-1..ZF-7) ------------------------------------
+
+def test_gate_zf1_a_book_already_inside_the_invariant_loses_no_cover(tmp_path):
+    """ZF-1, NEW harm introduced by the Z-C round: dropping the resize's
+    `if total <= held: return ""` early return made the reduce leg run in
+    cells where the aggregate ALREADY satisfied `cover <= held`, and there
+    it is a pure subtraction — the freed shares are handed to a peer whose
+    restore is blocked (its own unACKed orphan), so nothing replaces what
+    was cut.
+
+    Measured at the parent commit: a healthy, UNFLAGGED peer resting full
+    cover of 4 against 5 held was cut to 2 and mothballed UNVERIFIABLE, to
+    satisfy an invariant that already held. Reduce only while the running
+    aggregate exceeds `held`; cap restores at the slack."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    # call 1: cover retired, the cancel never ACKed — its own orphan may
+    # still rest, so no cover can be re-placed for it this cycle.
+    _held_position(m, call_id=1, qty=5, stop_level=44.0, stop_ref=None)
+    p1 = m.state.positions["1"]
+    p1.history_gap, p1.stop_missing, p1.stop_order_ref = True, True, None
+    m.record_orphan_stop("ghost-1", {"symbol": "CRSP", "qty": -5,
+                                     "call_id": 1})
+    # call 2: healthy, UNFLAGGED, fully covered by a real resting stop
+    old2 = _blackout_stop(m, a, call_id=2, qty=4, level=43.0)
+    a._positions["CRSP"] = 5          # 4 resting <= 5 held: ALREADY compliant
+    before = sorted(-o["qty"] for o in a._stops.values())
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    after = sorted(-o["qty"] for o in a._stops.values())
+    assert before == [4]
+    assert after == [4]                       # nothing of the 4 was cut
+    assert a._orders[old2]["status"] == "working"
+    p2 = m.state.positions["2"]
+    assert p2.stop_order_ref == old2 and not p2.stop_missing
+    assert p2.stop_cover_qty == 0              # not capped
+    # (R1's blackout guard flags both peers on the shortfall — that is
+    # pre-existing and correct; what the resize may not do is CAP a peer
+    # whose cover it never had to touch)
+    assert not any("UNVERIFIABLE too" in msg for msg in alerts)
+    assert not any("share(s) of protection were REMOVED" in msg
+                   for msg in alerts)
+    # and the invariant it would have served held before and after
+    assert sum(-o["qty"] for o in a._stops.values()) <= a._positions["CRSP"]
+
+
+def test_gate_zf1_the_reduce_leg_still_runs_when_the_aggregate_is_over(tmp_path):
+    """The other half of ZF-1: "reduce only as far as the aggregate
+    requires" must not become "never reduce". With 9 resting against 6 held
+    the reduce leg still runs to the pro-rata allocation, and a zero-cover
+    peer still gets its share of the slack (Z-C's restore-from-zero)."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    _blackout_stop(m, a, call_id=1, qty=5, level=44.0)
+    _blackout_stop(m, a, call_id=2, qty=4, level=43.0)
+    a._positions["CRSP"] = 6
+    run_cycle(m, a, None, "2026-08-24", alert=lambda _m: None)
+    assert sorted(-o["qty"] for o in a._stops.values()) == [3, 3]
+    assert sum(-o["qty"] for o in a._stops.values()) == 6      # == held
+    # a peer at cover ZERO is restored into the slack, never past it
+    m2 = mk(tmp_path / "b")
+    _seed_initialized(m2, sleeve_cash=2_750.0)
+    a2 = DryAdapter()
+    _held_position(m2, call_id=1, qty=5, stop_level=44.0, stop_ref=None)
+    q1 = m2.state.positions["1"]
+    q1.history_gap, q1.stop_missing, q1.stop_order_ref = True, True, None
+    _blackout_stop(m2, a2, call_id=2, qty=4, level=43.0)
+    a2._positions["CRSP"] = 6                  # 4 rests, 2 of slack left
+    run_cycle(m2, a2, None, "2026-08-24", alert=lambda _m: None)
+    assert sum(-o["qty"] for o in a2._stops.values()) <= 6
+    assert m2.state.positions["1"].stop_order_ref          # really restored
+    assert m2.state.positions["1"].stop_cover_qty == 2     # the SLACK, not 3
+    assert m2.state.positions["2"].stop_cover_qty == 0     # left alone
+
+
+def test_gate_zf5_a_newly_capped_peer_is_never_announced_silently(tmp_path):
+    """ZF-5: the `capped` clause was assembled AFTER `if not lines: return
+    ""`, so a peer the resize newly flagged UNVERIFIABLE — which mothballs
+    the whole sleeve — got NO Telegram line in the cycle it happened when
+    nothing could be placed or cancelled."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    for call_id, qty, level in ((1, 5, 44.0), (2, 4, 43.0)):
+        _held_position(m, call_id=call_id, qty=qty, stop_level=level,
+                       stop_ref=None)
+        p = m.state.positions[str(call_id)]
+        p.stop_missing, p.stop_order_ref = True, None
+        # every peer's own cover is an unACKed orphan: nothing is placeable
+        m.record_orphan_stop(f"ghost-{call_id}",
+                             {"symbol": "CRSP", "qty": -qty,
+                              "call_id": call_id})
+    m.state.positions["1"].history_gap = True        # only call 1 is flagged
+    a._positions["CRSP"] = 6
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-24", alert=alerts.append)
+    assert m.state.positions["2"].history_gap        # newly capped...
+    assert any("call 2" in msg and "UNVERIFIABLE too" in msg
+               for msg in alerts)                    # ...and SAID SO
+    assert any("NO NEW ENTRIES" in msg for msg in alerts)

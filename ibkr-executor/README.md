@@ -91,7 +91,7 @@ unreconciled venue state. Phases IN ORDER:
       | held == booked | `working` | UNPARKED; that stop is kept |
       | held == booked | dead/unknown | UNPARKED as STOP_MISSING; pass 1e re-places it |
       | held < booked, no same-symbol peer | any | parked UNRECONCILED, resting stop RETIRED first (counter-review N1) |
-      | held < booked, same-symbol peers exist | any | the shortfall is NOT attributable to one position: NOBODY is parked or sacrificed, all stay flagged (counter-review x5) — but resting SELL cover is ALIGNED PRO RATA to `held`, and every peer whose allocation is below its own qty is flagged UNVERIFIABLE too so the cap cannot drift back (counter-review Z1 / Z-A) |
+      | held < booked, same-symbol peers exist | any | the shortfall is NOT attributable to one position: NOBODY is parked or sacrificed, all stay flagged (counter-review x5) — but resting SELL cover is ALIGNED PRO RATA to `held`, only as far as the aggregate requires (counter-review ZF-1), and every peer whose resized cover ends below its own qty is flagged UNVERIFIABLE too so the cap cannot drift back (counter-review Z1 / Z-A) |
       | held > booked (CONFLATION) | `working` | stays flagged; the working stop is LEFT RESTING |
       | held > booked (CONFLATION) | dead/unknown | stays flagged, marked UNPROTECTED; no new stop is rested |
       | positions unanswerable | any | stays flagged |
@@ -134,18 +134,29 @@ unreconciled venue state. Phases IN ORDER:
       RED + STOP_MISSING and the placement is RETRIED on every reconcile
       that still sees the shortfall — never silently naked, and never
       restored above the allocation.
+      **Protection is never removed that the aggregate did not require**
+      (counter-review ZF-1): the reduce leg walks the peers only while the
+      RUNNING aggregate still exceeds `held`, and each restore is capped at
+      the remaining slack (`held` minus the cover already resting elsewhere
+      on that symbol). Aligning every peer unconditionally ran the reduce
+      leg in cells that were already compliant, where it is a pure
+      subtraction — measured: cover 4 against 5 held became cover **2**,
+      because the healthy peer was cut and the zero-cover peer's restore
+      was blocked by its own unACKed orphan.
       **"<= its pro-rata allocation" is the explicit exception** to the
       rule that no SELL stop is (re-)placed for an UNVERIFIABLE position.
       Not "strictly reducing": Y1 forbids cover the account may not be able
-      to honour, and since the allocation sums to exactly `held` and every
-      peer ends at `min(alloc, qty)`, cover at or below it is provably
-      short-safe whichever direction an individual peer moved. Cover is
+      to honour, and since the allocation sums to exactly `held`, cover at
+      or below it is provably short-safe whichever direction an individual
+      peer moved. Cover is
       only ever restored FROM ZERO (never stacked on a stop that already
       rests, never while an unACKed orphan of that position's own cover may
       still rest), because leaving a real position at cover 0 indefinitely
       is the unbounded naked downside of counter-review X3.
-      **The cap is DURABLE** (counter-review Z-A): a peer whose allocation
-      is below its own qty is marked `history_gap` in the same breath. The
+      **The cap is DURABLE** (counter-review Z-A): a peer whose TARGET
+      cover this round is below its own qty is marked `history_gap` in the
+      same breath — the target, not the bare allocation, so a peer the
+      round leaves alone is never mothballed for a cap it never took. The
       resize deliberately spans same-symbol peers that are NOT themselves
       flagged (the invariant is a per-symbol aggregate, so their cover
       counts) — and a cap recorded only in `stop_cover_qty` was undone for

@@ -1688,18 +1688,28 @@ def _resize_peer_cover(mgr: Blend3070Manager, adapter, held: int,
 
     Y1 CARVE-OUT (explicit): Y1 forbids resting cover the account may not be
     able to honour on an UNVERIFIABLE position, because that is a short
-    path. Cover is ALIGNED to the pro-rata allocation here and never above
-    it, which is provably short-safe by the same arithmetic the whole
-    function rests on: `sum(alloc) == held` by construction and every peer
-    ends at `min(alloc, qty)`, so the per-symbol aggregate is `<= held`
-    whichever direction an individual peer moved. That is the exemption —
-    "<= its pro-rata allocation", not "strictly reducing" (counter-review
-    Z-C / DEVIATION 1: leaving a real position at cover 0 forever because a
-    re-place would be an *increase* is X3's unbounded naked downside, and
-    this branch already ruled that bounded protection beats that). Cover is
-    only ever RESTORED from ZERO, never stacked on top of something that
-    already rests, and never while an unACKed orphan of this position's own
-    cover may still rest at the venue.
+    path. Cover is never RESTORED above a peer's pro-rata allocation, and
+    never above the aggregate slack, which is provably short-safe by the
+    same arithmetic the whole function rests on: `sum(alloc) == held` by
+    construction, so if the reduce leg ran to the end of the book every peer
+    sits at `min(alloc, qty)` and the aggregate is exactly `held`; if it
+    stopped early the aggregate was already `<= held` when it stopped; and
+    each restore is capped at `held - running`. The per-symbol aggregate is
+    therefore `<= held` whichever direction an individual peer moved. That
+    is the exemption — "<= its pro-rata allocation", not "strictly reducing"
+    (counter-review Z-C / DEVIATION 1: leaving a real position at cover 0
+    forever because a re-place would be an *increase* is X3's unbounded
+    naked downside, and this branch already ruled that bounded protection
+    beats that). Cover is only ever RESTORED from ZERO, never stacked on top
+    of something that already rests, and never while an unACKed orphan of
+    this position's own cover may still rest at the venue.
+
+    ZF-1 (the other end of the same rule): protection is never REMOVED that
+    the aggregate did not require. The reduce leg runs only while the
+    running aggregate still exceeds `held`, so a peer that was already
+    inside the line keeps its full cover and is not flagged — cutting a
+    healthy peer for a peer whose restore is blocked anyway is a pure
+    subtraction, and the invariant it would serve already held.
 
     DURABILITY (counter-review Z-A): a peer whose allocation is BELOW its
     own qty is CAPPED, and a cap that only lives in `stop_cover_qty` is
@@ -1731,11 +1741,42 @@ def _resize_peer_cover(mgr: Blend3070Manager, adapter, held: int,
         cover[key] = (_resting_cover(p) if resting else 0, ref)
     total = sum(c for c, _ in cover.values())
     alloc = _prorata_cover(order, held)
+    # ZF-1: the TARGET cover per peer, decided before a single order moves.
+    # Reduce ONLY while the running aggregate still exceeds `held`, and
+    # restore ONLY into the slack the aggregate leaves. An earlier revision
+    # aligned every peer to its allocation unconditionally, which ran the
+    # reduce leg in cells where the invariant ALREADY held: measured cover 4
+    # against 5 held -> cover 2, because the healthy peer was cut and the
+    # zero-cover peer's restore was blocked by its own unACKed orphan. Two
+    # real shares lost their stop to satisfy an invariant that was already
+    # satisfied. Protection is never removed that the aggregate did not
+    # require, and never restored past the slack.
+    target: dict[str, int] = {}
+    running = total
+    for p in order:                 # reductions first: they free the slack
+        key = str(p.call_id)
+        cur = cover[key][0]
+        want = min(alloc[key], p.qty)
+        if cur > want and running > held:
+            target[key] = want
+            running -= cur - want
+        else:
+            target[key] = cur       # already inside the aggregate: leave it
+    for p in order:                 # restores take only what slack is left
+        key = str(p.call_id)
+        if cover[key][0] > 0:       # Z-C: only ever restored from ZERO
+            continue
+        want = min(alloc[key], p.qty, max(held - running, 0))
+        if want > 0:
+            target[key] = want
+            running += want
     # Z-A: make the cap DURABLE before touching a single order — a capped
     # peer that is not flagged has its cover restored to FULL by the next
-    # ratchet (step() §3) or by pass 4 in this very reconcile.
+    # ratchet (step() §3) or by pass 4 in this very reconcile. Flagged on
+    # the TARGET, not the allocation: a peer this round leaves alone was not
+    # capped by it and must not be mothballed for a cap it never took.
     newly_capped = [p for p in order
-                    if alloc[str(p.call_id)] < p.qty and not p.history_gap]
+                    if target[str(p.call_id)] < p.qty and not p.history_gap]
     for p in newly_capped:
         p.history_gap = True
     if newly_capped:
@@ -1751,7 +1792,7 @@ def _resize_peer_cover(mgr: Blend3070Manager, adapter, held: int,
     for p in order:
         key = str(p.call_id)
         cur, ref = cover[key]
-        new = min(alloc[key], p.qty)    # NEVER above the allocation
+        new = target[key]               # NEVER above the allocation
         if new > cur:
             # Cover BELOW the allocation: restore it, but only from ZERO —
             # raising a stop that already rests would mean cancelling and
@@ -1880,18 +1921,7 @@ def _resize_peer_cover(mgr: Blend3070Manager, adapter, held: int,
         p.stop_cover_qty = new
         mgr.save()
         lines.append(f"call {p.call_id}: {cur} -> {new}")
-    if not lines:
-        return ""
-    now = sum(_resting_cover(p) for p in order
-              if p.stop_order_ref and not p.stop_missing)
-    book_qty = sum(p.qty for p in order)
     sym = order[0].symbol
-    # X2 residual: a cancel the venue will not ACK may leave the OLD stop
-    # resting, so the headline may not claim a cover the book cannot prove.
-    residual = (f", BUT {unknown} share(s) of the OLD cover could not be "
-                f"cancelled and may STILL rest at the venue (tracked; a fill "
-                f"on them alerts RED), so cover THERE may still exceed "
-                f"{held} — clear them by hand" if unknown else "")
     # Z-A: a peer that was NOT flagged before now is, which blocks entries
     # and stops its trail ratcheting. The operator hears that here, in the
     # cycle it happens, not only from next cycle's escalation.
@@ -1904,6 +1934,25 @@ def _resize_peer_cover(mgr: Blend3070Manager, adapter, held: int,
                 "restored behind the book's back — no trail ratchet, no "
                 "re-stop and NO NEW ENTRIES until you resolve the account"
               if newly_capped else "")
+    if not lines:
+        # ZF-5: nothing was placed or cancelled — but the cap above may
+        # still have just mothballed a sleeve. This clause used to be
+        # assembled AFTER this early return, so that peer got no Telegram
+        # line at all in the cycle it was flagged. Never silent.
+        if newly_capped:
+            alert(f"🚨🚨 blend: {sym} resting SELL cover could not be changed "
+                  f"this cycle (nothing placeable or cancellable against the "
+                  f"{held} share(s) the venue holds)" + capped)
+        return ""
+    now = sum(_resting_cover(p) for p in order
+              if p.stop_order_ref and not p.stop_missing)
+    book_qty = sum(p.qty for p in order)
+    # X2 residual: a cancel the venue will not ACK may leave the OLD stop
+    # resting, so the headline may not claim a cover the book cannot prove.
+    residual = (f", BUT {unknown} share(s) of the OLD cover could not be "
+                f"cancelled and may STILL rest at the venue (tracked; a fill "
+                f"on them alerts RED), so cover THERE may still exceed "
+                f"{held} — clear them by hand" if unknown else "")
     mgr._event("RED", f"{sym} resting stop cover RESIZED {total} -> {now} "
                       f"to match the {held} shares the venue holds"
                       + (f" ({unknown} share(s) uncancellable, tracked)"
