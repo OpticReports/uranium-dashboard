@@ -170,6 +170,7 @@ export default function Execution() {
               <Th>Entry</Th>
               <Th>Trail stop</Th>
               <Th>Days held</Th>
+              <Th>Status</Th>
             </tr>
           </thead>
           <tbody>
@@ -182,11 +183,29 @@ export default function Execution() {
                 </td>
                 <td className="px-3 py-2">${fmtNum(p.trail_level, 2)}</td>
                 <td className="px-3 py-2">{p.days_held != null ? `${p.days_held} / 90` : "—"}</td>
+                <td className="px-3 py-2 text-xs">
+                  {p.unverifiable || p.unprotected ? (
+                    <span className="flex flex-col gap-0.5">
+                      {p.unverifiable && (
+                        <span className="text-amber-400 font-semibold" title="The executor's blackout guard cannot prove the book owns these shares. Nothing will be sold or re-stopped until you resolve it manually.">
+                          UNVERIFIABLE{p.unverified_cycles ? ` (${p.unverified_cycles} cycles)` : ""}
+                        </span>
+                      )}
+                      {p.unprotected && (
+                        <span className="text-rose-400 font-semibold" title="No protective stop rests at the venue for this position.">
+                          UNPROTECTED
+                        </span>
+                      )}
+                    </span>
+                  ) : (
+                    <span className="text-emerald-400">OK</span>
+                  )}
+                </td>
               </tr>
             ))}
             {!positions.length && (
               <tr>
-                <td colSpan={5} className="px-3 py-5 text-center text-gray-500">
+                <td colSpan={6} className="px-3 py-5 text-center text-gray-500">
                   No open sleeve positions — entries appear when the tracker fires with the gate on.
                 </td>
               </tr>
