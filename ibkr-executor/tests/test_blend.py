@@ -4020,3 +4020,124 @@ def test_gate_mf2_shutting_down_an_older_lifespan_leaves_the_live_loop_running(
         client1.__exit__(None, None, None)
         service.BLEND = None
         service.MGR = None
+
+
+def _drifted_book_missing(tmp_path, field: str):
+    """Seed a real 5-share CRSP position protected by a real working GTC
+    stop, then drop ONE required field from the persisted row — the schema
+    drift a deploy ROLLBACK produces (ZF-4/MF-3's reachability class).
+    Returns (rebuilt manager, adapter)."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    _held_position(m, stop_ref=None)
+    pos = m.state.positions["1"]
+    rs = a.place_stock_order("CRSP", -5, "STP", stop_price=44.0, tif="GTC",
+                             client_order_id="blend-1-stp-44.0000")
+    pos.stop_order_ref = rs["order_ref"]
+    a._positions["CRSP"] = 5
+    m.state.halted = "KILL"
+    m.save()
+    raw = json.load(open(m.state_path))
+    raw["positions"]["1"].pop(field)
+    with open(m.state_path, "w") as fh:
+        json.dump(raw, fh)
+    return mk(tmp_path), a
+
+
+def test_gate_mfc_a_stand_in_row_never_addresses_the_venue(tmp_path):
+    """MF-C (NEW harm, introduced by MF-3 — the only cell where this branch
+    was WORSE than main): flagging a stand-in row `history_gap` routed it
+    into reconcile pass 1b, which then made venue decisions using the
+    FABRICATED identity. With `symbol` defaulted to "", `stock_position("")`
+    answers 0, so the book concluded the 5 booked shares were gone,
+    CANCELLED the real working GTC stop on 5 REAL shares and DELETED the
+    row — measured `rows=[] venue CRSP=5 stop cancelled naked=False`, while
+    9b33081 left the row and its working stop alone.
+
+    A row whose identity this build invented must never be used to address,
+    cancel or match a venue order: it is kept OUT of pass 1b's venue
+    comparison entirely."""
+    m2, a = _drifted_book_missing(tmp_path, "symbol")
+    assert m2.state.positions["1"].symbol == ""      # the stand-in identity
+    stop_ref = m2.state.positions["1"].stop_order_ref
+    m2.resume()                                  # the operator clears the halt
+    alerts: list[str] = []
+    run_cycle(m2, a, None, "2026-08-22", alert=alerts.append)
+
+    # the REAL protection is untouched
+    assert a.find_stock_order("blend-1-stp-44.0000")["status"] == "working"
+    assert stop_ref in a._stops                  # still resting at the venue
+    assert a._positions["CRSP"] == 5             # the real shares are there
+    assert not any(e.get("action") == "cancel_stock_order" for e in a.log)
+    # the book still knows about them
+    assert "1" in m2.state.positions
+    assert m2.state.unreconciled == {}
+    assert m2.has_naked_position()               # entries stay BLOCKED
+    assert m2.status_summary()["unverifiable"] == ["1"]
+    # and the operator is told why, loudly — never silently
+    assert any("REBUILT from STAND-INS" in msg and "symbol" in msg
+               for msg in alerts)
+    # with an invented symbol there is no honest venue question to ask, so
+    # the alert reports no share count at all
+    assert not any("the account holds" in msg for msg in alerts)
+    # the provenance carrier: book-level, so it survives a reconcile
+    assert m2.state.stand_in_rows == {"1": ["symbol"]}
+    assert m2.status_summary()["stand_in_rows"] == {"1": ["symbol"]}
+
+
+def test_gate_mfb_the_stand_in_flag_survives_every_reconcile(tmp_path):
+    """MF-B: MF-3's flag did not survive. `history_gap` clears on positive
+    venue evidence about QUANTITY (`held == book_qty`, reconcile pass 1b),
+    which is satisfied whenever `qty` is not the defaulted field — so 6 of
+    the 7 stand-in fields cleared on the NEXT reconcile. Worst measured:
+    `time_stop` defaulted to "" made the row "POSITIVELY verified" and then
+    `🧬 blend EXIT CRSP x5 (time_stop)` liquidated 5 REAL shares on a
+    FABRICATED time stop, green alert, same cycle. The boot alert's
+    "nothing exits, re-stops or flattens them" was false in cycle 1.
+
+    The provenance lives at BOOK level (`state.stand_in_rows`, not a
+    persisted BlendPosition field — that is ZF-3's one-way rollback door),
+    so it outlives every reconcile, every /resume and every restart."""
+    m2, a = _drifted_book_missing(tmp_path, "time_stop")
+    assert m2.state.positions["1"].time_stop == ""   # the stand-in
+    m2.resume()
+    alerts: list[str] = []
+    for _ in range(3):                       # three consecutive reconciles
+        run_cycle(m2, a, None, "2026-08-22", alert=alerts.append)
+        assert m2.state.positions["1"].history_gap is True
+
+    # the fabricated `time_stop` of "" DOES fire the local 90-day belt every
+    # cycle — and is refused every cycle, instead of selling on cycle 1
+    assert any("EXIT CRSP deferred" in msg and "STAND-INS" in msg
+               for msg in alerts)
+    assert not any("🧬 blend EXIT" in msg for msg in alerts)
+    assert not any("POSITIVELY verified" in msg for msg in alerts)
+    assert a._positions["CRSP"] == 5
+    assert a.find_stock_order("blend-1-stp-44.0000")["status"] == "working"
+    assert not [t for t in m2.state.trades if t["kind"] != "entry"]
+    assert "1" in m2.state.positions
+    assert m2.state.stand_in_rows == {"1": ["time_stop"]}
+
+    # ...and it survives a RESTART, because the carrier is persisted
+    m3 = mk(tmp_path)
+    assert m3.state.stand_in_rows == {"1": ["time_stop"]}
+    assert m3.state.positions["1"].history_gap is True
+    # a hand-edit that clears the flag without restoring the value does NOT
+    # un-park the row
+    raw = json.load(open(m3.state_path))
+    raw["positions"]["1"]["history_gap"] = False
+    with open(m3.state_path, "w") as fh:
+        json.dump(raw, fh)
+    m4 = mk(tmp_path)
+    assert m4.state.positions["1"].history_gap is True
+    # the ONLY resolution is restoring the row and dropping its entry
+    raw = json.load(open(m4.state_path))
+    raw["positions"]["1"]["time_stop"] = "2026-12-30"
+    raw["positions"]["1"]["history_gap"] = False
+    raw["stand_in_rows"] = {}
+    with open(m4.state_path, "w") as fh:
+        json.dump(raw, fh)
+    m5 = mk(tmp_path)
+    assert m5.state.stand_in_rows == {}
+    assert m5.state.positions["1"].history_gap is False

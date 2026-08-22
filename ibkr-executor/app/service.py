@@ -492,5 +492,8 @@ def resume(x_exec_token: str | None = Header(default=None),
             "rows came from a build this one does not fully understand. "
             "Every field this build knows was kept and nothing live was "
             "re-opened — confirm the venue matches the book before trusting "
-            "the next cycle." if drift else ""))
+            "the next cycle. Any row whose missing fields had to be STOOD "
+            "IN for stays UNVERIFIABLE through this resume (MF-B): it is "
+            "never exited, re-stopped or flattened and no reconcile clears "
+            "it — see `stand_in_rows` on /status." if drift else ""))
     return {"ok": True, "cleared": prior, "blend_cleared": blend_prior}

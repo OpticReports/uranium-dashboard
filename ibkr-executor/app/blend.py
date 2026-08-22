@@ -233,8 +233,19 @@ def _position_from_drifted_row(key: str, row: dict) -> tuple[BlendPosition,
         # is exactly the existing "UNVERIFIABLE — do not act, do not
         # unpark on a timestamp" machinery (R1/X3): the exit defers, the
         # row is kept, reconcile alerts the venue-vs-book discrepancy, and
-        # entries stay blocked. It is cleared only by positive venue
-        # evidence, like every other flagged row.
+        # entries stay blocked.
+        #
+        # MF-B: it is NOT cleared like every other flagged row. The R1 flag
+        # clears on positive venue evidence about the QUANTITY
+        # (`held == book_qty`, reconcile pass 1b) — which says nothing
+        # about a row whose CONTENTS were invented. Measured: 6 of the 7
+        # stand-in fields cleared on the very next reconcile, and a
+        # defaulted `time_stop` of "" then liquidated 5 real shares as a
+        # green "blend EXIT CRSP x5 (time_stop)" in the same cycle. The
+        # caller records WHICH fields were invented in
+        # `BlendState.stand_in_rows`, and that book-level record — not
+        # this flag alone — is what keeps the row untouchable until a
+        # human restores it.
         pos.history_gap = True
     return pos, dropped, defaulted
 
@@ -257,6 +268,23 @@ class BlendState:
     book_order_seq: int = 0     # monotone id sequence for book-level orders
     unreconciled: dict = field(default_factory=dict)     # trades with no fill price:
                                                          # key -> frozen record (manual)
+    stand_in_rows: dict = field(default_factory=dict)    # MF-B/MF-C: position key ->
+                                                         # the field names a schema-drift
+                                                         # rebuild had to INVENT for that
+                                                         # row. Book-level, NOT a
+                                                         # BlendPosition field: `_load`
+                                                         # reads every BlendState key with
+                                                         # raw.get(), so an older build
+                                                         # rolled back onto this file
+                                                         # ignores it, while a new
+                                                         # BlendPosition field would make
+                                                         # its `BlendPosition(**v)` raise
+                                                         # and drift-halt every row
+                                                         # (ZF-3's one-way door). Cleared
+                                                         # ONLY by a human restoring the
+                                                         # row (or by the row leaving the
+                                                         # book) — no venue evidence can
+                                                         # verify an invented value
     orphan_stop_refs: dict = field(default_factory=dict)  # retired stops whose
                                                           # cancel failed (retry)
     sleeve_cash: float = 0.0
@@ -376,6 +404,7 @@ class Blend3070Manager:
                 pending_book_orders=raw.get("pending_book_orders", {}),
                 book_order_seq=raw.get("book_order_seq", 0),
                 unreconciled=raw.get("unreconciled", {}),
+                stand_in_rows=raw.get("stand_in_rows", {}),
                 orphan_stop_refs=raw.get("orphan_stop_refs", {}),
                 sleeve_cash=raw.get("sleeve_cash", 0.0),
                 bil_qty=raw.get("bil_qty", 0),
@@ -426,6 +455,10 @@ class Blend3070Manager:
                     st.positions[k] = pos
                     dropped_keys.update(drop)
                     defaulted.extend(f"{k}.{d}" for d in defl)
+                    if defl:
+                        # MF-B/MF-C: the row's provenance, at BOOK level so
+                        # it survives every reconcile and every /resume.
+                        st.stand_in_rows[str(k)] = sorted(defl)
                 archive = f"{self.state_path}.corrupt-{int(time.time())}"
                 try:
                     os.replace(self.state_path, archive)
@@ -446,9 +479,16 @@ class Blend3070Manager:
                        if dropped_keys else "")
                     + (f"; fields the rows did not carry were DEFAULTED (the "
                        f"values are stand-ins, read them off the preserved "
-                       f"file) and those rows are flagged UNVERIFIABLE — "
-                       f"nothing exits, re-stops or flattens them and they "
-                       f"show up as `unverifiable` on /status and the feed: "
+                       f"file) and those rows are flagged UNVERIFIABLE for "
+                       f"GOOD — nothing exits, re-stops, resizes or flattens "
+                       f"them, no venue answer is allowed to DECIDE "
+                       f"anything about them (an invented symbol or stop "
+                       f"level addresses the WRONG order), and NO reconcile "
+                       f"clears the flag: restore the real values in the "
+                       f"state file and delete the row's `stand_in_rows` "
+                       f"entry. They show up as `unverifiable` on /status "
+                       f"and the feed, and /status names the invented "
+                       f"fields under `stand_in_rows`: "
                        f"{', '.join(defaulted)}" if defaulted else "")
                     + (f"; row(s) {', '.join(unbuildable)} could not be "
                        f"rebuilt at all and were DROPPED from the in-memory "
@@ -457,6 +497,15 @@ class Blend3070Manager:
                        if unbuildable else "")
                     + f"; {note}")
                 logger.error("blend: %s", self.archived_state)
+            # MF-B: keep the stand-in register honest on every load — drop
+            # rows that have left the book, and re-assert the flag on rows
+            # still in it (a hand-edit that cleared `history_gap` without
+            # restoring the invented values must not un-park the row).
+            for gone in [k for k in st.stand_in_rows
+                         if k not in st.positions]:
+                st.stand_in_rows.pop(gone)
+            for k in st.stand_in_rows:
+                st.positions[k].history_gap = True
             st.events = raw.get("events", [])[-300:]
             return st
         except FileNotFoundError:
@@ -509,6 +558,7 @@ class Blend3070Manager:
                    "pending_book_orders": self.state.pending_book_orders,
                    "book_order_seq": self.state.book_order_seq,
                    "unreconciled": self.state.unreconciled,
+                   "stand_in_rows": self.state.stand_in_rows,
                    "orphan_stop_refs": self.state.orphan_stop_refs,
                    "sleeve_cash": self.state.sleeve_cash,
                    "bil_qty": self.state.bil_qty,
@@ -1327,6 +1377,10 @@ class Blend3070Manager:
                             if _is_unprotected(v)],
             "unverifiable": [k for k, v in st.positions.items()
                              if v.history_gap],
+            # MF-B: WHY a row is unverifiable matters — a blackout row can
+            # be cleared by the next reconcile, a STAND-IN row never can.
+            # key -> the field names this build invented for it.
+            "stand_in_rows": dict(st.stand_in_rows),
             "pending_entries": sorted(st.pending_entries),
             "pending_book_orders": sorted(st.pending_book_orders),
             "unreconciled": st.unreconciled,
@@ -2183,6 +2237,63 @@ def _flag_unverified(mgr: Blend3070Manager, pos: BlendPosition, detail: str,
             f"re-alerting every {UNVERIFIED_REALERT_CYCLES})")
 
 
+def _flag_stand_in(mgr: Blend3070Manager, key: str, pos: BlendPosition,
+                   adapter, alert) -> None:
+    """MF-C/MF-B: a row a schema-drift rebuild had to INVENT fields for is
+    kept out of reconcile pass 1b entirely, and stays flagged until a human
+    restores it.
+
+    MF-C — why it is not merely 'left flagged' but kept OUT of the venue
+    comparison: pass 1b addresses the venue WITH the row's own identity.
+    A defaulted `symbol` makes `stock_position("")` answer 0, so the book
+    concluded the 5 booked shares were gone, CANCELLED the real working GTC
+    stop on 5 REAL shares and deleted the row (measured `rows=[] venue=5`);
+    a defaulted `stop_level` builds the wrong `stop_client_id` and asks
+    about an order that never existed. An identity this build invented must
+    never be used to address, cancel or match a venue order.
+
+    MF-B — why the flag cannot clear here: pass 1b clears `history_gap` on
+    positive venue evidence about the QUANTITY (`held == book_qty`), which
+    is satisfied whenever `qty` is not the invented field. Nothing at the
+    venue can corroborate an invented `time_stop`, `fill_price`,
+    `entry_date`, `entry_ref` or `stop_level`.
+
+    Fail-closed is never fail-SILENT (X3): escalate on the same re-armed
+    cadence the blackout guard uses, until the row is restored by hand."""
+    stand_ins = mgr.state.stand_in_rows.get(key) or []
+    invented = ", ".join(stand_ins)
+    pos.unverified_cycles = int(pos.unverified_cycles or 0) + 1
+    mgr._event("WARN", f"book row {key} (call {pos.call_id}) still carries "
+                       f"STAND-IN values ({invented}): not exited, not "
+                       f"re-stopped, not flattened, and no venue answer "
+                       f"decides anything about it")
+    mgr.save()
+    if (pos.unverified_cycles - 1) % UNVERIFIED_REALERT_CYCLES:
+        return
+    # The venue count is read ONLY to tell the operator what is really
+    # there, and only when the row's own symbol was not invented — it
+    # decides nothing and cancels nothing. With an invented symbol there is
+    # no honest question to ask.
+    held = (None if "symbol" in stand_ins
+            else _venue_held(adapter, pos.symbol))
+    alert(f"🚨🚨 blend: book row {key} (call {pos.call_id}) was REBUILT from "
+          f"STAND-INS for {invented} — this build INVENTED those values, so "
+          f"nothing at the venue can verify them and no reconcile will "
+          f"clear the flag. The row is never exited, re-stopped, resized or "
+          f"flattened, and no venue answer is allowed to DECIDE anything "
+          f"about it: an invented `symbol` or `stop_level` addresses the "
+          f"WRONG order, and letting pass 1b act on one cancelled a real "
+          f"working stop on real shares. Whatever shares and resting stop "
+          f"this row has at the venue are LEFT EXACTLY AS THEY ARE"
+          + (f" — the account holds {held} shares vs {pos.qty} booked for "
+             f"{pos.symbol}" if held is not None else "")
+          + f". Read the real values off the preserved drifted file, "
+            f"restore them in {mgr.state_path}, delete this row's entry "
+            f"from `stand_in_rows` there, and restart — unresolved for "
+            f"{pos.unverified_cycles} cycle(s); re-alerting every "
+            f"{UNVERIFIED_REALERT_CYCLES}")
+
+
 def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
     """Venue-truth-first pass, run BEFORE any decision in EVERY cycle —
     including tracker-outage cycles (payload=None) and /kill:
@@ -2238,7 +2349,8 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
     #    invisible FOREVER — not just this cycle. Flag every held position
     #    UNVERIFIABLE (persisted) BEFORE anything acts on it; the flag
     #    clears ONLY on positive venue evidence (pass 1b), never because
-    #    a later reconcile stamped a fresh timestamp.
+    #    a later reconcile stamped a fresh timestamp — and for a row
+    #    rebuilt from STAND-INS it never clears at all (MF-B).
     if mgr._reconcile_gap_s > HISTORY_HORIZON_S:
         newly = [p for p in st.positions.values() if not p.history_gap]
         if newly:
@@ -2288,9 +2400,15 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
     #     and /blend/feed until it is resolved.
     gap_stops: dict[str, dict | None] = {}
     for key, pos in list(st.positions.items()):
-        if pos.history_gap:
-            gap_stops[key] = adapter.find_stock_order(
-                stop_client_id(pos.call_id, pos.stop_level))
+        if not pos.history_gap:
+            continue
+        if key in st.stand_in_rows:
+            # MF-C: this row's identity was INVENTED — it may not be used to
+            # address, cancel or match a venue order (see _flag_stand_in).
+            _flag_stand_in(mgr, key, pos, adapter, alert)
+            continue
+        gap_stops[key] = adapter.find_stock_order(
+            stop_client_id(pos.call_id, pos.stop_level))
     # 1b-i) order-scoped resolution first: a FILLED stop settles ITS OWN
     #       position whatever the account-wide rows say — and resolving
     #       these before the positions comparison below keeps that
@@ -2808,10 +2926,19 @@ def _execute_exit(mgr: Blend3070Manager, adapter, it: dict,
     if pos0 is not None and pos0.history_gap:
         # R1: UNVERIFIABLE since a blackout — its stop may have filled
         # invisibly, so a MKT sell could short. Defer until reconcile pass
-        # 1b positively verifies the shares at the venue.
-        alert(f"🚨 blend EXIT {it['symbol']} deferred: position is "
-              f"UNVERIFIABLE after a venue-history blackout — nothing sold "
-              f"until venue positions verify it")
+        # 1b positively verifies the shares at the venue. MF-B: a row
+        # rebuilt from STAND-INS is flagged for a DIFFERENT reason and
+        # reconcile can never verify it, so say which one this is.
+        if key in mgr.state.stand_in_rows:
+            alert(f"🚨 blend EXIT {it['symbol']} deferred: this book row is "
+                  f"UNVERIFIABLE because it was REBUILT from STAND-INS for "
+                  f"{', '.join(mgr.state.stand_in_rows[key])} — nothing is "
+                  f"sold on invented values, and no reconcile can clear "
+                  f"that; restore the row by hand")
+        else:
+            alert(f"🚨 blend EXIT {it['symbol']} deferred: position is "
+                  f"UNVERIFIABLE after a venue-history blackout — nothing "
+                  f"sold until venue positions verify it")
         return False
     ref = it.get("stop_order_ref")
     if ref:
@@ -2901,11 +3028,22 @@ def execute_flatten(mgr: Blend3070Manager, adapter, alert) -> None:
         if pos.history_gap:
             # R1: its stop may have filled invisibly inside a blackout —
             # a MKT sell could short. Stays parked until a reconcile
-            # positively verifies it at the venue.
+            # positively verifies it at the venue. MF-B: a STAND-IN row is
+            # parked for a different reason and no reconcile can ever clear
+            # it — never tell the operator to wait for one.
             parked.append(sym)
-            alert(f"🚨🚨 blend kill: {sym} NOT flattened — UNVERIFIABLE "
-                  f"after a venue-history blackout; parked until venue "
-                  f"positions verify it, verify the account manually")
+            if key in mgr.state.stand_in_rows:
+                alert(f"🚨🚨 blend kill: book row {key} (call "
+                      f"{pos.call_id}) NOT flattened — it was REBUILT from "
+                      f"STAND-INS for "
+                      f"{', '.join(mgr.state.stand_in_rows[key])}, so its "
+                      f"symbol/quantity may not be its own; no reconcile "
+                      f"will clear that. Flatten it MANUALLY at the venue "
+                      f"if you need it flat")
+            else:
+                alert(f"🚨🚨 blend kill: {sym} NOT flattened — UNVERIFIABLE "
+                      f"after a venue-history blackout; parked until venue "
+                      f"positions verify it, verify the account manually")
             continue
         stop_ref = pos.stop_order_ref
         if stop_ref:
