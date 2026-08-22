@@ -1,0 +1,1061 @@
+{
+ "generated_utc": "2026-08-22T20:28:02+00:00",
+ "contract": "docs/VARIANTS_PREREGISTRATION_R7_20Y.md",
+ "window": {
+  "start": "2006-10-05",
+  "end": "2026-08-19",
+  "n": 4998
+ },
+ "gate": {
+  "threshold_bps": 5.0,
+  "tickers": {
+   "SPY": {
+    "n": 2512,
+    "start": "2016-08-23",
+    "end": "2026-08-21",
+    "rms_bps": 0.14814742885190071,
+    "max_bps": 2.5980225283139813,
+    "worst_date": "2020-03-20",
+    "mean_bps": -0.002660497612672983,
+    "threshold_bps": 5.0,
+    "pass": true
+   },
+   "GLD": {
+    "n": 2512,
+    "start": "2016-08-23",
+    "end": "2026-08-21",
+    "rms_bps": 0.13865853004985176,
+    "max_bps": 4.719269053792274,
+    "worst_date": "2017-03-21",
+    "mean_bps": 9.77828584645718e-06,
+    "threshold_bps": 5.0,
+    "pass": true
+   },
+   "EEM": {
+    "n": 2512,
+    "start": "2016-08-23",
+    "end": "2026-08-21",
+    "rms_bps": 1.0468659110780167,
+    "max_bps": 2.9850604543280035,
+    "worst_date": "2016-12-16",
+    "mean_bps": 0.0011412439436871457,
+    "threshold_bps": 5.0,
+    "pass": true
+   },
+   "IWN": {
+    "n": 2512,
+    "start": "2016-08-23",
+    "end": "2026-08-21",
+    "rms_bps": 0.33893968692836723,
+    "max_bps": 1.1150688403183118,
+    "worst_date": "2020-04-02",
+    "mean_bps": 0.00014390038380453457,
+    "threshold_bps": 5.0,
+    "pass": true
+   },
+   "DLS": {
+    "n": 2512,
+    "start": "2016-08-23",
+    "end": "2026-08-21",
+    "rms_bps": 3.5797628897373706,
+    "max_bps": 140.49184437826435,
+    "worst_date": "2017-06-26",
+    "mean_bps": -0.09549926201135046,
+    "threshold_bps": 5.0,
+    "pass": true
+   },
+   "XBI": {
+    "n": 2512,
+    "start": "2016-08-23",
+    "end": "2026-08-21",
+    "rms_bps": 0.6316162236535381,
+    "max_bps": 15.340201834597167,
+    "worst_date": "2017-06-16",
+    "mean_bps": -0.0010349977601190282,
+    "threshold_bps": 5.0,
+    "pass": true
+   }
+  },
+  "passed": true
+ },
+ "arms": {
+  "T1": {
+   "treatment": "T1",
+   "qual_realloc": false,
+   "desc": "proxy-where-possible, CASH (BIL/SHY) in the gap",
+   "metrics": {
+    "start": "2006-10-05",
+    "end": "2026-08-19",
+    "n": 4998,
+    "end_value": 5.432553967178023,
+    "cagr": 0.08890046322532741,
+    "max_dd": 0.38967056748409024,
+    "vol": 0.1396585292172048,
+    "sharpe_rf0": 0.6811418242357139,
+    "sharpe_bil": 0.5751634847832776,
+    "sortino_rf0": 0.9608070715993773,
+    "sortino_bil": 0.808110485735129,
+    "calmar": 0.2281426174917794,
+    "corr_spy": 0.8768039711554827
+   },
+   "boot": {
+    "point": 0.00982326526045263,
+    "ci_lo": -0.20678753114550863,
+    "ci_hi": 0.207562760701121,
+    "p_two_sided": 0.974,
+    "draws": 4000,
+    "block": 21,
+    "seed": 20260822,
+    "excludes_zero": false
+   },
+   "regimes": {
+    "GFC": {
+     "start": "2007-10-09",
+     "end": "2009-03-09",
+     "n": 356,
+     "total_return": -0.3738099126082274,
+     "max_dd": 0.38967056748409024,
+     "trough": "2008-11-20",
+     "recovery_days": 325,
+     "recovery_date": "2010-03-10"
+    },
+    "recovery": {
+     "start": "2009-03-10",
+     "end": "2019-12-31",
+     "n": 2723,
+     "total_return": 1.930407026461368,
+     "max_dd": 0.16194456236302202,
+     "trough": "2011-10-03",
+     "recovery_days": 240,
+     "recovery_date": "2012-09-14"
+    },
+    "COVID": {
+     "start": "2020-02-19",
+     "end": "2020-03-23",
+     "n": 24,
+     "total_return": -0.2637630414927543,
+     "max_dd": 0.26425316116065767,
+     "trough": "2020-03-23",
+     "recovery_days": 94,
+     "recovery_date": "2020-08-05"
+    },
+    "2022": {
+     "start": "2022-01-03",
+     "end": "2022-10-12",
+     "n": 196,
+     "total_return": -0.10120609388038304,
+     "max_dd": 0.1458039317269565,
+     "trough": "2022-09-26",
+     "recovery_days": 88,
+     "recovery_date": "2023-02-01"
+    },
+    "round-4/5 window": {
+     "start": "2020-12-03",
+     "end": "2026-08-19",
+     "n": 1433,
+     "total_return": 1.1496687782048878,
+     "max_dd": 0.1458039317269565,
+     "trough": "2022-09-26",
+     "recovery_days": 88,
+     "recovery_date": "2023-02-01"
+    }
+   },
+   "entry": {
+    "AVUV": "2006-10-05",
+    "AVDV": "2006-10-05",
+    "PHYS": "2006-10-05",
+    "KMLM": "2006-10-05",
+    "AVEM": "2006-10-05",
+    "QUAL": "2006-10-05",
+    "TAIL": "2006-10-05"
+   },
+   "provenance": {
+    "CASH": {
+     "SHY": 161,
+     "BIL": 4836
+    },
+    "AVUV": {
+     "SLYV": 3265,
+     "AVUV": 1732
+    },
+    "AVDV": {
+     "DLS": 3265,
+     "AVDV": 1732
+    },
+    "PHYS": {
+     "GLD": 853,
+     "PHYS": 4144
+    },
+    "KMLM": {
+     "CASH": 1070,
+     "WTMF": 2494,
+     "KMLM": 1433
+    },
+    "AVEM": {
+     "EEM": 3260,
+     "AVEM": 1737
+    },
+    "QUAL": {
+     "SPY": 1706,
+     "QUAL": 3291
+    },
+    "TAIL": {
+     "CASH": 2643,
+     "TAIL": 2354
+    }
+   }
+  },
+  "T2": {
+   "treatment": "T2",
+   "qual_realloc": false,
+   "desc": "proxy-where-possible, the missing leg REALLOCATED pro-rata in the gap",
+   "metrics": {
+    "start": "2006-10-05",
+    "end": "2026-08-19",
+    "n": 4998,
+    "end_value": 5.780047922166641,
+    "cagr": 0.09230336262470873,
+    "max_dd": 0.46590954737253365,
+    "vol": 0.15556557751187536,
+    "sharpe_rf0": 0.6466868608324122,
+    "sharpe_bil": 0.5513573342057222,
+    "sortino_rf0": 0.9130518410520275,
+    "sortino_bil": 0.7757791904165213,
+    "calmar": 0.19811434031615685,
+    "corr_spy": 0.8759608792576025
+   },
+   "boot": {
+    "point": -0.013982885317102789,
+    "ci_lo": -0.22799713569131913,
+    "ci_hi": 0.1831291045794844,
+    "p_two_sided": 0.8475,
+    "draws": 4000,
+    "block": 21,
+    "seed": 20260822,
+    "excludes_zero": false
+   },
+   "regimes": {
+    "GFC": {
+     "start": "2007-10-09",
+     "end": "2009-03-09",
+     "n": 356,
+     "total_return": -0.45351884517564045,
+     "max_dd": 0.46590954737253365,
+     "trough": "2009-03-09",
+     "recovery_days": 269,
+     "recovery_date": "2010-04-01"
+    },
+    "recovery": {
+     "start": "2009-03-10",
+     "end": "2019-12-31",
+     "n": 2723,
+     "total_return": 2.4219044377196175,
+     "max_dd": 0.1724115714609492,
+     "trough": "2011-10-03",
+     "recovery_days": 313,
+     "recovery_date": "2013-01-02"
+    },
+    "COVID": {
+     "start": "2020-02-19",
+     "end": "2020-03-23",
+     "n": 24,
+     "total_return": -0.2654292031942368,
+     "max_dd": 0.26593460637155253,
+     "trough": "2020-03-23",
+     "recovery_days": 95,
+     "recovery_date": "2020-08-06"
+    },
+    "2022": {
+     "start": "2022-01-03",
+     "end": "2022-10-12",
+     "n": 196,
+     "total_return": -0.10120609388038282,
+     "max_dd": 0.1458039317269565,
+     "trough": "2022-09-26",
+     "recovery_days": 88,
+     "recovery_date": "2023-02-01"
+    },
+    "round-4/5 window": {
+     "start": "2020-12-03",
+     "end": "2026-08-19",
+     "n": 1433,
+     "total_return": 1.1496687782048887,
+     "max_dd": 0.1458039317269565,
+     "trough": "2022-09-26",
+     "recovery_days": 88,
+     "recovery_date": "2023-02-01"
+    }
+   },
+   "entry": {
+    "AVUV": "2006-10-05",
+    "AVDV": "2006-10-05",
+    "PHYS": "2006-10-05",
+    "KMLM": "2011-01-06",
+    "AVEM": "2006-10-05",
+    "QUAL": "2006-10-05",
+    "TAIL": "2017-04-07"
+   },
+   "provenance": {
+    "CASH": {
+     "SHY": 161,
+     "BIL": 4836
+    },
+    "AVUV": {
+     "SLYV": 3265,
+     "AVUV": 1732
+    },
+    "AVDV": {
+     "DLS": 3265,
+     "AVDV": 1732
+    },
+    "PHYS": {
+     "GLD": 853,
+     "PHYS": 4144
+    },
+    "KMLM": {
+     "FLAT": 1070,
+     "WTMF": 2494,
+     "KMLM": 1433
+    },
+    "AVEM": {
+     "EEM": 3260,
+     "AVEM": 1737
+    },
+    "QUAL": {
+     "SPY": 1706,
+     "QUAL": 3291
+    },
+    "TAIL": {
+     "FLAT": 2643,
+     "TAIL": 2354
+    }
+   }
+  },
+  "T3": {
+   "treatment": "T3",
+   "qual_realloc": false,
+   "desc": "CASH for the whole KMLM+TAIL leg across the WHOLE window",
+   "metrics": {
+    "start": "2006-10-05",
+    "end": "2026-08-19",
+    "n": 4998,
+    "end_value": 5.657891319932363,
+    "cagr": 0.09112982019252058,
+    "max_dd": 0.38967056748409024,
+    "vol": 0.141560609322872,
+    "sharpe_rf0": 0.6883674118397202,
+    "sharpe_bil": 0.5838327168192264,
+    "sortino_rf0": 0.9728285101140298,
+    "sortino_bil": 0.8218019828840092,
+    "calmar": 0.23386375004122245,
+    "corr_spy": 0.8877016377089951
+   },
+   "boot": {
+    "point": 0.018492497296401456,
+    "ci_lo": -0.1875212673800123,
+    "ci_hi": 0.20405525197735497,
+    "p_two_sided": 0.8955,
+    "draws": 4000,
+    "block": 21,
+    "seed": 20260822,
+    "excludes_zero": false
+   },
+   "regimes": {
+    "GFC": {
+     "start": "2007-10-09",
+     "end": "2009-03-09",
+     "n": 356,
+     "total_return": -0.3738099126082274,
+     "max_dd": 0.38967056748409024,
+     "trough": "2008-11-20",
+     "recovery_days": 325,
+     "recovery_date": "2010-03-10"
+    },
+    "recovery": {
+     "start": "2009-03-10",
+     "end": "2019-12-31",
+     "n": 2723,
+     "total_return": 2.0871021602603963,
+     "max_dd": 0.15599231256939305,
+     "trough": "2018-12-24",
+     "recovery_days": 217,
+     "recovery_date": "2019-11-04"
+    },
+    "COVID": {
+     "start": "2020-02-19",
+     "end": "2020-03-23",
+     "n": 24,
+     "total_return": -0.27283900216842294,
+     "max_dd": 0.27297715705221925,
+     "trough": "2020-03-23",
+     "recovery_days": 97,
+     "recovery_date": "2020-08-10"
+    },
+    "2022": {
+     "start": "2022-01-03",
+     "end": "2022-10-12",
+     "n": 196,
+     "total_return": -0.14879304797186121,
+     "max_dd": 0.17292268722663307,
+     "trough": "2022-09-26",
+     "recovery_days": 199,
+     "recovery_date": "2023-07-13"
+    },
+    "round-4/5 window": {
+     "start": "2020-12-03",
+     "end": "2026-08-19",
+     "n": 1433,
+     "total_return": 1.1289692112630942,
+     "max_dd": 0.17996643467097684,
+     "trough": "2022-09-26",
+     "recovery_days": 202,
+     "recovery_date": "2023-07-18"
+    }
+   },
+   "entry": {
+    "AVUV": "2006-10-05",
+    "AVDV": "2006-10-05",
+    "PHYS": "2006-10-05",
+    "KMLM": "2006-10-05",
+    "AVEM": "2006-10-05",
+    "QUAL": "2006-10-05",
+    "TAIL": "2006-10-05"
+   },
+   "provenance": {
+    "CASH": {
+     "SHY": 161,
+     "BIL": 4836
+    },
+    "AVUV": {
+     "SLYV": 3265,
+     "AVUV": 1732
+    },
+    "AVDV": {
+     "DLS": 3265,
+     "AVDV": 1732
+    },
+    "PHYS": {
+     "GLD": 853,
+     "PHYS": 4144
+    },
+    "KMLM": {
+     "CASH (whole leg, T3)": 4997
+    },
+    "AVEM": {
+     "EEM": 3260,
+     "AVEM": 1737
+    },
+    "QUAL": {
+     "SPY": 1706,
+     "QUAL": 3291
+    },
+    "TAIL": {
+     "CASH (whole leg, T3)": 4997
+    }
+   }
+  },
+  "T1-QR": {
+   "treatment": "T1",
+   "qual_realloc": true,
+   "desc": "proxy-where-possible, CASH (BIL/SHY) in the gap | QUAL reallocated (sensitivity)",
+   "metrics": {
+    "start": "2006-10-05",
+    "end": "2026-08-19",
+    "n": 4998,
+    "end_value": 5.497874721166356,
+    "cagr": 0.08955561394072964,
+    "max_dd": 0.3859467819401685,
+    "vol": 0.13800843297040866,
+    "sharpe_rf0": 0.6920048040353345,
+    "sharpe_bil": 0.5848258185629096,
+    "sortino_rf0": 0.9751208606020386,
+    "sortino_bil": 0.8208726714736557,
+    "calmar": 0.23204135422643068,
+    "corr_spy": 0.8660645319636338
+   },
+   "boot": {
+    "point": 0.019485599040084622,
+    "ci_lo": -0.20608138077897376,
+    "ci_hi": 0.22593796216242712,
+    "p_two_sided": 0.9085,
+    "draws": 4000,
+    "block": 21,
+    "seed": 20260822,
+    "excludes_zero": false
+   },
+   "regimes": {
+    "GFC": {
+     "start": "2007-10-09",
+     "end": "2009-03-09",
+     "n": 356,
+     "total_return": -0.3682430221679871,
+     "max_dd": 0.3859467819401685,
+     "trough": "2008-11-20",
+     "recovery_days": 285,
+     "recovery_date": "2010-01-11"
+    },
+    "recovery": {
+     "start": "2009-03-10",
+     "end": "2019-12-31",
+     "n": 2723,
+     "total_return": 1.9262946193428205,
+     "max_dd": 0.15923508577849976,
+     "trough": "2011-10-03",
+     "recovery_days": 313,
+     "recovery_date": "2013-01-02"
+    },
+    "COVID": {
+     "start": "2020-02-19",
+     "end": "2020-03-23",
+     "n": 24,
+     "total_return": -0.26251312079444433,
+     "max_dd": 0.262965415128519,
+     "trough": "2020-03-23",
+     "recovery_days": 94,
+     "recovery_date": "2020-08-05"
+    },
+    "2022": {
+     "start": "2022-01-03",
+     "end": "2022-10-12",
+     "n": 196,
+     "total_return": -0.10243496808248742,
+     "max_dd": 0.14580470860943118,
+     "trough": "2022-09-26",
+     "recovery_days": 88,
+     "recovery_date": "2023-02-01"
+    },
+    "round-4/5 window": {
+     "start": "2020-12-03",
+     "end": "2026-08-19",
+     "n": 1433,
+     "total_return": 1.14643211830627,
+     "max_dd": 0.14580470860943118,
+     "trough": "2022-09-26",
+     "recovery_days": 88,
+     "recovery_date": "2023-02-01"
+    }
+   },
+   "entry": {
+    "AVUV": "2006-10-05",
+    "AVDV": "2006-10-05",
+    "PHYS": "2006-10-05",
+    "KMLM": "2006-10-05",
+    "AVEM": "2006-10-05",
+    "QUAL": "2013-07-19",
+    "TAIL": "2006-10-05"
+   },
+   "provenance": {
+    "CASH": {
+     "SHY": 161,
+     "BIL": 4836
+    },
+    "AVUV": {
+     "SLYV": 3265,
+     "AVUV": 1732
+    },
+    "AVDV": {
+     "DLS": 3265,
+     "AVDV": 1732
+    },
+    "PHYS": {
+     "GLD": 853,
+     "PHYS": 4144
+    },
+    "KMLM": {
+     "CASH": 1070,
+     "WTMF": 2494,
+     "KMLM": 1433
+    },
+    "AVEM": {
+     "EEM": 3260,
+     "AVEM": 1737
+    },
+    "QUAL": {
+     "FLAT": 1706,
+     "QUAL": 3291
+    },
+    "TAIL": {
+     "CASH": 2643,
+     "TAIL": 2354
+    }
+   }
+  },
+  "T2-QR": {
+   "treatment": "T2",
+   "qual_realloc": true,
+   "desc": "proxy-where-possible, the missing leg REALLOCATED pro-rata in the gap | QUAL reallocated (sensitivity)",
+   "metrics": {
+    "start": "2006-10-05",
+    "end": "2026-08-19",
+    "n": 4998,
+    "end_value": 5.776857568869858,
+    "cagr": 0.0922730140903607,
+    "max_dd": 0.4698184188774608,
+    "vol": 0.15516114598972738,
+    "sharpe_rf0": 0.6478046781909259,
+    "sharpe_bil": 0.5523051822657662,
+    "sortino_rf0": 0.9136810846139507,
+    "sortino_bil": 0.7763947617845188,
+    "calmar": 0.19640144017944,
+    "corr_spy": 0.8640691120317323
+   },
+   "boot": {
+    "point": -0.01303503725705879,
+    "ci_lo": -0.23549625847422528,
+    "ci_hi": 0.19478627669149184,
+    "p_two_sided": 0.8555,
+    "draws": 4000,
+    "block": 21,
+    "seed": 20260822,
+    "excludes_zero": false
+   },
+   "regimes": {
+    "GFC": {
+     "start": "2007-10-09",
+     "end": "2009-03-09",
+     "n": 356,
+     "total_return": -0.451625295270927,
+     "max_dd": 0.4698184188774608,
+     "trough": "2008-11-20",
+     "recovery_days": 341,
+     "recovery_date": "2010-04-01"
+    },
+    "recovery": {
+     "start": "2009-03-10",
+     "end": "2019-12-31",
+     "n": 2723,
+     "total_return": 2.386272622510829,
+     "max_dd": 0.17103690694220908,
+     "trough": "2011-10-03",
+     "recovery_days": 313,
+     "recovery_date": "2013-01-02"
+    },
+    "COVID": {
+     "start": "2020-02-19",
+     "end": "2020-03-23",
+     "n": 24,
+     "total_return": -0.2654292031942369,
+     "max_dd": 0.26593460637155264,
+     "trough": "2020-03-23",
+     "recovery_days": 95,
+     "recovery_date": "2020-08-06"
+    },
+    "2022": {
+     "start": "2022-01-03",
+     "end": "2022-10-12",
+     "n": 196,
+     "total_return": -0.10120609388038271,
+     "max_dd": 0.14580393172695627,
+     "trough": "2022-09-26",
+     "recovery_days": 88,
+     "recovery_date": "2023-02-01"
+    },
+    "round-4/5 window": {
+     "start": "2020-12-03",
+     "end": "2026-08-19",
+     "n": 1433,
+     "total_return": 1.1496687782048873,
+     "max_dd": 0.14580393172695627,
+     "trough": "2022-09-26",
+     "recovery_days": 88,
+     "recovery_date": "2023-02-01"
+    }
+   },
+   "entry": {
+    "AVUV": "2006-10-05",
+    "AVDV": "2006-10-05",
+    "PHYS": "2006-10-05",
+    "KMLM": "2011-01-06",
+    "AVEM": "2006-10-05",
+    "QUAL": "2013-07-19",
+    "TAIL": "2017-04-07"
+   },
+   "provenance": {
+    "CASH": {
+     "SHY": 161,
+     "BIL": 4836
+    },
+    "AVUV": {
+     "SLYV": 3265,
+     "AVUV": 1732
+    },
+    "AVDV": {
+     "DLS": 3265,
+     "AVDV": 1732
+    },
+    "PHYS": {
+     "GLD": 853,
+     "PHYS": 4144
+    },
+    "KMLM": {
+     "FLAT": 1070,
+     "WTMF": 2494,
+     "KMLM": 1433
+    },
+    "AVEM": {
+     "EEM": 3260,
+     "AVEM": 1737
+    },
+    "QUAL": {
+     "FLAT": 1706,
+     "QUAL": 3291
+    },
+    "TAIL": {
+     "FLAT": 2643,
+     "TAIL": 2354
+    }
+   }
+  },
+  "T3-QR": {
+   "treatment": "T3",
+   "qual_realloc": true,
+   "desc": "CASH for the whole KMLM+TAIL leg across the WHOLE window | QUAL reallocated (sensitivity)",
+   "metrics": {
+    "start": "2006-10-05",
+    "end": "2026-08-19",
+    "n": 4998,
+    "end_value": 5.723829719434882,
+    "cagr": 0.09176623698161701,
+    "max_dd": 0.3859467819401685,
+    "vol": 0.13995368205119157,
+    "sharpe_rf0": 0.6988435763974055,
+    "sharpe_bil": 0.5931715766124849,
+    "sortino_rf0": 0.9864271449236413,
+    "sortino_bil": 0.8339713191442447,
+    "calmar": 0.23776914661732584,
+    "corr_spy": 0.8775413011110789
+   },
+   "boot": {
+    "point": 0.02783135708965989,
+    "ci_lo": -0.18513969315855994,
+    "ci_hi": 0.2235869296464349,
+    "p_two_sided": 0.8325,
+    "draws": 4000,
+    "block": 21,
+    "seed": 20260822,
+    "excludes_zero": false
+   },
+   "regimes": {
+    "GFC": {
+     "start": "2007-10-09",
+     "end": "2009-03-09",
+     "n": 356,
+     "total_return": -0.3682430221679871,
+     "max_dd": 0.3859467819401685,
+     "trough": "2008-11-20",
+     "recovery_days": 285,
+     "recovery_date": "2010-01-11"
+    },
+    "recovery": {
+     "start": "2009-03-10",
+     "end": "2019-12-31",
+     "n": 2723,
+     "total_return": 2.0964183199943656,
+     "max_dd": 0.14615615823054406,
+     "trough": "2011-10-03",
+     "recovery_days": 84,
+     "recovery_date": "2012-02-02"
+    },
+    "COVID": {
+     "start": "2020-02-19",
+     "end": "2020-03-23",
+     "n": 24,
+     "total_return": -0.27497190580586817,
+     "max_dd": 0.2751591361991985,
+     "trough": "2020-03-23",
+     "recovery_days": 97,
+     "recovery_date": "2020-08-10"
+    },
+    "2022": {
+     "start": "2022-01-03",
+     "end": "2022-10-12",
+     "n": 196,
+     "total_return": -0.1487930479718611,
+     "max_dd": 0.17292268722663295,
+     "trough": "2022-09-26",
+     "recovery_days": 199,
+     "recovery_date": "2023-07-13"
+    },
+    "round-4/5 window": {
+     "start": "2020-12-03",
+     "end": "2026-08-19",
+     "n": 1433,
+     "total_return": 1.1289692112630942,
+     "max_dd": 0.17996643467097662,
+     "trough": "2022-09-26",
+     "recovery_days": 202,
+     "recovery_date": "2023-07-18"
+    }
+   },
+   "entry": {
+    "AVUV": "2006-10-05",
+    "AVDV": "2006-10-05",
+    "PHYS": "2006-10-05",
+    "KMLM": "2006-10-05",
+    "AVEM": "2006-10-05",
+    "QUAL": "2013-07-19",
+    "TAIL": "2006-10-05"
+   },
+   "provenance": {
+    "CASH": {
+     "SHY": 161,
+     "BIL": 4836
+    },
+    "AVUV": {
+     "SLYV": 3265,
+     "AVUV": 1732
+    },
+    "AVDV": {
+     "DLS": 3265,
+     "AVDV": 1732
+    },
+    "PHYS": {
+     "GLD": 853,
+     "PHYS": 4144
+    },
+    "KMLM": {
+     "CASH (whole leg, T3)": 4997
+    },
+    "AVEM": {
+     "EEM": 3260,
+     "AVEM": 1737
+    },
+    "QUAL": {
+     "FLAT": 1706,
+     "QUAL": 3291
+    },
+    "TAIL": {
+     "CASH (whole leg, T3)": 4997
+    }
+   }
+  }
+ },
+ "spy": {
+  "desc": "SPY buy-and-hold, identical dates",
+  "metrics": {
+   "start": "2006-10-05",
+   "end": "2026-08-19",
+   "n": 4998,
+   "end_value": 8.179748989576686,
+   "cagr": 0.11155901790280676,
+   "max_dd": 0.551907639577884,
+   "vol": 0.1949003908418335,
+   "sharpe_rf0": 0.6414264494148183,
+   "sharpe_bil": 0.565340219522825,
+   "sortino_rf0": 0.9056298381846933,
+   "sortino_bil": 0.7959132414381095,
+   "calmar": 0.20213349100971048,
+   "corr_spy": 1.0
+  },
+  "regimes": {
+   "GFC": {
+    "start": "2007-10-09",
+    "end": "2009-03-09",
+    "n": 356,
+    "total_return": -0.551907639577884,
+    "max_dd": 0.551907639577884,
+    "trough": "2009-03-09",
+    "recovery_days": 869,
+    "recovery_date": "2012-08-16"
+   },
+   "recovery": {
+    "start": "2009-03-10",
+    "end": "2019-12-31",
+    "n": 2723,
+    "total_return": 4.573518237082067,
+    "max_dd": 0.19346772332076634,
+    "trough": "2018-12-24",
+    "recovery_days": 75,
+    "recovery_date": "2019-04-12"
+   },
+   "COVID": {
+    "start": "2020-02-19",
+    "end": "2020-03-23",
+    "n": 24,
+    "total_return": -0.3371700927306919,
+    "max_dd": 0.3371700927306919,
+    "trough": "2020-03-23",
+    "recovery_days": 97,
+    "recovery_date": "2020-08-10"
+   },
+   "2022": {
+    "start": "2022-01-03",
+    "end": "2022-10-12",
+    "n": 196,
+    "total_return": -0.24496106785317018,
+    "max_dd": 0.24496106785317018,
+    "trough": "2022-10-12",
+    "recovery_days": 294,
+    "recovery_date": "2023-12-13"
+   },
+   "round-4/5 window": {
+    "start": "2020-12-03",
+    "end": "2026-08-19",
+    "n": 1433,
+    "total_return": 1.268212115849702,
+    "max_dd": 0.24496106785317018,
+    "trough": "2022-10-12",
+    "recovery_days": 294,
+    "recovery_date": "2023-12-13"
+   }
+  }
+ },
+ "cash": {
+  "desc": "cash (BIL, SHY-proxied before 2007-05-30) \u2014 context only",
+  "metrics": {
+   "start": "2006-10-05",
+   "end": "2026-08-19",
+   "n": 4998,
+   "end_value": 1.3310733001109887,
+   "cagr": 0.014495938753781967,
+   "max_dd": 0.007990249187418086,
+   "vol": 0.005311811969385304,
+   "sharpe_rf0": 2.717875728711315,
+   "sharpe_bil": NaN,
+   "sortino_rf0": 4.273921836094985,
+   "sortino_bil": NaN,
+   "calmar": 1.8142035891206147,
+   "corr_spy": -0.11727287616585129
+  },
+  "regimes": {
+   "GFC": {
+    "start": "2007-10-09",
+    "end": "2009-03-09",
+    "n": 356,
+    "total_return": 0.026947779949735517,
+    "max_dd": 0.007719393282772935,
+    "trough": "2008-10-17",
+    "recovery_days": 2334,
+    "recovery_date": "2018-01-26"
+   },
+   "recovery": {
+    "start": "2009-03-10",
+    "end": "2019-12-31",
+    "n": 2723,
+    "total_return": 0.040924541128505076,
+    "max_dd": 0.00462019296098759,
+    "trough": "2015-12-09",
+    "recovery_days": 447,
+    "recovery_date": "2017-09-19"
+   },
+   "COVID": {
+    "start": "2020-02-19",
+    "end": "2020-03-23",
+    "n": 24,
+    "total_return": 0.002607222004954002,
+    "max_dd": 0.00026017952387158427,
+    "trough": "2020-03-10",
+    "recovery_days": 1,
+    "recovery_date": "2020-03-11"
+   },
+   "2022": {
+    "start": "2022-01-03",
+    "end": "2022-10-12",
+    "n": 196,
+    "total_return": 0.005991923928618803,
+    "max_dd": 0.0002604845011721091,
+    "trough": "2022-02-14",
+    "recovery_days": 26,
+    "recovery_date": "2022-03-23"
+   },
+   "round-4/5 window": {
+    "start": "2020-12-03",
+    "end": "2026-08-19",
+    "n": 1433,
+    "total_return": 0.19138693728858724,
+    "max_dd": 0.0014309873812912155,
+    "trough": "2022-02-14",
+    "recovery_days": 108,
+    "recovery_date": "2022-07-21"
+   }
+  }
+ },
+ "assumption_share": [
+  {
+   "date": "2006-10-05",
+   "real": 0.0,
+   "proxied": 0.8099999999999999,
+   "missing": 0.19
+  },
+  {
+   "date": "2011-01-05",
+   "real": 0.18,
+   "proxied": 0.77,
+   "missing": 0.05
+  },
+  {
+   "date": "2013-07-18",
+   "real": 0.27,
+   "proxied": 0.68,
+   "missing": 0.05
+  },
+  {
+   "date": "2017-04-06",
+   "real": 0.32,
+   "proxied": 0.68,
+   "missing": 0.0
+  },
+  {
+   "date": "2019-09-26",
+   "real": 0.86,
+   "proxied": 0.14,
+   "missing": 0.0
+  },
+  {
+   "date": "2020-12-02",
+   "real": 1.0,
+   "proxied": 0.0,
+   "missing": 0.0
+  },
+  {
+   "date": "2026-08-19",
+   "real": 1.0,
+   "proxied": 0.0,
+   "missing": 0.0
+  }
+ ],
+ "protocol": {
+  "weights": {
+   "AVUV": 0.25,
+   "AVDV": 0.19,
+   "PHYS": 0.18,
+   "KMLM": 0.14,
+   "AVEM": 0.1,
+   "QUAL": 0.09,
+   "TAIL": 0.05
+  },
+  "band_rel": 0.2,
+  "cal_fallback_days": 365,
+  "cost_bps": 10.0,
+  "boot": {
+   "block": 21,
+   "draws": 4000,
+   "seed": 20260822,
+   "basis": "BIL-excess daily returns, paired on dates, vs SPY"
+  },
+  "proxy_map": {
+   "AVUV": [
+    "SLYV"
+   ],
+   "AVDV": [
+    "DLS"
+   ],
+   "AVEM": [
+    "EEM"
+   ],
+   "PHYS": [
+    "GLD"
+   ],
+   "QUAL": [
+    "SPY"
+   ],
+   "KMLM": [
+    "WTMF"
+   ],
+   "TAIL": []
+  },
+  "cash_proxy": [
+   "SHY"
+  ]
+ }
+}
