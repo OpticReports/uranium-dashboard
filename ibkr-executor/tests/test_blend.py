@@ -4141,3 +4141,326 @@ def test_gate_mfb_the_stand_in_flag_survives_every_reconcile(tmp_path):
     m5 = mk(tmp_path)
     assert m5.state.stand_in_rows == {}
     assert m5.state.positions["1"].history_gap is False
+
+
+def test_gate_mfa_the_halt_and_the_kill_response_never_wait_for_a_cycle(
+        tmp_path, monkeypatch):
+    """MF-A (1): `/kill`'s OWN halt used to block behind an in-flight cycle.
+    The handler took BLEND_LOCK, which `run_cycle` holds for its whole
+    duration — venue round-trips included. Measured at 6542d6f and
+    identically at 9b33081: the `/kill` HTTP call took 19.505s with NO
+    halt, NO ladder close, NO Telegram and NO response for the entire
+    window, while the comment said it "halts the book immediately".
+
+    The journal write has its own short-held lock now (BLEND_HALT_LOCK,
+    microseconds, never across I/O), so the halt, the journal and the HTTP
+    response are immediate whatever the loop is doing. The FLATTEN still
+    waits for the loop thread — only it may touch the adapter (R2) — and
+    that is what the operator is now told."""
+    import threading
+    import time as _time
+
+    HOLD = 6.0
+    release = threading.Event()
+    cycles = {"n": 0}
+    real_cycle = blend_mod.run_cycle
+
+    def holding_cycle(*a, **kw):
+        cycles["n"] += 1
+        if cycles["n"] > 1:              # cycle 1 boots the loop
+            release.wait(HOLD)           # ...then BLEND_LOCK is held here
+        return real_cycle(*a, **kw)
+
+    monkeypatch.setattr(blend_mod, "run_cycle", holding_cycle)
+    client, service = _service_client(tmp_path, monkeypatch)
+    try:
+        with client as c:
+            for _ in range(200):
+                if service.BLEND is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            B, A = service.BLEND, service.ADAPTER
+            assert _wait_until(lambda: service.LAST["loop_ok"] > 0)
+            n0 = cycles["n"]
+            service.LOOP_WAKE.set()      # drive the loop into a held cycle
+            assert _wait_until(lambda: cycles["n"] > n0)
+            _time.sleep(0.5)
+            assert service.BLEND_LOCK.locked()      # the cycle owns it
+            _kill_ready_position(B, A)
+            t0 = _time.time()
+            r = c.get("/kill", params={"token": "sekrit"})
+            elapsed = _time.time() - t0
+            # the response, the halt and the journal all landed immediately
+            assert elapsed < HOLD / 4, f"/kill blocked {elapsed:.2f}s"
+            assert r.json()["blend"] == "flatten_queued"
+            assert B.state.halted == "KILL"
+            assert B.state.flatten_request is not None
+            # ...and it is on DISK, so a crash inside that cycle keeps it
+            assert json.load(open(B.state_path))["flatten_request"] is not None
+        release.set()
+    finally:
+        release.set()
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_mfa_the_kill_response_never_waits_for_the_ladder_lock(
+        tmp_path, monkeypatch):
+    """MF-A (1), the other lock: the ladder section holds MGR_LOCK across
+    UNCAPPED gateway round-trips (`ADAPTER.mark`, `open_spread`,
+    `close_spread`; `IBAdapter._connect` alone retries 20 x (15s + 15s)).
+    /kill waited for it unconditionally — measured 19.401s of dead air with
+    a 20s-hanging mark(), at 6542d6f and at 9b33081 alike.
+
+    The wait is bounded now (KILL_LOCK_WAIT_S). If the loop holds the lock
+    the ladder halts in memory immediately and the LEG CLOSES are handed to
+    the loop thread, which is inside that very section and owns the
+    adapter — an API thread must never touch it (R2)."""
+    import threading
+    import time as _time
+
+    HANG = 6.0
+    release = threading.Event()
+    marks = {"n": 0}
+
+    class _SlowLadderAdapter(DryAdapter):
+        def mark(self, ref):
+            marks["n"] += 1
+            release.wait(HANG)
+            return 1.0
+
+    client, service = _service_client(tmp_path, monkeypatch,
+                                      adapter=_SlowLadderAdapter)
+    try:
+        with client as c:
+            for _ in range(200):
+                if service.MGR is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            assert _wait_until(lambda: service.LAST["loop_ok"] > 0)
+            with service.MGR_LOCK:      # give the ladder an OPEN leg to mark
+                leg = list(service.MGR.state.legs)[0]
+                service.MGR.on_opened(leg, 10_000, "ref-1", "2026-08-01")
+                service.MGR.save()
+            n0 = marks["n"]
+            service.LOOP_WAKE.set()
+            assert _wait_until(lambda: marks["n"] > n0)
+            _time.sleep(0.4)            # inside the uncapped round-trip
+            assert service.MGR_LOCK.locked()
+            t0 = _time.time()
+            r = c.get("/kill", params={"token": "sekrit"})
+            elapsed = _time.time() - t0
+            assert elapsed < HANG / 4, f"/kill blocked {elapsed:.2f}s"
+            assert elapsed >= 0          # bounded by KILL_LOCK_WAIT_S
+            assert service.KILL_LOCK_WAIT_S <= 1.0
+            assert r.json()["ladder"] == "close_queued"
+            assert service.MGR.state.halted == "KILL"   # halted right now
+            assert service.LADDER_KILL.is_set()         # closes handed over
+            release.set()
+            # the loop closes the legs itself, as the last act of the very
+            # section that held the lock — and says so
+            assert _wait_until(
+                lambda: service.MGR.state.legs[leg].status != "OPEN",
+                timeout=20.0)
+            assert not service.LADDER_KILL.is_set()
+            assert json.load(open(service.MGR.state_path))["halted"] == "KILL"
+    finally:
+        release.set()
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_mfa_a_trickling_feed_cannot_exceed_its_total_deadline():
+    """MF-A (2): `FEED_TIMEOUT` was passed to httpx, whose timeouts are
+    PER-OPERATION. A server emitting one chunk every 4s keeps every single
+    read inside 8s while the call runs arbitrarily long — measured,
+    `nino34_weekly()` took 32.09s with FEED_TIMEOUT at 8.0, and an
+    in-flight kill->flatten took 31.57s, while the operator alert printed
+    "feeds capped at 8s each". A per-operation timeout is not a bound; the
+    fetch runs under a TOTAL deadline now."""
+    import socket
+    import threading
+    import time as _time
+
+    from app import nino as nino_mod
+
+    srv = socket.socket()
+    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(1)
+    port = srv.getsockname()[1]
+    stop = threading.Event()
+
+    gap = nino_mod.FEED_TIMEOUT / 2      # every single read stays "in time"
+    chunks = 8                           # ...and the WHOLE body takes 4x the cap
+
+    def serve():
+        try:
+            conn, _ = srv.accept()
+            conn.recv(65535)
+            conn.sendall(b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n"
+                         b"Transfer-Encoding: chunked\r\n\r\n")
+            for _ in range(chunks):
+                if stop.wait(gap):
+                    break
+                conn.sendall(b"28\r\n" + b"x" * 40 + b"\r\n")
+            conn.sendall(b"0\r\n\r\n")     # a bounded body: at 6542d6f the
+            conn.close()                    # call RETURNS, late, and FAILS
+        except OSError:
+            pass
+
+    t = threading.Thread(target=serve, daemon=True)
+    t.start()
+    url, cache = nino_mod._URL, nino_mod._CACHE
+    try:
+        nino_mod._URL = f"http://127.0.0.1:{port}/"
+        nino_mod._CACHE = {}
+        t0 = _time.time()
+        assert nino_mod.nino34_weekly() is None      # degrades, as always
+        elapsed = _time.time() - t0
+        # the WHOLE fetch is bounded, not each read of it. Without the
+        # total deadline this same server measures gap * chunks (~32s).
+        assert gap * chunks > 3 * nino_mod.FEED_TIMEOUT      # a real attack
+        assert elapsed < nino_mod.FEED_TIMEOUT + 2.0, (
+            f"a trickling server ran the feed to {elapsed:.2f}s with "
+            f"FEED_TIMEOUT at {nino_mod.FEED_TIMEOUT}")
+    finally:
+        stop.set()
+        nino_mod._URL, nino_mod._CACHE = url, cache
+        srv.close()
+
+
+def test_gate_mfa_the_kill_alert_states_a_bound_the_code_holds(
+        tmp_path, monkeypatch):
+    """MF-A (3): under this repo's honesty rule an emergency-stop alert may
+    not state a bound the code does not hold. The alert said "feeds capped
+    at {N}s each" — wrong twice over: it interpolated only
+    nino.FEED_TIMEOUT while saying "each" (mf-10), and a per-operation
+    timeout caps nothing. It also implied the in-flight wait was bounded by
+    those feeds, when it is set by UNCAPPED gateway round-trips.
+
+    What the alert must now say: the halt is immediate; the flatten is
+    immediate when the loop is idle; a cycle in flight is waited out; the
+    feeds carry a TOTAL cap; and the gateway carries none, so no number is
+    promised for it."""
+    import time as _time
+
+    from app import nino as nino_mod
+
+    client, service = _service_client(tmp_path, monkeypatch)
+    try:
+        with client as c:
+            for _ in range(200):
+                if service.BLEND is not None:
+                    break
+                _time.sleep(0.05)
+            sent: list[str] = []
+            monkeypatch.setattr(service, "send", sent.append)
+            _seed_initialized(service.BLEND, sleeve_cash=2_750.0)
+            _held_position(service.BLEND, stop_ref=None)
+            c.get("/kill", params={"token": "sekrit"})
+            (kill_msg,) = [m for m in sent if "KILLED" in m]
+            # the halt no longer claims to be the flatten
+            assert "flatten QUEUED" in kill_msg
+            assert "runs FIRST in the loop's next iteration" in kill_msg
+            assert "already in flight" in kill_msg
+            # the discarded overclaim
+            assert "capped at 8s each" not in kill_msg
+            assert "each" not in kill_msg
+            # mf-10: BOTH feed caps are named, never one standing for two
+            assert f"{nino_mod.FEED_TIMEOUT:.0f}s (NOAA)" in kill_msg
+            assert f"{blend_mod.FEED_TIMEOUT:.0f}s (tracker)" in kill_msg
+            assert "TOTAL" in kill_msg
+            # the path that genuinely cannot be bounded is named as such
+            assert "gateway round-trips are NOT bounded" in kill_msg
+            assert "no bound this code can state" in kill_msg
+    finally:
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_mf8_the_wake_event_is_published_under_the_generation_lock():
+    """mf-8: `_start_loop` bumped LOOP_GEN under LOOP_GEN_LOCK and then
+    assigned `LOOP_WAKE = wake` OUTSIDE it. Two concurrent starts could
+    publish in reverse order, leaving LOOP_WAKE owned by the loop that is
+    ALREADY superseded — `/kill` would then wake nobody and the queued
+    flatten would wait a full poll interval (300s in production).
+
+    Reproduced the way the reviewer did: widen the window by making one
+    thread's `threading.Event()` slow, start two loops concurrently, and
+    check who owns the published event. Unreachable in production (one
+    uvicorn worker, one lifespan) — a one-line fix all the same."""
+    import threading
+    import time as _time
+
+    from app import service
+
+    real_event, real_loop = service.threading.Event, service._loop
+    real_gen, real_wake = service.LOOP_GEN, service.LOOP_WAKE
+    slow = {"tid": None}
+
+    def slow_event():
+        e = real_event()
+        if threading.get_ident() == slow["tid"]:
+            _time.sleep(0.4)             # preempted around the publish
+        return e
+
+    out: dict = {}
+
+    def start(tag, is_slow):
+        if is_slow:
+            slow["tid"] = threading.get_ident()
+        out[tag] = service._start_loop()
+
+    try:
+        service._loop = lambda gen, wake: None   # the body is not under test
+        service.threading.Event = slow_event
+        service.LOOP_GEN = 0
+        a = threading.Thread(target=start, args=("A", True))
+        b = threading.Thread(target=start, args=("B", False))
+        a.start()
+        _time.sleep(0.05)
+        b.start()
+        a.join()
+        b.join()
+        published = service.LOOP_WAKE            # read BEFORE restoring
+        live_gen = service.LOOP_GEN
+    finally:
+        service.threading.Event = real_event
+        service._loop = real_loop
+        service.LOOP_GEN = real_gen
+        service.LOOP_WAKE = real_wake
+
+    live = max(out, key=lambda k: out[k][2])     # highest generation wins
+    stale = "A" if live == "B" else "B"
+    assert out[live][2] == live_gen == 2 and out[stale][2] == 1
+    assert out[live][1] is not out[stale][1]
+    # the published wake belongs to the LIVE loop, never the superseded one.
+    # At 6542d6f this is `out[stale][1]` — /kill would wake nobody.
+    assert published is out[live][1]
+
+
+def test_gate_mf9_an_unparseable_200_is_negative_cached_too(monkeypatch):
+    """mf-9: nino's negative cache missed the parse-failure path. A 200 the
+    parser cannot read left `last is None` and wrote neither `_CACHE["v"]`
+    nor `_CACHE["fail"]`, so that failure mode re-paid the whole timeout
+    EVERY cycle (measured: 2 fetches in 2 calls). The exception path cached
+    correctly; this one now does too."""
+    from app import nino as nino_mod
+
+    monkeypatch.setattr(nino_mod, "_CACHE", {})
+    hits = {"n": 0}
+
+    class R:
+        text = "not a NOAA table at all\nnor is this line\n"
+
+        def __init__(self):
+            hits["n"] += 1
+
+    monkeypatch.setattr(nino_mod.httpx, "get", lambda url, **kw: R())
+    assert nino_mod.nino34_weekly() is None and hits["n"] == 1
+    assert "fail" in nino_mod._CACHE
+    assert nino_mod.nino34_weekly() is None and hits["n"] == 1   # not re-paid
+    # ...and it is still RE-TRIED on the schedule, never abandoned
+    nino_mod._CACHE["fail"] = time.time() - nino_mod.FAIL_TTL - 1
+    assert nino_mod.nino34_weekly() is None and hits["n"] == 2

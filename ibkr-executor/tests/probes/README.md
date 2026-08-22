@@ -52,6 +52,13 @@ one landed on its documented mark. The reviewer's own re-attack suite for
 that round (`scratchpad/attack_final.py`, 29 checks) went 28/29 -> 29/29,
 the one flip being `F4g` — the MF-3 defect it found.
 
+The MF-A/MF-B/MF-C round (the counter-review OF that round: the false
+kill-switch bound, the stand-in flag that cleared in one cycle, and the
+NEW harm where a stand-in row's fabricated identity cancelled a real
+working stop) again changed no probe file. All seven were re-run from
+`ibkr-executor/` before and after, every one on its documented mark, and
+`scratchpad/attack_final.py` stayed 29/29.
+
 | probe | result | note |
 |---|---|---|
 | `attack_reround.py` | 9/9 | |

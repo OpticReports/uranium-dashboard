@@ -37,13 +37,44 @@ MGR_LOCK = threading.Lock()        # x12: serializes LADDER state writes the
                                    # sections are always disjoint): a fixed
                                    # order is not needed if they never nest.
 BLEND = None                       # Blend3070Manager, ONLY when BLEND_ENABLED
-BLEND_LOCK = threading.Lock()      # serializes blend state writes: /kill's
-                                   # request_flatten (API thread) vs
-                                   # run_cycle (loop thread)
+BLEND_LOCK = threading.Lock()      # serializes a whole blend CYCLE (loop
+                                   # thread) against /resume (API thread).
+                                   # A cycle holds it across its venue
+                                   # round-trips, so it is NOT a lock the
+                                   # emergency stop may ever wait on — see
+                                   # BLEND_HALT_LOCK.
+BLEND_HALT_LOCK = threading.Lock()  # MF-A: the halt path's OWN lock, held
+                                   # only for the /kill journal write and
+                                   # the /resume clear — microseconds, never
+                                   # across I/O. /kill used to take
+                                   # BLEND_LOCK, so its own halt queued
+                                   # behind an in-flight run_cycle: measured
+                                   # 19.505s with no halt, no ladder close,
+                                   # no alert and no HTTP response for the
+                                   # whole window, while the comment claimed
+                                   # it "halts the book immediately". LOCK
+                                   # ORDER, the only nesting that exists:
+                                   # BLEND_LOCK -> BLEND_HALT_LOCK (/resume).
+                                   # /kill takes BLEND_HALT_LOCK alone and
+                                   # must NEVER take BLEND_LOCK.
 LOOP_WAKE = threading.Event()      # /kill pokes the loop so a queued blend
                                    # flatten runs at the TOP of the next
                                    # iteration instead of a full poll
                                    # interval later (R2 + MF-1)
+KILL_LOCK_WAIT_S = 0.5             # MF-A: how long /kill will wait for
+                                   # MGR_LOCK before handing the ladder's
+                                   # leg closes to the loop thread. Only a
+                                   # cycle INSIDE the ladder section holds
+                                   # it, and that section's gateway
+                                   # round-trips are unbounded (measured
+                                   # 19.4s with a 20s-hanging mark()).
+LADDER_KILL = threading.Event()    # MF-A: set when /kill could not take
+                                   # MGR_LOCK. The ladder is halted in
+                                   # memory immediately; the loop closes the
+                                   # legs at the end of the very section
+                                   # that was holding the lock — on the
+                                   # thread that owns the adapter, so no
+                                   # API thread ever reaches it (R2).
 LOOP_GEN = 0                       # MF-2: loop LIFECYCLE. Every lifespan used
 LOOP_GEN_LOCK = threading.Lock()   # to leak a daemon loop thread that never
                                    # exited and kept reading MGR/ADAPTER/BLEND
@@ -133,7 +164,15 @@ def _blend_cycle(payload: dict | None, today: str) -> None:
     from .blend import run_cycle
     try:
         with BLEND_LOCK:
-            run_cycle(BLEND, ADAPTER, payload, today, alert=send)
+            # The alert sink is resolved at EMIT time, like every other
+            # alert in this module. MF-A made that matter: /kill journals
+            # its flatten without waiting for BLEND_LOCK, so a cycle that
+            # started BEFORE the request can now be the one that executes
+            # it and reports what closed — binding `send` at call time
+            # would send that completion report to whatever sink was
+            # installed when the cycle began.
+            run_cycle(BLEND, ADAPTER, payload, today,
+                      alert=lambda msg: send(msg))
         BLEND_CYCLE.update({"date": today, "ok": True,
                             "error": None})
     except Exception as exc:  # noqa: BLE001
@@ -148,6 +187,25 @@ def _blend_cycle(payload: dict | None, today: str) -> None:
                  f"flatten QUEUED ({exc}) — nothing flattened "
                  f"yet; the loop retries next cycle, book "
                  f"stays halted")
+
+
+def _kill_ladder(today: str) -> None:
+    """Close every OPEN ladder leg and HALT the ladder. THE CALLER MUST HOLD
+    MGR_LOCK. Runs on whichever thread owns that lock at the time: the API
+    thread when /kill found it free (the normal case — the loop is parked in
+    its poll wait >99% of the time on a 300s cadence), or the LOOP thread
+    when a cycle was inside the ladder section (MF-A). The loop-thread route
+    is the safer of the two, not a fallback: it is the thread that owns the
+    adapter's ib_async event loop."""
+    for key, leg in MGR.state.legs.items():
+        if leg.status == "OPEN" and leg.order_ref:
+            try:
+                r = ADAPTER.close_spread(leg.order_ref)
+                MGR.on_closed(key, r["value"], "manual kill", today)
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("kill close %s failed: %s", key, exc)
+    MGR.state.halted = "KILL"
+    MGR.save()
 
 
 def _loop(gen: int, wake: threading.Event):
@@ -234,6 +292,17 @@ def _loop(gen: int, wake: threading.Event):
                             f"🚨 ibkr intent failed ({it['action']} {it['leg']}): {exc}\n"
                             f"→ no action needed from you — forward this to Claude "
                             f"(if it repeats, gateway/credentials may need you)")
+                if LADDER_KILL.is_set():
+                    # MF-A: a /kill landed while THIS section held MGR_LOCK.
+                    # The ladder was halted in memory the instant the
+                    # operator hit /kill; closing the legs is ours to do,
+                    # here, before this section releases the lock.
+                    LADDER_KILL.clear()
+                    _kill_ladder(today)
+                    ladder_alerts.append(
+                        "🔴 ibkr ladder: the /kill you sent while a cycle "
+                        "held the ladder has now closed its open legs; the "
+                        "ladder stays halted until /resume")
                 MGR.save()
             for msg in ladder_alerts:
                 send(msg)
@@ -272,11 +341,19 @@ from contextlib import asynccontextmanager
 def _start_loop() -> tuple[threading.Thread, threading.Event, int]:
     """Start THE loop thread for this lifespan and publish its wake event."""
     global LOOP_WAKE, LOOP_GEN
+    LADDER_KILL.clear()         # MF-A: never inherit a previous lifespan's
+                                # deferred ladder kill (its legs are re-read
+                                # from disk, halt included)
+    wake = threading.Event()
     with LOOP_GEN_LOCK:
         LOOP_GEN += 1
         gen = LOOP_GEN
-    wake = threading.Event()
-    LOOP_WAKE = wake            # /kill wakes the CURRENT loop only
+        # mf-8: published INSIDE the lock. Two concurrent starts could
+        # otherwise publish in reverse order and leave LOOP_WAKE owned by
+        # the already-superseded loop — reproduced with a widened window
+        # (live_gen=2, LOOP_WAKE belongs to gen 1), and /kill would then
+        # wake nobody and the queued flatten wait a full poll interval.
+        LOOP_WAKE = wake        # /kill wakes the CURRENT loop only
     t = threading.Thread(target=_loop, args=(gen, wake), daemon=True,
                          name=f"exec-loop-{gen}")
     t.start()
@@ -397,8 +474,9 @@ def kill(x_exec_token: str | None = Header(default=None),
     if MGR is None:
         return {"ok": False}
     blend_note = ""
+    today = datetime.now(timezone.utc).date().isoformat()
     # The BLEND halt runs FIRST: it is the cheapest and most urgent action
-    # here (a journal write under BLEND_LOCK), and putting the ladder's
+    # here (a journal write under BLEND_HALT_LOCK), and putting the ladder's
     # adapter round-trips ahead of it would let a slow spread close delay
     # halting the book (x12 added MGR_LOCK below — never let it gate this).
     if BLEND is not None:
@@ -414,13 +492,22 @@ def kill(x_exec_token: str | None = Header(default=None),
         # ahead of the NOAA fetch, the ladder and the tracker poll (MF-1),
         # with reconcile-first semantics (N14) and alerts what actually
         # closed vs parked — the summary here claims only what is true NOW.
-        # The bound is therefore: whatever remains of a cycle ALREADY in
-        # flight, and nothing else. Both of that cycle's feeds are capped
-        # (nino.FEED_TIMEOUT / blend.FEED_TIMEOUT), so the honest worst case
-        # is tens of seconds on a hanging dependency, not a full poll
-        # interval and not two 30s timeouts.
-        today = datetime.now(timezone.utc).date().isoformat()
-        with BLEND_LOCK:
+        #
+        # MF-A: "immediately" is now true of the HALT itself. This used to
+        # take BLEND_LOCK, which an in-flight run_cycle holds across its
+        # venue round-trips: measured, the whole handler blocked 19.505s —
+        # no halt, no ladder close, no Telegram, no HTTP response — while
+        # this comment said it halted the book immediately. The journal
+        # write has its own lock now, held for microseconds and never
+        # across I/O, so the halt and this response never queue behind a
+        # cycle. What still waits for the loop is the FLATTEN, because only
+        # the loop thread may touch the adapter; the bound on THAT is
+        # whatever remains of a cycle already in flight — its feeds carry a
+        # total deadline (nino.FEED_TIMEOUT / blend.FEED_TIMEOUT) but its
+        # IB gateway round-trips carry none, so no honest number can be
+        # promised for a wedged gateway. The alert below says exactly that.
+        from .blend import FEED_TIMEOUT as BLEND_FEED_TIMEOUT
+        with BLEND_HALT_LOCK:
             BLEND.request_flatten(today)
         LOOP_WAKE.set()                 # skip the poll wait; flatten first
         loop_age = (time.time() - LAST["loop_ok"]) if LAST["loop_ok"] else None
@@ -429,32 +516,52 @@ def kill(x_exec_token: str | None = Header(default=None),
             loop_warn = (" ⚠️ the execution loop looks DOWN (see /health) "
                          "— the flatten will NOT run until it recovers; "
                          "flatten manually if urgent")
-        blend_note = (" + blend HALTED, flatten QUEUED for the execution "
-                      "loop (it owns the venue connection) and it runs "
-                      "FIRST in the loop's next iteration — immediately "
-                      "unless a cycle is already in flight, in which case "
-                      "it waits out that cycle (feeds capped at "
-                      f"{FEED_TIMEOUT:.0f}s each); a completion alert will "
-                      "state what closed vs parked" + loop_warn)
+        blend_note = (" + blend HALTED (journalled the moment you hit "
+                      "/kill — the halt takes no lock a cycle can hold), "
+                      "flatten QUEUED for the execution loop (it owns the "
+                      "venue connection) and it runs FIRST in the loop's "
+                      "next iteration — immediately when the loop is idle, "
+                      "which is the normal case. If a cycle is already in "
+                      "flight the flatten waits that cycle out: its feeds "
+                      f"are capped at {FEED_TIMEOUT:.0f}s (NOAA) and "
+                      f"{BLEND_FEED_TIMEOUT:.0f}s (tracker) TOTAL, but its "
+                      "IB gateway round-trips are NOT bounded, so a wedged "
+                      "gateway can stretch that wait with no bound this "
+                      "code can state — watch /health and flatten manually "
+                      "if nothing lands. A completion alert will state "
+                      "what closed vs parked" + loop_warn)
     # x12: mutating legs/halted from this API thread must not interleave
     # with the loop thread's own ladder step + save (they raced with no
     # lock at all). MGR_LOCK is taken only AFTER the blend section above
-    # released BLEND_LOCK — the two locks are never held together.
-    with MGR_LOCK:
-        for key, leg in MGR.state.legs.items():
-            if leg.status == "OPEN" and leg.order_ref:
-                try:
-                    r = ADAPTER.close_spread(leg.order_ref)
-                    MGR.on_closed(key, r["value"], "manual kill",
-                                  datetime.now(timezone.utc).date().isoformat())
-                except Exception as exc:  # noqa: BLE001
-                    logger.exception("kill close %s failed: %s", key, exc)
-        MGR.state.halted = "KILL"
-        MGR.save()
-    send(f"🔴 ACTION NEEDED (you) — ibkr ladder KILLED: all legs closed, "
+    # released BLEND_HALT_LOCK — no two of these locks are held together.
+    #
+    # MF-A: bounded, because the ladder section this lock guards makes
+    # UNCAPPED gateway round-trips (ADAPTER.mark / open_spread /
+    # close_spread; IBAdapter._connect alone retries 20 x (15s + 15s)).
+    # Waiting for it blocked the whole /kill response for 19.4s. If the
+    # loop holds it, halt the ladder in memory NOW and hand the leg closes
+    # to the loop thread, which is inside that very section and owns the
+    # adapter — an API thread must never touch it (R2).
+    if MGR_LOCK.acquire(timeout=KILL_LOCK_WAIT_S):
+        try:
+            _kill_ladder(today)
+            ladder_note = "all legs closed"
+            ladder_state = "closed"
+        finally:
+            MGR_LOCK.release()
+    else:
+        MGR.state.halted = "KILL"       # in memory now; the loop's own
+        LADDER_KILL.set()               # save at the end of that section
+        LOOP_WAKE.set()                 # persists it
+        ladder_note = ("legs NOT closed yet — a cycle is inside the ladder "
+                       "section and only that thread may talk to the "
+                       "gateway; it closes them as its last act there and "
+                       "alerts when it has. The ladder is halted from now")
+        ladder_state = "close_queued"
+    send(f"🔴 ACTION NEEDED (you) — ibkr ladder KILLED: {ladder_note}, "
          f"ladder halted{blend_note}\n→ it stays halted until you hit "
          f"/resume?token=YOUR_TOKEN")
-    return {"ok": True, "halted": "KILL",
+    return {"ok": True, "halted": "KILL", "ladder": ladder_state,
             "blend": "flatten_queued" if BLEND is not None else None}
 
 
@@ -480,7 +587,10 @@ def resume(x_exec_token: str | None = Header(default=None),
         # interleaved with execute_flatten un-halts a book that is being
         # sold and lets the same cycle place fresh entries). BLEND_LOCK
         # serializes it behind any in-flight cycle, flatten included.
-        with BLEND_LOCK:
+        # MF-A: BLEND_HALT_LOCK on top, so a /kill journalling a flatten
+        # (which no longer takes BLEND_LOCK) cannot interleave with the
+        # clear. Lock order is always BLEND_LOCK -> BLEND_HALT_LOCK.
+        with BLEND_LOCK, BLEND_HALT_LOCK:
             blend_prior = BLEND.state.halted
             BLEND.resume()
     drift = "SCHEMA_DRIFT" in (prior, blend_prior)

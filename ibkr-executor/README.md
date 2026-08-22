@@ -296,13 +296,61 @@ unreconciled venue state. Phases IN ORDER:
    (counter-review MF-1; it used to run at the END of the iteration, so
    kill-to-flatten was exactly the loop's feed latency: an 8s feed meant
    8s, a hung feed meant no flatten at all, while the alert said "within
-   seconds"). Measured on a parked loop — the deployed steady state on a
-   300s cadence — kill-to-flatten is ~0.01s with a feed hanging for 3s,
-   8s or 25s. The only thing that can delay it is a cycle ALREADY inside
-   a feed call when the kill lands, and both feeds are capped
-   (`nino.FEED_TIMEOUT`, `blend.FEED_TIMEOUT`, a few seconds each, with a
-   failure negative-cached so a dead dependency is not re-paid every
-   cycle). Reconcile still runs FIRST inside that flatten cycle
+   seconds").
+
+   **What is bounded, and what is not** (counter-review MF-A — an
+   emergency-stop alert may not state a bound the code does not hold):
+
+   - *The halt, the journal write and the HTTP response are unconditional.*
+     Stage 1 takes `BLEND_HALT_LOCK`, its own lock, held for microseconds
+     and never across I/O; the ladder's `MGR_LOCK` is acquired with a
+     `KILL_LOCK_WAIT_S` timeout. Neither can queue behind a cycle. This
+     was NOT true before MF-A: stage 1 took `BLEND_LOCK`, which a cycle
+     holds across its venue round-trips, so the whole handler blocked for
+     whatever was left of that cycle — no halt, no ladder close, no
+     Telegram and no response (measured **19.505s** against a 20s-hanging
+     cycle, **14.504s** against a 15s one); waiting on `MGR_LOCK` with a
+     20s-hanging `mark()` measured **19.401s**. Both now return in
+     **~0.005s** and **<0.51s** (`KILL_LOCK_WAIT_S`). When that timeout
+     expires the ladder is halted in memory and its leg closes are handed
+     to the LOOP thread, which is inside the very section holding the lock
+     and owns the adapter — the reply says `ladder: close_queued` and the
+     loop alerts when the legs are actually closed.
+   - *Kill-to-flatten on a parked loop — the deployed steady state on a
+     300s cadence, >99% of the time — is ~0.01s*, measured with a feed
+     hanging 3s, 8s or 25s.
+   - *A cycle already IN FLIGHT is waited out*, because only the loop
+     thread may touch the adapter — and deliberately so: a request that
+     lands mid-cycle is executed by the NEXT iteration, which the wake
+     starts at once, never by the cycle already running. That cycle's
+     reconcile read the venue BEFORE the operator hit `/kill`, and
+     flattening on it would rob a venue that went away in between of its
+     chance to fail the cycle closed (re-review N14). Its two feeds carry
+     a TOTAL deadline
+     (`nino.FEED_TIMEOUT`, `blend.FEED_TIMEOUT`, `app/feeds.py`), with a
+     failure negative-cached so a dead dependency is not re-paid every
+     cycle. An httpx timeout alone is PER-OPERATION and bounded nothing:
+     a 4s-per-chunk trickle server ran `nino34_weekly()` to **32.09s**
+     with `FEED_TIMEOUT` at 8.0, and an in-flight kill-to-flatten to
+     31.57s. Under the total deadline the same server measures **8.00s**.
+   - *The IB gateway round-trips in that cycle are NOT bounded, and this
+     code states no number for them.* `ADAPTER.mark` / `open_spread` /
+     `close_spread` and `MGR.save()` run under `MGR_LOCK` with no
+     timeout; in `IBAdapter`, `qualifyContracts` / `reqContractDetails`
+     are unbounded sync facades and `_connect` retries 20 x (15s connect
+     + 15s sleep). A wedged gateway can stretch an in-flight cycle
+     arbitrarily. The `/kill` alert says exactly that and points at
+     `/health`; flatten manually if nothing lands. Residual, stated not
+     pretended away: while a cycle is wedged inside the ladder section the
+     ladder's halt is in MEMORY until that section's `MGR.save()` runs —
+     the BLEND flatten request, which is what protects real shares, is
+     journalled to disk synchronously either way. `app/feeds.py`'s other
+     residual: an abandoned fetch is a daemon thread that ends when one
+     socket read exceeds the per-operation timeout, so a server that
+     trickles FOREVER keeps one such thread alive per re-try (the
+     negative caches limit that to one per `FAIL_TTL`).
+
+   Reconcile still runs FIRST inside that flatten cycle
    (re-review N14 — stop fills book before anything sells, so only
    positions STILL actually held close), then
    flatten with all the standing guards: a RAISING stop cancel parks the
@@ -391,6 +439,11 @@ El Nino combo reads):
   re-review R2): it journals a flatten request under BLEND_LOCK and the
   loop thread, owner of the ib_async event loop, executes it FIRST in its
   next (immediately woken) iteration — see the two-stage `/kill` above.
+  MF-A extends the same rule to the LADDER's leg closes: when a cycle
+  holds `MGR_LOCK`, `/kill` halts the ladder and hands the closes to the
+  loop thread rather than waiting for a lock guarding uncapped gateway
+  I/O — so the API thread reaches the adapter strictly less often than
+  before, never more.
 - **The loop has a LIFECYCLE (counter-review MF-2)**: one loop thread per
   lifespan, started with a generation stamp and its OWN wake event, and
   superseded (generation bumped, event set, joined) when the lifespan

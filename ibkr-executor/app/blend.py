@@ -80,6 +80,8 @@ from datetime import date
 
 import httpx
 
+from .feeds import with_deadline
+
 logger = logging.getLogger(__name__)
 
 CORE = "SPY"
@@ -121,7 +123,11 @@ UNVERIFIED_REALERT_CYCLES = 4   # re-armed cadence for a position the blackout
 FEED_TIMEOUT = 8.0          # MF-1: the tracker poll is the loop's second 30s
                             # timeout — capped so one hanging dependency
                             # cannot stall the cycle (nino.FEED_TIMEOUT caps
-                            # the first)
+                            # the first). MF-A: this is the TOTAL deadline
+                            # on the fetch (feeds.with_deadline), not just
+                            # the per-operation httpx timeout it is also
+                            # passed as — a trickling server honours the
+                            # latter and still runs for minutes
 FEED_FAIL_TTL = 60.0        # MF-1: negative cache for a FAILING tracker,
                             # per URL. Shorter than the poll interval, so a
                             # scheduled cycle always re-tries; it only stops
@@ -1471,7 +1477,10 @@ def fetch_intents(cfg) -> dict | None:
     The timeout is now a few seconds and a failure is negative-cached per
     URL for FEED_FAIL_TTL — shorter than the poll interval, so an ordinary
     cycle is never denied a fetch; what it suppresses is re-paying the
-    timeout on a cycle woken moments later (a /kill wake, a retry)."""
+    timeout on a cycle woken moments later (a /kill wake, a retry).
+
+    MF-A: an httpx timeout is PER-OPERATION and never bounded the call, so
+    the fetch runs under a TOTAL deadline (feeds.with_deadline)."""
     base = (getattr(cfg, "tracker_url", "") or "").rstrip("/")
     if not base:
         return None
@@ -1489,7 +1498,10 @@ def fetch_intents(cfg) -> dict | None:
     elif getattr(cfg, "tracker_user", ""):
         kwargs["auth"] = (cfg.tracker_user, cfg.tracker_password)
     try:
-        r = httpx.get(f"{base}/blend3070/intents", **kwargs)
+        # MF-A: the deadline is on the WHOLE fetch, body included — the
+        # timeout in `kwargs` only bounds each individual socket operation.
+        r = with_deadline(FEED_TIMEOUT, httpx.get,
+                          f"{base}/blend3070/intents", **kwargs)
         r.raise_for_status()
         payload = r.json()
         _INTENTS_FAIL.pop(base, None)
@@ -3017,6 +3029,12 @@ def execute_flatten(mgr: Blend3070Manager, adapter, alert) -> None:
     stay parked untouched. The completion alert states exactly what closed
     vs what parked — the kill switch never overclaims."""
     st = mgr.state
+    # MF-A: /kill's journal write no longer waits behind an in-flight
+    # cycle, so a SECOND kill can land while this flatten is running. Clear
+    # only the request THIS pass started with — blanket-clearing at the end
+    # would swallow the new one and leave the operator with a halted book
+    # and no queued flatten.
+    executing = st.flatten_request
     closed: list[str] = []
     parked: list[str] = []
     unrec: list[str] = []
@@ -3130,27 +3148,38 @@ def execute_flatten(mgr: Blend3070Manager, adapter, alert) -> None:
             alert(f"🚨 blend kill: MKT close {sym} FAILED ({exc}) — "
                   f"position still held; book halted, close manually or "
                   f"wait for reconcile")
-    st.flatten_request = None       # executed (outcomes alerted below)
-    # N3: re-assert the halt. If a /resume slipped in between the request
-    # and this execution, the book must still come out of a flatten HALTED
-    # — the operator resumes a flattened book explicitly, never races one.
-    st.halted = "KILL"
-    mgr.save()
-    # Honest completion summary: exactly what closed vs what did not.
-    if parked or unrec:
-        alert(f"🔴 blend kill flatten finished WITH EXCEPTIONS: "
-              f"{len(closed)} closed ({', '.join(closed) or 'none'})"
-              + (f", {len(unrec)} sold but UNRECONCILED "
-                 f"({', '.join(unrec)})" if unrec else "")
-              + f", {len(parked)} NOT closed ({', '.join(parked)}) — "
-                f"parked positions need manual verification; book stays "
-                f"halted until /resume")
-    elif closed:
-        alert(f"🔴 blend kill flatten complete: {len(closed)} position(s) "
-              f"closed ({', '.join(closed)}); book halted until /resume")
-    else:
-        alert("🔴 blend kill flatten complete: book was already flat; "
-              "halted until /resume")
+    # Honest completion summary: exactly what closed vs what did not — and
+    # it goes out BEFORE the journal is cleared. `flatten_request` is what
+    # /status publishes as `flatten_pending`, so clearing it first opens a
+    # window where the operator can see "no flatten pending" with no report
+    # of what the flatten did. The clear is in a `finally`: a Telegram
+    # outage can delay the report, never block the journal from clearing
+    # (a request left journalled re-runs next cycle against an already
+    # flat book — harmless, but it is not the alert's call to make).
+    try:
+        if parked or unrec:
+            alert(f"🔴 blend kill flatten finished WITH EXCEPTIONS: "
+                  f"{len(closed)} closed ({', '.join(closed) or 'none'})"
+                  + (f", {len(unrec)} sold but UNRECONCILED "
+                     f"({', '.join(unrec)})" if unrec else "")
+                  + f", {len(parked)} NOT closed ({', '.join(parked)}) — "
+                    f"parked positions need manual verification; book stays "
+                    f"halted until /resume")
+        elif closed:
+            alert(f"🔴 blend kill flatten complete: {len(closed)} position(s) "
+                  f"closed ({', '.join(closed)}); book halted until /resume")
+        else:
+            alert("🔴 blend kill flatten complete: book was already flat; "
+                  "halted until /resume")
+    finally:
+        if st.flatten_request is executing:
+            st.flatten_request = None       # executed (outcomes alerted)
+        # N3: re-assert the halt. If a /resume slipped in between the
+        # request and this execution, the book must still come out of a
+        # flatten HALTED — the operator resumes a flattened book
+        # explicitly, never races one.
+        st.halted = "KILL"
+        mgr.save()
 
 
 def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
@@ -3161,6 +3190,11 @@ def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
     from .alerts import send as _send
     alert = alert or _send
 
+    # MF-A: /kill journals its flatten WITHOUT waiting for BLEND_LOCK, so a
+    # request can now land in the middle of this cycle. Capture what was
+    # already pending when the cycle STARTED — see PHASE 0b.
+    pending_flatten = mgr.state.flatten_request
+
     # PHASE 0 — reconciliation-first (order-safety law #1). Raises if the
     # adapter cannot reconcile: the cycle fails closed.
     reconcile(mgr, adapter, today, alert)
@@ -3168,7 +3202,16 @@ def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
     # PHASE 0b — a journaled /kill flatten request executes HERE, on the
     # loop thread that owns the adapter's event loop (R2). Reconcile above
     # already booked any stop fills; the book stays halted either way.
-    if mgr.state.flatten_request is not None:
+    #
+    # N14, preserved under MF-A: only a request that was ALREADY journalled
+    # when this cycle started. One that landed mid-cycle would be executed
+    # against a reconcile that read the venue BEFORE the operator hit
+    # /kill — and a venue that went away in between would never get to make
+    # this cycle fail closed. Deferring costs nothing: /kill wakes the loop,
+    # so the next iteration starts at once and runs the flatten FIRST
+    # (MF-1), which is exactly what the /kill alert tells the operator.
+    if pending_flatten is not None and (mgr.state.flatten_request
+                                        is pending_flatten):
         execute_flatten(mgr, adapter, alert)
 
     if payload is not None and payload_is_stale(payload, today):
