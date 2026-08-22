@@ -20,13 +20,26 @@ from scripts.backtest_core_variants import (
     D2_HI_W,
     D2_LO_W,
     D2_WARMUP_W,
+    E1_HI_W,
+    E1_LO_W,
+    E1_WARMUP_W,
+    E2_W,
+    E3_HI_W,
+    E3_LO_W,
+    E3_WARMUP_W,
+    E_CORE_LEG,
+    E_CORR_THRESHOLD,
+    E_CORR_WINDOW,
     INCUMBENTS,
     INCUMBENT_KEYS,
     LIVE_SLEEVE_W,
+    ROUNDS,
     VARIANTS,
     Ctx,
     Variant,
+    _spy_core_leg,
     _trailing,
+    arm_contrast,
     block_bootstrap_sharpe_diff,
     block_starts,
     boot_ci,
@@ -55,6 +68,10 @@ from scripts.backtest_core_variants import (
     sharpe,
     sleeve_idle_routed,
     sortino,
+    spy_core_corr_trigger,
+    spy_core_curves,
+    spy_core_static,
+    spy_core_trigger_profile,
     thirds,
     westfall_young_maxt,
 )
@@ -353,13 +370,24 @@ def test_registry_holds_exactly_the_registered_round_5_variants():
     assert counts == {"D1": 3, "D2": 1, "D3": 1, "D4": 2}
     assert sorted(r5) == ["D1-05", "D1-10", "D1-15", "D2", "D3",
                           "D4-band005", "D4-daily"]
-    assert len(VARIANTS) == 22
+    assert len(_round(4)) + len(r5) == 22
+
+
+def test_registry_holds_exactly_the_registered_round_6_variants():
+    """E1..E3 as pre-registered in VARIANTS_PREREGISTRATION_R6_SPYCORE.md: the
+    trigger at D2's weights, the static control for its weight LEVEL, and the
+    trigger at the live weights. Three arms, 25 across all three rounds, which
+    is the denominator the round-6 report is required to use."""
+    r6 = _round(6)
+    assert sorted(r6) == ["E1", "E2", "E3"]
+    assert sorted({v.group for v in r6.values()}) == ["E1", "E2", "E3"]
+    assert len(VARIANTS) == 25
 
 
 def test_every_variant_declares_a_registered_round():
     """A variant with no round would be judged by whichever campaign ran last —
     the exact failure the round tag exists to prevent."""
-    assert {v.round for v in VARIANTS.values()} == {4, 5}
+    assert {v.round for v in VARIANTS.values()} == {4, 5, 6}
     assert all(v.round == 4 for v in INCUMBENTS.values()), \
         "incumbents are shared across rounds and must stay untagged"
 
@@ -458,7 +486,7 @@ def test_evaluate_reports_the_rf0_flip_without_letting_it_move_the_bar():
 # --- C5's gate, the idle-cash router, monthly weights, _trailing ----------------
 
 def _ctx(n: int, *, sleeve=None, core=None, bil=None, gate=None,
-         idle=None) -> Ctx:
+         idle=None, spy=None) -> Ctx:
     """A minimal Ctx with hand-made legs — no network, no price cache."""
     dates = _dates(n)
     one = {d: 1.0 for d in dates}
@@ -473,7 +501,8 @@ def _ctx(n: int, *, sleeve=None, core=None, bil=None, gate=None,
     ctx = Ctx("real", "TEST", dates, {},
               core=lvl(core) if core else dict(one),
               sleeve=lvl(sleeve) if sleeve else dict(one),
-              spy=dict(one), bil=lvl(bil) if bil else dict(one),
+              spy=lvl(spy) if spy else dict(one),
+              bil=lvl(bil) if bil else dict(one),
               gate={d: (gate[i] if gate else True) for i, d in enumerate(dates)},
               idle_frac={d: (idle[i] if idle else 0.0)
                          for i, d in enumerate(dates)})
@@ -667,7 +696,7 @@ def test_both_cash_conventions_are_registered_and_neither_is_a_comparator():
     or judged arms (the campaign is still 22)."""
     assert {"INC-3070SPY-SWEPT", "REF-R2A-SWEPT"} <= set(INCUMBENTS)
     assert INCUMBENT_KEYS == ["INC-B5", "INC-3070SPY", "INC-SPY"]
-    assert len(VARIANTS) == 22
+    assert len(VARIANTS) == 25
     assert all(k not in VARIANTS for k in ("INC-3070SPY-SWEPT", "REF-R2A-SWEPT"))
 
 
@@ -724,3 +753,180 @@ def test_proxy_sessions_are_counted_not_quoted():
     assert got["returns_using_a_proxy"] == 2   # the return into it and out of it
     assert got["per_fund"] == {"KMLM": 2}
     assert got["n_returns"] == len(ctx.dates) - 1
+
+
+# --- ROUND 6: D2's rule on a SPY core -----------------------------------------------
+# The gate that matters most this round is the one on WHICH CORE the trigger
+# reads. Correlating against B.5 while HOLDING SPY would make round 6 a re-run
+# of D2 wearing a SPY label — the weights decided by one book and applied to
+# another — and every table would still look plausible. These tests make that
+# bug impossible to commit.
+
+def _spy_core_ctx(n: int = 140) -> Ctx:
+    """A context whose two candidate cores give OPPOSITE trigger calls.
+
+    The sleeve alternates +/-1%. SPY is its exact negative (rho = -1, BELOW the
+    0.30 threshold -> the HIGH leg). The B.5 core is its exact copy (rho = +1,
+    ABOVE the threshold -> the LOW leg). Nothing else distinguishes them, so an
+    arm that reads the wrong core cannot accidentally agree.
+    """
+    up = [0.01 if i % 2 == 0 else -0.01 for i in range(n - 1)]
+    return _ctx(n, sleeve=up, core=list(up), spy=[-r for r in up],
+                idle=[0.0] * n)
+
+
+def test_round6_correlates_against_the_SPY_core_it_holds_not_B5():
+    ctx = _spy_core_ctx()
+    sr = curve_returns(ctx.sleeve, ctx.dates)
+    assert pearson(sr, ctx.spy_rets) == pytest.approx(-1.0)
+    assert pearson(sr, curve_returns(ctx.core, ctx.dates)) == pytest.approx(1.0)
+    assert -1.0 < E_CORR_THRESHOLD < 1.0, "the two cores must straddle the bar"
+
+    for hi, lo, warm in ((E1_HI_W, E1_LO_W, E1_WARMUP_W),
+                         (E3_HI_W, E3_LO_W, E3_WARMUP_W)):
+        p = spy_core_trigger_profile(ctx, hi, lo, warm)
+        assert p["decisions_hi"] > 0, "the SPY core is anti-correlated: HIGH"
+        assert p["decisions_lo"] == 0, (
+            "a LOW decision here means the trigger read the B.5 core")
+        assert p["mean_rho"] == pytest.approx(-1.0)
+
+
+def test_round6_trigger_would_give_the_opposite_answer_on_the_B5_core():
+    """The companion half of the pin: on the SAME context, round 5's D2 — which
+    correlates against `ctx.core` by design — makes the opposite call. If both
+    ever agreed, the test above would be vacuous."""
+    ctx = _spy_core_ctx()
+    d2 = curve_returns(d2_corr_at_tangency(ctx), ctx.dates)
+    low = curve_returns(portfolio(ctx.dates, ctx.legs(),
+                                  const({"SLEEVE": D2_LO_W,
+                                         "CORE": 1 - D2_LO_W}),
+                                  rebal_dates=ctx.months), ctx.dates)
+    assert d2 == pytest.approx(low, abs=1e-12), \
+        "rho(sleeve, B.5 core) = +1 > 0.30, so D2 must sit on its LOW leg"
+
+
+def test_round6_arms_hold_the_SPY_leg_and_never_the_B5_core():
+    """A round-6 book must be sleeve + SPY. If any weight leaked into CORE, a
+    context whose B.5 core moves and whose SPY core does not would show it."""
+    ctx = _ctx(120, core=[0.02] * 119, spy=None, idle=[0.0] * 120)
+    for key in ("E1", "E2", "E3"):
+        r = curve_returns(VARIANTS[key].fn(ctx), ctx.dates)
+        assert max(abs(x) for x in r) == pytest.approx(0.0, abs=1e-12), (
+            f"{key} moved with the B.5 core it does not hold")
+
+
+def test_spy_core_leg_assertion_rejects_a_miswired_core():
+    """The assertion itself is the gate, so it gets its own test: hand the
+    helper a leg dict whose core is the B.5 curve and it must refuse."""
+    ctx = _spy_core_ctx()
+    good = spy_core_curves(ctx)
+    assert _spy_core_leg(good, ctx) is ctx.spy
+    bad = dict(good)
+    bad[E_CORE_LEG] = ctx.core
+    with pytest.raises(AssertionError):
+        _spy_core_leg(bad, ctx)
+
+
+def test_round6_maps_the_correlation_call_to_the_REGISTERED_weight_pair():
+    """E1 is 15/5 and E3 is 30/10 — the pairs the contract fixes, and no
+    others. Two contexts, one on each side of the threshold, and the realized
+    book must be exactly the static book at the corresponding leg."""
+    up = [0.01 if i % 2 == 0 else -0.01 for i in range(139)]
+    hi_ctx = _ctx(140, sleeve=up, core=list(up), spy=[-r for r in up],
+                  idle=[0.0] * 140)                       # rho = -1 -> HIGH
+    lo_ctx = _ctx(140, sleeve=up, core=[-r for r in up], spy=list(up),
+                  idle=[0.0] * 140)                       # rho = +1 -> LOW
+    for hi, lo, warm in ((E1_HI_W, E1_LO_W, E1_WARMUP_W),
+                         (E3_HI_W, E3_LO_W, E3_WARMUP_W)):
+        # BELOW the threshold: every decided month takes the HIGH leg, and the
+        # applied weight is exactly warm-up-then-high — no third weight exists.
+        p = spy_core_trigger_profile(hi_ctx, hi, lo, warm)
+        assert p["days_hi"] > 0 and p["days_lo"] == 0
+        assert p["mean_applied_w"] == pytest.approx(
+            (p["days_warmup"] * warm + p["days_hi"] * hi) / p["n_days"])
+        # ...and once it is settled at the high leg it IS the static high book:
+        # same weight, same monthly dates, so the daily returns coincide.
+        got = curve_returns(spy_core_corr_trigger(hi_ctx, hi, lo, warm),
+                            hi_ctx.dates)
+        want = curve_returns(spy_core_static(hi_ctx, hi), hi_ctx.dates)
+        assert got[120:] == pytest.approx(want[120:], abs=1e-12)
+        # ABOVE the threshold: the low leg IS the warm-up leg, so the whole
+        # path must equal the static low book with nothing left over.
+        assert curve_returns(spy_core_corr_trigger(lo_ctx, hi, lo, warm),
+                             lo_ctx.dates) == pytest.approx(
+            curve_returns(spy_core_static(lo_ctx, lo), lo_ctx.dates), abs=1e-12)
+    assert (E1_HI_W, E1_LO_W) == (0.15, 0.05)
+    assert (E3_HI_W, E3_LO_W) == (0.30, 0.10)
+    assert E2_W == 0.10 and E_CORR_WINDOW == 60 and E_CORR_THRESHOLD == 0.30
+
+
+def test_round6_warm_up_default_is_each_arms_OWN_registered_low_leg():
+    """Round-5 counter-agent M3, applied in advance. A round-6 arm that never
+    leaves warm-up must be its own registered LOW leg — never the live 30%,
+    never the other arm's leg."""
+    assert E1_WARMUP_W == E1_LO_W and E1_WARMUP_W != LIVE_SLEEVE_W
+    assert E3_WARMUP_W == E3_LO_W and E3_WARMUP_W != E1_LO_W
+    ctx = _ctx(40, core=[0.001] * 39, spy=[0.002] * 39, idle=[0.0] * 40)
+    for hi, lo, warm in ((E1_HI_W, E1_LO_W, E1_WARMUP_W),
+                         (E3_HI_W, E3_LO_W, E3_WARMUP_W)):
+        got = curve_returns(spy_core_corr_trigger(ctx, hi, lo, warm), ctx.dates)
+        assert got == pytest.approx(
+            curve_returns(spy_core_static(ctx, lo), ctx.dates), abs=1e-12)
+        p = spy_core_trigger_profile(ctx, hi, lo, warm)
+        assert p["days_warmup"] == p["n_days"] and p["decisions_hi"] == 0
+
+
+def test_e2_is_a_static_control_at_the_registered_weight_not_a_trigger():
+    """E2 exists to hold the LEVEL fixed. It must be flat in the weight, so a
+    context whose correlation swings cannot move it at all."""
+    ctx = _spy_core_ctx()
+    assert curve_returns(VARIANTS["E2"].fn(ctx), ctx.dates) == pytest.approx(
+        curve_returns(spy_core_static(ctx, E2_W), ctx.dates), abs=1e-12)
+
+
+def test_round6_arms_route_idle_sleeve_capital_to_BIL_not_to_the_core():
+    """Every round-6 arm carries the live cash convention. With the sleeve
+    fully idle, the sleeve leg must earn BIL — and a moving B.5 core must not
+    leak into it."""
+    ctx = _ctx(30, sleeve=[0.0] * 29, core=[0.05] * 29, spy=[0.0] * 29,
+               bil=[0.0002] * 29, idle=[1.0] * 30)
+    assert curve_returns(spy_core_curves(ctx)["SLEEVE"], ctx.dates) ==         pytest.approx([0.0002] * 29, abs=1e-12)
+
+
+def test_arm_contrast_is_paired_antisymmetric_and_zero_on_identical_arms():
+    """E1 - E2 is a contrast between two ARMS, so it must behave like the
+    paired bootstrap it wraps: exactly zero against itself, sign-flipping on
+    swap, and never wider than the difference it is measuring."""
+    ctx = _ctx(300, sleeve=[0.001] * 299, core=[0.0] * 299,
+               spy=[0.0004 if i % 3 else -0.0002 for i in range(299)],
+               bil=[0.00005] * 299, idle=[0.0] * 300)
+    a, b = spy_core_static(ctx, 0.30), spy_core_static(ctx, 0.05)
+    same = arm_contrast(ctx, a, a, draws=200, deep=None)
+    assert same["d_sharpe"] == pytest.approx(0.0, abs=1e-12)
+    assert same["ci95"] == pytest.approx([0.0, 0.0], abs=1e-9)
+    fwd = arm_contrast(ctx, a, b, draws=200, deep=None)
+    rev = arm_contrast(ctx, b, a, draws=200, deep=None)
+    assert fwd["d_sharpe"] == pytest.approx(-rev["d_sharpe"], abs=1e-12)
+    assert fwd["boot_p"] == pytest.approx(rev["boot_p"])
+    assert fwd["ci95"][0] <= fwd["d_sharpe"] <= fwd["ci95"][1]
+
+
+def test_round6_incumbent_is_NAMED_by_the_registration_not_selected():
+    """Round 6 may not pick its own comparator after seeing a result. The key
+    is frozen in ROUNDS beside the report path, it is a registered incumbent,
+    and it is the SWEPT (live-convention) 30/70 book — judging against the
+    dead-cash twin would hand every arm a free ~+0.04 it did not earn."""
+    assert ROUNDS[6]["incumbent"] == "INC-3070SPY-SWEPT"
+    assert ROUNDS[6]["incumbent"] in INCUMBENTS
+    assert ROUNDS[6]["incumbent"] not in INCUMBENT_KEYS   # not rule-selected
+    assert "incumbent" not in ROUNDS[4] and "incumbent" not in ROUNDS[5]
+    assert ROUNDS[6]["contract"] == "docs/VARIANTS_PREREGISTRATION_R6_SPYCORE.md"
+
+
+def test_monthly_weights_holds_the_named_core_leg():
+    """`core_leg` is what lets a round-6 arm hold SPY while rounds 4-5 hold
+    B.5. The default must stay CORE so no round-4/5 arm moves."""
+    ctx = _ctx(40)
+    assert monthly_weights(ctx, lambda _i: 0.2, 0.2)(ctx.dates[0]) ==         {"SLEEVE": 0.2, "CORE": 0.8}
+    assert monthly_weights(ctx, lambda _i: 0.2, 0.2,
+                           core_leg="SPY")(ctx.dates[0]) ==         {"SLEEVE": 0.2, "SPY": 0.8}

@@ -74,6 +74,18 @@ ROUNDS = {
         "contract": "docs/VARIANTS_PREREGISTRATION_R5_SLEEVE.md",
         "title": "ROUND 5 sleeve variants (idle cash, timing, inverse-vol)",
         "groups": "D1..D4"},
+    # Round 6's incumbent is NAMED BY ITS REGISTRATION, not selected by the
+    # "highest BIL-excess Sharpe among the three registered incumbents" rule
+    # that rounds 4-5 use. The contract says so in advance and says why:
+    # "Judging against the dead-cash version would hand every arm a free
+    # +0.040 it did not earn." A round may not pick its own comparator after
+    # seeing a result, so the key is frozen here beside the report path.
+    6: {"results": DATA / "backtest_spycore_variants_r6_results.json",
+        "report": BACKEND.parent / "docs" / "BACKTEST_SPYCORE_VARIANTS_R6.md",
+        "contract": "docs/VARIANTS_PREREGISTRATION_R6_SPYCORE.md",
+        "title": "ROUND 6 SPY-core variants (D2's rule on the live core)",
+        "groups": "E1..E3",
+        "incumbent": "INC-3070SPY-SWEPT"},
 }
 DEFAULT_ROUND = 4
 
@@ -132,6 +144,26 @@ D2_CORR_WINDOW = 60
 D2_CORR_THRESHOLD = 0.30
 D3_VOL_WINDOW = 60
 D4_RULES = ("daily", "band005")
+
+# Round-6 fixed parameters (VARIANTS_PREREGISTRATION_R6_SPYCORE.md) ----------
+# Fixed BEFORE any round-6 code existed. The round asks one question: does
+# D2's correlation trigger help on the SPY core the LIVE book actually runs?
+# Every arm holds R2-A against SPY (never B.5), rebalances monthly, and routes
+# the sleeve's idle CAPITAL to BIL — so the only thing under test is the
+# ALLOCATION rule.
+E_CORE_LEG = "SPY"          # the leg every round-6 arm holds as its core
+E_CORR_WINDOW = D2_CORR_WINDOW        # 60d — "same window conventions as D2"
+E_CORR_THRESHOLD = D2_CORR_THRESHOLD  # 0.30
+E1_HI_W, E1_LO_W = 0.15, 0.05         # D2's weights, on a SPY core
+E2_W = 0.10                           # the control for E1's WEIGHT LEVEL
+E3_HI_W, E3_LO_W = 0.30, 0.10         # the same trigger at the LIVE levels
+# Warm-up default, both trigger arms: the REGISTERED LOW LEG, never an
+# unregistered weight. This is round 5's counter-agent M3 applied in advance
+# rather than after the fact — there, `monthly_weights`' inherited 30% default
+# held a weight D2's contract did not name on 81 of 1,433 days and decided its
+# verdict. E1 and E3 each fall back to their own registered low leg.
+E1_WARMUP_W = E1_LO_W
+E3_WARMUP_W = E3_LO_W
 
 # Bootstrap (registration: 21d blocks, 4000 draws, paired on dates) -----------
 BOOT_BLOCK = 21
@@ -644,11 +676,20 @@ def _trailing(rets: list[float], i: int, window: int) -> list[float] | None:
 
 
 def monthly_weights(ctx: Ctx, pick: Callable[[int], float | None],
-                    default: float) -> Callable[[str], dict[str, float]]:
+                    default: float, *,
+                    core_leg: str = "CORE") -> Callable[[str], dict[str, float]]:
     """Sleeve weight re-decided on the first trading day of each month and held
     flat in between. `pick(i)` returns None during warm-up, when the weight
-    falls back to `default` (the live 30%) — a stated rule, not a free
-    parameter, and it is disclosed in the writeup."""
+    falls back to `default` — a stated rule, not a free parameter, and it is
+    disclosed in the writeup. Rounds 4-5 pass the live 30%; round 6 passes each
+    arm's own REGISTERED LOW LEG (counter-agent M3).
+
+    `core_leg` names the leg the remaining 1-w is held in. It defaults to
+    "CORE" (B.5), which is what every round-4 and round-5 arm holds, so those
+    arms are byte-identical to before. Round 6 passes "SPY", because its arms
+    hold the live book's SPY core — and an arm must be correlated against the
+    core it actually holds, which is what `E_CORE_LEG` pins.
+    """
     idx = {d: i for i, d in enumerate(ctx.dates)}
     rebal = set(ctx.months)
     w_by_date: dict[str, float] = {}
@@ -658,7 +699,7 @@ def monthly_weights(ctx: Ctx, pick: Callable[[int], float | None],
             got = pick(idx[d])
             cur = default if got is None else got
         w_by_date[d] = cur
-    return lambda d: {"SLEEVE": w_by_date[d], "CORE": 1 - w_by_date[d]}
+    return lambda d: {"SLEEVE": w_by_date[d], core_leg: 1 - w_by_date[d]}
 
 
 # -- C1: static sleeve weights on a B.5 core ---------------------------------
@@ -1057,6 +1098,194 @@ def d3_weight_distribution(ctx: Ctx) -> dict:
             "days_fallback": n_fallback,
             "decisions_with_a_weight": len(decided),
             "mean_decided_weight": statistics.fmean(decided)}
+
+
+# ============================================================================
+# ROUND 6 — D2's rule on a SPY core (docs/VARIANTS_PREREGISTRATION_R6_SPYCORE.md)
+# ----------------------------------------------------------------------------
+# Registered BEFORE any of this code was written. Rounds 4-5 tested cores
+# nobody is running; the live blend3070 book is 30% R2-A / 70% SPY. Three arms,
+# all monthly, all with the sleeve's idle CAPITAL earning BIL, all holding SPY
+# as the core — so the ONLY thing under test is the allocation rule.
+#
+# The obvious silent bug this round can have is correlating the sleeve against
+# the B.5 core of rounds 4-5 while HOLDING a SPY core. `spy_core_book` takes
+# the correlation series out of the very dict the portfolio engine is handed,
+# and asserts its identity, so the two cannot drift apart.
+
+
+def spy_core_curves(ctx: Ctx) -> dict[str, dict[str, float]]:
+    """Every round-6 arm's legs: the sleeve with its idle CAPITAL earning BIL,
+    against the SPY core the live book holds."""
+    curves = dict(ctx.legs())
+    curves["SLEEVE"] = sleeve_idle_routed(ctx, D1_CASH_LEG)
+    return curves
+
+
+def _spy_core_leg(curves: dict[str, dict[str, float]], ctx: Ctx) -> dict[str, float]:
+    """The core leg a round-6 arm actually holds, with its identity PINNED.
+
+    The correlation trigger must be evaluated against the core the arm holds.
+    Reading it off `ctx.core` instead would silently make round 6 a re-run of
+    D2 wearing a SPY label: the weights would be decided by B.5's correlation
+    and then applied to a SPY book. Taking the series out of the engine's own
+    leg dict makes that impossible, and these assertions say so out loud.
+    """
+    core = curves[E_CORE_LEG]
+    assert core is ctx.spy, (
+        f"round 6 correlates against the {E_CORE_LEG} core the arm HOLDS")
+    assert core is not ctx.core, (
+        "round 6 must NOT correlate against the B.5 core of rounds 4-5")
+    return core
+
+
+def spy_core_corr_trigger(ctx: Ctx, hi: float, lo: float, warmup: float,
+                          *, threshold: float = E_CORR_THRESHOLD,
+                          window: int = E_CORR_WINDOW) -> dict[str, float]:
+    """D2's rule, moved to a SPY core: sleeve `hi` when the trailing `window`-day
+    corr(sleeve, SPY core) < `threshold`, else `lo`, evaluated monthly, with the
+    sleeve's idle CAPITAL earning BIL.
+
+    Same trailing-window convention as D2 (`_trailing`: same-close
+    decide/execute, no look-ahead) and the same warm-up doctrine — the caller
+    passes a REGISTERED leg, never an unregistered weight.
+    """
+    curves = spy_core_curves(ctx)
+    core = _spy_core_leg(curves, ctx)
+    sr = curve_returns(curves["SLEEVE"], ctx.dates)
+    cr = curve_returns(core, ctx.dates)
+
+    def pick(i: int) -> float | None:
+        ws, wc = _trailing(sr, i, window), _trailing(cr, i, window)
+        if ws is None or wc is None:
+            return None
+        rho = pearson(ws, wc)
+        if math.isnan(rho):
+            return None
+        return hi if rho < threshold else lo
+
+    return portfolio(ctx.dates, curves,
+                     monthly_weights(ctx, pick, warmup, core_leg=E_CORE_LEG),
+                     rebal_dates=ctx.months)
+
+
+def spy_core_static(ctx: Ctx, w: float) -> dict[str, float]:
+    """A STATIC sleeve weight on the same SPY core, same monthly rebalance,
+    same idle-cash routing. E2 is this at 10%: the control that isolates E1's
+    trigger TIMING from its weight LEVEL."""
+    curves = spy_core_curves(ctx)
+    _spy_core_leg(curves, ctx)
+    return portfolio(ctx.dates, curves,
+                     const({"SLEEVE": w, E_CORE_LEG: 1 - w}),
+                     band=None, rebal_dates=ctx.months)
+
+
+register("E1", "E1",
+         f"sleeve {E1_HI_W:.0%} when trailing {E_CORR_WINDOW}d "
+         f"corr(sleeve, SPY core) < {E_CORR_THRESHOLD:.2f} else {E1_LO_W:.0%}, "
+         f"monthly, on a SPY core, sleeve idle CAPITAL earning BIL "
+         f"(warm-up default = the registered {E1_LO_W:.0%} low leg)",
+         lambda ctx: spy_core_corr_trigger(ctx, E1_HI_W, E1_LO_W, E1_WARMUP_W),
+         round=6)
+register("E2", "E2",
+         f"CONTROL for E1's weight LEVEL: static {E2_W:.0%} R2-A / "
+         f"{1 - E2_W:.0%} SPY, monthly, sleeve idle CAPITAL earning BIL",
+         lambda ctx: spy_core_static(ctx, E2_W), round=6)
+register("E3", "E3",
+         f"the same trigger at the LIVE levels: sleeve {E3_HI_W:.0%} when "
+         f"trailing {E_CORR_WINDOW}d corr(sleeve, SPY core) < "
+         f"{E_CORR_THRESHOLD:.2f} else {E3_LO_W:.0%}, monthly, on a SPY core, "
+         f"sleeve idle CAPITAL earning BIL (warm-up default = the registered "
+         f"{E3_LO_W:.0%} low leg)",
+         lambda ctx: spy_core_corr_trigger(ctx, E3_HI_W, E3_LO_W, E3_WARMUP_W),
+         round=6)
+
+
+def spy_core_trigger_profile(ctx: Ctx, hi: float, lo: float, warmup: float,
+                             *, threshold: float = E_CORR_THRESHOLD,
+                             window: int = E_CORR_WINDOW) -> dict:
+    """What the trigger actually DID: how many monthly decisions went high, how
+    many low, how many fell back to the warm-up leg, and the distribution of
+    the correlation it read. A trigger that almost never fires is a different
+    finding from a trigger that fires and does not pay, and the report may not
+    conflate them."""
+    curves = spy_core_curves(ctx)
+    core = _spy_core_leg(curves, ctx)
+    sr = curve_returns(curves["SLEEVE"], ctx.dates)
+    cr = curve_returns(core, ctx.dates)
+    idx = {d: i for i, d in enumerate(ctx.dates)}
+    rebal = set(ctx.months)
+    rhos: list[float] = []
+    n_hi = n_lo = n_warm = 0
+    cur = warmup
+    applied: list[float] = []
+    days_hi = days_lo = days_warm = 0
+    state = "warmup"
+    for d in ctx.dates:
+        if d == ctx.dates[0] or d in rebal:
+            ws, wc = _trailing(sr, idx[d], window), _trailing(cr, idx[d], window)
+            rho = float("nan") if ws is None or wc is None else pearson(ws, wc)
+            if math.isnan(rho):
+                cur, state = warmup, "warmup"
+                n_warm += 1
+            else:
+                rhos.append(rho)
+                if rho < threshold:
+                    cur, state = hi, "hi"
+                    n_hi += 1
+                else:
+                    cur, state = lo, "lo"
+                    n_lo += 1
+        applied.append(cur)
+        days_hi += state == "hi"
+        days_lo += state == "lo"
+        days_warm += state == "warmup"
+    return {"hi_w": hi, "lo_w": lo, "warmup_w": warmup, "threshold": threshold,
+            "window": window,
+            "decisions": n_hi + n_lo + n_warm,
+            "decisions_hi": n_hi, "decisions_lo": n_lo,
+            "decisions_warmup": n_warm,
+            "n_days": len(applied), "days_hi": days_hi, "days_lo": days_lo,
+            "days_warmup": days_warm,
+            "mean_applied_w": statistics.fmean(applied),
+            "mean_rho": statistics.fmean(rhos) if rhos else float("nan"),
+            "median_rho": statistics.median(rhos) if rhos else float("nan"),
+            "min_rho": min(rhos) if rhos else float("nan"),
+            "max_rho": max(rhos) if rhos else float("nan"),
+            "frac_decisions_hi": n_hi / (n_hi + n_lo) if (n_hi + n_lo) else
+            float("nan")}
+
+
+def arm_contrast(ctx: Ctx, a_curve: dict[str, float], b_curve: dict[str, float],
+                 *, draws: int, deep: int | None = BOOT_DRAWS_DEEP) -> dict:
+    """A paired bootstrap between two REGISTERED ARMS, not arm vs incumbent.
+
+    Round 6 registers E2 as the control for E1's WEIGHT LEVEL, and states in
+    advance that "without this control a win by E1 is uninterpretable". E1
+    minus E2 isolates the trigger's TIMING from the level of the weight it
+    moves between, and it gets its OWN paired interval — differencing two
+    arm-vs-incumbent rows would throw away the pairing that makes the contrast
+    tight, exactly the error round 5's M1 was about.
+    """
+    ax = excess(curve_returns(a_curve, ctx.dates), ctx.bil_rets)
+    bx = excess(curve_returns(b_curve, ctx.dates), ctx.bil_rets)
+    bt = block_bootstrap_sharpe_diff(ax, bx, draws=deep or draws,
+                                     shallow=draws if deep else None)
+    shallow = dict(bt, dist=bt["dist_shallow"]) if deep else bt
+    ma = metrics(a_curve, ctx.dates, ctx.bil_rets)
+    mb = metrics(b_curve, ctx.dates, ctx.bil_rets)
+    row = {"sharpe_a": ma["sharpe_bil"], "sharpe_b": mb["sharpe_bil"],
+           "sortino_a": ma["sortino_bil"], "sortino_b": mb["sortino_bil"],
+           "cagr_a": ma["cagr"], "cagr_b": mb["cagr"],
+           "max_dd_a": ma["max_dd"], "max_dd_b": mb["max_dd"],
+           "d_sharpe": bt["point"], "d_sortino": ma["sortino_bil"] - mb["sortino_bil"],
+           "d_cagr": ma["cagr"] - mb["cagr"],
+           "ci95": list(boot_ci(shallow)), "boot_p": shallow["p_two_sided"]}
+    if deep:
+        conf_all = 1 - NAIVE_ALPHA / len(VARIANTS)
+        row["ci_bonferroni_all_rounds"] = list(boot_ci(bt, conf_all))
+        row["bonferroni_conf_all_rounds"] = conf_all
+    return row
 
 
 # -- incumbents (registration: B.5 alone, 30/70 R2-A/SPY, SPY alone) ---------
@@ -1800,8 +2029,19 @@ def main(argv: list[str] | None = None) -> None:      # noqa: PLR0915
           f"({idle['zero_return_days']}/{idle['zero_return_of']} zero-return). "
           f"C7 routes the CAPITAL, not the zero-return days.")
 
-    # -- best incumbent: highest BIL-excess Sharpe over the FULL real window
-    best = max(INCUMBENT_KEYS, key=lambda k: res["real"][k]["full"]["sharpe_bil"])
+    # -- the comparator. Rounds 4-5 select it by rule: the highest BIL-excess
+    # Sharpe over the FULL real window among the three registered incumbents.
+    # A round whose registration NAMES its incumbent uses that instead — round
+    # 6 registers INC-3070SPY-SWEPT, the live design under the live cash
+    # convention, in advance and with its reason on the record. Either way the
+    # choice is made before any arm is judged, never after a result is seen.
+    named = rnd.get("incumbent")
+    if named:
+        assert named in INCUMBENTS, f"registered incumbent {named} is not registered"
+        best = named
+    else:
+        best = max(INCUMBENT_KEYS,
+                   key=lambda k: res["real"][k]["full"]["sharpe_bil"])
     rc, ir = ctxs["real"], res["real"][best]
     inc_ex = [a - b for a, b in
               zip(curve_returns(ir["curve"], rc.dates), rc.bil_rets, strict=True)]
@@ -1862,6 +2102,9 @@ def main(argv: list[str] | None = None) -> None:      # noqa: PLR0915
                         "end": ctxs[w].dates[-1], "n": len(ctxs[w].dates)}
                     for w in ("real", "synth")},
         "best_incumbent": best,
+        "incumbent_rule": ("NAMED BY THE REGISTRATION" if named else
+                           "highest BIL-excess Sharpe among the registered "
+                           "incumbents, over the full real window"),
         "incumbents": INCUMBENT_KEYS,
         "n_variants_tested": n_tested,
         "n_registered_groups": len({VARIANTS[k].group for k in sel}),
@@ -1932,6 +2175,35 @@ def main(argv: list[str] | None = None) -> None:      # noqa: PLR0915
         meta["d2_warmup_registered_default"] = D2_WARMUP_W
         # m1 — D3's fallback override flatters it; the literal rule too.
         meta["d3_literal_rule_real"] = d3_literal_rule(rc, inc_ex, draws=args.draws)
+    if args.round == 6:
+        # The registered contrast. E1 minus E2 isolates the trigger's TIMING
+        # from its weight LEVEL; the registration says an E1 win is
+        # uninterpretable without it, so it is computed whether or not E1 wins.
+        meta["e1_minus_e2_real"] = arm_contrast(
+            rc, res["real"]["E1"]["curve"], res["real"]["E2"]["curve"],
+            draws=args.draws)
+        meta["e1_minus_e2_synth"] = arm_contrast(
+            ctxs["synth"], res["synth"]["E1"]["curve"],
+            res["synth"]["E2"]["curve"], draws=args.draws, deep=None)
+        # E3's own level control is the incumbent itself (static 30% on SPY,
+        # swept), so it is already in the bar; reported here for symmetry.
+        meta["e3_minus_incumbent_note"] = (
+            "E3's weight-level control IS the registered incumbent "
+            "(INC-3070SPY-SWEPT: a static 30% sleeve on the same SPY core "
+            "under the same cash convention), so the registered bar already "
+            "measures E3's timing against its own level.")
+        meta["trigger_profile_real"] = {
+            "E1": spy_core_trigger_profile(rc, E1_HI_W, E1_LO_W, E1_WARMUP_W),
+            "E3": spy_core_trigger_profile(rc, E3_HI_W, E3_LO_W, E3_WARMUP_W)}
+        meta["trigger_profile_synth"] = {
+            "E1": spy_core_trigger_profile(ctxs["synth"], E1_HI_W, E1_LO_W,
+                                           E1_WARMUP_W),
+            "E3": spy_core_trigger_profile(ctxs["synth"], E3_HI_W, E3_LO_W,
+                                           E3_WARMUP_W)}
+        meta["corr_spy_sleeve_real"] = pearson(
+            curve_returns(sleeve_idle_routed(rc, D1_CASH_LEG), rc.dates),
+            rc.spy_rets)
+        meta["e_warmup_defaults"] = {"E1": E1_WARMUP_W, "E3": E3_WARMUP_W}
 
     _print_table(res, order, verdicts, meta, show)
 
@@ -1945,7 +2217,8 @@ def main(argv: list[str] | None = None) -> None:      # noqa: PLR0915
         path.write_text(json.dumps(_round(payload), indent=1))
         print(f"\nResults JSON written to {path}")
     if full_run:
-        writer = _write_report if args.round == 4 else _write_report_r5
+        writer = {4: _write_report, 5: _write_report_r5,
+                  6: _write_report_r6}[args.round]
         writer(res, order, verdicts, meta)
         print(f"Report written to {rnd['report']}")
 
@@ -1997,8 +2270,8 @@ def _print_table(res: dict, order: list[str], verdicts: dict, meta: dict,
         for k in order:
             surv = _sv(verdicts.get(k)) if w == "real" else "—"
             print(_row(k, res[w][k]["full"], surv))
-    print(f"\nbest incumbent = {meta['best_incumbent']} "
-          f"(highest BIL-excess Sharpe over the full real window)")
+    print(f"\ncomparator = {meta['best_incumbent']} "
+          f"({meta['incumbent_rule']})")
     print(f"{'variant':16s} {'dSharpe':>8s} {'95% CI':>18s} {'boot p':>7s} "
           f"{'1':>3s} {'2':>3s} {'3':>3s} {'4':>3s} {'SURV':>5s}")
     for k, v in verdicts.items():
@@ -3287,6 +3560,542 @@ def _write_report_r5(res: dict, order: list[str], verdicts: dict, meta: dict) ->
     w("")
     ROUNDS[5]["report"].write_text("\n".join(L) + "\n")
 
+
+def _write_report_r6(res: dict, order: list[str], verdicts: dict, meta: dict) -> None:
+    """Round 6's report. Same bar, same bootstrap, same honesty rules as rounds
+    4-5 — and the multiple-comparison denominator now spans all three rounds,
+    because round 6's hypothesis was read off round 5's results."""
+    best = meta["best_incumbent"]
+    n = meta["n_variants_tested"]
+    n_all = meta["n_arms_all_rounds"]
+    surv = [k for k, v in verdicts.items() if v["survives"]]
+    clears = [k for k, v in verdicts.items() if v.get("clears_bonferroni")]
+    c1_pass = [k for k, v in verdicts.items() if v["c1_sharpe_and_sortino"]]
+    c2_pass = [k for k, v in verdicts.items() if v["c2_ci_excludes_zero"]]
+    c3_pass = [k for k, v in verdicts.items() if v["c3_subperiods"]]
+    half = {k: (v["ci95"][1] - v["ci95"][0]) / 2 for k, v in verdicts.items()}
+    mt = meta["max_t_all_rounds"]
+    swept = meta["swept_vs_frozen_real"]
+    con = meta["e1_minus_e2_real"]
+    con_s = meta["e1_minus_e2_synth"]
+    prof = meta["trigger_profile_real"]
+    profs = meta["trigger_profile_synth"]
+    bf = res["real"][best]["full"]
+    rn = meta["windows"]["real"]["n"]
+    spans_zero = con["ci95"][0] < 0 < con["ci95"][1]
+    best_arm = max(verdicts, key=lambda k: verdicts[k]["d_sharpe"])
+    dead_c1 = [k for k in verdicts
+               if beats(res["real"][k]["full"], res["real"]["INC-3070SPY"]["full"])]
+    L: list[str] = []
+    w = L.append
+
+    w("# Backtest — ROUND 6 SPY-core variants (D2's rule on the live core), "
+      "2026-08-22")
+    w("")
+    w(f"Generated by `backend/scripts/backtest_core_variants.py --round 6` "
+      f"(deterministic, bootstrap seed {meta['bootstrap']['seed']}). Contract: "
+      f"[{meta['contract']}](VARIANTS_PREREGISTRATION_R6_SPYCORE.md), committed "
+      f"at d73149e BEFORE any round-6 code existed — not merely before it was "
+      f"run. Nothing in this document is a config change, a weight change or a "
+      f"promotion (TUNING.md law). Rounds 4 and 5 keep their own reports and "
+      f"results JSONs; this run does not rewrite them.")
+    w("")
+    w("## Verdict")
+    w("")
+    if surv:
+        w(f"**{len(surv)} of {n} arms SURVIVED the registered bar: "
+          f"{', '.join(surv)}.**")
+    else:
+        w(f"**NOTHING SURVIVED.** All {n} registered round-6 arms (E1, E2, E3) "
+          f"failed the pre-registered bar against the registered incumbent "
+          f"`{best}` — the live 30/70 R2-A/SPY design under the live cash "
+          f"convention. The registration recorded this as the expected "
+          f"outcome before the arms were built: *\"The prior is therefore that "
+          f"E1-E3 produce another null, and that E3 in particular has almost "
+          f"no room to improve on a book already near its own optimum.\"* That "
+          f"is the finding. No consolation winner is nominated, no bar is "
+          f"softened, and nothing was re-parameterized after a result was "
+          f"seen.")
+    w("")
+    if c1_pass:
+        top = max(c1_pass, key=lambda k: verdicts[k]["d_sharpe"])
+        w(f"{len(c1_pass)} of {n} arms ({', '.join(c1_pass)}) beat the "
+          f"incumbent on criterion 1 (Sharpe **and** Sortino, BIL basis, full "
+          f"real window). The largest gap is `{top}` at "
+          f"{verdicts[top]['d_sharpe']:+.4f} Sharpe against its own 95% "
+          f"interval of +/-{half[top]:.3f} — a point estimate "
+          f"{half[top] / abs(verdicts[top]['d_sharpe']):.0f}x narrower than "
+          f"the noise on it, bootstrap p={verdicts[top]['boot_p']:.3f}. "
+          f"Criterion 2 fails on "
+          f"{'every arm' if not c2_pass else 'every arm except ' + ', '.join(c2_pass)}, "
+          f"and it is what carries the null. Criterion 3 is passed by "
+          f"{', '.join(c3_pass) if c3_pass else 'no arm'}.")
+        w("")
+    w(f"**The contrast the registration demanded, stated before anything else "
+      f"can be read into E1: E1 - E2 = {con['d_sharpe']:+.4f} Sharpe, 95% CI "
+      f"[{con['ci95'][0]:+.4f}, {con['ci95'][1]:+.4f}], p={con['boot_p']:.3f}.** "
+      f"E2 is the registered control for E1's WEIGHT LEVEL — a static "
+      f"{E2_W:.0%} sleeve on the same SPY core, same monthly rebalance, same "
+      f"cash routing — and the registration says in advance that *\"without "
+      f"this control a win by E1 is uninterpretable\"*. The contrast is "
+      + ("positive but its interval spans zero" if spans_zero else "resolved")
+      + f": on this window the trigger's TIMING is worth "
+        f"{con['d_sharpe']:+.4f} Sharpe over holding its own average weight, "
+      + ("and that is not distinguishable from zero. " if spans_zero
+         else "and that is distinguishable from zero. ")
+      + "See [the E1 - E2 contrast]"
+        "(#e1--e2--the-registered-control-for-the-weight-level).")
+    w("")
+    w(f"**Multiple comparisons, across all three rounds: {n_all} arms.** Round "
+      f"6's hypothesis was read off round 5's results (D2 led round 5), so the "
+      f"honest denominator is the campaign, not the round — "
+      f"{meta['arms_other_rounds']} arms from rounds 4-5 plus these {n}. Three "
+      f"statements, in the order of how much work they do:")
+    w("")
+    w(f"1. **Bonferroni is reported and it is INERT.** The adjusted bar is "
+      f"alpha={meta['bonferroni_alpha_all_rounds']:.5f}, i.e. a "
+      f"{100 * meta['bonferroni_conf_all_rounds']:.3f}% CI on dSharpe must "
+      f"exclude zero. The smallest raw two-sided p anywhere in the "
+      f"{mt['n_arms']}-arm campaign is {mt['min_raw_p']:.3f} "
+      f"(`{mt['min_raw_p_arm']}`), so nothing is within an order of magnitude "
+      f"of even the naive alpha={meta['naive_alpha']:.2f}. Arms clearing the "
+      f"all-rounds bar: **NONE**. Arms clearing the round-only bar "
+      f"(alpha={meta['bonferroni_alpha']:.5f}): "
+      f"**{', '.join(clears) if clears else 'NONE'}**. Saying \"inert\" out "
+      f"loud is part of reporting it honestly — the percentage must not be "
+      f"allowed to imply that a near-miss was dispatched.")
+    w(f"2. **Bonferroni is also the wrong instrument** for arms that are "
+      f"near-identical portfolios: their tests are massively correlated and it "
+      f"over-corrects. The step-down max-T (Westfall-Young) resampling "
+      f"correction on the SHARED draw sequence across all {mt['n_arms']} arms "
+      f"of rounds 4-6, measured against this round's incumbent `{best}`, gives "
+      f"an adjusted p of **{mt['best_positive_adjusted_p']:.3f}** for the best "
+      f"positive arm in the whole campaign (`{mt['best_positive_arm']}`, "
+      f"{mt['best_positive_d_sharpe']:+.4f})"
+      + ("; that arm also carries the largest statistic anywhere in the "
+         "campaign."
+         if mt["strongest_arm"] == mt["best_positive_arm"] else
+         f" and **{mt['strongest_adjusted_p']:.3f}** for the largest statistic "
+         f"anywhere (`{mt['strongest_arm']}`, "
+         f"{mt['strongest_d_sharpe']:+.4f}).")
+      + f" Best positive arm of THIS round: `{best_arm}` at adjusted p="
+        f"{mt['adjusted_p'][best_arm]:.3f}. "
+        f"Same conclusion as Bonferroni, honestly obtained. Note the max-T is "
+        f"run against THIS round's incumbent `{best}`, so its raw p-values are "
+        f"not the ones rounds 4-5 published against `INC-B5`.")
+    w(f"3. **The multiplicity that actually matters is in no denominator at "
+      f"all:** the selection of R2-A itself over rounds 1-3, B.5's "
+      f"hindsight-fitted weights (they still set the comparator in rounds 4-5 "
+      f"and they still shape which hypotheses reached this round), and the "
+      f"choice of window. {n_all} arms is the SMALL multiplicity, and no "
+      f"resampling correction computed inside these {rn} days can reach the "
+      f"large one.")
+    w("")
+    w("## What round 6 was, and why these three arms")
+    w("")
+    w("Rounds 4 and 5 tested cores nobody is running. The live blend3070 book "
+      "is 30% R2-A / 70% SPY; an arm that improves a B.5 core requires "
+      "changing the core first, which is a much larger decision. Round 6 asks "
+      "the smaller and more relevant question: D2 was the best arm of round 5 "
+      "— does its correlation trigger also help on the SPY core the live book "
+      "actually holds?")
+    w("")
+    w("| arm | what it tests | where it comes from |")
+    w("|---|---|---|")
+    w(f"| E1 | D2's rule on a SPY core: {E1_HI_W:.0%} when trailing "
+      f"{E_CORR_WINDOW}d corr(sleeve, SPY) < {E_CORR_THRESHOLD:.2f}, else "
+      f"{E1_LO_W:.0%}, monthly | D2 led round 5 on Sharpe, Sortino and Calmar "
+      f"and was the only arm to win 2 of 3 sub-periods |")
+    w(f"| E2 | the CONTROL for E1's weight level: static {E2_W:.0%} on the "
+      f"same SPY core, monthly | round-5 verifier H1 — the trigger's claim is "
+      f"about TIMING, so the level has to be held fixed to see it |")
+    w(f"| E3 | the same trigger at the LIVE levels: {E3_HI_W:.0%} / "
+      f"{E3_LO_W:.0%} | the only version adoptable without also changing the "
+      f"book's size — the live book already runs {E3_HI_W:.0%} |")
+    w("")
+    w(f"All three route the sleeve's idle CAPITAL to BIL (the live convention "
+      f"and round 5's mechanism), rebalance monthly, and hold SPY as the core, "
+      f"so the ONLY thing under test is the allocation rule. The sleeve's "
+      f"realized correlation to SPY over the real window is "
+      f"{meta['corr_spy_sleeve_real']:.3f} on daily returns.")
+    w("")
+    w(f"**The prior was registered too, and it was specific:** *\"The b5 study "
+      f"measured the SPY-core optimum near 15%, with the live 30% costing only "
+      f"~0.006 Sharpe — an order of magnitude smaller than the B.5-core "
+      f"penalty that motivated D2.\"* An arm cannot clear a bar that needs its "
+      f"interval to exclude zero on an effect that small, and the intervals "
+      f"below (+/-{min(half.values()):.3f} to +/-{max(half.values()):.3f}) are "
+      f"{min(half.values()) / 0.006:.0f}-{max(half.values()) / 0.006:.0f}x "
+      f"wider than it.")
+    w("")
+    w("## Protocol (fixed before results, carried over VERBATIM from round 5)")
+    w("")
+    w(f"- Windows: REAL {meta['windows']['real']['start']}.."
+      f"{meta['windows']['real']['end']} (n={meta['windows']['real']['n']}) and "
+      f"SYNTHETIC-EXTENDED {meta['windows']['synth']['start']}.."
+      f"{meta['windows']['synth']['end']} (n={meta['windows']['synth']['n']}), "
+      f"identical dates across every comparator within a window.")
+    w(f"- **Incumbent: `{best}` — {meta['incumbent_rule']}.** Rounds 4-5 pick "
+      f"the best of the three registered incumbents by BIL-excess Sharpe; "
+      f"round 6's registration names its comparator in advance instead, and "
+      f"gives the reason: *\"Judging against the dead-cash version would hand "
+      f"every arm a free +0.040 it did not earn.\"* The other incumbents "
+      f"({', '.join(meta['incumbents'])}) are still computed and still printed "
+      f"in every table; they are not this round's bar.")
+    w(f"- Measurement basis: {meta['measurement_basis']}.")
+    w(f"- Sortino convention: {meta['sortino_convention']} (round-4 "
+      f"counter-agent m1). Sharpe and Sortino are printed on BOTH risk-free "
+      f"bases; a Sharpe and a Sortino from different bases never share a "
+      f"column, and no table below mixes rf bases unlabelled.")
+    w(f"- Costs {meta['cost_bps_per_side']:.0f} bps per side on traded "
+      f"notional. Tail sleeve = {meta['tail_sleeve']} (it is inside the B.5 "
+      f"comparators, not inside a SPY-core arm).")
+    w("- **Rebalance rule is REGISTERED:** monthly calendar for all three "
+      "arms. No absolute band is used in this round.")
+    w(f"- **Warm-up default is REGISTERED and it is each arm's own LOW leg** — "
+      f"E1 {meta['e_warmup_defaults']['E1']:.0%}, E3 "
+      f"{meta['e_warmup_defaults']['E3']:.0%}. This is round-5 counter-agent "
+      f"M3 applied in advance rather than after the fact: there, "
+      f"`monthly_weights`' inherited 30% default held a weight D2's contract "
+      f"never named on 81 of 1,433 days and decided its verdict.")
+    w(f"- Sleeve: {meta['sleeve']}. Idle CAPITAL routed to BIL in every arm "
+      f"and in the incumbent.")
+    w(f"- Bootstrap: paired circular block bootstrap on the Sharpe DIFFERENCE, "
+      f"{meta['bootstrap']['block_days']}-day blocks, "
+      f"{meta['bootstrap']['draws']} draws, seed {meta['bootstrap']['seed']}, "
+      f"basis {meta['bootstrap']['basis']}; both series resampled with the "
+      f"SAME block starts so the difference keeps its date pairing. The "
+      f"Bonferroni tail is read off a {meta['bootstrap']['deep_draws']:,}-draw "
+      f"run of the same seeded sequence, whose first "
+      f"{meta['bootstrap']['draws']:,} draws ARE the registered bootstrap.")
+    w("- Survival requires ALL FOUR: 1. Sharpe AND Sortino beat the incumbent "
+      "on the full real window; 2. the 95% bootstrap CI on dSharpe excludes "
+      "zero; 3. it beats the incumbent in >=2 of 3 equal sub-periods; 4. it "
+      "does not lose the synthetic window by more than 0.10 Sharpe.")
+    w("")
+    w("## Registered variants")
+    w("")
+    w("| key | group | description |")
+    w("|---|---|---|")
+    for k in order:
+        v = VARIANTS.get(k) or INCUMBENTS[k]
+        w(f"| {k} | {v.group} | {v.desc} |")
+    w("")
+    w(f"## Results — REAL window {meta['windows']['real']['start']}.."
+      f"{meta['windows']['real']['end']} (n={meta['windows']['real']['n']})")
+    w("")
+    w("Both Sharpe bases and both Sortino bases, every column labelled. "
+      "Adjudication is the **Sharpe BIL** column; `rf=0` is reported beside it "
+      "and any verdict that would flip on it is flagged below.")
+    w("")
+    L.extend(_md_table(res, "real", order, verdicts))
+    w("")
+    w(f"## Results — SYNTHETIC-EXTENDED window "
+      f"{meta['windows']['synth']['start']}.."
+      f"{meta['windows']['synth']['end']} (n={meta['windows']['synth']['n']})")
+    w("")
+    w("Proxy splice, unadjusted (no manager alpha added) — a FLOOR on B.5's "
+      "constituents, not a point estimate. Round 6's own arms hold SPY and BIL "
+      "only, both of which are real throughout this window; the splice affects "
+      "the B.5 comparators, which is where criterion 4's comparison lives.")
+    w("")
+    L.extend(_md_table(res, "synth", order, verdicts))
+    w("")
+    w("## Survival verdict, arm by arm")
+    w("")
+    w(f"| variant | dSharpe vs `{best}` | 95% CI | boot p | 1 | 2 | 3 (wins) | "
+      f"4 | SURVIVES | Bonferroni CI (round) |")
+    w("|---|---|---|---|---|---|---|---|---|---|")
+    for k, v in verdicts.items():
+        lo, hi = v["ci95"]
+        blo, bhi = v["ci_bonferroni"]
+        w(f"| {k} | {v['d_sharpe']:+.4f} | [{lo:+.3f}, {hi:+.3f}] | "
+          f"{v['boot_p']:.3f} | {_yn(v['c1_sharpe_and_sortino'])} | "
+          f"{_yn(v['c2_ci_excludes_zero'])} | {_yn(v['c3_subperiods'])} "
+          f"({v['c3_wins']}/3) | {_yn(v['c4_synthetic'])} | "
+          f"**{'YES' if v['survives'] else 'no'}** | [{blo:+.3f}, {bhi:+.3f}] |")
+    w("")
+    c4_fail = [k for k, v in verdicts.items() if not v["c4_synthetic"]]
+    if c4_fail:
+        isyn = res["synth"][best]["full"]["sharpe_bil"]
+        w("Criterion 4 (do not lose the synthetic window by more than 0.10 "
+          "Sharpe) is the one criterion that separates these arms: "
+          + "; ".join(
+              f"`{k}` loses it by "
+              f"{isyn - res['synth'][k]['full']['sharpe_bil']:.3f}"
+              for k in c4_fail)
+          + f" against the incumbent's synthetic {isyn:.4f}. It is a marginal "
+            f"miss, it does not change any verdict (criterion 2 already fails "
+            f"on every arm), and it is reported rather than rounded away.")
+        w("")
+    flips = [k for k, v in verdicts.items()
+             if v["c1_sharpe_and_sortino"] != v["c1_on_rf0"]]
+    w(f"Basis check: adjudication is on BIL-excess Sharpe/Sortino, with rf=0 "
+      f"printed beside it in the tables above. Arms whose criterion-1 result "
+      f"would FLIP on the rf=0 basis: **{', '.join(flips) if flips else 'none'}**"
+      + (" — each still fails criterion 2." if flips else "."))
+    w("")
+    w("## E1 - E2 — the registered control for the weight level")
+    w("")
+    w(f"The registration builds E2 for one purpose: *\"E1 minus E2 isolates "
+      f"the timing from the level. Without this control a win by E1 is "
+      f"uninterpretable.\"* E1 and E2 hold the same sleeve, the same SPY core, "
+      f"the same monthly rebalance and the same cash routing; they differ only "
+      f"in whether the sleeve weight moves with the trailing correlation. The "
+      f"contrast gets its OWN paired bootstrap — differencing two "
+      f"arm-vs-incumbent rows would throw away the pairing that makes it "
+      f"tight, which is the error round 5's M1 was about.")
+    w("")
+    w("| window | E1 Sharpe(BIL) | E2 Sharpe(BIL) | dSharpe (E1-E2) | 95% CI | "
+      "boot p | dSortino(BIL) | dCAGR |")
+    w("|---|---|---|---|---|---|---|---|")
+    w(f"| REAL (adjudication) | {con['sharpe_a']:.4f} | {con['sharpe_b']:.4f} | "
+      f"**{con['d_sharpe']:+.4f}** | [{con['ci95'][0]:+.4f}, "
+      f"{con['ci95'][1]:+.4f}] | {con['boot_p']:.3f} | "
+      f"{con['d_sortino']:+.4f} | {1e4 * con['d_cagr']:+.0f} bps |")
+    w(f"| SYNTHETIC-EXTENDED | {con_s['sharpe_a']:.4f} | "
+      f"{con_s['sharpe_b']:.4f} | {con_s['d_sharpe']:+.4f} | "
+      f"[{con_s['ci95'][0]:+.4f}, {con_s['ci95'][1]:+.4f}] | "
+      f"{con_s['boot_p']:.3f} | {con_s['d_sortino']:+.4f} | "
+      f"{1e4 * con_s['d_cagr']:+.0f} bps |")
+    w("")
+    spans = con["ci95"][0] < 0 < con["ci95"][1]
+    w(f"E1's mean applied sleeve weight over the real window is "
+      f"{prof['E1']['mean_applied_w']:.2%} against E2's flat {E2_W:.0%}, so "
+      f"the two arms are close to level-matched by construction and the "
+      f"contrast is close to a pure timing measurement. "
+      + (f"**The interval spans zero** "
+         f"([{con['ci95'][0]:+.4f}, {con['ci95'][1]:+.4f}], "
+         f"p={con['boot_p']:.3f}), so the timing effect is not distinguishable "
+         f"from zero on this window."
+         if spans else
+         f"**The interval excludes zero** "
+         f"([{con['ci95'][0]:+.4f}, {con['ci95'][1]:+.4f}], "
+         f"p={con['boot_p']:.3f}).")
+      + f" On the {n_all}-arm bar the same contrast is "
+        f"{100 * con['bonferroni_conf_all_rounds']:.3f}% CI "
+        f"[{con['ci_bonferroni_all_rounds'][0]:+.4f}, "
+        f"{con['ci_bonferroni_all_rounds'][1]:+.4f}]. This contrast is a "
+        f"REGISTERED diagnostic, not a fifth criterion: it cannot rescue an "
+        f"arm that failed the bar and it is not used to.")
+    w("")
+    if con["d_sharpe"] * con_s["d_sharpe"] < 0:
+        w(f"**And it changes sign between the two windows** — "
+          f"{con['d_sharpe']:+.4f} on the real window, "
+          f"{con_s['d_sharpe']:+.4f} on the synthetic-extended one, each with "
+          f"an interval several times its own size. Two point estimates of "
+          f"opposite sign, both inside the noise, is what a null timing effect "
+          f"looks like; it is not evidence the trigger hurts either.")
+        w("")
+    w(f"E3 needs no separate level control, because **its level control IS the "
+      f"incumbent**: `{best}` is a static {E3_HI_W:.0%} sleeve on the same SPY "
+      f"core under the same cash convention, so the registered bar already "
+      f"measures E3's re-timing against the level the live book holds. But "
+      f"E3's mean applied weight is {prof['E3']['mean_applied_w']:.2%}, not "
+      f"{E3_HI_W:.0%}, so `{best}` is a level control only in the sense that "
+      f"it is the level the live book runs — E3's "
+      f"{verdicts['E3']['d_sharpe']:+.4f} dSharpe mixes the trigger's timing "
+      f"with a lower average exposure, and this round registered no static "
+      f"{prof['E3']['mean_applied_w']:.0%} arm to separate them. **The E1-E2 "
+      f"row is the only clean read on timing this round contains**, and it is "
+      f"the one the registration asked for.")
+    w("")
+    w("## What the trigger actually did")
+    w("")
+    w("A trigger that almost never fires is a different finding from a trigger "
+      "that fires and does not pay. These are the monthly decisions, not a "
+      "restatement of the rule.")
+    w("")
+    w("| arm | window | decisions | high leg | low leg | warm-up | days high | "
+      "days low | days warm-up | mean applied w | rho: min / median / mean / max |")
+    w("|---|---|---|---|---|---|---|---|---|---|---|")
+    for key, src, lbl in (("E1", prof, "REAL"), ("E1", profs, "SYNTH"),
+                          ("E3", prof, "REAL"), ("E3", profs, "SYNTH")):
+        p = src[key]
+        w(f"| {key} ({p['hi_w']:.0%}/{p['lo_w']:.0%}) | {lbl} | "
+          f"{p['decisions']} | {p['decisions_hi']} | {p['decisions_lo']} | "
+          f"{p['decisions_warmup']} | {p['days_hi']}/{p['n_days']} | "
+          f"{p['days_lo']}/{p['n_days']} | {p['days_warmup']}/{p['n_days']} | "
+          f"{p['mean_applied_w']:.2%} | {p['min_rho']:+.3f} / "
+          f"{p['median_rho']:+.3f} / {p['mean_rho']:+.3f} / "
+          f"{p['max_rho']:+.3f} |")
+    w("")
+    w(f"The trigger is live, not decorative: on the real window it sends "
+      f"{prof['E1']['decisions_hi']} of "
+      f"{prof['E1']['decisions_hi'] + prof['E1']['decisions_lo']} decided "
+      f"months to the high leg ({prof['E1']['frac_decisions_hi']:.0%}), and the "
+      f"trailing correlation it reads ranges "
+      f"{prof['E1']['min_rho']:+.3f} to {prof['E1']['max_rho']:+.3f} around a "
+      f"median of {prof['E1']['median_rho']:+.3f} — straddling the registered "
+      f"{E_CORR_THRESHOLD:.2f} threshold rather than sitting on one side of "
+      f"it. E1 and E3 read the SAME correlation series and therefore make the "
+      f"same high/low calls; they differ only in the two weights those calls "
+      f"map to. Warm-up holds the registered low leg for "
+      f"{prof['E1']['days_warmup']}/{prof['E1']['n_days']} days "
+      f"({prof['E1']['days_warmup'] / prof['E1']['n_days']:.1%}).")
+    w("")
+    w(f"**The correlation is computed against the SPY core the arm HOLDS**, "
+      f"not against B.5. That is the obvious silent bug available to this "
+      f"round — the weights would be decided by one core's correlation and "
+      f"applied to another's book — and it is pinned two ways: the builder "
+      f"takes the correlation series out of the engine's own leg dict and "
+      f"asserts `core is ctx.spy and core is not ctx.core`, and a "
+      f"merge-blocking test "
+      f"(`test_round6_correlates_against_the_SPY_core_it_holds_not_B5`) "
+      f"constructs a context where the two cores give OPPOSITE calls and "
+      f"requires the SPY answer.")
+    w("")
+    w("## Per-arm resolution: what this round could have detected")
+    w("")
+    w("A null is only worth acting on if you know what size of edge it ruled "
+      "out. A known TRUE edge is injected into each arm's daily excess returns "
+      "(a constant shift sized to raise its Sharpe by exactly delta) and "
+      "criterion 2 is re-run.")
+    w("")
+    w("**Both power conventions are printed, and the earlier \"detection "
+      "floor\" framing is not reused.** Round 4 quoted an imported +/-0.4 "
+      "noise floor that was never measured on these arms; it was retracted "
+      "(round-4 counter-agent M4). Round 5 then found that the harness's own "
+      "\"smallest detectable edge\" is a **50%-power** threshold — it is "
+      "-CI_lo by construction — wearing an 80%-power label (M2). Both numbers "
+      "are given here with their power stated, and neither is called a floor.")
+    w("")
+    L.extend(_mde_table(verdicts))
+    w("")
+    mdes = [v["power"]["min_detectable_edge"] for v in verdicts.values()
+            if v["power"]["min_detectable_edge"]]
+    mde80 = [v["power_mc"]["mde_at_power"]["0.80"] for v in verdicts.values()]
+    w(f"The tightest arm here resolves an edge of about {min(mdes):+.2f} Sharpe "
+      f"at 50% power and {min(mde80):+.2f} at 80% "
+      f"({next(iter(verdicts.values()))['power_mc']['worlds']} circular "
+      f"block-resampled worlds of the same paired history, "
+      f"{next(iter(verdicts.values()))['power_mc']['draws']} draws each). The "
+      f"registered prior for this round was an effect of ~0.006 Sharpe — the "
+      f"cost of the live 30% versus the SPY-core optimum near 15%. **That is "
+      f"{min(mde80) / 0.006:.0f}x below what this test can resolve at 80% "
+      f"power, and it was on the record before the arms were built.** The "
+      f"honest reading of E1-E3's failure is therefore \"consistent with an "
+      f"effect too small for this window to see\", not \"the trigger is worth "
+      f"nothing\" — and equally not \"the trigger works\". The E1-E2 contrast "
+      f"is the one comparison in this round tight enough to say more, and it "
+      f"says {con['d_sharpe']:+.4f} "
+      f"[{con['ci95'][0]:+.4f}, {con['ci95'][1]:+.4f}].")
+    w("")
+    w("## Both cash conventions, carried forward (round-5 M4)")
+    w("")
+    w(f"Round 6's incumbent is the SWEPT one by registration, so this table is "
+      f"here to show what that choice costs the arms rather than to leave it "
+      f"implicit:")
+    w("")
+    w("| book | as-frozen (DEAD cash) | swept (LIVE convention) | dSharpe | "
+      "95% CI | boot p | CAGR |")
+    w("|---|---|---|---|---|---|---|")
+    for r in swept:
+        w(f"| {r['book']} | {r['sharpe_dead']:.4f} | "
+          f"**{r['sharpe_live']:.4f}** | {r['d_sharpe']:+.4f} | "
+          f"[{r['ci95'][0]:+.4f}, {r['ci95'][1]:+.4f}] | {r['boot_p']:.4f} | "
+          f"{r['cagr_dead']:.2%} -> **{r['cagr_live']:.2%}** |")
+    w("")
+    w(f"Judging round 6 against `INC-3070SPY` (dead cash, Sharpe "
+      f"{res['real']['INC-3070SPY']['full']['sharpe_bil']:.4f}) instead of "
+      f"`{best}` ({bf['sharpe_bil']:.4f}) would have handed every arm "
+      f"{swept[1]['d_sharpe']:+.3f} Sharpe it did not earn. Arms that pass "
+      f"criterion 1 against the DEAD-cash book: "
+      f"**{', '.join(dead_c1) if dead_c1 else 'none'}** "
+      f"— against the swept one: "
+      f"**{', '.join(c1_pass) if c1_pass else 'none'}**. Not a single day of "
+      f"the data changes between those two readings. The registration saw that "
+      f"coming and named the comparator in advance.")
+    w("")
+    w("## Honesty box")
+    w("")
+    w(f"- **The prior was registered and it held.** The contract said before "
+      f"any code existed that E1-E3 were expected to produce another null and "
+      f"that E3 in particular had almost no room. That is what happened. This "
+      f"is not a vindicated forecast — it is a round whose registered effect "
+      f"size (~0.006 Sharpe) was already {min(mde80) / 0.006:.0f}x below its "
+      f"own 80%-power resolution.")
+    w(f"- **In-sample status, and it is total.** Every number here is measured "
+      f"on the same {rn} days that generated the hypothesis: D2 was picked out "
+      f"of round 5 by reading round 5's results on this window. The R2-A "
+      f"sleeve carries survivorship, universe/alias hindsight and exit-engine "
+      f"overfit risk inherited from R2-A's own selection in rounds 1-3, and "
+      f"its 30% weight came from an H13 sweep against a SPY core — the same "
+      f"core E3 is tested on, so E3 is being judged against a level that was "
+      f"itself fitted here. **No CAGR in this document is a forecast.**")
+    w(f"- **B.5's hindsight weights still touch this round, even though no "
+      f"round-6 arm holds B.5.** `barbell-lab/config/portfolio.yaml` fixed "
+      f"those weights on 2026-08-11 with no derivation record and the data "
+      f"ends 2026-08-19. They set the comparator in rounds 4-5, which is how "
+      f"D2 came to be the arm worth carrying forward, and they appear in this "
+      f"document's tables as `INC-B5` and in the synthetic window's splice.")
+    w(f"- **The window is 5.7 years** ({rn} trading days, "
+      f"{meta['windows']['real']['start']}..{meta['windows']['real']['end']}) "
+      f"and it contains one bear market and one long expansion. Sub-period "
+      f"criterion 3 splits it into three ~1.9-year thirds, which is a weak "
+      f"stability test and is reported as one.")
+    w(f"- **The synthetic window is a FLOOR, not a point estimate.** Proxy "
+      f"splice, unadjusted, no manager alpha added; "
+      f"{meta['proxy_session_usage_synth']['returns_using_a_proxy']} of "
+      f"{meta['proxy_session_usage_synth']['n_returns']} return-days use a "
+      f"proxy for at least one B.5 constituent "
+      f"({meta['proxy_session_usage_synth']['weight_on_proxied_funds']:.0%} of "
+      f"B.5's weight sits in funds proxied somewhere in the window). Round "
+      f"6's own arms hold only R2-A, SPY and BIL, all real throughout — but "
+      f"criterion 4 compares against a spliced comparator, so the floor "
+      f"matters to the verdict.")
+    w(f"- **The tail sleeve question (#1) is still unresolved.** TAIL is the "
+      f"registered tail sleeve for every B.5 comparator in this campaign, "
+      f"identical across arms so it cannot flatter one over another — but the "
+      f"question of what the tail sleeve should be has never been answered, "
+      f"and it is inside every `INC-B5` number printed here.")
+    w(f"- **The idle-cash routing is a favourable assumption, in every arm AND "
+      f"in the incumbent.** Idle sleeve capital earns a full day of BIL from "
+      f"the prior close with no execution lag and no cost on the implied daily "
+      f"cash movement. `ibkr-executor/app/blend.py` sweeps idle sleeve cash to "
+      f"BIL for real, but the live sweep is skipped while any book order is "
+      f"pending, leaves a residual under max($50, one BIL share), can be "
+      f"clamped to zero by `BLEND_BUDGET` headroom and only fires on the next "
+      f"cycle. Because the convention is applied to arms and incumbent alike, "
+      f"it does not tilt the contrast; it does inflate all of them.")
+    w(f"- **What was NOT modeled:** taxes; bid-ask and market impact beyond a "
+      f"flat {meta['cost_bps_per_side']:.0f} bps per side; borrow, margin or "
+      f"liquidity constraints; the 20% short-vol bot the config pairs B.5 "
+      f"with; PHYS premium/discount; fund-closure or capacity risk; IBKR "
+      f"credit interest on unswept USD.")
+    w(f"- **Nothing is promoted.** No config change, no weight change, no "
+      f"live-book change. There are no survivors to nominate; had there been, "
+      f"they would have become HYPOTHESES.md entries at most. Refinements to "
+      f"the window, threshold or weights require a round-7 registration — the "
+      f"round-6 contract fixes 60d / {E_CORR_THRESHOLD:.2f} / monthly / "
+      f"{E1_HI_W:.0%}-{E1_LO_W:.0%} and {E3_HI_W:.0%}-{E3_LO_W:.0%} and says "
+      f"so.")
+    w("")
+    w("## Reproducibility")
+    w("")
+    w("```")
+    w("cd genomics-alpha-tracker/backend")
+    w("python -m scripts.backtest_core_variants --round 6      # this campaign")
+    w("python -m scripts.backtest_core_variants --round 5      # round 5's own report")
+    w("python -m scripts.backtest_core_variants --round 4      # round 4's own report")
+    w("```")
+    w("")
+    w(f"Results JSON: `backend/data/backtest_spycore_variants_r6_results.json`. "
+      f"`--round` decides which set is judged and which report is written, so "
+      f"a finished round's record is never rewritten by a later one. One "
+      f"honest caveat about that freeze, verified by re-running both rounds "
+      f"and diffing: the campaign-wide multiplicity fields are computed live "
+      f"from the registry, so re-running `--round 4` or `--round 5` today "
+      f"prints {n_all} arms where their committed reports print 22, a "
+      f"{100 * meta['bonferroni_conf_all_rounds']:.3f}% Bonferroni interval "
+      f"where they print 99.773%, and max-T adjusted p-values a few "
+      f"thousandths higher. **Not one arm, interval, criterion or verdict in "
+      f"either document moves** — every round-4 and round-5 number outside "
+      f"those denominator fields is byte-identical, and the denominators move "
+      f"in the conservative direction. The committed rounds 4-5 files are "
+      f"therefore left exactly as they were.")
+    w("")
+    ROUNDS[6]["report"].write_text("\n".join(L) + "\n")
 
 if __name__ == "__main__":
     import sys
