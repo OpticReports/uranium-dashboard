@@ -14,9 +14,13 @@ import math
 import pytest
 
 from scripts.backtest_core_variants import (
+    C5_SLEEVE_W,
     INCUMBENT_KEYS,
+    LIVE_SLEEVE_W,
     VARIANTS,
+    Ctx,
     Variant,
+    _trailing,
     block_bootstrap_sharpe_diff,
     block_starts,
     boot_ci,
@@ -24,14 +28,17 @@ from scripts.backtest_core_variants import (
     const,
     curve_returns,
     downside_deviation,
+    evaluate,
     excludes_zero,
     max_drawdown,
     metrics,
     month_starts,
+    monthly_weights,
     pearson,
     portfolio,
     quarter_starts,
     sharpe,
+    sleeve_idle_routed,
     sortino,
     thirds,
 )
@@ -323,3 +330,186 @@ def test_curve_returns_matches_a_hand_computed_series():
     dates = _dates(4)
     curve = {dates[0]: 100.0, dates[1]: 110.0, dates[2]: 99.0, dates[3]: 99.0}
     assert curve_returns(curve, dates) == pytest.approx([0.1, -0.1, 0.0])
+
+
+# --- the survival bar itself ---------------------------------------------------
+# The round-4 counter-agent's m6: the ONE function that produces a verdict had
+# no test. These are known-answer gates on `evaluate`, built from hand-made
+# metric dicts so no price data is touched.
+
+def _m(sharpe_bil: float, sortino_bil: float) -> dict:
+    """The only fields `evaluate` reads, plus rf=0 copies for the flag."""
+    return {"sharpe_bil": sharpe_bil, "sortino_bil": sortino_bil,
+            "sharpe_rf0": sharpe_bil, "sortino_rf0": sortino_bil}
+
+
+def _boot(lo: float, hi: float, point: float) -> dict:
+    """A bootstrap result whose percentile interval is exactly [lo, hi]."""
+    n = 4001
+    dist = [lo + (hi - lo) * i / (n - 1) for i in range(n)]
+    le = sum(1 for d in dist if d <= 0) / n
+    ge = sum(1 for d in dist if d >= 0) / n
+    return {"point": point, "dist": dist, "draws": n, "block": 21, "seed": 0,
+            "p_two_sided": min(1.0, 2 * min(le, ge))}
+
+
+def _bar(*, v=1.10, i=1.00, wins=3, synth_v=1.0, synth_i=1.0,
+         ci=(0.05, 0.20), point=0.10) -> dict:
+    subs_v = [_m(v, v)] * 3
+    subs_i = [_m(i, i)] * 3
+    for k in range(3 - wins):                 # turn the last `3-wins` into losses
+        subs_v[2 - k] = _m(i - 0.5, i - 0.5)
+    return evaluate(_m(v, v), subs_v, _m(synth_v, synth_v),
+                    _m(i, i), subs_i, _m(synth_i, synth_i),
+                    _boot(ci[0], ci[1], point))
+
+
+def test_evaluate_survives_only_when_all_four_criteria_hold():
+    good = _bar()
+    assert good["survives"] is True
+    assert (good["c1_sharpe_and_sortino"], good["c2_ci_excludes_zero"],
+            good["c3_subperiods"], good["c4_synthetic"]) == (True, True, True, True)
+    assert good["c3_wins"] == 3
+
+
+@pytest.mark.parametrize("kw", [
+    {"v": 0.90},                     # criterion 1: loses on Sharpe/Sortino
+    {"ci": (-0.05, 0.20)},           # criterion 2: interval spans zero
+    {"wins": 1},                     # criterion 3: only 1 of 3 sub-periods
+    {"synth_v": 0.80, "synth_i": 1.00},   # criterion 4: loses synth by 0.20
+])
+def test_evaluate_fails_when_any_single_criterion_fails(kw):
+    assert _bar(**kw)["survives"] is False
+
+
+def test_criterion_1_needs_sharpe_AND_sortino_not_either():
+    """A variant that wins Sharpe but loses Sortino does NOT clear criterion 1."""
+    v = evaluate(_m(1.10, 0.90), [_m(1.10, 0.90)] * 3, _m(1.0, 1.0),
+                 _m(1.00, 1.00), [_m(1.00, 1.00)] * 3, _m(1.0, 1.0),
+                 _boot(0.05, 0.20, 0.10))
+    assert v["c1_sharpe_and_sortino"] is False and v["survives"] is False
+
+
+def test_criterion_3_needs_two_of_three_and_counts_them():
+    assert _bar(wins=2)["c3_subperiods"] is True
+    assert _bar(wins=2)["c3_wins"] == 2
+    assert _bar(wins=1)["c3_subperiods"] is False
+
+
+def test_criterion_4_tolerates_a_0_10_synthetic_loss_but_not_more():
+    assert _bar(synth_v=0.90, synth_i=1.00)["c4_synthetic"] is True
+    assert _bar(synth_v=0.89, synth_i=1.00)["c4_synthetic"] is False
+
+
+def test_evaluate_reports_the_rf0_flip_without_letting_it_move_the_bar():
+    """rf=0 is reported alongside; the verdict stays on the BIL basis."""
+    v_real = {"sharpe_bil": 0.90, "sortino_bil": 0.90,
+              "sharpe_rf0": 1.10, "sortino_rf0": 1.10}
+    i_real = _m(1.00, 1.00)
+    v = evaluate(v_real, [v_real] * 3, _m(1.0, 1.0), i_real, [i_real] * 3,
+                 _m(1.0, 1.0), _boot(0.05, 0.20, 0.10))
+    assert v["c1_sharpe_and_sortino"] is False    # adjudicated on BIL
+    assert v["c1_on_rf0"] is True                 # and the flip is disclosed
+    assert v["survives"] is False
+
+
+# --- C5's gate, the idle-cash router, monthly weights, _trailing ----------------
+
+def _ctx(n: int, *, sleeve=None, core=None, bil=None, gate=None,
+         idle=None) -> Ctx:
+    """A minimal Ctx with hand-made legs — no network, no price cache."""
+    dates = _dates(n)
+    one = {d: 1.0 for d in dates}
+
+    def lvl(rets):
+        out, v = {dates[0]: 1.0}, 1.0
+        for d, r in zip(dates[1:], rets):
+            v *= 1 + r
+            out[d] = v
+        return out
+
+    ctx = Ctx("real", "TEST", dates, {},
+              core=lvl(core) if core else dict(one),
+              sleeve=lvl(sleeve) if sleeve else dict(one),
+              spy=dict(one), bil=lvl(bil) if bil else dict(one),
+              gate={d: (gate[i] if gate else True) for i, d in enumerate(dates)},
+              idle_frac={d: (idle[i] if idle else 0.0)
+                         for i, d in enumerate(dates)})
+    ctx.bil_rets = curve_returns(ctx.bil, dates)
+    ctx.spy_rets = curve_returns(ctx.spy, dates)
+    ctx.months = month_starts(dates)
+    ctx.quarters = quarter_starts(dates)
+    return ctx
+
+
+def test_c5_gate_holds_the_sleeve_when_ON_and_drops_it_to_zero_when_OFF():
+    """The gate is a hard 20%/0% switch and OFF sends the proceeds to the CORE.
+    With a flat core: an ON day carries exactly C5_SLEEVE_W of the sleeve's
+    move, and once the gate has been OFF through a rebalance the book is pure
+    core, so a later sleeve move cannot touch it at all."""
+    ctx = _ctx(5, sleeve=[0.0, -0.10, -0.10, -0.10],
+               gate=[True, True, True, False, False])
+    r = curve_returns(VARIANTS["C5"].fn(ctx), ctx.dates)
+    assert r[1] == pytest.approx(-0.10 * C5_SLEEVE_W, abs=1e-12)   # ON, no breach
+    assert r[2] < 0                                    # OFF: sells into the core
+    assert r[3] == pytest.approx(0.0, abs=1e-12)       # and is then immune
+
+
+def test_sleeve_idle_routed_credits_the_prior_close_idle_fraction():
+    """r_sleeve + idle_frac[prior] * r_route, compounded — nothing else."""
+    ctx = _ctx(4, sleeve=[0.0, 0.10, 0.0], core=[0.20, 0.20, 0.20],
+               idle=[1.0, 0.5, 0.0, 0.0])
+    r = curve_returns(sleeve_idle_routed(ctx, "CORE"), ctx.dates)
+    assert r == pytest.approx([0.0 + 1.0 * 0.20, 0.10 + 0.5 * 0.20,
+                               0.0 + 0.0 * 0.20], abs=1e-12)
+
+
+def test_sleeve_idle_routed_to_BIL_uses_the_cash_leg_not_the_core():
+    ctx = _ctx(3, sleeve=[0.0, 0.0], core=[0.20, 0.20], bil=[0.01, 0.01],
+               idle=[1.0, 1.0, 1.0])
+    assert curve_returns(sleeve_idle_routed(ctx, "BIL"), ctx.dates) == \
+        pytest.approx([0.01, 0.01], abs=1e-12)
+
+
+def test_sleeve_idle_routed_is_the_identity_when_nothing_is_idle():
+    ctx = _ctx(5, sleeve=[0.03, -0.02, 0.01, 0.0], core=[0.5] * 4,
+               idle=[0.0] * 5)
+    assert curve_returns(sleeve_idle_routed(ctx, "CORE"), ctx.dates) == \
+        pytest.approx(curve_returns(ctx.sleeve, ctx.dates), abs=1e-12)
+
+
+def test_monthly_weights_redecides_only_on_month_starts_and_holds_between():
+    ctx = _ctx(70)
+    calls: list[int] = []
+
+    def pick(i: int) -> float:
+        calls.append(i)
+        return 0.10 + 0.01 * len(calls)
+
+    target = monthly_weights(ctx, pick, LIVE_SLEEVE_W)
+    seen = [target(d)["SLEEVE"] for d in ctx.dates]
+    # one decision on day 0 plus one per month start, and the weight is
+    # piecewise-constant with exactly that many distinct steps
+    assert len(calls) == 1 + len(ctx.months)
+    steps = sum(1 for a, b in zip(seen, seen[1:]) if a != b)
+    assert steps == len(ctx.months)
+    assert all(d in (ctx.dates[0], *ctx.months)
+               for d, a, b in zip(ctx.dates[1:], seen, seen[1:]) if a != b)
+
+
+def test_monthly_weights_falls_back_to_the_default_during_warm_up():
+    ctx = _ctx(30)
+    target = monthly_weights(ctx, lambda _i: None, LIVE_SLEEVE_W)
+    assert {target(d)["SLEEVE"] for d in ctx.dates} == {LIVE_SLEEVE_W}
+    assert all(target(d)["CORE"] == 1 - LIVE_SLEEVE_W for d in ctx.dates)
+
+
+def test_trailing_window_ends_with_the_return_INTO_dates_i():
+    """The docstring convention, pinned: rets[i-window:i], so the last element
+    is the return into dates[i] itself (the engine's same-close convention),
+    and the window is None until `window` returns exist."""
+    rets = [0.0, 1.0, 2.0, 3.0, 4.0]
+    assert _trailing(rets, 3, 3) == [0.0, 1.0, 2.0]
+    assert _trailing(rets, 5, 2) == [3.0, 4.0]
+    assert _trailing(rets, 2, 3) is None
+    assert _trailing(rets, 3, 3)[-1] == rets[2]   # the return INTO dates[3]

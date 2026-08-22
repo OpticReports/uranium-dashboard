@@ -15,7 +15,10 @@ verdict on the B.5-as-core study):
     field 'a'), disk-cached under backend/data/px_cache so re-runs never
     re-fetch; the API is the only data lane and it is used politely.
   * the R2-A sleeve is the FROZEN dollar curve (data/r2a_daily.json), reused
-    verbatim and NEVER recomputed.
+    verbatim and NEVER recomputed. Its daily INVESTED notional comes from
+    data/r2a_exposure.json (scripts/build_r2a_exposure.py rebuilds it from the
+    round-2 pipeline and gates it against the frozen curve), so the idle
+    CAPITAL fraction C7 routes is exact, not inferred from zero-return days.
   * Sharpe on BOTH bases (rf=0 and BIL-excess) is always computed and printed.
     Sortino is printed on the SAME two bases; a Sharpe and a Sortino from
     different risk-free bases never share a column (counter-agent m2).
@@ -51,6 +54,7 @@ BACKEND = Path(__file__).resolve().parent.parent
 DATA = BACKEND / "data"
 PX_CACHE = DATA / "px_cache"
 R2A_DAILY = DATA / "r2a_daily.json"
+R2A_EXPOSURE = DATA / "r2a_exposure.json"
 BARS_CACHE = DATA / "backtest_bars.json"
 RESULTS = DATA / "backtest_core_variants_results.json"
 REPORT = BACKEND.parent / "docs" / "BACKTEST_CORE_VARIANTS_R4.md"
@@ -96,6 +100,12 @@ C8_HI_W, C8_LO_W = 0.30, 0.10
 # Bootstrap (registration: 21d blocks, 4000 draws, paired on dates) -----------
 BOOT_BLOCK = 21
 BOOT_DRAWS = 4000
+# The Bonferroni interval is a 99.667% percentile read off the tails, which at
+# 4000 draws is the 8th and 3992nd order statistics — 7 draws a side (round-4
+# counter-agent m4). The deep run uses the SAME seed and the same draw
+# sequence, so its first BOOT_DRAWS draws ARE the registered 4000-draw
+# bootstrap: the 95% CI is unchanged and only the adjusted tail gets denser.
+BOOT_DRAWS_DEEP = 40_000
 BOOT_SEED = 20260822
 NAIVE_ALPHA = 0.05
 
@@ -155,6 +165,26 @@ def load_frozen_sleeve() -> dict[str, float]:
     assert abs(last - R2A_END_VALUE) < 0.01, (
         f"frozen R2-A end value {last:,.2f} != the stored {R2A_END_VALUE:,.2f}")
     return curve
+
+
+def load_sleeve_exposure(curve: dict[str, float]) -> dict[str, float]:
+    """R2-A's daily IDLE CAPITAL fraction, keyed by ISO date.
+
+    Rebuilt from the round-2 pipeline by `scripts/build_r2a_exposure.py`:
+    [[date, equity, invested, open_positions], ...]. The equity column is
+    gated against the frozen curve here as well as there, because this file
+    is what turns C7 from a proxy into the real fix — if it ever drifts from
+    the sleeve the harness actually holds, C7 is measuring a different book.
+    """
+    rows = json.loads(R2A_EXPOSURE.read_text())
+    assert len(rows) == len(curve), (
+        f"exposure file has {len(rows)} days, frozen curve has {len(curve)}")
+    out: dict[str, float] = {}
+    for d, eq, inv, _n in rows:
+        assert d in curve and abs(eq - curve[d]) < 1e-5, (
+            f"exposure equity {eq} != frozen curve {curve.get(d)} on {d}")
+        out[d] = min(max((eq - inv) / eq, 0.0), 1.0) if eq > 0 else 0.0
+    return out
 
 
 def xbi_gate_200dma() -> tuple[dict[str, bool], str]:
@@ -394,7 +424,8 @@ def block_starts(n: int, block: int, rng: random.Random) -> list[tuple[int, int]
 
 def block_bootstrap_sharpe_diff(a: list[float], b: list[float], *,
                                 block: int = BOOT_BLOCK, draws: int = BOOT_DRAWS,
-                                seed: int = BOOT_SEED) -> dict:
+                                seed: int = BOOT_SEED,
+                                shallow: int | None = None) -> dict:
     """PAIRED circular block bootstrap on Sharpe(a) - Sharpe(b).
 
     Both series are resampled with the SAME block start indices, so the
@@ -404,6 +435,12 @@ def block_bootstrap_sharpe_diff(a: list[float], b: list[float], *,
 
     Deterministic given `seed`. Returns the point estimate, the sorted draw
     distribution, and a two-sided bootstrap p-value.
+
+    `shallow` (optional) additionally returns the sorted distribution of the
+    FIRST `shallow` draws as `dist_shallow`. Because the draw sequence depends
+    only on the seed, that prefix is bit-identical to a `shallow`-draw run:
+    the registered 95% interval and p-value can be read off it while a deeper
+    `draws` feeds the Bonferroni tail (counter-agent m4).
     """
     assert len(a) == len(b), "paired bootstrap needs equal-length series"
     n = len(a)
@@ -423,11 +460,17 @@ def block_bootstrap_sharpe_diff(a: list[float], b: list[float], *,
         db = _sharpe_from_sums(sb, s2b, n)
         if not (math.isnan(da) or math.isnan(db)):
             dist.append(da - db)
+    head = sorted(dist[:shallow]) if shallow else None
     dist.sort()
-    le = sum(1 for d in dist if d <= 0) / len(dist)
-    ge = sum(1 for d in dist if d >= 0) / len(dist)
-    return {"point": point, "dist": dist, "draws": draws, "block": block,
-            "seed": seed, "p_two_sided": min(1.0, 2 * min(le, ge))}
+    ref = head if head is not None else dist
+    le = sum(1 for d in ref if d <= 0) / len(ref)
+    ge = sum(1 for d in ref if d >= 0) / len(ref)
+    out = {"point": point, "dist": dist, "draws": draws, "block": block,
+           "seed": seed, "p_two_sided": min(1.0, 2 * min(le, ge))}
+    if head is not None:
+        out["dist_shallow"] = head
+        out["shallow_draws"] = shallow
+    return out
 
 
 def boot_ci(boot: dict, conf: float = 0.95) -> tuple[float, float]:
@@ -459,6 +502,7 @@ class Ctx:
     spy: dict[str, float] = field(default_factory=dict)
     bil: dict[str, float] = field(default_factory=dict)
     gate: dict[str, bool] = field(default_factory=dict)
+    idle_frac: dict[str, float] = field(default_factory=dict)
     bil_rets: list[float] = field(default_factory=list)
     spy_rets: list[float] = field(default_factory=list)
     months: list[str] = field(default_factory=list)
@@ -470,7 +514,7 @@ class Ctx:
 
 
 def build_ctx(key: str, raw: dict[str, dict[str, float]], sleeve_raw: dict[str, float],
-              gate: dict[str, bool]) -> Ctx:
+              gate: dict[str, bool], idle: dict[str, float]) -> Ctx:
     label, start, end = WINDOWS[key]
     if key == "real":
         # Every B.5 constituent genuinely trading; the window opens at KMLM's
@@ -490,7 +534,8 @@ def build_ctx(key: str, raw: dict[str, dict[str, float]], sleeve_raw: dict[str, 
     spy = {d: raw["SPY"][d] for d in dates}
     bil = {d: raw["BIL"][d] for d in dates}
     ctx = Ctx(key, label, dates, px, core, sleeve, spy, bil,
-              {d: gate.get(d, True) for d in dates})
+              {d: gate.get(d, True) for d in dates},
+              {d: idle[d] for d in dates})
     ctx.bil_rets = curve_returns(bil, dates)
     ctx.spy_rets = curve_returns(spy, dates)
     ctx.months = month_starts(dates)
@@ -538,8 +583,19 @@ def three_way(ctx: Ctx, ws: tuple[float, float, float]) -> dict[str, float]:
 
 
 def _trailing(rets: list[float], i: int, window: int) -> list[float] | None:
-    """The `window` returns ending at dates[i-1] — PRIOR close, no look-ahead.
-    rets[j] is the return from dates[j] to dates[j+1]."""
+    """The `window` returns ending WITH the return INTO dates[i] — that is,
+    rets[i-window:i] where rets[j] runs from dates[j] to dates[j+1], so the
+    last element is dates[i]'s OWN close.
+
+    This is the engine's SAME-CLOSE decide/execute convention (see
+    `portfolio`: breach detection and execution happen at one close), not a
+    prior-close one, and it is not look-ahead: nothing after dates[i] is used.
+    It IS a different convention from C5's gate, which is genuinely
+    prior-close because it inherits R2-A's own entry condition. The round-4
+    counter-agent measured the cost of that inconsistency by re-running the
+    statistics strictly prior-close: C3 -0.0004, C8 -0.0019, C4 +0.0181
+    Sharpe(BIL). No verdict moves; the numbers are recorded in the report.
+    """
     if i - window < 0:
         return None
     return rets[i - window:i]
@@ -664,21 +720,29 @@ for _k in C6_RULES:
 
 # -- C7: sleeve idle-cash routing (MECHANICAL fix, not a search) -------------
 
-def sleeve_idle_routed(ctx: Ctx) -> dict[str, float]:
-    """R2-A's uninvested cash earns the CORE's return instead of 0%.
+def sleeve_idle_routed(ctx: Ctx, route: str = "CORE") -> dict[str, float]:
+    """R2-A's uninvested CAPITAL earns `route`'s return instead of 0%.
 
-    The frozen sleeve is a dollar curve, so the only days on which idleness is
-    OBSERVABLE are those whose return is exactly zero — the fully-idle days
-    (424/1432 = 29.6% of the real window, matching the counter-agent's
-    measurement). Partially-invested days keep their 0% on the cash portion,
-    so this is the CONSERVATIVE corner of the fix, not its upper bound.
+    The idle fraction as of the PRIOR close (data/r2a_exposure.json, rebuilt
+    from the round-2 pipeline and gated against the frozen curve) earns the
+    routed leg's return today, so the sleeve's daily return becomes
+    `r_sleeve + idle_frac[prior] * r_route`.
+
+    This replaces the round-4 implementation, which credited only the days
+    whose sleeve return was exactly zero (424/1432 = 29.6%) on the belief that
+    a dollar curve makes partial idleness unobservable. That belief was wrong:
+    `backtest_variants_r2.py`'s `run_call_book_yield` already computes
+    `equity - invested` daily, and R2-A's real-window idle capital averages
+    63.3% (median 57.4%) — roughly twice what the old code credited
+    (round-4 counter-agent M1).
     """
+    dest = {"CORE": ctx.core, "BIL": ctx.bil}[route]
     d = ctx.dates
     lvl, out = 1.0, {d[0]: 1.0}
     for i in range(1, len(d)):
         rs = ctx.sleeve[d[i]] / ctx.sleeve[d[i - 1]] - 1
-        r = (ctx.core[d[i]] / ctx.core[d[i - 1]] - 1) if rs == 0.0 else rs
-        lvl *= 1 + r
+        rd = dest[d[i]] / dest[d[i - 1]] - 1
+        lvl *= 1 + rs + ctx.idle_frac[d[i - 1]] * rd
         out[d[i]] = lvl
     return out
 
@@ -691,8 +755,8 @@ def c7_idle_cash(ctx: Ctx) -> dict[str, float]:
                      band=LIVE_BAND)
 
 
-register("C7", "C7", "30/70 R2-A/B.5 with the sleeve's idle cash earning the "
-                     "CORE's return instead of 0%",
+register("C7", "C7", "30/70 R2-A/B.5 with the sleeve's idle CAPITAL earning "
+                     "the CORE's return instead of 0%",
          c7_idle_cash)
 
 
@@ -769,6 +833,247 @@ def evaluate(v_real: dict, v_sub: list[dict], v_synth: dict,
     }
 
 
+# --- diagnostics demanded by the round-4 counter-agent -----------------------------
+# None of these move the registered bar. They exist because the round-4 writeup
+# made four claims the counter-agent showed were wrong or unsupported, and the
+# fix for a wrong claim is a measurement, not a rewording.
+
+def excess(rets: list[float], rf: list[float]) -> list[float]:
+    return [a - b for a, b in zip(rets, rf, strict=True)]
+
+
+def tangency(sleeve_ex: list[float], core_ex: list[float]) -> dict:
+    """Two-asset tangency weight on the sleeve, and the Sharpe uplift there.
+
+    For P = (1-w)C + wS the derivative at w=0 is proportional to
+    mu_S*sigma_C - mu_C*rho*sigma_S, so a sleeve pays at the margin iff
+    S_sleeve > rho * S_core. This returns the interior optimum, which is the
+    number that says HOW MUCH the sleeve is worth once it does pay.
+    """
+    ms, mc = statistics.fmean(sleeve_ex), statistics.fmean(core_ex)
+    vs, vc = statistics.variance(sleeve_ex), statistics.variance(core_ex)
+    n = len(core_ex)
+    cov = sum((x - ms) * (y - mc)
+              for x, y in zip(sleeve_ex, core_ex, strict=True)) / (n - 1)
+    denom = ms * vc + mc * vs - (ms + mc) * cov
+    w = (ms * vc - mc * cov) / denom if denom else float("nan")
+
+    def sh(x: float) -> float:
+        b = [(1 - x) * a + x * c for a, c in zip(core_ex, sleeve_ex, strict=True)]
+        return statistics.fmean(b) / statistics.stdev(b) * math.sqrt(TRADING_DAYS)
+
+    return {"sharpe_sleeve": statistics.fmean(sleeve_ex) / statistics.stdev(sleeve_ex)
+            * math.sqrt(TRADING_DAYS),
+            "rho_to_core": pearson(sleeve_ex, core_ex),
+            "w_star": w, "sharpe_at_0": sh(0.0), "sharpe_at_w": sh(w),
+            "uplift": sh(w) - sh(0.0)}
+
+
+def mechanism_table(ctx: Ctx) -> list[dict]:
+    """M2. The sleeve's marginal value under each idle-cash treatment.
+
+    The round-4 writeup ran its whole mechanism argument on S_sleeve = 0.358 —
+    a number depressed by the very accounting artifact C7 exists to fix. Repair
+    it two ways and the arithmetic separates cleanly: routing idle cash to the
+    CORE buys Sharpe by buying CORRELATION, and is strictly dominated by
+    routing it to CASH.
+    """
+    core_ex = excess(curve_returns(ctx.core, ctx.dates), ctx.bil_rets)
+    rows = []
+    for label, route in (("as frozen (dead idle cash)", None),
+                         ("idle capital -> BIL (cash)", "BIL"),
+                         ("idle capital -> CORE (C7 as registered)", "CORE")):
+        curve = ctx.sleeve if route is None else sleeve_idle_routed(ctx, route)
+        sl_ex = excess(curve_returns(curve, ctx.dates), ctx.bil_rets)
+        rows.append({"treatment": label, "route": route, **tangency(sl_ex, core_ex)})
+    return rows
+
+
+def implemented_optimum(ctx: Ctx, hi: float = 0.30, step: float = 0.01) -> dict:
+    """m3. The costless argmax is ~4%; the harness's OWN implementation (live
+    5% band, 10bps) is monotone decreasing from zero, so its optimum is 0%."""
+    grid = []
+    n = int(round(hi / step))
+    for i in range(n + 1):
+        w = i * step
+        c = sleeve_core(ctx, w)
+        grid.append([round(w, 4),
+                     metrics(c, ctx.dates, ctx.bil_rets)["sharpe_bil"]])
+    best = max(grid, key=lambda r: r[1])
+    return {"grid": grid, "argmax_w": best[0], "argmax_sharpe": best[1],
+            "monotone_decreasing": all(grid[i][1] > grid[i + 1][1]
+                                       for i in range(len(grid) - 1))}
+
+
+REBAL_RULES: dict[str, dict] = {
+    "band05": {"band": LIVE_BAND, "label": "5% absolute band (the live rule, as run)"},
+    "daily": {"band": 0.0, "label": "daily"},
+    "band005": {"band": 0.005, "label": "0.5% absolute band"},
+    "band01": {"band": 0.01, "label": "1% absolute band"},
+    "monthly": {"band": None, "rebal": "months", "label": "monthly calendar"},
+    "quarterly": {"band": None, "rebal": "quarters", "label": "quarterly calendar"},
+}
+
+
+def rebalance_robustness(ctx: Ctx, w: float, inc: dict, inc_ex: list[float],
+                         inc_subs: list[dict], draws: int) -> list[dict]:
+    """M3. A 5% ABSOLUTE band never fires on a 5% TARGET weight, so C1-05 as
+    run is buy-and-hold. The registration fixes no rebalance rule for C1, so
+    the criterion-1 result is an unregistered implementation choice — this
+    reports the same arm under every equally registration-compliant rule.
+    DESCRIPTIVE: none of these is a registered arm and none enters the bar.
+    """
+    subs = thirds(ctx.dates)
+    out = []
+    for name, spec in REBAL_RULES.items():
+        rebal = getattr(ctx, spec["rebal"]) if spec.get("rebal") else ()
+        curve = sleeve_core(ctx, w, band=spec["band"], rebal=rebal)
+        f = metrics(curve, ctx.dates, ctx.bil_rets)
+        b = block_bootstrap_sharpe_diff(
+            excess(curve_returns(curve, ctx.dates), ctx.bil_rets), inc_ex,
+            draws=draws)
+        wins = 0
+        for sub, isub in zip(subs, inc_subs, strict=True):
+            i0 = ctx.dates.index(sub[0])
+            wins += beats(metrics(curve, sub, ctx.bil_rets[i0:i0 + len(sub) - 1]),
+                          isub)
+        out.append({"rule": name, "label": spec["label"],
+                    "rebalances": count_rebalances(ctx, w, spec),
+                    "sharpe_bil": f["sharpe_bil"], "sortino_bil": f["sortino_bil"],
+                    "c1": beats(f, inc), "d_sharpe": b["point"],
+                    "ci95": list(boot_ci(b)), "boot_p": b["p_two_sided"],
+                    "c3_wins": wins})
+    return out
+
+
+def count_rebalances(ctx: Ctx, w: float, spec: dict) -> int:
+    """How many times a sleeve/core rule actually TRADES. Zero is the whole
+    point of M3: the live 5% absolute band cannot fire on a 5% target."""
+    band = spec["band"]
+    sched = set(getattr(ctx, spec["rebal"])) if spec.get("rebal") else set()
+    tgt = {"SLEEVE": w, "CORE": 1 - w}
+    curves = ctx.legs()
+    d0 = ctx.dates[0]
+    eq = 1.0
+    units = {k: eq * x / curves[k][d0] for k, x in tgt.items() if x}
+    n = 0
+    for d in ctx.dates[1:]:
+        eq = sum(u * curves[k][d] for k, u in units.items())
+        w_now = {k: units.get(k, 0.0) * curves[k][d] / eq for k in tgt}
+        need = d in sched or (band is not None
+                              and any(abs(w_now[k] - tgt[k]) > band for k in tgt))
+        if need:
+            traded = sum(abs(tgt[k] - w_now[k]) for k in tgt) * eq / 2
+            eq -= traded * COST_BPS / 1e4
+            units = {k: eq * x / curves[k][d] for k, x in tgt.items() if x}
+            n += 1
+    return n
+
+
+def c3_cap_binding(ctx: Ctx) -> dict:
+    """M5. The registered 30% cap on C3's inverse-vol weight. Uncapped, the
+    ~20%-vol sleeve against a ~12%-vol core wants ~37.5%, so the cap binds on
+    most days and C3 degenerates into C6-monthly. That is a REGISTRATION
+    flaw, not a harness bug: the harness implements the registration exactly.
+    """
+    sr = curve_returns(ctx.sleeve, ctx.dates)
+    cr = curve_returns(ctx.core, ctx.dates)
+    idx = {d: i for i, d in enumerate(ctx.dates)}
+    rebal = set(ctx.months)
+    raw: float | None = None
+    applied: list[float] = []
+    uncapped: list[float] = []
+    n_at_cap = n_over_cap = n_warmup = n_zero_vol = n_decisions = 0
+    for d in ctx.dates:
+        if d == ctx.dates[0] or d in rebal:
+            ws, wc = _trailing(sr, idx[d], C3_VOL_WINDOW), _trailing(cr, idx[d], C3_VOL_WINDOW)
+            raw = None
+            if ws is not None and wc is not None:
+                n_decisions += 1
+                vs, vc = statistics.stdev(ws), statistics.stdev(wc)
+                if vs <= 0:
+                    n_zero_vol += 1
+                if vs > 0 and vc > 0:
+                    raw = (1 / vs) / (1 / vs + 1 / vc)
+        w = LIVE_SLEEVE_W if raw is None else min(C3_SLEEVE_CAP, raw)
+        applied.append(w)
+        if raw is None:
+            n_warmup += 1
+        else:
+            uncapped.append(raw)
+            n_over_cap += raw > C3_SLEEVE_CAP
+        n_at_cap += w >= C3_SLEEVE_CAP - 1e-9
+    return {"n_days": len(ctx.dates), "days_at_cap": n_at_cap,
+            "frac_at_cap": n_at_cap / len(ctx.dates),
+            "days_uncapped_over_cap": n_over_cap,
+            "frac_uncapped_over_cap": n_over_cap / len(ctx.dates),
+            "days_fallback": n_warmup,
+            "monthly_decisions": n_decisions, "zero_sleeve_vol_decisions": n_zero_vol,
+            "mean_applied_w": statistics.fmean(applied),
+            "min_applied_w": min(applied),
+            "mean_uncapped_w": statistics.fmean(uncapped),
+            "median_uncapped_w": statistics.median(uncapped),
+            "max_uncapped_w": max(uncapped)}
+
+
+def prior_close_sensitivity(ctx: Ctx, keys: Iterable[str]) -> dict[str, dict]:
+    """m1. Re-run the trailing-statistic arms under a STRICT prior-close
+    window and record the move. The harness's own convention is same-close
+    (documented on `_trailing`); this quantifies the inconsistency with C5."""
+    global _trailing
+    base = {k: metrics(VARIANTS[k].fn(ctx), ctx.dates,
+                       ctx.bil_rets)["sharpe_bil"] for k in keys}
+    orig = _trailing
+
+    def strict(rets: list[float], i: int, window: int) -> list[float] | None:
+        return None if i - window - 1 < 0 else rets[i - window - 1:i - 1]
+
+    _trailing = strict                       # noqa: F811
+    try:
+        alt = {k: metrics(VARIANTS[k].fn(ctx), ctx.dates,
+                          ctx.bil_rets)["sharpe_bil"] for k in keys}
+    finally:
+        _trailing = orig
+    return {k: {"same_close": base[k], "strict_prior_close": alt[k],
+                "delta": alt[k] - base[k]} for k in keys}
+
+
+POWER_GRID = (0.05, 0.10, 0.20, 0.40)
+
+
+def injected_edge_power(v_ex: list[float], inc_ex: list[float], *,
+                        draws: int, grid: Iterable[float] = POWER_GRID) -> dict:
+    """M4. What size of TRUE edge could this arm's own bar have detected?
+
+    A constant is added to the arm's daily excess returns so its Sharpe rises
+    by exactly `delta`, and criterion 2 is re-run. This answers the question
+    the round-4 writeup answered with an imported +/-0.4 floor: the low-sleeve
+    arms are not blind, they resolved a +0.10 Sharpe edge and found nothing.
+    """
+    sd = statistics.stdev(v_ex)
+
+    def detects(delta: float) -> tuple[bool, float]:
+        bump = delta * sd / math.sqrt(TRADING_DAYS)
+        b = block_bootstrap_sharpe_diff([x + bump for x in v_ex], inc_ex, draws=draws)
+        return excludes_zero(boot_ci(b)), b["p_two_sided"]
+
+    detected = {}
+    for delta in grid:
+        ok, pv = detects(delta)
+        detected[f"{delta:.2f}"] = {"detected": ok, "boot_p": pv}
+    lo, hi = 0.0, 2.0
+    mde: float | None = None
+    if detects(hi)[0]:
+        while hi - lo > 0.005:
+            mid = (lo + hi) / 2
+            if detects(mid)[0]:
+                hi = mid
+            else:
+                lo = mid
+        mde = hi
+    return {"grid": detected, "min_detectable_edge": mde}
+
+
 # --- run ---------------------------------------------------------------------------
 
 def build_all(keys: list[str]) -> dict[str, Ctx]:
@@ -776,8 +1081,9 @@ def build_all(keys: list[str]) -> dict[str, Ctx]:
                      | {p for ps in PROXIES.values() for p in ps})
     raw = {t: adj_series(t) for t in tickers}
     sleeve_raw = load_frozen_sleeve()
+    idle = load_sleeve_exposure(sleeve_raw)
     gate, gate_src = xbi_gate_200dma()
-    ctxs = {k: build_ctx(k, raw, sleeve_raw, gate) for k in keys}
+    ctxs = {k: build_ctx(k, raw, sleeve_raw, gate, idle) for k in keys}
     for c in ctxs.values():
         c.gate_source = gate_src           # type: ignore[attr-defined]
     return ctxs
@@ -819,11 +1125,23 @@ def sanity(real: dict[str, dict]) -> None:
           "counter-agent's verified real-window numbers.")
 
 
-def idle_day_count(ctx: Ctx) -> tuple[int, int]:
-    """Days on which the FROZEN sleeve returns exactly 0% — the observable
-    fully-idle days C7 fixes. Reported so the fix stays tied to a measurement."""
+def idle_capital_stats(ctx: Ctx) -> dict:
+    """R2-A's idle CAPITAL in this window — what C7 actually routes.
+
+    The round-4 harness reported only the zero-RETURN days (424/1432 = 29.6%)
+    and believed that was the whole observable artifact. It is not: the
+    time-average idle fraction is 63.3%, roughly twice as much
+    (round-4 counter-agent M1).
+    """
+    f = [ctx.idle_frac[d] for d in ctx.dates]
     r = curve_returns(ctx.sleeve, ctx.dates)
-    return sum(1 for x in r if x == 0.0), len(r)
+    return {"n_days": len(f),
+            "mean_idle_fraction": statistics.fmean(f),
+            "median_idle_fraction": statistics.median(f),
+            "days_fully_idle": sum(1 for x in f if x > 0.9999),
+            "days_over_90pct_idle": sum(1 for x in f if x > 0.90),
+            "zero_return_days": sum(1 for x in r if x == 0.0),
+            "zero_return_of": len(r)}
 
 
 def main(argv: list[str] | None = None) -> None:      # noqa: PLR0915
@@ -852,9 +1170,12 @@ def main(argv: list[str] | None = None) -> None:      # noqa: PLR0915
         c = ctxs[w]
         print(f"{c.label:22s} {c.dates[0]} -> {c.dates[-1]}  n={len(c.dates)}")
     sanity(res["real"])
-    idle_n, idle_tot = idle_day_count(ctxs["real"])
-    print(f"Frozen sleeve idle (exactly 0%) days, real window: {idle_n}/{idle_tot} "
-          f"= {idle_n / idle_tot:.1%} — this is what C7 routes to the core.")
+    idle = idle_capital_stats(ctxs["real"])
+    print(f"R2-A idle CAPITAL, real window: mean {idle['mean_idle_fraction']:.1%}, "
+          f"median {idle['median_idle_fraction']:.1%}, fully idle "
+          f"{idle['days_fully_idle']}/{idle['n_days']} days "
+          f"({idle['zero_return_days']}/{idle['zero_return_of']} zero-return). "
+          f"C7 routes the CAPITAL, not the zero-return days.")
 
     # -- best incumbent: highest BIL-excess Sharpe over the FULL real window
     best = max(INCUMBENT_KEYS, key=lambda k: res["real"][k]["full"]["sharpe_bil"])
@@ -865,18 +1186,27 @@ def main(argv: list[str] | None = None) -> None:      # noqa: PLR0915
     conf_adj = 1 - NAIVE_ALPHA / n_tested
     boots: dict[str, dict] = {}
     verdicts: dict[str, dict] = {}
+    deep_draws = max(args.draws, BOOT_DRAWS_DEEP)
     for k in sel:
-        v_ex = [a - b for a, b in
-                zip(curve_returns(res["real"][k]["curve"], rc.dates),
-                    rc.bil_rets, strict=True)]
-        b = block_bootstrap_sharpe_diff(v_ex, inc_ex, draws=args.draws)
+        v_ex = excess(curve_returns(res["real"][k]["curve"], rc.dates), rc.bil_rets)
+        # ONE deep bootstrap serves both intervals. The draw sequence depends
+        # only on the seed, so the first args.draws draws ARE the registered
+        # bootstrap — the 95% CI and p-value are bit-identical to a 4000-draw
+        # run — while the 99.667% Bonferroni tail stops being read off 7 order
+        # statistics a side (counter-agent m4).
+        deep = block_bootstrap_sharpe_diff(v_ex, inc_ex, draws=deep_draws,
+                                           shallow=args.draws)
+        b = dict(deep, dist=deep["dist_shallow"], draws=args.draws)
         boots[k] = b
         v = evaluate(res["real"][k]["full"], res["real"][k]["subs"],
                      res["synth"][k]["full"], ir["full"], ir["subs"],
                      res["synth"][best]["full"], b)
-        ci_adj = boot_ci(b, conf_adj)
+        ci_adj = boot_ci(deep, conf_adj)
         v["ci_bonferroni"] = list(ci_adj)
+        v["bonferroni_draws"] = deep_draws
+        v["bonferroni_tail_draws"] = round((1 - conf_adj) / 2 * deep_draws)
         v["clears_bonferroni"] = bool(v["survives"] and excludes_zero(ci_adj))
+        v["power"] = injected_edge_power(v_ex, inc_ex, draws=args.draws)
         verdicts[k] = v
 
     # C7 is a MECHANICAL fix, so its like-for-like comparator is the same book
@@ -912,11 +1242,20 @@ def main(argv: list[str] | None = None) -> None:      # noqa: PLR0915
         "adjudication_basis": "BIL-excess Sharpe; rf=0 reported alongside",
         "sortino_convention": "standard — downside deviation over N",
         "bootstrap": {"block_days": BOOT_BLOCK, "draws": args.draws,
+                      "deep_draws": deep_draws,
+                      "bonferroni_tail_draws": round((1 - conf_adj) / 2 * deep_draws),
                       "seed": BOOT_SEED, "paired": True, "circular": True,
                       "basis": "BIL-excess daily returns"},
         "gate_source": getattr(ctxs["real"], "gate_source", None),
-        "sleeve": "FROZEN R2-A dollar curve (data/r2a_daily.json), reused verbatim",
-        "sleeve_idle_days_real": [idle_n, idle_tot],
+        "sleeve": "FROZEN R2-A dollar curve (data/r2a_daily.json), reused verbatim; "
+                  "daily invested notional from data/r2a_exposure.json",
+        "sleeve_idle_capital_real": idle,
+        "mechanism_real": mechanism_table(rc),
+        "implemented_optimum_real": implemented_optimum(rc),
+        "c3_cap_binding_real": c3_cap_binding(rc),
+        "prior_close_sensitivity_real": prior_close_sensitivity(rc, ("C3", "C4", "C8")),
+        "c1_05_rebalance_robustness": rebalance_robustness(
+            rc, C1_WEIGHTS[0], ir["full"], inc_ex, ir["subs"], args.draws),
         "corr_core_sleeve_real": pearson(curve_returns(rc.core, rc.dates),
                                          curve_returns(rc.sleeve, rc.dates)),
         "synthetic_kmlm": "KMLM spliced to DBMF then WTMF, unadjusted",
@@ -1032,7 +1371,7 @@ def _write_report(res: dict, order: list[str], verdicts: dict, meta: dict) -> No
     n = meta["n_variants_tested"]
     surv = [k for k, v in verdicts.items() if v["survives"]]
     clears = [k for k, v in verdicts.items() if v.get("clears_bonferroni")]
-    idle_n, idle_tot = meta["sleeve_idle_days_real"]
+    idle = meta["sleeve_idle_capital_real"]
     L: list[str] = []
     w = L.append
 
@@ -1067,6 +1406,20 @@ def _write_report(res: dict, order: list[str], verdicts: dict, meta: dict) -> No
       f"{100 * meta['bonferroni_conf']:.3f}% CI must exclude zero. "
       f"Arms clearing the ADJUSTED bar: **{', '.join(clears) if clears else 'NONE'}**.")
     w("")
+    w("This document was REVISED after an adversarial counter-agent pass "
+      "(scratchpad/r4_counter_verdict.md, verdict: PASS WITH CORRECTIONS — the "
+      "null is REAL). Five material corrections are applied here: C7 is "
+      "re-implemented on R2-A's true idle CAPITAL (M1); the mechanism section "
+      "now states that routing idle cash to the core is DOMINATED by routing "
+      "it to cash (M2); the criterion-1 claim is qualified as "
+      "rebalance-rule-dependent (M3); the imported \"+/-0.4 noise floor\" is "
+      "replaced by each arm's own interval plus a measured power curve (M4); "
+      "and C3 is marked VOID AS SPECIFIED because its registered cap made it a "
+      "restatement of C6-monthly (M5). The verifier reproduced every other "
+      "headline number, independently rebuilt the R2-A book from the round-2 "
+      "pipeline and matched the frozen curve on all 2,672 days to <1e-6, and "
+      "reimplemented the paired block bootstrap from scratch to 5e-15.")
+    w("")
     w("## Protocol (fixed before results)")
     w("")
     w(f"- Windows, identical dates across every comparator within a window: "
@@ -1089,6 +1442,16 @@ def _write_report(res: dict, order: list[str], verdicts: dict, meta: dict) -> No
       f"{meta['bootstrap']['draws']} draws, seed {meta['bootstrap']['seed']}, "
       f"basis {meta['bootstrap']['basis']}. Both series are resampled with the "
       f"SAME block starts, so the difference keeps its date pairing.")
+    w(f"- Bonferroni interval: read from a {meta['bootstrap']['deep_draws']:,}-draw "
+      f"run of the SAME seeded sequence, so its first "
+      f"{meta['bootstrap']['draws']:,} draws are the registered bootstrap "
+      f"bit-for-bit while the {100 * meta['bonferroni_conf']:.3f}% tail rests on "
+      f"~{meta['bootstrap']['bonferroni_tail_draws']} draws a side instead of 7 "
+      f"(counter-agent m4).")
+    w("- Trailing statistics (C3/C4/C8) use the engine's SAME-CLOSE "
+      "decide/execute convention; C5's gate is genuinely prior-close because "
+      "it inherits R2-A's entry condition. The cost of that inconsistency is "
+      "measured below, not assumed away.")
     w(f"- XBI 200dma prior-close gate source (C5): {meta['gate_source']}.")
     w("")
     w("## Registered variants")
@@ -1142,20 +1505,29 @@ def _write_report(res: dict, order: list[str], verdicts: dict, meta: dict) -> No
         bits = []
         for k in flips:
             f, b = res["real"][k]["full"], res["real"][best]["full"]
+            lo, hi = verdicts[k]["ci95"]
             bits.append(f"{k} (rf=0 Sharpe {f['sharpe_rf0']:.4f} vs "
                         f"{b['sharpe_rf0']:.4f}, a {f['sharpe_rf0'] - b['sharpe_rf0']:+.4f} "
-                        f"gap against a ~+/-0.4 noise floor)")
+                        f"gap against ITS OWN paired 95% CI of "
+                        f"+/-{(hi - lo) / 2:.3f})")
         w("")
         w(f"Those flips change NO verdict: {'; '.join(bits)} — and each still "
           f"fails criteria 2 and 3. They are reported because the registration "
-          f"requires both bases printed, not because either is a finding.")
+          f"requires both bases printed, not because either is a finding. Each "
+          f"gap is compared to that ARM's own interval; there is no single "
+          f"campaign-wide noise floor, and the round-4 counter-agent showed "
+          f"that quoting one (the +/-0.4 taken from the earlier B.5-core vs "
+          f"SPY-core comparison) understated this round's resolution by up to "
+          f"7x.")
     w("")
     w("## Why nothing survived, and what criterion 4 did not test")
     w("")
+    mech = meta["mechanism_real"]
+    opt = meta["implemented_optimum_real"]
     w(f"The mechanism is not new evidence, it is the round-4 counter-agent's "
       f"finding restated on a wider grid: on a B.5 core the optimal R2-A weight "
-      f"is about 5% — effectively zero — because a sleeve helps at the margin "
-      f"only when its Sharpe exceeds rho times the core's, and here "
+      f"is a few per cent — effectively zero — because a sleeve helps at the "
+      f"margin only when its Sharpe exceeds rho times the core's, and here "
       f"{res['real']['REF-R2A']['full']['sharpe_bil']:.3f} sits barely above "
       f"{meta['corr_core_sleeve_real']:.3f} x "
       f"{res['real'][best]['full']['sharpe_bil']:.3f} = "
@@ -1164,10 +1536,21 @@ def _write_report(res: dict, order: list[str], verdicts: dict, meta: dict) -> No
       f"trading it differently, so the whole grid lands below the core alone. "
       f"Within C1 the damage is monotone in sleeve weight "
       f"({verdicts['C1-05']['d_sharpe']:+.3f} at 5% to "
-      f"{verdicts['C1-20']['d_sharpe']:+.3f} at 20% to "
-      f"{verdicts['C6-band05']['d_sharpe']:+.3f} at the live 30%), and every CI "
-      f"is far wider than its own gap: this round found no edge AND could not "
-      f"have resolved one this small if it existed.")
+      f"{verdicts['C1-10']['d_sharpe']:+.3f} at 10% to "
+      f"{verdicts['C1-15']['d_sharpe']:+.3f} at 15% to "
+      f"{verdicts['C1-20']['d_sharpe']:+.3f} at 20%), and it continues to "
+      f"{verdicts['C6-band05']['d_sharpe']:+.3f} at the live 30% — though that "
+      f"last figure is `C6-band05`, a C6 arm, not a C1 one.")
+    w("")
+    w(f"Two numbers for \"the optimal weight\", because they answer different "
+      f"questions. The closed-form tangency weight on the sleeve AS FROZEN is "
+      f"{mech[0]['w_star']:.2%} and the costless daily-rebalanced empirical "
+      f"argmax agrees at ~4%, worth {mech[0]['uplift']:+.4f} Sharpe. But in "
+      f"THIS harness's own implementation — the live 5% band, 10bps a side — "
+      f"Sharpe(BIL) is monotone decreasing from w=0 across the whole 0-30% "
+      f"grid, so the implemented optimum is exactly "
+      f"{opt['argmax_w']:.0%} ({opt['argmax_sharpe']:.4f}). \"About 5%\" is the "
+      f"costless figure; the tradable figure is zero.")
     w("")
     w("Criterion 4 was NOT binding. Every arm passed it, because the best "
       "incumbent (B.5 alone) is the WEAKEST comparator on the synthetic "
@@ -1175,6 +1558,157 @@ def _write_report(res: dict, order: list[str], verdicts: dict, meta: dict) -> No
       f"there against {res['synth']['INC-3070SPY']['full']['sharpe_bil']:.2f} "
       f"for 30/70 R2-A/SPY. A \"Y\" in column 4 means \"did not lose to a weak "
       "bar\", not \"held up out of sample\". Read columns 1-3 as the test.")
+    w("")
+    w("### The mechanism, with the accounting artifact repaired (M2)")
+    w("")
+    w("The arithmetic above runs on S_sleeve = "
+      f"{mech[0]['sharpe_sleeve']:.3f} — a number DEPRESSED by the very "
+      "accounting artifact C7 exists to fix, because the frozen sleeve holds "
+      "dead cash. Repair it two ways and the sleeve's marginal value "
+      "separates cleanly:")
+    w("")
+    w("| sleeve treatment | Sharpe(BIL) of the sleeve | rho to core | tangency w* | "
+      "Sharpe uplift at w* |")
+    w("|---|---|---|---|---|")
+    for r in mech:
+        w(f"| {r['treatment']} | {r['sharpe_sleeve']:.3f} | {r['rho_to_core']:.3f} | "
+          f"{r['w_star']:.1%} | {r['uplift']:+.4f} |")
+    w("")
+    w(f"**Routing idle sleeve cash to the CORE buys Sharpe by buying "
+      f"CORRELATION, and is strictly dominated by routing it to CASH.** "
+      f"Crediting the core lifts the sleeve's own Sharpe from "
+      f"{mech[0]['sharpe_sleeve']:.3f} to {mech[2]['sharpe_sleeve']:.3f}, but it "
+      f"drags rho from {mech[0]['rho_to_core']:.3f} to "
+      f"{mech[2]['rho_to_core']:.3f}, so the tangency weight only reaches "
+      f"{mech[2]['w_star']:.1%} and the uplift is {mech[2]['uplift']:+.4f}. "
+      f"Crediting BIL lifts it to {mech[1]['sharpe_sleeve']:.3f} while leaving "
+      f"rho untouched at {mech[1]['rho_to_core']:.3f}, roughly doubling the "
+      f"optimal weight to {mech[1]['w_star']:.1%} for {mech[1]['uplift']:+.4f}. "
+      f"**C7 as registered was the wrong fix.** The right one — idle cash to "
+      f"CASH — was never registered this round and may not be back-fitted into "
+      f"it; it is registered as D1 in "
+      f"[docs/VARIANTS_PREREGISTRATION_R5_SLEEVE.md](VARIANTS_PREREGISTRATION_R5_SLEEVE.md). "
+      f"Note the size: {mech[1]['uplift']:+.4f} Sharpe is far INSIDE most of "
+      f"the arms' own intervals below, so this is a mechanism, not a promise.")
+    w("")
+    w("### What this round could and could not have resolved (M4)")
+    w("")
+    w("The round-4 draft dismissed its near-ties against a \"+/-0.4 noise "
+      "floor\". That number was imported from a DIFFERENT comparison — "
+      "B.5-core vs SPY-core, and 30/70 B.5 vs 30/70 SPY, books with different "
+      "cores — and it is wrong here by up to 7x, in the direction that "
+      "UNDERSELLS the result. This round's paired CIs on near-core arms are "
+      "much tighter, and each arm is judged against its own. To make the claim "
+      "testable rather than rhetorical, a known TRUE edge was injected into "
+      "each arm's daily excess returns (a constant shift sized to raise its "
+      "Sharpe by exactly delta) and criterion 2 was re-run:")
+    w("")
+    w("| variant | 95% CI half-width | +0.05 | +0.10 | +0.20 | +0.40 | "
+      "smallest detectable edge |")
+    w("|---|---|---|---|---|---|---|")
+    for k in verdicts:
+        v = verdicts[k]
+        lo, hi = v["ci95"]
+        cells = []
+        for g in POWER_GRID:
+            e = v["power"]["grid"][f"{g:.2f}"]
+            cells.append(f"**detected** (p={e['boot_p']:.3f})" if e["detected"] else "no")
+        mde = v["power"]["min_detectable_edge"]
+        w(f"| {k} | +/-{(hi - lo) / 2:.3f} | " + " | ".join(cells)
+          + f" | {('%+.2f' % mde) if mde else 'not within +2.0'} |")
+    w("")
+    c105, c8v = verdicts["C1-05"], verdicts["C8"]
+    w(f"Read the top row: at a 5% sleeve weight this round had the power to "
+      f"resolve a true +0.10 Sharpe edge "
+      f"(p={c105['power']['grid']['0.10']['boot_p']:.3f}) and measured "
+      f"{c105['d_sharpe']:+.3f}. **That is an informative null, not an "
+      f"underpowered shrug.** It weakens as the sleeve grows: C8 needs about "
+      f"{c8v['power']['min_detectable_edge']:+.2f} before its bar would fire, "
+      f"and C6-band05 at a 30% sleeve misses even a true +0.40 — at the live "
+      f"weight this data genuinely cannot see an edge of any plausible size, "
+      f"which is a finding about the LIVE configuration, not about the "
+      f"variants.")
+    w("")
+    w("### Criterion 1 is rebalance-rule dependent (M3)")
+    w("")
+    rr = meta["c1_05_rebalance_robustness"]
+    asrun = next(r for r in rr if r["rule"] == "band05")
+    w(f"The registration fixes no rebalance rule for C1 (\"static sleeve "
+      f"weights 5/10/15/20% on a B.5 core\"). The harness used the live 5% "
+      f"ABSOLUTE band — which on a 5% TARGET weight can never fire: "
+      f"**{asrun['rebalances']} rebalances in {meta['windows']['real']['n']} "
+      f"days**. C1-05 as run is buy-and-hold, not a 5% book. Under other, "
+      f"equally registration-compliant rules:")
+    w("")
+    w("| rebalance rule | rebalances | Sharpe(BIL) | Sortino(BIL) | crit 1 | "
+      "dSharpe | 95% CI | boot p | crit 3 |")
+    w("|---|---|---|---|---|---|---|---|---|")
+    for r in rr:
+        w(f"| {r['label']} | {r['rebalances']} | {r['sharpe_bil']:.4f} | "
+          f"{r['sortino_bil']:.4f} | {'**Y**' if r['c1'] else 'n'} | "
+          f"{r['d_sharpe']:+.4f} | [{r['ci95'][0]:+.3f}, {r['ci95'][1]:+.3f}] | "
+          f"{r['boot_p']:.3f} | {r['c3_wins']}/3 |")
+    bf = res["real"][best]["full"]
+    w(f"| {best} (incumbent) | — | {bf['sharpe_bil']:.4f} | "
+      f"{bf['sortino_bil']:.4f} | — | — | — | — | — |")
+    w("")
+    passes = [r["label"] for r in rr if r["c1"]]
+    w(f"So \"every arm fails criterion 1\" is NOT robust: under "
+      f"{', '.join(passes)} rebalancing, C1-05 passes it. **The correct "
+      f"statement is that no arm survives, and that C1-05 fails on criteria 2 "
+      f"and 3 under EVERY rebalance reading** "
+      f"(boot p {min(r['boot_p'] for r in rr):.3f}-{max(r['boot_p'] for r in rr):.3f}, "
+      f"{min(r['c3_wins'] for r in rr)}/3 sub-periods everywhere). The edge "
+      f"criterion 1 flips to is at most "
+      f"{max(r['d_sharpe'] for r in rr):+.4f} Sharpe against its own "
+      f"+/-{(asrun['ci95'][1] - asrun['ci95'][0]) / 2:.3f} interval. These rows "
+      f"are DESCRIPTIVE robustness, not registered arms; the survival table "
+      f"above is unchanged, and the rule dimension is registered properly as "
+      f"D4 in round 5.")
+    w("")
+    w("### C3 is VOID AS SPECIFIED (M5)")
+    w("")
+    cap = meta["c3_cap_binding_real"]
+    c3f, c6mf = res["real"]["C3"]["full"], res["real"]["C6-monthly"]["full"]
+    w(f"C3 registered inverse-vol weighting with the sleeve **capped at 30%** "
+      f"as a fixed parameter. Uncapped, the ~20%-vol sleeve against a ~12%-vol "
+      f"core wants a mean weight of {cap['mean_uncapped_w']:.1%} "
+      f"(median {cap['median_uncapped_w']:.1%}, max {cap['max_uncapped_w']:.1%}), "
+      f"so the applied weight sits AT the 30% cap on "
+      f"**{cap['days_at_cap']}/{cap['n_days']} = {cap['frac_at_cap']:.1%}** of "
+      f"real-window days ({cap['days_uncapped_over_cap']} genuine cap binds "
+      f"plus {cap['days_fallback']} warm-up / zero-sleeve-vol fallbacks, which "
+      f"also default to 30%). Mean applied weight "
+      f"{cap['mean_applied_w']:.4f}, minimum {cap['min_applied_w']:.4f}.")
+    w("")
+    w(f"C3 is therefore functionally a restatement of C6-monthly — CAGR "
+      f"{c3f['cagr']:.2%} vs {c6mf['cagr']:.2%}, maxDD {c3f['max_dd']:.1%} vs "
+      f"{c6mf['max_dd']:.1%}, Sharpe(BIL) {c3f['sharpe_bil']:.4f} vs "
+      f"{c6mf['sharpe_bil']:.4f}. **The inverse-vol hypothesis was never "
+      f"tested this round.** This is a REGISTRATION flaw, not a harness bug: "
+      f"the harness implements the registration exactly, and the registration "
+      f"fixed a parameter that neutered its own variant. C3's result stands as "
+      f"reported but is VOID AS SPECIFIED as evidence about inverse-vol "
+      f"weighting; the uncapped test is registered as D3 in round 5. Direction "
+      f"is safe either way — uncapped would hold MORE sleeve, which every row "
+      f"in this document says is worse. "
+      f"(On {cap['zero_sleeve_vol_decisions']} of "
+      f"{cap['monthly_decisions']} monthly decisions that HAVE a full 60-day "
+      f"history the trailing sleeve "
+      f"vol is exactly zero — the sleeve is flat for three straight months — "
+      f"and the 30% fallback there coincides with what uncapped inverse-vol "
+      f"would give, so it introduces no distortion.)")
+    w("")
+    w("### Same-close vs prior-close trailing statistics (m1)")
+    w("")
+    pcs = meta["prior_close_sensitivity_real"]
+    w("C3/C4/C8 read their trailing windows on the engine's SAME-CLOSE "
+      "decide/execute convention, while C5's gate is genuinely prior-close "
+      "(it inherits R2-A's entry condition). Neither is look-ahead, but they "
+      "are inconsistent, so the cost is measured rather than argued: "
+      + "; ".join(f"{k} {v['same_close']:.4f} -> {v['strict_prior_close']:.4f} "
+                  f"({v['delta']:+.4f})" for k, v in pcs.items())
+      + " Sharpe(BIL). No verdict moves.")
     w("")
     w("## C7 — the mechanical one")
     w("")
@@ -1184,11 +1718,29 @@ def _write_report(res: dict, order: list[str], verdicts: dict, meta: dict) -> No
     if c7:
         lo, hi = c7["ci95"]
         w(f"C7 is the only arm whose edge, if any, is NOT a search result: it is "
-          f"a fix to a known accounting artifact. The frozen R2-A sleeve earns "
-          f"0% on idle cash on **{idle_n}/{idle_tot} = {idle_n / idle_tot:.1%}** "
-          f"of real-window days (the counter-agent's own measurement, "
-          f"reproduced here); C7 routes that idle cash to the CORE's return "
-          f"instead.")
+          f"a fix to a known accounting artifact. **This arm was RE-IMPLEMENTED "
+          f"after the counter-agent pass (M1).** The round-4 draft credited the "
+          f"core's return only on days whose sleeve return was exactly zero "
+          f"({idle['zero_return_days']}/{idle['zero_return_of']} = "
+          f"{idle['zero_return_days'] / idle['zero_return_of']:.1%} of the real "
+          f"window), and justified stopping there with the claim that \"the "
+          f"frozen sleeve is a dollar curve, so only FULLY idle days are "
+          f"observable\". That claim was FALSE about this repo: "
+          f"`backtest_variants_r2.py`'s `run_call_book_yield` already computes "
+          f"`equity - invested` every day, so the idle balance is exact. "
+          f"`scripts/build_r2a_exposure.py` rebuilds R2-A's book from the "
+          f"round-2 pipeline (601 taken, 2457 skipped at the cap), gates the "
+          f"rebuilt equity against the frozen curve on all 2,672 days, and "
+          f"records the daily invested notional in `data/r2a_exposure.json`.")
+        w("")
+        w(f"R2-A's real-window idle CAPITAL: **mean "
+          f"{idle['mean_idle_fraction']:.1%}, median "
+          f"{idle['median_idle_fraction']:.1%}** of the sleeve — with "
+          f"{idle['days_fully_idle']}/{idle['n_days']} days fully idle and "
+          f"{idle['days_over_90pct_idle']}/{idle['n_days']} above 90% idle. "
+          f"The draft's fix was therefore about **half** the size of the real "
+          f"artifact. C7 now credits the prior close's idle FRACTION with the "
+          f"core's return each day.")
         w("")
         w(f"Result: Sharpe(BIL) {c7f['sharpe_bil']:.3f} vs {best}'s "
           f"{bf['sharpe_bil']:.3f} (dSharpe {c7['d_sharpe']:+.3f}, 95% CI "
@@ -1209,19 +1761,34 @@ def _write_report(res: dict, order: list[str], verdicts: dict, meta: dict) -> No
               f"and costs {100 * (c7f['max_dd'] - c6f['max_dd']):+.1f}pp of max "
               f"drawdown and {100 * (c7f['vol'] - c6f['vol']):+.1f}pp of "
               f"volatility: crediting idle "
-              f"sleeve cash to the core raises both the return and the "
-              f"equity-beta of the sleeve leg, so the Sharpe barely moves "
-              f"({c6f['sharpe_bil']:.3f} -> {c7f['sharpe_bil']:.3f}) and Calmar "
-              f"FALLS ({c6f['calmar']:.2f} -> {c7f['calmar']:.2f}). The "
-              f"accounting artifact was real and is now fixed; it was not "
-              f"hiding a risk-adjusted edge.")
+              f"sleeve cash to the core raises the return AND the equity-beta "
+              f"of the sleeve leg together, so Sharpe rises "
+              f"({c6f['sharpe_bil']:.3f} -> {c7f['sharpe_bil']:.3f}) while "
+              f"Calmar FALLS ({c6f['calmar']:.2f} -> {c7f['calmar']:.2f}) and "
+              f"the interval on the Sharpe move still spans zero. The "
+              f"accounting artifact was real and is now fixed at its true "
+              f"size; correcting it does NOT lift the book past the "
+              f"incumbent, and the mechanism section shows why this routing "
+              f"is the dominated one.")
             w("")
-        w("Implementation limit, stated because it bounds the claim: the frozen "
-          "sleeve is a dollar curve, so only FULLY idle days (exactly 0% "
-          "return) are observable. Partially-invested days keep 0% on their "
-          "cash, so C7 as run is the conservative corner of the fix. It also "
-          "charges no transaction cost for the implied daily movement of idle "
-          "cash in and out of the core, which is a favourable assumption.")
+        w(f"Correction size, before -> after: the draft's zero-return-days "
+          f"implementation gave Sharpe(BIL) 0.828, dSharpe -0.090, CI "
+          f"[-0.449, +0.250], CAGR 13.63%, maxDD 15.5%. The idle-CAPITAL "
+          f"implementation gives {c7f['sharpe_bil']:.3f}, "
+          f"{c7['d_sharpe']:+.3f}, [{lo:+.3f}, {hi:+.3f}], "
+          f"{c7f['cagr']:.2%}, {c7f['max_dd']:.1%}. Better, and still not "
+          f"close: it fails criteria 1, 2 and 3 "
+          f"({c7['c3_wins']}/3 sub-periods). **The null survives the "
+          f"correction.** See the mechanism section for why the registered "
+          f"routing was the wrong one: crediting the CORE is dominated by "
+          f"crediting CASH.")
+        w("")
+        w("Implementation limits that remain, stated because they bound the "
+          "claim: the idle fraction is measured at the PRIOR close and earns a "
+          "full day of the routed leg's return, and no transaction cost is "
+          "charged for the implied daily movement of idle cash in and out of "
+          "the core — both favourable assumptions. The sleeve's own trade "
+          "slippage stays as the round-2 engine charged it.")
     w("")
     w("## Honesty box")
     w("")
@@ -1259,10 +1826,39 @@ def _write_report(res: dict, order: list[str], verdicts: dict, meta: dict) -> No
       "pessimistic corner. The registration fixes TAIL for every variant so "
       "the open question cannot flatter one over another — it does NOT resolve "
       "the question.")
-    w("- **Noise floor.** The counter-agent measured the 95% CI on a Sharpe "
-      "difference in this data at roughly +/-0.4. With ~1,400 real trading "
-      "days, differences smaller than that are not distinguishable from zero, "
-      "and the CI column above is the honest reading of every dSharpe here.")
+    w(f"- **Resolution is PER ARM; there is no campaign-wide noise floor.** "
+      f"The paired 95% CI half-width runs from "
+      f"+/-{min((v['ci95'][1] - v['ci95'][0]) / 2 for v in verdicts.values()):.3f} "
+      f"(C1-05) to "
+      f"+/-{max((v['ci95'][1] - v['ci95'][0]) / 2 for v in verdicts.values()):.3f} "
+      f"(the 30%-sleeve arms) — a 7x span. An earlier draft of this document "
+      f"quoted a single \"+/-0.4\" figure imported from the B.5-core vs "
+      f"SPY-core comparison in a different study; that was wrong, and it made "
+      f"the round look blinder than it is. The injected-edge table above is "
+      f"the honest statement: at low sleeve weight this campaign resolved a "
+      f"true +0.10 Sharpe edge and found none; at the live 30% weight it could "
+      f"not have seen +0.40.")
+    w("- **Two of the eight registered variants did not test what they "
+      "claimed.** C3's fixed 30% cap made it a restatement of C6-monthly "
+      "(VOID AS SPECIFIED for inverse-vol); C7's registered routing of idle "
+      "cash to the CORE is dominated by routing it to cash, so the arm tested "
+      "the wrong fix even after being re-implemented correctly. Both are "
+      "registration flaws found by the counter-agent, not harness bugs, and "
+      "neither may be re-parameterized inside this round.")
+    w("- **Criterion 1's failures are not all robust.** C1-05 passes criterion "
+      "1 under daily, 0.5%-band and monthly rebalancing and fails it under the "
+      "live 5% absolute band, which never fires at a 5% target. Criteria 2 and "
+      "3 carry the null: they fail under every reading tried.")
+    w("- **Independent reproduction.** An adversarial counter-agent re-ran the "
+      "full campaign (byte-identical report), rebuilt the R2-A book from the "
+      "round-2 pipeline and matched the FROZEN curve on all **2,672 days to "
+      "<1e-6**, reimplemented the paired block bootstrap naively and matched "
+      "this harness's optimized version to **5.3e-15** on every draw, ran a "
+      "200-run coverage simulation (96.0% empirical coverage), and re-ran the "
+      "whole bar on the rf=0 basis, against the strongest synthetic-window "
+      "incumbent, and under the prior round's stationary-bootstrap "
+      "convention. No verdict moved. Verdict: PASS WITH CORRECTIONS — the "
+      "null is REAL.")
     w("- **What was NOT modeled:** taxes; bid-ask and market impact beyond a "
       "flat 10bps per side; borrow, margin or liquidity constraints; the 20% "
       "short-vol bot the config actually pairs B.5 with; PHYS "
@@ -1277,6 +1873,7 @@ def _write_report(res: dict, order: list[str], verdicts: dict, meta: dict) -> No
     w("")
     w("```")
     w("cd genomics-alpha-tracker/backend")
+    w("python -m scripts.build_r2a_exposure               # R2-A idle-capital input")
     w("python -m scripts.backtest_core_variants            # full campaign")
     w("python -m scripts.backtest_core_variants --variant C7 --window real")
     w("```")
