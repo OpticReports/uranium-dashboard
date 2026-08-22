@@ -415,6 +415,10 @@ def render_report(res: dict) -> str:
       "committed (b7cf770) BEFORE any round-7 code existed. Nothing here is a config change or a live "
       "weight; nothing is promoted (TUNING.md law).")
     a("")
+    a("**Charts** (20-year log equity, the drawdown profile with the named regimes marked, the GFC panel "
+      "and the treatment spread): "
+      "https://claude.ai/code/artifact/1d6590af-c7c5-47a4-bcb5-20a0e6ead247")
+    a("")
     a("## Verdict")
     a("")
     t1, t2, t3 = arms["T1"], arms["T2"], arms["T3"]
@@ -567,9 +571,11 @@ def render_report(res: dict) -> str:
         a(f"| {k} | {b['point']:+.3f} | [{b['ci_lo']:+.3f}, {b['ci_hi']:+.3f}] | "
           f"{'YES' if b['excludes_zero'] else 'no'} | {b['p_two_sided']:.3f} |")
     a("")
-    a("Nothing is close. The intervals are roughly +/-0.2 Sharpe wide, which is the honest resolution "
-      "of 20 years of daily data on two 80%-correlated books — it is not a licence to read the sign "
-      "of a point estimate.")
+    a("Nothing is close: the largest |ΔSharpe| in the table is "
+      f"{max(abs(arms[k]['boot']['point']) for k in ARM_ORDER):.3f} and every interval contains zero "
+      "by a wide margin. Each arm's own interval is reported above and no floor is imported from "
+      "anywhere else — the point estimates' SIGNS are not readable at this sample size, which is "
+      "why the treatment spread, not the point estimate, is the result.")
     a("")
 
     # --- GFC ---------------------------------------------------------------------------
