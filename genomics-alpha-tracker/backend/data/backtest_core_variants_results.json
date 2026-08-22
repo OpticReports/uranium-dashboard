@@ -1,6 +1,7 @@
 {
  "meta": {
-  "generated": "2026-08-22T17:38:59+00:00",
+  "generated": "2026-08-22T18:00:26+00:00",
+  "round": 4,
   "contract": "docs/VARIANTS_PREREGISTRATION_R4_CORE.md",
   "windows": {
    "real": {
@@ -27,6 +28,10 @@
   "naive_alpha": 0.05,
   "bonferroni_alpha": 0.003333,
   "bonferroni_conf": 0.996667,
+  "n_arms_all_rounds": 22,
+  "arms_other_rounds": 7,
+  "bonferroni_alpha_all_rounds": 0.002273,
+  "bonferroni_conf_all_rounds": 0.997727,
   "cost_bps_per_side": 10.0,
   "tail_sleeve": "TAIL (registered, identical for every variant)",
   "adjudication_basis": "BIL-excess Sharpe; rf=0 reported alongside",
@@ -84,6 +89,18 @@
     "uplift": 0.004491
    }
   ],
+  "corr_core_sleeve_real": 0.328867,
+  "synthetic_kmlm": "KMLM spliced to DBMF then WTMF, unadjusted",
+  "c7_vs_c6_band05": {
+   "d_sharpe": 0.042325,
+   "ci95": [
+    -0.058508,
+    0.144762
+   ],
+   "boot_p": 0.3965,
+   "comparator": "C6-band05"
+  },
+  "measurement_basis": "daily MTM total returns on adjusted closes; CAGR calendar-annualized at 365.25; Sharpe/Sortino annualized sqrt(252); drawdown peak-to-trough within each window",
   "implemented_optimum_real": {
    "grid": [
     [
@@ -338,19 +355,7 @@
     "boot_p": 0.999,
     "c3_wins": 1
    }
-  ],
-  "corr_core_sleeve_real": 0.328867,
-  "synthetic_kmlm": "KMLM spliced to DBMF then WTMF, unadjusted",
-  "c7_vs_c6_band05": {
-   "d_sharpe": 0.042325,
-   "ci95": [
-    -0.058508,
-    0.144762
-   ],
-   "boot_p": 0.3965,
-   "comparator": "C6-band05"
-  },
-  "measurement_basis": "daily MTM total returns on adjusted closes; CAGR calendar-annualized at 365.25; Sharpe/Sortino annualized sqrt(252); drawdown peak-to-trough within each window"
+  ]
  },
  "verdicts": {
   "C1-05": {

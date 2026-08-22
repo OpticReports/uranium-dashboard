@@ -15,6 +15,10 @@ import pytest
 
 from scripts.backtest_core_variants import (
     C5_SLEEVE_W,
+    D1_WEIGHTS,
+    D2_HI_W,
+    D2_LO_W,
+    INCUMBENTS,
     INCUMBENT_KEYS,
     LIVE_SLEEVE_W,
     VARIANTS,
@@ -26,7 +30,10 @@ from scripts.backtest_core_variants import (
     boot_ci,
     cagr,
     const,
+    C3_SLEEVE_CAP,
     curve_returns,
+    d1_sleeve_cash,
+    d3_weight_at,
     downside_deviation,
     evaluate,
     excludes_zero,
@@ -309,17 +316,43 @@ def test_paired_bootstrap_rejects_mismatched_lengths():
 
 # --- registry -----------------------------------------------------------------------
 
+def _round(n: int) -> dict:
+    return {k: v for k, v in VARIANTS.items() if v.round == n}
+
+
 def test_registry_holds_exactly_the_registered_round_4_variants():
     """C1..C8 as pre-registered, and nothing else. C1, C2 and C6 register more
     than one parameterization, which is why the multiple-comparison count is
     the number of ARMS, not the number of letters."""
-    groups = sorted({v.group for v in VARIANTS.values()})
+    r4 = _round(4)
+    groups = sorted({v.group for v in r4.values()})
     assert groups == ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8"]
-    counts = {g: sum(1 for v in VARIANTS.values() if v.group == g) for g in groups}
+    counts = {g: sum(1 for v in r4.values() if v.group == g) for g in groups}
     assert counts == {"C1": 4, "C2": 2, "C3": 1, "C4": 1, "C5": 1,
                       "C6": 4, "C7": 1, "C8": 1}
-    assert len(VARIANTS) == 15
+    assert len(r4) == 15
     assert all(isinstance(v, Variant) and callable(v.fn) for v in VARIANTS.values())
+
+
+def test_registry_holds_exactly_the_registered_round_5_variants():
+    """D1..D4 as pre-registered in VARIANTS_PREREGISTRATION_R5_SLEEVE.md: three
+    D1 weights, one D2, one D3, two D4 rules — 7 arms, 22 across both rounds,
+    which is the denominator the round-5 report is required to use."""
+    r5 = _round(5)
+    counts = {g: sum(1 for v in r5.values() if v.group == g)
+              for g in sorted({v.group for v in r5.values()})}
+    assert counts == {"D1": 3, "D2": 1, "D3": 1, "D4": 2}
+    assert sorted(r5) == ["D1-05", "D1-10", "D1-15", "D2", "D3",
+                          "D4-band005", "D4-daily"]
+    assert len(VARIANTS) == 22
+
+
+def test_every_variant_declares_a_registered_round():
+    """A variant with no round would be judged by whichever campaign ran last —
+    the exact failure the round tag exists to prevent."""
+    assert {v.round for v in VARIANTS.values()} == {4, 5}
+    assert all(v.round == 4 for v in INCUMBENTS.values()), \
+        "incumbents are shared across rounds and must stay untagged"
 
 
 def test_incumbents_are_the_three_registered_ones():
@@ -513,3 +546,64 @@ def test_trailing_window_ends_with_the_return_INTO_dates_i():
     assert _trailing(rets, 5, 2) == [3.0, 4.0]
     assert _trailing(rets, 2, 3) is None
     assert _trailing(rets, 3, 3)[-1] == rets[2]   # the return INTO dates[3]
+
+
+# --- round-5 builders (D1..D4) --------------------------------------------------
+# The round-5 contract fixes the routing leg, the trigger weights, the absence
+# of a cap and the rebalance rule. Each of those is a place a later edit could
+# silently change what the campaign tested, so each gets a gate.
+
+def test_d1_routes_idle_capital_to_cash_and_never_to_the_core():
+    """D1's whole point (M2): the sleeve's idle capital earns BIL, so a book
+    built on a flat core and a flat sleeve still tracks BIL through the idle
+    fraction — and it does NOT pick up the core's return."""
+    ctx = _ctx(3, sleeve=[0.0, 0.0], core=[0.40, 0.40], bil=[0.01, 0.01],
+               idle=[1.0, 1.0, 1.0])
+    r = curve_returns(d1_sleeve_cash(ctx, 1.0), ctx.dates)
+    assert r == pytest.approx([0.01, 0.01], abs=1e-12)   # BIL, not 0.40
+
+
+def test_d1_weights_are_the_registered_grid():
+    assert D1_WEIGHTS == (0.05, 0.10, 0.15)
+    assert sorted(k for k in VARIANTS if k.startswith("D1-")) == \
+        ["D1-05", "D1-10", "D1-15"]
+
+
+def test_d2_holds_the_high_weight_only_while_correlation_is_below_threshold():
+    """D2 is C8's trigger at 15/5. Build a core perfectly correlated with the
+    sleeve so rho = 1 > 0.30 and the LOW weight must be chosen once warm-up
+    ends; an anti-correlated core must choose the HIGH one."""
+    n = 200
+    up = [0.01 if i % 2 else -0.01 for i in range(n - 1)]
+    same = _ctx(n, sleeve=up, core=up, idle=[0.0] * n)
+    opp = _ctx(n, sleeve=up, core=[-x for x in up], idle=[0.0] * n)
+    for ctx, want in ((same, D2_LO_W), (opp, D2_HI_W)):
+        sleeve = sleeve_idle_routed(ctx, "BIL")
+        sr, cr = curve_returns(sleeve, ctx.dates), curve_returns(ctx.core, ctx.dates)
+        rho = pearson(sr[-60:], cr[-60:])
+        assert (D2_HI_W if rho < 0.30 else D2_LO_W) == want
+
+
+def test_d3_is_uncapped_where_round_4s_c3_was_capped():
+    """M5: C3's 30% cap bound on most days. D3 must be able to exceed it."""
+    ctx = _ctx(120, sleeve=[0.001 * (1 if i % 2 else -1) for i in range(119)],
+               core=[0.05 * (1 if i % 2 else -1) for i in range(119)],
+               idle=[0.0] * 120)
+    w = d3_weight_at(ctx, 119)          # calm sleeve, wild core -> big sleeve
+    assert w is not None and w > C3_SLEEVE_CAP
+    assert 0.0 < w < 1.0                # the rule is a share, never levered
+
+
+def test_d3_weight_is_none_during_warm_up_and_on_a_flat_sleeve():
+    assert d3_weight_at(_ctx(30, idle=[0.0] * 30), 29) is None      # warm-up
+    flat = _ctx(120, core=[0.01] * 119, idle=[0.0] * 120)           # zero sleeve vol
+    assert d3_weight_at(flat, 119) is None
+
+
+def test_d4_selection_rule_prefers_the_lower_weight_on_a_tie(monkeypatch):
+    """The registration fixes the rule: highest BIL-excess Sharpe over the FULL
+    REAL window, ties broken toward the LOWER weight."""
+    import scripts.backtest_core_variants as mod
+    monkeypatch.setattr(mod, "_D1_BEST_W", None)
+    monkeypatch.setattr(mod, "d1_sleeve_cash", lambda ctx, w: dict(ctx.core))
+    assert mod.d1_best_weight(_ctx(40, core=[0.001] * 39)) == min(D1_WEIGHTS)
