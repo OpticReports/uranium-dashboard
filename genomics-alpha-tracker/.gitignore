@@ -26,6 +26,10 @@ backend/data/*
 # reuses verbatim, so it has to be tracked or the campaign is not
 # reproducible from a clean checkout
 !backend/data/r2a_daily.json
+# R2-A's daily equity AND invested notional, rebuilt from the round-2
+# pipeline (scripts/build_r2a_exposure.py). The idle CAPITAL fraction is
+# what C7 routes; without this file the correction is not reproducible.
+!backend/data/r2a_exposure.json
 !backend/data/bil_bars_raw.json
 *.db
 *.sqlite3
