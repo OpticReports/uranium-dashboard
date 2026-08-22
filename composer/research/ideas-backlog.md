@@ -89,9 +89,11 @@ gates/tsmom_tree.json, agents' variant tables in session transcript.
 ## SETTLED QUESTIONS — do not re-study without new evidence (2026-08-05)
 
 External de-risking overlays on the current engines are REJECTED as a
-class, measured five independent ways: trend gates (add. 19b), strategy
+class, measured SIX independent ways: trend gates (add. 19b), strategy
 vol-targeting (20b), DD-exit rules (21), VRP sizing (25), band-edge
-variants (25). Mechanism, replicated: every engine is internally
+variants (25), GARCH vol-regime gating + sizing on the harvester (31 --
+including sizing UP, which fails the same way: every 'size up when calm'
+rule concentrates short vol exactly where vol gaps). Mechanism, replicated: every engine is internally
 convexity-aware and earns disproportionately in its own high-vol/stress
 state; overlays de-risk exactly those states. Any new overlay proposal
 must first show the ENGINES' character changed (e.g., live divergence

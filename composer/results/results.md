@@ -1482,3 +1482,74 @@ non-Nasdaq leadership" hypothesis is NOT supported for this window
 (SMH -11%). (4) Historical precedent (same session): 6 prior >=60%-BIL
 2-mo stretches in 11y; forward 3mo positive 6/6 (+5% to +68%).
 NO CHANGES; consistent with 19b/20b and the no-overlay rule.
+
+
+## Addendum 31 — GARCH vol-regime forecasting on the harvester: NO-BUILD;
+## the one promising variant was KILLED by counter-agent audit (2026-08-22)
+
+Owner question (Engle/GARCH tweet): can vol-regime forecasting gate the VIX
+Harvester's entries/exits or increase its size? Note this is adjacent to two
+SETTLED items — the no-overlay rule and VRP sizing (add. 25) — but GARCH
+*forecasting* and sizing UP were genuinely untested, so it was run.
+
+MACHINERY BUILT (preserved, research/garch/): real-time GARCH(1,1) MLE with
+rolling-10y monthly refit, 1-step-ahead forecast (garchlib.py; passed a
+deliberate future-data corruption test BIT-IDENTICALLY — no lookahead);
+harvester replica (harvsim.py, daily corr 0.9377 vs real engine); ZVOL proxy
+from SVXY extending testable history 3.3y -> 14.8y; build_variants.py driver.
+Tweet's factual core CONFIRMED: SPX GARCH alpha .113 / beta .870 / pers .983.
+
+8 variants, 14.8y (2011-10..2026-08), expanding-window (real-time) thresholds:
+              CAGR    maxDD  Sharpe        vs baseline
+  BASELINE   +12.1%   17.5%   1.51
+  G1 calm-only +6.9%  15.9%   1.08   -5.1pp CAGR
+  G2 storm-only +10.6% 10.3%  1.49   -1.5pp CAGR / -7.2pp DD  <- the "finding"
+  S1 inverse-vol +11.8% 21.8% 1.35   -0.2pp / +4.3pp DD
+  S4 2x-in-calm +13.1% 19.8%  1.42   +1.0pp / +2.3pp DD
+NO variant improves Sharpe. Gates trade return for DD; sizers trade DD for
+return — the add.-18 no-free-lunch wall, reached from a new direction.
+
+COUNTER-AGENT VERDICT: G2 REFUTED. My three robustness checks were WRONG:
+1. "8+ episodes, not concentrated" — FALSE. Swapping ONE day (2018-02-05) out
+   of the ungated baseline moves maxDD 17.46->11.59%: 82% of the entire 7.2pp.
+   My "top-3 = 27%" counted only days the gate HELPED. Netted: +52.4pp over
+   124 days vs -73.1pp over 237; G2 loses in 9 of 15 years.
+2. "Stable plateau q=0.35-0.65" — FALSE. Stable because the binding drawdown
+   in that range is an untouched 2012 episode. q=0.34 -> 15.19% (2019 episode
+   binds). Decisive margin on 2018-02-05 is 0.6% RELATIVE on sigma. This is
+   exactly the add.-19b knife-edge failure, which I cited as the standard met.
+3. "GARCH beats naive vol" — FALSE. My comparators were all SHORT windows vs a
+   40-day-half-life model. RV126 and RiskMetrics EWMA(0.94) hit the IDENTICAL
+   10.26% DD at Sharpe 1.43 vs GARCH 1.49 — noise.
+MECHANISM RUNS BACKWARDS: on days the harvester wants ZVOL, high-vol regimes
+beat low by +0.11%/day at t=0.69 (no effect); 4 of the 5 worst ZVOL days fall
+in the regime G2 calls TRADEABLE. It escaped them only because the EXISTING
+UVXY credit guard was already flat — that guard, not GARCH, blocked the -31%
+day (2018-02-06). And on 2018-02-05 GARCH put sigma at the 34th percentile:
+it read the eve of Volmageddon as CALM. The save was a forecast FAILURE that
+an inverted rule converted into a win.
+OUT-OF-SAMPLE: train 2011-18 / test 2019-26 -> -3.01pp CAGR, -0.20 Sharpe
+(strictly dominated). Ex-Volmageddon (2011-17): dDD exactly +0.00pp. On the
+REAL-ZVOL-ONLY window (2023-04+, zero reconstruction): -3.36pp CAGR at
+IDENTICAL DD, -0.22 Sharpe. 22nd percentile vs 400 random block-rate-matched
+gates. Paired bootstrap P(edge>0)=0.065. ~56 designs tested, never charged.
+DISCLOSED: ~43% of the 14.8y record synthetic in >=1 leg; ZVOL proxy beta
+fitted on the SAME 828 days used to validate it (split-sample 0.787->0.711);
+replica tracking error concentrates in the ZVOL leg (under-holds it ~21%).
+
+BOOK LEVEL (HARV=15%): G2 -1.19pp book CAGR at ZERO DD benefit on the shared
+828d window; a pure cost at the level actually held.
+
+DECISIONS: (1) NO BUILD — not G2, not the sizers; no symphony changes.
+(2) The DURABLE result is negative and robust: do NOT vol-scale this engine.
+    Inverse-vol sizing costs return AND adds 4.3pp DD AND worsens Volmageddon
+    (-9.9 vs -7.3%) — the only finding not single-day-driven. Sizing UP in calm
+    fails identically: every such rule concentrates short vol exactly where vol
+    GAPS. This is the SIXTH independent measurement of the no-overlay mechanism
+    (gates 19b, vol-target 20b, DD-exit 21, VRP 25, band 25, now GARCH 31).
+(3) NOT shelved for IBKR — the constraint is not buildability, it is that the
+    signal has no edge on this engine.
+(4) The harvester's existing UVXY RSI guard is validated as the thing that
+    works: surgical (35/812 ZVOL days), and it caught the one catastrophe.
+(5) PROCESS: builder script was missing from the working dir (my own add.-27
+    fix-list item). Now preserved: research/garch/. Standing rule reaffirmed.
