@@ -252,10 +252,14 @@ def _loop(gen: int, wake: threading.Event):
                     and BLEND.state.flatten_request is not None):
                 # A /kill that landed while this iteration was parked inside
                 # the feed call above must not ALSO wait for the ladder's
-                # gateway round-trips and the tracker poll (MF-1). The bound
-                # on a queued flatten is therefore: whatever remains of the
-                # feed call already in flight — capped at FEED_TIMEOUT — and
-                # nothing else.
+                # gateway round-trips and the tracker poll (MF-1). What it
+                # does wait for is the rest of that feed call — and MF-A
+                # made FEED_TIMEOUT a real bound on it (feeds.with_deadline;
+                # the httpx timeout it also passes is per-operation and a
+                # trickling server walked straight through it). What is NOT
+                # bounded is the ladder section below, so a kill landing
+                # THERE waits on a gateway with no deadline — said plainly
+                # in the /kill alert and README §6, never as a number.
                 _blend_cycle(None, today)
             marks = {}
             # x12: the ladder block mutates and persists MGR — /kill and
