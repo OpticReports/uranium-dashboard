@@ -23,6 +23,11 @@ backend/data/*
 !backend/data/backtest_variants_r3_results.json
 !backend/data/backtest_core_variants_results.json
 !backend/data/backtest_sleeve_variants_r5_results.json
+# Round 8's results, curves included. Round 7's counter-agent (M5) found that
+# round could not be rebuilt from a clean checkout; this file carries every
+# arm curve, every regime row and the gate, so the round-8 report can be
+# checked line by line without re-running the study.
+!backend/data/backtest_vol_overlay_r8_results.json
 # the FROZEN R2-A daily dollar curve — an INPUT the round-4 harness
 # reuses verbatim, so it has to be tracked or the campaign is not
 # reproducible from a clean checkout
