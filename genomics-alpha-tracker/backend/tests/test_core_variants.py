@@ -35,9 +35,13 @@ from scripts.backtest_core_variants import (
     LIVE_SLEEVE_W,
     ROUNDS,
     VARIANTS,
+    CAMPAIGN,
     Ctx,
     Variant,
+    _corr_decision_path,
+    _mde_table,
     _spy_core_leg,
+    _thirds_d_sharpe,
     _trailing,
     arm_contrast,
     block_bootstrap_sharpe_diff,
@@ -68,8 +72,11 @@ from scripts.backtest_core_variants import (
     sharpe,
     sleeve_idle_routed,
     sortino,
+    campaign_size,
     spy_core_corr_trigger,
+    spy_core_corr_trigger_MISWIRED,
     spy_core_curves,
+    spy_core_level_decomposition,
     spy_core_static,
     spy_core_trigger_profile,
     thirds,
@@ -930,3 +937,110 @@ def test_monthly_weights_holds_the_named_core_leg():
     assert monthly_weights(ctx, lambda _i: 0.2, 0.2)(ctx.dates[0]) ==         {"SLEEVE": 0.2, "CORE": 0.8}
     assert monthly_weights(ctx, lambda _i: 0.2, 0.2,
                            core_leg="SPY")(ctx.dates[0]) ==         {"SLEEVE": 0.2, "SPY": 0.8}
+
+
+# --- ROUND 6 counter-agent corrections ----------------------------------------------
+# M3: the campaign denominators are part of a round's FROZEN record. They used
+# to be computed from the live registry, so registering round 6 rewrote rounds
+# 4-5's published multiplicity prose. M1/M2: the cross-round max-T re-bases
+# every prior arm onto round 6's incumbent, which is required for the
+# instrument and is NOT a fact about those arms.
+
+def test_each_round_freezes_its_own_campaign_snapshot():
+    """A finished round's multiple-comparison family may never grow. These are
+    the snapshots the committed reports were judged and written against."""
+    assert ROUNDS[4]["campaign_rounds"] == (4, 5)
+    assert ROUNDS[5]["campaign_rounds"] == (4, 5)
+    assert ROUNDS[6]["campaign_rounds"] == (4, 5, 6)
+    for r, want in ((4, 22), (5, 22), (6, 25)):
+        keys = [k for k, v in VARIANTS.items()
+                if v.round in ROUNDS[r]["campaign_rounds"]]
+        assert len(keys) == want, (
+            f"round {r}'s frozen campaign is {want} arms; a later round may "
+            f"not enlarge it")
+        assert r in ROUNDS[r]["campaign_rounds"], "a round is in its own family"
+    # Round 5's report states round 4's OWN size. Deriving it by subtraction
+    # (n_all - 7) printed 18 the moment round 6 was registered.
+    r4 = sum(1 for v in VARIANTS.values() if v.round == 4)
+    assert r4 == 15
+    assert len([k for k, v in VARIANTS.items()
+                if v.round in ROUNDS[5]["campaign_rounds"]]) - 7 == r4
+
+
+def test_campaign_size_falls_back_to_the_registry_and_tracks_the_snapshot():
+    before = list(CAMPAIGN)
+    try:
+        CAMPAIGN[:] = []
+        assert campaign_size() == len(VARIANTS)
+        CAMPAIGN[:] = ["E1", "E2"]
+        assert campaign_size() == 2
+    finally:
+        CAMPAIGN[:] = before
+
+
+def test_round6_miswired_counterfactual_really_reads_the_WRONG_core():
+    """The pin's cost is only meaningful if the counterfactual is genuinely the
+    bug. On the context where the two cores give OPPOSITE calls, the registered
+    arm must take the SPY answer and the counterfactual the B.5 one."""
+    ctx = _spy_core_ctx()
+    right = spy_core_corr_trigger(ctx, E1_HI_W, E1_LO_W, E1_WARMUP_W)
+    wrong = spy_core_corr_trigger_MISWIRED(ctx, E1_HI_W, E1_LO_W, E1_WARMUP_W)
+    r = [round(v, 12) for v in right.values()]
+    wrng = [round(v, 12) for v in wrong.values()]
+    assert r != wrng, "the counterfactual is indistinguishable from the arm"
+    hi = _corr_decision_path(ctx, ctx.spy, E1_HI_W, E1_LO_W, E1_WARMUP_W)
+    lo = _corr_decision_path(ctx, ctx.core, E1_HI_W, E1_LO_W, E1_WARMUP_W)
+    assert set(hi[-10:]) == {E1_HI_W}, "SPY is anti-correlated here: HIGH leg"
+    assert set(lo[-10:]) == {E1_LO_W}, "B.5 is correlated here: LOW leg"
+    assert sum(1 for a, b in zip(hi, lo) if a != b) > 0
+    # ...and no REGISTERED arm may be wired to it.
+    for k in ("E1", "E2", "E3"):
+        reg = [round(v, 12) for v in VARIANTS[k].fn(ctx).values()]
+        assert reg != [round(v, 12) for v in wrong.values()], (
+            f"{k} is wired to the MISWIRED builder")
+
+
+def test_round6_level_decomposition_adds_up_and_is_flagged_unregistered():
+    """LEVEL + TIMING must reconstruct the arm's own gap to the incumbent, and
+    the block must carry its own hypothesis-generation label."""
+    ctx = _spy_core_ctx()
+    arm = spy_core_corr_trigger(ctx, E3_HI_W, E3_LO_W, E3_WARMUP_W)
+    inc = spy_core_static(ctx, E3_HI_W)
+    prof = spy_core_trigger_profile(ctx, E3_HI_W, E3_LO_W, E3_WARMUP_W)
+    d = spy_core_level_decomposition(ctx, arm, inc, prof["mean_applied_w"],
+                                     draws=100)
+    assert d["registered"] is False
+    assert "HYPOTHESIS GENERATION" in d["basis"]
+    legs = d["level"]["d_sharpe"] + d["timing"]["d_sharpe"]
+    assert legs == pytest.approx(d["total"]["d_sharpe"], abs=1e-9)
+    assert d["mean_applied_w"] == pytest.approx(prof["mean_applied_w"])
+    assert len(d["timing_thirds"]) == 3
+
+
+def test_thirds_d_sharpe_is_zero_against_itself_and_antisymmetric():
+    ctx = _spy_core_ctx()
+    a = spy_core_static(ctx, 0.2)
+    b = spy_core_static(ctx, 0.1)
+    for t in _thirds_d_sharpe(ctx, a, a):
+        assert t["d_sharpe"] == pytest.approx(0.0, abs=1e-12)
+    for x, y in zip(_thirds_d_sharpe(ctx, a, b), _thirds_d_sharpe(ctx, b, a)):
+        assert x["d_sharpe"] == pytest.approx(-y["d_sharpe"], abs=1e-12)
+
+
+def test_mde_table_prints_the_MEASURED_power_only_when_asked():
+    """m2. The published `-CI_lo` column wears a 50%-power label but the
+    harness's own MC measures it at 55-60%. Round 6 prints both; rounds 4-5
+    keep the two-column form their frozen reports were written with."""
+    v = {"E1": {"ci95": [-0.2, 0.3],
+                "power": {"grid": {f"{g:.2f}": {"detected": False,
+                                                "boot_p": 0.9}
+                                   for g in (0.05, 0.10, 0.20, 0.40)},
+                          "min_detectable_edge": 0.2},
+                "power_mc": {"mde_at_power": {"0.50": 0.18, "0.80": 0.27},
+                             "power_at": {"0.2000": 0.595}}}}
+    frozen = _mde_table(v)
+    honest = _mde_table(v, measured_power=True)
+    assert "MDE @50% power (as published)" in frozen[0]
+    assert "60%" not in frozen[-1]
+    assert "MEASURED power" in honest[0] and "MDE @50% power (MC)" in honest[0]
+    assert "| 60% |" in honest[-1] and "+0.18" in honest[-1]
