@@ -3632,6 +3632,12 @@ def _service_client(tmp_path, monkeypatch, adapter=None):
     monkeypatch.setattr(service, "ADAPTER", None)
     monkeypatch.setattr(service, "BLEND", None)
     monkeypatch.setattr(service, "MGR", None)
+    # `LAST` is exactly the same kind of leak and was missed: it carries the
+    # PREVIOUS test's `loop_ok` timestamp, so a test guarding on "cycle 1 is
+    # complete -> the loop is parked" was vacuous in a shared-process run
+    # (counter-review MF2 §5 — the root cause of the MF-1 gate's flake).
+    monkeypatch.setattr(service, "LAST",
+                        {"loop_ok": 0.0, "nino34": None, "mode": "OFFLINE"})
     return TestClient(service_app), service
 
 
@@ -3661,7 +3667,14 @@ def test_gate_mf1_a_queued_kill_flatten_never_waits_for_a_SLOW_FEED(
     Measured here, not argued: both feeds are made to hang for FEED_HANG
     seconds from the second call on (the first cycle is fast so the loop is
     parked in its poll wait when /kill lands, which is the deployed shape),
-    and the flatten must complete in a small fraction of that."""
+    and the flatten must run without a single feed call in between.
+
+    The assertion is the PROPERTY, not a stopwatch (counter-review MF2 §5):
+    "kill -> flatten did not wait for a feed" is exactly "no feed call
+    happened between the two", and that is what is checked. The wall-clock
+    form (`latency < FEED_HANG/2`) measured the stubbed hang rather than the
+    ordering, and it passed or failed on which module globals the rest of
+    the suite had left behind."""
     import threading
     import time as _time
 
@@ -3686,6 +3699,16 @@ def test_gate_mf1_a_queued_kill_flatten_never_waits_for_a_SLOW_FEED(
 
     monkeypatch.setattr(service, "nino34_weekly", slow_nino)
     monkeypatch.setattr(blend_mod, "fetch_intents", slow_intents)
+
+    flat = {"nino_at_entry": None}
+    real_flatten = blend_mod.execute_flatten
+
+    def watched_flatten(mgr, adapter, alert):
+        if flat["nino_at_entry"] is None:
+            flat["nino_at_entry"] = calls["nino"]
+        return real_flatten(mgr, adapter, alert)
+
+    monkeypatch.setattr(blend_mod, "execute_flatten", watched_flatten)
     client, service = _service_client(tmp_path, monkeypatch)
     try:
         with client as c:
@@ -3698,18 +3721,20 @@ def test_gate_mf1_a_queued_kill_flatten_never_waits_for_a_SLOW_FEED(
             assert _wait_until(lambda: service.LAST["loop_ok"] > 0)
             assert _wait_until(lambda: calls["nino"] >= 1)
             _kill_ready_position(B, A)
-            t0 = _time.time()
+            nino_at_kill = calls["nino"]
             r = c.get("/kill", params={"token": "sekrit"})
             assert r.json()["blend"] == "flatten_queued"
             assert _wait_until(lambda: B.state.flatten_request is None
                                and B.state.positions == {}, timeout=20.0)
-            latency = _time.time() - t0
-            # the flatten did not wait out a single feed, let alone two
-            assert latency < FEED_HANG / 2, f"kill->flatten took {latency:.2f}s"
+            # the flatten did not wait out a single feed, let alone two:
+            # not one feed call happened between the kill and it starting
+            assert flat["nino_at_entry"] == nino_at_kill, (
+                f"the queued flatten waited for "
+                f"{flat['nino_at_entry'] - nino_at_kill} feed call(s)")
             assert _executions(A, "CRSP")           # it really sold
-        # and the loop DID go on to pay the slow feeds afterwards — the
-        # ordering is what changed, not the feeds being skipped
-        assert calls["nino"] >= 2
+            # and the loop DID go on to pay the slow feeds afterwards — the
+            # ordering is what changed, not the feeds being skipped
+            assert _wait_until(lambda: calls["nino"] >= 2, timeout=20.0)
     finally:
         release.set()
         service.BLEND = None
