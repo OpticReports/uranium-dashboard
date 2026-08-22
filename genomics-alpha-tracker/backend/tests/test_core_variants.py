@@ -14,10 +14,12 @@ import math
 import pytest
 
 from scripts.backtest_core_variants import (
+    B5_WEIGHTS,
     C5_SLEEVE_W,
     D1_WEIGHTS,
     D2_HI_W,
     D2_LO_W,
+    D2_WARMUP_W,
     INCUMBENTS,
     INCUMBENT_KEYS,
     LIVE_SLEEVE_W,
@@ -32,22 +34,29 @@ from scripts.backtest_core_variants import (
     const,
     C3_SLEEVE_CAP,
     curve_returns,
+    d1_dead_cash_twin,
     d1_sleeve_cash,
+    d2_corr_at_tangency,
+    d2_warmup_days,
     d3_weight_at,
     downside_deviation,
     evaluate,
     excludes_zero,
+    inc_3070spy,
     max_drawdown,
     metrics,
     month_starts,
     monthly_weights,
     pearson,
     portfolio,
+    power_mc,
+    proxy_session_usage,
     quarter_starts,
     sharpe,
     sleeve_idle_routed,
     sortino,
     thirds,
+    westfall_young_maxt,
 )
 
 ANN = math.sqrt(252)
@@ -607,3 +616,111 @@ def test_d4_selection_rule_prefers_the_lower_weight_on_a_tie(monkeypatch):
     monkeypatch.setattr(mod, "_D1_BEST_W", None)
     monkeypatch.setattr(mod, "d1_sleeve_cash", lambda ctx, w: dict(ctx.core))
     assert mod.d1_best_weight(_ctx(40, core=[0.001] * 39)) == min(D1_WEIGHTS)
+
+
+# --- round-5 counter-agent corrections (M1..M4, m1, m2) --------------------------
+# Each of these is a place where a later edit could silently undo a correction
+# the counter-agent had to catch, so each gets a merge-blocking gate.
+
+def test_dead_cash_twin_is_the_same_book_with_the_routing_off():
+    """M1. The mechanism's own counterfactual must differ from the arm ONLY in
+    the cash routing: with nothing idle the two books are identical, and with
+    idle cash the twin is the one that earns nothing on it."""
+    flat = _ctx(40, core=[0.001] * 39, bil=[0.0002] * 39, idle=[0.0] * 40)
+    assert curve_returns(d1_sleeve_cash(flat, 0.10), flat.dates) == \
+        pytest.approx(curve_returns(d1_dead_cash_twin(flat, 0.10), flat.dates))
+    idle = _ctx(40, core=[0.001] * 39, bil=[0.0002] * 39, idle=[1.0] * 40)
+    live = curve_returns(d1_sleeve_cash(idle, 0.10), idle.dates)
+    dead = curve_returns(d1_dead_cash_twin(idle, 0.10), idle.dates)
+    assert all(a > b for a, b in zip(live, dead, strict=True))
+
+
+def test_sweep_coverage_and_drag_bound_the_mechanism():
+    """M1. Zero coverage must reproduce the dead-cash book exactly, full
+    coverage with no drag is the registered arm, and a drag can only subtract."""
+    ctx = _ctx(30, core=[0.001] * 29, bil=[0.001] * 29, idle=[1.0] * 30)
+    none = curve_returns(sleeve_idle_routed(ctx, "BIL", coverage=0.0), ctx.dates)
+    assert none == pytest.approx(curve_returns(ctx.sleeve, ctx.dates))
+    full = sleeve_idle_routed(ctx, "BIL")[ctx.dates[-1]]
+    half = sleeve_idle_routed(ctx, "BIL", coverage=0.5)[ctx.dates[-1]]
+    dragged = sleeve_idle_routed(ctx, "BIL", drag_bps=100.0)[ctx.dates[-1]]
+    assert full > half > 1.0 and full > dragged
+
+
+def test_d2_warm_up_default_is_a_registered_weight_not_the_live_one():
+    """M3. D2's contract names 15% and 5% and nothing else. The 30% fallback is
+    registered for D3 ONLY; inheriting it here decided D2's verdict."""
+    assert D2_WARMUP_W == D2_LO_W and D2_WARMUP_W != LIVE_SLEEVE_W
+    ctx = _ctx(40, core=[0.001] * 39, idle=[0.0] * 40)   # never leaves warm-up
+    r = curve_returns(d2_corr_at_tangency(ctx), ctx.dates)
+    want = curve_returns(portfolio(ctx.dates, ctx.legs(),
+                                   const({"SLEEVE": D2_LO_W,
+                                          "CORE": 1 - D2_LO_W}),
+                                   rebal_dates=ctx.months), ctx.dates)
+    assert r == pytest.approx(want)
+    assert d2_warmup_days(ctx) == len(ctx.dates)         # all of it is warm-up
+
+
+def test_both_cash_conventions_are_registered_and_neither_is_a_comparator():
+    """M4. The swept twins must exist for every table, and must NOT become
+    incumbents (the bar is still 'vs the best of the three registered ones')
+    or judged arms (the campaign is still 22)."""
+    assert {"INC-3070SPY-SWEPT", "REF-R2A-SWEPT"} <= set(INCUMBENTS)
+    assert INCUMBENT_KEYS == ["INC-B5", "INC-3070SPY", "INC-SPY"]
+    assert len(VARIANTS) == 22
+    assert all(k not in VARIANTS for k in ("INC-3070SPY-SWEPT", "REF-R2A-SWEPT"))
+
+
+def test_the_swept_30_70_book_differs_from_the_frozen_one_only_by_idle_cash():
+    ctx = _ctx(40, core=[0.001] * 39, bil=[0.0003] * 39, idle=[0.0] * 40)
+    assert curve_returns(inc_3070spy(ctx, swept=True), ctx.dates) == \
+        pytest.approx(curve_returns(inc_3070spy(ctx), ctx.dates))
+    idle = _ctx(40, core=[0.001] * 39, bil=[0.0003] * 39, idle=[1.0] * 40)
+    assert inc_3070spy(idle, swept=True)[idle.dates[-1]] > \
+        inc_3070spy(idle)[idle.dates[-1]]
+
+
+def test_power_mc_is_monotone_in_power_and_at_least_the_50_percent_floor():
+    """M2. The harness's published MDE is the 50%-power threshold; the 80% one
+    can never be smaller, and the empirical power at the published floor must
+    land near a half."""
+    import random
+    rng = random.Random(7)
+    a = [rng.gauss(0.0004, 0.01) for _ in range(400)]
+    b = [rng.gauss(0.0002, 0.01) for _ in range(400)]
+    out = power_mc(a, b, worlds=25, draws=200, at=(0.20,))
+    q = out["mde_at_power"]
+    assert q["0.50"] <= q["0.80"] <= q["0.90"]
+    assert 0.0 <= out["power_at"]["0.2000"] <= 1.0
+
+
+def test_max_t_adjusted_p_is_never_smaller_than_the_raw_p():
+    """A multiplicity adjustment that made a p-value SMALLER would be broken;
+    with correlated near-identical arms it must also stay far below the
+    Bonferroni factor of n."""
+    ctx = _ctx(300, core=[0.0006 * (1 if i % 3 else -1) for i in range(299)],
+               bil=[0.00005] * 299, idle=[0.0] * 300)
+    keys = ["C1-05", "C1-10", "C6-monthly"]
+    inc_ex = [a - b for a, b in
+              zip(curve_returns(ctx.core, ctx.dates), ctx.bil_rets, strict=True)]
+    out = westfall_young_maxt(ctx, keys, inc_ex, draws=200)
+    assert set(out["adjusted_p"]) == set(keys)
+    for k in keys:
+        assert out["adjusted_p"][k] >= out["raw_p_shared"][k] - 1e-12
+        assert out["adjusted_p"][k] <= min(1.0, len(keys) * out["raw_p_shared"][k]) + 1e-9
+
+
+def test_proxy_sessions_are_counted_not_quoted():
+    """m2. The synthetic window's proxy usage must be COUNTED from the sources;
+    the report carried a hard-coded string for two rounds."""
+    ctx = _ctx(5, idle=[0.0] * 5)
+    full = {d: 1.0 for d in ctx.dates}
+    ctx.raw = {f: dict(full) for f in B5_WEIGHTS}
+    assert proxy_session_usage(ctx)["returns_using_a_proxy"] == 0
+    hole = dict(full)
+    del hole[ctx.dates[2]]                     # one fund missing one session
+    ctx.raw["KMLM"] = hole
+    got = proxy_session_usage(ctx)
+    assert got["returns_using_a_proxy"] == 2   # the return into it and out of it
+    assert got["per_fund"] == {"KMLM": 2}
+    assert got["n_returns"] == len(ctx.dates) - 1
