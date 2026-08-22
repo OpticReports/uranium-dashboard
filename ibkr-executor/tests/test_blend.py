@@ -4464,3 +4464,295 @@ def test_gate_mf9_an_unparseable_200_is_negative_cached_too(monkeypatch):
     # ...and it is still RE-TRIED on the schedule, never abandoned
     nino_mod._CACHE["fail"] = time.time() - nino_mod.FAIL_TTL - 1
     assert nino_mod.nino34_weekly() is None and hits["n"] == 2
+
+
+# --- the MF2 counter-review's MATERIALS (the LADDER half of the kill) ---------
+
+def test_gate_mf2_1_kill_never_makes_the_ladder_close_on_the_API_thread(
+        tmp_path, monkeypatch):
+    """MF2-1: `KILL_LOCK_WAIT_S` bounds the WAIT for `MGR_LOCK`, never
+    `/kill` itself. With the loop PARKED — the deployed steady state on a
+    300s cadence, so `MGR_LOCK` is free >99% of the time — `/kill` took the
+    lock instantly and then made the UNCAPPED `close_spread` call itself,
+    on the API thread, holding the lock: measured 20.008s of dead air with
+    a wedged gateway and one OPEN leg, no halt on disk, no Telegram and no
+    HTTP response for the whole window, while README §6 said "the halt, the
+    journal write and the HTTP response are unconditional".
+
+    Every leg close belongs to the loop thread now, exactly as the blend
+    flatten already did (R2: it owns the adapter's event loop)."""
+    import threading
+    import time as _time
+
+    HANG = 8.0
+    release = threading.Event()
+    closes = {"threads": [], "n": 0}
+
+    class _WedgedGateway(DryAdapter):
+        def close_spread(self, ref):
+            closes["n"] += 1
+            closes["threads"].append(threading.get_ident())
+            release.wait(HANG)
+            return {"value": 1.0}
+
+    client, service = _service_client(tmp_path, monkeypatch,
+                                      adapter=_WedgedGateway)
+    try:
+        with client as c:
+            for _ in range(200):
+                if service.MGR is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            assert _wait_until(lambda: service.LAST["loop_ok"] > 0)
+            with service.MGR_LOCK:
+                leg = list(service.MGR.state.legs)[0]
+                service.MGR.on_opened(leg, 10_000, "ref-1", "2026-08-01")
+                service.MGR.save()
+            _time.sleep(0.3)
+            assert not service.MGR_LOCK.locked()    # the loop is PARKED
+            api_thread = threading.get_ident()
+            t0 = _time.time()
+            r = c.get("/kill", params={"token": "sekrit"})
+            elapsed = _time.time() - t0
+            # the response is prompt even though the gateway is wedged
+            assert elapsed < HANG / 4, f"/kill blocked {elapsed:.2f}s"
+            assert r.json()["ladder"] == "close_queued"
+            assert service.MGR.state.halted == "KILL"
+            # ...and the API thread never reached the adapter at all
+            assert api_thread not in closes["threads"]
+            assert service.LADDER_KILL.is_set()
+            release.set()
+            assert _wait_until(
+                lambda: service.MGR.state.legs[leg].status != "OPEN",
+                timeout=20.0)
+            assert closes["n"] >= 1                 # the LOOP closed it
+            assert api_thread not in closes["threads"]
+    finally:
+        release.set()
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_mf2_2_a_queued_ladder_kill_survives_a_restart(
+        tmp_path, monkeypatch):
+    """MF2-2: the deferred ladder halt lived in MEMORY ONLY while the
+    operator was told it was in force. Measured: `/kill` answered in 0.505s
+    with "The ladder is halted from now", and on disk the book said
+    `halted: None` with the leg still OPEN — so a restart in that window
+    (the restart a wedged gateway invites) came back UN-HALTED with an open
+    leg. The window is the wedged ladder section: unbounded.
+
+    `MGR.save()` from an API thread is not the fix (x12 forbids the
+    cross-thread read-modify-write of `legs`); the kill is JOURNALLED to a
+    sentinel of its own, the way the blend flatten request is, and `_load`
+    re-asserts the halt from it."""
+    import threading
+    import time as _time
+
+    from app.manager import LadderManager
+    from app.config import settings
+
+    HANG = 8.0
+    release = threading.Event()
+    marks = {"n": 0}
+
+    class _SlowLadderAdapter(DryAdapter):
+        def mark(self, ref):
+            marks["n"] += 1
+            release.wait(HANG)
+            return 1.0
+
+    client, service = _service_client(tmp_path, monkeypatch,
+                                      adapter=_SlowLadderAdapter)
+    try:
+        with client as c:
+            for _ in range(200):
+                if service.MGR is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            assert _wait_until(lambda: service.LAST["loop_ok"] > 0)
+            with service.MGR_LOCK:
+                leg = list(service.MGR.state.legs)[0]
+                service.MGR.on_opened(leg, 10_000, "ref-1", "2026-08-01")
+                service.MGR.save()
+            n0 = marks["n"]
+            service.LOOP_WAKE.set()
+            assert _wait_until(lambda: marks["n"] > n0)
+            _time.sleep(0.3)
+            assert service.MGR_LOCK.locked()        # wedged INSIDE the section
+            r = c.get("/kill", params={"token": "sekrit"})
+            assert r.json()["ladder"] == "close_queued"
+            # the book itself cannot be written from here — the loop owns it
+            on_disk = json.load(open(service.MGR.state_path))
+            assert [k for k, v in on_disk["legs"].items()
+                    if v["status"] == "OPEN"] == [leg]
+            # ...so what a CRASH right here comes back as is the whole point
+            crashed = LadderManager(settings, service.MGR.state_path)
+            assert crashed.state.halted == "KILL"
+            assert crashed.kill_pending is True
+            assert crashed.state.legs[leg].status == "OPEN"   # still open
+            release.set()
+            # once the loop has closed the legs the sentinel is consumed
+            assert _wait_until(
+                lambda: service.MGR.state.legs[leg].status != "OPEN",
+                timeout=20.0)
+            assert _wait_until(
+                lambda: not os.path.exists(service.MGR.kill_sentinel))
+            assert LadderManager(settings,
+                                 service.MGR.state_path).state.halted == "KILL"
+    finally:
+        release.set()
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_mf2_3_resume_cancels_a_queued_ladder_kill(
+        tmp_path, monkeypatch):
+    """MF2-3 (new harm this round): `/resume` cleared `halted` but not the
+    QUEUED ladder kill, so a deferred kill fired at a RESUMED ladder — the
+    measured harm was a leg the operator had deliberately re-opened after
+    resuming being CLOSED by the stale kill. The blend half has had exactly
+    this guard since R2 ("a stale kill must never flatten a resumed
+    book").
+
+    Reproduced the way the reviewer did: the operator double-taps `/kill`
+    because the first one has not answered (its close is wedged on the
+    gateway), so the second one is DEFERRED; the loop then parks in its
+    NOAA fetch, which is what lets `/resume` land before the deferred kill
+    is consumed."""
+    import threading
+    import time as _time
+
+    from app import service as service_mod
+    from app.config import settings as settings_mod
+
+    CLOSE_HANG, FEED_HANG = 8.0, 10.0
+    release, release_feed = threading.Event(), threading.Event()
+    closes = {"n": 0}
+    ninos = {"n": 0}
+
+    def slow_nino():
+        ninos["n"] += 1
+        if ninos["n"] > 1:              # cycle 1 stays fast
+            release_feed.wait(FEED_HANG)
+        return 2.7
+
+    class _WedgedClose(DryAdapter):
+        def close_spread(self, ref):
+            closes["n"] += 1
+            if closes["n"] == 1:
+                release.wait(CLOSE_HANG)
+            return {"value": 1.0}
+
+    monkeypatch.setattr(service_mod, "nino34_weekly", slow_nino)
+    client, service = _service_client(tmp_path, monkeypatch,
+                                      adapter=_WedgedClose)
+    monkeypatch.setattr(settings_mod, "blend_enabled", False)   # ladder only
+    try:
+        with client as c:
+            for _ in range(200):
+                if service.MGR is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            assert _wait_until(lambda: service.LAST["loop_ok"] > 0)
+            legs = list(service.MGR.state.legs)
+            with service.MGR_LOCK:
+                service.MGR.on_opened(legs[0], 10_000, "ref-1", "2026-08-01")
+                service.MGR.save()
+            # kill #1: its close wedges on the gateway, holding MGR_LOCK
+            k1: dict = {}
+            t1 = threading.Thread(
+                target=lambda: k1.update(
+                    c.get("/kill", params={"token": "sekrit"}).json()))
+            t1.start()
+            assert _wait_until(lambda: closes["n"] >= 1, timeout=20.0)
+            # kill #2, the operator double-tap: DEFERRED, whoever holds it
+            assert c.get("/kill", params={"token": "sekrit"}
+                         ).json()["ladder"] == "close_queued"
+            assert service.LADDER_KILL.is_set()
+            release.set()
+            t1.join(timeout=20)
+            assert _wait_until(
+                lambda: service.MGR.state.legs[legs[0]].status != "OPEN",
+                timeout=20.0)
+            # the loop is now parked in its (slow) NOAA fetch, so /resume
+            # lands BEFORE the ladder section could consume a queued kill
+            assert _wait_until(lambda: ninos["n"] >= 2, timeout=20.0)
+            with service.MGR_LOCK:
+                service.MGR.on_opened(legs[1], 10_000, "ref-2", "2026-08-02")
+                service.MGR.save()
+            c.get("/kill", params={"token": "sekrit"})
+            # the operator changes their mind before the loop gets there
+            assert c.get("/resume", params={"token": "sekrit"}
+                         ).json()["cleared"] == "KILL"
+            assert not service.LADDER_KILL.is_set()
+            assert not os.path.exists(service.MGR.kill_sentinel)
+            # ...and re-opens a third leg deliberately
+            with service.MGR_LOCK:
+                service.MGR.on_opened(legs[2], 10_000, "ref-3", "2026-08-03")
+                service.MGR.save()
+            release_feed.set()
+            # the loop runs its ladder section: no stale kill may fire there
+            assert _wait_until(lambda: ninos["n"] >= 3, timeout=20.0)
+            _time.sleep(0.3)
+            assert service.MGR.state.legs[legs[1]].status == "OPEN"
+            assert service.MGR.state.legs[legs[2]].status == "OPEN"
+            assert service.MGR.state.halted is None
+    finally:
+        release.set()
+        release_feed.set()
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_mf2_4_the_kill_never_reports_legs_it_did_not_close(
+        tmp_path, monkeypatch):
+    """MF2-4: `_kill_ladder` swallowed every per-leg `close_spread` failure
+    with a log line, and `/kill` answered `ladder: "closed"` with the alert
+    "all legs closed" — measured with a gateway that rejected every close,
+    while the leg was still OPEN at the venue. The blend's own
+    `execute_flatten` already models the right behaviour ("closed vs
+    parked", `WITH EXCEPTIONS`); the machine-readable `ladder` field and
+    the operator alert must both report what ACTUALLY happened."""
+    import threading
+    import time as _time
+
+    class _RejectingGateway(DryAdapter):
+        def close_spread(self, ref):
+            raise RuntimeError("gateway rejected the close")
+
+    client, service = _service_client(tmp_path, monkeypatch,
+                                      adapter=_RejectingGateway)
+    try:
+        with client as c:
+            for _ in range(200):
+                if service.MGR is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            assert _wait_until(lambda: service.LAST["loop_ok"] > 0)
+            with service.MGR_LOCK:
+                leg = list(service.MGR.state.legs)[0]
+                service.MGR.on_opened(leg, 10_000, "ref-1", "2026-08-01")
+                service.MGR.save()
+            sent: list[str] = []
+            monkeypatch.setattr(service, "send", sent.append)
+            r = c.get("/kill", params={"token": "sekrit"})
+            # nothing has closed at the moment this answers, and it says so
+            assert r.json()["ladder"] != "closed"
+            (kill_msg,) = [m for m in sent if "KILLED" in m]
+            assert "all legs closed" not in kill_msg
+            # the loop tries, fails, and REPORTS the failure by leg name
+            assert _wait_until(
+                lambda: any("could NOT close" in m for m in sent),
+                timeout=20.0)
+            fail_msgs = [m for m in sent if "could NOT close" in m]
+            assert leg in fail_msgs[0] and "STILL OPEN" in fail_msgs[0]
+            # ...and it is not consumed: a kill that could not close its
+            # legs stays queued and is retried, never quietly dropped
+            assert service.LADDER_KILL.is_set()
+            assert os.path.exists(service.MGR.kill_sentinel)
+            assert service.MGR.state.legs[leg].status == "OPEN"
+            assert service.MGR.state.halted == "KILL"
+    finally:
+        service.BLEND = None
+        service.MGR = None
