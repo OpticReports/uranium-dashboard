@@ -549,12 +549,25 @@ class Blend3070Manager:
         # published truncated JSON (measured: 467 raises + 52 corrupt
         # published states over 4 unlocked savers on a 132 KB book), and it
         # flaked the suite with FileNotFoundError on the shared .tmp.
-        # Production writers all hold BLEND_LOCK (service.py: the loop's
-        # run_cycle, /kill's request_flatten, /resume's resume; /status and
-        # /blend/feed are read-only) — this makes save() safe on its own
-        # regardless.
+        # Production writers no longer all hold BLEND_LOCK: MF-A moved
+        # /kill's request_flatten to BLEND_HALT_LOCK on purpose, so its
+        # halt cannot queue behind a cycle (mf2-6 — this comment claimed
+        # the old discipline for a round after it was dropped). The
+        # remaining writers are the loop's run_cycle and /resume's resume
+        # under BLEND_LOCK, and /kill under BLEND_HALT_LOCK; /status and
+        # /blend/feed are read-only. What keeps THAT safe is this write
+        # being atomic and the state object being a single shared one
+        # mutated field-by-field under the GIL — never two half-books.
         directory = os.path.dirname(self.state_path) or "."
         os.makedirs(directory, exist_ok=True)
+        # mf2-9: the register was pruned only on _load, so a row that left
+        # the book between saves was written to disk as a dangling entry
+        # (measured: stand_in_rows={'1': ['time_stop']} with no such
+        # position). Prune where the book is written, not only where it is
+        # read.
+        for gone in [k for k in self.state.stand_in_rows
+                     if k not in self.state.positions]:
+            self.state.stand_in_rows.pop(gone)
         payload = {"initialized": self.state.initialized,
                    "positions": {k: asdict(v)
                                  for k, v in self.state.positions.items()},
@@ -1188,6 +1201,13 @@ class Blend3070Manager:
             stop_level=intent["stop_level"],
             risk_per_share=max(intent["entry_ref"] - intent["stop_level"], 0.0))
         key = str(pos.call_id)
+        # mf2-10: this row is built from a COMPLETE intent — no field of it
+        # was invented — so a register entry left by a retired row that
+        # held the same key must not park it. Without this the new row was
+        # flagged UNVERIFIABLE for good: never exited, never re-stopped,
+        # never flattened, blocking every entry, while the alert told the
+        # operator to restore values that were never invented for it.
+        self.state.stand_in_rows.pop(key, None)
         self.state.positions[key] = pos
         self.state.entered_ids.append(pos.call_id)
         self.state.entered_ids = self.state.entered_ids[-2000:]
@@ -1248,6 +1268,7 @@ class Blend3070Manager:
         pos = self.state.positions.pop(str(call_id), None)
         if pos is None:
             return
+        self.state.stand_in_rows.pop(str(call_id), None)   # mf2-9/mf2-10
         pnl = (fill_price - pos.fill_price) * pos.qty
         self.state.sleeve_cash += pos.qty * fill_price
         r_mult = ((fill_price - pos.fill_price) / pos.risk_per_share
@@ -1298,6 +1319,7 @@ class Blend3070Manager:
         pos = self.state.positions.pop(str(call_id), None)
         if pos is None:
             return
+        self.state.stand_in_rows.pop(str(call_id), None)   # mf2-9/mf2-10
         self.state.unreconciled[str(call_id)] = {**asdict(pos),
                                                  "reason": reason,
                                                  "ts": int(time.time())}
@@ -1343,7 +1365,9 @@ class Blend3070Manager:
     def request_flatten(self, today: str) -> None:
         """/kill stage 1 (R2): journal the flatten request (persisted — a
         restart resumes it, same doctrine as pending_entries) and halt the
-        book immediately (no new entries). Stage 2 — the actual flatten —
+        book immediately (no new entries — and run_cycle's intent loop
+        abandons the rest of a plan made before the halt, MF2-5). Stage 2 —
+        the actual flatten —
         runs on the blend LOOP thread's next cycle (execute_flatten): that
         thread owns the adapter's ib_async event loop, while an API thread
         pumping a fresh loop against the shared connection would time out
@@ -3223,7 +3247,24 @@ def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
     prices = reference_prices(adapter, mgr, payload)
     intents = mgr.step(today, payload, prices)
     exit_unsettled = False     # a funding exit deferred/UNRECONCILED (N5)
-    for it in intents:
+    for i, it in enumerate(intents):
+        if mgr.state.halted:
+            # MF2-5: `step()` refuses to PLAN anything for a halted book,
+            # but that guard is behind us — the plan was made before the
+            # halt landed. Since MF-A a /kill halts the book the instant
+            # the operator hits it, in the middle of this loop, and nothing
+            # here re-read it: measured, a cycle placed four venue BUYs
+            # (AAA, BBB, SPY, BIL) with `halted='KILL'` and a flatten
+            # already journalled, while `request_flatten` promised "halt
+            # the book immediately (no new entries)". The rest of the plan
+            # is abandoned; the flatten runs on the next iteration, which
+            # /kill has already woken.
+            alert(f"🛑 blend: HALTED ({mgr.state.halted}) mid-cycle — "
+                  f"{len(intents) - i} planned action(s) "
+                  f"were NOT executed (the plan predates the halt). The "
+                  f"book stays reconciled and stop-protected; a queued "
+                  f"/kill flatten runs on the next iteration.")
+            break
         try:
             act = it["action"]
             if act == "ALERT":

@@ -4756,3 +4756,80 @@ def test_gate_mf2_4_the_kill_never_reports_legs_it_did_not_close(
     finally:
         service.BLEND = None
         service.MGR = None
+
+
+def test_gate_mf2_5_a_halt_landing_mid_cycle_stops_the_rest_of_the_plan(
+        tmp_path):
+    """MF2-5: `step()`'s `if st.halted: return []` guard is BEHIND the
+    intent-execution loop, which never re-checked. Since MF-A the halt
+    lands the instant the operator hits `/kill` — in the middle of a cycle
+    — and the plan made before it kept executing: measured, four venue BUYs
+    (AAA, BBB, SPY, BIL) placed with `halted='KILL', flatten_pending=True`,
+    while `request_flatten` promised "halt the book immediately (no new
+    entries)" and `/status` showed the book halted.
+
+    Base places the same four, so this is a false CLAIM rather than a new
+    harm — and the free win MF-A left on the table."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=5_000.0, spy_qty=0, core_cash=7_000.0)
+    buys: list[tuple] = []
+
+    class _KillOnFirstBuy(DryAdapter):
+        def place_stock_order(self, symbol, qty, kind, **kw):
+            if qty > 0:
+                buys.append((symbol, m.state.halted))
+                if len(buys) == 1:      # the operator hits /kill right here
+                    m.request_flatten("2026-08-20")
+            return super().place_stock_order(symbol, qty, kind, **kw)
+
+        def stock_price(self, symbol):
+            return 10.0
+
+    a = _KillOnFirstBuy()
+    pl = payload(entries=[entry(call_id=11, symbol="AAA", entry_ref=10.0),
+                          entry(call_id=12, symbol="BBB", entry_ref=10.0)],
+                 stops=[stop_row(11, "AAA", 9.0), stop_row(12, "BBB", 9.0)])
+    run_cycle(m, a, pl, "2026-08-20", alert=lambda _m: None)
+    # the plan was made before the halt; nothing after it reached the venue
+    assert [s for s, halted in buys if halted] == [], (
+        f"orders placed AFTER the halt: {buys}")
+    assert len(buys) == 1 and buys[0][1] is None
+    assert m.state.halted == "KILL" and m.state.flatten_request is not None
+
+
+def test_gate_mf2_9_10_the_stand_in_register_never_outlives_its_row(
+        tmp_path):
+    """mf2-9: the register was pruned only on `_load`, so a row that left
+    the book was SAVED as a dangling entry. mf2-10 (new this round): a
+    fresh, fully-known row reusing that retired key was then poisoned
+    permanently — flagged UNVERIFIABLE for good, never exited, re-stopped
+    or flattened, blocking every entry, while the alert told the operator
+    to restore values that were never invented for it."""
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    _held_position(m)
+    m.state.stand_in_rows["1"] = ["time_stop"]
+    m.state.positions["1"].history_gap = True
+    m.save()
+    assert json.load(open(m.state_path))["stand_in_rows"] == {"1": ["time_stop"]}
+
+    m.state.positions.pop("1")          # the row leaves the book
+    m.save()
+    assert json.load(open(m.state_path))["stand_in_rows"] == {}
+
+    # ...and a NEW row that reuses the key is built from a complete intent
+    m.state.stand_in_rows["1"] = ["time_stop"]      # as a stale save left it
+    m.on_entered({"call_id": 1, "symbol": "NEWCO", "qty": 9,
+                  "entry_ref": 10.0, "stop_level": 9.0}, 10.0, "ref",
+                 "2026-08-20")
+    assert m.state.stand_in_rows == {}
+    assert m.state.positions["1"].history_gap is False
+    m2 = Blend3070Manager(m.cfg, m.state_path)
+    assert m2.state.stand_in_rows == {}
+    assert m2.state.positions["1"].history_gap is False
+    assert m2.state.positions["1"].symbol == "NEWCO"
+
+    # and an exit takes the register entry with it
+    m.state.stand_in_rows["1"] = ["time_stop"]
+    m.on_exited(1, 11.0, "signal")
+    assert m.state.stand_in_rows == {}
