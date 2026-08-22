@@ -48,6 +48,49 @@ btc-executor  --Coinbase Advanced API-->  BTC perp product
 | orphan fills | our limit filled but paper cancelled -> unwound at market |
 | restart | ledger + order map persisted; reboot re-places nothing |
 
+### Watchdog — who watches the executor (2026-08-22)
+
+Every rail above runs *inside* this service, so the one failure it can never
+report is its own death: a crashed, OOM-killed or failed-deploy executor
+pages nobody, and Telegram silence looks exactly like a quiet market. The
+only cover was an agent-run daily check, which stops whenever model credits,
+usage windows or the schedule lapse — an AI dependency in a live-money path.
+
+So the watch lives in **btc-paper-engine** (`backend/app/watchdog.py`):
+keyless, model-free, read-only. It polls this service's PUBLIC `/pulse` on a
+timer and pages Telegram on:
+
+| condition | meaning |
+|---|---|
+| `executor_silent` | no pulse for `WATCHDOG_SILENCE_S` (900s) — **the dead-man's switch**; nothing else could report this |
+| `divergence_<leg>` | executor leg vs engine book disagree for > `WATCHDOG_DIVERGENCE_S` (1800s) — the mirror stopped mirroring. Only a third party comparing both sides can see this; the persistence window absorbs the legitimate bar-close handoff |
+| `halted` / `stale_feed` / `red_events` / `not_ready` | corroborates this service's own pages from outside it |
+
+Each condition latches: one page when it opens, a re-page only every
+`WATCHDOG_COOLDOWN_S` while it stays open, and a `RECOVERED` line when it
+clears (the 2026-08-17 storm sent 35 identical REDs in ~12 minutes — never
+again, without ever going quiet about something still broken).
+
+**Separation of powers holds:** the engine remains keyless. The watchdog
+reads a public endpoint and the engine's own books, holds no credential, and
+has no order path — enforced by an AST gate test, not by convention.
+
+**What it does NOT cover, stated plainly:** it is hosted in the engine, so it
+dies with the engine. Engine-down-alone is already covered from this side
+(the stale-engine rail), which makes the two services mutual watchers.
+Neither covers **both** being down — a Render account suspension, billing
+lapse or platform outage. Nothing hosted on Render can. In that case the
+protection is the venue-resting stop (a real order at Coinbase that survives
+every host failure); the trades you lose are signal exits, not stops. An
+external uptime ping on `/health` is the only thing that would page, and it
+is not built.
+
+Enable: set `WATCHDOG_ENABLED=true` plus `TELEGRAM_BOT_TOKEN` /
+`TELEGRAM_CHAT_ID` on **btc-paper-engine** (default OFF, `sync:false` so a
+blueprint sync cannot silently disarm it). `GET /health` reports whether it
+is actually armed — a pager you believe is running but isn't is worse than
+no pager.
+
 ## Setup
 
 1. **Coinbase**: enable derivatives; fund with USDC. Create a CDP API key with

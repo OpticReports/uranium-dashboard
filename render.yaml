@@ -203,6 +203,23 @@ services:
       # on the btc-executor service. Enter once in the Render dashboard.
       - key: EXEC_TOKEN
         sync: false
+      # --- Executor watchdog (app/watchdog.py) ----------------------------
+      # Keyless dead-man's switch: polls btc-executor's PUBLIC /pulse and
+      # pages Telegram when the executor goes silent (the one failure the
+      # executor itself can never report) or when the mirror stops matching
+      # this engine's books. Reads no secret, places no order — the engine
+      # stays keyless. Default OFF; flip to "true" in the dashboard when the
+      # Telegram vars below are set. sync:false so a blueprint sync can't
+      # silently turn the pager off.
+      - key: WATCHDOG_ENABLED
+        sync: false
+      - key: WATCHDOG_PULSE_URL
+        value: https://btc-executor.onrender.com/pulse
+      # Same bot/chat as btc-executor's alerts (reuse the existing pair).
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
 
   # --- Catalyst Options Engine (pre-catalyst asymmetry radar) ----------------
   # PAPER ONLY + KEYLESS decision brain (born from the 2026-08-19 MRNA +130%

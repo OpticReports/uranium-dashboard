@@ -13,6 +13,7 @@ from fastapi.responses import StreamingResponse
 
 from .config import settings
 from .live import ENGINE, start_background_loop
+from .watchdog import start_watchdog
 from .store.db import (
     BarRow, EquitySnapRow, EventRow, SignalRow, TradeRow, init_db, session_scope,
 )
@@ -21,11 +22,19 @@ logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.I
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
+WATCHDOG = None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global WATCHDOG
     init_db()
     if settings.run_engine:
         start_background_loop()
+    # keyless executor watchdog; reads only the executor's public /pulse and
+    # this engine's own books. Off unless WATCHDOG_ENABLED is set.
+    WATCHDOG = start_watchdog(
+        settings, lambda: (ENGINE.status() or {}).get("books", {}))
     yield
 
 
@@ -41,8 +50,14 @@ def _iso(ts: int | None) -> str | None:
 
 @app.get("/health")
 def health():
+    # watchdog state is surfaced here on purpose: a monitor you believe is
+    # running but isn't is worse than no monitor at all.
+    wd = {"enabled": bool(settings.watchdog_enabled and WATCHDOG is not None)}
+    if WATCHDOG is not None:
+        wd["open_conditions"] = sorted(WATCHDOG.open)
+        wd["pulse_seen"] = WATCHDOG.last_ok is not None
     return {"status": "ok", "service": "btc-paper-engine",
-            "engine": settings.run_engine}
+            "engine": settings.run_engine, "watchdog": wd}
 
 
 @app.get("/status")

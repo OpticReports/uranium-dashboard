@@ -37,6 +37,18 @@ class Settings(BaseSettings):
     # endpoint open (dev); set in production so book state isn't public.
     exec_token: str = ""
 
+    # --- executor watchdog (see app/watchdog.py) -------------------------
+    # Keyless, read-only monitoring of btc-executor's PUBLIC /pulse. Default
+    # OFF, like AUTO_DRILL: a monitor that pages must be switched on
+    # deliberately. Reads no secret and can place no order.
+    watchdog_enabled: bool = False
+    watchdog_pulse_url: str = "https://btc-executor.onrender.com/pulse"
+    watchdog_period_s: int = 300          # poll cadence
+    watchdog_silence_s: int = 900         # no pulse this long -> dead-man's page
+    watchdog_target_age_s: int = 900      # executor's feed staleness threshold
+    watchdog_divergence_s: int = 1800     # leg/book disagreement must PERSIST
+    watchdog_cooldown_s: int = 3600       # re-page interval while still open
+
     @property
     def cors_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
