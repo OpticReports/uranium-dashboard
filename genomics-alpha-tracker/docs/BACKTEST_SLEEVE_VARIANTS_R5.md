@@ -50,7 +50,7 @@ D4's weight is the registered selection rule applied once: the D1 arm with the h
 | D1-05 | D1 | static 5% R2-A / 95% B.5 with the sleeve's idle CAPITAL earning BIL, monthly rebalance |
 | D1-10 | D1 | static 10% R2-A / 90% B.5 with the sleeve's idle CAPITAL earning BIL, monthly rebalance |
 | D1-15 | D1 | static 15% R2-A / 85% B.5 with the sleeve's idle CAPITAL earning BIL, monthly rebalance |
-| D2 | D2 | sleeve 15% when trailing 60d corr(sleeve, core) < 0.30 else 5%, monthly, with the sleeve's idle CAPITAL earning BIL |
+| D2 | D2 | sleeve 15% when trailing 60d corr(sleeve, core) < 0.30 else 5%, monthly, with the sleeve's idle CAPITAL earning BIL (warm-up default = the registered 5% low leg) |
 | D3 | D3 | UNCAPPED inverse-vol sleeve/core, monthly, trailing 60d (no 30% cap — the parameter that voided round 4's C3) |
 | D4-daily | D4 | D1 at its best weight, daily rebalance |
 | D4-band005 | D4 | D1 at its best weight, 0.5% absolute band rebalance |
@@ -121,7 +121,7 @@ Basis check: adjudication is on BIL-excess Sharpe/Sortino, with rf=0 printed bes
 
 Same measurement as round 4's, and for the same reason — a null is only worth acting on if you know what size of edge it ruled out. A known TRUE edge is injected into each arm's daily excess returns (a constant shift sized to raise its Sharpe by exactly delta) and criterion 2 is re-run.
 
-**Both power conventions are printed (M2).** A constant shift moves the whole bootstrap distribution with it, so "the smallest delta at which THIS sample's interval excludes zero" is the edge the test would catch **half** the time — it is -CI_lo by construction, not the conventional minimum detectable effect. The 80%-power column is the quantile of that threshold across 200 circular block-resampled worlds of the same paired history (1500 draws each). Burst-shaped edges cost about 7% more resolution and pure volatility cuts are identical, so the constant-drift injection is defensible; the power convention was not.
+**Both power conventions are printed (M2).** A constant shift moves the whole bootstrap distribution with it, so "the smallest delta at which THIS sample's interval excludes zero" is the edge the test would catch **half** the time — it is -CI_lo by construction, not the conventional minimum detectable effect. The 80%-power column is the quantile of that threshold across 200 circular block-resampled worlds of the same paired history (1500 draws each). The counter-agent's shape check (recorded in its verdict, not re-run here) found burst-shaped edges cost ~7% more resolution and pure volatility cuts identical, so the constant-drift injection is defensible; the power convention was not.
 
 | variant | 95% CI half-width | +0.05 | +0.10 | +0.20 | +0.40 | MDE @50% power (as published) | MDE @80% power |
 |---|---|---|---|---|---|---|---|
@@ -133,7 +133,7 @@ Same measurement as round 4's, and for the same reason — a null is only worth 
 | D4-daily | +/-0.131 | no | no | **detected** (p=0.002) | **detected** (p=0.000) | +0.12 | +0.18 |
 | D4-band005 | +/-0.130 | no | no | **detected** (p=0.002) | **detected** (p=0.000) | +0.12 | +0.18 |
 
-The tightest arm here resolves an edge of about +0.06 Sharpe at 50% power and +0.09 at 80%. **What that does and does not license:** against `INC-B5` — a book with no sleeve in it at all — this sample cannot resolve an effect the size of the cash mechanism, and it never could have; the registration said so in advance. It does NOT follow that the mechanism is unmeasurable. Measured against its own counterfactual the same fix is +0.0147 with an SE about 17x smaller (next section). The wide interval is a property of the comparison this bar runs, not of the mechanism.
+The tightest arm here resolves an edge of about +0.06 Sharpe at 50% power and +0.09 at 80%. **What that does and does not license:** against `INC-B5` — a book with no sleeve in it at all — this sample cannot resolve an effect the size of the cash mechanism, and it never could have; the registration said so in advance. It does NOT follow that the mechanism is unmeasurable. Measured against its own counterfactual the same fix is +0.0147 on an interval about 39x tighter — same arm, same days, same bootstrap, different comparator (next section). The wide interval is a property of the comparison this bar runs, not of the mechanism.
 
 ## D1 — routing idle cash to CASH instead of the core
 
@@ -157,7 +157,7 @@ The bar compares each arm to `INC-B5`: a portfolio that does not contain the sle
 | the live 30% sleeve weight | 0.8258 -> 0.8689 | **+0.0432** | [+0.0337, +0.0539] | 0.0000 | [+0.0292, +0.0607] | 12.75% -> 13.32% |
 | R2-A sleeve ALONE (idle -> BIL vs frozen) | 0.3579 -> 0.4429 | **+0.0850** | [+0.0645, +0.1103] | 0.0000 | [+0.0548, +0.1276] | 8.52% -> 10.36% |
 
-**The mechanism is adjudicated, in the positive direction, and it clears the campaign-wide bar.** At the registered 10% sleeve the fix is +0.0147 Sharpe (+19 bps of CAGR); on the sleeve alone +0.0850 (+184 bps, 8.52% -> 10.36%). The estimate's standard error is about 0.0017 — roughly 17x tighter than the interval the bar runs on — because the two books differ by a near-deterministic, near-zero-variance drift. It survives heavy pessimism about how much of the idle balance a live sweep would actually capture:
+**The mechanism is adjudicated, in the positive direction, and it clears the campaign-wide bar.** At the registered 10% sleeve the fix is +0.0147 Sharpe (+19 bps of CAGR); on the sleeve alone +0.0850 (+184 bps, 8.52% -> 10.36%). The estimate's standard error is about 0.0017 — roughly 39x tighter than the SAME arm's interval against `INC-B5` — because the two books differ by a near-deterministic, near-zero-variance drift. It survives heavy pessimism about how much of the idle balance a live sweep would actually capture:
 
 | sweep coverage / annual drag on the swept balance | dSharpe vs no sweep | 95% CI | boot p |
 |---|---|---|---|

@@ -1,6 +1,6 @@
 {
  "meta": {
-  "generated": "2026-08-22T18:54:03+00:00",
+  "generated": "2026-08-22T19:18:04+00:00",
   "round": 5,
   "contract": "docs/VARIANTS_PREREGISTRATION_R5_SLEEVE.md",
   "windows": {
@@ -1110,7 +1110,7 @@
     ]
    },
    "D2": {
-    "desc": "sleeve 15% when trailing 60d corr(sleeve, core) < 0.30 else 5%, monthly, with the sleeve's idle CAPITAL earning BIL",
+    "desc": "sleeve 15% when trailing 60d corr(sleeve, core) < 0.30 else 5%, monthly, with the sleeve's idle CAPITAL earning BIL (warm-up default = the registered 5% low leg)",
     "group": "D2",
     "judged": true,
     "full": {
@@ -1983,7 +1983,7 @@
     ]
    },
    "D2": {
-    "desc": "sleeve 15% when trailing 60d corr(sleeve, core) < 0.30 else 5%, monthly, with the sleeve's idle CAPITAL earning BIL",
+    "desc": "sleeve 15% when trailing 60d corr(sleeve, core) < 0.30 else 5%, monthly, with the sleeve's idle CAPITAL earning BIL (warm-up default = the registered 5% low leg)",
     "group": "D2",
     "judged": true,
     "full": {
