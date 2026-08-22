@@ -1,6 +1,6 @@
 {
  "meta": {
-  "generated": "2026-08-22T20:09:29+00:00",
+  "generated": "2026-08-22T21:27:31+00:00",
   "round": 6,
   "contract": "docs/VARIANTS_PREREGISTRATION_R6_SPYCORE.md",
   "windows": {
@@ -29,8 +29,45 @@
   "naive_alpha": 0.05,
   "bonferroni_alpha": 0.016667,
   "bonferroni_conf": 0.983333,
+  "campaign_rounds": [
+   4,
+   5,
+   6
+  ],
+  "campaign_arms": [
+   "C1-05",
+   "C1-10",
+   "C1-15",
+   "C1-20",
+   "C2-10/45/45",
+   "C2-20/40/40",
+   "C3",
+   "C4",
+   "C5",
+   "C6-band05",
+   "C6-band10",
+   "C6-monthly",
+   "C6-quarterly",
+   "C7",
+   "C8",
+   "D1-05",
+   "D1-10",
+   "D1-15",
+   "D2",
+   "D3",
+   "D4-band005",
+   "D4-daily",
+   "E1",
+   "E2",
+   "E3"
+  ],
   "n_arms_all_rounds": 25,
   "arms_other_rounds": 22,
+  "arms_by_round": {
+   "4": 15,
+   "5": 7,
+   "6": 3
+  },
   "bonferroni_alpha_all_rounds": 0.002,
   "bonferroni_conf_all_rounds": 0.998,
   "cost_bps_per_side": 10.0,
@@ -392,6 +429,430 @@
   "e_warmup_defaults": {
    "E1": 0.05,
    "E3": 0.1
+  },
+  "as_judged_all_rounds": {
+   "basis": "each arm against the incumbent ITS OWN round was judged against \u2014 the numbers rounds 4-5 published",
+   "prior_rounds_incumbent": "INC-B5",
+   "this_round_incumbent": "INC-3070SPY-SWEPT",
+   "n_arms_prior": 22,
+   "n_arms_campaign": 25,
+   "min_raw_p": 0.358,
+   "min_raw_p_arm": "C5",
+   "d_sharpe": {
+    "C1-05": -0.004093,
+    "C1-10": -0.012912,
+    "C1-15": -0.026832,
+    "C1-20": -0.04324,
+    "C2-10/45/45": -0.057859,
+    "C2-20/40/40": -0.079513,
+    "C3": -0.089943,
+    "C4": -0.08669,
+    "C5": -0.10785,
+    "C6-band05": -0.093259,
+    "C6-band10": -0.098924,
+    "C6-monthly": -0.092727,
+    "C6-quarterly": -0.093628,
+    "C7": -0.050934,
+    "C8": -0.003799,
+    "D1-05": 0.007429,
+    "D1-10": 0.00884,
+    "D1-15": 0.003734,
+    "D2": 0.03795,
+    "D3": -0.137326,
+    "D4-band005": 0.012144,
+    "D4-daily": 0.010297
+   },
+   "raw_p": {
+    "C1-05": 0.903,
+    "C1-10": 0.828,
+    "C1-15": 0.7625,
+    "C1-20": 0.73,
+    "C2-10/45/45": 0.781,
+    "C2-20/40/40": 0.721,
+    "C3": 0.65,
+    "C4": 0.677,
+    "C5": 0.358,
+    "C6-band05": 0.633,
+    "C6-band10": 0.595,
+    "C6-monthly": 0.6415,
+    "C6-quarterly": 0.6395,
+    "C7": 0.754,
+    "C8": 0.9895,
+    "D1-05": 0.823,
+    "D1-10": 0.8945,
+    "D1-15": 0.968,
+    "D2": 0.505,
+    "D3": 0.597,
+    "D4-band005": 0.8535,
+    "D4-daily": 0.8745
+   },
+   "adjusted_p": {
+    "C1-05": 1.0,
+    "C1-10": 0.99975,
+    "C1-15": 0.9995,
+    "C1-20": 0.99775,
+    "C2-10/45/45": 0.9985,
+    "C2-20/40/40": 0.9905,
+    "C3": 0.982,
+    "C4": 0.988,
+    "C5": 0.76025,
+    "C6-band05": 0.9785,
+    "C6-band10": 0.9585,
+    "C6-monthly": 0.98075,
+    "C6-quarterly": 0.979,
+    "C7": 0.99875,
+    "C8": 1.0,
+    "D1-05": 0.99975,
+    "D1-10": 1.0,
+    "D1-15": 1.0,
+    "D2": 0.8995,
+    "D3": 0.96175,
+    "D4-band005": 1.0,
+    "D4-daily": 1.0
+   },
+   "n_positive_prior": 6,
+   "n_positive_campaign_rebased": 23,
+   "n_sign_flips_to_positive": 15,
+   "sign_flips_to_positive": [
+    "C1-05",
+    "C1-10",
+    "C1-15",
+    "C1-20",
+    "C2-10/45/45",
+    "C2-20/40/40",
+    "C3",
+    "C4",
+    "C5",
+    "C6-band05",
+    "C6-band10",
+    "C6-monthly",
+    "C6-quarterly",
+    "C7",
+    "C8"
+   ],
+   "rebased_min_raw_p": 0.5575,
+   "rebased_min_raw_p_arm": "D2"
+  },
+  "spy_core_pin_counterfactual_real": {
+   "weight_days_changed": 170,
+   "n_days": 1433,
+   "correct_core": "SPY",
+   "miswired_core": "B.5 (ctx.core)",
+   "arms": {
+    "E1": {
+     "d_sharpe_miswired": 0.025607,
+     "ci95": [
+      -0.203608,
+      0.281964
+     ],
+     "boot_p": 0.815,
+     "sharpe_bil_miswired": 0.80835
+    },
+    "E3": {
+     "d_sharpe_miswired": 0.066783,
+     "ci95": [
+      -0.11582,
+      0.270651
+     ],
+     "boot_p": 0.451,
+     "sharpe_bil_miswired": 0.849526
+    }
+   }
+  },
+  "e3_level_decomposition_real": {
+   "registered": false,
+   "basis": "HYPOTHESIS GENERATION \u2014 the static control is UNREGISTERED",
+   "mean_applied_w": 0.176483,
+   "sharpe_bil": {
+    "arm": 0.807475,
+    "static_level_twin": 0.788888,
+    "incumbent": 0.782743
+   },
+   "total": {
+    "sharpe_a": 0.807475,
+    "sharpe_b": 0.782743,
+    "sortino_a": 1.179053,
+    "sortino_b": 1.134131,
+    "cagr_a": 0.148894,
+    "cagr_b": 0.143361,
+    "max_dd_a": 0.205509,
+    "max_dd_b": 0.205956,
+    "d_sharpe": 0.024732,
+    "d_sortino": 0.044922,
+    "d_cagr": 0.005532,
+    "ci95": [
+     -0.150616,
+     0.214471
+    ],
+    "boot_p": 0.764
+   },
+   "level": {
+    "sharpe_a": 0.788888,
+    "sharpe_b": 0.782743,
+    "sortino_a": 1.138874,
+    "sortino_b": 1.134131,
+    "cagr_a": 0.147873,
+    "cagr_b": 0.143361,
+    "max_dd_a": 0.219011,
+    "max_dd_b": 0.205956,
+    "d_sharpe": 0.006145,
+    "d_sortino": 0.004744,
+    "d_cagr": 0.004512,
+    "ci95": [
+     -0.12252,
+     0.148864
+    ],
+    "boot_p": 0.9105
+   },
+   "timing": {
+    "sharpe_a": 0.807475,
+    "sharpe_b": 0.788888,
+    "sortino_a": 1.179053,
+    "sortino_b": 1.138874,
+    "cagr_a": 0.148894,
+    "cagr_b": 0.147873,
+    "max_dd_a": 0.205509,
+    "max_dd_b": 0.219011,
+    "d_sharpe": 0.018587,
+    "d_sortino": 0.040179,
+    "d_cagr": 0.001021,
+    "ci95": [
+     -0.092883,
+     0.127151
+    ],
+    "boot_p": 0.713
+   },
+   "timing_thirds": [
+    {
+     "start": "2020-12-03",
+     "end": "2022-10-26",
+     "d_sharpe": 0.086955
+    },
+    {
+     "start": "2022-10-26",
+     "end": "2024-09-23",
+     "d_sharpe": -0.004933
+    },
+    {
+     "start": "2024-09-23",
+     "end": "2026-08-19",
+     "d_sharpe": -0.0833
+    }
+   ]
+  },
+  "e3_level_decomposition_synth": {
+   "registered": false,
+   "basis": "HYPOTHESIS GENERATION \u2014 the static control is UNREGISTERED",
+   "mean_applied_w": 0.17965,
+   "sharpe_bil": {
+    "arm": 0.850087,
+    "static_level_twin": 0.856542,
+    "incumbent": 0.911875
+   },
+   "total": {
+    "sharpe_a": 0.850087,
+    "sharpe_b": 0.911875,
+    "sortino_a": 1.201537,
+    "sortino_b": 1.28505,
+    "cagr_a": 0.16008,
+    "cagr_b": 0.167197,
+    "max_dd_a": 0.322745,
+    "max_dd_b": 0.292276,
+    "d_sharpe": -0.061788,
+    "d_sortino": -0.083513,
+    "d_cagr": -0.007117,
+    "ci95": [
+     -0.197297,
+     0.094938
+    ],
+    "boot_p": 0.4555
+   },
+   "level": {
+    "sharpe_a": 0.856542,
+    "sharpe_b": 0.911875,
+    "sortino_a": 1.197696,
+    "sortino_b": 1.28505,
+    "cagr_a": 0.16004,
+    "cagr_b": 0.167197,
+    "max_dd_a": 0.309567,
+    "max_dd_b": 0.292276,
+    "d_sharpe": -0.055333,
+    "d_sortino": -0.087355,
+    "d_cagr": -0.007158,
+    "ci95": [
+     -0.158161,
+     0.060279
+    ],
+    "boot_p": 0.3545
+   },
+   "timing": {
+    "sharpe_a": 0.850087,
+    "sharpe_b": 0.856542,
+    "sortino_a": 1.201537,
+    "sortino_b": 1.197696,
+    "cagr_a": 0.16008,
+    "cagr_b": 0.16004,
+    "max_dd_a": 0.322745,
+    "max_dd_b": 0.309567,
+    "d_sharpe": -0.006455,
+    "d_sortino": 0.003842,
+    "d_cagr": 4e-05,
+    "ci95": [
+     -0.089867,
+     0.085493
+    ],
+    "boot_p": 0.8995
+   },
+   "timing_thirds": [
+    {
+     "start": "2016-08-23",
+     "end": "2019-12-19",
+     "d_sharpe": 0.044312
+    },
+    {
+     "start": "2019-12-19",
+     "end": "2023-04-19",
+     "d_sharpe": 0.017923
+    },
+    {
+     "start": "2023-04-19",
+     "end": "2026-08-19",
+     "d_sharpe": -0.092227
+    }
+   ]
+  },
+  "e1_level_twin_real": {
+   "registered": false,
+   "basis": "HYPOTHESIS GENERATION \u2014 the static control is UNREGISTERED",
+   "mean_applied_w": 0.088241,
+   "sharpe_bil": {
+    "arm": 0.78952,
+    "static_level_twin": 0.780046,
+    "incumbent": 0.782743
+   },
+   "total": {
+    "sharpe_a": 0.78952,
+    "sharpe_b": 0.782743,
+    "sortino_a": 1.146213,
+    "sortino_b": 1.134131,
+    "cagr_a": 0.151809,
+    "cagr_b": 0.143361,
+    "max_dd_a": 0.225226,
+    "max_dd_b": 0.205956,
+    "d_sharpe": 0.006777,
+    "d_sortino": 0.012082,
+    "d_cagr": 0.008447,
+    "ci95": [
+     -0.217679,
+     0.249804
+    ],
+    "boot_p": 0.94
+   },
+   "level": {
+    "sharpe_a": 0.780046,
+    "sharpe_b": 0.782743,
+    "sortino_a": 1.126535,
+    "sortino_b": 1.134131,
+    "cagr_a": 0.151242,
+    "cagr_b": 0.143361,
+    "max_dd_a": 0.232008,
+    "max_dd_b": 0.205956,
+    "d_sharpe": -0.002697,
+    "d_sortino": -0.007596,
+    "d_cagr": 0.00788,
+    "ci95": [
+     -0.218629,
+     0.231611
+    ],
+    "boot_p": 0.993
+   },
+   "timing": {
+    "sharpe_a": 0.78952,
+    "sharpe_b": 0.780046,
+    "sortino_a": 1.146213,
+    "sortino_b": 1.126535,
+    "cagr_a": 0.151809,
+    "cagr_b": 0.151242,
+    "max_dd_a": 0.225226,
+    "max_dd_b": 0.232008,
+    "d_sharpe": 0.009475,
+    "d_sortino": 0.019678,
+    "d_cagr": 0.000567,
+    "ci95": [
+     -0.043178,
+     0.06049
+    ],
+    "boot_p": 0.6995
+   },
+   "timing_thirds": [
+    {
+     "start": "2020-12-03",
+     "end": "2022-10-26",
+     "d_sharpe": 0.038577
+    },
+    {
+     "start": "2022-10-26",
+     "end": "2024-09-23",
+     "d_sharpe": -0.00328
+    },
+    {
+     "start": "2024-09-23",
+     "end": "2026-08-19",
+     "d_sharpe": -0.041019
+    }
+   ]
+  },
+  "e1_minus_e2_thirds_real": [
+   {
+    "start": "2020-12-03",
+    "end": "2022-10-26",
+    "d_sharpe": 0.038964
+   },
+   {
+    "start": "2022-10-26",
+    "end": "2024-09-23",
+    "d_sharpe": -0.002707
+   },
+   {
+    "start": "2024-09-23",
+    "end": "2026-08-19",
+    "d_sharpe": -0.04245
+   }
+  ],
+  "rebalance_confound_real": {
+   "sharpe_a": 0.782385,
+   "sharpe_b": 0.782743,
+   "sortino_a": 1.131342,
+   "sortino_b": 1.134131,
+   "cagr_a": 0.142701,
+   "cagr_b": 0.143361,
+   "max_dd_a": 0.200776,
+   "max_dd_b": 0.205956,
+   "d_sharpe": -0.000358,
+   "d_sortino": -0.002789,
+   "d_cagr": -0.000661,
+   "ci95": [
+    -0.026989,
+    0.026575
+   ],
+   "boot_p": 0.998
+  },
+  "c3_wins_by_third_real": {
+   "E1": [
+    true,
+    true,
+    false
+   ],
+   "E2": [
+    true,
+    true,
+    false
+   ],
+   "E3": [
+    true,
+    true,
+    false
+   ]
   }
  },
  "verdicts": {
