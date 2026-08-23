@@ -128,6 +128,12 @@ class ExecState:
     # no further auto drills until a human clears it (manual /drill still
     # works). Never set by refusals - only by a drill that ran and failed.
     auto_drill_off: str | None = None
+    # B8 (counter-agent 2026-08-23): a drill holds a position for up to 60s.
+    # `except Exception` does not catch SystemExit, so a Render redeploy
+    # inside that window skips both the fallback flatten and the repair
+    # tail, and nothing at boot closes a stray position - _check_drift pages
+    # but never flattens. This marker survives the restart so __init__ can.
+    drill_open: str | None = None
     # fill-price capture queue. PERSISTED: in-memory it silently dropped
     # every order whose fill landed across a restart - the live pullback
     # entry of 2026-08-17 left fills[] empty after two env-change redeploys,
@@ -171,6 +177,41 @@ class Executor:
         self._warn_unattributed_coverage()
         if any(l.qty != 0.0 for l in self.state.legs.values()):
             self._cov("restart_with_position")
+        self._reconcile_stranded_drill()
+
+    def _reconcile_stranded_drill(self) -> None:
+        """B8: we died mid-drill. The drill's position belongs to nobody -
+        no leg claims it, so no stop protects it and no exit will close it.
+        Flatten it at boot and page; leaving it is how a 1-contract test
+        becomes an unmonitored position."""
+        base = getattr(self.state, "drill_open", None)
+        if not base:
+            return
+        try:
+            pos = self.venue.position()
+        except Exception as exc:  # noqa: BLE001
+            self._event("RED", "drill_stranded",
+                        f"{base} interrupted and the venue is unreadable "
+                        f"({exc}) - CHECK COINBASE MANUALLY")
+            return
+        if abs(pos) > 1e-9:
+            try:
+                self.venue.cancel_all()
+                self.venue.place_market(_close_side(pos), abs(pos),
+                                        f"{base}-B")
+                self._event("RED", "drill_stranded",
+                            f"{base} was interrupted holding {pos} - "
+                            f"flattened at boot")
+            except Exception as exc:  # noqa: BLE001
+                self._event("RED", "drill_stranded",
+                            f"{base} interrupted holding {pos} and the "
+                            f"flatten FAILED ({exc}) - FLATTEN MANUALLY NOW")
+                return
+        else:
+            self._event("WARN", "drill_stranded",
+                        f"{base} was interrupted but the venue is flat")
+        self.state.drill_open = None
+        self._save_state()
 
     def attest_coverage(self, note: str = "",
                         acknowledge_unwitnessed: bool = False) -> dict:
@@ -399,6 +440,7 @@ class Executor:
             st.unwitnessed_coverage = raw.get("unwitnessed_coverage", {})
             st.drills = raw.get("drills", [])[-50:]
             st.auto_drill_off = raw.get("auto_drill_off")
+            st.drill_open = raw.get("drill_open")
             st.fill_watch = raw.get("fill_watch", [])[-64:]
             return st
         except Exception:  # noqa: BLE001
@@ -425,6 +467,7 @@ class Executor:
                                              "unwitnessed_coverage", {}),
              "drills": getattr(self.state, "drills", [])[-50:],
              "auto_drill_off": getattr(self.state, "auto_drill_off", None),
+             "drill_open": getattr(self.state, "drill_open", None),
              "fill_watch": getattr(self.state, "fill_watch", [])[-64:]}
         # per-thread tmp: a shared tmp path was safe only while every writer
         # sat behind _venue_lock (counter-agent 2026-08-21). Auto-drill adds
@@ -757,7 +800,12 @@ class Executor:
         snap = {k: getattr(self.cfg, k, None) for k in
                 ("kelly_m", "sizing_base_usd", "max_notional_usd",
                  "max_account_lev", "dd_halt_pct", "daily_loss_halt_pct",
-                 "cb_product_id", "auto_drill")}
+                 "cb_product_id", "auto_drill",
+                 # B9: these set REAL order prices on the venue; a dashboard
+                 # fat-finger on any of them changes live order behaviour and
+                 # must page like every other trading-behaviour var
+                 "drill_stopfill_bps", "drill_stopfill_poll",
+                 "drill_limit_bps", "drill_limit_poll", "drill_cross_bps")}
         prev_snap = getattr(self.state, "last_config", None)
         if prev_snap is not None and prev_snap != snap:
             diffs = [f"{k}: {prev_snap.get(k)} -> {v}"
@@ -1156,6 +1204,10 @@ class Executor:
         # fully verified — a failed drill advancing ramp-authorizing rows let
         # broken mechanics count as proven (referee 2026-08-17)
         covs: list[str] = []
+        # B8: mark BEFORE the first order, persist, so a SIGTERM inside the
+        # position-holding window is recoverable at the next boot
+        self.state.drill_open = base
+        self._save_state()
         try:
             mid = self.venue.mid()
             if kind in LIMIT_PATH_KINDS:
@@ -1173,6 +1225,9 @@ class Executor:
         ok = ok and bool(steps.get("venue_flat_end"))
         if steps.get("repair_error") or steps.get("auto_repair") is not None:
             ok = False
+        # B1: a live order left working is a failed drill, even flat
+        if steps.get("orders_stranded") or steps.get("order_sweep_error"):
+            ok = False
         if ok:
             for k in covs:
                 self._cov(k)
@@ -1184,6 +1239,7 @@ class Executor:
                 self.state.auto_drill_off = None
                 self._event("INFO", "auto_drill_rearmed",
                             f"breaker cleared by verified {kind} drill")
+        self.state.drill_open = None          # B8: window closed
         rec = {"ts": ts, "day": time.strftime("%Y-%m-%d", time.gmtime(ts)),
                "kind": kind, "ok": ok, "steps": steps}
         self.state.drills = (self.state.drills or [])[-49:] + [rec]
@@ -1252,12 +1308,26 @@ class Executor:
         if filled:
             covs.extend(("stop_filled", "drill_stopfill"))
             return True
-        # never leave a drill position open: cancel + flatten
+        # never leave a drill position open: cancel + flatten.
         try:
             self.venue.cancel(f"{base}-S")
         except Exception:  # noqa: BLE001
             pass
-        self.venue.place_market("SELL", q, f"{base}-X")
+        # B4: the cancel can lose the race. `cycle` got this guard from the
+        # 2026-08-15 referee and stopfill did not - on main that branch was
+        # dead (the stop was always preview-rejected), the redesign makes it
+        # live. If we are already flat the stop FIRED: the row is genuinely
+        # earned, and selling q here would open a naked short.
+        try:
+            held = abs(self.venue.position())
+        except Exception:  # noqa: BLE001
+            held = q
+        if held <= 1e-12:
+            steps["fill_beat_cancel"] = True
+            steps["stop_filled"] = True
+            covs.extend(("stop_filled", "drill_stopfill"))
+            return True
+        self.venue.place_market("SELL", held, f"{base}-X")
         self._watch_fill("drill", "drill_exit", f"{base}-X", mid, "SELL")
         steps["fallback_flatten"] = True
         return False
@@ -1267,66 +1337,101 @@ class Executor:
         """Drills that route the REAL limit + post-only + chase machinery —
         the same venue calls an organic pullback entry makes (2026-08-23).
 
-        limit_buy / limit_sell: rest a post-only limit INSIDE the spread,
-        wait, and chase at market if it does not fill — exercising exactly
-        the path `step()` runs for a pending pullback entry, then flatten.
+        limit_buy / limit_sell: rest a post-only limit inside the measured
+        spread, wait, and chase at market if it does not fill, then flatten.
 
         post_only_cross: price the post-only order THROUGH the spread on
         purpose. The venue rejects it as marketable and the adapter records
-        the cross, which is the `post_only_cross` coverage row. Organically
-        that row needs a short at positive basis and can wait months.
+        the cross under OUR cloid, which is the `post_only_cross` row.
+        Organically that row needs a short at positive basis, so it can
+        otherwise sit at zero for months.
 
-        HONESTY (RAMP_V4 amendment): this proves the EXECUTION half - the
-        venue interaction, fill handling and chase. It does NOT prove the
-        DECISION half: that step() correctly decides when to enter from an
-        engine target. An organic entry proves both. The amendment records
-        that difference rather than claiming equivalence.
+        HONESTY (RAMP_V4 amendment): this proves order PLACEMENT, cancel and
+        chase. It does NOT prove the decision half (step() choosing when to
+        enter), and it does NOT prove stop-on-fill: an organic pullback fill
+        goes on to arm the protective stop, whereas the drill flattens
+        (counter-agent B6, 2026-08-23).
         """
         cross = kind == "post_only_cross"
         side = "SELL" if kind == "limit_sell" else "BUY"
         bps = (getattr(self.cfg, "drill_cross_bps", 25.0) if cross
-               else getattr(self.cfg, "drill_limit_bps", 5.0)) / 10_000.0
-        # rest INSIDE the spread (never marketable) unless we are deliberately
-        # crossing, in which case price THROUGH it
+               else getattr(self.cfg, "drill_limit_bps", 0.5)) / 10_000.0
+        # rest inside the measured spread (never marketable) unless we are
+        # deliberately crossing, in which case price THROUGH it
         sign = -1.0 if side == "BUY" else 1.0
         px = mid * (1.0 + sign * bps * (-1.0 if cross else 1.0))
         steps.update(side=side, limit_px=px, crossing=cross)
+        # B2: snapshot the adapter's CUMULATIVE cross list before we place.
+        # "non-empty" means some cross happened, not that OURS did - an
+        # unrelated organic rejection was crediting the drill.
+        before = set(getattr(self.venue, "post_only_crosses", None) or ())
         self.venue.place_limit(side, q, px, f"{base}-E", post_only=True)
         self._watch_fill("drill", "drill_entry", f"{base}-E", px, side)
         steps["entry"] = "limit_sent"
 
         filled = False
+        accepted = False
         for _ in range(max(1, int(getattr(self.cfg, "drill_limit_poll", 15)))):
             st = self.venue.order_status(f"{base}-E")
-            if st and st.get("status") == "FILLED":
-                filled = True
-                break
-            if st and st.get("status") in ("CANCELLED", "REJECTED"):
-                break
+            if st:
+                accepted = True
+                if st.get("status") == "FILLED":
+                    filled = True
+                    break
+                if st.get("status") in ("CANCELLED", "REJECTED"):
+                    break
             time.sleep(2)
         steps["limit_filled"] = filled
+        steps["limit_accepted"] = accepted
 
         if not filled:
-            # the real chase: cancel the resting remainder, take it at market
+            # the real chase: cancel the resting remainder, take it at market.
+            # B4: the cancel can LOSE the race - re-read the position and
+            # chase only the residual, or both fills land and we silently
+            # hold 2 contracts (the bound says exactly one, always).
             try:
                 self.venue.cancel(f"{base}-E")
             except Exception:  # noqa: BLE001
                 pass
-            self.venue.place_market(side, q, f"{base}-C")
-            self._watch_fill("drill", "drill_chase", f"{base}-C", mid, side)
-            steps["chased"] = True
-            # recorded as drill evidence, NOT as the organic `chase` row:
-            # the amendment says drill-triggered entry-path events stay
-            # distinguishable from signal-driven ones until review rules
-            covs.append("drill_chase")
+            try:
+                held = abs(self.venue.position())
+            except Exception:  # noqa: BLE001
+                held = 0.0
+            residual = max(0.0, q - held)
+            steps["held_before_chase"] = held
+            if residual > 1e-12:
+                self.venue.place_market(side, residual, f"{base}-C")
+                self._watch_fill("drill", "drill_chase", f"{base}-C", mid,
+                                 side)
+                steps["chased"] = True
+                # recorded as drill evidence, NOT as the organic `chase` row:
+                # the amendment says drill-triggered entry-path events stay
+                # distinguishable from signal-driven ones until review rules
+                covs.append("drill_chase")
+            else:
+                # the limit filled inside the cancel window: nothing to chase
+                steps["chased"] = False
+                steps["fill_beat_cancel"] = True
+                filled = True
+                steps["limit_filled"] = True
 
         # a deliberately-crossing post-only order is REJECTED by design, so
-        # the venue recording the cross is the pass condition, not a fill
-        crossed = bool(getattr(self.venue, "post_only_crosses", None))
+        # the venue recording OUR cross is the pass condition, not a fill
+        now = set(getattr(self.venue, "post_only_crosses", None) or ())
+        mine = f"{base}-E" in (now - before)
         if cross:
-            steps["post_only_rejected"] = crossed
-            if crossed:
+            steps["post_only_rejected"] = mine
+            if mine:
                 covs.append("post_only_cross")
+                # consume it: step()'s drainer would otherwise credit the
+                # SAME cloid again on its next tick (B2 double-count)
+                try:
+                    self.venue.post_only_crosses.discard(f"{base}-E")
+                except AttributeError:
+                    try:
+                        self.venue.post_only_crosses.remove(f"{base}-E")
+                    except Exception:  # noqa: BLE001
+                        pass
 
         # flatten whatever we ended up holding; the repair tail is the
         # backstop, this is the intended exit
@@ -1341,16 +1446,34 @@ class Executor:
             steps["exit"] = "sent"
 
         if cross:
-            return crossed
+            return mine
+        # B7: a REJECTED limit proves nothing about the maker path, so the
+        # credit is gated on the venue having accepted the order. This row is
+        # not gate-bearing today, but RAMP_V4 flags promoting it to
+        # entry_long/entry_short as the open question - it must not be a
+        # landmine when that happens.
+        if not accepted:
+            steps["limit_rejected"] = True
+            return False
         covs.append("drill_limit_entry")
         # the entry mechanic is proven whether it rested or had to be chased
         return True
+
+    DRILL_SUFFIXES = ("E", "S", "X", "C", "R")
 
     def _drill_repair(self, base: str, steps: dict) -> None:
         """AUTO-REPAIR (referee 2026-08-15, mandatory): a drill must NEVER
         leave exposure. Fill-beats-cancel races and any exception path land
         here; residual position is flattened with a reducing market order,
-        recorded, and the drill escalates to RED (which pages)."""
+        recorded, and the drill escalates to RED (which pages).
+
+        B1 (counter-agent 2026-08-23): flatness of the POSITION was the only
+        thing checked, but `cancel()` swallows every exception, so a failed
+        cancel was invisible - a drill could report ok=true with a live
+        order still resting. A stranded stopfill stop 10bp under market
+        fires within minutes into a naked, unstopped short. So the drill's
+        own cloids must each reach a terminal state before it may pass.
+        """
         try:
             pos_end = self.venue.position()
             if abs(pos_end) > 1e-9:
@@ -1367,6 +1490,38 @@ class Executor:
         except Exception as exc:  # noqa: BLE001
             steps["venue_flat_end"] = None
             steps["repair_error"] = str(exc)[:200]
+        # --- B1: no order of ours may still be working ---------------------
+        stranded: list[str] = []
+        try:
+            for suf in self.DRILL_SUFFIXES:
+                cloid = f"{base}-{suf}"
+                st = self.venue.order_status(cloid)
+                if st and st.get("status") == "OPEN":
+                    try:
+                        self.venue.cancel(cloid)
+                    except Exception:  # noqa: BLE001
+                        pass
+                    st = self.venue.order_status(cloid)
+                    if st and st.get("status") == "OPEN":
+                        stranded.append(cloid)
+            if stranded:
+                # _drill_refusal guarantees no leg holds an entry/stop cloid,
+                # so nothing else of ours is on the book: cancel_all is safe
+                # here and nowhere else in the drill path.
+                try:
+                    self.venue.cancel_all()
+                except Exception:  # noqa: BLE001
+                    pass
+                still = []
+                for cloid in stranded:
+                    st = self.venue.order_status(cloid)
+                    if st and st.get("status") == "OPEN":
+                        still.append(cloid)
+                stranded = still
+        except Exception as exc:  # noqa: BLE001
+            steps["order_sweep_error"] = str(exc)[:200]
+            stranded = stranded or ["unknown"]
+        steps["orders_stranded"] = stranded
 
     def _needed_auto_drill(self) -> str | None:
         """Next drill kind auto-drill may run: CYCLES ONLY. stopfill is

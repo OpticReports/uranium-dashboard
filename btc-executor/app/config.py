@@ -53,12 +53,19 @@ class Settings(BaseSettings):
     # fires-immediately design failed deterministically. A trigger just BELOW
     # market is venue-legal and fires on the next downtick, which needs a
     # longer poll budget than an instant fill did.
-    drill_stopfill_bps: float = 10.0      # trigger this far BELOW mid
+    # 3bp, not 10: the counter-agent measured first-passage probability for a
+    # 10bp move inside the 60s budget at 4-23% depending on vol, i.e. ~90% of
+    # drills would fail, each one a RED page burning a daily drill slot. 3bp
+    # gives 53-72%.
+    drill_stopfill_bps: float = 3.0       # trigger this far BELOW mid
     drill_stopfill_poll: int = 30         # x2s => up to 60s waiting for the fill
     # limit-path entry drills: rest INSIDE the spread so post-only is
     # accepted, then chase at market if unfilled - the same shape the real
     # pullback entry runs.
-    drill_limit_bps: float = 5.0          # rest this far inside mid
+    # 0.5bp: EXECUTOR.md measures the book's spread at 1.54bp, so the old 5bp
+    # rested ~4bp BEHIND the best bid - outside the spread, behind the whole
+    # level-1 queue, so every limit drill degenerated into a market chase.
+    drill_limit_bps: float = 0.5          # rest this far inside mid
     drill_limit_poll: int = 15            # x2s => up to 30s before chasing
     # post-only-cross drill: deliberately price THROUGH the spread so the
     # venue rejects the post-only order as marketable.

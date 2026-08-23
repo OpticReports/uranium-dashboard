@@ -149,8 +149,11 @@ live code paths:
 - `cycle`: market entry → protective stop placed → stop verified OPEN →
   stop cancelled → market flatten → venue position verified back to start.
 - `stopfill`: market entry → sell-stop with trigger just **below** market
-  (`DRILL_STOPFILL_BPS`, default 10bp) → fires on the next downtick → stop
-  FILL verified → flat. If the fill doesn't confirm within the poll budget
+  (`DRILL_STOPFILL_BPS`, default **3bp**) → fires when price trades down
+  through it → stop FILL verified → flat. It is a first-passage bet, not a
+  certainty: the counter-agent measured ~53-72% fill probability at 3bp
+  inside the 60s budget (10bp was 4-23%, i.e. ~90% failures, each one a RED
+  page burning a daily drill slot). If the fill doesn't confirm within the poll budget
   (`DRILL_STOPFILL_POLL` × 2s, default 60s): cancel + market flatten
   fallback, drill marked `unverified`, never left open.
   REDESIGNED 2026-08-23, exactly as the 2026-08-15 referee pre-registered:
@@ -160,15 +163,22 @@ live code paths:
   the row. Below-market is venue-legal; the cost is that it must wait for a
   downtick, hence the longer budget.
 - `limit_buy` / `limit_sell` (NEW 2026-08-23): post-only limit rested
-  INSIDE the spread (`DRILL_LIMIT_BPS`) → wait (`DRILL_LIMIT_POLL` × 2s) →
-  **chase at market if unfilled** → flatten. This routes the same venue
-  calls an organic pullback entry makes, which the market-entry drills
-  never touch.
+  inside the measured spread (`DRILL_LIMIT_BPS`, default **0.5bp** — the
+  book's spread is ~1.54bp, so the original 5bp rested BEHIND the level-1
+  queue and every drill degenerated into a market chase) → wait
+  (`DRILL_LIMIT_POLL` × 2s) → **chase only the residual** if unfilled →
+  flatten. This routes the post-only placement, cancel and chase calls that
+  an organic pullback entry makes and the market-entry drills never touch.
+  It does NOT arm a protective stop on fill, which an organic entry does.
 - `post_only_cross` (NEW 2026-08-23): a post-only limit priced deliberately
   THROUGH the spread (`DRILL_CROSS_BPS`). The venue rejects it as
   marketable and the adapter records the cross — which is the coverage row.
-  Credited ONLY when the venue actually records the rejection: us intending
-  to cross proves nothing, the venue refusing does. Organically this row
+  Credited ONLY when the venue records a rejection **under this drill's own
+  cloid**, measured as a delta against a snapshot taken before the order was
+  sent — and the entry is then consumed so `step()`'s drainer cannot credit
+  the same event a second time. A pre-existing organic cross must never be
+  attributed to a drill (counter-agent B2, 2026-08-23: the first cut read
+  the cumulative list and did exactly that, twice). Organically this row
   needs a short at positive basis and can sit at 0 for months.
 - AUTO-REPAIR tail (all kinds, all exception paths): residual venue
   position after a drill is flattened immediately with a reducing market
@@ -190,7 +200,9 @@ a limit-path drill proves strictly less than an organic entry:
 
 | | limit-path drill | organic entry |
 |---|---|---|
-| venue interaction, fill handling, chase | ✅ proven | ✅ proven |
+| post-only placement, cancel, chase | ✅ proven | ✅ proven |
+| maker FILL (resting order actually filling) | ⚠️ usually not reached — the drill normally chases | ✅ proven |
+| stop armed on fill (`_maintain_stop`) | ❌ untested — the drill flattens instead | ✅ proven |
 | `step()` deciding WHEN to enter from an engine target | ❌ untested | ✅ proven |
 
 A drill enters because an operator asked. It never exercises the

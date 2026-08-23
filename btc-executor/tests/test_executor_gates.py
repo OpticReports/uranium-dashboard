@@ -2231,21 +2231,50 @@ def test_gate_post_only_cross_prices_through_the_spread(tmp_path):
 
 
 def test_gate_post_only_cross_credits_only_on_venue_rejection(tmp_path):
-    """The row is earned by the VENUE rejecting the order, not by us saying
-    we tried. A venue that accepts it (no cross recorded) must not credit."""
+    """The row is earned by the VENUE rejecting OUR order. Three properties,
+    the first two of which an earlier version of this test got wrong by
+    asserting that any non-empty cross list credited the drill:
+      1. a venue that accepts our order must NOT credit;
+      2. a STALE FOREIGN cross must NOT credit (false attribution);
+      3. our own cloid appearing must credit, exactly once, and be consumed
+         so step()'s drainer cannot re-credit the same event.
+    """
     ex, venue = _drill_exec(tmp_path)
     ex.cfg.drill_cooldown_s = 0
     rec = ex.drill("post_only_cross")
     assert rec["steps"]["post_only_rejected"] is False
     assert rec["ok"] is False
     assert ex.state.coverage.get("post_only_cross") is None
-    # now a venue that DOES record the cross
-    venue.post_only_crosses = {"D-x-E"}
-    ex.cfg.drill_cooldown_s = 0
+
+    # 2. an unrelated ORGANIC cross that predates the drill must not count
+    venue.post_only_crosses = {"P-organic-E"}
     ex.state.drills = []
     rec2 = ex.drill("post_only_cross")
-    assert rec2["steps"]["post_only_rejected"] is True
+    assert rec2["steps"]["post_only_rejected"] is False, \
+        "a foreign cross must never be attributed to the drill"
+    assert ex.state.coverage.get("post_only_cross") is None
+    assert "P-organic-E" in venue.post_only_crosses, "foreign cross consumed"
+
+    # 3. the venue rejects OUR order -> credited once, and consumed.
+    # Drain the foreign cross first: it is a REAL cross and the drainer is
+    # right to credit it, which would otherwise muddy the count below.
+    ex._report_post_only_crosses()
+    ex.state.coverage.pop("post_only_cross", None)
+    ex.state.coverage_live.pop("post_only_cross", None)
+    real_place = venue.place_limit
+    def rejecting_limit(side, qty, px, cloid, post_only=True):
+        real_place(side, qty, px, cloid, post_only=post_only)
+        venue.post_only_crosses.add(cloid)
+    venue.place_limit = rejecting_limit
+    ex.state.drills = []
+    rec3 = ex.drill("post_only_cross")
+    assert rec3["steps"]["post_only_rejected"] is True
     assert ex.state.coverage.get("post_only_cross") == 1
+    ours = [c for c in venue.post_only_crosses if c.startswith("D-")]
+    assert ours == [], f"our cross must be consumed, not re-credited: {ours}"
+    # and the drainer step() uses must not find it again
+    ex._report_post_only_crosses()
+    assert ex.state.coverage.get("post_only_cross") == 1, "double counted"
 
 
 def test_gate_new_drill_kinds_obey_flat_precondition(tmp_path):
@@ -2270,3 +2299,124 @@ def test_gate_auto_drill_still_cycles_only(tmp_path):
     ex, _ = _drill_exec(tmp_path)
     ex.state.coverage_live = {}
     assert ex._needed_auto_drill() == "cycle"
+
+
+# ---------------------------------------------------------------------------
+# Counter-agent 2026-08-23 mutation testing found 4 weakenings that survived
+# the first cut of the drill tests. These kill them.
+def _fake_drill_exec(tmp_path, mid=60_000.0):
+    """FakeVenue, not DryRunVenue: FakeVenue ASSERTS post_only on limits and
+    records an order tape, so the maker-path claim is actually testable."""
+    from app.mirror import Executor
+    cfg = Cfg()
+    cfg.state_path = str(tmp_path / "state.json")
+    cfg.dry_run = False
+    v = FakeVenue(mid=mid)
+    return Executor(v, cfg), v
+
+
+def test_gate_limit_drill_must_be_post_only(tmp_path):
+    """MUTATION: dropping post_only=True previously survived every drill
+    test, because DryRunVenue ignores the flag. FakeVenue asserts it, so a
+    taker limit now fails loudly - the maker path is the whole claim."""
+    ex, venue = _fake_drill_exec(tmp_path)
+    ex.cfg.drill_cooldown_s = 0
+    rec = ex.drill("limit_buy")
+    limits = [o for o in venue.orders.values() if o["type"] == "LIMIT"]
+    assert limits, "no limit order reached the venue"
+    assert rec["steps"]["entry"] == "limit_sent"
+
+
+def test_gate_stopfill_fallback_is_not_dead_code(tmp_path):
+    """MUTATION: deleting the fallback flatten entirely still passed, because
+    the repair tail cleaned up behind it. Pin the fallback ITSELF: an
+    unfilled stopfill must place its own -X exit, not lean on repair."""
+    ex, venue = _fake_drill_exec(tmp_path)
+    ex.cfg.drill_cooldown_s = 0
+    rec = ex.drill("stopfill")
+    assert rec["steps"]["fallback_flatten"] is True
+    assert f"{[c for c in venue.orders if c.endswith('-X')]}" != "[]", \
+        "fallback must place its own exit order, not defer to auto-repair"
+    assert rec["steps"].get("auto_repair") is None, \
+        "repair should have had nothing left to do"
+
+
+def test_gate_stranded_order_fails_the_drill(tmp_path):
+    """B1 REGRESSION: a cancel that silently fails must not pass. Flat
+    position is not enough - a working order is a failed drill."""
+    ex, venue = _fake_drill_exec(tmp_path)
+    ex.cfg.drill_cooldown_s = 0
+    venue.cancel = lambda cloid: None          # silent no-op, as cb.py can be
+    venue.cancel_all = lambda: None
+    rec = ex.drill("limit_buy")
+    assert rec["steps"]["orders_stranded"], "stranded order not detected"
+    assert rec["ok"] is False, "a drill with a live order must never pass"
+    assert ex.state.coverage.get("drill_limit_entry") is None
+
+
+def test_gate_drill_size_bound_is_one_contract(tmp_path):
+    """MUTATION: tripling the drill size survived. Every order a drill sends
+    must be exactly the venue minimum - the bound RAMP_V4 calls absolute."""
+    ex, venue = _fake_drill_exec(tmp_path)
+    ex.cfg.drill_cooldown_s = 0
+    q = ex._min_contract()
+    for kind in ("cycle", "limit_buy"):
+        venue.orders.clear()
+        ex.state.drills = []
+        ex.drill(kind)
+        for cloid, o in venue.orders.items():
+            assert o["qty"] <= q + 1e-12, f"{kind} {cloid} sent {o['qty']} > {q}"
+
+
+def test_gate_fill_beating_cancel_does_not_double_size(tmp_path):
+    """B4 REGRESSION: the limit filled inside the cancel window, so the chase
+    must be skipped entirely - otherwise both fills land and the drill holds
+    two contracts while reporting one."""
+    ex, venue = _fake_drill_exec(tmp_path)
+    ex.cfg.drill_cooldown_s = 0
+    real_cancel = venue.cancel
+    def losing_cancel(cloid):
+        if cloid.endswith("-E"):
+            venue.orders[cloid]["status"] = "FILLED"   # too late
+            return
+        real_cancel(cloid)
+    venue.cancel = losing_cancel
+    rec = ex.drill("limit_buy")
+    assert rec["steps"].get("fill_beat_cancel") is True
+    assert rec["steps"].get("chased") is False, "must not chase an filled order"
+    assert not any(c.endswith("-C") for c in venue.orders), "chase was sent"
+    assert venue.position() == 0.0
+
+
+def test_gate_stranded_drill_is_flattened_at_boot(tmp_path):
+    """B8: a SIGTERM inside the drill's position-holding window leaves a
+    position no leg claims, so no stop protects it and no exit closes it.
+    The next boot must flatten it and page."""
+    import json
+    from app.mirror import Executor
+    v = FakeVenue(mid=60_000.0)
+    cfg = Cfg()
+    cfg.state_path = str(tmp_path / "state.json")
+    cfg.dry_run = False
+    json.dump({"halted": "", "legs": {}, "drill_open": "D-999"},
+              open(cfg.state_path, "w"))
+    v._add("MARKET", "BUY", 0.01, "D-999-E")        # the orphaned fill
+    assert v.position() == 0.01
+    ex = Executor(v, cfg)
+    assert v.position() == 0.0, "stranded drill position must be flattened"
+    assert any(e["kind"] == "drill_stranded" and e["level"] == "RED"
+               for e in ex.state.events), ex.state.events
+    assert ex.state.drill_open is None, "marker must be cleared once handled"
+
+
+def test_gate_drill_open_marker_is_set_and_cleared(tmp_path):
+    ex, venue = _fake_drill_exec(tmp_path)
+    ex.cfg.drill_cooldown_s = 0
+    assert ex.state.drill_open is None
+    ex.drill("cycle")
+    assert ex.state.drill_open is None, "marker must not outlive the drill"
+
+
+def test_gate_clean_boot_does_not_invent_a_stranded_drill(tmp_path):
+    ex, venue = _fake_drill_exec(tmp_path)
+    assert not any(e["kind"] == "drill_stranded" for e in ex.state.events)
