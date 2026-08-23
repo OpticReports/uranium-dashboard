@@ -2031,3 +2031,71 @@ def test_gate_coverage_events_actually_page(tmp_path, monkeypatch):
     assert msg, sent
     # attestation is security-relevant: it must say what to do if unexpected
     assert "ACTION NEEDED" in msg[0] and "EXEC_TOKEN" in msg[0]
+
+
+# ---------------------------------------------------------------------------
+# LIVE FIND 2026-08-23 (Casey's halt/resume RAMP test, at 1 contract): after
+# /kill -> /resume the leg re-entered and sat UNPROTECTED. halt() cleared
+# stop_cloid but NOT stop_px, so _maintain_stop's churn guard compared the
+# engine's unchanged trail against the stale price, saw "no material move",
+# and returned without placing anything. The ledger advertised a stop price
+# that no venue order backed, and self-correction had to wait for the trail
+# to move >stop_replace_bps - up to a day on a daily ratchet.
+def _long_target(entry_ts, stop):
+    return target(trend={"pending": None,
+                         "position": {"side": "L", "entry_price": 68_525.0,
+                                      "entry_ts": entry_ts,
+                                      "signal_ts": entry_ts - 14_400,
+                                      "stop": stop, "exit_flag": None}})
+
+
+def test_gate_halt_clears_stop_px_not_just_cloid(tmp_path):
+    v = FakeVenue(mult=0.01, mid=77_500.0)
+    ex = mkexec(tmp_path, v)
+    led = ex.state.legs["trend"]
+    led.qty, led.stop_cloid, led.stop_px = 0.01, "T-1-S71520", 71_520.89
+    led.entry_cloid, led.entry_side, led.entry_qty = "T-1-E", "L", 0.01
+    ex.halt("KILL", "manual")
+    assert led.qty == 0.0
+    assert led.stop_cloid is None
+    assert led.stop_px is None, \
+        "a stop PRICE that outlives its order suppresses the next placement"
+    assert led.entry_cloid is None and led.entry_qty == 0.0
+
+
+def test_gate_reentry_after_resume_is_protected(tmp_path):
+    """End-to-end reproduction of the live sequence: hold a long with a
+    trailing stop, /kill, /resume, and step against the SAME engine target
+    (the engine's trail has not moved). The re-entered position must carry a
+    real venue stop, not an inherited price."""
+    v = FakeVenue(mult=0.01, mid=77_500.0)
+    ex = mkexec(tmp_path, v)
+    ets, stop = NOW - 14_400, 71_520.89
+    ex.step(_long_target(ets, stop))                 # enter + protect
+    led = ex.state.legs["trend"]
+    assert led.qty != 0.0 and led.stop_cloid, "setup: leg must be protected"
+
+    ex.halt("KILL", "manual")
+    assert v.position() == 0.0
+    ex.resume()
+    ex.step(_long_target(ets, stop))                 # identical trail
+    ex.step(_long_target(ets, stop))                 # settle any chase
+
+    assert led.qty != 0.0, "resume must re-mirror the engine's open position"
+    assert led.stop_cloid, "RE-ENTERED POSITION LEFT UNPROTECTED"
+    assert led.stop_px == stop
+    live = [c for c, o in v.orders.items()
+            if c == led.stop_cloid and o.get("status") != "CANCELLED"]
+    assert live, "ledger claims a stop the venue does not hold"
+
+
+def test_gate_churn_guard_cannot_block_first_placement(tmp_path):
+    """Defence in depth: whatever leaves a stale stop_px behind, a leg with
+    no stop_cloid has no order to churn, so the guard must never suppress
+    the placement."""
+    v = FakeVenue(mult=0.01, mid=77_500.0)
+    ex = mkexec(tmp_path, v)
+    led = ex.state.legs["trend"]
+    led.qty, led.stop_cloid, led.stop_px = 0.01, None, 71_520.89
+    ex._maintain_stop("trend", led, {"entry_ts": NOW, "stop": 71_520.89})
+    assert led.stop_cloid, "churn guard blocked the FIRST stop placement"

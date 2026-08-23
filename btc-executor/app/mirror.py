@@ -674,6 +674,15 @@ class Executor:
             for l in self.state.legs.values():
                 l.qty = 0.0
                 l.entry_cloid = l.stop_cloid = None
+                # stop_px MUST die with the order (live find 2026-08-23):
+                # leaving it set made _maintain_stop's churn guard read the
+                # stale price as "the stop is already where it belongs" and
+                # return without placing anything. After /kill -> /resume the
+                # leg re-entered and sat UNPROTECTED, with the ledger
+                # claiming a stop price that no venue order backed, until the
+                # engine's trail happened to move >stop_replace_bps.
+                l.stop_px = None
+                l.entry_side, l.entry_qty = None, 0.0
         except Exception as exc:  # noqa: BLE001
             # Flatten FAILED: keep the ledger as-is - it is the only record
             # of what we believe we hold. Zeroing it here made the transfer
@@ -927,7 +936,12 @@ class Executor:
                 led.entry_cloid = led.entry_side = None
                 led.entry_qty = 0.0
                 return
-        if led.stop_px and abs(trigger - led.stop_px) / led.stop_px \
+        # The churn guard may only suppress a REPLACEMENT, never the first
+        # placement: with no stop_cloid there is no venue order to churn, so
+        # a stale stop_px must not be able to talk us out of protecting a
+        # live position (live find 2026-08-23, /kill -> /resume).
+        if led.stop_cloid and led.stop_px \
+                and abs(trigger - led.stop_px) / led.stop_px \
                 < self.cfg.stop_replace_bps / 10_000.0:
             return
         cloid = f"{leg[0].upper()}-{pos['entry_ts']}-S{int(trigger)}"
