@@ -1,0 +1,1122 @@
+[
+ {
+  "release": "2013-04-05",
+  "ref_month": "2013-03",
+  "consensus": 197.0,
+  "actual": 88.0,
+  "surprise": -109.0
+ },
+ {
+  "release": "2013-05-03",
+  "ref_month": "2013-04",
+  "consensus": 150.0,
+  "actual": 165.0,
+  "surprise": 15.0
+ },
+ {
+  "release": "2013-06-07",
+  "ref_month": "2013-05",
+  "consensus": 168.0,
+  "actual": 175.0,
+  "surprise": 7.0
+ },
+ {
+  "release": "2013-07-05",
+  "ref_month": "2013-06",
+  "consensus": 170.0,
+  "actual": 195.0,
+  "surprise": 25.0
+ },
+ {
+  "release": "2013-08-02",
+  "ref_month": "2013-07",
+  "consensus": 184.0,
+  "actual": 162.0,
+  "surprise": -22.0
+ },
+ {
+  "release": "2013-09-06",
+  "ref_month": "2013-08",
+  "consensus": 181.0,
+  "actual": 169.0,
+  "surprise": -12.0
+ },
+ {
+  "release": "2013-10-22",
+  "ref_month": "2013-09",
+  "consensus": 180.0,
+  "actual": 148.0,
+  "surprise": -32.0
+ },
+ {
+  "release": "2013-11-08",
+  "ref_month": "2013-10",
+  "consensus": 166.0,
+  "actual": 204.0,
+  "surprise": 38.0
+ },
+ {
+  "release": "2013-12-06",
+  "ref_month": "2013-11",
+  "consensus": 166.0,
+  "actual": 203.0,
+  "surprise": 37.0
+ },
+ {
+  "release": "2014-01-10",
+  "ref_month": "2013-12",
+  "consensus": 200.0,
+  "actual": 74.0,
+  "surprise": -126.0
+ },
+ {
+  "release": "2014-02-07",
+  "ref_month": "2014-01",
+  "consensus": 170.0,
+  "actual": 113.0,
+  "surprise": -57.0
+ },
+ {
+  "release": "2014-03-07",
+  "ref_month": "2014-02",
+  "consensus": 137.0,
+  "actual": 175.0,
+  "surprise": 38.0
+ },
+ {
+  "release": "2014-04-04",
+  "ref_month": "2014-03",
+  "consensus": 200.0,
+  "actual": 192.0,
+  "surprise": -8.0
+ },
+ {
+  "release": "2014-05-02",
+  "ref_month": "2014-04",
+  "consensus": 210.0,
+  "actual": 288.0,
+  "surprise": 78.0
+ },
+ {
+  "release": "2014-06-06",
+  "ref_month": "2014-05",
+  "consensus": 218.0,
+  "actual": 217.0,
+  "surprise": -1.0
+ },
+ {
+  "release": "2014-07-03",
+  "ref_month": "2014-06",
+  "consensus": 212.0,
+  "actual": 288.0,
+  "surprise": 76.0
+ },
+ {
+  "release": "2014-08-01",
+  "ref_month": "2014-07",
+  "consensus": 235.0,
+  "actual": 209.0,
+  "surprise": -26.0
+ },
+ {
+  "release": "2014-09-05",
+  "ref_month": "2014-08",
+  "consensus": 225.0,
+  "actual": 142.0,
+  "surprise": -83.0
+ },
+ {
+  "release": "2014-10-03",
+  "ref_month": "2014-09",
+  "consensus": 215.0,
+  "actual": 248.0,
+  "surprise": 33.0
+ },
+ {
+  "release": "2014-11-07",
+  "ref_month": "2014-10",
+  "consensus": 231.0,
+  "actual": 214.0,
+  "surprise": -17.0
+ },
+ {
+  "release": "2014-12-05",
+  "ref_month": "2014-11",
+  "consensus": 230.0,
+  "actual": 321.0,
+  "surprise": 91.0
+ },
+ {
+  "release": "2015-01-09",
+  "ref_month": "2014-12",
+  "consensus": 250.0,
+  "actual": 252.0,
+  "surprise": 2.0
+ },
+ {
+  "release": "2015-02-06",
+  "ref_month": "2015-01",
+  "consensus": 220.0,
+  "actual": 257.0,
+  "surprise": 37.0
+ },
+ {
+  "release": "2015-03-06",
+  "ref_month": "2015-02",
+  "consensus": 240.0,
+  "actual": 295.0,
+  "surprise": 55.0
+ },
+ {
+  "release": "2015-04-03",
+  "ref_month": "2015-03",
+  "consensus": 244.0,
+  "actual": 126.0,
+  "surprise": -118.0
+ },
+ {
+  "release": "2015-05-08",
+  "ref_month": "2015-04",
+  "consensus": 224.0,
+  "actual": 223.0,
+  "surprise": -1.0
+ },
+ {
+  "release": "2015-06-05",
+  "ref_month": "2015-05",
+  "consensus": 229.0,
+  "actual": 280.0,
+  "surprise": 51.0
+ },
+ {
+  "release": "2015-07-02",
+  "ref_month": "2015-06",
+  "consensus": 230.0,
+  "actual": 223.0,
+  "surprise": -7.0
+ },
+ {
+  "release": "2015-08-07",
+  "ref_month": "2015-07",
+  "consensus": 223.0,
+  "actual": 215.0,
+  "surprise": -8.0
+ },
+ {
+  "release": "2015-09-04",
+  "ref_month": "2015-08",
+  "consensus": 220.0,
+  "actual": 173.0,
+  "surprise": -47.0
+ },
+ {
+  "release": "2015-10-02",
+  "ref_month": "2015-09",
+  "consensus": 203.0,
+  "actual": 142.0,
+  "surprise": -61.0
+ },
+ {
+  "release": "2015-11-06",
+  "ref_month": "2015-10",
+  "consensus": 180.0,
+  "actual": 271.0,
+  "surprise": 91.0
+ },
+ {
+  "release": "2015-12-04",
+  "ref_month": "2015-11",
+  "consensus": 200.0,
+  "actual": 211.0,
+  "surprise": 11.0
+ },
+ {
+  "release": "2016-01-08",
+  "ref_month": "2015-12",
+  "consensus": 200.0,
+  "actual": 292.0,
+  "surprise": 92.0
+ },
+ {
+  "release": "2016-02-05",
+  "ref_month": "2016-01",
+  "consensus": 190.0,
+  "actual": 151.0,
+  "surprise": -39.0
+ },
+ {
+  "release": "2016-03-04",
+  "ref_month": "2016-02",
+  "consensus": 190.0,
+  "actual": 242.0,
+  "surprise": 52.0
+ },
+ {
+  "release": "2016-04-01",
+  "ref_month": "2016-03",
+  "consensus": 205.0,
+  "actual": 215.0,
+  "surprise": 10.0
+ },
+ {
+  "release": "2016-05-06",
+  "ref_month": "2016-04",
+  "consensus": 202.0,
+  "actual": 160.0,
+  "surprise": -42.0
+ },
+ {
+  "release": "2016-06-03",
+  "ref_month": "2016-05",
+  "consensus": 164.0,
+  "actual": 38.0,
+  "surprise": -126.0
+ },
+ {
+  "release": "2016-07-08",
+  "ref_month": "2016-06",
+  "consensus": 175.0,
+  "actual": 287.0,
+  "surprise": 112.0
+ },
+ {
+  "release": "2016-08-05",
+  "ref_month": "2016-07",
+  "consensus": 180.0,
+  "actual": 255.0,
+  "surprise": 75.0
+ },
+ {
+  "release": "2016-09-02",
+  "ref_month": "2016-08",
+  "consensus": 180.0,
+  "actual": 151.0,
+  "surprise": -29.0
+ },
+ {
+  "release": "2016-10-07",
+  "ref_month": "2016-09",
+  "consensus": 175.0,
+  "actual": 156.0,
+  "surprise": -19.0
+ },
+ {
+  "release": "2016-11-04",
+  "ref_month": "2016-10",
+  "consensus": 175.0,
+  "actual": 161.0,
+  "surprise": -14.0
+ },
+ {
+  "release": "2016-12-02",
+  "ref_month": "2016-11",
+  "consensus": 175.0,
+  "actual": 178.0,
+  "surprise": 3.0
+ },
+ {
+  "release": "2017-01-06",
+  "ref_month": "2016-12",
+  "consensus": 178.0,
+  "actual": 156.0,
+  "surprise": -22.0
+ },
+ {
+  "release": "2017-02-03",
+  "ref_month": "2017-01",
+  "consensus": 175.0,
+  "actual": 227.0,
+  "surprise": 52.0
+ },
+ {
+  "release": "2017-03-10",
+  "ref_month": "2017-02",
+  "consensus": 180.0,
+  "actual": 235.0,
+  "surprise": 55.0
+ },
+ {
+  "release": "2017-04-07",
+  "ref_month": "2017-03",
+  "consensus": 180.0,
+  "actual": 98.0,
+  "surprise": -82.0
+ },
+ {
+  "release": "2017-05-05",
+  "ref_month": "2017-04",
+  "consensus": 185.0,
+  "actual": 211.0,
+  "surprise": 26.0
+ },
+ {
+  "release": "2017-06-02",
+  "ref_month": "2017-05",
+  "consensus": 185.0,
+  "actual": 138.0,
+  "surprise": -47.0
+ },
+ {
+  "release": "2017-07-07",
+  "ref_month": "2017-06",
+  "consensus": 179.0,
+  "actual": 222.0,
+  "surprise": 43.0
+ },
+ {
+  "release": "2017-08-04",
+  "ref_month": "2017-07",
+  "consensus": 183.0,
+  "actual": 209.0,
+  "surprise": 26.0
+ },
+ {
+  "release": "2017-09-01",
+  "ref_month": "2017-08",
+  "consensus": 180.0,
+  "actual": 156.0,
+  "surprise": -24.0
+ },
+ {
+  "release": "2017-10-06",
+  "ref_month": "2017-09",
+  "consensus": 90.0,
+  "actual": -33.0,
+  "surprise": -123.0
+ },
+ {
+  "release": "2017-11-03",
+  "ref_month": "2017-10",
+  "consensus": 310.0,
+  "actual": 261.0,
+  "surprise": -49.0
+ },
+ {
+  "release": "2017-12-08",
+  "ref_month": "2017-11",
+  "consensus": 200.0,
+  "actual": 228.0,
+  "surprise": 28.0
+ },
+ {
+  "release": "2018-01-05",
+  "ref_month": "2017-12",
+  "consensus": 190.0,
+  "actual": 148.0,
+  "surprise": -42.0
+ },
+ {
+  "release": "2018-02-02",
+  "ref_month": "2018-01",
+  "consensus": 215.0,
+  "actual": 200.0,
+  "surprise": -15.0
+ },
+ {
+  "release": "2018-03-09",
+  "ref_month": "2018-02",
+  "consensus": 192.0,
+  "actual": 313.0,
+  "surprise": 121.0
+ },
+ {
+  "release": "2018-04-06",
+  "ref_month": "2018-03",
+  "consensus": 193.0,
+  "actual": 103.0,
+  "surprise": -90.0
+ },
+ {
+  "release": "2018-05-04",
+  "ref_month": "2018-04",
+  "consensus": 192.0,
+  "actual": 164.0,
+  "surprise": -28.0
+ },
+ {
+  "release": "2018-06-01",
+  "ref_month": "2018-05",
+  "consensus": 189.0,
+  "actual": 223.0,
+  "surprise": 34.0
+ },
+ {
+  "release": "2018-07-06",
+  "ref_month": "2018-06",
+  "consensus": 195.0,
+  "actual": 213.0,
+  "surprise": 18.0
+ },
+ {
+  "release": "2018-08-03",
+  "ref_month": "2018-07",
+  "consensus": 190.0,
+  "actual": 157.0,
+  "surprise": -33.0
+ },
+ {
+  "release": "2018-09-07",
+  "ref_month": "2018-08",
+  "consensus": 191.0,
+  "actual": 201.0,
+  "surprise": 10.0
+ },
+ {
+  "release": "2018-10-05",
+  "ref_month": "2018-09",
+  "consensus": 185.0,
+  "actual": 134.0,
+  "surprise": -51.0
+ },
+ {
+  "release": "2018-11-02",
+  "ref_month": "2018-10",
+  "consensus": 190.0,
+  "actual": 250.0,
+  "surprise": 60.0
+ },
+ {
+  "release": "2018-12-07",
+  "ref_month": "2018-11",
+  "consensus": 200.0,
+  "actual": 155.0,
+  "surprise": -45.0
+ },
+ {
+  "release": "2019-01-04",
+  "ref_month": "2018-12",
+  "consensus": 177.0,
+  "actual": 312.0,
+  "surprise": 135.0
+ },
+ {
+  "release": "2019-02-01",
+  "ref_month": "2019-01",
+  "consensus": 165.0,
+  "actual": 304.0,
+  "surprise": 139.0
+ },
+ {
+  "release": "2019-03-08",
+  "ref_month": "2019-02",
+  "consensus": 180.0,
+  "actual": 20.0,
+  "surprise": -160.0
+ },
+ {
+  "release": "2019-04-05",
+  "ref_month": "2019-03",
+  "consensus": 180.0,
+  "actual": 196.0,
+  "surprise": 16.0
+ },
+ {
+  "release": "2019-05-03",
+  "ref_month": "2019-04",
+  "consensus": 185.0,
+  "actual": 263.0,
+  "surprise": 78.0
+ },
+ {
+  "release": "2019-06-07",
+  "ref_month": "2019-05",
+  "consensus": 185.0,
+  "actual": 75.0,
+  "surprise": -110.0
+ },
+ {
+  "release": "2019-07-05",
+  "ref_month": "2019-06",
+  "consensus": 160.0,
+  "actual": 224.0,
+  "surprise": 64.0
+ },
+ {
+  "release": "2019-08-02",
+  "ref_month": "2019-07",
+  "consensus": 164.0,
+  "actual": 164.0,
+  "surprise": 0.0
+ },
+ {
+  "release": "2019-09-06",
+  "ref_month": "2019-08",
+  "consensus": 158.0,
+  "actual": 130.0,
+  "surprise": -28.0
+ },
+ {
+  "release": "2019-10-04",
+  "ref_month": "2019-09",
+  "consensus": 145.0,
+  "actual": 136.0,
+  "surprise": -9.0
+ },
+ {
+  "release": "2019-11-01",
+  "ref_month": "2019-10",
+  "consensus": 89.0,
+  "actual": 128.0,
+  "surprise": 39.0
+ },
+ {
+  "release": "2019-12-06",
+  "ref_month": "2019-11",
+  "consensus": 180.0,
+  "actual": 266.0,
+  "surprise": 86.0
+ },
+ {
+  "release": "2020-01-10",
+  "ref_month": "2019-12",
+  "consensus": 164.0,
+  "actual": 145.0,
+  "surprise": -19.0
+ },
+ {
+  "release": "2020-02-07",
+  "ref_month": "2020-01",
+  "consensus": 160.0,
+  "actual": 225.0,
+  "surprise": 65.0
+ },
+ {
+  "release": "2020-03-06",
+  "ref_month": "2020-02",
+  "consensus": 175.0,
+  "actual": 273.0,
+  "surprise": 98.0
+ },
+ {
+  "release": "2020-04-03",
+  "ref_month": "2020-03",
+  "consensus": -100.0,
+  "actual": -701.0,
+  "surprise": -601.0
+ },
+ {
+  "release": "2020-05-08",
+  "ref_month": "2020-04",
+  "consensus": -22000.0,
+  "actual": -20500.0,
+  "surprise": 1500.0
+ },
+ {
+  "release": "2020-06-05",
+  "ref_month": "2020-05",
+  "consensus": -8000.0,
+  "actual": 2509.0,
+  "surprise": 10509.0
+ },
+ {
+  "release": "2020-07-02",
+  "ref_month": "2020-06",
+  "consensus": 3000.0,
+  "actual": 4800.0,
+  "surprise": 1800.0
+ },
+ {
+  "release": "2020-08-07",
+  "ref_month": "2020-07",
+  "consensus": 1600.0,
+  "actual": 1763.0,
+  "surprise": 163.0
+ },
+ {
+  "release": "2020-09-04",
+  "ref_month": "2020-08",
+  "consensus": 1400.0,
+  "actual": 1371.0,
+  "surprise": -29.0
+ },
+ {
+  "release": "2020-10-02",
+  "ref_month": "2020-09",
+  "consensus": 850.0,
+  "actual": 661.0,
+  "surprise": -189.0
+ },
+ {
+  "release": "2020-11-06",
+  "ref_month": "2020-10",
+  "consensus": 600.0,
+  "actual": 638.0,
+  "surprise": 38.0
+ },
+ {
+  "release": "2020-12-04",
+  "ref_month": "2020-11",
+  "consensus": 469.0,
+  "actual": 245.0,
+  "surprise": -224.0
+ },
+ {
+  "release": "2021-01-08",
+  "ref_month": "2020-12",
+  "consensus": 71.0,
+  "actual": -140.0,
+  "surprise": -211.0
+ },
+ {
+  "release": "2021-02-05",
+  "ref_month": "2021-01",
+  "consensus": 50.0,
+  "actual": 49.0,
+  "surprise": -1.0
+ },
+ {
+  "release": "2021-03-05",
+  "ref_month": "2021-02",
+  "consensus": 182.0,
+  "actual": 379.0,
+  "surprise": 197.0
+ },
+ {
+  "release": "2021-04-02",
+  "ref_month": "2021-03",
+  "consensus": 647.0,
+  "actual": 916.0,
+  "surprise": 269.0
+ },
+ {
+  "release": "2021-05-07",
+  "ref_month": "2021-04",
+  "consensus": 978.0,
+  "actual": 266.0,
+  "surprise": -712.0
+ },
+ {
+  "release": "2021-06-04",
+  "ref_month": "2021-05",
+  "consensus": 650.0,
+  "actual": 559.0,
+  "surprise": -91.0
+ },
+ {
+  "release": "2021-07-02",
+  "ref_month": "2021-06",
+  "consensus": 700.0,
+  "actual": 850.0,
+  "surprise": 150.0
+ },
+ {
+  "release": "2021-08-06",
+  "ref_month": "2021-07",
+  "consensus": 870.0,
+  "actual": 943.0,
+  "surprise": 73.0
+ },
+ {
+  "release": "2021-09-03",
+  "ref_month": "2021-08",
+  "consensus": 750.0,
+  "actual": 235.0,
+  "surprise": -515.0
+ },
+ {
+  "release": "2021-10-08",
+  "ref_month": "2021-09",
+  "consensus": 500.0,
+  "actual": 194.0,
+  "surprise": -306.0
+ },
+ {
+  "release": "2021-11-05",
+  "ref_month": "2021-10",
+  "consensus": 450.0,
+  "actual": 531.0,
+  "surprise": 81.0
+ },
+ {
+  "release": "2021-12-03",
+  "ref_month": "2021-11",
+  "consensus": 550.0,
+  "actual": 210.0,
+  "surprise": -340.0
+ },
+ {
+  "release": "2022-01-07",
+  "ref_month": "2021-12",
+  "consensus": 400.0,
+  "actual": 199.0,
+  "surprise": -201.0
+ },
+ {
+  "release": "2022-02-04",
+  "ref_month": "2022-01",
+  "consensus": 150.0,
+  "actual": 467.0,
+  "surprise": 317.0
+ },
+ {
+  "release": "2022-03-04",
+  "ref_month": "2022-02",
+  "consensus": 400.0,
+  "actual": 678.0,
+  "surprise": 278.0
+ },
+ {
+  "release": "2022-04-01",
+  "ref_month": "2022-03",
+  "consensus": 490.0,
+  "actual": 431.0,
+  "surprise": -59.0
+ },
+ {
+  "release": "2022-05-06",
+  "ref_month": "2022-04",
+  "consensus": 391.0,
+  "actual": 428.0,
+  "surprise": 37.0
+ },
+ {
+  "release": "2022-06-03",
+  "ref_month": "2022-05",
+  "consensus": 325.0,
+  "actual": 390.0,
+  "surprise": 65.0
+ },
+ {
+  "release": "2022-07-08",
+  "ref_month": "2022-06",
+  "consensus": 268.0,
+  "actual": 372.0,
+  "surprise": 104.0
+ },
+ {
+  "release": "2022-08-05",
+  "ref_month": "2022-07",
+  "consensus": 250.0,
+  "actual": 528.0,
+  "surprise": 278.0
+ },
+ {
+  "release": "2022-09-02",
+  "ref_month": "2022-08",
+  "consensus": 300.0,
+  "actual": 315.0,
+  "surprise": 15.0
+ },
+ {
+  "release": "2022-10-07",
+  "ref_month": "2022-09",
+  "consensus": 250.0,
+  "actual": 263.0,
+  "surprise": 13.0
+ },
+ {
+  "release": "2022-11-04",
+  "ref_month": "2022-10",
+  "consensus": 200.0,
+  "actual": 261.0,
+  "surprise": 61.0
+ },
+ {
+  "release": "2022-12-02",
+  "ref_month": "2022-11",
+  "consensus": 200.0,
+  "actual": 263.0,
+  "surprise": 63.0
+ },
+ {
+  "release": "2023-01-06",
+  "ref_month": "2022-12",
+  "consensus": 200.0,
+  "actual": 223.0,
+  "surprise": 23.0
+ },
+ {
+  "release": "2023-02-03",
+  "ref_month": "2023-01",
+  "consensus": 185.0,
+  "actual": 517.0,
+  "surprise": 332.0
+ },
+ {
+  "release": "2023-03-10",
+  "ref_month": "2023-02",
+  "consensus": 205.0,
+  "actual": 311.0,
+  "surprise": 106.0
+ },
+ {
+  "release": "2023-04-07",
+  "ref_month": "2023-03",
+  "consensus": 239.0,
+  "actual": 236.0,
+  "surprise": -3.0
+ },
+ {
+  "release": "2023-05-05",
+  "ref_month": "2023-04",
+  "consensus": 180.0,
+  "actual": 253.0,
+  "surprise": 73.0
+ },
+ {
+  "release": "2023-06-02",
+  "ref_month": "2023-05",
+  "consensus": 190.0,
+  "actual": 339.0,
+  "surprise": 149.0
+ },
+ {
+  "release": "2023-07-07",
+  "ref_month": "2023-06",
+  "consensus": 225.0,
+  "actual": 209.0,
+  "surprise": -16.0
+ },
+ {
+  "release": "2023-08-04",
+  "ref_month": "2023-07",
+  "consensus": 200.0,
+  "actual": 187.0,
+  "surprise": -13.0
+ },
+ {
+  "release": "2023-09-01",
+  "ref_month": "2023-08",
+  "consensus": 170.0,
+  "actual": 187.0,
+  "surprise": 17.0
+ },
+ {
+  "release": "2023-10-06",
+  "ref_month": "2023-09",
+  "consensus": 170.0,
+  "actual": 336.0,
+  "surprise": 166.0
+ },
+ {
+  "release": "2023-11-03",
+  "ref_month": "2023-10",
+  "consensus": 180.0,
+  "actual": 150.0,
+  "surprise": -30.0
+ },
+ {
+  "release": "2023-12-08",
+  "ref_month": "2023-11",
+  "consensus": 180.0,
+  "actual": 199.0,
+  "surprise": 19.0
+ },
+ {
+  "release": "2024-01-05",
+  "ref_month": "2023-12",
+  "consensus": 170.0,
+  "actual": 216.0,
+  "surprise": 46.0
+ },
+ {
+  "release": "2024-02-02",
+  "ref_month": "2024-01",
+  "consensus": 180.0,
+  "actual": 353.0,
+  "surprise": 173.0
+ },
+ {
+  "release": "2024-03-08",
+  "ref_month": "2024-02",
+  "consensus": 200.0,
+  "actual": 275.0,
+  "surprise": 75.0
+ },
+ {
+  "release": "2024-04-05",
+  "ref_month": "2024-03",
+  "consensus": 200.0,
+  "actual": 303.0,
+  "surprise": 103.0
+ },
+ {
+  "release": "2024-05-03",
+  "ref_month": "2024-04",
+  "consensus": 243.0,
+  "actual": 175.0,
+  "surprise": -68.0
+ },
+ {
+  "release": "2024-06-07",
+  "ref_month": "2024-05",
+  "consensus": 185.0,
+  "actual": 272.0,
+  "surprise": 87.0
+ },
+ {
+  "release": "2024-07-05",
+  "ref_month": "2024-06",
+  "consensus": 190.0,
+  "actual": 206.0,
+  "surprise": 16.0
+ },
+ {
+  "release": "2024-08-02",
+  "ref_month": "2024-07",
+  "consensus": 175.0,
+  "actual": 114.0,
+  "surprise": -61.0
+ },
+ {
+  "release": "2024-09-06",
+  "ref_month": "2024-08",
+  "consensus": 160.0,
+  "actual": 142.0,
+  "surprise": -18.0
+ },
+ {
+  "release": "2024-10-04",
+  "ref_month": "2024-09",
+  "consensus": 140.0,
+  "actual": 254.0,
+  "surprise": 114.0
+ },
+ {
+  "release": "2024-11-01",
+  "ref_month": "2024-10",
+  "consensus": 113.0,
+  "actual": 12.0,
+  "surprise": -101.0
+ },
+ {
+  "release": "2024-12-06",
+  "ref_month": "2024-11",
+  "consensus": 200.0,
+  "actual": 227.0,
+  "surprise": 27.0
+ },
+ {
+  "release": "2025-01-10",
+  "ref_month": "2024-12",
+  "consensus": 160.0,
+  "actual": 256.0,
+  "surprise": 96.0
+ },
+ {
+  "release": "2025-02-07",
+  "ref_month": "2025-01",
+  "consensus": 170.0,
+  "actual": 143.0,
+  "surprise": -27.0
+ },
+ {
+  "release": "2025-03-07",
+  "ref_month": "2025-02",
+  "consensus": 160.0,
+  "actual": 151.0,
+  "surprise": -9.0
+ },
+ {
+  "release": "2025-04-04",
+  "ref_month": "2025-03",
+  "consensus": 135.0,
+  "actual": 228.0,
+  "surprise": 93.0
+ },
+ {
+  "release": "2025-05-02",
+  "ref_month": "2025-04",
+  "consensus": 130.0,
+  "actual": 177.0,
+  "surprise": 47.0
+ },
+ {
+  "release": "2025-06-06",
+  "ref_month": "2025-05",
+  "consensus": 130.0,
+  "actual": 139.0,
+  "surprise": 9.0
+ },
+ {
+  "release": "2025-07-03",
+  "ref_month": "2025-06",
+  "consensus": 110.0,
+  "actual": 147.0,
+  "surprise": 37.0
+ },
+ {
+  "release": "2025-08-01",
+  "ref_month": "2025-07",
+  "consensus": 110.0,
+  "actual": 73.0,
+  "surprise": -37.0
+ },
+ {
+  "release": "2025-09-05",
+  "ref_month": "2025-08",
+  "consensus": 75.0,
+  "actual": 22.0,
+  "surprise": -53.0
+ },
+ {
+  "release": "2025-11-20",
+  "ref_month": "2025-09",
+  "consensus": 50.0,
+  "actual": 119.0,
+  "surprise": 69.0
+ },
+ {
+  "release": "2025-12-16",
+  "ref_month": "2025-11",
+  "consensus": 55.0,
+  "actual": -105.0,
+  "surprise": -160.0
+ },
+ {
+  "release": "2026-01-09",
+  "ref_month": "2025-12",
+  "consensus": 60.0,
+  "actual": 50.0,
+  "surprise": -10.0
+ },
+ {
+  "release": "2026-02-11",
+  "ref_month": "2026-01",
+  "consensus": 70.0,
+  "actual": 130.0,
+  "surprise": 60.0
+ },
+ {
+  "release": "2026-03-06",
+  "ref_month": "2026-02",
+  "consensus": 59.0,
+  "actual": -92.0,
+  "surprise": -151.0
+ },
+ {
+  "release": "2026-04-03",
+  "ref_month": "2026-03",
+  "consensus": 60.0,
+  "actual": 178.0,
+  "surprise": 118.0
+ },
+ {
+  "release": "2026-05-08",
+  "ref_month": "2026-04",
+  "consensus": 62.0,
+  "actual": 115.0,
+  "surprise": 53.0
+ },
+ {
+  "release": "2026-06-05",
+  "ref_month": "2026-05",
+  "consensus": 85.0,
+  "actual": 172.0,
+  "surprise": 87.0
+ },
+ {
+  "release": "2026-07-02",
+  "ref_month": "2026-06",
+  "consensus": 110.0,
+  "actual": 57.0,
+  "surprise": -53.0
+ },
+ {
+  "release": "2026-08-07",
+  "ref_month": "2026-07",
+  "consensus": 80.0,
+  "actual": -23.0,
+  "surprise": -103.0
+ }
+]

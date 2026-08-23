@@ -1,0 +1,307 @@
+<title>The Payrolls Coin Flip</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>
+:root {
+  color-scheme: light;
+  --bg:#f7f8fa; --panel:#ffffff; --ink:#12141a; --ink2:#565c69; --ink3:#858b98;
+  --rule:#e2e5ec; --rule2:#eef0f4;
+  --pos:#2a78d6; --neg:#e34948; --null:#858b98; --accent:#2a78d6;
+  --band:#eceff4;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg:#14161a; --panel:#1b1e24; --ink:#f2f4f7; --ink2:#a8aeb9; --ink3:#7c8391;
+    --rule:#2b2f38; --rule2:#23272e;
+    --pos:#3987e5; --neg:#e66767; --null:#7c8391; --accent:#3987e5;
+    --band:#22262d;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg:#14161a; --panel:#1b1e24; --ink:#f2f4f7; --ink2:#a8aeb9; --ink3:#7c8391;
+  --rule:#2b2f38; --rule2:#23272e;
+  --pos:#3987e5; --neg:#e66767; --null:#7c8391; --accent:#3987e5;
+  --band:#22262d;
+}
+* { box-sizing:border-box; }
+body {
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:"Source Serif 4",Georgia,serif; font-size:17px; line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap { max-width:1140px; margin:0 auto; padding:56px 28px 96px; }
+.prose { max-width:68ch; }
+h1,h2,h3,.eyebrow,.stat-v,.mono,th,.tick,.rowval {
+  font-family:Archivo,"Helvetica Neue",Arial,sans-serif;
+}
+.eyebrow {
+  font-size:11.5px; font-weight:600; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--ink3); margin:0 0 14px;
+}
+h1 { font-size:clamp(34px,5vw,52px); line-height:1.04; font-weight:700;
+     letter-spacing:-.021em; margin:0 0 18px; text-wrap:balance; }
+h2 { font-size:23px; font-weight:600; letter-spacing:-.011em; margin:0 0 6px;
+     text-wrap:balance; }
+h3 { font-size:15px; font-weight:600; letter-spacing:-.005em; margin:0 0 8px; }
+p { margin:0 0 16px; }
+a { color:var(--accent); }
+.lede { font-size:20px; line-height:1.55; color:var(--ink2); margin-bottom:8px; }
+.meta { font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:12.5px;
+        color:var(--ink3); line-height:1.85; margin-top:26px;
+        padding-top:16px; border-top:1px solid var(--rule); }
+section { margin-top:56px; }
+.sec-head { display:flex; flex-direction:column; gap:2px; margin-bottom:20px; }
+.sec-head .k { font-family:"IBM Plex Mono",monospace; font-size:11.5px;
+               letter-spacing:.1em; text-transform:uppercase; color:var(--ink3); }
+.verdictcard {
+  display:grid; grid-template-columns:minmax(0,1fr) auto; gap:34px; align-items:center;
+  background:var(--panel); border:1px solid var(--rule); border-radius:4px;
+  padding:30px 32px; margin-top:34px;
+}
+@media (max-width:720px) { .verdictcard { grid-template-columns:1fr; gap:22px; } }
+.stat { text-align:right; }
+.stat-v { font-size:64px; font-weight:700; letter-spacing:-.03em; line-height:1;
+          font-variant-numeric:tabular-nums; }
+.stat-l { font-family:"IBM Plex Mono",monospace; font-size:11.5px; color:var(--ink3);
+          letter-spacing:.06em; margin-top:9px; line-height:1.5; }
+figure { margin:0; background:var(--panel); border:1px solid var(--rule);
+         border-radius:4px; padding:22px 22px 16px; }
+figcaption { font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--ink3);
+             margin-top:14px; padding-top:12px; border-top:1px solid var(--rule2);
+             line-height:1.65; }
+.chartbox { overflow-x:auto; }
+.chart { display:block; width:100%; min-width:620px; height:auto; }
+.grid { stroke:var(--rule2); stroke-width:1; }
+.axis-zero { stroke:var(--ink3); stroke-width:1.25; }
+.bar.pos { fill:var(--pos); }
+.bar.neg { fill:var(--neg); }
+.bar:hover { opacity:.72; }
+.gapband { fill:var(--band); }
+.gaplab,.mn { font-family:"IBM Plex Mono",monospace; font-size:10.5px; fill:var(--ink3); }
+.tick { font-size:11px; fill:var(--ink3); font-variant-numeric:tabular-nums; }
+.axtitle { font-family:"IBM Plex Mono",monospace; font-size:10.5px; fill:var(--ink3); }
+.bracket { stroke:var(--rule); stroke-width:1.5; }
+.eralab,.mlab { font-family:"IBM Plex Mono",monospace; font-size:11.5px; fill:var(--ink2); }
+.coinflip { font-family:"IBM Plex Mono",monospace; font-size:11px; fill:var(--ink3); }
+.ci { stroke-width:2.5; } .cicap { stroke-width:2; }
+.ci.pos,.cicap.pos { stroke:var(--pos); } .dot.pos { fill:var(--pos); }
+.ci.null,.cicap.null { stroke:var(--null); } .dot.null { fill:var(--null); }
+.dot { stroke:var(--panel); stroke-width:2; }
+.rowlab { font-family:Archivo,sans-serif; font-size:14.5px; font-weight:600; fill:var(--ink); }
+.rowsub { font-family:"IBM Plex Mono",monospace; font-size:11px; fill:var(--ink3); }
+.rowval { font-size:19px; font-weight:700; font-variant-numeric:tabular-nums; }
+.rowval.pos { fill:var(--pos); } .rowval.null { fill:var(--ink2); }
+table { width:100%; border-collapse:collapse; font-size:14.5px; }
+th { text-align:left; font-size:11px; letter-spacing:.09em; text-transform:uppercase;
+     color:var(--ink3); font-weight:600; padding:0 12px 9px 0;
+     border-bottom:1px solid var(--rule); }
+td { padding:11px 12px 11px 0; border-bottom:1px solid var(--rule2); color:var(--ink2); }
+td:first-child { color:var(--ink); }
+.num { font-family:"IBM Plex Mono",monospace; font-variant-numeric:tabular-nums;
+       text-align:right; white-space:nowrap; }
+.verdict { font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.05em;
+           padding:2.5px 8px; border-radius:3px; border:1px solid var(--rule);
+           color:var(--ink3); white-space:nowrap; }
+blockquote { margin:0 0 18px; padding:2px 0 2px 20px; border-left:2px solid var(--accent);
+             font-size:18px; color:var(--ink); }
+.honesty { background:var(--panel); border:1px solid var(--rule); border-radius:4px;
+           padding:26px 30px; }
+.honesty h2 { margin-bottom:14px; }
+.honesty ul { margin:0; padding-left:19px; }
+.honesty li { margin-bottom:11px; color:var(--ink2); font-size:15.5px; line-height:1.58; }
+.honesty li strong { color:var(--ink); font-weight:600; }
+.bar-note { display:flex; gap:20px; flex-wrap:wrap; font-family:"IBM Plex Mono",monospace;
+            font-size:11.5px; color:var(--ink3); margin-top:2px; }
+.key { display:inline-flex; align-items:center; gap:7px; }
+.sw { width:11px; height:11px; border-radius:2px; display:inline-block; }
+.gate { border:1px solid var(--accent); border-radius:4px; padding:20px 24px;
+        background:var(--panel); }
+.gate .k { font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.1em;
+           text-transform:uppercase; color:var(--accent); }
+.gate p { margin:8px 0 0; font-size:17px; }
+:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+@media (prefers-reduced-motion:reduce) { * { transition:none!important; } }
+</style>
+
+<div class="wrap">
+<p class="eyebrow">Uranium Dashboard · Research note</p>
+<h1>The payrolls trade is a coin flip</h1>
+<p class="lede prose">Joe Lonsdale's non-farm-payrolls story is real, but it
+describes an information edge inside the BLS seasonal-adjustment machinery —
+not a rule you can adopt. Tested on 160 releases, "bet the market is wrong"
+wins 50.0% of the time.</p>
+<div class="meta prose">
+2026-08-23 · 160 releases, 2013-04-05 → 2026-08-07 · consensus vs <b>first print</b><br>
+reproducible: <code>nfp_surprise_study.py</code> · gates: <code>tests/test_gates.py</code> (12 passing)
+</div>
+
+<div class="verdictcard">
+  <div>
+    <h2>The clean sample is exactly a coin flip</h2>
+    <p style="margin:6px 0 0;color:var(--ink2);font-size:16px;">
+    Over 2013–2019 — no pandemic distortion, no reopening surge — betting that
+    payrolls beat consensus won 40 of 80 decisions. You cannot get closer to
+    nothing than this.</p>
+  </div>
+  <div class="stat">
+    <div class="stat-v">50.0<span style="font-size:32px;">%</span></div>
+    <div class="stat-l">40 / 80 · p = 1.00<br>2013–2019</div>
+  </div>
+</div>
+
+<section>
+  <div class="sec-head">
+    <span class="k">Chart 1 · every release</span>
+    <h2>Surprises are noise around zero</h2>
+  </div>
+  <figure>
+    <div class="bar-note" style="margin-bottom:14px;">
+      <span class="key"><span class="sw" style="background:var(--pos)"></span>actual above consensus</span>
+      <span class="key"><span class="sw" style="background:var(--neg)"></span>actual below consensus</span>
+      <span>hover any bar for the print</span>
+    </div>
+    <div class="chartbox"><svg viewBox="0 0 1060 320" class="chart" role="img" aria-label="Payroll surprise versus consensus, each release 2013 to 2026"><title>Actual minus consensus, thousands of jobs, per release</title><line class="grid" x1="52" y1="265.0" x2="1046" y2="265.0"/><text class="tick" x="43" y="268.5" text-anchor="end">-200</text><line class="grid" x1="52" y1="220.1" x2="1046" y2="220.1"/><text class="tick" x="43" y="223.6" text-anchor="end">-100</text><line class="axis-zero" x1="52" y1="175.2" x2="1046" y2="175.2"/><text class="tick" x="43" y="178.7" text-anchor="end">0</text><line class="grid" x1="52" y1="130.3" x2="1046" y2="130.3"/><text class="tick" x="43" y="133.8" text-anchor="end">+100</text><line class="grid" x1="52" y1="85.4" x2="1046" y2="85.4"/><text class="tick" x="43" y="88.9" text-anchor="end">+200</text><line class="grid" x1="52" y1="40.5" x2="1046" y2="40.5"/><text class="tick" x="43" y="44.0" text-anchor="end">+300</text><rect class="gapband" x="637.1" y="18" width="21.1" height="256"/><text class="gaplab" x="647.7" y="31" text-anchor="middle">2020–21</text><text class="gaplab" x="647.7" y="43" text-anchor="middle">excluded</text><rect class="bar neg" x="53.3" y="175.2" width="4.4" height="49.0" rx="1.2"><title>2013-04-05 · consensus 197k · actual 88k · surprise -109k</title></rect><rect class="bar pos" x="60.4" y="168.5" width="4.4" height="6.7" rx="1.2"><title>2013-05-03 · consensus 150k · actual 165k · surprise +15k</title></rect><rect class="bar pos" x="67.4" y="172.0" width="4.4" height="3.1" rx="1.2"><title>2013-06-07 · consensus 168k · actual 175k · surprise +7k</title></rect><rect class="bar pos" x="74.5" y="164.0" width="4.4" height="11.2" rx="1.2"><title>2013-07-05 · consensus 170k · actual 195k · surprise +25k</title></rect><rect class="bar neg" x="81.5" y="175.2" width="4.4" height="9.9" rx="1.2"><title>2013-08-02 · consensus 184k · actual 162k · surprise -22k</title></rect><rect class="bar neg" x="88.6" y="175.2" width="4.4" height="5.4" rx="1.2"><title>2013-09-06 · consensus 181k · actual 169k · surprise -12k</title></rect><rect class="bar neg" x="95.6" y="175.2" width="4.4" height="14.4" rx="1.2"><title>2013-10-22 · consensus 180k · actual 148k · surprise -32k</title></rect><rect class="bar pos" x="102.7" y="158.1" width="4.4" height="17.1" rx="1.2"><title>2013-11-08 · consensus 166k · actual 204k · surprise +38k</title></rect><rect class="bar pos" x="109.7" y="158.6" width="4.4" height="16.6" rx="1.2"><title>2013-12-06 · consensus 166k · actual 203k · surprise +37k</title></rect><rect class="bar neg" x="116.8" y="175.2" width="4.4" height="56.6" rx="1.2"><title>2014-01-10 · consensus 200k · actual 74k · surprise -126k</title></rect><rect class="bar neg" x="123.8" y="175.2" width="4.4" height="25.6" rx="1.2"><title>2014-02-07 · consensus 170k · actual 113k · surprise -57k</title></rect><rect class="bar pos" x="130.9" y="158.1" width="4.4" height="17.1" rx="1.2"><title>2014-03-07 · consensus 137k · actual 175k · surprise +38k</title></rect><rect class="bar neg" x="137.9" y="175.2" width="4.4" height="3.6" rx="1.2"><title>2014-04-04 · consensus 200k · actual 192k · surprise -8k</title></rect><rect class="bar pos" x="145.0" y="140.2" width="4.4" height="35.0" rx="1.2"><title>2014-05-02 · consensus 210k · actual 288k · surprise +78k</title></rect><rect class="bar neg" x="152.0" y="175.2" width="4.4" height="1.2" rx="1.2"><title>2014-06-06 · consensus 218k · actual 217k · surprise -1k</title></rect><rect class="bar pos" x="159.1" y="141.1" width="4.4" height="34.1" rx="1.2"><title>2014-07-03 · consensus 212k · actual 288k · surprise +76k</title></rect><rect class="bar neg" x="166.1" y="175.2" width="4.4" height="11.7" rx="1.2"><title>2014-08-01 · consensus 235k · actual 209k · surprise -26k</title></rect><rect class="bar neg" x="173.2" y="175.2" width="4.4" height="37.3" rx="1.2"><title>2014-09-05 · consensus 225k · actual 142k · surprise -83k</title></rect><rect class="bar pos" x="180.2" y="160.4" width="4.4" height="14.8" rx="1.2"><title>2014-10-03 · consensus 215k · actual 248k · surprise +33k</title></rect><rect class="bar neg" x="187.3" y="175.2" width="4.4" height="7.6" rx="1.2"><title>2014-11-07 · consensus 231k · actual 214k · surprise -17k</title></rect><rect class="bar pos" x="194.3" y="134.3" width="4.4" height="40.9" rx="1.2"><title>2014-12-05 · consensus 230k · actual 321k · surprise +91k</title></rect><rect class="bar pos" x="201.4" y="174.3" width="4.4" height="1.2" rx="1.2"><title>2015-01-09 · consensus 250k · actual 252k · surprise +2k</title></rect><rect class="bar pos" x="208.4" y="158.6" width="4.4" height="16.6" rx="1.2"><title>2015-02-06 · consensus 220k · actual 257k · surprise +37k</title></rect><rect class="bar pos" x="215.5" y="150.5" width="4.4" height="24.7" rx="1.2"><title>2015-03-06 · consensus 240k · actual 295k · surprise +55k</title></rect><rect class="bar neg" x="222.5" y="175.2" width="4.4" height="53.0" rx="1.2"><title>2015-04-03 · consensus 244k · actual 126k · surprise -118k</title></rect><rect class="bar neg" x="229.6" y="175.2" width="4.4" height="1.2" rx="1.2"><title>2015-05-08 · consensus 224k · actual 223k · surprise -1k</title></rect><rect class="bar pos" x="236.6" y="152.3" width="4.4" height="22.9" rx="1.2"><title>2015-06-05 · consensus 229k · actual 280k · surprise +51k</title></rect><rect class="bar neg" x="243.7" y="175.2" width="4.4" height="3.1" rx="1.2"><title>2015-07-02 · consensus 230k · actual 223k · surprise -7k</title></rect><rect class="bar neg" x="250.7" y="175.2" width="4.4" height="3.6" rx="1.2"><title>2015-08-07 · consensus 223k · actual 215k · surprise -8k</title></rect><rect class="bar neg" x="257.8" y="175.2" width="4.4" height="21.1" rx="1.2"><title>2015-09-04 · consensus 220k · actual 173k · surprise -47k</title></rect><rect class="bar neg" x="264.8" y="175.2" width="4.4" height="27.4" rx="1.2"><title>2015-10-02 · consensus 203k · actual 142k · surprise -61k</title></rect><rect class="bar pos" x="271.9" y="134.3" width="4.4" height="40.9" rx="1.2"><title>2015-11-06 · consensus 180k · actual 271k · surprise +91k</title></rect><rect class="bar pos" x="278.9" y="170.3" width="4.4" height="4.9" rx="1.2"><title>2015-12-04 · consensus 200k · actual 211k · surprise +11k</title></rect><rect class="bar pos" x="286.0" y="133.9" width="4.4" height="41.3" rx="1.2"><title>2016-01-08 · consensus 200k · actual 292k · surprise +92k</title></rect><rect class="bar neg" x="293.0" y="175.2" width="4.4" height="17.5" rx="1.2"><title>2016-02-05 · consensus 190k · actual 151k · surprise -39k</title></rect><rect class="bar pos" x="300.1" y="151.8" width="4.4" height="23.4" rx="1.2"><title>2016-03-04 · consensus 190k · actual 242k · surprise +52k</title></rect><rect class="bar pos" x="307.1" y="170.7" width="4.4" height="4.5" rx="1.2"><title>2016-04-01 · consensus 205k · actual 215k · surprise +10k</title></rect><rect class="bar neg" x="314.2" y="175.2" width="4.4" height="18.9" rx="1.2"><title>2016-05-06 · consensus 202k · actual 160k · surprise -42k</title></rect><rect class="bar neg" x="321.2" y="175.2" width="4.4" height="56.6" rx="1.2"><title>2016-06-03 · consensus 164k · actual 38k · surprise -126k</title></rect><rect class="bar pos" x="328.3" y="124.9" width="4.4" height="50.3" rx="1.2"><title>2016-07-08 · consensus 175k · actual 287k · surprise +112k</title></rect><rect class="bar pos" x="335.3" y="141.5" width="4.4" height="33.7" rx="1.2"><title>2016-08-05 · consensus 180k · actual 255k · surprise +75k</title></rect><rect class="bar neg" x="342.4" y="175.2" width="4.4" height="13.0" rx="1.2"><title>2016-09-02 · consensus 180k · actual 151k · surprise -29k</title></rect><rect class="bar neg" x="349.4" y="175.2" width="4.4" height="8.5" rx="1.2"><title>2016-10-07 · consensus 175k · actual 156k · surprise -19k</title></rect><rect class="bar neg" x="356.5" y="175.2" width="4.4" height="6.3" rx="1.2"><title>2016-11-04 · consensus 175k · actual 161k · surprise -14k</title></rect><rect class="bar pos" x="363.5" y="173.8" width="4.4" height="1.3" rx="1.2"><title>2016-12-02 · consensus 175k · actual 178k · surprise +3k</title></rect><rect class="bar neg" x="370.6" y="175.2" width="4.4" height="9.9" rx="1.2"><title>2017-01-06 · consensus 178k · actual 156k · surprise -22k</title></rect><rect class="bar pos" x="377.6" y="151.8" width="4.4" height="23.4" rx="1.2"><title>2017-02-03 · consensus 175k · actual 227k · surprise +52k</title></rect><rect class="bar pos" x="384.7" y="150.5" width="4.4" height="24.7" rx="1.2"><title>2017-03-10 · consensus 180k · actual 235k · surprise +55k</title></rect><rect class="bar neg" x="391.7" y="175.2" width="4.4" height="36.8" rx="1.2"><title>2017-04-07 · consensus 180k · actual 98k · surprise -82k</title></rect><rect class="bar pos" x="398.8" y="163.5" width="4.4" height="11.7" rx="1.2"><title>2017-05-05 · consensus 185k · actual 211k · surprise +26k</title></rect><rect class="bar neg" x="405.8" y="175.2" width="4.4" height="21.1" rx="1.2"><title>2017-06-02 · consensus 185k · actual 138k · surprise -47k</title></rect><rect class="bar pos" x="412.9" y="155.9" width="4.4" height="19.3" rx="1.2"><title>2017-07-07 · consensus 179k · actual 222k · surprise +43k</title></rect><rect class="bar pos" x="419.9" y="163.5" width="4.4" height="11.7" rx="1.2"><title>2017-08-04 · consensus 183k · actual 209k · surprise +26k</title></rect><rect class="bar neg" x="427.0" y="175.2" width="4.4" height="10.8" rx="1.2"><title>2017-09-01 · consensus 180k · actual 156k · surprise -24k</title></rect><rect class="bar neg" x="434.0" y="175.2" width="4.4" height="55.2" rx="1.2"><title>2017-10-06 · consensus 90k · actual -33k · surprise -123k</title></rect><rect class="bar neg" x="441.1" y="175.2" width="4.4" height="22.0" rx="1.2"><title>2017-11-03 · consensus 310k · actual 261k · surprise -49k</title></rect><rect class="bar pos" x="448.1" y="162.6" width="4.4" height="12.6" rx="1.2"><title>2017-12-08 · consensus 200k · actual 228k · surprise +28k</title></rect><rect class="bar neg" x="455.2" y="175.2" width="4.4" height="18.9" rx="1.2"><title>2018-01-05 · consensus 190k · actual 148k · surprise -42k</title></rect><rect class="bar neg" x="462.2" y="175.2" width="4.4" height="6.7" rx="1.2"><title>2018-02-02 · consensus 215k · actual 200k · surprise -15k</title></rect><rect class="bar pos" x="469.3" y="120.8" width="4.4" height="54.3" rx="1.2"><title>2018-03-09 · consensus 192k · actual 313k · surprise +121k</title></rect><rect class="bar neg" x="476.3" y="175.2" width="4.4" height="40.4" rx="1.2"><title>2018-04-06 · consensus 193k · actual 103k · surprise -90k</title></rect><rect class="bar neg" x="483.4" y="175.2" width="4.4" height="12.6" rx="1.2"><title>2018-05-04 · consensus 192k · actual 164k · surprise -28k</title></rect><rect class="bar pos" x="490.4" y="159.9" width="4.4" height="15.3" rx="1.2"><title>2018-06-01 · consensus 189k · actual 223k · surprise +34k</title></rect><rect class="bar pos" x="497.5" y="167.1" width="4.4" height="8.1" rx="1.2"><title>2018-07-06 · consensus 195k · actual 213k · surprise +18k</title></rect><rect class="bar neg" x="504.5" y="175.2" width="4.4" height="14.8" rx="1.2"><title>2018-08-03 · consensus 190k · actual 157k · surprise -33k</title></rect><rect class="bar pos" x="511.6" y="170.7" width="4.4" height="4.5" rx="1.2"><title>2018-09-07 · consensus 191k · actual 201k · surprise +10k</title></rect><rect class="bar neg" x="518.6" y="175.2" width="4.4" height="22.9" rx="1.2"><title>2018-10-05 · consensus 185k · actual 134k · surprise -51k</title></rect><rect class="bar pos" x="525.7" y="148.2" width="4.4" height="26.9" rx="1.2"><title>2018-11-02 · consensus 190k · actual 250k · surprise +60k</title></rect><rect class="bar neg" x="532.7" y="175.2" width="4.4" height="20.2" rx="1.2"><title>2018-12-07 · consensus 200k · actual 155k · surprise -45k</title></rect><rect class="bar pos" x="539.8" y="114.6" width="4.4" height="60.6" rx="1.2"><title>2019-01-04 · consensus 177k · actual 312k · surprise +135k</title></rect><rect class="bar pos" x="546.8" y="112.8" width="4.4" height="62.4" rx="1.2"><title>2019-02-01 · consensus 165k · actual 304k · surprise +139k</title></rect><rect class="bar neg" x="553.9" y="175.2" width="4.4" height="71.9" rx="1.2"><title>2019-03-08 · consensus 180k · actual 20k · surprise -160k</title></rect><rect class="bar pos" x="560.9" y="168.0" width="4.4" height="7.2" rx="1.2"><title>2019-04-05 · consensus 180k · actual 196k · surprise +16k</title></rect><rect class="bar pos" x="568.0" y="140.2" width="4.4" height="35.0" rx="1.2"><title>2019-05-03 · consensus 185k · actual 263k · surprise +78k</title></rect><rect class="bar neg" x="575.0" y="175.2" width="4.4" height="49.4" rx="1.2"><title>2019-06-07 · consensus 185k · actual 75k · surprise -110k</title></rect><rect class="bar pos" x="582.1" y="146.4" width="4.4" height="28.7" rx="1.2"><title>2019-07-05 · consensus 160k · actual 224k · surprise +64k</title></rect><rect class="bar neg" x="589.1" y="175.2" width="4.4" height="1.2" rx="1.2"><title>2019-08-02 · consensus 164k · actual 164k · surprise +0k</title></rect><rect class="bar neg" x="596.2" y="175.2" width="4.4" height="12.6" rx="1.2"><title>2019-09-06 · consensus 158k · actual 130k · surprise -28k</title></rect><rect class="bar neg" x="603.2" y="175.2" width="4.4" height="4.0" rx="1.2"><title>2019-10-04 · consensus 145k · actual 136k · surprise -9k</title></rect><rect class="bar pos" x="610.3" y="157.7" width="4.4" height="17.5" rx="1.2"><title>2019-11-01 · consensus 89k · actual 128k · surprise +39k</title></rect><rect class="bar pos" x="617.3" y="136.6" width="4.4" height="38.6" rx="1.2"><title>2019-12-06 · consensus 180k · actual 266k · surprise +86k</title></rect><rect class="bar neg" x="624.4" y="175.2" width="4.4" height="8.5" rx="1.2"><title>2020-01-10 · consensus 164k · actual 145k · surprise -19k</title></rect><rect class="bar pos" x="631.4" y="146.0" width="4.4" height="29.2" rx="1.2"><title>2020-02-07 · consensus 160k · actual 225k · surprise +65k</title></rect><rect class="bar neg" x="659.6" y="175.2" width="4.4" height="90.3" rx="1.2"><title>2022-01-07 · consensus 400k · actual 199k · surprise -201k</title></rect><rect class="bar pos" x="666.7" y="32.8" width="4.4" height="142.4" rx="1.2"><title>2022-02-04 · consensus 150k · actual 467k · surprise +317k</title></rect><rect class="bar pos" x="673.7" y="50.3" width="4.4" height="124.9" rx="1.2"><title>2022-03-04 · consensus 400k · actual 678k · surprise +278k</title></rect><rect class="bar neg" x="680.8" y="175.2" width="4.4" height="26.5" rx="1.2"><title>2022-04-01 · consensus 490k · actual 431k · surprise -59k</title></rect><rect class="bar pos" x="687.8" y="158.6" width="4.4" height="16.6" rx="1.2"><title>2022-05-06 · consensus 391k · actual 428k · surprise +37k</title></rect><rect class="bar pos" x="694.9" y="146.0" width="4.4" height="29.2" rx="1.2"><title>2022-06-03 · consensus 325k · actual 390k · surprise +65k</title></rect><rect class="bar pos" x="701.9" y="128.5" width="4.4" height="46.7" rx="1.2"><title>2022-07-08 · consensus 268k · actual 372k · surprise +104k</title></rect><rect class="bar pos" x="709.0" y="50.3" width="4.4" height="124.9" rx="1.2"><title>2022-08-05 · consensus 250k · actual 528k · surprise +278k</title></rect><rect class="bar pos" x="716.0" y="168.5" width="4.4" height="6.7" rx="1.2"><title>2022-09-02 · consensus 300k · actual 315k · surprise +15k</title></rect><rect class="bar pos" x="723.1" y="169.4" width="4.4" height="5.8" rx="1.2"><title>2022-10-07 · consensus 250k · actual 263k · surprise +13k</title></rect><rect class="bar pos" x="730.1" y="147.8" width="4.4" height="27.4" rx="1.2"><title>2022-11-04 · consensus 200k · actual 261k · surprise +61k</title></rect><rect class="bar pos" x="737.2" y="146.9" width="4.4" height="28.3" rx="1.2"><title>2022-12-02 · consensus 200k · actual 263k · surprise +63k</title></rect><rect class="bar pos" x="744.2" y="164.9" width="4.4" height="10.3" rx="1.2"><title>2023-01-06 · consensus 200k · actual 223k · surprise +23k</title></rect><rect class="bar pos" x="751.3" y="26.1" width="4.4" height="149.1" rx="1.2"><title>2023-02-03 · consensus 185k · actual 517k · surprise +332k</title></rect><rect class="bar pos" x="758.3" y="127.6" width="4.4" height="47.6" rx="1.2"><title>2023-03-10 · consensus 205k · actual 311k · surprise +106k</title></rect><rect class="bar neg" x="765.4" y="175.2" width="4.4" height="1.3" rx="1.2"><title>2023-04-07 · consensus 239k · actual 236k · surprise -3k</title></rect><rect class="bar pos" x="772.4" y="142.4" width="4.4" height="32.8" rx="1.2"><title>2023-05-05 · consensus 180k · actual 253k · surprise +73k</title></rect><rect class="bar pos" x="779.5" y="108.3" width="4.4" height="66.9" rx="1.2"><title>2023-06-02 · consensus 190k · actual 339k · surprise +149k</title></rect><rect class="bar neg" x="786.5" y="175.2" width="4.4" height="7.2" rx="1.2"><title>2023-07-07 · consensus 225k · actual 209k · surprise -16k</title></rect><rect class="bar neg" x="793.6" y="175.2" width="4.4" height="5.8" rx="1.2"><title>2023-08-04 · consensus 200k · actual 187k · surprise -13k</title></rect><rect class="bar pos" x="800.6" y="167.6" width="4.4" height="7.6" rx="1.2"><title>2023-09-01 · consensus 170k · actual 187k · surprise +17k</title></rect><rect class="bar pos" x="807.7" y="100.6" width="4.4" height="74.6" rx="1.2"><title>2023-10-06 · consensus 170k · actual 336k · surprise +166k</title></rect><rect class="bar neg" x="814.7" y="175.2" width="4.4" height="13.5" rx="1.2"><title>2023-11-03 · consensus 180k · actual 150k · surprise -30k</title></rect><rect class="bar pos" x="821.8" y="166.7" width="4.4" height="8.5" rx="1.2"><title>2023-12-08 · consensus 180k · actual 199k · surprise +19k</title></rect><rect class="bar pos" x="828.8" y="154.5" width="4.4" height="20.7" rx="1.2"><title>2024-01-05 · consensus 170k · actual 216k · surprise +46k</title></rect><rect class="bar pos" x="835.9" y="97.5" width="4.4" height="77.7" rx="1.2"><title>2024-02-02 · consensus 180k · actual 353k · surprise +173k</title></rect><rect class="bar pos" x="842.9" y="141.5" width="4.4" height="33.7" rx="1.2"><title>2024-03-08 · consensus 200k · actual 275k · surprise +75k</title></rect><rect class="bar pos" x="849.9" y="128.9" width="4.4" height="46.3" rx="1.2"><title>2024-04-05 · consensus 200k · actual 303k · surprise +103k</title></rect><rect class="bar neg" x="857.0" y="175.2" width="4.4" height="30.5" rx="1.2"><title>2024-05-03 · consensus 243k · actual 175k · surprise -68k</title></rect><rect class="bar pos" x="864.0" y="136.1" width="4.4" height="39.1" rx="1.2"><title>2024-06-07 · consensus 185k · actual 272k · surprise +87k</title></rect><rect class="bar pos" x="871.1" y="168.0" width="4.4" height="7.2" rx="1.2"><title>2024-07-05 · consensus 190k · actual 206k · surprise +16k</title></rect><rect class="bar neg" x="878.1" y="175.2" width="4.4" height="27.4" rx="1.2"><title>2024-08-02 · consensus 175k · actual 114k · surprise -61k</title></rect><rect class="bar neg" x="885.2" y="175.2" width="4.4" height="8.1" rx="1.2"><title>2024-09-06 · consensus 160k · actual 142k · surprise -18k</title></rect><rect class="bar pos" x="892.2" y="124.0" width="4.4" height="51.2" rx="1.2"><title>2024-10-04 · consensus 140k · actual 254k · surprise +114k</title></rect><rect class="bar neg" x="899.3" y="175.2" width="4.4" height="45.4" rx="1.2"><title>2024-11-01 · consensus 113k · actual 12k · surprise -101k</title></rect><rect class="bar pos" x="906.3" y="163.1" width="4.4" height="12.1" rx="1.2"><title>2024-12-06 · consensus 200k · actual 227k · surprise +27k</title></rect><rect class="bar pos" x="913.4" y="132.1" width="4.4" height="43.1" rx="1.2"><title>2025-01-10 · consensus 160k · actual 256k · surprise +96k</title></rect><rect class="bar neg" x="920.4" y="175.2" width="4.4" height="12.1" rx="1.2"><title>2025-02-07 · consensus 170k · actual 143k · surprise -27k</title></rect><rect class="bar neg" x="927.5" y="175.2" width="4.4" height="4.0" rx="1.2"><title>2025-03-07 · consensus 160k · actual 151k · surprise -9k</title></rect><rect class="bar pos" x="934.5" y="133.4" width="4.4" height="41.8" rx="1.2"><title>2025-04-04 · consensus 135k · actual 228k · surprise +93k</title></rect><rect class="bar pos" x="941.6" y="154.1" width="4.4" height="21.1" rx="1.2"><title>2025-05-02 · consensus 130k · actual 177k · surprise +47k</title></rect><rect class="bar pos" x="948.6" y="171.2" width="4.4" height="4.0" rx="1.2"><title>2025-06-06 · consensus 130k · actual 139k · surprise +9k</title></rect><rect class="bar pos" x="955.7" y="158.6" width="4.4" height="16.6" rx="1.2"><title>2025-07-03 · consensus 110k · actual 147k · surprise +37k</title></rect><rect class="bar neg" x="962.7" y="175.2" width="4.4" height="16.6" rx="1.2"><title>2025-08-01 · consensus 110k · actual 73k · surprise -37k</title></rect><rect class="bar neg" x="969.8" y="175.2" width="4.4" height="23.8" rx="1.2"><title>2025-09-05 · consensus 75k · actual 22k · surprise -53k</title></rect><rect class="bar pos" x="976.8" y="144.2" width="4.4" height="31.0" rx="1.2"><title>2025-11-20 · consensus 50k · actual 119k · surprise +69k</title></rect><rect class="bar neg" x="983.9" y="175.2" width="4.4" height="71.9" rx="1.2"><title>2025-12-16 · consensus 55k · actual -105k · surprise -160k</title></rect><rect class="bar neg" x="990.9" y="175.2" width="4.4" height="4.5" rx="1.2"><title>2026-01-09 · consensus 60k · actual 50k · surprise -10k</title></rect><rect class="bar pos" x="998.0" y="148.2" width="4.4" height="26.9" rx="1.2"><title>2026-02-11 · consensus 70k · actual 130k · surprise +60k</title></rect><rect class="bar neg" x="1005.0" y="175.2" width="4.4" height="67.8" rx="1.2"><title>2026-03-06 · consensus 59k · actual -92k · surprise -151k</title></rect><rect class="bar pos" x="1012.1" y="122.2" width="4.4" height="53.0" rx="1.2"><title>2026-04-03 · consensus 60k · actual 178k · surprise +118k</title></rect><rect class="bar pos" x="1019.1" y="151.4" width="4.4" height="23.8" rx="1.2"><title>2026-05-08 · consensus 62k · actual 115k · surprise +53k</title></rect><rect class="bar pos" x="1026.2" y="136.1" width="4.4" height="39.1" rx="1.2"><title>2026-06-05 · consensus 85k · actual 172k · surprise +87k</title></rect><rect class="bar neg" x="1033.2" y="175.2" width="4.4" height="23.8" rx="1.2"><title>2026-07-02 · consensus 110k · actual 57k · surprise -53k</title></rect><rect class="bar neg" x="1040.3" y="175.2" width="4.4" height="46.3" rx="1.2"><title>2026-08-07 · consensus 80k · actual -23k · surprise -103k</title></rect><line class="bracket" x1="53.3" y1="288" x2="635.8" y2="288"/><text class="eralab" x="344.6" y="304" text-anchor="middle">2013–2019   coin flip</text><line class="bracket" x1="659.6" y1="288" x2="1044.7" y2="288"/><text class="eralab" x="852.1" y="304" text-anchor="middle">2022–2026</text><text class="axtitle" x="43" y="12" text-anchor="end">k</text></svg></div>
+    <figcaption>Actual minus consensus, thousands of jobs, per release. The
+    2020–21 window is excluded throughout — single prints missed by millions
+    (up to +10,509k) and would swamp every scale. Mean absolute surprise in the
+    core sample is 63k.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="k">Chart 2 · where "75%" comes from</span>
+    <h2>One era clears chance — in hindsight</h2>
+  </div>
+  <figure>
+    <div class="chartbox"><svg viewBox="0 0 1060 276" class="chart" role="img" aria-label="Hit rate of betting above consensus, by era, with 95% intervals"><title>Share of releases that beat consensus, by era</title><line class="grid" x1="278.5" y1="18" x2="278.5" y2="246"/><text class="tick" x="278.5" y="262" text-anchor="middle">35%</text><line class="grid" x1="347.1" y1="18" x2="347.1" y2="246"/><text class="tick" x="347.1" y="262" text-anchor="middle">40%</text><line class="grid" x1="415.6" y1="18" x2="415.6" y2="246"/><text class="tick" x="415.6" y="262" text-anchor="middle">45%</text><line class="axis-zero" x1="484.2" y1="18" x2="484.2" y2="246"/><text class="tick" x="484.2" y="262" text-anchor="middle">50%</text><line class="grid" x1="552.7" y1="18" x2="552.7" y2="246"/><text class="tick" x="552.7" y="262" text-anchor="middle">55%</text><line class="grid" x1="621.3" y1="18" x2="621.3" y2="246"/><text class="tick" x="621.3" y="262" text-anchor="middle">60%</text><line class="grid" x1="689.8" y1="18" x2="689.8" y2="246"/><text class="tick" x="689.8" y="262" text-anchor="middle">65%</text><line class="grid" x1="758.4" y1="18" x2="758.4" y2="246"/><text class="tick" x="758.4" y="262" text-anchor="middle">70%</text><line class="grid" x1="826.9" y1="18" x2="826.9" y2="246"/><text class="tick" x="826.9" y="262" text-anchor="middle">75%</text><line class="grid" x1="895.5" y1="18" x2="895.5" y2="246"/><text class="tick" x="895.5" y="262" text-anchor="middle">80%</text><text class="coinflip" x="484.2" y="12" text-anchor="middle">coin flip</text><line class="ci null" x1="337.5" y1="53.0" x2="630.9" y2="53.0"/><line class="cicap null" x1="337.5" y1="47.0" x2="337.5" y2="59.0"/><line class="cicap null" x1="630.9" y1="47.0" x2="630.9" y2="59.0"/><circle class="dot null" cx="484.2" cy="53.0" r="6.5"><title>2013–2019: 40/80 = 50.0% (95% CI 39–61%), p=1.000</title></circle><text class="rowlab" x="192" y="51.0" text-anchor="end">2013–2019</text><text class="rowsub" x="192" y="66.0" text-anchor="end">n=80 · p=1.00</text><text class="rowval null" x="978" y="58.0">50.0%</text><line class="ci pos" x1="566.5" y1="107.0" x2="952.4" y2="107.0"/><line class="cicap pos" x1="566.5" y1="101.0" x2="566.5" y2="113.0"/><line class="cicap pos" x1="952.4" y1="101.0" x2="952.4" y2="113.0"/><circle class="dot pos" cx="788.8" cy="107.0" r="6.5"><title>2022–2024: 26/36 = 72.2% (95% CI 56–84%), p=0.011</title></circle><text class="rowlab" x="192" y="105.0" text-anchor="end">2022–2024</text><text class="rowsub" x="192" y="120.0" text-anchor="end">n=36 · p=0.01</text><text class="rowval pos" x="978" y="112.0">72.2%</text><line class="ci null" x1="233.4" y1="161.0" x2="795.0" y2="161.0"/><line class="cicap null" x1="233.4" y1="155.0" x2="233.4" y2="167.0"/><line class="cicap null" x1="795.0" y1="155.0" x2="795.0" y2="167.0"/><circle class="dot null" cx="520.3" cy="161.0" r="6.5"><title>2025–2026: 10/19 = 52.6% (95% CI 32–73%), p=1.000</title></circle><text class="rowlab" x="192" y="159.0" text-anchor="end">2025–2026</text><text class="rowsub" x="192" y="174.0" text-anchor="end">n=19 · p=1.00</text><text class="rowval null" x="978" y="166.0">52.6%</text><line class="ci null" x1="454.6" y1="215.0" x2="679.3" y2="215.0"/><line class="cicap null" x1="454.6" y1="209.0" x2="454.6" y2="221.0"/><line class="cicap null" x1="679.3" y1="209.0" x2="679.3" y2="221.0"/><circle class="dot null" cx="569.2" cy="215.0" r="6.5"><title>all (ex-COVID): 77/137 = 56.2% (95% CI 48–64%), p=0.171</title></circle><text class="rowlab" x="192" y="213.0" text-anchor="end">all (ex-COVID)</text><text class="rowsub" x="192" y="228.0" text-anchor="end">n=137 · p=0.17</text><text class="rowval null" x="978" y="220.0">56.2%</text></svg></div>
+    <figcaption>Hit rate of "bet above consensus" with 95% Wilson intervals.
+    Only 2022–2024 separates from the coin-flip line, and that window was
+    chosen after seeing the data — the definition of an in-sample result. Every
+    other era's interval straddles 50%.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="k">Chart 3 · the closest living descendant</span>
+    <h2>Residual seasonality is a ghost</h2>
+  </div>
+  <figure>
+    <div class="chartbox"><svg viewBox="0 0 1060 250" class="chart" role="img" aria-label="Share of months beating consensus, by reference month"><title>Beat rate by calendar reference month</title><line class="grid" x1="52" y1="177.3" x2="1046" y2="177.3"/><text class="tick" x="43" y="180.8" text-anchor="end">20%</text><line class="grid" x1="52" y1="135.9" x2="1046" y2="135.9"/><text class="tick" x="43" y="139.4" text-anchor="end">40%</text><line class="axis-zero" x1="52" y1="115.2" x2="1046" y2="115.2"/><text class="tick" x="43" y="118.7" text-anchor="end">50%</text><line class="grid" x1="52" y1="94.5" x2="1046" y2="94.5"/><text class="tick" x="43" y="98.0" text-anchor="end">60%</text><line class="grid" x1="52" y1="53.1" x2="1046" y2="53.1"/><text class="tick" x="43" y="56.6" text-anchor="end">80%</text><rect class="bar pos" x="70.2" y="80.7" width="46.4" height="34.5" rx="2"><title>Jan: 8/12 beat consensus (67%), mean +86k</title></rect><text class="mlab" x="93.4" y="216" text-anchor="middle">Jan</text><text class="mn" x="93.4" y="230" text-anchor="middle">8/12</text><rect class="bar pos" x="153.1" y="68.1" width="46.4" height="47.1" rx="2"><title>Feb: 8/11 beat consensus (73%), mean +42k</title></rect><text class="mlab" x="176.2" y="216" text-anchor="middle">Feb</text><text class="mn" x="176.2" y="230" text-anchor="middle">8/11</text><rect class="bar neg" x="235.9" y="115.2" width="46.4" height="17.3" rx="2"><title>Mar: 5/12 beat consensus (42%), mean -11k</title></rect><text class="mlab" x="259.1" y="216" text-anchor="middle">Mar</text><text class="mn" x="259.1" y="230" text-anchor="middle">5/12</text><rect class="bar pos" x="318.7" y="80.7" width="46.4" height="34.5" rx="2"><title>Apr: 8/12 beat consensus (67%), mean +22k</title></rect><text class="mlab" x="341.9" y="216" text-anchor="middle">Apr</text><text class="mn" x="341.9" y="230" text-anchor="middle">8/12</text><rect class="bar pos" x="401.6" y="80.7" width="46.4" height="34.5" rx="2"><title>May: 8/12 beat consensus (67%), mean +17k</title></rect><text class="mlab" x="424.8" y="216" text-anchor="middle">May</text><text class="mn" x="424.8" y="230" text-anchor="middle">8/12</text><rect class="bar pos" x="484.4" y="63.4" width="46.4" height="51.8" rx="2"><title>Jun: 9/12 beat consensus (75%), mean +35k</title></rect><text class="mlab" x="507.6" y="216" text-anchor="middle">Jun</text><text class="mn" x="507.6" y="230" text-anchor="middle">9/12</text><rect class="bar neg" x="567.2" y="115.2" width="46.4" height="51.8" rx="2"><title>Jul: 3/12 beat consensus (25%), mean +6k</title></rect><text class="mlab" x="590.4" y="216" text-anchor="middle">Jul</text><text class="mn" x="590.4" y="230" text-anchor="middle">3/12</text><rect class="bar neg" x="650.1" y="115.2" width="46.4" height="47.1" rx="2"><title>Aug: 3/11 beat consensus (27%), mean -23k</title></rect><text class="mlab" x="673.2" y="216" text-anchor="middle">Aug</text><text class="mn" x="673.2" y="230" text-anchor="middle">3/11</text><rect class="bar neg" x="732.9" y="115.2" width="46.4" height="9.4" rx="2"><title>Sep: 5/11 beat consensus (45%), mean +9k</title></rect><text class="mlab" x="756.1" y="216" text-anchor="middle">Sep</text><text class="mn" x="756.1" y="230" text-anchor="middle">5/11</text><rect class="bar neg" x="815.7" y="115.2" width="46.4" height="1.5" rx="2"><title>Oct: 5/10 beat consensus (50%), mean +8k</title></rect><text class="mlab" x="838.9" y="216" text-anchor="middle">Oct</text><text class="mn" x="838.9" y="230" text-anchor="middle">5/10</text><rect class="bar pos" x="898.6" y="49.3" width="46.4" height="65.9" rx="2"><title>Nov: 9/11 beat consensus (82%), mean +15k</title></rect><text class="mlab" x="921.7" y="216" text-anchor="middle">Nov</text><text class="mn" x="921.7" y="230" text-anchor="middle">9/11</text><rect class="bar neg" x="981.4" y="115.2" width="46.4" height="1.5" rx="2"><title>Dec: 6/12 beat consensus (50%), mean -2k</title></rect><text class="mlab" x="1004.6" y="216" text-anchor="middle">Dec</text><text class="mn" x="1004.6" y="230" text-anchor="middle">6/12</text></svg></div>
+    <figcaption>Share of releases beating consensus by calendar reference
+    month — the modern analogue of the seasonal-adjustment error Clarium traded.
+    November looks strong at 9/11 (p = 0.065), but it is one of twelve
+    simultaneous tests. Šidák-corrected: <b>p = 0.556</b>. Noise.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="k">Out-of-sample</span>
+    <h2>Every rule we tested fails</h2>
+  </div>
+  <figure>
+    <table>
+      <thead><tr><th>Rule (no lookahead)</th><th class="num">Hits</th>
+      <th class="num">Rate</th><th class="num">p</th><th>Verdict</th></tr></thead>
+      <tbody>
+        <tr><td>Month-of-year (walk-forward)</td><td class="num">38/70</td><td class="num">54.3%</td><td class="num">0.55</td><td><span class="verdict null">no edge</span></td></tr><tr><td>Consensus vs 3-mo trend</td><td class="num">71/133</td><td class="num">53.4%</td><td class="num">0.49</td><td><span class="verdict null">no edge</span></td></tr>
+        <tr><td>Follow last month's surprise sign</td><td class="num">ρ = −0.04</td>
+        <td class="num">—</td><td class="num">—</td>
+        <td><span class="verdict null">no persistence</span></td></tr>
+        <tr><td>CES 4-week vs 5-week reference gap</td><td class="num">−16.9k</td>
+        <td class="num">—</td><td class="num">t = −1.19</td>
+        <td><span class="verdict null">no edge</span></td></tr>
+      </tbody>
+    </table>
+    <figcaption>Walk-forward means each bet uses only data available before that
+    release. Nothing survives.</figcaption>
+  </figure>
+</section>
+
+<section class="prose">
+  <div class="sec-head">
+    <span class="k">What the trade actually was</span>
+    <h2>An edge in the algorithm, not in the crowd</h2>
+  </div>
+  <p>From Lonsdale's April 2024 <i>My First Million</i> interview, describing
+  his stint at <b>Clarium Capital</b> — Peter Thiel's global-macro fund —
+  around 2003–04:</p>
+  <blockquote>"Kevin Harrington, the head of research, discovered an error in
+  the seasonal adjustment of the numbers, allowing them to predict whether the
+  number would hit or miss."</blockquote>
+  <p>First Friday of the month, desk in at 5:30am PT for the 8:30am ET print,
+  large bets on <b>the market's reaction</b> — mostly bonds.</p>
+  <p>The mechanism is the whole finding. This was not "the market is usually
+  wrong, so fade it." It was: <i>we model the BLS's own seasonal-adjustment
+  machinery better than anyone else, so we know the print before it lands.</i>
+  A behavioural rule you can state in one sentence gets arbitraged away. A
+  modelling edge in a government statistical process does not — but it also
+  isn't something you can acquire by hearing about it.</p>
+  <p>And it is harder now than in 2004: BLS moved CES to <b>concurrent</b>
+  seasonal adjustment, recomputing factors every month with all data through
+  the current month, which shrinks exactly the stale-factor error a static
+  model could exploit. The factors and methodology are published. Nowcasting
+  desks, ADP, and prediction markets all compete for the same gap.</p>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="k">If we build it</span>
+    <h2>The only honest version, and its gate</h2>
+  </div>
+  <div class="prose"><p>Rebuild the <i>information</i> edge, not the rule: a
+  genuine payrolls nowcast from independent high-frequency inputs — ADP, initial
+  claims in the reference week, ISM and PMI employment, withholding-tax
+  receipts, Indeed postings, WARN filings — plus our own seasonal reconstruction
+  from unadjusted payrolls. The bar is unambiguous:</p></div>
+  <div class="gate">
+    <span class="k">Merge-blocking gate</span>
+    <p>Beat the consensus median on out-of-sample RMSE across <b>≥ 24
+    consecutive releases</b> before any capital is committed.</p>
+  </div>
+  <div class="prose"><p style="margin-top:18px;">Absent that, there is nothing
+  here to trade. Venue if it ever clears: Kalshi has listed monthly payroll
+  contracts since March 2023, and the Fed's own working paper <i>Kalshi and the
+  Rise of Macro Markets</i> (FEDS 2026-010) treats them as a well-behaved
+  benchmark. Mind the arithmetic — a 56% edge on a ~50c binary is about 6c
+  gross, and spread plus fees eat most of it.</p></div>
+</section>
+
+<section>
+  <div class="honesty">
+    <h2>Honesty box</h2>
+    <ul>
+      <li><strong>Measurement basis.</strong> First print vs consensus captured
+      at release. No transaction costs, slippage, or sizing — raw directional
+      hit rates, an upper bound on any real strategy.</li>
+      <li><strong>The 72% is in-sample.</strong> The 2022–24 window was selected
+      after seeing the data. It is shown to explain where a "75%" impression
+      comes from, not as a forecast. Do not size anything off it.</li>
+      <li><strong>Not modelled: the market's reaction.</strong> That was
+      Lonsdale's actual P&amp;L driver — bonds can rally on a hot number. We
+      measured only whether the print beats consensus. A reaction study needs
+      intraday futures tick data we do not have.</li>
+      <li><strong>Not modelled: revisions.</strong> FMP's <code>previous</code>
+      field is back-filled with revised values, so it cannot measure
+      revision-at-the-time. We ran the test, got a result contradicting the
+      well-documented 2024–25 downward revisions, and <b>discarded it</b> rather
+      than publish a number the data could not support. Doing it properly needs
+      ALFRED vintages.</li>
+      <li><strong>Consensus source.</strong> FMP's survey median, spot-checked
+      against known Bloomberg consensus (Mar-24 200k/303k, Apr-24 243k/175k,
+      May-24 185k/272k) — all match. Not audited beyond that.</li>
+      <li><strong>Data gaps, both gated.</strong> October 2025 has no standalone
+      release (folded into the 2025-12-16 print), and the 2025-11-20 release is
+      the <b>September</b> report — FMP labels it October, and we override it.</li>
+      <li><strong>Sample starts 2013.</strong> FMP's calendar reaches no
+      further back, so the Clarium-era claim <b>cannot be tested directly</b>
+      with this data.</li>
+    </ul>
+  </div>
+</section>
+</div>

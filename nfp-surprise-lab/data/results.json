@@ -1,0 +1,164 @@
+{
+ "eras": [
+  {
+   "label": "2013-2019 pre-COVID",
+   "n": 81,
+   "mean": 1.2,
+   "t": 0.17,
+   "hits": 40,
+   "tot": 80,
+   "rate": 0.5,
+   "p": 1.0
+  },
+  {
+   "label": "2022-2024 reopening",
+   "n": 36,
+   "mean": 60.8,
+   "t": 3.19,
+   "hits": 26,
+   "tot": 36,
+   "rate": 0.7222,
+   "p": 0.0113
+  },
+  {
+   "label": "2025-2026 recent",
+   "n": 19,
+   "mean": 3.5,
+   "t": 0.18,
+   "hits": 10,
+   "tot": 19,
+   "rate": 0.5263,
+   "p": 1.0
+  },
+  {
+   "label": "core (all, ex-COVID)",
+   "n": 138,
+   "mean": 17.4,
+   "t": 2.39,
+   "hits": 77,
+   "tot": 137,
+   "rate": 0.562,
+   "p": 0.1714
+  }
+ ],
+ "lag1_autocorr": -0.0421,
+ "months": [
+  {
+   "month": 1,
+   "name": "Jan",
+   "n": 12,
+   "mean": 86.4,
+   "hits": 8,
+   "p": 0.3877
+  },
+  {
+   "month": 2,
+   "name": "Feb",
+   "n": 11,
+   "mean": 41.8,
+   "hits": 8,
+   "p": 0.2266
+  },
+  {
+   "month": 3,
+   "name": "Mar",
+   "n": 12,
+   "mean": -10.8,
+   "hits": 5,
+   "p": 0.7744
+  },
+  {
+   "month": 4,
+   "name": "Apr",
+   "n": 12,
+   "mean": 22.3,
+   "hits": 8,
+   "p": 0.3877
+  },
+  {
+   "month": 5,
+   "name": "May",
+   "n": 12,
+   "mean": 17.1,
+   "hits": 8,
+   "p": 0.3877
+  },
+  {
+   "month": 6,
+   "name": "Jun",
+   "n": 12,
+   "mean": 34.9,
+   "hits": 9,
+   "p": 0.146
+  },
+  {
+   "month": 7,
+   "name": "Jul",
+   "n": 12,
+   "mean": 6.3,
+   "hits": 3,
+   "p": 0.146
+  },
+  {
+   "month": 8,
+   "name": "Aug",
+   "n": 11,
+   "mean": -22.9,
+   "hits": 3,
+   "p": 0.2266
+  },
+  {
+   "month": 9,
+   "name": "Sep",
+   "n": 11,
+   "mean": 9.1,
+   "hits": 5,
+   "p": 1.0
+  },
+  {
+   "month": 10,
+   "name": "Oct",
+   "n": 10,
+   "mean": 7.8,
+   "hits": 5,
+   "p": 1.0
+  },
+  {
+   "month": 11,
+   "name": "Nov",
+   "n": 11,
+   "mean": 14.5,
+   "hits": 9,
+   "p": 0.0654
+  },
+  {
+   "month": 12,
+   "name": "Dec",
+   "n": 12,
+   "mean": -2.2,
+   "hits": 6,
+   "p": 1.0
+  }
+ ],
+ "month_best_p": 0.0654,
+ "month_sidak_p": 0.5559,
+ "gap_diff_t": -1.19,
+ "oos": [
+  {
+   "rule": "month-of-year, walk-forward",
+   "hits": 38,
+   "tot": 70,
+   "rate": 0.5429,
+   "p": 0.5504
+  },
+  {
+   "rule": "consensus vs 3mo trend (anchoring)",
+   "hits": 71,
+   "tot": 133,
+   "rate": 0.5338,
+   "p": 0.488
+  }
+ ],
+ "mean_abs_surprise": 63.1,
+ "median_abs_surprise": 47.0
+}
