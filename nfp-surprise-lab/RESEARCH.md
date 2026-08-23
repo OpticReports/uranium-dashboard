@@ -1,7 +1,7 @@
 # The "bet the market is wrong on payrolls" trade — does it exist?
 
 **Study date:** 2026-08-23 · **Script:** `nfp_surprise_study.py` (reproducible
-from `data/nfp_surprises.json`) · **Gates:** `tests/test_gates.py` (12 passing)
+from `data/nfp_surprises.json`) · **Gates:** `tests/test_gates.py` (15 passing)
 · **Sample:** 160 NFP releases, 2013-04-05 → 2026-08-07, consensus vs
 **first print** (what a pre-release bet actually resolves against).
 
@@ -63,6 +63,46 @@ Why it is far harder now than in 2004:
   error that a static-factor model could exploit.
 - Seasonal factors and methodology are published; the 2004 asymmetry is gone.
 - Nowcasting desks, ADP, and prediction markets all compete on the same gap.
+
+## Follow-up: do other signals tilt the odds? (No.)
+
+Casey's follow-up — consensus may be unbiased on average, but other indicators
+could still be tells. Eight pre-specified candidates, each measured as its own
+surprise from the last print **strictly before** the NFP release (no lookahead),
+`signal_study.py`:
+
+| candidate | n | Pearson | Spearman | sign hit rate |
+|---|---|---|---|---|
+| ADP employment change | 135 | −0.229 (p=0.007) | **+0.037 (p=0.67)** | 72/135 = 53.3% |
+| ISM manufacturing PMI | 126 | +0.112 | +0.171 (p=0.053) | 70/125 = 56.0% |
+| Continuing jobless claims | 137 | +0.017 | −0.171 (p=0.044) | 61/135 = 45.2% |
+| Initial jobless claims | 131 | −0.049 | −0.085 | 57/129 = 44.2% |
+| ISM non-mfg employment | 40 | −0.248 | −0.206 | 15/39 = 38.5% |
+| Challenger job cuts | 90 | −0.112 | −0.130 | 46/90 = 51.1% |
+| ISM manufacturing employment | 103 | +0.042 | +0.019 | 51/101 = 50.5% |
+| NFIB business optimism | 123 | +0.037 | −0.016 | 65/121 = 53.7% |
+
+**The Pearson column is a trap.** ADP looks like a real find at p=0.007 (Šidák
+0.052) — until you rank it. Spearman **+0.037, p=0.67**: the entire Pearson is
+two or three outliers. Same story for the direct test of Casey's framing,
+"consensus is misaligned with the freshest hard read":
+
+| consensus vs ADP actual | n | NFP beat |
+|---|---|---|
+| survey well **below** ADP | 45 | 58% |
+| middle | 45 | 51% |
+| survey well **above** ADP | 45 | 58% |
+
+Pearson +0.224 (p=0.008), Spearman −0.020 (p=0.82), rule hit rate 49.6%. The
+terciles are flat-to-U-shaped — no monotonic relationship of any kind.
+
+Walk-forward, every candidate lands between 42% and 53%; none is significant.
+
+**Why this is the expected answer.** Economists set their NFP forecast *after*
+reading ADP, claims, ISM, and Challenger. Consensus already impounds them — that
+is precisely *why* it is unbiased. Any public pre-release indicator is priced in
+by construction. The only thing that can work is information consensus does not
+already have, which is exactly what Clarium had and what we do not.
 
 ## Honesty box
 

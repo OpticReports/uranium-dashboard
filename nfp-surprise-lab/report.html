@@ -117,6 +117,11 @@ blockquote { margin:0 0 18px; padding:2px 0 2px 20px; border-left:2px solid var(
             font-size:11.5px; color:var(--ink3); margin-top:2px; }
 .key { display:inline-flex; align-items:center; gap:7px; }
 .sw { width:11px; height:11px; border-radius:2px; display:inline-block; }
+.slope { stroke:var(--rule); stroke-width:2; }
+.dotp { fill:var(--panel); stroke:var(--null); stroke-width:2; }
+.dots { fill:var(--pos); stroke:var(--panel); stroke-width:1.5; }
+.rowlab2 { font-family:Archivo,sans-serif; font-size:13.5px; fill:var(--ink); }
+.rowsub2 { font-family:"IBM Plex Mono",monospace; font-size:11px; fill:var(--ink3); }
 .gate { border:1px solid var(--accent); border-radius:4px; padding:20px 24px;
         background:var(--panel); }
 .gate .k { font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.1em;
@@ -135,7 +140,7 @@ not a rule you can adopt. Tested on 160 releases, "bet the market is wrong"
 wins 50.0% of the time.</p>
 <div class="meta prose">
 2026-08-23 · 160 releases, 2013-04-05 → 2026-08-07 · consensus vs <b>first print</b><br>
-reproducible: <code>nfp_surprise_study.py</code> · gates: <code>tests/test_gates.py</code> (12 passing)
+reproducible: <code>nfp_surprise_study.py</code> · gates: <code>tests/test_gates.py</code> (15 passing)
 </div>
 
 <div class="verdictcard">
@@ -221,6 +226,52 @@ reproducible: <code>nfp_surprise_study.py</code> · gates: <code>tests/test_gate
     <figcaption>Walk-forward means each bet uses only data available before that
     release. Nothing survives.</figcaption>
   </figure>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="k">Chart 4 · other signals</span>
+    <h2>Every candidate collapses when you rank it</h2>
+  </div>
+  <figure>
+    <div class="bar-note" style="margin-bottom:14px;">
+      <span class="key"><span class="sw" style="background:transparent;border:2px solid var(--null)"></span>Pearson (outlier-sensitive)</span>
+      <span class="key"><span class="sw" style="background:var(--pos)"></span>Spearman (rank, robust)</span>
+    </div>
+    <div class="chartbox"><svg viewBox="0 0 1060 390" class="chart" role="img" aria-label="Pearson versus Spearman correlation for each candidate signal"><title>Each signal's correlation with the payroll surprise</title><line class="grid" x1="271.2" y1="20" x2="271.2" y2="358"/><text class="tick" x="271.2" y="375" text-anchor="middle">-0.3</text><line class="grid" x1="377.5" y1="20" x2="377.5" y2="358"/><text class="tick" x="377.5" y="375" text-anchor="middle">-0.2</text><line class="grid" x1="483.8" y1="20" x2="483.8" y2="358"/><text class="tick" x="483.8" y="375" text-anchor="middle">-0.1</text><line class="axis-zero" x1="590.0" y1="20" x2="590.0" y2="358"/><text class="tick" x="590.0" y="375" text-anchor="middle">+0.0</text><line class="grid" x1="696.2" y1="20" x2="696.2" y2="358"/><text class="tick" x="696.2" y="375" text-anchor="middle">+0.1</text><line class="grid" x1="802.5" y1="20" x2="802.5" y2="358"/><text class="tick" x="802.5" y="375" text-anchor="middle">+0.2</text><line class="grid" x1="908.8" y1="20" x2="908.8" y2="358"/><text class="tick" x="908.8" y="375" text-anchor="middle">+0.3</text><text class="coinflip" x="590.0" y="14" text-anchor="middle">no relationship</text><line class="slope" x1="326.4" y1="50.0" x2="371.4" y2="50.0"/><circle class="dotp" cx="326.4" cy="50.0" r="5.5"><title>ISM non-mfg employment — Pearson -0.248 (p=0.114)</title></circle><circle class="dots" cx="371.4" cy="50.0" r="6"><title>ISM non-mfg employment — Spearman -0.206 (p=0.195)</title></circle><text class="rowlab2" x="234" y="55.0" text-anchor="end">ISM non-mfg employment</text><text class="rowsub2" x="942" y="54.0">n=40</text><line class="slope" x1="346.7" y1="90.0" x2="629.1" y2="90.0"/><circle class="dotp" cx="346.7" cy="90.0" r="5.5"><title>ADP employment change — Pearson -0.229 (p=0.007)</title></circle><circle class="dots" cx="629.1" cy="90.0" r="6"><title>ADP employment change — Spearman +0.037 (p=0.671)</title></circle><text class="rowlab2" x="234" y="95.0" text-anchor="end">ADP employment change</text><text class="rowsub2" x="942" y="94.0">n=135</text><line class="slope" x1="471.1" y1="130.0" x2="452.4" y2="130.0"/><circle class="dotp" cx="471.1" cy="130.0" r="5.5"><title>Challenger job cuts — Pearson -0.112 (p=0.291)</title></circle><circle class="dots" cx="452.4" cy="130.0" r="6"><title>Challenger job cuts — Spearman -0.130 (p=0.221)</title></circle><text class="rowlab2" x="234" y="135.0" text-anchor="end">Challenger job cuts</text><text class="rowsub2" x="942" y="134.0">n=90</text><line class="slope" x1="537.9" y1="170.0" x2="500.2" y2="170.0"/><circle class="dotp" cx="537.9" cy="170.0" r="5.5"><title>Initial jobless claims — Pearson -0.049 (p=0.578)</title></circle><circle class="dots" cx="500.2" cy="170.0" r="6"><title>Initial jobless claims — Spearman -0.085 (p=0.335)</title></circle><text class="rowlab2" x="234" y="175.0" text-anchor="end">Initial jobless claims</text><text class="rowsub2" x="942" y="174.0">n=131</text><line class="slope" x1="608.5" y1="210.0" x2="408.1" y2="210.0"/><circle class="dotp" cx="608.5" cy="210.0" r="5.5"><title>Continuing jobless claims — Pearson +0.017 (p=0.839)</title></circle><circle class="dots" cx="408.1" cy="210.0" r="6"><title>Continuing jobless claims — Spearman -0.171 (p=0.043)</title></circle><text class="rowlab2" x="234" y="215.0" text-anchor="end">Continuing jobless claims</text><text class="rowsub2" x="942" y="214.0">n=137</text><line class="slope" x1="629.1" y1="250.0" x2="573.0" y2="250.0"/><circle class="dotp" cx="629.1" cy="250.0" r="5.5"><title>NFIB business optimism — Pearson +0.037 (p=0.685)</title></circle><circle class="dots" cx="573.0" cy="250.0" r="6"><title>NFIB business optimism — Spearman -0.016 (p=0.860)</title></circle><text class="rowlab2" x="234" y="255.0" text-anchor="end">NFIB business optimism</text><text class="rowsub2" x="942" y="254.0">n=123</text><line class="slope" x1="634.9" y1="290.0" x2="610.3" y2="290.0"/><circle class="dotp" cx="634.9" cy="290.0" r="5.5"><title>ISM manufacturing employment — Pearson +0.042 (p=0.670)</title></circle><circle class="dots" cx="610.3" cy="290.0" r="6"><title>ISM manufacturing employment — Spearman +0.019 (p=0.848)</title></circle><text class="rowlab2" x="234" y="295.0" text-anchor="end">ISM manufacturing employment</text><text class="rowsub2" x="942" y="294.0">n=103</text><line class="slope" x1="708.9" y1="330.0" x2="772.1" y2="330.0"/><circle class="dotp" cx="708.9" cy="330.0" r="5.5"><title>ISM manufacturing PMI — Pearson +0.112 (p=0.210)</title></circle><circle class="dots" cx="772.1" cy="330.0" r="6"><title>ISM manufacturing PMI — Spearman +0.171 (p=0.053)</title></circle><text class="rowlab2" x="234" y="335.0" text-anchor="end">ISM manufacturing PMI</text><text class="rowsub2" x="942" y="334.0">n=126</text></svg></div>
+    <figcaption>Eight pre-specified indicators, each measured as its own
+    surprise from the last print strictly before the payroll release. ADP looks
+    like a real find on Pearson (−0.229, p = 0.007) and evaporates on Spearman
+    (+0.037, p = 0.67) — the whole correlation was two or three outliers. Every
+    other candidate sits on top of zero. Walk-forward, all land between 42% and
+    53%.</figcaption>
+  </figure>
+  <div class="prose" style="margin-top:26px;">
+    <h3>Testing "the survey is misaligned with the hard data" directly</h3>
+    <p>Split every month by how far consensus sat from the freshest hard read
+    (ADP's actual). If misalignment were a tell, the beat rate would slope
+    across the terciles. It does not:</p>
+  </div>
+  <figure style="margin-top:14px;">
+    <table>
+      <thead><tr><th>Consensus vs ADP actual</th><th class="num">n</th>
+      <th class="num">NFP beat</th></tr></thead>
+      <tbody>
+        <tr><td>Survey well <b>below</b> ADP</td><td class="num">45</td><td class="num">58%</td></tr>
+        <tr><td>Middle</td><td class="num">45</td><td class="num">51%</td></tr>
+        <tr><td>Survey well <b>above</b> ADP</td><td class="num">45</td><td class="num">58%</td></tr>
+      </tbody>
+    </table>
+    <figcaption>Flat to U-shaped, not monotonic. Pearson +0.224 (p = 0.008),
+    Spearman −0.020 (p = 0.82), rule hit rate 49.6%.</figcaption>
+  </figure>
+  <div class="prose" style="margin-top:26px;">
+    <p><b>This is the expected answer, and it is the useful one.</b> Economists
+    set their payroll forecast <i>after</i> reading ADP, claims, ISM and
+    Challenger. Consensus already impounds them — which is exactly <i>why</i>
+    it comes out unbiased. Any public pre-release indicator is priced in by
+    construction. Only information consensus does not already have can work.</p>
+  </div>
 </section>
 
 <section class="prose">

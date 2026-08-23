@@ -16,6 +16,7 @@ sys.path.insert(0, str(HERE))
 from nfp_surprise_study import COVID_END, COVID_START, load  # noqa: E402
 
 D = json.loads((HERE / "data" / "chart_data.json").read_text())
+S = json.loads((HERE / "data" / "signal_results.json").read_text())
 ROWS = load()
 CORE = [r for r in ROWS if not (COVID_START <= r["rel"] <= COVID_END)]
 
@@ -175,6 +176,44 @@ def chart_months() -> str:
     return "".join(p)
 
 
+# ------------------------------------------- chart 4: Pearson vs Spearman --
+def chart_signals() -> str:
+    cands = sorted(S["candidates"], key=lambda c: c["corr"])
+    W, rowh, mt = 1060, 40, 30
+    ml, mr = 250, 130
+    H = mt + rowh * len(cands) + 40
+    pw = W - ml - mr
+
+    def x(v: float) -> float:
+        return ml + (v + 0.32) / 0.64 * pw
+
+    p = [f'<svg viewBox="0 0 {W} {H}" class="chart" role="img" '
+         f'aria-label="Pearson versus Spearman correlation for each candidate signal">']
+    p.append("<title>Each signal's correlation with the payroll surprise</title>")
+    for gv in (-0.3, -0.2, -0.1, 0.0, 0.1, 0.2, 0.3):
+        xx = x(gv)
+        cls = "axis-zero" if gv == 0 else "grid"
+        p.append(f'<line class="{cls}" x1="{xx:.1f}" y1="{mt-10}" x2="{xx:.1f}" y2="{H-32}"/>')
+        p.append(f'<text class="tick" x="{xx:.1f}" y="{H-15}" text-anchor="middle">'
+                 f'{gv:+.1f}</text>')
+    p.append(f'<text class="coinflip" x="{x(0):.1f}" y="{mt-16}" text-anchor="middle">'
+             f'no relationship</text>')
+    for i, c in enumerate(cands):
+        cy = mt + i * rowh + rowh / 2
+        xa, xb = x(c["corr"]), x(c["spearman"])
+        p.append(f'<line class="slope" x1="{xa:.1f}" y1="{cy:.1f}" x2="{xb:.1f}" y2="{cy:.1f}"/>')
+        p.append(f'<circle class="dotp" cx="{xa:.1f}" cy="{cy:.1f}" r="5.5"><title>'
+                 f'{esc(c["label"])} — Pearson {c["corr"]:+.3f} (p={c["p_corr"]:.3f})</title></circle>')
+        p.append(f'<circle class="dots" cx="{xb:.1f}" cy="{cy:.1f}" r="6"><title>'
+                 f'{esc(c["label"])} — Spearman {c["spearman"]:+.3f} '
+                 f'(p={c["p_spearman"]:.3f})</title></circle>')
+        p.append(f'<text class="rowlab2" x="{ml-16}" y="{cy+5:.1f}" text-anchor="end">'
+                 f'{esc(c["label"])}</text>')
+        p.append(f'<text class="rowsub2" x="{W-mr+12}" y="{cy+4:.1f}">n={c["n"]}</text>')
+    p.append("</svg>")
+    return "".join(p)
+
+
 def rules_rows() -> str:
     out = []
     for r in D["rules"]:
@@ -305,6 +344,11 @@ blockquote {{ margin:0 0 18px; padding:2px 0 2px 20px; border-left:2px solid var
             font-size:11.5px; color:var(--ink3); margin-top:2px; }}
 .key {{ display:inline-flex; align-items:center; gap:7px; }}
 .sw {{ width:11px; height:11px; border-radius:2px; display:inline-block; }}
+.slope {{ stroke:var(--rule); stroke-width:2; }}
+.dotp {{ fill:var(--panel); stroke:var(--null); stroke-width:2; }}
+.dots {{ fill:var(--pos); stroke:var(--panel); stroke-width:1.5; }}
+.rowlab2 {{ font-family:Archivo,sans-serif; font-size:13.5px; fill:var(--ink); }}
+.rowsub2 {{ font-family:"IBM Plex Mono",monospace; font-size:11px; fill:var(--ink3); }}
 .gate {{ border:1px solid var(--accent); border-radius:4px; padding:20px 24px;
         background:var(--panel); }}
 .gate .k {{ font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.1em;
@@ -323,7 +367,7 @@ not a rule you can adopt. Tested on 160 releases, "bet the market is wrong"
 wins 50.0% of the time.</p>
 <div class="meta prose">
 2026-08-23 · 160 releases, 2013-04-05 → 2026-08-07 · consensus vs <b>first print</b><br>
-reproducible: <code>nfp_surprise_study.py</code> · gates: <code>tests/test_gates.py</code> (12 passing)
+reproducible: <code>nfp_surprise_study.py</code> · gates: <code>tests/test_gates.py</code> (15 passing)
 </div>
 
 <div class="verdictcard">
@@ -409,6 +453,52 @@ reproducible: <code>nfp_surprise_study.py</code> · gates: <code>tests/test_gate
     <figcaption>Walk-forward means each bet uses only data available before that
     release. Nothing survives.</figcaption>
   </figure>
+</section>
+
+<section>
+  <div class="sec-head">
+    <span class="k">Chart 4 · other signals</span>
+    <h2>Every candidate collapses when you rank it</h2>
+  </div>
+  <figure>
+    <div class="bar-note" style="margin-bottom:14px;">
+      <span class="key"><span class="sw" style="background:transparent;border:2px solid var(--null)"></span>Pearson (outlier-sensitive)</span>
+      <span class="key"><span class="sw" style="background:var(--pos)"></span>Spearman (rank, robust)</span>
+    </div>
+    <div class="chartbox">{chart_signals()}</div>
+    <figcaption>Eight pre-specified indicators, each measured as its own
+    surprise from the last print strictly before the payroll release. ADP looks
+    like a real find on Pearson (−0.229, p = 0.007) and evaporates on Spearman
+    (+0.037, p = 0.67) — the whole correlation was two or three outliers. Every
+    other candidate sits on top of zero. Walk-forward, all land between 42% and
+    53%.</figcaption>
+  </figure>
+  <div class="prose" style="margin-top:26px;">
+    <h3>Testing "the survey is misaligned with the hard data" directly</h3>
+    <p>Split every month by how far consensus sat from the freshest hard read
+    (ADP's actual). If misalignment were a tell, the beat rate would slope
+    across the terciles. It does not:</p>
+  </div>
+  <figure style="margin-top:14px;">
+    <table>
+      <thead><tr><th>Consensus vs ADP actual</th><th class="num">n</th>
+      <th class="num">NFP beat</th></tr></thead>
+      <tbody>
+        <tr><td>Survey well <b>below</b> ADP</td><td class="num">45</td><td class="num">58%</td></tr>
+        <tr><td>Middle</td><td class="num">45</td><td class="num">51%</td></tr>
+        <tr><td>Survey well <b>above</b> ADP</td><td class="num">45</td><td class="num">58%</td></tr>
+      </tbody>
+    </table>
+    <figcaption>Flat to U-shaped, not monotonic. Pearson +0.224 (p = 0.008),
+    Spearman −0.020 (p = 0.82), rule hit rate 49.6%.</figcaption>
+  </figure>
+  <div class="prose" style="margin-top:26px;">
+    <p><b>This is the expected answer, and it is the useful one.</b> Economists
+    set their payroll forecast <i>after</i> reading ADP, claims, ISM and
+    Challenger. Consensus already impounds them — which is exactly <i>why</i>
+    it comes out unbiased. Any public pre-release indicator is priced in by
+    construction. Only information consensus does not already have can work.</p>
+  </div>
 </section>
 
 <section class="prose">

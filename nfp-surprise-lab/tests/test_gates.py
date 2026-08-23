@@ -140,3 +140,49 @@ def test_gate_edge_is_smaller_than_transaction_costs_claim():
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-v"]))
+
+
+# ------------------------------------------------- signal-study gates ----
+def test_gate_no_leading_indicator_survives_rank_correlation():
+    """The follow-up study's load-bearing claim: every candidate signal that
+    looks significant on Pearson collapses under Spearman, i.e. it was
+    outlier-driven. Sidak-corrected across the candidates tested, nothing
+    survives. A signal that starts passing is a finding, not a green light --
+    it needs a fresh counter-agent review before anyone acts on it."""
+    from signal_study import CANDIDATES, load_signals, main  # noqa: PLC0415
+
+    results = main()
+    assert results, "signal study produced no results"
+    k = len(results)
+    for res in results:
+        sidak = 1 - (1 - res["p_spearman"]) ** k
+        assert sidak > 0.05, (
+            f"{res['label']} now survives rank correlation "
+            f"(Spearman {res['spearman']:+.3f}, Sidak p={sidak:.4f}) -- re-review")
+
+
+def test_gate_no_signal_beats_chance_on_sign():
+    from signal_study import main  # noqa: PLC0415
+
+    results = main()
+    k = len(results)
+    for res in results:
+        sidak = 1 - (1 - res["p_hit"]) ** k
+        assert sidak > 0.05, (
+            f"{res['label']} sign hit rate now significant "
+            f"({res['hits']}/{res['tot']}, Sidak p={sidak:.4f}) -- re-review")
+
+
+def test_gate_misalignment_terciles_are_not_monotonic():
+    """'Consensus is misaligned with the freshest hard read' would show up as a
+    monotonic tercile gradient. It does not -- it is flat/U-shaped."""
+    from signal_study import load as _load  # noqa: PLC0415
+    from signal_study import misalignment  # noqa: PLC0415
+
+    nfp = [r for r in _load() if not (COVID_START <= r["rel"] <= COVID_END)]
+    mis = misalignment(nfp, pathlib.Path(__file__).resolve().parents[1]
+                       / "data" / "signals_raw.json")
+    lo, mid, hi = (t["rate"] for t in mis["terciles"])
+    assert not (lo < mid < hi or lo > mid > hi), (
+        f"tercile gradient became monotonic ({lo:.2f}/{mid:.2f}/{hi:.2f}) -- re-review")
+    assert mis["p_hit"] > 0.05
