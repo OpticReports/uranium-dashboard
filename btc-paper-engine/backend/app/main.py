@@ -2,17 +2,20 @@
 from __future__ import annotations
 
 import csv
+import hmac
 import io
 import logging
+import threading
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
 from .config import settings
 from .live import ENGINE, start_background_loop
+from . import triage_chat
 from .watchdog import start_watchdog
 from .store.db import (
     BarRow, EquitySnapRow, EventRow, SignalRow, TradeRow, init_db, session_scope,
@@ -35,6 +38,10 @@ async def lifespan(app: FastAPI):
     # this engine's own books. Off unless WATCHDOG_ENABLED is set.
     WATCHDOG = start_watchdog(
         settings, lambda: (ENGINE.status() or {}).get("books", {}))
+    # read-only Telegram triage (explains pages; never raises them). Off
+    # unless TRIAGE_BOT_TOKEN is set to its OWN bot.
+    triage_chat.start_triage(
+        settings, lambda: (ENGINE.status() or {}).get("books", {}), WATCHDOG)
     yield
 
 
@@ -57,7 +64,35 @@ def health():
         wd["open_conditions"] = sorted(WATCHDOG.open)
         wd["pulse_seen"] = WATCHDOG.last_ok is not None
     return {"status": "ok", "service": "btc-paper-engine",
-            "engine": settings.run_engine, "watchdog": wd}
+            "engine": settings.run_engine, "watchdog": wd,
+            "triage": {"enabled": triage_chat.enabled()}}
+
+
+@app.post("/triage/webhook")
+async def triage_webhook(request: Request):
+    """Telegram update sink for the read-only triage bot.
+
+    Fails closed: a missing or wrong secret header is dropped without
+    processing, so only updates Telegram sent for THIS bot are handled. The
+    reply path has no order, halt or config surface — it can only send text
+    back to the owner's chat.
+    """
+    if not triage_chat.enabled():
+        return {"ok": True}
+    hdr = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
+    if not hmac.compare_digest(hdr, triage_chat.webhook_secret()):
+        return {"ok": True}                  # silent drop; never confirm/deny
+    try:
+        update = await request.json()
+    except Exception:  # noqa: BLE001
+        return {"ok": True}
+    # off the request thread: the LLM call can take a minute and Telegram
+    # retries any webhook that doesn't answer promptly
+    threading.Thread(
+        target=triage_chat.handle_update, daemon=True,
+        args=(update, lambda: (ENGINE.status() or {}).get("books", {}),
+              settings.watchdog_pulse_url, WATCHDOG)).start()
+    return {"ok": True}
 
 
 @app.get("/status")

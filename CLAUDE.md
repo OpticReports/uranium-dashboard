@@ -61,6 +61,30 @@ them to one line each. No restating context Casey already has.
   alongside the work (deal analyzer: templates/rubric-review-v1.md is the
   pattern). Applies to the venture-deal-analyzer pipeline and all research
   dashboards alike.
+- CROSS-FAMILY REVIEW (Casey, 2026-08-22): every counter-agent pass so far
+  has been one model family reviewing itself, which shares training, blind
+  spots and failure modes — a reviewer that doesn't think to check the same
+  thing the author didn't think to check is weaker evidence than the verdict
+  makes it look. So: (a) the review log NAMES the reviewing family, never a
+  version-specific ID; (b) for anything that BINDS — a merged build, a
+  published verdict, a live-trading change — prefer a reviewer from a
+  different family than the author, routed through whatever provider is
+  configured (OpenRouter is already wired on treasury-canary, barbell-lab
+  and btc-paper-engine); (c) a cross-family reviewer is a FINDER, not a
+  merge-blocker: its findings are verified before they bind, because a
+  weaker model's confident wrong verdict is worse than no verdict; (d) when
+  same-family review is all that ran, say so in the verdict log rather than
+  letting "counter-agent verified" imply more independence than it had.
+- LLMs stay OUT of alert and trade paths (Casey, 2026-08-22): monitoring
+  that pages, and anything that sizes/enters/exits, must be deterministic
+  code with no model, no API key and no third-party router in the
+  dependency chain — a pager whose reliability depends on a model being up
+  and funded is worse than an `if`. Models may EXPLAIN after the fact
+  (btc-paper-engine's read-only triage bot is the pattern: separate bot
+  token, owner-gated, no order surface, gate-tested) and may assist
+  research. Corollary: an agent-run check is never the only cover for a
+  live-money failure mode, because it stops when credits, usage windows or
+  schedules lapse.
 - Honesty rules: state measurement basis (trade-close vs MTM), in-sample
   caveats, and what was NOT modeled. Never present in-sample CAGR as a
   forecast.

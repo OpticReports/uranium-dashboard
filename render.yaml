@@ -220,6 +220,19 @@ services:
         sync: false
       - key: TELEGRAM_CHAT_ID
         sync: false
+      # --- read-only triage chat (app/triage_chat.py) ----------------------
+      # Ask the stack what a page means, answered from live state via
+      # OpenRouter. Explains alerts; never raises them — the watchdog pages
+      # with no model involved, so triage being down/unfunded costs nothing.
+      # Needs its OWN BotFather bot: Telegram allows one webhook per bot, and
+      # reusing TELEGRAM_BOT_TOKEN would steal the alert bot's webhook (the
+      # code refuses to start in that case). Unset = triage off.
+      - key: TRIAGE_BOT_TOKEN
+        sync: false
+      - key: TRIAGE_CHAT_MODEL
+        value: moonshotai/kimi-k3
+      - key: OPENROUTER_API_KEY
+        sync: false
 
   # --- Catalyst Options Engine (pre-catalyst asymmetry radar) ----------------
   # PAPER ONLY + KEYLESS decision brain (born from the 2026-08-19 MRNA +130%
