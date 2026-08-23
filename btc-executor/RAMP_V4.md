@@ -142,26 +142,75 @@ it never actually had.
 
 ## Drills (the accelerator)
 
-Token-gated `POST /drill?kind=cycle|stopfill` — one deliberate min-size
-(1 contract, 0.01 BTC) round trip through the REAL live code paths:
+Token-gated `POST /drill?kind=cycle|stopfill|limit_buy|limit_sell|post_only_cross`
+— one deliberate min-size (1 contract, 0.01 BTC) round trip through the REAL
+live code paths:
 
 - `cycle`: market entry → protective stop placed → stop verified OPEN →
   stop cancelled → market flatten → venue position verified back to start.
-- `stopfill`: market entry → sell-stop with trigger just above market
-  (fires immediately) → stop FILL verified → flat. If the venue rejects or
-  the fill doesn't confirm within the poll budget: cancel + market flatten
+- `stopfill`: market entry → sell-stop with trigger just **below** market
+  (`DRILL_STOPFILL_BPS`, default 10bp) → fires on the next downtick → stop
+  FILL verified → flat. If the fill doesn't confirm within the poll budget
+  (`DRILL_STOPFILL_POLL` × 2s, default 60s): cancel + market flatten
   fallback, drill marked `unverified`, never left open.
-  LIVE-SEMANTICS CAVEAT (referee 2026-08-15): Coinbase validates stop
-  price vs last trade and may REJECT an above-market STOP_DOWN sell — the
-  first live stopfill drill is therefore also a venue experiment; if
-  rejected, the fallback flattens safely and stopfill gets redesigned
-  (below-market trigger + longer poll budget) before the stop_filled row
-  relies on it.
+  REDESIGNED 2026-08-23, exactly as the 2026-08-15 referee pre-registered:
+  the original placed the trigger ABOVE market to fire instantly, but
+  Coinbase maps a SELL stop to STOP_DOWN and preview-REJECTS an
+  above-market trigger, so it failed deterministically and could never earn
+  the row. Below-market is venue-legal; the cost is that it must wait for a
+  downtick, hence the longer budget.
+- `limit_buy` / `limit_sell` (NEW 2026-08-23): post-only limit rested
+  INSIDE the spread (`DRILL_LIMIT_BPS`) → wait (`DRILL_LIMIT_POLL` × 2s) →
+  **chase at market if unfilled** → flatten. This routes the same venue
+  calls an organic pullback entry makes, which the market-entry drills
+  never touch.
+- `post_only_cross` (NEW 2026-08-23): a post-only limit priced deliberately
+  THROUGH the spread (`DRILL_CROSS_BPS`). The venue rejects it as
+  marketable and the adapter records the cross — which is the coverage row.
+  Credited ONLY when the venue actually records the rejection: us intending
+  to cross proves nothing, the venue refusing does. Organically this row
+  needs a short at positive basis and can sit at 0 for months.
 - AUTO-REPAIR tail (all kinds, all exception paths): residual venue
   position after a drill is flattened immediately with a reducing market
   order, recorded as `auto_repair`, and the drill event escalates to RED
   (pages Telegram). Trend organic entries (market path) count toward entry
   coverage; pullback entries prove the limit/post-only path.
+
+### What a limit-path drill does and does NOT prove (amendment 2026-08-23)
+
+The original rule was "drills never count toward entry/exit coverage,
+because drill entries are market orders and only the real path proves the
+real path." That rationale is about the **path**, not the trigger — and the
+2026-08-23 `/kill` → `/resume` test demonstrated the distinction live: a
+button-pressed re-entry, with no signal behind it, legitimately earned
+`entry_long` and `chase` because it ran the real machinery.
+
+So the amended principle is **real path, any trigger**. But stated honestly,
+a limit-path drill proves strictly less than an organic entry:
+
+| | limit-path drill | organic entry |
+|---|---|---|
+| venue interaction, fill handling, chase | ✅ proven | ✅ proven |
+| `step()` deciding WHEN to enter from an engine target | ❌ untested | ✅ proven |
+
+A drill enters because an operator asked. It never exercises the
+engine→executor decision handoff. **Drill-earned entry coverage is therefore
+weaker evidence than organic and must never be presented as equivalent.**
+`drill_limit_entry` is recorded separately from `entry_long`/`entry_short`
+so the two can always be told apart in the audit trail.
+
+PENDING CROSS-FAMILY REVIEW: whether drill-earned entries may satisfy
+`entry_long`/`entry_short` at all is exactly the judgment this amendment
+should not make for itself. Until a reviewer rules, the drills record
+`drill_limit_entry` and do NOT credit the organic entry rows. `stop_filled`,
+`post_only_cross`, `stop_placed` and `slippage_sample` are unaffected by
+that question — those rows are about venue mechanics, which a drill proves
+identically however it was triggered.
+
+AUTO-DRILL STAYS CYCLES-ONLY. The new kinds are manual until each has been
+run supervised and verified live at least once — the same staged-proof rule
+that governed stopfill. Extending auto-drill to them is a separate change
+with its own review.
 
 Hard bounds (all enforced in code, not convention):
 - size is ALWAYS exactly one venue contract; no parameter can raise it

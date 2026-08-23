@@ -37,6 +37,13 @@ logger = logging.getLogger(__name__)
 BAR_SECONDS = 14_400
 LEGS = ("pullback", "trend")
 
+# RAMP v4 drill kinds. "cycle"/"stopfill" enter at market; the limit_* and
+# post_only_cross kinds route the REAL limit + post-only + chase machinery,
+# which is the path an organic pullback entry runs (RAMP_V4.md, 2026-08-23).
+DRILL_KINDS = ("cycle", "stopfill", "limit_buy", "limit_sell",
+               "post_only_cross")
+LIMIT_PATH_KINDS = ("limit_buy", "limit_sell", "post_only_cross")
+
 
 class Venue(Protocol):
     def equity(self) -> float: ...
@@ -1122,7 +1129,7 @@ class Executor:
         it. Endpoint-only (token-gated); never called by any scheduler.
         Fills are recorded (leg='drill') so they feed slippage stats, and
         are excluded from every P&L metric by that tag."""
-        if kind not in ("cycle", "stopfill"):
+        if kind not in DRILL_KINDS:
             return {"ok": False, "refused": f"unknown kind {kind}"}
         if not self._venue_lock.acquire(timeout=30):
             return {"ok": False, "refused": "executor busy (step running)"}
@@ -1151,87 +1158,20 @@ class Executor:
         covs: list[str] = []
         try:
             mid = self.venue.mid()
-            self.venue.place_market("BUY", q, f"{base}-E")
-            self._watch_fill("drill", "drill_entry", f"{base}-E", mid, "BUY")
-            steps["entry"] = "sent"
-            if kind == "cycle":
-                trig = mid * 0.99
-                self.venue.place_stop("SELL", q, trig, f"{base}-S")
-                covs.append("stop_placed")
-                st = self.venue.order_status(f"{base}-S")
-                steps["stop_open"] = bool(st and st.get("status") == "OPEN")
-                self.venue.cancel(f"{base}-S")
-                st2 = self.venue.order_status(f"{base}-S")
-                steps["stop_cancelled"] = bool(
-                    st2 and st2.get("status") != "FILLED")
-                # exit ONLY if the stop did not fill in the cancel window -
-                # unconditional exit after a filled stop sold us short
-                # (referee 2026-08-15, executed repro)
-                if steps["stop_cancelled"]:
-                    self.venue.place_market("SELL", q, f"{base}-X")
-                    self._watch_fill("drill", "drill_exit", f"{base}-X",
-                                     mid, "SELL")
-                    steps["exit"] = "sent"
-                else:
-                    steps["exit"] = "skipped_stop_filled"
-                ok = steps["stop_open"] and steps["stop_cancelled"]
-                if ok:
-                    covs.append("drill_cycle")
-            else:  # stopfill: trigger just above market -> fires immediately
-                trig = mid * 1.005
-                filled = False
-                try:
-                    self.venue.place_stop("SELL", q, trig, f"{base}-S")
-                    covs.append("stop_placed")
-                    self._watch_fill("drill", "drill_stop", f"{base}-S",
-                                     trig, "SELL")
-                    for _ in range(6):
-                        st = self.venue.order_status(f"{base}-S")
-                        if st and st.get("status") == "FILLED":
-                            filled = True
-                            break
-                        time.sleep(2)
-                except Exception as exc:  # noqa: BLE001
-                    steps["stop_error"] = str(exc)[:120]
-                steps["stop_filled"] = filled
-                if filled:
-                    covs.extend(("stop_filled", "drill_stopfill"))
-                else:
-                    # never leave a drill position open: cancel + flatten
-                    try:
-                        self.venue.cancel(f"{base}-S")
-                    except Exception:  # noqa: BLE001
-                        pass
-                    self.venue.place_market("SELL", q, f"{base}-X")
-                    self._watch_fill("drill", "drill_exit", f"{base}-X",
-                                     mid, "SELL")
-                    steps["fallback_flatten"] = True
-                    ok = False
+            if kind in LIMIT_PATH_KINDS:
+                ok = self._drill_limit_path(kind, q, mid, base, steps, covs)
+            else:
+                self.venue.place_market("BUY", q, f"{base}-E")
+                self._watch_fill("drill", "drill_entry", f"{base}-E", mid,
+                                 "BUY")
+                steps["entry"] = "sent"
+                ok = self._drill_market_path(kind, q, mid, base, steps, covs)
         except Exception as exc:  # noqa: BLE001
             ok = False
             steps["error"] = str(exc)[:200]
-        # AUTO-REPAIR (referee 2026-08-15, mandatory): a drill must NEVER
-        # leave exposure. Fill-beats-cancel races and any exception path land
-        # here; residual position is flattened with a reducing market order,
-        # recorded, and the drill escalates to RED (which pages).
-        try:
-            pos_end = self.venue.position()
-            if abs(pos_end) > 1e-9:
-                rq = 0.0
-                try:
-                    rq = self.venue.quantize(abs(pos_end))
-                except Exception:  # noqa: BLE001
-                    pass
-                rq = rq or abs(pos_end)
-                self.venue.place_market(_close_side(pos_end), rq, f"{base}-R")
-                steps["auto_repair"] = pos_end
-                ok = False
-                pos_end = self.venue.position()
-            steps["venue_flat_end"] = abs(pos_end) <= 1e-9
-            ok = ok and bool(steps["venue_flat_end"])
-        except Exception as exc:  # noqa: BLE001
-            steps["venue_flat_end"] = None
-            steps["repair_error"] = str(exc)[:200]
+        self._drill_repair(base, steps)
+        ok = ok and bool(steps.get("venue_flat_end"))
+        if steps.get("repair_error") or steps.get("auto_repair") is not None:
             ok = False
         if ok:
             for k in covs:
@@ -1252,6 +1192,181 @@ class Executor:
         self._poll_fill_watch()
         self._save_state()
         return rec
+
+    def _drill_market_path(self, kind: str, q: float, mid: float, base: str,
+                           steps: dict, covs: list) -> bool:
+        """Market-entry drills: cycle (stop placed, verified OPEN, cancelled,
+        flatten) and stopfill (stop actually FIRES).
+
+        STOPFILL REDESIGN 2026-08-23: the original placed the SELL stop
+        ABOVE market so it would fire instantly, but Coinbase maps a SELL
+        stop to STOP_DOWN and preview-REJECTS an above-market trigger — it
+        failed deterministically and could never earn the row. RAMP_V4
+        pre-registered the fix: trigger just BELOW market (venue-legal) and
+        wait for the next downtick, which needs a longer poll budget than an
+        instant fill did. Unfilled inside the budget still cancels, flattens
+        and reports UNVERIFIED — it never leaves the drill position open.
+        """
+        if kind == "cycle":
+            trig = mid * 0.99
+            self.venue.place_stop("SELL", q, trig, f"{base}-S")
+            covs.append("stop_placed")
+            st = self.venue.order_status(f"{base}-S")
+            steps["stop_open"] = bool(st and st.get("status") == "OPEN")
+            self.venue.cancel(f"{base}-S")
+            st2 = self.venue.order_status(f"{base}-S")
+            steps["stop_cancelled"] = bool(
+                st2 and st2.get("status") != "FILLED")
+            # exit ONLY if the stop did not fill in the cancel window -
+            # unconditional exit after a filled stop sold us short
+            # (referee 2026-08-15, executed repro)
+            if steps["stop_cancelled"]:
+                self.venue.place_market("SELL", q, f"{base}-X")
+                self._watch_fill("drill", "drill_exit", f"{base}-X",
+                                 mid, "SELL")
+                steps["exit"] = "sent"
+            else:
+                steps["exit"] = "skipped_stop_filled"
+            ok = bool(steps["stop_open"] and steps["stop_cancelled"])
+            if ok:
+                covs.append("drill_cycle")
+            return ok
+
+        # stopfill: trigger just BELOW market -> fires on the next downtick
+        trig = mid * (1.0 - getattr(self.cfg, "drill_stopfill_bps", 10.0) / 10_000.0)
+        steps["stop_trigger"] = trig
+        filled = False
+        try:
+            self.venue.place_stop("SELL", q, trig, f"{base}-S")
+            covs.append("stop_placed")
+            self._watch_fill("drill", "drill_stop", f"{base}-S", trig, "SELL")
+            for _ in range(max(1, int(getattr(self.cfg, "drill_stopfill_poll", 30)))):
+                st = self.venue.order_status(f"{base}-S")
+                if st and st.get("status") == "FILLED":
+                    filled = True
+                    break
+                time.sleep(2)
+        except Exception as exc:  # noqa: BLE001
+            steps["stop_error"] = str(exc)[:120]
+        steps["stop_filled"] = filled
+        if filled:
+            covs.extend(("stop_filled", "drill_stopfill"))
+            return True
+        # never leave a drill position open: cancel + flatten
+        try:
+            self.venue.cancel(f"{base}-S")
+        except Exception:  # noqa: BLE001
+            pass
+        self.venue.place_market("SELL", q, f"{base}-X")
+        self._watch_fill("drill", "drill_exit", f"{base}-X", mid, "SELL")
+        steps["fallback_flatten"] = True
+        return False
+
+    def _drill_limit_path(self, kind: str, q: float, mid: float, base: str,
+                          steps: dict, covs: list) -> bool:
+        """Drills that route the REAL limit + post-only + chase machinery —
+        the same venue calls an organic pullback entry makes (2026-08-23).
+
+        limit_buy / limit_sell: rest a post-only limit INSIDE the spread,
+        wait, and chase at market if it does not fill — exercising exactly
+        the path `step()` runs for a pending pullback entry, then flatten.
+
+        post_only_cross: price the post-only order THROUGH the spread on
+        purpose. The venue rejects it as marketable and the adapter records
+        the cross, which is the `post_only_cross` coverage row. Organically
+        that row needs a short at positive basis and can wait months.
+
+        HONESTY (RAMP_V4 amendment): this proves the EXECUTION half - the
+        venue interaction, fill handling and chase. It does NOT prove the
+        DECISION half: that step() correctly decides when to enter from an
+        engine target. An organic entry proves both. The amendment records
+        that difference rather than claiming equivalence.
+        """
+        cross = kind == "post_only_cross"
+        side = "SELL" if kind == "limit_sell" else "BUY"
+        bps = (getattr(self.cfg, "drill_cross_bps", 25.0) if cross
+               else getattr(self.cfg, "drill_limit_bps", 5.0)) / 10_000.0
+        # rest INSIDE the spread (never marketable) unless we are deliberately
+        # crossing, in which case price THROUGH it
+        sign = -1.0 if side == "BUY" else 1.0
+        px = mid * (1.0 + sign * bps * (-1.0 if cross else 1.0))
+        steps.update(side=side, limit_px=px, crossing=cross)
+        self.venue.place_limit(side, q, px, f"{base}-E", post_only=True)
+        self._watch_fill("drill", "drill_entry", f"{base}-E", px, side)
+        steps["entry"] = "limit_sent"
+
+        filled = False
+        for _ in range(max(1, int(getattr(self.cfg, "drill_limit_poll", 15)))):
+            st = self.venue.order_status(f"{base}-E")
+            if st and st.get("status") == "FILLED":
+                filled = True
+                break
+            if st and st.get("status") in ("CANCELLED", "REJECTED"):
+                break
+            time.sleep(2)
+        steps["limit_filled"] = filled
+
+        if not filled:
+            # the real chase: cancel the resting remainder, take it at market
+            try:
+                self.venue.cancel(f"{base}-E")
+            except Exception:  # noqa: BLE001
+                pass
+            self.venue.place_market(side, q, f"{base}-C")
+            self._watch_fill("drill", "drill_chase", f"{base}-C", mid, side)
+            steps["chased"] = True
+            # recorded as drill evidence, NOT as the organic `chase` row:
+            # the amendment says drill-triggered entry-path events stay
+            # distinguishable from signal-driven ones until review rules
+            covs.append("drill_chase")
+
+        # a deliberately-crossing post-only order is REJECTED by design, so
+        # the venue recording the cross is the pass condition, not a fill
+        crossed = bool(getattr(self.venue, "post_only_crosses", None))
+        if cross:
+            steps["post_only_rejected"] = crossed
+            if crossed:
+                covs.append("post_only_cross")
+
+        # flatten whatever we ended up holding; the repair tail is the
+        # backstop, this is the intended exit
+        try:
+            pos = self.venue.position()
+        except Exception:  # noqa: BLE001
+            pos = 0.0
+        if abs(pos) > 1e-9:
+            self.venue.place_market(_close_side(pos), abs(pos), f"{base}-X")
+            self._watch_fill("drill", "drill_exit", f"{base}-X", mid,
+                             _close_side(pos))
+            steps["exit"] = "sent"
+
+        if cross:
+            return crossed
+        covs.append("drill_limit_entry")
+        # the entry mechanic is proven whether it rested or had to be chased
+        return True
+
+    def _drill_repair(self, base: str, steps: dict) -> None:
+        """AUTO-REPAIR (referee 2026-08-15, mandatory): a drill must NEVER
+        leave exposure. Fill-beats-cancel races and any exception path land
+        here; residual position is flattened with a reducing market order,
+        recorded, and the drill escalates to RED (which pages)."""
+        try:
+            pos_end = self.venue.position()
+            if abs(pos_end) > 1e-9:
+                rq = 0.0
+                try:
+                    rq = self.venue.quantize(abs(pos_end))
+                except Exception:  # noqa: BLE001
+                    pass
+                rq = rq or abs(pos_end)
+                self.venue.place_market(_close_side(pos_end), rq, f"{base}-R")
+                steps["auto_repair"] = pos_end
+                pos_end = self.venue.position()
+            steps["venue_flat_end"] = abs(pos_end) <= 1e-9
+        except Exception as exc:  # noqa: BLE001
+            steps["venue_flat_end"] = None
+            steps["repair_error"] = str(exc)[:200]
 
     def _needed_auto_drill(self) -> str | None:
         """Next drill kind auto-drill may run: CYCLES ONLY. stopfill is

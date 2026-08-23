@@ -48,6 +48,21 @@ class Settings(BaseSettings):
     # RAMP v4 drills (RAMP_V4.md): min-size test round trips
     drill_max_per_day: int = 6
     drill_cooldown_s: int = 300
+    # stopfill redesign (2026-08-23): Coinbase maps a SELL stop to STOP_DOWN
+    # and preview-rejects an ABOVE-market trigger, so the original
+    # fires-immediately design failed deterministically. A trigger just BELOW
+    # market is venue-legal and fires on the next downtick, which needs a
+    # longer poll budget than an instant fill did.
+    drill_stopfill_bps: float = 10.0      # trigger this far BELOW mid
+    drill_stopfill_poll: int = 30         # x2s => up to 60s waiting for the fill
+    # limit-path entry drills: rest INSIDE the spread so post-only is
+    # accepted, then chase at market if unfilled - the same shape the real
+    # pullback entry runs.
+    drill_limit_bps: float = 5.0          # rest this far inside mid
+    drill_limit_poll: int = 15            # x2s => up to 30s before chasing
+    # post-only-cross drill: deliberately price THROUGH the spread so the
+    # venue rejects the post-only order as marketable.
+    drill_cross_bps: float = 25.0
     # Auto-drill (RAMP_V4.md amendment 2026-08-17): the executor runs its own
     # drills in flat windows until drill coverage is met. Default OFF - a
     # fresh deploy never self-trades drills; Casey arms it in the Render env.

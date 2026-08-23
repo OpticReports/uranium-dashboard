@@ -21,6 +21,14 @@ class Cfg:
     stop_replace_bps = 5.0
     stop_limit_offset_pct = 0.5
     state_path = ""
+    # drill poll budgets: 1 iteration in tests. Production defaults wait up
+    # to 60s for a below-market stop to fire; a suite that actually slept
+    # that long per fallback case would stop being run.
+    drill_stopfill_bps = 10.0
+    drill_stopfill_poll = 1
+    drill_limit_bps = 5.0
+    drill_limit_poll = 1
+    drill_cross_bps = 25.0
 
 
 class FakeVenue:
@@ -2138,3 +2146,127 @@ def test_gate_fill_watch_survives_restart(tmp_path):
     assert len(ex2.state.fills) == 1
     assert ex2.state.fills[0]["cloid"] == "P-1-E"
     assert ex2.state.fill_watch == []       # drained, not re-recorded
+
+
+# ---------------------------------------------------------------------------
+# RAMP v4 drill variants (2026-08-23): stopfill redesigned for Coinbase's
+# STOP_DOWN rule, plus limit-path drills that route the REAL post-only/chase
+# machinery instead of a market order.
+def test_gate_stopfill_trigger_is_below_market(tmp_path):
+    """Coinbase maps a SELL stop to STOP_DOWN and preview-REJECTS an
+    above-market trigger — the original design could never earn the row.
+    The trigger must sit BELOW mid."""
+    ex, venue = _drill_exec(tmp_path)
+    ex.cfg.drill_cooldown_s = 0
+    rec = ex.drill("stopfill")
+    trig = rec["steps"]["stop_trigger"]
+    assert trig < venue.mid(), f"trigger {trig} must be below mid"
+    assert trig > venue.mid() * 0.99, "and close enough to fire on a downtick"
+
+
+def test_gate_stopfill_unfilled_still_flattens(tmp_path):
+    """A below-market trigger may not fire inside the budget. That must
+    cancel, flatten and report UNVERIFIED - never leave the drill open."""
+    ex, venue = _drill_exec(tmp_path)
+    ex.cfg.drill_cooldown_s = 0
+    rec = ex.drill("stopfill")            # FakeVenue never fires the stop
+    assert rec["ok"] is False
+    assert rec["steps"]["fallback_flatten"] is True
+    assert venue.position() == 0.0
+    assert ex.state.coverage.get("stop_filled") is None
+
+
+def test_gate_limit_drill_uses_post_only_not_market(tmp_path):
+    """The whole point: an organic pullback entry is a post-only LIMIT, so a
+    drill that proves that path must place one too."""
+    ex, venue = _drill_exec(tmp_path)
+    ex.cfg.drill_cooldown_s = 0
+    rec = ex.drill("limit_buy")
+    types = {o.get("type") for o in venue.orders.values()}
+    assert "LIMIT" in types, f"no limit order placed: {venue.orders}"
+    assert rec["steps"]["entry"] == "limit_sent"
+    assert rec["steps"]["side"] == "BUY"
+    # rests INSIDE the spread -> never marketable
+    assert rec["steps"]["limit_px"] < venue.mid()
+    assert rec["steps"]["crossing"] is False
+
+
+def test_gate_limit_sell_rests_above_mid(tmp_path):
+    ex, venue = _drill_exec(tmp_path)
+    ex.cfg.drill_cooldown_s = 0
+    rec = ex.drill("limit_sell")
+    assert rec["steps"]["side"] == "SELL"
+    assert rec["steps"]["limit_px"] > venue.mid(), "a maker sell rests above"
+
+
+def test_gate_limit_drill_chases_when_unfilled(tmp_path):
+    """FakeVenue leaves limits OPEN, so this exercises the chase path — the
+    same shape step() runs when a pullback limit misses."""
+    ex, venue = _drill_exec(tmp_path)
+    ex.cfg.drill_cooldown_s = 0
+    rec = ex.drill("limit_buy")
+    assert rec["steps"]["limit_filled"] is False
+    assert rec["steps"]["chased"] is True
+    assert ex.state.coverage.get("drill_chase") == 1
+    assert ex.state.coverage.get("chase") is None, "must not credit the organic row"
+    assert venue.position() == 0.0, "chased entry must still be flattened"
+
+
+def test_gate_limit_drill_leaves_venue_flat(tmp_path):
+    ex, venue = _drill_exec(tmp_path)
+    ex.cfg.drill_cooldown_s = 0
+    rec = ex.drill("limit_buy")
+    assert rec["steps"]["venue_flat_end"] is True
+    assert venue.position() == 0.0
+
+
+def test_gate_post_only_cross_prices_through_the_spread(tmp_path):
+    """post_only_cross must deliberately be MARKETABLE — that is the whole
+    mechanic. A buy prices ABOVE mid so the venue rejects the maker order."""
+    ex, venue = _drill_exec(tmp_path)
+    ex.cfg.drill_cooldown_s = 0
+    rec = ex.drill("post_only_cross")
+    assert rec["steps"]["crossing"] is True
+    assert rec["steps"]["limit_px"] > venue.mid(), "must cross, not rest"
+
+
+def test_gate_post_only_cross_credits_only_on_venue_rejection(tmp_path):
+    """The row is earned by the VENUE rejecting the order, not by us saying
+    we tried. A venue that accepts it (no cross recorded) must not credit."""
+    ex, venue = _drill_exec(tmp_path)
+    ex.cfg.drill_cooldown_s = 0
+    rec = ex.drill("post_only_cross")
+    assert rec["steps"]["post_only_rejected"] is False
+    assert rec["ok"] is False
+    assert ex.state.coverage.get("post_only_cross") is None
+    # now a venue that DOES record the cross
+    venue.post_only_crosses = {"D-x-E"}
+    ex.cfg.drill_cooldown_s = 0
+    ex.state.drills = []
+    rec2 = ex.drill("post_only_cross")
+    assert rec2["steps"]["post_only_rejected"] is True
+    assert ex.state.coverage.get("post_only_cross") == 1
+
+
+def test_gate_new_drill_kinds_obey_flat_precondition(tmp_path):
+    """Every new kind inherits the refusal: a drill may never touch the
+    venue while a real position exists."""
+    ex, venue = _drill_exec(tmp_path)
+    ex.state.legs["trend"].qty = 0.01
+    for kind in ("limit_buy", "limit_sell", "post_only_cross", "stopfill"):
+        r = ex.drill(kind)
+        assert r["ok"] is False and "leg_not_flat" in r["refused"], (kind, r)
+
+
+def test_gate_unknown_drill_kind_still_refused(tmp_path):
+    ex, _ = _drill_exec(tmp_path)
+    r = ex.drill("wire-me-money")
+    assert r["ok"] is False and "unknown kind" in r["refused"]
+
+
+def test_gate_auto_drill_still_cycles_only(tmp_path):
+    """The new kinds are MANUAL until each is proven live once. Auto-drill
+    must not pick them up (referee 2026-08-17 rule, unchanged)."""
+    ex, _ = _drill_exec(tmp_path)
+    ex.state.coverage_live = {}
+    assert ex._needed_auto_drill() == "cycle"
