@@ -205,6 +205,20 @@ class IBAdapter:
     # reqMktData for legs, Bag contract with ComboLegs, LimitOrder at mid.
 
     def spot(self, symbol: str) -> float:
+        return self.spot_ex(symbol)[0]
+
+    def spot_ex(self, symbol: str) -> tuple[float, str]:
+        """(price, source) with source in {live, last, close}.
+
+        CR-N2: B8 gave the quote walk a previous-CLOSE fallback so that a
+        thin or out-of-RTH quote stops being indistinguishable from a
+        missing market-data subscription. That is right for SIZING and
+        VALUATION and wrong for a FILL: a previous session's close is not
+        a price anything traded at today. `spot()` alone cannot say which
+        it returned, so the two callers that adopt a venue fill lacking a
+        reported price were booking a close as a fill basis where the
+        pre-B8 code raised and failed closed. The source is the caller's
+        only way to tell, so it is returned rather than merely logged."""
         from ib_async import Future, Stock
         self._require_connected()
         # Symbols outside the El Nino table (SPY/BIL/sleeve names from the
@@ -258,7 +272,7 @@ class IBAdapter:
             # are never fill prices) but they must never look like live.
             logger.warning("spot(%s) = %.4f from %s data (marketDataType=%s) "
                            "— not a live tick", symbol, px, source, mdt)
-        return float(px)
+        return float(px), source
 
     def _await_quote(self, ticker) -> tuple[float, str]:
         """B8: wait for a usable tick, bounded — not a blind fixed sleep.
@@ -701,6 +715,21 @@ class DryAdapter:
             return self._last_px[symbol]
         return {"NG": 2.6, "SB": 15.6, "SLV": 55.9}.get(symbol, 100.0)
 
+    def spot_ex(self, symbol: str) -> tuple[float, str]:
+        """Dry quotes are synthetic but they are never STALE — every one is
+        produced for the cycle asking for it, so none of them is the
+        previous-close case CR-N2 guards against."""
+        return self.spot(symbol), "live"
+
+    def seed_price(self, symbol: str, px: float) -> None:
+        """Anchor a dry quote to a REAL input (a tracker entry_ref) before
+        any fill exists for that symbol. Without it a dry sleeve name
+        quotes at a fictional flat 100, which the entry_ref sanity band
+        would read as a 10x mispricing on a $9 stock and refuse. A real
+        fill still wins: this only fills in a symbol never seen."""
+        if px and px > 0 and symbol not in self._last_px:
+            self._last_px[symbol] = float(px)
+
     def open_spread(self, structure: dict, budget: float) -> dict:
         ref = f"dry-{structure['underlying']}-{int(time.time())}"
         self._open[ref] = budget
@@ -853,3 +882,14 @@ class DryAdapter:
         IBAdapter positions surface (the R1 blackout guard's positive-
         verification basis)."""
         return self._positions.get(symbol, 0)
+
+    def seed_position(self, symbol: str, qty: int) -> None:
+        """Assert what the ACCOUNT holds without routing an order through
+        the fill path — the same class of simulation hook as
+        `trigger_stop`/`trigger_stop_partial`. A book seeded straight into
+        the manager (a restored state file, a test fixture) describes shares
+        this adapter never filled, and the flatten's venue ceiling reads
+        THIS surface: without a seed such a book looks like a naked short to
+        every guard, which is exactly right and exactly not what those
+        setups mean."""
+        self._positions[symbol] = self._positions.get(symbol, 0) + int(qty)

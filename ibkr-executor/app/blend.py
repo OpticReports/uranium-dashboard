@@ -92,6 +92,15 @@ MAX_OPEN = 10
 RISK_FRAC = 0.01
 TIME_STOP_DAYS = 90
 MIN_ORDER_USD = 50.0        # dust guard: never emit orders smaller than this
+ENTRY_REF_MAX_DEV = 3.0     # L-E1: how far the TRACKER's fire-day entry_ref
+                            # may sit from the venue's own quote before the
+                            # entry is refused outright. Deliberately loose —
+                            # a genomics name can gap 100% on a catalyst
+                            # between the fire close and the next open, and
+                            # this is not a slippage control. It is an
+                            # order-of-magnitude sanity bar for the failure
+                            # it exists to stop: an unadjusted split, a
+                            # months-stale reference, or a 1.00 placeholder
 STOP_EPS = 1e-6             # stop cancel/replace only on a real level change
 CASH_EPS = 1e-6             # ledger tolerance
 STOP_RETRY_ATTEMPTS = 3     # in-cycle protective-stop placement retries
@@ -294,6 +303,43 @@ def _position_from_drifted_row(key: str, row: dict) -> tuple[BlendPosition,
         # human restores it.
         pos.history_gap = True
     return pos, dropped, defaulted
+
+
+def _intent_size_ref(intent: dict) -> float:
+    """The price an ENTER intent was CHARGED to the cash ledger at.
+
+    L-E1: sizing charges `max(entry_ref, venue quote)` so an entry can
+    never overdraw the sleeve, and every site that unwinds or re-checks
+    that charge has to reverse the SAME number — charging at one price and
+    refunding at another leaks cash into the ledger silently. `entry_ref`
+    is the fallback so an intent journalled by an older build (which had
+    no `size_ref`) still balances against how IT was charged."""
+    return float(intent.get("size_ref") or intent["entry_ref"])
+
+
+def _fill_grade_price(adapter, symbol: str) -> float | None:
+    """A price this service is willing to BOOK A FILL at, or None.
+
+    CR-N2: B8 gave `spot()` a previous-CLOSE fallback so that a thin or
+    out-of-RTH quote stops looking identical to a missing market-data
+    subscription. Right for sizing and valuation, wrong for a fill — a
+    previous session's close is not a price anything traded at today. The
+    two paths that adopt a venue fill with no reported price were taking
+    it as one, where the pre-B8 code raised and failed closed. A live tick
+    or a current-session last is still an honest PROVISIONAL basis; a
+    close is not, and returns None so the caller keeps its journal and
+    tries again when the market is open."""
+    ex = getattr(adapter, "spot_ex", None)
+    if ex is None:                      # adapter without the source surface
+        return None
+    try:
+        px, source = ex(symbol)
+    except Exception as exc:            # noqa: BLE001
+        logger.warning("fill-grade quote %s failed: %s", symbol, exc)
+        return None
+    if px is None or px != px or px <= 0 or source == "close":
+        return None
+    return float(px)
 
 
 @dataclass
@@ -1046,14 +1092,55 @@ class Blend3070Manager:
                     self._event("WARN", f"no sizing reference for {e['symbol']} "
                                         f"(call {e['call_id']}): skipped")
                     continue
+                # L-E1 (live blocker): `entry_ref` is the TRACKER's fire-day
+                # close and NOTHING checked it against the venue —
+                # `reference_prices` has always fetched a real spot for
+                # every payload entry symbol, and this, the one place that
+                # sizes real orders from that number, never read it. At a
+                # $10k book a 1.00 placeholder on a $50 name sizes ~300
+                # shares, books $300 into the ledger and fills ~$15,000 at
+                # the account: the book and the venue diverge by 50x on the
+                # FIRST trade, and every gate computed downstream from the
+                # ledger — budget, funds, weights, rebalance — is then
+                # computed from fiction.
+                ref_px = prices.get(e["symbol"], 0.0)
+                if ref_px <= 0:
+                    # Never buy what we cannot price. Same law the
+                    # rebalance/valuation gate already keeps for SPY/BIL: a
+                    # missing quote is a SKIP, never an assumption.
+                    msg = (f"REFUSED entry {e['symbol']} (call {e['call_id']}): "
+                           f"no venue quote to check entry_ref "
+                           f"{entry_ref:.2f} against — nothing sized")
+                    self._event("WARN", msg)
+                    alerts.append(msg)
+                    continue
+                if not (ref_px / ENTRY_REF_MAX_DEV <= entry_ref
+                        <= ref_px * ENTRY_REF_MAX_DEV):
+                    msg = (f"REFUSED entry {e['symbol']} (call {e['call_id']}): "
+                           f"tracker entry_ref {entry_ref:.2f} is off the "
+                           f"venue quote {ref_px:.2f} by more than "
+                           f"{ENTRY_REF_MAX_DEV:.0f}x — an unadjusted split, "
+                           f"a stale reference or a placeholder, not a price "
+                           f"to size real orders on. Nothing entered")
+                    self._event("RED", msg)
+                    alerts.append(msg)
+                    continue
                 risk_usd = risk_frac * sleeve_eq
+                # The RISK unit stays frozen at the tracker reference — that
+                # is the pre-registered contract and it does not change here.
                 qty = int(risk_usd // (entry_ref - trail))
+                # What must NOT stay frozen is what the shares will actually
+                # COST. Size the cash clamp and charge the ledger at
+                # whichever of the two prices is higher, so an entry can
+                # never overdraw the sleeve merely because the venue opened
+                # above the fire-day close.
+                size_px = max(entry_ref, ref_px)
                 avail = max(funds, 0.0)
-                qty = min(qty, int(avail // entry_ref)) if entry_ref > 0 else 0
+                qty = min(qty, int(avail // size_px))
                 if qty <= 0:
                     self._event("INFO", f"{e['symbol']} sized to zero: skipped")
                     continue
-                cost = qty * entry_ref
+                cost = qty * size_px
                 # Budget binds on projected gross; the BIL-funded slice of an
                 # entry swaps one holding for another (gross-neutral) — only
                 # the cash-funded slice adds exposure.
@@ -1065,6 +1152,7 @@ class Blend3070Manager:
                 entry_intents.append({"action": "ENTER", "call_id": e["call_id"],
                                       "symbol": e["symbol"], "qty": qty,
                                       "entry_ref": entry_ref, "stop_level": trail,
+                                      "size_ref": size_px,
                                       "time_stop_days": TIME_STOP_DAYS,
                                       "reason": f"gate-on fire {e.get('flag_type')} "
                                                 f"({e.get('fire_date')}), risk "
@@ -1134,7 +1222,7 @@ class Blend3070Manager:
             rebalance_intent = None
         while funds < -CASH_EPS and entry_intents:
             dropped = entry_intents.pop()               # newest entry first
-            cost = dropped["qty"] * dropped["entry_ref"]
+            cost = dropped["qty"] * _intent_size_ref(dropped)
             projected_cash += cost
             funds += cost
             self._event("WARN", f"entry {dropped['symbol']} "
@@ -1150,7 +1238,7 @@ class Blend3070Manager:
             self._event("RED", "cash ledger still negative after BIL funding: "
                                "dropping remaining sleeve actions")
             for dropped in entry_intents:
-                projected_cash += dropped["qty"] * dropped["entry_ref"]
+                projected_cash += dropped["qty"] * _intent_size_ref(dropped)
             entry_intents = []
             if (rebalance_intent is not None
                     and rebalance_intent["direction"] == "sleeve_to_core"):
@@ -1649,6 +1737,20 @@ def reference_prices(adapter, mgr: Blend3070Manager, payload: dict | None) -> di
     symbols.update(p.symbol for p in mgr.state.positions.values())
     if payload:
         symbols.update(e["symbol"] for e in payload.get("entries", []) if e.get("symbol"))
+    # L-E1: the entry_ref sanity band compares the tracker's reference
+    # against the adapter's quote, and DryAdapter answers a flat 100 for any
+    # symbol it has never filled — which would read as a 10x mispricing on a
+    # $9 stock and refuse every dry entry. Anchor dry quotes to the real
+    # references in the payload first (real adapters have no seed_price and
+    # are untouched); a real fill still wins over the seed.
+    seed = getattr(adapter, "seed_price", None)
+    if seed is not None and payload:
+        for e in payload.get("entries", []):
+            if e.get("symbol") and e.get("entry_ref"):
+                try:
+                    seed(e["symbol"], float(e["entry_ref"]))
+                except (TypeError, ValueError):
+                    pass
     prices: dict[str, float] = {}
     for s in symbols:
         try:
@@ -2850,7 +2952,38 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
                 # book at the current spot as a PROVISIONAL basis and say so
                 # loudly (same asymmetry as entry adoption: parking would
                 # desync the holdings themselves, worse than a fuzzy basis).
-                fill = adapter.spot(rec["symbol"])
+                #
+                # CR-N2: "the current spot" stopped meaning that when B8
+                # added the previous-CLOSE fallback. A close is a price from
+                # a session that has ENDED — booking it here writes a basis
+                # nothing traded at, silently, on the one path whose whole
+                # justification is that a fuzzy basis beats a desynced book.
+                # Before B8 this raised and failed closed, and for the close
+                # case it fails closed again: the journal is KEPT, so the
+                # holding stays tracked and visible on /status, step() plans
+                # no competing order of this kind while it is pending (M1),
+                # and the very next cycle with a real quote adopts it. The
+                # alert fires ONCE per record (B4's lesson: an every-cycle
+                # alarm on a condition the operator cannot clear buries the
+                # channel it exists to serve).
+                fill = _fill_grade_price(adapter, rec["symbol"])
+                if fill is None:
+                    if not rec.get("noprice_alerted"):
+                        rec["noprice_alerted"] = True
+                        mgr.save()
+                        alert(f"🚨 blend: reconciled {rec['kind']} "
+                              f"{rec['symbol']} x{rec['qty']} has NO venue "
+                              f"fill price and no live quote to stand in for "
+                              f"one (only a previous CLOSE, which is not a "
+                              f"price anything traded at). NOT booked — the "
+                              f"order stays journalled and adopts on the next "
+                              f"cycle that has a real quote. The shares ARE "
+                              f"held at the venue")
+                    else:
+                        logger.info("book order %s still lacks a fill-grade "
+                                    "quote — journal kept, already alerted",
+                                    cid)
+                    continue
                 alert(f"🚨 blend: reconciled {rec['kind']} {rec['symbol']} "
                       f"x{rec['qty']} has no venue fill price — booked at "
                       f"spot {fill:.2f} (basis PROVISIONAL, verify manually)")
@@ -3190,6 +3323,38 @@ def execute_flatten(mgr: Blend3070Manager, adapter, alert) -> None:
     retryable: list[str] = []       # ...of which another pass could close
     terminal: list[str] = []        # ...and of which none ever will
     unrec: list[str] = []
+    # L1-L5 (the naked-short class, five blockers with one root): the MKT
+    # sell below was sized from the BOOK's qty and NOTHING asked the venue
+    # what the account actually holds. Every route that leaves the book
+    # believing in shares the account has already sold — a stop that filled
+    # inside the cancel window, a `close_failed` park whose order did reach
+    # the venue, an adoption reconcile has not booked yet, a retry across a
+    # restart — turns this sell into a SHORT. CR-N1 is the same root seen
+    # from the other end: the completion alert then tells the operator to
+    # hand-sell a position the service already sold. The venue is the only
+    # authority on what is held. Ask it once per symbol per pass, never
+    # sell more than it reports, and treat an unanswerable venue as a
+    # reason to STOP rather than a licence to sell from the book's belief.
+    venue_qty: dict[str, int] = {}
+    venue_err: dict[str, str] = {}
+
+    def venue_held(sym: str) -> int | None:
+        """Net shares the ACCOUNT holds now, or None when the venue could
+        not be asked. Cached per pass, and decremented as this pass sells,
+        so two book rows on one symbol cannot both spend the same shares."""
+        if sym in venue_qty:
+            return venue_qty[sym]
+        if sym in venue_err:
+            return None
+        try:
+            held = int(adapter.stock_position(sym))
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("kill flatten: venue position %s failed: %s",
+                             sym, exc)
+            venue_err[sym] = f"{type(exc).__name__}: {exc}"
+            return None
+        venue_qty[sym] = held
+        return held
 
     def park(key, sym: str, reason: str, msg: str, can_retry: bool = True):
         """Record a position this pass did NOT close, and alert ONCE per
@@ -3293,17 +3458,96 @@ def execute_flatten(mgr: Blend3070Manager, adapter, alert) -> None:
                 mgr.record_orphan_stop(stop_ref, {"symbol": sym,
                                                   "qty": -pos.qty,
                                                   "call_id": pos.call_id})
+        kill_cid = f"blend-{pos.call_id}-kill"
+        # Does an order under THIS row's kill id already bind at the venue?
+        # If it does, `place_stock_order` returns it instead of placing
+        # anything, so the call below creates NO new exposure and the
+        # venue-position ceiling does not apply to it — and a prior FILL is
+        # the honest exit for this row at a price the venue still knows even
+        # when this process no longer does (the B1 restart path). Asking
+        # here, before the ceiling, is what keeps the retry able to recover
+        # its own fill rather than writing the row off as unreconciled.
+        binding_prior = False
         try:
-            # M3: -pos.qty is the venue-truth REMAINING qty (a partial
-            # stop fill above already reduced it).
+            prior = adapter.find_stock_order(kill_cid)
+            binding_prior = (prior is not None
+                             and prior.get("status") in ("filled", "working"))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("kill flatten: idempotency lookup %s failed: %s",
+                           kill_cid, exc)
+        # L1-L5: for a genuinely NEW order, what the VENUE holds is the
+        # ceiling on what may be sold.
+        held = int(pos.qty) if binding_prior else venue_held(sym)
+        if held is None:
+            # The positions query itself failed. Refusing to sell on that
+            # alone would let one flaky endpoint disable the EMERGENCY STOP,
+            # which is its own harm — so fall back to the verification the
+            # book already carries. A row that is not `history_gap` and sits
+            # inside the venue-history horizon was reconciled against the
+            # venue recently, and its qty is venue-derived; past the horizon
+            # nothing here is verified by anything, and that is the R1 case
+            # where the law is already park-never-sell.
+            if mgr._reconcile_gap_s > HISTORY_HORIZON_S:
+                park(key, sym, "venue_unreachable",
+                     f"🚨🚨 blend kill: {sym} NOT flattened — the venue would "
+                     f"not report its position "
+                     f"({venue_err.get(sym, 'unknown')}) and the last "
+                     f"reconcile is past the history horizon, so the book's "
+                     f"{pos.qty} shares are UNVERIFIED and a MKT sell could "
+                     f"SHORT the account. Parked — close it by hand at the "
+                     f"venue if you need it flat")
+                continue
+            logger.warning("kill flatten: venue position %s unavailable (%s) "
+                           "— selling the reconciled book qty %d",
+                           sym, venue_err.get(sym), pos.qty)
+            alert(f"⚠️ blend kill {sym}: the venue would not report its "
+                  f"position ({venue_err.get(sym, 'unknown')}) — selling the "
+                  f"{pos.qty} shares the last reconcile verified. Check the "
+                  f"account afterwards")
+            held = int(pos.qty)
+        if held <= 0:
+            # The account is already FLAT in this name: its stop filled, or
+            # an earlier pass (or an earlier process) sold it and the fill
+            # has not booked here. Selling now opens a naked short, and the
+            # completion alert would then name it as something for the
+            # operator to sell AGAIN (CR-N1). Book the row out as
+            # UNRECONCILED instead — the shares are gone, the price they
+            # went at is not known to this service, and that is exactly
+            # what the unreconciled ledger is for.
+            mgr.on_exit_unreconciled(pos.call_id,
+                                     "manual kill: venue reports 0 shares "
+                                     "held — nothing sold here")
+            unrec.append(sym)
+            alert(f"🚨 blend kill {sym} x{pos.qty}: the VENUE HOLDS NONE of "
+                  f"it — NOTHING SOLD (its stop had already filled). The row "
+                  f"is booked UNRECONCILED: the exit price is not known to "
+                  f"this service, so reconcile it from your statement. Do "
+                  f"NOT sell it by hand — the account is already flat in it")
+            continue
+        sell_qty = min(int(pos.qty), held)
+        overcount = int(pos.qty) - sell_qty
+        try:
+            # M3: pos.qty is the venue-truth REMAINING book qty (a partial
+            # stop fill above already reduced it); `sell_qty` clamps that
+            # again to what the account is actually holding right now.
             #
             # B1: this client id is the ONLY thing standing between a retry
             # and a second sell of the same shares. The adapter resolves it
             # against the venue, not against this process's trade list, so
             # it still binds after a restart.
             r = adapter.place_stock_order(
-                sym, -pos.qty, "MKT",
-                client_order_id=f"blend-{pos.call_id}-kill")
+                sym, -sell_qty, "MKT", client_order_id=kill_cid)
+            # Spend the venue budget whether or not a price came back: the
+            # shares left the account either way, and a second row on this
+            # symbol must not sell them again.
+            if sym in venue_qty:
+                venue_qty[sym] = max(venue_qty[sym] - sell_qty, 0)
+            if overcount:
+                alert(f"🚨 blend kill {sym}: the book claimed {pos.qty} "
+                      f"shares, the venue held {held} — sold {sell_qty} and "
+                      f"NOT the difference ({overcount}), which the account "
+                      f"does not have. The book was over-counting; verify "
+                      f"this name against your statement")
             fill = r.get("fill_price")
             if fill is None:
                 # Repo law: never book at a silent 0.0.
@@ -3311,7 +3555,7 @@ def execute_flatten(mgr: Blend3070Manager, adapter, alert) -> None:
                                          "manual kill: venue ack without "
                                          "a fill price")
                 unrec.append(sym)
-                alert(f"🚨 blend kill close {sym} x{pos.qty} UNRECONCILED: "
+                alert(f"🚨 blend kill close {sym} x{sell_qty} UNRECONCILED: "
                       f"no fill price — proceeds NOT booked, manual "
                       f"reconciliation needed")
             else:
@@ -3495,7 +3739,7 @@ def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
                           f"exit did not book this cycle — entry re-planned "
                           f"once the exit settles")
                     continue
-                if (it["qty"] * it["entry_ref"]
+                if (it["qty"] * _intent_size_ref(it)
                         > mgr.state.sleeve_cash
                         - mgr.reserved_sleeve_cash() + CASH_EPS):
                     # Belt: entries spend only SETTLED cash (exits + the BIL
@@ -3504,7 +3748,7 @@ def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
                     # adoption (M1) — the ledger never goes negative.
                     alert(f"⚠️ blend ENTER {it['symbol']} skipped: settled "
                           f"sleeve cash ${mgr.state.sleeve_cash:,.2f} cannot "
-                          f"fund ${it['qty'] * it['entry_ref']:,.2f}")
+                          f"fund ${it['qty'] * _intent_size_ref(it):,.2f}")
                     continue
                 _execute_enter(mgr, adapter, it, today, alert)
             elif act == "ADJUST_STOP":
@@ -3583,9 +3827,18 @@ def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
                         continue                # journal stays until adopted
                     fill = r.get("fill_price")
                     if fill is None:
-                        fill = prices.get(CASH_VEHICLE)
+                        # CR-N2: `prices` is built by `reference_prices`,
+                        # which since B8 can hand back a previous CLOSE.
+                        # Re-ask for a FILL-GRADE quote rather than adopting
+                        # whatever the valuation pass happened to get; with
+                        # none, this raises exactly as it did pre-B8 and the
+                        # journal carries the order to the next cycle.
+                        fill = _fill_grade_price(adapter, CASH_VEHICLE)
                     if not fill:
-                        raise RuntimeError("sweep fill price unknown")
+                        raise RuntimeError(
+                            "sweep fill price unknown and no fill-grade "
+                            "quote to stand in for it — order journalled, "
+                            "adopted next cycle")
                     mgr.state.pending_book_orders.pop(cid, None)
                     mgr.on_sweep(qty, fill)        # saves journal-pop + booking
                     alert(f"🧬 blend SWEEP {CASH_VEHICLE} "

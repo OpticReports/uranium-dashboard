@@ -285,6 +285,45 @@ unrelated. Likewise `N1/N2` (round 6) vs `N3/N5/N13/N14/N15` (rounds 2-5).
 
 ---
 
+## Round 16 — THE JUDGE'S RULING on f5e7154, and the campaign verdict
+* **Reviewed:** `f5e7154` (the corrective round: R-a/R-b/R-c + B1-B10)
+* **Verdict:** **FAIL** — `MERGE: NO / LIVE-READY: NO`. All thirteen items
+  of round 15 were confirmed closed, and the round introduced TWO NEW
+  HARMS while the live-blocker count went from 10+3 to 12: *"In count it
+  is flat; in kind it is worse — the naked-short class went from one route
+  to three, and two blockers are this round's own creation."*
+* **The campaign question, asked explicitly as a stopping criterion**
+  ("is this converging or thrashing? if each round introduces roughly as
+  many as it closes, say so plainly and recommend a different approach"):
+  the judge answered **"Both — and that is the actual finding"**, with a
+  round-7 tally of ~8 closed against 2 new harms.
+* **Remediated by:** this commit — and the response to the thrashing
+  finding is the SHAPE of this round, not another open-ended sweep: three
+  named defects with one root each, fixed by hand, no new subsystem, no
+  new abstraction. See "What this round deliberately did NOT do" below.
+
+| id | finding | status |
+|---|---|---|
+| CR-N1 | the flatten's completion alert told the operator to hand-sell a position the service had ALREADY sold. Same root as L1-L5: the pass never asked the venue what the account holds, so a row whose sell landed but whose ack was lost parked as "still held" and was then named in "CLOSE ... BY HAND". | `closed` |
+| CR-N2 | B8's previous-CLOSE fallback was adopted as a FILL PRICE at the two paths that book a venue fill lacking a reported price, where `cc03347` raised and failed closed. A close is not a price anything traded at today; the basis was written silently. | `closed` |
+| L1 · L2 · L3 · L4 · L5 | the naked-short class, five blockers with ONE root: `execute_flatten` fell through to `place_stock_order(sym, -pos.qty, "MKT")` sized from the BOOK, with no venue-position check. The judge named the single call that closes all five. | `closed` |
+| L-E1 | **the `entry_ref` validation gap** — the top live blocker. `reference_prices()` has always fetched a real spot for every payload entry symbol, and the one place that sizes real orders from the tracker's `entry_ref` never read it. At a $10k book a 1.00 placeholder on a $50 name sizes ~300 shares, books $300 and fills ~$15,000: a 50x ledger-vs-account divergence on the FIRST trade, with every downstream gate then computed from the fiction. | `closed` |
+| B9 | still `open`, unchanged and by instruction: the blend book has never taken a real fill in any mode. No code review substitutes for one supervised fill end to end. | `open` |
+| CR-O1 | the ladder half of the kill retry is still unbounded. Unchanged this round. | `open` |
+| L6-L12 | the remaining live blockers of the judge's twelve. NOT fixed here. | `open` |
+
+### What this round deliberately did NOT do
+
+The judge's own finding is that each round of this campaign closes roughly
+as many defects as it creates. Widening the sweep is the move that
+produced that pattern, so this round did the opposite: it fixed the four
+items whose root cause the judge had already isolated to a single call
+site, added eleven merge-blocking gates (each verified failing at
+`f5e7154`), and stopped. L6-L12 are recorded above as open rather than
+attempted. That is a scope decision, not a claim that they do not matter.
+
+---
+
 ## Standing UNKNOWNs
 
 * `mf-6`, `mf-11`, `mf-12`, `mf3-12` — referenced by id in this campaign's

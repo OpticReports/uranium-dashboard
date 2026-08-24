@@ -1305,6 +1305,11 @@ def test_gate_b1_the_flatten_retry_across_a_restart_sells_exactly_once(
     m.on_entered({"call_id": 1, "symbol": "CRSP", "qty": 5,
                   "entry_ref": 50.0, "stop_level": 44.0}, 50.0,
                  "entry-ref", "2026-08-01")
+    # ...and the ACCOUNT holds them, which is what the flatten's venue
+    # ceiling (L1-L5) reads. Modelling it is the point of this gate: by
+    # pass 2 the lost-ack sell HAS filled and the account is FLAT, so a
+    # retry sized from the book alone is the naked short this test names.
+    venue_adapter.ib.position_rows = [FakePosition("CRSP", 5)]
     m.request_flatten("2026-08-21")
 
     # pass 1: the sell reaches the venue, then the ACK never comes back —
@@ -1322,6 +1327,7 @@ def test_gate_b1_the_flatten_retry_across_a_restart_sells_exactly_once(
     # the venue fills it anyway — the ack was lost, the ORDER was not.
     venue_adapter.ib.on_place = None
     venue_adapter.ib.fill(venue[0], [(5, 49.0)])
+    venue_adapter.ib.position_rows = []          # the account is now FLAT
     # ...and the process restarts before the next cycle (a deploy).
     _restart(venue_adapter, venue, monkeypatch)
     monkeypatch.setattr(ib_mod, "PLACE_ACK_TIMEOUT_S", 0.2)

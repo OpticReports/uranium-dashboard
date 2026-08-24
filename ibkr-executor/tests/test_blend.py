@@ -83,10 +83,16 @@ def _wait_until(cond, timeout=10.0):
 
 def _held_position(m, call_id=1, symbol="CRSP", qty=5, fill=50.0,
                    stop_level=44.0, entry_date="2026-08-01",
-                   time_stop="2026-10-30", stop_ref="old-stop"):
+                   time_stop="2026-10-30", stop_ref="old-stop", adapter=None):
+    """Book a held position. `adapter` seeds the VENUE to match, which any
+    test that later flattens MUST pass: the flatten's ceiling is what the
+    account holds, and a book asserting shares the venue does not report is
+    the naked-short state the ceiling exists to catch."""
     m.on_entered({"call_id": call_id, "symbol": symbol, "qty": qty,
                   "entry_ref": fill, "stop_level": stop_level},
                  fill, "entry-ref", entry_date)
+    if adapter is not None:
+        adapter.seed_position(symbol, qty)
     pos = m.state.positions[str(call_id)]
     pos.time_stop = time_stop
     pos.stop_order_ref = stop_ref
@@ -1063,7 +1069,7 @@ def test_gate_n14_kill_does_not_double_sell_a_stop_filled_position(
                 _time.sleep(0.05)
             B, A = service.BLEND, service.ADAPTER
             _seed_initialized(B, sleeve_cash=2_750.0)
-            _held_position(B, stop_ref=None)
+            _held_position(B, stop_ref=None, adapter=A)
             pos = B.state.positions["1"]
             rs = A.place_stock_order("CRSP", -5, "STP", stop_price=44.0,
                                      tif="GTC",
@@ -1445,7 +1451,7 @@ def test_gate_kd_kill_raising_cancel_never_market_sells(tmp_path, monkeypatch):
                 _time.sleep(0.05)
             B, A = service.BLEND, service.ADAPTER
             _seed_initialized(B, sleeve_cash=2_750.0)
-            _held_position(B, stop_ref=None)
+            _held_position(B, stop_ref=None, adapter=A)
             pos = B.state.positions["1"]
             rs = A.place_stock_order("CRSP", -5, "STP", stop_price=44.0,
                                      tif="GTC",
@@ -1546,7 +1552,7 @@ def test_gate_adapt_m3_kill_after_partial_stop_never_oversells(
                 _time.sleep(0.05)
             B, A = service.BLEND, service.ADAPTER
             _seed_initialized(B, sleeve_cash=2_750.0)
-            _held_position(B, stop_ref=None)
+            _held_position(B, stop_ref=None, adapter=A)
             pos = B.state.positions["1"]
             rs = A.place_stock_order("CRSP", -5, "STP", stop_price=44.0,
                                      tif="GTC",
@@ -2457,7 +2463,7 @@ def test_gate_r2_kill_never_touches_the_adapter_from_the_api_thread(
             loop_threads = set(A.call_threads)           # THE loop thread
             assert len(loop_threads) == 1
             _seed_initialized(B, sleeve_cash=2_750.0)
-            _held_position(B, stop_ref=None)
+            _held_position(B, stop_ref=None, adapter=A)
             pos = B.state.positions["1"]
             rs = A.place_stock_order("CRSP", -5, "STP", stop_price=44.0,
                                      tif="GTC",
@@ -2501,9 +2507,9 @@ def test_gate_r2_kill_alerts_are_honest_two_stage(tmp_path, monkeypatch):
                 if service.BLEND is not None and service.ADAPTER is not None:
                     break
                 _time.sleep(0.05)
-            B = service.BLEND
+            B, A = service.BLEND, service.ADAPTER
             _seed_initialized(B, sleeve_cash=2_750.0)
-            _held_position(B, stop_ref=None)
+            _held_position(B, stop_ref=None, adapter=A)
             sent: list[str] = []
             monkeypatch.setattr(service, "send", sent.append)
             r = c.post("/kill", params={"token": "sekrit"})
@@ -3683,7 +3689,7 @@ def _kill_ready_position(B, A):
     """A held position with a REAL resting stop at the venue — the shape the
     /kill flatten actually has to close."""
     _seed_initialized(B, sleeve_cash=2_750.0)
-    _held_position(B, stop_ref=None)
+    _held_position(B, stop_ref=None, adapter=A)
     pos = B.state.positions["1"]
     rs = A.place_stock_order("CRSP", -5, "STP", stop_price=44.0, tif="GTC",
                              client_order_id="blend-1-stp-44.0000")
@@ -4924,7 +4930,7 @@ def test_gate_mf3_1_a_failing_blend_journal_never_500s_and_still_kills(
             # before it lands goes onto an object the service then discards
             # (the `LAST` leak `_service_client` documents, same root cause).
             assert _wait_until(lambda: service.LAST["loop_ok"] > 0)
-            B = service.BLEND
+            B, A = service.BLEND, service.ADAPTER
             sent: list[str] = []
             monkeypatch.setattr(service, "send", sent.append)
             # This gate is about /kill's OWN stage: what the handler halts,
@@ -4933,7 +4939,7 @@ def test_gate_mf3_1_a_failing_blend_journal_never_500s_and_still_kills(
             # cannot race the assertions below.
             monkeypatch.setattr(service, "LOOP_WAKE", threading.Event())
             _seed_initialized(B, sleeve_cash=2_750.0)
-            _held_position(B, stop_ref=None)
+            _held_position(B, stop_ref=None, adapter=A)
             with service.MGR_LOCK:      # a real OPEN ladder leg to halt
                 leg = list(service.MGR.state.legs)[0]
                 service.MGR.on_opened(leg, 10_000, "ref-1", "2026-08-01")
@@ -5070,9 +5076,9 @@ def test_gate_mf3_3_a_flatten_that_closed_nothing_retries_until_it_lands(
             return super().cancel_stock_order(ref)
 
     m = mk(tmp_path)
-    _seed_initialized(m, sleeve_cash=2_750.0)
-    _held_position(m)
     a = _CancelFailsThenWorks()
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m, adapter=a)
     m.request_flatten("2026-08-21")
 
     # cycle 1: nothing closes -> the request SURVIVES (at 0433d4a it did not)
@@ -5915,3 +5921,260 @@ def test_gate_rc_the_kill_response_and_its_alert_never_contradict(
         says_not_halted = "the ladder is NOT halted by this service" in msg
         assert halted == says_halted, (breaker, body, msg)
         assert halted != says_not_halted, (breaker, body, msg)
+
+
+# --- L-E1: the tracker's entry_ref is checked against the VENUE ---------------
+# Until now `reference_prices` fetched a real spot for every payload entry
+# symbol and the one place that sizes real orders from `entry_ref` never
+# read it. At a $10k book that is a 50x ledger-vs-account divergence on the
+# FIRST trade, and every gate computed downstream runs on the fiction.
+
+def test_gate_le1_a_placeholder_entry_ref_is_refused_not_sized(tmp_path):
+    """entry_ref 1.00 on a $50 name: ~300 shares sized, $300 booked, ~$15,000
+    filled. Refused outright — an order-of-magnitude gap is a broken input,
+    not a price."""
+    class _RealVenueQuote(DryAdapter):
+        # The venue prices CRSP at 50 and says so regardless of what the
+        # tracker asserts — a dry seed must never be able to talk it down.
+        def spot(self, symbol):
+            return 50.0 if symbol == "CRSP" else super().spot(symbol)
+
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10_000.0)
+    a = _RealVenueQuote()
+    alerts: list[str] = []
+    run_cycle(m, a, payload(entries=[entry(entry_ref=1.00)],
+                            stops=[stop_row(trail=0.88)]),
+              "2026-08-20", alert=alerts.append)
+    assert m.state.positions == {}, m.state.positions
+    assert _executions(a, "CRSP") == []
+    assert not [e for e in a.log
+                if e.get("symbol") == "CRSP" and e.get("qty", 0) > 0]
+    assert any("REFUSED entry CRSP" in msg and "1.00" in msg
+               for msg in alerts), alerts
+
+
+def test_gate_le1_an_entry_with_no_venue_quote_is_refused(tmp_path):
+    """Never buy what cannot be priced — the same law the rebalance quote
+    gate already keeps for SPY/BIL."""
+    class _NoQuoteForEntry(DryAdapter):
+        def spot(self, symbol):
+            if symbol == "CRSP":
+                raise RuntimeError("no market price for CRSP (simulated)")
+            return super().spot(symbol)
+
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10_000.0)
+    a = _NoQuoteForEntry()
+    alerts: list[str] = []
+    run_cycle(m, a, payload(entries=[entry()], stops=[stop_row()]),
+              "2026-08-20", alert=alerts.append)
+    assert m.state.positions == {}
+    assert any("REFUSED entry CRSP" in msg and "no venue quote" in msg
+               for msg in alerts), alerts
+
+
+def test_gate_le1_sizing_charges_the_higher_of_ref_and_quote(tmp_path):
+    """The RISK unit stays frozen at the tracker reference (the
+    pre-registered contract). What the shares COST must not: with the venue
+    above the fire-day close, the cash clamp has to bind on the venue price
+    or the sleeve overdraws."""
+    class _GappedUp(DryAdapter):
+        def spot(self, symbol):
+            return 90.0 if symbol == "CRSP" else super().spot(symbol)
+
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=900.0)
+    a = _GappedUp()
+    # A TIGHT stop, so the CASH clamp binds rather than the risk unit:
+    # risk 1% of $900 = $9 at $0.50/share = 18 shares by risk, but $900
+    # buys only 10 at the venue's $90. Sizing on the fire-day close bought
+    # 18 and booked them at $900 while the account paid $1,620.
+    run_cycle(m, a, payload(entries=[entry(entry_ref=50.0)],
+                            stops=[stop_row(trail=49.5)]),
+              "2026-08-20", alert=lambda _: None)
+    buys = [e for e in a.log
+            if e.get("symbol") == "CRSP" and e.get("qty", 0) > 0]
+    assert buys, a.log
+    assert buys[0]["qty"] == 10, buys           # 900/90, never 900/50 = 18
+    assert m.state.sleeve_cash >= -1e-6, m.state.sleeve_cash
+
+
+# --- L1-L5: the /kill flatten may never sell more than the ACCOUNT holds -----
+
+def _flatten_fixture(tmp_path, book_qty, venue_qty, adapter=None):
+    from app.blend import execute_flatten
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = adapter or DryAdapter()
+    _held_position(m, qty=book_qty, stop_ref=None)
+    a.seed_position("CRSP", venue_qty)
+    m.request_flatten("2026-08-21")
+    m.state.last_reconcile_ts = time.time()
+    alerts: list[str] = []
+    execute_flatten(m, a, alerts.append)
+    return m, a, alerts
+
+
+def test_gate_l1_flatten_never_sells_what_the_venue_does_not_hold(tmp_path):
+    """The naked-short class, one root, five blockers: the MKT sell was
+    sized from the BOOK and nothing asked the account. A stop that filled
+    inside the cancel window leaves the book believing in shares that are
+    gone; selling them SHORTS the account, and CR-N1 then tells the operator
+    to sell them a THIRD time by hand."""
+    m, a, alerts = _flatten_fixture(tmp_path, book_qty=5, venue_qty=0)
+    assert _executions(a, "CRSP") == [], a.log
+    assert a.stock_position("CRSP") == 0, "the account was shorted"
+    assert "1" not in m.state.positions          # booked out, not left open
+    assert m.state.unreconciled, "the exit price is unknown — say so"
+    assert any("VENUE HOLDS NONE" in msg for msg in alerts), alerts
+    # CR-N1: never tell the operator to hand-sell what is already sold
+    assert any("Do NOT sell it by hand" in msg for msg in alerts), alerts
+    summary = [msg for msg in alerts if "flatten finished" in msg
+               or "flatten complete" in msg]
+    assert not any("CLOSE CRSP" in msg for msg in summary), summary
+
+
+def test_gate_l1_flatten_clamps_to_the_venue_when_the_book_overcounts(tmp_path):
+    """Book says 5, account holds 2: sell 2, never 5."""
+    m, a, alerts = _flatten_fixture(tmp_path, book_qty=5, venue_qty=2)
+    sold = -sum(e["qty"] for e in _executions(a, "CRSP"))
+    assert sold == 2, a.log
+    assert a.stock_position("CRSP") == 0
+    assert any("the book claimed 5" in msg and "venue held 2" in msg
+               for msg in alerts), alerts
+
+
+def test_gate_l1_two_book_rows_cannot_spend_the_same_venue_shares(tmp_path):
+    """One symbol, two rows, five shares at the venue. The pass must not
+    sell five twice."""
+    from app.blend import execute_flatten
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    _held_position(m, call_id=1, qty=5, stop_ref=None)
+    _held_position(m, call_id=2, qty=5, stop_ref=None)
+    a.seed_position("CRSP", 5)                   # the account holds FIVE
+    m.request_flatten("2026-08-21")
+    m.state.last_reconcile_ts = time.time()
+    alerts: list[str] = []
+    execute_flatten(m, a, alerts.append)
+    sold = -sum(e["qty"] for e in _executions(a, "CRSP"))
+    assert sold == 5, (sold, a.log)
+    assert a.stock_position("CRSP") == 0, "the account was shorted"
+
+
+def test_gate_l1_an_unreachable_positions_api_does_not_disable_the_kill(
+        tmp_path):
+    """Failing closed on the positions query alone would let one flaky
+    endpoint disable the EMERGENCY STOP. A row inside the venue-history
+    horizon was reconciled recently and its qty is venue-derived: sell it,
+    and say what backed the decision."""
+    class _NoPositions(DryAdapter):
+        def stock_position(self, symbol):
+            raise RuntimeError("positions unavailable (simulated)")
+
+    from app.blend import execute_flatten
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = _NoPositions()
+    _held_position(m, qty=5, stop_ref=None)
+    m.request_flatten("2026-08-21")
+    m.state.last_reconcile_ts = time.time()      # fresh: verified recently
+    alerts: list[str] = []
+    execute_flatten(m, a, alerts.append)
+    assert -sum(e["qty"] for e in _executions(a, "CRSP")) == 5, a.log
+    assert any("would not report its position" in msg for msg in alerts)
+
+
+def test_gate_l1_an_unreachable_positions_api_past_the_horizon_parks(tmp_path):
+    """...but past the venue-history horizon nothing verifies the row at
+    all, and that is the R1 case where the law is already park-never-sell."""
+    class _NoPositions(DryAdapter):
+        def stock_position(self, symbol):
+            raise RuntimeError("positions unavailable (simulated)")
+
+    from app.blend import execute_flatten
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = _NoPositions()
+    _held_position(m, qty=5, stop_ref=None)
+    m.request_flatten("2026-08-21")
+    m.state.last_reconcile_ts = time.time() - 3 * 86_400
+    m._reconcile_gap_s = 3 * 86_400.0       # what the reconcile pass would set
+    alerts: list[str] = []
+    execute_flatten(m, a, alerts.append)
+    assert _executions(a, "CRSP") == [], a.log
+    assert "1" in m.state.positions              # parked, not sold
+    assert any("NOT flattened" in msg and "UNVERIFIED" in msg
+               for msg in alerts), alerts
+
+
+# --- CR-N2: a previous CLOSE is never adopted as a FILL price ----------------
+
+def test_gate_crn2_spot_reports_which_source_backed_the_price():
+    """`spot()` alone cannot say whether it returned a live tick or last
+    session's close. The callers that book fills need to know."""
+    a = DryAdapter()
+    px, source = a.spot_ex("CRSP")
+    assert px > 0 and source == "live"
+
+
+def test_gate_crn2_a_close_is_not_booked_as_a_fill_basis(tmp_path):
+    """B8 gave the quote walk a previous-CLOSE fallback so a thin quote
+    stops looking like a missing subscription — right for sizing, wrong for
+    a fill. The pre-B8 code raised here and failed closed; adopting the
+    close silently writes a basis nothing traded at."""
+    from app.blend import _fill_grade_price
+
+    class _CloseOnly(DryAdapter):
+        def spot_ex(self, symbol):
+            return 101.5, "close"
+
+    class _LiveAgain(_CloseOnly):
+        def spot_ex(self, symbol):
+            return 101.5, "live"
+
+    assert _fill_grade_price(_CloseOnly(), "BIL") is None
+    assert _fill_grade_price(_LiveAgain(), "BIL") == pytest.approx(101.5)
+
+
+def test_gate_crn2_an_orphan_book_order_waits_for_a_real_quote(tmp_path):
+    """No venue fill price AND only a close: the journal is KEPT (so the
+    holding stays tracked and visible), the alert fires ONCE, and the next
+    cycle with a real quote adopts it."""
+    class _NoFillPriceCloseOnly(DryAdapter):
+        source = "close"
+
+        def find_stock_order(self, client_order_id):
+            rec = self._orders.get(self._by_client.get(client_order_id, ""))
+            if rec is None:
+                return None
+            return {"order_ref": rec["order_ref"], "status": "filled"}
+
+        def spot_ex(self, symbol):
+            return self.spot(symbol), self.source
+
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=1_000.0, spy_qty=0, core_cash=1_000.0)
+    a = _NoFillPriceCloseOnly()
+    cid = m.record_pending_book_order("core-buy", "SPY", 5, "2026-08-20",
+                                      ref_price=100.0)
+    a.place_stock_order("SPY", 5, "MKT", ref_price=100.0, client_order_id=cid)
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-20", alert=alerts.append)
+    assert cid in m.state.pending_book_orders, "the holding stopped being tracked"
+    assert m.state.spy_qty == 0, "a CLOSE was booked as a fill basis"
+    assert sum("no live quote to stand in" in msg for msg in alerts) == 1
+
+    # ...and it does not re-shout every cycle
+    alerts.clear()
+    run_cycle(m, a, None, "2026-08-21", alert=alerts.append)
+    assert not any("no live quote to stand in" in msg for msg in alerts), alerts
+
+    # ...and a real quote adopts it
+    a.source = "live"
+    alerts.clear()
+    run_cycle(m, a, None, "2026-08-22", alert=alerts.append)
+    assert cid not in m.state.pending_book_orders
+    assert m.state.spy_qty == 5
