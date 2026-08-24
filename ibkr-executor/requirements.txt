@@ -2,4 +2,9 @@ fastapi>=0.110
 uvicorn[standard]>=0.29
 pydantic-settings>=2.2
 httpx>=0.27
-ib_async>=1.0
+# B8: PINNED to the 2.x line (resolved: 2.1.0). `>=1.0` floated across a
+# MAJOR: ib_async changed `Ticker.marketPrice()` (the previous-close
+# fallback was removed) and `qualifyContracts()` semantics between majors,
+# so an unpinned rebuild could silently change what a mark IS on a live
+# money book. Bump deliberately, with the adapter suite re-run.
+ib_async>=2.1,<3

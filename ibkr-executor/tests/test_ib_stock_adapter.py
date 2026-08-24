@@ -84,10 +84,23 @@ class FakeTrade:
 
 
 class FakeTicker:
-    def __init__(self, px):
+    """B8: a ticker now has the fields the adapter actually reads. The
+    defaults keep every pre-existing test byte-identical (marketPrice
+    returns the quoted price and nothing else is consulted)."""
+
+    def __init__(self, px, close=None, last=None, market_data_type=1,
+                 arrives_after=0):
         self._px = px
+        self.close = close
+        self.last = last
+        self.marketDataType = market_data_type
+        self._arrives_after = arrives_after   # ticks of nan before px lands
+        self.market_price_calls = 0
 
     def marketPrice(self):
+        self.market_price_calls += 1
+        if self.market_price_calls <= self._arrives_after:
+            return float("nan")
         return self._px
 
 
@@ -115,6 +128,8 @@ class FakeIB:
         self.on_sleep = None
         self.connect_calls = 0
         self.connect_fails = False        # M5: gateway down (restart window)
+        self.tickers: dict[str, FakeTicker] = {}   # B8: explicit override
+        self.market_data_types: list[int] = []     # B8: reqMarketDataType log
 
     # connection
     def connect(self, host, port, clientId, timeout=15):
@@ -133,7 +148,13 @@ class FakeIB:
     def qualifyContracts(self, *contracts):
         return list(contracts)
 
+    def reqMarketDataType(self, data_type):
+        self.market_data_types.append(data_type)
+
     def reqMktData(self, contract, generic, snapshot, regulatory):
+        t = self.tickers.get(contract.symbol)
+        if t is not None:
+            return t
         return FakeTicker(self.prices.get(contract.symbol, float("nan")))
 
     def cancelMktData(self, contract):
@@ -236,6 +257,14 @@ def ib_adapter(monkeypatch):
     monkeypatch.setattr(ib_mod, "MKT_FILL_WAIT_S", 0.2)
     monkeypatch.setattr(ib_mod, "CANCEL_ACK_TIMEOUT_S", 0.2)
     monkeypatch.setattr(ib_mod, "WAIT_TICK_S", 0.0)
+    # B8: the quote wait is a real bounded wait now, not a fixed sleep(3);
+    # FakeIB.sleep never actually sleeps, so shorten the bound the same way
+    # every other bounded wait above is shortened.
+    # raising=False so this same fixture still boots against a tree that
+    # predates the constants — that is how the B8 gates are verified FAILING
+    # on their own assertions rather than on a missing attribute.
+    monkeypatch.setattr(ib_mod, "QUOTE_WAIT_S", 0.3, raising=False)
+    monkeypatch.setattr(ib_mod, "QUOTE_TICK_S", 0.0, raising=False)
     a = ib_mod.IBAdapter(_Cfg())
     a.ib.prices = {"SPY": 100.0, "BIL": 100.0, "CRSP": 50.0}
     return a
@@ -1119,3 +1148,254 @@ def test_gate_m1min_rejected_book_order_cleared_and_replanned(tmp_path,
             if t.orderStatus.status not in ("Inactive", "Cancelled",
                                             "ApiCancelled", "Filled")]
     assert len(live) == 1
+
+
+# --- corrective round: B1 (the session boundary) and B8 (the quote) ----------
+
+
+class _VenueIB(FakeIB):
+    """A venue that OUTLIVES the process.
+
+    `self.ib.trades()` is what ib_async gives a freshly connected client:
+    the orders THIS session placed, and nothing else. `reqAllOpenOrders` /
+    `reqCompletedOrders` are how a new session learns about orders placed by
+    a previous one — which is exactly what a Render deploy, an OOM restart
+    or a gateway reconnect creates. `venue` is shared across "restarts"."""
+
+    def __init__(self, venue: list, next_id: int = 1):
+        super().__init__()
+        self.venue = venue
+        self._next_id = next_id
+        self.open_order_calls = 0
+
+    def placeOrder(self, contract, order):
+        t = super().placeOrder(contract, order)
+        self.venue.append(t)
+        return t
+
+    def reqAllOpenOrders(self):
+        self.open_order_calls += 1
+        return [t for t in self.venue
+                if t.orderStatus.status in ("Submitted", "PreSubmitted")]
+
+    def reqCompletedOrders(self, apiOnly=True):
+        return [t for t in self.venue if t.orderStatus.status == "Filled"]
+
+
+def _restart(adapter, venue, monkeypatch):
+    """Hand the adapter a BRAND NEW client session over the same venue —
+    the process boundary, modelled at the one place it actually bites."""
+    fresh = _VenueIB(venue, next_id=1_000)
+    fresh.connected = True
+    fresh.prices = dict(adapter.ib.prices)
+    monkeypatch.setattr(adapter, "ib", fresh)
+    return fresh
+
+
+@pytest.fixture
+def venue_adapter(ib_adapter, monkeypatch):
+    venue: list = []
+    fake = _VenueIB(venue)
+    fake.connected = True
+    fake.prices = {"SPY": 100.0, "BIL": 100.0, "CRSP": 50.0}
+    monkeypatch.setattr(ib_adapter, "ib", fake)
+    ib_adapter._venue = venue
+    return ib_adapter
+
+
+def test_gate_b1_a_filled_order_still_dedupes_after_a_session_boundary(
+        venue_adapter, monkeypatch):
+    """B1 / regression R-a — the naked-short path, and the reason this
+    branch may not merge as it stood.
+
+    `place_stock_order` resolved its idempotency key with
+    `_find_trade_by_client_id(cid)`, whose default `refresh=False` reads
+    `self.ib.trades()` — THIS SESSION ONLY. A restart empties that list, so
+    a retry under the same deterministic client id saw NO prior and placed
+    the order AGAIN. Both halves of the stated no-double-sell law fail
+    together at a session boundary: reconcile-first cannot help either,
+    because the book it reconciles was destroyed by the very same restart
+    (B2).
+
+    The bug is INVISIBLE inside one session, so the gate crosses one."""
+    venue = venue_adapter._venue
+    first = venue_adapter.place_stock_order(
+        "CRSP", -5, "MKT", client_order_id="blend-1-kill")
+    venue_adapter.ib.fill(venue[0], [(5, 49.5)])
+    assert first["order_ref"] == str(venue[0].order.orderId)
+    assert len(venue) == 1
+
+    _restart(venue_adapter, venue, monkeypatch)
+    assert venue_adapter.ib.trades() == []          # a new session, truly
+
+    again = venue_adapter.place_stock_order(
+        "CRSP", -5, "MKT", client_order_id="blend-1-kill")
+    assert again.get("duplicate") is True, again
+    assert again["status"] == "filled"
+    assert again["fill_price"] == pytest.approx(49.5)
+    assert again["order_ref"] == first["order_ref"]
+    # THE assertion: the venue never saw a second sell. At cc03347 this list
+    # had two SELL orders -> CRSP -10 against a 5-share book position.
+    assert len(venue) == 1, [t.order.action for t in venue]
+    assert venue_adapter.ib.open_order_calls >= 1   # it ASKED the venue
+
+
+def test_gate_b1_a_working_order_still_dedupes_after_a_session_boundary(
+        venue_adapter, monkeypatch):
+    """The same boundary, with the prior order still WORKING rather than
+    filled — a resting MKT/MOO the restart interrupted."""
+    venue = venue_adapter._venue
+    first = venue_adapter.place_stock_order(
+        "CRSP", -5, "MOO", tif="OPG", client_order_id="blend-2-kill")
+    assert first["status"] == "working"
+    _restart(venue_adapter, venue, monkeypatch)
+    again = venue_adapter.place_stock_order(
+        "CRSP", -5, "MOO", tif="OPG", client_order_id="blend-2-kill")
+    assert again.get("duplicate") is True
+    assert again["status"] == "working"
+    assert len(venue) == 1
+
+
+def test_gate_b1_a_cancelled_prior_still_re_places_after_a_restart(
+        venue_adapter, monkeypatch):
+    """CONTROL (passes before and after — it guards against OVER-fixing
+    B1): the venue lookup must not turn the adapter into a
+    one-shot. A CANCELLED order under the key never binds — before or after
+    a restart — so a legitimate re-placement still reaches the venue."""
+    venue = venue_adapter._venue
+    venue_adapter.place_stock_order("CRSP", -5, "STP", stop_price=44.0,
+                                    client_order_id="blend-3-stp")
+    venue[0].orderStatus.status = "Cancelled"
+    _restart(venue_adapter, venue, monkeypatch)
+    r = venue_adapter.place_stock_order("CRSP", -5, "STP", stop_price=43.0,
+                                        client_order_id="blend-3-stp")
+    assert r.get("duplicate") is not True
+    assert len(venue) == 2
+
+
+def test_gate_b1_a_different_client_id_still_places_after_a_restart(
+        venue_adapter, monkeypatch):
+    """CONTROL #2 (passes before and after): the venue lookup matches on orderRef, so an
+    unrelated key is never suppressed by somebody else's order."""
+    venue = venue_adapter._venue
+    venue_adapter.place_stock_order("CRSP", -5, "MKT",
+                                    client_order_id="blend-1-kill")
+    venue_adapter.ib.fill(venue[0], [(5, 49.5)])
+    _restart(venue_adapter, venue, monkeypatch)
+    r = venue_adapter.place_stock_order("CRSP", -3, "MKT",
+                                        client_order_id="blend-9-kill")
+    assert r.get("duplicate") is not True
+    assert len(venue) == 2
+
+
+def test_gate_b1_the_flatten_retry_across_a_restart_sells_exactly_once(
+        tmp_path, venue_adapter, monkeypatch):
+    """B1 end to end, in the shape that actually reaches the account.
+
+    MF3-3 made a flatten that closed nothing RETRY every cycle. Combined
+    with B2 (the blend book sat on the ephemeral layer, so every deploy
+    re-seeded it) the retry routinely lands in a NEW process. Here: pass 1
+    fails at the venue and parks; the process restarts; pass 2 re-issues the
+    same `blend-1-kill` client id. Exactly ONE sell may ever exist, and the
+    book must end FLAT rather than short."""
+    from app.blend import execute_flatten
+
+    venue = venue_adapter._venue
+    m = _mgr(tmp_path)
+    m.on_entered({"call_id": 1, "symbol": "CRSP", "qty": 5,
+                  "entry_ref": 50.0, "stop_level": 44.0}, 50.0,
+                 "entry-ref", "2026-08-01")
+    m.request_flatten("2026-08-21")
+
+    # pass 1: the sell reaches the venue, then the ACK never comes back —
+    # the adapter raises ("state UNKNOWN; retry is idempotent via orderRef"),
+    # the position parks, and the request stays queued.
+    venue_adapter.ib.on_place = lambda t: setattr(t.orderStatus, "status",
+                                                  "PendingSubmit")
+    monkeypatch.setattr(ib_mod, "PLACE_ACK_TIMEOUT_S", 0.0)
+    a1: list[str] = []
+    execute_flatten(m, venue_adapter, a1.append)
+    assert "1" in m.state.positions, "the parked position was booked out"
+    assert m.state.flatten_request is not None
+    assert len(venue) == 1, "pass 1 should have reached the venue once"
+
+    # the venue fills it anyway — the ack was lost, the ORDER was not.
+    venue_adapter.ib.on_place = None
+    venue_adapter.ib.fill(venue[0], [(5, 49.0)])
+    # ...and the process restarts before the next cycle (a deploy).
+    _restart(venue_adapter, venue, monkeypatch)
+    monkeypatch.setattr(ib_mod, "PLACE_ACK_TIMEOUT_S", 0.2)
+
+    a2: list[str] = []
+    execute_flatten(m, venue_adapter, a2.append)
+    sells = [t for t in venue if t.order.action == "SELL"]
+    assert len(sells) == 1, [t.order.action for t in venue]
+    assert "1" not in m.state.positions          # booked out at 49.0
+    assert m.state.flatten_request is None
+    assert m.state.halted == "KILL"
+    assert any("flatten complete" in msg for msg in a2), a2
+
+
+def test_gate_b8_spot_asks_for_a_market_data_type_before_subscribing(
+        ib_adapter):
+    """B8: without `reqMarketDataType` the gateway rejects an unentitled
+    request (error 354) and the ticker never gets a field — reported as
+    "no market price", the SAME line a thin quote produces. The book would
+    simply never trade, with no distinguishing symptom."""
+    assert ib_adapter.spot("SPY") == pytest.approx(100.0)
+    assert ib_adapter.ib.market_data_types == [ib_mod.MKT_DATA_TYPE]
+
+
+def test_gate_b8_spot_falls_back_to_the_previous_close(ib_adapter):
+    """B8: under the PINNED ib_async 2.x, `Ticker.marketPrice()` returns
+    last-or-midpoint and has NO close fallback (it did in the 1.x line this
+    code was written against, and `ib_async>=1.0` let the resolver cross
+    that major). Outside RTH that is nan forever. The close is read
+    explicitly now."""
+    ib_adapter.ib.tickers["CRSP"] = FakeTicker(float("nan"), close=48.25)
+    assert ib_adapter.spot("CRSP") == pytest.approx(48.25)
+
+
+def test_gate_b8_spot_prefers_a_live_tick_over_the_close(ib_adapter):
+    """CONTROL (passes before and after): the close is a FALLBACK, never a
+    substitute for a live tick — the fix must not start marking the book at
+    yesterday's close while a real quote is on the wire."""
+    ib_adapter.ib.tickers["CRSP"] = FakeTicker(50.5, close=48.25)
+    assert ib_adapter.spot("CRSP") == pytest.approx(50.5)
+
+
+def test_gate_b8_spot_waits_for_a_late_tick_instead_of_a_fixed_sleep(
+        ib_adapter):
+    """B8: the fixed `sleep(3)` was a guess in both directions — it burned
+    3s on a quote that had already arrived and gave up on one that had not.
+    A tick that lands on the fourth poll must be picked up."""
+    ib_adapter.ib.tickers["CRSP"] = FakeTicker(51.0, arrives_after=3)
+    assert ib_adapter.spot("CRSP") == pytest.approx(51.0)
+    assert ib_adapter.ib.tickers["CRSP"].market_price_calls >= 4
+
+
+def test_gate_b8_no_quote_at_all_names_the_missing_subscription(ib_adapter):
+    """B8: the two failures must be DISTINGUISHABLE. A quote that is merely
+    thin still carries a close; nothing at all is an entitlement problem,
+    and the operator is told which one this is."""
+    ib_adapter.ib.tickers["ZZZZ"] = FakeTicker(float("nan"))
+    with pytest.raises(RuntimeError) as exc:
+        ib_adapter.spot("ZZZZ")
+    msg = str(exc.value)
+    assert "MISSING MARKET-DATA SUBSCRIPTION" in msg
+    assert "NO PREVIOUS CLOSE" in msg
+
+
+def test_gate_b8_spot_retires_its_subscription_on_the_failure_path(
+        ib_adapter):
+    """CONTROL (passes before and after): the old body already cancelled
+    before it raised on a bad price, and the rewrite must not lose that. It
+    now also holds when the WAIT itself raises, which the old straight-line
+    body did not — pinned here so a later edit cannot leak a subscription
+    per failed quote."""
+    cancelled: list[str] = []
+    ib_adapter.ib.cancelMktData = lambda c: cancelled.append(c.symbol)
+    ib_adapter.ib.tickers["ZZZZ"] = FakeTicker(float("nan"))
+    with pytest.raises(RuntimeError):
+        ib_adapter.spot("ZZZZ")
+    assert cancelled == ["ZZZZ"]

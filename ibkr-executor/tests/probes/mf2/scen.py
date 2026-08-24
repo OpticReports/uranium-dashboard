@@ -110,7 +110,7 @@ if SCEN == "ladder_lost_halt":
         time.sleep(0.5)
         seed(B, A)
         t0 = time.time()
-        r = c.get("/kill", params={"token": "sekrit"}).json()
+        r = c.post("/kill", params={"token": "sekrit"}).json()
         R("kill_http_s", round(time.time() - t0, 3))
         R("ladder_field", r.get("ladder"))
         R("mem_halted", service.MGR.state.halted)
@@ -160,11 +160,11 @@ elif SCEN == "ladder_stale_kill_after_resume":
         out = {}
         t1 = threading.Thread(
             target=lambda: out.update(
-                k1=c.get("/kill", params={"token": "sekrit"}).json()))
+                k1=c.post("/kill", params={"token": "sekrit"}).json()))
         t1.start()
         time.sleep(0.4)                    # kill #1 is inside close_spread
         t0 = time.time()
-        k2 = c.get("/kill", params={"token": "sekrit"}).json()
+        k2 = c.post("/kill", params={"token": "sekrit"}).json()
         R("kill2_http_s", round(time.time() - t0, 3))
         R("kill2_ladder", k2.get("ladder"))
         R("LADDER_KILL_set_after_kill2", service.LADDER_KILL.is_set())
@@ -173,7 +173,7 @@ elif SCEN == "ladder_stale_kill_after_resume":
         R("kill1_ladder", out.get("k1", {}).get("ladder"))
         R("LADDER_KILL_still_set", service.LADDER_KILL.is_set())
         # operator resumes
-        rr = c.get("/resume", params={"token": "sekrit"}).json()
+        rr = c.post("/resume", params={"token": "sekrit"}).json()
         R("resume_cleared", rr.get("cleared"))
         R("halted_after_resume", service.MGR.state.halted)
         # re-open a leg the way a resumed ladder would, then let the loop run
@@ -247,7 +247,7 @@ elif SCEN == "kill_midcycle_enters":
         assert wait(lambda: fired.is_set(), 30), "no entry attempted"
         R("halted_before_kill", B.state.halted)
         before = sorted(B.state.positions)
-        kt = threading.Thread(target=lambda: c.get(
+        kt = threading.Thread(target=lambda: c.post(
             "/kill", params={"token": "sekrit"}))
         kt.start()
         time.sleep(0.6)          # HEAD: journalled already. base: still blocked
@@ -306,16 +306,16 @@ elif SCEN == "ladder_stale_kill_wins_resume":
         out = {}
         t1 = threading.Thread(
             target=lambda: out.update(
-                k1=c.get("/kill", params={"token": "sekrit"}).json()))
+                k1=c.post("/kill", params={"token": "sekrit"}).json()))
         t1.start()
         time.sleep(0.4)
-        k2 = c.get("/kill", params={"token": "sekrit"}).json()
+        k2 = c.post("/kill", params={"token": "sekrit"}).json()
         R("kill2_ladder", k2.get("ladder"))
         R("LADDER_KILL_set", service.LADDER_KILL.is_set())
         rel.set(); t1.join(20)
         # the loop is now parked inside the slow NOAA fetch
         assert wait(lambda: ninon["n"] > 1, 20), "loop never re-entered nino"
-        rr = c.get("/resume", params={"token": "sekrit"}).json()
+        rr = c.post("/resume", params={"token": "sekrit"}).json()
         R("resume_cleared", rr.get("cleared"))
         R("halted_after_resume", service.MGR.state.halted)
         R("LADDER_KILL_after_resume", service.LADDER_KILL.is_set())
@@ -361,7 +361,7 @@ elif SCEN == "kill_own_close_unbounded":
         time.sleep(0.5)
         R("mgr_lock_free_before_kill", not service.MGR_LOCK.locked())
         t0 = time.time()
-        r = c.get("/kill", params={"token": "sekrit"}).json()
+        r = c.post("/kill", params={"token": "sekrit"}).json()
         el = time.time() - t0
         R("kill_http_s", round(el, 3))
         R("readme_claims_max_s", 0.51)
@@ -392,7 +392,11 @@ elif SCEN == "deadlock_storm":
             while not stop.is_set():
                 t0 = time.time()
                 try:
-                    c.get(path, params={"token": "sekrit"})
+                    # B3: /kill and /resume are POST-only now; the
+                    # hammer still hits the same four paths.
+                    meth = (c.post if path in ("/kill", "/resume")
+                            else c.get)
+                    meth(path, params={"token": "sekrit"})
                 except Exception as e:
                     errs.append(f"{path}:{e}")
                 lat.append((path, time.time() - t0))
@@ -416,7 +420,7 @@ elif SCEN == "deadlock_storm":
         R("loop_alive", any(t.name.startswith("exec-loop")
                             for t in threading.enumerate()))
         # settle: one last kill must leave the book flat and halted
-        c.get("/kill", params={"token": "sekrit"})
+        c.post("/kill", params={"token": "sekrit"})
         ok = wait(lambda: B.state.flatten_request is None
                   and B.state.positions == {}, 30)
         R("settles_flat", ok is not None)
@@ -498,12 +502,12 @@ elif SCEN == "phase_matrix":
                     gate.wait(HOLD + 20)
                 return orig(mgr, adapter, alert)
             blend_mod.execute_flatten = slow_flatten
-            c.get("/kill", params={"token": "sekrit"})
+            c.post("/kill", params={"token": "sekrit"})
         service.LOOP_WAKE.set()
         got = wait(lambda: hit.is_set(), 40)
         R("phase_reached", got is not None)
         t0 = time.time()
-        r = c.get("/kill", params={"token": "sekrit"}).json()
+        r = c.post("/kill", params={"token": "sekrit"}).json()
         R("kill_http_s", round(time.time() - t0, 3))
         R("halted_immediately", B.state.halted)
         R("journalled_on_disk",
@@ -541,10 +545,10 @@ elif SCEN == "double_kill_in_flatten":
     with TestClient(service_app) as c:
         B, A = boot(c)
         seed(B, A)
-        r1 = c.get("/kill", params={"token": "sekrit"}).json()
+        r1 = c.post("/kill", params={"token": "sekrit"}).json()
         assert wait(lambda: hit.is_set(), 30), "flatten never reached the sell"
         req1 = B.state.flatten_request
-        r2 = c.get("/kill", params={"token": "sekrit"}).json()
+        r2 = c.post("/kill", params={"token": "sekrit"}).json()
         req2 = B.state.flatten_request
         R("second_request_is_new", req2 is not req1)
         gate.set()
@@ -588,7 +592,7 @@ elif SCEN == "deferred_kill_lost_on_save_error":
         service.LOOP_WAKE.set()
         assert wait(lambda: SlowMark.n > 0, 20), "no mark"
         time.sleep(0.4)
-        k = c.get("/kill", params={"token": "sekrit"}).json()
+        k = c.post("/kill", params={"token": "sekrit"}).json()
         R("kill_ladder", k.get("ladder"))
         R("LADDER_KILL_set", service.LADDER_KILL.is_set())
         boom = {"n": 0}
@@ -634,7 +638,7 @@ elif SCEN == "kill_alert_overclaims_closed_legs":
             service.MGR.on_opened(leg0, 10_000, "ref-1", "2026-08-01")
             service.MGR.save()
         assert wait(lambda: service.LAST["loop_ok"] > 0, 30)
-        r = c.get("/kill", params={"token": "sekrit"}).json()
+        r = c.post("/kill", params={"token": "sekrit"}).json()
         R("ladder_field", r.get("ladder"))
         R("legs_still_open", [k for k, v in service.MGR.state.legs.items()
                               if v.status == "OPEN"])
@@ -675,7 +679,7 @@ elif SCEN == "api_thread_overlaps_loop_on_adapter":
         service.LOOP_WAKE.set()
         assert wait(lambda: inside.is_set(), 30), "loop never hit the adapter"
         t0 = time.time()
-        r = c.get("/kill", params={"token": "sekrit"})
+        r = c.post("/kill", params={"token": "sekrit"})
         R("kill_http_s", round(time.time() - t0, 3))
         R("close_ran_while_loop_was_inside_the_adapter", OVER["v"])
         R("close_on_api_thread", OVER["closer"] in API_THREADS)

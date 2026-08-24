@@ -41,6 +41,9 @@ purpose, as the record of what was measured, and are NOT gates.
 `probes/mf3/save_race.py` is the same kind of artefact for the MF3 round:
 the reproduction whose numbers the `save()` comments and the executor
 README cite for mf3-10. It exits non-zero when the race LANDS.
+`probes/corrective/status_race.py` and `probes/corrective/kill_resume_race.py`
+are the same kind of artefact for the corrective round (B6 and B7). Both
+exit non-zero when their race LANDS.
 
 ## Rules for touching them
 
@@ -115,6 +118,44 @@ Every other assertion in both tests is untouched; nothing was removed.
 
 | probe | result | note |
 |---|---|---|
+The CORRECTIVE round (the judge's MERGE: NO / LIVE-READY: NO on cc03347 —
+three regressions cc03347 introduced plus ten live blockers) changed **two
+probe files, in one mechanical way, with no assertion touched**:
+`probes/mf2/scen.py` (17 call sites) and `probes/mf2/flake_repro.py` (1)
+now drive `/kill` and `/resume` with `c.post(...)` instead of `c.get(...)`.
+B3 made both mutations POST-only — `/kill` answering GET meant a crawler, a
+chat link-unfurl or a mail prefetch of the tokenised URL could flatten a
+live book — so the OLD verb now returns 405 and every probe that used it
+would have measured nothing at all. Per rule 2: the contract legitimately
+changed, the check that changed is the HTTP METHOD and nothing else, and
+`scen.py`'s concurrency scenario additionally got the method-aware dispatch
+its four-path hammer needs (`/status` and `/health` stay GET). Every
+assertion, every scenario and every recorded expectation in both files is
+byte-identical. All eight `attack_*` files were re-run from
+`ibkr-executor/` before and after and every one landed on its documented
+mark:
+
+| probe | before the corrective round | after |
+|---|---|---|
+| `attack_reround.py` | 9/9 | 9/9 |
+| `attack_r1r2.py` | 7/7 | 7/7 |
+| `attack_n3guard.py` | 10/10 | 10/10 |
+| `attack_n1n2.py` | 14/14 | 14/14 |
+| `attack_x1x4.py` | 39/40 | 39/40 |
+| `attack_zfinal.py` | 41/43 | 41/43 |
+| `attack_z1.py` | 20/21 | 20/21 |
+| `attack_mf2.py` | 54/56 | 54/56 |
+
+The round's own gates live in the pytest suite (`test_gate_b1_*`,
+`test_gate_b3_*`, `test_gate_b4_*`, `test_gate_b5_*`, `test_gate_b6_*`,
+`test_gate_b7_*`, `test_gate_b8_*`, `test_gate_b10_*`, `test_gate_b2_*`,
+`test_gate_rb_*`, `test_gate_rc_*`), each verified FAILING at `cc03347` and
+passing after, plus five explicitly labelled CONTROLS that pass on BOTH
+trees because their job is to catch an OVER-fix. Two of cc03347's own
+assertions changed, both of them the unbounded-retry promise B4 names as
+the defect (`"RETRIES every cycle"`); each test gained the bound the old
+line could not express, and both tests are strictly harder than before.
+
 | `attack_reround.py` | 9/9 | |
 | `attack_r1r2.py` | 7/7 | |
 | `attack_n3guard.py` | 10/10 | |

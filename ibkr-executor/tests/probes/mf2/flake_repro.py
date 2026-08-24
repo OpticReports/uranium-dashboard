@@ -100,7 +100,7 @@ try:
         g2 = _wait_until(lambda: calls["nino"] >= 1)
         seed(B, A)
         t0 = time.time()
-        r = c.get("/kill", params={"token": "sekrit"})
+        r = c.post("/kill", params={"token": "sekrit"})
         done = _wait_until(lambda: B.state.flatten_request is None
                            and B.state.positions == {}, timeout=20.0)
         latency = time.time() - t0

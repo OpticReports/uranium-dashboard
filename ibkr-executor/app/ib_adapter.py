@@ -36,6 +36,25 @@ MKT_FILL_WAIT_S = 5.0        # bounded wait for a synchronous MKT fill (liquid
                              # still working after it returns 'working'
 CANCEL_ACK_TIMEOUT_S = 10.0  # ambiguous cancel timeout -> RAISE (fail closed)
 WAIT_TICK_S = 0.25           # event-loop pump granularity inside waits
+QUOTE_WAIT_S = 8.0           # B8: bounded WAIT-FOR-TICK for spot(). The
+                             # fixed `sleep(3)` this replaced was a guess in
+                             # both directions: it burned 3s on every quote
+                             # that had already arrived, and it gave up on
+                             # every one that had not (a cold subscription
+                             # on a thin name routinely needs longer).
+QUOTE_TICK_S = 0.25          # poll granularity inside that wait
+MKT_DATA_TYPE = 4            # B8: reqMarketDataType(4) = "delayed frozen":
+                             # LIVE data is still served when the account is
+                             # entitled, and an UNENTITLED instrument
+                             # degrades to delayed/frozen instead of
+                             # returning nan forever. Without this call the
+                             # gateway answers an unentitled request with
+                             # error 354 and NO tick at all, which
+                             # `marketPrice()` reports as nan — the exact
+                             # symptom of an ordinary missing quote. Marks
+                             # are never fill prices (fills come back from
+                             # the venue), but a delayed mark is still
+                             # logged as such, never silently adopted.
 RECONNECT_BACKOFF_S = 15.0   # first retry delay after the gateway drops
 RECONNECT_BACKOFF_MAX_S = 300.0  # backoff cap (~one attempt per blend cycle)
 OUTAGE_ALERT_S = 30 * 60.0   # alert ONLY when down longer than this — the
@@ -51,6 +70,41 @@ class ExecutorConnectionError(RuntimeError):
     """The gateway connection is down: every stock-order surface raises this
     instead of guessing — the blend cycle FAILS CLOSED on it (reconcile
     raises, no decision is taken against unreconciled venue state)."""
+
+
+def _usable_px(value) -> float | None:
+    """A price we are willing to act on: finite, positive, float-able."""
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return None
+    if v != v or v <= 0:                    # NaN or non-positive
+        return None
+    return v
+
+
+def _ticker_price(ticker) -> tuple[float, str]:
+    """(price, source) from an ib_async Ticker, with the CLOSE fallback the
+    library itself dropped.
+
+    B8: under the pinned ib_async 2.x, `Ticker.marketPrice()` returns the
+    last price (or the bid/ask midpoint) and NOTHING ELSE — the previous
+    close fallback that older majors had is GONE. Outside RTH, or on any
+    instrument whose live subscription is missing, that is nan forever, and
+    `spot()` reported it as "no market price", indistinguishable from a
+    transient miss. The close is read explicitly here, and the source is
+    returned so the caller can say which one it used."""
+    for source, getter in (("live", lambda: ticker.marketPrice()),
+                           ("last", lambda: getattr(ticker, "last", None)),
+                           ("close", lambda: getattr(ticker, "close", None))):
+        try:
+            v = getter()
+        except Exception:                   # noqa: BLE001  (a fake/partial
+            continue                        # ticker must not break the walk)
+        px = _usable_px(v)
+        if px is not None:
+            return px, source
+    return float("nan"), "none"
 
 
 def _map_status(ib_status: str) -> str:
@@ -165,13 +219,62 @@ class IBAdapter:
                        key=lambda d: d.contract.lastTradeDateOrContractMonth
                        )[0].contract
         self.ib.qualifyContracts(c)
+        # B8 (live-blocker): ask for a data type BEFORE subscribing. Without
+        # this the gateway rejects an unentitled request outright (error
+        # 354) and the ticker never receives a single field — which the old
+        # body reported as "no market price for X", the SAME sentence a
+        # thin quote produces. A missing market-data subscription was
+        # therefore indistinguishable from a transient miss, and the book
+        # would simply never trade with no distinguishing symptom.
+        try:
+            self.ib.reqMarketDataType(MKT_DATA_TYPE)
+        except Exception as exc:            # noqa: BLE001
+            # Never fatal: an older/limited gateway that does not accept the
+            # request still serves whatever it is entitled to.
+            logger.debug("reqMarketDataType(%s) failed: %s",
+                         MKT_DATA_TYPE, exc)
         t = self.ib.reqMktData(c, "", False, False)
-        self.ib.sleep(3)
-        px = t.marketPrice()
-        self.ib.cancelMktData(c)
+        try:
+            px, source = self._await_quote(t)
+        finally:
+            # Always retire the subscription, even when the wait raises —
+            # the old body leaked it on every failure path.
+            try:
+                self.ib.cancelMktData(c)
+            except Exception as exc:        # noqa: BLE001
+                logger.debug("cancelMktData(%s) failed: %s", symbol, exc)
         if px != px or px <= 0:
-            raise RuntimeError(f"no market price for {symbol}")
+            raise RuntimeError(
+                f"no market price for {symbol} after {QUOTE_WAIT_S:.0f}s: "
+                f"no live tick, no last, and NO PREVIOUS CLOSE. A quote that "
+                f"is merely thin still carries a close, so on a real gateway "
+                f"this is usually a MISSING MARKET-DATA SUBSCRIPTION / "
+                f"entitlement for {symbol} (or the wrong data type) — check "
+                f"the IBKR subscriptions before assuming the feed is slow")
+        mdt = getattr(t, "marketDataType", None)
+        if source != "live" or (mdt is not None and mdt != 1):
+            # Honesty: say what actually backed the mark. Delayed/frozen/
+            # close-derived marks are usable for sizing and valuation (they
+            # are never fill prices) but they must never look like live.
+            logger.warning("spot(%s) = %.4f from %s data (marketDataType=%s) "
+                           "— not a live tick", symbol, px, source, mdt)
         return float(px)
+
+    def _await_quote(self, ticker) -> tuple[float, str]:
+        """B8: wait for a usable tick, bounded — not a blind fixed sleep.
+
+        Returns (price, source); (nan, "none") when nothing usable arrived
+        inside QUOTE_WAIT_S. Pumps the ib_async event loop the same way
+        every other bounded wait in this adapter does."""
+        deadline = time.monotonic() + QUOTE_WAIT_S
+        px, source = float("nan"), "none"
+        while True:
+            self.ib.sleep(QUOTE_TICK_S)
+            px, source = _ticker_price(ticker)
+            if px == px and px > 0:
+                return px, source
+            if time.monotonic() >= deadline:
+                return px, source
 
     def open_spread(self, structure: dict, budget: float) -> dict:
         """Build+place the combo; returns {order_ref, premium} once filled.
@@ -401,7 +504,30 @@ class IBAdapter:
         self._require_connected()
         if client_order_id:
             self._pump()
+            # B1 (live-blocker, naked-short path): the idempotency key must
+            # be resolved against the VENUE, not against this process's
+            # trade list. `_find_trade_by_client_id` with the default
+            # refresh=False reads `self.ib.trades()`, which is THIS SESSION
+            # ONLY: after a restart — a Render deploy, an OOM, a gateway
+            # reconnect that rebuilt the client — it is EMPTY, so a retry
+            # carrying the same deterministic client id (e.g. the flatten's
+            # `blend-{call_id}-kill`) saw no prior and placed a SECOND sell
+            # of shares the first sell had already sold. Reproduced: venue
+            # CRSP -10 against a 5-share book position, reported to the
+            # operator as "flatten complete", with zero alerts mentioning a
+            # short. `find_stock_order` — the boot/crash reconcile's own
+            # lookup — has always used the two-stage form; the placement
+            # path, the one that can actually create the short, did not.
+            #
+            # Fast path first (a binding order already in this session needs
+            # no round-trip), then ask the venue for open + completed orders
+            # whenever this session holds nothing that still binds.
             prior = self._find_trade_by_client_id(client_order_id)
+            if (prior is None
+                    or _map_status(prior.orderStatus.status) == "cancelled"):
+                prior = (self._find_trade_by_client_id(client_order_id,
+                                                       refresh=True)
+                         or prior)
             if (prior is not None
                     and _map_status(prior.orderStatus.status) != "cancelled"):
                 # Venue-side dedupe by orderRef (pinned contract): a working

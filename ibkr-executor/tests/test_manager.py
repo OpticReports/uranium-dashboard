@@ -219,7 +219,7 @@ def test_gate_x12_kill_and_resume_serialize_behind_the_ladder_lock(
             done = threading.Event()
             with service.MGR_LOCK:                  # a cycle is "in flight"
                 t = threading.Thread(
-                    target=lambda: (c.get(endpoint, params={"token": "sekrit"}),
+                    target=lambda: (c.post(endpoint, params={"token": "sekrit"}),
                                     done.set()))
                 t.start()
                 assert not done.wait(0.4)           # blocked on the lock

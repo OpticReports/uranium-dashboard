@@ -374,6 +374,28 @@ services:
         sync: false          # $10k per ladder leg now; dashboard owns ramps
       - key: STATE_PATH
         value: /app/data/ladder_state.json
+      - key: BLEND_STATE_PATH
+        # B2 (live-blocker): DECLARED, and onto the mounted disk above.
+        # Undeclared, app/config.py's default `./data/blend_state.json`
+        # resolved to the container's EPHEMERAL layer — NOT the ibkr-data
+        # disk mounted at /app/data, which STATE_PATH has always used. Every
+        # deploy (autoDeploy: true) therefore destroyed the live blend book
+        # and re-seeded a FRESH one on top of shares the account still held:
+        # positions forgotten, resting GTC stops orphaned, `halted` and any
+        # queued /kill flatten lost, and the entry ledger reset. That is
+        # also what made the restart-boundary double-sell (B1) a ROUTINE
+        # event rather than an exotic one — a deploy is a restart.
+        value: /app/data/blend_state.json
+      - key: IB_CLIENT_ID
+        # B10 (live-blocker): DECLARED, and deliberately NOT the code
+        # default of 17. An IB gateway/TWS accepts one session per client
+        # id; a human TWS session (or another script) already holding this
+        # id makes every connect attempt fail — 20 attempts x 15s = 5
+        # minutes — after which the loop thread RAISES and DIES, and the
+        # service answers /health with a stale loop and places nothing.
+        # This id is RESERVED for this service: never reuse it from a
+        # desktop TWS, a notebook, or another container.
+        value: "1701"
       - key: LOG_LEVEL
         value: INFO
       # Same Canary Optics bot as btc-executor/canary. Unset = silent no-op.
