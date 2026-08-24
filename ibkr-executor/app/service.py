@@ -90,7 +90,12 @@ LADDER_KILL = threading.Event()    # MF-A/MF2-1: set by every /kill. The
                                    # end of the ladder section that was
                                    # holding the lock. /resume clears it —
                                    # a queued kill must never fire at a
-                                   # RESUMED ladder (MF2-3).
+                                   # RESUMED ladder (MF2-3). Both clears
+                                   # happen under MGR_LOCK, and
+                                   # _consume_ladder_kill re-tests this flag
+                                   # INSIDE that lock, so a /resume landing
+                                   # between the loop's out-of-lock test and
+                                   # its acquire is never overtaken (MF3-2).
 LOOP_GEN = 0                       # MF-2: loop LIFECYCLE. Every lifespan used
 LOOP_GEN_LOCK = threading.Lock()   # to leak a daemon loop thread that never
                                    # exited and kept reading MGR/ADAPTER/BLEND
@@ -236,22 +241,44 @@ def _kill_ladder(today: str) -> tuple[list[str], list[str]]:
             logger.error("kill close %s: no order_ref in the book", key)
         (closed if MGR.state.legs[key].status != "OPEN"
          else still_open).append(key)
-    MGR.state.halted = "KILL"
+    # mf3-8: a MORE SPECIFIC halt reason survives. `_load` deliberately
+    # keeps SCHEMA_DRIFT over a sentinel's KILL ("an existing halt reason is
+    # more specific than KILL"), and this line then overwrote it on the very
+    # next iteration, when the loop re-armed that sentinel — losing the
+    # data-integrity reason that drives /resume's stand-in warning. Halting
+    # is what matters here and the ladder is already halted either way.
+    MGR.state.halted = MGR.state.halted or "KILL"
     MGR.save()
     return closed, still_open
 
 
-def _consume_ladder_kill(today: str) -> str:
+def _consume_ladder_kill(today: str) -> str | None:
     """Execute the kill /kill handed to this thread and return the alert
-    that reports what ACTUALLY happened. THE CALLER MUST HOLD MGR_LOCK.
+    that reports what ACTUALLY happened, or None when the kill was
+    CANCELLED by /resume before this thread got the lock (MF3-2).
+    THE CALLER MUST HOLD MGR_LOCK.
 
     The kill is consumed only when every open leg is actually closed —
     otherwise the flag and the disk sentinel BOTH stay set and the loop
     retries it every cycle, alerting every time, exactly as a failing blend
-    kill-flatten does (R2: an emergency stop may not fail quietly). Same
+    kill-flatten does (R2: an emergency stop may not fail quietly; MF3-3
+    made that comparison true of the blend half as well). Same
     for a raise: the halt could not be persisted, so nothing is consumed
     (mf2-8 — the clear used to happen BEFORE the work, so a raise dropped
     the flag with nothing left to re-trigger it)."""
+    if not LADDER_KILL.is_set():
+        # MF3-2: MF2-3 was NOT closed. The loop tests `LADDER_KILL.is_set()`
+        # OUTSIDE MGR_LOCK and nothing re-tested it once the lock was held,
+        # so a /resume that landed in between — clearing halt, flag AND
+        # sentinel under this very lock — was overtaken: measured, the
+        # operator resumed, re-opened a leg, and the loop still closed
+        # ref-2 and re-halted the ladder. /resume mutates both halves of
+        # the record under MGR_LOCK, so once we hold it the flag is the
+        # authority. This is the ladder's copy of the blend half's identity
+        # re-check (`mgr.state.flatten_request is pending_flatten`).
+        logger.info("deferred ladder kill dropped: /resume cancelled it "
+                    "before the loop could run it")
+        return None
     closed, still_open = _kill_ladder(today)
     if still_open:
         return ("🚨🚨 ACTION NEEDED (you) — ibkr ladder: the /kill you sent "
@@ -262,14 +289,30 @@ def _consume_ladder_kill(today: str) -> str:
                 + ". They are STILL OPEN at the venue — close them by hand "
                   "in TWS. The ladder is halted, and the loop retries the "
                   "close every cycle until it lands or you /resume")
-    MGR.clear_kill()            # MF2-2: the kill is executed — consume the
+    sentinel_note = ""
+    try:
+        MGR.clear_kill()        # MF2-2: the kill is executed — consume the
+    except Exception as exc:  # noqa: BLE001
+        # mf3-7: the legs are already CLOSED and `halted: KILL` is already
+        # in the book. A sentinel that will not unlink used to escape as a
+        # raise, which the loop reported as "the /kill could not be
+        # completed... the loop retries it every cycle" — and every retry
+        # found nothing to close and failed the same unlink, alerting
+        # FOREVER. The work is done, so the flag is consumed regardless and
+        # the leftover sentinel is reported ONCE, as what it actually costs.
+        logger.exception("kill: clearing the ladder kill sentinel failed: %s",
+                         exc)
+        sentinel_note = (f" (note: the kill journal at {MGR.kill_sentinel} "
+                         f"could not be removed — {exc}; nothing is left to "
+                         f"close, but a RESTART before you /resume will "
+                         f"re-run this kill as a no-op and re-alert)")
     LADDER_KILL.clear()         # on-disk sentinel, then the in-memory flag
     if closed:
         return (f"🔴 ibkr ladder: the /kill you sent has now closed leg(s) "
                 f"{', '.join(closed)}; the ladder stays halted until "
-                f"/resume")
+                f"/resume{sentinel_note}")
     return ("🔴 ibkr ladder: the /kill you sent found no OPEN legs to close; "
-            "the ladder stays halted until /resume")
+            "the ladder stays halted until /resume" + sentinel_note)
 
 
 def _loop(gen: int, wake: threading.Event):
@@ -296,7 +339,9 @@ def _loop(gen: int, wake: threading.Event):
         LADDER_KILL.set()
         send("🔴 ibkr ladder: a /kill from before this restart is still "
              "in force — the ladder is HALTED and its open legs are "
-             "closed as the first act of this loop\'s first iteration")
+             "closed at the top of this loop's first iteration, ahead of "
+             "both feeds (mf3-9: a queued blend flatten, if there is one, "
+             "runs just before them — real shares first)")
     while True:
         if _superseded(gen):
             return
@@ -332,7 +377,8 @@ def _loop(gen: int, wake: threading.Event):
                 try:
                     with MGR_LOCK:
                         kill_msg = _consume_ladder_kill(today)
-                    send(kill_msg)
+                    if kill_msg:        # None = /resume cancelled it (MF3-2)
+                        send(kill_msg)
                 except Exception as exc:  # noqa: BLE001
                     logger.exception("deferred ladder kill failed: %s", exc)
                     send(f"🚨🚨 ibkr ladder: the /kill you sent could not be "
@@ -370,7 +416,33 @@ def _loop(gen: int, wake: threading.Event):
                         except Exception as exc:  # noqa: BLE001
                             logger.warning("mark %s failed: %s", key, exc)
                 intents = MGR.step(today, nino, marks)
-                for it in intents:
+                # MF3-5: the halt that `step()` itself may have just raised
+                # (EVENT_COLLAPSE, whose CLOSE intents MUST still run) is
+                # the plan's OWN halt. Anything that appears AFTER this
+                # point landed mid-cycle and the plan predates it.
+                planned_under = MGR.state.halted
+                for i, it in enumerate(intents):
+                    if MGR.state.halted != planned_under:
+                        # MF3-5: MF2-5 gave the blend's intent loop exactly
+                        # this guard and the LADDER's — the other of the two
+                        # intent loops in this service — never got it. /kill
+                        # sets `halted` from an API thread WITHOUT MGR_LOCK
+                        # (it must: the lock is held across gateway I/O), so
+                        # it lands mid-plan: measured, this loop OPENED two
+                        # spreads with `halted: KILL` already on disk and the
+                        # "ladder KILLED" alert already sent. The ladder
+                        # windows open 2026-11-01, so an OPEN here is live
+                        # money in the gate month. The rest of the plan is
+                        # abandoned; the kill's own closes run below.
+                        dropped = [f"{x['action']} {x['leg']}"
+                                   for x in intents[i:]]
+                        ladder_alerts.append(
+                            f"🛑 ibkr ladder: HALTED ({MGR.state.halted}) "
+                            f"mid-cycle — {len(dropped)} planned action(s) "
+                            f"were NOT executed ({', '.join(dropped)}); the "
+                            f"plan predates the halt. A queued /kill closes "
+                            f"any leg still OPEN in this same pass.")
+                        break
                     try:
                         if it["action"] == "OPEN":
                             r = ADAPTER.open_spread(it["structure"], it["budget"])
@@ -399,7 +471,9 @@ def _loop(gen: int, wake: threading.Event):
                     # pass above cannot have run for a kill that landed
                     # after it — and when it DID run, `kill_handled` keeps
                     # this from being a second attempt in one iteration).
-                    ladder_alerts.append(_consume_ladder_kill(today))
+                    kill_msg = _consume_ladder_kill(today)
+                    if kill_msg:        # None = /resume cancelled it (MF3-2)
+                        ladder_alerts.append(kill_msg)
                 MGR.save()
             for msg in ladder_alerts:
                 send(msg)
@@ -574,6 +648,7 @@ def kill(x_exec_token: str | None = Header(default=None),
     if MGR is None:
         return {"ok": False}
     blend_note = ""
+    blend_state = None
     today = datetime.now(timezone.utc).date().isoformat()
     # The BLEND halt runs FIRST: real shares are what it protects, and it
     # is the cheapest action here (one journal write under
@@ -609,9 +684,51 @@ def kill(x_exec_token: str | None = Header(default=None),
         # total deadline (nino.FEED_TIMEOUT / blend.FEED_TIMEOUT) but its
         # IB gateway round-trips carry none, so no honest number can be
         # promised for a wedged gateway. The alert below says exactly that.
+        #
+        # MF3-1: `request_flatten` ends in `save()`, so ANY write failure (a
+        # full disk, and mf3-10's concurrent-mutation RuntimeError) used to
+        # raise straight out of this handler: HTTP 500, ZERO Telegram, the
+        # LADDER stage below never reached at ALL — no halt, no sentinel,
+        # legs still OPEN — and no word to the operator that half a kill
+        # switch had fired. mf2-11 gave the LADDER stage exactly this guard
+        # and left the half holding real shares bare. The halt is attempted
+        # and REPORTED here either way; what differs is only what is
+        # DURABLE, and the note says which.
         from .blend import FEED_TIMEOUT as BLEND_FEED_TIMEOUT
-        with BLEND_HALT_LOCK:
-            BLEND.request_flatten(today)
+        blend_state = "flatten_queued"
+        blend_warn = ""
+        try:
+            with BLEND_HALT_LOCK:
+                try:
+                    BLEND.request_flatten(today)
+                except Exception as exc:  # noqa: BLE001
+                    logger.exception("kill: journalling the blend flatten "
+                                     "failed: %s", exc)
+                    # `request_flatten` sets `halted` and `flatten_request`
+                    # BEFORE it saves, so the halt and the queued flatten are
+                    # already in force for THIS process. Re-assert both
+                    # rather than trusting that ordering, and keep going:
+                    # an unpersisted halt still stops every new entry and
+                    # still makes the loop flatten on its next iteration.
+                    if BLEND.state.flatten_request is None:
+                        BLEND.state.flatten_request = {"ts": int(time.time()),
+                                                       "date": today}
+                    BLEND.state.halted = "KILL"
+                    blend_state = "flatten_queued_unpersisted"
+                    blend_warn = (
+                        f" ⚠️ the blend halt could NOT be written to disk "
+                        f"({exc}): the book IS halted and the flatten IS "
+                        f"queued in this process — both run as described — "
+                        f"but a RESTART would lose them, so re-send /kill "
+                        f"(or flatten by hand) if the service restarts")
+        except Exception as exc:  # noqa: BLE001
+            # Belt: even the lock/bookkeeping above must never 500 this
+            # handler and strand the LADDER stage below.
+            logger.exception("kill: the blend halt failed: %s", exc)
+            blend_state = "halt_failed"
+            blend_warn = (f" 🚨 the blend halt FAILED ({exc}) — the book may "
+                          f"be UNHALTED with positions open: FLATTEN THE "
+                          f"BLEND BOOK BY HAND at the venue")
         LOOP_WAKE.set()                 # skip the poll wait; flatten first
         loop_age = (time.time() - LAST["loop_ok"]) if LAST["loop_ok"] else None
         loop_warn = ""
@@ -619,20 +736,30 @@ def kill(x_exec_token: str | None = Header(default=None),
             loop_warn = (" ⚠️ the execution loop looks DOWN (see /health) "
                          "— the flatten will NOT run until it recovers; "
                          "flatten manually if urgent")
-        blend_note = (" + blend HALTED (journalled the moment you hit "
-                      "/kill — the halt takes no lock a cycle can hold), "
-                      "flatten QUEUED for the execution loop (it owns the "
-                      "venue connection) and it runs FIRST in the loop's "
-                      "next iteration — immediately when the loop is idle, "
-                      "which is the normal case. If a cycle is already in "
-                      "flight the flatten waits that cycle out: its feeds "
-                      f"are capped at {FEED_TIMEOUT:.0f}s (NOAA) and "
-                      f"{BLEND_FEED_TIMEOUT:.0f}s (tracker) TOTAL, but its "
-                      "IB gateway round-trips are NOT bounded, so a wedged "
-                      "gateway can stretch that wait with no bound this "
-                      "code can state — watch /health and flatten manually "
-                      "if nothing lands. A completion alert will state "
-                      "what closed vs parked" + loop_warn)
+        if blend_state == "halt_failed":
+            blend_note = " + blend:" + blend_warn
+        else:
+            # The opening clause must not claim a journal that did not
+            # land: an unpersisted halt is still IN FORCE, and saying so is
+            # a different sentence from saying it was written down.
+            how = ("journalled the moment you hit /kill — the halt takes no "
+                   "lock a cycle can hold"
+                   if blend_state == "flatten_queued" else
+                   "in force from the moment you hit /kill, but NOT written "
+                   "to disk — see the warning below")
+            blend_note = (f" + blend HALTED ({how}), "
+                          "flatten QUEUED for the execution loop (it owns the "
+                          "venue connection) and it runs FIRST in the loop's "
+                          "next iteration — immediately when the loop is idle, "
+                          "which is the normal case. If a cycle is already in "
+                          "flight the flatten waits that cycle out: its feeds "
+                          f"are capped at {FEED_TIMEOUT:.0f}s (NOAA) and "
+                          f"{BLEND_FEED_TIMEOUT:.0f}s (tracker) TOTAL, but its "
+                          "IB gateway round-trips are NOT bounded, so a wedged "
+                          "gateway can stretch that wait with no bound this "
+                          "code can state — watch /health and flatten manually "
+                          "if nothing lands. A completion alert will state "
+                          "what closed vs parked" + blend_warn + loop_warn)
     # The LADDER halt is TWO-STAGE too, for the same reason the blend one
     # is (MF2-1/MF2-2). This handler used to call close_spread ITSELF
     # whenever MGR_LOCK happened to be free — the deployed steady state, a
@@ -648,6 +775,8 @@ def kill(x_exec_token: str | None = Header(default=None),
     # happens only under MGR_LOCK, and the sentinel is a file of its own.
     ladder_note, ladder_state = "", "close_queued"
     durability_warn = ""
+    sentinel_err: Exception | None = None
+    book_saved = False
     try:
         MGR.state.halted = "KILL"       # in memory the instant you hit /kill
         LADDER_KILL.set()               # ...and the closes are the loop's
@@ -659,11 +788,9 @@ def kill(x_exec_token: str | None = Header(default=None),
         except Exception as exc:  # noqa: BLE001
             logger.exception("kill: journalling the ladder halt failed: %s",
                              exc)
-            durability_warn = (f" ⚠️ the ladder halt could NOT be written to "
-                               f"disk ({exc}): it holds while this process "
-                               f"lives, but a RESTART would lose it — halt "
-                               f"by hand at the venue if the service "
-                               f"restarts")
+            sentinel_err = exc          # MF3-6: the book save below may
+                                        # still make the HALT durable — what
+                                        # is true is decided after it runs
         open_legs: list[str] | None = None
         # MGR_LOCK is taken only AFTER the blend section above released
         # BLEND_HALT_LOCK — no two of these locks are ever held together.
@@ -676,6 +803,8 @@ def kill(x_exec_token: str | None = Header(default=None),
                 open_legs = [k for k, leg in MGR.state.legs.items()
                              if leg.status == "OPEN"]
                 MGR.save()              # local write; no gateway call here
+                book_saved = True       # `halted: KILL` is now ON DISK in
+                                        # the book, sentinel or no sentinel
             except Exception as exc:  # noqa: BLE001
                 # The sentinel is what makes the halt durable; this write
                 # only mirrors it into the book. Degrade, never 500.
@@ -683,6 +812,28 @@ def kill(x_exec_token: str | None = Header(default=None),
                 open_legs = None
             finally:
                 MGR_LOCK.release()
+        if sentinel_err is not None:
+            # MF3-6: say what is TRUE, per case. This warning used to be
+            # emitted the instant the sentinel write failed and always read
+            # "a RESTART would lose it" — false whenever the book save
+            # above then succeeded, because `_load_book` reads `halted`
+            # straight back out of the book. What a missing sentinel really
+            # costs in that case is the re-ARMING of the deferred leg
+            # closes (`kill_pending`), not the halt.
+            if book_saved:
+                durability_warn = (
+                    f" ⚠️ the ladder kill JOURNAL could not be written "
+                    f"({sentinel_err}), but the halt itself IS on disk in "
+                    f"the book, so a restart still comes back HALTED. What "
+                    f"a restart would NOT re-arm is the queued leg close — "
+                    f"re-send /kill (or close by hand in TWS) if the "
+                    f"service restarts before the close lands")
+            else:
+                durability_warn = (
+                    f" ⚠️ the ladder halt could NOT be written to disk "
+                    f"({sentinel_err}): it holds while this process lives, "
+                    f"but a RESTART would lose it — halt by hand at the "
+                    f"venue if the service restarts")
         if open_legs == []:
             LADDER_KILL.clear()
             MGR.clear_kill()
@@ -694,8 +845,11 @@ def kill(x_exec_token: str | None = Header(default=None),
                  if open_legs else "any open legs are")
                 + " NOT closed yet — only the execution loop may talk to "
                   "the gateway (it owns the connection), so it closes them "
-                  "as the FIRST thing it does, ahead of both feeds, and "
-                  "alerts what actually closed. A wedged gateway has no "
+                  "at the TOP of its next iteration, ahead of both feeds "
+                  "and ahead of every ladder decision (a queued blend "
+                  "flatten is the one thing that runs first — real shares "
+                  "before options), and alerts what actually closed. A "
+                  "wedged gateway has no "
                   "bound this code can state, so watch /status and close by "
                   "hand in TWS if nothing lands. The ladder is halted from "
                   "now"
@@ -709,11 +863,20 @@ def kill(x_exec_token: str | None = Header(default=None),
         ladder_note = (f"the ladder halt FAILED ({exc}) — HALT THE LADDER "
                        f"BY HAND at the venue")
         ladder_state = "halt_failed"
-    send(f"🔴 ACTION NEEDED (you) — ibkr ladder KILLED: {ladder_note}, "
-         f"ladder halted{durability_warn}{blend_note}\n→ it stays halted "
-         f"until you hit /resume?token=YOUR_TOKEN")
+    # The state clause must match `ladder_state`: on the mf2-11 failure path
+    # `ladder_note` already says the halt FAILED, and an unconditional
+    # ", ladder halted" contradicted it inside the same sentence.
+    if ladder_state == "halt_failed":
+        state_clause = ""
+        tail = ("\n→ the ladder is NOT halted by this service — halt it at "
+                "the venue, then /resume?token=YOUR_TOKEN once you have")
+    else:
+        state_clause = ", ladder halted"
+        tail = "\n→ it stays halted until you hit /resume?token=YOUR_TOKEN"
+    send(f"🔴 ACTION NEEDED (you) — ibkr ladder KILLED: {ladder_note}"
+         f"{state_clause}{durability_warn}{blend_note}{tail}")
     return {"ok": True, "halted": "KILL", "ladder": ladder_state,
-            "blend": "flatten_queued" if BLEND is not None else None}
+            "blend": blend_state}
 
 
 @app.api_route("/resume", methods=["GET", "POST"])

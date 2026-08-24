@@ -145,6 +145,30 @@ def _utc_today() -> str:
     return datetime.now(timezone.utc).date().isoformat()
 
 
+_SNAPSHOT_RETRIES = 5
+
+
+def _snapshot(d: dict) -> dict:
+    """A PRIVATE copy of a dict another thread may be mutating (mf3-10).
+
+    `dict(d)` copies at the C level: with the string keys this book uses,
+    no Python-level code runs inside it, so the GIL is never released
+    mid-copy and the copy is atomic. A comprehension or an `.items()` walk
+    is NOT — it yields between elements, and an insert from the loop thread
+    makes CPython raise `RuntimeError: dictionary changed size during
+    iteration`, which is what took `save()` down (measured 1-10 raises per
+    8s run over 8 runs; 0 over 6 runs after this).
+    The retry is a belt for the copy paths that are not atomic (a dict
+    SUBCLASS carrying its own `keys()` falls back to Python iteration); it
+    converges, because the mutating thread always makes progress."""
+    for _ in range(_SNAPSHOT_RETRIES - 1):
+        try:
+            return dict(d)
+        except RuntimeError:            # "changed size during iteration"
+            time.sleep(0)               # yield the GIL; let the writer land
+    return dict(d)
+
+
 def entry_client_id(call_id: int) -> str:
     return f"blend-{call_id}-entry"
 
@@ -558,27 +582,45 @@ class Blend3070Manager:
         # /blend/feed are read-only. What keeps THAT safe is this write
         # being atomic and the state object being a single shared one
         # mutated field-by-field under the GIL — never two half-books.
+        #
+        # mf3-10: that GIL argument only covers a writer that ASSIGNS a
+        # field. A writer that ITERATES a shared container breaks it, and
+        # mf2-9's prune (below) did exactly that, under this very comment:
+        # `[k for k in self.state.stand_in_rows ...]` walks a live dict the
+        # loop thread inserts into, and CPython answers "dictionary changed
+        # size during iteration" — reproduced by two API savers against
+        # three mutators, 1-10 raises per 8s run over 8 runs (0 over 6 after
+        # this fix; tests/probes/mf3/save_race.py), raising straight out of
+        # `/kill`'s `request_flatten`. Every shared container is SNAPSHOTTED first now
+        # (`_snapshot`: a C-level dict copy that never runs Python-level
+        # iteration over the live dict), the prune walks the private
+        # snapshot, and json.dump only ever sees snapshots — nothing in this
+        # method iterates shared state.
         directory = os.path.dirname(self.state_path) or "."
         os.makedirs(directory, exist_ok=True)
+        positions = _snapshot(self.state.positions)
+        stand_in = _snapshot(self.state.stand_in_rows)
         # mf2-9: the register was pruned only on _load, so a row that left
         # the book between saves was written to disk as a dangling entry
         # (measured: stand_in_rows={'1': ['time_stop']} with no such
         # position). Prune where the book is written, not only where it is
-        # read.
-        for gone in [k for k in self.state.stand_in_rows
-                     if k not in self.state.positions]:
-            self.state.stand_in_rows.pop(gone)
+        # read — off the SNAPSHOT (mf3-10), and out of the live register too
+        # so /status stops publishing the dangling row as well.
+        for gone in [k for k in stand_in if k not in positions]:
+            stand_in.pop(gone)
+            self.state.stand_in_rows.pop(gone, None)
         payload = {"initialized": self.state.initialized,
                    "positions": {k: asdict(v)
-                                 for k, v in self.state.positions.items()},
-                   "entered_ids": self.state.entered_ids,
-                   "entered_symbols": self.state.entered_symbols,
-                   "pending_entries": self.state.pending_entries,
-                   "pending_book_orders": self.state.pending_book_orders,
+                                 for k, v in positions.items()},
+                   "entered_ids": list(self.state.entered_ids),
+                   "entered_symbols": _snapshot(self.state.entered_symbols),
+                   "pending_entries": _snapshot(self.state.pending_entries),
+                   "pending_book_orders": _snapshot(
+                       self.state.pending_book_orders),
                    "book_order_seq": self.state.book_order_seq,
-                   "unreconciled": self.state.unreconciled,
-                   "stand_in_rows": self.state.stand_in_rows,
-                   "orphan_stop_refs": self.state.orphan_stop_refs,
+                   "unreconciled": _snapshot(self.state.unreconciled),
+                   "stand_in_rows": stand_in,
+                   "orphan_stop_refs": _snapshot(self.state.orphan_stop_refs),
                    "sleeve_cash": self.state.sleeve_cash,
                    "bil_qty": self.state.bil_qty,
                    "spy_qty": self.state.spy_qty,
@@ -3051,7 +3093,14 @@ def execute_flatten(mgr: Blend3070Manager, adapter, alert) -> None:
     survives: a RAISING stop cancel means the stop likely FILLED — park,
     never a MKT sell on top of it. R1 UNVERIFIABLE (history_gap) positions
     stay parked untouched. The completion alert states exactly what closed
-    vs what parked — the kill switch never overclaims."""
+    vs what parked — the kill switch never overclaims.
+
+    MF3-3: if ANYTHING parked, the journalled request is KEPT and the next
+    cycle retries it — an emergency stop does not give up after one pass.
+    Only /resume (or a pass that parks nothing) clears it. Retrying cannot
+    double-sell: reconcile runs first every cycle, and each close carries
+    the deterministic `blend-{call_id}-kill` client id the adapter dedupes
+    by orderRef."""
     st = mgr.state
     # MF-A: /kill's journal write no longer waits behind an in-flight
     # cycle, so a SECOND kill can land while this flatten is running. Clear
@@ -3188,7 +3237,11 @@ def execute_flatten(mgr: Blend3070Manager, adapter, alert) -> None:
                      f"({', '.join(unrec)})" if unrec else "")
                   + f", {len(parked)} NOT closed ({', '.join(parked)}) — "
                     f"parked positions need manual verification; book stays "
-                    f"halted until /resume")
+                    f"halted until /resume"
+                  + (". The flatten stays QUEUED and RETRIES every cycle "
+                     "until every position is closed or you /resume "
+                     "(each retry reconciles venue truth first, so nothing "
+                     "already sold is sold again)" if parked else ""))
         elif closed:
             alert(f"🔴 blend kill flatten complete: {len(closed)} position(s) "
                   f"closed ({', '.join(closed)}); book halted until /resume")
@@ -3196,8 +3249,28 @@ def execute_flatten(mgr: Blend3070Manager, adapter, alert) -> None:
             alert("🔴 blend kill flatten complete: book was already flat; "
                   "halted until /resume")
     finally:
-        if st.flatten_request is executing:
+        if st.flatten_request is executing and not parked:
             st.flatten_request = None       # executed (outcomes alerted)
+        elif parked:
+            # MF3-3: a flatten that could NOT close a position stays QUEUED
+            # and retries next cycle — the behaviour README §6, this
+            # module's docstrings and `_consume_ladder_kill` all already
+            # claimed ("exactly as a failing blend kill-flatten does") and
+            # the code did not have: the clear was unconditional, so a
+            # flatten whose every close RAISED was dropped after ONE pass
+            # and the operator's emergency stop simply stopped trying.
+            # Safe to retry because both halves of the no-double-sell law
+            # hold: run_cycle reconciles BEFORE PHASE 0b (a position whose
+            # sell did land leaves `positions` first), and every kill close
+            # carries the deterministic client id `blend-{call_id}-kill`,
+            # which the adapter dedupes venue-side by orderRef. The K-d
+            # fail-closed law is untouched: a raising cancel still parks and
+            # never MKT-sells, it just gets re-attempted rather than
+            # abandoned. /resume is the operator's cancel (it clears
+            # `flatten_request`), exactly as it is for the ladder half.
+            logger.warning("kill flatten: %d position(s) not closed — "
+                           "request stays queued for the next cycle",
+                           len(parked))
         # N3: re-assert the halt. If a /resume slipped in between the
         # request and this execution, the book must still come out of a
         # flatten HALTED — the operator resumes a flattened book
@@ -3259,11 +3332,29 @@ def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
             # the book immediately (no new entries)". The rest of the plan
             # is abandoned; the flatten runs on the next iteration, which
             # /kill has already woken.
+            #
+            # MF3-4: the break stops ACTIONS — it must never suppress
+            # INFORMATION. `step()` assembles its ALERT intents LAST, so a
+            # halt landing at i=0 delivered [] instead of e.g. "REFUSED exit
+            # for call N: tracker says 'X' but book holds Y — tracker DB
+            # reset? ... manual review needed". Worse, two of those alerts
+            # consume a PERSISTED one-shot on the way in (`stale_alerted`,
+            # `quote_alert_armed` — both already saved to disk), so the
+            # warning was not merely deferred, it was gone for good. Every
+            # remaining ALERT is delivered here; only the ORDERS are dropped.
+            rest = intents[i:]
+            dropped = [x for x in rest if x.get("action") != "ALERT"]
             alert(f"🛑 blend: HALTED ({mgr.state.halted}) mid-cycle — "
-                  f"{len(intents) - i} planned action(s) "
+                  f"{len(dropped)} planned action(s) "
                   f"were NOT executed (the plan predates the halt). The "
-                  f"book stays reconciled and stop-protected; a queued "
-                  f"/kill flatten runs on the next iteration.")
+                  f"book stays reconciled and stop-protected"
+                  + ("; a queued /kill flatten runs on the next iteration."
+                     if mgr.state.flatten_request is not None else
+                     "; no flatten is queued — the book stays HELD and "
+                     "halted until you /resume."))
+            for x in rest:
+                if x.get("action") == "ALERT":
+                    alert(f"🚨 blend: {x['msg']}")
             break
         try:
             act = it["action"]

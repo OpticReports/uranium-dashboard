@@ -358,7 +358,62 @@ unreconciled venue state. Phases IN ORDER:
      alerts every time, the way a failing blend kill-flatten does. It used
      to swallow every failure with a log line and answer
      `ladder: "closed"` / "all legs closed" with the leg still open at the
-     venue (counter-review MF2-4).
+     venue (counter-review MF2-4). **That comparison was FALSE when it was
+     written** (counter-review MF3-3): a blend flatten whose every close
+     RAISED cleared `flatten_request` in its `finally` and was never
+     retried — one pass and the emergency stop gave up. The BEHAVIOUR was
+     fixed rather than the sentence: a flatten that could not close a
+     position keeps its journal, retries every cycle and alerts every time,
+     until it lands or `/resume` cancels it. Retrying cannot double-sell —
+     reconcile runs first every cycle (a position whose sell did land has
+     already left the book), and every kill close carries the
+     deterministic `blend-<call_id>-kill` client id the adapter dedupes
+     venue-side by `orderRef` — and K-d is untouched: a raising cancel
+     still parks and never MKT-sells, it is just re-attempted rather than
+     abandoned.
+   - *Neither stage can 500, and each says what is DURABLE.* The blend
+     stage had no exception guard at all (counter-review MF3-1):
+     `request_flatten` ends in `save()`, so a full disk — or the
+     concurrent-mutation `RuntimeError` of mf3-10, which comes out of that
+     same call — returned HTTP 500 with ZERO Telegram, and the LADDER
+     stage below was never reached: no halt, no sentinel, legs still OPEN.
+     mf2-11 had given the ladder stage exactly this guard and left the half
+     holding real shares bare. Both stages are guarded now; an unpersisted
+     halt is still IN FORCE for the running process and the alert says so
+     rather than claiming durability it does not have. The reverse
+     overclaim is gone too (counter-review MF3-6): the ladder note used to
+     read "a RESTART would lose it" whenever the SENTINEL write failed,
+     which is false when the book save that follows succeeded — `_load_book`
+     reads `halted` straight back out of the book. It now states, per case,
+     what disk actually holds and what a restart would not re-arm.
+   - *A halt landing mid-plan stops BOTH intent loops.* MF2-5 gave the
+     blend's intent loop a per-intent halt re-check; the LADDER's — the
+     other of the two intent loops in this service — never got one
+     (counter-review MF3-5), so it kept executing a plan made before the
+     halt: measured, two spreads OPENED with `halted: KILL` already on disk
+     and the "ladder KILLED" alert already sent. The ladder windows open
+     2026-11-01, so that is live money in the gate month. Both loops now
+     abandon the rest of the plan and say how many actions were dropped —
+     and the ladder's guard compares against the halt the PLAN was made
+     under, so `step()`'s own EVENT_COLLAPSE closes still run.
+   - *The break stops ACTIONS, never INFORMATION* (counter-review MF3-4).
+     `step()` assembles its ALERT intents LAST, so a halt landing early in
+     the blend's intent loop delivered `[]` — the operator got the
+     "N planned action(s) were NOT executed" line and nothing else, instead
+     of e.g. "REFUSED exit for call N: tracker says 'X' but book holds Y —
+     tracker DB reset? ... manual review needed". Two of those alerts
+     consume a PERSISTED one-shot on the way in (`stale_alerted`,
+     `quote_alert_armed`, both already written to disk), so the warning was
+     not deferred, it was gone for good. Every remaining ALERT is delivered
+     when the loop breaks; only the ORDERS are dropped.
+   - *A queued kill is re-checked under the lock it is executed under*
+     (counter-review MF3-2). `_loop` tests `LADDER_KILL.is_set()` OUTSIDE
+     `MGR_LOCK`, so a `/resume` landing in that window was overtaken:
+     measured, `/resume` cleared halt + flag + sentinel, the operator
+     re-opened a leg, and the loop still closed `ref-2` and re-halted the
+     ladder. `_consume_ladder_kill` re-tests the flag INSIDE the lock now —
+     the ladder's copy of the identity re-check the blend half has had
+     since R2 — and drops a cancelled kill instead of executing it.
    - *Kill-to-flatten on a parked loop — the deployed steady state on a
      300s cadence, >99% of the time — is ~0.01s*, measured with a feed
      hanging 3s, 8s or 25s.
@@ -407,7 +462,9 @@ unreconciled venue state. Phases IN ORDER:
    overclaims. If reconcile fails, the book stays halted, the request
    stays journaled, and every failing cycle alerts loudly until the
    flatten lands; /resume clears a still-queued request (a stale kill
-   must never flatten a resumed book).
+   must never flatten a resumed book). A flatten that RAN but could not
+   close every position keeps its journal on exactly the same terms
+   (MF3-3) — it is retried, with reconcile first, every cycle.
 
 Adapter contract (pinned, now implemented by BOTH adapters): cancelling a
 FILLED order must RAISE (IB errors on it) — bool False is reserved for
@@ -555,7 +612,7 @@ Env (all optional until the paper gate):
 | `TRACKER_USER` / `TRACKER_PASSWORD` | fallback: the tracker's HTTP Basic dashboard login (its DASHBOARD_USER/PASSWORD) — dashboard creds only, no broker credential enters the blend path |
 | `BLEND_BUDGET` | per-strategy gross-exposure cap in USD; 0 (default) = disabled. When set, crossing 85% utilization sends a one-time Telegram alert ("review and raise BLEND_BUDGET"), re-armed once utilization drops below 75% |
 | `BLEND_BOOK_USD` | initial paper book (default 10,000), split 30/70 at first boot |
-| `BLEND_STATE_PATH` | persisted book state (default `./data/blend_state.json`). Saves are atomic: a UNIQUE temp file per write (`mkstemp` in the state directory) + fsync + rename, so two threads saving at once can never clobber each other's partial file or publish truncated JSON (counter-review x11 — a single shared `.tmp` made that promise false; the same treatment now covers `STATE_PATH`, the El Niño ladder book; an unreadable ladder book — and a leg-row SCHEMA DRIFT after a deploy rollback — is PRESERVED as `.corrupt-<ts>` and loud, and a drifted book additionally comes back `halted="SCHEMA_DRIFT"` with every leg field this build understands intact, so `step()` cannot re-OPEN a spread that is still live at the venue, counter-review y2). The BLEND book gets the same treatment on its own position rows (counter-review Z-D — Z1 added `stop_cover_qty`, so a rollback to a build without it hit an unfiltered `BlendPosition(**row)` and came back a FRESH, un-halted book with entries UNBLOCKED while real shares and GTC stops rested at the venue): unknown fields are dropped, fields the row does not carry are DEFAULTED (a renamed or removed field used to raise inside the handler and fall through to the fresh-book branch — counter-review ZF-4; the ladder never had that hole because every `LegState` field is defaulted), a row that still cannot be rebuilt is NAMED and left to the preserved file rather than dropped in silence (counter-review ZF-6), positions/cash/stop refs are kept, the file is preserved as `.corrupt-<ts>` and the book comes back `halted="SCHEMA_DRIFT"` — reconcile still runs and still protects it, only new decisions stop. **What this protects is the NEXT rollback — a book written by a FUTURE build, read by THIS one. It cannot protect a rollback FROM this build to an older one** (counter-review ZF-3): the reader is the older build, the fix is not in it, and the fix is therefore structurally unreachable from this side — see the deploy note under "Rollout gates". Both managers PERSIST that recovered state at load (counter-review Z-J: it used to live in memory until the loop's first save, so a crash in between lost the halt AND the preserved rows) — but only when the `.corrupt-<ts>` rename actually SUCCEEDED, because when it fails the file still sitting at the state path is the only copy of the evidence and the boot save would destroy it (counter-review ZF-7); the halt then lives in memory only and the alert says so. A `SCHEMA_DRIFT` halt is cleared by `/resume` exactly like a KILL — deliberately, because every field this build understands survives the drifted load, so nothing live is re-opened — and the resume alert NAMES the halt it cleared, for the ladder and for the blend book separately (counter-review Z-K). Service writers serialize their read-modify-write under `BLEND_LOCK` (blend: the loop's `run_cycle` and `/resume`) / `MGR_LOCK` (ladder: the loop's ladder section, `/kill` and `/resume`) — with ONE deliberate exception, `/kill`'s blend halt, which takes `BLEND_HALT_LOCK` instead so it can never queue behind a cycle (counter-review MF-A; mf2-6 — this line claimed the old discipline for a round after it was dropped). `/kill`'s LADDER halt takes no lock at all when `MGR_LOCK` is busy: it writes a separate `<STATE_PATH>.kill` sentinel, atomically, and never touches `legs` from an API thread. The state is MODE-TAGGED (`dry:paper` / `real:paper` / `real:live`): on any mode change the previous book is archived alongside and a FRESH book starts, with a Telegram alert — a book's fills are fiction in any other mode (DRY fills at placeholder prices; paper fills aren't live fills), so they must never be reconciled against a venue that never saw them |
+| `BLEND_STATE_PATH` | persisted book state (default `./data/blend_state.json`). Saves are atomic: a UNIQUE temp file per write (`mkstemp` in the state directory) + fsync + rename, so two threads saving at once can never clobber each other's partial file or publish truncated JSON (counter-review x11 — a single shared `.tmp` made that promise false; and counter-review mf3-10 — the save additionally SNAPSHOTS every shared container before it walks it, because mf2-9's in-save prune iterated a dict the loop thread was inserting into and CPython answered `RuntimeError: dictionary changed size during iteration`, reproduced 1-10 times per 8s run across 8 runs, 0 after the fix, and raised straight out of `/kill` (`tests/probes/mf3/save_race.py`); the same treatment now covers `STATE_PATH`, the El Niño ladder book; an unreadable ladder book — and a leg-row SCHEMA DRIFT after a deploy rollback — is PRESERVED as `.corrupt-<ts>` and loud, and a drifted book additionally comes back `halted="SCHEMA_DRIFT"` with every leg field this build understands intact, so `step()` cannot re-OPEN a spread that is still live at the venue, counter-review y2). The BLEND book gets the same treatment on its own position rows (counter-review Z-D — Z1 added `stop_cover_qty`, so a rollback to a build without it hit an unfiltered `BlendPosition(**row)` and came back a FRESH, un-halted book with entries UNBLOCKED while real shares and GTC stops rested at the venue): unknown fields are dropped, fields the row does not carry are DEFAULTED (a renamed or removed field used to raise inside the handler and fall through to the fresh-book branch — counter-review ZF-4; the ladder never had that hole because every `LegState` field is defaulted), a row that still cannot be rebuilt is NAMED and left to the preserved file rather than dropped in silence (counter-review ZF-6), positions/cash/stop refs are kept, the file is preserved as `.corrupt-<ts>` and the book comes back `halted="SCHEMA_DRIFT"` — reconcile still runs and still protects it, only new decisions stop. **What this protects is the NEXT rollback — a book written by a FUTURE build, read by THIS one. It cannot protect a rollback FROM this build to an older one** (counter-review ZF-3): the reader is the older build, the fix is not in it, and the fix is therefore structurally unreachable from this side — see the deploy note under "Rollout gates". Both managers PERSIST that recovered state at load (counter-review Z-J: it used to live in memory until the loop's first save, so a crash in between lost the halt AND the preserved rows) — but only when the `.corrupt-<ts>` rename actually SUCCEEDED, because when it fails the file still sitting at the state path is the only copy of the evidence and the boot save would destroy it (counter-review ZF-7); the halt then lives in memory only and the alert says so. A `SCHEMA_DRIFT` halt is cleared by `/resume` exactly like a KILL — deliberately, because every field this build understands survives the drifted load, so nothing live is re-opened — and the resume alert NAMES the halt it cleared, for the ladder and for the blend book separately (counter-review Z-K). Service writers serialize their read-modify-write under `BLEND_LOCK` (blend: the loop's `run_cycle` and `/resume`) / `MGR_LOCK` (ladder: the loop's ladder section, `/kill` and `/resume`) — with ONE deliberate exception, `/kill`'s blend halt, which takes `BLEND_HALT_LOCK` instead so it can never queue behind a cycle (counter-review MF-A; mf2-6 — this line claimed the old discipline for a round after it was dropped). `/kill`'s LADDER halt takes no lock at all when `MGR_LOCK` is busy: it writes a separate `<STATE_PATH>.kill` sentinel, atomically, and never touches `legs` from an API thread. The state is MODE-TAGGED (`dry:paper` / `real:paper` / `real:live`): on any mode change the previous book is archived alongside and a FRESH book starts, with a Telegram alert — a book's fills are fiction in any other mode (DRY fills at placeholder prices; paper fills aren't live fills), so they must never be reconciled against a venue that never saw them |
 | `READ_TOKEN` | READ-ONLY token gating `GET /blend/feed` (header `X-Read-Token`, constant-time compare). SEPARATE from `EXEC_TOKEN` by design: the feed holder sees book state only — never kill/resume. Empty (default) = the feed endpoint 404s. Set the same value as `BLEND_READ_TOKEN` on the genomics tracker, whose server-side proxy powers the research site's Execution tab |
 
 ### Read-only feed: `GET /blend/feed` (the Execution tab)
@@ -645,11 +702,27 @@ order:
 1. **halt first** — `POST /kill` (token-gated), and confirm `/status` shows
    the blend book halted and the flatten resolved, and the LADDER halted with
    its legs closed (the leg closes are the loop's, so they land a moment after
-   the reply — the completion alert names what closed and what would not);
+   the reply — the completion alert names what closed and what would not).
+   Two things to check here that this round added (counter-review MF3):
+   - `/status`'s `flatten_pending` STAYS true while any position could not be
+     closed — the flatten is retried every cycle now instead of being dropped
+     after one pass (MF3-3). `flatten_pending: true` before a rollback means
+     shares are still held: close them by hand in TWS first, or `/resume`
+     deliberately to cancel the queued flatten. Do not roll back over it —
+     an older build's `_load` reads `flatten_request` and would execute it
+     against a book it has not reconciled.
+   - if the `/kill` alert carried a DURABILITY warning, believe it literally.
+     "the halt itself IS on disk" means a restart comes back halted but the
+     queued LEG CLOSE is not re-armed; "a RESTART would lose it" means the
+     halt lives only in the running process — halt at the venue by hand
+     BEFORE stopping the service, because the rollback is a restart
+     (MF3-1/MF3-6);
 2. move `BLEND_STATE_PATH` aside by hand (keep it — it is the only record of
    the book, and the only record of which fields were STOOD IN) and **then**
    roll back; delete `<STATE_PATH>.kill` if it is still there — an older build
-   does not know that file and would not re-assert the halt from it;
+   does not know that file and would not re-assert the halt from it, and this
+   build's `halted` in the ladder book is what the older one will read
+   instead (which is why step 1's durability check matters);
 3. **verify positions at the venue** in TWS/Client Portal — every open share
    and every resting GTC stop — and re-seed or reconcile the older build's
    book against what is actually there before clearing the halt.

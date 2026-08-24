@@ -38,6 +38,9 @@ globals), so that directory travels with it. `probes/mf2/flake_repro.py`
 and `probes/mf2/linger.py` are the two deterministic reproductions behind
 the MF-1 gate's flake ruling; they run the OLD body of that test on
 purpose, as the record of what was measured, and are NOT gates.
+`probes/mf3/save_race.py` is the same kind of artefact for the MF3 round:
+the reproduction whose numbers the `save()` comments and the executor
+README cite for mf3-10. It exits non-zero when the race LANDS.
 
 ## Rules for touching them
 
@@ -73,6 +76,42 @@ outlived `/resume`, and a `ladder: "closed"` when nothing closed) changed no
 existing probe file either. All seven were re-run before and after, every
 one on its documented mark, `scratchpad/attack_final.py` stayed 29/29, and
 the round's own suite is landed below as `attack_mf2.py`.
+
+The MF3 round (the counter-review OF the MF2 round: MF3-1 `/kill`'s blend
+stage with no exception guard, MF3-2 MF2-3 not actually closed, MF3-3 a
+false retry claim whose true behaviour was the wrong one, MF3-4 the halt
+break swallowing every ALERT intent, MF3-5 the halt guard reaching only one
+of the two intent loops, MF3-6 an unconditional and sometimes-false
+durability warning) changed **no probe file at all**. All eight `attack_*`
+files were re-run from `ibkr-executor/` before and after the fixes and every
+one landed on its documented mark, unchanged:
+
+| probe | before MF3 | after MF3 |
+|---|---|---|
+| `attack_reround.py` | 9/9 | 9/9 |
+| `attack_r1r2.py` | 7/7 | 7/7 |
+| `attack_n3guard.py` | 10/10 | 10/10 |
+| `attack_n1n2.py` | 14/14 | 14/14 |
+| `attack_x1x4.py` | 39/40 | 39/40 |
+| `attack_zfinal.py` | 41/43 | 41/43 |
+| `attack_z1.py` | 20/21 | 20/21 |
+| `attack_mf2.py` | 54/56 | 54/56 |
+
+(`attack_mf2.py` reads 54/56 rather than the table's 55/57 only because no
+`probes/base9b` worktree is present: `C1` lands as SKIPPED and `C2` never
+runs, exactly as its row below documents. `A6` still lands, still by design
+— the one order it counts is the one whose `place_stock_order` the probe is
+blocked INSIDE when the kill lands.)
+
+The round's own gates live in the pytest suite (`test_gate_mf3_1` ..
+`test_gate_mf3_10`), each verified FAILING at `09aa936` and passing after.
+Two EXISTING assertions were reversed rather than deleted, both in the
+`flatten_request is None` line that MF3-3 identifies as the defect itself:
+`test_gate_kd_kill_raising_cancel_never_market_sells` and
+`test_gate_r2_flatten_raising_cancel_parks_never_sells` now assert the
+request STAYS queued, and each gained a check the old line could never
+reach — that K-d survives the RETRY too (no MKT sell on a second pass).
+Every other assertion in both tests is untouched; nothing was removed.
 
 | probe | result | note |
 |---|---|---|
