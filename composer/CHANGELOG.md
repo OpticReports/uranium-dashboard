@@ -7,6 +7,24 @@ history is a complete audit trail. Newest first.
 Format per entry:
 
 ```
+## 2026-08-24 — EXECUTED: $1,965 cash deployed to underweights (owner-directed)
+
+- Owner instruction (chat): "There is about $1,900 in composer cash, can you
+  deploy it". Unallocated cash $1,970.41.
+- Book had drifted (KMLM 35.2% vs 29% target; HG/SLEEVE/HARV all under), so
+  the cash was directed to the three UNDERWEIGHT engines in proportion to
+  each one's dollar shortfall — same mechanic as POLICY Operation 1's
+  "invest into whichever engine is furthest below target" — rather than
+  pro-rata, which would have added to the overweight.
+  Shortfalls vs target on a $281,623 book: HG -$8,121, HARV -$5,826,
+  SLEEVE -$4,785 (KMLM +$16,762 over; no cash to it).
+  - HG     [mbkiXcuN] +$852 [deploy 65c20077-3564-444d-8a19-f5097a97e950]
+  - SLEEVE [nNdBk7hc] +$502 [deploy f0f28940-980b-47c8-9aaf-10c16de335e8]
+  - HARV   [ORQNCfZn] +$611 [deploy e66628b3-5630-4b06-84e2-e8e9d53e18fc]
+- Queued for the next trading window; ~$5 dust left as buffer. KMLM at 35.2%
+  remains under the 40% cap, so Operation 5 did not fire. No trim executed —
+  trimming the overweight is not pre-authorized below the cap.
+
 ## 2026-08-17 — EXECUTED: cash remainder deployed per target split (owner-directed)
 
 - Owner instruction (chat): "fully deploy the remainder into our approved
