@@ -1815,18 +1815,29 @@ def _auto_exec(tmp_path, monkeypatch):
 
 
 def test_gate_auto_drill_runs_cycles_in_flat_window(tmp_path, monkeypatch):
+    from app.mirror import DRILL_CYCLE_NEED, SLIPPAGE_SAMPLE_NEED
     ex, venue, sent = _auto_exec(tmp_path, monkeypatch)
     for _ in range(3):
         ex.step(target())
-    assert ex.state.coverage_live.get("drill_cycle") == 3
-    assert ex.state.coverage.get("drill_cycle") == 3
+    assert ex.state.coverage_live.get("drill_cycle") == DRILL_CYCLE_NEED
+    assert ex.state.coverage.get("drill_cycle") == DRILL_CYCLE_NEED
     assert all(d["kind"] == "cycle" and d["ok"] for d in ex.state.drills)
     assert venue.position() == 0.0
     assert ex.state.auto_drill_off is None
     assert sum("auto-drill cycle ok" in m for m in sent) == 3
-    # cycles complete -> auto-drill is DONE; it never over-runs and never
-    # schedules stopfill (deterministic live rejection, referee 2026-08-17)
-    assert ex._needed_auto_drill() is None
+    # drill_cycle is met, but 3 cycles yield only 6 live fills and
+    # slippage_sample needs 10 - auto-drill must NOT report itself done with
+    # the gate stuck at 6/10 (found 2026-08-24)
+    assert ex._live_fill_count() == 6
+    assert ex._needed_auto_drill() == "cycle"
+    # ...and it keeps going until the slippage row is genuinely satisfied
+    for _ in range(6):
+        ex.step(target())
+    assert ex._live_fill_count() >= SLIPPAGE_SAMPLE_NEED
+    assert ex._needed_auto_drill() is None            # now, and only now
+    assert all(d["kind"] == "cycle" for d in ex.state.drills)   # never stopfill
+    assert venue.position() == 0.0
+    assert ex.state.auto_drill_off is None
 
 
 def test_gate_auto_drill_never_schedules_stopfill(tmp_path):
@@ -1835,7 +1846,8 @@ def test_gate_auto_drill_never_schedules_stopfill(tmp_path):
     ex, _ = _drill_exec(tmp_path)
     assert ex._needed_auto_drill() == "cycle"
     ex.state.coverage_live = {"drill_cycle": 3}     # stop_filled still unmet
-    assert ex._needed_auto_drill() is None
+    ex.state.fills = [{"slip_bps": 1.0, "live": True}] * 10
+    assert ex._needed_auto_drill() is None          # never "stopfill"
 
 
 def test_gate_auto_drill_respects_spacing(tmp_path, monkeypatch):
@@ -1894,6 +1906,7 @@ def test_gate_auto_drill_breaker_trips_on_failure(tmp_path, monkeypatch):
 def test_gate_auto_drill_stops_at_coverage_complete(tmp_path, monkeypatch):
     ex, venue, sent = _auto_exec(tmp_path, monkeypatch)
     ex.state.coverage_live = {"drill_cycle": 3, "stop_filled": 1}
+    ex.state.fills = [{"slip_bps": 1.0, "live": True}] * 10
     ex.step(target())
     assert ex.state.drills == []
 
@@ -1997,12 +2010,14 @@ def test_gate_auto_drill_reads_gate_source_not_all_modes_total(tmp_path):
     assert _ramp_v4(ex.state)["rows"]["drill_cycle"]["met"] is False
     assert ex._needed_auto_drill() == "cycle", \
         "auto-drill went blind to an unmet gate row"
-    # once the gate is genuinely satisfied it stops
+    # once the gate is genuinely satisfied it stops - which now requires the
+    # slippage sample too, not just drill_cycle
     ex.state.coverage_live = {"drill_cycle": 3}
     assert _ramp_v4(ex.state)["rows"]["drill_cycle"]["met"] is True
+    assert ex._needed_auto_drill() == "cycle"       # slippage still 0/10
+    ex.state.fills = [{"slip_bps": 1.0, "live": True}] * 10
     assert ex._needed_auto_drill() is None
     # attested evidence counts as satisfied too - no pointless drilling
-    ex.state.coverage_live = {"drill_cycle": 3}
     ex.state.coverage_attested = {"drill_cycle": 3}
     assert ex._needed_auto_drill() is None
 
@@ -2099,3 +2114,260 @@ def test_gate_churn_guard_cannot_block_first_placement(tmp_path):
     led.qty, led.stop_cloid, led.stop_px = 0.01, None, 71_520.89
     ex._maintain_stop("trend", led, {"entry_ts": NOW, "stop": 71_520.89})
     assert led.stop_cloid, "churn guard blocked the FIRST stop placement"
+
+
+# --- venue stop verification (live find 2026-08-24) ------------------------
+def _armed_leg(tmp_path):
+    """Executor holding a trend long with a venue stop armed."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    pos = {"side": "L", "entry_price": 68525.0, "entry_ts": 1787155200,
+           "signal_ts": 1787140800, "stop": 73000.0, "exit_flag": None}
+    ex.step(target(trend={"pending": None, "position": pos}))
+    return ex, v, pos
+
+
+def test_gate_venue_cancelled_stop_is_detected_and_replaced(tmp_path):
+    """A stop CANCELLED at the venue is not protection. Previously only
+    FILLED was handled, so stop_cloid stayed set, the 5bp churn guard
+    suppressed the replacement, and /pulse still read stop_placed=true. The
+    chandelier only ratchets UP, so self-repair never came in a falling
+    market - silent exactly when the stop matters."""
+    ex, v, pos = _armed_leg(tmp_path)
+    led = ex.state.legs["trend"]
+    old_cloid = led.stop_cloid
+    assert old_cloid and led.stop_px == 73000.0
+    v.orders[old_cloid]["status"] = "CANCELLED"        # venue-side death
+    ex.step(target(trend={"pending": None, "position": pos}))  # trail UNCHANGED
+    assert led.stop_cloid is not None
+    assert led.stop_cloid != old_cloid, "no replacement stop was placed"
+    assert v.orders[led.stop_cloid]["status"] != "CANCELLED"
+    assert any(e["kind"] == "stop_vanished" and e["level"] == "RED"
+               for e in ex.state.events), [e["kind"] for e in ex.state.events]
+    # the replacement must not reuse the dead order's client id: the cloid is
+    # derived from (leg, entry_ts, trigger), so an unchanged trail would
+    # regenerate it verbatim and Coinbase rejects duplicate cloids
+    assert "-R" in led.stop_cloid, "replacement reused the dead cloid"
+    assert led.stop_px == 73000.0
+
+
+def test_gate_open_or_unknown_stop_never_duplicated(tmp_path):
+    """The other half: QUEUED/PENDING map to OPEN and an API failure returns
+    None. Neither may provoke a second stop on the same position - that was
+    the 2026-08-11 doubled-position failure mode."""
+    ex, v, pos = _armed_leg(tmp_path)
+    led = ex.state.legs["trend"]
+    cloid = led.stop_cloid
+    before = len([c for c in v.calls if c[0] == "STOP"])
+    for _ in range(3):
+        ex.step(target(trend={"pending": None, "position": pos}))
+    assert led.stop_cloid == cloid
+    assert len([c for c in v.calls if c[0] == "STOP"]) == before
+    # API failure -> order_status returns None -> still no duplicate
+    orig = v.order_status
+    v.order_status = lambda c: None
+    try:
+        for _ in range(3):
+            ex.step(target(trend={"pending": None, "position": pos}))
+    finally:
+        v.order_status = orig
+    assert led.stop_cloid == cloid
+    assert len([c for c in v.calls if c[0] == "STOP"]) == before
+    assert not [e for e in ex.state.events if e["kind"] == "stop_vanished"]
+
+
+def test_gate_filled_stop_still_takes_the_fill_path(tmp_path):
+    """The pre-existing FILLED branch must be untouched by the new one."""
+    ex, v, pos = _armed_leg(tmp_path)
+    led = ex.state.legs["trend"]
+    v.orders[led.stop_cloid]["status"] = "FILLED"
+    ex.step(target(trend={"pending": None, "position": pos}))
+    assert led.qty == 0.0 and led.stop_cloid is None and led.stop_px is None
+    assert any(e["kind"] == "stop_filled_on_venue" for e in ex.state.events)
+    assert not [e for e in ex.state.events if e["kind"] == "stop_vanished"]
+
+
+def test_gate_auto_drill_wait_reason_is_visible(tmp_path):
+    """Auto-drill blocked behind an open position looked identical to a
+    broken one: it returned on a bare `# quietly wait`."""
+    ex, v, pos = _armed_leg(tmp_path)
+    ex.cfg.auto_drill = True
+    ex.cfg.dry_run = False
+    ex.cfg.auto_drill_spacing_s = 0
+    ex._maybe_auto_drill(True)
+    assert ex.state.drills == []
+    assert ex._auto_drill_wait == "leg_not_flat:trend", ex._auto_drill_wait
+    ex.cfg.auto_drill = False
+    ex._maybe_auto_drill(True)
+    assert ex._auto_drill_wait == "disarmed"
+
+
+def test_gate_gate_constants_have_one_source():
+    """drill_cycle=3 lived in mirror AND main, slippage=10 only in main.
+    They must not be able to drift apart again."""
+    import re
+    src = open(os.path.join(os.path.dirname(__file__), "..",
+                            "app", "main.py")).read()
+    # `is` on small ints is CPython interning - it holds for any literal 3/10,
+    # so the only real assertion is that main.py does not hardcode them
+    assert not re.search(r'"drill_cycle":\s*\d', src), "drill_cycle hardcoded"
+    assert not re.search(r'"slippage_sample",\s*\d', src), "slippage hardcoded"
+    assert "DRILL_CYCLE_NEED" in src and "SLIPPAGE_SAMPLE_NEED" in src
+
+
+# --- counter-agent fixes to the stop/drill change (2026-08-24) -------------
+def test_gate_vanished_stop_never_armed_against_a_flat_venue(tmp_path):
+    """DEF-1 (regression introduced by the first cut): _maintain_stop gates on
+    the LEDGER only. Venue flat + stale ledger + CANCELLED stop meant a fresh
+    stop was placed - and place_stop is NOT reduce-only, so if it triggered it
+    OPENED an unintended short. Reachable via an operator flatten, a
+    liquidation, or dated-contract settlement."""
+    ex, v, pos = _armed_leg(tmp_path)
+    led = ex.state.legs["trend"]
+    v.orders[led.stop_cloid]["status"] = "CANCELLED"
+    for o in v.orders.values():                    # venue goes flat under us
+        o["status"] = "CANCELLED"
+    assert v.position() == 0.0
+    before = len([c for c in v.calls if c[0] == "STOP"])
+    ex.step(target(trend={"pending": None, "position": pos}))
+    assert len([c for c in v.calls if c[0] == "STOP"]) == before, \
+        "armed a naked stop on a flat venue"
+    assert ex.state.halted == "LEDGER_DIVERGENCE"
+    assert any(e["kind"] == "ledger_divergence" for e in ex.state.events)
+
+
+def test_gate_repeatedly_vanishing_stop_halts_instead_of_looping(tmp_path):
+    """DEF-2: no cap meant 4,320 live orders and 4,320 pages per day against
+    a persistent accept-then-cancel venue."""
+    from app.mirror import STOP_REPLACE_MAX
+    ex, v, pos = _armed_leg(tmp_path)
+    led = ex.state.legs["trend"]
+    for _ in range(STOP_REPLACE_MAX + 4):
+        if led.stop_cloid and led.stop_cloid in v.orders:
+            v.orders[led.stop_cloid]["status"] = "CANCELLED"
+        ex.step(target(trend={"pending": None, "position": pos}))
+    placed = len([c for c in v.calls if c[0] == "STOP"])
+    assert placed <= STOP_REPLACE_MAX + 1, f"unbounded replacement: {placed}"
+    assert ex.state.halted == "STOP_UNPLACEABLE"
+
+
+def test_gate_stop_vanished_paging_is_rate_limited(tmp_path, monkeypatch):
+    """The msg embedded a changing cloid, defeating kind+msg dedupe."""
+    from app import alerts
+    sent = []
+    monkeypatch.setattr(alerts, "send", lambda m: sent.append(m))
+    ex, v, pos = _armed_leg(tmp_path)
+    led = ex.state.legs["trend"]
+    for _ in range(3):
+        if led.stop_cloid and led.stop_cloid in v.orders:
+            v.orders[led.stop_cloid]["status"] = "CANCELLED"
+        ex.step(target(trend={"pending": None, "position": pos}))
+    assert len([m for m in sent if "stop_vanished" in m]) <= 1, sent
+
+
+def test_gate_partially_filled_dead_stop_rearms_only_remainder(tmp_path):
+    """DEF-3: Coinbase reports a partially-filled-then-expired stop as
+    EXPIRED with filled_size > 0. Re-arming the full ledger size would
+    over-hedge into a short if it triggered."""
+    ex, v, pos = _armed_leg(tmp_path)
+    led = ex.state.legs["trend"]
+    full = led.qty
+    v.orders[led.stop_cloid].update(status="CANCELLED", filled_qty=full / 2)
+    orig = v.order_status
+    v.order_status = lambda c: ({"status": "CANCELLED",
+                                 "filled_qty": full / 2, "avg_price": 73000.0}
+                                if c == led.stop_cloid else orig(c))
+    ex.step(target(trend={"pending": None, "position": pos}))
+    # ledger qty is rounded to 8dp, so compare within that, not below it
+    assert abs(led.qty - full / 2) < 1e-7, f"re-armed {led.qty} of {full}"
+    sized = [c for c in v.calls if c[0] == "STOP"][-1]
+    # the venue rounds the order size, so assert within venue precision -
+    # still four orders of magnitude below one 0.01-BTC contract
+    assert abs(sized[2] - full / 2) < 1e-4, sized
+
+
+def test_gate_state_survives_unknown_persisted_leg_keys(tmp_path):
+    """DEF-4: a state file from a NEWER build carries fields this LegLedger
+    lacks; the bare except discarded the ENTIRE state - un-halting a killed
+    executor and zeroing the ledger under a live position."""
+    import json
+    from app.mirror import Executor
+    cfg = Cfg(); cfg.state_path = str(tmp_path / "state.json")
+    json.dump({"halted": "DAILY_LOSS",
+               "legs": {"trend": {"qty": 0.03, "stop_px": 73000.0,
+                                  "from_the_future": 7}},
+               "coverage_live": {"drill_cycle": 3}},
+              open(cfg.state_path, "w"))
+    ex = Executor(FakeVenue(), cfg)
+    assert ex.state.halted == "DAILY_LOSS", "a rollback un-halted the executor"
+    assert ex.state.legs["trend"].qty == 0.03
+    assert ex.state.coverage_live == {"drill_cycle": 3}
+
+
+def test_gate_drills_stop_when_they_produce_no_fills(tmp_path, monkeypatch):
+    """DEF-5/6: the terminal condition is a MEASUREMENT drilling can fail to
+    advance (venue omits average_filled_price). Unbounded, it spends the
+    daily budget forever, unattended."""
+    from app.mirror import DRILL_NO_FILL_MAX
+    # _auto_exec installs its OWN alerts.send patch, so take its list rather
+    # than a local one it would overwrite
+    ex, venue, sent = _auto_exec(tmp_path, monkeypatch)
+    ex.state.coverage_live = {"drill_cycle": 3}      # only slippage remains
+    monkeypatch.setattr(ex, "_record_fill", lambda *a, **k: None)
+    for _ in range(DRILL_NO_FILL_MAX + 3):
+        ex.step(target())
+    assert ex._live_fill_count() == 0
+    assert ex.state.auto_drill_off, "drilled forever with no slippage sample"
+    assert len(ex.state.drills) <= DRILL_NO_FILL_MAX
+    assert any("ACTION NEEDED" in m for m in sent)
+
+
+def test_gate_pulse_never_leaks_position_or_api_errors(tmp_path, monkeypatch):
+    """DEF-7: /pulse is unauthenticated and its own docstring promises no
+    position sizes or order details. _drill_refusal returns
+    venue_not_flat:{pos} and position_unreadable:{exc} (raw API URLs with key
+    ids), and those were being published verbatim."""
+    from fastapi.testclient import TestClient
+    import app.main as m
+    ex, v, pos = _armed_leg(tmp_path)
+    ex._auto_drill_wait = ("position_unreadable:401 https://api.coinbase.com/"
+                           "api/v3/brokerage/portfolios/9f3e-uuid organizations"
+                           "/abc123/apiKeys/def456")
+    monkeypatch.setattr(m, "EXEC", ex)
+    monkeypatch.setattr(m.settings, "exec_token", "")
+    body = TestClient(m.app).get("/pulse").text
+    assert "http" not in body and "apiKeys" not in body, body
+    ex._auto_drill_wait = "venue_not_flat:-0.37"
+    body = TestClient(m.app).get("/pulse").json()
+    assert body["auto_drill"] == "venue_not_flat"
+    assert "0.37" not in str(body["auto_drill"])
+
+
+def test_gate_status_exposes_auto_drill_waiting_on(tmp_path, monkeypatch):
+    """DEF-8: a duplicate "auto_drill" key made the new block dead code."""
+    import ast
+    from fastapi.testclient import TestClient
+    import app.main as m
+    src = open(os.path.join(os.path.dirname(__file__), "..",
+                            "app", "main.py")).read()
+    for node in ast.walk(ast.parse(src)):
+        if isinstance(node, ast.Dict):
+            keys = [k.value for k in node.keys
+                    if isinstance(k, ast.Constant) and isinstance(k.value, str)]
+            assert len(keys) == len(set(keys)), f"duplicate keys: {keys}"
+    ex, v, pos = _armed_leg(tmp_path)
+    ex._auto_drill_wait = "leg_not_flat:trend"
+    monkeypatch.setattr(m, "EXEC", ex)
+    monkeypatch.setattr(m.settings, "exec_token", "")
+    ad = TestClient(m.app).get("/status").json()["auto_drill"]
+    assert ad["waiting_on"] == "leg_not_flat:trend"
+
+
+def test_gate_dry_run_fills_never_close_the_slippage_gate(tmp_path):
+    """Mutation M6 had no test: dropping the live filter would let synthetic
+    DryRunVenue prices satisfy the slippage row."""
+    ex, v, pos = _armed_leg(tmp_path)
+    ex.state.fills = [{"slip_bps": 1.0, "live": False}] * 20
+    assert ex._live_fill_count() == 0
+    ex.state.coverage_live = {"drill_cycle": 3}
+    assert ex._needed_auto_drill() == "cycle"
