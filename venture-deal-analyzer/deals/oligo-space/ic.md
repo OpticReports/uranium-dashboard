@@ -7,17 +7,16 @@ ledger. **First deal run through the IC process from S1.**
 
 ## S1 · INTAKE — 2026-08-25
 
-### Sealed prior [AWAITING CASEY — must be written before any analysis lands]
+### Blind prior — OPTIONAL, not blocking (process rev 1.2)
 
-- P(<1x): ____
-- P(>=10x): ____
-- One-line thesis: ____
-- Sealed at: ____
+- Not supplied. Casey corrected the process at this deal (2026-08-25):
+  S1 delivers the full report at intake; the blind prior is a
+  30-second optional step, never a gate. Slot stays open until the
+  report is opened, then closes: not-given, by design.
 
-> **BLOCKING.** The S1 blind prior is the only anchor-free datapoint the
-> whole calibration exercise ever gets, and it is destroyed the moment
-> analysis is read. Verification is running but its output is being
-> withheld from the LP until this is filled in.
+> Process note, recorded once: an unanchored prior can only be captured
+> before analysis is read; if unused, the S3 prior-vs-panel comparison
+> has no datapoint for this deal. Casey's call, cleanly made.
 
 ### The ask
 
@@ -105,8 +104,9 @@ Ordered by how much each would move the decision.
 - Verification workflow launched at intake: six independent sweeps
   (team, corporate/funding, commercial traction, market-stat audit,
   competition/comps, technical feasibility), each with an adversarial
-  counter-agent pass. Output is held for S2 and is **deliberately not
-  shown to the LP before the sealed prior is written.**
+  counter-agent pass. Under rev 1.2 the output feeds the FULL intake
+  report (panel + red team + EV + exit odds) published to /deals as
+  soon as it completes — no withholding.
 - **Intake card published to /deals same day** (process step S1.5,
   added at Casey's direction 2026-08-25): captured facts and process
   state only, no scores/odds/verdict until S3.
