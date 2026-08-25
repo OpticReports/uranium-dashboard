@@ -447,3 +447,129 @@ Ordered by how much each would move the decision. Per the standing rule, none of
 ---
 
 *Prepared 2026-08-25 for S1 INTAKE under process v1.2 (full report at intake). Panel scores, red team, EV and exit odds are appended by the scoring pass; the ranked PENDING DD QUESTIONS list derives from §6. The two §0 corrections (ic.md capture rows 1–2; source-memo.txt) were applied in the same commit as this file.*
+---
+
+# SCORING PASS — appended 2026-08-25 (process v1.2: full report at intake)
+
+Five independent scorers (distinct lenses, one rubric) + standing red
+team, on the fact pack above. Aggregation and EV arithmetic re-verified
+by an adversarial QA agent. **Stamped rev 1 — PRE-DD: these numbers
+price the deal as documented today and are re-run as DD answers land.**
+
+## Panel (median · IQR · raw)
+
+| dimension | median | IQR | raw scores |
+|---|---|---|---|
+| Market (30) | **3** | 0 | 3,3,3,3,3 |
+| Team (30) | **2** | 0 | 2,2,3,2,2 |
+| Moat (15) | **2** | 1 ⚑ | 1,1,2,2,2 |
+| Traction — demand (10) | **2** | 0 | 2,2,2,2,2 |
+| Traction — delivery | **1** | 1 ⚑ | 1,1,2,2,1 |
+| Competition (10) | **2** | 0 | 2,1,2,2,2 |
+| Deal & price (5) | **1** | 0 — **unanimous** | 1,1,1,1,1 |
+
+**W = 2.20** (house formula, identical to the one that produced
+DexMat's logged 3.25; traction enters W as the split average, reported
+split everywhere else). QA audit challenged W using a different
+weighting and verified every other number (medians, IQRs, forecast
+aggregates, both EVs); sensitivity: W = 2.15 if traction enters as
+min(demand, delivery). Both logged; verdict comes from gates, not W.
+
+Score anchors, compressed:
+- **Market 3, unanimous:** real growing sector on verified data; but
+  the memo's own thesis stat inverts under audit (mfg ≈ $20B and
+  near-flat in CY2025 while launch grew 33%) and no named enterprise
+  example actually commissions custom satellites — they buy data.
+- **Team 2:** verified fellowships + internships, pedigree-capped; the
+  page-3 roster is decent for ONE ESPA build if real, but every hire is
+  company-claimed with zero independent confirmation, and the bench is
+  JPL-flagship-heavy — the wrong lineage for high-rate low-cost
+  production. Rises on employment verification + Proteus separation docs.
+- **Moat 2 (IQR 1):** the claimed differentiator was FLOWN FIRST by
+  Proteus (MERCURY ONE, 2025-11-28) — co-founded by Oligo's own claimed
+  Chief Technologist and absent from the memo's competitive table.
+  Zenith has no reviewable artifact and its one public demo is offline.
+- **Traction 2/1:** one independently corroborated relationship
+  (Spacedock — tied to Oligo, never to CHIMERA-1); delivery = 0 flown
+  vs ">10/yr" claimed, ~14x headcount gap vs Terran's demonstrated
+  ratio, public Q2-2026 target expired unflown.
+- **Deal & price 1, unanimous:** entry at 2x a prior mark with no
+  public trace, through an undecoded fee wrapper, in a category whose
+  realized cash-exit ceiling is $875M. The SPV-at-2x structure is
+  itself evidence no institutional lead priced this round.
+
+## Logged forecasts (medians; gross of fees)
+
+| P(next priced round ≤24mo) | P(<1x) | P(≥10x gross) |
+|---|---|---|
+| **0.40** | **0.75** | **0.03** |
+
+vs measured Series A base rates (66% <1x, 8.4% ≥10x): the panel prices
+this deal WORSE than base on both tails — driven by the 2x-unverified
+entry, delivery-1, and the flown competitor. Red team independently:
+0.76 / 0.03 — divergence 0.01, logged not averaged.
+
+## Red team EV tree (audited: Σp = 1.000 exactly)
+
+| p | gross | branch |
+|---|---|---|
+| 0.62 | 0.05x | Wipeout before durable revenue |
+| 0.14 | 0.4x | Distressed partial: down round / recap / asset sale |
+| 0.12 | 1.5x | Par zone: flies late, niche integrator, low-band trade sale |
+| 0.09 | 4x | Real manufacturer: top of the historical cash band |
+| 0.03 | 15x | Tail: York-class public outcome after dilution |
+
+**Gross EV 1.08x → NET EV 0.92x** under the house fee map — **the fee
+wrapper flips the sign of the headline.** Any citation of the gross
+figure must carry the net alongside it (audit finding, honesty rule).
+
+## Exit odds (model; series_a anchor tilted to the logged 0.75 / 0.03)
+
+P(net≥3x) **12.5%** · P(net≥10x) **2.5%** · P(net≥20x) **1.1%** ·
+P(net≥50x) **~0.4%** (one significant figure). Curve EV net capped@20x
+= 1.49 — **the audited discrete tree (0.92x net) headlines per house
+rule**; the curve inherits the empirical mid-shape between its two
+pinned points and cannot see the sector's structural exit ceiling,
+which is exactly what the tree encodes. Divergence logged.
+
+## WWHTBT ladder (red team)
+
+Evidenced: a real operating company with a JPL-veteran bench exists.
+Plausible: the wrapper decodes benignly; the capital stack is real as
+claimed; a paid LSA exists; CHIMERA-1 is integrated today and flies
+with its five customers. Heroic: binding ≥$15M/vehicle contracts exist
+now; Zenith bends the engineering-hours curve within ~3 vehicles;
+Oligo out-executes Proteus/Apex/K2/Muon/Loft from behind; exit clears
+the sector's all-time realized cash ceiling.
+
+**DECIDER (red team):** the executed CHIMERA-1 Launch Services
+Agreement + payment record + an explanation of the undisclosed
+Q2-2026 → April-2027 slip. Highest-variance single disclosure in
+either direction.
+
+## PENDING DD QUESTIONS — ranked (standing section, v1.2)
+
+Status key: ● asked (2026-08-25) · ✓ answered · ✗ refused · ⌛ expired.
+60-day clock runs per question from first ask.
+
+| # | pri | question | what it moves | status |
+|---|---|---|---|---|
+| 1 | **P1** | Cap table + every financing document: instrument/amount/date/price per round; pricing evidence for the "$50M last round"; **$100M pre or post**; did Lux lead or participate; board seats | Deal&price (unanimous 1), P(<1x), every multiple | ● |
+| 2 | **P1** | Decode "L1, 10/0/10" — supply the SPV/LPA; who brings the deal and their economics | Net of every branch; the 1.08→0.92 sign flip | ● |
+| 3 | **P1** | Executed Launch Services Agreement + proof of payment (provider, mission, window, refundability) **+ why the Q2-2026→Apr-2027 slip was not disclosed** | Red team's named decider; delivery score; candour | ● |
+| 4 | **P1** | CHIMERA customers: contracts vs LOIs, per-contract value vs the $15M–$37M "possible", names of the other three of five, affiliate/investor checks; is CHIMERA2 sold or still selling | Traction-demand; revenue reality | ● |
+| 5 | **P1** | CHIMERA-1 build state + program start date; any photo of integrated structure; has ANY spacecraft/EM ever been built or qualified | Delivery (currently 1); April-2027 credibility (7.2 months out) | ● |
+| 6 | P2 | Shapiro: employment terms (FT/advisory, start, equity), JPL title history 2010–2022, **Proteus separation terms + non-compete/IP exposure for all three Proteus alumni** | Team 2→3 or →kill-list | ● |
+| 7 | P2 | Engineering hours on CHIMERA-1 vs projected CHIMERA-2 — the declining curve an AI-native claim predicts | Moat; the entire thesis | ● |
+| 8 | P2 | Cash, burn, runway, FTE vs contractor count, use of proceeds (15 open reqs vs ~18 claimed staff = near-doubling plan) | Financing risk; P(next round) | ● |
+| 9 | P2 | Zenith: any reviewable artifact (paper/patent/demo/trace); why the Mission Configurator went offline; what it does that Valispace/MERCURY/SimAI does not | Moat (IQR-flagged) | ● |
+| 10 | P2 | Facility: street address, lease, equipment ratings (TVAC dims, shaker lbf, cleanroom class); can it qualify 400 kg or only 100 kg | Delivery; the 14,000 sq ft figure appears nowhere but the memo | ● |
+| 11 | P2 | Why no Form D for any round, incl. the confirmed May-2025 seed — which exemption; ask counsel directly | Capital-stack credibility as a pattern | ● |
+| 12 | P3 | 100–400 kg: one architecture or several; separation system at 400 kg; "capability" = demonstrated or design | Delivery ceiling | ● |
+| 13 | P3 | Corporate record: CA/DE entity, registered agent, any predecessor (registries WAF-blocked to us) | Hygiene | ● |
+| 14 | P3 | Who is Benjamin Carlson (single unread Crunchbase snippet; cap table answers it) | Team completeness | ● |
+| 15 | P3 | Market section provenance: author/date; source for "~120 manufacturers"; the 7%/93% splice; why Proteus/Loft/Muon/K2 are absent from the competitive table | Candour | ● |
+| 16 | P3 | Name one enterprise that has commissioned a custom satellite from a third party | Market thesis | ● |
+| 17 | P3 | Founder bio: machine-shop employer/dates/title; enumerate the six internships; degree conferred or not | Candour, not substance | ● |
+| 18 | P3 | SBIR/UEI/CAGE direct from company (registries blocked) | Non-dilutive picture | ● |
+| 19 | P3 | Re-run from unblocked network: FCC/NOAA/USPTO/CA-SOS/Wayback + formal background check (PACER, state courts, UCC) | Closes the open registry gaps | ● |
