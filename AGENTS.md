@@ -1,7 +1,5 @@
-<!-- MIRROR of CLAUDE.md — canonical source. Do not edit here; edit CLAUDE.md
-     and re-copy (all three files ship in the same commit). -->
-
-# Working conventions for this repo (agent rules)
+<!-- MIRROR of CLAUDE.md — DO NOT EDIT DIRECTLY. Regenerate from CLAUDE.md
+     in the same commit whenever it changes (see the SYNC RULE there). -->
 
 > SYNC RULE: this file is the CANONICAL copy. AGENTS.md and .cursorrules at
 > the repo root are byte-for-byte mirrors (plus a provenance header) so
@@ -52,6 +50,21 @@ genuinely meaningless.
   fact pack's UNKNOWN list. Origin: the Quaise SPV terms (valuation,
   class, fees) sat on page 1 of the Delta4 teaser while the dashboard
   said "waiting on valuation" for two revisions.
+- IC PROCESS runs on every deal (Casey, 2026-08-21). Protocol:
+  venture-deal-analyzer/templates/ic-process.md (v1.1); per-deal record
+  from templates/ic-deal-template.md into deals/<slug>/ic.md. Two
+  sessions — S1 intake same day (SEAL a blind prior BEFORE any research
+  or exposure; never edit it afterwards), S2 the case at T+3 (a
+  DIALOGUE run in rounds, not a presentation; concessions logged live;
+  output is the CRUXES), S3 the decision at T+10 (pre-mortem, kill
+  criteria written BEFORE money moves, forecasts dated into ledger.csv,
+  sealed prior opened and compared). Then the recurring half, which is
+  the point: R1 monthly position review and R2 quarterly calibration,
+  both scheduled as Routines. R1 covers EVERY ledger row in three
+  tracks — HELD, LIVE and PASSED — because a pass is a forecast, and
+  reviewing only what we bought makes the calibration record
+  survivorship-biased. Asks unanswered for 60 days are closed as
+  refused and priced as a negative signal.
 - Counter-agent verification is MANDATORY (Casey, 2026-08-09): every
   research pass, dataset, scoring instrument, and analytical artifact gets
   an adversarial counter-agent review BEFORE its findings are acted on,
