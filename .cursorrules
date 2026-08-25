@@ -54,21 +54,30 @@ them to one line each. No restating context Casey already has.
   fact pack's UNKNOWN list. Origin: the Quaise SPV terms (valuation,
   class, fees) sat on page 1 of the Delta4 teaser while the dashboard
   said "waiting on valuation" for two revisions.
-- IC PROCESS runs on every deal (Casey, 2026-08-21). Protocol:
-  venture-deal-analyzer/templates/ic-process.md (v1.1); per-deal record
-  from templates/ic-deal-template.md into deals/<slug>/ic.md. Two
-  sessions — S1 intake same day (SEAL a blind prior BEFORE any research
-  or exposure; never edit it afterwards), S2 the case at T+3 (a
-  DIALOGUE run in rounds, not a presentation; concessions logged live;
-  output is the CRUXES), S3 the decision at T+10 (pre-mortem, kill
-  criteria written BEFORE money moves, forecasts dated into ledger.csv,
-  sealed prior opened and compared). Then the recurring half, which is
+- IC PROCESS runs on every deal (Casey, 2026-08-21; rev 1.2
+  2026-08-25). Protocol: venture-deal-analyzer/templates/ic-process.md
+  (v1.2); per-deal record into deals/<slug>/ic.md. Flow: **S1 intake
+  same day = the FULL analysis report, published to /deals immediately**
+  (fact pack, verification + counter-agents, panel, red team, EV, exit
+  odds — stamped "rev 1, pre-DD"; blind prior optional and
+  non-blocking), then CHASE THE DATA via the ranked DD list, then S2
+  the case at T+3 (a DIALOGUE run in rounds, not a presentation;
+  concessions logged live; output is the CRUXES), then S3 the decision
+  at T+10 (pre-mortem, kill criteria written BEFORE money moves,
+  forecasts dated into ledger.csv). Then the recurring half, which is
   the point: R1 monthly position review and R2 quarterly calibration,
   both scheduled as Routines. R1 covers EVERY ledger row in three
   tracks — HELD, LIVE and PASSED — because a pass is a forecast, and
   reviewing only what we bought makes the calibration record
   survivorship-biased. Asks unanswered for 60 days are closed as
   refused and priced as a negative signal.
+- PENDING DD QUESTIONS in EVERY report (Casey, 2026-08-25): each
+  report — intake, revision, memo, R1 diff, R2 calibration — carries a
+  section listing the open questions we need/want answered, RANKED BY
+  WEIGHT OF IMPORTANCE AND PRIORITY (P1 decision-gating / P2
+  score-moving / P3 completeness), each naming what it would move, with
+  asked/answered/refused/expired status carried forward as a living
+  ledger. 60-day expiry per question from first ask.
 - Counter-agent verification is MANDATORY (Casey, 2026-08-09): every
   research pass, dataset, scoring instrument, and analytical artifact gets
   an adversarial counter-agent review BEFORE its findings are acted on,

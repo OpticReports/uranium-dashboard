@@ -1,10 +1,11 @@
-# IC process v1.1 — what happens after a deal lands
+# IC process v1.2 — what happens after a deal lands
 
-Standing protocol, adopted 2026-08-21 (rev 1.1 same day, after Casey's
-feedback: S2 is a dialogue, and R1 is not investments-only). Two
-deal-specific sessions, two recurring cadences. Total per deal: ~70
-minutes of Casey's time spread over ~10 days, plus 20 min/month and 30
-min/quarter for the book.
+Standing protocol, adopted 2026-08-21. Rev 1.1 same day (S2 is a
+dialogue; R1 is not investments-only). **Rev 1.2, 2026-08-25 (Casey):
+S1 delivers the FULL analysis report at intake — no staged
+withholding — every report carries a ranked PENDING DD QUESTIONS
+section, and the flow is: full intake report → chase the missing data →
+the dialogue (S2) → the decision (S3).**
 
 ## Why this shape
 
@@ -22,32 +23,66 @@ So: keep the sessions short, and put the weight on the loop that closes.
 
 ---
 
-## S1 · INTAKE — same day, ~10 min
+## S1 · INTAKE — same day: the FULL report
 
-Capture, **not** analysis. The point is to record the deal before
-anyone has been persuaded by it.
+**Rev 1.2 (Casey, 2026-08-25): S1 produces the complete analysis at
+intake, published to /deals the same day** — fact pack with provenance
+tags, independent verification with counter-agent passes, panel scores,
+red team, EV tree, exit odds. The same full treatment every prior deal
+got, immediately. No staged withholding of analysis.
 
-1. **Seal a blind prior.** Before any research, any deck, any call:
-   Casey writes P(<1x), P(≥10x), and a one-line thesis. Sealed into
-   `deals/<slug>/ic.md` and not revisited until S3.
-2. Log the ask, the instrument, the close date, and every hard deadline.
-3. Start the **UNKNOWN — REQUIRED** list (standing rule: ask, don't
-   analyze around).
-4. List every document supplied, and every document named but not
-   supplied. A document that cannot be opened is logged as NOT READ, in
-   the reply, that day.
-5. **Publish the intake card to the /deals dashboard, same day**
-   (Casey, 2026-08-25: deals populate the page ON INTAKE, not at
-   decision). The card carries captured facts and process state only —
-   the ask, the divergences, the UNKNOWN list, the sealed-prior status,
-   the S2/S3 dates. **No scores, no odds, no verdict** — those appear
-   at S3. Canonical `dashboard.html` + mirror regenerated in the same
-   commit, per the sync rule.
+1. **(Optional, 30 seconds, before opening the report.)** Casey may
+   text a blind prior — P(<1x), P(≥10x), one line — for the
+   calibration record. Non-blocking: the report ships regardless.
+   Recorded if given, skipped without ceremony if not.
+2. Full pipeline runs at once: verification sweeps (team, corporate,
+   traction, market stats, comps, technical), adversarial counter-agent
+   on each, panel + red team scoring on the verified fact pack, EV and
+   exit odds.
+3. Every claim tagged VERIFIED / CLAIMED / CONFLICT / UNKNOWN; every
+   document listed READ or NOT READ (never a silent gap).
+4. **PENDING DD QUESTIONS — ranked.** See the standing section below.
+5. Published to /deals same day: full card, canonical `dashboard.html`
+   + mirror in the same commit.
 
-**Output:** fact-pack skeleton + a sealed prior + a live intake card.
-**Not produced:** any opinion.
+**Output:** the complete intake report, live on /deals, with the ranked
+DD list. **Scores at intake are stamped "rev 1 — pre-DD"**: they price
+the deal as documented today and are re-run as DD answers land.
 
-## S2 · THE CASE — T+3, ~30 min
+## THE GAP — between S1 and S2: chase the data
+
+The ranked DD list goes to the sponsor/source the day the report ships.
+Answers that arrive before S2 get folded in (report rev 2); the
+DIALOGUE then argues the updated picture, not the stale one. Asks
+still open at S2 become the cruxes' raw material; asks still open at
+S3 are priced as non-response. 60-day expiry applies from the day the
+list ships.
+
+## STANDING: PENDING DD QUESTIONS — in EVERY report (Casey, 2026-08-25)
+
+Every report this pipeline produces — intake reports, revisions, memos,
+R1 diffs, R2 calibrations — carries a **PENDING DD QUESTIONS** section:
+the open questions we need or want answered, **ranked by weight of
+importance and priority**, not listed in discovery order.
+
+Format per question:
+| # | question | why it matters (what it moves) | priority | asked → status |
+
+- **P1 — decision-gating:** the verdict or price cannot be settled
+  without it. A P1 unanswered at decision time is priced as a negative
+  signal, per the non-response rule.
+- **P2 — score-moving:** would move a rubric dimension, a forecast, or
+  an EV branch by a visible amount.
+- **P3 — completeness:** worth having; would not change the decision
+  alone.
+
+Rules: ranked by expected decision impact; each question names what it
+would move; statuses (asked / answered / refused / expired) are carried
+forward report-to-report so the list is a living ledger, not a
+rewritten one; the 60-day expiry clock runs per question from first
+ask.
+
+## S2 · THE CASE — T+3 (after the data chase), ~30 min
 
 **A working session, not a presentation.** This is the one place in the
 pipeline where the two of us actually argue the deal out. Everything
@@ -97,9 +132,9 @@ Only after the asks come back — **or don't.**
    moment of maximum objectivity, never invented later to justify a
    decision already made.
 5. Forecasts + **resolution dates** → `ledger.csv`.
-6. **Open the sealed prior.** Compare Casey's blind numbers to the
-   panel's. Divergence is the interesting signal — record it, don't
-   reconcile it.
+6. **Open the sealed prior, if one was given** (optional under rev
+   1.2). Compare Casey's blind numbers to the panel's. Divergence is
+   the interesting signal — record it, don't reconcile it.
 
 **Output:** verdict, forecasts with dates, tripwires, pre-mortem.
 
