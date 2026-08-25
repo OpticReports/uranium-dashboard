@@ -58,10 +58,35 @@ log_restart() {   # $1=reason $2=exit_code $3=uptime_s $4=next_delay_s
   fi
 }
 
+cleanup_gateway_leftovers() {
+  # The gnzsnz run.sh cleans up (stop_ibc kills IBC/Xvfb/x11vnc/socat) ONLY
+  # on SIGINT/SIGTERM, which the supervisor never sends - a non-signal exit
+  # leaves those helpers alive. Each restart then stacked a fresh X server,
+  # VNC and socat on top of the survivors, on a 2GB instance shared with the
+  # JVM (counter-agent 2026-08-24, residual). Kill the stack and free the
+  # display lock so every start is from a clean slate. Best-effort: pkill
+  # may be absent or matches may be gone; never abort the restart over it.
+  pkill -f 'ibcstart' 2>/dev/null || true
+  pkill -f 'ibgateway'  2>/dev/null || true
+  pkill Xvfb   2>/dev/null || true
+  pkill x11vnc 2>/dev/null || true
+  pkill socat  2>/dev/null || true
+  rm -f /tmp/.X1-lock 2>/dev/null || true
+  sleep 1
+}
+
 supervise_gateway() {
-  local gw="$1" delay="$BACKOFF_MIN_S" consec=0
+  local gw="$1" delay="$BACKOFF_MIN_S" consec=0 first=1
   while :; do
     local started ec uptime
+    if [ "$first" -eq 1 ]; then
+      first=0
+    elif declare -F cleanup_gateway_leftovers >/dev/null; then
+      # declare-guard: the test harness extracts supervise_gateway alone,
+      # and a bare call there would be command-not-found noise (and pkill
+      # in a test environment must never run)
+      cleanup_gateway_leftovers
+    fi
     started=$(date +%s)
     "$gw"
     ec=$?
