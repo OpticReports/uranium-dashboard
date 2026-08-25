@@ -1121,74 +1121,117 @@ def test_gate_m1min_rejected_book_order_cleared_and_replanned(tmp_path,
     assert len(live) == 1
 
 
-# --- ValidationError wedge (live find 2026-08-25) ---------------------------
+# --- ValidationError semantics (live find 2026-08-25; corrected same day) ---
+# ib_async sets 'ValidationError' CLIENT-SIDE for warning-class error codes
+# on an order that is STILL LIVE at the broker (ActiveStates/WorkingStates,
+# not DoneStates). The first fix treated it as terminal - counter-agent
+# FATAL: dedupe re-placed live orders (180 SPY where the book meant 90) and
+# journals cleared working orders whose fills nothing would book. These
+# gates encode the CORRECT model.
 class _LogEntry:
     def __init__(self, code, message):
         self.errorCode = code
         self.message = message
 
 
-def _validation_reject_ib(ib):
-    """Venue that refuses every placement at validation, with a reason in
-    the trade log - what the gateway did to the book's first-ever orders."""
+def _warned_live_ib(ib, code=321, msg="Error validating request: the API "
+                                      "interface is currently in Read-Only "
+                                      "mode."):
+    """Order gets a warning-class error: status ValidationError, order LIVE."""
     def on_place(trade):
         trade.orderStatus.status = "ValidationError"
-        trade.log = [_LogEntry(0, "submitted"),
-                     _LogEntry(10331, "order validation failed: precautionary "
-                                      "constraint (simulated)")]
+        trade.log = [_LogEntry(0, "submitted"), _LogEntry(code, msg)]
     ib.on_place = on_place
 
 
-def test_gate_validation_error_is_terminal_and_names_the_reason(ib_adapter):
-    """Pre-fix: 'ValidationError' fell through _map_status to 'working', so
-    the placement spun the full ack timeout and raised 'state UNKNOWN' with
-    IB's actual reason discarded in trade.log."""
+def test_gate_warned_order_raises_unknown_with_the_reason(ib_adapter):
+    """A warned order is neither acked nor dead: the placement must raise
+    the UNKNOWN-timeout path (never 'rejected by venue') and carry IB's own
+    words so the alert names the cause."""
+    import pytest as _pytest
+    _warned_live_ib(ib_adapter.ib)
+    with _pytest.raises(RuntimeError) as e:
+        ib_adapter.place_stock_order("SPY", 10, "MKT",
+                                     client_order_id="blend-core-buy-t-0")
+    msg = str(e.value)
+    assert "state UNKNOWN" in msg
+    assert "rejected by venue" not in msg
+    assert "321" in msg, "IB's reason must reach the alert"
+
+
+def test_gate_warned_order_retry_is_duplicate_suppressed(ib_adapter):
+    """THE FATAL INVERSION, pinned the right way round: the order may be
+    LIVE, so the idempotent retry must be duplicate-suppressed - re-placing
+    is the 180-SPY-instead-of-90 route."""
+    import pytest as _pytest
+    _warned_live_ib(ib_adapter.ib)
+    with _pytest.raises(RuntimeError):
+        ib_adapter.place_stock_order("SPY", 10, "MKT",
+                                     client_order_id="blend-core-buy-t-1")
+    ib_adapter.ib.on_place = None
+    out = ib_adapter.place_stock_order("SPY", 10, "MKT",
+                                       client_order_id="blend-core-buy-t-1")
+    assert out.get("duplicate") is True, "re-placed against a possibly-live order"
+    placed = [t for t in ib_adapter.ib._trades
+              if getattr(t.order, "orderRef", "") == "blend-core-buy-t-1"]
+    assert len(placed) == 1, f"venue holds {len(placed)} orders for one intent"
+
+
+def test_gate_warned_order_reports_working_not_cancelled(ib_adapter):
+    """find_stock_order must report 'working' so the journal KEEPS the
+    entry; the unwedge is pass 2b's cancel-confirmation, never an assumed
+    death."""
+    import pytest as _pytest
+    _warned_live_ib(ib_adapter.ib)
+    with _pytest.raises(RuntimeError):
+        ib_adapter.place_stock_order("BIL", 32, "MKT",
+                                     client_order_id="blend-sweep-t-2")
+    o = ib_adapter.find_stock_order("blend-sweep-t-2")
+    assert o is not None and o["status"] == "working", o
+
+
+def test_gate_warned_order_cancel_actually_sends_the_cancel(ib_adapter):
+    """PROBE B's first half: cancel_stock_order on a warned order used to
+    return False WITHOUT sending cancelOrder, leaving a live stop resting
+    while the caller believed it gone (double-stop route)."""
+    import pytest as _pytest
+    _warned_live_ib(ib_adapter.ib)
+    with _pytest.raises(RuntimeError):
+        ib_adapter.place_stock_order("SPY", -10, "STP", stop_price=90.0,
+                                     client_order_id="blend-stop-t-3")
+    cancels = []
+    orig_cancel = ib_adapter.ib.cancelOrder
+    ib_adapter.ib.on_cancel = None
+    def counting_cancel(order):
+        cancels.append(order)
+        orig_cancel(order)
+    ib_adapter.ib.cancelOrder = counting_cancel
+    # cancel takes the adapter's orderId handle (what _trade_result returns),
+    # not the client id
+    trade = ib_adapter._find_trade_by_client_id("blend-stop-t-3")
+    ok = ib_adapter.cancel_stock_order(str(trade.order.orderId))
+    assert cancels, "cancelOrder was never sent for a possibly-live order"
+    assert ok is True
+
+
+def test_gate_hard_reject_still_fast_with_reason(ib_adapter):
+    """A REAL rejection (status Cancelled) fails fast and names the code."""
     import pytest as _pytest
     import time as _time
-    _validation_reject_ib(ib_adapter.ib)
+    def on_place(trade):
+        trade.orderStatus.status = "Cancelled"
+        trade.log = [_LogEntry(201, "Order rejected - reason: simulated")]
+    ib_adapter.ib.on_place = on_place
     t0 = _time.monotonic()
     with _pytest.raises(RuntimeError) as e:
         ib_adapter.place_stock_order("SPY", 10, "MKT",
-                                     client_order_id="blend-CORE_BUY-x-0")
-    took = _time.monotonic() - t0
-    assert "rejected by venue" in str(e.value)
-    assert "10331" in str(e.value), "IB's reason must reach the alert"
-    assert took < 2.0, f"spun the ack timeout instead of failing fast ({took:.1f}s)"
+                                     client_order_id="blend-core-buy-t-4")
+    assert "rejected by venue" in str(e.value) and "201" in str(e.value)
+    assert _time.monotonic() - t0 < 2.0
 
 
-def test_gate_validation_error_never_suppresses_the_retry(ib_adapter):
-    """THE WEDGE: the dead order mapped 'working', so orderRef dedupe
-    returned it as a duplicate and the idempotent retry never re-placed -
-    while the journal kept pending_book true, blocking CORE_BUY/sweep/
-    rebalance forever, silently."""
-    import pytest as _pytest
-    _validation_reject_ib(ib_adapter.ib)
-    with _pytest.raises(RuntimeError):
-        ib_adapter.place_stock_order("SPY", 10, "MKT",
-                                     client_order_id="blend-CORE_BUY-x-1")
-    # venue heals (whatever blocked validation is gone): retry must PLACE
-    ib_adapter.ib.on_place = None
-    out = ib_adapter.place_stock_order("SPY", 10, "MKT",
-                                       client_order_id="blend-CORE_BUY-x-1")
-    assert not out.get("duplicate"), "retry was duplicate-suppressed by a dead order"
-    assert out["status"] in ("filled", "working")
-
-
-def test_gate_dead_journaled_book_order_unwedges_via_find(ib_adapter):
-    """find_stock_order must report the dead order as 'cancelled' so the
-    journal's existing rejection branch clears it and step() re-plans."""
-    _validation_reject_ib(ib_adapter.ib)
-    import pytest as _pytest
-    with _pytest.raises(RuntimeError):
-        ib_adapter.place_stock_order("BIL", 32, "MKT",
-                                     client_order_id="blend-SWEEP-x-2")
-    o = ib_adapter.find_stock_order("blend-SWEEP-x-2")
-    assert o is not None and o["status"] == "cancelled", o
-
-
-def test_gate_unknown_status_still_conservative(ib_adapter):
-    """A genuinely unknown transitional status must keep mapping 'working'
-    (never re-place on ambiguity) - only known-terminal states are dead."""
+def test_gate_status_mapping_matches_ib_async_semantics(ib_adapter):
     import app.ib_adapter as m
+    assert m._map_status("ValidationError") == "working"   # LIVE per ib_async
+    assert m._map_status("Cancelled") == "cancelled"
     assert m._map_status("SomeFutureTransitionalState") == "working"
-    assert m._map_status("ValidationError") == "cancelled"

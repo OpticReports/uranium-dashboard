@@ -98,6 +98,9 @@ TRADE_LOG_MAX = 200         # persisted closed/booked trade rows kept (feed)
 EQUITY_CURVE_MAX = 1500     # daily book-value snapshots kept (~6 years)
 UTIL_ALERT_ON = 0.85        # budget-utilization alert threshold (one-shot)
 UTIL_ALERT_OFF = 0.75       # re-arm threshold once utilization drops back
+# A book order (MKT/DAY) still "working" after this many cycles is stuck -
+# resolve by cancel-confirmation, never by assuming death (2026-08-25).
+BOOK_ORDER_STUCK_CYCLES = 3
 BOOK_ORDER_STALE_DAYS = 2   # a pending book-order journal older than this is
                             # anomalous (real DAY/OPG orders expire same-day)
                             # -> WARN once per order (r6)
@@ -2634,8 +2637,39 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
             alert(f"🚨 blend {rec['kind']} {rec['symbol']} x{rec['qty']} "
                   f"REJECTED by the venue — journal cleared, re-planned "
                   f"next cycle")
-        # status "working": async order awaiting its fill — keep the journal
-        # (step() plans no new order of this kind while it is pending, M1).
+        else:
+            # status "working": async order awaiting its fill - keep the
+            # journal (step() plans no new order of this kind, M1). But a
+            # book order (MKT/DAY) that stays "working" for cycles is stuck:
+            # the 2026-08-25 wedge was a warned-but-unresolved order sitting
+            # here forever. Resolution is CANCEL-CONFIRMATION, never assumed
+            # death: only a venue-ACKed cancel (True) or a definitive
+            # not-found (False) clears the journal; a raise (FILLED or
+            # ambiguous) leaves it for the next cycle's adoption to book.
+            # This is safe against ib_async's ValidationError warning
+            # overlay in BOTH directions - a live order gets cancelled
+            # before re-planning (no duplicate), a dead one gets confirmed
+            # dead (no wedge).
+            rec["stuck_cycles"] = rec.get("stuck_cycles", 0) + 1
+            mgr.save()
+            if rec["stuck_cycles"] >= BOOK_ORDER_STUCK_CYCLES:
+                try:
+                    adapter.cancel_stock_order(o["order_ref"])
+                except Exception as exc:  # noqa: BLE001
+                    mgr._event("WARN",
+                               f"stuck {rec['kind']} {rec['symbol']} cancel "
+                               f"unresolved ({exc}) — retrying next cycle")
+                else:
+                    mgr.clear_pending_book_order(cid)
+                    mgr._event("RED",
+                               f"{rec['kind']} {rec['symbol']} x{rec['qty']} "
+                               f"stuck {rec['stuck_cycles']} cycles — cancel "
+                               f"confirmed, journal cleared, re-planned")
+                    alert(f"🚨 blend {rec['kind']} {rec['symbol']} "
+                          f"x{rec['qty']} was stuck "
+                          f"{rec['stuck_cycles']} cycles — cancel-confirmed "
+                          f"and re-planned (venue reason, if any, was in the "
+                          f"placement alert)")
 
     # 3) retired stops whose cancel never ACKed. Tracking is cleared ONLY by
     #    a definitively ACKed cancel (True). A False is the venue saying
@@ -3020,6 +3054,52 @@ def execute_flatten(mgr: Blend3070Manager, adapter, alert) -> None:
               "halted until /resume")
 
 
+# Consecutive same-kind intent failures before that kind's planning is
+# paused for the rest of the process (a restart or a success resumes it).
+# Every failed attempt is a REAL venue order under the current semantics,
+# so an unbounded retry loop is not merely noisy (counter-agent 2026-08-25).
+INTENT_BREAKER_N = 5
+
+# (kind -> consecutive failures) and (kind -> last alerted reason). Module
+# state, in-memory by design: a restart retries once and re-alerts once,
+# which matches the gateway-restart-heals operational pattern.
+_intent_fail_counts: dict = {}
+_intent_alerted_reason: dict = {}
+
+
+def _intent_failure_alert(mgr, it, exc, alert) -> None:
+    """Alert ONCE per (action, reason) - not per cycle. The read-only-mode
+    incident paged every 5 minutes with the identical [321] text, ~48
+    pages/hour, while saying nothing new after the first (counter-agent
+    2026-08-25). A CHANGED reason re-alerts immediately; a success clears."""
+    kind = str(it.get("action"))
+    reason = str(exc)
+    n = _intent_fail_counts.get(kind, 0) + 1
+    _intent_fail_counts[kind] = n
+    mgr._event("RED", f"intent failed ({kind} {it.get('symbol')}): {reason}")
+    if _intent_alerted_reason.get(kind) != reason:
+        _intent_alerted_reason[kind] = reason
+        alert(f"🚨 blend intent failed ({kind} {it.get('symbol')}): {reason}"
+              f"\n→ no action needed from you — forward this to Claude "
+              f"(repeat failures of this kind alert only on a CHANGED "
+              f"reason; all attempts land in /status events)")
+    if n == INTENT_BREAKER_N:
+        alert(f"🔴 ACTION NEEDED (you) — blend {kind} has failed "
+              f"{n} consecutive cycles (latest: {reason}). Pausing {kind} "
+              f"planning until the cause is fixed; a service restart or one "
+              f"success resumes it. The book takes no {kind} decisions "
+              f"meanwhile.")
+
+
+def _intent_success(kind: str) -> None:
+    _intent_fail_counts.pop(kind, None)
+    _intent_alerted_reason.pop(kind, None)
+
+
+def intent_kind_paused(kind: str) -> bool:
+    return _intent_fail_counts.get(kind, 0) >= INTENT_BREAKER_N
+
+
 def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
               today: str, alert=None) -> list[dict]:
     """One blend cycle: RECONCILE (venue truth first) -> step -> execute
@@ -3050,6 +3130,12 @@ def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
     for it in intents:
         try:
             act = it["action"]
+            if act != "ALERT" and intent_kind_paused(act):
+                # breaker open for this kind: skip quietly (the ACTION page
+                # already fired once); a restart or one success resumes
+                mgr._event("WARN", f"{act} skipped: breaker open "
+                                   f"({_intent_fail_counts.get(act)} fails)")
+                continue
             if act == "ALERT":
                 alert(f"🚨 blend: {it['msg']}")
             elif act == "ENTER":
@@ -3164,9 +3250,9 @@ def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
                           f"{'+' if qty > 0 else ''}{qty}")
         except Exception as exc:  # noqa: BLE001
             logger.exception("blend intent %s failed: %s", it, exc)
-            alert(f"🚨 blend intent failed ({it.get('action')} "
-                  f"{it.get('symbol')}): {exc}\n→ no action needed from you — "
-                  f"forward this to Claude")
+            _intent_failure_alert(mgr, it, exc, alert)
+        else:
+            _intent_success(str(it.get("action")))
     # Post-execution marks (fresh quotes for what the book NOW holds): the
     # pre-cycle price set can miss names entered this cycle.
     post_prices = reference_prices(adapter, mgr, None)

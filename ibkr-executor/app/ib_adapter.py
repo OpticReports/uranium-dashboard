@@ -44,14 +44,18 @@ OUTAGE_ALERT_S = 30 * 60.0   # alert ONLY when down longer than this — the
                              # auto-recover silently)
 
 # IB order states that mean the order can no longer fill.
-# Terminal-dead order statuses. 'ValidationError' (gateway 10.30+: the
-# server refused the order at validation) was MISSING: it fell through
-# _map_status to "working", so the write-ahead journal adopted a rejected
-# order as in-flight, orderRef dedupe suppressed every idempotent retry,
-# and pending_book blocked CORE_BUY/sweep/rebalance forever - the book's
-# first-ever live orders wedged it silently (found 2026-08-25, the first
-# real placement after the market-data fix).
-_IB_CANCELLED = ("Cancelled", "ApiCancelled", "Inactive", "ValidationError")
+# Terminal-dead order statuses - and ONLY these. CORRECTION (2026-08-25,
+# counter-agent FATAL on 3905f98): 'ValidationError' is NOT a venue
+# rejection. ib_async sets it CLIENT-SIDE for warning-class error codes
+# (321, 399, 21xx...) on an order that is STILL LIVE at the broker
+# (ib_async order.py: member of ActiveStates/WorkingStates, absent from
+# DoneStates; a real rejection displays 'Cancelled'). Treating it as
+# terminal made the dedupe re-place live orders (probe: 180 SPY bought
+# where the book intended 90) and the journal clear working orders whose
+# fills nothing would ever book. It maps "working"; the stuck-journal
+# case is resolved by CANCEL-CONFIRMATION in the blend's pass 2b, never
+# by assuming death from a status ib_async's own docs call live.
+_IB_CANCELLED = ("Cancelled", "ApiCancelled", "Inactive")
 
 
 class ExecutorConnectionError(RuntimeError):
@@ -535,6 +539,10 @@ class IBAdapter:
                 raise RuntimeError(
                     f"order rejected by venue (status {s})"
                     + (f": {why}" if why else ""))
+            # 'ValidationError' = ib_async's warning overlay: the order may
+            # be live and may yet transition to Submitted/Filled. Neither an
+            # ack nor a death - keep waiting; the ack timeout below raises
+            # UNKNOWN with the captured warning text.
             if s in ("PreSubmitted", "Submitted"):
                 # Acked and resting. MOO/STP return 'working' right away;
                 # MKT keeps one bounded window open for the synchronous fill.

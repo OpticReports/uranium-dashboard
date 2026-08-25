@@ -3588,3 +3588,86 @@ def test_gate_zf3_the_readme_does_not_overstate_rollback_protection():
     # never the one away from this build
     assert ("cannot protect a rollback FROM this build to an older one"
             in readme)
+
+
+# --- stuck book order: cancel-confirmation unwedge (2026-08-25) ------------
+class _WarnedLiveAdapter(DryAdapter):
+    """Venue where book orders land but stay 'working' (ib_async's
+    ValidationError warning overlay): find_stock_order reports working
+    forever; cancel_stock_order ACKs. The read-only-mode incident shape."""
+
+    def __init__(self):
+        super().__init__()
+        self.cancels: list = []
+
+    def place_stock_order(self, symbol, qty, order_type, stop_price=None,
+                          tif="DAY", ref_price=None, client_order_id=None):
+        self._rec("place_stock_order", symbol=symbol, qty=qty, status="working")
+        return {"order_ref": f"warned-{client_order_id}", "status": "working"}
+
+    def find_stock_order(self, client_order_id):
+        return {"order_ref": f"warned-{client_order_id}", "status": "working"}
+
+    def cancel_stock_order(self, order_ref):
+        self.cancels.append(order_ref)
+        return True
+
+
+def test_gate_stuck_book_order_cancel_confirmed_then_replanned(tmp_path):
+    """The wedge, resolved the safe way: a book order stuck 'working' for
+    BOOK_ORDER_STUCK_CYCLES is CANCELLED at the venue (ACK required) before
+    its journal is cleared - never assumed dead. No duplicate can arise:
+    the re-plan happens only after the venue acked the cancel."""
+    from app.blend import BOOK_ORDER_STUCK_CYCLES
+    m = mk(tmp_path)
+    a = _WarnedLiveAdapter()
+    sent = []
+    for cyc in range(BOOK_ORDER_STUCK_CYCLES + 2):
+        run_cycle(m, a, payload(), "2026-08-20", alert=sent.append)
+        if a.cancels:
+            break
+    assert a.cancels, "stuck order was never cancel-confirmed"
+    # journal cleared only AFTER the ack; step() re-plans a fresh cid
+    assert all("warned-" in c for c in a.cancels)
+    assert any("stuck" in s and "cancel-confirmed" in s for s in sent), sent
+
+
+def test_gate_intent_alerts_once_per_reason_and_breaker_pauses(tmp_path):
+    """The read-only incident paged the identical [321] text every cycle
+    (~48/hour). Now: one page per (kind, reason), a CHANGED reason
+    re-pages, and INTENT_BREAKER_N consecutive failures pause the kind
+    with a single ACTION page."""
+    import app.blend as B
+    B._intent_fail_counts.clear()
+    B._intent_alerted_reason.clear()
+
+    class _RejectingAdapter(DryAdapter):
+        attempts = 0
+
+        def place_stock_order(self, *a, **k):
+            # count BEFORE raising - the prior version raised first, so the
+            # breaker assertion compared 0 == 0 and proved nothing
+            type(self).attempts += 1
+            raise RuntimeError("[321] read-only mode (simulated)")
+
+        def find_stock_order(self, client_order_id):
+            return None                      # never reached the venue
+
+    m = mk(tmp_path)
+    a = _RejectingAdapter()
+    sent = []
+    for _ in range(B.INTENT_BREAKER_N + 3):
+        run_cycle(m, a, payload(), "2026-08-20", alert=sent.append)
+    fail_pages = [s for s in sent if "intent failed" in s and "321" in s]
+    # one per kind (CORE_BUY, SWEEP), not one per kind per cycle
+    assert 1 <= len(fail_pages) <= 2, f"paged {len(fail_pages)}x: {fail_pages}"
+    assert any("ACTION NEEDED" in s and "consecutive" in s for s in sent), \
+        "breaker never paged"
+    # breaker open: later cycles place nothing
+    placed_before = type(a).attempts
+    assert placed_before > 0, "harness never attempted a placement"
+    run_cycle(m, a, payload(), "2026-08-20", alert=sent.append)
+    assert type(a).attempts == placed_before, "breaker did not pause placement"
+    type(a).attempts = 0
+    B._intent_fail_counts.clear()
+    B._intent_alerted_reason.clear()
