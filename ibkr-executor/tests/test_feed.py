@@ -269,7 +269,8 @@ def test_gate_health_blend_loop_surfaces_cycle_failures(tmp_path, monkeypatch):
                         {"date": "2026-08-20", "ok": True, "error": None,
                          "error_ts": None})
     body = c.get("/health").json()
-    assert body["blend_loop"] == {"ok": True, "last_error_age_s": None}
+    assert body["blend_loop"] == {"ok": True, "last_error_age_s": None,
+                                  "quotes_missing_for_s": None}
     # BLEND disabled -> the section does not exist (byte-identical /health)
     monkeypatch.setattr(service, "BLEND", None)
     assert "blend_loop" not in c.get("/health").json()
