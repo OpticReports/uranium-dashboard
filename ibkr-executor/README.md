@@ -24,7 +24,7 @@ strategy managers (keyless decision brains)     ibkr-executor
 
 | module | book | status |
 |---|---|---|
-| manager.py (El Nino ladder) | NG call spread -> SB put spread -> SLV call spread, triggered + sequential, house-money rolling (see elnino-lab/ELNINO.md) | infra deployed OFFLINE; combo placement lands with paper phase; live target Nov 2026 window |
+| manager.py (El Nino ladder) | NG call spread -> SB put spread -> SLV call spread, triggered + sequential, house-money rolling (see elnino-lab/ELNINO.md) | **PARKED (Casey, 2026-08-24): LADDER_ENABLED defaults false — blend3070 is the ONLY strategy authorized on IBKR.** Re-arming is a Casey decision via the Render dashboard, not a code default; leg-3 SLV also carries an open fidelity question (study says silver/GOLD ratio, leg is outright SLV) to settle before any re-arm |
 | blend.py (blend3070) | H13 30/70: R2-A sleeve (tracker gate-on fires, 1% sleeve risk, 3xATR GTC trail + 90d time stop, BIL on idle cash) / SPY core, 5pp rebalance band (genomics-alpha-tracker HYPOTHESES.md H11/H13) | paper-phase adapter LANDED (real IBAdapter stock surfaces, see below); BLEND_ENABLED=false default — zero behavior change until flipped |
 
 ## blend3070: intents contract + rollout
