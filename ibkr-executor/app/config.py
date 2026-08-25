@@ -37,6 +37,13 @@ class Settings(BaseSettings):
     # blend3070 (H13 30/70 R2-A sleeve + SPY core; OFFLINE scaffold).
     # BLEND_ENABLED=false is the default: the service boots exactly as today.
     blend_enabled: bool = False           # BLEND_ENABLED
+    # El Nino ladder: OPT-IN, same doctrine as the blend (Casey 2026-08-24:
+    # "forget the el nino ladder, turn that off for now"). Disabled = the
+    # manager is still built (state preserved, /status renders, /kill can
+    # flatten any open leg) but step() is never called: no entries, no
+    # closes, no decisions. Re-enable via LADDER_ENABLED=true in Render
+    # before the Nov 2026 window if the trade is back on.
+    ladder_enabled: bool = False          # LADDER_ENABLED
     tracker_url: str = ""                 # TRACKER_URL (genomics tracker base URL)
     # The tracker's login gate is HTTP Basic (its DASHBOARD_USER/PASSWORD).
     # These are DASHBOARD credentials for polling a keyless decision brain —

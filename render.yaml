@@ -356,6 +356,11 @@ services:
       # with autoDeploy every push wiped the whole history - including, in
       # its own motivating case, the open outage record when a human
       # redeploys to fix a wedged gateway (counter-agent 2026-08-24).
+      # El Nino ladder is OPT-IN (Casey 2026-08-24: off for now). Code
+      # default is false; set LADDER_ENABLED=true in the dashboard before
+      # the Nov 2026 window to re-arm. sync:false - trading-behavior var.
+      - key: LADDER_ENABLED
+        sync: false
       - key: OUTAGE_LOG_PATH
         value: /app/data/gateway_outages.json
       - key: GATEWAY_RESTART_LOG

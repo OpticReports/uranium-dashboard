@@ -181,7 +181,9 @@ def _loop():
              f"loop is running; fix config/gateway and redeploy")
         return
     send(f"🌊 ibkr-executor up — mode {LAST['mode']}, "
-         f"ladder legs {[k for k in MGR.state.legs]}")
+         + (f"ladder legs {[k for k in MGR.state.legs]}"
+            if settings.ladder_enabled else "ladder DISABLED (LADDER_ENABLED "
+            "unset; blend unaffected)"))
     while True:
         try:
             today = datetime.now(timezone.utc).date().isoformat()
@@ -193,7 +195,11 @@ def _loop():
             # as BLEND_LOCK serializes the blend (alerts are sent outside
             # the lock so a slow Telegram call never holds it).
             ladder_alerts: list[str] = []
+            # ladder gate below: when disabled, no marks, no step(), no
+            # intents - nothing can open or close. State untouched; /kill
+            # still works on any previously-open leg (MGR stays built).
             with MGR_LOCK:
+              if settings.ladder_enabled:
                 for key, leg in MGR.state.legs.items():
                     if leg.status == "OPEN" and leg.order_ref:
                         try:
@@ -321,6 +327,7 @@ def status(x_exec_token: str | None = Header(default=None),
         return {"ready": False}
     body = {"ready": True, "mode": LAST["mode"], "dry_run": settings.dry_run,
             "nino34_weekly": LAST["nino34"],
+            "ladder_enabled": settings.ladder_enabled,
             "ladder": {k: vars(v) for k, v in MGR.state.legs.items()},
             "banked": MGR.state.banked, "halted": MGR.state.halted,
             "leg_budget": MGR.leg_budget(),
