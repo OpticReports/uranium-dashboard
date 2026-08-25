@@ -287,3 +287,51 @@ def test_clock_step_backwards_does_not_poison_totals(tmp_path):
     rec = lg.end(t - 600)                 # NTP stepped backwards
     assert rec["duration_s"] == 0.0 and rec["clock_step"] is True
     assert lg.summary()["total_downtime_s"] >= 0
+
+
+def test_cleanup_runs_between_exit_and_relaunch_never_on_first(tmp_path):
+    """The cleanup path had zero coverage by construction: the harness
+    extracts supervise_gateway alone, so the declare-F guard no-op'd it in
+    every test while the real container runs pkill. Extract BOTH functions,
+    stub pkill via PATH shim (it must never really run in a test env), and
+    assert cleanup fires between exit and relaunch - and not before the
+    first launch."""
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    bindir = tmp_path / "bin"; bindir.mkdir()
+    for tool in ("pkill",):
+        sh = bindir / tool
+        sh.write_text("#!/usr/bin/env bash\necho \"$0 $@\" >> %s\nexit 0\n"
+                      % (tmp_path / "pkill.log"))
+        sh.chmod(0o755)
+    gw = tmp_path / "gw.sh"
+    gw.write_text("#!/usr/bin/env bash\necho launch >> %s\nexit 7\n"
+                  % (tmp_path / "events"))
+    gw.chmod(0o755)
+    runner = tmp_path / "run.sh"
+    runner.write_text(
+        "#!/usr/bin/env bash\nset -u\n"
+        f"export PATH={bindir}:$PATH\n"
+        f"RESTART_LOG={tmp_path}/r.jsonl\n"
+        "BACKOFF_MIN_S=1; BACKOFF_MAX_S=1; HEALTHY_S=99; MAX_CONSEC_FAIL=99\n"
+        "LOG_MAX_LINES=2000\n"
+        "eval \"$(sed -n '/^cleanup_gateway_leftovers()/,/^}$/p;"
+        "/^log_restart()/,/^}$/p;"
+        "/^supervise_gateway()/,/^}$/p' %s/start.sh)\"\n"
+        # wrap cleanup to also journal into the same event stream
+        "eval \"orig_$(declare -f cleanup_gateway_leftovers)\"\n"
+        "cleanup_gateway_leftovers() { echo cleanup >> %s; "
+        "orig_cleanup_gateway_leftovers; }\n"
+        "supervise_gateway \"$1\"\n" % (root, tmp_path / "events"))
+    runner.chmod(0o755)
+    subprocess.run(["timeout", "7", str(runner), str(gw)], capture_output=True)
+    events = (tmp_path / "events").read_text().split()
+    assert events[0] == "launch", events           # never before first launch
+    assert "cleanup" in events, events             # ran on restarts
+    # strict alternation after the first launch: every relaunch is preceded
+    # by exactly one cleanup
+    for i, e in enumerate(events):
+        if e == "launch" and i > 0:
+            assert events[i - 1] == "cleanup", events
+    # the stubbed pkill actually executed (the path is exercised, not argued)
+    pk = (tmp_path / "pkill.log").read_text()
+    assert "Xvfb" in pk and "socat" in pk, pk
