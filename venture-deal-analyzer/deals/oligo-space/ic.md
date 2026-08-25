@@ -1,0 +1,129 @@
+# IC record — Oligo Space
+
+Protocol: `templates/ic-process.md` (v1.1). Seventh vehicle in the
+ledger. **First deal run through the IC process from S1.**
+
+---
+
+## S1 · INTAKE — 2026-08-25
+
+### Sealed prior [AWAITING CASEY — must be written before any analysis lands]
+
+- P(<1x): ____
+- P(>=10x): ____
+- One-line thesis: ____
+- Sealed at: ____
+
+> **BLOCKING.** The S1 blind prior is the only anchor-free datapoint the
+> whole calibration exercise ever gets, and it is destroyed the moment
+> analysis is read. Verification is running but its output is being
+> withheld from the LP until this is filled in.
+
+### The ask
+
+| | |
+|---|---|
+| Round | $10,000,000 |
+| Pre/post | **$100M — stated as "valuation", pre vs POST not specified** |
+| Last round | $7M raised to date; last strategic round at $50M valuation |
+| Step-up | 2x on the headline, over an unstated interval |
+| Instrument | **UNKNOWN** — direct equity vs SPV not stated |
+| Terms [LP-STATED] | "L1, 10/0/10" — **notation not defined; do not guess** |
+| Close date | **UNKNOWN — not stated in the memo or the summary** |
+| Source | LP-supplied; who is bringing it, and their economics, UNKNOWN |
+
+### Documents
+
+| document | supplied | read | notes |
+|---|---|---|---|
+| `Oligo_Memo.pdf` (`Oligo_Space_IC_Memo_V1`) | yes | **YES — in full** | 4pp, Google Docs export, text layer complete, nothing gated |
+| LP summary text (in chat) | yes | yes | Contains material claims **absent from the PDF** — see below |
+| Deck / data room | **not supplied** | — | none referenced |
+| Cap table | **not supplied** | — | required |
+| Customer contracts / LOIs | **not supplied** | — | required |
+| Launch services agreement | **not supplied** | — | required |
+| Financials, burn, runway | **not supplied** | — | required |
+| SPV / LPA docs for "L1, 10/0/10" | **not supplied** | — | required |
+
+**Nothing was unreadable.** The memo parsed cleanly and in full; no
+silent gaps from this batch.
+
+### CAPTURE — where the LP summary and the memo PDF diverge
+
+Recorded as fact, not as judgement. The summary contains claims the memo
+does not, which means a second source exists that has not been supplied.
+
+| # | LP summary says | The memo PDF says |
+|---|---|---|
+| 1 | "Chief Technologist **Dr. Andrew Shapiro** (former NASA JPL Chief Technologist, 20+ yrs)" | **Does not appear anywhere in the PDF.** The Team section names *only* Jacob Rodriguez. |
+| 2 | "veteran engineering team drawing from NASA JPL, Caltech, UCLA, and defense programs" | Not present. No team members named beyond the founder. |
+| 3 | "**signed** customers for CHIMERA1 and CHIMERA2 **yielding** potential revenue of $15M–$37M per satellite" | "**Acquired** customers … with a **possible** revenue on each CHIMERA ranging from $15M–$37M" |
+| 4 | "an **MIT dropout**" | "later **studied** AeroAstro, physics, and AI at MIT while working six internships" |
+| 5 | "Terms: L1, 10/0/10" | No terms of any kind appear in the memo. |
+
+**Where did items 1–2 and 5 come from?** A deck, a call, or a sponsor
+email that has not been supplied. Per the standing rule that artifact is
+requested, not worked around.
+
+### UNKNOWN — REQUIRED (ask, do not analyze around)
+
+Ordered by how much each would move the decision.
+
+1. **Is the $100M pre or post?** On a $10M raise that is the difference
+   between buying 9.1% and 10.0% — and it determines every multiple.
+2. **What does "L1, 10/0/10" mean?** Layer/tier, and the three numbers —
+   carry / management / something. Fees compound directly into the exit
+   multiple and this is currently undecodable. Supply the SPV or LPA.
+3. **The CHIMERA customers: named, and signed what?** Binding purchase
+   agreement, LOI, or MOU? "Acquired" and "possible revenue" are not
+   contract language. What is the *contracted* value versus the
+   $15M–$37M "possible" range, and why is the range 2.5x wide? Is
+   either customer an affiliate or an investor?
+4. **Andrew Shapiro** — is he actually at Oligo, in what role, full or
+   part time, and what was his *actual* title at JPL?
+5. **The launch**: which provider, what was paid, is it on a published
+   manifest, and is the slot transferable/refundable?
+6. **Has Oligo ever built or flown a spacecraft?** The memo claims
+   *capability* to produce 10+/yr. Any delivered hardware, any flight
+   heritage, any qualified structure?
+7. **Cash, burn, runway**, and what the $10M funds to. $7M raised
+   against a 14,000 sq ft build-out, TVAC/vibe/cleanroom capital
+   equipment, payroll, and a paid launch slot is a lot of uses.
+8. **Cap table and the $50M round**: date, lead, instrument, and
+   whether Lux led or merely participated. Alumni Ventures in the same
+   line implies a mixed institutional/retail syndicate — which is it?
+9. **Zenith**: any demonstrable artifact — demo, paper, patent, or
+   customer using it — or is it roadmap?
+10. **Who is bringing this deal, and what are their economics?**
+
+### Process notes
+
+- **Book-check flag, logged at intake:** this is the ledger's second
+  satellite/EO-adjacent name. Matter Intelligence was passed at ask,
+  and Bellwether (held twice) is in the same broad sector. Sector
+  concentration is now a live R1 item, not a hypothetical.
+- Verification workflow launched at intake: six independent sweeps
+  (team, corporate/funding, commercial traction, market-stat audit,
+  competition/comps, technical feasibility), each with an adversarial
+  counter-agent pass. Output is held for S2 and is **deliberately not
+  shown to the LP before the sealed prior is written.**
+- **No opinion is recorded in S1.** Per protocol.
+
+---
+
+## S2 · THE CASE — scheduled T+3 (2026-08-28)
+
+*Not yet run. Dialogue in rounds; concessions logged live; output is the
+cruxes.*
+
+---
+
+## S3 · THE DECISION — scheduled T+10 (2026-09-04)
+
+*Not yet run.*
+
+---
+
+## Track
+
+☐ HELD  ☑ LIVE  ☐ PASSED
