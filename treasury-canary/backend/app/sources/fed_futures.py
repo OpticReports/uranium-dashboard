@@ -136,3 +136,31 @@ def implied_probs(meeting_dates: list[str],
         if client is not None:
             client.close()
     return out
+
+
+def implied_6m_change_bp(prices: dict[tuple[int, int], float] | None = None
+                         ) -> float | None:
+    """Squeeze Radar T1: the ZQ-implied change in the fed funds rate over the
+    next ~6 months, in bp (negative = cuts priced). Front month vs the
+    contract 6 months out; same first-order caveats as implied_probs. None
+    when either leg is unavailable."""
+    today = date.today()
+    y0, m0 = today.year, today.month
+    y6, m6 = (y0 + (m0 + 6 - 1) // 12, (m0 + 6 - 1) % 12 + 1)
+    client = None
+    if prices is None:
+        client = httpx.Client(timeout=15, headers=_UA)
+
+    def px(y: int, m: int) -> float | None:
+        if prices is not None:
+            return prices.get((y, m))
+        return _price(y, m, client)
+
+    try:
+        p0, p6 = px(y0, m0), px(y6, m6)
+    finally:
+        if client is not None:
+            client.close()
+    if p0 is None or p6 is None:
+        return None
+    return round(((100.0 - p6) - (100.0 - p0)) * 100.0, 1)

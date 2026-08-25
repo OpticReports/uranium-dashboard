@@ -79,6 +79,7 @@ FRED_LABOR: dict[str, str] = {
     "openings": "JTSJOL",          # JOLTS job openings, thousands (monthly, ~5wk lag)
     "unemployed": "UNEMPLOY",      # unemployed persons, thousands (monthly)
     "indeed_postings": "IHLIDXUS", # Indeed postings index, Feb-2020=100 (near-daily, timely)
+    "payrolls": "PAYEMS",          # total nonfarm payrolls, thousands (Squeeze Radar T2)
 }
 # Flow-compass discriminators: where money hides when the stock-bond hedge breaks.
 # (Gold comes from FMP — FRED's LBMA gold series were discontinued.)

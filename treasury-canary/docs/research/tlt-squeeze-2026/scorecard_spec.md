@@ -23,7 +23,7 @@ break (Ultra Bond added Mar 2010); COT report date (Tue) precedes release
 ## FUEL (how far a rally travels if ignited) — now 2/4
 | id | condition | registered threshold | source | 2026-08-25 |
 |---|---|---|---|---|
-| F1 | Lev-fund UST net short extreme | ≤10th pctile, 10y expanding window | CFTC TFF (canary cftc.py) | MET: -30.3%OI, 9.2th pctile (4.6th since 2006) |
+| F1 | Lev-fund UST net short extreme | ≤10th pctile, TRAILING 10y window (wording clarified: v2 said '10y expanding', self-contradictory; the registered 9.2th-pctile validation number was always the trailing form). COMPOSITION REGISTERED: duration complex only (10Y, Ultra 10Y, Bond, Ultra Bond) — adding 2Y/5Y moves the same week to the 27th pctile | CFTC TFF (canary cftc.py) | MET: -30.3%OI, 9.2th pctile (4.6th since 2006) |
 | F2 | TLT SI % shares outstanding | ≥20% | FINRA consolidated SI + iShares SO | NOT MET: 95.3M / 571.3M = 16.7%, FALLING (peak ~26-28% Dec-25) |
 | F3 | Term premium elevated | ACM 10y TP ≥75th pctile since 2015 | FRED THREEFYTP10 | MET: +0.84, 99.7th |
 | F4 | Borrow stress | fee >1% or util >90% | IBKR/Fintel (UNVERIFIED today; GC ~30bp per S3) | NOT MET (DTC 3.6) |

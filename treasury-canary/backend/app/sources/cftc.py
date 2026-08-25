@@ -159,3 +159,85 @@ def aggregate_net_short(rows: list[dict]) -> tuple[list[date], list[float | None
         by_date[d] += (short - long) / 1_000_000.0
     dates = sorted(by_date)
     return dates, [round(by_date[d], 3) for d in dates]
+
+
+# ── UST duration-complex leveraged-fund %OI history (Squeeze Radar F1) ───────
+# Same dataset as fetch_lev_net_short but returned as net %OI with FULL weekly
+# history, because F1's registered threshold is a percentile on a 10-yr
+# window — the level alone is meaningless. COMPOSITION IS PART OF THE
+# REGISTRATION: the study's numbers (-30.3%OI, 9.2th pctile on 10y) were
+# computed on the DURATION complex (10Y, Ultra 10Y, Bond, Ultra Bond) —
+# adding 2Y/5Y (the ladder metric's set) shifts the same week to the 27th
+# pctile and un-registers the threshold. Do not "fix" this to _CONTRACTS.
+_DURATION_CONTRACTS = ("UST 10Y NOTE", "ULTRA UST 10Y",
+                       "UST BOND", "ULTRA UST BOND")
+_ucache: dict[str, object] = {"ts": 0.0, "data": None, "ok": False}
+_ulock = threading.Lock()
+
+
+def parse_ust_pct_oi(rows: list[dict]) -> tuple[list[date], list[float]]:
+    """Aggregate the UST complex per report date -> net (long-short) as %OI,
+    ascending. Rows missing any leg are skipped (never a silent zero)."""
+    agg: dict[date, list[float]] = {}
+    for r in rows:
+        ds = str(r.get("report_date_as_yyyy_mm_dd") or "")[:10]
+        try:
+            d = datetime.strptime(ds, "%Y-%m-%d").date()
+            key = (float(r["lev_money_positions_long"]),
+                   float(r["lev_money_positions_short"]),
+                   float(r["open_interest_all"]))
+        except (KeyError, TypeError, ValueError):
+            continue
+        acc = agg.setdefault(d, [0.0, 0.0, 0.0])
+        acc[0] += key[0]
+        acc[1] += key[1]
+        acc[2] += key[2]
+    out = [(d, (l - s) / oi * 100.0) for d, (l, s, oi) in sorted(agg.items())
+           if oi > 0]
+    return [d for d, _ in out], [v for _, v in out]
+
+
+def fetch_ust_lev_pct_oi() -> tuple[list[date], list[float]]:
+    """Weekly UST-complex (2y..Ultra Bond) leveraged-fund net %OI, 2006+,
+    oldest->newest. ([], []) on failure; stale-preferred."""
+    now = time.time()
+    ttl = _TTL_OK if _ucache["ok"] else _TTL_FAIL
+    if _ucache["data"] is not None and now - float(_ucache["ts"]) < ttl:
+        return _ucache["data"]  # type: ignore[return-value]
+    with _ulock:
+        now = time.time()
+        ttl = _TTL_OK if _ucache["ok"] else _TTL_FAIL
+        if _ucache["data"] is not None and now - float(_ucache["ts"]) < ttl:
+            return _ucache["data"]  # type: ignore[return-value]
+        result: tuple[list[date], list[float]] = ([], [])
+        ok = False
+        try:
+            names = ",".join(f"'{c}'" for c in _DURATION_CONTRACTS)
+            rows: list = []
+            for off in range(0, 40000, 5000):
+                r = httpx.get(_URL, params={
+                    "$select": ("report_date_as_yyyy_mm_dd,contract_market_name,"
+                                "lev_money_positions_long,lev_money_positions_short,"
+                                "open_interest_all"),
+                    "$where": f"contract_market_name in({names})",
+                    "$order": "report_date_as_yyyy_mm_dd ASC",
+                    "$limit": "5000", "$offset": str(off),
+                }, timeout=settings.http_timeout_seconds)
+                r.raise_for_status()
+                chunk = r.json()
+                rows.extend(chunk)
+                if len(chunk) < 5000:
+                    break
+            result = parse_ust_pct_oi(rows)
+            ok = bool(result[0])
+            logger.info("CFTC UST lev %%OI: %d weeks", len(result[0]))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("CFTC UST lev %%OI fetch failed: %s", exc)
+            if _ucache["data"] is not None and _ucache["data"][0]:  # type: ignore[index]
+                _ucache["ts"] = time.time()
+                _ucache["ok"] = False
+                return _ucache["data"]  # type: ignore[return-value]
+        _ucache["data"] = result
+        _ucache["ts"] = time.time()
+        _ucache["ok"] = ok
+        return result

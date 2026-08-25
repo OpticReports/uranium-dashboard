@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import date
 
 import httpx
 from sqlalchemy import select
@@ -202,6 +203,54 @@ def run_refresh(session: Session) -> dict:
                 rationale=msg, detail={"source": "business_cycle"}))
     except Exception as exc:  # noqa: BLE001
         logger.warning("cycle phase check failed: %s", exc)
+
+    # --- Duration Squeeze Radar: condition flips + calendar pre-briefs -------
+    # Pre-registered scorecard (docs/research/tlt-squeeze-2026, spec v2): a
+    # TRIGGER condition flipping to MET is the event the card exists for ->
+    # RED. Fuel flips and downgrades are context -> WARN. Pre-briefs fire once
+    # per (event, date) at T-minus-3 days with the live scorecard attached.
+    try:
+        from ..api.routes_squeeze import assemble_radar
+        radar = assemble_radar()
+        conds = radar["fuel"] + radar["triggers"]
+        score_line = (f"fuel {radar['fuel_score']:.1f}/4, "
+                      f"triggers {radar['trigger_score']:.1f}/5")
+        for c in conds:
+            mid = f"squeeze.{c['id'].lower()}"
+            _upsert_snapshot(
+                session, metric_id=mid, category="S", asof=today,
+                value=c.get("value"), status=c["state"], percentile=None,
+                note=c.get("detail"))
+            prev = prev_status.get(mid)
+            if prev is not None and prev != c["state"] and                     "STALE" not in (prev, c["state"]):
+                is_trigger = c["id"].startswith("T")
+                sev = "RED" if (c["state"] == "MET" and is_trigger) else "WARN"
+                new_events.append(Event(
+                    event_type="squeeze_condition_flip", severity=sev,
+                    asof=today,
+                    dedup_key=f"{c['id']}:{c['state']}:{today.isoformat()}",
+                    rationale=(f"Squeeze Radar {c['id']} ({c['label']}) "
+                               f"{prev} -> {c['state']}: {c.get('detail','')} "
+                               f"[{score_line}]"),
+                    detail=c))
+        for ev in radar.get("calendar", []):
+            try:
+                edate = date.fromisoformat(ev["date"])
+            except (KeyError, ValueError):
+                continue
+            days_out = (edate - today).days
+            if 0 <= days_out <= 3:
+                approx = "≈" if ev.get("estimated") else ""
+                new_events.append(Event(
+                    event_type="squeeze_prebrief", severity="WARN", asof=today,
+                    dedup_key=f"{ev['event']}:{ev['date']}",
+                    rationale=(f"Squeeze Radar pre-brief: {ev['event']} "
+                               f"{approx}{ev['date']} (T-{days_out}). "
+                               f"Scorecard now: {score_line}. Triggers ignite "
+                               f"on scheduled dates — watch this one."),
+                    detail=ev))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("squeeze radar refresh failed: %s", exc)
 
     from ..alerts import format_event, should_send
     from ..alerts import send as _tg_send

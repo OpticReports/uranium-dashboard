@@ -113,3 +113,94 @@ def _parse(data) -> tuple[list[date], list[float | None]]:
             continue
     rows.sort(key=lambda r: r[0])
     return [r[0] for r in rows], [r[1] for r in rows]
+
+
+def fetch_move(start: str = "2015-01-01") -> tuple[list[date], list[float | None]]:
+    """Daily ^MOVE closes for the Squeeze Radar's T5 (real MOVE, not the
+    realized-vol proxy — T5's registered threshold is on the actual index).
+    No key -> ([], []) and the condition degrades to STALE, never the proxy:
+    swapping bases silently would un-register the threshold."""
+    if not settings.fmp_api_key:
+        return [], []
+    os.makedirs(settings.cache_dir, exist_ok=True)
+    cache = os.path.join(settings.cache_dir, "fmp_move.json")
+    if os.path.exists(cache) and time.time() - os.path.getmtime(cache) < settings.cache_ttl_seconds:
+        try:
+            return _parse(json.load(open(cache)))
+        except Exception:  # noqa: BLE001
+            pass
+    rows: list = []
+    to: str | None = None
+    try:
+        for _ in range(6):
+            params = {"symbol": "^MOVE", "from": start,
+                      "apikey": settings.fmp_api_key}
+            if to:
+                params["to"] = to
+            r = httpx.get(_URL, params=params,
+                          timeout=settings.http_timeout_seconds)
+            r.raise_for_status()
+            chunk = r.json()
+            if not chunk:
+                break
+            rows.extend(chunk)
+            earliest = min(c["date"] for c in chunk)
+            if earliest <= start or len(chunk) < 100:
+                break
+            to = (datetime.strptime(earliest, "%Y-%m-%d").date()
+                  - timedelta(days=1)).isoformat()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("FMP MOVE fetch failed: %s", exc)
+        if os.path.exists(cache):
+            try:
+                return _parse(json.load(open(cache)))
+            except Exception:  # noqa: BLE001
+                pass
+        return [], []
+    dedup = {c["date"]: c for c in rows}
+    data = [dedup[k] for k in sorted(dedup)]
+    try:
+        json.dump(data, open(cache, "w"))
+    except Exception:  # noqa: BLE001
+        pass
+    return _parse(data)
+
+
+def fetch_shares_outstanding(symbol: str = "TLT") -> float | None:
+    """Current shares outstanding via FMP quote (F2's denominator). ETF share
+    counts move with daily creations/redemptions, so this is TODAY'S count —
+    the radar labels the basis. None without a key or on failure (F2 -> its
+    %SO-not-computable state, never a guessed denominator)."""
+    if not settings.fmp_api_key:
+        return None
+    os.makedirs(settings.cache_dir, exist_ok=True)
+    cache = os.path.join(settings.cache_dir, f"fmp_so_{symbol}.json")
+    if os.path.exists(cache) and time.time() - os.path.getmtime(cache) < 24 * 3600:
+        try:
+            v = json.load(open(cache)).get("so")
+            if v:
+                return float(v)
+        except Exception:  # noqa: BLE001
+            pass
+    try:
+        # quote.sharesOutstanding is absent for ETFs and marketCap/price runs
+        # ~13% stale (measured 2026-08-25: implied 505M vs iShares' 571.3M).
+        # etf/info AUM ÷ NAV reproduces the issuer's official count exactly.
+        r = httpx.get("https://financialmodelingprep.com/stable/etf/info",
+                      params={"symbol": symbol, "apikey": settings.fmp_api_key},
+                      timeout=settings.http_timeout_seconds)
+        r.raise_for_status()
+        rows = r.json()
+        aum = float(rows[0]["assetsUnderManagement"]) if rows else 0.0
+        nav = float(rows[0]["nav"]) if rows else 0.0
+        so = aum / nav if aum > 0 and nav > 0 else None
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("FMP shares-outstanding fetch failed: %s", exc)
+        return None
+    if so and so > 0:
+        try:
+            json.dump({"so": so}, open(cache, "w"))
+        except Exception:  # noqa: BLE001
+            pass
+        return so
+    return None
