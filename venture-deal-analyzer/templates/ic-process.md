@@ -1,4 +1,4 @@
-# IC process v1.0 — what happens after a deal lands
+# IC process v1.1 — what happens after a deal lands
 
 Standing protocol, adopted 2026-08-21 (rev 1.1 same day, after Casey's
 feedback: S2 is a dialogue, and R1 is not investments-only). Two
