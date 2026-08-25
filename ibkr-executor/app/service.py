@@ -90,6 +90,10 @@ def _gateway_restarts(limit: int = 20) -> dict:
     last_24h = sum(1 for r in out if _num_ts(r) >= day)
     return {"recent_shown": min(len(out), limit),
             "last_24h": last_24h,
+            # the breaker deliberately recreates a dead-gateway steady state
+            # (stops hammering IBKR logins); it must be NAMED, not buried in
+            # the last record's reason field (counter-agent 2026-08-24 F3)
+            "circuit_open": bool(out) and out[-1].get("reason") == "circuit_open",
             "last": out[-1] if out else None}
 
 
@@ -106,7 +110,7 @@ def _auth(hdr: str | None, q: str | None) -> None:
 
 
 def _build():
-    global MGR, ADAPTER, BLEND
+    global MGR, ADAPTER, BLEND, OUTAGES
     MGR = LadderManager(settings, settings.state_path)
     if MGR.archived_state:
         # x12: an unreadable ladder file used to become a fresh, un-halted
@@ -142,9 +146,14 @@ def _build():
         ADAPTER = DryAdapter()
         LAST["mode"] = f"DRY ({settings.trading_mode})"
         logger.warning("DRY_RUN with credentials: mutations stay simulated")
+        # the gateway + supervisor run in DRY too (creds exist) - without a
+        # ledger the /health gateway block was dark in exactly the rehearsal
+        # mode that precedes live (counter-agent 2026-08-24 F6-ii). The
+        # DryAdapter never calls the hooks, so this records restarts only.
+        global OUTAGES
+        OUTAGES = OutageLog(settings.outage_log_path)
         return
     from .ib_adapter import IBAdapter
-    global OUTAGES
     OUTAGES = OutageLog(settings.outage_log_path)
     if OUTAGES.history and OUTAGES.history[-1].get("ended_by") == "process_restart":
         # the previous process died mid-outage: it did NOT self-heal, and
@@ -296,7 +305,8 @@ def health():
                 "outages_30d": summ.get("outages"),
                 "self_healed_30d": summ.get("self_healed"),
                 "needed_a_restart_30d": summ.get("needed_a_restart"),
-                "restarts_24h": _gateway_restarts().get("last_24h")}
+                "restarts_24h": (_gr := _gateway_restarts()).get("last_24h"),
+                "circuit_open": _gr.get("circuit_open")}
         except Exception as exc:  # noqa: BLE001
             logger.warning("gateway health block failed (ignored): %s", exc)
             body["gateway"] = {"error": "unavailable"}

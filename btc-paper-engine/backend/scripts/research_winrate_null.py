@@ -10,11 +10,16 @@ the prior panels used). Per draw: best-of-12 WR gain and best-of-12 MAR.
 import os, sys, json
 import numpy as np
 
-os.environ.setdefault("BARS_CSV", "/tmp/claude-0/-home-user-uranium-dashboard/"
-                      "98a6cf63-599b-59a8-b758-40c71716fb29/scratchpad/bars_4h_btcusd_ext.csv")
-sys.path.insert(0, "/home/user/uranium-dashboard/btc-paper-engine/backend")
-sys.path.insert(0, "/home/user/uranium-dashboard/btc-paper-engine/backend/scripts")
-sys.argv = ["null_study.py", os.environ["BARS_CSV"]]
+# bars CSV: argv[1] or BARS_CSV env (regenerate with scripts/fetch_bars.py)
+if len(sys.argv) > 1:
+    os.environ["BARS_CSV"] = sys.argv[1]
+if not os.environ.get("BARS_CSV"):
+    sys.exit("usage: research_winrate_null.py <bars.csv>  "
+             "(fetch with scripts/fetch_bars.py)")
+_here = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(_here, ".."))
+sys.path.insert(0, _here)
+sys.argv = ["research_winrate_null.py", os.environ["BARS_CSV"]]
 from research_winrate import run_gated, SPLIT  # noqa: E402  (loads bars once)
 
 b3, b4 = run_gated()

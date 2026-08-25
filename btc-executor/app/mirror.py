@@ -117,6 +117,13 @@ class ExecState:
     # under the guard. Kept SEPARATE forever: "attested live" is weaker
     # evidence than "observed live" and the matrix must keep saying so.
     coverage_attested: dict = field(default_factory=dict)
+    # per-position stop-vanish counts ("leg:entry_ts" -> n). Persisted:
+    # in-memory it reset on every restart, so under a crash-loop the
+    # STOP_REPLACE_MAX bound never tripped and the 4,320-order storm it
+    # exists to prevent came back (whole-chain counter-agent 2026-08-24).
+    # Top-level, NOT a LegLedger field: older loaders cherry-pick keys, so
+    # this stays rollback-safe.
+    stop_vanish: dict = field(default_factory=dict)
     attestation: dict | None = None
     # monotonic DRY_RUN flip counter. A safety invariant must NOT live in a
     # rotating buffer: the event log holds 200 entries and rate-limited
@@ -173,10 +180,11 @@ class Executor:
         # run. It used to `return  # quietly wait`, so "armed and waiting"
         # and "broken" were indistinguishable from outside.
         self._auto_drill_wait: str | None = None
-        # per-position stop-vanish counts and consecutive fill-less drills.
-        # Deliberately NOT persisted: a restart is a fresh venue read, and a
-        # new LegLedger field made state files non-reversible.
-        self._stop_vanish: dict[str, int] = {}
+        # consecutive fill-less drills. In-memory reset across restarts is
+        # acceptable here: the cost is bounded by drill_max_per_day and
+        # auto_drill_off persists once latched. The stop-vanish counter, by
+        # contrast, lives in ExecState (a restart must not re-arm the
+        # replacement loop - counter-agent 2026-08-24).
         self._drill_no_fill: int = 0
         self._stamp_witnessing()
         self._check_dry_run_flip()
@@ -419,6 +427,8 @@ class Executor:
             # so pre-split counts read as unattributed rather than live
             st.coverage_live = raw.get("coverage_live", {})
             st.coverage_attested = raw.get("coverage_attested", {})
+            st.stop_vanish = raw.get("stop_vanish", {}) \
+                if isinstance(raw.get("stop_vanish"), dict) else {}
             st.attestation = raw.get("attestation")
             st.mode_flips = raw.get("mode_flips", 0)
             st.witnessing_since = raw.get("witnessing_since")
@@ -443,6 +453,7 @@ class Executor:
              "coverage": getattr(self.state, "coverage", {}),
              "coverage_live": getattr(self.state, "coverage_live", {}),
              "coverage_attested": getattr(self.state, "coverage_attested", {}),
+             "stop_vanish": getattr(self.state, "stop_vanish", {}),
              "attestation": getattr(self.state, "attestation", None),
              "mode_flips": getattr(self.state, "mode_flips", 0),
              "witnessing_since": getattr(self.state, "witnessing_since", None),
@@ -819,6 +830,16 @@ class Executor:
                         f"data_halt={target.get('data_halt')}")
         blend = target.get("blend", {})
         for leg in LEGS:
+            # A halt can now fire MID-LOOP (_handle_stop_vanished halts on
+            # ledger divergence / unplaceable stops). Without this check the
+            # loop kept iterating: pullback halted and flattened the book,
+            # then trend's _sync_leg saw qty==0 and RE-ENTERED AT MARKET on
+            # the halted book in the same step - an open, unmanaged position
+            # behind a halt page saying the book was flat (whole-chain
+            # counter-agent 2026-08-24, CONFIRMED; missed by every per-change
+            # review because their tests used the LAST leg in this order).
+            if self.state.halted:
+                break
             tl = (target.get("legs") or {}).get(leg)
             if tl is None:
                 continue
@@ -829,6 +850,12 @@ class Executor:
                 # step via the loop's bare except, silently skipping the other
                 # leg on every poll it occurred (QA 2026-08-10).
                 self._event("RED", "leg_sync_error", f"{leg}: {exc}")
+        if self.state.halted:
+            # same discipline as the top-of-step check: nothing places or
+            # chases on a halted book; fill bookkeeping alone is safe
+            self._poll_fill_watch()
+            self._save_state()
+            return
         self._report_post_only_crosses()
         self._poll_fill_watch()
         self._check_drift(equity)
@@ -967,7 +994,12 @@ class Executor:
         if done > 0:
             sgn = 1.0 if led.qty > 0 else -1.0
             led.qty = round(led.qty - sgn * min(done, abs(led.qty)), 8)
-            self._cov("stop_filled")
+            # ramp evidence only when the fill fully consumed the leg: a
+            # partial on a stop the venue KILLED is simultaneously evidence
+            # the venue's stop handling misbehaved, and the row exists to
+            # prove the clean fill path (counter-agent 2026-08-24 F3)
+            if led.qty == 0.0:
+                self._cov("stop_filled")
             self._event("RED", "stop_partial_fill",
                         f"{leg} stop died having filled {done} - ledger now "
                         f"{led.qty}; re-arming only the remainder")
@@ -977,8 +1009,14 @@ class Executor:
             led.entry_qty = 0.0
             return False
         key = f"{leg}:{pos.get('entry_ts')}"
-        n = self._stop_vanish.get(key, 0) + 1
-        self._stop_vanish[key] = n
+        sv = getattr(self.state, "stop_vanish", None)
+        if sv is None:
+            sv = self.state.stop_vanish = {}
+        n = sv.get(key, 0) + 1
+        sv[key] = n
+        # bounded growth: keep only this position's key per leg
+        for k in [k for k in sv if k.startswith(f"{leg}:") and k != key]:
+            del sv[k]
         try:
             net = self.venue.position()
         except Exception as exc:  # noqa: BLE001
@@ -1060,7 +1098,8 @@ class Executor:
         # trail regenerates it verbatim and Coinbase rejects duplicate cloids
         # (the reason drills carry a ns nonce). Kept OUT of the persisted
         # ledger so state files stay schema-compatible both ways.
-        nonce = self._stop_vanish.get(f"{leg}:{pos.get('entry_ts')}", 0)
+        nonce = (getattr(self.state, "stop_vanish", None)
+                 or {}).get(f"{leg}:{pos.get('entry_ts')}", 0)
         cloid = (f"{leg[0].upper()}-{pos['entry_ts']}-S{int(trigger)}"
                  + (f"-R{time.time_ns()}" if nonce else ""))
         if led.stop_cloid:

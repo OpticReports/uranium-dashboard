@@ -2371,3 +2371,82 @@ def test_gate_dry_run_fills_never_close_the_slippage_gate(tmp_path):
     assert ex._live_fill_count() == 0
     ex.state.coverage_live = {"drill_cycle": 3}
     assert ex._needed_auto_drill() == "cycle"
+
+
+# --- whole-chain review fixes (2026-08-24) ---------------------------------
+def test_gate_mid_step_halt_stops_the_leg_loop(tmp_path):
+    """CONFIRMED chain seam: _handle_stop_vanished halts INSIDE the leg loop.
+    With pullback (first in LEGS) halting on ledger divergence, trend's
+    _sync_leg then saw qty==0 on the flattened ledger and RE-ENTERED AT
+    MARKET on the halted book in the same step. Every per-change test used
+    the trend leg - the LAST in iteration order - so nothing after it could
+    re-enter and the seam stayed invisible."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    # arm a pullback position + stop, then kill the stop AND flatten the venue
+    ppos = {"side": "L", "entry_price": 60000.0, "entry_ts": 1787000000,
+            "signal_ts": 1786990000, "stop": 58000.0, "exit_flag": None}
+    ex.step(target(pull={"pending": None, "position": ppos}))
+    led = ex.state.legs["pullback"]
+    assert led.stop_cloid
+    for o in v.orders.values():
+        o["status"] = "CANCELLED"
+    assert v.position() == 0.0
+    # same step: engine also wants a trend position - must NOT be entered
+    tpos = {"side": "L", "entry_price": 60000.0, "entry_ts": 1787000100,
+            "signal_ts": 1786990100, "stop": 58000.0, "exit_flag": None}
+    before = len(v.calls)
+    ex.step(target(pull={"pending": None, "position": ppos},
+                   trend={"pending": None, "position": tpos}))
+    assert ex.state.halted == "LEDGER_DIVERGENCE"
+    new = [c for c in v.calls[before:] if c[0] in ("MARKET", "STOP")]
+    assert not new, f"halted book traded in the same step: {new}"
+    assert ex.state.legs["trend"].qty == 0.0
+
+
+def test_gate_stop_replace_bound_survives_restarts(tmp_path):
+    """The vanish counter was in-memory, so a crash-loop reset it each boot
+    and STOP_REPLACE_MAX never tripped - the 4,320-order storm returned."""
+    from app.mirror import Executor, STOP_REPLACE_MAX
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    pos = {"side": "L", "entry_price": 60000.0, "entry_ts": 1787000000,
+           "signal_ts": 1786990000, "stop": 58000.0, "exit_flag": None}
+    placed = 0
+    for i in range(STOP_REPLACE_MAX + 4):
+        led = ex.state.legs["trend"]
+        if led.stop_cloid and led.stop_cloid in v.orders:
+            v.orders[led.stop_cloid]["status"] = "CANCELLED"
+        n0 = len([c for c in v.calls if c[0] == "STOP"])
+        ex.step(target(trend={"pending": None, "position": pos}))
+        placed += len([c for c in v.calls if c[0] == "STOP"]) - n0
+        if ex.state.halted:
+            break
+        # simulate a restart every step - the old in-memory counter reset here
+        ex._save_state()
+        ex = Executor(v, ex.cfg)
+    assert ex.state.halted == "STOP_UNPLACEABLE", \
+        f"bound never tripped across restarts ({placed} stops placed)"
+    assert placed <= STOP_REPLACE_MAX + 1, placed
+
+
+def test_gate_partial_fill_on_dying_stop_is_not_clean_evidence(tmp_path):
+    """F3: the stop_filled ramp row proves the CLEAN venue stop-fill path.
+    A partial fill on a stop the venue killed is also evidence the venue
+    misbehaved - it must not be the sole evidence behind a KELLY_M advance."""
+    ex, v, pos = _armed_leg(tmp_path)
+    led = ex.state.legs["trend"]
+    full = led.qty
+    orig = v.order_status
+    v.order_status = lambda c: ({"status": "CANCELLED",
+                                 "filled_qty": full / 2, "avg_price": 73000.0}
+                                if c == led.stop_cloid else orig(c))
+    ex.step(target(trend={"pending": None, "position": pos}))
+    assert abs(led.qty - full / 2) < 1e-7
+    assert ex.state.coverage_live.get("stop_filled") is None
+    # a FULL consumption still credits
+    v.order_status = lambda c: ({"status": "CANCELLED",
+                                 "filled_qty": full / 2, "avg_price": 73000.0}
+                                if c == led.stop_cloid else orig(c))
+    ex.step(target(trend={"pending": None, "position": pos}))
+    assert led.qty == 0.0
