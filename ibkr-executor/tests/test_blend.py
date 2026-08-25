@@ -1588,6 +1588,15 @@ def test_gate_adapt_m4_missing_core_quote_skips_rebalance_alerts_once(
     # no equity snapshot on absent CORE/BIL quotes (distorted valuation)
     m.record_equity_snapshot("2026-08-20", no_spy)
     assert m.state.equity_curve == []
+    # 2026-08-24: alert-once is right for Telegram but made a PERSISTENT
+    # outage self-silencing - the age must be tracked continuously, survive
+    # a restart, and clear only on recovery
+    assert m.state.quotes_missing_since is not None
+    m_re = Blend3070Manager(Cfg(), m.state_path)
+    assert m_re.state.quotes_missing_since == m.state.quotes_missing_since
+    m.step("2026-08-20", payload(), {"SPY": 100.0, "BIL": 100.0})
+    assert m.state.quotes_missing_since is None
+    assert m.state.quote_alert_armed is True     # re-armed for the next outage
 
 
 class _NoSpyQuoteAdapter(DryAdapter):

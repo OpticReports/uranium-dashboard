@@ -294,10 +294,16 @@ def health():
     # main loop and would otherwise fail silently — surface it here.
     if BLEND is not None:
         err_ts = BLEND_CYCLE.get("error_ts")
+        qm = getattr(BLEND.state, "quotes_missing_since", None)
         body["blend_loop"] = {
             "ok": BLEND_CYCLE["ok"] is not False,
             "last_error_age_s": round(time.time() - err_ts, 1)
-            if err_ts else None}
+            if err_ts else None,
+            # a cycle that skips every decision on absent quotes is a
+            # SUCCESSFUL cycle, so ok:true said nothing about whether the
+            # book could trade - one Telegram alert then permanent silence
+            # (2026-08-24). Age, not a boolean: watchers can threshold it.
+            "quotes_missing_for_s": round(time.time() - qm, 1) if qm else None}
     if OUTAGES is not None:
         # Guarded: healthCheckPath is /health, so a raise here 500s the probe
         # and Render restarts the WHOLE container - executor included,

@@ -257,6 +257,12 @@ class BlendState:
     quote_alert_armed: bool = True   # missing-SPY/BIL alert armed? (r3/r4:
                                      # alert-once per outage, re-armed on
                                      # recovery — the budget-alarm pattern)
+    # When quotes went missing (wall clock), None = quotes healthy. The
+    # alert-once pattern above is correct for Telegram but made a PERSISTENT
+    # no-quote condition self-silencing: one alert, then /health green and
+    # zero trades forever (2026-08-24 — the book never seeded its SPY core).
+    # This surfaces the condition continuously on /health instead.
+    quotes_missing_since: float | None = None
     last_reconcile_ts: float = 0.0   # wall clock of the last SUCCESSFUL
                                      # reconcile pass (venue-history horizon
                                      # guard, adapter review m2)
@@ -365,6 +371,7 @@ class Blend3070Manager:
                 last_gate=raw.get("last_gate"),
                 util_alert_armed=raw.get("util_alert_armed", True),
                 quote_alert_armed=raw.get("quote_alert_armed", True),
+                quotes_missing_since=raw.get("quotes_missing_since"),
                 last_reconcile_ts=raw.get("last_reconcile_ts", 0.0),
                 mode=stored_mode,
             )
@@ -495,6 +502,7 @@ class Blend3070Manager:
                    "last_gate": self.state.last_gate,
                    "util_alert_armed": self.state.util_alert_armed,
                    "quote_alert_armed": self.state.quote_alert_armed,
+                   "quotes_missing_since": self.state.quotes_missing_since,
                    "last_reconcile_ts": self.state.last_reconcile_ts,
                    "mode": self.state.mode,
                    "events": self.state.events[-300:]}
@@ -912,14 +920,20 @@ class Blend3070Manager:
         #    M1: skipped while any book order is pending adoption.
         rebalance_intent = None
         spy_quote = prices.get(CORE, 0.0)
-        if spy_quote > 0 and bil_px > 0 and not st.quote_alert_armed:
+        if spy_quote > 0 and bil_px > 0 and (
+                not st.quote_alert_armed
+                or st.quotes_missing_since is not None):
             st.quote_alert_armed = True     # outage over: re-arm (r3)
+            st.quotes_missing_since = None
             self.save()
         if spy_quote <= 0 or bil_px <= 0:
             msg = (f"rebalance/valuation SKIPPED: missing quote "
                    f"(SPY={spy_quote or None}, BIL={bil_px or None}) — no "
                    f"weight decision is taken on absent prices")
             self._event("WARN", msg)
+            if st.quotes_missing_since is None:
+                st.quotes_missing_since = time.time()
+                self.save()
             if st.quote_alert_armed:
                 # r3/r4: alert-once per OUTAGE via a persisted armed flag
                 # (the budget-alarm pattern). Event-log dedup alone both
@@ -1289,6 +1303,7 @@ class Blend3070Manager:
             "halted": st.halted,
             "flatten_pending": st.flatten_request is not None,
             "initialized": st.initialized,
+            "quotes_missing_since": st.quotes_missing_since,
             "positions": {k: asdict(v) for k, v in st.positions.items()},
             "open_count": len(st.positions),
             "stop_missing": [k for k, v in st.positions.items()

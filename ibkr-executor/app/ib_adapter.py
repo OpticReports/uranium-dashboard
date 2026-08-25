@@ -132,6 +132,10 @@ class IBAdapter:
         # Persisted outage ledger (optional). Observability must never be
         # able to break trading, so every call site tolerates None.
         self.outages = outage_log
+        # market-data posture: which feed IB is actually serving, and whether
+        # the operator has been told we fell back to delayed
+        self._md_type: int = int(getattr(cfg, "ib_market_data_type", 1))
+        self._delayed_announced = False
         self._connect()
 
     def _connect(self):
@@ -141,6 +145,7 @@ class IBAdapter:
                 self.ib.connect(self.cfg.ib_host, port,
                                 clientId=self.cfg.ib_client_id, timeout=15)
                 logger.info("connected to IB gateway (%s)", self.cfg.trading_mode)
+                self._apply_market_data_type()
                 return
             except Exception as exc:  # noqa: BLE001
                 logger.info("gateway not ready (%d/20): %s", attempt + 1, exc)
@@ -152,6 +157,37 @@ class IBAdapter:
     # exception the service logs rather than acts on. Implementation uses
     # ib_async primitives: qualifyContracts, reqSecDefOptParams,
     # reqMktData for legs, Bag contract with ComboLegs, LimitOrder at mid.
+
+    def _apply_market_data_type(self, mdt: int | None = None) -> None:
+        """Tell IB which data feed to serve. NEVER called before 2026-08-24,
+        so IB defaulted to LIVE (type 1); a paper account without market-data
+        subscriptions then returned nan for every quote, spot() raised, every
+        price went absent, and the book could not seed the SPY core, sweep
+        BIL or rebalance - silently, forever."""
+        want = int(mdt if mdt is not None
+                   else getattr(self.cfg, "ib_market_data_type", 1))
+        try:
+            self.ib.reqMarketDataType(want)
+            self._md_type = want
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("reqMarketDataType(%d) failed: %s", want, exc)
+
+    def _await_tick(self, ticker, wait_s: float) -> float:
+        """Poll for a usable price until wait_s. The old code slept a flat 3s
+        and read once - too short for a delayed feed's first tick, so even a
+        working subscription could read as 'no market price'."""
+        deadline = time.monotonic() + max(0.5, wait_s)
+        px = float("nan")
+        while time.monotonic() < deadline:
+            self.ib.sleep(0.25)
+            px = ticker.marketPrice()
+            if px == px and px > 0:
+                return float(px)
+            for attr in ("last", "close", "bid", "ask"):
+                v = getattr(ticker, attr, None)
+                if v is not None and v == v and v > 0:
+                    return float(v)
+        return px
 
     def spot(self, symbol: str) -> float:
         from ib_async import Future, Stock
@@ -168,12 +204,40 @@ class IBAdapter:
                        key=lambda d: d.contract.lastTradeDateOrContractMonth
                        )[0].contract
         self.ib.qualifyContracts(c)
+        wait = float(getattr(self.cfg, "ib_quote_wait_s", 6.0))
         t = self.ib.reqMktData(c, "", False, False)
-        self.ib.sleep(3)
-        px = t.marketPrice()
+        px = self._await_tick(t, wait)
+        self.ib.cancelMktData(c)
+        if px == px and px > 0:
+            return float(px)
+        # Live returned nothing. Escalate ONCE to delayed if allowed - and say
+        # so: a degradation that prices real orders must be visible, never
+        # inferred. With delayed disallowed (the go-live posture) this stays a
+        # hard failure and the cycle fails closed, as it should.
+        allow = getattr(self.cfg, "ib_allow_delayed", True)
+        if not allow or getattr(self, "_md_type", 1) != 1:
+            raise RuntimeError(
+                f"no market price for {symbol} (market-data type "
+                f"{getattr(self, '_md_type', 1)}; delayed fallback "
+                f"{'disabled' if not allow else 'already active'})")
+        self._apply_market_data_type(3)          # delayed
+        t = self.ib.reqMktData(c, "", False, False)
+        px = self._await_tick(t, wait)
         self.ib.cancelMktData(c)
         if px != px or px <= 0:
-            raise RuntimeError(f"no market price for {symbol}")
+            self._apply_market_data_type()       # restore configured type
+            raise RuntimeError(
+                f"no market price for {symbol} on live OR delayed data - "
+                f"check this account's IB market-data subscription")
+        if not self._delayed_announced:
+            self._delayed_announced = True
+            from .alerts import send
+            send("🔴 ACTION NEEDED (you) — IBKR is serving DELAYED (~15min) "
+                 "quotes: this account has no live market-data subscription. "
+                 "The 30/70 book is valuing and rebalancing on delayed "
+                 "prices. Acceptable on paper; attach a subscription and set "
+                 "IB_ALLOW_DELAYED=false BEFORE switching to live money.")
+        logger.warning("%s priced on DELAYED data", symbol)
         return float(px)
 
     def open_spread(self, structure: dict, budget: float) -> dict:
