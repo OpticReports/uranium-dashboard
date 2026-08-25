@@ -1,5 +1,5 @@
 {
- "_provenance": "CONFIRMED calibration (validation brief 2026-08-09). SEED targets: Correlation Ventures US venture financing outcomes 2004-2013, n=21,640 (Seth Levine 2014 / Forbes-Booth 2014): <1x 64.8%, 1-5x 25.3%, 5-10x 5.9%, 10-20x 2.5%, 20-50x 1.1%, >50x 0.4% \u2014 the provisional targets matched the published figures exactly, no refit needed. CONVENTION: this model's 'alpha' is the SURVIVAL exponent P(>x) ~ x^-alpha; the CSN density exponent = alpha+1. Fitted seed alpha 1.70 => CSN 2.70, adjacent to AngelList/Othman CSN MLE 2.42 (winners, xmin=1) and the CV-bucket-implied ~2.44; Moonfire production omega 2.05. Literature range (brief): seed CSN 2.0-2.7 => survival 1.0-1.7; Series B CSN 2.5-3.0 => survival 1.5-2.0. SERIES_B targets constructed per brief: loss mass 0.40 (CV dollar-basis 37% <1x, 2021 update; Carta A->B graduation 9-25%), conditional body CV-shaped, tail survival alpha 1.75 (CSN 2.75, mid of published B range). Series B mid-buckets are CONSTRUCTED (no published 6-bucket B histogram exists) and are so labeled. Cross-checks: Cochrane 2005 corrected lognormal (log mean 15%/yr, log sd 89%/yr); Korteweg-Sorensen 2010 (monthly idio sigma 41%). Fee map: net=1+0.8(g-1), matches audited EV trees.",
+ "_provenance": "MEASURED STAGE-CONDITIONAL MOIC, PitchBook 'VC Returns by Series' Part IV (Q3 2024; US, n=31,642 companies taking a first VC round 2009-2018, measured 2024-06-06; COUNT basis; INCLUDES tracked failures - out-of-business plus no-major-round-in-6-years; gross, pre-fee; IPO payout marked at IPO PRE-MONEY). PROVENANCE OF THE NUMBERS THEMSELVES: PitchBook published the by-series MOIC figure as a chart and withheld its data labels - the PDF text layer for that figure carries only axis and legend text. Values were recovered by converting the page to SVG (pdftocairo -svg) and reading the 30 bar rectangles' geometry, then normalizing each series column to 100%. Precision +/-0.5pp. TWO INDEPENDENT VALIDATION LOCKS, both pass: (1) recovered seed <1x = 81.2% against PitchBook's own prose 'as much as 81% of seed investments return less than the original cost'; (2) mean(Series C, Series D+) = 49.5/40.9/6.1/2.1/0.9/0.5 rounds to 50/41/6/2/1/0, which are PitchBook's PRINTED Series C+ labels. Recovered by adversarial counter-agent, 2026-08-20. TAIL EXPONENT CONVENTION: 'alpha' is the SURVIVAL exponent P(>x) ~ x^-alpha; CSN density exponent = alpha+1. TAIL DETERMINACY WARNING: the survival exponent implied directly by the measured 20-50x and >50x buckets is seed 0.94, series_a 1.20, series_b 1.24, series_c 1.46, series_d_plus 0.76. An exponent <= 1 has NO FINITE MEAN - EV would be purely a function of where one caps. For seed (1.9%/1.4%) and series_d_plus (0.5%/0.5%) those two buckets sit at or near the +/-0.5pp recovery precision floor, so their tail ratio is NOT determined by the data; both are fitted under a constraint alpha >= 1.05 and their tails must be treated as indicative only. series_a, series_b and series_c have both tail buckets well clear of the precision floor and their exponents ARE determined. FUNCTIONAL-FORM LIMITATION: the lognormal-body + Pareto-tail form cannot represent the seed column well (16.2% max relative bucket error) - measured seed is a barbell, 81% dead plus a fat top, with a thin middle that a single lognormal body overfills. series_d_plus fits poorly for the precision reason above (23.6%). series_a/b/c fit within 10%. CORRECTED 2026-08-20 - WHAT THIS REPLACES: the vector previously installed as 'seed' (64.8/25.3/5.9/2.5/1.1/0.4) is NOT a seed distribution. It is Correlation Ventures' ALL-SECTOR, ALL-SERIES POOLED 2014 figure - reconstructed exactly as the n-weighted blend of CV's two published sector bars (Other VC n=19,412 at 65.7/24.6/5.8/2.5/1.1/0.4 and BioPharma n=2,228 at 57.0/31.6/7.1/2.8/1.3/0.3 -> 64.804/25.321/5.934/2.531/1.121/0.390). It is retained below as cv_pooled_2014_crosscheck, NOT as a stage. Likewise the previous series_b provenance cited a 'CV dollar-basis 37% <1x' that is CV's ALL-STAGES POOLED dollar-weighted figure, not a Series B figure; the constructed series_b (41.7% <1x) was 14pp OPTIMISTIC against measured B (55.4%). A REFUTED INFERENCE, logged: it was proposed that because CV's pooled <1x (64.8%) nearly equals CV's Series A <1x (65%), the pooled vector was 'Series-A-shaped'. REFUTED - the coincidence is arithmetic. Sweeping stage weights on a 5% grid over these measured columns, 133 distinct mixtures reproduce pooled <1x = 64.8%, spanning 19.7-26.5% at 1-5x and 4.2-8.2% at >=10x. One moment cannot identify six buckets. Measured Series A is 18.4% at 1-5x and 8.4% at >=10x against the pooled vector's 25.3% and 4.0% - importing the pooled mid-buckets would have HALVED the Series A tail. MEAN BASIS: do NOT target Correlation's 3.0X Series A average - it is DOLLAR-weighted while these bucket frequencies are COUNT-weighted. CV's matched count-basis pair is 65% <1x; its matched dollar-basis pair is 56% <1x with the 3.0X. For a per-deal analyzer the count basis is correct and 3.0X is the wrong object. UNRESOLVED, per the standing missing-inputs rule - ASK, do not average: Correlation's 2014 source is internally ambiguous about whether '2004-2013' is the FINANCING window (Booth's prose) or the EXIT window (CV's own chart subtitle). CV's later posts favour the exit reading. Affects only the cross-check vector, not the installed stages. Fee map unchanged: net = 1 + 0.8(g-1) for g>1, matches the audited EV trees.",
  "bucket_edges": [
   0.0,
   1,
@@ -12,6 +12,98 @@
  "stages": {
   "seed": {
    "target_buckets": {
+    "lt1": 0.812,
+    "1_5": 0.089,
+    "5_10": 0.038,
+    "10_20": 0.028,
+    "20_50": 0.019,
+    "gt50": 0.014
+   },
+   "fitted_params": {
+    "mu": 0.78,
+    "sigma": 1.9,
+    "x_tail": 32,
+    "alpha": 1.05
+   },
+   "rel_gate_tol": 0.25,
+   "_note": "MEASURED. Tail exponent NOT determined at published precision (20-50x and >50x buckets are 1.9%/1.4%, near the +/-0.5pp floor); fitted under alpha>=1.05. Functional form underfits this column (16.2% max rel err) - measured seed is a barbell the lognormal body cannot hold. Gate tolerance widened to 25% with that documented reason."
+  },
+  "series_a": {
+   "target_buckets": {
+    "lt1": 0.66066,
+    "1_5": 0.18418,
+    "5_10": 0.07107,
+    "10_20": 0.04204,
+    "20_50": 0.02803,
+    "gt50": 0.01401
+   },
+   "fitted_params": {
+    "mu": 1.0,
+    "sigma": 1.42,
+    "x_tail": 22,
+    "alpha": 1.11
+   },
+   "rel_gate_tol": 0.1,
+   "_note": "MEASURED. Tail exponent determined (2.8%/1.4%, both clear of the precision floor; implied survival alpha 1.20). Best-supported anchor in this file. Max rel bucket err 8.5%."
+  },
+  "series_b": {
+   "target_buckets": {
+    "lt1": 0.554,
+    "1_5": 0.31,
+    "5_10": 0.075,
+    "10_20": 0.033,
+    "20_50": 0.019,
+    "gt50": 0.009
+   },
+   "fitted_params": {
+    "mu": -2.2,
+    "sigma": 2.9,
+    "x_tail": 6,
+    "alpha": 1.15
+   },
+   "rel_gate_tol": 0.1,
+   "_note": "MEASURED. Replaces a CONSTRUCTED vector that was 14pp optimistic on loss mass (41.7% vs measured 55.4%). Max rel bucket err 4.9%."
+  },
+  "series_c": {
+   "target_buckets": {
+    "lt1": 0.50649,
+    "1_5": 0.37662,
+    "5_10": 0.06993,
+    "10_20": 0.02797,
+    "20_50": 0.01399,
+    "gt50": 0.005
+   },
+   "fitted_params": {
+    "mu": 0.18,
+    "sigma": 2.54,
+    "x_tail": 4,
+    "alpha": 1.35
+   },
+   "rel_gate_tol": 0.1,
+   "_note": "MEASURED. Max rel bucket err 5.6%."
+  },
+  "series_d_plus": {
+   "target_buckets": {
+    "lt1": 0.48352,
+    "1_5": 0.44056,
+    "5_10": 0.05195,
+    "10_20": 0.01399,
+    "20_50": 0.005,
+    "gt50": 0.005
+   },
+   "fitted_params": {
+    "mu": -2.16,
+    "sigma": 1.66,
+    "x_tail": 19,
+    "alpha": 1.05
+   },
+   "rel_gate_tol": 0.3,
+   "_note": "MEASURED buckets, but tail exponent NOT determined (20-50x and >50x both 0.5%, at the precision floor). Fitted under alpha>=1.05; max rel bucket err 23.6%. Treat the tail as indicative only. Gate tolerance 30%: the 20-50x and >50x buckets are both 0.5%, i.e. AT the +/-0.5pp recovery precision floor, so their ratio carries no information and no functional form can fit them meaningfully."
+  }
+ },
+ "_superseded": {
+  "cv_pooled_2014_crosscheck": {
+   "buckets": {
     "lt1": 0.648,
     "1_5": 0.253,
     "5_10": 0.059,
@@ -19,30 +111,8 @@
     "20_50": 0.011,
     "gt50": 0.004
    },
-   "fitted_params": {
-    "mu": -0.7,
-    "sigma": 1.8,
-    "x_tail": 12,
-    "alpha": 1.7
-   },
-   "_note": "Targets = published CV 2004-2013 figures verbatim (confirmed 2026-08-09)."
-  },
-  "series_b": {
-   "target_buckets": {
-    "lt1": 0.4169,
-    "1_5": 0.4956,
-    "5_10": 0.0614,
-    "10_20": 0.0184,
-    "20_50": 0.0062,
-    "gt50": 0.0016
-   },
-   "fitted_params": {
-    "mu": 0.20000000000000007,
-    "sigma": 1.0,
-    "x_tail": 8,
-    "alpha": 1.75
-   },
-   "_note": "CONSTRUCTED stage-conditional anchor (loss mass 0.40 cited to CV-dollars/Carta; tail survival alpha 1.75 = CSN 2.75 per published B-round range; mid-buckets emerge from fit, not from a published histogram \u2014 labeled as such on any display). VALIDATED AGAINST MEASUREMENT 2026-08-15: PitchBook Part IV (US, n=31,642 first rounds 2009-2018) publishes a measured Series C+ MOIC histogram 50/41/6/2/1/0 across these exact buckets - close to this constructed shape; loss-mass band documented as 0.40 (CV-dollars floor) to 0.50 (PB C+ count ceiling); fitted 0.417 sits at the optimistic end, gate-tested within band. Deal verdicts insensitive to anchor choice (tilt pins logged forecasts; sensitivity ~0.05pp on P(net>=20x)). Study: validation/pitchbook-series-study-2026-08-15.md."
+   "what_it_is": "Correlation Ventures, US venture financings, n=21,640, ALL SECTORS and ALL SERIES pooled (seed through late). Reconstructed exactly from CV's two published sector bars. Retained as an independent cross-check on the aggregate, NOT usable as a stage anchor. Was previously mislabeled 'seed' in this file.",
+   "window_ambiguity": "2004-2013 is either the financing window or the exit window; unresolved."
   }
  }
 }

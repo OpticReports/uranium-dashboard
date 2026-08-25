@@ -45,6 +45,60 @@
   .rule { border: 0; border-top: 1px solid var(--line); margin: 32px 0 26px; }
   .num { font-family: ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; }
 
+
+  /* ---- site nav (hamburger) ----
+     Links are ABSOLUTE, not root-relative: this same file is served at
+     research.optic.capital/deals/ AND published as a standalone artifact,
+     where "/genomics/" would resolve against the wrong origin. */
+  .navbtn {
+    display: inline-flex; flex-direction: column; justify-content: center; gap: 4px;
+    width: 38px; height: 38px; padding: 0 8px; margin: 0 0 14px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 7px;
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  .navbtn:hover { border-color: var(--accent); }
+  .navbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .navbtn i { display: block; height: 2px; background: var(--ink); border-radius: 2px; transition: transform .18s ease, opacity .18s ease; }
+  .navbtn[aria-expanded="true"] i:nth-child(1) { transform: translateY(6px) rotate(45deg); }
+  .navbtn[aria-expanded="true"] i:nth-child(2) { opacity: 0; }
+  .navbtn[aria-expanded="true"] i:nth-child(3) { transform: translateY(-6px) rotate(-45deg); }
+
+  .navback {
+    position: fixed; inset: 0; background: rgba(10,16,14,.45);
+    opacity: 0; pointer-events: none; transition: opacity .18s ease; z-index: 40;
+  }
+  .navback.open { opacity: 1; pointer-events: auto; }
+
+  .sitenav {
+    position: fixed; top: 0; left: 0; bottom: 0; width: min(310px, 84vw);
+    background: var(--card); border-right: 1px solid var(--line);
+    padding: 22px 18px; z-index: 41; overflow-y: auto;
+    transform: translateX(-102%); transition: transform .2s ease;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .sitenav.open { transform: translateX(0); }
+  .sitenav .navhead {
+    font-family: ui-monospace, Menlo, monospace; font-size: .68rem; letter-spacing: .13em;
+    text-transform: uppercase; color: var(--muted); margin: 2px 0 12px;
+  }
+  .sitenav a {
+    display: block; padding: 10px 12px; border-radius: 7px;
+    color: var(--ink); text-decoration: none; border: 1px solid transparent;
+  }
+  .sitenav a:hover { background: var(--wash); border-color: var(--line); }
+  .sitenav a:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .sitenav a b { display: block; font-weight: 600; font-size: .95rem; }
+  .sitenav a span { display: block; font-size: .78rem; color: var(--muted); line-height: 1.35; }
+  .sitenav a[aria-current="page"] { background: var(--wash); border-color: var(--accent); }
+  .sitenav a[aria-current="page"] b { color: var(--accent); }
+  .sitenav .navfoot {
+    margin-top: auto; padding-top: 16px; border-top: 1px solid var(--line);
+    font-family: ui-monospace, Menlo, monospace; font-size: .68rem; color: var(--muted);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .sitenav, .navback, .navbtn i { transition: none; }
+  }
+
   /* tooltips */
   .tt { position: relative; cursor: help; border-bottom: 1px dotted var(--muted); }
   .tt:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -77,6 +131,7 @@
   .deal .meta { font-size: .76rem; color: var(--muted); margin-bottom: 10px; }
   .vchip { display: inline-block; font-family: ui-monospace, Menlo, monospace; font-size: .7rem; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); margin-bottom: 8px; }
   .v-watch { background: var(--warn-wash); color: var(--danger); }
+  .v-intake { background: var(--wash); color: var(--accent-ink); border: 1px dashed var(--accent); }
   .v-cond { background: var(--wash); color: var(--accent-ink); }
   .srow { display: grid; grid-template-columns: 118px 1fr 66px; gap: 8px; align-items: center; font-size: .8rem; margin-bottom: 6px; }
   .srow .name { color: var(--muted); }
@@ -129,12 +184,26 @@
 </style>
 
 <div class="wrap">
-  <div class="eyebrow"><b>OpticReports</b> · Deal Analyzer · <span class="tt down" tabindex="0">rubric v1.1<span class="box"><b>Versioned instrument.</b> Both ledger deals were scored under rubric v1; v1.1 was adopted 2026-08-09 after an adversarial counter-agent review of the instrument itself (gates before weighted sums, timing as its own axis, traction split into demand/delivery evidence, pedigree-capped team credit). v1 scores stand as logged — every ledger entry is stamped with its rubric version so calibration is computed per version, never mixed.</span></span> · updated 2026-08-09</div>
+  <button class="navbtn" id="navbtn" aria-label="Open site menu" aria-expanded="false" aria-controls="sitenav">
+    <i></i><i></i><i></i>
+  </button>
+  <div class="navback" id="navback" hidden></div>
+  <nav class="sitenav" id="sitenav" aria-label="Research site">
+    <div class="navhead">OpticReports · Research</div>
+    <a href="https://research.optic.capital/genomics/"><b>Genomics Alpha Tracker</b><span>Sector signal scoring and analyst chat</span></a>
+    <a href="https://research.optic.capital/canary/"><b>Treasury Canary</b><span>Treasury market health monitor</span></a>
+    <a href="https://research.optic.capital/exit/"><b>Exit Window Monitor</b><span>Regime / exit-window signals</span></a>
+    <a href="https://research.optic.capital/portfolio-optimizer/"><b>Barbell Lab</b><span>Portfolio construction and optimization</span></a>
+    <a href="https://research.optic.capital/btc/"><b>BTC Paper Engine</b><span>Pullback strategy, paper-traded</span></a>
+    <a href="https://research.optic.capital/deals/" aria-current="page"><b>Deal Analyzer</b><span>Private deal ledger and forecasts</span></a>
+    <div class="navfoot">research.optic.capital</div>
+  </nav>
+  <div class="eyebrow"><b>OpticReports</b> · Deal Analyzer · <span class="tt down" tabindex="0">rubric v1.1<span class="box"><b>Versioned instrument.</b> Both ledger deals were scored under rubric v1; v1.1 was adopted 2026-08-09 after an adversarial counter-agent review of the instrument itself (gates before weighted sums, timing as its own axis, traction split into demand/delivery evidence, pedigree-capped team credit). v1 scores stand as logged — every ledger entry is stamped with its rubric version so calibration is computed per version, never mixed.</span></span> · updated 2026-08-25</div>
   <h1>Ledger Dashboard</h1>
   <p class="sub">Every deal scored on the same fixed rubric by a 5-scorer independent panel plus a red team; every verdict logged with probability forecasts that resolve against reality. Hover (or tab to) any dotted element for the evidence and reasoning behind it.</p>
 
   <div class="tiles">
-    <div class="tile"><span class="big">5</span><span class="cap"><span class="tt down" tabindex="0">deals analyzed<span class="box"><b>What "analyzed" means here:</b> the full pipeline ran — provenance-tagged fact pack, independent verification, standing red team, pre-mortem, audited EV tree, tiered memo, ledger entry with resolvable forecasts. <b>3 venture</b> (DexMat, Quaise, Matter Intelligence) + <b>2 non-venture</b> (Argentina GDP warrants — sovereign litigation; Series X Capital — fund position). Every deal: full pipeline with counter-agent verification before display.</span></span></span></div>
+    <div class="tile"><span class="big">5<small style="font-size:.85rem; color:var(--muted)"> +1 intake</small></span><span class="cap"><span class="tt down" tabindex="0">deals analyzed · Oligo Space in S1<span class="box"><b>What "analyzed" means here:</b> the full pipeline ran — provenance-tagged fact pack, independent verification, standing red team, pre-mortem, audited EV tree, tiered memo, ledger entry with resolvable forecasts. <b>3 venture</b> (DexMat, Quaise, Matter Intelligence) + <b>2 non-venture</b> (Argentina GDP warrants — sovereign litigation; Series X Capital — fund position). Every deal: full pipeline with counter-agent verification before display.</span></span></span></div>
     <div class="tile"><span class="big">3.18</span><span class="cap">average weighted score, <span class="tt" tabindex="0">venture deals only<span class="box">The Argentina litigation entry carries no 1–5 score by design — its comparable quantity is the audited EV tree. Averaging across asset classes would be meaningless, so this tile covers the two venture deals.</span></span> — <span class="tt down" tabindex="0">scale<span class="box"><b>Weighted total</b> = Σ(weight × panel-median score)/100 on a 1–5 scale. Pre-committed weights; medians from 5 independent scorers who never see each other's scores. Mechanical aggregation beats holistic judgment by ~10% on average (Grove et&nbsp;al. 2000 meta-analysis, 136 studies).</span></span></span></div>
     <div class="tile"><span class="big">14</span><span class="cap"><span class="tt down" tabindex="0">probability forecasts pending<span class="box"><b>The improvement engine.</b> Each venture run logs P(next round ≤24mo), P(&lt;1x), P(≥10x); the Argentina entry logs P(claim survives dismissal) and P(&lt;1x net). <b>First resolution is now near-term</b> — the SDNY motion-to-dismiss ruling is overdue — then 2028-08 (venture next-round proxies) and 2033–34 (multiples). Scored with Brier scores per rubric version — the only contamination-proof validity signal (calibration training improved forecast accuracy ~10% in the Good Judgment Project; consistency alone ≠ accuracy).</span></span></span></div>
     <div class="tile"><span class="big">0</span><span class="cap"><span class="tt down" tabindex="0">forecasts resolved<span class="box"><b>Why zero is the honest number.</b> Venture outcomes take years: next-round proxies resolve 2028-08, return multiples 2033–34. Until forecasts resolve, this system has a defensible <b>process</b> but no <b>track record</b> — and the dashboard says so rather than borrowing credibility from the evidence base. The calibration panel activates with the first resolution.</span></span></span></div>
@@ -163,6 +232,16 @@
 
   <h2>Deals</h2>
   <div class="deals">
+    <div class="deal cardish">
+      <span class="vchip v-intake tt" tabindex="0">IN PROCESS · S1 INTAKE<span class="box"><b>Why this card has no scores, odds, or verdict.</b> This deal entered the IC process (v1.1) on 2026-08-25 and is at S1 — capture only, opinion forbidden by protocol. The sealed blind prior must be written before any analysis is shown; a six-sweep verification workflow (team, corporate/funding, traction, market-stat audit, comps, technical feasibility — each with an adversarial counter-agent pass) is running and its output is deliberately withheld until the prior is sealed. Scores, EV and exit odds appear at S3 (2026-09-04). Publishing the card at intake is itself part of the process: the ledger shows deals from the moment they arrive, not only once they have been decided.</span></span>
+      <h3>Oligo Space</h3>
+      <span class="vchip v-cond tt" tabindex="0" style="font-size:.64rem">RISK TYPE: PENDING (S2)<span class="box">Hurdle-ledger classification happens in the S2 dialogue once verification lands. Prior expectation from the sector pattern — a mix of execution hurdles (facility throughput, first build) and dated venture hurdles (April 2027 launch) — is NOT recorded as a classification; that would be an opinion, and S1 forbids those.</span></span>
+      <div class="meta">Space / AI-native satellite manufacturing · Hawthorne, CA · raising $10M at <span class="tt" tabindex="0">$100M — pre or post UNKNOWN<span class="box"><b>Top ask, unanswered.</b> The memo says only "a $100M valuation." On a $10M raise, pre vs post is 9.1% vs 10.0% ownership and rescales every multiple. Asked, not assumed — per the standing missing-inputs rule.</span></span> · <span class="tt" tabindex="0">terms "L1, 10/0/10" — undecoded<span class="box"><b>LP-stated notation that appears in no supplied document.</b> Fees compound directly into the exit multiple (a 2/20 SPV needs ≈12.5x gross for the LP to net 10x), so the deal cannot be priced until the three numbers are defined. SPV/LPA docs requested.</span></span> · intake 2026-08-25 · <span class="tt" tabindex="0">S2 08-28 · S3 09-04<span class="box"><b>IC process v1.1 schedule.</b> S2 (T+3): the case, argued as a dialogue in rounds — bull steelmanned, bear steelmanned, concessions logged live, output is the cruxes. S3 (T+10): panel scores, pre-mortem, kill criteria written before money moves, forecasts dated into the ledger, sealed prior opened and compared.</span></span></div>
+      <div class="meta" style="margin-bottom:6px"><span class="lbl" style="letter-spacing:.08em; font-size:.64rem">CAPTURED AT INTAKE</span></div>
+      <div class="meta">Memo READ IN FULL (4pp; archived with text extract). Claims $7M raised (Lux, Soma, Alumni Ventures, Kakao), last round at $50M; Zenith AI design platform; 14,000 sq ft Hawthorne facility; CHIMERA1 launch "booked and paid" April 2027; customers "acquired" for CHIMERA1–2 at $15M–$37M "possible" revenue each. <b>All CLAIMED — verification in flight, nothing yet independently confirmed.</b></div>
+      <div class="meta"><span class="tt" tabindex="0"><b>5 divergences</b> between the LP summary and the memo PDF<span class="box"><b>Captured as fact, not judgement.</b> (1) "Dr. Andrew Shapiro, Chief Technologist, former NASA JPL Chief Technologist" — appears NOWHERE in the PDF; its Team section names only the founder. (2) "veteran team from NASA JPL, Caltech, UCLA, defense" — not in the PDF. (3) Summary's "signed customers… yielding" vs memo's "acquired customers… possible revenue." (4) "MIT dropout" vs "studied at MIT." (5) Terms "L1, 10/0/10" appear in neither. Items 1, 2 and 5 imply a second source document that has not been supplied — requested rather than worked around.</span></span> · <span class="tt" tabindex="0"><b>10 UNKNOWN–REQUIRED</b> asks logged<span class="box"><b>Top of the list, by decision impact:</b> pre vs post on the $100M; the "L1, 10/0/10" fee decode; the CHIMERA customers — named, contract vs LOI, contracted value vs the 2.5x-wide "possible" range, affiliate check; whether Shapiro is actually at Oligo and his real JPL title; the launch provider and manifest entry; whether Oligo has ever built or flown ANY spacecraft (claimed capacity is not demonstrated output); cash/burn/runway; cap table and who led the $50M round; any demonstrable Zenith artifact; who brings the deal and their economics. Full list: deals/oligo-space/ic.md.</span></span></div>
+      <div class="meta" style="margin-bottom:0"><span class="tt" tabindex="0">Sealed prior: <b>AWAITING CASEY — blocking</b><span class="box"><b>The one S1 step only the LP can do.</b> P(&lt;1x), P(≥10x), and a one-line thesis, written blind — before reading any analysis. It is the only anchor-free datapoint the calibration record ever gets, and it is destroyed the moment analysis is read. Verification output is held back until this is sealed.</span></span> · <span class="tt" tabindex="0">book flag: 2nd satellite-adjacent name<span class="box"><b>Sector concentration, logged at intake.</b> Matter Intelligence (passed at ask) and Bellwether (held twice: Series X fund + direct angel) are already in the ledger. A third satellite-economy exposure makes cross-position correlation a live R1 item — the monthly review checks the book, not just the deal.</span></span></div>
+    </div>
     <div class="deal cardish">
       <span class="vchip v-watch tt" tabindex="0">BORDERLINE PASS / WATCH<span class="box"><b>Decider:</b> the signed multi-year offtake's counterparty + binding committed volumes (or an executed Tokai Rika PO at ~$3M/yr). Binding + named → defensible tail bet despite the price. Frame agreement / unnamed → pass. At $45M post, the specialty-only success (Zoltek-class $400–585M exit) nets just 1.5–3x after 2/20 — the copper tail is what you'd be buying.</span></span>
       <h3>DexMat (Galvorn)</h3>
@@ -312,3 +391,47 @@
 
   <p class="foot">Process: provenance-tagged fact pack → 5 independent scorers (median + IQR, reliability gate) → red team → tiered memo → ledger entry. Rubric v1 weights and anchors: <code>venture-deal-analyzer/templates/rubric.md</code> · design + evidence base: <code>venture-deal-analyzer/DESIGN.md</code> · this file: <code>venture-deal-analyzer/dashboard.html</code> — updated by each deal run; superseded revisions live in git history.</p>
 </div>
+<script>
+(function () {
+  var btn = document.getElementById('navbtn');
+  var nav = document.getElementById('sitenav');
+  var back = document.getElementById('navback');
+  if (!btn || !nav || !back) return;
+  var lastFocus = null;
+
+  function open() {
+    lastFocus = document.activeElement;
+    back.hidden = false;
+    // next frame so the transition runs from the hidden state
+    requestAnimationFrame(function () { nav.classList.add('open'); back.classList.add('open'); });
+    btn.setAttribute('aria-expanded', 'true');
+    btn.setAttribute('aria-label', 'Close site menu');
+    var first = nav.querySelector('a');
+    if (first) first.focus();
+  }
+  function close(refocus) {
+    nav.classList.remove('open');
+    back.classList.remove('open');
+    btn.setAttribute('aria-expanded', 'false');
+    btn.setAttribute('aria-label', 'Open site menu');
+    window.setTimeout(function () { if (!nav.classList.contains('open')) back.hidden = true; }, 220);
+    if (refocus) (lastFocus && lastFocus.focus ? lastFocus : btn).focus();
+  }
+  btn.addEventListener('click', function () {
+    nav.classList.contains('open') ? close(true) : open();
+  });
+  back.addEventListener('click', function () { close(true); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && nav.classList.contains('open')) close(true);
+  });
+  // keep focus inside the panel while it is open
+  nav.addEventListener('keydown', function (e) {
+    if (e.key !== 'Tab') return;
+    var f = nav.querySelectorAll('a');
+    if (!f.length) return;
+    var first = f[0], last = f[f.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
+})();
+</script>
