@@ -432,6 +432,15 @@ instead of assertion.
   loop thread, owner of the ib_async event loop, executes it on its next
   (immediately woken) iteration — see the two-stage `/kill` above.
 
+GATEWAY WRITE-ARMING: IBC's ReadOnlyApi DEFAULTS TO ON - reads (quotes,
+positions) work while every placeOrder is refused with error 321 ("API
+interface is currently in Read-Only mode"). The paper book's first-ever
+orders died on this, 2026-08-25. Arm with `READ_ONLY_API=no` in the Render
+dashboard (sync:false - an arming var is never a blueprint literal). This
+is a REQUIRED step of both the paper phase and go-live; it sits underneath
+DRY_RUN in the safety stack: DRY_RUN gates whether the executor SENDS
+orders, ReadOnlyApi gates whether the gateway ACCEPTS them.
+
 SUPERVISED FIRST SESSION: flip `DRY_RUN=false` (with `TRADING_MODE=paper`)
 DURING MARKET HOURS and keep eyes on Telegram + `/status` through the
 session — watch the first MOO entry get adopted by reconcile after the
