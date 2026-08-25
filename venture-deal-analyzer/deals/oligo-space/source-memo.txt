@@ -159,3 +159,34 @@ repeatable manufacturing process, its advantage should compound with every space
 Bottom line: Oligo offers a differentiated way to invest in the transition from “space as a service” to “space
 as enterprise-owned infrastructure.”
 
+================================================================================
+CORRECTION 2026-08-25: pdftotext DROPS PAGE 3, which is a full-page raster
+image (2048x1045, sole image in the PDF). Transcription of that slide,
+read from the extracted image during verification:
+
+"Assembled a team of veteran engineers that have worked on the world's
+most advanced flagship missions" - 70+ YRS OF FLIGHT EXPERIENCE - 25+
+FLAGSHIP MISSIONS WORKED ON
+
+Andrew Shapiro, PhD - CHIEF TECHNOLOGIST - "20+ yrs previous NASA JPL
+Manager of Technology Formulation and Division Chief Technologist where he
+spearheaded early-stage innovation and funded seeded over 12 advanced
+missions across NASA Lectured at Caltech and UC Irvine. Former Proteus
+Space Co-Founder/CTO."
+Carlos Deccia, PhD - CHIEF MISSION ARCHITECT - astrodynamics PhD, ML lead;
+$8.4M NASA research grant; led AI at Canaria
+Carlyn Lee - SOFTWARE SYSTEMS LEAD - DARPA SubT autonomy co-author; JPL
+supercomputer sims; automated ops for 3 flagship missions
+Samuel Villarreal - HEAD OF FLIGHT SOFTWARE - Mars 2020, Curiosity, Psyche
+Warren Kaye - SENIOR FLIGHT SOFTWARE - 10 yrs JPL; Lunar Flashlight;
+Cassini Grand Finale; Psyche; ex Call of Duty developer
+Liliana Reyes - SENIOR AVIONICS - 4 full ESPA spacecraft at Momentus and
+Proteus Space
+Richard Guerrero - MANUFACTURING LEAD - 25 yrs JPL flight hardware; USAF
+veteran; harnessing vertical integration at Proteus Space
+Corey Mack - HEAD OF OPERATIONS - 20+ yrs JPL ops; 190-engineer robotics
+section
+Khari Lobin - MANUFACTURING TECHNICIAN - BMW automotive manufacturing
+
+Logos on slide: Cal, UCLA, Caltech, NASA, JPL, USAF.
+================================================================================

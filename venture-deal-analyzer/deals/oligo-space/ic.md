@@ -52,17 +52,27 @@ silent gaps from this batch.
 Recorded as fact, not as judgement. The summary contains claims the memo
 does not, which means a second source exists that has not been supplied.
 
-| # | LP summary says | The memo PDF says |
-|---|---|---|
-| 1 | "Chief Technologist **Dr. Andrew Shapiro** (former NASA JPL Chief Technologist, 20+ yrs)" | **Does not appear anywhere in the PDF.** The Team section names *only* Jacob Rodriguez. |
-| 2 | "veteran engineering team drawing from NASA JPL, Caltech, UCLA, and defense programs" | Not present. No team members named beyond the founder. |
-| 3 | "**signed** customers for CHIMERA1 and CHIMERA2 **yielding** potential revenue of $15M–$37M per satellite" | "**Acquired** customers … with a **possible** revenue on each CHIMERA ranging from $15M–$37M" |
-| 4 | "an **MIT dropout**" | "later **studied** AeroAstro, physics, and AI at MIT while working six internships" |
-| 5 | "Terms: L1, 10/0/10" | No terms of any kind appear in the memo. |
+**CORRECTED 2026-08-25 (verification §0): rows 1–2 of the original
+table were WRONG.** The memo's page 3 is a full-page raster image that
+the text extraction silently dropped — `pdfimages` shows one 2048×1045
+image, and the text layer contains zero occurrences of "Shapiro". The
+slide names NINE people including **Andrew Shapiro, PhD — CHIEF
+TECHNOLOGIST — "…Division Chief Technologist… Former Proteus Space
+Co-Founder/CTO"**, under the header "70+ YRS OF FLIGHT EXPERIENCE / 25+
+FLAGSHIP MISSIONS", with Cal/UCLA/Caltech/NASA/JPL/USAF logos. So the
+LP's summary items 1–2 came FROM the memo, not from a missing second
+source. **The original claim that "the Team section names only Jacob
+Rodriguez" was an artifact of reading a document without reading its
+images — exactly the failure mode the standing rule names.** The
+corrected divergence table:
 
-**Where did items 1–2 and 5 come from?** A deck, a call, or a sponsor
-email that has not been supplied. Per the standing rule that artifact is
-requested, not worked around.
+| # | LP summary says | The memo PDF says (full read incl. p.3 image) |
+|---|---|---|
+| 1 | "former NASA JPL Chief Technologist" | Slide is MORE precise: "Manager of Technology Formulation and **Division** Chief Technologist" — the dropped word is the finding, and it is Oligo's own website (not the LP) that drops it |
+| 2 | team from "NASA JPL, Caltech, UCLA, and defense programs" | Supported by the slide header + logos; NOTE Oligo's own job postings instead say "ex-MIT, Harvard, and NASA JPL" (Caltech 0, UCLA 0 across all 15) |
+| 3 | "**signed** customers … yielding potential revenue" | "**Acquired** customers … **possible** revenue" — "signed" remains the one real upgrade; the LP kept "potential" |
+| 4 | "an **MIT dropout**" | "studied at MIT" — and "MIT dropout" ALSO appears in the memo's own highlights (line 21); degree conferral unresolved either way |
+| 5 | "Terms: L1, 10/0/10" | **Genuinely absent from the memo, in text AND image (re-verified).** This one still implies an unsupplied source. |
 
 ### UNKNOWN — REQUIRED (ask, do not analyze around)
 
