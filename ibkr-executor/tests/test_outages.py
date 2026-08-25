@@ -335,3 +335,18 @@ def test_cleanup_runs_between_exit_and_relaunch_never_on_first(tmp_path):
     # the stubbed pkill actually executed (the path is exercised, not argued)
     pk = (tmp_path / "pkill.log").read_text()
     assert "Xvfb" in pk and "socat" in pk, pk
+
+
+def test_ladder_is_opt_in_and_disabled_ladder_never_steps(monkeypatch):
+    """Casey 2026-08-24: ladder off for now. Two properties: the flag
+    defaults FALSE (fresh deploys are ladder-off), and a disabled ladder's
+    step() is unreachable from the loop body's gate."""
+    from app.config import Settings
+    assert Settings().ladder_enabled is False
+    import inspect
+    import app.service as svc
+    src = inspect.getsource(svc._loop)
+    gate = src.index("if settings.ladder_enabled:")
+    step = src.index("MGR.step(")
+    save = src.index("MGR.save()")
+    assert gate < step < save, "step/save not inside the enabled gate"
