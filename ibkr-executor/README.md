@@ -348,6 +348,7 @@ El Nino combo reads):
   (an IB-initiated GTC cancel, e.g. corporate action) demotes the
   position to STOP_MISSING and is re-placed the same pass — never a
   naked position believed protected (adapter review m4).
+
 ### Gateway supervision + outage ledger (2026-08-24)
 
 The gateway was started as `"$GW" &` and never looked at again: uvicorn is
@@ -359,21 +360,37 @@ correctly, to a process that no longer existed. That is the difference
 between the 3-minute daily restart and the 30+ minute outage on 2026-08-24.
 
 - `start.sh` now SUPERVISES the gateway: restart on exit with 5s→300s
-  backoff, reset after `IBGW_HEALTHY_S` of clean uptime, and exit without
-  resurrecting on SIGTERM/SIGINT so a restart never races container
-  teardown. Every restart is appended to `data/gateway_restarts.jsonl`
-  with its exit code and uptime.
+  backoff (env values validated at boot — a non-numeric value used to kill
+  the supervisor silently and a negative one made it a fork bomb), reset
+  after `IBGW_HEALTHY_S` of clean uptime, a circuit breaker after
+  `IBGW_MAX_CONSEC_FAIL` consecutive short-lived starts (a permanently
+  unstartable gateway would otherwise attempt ~250–290 IBKR logins/day —
+  enough to lock the account), and no restart on a signal exit (143/130).
+  Every restart is appended to the restart log (rotated) with its exit code
+  and uptime. Honesty note: on a normal container stop Docker signals PID 1
+  (uvicorn) only, so the supervisor dies with the container — there is no
+  trap, because `exec` discards traps and a claimed-but-inert guarantee is
+  worse than none.
 - Gateway state deliberately does **not** gate `/health`. Wiring it in would
   make Render restart the whole container — executor included, possibly
   mid-order — on every routine blip, the mandatory daily restart included.
   Supervision restarts the gateway process alone; `/health` only reports.
-- `app/outages.py` persists an outage ledger (`data/gateway_outages.json`).
-  Each record carries `duration_s`, `cycles_blocked`, `alerted`, and
-  `ended_by`: `reconnect` (self-healed) vs `process_restart` (it did not).
-  That last field is the one an in-memory flag could never provide, and it
-  is what separates "IBKR being IBKR" from "our container is broken".
+- `app/outages.py` persists an outage ledger. On Render it MUST live on
+  the mounted disk — `OUTAGE_LOG_PATH=/app/data/...` in render.yaml — the
+  `./data` default is the ephemeral layer and dies on every deploy,
+  including the redeploy that fixes a wedged gateway. Each record carries
+  `duration_s`, `blocked_calls` (blocked ADAPTER CALLS, not cycles — it
+  scales with book size, so it is a cost signal, not a rate), `alerted`,
+  and `ended_by`: `reconnect` (self-healed) vs `process_restart` (it did
+  not). That last field separates "IBKR being IBKR" from "our container is
+  broken". The ledger may never raise into the trading path: every method
+  is exception-shimmed AND every adapter call site is wrapped.
 
-**What this does and does not reduce.** Frequency is unchanged — IBKR
+**What this does and does not reduce.** Expect the REPORTED `outages_30d`
+count to go UP as the tail collapses: one human-gated multi-hour outage
+becomes several short self-healed ones. Count and tail move in opposite
+directions — judge on `needed_a_restart` and the duration tail, not the
+count. Frequency of underlying incidents is unchanged — IBKR
 mandates a daily gateway restart and runs its own maintenance windows, and
 those stay irreducible. What collapses is the TAIL: process-death and
 login-wedge outages go from unbounded (human-gated) to seconds. Uptime %

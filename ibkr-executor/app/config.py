@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     # Without these there is NO downtime history at all, so "how much of our
     # downtime is IBKR vs our own container" is unanswerable rather than
     # merely unanswered (2026-08-24).
+    # Defaults match the OTHER state paths' style, but on Render these are
+    # overridden to /app/data (the mounted disk). ./data is the ephemeral
+    # container layer: history there dies on every deploy.
     outage_log_path: str = "./data/gateway_outages.json"
     gateway_restart_log: str = "./data/gateway_restarts.jsonl"
 

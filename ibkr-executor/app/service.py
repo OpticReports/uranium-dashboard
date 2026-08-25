@@ -62,18 +62,42 @@ def _gateway_restarts(limit: int = 20) -> dict:
     path = getattr(settings, "gateway_restart_log", "")
     out: list[dict] = []
     try:
-        with open(path) as fh:
-            for line in fh.readlines()[-limit:]:
-                try:
-                    out.append(json.loads(line))
-                except Exception:  # noqa: BLE001
-                    continue
+        # seek to the tail: /health is probed every few seconds and used to
+        # slurp the entire unrotated file (counter-agent measured 7.5 MB per
+        # call on a one-year log)
+        WINDOW = 256 * 1024
+        with open(path, "rb") as fh:
+            fh.seek(0, 2)
+            size = fh.tell()
+            fh.seek(max(0, size - WINDOW))
+            blob = fh.read().decode("utf-8", "replace")
+        lines = blob.splitlines()
+        if size > WINDOW:
+            lines = lines[1:]      # only THEN is the first line partial
+        for line in lines:
+            try:
+                rec = json.loads(line)
+            except Exception:  # noqa: BLE001
+                continue
+            if isinstance(rec, dict):
+                out.append(rec)
     except Exception:  # noqa: BLE001
         pass
     day = time.time() - 86400
-    return {"total_recorded": len(out),
-            "last_24h": sum(1 for r in out if r.get("ts", 0) >= day),
+    # count over EVERYTHING in the tail, then truncate for display: applying
+    # the limit first made last_24h saturate at exactly the storm it exists
+    # to reveal
+    last_24h = sum(1 for r in out if _num_ts(r) >= day)
+    return {"recent_shown": min(len(out), limit),
+            "last_24h": last_24h,
             "last": out[-1] if out else None}
+
+
+def _num_ts(rec: dict) -> float:
+    try:
+        return float(rec.get("ts") or 0)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _auth(hdr: str | None, q: str | None) -> None:
@@ -260,13 +284,22 @@ def health():
             "last_error_age_s": round(time.time() - err_ts, 1)
             if err_ts else None}
     if OUTAGES is not None:
-        summ = OUTAGES.summary()
-        body["gateway"] = {
-            "down_since": summ["currently_down_since"],
-            "outages_30d": summ["outages"],
-            "self_healed_30d": summ["self_healed"],
-            "needed_a_restart_30d": summ["needed_a_restart"],
-            "restarts_24h": _gateway_restarts()["last_24h"]}
+        # Guarded: healthCheckPath is /health, so a raise here 500s the probe
+        # and Render restarts the WHOLE container - executor included,
+        # possibly mid-order. That is the exact outcome the comment above
+        # says this block avoids, reached by another route (counter-agent
+        # 2026-08-24, CRITICAL). Reporting must never fail the verdict.
+        try:
+            summ = OUTAGES.summary() or {}
+            body["gateway"] = {
+                "down_since": summ.get("currently_down_since"),
+                "outages_30d": summ.get("outages"),
+                "self_healed_30d": summ.get("self_healed"),
+                "needed_a_restart_30d": summ.get("needed_a_restart"),
+                "restarts_24h": _gateway_restarts().get("last_24h")}
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("gateway health block failed (ignored): %s", exc)
+            body["gateway"] = {"error": "unavailable"}
     return body
 
 
@@ -295,6 +328,9 @@ def status(x_exec_token: str | None = Header(default=None),
         ts = marks.get("ts")
         body["blend"]["marks_age_s"] = (round(time.time() - ts, 1)
                                         if ts else None)
+    # /status is the operator's incident endpoint - it was the one place
+    # blind to gateway state (counter-agent 2026-08-24)
+    body.update(_gateway_report())
     return body
 
 
@@ -324,10 +360,20 @@ def blend_feed(x_read_token: str | None = Header(default=None)):
     body["mode"] = LAST["mode"]
     body["last_cycle"] = {"date": BLEND_CYCLE["date"], "ok": BLEND_CYCLE["ok"],
                           "error": BLEND_CYCLE["error"]}
-    if OUTAGES is not None:
-        body["gateway_outages"] = OUTAGES.summary()
-        body["gateway_restarts"] = _gateway_restarts()
+    body.update(_gateway_report())
     return body
+
+
+def _gateway_report() -> dict:
+    """Gateway reliability for operator endpoints. Never raises."""
+    if OUTAGES is None:
+        return {}
+    try:
+        return {"gateway_outages": OUTAGES.summary(),
+                "gateway_restarts": _gateway_restarts()}
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("gateway report failed (ignored): %s", exc)
+        return {"gateway_outages": {"error": "unavailable"}}
 
 
 @app.api_route("/kill", methods=["GET", "POST"])

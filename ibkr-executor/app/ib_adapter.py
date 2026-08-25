@@ -213,6 +213,18 @@ class IBAdapter:
     # synchronous ib_async calls (self.ib.sleep pumps the event loop) from
     # the service loop thread that built the adapter.
 
+    def _outage(self, method: str, *args) -> None:
+        """Ledger call that can never propagate. OutageLog guards its own
+        methods too; this guards the adapter against any other ledger."""
+        lg = self.outages
+        if lg is None:
+            return
+        try:
+            getattr(lg, method)(*args)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("outage ledger %s failed (ignored): %s",
+                           method, exc)
+
     def _require_connected(self) -> None:
         if self.ib.isConnected():
             return
@@ -237,13 +249,11 @@ class IBAdapter:
             logger.warning("IB gateway connection lost — reconnecting with "
                            "backoff (alert only if down > %d min)",
                            int(OUTAGE_ALERT_S // 60))
-            if self.outages:
-                # wall clock, not monotonic: the ledger outlives this process
-                self.outages.start(time.time())
-        if self.outages:
-            # every blocked poll is a decision the executor could not take -
-            # the real cost of an outage, unlike wall-clock uptime
-            self.outages.cycle_blocked()
+            # wall clock, not monotonic: the ledger outlives this process
+            self._outage("start", time.time())
+        # a blocked adapter call - NOT a cycle: this guard fronts six
+        # surfaces and reference_prices loops per symbol
+        self._outage("blocked_call")
         if now < self._next_reconnect_ts:
             self._maybe_outage_alert(now)
             return
@@ -272,20 +282,23 @@ class IBAdapter:
             send(f"🧬 IB gateway RECONNECTED after {down_s / 60:.0f} min — "
                  f"executor resumed (cycles were failing closed meanwhile; "
                  f"GTC stops rested at the venue throughout)")
-        if self.outages:
-            self.outages.end(time.time())
+        # State resets come FIRST. Closing the ledger before them meant a
+        # raise inside end() left the adapter permanently believing it was
+        # mid-outage while actually connected - the next real drop would then
+        # skip the outage start and fire a spurious DOWN alert with a bogus
+        # multi-hour duration (counter-agent 2026-08-24, CRITICAL).
         self._disconnected_since = None
         self._outage_alerted = False
         self._reconnect_backoff = RECONNECT_BACKOFF_S
         self._next_reconnect_ts = 0.0
+        self._outage("end", time.time())
 
     def _maybe_outage_alert(self, now: float) -> None:
         if (self._outage_alerted or self._disconnected_since is None
                 or now - self._disconnected_since <= OUTAGE_ALERT_S):
             return
         self._outage_alerted = True
-        if self.outages:
-            self.outages.mark_alerted()
+        self._outage("mark_alerted")
         from .alerts import send
         send(f"🚨 IB gateway DOWN for over {int(OUTAGE_ALERT_S // 60)} min "
              f"— executor is failing closed (no entries/exits/stop "

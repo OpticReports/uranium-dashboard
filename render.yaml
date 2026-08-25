@@ -350,6 +350,19 @@ services:
         sync: false          # PAPER username first (usually starts with 'D')
       - key: TWS_PASSWORD
         sync: false
+      # Gateway-outage ledger + supervisor restart records. These MUST sit
+      # on the mounted disk (/app/data): the code defaults are ./data, which
+      # resolves to /opt/executor/data on the EPHEMERAL container layer, so
+      # with autoDeploy every push wiped the whole history - including, in
+      # its own motivating case, the open outage record when a human
+      # redeploys to fix a wedged gateway (counter-agent 2026-08-24).
+      - key: OUTAGE_LOG_PATH
+        value: /app/data/gateway_outages.json
+      - key: GATEWAY_RESTART_LOG
+        value: /app/data/gateway_restarts.jsonl
+      # the shell supervisor's own copy of the same path; they must agree
+      - key: IBGW_RESTART_LOG
+        value: /app/data/gateway_restarts.jsonl
       - key: TRADING_MODE
         # paper | live — read by gateway AND executor. sync:false: this is
         # HALF of the ibkr live gate (with DRY_RUN); as a blueprint literal a
