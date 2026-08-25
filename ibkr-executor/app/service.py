@@ -303,7 +303,8 @@ def health():
             # SUCCESSFUL cycle, so ok:true said nothing about whether the
             # book could trade - one Telegram alert then permanent silence
             # (2026-08-24). Age, not a boolean: watchers can threshold it.
-            "quotes_missing_for_s": round(time.time() - qm, 1) if qm else None}
+            "quotes_missing_for_s": max(0.0, round(time.time() - qm, 1))
+            if qm else None}
     if OUTAGES is not None:
         # Guarded: healthCheckPath is /health, so a raise here 500s the probe
         # and Render restarts the WHOLE container - executor included,

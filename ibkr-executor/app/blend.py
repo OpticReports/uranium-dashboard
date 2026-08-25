@@ -636,6 +636,30 @@ class Blend3070Manager:
 
     # ---------- the decision step ----------
 
+    def _note_quote_health(self, prices: dict[str, float],
+                           alerts: list[str]) -> None:
+        """Track the SPY/BIL quote outage state (set on first miss, cleared
+        only when BOTH recover) and fire the once-per-outage alert. One
+        place, called unconditionally at the top of step()."""
+        st = self.state
+        spy = prices.get(CORE, 0.0) or 0.0
+        bil = prices.get(CASH_VEHICLE, 0.0) or 0.0
+        if spy > 0 and bil > 0:
+            if not st.quote_alert_armed or st.quotes_missing_since is not None:
+                st.quote_alert_armed = True      # outage over: re-arm (r3)
+                st.quotes_missing_since = None
+                self.save()
+            return
+        if st.quotes_missing_since is None:
+            st.quotes_missing_since = time.time()
+            self.save()
+        if st.quote_alert_armed:
+            st.quote_alert_armed = False
+            self.save()
+            alerts.append(f"🚨 blend: rebalance/valuation SKIPPED: missing "
+                          f"quote (SPY={spy or None}, BIL={bil or None}) — "
+                          f"no weight decision is taken on absent prices")
+
     def step(self, today: str, payload: dict | None,
              prices: dict[str, float]) -> list[dict]:
         """One evaluation against the tracker's intent payload. Returns order
@@ -651,6 +675,12 @@ class Blend3070Manager:
         st = self.state
         if st.halted:
             return intents
+        # Quote-health bookkeeping runs BEFORE the payload gate: with the
+        # tracker down (payload None) the old placement inside section 5
+        # meant a simultaneous quote outage was never flagged - and a
+        # recovery during a tracker outage never CLEARED the flag, so
+        # /health reported a growing false outage (counter-agent B1/B1b).
+        self._note_quote_health(prices, alerts)
         if payload is None:
             # Tracker unreachable or stale: NO tracker-dependent decision is
             # taken, but the LOCAL safety belt still runs — the 90-calendar-
@@ -920,29 +950,14 @@ class Blend3070Manager:
         #    M1: skipped while any book order is pending adoption.
         rebalance_intent = None
         spy_quote = prices.get(CORE, 0.0)
-        if spy_quote > 0 and bil_px > 0 and (
-                not st.quote_alert_armed
-                or st.quotes_missing_since is not None):
-            st.quote_alert_armed = True     # outage over: re-arm (r3)
-            st.quotes_missing_since = None
-            self.save()
         if spy_quote <= 0 or bil_px <= 0:
-            msg = (f"rebalance/valuation SKIPPED: missing quote "
-                   f"(SPY={spy_quote or None}, BIL={bil_px or None}) — no "
-                   f"weight decision is taken on absent prices")
-            self._event("WARN", msg)
-            if st.quotes_missing_since is None:
-                st.quotes_missing_since = time.time()
-                self.save()
-            if st.quote_alert_armed:
-                # r3/r4: alert-once per OUTAGE via a persisted armed flag
-                # (the budget-alarm pattern). Event-log dedup alone both
-                # missed a NEW outage after a quiet recovery (identical
-                # message, r3) and spammed when another recurring event
-                # interleaved (r4).
-                st.quote_alert_armed = False
-                self.save()
-                alerts.append(msg)
+            # flag + once-per-outage alert now live in _note_quote_health
+            # (top of step, ahead of the payload gate - B1/B1b); here we
+            # only record the skip and take no weight decision
+            self._event("WARN",
+                        f"rebalance/valuation SKIPPED: missing quote "
+                        f"(SPY={spy_quote or None}, BIL={bil_px or None}) — "
+                        f"no weight decision is taken on absent prices")
         elif pending_book:
             pass                        # wait for the in-flight book order
         elif (book := self.book_value(prices)) > 0:
@@ -1441,12 +1456,29 @@ def payload_is_stale(payload: dict, today: str) -> bool:
 def reference_prices(adapter, mgr: Blend3070Manager, payload: dict | None) -> dict:
     """Reference prices for every symbol the cycle can touch, via the
     adapter (DryAdapter returns synthetic quotes offline)."""
-    symbols = {CORE, CASH_VEHICLE}
-    symbols.update(p.symbol for p in mgr.state.positions.values())
+    rest = set()
+    rest.update(p.symbol for p in mgr.state.positions.values())
     if payload:
-        symbols.update(e["symbol"] for e in payload.get("entries", []) if e.get("symbol"))
+        rest.update(e["symbol"] for e in payload.get("entries", [])
+                    if e.get("symbol"))
+    rest -= {CORE, CASH_VEHICLE}
     prices: dict[str, float] = {}
-    for s in symbols:
+    # CORE and the cash vehicle probe FIRST: when both are dark the feed is
+    # down and every further symbol would burn its full quote wait inside
+    # BLEND_LOCK - measured ~2x wait_s per symbol, up to minutes on a
+    # mature book, all while /kill blocks on the lock (counter-agent A5).
+    # Sleeve positions then take conservative stop-level marks, which is
+    # the existing degraded-mark path.
+    for s in (CORE, CASH_VEHICLE):
+        try:
+            prices[s] = adapter.spot(s)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("spot %s failed: %s", s, exc)
+    if not (prices.get(CORE) and prices.get(CASH_VEHICLE)):
+        logger.warning("core/cash quotes dark - skipping %d sleeve quote "
+                       "lookups this cycle (bounded lock hold)", len(rest))
+        return prices
+    for s in rest:
         try:
             prices[s] = adapter.spot(s)
         except Exception as exc:  # noqa: BLE001
