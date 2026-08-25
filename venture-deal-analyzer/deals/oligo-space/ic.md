@@ -107,6 +107,9 @@ Ordered by how much each would move the decision.
   competition/comps, technical feasibility), each with an adversarial
   counter-agent pass. Output is held for S2 and is **deliberately not
   shown to the LP before the sealed prior is written.**
+- **Intake card published to /deals same day** (process step S1.5,
+  added at Casey's direction 2026-08-25): captured facts and process
+  state only, no scores/odds/verdict until S3.
 - **No opinion is recorded in S1.** Per protocol.
 
 ---

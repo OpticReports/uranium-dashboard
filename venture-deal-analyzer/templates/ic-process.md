@@ -36,8 +36,15 @@ anyone has been persuaded by it.
 4. List every document supplied, and every document named but not
    supplied. A document that cannot be opened is logged as NOT READ, in
    the reply, that day.
+5. **Publish the intake card to the /deals dashboard, same day**
+   (Casey, 2026-08-25: deals populate the page ON INTAKE, not at
+   decision). The card carries captured facts and process state only —
+   the ask, the divergences, the UNKNOWN list, the sealed-prior status,
+   the S2/S3 dates. **No scores, no odds, no verdict** — those appear
+   at S3. Canonical `dashboard.html` + mirror regenerated in the same
+   commit, per the sync rule.
 
-**Output:** fact-pack skeleton + a sealed prior.
+**Output:** fact-pack skeleton + a sealed prior + a live intake card.
 **Not produced:** any opinion.
 
 ## S2 · THE CASE — T+3, ~30 min
