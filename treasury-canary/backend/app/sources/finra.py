@@ -77,6 +77,14 @@ def fetch_tlt_short_interest(start: str = "2017-12-01") -> list[dict]:
             r.raise_for_status()
             rows = parse_rows(r.text)
             ok = bool(rows)
+            if not rows and _cache["data"]:
+                # a 200 whose body parses to nothing (schema change, JSON
+                # error page, rate-limit body) is a FAILURE, not new truth —
+                # never overwrite weeks-old-but-real settlements with [].
+                logger.warning("FINRA SI: 200 but 0 rows — keeping stale data")
+                _cache["ts"] = time.time()
+                _cache["ok"] = False
+                return _cache["data"]  # type: ignore[return-value]
             logger.info("FINRA TLT SI: %d settlements", len(rows))
         except Exception as exc:  # noqa: BLE001
             logger.warning("FINRA SI fetch failed: %s", exc)

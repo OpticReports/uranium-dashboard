@@ -53,6 +53,9 @@ def squeeze_history():
     cd, cv = fetch_ust_lev_pct_oi()
     si = fetch_tlt_short_interest()
     return {
+        "cot_note": ("pre-2016 weeks aggregate a 3-contract complex — Ultra "
+                     "10Y launched 2016; F1's trailing-10y window is "
+                     "unaffected"),
         "cot": [{"date": d.isoformat(), "pct_oi": round(v, 2)}
                 for d, v in zip(cd, cv)],
         "si": [{"date": r["settlement_date"],

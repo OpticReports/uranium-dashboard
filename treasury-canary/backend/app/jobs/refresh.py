@@ -207,32 +207,44 @@ def run_refresh(session: Session) -> dict:
     # --- Duration Squeeze Radar: condition flips + calendar pre-briefs -------
     # Pre-registered scorecard (docs/research/tlt-squeeze-2026, spec v2): a
     # TRIGGER condition flipping to MET is the event the card exists for ->
-    # RED. Fuel flips and downgrades are context -> WARN. Pre-briefs fire once
-    # per (event, date) at T-minus-3 days with the live scorecard attached.
+    # RED. Fuel flips and downgrades are context -> WARN. Two counter-agent
+    # laws encoded here: the flip baseline is the last NON-STALE state (a
+    # STALE interlude — deploy during a source outage — must not swallow a
+    # real MET->NOT_MET transition), and flip alerts debounce to one per
+    # (condition, state) per ISO week so a boundary oscillation cannot flood
+    # the channel. Pre-briefs fire once per (event, date) at T-minus-3.
     try:
         from ..api.routes_squeeze import assemble_radar
         radar = assemble_radar()
         conds = radar["fuel"] + radar["triggers"]
         score_line = (f"fuel {radar['fuel_score']:.1f}/4, "
                       f"triggers {radar['trigger_score']:.1f}/5")
+        sq_rows = session.execute(
+            select(MetricSnapshot)
+            .where(MetricSnapshot.metric_id.like("squeeze.%"))
+            .order_by(MetricSnapshot.asof.asc())).scalars().all()
+        prev_nonstale = {r.metric_id: r.status for r in sq_rows
+                         if r.status != "STALE"}
         for c in conds:
             mid = f"squeeze.{c['id'].lower()}"
             _upsert_snapshot(
                 session, metric_id=mid, category="S", asof=today,
                 value=c.get("value"), status=c["state"], percentile=None,
                 note=c.get("detail"))
-            prev = prev_status.get(mid)
-            if prev is not None and prev != c["state"] and                     "STALE" not in (prev, c["state"]):
-                is_trigger = c["id"].startswith("T")
-                sev = "RED" if (c["state"] == "MET" and is_trigger) else "WARN"
-                new_events.append(Event(
-                    event_type="squeeze_condition_flip", severity=sev,
-                    asof=today,
-                    dedup_key=f"{c['id']}:{c['state']}:{today.isoformat()}",
-                    rationale=(f"Squeeze Radar {c['id']} ({c['label']}) "
-                               f"{prev} -> {c['state']}: {c.get('detail','')} "
-                               f"[{score_line}]"),
-                    detail=c))
+            prev = prev_nonstale.get(mid)
+            if c["state"] == "STALE" or prev is None or prev == c["state"]:
+                continue
+            is_trigger = c["id"].startswith("T")
+            sev = "RED" if (c["state"] == "MET" and is_trigger) else "WARN"
+            iso_wk = "{}-W{:02d}".format(*today.isocalendar()[:2])
+            new_events.append(Event(
+                event_type="squeeze_condition_flip", severity=sev,
+                asof=today,
+                dedup_key=f"{c['id']}:{c['state']}:{iso_wk}",
+                rationale=(f"Squeeze Radar {c['id']} ({c['label']}) "
+                           f"{prev} -> {c['state']}: {c.get('detail','')} "
+                           f"[{score_line}]"),
+                detail=c))
         for ev in radar.get("calendar", []):
             try:
                 edate = date.fromisoformat(ev["date"])

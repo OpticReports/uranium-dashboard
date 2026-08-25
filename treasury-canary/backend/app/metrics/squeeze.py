@@ -27,7 +27,7 @@ F1_WINDOW_WEEKS = 520
 F2_SI_PCT_SO_MIN = 20.0       # TLT short interest as % of shares outstanding
 F3_TP_PCTILE_MIN = 0.75       # ACM 10y TP percentile since 2015
 F3_SINCE = date(2015, 1, 1)
-T1_CUTS_PRICED_BP = -50.0     # ZQ-implied 6m change
+T1_CUTS_PRICED_BP = -50.0     # ZQ-implied 6m change; STRICT < (spec: ">50bp")
 T2_PAYROLLS_3M_AVG = 0.0      # < 0k, OR
 T2_SAHM_MIN = 0.50            # >= 0.50
 T3_CORE_PCE_3M_ANN = 2.5      # < 2.5% 3m annualized
@@ -44,6 +44,17 @@ T4_MANUAL = {
                   "the next several quarters'); long-end buybacks doubled to "
                   ">=$4B/op Sep-Nov (~$8B/qtr long-end) — intent without "
                   "scale vs the >$25B/qtr registered bar."),
+}
+
+# T1's FIRST leg ("first cut after >=6-mo hold") is an FOMC-day event, not
+# a feed. Like T4 it changes ONLY by commit, on the day it happens, with
+# rationale and as-of carried to the UI. False until a first cut lands.
+T1_MANUAL_FIRST_CUT = {
+    "confirmed": False,
+    "asof": "2026-08-25",
+    "rationale": ("no 2026 cut has occurred (Warsh FOMC: zero cuts YTD, "
+                  "Sept-hike odds priced); flip by commit on the FOMC day a "
+                  "first cut after a >=6-month hold lands"),
 }
 
 # F4 (borrow stress: fee >1% or utilization >90%) has no free live feed —
@@ -153,16 +164,24 @@ def cond_f4(si_rows: list[dict]) -> Condition:
     return c
 
 
-def cond_t1(chg_6m_bp: float | None) -> Condition:
+def cond_t1(chg_6m_bp: float | None, today: date | None = None) -> Condition:
     c = Condition("T1", "Fed pivot",
                   "first cut after ≥6-mo hold, or >50bp cuts priced 6m", STALE)
-    if chg_6m_bp is None:
+    manual = bool(T1_MANUAL_FIRST_CUT["confirmed"])
+    if chg_6m_bp is None and not manual:
+        c.detail = ("first-cut leg is MANUAL (by commit, T4 pattern) and "
+                    f"unconfirmed as of {T1_MANUAL_FIRST_CUT['asof']}; "
+                    "priced-cuts leg STALE")
         return c
-    c.value, c.unit = chg_6m_bp, "bp/6m"
-    c.asof = date.today().isoformat()
-    c.detail = ("ZQ-implied 6m path (first-order); the first-cut-after-hold "
-                "leg is event-scored on FOMC days")
-    c.state = MET if chg_6m_bp <= T1_CUTS_PRICED_BP else NOT_MET
+    if chg_6m_bp is not None:
+        c.value, c.unit = chg_6m_bp, "bp/6m"
+    c.asof = (today or date.today()).isoformat()
+    c.detail = ("ZQ-implied 6m path (first-order). The first-cut-after-hold "
+                "leg is MANUAL — flipped by commit on the FOMC day it "
+                f"happens (unconfirmed as of {T1_MANUAL_FIRST_CUT['asof']}), "
+                "NOT scored automatically")
+    priced = chg_6m_bp is not None and chg_6m_bp < T1_CUTS_PRICED_BP
+    c.state = MET if (manual or priced) else NOT_MET
     return c
 
 
@@ -176,6 +195,17 @@ def cond_t2(pay_dates: list, pay_vals: list,
         return c
     avg3 = None
     if len(lvls) >= 4:
+        span = (lvls[-1][0] - lvls[-4][0]).days
+        if span > 100:
+            # a gap makes a "monthly" change span 2+ months — a silent basis
+            # shift. Refuse the payrolls leg rather than mislabel it.
+            c.detail = (f"payrolls STALE: last 4 prints span {span}d "
+                        f"(missing months)")
+            sd2, sv2 = _last(sahm_dates, sahm_vals)
+            if sv2 is not None:
+                c.detail += f"; Sahm {sv2:+.2f} ({sd2})"
+                c.state = MET if sv2 >= T2_SAHM_MIN else NOT_MET
+            return c
         chgs = [lvls[i][1] - lvls[i - 1][1] for i in range(len(lvls) - 3, len(lvls))]
         avg3 = sum(chgs) / 3.0
         c.value, c.unit, c.asof = round(avg3, 0), "k/mo", lvls[-1][0].isoformat()
@@ -192,6 +222,11 @@ def cond_t3(pce_dates: list, pce_vals: list) -> Condition:
                   "core PCE 3-mo annualized <2.5%", STALE)
     lvls = [(d, v) for d, v in zip(pce_dates, pce_vals) if v is not None]
     if len(lvls) < 4:
+        return c
+    if (lvls[-1][0] - lvls[-4][0]).days > 100:
+        c.detail = (f"STALE: last 4 prints span "
+                    f"{(lvls[-1][0] - lvls[-4][0]).days}d (missing months) — "
+                    f"3m-annualized basis would silently shift")
         return c
     ann = ((lvls[-1][1] / lvls[-4][1]) ** 4 - 1) * 100.0
     c.value, c.unit, c.asof = round(ann, 2), "%3m-ann", lvls[-1][0].isoformat()
@@ -218,12 +253,14 @@ def cond_t5(move_dates: list, move_vals: list,
         return c
     prior = [v for d, v in zip(oas_dates, oas_vals)
              if v is not None and d <= od - timedelta(days=T5_OAS_LOOKBACK_D)]
-    widening = bool(prior) and ov > prior[-1]
     c.value, c.unit, c.asof = round(mv, 0), "MOVE", md.isoformat()
-    c.detail = (f"HY OAS {ov:.2f} vs {prior[-1]:.2f} 3m ago"
-                if prior else f"HY OAS {ov:.2f}; no 3m-ago reading") + \
-               " — fires on duration capitulation too, not only flight-to-quality"
-    c.state = MET if (mv > T5_MOVE_MIN and widening) else NOT_MET
+    if not prior:
+        # the widening leg is UNVERIFIABLE — that is a STALE, not a verdict
+        c.detail = f"HY OAS {ov:.2f}; no 3m-ago reading — widening leg unverifiable"
+        return c
+    c.detail = (f"HY OAS {ov:.2f} vs {prior[-1]:.2f} 3m ago — fires on "
+                f"duration capitulation too, not only flight-to-quality")
+    c.state = MET if (mv > T5_MOVE_MIN and ov > prior[-1]) else NOT_MET
     return c
 
 
@@ -259,6 +296,13 @@ def build_calendar(today: date, horizon_days: int = 45) -> list[dict]:
         if today <= fomc_days[i + 1] and (fomc_days[i] - today).days <= horizon_days:
             out.append({"event": "FOMC decision", "date": fomc_days[i + 1].isoformat(),
                         "estimated": False})
+    if not any(today <= d for d in fomc_days):
+        # the hardcoded table has run out — the "get in earlier" mechanism
+        # must fail LOUDLY, not by silently dropping FOMC coverage
+        out.append({"event": ("FOMC schedule table EXHAUSTED — add next "
+                              "year's published dates to metrics/squeeze.py"),
+                    "date": today.isoformat(), "estimated": True,
+                    "warning": True})
     for months in (0, 1):
         y = today.year + (today.month - 1 + months) // 12
         m = (today.month - 1 + months) % 12 + 1
@@ -291,7 +335,7 @@ def build_squeeze_radar(*, cot: tuple, si_rows: list[dict],
     today = today or date.today()
     fuel = [cond_f1(*cot), cond_f2(si_rows, shares_outstanding),
             cond_f3(*tp), cond_f4(si_rows)]
-    trig = [cond_t1(fed_chg_6m_bp), cond_t2(*payrolls, *sahm),
+    trig = [cond_t1(fed_chg_6m_bp, today), cond_t2(*payrolls, *sahm),
             cond_t3(*core_pce), cond_t4(), cond_t5(*move, *hy_oas)]
     return {
         "asof": today.isoformat(),

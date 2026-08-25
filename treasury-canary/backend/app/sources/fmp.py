@@ -159,6 +159,18 @@ def fetch_move(start: str = "2015-01-01") -> tuple[list[date], list[float | None
         return [], []
     dedup = {c["date"]: c for c in rows}
     data = [dedup[k] for k in sorted(dedup)]
+    if not data:
+        # a 200 with an empty body must never poison a good disk cache —
+        # prefer stale MOVE history over none, and never persist [] over it.
+        if os.path.exists(cache):
+            try:
+                cached = json.load(open(cache))
+                if cached:
+                    logger.warning("FMP MOVE: 0 rows — keeping stale cache")
+                    return _parse(cached)
+            except Exception:  # noqa: BLE001
+                pass
+        return [], []
     try:
         json.dump(data, open(cache, "w"))
     except Exception:  # noqa: BLE001
@@ -196,6 +208,15 @@ def fetch_shares_outstanding(symbol: str = "TLT") -> float | None:
         so = aum / nav if aum > 0 and nav > 0 else None
     except Exception as exc:  # noqa: BLE001
         logger.warning("FMP shares-outstanding fetch failed: %s", exc)
+        # stale-preferred (house convention): an expired cache beats None —
+        # F2's denominator drifting a few days is labeled on the condition.
+        if os.path.exists(cache):
+            try:
+                v = json.load(open(cache)).get("so")
+                if v:
+                    return float(v)
+            except Exception:  # noqa: BLE001
+                pass
         return None
     if so and so > 0:
         try:

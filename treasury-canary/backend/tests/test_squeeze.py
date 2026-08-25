@@ -49,6 +49,19 @@ def test_gate_f1_stale_on_empty():
     assert cond_f1([], []).state == STALE
 
 
+def test_gate_f1_threshold_straddles_the_10th_percentile():
+    """Anti-mutation gate: 500-week window of distinct values; the current
+    week is placed just under vs just over the registered decile. A silent
+    retune of F1_PCTILE_MAX moves one of these."""
+    base = [float(-i) for i in range(500)]              # 0 .. -499
+    # current -454.5: 45 of 501 values below -> 8.98th pctile -> MET
+    d, v = _weekly(base + [-454.5])
+    assert cond_f1(d, v).state == MET
+    # current -444.5: 55 below -> 10.98th pctile -> NOT MET
+    d, v = _weekly(base + [-444.5])
+    assert cond_f1(d, v).state == NOT_MET
+
+
 def test_gate_f1_registered_composition_is_duration_only():
     """The registration's -30.3%OI / 9.2th pctile was computed on the
     duration complex. A 2Y row must be excluded by the fetch's WHERE, and the
@@ -80,6 +93,12 @@ def test_gate_f2_threshold_both_sides():
     assert cond_f2([_si(150_497_343)], so).state == MET        # 26.3%
 
 
+def test_gate_f2_threshold_straddles_20pct():
+    so = 500_000_000
+    assert cond_f2([_si(100_000_000)], so).state == MET        # exactly 20.0
+    assert cond_f2([_si(99_500_000)], so).state == NOT_MET     # 19.9
+
+
 def test_gate_f2_no_denominator_is_stale_not_guessed():
     c = cond_f2([_si(150_000_000)], None)
     assert c.state == STALE
@@ -100,6 +119,15 @@ def test_gate_f3_threshold_both_sides():
     assert c.state == MET, "pre-2015 readings leaked into the F3 basis"
 
 
+def test_gate_f3_threshold_straddles_75th_percentile():
+    n = 500
+    dates = [date(2015, 1, 1) + timedelta(days=7 * i) for i in range(n)]
+    base = [float(i) for i in range(n - 1)]             # 0..498
+    # 385 of 500 below -> 77th pctile -> MET; 365 below -> 73rd -> NOT MET
+    assert cond_f3(dates, base + [384.5]).state == MET
+    assert cond_f3(dates, base + [364.5]).state == NOT_MET
+
+
 # ── F4: borrow stress is UNVERIFIED, never silently scored ───────────────────
 
 def test_gate_f4_unverified_scores_zero_and_carries_dtc():
@@ -116,10 +144,23 @@ def test_gate_f4_unverified_scores_zero_and_carries_dtc():
 
 def test_gate_t1_cuts_priced_threshold():
     assert cond_t1(-60.0).state == MET
-    assert cond_t1(-50.0).state == MET                  # boundary: <= -50
+    assert cond_t1(-50.1).state == MET
+    assert cond_t1(-50.0).state == NOT_MET              # STRICT: spec ">50bp"
     assert cond_t1(-49.9).state == NOT_MET
     assert cond_t1(+29.8).state == NOT_MET              # Aug-2026 live state
     assert cond_t1(None).state == STALE
+
+
+def test_gate_t1_manual_first_cut_leg_is_stated_and_flips(monkeypatch):
+    """The first-cut leg is by-commit (T4 pattern). Unconfirmed: the detail
+    must SAY it is manual and unscored; confirmed: MET regardless of pricing,
+    including with the priced leg STALE."""
+    c = cond_t1(+29.8)
+    assert "MANUAL" in c.detail and "unconfirmed" in c.detail
+    from app.metrics import squeeze as sq
+    monkeypatch.setitem(sq.T1_MANUAL_FIRST_CUT, "confirmed", True)
+    assert cond_t1(+29.8).state == MET
+    assert cond_t1(None).state == MET
 
 
 def test_gate_t1_implied_change_math():
@@ -153,6 +194,15 @@ def test_gate_t2_aug2026_state_is_not_met():
     assert c.state == NOT_MET and round(c.value) == 20
 
 
+def test_gate_t2_missing_months_fall_back_to_sahm_leg():
+    d, v = _payrolls([200, 148, 63, 20, -23])
+    d = d[:-1] + [d[-1] + timedelta(days=120)]           # a hole in the series
+    c = cond_t2(d, v, [date(2026, 7, 1)], [-0.03])
+    assert c.state == NOT_MET and "missing months" in c.detail
+    c = cond_t2(d, v, [date(2026, 7, 1)], [0.55])        # Sahm leg still works
+    assert c.state == MET
+
+
 def test_gate_t2_either_leg_fires():
     pay_neg = _payrolls([50, -40, -30, -20])            # 3m avg -30
     assert cond_t2(*pay_neg, [date(2026, 7, 1)], [0.10]).state == MET
@@ -178,6 +228,18 @@ def test_gate_t3_threshold_both_sides():
     c = cond_t3(d, v)
     assert c.state == NOT_MET and abs(c.value - 2.89) < 0.05
     assert cond_t3(d[:3], v[:3]).state == STALE          # <4 prints
+    d, v = _pce(2.45)                                    # straddle the bar
+    assert cond_t3(d, v).state == MET
+    d, v = _pce(2.55)
+    assert cond_t3(d, v).state == NOT_MET
+
+
+def test_gate_t3_missing_months_degrade_to_stale():
+    d, v = _pce(2.0, n=6)
+    gapped_d = d[:3] + [d[3] + timedelta(days=90), d[4] + timedelta(days=90),
+                        d[5] + timedelta(days=90)]
+    c = cond_t3(gapped_d, v)
+    assert c.state == STALE and "missing months" in c.detail
 
 
 # ── T5: vol/dislocation ──────────────────────────────────────────────────────
@@ -196,6 +258,23 @@ def test_gate_t5_needs_both_legs():
     assert cond_t5(*move_hot, *oas_flat).state == NOT_MET
     assert cond_t5(*move_calm, *oas_wide).state == NOT_MET
     assert cond_t5([], [], *oas_wide).state == STALE
+
+
+def test_gate_t5_threshold_straddles_120():
+    oas_wide = _daily([2.5] * 150 + [3.5] * 50)
+    assert cond_t5(*_daily([120.1] * 200), *oas_wide).state == MET
+    assert cond_t5(*_daily([120.0] * 200), *oas_wide).state == NOT_MET
+
+
+def test_gate_t5_short_history_is_stale_not_a_verdict():
+    # <91d of OAS: the widening leg is unverifiable -> STALE, never NOT_MET
+    c = cond_t5(*_daily([135.0] * 30), *_daily([3.5] * 30))
+    assert c.state == STALE and "unverifiable" in c.detail
+
+
+def test_gate_calendar_fomc_exhaustion_is_loud():
+    cal = build_calendar(date(2027, 1, 5))
+    assert any(e.get("warning") and "EXHAUSTED" in e["event"] for e in cal), cal
 
 
 # ── the two calibration points the registration was validated on ─────────────

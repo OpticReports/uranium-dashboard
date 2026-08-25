@@ -198,8 +198,12 @@ def parse_ust_pct_oi(rows: list[dict]) -> tuple[list[date], list[float]]:
 
 
 def fetch_ust_lev_pct_oi() -> tuple[list[date], list[float]]:
-    """Weekly UST-complex (2y..Ultra Bond) leveraged-fund net %OI, 2006+,
-    oldest->newest. ([], []) on failure; stale-preferred."""
+    """Weekly DURATION-complex (10Y, Ultra 10Y, Bond, Ultra Bond) leveraged-
+    fund net %OI, 2006+, oldest->newest — the REGISTERED F1 composition (see
+    _DURATION_CONTRACTS above). Pre-2016 weeks aggregate a 3-contract complex
+    (Ultra 10Y launched 2016) — outside F1's trailing-10y window, but present
+    in /squeeze/history, where the route labels it. ([], []) on failure;
+    stale-preferred."""
     now = time.time()
     ttl = _TTL_OK if _ucache["ok"] else _TTL_FAIL
     if _ucache["data"] is not None and now - float(_ucache["ts"]) < ttl:
@@ -230,6 +234,13 @@ def fetch_ust_lev_pct_oi() -> tuple[list[date], list[float]]:
                     break
             result = parse_ust_pct_oi(rows)
             ok = bool(result[0])
+            if not result[0] and _ucache["data"] is not None and \
+                    _ucache["data"][0]:  # type: ignore[index]
+                logger.warning("CFTC UST lev %%OI: 200 but 0 rows — keeping "
+                               "stale data")
+                _ucache["ts"] = time.time()
+                _ucache["ok"] = False
+                return _ucache["data"]  # type: ignore[return-value]
             logger.info("CFTC UST lev %%OI: %d weeks", len(result[0]))
         except Exception as exc:  # noqa: BLE001
             logger.warning("CFTC UST lev %%OI fetch failed: %s", exc)
