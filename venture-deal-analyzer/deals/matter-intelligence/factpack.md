@@ -26,11 +26,48 @@ REQUIRED). Ask: $5–10M "strategic Series A-1 tranche" at $220M post.
 - Seed CONFIRMED: $12M, Lowercarbon lead, Toyota Ventures/Pear/Cuban/
   E2MC (Businesswire 2024-10-30). Implied seed post ~$48–60M.
 - **QUIET SERIES A CONFIRMED (EDGAR, unannounced): Form D first sale
-  2026-04-07, $49.1M authorized, $35.9M SOLD, $13.2M remaining, 5
+  2026-04-07, FILED 2026-04-22, signed by Vishnu Sridhar as CEO;
+  $49,141,918 authorized, $35,941,896 SOLD, $13,200,022 remaining, 5
   investors; Lowercarbon partner (Shawn Xu) director.** The "A-1
   tranche" ≈ the unsold remainder. **April post-money UNKNOWN — the
   single most important open number: same-$220M vs marked-up-remainder
   are different deals.**
+- SECOND-PASS VERIFICATION 2026-08-20 (adversarial recheck): every
+  figure above reproduced exactly from primary_doc.xml. Additional
+  verified detail: **Rule 506(b)**, no general solicitation — which is
+  why zero press exists; **$0 sales commissions, $0 finders' fees, no
+  placement agent**; securities sold are **equity AND warrants/options**
+  (both flags set); only TWO related persons on the filing (Sridhar,
+  Xu); revenue range "Decline to Disclose". **No Form D/A exists; the
+  company has exactly two EDGAR filings, ever.** The 2024 seed Form D
+  (as Earth XYZ, Inc., Cambridge MA) authorized $13,900,020 with $0
+  sold at filing vs the $12M announced — normal over-authorization,
+  flagged not read into.
+- **"Series A" is a label from secondary databases only** — neither the
+  company nor any primary source names the round. Crunchbase/Tracxn
+  "$47.9M over 2 rounds / Series A Apr 07 2026 / $35.9M" is simply the
+  Form D re-published ($12M + $35.9M); no database discloses a
+  valuation. Proven negative: the company's own press page carries only
+  the two October 2024 seed stories and NO Series A release.
+- **NEW — federal revenue exists and was not in rev 1** [VERIFIED,
+  USAspending/HigherGov; UEI VQBVM9BUFVQ3, CAGE 140P2]: total federal
+  awards **$1,396,782** — **USAF $1,248,445 (2025-08-29)** for
+  "multi-phenomenology sensing with fused color, hyperspectral and
+  thermal imaging for real-time ISR", and **NASA SBIR Phase I $148,337
+  (2025-09-29)** for black-silicon IR absorption. This is real,
+  third-party-verifiable, non-dilutive revenue — the strongest
+  traction datapoint in the file, and it is government, not the
+  insurance beachhead the memo sells.
+- **NEW — possible co-founder departure [FLAG]:** the Businesswire seed
+  release names co-founders **Vishnu Sridhar (CEO) and Nathan Stein**
+  (ex-Caltech), with Thomas Chrien as Technical Director. **Nathan
+  Stein does not appear on the current matter.com team page.** Rev 1
+  omitted Stein entirely. Also correcting rev 1: **Nimrod Carmon is
+  Principal Scientist, not a founder**; his EMIT role is verified via
+  JPL independently, but the company site credits him with
+  "Shape-from-Spectra", not EMIT. ASK: did Stein leave, and on what
+  terms (founder departure + unvested/accelerated equity is a
+  materially different cap table).
 - Satellite: NOTHING launched; no public launch contract. Memo claims
   EARTH-1a airborne summer 2026; EARTH-1 satellite Oct 2027 on SpaceX
   Transporter-22 (company-claimed only).
@@ -115,13 +152,26 @@ Competitive read vs Matter:
 - Score impact: reinforces competition 2·3 (no re-score needed — the
   scorers already priced incumbent pressure; Bellwether sharpens it).
 
-**Portfolio conflict/synergy note for the LP:** Bellwether is an X
-moonshot heading to market — i.e., squarely in the pipeline that
-**Series X Capital** (which Casey holds) is legally obligated to fund
-if it spins out. If that happens, Casey would be LONG Matter's
-best-resourced competitor through the fund — one more reason the
-Matter pass is portfolio-coherent, and a concrete question for the
-Series X team: is Bellwether in the pipeline?
+**Portfolio conflict note for the LP — RESOLVED 2026-08-20:** the open
+question here was "is Bellwether in the pipeline?" **Casey has
+confirmation that it is** — Bellwether is spinning out to Series X
+Capital, and Casey will additionally take a ~$40k direct angel check
+into the Series A at a 20–25% discount. So Casey is becoming LONG
+Matter's best-resourced competitor, twice (fund + direct). This does
+not change any Matter score — the competitive read above was written
+before the allocation was confirmed — but it makes the Matter pass
+portfolio-coherent and creates a **disclosure item** if the Burke
+conversation continues. See `deals/bellwether/factpack.md`.
+
+Correction to the read above: as of 2026-08-20 Bellwether has **not
+publicly spun out** — it remains an internal X project with no Form D,
+no announced round, and no disclosed valuation, and it is absent from
+X's own Series X portfolio list (Taara, Chorus, Anori, Verily Health).
+Its commercial traction is real and named (Hiscox, Swiss Re CatNet,
+Kansas City, DIU) but none of it is publicly confirmed as PAID at a
+disclosed ACV. Bellwether is still the sharper competitive threat on
+evidence; "paying-customer live" above should read "named-customer
+live."
 
 ## TAM model assessment
 
@@ -144,7 +194,14 @@ watch from outside.
 
 ## UNKNOWN — REQUIRED (ask, per standing rule)
 
+0. **Did co-founder Nathan Stein leave, when, and on what equity
+   terms?** (New 2026-08-20 — he is on the seed announcement and off
+   the current team page.)
 1. April 7 round post-money + lead; A-1 class/price parity; primary?
+   NOTE: proven 2026-08-20 that this is disclosed NOWHERE public —
+   primary filings have no valuation field, no press covered the round
+   (506(b), no solicitation), and no secondary database carries a
+   valuation. It can ONLY come from Burke/the company. Ask directly.
 2. Burke's role and fees; any SPV wrapper.
 3. Per-LOI dollar values reconciling the "$300M book"; the remaining
    LOI documents (DocSend access revoked).
