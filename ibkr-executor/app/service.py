@@ -10,6 +10,7 @@ exercised in PAPER mode (DRY_RUN=false, TRADING_MODE=paper).
 """
 from __future__ import annotations
 
+import json
 import logging
 import secrets
 import threading
@@ -19,6 +20,7 @@ from datetime import datetime, timezone
 from fastapi import FastAPI, Header, HTTPException, Query
 
 from .alerts import send
+from .outages import OutageLog
 from .config import settings
 from .ib_adapter import DryAdapter
 from .manager import LadderManager
@@ -49,6 +51,29 @@ LAST: dict = {"loop_ok": 0.0, "nino34": None, "mode": "OFFLINE"}
 # silently failing blend loop must be visible from the outside.
 BLEND_CYCLE: dict = {"date": None, "ok": None, "error": None,
                      "error_ts": None}
+# Persisted gateway-outage ledger (built with the live adapter only).
+OUTAGES = None
+
+
+def _gateway_restarts(limit: int = 20) -> dict:
+    """Restart records written by start.sh's supervisor. A gateway that keeps
+    dying is a different problem from IBKR being unreachable, and the two used
+    to be indistinguishable."""
+    path = getattr(settings, "gateway_restart_log", "")
+    out: list[dict] = []
+    try:
+        with open(path) as fh:
+            for line in fh.readlines()[-limit:]:
+                try:
+                    out.append(json.loads(line))
+                except Exception:  # noqa: BLE001
+                    continue
+    except Exception:  # noqa: BLE001
+        pass
+    day = time.time() - 86400
+    return {"total_recorded": len(out),
+            "last_24h": sum(1 for r in out if r.get("ts", 0) >= day),
+            "last": out[-1] if out else None}
 
 
 def _auth(hdr: str | None, q: str | None) -> None:
@@ -95,7 +120,14 @@ def _build():
         logger.warning("DRY_RUN with credentials: mutations stay simulated")
         return
     from .ib_adapter import IBAdapter
-    ADAPTER = IBAdapter(settings)
+    global OUTAGES
+    OUTAGES = OutageLog(settings.outage_log_path)
+    if OUTAGES.history and OUTAGES.history[-1].get("ended_by") == "process_restart":
+        # the previous process died mid-outage: it did NOT self-heal, and
+        # that is precisely the case supervision is meant to eliminate
+        logger.warning("previous gateway outage ended by process restart, "
+                       "not by reconnect: %s", OUTAGES.history[-1])
+    ADAPTER = IBAdapter(settings, outage_log=OUTAGES)
     LAST["mode"] = settings.trading_mode.upper()
 
 
@@ -210,6 +242,11 @@ app = FastAPI(title="IBKR Executor", version="0.1.0", lifespan=lifespan)
 
 @app.get("/health")
 def health():
+    # Gateway reliability, deliberately NOT part of the health verdict:
+    # tying it to `status` would make Render restart the whole container -
+    # executor included, possibly mid-order - on every routine gateway blip,
+    # including its mandatory daily restart. Supervision restarts the gateway
+    # process alone; this block only reports.
     body = {"status": "ok", "service": "ibkr-executor", "mode": LAST["mode"],
             "loop_age_s": round(time.time() - LAST["loop_ok"], 1)
             if LAST["loop_ok"] else None}
@@ -222,6 +259,14 @@ def health():
             "ok": BLEND_CYCLE["ok"] is not False,
             "last_error_age_s": round(time.time() - err_ts, 1)
             if err_ts else None}
+    if OUTAGES is not None:
+        summ = OUTAGES.summary()
+        body["gateway"] = {
+            "down_since": summ["currently_down_since"],
+            "outages_30d": summ["outages"],
+            "self_healed_30d": summ["self_healed"],
+            "needed_a_restart_30d": summ["needed_a_restart"],
+            "restarts_24h": _gateway_restarts()["last_24h"]}
     return body
 
 
@@ -279,6 +324,9 @@ def blend_feed(x_read_token: str | None = Header(default=None)):
     body["mode"] = LAST["mode"]
     body["last_cycle"] = {"date": BLEND_CYCLE["date"], "ok": BLEND_CYCLE["ok"],
                           "error": BLEND_CYCLE["error"]}
+    if OUTAGES is not None:
+        body["gateway_outages"] = OUTAGES.summary()
+        body["gateway_restarts"] = _gateway_restarts()
     return body
 
 

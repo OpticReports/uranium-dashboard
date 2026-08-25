@@ -348,6 +348,41 @@ El Nino combo reads):
   (an IB-initiated GTC cancel, e.g. corporate action) demotes the
   position to STOP_MISSING and is re-placed the same pass — never a
   naked position believed protected (adapter review m4).
+### Gateway supervision + outage ledger (2026-08-24)
+
+The gateway was started as `"$GW" &` and never looked at again: uvicorn is
+PID 1, so a gateway that crashed, was OOM-killed, or gave up after a failed
+login stayed dead **until a human redeployed** — while `/health` kept
+answering 200 (it reports the API, not the gateway), so Render never
+restarted the container either. The executor then reconnected forever,
+correctly, to a process that no longer existed. That is the difference
+between the 3-minute daily restart and the 30+ minute outage on 2026-08-24.
+
+- `start.sh` now SUPERVISES the gateway: restart on exit with 5s→300s
+  backoff, reset after `IBGW_HEALTHY_S` of clean uptime, and exit without
+  resurrecting on SIGTERM/SIGINT so a restart never races container
+  teardown. Every restart is appended to `data/gateway_restarts.jsonl`
+  with its exit code and uptime.
+- Gateway state deliberately does **not** gate `/health`. Wiring it in would
+  make Render restart the whole container — executor included, possibly
+  mid-order — on every routine blip, the mandatory daily restart included.
+  Supervision restarts the gateway process alone; `/health` only reports.
+- `app/outages.py` persists an outage ledger (`data/gateway_outages.json`).
+  Each record carries `duration_s`, `cycles_blocked`, `alerted`, and
+  `ended_by`: `reconnect` (self-healed) vs `process_restart` (it did not).
+  That last field is the one an in-memory flag could never provide, and it
+  is what separates "IBKR being IBKR" from "our container is broken".
+
+**What this does and does not reduce.** Frequency is unchanged — IBKR
+mandates a daily gateway restart and runs its own maintenance windows, and
+those stay irreducible. What collapses is the TAIL: process-death and
+login-wedge outages go from unbounded (human-gated) to seconds. Uptime %
+is the wrong metric; `cycles_blocked` is the right one, because an outage
+that overlaps no decision point costs nothing. Before this there was no
+history at all, so no reduction could be claimed OR measured — after ~30
+days, `self_healed` vs `needed_a_restart` answers it with arithmetic
+instead of assertion.
+
 - **Reconnect with backoff (adapter review M5)**: every surface checks the
   connection and, when the gateway has dropped (its DAILY AUTO-RESTART
   included), attempts a reconnect with exponential backoff (15s doubling

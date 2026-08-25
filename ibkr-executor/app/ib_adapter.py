@@ -101,7 +101,7 @@ def size_combos(budget: float, net_debit: float, multiplier: int) -> int:
 
 
 class IBAdapter:
-    def __init__(self, cfg):
+    def __init__(self, cfg, outage_log=None):
         # The adapter is built inside the service's daemon loop thread:
         # ensure that thread owns an asyncio event loop BEFORE IB() binds
         # one (review sub-note — a constructor raise here used to kill the
@@ -129,6 +129,9 @@ class IBAdapter:
         self._next_reconnect_ts = 0.0
         self._disconnected_since: float | None = None
         self._outage_alerted = False
+        # Persisted outage ledger (optional). Observability must never be
+        # able to break trading, so every call site tolerates None.
+        self.outages = outage_log
         self._connect()
 
     def _connect(self):
@@ -234,6 +237,13 @@ class IBAdapter:
             logger.warning("IB gateway connection lost — reconnecting with "
                            "backoff (alert only if down > %d min)",
                            int(OUTAGE_ALERT_S // 60))
+            if self.outages:
+                # wall clock, not monotonic: the ledger outlives this process
+                self.outages.start(time.time())
+        if self.outages:
+            # every blocked poll is a decision the executor could not take -
+            # the real cost of an outage, unlike wall-clock uptime
+            self.outages.cycle_blocked()
         if now < self._next_reconnect_ts:
             self._maybe_outage_alert(now)
             return
@@ -262,6 +272,8 @@ class IBAdapter:
             send(f"🧬 IB gateway RECONNECTED after {down_s / 60:.0f} min — "
                  f"executor resumed (cycles were failing closed meanwhile; "
                  f"GTC stops rested at the venue throughout)")
+        if self.outages:
+            self.outages.end(time.time())
         self._disconnected_since = None
         self._outage_alerted = False
         self._reconnect_backoff = RECONNECT_BACKOFF_S
@@ -272,6 +284,8 @@ class IBAdapter:
                 or now - self._disconnected_since <= OUTAGE_ALERT_S):
             return
         self._outage_alerted = True
+        if self.outages:
+            self.outages.mark_alerted()
         from .alerts import send
         send(f"🚨 IB gateway DOWN for over {int(OUTAGE_ALERT_S // 60)} min "
              f"— executor is failing closed (no entries/exits/stop "

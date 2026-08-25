@@ -50,6 +50,12 @@ class Settings(BaseSettings):
     blend_budget: float = 0.0             # BLEND_BUDGET cap in USD; 0 = disabled
     blend_book_usd: float = 10_000.0      # BLEND_BOOK_USD initial paper book
     blend_state_path: str = "./data/blend_state.json"
+    # Persisted gateway-outage ledger + the supervisor's restart records.
+    # Without these there is NO downtime history at all, so "how much of our
+    # downtime is IBKR vs our own container" is unanswerable rather than
+    # merely unanswered (2026-08-24).
+    outage_log_path: str = "./data/gateway_outages.json"
+    gateway_restart_log: str = "./data/gateway_restarts.jsonl"
 
 
 settings = Settings()
