@@ -1119,3 +1119,76 @@ def test_gate_m1min_rejected_book_order_cleared_and_replanned(tmp_path,
             if t.orderStatus.status not in ("Inactive", "Cancelled",
                                             "ApiCancelled", "Filled")]
     assert len(live) == 1
+
+
+# --- ValidationError wedge (live find 2026-08-25) ---------------------------
+class _LogEntry:
+    def __init__(self, code, message):
+        self.errorCode = code
+        self.message = message
+
+
+def _validation_reject_ib(ib):
+    """Venue that refuses every placement at validation, with a reason in
+    the trade log - what the gateway did to the book's first-ever orders."""
+    def on_place(trade):
+        trade.orderStatus.status = "ValidationError"
+        trade.log = [_LogEntry(0, "submitted"),
+                     _LogEntry(10331, "order validation failed: precautionary "
+                                      "constraint (simulated)")]
+    ib.on_place = on_place
+
+
+def test_gate_validation_error_is_terminal_and_names_the_reason(ib_adapter):
+    """Pre-fix: 'ValidationError' fell through _map_status to 'working', so
+    the placement spun the full ack timeout and raised 'state UNKNOWN' with
+    IB's actual reason discarded in trade.log."""
+    import pytest as _pytest
+    import time as _time
+    _validation_reject_ib(ib_adapter.ib)
+    t0 = _time.monotonic()
+    with _pytest.raises(RuntimeError) as e:
+        ib_adapter.place_stock_order("SPY", 10, "MKT",
+                                     client_order_id="blend-CORE_BUY-x-0")
+    took = _time.monotonic() - t0
+    assert "rejected by venue" in str(e.value)
+    assert "10331" in str(e.value), "IB's reason must reach the alert"
+    assert took < 2.0, f"spun the ack timeout instead of failing fast ({took:.1f}s)"
+
+
+def test_gate_validation_error_never_suppresses_the_retry(ib_adapter):
+    """THE WEDGE: the dead order mapped 'working', so orderRef dedupe
+    returned it as a duplicate and the idempotent retry never re-placed -
+    while the journal kept pending_book true, blocking CORE_BUY/sweep/
+    rebalance forever, silently."""
+    import pytest as _pytest
+    _validation_reject_ib(ib_adapter.ib)
+    with _pytest.raises(RuntimeError):
+        ib_adapter.place_stock_order("SPY", 10, "MKT",
+                                     client_order_id="blend-CORE_BUY-x-1")
+    # venue heals (whatever blocked validation is gone): retry must PLACE
+    ib_adapter.ib.on_place = None
+    out = ib_adapter.place_stock_order("SPY", 10, "MKT",
+                                       client_order_id="blend-CORE_BUY-x-1")
+    assert not out.get("duplicate"), "retry was duplicate-suppressed by a dead order"
+    assert out["status"] in ("filled", "working")
+
+
+def test_gate_dead_journaled_book_order_unwedges_via_find(ib_adapter):
+    """find_stock_order must report the dead order as 'cancelled' so the
+    journal's existing rejection branch clears it and step() re-plans."""
+    _validation_reject_ib(ib_adapter.ib)
+    import pytest as _pytest
+    with _pytest.raises(RuntimeError):
+        ib_adapter.place_stock_order("BIL", 32, "MKT",
+                                     client_order_id="blend-SWEEP-x-2")
+    o = ib_adapter.find_stock_order("blend-SWEEP-x-2")
+    assert o is not None and o["status"] == "cancelled", o
+
+
+def test_gate_unknown_status_still_conservative(ib_adapter):
+    """A genuinely unknown transitional status must keep mapping 'working'
+    (never re-place on ambiguity) - only known-terminal states are dead."""
+    import app.ib_adapter as m
+    assert m._map_status("SomeFutureTransitionalState") == "working"
+    assert m._map_status("ValidationError") == "cancelled"

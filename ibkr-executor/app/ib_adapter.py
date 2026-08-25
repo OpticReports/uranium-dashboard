@@ -44,7 +44,14 @@ OUTAGE_ALERT_S = 30 * 60.0   # alert ONLY when down longer than this — the
                              # auto-recover silently)
 
 # IB order states that mean the order can no longer fill.
-_IB_CANCELLED = ("Cancelled", "ApiCancelled", "Inactive")
+# Terminal-dead order statuses. 'ValidationError' (gateway 10.30+: the
+# server refused the order at validation) was MISSING: it fell through
+# _map_status to "working", so the write-ahead journal adopted a rejected
+# order as in-flight, orderRef dedupe suppressed every idempotent retry,
+# and pending_book blocked CORE_BUY/sweep/rebalance forever - the book's
+# first-ever live orders wedged it silently (found 2026-08-25, the first
+# real placement after the market-data fix).
+_IB_CANCELLED = ("Cancelled", "ApiCancelled", "Inactive", "ValidationError")
 
 
 class ExecutorConnectionError(RuntimeError):
@@ -60,6 +67,19 @@ def _map_status(ib_status: str) -> str:
     if ib_status in _IB_CANCELLED:
         return "cancelled"
     return "working"
+
+
+def _trade_errors(trade) -> str:
+    """IB's own words for why an order died, from the trade log. Without
+    this the ValidationError alert could only say 'state UNKNOWN' - the
+    reason was sitting in trade.log, discarded."""
+    out = []
+    for entry in (getattr(trade, "log", None) or []):
+        code = getattr(entry, "errorCode", 0) or 0
+        msg = (getattr(entry, "message", "") or "").strip()
+        if code or ("rror" in msg):
+            out.append(f"[{code}] {msg}" if code else msg)
+    return "; ".join(out[-3:])
 
 
 def _agg_fill_price(trade) -> float | None:
@@ -511,18 +531,21 @@ class IBAdapter:
             if s == "Filled":
                 return
             if s in _IB_CANCELLED:
+                why = _trade_errors(trade)
                 raise RuntimeError(
-                    f"order rejected by venue (status {s})")
+                    f"order rejected by venue (status {s})"
+                    + (f": {why}" if why else ""))
             if s in ("PreSubmitted", "Submitted"):
                 # Acked and resting. MOO/STP return 'working' right away;
                 # MKT keeps one bounded window open for the synchronous fill.
                 if fill_deadline is None or time.monotonic() >= fill_deadline:
                     return
             elif time.monotonic() >= ack_deadline:
+                why = _trade_errors(trade)
                 raise RuntimeError(
                     f"no venue ack within {PLACE_ACK_TIMEOUT_S:.0f}s "
                     f"(status {s!r}) — state UNKNOWN; retry is idempotent "
-                    f"via orderRef")
+                    f"via orderRef" + (f" | venue log: {why}" if why else ""))
             self.ib.sleep(WAIT_TICK_S)
 
     def place_stock_order(self, symbol: str, qty: int, order_type: str,
