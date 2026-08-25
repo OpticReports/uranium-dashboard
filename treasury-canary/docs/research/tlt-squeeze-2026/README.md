@@ -9,6 +9,8 @@ Contents: data pulls (FMP, FRED fredgraph, CFTC Socrata TFF + legacy COT,
 FINRA consolidated short interest), the analog/conditional-probability
 harness, the Oct-2023 point-in-time scorecard backtest, and figure code.
 
-STATUS: counter-agent review IN FLIGHT at commit time; per house law the
-verdict is committed alongside the final report in the follow-up commit.
-Findings are not to be acted on until that verdict lands.
+STATUS: counter-agent review COMPLETE — PASS WITH CORRECTIONS, all applied
+(see counter_agent_verdict.md). Final report published as the "TLT Squeeze
+Verdict" artifact, 2026-08-25. Scorecard spec v2 in scorecard_spec.md is the
+pre-registration candidate for the "Duration Squeeze Radar" canary card —
+build awaits Casey's go.
