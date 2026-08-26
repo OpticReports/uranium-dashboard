@@ -203,6 +203,15 @@ services:
       # on the btc-executor service. Enter once in the Render dashboard.
       - key: EXEC_TOKEN
         sync: false
+      # Funding-regime monitor pages (RESEARCH_CARRY.md deployment policy:
+      # V6 carry sleeve parked until 30d INTX funding >= 8%/yr, hysteresis
+      # to 5%). Same Canary Optics bot as the executors — paste the same
+      # TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID here. Unset = silent no-op;
+      # /funding still serves the readings either way.
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
 
   # --- Catalyst Options Engine (pre-catalyst asymmetry radar) ----------------
   # PAPER ONLY + KEYLESS decision brain (born from the 2026-08-19 MRNA +130%

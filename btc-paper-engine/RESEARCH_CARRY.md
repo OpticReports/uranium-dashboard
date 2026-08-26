@@ -125,6 +125,39 @@ not a standing upgrade to S6."
   matters. S6's leg has a 2022 record; the carry leg does not. Moves:
   tail sizing.
 
+## Deployment policy (Casey, 2026-08-26)
+
+**V6 is PARKED until the funding subsidy returns.** Written trigger, not
+vibes — implemented as a live monitor in the paper engine
+(`backend/app/funding_monitor.py`, state at `/funding`, 4 checks/day):
+
+- **Metric:** 30d trailing mean annualized BTC perp funding. Gate venue =
+  **INTX** (where the sleeve would trade); HL tracked as the hotter
+  leading indicator.
+- **ARM at ≥ 8%/yr → Telegram ACTION page. DISARM at < 5%/yr.** The 5–8
+  band holds state (hysteresis — single thresholds whipsaw on funding
+  noise). One page per crossing, state survives restarts. Threshold
+  rationale: break-even vs T-bill cash ~4.5–5%; the extra ~3pp pays for
+  what the backtest didn't price (margin drag, basis MTM, liquidation
+  topology). The 8% figure comes from the audit decomposition, NOT from
+  backtesting it as a rule — in-sample it reduces to "run V6 in
+  2023–25, don't in 2026".
+- **The monitor is a research signal.** It places no trades and changes
+  no config; an ARM page starts the human runway below, nothing else.
+
+**Pre-deploy runway (do these when it fires, before any money moves):**
+1. P2 venue work: INTX portfolio-margin mechanics — does spot collateral
+   actually margin the perp short, at what haircut, and where do
+   liquidations trigger? (The backtest's unified-collateral assumption.)
+2. Fee check: realized INTX perp fees + spread vs the 6bp/side model.
+3. Sizing: start at a fraction of the 30% sleeve, meter REALIZED funding
+   weekly vs the 30d trailing mean that armed the trigger.
+4. Kill criterion, written before entry: sleeve off if 30d funding
+   disarms (< 5%) or realized carry underruns the model by >50% over 4
+   weeks.
+5. Separation of powers: any live sleeve execution goes through an
+   executor service holding the keys — never the paper engine.
+
 ## Honesty box
 
 - S6/V6 blend curves are exit-step (trade-close basis); MTM runs

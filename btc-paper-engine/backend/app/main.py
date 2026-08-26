@@ -26,6 +26,9 @@ async def lifespan(app: FastAPI):
     init_db()
     if settings.run_engine:
         start_background_loop()
+    if settings.run_funding_monitor:
+        from .funding_monitor import start_funding_monitor
+        start_funding_monitor()
     yield
 
 
@@ -48,6 +51,15 @@ def health():
 @app.get("/status")
 def status():
     return ENGINE.status()
+
+
+@app.get("/funding")
+def funding():
+    """Funding-regime monitor state (RESEARCH_CARRY.md deployment policy):
+    30d trailing mean annualized BTC perp funding per venue, ARM/DISARM
+    hysteresis state, and the recent reading history."""
+    from .funding_monitor import MONITOR
+    return MONITOR.snapshot()
 
 
 @app.get("/exec/target")
