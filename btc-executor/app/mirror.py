@@ -62,6 +62,15 @@ class LegLedger:
     stop_cloid: str | None = None
     stop_px: float | None = None
     signal_ts: int | None = None
+    # Monotonic chase-attempt counter, persisted. The chase cloid used to be
+    # deterministic per entry_ts, so the SECOND chase for the same engine
+    # position (kill -> resume -> resume) re-used the first one's client
+    # order id: Coinbase rejected it as a duplicate, the fill-watch then
+    # polled the OLD order's FILLED status, and the ledger booked a fill
+    # that never happened — the 2026-08-26 phantom position. Incremented
+    # and persisted BEFORE the order is sent, so a crash between increment
+    # and send burns a number instead of ever re-using one.
+    chase_n: int = 0
     # entry_ts of an engine position whose protective stop FILLED on-venue.
     # While the engine (which only updates on 4h bar closes) keeps reporting
     # that position, case 1 must NOT re-enter from the stale entry order -
@@ -74,6 +83,11 @@ class LegLedger:
 class ExecState:
     legs: dict = field(default_factory=lambda: {n: LegLedger() for n in LEGS})
     halted: str | None = None             # None | DAILY_LOSS | DRAWDOWN | KILL
+    # unix ts of the last SUCCESSFUL venue position read. /pulse publishes
+    # its age so an external monitor can see venue blindness — every other
+    # /pulse field reads from the ledger, which is belief, not truth
+    # (2026-08-26 incident: 3 days blind, nothing external could tell).
+    last_venue_read_ts: int = 0
     day_key: str = ""
     day_start_equity: float = 0.0
     high_water: float = 0.0
@@ -154,12 +168,91 @@ class Executor:
         self._venue_lock = threading.RLock()   # reentrant: halt() runs
         # inside _step_locked's _check_halts AND from the /kill API thread
         self._cov_since_boot: dict[str, int] = {}
+        self._venue_read_failed_at = 0.0   # append-side cooldown for the RED
         self._stamp_witnessing()
         self._check_dry_run_flip()
         self._migrate_ledger_granularity()
         self._warn_unattributed_coverage()
+        self._void_absurd_fills()
+        self._reconcile_boot()
         if any(l.qty != 0.0 for l in self.state.legs.values()):
             self._cov("restart_with_position")
+
+    def _void_absurd_fills(self) -> None:
+        """One-time hygiene at boot: a recorded |slip_bps| > 500 is not a
+        fill measurement, it is a broken reference (2026-08-26: two chase
+        fills carried 1320bps because ref_px was the engine's days-stale
+        entry price — and one of them never happened at all). Void them so
+        they stop gating the ramp and poisoning the edge-monitor, but keep
+        them in the record for audit."""
+        changed = 0
+        for f in (self.state.fills or []):
+            if isinstance(f, dict) and not f.get("void") \
+                    and abs(f.get("slip_bps") or 0) > 500:
+                f["void"] = True
+                changed += 1
+        if changed:
+            self._event("WARN", "fills_voided",
+                        f"{changed} fill(s) with |slip|>500bps marked void "
+                        f"(broken reference, not execution) - excluded from "
+                        f"slippage sampling, kept for audit")
+            self._save_state()
+
+    def _reconcile_boot(self) -> None:
+        """Venue-vs-ledger truth check at boot (2026-08-26 phantom incident:
+        the ledger claimed a 0.01 BTC long for three days while the venue was
+        flat, with a resting stop that would have OPENED a naked short).
+
+        Rules, deliberately asymmetric:
+        - read fails -> RED page, adopt nothing. The fixed position() only
+          raises on genuine API failure now, so this is loud and rare.
+        - venue FLAT while the ledger claims positions -> the position was
+          closed outside our sight (external cancel/close, or a booked fill
+          that never happened). Adopt the venue: zero the legs and clear the
+          order refs. The normal mirror loop will then re-enter per the
+          engine if it still wants the position - re-entering is CORRECT
+          mirroring; believing you hold what you do not is the failure.
+        - any OTHER mismatch (venue holds more/less/opposite) -> RED
+          ACTION page only, adopt nothing: partial states are ambiguous and
+          a wrong auto-fix at boot compounds silently. The operator decides.
+        Runs only against a real venue (dry-run venues simulate fills).
+        """
+        if getattr(self.venue, "log", None) is not None:
+            return
+        ledger_net = sum(l.qty for l in self.state.legs.values())
+        if abs(ledger_net) < 1e-12:
+            return
+        try:
+            net = self.venue.position()
+        except Exception as exc:  # noqa: BLE001
+            self._event("RED", "venue_read_failed",
+                        f"boot reconcile blind: {exc}")
+            return
+        self.state.last_venue_read_ts = int(time.time())
+        if abs(net) < 1e-9:
+            for name, l in self.state.legs.items():
+                if l.qty == 0.0:
+                    continue
+                self._event("RED", "phantom_position_cleared",
+                            f"{name}: ledger claimed {l.qty} BTC but the "
+                            f"venue is FLAT - adopting venue truth. Any "
+                            f"resting stop for this leg is being cancelled; "
+                            f"the mirror will re-enter if the engine still "
+                            f"holds the position.")
+                if l.stop_cloid:
+                    try:
+                        self.venue.cancel(l.stop_cloid)
+                    except Exception:  # noqa: BLE001
+                        pass
+                l.qty = 0.0
+                l.entry_cloid = l.stop_cloid = None
+                l.stop_px = None
+                l.entry_side, l.entry_qty = None, 0.0
+            self._save_state()
+        elif abs(net - ledger_net) > 1e-9:
+            self._event("RED", "position_drift",
+                        f"boot: venue={net:.5f} ledger={ledger_net:.5f} BTC "
+                        f"- NOT auto-fixed (ambiguous); verify on Coinbase")
 
     def attest_coverage(self, note: str = "",
                         acknowledge_unwitnessed: bool = False) -> dict:
@@ -388,6 +481,7 @@ class Executor:
             st.unwitnessed_coverage = raw.get("unwitnessed_coverage", {})
             st.drills = raw.get("drills", [])[-50:]
             st.auto_drill_off = raw.get("auto_drill_off")
+            st.last_venue_read_ts = raw.get("last_venue_read_ts", 0)
             return st
         except Exception:  # noqa: BLE001
             return ExecState()
@@ -412,7 +506,9 @@ class Executor:
              "unwitnessed_coverage": getattr(self.state,
                                              "unwitnessed_coverage", {}),
              "drills": getattr(self.state, "drills", [])[-50:],
-             "auto_drill_off": getattr(self.state, "auto_drill_off", None)}
+             "auto_drill_off": getattr(self.state, "auto_drill_off", None),
+             "last_venue_read_ts": getattr(self.state,
+                                           "last_venue_read_ts", 0)}
         # per-thread tmp: a shared tmp path was safe only while every writer
         # sat behind _venue_lock (counter-agent 2026-08-21). Auto-drill adds
         # another writer, so this matters more, not less.
@@ -662,12 +758,39 @@ class Executor:
 
     def _halt_locked(self, reason: str, msg: str = "") -> None:
         self._cov("halt")
-        """Cancel everything, flatten everything, block until resume()."""
+        """Cancel everything, flatten everything, block until resume().
+
+        HARDENED after the 2026-08-26 diagnosis (the worst finding of the
+        incident): the old sequence was cancel_all -> position() -> flatten
+        inside one try. With the position read broken, cancel_all SUCCEEDED
+        and then position() raised — so the protective stop was already
+        cancelled, no flatten was ever sent, and the halted flag blocked the
+        step loop from ever re-placing anything. A halt on an unreadable
+        venue stripped the position's only protection and left it naked.
+
+        Invariant now: PROBE the venue BEFORE touching any order. If the
+        position cannot be read, cancel NOTHING — the resting stop stays
+        alive, trading still stops (halted is set), and the operator is
+        paged to flatten manually. Only a successful probe may proceed to
+        cancel; the flatten then works off a SECOND read taken after the
+        cancels, never off the ledger (a blind market close against a wrong
+        ledger can open a reverse naked position).
+        """
         self.state.halted = reason
         self._event("RED", "halt", f"{reason} {msg}")
         try:
+            self.venue.position()          # probe: readable at all?
+        except Exception as exc:  # noqa: BLE001
+            self._event("RED", "halt_blind",
+                        f"halt requested but the venue position is "
+                        f"UNREADABLE ({exc}) - no orders were cancelled, "
+                        f"the protective stop is still resting. Flatten "
+                        f"and cancel MANUALLY on Coinbase, then /resume.")
+            self._save_state()
+            return
+        try:
             self.venue.cancel_all()
-            net = self.venue.position()
+            net = self.venue.position()    # re-read AFTER cancels
             if abs(net) > 1e-6:
                 self.venue.place_market(_close_side(net), abs(net),
                                         f"halt-{int(time.time())}")
@@ -812,7 +935,8 @@ class Executor:
                 return
             led.stopped_entry_ts = None
             if led.qty == 0.0:
-                self._enter_from_fill(leg, led, pos, blend, equity)
+                self._enter_from_fill(leg, led, pos, blend, equity,
+                                      entries_ok)
             if led.qty != 0.0:
                 self._maintain_stop(leg, led, pos)
             return
@@ -877,10 +1001,26 @@ class Executor:
             self._close_leg(leg, led, "engine_exit")
 
     def _enter_from_fill(self, leg: str, led: LegLedger, pos: dict,
-                         blend: dict, equity: float) -> None:
+                         blend: dict, equity: float,
+                         entries_ok: bool = True) -> None:
         """Engine position appeared. If our entry order (partially) missed,
-        chase the remainder at market so the legs stay in sync."""
-        want = self._leg_qty(leg, blend, pos["entry_price"], equity)
+        chase the remainder at market so the legs stay in sync.
+
+        2026-08-26 hardening, three changes from the diagnosis:
+        - sizing and the slippage reference use the venue mid at SEND time,
+          not the engine's entry-bar price. The engine price can be days
+          stale (the position it reports opened bars ago), which both
+          oversized the chase and made `_leg_qty`'s notional/leverage caps
+          admit proportionally more — and recorded 1320bps of fictitious
+          "slippage" that poisoned the ramp gate's sample.
+        - the chase cloid carries a persisted attempt counter (see
+          LegLedger.chase_n) so it can never collide with a prior attempt.
+        - a market chase is NEW RISK, so it obeys entries_ok: with the feed
+          stale or degraded we book only what verifiably filled and do not
+          buy more (the old code market-bought during blindness).
+        """
+        px_ref = self.venue.mid()
+        want = self._leg_qty(leg, blend, px_ref, equity)
         filled = 0.0
         if led.entry_cloid:
             st = self.venue.order_status(led.entry_cloid)
@@ -892,12 +1032,18 @@ class Executor:
         # the target (live find, 2026-08-10). Round the shortfall down and
         # accept the tracking error instead.
         missing = self.venue.quantize(max(0.0, round(want - filled, 8)))
+        if missing > 0 and not entries_ok:
+            self._event("RED", "entries_blocked",
+                        f"{leg} chase of {missing} BTC suppressed: feed "
+                        f"stale/degraded - will not add risk while blind")
+            missing = 0.0
         if missing > 0:
             side = _order_side(pos["side"])
-            self.venue.place_market(side, missing,
-                                    f"{leg[0].upper()}-{pos['entry_ts']}-C")
-            self._watch_fill(leg, "chase", f"{leg[0].upper()}-{pos['entry_ts']}-C",
-                             pos["entry_price"], side)
+            led.chase_n += 1
+            self._save_state()     # burn the number BEFORE the order exists
+            cloid = f"{leg[0].upper()}-{pos['entry_ts']}-C{led.chase_n}"
+            self.venue.place_market(side, missing, cloid)
+            self._watch_fill(leg, "chase", cloid, px_ref, side)
             self._event("WARN", "entry_chase",
                         f"{leg} missed {missing} of {want} BTC - chased at market")
         # Record what the venue HOLDS (filled + whatever we could chase), not
@@ -1322,8 +1468,23 @@ class Executor:
             return          # dry-run venue: simulated fills, drift meaningless
         try:
             net = self.venue.position()
-        except Exception:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
+            # 2026-08-26 incident: this was a bare `return` — the single
+            # mechanism that compares venue truth to the ledger disabled
+            # itself, silently, on exactly the failure that makes it
+            # essential. Three days of blindness, zero pages. Now it is a
+            # RED with its own append-side cooldown (the event log holds 200
+            # entries and rotates in ~67 min of normal traffic, so flooding
+            # it would also destroy the forensic record).
+            now = time.time()
+            if now - self._venue_read_failed_at >= 1800:
+                self._venue_read_failed_at = now
+                self._event("RED", "venue_read_failed",
+                            f"cannot verify the venue position ({exc}) - "
+                            f"drift check is BLIND until this clears")
             return
+        self.state.last_venue_read_ts = int(time.time())
+        self._venue_read_failed_at = 0.0
         want = sum(l.qty for l in self.state.legs.values())
         px = self.venue.mid()
         if abs(net - want) * px > self.cfg.drift_tol_frac * max(equity, 1.0):

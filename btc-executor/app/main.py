@@ -139,6 +139,14 @@ def pulse():
                                     if r.get("attested")),
             "last_target_age_s": round(now - LAST["target_ts"], 1)
             if LAST["target_ts"] else None,
+            # age of the last SUCCESSFUL venue position read. Every other
+            # field here reads the LEDGER (belief); this is the only signal
+            # of venue truth an external monitor gets. null = never read
+            # this process; a growing number = the executor is going blind
+            # (2026-08-26: three days blind with a healthy-looking pulse).
+            "venue_read_age_s": (round(now - st.last_venue_read_ts, 1)
+                                 if getattr(st, "last_venue_read_ts", 0)
+                                 else None),
             "legs": {n: {"in_position": l.qty != 0.0,
                          "entry_open": l.entry_cloid is not None,
                          "stop_placed": l.stop_cloid is not None}
@@ -235,8 +243,13 @@ def _ramp_v4(st) -> dict:
     fills = getattr(st, "fills", []) or []
     fills = fills if isinstance(fills, list) else []
     # a fill recorded before the split has no "live" key -> unattributed
+    # void fills are excluded: the 2026-08-26 incident recorded two chase
+    # fills with 1320bps of fictitious "slippage" (measured against a
+    # days-stale engine price) — one of which never happened at all. They
+    # stay in the record for audit, marked void, and count toward nothing.
     n_live = sum(1 for f in fills
-                 if isinstance(f, dict) and f.get("live") is True)
+                 if isinstance(f, dict) and f.get("live") is True
+                 and not f.get("void"))
 
     def _n(d, k):
         v = d.get(k, 0)
