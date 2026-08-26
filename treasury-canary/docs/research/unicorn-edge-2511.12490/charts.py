@@ -62,7 +62,7 @@ for ser, col, lab, dy in [(bug, RED, "the look-ahead bug (D4): 'Sharpe 12'", 8),
                 textcoords="offset points", fontsize=9, color=col)
 a1.set_yscale("log")
 a1.set_ylabel("growth of $1 (log)")
-a1.set_title("arXiv 2511.12490 replicated: the 13-Sharpe exists only inside a one-line look-ahead",
+a1.set_title("arXiv 2511.12490 replicated: the 13-Sharpe appears only when the portfolio earns the return already inside its signal",
              fontsize=12, loc="left", color=INK, pad=10)
 py = l2.groupby(l2.index.year).apply(lambda r: r.mean() / r.std() * np.sqrt(252))
 colors = [AQUA if v > 0 else RED for v in py.values]
@@ -81,11 +81,12 @@ plt.close(fig)
 
 # ── the ladder waterfall ────────────────────────────────────────────────────
 rows = [("Paper's claim (OOS)", 13.19, RED),
-        ("Bug reproduction: sign flip + same-day earn (D4)", 11.99, ORANGE),
+        ("Leak family reproduction: same-day earn + sign flip (D4)", 11.99, ORANGE),
+        ("   ...closest variant: momentum-z only, same-day", 12.99, ORANGE),
         ("Their spec, faithfully implemented (L0)", 0.16, BLUE),
         ("+ honest t+1 fill (L1)", 0.14, BLUE),
         ("+ realistic 3.5bp costs (L2)", -0.29, BLUE),
-        ("open-to-open marks (L2o)", -1.98, BLUE)]
+        ("open-to-open marks (L2o)", -0.30, BLUE)]
 fig, ax = plt.subplots(figsize=(10.5, 4.4))
 ys = range(len(rows))[::-1]
 ax.barh(list(ys), [r[1] for r in rows], color=[r[2] for r in rows], height=0.55)
@@ -96,7 +97,7 @@ ax.set_yticks(list(ys))
 ax.set_yticklabels([r[0] for r in rows], fontsize=9.5)
 ax.axvline(0, color=MUTED, lw=0.8)
 ax.set_xlabel("full-period Sharpe, 2006–2024 (rf=0), current-constituent universe")
-ax.set_xlim(-3.2, 15)
+ax.set_xlim(-1.6, 15.4)
 ax.set_title("The sin ladder: honest steps remove the manufactured alpha",
              fontsize=12, loc="left", color=INK, pad=10)
 fig.tight_layout()
