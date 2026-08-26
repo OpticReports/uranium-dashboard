@@ -24,7 +24,7 @@ strategy managers (keyless decision brains)     ibkr-executor
 
 | module | book | status |
 |---|---|---|
-| manager.py (El Nino ladder) | NG call spread -> SB put spread -> SLV call spread, triggered + sequential, house-money rolling (see elnino-lab/ELNINO.md) | infra deployed OFFLINE; combo placement lands with paper phase; live target Nov 2026 window |
+| manager.py (El Nino ladder) | NG call spread -> SB put spread -> SLV call spread, triggered + sequential, house-money rolling (see elnino-lab/ELNINO.md) | **PARKED (Casey, 2026-08-24): LADDER_ENABLED defaults false — blend3070 is the ONLY strategy authorized on IBKR.** Re-arming is a Casey decision via the Render dashboard, not a code default; leg-3 SLV also carries an open fidelity question (study says silver/GOLD ratio, leg is outright SLV) to settle before any re-arm |
 | blend.py (blend3070) | H13 30/70: R2-A sleeve (tracker gate-on fires, 1% sleeve risk, 3xATR GTC trail + 90d time stop, BIL on idle cash) / SPY core, 5pp rebalance band (genomics-alpha-tracker HYPOTHESES.md H11/H13) | paper-phase adapter LANDED (real IBAdapter stock surfaces, see below); BLEND_ENABLED=false default — zero behavior change until flipped |
 
 ## blend3070: intents contract + rollout
@@ -348,6 +348,58 @@ El Nino combo reads):
   (an IB-initiated GTC cancel, e.g. corporate action) demotes the
   position to STOP_MISSING and is re-placed the same pass — never a
   naked position believed protected (adapter review m4).
+
+### Gateway supervision + outage ledger (2026-08-24)
+
+The gateway was started as `"$GW" &` and never looked at again: uvicorn is
+PID 1, so a gateway that crashed, was OOM-killed, or gave up after a failed
+login stayed dead **until a human redeployed** — while `/health` kept
+answering 200 (it reports the API, not the gateway), so Render never
+restarted the container either. The executor then reconnected forever,
+correctly, to a process that no longer existed. That is the difference
+between the 3-minute daily restart and the 30+ minute outage on 2026-08-24.
+
+- `start.sh` now SUPERVISES the gateway: restart on exit with 5s→300s
+  backoff (env values validated at boot — a non-numeric value used to kill
+  the supervisor silently and a negative one made it a fork bomb), reset
+  after `IBGW_HEALTHY_S` of clean uptime, a circuit breaker after
+  `IBGW_MAX_CONSEC_FAIL` consecutive short-lived starts (a permanently
+  unstartable gateway would otherwise attempt ~250–290 IBKR logins/day —
+  enough to lock the account), and no restart on a signal exit (143/130).
+  Every restart is appended to the restart log (rotated) with its exit code
+  and uptime. Honesty note: on a normal container stop Docker signals PID 1
+  (uvicorn) only, so the supervisor dies with the container — there is no
+  trap, because `exec` discards traps and a claimed-but-inert guarantee is
+  worse than none.
+- Gateway state deliberately does **not** gate `/health`. Wiring it in would
+  make Render restart the whole container — executor included, possibly
+  mid-order — on every routine blip, the mandatory daily restart included.
+  Supervision restarts the gateway process alone; `/health` only reports.
+- `app/outages.py` persists an outage ledger. On Render it MUST live on
+  the mounted disk — `OUTAGE_LOG_PATH=/app/data/...` in render.yaml — the
+  `./data` default is the ephemeral layer and dies on every deploy,
+  including the redeploy that fixes a wedged gateway. Each record carries
+  `duration_s`, `blocked_calls` (blocked ADAPTER CALLS, not cycles — it
+  scales with book size, so it is a cost signal, not a rate), `alerted`,
+  and `ended_by`: `reconnect` (self-healed) vs `process_restart` (it did
+  not). That last field separates "IBKR being IBKR" from "our container is
+  broken". The ledger may never raise into the trading path: every method
+  is exception-shimmed AND every adapter call site is wrapped.
+
+**What this does and does not reduce.** Expect the REPORTED `outages_30d`
+count to go UP as the tail collapses: one human-gated multi-hour outage
+becomes several short self-healed ones. Count and tail move in opposite
+directions — judge on `needed_a_restart` and the duration tail, not the
+count. Frequency of underlying incidents is unchanged — IBKR
+mandates a daily gateway restart and runs its own maintenance windows, and
+those stay irreducible. What collapses is the TAIL: process-death and
+login-wedge outages go from unbounded (human-gated) to seconds. Uptime %
+is the wrong metric; `cycles_blocked` is the right one, because an outage
+that overlaps no decision point costs nothing. Before this there was no
+history at all, so no reduction could be claimed OR measured — after ~30
+days, `self_healed` vs `needed_a_restart` answers it with arithmetic
+instead of assertion.
+
 - **Reconnect with backoff (adapter review M5)**: every surface checks the
   connection and, when the gateway has dropped (its DAILY AUTO-RESTART
   included), attempts a reconnect with exponential backoff (15s doubling
@@ -379,6 +431,15 @@ El Nino combo reads):
   re-review R2): it journals a flatten request under BLEND_LOCK and the
   loop thread, owner of the ib_async event loop, executes it on its next
   (immediately woken) iteration — see the two-stage `/kill` above.
+
+GATEWAY WRITE-ARMING: IBC's ReadOnlyApi DEFAULTS TO ON - reads (quotes,
+positions) work while every placeOrder is refused with error 321 ("API
+interface is currently in Read-Only mode"). The paper book's first-ever
+orders died on this, 2026-08-25. Arm with `READ_ONLY_API=no` in the Render
+dashboard (sync:false - an arming var is never a blueprint literal). This
+is a REQUIRED step of both the paper phase and go-live; it sits underneath
+DRY_RUN in the safety stack: DRY_RUN gates whether the executor SENDS
+orders, ReadOnlyApi gates whether the gateway ACCEPTS them.
 
 SUPERVISED FIRST SESSION: flip `DRY_RUN=false` (with `TRADING_MODE=paper`)
 DURING MARKET HOURS and keep eyes on Telegram + `/status` through the

@@ -203,6 +203,15 @@ services:
       # on the btc-executor service. Enter once in the Render dashboard.
       - key: EXEC_TOKEN
         sync: false
+      # Funding-regime monitor pages (RESEARCH_CARRY.md deployment policy:
+      # V6 carry sleeve parked until 30d INTX funding >= 8%/yr, hysteresis
+      # to 5%). Same Canary Optics bot as the executors — paste the same
+      # TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID here. Unset = silent no-op;
+      # /funding still serves the readings either way.
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
 
   # --- Catalyst Options Engine (pre-catalyst asymmetry radar) ----------------
   # PAPER ONLY + KEYLESS decision brain (born from the 2026-08-19 MRNA +130%
@@ -350,6 +359,34 @@ services:
         sync: false          # PAPER username first (usually starts with 'D')
       - key: TWS_PASSWORD
         sync: false
+      # Gateway-outage ledger + supervisor restart records. These MUST sit
+      # on the mounted disk (/app/data): the code defaults are ./data, which
+      # resolves to /opt/executor/data on the EPHEMERAL container layer, so
+      # with autoDeploy every push wiped the whole history - including, in
+      # its own motivating case, the open outage record when a human
+      # redeploys to fix a wedged gateway (counter-agent 2026-08-24).
+      # Gateway API write-arming (IBC ReadOnlyApi, via the gnzsnz image).
+      # IBC DEFAULTS to read-only: every order the executor placed was
+      # refused with error 321 "API interface is currently in Read-Only
+      # mode" - the book's first live orders on 2026-08-25 died here.
+      # Set READ_ONLY_API=no in the dashboard to arm order placement.
+      # sync:false (AUTO_DRILL precedent): an ARMING variable must never be
+      # a blueprint literal a sync could silently re-arm after Casey
+      # disarms it in the dashboard.
+      - key: READ_ONLY_API
+        sync: false
+      # El Nino ladder is OPT-IN (Casey 2026-08-24: off for now). Code
+      # default is false; set LADDER_ENABLED=true in the dashboard before
+      # the Nov 2026 window to re-arm. sync:false - trading-behavior var.
+      - key: LADDER_ENABLED
+        sync: false
+      - key: OUTAGE_LOG_PATH
+        value: /app/data/gateway_outages.json
+      - key: GATEWAY_RESTART_LOG
+        value: /app/data/gateway_restarts.jsonl
+      # the shell supervisor's own copy of the same path; they must agree
+      - key: IBGW_RESTART_LOG
+        value: /app/data/gateway_restarts.jsonl
       - key: TRADING_MODE
         # paper | live — read by gateway AND executor. sync:false: this is
         # HALF of the ibkr live gate (with DRY_RUN); as a blueprint literal a

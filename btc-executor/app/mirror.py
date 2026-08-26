@@ -35,6 +35,21 @@ from typing import Protocol
 logger = logging.getLogger(__name__)
 
 BAR_SECONDS = 14_400
+# RAMP v4 gate requirements that auto-drill must also respect. Single source
+# of truth: main.py imports these, so the drill loop and the gate can never
+# disagree about what "done" means (they did - auto-drill stopped at 3 cycles
+# = 6 fills while slippage_sample needed 10, and reported "done").
+DRILL_CYCLE_NEED = 3
+SLIPPAGE_SAMPLE_NEED = 10
+# A stop that keeps vanishing is a venue condition, not something to retry
+# into: at poll_seconds=20 an unbounded replace loop placed 4,320 live orders
+# and 4,320 pages per day (counter-agent 2026-08-24).
+STOP_REPLACE_MAX = 3
+# Auto-drill's terminal condition is now a MEASUREMENT (live fill count) that
+# drilling can fail to advance - e.g. the venue omits average_filled_price.
+# Without this bound it drills the daily budget forever, unattended.
+DRILL_NO_FILL_MAX = 3
+
 LEGS = ("pullback", "trend")
 
 
@@ -129,6 +144,13 @@ class ExecState:
     # under the guard. Kept SEPARATE forever: "attested live" is weaker
     # evidence than "observed live" and the matrix must keep saying so.
     coverage_attested: dict = field(default_factory=dict)
+    # per-position stop-vanish counts ("leg:entry_ts" -> n). Persisted:
+    # in-memory it reset on every restart, so under a crash-loop the
+    # STOP_REPLACE_MAX bound never tripped and the 4,320-order storm it
+    # exists to prevent came back (whole-chain counter-agent 2026-08-24).
+    # Top-level, NOT a LegLedger field: older loaders cherry-pick keys, so
+    # this stays rollback-safe.
+    stop_vanish: dict = field(default_factory=dict)
     attestation: dict | None = None
     # monotonic DRY_RUN flip counter. A safety invariant must NOT live in a
     # rotating buffer: the event log holds 200 entries and rate-limited
@@ -193,6 +215,16 @@ class Executor:
         self._cov_since_boot: dict[str, int] = {}
         self._venue_read_failed_at = 0.0   # append-side cooldown for the RED
         self._boot_mismatch = False        # venue-vs-ledger unresolved at boot
+        # live diagnostic (not persisted): why auto-drill last declined to
+        # run. It used to `return  # quietly wait`, so "armed and waiting"
+        # and "broken" were indistinguishable from outside.
+        self._auto_drill_wait: str | None = None
+        # consecutive fill-less drills. In-memory reset across restarts is
+        # acceptable here: the cost is bounded by drill_max_per_day and
+        # auto_drill_off persists once latched. The stop-vanish counter, by
+        # contrast, lives in ExecState (a restart must not re-arm the
+        # replacement loop - counter-agent 2026-08-24).
+        self._drill_no_fill: int = 0
         self._stamp_witnessing()
         self._check_dry_run_flip()
         self._migrate_ledger_granularity()
@@ -506,15 +538,21 @@ class Executor:
             st = ExecState(**{k: raw[k] for k in
                               ("halted", "day_key", "day_start_equity",
                                "high_water") if k in raw})
-            # unknown keys are DROPPED, not fatal: a state file written by a
-            # newer build must never brick (or silently wipe) an older one -
-            # rolling back past a schema change destroyed halted/position/
-            # stop state (review of first hotfix cut, 2026-08-26)
-            _lfields = {f.name for f in fields(LegLedger)}
-            st.legs = {n: LegLedger(**{k: v for k, v in
-                                       raw.get("legs", {}).get(n, {}).items()
-                                       if k in _lfields})
-                       for n in LEGS}
+            # Filter unknown keys: a state file written by a NEWER build
+            # carries fields this LegLedger lacks, and the bare except below
+            # would discard the entire state - un-halting a killed executor
+            # and zeroing the ledger under a live position (counter-agent
+            # 2026-08-24). Forward-compatible by construction.
+            _fields = set(LegLedger.__dataclass_fields__)
+            st.legs = {}
+            for n in LEGS:
+                raw_leg = raw.get("legs", {}).get(n, {}) or {}
+                extra = set(raw_leg) - _fields
+                if extra:
+                    logger.warning("state leg %s: dropping unknown keys %s",
+                                   n, sorted(extra))
+                st.legs[n] = LegLedger(**{k: v for k, v in raw_leg.items()
+                                          if k in _fields})
             st.events = raw.get("events", [])[-200:]
             st.marks = raw.get("marks", [])[-400:]
             st.fills = raw.get("fills", [])[-400:]
@@ -525,6 +563,8 @@ class Executor:
             # so pre-split counts read as unattributed rather than live
             st.coverage_live = raw.get("coverage_live", {})
             st.coverage_attested = raw.get("coverage_attested", {})
+            st.stop_vanish = raw.get("stop_vanish", {}) \
+                if isinstance(raw.get("stop_vanish"), dict) else {}
             st.attestation = raw.get("attestation")
             st.mode_flips = raw.get("mode_flips", 0)
             st.witnessing_since = raw.get("witnessing_since")
@@ -550,6 +590,7 @@ class Executor:
              "coverage": getattr(self.state, "coverage", {}),
              "coverage_live": getattr(self.state, "coverage_live", {}),
              "coverage_attested": getattr(self.state, "coverage_attested", {}),
+             "stop_vanish": getattr(self.state, "stop_vanish", {}),
              "attestation": getattr(self.state, "attestation", None),
              "mode_flips": getattr(self.state, "mode_flips", 0),
              "witnessing_since": getattr(self.state, "witnessing_since", None),
@@ -638,8 +679,11 @@ class Executor:
         # changes and live-trade events are never suppressed.
         RATE_LIMITED = {"halt_config", "cap_clamp", "leg_sync_error",
                         "stop_unconfirmed", "entry_unconfirmed",
-                        "stop_ref_cleared", "stop_externally_cancelled",
-                        "position_drift", "entries_blocked", "sub_min_size"}
+                        "stop_ref_cleared",
+                        "position_drift", "entries_blocked", "sub_min_size",
+                        # a persistent accept-then-cancel venue condition
+                        # paged 4,320x/day before this (2026-08-24)
+                        "stop_vanished"}
         if kind in RATE_LIMITED:
             now = time.time()
             if now - self._sent_at.get(kind, 0.0) < 1800:
@@ -1040,6 +1084,16 @@ class Executor:
                         f"data_halt={target.get('data_halt')}")
         blend = target.get("blend", {})
         for leg in LEGS:
+            # A halt can now fire MID-LOOP (_handle_stop_vanished halts on
+            # ledger divergence / unplaceable stops). Without this check the
+            # loop kept iterating: pullback halted and flattened the book,
+            # then trend's _sync_leg saw qty==0 and RE-ENTERED AT MARKET on
+            # the halted book in the same step - an open, unmanaged position
+            # behind a halt page saying the book was flat (whole-chain
+            # counter-agent 2026-08-24, CONFIRMED; missed by every per-change
+            # review because their tests used the LAST leg in this order).
+            if self.state.halted:
+                break
             tl = (target.get("legs") or {}).get(leg)
             if tl is None:
                 continue
@@ -1050,6 +1104,12 @@ class Executor:
                 # step via the loop's bare except, silently skipping the other
                 # leg on every poll it occurred (QA 2026-08-10).
                 self._event("RED", "leg_sync_error", f"{leg}: {exc}")
+        if self.state.halted:
+            # same discipline as the top-of-step check: nothing places or
+            # chases on a halted book; fill bookkeeping alone is safe
+            self._poll_fill_watch()
+            self._save_state()
+            return
         self._report_post_only_crosses()
         self._poll_fill_watch()
         self._check_drift(equity)
@@ -1241,6 +1301,73 @@ class Executor:
         led.entry_cloid = None
         led.signal_ts = pos.get("signal_ts")
 
+    def _handle_stop_vanished(self, leg: str, led: LegLedger, pos: dict,
+                              st: dict | None) -> bool:
+        """A venue stop reported CANCELLED/EXPIRED/FAILED. Returns False if
+        the caller must stop (position consumed, halted, or unverifiable).
+
+        Three things this must NOT do, each a counter-agent find:
+        - re-arm the FULL size when the stop was partially filled before it
+          died (Coinbase reports EXPIRED with filled_size > 0);
+        - place a stop the venue cannot back: place_stop is NOT reduce-only,
+          so replacing against a flat or opposite venue OPENS a position;
+        - retry forever into a venue that keeps cancelling.
+        """
+        done = float((st or {}).get("filled_qty") or 0.0)
+        led.stop_cloid, led.stop_px = None, None
+        if done > 0:
+            sgn = 1.0 if led.qty > 0 else -1.0
+            led.qty = round(led.qty - sgn * min(done, abs(led.qty)), 8)
+            # ramp evidence only when the fill fully consumed the leg: a
+            # partial on a stop the venue KILLED is simultaneously evidence
+            # the venue's stop handling misbehaved, and the row exists to
+            # prove the clean fill path (counter-agent 2026-08-24 F3)
+            if led.qty == 0.0:
+                self._cov("stop_filled")
+            self._event("RED", "stop_partial_fill",
+                        f"{leg} stop died having filled {done} - ledger now "
+                        f"{led.qty}; re-arming only the remainder")
+        if led.qty == 0.0:
+            led.stopped_entry_ts = pos.get("entry_ts")
+            led.entry_cloid = led.entry_side = None
+            led.entry_qty = 0.0
+            return False
+        key = f"{leg}:{pos.get('entry_ts')}"
+        sv = getattr(self.state, "stop_vanish", None)
+        if sv is None:
+            sv = self.state.stop_vanish = {}
+        n = sv.get(key, 0) + 1
+        sv[key] = n
+        # bounded growth: keep only this position's key per leg
+        for k in [k for k in sv if k.startswith(f"{leg}:") and k != key]:
+            del sv[k]
+        try:
+            net = self.venue.position()
+        except Exception as exc:  # noqa: BLE001
+            self._event("RED", "stop_vanished",
+                        f"{leg} stop is gone and the venue position is "
+                        f"unreadable ({type(exc).__name__}) - NOT replacing "
+                        f"blind; will retry next poll")
+            return False
+        if abs(net) <= 1e-9 or (net > 0) != (led.qty > 0):
+            self._event("RED", "ledger_divergence",
+                        f"{leg} stop vanished and the venue does not back the "
+                        f"ledger (venue {net}, ledger {led.qty}) - replacing "
+                        f"would arm a NAKED stop, halting instead")
+            self.halt("LEDGER_DIVERGENCE",
+                      f"{leg}: venue {net} vs ledger {led.qty}")
+            return False
+        if n > STOP_REPLACE_MAX:
+            self._event("RED", "stop_unplaceable",
+                        f"{leg} venue stop has vanished {n} times on this "
+                        f"position - not retrying into it")
+            self.halt("STOP_UNPLACEABLE", f"{leg} after {n} vanishes")
+            return False
+        self._event("RED", "stop_vanished",
+                    f"{leg} venue stop was no longer working (position "
+                    f"UNPROTECTED) - replacing, occurrence {n}")
+        return True
+
     def _maintain_stop(self, leg: str, led: LegLedger, pos: dict) -> None:
         trigger = pos.get("stop")
         if not trigger or led.qty == 0.0:
@@ -1252,18 +1379,22 @@ class Executor:
         # flat venue (counter-agent find 2026-08-11, reproduced end-to-end).
         if led.stop_cloid:
             st = self.venue.order_status(led.stop_cloid)
-            stat = (st or {}).get("status", "UNKNOWN") if st else "UNKNOWN"
-            if stat == "CANCELLED":
-                # externally cancelled (operator, venue expiry, dup-mapped):
-                # the old code fell through to the churn guard and held a
-                # DEAD ref silently forever - zero live stops, zero events
-                # (re-review 2026-08-26). Clear, page, and fall through so
-                # this same call re-places under a fresh salt.
-                self._event("RED", "stop_externally_cancelled",
-                            f"{leg} stop {led.stop_cloid} is CANCELLED on "
-                            f"the venue - re-placing")
-                led.stop_cloid, led.stop_px = None, None
-            elif stat == "FILLED":
+            status = (st or {}).get("status")
+            # A stop no longer working at the venue is NOT protection, but the
+            # ledger kept advertising it: only FILLED was handled, so a
+            # CANCELLED/EXPIRED stop left stop_cloid set, the churn guard
+            # suppressed the replacement, and /pulse still read
+            # stop_placed=true. Self-repair needed a >5bp trail move, and the
+            # chandelier only ratchets UP - silent exactly in a falling market
+            # (found 2026-08-24, reproduced end-to-end).
+            #
+            # Only the venue's TERMINAL bucket counts: cb.order_status maps
+            # QUEUED/PENDING/CANCEL_QUEUED to OPEN and returns None on an API
+            # failure, and neither may ever provoke a duplicate stop.
+            if status == "CANCELLED":
+                if self._handle_stop_vanished(leg, led, pos, st) is False:
+                    return
+            elif st and status == "FILLED":
                 # protective stop fired on-venue; ledger goes flat, and
                 # stopped_entry_ts blocks re-entry from this same engine
                 # position until the engine catches up at its own stop logic
@@ -1286,6 +1417,10 @@ class Executor:
                 and abs(trigger - led.stop_px) / led.stop_px \
                 < self.cfg.stop_replace_bps / 10_000.0:
             return
+        # Every attempt is salted with a PERSISTED burned-before-send counter
+        # (this branch's review chain), which supersedes main's conditional
+        # -R nonce: the id can never repeat, crash included, so the
+        # dup-reject/idempotent-dedupe class is closed unconditionally.
         led.stop_n += 1
         self._save_state()                 # burn the number BEFORE the order
         cloid = f"{leg[0].upper()}-{pos['entry_ts']}-S{int(trigger)}-{led.stop_n}"
@@ -1335,20 +1470,15 @@ class Executor:
         led.entry_qty = 0.0
 
     def _close_leg(self, leg: str, led: LegLedger, why: str) -> None:
+        # NOTE (merge 2026-08-26): an earlier hotfix cut accidentally
+        # duplicated the _maintain_stop CANCELLED-page block here via an
+        # unanchored replace. Restored to the simple form: on a close we
+        # cancel whatever ref exists and clear it - CANCELLED needs no page
+        # here because the leg is being closed anyway, and FILLED means the
+        # stop beat the signal exit.
         if led.stop_cloid:
             st = self.venue.order_status(led.stop_cloid)
-            stat = (st or {}).get("status", "UNKNOWN") if st else "UNKNOWN"
-            if stat == "CANCELLED":
-                # externally cancelled (operator, venue expiry, dup-mapped):
-                # the old code fell through to the churn guard and held a
-                # DEAD ref silently forever - zero live stops, zero events
-                # (re-review 2026-08-26). Clear, page, and fall through so
-                # this same call re-places under a fresh salt.
-                self._event("RED", "stop_externally_cancelled",
-                            f"{leg} stop {led.stop_cloid} is CANCELLED on "
-                            f"the venue - re-placing")
-                led.stop_cloid, led.stop_px = None, None
-            elif stat == "FILLED":
+            if st and st.get("status") == "FILLED":
                 led.qty = 0.0          # stop beat the signal exit; already flat
             else:
                 self.venue.cancel(led.stop_cloid)
@@ -1642,9 +1772,23 @@ class Executor:
         # advancing the ramp gate, with no error anywhere. Read the same
         # source the gate reads.
         cov = getattr(self.state, "coverage_live", {}) or {}
-        if cov.get("drill_cycle", 0) < 3:
+        if cov.get("drill_cycle", 0) < DRILL_CYCLE_NEED:
+            return "cycle"
+        # slippage_sample ALSO gates coverage_complete, and one cycle drill
+        # yields exactly 2 live fills (market entry + market flatten; the stop
+        # is cancelled, not filled). Stopping at drill_cycle left the gate
+        # stuck at 6/10 while this returned None - which reads as "drills
+        # complete", so the ramp could never close on its own. Organic fills
+        # count too, so this self-limits once trading resumes.
+        if self._live_fill_count() < SLIPPAGE_SAMPLE_NEED:
             return "cycle"
         return None
+
+    def _live_fill_count(self) -> int:
+        """Fills counting toward the slippage sample: live venue fills only
+        (a DryRunVenue price is synthetic)."""
+        return sum(1 for f in (getattr(self.state, "fills", None) or [])
+                   if isinstance(f, dict) and f.get("live") is True)
 
     def _maybe_auto_drill(self, entries_ok: bool) -> None:
         """RAMP_V4.md amendment 2026-08-17 (Casey: zero-touch drill QA):
@@ -1660,29 +1804,67 @@ class Executor:
         # shadow venue. Without it, evidence would never reach coverage_live
         # while _needed_auto_drill kept asking for more, so auto-drill would
         # spend real drills into a gate that can never advance.
-        if not getattr(self.cfg, "auto_drill", False) \
-                or not self._is_live() \
-                or not entries_ok \
-                or getattr(self.state, "auto_drill_off", None):
+        if not getattr(self.cfg, "auto_drill", False):
+            self._auto_drill_wait = "disarmed"
+            return
+        if not self._is_live():
+            self._auto_drill_wait = "not_live"
+            return
+        if not entries_ok:
+            self._auto_drill_wait = "feed_degraded"
+            return
+        if getattr(self.state, "auto_drill_off", None):
+            self._auto_drill_wait = "breaker_latched"
             return
         kind = self._needed_auto_drill()
         if kind is None:
+            self._auto_drill_wait = "complete"
             return
         last = self.state.drills[-1]["ts"] if self.state.drills else 0
         if time.time() - last < getattr(self.cfg, "auto_drill_spacing_s", 3600):
+            self._auto_drill_wait = "spacing"
             return
-        if self._drill_refusal():
-            return              # not flat / budget / cooldown: quietly wait
+        refusal = self._drill_refusal()
+        if refusal:
+            # Record WHY. This used to `return  # quietly wait`, so an
+            # auto-drill blocked for days behind an open position looked
+            # exactly like a broken one from outside (2026-08-24: the book
+            # had been non-flat since 08-19 and nothing said so anywhere).
+            self._auto_drill_wait = refusal
+            return
+        fills_before = self._live_fill_count()
         rec = self._drill_locked(kind)
         if rec.get("refused"):
+            self._auto_drill_wait = rec["refused"]
             return
+        self._auto_drill_wait = None
         from .alerts import send
+        # DEF-5/6: the terminal condition is now a MEASUREMENT (live fill
+        # count), and a drill can fail to advance it (venue omits
+        # average_filled_price, or mid() is 0 so _watch_fill never queues).
+        # Without this bound auto-drill burns the daily budget forever.
+        if rec["ok"]:
+            if self._live_fill_count() <= fills_before:
+                self._drill_no_fill += 1
+                if self._drill_no_fill >= DRILL_NO_FILL_MAX:
+                    self.state.auto_drill_off = (
+                        f"{self._drill_no_fill} drills produced no slippage "
+                        f"sample - fills are not being recorded")
+                    send("🔴 ACTION NEEDED (you) — auto-drill disabled: "
+                         f"{self._drill_no_fill} consecutive drills verified "
+                         "OK but recorded NO fills, so the slippage row can "
+                         "never close. Drilling further just spends money — "
+                         "check the venue's average_filled_price reporting.")
+                    return
+            else:
+                self._drill_no_fill = 0
         if rec["ok"]:
             # gate-relevant counts, not the all-modes total: reporting
             # "3/3" while the ramp gate reads 0/3 is worse than silence
             cov = getattr(self.state, "coverage_live", {}) or {}
             send(f"✅ auto-drill {kind} ok "
-                 f"(cycle {cov.get('drill_cycle', 0)}/3, "
+                 f"(cycle {cov.get('drill_cycle', 0)}/{DRILL_CYCLE_NEED}, "
+                 f"slippage {self._live_fill_count()}/{SLIPPAGE_SAMPLE_NEED}, "
                  f"stop_filled {cov.get('stop_filled', 0)}/1)"
                  + ("" if self._needed_auto_drill()
                     else " — auto-drill cycles COMPLETE (stop_filled row "

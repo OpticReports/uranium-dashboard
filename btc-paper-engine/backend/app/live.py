@@ -285,7 +285,10 @@ class Engine:
             with session_scope() as s:
                 s.query(TradeRow).delete()
                 s.query(EquitySnapRow).delete()
-                s.query(BookStateRow).delete()
+                # keep the funding monitor's row: a book reset must not make
+                # a restarted monitor forget an ARMED regime and re-page it
+                s.query(BookStateRow).filter(
+                    BookStateRow.book != "_funding_monitor").delete()
                 s.merge(BookStateRow(book="_meta",
                                      state_json=json.dumps({"capital": self.start_capital}),
                                      last_processed_bar=0))

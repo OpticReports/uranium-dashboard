@@ -10,6 +10,7 @@ exercised in PAPER mode (DRY_RUN=false, TRADING_MODE=paper).
 """
 from __future__ import annotations
 
+import json
 import logging
 import secrets
 import threading
@@ -19,6 +20,7 @@ from datetime import datetime, timezone
 from fastapi import FastAPI, Header, HTTPException, Query
 
 from .alerts import send
+from .outages import OutageLog
 from .config import settings
 from .ib_adapter import DryAdapter
 from .manager import LadderManager
@@ -49,6 +51,57 @@ LAST: dict = {"loop_ok": 0.0, "nino34": None, "mode": "OFFLINE"}
 # silently failing blend loop must be visible from the outside.
 BLEND_CYCLE: dict = {"date": None, "ok": None, "error": None,
                      "error_ts": None}
+# Persisted gateway-outage ledger (built with the live adapter only).
+OUTAGES = None
+
+
+def _gateway_restarts(limit: int = 20) -> dict:
+    """Restart records written by start.sh's supervisor. A gateway that keeps
+    dying is a different problem from IBKR being unreachable, and the two used
+    to be indistinguishable."""
+    path = getattr(settings, "gateway_restart_log", "")
+    out: list[dict] = []
+    try:
+        # seek to the tail: /health is probed every few seconds and used to
+        # slurp the entire unrotated file (counter-agent measured 7.5 MB per
+        # call on a one-year log)
+        WINDOW = 256 * 1024
+        with open(path, "rb") as fh:
+            fh.seek(0, 2)
+            size = fh.tell()
+            fh.seek(max(0, size - WINDOW))
+            blob = fh.read().decode("utf-8", "replace")
+        lines = blob.splitlines()
+        if size > WINDOW:
+            lines = lines[1:]      # only THEN is the first line partial
+        for line in lines:
+            try:
+                rec = json.loads(line)
+            except Exception:  # noqa: BLE001
+                continue
+            if isinstance(rec, dict):
+                out.append(rec)
+    except Exception:  # noqa: BLE001
+        pass
+    day = time.time() - 86400
+    # count over EVERYTHING in the tail, then truncate for display: applying
+    # the limit first made last_24h saturate at exactly the storm it exists
+    # to reveal
+    last_24h = sum(1 for r in out if _num_ts(r) >= day)
+    return {"recent_shown": min(len(out), limit),
+            "last_24h": last_24h,
+            # the breaker deliberately recreates a dead-gateway steady state
+            # (stops hammering IBKR logins); it must be NAMED, not buried in
+            # the last record's reason field (counter-agent 2026-08-24 F3)
+            "circuit_open": bool(out) and out[-1].get("reason") == "circuit_open",
+            "last": out[-1] if out else None}
+
+
+def _num_ts(rec: dict) -> float:
+    try:
+        return float(rec.get("ts") or 0)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _auth(hdr: str | None, q: str | None) -> None:
@@ -57,7 +110,7 @@ def _auth(hdr: str | None, q: str | None) -> None:
 
 
 def _build():
-    global MGR, ADAPTER, BLEND
+    global MGR, ADAPTER, BLEND, OUTAGES
     MGR = LadderManager(settings, settings.state_path)
     if MGR.archived_state:
         # x12: an unreadable ladder file used to become a fresh, un-halted
@@ -93,9 +146,21 @@ def _build():
         ADAPTER = DryAdapter()
         LAST["mode"] = f"DRY ({settings.trading_mode})"
         logger.warning("DRY_RUN with credentials: mutations stay simulated")
+        # the gateway + supervisor run in DRY too (creds exist) - without a
+        # ledger the /health gateway block was dark in exactly the rehearsal
+        # mode that precedes live (counter-agent 2026-08-24 F6-ii). The
+        # DryAdapter never calls the hooks, so this records restarts only.
+        global OUTAGES
+        OUTAGES = OutageLog(settings.outage_log_path)
         return
     from .ib_adapter import IBAdapter
-    ADAPTER = IBAdapter(settings)
+    OUTAGES = OutageLog(settings.outage_log_path)
+    if OUTAGES.history and OUTAGES.history[-1].get("ended_by") == "process_restart":
+        # the previous process died mid-outage: it did NOT self-heal, and
+        # that is precisely the case supervision is meant to eliminate
+        logger.warning("previous gateway outage ended by process restart, "
+                       "not by reconnect: %s", OUTAGES.history[-1])
+    ADAPTER = IBAdapter(settings, outage_log=OUTAGES)
     LAST["mode"] = settings.trading_mode.upper()
 
 
@@ -116,7 +181,9 @@ def _loop():
              f"loop is running; fix config/gateway and redeploy")
         return
     send(f"🌊 ibkr-executor up — mode {LAST['mode']}, "
-         f"ladder legs {[k for k in MGR.state.legs]}")
+         + (f"ladder legs {[k for k in MGR.state.legs]}"
+            if settings.ladder_enabled else "ladder DISABLED (LADDER_ENABLED "
+            "unset; blend unaffected)"))
     while True:
         try:
             today = datetime.now(timezone.utc).date().isoformat()
@@ -128,7 +195,11 @@ def _loop():
             # as BLEND_LOCK serializes the blend (alerts are sent outside
             # the lock so a slow Telegram call never holds it).
             ladder_alerts: list[str] = []
+            # ladder gate below: when disabled, no marks, no step(), no
+            # intents - nothing can open or close. State untouched; /kill
+            # still works on any previously-open leg (MGR stays built).
             with MGR_LOCK:
+              if settings.ladder_enabled:
                 for key, leg in MGR.state.legs.items():
                     if leg.status == "OPEN" and leg.order_ref:
                         try:
@@ -210,6 +281,11 @@ app = FastAPI(title="IBKR Executor", version="0.1.0", lifespan=lifespan)
 
 @app.get("/health")
 def health():
+    # Gateway reliability, deliberately NOT part of the health verdict:
+    # tying it to `status` would make Render restart the whole container -
+    # executor included, possibly mid-order - on every routine gateway blip,
+    # including its mandatory daily restart. Supervision restarts the gateway
+    # process alone; this block only reports.
     body = {"status": "ok", "service": "ibkr-executor", "mode": LAST["mode"],
             "loop_age_s": round(time.time() - LAST["loop_ok"], 1)
             if LAST["loop_ok"] else None}
@@ -218,10 +294,35 @@ def health():
     # main loop and would otherwise fail silently — surface it here.
     if BLEND is not None:
         err_ts = BLEND_CYCLE.get("error_ts")
+        qm = getattr(BLEND.state, "quotes_missing_since", None)
         body["blend_loop"] = {
             "ok": BLEND_CYCLE["ok"] is not False,
             "last_error_age_s": round(time.time() - err_ts, 1)
-            if err_ts else None}
+            if err_ts else None,
+            # a cycle that skips every decision on absent quotes is a
+            # SUCCESSFUL cycle, so ok:true said nothing about whether the
+            # book could trade - one Telegram alert then permanent silence
+            # (2026-08-24). Age, not a boolean: watchers can threshold it.
+            "quotes_missing_for_s": max(0.0, round(time.time() - qm, 1))
+            if qm else None}
+    if OUTAGES is not None:
+        # Guarded: healthCheckPath is /health, so a raise here 500s the probe
+        # and Render restarts the WHOLE container - executor included,
+        # possibly mid-order. That is the exact outcome the comment above
+        # says this block avoids, reached by another route (counter-agent
+        # 2026-08-24, CRITICAL). Reporting must never fail the verdict.
+        try:
+            summ = OUTAGES.summary() or {}
+            body["gateway"] = {
+                "down_since": summ.get("currently_down_since"),
+                "outages_30d": summ.get("outages"),
+                "self_healed_30d": summ.get("self_healed"),
+                "needed_a_restart_30d": summ.get("needed_a_restart"),
+                "restarts_24h": (_gr := _gateway_restarts()).get("last_24h"),
+                "circuit_open": _gr.get("circuit_open")}
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("gateway health block failed (ignored): %s", exc)
+            body["gateway"] = {"error": "unavailable"}
     return body
 
 
@@ -233,6 +334,7 @@ def status(x_exec_token: str | None = Header(default=None),
         return {"ready": False}
     body = {"ready": True, "mode": LAST["mode"], "dry_run": settings.dry_run,
             "nino34_weekly": LAST["nino34"],
+            "ladder_enabled": settings.ladder_enabled,
             "ladder": {k: vars(v) for k, v in MGR.state.legs.items()},
             "banked": MGR.state.banked, "halted": MGR.state.halted,
             "leg_budget": MGR.leg_budget(),
@@ -250,6 +352,9 @@ def status(x_exec_token: str | None = Header(default=None),
         ts = marks.get("ts")
         body["blend"]["marks_age_s"] = (round(time.time() - ts, 1)
                                         if ts else None)
+    # /status is the operator's incident endpoint - it was the one place
+    # blind to gateway state (counter-agent 2026-08-24)
+    body.update(_gateway_report())
     return body
 
 
@@ -279,7 +384,20 @@ def blend_feed(x_read_token: str | None = Header(default=None)):
     body["mode"] = LAST["mode"]
     body["last_cycle"] = {"date": BLEND_CYCLE["date"], "ok": BLEND_CYCLE["ok"],
                           "error": BLEND_CYCLE["error"]}
+    body.update(_gateway_report())
     return body
+
+
+def _gateway_report() -> dict:
+    """Gateway reliability for operator endpoints. Never raises."""
+    if OUTAGES is None:
+        return {}
+    try:
+        return {"gateway_outages": OUTAGES.summary(),
+                "gateway_restarts": _gateway_restarts()}
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("gateway report failed (ignored): %s", exc)
+        return {"gateway_outages": {"error": "unavailable"}}
 
 
 @app.api_route("/kill", methods=["GET", "POST"])

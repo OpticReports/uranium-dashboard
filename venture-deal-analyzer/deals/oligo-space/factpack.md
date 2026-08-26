@@ -1,0 +1,575 @@
+# Fact pack — Oligo Space (S1 INTAKE)
+
+**Deal:** Oligo Space, Inc. — early-stage satellite manufacturer, Hawthorne CA (HQ per memo; see HQ conflict below)
+**Stage / ask:** $10,000,000 at "$100M valuation" — **pre vs post not specified in the memo** (source-memo.txt line 147). Prior: "$7M raised to date"; "last strategic round … closed at a $50M valuation" (lines 144–146).
+**Terms:** "L1, 10/0/10" — LP-supplied, appears nowhere in the memo, notation undefined.
+**Date:** 2026-08-25. Rev 1. Six independent verification sweeps (team, corporate/funding, commercial traction, market-stat audit, competition/comps, technical feasibility), each with an adversarial counter-agent pass. **Where a counter-agent overturned or downgraded a sweep finding, the counter-agent's version is what appears below and the correction is marked `[CORRECTED]`.**
+
+**Orientation.** Oligo Space is a ~2024-founded (see founding-date conflict) spacecraft manufacturer building CHIMERA, a 100 kg ESPA-class bus, and Zenith, an AI-assisted spacecraft design stack. The company is real, operating, hiring 15 on-site Hawthorne roles, and has one independently corroborated commercial relationship (Spacedock + Melagen Labs, via SpaceNews). It has no flown hardware, no public launch manifest entry, no SEC Form D, no federal award record, and no publicly disclosed valuation at any round. Three categories of fact dominate this intake: (a) a set of company claims that public sources can neither confirm nor contradict, chiefly the $7M / $50M / $100M capital stack and the "booked and paid" April 2027 launch; (b) an unacknowledged ~10–12 month first-flight slip, which is documented in third-party sources and reflected on Oligo's own website but not disclosed in the memo; and (c) a market section in which 10 of 17 statistics carry a defect after adversarial correction. **No opinion, score, or recommendation is recorded at S1, per protocol.**
+
+---
+
+## 0. Correction to the S1 record — the memo's team slide was never read
+
+**The memo PDF has four pages. Page 3 contains a full-page raster team roster that the text layer does not include.** This was caught by the market-stat counter-agent and independently reproduced for this fact pack.
+
+- `pdfimages -list source-memo.pdf` → exactly one image in the document: page 3, 2048×1045, object 11.
+- `pdftotext source-memo.pdf` → **0 occurrences** of "Shapiro", "Caltech", "UCLA", "Deccia", "Guerrero".
+- The extracted image was read directly. [VERIFIED: `/home/user/uranium-dashboard/venture-deal-analyzer/deals/oligo-space/source-memo.pdf`, page 3, object 11]
+
+Slide header, verbatim: *"Assembled a team of veteran engineers that have worked on the world's most advanced flagship missions"* · **"70+ YRS OF FLIGHT EXPERIENCE"** · **"25+ FLAGSHIP MISSIONS WORKED ON"**. Logos on the Shapiro panel: Cal, UCLA, Caltech, NASA, JPL.
+
+Nine named people, verbatim titles and bios:
+
+| Name | Title | Bio (verbatim, as printed) |
+|---|---|---|
+| **Andrew Shapiro, PhD** | CHIEF TECHNOLOGIST | "20+ yrs previous NASA JPL Manager of Technology Formulation and Division Chief Technologist where he spearheaded early-stage innovation and funded seeded over 12 advanced missions across NASA Lectured at Caltech and UC Irvine. **Former Proteus Space Co-Founder/CTO** ." |
+| Carlos Deccia, PhD | CHIEF MISSION ARCHITECT | "Astrodynamics PhD and ML lead engineer. Won a $8.4M NASA research grant for work in constellation design and remote sensing automation and led AI at Canaria" |
+| Carlyn Lee | SOFTWARE SYSTEMS LEAD | "Co-authored the autonomy that won DARPA's SubT Challenge, led 1000x simulation speedups across JPL's supercomputer cluster, and automated operations for 3 flagship missions." |
+| Samuel Villarreal | HEAD OF FLIGHT SOFTWARE | "Owned flight simulations across Mars 2020, Curiosity, and Psyche leading payload definition and flight interface design and ground support equipment testbeds" |
+| Warren Kaye | SENIOR FLIGHT SOFTWARE | "10 years of JPL flight software leadership, from leading Lunar Flashlight to spearheading Cassini's Grand Finale maneuver and Psyche. Previous game developer for Call of Duty." |
+| Liliana Reyes | SENIOR AVIONICS | "Led the assembly, testing, integration, and delivery of 4 full ESPA spacecraft at Momentus and **Proteus Space**, achieving the record for fastest delivery of a custom satellite." |
+| Richard Guerrero | MANUFACTURING LEAD | "25 years leading the build, test, and integration of flight-qualified hardware and avionic systems at NASA JPL. Air Force veteran led the vertical integration of harnessing at **Proteus Space**" |
+| Corey Mack | HEAD OF OPERATIONS | "20+ yrs JPL operations. Ran ops for a 190-engineer robotics section, managing section logistics, multiple global field tests across flagship missions, lunar rover deployments," |
+| Khari Lobin | MANUFACTURING TECHNICIAN | "Automotive manufacturing technician at BMW. Welding, assembly/integration, and precision fabrication experience across automotive, HVAC systems, PC assembly, and IT infrastructure." |
+
+**What this corrects, factually:**
+
+1. `deals/oligo-space/ic.md` capture row 1 — "[Shapiro] Does not appear anywhere in the PDF. The Team section names *only* Jacob Rodriguez" — **is wrong on both halves.**
+2. `ic.md` capture row 2 — "veteran engineering team drawing from NASA JPL, Caltech, UCLA, and defense programs — Not present" — **is wrong**; it is a close paraphrase of the slide header plus the Cal/UCLA/Caltech and US Air Force logos on the roster.
+3. `ic.md`'s conclusion that LP-summary items 1–2 came from "a deck, a call, or a sponsor email that has not been supplied" **does not hold for items 1–2**. They came from the memo. **Item 5 (the "L1, 10/0/10" terms) remains genuinely off-memo** — re-checked; no terms appear anywhere in text or image.
+4. `deals/oligo-space/source-memo.txt` is a **text-layer-only extraction that silently drops the entire page-3 roster**. It should not be used as the memo of record. This is the failure mode the standing rule names: the document was opened, but one of its four pages was never actually read.
+5. Three sweeps built findings on "the memo names only Rodriguez." Those are corrected throughout this pack.
+
+---
+
+## 1. Source manifest
+
+### READ — primary / first-party
+
+- `source-memo.pdf`, all 4 pages including the page-3 image roster (this pack; extraction reproduced above).
+- **Oligo's own website**, via its single JS bundle `https://www.oligospace.com/assets/index-SgGf0O8P.js` (210,919 bytes; the site has 4 routes and no dynamic imports, so the bundle is the complete public site copy). Direct fetches of `oligospace.com` return a 1,437-byte SPA shell with no body text — every earlier "the site says nothing" finding was a render artifact.
+- **Oligo's own ATS**: `https://api.ashbyhq.com/posting-api/job-board/oligo?includeCompensation=true` — 15 live postings, 82,868 chars of body text, all Hawthorne/on-site.
+- Oligo careers photography: `/assets/careers/{cleanroom,mill,drill-press,robot-arm,gpus,workstation,bench,team-hardware,network,motherboard}.jpg` — downloaded and visually inspected.
+- **SEC EDGAR**: full-text search + company-name search (both API and UI endpoints); Globalstar 8-Ks (2024-10-29 and 2026-04-13); Terran Orbital FY2022 10-K, FY2023 10-K, Q2-2024 10-Q, 8-K 2023-03-21, DEFM14A, SC 13D/A ×2; Astra 8-K 2024-07-18 and DEFM14C 2024-06-05; Vector Acquisition 8-K EX-99.1; Terran XBRL `RevenueRemainingPerformanceObligation` concept series.
+- **Apex Space configurator** `https://www.apexspace.com/configurator` (machine-readable `data-price` / `data-delivery` attributes) and `/platforms/*`, `/factory-one`, `/factory-x`, `/news`, blog.
+- **Proteus Space** `https://proteus-space.com/` — `/leadership`, `/origins`, `/solutions`, `/media` (footer "© Proteus Space 2026", Webflow last published 2026-04-24).
+- **Andrew Shapiro's own CVs**, hosted on a .edu domain: `https://engineering.uci.edu/files/Shapiro_WebCV10.pdf` (PDF CreationDate 2010-02-12, Author "ANDREW SHAPIRO") and the earlier `https://engineering.uci.edu/files/Andrew_Shapiro_CV.pdf` (CreationDate 2004-02-25). Extracted via pdftotext, quoted verbatim.
+- GAO/NSIAD-97-159 full text (govinfo.gov); SDA Tranche 1 Transport Layer award release (sda.mil); SIA 28th and 29th Annual State of the Satellite Industry press releases; McDowell, *Space Activities in 2025* (planet4589.org/space/papers/space25.pdf); Accenture *Space for Growth* PDF; BryceTech *Start-Up Space 2025* PDF; Deloitte press room; Exolaunch mission_41 (Transporter-15); Spaceflight Now live coverage for Transporter-15/16/17; SpaceNews Spacedock/Oligo/Melagen article (direct curl with browser UA, HTTP 200, 257 KB); Payload founder profile; USAspending.gov API; jpl.nasa.gov.
+
+### NOT READ — blocked, gated, or unrenderable (no silent gaps)
+
+**Hard-blocked aggregators / databases**
+- `https://www.crunchbase.com/organization/oligo-4fd9` — HTTP 403 to every agent; r.jina.ai reader proxy hit a CAPTCHA; **archive.org availability API reports no Wayback snapshot exists.** The "Benjamin Carlson co-founder / founded 2023 / Cambridge MA" claim and the "$100K seed" figure rest on search-index summaries of this page and **have never been read by anyone**.
+- `https://pitchbook.com/profiles/company/588864-16` — 403. `https://pitchbook.com/profiles/person/386278-48P` — paywalled.
+- `https://tracxn.com/d/companies/oligo/...` — 403. `https://www.caplight.com/company/oligo-space` — 307 → demo gate. `https://www.preqin.com/data/profile/asset/oligo-space/745113` — financial detail behind "Subscriber Access Only". `https://app.dealroom.co/companies/oligo_2` — 403. `cbinsights.com` free tier truncates the investor list ("and 9 more").
+- `https://rocketreach.co/oligo-profile_b72baab8c442dd01` — 403. `https://f4.fund/startups/oligospace` — 403. `https://www.ycombinator.com/companies/oligo-space` — 404.
+
+**LinkedIn — the single most consequential block**
+- `https://www.linkedin.com/in/jrod2024/` (Rodriguez) — HTTP 999. `https://www.linkedin.com/in/andrew-shapiro-phd` — HTTP 999. `linkedin.com/company/oligo-space/people/` and `/about/` — login wall. **All LinkedIn-derived content anywhere in this pack reached the sweeps only as second-hand search-engine summaries and is tagged [SECONDARY, UNREPRODUCED].** This is where the CNC/machine-shop employment, the internship count, Shapiro's Proteus end date, and the ~28-employee headcount would be adjudicated.
+
+**Government / registry**
+- `https://bizfileonline.sos.ca.gov/api/Records/businesssearch` — HTTP 403, Incapsula WAF (incident 1012000050260237233). **No California corporate record obtained.** Delaware Division of Corporations entity search — not reachable.
+- `https://api.www.sbir.gov/public/api/awards?firm=Oligo` — Forbidden on all variants. HigherGov — unreachable. **SBIR/STTR and UEI/CAGE remain OPEN, not closed.**
+- USPTO: `tmsearch.uspto.gov` HTTP 405; `trademarks.justia.com` 403; `uspto.report` 403; `ped.uspto.gov` HTTP 000; `search.patentsview.org` empty. **No trademark or patent search was completed for "Oligo Space", "Zenith", or "CHIMERA". Draw no conclusion either way.**
+- FCC: ELS (`apps.fcc.gov/oetcf/els/...` 403/503), IBFS (`licensing.fcc.gov/myibfs/` 403), ICFS (connection failed), `fcc.gov/space` 403, `fcc.report` Cloudflare challenge, ECFS API needs a key. NOAA CRSRA `nesdis.noaa.gov/CRSRA/licenseHome.html` 403. **Licence status is UNCHECKED, not absent.**
+
+**Trade press / other**
+- `spacenews.com` — 403 to WebFetch across the board (Proteus AI-satellite article, Terran/Rivada backlog article, Apex $2.3B, Lockheed/Terran completion, the Oligo Space tag archive). One SpaceNews article (Spacedock/Oligo/Melagen, Werner, 2025-09-03) **was** read via direct curl with a browser UA; the rest were not.
+- `https://www.spacefoundation.org/2025/07/22/the-space-report-2025-q2/` — 403; GlobeNewswire mirror 503. **The $613B figure, its +7.8% growth and 78/22 split were never read at primary.**
+- CSIS Aerospace launch-cost page — figures live in an interactive chart that did not serialize; dataset CSV 404. **The $54,500/kg Shuttle and $2,720/kg Falcon 9 figures were not read at CSIS.**
+- `https://www.spacex.com/rideshare/` — JS SPA, no pricing in HTML or in main.js. **The $350k ≤50 kg + $7,000/kg rate card is [SECONDARY], not read at primary.**
+- `investors.globalstar.com` 503; Globalstar FY2025 10-K truncated by the fetch tool (~13 MB); Exhibits 10.1/10.2 to the April 2026 8-K not read.
+- `https://apps.dtic.mil/sti/html/tr/ADA522479/index.html` — HTTP 403 from DTIC's own Azure WAF, on five URL variants; DTIC Public Search is offline. **The ">6 months AIT" claim is uncorroborated.**
+- `bluecanyontech.com` — 403 on http and https; datasheet 404. **The 80,000 sq ft / 100-satellites-per-year figures are unverified.**
+- `https://www.tandfonline.com/doi/full/10.1080/09544828.2025.2453401` — paywalled (existence confirmed via Crossref: *J. Engineering Design*, 2025-01-28).
+- `https://digitalcommons.usu.edu/...smallsat` ESPA Grande qualification paper — 403. `https://rocketlabcorp.com/space-systems/spacecraft/` — 403. `web.archive.org` — egress-blocked from these sessions (the availability API worked; **snapshot CONTENT was never read**, which blocked the cleanest way to date the launch slip).
+- `https://mission-configurator.oligospace.com/` — Wayback availability API confirms an HTTP 200 snapshot dated 2026-03-10 15:08:15 UTC; **the URL today returns Vercel "DEPLOYMENT_NOT_FOUND"**. The snapshot's content was not readable.
+- `https://theorg.com/org/proteus-space/org-chart/andrew-shapiro` — fetched HTTP 200, 136 KB, and contains **zero** occurrences of "Shapiro"; the name survives only in the URL slug and theorg self-labels the chart "Unverified". It must not be cited for Shapiro's Proteus role.
+
+**Search-budget disclosure:** four of the six counter-agent passes exhausted their WebSearch budget (200/200) mid-task; DuckDuckGo served CAPTCHAs and Bing/mojeek/ecosia returned 403 in several sessions. Where a negative ("no source found") rests on a degraded search capability, it is labelled below as *not-contradicted* rather than verified.
+
+---
+
+## 2. VERIFIED
+
+Claims that survived the adversarial pass, with primary sourcing.
+
+### Founder credentials
+
+- **2024 Thiel Fellow.** Named in the Thiel Foundation's own class announcement, 2024-03-20, verbatim: *"Jacob Rodriguez: Los Angeles, CA — Oligo is revolutionizing the production of space-grade hardware and orbit-ready spacecraft…"*, linking to oligo.space. Fellowship terms $100,000 over two years. [VERIFIED: https://www.businesswire.com/news/home/20240320742346/en/Thiel-Foundation-Announces-Next-Thiel-Fellow-Class] — this is also primary confirmation that Rodriguez founded Oligo.
+- **MIT attendance, AeroAstro.** MIT AeroAstro's own department page, verbatim: *"Jacob Rodriguez '24 is a senior majoring in Aerospace Engineering with a concentration in Robotics and Autonomous Systems, and minoring in Education Equity. From Orange County, California, Jacob is a first-generation, low-income student… He is deputy director of the MIT WORMS Project, which won Best Paper at NASA's Big Idea Challenge in 2022."* [VERIFIED: https://aeroastro.mit.edu/news-impact/three-from-mit-named-2024-matthew-isakowitz-fellows] An earlier TEDxMIT organizer bio gives "freshman majoring in both Aerospace Engineering and Physics." `[CORRECTED]` — **degree conferral is NOT verified** (see §5); the memo's actual wording is "studied at MIT", which is supported. The word "AI" in the memo's "AeroAstro, physics, and AI at MIT" is **not supported by any MIT source** — his concentration is Robotics and Autonomous Systems.
+- **NASA internships at Goddard and JPL, three named JPL projects.** MIT AeroAstro, verbatim: *"He has held internships at NASA Goddard Space Center and with NASA JPL, where he worked on the Psyche spacecraft, the Europa Ocean World Lander Autonomy Testbed, and projects developing high-speed offroad autonomous vehicles for the Moon."* The memo correctly labels these **internships**, not staff roles. **The count "six" appears in no source.**
+- **776 Fellow.** Confirmed from the 776 Foundation's own account: *"Meet climate fellow Jacob Rodriguez 🛰️ He's the founder & CEO of Oligo Space…"* [VERIFIED: https://www.instagram.com/p/DMs0fQTP2ez/] Cohort year not stated; 776.org/fellowship is a JS shell and served no roster.
+- **2024 Matthew Isakowitz Fellow** — a credential the memo does not claim. Confirmed on the foundation's own independent roster (`/fellowship`, `/news-post/mifp-class-2024`): Jacob Rodriguez, MIT, placement Astrolab; 31 fellows from ~250 applicants across 90 colleges. `[CORRECTED]` — the foundation's *news-post* version of the MIT article is a verbatim repost with the same byline and an explicit "Source: aeroastro.mit.edu" attribution and is **not** independent corroboration.
+- **Identity bridge** (MIT pages never mention Oligo; "Jacob Rodriguez" is a common name): closed via the Thiel release above, plus `roboticssummit.com/speaker/jacob-rodriguez/` listing "Founder | Oligo" and matching MIT on five attributes (MIT senior in AeroAstro, Orange County, first-gen, WORMS leadership, NASA internships).
+
+### The company exists and is operating
+
+- **15 live job postings, all Hawthorne, all on-site**, from Oligo's own ATS. Every posting's structured address is `{addressLocality: "Hawthorne", addressRegion: "California", addressCountry: "United States"}` with **no street address**; 13 of 15 state "This role is on-site in Hawthorne, CA." [VERIFIED: https://api.ashbyhq.com/posting-api/job-board/oligo?includeCompensation=true]
+- **Exactly one posting discloses compensation**: "Generative Spacecraft Design Software Engineer (ML/AI)" at "$110 – $165,000 • Offers Equity • Offers Bonus" — malformed on Oligo's own board (API returns minValue 110, maxValue 165000). The other 14 return `compensationTierSummary: null`. `[CORRECTED]` — an earlier sweep's "$84k–$164k across 7+ roles" is **not in the data** and was struck; neither $84,000 nor $164,000 appears anywhere.
+- **Equipment partially corroborated by Oligo's own photography** (downloaded and inspected): `cleanroom.jpg` shows two people in bunny suits and N95s at an ESD bench inside a **soft-wall enclosure**; `team-hardware.jpg` shows a **vacuum chamber with multiple circular flanged feedthrough ports on a rolling frame, with pump assembly and flexible vacuum hose** — a real in-house TVAC at bench/subsystem scale; `mill.jpg` shows a benchtop drill/tapping machine and a small mill. **No photo shows a waterjet, vibration table, or ADCS test rig.**
+- **Equipment corroborated in Oligo's own job text** (a separate, dated, non-fundraising channel): "Manufacturing Engineer – Mechanical" (published 2026-02-03) — *"Operate CNC mills, lathes, and manual machining equipment"*, *"Use waterjet cutting systems to create precision plate parts, brackets, and quick-turn prototypes."* Across all 15 postings: TVAC 11 mentions, vibration 10, waterjet 2, machin\* 27. One posting hedges toward vendors: *"Collaborate with internal and external machinists, fabricators, and vendors."*
+- **Company-sourced team provenance, verbatim and identical across all 15 postings**: *"Leveraging cutting edge AI-driven generative design and automated manufacturing, our **ex-MIT, Harvard, and NASA JPL** team work to create the most advanced payload-specific spacecraft at scale in weeks over months."* Keyword counts across all 15: **Caltech 0, UCLA 0, "defense programs" 0.** (The page-3 slide carries Cal/UCLA/Caltech logos and a USAF logo — see §5.)
+- **Oligo's own site states the April 2027 date**, verbatim: *"Our first 100 kg ESPA-class spacecraft is fully booked and scheduled to launch in April 2027, bringing together five completely different customer applications on a single custom spacecraft."* A live countdown labelled "CHIMERA-1 · First flight" resolves to the hardcoded constant `zv="2027-04-01T00:00:00Z"` and was observed ticking across two reads ~30 s apart. [VERIFIED: https://www.oligospace.com/assets/index-SgGf0O8P.js]
+
+### One independently corroborated commercial relationship
+
+- **Spacedock + Melagen Labs**, reported by named SpaceNews correspondent Debra Werner, published 2025-09-03, with on-record quotes from **Spacedock CEO Negar Feher** and **Melagen CEO Muhammad Hunain**. Verbatim: *"Working with launch integrator Oligo Space and radiation-shielding specialist Melagen Labs, Spacedock is preparing to fly its berthing and docking connector, also called Spacedock, in the second quarter of 2026."* Hunain, quoted: *"We're testing our proprietary Melagen shielding head-to-head against decades-old industry-standard aluminum, measuring total ionizing dose and how well it protects COTS electronics."* [VERIFIED: https://spacenews.com/spacedock-to-demonstrate-modular-payload-interface-with-oligo-and-melagen/]
+  - `[CORRECTED]` — the spacedock.co post cited by one sweep is a **verbatim repost** of the SpaceNews lede (same date, author "roxannajackson") and does not double-count as independent corroboration; it also does not contain the aluminium/TID/COTS detail attributed to it.
+  - `[CORRECTED]` — **no source ties either party to CHIMERA-1.** "CHIMERA" appears 0 times in the SpaceNews article, 0 times on spacedock.co, and "Melagen"/"Spacedock" appear **0 times in Oligo's entire site bundle**. The relationship is verified to *Oligo the company*, never to *CHIMERA-1 the mission*.
+  - `[CORRECTED]` — SpaceNews frames Spacedock as principal and Oligo as "launch integrator"; Melagen's on-record praise is for **Spacedock**, not Oligo (*"working with Spacedock has been a game-changer… They supported our software integration, oversaw qualification testing, handled hardware integration"*). This reads as one direct Oligo customer plus one downstream sub-payload, not two Oligo customers.
+  - The "Capital Q Ventures" association attributed to Spacedock is **unsupported**: 0 hits on spacedock.co, which instead names Blue Pacific Ventures and Reka Capital.
+
+### Public-record negatives, stated with their limits
+
+- **No SEC Form D exists for Oligo Space, under any name.** EDGAR full-text search returns 0 hits for "Oligo Space", "Oligo Space Inc", "Zenith spacecraft", "CHIMERA1", "Chimera-1". Company-name search on "oligo" with form type D returns exactly three filers, all excluded: **Oligo Foundry, Inc.** (CIK 0001954622, Encinitas CA, industry group *Biotechnology*, signer Jimmy Hollis Williams, single Form D 2022-11-22, $63,500 offered and sold, 16 investors incl. 2 non-accredited, Rule 506(b), yearOfInc 2022); **CleanSpot, Inc.** (CIK 0001561416, NM — formerly OLIGOCIDE, INC.); **Oligomerix, Inc.** (NY, CIKs 0001382831 and 0001543843). **Method control: the bare query "Oligo" DID return Oligo Foundry's Form D, proving Form Ds are FTS-indexed, so the null is real.** [VERIFIED: https://www.sec.gov/edgar/search/#/q=%22Oligo%20Space%22 and https://www.sec.gov/Archives/edgar/data/1954622/000195462222000001/primary_doc.xml]
+  - **Stated limit:** Form D is elective. Section 4(a)(2) placements require none; SAFE rounds commonly skip it; late and non-filing are common and lightly enforced; a filing under a different legal entity name or as "Jacob M. Rodriguez" would defeat an exact-phrase test (only the top 100 of 211 CA "Rodriguez" hits were reviewed — the entity-name test is airtight, the related-person test is not). **Absence of a Form D is not evidence a raise did not occur.** It means EDGAR supplies zero corroboration for any round, including the independently confirmed May 2025 seed. Form D never discloses valuation, so no valuation was or could be back-derived.
+- **No federal award record.** USAspending recipient autocomplete on "Oligo" returns 21 entities (Oligomerix, Oligos Etc, Koligo Therapeutics, Loligo Systems, Oligo Transport Corp, etc.) and **no Oligo Space**. `spending_by_award` keyword search on "Oligo Space" returns 0 contracts (types A/B/C/D, 2023-01-01→2026-08-25) and 0 assistance awards (types 02–11, 2008-01-01→2026-08-25). No UEI or CAGE surfaced. **Limit:** covers prime awards only; SAM registration without awards, subcontracts, OTAs and SBIR Phase I flow-downs are invisible here, and SBIR.gov itself was blocked.
+- **Adverse media / litigation: nothing found, at shallow depth.** Web searches for litigation, disputes, complaints, investigations and regulatory action against Jacob Rodriguez or Oligo Space returned no hits. **This was web-search only. No PACER, no California or Delaware state court records, no entity registries, no UCC filings, no formal background check.** "Jacob Rodriguez" is a common name that would generate heavy false-positive noise in any name-only search. **Do not record this as a clean bill of health.**
+
+### Andrew Shapiro — what is established
+
+- **The memo asserts he is Oligo's Chief Technologist** (page-3 slide, §0 above). [VERIFIED: source-memo.pdf p.3]
+- **Oligo's own website corroborates in aggregate but names nobody**: *"Our team includes a former NASA JPL Chief Technologist, PhDs in remote sensing, and engineers who have held technical ownership roles across flagship NASA missions including Psyche, Perseverance, and Europa Clipper…"* [VERIFIED: oligospace.com JS bundle, "2.0 Team"]
+- **No independent third-party source connects Shapiro to Oligo.** Not press, not job listings, not any interview. This is *absence of evidence at a degraded search capability* (two counter-agents exhausted their search budgets before running a dedicated "Shapiro joins Oligo" query), **not contradiction**. Verdict: **[CLAIMED-BY-COMPANY], UNVERIFIED.** `[CORRECTED]` — four of six sweeps recorded this as REFUTED on the basis that he "does not appear in the memo." That basis is factually wrong.
+- **Identity confirmed, not a namesake**: his UCI CV degrees (BS ChemE UC Berkeley 1981, MS UCLA 1989, PhD Materials UC Irvine 1998; Caltech Visiting Associate; UCI adjunct) match the memo slide's Cal/UCLA/Caltech logos and "Lectured at Caltech and UC Irvine" on four independent attributes.
+- **His Proteus Space departure is close to confirmed from the primary source.** Proteus Space's own live site (footer "© Proteus Space 2026") lists leadership as Kervin (CEO), Gdoutos (VP Spacecraft Systems), Otis (VP Automated Design), Littleton, McDonald + advisors — **"Shapiro" appears 0 times on `/leadership`, `/origins`, `/solutions` and `/media`, and no CTO is listed at all.** [VERIFIED: https://proteus-space.com/leadership] Note: a **stale search-engine cache** still renders that page *with* Shapiro as "Co-founder and CTO" in present tense — contradicted by the live fetch, and a plausible mechanism for how third-party summaries still place him there.
+- **Proteus Space is a real, active, direct competitor** and the memo does not name it in its competitive landscape table: Los Angeles, founded 2021 (site `/origins`), David Kervin CEO, MERCURY automated bus-design platform, **flew MERCURY ONE — a four-payload ESPA-class spacecraft — on 2025-11-28 from Vandenberg**, billed as the first AI-designed satellite, "9 months blank sheet to vibe." [VERIFIED: proteus-space.com/media, dated 2025-11-28] `[CORRECTED]` — the widely repeated "18 months to 30 days" and "2,300 configurations in 10 minutes" figures are **not on the Proteus primary site**, which says "thousands of manufacturable, payload-tailored architectures in minutes" and "compresses timelines from years to months." Tag those figures [SECONDARY] or drop them. Proteus funding: $450K pre-seed (Morpheus Space) + $4.2M seed (Moonshots Capital; Moonshots' own post says "$4 million… in 2023" — [CONFLICT], immaterial) + $6.1M Seed-2 (Lavrock Ventures, 2025-03-18) = ~$10.75M traceable, vs $14.4M over 3 rounds per Tracxn [SECONDARY, unreconciled]. Valuation not disclosed.
+
+### Market statistics that verified cleanly
+
+- **Orbital launch cadence.** 2015 = 87 attempts. 2025: McDowell, *Space Activities in 2025* (2026-02-04), Table 1(a): *"During 2025 there were 329 orbital launch attempts from Earth, with 321 reaching orbit or marginal orbit"* — so the memo's ">320" is correct and **conservative**. 2024 = 259 is at the low end of a 259–263 range that varies by counting convention (McDowell 263; Wikipedia 261 attempts; SpaceNews/Space Foundation 259). [VERIFIED: https://planet4589.org/space/papers/space25.pdf]
+- **Active satellites.** UCS Satellite Database recorded 1,381 active satellites at end-2015 — the top of the memo's "~1,000–1,400" band. McDowell: Starlink *"is now a majority of all active satellites — 66 percent of the 14132 satellites assessed to be active as of 2025 Dec 13."* The memo's ">13,000" **understates by ~1,100.** McDowell states his own uncertainty is ~10%. Provenance caution: UCS discontinued its database (last updated 2023), so the two halves of the memo's sentence come from two non-continuous datasets with different "active" criteria.
+- **Accenture 80% / 18%.** Reproduced verbatim: *"more than 80% of executives see space-based technologies as vital drivers of both revenue growth and their ability to differentiate (Figure 1). But only 18% are moving beyond pilots and using these advanced technologies in their daily operations (Figure 2)."* Methodology disclosed: 1,300 executives, 17 industries, NA/Europe/APAC, *"We conducted interviews and the executive survey in 2024."* The memo's "80%" rounds a "more than 80%" downward. Caveats: stated sentiment from a 2024 survey, not observed behaviour; Accenture sells space consulting and has invested in Open Cosmos. [VERIFIED: https://www.accenture.com/content/dam/accenture/final/industry/aerospace-and-defense/document/Accenture-Space-for-Growth-PDF.pdf]
+- **AXA and Munich Re parametric triggers.** AXA Climate uses VanderSat satellite soil-moisture data to trigger parametric drought payouts on index threshold; Munich Re operates a drought-index product for Argentina using satellite vegetation "greenness" as a yield proxy. True as stated. [VERIFIED: https://www.artemis.bm/news/axa-climate-uses-vandersat-data-for-parametric-drought-soil-moisture-insurance/]
+- **GAO 14x — `[CORRECTED]`, upgraded from PARTIALLY_VERIFIED to VERIFIED.** GAO states the ratio **in its own voice**, in the sentence immediately after the one the original sweep quoted: *"Thus, if this leasing rate remained the same for 10 years, there would be a 14-to-1 cost advantage ($450,000 to $31,500) for DOD to acquire a commercial-like system rather than lease an equivalent amount of commercial services."* [VERIFIED: https://www.govinfo.gov/content/pkg/GAOREPORTS-NSIAD-97-159/html/GAOREPORTS-NSIAD-97-159.htm] Two provenance qualifiers survive: GAO attributes the underlying conclusion to DOD (*"According to a DOD analysis…"*) and computed the ratio on *"preliminary DOD satellite replacement cost data"*; and it holds *"if this leasing rate remained the same for 10 years."* Scope: five ~$315M commercial-like MILSATCOM satellites, ~5 Gbps aggregate, 10-year life, vs DOD's then-current commercial leases at $450,000 per Mbps-year. Recommendation was to accelerate DSCS replacement FY2006→FY2003, saving ~$2.8B. **Vintage: 29 years old.**
+- **$299.4B telecom capex / 38x.** IDC *Worldwide Telecommunications Capex and Opex FY24*: $299.4B capex in 2024. BryceTech *Start-Up Space 2025*: $7.8B total start-up space investment in 2024, 220 deals, 198 recipients, VC 92% of funds. $299.4B / $7.8B = **38.4x**. Arithmetic exact. Note the comparison sets an industry's annual **capital expenditure** against another sector's **equity fundraising** — different accounting objects — and is source-dependent: Space Capital reported $9.5B for 2024, giving 31.5x. [VERIFIED: https://brycetech.com/reports/report-documents/start_up_space_2025/BryceTech_Start_Up_Space_2025.pdf]
+- **Apple/Globalstar — `[CORRECTED]`, overturned from REFUTED to substantially supported.** The original sweep reasoned only from the Nov-2024 8-K and never checked subsequent filings. Globalstar's 8-K for period 2026-04-13 states verbatim that the parties *"increased the maximum amount of the High Power Infrastructure Prepayment Balance… by approximately $468 million"* to *"an aggregate maximum amount of approximately $1.58 billion."* [VERIFIED: https://www.sec.gov/Archives/edgar/data/1366868/000114036126014528/ef20070409_8k.htm] Corrected arithmetic as of the memo date: prepayment max ~$1.58B + $400M equity (20% of Class B Units of the MSS SPE) = **~$1.98B**; adding the 2029 Notes retirement ($219M + $13M make-whole) = **~$2.21B**. **$1.95B sits ~1.5% *below* the prepayment-plus-equity basis, not above it.** No single filing states "$1.95 billion" (EDGAR FTS on Globalstar CIK 0001366868 returns 0 hits for that phrase; the same endpoint correctly returns 3 hits for "$1.58 billion"), so tag it **[SECONDARY]/derived, inside the envelope of disclosed components**. Separate, non-numerical staleness point: the same April 2026 8-K discloses **Amazon.com is acquiring Globalstar** ($90.00/share cash or 0.3210 Amazon shares, 40% cash cap; Thermo's 57.6% written consent delivered), and that *"Amazon and Apple signed an agreement to provide satellite connectivity for current and future iPhone and Apple Watch features"* under Amazon Leo.
+
+---
+
+## 3. CLAIMED, NOT VERIFIED
+
+Every item here is a company assertion. The distinction between *no public evidence found* and *contradicted* is stated for each.
+
+### The capital stack — the largest unverified block
+
+| Memo claim | Status |
+|---|---|
+| "$7M raised to date" | **[CLAIMED], UNVERIFIED — absence of evidence, not contradiction.** `[CORRECTED]` from REFUTED. |
+| "last strategic round … closed at a $50M valuation" | **[CLAIMED], no public trace of any kind.** |
+| "raising $10M at a $100M valuation" | **[CLAIMED].** Absence is expected — a live private negotiation would not be public. |
+
+- **Why the $7M is not refuted.** Aggregator "Total Raised" is a **sum of disclosed line items**, not a measurement. CB Insights shows "Total Raised $200K" alongside a news item stating Kakao made *"undisclosed seed investments"* in Oligo Space — by construction that round contributes $0 to the $200K. The **Thiel Fellowship is itself a $200,000 two-year grant**, matching the total exactly, so the $200K is plausibly one grant. `[CORRECTED]` — the "~35–70x the highest published figure" arithmetic was **struck**: it compares a claimed total against a disclosed-only floor, and the ratio is an artifact of the methodology.
+- `[CORRECTED]` — "CB Insights does NOT list Lux or Soma" was **struck**: CB Insights names five investors "and 9 more"; the free tier truncates, it does not exclude.
+- The "$100K raised May 2025" figure attributed to Crunchbase and PitchBook is **[SECONDARY], search-snippet-derived; neither page was read** (both 403).
+- YesPress's "low six figures" line was cited selectively — YesPress itself disclaims the inference, calling the database total *"'early and lean' rather than a full picture"* for a hardware company.
+- **What supports a larger number, circumstantially and without converting it to an estimate:** Oligo's own job board states *"With world-class advisors on our board, and fresh funding from top investors like Lux Capital"* [CLAIMED-BY-COMPANY]; 15 open Hawthorne roles including Chief Spacecraft Engineer, Senior Generative Spacecraft Engineer, Manufacturing Engineer and multiple ML/AI engineers imply a payroll well above $200K. **No number is inferred from this.**
+
+**Investor list — better supported than the amount.** Kakao Ventures publicly announced (2025-05-29, Asia Business Daily / Businesskorea) a seed investment in Oligo Space, naming **Lux Capital** as co-investor, naming Jacob Rodriguez as founder/CEO, stating the amount was **"not disclosed"** and that this was the company's **first institutional investment**. [VERIFIED: https://view.asiae.co.kr/en/article/2025052908575814784] YesPress lists Kakao, Lux, Soma, Alumni **and Link Ventures**. **Link Ventures is a fifth investor absent from the memo.** No partner quote, board seat or portfolio-page listing was found for Lux, Soma or Alumni. Whether Lux's participation was a fund check or a scout/angel allocation is UNKNOWN.
+
+**Alumni Ventures — factual note on the vehicle, stated without inference to Oligo.** Alumni Ventures Group, LLC and founder/CEO Michael Collins settled SEC administrative proceedings under Advisers Act §203(k) (Order IA-5975, 2022): AVG marketed its fee as the *"industry standard '2 and 20'"* while assessing the entire 20% — ten years of 2% management fees — upfront at initial investment. AVG repaid **$4.7M** to the affected funds and paid a **$700,000** penalty; Collins paid **$100,000** personally. AVG was formerly Launch Angels; reported $425M in private fund assets. [VERIFIED: https://www.sec.gov/files/litigation/admin/2022/ia-5975.pdf] This bears on how the syndicate composition should be read, not on Oligo's technology.
+
+### The launch
+
+- **"Booked and paid … April 2027."** The **April 2027 date is [CLAIMED-BY-COMPANY] and corroborated by Oligo's own live countdown** (`zv="2027-04-01T00:00:00Z"`). The words **"booked"** applied to the *launch* and **"paid"** are unsupported: an exhaustive grep of Oligo's complete site bundle returns **0 hits** for SpaceX, Falcon, Transporter, Bandwagon, Rocket Lab, Electron, Exolaunch, D-Orbit, Maverick, Momentus, Arianespace, "launch services", "LSA", "deposit", "paid", "contract", "rideshare". (Three apparent hits are false positives: "Isar"←`isArray`, "Alpha"←`globalAlpha`, and "Firefly" appears only in a **team bio** — "Starshield, Starlink, and Firefly's Blue Ghost".) No launch provider is named anywhere by Oligo.
+- **"Fully booked" is Oligo's term for *customer payload slots*, not launch procurement.** The clincher is the parallel construction in the same site section: *"We are now filling the manifest for a larger 300 kg mission planned for the end of 2027."* The memo conflates the two senses.
+- **`[CORRECTED]`** — an earlier sweep's supporting points were struck: Wikipedia's "2027 in spaceflight" page contains **no April 2027 entries at all** (the orbital table jumps from March to June), so absence there is an expected null, not disconfirmation; and rideshare brokers do not publish per-customer manifests as a rule.
+- **The 2027-04-01T00:00:00Z value is a round midnight-UTC month boundary** — it reads as a month-granularity placeholder ("April 2027"), corroborating a stated target month, not a manifested slot.
+- **The April 2027 timeline is arithmetically tight, not absurd.** `[CORRECTED]` — one sweep computed "~19 months remain"; recomputed, **2026-08-25 → 2027-04-01 is 219 days = 7.2 months**; to 2027-04-30, 248 days = 8.1 months. 19.2 months is the distance to April **2028**. Benchmark: Proteus's self-claimed record is 9 months blank-sheet **to vibration test** (not to launch), on its own homepage [CLAIMED-BY-COMPANY]. Whether 7.2 months is credible turns entirely on CHIMERA1's current build state, which is **UNKNOWN** — the memo does not say when the program started or what integration state it is in.
+- **Launch cost anchor**, for scale only: SpaceX rideshare to SSO advertised at $350,000 for ≤50 kg plus $7,000/kg thereafter → 100 kg ≈ **$700,000**. [SECONDARY — spacex.com/rideshare is a JS SPA with no pricing in HTML or main.js; **not read at primary**.] Arithmetic, not a quoted contract value; the memo names no provider.
+
+### The facility and the capacity claim
+
+- **"14,000 sq. ft. … in Hawthorne, next to SpaceX."** Split verdict `[CORRECTED]`:
+  - **Hawthorne + a production capability**: [CLAIMED] across **three independent company channels** — memo, website careers copy (*"spacecraft engineering, manufacturing, ML/AI, business, and internships in Hawthorne, California"*), and 15 ATS postings. Corroborated as a claim; never independently verified.
+  - **"14,000 sq. ft." and "next to SpaceX"**: **zero corroboration in any channel, including Oligo's own.** Bundle grep: "14,000"/"14000"/"sq. ft"/"sq ft" = 0 hits (the only "sq" matches are `Math.sqrt`). No street address is published anywhere; the contact page exposes only `mailto:information@oligo.space`. No lease listing, building permit or LA County record located; CA SOS blocked.
+  - `[CORRECTED]` — the "$21–22/sq ft/yr → $294,000–$308,000/yr" lease cost anchor was **struck entirely**. Two independent reads of the cited commercialcafe.com page returned no average asking rent and no average listing size; visible rates on it are unit-inconsistent ($0.17/SF/MO alongside $21.00/SF/YR); a later curl was 403-blocked. Derived facility cost **must not be carried**. Note: `ic.md` line 89 already leans on the 14,000 sq ft figure in a burn argument; that argument inherits this uncertainty.
+- **"Capability to produce over 10 custom spacecraft ranging between 100-400kg … every year."** `[CORRECTED]` from REFUTED to **UNSUBSTANTIATED / NOT CREDIBLE AS STATED**, with the arithmetic repaired:
+  - **Floor area is not the binding constraint.** Normalized sq ft per spacecraft-year on nameplate claims: **Apex** ~100,000 sq ft / "over 200 buses" ≈ **500**; **Blue Canyon** Lafayette 80,000 / 100 = **800** [NOT READ — bluecanyontech.com 403]; **Terran Orbital** ~192,000 sq ft post-expansion / 250 = **~768** `[CORRECTED from 392 — the 250/yr nameplate is explicitly the post-expansion figure and must not be paired with the 98,000 sq ft pre-expansion footprint]`; **Oligo** 14,000 / 10 = **1,400**. Oligo's claim is the least aggressive of the set. **York is a [CONFLICT]**: yorkspacesystems.com's own homepage says *"spacecraft capacity annually in current facility footprint / 1,000"*, not the "60,000 sq ft / 540" an earlier sweep used; neither figure could be reproduced.
+  - **Headcount is where the claim is unsupported.** Terran Orbital's demonstrated best: **19 satellites delivered in 2022** with **"over 480 full-time employees" at 2022 year-end** [VERIFIED: FY2022 10-K, https://www.sec.gov/Archives/edgar/data/1835512/000095017023009288/llap-20221231.htm] = **~25.3 people per delivered spacecraft-year**, on largely repeat SDA builds. `[CORRECTED from ~34 — the original divided FY2023 headcount (660) by FY2022 deliveries.]` Against a reported Oligo headcount of ~18, the implied gap is **~14x** (≈10x at the top of the 17–26 reported range), **not 19x**. **Two honest qualifiers:** Terran's 480/660 is *total company* headcount across Boca Raton, Melbourne FL, Santa Maria and Tyvak International (Torino), not Irvine production staff — which inflates the incumbent's ratio; and Oligo's own square footage covers machining, waterjet, TVAC, vibe and cleanroom, where comparators' figures are manufacturing/assembly space specifically — which softens the floor-area concession.
+  - **The ~18 headcount is [SECONDARY, UNVERIFIED]** and is the single number the whole comparison rests on. It appears in YesPress's metrics box ("~18 Employees", attributed to "Oligo Space public materials and databases") and a LinkedIn-derived "~28 employees" [SECONDARY, page not read]. The reported range is 17–28 — a ~65% spread from unnamed aggregators. **It is not in the memo.**
+  - **What no source establishes:** whether "capability" here means demonstrated throughput or design capacity. The memo lists it under "Progress So Far," alongside completed items.
+- **"100-400 kg on one line."** `[CORRECTED]` from REFUTED to **UNVERIFIED / NOT PROVEN**. The impossibility argument was **retracted**: Apex's own site markets *"A 100k sq. ft. facility produces up to 200 satellites per year across multiple products"* spanning 150 kg to 3,000 kg payload out of one Factory One [VERIFIED: apexspace.com/factory-x, /factory-one], and Moog's **ESPA Grande supports up to 700 kg per port**, so a 400 kg spacecraft fits. What survives: standard ESPA is **181 kg (400 lb) per port** [SECONDARY: Wikipedia, not Moog primary], so 100 kg and 400 kg fall on opposite sides of the standard-port limit; and every manufacturer that has built across the range segments it into product lines (Apex Aries vs Nova; York S-CLASS vs LX-CLASS vs M-CLASS). **York specs corrected:** S-CLASS is *"85kg+ payload mass"* and *"500w peak power system; extensible to 1kW"*; LX-CLASS is *"300kg+ payload mass"*; M-CLASS is *"1,000+kg payload mass"*; "flight-proven 21 times" is [UNKNOWN] — not on the platforms page. A **payload-mass vs total-mass conflation** runs through the comparison: competitor specs are payload capacity; Oligo's 100–400 kg is total spacecraft mass.
+- **In-house TVAC / vibe / ADCS ratings are UNKNOWN.** No chamber volume, shaker force rating, or cleanroom ISO class is published. Apex publishes a specific figure for the equivalent capability (66,000-lbf vibration table).
+
+### Zenith
+
+`[CORRECTED]` — the earlier finding that "there is no published technical detail on Zenith at all" was **an artifact of fetching the SPA shell instead of the JS bundle** and is struck. Oligo **does** publish a named architecture on first-party surfaces:
+
+> *"our AI software stack … turns raw mission requirements into flight-ready spacecraft using a pipeline of agentic AI systems, embedded simulation, and hardware-in-the-loop validation"*
+
+Named components across the site bundle and the 15 Ashby postings: **VLM spec-parsing into structured constraints; RL agents over structural/thermal/orbital/manufacturability design spaces; CNN topology optimizers (U-Net + FEniCSx) explicitly positioned as a "SIMP replacement"; CAD kernels (OpenCascade, CadQuery, SolidWorks API); Ansys / GMAT / Thermal Desktop; JSON-schema and graph-based architecture representations; a multimodal training dataset built from prior spacecraft programs.** **All [CLAIMED-BY-COMPANY]** — this is recruiting copy on company-controlled domains, and several of the ML reqs are intern/entry-level roles to *"help advance core algorithms"* and *"help build a multimodal training dataset."*
+
+**Status: UNVERIFIABLE.** No whitepaper, peer-reviewed paper, conference presentation, patent, benchmark, third-party evaluation, or named Zenith customer was found; the site has four routes and no technology/product page; USPTO was blocked on every route. **Zenith's only ever public artifact, the Mission Configurator at `mission-configurator.oligospace.com`, existed (Wayback HTTP 200 snapshot, 2026-03-10 15:08:15 UTC) and today returns Vercel "DEPLOYMENT_NOT_FOUND" — the public demo is offline, and the archived content could not be read.**
+
+**Prior art, for context and stated neutrally:** Valispace ships requirements→design→verification tooling used by Airbus [VERIFIED: valispace.com]; a peer-reviewed 2025 study in *Journal of Engineering Design* assesses LLMs for generative design of model-based spacecraft system architectures [VERIFIED via Crossref, DOI 10.1080/09544828.2025.2453401]; Ansys SimAI is a generative platform [NOT READ — 403]. `[CORRECTED]` — the unreproducible Valispace quotations and its ESA/Momentus/ispace customer list were **struck**.
+
+### Customers
+
+- **CHIMERA1**: [CLAIMED] *"fully booked… five completely different customer applications"* — **three of the five are unnamed publicly**, and Oligo's site names zero customers.
+- **CHIMERA2**: `[CORRECTED]` from REFUTED to **SPLIT**. Oligo's own site says it is *"now filling the manifest for a larger 300 kg mission planned for the end of 2027."* That establishes **not-fully-booked**, **not zero customers** — and since the model is explicitly multi-customer, partial subscription is consistent with some slots signed. **No public source names any CHIMERA2 customer.** Note the site never uses the string "CHIMERA2"/"CHIMERA-2" at all; mapping "the larger 300 kg mission" to CHIMERA2 is a reasonable but stated inference. Also note **"end of 2027" is within 2027**, so the site confirms the memo's date component, and adds two details the memo omits (300 kg; end of year).
+- **"Possible revenue on each CHIMERA ranging from $15M-$37M."** **No contract value has been published by Oligo, Melagen, Spacedock or any third party.** No derivation is visible; the range is 2.5x wide. `[CORRECTED]` — the "YesPress: *Contract Values: Not disclosed*" quote is **not on that page** and was struck; the accurate negative is that YesPress carries no revenue or contract figure at all. `[CORRECTED]` — the charge that the LP upgraded "possible"→"yielding" was **dropped**: per `ic.md` line 59 the LP wrote *"yielding **potential** revenue"*, retaining the hedge. The only surviving wording delta is **"acquired" → "signed."** Read in context, $15M–$37M is best understood as a **per-vehicle revenue potential**, not the value of the acquired contracts.
+
+---
+
+## 4. CONFLICTS / CANDOUR FLAGS
+
+Where the memo, the LP's summary, and the public record disagree.
+
+### 4.1 The launch slip — documented, and not disclosed in the memo
+
+This is the most heavily corroborated conflict in the file, and its direction was **inverted** by the counter-agent pass.
+
+| Date | Source | Stated CHIMERA-1 timing |
+|---|---|---|
+| 2025-09-03 | SpaceNews (Werner) — Oligo as "launch integrator" for the Spacedock demo | **"second quarter of 2026"** [VERIFIED] |
+| 2025-10-14 | Payload founder profile | *"expecting to launch its first spacecraft—Chimera-1—in 2026 aboard SpaceX's Transporter-15 mission"* [CLAIMED, relayed] |
+| undated | YesPress company profile | *"slated to fly on SpaceX's Transporter-15 rideshare in 2026"* [SECONDARY] |
+| ~2026-08-25 | **Oligo's own website countdown** | **2027-04-01** [VERIFIED: site JS bundle] |
+| memo | Oligo IC memo, line 133 | *"Booked and paid for the launch… in April 2027"* |
+
+**Transporter-15 actually launched 2025-11-28** from Vandenberg SLC-4E with **140 payloads** [VERIFIED: https://spaceflightnow.com/2025/11/28/live-coverage-spacex-to-launch-140-spacecraft-on-transporter-15-rideshare/]. Exolaunch's manifest for that mission lists **29 named customers across 58 satellites** with no Oligo entry [VERIFIED: https://exolaunch.com/mission_41]; Wikipedia's T-15 entry lists 80+ payloads with no Oligo/Chimera. Transporter-16 flew 2026-03-30 (119 payloads) and Transporter-17 on 2026-07-07 (81 payloads), neither with any Oligo/Chimera in coverage.
+
+**`[CORRECTED]` — the framing is the opposite of what two sweeps recorded.** They logged this as "the memo's April 2027 conflicts with the public record." It does not: **Oligo's own homepage publicly shows April 2027**, which agrees with the memo. The dates that are falsified by events are the **public 2026 targets**, which have expired unflown. The material, factual finding is:
+
+> **Oligo publicly stated a Q2 2026 first launch; that window passed unflown; the company's own site now shows April 2027 — a ~10–12 month slip. The memo presents April 2027 under "Progress So Far" as a booked-and-paid accomplishment and does not disclose the slip.**
+
+Two honest qualifiers: 10–12 month first-flight slips are routine for a seed-stage smallsat builder; and a private company has no duty to correct third-party founder profiles. `[CORRECTED]` — the "slipped 10–16 months" range and the attribution of "June 2026" to SpaceNews were **struck**: SpaceNews says "second quarter of 2026" and the words "June", "Chimera", "Transporter" and "SpaceX" do not appear in that article at all. Payload's "T-15 in 2026" was internally inconsistent at publication (T-15 was ~6 weeks from launch) and is unreliable as a slip baseline. Also **not verified**: that the Spacedock Q2 2026 demo *is* CHIMERA-1 — no source connects them.
+
+**Second-order effect:** Oligo's site puts a 300 kg mission at "end of 2027", ~8 months after CHIMERA-1, for a company claiming >10 spacecraft/year capacity.
+
+### 4.2 The Shapiro line — where the inflation actually sits
+
+Three claims, three different statuses:
+
+1. **"Chief Technologist at Oligo"** — **in the memo** (page 3 slide). [CLAIMED-BY-COMPANY], no independent confirmation. `[CORRECTED]` — the LP did **not** invent this.
+2. **"Former NASA JPL Chief Technologist"** — **this phrasing is Oligo's own website**, not the LP's: *"Our team includes a former NASA JPL Chief Technologist…"* [VERIFIED: oligospace.com bundle]. **The memo itself is more accurate than the website**: the slide says *"Manager of Technology Formulation and **Division** Chief Technologist."* The website drops "Division." That delta between two company documents is the reportable item.
+3. **The underlying JPL title.** Shapiro's own self-authored CV (UCI-hosted, PDF Author "ANDREW SHAPIRO", CreationDate 2010-02-12), verbatim:
+   > *"CALIFORNIA INSTITUTE OF TECHNOLOGY, JET PROPULSION LABORATORY … Principal Engineer, Program Element Manager, Division Technologist 2002 – Present"*
+   > *"Responsible for all division (400 personnel) research and technology activities (about $2.5M/yr)"*
+   > *"Serve on the Engineering and Science Directorate Research Board as well as the Technology Working Group of the Office of the Chief Technologist. Called on to review task progress and proposals for the Office of the Chief Scientist and Chief Technologist."*
+
+   He **sat on a working group *of* the Office of the Chief Technologist**; he did not head it. JPL's Laboratory-level Chief Technologists are named public people — Leslie Deutsch (acting), Erik Antonsson (appointed 2002-07-23), Jonas Zmuidzinas, Fred Hadaegh, Tom Cwik, Shouleh Nikzad — and he is not among them [SECONDARY on the succession: `scienceandtechnology.jpl.nasa.gov` returned 503 on two pages; NOT READ].
+
+   **`[CORRECTED]` — "he was NEVER JPL's Chief Technologist" is not supportable from a 2010 document reading "2002–Present."** The correct statement: **as of Feb 2010 his JPL role was division-level; the institutional title is UNSUBSTANTIATED, not disproven.** The post-2010 gap is closed independently, and both closures are division-qualified: a 2019 contemporaneous interview describes him as *"the manager of technology formulation for the Jet Propulsion Laboratory"* and *"manager of early-stage innovation for the Space Technology Office"* [VERIFIED: https://www.kpcw.org/public-affairs/2019-10-17/jet-propulsion-laboratorys-andrew-shapiro-guides-concept-development-for-space-exploration]; his own consulting-firm bio reads *"leadership roles at NASA's Jet Propulsion Laboratory (JPL), including Manager of Early-Stage Innovation and **Chief Technologist for the Enterprise Division**"* [https://tcconsulting.space/team/]; and **Proteus Space's own bio — the company with maximum incentive to inflate — says *"In his 14+ years at NASA JPL, he was Manager of Technology Formulation and **Division** Chief Technologist"*** [SECONDARY: proteus-space.com/leadership, direct fetch 403, read via search index].
+
+4. **Tenure length is a [CONFLICT] across sources**: "14+ years" (Proteus bio) vs "worked at JPL for 20 years" (a Proteus press release) vs the memo's "20+ yrs" vs the CVs, which show two stints with a gap — Manager, Mission Assurance Mar 1999–Mar 2000, then Broadcom/VSK Photonics, then JPL again from June 2002. A continuous "Jan 1999–Apr 2012 as Division Chief Technologist" [SECONDARY] is **not supported** by either CV.
+
+5. **The competitor overlap is disclosed, in the memo, in Oligo's own words: "Former Proteus Space Co-Founder/CTO."** Two further Oligo staff on the same slide carry Proteus experience (Liliana Reyes: *"4 full ESPA spacecraft at Momentus and Proteus Space"*; Richard Guerrero: *"vertical integration of harnessing at Proteus Space"*). **This is a disclosed conflict, not a concealed one.** Nothing in the memo addresses trade-secret, non-solicit, non-compete or IP-assignment exposure travelling with three hires from a direct competitor that has already flown the same product category.
+
+### 4.3 The market-statistics tally
+
+Seventeen statistics in the memo's Opportunity and Why Now sections were audited against primary sources, then adversarially re-checked. **Four of the six adversarial passes changed a verdict.**
+
+| # | Statistic | Post-adversarial status |
+|---|---|---|
+| 1 | Launches 87 (2015) → 259 (2024) → >320 (2025) | **Verified**; memo conservative (McDowell: 329 attempts) |
+| 2 | Active satellites ~1,000–1,400 → >13,000 | **Verified**; memo understates (14,132 at 2025-12-13) |
+| 3 | AXA / Munich Re parametric triggers | **Verified** |
+| 4 | Accenture 80% / 18% | **Verified** (memo rounds "more than 80%" down) |
+| 5 | Falcon 9 >95% vs Shuttle | **Imprecise** — clears by 0.01pp (54,500→2,720 = 95.01%); mixes Shuttle full-program **cost** with Falcon 9 advertised **price**; CSIS figures NOT READ at primary |
+| 6 | Starship sub-$100/kg | **Imprecise** — vendor's own unmet target, conditioned on complete reusability *and* local propellant; Musk's headline figure elsewhere is $10/kg; analyst current cost ~$820–980/kg |
+| 7 | GAO 14x own-vs-lease | **Verified** `[CORRECTED, upgraded]` — GAO's own sentence. Vintage 1997; DOD preliminary inputs |
+| 8 | Hedge funds $2.8B alt-data 2025 | **Imprecise** — Neudata's figure is **all investment managers**, no hedge-fund split; same publisher separately headlined **$15.4bn** for the same year; satellite imagery is a small, unquantified slice |
+| 9 | Nestlé / Cargill / Unilever | **Imprecise** — **deforestation verified for all three**; **crop-yield forecasting evidenced for none**. All three buy processed data from third parties (Satelligence, Starling); none owns a satellite |
+| 10 | $299.4B telecom capex ≈ 38x space VC | **Verified numerically** (38.4x exact); capex-vs-equity-fundraising basis mismatch; 31.5x on the Space Capital tally |
+| 11 | **7% / 93% of the $613B space economy** | **Materially wrong — source splice.** See below |
+| 12 | SDA 126 "identical buses" | **Imprecise** — 126 correct; **three primes × 42** (Lockheed $700M, Northrop $692M, York $382M, ~$1.8B, awarded **2022-02-28**); "identical" appears nowhere in the SDA release. SDA *did* specify a **common four-payload complement** across all 126 (OCTs with ≥4 simultaneous optical links, Link 16, Ka-band RF, BMC3), so the standardization point is stronger than "interoperable only." Vintage: four years before the memo; SDA awarded ~$3.5B for 72 Tranche 3 Tracking Layer satellites in Dec 2025 |
+| 13 | **Deloitte "flying nine satellites for RF monitoring"** | **Overstated on both clauses.** Nine = stated program **goal**; eight contracted to Spire (Dec 2025); **six on orbit** as of 2026-08-25 [SECONDARY: Gunter's Space Page COSPAR designators; celestrak SATCAT 503, NOT READ]. Primary purpose is on-orbit **cyber defense** (Silent Shield); RF and geolocation payloads **are genuinely aboard**. `[CORRECTED]` — the counter-agent's own "three satellites" was also wrong, and five quotes attributed to Deloitte's press release are **not on that page** |
+| 14 | Geely $637M vehicle constellation | **Misattributed** — $637M traces to a **satellite-internet project in Qingdao** by Zhejiang Shikong Daoyu Tech, a Geely subsidiary. The constellation figures are **$326M** (Taizhou factory, 2020, ~500 sats/yr planned) and **$281M** (Geespace raise). Geespace completed Phase I with 64 satellites |
+| 15 | Apple $1.95B to Globalstar | **Substantially supported** `[CORRECTED, overturned from REFUTED]` — ~$1.98B prepayment+equity after the April 2026 amendment; derived, not a published figure |
+| 16 | Varda $329M | **Stale by one round** — exact at the $187M Series C (2025-07-10, Natural Capital / Shrug lead); a Feb 2026 Series D put it at ~$1.58B valuation, ~$578M total [SECONDARY: Tracxn/Caplight]. **Do not quote a Series D dollar amount — none is primary-disclosed** |
+| 17 | "~120 satellite manufacturers" | **Unsourced / unverifiable** — no primary source found; independent counts run **193** (Tracxn smallsat manufacturers alone) to **220+** |
+
+**Tally, post-adversarial: 7 verified as written · 6 imprecise or misattributed · 2 materially wrong (#11, #13) · 1 stale (#16) · 1 unsourced (#17).** The original audit's tally was 4 clean / 13 defective / 6 materially wrong; the adversarial pass upgraded #7 and #15 and softened #12, so **the corrected error rate is meaningfully lower than the first pass reported.** Ten of seventeen still carry a defect.
+
+**On #11, the memo's thesis statistic.** *"Launch and manufacturing represent only 7% of the $613B global space economy, while 93% flows through applications, services and ground infrastructure."* The **$613B is Space Foundation** (The Space Report 2025 Q2, CY2024) [**NOT READ — 403; the figure, its +7.8% growth and 78/22 commercial-government split are [UNKNOWN] at primary**]. The **7% is SIA/BryceTech's denominator**: 28th Annual State of the Satellite Industry Report (2025-05-13, CY2024) — global space economy **$415B**, satellite industry **$293B (71%)**, launch **$9.3B**, manufacturing **$20.0B**, services **$108.3B**, ground **$155.3B** [VERIFIED, every figure reproduced verbatim: https://sia.org/historic-number-of-launches-powers-commercial-satellite-industry-growth-satellite-industry-association-releases-the-28th-annual-state-of-the-satellite-industry-report/]. $29.3B / $415B = **7.06%**; the complement ($415B − $29.3B)/$415B = **92.94% = "93%"**. **Both halves of the memo's sentence reproduce SIA's $415B denominator to two significant figures.** Against the $613B the memo actually cites, the same two segments are **4.78%**. The "93% flows through applications, services and ground infrastructure" is false under either source: under SIA, ground + services = $263.6B = **63.5%**, and the ~29% residual is chiefly government space budgets; under Space Foundation, government alone is 22%. **The direction of the error runs against the memo's own framing** — the segment Oligo sells into is smaller than stated, not larger. Robustness: on the CY2025 vintage (29th Annual, 2026-05-13: economy $429B, satellite industry $303B, launch $12.4B, manufacturing $20.4B, services $105.0B, ground $165.2B), launch+mfg = 7.65% of $429B but 5.35% of $613B — the conclusion holds under either vintage. **Also of note in the CY2025 data: satellite manufacturing grew +17% in CY2024 ($20.0B) but only "marginal growth" to $20.4B in CY2025, while launch grew +33%.** `[CORRECTED]` — an earlier sweep cited the **29th** Annual (CY2025 data) as the source of the CY2024 figures it quoted; the correct citation is the 28th.
+
+**A steelman the audit initially missed:** **Caltech manages JPL** — *"Managed by Caltech, JPL is NASA's only federally-funded research and development center"* [VERIFIED: https://www.jpl.nasa.gov/who-we-are/] — so "Caltech" in the LP's team-provenance line is largely **redundant with "NASA JPL"** and someone from JPL can be described as ex-Caltech without deception. `[CORRECTED]` — the "team provenance is REFUTED" verdict was downgraded to **"unsourced in the ATS copy, and inconsistent with it."** With the page-3 slide now read, the Cal/UCLA/Caltech logos and the USAF logo on Guerrero's panel supply the memo-side source for the LP's phrasing.
+
+### 4.4 Memo vs LP summary vs public record — remaining divergences
+
+| # | LP summary | Memo PDF | Public record |
+|---|---|---|---|
+| 1 | "Dr. Andrew Shapiro, Chief Technologist, former NASA JPL Chief Technologist, 20+ yrs" | **Page 3 slide: "Andrew Shapiro, PhD / CHIEF TECHNOLOGIST / 20+ yrs previous NASA JPL Manager of Technology Formulation and Division Chief Technologist… Former Proteus Space Co-Founder/CTO"** | Own CV: Division-level title, working-group member. Proteus's live leadership page does not list him. No third-party source links him to Oligo. |
+| 2 | "team drawing from NASA JPL, Caltech, UCLA, and defense programs" | Page 3 slide header + Cal/UCLA/Caltech/NASA/JPL/USAF logos | Oligo's own ATS copy says **"ex-MIT, Harvard, and NASA JPL"**; Caltech 0, UCLA 0, "defense programs" 0 across all 15 postings |
+| 3 | "**signed** customers … **yielding** potential revenue $15M–$37M" | "**Acquired** customers … **possible** revenue" | No contract, value, or binding language published by anyone |
+| 4 | "an **MIT dropout**" | "later **studied** AeroAstro, physics, and AI at MIT" | **[CONFLICT], unresolved.** LinkedIn (read only via snippet) asserts a 2020–2024 degree; MIT lists him as "Jacob Rodriguez '24," a senior in spring 2024; but the Thiel Fellowship was announced 2024-03-20, months before a June commencement, and is premised on leaving school. **No registrar record or commencement program was located.** Two flags on the self-reported version: "Astronautical Engineering" is **not an MIT degree name** (Course 16 is Aerospace Engineering), and the string reads as free-text. The memo's softer phrasing is the supported one. |
+| 5 | "Terms: L1, 10/0/10" | **No terms of any kind, in text or image** (re-verified) | — |
+| 6 | — | "MIT dropout" also appears in the memo's own Key Investment Highlights (line 21) | Same conflict as #4 |
+
+### 4.5 Founder-bio items with no public support
+
+- **"Aerospace machine-shop technician producing hardware for Virgin Galactic, Rocket Lab, and SpaceX across 3- and 5-axis CNCs."** **Found in zero published biographies** — MIT AeroAstro, Matthew Isakowitz Foundation, TEDxMIT, Payload, YesPress, Robotics Summit, Thiel Foundation, two Forbes pieces. Not machining, not CNC, not a machine shop, not any of the three companies as employer or customer. `[CORRECTED]`, four ways: (a) **drop "multi-year"** — the memo states no duration; (b) the strongest evidence is not Payload but the **Isakowitz fellowship bio**, a self-reported ~130-word CV-like source that enumerates work experience (Goddard, JPL/Psyche/Europa lander testbed, MIT WORMS, MITES TA, Astrolab) with no machine shop — a self-authored omission is more probative than a journalist's; (c) **"LinkedIn is the one place it would appear" is overstated** — that fellowship bio is exactly such a place; (d) **steelman**: the memo says "producing hardware **for**" those companies, which on its face describes a **job-shop/supplier** relationship, not employment by the primes, and the benign reading is the literal one. **New, sharper point:** the memo sequences this **before** MIT ("He *later* studied AeroAstro"), and MIT identifies him as class of '24 from Orange County — so a pre-MIT job places him at roughly high-school age (~pre-2020). Payload's profile does foreground blue-collar origins — *"helping his grandfather with construction projects and taking care of his siblings"* — but names **construction**, not machining. **Status: no public evidence found. Not contradicted.**
+- **"Six internships at NASA JPL and Goddard."** Both institutions verified; **the number six appears in no source.** Payload says only *"an internship at NASA's Jet Propulsion Laboratory"* (singular). His freshman TEDxMIT bio adds a JetBrains internship (not NASA).
+- **A co-founder may exist and is not named in the memo.** A search-index summary attributed to Crunchbase reports Oligo as *"founded in 2023 by Benjamin Carlson and Jacob Rodriguez"* in Cambridge, MA. `[CORRECTED]` — verdict downgraded from **REFUTED** to **[UNKNOWN]**: **the underlying page has not been read by anyone** (403 to two agents, CAPTCHA via reader proxy, **no Wayback snapshot exists**), and Crunchbase founder fields are user/AI-populated. **Disconfirming evidence gathered directly:** Payload (2025-10-14) — *"In 2024, Rodriguez founded Oligo…"*, sole-founder framing, no Carlson, no Cambridge; theorg.com/org/oligo-space lists exactly one person, Jacob Rodriguez, Founder/CEO; Oligo's LinkedIn company page gives founded **2024**, HQ **3457 W El Segundo Blvd, Hawthorne CA**, ~28 employees; the Massachusetts corporation dataset has no entity named "Oligo." **Steelman:** the Crunchbase slug `oligo-4fd9` carries a disambiguation suffix, meaning Crunchbase holds multiple "Oligo" entities, and "Oligo" is overwhelmingly a biotech term — a 2023 Cambridge MA company named "Oligo" fits an MIT-adjacent **biotech** at least as well as a Hawthorne satellite maker. **This is an ask, not a finding.**
+
+### 4.6 Metadata conflicts
+
+- **HQ**: Hawthorne (memo, all 15 job posts, LinkedIn "3457 W El Segundo Blvd, Hawthorne CA") vs **El Segundo, 607 E El Segundo Boulevard, CA 90245** (CB Insights, Preqin) vs **Cambridge MA** (Crunchbase, unread). Adjacent aerospace corridors; a young company may have moved. **CA SOS blocked, so the registered address is unverified.**
+- **Founding year**: 2024 (Payload, YesPress, CB Insights, Preqin, Tracxn, LinkedIn) vs 2023 (Crunchbase, unread). `[CORRECTED]` — this "conflict" largely collapses: 2024 is independently corroborated multiple times; 2023 rests on the same single unread snippet.
+- **Domain**: `https://oligo.space` — the apex domain that the **Thiel Foundation's own 2024 release links to** — does not resolve (CONNECT tunnel 502). `www.oligo.space` 301-redirects to `https://www.oligospace.com/`. `/careers` and `/about` return 404 on some paths.
+
+### 4.7 Entity-collision hazards — data-hygiene warnings that must travel with this file
+
+1. **Oligo Security** — unrelated Israeli runtime-cybersecurity firm. Raised **$8M seed (2022-06-01), $20M Series A (2023-02-15), $50M Series B (2025-01-29), $60M (Aug 2026)**, ~$140M total, valuation "more than doubled." **The search string "Oligo" + "$50 million" + "valuation" resolves in public search to this company, not Oligo Space** — an automated re-verification pass would retrieve a spurious confirmation of the memo's $50M mark. Tracxn's `/companies/oligo/` page returning "$80M over 4 rounds" is also this company.
+2. **Oligo Foundry, Inc.** — biotech, Encinitas CA, CIK 1954622, the only EDGAR "Oligo" registrant.
+3. **Epic Aerospace "CHIMERA LEO-1" / "Chimera GEO-1"** — orbital transfer vehicles that dominate any "Chimera" catalogue search; Chimera GEO-1 flew on a Falcon 9 on 2025-02-27 and has SatNOGS DB and Gunter's records. **Do not read any of these as evidence Oligo's Chimera-1 is on orbit.**
+4. **"Jacob Rodriguez"** — at least two other MIT-adjacent bearers surfaced (an MIT Chemistry graduate student; a Jacob Rodriguez at The Aerospace Corporation).
+
+---
+
+## 5. Comparable valuations and exit base rates
+
+### Realized exits — satellite bus / spacecraft manufacturers
+
+| Exit | Price | Date |
+|---|---|---|
+| Space Systems/Loral → MDA | **$875M** | announced Jun 2012, closed Nov 2012 |
+| Blue Canyon Technologies → Raytheon | **$350M announced / ~$426M net of cash / ~$430M per RTX filings** — **[CONFLICT]**, likely announced consideration vs final purchase accounting; the RTX 10-K purchase-accounting note was **not opened** | Dec 2020 |
+| Terran Orbital → Lockheed Martin | **$450M EV / $0.25 cash per share** | announced 2024-08-15, closed 2024-10-30 |
+| Maxar Space Systems (Lanteris) → Intuitive Machines | **$800M** before closing adjustments | Jan 2026 |
+| Surrey Satellite Technology (SSTL) → Airbus | **price never disclosed** [UNKNOWN] | 2009 (majority) |
+| York Space Systems → AE Industrial Partners (51%) | **$1.125B EV** | Oct 2022 |
+| **York Space IPO (NYSE)** | **$4.75B valuation**, $34/share, **$629M gross / $582.6M net** raised, on FY2025 revenue **$386M (+52%)** and $543M year-end backlog | 2026-01-29/30 |
+
+**No satellite bus manufacturer has ever exited above $1B for cash.** The realized cash band is **$350M–$875M across fourteen years**, and it has not inflated with the sector — the 2026 Lanteris print ($800M) sits inside the 2012 SSL print ($875M). The one $1B+ mark is York's public-market valuation, earned on $386M of revenue and 21 satellites delivered to orbit. *(Stated as base rate; no inference to this deal is drawn at S1.)*
+
+### The Terran Orbital case — mechanism, with all primary corrections applied
+
+- **SPAC**: merged with Tailwind Two Acquisition Corp at ~$1.58B pro-forma EV; NYSE (LLAP) from 2022-03-28, **day-one close $11.80** `[CORRECTED to [SECONDARY]]` — this figure appears in **zero** Terran SEC filings; it is corroborated by two independent aggregator/news sources, one of which lists it as the stock's highest-ever end-of-day price. The fully primary comparison is **$10.00 SPAC reference** (Tailwind Two S-1) **→ $0.25 takeout = −97.5%**.
+- **`[CORRECTED]` — Lockheed's earlier offer**: **$1.00/share non-binding, dated 2024-03-01** (SC 13D/A 0000936468-24-000019); *"On April 30, 2024, LMC notified the Issuer that it was withdrawing the Proposal"* (SC 13D/A 0000936468-24-000056). Withdrawal, not rescission; a two-month standoff, and the bidder returned four months later at a quarter of its own prior number.
+- **`[CORRECTED]` — "creditors made whole"** softened to *"existing debt was retired at closing"*; par recovery on each tranche is **[UNKNOWN]**.
+- **`[CORRECTED]` — the "$0.23–$1.62 trailing range" is not reproducible** from any primary source (EDGAR FTS returns 0 hits across all Terran filings including the merger proxy) and should be dropped.
+- **The transferable numbers are the primary-verified ones**: **gross margin 6.3%** at record scale ($8,560,000 on $135,915,000 revenue, FY2023, +44% y/y) and a **~3.3x-revenue exit** to the single natural strategic acquirer, which was already both a shareholder and a creditor. **EV fell −72% ($1.58B → ~$450M); equity fell −98%. The gap is entirely leverage** — ~$309M of debt above the common. An equity round at $100M post with no comparable debt stack is not structurally exposed to that amplification, so **−98% is the least transferable number in the comparison.**
+
+### The backlog mechanism — and the scope limit on it
+
+Reproduced from primary SEC filings (CIK 0001835512):
+- Backlog **$170.8M** at 2022-12-31 → **$2.7B** at 2023-12-31 [VERIFIED: XBRL `RevenueRemainingPerformanceObligation` series].
+- Rivada Space Networks, Feb 2023, **$2.4B**, *"300 satellites, inclusive of 12 in-orbit spares and ground station equipment"* `[CORRECTED from "288"]` [VERIFIED: FY2023 10-K].
+- $2.4B of $2.7B = **88.9%**; the 10-K risk factor states *"a single commercial program represented approximately 88% of our backlog."*
+- **The cleanest number, which the original sweep missed: revenue actually recognized under the Rivada Agreement was $6.9 MILLION during all of 2023 — 0.29% conversion on a $2.4B contract** [VERIFIED: FY2023 10-K].
+- Guidance cut from $250M to *"in excess of $130 million"* on 2023-11-14 after Rivada missed a milestone payment. `[CORRECTED]` — **the "$180M incremental payment" figure is unverified and appears in no filing; drop it.** `[CORRECTED]` — **"and cut workforce" is unsupported and partly disconfirmed: headcount GREW from "over 480" (2022-12-31) to "over 660" (2023-12-31)**, with no restructuring report in any 2023–2024 filing.
+- **`[CORRECTED]`** — Rivada RPO was **written down from $2.4B to $1.6M (−99.9%)**, not removed entirely; total RPO **$312.7M at 2024-06-30** [VERIFIED: Q2-2024 10-Q].
+- **Scope limit, reported with equal prominence:** Terran's **non-Rivada** backlog went the other way — $170.8M (2022-12-31) → ~$311.1M (2024-06-30), nearly doubling. Government/prime backlog converted. **The evidence refutes "backlog from an unfunded commercial constellation customer converts," not "backlog in satellite manufacturing converts."** Terran also disclosed the risk contemporaneously (10-K risk factor: *"Our contract with Rivada Space Networks GmbH is subject to uncertainty,"* citing *"Rivada's funding ability"*).
+- **Applicability note:** Oligo's "booked and paid" launch slot is a cash **outflow** commitment by Oligo, not customer backlog. This comparable bears on Oligo's customer/pipeline claims, and **whether Oligo claims any customer backlog is [UNKNOWN]**.
+
+### The de-SPAC cohort — both tails
+
+| Company | SPAC valuation | Now / exit |
+|---|---|---|
+| Astra | $2.1B (Feb 2021 Holicity announcement; trading from 2021-07-01) | Taken private at **$0.50/share**, completed 2024-07-18. DEFM14C, verbatim: the merger was *"the only actionable alternative to the filing of a petition for voluntary relief under Chapter 7… stockholders would have received no value for their shares"* [VERIFIED: 8-K 0001193125-24-180782; DEFM14C 0001193125-24-154412] |
+| Momentus | $1.2B announced, cut to $567M | Went public only after settling **SEC charges of misrepresenting that it had "successfully tested" its propulsion in space** [VERIFIED: sec.gov/newsroom/press-releases/2021-124]; 1-for-17.85 reverse split 2025-12-17 (25M → ~1.4M shares) → **21.96M shares by Aug 2026** (~15x re-dilution in eight months); ~$92.7M market cap on $3.84M TTM revenue |
+| Spire | $1.6B post-money **equity** value | **$537.4M market cap, 2026-08-25** (≈ −66%). FY2026 revenue guidance $75–85M is **[UNVERIFIED]**. Note Spire executed a 1-for-8 reverse split in Aug 2024, so any quoted historical peak is split-adjusted |
+| **Planet** | $2.8B (closed Dec 2021, $11.35 day-one close) | All-time low **$1.67** (2024-04-30) → record close **$51.40** (2026-05-28; 52-wk high $51.76) → **$7.66B at $21.50 on 356.40M shares, 2026-08-25** ≈ **2.7x the SPAC valuation**, and **down ~58% from the May 2026 peak** `[CORRECTED from "~$8.8B / roughly 3x"; the "$14.8B at the May peak" figure is not reproducible and should be dropped]` |
+| **Rocket Lab** | $4.1B pro-forma EV (Vector Acquisition 8-K EX-99.1, 2021-03-01) | **$40.46B, 2026-08-25** ≈ 10x |
+| **AST SpaceMobile** | — | **$24.24B, 2026-08-25** |
+| Terran Orbital | $1.58B EV | $450M EV, Oct 2024 |
+
+**`[CORRECTED]` — "base rate" is the wrong label for the original four-name sample.** Both tails were missing: Terran Orbital and Virgin Orbit (Chapter 11, 2023) on the downside, Rocket Lab and AST SpaceMobile on the upside. **The distribution is bimodal, not uniformly poor.** Two further qualifiers belong on the record: every name in the original cohort is a **2021-vintage de-SPAC**, a financing-vehicle failure mode (retail distribution, projection-based marketing, redemption-driven capital shortfalls) that does not automatically transmit to a privately-financed round; and Momentus's collapse is substantially **idiosyncratic** (SEC fraud findings plus national-security issues around its founder), not a market verdict on smallsats.
+
+### Venture-stage marks, as of Aug 2026
+
+| Company | Latest mark | Flown | Raised |
+|---|---|---|---|
+| **Apex Space** | **$2.3B post**, announced 2026-06-05 ($200M, Glade Brook lead / Washington Harbour co-lead), *"nearly doubling… to $2.3 billion"* | **One confirmed on-orbit unit** (Aries SN1, Falcon 9, 2024-03-04, healthy at one year and *"continues to execute its mission"* as of Jun 2026). No total on-orbit count is published | >$718M (computed; ~$718.5M–$722M, no cumulative total published) |
+| K2 Space | $3B (Dec 2025, $250M, Redpoint lead) → **$6.8B** (~2026-07-30, $500M, Kleiner + ICONIQ lead) | first Mega Class satellite GRAVITAS targeted Mar 2026 | >$1B, plus "an equivalent amount in contracts" |
+| Impulse Space | $300M Series C (Jun 2025); **$4.26B** Series D ($500M, 2026) | — | — |
+| Muon Space | **$1.5B** (2026-08-20, $250M Series C, Eclipse lead, Google + Salesforce Ventures) | **11 satellites launched** | — |
+| Loft Orbital | **$1B** (Jan 2025, $170M Series C, Tikehau + Axial) | **30+ satellites sold, $500M lifetime bookings** | ~$330M |
+| **Proteus Space** | **not disclosed** | **MERCURY ONE, ESPA-class, 2025-11-28** | ~$10.75M traceable / $14.4M per Tracxn [SECONDARY, unreconciled] |
+| Reflect Orbital | **no valuation disclosed** [UNKNOWN] | — | $35.2M over 3 rounds |
+| Turion Space | **[UNKNOWN]** — no reliable funding or valuation figures found; PitchBook records a Jan 2026 merger with Tychee Research Group [SECONDARY, unconfirmed]. **No estimate made** | — | [UNKNOWN] |
+
+**`[CORRECTED]` — the "Apex brackets the $100M ask" calibration must be withdrawn.** Three errors: (a) Apex's **Series A was $16M announced 2023-06-22, co-led by Andreessen Horowitz and Shield Capital** — not "$16M Apr 2023, XYZ Ventures" (XYZ led the **Series B**) [VERIFIED: https://techcrunch.com/2023/06/22/andreessen-horowitz-shield-capital-apex-space/]; (b) **Apex's valuation was NOT DISCLOSED at seed, Series A, Series B and Series C** — the first disclosed mark is ">$1B" at the Series D (Sept 2025), so **nothing in the public record places Apex at ~$100M at any date**, and the interpolation violates the standing rule against inferring unpublished numbers; (c) the qualifier "Apex did so with a satellite already built and launching" is **timeline-inverted** — Aries SN1 flew 2024-03-04, **nine months after** the Series A, when Apex was ~9 months old with zero flown hardware. Apex's verified ladder: seed **$7.5M** (2022-10-24, a16z lead, with XYZ VC, J2, **Lux Capital**, Village Global) → **$16M** Series A (2023-06-22, a16z + Shield) → **$95M** Series B (2024-06-12, XYZ + CRV) → **$200M** Series C (2025-04-29, Point72 Ventures + 8VC) → **$200M** Series D (Sept 2025, Interlagos, >$1B) → **$200M at $2.3B** (2026-06-05). Headcount >350, *"more than doubled in the past year."* Customers on Apex's own logo wall: MTDP, NASA, Anduril, SDA, USSF, Aetherflux, Booz Allen; plus NEC (Mar 2026) and Northrop Grumman (Golden Dome SBI, Jun 2026). **`[CORRECTED]`** — "BAE Systems" as an Apex customer is **[UNVERIFIED]** (absent from the logo wall and from every article reached); and Apex revenue "$60M (2024)", ">$100M bookings", "~12 customers", "~2/3 defense" are **[CLAIMED — source not identified]**, not reproduced from any Apex or Payload source. **Note for the record: Lux Capital, named as an Oligo investor, also participated in Apex's 2022 seed.**
+
+### Pricing comps — corrected to Apex's own configurator (primary)
+
+`[CORRECTED]` — the earlier "$3.5M–$9.5M" and "$6M" Apex figures came from **Sacra, which self-labels them estimates**; Apex's product pages carry specs only. Fetched 2026-08-25 from `https://www.apexspace.com/configurator`, which exposes machine-readable `data-price` and `data-delivery` attributes:
+
+| Apex platform | Published base price | Bus / payload | Power |
+|---|---|---|---|
+| LEO Aries | **$3,600,000** | bus dry mass 125 kg; payload ≤150 kg (100 kg on SpaceX Rideshare) | 175+ W OAP, EOL 5 yr |
+| GEO Aries | **$13,750,000** | bus 175 kg; payload ≤120 kg | 125+ W |
+| Nova LEO | **$6,250,000** | bus 300 kg; payload ≤300 kg | 1 kW, EOL 7 yr |
+| MEO Aries, Nova MEO/GEO, Comet Mini/XL | **no price published** [UNKNOWN] | — | — |
+
+- **Delivery is quoted in WEEKS, not months**: the rendered label reads *"BUS DELIVERY 10 WEEKS"*, with `data-delivery` values of 6/8/9/12/15 weeks. The "as little as six months" and "GEO Aries 15-month lead time" secondary claims are **[CONFLICT]** with the primary (GEO Aries `data-delivery` = 15, in the same weeks unit).
+- **"$9.5M fully equipped" is NOT reproducible**: maxing every priced LEO Aries option (High Power 600k, SADAs 500k, High-Rate comms 295k, Chemical 6DOF 2.25M, NSA Type 1 400k, Precision GNC 495k) gives **$8,140,000**.
+- **The correct comparable for a full-mission revenue figure** is a maxed Aries **plus** Apex's priced mission-services wrap (Payload Integration & SV Vibe Test 690k, SV-Level Test 860k, Launch Planning & Procurement 320k, LV Integration 370k, Ground Segment Implementation 230k, LEOP & Bus Commissioning 660k, Payload Commissioning & 1 Yr Mission Ops 1.53M, plus analyses): **$13,425,000**, still excluding the customer payload and the launch vehicle itself.
+- **Against that comparable, Oligo's $15M–$37M is 1.1x to 2.8x — not the "2x to 10x" a sweep recorded against a bus-only base price.** `[CORRECTED]` — the original framing was a category error (mission-level revenue vs bus list price). Oligo's memo scope is explicitly end-to-end (*"business requirement → spacecraft architecture → AI-assisted design → manufacturing → testing → launch → operations → data"*, line 51–52) and Oligo procures the launch.
+- **Sacra's own page contradicts its own price line**, and this cuts both ways: it also states Apex *"plans to deliver 10 satellites in 2025, which could result in revenue of $120-200 million based on comparable per-unit economics"* — i.e. **$12–20M of revenue per Apex satellite**, overlapping Oligo's range at the low end. Apex's **$45.9M USSF SBIR Phase II** *"to build multiple satellites"* (Feb 2025) implies ~$11.5M–$23M each at 2–4 vehicles. **Sacra's two figures are mutually inconsistent by 2–3x, so neither is a usable benchmark.**
+- **Class-basis caution:** CHIMERA1 is 100 kg **total spacecraft**; Aries is quoted at ≤150 kg **payload** and GEO Aries is a 200-kg **vehicle**. Not the same measurement basis.
+- **Program-level comps [SECONDARY, sources NOT READ — spacenews 403, SDA/Lockheed URLs 404]:** York SDA T1TL $382M / 42 SVs ≈ $9.1M per SV; Rocket Lab SDA T2TL-Beta $515M / 18 SVs ≈ $28.6M per SV — **the latter is a prime contract including design, ground segment and operations and must not be quoted as a bus price.**
+
+### "AI-native design" as a claimed differentiator — who else claims it
+
+- **Proteus Space** flew MERCURY ONE (2025-11-28) and has announced a SaaS version of MERCURY by end-2026. Its site: *"thousands of manufacturable, payload-tailored architectures in minutes"*, *"compresses timelines from years to months"*, *"TRL 9 flight heritage on orbit with AFRL"*.
+- **Northrop Grumman** — a company the memo's own table marks "low repeatability" — publicly claims AI is *"reducing design cycles from years to hours"*, with a thruster-impingement model giving *"accurate predictions in seconds rather than days, reducing development time by a factor of 100"*; VP Han Park: *"we are compressing decades of work into years, years into months, months into weeks, and weeks into hours."* Tooling: Flexcompute + NVIDIA PhysicsNeMo, Apr 2026. [VERIFIED: https://defence-industry.eu/northrop-grumman-uses-ai-to-cut-spacecraft-design-time-from-years-to-hours-in-major-shift-for-space-engineering/]
+- **Apex** runs a manufacturing OS ("Octopus") and **makes no AI claim at all** in its $2.3B raise announcement.
+- **York** cites *"high-volume production techniques and software automation… at one of the lowest costs-per-satellite compared to competitor bids."*
+- Practitioner counterpoint, recorded because it names a different bottleneck: one CEO in the same market is quoted that it is *"~5x more complicated to construct a supply chain that can contend with problems and component shortages versus inventing a technology."*
+- **Companies absent from the memo's competitive table** (which names Apex, Rocket Lab, Terran Orbital, Planet, Spire, Starshield, Blue Ring, Lockheed, Northrop): **Proteus Space**, **Loft Orbital** ($1B, 30+ satellites sold, $500M bookings, "space infrastructure as a service"), **Muon Space** ($1.5B, 11 satellites launched), and **K2 Space** ($6.8B, Torrance CA).
+
+### The flight-data flywheel — the published scale of the canonical example
+
+Planet Labs *"has successfully built and launched over 500 satellites"* since 2012 across *"14 major iterations of the Dove spacecraft design"* (another source: 15 hardware iterations, ten times as many software iterations) — roughly **30–35 flown units per hardware generation, sustained for a decade** [VERIFIED: https://www.planet.com/pulse/what-is-agile-aerospace/]. Two structural notes recorded as facts, not conclusions: Planet's loop works because every Dove is the **same** spacecraft, so N units give N samples of one design; and on-orbit reliability data (radiation effects, thermal cycling fatigue, component degradation) accrues over 2–5 years. Separately, a systems integrator selecting COTS components inherits flight heritage held by its **vendors** — Proteus's MERCURY explicitly selects components *"based on flight heritage"* from vendor data.
+
+---
+
+## 6. UNKNOWN — REQUIRED (ask, do not analyze around)
+
+Ordered by how much each would move the decision. Per the standing rule, none of these is to be resolved analytically, recorded as UNKNOWN and then reasoned past.
+
+1. **The cap table and every financing document to date.** Executed SAFEs and/or stock purchase agreements for each round: instrument, amount, date, cap/discount or price per share, and the pricing evidence for the "$50M last strategic round." The public record supports neither $7M nor $50M in either direction; **no research can resolve this, only documents.** Include: is the $100M **pre or post** (9.1% vs 10.0% on a $10M raise, and it determines every multiple); was the prior round priced equity or an uncapped/capped SAFE (which changes what "$50M last round" even means); did Lux **lead** or merely participate; and does any of the four named investors hold a board seat or information rights?
+2. **What does "L1, 10/0/10" mean?** Layer/tier, and the three numbers. **This is the one LP-summary item confirmed absent from the memo in both text and image.** Fees compound directly into the exit multiple and the notation is currently undecodable. Supply the SPV or LPA. Also: who is bringing this deal, and what are their economics?
+3. **The launch: the executed Launch Services Agreement and proof of payment.** Which provider, which mission and window, what was paid and when, is the deposit non-refundable, is the slot transferable? *"Paid"* is a payment claim and should be evidenced by a payment record. **And, separately: why was the slip from the publicly stated Q2 2026 target to April 2027 never disclosed in the memo, and what drove it — spacecraft readiness, payload readiness, or loss of a rideshare slot?**
+4. **The CHIMERA customers.** Binding purchase agreements, LOIs or MOUs? What is the **contracted** value of each versus the "possible" $15M–$37M, how was that range derived, and why is it 2.5x wide? Who are the **other three of the five** CHIMERA1 "customer applications" Oligo's site claims? Are any of them investors, affiliates or related parties? **Is CHIMERA2 sold or still being sold** — the site says "filling the manifest"? And are the Spacedock and Melagen agreements the CHIMERA-1 payloads at all, given no source connects them to that mission and SpaceNews dates that demo to Q2 2026?
+5. **Andrew Shapiro — employment terms and the Proteus overhang.** Full-time or advisory, start date, equity, and his **written JPL title history 2010–2022** (the only primary CV is dated Feb 2010 and reads "2002–Present"). Then the harder half: **his Proteus Space separation date and terms, and any non-compete, non-solicit, trade-secret or IP-assignment exposure travelling with him and with the two other Proteus alumni named on the same slide (Liliana Reyes, Richard Guerrero).** The memo discloses the Proteus history in one line and addresses none of this. Also ask why Oligo's website says "former NASA JPL Chief Technologist" where its own memo says "Division Chief Technologist."
+6. **Has Oligo ever built, environmentally qualified, or delivered a spacecraft — even a non-flight engineering model?** What is CHIMERA1's **current integration state and program start date**? With ~7.2 months to 2027-04-01, this is the input that determines whether the date is credible. A photograph of an integrated CHIMERA1 structure would move the capacity claim further than any material reviewed.
+7. **Engineering hours per spacecraft — the number that tests the thesis.** Total engineering hours on CHIMERA1, and the projected figure for CHIMERA2. A declining curve is what an AI-native claim predicts. The demonstrated benchmark to beat is Terran Orbital's **~25.3 people per delivered spacecraft-year** (480+ staff, 19 delivered, 2022), on repeat rather than bespoke builds.
+8. **Cash, burn, runway, headcount and use of proceeds.** Current FTE vs contractor count (public figures range 17–28 and none is primary), the full org chart with titles, start dates and prior employers, and what the $10M funds to. Context for the ask: **15 open reqs against a claimed ~18 headcount implies a near-doubling hiring plan**, and Oligo posted **"Chief Spacecraft Engineer" on 2026-07-02** and **"Senior AI Engineer" on 2026-07-09**, within ~7 weeks of this memo; some reqs have been live since 2025-08-03.
+9. **Zenith: any reviewable artifact.** Architecture document, patent application, a live demo on a fresh requirement set, a worked requirements-to-design trace for CHIMERA1, the size and provenance of the "multimodal training dataset from prior spacecraft programs" (prior-program data is scarce and export-controlled), and any held-out benchmark of the U-Net topology optimizer against standard SIMP. **Also: why did the Mission Configurator go offline between 2026-03-10 and today?** And: what does Zenith do that Valispace, Ansys ModelCenter/SimAI, or Proteus's MERCURY does not?
+10. **The facility.** Street address, the lease or sublease, an exterior photo with signage, and the **rated capacities of the test equipment**: TVAC chamber internal dimensions, shaker force rating in lbf, cleanroom ISO class, crane capacity. Can it qualify a 400 kg article, or only the 100 kg bottom of the claimed range — and if not, which vendor does that work? **The 14,000 sq ft figure appears in the memo and nowhere else, including Oligo's own website and all 15 of its job postings.**
+11. **Is 100–400 kg one bus architecture or several?** How many distinct primary structures, and what separation system is baselined at the 400 kg end (standard ESPA is 181 kg per port; ESPA Grande supports up to 700 kg)? And is *"capability to produce over 10 custom spacecraft… every year"* demonstrated throughput or design capacity?
+12. **Corporate record.** CA SOS entity number and status, Delaware certificate of incorporation, registered agent, and any DBA, name change, predecessor entity or redomicile (Crunchbase shows Cambridge MA / founded 2023 against everything else showing CA / 2024). **Every state registry was WAF-blocked.**
+13. **Who is Benjamin Carlson?** Is he a co-founder, is he still with the company, what is his title and equity, and if he departed, what are the vesting/repurchase terms and is there any dispute? **Note the honest status: this rests on a single search-index snippet of a Crunchbase page that no one has read and for which no Wayback snapshot exists, and "Oligo" is overwhelmingly a biotech name.** The cap table (item 1) answers it.
+14. **Why is there no Form D for any round, including the confirmed May 2025 Kakao/Lux seed?** Ask counsel directly which exemption was relied on. Either answer is informative, and the consistency of the practice matters more than the $7M question alone.
+15. **The market section's provenance.** Does it have a named author and date? Specifically: what is the source for **"~120 satellite manufacturers"** (independent counts are 193–220+); which report produced the **7%/93%** split (it only reproduces against SIA's $415B, not the $613B cited); and **is Proteus Space in Oligo's competitive set — if not, why not**, given the memo's own Chief Technologist co-founded it?
+16. **Named enterprise demand.** Every "demand building up" example that checks out — Nestlé, Cargill, Unilever, AXA, Munich Re — is a company **buying processed data from a third-party provider**, and the two that own hardware — Geely, Varda — **built it themselves** (Geely a $326M factory; Varda its own capsules, with buses from Rocket Lab). Ask the founder to name one enterprise that has commissioned a custom satellite from a third party.
+17. **Founder-bio specifics, for candour rather than substance.** (a) The CNC/machine-shop claim: employer name, dates, title — was he employed **by** Virgin Galactic / Rocket Lab / SpaceX, or by a supplier shop selling to them? It appears in none of the nine published biographies, including his own self-reported fellowship bio. (b) Enumerate the six NASA internships with center, dates and supervising organization. (c) Was the MIT degree conferred in 2024, or did he leave for the Thiel Fellowship? (Resolvable cheaply via National Student Clearinghouse. Note "Astronautical Engineering" is not an MIT degree name.)
+18. **SBIR/STTR, UEI and CAGE.** Directly from the company — SBIR.gov and HigherGov were both blocked, so this is unresolved, not closed. USAspending shows no prime awards, so any claimed government traction would have to be Phase I, subcontract, or OTA.
+19. **Re-run from an unblocked network before anything ships:** FCC ELS and IBFS/ICFS, NOAA CRSRA, USPTO trademark and patent, CA SOS and Delaware registries, Wayback snapshot content for oligospace.com and mission-configurator.oligospace.com, and a **formal third-party background check (PACER, CA state courts, entity registries, UCC) on Rodriguez** — the adverse scan was web-search only and must not be recorded as a clean result.
+
+---
+
+*Prepared 2026-08-25 for S1 INTAKE under process v1.2 (full report at intake). Panel scores, red team, EV and exit odds are appended by the scoring pass; the ranked PENDING DD QUESTIONS list derives from §6. The two §0 corrections (ic.md capture rows 1–2; source-memo.txt) were applied in the same commit as this file.*
+---
+
+# SCORING PASS — appended 2026-08-25 (process v1.2: full report at intake)
+
+Five independent scorers (distinct lenses, one rubric) + standing red
+team, on the fact pack above. Aggregation and EV arithmetic re-verified
+by an adversarial QA agent. **Stamped rev 1 — PRE-DD: these numbers
+price the deal as documented today and are re-run as DD answers land.**
+
+## Panel (median · IQR · raw)
+
+| dimension | median | IQR | raw scores |
+|---|---|---|---|
+| Market (30) | **3** | 0 | 3,3,3,3,3 |
+| Team (30) | **2** | 0 | 2,2,3,2,2 |
+| Moat (15) | **2** | 1 ⚑ | 1,1,2,2,2 |
+| Traction — demand (10) | **2** | 0 | 2,2,2,2,2 |
+| Traction — delivery | **1** | 1 ⚑ | 1,1,2,2,1 |
+| Competition (10) | **2** | 0 | 2,1,2,2,2 |
+| Deal & price (5) | **1** | 0 — **unanimous** | 1,1,1,1,1 |
+
+**W = 2.20** (house formula, identical to the one that produced
+DexMat's logged 3.25; traction enters W as the split average, reported
+split everywhere else). QA audit challenged W using a different
+weighting and verified every other number (medians, IQRs, forecast
+aggregates, both EVs); sensitivity: W = 2.15 if traction enters as
+min(demand, delivery). Both logged; verdict comes from gates, not W.
+
+Score anchors, compressed:
+- **Market 3, unanimous:** real growing sector on verified data; but
+  the memo's own thesis stat inverts under audit (mfg ≈ $20B and
+  near-flat in CY2025 while launch grew 33%) and no named enterprise
+  example actually commissions custom satellites — they buy data.
+- **Team 2:** verified fellowships + internships, pedigree-capped; the
+  page-3 roster is decent for ONE ESPA build if real, but every hire is
+  company-claimed with zero independent confirmation, and the bench is
+  JPL-flagship-heavy — the wrong lineage for high-rate low-cost
+  production. Rises on employment verification + Proteus separation docs.
+- **Moat 2 (IQR 1):** the claimed differentiator was FLOWN FIRST by
+  Proteus (MERCURY ONE, 2025-11-28) — co-founded by Oligo's own claimed
+  Chief Technologist and absent from the memo's competitive table.
+  Zenith has no reviewable artifact and its one public demo is offline.
+- **Traction 2/1:** one independently corroborated relationship
+  (Spacedock — tied to Oligo, never to CHIMERA-1); delivery = 0 flown
+  vs ">10/yr" claimed, ~14x headcount gap vs Terran's demonstrated
+  ratio, public Q2-2026 target expired unflown.
+- **Deal & price 1, unanimous:** entry at 2x a prior mark with no
+  public trace, through an undecoded fee wrapper, in a category whose
+  realized cash-exit ceiling is $875M. The SPV-at-2x structure is
+  itself evidence no institutional lead priced this round.
+
+## Logged forecasts (medians; gross of fees)
+
+| P(next priced round ≤24mo) | P(<1x) | P(≥10x gross) |
+|---|---|---|
+| **0.40** | **0.75** | **0.03** |
+
+vs measured Series A base rates (66% <1x, 8.4% ≥10x): the panel prices
+this deal WORSE than base on both tails — driven by the 2x-unverified
+entry, delivery-1, and the flown competitor. Red team independently:
+0.76 / 0.03 — divergence 0.01, logged not averaged.
+
+## Red team EV tree (audited: Σp = 1.000 exactly)
+
+| p | gross | branch |
+|---|---|---|
+| 0.62 | 0.05x | Wipeout before durable revenue |
+| 0.14 | 0.4x | Distressed partial: down round / recap / asset sale |
+| 0.12 | 1.5x | Par zone: flies late, niche integrator, low-band trade sale |
+| 0.09 | 4x | Real manufacturer: top of the historical cash band |
+| 0.03 | 15x | Tail: York-class public outcome after dilution |
+
+**Gross EV 1.08x → NET EV 0.92x** under the house fee map — **the fee
+wrapper flips the sign of the headline.** Any citation of the gross
+figure must carry the net alongside it (audit finding, honesty rule).
+
+## Exit odds (model; series_a anchor tilted to the logged 0.75 / 0.03)
+
+P(net≥3x) **12.5%** · P(net≥10x) **2.5%** · P(net≥20x) **1.1%** ·
+P(net≥50x) **~0.4%** (one significant figure). Curve EV net capped@20x
+= 1.49 — **the audited discrete tree (0.92x net) headlines per house
+rule**; the curve inherits the empirical mid-shape between its two
+pinned points and cannot see the sector's structural exit ceiling,
+which is exactly what the tree encodes. Divergence logged.
+
+## WWHTBT ladder (red team)
+
+Evidenced: a real operating company with a JPL-veteran bench exists.
+Plausible: the wrapper decodes benignly; the capital stack is real as
+claimed; a paid LSA exists; CHIMERA-1 is integrated today and flies
+with its five customers. Heroic: binding ≥$15M/vehicle contracts exist
+now; Zenith bends the engineering-hours curve within ~3 vehicles;
+Oligo out-executes Proteus/Apex/K2/Muon/Loft from behind; exit clears
+the sector's all-time realized cash ceiling.
+
+**DECIDER (red team):** the executed CHIMERA-1 Launch Services
+Agreement + payment record + an explanation of the undisclosed
+Q2-2026 → April-2027 slip. Highest-variance single disclosure in
+either direction.
+
+## PENDING DD QUESTIONS — ranked (standing section, v1.2)
+
+Status key: ● asked (2026-08-25) · ✓ answered · ✗ refused · ⌛ expired.
+60-day clock runs per question from first ask.
+
+| # | pri | question | what it moves | status |
+|---|---|---|---|---|
+| 1 | **P1** | Cap table + every financing document: instrument/amount/date/price per round; pricing evidence for the "$50M last round"; **$100M pre or post**; did Lux lead or participate; board seats | Deal&price (unanimous 1), P(<1x), every multiple | ● |
+| 2 | **P1** | Decode "L1, 10/0/10" — supply the SPV/LPA; who brings the deal and their economics | Net of every branch; the 1.08→0.92 sign flip | ● |
+| 3 | **P1** | Executed Launch Services Agreement + proof of payment (provider, mission, window, refundability) **+ why the Q2-2026→Apr-2027 slip was not disclosed** | Red team's named decider; delivery score; candour | ● |
+| 4 | **P1** | CHIMERA customers: contracts vs LOIs, per-contract value vs the $15M–$37M "possible", names of the other three of five, affiliate/investor checks; is CHIMERA2 sold or still selling | Traction-demand; revenue reality | ● |
+| 5 | **P1** | CHIMERA-1 build state + program start date; any photo of integrated structure; has ANY spacecraft/EM ever been built or qualified | Delivery (currently 1); April-2027 credibility (7.2 months out) | ● |
+| 6 | P2 | Shapiro: employment terms (FT/advisory, start, equity), JPL title history 2010–2022, **Proteus separation terms + non-compete/IP exposure for all three Proteus alumni** | Team 2→3 or →kill-list | ● |
+| 7 | P2 | Engineering hours on CHIMERA-1 vs projected CHIMERA-2 — the declining curve an AI-native claim predicts | Moat; the entire thesis | ● |
+| 8 | P2 | Cash, burn, runway, FTE vs contractor count, use of proceeds (15 open reqs vs ~18 claimed staff = near-doubling plan) | Financing risk; P(next round) | ● |
+| 9 | P2 | Zenith: any reviewable artifact (paper/patent/demo/trace); why the Mission Configurator went offline; what it does that Valispace/MERCURY/SimAI does not | Moat (IQR-flagged) | ● |
+| 10 | P2 | Facility: street address, lease, equipment ratings (TVAC dims, shaker lbf, cleanroom class); can it qualify 400 kg or only 100 kg | Delivery; the 14,000 sq ft figure appears nowhere but the memo | ● |
+| 11 | P2 | Why no Form D for any round, incl. the confirmed May-2025 seed — which exemption; ask counsel directly | Capital-stack credibility as a pattern | ● |
+| 12 | P3 | 100–400 kg: one architecture or several; separation system at 400 kg; "capability" = demonstrated or design | Delivery ceiling | ● |
+| 13 | P3 | Corporate record: CA/DE entity, registered agent, any predecessor (registries WAF-blocked to us) | Hygiene | ● |
+| 14 | P3 | Who is Benjamin Carlson (single unread Crunchbase snippet; cap table answers it) | Team completeness | ● |
+| 15 | P3 | Market section provenance: author/date; source for "~120 manufacturers"; the 7%/93% splice; why Proteus/Loft/Muon/K2 are absent from the competitive table | Candour | ● |
+| 16 | P3 | Name one enterprise that has commissioned a custom satellite from a third party | Market thesis | ● |
+| 17 | P3 | Founder bio: machine-shop employer/dates/title; enumerate the six internships; degree conferred or not | Candour, not substance | ● |
+| 18 | P3 | SBIR/UEI/CAGE direct from company (registries blocked) | Non-dilutive picture | ● |
+| 19 | P3 | Re-run from unblocked network: FCC/NOAA/USPTO/CA-SOS/Wayback + formal background check (PACER, state courts, UCC) | Closes the open registry gaps | ● |

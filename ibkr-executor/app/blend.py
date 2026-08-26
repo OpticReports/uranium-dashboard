@@ -98,6 +98,9 @@ TRADE_LOG_MAX = 200         # persisted closed/booked trade rows kept (feed)
 EQUITY_CURVE_MAX = 1500     # daily book-value snapshots kept (~6 years)
 UTIL_ALERT_ON = 0.85        # budget-utilization alert threshold (one-shot)
 UTIL_ALERT_OFF = 0.75       # re-arm threshold once utilization drops back
+# A book order (MKT/DAY) still "working" after this many cycles is stuck -
+# resolve by cancel-confirmation, never by assuming death (2026-08-25).
+BOOK_ORDER_STUCK_CYCLES = 3
 BOOK_ORDER_STALE_DAYS = 2   # a pending book-order journal older than this is
                             # anomalous (real DAY/OPG orders expire same-day)
                             # -> WARN once per order (r6)
@@ -257,6 +260,12 @@ class BlendState:
     quote_alert_armed: bool = True   # missing-SPY/BIL alert armed? (r3/r4:
                                      # alert-once per outage, re-armed on
                                      # recovery — the budget-alarm pattern)
+    # When quotes went missing (wall clock), None = quotes healthy. The
+    # alert-once pattern above is correct for Telegram but made a PERSISTENT
+    # no-quote condition self-silencing: one alert, then /health green and
+    # zero trades forever (2026-08-24 — the book never seeded its SPY core).
+    # This surfaces the condition continuously on /health instead.
+    quotes_missing_since: float | None = None
     last_reconcile_ts: float = 0.0   # wall clock of the last SUCCESSFUL
                                      # reconcile pass (venue-history horizon
                                      # guard, adapter review m2)
@@ -365,6 +374,7 @@ class Blend3070Manager:
                 last_gate=raw.get("last_gate"),
                 util_alert_armed=raw.get("util_alert_armed", True),
                 quote_alert_armed=raw.get("quote_alert_armed", True),
+                quotes_missing_since=raw.get("quotes_missing_since"),
                 last_reconcile_ts=raw.get("last_reconcile_ts", 0.0),
                 mode=stored_mode,
             )
@@ -495,6 +505,7 @@ class Blend3070Manager:
                    "last_gate": self.state.last_gate,
                    "util_alert_armed": self.state.util_alert_armed,
                    "quote_alert_armed": self.state.quote_alert_armed,
+                   "quotes_missing_since": self.state.quotes_missing_since,
                    "last_reconcile_ts": self.state.last_reconcile_ts,
                    "mode": self.state.mode,
                    "events": self.state.events[-300:]}
@@ -628,6 +639,30 @@ class Blend3070Manager:
 
     # ---------- the decision step ----------
 
+    def _note_quote_health(self, prices: dict[str, float],
+                           alerts: list[str]) -> None:
+        """Track the SPY/BIL quote outage state (set on first miss, cleared
+        only when BOTH recover) and fire the once-per-outage alert. One
+        place, called unconditionally at the top of step()."""
+        st = self.state
+        spy = prices.get(CORE, 0.0) or 0.0
+        bil = prices.get(CASH_VEHICLE, 0.0) or 0.0
+        if spy > 0 and bil > 0:
+            if not st.quote_alert_armed or st.quotes_missing_since is not None:
+                st.quote_alert_armed = True      # outage over: re-arm (r3)
+                st.quotes_missing_since = None
+                self.save()
+            return
+        if st.quotes_missing_since is None:
+            st.quotes_missing_since = time.time()
+            self.save()
+        if st.quote_alert_armed:
+            st.quote_alert_armed = False
+            self.save()
+            alerts.append(f"🚨 blend: rebalance/valuation SKIPPED: missing "
+                          f"quote (SPY={spy or None}, BIL={bil or None}) — "
+                          f"no weight decision is taken on absent prices")
+
     def step(self, today: str, payload: dict | None,
              prices: dict[str, float]) -> list[dict]:
         """One evaluation against the tracker's intent payload. Returns order
@@ -643,6 +678,12 @@ class Blend3070Manager:
         st = self.state
         if st.halted:
             return intents
+        # Quote-health bookkeeping runs BEFORE the payload gate: with the
+        # tracker down (payload None) the old placement inside section 5
+        # meant a simultaneous quote outage was never flagged - and a
+        # recovery during a tracker outage never CLEARED the flag, so
+        # /health reported a growing false outage (counter-agent B1/B1b).
+        self._note_quote_health(prices, alerts)
         if payload is None:
             # Tracker unreachable or stale: NO tracker-dependent decision is
             # taken, but the LOCAL safety belt still runs — the 90-calendar-
@@ -912,23 +953,14 @@ class Blend3070Manager:
         #    M1: skipped while any book order is pending adoption.
         rebalance_intent = None
         spy_quote = prices.get(CORE, 0.0)
-        if spy_quote > 0 and bil_px > 0 and not st.quote_alert_armed:
-            st.quote_alert_armed = True     # outage over: re-arm (r3)
-            self.save()
         if spy_quote <= 0 or bil_px <= 0:
-            msg = (f"rebalance/valuation SKIPPED: missing quote "
-                   f"(SPY={spy_quote or None}, BIL={bil_px or None}) — no "
-                   f"weight decision is taken on absent prices")
-            self._event("WARN", msg)
-            if st.quote_alert_armed:
-                # r3/r4: alert-once per OUTAGE via a persisted armed flag
-                # (the budget-alarm pattern). Event-log dedup alone both
-                # missed a NEW outage after a quiet recovery (identical
-                # message, r3) and spammed when another recurring event
-                # interleaved (r4).
-                st.quote_alert_armed = False
-                self.save()
-                alerts.append(msg)
+            # flag + once-per-outage alert now live in _note_quote_health
+            # (top of step, ahead of the payload gate - B1/B1b); here we
+            # only record the skip and take no weight decision
+            self._event("WARN",
+                        f"rebalance/valuation SKIPPED: missing quote "
+                        f"(SPY={spy_quote or None}, BIL={bil_px or None}) — "
+                        f"no weight decision is taken on absent prices")
         elif pending_book:
             pass                        # wait for the in-flight book order
         elif (book := self.book_value(prices)) > 0:
@@ -1289,6 +1321,7 @@ class Blend3070Manager:
             "halted": st.halted,
             "flatten_pending": st.flatten_request is not None,
             "initialized": st.initialized,
+            "quotes_missing_since": st.quotes_missing_since,
             "positions": {k: asdict(v) for k, v in st.positions.items()},
             "open_count": len(st.positions),
             "stop_missing": [k for k, v in st.positions.items()
@@ -1426,12 +1459,29 @@ def payload_is_stale(payload: dict, today: str) -> bool:
 def reference_prices(adapter, mgr: Blend3070Manager, payload: dict | None) -> dict:
     """Reference prices for every symbol the cycle can touch, via the
     adapter (DryAdapter returns synthetic quotes offline)."""
-    symbols = {CORE, CASH_VEHICLE}
-    symbols.update(p.symbol for p in mgr.state.positions.values())
+    rest = set()
+    rest.update(p.symbol for p in mgr.state.positions.values())
     if payload:
-        symbols.update(e["symbol"] for e in payload.get("entries", []) if e.get("symbol"))
+        rest.update(e["symbol"] for e in payload.get("entries", [])
+                    if e.get("symbol"))
+    rest -= {CORE, CASH_VEHICLE}
     prices: dict[str, float] = {}
-    for s in symbols:
+    # CORE and the cash vehicle probe FIRST: when both are dark the feed is
+    # down and every further symbol would burn its full quote wait inside
+    # BLEND_LOCK - measured ~2x wait_s per symbol, up to minutes on a
+    # mature book, all while /kill blocks on the lock (counter-agent A5).
+    # Sleeve positions then take conservative stop-level marks, which is
+    # the existing degraded-mark path.
+    for s in (CORE, CASH_VEHICLE):
+        try:
+            prices[s] = adapter.spot(s)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("spot %s failed: %s", s, exc)
+    if not (prices.get(CORE) and prices.get(CASH_VEHICLE)):
+        logger.warning("core/cash quotes dark - skipping %d sleeve quote "
+                       "lookups this cycle (bounded lock hold)", len(rest))
+        return prices
+    for s in rest:
         try:
             prices[s] = adapter.spot(s)
         except Exception as exc:  # noqa: BLE001
@@ -2587,8 +2637,39 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
             alert(f"🚨 blend {rec['kind']} {rec['symbol']} x{rec['qty']} "
                   f"REJECTED by the venue — journal cleared, re-planned "
                   f"next cycle")
-        # status "working": async order awaiting its fill — keep the journal
-        # (step() plans no new order of this kind while it is pending, M1).
+        else:
+            # status "working": async order awaiting its fill - keep the
+            # journal (step() plans no new order of this kind, M1). But a
+            # book order (MKT/DAY) that stays "working" for cycles is stuck:
+            # the 2026-08-25 wedge was a warned-but-unresolved order sitting
+            # here forever. Resolution is CANCEL-CONFIRMATION, never assumed
+            # death: only a venue-ACKed cancel (True) or a definitive
+            # not-found (False) clears the journal; a raise (FILLED or
+            # ambiguous) leaves it for the next cycle's adoption to book.
+            # This is safe against ib_async's ValidationError warning
+            # overlay in BOTH directions - a live order gets cancelled
+            # before re-planning (no duplicate), a dead one gets confirmed
+            # dead (no wedge).
+            rec["stuck_cycles"] = rec.get("stuck_cycles", 0) + 1
+            mgr.save()
+            if rec["stuck_cycles"] >= BOOK_ORDER_STUCK_CYCLES:
+                try:
+                    adapter.cancel_stock_order(o["order_ref"])
+                except Exception as exc:  # noqa: BLE001
+                    mgr._event("WARN",
+                               f"stuck {rec['kind']} {rec['symbol']} cancel "
+                               f"unresolved ({exc}) — retrying next cycle")
+                else:
+                    mgr.clear_pending_book_order(cid)
+                    mgr._event("RED",
+                               f"{rec['kind']} {rec['symbol']} x{rec['qty']} "
+                               f"stuck {rec['stuck_cycles']} cycles — cancel "
+                               f"confirmed, journal cleared, re-planned")
+                    alert(f"🚨 blend {rec['kind']} {rec['symbol']} "
+                          f"x{rec['qty']} was stuck "
+                          f"{rec['stuck_cycles']} cycles — cancel-confirmed "
+                          f"and re-planned (venue reason, if any, was in the "
+                          f"placement alert)")
 
     # 3) retired stops whose cancel never ACKed. Tracking is cleared ONLY by
     #    a definitively ACKed cancel (True). A False is the venue saying
@@ -2973,6 +3054,52 @@ def execute_flatten(mgr: Blend3070Manager, adapter, alert) -> None:
               "halted until /resume")
 
 
+# Consecutive same-kind intent failures before that kind's planning is
+# paused for the rest of the process (a restart or a success resumes it).
+# Every failed attempt is a REAL venue order under the current semantics,
+# so an unbounded retry loop is not merely noisy (counter-agent 2026-08-25).
+INTENT_BREAKER_N = 5
+
+# (kind -> consecutive failures) and (kind -> last alerted reason). Module
+# state, in-memory by design: a restart retries once and re-alerts once,
+# which matches the gateway-restart-heals operational pattern.
+_intent_fail_counts: dict = {}
+_intent_alerted_reason: dict = {}
+
+
+def _intent_failure_alert(mgr, it, exc, alert) -> None:
+    """Alert ONCE per (action, reason) - not per cycle. The read-only-mode
+    incident paged every 5 minutes with the identical [321] text, ~48
+    pages/hour, while saying nothing new after the first (counter-agent
+    2026-08-25). A CHANGED reason re-alerts immediately; a success clears."""
+    kind = str(it.get("action"))
+    reason = str(exc)
+    n = _intent_fail_counts.get(kind, 0) + 1
+    _intent_fail_counts[kind] = n
+    mgr._event("RED", f"intent failed ({kind} {it.get('symbol')}): {reason}")
+    if _intent_alerted_reason.get(kind) != reason:
+        _intent_alerted_reason[kind] = reason
+        alert(f"🚨 blend intent failed ({kind} {it.get('symbol')}): {reason}"
+              f"\n→ no action needed from you — forward this to Claude "
+              f"(repeat failures of this kind alert only on a CHANGED "
+              f"reason; all attempts land in /status events)")
+    if n == INTENT_BREAKER_N:
+        alert(f"🔴 ACTION NEEDED (you) — blend {kind} has failed "
+              f"{n} consecutive cycles (latest: {reason}). Pausing {kind} "
+              f"planning until the cause is fixed; a service restart or one "
+              f"success resumes it. The book takes no {kind} decisions "
+              f"meanwhile.")
+
+
+def _intent_success(kind: str) -> None:
+    _intent_fail_counts.pop(kind, None)
+    _intent_alerted_reason.pop(kind, None)
+
+
+def intent_kind_paused(kind: str) -> bool:
+    return _intent_fail_counts.get(kind, 0) >= INTENT_BREAKER_N
+
+
 def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
               today: str, alert=None) -> list[dict]:
     """One blend cycle: RECONCILE (venue truth first) -> step -> execute
@@ -3003,6 +3130,12 @@ def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
     for it in intents:
         try:
             act = it["action"]
+            if act != "ALERT" and intent_kind_paused(act):
+                # breaker open for this kind: skip quietly (the ACTION page
+                # already fired once); a restart or one success resumes
+                mgr._event("WARN", f"{act} skipped: breaker open "
+                                   f"({_intent_fail_counts.get(act)} fails)")
+                continue
             if act == "ALERT":
                 alert(f"🚨 blend: {it['msg']}")
             elif act == "ENTER":
@@ -3117,9 +3250,9 @@ def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
                           f"{'+' if qty > 0 else ''}{qty}")
         except Exception as exc:  # noqa: BLE001
             logger.exception("blend intent %s failed: %s", it, exc)
-            alert(f"🚨 blend intent failed ({it.get('action')} "
-                  f"{it.get('symbol')}): {exc}\n→ no action needed from you — "
-                  f"forward this to Claude")
+            _intent_failure_alert(mgr, it, exc, alert)
+        else:
+            _intent_success(str(it.get("action")))
     # Post-execution marks (fresh quotes for what the book NOW holds): the
     # pre-cycle price set can miss names entered this cycle.
     post_prices = reference_prices(adapter, mgr, None)

@@ -15,6 +15,24 @@ class Settings(BaseSettings):
     ib_host: str = "127.0.0.1"
     ib_port: int = 4002                   # 4002 paper, 4001 live (in-container)
     ib_client_id: int = 17
+    # IB market-data type. reqMarketDataType was NEVER called, so IB served
+    # LIVE data (type 1); a paper account without market-data subscriptions
+    # returns nan, spot() raised "no market price", every price went absent,
+    # and the book could not seed the SPY core, sweep BIL, or rebalance -
+    # silently, forever (found 2026-08-24: SPY=None, BIL=None).
+    #   1 live · 2 frozen · 3 delayed · 4 delayed-frozen
+    # Default 1: ALWAYS ask for real-time first. When live returns nothing
+    # and ib_allow_delayed is set, spot() escalates per-call to delayed and
+    # says so - so delayed data is a visible, deliberate degradation, never
+    # a silent one.
+    ib_market_data_type: int = 1
+    # Delayed quotes are ~15 minutes stale. Fine for a daily 30/70 weight
+    # decision on a PAPER book; NOT something to price live orders with
+    # unnoticed. Allowed by default so paper works out of the box; the
+    # go-live checklist turns it OFF once real subscriptions are attached.
+    ib_allow_delayed: bool = True
+    # seconds to wait for a first tick before giving up on a quote
+    ib_quote_wait_s: float = 6.0
 
     # safety
     dry_run: bool = True                  # log intents, never place orders
@@ -37,6 +55,13 @@ class Settings(BaseSettings):
     # blend3070 (H13 30/70 R2-A sleeve + SPY core; OFFLINE scaffold).
     # BLEND_ENABLED=false is the default: the service boots exactly as today.
     blend_enabled: bool = False           # BLEND_ENABLED
+    # El Nino ladder: OPT-IN, same doctrine as the blend (Casey 2026-08-24:
+    # "forget the el nino ladder, turn that off for now"). Disabled = the
+    # manager is still built (state preserved, /status renders, /kill can
+    # flatten any open leg) but step() is never called: no entries, no
+    # closes, no decisions. Re-enable via LADDER_ENABLED=true in Render
+    # before the Nov 2026 window if the trade is back on.
+    ladder_enabled: bool = False          # LADDER_ENABLED
     tracker_url: str = ""                 # TRACKER_URL (genomics tracker base URL)
     # The tracker's login gate is HTTP Basic (its DASHBOARD_USER/PASSWORD).
     # These are DASHBOARD credentials for polling a keyless decision brain —
@@ -50,6 +75,15 @@ class Settings(BaseSettings):
     blend_budget: float = 0.0             # BLEND_BUDGET cap in USD; 0 = disabled
     blend_book_usd: float = 10_000.0      # BLEND_BOOK_USD initial paper book
     blend_state_path: str = "./data/blend_state.json"
+    # Persisted gateway-outage ledger + the supervisor's restart records.
+    # Without these there is NO downtime history at all, so "how much of our
+    # downtime is IBKR vs our own container" is unanswerable rather than
+    # merely unanswered (2026-08-24).
+    # Defaults match the OTHER state paths' style, but on Render these are
+    # overridden to /app/data (the mounted disk). ./data is the ephemeral
+    # container layer: history there dies on every deploy.
+    outage_log_path: str = "./data/gateway_outages.json"
+    gateway_restart_log: str = "./data/gateway_restarts.jsonl"
 
 
 settings = Settings()

@@ -17,7 +17,8 @@ from fastapi import FastAPI, HTTPException, Query, Header
 
 from .config import settings
 from .feed import EngineFeed
-from .mirror import Executor
+from .mirror import (Executor, DRILL_CYCLE_NEED,  # noqa: F401
+                     SLIPPAGE_SAMPLE_NEED)
 
 
 def _auth(x_exec_token: str | None, token_q: str | None) -> None:
@@ -137,6 +138,16 @@ def pulse():
             # heartbeat reports attested rows identically to observed ones
             "ramp_v4_attested": sum(1 for r in rv.values()
                                     if r.get("attested")),
+            # why auto-drill is not drilling. Without this, "armed and
+            # waiting behind an open position" and "broken" look identical
+            # on the only endpoint that is public.
+            # Bare reason TOKEN only: _drill_refusal returns
+            # venue_not_flat:{pos} and position_unreadable:{exc}, which would
+            # publish position sizes and raw API error text (key ids included)
+            # on an unauthenticated endpoint (counter-agent 2026-08-24).
+            "auto_drill": ("off" if getattr(st, "auto_drill_off", None)
+                           else (getattr(EXEC, "_auto_drill_wait", None)
+                                 or "ok").split(":")[0]),
             "last_target_age_s": round(now - LAST["target_ts"], 1)
             if LAST["target_ts"] else None,
             # age of the last SUCCESSFUL venue position read. Every other
@@ -202,6 +213,10 @@ def status(x_exec_token: str | None = Header(default=None),
            "auto_drill": {"enabled": settings.auto_drill,
                           "spacing_s": settings.auto_drill_spacing_s,
                           "off": getattr(st, "auto_drill_off", None),
+                          # full reason string stays on the TOKEN-GATED
+                          # endpoint; /pulse publishes only the bare token
+                          "waiting_on": getattr(EXEC, "_auto_drill_wait",
+                                                None),
                           "next_needed": EXEC._needed_auto_drill()},
            "ramp_v4": _ramp_v4(st)}
     try:
@@ -217,7 +232,7 @@ def status(x_exec_token: str | None = Header(default=None),
 RAMP_V4_REQUIRED = {"entry_long": 2, "entry_short": 2, "stop_placed": 2,
                     "stop_filled": 1, "signal_exit": 2, "chase": 1,
                     "post_only_cross": 1, "restart_with_position": 1,
-                    "config_change": 1, "drill_cycle": 3,
+                    "config_change": 1, "drill_cycle": DRILL_CYCLE_NEED,
                     "halt": 1, "resume": 1}
 
 
@@ -276,7 +291,8 @@ def _ramp_v4(st) -> dict:
 
     rows = {k: _row(k, v, _n(live, k), _n(cov, k))
             for k, v in RAMP_V4_REQUIRED.items()}
-    rows["slippage_sample"] = _row("slippage_sample", 10, n_live, len(fills))
+    rows["slippage_sample"] = _row("slippage_sample", SLIPPAGE_SAMPLE_NEED,
+                                   n_live, len(fills))
     return {"spec": "RAMP_V4.md (frozen 2026-08-15; mode guard 2026-08-21)",
             "basis": "live-mode events only (DRY_RUN=false)",
             "attestation": getattr(st, "attestation", None),
