@@ -2955,3 +2955,42 @@ def test_gate_M13_new_pager_kinds_are_rate_limited(tmp_path, monkeypatch):
         for i in range(4):
             ex._event("RED", kind, f"{kind} occurrence {i}")
         assert len(sent) == 1, f"{kind} paged {len(sent)}x inside cooldown"
+
+
+def test_gate_C1_blipped_reread_keeps_entry_ref(tmp_path):
+    """Final-gate C1 killer: first confirm read says CANCELLED, the re-read
+    BLIPS (UNKNOWN - falsy filled_qty). Clearing on that blip violated the
+    invariant inside the very block that closed it. The ref must be KEPT
+    and no re-send may follow."""
+    class _V(FakeVenue):
+        def __init__(self, **kw):
+            super().__init__(**kw)
+            self.seq = []                # scripted statuses, then real
+
+        def order_status(self, cloid):
+            if self.seq:
+                stt = self.seq.pop(0)
+                if stt is None:
+                    return None
+                return {"status": stt, "filled_qty": 0.0, "avg_price": None}
+            return super().order_status(cloid)
+    v = _V(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    pend = {"pending": {"side": "L", "limit": 59_000.0, "signal_ts": NOW},
+            "position": None}
+    # _ostat first read CANCELLED -> re-read blips UNKNOWN
+    v.seq = ["CANCELLED", "UNKNOWN"]
+    ex.step(target(pull=pend))
+    led = ex.state.legs["pullback"]
+    assert led.entry_cloid, "blipped re-read must KEEP the ref"
+    n = len([c for c, o in v.orders.items() if o["type"] == "LIMIT"])
+    ex.step(target(pull=pend))           # dedupe must hold
+    n2 = len([c for c, o in v.orders.items() if o["type"] == "LIMIT"])
+    assert n2 == n == 1, f"re-sent past a possibly-live entry: {n}->{n2}"
+    # and a None re-read (no handle) must behave the same
+    v2 = _V(mult=0.01)
+    ex2 = mkexec(tmp_path / "b", v2)
+    v2.seq = ["CANCELLED", None]
+    ex2.step(target(pull=pend))
+    assert ex2.state.legs["pullback"].entry_cloid, \
+        "None re-read must KEEP the ref too"

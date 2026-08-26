@@ -614,6 +614,10 @@ class Executor:
             "halt_error": "closing positions during the halt FAILED — open "
                           "Coinbase NOW, check positions, flatten manually "
                           "if any remain",
+            "entry_unconfirmed": "an entry order could not be verified - "
+                                 "check Coinbase OPEN ORDERS for the cloid "
+                                 "named above if this repeats; the ref is "
+                                 "kept so the executor will not re-send",
             "config_change": "sizing/risk config changed - if this was you "
                              "(ramp step, base change), ignore; if NOT, a "
                              "sync or fat-finger altered live risk limits - "
@@ -1126,8 +1130,14 @@ class Executor:
                 led.entry_qty, led.signal_ts = qty, pend["signal_ts"]
                 stat = self._ostat(cloid)
                 if stat == "CANCELLED":
+                    # C1 (final gate): the RE-READ must itself be a venue-
+                    # confirmed terminal-and-unfilled answer. A blipped
+                    # re-read (UNKNOWN/None) has falsy filled_qty too, and
+                    # clearing on it violated the very invariant this block
+                    # exists for. Anything unconfirmed keeps the ref.
                     st_c = self.venue.order_status(cloid)
-                    if not (st_c or {}).get("filled_qty"):
+                    if (st_c or {}).get("status") == "CANCELLED" \
+                            and not (st_c or {}).get("filled_qty"):
                         led.entry_cloid = led.entry_side = None
                         led.entry_qty = 0.0
                         self._event("RED", "entry_unconfirmed",
@@ -1135,11 +1145,13 @@ class Executor:
                                     f"terminal and unfilled - will retry "
                                     f"while the signal stands")
                         return
-                elif stat == "UNKNOWN":
+                    stat = "UNKNOWN"
+                if stat == "UNKNOWN":
                     self._event("RED", "entry_unconfirmed",
-                                f"{leg} entry {cloid} unverifiable "
-                                f"(status=UNKNOWN) - ref KEPT as possibly "
-                                f"live; fill-watch will resolve it")
+                                f"{leg} entry {cloid} unverifiable - ref "
+                                f"KEPT as possibly live; verify the order "
+                                f"under Coinbase open orders if this "
+                                f"persists")
             else:
                 self.venue.place_market(side, qty, cloid)
                 led.qty = _side_sign(pend["side"]) * qty
