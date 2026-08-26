@@ -2561,6 +2561,7 @@ def test_gate_resume_clears_dead_stop_refs(tmp_path):
     v = FakeVenue(mult=0.01)
     ex = mkexec(tmp_path, v)
     led = ex.state.legs["trend"]
+    v._add("MARKET", "BUY", 0.01, "seed")          # venue really holds the leg
     v._add("STOP", "SELL", 0.01, "T-1-S74089-1", px=74_089.0)
     v.cancel("T-1-S74089-1")
     led.qty, led.stop_cloid, led.stop_px = 0.01, "T-1-S74089-1", 74_089.0
@@ -2569,6 +2570,7 @@ def test_gate_resume_clears_dead_stop_refs(tmp_path):
     assert led.stop_cloid is None and led.stop_px is None, \
         "dead stop ref must not survive resume (churn guard would mute it)"
     assert any(e["kind"] == "stop_ref_cleared" for e in ex.state.events)
+    assert ex.state.halted is None, "a venue-BACKED leg must resume normally"
 
 
 def test_gate_boot_reconcile_venue_holds_ledger_flat_blocks_entries(tmp_path):
@@ -2694,6 +2696,7 @@ def test_gate_resume_unknown_ref_cancelled_not_abandoned(tmp_path):
     v = _BlipStatusVenue(mult=0.01)
     ex = mkexec(tmp_path, v)
     led = ex.state.legs["trend"]
+    v._add("MARKET", "BUY", 0.01, "seed")          # venue really holds the leg
     v._add("STOP", "SELL", 0.01, "T-1-S74089-1", px=74_089.0)
     led.qty, led.stop_cloid, led.stop_px = 0.01, "T-1-S74089-1", 74_089.0
     ex.state.halted = "KILL"
@@ -2702,6 +2705,199 @@ def test_gate_resume_unknown_ref_cancelled_not_abandoned(tmp_path):
     assert led.stop_cloid is None
     assert "T-1-S74089-1" in v.cancels, "must cancel before clearing"
     assert v.orders["T-1-S74089-1"]["status"] == "CANCELLED"
+
+
+# ---------------------------------------------------------------------------
+# Fusion gate (2026-08-26) BLOCKING 2: STOP_REPLACE_MAX only ever watched the
+# confirmed-then-vanished door. A stop that never confirms — killed inside the
+# ~1s confirm window, or read UNKNOWN forever — cleared its refs and returned,
+# so the next poll placed another under a fresh salt, unbounded: 4,320 orders
+# a day, the exact storm the cap exists to stop, arriving through the door the
+# cap did not watch.
+class _AcceptThenCancelVenue(FakeVenue):
+    """Accepts every stop, then kills it before the confirm read lands."""
+    def place_stop(self, side, qty, trigger_px, cloid):
+        super().place_stop(side, qty, trigger_px, cloid)
+        self.orders[cloid]["status"] = "CANCELLED"
+
+
+def _drive_stop(ex, v, polls=8):
+    led = ex.state.legs["trend"]
+    for _ in range(polls):
+        if ex.state.halted:
+            break
+        ex._maintain_stop("trend", led, _long_pos())
+    return [c for c in v.orders if "-S" in c]
+
+
+def test_gate_accept_then_cancel_stop_is_bounded(tmp_path):
+    from app.mirror import STOP_REPLACE_MAX
+    v = _AcceptThenCancelVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    v._add("MARKET", "BUY", 0.01, "seed")          # venue backs the ledger
+    ex.state.legs["trend"].qty = 0.01
+    placed = _drive_stop(ex, v)
+    assert ex.state.halted == "STOP_UNPLACEABLE", \
+        f"unbounded re-placement (halted={ex.state.halted}, n={len(placed)})"
+    assert len(placed) <= STOP_REPLACE_MAX + 1, \
+        f"placed {len(placed)} stops before halting: {placed}"
+    assert any(e["kind"] == "stop_unplaceable" for e in ex.state.events)
+
+
+def test_gate_persistent_unknown_stop_is_bounded(tmp_path):
+    """The other variant of the same hole: reads never resolve, so the stop
+    is never believed and never bounded either."""
+    from app.mirror import STOP_REPLACE_MAX
+    v = _BlipStatusVenue(mult=0.01)
+    v.blips = 10_000                     # every read UNKNOWN, forever
+    ex = mkexec(tmp_path, v)
+    v._add("MARKET", "BUY", 0.01, "seed")
+    ex.state.legs["trend"].qty = 0.01
+    placed = _drive_stop(ex, v)
+    assert ex.state.halted == "STOP_UNPLACEABLE"
+    assert len(placed) <= STOP_REPLACE_MAX + 1, \
+        f"placed {len(placed)} stops before halting: {placed}"
+
+
+def test_gate_stop_unconfirmed_counter_is_persisted(tmp_path):
+    """In-memory, the counter reset on every restart — which is how the
+    4,320-order storm survived its first cap. It must ride the state file."""
+    v = _AcceptThenCancelVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    v._add("MARKET", "BUY", 0.01, "seed")
+    ex.state.legs["trend"].qty = 0.01
+    ex._maintain_stop("trend", ex.state.legs["trend"], _long_pos())
+    ex._save_state()
+    ex2 = mkexec(tmp_path, v)            # same state path = a "restart"
+    assert (getattr(ex2.state, "stop_vanish", {}) or {}) == \
+        (getattr(ex.state, "stop_vanish", {}) or {}), \
+        "stop_vanish must survive a restart or the cap is resettable"
+
+
+def test_gate_healthy_stop_never_touches_the_counter(tmp_path):
+    """The cap must not creep on ordinary trail re-placement, or a long
+    winning position halts itself out of a working stop."""
+    v = FakeVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    v._add("MARKET", "BUY", 0.01, "seed")
+    led = ex.state.legs["trend"]
+    led.qty = 0.01
+    for trig in (74_000.0, 75_000.0, 76_000.0, 77_000.0, 78_000.0, 79_000.0):
+        pos = dict(_long_pos())
+        pos["stop"] = trig
+        ex._maintain_stop("trend", led, pos)
+    assert ex.state.halted is None, "healthy ratcheting must not halt"
+    assert not (getattr(ex.state, "stop_vanish", {}) or {}), \
+        "confirmed placements must leave the failure counter untouched"
+
+
+# ---------------------------------------------------------------------------
+# Fusion gate (2026-08-26) BINDING 3: the ramp's two slippage readers must
+# agree. They did not — main.py excluded void fills, _live_fill_count did
+# not — so at the first boot after _void_absurd_fills auto-drill would read a
+# real 8/10 as complete while /pulse correctly showed 8.
+def test_gate_live_fill_count_excludes_void(tmp_path):
+    v = FakeVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    ex.state.fills = [{"live": True}, {"live": True, "void": True},
+                      {"live": True}, {"live": False}, {"void": True}]
+    assert ex._live_fill_count() == 2
+
+
+def test_gate_slippage_readers_agree_on_void(tmp_path):
+    """Parity checked against the ACTUAL ramp render main.py serves, not a
+    copy of its arithmetic. This is the exact first-boot state after
+    _void_absurd_fills: 8 real fills + the 2 phantom rows."""
+    from app.main import _ramp_v4
+    v = FakeVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    ex.state.fills = ([{"live": True} for _ in range(8)]
+                      + [{"live": True, "void": True} for _ in range(2)])
+    row = _ramp_v4(ex.state)["rows"]["slippage_sample"]
+    assert row["have"] == ex._live_fill_count() == 8, \
+        f"ramp render says {row['have']}, mirror says {ex._live_fill_count()}"
+    assert row["met"] is False, "8 real fills must not read as a met 10"
+    # ...and the terminal condition auto-drill reads must agree with both:
+    # with the cycle row already satisfied, only the slippage count is left,
+    # so this is exactly where the two readers used to diverge.
+    from app.mirror import DRILL_CYCLE_NEED
+    ex.state.coverage_live = {"drill_cycle": DRILL_CYCLE_NEED}
+    assert ex._needed_auto_drill() == "cycle", \
+        "auto-drill read 8 real fills + 2 voids as a complete sample"
+
+
+# ---------------------------------------------------------------------------
+# Fusion gate (2026-08-26) BLOCKING 1: the resume hygiene that repairs a
+# failed halt could itself arm the naked stop the incident was about. On a
+# leg the ledger believes HOLDS, a dead ref is cleared only once the venue
+# BACKS the ledger — because clearing it routes _maintain_stop to its
+# first-placement path, which is not reduce-only.
+def test_gate_resume_dead_ref_on_flat_venue_halts_not_clears(tmp_path):
+    v = FakeVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    led = ex.state.legs["trend"]
+    v._add("STOP", "SELL", 0.01, "T-1-S74089-1", px=74_089.0)
+    v.cancel("T-1-S74089-1")             # dead ref...
+    led.qty, led.stop_cloid, led.stop_px = 0.01, "T-1-S74089-1", 74_089.0
+    ex.state.halted = "KILL"
+    ex.resume()                          # ...on a venue that holds NOTHING
+    assert ex.state.halted == "LEDGER_DIVERGENCE", \
+        f"must halt, not clear into a naked re-place (halted={ex.state.halted})"
+    assert any(e["kind"] == "ledger_divergence" for e in ex.state.events)
+    stops = [c for c, o in v.orders.items()
+             if o["type"] == "STOP" and o["status"] == "OPEN"]
+    assert not stops, f"a NAKED stop was armed on a flat venue: {stops}"
+
+
+def test_gate_resume_dead_ref_opposite_side_halts(tmp_path):
+    """Venue holds the OPPOSITE side: same divergence, same halt. A
+    same-sign-only check would sail past this and arm a stop that doubles
+    the wrong-way position instead of closing it."""
+    v = FakeVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    led = ex.state.legs["trend"]
+    v._add("MARKET", "SELL", 0.01, "seed")         # venue is SHORT
+    v._add("STOP", "SELL", 0.01, "T-1-S74089-1", px=74_089.0)
+    v.cancel("T-1-S74089-1")
+    led.qty, led.stop_cloid, led.stop_px = 0.01, "T-1-S74089-1", 74_089.0
+    ex.state.halted = "KILL"
+    ex.resume()
+    assert ex.state.halted == "LEDGER_DIVERGENCE"
+
+
+def test_gate_resume_dead_ref_blind_venue_keeps_ref(tmp_path):
+    """Unreadable venue: the ref is KEPT (the stop may genuinely rest) and
+    the operator gets an ACTION page. Clearing blind is the naked-stop hole;
+    halting blind is not available either — _halt_locked would cancel
+    nothing anyway. _maintain_stop's CANCELLED dispatch corroborates before
+    it ever replaces, so keeping the ref cannot arm anything."""
+    v = _BlindVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    ex.state.events.clear()
+    led = ex.state.legs["trend"]
+    v._add("STOP", "SELL", 0.01, "T-1-S74089-1", px=74_089.0)
+    v.cancel("T-1-S74089-1")
+    led.qty, led.stop_cloid, led.stop_px = 0.01, "T-1-S74089-1", 74_089.0
+    ex.state.halted = "KILL"
+    ex.resume()
+    assert led.stop_cloid == "T-1-S74089-1", "must not clear on a blind read"
+    assert any(e["kind"] == "stop_ref_unverified" and e["level"] == "RED"
+               for e in ex.state.events)
+
+
+def test_gate_resume_dead_ref_on_flat_leg_still_clears(tmp_path):
+    """qty == 0: nothing to protect, so no corroboration is owed and the
+    stale ref is simply cleared. The corroboration must not become a way for
+    dead refs to accumulate on flat legs."""
+    v = FakeVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    led = ex.state.legs["trend"]
+    v._add("STOP", "SELL", 0.01, "T-1-S74089-1", px=74_089.0)
+    v.cancel("T-1-S74089-1")
+    led.qty, led.stop_cloid, led.stop_px = 0.0, "T-1-S74089-1", 74_089.0
+    ex.state.halted = "KILL"
+    ex.resume()
+    assert led.stop_cloid is None and ex.state.halted is None
 
 
 def test_gate_resume_working_stop_kept(tmp_path):
@@ -2930,6 +3126,7 @@ def test_gate_M9_auto_rearm_runs_stop_ref_hygiene(tmp_path):
     ex = mkexec(tmp_path, v)
     ex.cfg.kelly_m = 0.05                # inside the auto-rearm regime
     led = ex.state.legs["trend"]
+    v._add("MARKET", "BUY", 0.01, "seed")  # venue really holds the leg
     v._add("STOP", "SELL", 0.01, "T-1-S74089-1", px=74_089.0)
     v.cancel("T-1-S74089-1")             # the venue no longer honours it
     led.qty, led.stop_cloid, led.stop_px = 0.01, "T-1-S74089-1", 74_089.0
@@ -2940,6 +3137,28 @@ def test_gate_M9_auto_rearm_runs_stop_ref_hygiene(tmp_path):
     assert led.stop_cloid is None, \
         "auto-rearm bypassed stop-ref hygiene: dead ref survives"
     assert any(e["kind"] == "stop_ref_cleared" for e in ex.state.events)
+
+
+def test_gate_M9b_auto_rearm_halts_on_divergence(tmp_path):
+    """The same automatic path, with the venue NOT backing the ledger: the
+    rearm must refuse to clear into a naked re-place and halt instead
+    (fusion gate 2026-08-26). A silent midnight rearm is the worst possible
+    place for the clear-then-arm hole - nobody is watching."""
+    v = FakeVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    ex.cfg.kelly_m = 0.05
+    led = ex.state.legs["trend"]
+    v._add("STOP", "SELL", 0.01, "T-1-S74089-1", px=74_089.0)
+    v.cancel("T-1-S74089-1")
+    led.qty, led.stop_cloid, led.stop_px = 0.01, "T-1-S74089-1", 74_089.0
+    ex.state.halted = "DAILY_LOSS"
+    ex.state.day_key = "1999-01-01"
+    ex._roll_day(50_000.0)
+    assert ex.state.halted == "LEDGER_DIVERGENCE", \
+        "rearm cleared a dead ref against a flat venue"
+    stops = [c for c, o in v.orders.items()
+             if o["type"] == "STOP" and o["status"] == "OPEN"]
+    assert not stops, f"a NAKED stop was armed at rollover: {stops}"
 
 
 def test_gate_M12_entry_n_burned_before_order_reaches_venue(tmp_path):

@@ -42,7 +42,8 @@ btc-executor  --Coinbase Advanced API-->  BTC perp product
 | DRY_RUN (default ON) | full state machine runs; orders only logged |
 | daily-loss halt | day loss > DAILY_LOSS_HALT_PCT (6%) **of the sizing base** -> cancel all, flatten, halt. Auto-rearms at UTC rollover at KELLY_M <= 0.30; MANUAL above. Boundary caveat: a rearm grants a fresh full day budget, so worst-case loss across a UTC boundary is ~2x the daily rail |
 | drawdown halt | equity below high-water minus DD_HALT_PCT (live: 0.35) **of the sizing base** -> same, manual resume |
-| kill switch | POST /kill -> same; POST /resume to clear (manual only). Resume also verifies every stop ref against the venue and clears dead ones |
+| kill switch | POST /kill -> same; POST /resume to clear (manual only). Resume also verifies every stop ref against the venue and clears dead ones — but on a leg the ledger believes HOLDS, a dead ref is cleared only once `position()` BACKS the ledger (clearing it hands the mirror its first-placement path, which is not reduce-only: on a flat venue that arms a full-size NAKED stop). Divergence -> `LEDGER_DIVERGENCE` halt; unreadable venue -> ref KEPT, `stop_ref_unverified` ACTION page |
+| stop protection is BOUNDED | a position whose stop keeps failing is closed, not retried forever. One counter per position (`stop_vanish[leg:entry_ts]`, persisted so a crash-loop cannot reset it), one cap (`STOP_REPLACE_MAX` = 3), fed by BOTH failure doors: a stop the venue confirms then kills (`stop_vanished`), and a stop the venue never confirms — accept-then-cancel inside the ~1s confirm window, or a persistent UNKNOWN read (`stop_unconfirmed`). Past the cap -> `STOP_UNPLACEABLE` halt. Before ANY replacement the venue must back the ledger; if it does not -> `LEDGER_DIVERGENCE` halt rather than a naked stop. Unreadable venue -> replace nothing, retry next poll |
 | halt on a BLIND venue | position unreadable at halt time -> cancel NOTHING (the resting stop stays alive), page ACTION-NEEDED, still halt trading. A halt may only cancel/flatten/zero after the venue confirms: probe -> cancel_all -> verify our orders terminal -> re-read (retried) -> flatten (2026-08-26 incident: the old order stripped the stop then aborted) |
 | stale engine | feed stale/degraded -> new entries blocked (RED alert, rate-limited), exits still run |
 | drift check | venue vs ledger position mismatch > 1% of equity (below one CDE contract) -> RED event. A FAILED venue read is itself a RED (venue_read_failed, 30-min cooldown) - blindness is never silent (2026-08-26: 3 silent days) |
@@ -195,6 +196,15 @@ so it is measured identically regardless of how fast the size ramps).
   holds its position the mirror re-enters it - worst case across a boundary
   is roughly 2x the daily rail. Below 0.30 the dollar amounts are small and
   this is accepted; above 0.30 the manual gate closes it.
+- **LEDGER_DIVERGENCE and STOP_UNPLACEABLE are protection failures, not
+  risk breaches** (2026-08-26), and are ALWAYS manual-resume at every
+  KELLY_M — the auto-rearm is keyed on `DAILY_LOSS` alone. `LEDGER_DIVERGENCE`
+  = the venue does not back a position the ledger claims, so replacing its
+  stop would OPEN one; `STOP_UNPLACEABLE` = protection for a live position
+  failed `STOP_REPLACE_MAX` times through either door (vanished-after-confirm
+  or never-confirmed). Both halt into the normal cancel/flatten sequence, so
+  the intended end state is a flat book — verify that on Coinbase before
+  resuming, because a halt on a blind venue deliberately flattens nothing.
 - **DRAWDOWN and KILL remain manual-resume**, deliberately: a circuit
   breaker with automatic reset is a retry loop, and the −35%-of-base floor
   is only a floor because a human stands behind it. Resume is a

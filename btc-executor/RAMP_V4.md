@@ -29,7 +29,26 @@ satisfy any row (see the mode guard below):
 | config_change detected | ≥1       | any env change redeploy           |
 | halt + resume          | ≥1 pair  | operator-triggered manual test    |
 | drill_cycle complete   | ≥3       | drill                             |
-| slippage sample        | ≥10 fills| any LIVE fill (drill fills count — they are real fills) |
+| slippage sample        | ≥10 fills| any LIVE fill (drill fills count — they are real fills), **VOID fills excluded** |
+
+**Void fills (2026-08-26).** A fill whose `|slip_bps| > 500` is marked
+`void` at boot and never counts toward the slippage sample — the phantom
+incident produced two such rows (1320bps against a days-stale reference,
+one for an execution that never happened at all), and a sizing gate fed by
+fictitious slippage authorizes size on evidence that does not exist. The
+exclusion lives in exactly TWO readers, `mirror._live_fill_count()` and
+`main.py`'s `n_live`, and they MUST stay identical: they diverged once, and
+auto-drill then read a real 8/10 as complete while `/pulse` showed 8. A gate
+whose readers disagree is not a gate. Already-ingested rows downstream
+(barbell-lab `edge_trades`, and any `slip_norms` frozen from them) are NOT
+cleaned by this filter — that purge is tracked separately.
+
+**Auto-drill is bounded** by `DRILL_NO_FILL_MAX` (3): a drill can report
+`ok` and still advance the sample by zero (venue omits
+`average_filled_price`, or `mid()` is 0 so the fill watch never queues).
+Three consecutive no-sample drills disable auto-drill with an ACTION page
+rather than spending the daily budget into a row that can never close. Any
+drill that DOES record a fill resets the counter.
 
 Honesty note: drills deliberately do NOT count toward entry/exit/chase
 coverage — drill entries are market orders, organic entries go through the

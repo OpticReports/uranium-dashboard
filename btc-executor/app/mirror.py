@@ -110,7 +110,11 @@ class LegLedger:
 @dataclass
 class ExecState:
     legs: dict = field(default_factory=lambda: {n: LegLedger() for n in LEGS})
-    halted: str | None = None             # None | DAILY_LOSS | DRAWDOWN | KILL
+    # None | DAILY_LOSS | DRAWDOWN | KILL | LEDGER_DIVERGENCE |
+    # STOP_UNPLACEABLE  (the last two are protection failures, not risk
+    # breaches: the book stops because a position cannot be kept protected,
+    # and both require a MANUAL /resume regardless of KELLY_M)
+    halted: str | None = None
     # unix ts of the last SUCCESSFUL venue position read. /pulse publishes
     # its age so an external monitor can see venue blindness — every other
     # /pulse field reads from the ledger, which is belief, not truth
@@ -655,6 +659,13 @@ class Executor:
             "halt_error": "closing positions during the halt FAILED — open "
                           "Coinbase NOW, check positions, flatten manually "
                           "if any remain",
+            "stop_ref_unverified": "a /resume found a stop the venue would "
+                                   "not confirm AND could not read the "
+                                   "position - open Coinbase, confirm the "
+                                   "stop is really resting against the "
+                                   "position, and place one manually if it "
+                                   "is not; the executor deliberately did "
+                                   "NOT re-place it blind",
             "entry_unconfirmed": "an entry order could not be verified - "
                                  "check Coinbase OPEN ORDERS for the cloid "
                                  "named above if this repeats; the ref is "
@@ -985,7 +996,18 @@ class Executor:
         fresh salt. UNKNOWN is CANCELLED-first-then-cleared - clearing a ref
         whose order might genuinely rest would arm a duplicate on re-place
         (re-review 2026-08-26 blocking find). Also runs on the DAILY_LOSS
-        auto-rearm, which previously bypassed this hygiene entirely."""
+        auto-rearm, which previously bypassed this hygiene entirely.
+
+        CORROBORATED on legs the ledger believes HOLD (fusion gate 2026-08-26,
+        BLOCKING): clearing the ref hands _maintain_stop its FIRST-placement
+        path, which neither corroborates nor sends reduce-only. On a venue
+        that is actually flat - precisely the state a failed halt leaves
+        behind - that arms a full-size NAKED stop, which is the incident's
+        own phenotype re-created by its own repair. So a held leg's ref is
+        cleared only once venue.position() BACKS the ledger; divergence
+        halts LEDGER_DIVERGENCE, and an unreadable venue KEEPS the ref (the
+        stop may well be resting, and _maintain_stop's CANCELLED dispatch
+        corroborates before it ever replaces)."""
         for name, l in self.state.legs.items():
             if not l.stop_cloid:
                 continue
@@ -997,6 +1019,26 @@ class Executor:
                     self.venue.cancel(l.stop_cloid)
                 except Exception:  # noqa: BLE001
                     pass
+            if l.qty != 0.0:
+                try:
+                    net = self.venue.position()
+                except Exception as exc:  # noqa: BLE001
+                    self._event("RED", "stop_ref_unverified",
+                                f"{name} stop {l.stop_cloid} not confirmed "
+                                f"(status={stat}) and the venue position is "
+                                f"UNREADABLE ({type(exc).__name__}) - KEEPING "
+                                f"the ref rather than clearing into a blind "
+                                f"re-place; position may be UNPROTECTED")
+                    continue
+                if abs(net) <= 1e-9 or (net > 0) != (l.qty > 0):
+                    self._event("RED", "ledger_divergence",
+                                f"{name} stop ref is dead and the venue does "
+                                f"not back the ledger (venue {net}, ledger "
+                                f"{l.qty}) - clearing would arm a NAKED stop, "
+                                f"halting instead")
+                    self.halt("LEDGER_DIVERGENCE",
+                              f"{name}: venue {net} vs ledger {l.qty}")
+                    return
             self._event("WARN", "stop_ref_cleared",
                         f"{name} stop {l.stop_cloid} not confirmed working "
                         f"(status={stat}) - cancelled best-effort and "
@@ -1301,6 +1343,29 @@ class Executor:
         led.entry_cloid = None
         led.signal_ts = pos.get("signal_ts")
 
+    def _bump_stop_vanish(self, leg: str, pos: dict) -> int:
+        """Failed stop-protection attempts on THIS position, keyed by
+        entry_ts and pruned when the position changes.
+
+        SHARED by the two paths that can each spin forever on their own
+        (fusion gate 2026-08-26, BLOCKING): a stop the venue confirms and
+        then kills, and a stop the venue never confirms at all. Only the
+        first was bounded, so a venue that accepts-then-cancels inside the
+        ~1s confirm window - or that simply reads UNKNOWN forever - produced
+        one fresh salted placement per poll, 4,320/day, with no cap and no
+        halt. One counter, one cap: whichever way protection keeps failing,
+        it fails at most STOP_REPLACE_MAX times before STOP_UNPLACEABLE."""
+        key = f"{leg}:{pos.get('entry_ts')}"
+        sv = getattr(self.state, "stop_vanish", None)
+        if sv is None:
+            sv = self.state.stop_vanish = {}
+        n = sv.get(key, 0) + 1
+        sv[key] = n
+        # bounded growth: keep only this position's key per leg
+        for k in [k for k in sv if k.startswith(f"{leg}:") and k != key]:
+            del sv[k]
+        return n
+
     def _handle_stop_vanished(self, leg: str, led: LegLedger, pos: dict,
                               st: dict | None) -> bool:
         """A venue stop reported CANCELLED/EXPIRED/FAILED. Returns False if
@@ -1332,15 +1397,7 @@ class Executor:
             led.entry_cloid = led.entry_side = None
             led.entry_qty = 0.0
             return False
-        key = f"{leg}:{pos.get('entry_ts')}"
-        sv = getattr(self.state, "stop_vanish", None)
-        if sv is None:
-            sv = self.state.stop_vanish = {}
-        n = sv.get(key, 0) + 1
-        sv[key] = n
-        # bounded growth: keep only this position's key per leg
-        for k in [k for k in sv if k.startswith(f"{leg}:") and k != key]:
-            del sv[k]
+        n = self._bump_stop_vanish(leg, pos)
         try:
             net = self.venue.position()
         except Exception as exc:  # noqa: BLE001
@@ -1446,10 +1503,23 @@ class Executor:
             except Exception:  # noqa: BLE001
                 pass
             led.stop_cloid, led.stop_px = None, None
+            # BOUNDED (fusion gate 2026-08-26, BLOCKING): this branch used to
+            # return unbounded. STOP_REPLACE_MAX only ever covered the
+            # confirmed-then-vanished path, so the fast accept-then-cancel and
+            # the persistent-UNKNOWN variants both re-placed forever - the
+            # exact order storm the cap exists to stop, arriving through the
+            # door the cap did not watch. Same counter, same cap, same halt.
+            n = self._bump_stop_vanish(leg, pos)
             self._event("RED", "stop_unconfirmed",
                         f"{leg} stop {cloid} not confirmed working "
                         f"(status={stat}) - cancelled best-effort; position "
-                        f"may be UNPROTECTED; retrying next step")
+                        f"may be UNPROTECTED; attempt {n}")
+            if n > STOP_REPLACE_MAX:
+                self._event("RED", "stop_unplaceable",
+                            f"{leg} stop placement has failed to confirm {n} "
+                            f"times on this position - not retrying into it")
+                self.halt("STOP_UNPLACEABLE",
+                          f"{leg} after {n} unconfirmed placements")
             return
         self._watch_fill(leg, "stop", cloid, trigger, _close_side(led.qty))
         led.stop_cloid, led.stop_px = cloid, trigger
@@ -1786,9 +1856,17 @@ class Executor:
 
     def _live_fill_count(self) -> int:
         """Fills counting toward the slippage sample: live venue fills only
-        (a DryRunVenue price is synthetic)."""
+        (a DryRunVenue price is synthetic), voids excluded.
+
+        The void filter must match main.py's `n_live` EXACTLY (fusion gate
+        2026-08-26): it did not, so at the first boot after _void_absurd_fills
+        the two 1320bps phantom fills counted here but not there - auto-drill
+        read the sample as complete and stopped at a real 8/10, while /pulse
+        correctly showed 8. A ramp gate whose two readers disagree is not a
+        gate."""
         return sum(1 for f in (getattr(self.state, "fills", None) or [])
-                   if isinstance(f, dict) and f.get("live") is True)
+                   if isinstance(f, dict) and f.get("live") is True
+                   and not f.get("void"))
 
     def _maybe_auto_drill(self, entries_ok: bool) -> None:
         """RAMP_V4.md amendment 2026-08-17 (Casey: zero-touch drill QA):
