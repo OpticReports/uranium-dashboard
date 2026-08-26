@@ -112,7 +112,7 @@ def test_gate_pullback_entry_sizing_and_lifecycle(tmp_path):
             "position": None}
     ex.step(target(pull=pend))
     kind, side, qty, cloid = v.calls[0]
-    assert (kind, side) == ("LIMIT", "BUY") and cloid == f"P-{NOW}-E"
+    assert (kind, side) == ("LIMIT", "BUY") and cloid == f"P-{NOW}-E1"
     # 0.56 * 1.5 * 0.75 * 10k / 59k = 0.10678 BTC
     assert qty == pytest.approx(0.56 * 1.5 * 0.75 * 10_000 / 59_000, abs=1e-4)
     # same pending again -> no duplicate order
@@ -120,7 +120,7 @@ def test_gate_pullback_entry_sizing_and_lifecycle(tmp_path):
     assert len([c for c in v.calls if c[0] == "LIMIT"]) == 1
     # engine cancels (flat, no position) -> our order cancelled
     ex.step(target())
-    assert v.orders[f"P-{NOW}-E"]["status"] == "CANCELLED"
+    assert v.orders[f"P-{NOW}-E1"]["status"] == "CANCELLED"
 
 
 def test_gate_fill_places_stop_and_exit_closes(tmp_path):
@@ -129,7 +129,7 @@ def test_gate_fill_places_stop_and_exit_closes(tmp_path):
     pend = {"pending": {"side": "L", "limit": 59_000.0, "signal_ts": NOW},
             "position": None}
     ex.step(target(pull=pend))
-    v.orders[f"P-{NOW}-E"]["status"] = "FILLED"           # limit filled
+    v.orders[f"P-{NOW}-E1"]["status"] = "FILLED"          # limit filled
     pos = {"pending": None,
            "position": {"side": "L", "entry_price": 59_000.0, "entry_ts": NOW,
                         "signal_ts": NOW, "stop": 56_500.0, "exit_flag": None}}
@@ -201,7 +201,7 @@ def test_gate_trend_new_signal_closes_stale_qty(tmp_path):
                           "position": None}))
     assert any(e["kind"] == "leg_closed" for e in ex.state.events)
     assert ex.state.legs["trend"].qty > 0                 # re-entered long
-    assert ex.state.legs["trend"].entry_cloid == f"T-{NOW + 14_400}-E"
+    assert ex.state.legs["trend"].entry_cloid == f"T-{NOW + 14_400}-E2"
 
 
 def test_gate_size_quantized_to_contracts(tmp_path):
@@ -287,7 +287,7 @@ def test_gate_orphan_fill_unwound(tmp_path):
     pend = {"pending": {"side": "L", "limit": 59_000.0, "signal_ts": NOW},
             "position": None}
     ex.step(target(pull=pend))
-    v.orders[f"P-{NOW}-E"]["status"] = "FILLED"           # we filled...
+    v.orders[f"P-{NOW}-E1"]["status"] = "FILLED"          # we filled...
     ex.step(target())                                     # ...paper cancelled
     mkts = [c for c in v.calls if c[0] == "MARKET"]
     assert mkts and mkts[-1][1] == "SELL"                 # unwound
@@ -372,7 +372,7 @@ def test_gate_restart_resumes_ledger(tmp_path):
     n_orders = len(v.calls)
     # new process, same state file + same venue
     ex2 = Executor(v, ex.cfg, ex.cfg.state_path)
-    assert ex2.state.legs["pullback"].entry_cloid == f"P-{NOW}-E"
+    assert ex2.state.legs["pullback"].entry_cloid == f"P-{NOW}-E1"
     ex2.step(target(pull=pend))                           # no duplicate order
     assert len([c for c in v.calls[n_orders:] if c[0] == "LIMIT"]) == 0
 
@@ -607,7 +607,7 @@ def test_gate_trend_exit_no_double_close(tmp_path):
     tr_pend = {"pending": {"side": "S", "limit": -1.0, "signal_ts": NOW},
                "position": None}
     ex.step(target(trend=tr_pend))                       # market entry (sentinel)
-    v.orders[f"T-{NOW}-E"]["status"] = "FILLED"
+    v.orders[f"T-{NOW}-E1"]["status"] = "FILLED"
     tr_pos = {"pending": None,
               "position": {"side": "S", "entry_price": 60_000.0, "entry_ts": NOW,
                            "signal_ts": NOW, "stop": 63_000.0, "exit_flag": None}}
@@ -619,7 +619,7 @@ def test_gate_trend_exit_no_double_close(tmp_path):
     assert ex.state.legs["trend"].qty == 0.0
     # branch-2 variant: position -> directly to a NEW pending (no flat step)
     ex.step(target(trend=tr_pend))
-    v.orders[f"T-{NOW}-E"]["status"] = "FILLED"
+    v.orders[f"T-{NOW}-E2"]["status"] = "FILLED"
     ex.step(target(trend=tr_pos))
     new_pend = {"pending": {"side": "L", "limit": -1.0, "signal_ts": NOW + 14_400},
                 "position": None}
@@ -627,7 +627,7 @@ def test_gate_trend_exit_no_double_close(tmp_path):
     unwinds = [c for c in v.orders if c.endswith("-UNWIND")]
     assert not unwinds, unwinds
     # old short closed + new long entry = net long exactly the new entry qty
-    new_e = v.orders.get(f"T-{NOW + 14_400}-E")
+    new_e = v.orders.get(f"T-{NOW + 14_400}-E3")
     assert new_e is not None
 
 
@@ -2059,6 +2059,9 @@ def test_gate_halt_clears_stop_px_not_just_cloid(tmp_path):
     led = ex.state.legs["trend"]
     led.qty, led.stop_cloid, led.stop_px = 0.01, "T-1-S71520", 71_520.89
     led.entry_cloid, led.entry_side, led.entry_qty = "T-1-E", "L", 0.01
+    v._add("MARKET", "BUY", 0.01, "seed-fill")           # venue holds it
+    v._add("STOP", "SELL", 0.01, "T-1-S71520", px=71_520.89)
+    v._add("MARKET", "BUY", 0.0, "T-1-E")                # entry handle exists
     ex.halt("KILL", "manual")
     assert led.qty == 0.0
     assert led.stop_cloid is None
@@ -2623,3 +2626,195 @@ def test_gate_pre_hotfix_state_backed_up_once(tmp_path):
     json.dump({"halted": "", "legs": {}}, open(cfg.state_path, "w"))
     Executor(FakeVenue(), cfg)
     assert os.path.exists(cfg.state_path + ".pre-phantom-fix.bak")
+
+
+# ---------------------------------------------------------------------------
+# Re-review round 3 (2026-08-26): UNKNOWN is not terminal, and no ref is
+# cleared without a best-effort cancel first — a confirm-read blip over a
+# genuinely-resting stop must never arm a SECOND stop (both fill on trigger
+# = naked reversal).
+class _BlipStatusVenue(FakeVenue):
+    """Returns UNKNOWN for order_status on demand while orders really rest."""
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.blips = 0                  # consume one UNKNOWN per read while >0
+        self.cancels = []
+
+    def order_status(self, cloid):
+        if self.blips > 0:
+            self.blips -= 1
+            return {"status": "UNKNOWN", "filled_qty": 0.0, "avg_price": None}
+        return super().order_status(cloid)
+
+    def cancel(self, cloid):
+        self.cancels.append(cloid)
+        super().cancel(cloid)
+
+
+def test_gate_confirm_blip_cancels_before_clearing(tmp_path):
+    """BLOCKING repro from the re-review: place succeeds, confirm read
+    blips. Old code cleared refs and armed a duplicate next poll. Now the
+    order is cancelled best-effort BEFORE the refs clear — at most ONE stop
+    can ever rest."""
+    v = _BlipStatusVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    led = ex.state.legs["trend"]
+    led.qty = 0.01
+    v.blips = 2                          # confirm read + its retry both blip
+    ex._maintain_stop("trend", led, _long_pos())
+    assert led.stop_cloid is None, "must not believe an unconfirmed stop"
+    placed = [c for c in v.orders if "-S" in c]
+    assert placed and placed[0] in v.cancels, \
+        "unconfirmed stop must be cancelled, not abandoned to duplicate"
+    # next poll: fresh salt, healthy read -> exactly ONE open stop
+    ex._maintain_stop("trend", led, _long_pos())
+    open_stops = [c for c, o in v.orders.items()
+                  if o["type"] == "STOP" and o["status"] == "OPEN"]
+    assert len(open_stops) == 1, f"duplicate stops armed: {open_stops}"
+
+
+def test_gate_resume_unknown_ref_cancelled_not_abandoned(tmp_path):
+    """Resume hygiene on an UNKNOWN ref must cancel first: clearing alone
+    would re-place while the old order still rests = two live stops."""
+    v = _BlipStatusVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    led = ex.state.legs["trend"]
+    v._add("STOP", "SELL", 0.01, "T-1-S74089-1", px=74_089.0)
+    led.qty, led.stop_cloid, led.stop_px = 0.01, "T-1-S74089-1", 74_089.0
+    ex.state.halted = "KILL"
+    v.blips = 2
+    ex.resume()
+    assert led.stop_cloid is None
+    assert "T-1-S74089-1" in v.cancels, "must cancel before clearing"
+    assert v.orders["T-1-S74089-1"]["status"] == "CANCELLED"
+
+
+def test_gate_resume_working_stop_kept(tmp_path):
+    """A confirmed-OPEN stop must survive resume untouched."""
+    v = FakeVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    led = ex.state.legs["trend"]
+    v._add("STOP", "SELL", 0.01, "T-1-S74089-1", px=74_089.0)
+    led.qty, led.stop_cloid, led.stop_px = 0.01, "T-1-S74089-1", 74_089.0
+    ex.state.halted = "KILL"
+    ex.resume()
+    assert led.stop_cloid == "T-1-S74089-1", "working stop must be kept"
+    assert v.orders["T-1-S74089-1"]["status"] == "OPEN"
+
+
+def test_gate_halt_unknown_status_refuses_to_zero(tmp_path):
+    """Correlated outage: cancel_all no-ops AND order_status is UNKNOWN.
+    The old verification passed vacuously and zeroed refs past an armed
+    orphan stop. UNKNOWN must fail the halt verification."""
+    class _V(FakeVenue):
+        def cancel_all(self):
+            pass
+
+        def order_status(self, cloid):
+            return {"status": "UNKNOWN", "filled_qty": 0.0, "avg_price": None}
+    v = _V(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    led = ex.state.legs["trend"]
+    v._add("MARKET", "BUY", 0.01, "seed")
+    v._add("STOP", "SELL", 0.01, "T-1-S74089-1", px=74_089.0)
+    led.qty, led.stop_cloid = 0.01, "T-1-S74089-1"
+    ex.halt("KILL", "manual")
+    assert led.stop_cloid == "T-1-S74089-1", "zeroed past an unverifiable order"
+    assert any(e["kind"] == "halt_error" for e in ex.state.events)
+
+
+def test_gate_externally_cancelled_stop_replaced_and_paged(tmp_path):
+    """A stop cancelled outside our sight fell through the churn guard and
+    was held as a dead ref silently forever. Now: page + re-place under a
+    fresh salt in the same maintenance pass."""
+    v = FakeVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    led = ex.state.legs["trend"]
+    led.qty = 0.01
+    ex._maintain_stop("trend", led, _long_pos())
+    first = led.stop_cloid
+    v.cancel(first)                       # external cancel (operator/venue)
+    ex._maintain_stop("trend", led, _long_pos())
+    assert any(e["kind"] == "stop_externally_cancelled"
+               for e in ex.state.events), "external cancel must page"
+    assert led.stop_cloid and led.stop_cloid != first
+    assert v.orders[led.stop_cloid]["status"] == "OPEN"
+
+
+def test_gate_boot_reconcile_survives_transient_read(tmp_path):
+    """One boot-time blip must not disarm the phantom-clear."""
+    import json
+    from app.mirror import Executor
+    class _V(FakeVenue):
+        def __init__(self, **kw):
+            super().__init__(**kw)
+            self.n = 0
+
+        def position(self):
+            self.n += 1
+            if self.n == 1:
+                raise RuntimeError("boot blip")
+            return super().position()
+    v = _V(mult=0.01)
+    cfg = Cfg()
+    cfg.state_path = str(tmp_path / "state.json")
+    cfg.dry_run = False
+    json.dump({"halted": "", "legs": {"trend": {"qty": 0.01}}},
+              open(cfg.state_path, "w"))
+    ex = Executor(v, cfg)
+    assert ex.state.legs["trend"].qty == 0.0, \
+        "phantom must clear despite one transient read"
+
+
+def test_gate_boot_mismatch_clears_only_on_exact_agreement(tmp_path):
+    """A sub-tolerance orphan must NOT unblock entries."""
+    import json
+    from app.mirror import Executor
+    v = FakeVenue(mult=0.01)
+    v._add("MARKET", "BUY", 0.01, "orphan")     # tiny orphan, ~$600
+    cfg = Cfg()
+    cfg.state_path = str(tmp_path / "state.json")
+    cfg.dry_run = False
+    json.dump({"halted": "", "legs": {}}, open(cfg.state_path, "w"))
+    ex = Executor(v, cfg)
+    assert ex._boot_mismatch is True
+    ex._check_drift(50_000_000.0)         # huge equity => inside $ tolerance
+    assert ex._boot_mismatch is True, \
+        "dollar tolerance must not unblock while the orphan rests"
+    v.orders["orphan"]["status"] = "CANCELLED"
+    ex._check_drift(50_000_000.0)
+    assert ex._boot_mismatch is False
+
+
+def test_gate_entry_cloids_salted_and_burned(tmp_path):
+    """Entries carry the same burned-before-send salt as stops/chases: the
+    boot-mismatch resolution path re-sends an entry the venue already saw."""
+    v = FakeVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    pend = {"pending": {"side": "L", "limit": -1.0, "signal_ts": NOW},
+            "position": None}
+    ex.step(target(trend=pend))
+    assert ex.state.legs["trend"].entry_cloid == f"T-{NOW}-E1"
+    ex2 = mkexec(tmp_path, v)
+    assert ex2.state.legs["trend"].entry_n == 1, "salt must persist"
+
+
+def test_gate_stop_n_burned_before_order_reaches_venue(tmp_path):
+    """MUTATION KILLER: saving the counter AFTER the order would pass every
+    ordinary test but reintroduce reuse-on-crash. The venue itself checks
+    the persisted state at the moment the order arrives."""
+    import json
+    v = FakeVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    led = ex.state.legs["trend"]
+    led.qty = 0.01
+    seen = {}
+    real_place_stop = v.place_stop
+    def checking_place_stop(side, qty, trigger_px, cloid):
+        on_disk = json.load(open(ex.cfg.state_path))
+        seen["disk_stop_n"] = on_disk["legs"]["trend"]["stop_n"]
+        real_place_stop(side, qty, trigger_px, cloid)
+    v.place_stop = checking_place_stop
+    ex._maintain_stop("trend", led, _long_pos())
+    assert seen["disk_stop_n"] == led.stop_n, \
+        "stop_n must be PERSISTED before the order is sent"

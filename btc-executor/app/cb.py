@@ -259,8 +259,14 @@ class CoinbaseVenue:
             return {"status": status, "filled_qty": filled,
                     "avg_price": float(avg) if avg else None}
         except Exception as exc:  # noqa: BLE001
+            # UNKNOWN, not None: an API failure is not "no such order". The
+            # 2026-08-26 re-review found every verification site resolving
+            # that ambiguity in whichever direction let it proceed — a
+            # one-blip confirm read after a successful stop placement
+            # cleared refs without cancelling and armed a DUPLICATE stop.
+            # None now means only "no handle" (order-map miss).
             logger.warning("order_status(%s) failed: %s", cloid, exc)
-            return None
+            return {"status": "UNKNOWN", "filled_qty": 0.0, "avg_price": None}
 
     # ---------- mutations ----------
 

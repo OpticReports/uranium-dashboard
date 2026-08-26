@@ -330,3 +330,22 @@ def test_gate_blueprint_sync():
     assert "EXEC_TOKEN" in ryaml
     ex = open(os.path.join(_ROOT, "..", "btc-executor", "app", "main.py")).read()
     assert '"fills": getattr(st, "fills"' in ex   # /status exposes fills
+
+
+def test_gate_adapter_skips_void_fills(tmp_path):
+    """2026-08-26 phantom incident: fills marked void by the executor are
+    broken measurements (1320bps against a days-stale reference; one never
+    happened at all). They must not enter edge_trades, where slip stats
+    authorize KELLY_M sizing. Mutation-tested: removing the filter fails."""
+    con = _con(tmp_path)
+    st = _status(n_fills=3)
+    st["fills"].append({"ts": st["fills"][-1]["ts"] + 60, "leg": "trend",
+                        "role": "chase", "cloid": "poison", "side": "BUY",
+                        "px": 77_575.0, "ref_px": 68_525.61,
+                        "slip_bps": 1320.59, "live": True, "void": True})
+    rep = adapter_coinbase.sync(con, status=st)
+    assert rep["trades"] == 3, "void fill must not be ingested"
+    assert rep.get("voided_skipped") == 1
+    n = con.execute("SELECT COUNT(*) FROM edge_trades WHERE "
+                    "trade_id LIKE 'poison%'").fetchone()[0]
+    assert n == 0, "the poison row reached edge_trades"
