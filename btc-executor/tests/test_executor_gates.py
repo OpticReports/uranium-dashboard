@@ -2818,3 +2818,140 @@ def test_gate_stop_n_burned_before_order_reaches_venue(tmp_path):
     ex._maintain_stop("trend", led, _long_pos())
     assert seen["disk_stop_n"] == led.stop_n, \
         "stop_n must be PERSISTED before the order is sent"
+
+
+# ---------------------------------------------------------------------------
+# Round-4 mutant killers (review round 3: fixes without killers do not close
+# bindings in this repo's convention).
+def test_gate_M14_unknown_entry_confirm_keeps_ref_no_resend(tmp_path):
+    """BLOCKING repro: pullback entry placed, confirm reads UNKNOWN. The ref
+    must be KEPT so the identity dedupe suppresses the next poll's re-send —
+    the round-3 code dropped it and re-sent FULL SIZE every 20s (each fill
+    real on a marketable limit, ledger booking nothing)."""
+    v = _BlipStatusVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    pend = {"pending": {"side": "L", "limit": 59_000.0, "signal_ts": NOW},
+            "position": None}
+    v.blips = 2                          # confirm + retry both UNKNOWN
+    ex.step(target(pull=pend))
+    led = ex.state.legs["pullback"]
+    assert led.entry_cloid, "UNKNOWN must keep the ref (possibly live)"
+    n_limits = len([c for c, o in v.orders.items() if o["type"] == "LIMIT"])
+    for _ in range(3):                   # subsequent polls, same pending
+        ex.step(target(pull=pend))
+    n_after = len([c for c, o in v.orders.items() if o["type"] == "LIMIT"])
+    assert n_after == n_limits == 1, \
+        f"re-sent a possibly-live entry: {n_limits} -> {n_after}"
+    assert any(e["kind"] == "entry_unconfirmed" for e in ex.state.events)
+
+
+def test_gate_M14b_confirmed_dead_entry_cleared_and_retried(tmp_path):
+    """The venue-CONFIRMED terminal-and-unfilled case must still clear and
+    allow a fresh salted attempt while the signal stands."""
+    class _RejectingVenue(FakeVenue):
+        def __init__(self, **kw):
+            super().__init__(**kw)
+            self.reject_next = 0
+
+        def place_limit(self, side, qty, px, cloid, post_only=True):
+            super().place_limit(side, qty, px, cloid, post_only=post_only)
+            if self.reject_next > 0:
+                self.reject_next -= 1
+                self.orders[cloid]["status"] = "CANCELLED"
+    v = _RejectingVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    pend = {"pending": {"side": "L", "limit": 59_000.0, "signal_ts": NOW},
+            "position": None}
+    v.reject_next = 1
+    ex.step(target(pull=pend))
+    assert ex.state.legs["pullback"].entry_cloid is None
+    ex.step(target(pull=pend))           # retry under a fresh salt
+    led = ex.state.legs["pullback"]
+    assert led.entry_cloid and led.entry_cloid.endswith("-E2")
+    assert v.orders[led.entry_cloid]["status"] == "OPEN"
+
+
+def test_gate_M2_fill_watch_survives_unknown_status(tmp_path):
+    """A truthy UNKNOWN dict silently dropped the watch, starving the
+    slippage sample on one API blip."""
+    v = _BlipStatusVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    v._add("MARKET", "BUY", 0.01, "W-1")
+    v.orders["W-1"]["status"] = "OPEN"
+    ex._watch_fill("trend", "entry", "W-1", 60_000.0, "BUY")
+    v.blips = 1
+    ex._poll_fill_watch()
+    assert ex._fill_watch, "UNKNOWN must keep the watch, not drop it"
+    v.orders["W-1"]["status"] = "FILLED"
+    ex._poll_fill_watch()
+    assert any(f["cloid"] == "W-1" for f in ex.state.fills), \
+        "the fill must still be recorded after the blip clears"
+
+
+def test_gate_M1_cb_order_status_api_error_is_unknown(tmp_path, monkeypatch):
+    """cb.py's exception branch must return UNKNOWN, never None (None means
+    only no-handle). Pins the tri-state at the adapter."""
+    client = _StubClient()
+    def boom(oid):
+        raise RuntimeError("api down")
+    client.get_order = boom
+    v = _mk_cb_venue(tmp_path, monkeypatch, client)
+    v._orders["X-1"] = "oid-x"           # handle exists, API fails
+    st = v.order_status("X-1")
+    assert st is not None and st.get("status") == "UNKNOWN"
+    assert v.order_status("NO-HANDLE") is None
+
+
+def test_gate_M9_auto_rearm_runs_stop_ref_hygiene(tmp_path):
+    """Round-2 binding 5 with the demanded repro: failed-halt stale ref +
+    midnight UTC auto-rearm. The rearm must route through the same hygiene
+    as manual resume, or the churn guard suppresses re-placement against a
+    dead order on the AUTOMATIC path."""
+    v = FakeVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    ex.cfg.kelly_m = 0.05                # inside the auto-rearm regime
+    led = ex.state.legs["trend"]
+    v._add("STOP", "SELL", 0.01, "T-1-S74089-1", px=74_089.0)
+    v.cancel("T-1-S74089-1")             # the venue no longer honours it
+    led.qty, led.stop_cloid, led.stop_px = 0.01, "T-1-S74089-1", 74_089.0
+    ex.state.halted = "DAILY_LOSS"
+    ex.state.day_key = "1999-01-01"      # force the rollover branch
+    ex._roll_day(50_000.0)
+    assert ex.state.halted is None, "auto-rearm must clear DAILY_LOSS"
+    assert led.stop_cloid is None, \
+        "auto-rearm bypassed stop-ref hygiene: dead ref survives"
+    assert any(e["kind"] == "stop_ref_cleared" for e in ex.state.events)
+
+
+def test_gate_M12_entry_n_burned_before_order_reaches_venue(tmp_path):
+    import json
+    v = FakeVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    seen = {}
+    real_place_limit = v.place_limit
+    def checking_place_limit(side, qty, px, cloid, post_only=True):
+        on_disk = json.load(open(ex.cfg.state_path))
+        seen["disk_entry_n"] = on_disk["legs"]["pullback"]["entry_n"]
+        real_place_limit(side, qty, px, cloid, post_only=post_only)
+    v.place_limit = checking_place_limit
+    pend = {"pending": {"side": "L", "limit": 59_000.0, "signal_ts": NOW},
+            "position": None}
+    ex.step(target(pull=pend))
+    assert seen["disk_entry_n"] == ex.state.legs["pullback"].entry_n, \
+        "entry_n must be PERSISTED before the order is sent"
+
+
+def test_gate_M13_new_pager_kinds_are_rate_limited(tmp_path, monkeypatch):
+    """stop_unconfirmed can fire every 20s poll during an outage - the pager
+    must not (round-2 binding 10: ~180 pages/hour otherwise)."""
+    from app import alerts
+    sent = []
+    monkeypatch.setattr(alerts, "send", lambda m: sent.append(m))
+    v = FakeVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    for kind in ("stop_unconfirmed", "entry_unconfirmed",
+                 "stop_ref_cleared", "stop_externally_cancelled"):
+        sent.clear()
+        for i in range(4):
+            ex._event("RED", kind, f"{kind} occurrence {i}")
+        assert len(sent) == 1, f"{kind} paged {len(sent)}x inside cooldown"

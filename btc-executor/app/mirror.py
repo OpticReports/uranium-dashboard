@@ -1113,22 +1113,33 @@ class Executor:
             if leg == "pullback":
                 self.venue.place_limit(side, qty, pend["limit"], cloid,
                                        post_only=True)
-                # confirm-after-place for the LIMIT path: belief that an
-                # order RESTS must follow the venue, not the send. Market
-                # entries book qty instead (verified by the drift check) -
-                # a filled market order cannot be un-sent, so a status gate
-                # there would only lie about what we hold.
+                # BELIEF IS RECORDED BEFORE THE CONFIRM (round-3 review
+                # BLOCKING find): returning on UNKNOWN without the ref let
+                # the identity dedupe miss the live order and re-send full
+                # size on every 20s poll - on a marketable limit that was a
+                # real taker fill per poll, ledger booking nothing. An
+                # unverifiable order is treated as POSSIBLY LIVE: keep the
+                # ref (the dedupe then suppresses re-sends; the fill-watch
+                # resolves it), and clear only on a venue-CONFIRMED
+                # terminal-and-unfilled read.
+                led.entry_cloid, led.entry_side = cloid, pend["side"]
+                led.entry_qty, led.signal_ts = qty, pend["signal_ts"]
                 stat = self._ostat(cloid)
-                if stat not in ("OPEN", "FILLED"):
-                    try:
-                        self.venue.cancel(cloid)
-                    except Exception:  # noqa: BLE001
-                        pass
+                if stat == "CANCELLED":
+                    st_c = self.venue.order_status(cloid)
+                    if not (st_c or {}).get("filled_qty"):
+                        led.entry_cloid = led.entry_side = None
+                        led.entry_qty = 0.0
+                        self._event("RED", "entry_unconfirmed",
+                                    f"{leg} entry {cloid} venue-confirmed "
+                                    f"terminal and unfilled - will retry "
+                                    f"while the signal stands")
+                        return
+                elif stat == "UNKNOWN":
                     self._event("RED", "entry_unconfirmed",
-                                f"{leg} entry {cloid} not confirmed "
-                                f"(status={stat}) - cancelled best-effort; "
-                                f"will retry while the signal stands")
-                    return
+                                f"{leg} entry {cloid} unverifiable "
+                                f"(status=UNKNOWN) - ref KEPT as possibly "
+                                f"live; fill-watch will resolve it")
             else:
                 self.venue.place_market(side, qty, cloid)
                 led.qty = _side_sign(pend["side"]) * qty
@@ -1396,7 +1407,10 @@ class Executor:
                 st = self.venue.order_status(w["cloid"])
             except Exception:  # noqa: BLE001
                 pass
-            if st is None or st.get("status") == "OPEN":
+            if st is None or st.get("status") in ("OPEN", "UNKNOWN"):
+                # UNKNOWN keeps the watch: a truthy UNKNOWN dict used to
+                # fall through and silently DROP it, starving the ramp's
+                # slippage sample on one API blip (round-3 review)
                 if time.time() - w["ts"] < 48 * 3600:
                     keep.append(w)
                 continue
