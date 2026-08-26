@@ -36,10 +36,13 @@ satisfy any row (see the mode guard below):
 incident produced two such rows (1320bps against a days-stale reference,
 one for an execution that never happened at all), and a sizing gate fed by
 fictitious slippage authorizes size on evidence that does not exist. The
-exclusion lives in exactly TWO readers, `mirror._live_fill_count()` and
-`main.py`'s `n_live`, and they MUST stay identical: they diverged once, and
-auto-drill then read a real 8/10 as complete while `/pulse` showed 8. A gate
-whose readers disagree is not a gate. Already-ingested rows downstream
+exclusion lives in the two GATING readers, `mirror._live_fill_count()`
+and `main.py`'s `n_live`, and they MUST stay identical: they diverged once,
+and auto-drill then read a real 8/10 as complete while `/pulse` showed 8. A
+gate whose readers disagree is not a gate. (barbell-lab's
+`edge/adapter_coinbase.py` filters voids too, but it feeds the edge monitor,
+not this gate. `_ramp_v4`'s `all_modes = len(fills)` deliberately does NOT
+filter — it is the all-modes total, and `met` never reads it.) Already-ingested rows downstream
 (barbell-lab `edge_trades`, and any `slip_norms` frozen from them) are NOT
 cleaned by this filter — that purge is tracked separately.
 

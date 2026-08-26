@@ -372,9 +372,20 @@ def kill(x_exec_token: str | None = Header(default=None),
 
 @app.api_route("/resume", methods=["GET", "POST"])
 def resume(x_exec_token: str | None = Header(default=None),
-           token: str | None = Query(default=None)):
+           token: str | None = Query(default=None),
+           adopt_venue: int = Query(default=0)):
+    """adopt_venue=1 resets the LEDGER to what the venue actually holds
+    before clearing the halt.
+
+    Needed because a halt whose flatten failed keeps its (divergent) ledger
+    on purpose, and LEDGER_DIVERGENCE then re-fires on every plain /resume —
+    a deadlock only a redeploy could break (re-gate 2026-08-26 N2). Use it
+    ONLY after looking at Coinbase yourself: it makes the venue the source
+    of truth, which is the right call when you have just verified the venue,
+    and the wrong one if the position read is what is broken."""
     _auth(x_exec_token, token)
     if EXEC is None:
         return {"ok": False}
-    EXEC.resume()
-    return {"ok": True, "halted": EXEC.state.halted}
+    EXEC.resume(adopt_venue=bool(adopt_venue))
+    return {"ok": True, "halted": EXEC.state.halted,
+            "adopted": bool(adopt_venue)}
