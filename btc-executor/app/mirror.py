@@ -29,7 +29,7 @@ import logging
 import threading
 import os
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from typing import Protocol
 
 logger = logging.getLogger(__name__)
@@ -71,6 +71,16 @@ class LegLedger:
     # and persisted BEFORE the order is sent, so a crash between increment
     # and send burns a number instead of ever re-using one.
     chase_n: int = 0
+    # Same counter, same reason, for PROTECTIVE STOPS (review of the first
+    # hotfix cut, 2026-08-26): the stop cloid was still deterministic per
+    # (entry_ts, trigger), so cancel-then-replace at an unchanged trail —
+    # which is exactly what the boot reconcile and every kill->resume does —
+    # re-sent a client order id the venue had already seen. Depending on the
+    # venue's dup semantics that either leaves the position STOPLESS (reject)
+    # or arms a stop mapped to a CANCELLED order (idempotent return): both
+    # reproduce the incident's belief-vs-truth phenotype. Burned before
+    # send, persisted, never reused.
+    stop_n: int = 0
     # entry_ts of an engine position whose protective stop FILLED on-venue.
     # While the engine (which only updates on 4h bar closes) keeps reporting
     # that position, case 1 must NOT re-enter from the stale entry order -
@@ -158,6 +168,16 @@ class Executor:
         self.cfg = cfg
         self.state_path = state_path or cfg.state_path
         self.state = self._load_state()
+        # one-time backup of the pre-hotfix state file: this build adds
+        # schema fields, and a rollback past it must have something to
+        # restore (review of first hotfix cut, 2026-08-26)
+        try:
+            bak = f"{self.state_path}.pre-phantom-fix.bak"
+            if os.path.exists(self.state_path) and not os.path.exists(bak):
+                import shutil
+                shutil.copyfile(self.state_path, bak)
+        except Exception:  # noqa: BLE001
+            pass
         self._breach_count = 0
         self._last_flat_equity = None      # transfer-reconciliation baseline
         self._fill_watch: list[dict] = []  # orders pending a fill-price read
@@ -169,6 +189,7 @@ class Executor:
         # inside _step_locked's _check_halts AND from the /kill API thread
         self._cov_since_boot: dict[str, int] = {}
         self._venue_read_failed_at = 0.0   # append-side cooldown for the RED
+        self._boot_mismatch = False        # venue-vs-ledger unresolved at boot
         self._stamp_witnessing()
         self._check_dry_run_flip()
         self._migrate_ledger_granularity()
@@ -183,8 +204,11 @@ class Executor:
         fill measurement, it is a broken reference (2026-08-26: two chase
         fills carried 1320bps because ref_px was the engine's days-stale
         entry price — and one of them never happened at all). Void them so
-        they stop gating the ramp and poisoning the edge-monitor, but keep
-        them in the record for audit."""
+        they stop gating the ramp, and keep them in the record for audit.
+        HONESTY: voiding here does NOT clean the edge-monitor - barbell-lab
+        ingests fills separately and its adapter must filter void rows and
+        purge what it already ingested (tracked follow-up); until then its
+        slip verdict is contaminated and must not authorize sizing."""
         changed = 0
         for f in (self.state.fills or []):
             if isinstance(f, dict) and not f.get("void") \
@@ -220,8 +244,6 @@ class Executor:
         if getattr(self.venue, "log", None) is not None:
             return
         ledger_net = sum(l.qty for l in self.state.legs.values())
-        if abs(ledger_net) < 1e-12:
-            return
         try:
             net = self.venue.position()
         except Exception as exc:  # noqa: BLE001
@@ -229,6 +251,19 @@ class Executor:
                         f"boot reconcile blind: {exc}")
             return
         self.state.last_venue_read_ts = int(time.time())
+        if abs(ledger_net) < 1e-12:
+            # Review of the first cut: this side was never checked. A crash
+            # after an order was sent but before the ledger booked it mints
+            # exactly this state, and blindly re-entering on top of it
+            # doubles the venue position. Adopt nothing, page, and block new
+            # entries until the mismatch is resolved.
+            if abs(net) > 1e-9:
+                self._boot_mismatch = True
+                self._event("RED", "position_drift",
+                            f"boot: venue holds {net:.5f} BTC but the ledger "
+                            f"is FLAT - NOT auto-fixed; new entries BLOCKED "
+                            f"until this reconciles. Verify on Coinbase.")
+            return
         if abs(net) < 1e-9:
             for name, l in self.state.legs.items():
                 if l.qty == 0.0:
@@ -463,7 +498,14 @@ class Executor:
             st = ExecState(**{k: raw[k] for k in
                               ("halted", "day_key", "day_start_equity",
                                "high_water") if k in raw})
-            st.legs = {n: LegLedger(**raw.get("legs", {}).get(n, {}))
+            # unknown keys are DROPPED, not fatal: a state file written by a
+            # newer build must never brick (or silently wipe) an older one -
+            # rolling back past a schema change destroyed halted/position/
+            # stop state (review of first hotfix cut, 2026-08-26)
+            _lfields = {f.name for f in fields(LegLedger)}
+            st.legs = {n: LegLedger(**{k: v for k, v in
+                                       raw.get("legs", {}).get(n, {}).items()
+                                       if k in _lfields})
                        for n in LEGS}
             st.events = raw.get("events", [])[-200:]
             st.marks = raw.get("marks", [])[-400:]
@@ -518,8 +560,13 @@ class Executor:
 
     def _event(self, level: str, kind: str, msg: str) -> None:
         last = self.state.events[-1] if self.state.events else None
-        if last and last["kind"] == kind and last["msg"] == msg:
-            return                       # dedupe: don't spam repeats every poll
+        # dedupe only SPAM: identical kind+msg within 10 minutes. An
+        # unconditional match muted every cooldown-spaced RED after the
+        # first (venue_read_failed, leg_sync_error) - one page per multi-day
+        # blindness spell (review of first hotfix cut, 2026-08-26).
+        if last and last["kind"] == kind and last["msg"] == msg \
+                and time.time() - last.get("ts", 0) < 600:
+            return
         self.state.events.append(
             {"ts": int(time.time()), "level": level, "kind": kind, "msg": msg})
         logger.log(logging.WARNING if level in ("WARN", "RED") else logging.INFO,
@@ -790,7 +837,29 @@ class Executor:
             return
         try:
             self.venue.cancel_all()
-            net = self.venue.position()    # re-read AFTER cancels
+            # cancel_all is best-effort inside the adapter, so VERIFY: every
+            # order the ledger believes in must be terminal before we zero
+            # the refs - a silently-failed cancel would otherwise leave an
+            # armed orphan stop on a flat, halted, unwatched book (review of
+            # first hotfix cut, 2026-08-26).
+            for name, l in self.state.legs.items():
+                for cloid in (l.entry_cloid, l.stop_cloid):
+                    if not cloid:
+                        continue
+                    st = self.venue.order_status(cloid)
+                    if st and st.get("status") == "OPEN":
+                        raise RuntimeError(
+                            f"{name} order {cloid} still OPEN after "
+                            f"cancel_all - not zeroing the ledger")
+            net = None                     # re-read AFTER cancels, with retry:
+            for attempt in range(3):       # one transient must not strip the
+                try:                       # stop and skip the flatten
+                    net = self.venue.position()
+                    break
+                except Exception:  # noqa: BLE001
+                    if attempt == 2:
+                        raise
+                    time.sleep(2)
             if abs(net) > 1e-6:
                 self.venue.place_market(_close_side(net), abs(net),
                                         f"halt-{int(time.time())}")
@@ -822,6 +891,19 @@ class Executor:
         self._cov("resume")
         self._event("INFO", "resume", f"cleared {self.state.halted}")
         self.state.halted = None
+        # A halt that failed mid-way (halt_error / halt_blind) leaves stop
+        # refs the venue may no longer honour; the churn guard would then
+        # suppress re-placement against a dead order. Verify each ref is
+        # genuinely working; clear anything that is not so the next step
+        # re-places under a fresh salt.
+        for name, l in self.state.legs.items():
+            if l.stop_cloid:
+                st = self.venue.order_status(l.stop_cloid)
+                if not st or st.get("status") not in ("OPEN", "FILLED"):
+                    self._event("WARN", "stop_ref_cleared",
+                                f"{name} stop {l.stop_cloid} not working on "
+                                f"venue - cleared; will re-place if needed")
+                    l.stop_cloid, l.stop_px = None, None
         self._save_state()
 
     # ---------- main step ----------
@@ -892,7 +974,10 @@ class Executor:
         stale = (time.time() - (target.get("bar_ts") or 0)
                  > (self.cfg.stale_bars_max + 1) * BAR_SECONDS)
         entries_ok = not (stale or target.get("degraded")
-                          or target.get("data_halt"))
+                          or target.get("data_halt")
+                          # boot found the venue holding what the ledger does
+                          # not know about: no NEW risk until that resolves
+                          or self._boot_mismatch)
         if not entries_ok:
             # RED: a stale/degraded engine feed silently stopping all entries
             # for days while /health stays green is the DRY_RUN-incident
@@ -1023,6 +1108,13 @@ class Executor:
         want = self._leg_qty(leg, blend, px_ref, equity)
         filled = 0.0
         if led.entry_cloid:
+            # When a real entry order exists, chase ITS shortfall — not a
+            # re-target computed at the live mid, which on any adverse move
+            # sent a spurious market top-up the old code never sent (review
+            # of first hotfix cut, 2026-08-26). The mid stays the SLIPPAGE
+            # reference; the entry order's own size is the quantity truth.
+            if led.entry_qty and led.entry_qty > 0:
+                want = min(want, led.entry_qty)
             st = self.venue.order_status(led.entry_cloid)
             filled = (st or {}).get("filled_qty", 0.0)
             if st and st.get("status") == "OPEN" and filled < want:
@@ -1090,10 +1182,25 @@ class Executor:
                 and abs(trigger - led.stop_px) / led.stop_px \
                 < self.cfg.stop_replace_bps / 10_000.0:
             return
-        cloid = f"{leg[0].upper()}-{pos['entry_ts']}-S{int(trigger)}"
+        led.stop_n += 1
+        self._save_state()                 # burn the number BEFORE the order
+        cloid = f"{leg[0].upper()}-{pos['entry_ts']}-S{int(trigger)}-{led.stop_n}"
         if led.stop_cloid:
             self.venue.cancel(led.stop_cloid)
         self.venue.place_stop(_close_side(led.qty), abs(led.qty), trigger, cloid)
+        # A protective stop the ledger BELIEVES in but the venue does not
+        # hold is the incident's exact phenotype, so belief is set only
+        # after the venue confirms the order is genuinely working. A venue
+        # that deduped/rejected/failed the place leaves refs clear, pages,
+        # and the next step retries under a fresh salt.
+        st = self.venue.order_status(cloid)
+        if not st or st.get("status") not in ("OPEN", "FILLED"):
+            led.stop_cloid, led.stop_px = None, None
+            self._event("RED", "stop_unconfirmed",
+                        f"{leg} stop {cloid} not confirmed working "
+                        f"(status={st.get('status') if st else None}) - "
+                        f"position is UNPROTECTED; retrying next step")
+            return
         self._watch_fill(leg, "stop", cloid, trigger, _close_side(led.qty))
         led.stop_cloid, led.stop_px = cloid, trigger
         self._cov("stop_placed")
@@ -1487,6 +1594,11 @@ class Executor:
         self._venue_read_failed_at = 0.0
         want = sum(l.qty for l in self.state.legs.values())
         px = self.venue.mid()
+        if self._boot_mismatch and abs(net - want) * px \
+                <= self.cfg.drift_tol_frac * max(equity, 1.0):
+            self._boot_mismatch = False
+            self._event("INFO", "boot_mismatch_resolved",
+                        "venue and ledger agree again - entries unblocked")
         if abs(net - want) * px > self.cfg.drift_tol_frac * max(equity, 1.0):
             self._event("RED", "position_drift",
                         f"venue={net:.5f} ledger={want:.5f} BTC - investigate")

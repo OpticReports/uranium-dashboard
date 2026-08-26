@@ -2238,18 +2238,29 @@ def test_gate_halt_readable_venue_still_flattens(tmp_path):
 def test_gate_drift_blindness_pages_with_cooldown(tmp_path):
     v = _BlindVenue(mult=0.01)
     ex = mkexec(tmp_path, v)
+    ex.state.events.clear()          # drop the boot reconcile's own RED
     for _ in range(5):
         ex._check_drift(50_000.0)
     reds = [e for e in ex.state.events if e["kind"] == "venue_read_failed"]
     assert len(reds) == 1, f"must page exactly once inside cooldown: {reds}"
+    # and after the cooldown lapses it pages AGAIN - blindness that lasts
+    # must keep reaching the phone (review: dedupe muted repeat REDs)
+    ex._venue_read_failed_at -= 1801
+    ex.state.events[-1]["ts"] -= 1801
+    ex._check_drift(50_000.0)
+    reds = [e for e in ex.state.events if e["kind"] == "venue_read_failed"]
+    assert len(reds) == 2, "cooldown expiry must re-page"
 
 
 def test_gate_drift_success_stamps_venue_read_ts(tmp_path):
     v = FakeVenue(mult=0.01)
     ex = mkexec(tmp_path, v)
-    assert getattr(ex.state, "last_venue_read_ts", 0) == 0
-    ex._check_drift(50_000.0)
+    # the boot reconcile reads the venue unconditionally now (two-sided
+    # check), so a healthy boot has already stamped it
     assert ex.state.last_venue_read_ts > 0
+    ex.state.last_venue_read_ts = 0
+    ex._check_drift(50_000.0)
+    assert ex.state.last_venue_read_ts > 0, "drift check must re-stamp"
 
 
 # --- boot reconcile: phantom clears, ambiguity does not --------------------
@@ -2386,3 +2397,229 @@ def test_gate_absurd_fills_voided_and_excluded(tmp_path):
     assert rows["slippage_sample"]["have"] == 1, \
         "voided garbage must not gate the ramp"
     assert any(e["kind"] == "fills_voided" for e in ex.state.events)
+
+
+# ---------------------------------------------------------------------------
+# Review of the first hotfix cut (2026-08-26): REJECT — the stop cloid was
+# still deterministic, and cancel-then-replace at an unchanged trail (the
+# boot-reconcile wake-up, every kill->resume) re-sent a client order id the
+# venue had already seen. These gates pin the reroll under BOTH possible
+# venue dup semantics.
+class _DupRejectVenue(FakeVenue):
+    """A venue that REJECTS any client order id it has ever seen (the
+    semantics the live incident proved for at least some order states)."""
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.seen = set()
+
+    def _add(self, kind, side, qty, cloid, px=None):
+        if cloid in self.seen:
+            raise RuntimeError(f"duplicate client_order_id {cloid}")
+        self.seen.add(cloid)
+        super()._add(kind, side, qty, cloid, px)
+
+
+class _IdempotentVenue(FakeVenue):
+    """A venue that silently maps a reused cloid onto the ORIGINAL order
+    (idempotent semantics): the place 'succeeds' but nothing new rests."""
+    def _add(self, kind, side, qty, cloid, px=None):
+        if cloid in self.orders:
+            return                      # old (possibly CANCELLED) order wins
+        super()._add(kind, side, qty, cloid, px)
+
+
+def _long_pos(trigger=74_089.46, entry_ts=NOW):
+    return {"side": "L", "entry_price": 68_525.61, "entry_ts": entry_ts,
+            "signal_ts": entry_ts - 14_400, "stop": trigger,
+            "exit_flag": None}
+
+
+def test_gate_stop_cloids_never_repeat_across_replace(tmp_path):
+    """Cancel-then-replace at an UNCHANGED trigger must use a fresh cloid
+    every time — under dup-REJECT semantics a reused one leaves the live
+    position stopless."""
+    v = _DupRejectVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    led = ex.state.legs["trend"]
+    led.qty = 0.01
+    ex._maintain_stop("trend", led, _long_pos())
+    first = led.stop_cloid
+    assert first and v.orders[first]["status"] == "OPEN"
+    # simulate the wake-up: reconcile/halt cancelled the stop and cleared refs
+    v.cancel(first)
+    led.stop_cloid, led.stop_px = None, None
+    ex._maintain_stop("trend", led, _long_pos())      # SAME trigger integer
+    second = led.stop_cloid
+    assert second and second != first, \
+        f"stop cloid reused: {second!r} (dup-reject => stopless position)"
+    assert v.orders[second]["status"] == "OPEN"
+
+
+def test_gate_stop_not_believed_until_venue_confirms(tmp_path):
+    """Under IDEMPOTENT semantics a reused cloid maps to the CANCELLED
+    original: the place 'succeeds', nothing rests. Belief (stop_cloid set,
+    /pulse stop_placed=true) must only follow venue confirmation."""
+    v = _IdempotentVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    led = ex.state.legs["trend"]
+    led.qty = 0.01
+    # poison: pre-cancelled order under the cloid the NEXT placement would
+    # use if it ever reused ids; with salting the id differs, so emulate the
+    # idempotent-collision by pre-seeding the exact salted id
+    ex._maintain_stop("trend", led, _long_pos())
+    cl1 = led.stop_cloid
+    v.cancel(cl1)
+    led.stop_cloid, led.stop_px = None, None
+    # force the NEXT salt to collide with the cancelled order
+    nxt = f"T-{NOW}-S74089-{led.stop_n + 1}"
+    v.orders[nxt] = {"type": "STOP", "side": "SELL", "qty": 0.01,
+                     "px": 74_089.46, "status": "CANCELLED"}
+    ex._maintain_stop("trend", led, _long_pos())
+    assert led.stop_cloid is None, \
+        "ledger believes in a stop the venue holds as CANCELLED"
+    assert any(e["kind"] == "stop_unconfirmed" for e in ex.state.events)
+    # next step retries under a fresh salt and succeeds
+    ex._maintain_stop("trend", led, _long_pos())
+    assert led.stop_cloid and v.orders[led.stop_cloid]["status"] == "OPEN"
+
+
+def test_gate_stop_counter_survives_restart(tmp_path):
+    v = FakeVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    led = ex.state.legs["trend"]
+    led.qty = 0.01
+    ex._maintain_stop("trend", led, _long_pos())
+    n = led.stop_n
+    assert n >= 1
+    ex2 = mkexec(tmp_path, v)
+    assert ex2.state.legs["trend"].stop_n == n, "salt must persist"
+
+
+def test_gate_halt_refuses_to_zero_past_a_surviving_order(tmp_path):
+    """cancel_all is best-effort in the adapter. If an order the ledger
+    believes in is still OPEN afterwards, zeroing the refs would orphan an
+    ARMED stop on a flat halted book - the halt must fail loud instead."""
+    class _StickyCancelVenue(FakeVenue):
+        def cancel_all(self):
+            pass                         # silently cancels nothing
+    v = _StickyCancelVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    led = ex.state.legs["trend"]
+    v._add("MARKET", "BUY", 0.01, "seed")
+    v._add("STOP", "SELL", 0.01, "T-1-S74089-1", px=74_089.0)
+    led.qty, led.stop_cloid = 0.01, "T-1-S74089-1"
+    ex.halt("KILL", "manual")
+    assert led.stop_cloid == "T-1-S74089-1", "refs zeroed past a live order"
+    assert led.qty == 0.01
+    assert any(e["kind"] == "halt_error" for e in ex.state.events)
+
+
+def test_gate_halt_retries_transient_reread(tmp_path):
+    """One transient on the post-cancel re-read must not strip the stop and
+    skip the flatten."""
+    class _FlakyVenue(FakeVenue):
+        def __init__(self, **kw):
+            super().__init__(**kw)
+            self.calls_n = 0
+
+        def position(self):
+            self.calls_n += 1
+            if self.calls_n == 3:        # boot(1) probe(2) ok; re-read blips
+                raise RuntimeError("transient")
+            return super().position()
+    v = _FlakyVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    v._add("MARKET", "BUY", 0.01, "seed")
+    ex.state.legs["trend"].qty = 0.01
+    ex.halt("KILL", "manual")
+    assert v.position() == 0.0, "flatten must survive one transient re-read"
+    assert ex.state.legs["trend"].qty == 0.0
+
+
+def test_gate_resume_clears_dead_stop_refs(tmp_path):
+    """After a failed halt the ledger can hold refs to orders the venue no
+    longer honours; the churn guard would then suppress re-placement. Resume
+    must verify and clear."""
+    v = FakeVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    led = ex.state.legs["trend"]
+    v._add("STOP", "SELL", 0.01, "T-1-S74089-1", px=74_089.0)
+    v.cancel("T-1-S74089-1")
+    led.qty, led.stop_cloid, led.stop_px = 0.01, "T-1-S74089-1", 74_089.0
+    ex.state.halted = "KILL"
+    ex.resume()
+    assert led.stop_cloid is None and led.stop_px is None, \
+        "dead stop ref must not survive resume (churn guard would mute it)"
+    assert any(e["kind"] == "stop_ref_cleared" for e in ex.state.events)
+
+
+def test_gate_boot_reconcile_venue_holds_ledger_flat_blocks_entries(tmp_path):
+    """The OTHER side: a crash after an order was sent but before the ledger
+    booked it leaves the venue holding what the ledger does not know.
+    Re-entering on top would double the position - page, adopt nothing,
+    block new entries until it resolves."""
+    import json
+    from app.mirror import Executor
+    v = FakeVenue(mult=0.01)
+    v._add("MARKET", "BUY", 0.02, "orphan")
+    cfg = Cfg()
+    cfg.state_path = str(tmp_path / "state.json")
+    cfg.dry_run = False
+    json.dump({"halted": "", "legs": {}}, open(cfg.state_path, "w"))
+    ex = Executor(v, cfg)
+    assert ex._boot_mismatch is True
+    assert any(e["kind"] == "position_drift" for e in ex.state.events)
+    # entries stay blocked...
+    ex.step(target(trend={"pending": {"side": "L", "limit": -1.0,
+                                      "signal_ts": NOW}, "position": None}))
+    assert ex.state.legs["trend"].qty == 0.0, "entered while mismatched"
+    # ...until someone resolves the venue side; then the flag clears
+    v.orders["orphan"]["status"] = "CANCELLED"
+    ex._check_drift(50_000.0)
+    assert ex._boot_mismatch is False
+
+
+def test_gate_fully_filled_entry_not_topped_up(tmp_path):
+    """A fully-filled entry re-targeted at the live mid sent a spurious
+    market top-up on adverse moves. The entry order's own size is the
+    quantity truth; the mid is only the slippage reference."""
+    v = FakeVenue(mult=0.01, mid=60_000.0)
+    ex = mkexec(tmp_path, v)
+    led = ex.state.legs["trend"]
+    led.entry_cloid, led.entry_side, led.entry_qty = "T-1-E", "L", 0.01
+    v.orders["T-1-E"] = {"type": "MARKET", "side": "BUY", "qty": 0.01,
+                         "px": 60_000.0, "status": "FILLED"}
+    # adverse move: mid drops, a mid-recomputed want would exceed 0.01
+    v._mid = 55_000.0
+    ex._enter_from_fill("trend", led, _long_pos(), BLEND, 10_000.0)
+    assert not any("-C" in c for c in v.orders if c != "T-1-E"), \
+        "spurious top-up chased beyond the entry order's own size"
+    assert led.qty == pytest.approx(0.01)
+
+
+def test_gate_state_load_tolerates_unknown_leg_fields(tmp_path):
+    """Roll-back safety: a state file written by a NEWER build must load,
+    not brick-and-wipe. Unknown leg fields are dropped."""
+    import json
+    from app.mirror import Executor
+    cfg = Cfg()
+    cfg.state_path = str(tmp_path / "state.json")
+    json.dump({"halted": "KILL", "legs": {"trend": {
+        "qty": 0.01, "stop_n": 4, "chase_n": 2,
+        "field_from_the_future": True}}}, open(cfg.state_path, "w"))
+    v = FakeVenue(mult=0.01)
+    v._add("MARKET", "BUY", 0.01, "seed")
+    ex = Executor(v, cfg)
+    assert ex.state.halted == "KILL", "state must survive unknown fields"
+    assert ex.state.legs["trend"].qty == 0.01
+    assert ex.state.legs["trend"].stop_n == 4
+
+
+def test_gate_pre_hotfix_state_backed_up_once(tmp_path):
+    import json, os
+    from app.mirror import Executor
+    cfg = Cfg()
+    cfg.state_path = str(tmp_path / "state.json")
+    json.dump({"halted": "", "legs": {}}, open(cfg.state_path, "w"))
+    Executor(FakeVenue(), cfg)
+    assert os.path.exists(cfg.state_path + ".pre-phantom-fix.bak")

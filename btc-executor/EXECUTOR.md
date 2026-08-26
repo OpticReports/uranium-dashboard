@@ -42,11 +42,14 @@ btc-executor  --Coinbase Advanced API-->  BTC perp product
 | DRY_RUN (default ON) | full state machine runs; orders only logged |
 | daily-loss halt | day loss > DAILY_LOSS_HALT_PCT (6%) **of the sizing base** -> cancel all, flatten, halt. Auto-rearms at UTC rollover at KELLY_M <= 0.30; MANUAL above. Boundary caveat: a rearm grants a fresh full day budget, so worst-case loss across a UTC boundary is ~2x the daily rail |
 | drawdown halt | equity below high-water minus DD_HALT_PCT (live: 0.35) **of the sizing base** -> same, manual resume |
-| kill switch | POST /kill -> same; POST /resume to clear (manual only) |
+| kill switch | POST /kill -> same; POST /resume to clear (manual only). Resume also verifies every stop ref against the venue and clears dead ones |
+| halt on a BLIND venue | position unreadable at halt time -> cancel NOTHING (the resting stop stays alive), page ACTION-NEEDED, still halt trading. A halt may only cancel/flatten/zero after the venue confirms: probe -> cancel_all -> verify our orders terminal -> re-read (retried) -> flatten (2026-08-26 incident: the old order stripped the stop then aborted) |
 | stale engine | feed stale/degraded -> new entries blocked (RED alert, rate-limited), exits still run |
-| drift check | venue vs ledger position mismatch > 1% of equity (below one CDE contract) -> RED event |
+| drift check | venue vs ledger position mismatch > 1% of equity (below one CDE contract) -> RED event. A FAILED venue read is itself a RED (venue_read_failed, 30-min cooldown) - blindness is never silent (2026-08-26: 3 silent days) |
 | orphan fills | our limit filled but paper cancelled -> unwound at market |
-| restart | ledger + order map persisted; reboot re-places nothing |
+| restart | ledger + order map persisted; reboot re-places nothing. Boot RECONCILES venue vs ledger: venue-confirmed-flat vs ledger-long -> adopt flat, cancel the trap stop, page (the phantom class); venue-holds vs ledger-flat -> page + BLOCK entries, adopt nothing; unreadable -> page, adopt nothing |
+| stop/chase identity | every stop and chase order carries a persisted attempt counter in its client order id - a cancel-then-replace can never re-send an id the venue has seen; a stop is BELIEVED only after the venue confirms it OPEN (stop_unconfirmed pages otherwise) |
+| rollback | NEVER roll back to a pre-2026-08-26 image while executor_state.json exists (old loader wipes state on unknown fields); boot writes a one-time .pre-phantom-fix.bak snapshot |
 
 ## Setup
 

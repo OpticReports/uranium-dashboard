@@ -66,6 +66,16 @@ def sync(con: sqlite3.Connection, status: dict | None = None) -> dict:
         rep["revisions"] += out == "REVISION"
 
     for f in status.get("fills", []):
+        # void fills are broken measurements, not executions (2026-08-26
+        # phantom incident: 1320bps of fictitious slippage against a
+        # days-stale reference, one fill that never happened at all). They
+        # must never enter the slip stats that authorize KELLY_M sizing.
+        # NOTE: rows ingested BEFORE this filter (and any slip_norms frozen
+        # from them) must be purged on the live DB - the filter alone only
+        # stops re-ingestion.
+        if f.get("void"):
+            rep["voided_skipped"] = rep.get("voided_skipped", 0) + 1
+            continue
         t = {"trade_id": f"{f.get('cloid', '?')}:{f.get('role', '?')}",
              "ts_utc": datetime.fromtimestamp(f["ts"], tz=timezone.utc).isoformat(),
              "side": f.get("side"), "fill_px": f.get("px"),
