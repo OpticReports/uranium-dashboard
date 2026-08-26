@@ -39,6 +39,34 @@ SUCCINCTNESS (Casey, 2026-08-13): "cut to the meat." Results first, minimal
 prose, tables/bullets over paragraphs. Keep the honesty caveats but compress
 them to one line each. No restating context Casey already has.
 
+## Model & token routing (STANDING, Casey 2026-08-26)
+
+The main loop (Fable when so configured) is for: architecture, planning,
+hard debugging, final review/synthesis, and anything ambiguous. Everything
+else is delegated — set `model` EXPLICITLY on every Agent / Workflow agent
+call instead of letting subagents inherit the main-loop model:
+
+- **sonnet** — default for exploration and analysis: file/code search,
+  exploration fan-outs (Explore agent type), codebase analysis and
+  summarization, log scanning, data extraction, standard implementation
+  from a clear spec, QA runs, doc updates. Do NOT use haiku for
+  exploration: a subtly wrong exploration summary taken as given costs
+  more than it saves — sonnet is the exploration floor.
+- **opus** — complex implementation, tricky refactors, code-review
+  passes, and the mandatory counter-agent verification passes.
+- **omit model (inherit main loop)** — only for design decisions,
+  adversarial verification of decision-critical findings, and synthesis
+  across many agent results.
+
+Effort: "low" for mechanical stages, session default for normal work,
+"high"+ reserved for verify/judge/design stages. Ultracode/xhigh is
+per-task opt-in (Casey says so explicitly), never a standing default.
+
+Subagents return CONCLUSIONS with file:line references — never raw file
+contents or dumps; state this in every subagent prompt. Verify a
+load-bearing claim by reading the few cited lines, not by re-running the
+search at main-loop rates.
+
 ## Standing engineering conventions
 
 - Agent-governed pattern for studies/builds: research or counter-agent pass
