@@ -63,10 +63,17 @@ def ensure_schema(con: sqlite3.Connection) -> None:
     # migration (2026-08-27): quarantine columns on edge_trades. Same
     # CREATE-IF-NOT-EXISTS trap as above — an existing live table never
     # gains columns from _SCHEMA.
+    # Each column guarded INDEPENDENTLY. DDL auto-commits in sqlite, so a
+    # crash between the two ALTERs leaves `quarantined` present and
+    # `quarantine_note` missing — and a guard keyed on the first column alone
+    # would then never add the second, leaving quarantine_trades raising
+    # OperationalError forever with no repair path (panel 2026-08-27).
     tcols = {r[1] for r in con.execute("PRAGMA table_info(edge_trades)")}
     if "quarantined" not in tcols:
         con.execute("ALTER TABLE edge_trades ADD COLUMN quarantined INTEGER "
                     "NOT NULL DEFAULT 0")
+        con.commit()
+    if "quarantine_note" not in tcols:
         con.execute("ALTER TABLE edge_trades ADD COLUMN quarantine_note TEXT")
         con.commit()
 

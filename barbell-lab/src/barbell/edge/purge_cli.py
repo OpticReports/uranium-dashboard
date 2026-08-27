@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sqlite3
 import sys
 
@@ -47,7 +48,22 @@ def main(argv: list[str] | None = None) -> int:
                     help="written rationale, >=10 chars; required with --apply")
     a = ap.parse_args(argv)
 
+    # REFUSE a path that is not already a database. sqlite happily CREATES
+    # an empty file, so a mistyped --db used to print "0 candidates, nothing
+    # quarantined, slip_norms null" and exit 0 — which reads exactly like
+    # "the live DB is clean". That is the worst possible failure for the one
+    # command an operator runs at 2am against real money (panel 2026-08-27).
+    if not os.path.isfile(a.db):
+        print(f"REFUSED: {a.db} does not exist. sqlite would silently create "
+              f"an empty DB and this tool would report it clean.",
+              file=sys.stderr)
+        return 2
     con = sqlite3.connect(a.db)
+    if not con.execute("SELECT name FROM sqlite_master WHERE type='table' "
+                       "AND name='edge_trades'").fetchone():
+        print(f"REFUSED: {a.db} has no edge_trades table — this is not the "
+              f"edge-monitor database.", file=sys.stderr)
+        return 2
     db.ensure_schema(con)          # also runs the quarantine-column migration
 
     if a.trade_id:

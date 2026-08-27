@@ -690,3 +690,45 @@ def test_gate_breach_check_uses_the_norms_in_force_not_refitted_ones(tmp_path):
     assert edb.kv_get(con, "S5-live", "last_breach_slip_cusum") == "2026-08-26"
     assert edb.kv_get(con, "S5-live", "slip_norms") is None, \
         "norms must still be dropped after the evaluation"
+
+
+def test_gate_ensure_schema_repairs_a_half_applied_migration(tmp_path):
+    """DDL auto-commits, so a crash between the two ALTERs is a real state:
+    `quarantined` present, `quarantine_note` missing. A guard keyed on the
+    first column alone never adds the second, and quarantine_trades then
+    raises OperationalError forever with no repair path."""
+    p = str(tmp_path / "half.db")
+    con = sqlite3.connect(p)
+    con.executescript(
+        "CREATE TABLE edge_trades (strategy_id TEXT NOT NULL, "
+        "trade_id TEXT NOT NULL, ts_utc TEXT NOT NULL, side TEXT, qty REAL, "
+        "notional_usd REAL, fill_px REAL, model_px REAL, slip_bps REAL, "
+        "fees_usd REAL, pnl_usd REAL, PRIMARY KEY (strategy_id, trade_id));")
+    con.execute("ALTER TABLE edge_trades ADD COLUMN quarantined INTEGER "
+                "NOT NULL DEFAULT 0")           # first ALTER only
+    con.commit()
+    edb.ensure_schema(con)                      # must finish the job
+    cols = {r[1] for r in con.execute("PRAGMA table_info(edge_trades)")}
+    assert "quarantine_note" in cols, f"half migration not repaired: {cols}"
+    edb.record_trade(con, "S5-live", _trade(1, 1320.59))
+    con.commit()
+    rep = edb.quarantine_trades(con, "S5-live", ["t1"], "repaired schema works")
+    assert rep["quarantined"] == 1
+
+
+def test_gate_purge_cli_refuses_a_path_that_is_not_the_db(tmp_path):
+    """sqlite CREATES an empty file for a mistyped --db, and the tool then
+    reports "0 candidates, nothing quarantined" — indistinguishable from a
+    clean live DB. That is the worst failure for a 2am command against real
+    money."""
+    from barbell.edge import purge_cli
+    missing = str(tmp_path / "typo.db")
+    assert purge_cli.main(["--db", missing]) == 2
+    assert not os.path.exists(missing), "created a DB for a mistyped path"
+    # an existing file that is not the edge DB is refused too
+    other = str(tmp_path / "other.db")
+    c = sqlite3.connect(other)
+    c.execute("CREATE TABLE unrelated (x INTEGER)")
+    c.commit()
+    c.close()
+    assert purge_cli.main(["--db", other]) == 2
