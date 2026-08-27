@@ -411,6 +411,24 @@ services:
         sync: false          # $10k per ladder leg now; dashboard owns ramps
       - key: STATE_PATH
         value: /app/data/ladder_state.json
+      # Blend book state MUST live on the mounted disk (same lesson as
+      # OUTAGE_LOG_PATH above): the code default is ./data on the EPHEMERAL
+      # layer, so every deploy silently wiped the blend book — positions,
+      # stop journal, pending orders. Harmless in DRY (it just re-inits);
+      # FATAL for a live book, which must survive deploys (found 2026-08-27,
+      # pre-go-live).
+      - key: BLEND_STATE_PATH
+        value: /app/data/blend_state.json
+      # blend3070 arming + sizing — trading-behavior vars, dashboard-owned
+      # (sync:false, AUTO_DRILL/DRY_RUN precedent). BLEND_BOOK_USD is read
+      # ONCE, when the live book first initializes; BLEND_BUDGET is the
+      # hard gross-notional cap the 85% utilization alarm binds on.
+      - key: BLEND_ENABLED
+        sync: false
+      - key: BLEND_BOOK_USD
+        sync: false
+      - key: BLEND_BUDGET
+        sync: false
       - key: LOG_LEVEL
         value: INFO
       # Same Canary Optics bot as btc-executor/canary. Unset = silent no-op.
