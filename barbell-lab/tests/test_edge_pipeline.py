@@ -349,3 +349,136 @@ def test_gate_adapter_skips_void_fills(tmp_path):
     n = con.execute("SELECT COUNT(*) FROM edge_trades WHERE "
                     "trade_id LIKE 'poison%'").fetchone()[0]
     assert n == 0, "the poison row reached edge_trades"
+
+
+# ---------------------------------------------------------------------------
+# 2026-08-27: the void filter only stops RE-ingestion. Rows already in
+# edge_trades — and any slip_norms frozen from them — needed a purge, because
+# those norms gate the CUSUM that authorizes KELLY_M sizing.
+def _trade(i, slip, ts_day=1):
+    return {"trade_id": f"t{i}", "ts_utc": f"2026-08-{ts_day:02d}T00:00:{i:02d}+00:00",
+            "side": "BUY", "fill_px": 70_000.0, "model_px": 70_000.0,
+            "slip_bps": slip}
+
+
+def test_gate_quarantine_migration_on_a_preexisting_db(tmp_path):
+    """THE migration gate: a live DB created by the OLD schema never gains
+    columns from CREATE TABLE IF NOT EXISTS — the exact trap that 500'd the
+    live disk on edge_revisions in 2026-08-14. Build the old table by hand,
+    then prove ensure_schema migrates it AND that inserts still work."""
+    p = str(tmp_path / "old.db")
+    con = sqlite3.connect(p)
+    con.executescript(
+        "CREATE TABLE edge_trades (strategy_id TEXT NOT NULL, "
+        "trade_id TEXT NOT NULL, ts_utc TEXT NOT NULL, side TEXT, qty REAL, "
+        "notional_usd REAL, fill_px REAL, model_px REAL, slip_bps REAL, "
+        "fees_usd REAL, pnl_usd REAL, PRIMARY KEY (strategy_id, trade_id));")
+    con.commit()
+    edb.ensure_schema(con)
+    cols = {r[1] for r in con.execute("PRAGMA table_info(edge_trades)")}
+    assert {"quarantined", "quarantine_note"} <= cols, f"not migrated: {cols}"
+    # and the widened table must still accept a normal insert (a positional
+    # VALUES(...) would blow up here with 11 values for 13 columns)
+    assert edb.record_trade(con, "S5-live", _trade(1, 2.0)) == "inserted"
+    assert edb.ensure_schema(con) is None          # idempotent, no crash
+
+
+def test_gate_quarantine_excludes_from_slip_stats(tmp_path):
+    con = _con(tmp_path)
+    for i in range(10):
+        edb.record_trade(con, "S5-live", _trade(i, 2.0))
+    edb.record_trade(con, "S5-live", _trade(99, 1320.59))
+    con.commit()
+    before = layers.check_slippage(con, "S5-live", {})
+    assert before["status"] == "breach", \
+        f"fixture must trip the CUSUM before the purge: {before}"
+    edb.quarantine_trades(con, "S5-live", ["t99"],
+                          "phantom incident: stale ref_px, fill never happened")
+    after = layers.check_slippage(con, "S5-live", {})
+    assert after["status"] == "ok" and after["value"] < before["value"], \
+        f"quarantine did not clear the fictitious breach: {before} -> {after}"
+    rows = con.execute("SELECT slip_bps FROM edge_trades WHERE strategy_id=? "
+                       "AND quarantined=0", ("S5-live",)).fetchall()
+    assert 1320.59 not in [r[0] for r in rows]
+    # the row SURVIVES with its reason — append-only means you can still see
+    # what was excluded and why
+    r = con.execute("SELECT slip_bps, quarantine_note FROM edge_trades "
+                    "WHERE trade_id='t99'").fetchone()
+    assert r[0] == 1320.59 and "phantom" in r[1]
+
+
+def test_gate_quarantine_drops_contaminated_slip_norms(tmp_path):
+    """The norms freeze on the first 10 rows. If a purge changes which rows
+    those are, keeping the old norms keeps the contamination — the filter
+    alone would not have fixed the live DB."""
+    con = _con(tmp_path)
+    edb.record_trade(con, "S5-live", _trade(0, 1320.59))
+    for i in range(1, 11):
+        edb.record_trade(con, "S5-live", _trade(i, 2.0))
+    con.commit()
+    layers.check_slippage(con, "S5-live", {})          # freezes norms
+    norms = edb.kv_get(con, "S5-live", "slip_norms")
+    assert norms and norms["mean"] > 100, "fixture did not contaminate norms"
+    rep = edb.quarantine_trades(con, "S5-live", ["t0"], "broken measurement row")
+    assert rep["quarantined"] == 1 and rep["slip_norms_dropped"] is True
+    assert edb.kv_get(con, "S5-live", "slip_norms") is None
+    layers.check_slippage(con, "S5-live", {})          # re-freezes clean
+    assert edb.kv_get(con, "S5-live", "slip_norms")["mean"] == pytest.approx(2.0)
+
+
+def test_gate_quarantine_requires_a_written_rationale(tmp_path):
+    """Same posture as resolve_revisions: this is the one operation that can
+    make a decaying strategy look healthy, so it is never casual."""
+    con = _con(tmp_path)
+    edb.record_trade(con, "S5-live", _trade(1, 1320.59))
+    con.commit()
+    for bad in ("", "oops"):
+        with pytest.raises(ValueError):
+            edb.quarantine_trades(con, "S5-live", ["t1"], bad)
+    assert con.execute("SELECT quarantined FROM edge_trades WHERE "
+                       "trade_id='t1'").fetchone()[0] == 0
+
+
+def test_gate_quarantine_never_deletes(tmp_path):
+    con = _con(tmp_path)
+    for i in range(3):
+        edb.record_trade(con, "S5-live", _trade(i, 900.0))
+    con.commit()
+    edb.quarantine_trades(con, "S5-live", ["t0", "t1", "t2"], "all three broken")
+    n = con.execute("SELECT COUNT(*) FROM edge_trades").fetchone()[0]
+    assert n == 3, "append-only law violated: rows were deleted"
+    log = con.execute("SELECT trigger FROM edge_state_log WHERE "
+                      "strategy_id='S5-live'").fetchall()
+    assert ("quarantine_trades",) in log, "purge left no audit trail"
+
+
+def test_gate_find_absurd_slippage_matches_executor_void_rule(tmp_path):
+    con = _con(tmp_path)
+    edb.record_trade(con, "S5-live", _trade(1, 499.0))
+    edb.record_trade(con, "S5-live", _trade(2, 501.0))
+    edb.record_trade(con, "S5-live", _trade(3, -1320.59))
+    con.commit()
+    got = {r["trade_id"] for r in edb.find_absurd_slippage(con, "S5-live")}
+    assert got == {"t2", "t3"}, f"threshold/abs mismatch vs |slip|>500: {got}"
+    edb.quarantine_trades(con, "S5-live", ["t2"], "already handled this one")
+    assert {r["trade_id"] for r in edb.find_absurd_slippage(con, "S5-live")} == {"t3"}
+
+
+def test_gate_purge_cli_dry_run_changes_nothing(tmp_path):
+    from barbell.edge import purge_cli
+    p = str(tmp_path / "cli.db")
+    con = sqlite3.connect(p)
+    edb.ensure_schema(con)
+    edb.record_trade(con, "S5-live", _trade(1, 1320.59))
+    con.commit()
+    con.close()
+    assert purge_cli.main(["--db", p]) == 0
+    con = sqlite3.connect(p)
+    assert con.execute("SELECT quarantined FROM edge_trades").fetchone()[0] == 0, \
+        "dry run quarantined a row"
+    # and --apply without a rationale is REFUSED, not silently accepted
+    assert purge_cli.main(["--db", p, "--apply", "--note", "x"]) == 2
+    assert con.execute("SELECT quarantined FROM edge_trades").fetchone()[0] == 0
+    assert purge_cli.main(["--db", p, "--apply", "--note",
+                           "phantom incident cleanup 2026-08-26"]) == 0
+    assert con.execute("SELECT quarantined FROM edge_trades").fetchone()[0] == 1
