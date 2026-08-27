@@ -51,11 +51,26 @@ def main(argv: list[str] | None = None) -> int:
     db.ensure_schema(con)          # also runs the quarantine-column migration
 
     if a.trade_id:
+        # RESOLVE named ids against the DB (2026-08-27 panel, BINDING): a
+        # typo used to be quarantined silently - rc 0, "success" printed, and
+        # the append-only audit row naming an id that matched nothing, while
+        # the row the operator meant to purge survived.
         ids = list(a.trade_id)
-        rows = [{"trade_id": i, "note": "named explicitly"} for i in ids]
+        found = {r[0]: r for r in con.execute(
+            f"SELECT trade_id, ts_utc, slip_bps, quarantined FROM edge_trades "
+            f"WHERE strategy_id=? AND trade_id IN ({','.join('?' * len(ids))})",
+            (a.strategy, *ids))}
+        rows = [{"trade_id": i,
+                 "ts_utc": found[i][1] if i in found else None,
+                 "slip_bps": found[i][2] if i in found else None,
+                 "status": ("already quarantined" if i in found and found[i][3]
+                            else "found" if i in found else "MISSING")}
+                for i in ids]
+        missing = [r["trade_id"] for r in rows if r["status"] == "MISSING"]
     else:
         rows = db.find_absurd_slippage(con, a.strategy, a.threshold)
         ids = [r["trade_id"] for r in rows]
+        missing = []
 
     norms = db.kv_get(con, a.strategy, "slip_norms")
     total = con.execute(
@@ -71,6 +86,11 @@ def main(argv: list[str] | None = None) -> int:
                       "slip_norms_currently_frozen": norms}, indent=2,
                      default=str))
 
+    if missing:
+        print(f"\nREFUSED: {len(missing)} named trade_id(s) do not exist on "
+              f"this strategy: {missing}\nNothing was changed. trade_id is "
+              f"'<cloid>:<role>' - check the ids and re-run.", file=sys.stderr)
+        return 2
     if not a.apply:
         print("\nDRY RUN - nothing changed. Re-run with --apply --note '...' "
               "to quarantine the candidates above.", file=sys.stderr)
@@ -87,6 +107,22 @@ def main(argv: list[str] | None = None) -> int:
     if rep["slip_norms_dropped"]:
         print("slip_norms dropped - they re-freeze from the surviving rows on "
               "the next run_daily once >=10 clean trades exist.", file=sys.stderr)
+    if rep.get("cusum_reset_i_restored") is not None:
+        print(f"cusum_reset_i RESTORED to {rep['cusum_reset_i_restored']}: the "
+              f"purged rows had driven a YELLOW transition that erased the "
+              f"return-CUSUM history. That evidence is back.", file=sys.stderr)
+    if rep.get("unresolved_residue"):
+        # rc 3, not 0: the purge succeeded but the account is NOT safe to
+        # size on until a human resolves this. Exiting 0 here is how the
+        # 'quarantine silently re-authorizes size' path stayed invisible.
+        print("\n*** UNRESOLVED RESIDUE - DO NOT TRUST CLEAN-DAY COUNTS ***",
+              file=sys.stderr)
+        for r in rep["unresolved_residue"]:
+            print(f"  - {r}", file=sys.stderr)
+        print("Resolve by hand before the next run_daily, or the state "
+              "machine may promote on evidence that was destroyed.",
+              file=sys.stderr)
+        return 3
     return 0
 
 

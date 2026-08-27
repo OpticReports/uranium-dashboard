@@ -181,20 +181,104 @@ def quarantine_trades(con: sqlite3.Connection, strategy_id: str,
         f"WHERE strategy_id=? AND trade_id IN ({marks}) AND quarantined=0",
         (note, strategy_id, *trade_ids))
     n = cur.rowcount
-    dropped = False
-    if n:
-        cur2 = con.execute("DELETE FROM edge_kv WHERE strategy_id=? AND key=?",
-                           (strategy_id, "slip_norms"))
-        dropped = cur2.rowcount > 0
-        con.execute(
-            "INSERT INTO edge_state_log (strategy_id, ts_utc, from_state, "
-            "to_state, trigger, note) VALUES (?,?,?,?,?,?)",
-            (strategy_id, _now(), None, None, "quarantine_trades",
-             json.dumps({"n": n, "ids": trade_ids, "note": note,
-                         "slip_norms_dropped": dropped})))
+    rep = {"quarantined": n, "slip_norms_dropped": False,
+           "ids": list(trade_ids), "cusum_reset_i_restored": None,
+           "unresolved_residue": [], "breach_stamp_cleared": False}
+    if not n:
+        con.commit()
+        return rep
+    _undo_phantom_state_damage(con, strategy_id, trade_ids, rep)
+    con.execute(
+        "INSERT INTO edge_state_log (strategy_id, ts_utc, from_state, "
+        "to_state, trigger, note) VALUES (?,?,?,?,?,?)",
+        (strategy_id, _now(), None, None, "quarantine_trades",
+         json.dumps({"n": n, "ids": trade_ids, "note": note, **{
+             k: rep[k] for k in ("slip_norms_dropped", "cusum_reset_i_restored",
+                                 "unresolved_residue", "breach_stamp_cleared")}})))
     con.commit()
-    return {"quarantined": n, "slip_norms_dropped": dropped,
-            "ids": list(trade_ids)}
+    return rep
+
+
+def _undo_phantom_state_damage(con: sqlite3.Connection, sid: str,
+                               trade_ids: list[str], rep: dict) -> None:
+    """Repair what the quarantined rows did to the STATE MACHINE, not just to
+    the statistic they polluted.
+
+    THE BUG THIS EXISTS FOR (2026-08-27 panel, BLOCKING). Dropping slip_norms
+    is not enough, and the gap is the dangerous direction. A phantom slip
+    breach drives GREEN->YELLOW, and entering YELLOW zeroes `cusum_reset_i`,
+    discarding every day of genuine return-decay evidence accumulated so far.
+    Quarantine the phantom rows and the fictitious brake releases - but the
+    real evidence stays erased, `half_threshold_ok` reads vacuously true,
+    20 clean nights accrue, and the machine promotes itself YELLOW->GREEN at
+    full ramp. Measured: 11-40 days at TWICE the size ground truth allows,
+    with the operator told only "slip_norms dropped". The human's single
+    decision was "purge two rows"; everything after that was automatic.
+
+    So: find the YELLOW transition those rows caused and undo its side
+    effects. `statemachine.step` now stamps the pre-reset index into the log
+    row, so the repair is exact. Transitions written before that stamp
+    existed cannot be repaired automatically - they are reported as
+    unresolved residue for the operator, never silently ignored.
+
+    Also clears `last_breach_slip_cusum`, but only when the SURVIVING rows no
+    longer breach: a partial purge that still leaves a genuine breach must
+    keep its stamp, or a real dual-confirmation RED gets erased. That stamp
+    otherwise lets a disowned phantom supply half of a dual_confirmation RED
+    (same panel, BINDING) - the fail-safe direction, but it re-opens the
+    cross-episode invariant the suite already pins."""
+    # Evaluate the surviving rows FIRST, under the norms that were actually
+    # in force, and only then drop those norms. Order matters: check_slippage
+    # FREEZES new norms as a side effect when none exist, so dropping first
+    # would have it silently re-freeze the key we just deleted - reporting
+    # "slip_norms_dropped" while the key sat there, re-derived at purge time
+    # instead of on the next nightly run.
+    norms = kv_get(con, sid, "slip_norms")
+    still_breach = layers_check_slippage_status(
+        con, sid, {"slip": norms} if norms else {}) == "breach"
+    cur = con.execute("DELETE FROM edge_kv WHERE strategy_id=? AND key=?",
+                      (sid, "slip_norms"))
+    rep["slip_norms_dropped"] = cur.rowcount > 0
+    if not still_breach:
+        cur = con.execute("DELETE FROM edge_kv WHERE strategy_id=? AND key=?",
+                          (sid, "last_breach_slip_cusum"))
+        rep["breach_stamp_cleared"] = cur.rowcount > 0
+    first_ts = con.execute(
+        f"SELECT MIN(ts_utc) FROM edge_trades WHERE strategy_id=? AND "
+        f"trade_id IN ({','.join('?' * len(trade_ids))})",
+        (sid, *trade_ids)).fetchone()[0]
+    if first_ts:
+        row = con.execute(
+            "SELECT rowid, note FROM edge_state_log WHERE strategy_id=? "
+            "AND trigger='slip_cusum' AND to_state='YELLOW' AND ts_utc>=? "
+            "ORDER BY ts_utc DESC LIMIT 1", (sid, first_ts)).fetchone()
+        if row:
+            prev = None
+            try:
+                prev = (json.loads(row[1] or "{}") or {}).get("cusum_reset_i_prev")
+            except (ValueError, TypeError):
+                prev = None
+            if prev is not None:
+                kv_set(con, sid, "cusum_reset_i", int(prev))
+                rep["cusum_reset_i_restored"] = int(prev)
+            else:
+                # legacy transition with no stamp: we know evidence was
+                # destroyed but not how much. Refuse to guess - a blind
+                # cusum_reset_i=0 is wrong in the other direction.
+                rep["unresolved_residue"].append(
+                    f"a slip_cusum YELLOW transition at/after {first_ts} reset "
+                    f"the return-CUSUM, and its pre-reset index was not "
+                    f"recorded (pre-2026-08-27 row). The genuine return "
+                    f"evidence it erased CANNOT be restored automatically - "
+                    f"review edge_state_log and decide cusum_reset_i by hand "
+                    f"BEFORE trusting any clean-day count.")
+
+def layers_check_slippage_status(con: sqlite3.Connection, sid: str,
+                                 base: dict) -> str:
+    """check_slippage's verdict only. Lazy import: layers imports db at module
+    level, so the reverse edge has to be deferred to call time."""
+    from . import layers
+    return layers.check_slippage(con, sid, base).get("status")
 
 
 def find_absurd_slippage(con: sqlite3.Connection, strategy_id: str,
