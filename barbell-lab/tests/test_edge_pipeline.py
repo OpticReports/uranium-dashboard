@@ -482,3 +482,36 @@ def test_gate_purge_cli_dry_run_changes_nothing(tmp_path):
     assert purge_cli.main(["--db", p, "--apply", "--note",
                            "phantom incident cleanup 2026-08-26"]) == 0
     assert con.execute("SELECT quarantined FROM edge_trades").fetchone()[0] == 1
+
+
+def test_gate_quarantine_excludes_from_behavior_rate(tmp_path):
+    """MUTATION KILLER for check_behavior's quarantine filter.
+
+    Found the hard way (2026-08-27): a counter-agent planted exactly this
+    mutation, the container died mid-run, and the orphaned diff proved it
+    survived all 26 tests — check_slippage was covered, check_behavior was
+    not. A purge that fixes one edge_trades reader and not the other leaves
+    the ops tripwire counting rows the stats have already disowned, so a
+    phantom-fill burst reads as a strategy that suddenly changed behaviour.
+
+    Fixture: 30 nav days, expected 0.1 trades/day (breach above 0.3/day).
+    5 real trades = 0.167/day -> ok. Count the 20 quarantined rows too and
+    it is 0.833/day -> a fictitious breach."""
+    con = _con(tmp_path)
+    for i in range(30):
+        edb.record_nav(con, "S5-live", f"2026-07-{i + 1:02d}", 50_000.0 + i, "t")
+    for i in range(5):
+        edb.record_trade(con, "S5-live", _trade(i, 2.0))
+    for i in range(100, 120):
+        edb.record_trade(con, "S5-live", _trade(i, 1320.59))
+    con.commit()
+    base = {"expected_trades_per_day": 0.1}
+    before = layers.check_behavior(con, "S5-live", base)
+    assert before["status"] == "breach", f"fixture must breach first: {before}"
+    edb.quarantine_trades(con, "S5-live", [f"t{i}" for i in range(100, 120)],
+                          "phantom fill burst, not real executions")
+    after = layers.check_behavior(con, "S5-live", base)
+    assert after["status"] == "ok", \
+        f"quarantined rows still counted in the trade rate: {after}"
+    assert after["value"] == round(5 / 30, 3), \
+        f"rate must count the 5 surviving trades only: {after}"
