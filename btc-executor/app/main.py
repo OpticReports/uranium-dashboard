@@ -85,7 +85,23 @@ def _build_executor() -> Executor:
 
 def _loop() -> None:
     global EXEC
-    EXEC = _build_executor()
+    # The venue_init_failed ACTION page has promised "Retrying
+    # automatically" since 2026-08-11 — but this call sat OUTSIDE any
+    # try, so a raise killed the daemon thread and no retry ever existed
+    # (counter-agent 2026-08-27, out-of-delta find). Mid-incident that is
+    # the worst possible shape: a transient Coinbase outage at deploy time
+    # left the service permanently dead while its own alert claimed it was
+    # self-healing. Backoff 30s -> 60s -> ... -> capped 10 min, forever:
+    # a LIVE book must not stay unmanaged because boot raced an outage.
+    delay = 30.0
+    while EXEC is None:
+        try:
+            EXEC = _build_executor()
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("executor build failed, retrying in %ss: %s",
+                             delay, exc)
+            time.sleep(delay)
+            delay = min(delay * 2, 600.0)
     while True:
         try:
             target = FEED.get_target()

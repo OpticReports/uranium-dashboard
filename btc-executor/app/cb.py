@@ -111,13 +111,19 @@ class CoinbaseVenue:
         else:
             try:
                 p = self.client.get_product(pid).to_dict()
+                # same sanity gate as the direct probes above: a 200 with an
+                # empty body is NOT a confirmed product, and rendering it as
+                # "[None] (configured)" would launder an unreadable product
+                # into a plausible-looking row (counter-agent 2026-08-27 F2)
+                if not p.get("product_id"):
+                    raise RuntimeError("empty product response")
                 found[pid] = (f"{pid} [{p.get('product_venue')}"
                               f"{' view_only' if p.get('view_only') else ''}"
                               f"{' DISABLED' if p.get('trading_disabled') else ''}]"
                               f" (configured)")
             except Exception as exc:  # noqa: BLE001
                 found[pid] = (f"{pid} [CONFIGURED but UNREADABLE: "
-                              f"{type(exc).__name__}]")
+                              f"{type(exc).__name__}: {exc}"[:120] + "]")
         return sorted(found.values())
 
     # ---------- size/price rounding ----------

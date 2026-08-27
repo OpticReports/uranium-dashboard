@@ -255,12 +255,12 @@ class Executor:
         if not flags:
             return
         if flags.get("view_only") or flags.get("trading_disabled"):
+            why = " ".join(k for k in ("view_only", "trading_disabled")
+                           if flags.get(k))
             self._event("RED", "product_untradable",
-                        f"configured product is "
-                        f"{'view_only' if flags.get('view_only') else ''}"
-                        f"{' trading_disabled' if flags.get('trading_disabled') else ''}"
-                        f" on venue {flags.get('venue')} - every order will "
-                        f"be rejected; fix CB_PRODUCT_ID before trusting any "
+                        f"configured product is {why} on venue "
+                        f"{flags.get('venue')} - every order will be "
+                        f"rejected; fix CB_PRODUCT_ID before trusting any "
                         f"'ready' signal")
 
     def _void_absurd_fills(self) -> None:

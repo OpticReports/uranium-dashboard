@@ -752,7 +752,10 @@ class _StubClient:
         self.limit_calls = []
 
     def get_product(self, product_id=None):
-        return _StubResp({"base_increment": "0.0001",
+        # echoes product_id like the real API - the configured-product probe
+        # sanity-gates on it (a 200 with no product_id is not a confirmation)
+        return _StubResp({"product_id": product_id or "BIP-20DEC30-CDE",
+                          "base_increment": "0.0001",
                           "quote_increment": "0.1",
                           "price_increment": "0.1",
                           "future_product_details": {"contract_size": "0.01"}})
@@ -2286,6 +2289,21 @@ def test_gate_untradable_product_pages_at_boot(tmp_path):
     assert any(e["kind"] == "product_untradable" and e["level"] == "RED"
                for e in ex.state.events), \
         "a view_only product must page at boot, not fail one order at a time"
+
+
+def test_gate_untradable_product_pages_through_dryrun_wrapper(tmp_path):
+    """MUTATION KILLER (counter-agent 2026-08-27 F1): the flags live on the
+    INNER venue when DryRunVenue wraps it — which is exactly the mandatory
+    shadow stage. Reading only venue.product_flags let a view_only product
+    run the whole shadow period silent, with the warning arriving only at
+    the LIVE boot after DRY_RUN flips."""
+    from app.cb import DryRunVenue        # the REAL wrapper: no __getattr__
+    inner = FakeVenue(mult=0.01)          # delegation, flags ONLY on inner —
+    inner.product_flags = {"view_only": True, "trading_disabled": False,
+                           "venue": "FCM"}
+    ex = mkexec(tmp_path, DryRunVenue(inner))
+    assert any(e["kind"] == "product_untradable" for e in ex.state.events), \
+        "flags on DryRunVenue.inner must still page at boot"
 
 
 def test_gate_tradable_product_boots_quiet(tmp_path):
