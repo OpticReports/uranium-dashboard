@@ -54,6 +54,14 @@ class CoinbaseVenue:
         p = self.client.get_product(self.product_id).to_dict()
         f = p.get("future_product_details") or {}
         mult = float(f.get("contract_size") or 0) or None
+        # Tradability flags for the CONFIGURED product, surfaced so the
+        # mirror can refuse/page at boot instead of discovering the problem
+        # one rejected order at a time (2026-08-27 finding: a view_only or
+        # trading_disabled product passes this meta call fine and the
+        # executor boots "ready" into a book it cannot touch).
+        self.product_flags = {"view_only": bool(p.get("view_only")),
+                              "trading_disabled": bool(p.get("trading_disabled")),
+                              "venue": p.get("product_venue")}
         return {"base_increment": float(p.get("base_increment") or 0.0001),
                 "price_increment": float(p.get("price_increment") or 0.1),
                 "contract_multiplier": mult}   # None => sizes are plain BTC
@@ -70,7 +78,13 @@ class CoinbaseVenue:
                 out = self.client.get_products(**kw).to_dict()
                 for p in out.get("products", []):
                     pid = p.get("product_id", "")
-                    if "BTC" in pid.upper() or "BIT" in pid.upper():
+                    # "BIP" too (2026-08-27): the nano BTC perpetual-style
+                    # future is BIP-20DEC30-CDE — the very product this
+                    # deployment trades — and the old BTC/BIT filter dropped
+                    # it, so the /status banner omitted the configured
+                    # product and read as "your product does not exist"
+                    # during a live incident diagnosis.
+                    if any(t in pid.upper() for t in ("BTC", "BIT", "BIP")):
                         found.setdefault(
                             pid, f"{pid} [{p.get('product_venue')}"
                                  f"{' view_only' if p.get('view_only') else ''}]")
@@ -88,6 +102,22 @@ class CoinbaseVenue:
                                   f"{' DISABLED' if p.get('trading_disabled') else ''}]")
             except Exception:  # noqa: BLE001
                 pass
+        # The CONFIGURED product is ALWAYS in the list, labeled — a
+        # diagnostic banner that can omit the one product we actually trade
+        # is worse than none. Reachability failure is loud, not absent.
+        pid = self.product_id
+        if pid in found:
+            found[pid] += " (configured)"
+        else:
+            try:
+                p = self.client.get_product(pid).to_dict()
+                found[pid] = (f"{pid} [{p.get('product_venue')}"
+                              f"{' view_only' if p.get('view_only') else ''}"
+                              f"{' DISABLED' if p.get('trading_disabled') else ''}]"
+                              f" (configured)")
+            except Exception as exc:  # noqa: BLE001
+                found[pid] = (f"{pid} [CONFIGURED but UNREADABLE: "
+                              f"{type(exc).__name__}]")
         return sorted(found.values())
 
     # ---------- size/price rounding ----------

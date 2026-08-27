@@ -234,9 +234,34 @@ class Executor:
         self._migrate_ledger_granularity()
         self._warn_unattributed_coverage()
         self._void_absurd_fills()
+        self._check_product_tradable()
         self._reconcile_boot()
         if any(l.qty != 0.0 for l in self.state.legs.values()):
             self._cov("restart_with_position")
+
+    def _check_product_tradable(self) -> None:
+        """Boot page when the CONFIGURED product cannot actually trade.
+
+        A view_only or trading_disabled product passes the meta call in
+        CoinbaseVenue.__init__ fine, so the executor booted "ready" into a
+        book where every placement would be rejected one order at a time —
+        which for a protective stop is the naked-position phenotype again,
+        discovered only when protection was already owed (2026-08-27
+        finding, from the live product-config diagnosis). DryRunVenue wraps
+        the real venue, so flags are read through `inner` when present."""
+        flags = (getattr(self.venue, "product_flags", None)
+                 or getattr(getattr(self.venue, "inner", None),
+                            "product_flags", None))
+        if not flags:
+            return
+        if flags.get("view_only") or flags.get("trading_disabled"):
+            self._event("RED", "product_untradable",
+                        f"configured product is "
+                        f"{'view_only' if flags.get('view_only') else ''}"
+                        f"{' trading_disabled' if flags.get('trading_disabled') else ''}"
+                        f" on venue {flags.get('venue')} - every order will "
+                        f"be rejected; fix CB_PRODUCT_ID before trusting any "
+                        f"'ready' signal")
 
     def _void_absurd_fills(self) -> None:
         """One-time hygiene at boot: a recorded |slip_bps| > 500 is not a
@@ -659,6 +684,12 @@ class Executor:
             "halt_error": "closing positions during the halt FAILED — open "
                           "Coinbase NOW, check positions, flatten manually "
                           "if any remain",
+            "product_untradable": "CB_PRODUCT_ID points at a product this "
+                                  "key cannot trade (view_only/disabled) - "
+                                  "every order will be rejected. Check "
+                                  "/status venue_products for the entry "
+                                  "marked (configured) and fix the Render "
+                                  "env var",
             "stop_ref_unverified": "a /resume found a stop the venue would "
                                    "not confirm AND could not read the "
                                    "position - open Coinbase, confirm the "

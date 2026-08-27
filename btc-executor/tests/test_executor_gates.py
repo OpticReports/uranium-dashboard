@@ -2204,6 +2204,99 @@ def test_gate_position_never_calls_nonexistent_sdk_method():
     assert "get_intx_position" not in called
 
 
+# ---------------------------------------------------------------------------
+# 2026-08-27 live finding: the discovery banner filtered tickers on BTC/BIT
+# and dropped BIP-20DEC30-CDE — the nano BTC perpetual-style future this
+# deployment actually trades — so /status venue_products omitted the one
+# configured product and the incident diagnosis concluded "your product does
+# not exist" from the executor's own diagnostics.
+class _DiscoveryStubClient(_StubClient):
+    def get_products(self, **kw):
+        return _StubResp({"products": [
+            {"product_id": "BIT-25SEP26-CDE", "product_venue": "FCM"},
+            {"product_id": "BIP-20DEC30-CDE", "product_venue": "FCM"},
+            # a BIP product that is NOT the configured one: only the ticker
+            # filter can surface it, so this row is what makes the filter
+            # test non-vacuous (the configured product would be added by the
+            # always-label fallback even with the filter broken - mutation
+            # check 2026-08-27)
+            {"product_id": "BIP-19DEC31-CDE", "product_venue": "FCM"},
+            {"product_id": "ETH-PERP-INTX", "product_venue": "INTX"},
+        ]})
+
+
+class _NoListStubClient(_StubClient):
+    """Listings entirely down; only direct get_product probes work."""
+    def get_products(self, **kw):
+        raise RuntimeError("listing endpoint down")
+
+
+def test_gate_discovery_matches_bip_prefix(tmp_path, monkeypatch):
+    v = _mk_cb_venue(tmp_path, monkeypatch, _DiscoveryStubClient())
+    out = v.list_perp_candidates()
+    assert any("BIP-20DEC30-CDE" in e for e in out), \
+        f"BIP-prefixed product dropped by the ticker filter: {out}"
+    # the NON-configured BIP row proves the FILTER matched it - the
+    # configured row alone would also appear via the always-label fallback
+    assert any("BIP-19DEC31-CDE" in e for e in out), \
+        f"ticker filter still drops BIP prefixes: {out}"
+    assert not any("ETH" in e for e in out), "not a BTC product list"
+
+
+def test_gate_discovery_always_labels_configured_product(tmp_path, monkeypatch):
+    """The configured product appears LABELED even when every listing query
+    fails — a banner that can omit the product we trade is worse than none."""
+    for client in (_DiscoveryStubClient(), _NoListStubClient()):
+        v = _mk_cb_venue(tmp_path, monkeypatch, client)
+        out = v.list_perp_candidates()
+        cfg_rows = [e for e in out if "BIP-20DEC30-CDE" in e]
+        assert cfg_rows and "(configured)" in cfg_rows[0], \
+            f"configured product missing/unlabeled with {type(client).__name__}: {out}"
+
+
+def test_gate_discovery_unreadable_configured_product_is_loud(tmp_path,
+                                                              monkeypatch):
+    v = _mk_cb_venue(tmp_path, monkeypatch, _NoListStubClient())
+
+    def _boom(product_id=None):
+        raise RuntimeError("api down")
+    v.client.get_product = _boom
+    out = v.list_perp_candidates()
+    assert any("BIP-20DEC30-CDE" in e and "UNREADABLE" in e for e in out), \
+        f"an unreachable configured product must be loud, not absent: {out}"
+
+
+def test_gate_cb_captures_product_flags(tmp_path, monkeypatch):
+    class _ViewOnlyClient(_StubClient):
+        def get_product(self, product_id=None):
+            r = super().get_product(product_id).to_dict()
+            r["view_only"] = True
+            r["product_venue"] = "FCM"
+            return _StubResp(r)
+    v = _mk_cb_venue(tmp_path, monkeypatch, _ViewOnlyClient())
+    assert v.product_flags["view_only"] is True
+    assert v.product_flags["venue"] == "FCM"
+
+
+def test_gate_untradable_product_pages_at_boot(tmp_path):
+    v = FakeVenue(mult=0.01)
+    v.product_flags = {"view_only": True, "trading_disabled": False,
+                       "venue": "FCM"}
+    ex = mkexec(tmp_path, v)
+    assert any(e["kind"] == "product_untradable" and e["level"] == "RED"
+               for e in ex.state.events), \
+        "a view_only product must page at boot, not fail one order at a time"
+
+
+def test_gate_tradable_product_boots_quiet(tmp_path):
+    v = FakeVenue(mult=0.01)
+    v.product_flags = {"view_only": False, "trading_disabled": False,
+                       "venue": "FCM"}
+    ex = mkexec(tmp_path, v)
+    assert not any(e["kind"] == "product_untradable"
+                   for e in ex.state.events)
+
+
 def test_gate_cb_calls_only_real_sdk_methods():
     """THE test that would have caught the incident at merge: every method
     cb.py invokes on self.client must exist on the pinned RESTClient."""
