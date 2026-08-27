@@ -1553,3 +1553,67 @@ DECISIONS: (1) NO BUILD — not G2, not the sizers; no symphony changes.
     works: surgical (35/812 ZVOL days), and it caught the one catastrophe.
 (5) PROCESS: builder script was missing from the working dir (my own add.-27
     fix-list item). Now preserved: research/garch/. Standing rule reaffirmed.
+
+
+## Addendum 32 — Singha drift-regimes RE-REVIEW: mechanism tested on our own
+## instruments; NO ALPHA, no changes (2026-08-27)
+
+Owner re-sent arXiv:2511.12490 (Singha 2025) asking what is learnable and
+whether the mechanism applies to our symphonies. The PAPER was already
+rejected 2026-07-23 (research/singha2025-drift-regimes.md — survivorship:
+their own equal-weight benchmark returns +79%/yr in all three test windows
+vs real SPX +12..30% / ~0% / +14..39%). NEW here: the salvaged mechanism
+(ideas-backlog #1, per-instrument regime gating) was actually TESTED.
+
+Regime definition per paper: >60% up-days in trailing 63d, PER INSTRUMENT,
+computed real-time (no lookahead).
+
+T1 — does the regime LABEL predict? fwd-21d return in-regime vs out, 13 of
+our tickers: mean spread -1.27% (in-regime does WORSE), 11/13 negative,
+0/13 with |t|>2 (t deflated by sqrt(21) for overlapping windows).
+T2 — the paper's ACTUAL claim (regime CONDITIONS a reversal signal; it says
+this interaction is 53% of returns): corr(neg-10d-return, fwd-5d) IN-regime
+-0.007 vs OUT +0.036; mean diff -0.043 (t=-1.23, 11 tickers); regime helps
+on only 3/11. The interaction runs the WRONG WAY on our universe.
+T3 — per-instrument gating on HG legs (restrict selection universe to names
+in their own drift regime, else BIL): TREND CAGR +39.0%->+1.7%, Sharpe
+0.89->0.22; DIP-BUY +13.2%->+3.4%, Sharpe 0.58->0.29.
+
+COUNTER-AGENT (audit ran to completion; the agent died while publishing its
+writeup — results recovered from its transcript and the headline
+independently re-verified by me):
+- T1 and T2 replicated EXACTLY. CONFIRMED.
+- FAITHFULNESS ATTACK ANSWERED: my tests are time-series, the paper is
+  cross-sectional — a real category-error risk I had flagged. The agent
+  built the paper-faithful cross-sectional IC version; it gives the SAME
+  answer: IN-regime IC negative across TREND/DIP/ALL13 (-0.01 to -0.12),
+  OUT-regime IC positive (+0.011 to +0.057). The category error does not
+  rescue the mechanism.
+- MY T3 WAS FLAWED: comparing a gate that forces cash 55% of days against
+  a fully-invested leg confounds the gate with the cash drag. Corrected
+  with an excess-of-BIL measure.
+- PLACEBO (the decisive test): against random gates matched to the real
+  gate's participation rate, the real drift gate lands at the 10th
+  percentile on my replication (agent got 0.0th on its excess-of-BIL
+  measure); random gates beat it ~90% of the time. TREND leg ungated
+  Sharpe 0.886 -> drift-gated 0.404, random-gate median 0.625.
+  The gate is not merely useless, it is WORSE THAN RANDOM — it
+  systematically selects names that have already run.
+- STEELMAN (inverted gate — hold names OUT of drift regime, which T1
+  implies should work): best variant over the full threshold/window sweep
+  improves Sharpe by only +0.086, against a random-gate null whose MEDIAN
+  improvement is +0.355 and 95th pct +0.703. The steelman also fails.
+
+DECISIONS: (1) NO CHANGES; the existing rejection stands and is now
+mechanism-tested on our own instruments rather than argued from the paper's
+flaws alone. (2) ideas-backlog item #1 (per-instrument regime gating) is
+CLOSED, not merely parked — it was the cheapest idea to falsify and it
+falsified. Items #2 (binary activation) and #3 (kill-switch) remain, though
+#2 is already how our trees are built and #3 is the monitor's alert layer.
+(3) MECHANISM, consistent with the six no-overlay measurements: our engines
+earn from mean reversion AFTER stress; a drift filter buys what has already
+run, so it is phase-inverted for this book — the same reason the 19b trend
+gates failed. (4) METHODOLOGY KEPT: the paper's randomization test (1000
+random regime filters) is its one good idea, and we had already adopted it
+independently — the counter-agent used exactly that to kill my GARCH gate
+in add. 31, and used it again here. Now standard for any gate proposal.

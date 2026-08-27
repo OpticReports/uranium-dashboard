@@ -12,12 +12,17 @@ The paper's empirics are survivorship artifacts (see
 singha2025-drift-regimes.md), but three concepts are independently sound
 and worth a clean test on real infrastructure:
 
-1. **Stock-level (not market-level) regime gating.** Defining the regime
-   per-instrument (e.g., fraction of up-days over a trailing window) lets
-   different names be in different regimes simultaneously — a bigger
-   opportunity set than market-wide VIX/trend gates. Our current gates
-   (HYG guard, KMLM branches) are market-level; per-instrument gating is
-   the genuinely new-to-us idea.
+1. ~~**Stock-level (not market-level) regime gating.**~~ **CLOSED
+   2026-08-27, addendum 32 — TESTED AND FAILED.** Built and measured on our
+   own instruments: the regime label predicts forward returns with the
+   WRONG sign (-1.27% mean spread, 0/13 tickers significant); the paper's
+   regime-conditions-reversal interaction also inverts (corr IN -0.007 vs
+   OUT +0.036); applied to HG's legs it cuts TREND Sharpe 0.89->0.22 and
+   DIP-BUY 0.58->0.29. Decisive: against random gates at matched
+   participation the real gate lands at the 10th percentile — worse than
+   random. The inverted steelman also fails its null. Mechanism: our
+   engines earn from mean reversion after stress, so a drift filter buys
+   what has already run. Do not revisit without new evidence.
 2. **Binary on/off signal activation rather than continuous weighting.**
    Turning a weak unconditional signal fully OFF outside its regime beats
    scaling it down, IF the conditional edge is real. Cheap to test.
