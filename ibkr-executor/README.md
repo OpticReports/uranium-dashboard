@@ -516,7 +516,56 @@ injects the token server-side, so the browser never holds it.
 `BLEND_ENABLED` — a silently failing blend cycle is visible from the
 outside.
 
-Casey's paper-credential steps when the paper gate opens:
+LIVE SINCE 2026-08-28 (blend3070 only; the ladder stays PARKED). The
+staged paper rehearsal below was NOT completed — the paper phase never
+produced a fill (quote outage -> ValidationError -> error 321 -> market
+data entitlement, fixed in that order), and Casey elected to go straight
+to live money once quotes flowed. Recorded here because the rollout
+history is otherwise unreadable from the code.
+
+First live session, 2026-08-28 (verified at the venue):
+  book $50,000 (BLEND_BOOK_USD) inside a $60,000 cap (BLEND_BUDGET);
+  CORE 45 SPY @ ~772.02 ($34.7k) + SWEEP 163 BIL @ ~91.67 ($14.9k)
+  = $49.7k deployed, 83% utilization; sleeve flat, parked in BIL.
+  Book P&L on entry -$12.35 (spread + commission). No naked positions:
+  SPY/BIL are book-level holdings and carry no stops by design.
+
+WHAT LIVE ACTUALLY REQUIRED (none of it obvious from the paper phase):
+1. A SECOND IBKR USERNAME for the gateway. IBKR allows one session per
+   username, and Casey's primary holds IB Key. The gateway user logs in
+   headless; IB Key stays ACTIVE on it (no SLS opt-out was available on
+   this account), so every gateway login fires a PUSH to Casey's phone:
+   one per deploy, one per IBKR's forced weekend restart, one per crash.
+   Unanswered pushes are safe - the supervisor's circuit breaker
+   (MAX_CONSEC_FAIL) stops retrying long before IBKR locks the account.
+   IB Key must be activated FOR THAT USERNAME in IBKR Mobile; without it
+   IBKR falls back to EMAILED codes, which a headless gateway can never
+   answer (this cost a day).
+2. MARKET DATA IS A SEPARATE PURCHASE, on the gateway user: the
+   fee-waived defaults are NOT enough for SPY/BIL over the API. Needed:
+   Market Data API Acknowledgement SIGNED, Non-Professional status set,
+   plus the US Securities Snapshot and Futures Value Bundle (and the US
+   Equity and Options Add-On Streaming Bundle). Activation was same-day
+   here, but next-trading-day is the documented norm.
+3. `IB_ALLOW_DELAYED=false` is enforced at boot in live mode, and
+   `_await_tick` then EXCLUDES the `close` field - so an account without
+   a live entitlement reads as "no market price" and the book fails
+   closed rather than pricing real orders off yesterday's close. That is
+   what a missing subscription looks like from the outside: 21 hours of
+   `quotes_missing_for_s` climbing, zero orders, no damage.
+4. `DRY_RUN=true` IS NOT A DIAGNOSTIC POSTURE. It swaps in the
+   DryAdapter, whose synthetic prices CLEAR the missing-quote counter -
+   a false all-clear on the exact thing under test. Diagnose market-data
+   problems with the real adapter, fail-closed, or not at all.
+
+`/kill` REMAINS UNVERIFIED AGAINST A REAL VENUE. It was meant to be
+proven in the paper week; with a live book it FLATTENS (sells) real
+positions, so it can only be tested at a moment when flat is acceptable.
+Until then its two-stage path (journal + halt on the API thread, execute
+on the loop thread) has never run against IBKR.
+
+The original staged rehearsal, kept for the record and for any FUTURE
+strategy's cutover (the per-leg discipline still applies):
 
 1. Set `TRACKER_URL` + `TRACKER_API_TOKEN` (generate one, set the same
    value as `BLEND_API_TOKEN` on the tracker; or fall back to
@@ -529,7 +578,6 @@ Casey's paper-credential steps when the paper gate opens:
    `/kill` halts the blend book immediately and queues the flatten for
    the execution loop (two-stage — the completion alert says what closed
    vs parked). VERIFY `/kill` EARLY in the paper week (re-review R2).
-   Live is a separate, later decision — same per-leg cutover discipline.
 
 ## Service modes (auto-selected at boot)
 
@@ -538,7 +586,7 @@ Casey's paper-credential steps when the paper gate opens:
 | OFFLINE | no TWS credentials | full decision loop, DryAdapter, no gateway |
 | DRY | credentials present, DRY_RUN=true | gateway boots; mutations (and reads) still simulated via DryAdapter |
 | PAPER | TRADING_MODE=paper, DRY_RUN=false | real market reads + real paper orders — blend stock/ETF surfaces LANDED (see the paper-phase adapter section); combo placement still pending |
-| LIVE | TRADING_MODE=live, DRY_RUN=false | real money (Nov gate, per-leg cutover) |
+| LIVE | TRADING_MODE=live, DRY_RUN=false | real money — ACTIVE since 2026-08-28 (blend3070 only, $50k book / $60k cap; ladder parked) |
 
 Control surface: `/health` (public), `/status`, `/kill` (closes all open
 ladder legs and halts; the blend flatten is queued to the execution loop
