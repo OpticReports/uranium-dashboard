@@ -524,11 +524,14 @@ to live money once quotes flowed. Recorded here because the rollout
 history is otherwise unreadable from the code.
 
 First live session, 2026-08-28 (verified at the venue):
-  book $50,000 (BLEND_BOOK_USD) inside a $60,000 cap (BLEND_BUDGET);
-  CORE 45 SPY @ ~772.02 ($34.7k) + SWEEP 163 BIL @ ~91.67 ($14.9k)
-  = $49.7k deployed, 83% utilization; sleeve flat, parked in BIL.
-  Book P&L on entry -$12.35 (spread + commission). No naked positions:
-  SPY/BIL are book-level holdings and carry no stops by design.
+  book $50,000 (BLEND_BOOK_USD) inside a $60,000 cap (BLEND_BUDGET).
+  Venue-confirmed fills, 09:58:30-31 ET: CORE 45 SPY @ 772.00 =
+  $34,740.00, SWEEP 163 BIL @ 91.66 = $14,940.58 (2 venues), $1.00
+  commission each. $49,680.58 deployed, 83% utilization; sleeve flat,
+  parked in BIL. Both legs spent to the weight cap without crossing it
+  (46 SPY = $35,512 > the $35,000 core; 164 BIL = $15,032 > the $15,000
+  sleeve). Total cost of going live: $2.00. No naked positions - SPY/BIL
+  are book-level holdings and carry no stops by design.
 
 WHAT LIVE ACTUALLY REQUIRED (none of it obvious from the paper phase):
 1. A SECOND IBKR USERNAME for the gateway. IBKR allows one session per
