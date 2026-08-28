@@ -4157,3 +4157,244 @@ def test_gate_partial_fill_on_dying_stop_is_not_clean_evidence(tmp_path):
                                 if c == led.stop_cloid else orig(c))
     ex.step(target(trend={"pending": None, "position": pos}))
     assert led.qty == 0.0
+
+
+# ---------------------------------------------------------------------------
+# Re-gate 2026-08-27. Four BLOCKING paths, all reproduced by the panel
+# end-to-end; three were introduced by the fixes that preceded them. Every
+# test below corresponds to a mutation that previously survived all 213.
+def _legs(ex, pull, trend):
+    ex.state.legs["pullback"].qty = pull
+    ex.state.legs["trend"].qty = trend
+
+
+def test_gate_B1_opposed_leg_gets_no_surplus_credit(tmp_path):
+    """The surplus relaxation ('holding MORE is fine') is FALSE when a leg's
+    sign opposes the net: the stop's side is _close_side(led.qty), so it
+    moves the net AWAY from zero and OPENS size. The stop is sized on ONE
+    leg while the check compared the SUM, so |leg| could exceed |sum| freely.
+    Panel repro: venue +0.34, ledger {+0.34, -0.14 phantom}, sum +0.20 ->
+    'ok' -> a BUY stop armed 0.14 BTC (~$10k) of unmanaged long."""
+    v = FakeVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    v._add("MARKET", "BUY", 0.34, "seed")          # only pullback is real
+    _legs(ex, +0.34, -0.14)                        # trend is phantom
+    verdict, net, want = ex._stop_backing()
+    assert verdict == "diverged", \
+        f"opposed phantom leg rode in on the surplus: {verdict} net={net} want={want}"
+
+
+def test_gate_B1_opposed_leg_blocks_the_placement(tmp_path):
+    v = FakeVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    v._add("MARKET", "BUY", 0.34, "seed")
+    _legs(ex, +0.34, -0.14)
+    pos = {"side": "S", "entry_ts": NOW, "signal_ts": NOW - 14_400,
+           "stop": 77_000.0, "exit_flag": None}
+    ex._maintain_stop("trend", ex.state.legs["trend"], pos)
+    assert ex.state.halted == "LEDGER_DIVERGENCE"
+    assert not [c for c, o in v.orders.items()
+                if o["type"] == "STOP" and o["status"] == "OPEN"], \
+        "armed a stop that OPENS size on trigger"
+
+
+def test_gate_B1_flat_ledger_is_not_vacuously_ok(tmp_path):
+    """want == 0 used to return 'ok' with NO check in either direction: the
+    early return masked net > 0, and `(want > 0)` being False at zero masked
+    net < 0. A flat ledger against a venue holding anything is a
+    contradiction like any other."""
+    for seed_side, qty in (("BUY", 0.02), ("SELL", 0.02)):
+        v = FakeVenue(mult=0.01)
+        ex = mkexec(tmp_path / seed_side, v)
+        v._add("MARKET", seed_side, qty, "seed")
+        _legs(ex, 0.0, 0.0)
+        assert ex._stop_backing()[0] == "diverged", \
+            f"flat ledger vs venue {seed_side} {qty} read as ok"
+
+
+def test_gate_B1_same_sign_surplus_is_still_allowed(tmp_path):
+    """The relaxation must survive where it is sound: no opposed leg, venue
+    holds more than the ledger claims. Tightening this into a halt would
+    fire on every rounding difference."""
+    v = FakeVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    v._add("MARKET", "BUY", 0.05, "seed")
+    _legs(ex, +0.02, +0.01)
+    assert ex._stop_backing()[0] == "ok"
+
+
+def test_gate_B2_close_leg_refuses_to_open_the_reverse_side(tmp_path):
+    """_close_leg took side AND size straight off the ledger with no
+    position read. Reads fully HEALTHY here: the position was closed outside
+    our sight (an operator flatten, which halt_error's own page instructs),
+    so the exit path sent MARKET SELL 0.34 into a flat venue and opened a
+    naked, stopless SHORT of ~$25k with halted=None."""
+    v = FakeVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    led = ex.state.legs["pullback"]
+    led.qty, led.stop_cloid, led.stop_px = 0.34, "P-1-S70000-1", 70_000.0
+    v._add("STOP", "SELL", 0.34, "P-1-S70000-1", px=70_000.0)
+    v.cancel("P-1-S70000-1")                       # venue killed it too
+    ex._close_leg("pullback", led, "engine_flat")  # venue is FLAT
+    assert v.position() == 0.0, \
+        f"opened a reverse naked position out of a flat venue: {v.position()}"
+    assert not [c for c, o in v.orders.items() if o["type"] == "MARKET"], \
+        "sent a market close against a venue that holds nothing"
+
+
+def test_gate_B2_close_leg_clamps_to_the_venue(tmp_path):
+    """Corroboration says the ledger is backed in AGGREGATE; it does not
+    bound THIS leg against the net. A close larger than the venue holds
+    overshoots through flat and opens the reverse side.
+
+    The fixture has to be a hedged book, or the aggregate check diverges and
+    halts before the clamp is ever reached — an earlier version of this test
+    did exactly that and passed by reading the HALT's own flatten order, so
+    removing the clamp left it green (mutation survived 226 tests)."""
+    v = FakeVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    v._add("MARKET", "BUY", 0.02, "seed")          # venue net +0.02
+    _legs(ex, +0.05, -0.03)                        # ledger sum +0.02: agrees
+    led = ex.state.legs["pullback"]
+    assert ex._stop_backing()[0] == "ok", "fixture must reach the clamp"
+    ex._close_leg("pullback", led, "engine_flat")
+    assert ex.state.halted is None, "fixture halted instead of clamping"
+    assert v.position() >= -1e-9, \
+        f"close overshot through flat into a naked short: {v.position()}"
+    mkt = [o for c, o in v.orders.items()
+           if c != "seed" and o["type"] == "MARKET" and o["side"] == "SELL"]
+    assert mkt and all(o["qty"] <= 0.02 + 1e-9 for o in mkt), \
+        f"closed more than the venue held: {mkt}"
+
+
+def test_gate_B2_close_leg_blind_venue_touches_nothing(tmp_path):
+    v = _BlindVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    led = ex.state.legs["trend"]
+    led.qty, led.stop_cloid = 0.01, "T-1-S74089-1"
+    v._add("STOP", "SELL", 0.01, "T-1-S74089-1", px=74_089.0)
+    ex._close_leg("trend", led, "engine_flat")
+    assert v.orders["T-1-S74089-1"]["status"] == "OPEN", \
+        "cancelled protection it could not replace"
+    assert led.qty == 0.01 and led.stop_cloid == "T-1-S74089-1"
+    assert any(e["kind"] == "close_backing_blind" for e in ex.state.events)
+
+
+def test_gate_B2_dust_still_clears_without_halting(tmp_path):
+    """Sub-contract dust is ledger noise, not a position: clearing it sends
+    no order, so it must settle BEFORE the divergence check rather than
+    halting the book over unholdable noise."""
+    v = FakeVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    ex.state.legs["trend"].qty = -0.004
+    ex._close_leg("trend", ex.state.legs["trend"], "engine_flat")
+    assert ex.state.legs["trend"].qty == 0.0
+    assert ex.state.halted is None, "halted on sub-contract dust"
+    assert any(e["kind"] == "ledger_dust_cleared" for e in ex.state.events)
+
+
+def test_gate_B3_unplaceable_halt_still_flattens(tmp_path):
+    """The terminal verify ran BEFORE the flatten and raised, so a venue
+    where cancel_all WORKS but order_status reads UNKNOWN - the 2026-08-26
+    shape - had its orders stripped and was then never flattened: a live,
+    unprotected position behind a halt that blocks re-placement."""
+    class _CancelsButBlindStatus(FakeVenue):
+        def order_status(self, cloid):
+            return {"status": "UNKNOWN", "filled_qty": 0.0, "avg_price": None}
+
+    v = _CancelsButBlindStatus(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    v._add("MARKET", "BUY", 0.34, "seed")
+    led = ex.state.legs["pullback"]
+    led.qty = 0.34
+    pos = {"side": "L", "entry_price": 70_000.0, "entry_ts": NOW,
+           "signal_ts": NOW - 14_400, "stop": 70_000.0, "exit_flag": None}
+    for _ in range(8):
+        if ex.state.halted:
+            break
+        ex._maintain_stop("pullback", led, pos)
+    assert ex.state.halted == "STOP_UNPLACEABLE"
+    assert abs(v.position()) <= 1e-9, \
+        f"halt stripped the orders and left {v.position()} BTC live"
+    assert any(e["kind"] == "halt_error" for e in ex.state.events), \
+        "unverifiable cancels must still page halt_error"
+    assert led.qty != 0.0, "ledger zeroed past unverified orders"
+
+
+def test_gate_B4_adopt_partial_keeps_the_halt_and_the_stop(tmp_path):
+    """Adopt used to cancel EVERY believed stop, keep an unattributable
+    ledger, and un-halt - so the next poll's _close_leg market-closed a leg
+    the venue did not hold and opened a naked position OUT OF A FLAT VENUE,
+    by the operator obeying the page's own instruction."""
+    v = FakeVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    v._add("MARKET", "SELL", 0.02, "seed")         # real trend short
+    v._add("STOP", "BUY", 0.02, "T-real-S1", px=80_000.0)
+    _legs(ex, +0.01, -0.02)                        # pullback is phantom
+    ex.state.legs["trend"].stop_cloid = "T-real-S1"
+    ex.state.halted = "DRAWDOWN"
+    ok = ex.resume(adopt_venue=True)
+    assert ok is False, "adopt reported success on an unattributable ledger"
+    assert ex.state.halted == "DRAWDOWN", "un-halted into a divergent ledger"
+    assert v.orders["T-real-S1"]["status"] == "OPEN", \
+        "cancelled the REAL leg's only protection"
+
+
+def test_gate_N1_isolated_vanishes_decay_on_a_fixed_trigger(tmp_path):
+    """The pullback engine stop is a fixed ATR level, never trailed, so the
+    churn guard returns before any placement and the reset on a confirmed
+    placement is UNREACHABLE. Four isolated, fully-recovered cancellations
+    spread over hundreds of polls therefore accumulated into a false
+    STOP_UNPLACEABLE that force-flattened a healthy book."""
+    from app.mirror import STOP_OK_DECAY_POLLS
+    v = FakeVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    v._add("MARKET", "BUY", 0.03, "seed")
+    led = ex.state.legs["pullback"]
+    led.qty = 0.03
+    pos = {"side": "L", "entry_price": 70_000.0, "entry_ts": NOW,
+           "signal_ts": NOW - 14_400, "stop": 68_000.0, "exit_flag": None}
+    for cycle in range(4):
+        ex._maintain_stop("pullback", led, pos)        # place / re-place
+        assert led.stop_cloid, "leg left unprotected"
+        v.cancel(led.stop_cloid)                       # venue kills it once
+        ex._maintain_stop("pullback", led, pos)        # detect + re-place
+        for _ in range(STOP_OK_DECAY_POLLS + 2):       # then it just rests
+            ex._maintain_stop("pullback", led, pos)
+        assert ex.state.halted is None, \
+            f"false STOP_UNPLACEABLE after {cycle + 1} recovered vanishes"
+    assert not (getattr(ex.state, "stop_vanish", {}) or {}), \
+        "a stop resting confirmed for many polls must clear the count"
+
+
+def test_gate_N3_resume_reports_the_adopt_outcome_not_the_request(tmp_path,
+                                                                  monkeypatch):
+    """`adopted` echoed the query parameter, so a REFUSED adopt on a blind
+    venue returned a body byte-identical to a successful one - concealing
+    that the stops the operator believes were cancelled are still armed."""
+    from fastapi.testclient import TestClient
+    import app.main as m
+    v = _BlindVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    ex.state.legs["trend"].qty = 0.01
+    ex.state.halted = "DRAWDOWN"
+    monkeypatch.setattr(m, "EXEC", ex)
+    monkeypatch.setattr(m.settings, "exec_token", "")
+    body = TestClient(m.app).get("/resume?adopt_venue=1").json()
+    assert body["adopted"] is False, f"claimed a refused adopt succeeded: {body}"
+    assert body["adopt_requested"] is True
+    assert body["halted"] == "DRAWDOWN"
+
+
+def test_gate_N4_dryrun_adopt_does_not_latch_entries_off(tmp_path):
+    """_adopt_venue_locked has no dry-run guard, and _check_drift returned
+    on its dry-run guard BEFORE the clearing site - so an adopt in the
+    mandatory shadow stage killed entries, chase and auto-drill for the
+    process life, with the page's own remedy unable to clear it."""
+    from app.cb import DryRunVenue
+    inner = FakeVenue(mult=0.01)
+    ex = mkexec(tmp_path, DryRunVenue(inner), dry_run=True)
+    ex._boot_mismatch = True
+    ex._check_drift(50_000.0)
+    assert ex._boot_mismatch is False, \
+        "dry-run adopt latched entries off with no in-band clear"

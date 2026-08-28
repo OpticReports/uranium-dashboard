@@ -62,11 +62,22 @@ def _build_executor() -> Executor:
         # same phenotype as the DRY_RUN blueprint incident). Alert and raise;
         # _loop retries with backoff so a transient Coinbase outage self-heals.
         from .alerts import send
-        send("🔴 ACTION NEEDED (you) — executor venue_init_failed: LIVE mode "
-             f"cannot connect to Coinbase ({LAST['venue_init_error']}). "
-             "No orders are being managed; any open positions/stops are "
-             "untouched on the venue. Retrying automatically - if this "
-             "repeats, check Coinbase status and the API key in Render.")
+        # RATE-LIMITED (re-gate 2026-08-27): alerts.send has no cooldown of
+        # its own and never touches Executor._event's RATE_LIMITED table, so
+        # the new retry loop below would fire this ACTION page on every
+        # attempt - 144 identical pages a day, forever, on a missing-key
+        # condition that never self-heals. This repo set its own house rule
+        # at one page per 30 min after halt_config (~180/hr) and
+        # stop_vanished (4,320/day); the retry is right, its paging was not.
+        now = time.time()
+        if now - LAST.get("init_paged_at", 0.0) > 1800:
+            LAST["init_paged_at"] = now
+            send("🔴 ACTION NEEDED (you) — executor venue_init_failed: LIVE "
+                 f"mode cannot connect to Coinbase ({LAST['venue_init_error']}). "
+                 "No orders are being managed; any open positions/stops are "
+                 "untouched on the venue. Retrying automatically every "
+                 "30s-10min - if this repeats, check Coinbase status and the "
+                 "API key in Render. (This page is rate-limited to 1/30min.)")
         raise RuntimeError(f"live venue init failed: "
                            f"{LAST['venue_init_error']}")
     if settings.dry_run:
@@ -93,15 +104,23 @@ def _loop() -> None:
     # left the service permanently dead while its own alert claimed it was
     # self-healing. Backoff 30s -> 60s -> ... -> capped 10 min, forever:
     # a LIVE book must not stay unmanaged because boot raced an outage.
-    delay = 30.0
+    delay, attempts = 30.0, 0
     while EXEC is None:
         try:
             EXEC = _build_executor()
         except Exception as exc:  # noqa: BLE001
+            attempts += 1
             logger.exception("executor build failed, retrying in %ss: %s",
                              delay, exc)
             time.sleep(delay)
             delay = min(delay * 2, 600.0)
+    if attempts:
+        # close the loop the ACTION page opened: an operator who was told
+        # "no orders are being managed" must be told when that stops being
+        # true, or they act on a stale page.
+        from .alerts import send
+        send(f"✅ executor venue_init recovered after {attempts} failed "
+             f"attempt(s) — the book is being managed again; no action needed")
     while True:
         try:
             target = FEED.get_target()
@@ -402,6 +421,11 @@ def resume(x_exec_token: str | None = Header(default=None),
     _auth(x_exec_token, token)
     if EXEC is None:
         return {"ok": False}
-    EXEC.resume(adopt_venue=bool(adopt_venue))
+    # `adopted` reports the OUTCOME, not the request (re-gate 2026-08-27):
+    # echoing the query parameter made a REFUSED adopt on a blind venue
+    # indistinguishable from a successful one, hiding that the stops the
+    # operator believes were cancelled are still armed.
+    ok = EXEC.resume(adopt_venue=bool(adopt_venue))
     return {"ok": True, "halted": EXEC.state.halted,
-            "adopted": bool(adopt_venue)}
+            "adopt_requested": bool(adopt_venue),
+            "adopted": bool(adopt_venue) and bool(ok)}
