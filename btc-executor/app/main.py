@@ -254,6 +254,21 @@ def pulse():
             "venue_read_age_s": (round(now - st.last_venue_read_ts, 1)
                                  if getattr(st, "last_venue_read_ts", 0)
                                  else None),
+            # WHICH KEY IS DEPLOYED, as the address it signs as. Added
+            # 2026-08-28 after a key swap could not be verified from
+            # outside: agent_days_left said "this key is not an approved
+            # agent", but it could not say WHICH key, so "you pasted the
+            # wrong one" and "the new one has not loaded yet" were the same
+            # observation - and every other signal that might have
+            # distinguished them (the build sha, which does not change on an
+            # env edit; the rolling RED count, which can absorb a new event
+            # as an old one ages out) turned out not to. This one is
+            # unambiguous: compare it against the approved agent.
+            # Not a secret - an agent address is public on-chain, already
+            # discoverable from the account, and useless without the key.
+            "agent_address": (getattr(EXEC.venue, "agent_address", None)
+                              or getattr(getattr(EXEC.venue, "inner", None),
+                                         "agent_address", None)),
             # days until the signing key stops working (Hyperliquid agent
             # wallets expire). null = no expiry, or not read yet. The
             # executor halts itself at T-1 day, but this makes the clock

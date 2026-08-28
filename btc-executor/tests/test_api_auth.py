@@ -65,3 +65,65 @@ def test_build_sha_is_null_when_the_runtime_does_not_set_it(monkeypatch):
     monkeypatch.delenv("GIT_COMMIT", raising=False)
     with TestClient(app) as c:
         assert c.get("/health").json()["build"] is None
+
+
+def test_pulse_publishes_which_key_is_deployed():
+    """A key swap could not be verified from outside: agent_days_left said
+    'not an approved agent' but not WHICH key, so 'you pasted the wrong one'
+    and 'the new one has not loaded yet' were the same observation. The
+    build sha does not change on an env edit and the RED count is a rolling
+    window, so neither could break the tie. This can."""
+    import app.main as m
+
+    class _V:
+        agent_address = "0x243cb2b53aea9d751093f6de7de8028adf19862f"
+
+    class _St:
+        halted = None
+        events: list = []
+        legs: dict = {}
+        last_venue_read_ts = 0
+        agent_valid_until = None
+        auto_drill_off = None
+
+    class _E:
+        venue = _V()
+        state = _St()
+        _auto_drill_wait = None
+
+    old = m.EXEC
+    m.EXEC = _E()
+    try:
+        with TestClient(app) as c:
+            body = c.get("/pulse").json()
+        assert body["agent_address"] == _V.agent_address
+    finally:
+        m.EXEC = old
+
+
+def test_pulse_agent_address_is_null_on_a_venue_without_one():
+    """Coinbase has no agent wallets. Absent must read as null, not crash
+    the only unauthenticated monitoring surface."""
+    import app.main as m
+
+    class _St:
+        halted = None
+        events: list = []
+        legs: dict = {}
+        last_venue_read_ts = 0
+        agent_valid_until = None
+        auto_drill_off = None
+
+    class _E:
+        venue = object()
+        state = _St()
+        _auto_drill_wait = None
+
+    old = m.EXEC
+    m.EXEC = _E()
+    try:
+        with TestClient(app) as c:
+            body = c.get("/pulse").json()
+        assert body["agent_address"] is None
+    finally:
+        m.EXEC = old
