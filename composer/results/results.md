@@ -1617,3 +1617,116 @@ gates failed. (4) METHODOLOGY KEPT: the paper's randomization test (1000
 random regime filters) is its one good idea, and we had already adopted it
 independently — the counter-agent used exactly that to kill my GARCH gate
 in add. 31, and used it again here. Now standard for any gate proposal.
+
+
+## Addendum 33 — Rate-hike odds: are we factoring them, and would trading them
+## have helped? NO and NO (owner question 2026-08-28)
+
+Trigger: owner observed "rate hike odds spiked, that's why we got hit today"
+(book -1.98%, KMLM -5.02%/-$4,894) and asked whether any symphony factors
+rate expectations and whether trading them has historically helped.
+Method: 4 parallel measurement lenses -> 3 backtested overlay families ->
+adversarial placebo verification. 8 agents, ~895k tokens.
+
+Q1 — ARE WE FACTORING RATE-HIKE ODDS? NO. Tree audit: HG reads TQQQ+SOXL
+price/RSI only; KMLM 17 equity/vol tickers via RSI only; HARV SPY+UVXY RSI
+only; SLEEVE reads bond-ETF PRICES (TLT/TMF/TMV/IEF/SHY/LQD/HYG) via
+cumulative-return/stdev/RSI. No macro or rates input anywhere.
+CONFIRMED BY MEASUREMENT, not just code reading — holdings pass-through
+test (daily holdings reverse-engineered from each curve; replica tracking
+R2 = HG 1.0000, SLEEVE 1.0000, KMLM 0.9974, HARV 0.9636):
+  engine beta(dDGS2) vs ITS OWN HOLDINGS' beta, %/bp:
+  HG +0.0140/+0.0141; KMLM +0.0511/+0.0516; SLEEVE -0.0047/-0.0046;
+  HARV +0.0037/+0.0047. Residual (engine minus holdings) = -0.0001 to
+  -0.0010, economically zero in every case. The logic contributes no rate
+  view; all rate exposure is pass-through from what is held that day.
+  SLEEVE's duration channel is real but holdings-determined: it holds
+  TMF or TMV on 51.6% of days; in that state beta(dDGS10) +0.0421
+  (t=+5.62) vs holdings' +0.0422; outside it -0.0021 (t=-0.14). The SIGN
+  of its duration exposure is set by which of TMF/TMV it is long — price
+  action, not a rate forecast.
+
+Q2 — WAS 2026-08-28 A RATE EVENT? Transmission is EQUITY BETA, not a rate
+channel. KMLM held SOXL 38% + TECL 37% + PULS/VXZ; that basket has SPY-beta
+5.11 (R2 0.712) and vol 5.75%/day. Basket beta(dDGS2) = +0.0893 %/bp and
+POSITIVE-signed; controlling for SPY it is +0.0283 (t=+1.59) — nothing
+beyond equity beta. Producing -5% through rates alone needs dDGS2 = -58bp;
+through ordinary equity beta it needs only a ~-1% SPY day. Book -1.98% is a
+-1.28 sigma draw on 1.54% daily vol. Corroboration in-sample: KMLM's worst
+recent day 2026-08-18 (-8.61%) had dDGS2 = 0bp, dDGS10 = -1bp; and
+rate-quiet days (|dDGS2|<=2bp) are 25.8% of the sample but hold 26.2% of
+KMLM's largest absolute moves. Rate news can drive the equity move; our
+loss is levered-growth beta to that move, not a separate rate exposure.
+MISSING INPUT (house rule — flagged, not worked around): 2026-08-28 SPY and
+2y prints are in NO source yet (Composer engine data ends 08-27, FRED 08-26,
+ticker files 08-06). The pre-registered decomposition test — does -5.02%
+equal SPY-beta 5.11 x that day's SPY move, or is there a rate-aligned
+residual — RUNS MONDAY. A large residual reopens this study immediately.
+
+Q3 — IS RATE SENSITIVITY REAL? Contemporaneous: yes but trivial and
+WRONG-SIGNED. R2 of daily engine return on dDGS2+dDGS10 jointly (n=822):
+HG 1.94%, KMLM 0.84%, SLEEVE 0.99%, HARV 0.17%, BOOK 1.16%; SPY alone
+explains 22.2% of the book. Every single-regressor beta is POSITIVE —
+rising yields coincided with RISING engine returns. On the top 5% |dDGS2|
+days KMLM earned +2.33% vs +0.45% on the rest (t=+2.67). Engines earn MORE
+on big rate-move days. Scale-free: corr(return, dDGS2) KMLM 0.0883 vs SPY
+0.0766, TECL 0.1038, XLK 0.1058 — vol-matched, TECL and XLK carry HIGHER
+rate beta than KMLM. KMLM is not rate-exposed; it is levered tech.
+FORWARD (the tradeable question): one cell of a pre-specified 160-cell grid
+clears family-wise correction — HG x DGS2 60-day range-rank, h=1, spread
+-77.2bp/day, deflated t=-3.78, FWE p=0.0040 vs 2000 circular rotations.
+It does NOT convert: the gate it implies earns +2.4%/yr at t=0.39
+(bootstrap p=0.71), gives ZERO drawdown benefit in all 24 configs, and is
+absent in S&P data 1990-2014 (spread -2.6bp, t=-0.55, n=6241). Most of the
+spread is Q1 being exceptionally GOOD (+68.5bp/day, t=+3.87) — the
+actionable side is levering UP in HG's high-vol state, which is the
+standing prior, vindicated again. SLEEVE loads OPPOSITE on the same signal
+(Q5 is its best state); a book-wide rate gate costs the sleeve -19.9%/yr
+(t=-3.01).
+FOMC: grid-wide max |t| = 2.63 across 5 engines x 11 offsets, BELOW the
+median of Wednesday-matched random date sets (3.00, p=0.841) — the engines
+contain LESS FOMC structure than random dates. Lucca-Moench pre-FOMC drift
+has died: SPY day-0 +34.2bp (t=+3.31) 1994-2011 -> +1.3bp (t=+0.10)
+2015-2026.
+KMLM WHIPSAWS: the price of a working signal, not a bug — 45 winners vs 19
+losers on DEF->AGG switches, 2.73x gross gain/loss ratio; disabling the
+switch takes CAGR from +258% to -9%.
+
+Q4 — WOULD TRADING IT HAVE HELPED? NO. 92 backtested overlay cells:
+  KMLM rate-confirmation veto (20+31 cells): best dSharpe -0.02; maxDD
+    unchanged in all 10 primary cells; ex-largest-day every cell still
+    trails baseline. Damage scales with PARTICIPATION, not wrongness.
+  Book-level hawkish-shock de-risk (24 cells): 0/24 improve CAGR, 0/24
+    Sharpe, 0/24 maxDD; 4 cells make maxDD materially WORSE (35.8->40.7%).
+    Placebo: 2nd-23rd percentile of 3000 matched random gates. Even a
+    CHEATING same-day version is worse than the honest t+1 version.
+  Duration-aware allocation rotation (48 cells): briefed dSharpe -0.035;
+    best-of-48 +0.043 fails permutation (p=0.971) and its single largest
+    day is -126% of the whole cumulative edge. Also NOT IDENTIFIABLE in
+    real time: split-half rate betas flip SIGN for 2 of 4 engines
+    (KMLM -0.93 -> +15.56); rolling 252d beta ranges -2.7 to +24.7.
+  0 of 92 cells improved CAGR/Sharpe/maxDD together; 0 improved maxDD at
+  all. The verification queue was EMPTY because nothing reached it.
+
+DECISIONS: (1) NO BUILD, no symphony or book changes. The failure is in the
+PREMISE (the book is not weak after hawkish repricing — in this sample it is
+stronger), not the parameterisation. Measurements #7-#9 of the no-overlay
+mechanism. (2) NEVER a book-level rate gate: HG and SLEEVE load in opposite
+directions on the same signal. (3) The book's risk is levered-growth equity
+beta, not rates — if -2% days are unwelcome the lever is book weights or
+notional, priced as an explicit return give-up, not a rate signal. (4)
+PAPER-LOG ONLY, zero capital: HG->SLEEVE tilt on HG's Q5 days (in-sample
+CAGR 71.1->86.7%, maxDD 15.9->10.8%, but excess t=1.32, positive in 3 of 6
+years, chosen after seeing the grid). Revisit in >=3 years.
+REOPEN TRIGGERS (pre-specified): (a) the 08-28 decomposition leaves a
+rate-aligned residual; (b) rolling 252d corr(SPY return, dDGS2) turns
+persistently NEGATIVE — the inflation-shock regime, absent from our sample,
+where the whole sign inverts; (c) the HG signal clears t>2 on EXCESS RETURN
+out of sample; (d) any engine is edited to read a macro input.
+CAVEAT ON SAMPLE: KMLM/HARV/BOOK have only 838 days, all inside the
+2023-2026 disinflation regime. There is NO 2022-style hiking shock
+in-sample. The positive yields-up/engines-up sign is a growth-driven-yield
+artifact; the regime-independent finding is the PASS-THROUGH result.
+METHOD NOTE adopted as standing: never downsample a path you also quote a
+statistic from (a 2x chart downsample dropped a drawdown trough, displaying
+-8.0% against a stated maxDD of -9.9%).
