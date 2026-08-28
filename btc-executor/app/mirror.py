@@ -276,14 +276,35 @@ class Executor:
         cur = str(getattr(self.cfg, "venue", "coinbase") or "coinbase").lower()
         prev = getattr(self.state, "venue", None)
         if prev is None:
-            self.state.venue = cur
-            return
+            # UNSTAMPED = written before this field existed, and the only
+            # venue that existed then was Coinbase. Adopting `cur` here would
+            # silently bless a Coinbase ledger as Hyperliquid's on the very
+            # first boot after VENUE is switched - which is exactly the
+            # deploy this guard is for (2026-08-28: VENUE=hyperliquid was set
+            # in Render while the state file was still Coinbase's).
+            prev = "coinbase"
         if prev == cur:
+            self.state.venue = cur
             return
         held = {n: l.qty for n, l in self.state.legs.items() if l.qty != 0.0}
         refs = {n: l.stop_cloid or l.entry_cloid
                 for n, l in self.state.legs.items()
                 if l.stop_cloid or l.entry_cloid}
+        if not held and not refs:
+            # An EMPTY ledger carries nothing across. The danger is
+            # positions and order refs that mean something on the old venue
+            # and nothing on the new one; with neither, a switch is clean and
+            # halting would be pure friction on an operator who did the right
+            # thing (flatten first, then switch).
+            self.state.venue = cur
+            self._event("WARN", "venue_switched",
+                        f"venue {prev} -> {cur} with an EMPTY ledger (no "
+                        f"positions, no order refs) - adopted cleanly. "
+                        f"Confirm {prev.upper()} really is flat and has no "
+                        f"resting orders; this check reads the LEDGER, not "
+                        f"the old venue.")
+            self._save_state()
+            return
         self._event("RED", "venue_changed",
                     f"state file belongs to venue '{prev}' but VENUE is now "
                     f"'{cur}'. Ledger positions {held or 'none'} and order "

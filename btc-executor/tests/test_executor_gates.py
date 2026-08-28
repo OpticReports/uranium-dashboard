@@ -4475,6 +4475,9 @@ def test_gate_same_venue_boots_normally_and_stamps(tmp_path):
     ex = Executor(FakeVenue(mult=0.01), cfg, cfg.state_path)
     assert ex.state.halted is None, "halted on a legacy unstamped state file"
     assert ex.state.venue == "coinbase", "did not stamp the venue"
+    # a legacy file is COINBASE's by construction - it predates the field,
+    # and Coinbase was the only venue that existed. Adopting whatever VENUE
+    # happens to say would bless a Coinbase ledger as Hyperliquid's.
     ex._save_state()
     ex2 = Executor(FakeVenue(mult=0.01), cfg, cfg.state_path)
     assert ex2.state.halted is None and ex2.state.venue == "coinbase"
@@ -4483,6 +4486,12 @@ def test_gate_same_venue_boots_normally_and_stamps(tmp_path):
     # Asserting the stamp alone passed with persistence removed entirely.
     assert json.load(open(cfg.state_path))["venue"] == "coinbase", \
         "venue not written to the state file"
+    # Prove the SAVED stamp is what the next boot reads, using a ledger that
+    # actually carries something - an empty one now switches cleanly by
+    # design (test_gate_empty_ledger_switches_venue_without_friction), so it
+    # cannot distinguish "stamp persisted" from "stamp lost".
+    ex2.state.legs["trend"].qty = 0.01
+    ex2._save_state()
     cfg.venue = "hyperliquid"
     ex3 = Executor(FakeVenue(mult=0.01), cfg, cfg.state_path)
     assert ex3.state.halted == "VENUE_CHANGED", \
@@ -4499,3 +4508,42 @@ def test_gate_pulse_publishes_the_venue(tmp_path, monkeypatch):
     monkeypatch.setattr(m.settings, "exec_token", "")
     m.LAST["venue_name"] = "hyperliquid"
     assert TestClient(m.app).get("/pulse").json()["venue"] == "hyperliquid"
+
+
+def test_gate_legacy_state_is_coinbase_not_whatever_venue_says(tmp_path):
+    """The deploy this guard exists for. VENUE=hyperliquid was set in Render
+    on 2026-08-28 while the state file was still Coinbase's and carried no
+    venue field. Treating an UNSTAMPED file as belonging to the configured
+    venue would bless a Coinbase ledger as Hyperliquid's on the first boot -
+    the one moment the check had to fire."""
+    import json
+    from app.mirror import Executor
+    cfg = Cfg()
+    cfg.state_path = str(tmp_path / "legacy.json")
+    cfg.venue = "hyperliquid"
+    json.dump({"halted": None,          # NO venue key: pre-2026-08-28 file
+               "legs": {"trend": {"qty": 0.01, "stop_cloid": "T-1-S1"}}},
+              open(cfg.state_path, "w"))
+    ex = Executor(FakeVenue(mult=0.01), cfg, cfg.state_path)
+    assert ex.state.halted == "VENUE_CHANGED", \
+        "an unstamped Coinbase ledger was adopted as Hyperliquid's"
+    assert ex.state.legs["trend"].qty == 0.01, "adopted/abandoned across venues"
+
+
+def test_gate_empty_ledger_switches_venue_without_friction(tmp_path):
+    """The operator who did the right thing - flatten, THEN switch - must not
+    be blocked. An empty ledger carries nothing across; the danger is
+    positions and order refs, and there are none."""
+    import json
+    from app.mirror import Executor
+    cfg = Cfg()
+    cfg.state_path = str(tmp_path / "empty.json")
+    cfg.venue = "hyperliquid"
+    json.dump({"halted": None, "venue": "coinbase", "legs": {}},
+              open(cfg.state_path, "w"))
+    ex = Executor(FakeVenue(mult=0.01), cfg, cfg.state_path)
+    assert ex.state.halted is None, "halted on a genuinely empty ledger"
+    assert ex.state.venue == "hyperliquid", "did not re-stamp"
+    assert any(e["kind"] == "venue_switched" for e in ex.state.events), \
+        "a venue switch must still be announced, even when it is clean"
+    assert json.load(open(cfg.state_path))["venue"] == "hyperliquid"
