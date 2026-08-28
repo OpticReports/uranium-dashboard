@@ -262,11 +262,38 @@ class HyperliquidVenue:
                     raise RuntimeError(f"agent row carried no validUntil: {a}")
                 self.agent_note = None
                 return float(vu) / 1000.0          # venue reports ms
-        # A clean response that does not list us is DEFINITIVE, not a read
-        # failure: the agent was revoked, or never approved for this
-        # account, or HL_SECRET_KEY belongs to someone else's wallet. No
-        # order will ever succeed. Surfaced as expired-now so the caller's
-        # expiry rail fires instead of a fresh code path.
+        # NOT IN extraAgents IS NOT THE SAME AS NOT APPROVED (2026-08-28,
+        # second pass — the first cut of this rail got it wrong and would
+        # have halted a healthy book). Hyperliquid has TWO kinds of agent:
+        # approveAgent WITH an agentName creates a named "extra" agent, and
+        # approveAgent with the field ABSENT creates the unnamed/default API
+        # wallet (see Exchange.approve_agent: `if name is None: del
+        # action["agentName"]`). `extraAgents` enumerates the EXTRA ones —
+        # the name is the contract — so a perfectly valid unnamed agent is
+        # simply not in that list. Concluding "not approved" from absence
+        # would halt a book whose key signs fine, which is precisely the
+        # self-inflicted damage the unreadable-expiry branch exists to
+        # avoid. So ask the authoritative, name-independent question first.
+        role = self.info.user_role(self.agent_address) or {}
+        rname = str(role.get("role", "")).lower()
+        master = str(((role.get("data") or {}).get("user")) or "")
+        if rname == "agent" and master.lower() == self.address.lower():
+            # Approved and able to trade — we just cannot see its expiry,
+            # because only extraAgents carries validUntil. Raise into the
+            # caller's UNREADABLE branch (WARN, never halt): the key works,
+            # what is missing is visibility. HL agents still expire, so this
+            # is a real gap and the fix is one UI action.
+            self.agent_note = None
+            raise RuntimeError(
+                f"{self.agent_address} is an approved UNNAMED (default) API "
+                f"wallet of {self.address}: it can trade, but only NAMED "
+                f"agents appear in extraAgents, which is the only source of "
+                f"validUntil - so its expiry cannot be tracked. Approve a "
+                f"NAMED API wallet and deploy that key to re-arm the rail")
+        # Now absence IS definitive: the agent was revoked, or never
+        # approved for this account, or HL_SECRET_KEY belongs to someone
+        # else's wallet. No order will ever succeed. Surfaced as expired-now
+        # so the caller's expiry rail fires instead of a fresh code path.
         #
         # NAME THE MISMATCH (2026-08-28, the rail's first live boot returned
         # exactly this). As a bare 0.0 it reached the operator as

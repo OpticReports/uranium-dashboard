@@ -62,6 +62,9 @@ class _FakeInfo:
         self.agents = [{"name": "BTC EXECUTOR",
                         "address": "0xDEADbeefDEADbeefDEADbeefDEADbeefDEADbeef",
                         "validUntil": 1_803_483_076_101}]
+        # what userRole says about the SIGNER. Default: an ordinary
+        # address that is nobody's agent.
+        self.role = {"role": "user"}
 
     def meta(self, dex=""):
         return {"universe": [{"name": "BTC", "szDecimals": 5,
@@ -93,6 +96,9 @@ class _FakeInfo:
 
     def extra_agents(self, user):
         return self.agents
+
+    def user_role(self, user):
+        return self.role
 
 
 class _FakeExchange:
@@ -562,3 +568,50 @@ def test_gate_agent_note_clears_once_the_key_matches(venue):
                           "validUntil": 1_803_483_076_101}]
     venue.agent_valid_until()
     assert venue.agent_note is None, "note survived the fix"
+
+
+# --------------------------------------------------------------------------
+# extraAgents lists only the NAMED agents. approveAgent with the agentName
+# field ABSENT creates the unnamed/default API wallet, which is just as able
+# to trade and simply is not in that list. The first cut of this rail read
+# absence as "not approved" and would have halted a healthy book.
+def test_gate_agent_unnamed_default_wallet_is_not_treated_as_unapproved(venue):
+    """A valid unnamed API wallet must NOT reach the halt. Halting a book
+    whose key signs fine is the self-inflicted damage the unreadable branch
+    exists to avoid."""
+    venue.info.agents = []                      # named list is empty...
+    venue.info.role = {"role": "agent",         # ...but we ARE its agent
+                       "data": {"user": venue.address}}
+    with pytest.raises(RuntimeError, match="UNNAMED"):
+        venue.agent_valid_until()
+    assert venue.agent_note is None, "flagged a valid key as a mismatch"
+
+
+def test_gate_agent_role_for_a_different_master_is_still_unapproved(venue):
+    """role=agent is not enough: an agent of SOMEONE ELSE'S account cannot
+    trade ours. The master must match, or absence stays definitive."""
+    venue.info.agents = []
+    venue.info.role = {"role": "agent", "data": {"user": "0x" + "cd" * 20}}
+    assert venue.agent_valid_until() == 0.0
+    assert venue.agent_note, "no diagnosis for a foreign-account agent"
+
+
+def test_gate_agent_plain_user_role_is_unapproved(venue):
+    """The genuine mismatch case still reports as expired-now."""
+    venue.info.agents = []
+    venue.info.role = {"role": "user"}
+    assert venue.agent_valid_until() == 0.0
+    assert venue.agent_note
+
+
+def test_gate_agent_named_match_never_consults_user_role(venue):
+    """The precise path must win: a named match carries validUntil, and an
+    extra /info call per check for nothing is waste."""
+    called = {"n": 0}
+
+    def _role(user):
+        called["n"] += 1
+        return {"role": "user"}
+    venue.info.user_role = _role
+    assert venue.agent_valid_until() == pytest.approx(1_803_483_076.101)
+    assert called["n"] == 0, "queried userRole despite a named match"
