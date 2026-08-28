@@ -45,3 +45,23 @@ def test_open_when_no_token_configured():
             assert c.get("/status").status_code == 200
     finally:
         settings.exec_token = old
+
+
+def test_build_sha_is_published_and_never_guessed(monkeypatch):
+    """A live diagnosis stalled on exactly this: a rail reported a fault, a
+    fix was pushed, and nothing outside could say whether the next reading
+    came from the old build or the new one - so 'unchanged value' and
+    'deploy has not landed' were the same observation."""
+    monkeypatch.setenv("RENDER_GIT_COMMIT", "a61ffae1234567890abcdef")
+    with TestClient(app) as c:
+        assert c.get("/health").json()["build"] == "a61ffae"
+        assert c.get("/pulse").json()["build"] == "a61ffae"
+
+
+def test_build_sha_is_null_when_the_runtime_does_not_set_it(monkeypatch):
+    """Null is the honest answer off Render. A guess here would be worse
+    than nothing: it would attribute readings to a build we invented."""
+    monkeypatch.delenv("RENDER_GIT_COMMIT", raising=False)
+    monkeypatch.delenv("GIT_COMMIT", raising=False)
+    with TestClient(app) as c:
+        assert c.get("/health").json()["build"] is None

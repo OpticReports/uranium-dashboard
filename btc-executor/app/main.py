@@ -176,10 +176,31 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="S5 Executor", version="0.1.0", lifespan=lifespan)
 
 
+def _build_sha() -> str | None:
+    """Which commit is actually running.
+
+    Added 2026-08-28 after a live diagnosis stalled on a question nothing
+    could answer. A rail was reporting a fault, a fix was pushed, and there
+    was no way to tell from outside whether the next reading came from the
+    OLD build or the new one — so a value that had not changed was
+    indistinguishable from a deploy that had not landed, and the diagnosis
+    could only be guessed at. Every other field on these endpoints
+    describes STATE; without this one none of them can be attributed to a
+    version of the code.
+
+    Render injects RENDER_GIT_COMMIT. Absent (local, or a runtime that does
+    not set it) the honest answer is null, never a guess."""
+    import os
+    sha = (os.environ.get("RENDER_GIT_COMMIT")
+           or os.environ.get("GIT_COMMIT") or "").strip()
+    return sha[:7] or None
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "btc-executor",
             "dry_run": settings.dry_run,
+            "build": _build_sha(),
             "loop_age_s": round(time.time() - LAST["loop_ok"], 1)
             if LAST["loop_ok"] else None}
 
@@ -189,7 +210,7 @@ def pulse():
     """Public minimal heartbeat for automated monitoring: state flags only —
     no equity, no position sizes, no order details."""
     if EXEC is None:
-        return {"ready": False}
+        return {"ready": False, "build": _build_sha()}
     st = EXEC.state
     now = time.time()
     red_24h = sum(1 for e in st.events
@@ -197,6 +218,9 @@ def pulse():
     _rv = _ramp_v4(st)
     rv = _rv["rows"]
     return {"ready": True, "dry_run": settings.dry_run,
+            # which commit produced every other field below — without it a
+            # reading cannot be attributed to a build (2026-08-28)
+            "build": _build_sha(),
             # WHICH VENUE is publicly visible: a book silently running on
             # the wrong exchange is the one config error no ledger check can
             # catch, and this is the only unauthenticated surface.
@@ -262,6 +286,7 @@ def status(x_exec_token: str | None = Header(default=None),
     venue = EXEC.venue
     dry_log = getattr(venue, "log", None)
     out = {"ready": True, "dry_run": settings.dry_run,
+           "build": _build_sha(),
            "venue_inner": LAST.get("venue_inner"),
            "venue_init_error": LAST.get("venue_init_error"),
            "venue_products": LAST.get("venue_products"),
