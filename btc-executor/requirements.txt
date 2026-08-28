@@ -9,3 +9,9 @@ httpx>=0.27
 # until it ran against real money. A gate test asserts every method cb.py
 # calls exists on RESTClient at this exact version.
 coinbase-advanced-py==1.8.4
+# Hyperliquid venue (VENUE=hyperliquid). Pinned for the same reason the
+# Coinbase SDK is: an unpinned venue adapter is one `pip install` away
+# from a renamed method, and a method that does not exist is exactly what
+# blinded the executor for three days on 2026-08-26.
+hyperliquid-python-sdk==0.24.0
+eth-account>=0.10.0

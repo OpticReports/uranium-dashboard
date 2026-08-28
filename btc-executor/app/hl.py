@@ -53,6 +53,28 @@ logger = logging.getLogger(__name__)
 # "market" type (Hyperliquid has none). This is the crossing allowance.
 DEFAULT_SLIPPAGE = 0.02
 
+# Hyperliquid rejects any order under $10 notional ("Order must have minimum
+# value of $10", MinTradeNtl). The docs do NOT grant reduce-only an
+# exemption, so we must assume a sub-$10 position CANNOT BE CLOSED BY ORDER
+# - not by its stop, not by the halt's flatten. See MinNotionalRejected.
+MIN_NOTIONAL_USD = 10.0
+
+
+class MinNotionalRejected(RuntimeError):
+    """An order was refused for being under the venue's $10 minimum.
+
+    Called out as its own type because of what it means on the PROTECTIVE
+    path: a position whose remaining notional is under $10 cannot be closed
+    by any order we send, so the stop is unplaceable AND the halt's flatten
+    fails too - an open, unprotected residue that only a manual close on
+    the Hyperliquid UI clears. Sizing keeps this far away (the smaller leg
+    is ~5x the floor at KELLY_M 0.135 on a $1k base), so it takes an
+    extreme partial fill to reach; the point of the named error is that
+    when it does happen the page says WHY instead of looking like a generic
+    rejection storm. Disclosed in EXECUTOR.md rather than engineered
+    around: no order-level rail can close a position the venue will not
+    accept an order for."""
+
 
 def derive_cloid(our_cloid: str) -> str:
     """Our string ids -> Hyperliquid's 16-byte hex cloid, DETERMINISTICALLY.
@@ -85,11 +107,39 @@ class HyperliquidVenue:
         # the venue rather than by our own care. account_address is the MAIN
         # account the agent trades for; if unset the SDK uses the signer.
         wallet = Account.from_key(cfg.hl_secret_key)
-        self.address = getattr(cfg, "hl_account_address", "") or wallet.address
+        # HL_ACCOUNT_ADDRESS IS MANDATORY (2026-08-28, caught while Casey was
+        # on the API-wallet screen). An agent wallet SIGNS for a main account
+        # but HOLDS NOTHING ITSELF, and Hyperliquid's own UI says it: "the
+        # account's public address must be used for info requests". Falling
+        # back to the signer's address would query the AGENT - which has no
+        # positions - so position() would return 0.0 as a CONFIRMED FLAT,
+        # forever, while the real account carried the book. That is the
+        # 2026-08-26 phantom-position failure mode exactly, re-entered
+        # through config instead of through a dead SDK method. There is no
+        # safe guess here, so refuse to construct.
+        self.address = str(getattr(cfg, "hl_account_address", "") or "").strip()
+        if not self.address:
+            raise RuntimeError(
+                "HL_ACCOUNT_ADDRESS is required: it is the MAIN account's "
+                "public address, which is what info/position requests read. "
+                "An agent (API) wallet signs on the account's behalf and "
+                "holds nothing itself, so defaulting to the signer would "
+                "report the book as permanently FLAT.")
+        if self.address.lower() == wallet.address.lower():
+            # Not fatal - trading with the main account's OWN key is a valid
+            # (if less safe) setup - but it means no agent wallet is in play,
+            # so the venue is NOT enforcing the no-withdrawal separation and
+            # the operator should know which of the two they deployed.
+            logger.warning(
+                "HL_ACCOUNT_ADDRESS equals the signing key's own address: "
+                "this is the MAIN account key, not an agent wallet. Trading "
+                "works, but the venue is not enforcing withdrawal separation.")
+        self.agent_address = wallet.address
         self.info = Info(base, skip_ws=True)
         self.exchange = Exchange(wallet, base, account_address=self.address)
         self._meta = self._coin_meta()
         self._mid_cache: tuple[float, float] | None = None
+        self._abs_cache: tuple[float, bool] | None = None
         self.post_only_crosses: list[str] = []
         logger.info("hyperliquid venue ready: coin=%s addr=%s meta=%s",
                     self.coin, self.address, self._meta)
@@ -162,12 +212,95 @@ class HyperliquidVenue:
             raise RuntimeError(f"user_state returned {type(st).__name__}, not a dict")
         return st
 
+    def _is_unified(self) -> bool:
+        """Is spot collateral backing perps? Cached briefly, never guessed.
+
+        A wrong answer here is not cosmetic: equity() feeds day_start_equity
+        and high_water, so understating it kills the halts and overstating
+        it loosens them. If the venue will not tell us, we RAISE - the
+        caller treats an unreadable venue as a first-class condition, and a
+        silent default is exactly how the 2026-08-26 blind read stayed
+        invisible for three days."""
+        now = time.time()
+        if self._abs_cache and now - self._abs_cache[0] < 60.0:
+            return self._abs_cache[1]
+        r = self.info.query_user_abstraction_state(self.address)
+        mode = r if isinstance(r, str) else str((r or {}).get("abstraction", ""))
+        unified = "unified" in str(mode).lower()
+        self._abs_cache = (now, unified)
+        return unified
+
+    def agent_valid_until(self) -> float | None:
+        """Epoch seconds at which our SIGNING key stops being able to trade.
+
+        Hyperliquid agent (API) wallets EXPIRE - ours on 2027-02-24. Expiry
+        is not a degraded mode, it is a total loss of write access: every
+        order is rejected, including the protective ones. If it lapses with
+        a position open, the book is naked and the executor cannot even
+        flatten itself - the one failure this whole rewrite exists to
+        prevent, arriving on a calendar we already know.
+
+        Returns None when the signer IS the main account, which cannot
+        expire. Raises when the venue will not say: an unreadable expiry is
+        NOT an absent one, and the caller decides how long to tolerate it."""
+        if self.agent_address.lower() == self.address.lower():
+            return None
+        agents = self.info.extra_agents(self.address) or []
+        for a in agents:
+            # Match on ADDRESS, never on the display name: the name is
+            # operator-chosen, editable, and duplicable in the UI, so a
+            # name match can point at a DIFFERENT key than the one we sign
+            # with - reporting a healthy expiry for a wallet we do not use.
+            if str((a or {}).get("address", "")).lower() \
+                    == self.agent_address.lower():
+                vu = a.get("validUntil")
+                if vu is None:
+                    raise RuntimeError(f"agent row carried no validUntil: {a}")
+                return float(vu) / 1000.0          # venue reports ms
+        # A clean response that does not list us is DEFINITIVE, not a read
+        # failure: the agent was revoked, or never approved for this
+        # account, or HL_SECRET_KEY belongs to someone else's wallet. No
+        # order will ever succeed. Surfaced as expired-now so the caller's
+        # expiry rail fires instead of a fresh code path.
+        return 0.0
+
+    def _spot_usdc(self) -> float:
+        sp = self.info.spot_user_state(self.address) or {}
+        for b in sp.get("balances", []):
+            if (b or {}).get("coin") == "USDC":
+                return float(b.get("total") or 0.0)
+        return 0.0
+
     def equity(self) -> float:
+        """Total USD backing the perp book.
+
+        MUST include spot under a unified account (2026-08-28, caught before
+        the first live order). Hyperliquid keeps two pools, and
+        marginSummary.accountValue reports ONLY the perp one - it read $0.00
+        against a real $998.99 sitting in spot. Every circuit breaker is
+        equity-derived (day_start_equity for the 6% daily rail, high_water
+        for the 35% drawdown), so a constant zero makes every loss compute
+        as zero and NO HALT CAN EVER FIRE. Sizing would have been fine,
+        because SIZING_BASE_USD is a fixed number - so the book would have
+        traded correctly with its rails silently absent, which is the same
+        shape as the incident this whole rewrite is about.
+
+        USDC only: other spot tokens may also collateralise under unified,
+        but valuing them here would be speculation. Omitting them understates
+        equity, and a CONSISTENT understatement is near-harmless because the
+        halts compare a DELTA (equity vs day-start/HWM, both measured the
+        same way) against a threshold struck off SIZING_BASE_USD, which is a
+        fixed config number. That argument holds only while SIZING_BASE_USD
+        is set - unset, _base() falls back to equity and an understatement
+        would tighten both rails."""
         st = self._user_state()
         v = ((st.get("marginSummary") or {}).get("accountValue"))
         if v is None:
             raise RuntimeError("user_state carried no marginSummary.accountValue")
-        return float(v)
+        total = float(v)
+        if self._is_unified():
+            total += self._spot_usdc()
+        return total
 
     def position(self) -> float:
         """Signed BTC position. A clean response with no row for our coin is
@@ -289,7 +422,15 @@ class HyperliquidVenue:
                     .get("statuses") or [])
         for s in statuses:
             if isinstance(s, dict) and "error" in s:
-                raise RuntimeError(f"order rejected: {s['error']}")
+                err = str(s["error"])
+                if "minimum value" in err.lower():
+                    raise MinNotionalRejected(
+                        f"order rejected: {err} - a position under "
+                        f"${MIN_NOTIONAL_USD:.0f} cannot be closed by ANY "
+                        f"order, including its stop and the halt's flatten; "
+                        f"close the residue manually on the Hyperliquid UI "
+                        f"(cloid {cloid})")
+                raise RuntimeError(f"order rejected: {err}")
         return r
 
     def place_limit(self, side: str, qty: float, px: float, cloid: str,

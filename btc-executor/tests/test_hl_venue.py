@@ -54,6 +54,14 @@ class _FakeInfo:
         self.orders: dict[str, dict] = {}      # raw cloid -> order record
         self.resting: list[dict] = []
         self.raise_on_state = None
+        self.abstraction = "unifiedAccount"
+        self.spot_usdc = 0.0
+        # the signer (_Acct.address) approved as an agent, in the venue's
+        # own shape: ms epoch, and MIXED CASE, because Hyperliquid does not
+        # promise the checksum casing our config carries
+        self.agents = [{"name": "BTC EXECUTOR",
+                        "address": "0xDEADbeefDEADbeefDEADbeefDEADbeefDEADbeef",
+                        "validUntil": 1_803_483_076_101}]
 
     def meta(self, dex=""):
         return {"universe": [{"name": "BTC", "szDecimals": 5,
@@ -76,6 +84,15 @@ class _FakeInfo:
 
     def open_orders(self, address, dex=""):
         return self.resting
+
+    def query_user_abstraction_state(self, user):
+        return self.abstraction
+
+    def spot_user_state(self, address):
+        return {"balances": [{"coin": "USDC", "total": str(self.spot_usdc)}]}
+
+    def extra_agents(self, user):
+        return self.agents
 
 
 class _FakeExchange:
@@ -148,7 +165,9 @@ def venue(monkeypatch):
 
     class Cfg:
         hl_secret_key = "0x" + "11" * 32
-        hl_account_address = ""
+        # the MAIN account, deliberately DIFFERENT from the signer: an agent
+        # wallet signs for an account it is not
+        hl_account_address = "0xMAIN0000000000000000000000000000000000ac"
         hl_coin = "BTC"
         hl_testnet = True
     return HyperliquidVenue(Cfg())
@@ -345,3 +364,173 @@ def test_gate_unknown_coin_fails_at_construction(monkeypatch, venue):
     venue.coin = "NOTACOIN"
     with pytest.raises(RuntimeError, match="not in the Hyperliquid perp"):
         venue._coin_meta()
+
+
+def test_gate_account_address_is_mandatory(monkeypatch, venue):
+    """THE agent-wallet trap, and the reason this is a hard failure rather
+    than a default. An agent wallet SIGNS for a main account but HOLDS
+    NOTHING itself - Hyperliquid's own UI says "the account's public address
+    must be used for info requests". Falling back to the signer would query
+    the AGENT, find no positions, and return 0.0 as a CONFIRMED FLAT forever
+    while the real account carried the book: the 2026-08-26 phantom-position
+    failure mode, re-entered through config."""
+    from app.hl import HyperliquidVenue
+
+    class Blank:
+        hl_secret_key = "0x" + "11" * 32
+        hl_account_address = ""
+        hl_coin = "BTC"
+        hl_testnet = True
+    with pytest.raises(RuntimeError, match="HL_ACCOUNT_ADDRESS is required"):
+        HyperliquidVenue(Blank())
+
+
+def test_gate_reads_target_the_main_account_not_the_signer(venue):
+    """Positions must be read for the MAIN account. If this ever regresses to
+    the signer's address the book reads permanently flat."""
+    assert venue.address == "0xMAIN0000000000000000000000000000000000ac"
+    seen = {}
+    real = venue.info.user_state
+
+    def _spy(addr, dex=""):
+        seen["addr"] = addr
+        return real(addr, dex)
+    venue.info.user_state = _spy
+    venue.position()
+    assert seen["addr"] == "0xMAIN0000000000000000000000000000000000ac"
+
+
+# ---------------------------------------------------------------------------
+# 2026-08-28, caught before the first live order: Hyperliquid keeps TWO USDC
+# pools and marginSummary.accountValue reports only the perp one. It read
+# $0.00 against a real $998.99 in spot.
+def test_gate_equity_includes_spot_under_a_unified_account(venue):
+    """Every circuit breaker is equity-derived. A constant zero makes every
+    loss compute as zero, so NO HALT CAN EVER FIRE - and sizing would have
+    looked fine, because SIZING_BASE_USD is a fixed number. The book would
+    have traded correctly with its rails silently absent."""
+    venue.info.abstraction = "unifiedAccount"
+    venue.info.state = {"marginSummary": {"accountValue": "0.0"},
+                        "assetPositions": []}
+    venue.info.spot_usdc = 998.99528
+    assert venue.equity() == pytest.approx(998.99528), \
+        "equity blind to spot under a unified account -> halts dead"
+
+
+def test_gate_equity_excludes_spot_when_not_unified(venue):
+    """The opposite error loosens the rails. With separate pools spot does
+    NOT back perps, so counting it would overstate what is at risk."""
+    venue.info.abstraction = "disabled"
+    venue.info.state = {"marginSummary": {"accountValue": "250.0"},
+                        "assetPositions": []}
+    venue.info.spot_usdc = 48_000.0
+    assert venue.equity() == pytest.approx(250.0), \
+        "counted spot as perp collateral on a non-unified account"
+
+
+def test_gate_unreadable_abstraction_raises_rather_than_guessing(venue):
+    """A silent default here either kills the halts or loosens them. An
+    unreadable venue is a first-class condition everywhere else in this
+    codebase; it is one here too."""
+    def _boom(user):
+        raise RuntimeError("info endpoint down")
+    venue.info.query_user_abstraction_state = _boom
+    venue.info.state = {"marginSummary": {"accountValue": "100.0"},
+                        "assetPositions": []}
+    with pytest.raises(RuntimeError, match="info endpoint down"):
+        venue.equity()
+
+
+def test_gate_abstraction_is_cached_not_polled_per_call(venue):
+    """One extra /info call per equity read is fine; one per anything else
+    is not. Cached for 60s, and the cache must not mask a real change
+    forever."""
+    calls = {"n": 0}
+    real = venue.info.query_user_abstraction_state
+
+    def _count(user):
+        calls["n"] += 1
+        return real(user)
+    venue.info.query_user_abstraction_state = _count
+    venue.info.spot_usdc = 100.0
+    for _ in range(5):
+        venue.equity()
+    assert calls["n"] == 1, f"queried abstraction {calls['n']}x for 5 reads"
+    venue._abs_cache = (0.0, True)          # expire
+    venue.equity()
+    assert calls["n"] == 2, "cache never expires"
+
+
+# --------------------------------------------------------------------------
+# Agent-wallet expiry (HL-3). Hyperliquid API wallets expire on a date the
+# venue will tell us; past it EVERY order is rejected, protective ones
+# included. That is the naked-position failure with a calendar on it.
+def test_gate_agent_expiry_is_read_and_converted_from_ms(venue):
+    """The venue reports ms; the rails think in seconds. An unconverted
+    value is ~57000x too large, i.e. 'expires in 55 million days' - a
+    warning that can never fire, which is the same as no rail at all."""
+    assert venue.agent_valid_until() == pytest.approx(1_803_483_076.101), \
+        "agent expiry not converted from the venue's milliseconds"
+
+
+def test_gate_agent_matched_by_address_not_display_name(venue):
+    """The name is operator-chosen, editable, and duplicable in the HL UI.
+    A name match can point at a DIFFERENT key than the one we sign with -
+    reporting a healthy expiry for a wallet we do not use, while ours dies."""
+    venue.info.agents = [{"name": "BTC EXECUTOR",       # our name...
+                          "address": "0x" + "ab" * 20,  # ...someone else's key
+                          "validUntil": 9_999_999_999_000}]
+    assert venue.agent_valid_until() == 0.0, \
+        "matched an agent row by NAME - reported a key we cannot sign with"
+
+
+def test_gate_revoked_agent_reads_as_expired_not_healthy(venue):
+    """A clean response that does not list us is DEFINITIVE: revoked, never
+    approved, or HL_SECRET_KEY belongs to another wallet. No order will
+    ever succeed, so it must reach the expiry rail, not a silent pass."""
+    venue.info.agents = []
+    assert venue.agent_valid_until() == 0.0, \
+        "an unlisted (revoked) agent read as having no expiry"
+
+
+def test_gate_unreadable_agent_list_raises_rather_than_reporting_healthy(venue):
+    """Unreadable is not absent. Returning None here would mean 'this key
+    never expires', permanently disarming the rail on a transient outage."""
+    def _boom(user):
+        raise RuntimeError("info endpoint down")
+    venue.info.extra_agents = _boom
+    with pytest.raises(RuntimeError, match="info endpoint down"):
+        venue.agent_valid_until()
+
+
+def test_gate_main_account_key_has_no_expiry(venue):
+    """Trading with the main account's own key is a valid (less safe) setup
+    and cannot expire. It must not be reported as expired-now, which would
+    halt a perfectly healthy book forever."""
+    venue.address = venue.agent_address        # signer IS the account
+    assert venue.agent_valid_until() is None
+
+
+# --------------------------------------------------------------------------
+# The $10 floor. Hyperliquid refuses any order under $10 notional and does
+# NOT document a reduce-only exemption, so a sub-$10 position cannot be
+# closed by its stop OR by the halt's flatten.
+def test_gate_min_notional_rejection_is_its_own_error(venue):
+    """A generic 'order rejected' on the protective path reads as a venue
+    hiccup and gets retried. This one is not retryable at any size - the
+    page has to say so, or the operator debugs the wrong thing while an
+    unprotected residue sits open."""
+    from app.hl import MinNotionalRejected
+    venue.exchange.reject = "Order must have minimum value of $10."
+    with pytest.raises(MinNotionalRejected, match="cannot be closed by ANY"):
+        venue.place_stop("SELL", 0.00001, 74_000.0, "T-1-S74000-1")
+
+
+def test_gate_other_rejections_stay_generic(venue):
+    """Only the floor gets the special type. Widening it would relabel
+    ordinary rejections as unrecoverable."""
+    from app.hl import MinNotionalRejected
+    venue.exchange.reject = "Insufficient margin to place order."
+    with pytest.raises(RuntimeError) as e:
+        venue.place_market("SELL", 0.01, "T-1-X1")
+    assert not isinstance(e.value, MinNotionalRejected)

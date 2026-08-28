@@ -275,6 +275,33 @@ services:
         value: https://btc-paper-engine.onrender.com
       - key: EXEC_TOKEN
         sync: false            # must match btc-paper-engine's EXEC_TOKEN
+      - key: VENUE
+        # coinbase | hyperliquid. sync:false for the same reason DRY_RUN is:
+        # a blueprint sync that flipped this would point a LIVE book at a
+        # different exchange, where its ledger positions and resting orders
+        # mean nothing. The code refuses that (VENUE_CHANGED halt, checked
+        # before boot reconcile can adopt or abandon anything), but the env
+        # must not be able to propose it in the first place. Unset = the
+        # code default, coinbase - an absent env can never move the book.
+        sync: false
+      # --- Hyperliquid (only read when VENUE=hyperliquid) ---
+      - key: HL_SECRET_KEY
+        # AGENT (API) wallet private key. Approve one in the HL UI under
+        # API; it can TRADE but CANNOT WITHDRAW - the same separation of
+        # powers as the Coinbase trade-only key, enforced by the venue
+        # rather than by our own care. NEVER the main account's key.
+        sync: false
+      - key: HL_ACCOUNT_ADDRESS
+        # REQUIRED for VENUE=hyperliquid, and it is the MAIN account's public
+        # address - NOT the agent wallet's. Positions are read by this
+        # address; the agent holds nothing, so pointing it at the agent would
+        # report the book permanently FLAT. The executor refuses to start
+        # rather than guess.
+        sync: false
+      - key: HL_COIN
+        sync: false            # perp symbol, e.g. BTC
+      - key: HL_TESTNET
+        sync: false            # "true" routes to the testnet API
       - key: CB_API_KEY_NAME
         sync: false            # CDP key name (trade-only key)
       - key: CB_API_PRIVATE_KEY
@@ -304,9 +331,25 @@ services:
       # -> 0.20 -> 0.35 -> 0.56, advance after 4 trades at a rung AND
       # cumulative ramp P&L >= 0; step DOWN a rung at -$5,000 ramp drawdown.
       # Change KELLY_M one step at a time, never alongside SIZING_BASE_USD.
-      # Current dashboard values (2026-08-11): KELLY_M 0.05,
-      # SIZING_BASE_USD 50000, MAX_NOTIONAL_USD 80000, MAX_ACCOUNT_LEV 2.0,
-      # DD_HALT_PCT 0.35 (% of sizing base; 0.30 at the $100k phase).
+      # Current dashboard values (2026-08-28, Hyperliquid live-test phase):
+      # KELLY_M 0.135, SIZING_BASE_USD 1000, MAX_NOTIONAL_USD 2000,
+      # MAX_ACCOUNT_LEV 2.0, DD_HALT_PCT 0.35 (% of sizing base).
+      # (was 0.05 / 50000 / 80000 through the Coinbase phase.)
+      #
+      # KELLY_M 0.135 is deliberately OFF the ramp staircase, and is not
+      # ramp progress. It is a VENUE-MECHANICS floor, not an evidence-based
+      # step up: Hyperliquid rejects any order under $10 notional and grants
+      # reduce-only no exemption, so a position that falls under $10 cannot
+      # be closed by ANY order - not its stop, not the halt's flatten. At
+      # 0.05 on a $1k base the smaller (trend) leg is $18.75, under 2x that
+      # floor; at 0.135 it is $50.62, about 5x. Gross is $202 on a ~$999
+      # account (0.20x), so the absolute risk stays token.
+      #
+      # RAISING THE BASE INSTEAD WOULD HAVE DISARMED A HALT: reaching the
+      # same $50 via SIZING_BASE_USD 2700 puts the drawdown halt at 35% of
+      # 2700 = $945 on a $999 account, i.e. it could never fire before
+      # wipeout. The mirror's halt_config coherence guard warns on exactly
+      # this. At base 1000 the rails stay calibrated: DD -$350, daily -$60.
       - key: KELLY_M
         sync: false
       - key: SIZING_BASE_USD

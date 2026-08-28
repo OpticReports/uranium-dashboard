@@ -51,6 +51,13 @@ STOP_REPLACE_MAX = 3
 # storm fails), short enough that isolated blips cannot accumulate across a
 # multi-week position (re-gate 2026-08-27 N1).
 STOP_OK_DECAY_POLLS = 20
+# Hyperliquid agent (API) wallets expire on a date the venue tells us.
+# Expiry is a TOTAL loss of write access, protective orders included, so the
+# halt must fire while the key still WORKS - a halt at T-0 cannot flatten.
+AGENT_WARN_DAYS = 14.0
+AGENT_HALT_DAYS = 1.0
+AGENT_CHECK_EVERY_S = 3600.0
+AGENT_UNREADABLE_WARN_S = 6 * 3600.0
 # Auto-drill's terminal condition is now a MEASUREMENT (live fill count) that
 # drilling can fail to advance - e.g. the venue omits average_filled_price.
 # Without this bound it drills the daily budget forever, unattended.
@@ -117,15 +124,25 @@ class LegLedger:
 class ExecState:
     legs: dict = field(default_factory=lambda: {n: LegLedger() for n in LEGS})
     # None | DAILY_LOSS | DRAWDOWN | KILL | LEDGER_DIVERGENCE |
-    # STOP_UNPLACEABLE  (the last two are protection failures, not risk
-    # breaches: the book stops because a position cannot be kept protected,
-    # and both require a MANUAL /resume regardless of KELLY_M)
+    # STOP_UNPLACEABLE | VENUE_CHANGED | AGENT_EXPIRED  (AGENT_EXPIRED means
+    # the signing key is about to stop working, so it fires at T-1 day while
+    # the flatten can still execute; /resume alone does not fix it — a new
+    # API wallet must be approved and HL_SECRET_KEY updated first.)
+    # (all but DAILY_LOSS require a MANUAL
+    # /resume regardless of KELLY_M. LEDGER_DIVERGENCE and STOP_UNPLACEABLE
+    # are protection failures - the book stops because a position cannot be
+    # kept protected. VENUE_CHANGED means the ledger describes a different
+    # exchange, and is the only one /resume alone must never clear.)
     halted: str | None = None
     # unix ts of the last SUCCESSFUL venue position read. /pulse publishes
     # its age so an external monitor can see venue blindness — every other
     # /pulse field reads from the ledger, which is belief, not truth
     # (2026-08-26 incident: 3 days blind, nothing external could tell).
     last_venue_read_ts: int = 0
+    # epoch seconds the signing key stops working (Hyperliquid agent
+    # wallets expire). None = unknown yet, or a key that cannot expire.
+    # Deliberately NOT persisted: a saved copy would outlive the fact.
+    agent_valid_until: float | None = None
     day_key: str = ""
     day_start_equity: float = 0.0
     high_water: float = 0.0
@@ -161,6 +178,12 @@ class ExecState:
     # Top-level, NOT a LegLedger field: older loaders cherry-pick keys, so
     # this stays rollback-safe.
     stop_vanish: dict = field(default_factory=dict)
+    # WHICH VENUE this ledger belongs to. A ledger is a claim about
+    # positions ON A SPECIFIC EXCHANGE; carrying it across a VENUE switch
+    # would have the mirror believe it holds, on the new venue, whatever it
+    # held on the old one - and would silently ABANDON the real position on
+    # the old one. Recorded on first save, checked at every boot.
+    venue: str | None = None
     attestation: dict | None = None
     # monotonic DRY_RUN flip counter. A safety invariant must NOT live in a
     # rotating buffer: the event log holds 200 entries and rate-limited
@@ -225,6 +248,12 @@ class Executor:
         self._cov_since_boot: dict[str, int] = {}
         self._venue_read_failed_at = 0.0   # append-side cooldown for the RED
         self._boot_mismatch = False        # venue-vs-ledger unresolved at boot
+        # agent-wallet expiry rail. 0 forces a check on the FIRST step of
+        # every process, so a restart cannot postpone the warning; both are
+        # in-memory because the answer is a venue fact, and a persisted copy
+        # could only ever be a staler version of it.
+        self._agent_checked_ts = 0.0
+        self._agent_unreadable_since: float | None = None
         # live diagnostic (not persisted): why auto-drill last declined to
         # run. It used to `return  # quietly wait`, so "armed and waiting"
         # and "broken" were indistinguishable from outside.
@@ -244,10 +273,67 @@ class Executor:
         self._migrate_ledger_granularity()
         self._warn_unattributed_coverage()
         self._void_absurd_fills()
+        self._check_venue_continuity()
         self._check_product_tradable()
         self._reconcile_boot()
         if any(l.qty != 0.0 for l in self.state.legs.values()):
             self._cov("restart_with_position")
+
+    def _check_venue_continuity(self) -> None:
+        """A ledger belongs to ONE exchange. Refuse to run it against another.
+
+        The ledger is a claim about positions on a specific venue. Carried
+        across a VENUE switch it would make the mirror believe it holds, on
+        the NEW venue, whatever it held on the old one - and boot reconcile
+        would then "helpfully" resolve the difference: a real Coinbase
+        position silently abandoned, or a phantom one adopted onto
+        Hyperliquid. Neither is recoverable by anything downstream, because
+        every later check compares the ledger against the WRONG exchange.
+
+        So: stamp the venue on first save, and on any later boot where it
+        disagrees, HALT before _reconcile_boot can touch anything. Clearing
+        it is deliberately manual - flatten on the old venue, confirm it,
+        then start the new one from a clean state file."""
+        cur = str(getattr(self.cfg, "venue", "coinbase") or "coinbase").lower()
+        prev = getattr(self.state, "venue", None)
+        if prev is None:
+            # UNSTAMPED = written before this field existed, and the only
+            # venue that existed then was Coinbase. Adopting `cur` here would
+            # silently bless a Coinbase ledger as Hyperliquid's on the very
+            # first boot after VENUE is switched - which is exactly the
+            # deploy this guard is for (2026-08-28: VENUE=hyperliquid was set
+            # in Render while the state file was still Coinbase's).
+            prev = "coinbase"
+        if prev == cur:
+            self.state.venue = cur
+            return
+        held = {n: l.qty for n, l in self.state.legs.items() if l.qty != 0.0}
+        refs = {n: l.stop_cloid or l.entry_cloid
+                for n, l in self.state.legs.items()
+                if l.stop_cloid or l.entry_cloid}
+        if not held and not refs:
+            # An EMPTY ledger carries nothing across. The danger is
+            # positions and order refs that mean something on the old venue
+            # and nothing on the new one; with neither, a switch is clean and
+            # halting would be pure friction on an operator who did the right
+            # thing (flatten first, then switch).
+            self.state.venue = cur
+            self._event("WARN", "venue_switched",
+                        f"venue {prev} -> {cur} with an EMPTY ledger (no "
+                        f"positions, no order refs) - adopted cleanly. "
+                        f"Confirm {prev.upper()} really is flat and has no "
+                        f"resting orders; this check reads the LEDGER, not "
+                        f"the old venue.")
+            self._save_state()
+            return
+        self._event("RED", "venue_changed",
+                    f"state file belongs to venue '{prev}' but VENUE is now "
+                    f"'{cur}'. Ledger positions {held or 'none'} and order "
+                    f"refs {refs or 'none'} refer to {prev.upper()} and mean "
+                    f"NOTHING on {cur.upper()}. Halting before boot reconcile "
+                    f"can adopt or abandon anything.")
+        self.state.halted = "VENUE_CHANGED"
+        self._save_state()
 
     def _check_product_tradable(self) -> None:
         """Boot page when the CONFIGURED product cannot actually trade.
@@ -272,6 +358,72 @@ class Executor:
                         f"{flags.get('venue')} - every order will be "
                         f"rejected; fix CB_PRODUCT_ID before trusting any "
                         f"'ready' signal")
+
+    def _check_agent_expiry(self) -> None:
+        """Halt BEFORE the signing key dies, not after.
+
+        A Hyperliquid agent wallet has a hard expiry (ours: 2027-02-24).
+        Past it every order is rejected — entries AND stops — so a position
+        open at expiry is naked, and the executor cannot flatten itself out
+        of it because flattening is also an order. That is the phantom
+        incident with a known date on it, which makes tolerating it a
+        choice rather than an accident.
+
+        So the halt fires at T-1 DAY, while the credentials still work and
+        _halt_locked's flatten can actually execute. Warnings start at
+        T-14 days so the renewal is routine rather than an emergency.
+
+        Unreadable expiry is a WARN, never a halt: the info endpoint being
+        down says nothing about whether our key can still sign, and halting
+        a healthy book on a read failure would be self-inflicted damage of
+        exactly the kind the halt exists to prevent. Venue-agnostic by duck
+        type — Coinbase has no such method and is untouched. DryRunVenue
+        wraps the real venue, so look through `inner` as well."""
+        fn = (getattr(self.venue, "agent_valid_until", None)
+              or getattr(getattr(self.venue, "inner", None),
+                         "agent_valid_until", None))
+        if fn is None:
+            return
+        now = time.time()
+        if now - self._agent_checked_ts < AGENT_CHECK_EVERY_S:
+            return
+        self._agent_checked_ts = now
+        try:
+            vu = fn()
+        except Exception as exc:  # noqa: BLE001
+            if self._agent_unreadable_since is None:
+                self._agent_unreadable_since = now
+            blind = now - self._agent_unreadable_since
+            if blind > AGENT_UNREADABLE_WARN_S:
+                self._event("WARN", "agent_expiry_unreadable",
+                            f"cannot read agent wallet expiry for "
+                            f"{blind / 3600:.0f}h ({exc}) - the key may "
+                            f"still sign fine, but the expiry rail is dark")
+            return
+        self._agent_unreadable_since = None
+        self.state.agent_valid_until = vu
+        if vu is None:                      # main-account key: never expires
+            return
+        days = (vu - now) / 86400.0
+        if days <= AGENT_HALT_DAYS:
+            # includes the revoked/not-approved case, which the adapter
+            # reports as valid_until=0 (definitively expired, not unread).
+            # Already halted: do NOT re-halt — _halt_locked flattens, and
+            # re-running that hourly against a book someone is manually
+            # working would fight the operator.
+            if self.state.halted:
+                return
+            self._halt_locked(
+                "AGENT_EXPIRED",
+                f"agent wallet expires in {days * 24:.1f}h - halting NOW "
+                f"while it can still cancel and flatten; approve a new API "
+                f"wallet, set HL_SECRET_KEY, then /resume")
+        elif days <= AGENT_WARN_DAYS:
+            self._event("RED", "agent_expiring",
+                        f"agent wallet expires in {days:.1f} days "
+                        f"({time.strftime('%Y-%m-%d', time.gmtime(vu))}) - "
+                        f"the executor HALTS at T-1 day; approve a new API "
+                        f"wallet and update HL_SECRET_KEY before then")
 
     def _void_absurd_fills(self) -> None:
         """One-time hygiene at boot: a recorded |slip_bps| > 500 is not a
@@ -313,10 +465,17 @@ class Executor:
         - any OTHER mismatch (venue holds more/less/opposite) -> RED
           ACTION page only, adopt nothing: partial states are ambiguous and
           a wrong auto-fix at boot compounds silently. The operator decides.
+
+        SKIPPED ENTIRELY on a VENUE_CHANGED halt. The ledger then describes
+        a DIFFERENT exchange, so every rule above would compare it against
+        the wrong venue and "resolve" the difference by abandoning a real
+        position or adopting a phantom one.
         Runs only against a real venue (dry-run venues simulate fills).
         """
         if getattr(self.venue, "log", None) is not None:
             return
+        if self.state.halted == "VENUE_CHANGED":
+            return          # the ledger describes another exchange entirely
         ledger_net = sum(l.qty for l in self.state.legs.values())
         net = None
         for attempt in range(3):       # one boot-time blip must not disarm
@@ -576,7 +735,7 @@ class Executor:
             raw = json.load(open(self.state_path))
             st = ExecState(**{k: raw[k] for k in
                               ("halted", "day_key", "day_start_equity",
-                               "high_water") if k in raw})
+                               "high_water", "venue") if k in raw})
             # Filter unknown keys: a state file written by a NEWER build
             # carries fields this LegLedger lacks, and the bare except below
             # would discard the entire state - un-halting a killed executor
@@ -630,6 +789,7 @@ class Executor:
              "coverage_live": getattr(self.state, "coverage_live", {}),
              "coverage_attested": getattr(self.state, "coverage_attested", {}),
              "stop_vanish": getattr(self.state, "stop_vanish", {}),
+             "venue": getattr(self.state, "venue", None),
              "attestation": getattr(self.state, "attestation", None),
              "mode_flips": getattr(self.state, "mode_flips", 0),
              "witnessing_since": getattr(self.state, "witnessing_since", None),
@@ -694,6 +854,13 @@ class Executor:
             "halt_error": "closing positions during the halt FAILED — open "
                           "Coinbase NOW, check positions, flatten manually "
                           "if any remain",
+            "venue_changed": "the state file was written by a DIFFERENT "
+                             "venue. Its ledger positions and order refs "
+                             "mean nothing here. Flatten and cancel on the "
+                             "OLD venue, confirm it is empty, then start "
+                             "this one from a clean state file (delete "
+                             "executor_state.json) - do NOT /resume into a "
+                             "ledger that describes another exchange",
             "product_untradable": "CB_PRODUCT_ID points at a product this "
                                   "key cannot trade (view_only/disabled) - "
                                   "every order will be rejected. Check "
@@ -1279,6 +1446,7 @@ class Executor:
         equity = self.venue.equity()
         self._reconcile_transfers(equity)
         self._roll_day(equity)
+        self._check_agent_expiry()
         self._check_halts(equity)
         if self.state.halted:
             self._save_state()

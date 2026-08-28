@@ -4398,3 +4398,287 @@ def test_gate_N4_dryrun_adopt_does_not_latch_entries_off(tmp_path):
     ex._check_drift(50_000.0)
     assert ex._boot_mismatch is False, \
         "dry-run adopt latched entries off with no in-band clear"
+
+
+# ---------------------------------------------------------------------------
+# HL-2: the VENUE selector. The failure this guards is the one no ledger
+# check can catch on its own - a book running against the wrong exchange.
+def test_gate_venue_selector_rejects_unknown_values(monkeypatch):
+    """An unknown VENUE must RAISE, never fall through to a default. A typo
+    that silently routes real orders to whichever venue happens to be the
+    fallback is the worst possible config error, and _loop's retry turns
+    the raise into a loud repeating page instead of a wrong-exchange deploy."""
+    import app.main as m
+    for bad in ("hyperliquidd", "binance", "COINBASE_", "x"):
+        monkeypatch.setattr(m.settings, "venue", bad)
+        with pytest.raises(RuntimeError, match="not one of"):
+            m._venue_name()
+
+
+def test_gate_venue_selector_defaults_to_coinbase(monkeypatch):
+    """Unset/blank must keep the ALREADY-DEPLOYED behaviour. A missing env
+    can never move a live book to another exchange."""
+    import app.main as m
+    for blank in ("", None, "coinbase", " CoinBase "):
+        monkeypatch.setattr(m.settings, "venue", blank)
+        assert m._venue_name() == "coinbase"
+    monkeypatch.setattr(m.settings, "venue", "HyperLiquid ")
+    assert m._venue_name() == "hyperliquid"
+
+
+def test_gate_hyperliquid_live_without_key_refuses_to_demote(monkeypatch):
+    """LIVE mode must never silently demote to a shadow book - the same rule
+    Coinbase has. Selecting hyperliquid with no key must raise, not run a
+    DryRunVenue over a real account."""
+    import app.main as m
+    monkeypatch.setattr(m.settings, "venue", "hyperliquid")
+    monkeypatch.setattr(m.settings, "hl_secret_key", "")
+    monkeypatch.setattr(m.settings, "dry_run", False)
+    monkeypatch.setattr("app.alerts.send", lambda *a, **k: None)
+    with pytest.raises(RuntimeError, match="live venue init failed"):
+        m._build_executor()
+    assert "HL_SECRET_KEY" in m.LAST["venue_init_error"]
+
+
+def test_gate_venue_change_halts_before_reconcile_can_act(tmp_path):
+    """A ledger is a claim about positions on ONE exchange. Carried across a
+    VENUE switch, boot reconcile would 'resolve' it against the WRONG venue:
+    a real position silently abandoned, or a phantom one adopted. Halt
+    first, adopt nothing."""
+    import json
+    from app.mirror import Executor
+    cfg = Cfg()
+    cfg.state_path = str(tmp_path / "state.json")
+    json.dump({"halted": None, "venue": "coinbase",
+               "legs": {"trend": {"qty": 0.34, "stop_cloid": "T-1-S70000-1"}}},
+              open(cfg.state_path, "w"))
+    v = FakeVenue(mult=0.01)          # the NEW venue holds nothing
+    cfg.venue = "hyperliquid"
+    ex = Executor(v, cfg, cfg.state_path)
+    assert ex.state.halted == "VENUE_CHANGED", \
+        "ran a coinbase ledger against hyperliquid"
+    assert ex.state.legs["trend"].qty == 0.34, \
+        "boot reconcile adopted/abandoned across a venue change"
+    assert ex.state.legs["trend"].stop_cloid == "T-1-S70000-1"
+    assert any(e["kind"] == "venue_changed" for e in ex.state.events)
+
+
+def test_gate_same_venue_boots_normally_and_stamps(tmp_path):
+    """The guard must not fire on the ordinary case, and an unstamped legacy
+    state file must adopt the current venue rather than halting on it."""
+    import json
+    from app.mirror import Executor
+    cfg = Cfg()
+    cfg.state_path = str(tmp_path / "s.json")
+    cfg.venue = "coinbase"
+    json.dump({"halted": None, "legs": {}}, open(cfg.state_path, "w"))
+    ex = Executor(FakeVenue(mult=0.01), cfg, cfg.state_path)
+    assert ex.state.halted is None, "halted on a legacy unstamped state file"
+    assert ex.state.venue == "coinbase", "did not stamp the venue"
+    # a legacy file is COINBASE's by construction - it predates the field,
+    # and Coinbase was the only venue that existed. Adopting whatever VENUE
+    # happens to say would bless a Coinbase ledger as Hyperliquid's.
+    ex._save_state()
+    ex2 = Executor(FakeVenue(mult=0.01), cfg, cfg.state_path)
+    assert ex2.state.halted is None and ex2.state.venue == "coinbase"
+    # ROUND-TRIP, not just the in-memory stamp: if _save_state drops the
+    # venue, every boot looks like a fresh one and the guard can never fire.
+    # Asserting the stamp alone passed with persistence removed entirely.
+    assert json.load(open(cfg.state_path))["venue"] == "coinbase", \
+        "venue not written to the state file"
+    # Prove the SAVED stamp is what the next boot reads, using a ledger that
+    # actually carries something - an empty one now switches cleanly by
+    # design (test_gate_empty_ledger_switches_venue_without_friction), so it
+    # cannot distinguish "stamp persisted" from "stamp lost".
+    ex2.state.legs["trend"].qty = 0.01
+    ex2._save_state()
+    cfg.venue = "hyperliquid"
+    ex3 = Executor(FakeVenue(mult=0.01), cfg, cfg.state_path)
+    assert ex3.state.halted == "VENUE_CHANGED", \
+        "a SAVED venue must still be detected on the next boot"
+
+
+def test_gate_pulse_publishes_the_venue(tmp_path, monkeypatch):
+    """A book on the wrong exchange is the one config error no ledger check
+    catches; /pulse is the only unauthenticated surface, so it must say."""
+    from fastapi.testclient import TestClient
+    import app.main as m
+    ex = mkexec(tmp_path, FakeVenue(mult=0.01))
+    monkeypatch.setattr(m, "EXEC", ex)
+    monkeypatch.setattr(m.settings, "exec_token", "")
+    m.LAST["venue_name"] = "hyperliquid"
+    assert TestClient(m.app).get("/pulse").json()["venue"] == "hyperliquid"
+
+
+def test_gate_legacy_state_is_coinbase_not_whatever_venue_says(tmp_path):
+    """The deploy this guard exists for. VENUE=hyperliquid was set in Render
+    on 2026-08-28 while the state file was still Coinbase's and carried no
+    venue field. Treating an UNSTAMPED file as belonging to the configured
+    venue would bless a Coinbase ledger as Hyperliquid's on the first boot -
+    the one moment the check had to fire."""
+    import json
+    from app.mirror import Executor
+    cfg = Cfg()
+    cfg.state_path = str(tmp_path / "legacy.json")
+    cfg.venue = "hyperliquid"
+    json.dump({"halted": None,          # NO venue key: pre-2026-08-28 file
+               "legs": {"trend": {"qty": 0.01, "stop_cloid": "T-1-S1"}}},
+              open(cfg.state_path, "w"))
+    ex = Executor(FakeVenue(mult=0.01), cfg, cfg.state_path)
+    assert ex.state.halted == "VENUE_CHANGED", \
+        "an unstamped Coinbase ledger was adopted as Hyperliquid's"
+    assert ex.state.legs["trend"].qty == 0.01, "adopted/abandoned across venues"
+
+
+def test_gate_empty_ledger_switches_venue_without_friction(tmp_path):
+    """The operator who did the right thing - flatten, THEN switch - must not
+    be blocked. An empty ledger carries nothing across; the danger is
+    positions and order refs, and there are none."""
+    import json
+    from app.mirror import Executor
+    cfg = Cfg()
+    cfg.state_path = str(tmp_path / "empty.json")
+    cfg.venue = "hyperliquid"
+    json.dump({"halted": None, "venue": "coinbase", "legs": {}},
+              open(cfg.state_path, "w"))
+    ex = Executor(FakeVenue(mult=0.01), cfg, cfg.state_path)
+    assert ex.state.halted is None, "halted on a genuinely empty ledger"
+    assert ex.state.venue == "hyperliquid", "did not re-stamp"
+    assert any(e["kind"] == "venue_switched" for e in ex.state.events), \
+        "a venue switch must still be announced, even when it is clean"
+    assert json.load(open(cfg.state_path))["venue"] == "hyperliquid"
+
+
+# --------------------------------------------------------------------------
+# HL-3: the agent-wallet expiry rail. Hyperliquid API wallets expire on a
+# date the venue tells us in advance. Past it EVERY order is rejected -
+# entries AND stops AND the flatten - so a position open at expiry is naked
+# and the executor cannot get itself out. This is the phantom-position
+# failure with a calendar attached, which makes ignoring it a choice.
+class _ExpiringVenue(FakeVenue):
+    """FakeVenue that also answers the Hyperliquid expiry question."""
+
+    def __init__(self, days_left=90.0, boom=False, **kw):
+        super().__init__(**kw)
+        self.days_left = days_left
+        self.boom = boom
+        self.expiry_calls = 0
+
+    def agent_valid_until(self):
+        self.expiry_calls += 1
+        if self.boom:
+            raise RuntimeError("info endpoint down")
+        if self.days_left is None:
+            return None
+        return time.time() + self.days_left * 86400.0
+
+
+def _evt(ex, kind):
+    return [e for e in ex.state.events if e["kind"] == kind]
+
+
+def test_gate_agent_expiry_halts_while_the_key_still_works(tmp_path):
+    """THE point of the rail: halt at T-1 DAY, not at T-0. _halt_locked
+    cancels and flattens, and both are ORDERS - at T-0 the key is already
+    dead and the halt would be a page attached to a book it cannot close."""
+    v = _ExpiringVenue(days_left=0.5)
+    ex = mkexec(tmp_path, v)
+    _hold(v, 0.01, "seed")
+    ex.state.legs["pullback"].qty = 0.01
+    ex.step(target())
+    assert ex.state.halted == "AGENT_EXPIRED"
+    assert any(c[0] in ("MARKET", "CANCEL_ALL") for c in v.calls), \
+        "halted on expiry but never tried to close the book"
+    assert ex.state.legs["pullback"].qty == 0.0, "ledger left holding"
+
+
+def test_gate_agent_expiry_warns_two_weeks_out_without_halting(tmp_path):
+    """A halt is the last resort; the renewal should be routine. Warning
+    only at T-1 would make every renewal an outage."""
+    v = _ExpiringVenue(days_left=10.0)
+    ex = mkexec(tmp_path, v)
+    ex.step(target())
+    assert ex.state.halted is None, "warned AND halted 10 days out"
+    assert _evt(ex, "agent_expiring"), "no warning inside the 14-day window"
+
+
+def test_gate_agent_expiry_quiet_when_far_out(tmp_path):
+    v = _ExpiringVenue(days_left=180.0)
+    ex = mkexec(tmp_path, v)
+    ex.step(target())
+    assert ex.state.halted is None and not _evt(ex, "agent_expiring")
+    assert ex.state.agent_valid_until is not None, "expiry never published"
+
+
+def test_gate_revoked_agent_halts(tmp_path):
+    """The adapter reports a revoked/unlisted agent as valid_until=0. It
+    must reach the SAME rail, not a separate path that could be missed."""
+    v = _ExpiringVenue()
+    v.agent_valid_until = lambda: 0.0
+    ex = mkexec(tmp_path, v)
+    ex.step(target())
+    assert ex.state.halted == "AGENT_EXPIRED"
+
+
+def test_gate_unreadable_expiry_never_halts(tmp_path):
+    """The info endpoint being down says NOTHING about whether our key can
+    still sign. Halting a healthy book on a read failure is self-inflicted
+    damage of exactly the kind the halt exists to prevent."""
+    v = _ExpiringVenue(boom=True)
+    ex = mkexec(tmp_path, v)
+    ex.step(target())
+    assert ex.state.halted is None, "halted the book on an info outage"
+    assert not _evt(ex, "agent_expiry_unreadable"), "paged on first failure"
+    # ...but staying dark must not be silent forever
+    ex._agent_unreadable_since = time.time() - 7 * 3600
+    ex._agent_checked_ts = 0.0
+    ex.step(target())
+    assert _evt(ex, "agent_expiry_unreadable"), "6h dark and no page"
+    assert ex.state.halted is None
+
+
+def test_gate_expiry_recovers_after_a_transient_outage(tmp_path):
+    """A blind stretch that ends must reset, or one outage arms the warning
+    permanently and the operator learns to ignore it."""
+    v = _ExpiringVenue(days_left=90.0, boom=True)
+    ex = mkexec(tmp_path, v)
+    ex.step(target())
+    assert ex._agent_unreadable_since is not None
+    v.boom = False
+    ex._agent_checked_ts = 0.0
+    ex.step(target())
+    assert ex._agent_unreadable_since is None, "blind clock never cleared"
+
+
+def test_gate_expiry_is_not_polled_every_step(tmp_path):
+    """One extra /info call per poll, forever, for a date that moves once
+    every six months."""
+    v = _ExpiringVenue(days_left=90.0)
+    ex = mkexec(tmp_path, v)
+    for _ in range(5):
+        ex.step(target())
+    assert v.expiry_calls == 1, f"polled expiry {v.expiry_calls}x in 5 steps"
+
+
+def test_gate_expiry_check_is_venue_agnostic(tmp_path):
+    """Coinbase has no agent wallets and no such method. Duck-typed, so the
+    rail must be a silent no-op there rather than an AttributeError that
+    takes down every step."""
+    v = FakeVenue()
+    assert not hasattr(v, "agent_valid_until")
+    ex = mkexec(tmp_path, v)
+    ex.step(target())
+    assert ex.state.halted is None and ex.state.agent_valid_until is None
+
+
+def test_gate_expired_agent_does_not_refight_an_existing_halt(tmp_path):
+    """_halt_locked flattens. Re-running it hourly against a book the
+    operator is manually working would fight them."""
+    v = _ExpiringVenue(days_left=0.5)
+    ex = mkexec(tmp_path, v)
+    ex.step(target())
+    assert ex.state.halted == "AGENT_EXPIRED"
+    n = len(v.calls)
+    ex._agent_checked_ts = 0.0
+    ex.step(target())
+    assert len(v.calls) == n, "re-flattened a book that was already halted"

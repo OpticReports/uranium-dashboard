@@ -36,12 +36,43 @@ LAST: dict = {"target": None, "target_ts": 0, "loop_ok": 0}
 EXEC: Executor | None = None
 
 
+VENUES = ("coinbase", "hyperliquid")
+
+
+def _venue_name() -> str:
+    """Validated at boot. An unknown VENUE RAISES rather than defaulting -
+    a typo must never route real orders to whichever venue happens to be
+    the fallback, and the caller's retry loop turns this into a loud,
+    repeating ACTION page instead of a silent wrong-exchange deploy."""
+    v = str(getattr(settings, "venue", "coinbase") or "coinbase").strip().lower()
+    if v not in VENUES:
+        raise RuntimeError(f"VENUE={v!r} is not one of {VENUES}")
+    return v
+
+
 def _build_executor() -> Executor:
     import os
     inner = None
+    which = _venue_name()
     LAST["venue_init_error"] = None
     LAST["venue_products"] = None
-    if not (settings.cb_api_key_name and settings.cb_api_private_key):
+    LAST["venue_name"] = which
+    if which == "hyperliquid":
+        missing = "no HL_SECRET_KEY set" if not settings.hl_secret_key else None
+        if missing:
+            LAST["venue_init_error"] = missing
+        else:
+            try:
+                from .hl import HyperliquidVenue
+                inner = HyperliquidVenue(settings)
+                LAST["venue_products"] = inner.list_perp_candidates()
+                logger.info("hyperliquid perps visible: %s",
+                            LAST["venue_products"])
+            except Exception as exc:  # noqa: BLE001
+                LAST["venue_init_error"] = f"{type(exc).__name__}: {exc}"
+                logger.error("hyperliquid venue init failed: %s", exc)
+                inner = None
+    elif not (settings.cb_api_key_name and settings.cb_api_private_key):
         LAST["venue_init_error"] = "no CB_API_KEY_NAME / CB_API_PRIVATE_KEY set"
     else:
         try:
@@ -73,11 +104,13 @@ def _build_executor() -> Executor:
         if now - LAST.get("init_paged_at", 0.0) > 1800:
             LAST["init_paged_at"] = now
             send("🔴 ACTION NEEDED (you) — executor venue_init_failed: LIVE "
-                 f"mode cannot connect to Coinbase ({LAST['venue_init_error']}). "
+                 f"mode cannot connect to {which.upper()} "
+                 f"({LAST['venue_init_error']}). "
                  "No orders are being managed; any open positions/stops are "
                  "untouched on the venue. Retrying automatically every "
-                 "30s-10min - if this repeats, check Coinbase status and the "
-                 "API key in Render. (This page is rate-limited to 1/30min.)")
+                 "30s-10min - if this repeats, check the venue's status and "
+                 f"the {which} credentials in Render. "
+                 "(This page is rate-limited to 1/30min.)")
         raise RuntimeError(f"live venue init failed: "
                            f"{LAST['venue_init_error']}")
     if settings.dry_run:
@@ -164,6 +197,10 @@ def pulse():
     _rv = _ramp_v4(st)
     rv = _rv["rows"]
     return {"ready": True, "dry_run": settings.dry_run,
+            # WHICH VENUE is publicly visible: a book silently running on
+            # the wrong exchange is the one config error no ledger check can
+            # catch, and this is the only unauthenticated surface.
+            "venue": LAST.get("venue_name", "coinbase"),
             "halted": st.halted, "red_events_24h": red_24h,
             "ramp_v4_met": f"{sum(r['met'] for r in rv.values())}/{len(rv)}",
             # without this a 13/13 -> 0/13 drop at the provenance split reads
@@ -193,6 +230,13 @@ def pulse():
             "venue_read_age_s": (round(now - st.last_venue_read_ts, 1)
                                  if getattr(st, "last_venue_read_ts", 0)
                                  else None),
+            # days until the signing key stops working (Hyperliquid agent
+            # wallets expire). null = no expiry, or not read yet. The
+            # executor halts itself at T-1 day, but this makes the clock
+            # visible to an external monitor long before that.
+            "agent_days_left": (
+                round((getattr(st, "agent_valid_until", None) - now) / 86400.0, 2)
+                if getattr(st, "agent_valid_until", None) is not None else None),
             "legs": {n: {"in_position": l.qty != 0.0,
                          "entry_open": l.entry_cloid is not None,
                          "stop_placed": l.stop_cloid is not None}
