@@ -54,6 +54,14 @@ class CoinbaseVenue:
         p = self.client.get_product(self.product_id).to_dict()
         f = p.get("future_product_details") or {}
         mult = float(f.get("contract_size") or 0) or None
+        # Tradability flags for the CONFIGURED product, surfaced so the
+        # mirror can refuse/page at boot instead of discovering the problem
+        # one rejected order at a time (2026-08-27 finding: a view_only or
+        # trading_disabled product passes this meta call fine and the
+        # executor boots "ready" into a book it cannot touch).
+        self.product_flags = {"view_only": bool(p.get("view_only")),
+                              "trading_disabled": bool(p.get("trading_disabled")),
+                              "venue": p.get("product_venue")}
         return {"base_increment": float(p.get("base_increment") or 0.0001),
                 "price_increment": float(p.get("price_increment") or 0.1),
                 "contract_multiplier": mult}   # None => sizes are plain BTC
@@ -70,7 +78,13 @@ class CoinbaseVenue:
                 out = self.client.get_products(**kw).to_dict()
                 for p in out.get("products", []):
                     pid = p.get("product_id", "")
-                    if "BTC" in pid.upper() or "BIT" in pid.upper():
+                    # "BIP" too (2026-08-27): the nano BTC perpetual-style
+                    # future is BIP-20DEC30-CDE — the very product this
+                    # deployment trades — and the old BTC/BIT filter dropped
+                    # it, so the /status banner omitted the configured
+                    # product and read as "your product does not exist"
+                    # during a live incident diagnosis.
+                    if any(t in pid.upper() for t in ("BTC", "BIT", "BIP")):
                         found.setdefault(
                             pid, f"{pid} [{p.get('product_venue')}"
                                  f"{' view_only' if p.get('view_only') else ''}]")
@@ -88,6 +102,28 @@ class CoinbaseVenue:
                                   f"{' DISABLED' if p.get('trading_disabled') else ''}]")
             except Exception:  # noqa: BLE001
                 pass
+        # The CONFIGURED product is ALWAYS in the list, labeled — a
+        # diagnostic banner that can omit the one product we actually trade
+        # is worse than none. Reachability failure is loud, not absent.
+        pid = self.product_id
+        if pid in found:
+            found[pid] += " (configured)"
+        else:
+            try:
+                p = self.client.get_product(pid).to_dict()
+                # same sanity gate as the direct probes above: a 200 with an
+                # empty body is NOT a confirmed product, and rendering it as
+                # "[None] (configured)" would launder an unreadable product
+                # into a plausible-looking row (counter-agent 2026-08-27 F2)
+                if not p.get("product_id"):
+                    raise RuntimeError("empty product response")
+                found[pid] = (f"{pid} [{p.get('product_venue')}"
+                              f"{' view_only' if p.get('view_only') else ''}"
+                              f"{' DISABLED' if p.get('trading_disabled') else ''}]"
+                              f" (configured)")
+            except Exception as exc:  # noqa: BLE001
+                found[pid] = (f"{pid} [CONFIGURED but UNREADABLE: "
+                              f"{type(exc).__name__}: {exc}"[:120] + "]")
         return sorted(found.values())
 
     # ---------- size/price rounding ----------
@@ -156,30 +192,68 @@ class CoinbaseVenue:
         raise RuntimeError("could not read account equity")
 
     def position(self) -> float:
-        """Signed BTC position for the product (contracts * multiplier)."""
+        """Signed BTC position for the product (contracts * multiplier).
+
+        REWRITTEN after the 2026-08-26 phantom-position incident. The old
+        version had two defects that compounded into a 3-day blind spot:
+        - a clean /cfm/positions response with NO row for our product (which
+          is exactly how Coinbase reports FLAT — flat products are omitted)
+          fell through to the fallback instead of returning 0.0, so a flat
+          account could never read as flat;
+        - the fallback called `get_intx_position`, a method that exists in
+          NO published version of coinbase-advanced-py (the real name is
+          `get_perps_position`), and passed an empty portfolio uuid, and
+          targeted INTX which cannot hold a CDE future anyway. It had never
+          executed successfully in any deployed build.
+        The result: "flat" and "error" were indistinguishable, both raising
+        the same message, and the first swallowed exception was invisible.
+
+        Contract now: a CLEAN response with no row is a confirmed FLAT and
+        returns 0.0. Only a genuine API failure raises — and the raise
+        carries every underlying error, so the operator can tell auth/scope
+        problems from SDK drift without grepping provider logs.
+        """
         mult = self._meta["contract_multiplier"] or 1.0
+        errors: list[str] = []
         try:
             pos = self.client.list_futures_positions().to_dict()
             for p in pos.get("positions", []):
                 if p.get("product_id") == self.product_id:
                     n = float(p.get("number_of_contracts") or 0)
-                    sgn = 1.0 if p.get("side", "").upper() == "LONG" else -1.0
+                    side = (p.get("side") or "").upper()
+                    if side == "UNKNOWN":
+                        # do not guess a sign on real money
+                        raise RuntimeError(
+                            f"venue reports side=UNKNOWN for {n} contracts")
+                    sgn = 1.0 if side == "LONG" else -1.0
                     return sgn * n * mult
-        except Exception:  # noqa: BLE001
-            pass
-        try:
-            p = self.client.get_intx_position(self.cfg.cb_portfolio,
-                                              self.product_id).to_dict()
-            n = float(p.get("position", {}).get("net_size") or 0)
-            return n
+            # clean response, no row for our product: Coinbase omits flat
+            # products from /cfm/positions, so this IS the flat signal
+            return 0.0
         except Exception as exc:  # noqa: BLE001
+            errors.append(f"list_futures_positions: {exc}")
+        try:
+            p = self.client.get_futures_position(self.product_id).to_dict()
+            row = p.get("position") or {}
+            n = float(row.get("number_of_contracts") or 0)
+            if n == 0:
+                return 0.0
+            side = (row.get("side") or "").upper()
+            if side == "UNKNOWN":
+                raise RuntimeError(
+                    f"venue reports side=UNKNOWN for {n} contracts")
+            sgn = 1.0 if side == "LONG" else -1.0
+            return sgn * n * mult
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"get_futures_position: {exc}")
             # Fail LOUD, not flat. Returning 0.0 on a dual API failure told
             # the halt-flatten path "already flat" and let the transfer
             # reconciler reclassify a naked position's bleed as withdrawals
             # (counter-agent find 2026-08-11). Callers that can tolerate an
             # unknown position catch this; the ones that cannot must not be
             # fed a fabricated zero.
-            raise RuntimeError(f"position read failed (both APIs): {exc}")
+            raise RuntimeError(
+                "position read failed (both APIs): " + " | ".join(errors))
 
     def mid(self) -> float:
         now = time.time()
@@ -221,8 +295,14 @@ class CoinbaseVenue:
             return {"status": status, "filled_qty": filled,
                     "avg_price": float(avg) if avg else None}
         except Exception as exc:  # noqa: BLE001
+            # UNKNOWN, not None: an API failure is not "no such order". The
+            # 2026-08-26 re-review found every verification site resolving
+            # that ambiguity in whichever direction let it proceed — a
+            # one-blip confirm read after a successful stop placement
+            # cleared refs without cancelling and armed a DUPLICATE stop.
+            # None now means only "no handle" (order-map miss).
             logger.warning("order_status(%s) failed: %s", cloid, exc)
-            return None
+            return {"status": "UNKNOWN", "filled_qty": 0.0, "avg_price": None}
 
     # ---------- mutations ----------
 

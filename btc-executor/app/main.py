@@ -62,11 +62,22 @@ def _build_executor() -> Executor:
         # same phenotype as the DRY_RUN blueprint incident). Alert and raise;
         # _loop retries with backoff so a transient Coinbase outage self-heals.
         from .alerts import send
-        send("🔴 ACTION NEEDED (you) — executor venue_init_failed: LIVE mode "
-             f"cannot connect to Coinbase ({LAST['venue_init_error']}). "
-             "No orders are being managed; any open positions/stops are "
-             "untouched on the venue. Retrying automatically - if this "
-             "repeats, check Coinbase status and the API key in Render.")
+        # RATE-LIMITED (re-gate 2026-08-27): alerts.send has no cooldown of
+        # its own and never touches Executor._event's RATE_LIMITED table, so
+        # the new retry loop below would fire this ACTION page on every
+        # attempt - 144 identical pages a day, forever, on a missing-key
+        # condition that never self-heals. This repo set its own house rule
+        # at one page per 30 min after halt_config (~180/hr) and
+        # stop_vanished (4,320/day); the retry is right, its paging was not.
+        now = time.time()
+        if now - LAST.get("init_paged_at", 0.0) > 1800:
+            LAST["init_paged_at"] = now
+            send("🔴 ACTION NEEDED (you) — executor venue_init_failed: LIVE "
+                 f"mode cannot connect to Coinbase ({LAST['venue_init_error']}). "
+                 "No orders are being managed; any open positions/stops are "
+                 "untouched on the venue. Retrying automatically every "
+                 "30s-10min - if this repeats, check Coinbase status and the "
+                 "API key in Render. (This page is rate-limited to 1/30min.)")
         raise RuntimeError(f"live venue init failed: "
                            f"{LAST['venue_init_error']}")
     if settings.dry_run:
@@ -85,7 +96,31 @@ def _build_executor() -> Executor:
 
 def _loop() -> None:
     global EXEC
-    EXEC = _build_executor()
+    # The venue_init_failed ACTION page has promised "Retrying
+    # automatically" since 2026-08-11 — but this call sat OUTSIDE any
+    # try, so a raise killed the daemon thread and no retry ever existed
+    # (counter-agent 2026-08-27, out-of-delta find). Mid-incident that is
+    # the worst possible shape: a transient Coinbase outage at deploy time
+    # left the service permanently dead while its own alert claimed it was
+    # self-healing. Backoff 30s -> 60s -> ... -> capped 10 min, forever:
+    # a LIVE book must not stay unmanaged because boot raced an outage.
+    delay, attempts = 30.0, 0
+    while EXEC is None:
+        try:
+            EXEC = _build_executor()
+        except Exception as exc:  # noqa: BLE001
+            attempts += 1
+            logger.exception("executor build failed, retrying in %ss: %s",
+                             delay, exc)
+            time.sleep(delay)
+            delay = min(delay * 2, 600.0)
+    if attempts:
+        # close the loop the ACTION page opened: an operator who was told
+        # "no orders are being managed" must be told when that stops being
+        # true, or they act on a stale page.
+        from .alerts import send
+        send(f"✅ executor venue_init recovered after {attempts} failed "
+             f"attempt(s) — the book is being managed again; no action needed")
     while True:
         try:
             target = FEED.get_target()
@@ -150,6 +185,14 @@ def pulse():
                                  or "ok").split(":")[0]),
             "last_target_age_s": round(now - LAST["target_ts"], 1)
             if LAST["target_ts"] else None,
+            # age of the last SUCCESSFUL venue position read. Every other
+            # field here reads the LEDGER (belief); this is the only signal
+            # of venue truth an external monitor gets. null = never read
+            # this process; a growing number = the executor is going blind
+            # (2026-08-26: three days blind with a healthy-looking pulse).
+            "venue_read_age_s": (round(now - st.last_venue_read_ts, 1)
+                                 if getattr(st, "last_venue_read_ts", 0)
+                                 else None),
             "legs": {n: {"in_position": l.qty != 0.0,
                          "entry_open": l.entry_cloid is not None,
                          "stop_placed": l.stop_cloid is not None}
@@ -250,8 +293,13 @@ def _ramp_v4(st) -> dict:
     fills = getattr(st, "fills", []) or []
     fills = fills if isinstance(fills, list) else []
     # a fill recorded before the split has no "live" key -> unattributed
+    # void fills are excluded: the 2026-08-26 incident recorded two chase
+    # fills with 1320bps of fictitious "slippage" (measured against a
+    # days-stale engine price) — one of which never happened at all. They
+    # stay in the record for audit, marked void, and count toward nothing.
     n_live = sum(1 for f in fills
-                 if isinstance(f, dict) and f.get("live") is True)
+                 if isinstance(f, dict) and f.get("live") is True
+                 and not f.get("void"))
 
     def _n(d, k):
         v = d.get(k, 0)
@@ -359,9 +407,25 @@ def kill(x_exec_token: str | None = Header(default=None),
 
 @app.api_route("/resume", methods=["GET", "POST"])
 def resume(x_exec_token: str | None = Header(default=None),
-           token: str | None = Query(default=None)):
+           token: str | None = Query(default=None),
+           adopt_venue: int = Query(default=0)):
+    """adopt_venue=1 resets the LEDGER to what the venue actually holds
+    before clearing the halt.
+
+    Needed because a halt whose flatten failed keeps its (divergent) ledger
+    on purpose, and LEDGER_DIVERGENCE then re-fires on every plain /resume —
+    a deadlock only a redeploy could break (re-gate 2026-08-26 N2). Use it
+    ONLY after looking at Coinbase yourself: it makes the venue the source
+    of truth, which is the right call when you have just verified the venue,
+    and the wrong one if the position read is what is broken."""
     _auth(x_exec_token, token)
     if EXEC is None:
         return {"ok": False}
-    EXEC.resume()
-    return {"ok": True, "halted": EXEC.state.halted}
+    # `adopted` reports the OUTCOME, not the request (re-gate 2026-08-27):
+    # echoing the query parameter made a REFUSED adopt on a blind venue
+    # indistinguishable from a successful one, hiding that the stops the
+    # operator believes were cancelled are still armed.
+    ok = EXEC.resume(adopt_venue=bool(adopt_venue))
+    return {"ok": True, "halted": EXEC.state.halted,
+            "adopt_requested": bool(adopt_venue),
+            "adopted": bool(adopt_venue) and bool(ok)}

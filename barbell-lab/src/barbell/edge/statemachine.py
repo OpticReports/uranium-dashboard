@@ -6,6 +6,7 @@ makes the policy's null drag ~4x smaller must be operationally real, so RED
 here only ever moves by Casey's hand via re_promote())."""
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import datetime, timezone
 
@@ -69,6 +70,16 @@ def step(con: sqlite3.Connection, sid: str, checks: list[dict],
             # pinned rule: return-CUSUM resets on entering YELLOW
             n = con.execute("SELECT COUNT(*) FROM edge_nav_daily WHERE "
                             "strategy_id=? AND ret IS NOT NULL", (sid,)).fetchone()[0]
+            # RECORD WHAT THE RESET DESTROYS (2026-08-27 panel, BLOCKING B1).
+            # This reset discards every day of accumulated return-CUSUM
+            # evidence. That is correct when the trigger is real — and a
+            # catastrophe when the trigger was a phantom fill, because
+            # quarantining the phantom later clears the fictitious brake
+            # while the genuine decay it erased stays erased. Stamping the
+            # PRIOR index makes that erasure reversible: db.quarantine_trades
+            # reads it back and restores it. Without this a purge could only
+            # warn, never repair.
+            reset_prev = int(db.kv_get(con, sid, "cusum_reset_i", 0))
             db.kv_set(con, sid, "cusum_reset_i", n)
             db.kv_set(con, sid, "clean_days", 0)
             db.kv_set(con, sid, "green_clean", 0)   # ramp clock restarts too
@@ -104,8 +115,12 @@ def step(con: sqlite3.Connection, sid: str, checks: list[dict],
     if new_state != state:
         con.execute("UPDATE edge_strategies SET state=?, size_mult=? "
                     "WHERE strategy_id=?", (new_state, new_size, sid))
-        _log(con, sid, state, new_state, trigger or "?",
-             "; ".join(f"{x['metric']}={x['status']}" for x in checks))
+        summary = "; ".join(f"{x['metric']}={x['status']}" for x in checks)
+        rp = locals().get("reset_prev")
+        note = summary if rp is None else json.dumps(
+            {"checks": summary, "cusum_reset_i_prev": rp,
+             "cusum_reset_i_new": n})
+        _log(con, sid, state, new_state, trigger or "?", note)
     con.commit()
     adv = locals().get("ramp_advanced")
     return {"state": new_state, "size_mult": new_size,
