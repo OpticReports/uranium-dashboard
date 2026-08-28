@@ -54,6 +54,8 @@ class _FakeInfo:
         self.orders: dict[str, dict] = {}      # raw cloid -> order record
         self.resting: list[dict] = []
         self.raise_on_state = None
+        self.abstraction = "unifiedAccount"
+        self.spot_usdc = 0.0
 
     def meta(self, dex=""):
         return {"universe": [{"name": "BTC", "szDecimals": 5,
@@ -76,6 +78,12 @@ class _FakeInfo:
 
     def open_orders(self, address, dex=""):
         return self.resting
+
+    def query_user_abstraction_state(self, user):
+        return self.abstraction
+
+    def spot_user_state(self, address):
+        return {"balances": [{"coin": "USDC", "total": str(self.spot_usdc)}]}
 
 
 class _FakeExchange:
@@ -381,3 +389,64 @@ def test_gate_reads_target_the_main_account_not_the_signer(venue):
     venue.info.user_state = _spy
     venue.position()
     assert seen["addr"] == "0xMAIN0000000000000000000000000000000000ac"
+
+
+# ---------------------------------------------------------------------------
+# 2026-08-28, caught before the first live order: Hyperliquid keeps TWO USDC
+# pools and marginSummary.accountValue reports only the perp one. It read
+# $0.00 against a real $998.99 in spot.
+def test_gate_equity_includes_spot_under_a_unified_account(venue):
+    """Every circuit breaker is equity-derived. A constant zero makes every
+    loss compute as zero, so NO HALT CAN EVER FIRE - and sizing would have
+    looked fine, because SIZING_BASE_USD is a fixed number. The book would
+    have traded correctly with its rails silently absent."""
+    venue.info.abstraction = "unifiedAccount"
+    venue.info.state = {"marginSummary": {"accountValue": "0.0"},
+                        "assetPositions": []}
+    venue.info.spot_usdc = 998.99528
+    assert venue.equity() == pytest.approx(998.99528), \
+        "equity blind to spot under a unified account -> halts dead"
+
+
+def test_gate_equity_excludes_spot_when_not_unified(venue):
+    """The opposite error loosens the rails. With separate pools spot does
+    NOT back perps, so counting it would overstate what is at risk."""
+    venue.info.abstraction = "disabled"
+    venue.info.state = {"marginSummary": {"accountValue": "250.0"},
+                        "assetPositions": []}
+    venue.info.spot_usdc = 48_000.0
+    assert venue.equity() == pytest.approx(250.0), \
+        "counted spot as perp collateral on a non-unified account"
+
+
+def test_gate_unreadable_abstraction_raises_rather_than_guessing(venue):
+    """A silent default here either kills the halts or loosens them. An
+    unreadable venue is a first-class condition everywhere else in this
+    codebase; it is one here too."""
+    def _boom(user):
+        raise RuntimeError("info endpoint down")
+    venue.info.query_user_abstraction_state = _boom
+    venue.info.state = {"marginSummary": {"accountValue": "100.0"},
+                        "assetPositions": []}
+    with pytest.raises(RuntimeError, match="info endpoint down"):
+        venue.equity()
+
+
+def test_gate_abstraction_is_cached_not_polled_per_call(venue):
+    """One extra /info call per equity read is fine; one per anything else
+    is not. Cached for 60s, and the cache must not mask a real change
+    forever."""
+    calls = {"n": 0}
+    real = venue.info.query_user_abstraction_state
+
+    def _count(user):
+        calls["n"] += 1
+        return real(user)
+    venue.info.query_user_abstraction_state = _count
+    venue.info.spot_usdc = 100.0
+    for _ in range(5):
+        venue.equity()
+    assert calls["n"] == 1, f"queried abstraction {calls['n']}x for 5 reads"
+    venue._abs_cache = (0.0, True)          # expire
+    venue.equity()
+    assert calls["n"] == 2, "cache never expires"

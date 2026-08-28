@@ -116,6 +116,7 @@ class HyperliquidVenue:
         self.exchange = Exchange(wallet, base, account_address=self.address)
         self._meta = self._coin_meta()
         self._mid_cache: tuple[float, float] | None = None
+        self._abs_cache: tuple[float, bool] | None = None
         self.post_only_crosses: list[str] = []
         logger.info("hyperliquid venue ready: coin=%s addr=%s meta=%s",
                     self.coin, self.address, self._meta)
@@ -188,12 +189,61 @@ class HyperliquidVenue:
             raise RuntimeError(f"user_state returned {type(st).__name__}, not a dict")
         return st
 
+    def _is_unified(self) -> bool:
+        """Is spot collateral backing perps? Cached briefly, never guessed.
+
+        A wrong answer here is not cosmetic: equity() feeds day_start_equity
+        and high_water, so understating it kills the halts and overstating
+        it loosens them. If the venue will not tell us, we RAISE - the
+        caller treats an unreadable venue as a first-class condition, and a
+        silent default is exactly how the 2026-08-26 blind read stayed
+        invisible for three days."""
+        now = time.time()
+        if self._abs_cache and now - self._abs_cache[0] < 60.0:
+            return self._abs_cache[1]
+        r = self.info.query_user_abstraction_state(self.address)
+        mode = r if isinstance(r, str) else str((r or {}).get("abstraction", ""))
+        unified = "unified" in str(mode).lower()
+        self._abs_cache = (now, unified)
+        return unified
+
+    def _spot_usdc(self) -> float:
+        sp = self.info.spot_user_state(self.address) or {}
+        for b in sp.get("balances", []):
+            if (b or {}).get("coin") == "USDC":
+                return float(b.get("total") or 0.0)
+        return 0.0
+
     def equity(self) -> float:
+        """Total USD backing the perp book.
+
+        MUST include spot under a unified account (2026-08-28, caught before
+        the first live order). Hyperliquid keeps two pools, and
+        marginSummary.accountValue reports ONLY the perp one - it read $0.00
+        against a real $998.99 sitting in spot. Every circuit breaker is
+        equity-derived (day_start_equity for the 6% daily rail, high_water
+        for the 35% drawdown), so a constant zero makes every loss compute
+        as zero and NO HALT CAN EVER FIRE. Sizing would have been fine,
+        because SIZING_BASE_USD is a fixed number - so the book would have
+        traded correctly with its rails silently absent, which is the same
+        shape as the incident this whole rewrite is about.
+
+        USDC only: other spot tokens may also collateralise under unified,
+        but valuing them here would be speculation. Omitting them understates
+        equity, and a CONSISTENT understatement is near-harmless because the
+        halts compare a DELTA (equity vs day-start/HWM, both measured the
+        same way) against a threshold struck off SIZING_BASE_USD, which is a
+        fixed config number. That argument holds only while SIZING_BASE_USD
+        is set - unset, _base() falls back to equity and an understatement
+        would tighten both rails."""
         st = self._user_state()
         v = ((st.get("marginSummary") or {}).get("accountValue"))
         if v is None:
             raise RuntimeError("user_state carried no marginSummary.accountValue")
-        return float(v)
+        total = float(v)
+        if self._is_unified():
+            total += self._spot_usdc()
+        return total
 
     def position(self) -> float:
         """Signed BTC position. A clean response with no row for our coin is
