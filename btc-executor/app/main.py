@@ -269,6 +269,21 @@ def pulse():
             "agent_address": (getattr(EXEC.venue, "agent_address", None)
                               or getattr(getattr(EXEC.venue, "inner", None),
                                          "agent_address", None)),
+            # ...and WHICH ACCOUNT it signs FOR. Both halves are needed:
+            # publishing only the signer sent a live diagnosis down the wrong
+            # path for two rounds, because "this key is not an approved agent
+            # of X" is equally consistent with a wrong key and a wrong X, and
+            # X was the one nobody could see. It is also the address
+            # position() and equity() read, so a wrong value here is the
+            # phantom-position failure mode itself: a real book elsewhere,
+            # reported as a CONFIRMED FLAT, with a healthy-looking
+            # venue_read_age_s because the read genuinely succeeded - against
+            # the wrong account.
+            # Leaks nothing: userRole(agent_address) already returns this
+            # address to anyone, and agent_address is published above.
+            "account_address": (getattr(EXEC.venue, "address", None)
+                                or getattr(getattr(EXEC.venue, "inner", None),
+                                           "address", None)),
             # days until the signing key stops working (Hyperliquid agent
             # wallets expire). null = no expiry, or not read yet. The
             # executor halts itself at T-1 day, but this makes the clock

@@ -77,6 +77,7 @@ def test_pulse_publishes_which_key_is_deployed():
 
     class _V:
         agent_address = "0x243cb2b53aea9d751093f6de7de8028adf19862f"
+        address = "0xab533e69e77881d89d0357166851c9653bc551e2"
 
     class _St:
         halted = None
@@ -97,6 +98,9 @@ def test_pulse_publishes_which_key_is_deployed():
         with TestClient(app) as c:
             body = c.get("/pulse").json()
         assert body["agent_address"] == _V.agent_address
+        # BOTH halves, or the diagnosis is ambiguous: "this key is not an
+        # approved agent of X" fits a wrong key AND a wrong X equally.
+        assert body["account_address"] == _V.address
     finally:
         m.EXEC = old
 
@@ -125,5 +129,6 @@ def test_pulse_agent_address_is_null_on_a_venue_without_one():
         with TestClient(app) as c:
             body = c.get("/pulse").json()
         assert body["agent_address"] is None
+        assert body["account_address"] is None
     finally:
         m.EXEC = old
