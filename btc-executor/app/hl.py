@@ -53,6 +53,28 @@ logger = logging.getLogger(__name__)
 # "market" type (Hyperliquid has none). This is the crossing allowance.
 DEFAULT_SLIPPAGE = 0.02
 
+# Hyperliquid rejects any order under $10 notional ("Order must have minimum
+# value of $10", MinTradeNtl). The docs do NOT grant reduce-only an
+# exemption, so we must assume a sub-$10 position CANNOT BE CLOSED BY ORDER
+# - not by its stop, not by the halt's flatten. See MinNotionalRejected.
+MIN_NOTIONAL_USD = 10.0
+
+
+class MinNotionalRejected(RuntimeError):
+    """An order was refused for being under the venue's $10 minimum.
+
+    Called out as its own type because of what it means on the PROTECTIVE
+    path: a position whose remaining notional is under $10 cannot be closed
+    by any order we send, so the stop is unplaceable AND the halt's flatten
+    fails too - an open, unprotected residue that only a manual close on
+    the Hyperliquid UI clears. Sizing keeps this far away (the smaller leg
+    is ~5x the floor at KELLY_M 0.135 on a $1k base), so it takes an
+    extreme partial fill to reach; the point of the named error is that
+    when it does happen the page says WHY instead of looking like a generic
+    rejection storm. Disclosed in EXECUTOR.md rather than engineered
+    around: no order-level rail can close a position the venue will not
+    accept an order for."""
+
 
 def derive_cloid(our_cloid: str) -> str:
     """Our string ids -> Hyperliquid's 16-byte hex cloid, DETERMINISTICALLY.
@@ -400,7 +422,15 @@ class HyperliquidVenue:
                     .get("statuses") or [])
         for s in statuses:
             if isinstance(s, dict) and "error" in s:
-                raise RuntimeError(f"order rejected: {s['error']}")
+                err = str(s["error"])
+                if "minimum value" in err.lower():
+                    raise MinNotionalRejected(
+                        f"order rejected: {err} - a position under "
+                        f"${MIN_NOTIONAL_USD:.0f} cannot be closed by ANY "
+                        f"order, including its stop and the halt's flatten; "
+                        f"close the residue manually on the Hyperliquid UI "
+                        f"(cloid {cloid})")
+                raise RuntimeError(f"order rejected: {err}")
         return r
 
     def place_limit(self, side: str, qty: float, px: float, cloid: str,

@@ -509,3 +509,28 @@ def test_gate_main_account_key_has_no_expiry(venue):
     halt a perfectly healthy book forever."""
     venue.address = venue.agent_address        # signer IS the account
     assert venue.agent_valid_until() is None
+
+
+# --------------------------------------------------------------------------
+# The $10 floor. Hyperliquid refuses any order under $10 notional and does
+# NOT document a reduce-only exemption, so a sub-$10 position cannot be
+# closed by its stop OR by the halt's flatten.
+def test_gate_min_notional_rejection_is_its_own_error(venue):
+    """A generic 'order rejected' on the protective path reads as a venue
+    hiccup and gets retried. This one is not retryable at any size - the
+    page has to say so, or the operator debugs the wrong thing while an
+    unprotected residue sits open."""
+    from app.hl import MinNotionalRejected
+    venue.exchange.reject = "Order must have minimum value of $10."
+    with pytest.raises(MinNotionalRejected, match="cannot be closed by ANY"):
+        venue.place_stop("SELL", 0.00001, 74_000.0, "T-1-S74000-1")
+
+
+def test_gate_other_rejections_stay_generic(venue):
+    """Only the floor gets the special type. Widening it would relabel
+    ordinary rejections as unrecoverable."""
+    from app.hl import MinNotionalRejected
+    venue.exchange.reject = "Insufficient margin to place order."
+    with pytest.raises(RuntimeError) as e:
+        venue.place_market("SELL", 0.01, "T-1-X1")
+    assert not isinstance(e.value, MinNotionalRejected)
