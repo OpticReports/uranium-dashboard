@@ -85,7 +85,33 @@ class HyperliquidVenue:
         # the venue rather than by our own care. account_address is the MAIN
         # account the agent trades for; if unset the SDK uses the signer.
         wallet = Account.from_key(cfg.hl_secret_key)
-        self.address = getattr(cfg, "hl_account_address", "") or wallet.address
+        # HL_ACCOUNT_ADDRESS IS MANDATORY (2026-08-28, caught while Casey was
+        # on the API-wallet screen). An agent wallet SIGNS for a main account
+        # but HOLDS NOTHING ITSELF, and Hyperliquid's own UI says it: "the
+        # account's public address must be used for info requests". Falling
+        # back to the signer's address would query the AGENT - which has no
+        # positions - so position() would return 0.0 as a CONFIRMED FLAT,
+        # forever, while the real account carried the book. That is the
+        # 2026-08-26 phantom-position failure mode exactly, re-entered
+        # through config instead of through a dead SDK method. There is no
+        # safe guess here, so refuse to construct.
+        self.address = str(getattr(cfg, "hl_account_address", "") or "").strip()
+        if not self.address:
+            raise RuntimeError(
+                "HL_ACCOUNT_ADDRESS is required: it is the MAIN account's "
+                "public address, which is what info/position requests read. "
+                "An agent (API) wallet signs on the account's behalf and "
+                "holds nothing itself, so defaulting to the signer would "
+                "report the book as permanently FLAT.")
+        if self.address.lower() == wallet.address.lower():
+            # Not fatal - trading with the main account's OWN key is a valid
+            # (if less safe) setup - but it means no agent wallet is in play,
+            # so the venue is NOT enforcing the no-withdrawal separation and
+            # the operator should know which of the two they deployed.
+            logger.warning(
+                "HL_ACCOUNT_ADDRESS equals the signing key's own address: "
+                "this is the MAIN account key, not an agent wallet. Trading "
+                "works, but the venue is not enforcing withdrawal separation.")
         self.info = Info(base, skip_ws=True)
         self.exchange = Exchange(wallet, base, account_address=self.address)
         self._meta = self._coin_meta()

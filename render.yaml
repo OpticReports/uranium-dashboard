@@ -292,7 +292,12 @@ services:
         # rather than by our own care. NEVER the main account's key.
         sync: false
       - key: HL_ACCOUNT_ADDRESS
-        sync: false            # main account the agent trades for
+        # REQUIRED for VENUE=hyperliquid, and it is the MAIN account's public
+        # address - NOT the agent wallet's. Positions are read by this
+        # address; the agent holds nothing, so pointing it at the agent would
+        # report the book permanently FLAT. The executor refuses to start
+        # rather than guess.
+        sync: false
       - key: HL_COIN
         sync: false            # perp symbol, e.g. BTC
       - key: HL_TESTNET

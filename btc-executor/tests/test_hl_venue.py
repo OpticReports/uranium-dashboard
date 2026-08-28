@@ -148,7 +148,9 @@ def venue(monkeypatch):
 
     class Cfg:
         hl_secret_key = "0x" + "11" * 32
-        hl_account_address = ""
+        # the MAIN account, deliberately DIFFERENT from the signer: an agent
+        # wallet signs for an account it is not
+        hl_account_address = "0xMAIN0000000000000000000000000000000000ac"
         hl_coin = "BTC"
         hl_testnet = True
     return HyperliquidVenue(Cfg())
@@ -345,3 +347,37 @@ def test_gate_unknown_coin_fails_at_construction(monkeypatch, venue):
     venue.coin = "NOTACOIN"
     with pytest.raises(RuntimeError, match="not in the Hyperliquid perp"):
         venue._coin_meta()
+
+
+def test_gate_account_address_is_mandatory(monkeypatch, venue):
+    """THE agent-wallet trap, and the reason this is a hard failure rather
+    than a default. An agent wallet SIGNS for a main account but HOLDS
+    NOTHING itself - Hyperliquid's own UI says "the account's public address
+    must be used for info requests". Falling back to the signer would query
+    the AGENT, find no positions, and return 0.0 as a CONFIRMED FLAT forever
+    while the real account carried the book: the 2026-08-26 phantom-position
+    failure mode, re-entered through config."""
+    from app.hl import HyperliquidVenue
+
+    class Blank:
+        hl_secret_key = "0x" + "11" * 32
+        hl_account_address = ""
+        hl_coin = "BTC"
+        hl_testnet = True
+    with pytest.raises(RuntimeError, match="HL_ACCOUNT_ADDRESS is required"):
+        HyperliquidVenue(Blank())
+
+
+def test_gate_reads_target_the_main_account_not_the_signer(venue):
+    """Positions must be read for the MAIN account. If this ever regresses to
+    the signer's address the book reads permanently flat."""
+    assert venue.address == "0xMAIN0000000000000000000000000000000000ac"
+    seen = {}
+    real = venue.info.user_state
+
+    def _spy(addr, dex=""):
+        seen["addr"] = addr
+        return real(addr, dex)
+    venue.info.user_state = _spy
+    venue.position()
+    assert seen["addr"] == "0xMAIN0000000000000000000000000000000000ac"

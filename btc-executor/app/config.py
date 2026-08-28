@@ -30,8 +30,12 @@ class Settings(BaseSettings):
     # key, except enforced by the venue instead of by our own care. Approve
     # one from the HL UI (API -> generate agent wallet); the main account
     # address it trades for goes in hl_account_address.
-    hl_secret_key: str = ""               # agent wallet private key (0x...)
-    hl_account_address: str = ""          # main account; blank = signer's own
+    hl_secret_key: str = ""               # agent wallet PRIVATE KEY (0x...)
+    # REQUIRED, and NOT the agent's address. An agent wallet signs for a main
+    # account but holds nothing itself, and HL reads positions by the MAIN
+    # account's public address - defaulting to the signer would report the
+    # book permanently FLAT. Construction refuses if this is blank.
+    hl_account_address: str = ""
     hl_coin: str = "BTC"
     hl_testnet: bool = False
 
