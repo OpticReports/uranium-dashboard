@@ -12,11 +12,28 @@ class Settings(BaseSettings):
     engine_url: str = "https://btc-paper-engine.onrender.com"
     exec_token: str = ""                  # must match the engine's EXEC_TOKEN
 
-    # venue (Coinbase Advanced Trade / INTX perps)
+    # WHICH VENUE. Defaults to coinbase: an unset or misspelled env must
+    # keep the behaviour that is already deployed, never silently move a
+    # live book to a different exchange. Validated at boot - an unknown
+    # value raises rather than falling through to a default (a typo here
+    # would otherwise route real orders somewhere nobody intended).
+    venue: str = "coinbase"               # coinbase | hyperliquid
+
+    # venue: Coinbase Advanced Trade / INTX perps
     cb_api_key_name: str = ""             # CDP key name ("organizations/...")
     cb_api_private_key: str = ""          # CDP EC private key PEM
     cb_product_id: str = "BIP-20DEC30-CDE"   # US perp-style BTC future (CDE)
     cb_portfolio: str = ""                # INTX portfolio uuid (auto-detected if empty)
+
+    # venue: Hyperliquid. The AGENT (API) wallet signs trades and CANNOT
+    # withdraw - the same separation of powers as the Coinbase trade-only
+    # key, except enforced by the venue instead of by our own care. Approve
+    # one from the HL UI (API -> generate agent wallet); the main account
+    # address it trades for goes in hl_account_address.
+    hl_secret_key: str = ""               # agent wallet private key (0x...)
+    hl_account_address: str = ""          # main account; blank = signer's own
+    hl_coin: str = "BTC"
+    hl_testnet: bool = False
 
     # sizing: leg exposure fraction = kelly_m * blend_lev * leg_weight
     kelly_m: float = 0.05                 # FAIL-SAFE token size; the

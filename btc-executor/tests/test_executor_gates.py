@@ -4398,3 +4398,104 @@ def test_gate_N4_dryrun_adopt_does_not_latch_entries_off(tmp_path):
     ex._check_drift(50_000.0)
     assert ex._boot_mismatch is False, \
         "dry-run adopt latched entries off with no in-band clear"
+
+
+# ---------------------------------------------------------------------------
+# HL-2: the VENUE selector. The failure this guards is the one no ledger
+# check can catch on its own - a book running against the wrong exchange.
+def test_gate_venue_selector_rejects_unknown_values(monkeypatch):
+    """An unknown VENUE must RAISE, never fall through to a default. A typo
+    that silently routes real orders to whichever venue happens to be the
+    fallback is the worst possible config error, and _loop's retry turns
+    the raise into a loud repeating page instead of a wrong-exchange deploy."""
+    import app.main as m
+    for bad in ("hyperliquidd", "binance", "COINBASE_", "x"):
+        monkeypatch.setattr(m.settings, "venue", bad)
+        with pytest.raises(RuntimeError, match="not one of"):
+            m._venue_name()
+
+
+def test_gate_venue_selector_defaults_to_coinbase(monkeypatch):
+    """Unset/blank must keep the ALREADY-DEPLOYED behaviour. A missing env
+    can never move a live book to another exchange."""
+    import app.main as m
+    for blank in ("", None, "coinbase", " CoinBase "):
+        monkeypatch.setattr(m.settings, "venue", blank)
+        assert m._venue_name() == "coinbase"
+    monkeypatch.setattr(m.settings, "venue", "HyperLiquid ")
+    assert m._venue_name() == "hyperliquid"
+
+
+def test_gate_hyperliquid_live_without_key_refuses_to_demote(monkeypatch):
+    """LIVE mode must never silently demote to a shadow book - the same rule
+    Coinbase has. Selecting hyperliquid with no key must raise, not run a
+    DryRunVenue over a real account."""
+    import app.main as m
+    monkeypatch.setattr(m.settings, "venue", "hyperliquid")
+    monkeypatch.setattr(m.settings, "hl_secret_key", "")
+    monkeypatch.setattr(m.settings, "dry_run", False)
+    monkeypatch.setattr("app.alerts.send", lambda *a, **k: None)
+    with pytest.raises(RuntimeError, match="live venue init failed"):
+        m._build_executor()
+    assert "HL_SECRET_KEY" in m.LAST["venue_init_error"]
+
+
+def test_gate_venue_change_halts_before_reconcile_can_act(tmp_path):
+    """A ledger is a claim about positions on ONE exchange. Carried across a
+    VENUE switch, boot reconcile would 'resolve' it against the WRONG venue:
+    a real position silently abandoned, or a phantom one adopted. Halt
+    first, adopt nothing."""
+    import json
+    from app.mirror import Executor
+    cfg = Cfg()
+    cfg.state_path = str(tmp_path / "state.json")
+    json.dump({"halted": None, "venue": "coinbase",
+               "legs": {"trend": {"qty": 0.34, "stop_cloid": "T-1-S70000-1"}}},
+              open(cfg.state_path, "w"))
+    v = FakeVenue(mult=0.01)          # the NEW venue holds nothing
+    cfg.venue = "hyperliquid"
+    ex = Executor(v, cfg, cfg.state_path)
+    assert ex.state.halted == "VENUE_CHANGED", \
+        "ran a coinbase ledger against hyperliquid"
+    assert ex.state.legs["trend"].qty == 0.34, \
+        "boot reconcile adopted/abandoned across a venue change"
+    assert ex.state.legs["trend"].stop_cloid == "T-1-S70000-1"
+    assert any(e["kind"] == "venue_changed" for e in ex.state.events)
+
+
+def test_gate_same_venue_boots_normally_and_stamps(tmp_path):
+    """The guard must not fire on the ordinary case, and an unstamped legacy
+    state file must adopt the current venue rather than halting on it."""
+    import json
+    from app.mirror import Executor
+    cfg = Cfg()
+    cfg.state_path = str(tmp_path / "s.json")
+    cfg.venue = "coinbase"
+    json.dump({"halted": None, "legs": {}}, open(cfg.state_path, "w"))
+    ex = Executor(FakeVenue(mult=0.01), cfg, cfg.state_path)
+    assert ex.state.halted is None, "halted on a legacy unstamped state file"
+    assert ex.state.venue == "coinbase", "did not stamp the venue"
+    ex._save_state()
+    ex2 = Executor(FakeVenue(mult=0.01), cfg, cfg.state_path)
+    assert ex2.state.halted is None and ex2.state.venue == "coinbase"
+    # ROUND-TRIP, not just the in-memory stamp: if _save_state drops the
+    # venue, every boot looks like a fresh one and the guard can never fire.
+    # Asserting the stamp alone passed with persistence removed entirely.
+    assert json.load(open(cfg.state_path))["venue"] == "coinbase", \
+        "venue not written to the state file"
+    cfg.venue = "hyperliquid"
+    ex3 = Executor(FakeVenue(mult=0.01), cfg, cfg.state_path)
+    assert ex3.state.halted == "VENUE_CHANGED", \
+        "a SAVED venue must still be detected on the next boot"
+
+
+def test_gate_pulse_publishes_the_venue(tmp_path, monkeypatch):
+    """A book on the wrong exchange is the one config error no ledger check
+    catches; /pulse is the only unauthenticated surface, so it must say."""
+    from fastapi.testclient import TestClient
+    import app.main as m
+    ex = mkexec(tmp_path, FakeVenue(mult=0.01))
+    monkeypatch.setattr(m, "EXEC", ex)
+    monkeypatch.setattr(m.settings, "exec_token", "")
+    m.LAST["venue_name"] = "hyperliquid"
+    assert TestClient(m.app).get("/pulse").json()["venue"] == "hyperliquid"

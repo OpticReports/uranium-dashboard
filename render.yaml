@@ -275,6 +275,28 @@ services:
         value: https://btc-paper-engine.onrender.com
       - key: EXEC_TOKEN
         sync: false            # must match btc-paper-engine's EXEC_TOKEN
+      - key: VENUE
+        # coinbase | hyperliquid. sync:false for the same reason DRY_RUN is:
+        # a blueprint sync that flipped this would point a LIVE book at a
+        # different exchange, where its ledger positions and resting orders
+        # mean nothing. The code refuses that (VENUE_CHANGED halt, checked
+        # before boot reconcile can adopt or abandon anything), but the env
+        # must not be able to propose it in the first place. Unset = the
+        # code default, coinbase - an absent env can never move the book.
+        sync: false
+      # --- Hyperliquid (only read when VENUE=hyperliquid) ---
+      - key: HL_SECRET_KEY
+        # AGENT (API) wallet private key. Approve one in the HL UI under
+        # API; it can TRADE but CANNOT WITHDRAW - the same separation of
+        # powers as the Coinbase trade-only key, enforced by the venue
+        # rather than by our own care. NEVER the main account's key.
+        sync: false
+      - key: HL_ACCOUNT_ADDRESS
+        sync: false            # main account the agent trades for
+      - key: HL_COIN
+        sync: false            # perp symbol, e.g. BTC
+      - key: HL_TESTNET
+        sync: false            # "true" routes to the testnet API
       - key: CB_API_KEY_NAME
         sync: false            # CDP key name (trade-only key)
       - key: CB_API_PRIVATE_KEY

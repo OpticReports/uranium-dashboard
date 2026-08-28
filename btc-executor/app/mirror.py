@@ -117,9 +117,11 @@ class LegLedger:
 class ExecState:
     legs: dict = field(default_factory=lambda: {n: LegLedger() for n in LEGS})
     # None | DAILY_LOSS | DRAWDOWN | KILL | LEDGER_DIVERGENCE |
-    # STOP_UNPLACEABLE  (the last two are protection failures, not risk
-    # breaches: the book stops because a position cannot be kept protected,
-    # and both require a MANUAL /resume regardless of KELLY_M)
+    # STOP_UNPLACEABLE | VENUE_CHANGED  (all but DAILY_LOSS require a MANUAL
+    # /resume regardless of KELLY_M. LEDGER_DIVERGENCE and STOP_UNPLACEABLE
+    # are protection failures - the book stops because a position cannot be
+    # kept protected. VENUE_CHANGED means the ledger describes a different
+    # exchange, and is the only one /resume alone must never clear.)
     halted: str | None = None
     # unix ts of the last SUCCESSFUL venue position read. /pulse publishes
     # its age so an external monitor can see venue blindness — every other
@@ -161,6 +163,12 @@ class ExecState:
     # Top-level, NOT a LegLedger field: older loaders cherry-pick keys, so
     # this stays rollback-safe.
     stop_vanish: dict = field(default_factory=dict)
+    # WHICH VENUE this ledger belongs to. A ledger is a claim about
+    # positions ON A SPECIFIC EXCHANGE; carrying it across a VENUE switch
+    # would have the mirror believe it holds, on the new venue, whatever it
+    # held on the old one - and would silently ABANDON the real position on
+    # the old one. Recorded on first save, checked at every boot.
+    venue: str | None = None
     attestation: dict | None = None
     # monotonic DRY_RUN flip counter. A safety invariant must NOT live in a
     # rotating buffer: the event log holds 200 entries and rate-limited
@@ -244,10 +252,46 @@ class Executor:
         self._migrate_ledger_granularity()
         self._warn_unattributed_coverage()
         self._void_absurd_fills()
+        self._check_venue_continuity()
         self._check_product_tradable()
         self._reconcile_boot()
         if any(l.qty != 0.0 for l in self.state.legs.values()):
             self._cov("restart_with_position")
+
+    def _check_venue_continuity(self) -> None:
+        """A ledger belongs to ONE exchange. Refuse to run it against another.
+
+        The ledger is a claim about positions on a specific venue. Carried
+        across a VENUE switch it would make the mirror believe it holds, on
+        the NEW venue, whatever it held on the old one - and boot reconcile
+        would then "helpfully" resolve the difference: a real Coinbase
+        position silently abandoned, or a phantom one adopted onto
+        Hyperliquid. Neither is recoverable by anything downstream, because
+        every later check compares the ledger against the WRONG exchange.
+
+        So: stamp the venue on first save, and on any later boot where it
+        disagrees, HALT before _reconcile_boot can touch anything. Clearing
+        it is deliberately manual - flatten on the old venue, confirm it,
+        then start the new one from a clean state file."""
+        cur = str(getattr(self.cfg, "venue", "coinbase") or "coinbase").lower()
+        prev = getattr(self.state, "venue", None)
+        if prev is None:
+            self.state.venue = cur
+            return
+        if prev == cur:
+            return
+        held = {n: l.qty for n, l in self.state.legs.items() if l.qty != 0.0}
+        refs = {n: l.stop_cloid or l.entry_cloid
+                for n, l in self.state.legs.items()
+                if l.stop_cloid or l.entry_cloid}
+        self._event("RED", "venue_changed",
+                    f"state file belongs to venue '{prev}' but VENUE is now "
+                    f"'{cur}'. Ledger positions {held or 'none'} and order "
+                    f"refs {refs or 'none'} refer to {prev.upper()} and mean "
+                    f"NOTHING on {cur.upper()}. Halting before boot reconcile "
+                    f"can adopt or abandon anything.")
+        self.state.halted = "VENUE_CHANGED"
+        self._save_state()
 
     def _check_product_tradable(self) -> None:
         """Boot page when the CONFIGURED product cannot actually trade.
@@ -313,10 +357,17 @@ class Executor:
         - any OTHER mismatch (venue holds more/less/opposite) -> RED
           ACTION page only, adopt nothing: partial states are ambiguous and
           a wrong auto-fix at boot compounds silently. The operator decides.
+
+        SKIPPED ENTIRELY on a VENUE_CHANGED halt. The ledger then describes
+        a DIFFERENT exchange, so every rule above would compare it against
+        the wrong venue and "resolve" the difference by abandoning a real
+        position or adopting a phantom one.
         Runs only against a real venue (dry-run venues simulate fills).
         """
         if getattr(self.venue, "log", None) is not None:
             return
+        if self.state.halted == "VENUE_CHANGED":
+            return          # the ledger describes another exchange entirely
         ledger_net = sum(l.qty for l in self.state.legs.values())
         net = None
         for attempt in range(3):       # one boot-time blip must not disarm
@@ -576,7 +627,7 @@ class Executor:
             raw = json.load(open(self.state_path))
             st = ExecState(**{k: raw[k] for k in
                               ("halted", "day_key", "day_start_equity",
-                               "high_water") if k in raw})
+                               "high_water", "venue") if k in raw})
             # Filter unknown keys: a state file written by a NEWER build
             # carries fields this LegLedger lacks, and the bare except below
             # would discard the entire state - un-halting a killed executor
@@ -630,6 +681,7 @@ class Executor:
              "coverage_live": getattr(self.state, "coverage_live", {}),
              "coverage_attested": getattr(self.state, "coverage_attested", {}),
              "stop_vanish": getattr(self.state, "stop_vanish", {}),
+             "venue": getattr(self.state, "venue", None),
              "attestation": getattr(self.state, "attestation", None),
              "mode_flips": getattr(self.state, "mode_flips", 0),
              "witnessing_since": getattr(self.state, "witnessing_since", None),
@@ -694,6 +746,13 @@ class Executor:
             "halt_error": "closing positions during the halt FAILED — open "
                           "Coinbase NOW, check positions, flatten manually "
                           "if any remain",
+            "venue_changed": "the state file was written by a DIFFERENT "
+                             "venue. Its ledger positions and order refs "
+                             "mean nothing here. Flatten and cancel on the "
+                             "OLD venue, confirm it is empty, then start "
+                             "this one from a clean state file (delete "
+                             "executor_state.json) - do NOT /resume into a "
+                             "ledger that describes another exchange",
             "product_untradable": "CB_PRODUCT_ID points at a product this "
                                   "key cannot trade (view_only/disabled) - "
                                   "every order will be rejected. Check "
