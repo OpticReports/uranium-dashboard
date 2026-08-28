@@ -243,7 +243,9 @@ class BlendState:
     bil_qty: int = 0
     spy_qty: int = 0
     core_cash: float = 0.0
-    halted: str | None = None   # KILL | None
+    halted: str | None = None   # KILL | SCHEMA_DRIFT |
+                                # FRESH_BOOK_VS_VENUE |
+                                # MODE_CHANGE_FROM_REAL | None
     flatten_request: dict | None = None  # /kill journal (R2): {ts, date} —
                                          # persisted like pending_entries so
                                          # a restart resumes the flatten; the
@@ -256,6 +258,13 @@ class BlendState:
     equity_curve: list = field(default_factory=list)  # [[date, book_value]]
                                                       # one row per cycle day
     last_gate: bool | None = None    # last tracker gate seen (feed display)
+    bootstrap_ack_date: str = ""  # trading date the ack was granted on; the
+                                  # ack is only honoured on that same date
+    bootstrap_ack: bool = False  # operator acknowledged (via /resume) that a
+                                 # FRESH book may seed even though the venue
+                                 # already holds CORE/CASH_VEHICLE. Without
+                                 # it the seed is refused - see run_cycle's
+                                 # bootstrap guard (2026-08-28).
     util_alert_armed: bool = True    # one-shot 85% budget alert armed?
     quote_alert_armed: bool = True   # missing-SPY/BIL alert armed? (r3/r4:
                                      # alert-once per outage, re-armed on
@@ -353,12 +362,27 @@ class Blend3070Manager:
                 self.archived_state = (f"mode change "
                                        f"{stored_mode or 'unknown'} -> "
                                        f"{self._current_mode()}; {note}")
-                return BlendState(mode=self._current_mode())
+                # Losing a REAL book is never routine (2026-08-28). Note
+                # that _current_mode() reports dry whenever creds are
+                # merely ABSENT, so an unauthenticated boot - a gateway
+                # still waiting on its 2FA approval - is enough to land
+                # here. The old code returned an un-halted fresh book,
+                # which then SEEDS (step's `not st.initialized` branch)
+                # and buys CORE + CASH_VEHICLE on top of the holdings the
+                # archived book already owned. Halt and escalate instead;
+                # /resume is the deliberate acknowledgement.
+                fresh = BlendState(mode=self._current_mode())
+                if stored_mode.startswith("real:"):
+                    self.archived_state_critical = True
+                    fresh.halted = "MODE_CHANGE_FROM_REAL"
+                return fresh
             st = BlendState(
                 initialized=raw.get("initialized", False),
                 entered_ids=raw.get("entered_ids", []),
                 entered_symbols=raw.get("entered_symbols", {}),
                 pending_entries=raw.get("pending_entries", {}),
+                bootstrap_ack=raw.get("bootstrap_ack", False),
+                bootstrap_ack_date=raw.get("bootstrap_ack_date", ""),
                 pending_book_orders=raw.get("pending_book_orders", {}),
                 book_order_seq=raw.get("book_order_seq", 0),
                 unreconciled=raw.get("unreconciled", {}),
@@ -490,6 +514,8 @@ class Blend3070Manager:
                    "entered_ids": self.state.entered_ids,
                    "entered_symbols": self.state.entered_symbols,
                    "pending_entries": self.state.pending_entries,
+                   "bootstrap_ack": self.state.bootstrap_ack,
+                   "bootstrap_ack_date": self.state.bootstrap_ack_date,
                    "pending_book_orders": self.state.pending_book_orders,
                    "book_order_seq": self.state.book_order_seq,
                    "unreconciled": self.state.unreconciled,
@@ -711,6 +737,7 @@ class Blend3070Manager:
             st.sleeve_cash = target * book
             st.core_cash = (1.0 - target) * book
             st.initialized = True
+            st.bootstrap_ack = False    # one-shot: consumed by this seed
             self._event("INFO", f"book initialized: ${book:,.0f} "
                                 f"({target:.0%} sleeve / {1 - target:.0%} core)")
 
@@ -1299,13 +1326,43 @@ class Blend3070Manager:
         pumping a fresh loop against the shared connection would time out
         every wait and risk session corruption."""
         self.state.flatten_request = {"ts": int(time.time()), "date": today}
+        # A kill revokes any standing seed authorization: /kill then /resume
+        # means "undo my kill", never "seed a second book" (re-review).
+        self.state.bootstrap_ack = False
+        self.state.bootstrap_ack_date = ""
         self.state.halted = "KILL"
         self._event("RED", "kill: halt engaged; flatten queued for the "
                            "execution loop")
         self.save()
 
-    def resume(self) -> None:
+    def resume(self, today: str = "") -> None:
+        # ONLY the venue guard's own halt may be acknowledged here. A
+        # MODE_CHANGE_FROM_REAL resume must NOT grant it (counter-agent
+        # 2026-08-28, FATAL): that halt fires before anything has looked at
+        # the venue, so acking it there walks the double-deployment guard
+        # past the holdings it exists to protect - the probe seeded a
+        # second book and left 395 SPY / 286 BIL. A mode-change resume now
+        # clears only its own halt; the next cycle meets the venue guard on
+        # its own merits, and seeding on top of real holdings takes a
+        # SECOND, separately-informed /resume.
+        if self.state.halted == "FRESH_BOOK_VS_VENUE":
+            self.state.bootstrap_ack_date = today or ""
+            # Deliberate operator acknowledgement that a fresh book may
+            # seed even though the venue already holds CORE/CASH_VEHICLE.
+            # One-shot: cleared as soon as the book actually initializes,
+            # so it can never silently authorize a LATER re-seed.
+            self.state.bootstrap_ack = True
+            self._event("WARN", f"resume: bootstrap guard "
+                                f"({self.state.halted}) ACKNOWLEDGED — the "
+                                f"next cycle may seed a fresh book on top "
+                                f"of existing venue holdings")
         self.state.halted = None
+        # The ACTION page promises a paused kind resumes on /resume. It did
+        # not - resume() never touched the breaker (counter-agent
+        # 2026-08-28). Make the promise true rather than deleting it: an
+        # operator who has read the page and acted is exactly the signal
+        # the breaker is waiting for.
+        intent_breaker_clear()
         if self.state.flatten_request is not None:
             # A queued kill-flatten must never fire against a RESUMED book.
             self.state.flatten_request = None
@@ -1335,6 +1392,9 @@ class Blend3070Manager:
             "unverifiable": [k for k, v in st.positions.items()
                              if v.history_gap],
             "pending_entries": sorted(st.pending_entries),
+            "intent_breakers": intent_breaker_state(),
+            "bootstrap_ack": (self.state.bootstrap_ack_date
+                              if self.state.bootstrap_ack else None),
             "pending_book_orders": sorted(st.pending_book_orders),
             "unreconciled": st.unreconciled,
             "orphan_stops": sorted(st.orphan_stop_refs),
@@ -2575,6 +2635,12 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
                       f"(call {it['call_id']}) has no venue fill price — "
                       f"booked at entry_ref {fill:.2f} (basis provisional)")
             mgr.on_entered(it, fill, o["order_ref"], rec.get("date", today))
+            # THE entry outcome: a real fill. ENTER is async-outcome, so
+            # placement credits nothing - without this the counter only
+            # ever rises and a healthy book loses its entries for the day
+            # on 5 CUMULATIVE failures (counter-agent 2026-08-28 probe: 4
+            # clean fills interleaved and the breaker still opened).
+            _intent_success("ENTER")
             mgr.mark_stop_missing(it["call_id"])   # stop placed in pass 4
             alert(f"🧬 blend reconciled orphan ENTER {it['symbol']} "
                   f"x{it['qty']} (call {it['call_id']}) from venue order "
@@ -2592,6 +2658,19 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
                               f"REJECTED by the venue — journal cleared, "
                               f"max_open slot released")
             mgr.save()
+            # This IS the ENTER outcome (placement only ever returned
+            # 'working'). Book it against the breaker, or a kind that
+            # fails this way every cycle never trips one — 2026-08-28,
+            # when a mid-session restart produced OPG-after-open
+            # rejections all day and the breaker never fired.
+            n = _intent_fail_counts.get("ENTER", 0) + 1
+            _intent_fail_counts["ENTER"] = n
+            if n == INTENT_BREAKER_N:
+                alert(f"🔴 ACTION NEEDED (you) — blend ENTER has been "
+                      f"REJECTED by the venue {n} times in a row (latest: "
+                      f"{it['symbol']}). Pausing ENTER planning; it resumes "
+                      f"on the next TRADING DAY, a service restart, or "
+                      f"/resume.")
             alert(f"🚨 blend ENTER {it['symbol']} (call {it['call_id']}) "
                   f"REJECTED by the venue — nothing entered; slot released, "
                   f"journal cleared (a republished fire may retry)")
@@ -2780,6 +2859,7 @@ def _execute_enter(mgr: Blend3070Manager, adapter, it: dict, today: str,
         alert(f"⚠️ blend ENTER {it['symbol']}: venue ack without fill price — "
               f"booked at entry_ref {fill:.2f}, basis provisional")
     mgr.on_entered(it, fill, r["order_ref"], today)
+    _intent_success("ENTER")        # a real fill: see the reconcile branch
     pos = mgr.state.positions[str(it["call_id"])]
     _ensure_stop(mgr, adapter, pos, alert)
     alert(f"🧬 blend ENTER {it['symbol']} x{it['qty']} MOO "
@@ -3065,6 +3145,40 @@ INTENT_BREAKER_N = 5
 # which matches the gateway-restart-heals operational pattern.
 _intent_fail_counts: dict = {}
 _intent_alerted_reason: dict = {}
+_intent_breaker_date: str = ""      # trading date the counters belong to
+
+# Intents whose OUTCOME is decided asynchronously: place_stock_order returns
+# 'working' for an OPG/GTC order and the venue accepts or rejects it later.
+# For these, a clean placement is NOT success - crediting it as one is what
+# let a whole day of rejected ENTERs reset the breaker every cycle and never
+# trip it (2026-08-28). Their success/failure is booked by reconcile.
+_ASYNC_OUTCOME_KINDS = {"ENTER"}
+
+
+def intent_breaker_roll_date(today: str) -> None:
+    """Reset the breakers on a new trading date. Without this a kind that
+    trips stays paused FOREVER: the execution loop skips a paused kind, so
+    it is never retried, so no success can ever clear it - the ACTION page's
+    'one success resumes it' was unreachable (2026-08-28). A new day is the
+    natural retry boundary; a genuinely broken kind simply trips again."""
+    global _intent_breaker_date
+    if today and today != _intent_breaker_date:
+        _intent_breaker_date = today
+        _intent_fail_counts.clear()
+        _intent_alerted_reason.clear()
+
+
+def intent_breaker_state() -> dict:
+    """Open breakers, for /status and /blend/feed - a paused kind must be
+    visible from outside the process, not only in a Telegram page that has
+    scrolled away."""
+    return {k: v for k, v in _intent_fail_counts.items()
+            if v >= INTENT_BREAKER_N}
+
+
+def intent_breaker_clear() -> None:
+    _intent_fail_counts.clear()
+    _intent_alerted_reason.clear()
 
 
 def _intent_failure_alert(mgr, it, exc, alert) -> None:
@@ -3086,9 +3200,10 @@ def _intent_failure_alert(mgr, it, exc, alert) -> None:
     if n == INTENT_BREAKER_N:
         alert(f"🔴 ACTION NEEDED (you) — blend {kind} has failed "
               f"{n} consecutive cycles (latest: {reason}). Pausing {kind} "
-              f"planning until the cause is fixed; a service restart or one "
-              f"success resumes it. The book takes no {kind} decisions "
-              f"meanwhile.")
+              f"planning until the cause is fixed. It resumes on the next "
+              f"TRADING DAY, on a service restart, or on /resume — a paused "
+              f"kind is never retried within the day, so it cannot clear "
+              f"itself. The book takes no {kind} decisions meanwhile.")
 
 
 def _intent_success(kind: str) -> None:
@@ -3110,6 +3225,11 @@ def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
 
     # PHASE 0 — reconciliation-first (order-safety law #1). Raises if the
     # adapter cannot reconcile: the cycle fails closed.
+    # Roll BEFORE reconcile: reconcile is where a venue-rejected entry books
+    # its failure, and rolling afterwards wiped the day's first one every
+    # day (counter-agent 2026-08-28) — precisely the OPG-after-open case
+    # this counter exists to catch.
+    intent_breaker_roll_date(today)
     reconcile(mgr, adapter, today, alert)
 
     # PHASE 0b — a journaled /kill flatten request executes HERE, on the
@@ -3125,6 +3245,54 @@ def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
         payload = None
 
     prices = reference_prices(adapter, mgr, payload)
+
+    # BOOTSTRAP GUARD (2026-08-28). A book that is about to SEED (step's
+    # `not st.initialized` branch writes the full BLEND_BOOK_USD split and
+    # then buys CORE + sweeps CASH_VEHICLE as MKT/DAY orders, which fill
+    # intraday) must first prove the venue is not already holding those
+    # names. gross_exposure()/BLEND_BUDGET are computed from the BOOK's own
+    # ledger, so a fresh book is structurally blind to real holdings and
+    # would deploy a second full book on top of the first. The venue is the
+    # only ground truth. Fail CLOSED on an unanswerable query too: "I could
+    # not check" must never read as "nothing is there".
+    ack_live = (mgr.state.bootstrap_ack
+                and mgr.state.bootstrap_ack_date == today)
+    if mgr.state.bootstrap_ack and not ack_live:
+        # An ack is a same-day authorization. Left standing it becomes a
+        # durable, invisible permission: the re-review seeded 45->395 SPY
+        # on an ack granted 27 days earlier.
+        mgr.state.bootstrap_ack = False
+        mgr.state.bootstrap_ack_date = ""
+        mgr._event("WARN", "bootstrap ack EXPIRED (granted on a previous "
+                           "trading day) — a fresh seed needs a new /resume")
+        mgr.save()
+    if not mgr.state.initialized and not ack_live:
+        held = {sym: _venue_held(adapter, sym) for sym in (CORE, CASH_VEHICLE)}
+        blocking = {k: v for k, v in held.items() if v is None or v != 0}
+        if blocking:
+            detail = ", ".join(
+                f"{k}=" + ("UNKNOWN" if v is None else str(v))
+                for k, v in sorted(blocking.items()))
+            # Never downgrade a stronger halt: a KILL reinterpreted as
+            # FRESH_BOOK_VS_VENUE turned the operator's "undo my kill"
+            # /resume into a seed authorization (re-review).
+            if mgr.state.halted not in ("FRESH_BOOK_VS_VENUE", "KILL",
+                                        "SCHEMA_DRIFT"):
+                mgr.state.halted = "FRESH_BOOK_VS_VENUE"
+                mgr._event("RED", f"fresh book refused to seed: venue holds "
+                                  f"{detail}")
+                mgr.save()
+                alert(f"🚨🚨 blend: a FRESH book was about to seed "
+                      f"${getattr(mgr.cfg, 'blend_book_usd', 0):,.0f} while the "
+                      f"venue already holds {detail} — REFUSED (nothing "
+                      f"ordered). This is the double-deployment guard: the "
+                      f"book's ledger cannot see venue holdings, so seeding "
+                      f"would buy a second {CORE}/{CASH_VEHICLE} position on "
+                      f"top of the existing one. If the previous book state "
+                      f"was lost, restore it; if seeding on top IS intended, "
+                      f"/resume acknowledges and allows it once.")
+            return []
+
     intents = mgr.step(today, payload, prices)
     exit_unsettled = False     # a funding exit deferred/UNRECONCILED (N5)
     for it in intents:
@@ -3252,7 +3420,9 @@ def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
             logger.exception("blend intent %s failed: %s", it, exc)
             _intent_failure_alert(mgr, it, exc, alert)
         else:
-            _intent_success(str(it.get("action")))
+            kind = str(it.get("action"))
+            if kind not in _ASYNC_OUTCOME_KINDS:
+                _intent_success(kind)
     # Post-execution marks (fresh quotes for what the book NOW holds): the
     # pre-cycle price set can miss names entered this cycle.
     post_prices = reference_prices(adapter, mgr, None)

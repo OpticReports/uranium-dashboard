@@ -393,6 +393,24 @@ services:
     plan: standard           # IB Gateway is Java; needs 2GB (won't fit starter)
     healthCheckPath: /health
     autoDeploy: true
+    # Restart this service ONLY for changes that actually affect it. Without
+    # a filter, autoDeploy restarts a LIVE trading container on EVERY push to
+    # the monorepo - a docs commit on 2026-08-28 restarted it 44 minutes into
+    # the session, which re-ran the blend mid-cycle, sold BIL to fund an entry
+    # and then had that entry rejected by the venue (MOO/OPG is only valid
+    # pre-open). A restart of this service is never free: it also forces a
+    # fresh gateway login, which blocks on a 2FA approval.
+    # Narrowed to what the IMAGE actually contains (Dockerfile copies only
+    # requirements.txt, app/, start.sh). A broad ibkr-executor/** still let a
+    # README or tests-only commit restart the live container and force a 2FA
+    # gateway login - the exact 2026-08-28 incident this filter exists to
+    # prevent (counter-agent).
+    buildFilter:
+      paths:
+        - ibkr-executor/app/**
+        - ibkr-executor/Dockerfile
+        - ibkr-executor/requirements.txt
+        - ibkr-executor/start.sh
     disk:
       name: ibkr-data
       mountPath: /app/data

@@ -3671,3 +3671,334 @@ def test_gate_intent_alerts_once_per_reason_and_breaker_pauses(tmp_path):
     type(a).attempts = 0
     B._intent_fail_counts.clear()
     B._intent_alerted_reason.clear()
+
+
+# ---------------------------------------------------------------------------
+# 2026-08-28 incident gates: a docs commit restarted the LIVE service 44 min
+# into the session; the blend re-ran mid-cycle, sold BIL to fund an entry, and
+# the entry was rejected (MOO/OPG is only placeable pre-open). The audit that
+# followed found the far more expensive sibling: a fresh book cannot see venue
+# holdings, so re-seeding deploys a SECOND book on top of the first.
+# ---------------------------------------------------------------------------
+
+class _HoldingsAdapter(DryAdapter):
+    """Venue already holds the book-level names (Casey's real account)."""
+
+    def __init__(self, spy=45, bil=136):
+        super().__init__()
+        self._positions["SPY"] = spy
+        self._positions["BIL"] = bil
+
+
+class _WorkingMOOAdapter(DryAdapter):
+    """Venue ACCEPTS the OPG order and leaves it working (real MOO)."""
+
+    def place_stock_order(self, symbol, qty, order_type="MKT", **kw):
+        r = super().place_stock_order(symbol, qty, order_type=order_type, **kw)
+        if order_type == "MOO":
+            r = dict(r)
+            r["status"] = "working"
+            r.pop("fill_price", None)
+            self._orders[r["order_ref"]]["status"] = "working"
+        return r
+
+
+class _RejectedMOOAdapter(_WorkingMOOAdapter):
+    """Accepts, then the venue cancels it (OPG placed after the open)."""
+
+    def find_stock_order(self, client_order_id):
+        r = super().find_stock_order(client_order_id)
+        if r and "-entry" in str(client_order_id):
+            r = dict(r)
+            r["status"] = "cancelled"
+        return r
+
+
+class _AdoptedMOOAdapter(_WorkingMOOAdapter):
+    """Accepts the OPG, then the venue reports it FILLED — the orphan/async
+    success path that only reconcile() ever sees."""
+
+    def find_stock_order(self, client_order_id):
+        r = super().find_stock_order(client_order_id)
+        if r and "-entry" in str(client_order_id):
+            r = dict(r)
+            r["status"] = "filled"
+            r["fill_price"] = 50.0
+        return r
+
+
+class _BlindPositionsAdapter(DryAdapter):
+    """The venue cannot answer a positions query."""
+
+    def stock_position(self, symbol):
+        raise RuntimeError("positions unavailable")
+
+
+def test_gate_a_fresh_book_never_seeds_on_top_of_venue_holdings(tmp_path):
+    mgr = mk(tmp_path, blend_book_usd=50_000.0)
+    a = _HoldingsAdapter()
+    alerts = []
+    out = run_cycle(mgr, a, payload(entries=[]), "2026-08-20", alerts.append)
+    assert out == []                                   # nothing planned
+    assert mgr.state.halted == "FRESH_BOOK_VS_VENUE"
+    assert not mgr.state.initialized                   # never seeded
+    # and crucially: no CORE_BUY / SWEEP reached the venue
+    assert not [r for r in a.log if r.get("action") == "place_stock_order"]
+    assert any("double-deployment guard" in m for m in alerts)
+
+
+def test_gate_bootstrap_guard_fails_closed_when_the_venue_cannot_answer(tmp_path):
+    mgr = mk(tmp_path, blend_book_usd=50_000.0)
+    a = _BlindPositionsAdapter()
+    alerts = []
+    out = run_cycle(mgr, a, payload(entries=[]), "2026-08-20", alerts.append)
+    assert out == []
+    assert mgr.state.halted == "FRESH_BOOK_VS_VENUE"   # UNKNOWN != "flat"
+    assert any("UNKNOWN" in m for m in alerts)
+
+
+def test_gate_a_flat_venue_still_seeds_normally(tmp_path):
+    """The guard must not block a genuine first go-live."""
+    mgr = mk(tmp_path, blend_book_usd=50_000.0)
+    a = DryAdapter()                                   # venue holds nothing
+    run_cycle(mgr, a, payload(entries=[]), "2026-08-20", lambda m: None)
+    assert mgr.state.halted is None
+    assert mgr.state.initialized
+
+
+def test_gate_resume_acknowledges_the_bootstrap_guard_exactly_once(tmp_path):
+    mgr = mk(tmp_path, blend_book_usd=50_000.0)
+    a = _HoldingsAdapter()
+    run_cycle(mgr, a, payload(entries=[]), "2026-08-20", lambda m: None)
+    assert mgr.state.halted == "FRESH_BOOK_VS_VENUE"
+    mgr.resume("2026-08-20")                           # operator acknowledges
+    assert mgr.state.bootstrap_ack is True
+    run_cycle(mgr, a, payload(entries=[]), "2026-08-20", lambda m: None)
+    assert mgr.state.initialized                       # seeded on purpose
+    assert mgr.state.bootstrap_ack is False            # one-shot consumed
+
+
+def test_gate_a_real_live_book_is_never_silently_replaced_by_a_dry_one(tmp_path):
+    """Missing creds read as 'dry' — an unauthenticated boot must not quietly
+    archive a REAL book and hand back an un-halted fresh one."""
+    live = mk(tmp_path, dry_run=False, trading_mode="live",
+              tws_userid="u", tws_password="p")
+    live.state.initialized = True
+    live.state.spy_qty, live.state.bil_qty = 45, 136
+    live.save()
+    # same file, but now DRY (creds absent is the same signal)
+    dry = mk(tmp_path, dry_run=True, trading_mode="live")
+    assert dry.archived_state_critical is True
+    assert dry.state.halted == "MODE_CHANGE_FROM_REAL"
+
+
+def test_gate_breaker_resets_on_a_new_trading_date(tmp_path):
+    blend_mod.intent_breaker_clear()
+    blend_mod.intent_breaker_roll_date("2026-08-20")
+    blend_mod._intent_fail_counts["ENTER"] = blend_mod.INTENT_BREAKER_N
+    assert blend_mod.intent_kind_paused("ENTER")
+    blend_mod.intent_breaker_roll_date("2026-08-21")   # new day
+    assert not blend_mod.intent_kind_paused("ENTER")
+
+
+def test_gate_a_working_MOO_is_never_credited_as_a_successful_ENTER(tmp_path):
+    """Drives a REAL cycle. An OPG the venue merely ACCEPTED is not a
+    successful ENTER; crediting it reset the breaker every cycle so a day of
+    rejected entries never tripped it."""
+    blend_mod.intent_breaker_clear()
+    blend_mod.intent_breaker_roll_date("2026-08-20")   # same day as the cycle
+    m = mk(tmp_path, blend_book_usd=500_000.0)
+    _seed_initialized(m, sleeve_cash=300_000.0)
+    m.save()
+    a = _WorkingMOOAdapter()
+    blend_mod._intent_fail_counts["ENTER"] = 3
+    run_cycle(m, a, payload(entries=[entry(call_id=1)],
+                            stops=[stop_row(call_id=1)]),
+              "2026-08-20", lambda s_: None)
+    assert m.state.pending_entries          # a MOO really went to the venue
+    assert not m.state.positions            # and did NOT book
+    assert blend_mod._intent_fail_counts["ENTER"] == 3   # nothing credited
+
+
+@pytest.mark.parametrize("adapter_cls,label", [
+    (DryAdapter, "synchronous fill"),
+    (_AdoptedMOOAdapter, "reconcile-adopted async fill"),
+])
+def test_gate_a_real_fill_clears_the_ENTER_breaker(tmp_path, adapter_cls, label):
+    """The counter must stay CONSECUTIVE. Without this a healthy book loses
+    its entries for the day on 5 CUMULATIVE failures. Both fill paths must
+    clear it — the async one is only ever seen by reconcile()."""
+    blend_mod.intent_breaker_clear()
+    blend_mod.intent_breaker_roll_date("2026-08-20")   # same day as the cycle
+    m = mk(tmp_path, blend_book_usd=500_000.0)
+    _seed_initialized(m, sleeve_cash=300_000.0)
+    m.save()
+    a = adapter_cls()
+    blend_mod._intent_fail_counts["ENTER"] = 4
+    run_cycle(m, a, payload(entries=[entry(call_id=1)],
+                            stops=[stop_row(call_id=1)]),
+              "2026-08-20", lambda s_: None)
+    run_cycle(m, a, payload(), "2026-08-20", lambda s_: None)  # reconcile pass
+    assert m.state.positions, label                     # it really entered
+    assert "ENTER" not in blend_mod._intent_fail_counts, label
+
+
+def test_gate_a_venue_rejected_entry_books_a_breaker_failure(tmp_path):
+    """Reconcile is where an async ENTER's real outcome lands."""
+    blend_mod.intent_breaker_clear()
+    blend_mod._intent_breaker_date = ""
+    m = mk(tmp_path, blend_book_usd=500_000.0)
+    _seed_initialized(m, sleeve_cash=300_000.0)
+    m.save()
+    a = _RejectedMOOAdapter()
+    run_cycle(m, a, payload(entries=[entry(call_id=1)],
+                            stops=[stop_row(call_id=1)]),
+              "2026-08-20", lambda s_: None)
+    run_cycle(m, a, payload(), "2026-08-20", lambda s_: None)  # reconcile sees it
+    assert blend_mod._intent_fail_counts.get("ENTER") == 1
+    assert not m.state.pending_entries      # journal cleared, slot released
+
+
+def test_gate_the_breaker_roll_survives_a_reconcile_increment(tmp_path):
+    """Rolling AFTER reconcile wiped the day's first rejection every day."""
+    blend_mod.intent_breaker_clear()
+    blend_mod.intent_breaker_roll_date("2026-08-20")
+    m = mk(tmp_path, blend_book_usd=500_000.0)
+    _seed_initialized(m, sleeve_cash=300_000.0)
+    m.save()
+    a = _RejectedMOOAdapter()
+    run_cycle(m, a, payload(entries=[entry(call_id=1)],
+                            stops=[stop_row(call_id=1)]),
+              "2026-08-20", lambda s_: None)
+    # NEXT trading day: the roll and the reconcile-detected rejection land in
+    # the SAME cycle. Rolling after reconcile wipes the increment.
+    run_cycle(m, a, payload(), "2026-08-21", lambda s_: None)
+    assert blend_mod._intent_fail_counts.get("ENTER") == 1   # survived the roll
+
+
+def test_gate_a_mode_change_resume_still_faces_the_venue_guard(tmp_path):
+    """THE fatal one: acking MODE_CHANGE_FROM_REAL must NOT authorize a seed
+    on top of real holdings. The probe that found this left 395 SPY/286 BIL."""
+    live = mk(tmp_path, dry_run=False, trading_mode="live",
+              tws_userid="u", tws_password="p", blend_book_usd=50_000.0)
+    live.state.initialized = True
+    live.state.spy_qty, live.state.bil_qty = 45, 136
+    live.save()
+    dry = mk(tmp_path, dry_run=True, trading_mode="live",
+             blend_book_usd=50_000.0)
+    assert dry.state.halted == "MODE_CHANGE_FROM_REAL"
+    dry.resume()                                   # operator clears THAT halt
+    assert dry.state.bootstrap_ack is False        # but authorizes NO seed
+    a = _HoldingsAdapter()
+    out = run_cycle(dry, a, payload(), "2026-08-20", lambda s_: None)
+    assert out == []
+    assert dry.state.halted == "FRESH_BOOK_VS_VENUE"   # guard still stands
+    assert not [r for r in a.log if r.get("action") == "place_stock_order"]
+
+
+def test_gate_bootstrap_ack_round_trips_through_disk(tmp_path):
+    m = mk(tmp_path, blend_book_usd=50_000.0)
+    m.state.halted = "FRESH_BOOK_VS_VENUE"
+    m.resume()
+    assert m.state.bootstrap_ack is True
+    m.save()
+    again = mk(tmp_path, blend_book_usd=50_000.0)
+    assert again.state.bootstrap_ack is True       # survived the restart
+
+
+def test_gate_resume_clears_a_paused_kind(tmp_path):
+    """The ACTION page promises /resume resumes a paused kind."""
+    m = mk(tmp_path)
+    blend_mod.intent_breaker_clear()
+    blend_mod._intent_fail_counts["ENTER"] = blend_mod.INTENT_BREAKER_N
+    assert blend_mod.intent_kind_paused("ENTER")
+    m.resume()
+    assert not blend_mod.intent_kind_paused("ENTER")
+
+
+def test_gate_open_breakers_are_visible_on_status(tmp_path):
+    mgr = mk(tmp_path)
+    blend_mod.intent_breaker_clear()
+    blend_mod._intent_fail_counts["ENTER"] = blend_mod.INTENT_BREAKER_N
+    assert mgr.status_summary()["intent_breakers"] == {
+        "ENTER": blend_mod.INTENT_BREAKER_N}
+    blend_mod.intent_breaker_clear()
+    assert mgr.status_summary()["intent_breakers"] == {}
+
+
+def test_gate_a_bootstrap_ack_expires_with_the_trading_day(tmp_path):
+    """An ack is a SAME-DAY authorization. Left standing it becomes a durable
+    invisible permission — the re-review seeded 45->395 SPY on an ack granted
+    27 days earlier."""
+    mgr = mk(tmp_path, blend_book_usd=50_000.0)
+    a = _HoldingsAdapter()
+    run_cycle(mgr, a, payload(), "2026-08-20", lambda m: None)
+    mgr.resume("2026-08-20")
+    assert mgr.state.bootstrap_ack is True
+    out = run_cycle(mgr, a, payload(), "2026-09-16", lambda m: None)  # later
+    assert out == []
+    assert mgr.state.bootstrap_ack is False            # expired, not honoured
+    assert not mgr.state.initialized                   # nothing seeded
+    assert not [r for r in a.log if r.get("action") == "place_stock_order"]
+
+
+def test_gate_a_kill_revokes_a_standing_seed_authorization(tmp_path):
+    """/kill then /resume means 'undo my kill', never 'seed a second book'."""
+    mgr = mk(tmp_path, blend_book_usd=50_000.0)
+    a = _HoldingsAdapter()
+    run_cycle(mgr, a, payload(), "2026-08-20", lambda m: None)
+    mgr.resume("2026-08-20")
+    assert mgr.state.bootstrap_ack is True
+    mgr.request_flatten("2026-08-20")                  # operator changes mind
+    assert mgr.state.bootstrap_ack is False            # revoked
+    mgr.resume("2026-08-20")                           # un-kill
+    # the un-kill cleared a KILL, not the venue guard, so no ack was granted
+    assert mgr.state.bootstrap_ack is False
+    out = run_cycle(mgr, a, payload(), "2026-08-20", lambda m: None)
+    assert out == []
+    assert not mgr.state.initialized
+
+
+def test_gate_the_venue_guard_never_downgrades_a_kill(tmp_path):
+    """A KILL reinterpreted as FRESH_BOOK_VS_VENUE turned the next /resume
+    into a seed authorization."""
+    mgr = mk(tmp_path, blend_book_usd=50_000.0)
+    a = _HoldingsAdapter()
+    mgr.request_flatten("2026-08-20")
+    run_cycle(mgr, a, payload(), "2026-08-20", lambda m: None)
+    assert mgr.state.halted == "KILL"                  # not overwritten
+
+
+def test_gate_a_failing_manager_build_alerts_and_retries(monkeypatch, tmp_path):
+    """The loop must never die SILENTLY. Splitting _build left the manager
+    half outside the guarded retry, so a raise from LadderManager /
+    Blend3070Manager killed the thread with no alert and no loop — the exact
+    'alive, serving /health, inert forever' mode this batch removes."""
+    from app import service as svc
+
+    class _Stop(Exception):
+        pass
+
+    sent: list = []
+
+    def _send(m):
+        sent.append(m)
+        if m.startswith("\U0001f30a"):      # the boot canary: build finished
+            raise _Stop()
+
+    monkeypatch.setattr(svc, "BUILD_RETRY_S", 0)
+    monkeypatch.setattr(svc, "send", _send)
+    calls = {"n": 0}
+
+    def flaky_managers():
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise OSError("state disk not writable")
+
+    monkeypatch.setattr(svc, "_build_managers", flaky_managers)
+    monkeypatch.setattr(svc, "_build_adapter", lambda: None)
+    with pytest.raises(_Stop):
+        svc._loop()
+    assert calls["n"] == 3                                  # retried, not dead
+    assert any("build failed" in m for m in sent)           # and it SAID so
+    assert any("recovered" in m for m in sent)

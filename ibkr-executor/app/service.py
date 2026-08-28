@@ -47,6 +47,11 @@ LOOP_WAKE = threading.Event()      # /kill pokes the loop so a queued blend
                                    # full poll interval (R2)
 ADAPTER = None
 LAST: dict = {"loop_ok": 0.0, "nino34": None, "mode": "OFFLINE"}
+# Boot retry (2026-08-28): _build() connects to the gateway, which cannot
+# finish logging in until a 2FA push is approved. A failed build is
+# therefore usually TEMPORARY and must be retried, not fatal.
+BUILD_RETRY_S = 60.0        # tests monkeypatch this to 0
+BUILD_ALERT_EVERY = 30      # ~1 page per 30 min while it keeps failing
 # Last blend cycle outcome (feed's last_cycle + /health blend_loop): a
 # silently failing blend loop must be visible from the outside.
 BLEND_CYCLE: dict = {"date": None, "ok": None, "error": None,
@@ -109,8 +114,20 @@ def _auth(hdr: str | None, q: str | None) -> None:
         raise HTTPException(status_code=401, detail="bad exec token")
 
 
-def _build():
-    global MGR, ADAPTER, BLEND, OUTAGES
+def _build_managers():
+    """Construct the state-owning managers EXACTLY ONCE per process.
+
+    Split out of _build (counter-agent 2026-08-28): the boot retry loop calls
+    the adapter build repeatedly, and re-running this part reassigns the MGR
+    and BLEND globals with no lock while /kill and /resume mutate those same
+    objects under MGR_LOCK/BLEND_LOCK from API threads. A /kill landing in
+    that window wrote `halted` + the flatten journal onto an object the
+    rebuild then replaced, and the swapped-in manager's next save() erased
+    it. That window used to be one ~5-minute boot; with retries it would be
+    open for as long as the gateway stays unreachable - exactly while the
+    operator is reacting to 'build failed' pages and most likely to hit
+    /kill."""
+    global MGR, BLEND
     MGR = LadderManager(settings, settings.state_path)
     if MGR.archived_state:
         # x12: an unreadable ladder file used to become a fresh, un-halted
@@ -137,6 +154,11 @@ def _build():
                 # another mode (e.g. DRY placeholder prices) — starting clean.
                 logger.warning("blend: %s", BLEND.archived_state)
                 send(f"⚠️ blend: starting a FRESH book — {BLEND.archived_state}")
+
+
+def _build_adapter():
+    """Adapter/gateway only - the part the boot loop RETRIES."""
+    global ADAPTER, OUTAGES
     if not (settings.tws_userid and settings.tws_password):
         ADAPTER = DryAdapter()
         LAST["mode"] = "OFFLINE"
@@ -164,22 +186,61 @@ def _build():
     LAST["mode"] = settings.trading_mode.upper()
 
 
+def _build():
+    """Full single-shot build (tests and any non-retrying caller)."""
+    _build_managers()
+    _build_adapter()
+
+
 def _loop():
     global LOOP_WAKE
     # Fresh wake event per loop thread: a superseded loop from an earlier
     # lifespan (tests spawn several; daemon threads never die) keeps
     # waiting on its OLD event, so /kill only ever wakes the CURRENT loop.
     LOOP_WAKE = threading.Event()
-    try:
-        _build()
-    except Exception as exc:  # noqa: BLE001
-        # A constructor raise (gateway auth, ib_async loop binding) must
-        # never kill the loop thread SILENTLY (adapter review M2 sub-note):
-        # alert loudly and stop — /health then shows loop_age_s as None.
-        logger.exception("executor build failed: %s", exc)
-        send(f"🚨🚨 ibkr-executor FAILED TO BUILD ({exc}) — NO trading "
-             f"loop is running; fix config/gateway and redeploy")
-        return
+    # A constructor raise (gateway auth, ib_async loop binding) must never
+    # kill the loop thread SILENTLY (adapter review M2 sub-note): alert
+    # loudly. It must ALSO NOT kill it PERMANENTLY (2026-08-28): the old
+    # code `return`ed here, so a boot that merely lost a race with the
+    # gateway's login left the service alive, serving /health, and inert
+    # FOREVER - no loop, no reconcile, no alerts - until a human noticed
+    # and redeployed. With 2FA in the login path that race is routine: the
+    # gateway cannot finish logging in until the operator taps approve on
+    # their phone, which is often longer than _connect()'s ~5 minute
+    # budget. Retry with backoff so a late approval self-heals.
+    attempt = 0
+    managers_built = False
+    while True:
+        try:
+            # Managers build ONCE (never reassigned under a live /kill) but
+            # INSIDE the guarded loop: a raise from LadderManager or
+            # Blend3070Manager - both of which touch the persistent disk on
+            # construction - used to kill this thread with no alert at all
+            # once the build was split (counter-agent re-review 2026-08-28,
+            # FATAL). That is the exact "alive, serving /health, inert
+            # forever" mode this batch exists to remove.
+            if not managers_built:
+                _build_managers()
+                managers_built = True
+            _build_adapter()
+            break
+        except Exception as exc:  # noqa: BLE001
+            attempt += 1
+            logger.exception("executor build failed (attempt %d): %s",
+                             attempt, exc)
+            # Alert on the first failure and then only rarely: a retry
+            # loop must not become a pager loop (the alert-once doctrine
+            # the blend's intent breaker already follows).
+            if attempt == 1 or attempt % BUILD_ALERT_EVERY == 0:
+                send(f"🚨🚨 ibkr-executor build failed ({exc}) — NO trading "
+                     f"loop yet; retrying every {BUILD_RETRY_S:.0f}s "
+                     f"(attempt {attempt}). If the gateway is waiting on a "
+                     f"2FA approval, approving it recovers this with no "
+                     f"redeploy.")
+            time.sleep(BUILD_RETRY_S)
+    if attempt:
+        send(f"✅ ibkr-executor recovered after {attempt} failed build "
+             f"attempt(s) — trading loop starting")
     send(f"🌊 ibkr-executor up — mode {LAST['mode']}, "
          + (f"ladder legs {[k for k in MGR.state.legs]}"
             if settings.ladder_enabled else "ladder DISABLED (LADDER_ENABLED "
@@ -475,6 +536,8 @@ def resume(x_exec_token: str | None = Header(default=None),
         MGR.state.halted = None
         MGR.save()
     blend_prior = None
+    breakers_cleared: list = []
+    seed_acked = False
     if BLEND is not None:
         # N3: /resume must not race the loop thread's cycle (a resume
         # interleaved with execute_flatten un-halts a book that is being
@@ -482,12 +545,20 @@ def resume(x_exec_token: str | None = Header(default=None),
         # serializes it behind any in-flight cycle, flatten included.
         with BLEND_LOCK:
             blend_prior = BLEND.state.halted
-            BLEND.resume()
+            from .blend import intent_breaker_state
+            breakers_cleared = sorted(intent_breaker_state())
+            BLEND.resume(datetime.now(timezone.utc).date().isoformat())
+            seed_acked = BLEND.state.bootstrap_ack
     drift = "SCHEMA_DRIFT" in (prior, blend_prior)
     send("ibkr ladder resumed"
          + (f" (cleared halt: {prior})" if prior else " (was not halted)")
          + (f"; blend book resumed (cleared halt: {blend_prior})"
             if blend_prior else "")
+         + (f"; blend intent breaker(s) RE-ARMED: {', '.join(breakers_cleared)}"
+            if breakers_cleared else "")
+         + ("\n→ this ALSO authorized the blend to seed a fresh book on top "
+            "of existing venue holdings, TODAY ONLY. If that is not what you "
+            "meant, /kill revokes it." if seed_acked else "")
          + ("\n→ SCHEMA_DRIFT was a data-integrity halt, not a kill: those "
             "rows came from a build this one does not fully understand. "
             "Every field this build knows was kept and nothing live was "
