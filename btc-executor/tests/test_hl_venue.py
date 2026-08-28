@@ -534,3 +534,31 @@ def test_gate_other_rejections_stay_generic(venue):
     with pytest.raises(RuntimeError) as e:
         venue.place_market("SELL", 0.01, "T-1-X1")
     assert not isinstance(e.value, MinNotionalRejected)
+
+
+def test_gate_agent_unapproved_key_names_both_addresses(venue):
+    """The rail's first live boot returned the not-in-the-list sentinel and
+    the operator saw 'agent_days_left: -20693' - a description of the
+    arithmetic, not of the fault. The two addresses ARE the diagnosis: what
+    we sign with, and what the account actually approved."""
+    venue.info.agents = [{"name": "BTC EXECUTOR",
+                          "address": "0x" + "ab" * 20,
+                          "validUntil": 9_999_999_999_000}]
+    assert venue.agent_valid_until() == 0.0
+    note = venue.agent_note
+    assert venue.agent_address.lower() in note.lower(), "signer not named"
+    assert ("0x" + "ab" * 20) in note.lower(), "approved agent not named"
+    assert venue.address.lower() in note.lower(), "main account not named"
+
+
+def test_gate_agent_note_clears_once_the_key_matches(venue):
+    """A stale note would keep explaining a fault that is fixed, and the
+    halt page prefers the note over the date."""
+    venue.info.agents = []
+    venue.agent_valid_until()
+    assert venue.agent_note
+    venue.info.agents = [{"name": "BTC EXECUTOR",
+                          "address": venue.agent_address,
+                          "validUntil": 1_803_483_076_101}]
+    venue.agent_valid_until()
+    assert venue.agent_note is None, "note survived the fix"

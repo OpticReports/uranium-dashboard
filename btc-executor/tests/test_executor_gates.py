@@ -4682,3 +4682,39 @@ def test_gate_expired_agent_does_not_refight_an_existing_halt(tmp_path):
     ex._agent_checked_ts = 0.0
     ex.step(target())
     assert len(v.calls) == n, "re-flattened a book that was already halted"
+
+
+def test_gate_resume_rechecks_the_expiry_rail(tmp_path):
+    """The check is hourly and boot spends the slot, so a /resume landed in
+    a window of up to an hour with the rail asleep - trading against a key
+    the venue will not accept, one rejected order at a time, instead of the
+    single clean halt the operator was supposed to get."""
+    v = _ExpiringVenue(days_left=0.5)
+    ex = mkexec(tmp_path, v)
+    ex.step(target())
+    assert ex.state.halted == "AGENT_EXPIRED"
+    assert ex.resume() is True
+    assert ex.state.halted == "AGENT_EXPIRED", \
+        "resume cleared the halt and left the rail asleep for an hour"
+
+
+def test_gate_resume_still_works_when_the_key_is_healthy(tmp_path):
+    """The re-check must not make /resume unusable on a good key."""
+    v = _ExpiringVenue(days_left=90.0)
+    ex = mkexec(tmp_path, v)
+    ex.halt("KILL", "operator")
+    assert ex.state.halted == "KILL"
+    assert ex.resume() is True
+    assert ex.state.halted is None
+
+
+def test_gate_agent_halt_page_names_the_mismatch(tmp_path):
+    """An unapproved key and an expiring one both reach this halt, but they
+    are different operator problems."""
+    v = _ExpiringVenue(days_left=0.5)
+    v.agent_valid_until = lambda: 0.0
+    v.agent_note = "the deployed HL_SECRET_KEY signs as 0xAAA, NOT approved"
+    ex = mkexec(tmp_path, v)
+    ex.step(target())
+    msg = [e for e in ex.state.events if e["kind"] == "halt"][-1]["msg"]
+    assert "NOT approved" in msg, f"halt page lost the diagnosis: {msg}"

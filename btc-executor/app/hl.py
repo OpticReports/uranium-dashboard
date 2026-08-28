@@ -135,6 +135,10 @@ class HyperliquidVenue:
                 "this is the MAIN account key, not an agent wallet. Trading "
                 "works, but the venue is not enforcing withdrawal separation.")
         self.agent_address = wallet.address
+        # set by agent_valid_until when the signer is not an approved
+        # agent: the halt page carries it so the operator sees WHICH
+        # key was deployed vs which are approved, not just a date
+        self.agent_note: str | None = None
         self.info = Info(base, skip_ws=True)
         self.exchange = Exchange(wallet, base, account_address=self.address)
         self._meta = self._coin_meta()
@@ -256,12 +260,29 @@ class HyperliquidVenue:
                 vu = a.get("validUntil")
                 if vu is None:
                     raise RuntimeError(f"agent row carried no validUntil: {a}")
+                self.agent_note = None
                 return float(vu) / 1000.0          # venue reports ms
         # A clean response that does not list us is DEFINITIVE, not a read
         # failure: the agent was revoked, or never approved for this
         # account, or HL_SECRET_KEY belongs to someone else's wallet. No
         # order will ever succeed. Surfaced as expired-now so the caller's
         # expiry rail fires instead of a fresh code path.
+        #
+        # NAME THE MISMATCH (2026-08-28, the rail's first live boot returned
+        # exactly this). As a bare 0.0 it reached the operator as
+        # "agent_days_left: -20693" and a halt saying "expires in -496648h",
+        # which describes the arithmetic rather than the problem. The two
+        # addresses ARE the diagnosis, and both are public on-chain values:
+        # what we sign with, and what the account actually approved.
+        approved = ", ".join(
+            f"{(a or {}).get('name', '?')}={(a or {}).get('address', '?')}"
+            for a in agents) or "(none)"
+        self.agent_note = (
+            f"the deployed HL_SECRET_KEY signs as {self.agent_address}, which "
+            f"is NOT an approved agent of {self.address}. Approved: "
+            f"{approved}. No order can succeed until HL_SECRET_KEY is the "
+            f"private key of an approved agent")
+        logger.error("hyperliquid agent mismatch: %s", self.agent_note)
         return 0.0
 
     def _spot_usdc(self) -> float:

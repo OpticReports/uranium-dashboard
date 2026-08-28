@@ -413,11 +413,19 @@ class Executor:
             # working would fight the operator.
             if self.state.halted:
                 return
+            # A NOT-APPROVED key and an EXPIRING one both arrive here, but
+            # they are different operator problems and the arithmetic alone
+            # cannot tell them apart ("expires in -496648h" is a description
+            # of the sentinel, not of the fault). The adapter names the
+            # mismatch when it knows it; prefer that over the date.
+            note = (getattr(self.venue, "agent_note", None)
+                    or getattr(getattr(self.venue, "inner", None),
+                               "agent_note", None))
             self._halt_locked(
                 "AGENT_EXPIRED",
-                f"agent wallet expires in {days * 24:.1f}h - halting NOW "
-                f"while it can still cancel and flatten; approve a new API "
-                f"wallet, set HL_SECRET_KEY, then /resume")
+                note or (f"agent wallet expires in {days * 24:.1f}h - halting "
+                         f"NOW while it can still cancel and flatten; approve "
+                         f"a new API wallet, set HL_SECRET_KEY, then /resume"))
         elif days <= AGENT_WARN_DAYS:
             self._event("RED", "agent_expiring",
                         f"agent wallet expires in {days:.1f} days "
@@ -1224,6 +1232,16 @@ class Executor:
         self._event("INFO", "resume", f"cleared {self.state.halted}")
         self.state.halted = None
         self._verify_stop_refs()
+        # Re-arm the expiry rail IMMEDIATELY (2026-08-28, found on the first
+        # live HL boot). The check is hourly, and boot had already spent this
+        # process's slot — so a /resume landed in a window of up to an hour
+        # with the rail asleep. In that window the book trades against a key
+        # the venue will not accept: every order rejected one at a time, a
+        # rejection storm instead of the one clean AGENT_EXPIRED halt the
+        # operator was supposed to get. Re-checking here means /resume can
+        # hand the halt straight back, which is the honest answer.
+        self._agent_checked_ts = 0.0
+        self._check_agent_expiry()
         self._save_state()
         return True
 
