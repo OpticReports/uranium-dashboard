@@ -284,6 +284,12 @@ def pulse():
             "account_address": (getattr(EXEC.venue, "address", None)
                                 or getattr(getattr(EXEC.venue, "inner", None),
                                            "address", None)),
+            # WHICH CHAIN every other field describes. venue="hyperliquid"
+            # was not enough: mainnet and testnet are the same adapter and
+            # the same healthy-looking pulse, against different accounts.
+            "network": (getattr(EXEC.venue, "network", None)
+                        or getattr(getattr(EXEC.venue, "inner", None),
+                                   "network", None)),
             # days until the signing key stops working (Hyperliquid agent
             # wallets expire). null = no expiry, or not read yet. The
             # executor halts itself at T-1 day, but this makes the clock

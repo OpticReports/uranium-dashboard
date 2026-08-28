@@ -615,3 +615,29 @@ def test_gate_agent_named_match_never_consults_user_role(venue):
     venue.info.user_role = _role
     assert venue.agent_valid_until() == pytest.approx(1_803_483_076.101)
     assert called["n"] == 0, "queried userRole despite a named match"
+
+
+# --------------------------------------------------------------------------
+# WHICH NETWORK (2026-08-28). HL_TESTNET was truthy in production, so every
+# info call answered about a different chain: extraAgents empty, userRole
+# 'missing', and the agent rail concluded "your key is not approved" about a
+# key that is properly approved on mainnet.
+def test_gate_network_is_recorded_not_just_used(venue):
+    """The fixture config sets hl_testnet=True. If the choice is only ever a
+    local variable, nothing downstream can publish or check it - which is
+    exactly why it stayed invisible through three rounds of diagnosis."""
+    assert venue.network == "testnet"
+    assert venue.testnet is True
+
+
+def test_gate_mainnet_is_the_default_and_is_labelled(monkeypatch):
+    import app.hl as hlmod
+
+    class Cfg:
+        hl_secret_key = "0x" + "11" * 32
+        hl_account_address = "0xMAIN0000000000000000000000000000000000ac"
+        hl_coin = "BTC"
+        # hl_testnet deliberately ABSENT: the default must be mainnet, and
+        # must still be labelled rather than left None.
+    v = hlmod.HyperliquidVenue(Cfg())
+    assert v.network == "mainnet" and v.testnet is False

@@ -100,7 +100,20 @@ class HyperliquidVenue:
 
         self.cfg = cfg
         self.coin = getattr(cfg, "hl_coin", "BTC")
-        base = (constants.TESTNET_API_URL if getattr(cfg, "hl_testnet", False)
+        # WHICH NETWORK. Recorded, not just used, because it was invisible
+        # (2026-08-28): with HL_TESTNET truthy every info call answered about
+        # a DIFFERENT chain, so extraAgents came back empty and userRole said
+        # 'missing' for a key that is properly approved on mainnet - and the
+        # agent rail read that as "your key is not approved". The account,
+        # the key and the matching logic were all correct; they were being
+        # asked about the wrong network, and nothing published which one.
+        # Worse than the misdiagnosis: position() answers 0.0 from an empty
+        # testnet account as a CONFIRMED FLAT while the real mainnet book
+        # sits untouched, with a perfectly fresh venue_read_age_s - the
+        # phantom-position shape, reached through a single boolean.
+        self.testnet = bool(getattr(cfg, "hl_testnet", False))
+        self.network = "testnet" if self.testnet else "mainnet"
+        base = (constants.TESTNET_API_URL if self.testnet
                 else constants.MAINNET_API_URL)
         # The AGENT (API) wallet signs trades and CANNOT withdraw - the same
         # separation of powers as the Coinbase trade-only key, enforced by

@@ -4718,3 +4718,40 @@ def test_gate_agent_halt_page_names_the_mismatch(tmp_path):
     ex.step(target())
     msg = [e for e in ex.state.events if e["kind"] == "halt"][-1]["msg"]
     assert "NOT approved" in msg, f"halt page lost the diagnosis: {msg}"
+
+
+def test_gate_live_mode_on_testnet_pages_red(tmp_path):
+    """DRY_RUN=false against a TEST chain is a contradiction, and a silent
+    one: the account reads empty, so position() is a CONFIRMED FLAT and
+    equity() is 0 - every equity-derived halt then computes zero loss and
+    can never fire - while /pulse looks healthy."""
+    v = FakeVenue()
+    v.network = "testnet"
+    ex = mkexec(tmp_path, v, dry_run=False)
+    assert [e for e in ex.state.events if e["kind"] == "live_mode_on_testnet"], \
+        "live mode on a test chain booted silently"
+
+
+def test_gate_dry_run_on_testnet_is_not_paged(tmp_path):
+    """DRY_RUN + testnet is a coherent rehearsal. Paging it would train the
+    operator to ignore the page that matters."""
+    v = FakeVenue()
+    v.network = "testnet"
+    ex = mkexec(tmp_path, v, dry_run=True)
+    assert not [e for e in ex.state.events if e["kind"] == "live_mode_on_testnet"]
+
+
+def test_gate_live_mode_on_mainnet_is_not_paged(tmp_path):
+    v = FakeVenue()
+    v.network = "mainnet"
+    ex = mkexec(tmp_path, v, dry_run=False)
+    assert not [e for e in ex.state.events if e["kind"] == "live_mode_on_testnet"]
+
+
+def test_gate_network_check_is_venue_agnostic(tmp_path):
+    """Coinbase has no network attribute. Absent must be a no-op, not an
+    AttributeError that kills boot."""
+    v = FakeVenue()
+    assert not hasattr(v, "network")
+    ex = mkexec(tmp_path, v, dry_run=False)
+    assert not [e for e in ex.state.events if e["kind"] == "live_mode_on_testnet"]

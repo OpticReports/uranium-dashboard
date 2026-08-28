@@ -275,6 +275,7 @@ class Executor:
         self._void_absurd_fills()
         self._check_venue_continuity()
         self._check_product_tradable()
+        self._check_network()
         self._reconcile_boot()
         if any(l.qty != 0.0 for l in self.state.legs.values()):
             self._cov("restart_with_position")
@@ -432,6 +433,31 @@ class Executor:
                         f"({time.strftime('%Y-%m-%d', time.gmtime(vu))}) - "
                         f"the executor HALTS at T-1 day; approve a new API "
                         f"wallet and update HL_SECRET_KEY before then")
+
+    def _check_network(self) -> None:
+        """LIVE mode pointed at a TEST network is a contradiction - say so.
+
+        Not fatal, because a deliberate live-fire rehearsal on testnet is a
+        legitimate thing to run. But it must never be QUIET: on testnet the
+        account is empty, so position() reports a CONFIRMED FLAT, equity()
+        reports 0 - which makes every equity-derived halt compute zero loss
+        and never fire - and every order is rejected, all while /pulse looks
+        healthy. That is the 2026-08-26 silently-absent-safety shape reached
+        through one boolean.
+
+        It also CONTAMINATES: fills, slippage samples and ramp coverage
+        recorded on testnet are indistinguishable downstream from live
+        evidence, and those are the gates that authorise real sizing."""
+        net = (getattr(self.venue, "network", None)
+               or getattr(getattr(self.venue, "inner", None), "network", None))
+        if net == "testnet" and not self.cfg.dry_run:
+            self._event("RED", "live_mode_on_testnet",
+                        "DRY_RUN=false but HL_TESTNET is set: every info read "
+                        "answers about the TEST chain, so the account reads "
+                        "EMPTY (flat, zero equity, halts computing zero loss) "
+                        "and every order is rejected - while /pulse looks "
+                        "healthy. Any fill recorded here also contaminates the "
+                        "ramp evidence. Set HL_TESTNET=false for real trading")
 
     def _void_absurd_fills(self) -> None:
         """One-time hygiene at boot: a recorded |slip_bps| > 500 is not a
