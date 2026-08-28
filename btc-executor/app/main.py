@@ -230,6 +230,13 @@ def pulse():
             "venue_read_age_s": (round(now - st.last_venue_read_ts, 1)
                                  if getattr(st, "last_venue_read_ts", 0)
                                  else None),
+            # days until the signing key stops working (Hyperliquid agent
+            # wallets expire). null = no expiry, or not read yet. The
+            # executor halts itself at T-1 day, but this makes the clock
+            # visible to an external monitor long before that.
+            "agent_days_left": (
+                round((getattr(st, "agent_valid_until", None) - now) / 86400.0, 2)
+                if getattr(st, "agent_valid_until", None) is not None else None),
             "legs": {n: {"in_position": l.qty != 0.0,
                          "entry_open": l.entry_cloid is not None,
                          "stop_placed": l.stop_cloid is not None}

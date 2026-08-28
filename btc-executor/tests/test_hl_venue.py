@@ -56,6 +56,12 @@ class _FakeInfo:
         self.raise_on_state = None
         self.abstraction = "unifiedAccount"
         self.spot_usdc = 0.0
+        # the signer (_Acct.address) approved as an agent, in the venue's
+        # own shape: ms epoch, and MIXED CASE, because Hyperliquid does not
+        # promise the checksum casing our config carries
+        self.agents = [{"name": "BTC EXECUTOR",
+                        "address": "0xDEADbeefDEADbeefDEADbeefDEADbeefDEADbeef",
+                        "validUntil": 1_803_483_076_101}]
 
     def meta(self, dex=""):
         return {"universe": [{"name": "BTC", "szDecimals": 5,
@@ -84,6 +90,9 @@ class _FakeInfo:
 
     def spot_user_state(self, address):
         return {"balances": [{"coin": "USDC", "total": str(self.spot_usdc)}]}
+
+    def extra_agents(self, user):
+        return self.agents
 
 
 class _FakeExchange:
@@ -450,3 +459,53 @@ def test_gate_abstraction_is_cached_not_polled_per_call(venue):
     venue._abs_cache = (0.0, True)          # expire
     venue.equity()
     assert calls["n"] == 2, "cache never expires"
+
+
+# --------------------------------------------------------------------------
+# Agent-wallet expiry (HL-3). Hyperliquid API wallets expire on a date the
+# venue will tell us; past it EVERY order is rejected, protective ones
+# included. That is the naked-position failure with a calendar on it.
+def test_gate_agent_expiry_is_read_and_converted_from_ms(venue):
+    """The venue reports ms; the rails think in seconds. An unconverted
+    value is ~57000x too large, i.e. 'expires in 55 million days' - a
+    warning that can never fire, which is the same as no rail at all."""
+    assert venue.agent_valid_until() == pytest.approx(1_803_483_076.101), \
+        "agent expiry not converted from the venue's milliseconds"
+
+
+def test_gate_agent_matched_by_address_not_display_name(venue):
+    """The name is operator-chosen, editable, and duplicable in the HL UI.
+    A name match can point at a DIFFERENT key than the one we sign with -
+    reporting a healthy expiry for a wallet we do not use, while ours dies."""
+    venue.info.agents = [{"name": "BTC EXECUTOR",       # our name...
+                          "address": "0x" + "ab" * 20,  # ...someone else's key
+                          "validUntil": 9_999_999_999_000}]
+    assert venue.agent_valid_until() == 0.0, \
+        "matched an agent row by NAME - reported a key we cannot sign with"
+
+
+def test_gate_revoked_agent_reads_as_expired_not_healthy(venue):
+    """A clean response that does not list us is DEFINITIVE: revoked, never
+    approved, or HL_SECRET_KEY belongs to another wallet. No order will
+    ever succeed, so it must reach the expiry rail, not a silent pass."""
+    venue.info.agents = []
+    assert venue.agent_valid_until() == 0.0, \
+        "an unlisted (revoked) agent read as having no expiry"
+
+
+def test_gate_unreadable_agent_list_raises_rather_than_reporting_healthy(venue):
+    """Unreadable is not absent. Returning None here would mean 'this key
+    never expires', permanently disarming the rail on a transient outage."""
+    def _boom(user):
+        raise RuntimeError("info endpoint down")
+    venue.info.extra_agents = _boom
+    with pytest.raises(RuntimeError, match="info endpoint down"):
+        venue.agent_valid_until()
+
+
+def test_gate_main_account_key_has_no_expiry(venue):
+    """Trading with the main account's own key is a valid (less safe) setup
+    and cannot expire. It must not be reported as expired-now, which would
+    halt a perfectly healthy book forever."""
+    venue.address = venue.agent_address        # signer IS the account
+    assert venue.agent_valid_until() is None

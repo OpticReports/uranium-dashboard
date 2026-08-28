@@ -51,6 +51,13 @@ STOP_REPLACE_MAX = 3
 # storm fails), short enough that isolated blips cannot accumulate across a
 # multi-week position (re-gate 2026-08-27 N1).
 STOP_OK_DECAY_POLLS = 20
+# Hyperliquid agent (API) wallets expire on a date the venue tells us.
+# Expiry is a TOTAL loss of write access, protective orders included, so the
+# halt must fire while the key still WORKS - a halt at T-0 cannot flatten.
+AGENT_WARN_DAYS = 14.0
+AGENT_HALT_DAYS = 1.0
+AGENT_CHECK_EVERY_S = 3600.0
+AGENT_UNREADABLE_WARN_S = 6 * 3600.0
 # Auto-drill's terminal condition is now a MEASUREMENT (live fill count) that
 # drilling can fail to advance - e.g. the venue omits average_filled_price.
 # Without this bound it drills the daily budget forever, unattended.
@@ -117,7 +124,11 @@ class LegLedger:
 class ExecState:
     legs: dict = field(default_factory=lambda: {n: LegLedger() for n in LEGS})
     # None | DAILY_LOSS | DRAWDOWN | KILL | LEDGER_DIVERGENCE |
-    # STOP_UNPLACEABLE | VENUE_CHANGED  (all but DAILY_LOSS require a MANUAL
+    # STOP_UNPLACEABLE | VENUE_CHANGED | AGENT_EXPIRED  (AGENT_EXPIRED means
+    # the signing key is about to stop working, so it fires at T-1 day while
+    # the flatten can still execute; /resume alone does not fix it — a new
+    # API wallet must be approved and HL_SECRET_KEY updated first.)
+    # (all but DAILY_LOSS require a MANUAL
     # /resume regardless of KELLY_M. LEDGER_DIVERGENCE and STOP_UNPLACEABLE
     # are protection failures - the book stops because a position cannot be
     # kept protected. VENUE_CHANGED means the ledger describes a different
@@ -128,6 +139,10 @@ class ExecState:
     # /pulse field reads from the ledger, which is belief, not truth
     # (2026-08-26 incident: 3 days blind, nothing external could tell).
     last_venue_read_ts: int = 0
+    # epoch seconds the signing key stops working (Hyperliquid agent
+    # wallets expire). None = unknown yet, or a key that cannot expire.
+    # Deliberately NOT persisted: a saved copy would outlive the fact.
+    agent_valid_until: float | None = None
     day_key: str = ""
     day_start_equity: float = 0.0
     high_water: float = 0.0
@@ -233,6 +248,12 @@ class Executor:
         self._cov_since_boot: dict[str, int] = {}
         self._venue_read_failed_at = 0.0   # append-side cooldown for the RED
         self._boot_mismatch = False        # venue-vs-ledger unresolved at boot
+        # agent-wallet expiry rail. 0 forces a check on the FIRST step of
+        # every process, so a restart cannot postpone the warning; both are
+        # in-memory because the answer is a venue fact, and a persisted copy
+        # could only ever be a staler version of it.
+        self._agent_checked_ts = 0.0
+        self._agent_unreadable_since: float | None = None
         # live diagnostic (not persisted): why auto-drill last declined to
         # run. It used to `return  # quietly wait`, so "armed and waiting"
         # and "broken" were indistinguishable from outside.
@@ -337,6 +358,72 @@ class Executor:
                         f"{flags.get('venue')} - every order will be "
                         f"rejected; fix CB_PRODUCT_ID before trusting any "
                         f"'ready' signal")
+
+    def _check_agent_expiry(self) -> None:
+        """Halt BEFORE the signing key dies, not after.
+
+        A Hyperliquid agent wallet has a hard expiry (ours: 2027-02-24).
+        Past it every order is rejected — entries AND stops — so a position
+        open at expiry is naked, and the executor cannot flatten itself out
+        of it because flattening is also an order. That is the phantom
+        incident with a known date on it, which makes tolerating it a
+        choice rather than an accident.
+
+        So the halt fires at T-1 DAY, while the credentials still work and
+        _halt_locked's flatten can actually execute. Warnings start at
+        T-14 days so the renewal is routine rather than an emergency.
+
+        Unreadable expiry is a WARN, never a halt: the info endpoint being
+        down says nothing about whether our key can still sign, and halting
+        a healthy book on a read failure would be self-inflicted damage of
+        exactly the kind the halt exists to prevent. Venue-agnostic by duck
+        type — Coinbase has no such method and is untouched. DryRunVenue
+        wraps the real venue, so look through `inner` as well."""
+        fn = (getattr(self.venue, "agent_valid_until", None)
+              or getattr(getattr(self.venue, "inner", None),
+                         "agent_valid_until", None))
+        if fn is None:
+            return
+        now = time.time()
+        if now - self._agent_checked_ts < AGENT_CHECK_EVERY_S:
+            return
+        self._agent_checked_ts = now
+        try:
+            vu = fn()
+        except Exception as exc:  # noqa: BLE001
+            if self._agent_unreadable_since is None:
+                self._agent_unreadable_since = now
+            blind = now - self._agent_unreadable_since
+            if blind > AGENT_UNREADABLE_WARN_S:
+                self._event("WARN", "agent_expiry_unreadable",
+                            f"cannot read agent wallet expiry for "
+                            f"{blind / 3600:.0f}h ({exc}) - the key may "
+                            f"still sign fine, but the expiry rail is dark")
+            return
+        self._agent_unreadable_since = None
+        self.state.agent_valid_until = vu
+        if vu is None:                      # main-account key: never expires
+            return
+        days = (vu - now) / 86400.0
+        if days <= AGENT_HALT_DAYS:
+            # includes the revoked/not-approved case, which the adapter
+            # reports as valid_until=0 (definitively expired, not unread).
+            # Already halted: do NOT re-halt — _halt_locked flattens, and
+            # re-running that hourly against a book someone is manually
+            # working would fight the operator.
+            if self.state.halted:
+                return
+            self._halt_locked(
+                "AGENT_EXPIRED",
+                f"agent wallet expires in {days * 24:.1f}h - halting NOW "
+                f"while it can still cancel and flatten; approve a new API "
+                f"wallet, set HL_SECRET_KEY, then /resume")
+        elif days <= AGENT_WARN_DAYS:
+            self._event("RED", "agent_expiring",
+                        f"agent wallet expires in {days:.1f} days "
+                        f"({time.strftime('%Y-%m-%d', time.gmtime(vu))}) - "
+                        f"the executor HALTS at T-1 day; approve a new API "
+                        f"wallet and update HL_SECRET_KEY before then")
 
     def _void_absurd_fills(self) -> None:
         """One-time hygiene at boot: a recorded |slip_bps| > 500 is not a
@@ -1359,6 +1446,7 @@ class Executor:
         equity = self.venue.equity()
         self._reconcile_transfers(equity)
         self._roll_day(equity)
+        self._check_agent_expiry()
         self._check_halts(equity)
         if self.state.halted:
             self._save_state()

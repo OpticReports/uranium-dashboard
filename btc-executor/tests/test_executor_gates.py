@@ -4547,3 +4547,138 @@ def test_gate_empty_ledger_switches_venue_without_friction(tmp_path):
     assert any(e["kind"] == "venue_switched" for e in ex.state.events), \
         "a venue switch must still be announced, even when it is clean"
     assert json.load(open(cfg.state_path))["venue"] == "hyperliquid"
+
+
+# --------------------------------------------------------------------------
+# HL-3: the agent-wallet expiry rail. Hyperliquid API wallets expire on a
+# date the venue tells us in advance. Past it EVERY order is rejected -
+# entries AND stops AND the flatten - so a position open at expiry is naked
+# and the executor cannot get itself out. This is the phantom-position
+# failure with a calendar attached, which makes ignoring it a choice.
+class _ExpiringVenue(FakeVenue):
+    """FakeVenue that also answers the Hyperliquid expiry question."""
+
+    def __init__(self, days_left=90.0, boom=False, **kw):
+        super().__init__(**kw)
+        self.days_left = days_left
+        self.boom = boom
+        self.expiry_calls = 0
+
+    def agent_valid_until(self):
+        self.expiry_calls += 1
+        if self.boom:
+            raise RuntimeError("info endpoint down")
+        if self.days_left is None:
+            return None
+        return time.time() + self.days_left * 86400.0
+
+
+def _evt(ex, kind):
+    return [e for e in ex.state.events if e["kind"] == kind]
+
+
+def test_gate_agent_expiry_halts_while_the_key_still_works(tmp_path):
+    """THE point of the rail: halt at T-1 DAY, not at T-0. _halt_locked
+    cancels and flattens, and both are ORDERS - at T-0 the key is already
+    dead and the halt would be a page attached to a book it cannot close."""
+    v = _ExpiringVenue(days_left=0.5)
+    ex = mkexec(tmp_path, v)
+    _hold(v, 0.01, "seed")
+    ex.state.legs["pullback"].qty = 0.01
+    ex.step(target())
+    assert ex.state.halted == "AGENT_EXPIRED"
+    assert any(c[0] in ("MARKET", "CANCEL_ALL") for c in v.calls), \
+        "halted on expiry but never tried to close the book"
+    assert ex.state.legs["pullback"].qty == 0.0, "ledger left holding"
+
+
+def test_gate_agent_expiry_warns_two_weeks_out_without_halting(tmp_path):
+    """A halt is the last resort; the renewal should be routine. Warning
+    only at T-1 would make every renewal an outage."""
+    v = _ExpiringVenue(days_left=10.0)
+    ex = mkexec(tmp_path, v)
+    ex.step(target())
+    assert ex.state.halted is None, "warned AND halted 10 days out"
+    assert _evt(ex, "agent_expiring"), "no warning inside the 14-day window"
+
+
+def test_gate_agent_expiry_quiet_when_far_out(tmp_path):
+    v = _ExpiringVenue(days_left=180.0)
+    ex = mkexec(tmp_path, v)
+    ex.step(target())
+    assert ex.state.halted is None and not _evt(ex, "agent_expiring")
+    assert ex.state.agent_valid_until is not None, "expiry never published"
+
+
+def test_gate_revoked_agent_halts(tmp_path):
+    """The adapter reports a revoked/unlisted agent as valid_until=0. It
+    must reach the SAME rail, not a separate path that could be missed."""
+    v = _ExpiringVenue()
+    v.agent_valid_until = lambda: 0.0
+    ex = mkexec(tmp_path, v)
+    ex.step(target())
+    assert ex.state.halted == "AGENT_EXPIRED"
+
+
+def test_gate_unreadable_expiry_never_halts(tmp_path):
+    """The info endpoint being down says NOTHING about whether our key can
+    still sign. Halting a healthy book on a read failure is self-inflicted
+    damage of exactly the kind the halt exists to prevent."""
+    v = _ExpiringVenue(boom=True)
+    ex = mkexec(tmp_path, v)
+    ex.step(target())
+    assert ex.state.halted is None, "halted the book on an info outage"
+    assert not _evt(ex, "agent_expiry_unreadable"), "paged on first failure"
+    # ...but staying dark must not be silent forever
+    ex._agent_unreadable_since = time.time() - 7 * 3600
+    ex._agent_checked_ts = 0.0
+    ex.step(target())
+    assert _evt(ex, "agent_expiry_unreadable"), "6h dark and no page"
+    assert ex.state.halted is None
+
+
+def test_gate_expiry_recovers_after_a_transient_outage(tmp_path):
+    """A blind stretch that ends must reset, or one outage arms the warning
+    permanently and the operator learns to ignore it."""
+    v = _ExpiringVenue(days_left=90.0, boom=True)
+    ex = mkexec(tmp_path, v)
+    ex.step(target())
+    assert ex._agent_unreadable_since is not None
+    v.boom = False
+    ex._agent_checked_ts = 0.0
+    ex.step(target())
+    assert ex._agent_unreadable_since is None, "blind clock never cleared"
+
+
+def test_gate_expiry_is_not_polled_every_step(tmp_path):
+    """One extra /info call per poll, forever, for a date that moves once
+    every six months."""
+    v = _ExpiringVenue(days_left=90.0)
+    ex = mkexec(tmp_path, v)
+    for _ in range(5):
+        ex.step(target())
+    assert v.expiry_calls == 1, f"polled expiry {v.expiry_calls}x in 5 steps"
+
+
+def test_gate_expiry_check_is_venue_agnostic(tmp_path):
+    """Coinbase has no agent wallets and no such method. Duck-typed, so the
+    rail must be a silent no-op there rather than an AttributeError that
+    takes down every step."""
+    v = FakeVenue()
+    assert not hasattr(v, "agent_valid_until")
+    ex = mkexec(tmp_path, v)
+    ex.step(target())
+    assert ex.state.halted is None and ex.state.agent_valid_until is None
+
+
+def test_gate_expired_agent_does_not_refight_an_existing_halt(tmp_path):
+    """_halt_locked flattens. Re-running it hourly against a book the
+    operator is manually working would fight them."""
+    v = _ExpiringVenue(days_left=0.5)
+    ex = mkexec(tmp_path, v)
+    ex.step(target())
+    assert ex.state.halted == "AGENT_EXPIRED"
+    n = len(v.calls)
+    ex._agent_checked_ts = 0.0
+    ex.step(target())
+    assert len(v.calls) == n, "re-flattened a book that was already halted"

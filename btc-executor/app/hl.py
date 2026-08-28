@@ -112,6 +112,7 @@ class HyperliquidVenue:
                 "HL_ACCOUNT_ADDRESS equals the signing key's own address: "
                 "this is the MAIN account key, not an agent wallet. Trading "
                 "works, but the venue is not enforcing withdrawal separation.")
+        self.agent_address = wallet.address
         self.info = Info(base, skip_ws=True)
         self.exchange = Exchange(wallet, base, account_address=self.address)
         self._meta = self._coin_meta()
@@ -206,6 +207,40 @@ class HyperliquidVenue:
         unified = "unified" in str(mode).lower()
         self._abs_cache = (now, unified)
         return unified
+
+    def agent_valid_until(self) -> float | None:
+        """Epoch seconds at which our SIGNING key stops being able to trade.
+
+        Hyperliquid agent (API) wallets EXPIRE - ours on 2027-02-24. Expiry
+        is not a degraded mode, it is a total loss of write access: every
+        order is rejected, including the protective ones. If it lapses with
+        a position open, the book is naked and the executor cannot even
+        flatten itself - the one failure this whole rewrite exists to
+        prevent, arriving on a calendar we already know.
+
+        Returns None when the signer IS the main account, which cannot
+        expire. Raises when the venue will not say: an unreadable expiry is
+        NOT an absent one, and the caller decides how long to tolerate it."""
+        if self.agent_address.lower() == self.address.lower():
+            return None
+        agents = self.info.extra_agents(self.address) or []
+        for a in agents:
+            # Match on ADDRESS, never on the display name: the name is
+            # operator-chosen, editable, and duplicable in the UI, so a
+            # name match can point at a DIFFERENT key than the one we sign
+            # with - reporting a healthy expiry for a wallet we do not use.
+            if str((a or {}).get("address", "")).lower() \
+                    == self.agent_address.lower():
+                vu = a.get("validUntil")
+                if vu is None:
+                    raise RuntimeError(f"agent row carried no validUntil: {a}")
+                return float(vu) / 1000.0          # venue reports ms
+        # A clean response that does not list us is DEFINITIVE, not a read
+        # failure: the agent was revoked, or never approved for this
+        # account, or HL_SECRET_KEY belongs to someone else's wallet. No
+        # order will ever succeed. Surfaced as expired-now so the caller's
+        # expiry rail fires instead of a fresh code path.
+        return 0.0
 
     def _spot_usdc(self) -> float:
         sp = self.info.spot_user_state(self.address) or {}
