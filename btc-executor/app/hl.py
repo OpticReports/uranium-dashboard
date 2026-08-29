@@ -615,16 +615,26 @@ class HyperliquidVenue:
                                           "isMarket": True,
                                            "tpsl": "sl"}})
 
-    def place_market(self, side: str, qty: float, cloid: str) -> None:
+    def place_market(self, side: str, qty: float, cloid: str,
+                     reduce_only: bool = False) -> None:
         """Aggressive IOC. Hyperliquid has no market type; crossing by
         DEFAULT_SLIPPAGE is what market_open does internally, done here so
-        the cloid and rejection handling stay on one path."""
+        the cloid and rejection handling stay on one path.
+
+        reduce_only exists because this is BOTH the entry path and the
+        CLOSING path - the halt's flatten, the leg unwind, the drift repair
+        (2026-08-29 review). A close sent without it is the Coinbase
+        naked-order bug rebuilt on a venue that offers the fix for free: if
+        the position is already gone (stop filled a moment earlier, an
+        operator closed by hand, a partial we misread), the "close" OPENS an
+        equal and opposite position instead - unmanaged, unstopped, behind a
+        halt page saying the book is flat. reduce_only makes that a no-op."""
         mid = self.mid()
         bound = mid * (1 + DEFAULT_SLIPPAGE) if side == "BUY" \
             else mid * (1 - DEFAULT_SLIPPAGE)
         self._send(cloid, is_buy=(side == "BUY"), sz=self._sz(qty),
                    limit_px=self._px(bound, "up" if side == "BUY" else "down"),
-                   reduce_only=False,
+                   reduce_only=bool(reduce_only),
                    order_type={"limit": {"tif": "Ioc"}})
 
     def cancel(self, cloid: str) -> None:

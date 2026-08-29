@@ -58,6 +58,9 @@ AGENT_WARN_DAYS = 14.0
 AGENT_HALT_DAYS = 1.0
 AGENT_CHECK_EVERY_S = 3600.0
 AGENT_UNREADABLE_WARN_S = 6 * 3600.0
+# consecutive failed steps before the page goes RED. A step that raises runs
+# NOTHING in it, so a sustained run means the book is unmanaged.
+STEP_ERROR_RED = 3
 # Auto-drill's terminal condition is now a MEASUREMENT (live fill count) that
 # drilling can fail to advance - e.g. the venue omits average_filled_price.
 # Without this bound it drills the daily budget forever, unattended.
@@ -76,7 +79,8 @@ class Venue(Protocol):
                     post_only: bool = True) -> None: ...
     def place_stop(self, side: str, qty: float, trigger_px: float,
                    cloid: str) -> None: ...
-    def place_market(self, side: str, qty: float, cloid: str) -> None: ...
+    def place_market(self, side: str, qty: float, cloid: str,
+                     reduce_only: bool = False) -> None: ...
     def cancel(self, cloid: str) -> None: ...
     def cancel_all(self) -> None: ...
 
@@ -254,6 +258,7 @@ class Executor:
         # could only ever be a staler version of it.
         self._agent_checked_ts = 0.0
         self._agent_unreadable_since: float | None = None
+        self._step_errors = 0      # consecutive whole-step failures
         # live diagnostic (not persisted): why auto-drill last declined to
         # run. It used to `return  # quietly wait`, so "armed and waiting"
         # and "broken" were indistinguishable from outside.
@@ -319,6 +324,25 @@ class Executor:
             # halting would be pure friction on an operator who did the right
             # thing (flatten first, then switch).
             self.state.venue = cur
+            # RE-BASELINE THE EQUITY RAILS (2026-08-29, review blocker).
+            # high_water and day_start_equity are DOLLARS ON THE OLD VENUE.
+            # Carried across a switch they are not stale, they are about a
+            # different account: a $50k Coinbase high-water against a $999
+            # Hyperliquid book means _check_halts computes a >$49k drawdown
+            # on the first poll after /resume - and _check_halts runs AFTER
+            # entries in that same step, so the book opens real positions and
+            # only then halts on top of them. Zero here and let _roll_day
+            # re-seed both from the NEW venue's equity.
+            if self.state.high_water or self.state.day_start_equity:
+                self._event("WARN", "equity_rails_rebaselined",
+                            f"cleared {prev.upper()}-era high_water "
+                            f"{self.state.high_water:.0f} and day_start "
+                            f"{self.state.day_start_equity:.0f}: those are "
+                            f"dollars on a DIFFERENT account. Re-seeding from "
+                            f"{cur.upper()} equity on the next poll.")
+                self.state.high_water = 0.0
+                self.state.day_start_equity = 0.0
+                self.state.day_key = ""
             self._event("WARN", "venue_switched",
                         f"venue {prev} -> {cur} with an EMPTY ledger (no "
                         f"positions, no order refs) - adopted cleanly. "
@@ -458,6 +482,27 @@ class Executor:
                         "and every order is rejected - while /pulse looks "
                         "healthy. Any fill recorded here also contaminates the "
                         "ramp evidence. Set HL_TESTNET=false for real trading")
+
+    def note_step_error(self, exc: Exception) -> None:
+        """A whole step failed. Make that visible instead of a log line.
+
+        The loop's catch-all is correct - one bad poll must not kill the
+        thread - but it was also SILENT, and a step that never completes
+        skips every safety mechanism in it: stops unverified, fills
+        unbooked, drift unchecked, halts unevaluated. With a green /health
+        and a fresh /pulse the whole time.
+
+        Escalates rather than paging on the first blip: transient venue
+        errors are normal, a sustained run of them is not."""
+        with self._venue_lock:
+            self._step_errors += 1
+            lvl = "RED" if self._step_errors >= STEP_ERROR_RED else "WARN"
+            self._event(lvl, "step_failed",
+                        f"{self._step_errors} consecutive failed step(s): "
+                        f"{type(exc).__name__}: {exc}. NOTHING in the step "
+                        f"ran - stops unverified, fills unbooked, drift "
+                        f"unchecked. The book is unmanaged until this clears.")
+            self._save_state()
 
     def _void_absurd_fills(self) -> None:
         """One-time hygiene at boot: a recorded |slip_bps| > 500 is not a
@@ -1194,8 +1239,13 @@ class Executor:
                         raise
                     time.sleep(2)
             if abs(net) > 1e-6:
+                # THE flatten. reduce_only or it is the naked-order bug:
+                # if the position closed a moment ago (the stop filled, an
+                # operator flattened by hand) this opens an equal and
+                # opposite one, unmanaged, behind a halt page saying flat.
                 self.venue.place_market(_close_side(net), abs(net),
-                                        f"halt-{int(time.time())}")
+                                        f"halt-{int(time.time())}",
+                                        reduce_only=True)
             # cancel_all is best-effort inside the adapter, so VERIFY: every
             # order the ledger believes in must be terminal before we zero
             # the refs - a silently-failed cancel would otherwise leave an
@@ -1254,6 +1304,17 @@ class Executor:
         # a stop the operator now believes is cancelled is still armed.
         if adopt_venue and not self._adopt_venue_locked():
             return False
+        if self.state.halted == "VENUE_CHANGED":
+            # ExecState documents this as the one halt /resume must never
+            # clear, and then /resume cleared it like any other (2026-08-29
+            # review). Containment was real but incidental.
+            self._event("RED", "resume_refused",
+                        "/resume cannot clear VENUE_CHANGED: the ledger "
+                        "describes a different exchange and would become the "
+                        "live belief for this one. Flatten on the old venue, "
+                        "then start from a clean state file.")
+            self._save_state()
+            return False
         self._cov("resume")
         self._event("INFO", "resume", f"cleared {self.state.halted}")
         self.state.halted = None
@@ -1290,6 +1351,22 @@ class Executor:
         whole point of keeping a divergent ledger is that a machine cannot
         tell "the venue is right and our belief is stale" from "the read is
         lying to us again". A human who has just looked at Coinbase can."""
+        # A VENUE_CHANGED halt means the ledger describes a DIFFERENT
+        # exchange, so a position read from the CURRENT one cannot arbitrate
+        # it: adopting would zero the old venue's positions on the strength
+        # of the new venue being flat, and report success. _reconcile_boot
+        # already refuses this; the operator-facing door did not (2026-08-29
+        # review blocker). Clearing it stays deliberately manual: flatten on
+        # the OLD venue, confirm, then start clean.
+        if self.state.halted == "VENUE_CHANGED":
+            self._event("RED", "adopt_venue_refused",
+                        "adopt refused under a VENUE_CHANGED halt: the "
+                        "ledger belongs to another exchange, so a read of "
+                        "THIS one cannot settle it. Flatten and cancel on "
+                        "the old venue, confirm it is empty, then start from "
+                        "a clean state file.")
+            self._save_state()
+            return False
         net = None
         for attempt in range(3):
             try:
@@ -1486,6 +1563,7 @@ class Executor:
             self._step_locked(target)
 
     def _step_locked(self, target: dict) -> None:
+        self._step_errors = 0          # a step that starts clean clears the run
         self._check_mode_change()
         equity = self.venue.equity()
         self._reconcile_transfers(equity)
@@ -2025,13 +2103,30 @@ class Executor:
         cloid = f"{leg[0].upper()}-{pos['entry_ts']}-S{int(trigger)}-{led.stop_n}"
         if led.stop_cloid:
             self.venue.cancel(led.stop_cloid)
-        self.venue.place_stop(_close_side(led.qty), abs(led.qty), trigger, cloid)
+        placed = True
+        try:
+            self.venue.place_stop(_close_side(led.qty), abs(led.qty),
+                                  trigger, cloid)
+        except Exception as exc:  # noqa: BLE001
+            # A RAISE bypassed the whole STOP_UNPLACEABLE machinery
+            # (2026-08-29 review): every guard below is reachable only if
+            # place_stop RETURNS, so a venue that rejects the order - a bad
+            # price, a sub-minimum residue, a lapsed key - left the leg
+            # permanently unprotected, no counter, no cap, no halt, forever.
+            # Route it into the SAME bounded path a vanished stop takes so a
+            # position that cannot be protected is CLOSED rather than
+            # retried until something else notices.
+            self._event("RED", "stop_place_failed",
+                        f"{leg} stop REJECTED by the venue "
+                        f"({type(exc).__name__}: {exc}) - the position is "
+                        f"UNPROTECTED; counting toward STOP_REPLACE_MAX")
+            placed = False
         # A protective stop the ledger BELIEVES in but the venue does not
         # hold is the incident's exact phenotype, so belief is set only
         # after the venue confirms the order is genuinely working. A venue
         # that deduped/rejected/failed the place leaves refs clear, pages,
         # and the next step retries under a fresh salt.
-        stat = self._ostat(cloid)
+        stat = self._ostat(cloid) if placed else "REJECTED"
         if stat not in ("OPEN", "FILLED"):
             # BOUNDED (fusion gate 2026-08-26): this branch used to return
             # unbounded. STOP_REPLACE_MAX only ever covered the
@@ -2106,7 +2201,8 @@ class Executor:
         if filled > 0 and filled_action == "flatten":
             side = "SELL" if led.entry_side == "L" else "BUY"
             self.venue.place_market(side, filled,
-                                    f"{led.entry_cloid}-UNWIND")
+                                    f"{led.entry_cloid}-UNWIND",
+                                    reduce_only=True)
             self._event("WARN", "orphan_fill_unwound",
                         f"{led.entry_cloid} filled {filled} but engine cancelled")
         led.entry_cloid = led.entry_side = None
@@ -2213,7 +2309,8 @@ class Executor:
                 ref = self.venue.mid()
             except Exception:  # noqa: BLE001
                 ref = 0.0
-            self.venue.place_market(_close_side(led.qty), qty, cloid)
+            self.venue.place_market(_close_side(led.qty), qty, cloid,
+                                reduce_only=True)
             self._watch_fill(leg, "close", cloid, ref, _close_side(led.qty))
             self._event("INFO", "leg_closed", f"{leg} {why} qty={led.qty}")
             self._cov("signal_exit")
@@ -2380,7 +2477,8 @@ class Executor:
                 # unconditional exit after a filled stop sold us short
                 # (referee 2026-08-15, executed repro)
                 if steps["stop_cancelled"]:
-                    self.venue.place_market("SELL", q, f"{base}-X")
+                    self.venue.place_market("SELL", q, f"{base}-X",
+                                            reduce_only=True)
                     self._watch_fill("drill", "drill_exit", f"{base}-X",
                                      mid, "SELL")
                     steps["exit"] = "sent"
@@ -2414,7 +2512,8 @@ class Executor:
                         self.venue.cancel(f"{base}-S")
                     except Exception:  # noqa: BLE001
                         pass
-                    self.venue.place_market("SELL", q, f"{base}-X")
+                    self.venue.place_market("SELL", q, f"{base}-X",
+                                            reduce_only=True)
                     self._watch_fill("drill", "drill_exit", f"{base}-X",
                                      mid, "SELL")
                     steps["fallback_flatten"] = True
@@ -2435,7 +2534,8 @@ class Executor:
                 except Exception:  # noqa: BLE001
                     pass
                 rq = rq or abs(pos_end)
-                self.venue.place_market(_close_side(pos_end), rq, f"{base}-R")
+                self.venue.place_market(_close_side(pos_end), rq, f"{base}-R",
+                                        reduce_only=True)
                 steps["auto_repair"] = pos_end
                 ok = False
                 pos_end = self.venue.position()

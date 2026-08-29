@@ -366,7 +366,16 @@ class CoinbaseVenue:
             stop_price=self._to_venue_px(trigger_px), stop_direction=direction)
         self._remember(cloid, r)
 
-    def place_market(self, side: str, qty: float, cloid: str) -> None:
+    def place_market(self, side: str, qty: float, cloid: str,
+                     reduce_only: bool = False) -> None:
+        # Protocol parity with hl.py. Coinbase perps have NO reduce-only
+        # flag, so this cannot be honoured here - and silently accepting it
+        # would let a caller believe a close is protected when it is not.
+        if reduce_only:
+            logger.warning(
+                "place_market(reduce_only=True) on Coinbase: the venue has "
+                "no such flag, so this close can OPEN a position if the "
+                "book is already flat - the caller must corroborate first")
         r = self.client.market_order(
             client_order_id=cloid, product_id=self.product_id, side=side,
             base_size=self._to_venue_size(qty))
@@ -498,10 +507,22 @@ class DryRunVenue:
                               "px": trigger_px, "status": "OPEN"}
         self._rec("place_stop", side=side, qty=qty, trigger=trigger_px, cloid=cloid)
 
-    def place_market(self, side, qty, cloid):
+    def place_market(self, side, qty, cloid, reduce_only=False):
+        if reduce_only:
+            # Simulate the venue's semantics, not just the signature. A
+            # shadow book that "closes" its way into a naked reverse
+            # position would rehearse a failure the real reduce-only flag
+            # makes impossible, and every drill would still report success.
+            net = self.position()
+            if abs(net) <= 1e-12 or (net > 0) != (side == "SELL"):
+                self._rec("place_market_noop", side=side, qty=qty,
+                          cloid=cloid, reduce_only=True)
+                return
+            qty = min(qty, abs(net))
         self.orders[cloid] = {"type": "MARKET", "side": side, "qty": qty,
                               "px": self.mid(), "status": "FILLED"}
-        self._rec("place_market", side=side, qty=qty, cloid=cloid)
+        self._rec("place_market", side=side, qty=qty, cloid=cloid,
+                  reduce_only=reduce_only)
 
     def cancel(self, cloid):
         if cloid in self.orders and self.orders[cloid]["status"] == "OPEN":

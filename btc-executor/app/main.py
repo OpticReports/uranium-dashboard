@@ -163,7 +163,19 @@ def _loop() -> None:
                 EXEC.step(target)
             LAST["loop_ok"] = time.time()
         except Exception as exc:  # noqa: BLE001
+            # NOT SILENT (2026-08-29 review blocker). This caught everything
+            # and wrote a log line nothing reads: no event, no page, no
+            # /pulse signal. equity() is the FIRST venue call of every step
+            # and now touches three endpoints, so one degrading endpoint
+            # aborts the whole step - stops unverified, fills unbooked,
+            # drift unchecked - with a green /health throughout. That is the
+            # silently-absent-safety shape this rewrite exists to prevent.
             logger.exception("executor loop error: %s", exc)
+            try:
+                if EXEC is not None:
+                    EXEC.note_step_error(exc)
+            except Exception:  # noqa: BLE001
+                logger.exception("failed to record step error")
         time.sleep(settings.poll_seconds)
 
 

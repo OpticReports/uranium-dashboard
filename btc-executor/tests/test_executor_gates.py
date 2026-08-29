@@ -69,7 +69,19 @@ class FakeVenue:
     def place_stop(self, side, qty, trigger_px, cloid):
         self._add("STOP", side, qty, cloid, trigger_px)
 
-    def place_market(self, side, qty, cloid):
+    def place_market(self, side, qty, cloid, reduce_only=False):
+        if reduce_only:
+            # Model the venue's OWN semantics, not just the signature: a
+            # reduce-only order against a flat or same-side book is a NO-OP,
+            # and against a smaller book it clamps. Without this the fake
+            # would happily "close" its way into a naked reverse position -
+            # the exact bug reduce_only exists to make impossible - and every
+            # gate here would pass anyway.
+            net = self.position()
+            if abs(net) <= 1e-9 or (net > 0) != (side == "SELL"):
+                self.calls.append(("MARKET_NOOP", side, round(qty, 5), cloid))
+                return
+            qty = min(qty, abs(net))
         self._add("MARKET", side, qty, cloid, px=self._mid)
 
     def cancel(self, cloid):
@@ -4755,3 +4767,141 @@ def test_gate_network_check_is_venue_agnostic(tmp_path):
     assert not hasattr(v, "network")
     ex = mkexec(tmp_path, v, dry_run=False)
     assert not [e for e in ex.state.events if e["kind"] == "live_mode_on_testnet"]
+
+
+# --------------------------------------------------------------------------
+# Review blockers, 2026-08-29.
+def test_gate_venue_switch_rebaselines_the_equity_rails(tmp_path):
+    """high_water and day_start_equity are DOLLARS ON THE OLD VENUE. A $50k
+    Coinbase high-water against a $999 Hyperliquid book makes _check_halts
+    compute a >$49k drawdown on the first poll after /resume - and halts run
+    AFTER entries in that same step, so it opens real positions and only
+    then halts on top of them."""
+    v = FakeVenue(equity=999.0)
+    ex = mkexec(tmp_path, v)
+    ex.state.venue = "coinbase"
+    ex.state.high_water = 50_000.0
+    ex.state.day_start_equity = 50_000.0
+    ex.cfg.venue = "hyperliquid"
+    ex._check_venue_continuity()
+    assert ex.state.halted is None, "empty ledger should switch cleanly"
+    assert ex.state.high_water == 0.0 and ex.state.day_start_equity == 0.0, \
+        "carried the old venue's dollars onto the new account"
+    assert [e for e in ex.state.events if e["kind"] == "equity_rails_rebaselined"]
+
+
+def test_gate_rebaselined_rails_reseed_from_the_new_venue(tmp_path):
+    """Zeroing is only half the fix: the next poll must re-seed from the NEW
+    venue's equity, or the rails stay disarmed."""
+    v = FakeVenue(equity=999.0)
+    ex = mkexec(tmp_path, v)
+    ex.state.venue = "coinbase"
+    ex.state.high_water = 50_000.0
+    ex.cfg.venue = "hyperliquid"
+    ex._check_venue_continuity()
+    ex.step(target())
+    assert ex.state.high_water == pytest.approx(999.0)
+    assert ex.state.halted is None, "self-halted on the re-seeded rails"
+
+
+def test_gate_resume_cannot_clear_venue_changed(tmp_path):
+    """ExecState documents this as the one halt /resume must never clear."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    ex.state.halted = "VENUE_CHANGED"
+    assert ex.resume() is False
+    assert ex.state.halted == "VENUE_CHANGED"
+
+
+def test_gate_adopt_venue_refused_under_venue_changed(tmp_path):
+    """A read of THIS venue cannot settle a ledger describing another one:
+    adopting would zero the old venue's positions on the strength of the new
+    one being flat, and report success."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    ex.state.legs["trend"].qty = 0.01
+    ex.state.halted = "VENUE_CHANGED"
+    assert ex.resume(adopt_venue=True) is False
+    assert ex.state.legs["trend"].qty == 0.01, "zeroed another venue's ledger"
+    assert ex.state.halted == "VENUE_CHANGED"
+
+
+def test_gate_step_failures_are_visible_and_escalate(tmp_path):
+    """The loop's catch-all is right, but it was SILENT - and a step that
+    raises runs nothing in it: stops unverified, fills unbooked, drift
+    unchecked, with a green /health throughout."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    ex.note_step_error(RuntimeError("info endpoint down"))
+    evs = [e for e in ex.state.events if e["kind"] == "step_failed"]
+    assert evs and evs[-1]["level"] == "WARN", "first blip should not be RED"
+    for _ in range(2):
+        ex.note_step_error(RuntimeError("info endpoint down"))
+    assert [e for e in ex.state.events
+            if e["kind"] == "step_failed" and e["level"] == "RED"], \
+        "a sustained run of failed steps never escalated"
+
+
+def test_gate_a_completed_step_clears_the_failure_run(tmp_path):
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    ex.note_step_error(RuntimeError("blip"))
+    assert ex._step_errors == 1
+    ex.step(target())
+    assert ex._step_errors == 0
+
+
+def test_gate_halt_flatten_is_reduce_only(tmp_path):
+    """The flatten is a CLOSE, and it races: _halt_locked probes the position
+    and THEN sends the order. If the position goes away in between (the stop
+    fills, an operator flattens by hand), a non-reduce-only flatten OPENS an
+    equal and opposite one - unmanaged, behind a halt page saying flat.
+    The probe already skips a venue that reads flat, so the flag is what
+    covers the window the probe cannot."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    seen = {}
+    real = v.place_market
+
+    def spy(side, qty, cloid, reduce_only=False):
+        if cloid.startswith("halt-"):
+            seen["reduce_only"] = reduce_only
+        return real(side, qty, cloid, reduce_only=reduce_only)
+    v.place_market = spy
+    _hold(v, 0.01, "seed")                      # venue genuinely holds it
+    ex.state.legs["trend"].qty = 0.01
+    ex.halt("KILL", "manual")
+    assert seen.get("reduce_only") is True, \
+        f"halt flatten was not reduce-only: {seen}"
+    assert v.position() == 0.0, "halt did not flatten a real position"
+
+
+def test_gate_reduce_only_close_cannot_open_a_reverse_position(tmp_path):
+    """The property the flag buys, asserted directly on the venue model."""
+    v = FakeVenue()
+    v.place_market("SELL", 0.01, "close-1", reduce_only=True)   # book is FLAT
+    assert v.position() == 0.0, "a reduce-only close opened a short"
+    assert any(c[0] == "MARKET_NOOP" for c in v.calls)
+
+
+def test_gate_a_raising_place_stop_counts_toward_the_cap(tmp_path):
+    """Every guard in _maintain_stop is reachable only if place_stop
+    RETURNS. A venue that REJECTS the order left the leg permanently
+    unprotected: no counter, no cap, no halt, forever."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    _hold(v, 0.01, "seed")
+    ex.state.legs["trend"].qty = 0.01
+
+    def rejecting(side, qty, trigger_px, cloid):
+        raise RuntimeError("Price must be divisible by tick size")
+    v.place_stop = rejecting
+    from app.mirror import STOP_REPLACE_MAX
+    for _ in range(STOP_REPLACE_MAX + 2):
+        if ex.state.halted:
+            break
+        ex._maintain_stop("trend", ex.state.legs["trend"], _long_pos())
+    assert [e for e in ex.state.events if e["kind"] == "stop_place_failed"], \
+        "a REJECTED stop was silent"
+    assert ex.state.halted == "STOP_UNPLACEABLE", \
+        "a rejected stop never reached the bounded path - leg left naked"
