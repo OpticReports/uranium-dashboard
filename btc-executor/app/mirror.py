@@ -151,6 +151,13 @@ class ExecState:
     # wallets expire). None = unknown yet, or a key that cannot expire.
     # Deliberately NOT persisted: a saved copy would outlive the fact.
     agent_valid_until: float | None = None
+    # which venue high_water / day_start_equity were last baselined against.
+    # SEPARATE from `venue` (which stamps the LEDGER) because they went stale
+    # independently: the ledger stamp flipped to hyperliquid on the HL-2
+    # deploy, so a re-baseline keyed on the ledger stamp saw prev == cur and
+    # returned early - leaving a $59,054 Coinbase high-water to fire a
+    # DRAWDOWN halt against a $9,999 account on the first live position.
+    rails_venue: str | None = None
     day_key: str = ""
     day_start_equity: float = 0.0
     high_water: float = 0.0
@@ -362,6 +369,46 @@ class Executor:
                     f"NOTHING on {cur.upper()}. Halting before boot reconcile "
                     f"can adopt or abandon anything.")
         self.state.halted = "VENUE_CHANGED"
+        self._save_state()
+
+    def _rebaseline_rails_if_stale(self, equity: float) -> None:
+        """Equity rails are DOLLARS ON ONE ACCOUNT. Re-seed when they are
+        not this venue's.
+
+        high_water and day_start_equity anchor the drawdown and daily-loss
+        halts. Carried across a venue change they are not stale numbers,
+        they describe a DIFFERENT account - and the halt they fire is
+        indistinguishable from a real one except by knowing where the
+        dollars came from. Live proof, 2026-08-29: HWM 59,054 (Coinbase)
+        against equity 9,999 (Hyperliquid) halted DRAWDOWN on the first
+        real position, having already opened and then flattened it.
+
+        Keyed on its OWN marker, not the ledger's venue stamp: the ledger
+        stamp had already flipped on the venue-selector deploy, so a check
+        keyed on it saw no change and did nothing. Unstamped is treated as
+        Coinbase for the same reason the ledger stamp is - that is the
+        state every file written before this field existed is in.
+
+        Only ever re-seeds on a venue MISMATCH. It cannot forgive a real
+        drawdown, because a real drawdown does not change which venue the
+        rails belong to."""
+        cur = str(getattr(self.cfg, "venue", "coinbase") or "coinbase").lower()
+        prev = getattr(self.state, "rails_venue", None) or "coinbase"
+        if prev == cur:
+            return
+        old_hw, old_ds = self.state.high_water, self.state.day_start_equity
+        self.state.rails_venue = cur
+        if old_hw or old_ds:
+            self._event("WARN", "equity_rails_rebaselined",
+                        f"halt anchors belonged to {prev.upper()} (high_water "
+                        f"{old_hw:.0f}, day_start {old_ds:.0f}) but the book "
+                        f"is on {cur.upper()} with equity {equity:.0f} - those "
+                        f"are dollars on a different account. Re-seeding from "
+                        f"{cur.upper()}; the drawdown and daily-loss rails "
+                        f"restart from here.")
+        self.state.high_water = 0.0
+        self.state.day_start_equity = 0.0
+        self.state.day_key = ""
         self._save_state()
 
     def _check_product_tradable(self) -> None:
@@ -853,6 +900,7 @@ class Executor:
             st.drills = raw.get("drills", [])[-50:]
             st.auto_drill_off = raw.get("auto_drill_off")
             st.last_venue_read_ts = raw.get("last_venue_read_ts", 0)
+            st.rails_venue = raw.get("rails_venue")
             return st
         except Exception:  # noqa: BLE001
             return ExecState()
@@ -880,6 +928,7 @@ class Executor:
                                              "unwitnessed_coverage", {}),
              "drills": getattr(self.state, "drills", [])[-50:],
              "auto_drill_off": getattr(self.state, "auto_drill_off", None),
+             "rails_venue": getattr(self.state, "rails_venue", None),
              "last_venue_read_ts": getattr(self.state,
                                            "last_venue_read_ts", 0)}
         # per-thread tmp: a shared tmp path was safe only while every writer
@@ -1571,6 +1620,7 @@ class Executor:
         self._check_mode_change()
         equity = self.venue.equity()
         self._reconcile_transfers(equity)
+        self._rebaseline_rails_if_stale(equity)
         self._roll_day(equity)
         self._check_agent_expiry()
         self._check_halts(equity)

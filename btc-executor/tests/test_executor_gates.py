@@ -4970,3 +4970,75 @@ def test_gate_drill_size_does_not_guess_bigger_on_an_unreadable_mid(tmp_path):
     ex = mkexec(tmp_path, v)
     v.mid = boom
     assert ex._min_contract() == pytest.approx(1e-5)
+
+
+def test_gate_stale_rails_rebaseline_even_when_the_ledger_stamp_matches(tmp_path):
+    """LIVE FAILURE 2026-08-29. The first fix keyed off the LEDGER's venue
+    stamp, which had already flipped on the venue-selector deploy - so
+    prev == cur, it returned early, and a $59,054 Coinbase high-water fired
+    a DRAWDOWN halt against a $9,999 Hyperliquid account after opening and
+    flattening a real position."""
+    v = FakeVenue(equity=9_999.0)
+    ex = mkexec(tmp_path, v)
+    ex.state.venue = "hyperliquid"          # ledger ALREADY stamped...
+    ex.state.rails_venue = None             # ...but the rails never were
+    ex.state.high_water = 59_054.0
+    ex.state.day_start_equity = 59_054.0
+    # ALREADY mid-day on this process: without this, _roll_day re-seeds the
+    # day-start anyway and the gate passes against code that never cleared
+    # it. That is exactly how two mutants survived the first cut.
+    ex.state.day_key = time.strftime("%Y-%m-%d", time.gmtime())
+    ex.cfg.venue = "hyperliquid"
+    ex.step(target())
+    assert ex.state.halted is None, "stale Coinbase high-water halted the book"
+    assert ex.state.rails_venue == "hyperliquid"
+    # BOTH anchors, and both RE-SEEDED - not merely zeroed. _check_halts
+    # guards each rail on `> 0`, so an anchor left at zero disarms it
+    # silently: the book would trade on with no daily-loss rail at all,
+    # which is the same shape as the halt that just fired wrongly, inverted.
+    assert ex.state.high_water == pytest.approx(9_999.0), "HWM not re-seeded"
+    assert ex.state.day_start_equity == pytest.approx(9_999.0), \
+        "day-start not re-seeded - the daily-loss rail is disarmed"
+
+
+def test_gate_rails_marker_persists_so_it_rebaselines_once(tmp_path):
+    """Re-seeding on every boot would quietly forgive a real drawdown."""
+    v = FakeVenue(equity=9_999.0)
+    ex = mkexec(tmp_path, v)
+    ex.state.rails_venue = None
+    ex.cfg.venue = "hyperliquid"
+    ex.step(target())
+    ex.state.high_water = 20_000.0          # a REAL high-water on this venue
+    ex._save_state()
+    ex2 = mkexec(tmp_path, v)
+    ex2.cfg.venue = "hyperliquid"
+    ex2.step(target())
+    assert ex2.state.high_water == pytest.approx(20_000.0), \
+        "re-baselined a second time and forgave a real drawdown"
+
+
+def test_gate_a_real_drawdown_still_halts_after_rebaselining(tmp_path):
+    """The rail must survive its own repair."""
+    v = FakeVenue(equity=9_999.0)
+    ex = mkexec(tmp_path, v)
+    ex.state.rails_venue = None
+    ex.cfg.venue = "hyperliquid"
+    ex.step(target())
+    assert ex.state.high_water == pytest.approx(9_999.0)
+    # the book must be HOLDING: a flat-book equity drop is correctly read as
+    # a transfer and shifts the anchors, so it can never express a loss.
+    _hold(v, 0.01, "seed")
+    ex.state.legs["trend"].qty = 0.01
+    # this Cfg has no fixed SIZING_BASE_USD, so the base IS the high-water:
+    # the threshold is 35% of 9,999, not of 1,000.
+    v._equity = 9_999.0 - 0.35 * 9_999.0 - 50
+    for _ in range(6):
+        if ex.state.halted:
+            break
+        ex.step(target())
+    # DAILY_LOSS, not DRAWDOWN: it is evaluated first and its threshold is
+    # lower (6% of base vs 35%), so it always trips first on a same-day
+    # loss. The point of the gate is that the equity rails still BITE after
+    # re-baselining, not which of the two gets there first.
+    assert ex.state.halted in ("DAILY_LOSS", "DRAWDOWN"), \
+        f"rebaseline disarmed the equity rails (halted={ex.state.halted})"
