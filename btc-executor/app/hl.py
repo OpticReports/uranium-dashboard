@@ -158,6 +158,10 @@ class HyperliquidVenue:
         self._meta = self._coin_meta()
         self._mid_cache: tuple[float, float] | None = None
         self._abs_cache: tuple[float, bool] | None = None
+        # last equity read decomposed, for the operator: whether the
+        # unified spot figure also carries unrealised perp PnL is
+        # UNVERIFIED until a live position exists to measure it against.
+        self.equity_parts: dict = {}
         self.post_only_crosses: list[str] = []
         logger.info("hyperliquid venue ready: coin=%s addr=%s meta=%s",
                     self.coin, self.address, self._meta)
@@ -411,10 +415,22 @@ class HyperliquidVenue:
         v = ((st.get("marginSummary") or {}).get("accountValue"))
         if v is None:
             raise RuntimeError("user_state carried no marginSummary.accountValue")
-        total = float(v)
-        if self._is_unified():
-            total += self._spot_usdc()
-        return total
+        perp = float(v)
+        if not self._is_unified():
+            return perp
+        # INSTEAD OF, not IN ADDITION TO (2026-08-29). The first cut of this
+        # summed the two pools, which is right only while FLAT - exactly the
+        # state it was written and verified in. Hyperliquid's own docs settle
+        # it, on clearinghouseState: "Under unified account or portfolio
+        # margin, use spot balances endpoint instead for trading account
+        # balance across spot and perps." The spot figure ALREADY SPANS both
+        # pools, so adding marginSummary on top double-counts the collateral
+        # the moment a position pledges any of it - and equity feeds
+        # day_start_equity and high_water, so an equity that jumps when a
+        # position opens moves both halt thresholds with it.
+        spot = self._spot_usdc()
+        self.equity_parts = {"perp": perp, "spot": spot}
+        return spot
 
     def position(self) -> float:
         """Signed BTC position. A clean response with no row for our coin is

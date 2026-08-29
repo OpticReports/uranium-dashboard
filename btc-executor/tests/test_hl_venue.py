@@ -732,3 +732,30 @@ def test_gate_price_below_the_grid_raises_instead_of_sending_zero(venue):
     limit or a trigger would be an order at any price - refuse instead."""
     with pytest.raises(ValueError, match="not tradable"):
         venue._px(0.00012345)
+
+
+def test_gate_equity_does_not_double_count_once_a_position_pledges_margin(venue):
+    """The blocker the flat-state fix could not see. HL's docs say the spot
+    figure spans spot AND perps under a unified account, so adding
+    marginSummary on top double-counts the moment collateral is pledged -
+    and equity feeds day_start_equity and high_water, so it would move both
+    halt thresholds with it."""
+    venue.info.abstraction = "unifiedAccount"
+    venue.info.spot_usdc = 999.00
+    venue.info.state = {"marginSummary": {"accountValue": "999.00"},
+                        "assetPositions": [{"position": {"coin": "BTC",
+                                                         "szi": "0.00194"}}]}
+    assert venue.equity() == pytest.approx(999.00), \
+        "summed both pools: equity reads 2x once a position opens"
+
+
+def test_gate_equity_records_both_pools_for_the_operator(venue):
+    """Whether the unified spot figure carries unrealised perp PnL is
+    UNVERIFIED until a live position exists. Keep both numbers so the first
+    one settles it instead of being guessed at."""
+    venue.info.abstraction = "unifiedAccount"
+    venue.info.spot_usdc = 999.00
+    venue.info.state = {"marginSummary": {"accountValue": "12.34"},
+                        "assetPositions": []}
+    venue.equity()
+    assert venue.equity_parts == {"perp": 12.34, "spot": 999.00}
