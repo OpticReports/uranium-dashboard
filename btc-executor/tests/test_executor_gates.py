@@ -4905,3 +4905,68 @@ def test_gate_a_raising_place_stop_counts_toward_the_cap(tmp_path):
         "a REJECTED stop was silent"
     assert ex.state.halted == "STOP_UNPLACEABLE", \
         "a rejected stop never reached the bounded path - leg left naked"
+
+
+def test_gate_drill_size_clears_a_venue_notional_floor(tmp_path):
+    """A LOT is not always a sendable order. Hyperliquid's BTC lot is
+    0.00001 (~$0.78) but no order under $10 notional is accepted - so every
+    drill was destined to be rejected, and drills are how RAMP v4 earns the
+    coverage rows that authorise real sizing. The proving mechanism was
+    broken on the venue being proved."""
+    v = FakeVenue(mid=78_000.0, mult=1e-5)
+    v.min_notional_usd = 10.0
+    ex = mkexec(tmp_path, v)
+    q = ex._min_contract()
+    assert q * 78_000.0 >= 10.0, f"drill size ${q * 78_000:.2f} is under the floor"
+    assert q * 78_000.0 < 40.0, "drill got needlessly expensive"
+    assert abs(q / 1e-5 - round(q / 1e-5)) < 1e-6, "not a whole number of lots"
+
+
+def test_gate_drill_size_keeps_the_bare_lot_with_no_floor(tmp_path):
+    """Coinbase enforces a contract multiple and no notional floor. Sizing
+    up there would make every drill needlessly expensive.
+
+    Uses a lot worth WELL UNDER $10 on purpose: with a coarse lot the bare
+    lot already clears any plausible floor, so the test would pass even if
+    the code invented a floor out of nowhere."""
+    v = FakeVenue(mid=78_000.0, mult=1e-5)          # lot = $0.78
+    assert not hasattr(v, "min_notional_usd")
+    ex = mkexec(tmp_path, v)
+    assert ex._min_contract() == pytest.approx(1e-5), \
+        "sized up against a floor this venue does not have"
+
+
+def test_gate_drill_size_clears_the_floor_across_lot_sizes(tmp_path):
+    """The invariant, not one arithmetic example. Rounding DOWN to whole
+    lots lands under the floor whenever a lot is worth more than a fifth of
+    it - which the single BTC-shaped example could never reach."""
+    for mult in (1e-5, 5.13e-5, 1e-4, 2.5e-4, 1e-3):
+        for mid in (11_000.0, 39_000.0, 78_000.0, 121_000.0):
+            v = FakeVenue(mid=mid, mult=mult)
+            v.min_notional_usd = 10.0
+            ex = mkexec(tmp_path, v)
+            q = ex._min_contract()
+            assert q * mid >= 10.0, \
+                f"lot={mult} mid={mid}: drill sized ${q * mid:.2f}, under the floor"
+
+
+def test_gate_drill_size_carries_a_buffer_over_the_floor(tmp_path):
+    """Size is computed against mid and the order lands later. A
+    floor-exact order can slip under between the two and reject for the
+    very reason it was sized up."""
+    v = FakeVenue(mid=78_000.0, mult=1e-5)
+    v.min_notional_usd = 10.0
+    ex = mkexec(tmp_path, v)
+    assert ex._min_contract() * 78_000.0 >= 10.0 * 1.15
+
+
+def test_gate_drill_size_does_not_guess_bigger_on_an_unreadable_mid(tmp_path):
+    """An unreadable mid must not silently produce an oversized real order."""
+    v = FakeVenue(mid=78_000.0, mult=1e-5)
+    v.min_notional_usd = 10.0
+
+    def boom():
+        raise RuntimeError("mid unreadable")
+    ex = mkexec(tmp_path, v)
+    v.mid = boom
+    assert ex._min_contract() == pytest.approx(1e-5)

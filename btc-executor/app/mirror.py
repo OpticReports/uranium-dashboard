@@ -25,6 +25,7 @@ account read-side without sending an order.
 from __future__ import annotations
 
 import json
+import math
 import logging
 import threading
 import os
@@ -61,6 +62,9 @@ AGENT_UNREADABLE_WARN_S = 6 * 3600.0
 # consecutive failed steps before the page goes RED. A step that raises runs
 # NOTHING in it, so a sustained run means the book is unmanaged.
 STEP_ERROR_RED = 3
+# drills must clear a venue's minimum NOTIONAL, not just its lot, and
+# with room for price drift between sizing and sending.
+DRILL_NOTIONAL_BUFFER = 1.20
 # Auto-drill's terminal condition is now a MEASUREMENT (live fill count) that
 # drilling can fail to advance - e.g. the venue omits average_filled_price.
 # Without this bound it drills the daily budget forever, unattended.
@@ -2393,16 +2397,45 @@ class Executor:
     # ---------- RAMP v4 drills (RAMP_V4.md, frozen 2026-08-15) ----------
 
     def _min_contract(self) -> float:
-        """Smallest tradable size: first candidate the venue quantizes to a
-        nonzero amount (quantize floors to contract multiples)."""
+        """Smallest DRILLABLE size: the venue's lot, stepped up until it
+        clears any minimum NOTIONAL the venue also enforces.
+
+        A lot is not always a tradable order (2026-08-29). Coinbase's floor
+        was purely a contract multiple, so the smallest lot was always
+        sendable. Hyperliquid enforces BOTH: the BTC lot is 0.00001 (~$0.78)
+        but no order under $10 notional is accepted - so every drill was
+        destined to be rejected, and the drills are how RAMP v4 earns the
+        coverage rows that authorise real sizing. The proving mechanism was
+        broken on the venue we are proving.
+
+        The buffer is not decoration: size is computed against mid and the
+        order lands later, so a floor-exact order can slip under the floor
+        between the two and reject for the same reason all over again."""
+        lot = 0.0
         for x in (1e-6, 1e-5, 1e-4, 1e-3, 0.005, 0.01, 0.02, 0.05, 0.1):
             try:
                 q = self.venue.quantize(x * 1.0000001)
             except Exception:  # noqa: BLE001
                 continue
             if q and q > 0:
-                return q
-        return 0.0
+                lot = q
+                break
+        if not lot:
+            return 0.0
+        floor = (getattr(self.venue, "min_notional_usd", 0.0)
+                 or getattr(getattr(self.venue, "inner", None),
+                            "min_notional_usd", 0.0) or 0.0)
+        if floor <= 0:
+            return lot                      # no notional floor (Coinbase)
+        try:
+            px = float(self.venue.mid())
+        except Exception:  # noqa: BLE001
+            return lot                      # unreadable mid: do not guess bigger
+        if px <= 0:
+            return lot
+        need = (floor * DRILL_NOTIONAL_BUFFER) / px
+        n = max(1, math.ceil(need / lot - 1e-9))
+        return round(n * lot, 12)
 
     def _drill_refusal(self) -> str | None:
         if self.state.halted:

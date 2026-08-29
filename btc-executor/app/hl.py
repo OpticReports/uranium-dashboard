@@ -162,6 +162,9 @@ class HyperliquidVenue:
         # unified spot figure also carries unrealised perp PnL is
         # UNVERIFIED until a live position exists to measure it against.
         self.equity_parts: dict = {}
+        # the venue's minimum ORDER NOTIONAL, read by the drill
+        # harness: a lot is not always a sendable order here.
+        self.min_notional_usd = MIN_NOTIONAL_USD
         self.post_only_crosses: list[str] = []
         logger.info("hyperliquid venue ready: coin=%s addr=%s meta=%s",
                     self.coin, self.address, self._meta)
