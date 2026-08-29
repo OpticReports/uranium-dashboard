@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import math
 import time
 
 logger = logging.getLogger(__name__)
@@ -220,6 +221,58 @@ class HyperliquidVenue:
             raise ValueError(
                 f"size {qty} is below one lot (1e-{self._meta['sz_decimals']})")
         return round(q, self._meta["sz_decimals"])
+
+    def _tick(self, px: float) -> float:
+        """Smallest legal price increment at this price level.
+
+        Hyperliquid enforces BOTH rules at once: at most 5 significant
+        figures, AND at most (6 - szDecimals) decimal places for a perp.
+        Whichever is COARSER binds. BTC has szDecimals=5, so the decimal cap
+        is 1 - but at ~$78,000 five significant figures is already whole
+        dollars, so the sig-fig rule binds and the grid is $1."""
+        if not px or px <= 0:
+            raise ValueError(f"price must be positive, got {px}")
+        exp = math.floor(math.log10(abs(px)))
+        return max(10.0 ** (exp - 4),                       # 5 significant figures
+                   10.0 ** -(6 - int(self._meta["sz_decimals"])))   # perp decimal cap
+
+    def _px(self, px: float, mode: str = "nearest") -> float:
+        """Snap a price onto Hyperliquid's grid, in a chosen DIRECTION.
+
+        THE ORDER-KILLING BUG (2026-08-29, found by review before the first
+        live order). The SDK rounds prices ONLY inside its own
+        _slippage_price helper, which serves market_open/market_close -
+        `Exchange.order()`, which this adapter calls directly, wires whatever
+        float it is given. Every price the engine produces carries decimals,
+        so at BTC's $1 grid EVERY order was destined to be rejected:
+        entries, protective stops, exits, and - the part that matters - the
+        halt's own flatten. A halt that cannot place its flatten is a page
+        attached to a book it cannot close, which is the naked-position
+        outcome this whole rewrite exists to prevent.
+
+        Direction is not cosmetic:
+          - a post-only entry must round AWAY from the market, or snapping
+            can push it across the spread and lose maker status (or get the
+            Alo rejected, forcing the taker retry);
+          - a crossing bound must round TOWARD aggression, or snapping can
+            pull it back inside the spread so the protective IOC does not
+            fill - a stop that triggers and then rests is not protection;
+          - a trigger level is a threshold, not a fill, so nearest is right.
+        The final pass is the SDK's own expression, so whatever we do here
+        the result is a price the venue will accept."""
+        dec = max(0, 6 - int(self._meta["sz_decimals"]))
+        px = float(px)
+        v = round(float(f"{px:.5g}"), dec)
+        if mode != "nearest" and v != px:
+            t = self._tick(px)
+            if mode == "up" and v < px:
+                v = v + t
+            elif mode == "down" and v > px:
+                v = v - t
+            v = round(float(f"{v:.5g}"), dec)
+        if v <= 0:
+            raise ValueError(f"price {px} snapped to {v}, which is not tradable")
+        return v
 
     # ---------- reads ----------
 
@@ -498,7 +551,10 @@ class HyperliquidVenue:
                     post_only: bool = True) -> None:
         try:
             self._send(cloid, is_buy=(side == "BUY"), sz=self._sz(qty),
-                       limit_px=float(px), reduce_only=False,
+                       limit_px=self._px(px, "down" if side == "BUY" else "up")
+                       if post_only else
+                       self._px(px, "up" if side == "BUY" else "down"),
+                       reduce_only=False,
                        order_type={"limit": {"tif": "Alo" if post_only else "Gtc"}})
         except RuntimeError as exc:
             # Post-only that would cross is REJECTED, same as Coinbase at a
@@ -509,7 +565,8 @@ class HyperliquidVenue:
                 logger.warning("Alo rejected (would cross); retrying Gtc: %s", cloid)
                 self.post_only_crosses.append(cloid)
                 self._send(cloid, is_buy=(side == "BUY"), sz=self._sz(qty),
-                           limit_px=float(px), reduce_only=False,
+                           limit_px=self._px(px, "up" if side == "BUY" else "down"),
+                           reduce_only=False,
                            order_type={"limit": {"tif": "Gtc"}})
             else:
                 raise
@@ -531,9 +588,15 @@ class HyperliquidVenue:
         # crossing bound the SDK uses for the resulting IOC.
         bound = px * (1 - DEFAULT_SLIPPAGE) if side == "SELL" \
             else px * (1 + DEFAULT_SLIPPAGE)
+        # trigger = a threshold, so nearest. bound = must CROSS when it
+        # fires, so snap toward aggression: a bound rounded back inside the
+        # spread turns a protective stop into a resting order, which is not
+        # protection at all.
         self._send(cloid, is_buy=(side == "BUY"), sz=self._sz(qty),
-                   limit_px=bound, reduce_only=True,
-                   order_type={"trigger": {"triggerPx": px, "isMarket": True,
+                   limit_px=self._px(bound, "up" if side == "BUY" else "down"),
+                   reduce_only=True,
+                   order_type={"trigger": {"triggerPx": self._px(px),
+                                          "isMarket": True,
                                            "tpsl": "sl"}})
 
     def place_market(self, side: str, qty: float, cloid: str) -> None:
@@ -544,7 +607,8 @@ class HyperliquidVenue:
         bound = mid * (1 + DEFAULT_SLIPPAGE) if side == "BUY" \
             else mid * (1 - DEFAULT_SLIPPAGE)
         self._send(cloid, is_buy=(side == "BUY"), sz=self._sz(qty),
-                   limit_px=bound, reduce_only=False,
+                   limit_px=self._px(bound, "up" if side == "BUY" else "down"),
+                   reduce_only=False,
                    order_type={"limit": {"tif": "Ioc"}})
 
     def cancel(self, cloid: str) -> None:

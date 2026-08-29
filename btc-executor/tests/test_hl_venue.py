@@ -641,3 +641,94 @@ def test_gate_mainnet_is_the_default_and_is_labelled(monkeypatch):
         # must still be labelled rather than left None.
     v = hlmod.HyperliquidVenue(Cfg())
     assert v.network == "mainnet" and v.testnet is False
+
+
+# --------------------------------------------------------------------------
+# PRICE GRID (2026-08-29). Hyperliquid enforces 5 significant figures AND
+# (6 - szDecimals) decimals; the SDK applies that rule ONLY inside its own
+# _slippage_price helper, and Exchange.order() wires whatever float it gets.
+# Every price this adapter sent was off-grid, so every order was destined to
+# be rejected - including the halt's flatten.
+def _sdk_legal(px, sz_decimals=5):
+    """The venue's own rule, from hyperliquid/exchange.py:131-132."""
+    return round(float(f"{px:.5g}"), 6 - sz_decimals) == px
+
+
+def test_gate_every_order_price_is_on_the_venue_grid(venue):
+    """The blocker. If any of these prices reaches the wire unrounded the
+    venue rejects it, and the order that matters most is the flatten."""
+    venue.place_limit("BUY", 0.002, 77123.45, "P-1-E1", post_only=True)
+    venue.place_stop("SELL", 0.002, 74880.70, "P-1-S74880-1")
+    venue.info.mids = {"BTC": "78010.37"}
+    venue.place_market("BUY", 0.00065, "T-1-E1")
+    assert venue.exchange.sent, "no orders captured"
+    for o in venue.exchange.sent:
+        assert _sdk_legal(o["limit_px"]), f"off-grid limit_px {o['limit_px']}"
+        trig = (o["order_type"].get("trigger") or {}).get("triggerPx")
+        if trig is not None:
+            assert _sdk_legal(trig), f"off-grid triggerPx {trig}"
+
+
+def test_gate_post_only_entry_rounds_away_from_the_market(venue):
+    """Snapping a maker bid UP can push it across the spread: the Alo is
+    rejected and the retry pays taker. Round away, always."""
+    venue.place_limit("BUY", 0.002, 77123.45, "P-1-E1", post_only=True)
+    assert venue.exchange.sent[-1]["limit_px"] <= 77123.45
+    venue.place_limit("SELL", 0.002, 77123.45, "P-2-E1", post_only=True)
+    assert venue.exchange.sent[-1]["limit_px"] >= 77123.45
+
+
+def test_gate_crossing_bounds_round_toward_aggression(venue):
+    """A stop's bound rounded back INSIDE the spread turns a protective
+    order into a resting one. That is not protection."""
+    venue.place_stop("SELL", 0.002, 74880.70, "P-1-S74880-1")
+    sell = venue.exchange.sent[-1]
+    assert sell["limit_px"] <= 74880.70 * (1 - 0.02), "sell bound not aggressive"
+    venue.place_stop("BUY", 0.002, 80100.30, "T-1-S80100-1")
+    buy = venue.exchange.sent[-1]
+    assert buy["limit_px"] >= 80100.30 * (1 + 0.02), "buy bound not aggressive"
+
+
+def test_gate_taker_retry_after_post_only_cross_rounds_into_the_market(venue):
+    """The Gtc retry exists to cross. Rounding it away would re-reject it."""
+    venue.exchange.reject = "Post only order would have immediately matched"
+    real, n = venue.exchange.order, {"i": 0}
+
+    def once(*a, **kw):
+        n["i"] += 1
+        if n["i"] > 1:                 # only the FIRST (Alo) send is rejected
+            venue.exchange.reject = None
+        return real(*a, **kw)
+    venue.exchange.order = once
+    venue.place_limit("BUY", 0.002, 77123.45, "P-1-E1", post_only=True)
+    assert n["i"] == 2, "post-only rejection did not trigger the taker retry"
+    alo, gtc = venue.exchange.sent[-2], venue.exchange.sent[-1]
+    assert alo["limit_px"] <= 77123.45, "maker attempt rounded into the market"
+    assert gtc["limit_px"] >= 77123.45, "taker retry rounded away from the market"
+
+
+def test_gate_price_grid_matches_the_venue_rule_across_magnitudes(venue):
+    """Both rules bind, and which one binds depends on price magnitude:
+    5 sig figs is $1 at BTC's ~$78k but $0.1 at $7.8k."""
+    for raw in (77670.5, 77123.45, 7712.345, 771.2345, 1.234567):
+        for mode in ("nearest", "up", "down"):
+            v = venue._px(raw, mode)
+            assert _sdk_legal(v), f"{raw!r}/{mode} -> {v!r} is off-grid"
+            if mode == "up":
+                assert v >= venue._px(raw, "nearest") or v >= raw
+            if mode == "down":
+                assert v <= venue._px(raw, "nearest") or v <= raw
+
+
+def test_gate_price_snapping_refuses_nonsense(venue):
+    for bad in (0, -1.0):
+        with pytest.raises(ValueError):
+            venue._px(bad)
+
+
+def test_gate_price_below_the_grid_raises_instead_of_sending_zero(venue):
+    """BTC has szDecimals=5, so the perp decimal cap is ONE place: a price
+    under $0.05 has no representation and snaps to 0.0. Sending 0.0 as a
+    limit or a trigger would be an order at any price - refuse instead."""
+    with pytest.raises(ValueError, match="not tradable"):
+        venue._px(0.00012345)
