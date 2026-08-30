@@ -130,3 +130,37 @@ def test_gate_the_test_command_covers_the_repo_not_one_service():
     the run that made it."""
     assert any("btc-executor/tests" in a for a in runner.TEST_CMD)
     assert any("code-agent/tests" in a for a in runner.TEST_CMD)
+
+
+def test_gate_auth_failure_names_the_expired_token(monkeypatch):
+    """GitHub reports an EXPIRED token identically to a wrong one, and a
+    fine-grained PAT expires on a date set months earlier. Without this the
+    failure is a generic 'push failed' in the middle of a task."""
+    monkeypatch.setattr(runner.os.path, "isdir", lambda p: True)
+
+    class Failing(FakeRun):
+        def __call__(self, cmd, cwd=None, timeout=300, env=None):
+            if cmd[:2] == ["git", "push"]:
+                self.calls.append(list(cmd))
+                return 128, "remote: Invalid username or password\nfatal: Authentication failed"
+            return super().__call__(cmd, cwd, timeout, env)
+
+    with pytest.raises(Refused, match="expired"):
+        _do(Failing(diff="+ok = 1\n"))
+
+
+def test_gate_a_normal_failure_is_not_blamed_on_the_token(monkeypatch):
+    """Guessing 'expired token' at every failure trains the operator to
+    ignore the hint."""
+    monkeypatch.setattr(runner.os.path, "isdir", lambda p: True)
+
+    class Failing(FakeRun):
+        def __call__(self, cmd, cwd=None, timeout=300, env=None):
+            if cmd[:2] == ["git", "push"]:
+                self.calls.append(list(cmd))
+                return 1, "error: failed to push some refs (non-fast-forward)"
+            return super().__call__(cmd, cwd, timeout, env)
+
+    with pytest.raises(Refused) as e:
+        _do(Failing(diff="+ok = 1\n"))
+    assert "expired" not in str(e.value)

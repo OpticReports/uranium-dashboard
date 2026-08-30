@@ -85,6 +85,25 @@ def run_tests(workdir: str, run=_run) -> tuple[int, str]:
     return run(TEST_CMD, cwd=workdir, timeout=TEST_TIMEOUT_S)
 
 
+# GitHub says "authentication failed" for an expired token exactly as it does
+# for a wrong one, and a fine-grained PAT expires on a date nobody remembers -
+# months after it was set, mid-task. Name the likely cause in the message so
+# the failure is one glance instead of an evening.
+_AUTH_HINTS = ("authentication failed", "could not read username",
+               "invalid username or password", "403", "permission denied",
+               "repository not found")
+
+
+def _explain(out: str) -> str:
+    tail = (out or "")[-500:]
+    if any(h in (out or "").lower() for h in _AUTH_HINTS):
+        return (tail + "\n\nLIKELY CAUSE: the GITHUB_TOKEN has expired, been "
+                "revoked, or lacks Contents:write on this repo. Fine-grained "
+                "tokens expire on a fixed date and GitHub does not warn the "
+                "service - reissue it and update the code-agent env var.")
+    return tail
+
+
 def commit_and_push(workdir: str, branch: str, task: str, run=_run) -> None:
     assert_pushable(branch)                      # again, at the last moment
     for cmd in (["git", "checkout", "-b", branch],
@@ -93,7 +112,7 @@ def commit_and_push(workdir: str, branch: str, task: str, run=_run) -> None:
                 ["git", "push", "-u", "origin", branch]):
         rc, out = run(cmd, cwd=workdir, timeout=300)
         if rc != 0:
-            raise Refused(f"{cmd[1]} failed: {out[-500:]}")
+            raise Refused(f"{cmd[1]} failed: {_explain(out)}")
 
 
 def do_task(task: str, workdir: str, clone_url: str, model: str,
