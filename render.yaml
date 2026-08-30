@@ -258,6 +258,54 @@ services:
   # is flipped to "false" by hand AFTER the dry-run shadow period checks out.
   # The API key must be created trade-only (view + trade; NO transfers).
   # Full runbook: btc-executor/EXECUTOR.md
+  # ---------------------------------------------------------------------
+  # code-agent: Telegram-driven coding agent (OpenRouter). Edits the REPO,
+  # never the running services.
+  #
+  # ISOLATION IS THE WHOLE DESIGN. This service deliberately holds NO
+  # trading credential - no HL_SECRET_KEY, no EXEC_TOKEN, no CB_API_*. An
+  # LLM driven from a chat app has attacker-reachable input by definition,
+  # and btc-executor's key can sign trades against real money. app/guard.py
+  # re-checks this at boot and REFUSES TO START if any of them are present,
+  # because the isolation is a deployment property and a blueprint is a file
+  # someone can edit - this repo has already had DRY_RUN flip silently on an
+  # unrelated sync.
+  #
+  # It pushes agent/* branches only. `main` auto-deploys a live book, so a
+  # human reviews and merges; that merge is the deploy.
+  - type: web
+    name: code-agent
+    runtime: docker
+    dockerfilePath: code-agent/Dockerfile
+    dockerContext: code-agent
+    plan: starter
+    healthCheckPath: /health
+    autoDeploy: true
+    disk:
+      name: repo             # the checkout; a cold clone each boot is slow
+      mountPath: /app/data
+      sizeGB: 5
+    envVars:
+      - key: GITHUB_TOKEN
+        # FINE-GRAINED, this repo only, Contents: read+write. NOT a classic
+        # token: a classic PAT carries every repo the account can reach, and
+        # blast radius is the only thing standing between a bad edit and the
+        # rest of the account.
+        sync: false
+      - key: GITHUB_REPO
+        value: OpticReports/uranium-dashboard
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: CODE_MODEL
+        # any OpenRouter coding model, e.g. openrouter/moonshotai/kimi-k3
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        # owner-only: every other chat id is ignored SILENTLY, so a stranger
+        # who finds the endpoint learns nothing from the response
+        sync: false
+
   - type: web
     name: btc-executor
     runtime: docker
