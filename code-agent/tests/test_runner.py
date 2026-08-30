@@ -164,3 +164,16 @@ def test_gate_a_normal_failure_is_not_blamed_on_the_token(monkeypatch):
     with pytest.raises(Refused) as e:
         _do(Failing(diff="+ok = 1\n"))
     assert "expired" not in str(e.value)
+
+
+def test_gate_webhook_secret_is_derived_and_stable(monkeypatch):
+    """Setup needs this value; deriving a sha256 by hand is how setup gets
+    skipped. It must also not BE the bot token - it is logged."""
+    from app import main
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "12345:abcdefg")
+    a = main.webhook_secret()
+    assert a == main.webhook_secret(), "not stable across calls"
+    assert "12345:abcdefg" not in a, "the log line would leak the bot token"
+    assert len(a) == 32
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "99999:zzzzzzz")
+    assert main.webhook_secret() != a, "same path for a different bot"

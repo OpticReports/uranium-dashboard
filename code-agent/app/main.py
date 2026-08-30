@@ -92,6 +92,17 @@ async def lifespan(app: FastAPI):
     # Boot-time isolation check. Raising here fails the deploy, which is the
     # correct outcome: a coding agent holding a trading key must not run.
     assert_environment_isolated(os.environ)
+    # The webhook path, so setup does not require deriving a sha256 by hand.
+    # Safe to log: it is a HASH of the bot token, not the token, and Render
+    # logs are account-private. It only keeps the endpoint from being found
+    # by scanning - the owner chat-id check behind it is the real gate.
+    if _tok():
+        base = os.environ.get("RENDER_EXTERNAL_URL", "https://<service>.onrender.com")
+        logger.info("webhook: register this URL with Telegram ->\n"
+                    "  %s/telegram/%s", base.rstrip("/"), webhook_secret())
+    else:
+        logger.warning("TELEGRAM_BOT_TOKEN unset: the bot cannot be reached "
+                       "and no webhook path exists yet")
     yield
 
 
