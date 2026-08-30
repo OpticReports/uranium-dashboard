@@ -297,8 +297,15 @@ services:
       - key: OPENROUTER_API_KEY
         sync: false
       - key: CODE_MODEL
-        # any OpenRouter coding model, e.g. openrouter/moonshotai/kimi-k3
-        sync: false
+        # OPTIONAL. Has a default in code; this only exists so the model can
+        # be changed without a redeploy. NOT sync:false - it is not a secret,
+        # and prompting for it made it look mandatory. The value must be a
+        # string AIDER recognises (openrouter/<vendor>/<model>) - the model
+        # is a per-request field in the API, so something has to name it;
+        # there is no "set it once on the OpenRouter side" that removes this.
+        # A weak model here wastes tokens, it does not endanger the repo: the
+        # path/secret/test gates run on the OUTPUT regardless of who wrote it.
+        value: openrouter/moonshotai/kimi-k3
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: TELEGRAM_CHAT_ID
