@@ -312,6 +312,48 @@ def test_gate_quantize_rounds_down_never_up(venue):
         venue._sz(0.000001)         # sub-lot must fail LOUD, not inflate
 
 
+def test_gate_quantize_never_sizes_above_the_input_across_the_range(venue):
+    """The three hand-picked values above cover the cases someone thought of.
+    This sweeps the range, and it is deliberately NOT asserting the obvious
+    `quantize(x) <= x`, because that is FALSE.
+
+    quantize adds 1e-9 lots before truncating, and it has to: 0.0002 / 1e-5
+    is 19.999999999999996 in binary float, so a bare int() would quantize a
+    clean 0.0002 down to 0.00019 - a real under-fill caused by nothing but
+    representation. The fudge buys that back, and the price is that a value
+    sitting within 1e-9 of a lot boundary rounds UP to it.
+
+    So the guarantee the executor actually has is a BOUNDED overshoot: never
+    more than one part in 1e9 of a lot, which at BTC's szDecimals=5 is 1e-14
+    BTC - about a billionth of a cent. Worth stating exactly, because the
+    thing this protects against is the Coinbase round-up that turned a
+    0.466-contract chase into a full contract, and a test claiming an
+    absolute bound would fail for a reason that has nothing to do with it."""
+    step = 10.0 ** -5                       # BTC szDecimals=5, per the fake
+    tol = step * 1e-9                       # the fudge, and nothing more
+
+    probes = [0.0, 1e-9, 1e-6, 0.000012345, 0.0002, 0.0199999, 0.123456789,
+              1.0, 12.987654321]
+    # values pressed right up against a lot boundary from below - where the
+    # fudge decides the outcome and an off-by-one lot would hide
+    probes += [k * step - d for k in (1, 2, 19, 784, 4999)
+               for d in (0.0, 1e-18, 1e-16, 1e-14, 1e-12)]
+    probes += [k * step + step / 2 for k in (1, 7, 250)]
+
+    for x in probes:
+        for signed in (x, -x):
+            q = venue.quantize(signed)
+            assert abs(q) <= abs(signed) + tol, (
+                f"quantize({signed!r}) = {q!r} sizes ABOVE the target by "
+                f"{abs(q) - abs(signed):.3e}, more than the {tol:.0e} the "
+                f"rounding fudge can account for")
+            assert q == 0 or (q < 0) == (signed < 0), (
+                f"quantize({signed!r}) = {q!r} flipped the side")
+            # and it must land ON the grid, not merely below the input
+            assert abs(round(abs(q) / step) * step - abs(q)) < step * 1e-6, (
+                f"quantize({signed!r}) = {q!r} is not a whole number of lots")
+
+
 def test_gate_rejected_order_raises_not_silently_ok(venue):
     """HL returns status 'ok' with a per-order error inside. Treating that
     envelope as success would book a fill that never happened - which is
