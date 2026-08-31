@@ -26,7 +26,7 @@ class FakeRun:
         self.calls.append(list(cmd))
         if cmd[0] == "aider":
             return self.aider_rc, "edited 1 file"
-        if cmd[:3] == ["git", "diff", "--name-only"]:
+        if cmd[:2] == ["git", "diff"] and "--name-only" in cmd:
             return 0, self.names
         if cmd[:2] == ["git", "diff"]:
             return 0, self.diff
@@ -205,6 +205,71 @@ def test_gate_a_path_that_does_not_exist_is_not_passed_to_aider(tmp_path):
     """aider errors out on a --file that is not there, which would turn a
     typo in the task into an opaque 'the editor failed'."""
     assert runner.files_in("edit btc-executor/app/nope.py", str(tmp_path)) == []
+
+
+class StagingAwareRun(FakeRun):
+    """Models the ONE git behaviour this pair of tests is about: a file the
+    editor CREATED is invisible to `git diff` until it has been staged."""
+
+    def __init__(self, new_file, **kw):
+        super().__init__(names="", **kw)
+        self.new_file, self.staged = new_file, False
+
+    def __call__(self, cmd, cwd=None, timeout=300, env=None):
+        if cmd[:3] == ["git", "add", "-A"]:
+            self.calls.append(list(cmd))
+            self.staged = True
+            return 0, ""
+        if cmd[:2] == ["git", "diff"]:
+            self.calls.append(list(cmd))
+            visible = self.staged and "--cached" in cmd
+            if "--name-only" in cmd:
+                return 0, (self.new_file if visible else "")
+            return 0, (f"--- /dev/null\n+++ b/{self.new_file}\n+x = 1\n"
+                       if visible else "")
+        return super().__call__(cmd, cwd, timeout, env)
+
+
+def test_gate_a_file_the_editor_CREATED_is_still_path_checked(monkeypatch):
+    """`git diff HEAD` does not list untracked files. Before staging was
+    added, a task that created code-agent/app/x.py showed NO changed paths,
+    so the deny list never saw it - and `git add -A` at commit time would
+    then sweep it into the push. A new file is the easiest way to add code,
+    so this is the gap that mattered most."""
+    monkeypatch.setattr(runner.os.path, "isdir", lambda p: True)
+    f = StagingAwareRun("code-agent/app/backdoor.py")
+    with pytest.raises(Refused, match="refusing to modify"):
+        _do(f)
+    assert not f.pushed
+
+
+def test_gate_a_created_file_is_secret_scanned(monkeypatch):
+    """Same blind spot, second gate: an untracked file contributes nothing to
+    `git diff HEAD`, so a key inside a brand-new file scanned clean."""
+    monkeypatch.setattr(runner.os.path, "isdir", lambda p: True)
+
+    class WithKey(StagingAwareRun):
+        def __call__(self, cmd, cwd=None, timeout=300, env=None):
+            rc, out = super().__call__(cmd, cwd, timeout, env)
+            if cmd[:2] == ["git", "diff"] and "--name-only" not in cmd and out:
+                return rc, "--- /dev/null\n+++ b/x\n+K = '0x" + "ab" * 32 + "'\n"
+            return rc, out
+
+    f = WithKey("btc-executor/app/new_helper.py")
+    with pytest.raises(Refused, match="refusing to commit"):
+        _do(f)
+    assert not f.pushed
+
+
+def test_gate_staging_happens_before_the_gates_read_anything(monkeypatch):
+    """Order, not presence: staging after the gates would leave them reading
+    the same blind worktree diff."""
+    monkeypatch.setattr(runner.os.path, "isdir", lambda p: True)
+    f = FakeRun(diff="+ok = 1\n")
+    _do(f)
+    add = [i for i, c in enumerate(f.calls) if c[:3] == ["git", "add", "-A"]][0]
+    first_read = [i for i, c in enumerate(f.calls) if c[:2] == ["git", "diff"]][0]
+    assert add < first_read, f"gates read the diff before staging: {f.calls}"
 
 
 def test_gate_aider_receives_the_file_flag(monkeypatch, tmp_path):

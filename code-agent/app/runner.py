@@ -74,15 +74,33 @@ def ensure_repo(workdir: str, clone_url: str, run=_run) -> str:
     return workdir
 
 
+def stage_all(workdir: str, run=_run) -> None:
+    """Stage everything - INCLUDING NEW FILES - before any gate reads a diff.
+
+    `git diff HEAD` DOES NOT SEE UNTRACKED FILES (2026-08-31). So a task that
+    edited one allowed file and also CREATED code-agent/app/x.py showed only
+    the edit: the new file was never path-checked and never secret-scanned,
+    and then `git add -A` inside commit_and_push swept it into the push. A
+    file the gates never saw is the exact thing this harness exists to stop.
+
+    Staging first makes creations, renames and deletions all visible to
+    `git diff --cached`. Nothing is committed here - ensure_repo resets and
+    cleans the tree at the start of every task, so a refused run leaves the
+    index behind harmlessly."""
+    rc, out = run(["git", "add", "-A"], cwd=workdir, timeout=120)
+    if rc != 0:
+        raise Refused(f"could not stage the edit: {out[-300:]}")
+
+
 def changed_paths(workdir: str, run=_run) -> list[str]:
-    rc, out = run(["git", "diff", "--name-only", "HEAD"], cwd=workdir)
+    rc, out = run(["git", "diff", "--cached", "--name-only"], cwd=workdir)
     if rc != 0:
         raise Refused(f"could not read the working diff: {out[-300:]}")
     return [l.strip() for l in out.splitlines() if l.strip()]
 
 
 def working_diff(workdir: str, run=_run) -> str:
-    rc, out = run(["git", "diff", "HEAD"], cwd=workdir, timeout=120)
+    rc, out = run(["git", "diff", "--cached"], cwd=workdir, timeout=120)
     if rc != 0:
         raise Refused(f"could not read the working diff: {out[-300:]}")
     return out
@@ -158,6 +176,7 @@ def do_task(task: str, workdir: str, clone_url: str, model: str,
     ensure_repo(workdir, clone_url, run=run)
     out = run_aider(workdir, task, model, run=run)
 
+    stage_all(workdir, run=run)          # so NEW files reach the gates below
     paths = changed_paths(workdir, run=run)
     if not paths:
         return {"ok": False, "reason": "the editor changed nothing",
