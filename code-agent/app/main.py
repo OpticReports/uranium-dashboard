@@ -109,10 +109,26 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="code-agent", lifespan=lifespan)
 
 
+def build_sha() -> str | None:
+    """Which commit is running. Same gap, same fix as btc-executor: without
+    it, "the log line is missing" and "the deploy has not landed" are the
+    same observation - which is exactly how this was diagnosed by guesswork
+    the first time. Render injects RENDER_GIT_COMMIT; absent, the honest
+    answer is null."""
+    sha = (os.environ.get("RENDER_GIT_COMMIT")
+           or os.environ.get("GIT_COMMIT") or "").strip()
+    return sha[:7] or None
+
+
 @app.get("/health")
 def health():
+    """Public. Says what is running and whether setup is complete - never a
+    secret. `telegram_ready` is a BOOLEAN, not the webhook path: the path is
+    the only thing keeping the endpoint from being found by scanning."""
     return {"status": "ok", "service": "code-agent", "model": MODEL,
-            "busy": BUSY.locked()}
+            "build": build_sha(), "busy": BUSY.locked(),
+            "telegram_ready": bool(_tok() and os.environ.get("TELEGRAM_CHAT_ID")),
+            "github_ready": bool(os.environ.get("GITHUB_TOKEN"))}
 
 
 @app.post("/telegram/{secret}")

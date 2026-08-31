@@ -177,3 +177,35 @@ def test_gate_webhook_secret_is_derived_and_stable(monkeypatch):
     assert len(a) == 32
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "99999:zzzzzzz")
     assert main.webhook_secret() != a, "same path for a different bot"
+
+
+def test_gate_health_reports_the_build_and_readiness_but_no_secret(monkeypatch):
+    """A health endpoint that cannot say which build it is running turns
+    'the log line is missing' and 'the deploy has not landed' into the same
+    observation - which is how this got diagnosed by guesswork once already.
+    It must NOT leak the webhook path: that is what stops the endpoint being
+    found by scanning."""
+    from fastapi.testclient import TestClient
+    from app import main
+    monkeypatch.setenv("RENDER_GIT_COMMIT", "abc1234567890")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "12345:abcdefg")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "42")
+    monkeypatch.setenv("GITHUB_TOKEN", "ghp_x")
+    body = TestClient(main.app).get("/health").json()
+    assert body["build"] == "abc1234"
+    assert body["telegram_ready"] is True and body["github_ready"] is True
+    blob = str(body)
+    assert main.webhook_secret() not in blob, "health leaked the webhook path"
+    assert "12345:abcdefg" not in blob, "health leaked the bot token"
+    assert "ghp_x" not in blob, "health leaked the github token"
+
+
+def test_gate_health_shows_what_is_still_unset(monkeypatch):
+    from fastapi.testclient import TestClient
+    from app import main
+    for k in ("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "GITHUB_TOKEN",
+              "RENDER_GIT_COMMIT", "GIT_COMMIT"):
+        monkeypatch.delenv(k, raising=False)
+    body = TestClient(main.app).get("/health").json()
+    assert body["telegram_ready"] is False and body["github_ready"] is False
+    assert body["build"] is None, "guessed a build id it does not have"
