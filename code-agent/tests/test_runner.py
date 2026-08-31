@@ -260,6 +260,17 @@ def test_gate_an_empty_edit_names_the_likely_cause(monkeypatch):
     assert "prose" in r["reason"] and "AIDER_EDIT_FORMAT" in r["reason"]
 
 
+def test_gate_an_empty_edit_reports_the_command_that_was_run(monkeypatch):
+    """Two failures in a row were diagnosed by GUESSING which flags had
+    applied, and the second guess was wrong. The argv is the cheapest
+    evidence there is and it was the one thing missing from the result."""
+    monkeypatch.setattr(runner.os.path, "isdir", lambda p: True)
+    monkeypatch.setattr(runner, "files_in", lambda t, w: ["btc-executor/app/hl.py"])
+    r = _do(FakeRun(names=""))
+    assert "--map-tokens 0" in r["aider_cmd"]
+    assert "--file btc-executor/app/hl.py" in r["aider_cmd"]
+
+
 class StagingAwareRun(FakeRun):
     """Models the ONE git behaviour this pair of tests is about: a file the
     editor CREATED is invisible to `git diff` until it has been staged."""

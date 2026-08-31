@@ -106,11 +106,13 @@ def working_diff(workdir: str, run=_run) -> str:
     return out
 
 
-def run_aider(workdir: str, task: str, model: str, run=_run) -> str:
-    """Let aider make the edit. It commits nothing - --no-auto-commits keeps
-    the change in the working tree so the gates below see a diff they can
-    still refuse. An agent that commits before it is checked has already
-    written the thing you wanted to prevent."""
+def aider_cmd(task: str, workdir: str, model: str) -> list[str]:
+    """The exact argv, built separately so a failed run can REPORT it.
+
+    Two runs were diagnosed by guessing at which flags had been applied,
+    and the second guess was wrong - the context grew when the change was
+    supposed to shrink it. The command is the cheapest possible evidence
+    and it was the one thing not in the result."""
     cmd = ["aider", "--model", model, "--yes", "--no-auto-commits",
            "--no-analytics", "--no-check-update",
            # The model kept spending turns proposing commands to run instead
@@ -134,6 +136,15 @@ def run_aider(workdir: str, task: str, model: str, run=_run) -> str:
         # with prose claiming an edit it never emitted.
         cmd += ["--map-tokens", "0"]
     cmd += ["--message", task]
+    return cmd
+
+
+def run_aider(workdir: str, task: str, model: str, run=_run) -> str:
+    """Let aider make the edit. It commits nothing - --no-auto-commits keeps
+    the change in the working tree so the gates below see a diff they can
+    still refuse. An agent that commits before it is checked has already
+    written the thing you wanted to prevent."""
+    cmd = aider_cmd(task, workdir, model)
     rc, out = run(cmd, cwd=workdir, timeout=AIDER_TIMEOUT_S)
     if rc != 0:
         raise Refused(f"the editor failed: {out[-800:]}")
@@ -207,6 +218,7 @@ def do_task(task: str, workdir: str, clone_url: str, model: str,
                           "likely described the edit in prose instead of "
                           "emitting an edit block. Try AIDER_EDIT_FORMAT="
                           "whole, or a different CODE_MODEL.",
+                "aider_cmd": " ".join(aider_cmd(task, workdir, model)),
                 "log": out[-1500:]}
     assert_paths_allowed(paths)
     scan_diff_for_secrets(working_diff(workdir, run=run))
