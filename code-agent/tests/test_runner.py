@@ -207,6 +207,59 @@ def test_gate_a_path_that_does_not_exist_is_not_passed_to_aider(tmp_path):
     assert runner.files_in("edit btc-executor/app/nope.py", str(tmp_path)) == []
 
 
+def test_gate_the_repo_map_is_off_once_the_files_are_named(monkeypatch):
+    """The run that changed nothing sent 37k tokens: the map spans twelve
+    projects, so the model spent the task choosing files instead of editing
+    the one it was handed."""
+    monkeypatch.setattr(runner.os.path, "isdir", lambda p: True)
+    monkeypatch.setattr(runner, "files_in", lambda t, w: ["btc-executor/app/hl.py"])
+    f = FakeRun(diff="+ok = 1\n")
+    _do(f)
+    aider = [c for c in f.calls if c[0] == "aider"][0]
+    assert aider[aider.index("--map-tokens") + 1] == "0"
+
+
+def test_gate_the_repo_map_stays_on_when_no_file_was_named(monkeypatch):
+    """With nothing named, the map is the ONLY way aider finds the file.
+    Disabling it unconditionally would blind the editor completely."""
+    monkeypatch.setattr(runner.os.path, "isdir", lambda p: True)
+    monkeypatch.setattr(runner, "files_in", lambda t, w: [])
+    f = FakeRun(diff="+ok = 1\n")
+    _do(f)
+    aider = [c for c in f.calls if c[0] == "aider"][0]
+    assert "--map-tokens" not in aider
+
+
+def test_gate_the_edit_format_is_settable_without_a_redeploy(monkeypatch):
+    """Which format a model can actually produce is empirical, and finding
+    out costs one live task."""
+    monkeypatch.setattr(runner.os.path, "isdir", lambda p: True)
+    monkeypatch.setenv("AIDER_EDIT_FORMAT", "whole")
+    f = FakeRun(diff="+ok = 1\n")
+    _do(f)
+    aider = [c for c in f.calls if c[0] == "aider"][0]
+    assert aider[aider.index("--edit-format") + 1] == "whole"
+
+
+def test_gate_no_edit_format_is_forced_when_the_env_is_unset(monkeypatch):
+    """Unset must mean 'let aider choose', not an empty flag value that
+    aider rejects."""
+    monkeypatch.setattr(runner.os.path, "isdir", lambda p: True)
+    monkeypatch.delenv("AIDER_EDIT_FORMAT", raising=False)
+    f = FakeRun(diff="+ok = 1\n")
+    _do(f)
+    assert "--edit-format" not in [c for c in f.calls if c[0] == "aider"][0]
+
+
+def test_gate_an_empty_edit_names_the_likely_cause(monkeypatch):
+    """A bare 'changed nothing' after a 30-minute run sent us reading the
+    log line by line to discover a one-line remedy."""
+    monkeypatch.setattr(runner.os.path, "isdir", lambda p: True)
+    r = _do(FakeRun(names=""))
+    assert r["ok"] is False
+    assert "prose" in r["reason"] and "AIDER_EDIT_FORMAT" in r["reason"]
+
+
 class StagingAwareRun(FakeRun):
     """Models the ONE git behaviour this pair of tests is about: a file the
     editor CREATED is invisible to `git diff` until it has been staged."""

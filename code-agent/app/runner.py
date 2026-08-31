@@ -112,9 +112,27 @@ def run_aider(workdir: str, task: str, model: str, run=_run) -> str:
     still refuse. An agent that commits before it is checked has already
     written the thing you wanted to prevent."""
     cmd = ["aider", "--model", model, "--yes", "--no-auto-commits",
-           "--no-analytics", "--no-check-update"]
-    for f in files_in(task, workdir):
+           "--no-analytics", "--no-check-update",
+           # The model kept spending turns proposing commands to run instead
+           # of emitting an edit. It has no shell here; offering one is a
+           # detour with no destination.
+           "--no-suggest-shell-commands"]
+    fmt = os.environ.get("AIDER_EDIT_FORMAT", "").strip()
+    if fmt:
+        # An env knob, not a constant: which format a model can actually
+        # produce is an empirical property of that model, and finding out
+        # costs one live task. Changing it must not cost a redeploy.
+        cmd += ["--edit-format", fmt]
+    files = files_in(task, workdir)
+    for f in files:
         cmd += ["--file", f]          # explicit beats hoping the map finds it
+    if files:
+        # NO REPO MAP once the files are named (2026-08-31). The run that
+        # changed nothing sent 37k tokens: the map spans twelve projects, so
+        # the model spent the task reasoning about which OTHER files it
+        # wanted rather than editing the one it was given, and signed off
+        # with prose claiming an edit it never emitted.
+        cmd += ["--map-tokens", "0"]
     cmd += ["--message", task]
     rc, out = run(cmd, cwd=workdir, timeout=AIDER_TIMEOUT_S)
     if rc != 0:
@@ -179,7 +197,16 @@ def do_task(task: str, workdir: str, clone_url: str, model: str,
     stage_all(workdir, run=run)          # so NEW files reach the gates below
     paths = changed_paths(workdir, run=run)
     if not paths:
-        return {"ok": False, "reason": "the editor changed nothing",
+        # NAME THE LIKELY CAUSE. This came back as a bare "changed nothing"
+        # after a 30-minute run, and the log had to be read line by line to
+        # find that the model had written PROSE describing the edit instead
+        # of an edit block. That is a model-format problem with a one-line
+        # remedy, and it looked like a harness bug.
+        return {"ok": False,
+                "reason": "the editor changed nothing - the model most "
+                          "likely described the edit in prose instead of "
+                          "emitting an edit block. Try AIDER_EDIT_FORMAT="
+                          "whole, or a different CODE_MODEL.",
                 "log": out[-1500:]}
     assert_paths_allowed(paths)
     scan_diff_for_secrets(working_diff(workdir, run=run))
