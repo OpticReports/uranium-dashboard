@@ -136,6 +136,12 @@ def health():
     secret, and never the AGENT_TOKEN."""
     return {"status": "ok", "service": "code-agent", "model": MODEL,
             "build": build_sha(), "busy": BUSY.locked(), "repo": REPO,
+            # Which edit format is in force decides whether the editor can
+            # produce an edit at all, and it was invisible from outside:
+            # two rounds were spent guessing whether an env change had
+            # taken. "default" means unset - aider picks per model.
+            "edit_format": os.environ.get("AIDER_EDIT_FORMAT", "").strip()
+                           or "default",
             "auth_ready": bool(os.environ.get("AGENT_TOKEN")),
             "github_ready": bool(os.environ.get("GITHUB_TOKEN"))}
 

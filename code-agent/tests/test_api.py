@@ -55,6 +55,16 @@ def test_gate_health_is_public_and_leaks_nothing(client, monkeypatch):
     assert "s3cret-token-value" not in blob and "ghp_x" not in blob
 
 
+def test_gate_health_reports_the_edit_format_in_force(client, monkeypatch):
+    """Whether the editor can produce an edit AT ALL depends on this, and it
+    was invisible from outside - two rounds went on guessing whether an env
+    change had taken effect."""
+    monkeypatch.delenv("AIDER_EDIT_FORMAT", raising=False)
+    assert client.get("/health").json()["edit_format"] == "default"
+    monkeypatch.setenv("AIDER_EDIT_FORMAT", "whole")
+    assert client.get("/health").json()["edit_format"] == "whole"
+
+
 def test_gate_task_runs_and_reports_through_the_job_store(client, monkeypatch):
     monkeypatch.setattr(main, "do_task",
                         lambda *a, **k: {"ok": True, "branch": "agent/x-1",
