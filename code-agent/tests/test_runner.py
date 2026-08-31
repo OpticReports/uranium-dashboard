@@ -209,3 +209,24 @@ def test_gate_health_shows_what_is_still_unset(monkeypatch):
     body = TestClient(main.app).get("/health").json()
     assert body["telegram_ready"] is False and body["github_ready"] is False
     assert body["build"] is None, "guessed a build id it does not have"
+
+
+def test_gate_webhook_log_is_one_line_and_self_findable(monkeypatch, caplog):
+    """Logs are retrieved through a substring filter. A two-line message
+    puts the URL on a continuation line that does not contain the search
+    term, so the only half that matters is the half that gets hidden -
+    which is exactly what happened in production."""
+    import logging
+    from fastapi.testclient import TestClient
+    from app import main
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "12345:abcdefg")
+    monkeypatch.setenv("RENDER_EXTERNAL_URL", "https://code-agent-96w7.onrender.com")
+    with caplog.at_level(logging.INFO):
+        with TestClient(main.app):
+            pass
+    hits = [r.getMessage() for r in caplog.records if "webhook" in r.getMessage()]
+    assert hits, "nothing logged the webhook at boot"
+    line = hits[-1]
+    assert "\n" not in line, "multi-line: the URL half is invisible to a filter"
+    assert main.webhook_secret() in line, "the secret is not on the found line"
+    assert "code-agent-96w7.onrender.com/telegram/" in line

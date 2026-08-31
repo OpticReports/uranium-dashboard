@@ -98,8 +98,12 @@ async def lifespan(app: FastAPI):
     # by scanning - the owner chat-id check behind it is the real gate.
     if _tok():
         base = os.environ.get("RENDER_EXTERNAL_URL", "https://<service>.onrender.com")
-        logger.info("webhook: register this URL with Telegram ->\n"
-                    "  %s/telegram/%s", base.rstrip("/"), webhook_secret())
+        # ONE LINE. A multi-line log message is retrieved through a
+        # substring FILTER, and the continuation line does not contain the
+        # word being searched for - so the half that matters is the half
+        # that gets hidden. Every token needed to find it is on this line.
+        logger.info("webhook url (register this with Telegram): %s/telegram/%s",
+                    base.rstrip("/"), webhook_secret())
     else:
         logger.warning("TELEGRAM_BOT_TOKEN unset: the bot cannot be reached "
                        "and no webhook path exists yet")
