@@ -5,6 +5,91 @@ from __future__ import annotations
 
 import pytest
 
+import app.guard as _g
+
+
+# ---------------------------------------------------------------- multi-repo
+# The sandbox split. The load-bearing claim is that a policy for one repo
+# can never widen what is allowed in another, and that a repo nobody
+# configured cannot be targeted at all.
+
+def test_gate_an_unlisted_repo_cannot_be_targeted(monkeypatch):
+    """The repo is CONFIGURED, never taken from the task. A task that can
+    name its own repo can name one whose policy nobody wrote."""
+    with pytest.raises(_g.Refused, match="not in the allowlist"):
+        _g.policy_for("attacker/evil")
+
+
+def test_gate_an_unset_repo_gets_the_STRICT_policy(monkeypatch):
+    """A missing field must never mean 'fewer rules'."""
+    monkeypatch.setenv("GITHUB_REPO", "OpticReports/uranium-dashboard")
+    p = _g.policy_for(None)
+    assert p.repo == "OpticReports/uranium-dashboard"
+    assert p.push_to_main is False
+    with pytest.raises(_g.Refused):
+        _g.assert_pushable("main", p)
+
+
+def test_gate_the_sandbox_policy_cannot_push_this_repos_main(monkeypatch):
+    """Even with the sandbox allowed to publish, that permission belongs to
+    ITS policy - it must not travel to the primary repo."""
+    monkeypatch.setenv("SLAV_LAB_PUSH_MAIN", "true")
+    lab = _g.policy_for("OpticReports/slav-lab")
+    main_repo = _g.policy_for("OpticReports/uranium-dashboard")
+    _g.assert_pushable("main", lab)                    # allowed there
+    with pytest.raises(_g.Refused, match="live trading book"):
+        _g.assert_pushable("main", main_repo)          # never here
+
+
+def test_gate_the_sandbox_does_not_publish_by_default(monkeypatch):
+    """Loosening later is one env var. Tightening after something has
+    already shipped is not."""
+    monkeypatch.delenv("SLAV_LAB_PUSH_MAIN", raising=False)
+    with pytest.raises(_g.Refused):
+        _g.assert_pushable("main", _g.policy_for("OpticReports/slav-lab"))
+
+
+def test_gate_each_repo_uses_its_OWN_token(monkeypatch):
+    """The isolation that actually holds is the token scope: a PAT scoped
+    to slav-lab cannot reach this repo whatever the model is told. Falling
+    back to another repo's token would erase exactly that."""
+    monkeypatch.setenv("GITHUB_TOKEN", "primary-token")
+    monkeypatch.delenv("SLAV_LAB_TOKEN", raising=False)
+    lab = _g.policy_for("OpticReports/slav-lab")
+    assert lab.token_env == "SLAV_LAB_TOKEN"
+    with pytest.raises(_g.Refused, match="SLAV_LAB_TOKEN is not set"):
+        _g.token_for(lab)                  # must NOT fall back to GITHUB_TOKEN
+
+
+def test_gate_this_repos_deny_list_does_not_leak_into_the_sandbox(monkeypatch):
+    """The sandbox's render.yaml is how Slav creates a service - denying it
+    would remove the point of the sandbox. This repo's still grants trading
+    keys, so it stays denied here."""
+    lab = _g.policy_for("OpticReports/slav-lab")
+    main_repo = _g.policy_for("OpticReports/uranium-dashboard")
+    _g.assert_paths_allowed(["render.yaml"], lab)              # fine there
+    with pytest.raises(_g.Refused, match="refusing to modify"):
+        _g.assert_paths_allowed(["render.yaml"], main_repo)    # never here
+
+
+def test_gate_env_files_stay_denied_in_every_repo(monkeypatch):
+    """A committed credential is public the moment it is pushed, wherever
+    it was pushed. This one is not per-repo."""
+    for repo in ("OpticReports/slav-lab", "OpticReports/uranium-dashboard"):
+        for path in (".env", "digest/.env", "a/b/prod.env"):
+            with pytest.raises(_g.Refused, match="refusing to modify"):
+                _g.assert_paths_allowed([path], _g.policy_for(repo))
+
+
+def test_gate_no_policy_argument_means_the_strict_list(monkeypatch):
+    """Every existing caller passes nothing. That must keep meaning the
+    strictest rules, not 'unrestricted'."""
+    with pytest.raises(_g.Refused, match="refusing to modify"):
+        _g.assert_paths_allowed(["code-agent/app/guard.py"])
+    with pytest.raises(_g.Refused):
+        _g.assert_pushable("main")
+
+
 from app.guard import (BRANCH_PREFIX, Refused, assert_environment_isolated,
                        assert_paths_allowed, assert_pushable,
                        assert_tests_passed, branch_for, scan_diff_for_secrets)

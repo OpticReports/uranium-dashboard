@@ -16,8 +16,9 @@ import os
 import re
 import subprocess
 
-from .guard import (Refused, assert_paths_allowed, assert_pushable,
-                    assert_tests_passed, branch_for, scan_diff_for_secrets)
+from .guard import (RepoPolicy, Refused, assert_paths_allowed,
+                    assert_pushable, assert_tests_passed, branch_for,
+                    scan_diff_for_secrets)
 
 logger = logging.getLogger(__name__)
 
@@ -151,11 +152,29 @@ def run_aider(workdir: str, task: str, model: str, run=_run) -> str:
     return out
 
 
+def suites_for(workdir: str) -> tuple:
+    """Which suites this checkout actually has.
+
+    TEST_SUITES names THIS repo's services. Another repo - the sandbox -
+    has neither, and running pytest in a directory that does not exist
+    fails in a way indistinguishable from a real test failure. So discover
+    instead of assuming: the known services if present, otherwise a root
+    suite if there is one, otherwise nothing (and the caller must SAY so
+    rather than treat silence as a pass)."""
+    found = [(sub, cmd) for sub, cmd in TEST_SUITES
+             if os.path.isdir(os.path.join(workdir, sub))]
+    if found:
+        return tuple(found)
+    if os.path.isdir(os.path.join(workdir, "tests")):
+        return ((".", _PYTEST),)
+    return ()
+
+
 def run_tests(workdir: str, run=_run) -> tuple[int, str]:
     """Every suite must pass. Stops at the first failure - the caller only
     needs to know that the gate said no, and which suite said it."""
     outs = []
-    for sub, cmd in TEST_SUITES:
+    for sub, cmd in suites_for(workdir):
         rc, out = run(cmd, cwd=os.path.join(workdir, sub),
                       timeout=TEST_TIMEOUT_S)
         outs.append(f"--- {sub} ---\n{out.strip()}")
@@ -183,9 +202,10 @@ def _explain(out: str) -> str:
     return tail
 
 
-def commit_and_push(workdir: str, branch: str, task: str, run=_run) -> None:
-    assert_pushable(branch)                      # again, at the last moment
-    for cmd in (["git", "checkout", "-b", branch],
+def commit_and_push(workdir: str, branch: str, task: str, run=_run,
+                    policy: RepoPolicy | None = None) -> None:
+    assert_pushable(branch, policy)              # again, at the last moment
+    for cmd in (["git", "checkout", "-B", branch],
                 ["git", "add", "-A"],
                 ["git", "commit", "-m", f"agent: {task[:70]}"],
                 ["git", "push", "-u", "origin", branch]):
@@ -195,7 +215,7 @@ def commit_and_push(workdir: str, branch: str, task: str, run=_run) -> None:
 
 
 def do_task(task: str, workdir: str, clone_url: str, model: str,
-            run=_run) -> dict:
+            run=_run, policy: RepoPolicy | None = None) -> dict:
     """The whole loop, in the order the gates have to happen.
 
     ORDER IS THE DESIGN. Paths are checked before the diff is read, the diff
@@ -220,13 +240,22 @@ def do_task(task: str, workdir: str, clone_url: str, model: str,
                           "whole, or a different CODE_MODEL.",
                 "aider_cmd": " ".join(aider_cmd(task, workdir, model)),
                 "log": out[-1500:]}
-    assert_paths_allowed(paths)
+    assert_paths_allowed(paths, policy)
     scan_diff_for_secrets(working_diff(workdir, run=run))
 
     rc, tout = run_tests(workdir, run=run)
     assert_tests_passed(rc, tout)
+    if not suites_for(workdir):
+        # NOT a pass. Zero suites means the strongest gate did not run, and
+        # a result that looks identical to "all tests passed" would be a
+        # lie by omission - the same shape as the empty -k filter that
+        # exits 0 having tested nothing.
+        tout = "NO TEST SUITE FOUND - nothing was verified by tests"
 
-    branch = branch_for(task)
-    commit_and_push(workdir, branch, task, run=run)
+    # A sandbox that may publish pushes to main, because main IS the deploy
+    # there. Everywhere else the branch is derived and prefixed.
+    branch = "main" if (policy and policy.push_to_main) else branch_for(task)
+    commit_and_push(workdir, branch, task, run=run, policy=policy)
     return {"ok": True, "branch": branch, "files": paths,
+            "repo": policy.repo if policy else None,
             "tests": tout.strip().splitlines()[-1] if tout.strip() else ""}

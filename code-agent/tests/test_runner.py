@@ -271,6 +271,41 @@ def test_gate_an_empty_edit_reports_the_command_that_was_run(monkeypatch):
     assert "--file btc-executor/app/hl.py" in r["aider_cmd"]
 
 
+def test_gate_a_repo_without_our_services_still_finds_its_own_suite(tmp_path):
+    """TEST_SUITES names THIS repo's services. The sandbox has neither, and
+    running pytest in a directory that does not exist fails in a way
+    indistinguishable from a real test failure."""
+    (tmp_path / "tests").mkdir()
+    assert runner.suites_for(str(tmp_path)) == ((".", runner._PYTEST),)
+
+
+def test_gate_a_repo_with_no_tests_at_all_reports_that_it_was_not_verified():
+    """Zero suites is NOT a pass. A result that looked like 'tests passed'
+    when nothing ran would be the empty -k filter all over again."""
+    import os as _os
+    from unittest import mock
+    with mock.patch.object(_os.path, "isdir", lambda p: False):
+        assert runner.suites_for("/nowhere") == ()
+        f = FakeRun(diff="+ok = 1\n")
+        with mock.patch.object(_os.path, "isdir",
+                               lambda p: not p.endswith(("tests", "btc-executor",
+                                                         "code-agent"))):
+            r = runner.do_task("t", "/tmp/x", "https://e/r.git", "m", run=f)
+    assert "NO TEST SUITE FOUND" in r["tests"]
+
+
+def test_gate_a_rerun_of_the_same_task_does_not_die_on_an_existing_branch():
+    """branch_for is deterministic, so the second attempt at a task reuses
+    the name. `checkout -b` fails there; -B does not."""
+    import os as _os
+    from unittest import mock
+    f = FakeRun(diff="+ok = 1\n")
+    with mock.patch.object(_os.path, "isdir", lambda p: True):
+        runner.do_task("same task", "/tmp/x", "https://e/r.git", "m", run=f)
+    co = [c for c in f.calls if c[:2] == ["git", "checkout"]][0]
+    assert co[2] == "-B", f"used {co[2]}, which fails on a repeated task"
+
+
 class StagingAwareRun(FakeRun):
     """Models the ONE git behaviour this pair of tests is about: a file the
     editor CREATED is invisible to `git diff` until it has been staged."""

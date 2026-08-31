@@ -145,6 +145,39 @@ def test_gate_the_token_is_compared_in_constant_time():
         "the shared secret is compared with ==, which leaks its prefix by timing"
 
 
+def test_gate_an_unlisted_repo_is_rejected_without_taking_the_lock(client):
+    """400, not 409-then-fail: an unknown repo is a caller error, and
+    holding the service busy for one would block real work."""
+    r = client.post("/task", json={"task": "x", "repo": "attacker/evil"},
+                    headers={"X-Agent-Token": "s3cret-token-value"})
+    assert r.status_code == 400 and "allowlist" in r.json()["detail"]
+    assert not main.BUSY.locked(), "an invalid repo left the service busy"
+
+
+def test_gate_the_accepted_task_says_which_repo_and_where_it_pushes(client,
+                                                                   monkeypatch):
+    """The caller is an LLM relaying to a human. It must not have to infer
+    which repo it just aimed at, or whether that repo publishes."""
+    monkeypatch.setattr(main, "do_task",
+                        lambda *a, **k: {"ok": True, "branch": "agent/x-1",
+                                         "files": ["a.py"], "tests": "1 passed"})
+    r = client.post("/task", json={"task": "add a test"},
+                    headers={"X-Agent-Token": "s3cret-token-value"})
+    body = r.json()
+    assert body["repo"] == "OpticReports/uranium-dashboard"
+    assert body["pushes_to"] == "agent/*"
+
+
+def test_gate_health_lists_the_repos_and_whether_each_token_is_present(client,
+                                                                      monkeypatch):
+    """A repo configured without its token is reachable in theory and not
+    in practice. That belongs here, not at first use."""
+    monkeypatch.delenv("SLAV_LAB_TOKEN", raising=False)
+    repos = {r["repo"]: r for r in client.get("/health").json()["repos"]}
+    assert repos["OpticReports/uranium-dashboard"]["token_ready"] is True
+    assert repos["OpticReports/slav-lab"]["token_ready"] is False
+
+
 def test_gate_a_refusal_reports_which_files_were_touched(client, monkeypatch):
     """The first live refusal said the suite failed but not WHAT had been
     edited - so there was no way to tell whether the editor had touched the
@@ -154,7 +187,7 @@ def test_gate_a_refusal_reports_which_files_were_touched(client, monkeypatch):
     def refusing(*a, **k):
         raise Refused("refusing to push: the test suite failed.")
     monkeypatch.setattr(main, "do_task", refusing)
-    monkeypatch.setattr(main, "_touched", lambda: ["btc-executor/app/hl.py"])
+    monkeypatch.setattr(main, "_touched", lambda wd: ["btc-executor/app/hl.py"])
     r = client.post("/task", json={"task": "x"},
                     headers={"X-Agent-Token": "s3cret-token-value"})
     jid = r.json()["id"]

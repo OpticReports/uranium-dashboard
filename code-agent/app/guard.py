@@ -18,7 +18,9 @@ forget to check.
 from __future__ import annotations
 
 import hashlib
+import os
 import re
+from dataclasses import dataclass
 
 
 class Refused(Exception):
@@ -73,6 +75,79 @@ FORBIDDEN_ENV = (
 )
 
 
+@dataclass(frozen=True)
+class RepoPolicy:
+    """What the agent may do IN ONE REPO. Two repos, two answers.
+
+    The important field is `token_env`: each repo is reached with its OWN
+    fine-grained GitHub token, scoped to only that repo. That is the part
+    that actually holds - a token scoped to slav-lab CANNOT reach
+    uranium-dashboard however the model is talked into trying, because the
+    refusal comes from GitHub rather than from a string comparison in this
+    file. Everything else here is defence in depth on top of that."""
+    repo: str
+    token_env: str
+    push_to_main: bool
+    denied_exact: tuple[str, ...]
+    denied_trees: tuple[str, ...]
+
+
+def _bool_env(name: str, default: bool = False) -> bool:
+    v = (os.environ.get(name) or "").strip().lower()
+    return v in ("1", "true", "yes", "on") if v else default
+
+
+def policies() -> dict[str, RepoPolicy]:
+    """The allowlist. A repo not in here cannot be targeted at all - the
+    agent picks from this table, it never takes a repo name on trust."""
+    primary = os.environ.get("GITHUB_REPO", "OpticReports/uranium-dashboard")
+    lab = os.environ.get("SLAV_LAB_REPO", "OpticReports/slav-lab")
+    out = {
+        primary: RepoPolicy(
+            repo=primary, token_env="GITHUB_TOKEN", push_to_main=False,
+            denied_exact=DENIED_EXACT, denied_trees=DENIED_TREES),
+        # THE SANDBOX. Its render.yaml is deliberately NOT denied: creating
+        # a service by editing the blueprint is the whole point, and that
+        # blueprint is separate from this repo's, so a sync of it cannot
+        # reach btc-executor. Push-to-main stays OFF until it is earned -
+        # loosening later is one env var, tightening after something has
+        # already shipped is not.
+        lab: RepoPolicy(
+            repo=lab, token_env="SLAV_LAB_TOKEN",
+            push_to_main=_bool_env("SLAV_LAB_PUSH_MAIN", False),
+            denied_exact=(), denied_trees=()),
+    }
+    return out
+
+
+def policy_for(repo: str | None) -> RepoPolicy:
+    """Resolve a repo name to its policy, or refuse.
+
+    Defaults to the primary repo, and the primary repo is the STRICT one:
+    an unset or unrecognised value must never land somewhere with fewer
+    rules than the caller expected."""
+    table = policies()
+    name = (repo or os.environ.get("GITHUB_REPO")
+            or "OpticReports/uranium-dashboard").strip()
+    if name not in table:
+        raise Refused(
+            f"refusing to work on {name!r}: not in the allowlist "
+            f"({', '.join(sorted(table))}). Repos are configured, never "
+            f"taken from the task.")
+    return table[name]
+
+
+def token_for(policy: RepoPolicy, env=None) -> str:
+    env = os.environ if env is None else env
+    tok = (env.get(policy.token_env) or "").strip()
+    if not tok:
+        raise Refused(
+            f"{policy.token_env} is not set, so {policy.repo} is unreachable. "
+            f"Each repo has its OWN scoped token on purpose - do not fall "
+            f"back to another repo's.")
+    return tok
+
+
 def _norm(path) -> str:
     """Repo-relative, forward-slashed, no leading './'.
 
@@ -96,13 +171,19 @@ def branch_for(task: str, salt: str = "") -> str:
     return f"{BRANCH_PREFIX}{slug or 'task'}-{h}"
 
 
-def assert_pushable(branch: str) -> None:
+def assert_pushable(branch: str, policy: RepoPolicy | None = None) -> None:
     """`main` auto-deploys into a live trading book. Nothing else matters as
-    much as this one refusing correctly."""
+    much as this one refusing correctly.
+
+    A sandbox repo may set push_to_main - a broken toy service costs
+    nothing. That permission is per-repo and it is never the default: when
+    no policy is given, the strictest one applies."""
     name = (branch or "").strip()
     if not name:
         raise Refused("no branch given")
     if name in PROTECTED_BRANCHES or name.lower() in PROTECTED_BRANCHES:
+        if policy is not None and policy.push_to_main and name != "HEAD":
+            return                       # sandbox: main IS the deploy
         raise Refused(
             f"refusing to push to {name!r}: it auto-deploys a live trading "
             f"book. The agent opens a PR; a human merges it.")
@@ -115,13 +196,23 @@ def assert_pushable(branch: str) -> None:
         raise Refused(f"unsafe branch name {name!r}")
 
 
-def assert_paths_allowed(paths) -> None:
-    """Refuse edits that would let the agent widen its own privileges."""
+def assert_paths_allowed(paths, policy: RepoPolicy | None = None) -> None:
+    """Refuse edits that would let the agent widen its own privileges.
+
+    The deny list is per-repo: this repo's render.yaml grants trading keys,
+    a sandbox's grants a toy service. No policy given -> the strict list,
+    because a missing argument must never mean "fewer rules".
+
+    .env files stay denied in EVERY repo. A committed credential is public
+    the moment it is pushed, wherever it was pushed."""
+    pol = policy
+    d_exact = DENIED_EXACT if pol is None else pol.denied_exact
+    d_trees = DENIED_TREES if pol is None else pol.denied_trees
     bad = []
     for p in paths:
         q = _norm(p)
-        if (q in DENIED_EXACT
-                or any(q.startswith(d) for d in DENIED_TREES)
+        if (q in d_exact
+                or any(q.startswith(d) for d in d_trees)
                 or q.endswith(DENIED_SUFFIXES)
                 or q.rsplit("/", 1)[-1] in DENIED_NAMES):
             bad.append(q)

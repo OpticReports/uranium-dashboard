@@ -12,6 +12,15 @@ class Settings(BaseSettings):
     engine_url: str = "https://btc-paper-engine.onrender.com"
     exec_token: str = ""                  # must match the engine's EXEC_TOKEN
 
+    # READ-ONLY companion to exec_token. Satisfies GET /status and NOTHING
+    # else - not /drill, not /coverage/attest, not /kill, not /resume.
+    # It exists because EXEC_TOKEN is a WRITE credential: /drill places real
+    # orders. Anything that only needs to answer "what is the executor
+    # doing" - an assistant, a dashboard, a monitor - gets this instead, so
+    # read access never comes bundled with the authority to trade.
+    # Unset = the endpoint behaves exactly as it did before.
+    exec_read_token: str = ""
+
     # WHICH VENUE. Defaults to coinbase: an unset or misspelled env must
     # keep the behaviour that is already deployed, never silently move a
     # live book to a different exchange. Validated at boot - an unknown

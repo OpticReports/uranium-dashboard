@@ -67,6 +67,12 @@ btc-executor  --Coinbase Advanced API-->  BTC perp product
 2. **Render**: deploy the `btc-executor` service from render.yaml. Enter
    secrets in the dashboard: `CB_API_KEY_NAME`, `CB_API_PRIVATE_KEY`,
    `EXEC_TOKEN` (same value as on btc-paper-engine).
+   Optionally also set `EXEC_READ_TOKEN` — a DIFFERENT random value. It
+   satisfies `GET /status` and nothing else in the service. `EXEC_TOKEN` is
+   a **trading** credential (`POST /drill` places real orders), so anything
+   that only needs to answer "what is the executor holding" — an assistant,
+   a dashboard, a monitor — gets the read token instead. Unset leaves
+   `/status` behaving exactly as before.
 3. **Product**: boot logs list every BTC futures product the key can trade
    (`BTC futures products visible to this key: [...]`). Set `CB_PRODUCT_ID`
    accordingly (INTX perp: `BTC-PERP-INTX`; US CFM contracts appear with a

@@ -24,6 +24,78 @@ def test_control_endpoints_require_token():
         settings.exec_token = old
 
 
+# Every endpoint that can CHANGE something. /drill places real orders;
+# /coverage/attest writes the record that gates the ramp; /kill and /resume
+# move the executor between trading and halted. The read token must open
+# none of them, and this list must grow whenever a write endpoint is added.
+_WRITE_ENDPOINTS = (("post", "/kill"), ("post", "/resume"),
+                    ("post", "/drill"), ("post", "/coverage/attest"),
+                    ("get", "/test-alert"))
+
+
+def test_read_token_opens_status_and_absolutely_nothing_else():
+    """THE POINT OF THE READ TOKEN. EXEC_TOKEN is a TRADING credential -
+    /drill places real orders - so an assistant that only needs to answer
+    "what is the executor holding" must not be handed it. This asserts the
+    separation actually holds rather than merely being intended."""
+    old, old_r = settings.exec_token, settings.exec_read_token
+    settings.exec_token, settings.exec_read_token = "write-sekrit", "read-only"
+    try:
+        with TestClient(app) as c:
+            hdr = {"X-Exec-Token": "read-only"}
+            assert c.get("/status", headers=hdr).status_code == 200
+            assert c.get("/status", params={"token": "read-only"}).status_code == 200
+            for verb, path in _WRITE_ENDPOINTS:
+                r = getattr(c, verb)(path, headers=hdr)
+                assert r.status_code == 401, (
+                    f"the READ token opened {verb.upper()} {path} - it is a "
+                    f"write endpoint and must refuse")
+                r2 = getattr(c, verb)(path, params={"token": "read-only"})
+                assert r2.status_code == 401, (
+                    f"the READ token opened {verb.upper()} {path} via query")
+    finally:
+        settings.exec_token, settings.exec_read_token = old, old_r
+
+
+def test_write_token_still_reads_so_existing_tooling_is_untouched():
+    old, old_r = settings.exec_token, settings.exec_read_token
+    settings.exec_token, settings.exec_read_token = "write-sekrit", "read-only"
+    try:
+        with TestClient(app) as c:
+            assert c.get("/status",
+                         headers={"X-Exec-Token": "write-sekrit"}).status_code == 200
+            assert c.post("/resume",
+                          params={"token": "write-sekrit"}).status_code == 200
+    finally:
+        settings.exec_token, settings.exec_read_token = old, old_r
+
+
+def test_an_unset_read_token_changes_nothing():
+    """Adding a knob must not quietly widen access on a deployment that
+    never sets it."""
+    old, old_r = settings.exec_token, settings.exec_read_token
+    settings.exec_token, settings.exec_read_token = "sekrit", ""
+    try:
+        with TestClient(app) as c:
+            assert c.get("/status").status_code == 401
+            assert c.get("/status", params={"token": "sekrit"}).status_code == 200
+            assert c.get("/status", params={"token": ""}).status_code == 401
+    finally:
+        settings.exec_token, settings.exec_read_token = old, old_r
+
+
+def test_an_empty_read_token_is_not_a_master_key():
+    """An empty string must never satisfy a comparison - the classic
+    default-open bug, where an unset env var authenticates everyone."""
+    old, old_r = settings.exec_token, settings.exec_read_token
+    settings.exec_token, settings.exec_read_token = "sekrit", ""
+    try:
+        with TestClient(app) as c:
+            assert c.get("/status", headers={"X-Exec-Token": ""}).status_code == 401
+    finally:
+        settings.exec_token, settings.exec_read_token = old, old_r
+
+
 def test_pulse_is_public_and_minimal():
     old = settings.exec_token
     settings.exec_token = "sekrit"

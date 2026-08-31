@@ -28,7 +28,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
-from .guard import Refused, assert_environment_isolated
+from .guard import (Refused, assert_environment_isolated, policies,
+                    policy_for, token_for)
 from .jobs import Jobs
 from .runner import do_task
 
@@ -57,28 +58,39 @@ def _auth(token: str | None) -> None:
         raise HTTPException(status_code=401, detail="bad agent token")
 
 
-def clone_url() -> str:
-    """HTTPS with the token inlined. Never logged, never returned."""
-    tok = os.environ.get("GITHUB_TOKEN", "")
-    if not tok:
-        raise Refused("GITHUB_TOKEN is not set")
-    return f"https://x-access-token:{tok}@github.com/{REPO}.git"
+def clone_url(policy) -> str:
+    """HTTPS with that repo's OWN token inlined. Never logged, never
+    returned. Each repo has a separate fine-grained token, so this is also
+    the point where the repos are actually isolated from one another."""
+    return (f"https://x-access-token:{token_for(policy)}"
+            f"@github.com/{policy.repo}.git")
 
 
-def _touched() -> list:
+def workdir_for(policy) -> str:
+    """One checkout per repo. Sharing a directory between repos would let a
+    leftover tree from one be diffed - and gated - as the other."""
+    slug = policy.repo.replace("/", "__")
+    return os.path.join(WORKDIR, slug)
+
+
+def _touched(wd: str) -> list:
     """Best-effort list of files the editor changed, for a refusal message."""
     try:
         from .runner import changed_paths
-        return changed_paths(WORKDIR)
+        return changed_paths(wd)
     except Exception:  # noqa: BLE001
         return []
 
 
-def _work(jid: str, task: str) -> None:
+def _work(jid: str, task: str, repo: str | None = None) -> None:
+    wd = WORKDIR
     try:
-        r = do_task(task, WORKDIR, clone_url(), MODEL)
+        policy = policy_for(repo)
+        wd = workdir_for(policy)
+        r = do_task(task, wd, clone_url(policy), MODEL, policy=policy)
         if r.get("ok"):
-            r["compare"] = f"https://github.com/{REPO}/compare/{r['branch']}?expand=1"
+            r["compare"] = (f"https://github.com/{policy.repo}/compare/"
+                            f"{r['branch']}?expand=1")
         JOBS.finish(jid, result=r)
     except Refused as exc:
         # A gate said no. That is an ANSWER, not a crash - reported as a
@@ -89,7 +101,7 @@ def _work(jid: str, task: str) -> None:
         # but not what had been edited, so it was impossible to tell whether
         # the editor had touched the intended file at all. A refusal that
         # cannot be attributed to a change is hard to act on.
-        JOBS.finish(jid, error=f"refused: {exc}", files=_touched())
+        JOBS.finish(jid, error=f"refused: {exc}", files=_touched(wd))
     except Exception as exc:  # noqa: BLE001
         logger.exception("task failed")
         JOBS.finish(jid, error=f"{type(exc).__name__}: {exc}")
@@ -128,6 +140,10 @@ app = FastAPI(title="code-agent", lifespan=lifespan)
 
 class TaskIn(BaseModel):
     task: str
+    # WHICH REPO. Omitted -> the primary one, which is the STRICT one: a
+    # caller that forgets this field must never land somewhere with fewer
+    # rules than it expected. Resolved against an allowlist, never trusted.
+    repo: str | None = None
 
 
 @app.get("/health")
@@ -143,7 +159,16 @@ def health():
             "edit_format": os.environ.get("AIDER_EDIT_FORMAT", "").strip()
                            or "default",
             "auth_ready": bool(os.environ.get("AGENT_TOKEN")),
-            "github_ready": bool(os.environ.get("GITHUB_TOKEN"))}
+            "github_ready": bool(os.environ.get("GITHUB_TOKEN")),
+            # Which repos can be targeted, where each one pushes, and
+            # whether its own token is actually present. A repo listed
+            # without a token is configured but unreachable, and that
+            # should be visible here rather than at first use.
+            "repos": [{"repo": p.repo,
+                       "pushes_to": "main" if p.push_to_main else "agent/*",
+                       "token_ready": bool(
+                           (os.environ.get(p.token_env) or "").strip())}
+                      for p in policies().values()]}
 
 
 @app.post("/task")
@@ -157,12 +182,21 @@ def create_task(body: TaskIn, x_agent_token: str | None = Header(default=None)):
     task = (body.task or "").strip()
     if not task:
         raise HTTPException(status_code=400, detail="empty task")
+    # Resolve the repo BEFORE taking the lock. An unknown repo is a caller
+    # error, and holding the service busy for one would block real work.
+    try:
+        policy = policy_for(body.repo)
+    except Refused as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     if not BUSY.acquire(blocking=False):
         raise HTTPException(status_code=409,
                             detail="busy with another task")
     jid = JOBS.create(task)
-    threading.Thread(target=_work, args=(jid, task), daemon=True).start()
-    return {"id": jid, "state": "running", "task": task[:200]}
+    threading.Thread(target=_work, args=(jid, task, policy.repo),
+                     daemon=True).start()
+    return {"id": jid, "state": "running", "task": task[:200],
+            "repo": policy.repo,
+            "pushes_to": "main" if policy.push_to_main else "agent/*"}
 
 
 @app.get("/task/{jid}")

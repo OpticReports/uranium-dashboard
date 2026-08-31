@@ -8,6 +8,7 @@ Control surface:
 """
 from __future__ import annotations
 
+import hmac
 import logging
 import threading
 import time
@@ -21,12 +22,40 @@ from .mirror import (Executor, DRILL_CYCLE_NEED,  # noqa: F401
                      SLIPPAGE_SAMPLE_NEED)
 
 
+def _tok_eq(given: str | None, want: str) -> bool:
+    """Constant-time. == on a secret leaks its prefix through timing, and
+    this one authorizes real orders."""
+    return bool(given) and hmac.compare_digest(given, want)
+
+
 def _auth(x_exec_token: str | None, token_q: str | None) -> None:
-    """Control/status endpoints share the EXEC_TOKEN secret. Header for
-    tools, ?token= for a browser. No token configured -> open (dev only)."""
-    if settings.exec_token and x_exec_token != settings.exec_token \
-            and token_q != settings.exec_token:
-        raise HTTPException(status_code=401, detail="bad exec token")
+    """WRITE authority. /drill, /coverage/attest, /kill and /resume all sit
+    behind this, and /drill places REAL ORDERS - so EXEC_TOKEN is a trading
+    credential, not a viewing one. Never hand it to something that only
+    needs to read; use EXEC_READ_TOKEN for that.
+
+    Header for tools, ?token= for a browser. No token configured -> open
+    (dev only)."""
+    if not settings.exec_token:
+        return
+    if _tok_eq(x_exec_token, settings.exec_token) \
+            or _tok_eq(token_q, settings.exec_token):
+        return
+    raise HTTPException(status_code=401, detail="bad exec token")
+
+
+def _auth_read(x_exec_token: str | None, token_q: str | None) -> None:
+    """READ-ONLY authority, for GET /status and nothing else.
+
+    EXEC_READ_TOKEN satisfies this and no other endpoint in the service.
+    That separation is the whole point: an assistant should be able to
+    answer "what is the executor holding" without also being able to fire a
+    drill. EXEC_TOKEN still works here, so existing tooling is untouched,
+    and an unset read token leaves the endpoint exactly as it was."""
+    rt = settings.exec_read_token
+    if rt and (_tok_eq(x_exec_token, rt) or _tok_eq(token_q, rt)):
+        return
+    _auth(x_exec_token, token_q)
 
 logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
 logger = logging.getLogger(__name__)
@@ -318,7 +347,7 @@ def pulse():
 @app.get("/status")
 def status(x_exec_token: str | None = Header(default=None),
            token: str | None = Query(default=None)):
-    _auth(x_exec_token, token)
+    _auth_read(x_exec_token, token)      # READ token is enough HERE ONLY
     if EXEC is None:
         return {"ready": False}
     inner = LAST.get("_inner")
