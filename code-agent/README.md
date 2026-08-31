@@ -1,9 +1,33 @@
-# code-agent — Telegram coding agent (OpenRouter)
+# code-agent — a coding API for this repo (OpenRouter)
 
-Send a coding task from Telegram. It edits a fresh checkout of `origin/main`,
-runs the test suite, and pushes an `agent/*` branch for you to review.
+POST a task. It edits a fresh checkout of `origin/main`, runs the test suite,
+and pushes an `agent/*` branch for you to review.
 
 It **never pushes to `main`** and **never merges**. Your merge is the deploy.
+
+## It is a tool, not a bot
+
+Slav owns Telegram; this is something Slav calls. That split is forced —
+a Telegram bot gets exactly ONE delivery mechanism, webhook or polling, so
+two services wanting the same bot steal it from each other silently, with no
+error either can see. It is also the better shape: one assistant that answers
+questions *and* writes code, rather than a bot per capability.
+
+```bash
+# start a task (returns immediately - a task takes minutes)
+curl -sX POST https://<host>/task \
+  -H "X-Agent-Token: $AGENT_TOKEN" -H "Content-Type: application/json" \
+  -d '{"task":"add a test asserting quantize() never rounds up"}'
+# -> {"id":"a1b2c3d4e5f6","state":"running","task":"..."}
+
+# poll it
+curl -s https://<host>/task/a1b2c3d4e5f6 -H "X-Agent-Token: $AGENT_TOKEN"
+# -> {"state":"done","result":{"branch":"agent/...","tests":"316 passed","compare":"https://..."}}
+# -> or {"state":"error","error":"refused: refusing to modify render.yaml"}
+```
+
+A `refused:` prefix means a gate said no. That is an ANSWER, not a bug —
+relay it; do not retry into the same refusal.
 
 ## Why it is a separate service
 
@@ -47,22 +71,19 @@ commits before it is checked has already done the thing being prevented.
    reach, and blast radius is the only thing between a bad edit and the rest
    of the account.
 2. Render dashboard → `code-agent` → set `GITHUB_TOKEN`, `OPENROUTER_API_KEY`,
-   `CODE_MODEL`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
+   and `AGENT_TOKEN` (any long random string).
    **Do not add any trading variable** — the service refuses to boot with one.
-3. Register the webhook (the secret is derived from the bot token):
-   ```
-   curl -X POST "https://api.telegram.org/bot<TOKEN>/setWebhook" \
-     -d "url=https://code-agent.onrender.com/telegram/<secret>"
-   ```
-   Get `<secret>` from `python -c "from app.main import webhook_secret; print(webhook_secret())"`
-   with `TELEGRAM_BOT_TOKEN` set, or from the service logs at boot.
+3. Give Slav the host and `AGENT_TOKEN`. Nothing else.
 
-Use a **different bot** from the alerts/canary one, or its messages will be
-read as coding tasks.
+`AGENT_TOKEN` is not optional: unset, every call returns 503 rather than
+serving an unauthenticated endpoint that can push to a repo which deploys a
+live trading book.
 
 ## Limits, stated
 
-- One task at a time; a second is told the agent is busy.
+- One task at a time; a second gets 409. Two aiders in one checkout would
+  interleave their edits into a single diff, and the gates would then be
+  judging a mixture of two tasks.
 - It only knows what `aider` maps from the repo. It cannot see live venue
   state, and it holds no token to ask for any.
 - It does not review its own work. The branch is the deliverable; the review

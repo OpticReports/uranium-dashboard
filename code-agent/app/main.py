@@ -1,28 +1,35 @@
-"""code-agent: a Telegram-driven coding agent for this repo.
+"""code-agent: a token-gated coding API for this repo.
+
+NOT a chat bot. Slav is the assistant; this is a tool Slav calls. That
+split is forced by Telegram - a bot gets exactly one delivery mechanism,
+webhook or polling, so two services wanting the same bot silently steal it
+from each other - but it is also the better shape: one assistant that
+answers questions AND writes code, rather than a bot per capability.
 
 Deliberately NOT deployed alongside anything that holds money. It carries a
-GitHub token and an OpenRouter key and nothing else - `guard.assert_environment_isolated`
+GitHub token and an OpenRouter key and nothing else; `assert_environment_isolated`
 refuses to boot if a trading credential is present, because the isolation is
 a deployment property and this repo has already had an env var flip silently
 on an unrelated blueprint sync.
 
-What it does: owner-only Telegram message -> aider edits a fresh checkout of
-origin/main -> path/secret/test gates -> push an `agent/*` branch. It never
-pushes to main and never merges. You review the branch and merge it, which
-is the step that actually deploys.
+Flow: POST /task -> aider edits a fresh checkout of origin/main -> path,
+secret and test gates -> push an `agent/*` branch. It never pushes to main
+and never merges. A human reviews the branch and merges it, and that merge
+is the deploy.
 """
 from __future__ import annotations
 
-import hashlib
+import hmac
 import logging
 import os
 import threading
 from contextlib import asynccontextmanager
 
-import httpx
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Header, HTTPException
+from pydantic import BaseModel
 
 from .guard import Refused, assert_environment_isolated
+from .jobs import Jobs
 from .runner import do_task
 
 logging.basicConfig(level=logging.INFO)
@@ -30,128 +37,114 @@ logger = logging.getLogger(__name__)
 
 WORKDIR = os.environ.get("WORKDIR", "/app/data/repo")
 MODEL = os.environ.get("CODE_MODEL", "openrouter/moonshotai/kimi-k3")
-BUSY = threading.Lock()          # one task at a time: two aiders in one
-                                 # checkout would interleave edits
+REPO = os.environ.get("GITHUB_REPO", "OpticReports/uranium-dashboard")
+JOBS = Jobs()
+BUSY = threading.Lock()      # one task at a time: two aiders in one checkout
+                             # would interleave edits into one diff
 
 
-def _tok() -> str:
-    return os.environ.get("TELEGRAM_BOT_TOKEN", "")
+def _auth(token: str | None) -> None:
+    """Shared-secret gate, compared in constant time.
 
-
-def webhook_secret() -> str:
-    """Derived from the bot token, like treasury-canary's - no extra env."""
-    return hashlib.sha256(("code-agent" + _tok()).encode()).hexdigest()[:32]
-
-
-def send(text: str) -> None:
-    chat = os.environ.get("TELEGRAM_CHAT_ID", "")
-    if not (_tok() and chat):
-        logger.warning("telegram not configured; dropping: %s", text[:200])
-        return
-    try:
-        httpx.post(f"https://api.telegram.org/bot{_tok()}/sendMessage",
-                   json={"chat_id": chat, "text": text[:4000]}, timeout=20)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("telegram send failed: %s", exc)
+    == on a secret leaks its prefix through timing. Cheap to avoid, and this
+    endpoint can write to a repo that deploys a live trading book."""
+    want = os.environ.get("AGENT_TOKEN", "")
+    if not want:
+        raise HTTPException(status_code=503,
+                            detail="AGENT_TOKEN is not set; refusing to serve "
+                                   "an unauthenticated coding endpoint")
+    if not token or not hmac.compare_digest(token, want):
+        raise HTTPException(status_code=401, detail="bad agent token")
 
 
 def clone_url() -> str:
-    """HTTPS with the token inlined. Never logged, never echoed to Telegram."""
+    """HTTPS with the token inlined. Never logged, never returned."""
     tok = os.environ.get("GITHUB_TOKEN", "")
-    repo = os.environ.get("GITHUB_REPO", "OpticReports/uranium-dashboard")
     if not tok:
         raise Refused("GITHUB_TOKEN is not set")
-    return f"https://x-access-token:{tok}@github.com/{repo}.git"
+    return f"https://x-access-token:{tok}@github.com/{REPO}.git"
 
 
-def _work(task: str) -> None:
-    if not BUSY.acquire(blocking=False):
-        send("busy with another task - try again when it finishes")
-        return
+def _work(jid: str, task: str) -> None:
     try:
-        send(f"working: {task[:200]}")
         r = do_task(task, WORKDIR, clone_url(), MODEL)
-        if not r.get("ok"):
-            send(f"no change made: {r.get('reason')}")
-            return
-        repo = os.environ.get("GITHUB_REPO", "OpticReports/uranium-dashboard")
-        send(f"pushed {r['branch']}\nfiles: {', '.join(r['files'][:10])}\n"
-             f"tests: {r['tests']}\n"
-             f"https://github.com/{repo}/compare/{r['branch']}?expand=1")
+        if r.get("ok"):
+            r["compare"] = f"https://github.com/{REPO}/compare/{r['branch']}?expand=1"
+        JOBS.finish(jid, result=r)
     except Refused as exc:
-        send(f"refused: {exc}")            # a gate said no; that is the answer
+        # A gate said no. That is an ANSWER, not a crash - reported as a
+        # normal outcome so the caller relays the reason rather than
+        # retrying into the same refusal.
+        JOBS.finish(jid, error=f"refused: {exc}")
     except Exception as exc:  # noqa: BLE001
         logger.exception("task failed")
-        send(f"failed: {type(exc).__name__}: {exc}")
+        JOBS.finish(jid, error=f"{type(exc).__name__}: {exc}")
     finally:
         BUSY.release()
 
 
+def build_sha() -> str | None:
+    sha = (os.environ.get("RENDER_GIT_COMMIT")
+           or os.environ.get("GIT_COMMIT") or "").strip()
+    return sha[:7] or None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Boot-time isolation check. Raising here fails the deploy, which is the
-    # correct outcome: a coding agent holding a trading key must not run.
+    # Raising here fails the deploy, which is the correct outcome: a coding
+    # agent holding a trading key must not run.
     assert_environment_isolated(os.environ)
-    # The webhook path, so setup does not require deriving a sha256 by hand.
-    # Safe to log: it is a HASH of the bot token, not the token, and Render
-    # logs are account-private. It only keeps the endpoint from being found
-    # by scanning - the owner chat-id check behind it is the real gate.
-    if _tok():
-        base = os.environ.get("RENDER_EXTERNAL_URL", "https://<service>.onrender.com")
-        # ONE LINE. A multi-line log message is retrieved through a
-        # substring FILTER, and the continuation line does not contain the
-        # word being searched for - so the half that matters is the half
-        # that gets hidden. Every token needed to find it is on this line.
-        logger.info("webhook url (register this with Telegram): %s/telegram/%s",
-                    base.rstrip("/"), webhook_secret())
-    else:
-        logger.warning("TELEGRAM_BOT_TOKEN unset: the bot cannot be reached "
-                       "and no webhook path exists yet")
+    if not os.environ.get("AGENT_TOKEN"):
+        logger.warning("AGENT_TOKEN unset: /task will refuse every call")
     yield
 
 
 app = FastAPI(title="code-agent", lifespan=lifespan)
 
 
-def build_sha() -> str | None:
-    """Which commit is running. Same gap, same fix as btc-executor: without
-    it, "the log line is missing" and "the deploy has not landed" are the
-    same observation - which is exactly how this was diagnosed by guesswork
-    the first time. Render injects RENDER_GIT_COMMIT; absent, the honest
-    answer is null."""
-    sha = (os.environ.get("RENDER_GIT_COMMIT")
-           or os.environ.get("GIT_COMMIT") or "").strip()
-    return sha[:7] or None
+class TaskIn(BaseModel):
+    task: str
 
 
 @app.get("/health")
 def health():
     """Public. Says what is running and whether setup is complete - never a
-    secret. `telegram_ready` is a BOOLEAN, not the webhook path: the path is
-    the only thing keeping the endpoint from being found by scanning."""
+    secret, and never the AGENT_TOKEN."""
     return {"status": "ok", "service": "code-agent", "model": MODEL,
-            "build": build_sha(), "busy": BUSY.locked(),
-            "telegram_ready": bool(_tok() and os.environ.get("TELEGRAM_CHAT_ID")),
+            "build": build_sha(), "busy": BUSY.locked(), "repo": REPO,
+            "auth_ready": bool(os.environ.get("AGENT_TOKEN")),
             "github_ready": bool(os.environ.get("GITHUB_TOKEN"))}
 
 
-@app.post("/telegram/{secret}")
-async def telegram(secret: str, request: Request):
-    if secret != webhook_secret():
-        raise HTTPException(status_code=404, detail="not found")
-    update = await request.json()
-    msg = update.get("message") or {}
-    chat_id = str((msg.get("chat") or {}).get("id", ""))
-    text = (msg.get("text") or "").strip()
-    owner = os.environ.get("TELEGRAM_CHAT_ID", "")
-    # Owner-only, and silent for everyone else: an error reply confirms the
-    # endpoint exists to whoever found it.
-    if not text or not owner or chat_id != str(owner):
-        return {"ok": True}
-    if text.lower() in ("/start", "/help"):
-        send("Send me a coding task. I edit a fresh checkout of main, run the "
-             "test suite, and push an agent/* branch for you to review. I "
-             "never push to main and never merge.")
-        return {"ok": True}
-    threading.Thread(target=_work, args=(text,), daemon=True).start()
-    return {"ok": True}
+@app.post("/task")
+def create_task(body: TaskIn, x_agent_token: str | None = Header(default=None)):
+    """Start a coding task. Returns immediately with a job id.
+
+    Async because a task takes MINUTES - a caller holding the connection
+    would time out mid-run and lose the outcome of work that is still
+    happening."""
+    _auth(x_agent_token)
+    task = (body.task or "").strip()
+    if not task:
+        raise HTTPException(status_code=400, detail="empty task")
+    if not BUSY.acquire(blocking=False):
+        raise HTTPException(status_code=409,
+                            detail="busy with another task")
+    jid = JOBS.create(task)
+    threading.Thread(target=_work, args=(jid, task), daemon=True).start()
+    return {"id": jid, "state": "running", "task": task[:200]}
+
+
+@app.get("/task/{jid}")
+def get_task(jid: str, x_agent_token: str | None = Header(default=None)):
+    _auth(x_agent_token)
+    j = JOBS.get(jid)
+    if not j:
+        raise HTTPException(status_code=404, detail="unknown job")
+    return j
+
+
+@app.get("/tasks")
+def list_tasks(x_agent_token: str | None = Header(default=None)):
+    _auth(x_agent_token)
+    return {"jobs": JOBS.recent()}

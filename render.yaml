@@ -273,6 +273,12 @@ services:
   #
   # It pushes agent/* branches only. `main` auto-deploys a live book, so a
   # human reviews and merges; that merge is the deploy.
+  #
+  # NOT a Telegram client. Slav owns the bot and calls this as a tool. A
+  # Telegram bot gets exactly ONE delivery mechanism - webhook or polling -
+  # so two services wanting the same bot steal it from each other silently,
+  # with no error either one can see. One assistant that both answers
+  # questions and writes code is the better shape anyway.
   - type: web
     name: code-agent
     runtime: docker
@@ -306,11 +312,11 @@ services:
         # A weak model here wastes tokens, it does not endanger the repo: the
         # path/secret/test gates run on the OUTPUT regardless of who wrote it.
         value: openrouter/moonshotai/kimi-k3
-      - key: TELEGRAM_BOT_TOKEN
-        sync: false
-      - key: TELEGRAM_CHAT_ID
-        # owner-only: every other chat id is ignored SILENTLY, so a stranger
-        # who finds the endpoint learns nothing from the response
+      - key: AGENT_TOKEN
+        # Shared secret for POST /task. NOT optional: an unset value makes
+        # the service refuse every call (503) rather than serve an
+        # unauthenticated endpoint that can push to a repo which deploys a
+        # live trading book. Slav sends it as X-Agent-Token.
         sync: false
 
   - type: web
