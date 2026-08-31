@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import subprocess
 
 from .guard import (Refused, assert_paths_allowed, assert_pushable,
@@ -20,12 +21,31 @@ from .guard import (Refused, assert_paths_allowed, assert_pushable,
 
 logger = logging.getLogger(__name__)
 
-# The gate the whole repo already merges on. Run from the repo root so a
-# change anywhere is covered, not just the service the task mentioned.
-TEST_CMD = ["python3", "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider",
-            "btc-executor/tests", "code-agent/tests"]
+# EACH SUITE RUNS FROM ITS OWN SERVICE DIRECTORY (2026-08-29, found live).
+# Running them together from the repo root collected zero tests and errored
+# with `No module named 'app'`: btc-executor's tests import `app.mirror`,
+# which resolves only with that service as the root. A gate that cannot
+# import the code it guards refuses everything - safe, and useless.
+_PYTEST = ["python3", "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider", "tests"]
+TEST_SUITES = (("btc-executor", _PYTEST), ("code-agent", _PYTEST))
 AIDER_TIMEOUT_S = 1800
 TEST_TIMEOUT_S = 900
+
+# Paths named in the task, handed to aider explicitly. Without this it falls
+# back to its repo map, and this repo holds twelve projects - the first live
+# run edited only .gitignore and never touched the file the task named.
+_PATH_RE = re.compile(
+    r"\b[\w.-]+(?:/[\w.-]+)+\.(?:py|md|ya?ml|txt|json|toml|cfg|ini|sh)\b")
+
+
+def files_in(task: str, workdir: str) -> list[str]:
+    """Repo paths mentioned in the task that actually exist."""
+    seen, out = set(), []
+    for m in _PATH_RE.findall(task or ""):
+        if m not in seen and os.path.isfile(os.path.join(workdir, m)):
+            seen.add(m)
+            out.append(m)
+    return out
 
 
 def _run(cmd, cwd=None, timeout=300, env=None):
@@ -74,7 +94,10 @@ def run_aider(workdir: str, task: str, model: str, run=_run) -> str:
     still refuse. An agent that commits before it is checked has already
     written the thing you wanted to prevent."""
     cmd = ["aider", "--model", model, "--yes", "--no-auto-commits",
-           "--no-analytics", "--no-check-update", "--message", task]
+           "--no-analytics", "--no-check-update"]
+    for f in files_in(task, workdir):
+        cmd += ["--file", f]          # explicit beats hoping the map finds it
+    cmd += ["--message", task]
     rc, out = run(cmd, cwd=workdir, timeout=AIDER_TIMEOUT_S)
     if rc != 0:
         raise Refused(f"the editor failed: {out[-800:]}")
@@ -82,7 +105,16 @@ def run_aider(workdir: str, task: str, model: str, run=_run) -> str:
 
 
 def run_tests(workdir: str, run=_run) -> tuple[int, str]:
-    return run(TEST_CMD, cwd=workdir, timeout=TEST_TIMEOUT_S)
+    """Every suite must pass. Stops at the first failure - the caller only
+    needs to know that the gate said no, and which suite said it."""
+    outs = []
+    for sub, cmd in TEST_SUITES:
+        rc, out = run(cmd, cwd=os.path.join(workdir, sub),
+                      timeout=TEST_TIMEOUT_S)
+        outs.append(f"--- {sub} ---\n{out.strip()}")
+        if rc != 0:
+            return rc, "\n".join(outs)
+    return 0, "\n".join(outs)
 
 
 # GitHub says "authentication failed" for an expired token exactly as it does

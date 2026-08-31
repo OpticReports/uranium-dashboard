@@ -10,3 +10,8 @@ __pycache__/
 *.pem
 *.key
 secrets.*
+
+# aider's own working files. Pre-seeded so the coding agent has nothing to
+# add here: its first live run edited ONLY .gitignore, which put housekeeping
+# noise in every diff the gates then had to judge.
+.aider*

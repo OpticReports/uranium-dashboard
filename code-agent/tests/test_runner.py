@@ -20,6 +20,7 @@ class FakeRun:
         self.calls = []
         self.diff, self.names = diff, names
         self.test_rc, self.test_out, self.aider_rc = test_rc, test_out, aider_rc
+        self.test_cwds = []
 
     def __call__(self, cmd, cwd=None, timeout=300, env=None):
         self.calls.append(list(cmd))
@@ -30,6 +31,7 @@ class FakeRun:
         if cmd[:2] == ["git", "diff"]:
             return 0, self.diff
         if cmd[0] == "python3":
+            self.test_cwds.append(cwd)
             return self.test_rc, self.test_out
         return 0, ""
 
@@ -128,8 +130,8 @@ def test_gate_a_failed_editor_never_reaches_the_gates(monkeypatch):
 def test_gate_the_test_command_covers_the_repo_not_one_service():
     """A change in btc-executor that breaks code-agent's own gates must fail
     the run that made it."""
-    assert any("btc-executor/tests" in a for a in runner.TEST_CMD)
-    assert any("code-agent/tests" in a for a in runner.TEST_CMD)
+    subs = [sub for sub, _ in runner.TEST_SUITES]
+    assert "btc-executor" in subs and "code-agent" in subs
 
 
 def test_gate_auth_failure_names_the_expired_token(monkeypatch):
@@ -164,3 +166,51 @@ def test_gate_a_normal_failure_is_not_blamed_on_the_token(monkeypatch):
     with pytest.raises(Refused) as e:
         _do(Failing(diff="+ok = 1\n"))
     assert "expired" not in str(e.value)
+
+def test_gate_each_suite_runs_from_its_own_service_directory(monkeypatch):
+    """Running them together from the repo root collected ZERO tests and
+    errored with `No module named app` - btc-executor's tests import
+    `app.mirror`, which resolves only with that service as the root. A gate
+    that cannot import the code it guards refuses everything: safe, useless,
+    and it looked like a real failure."""
+    monkeypatch.setattr(runner.os.path, "isdir", lambda p: True)
+    f = FakeRun(diff="+ok = 1\n")
+    _do(f)
+    assert any(str(c).endswith("btc-executor") for c in f.test_cwds), \
+        f"btc-executor suite not run from its own directory: {f.test_cwds}"
+    assert any(str(c).endswith("code-agent") for c in f.test_cwds)
+
+
+def test_gate_a_failing_suite_stops_the_run_at_that_suite(monkeypatch):
+    monkeypatch.setattr(runner.os.path, "isdir", lambda p: True)
+    f = FakeRun(diff="+ok = 1\n", test_rc=1, test_out="1 failed")
+    with pytest.raises(Refused, match="test suite failed"):
+        _do(f)
+    assert len(f.test_cwds) == 1, "kept running suites after one failed"
+    assert not f.pushed
+
+
+def test_gate_paths_named_in_the_task_are_handed_to_aider(monkeypatch, tmp_path):
+    """The first live run edited ONLY .gitignore and never touched the file
+    the task named: with --message alone aider falls back to its repo map,
+    and this repo holds twelve projects."""
+    (tmp_path / "btc-executor" / "app").mkdir(parents=True)
+    (tmp_path / "btc-executor" / "app" / "hl.py").write_text("x = 1\n")
+    got = runner.files_in("please fix quantize in btc-executor/app/hl.py",
+                          str(tmp_path))
+    assert got == ["btc-executor/app/hl.py"]
+
+
+def test_gate_a_path_that_does_not_exist_is_not_passed_to_aider(tmp_path):
+    """aider errors out on a --file that is not there, which would turn a
+    typo in the task into an opaque 'the editor failed'."""
+    assert runner.files_in("edit btc-executor/app/nope.py", str(tmp_path)) == []
+
+
+def test_gate_aider_receives_the_file_flag(monkeypatch, tmp_path):
+    monkeypatch.setattr(runner.os.path, "isdir", lambda p: True)
+    monkeypatch.setattr(runner, "files_in", lambda t, w: ["code-agent/app/guard.py"])
+    f = FakeRun(diff="+ok = 1\n")
+    _do(f, task="add a docstring to _norm in code-agent/app/guard.py")
+    aider = [c for c in f.calls if c[0] == "aider"][0]
+    assert "--file" in aider and "code-agent/app/guard.py" in aider
