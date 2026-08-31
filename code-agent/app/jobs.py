@@ -30,13 +30,15 @@ class Jobs:
                 self._d.popitem(last=False)
         return jid
 
-    def finish(self, jid: str, result=None, error=None) -> None:
+    def finish(self, jid: str, result=None, error=None, files=None) -> None:
         with self._lock:
             j = self._d.get(jid)
             if j is None:
                 return
             j["state"] = "error" if error else "done"
             j["result"], j["error"] = result, error
+            if files:
+                j["files"] = files
 
     def get(self, jid: str):
         with self._lock:

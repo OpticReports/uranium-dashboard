@@ -133,3 +133,40 @@ def test_gate_the_token_is_compared_in_constant_time():
     names = {getattr(c, "attr", getattr(c, "id", "")) for c in calls}
     assert "compare_digest" in names, \
         "the shared secret is compared with ==, which leaks its prefix by timing"
+
+
+def test_gate_a_refusal_reports_which_files_were_touched(client, monkeypatch):
+    """The first live refusal said the suite failed but not WHAT had been
+    edited - so there was no way to tell whether the editor had touched the
+    intended file at all. It had not, and that took a second run to learn."""
+    from app.guard import Refused
+
+    def refusing(*a, **k):
+        raise Refused("refusing to push: the test suite failed.")
+    monkeypatch.setattr(main, "do_task", refusing)
+    monkeypatch.setattr(main, "_touched", lambda: ["btc-executor/app/hl.py"])
+    r = client.post("/task", json={"task": "x"},
+                    headers={"X-Agent-Token": "s3cret-token-value"})
+    jid = r.json()["id"]
+    for _ in range(200):
+        j = client.get(f"/task/{jid}",
+                       headers={"X-Agent-Token": "s3cret-token-value"}).json()
+        if j["state"] != "running":
+            break
+    assert j["files"] == ["btc-executor/app/hl.py"], \
+        "a refusal that cannot be attributed to a change is hard to act on"
+
+
+def test_gate_boot_refuses_when_the_test_gate_cannot_run(monkeypatch):
+    """A gate that cannot RUN is not a gate. Without pytest every task
+    refuses forever - safe and useless - and it surfaced at first USE
+    rather than at deploy, which is the wrong end to find it."""
+    import importlib.util
+    from fastapi.testclient import TestClient
+    from app.guard import Refused
+    real = importlib.util.find_spec
+    monkeypatch.setattr(importlib.util, "find_spec",
+                        lambda n, *a, **k: None if n == "pytest" else real(n, *a, **k))
+    with pytest.raises(Refused, match="pytest is not installed"):
+        with TestClient(main.app):
+            pass

@@ -65,6 +65,15 @@ def clone_url() -> str:
     return f"https://x-access-token:{tok}@github.com/{REPO}.git"
 
 
+def _touched() -> list:
+    """Best-effort list of files the editor changed, for a refusal message."""
+    try:
+        from .runner import changed_paths
+        return changed_paths(WORKDIR)
+    except Exception:  # noqa: BLE001
+        return []
+
+
 def _work(jid: str, task: str) -> None:
     try:
         r = do_task(task, WORKDIR, clone_url(), MODEL)
@@ -75,7 +84,12 @@ def _work(jid: str, task: str) -> None:
         # A gate said no. That is an ANSWER, not a crash - reported as a
         # normal outcome so the caller relays the reason rather than
         # retrying into the same refusal.
-        JOBS.finish(jid, error=f"refused: {exc}")
+        #
+        # WITH THE FILE LIST: the first live refusal said the suite failed
+        # but not what had been edited, so it was impossible to tell whether
+        # the editor had touched the intended file at all. A refusal that
+        # cannot be attributed to a change is hard to act on.
+        JOBS.finish(jid, error=f"refused: {exc}", files=_touched())
     except Exception as exc:  # noqa: BLE001
         logger.exception("task failed")
         JOBS.finish(jid, error=f"{type(exc).__name__}: {exc}")
@@ -94,6 +108,16 @@ async def lifespan(app: FastAPI):
     # Raising here fails the deploy, which is the correct outcome: a coding
     # agent holding a trading key must not run.
     assert_environment_isolated(os.environ)
+    # THE TEST GATE MUST BE ABLE TO RUN (2026-08-29, found on the first real
+    # task: the image had no pytest, so every task refused at the test gate
+    # forever - safe, and completely useless). A gate that cannot run is not
+    # a gate, and this failed at first USE rather than at deploy, which is
+    # the wrong end. Fail the deploy instead.
+    import importlib.util
+    if importlib.util.find_spec("pytest") is None:
+        raise Refused(
+            "refusing to start: pytest is not installed, so the test gate "
+            "cannot run and every task would refuse. Rebuild the image.")
     if not os.environ.get("AGENT_TOKEN"):
         logger.warning("AGENT_TOKEN unset: /task will refuse every call")
     yield

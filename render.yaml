@@ -283,7 +283,9 @@ services:
     name: code-agent
     runtime: docker
     dockerfilePath: code-agent/Dockerfile
-    dockerContext: code-agent
+    # ROOT context: the test gate runs the REPO's suite, so the image needs
+    # btc-executor's dependencies too - unreachable from a code-agent/ context.
+    dockerContext: .
     plan: starter
     healthCheckPath: /health
     autoDeploy: true

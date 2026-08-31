@@ -3,11 +3,20 @@ FROM python:3.11-slim
 RUN apt-get update && apt-get install -y --no-install-recommends git \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY app ./app
-COPY tests ./tests
-COPY pytest.ini .
+
+# BUILD CONTEXT IS THE REPO ROOT, not code-agent/. The test gate runs the
+# REPO's suite, so this image needs every dependency those tests import -
+# and it can only reach btc-executor/requirements.txt from the root.
+COPY code-agent/requirements.txt ./requirements.txt
+COPY btc-executor/requirements.txt ./requirements-executor.txt
+# The gated suite's dependencies. Without these the gate cannot RUN, and a
+# gate that cannot run refuses everything - which is safe, and useless.
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir -r requirements-executor.txt
+
+COPY code-agent/app ./app
+COPY code-agent/tests ./tests
+COPY code-agent/pytest.ini .
 # The agent commits; git refuses without an identity.
 RUN git config --global user.email "code-agent@users.noreply.github.com" \
     && git config --global user.name "code-agent" \
