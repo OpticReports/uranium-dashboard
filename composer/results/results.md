@@ -1730,3 +1730,52 @@ artifact; the regime-independent finding is the PASS-THROUGH result.
 METHOD NOTE adopted as standing: never downsample a path you also quote a
 statistic from (a 2x chart downsample dropped a drawdown trough, displaying
 -8.0% against a stated maxDD of -9.9%).
+
+
+## Addendum 33b — the pre-registered 2026-08-28 decomposition test, RUN (2026-08-31)
+
+Addendum 33 deferred one test for want of data. Now run with the real tape.
+
+MEASURED 2026-08-28: SPY -0.23%, QQQ -0.65%, SOXL -9.52%, TECL -4.67%,
+TLT -0.30%; DGS2 4.20 -> 4.34 = +14bp (95th pct of |d2y| is 13bp, so the
+hawkish repricing the owner flagged WAS real and top-5%-sized).
+
+TEST 1 — holdings decomposition. KMLM held SOXL 38% + TECL 37% + PULS/VXZ.
+  predicted 0.38(-9.52%) + 0.37(-4.67%) = -5.34%
+  actual (live account)                 = -5.02%
+  RESIDUAL = +0.32pp.
+The loss is fully explained by the instruments held. NO hidden rate
+exposure. Addendum 33's pass-through finding is CONFIRMED out of sample on
+the very day that prompted the question.
+
+TEST 2 — the SPY-beta form of the trigger FAILS, for an instructive reason.
+SPY-beta 5.11 x SPY -0.23% predicts only -1.16% vs -5.02% actual, a -3.9pp
+residual. But that residual is NOT rate-aligned: it is SECTOR dispersion.
+SOXL fell -9.52% on a day SPY fell -0.23% and QQQ -0.65% — a semiconductor
+rout, not a broad selloff. Single-factor SPY beta is simply the wrong model
+for a day with that much dispersion; the holdings decomposition (Test 1) is
+the correct one and it is near-exact. NOT a reopen.
+
+TEST 3 — the sign, and this is the real finding. Historical basket beta to
+d2y is POSITIVE (+0.0893 %/bp), so a +14bp hawkish move "should" have added
+about +1.25%. Instead the basket fell hard. The historical positive
+yields-up/equities-up relationship INVERTED that day — which is exactly the
+regime addendum 33 pre-registered as reopen trigger (b), and which is
+absent from the 2023-2026 sample.
+
+TRIGGER (b) STATUS — rolling 252d corr(SPY return, d2y), computed 2021+:
+  2025-04 +0.259 | 2025-07 +0.309 | 2025-10 +0.307 | 2026-01 +0.366
+  2026-04 +0.018 | 2026-07 -0.156 | CURRENT 2026-08-28 -0.196
+The correlation has fallen ~56 points from its Jan-2026 peak and has been
+negative for roughly two months. This is the inflation-shock configuration
+(bad-news-for-bonds is bad-news-for-stocks) in which addendum 33's
+contemporaneous lens inverts. It is NOT yet "persistent" by the standard
+the trigger set, and 2022-2024 shows the series oscillating through zero
+repeatedly, so single readings are not decisive.
+DECISION: no reopen, no changes. ADD to the daily monitor's standing watch:
+report this rolling correlation monthly; if it holds below -0.20 through
+two consecutive month-ends, RE-RUN addendum 33's contemporaneous and
+overlay lenses in full, because their central sign assumption will no
+longer hold. Note this changes the ATTRIBUTION lens only — it does not
+resurrect the overlays, which failed on participation cost (0 of 92 cells
+improved maxDD at all), not on sign.
