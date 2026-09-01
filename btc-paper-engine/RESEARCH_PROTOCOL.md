@@ -13,7 +13,12 @@ future test batch — an uncounted trial silently lowers the evidence bar.
 | Blend weight × leverage frontier | 20 | RESEARCH_S4.md |
 | Blend weight/win-rate scan | 5 | session notes 2026-07 |
 | ETH transfer test (frozen BTC params) | 1 | §10 below |
-| **Total** | **~1,554** | |
+| Forecasting foundation models (registered, NOT yet run) | 10 | RESEARCH_FORECAST_FM.md |
+| **Total** | **~1,564** | |
+
+Registered-but-unrun trials are counted from registration, not from
+completion. Counting them only on success is how a registry stops
+deflating anything.
 
 ## 2. Deflated Sharpe audit (barbell-lab stats, modern era 2022-2026)
 
