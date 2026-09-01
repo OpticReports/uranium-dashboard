@@ -592,6 +592,48 @@ class HyperliquidVenue:
         self._fills_cache = (now, fills)
         return fills
 
+    def fill_pnl(self, cloid: str) -> dict | None:
+        """Venue-truth realized P&L for ONE closing order's prints.
+
+        Sums Hyperliquid's own closedPnl and fee over the order's fills in
+        userFills (matched by derived cloid), with the size-weighted exit
+        price. closedPnl is the venue's position accounting: it marks the
+        close against the ACCOUNT's average entry price, so when more than
+        one leg holds the same coin the per-leg attribution is approximate
+        (the account-level number is exact). None when no print has
+        surfaced (or the fetch failed - _recent_fills already degraded to
+        []); never raises. Fees are venue-signed: positive = paid, negative
+        = maker rebate. closedPnl is GROSS of fees (verified against the
+        account's real 2026-08/09 fills: the drill close's closedPnl equals
+        price-move x size exactly, fee reported separately). Prints are NOT
+        filtered by dir, so a non-reduce-only stop that overshoots into an
+        opening print (closedPnl=0) dilutes the derived entry notional -
+        that anomaly already pages through drift events."""
+        want = derive_cloid(cloid).lower()
+        pnl = fee = qty = notional = 0.0
+        for f in self._recent_fills():
+            try:
+                if str(f.get("cloid") or "").lower() != want:
+                    continue
+                # parse the WHOLE row before accumulating anything: a row
+                # whose closedPnl parses but whose px is garbage must be
+                # skipped atomically, not half-counted (counter-agent find
+                # 2026-09-01)
+                sz = float(f.get("sz") or 0.0)
+                row_pnl = float(f.get("closedPnl") or 0.0)
+                row_fee = float(f.get("fee") or 0.0)
+                row_px = float(f.get("px") or 0.0)
+            except (TypeError, ValueError, AttributeError):
+                continue
+            pnl += row_pnl
+            fee += row_fee
+            notional += row_px * sz
+            qty += sz
+        if qty <= 0:
+            return None
+        return {"pnl": pnl, "fee": fee, "qty": qty,
+                "exit_px": notional / qty}
+
     def open_orders(self) -> list[dict]:
         """Every resting order for our coin. This is the F1 open-orders
         sweep the Coinbase build had to plan for and never got: the one

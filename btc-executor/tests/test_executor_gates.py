@@ -5195,3 +5195,158 @@ def test_gate_a_real_drawdown_still_halts_after_rebaselining(tmp_path):
     # re-baselining, not which of the two gets there first.
     assert ex.state.halted in ("DAILY_LOSS", "DRAWDOWN"), \
         f"rebaseline disarmed the equity rails (halted={ex.state.halted})"
+
+
+# ---------------------------------------------------------------------------
+# trade-close P&L canary line (Casey 2026-09-01): when a REAL exit's fill
+# resolves (role stop/close), the canary states amount and % from the
+# venue's own closedPnl. Drills and entry-side fills stay silent; venues
+# without fill_pnl (Coinbase, dry) skip without error.
+# ---------------------------------------------------------------------------
+
+class _PnlVenue(FakeVenue):
+    """FakeVenue + fill_pnl, keyed by cloid. None = no prints surfaced."""
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        self.pnl_by_cloid = {}
+
+    def fill_pnl(self, cloid):
+        return self.pnl_by_cloid.get(cloid)
+
+
+def _resolve_watch(ex, v, role, cloid, side, qty=0.01, px=78_000.0):
+    v._add("MARKET", side, qty, cloid, px=px)
+    ex._watch_fill("pullback", role, cloid, px, side)
+    ex._poll_fill_watch()
+
+
+def test_gate_close_fill_alerts_amount_and_pct_long(tmp_path, monkeypatch):
+    sent = []
+    import app.alerts as alerts
+    monkeypatch.setattr(alerts, "send", lambda t: sent.append(t))
+    v = _PnlVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    # long close: SELL 0.01 @ 78,000 (exit notional 780); venue says the
+    # position P&L was +20 with 0.50 of fees -> entry notional 760,
+    # net +19.50 = +2.57% on entry
+    v.pnl_by_cloid["P-9-X"] = {"pnl": 20.0, "fee": 0.50, "qty": 0.01,
+                               "exit_px": 78_000.0}
+    _resolve_watch(ex, v, "close", "P-9-X", "SELL")
+    ev = [e for e in ex.state.events if e["kind"] == "trade_pnl"]
+    assert len(ev) == 1
+    assert "+$19.50" in ev[0]["msg"]
+    assert "+2.57%" in ev[0]["msg"]
+    assert "$760.00 entry" in ev[0]["msg"]
+    assert any("trade_pnl" in t for t in sent), \
+        "the P&L line must reach the phone on a live book"
+
+
+def test_gate_close_fill_alerts_short_side_math(tmp_path):
+    v = _PnlVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    # short close: BUY back @ 100 x 0.01 (exit notional 1.0); pnl +0.25
+    # means entry notional 1.25; net (fee 0.05) = +0.20 = +16.00% on entry
+    v.pnl_by_cloid["P-8-X"] = {"pnl": 0.25, "fee": 0.05, "qty": 0.01,
+                               "exit_px": 100.0}
+    _resolve_watch(ex, v, "close", "P-8-X", "BUY", px=100.0)
+    ev = [e for e in ex.state.events if e["kind"] == "trade_pnl"]
+    assert len(ev) == 1
+    assert "+$0.20" in ev[0]["msg"]
+    assert "+16.00%" in ev[0]["msg"]
+
+
+def test_gate_losing_stop_reports_negative(tmp_path):
+    v = _PnlVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    v.pnl_by_cloid["T-7-S1"] = {"pnl": -12.0, "fee": 0.40, "qty": 0.01,
+                                "exit_px": 76_000.0}
+    _resolve_watch(ex, v, "stop", "T-7-S1", "SELL", px=76_000.0)
+    ev = [e for e in ex.state.events if e["kind"] == "trade_pnl"]
+    # entry notional 760 + 12 = 772; net -12.40 = -1.61%
+    assert len(ev) == 1
+    assert "-$12.40" in ev[0]["msg"]
+    assert "-1.61%" in ev[0]["msg"]
+
+
+def test_gate_entries_chases_and_drills_stay_silent(tmp_path):
+    v = _PnlVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    for cloid, role in (("P-1-E1", "entry"), ("P-1-C1", "chase"),
+                        ("D-1-X", "drill_exit"), ("D-1-S", "drill_stop")):
+        v.pnl_by_cloid[cloid] = {"pnl": 5.0, "fee": 0.1, "qty": 0.01,
+                                 "exit_px": 78_000.0}
+        _resolve_watch(ex, v, role, cloid, "SELL")
+    assert not [e for e in ex.state.events if e["kind"] == "trade_pnl"], \
+        "only real exits (stop/close) may narrate P&L"
+
+
+def test_gate_venue_without_fill_pnl_skips_silently(tmp_path):
+    v = FakeVenue()                       # no fill_pnl attribute at all
+    ex = mkexec(tmp_path, v, dry_run=False)
+    _resolve_watch(ex, v, "close", "P-6-X", "SELL")
+    assert not [e for e in ex.state.events if e["kind"] == "trade_pnl"]
+    assert [f for f in ex.state.fills if f["cloid"] == "P-6-X"], \
+        "the slippage record must still land when P&L narration is absent"
+
+
+def test_gate_fill_pnl_none_or_raising_never_breaks_watch_drain(tmp_path):
+    v = _PnlVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    _resolve_watch(ex, v, "close", "P-5-X", "SELL")   # pnl_by_cloid: None
+    assert not [e for e in ex.state.events if e["kind"] == "trade_pnl"]
+
+    def _boom(_c):
+        raise RuntimeError("info API down")
+    v.fill_pnl = _boom
+    _resolve_watch(ex, v, "close", "P-4-X", "SELL")
+    assert [f for f in ex.state.fills if f["cloid"] == "P-4-X"], \
+        "a P&L lookup failure must not consume or crash the watch pass"
+
+
+def test_gate_pct_uses_venue_exit_px_not_watch_ref(tmp_path):
+    """Counter-agent find 2026-09-01: every other alert gate sets the
+    venue fill px equal to the watch ref_px, so swapping exit_px for
+    ref_px in the notional math survived all of them. For a stop the ref
+    is the TRIGGER and the fill gaps beyond it - decouple the two."""
+    v = _PnlVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    # stop triggered at 76,000 (ref) but gapped to fill at 75,500
+    v.pnl_by_cloid["T-6-S1"] = {"pnl": -15.0, "fee": 0.50, "qty": 0.01,
+                                "exit_px": 75_500.0}
+    _resolve_watch(ex, v, "stop", "T-6-S1", "SELL", px=76_000.0)
+    ev = [e for e in ex.state.events if e["kind"] == "trade_pnl"]
+    # entry notional 755 + 15 = 770 (NOT 760 off the ref); net -15.50 = -2.01%
+    assert len(ev) == 1
+    assert "$770.00 entry" in ev[0]["msg"]
+    assert "-2.01%" in ev[0]["msg"]
+
+
+def test_gate_pnl_line_fires_exactly_once_across_priceless_retry(tmp_path):
+    """A FILLED watch kept on the no-price path (fill_px_unresolved) must
+    NOT narrate P&L early - one line, on the pass that resolves it."""
+    class _PricelessPnl(_PnlVenue):
+        def __init__(self, *a, **kw):
+            super().__init__(*a, **kw)
+            self.priceless = set()
+
+        def order_status(self, cloid):
+            st = super().order_status(cloid)
+            if st and cloid in self.priceless:
+                st["avg_price"] = None
+            return st
+
+    v = _PricelessPnl()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    v.pnl_by_cloid["P-7-X"] = {"pnl": 20.0, "fee": 0.50, "qty": 0.01,
+                               "exit_px": 78_000.0}
+    v.priceless.add("P-7-X")
+    v._add("MARKET", "SELL", 0.01, "P-7-X", px=78_000.0)
+    ex._watch_fill("pullback", "close", "P-7-X", 78_000.0, "SELL")
+    ex._poll_fill_watch()                       # FILLED, no price: kept
+    assert not [e for e in ex.state.events if e["kind"] == "trade_pnl"], \
+        "the keep path must not narrate P&L before the price resolves"
+    v.priceless.discard("P-7-X")
+    ex._poll_fill_watch()                       # resolves and consumes
+    ex._poll_fill_watch()                       # watch gone: nothing more
+    ev = [e for e in ex.state.events if e["kind"] == "trade_pnl"]
+    assert len(ev) == 1

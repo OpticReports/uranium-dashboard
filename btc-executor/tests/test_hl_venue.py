@@ -958,3 +958,48 @@ def test_gate_malformed_fill_rows_are_skipped_not_fatal(venue):
     v.info.fills = ["<garbage row>", None,
                     {"px": "60000.0", "sz": "0.002", "oid": 88}]
     assert v.order_status("P-8-E1")["avg_price"] == pytest.approx(60000.0)
+
+
+# ---------------------------------------------------------------------------
+# fill_pnl: venue-truth realized P&L for a closing order (Casey 2026-09-01,
+# the trade-close P&L canary line). Source of truth is userFills' closedPnl
+# and fee per print, matched by derived cloid, weighted exit price.
+# ---------------------------------------------------------------------------
+
+def test_gate_fill_pnl_sums_prints_and_ignores_foreign_fills(venue):
+    v = venue
+    from app.hl import derive_cloid
+    v.info.fills = [
+        {"px": "110.0", "sz": "0.001", "closedPnl": "10.0", "fee": "0.20",
+         "cloid": derive_cloid("P-1-X")},
+        {"px": "120.0", "sz": "0.002", "closedPnl": "25.0", "fee": "0.30",
+         "cloid": derive_cloid("P-1-X").upper()},   # casing must not matter
+        {"px": "999.0", "sz": "5.0", "closedPnl": "888.0", "fee": "9.0",
+         "cloid": "0xother"},                        # someone else's close
+    ]
+    d = v.fill_pnl("P-1-X")
+    assert d["pnl"] == pytest.approx(35.0)
+    assert d["fee"] == pytest.approx(0.50)
+    assert d["qty"] == pytest.approx(0.003)
+    assert d["exit_px"] == pytest.approx((110 * 1 + 120 * 2) / 3)
+
+
+def test_gate_fill_pnl_none_when_no_prints_or_fetch_failed(venue):
+    v = venue
+    v.info.fills = []
+    assert v.fill_pnl("P-2-X") is None
+    v.info.raise_on_fills = "info API down"
+    v._fills_cache = (0.0, None)                 # bust the cache
+    assert v.fill_pnl("P-2-X") is None           # degrades, never raises
+
+
+def test_gate_fill_pnl_maker_rebate_keeps_its_sign(venue):
+    """HL fees are venue-signed: negative = maker rebate. fill_pnl must
+    pass them through so the canary's net includes the rebate."""
+    v = venue
+    from app.hl import derive_cloid
+    v.info.fills = [{"px": "100.0", "sz": "0.01", "closedPnl": "-3.0",
+                     "fee": "-0.05", "cloid": derive_cloid("P-3-X")}]
+    d = v.fill_pnl("P-3-X")
+    assert d["pnl"] == pytest.approx(-3.0)
+    assert d["fee"] == pytest.approx(-0.05)

@@ -1053,7 +1053,10 @@ class Executor:
                       "coverage_provenance_reset", "auto_drill_rearmed"):
             send(f"✅ executor {kind}: {msg} — no action needed")
         elif kind in ("entry_order", "leg_closed", "entry_chase",
-                      "stop_filled_on_venue", "orphan_fill_unwound") \
+                      "stop_filled_on_venue", "orphan_fill_unwound",
+                      # the P&L line for a real exit (Casey 2026-09-01):
+                      # amount and % from the venue's own closedPnl
+                      "trade_pnl") \
                 and not getattr(self.cfg, "dry_run", True):
             # stop_filled_on_venue is a REAL money exit and orphan_fill_unwound
             # places a real order - both were log-only while routine engine
@@ -2449,7 +2452,53 @@ class Executor:
                         self._drill_no_fill = 0
                 self._record_fill(w["leg"], w["role"], w["cloid"], st,
                                   w["ref_px"], w["side"])
+                if w["role"] in ("stop", "close"):
+                    self._alert_trade_pnl(w)
         self._fill_watch = keep
+
+    def _alert_trade_pnl(self, w: dict) -> None:
+        """One ⚡ line per REAL exit (role stop/close only - drill
+        round-trips and entry-side fills stay out), using the VENUE's own
+        realized P&L per print (closedPnl) rather than a rebuilt entry
+        price: the ledger never persisted one, and the venue's number is
+        the one the account statement will show. Entry notional is
+        recovered from exit notional -/+ price P&L (long/short close), so
+        the %% needs no extra state. Venues without fill_pnl (Coinbase,
+        dry-run) skip silently - their leg_closed / stop_filled_on_venue
+        line already fired. Never raises: P&L narration must not be able
+        to break watch draining (Casey request 2026-09-01)."""
+        try:
+            fn = getattr(self.venue, "fill_pnl", None)
+            if fn is None:
+                return                     # venue has no P&L surface at all
+            data = fn(w["cloid"])
+            if not data:
+                # the one-shot is spent (the watch is consumed by our
+                # caller) - a lost line must at least be visible in logs
+                logger.warning("trade_pnl: no venue P&L surfaced for %s - "
+                               "line skipped", w["cloid"])
+                return
+            pnl, fee = data["pnl"], data["fee"]
+            exit_notional = data["exit_px"] * data["qty"]
+            # long close SELLs: pnl = exit - entry; short close BUYs: reverse
+            entry_notional = exit_notional + (pnl if w["side"] == "BUY"
+                                              else -pnl)
+            net = pnl - fee
+            if entry_notional <= 0:
+                return
+            # "acct-avg": HL marks closedPnl against the ACCOUNT's average
+            # entry, so with both legs open the per-leg entry here is the
+            # blended-implied one (verified ~6% skew on the real 08-31
+            # close). Honesty rule: the line states its measurement basis.
+            self._event("INFO", "trade_pnl",
+                        f"{w['leg']} {w['role']} closed: "
+                        f"{'+' if net >= 0 else '-'}${abs(net):.2f} "
+                        f"({100.0 * net / entry_notional:+.2f}%) on "
+                        f"${entry_notional:.2f} entry (acct-avg; "
+                        f"price P&L {pnl:+.2f}, fees {fee:.2f})")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("trade_pnl alert failed for %s: %s",
+                           w.get("cloid"), exc)
 
     def _record_fill(self, leg: str, role: str, cloid: str, st: dict,
                      ref_px: float, side: str) -> None:
