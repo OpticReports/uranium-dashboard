@@ -60,6 +60,13 @@ def evaluate(built: dict) -> dict:
         valid = np.isfinite(y) & np.isfinite(s) & (s > 0)
         i_tr = D.eval_index(masks["train"], valid)
         i_va = D.eval_index(masks["validate"], valid)
+        # A TRAIN point whose forward window reaches into VALIDATE would fit
+        # the spread on the period it is then scored against. Eight bars out
+        # of two and a half years is a small leak; a leak that is small is
+        # still the kind of thing that makes a study unpublishable, and it
+        # costs one line to not have.
+        if i_va.size:
+            i_tr = i_tr[i_tr + D.HORIZON_BARS <= i_va[0]]
         dress = Mod.QuantileDressing().fit(y[i_tr], s[i_tr])
         out[name] = {
             # TRAIN coverage is 80% by construction - reported only so the

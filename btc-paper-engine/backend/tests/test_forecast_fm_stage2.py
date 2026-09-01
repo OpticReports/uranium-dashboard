@@ -182,3 +182,108 @@ def test_gate_the_schema_survives_a_round_trip(tmp_path):
     row = json.loads(open(p).read().strip())
     assert row["model"] == "Chronos-2" and len(row["q"]) == 9
     assert row["schema"] == S.SCHEMA and row["y"] is None
+
+
+# --------------------------------------------------------------- shadow CLI
+
+def _live_bars(n=600, end=None, seed=9):
+    import time as _t
+    end = int(_t.time()) if end is None else end
+    ts = end - np.arange(n)[::-1] * D.BAR_SECONDS
+    c = 100 * np.exp(np.cumsum(np.random.default_rng(seed).normal(0, .01, n)))
+    return {"ts": ts.astype(np.int64), "open": c, "close": c,
+            "high": c * 1.004, "low": c * 0.996}
+
+
+def test_gate_the_shadow_never_forecasts_a_bar_whose_answer_is_known():
+    """The single easiest way for a forward record to quietly become a
+    backtest: stand on an old bar whose window has already closed."""
+    from research.forecast_fm import shadow_cli as C
+    now = 1_800_000_000
+    bars = _live_bars(end=now)
+    i = C.latest_open_index(bars, D.HORIZON_BARS, now)
+    assert bars["ts"][i] + D.HORIZON_BARS * D.BAR_SECONDS > now
+    assert i == bars["ts"].size - 1 or \
+        bars["ts"][i - 1] + D.HORIZON_BARS * D.BAR_SECONDS <= now
+
+
+def test_gate_a_stale_feed_fails_loudly():
+    """Every window closed means the feed stopped. Logging a forecast from
+    stale bars would poison the record silently."""
+    from research.forecast_fm import shadow_cli as C
+    bars = _live_bars(end=1_700_000_000)
+    with pytest.raises(RuntimeError, match="stale"):
+        C.latest_open_index(bars, D.HORIZON_BARS, now=1_800_000_000)
+
+
+def test_gate_out_of_order_bars_from_the_feed_are_refused(monkeypatch):
+    from research.forecast_fm import shadow_cli as C
+    import json as _j, io
+
+    payload = [{"ts": 200, "open": 1, "high": 1, "low": 1, "close": 1},
+               {"ts": 100, "open": 1, "high": 1, "low": 1, "close": 1}]
+
+    class R(io.BytesIO):
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    monkeypatch.setattr(C.urllib.request, "urlopen",
+                        lambda *a, **k: R(_j.dumps(payload).encode()))
+    with pytest.raises(RuntimeError, match="out of order"):
+        C.fetch_bars()
+
+
+def test_gate_the_incumbent_is_always_shadowed_too():
+    """The question is not 'is the model good' but 'is it better than what
+    we already run'. A record of only the challengers cannot answer it."""
+    from research.forecast_fm import shadow_cli as C
+    bars = _live_bars(n=700)
+    got = C.forecasts_at(bars, i=650, horizon=D.HORIZON_BARS)
+    assert "ATR14 (incumbent)" in got
+    for name, q in got.items():
+        assert len(q) == 9 and np.all(np.diff(np.sort(q)) >= 0)
+
+
+def test_gate_rerunning_the_same_bar_logs_nothing_twice(tmp_path, monkeypatch):
+    """A timer that fires twice, or a manual run after one, must not double
+    the record - duplicate forecasts at one bar would weight that bar twice
+    in every score."""
+    from research.forecast_fm import shadow_cli as C
+    now = 1_800_000_000
+    bars = _live_bars(end=now, n=700)
+    monkeypatch.setattr(C, "fetch_bars", lambda **k: bars)
+    monkeypatch.setattr(C.time, "time", lambda: now)
+    p = str(tmp_path / "s.jsonl")
+    C.main(["--log", p])
+    first = len(S.load(p))
+    C.main(["--log", p])
+    assert first > 0 and len(S.load(p)) == first
+
+
+def test_gate_the_live_spread_is_fitted_only_on_the_past():
+    """Found by a surviving mutant, not by review. The shadow fits its
+    quantile spread on history each run; if that fit reaches bars at or
+    after the forecast bar, the LIVE record leaks the future - the one
+    failure the forward shadow exists to be immune to.
+
+    Proven by making the future violent and asserting the forecast does not
+    move: a spread that saw it would widen."""
+    from research.forecast_fm import shadow_cli as C
+    i, n = 500, 700
+    rng = np.random.default_rng(11)
+    r = rng.normal(0, 0.01, n)
+
+    calm, wild = r.copy(), r.copy()
+    wild[i + 1:] = rng.normal(0, 0.20, n - i - 1)      # future only
+
+    def mk(rr):
+        c = 100 * np.exp(np.cumsum(rr))
+        return {"ts": np.arange(n, dtype=np.int64) * D.BAR_SECONDS + 1_700_000_000,
+                "open": c, "close": c, "high": c * 1.004, "low": c * 0.996}
+
+    a = C.forecasts_at(mk(calm), i=i, horizon=D.HORIZON_BARS)
+    b = C.forecasts_at(mk(wild), i=i, horizon=D.HORIZON_BARS)
+    key = "ATR14 (incumbent)"
+    assert np.allclose(a[key], b[key]), (
+        "the forecast changed when only FUTURE bars changed - the spread "
+        "is being fitted on data at or after the forecast bar")

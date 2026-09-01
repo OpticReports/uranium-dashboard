@@ -138,3 +138,21 @@ def test_gate_the_range_estimator_sees_what_closes_cannot():
     bars = {"high": np.array([110.0]), "low": np.array([90.0]),
             "close": np.array([100.0])}
     assert Mod.parkinson_sigma(bars)[0] > 0.1
+
+
+def test_gate_no_train_point_reaches_into_validate():
+    """The TRAIN/VALIDATE boundary leak: a point 4 bars before the split has
+    a forward window straddling it, so fitting the spread there uses the
+    period it is then scored against. Small - 8 bars in two and a half
+    years - and small leaks are still what make a study unpublishable."""
+    from research.forecast_fm import run as R
+    built = R.build()
+    res = R.evaluate(built)
+    y, masks = built["y"], built["masks"]
+    for name, r in res.items():
+        s = r["_sigma"]
+        valid = np.isfinite(y) & np.isfinite(s) & (s > 0)
+        i_va = D.eval_index(masks["validate"], valid)
+        i_tr = D.eval_index(masks["train"], valid)
+        i_tr = i_tr[i_tr + D.HORIZON_BARS <= i_va[0]]
+        assert i_tr.max() + D.HORIZON_BARS <= i_va[0], name

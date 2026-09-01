@@ -26,6 +26,16 @@ services:
     plan: starter            # always-on (scheduler runs) + supports a persistent disk
     healthCheckPath: /health
     autoDeploy: true
+    # Only rebuild when THIS service's files change (2026-09-01). Without
+    # this, every push to main redeployed every service: a docs-only commit
+    # and a change to an unrelated project both restarted btc-executor,
+    # which holds live positions. Paths are relative to the REPO ROOT even
+    # where dockerContext is not. render.yaml is deliberately absent - a
+    # blueprint sync already redeploys the resources it changed, and listing
+    # it here would rebuild all nine services on any edit to the file.
+    buildFilter:
+      paths:
+        - genomics-alpha-tracker/**
     disk:
       name: data             # persists SQLite + cache across restarts/redeploys
       mountPath: /app/data
@@ -96,6 +106,16 @@ services:
     plan: starter
     healthCheckPath: /health
     autoDeploy: true
+    # Only rebuild when THIS service's files change (2026-09-01). Without
+    # this, every push to main redeployed every service: a docs-only commit
+    # and a change to an unrelated project both restarted btc-executor,
+    # which holds live positions. Paths are relative to the REPO ROOT even
+    # where dockerContext is not. render.yaml is deliberately absent - a
+    # blueprint sync already redeploys the resources it changed, and listing
+    # it here would rebuild all nine services on any edit to the file.
+    buildFilter:
+      paths:
+        - barbell-lab/**
     disk:
       name: data
       mountPath: /app/data
@@ -139,6 +159,16 @@ services:
     plan: starter
     healthCheckPath: /health
     autoDeploy: true
+    # Only rebuild when THIS service's files change (2026-09-01). Without
+    # this, every push to main redeployed every service: a docs-only commit
+    # and a change to an unrelated project both restarted btc-executor,
+    # which holds live positions. Paths are relative to the REPO ROOT even
+    # where dockerContext is not. render.yaml is deliberately absent - a
+    # blueprint sync already redeploys the resources it changed, and listing
+    # it here would rebuild all nine services on any edit to the file.
+    buildFilter:
+      paths:
+        - treasury-canary/**
     disk:
       name: canary-data
       mountPath: /app/data
@@ -182,6 +212,16 @@ services:
     plan: starter            # always-on: the engine polls 24/7
     healthCheckPath: /health
     autoDeploy: true
+    # Only rebuild when THIS service's files change (2026-09-01). Without
+    # this, every push to main redeployed every service: a docs-only commit
+    # and a change to an unrelated project both restarted btc-executor,
+    # which holds live positions. Paths are relative to the REPO ROOT even
+    # where dockerContext is not. render.yaml is deliberately absent - a
+    # blueprint sync already redeploys the resources it changed, and listing
+    # it here would rebuild all nine services on any edit to the file.
+    buildFilter:
+      paths:
+        - btc-paper-engine/**
     disk:
       name: btc-data
       mountPath: /app/data
@@ -229,6 +269,16 @@ services:
     plan: starter            # always-on: daily scan + market-hours chain refresh
     healthCheckPath: /health
     autoDeploy: true
+    # Only rebuild when THIS service's files change (2026-09-01). Without
+    # this, every push to main redeployed every service: a docs-only commit
+    # and a change to an unrelated project both restarted btc-executor,
+    # which holds live positions. Paths are relative to the REPO ROOT even
+    # where dockerContext is not. render.yaml is deliberately absent - a
+    # blueprint sync already redeploys the resources it changed, and listing
+    # it here would rebuild all nine services on any edit to the file.
+    buildFilter:
+      paths:
+        - catalyst-options-engine/**
     disk:
       name: options-data     # paper book + catalyst calendar survive deploys
       mountPath: /app/data
@@ -289,6 +339,24 @@ services:
     plan: starter
     healthCheckPath: /health
     autoDeploy: true
+    # Only rebuild when THIS service's files change (2026-09-01). Without
+    # this, every push to main redeployed every service: a docs-only commit
+    # and a change to an unrelated project both restarted btc-executor,
+    # which holds live positions. Paths are relative to the REPO ROOT even
+    # where dockerContext is not. render.yaml is deliberately absent - a
+    # blueprint sync already redeploys the resources it changed, and listing
+    # it here would rebuild all nine services on any edit to the file.
+    # NARROWED likewise. tests/ IS in the image - it is the gate the
+    # service runs - so a test change must rebuild. A restart also wipes the
+    # in-memory job store, losing the result of any task in flight.
+    buildFilter:
+      paths:
+        - code-agent/app/**
+        - code-agent/tests/**
+        - code-agent/Dockerfile
+        - code-agent/pytest.ini
+        - code-agent/requirements.txt
+        - btc-executor/requirements.txt
     disk:
       name: repo             # the checkout; a cold clone each boot is slow
       mountPath: /app/data
@@ -329,6 +397,23 @@ services:
     plan: starter            # always-on: mirrors stops 24/7
     healthCheckPath: /health
     autoDeploy: true
+    # Only rebuild when THIS service's files change (2026-09-01). Without
+    # this, every push to main redeployed every service: a docs-only commit
+    # and a change to an unrelated project both restarted btc-executor,
+    # which holds live positions. Paths are relative to the REPO ROOT even
+    # where dockerContext is not. render.yaml is deliberately absent - a
+    # blueprint sync already redeploys the resources it changed, and listing
+    # it here would rebuild all nine services on any edit to the file.
+    # NARROWED to what the image contains (the Dockerfile copies only
+    # requirements.txt and app/). btc-executor/** would still let a docs or
+    # tests-only commit restart a container holding live positions - which
+    # b6bb758 did today. Same reasoning as ibkr-executor below, which
+    # learned it the expensive way on 2026-08-28.
+    buildFilter:
+      paths:
+        - btc-executor/app/**
+        - btc-executor/Dockerfile
+        - btc-executor/requirements.txt
     disk:
       name: btc-exec-data
       mountPath: /app/data

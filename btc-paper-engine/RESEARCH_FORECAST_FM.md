@@ -129,6 +129,20 @@ Consequence, and it is the load-bearing methodological decision here:
   edge it belongs in the live stack, and research whose conclusions feed
   sizing does not live in a toy repo. Only the heavy compute goes
   elsewhere, into a separate virtualenv on a box with disk.
+- **Nobody runs S2 by hand.** `systemd/fm-shadow.{service,timer}` fires
+  every 4h at :07 past the bar boundary. Install:
+
+      mkdir -p ~/fm-shadow
+      cp research/forecast_fm/systemd/fm-shadow.* ~/.config/systemd/user/
+      systemctl --user daemon-reload
+      systemctl --user enable --now fm-shadow.timer
+      loginctl enable-linger root      # survives logout
+      systemctl --user list-timers fm-shadow.timer
+
+  The unit runs read-only everywhere except its own log, holds no
+  credentials, and reads only the public `/bars`. It does not retry: the
+  timer fires again in four hours, and a job that silently retried a broken
+  feed would fill the record with forecasts made from bad bars.
 - **S3 shadow sizing.** Compute the `KELLY_M` the forecast WOULD have
   produced. Logged, never applied.
 - **S4 gate.** Live only after §4.5. Executor sizing changes remain
