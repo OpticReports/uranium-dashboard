@@ -83,8 +83,30 @@ sign to power a study for. And 35.3 < 50, so conviction sizing stays fully mecha
 
 ## Status
 
-Design frozen, nothing built. The research is complete and adversarially verified;
-the build is gated on the P1 questions in [`PENDING.md`](PENDING.md) — chiefly Casey's
-risk capital and account permissions, whether the uranium sleeve is actually held
-anywhere this session can see, and which of two readings of the no-trade gate applies
-(they differ by 26× in how often the system is allowed to act).
+Design frozen. The research is complete and adversarially verified; the build is gated
+on the P1 questions in [`PENDING.md`](PENDING.md) — chiefly Casey's risk capital and
+account permissions, whether the uranium sleeve is actually held anywhere this session
+can see, and which of two readings of the no-trade gate applies (they differ by 26× in
+how often the system is allowed to act).
+
+**One thing is live: the ledger.** [`ledger.csv`](ledger.csv) carries dated, resolvable
+forecasts, and [`resolve.py`](resolve.py) closes them — keyless, idempotent, and it
+refuses to settle rather than guessing when a price is unavailable or a primitive is
+unparseable. Per [`BLUEPRINT.md`](BLUEPRINT.md) §9 the closing loop ships with the
+writing loop, because `venture-deal-analyzer/ledger.csv` has 6 rows and 0 resolved
+outcomes precisely for want of one.
+
+```
+python3 variant-lab/resolve.py            # resolve anything due, print calibration
+python3 variant-lab/resolve.py --status   # summary only, never writes
+```
+
+Rows are logged whether or not the trade is taken — a pass is a forecast, and a ledger
+that only records what we bought produces a survivorship-biased calibration record.
+`mechanism_id = NONE` marks a row that carries **no system direction**: under
+[ruling R1](RULINGS.md) direction requires a named forced-flow mechanism with a dated
+public trigger, so a row without one is an analysed candidate, never a signal.
+
+**Outstanding:** the R1-monthly / R2-quarterly Routines that fire `resolve.py` on a
+schedule do not exist yet. Until they do, the closing loop is a script someone has to
+remember to run — which is the same failure mode in a slower costume.
