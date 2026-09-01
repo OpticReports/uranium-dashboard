@@ -104,11 +104,31 @@ Consequence, and it is the load-bearing methodological decision here:
 
 ## 6. Stages
 
-- **S1 frozen bake-off.** All five models, targets: realized vol at S5's
-  sizing horizon. TRAIN / VALIDATE split fixed before the first run;
-  HOLDOUT sealed.
-- **S2 forward shadow.** Daily job logging all 9 quantiles, scored weekly
-  against realized. Reuses the BARBELL-SHADOW harness.
+- **S1a frozen bake-off, baselines.** DONE — see section 9.
+- **S1b same bake-off, foundation models.** Built, not yet run: needs
+  torch and weights, which are deliberately not in any deployed service.
+
+      python3 -m venv ~/.venvs/fmstudy
+      ~/.venvs/fmstudy/bin/pip install -r \
+          research/forecast_fm/requirements-research.txt
+      cd btc-paper-engine/backend
+      ~/.venvs/fmstudy/bin/python -m research.forecast_fm.run --with-fm
+
+  Runs on CPU, 343 forecasts per model, minutes not hours. Absent models
+  are NAMED and skipped, never silently dropped.
+- **S2 forward shadow.** Built: `shadow.py`. Append-only JSONL, the
+  forecast written before the outcome exists, `ts_resolve` derived from the
+  horizon so a caller cannot choose the window that flatters it, and a
+  window that has not closed is refused rather than scored early.
+  `score()` reports pending rows alongside resolved ones.
+
+  **S1b gates S2.** A model that cannot beat ATR14 offline does not earn a
+  forward shadow; running one anyway would just be a slower way to learn
+  the same thing.
+- **Where it runs.** In THIS repo, not the sandbox: if it improves the
+  edge it belongs in the live stack, and research whose conclusions feed
+  sizing does not live in a toy repo. Only the heavy compute goes
+  elsewhere, into a separate virtualenv on a box with disk.
 - **S3 shadow sizing.** Compute the `KELLY_M` the forecast WOULD have
   produced. Logged, never applied.
 - **S4 gate.** Live only after §4.5. Executor sizing changes remain

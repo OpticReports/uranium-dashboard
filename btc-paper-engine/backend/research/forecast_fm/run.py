@@ -19,7 +19,7 @@ from . import metrics as M
 from . import models as Mod
 
 
-def build() -> dict:
+def build(with_fm: bool = False, device: str = "cpu") -> dict:
     bars = D.load_bars(D.bars_path())
     r = D.log_returns(bars["close"])
     y = D.forward_realized_vol(bars["close"], D.HORIZON_BARS)
@@ -34,6 +34,21 @@ def build() -> dict:
     }
     params = Mod.garch11_fit(r[masks["train"]])
     sig["GARCH(1,1)"] = Mod.garch11_sigma(r, params, D.HORIZON_BARS)
+
+    if with_fm:
+        # Foundation models forecast at the evaluation points only: 343
+        # forward passes instead of 10,000, which is minutes on a CPU
+        # rather than hours, and the non-evaluated bars are never scored.
+        from . import fm as FM
+        series = FM.input_series(bars)
+        base_valid = np.isfinite(y) & np.isfinite(series)
+        want = np.concatenate([D.eval_index(masks["train"], base_valid),
+                               D.eval_index(masks["validate"], base_valid)])
+        for ad in FM.available(device=device):
+            col = np.full(y.shape, np.nan)
+            col[want] = ad.predict_sigma(series, want, D.HORIZON_BARS)
+            sig[ad.name] = col
+
     return {"bars": bars, "y": y, "masks": masks, "sigma": sig,
             "garch": params}
 
@@ -117,7 +132,16 @@ def charts(built: dict, res: dict, path: str) -> str:
 
 
 def main() -> None:
-    built = build()
+    import argparse
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--with-fm", action="store_true",
+                    help="also run Chronos-2 / TimesFM-3 (needs "
+                         "requirements-research.txt in a separate env)")
+    ap.add_argument("--device", default="cpu")
+    ap.add_argument("--chart", default="research/forecast_fm/stage1_baselines.png")
+    args = ap.parse_args()
+
+    built = build(with_fm=args.with_fm, device=args.device)
     res = evaluate(built)
     o, a, b = built["garch"]
     print(f"\nGARCH(1,1) fitted on TRAIN: omega={o:.3e} alpha={a:.3f} "
@@ -126,6 +150,8 @@ def main() -> None:
     print("\nTRAIN coverage is 80% by construction (the spread is fitted "
           "there); only the VALIDATE column is evidence.")
     print("HOLDOUT: sealed, not touched.")
+    if args.chart:
+        print("chart:", charts(built, res, args.chart))
 
 
 if __name__ == "__main__":
