@@ -128,8 +128,62 @@ decision, recorded here rather than argued: personal use, accepted risk.
 Chronos-2 is Apache 2.0 and carries no such restriction, which is a reason
 to prefer it on a tie regardless of the licence question.
 
-## 9. Results — EMPTY UNTIL RUN
+## 9. Results
 
-No numbers exist yet. Any figure appearing in this section must be dated
-and state its window and whether it is TRAIN, VALIDATE, HOLDOUT or shadow.
-Failures are recorded here, not deleted.
+### S1a — baselines only, 2026-09-01. HOLDOUT untouched.
+
+Target: forward realized vol over 8 bars (32h = median hold of the
+reference pullback trades). VALIDATE = 2024-07-01..2025-09-30, scored on
+343 NON-OVERLAPPING windows. Every model dressed with the same TRAIN-fitted
+ratio spread, so this compares point forecasts on equal terms.
+
+| model | coverage | gate | pinball | vs incumbent |
+|---|---|---|---|---|
+| **ATR14 (incumbent)** | 0.799 | PASS | 1.355e-03 | — |
+| EWMA(0.94) **range** | 0.834 | PASS | 1.357e-03 | +0.1% |
+| GARCH(1,1) | 0.845 | PASS | 1.390e-03 | +2.6% |
+| EWMA(0.94) **close** | 0.834 | PASS | 1.406e-03 | +3.7% |
+| RandomWalk(8) | 0.796 | PASS | 1.891e-03 | +39.5% |
+
+GARCH(1,1) on TRAIN: omega 7.006e-06, alpha 0.130, beta 0.825,
+persistence 0.955.
+
+**Finding 1 — the incumbent is already the best of these, and is
+essentially perfectly calibrated** (0.799 against a 0.800 target). Nothing
+here justifies changing how the book is sized.
+
+**Finding 2 — the ranking is about the INPUT, not the model.** The same
+EWMA recursion fed a Parkinson range estimate instead of closes moves from
++3.7% to +0.1%. A bar that travelled 4% and returned is flat to a
+close-to-close estimator and violent to a range one. That difference is an
+order of magnitude larger than any difference between the models.
+
+Consequence, and it is the actionable output of S1a: **a foundation model
+handed a series of closes starts ~3.6% behind before it forecasts
+anything.** Chronos-2 and TimesFM-3 must be given range-derived series, or
+OHLC as covariates, or the test measures the input handicap and calls it a
+model result.
+
+**Finding 3 — every model fails in the same place, and it is the place
+that costs money.** All five pass the aggregate coverage gate, but all five
+sag in the upper-middle: at nominal 0.6 the empirical is 0.42-0.53 across
+the board. The quantiles that should bound a violent period are too low, so
+the sizer takes too much risk exactly when vol is about to spike. That
+specific defect — not general accuracy — is where a better forecaster would
+earn its place, and it is what S2 should be scored on.
+
+**Prior update: DOWN on H1.** The bar is a well-calibrated incumbent, the
+spread between credible models is ~3%, and the honest expectation of a
+foundation model beating ATR14 enough to justify running 120M-330M
+parameters in the sizing path is now low. Not abandoned — Finding 3 is a
+real defect and a genuinely multivariate model is the kind of thing that
+could fix it — but S2 should be cheap until it shows something.
+
+Chart: `research/forecast_fm/stage1_baselines.png`.
+
+**Not run:** Chronos-2 and TimesFM-3. torch is not installed in this
+container. The adapter interface is `sigma_hat -> (n, 9)` via
+QuantileDressing, or nine native quantiles scored directly.
+
+Any figure added here must be dated and state its window and whether it is
+TRAIN, VALIDATE, HOLDOUT or shadow. Failures are recorded, not deleted.
