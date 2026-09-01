@@ -158,6 +158,12 @@ class HyperliquidVenue:
         self._meta = self._coin_meta()
         self._mid_cache: tuple[float, float] | None = None
         self._abs_cache: tuple[float, bool] | None = None
+        # userFills cache: order_status resolves fill prices from userFills
+        # (Hyperliquid's orderStatus payload carries NO avgPx - verified
+        # against the live API 2026-09-01), and one poll pass can ask about
+        # many watches; fetch the account's fills at most once per
+        # FILLS_CACHE_S across them.
+        self._fills_cache: tuple[float, list | None] = (0.0, None)
         # last equity read decomposed, for the operator: whether the
         # unified spot figure also carries unrealised perp PnL is
         # UNVERIFIED until a live position exists to measure it against.
@@ -522,8 +528,69 @@ class HyperliquidVenue:
         if status == "FILLED" and filled <= 0.0:
             filled = total
         avg = inner.get("avgPx") or o.get("avgPx")
+        if status == "FILLED" and not avg:
+            # Hyperliquid's orderStatus response does NOT include an average
+            # fill price - the order object carries limitPx/origSz/sz only
+            # (verified live 2026-09-01 on a real filled order). Every fill
+            # therefore resolved as FILLED/avg_price=None, _record_fill
+            # dropped it, and the ramp's slippage sample sat at 0 forever
+            # while /status showed healthy fills. The prices exist in
+            # userFills, keyed by the SAME oid and (derived) cloid this
+            # order carries - resolve them there, size-weighted across
+            # partial prints.
+            oid = inner.get("oid")
+            want = str(inner.get("cloid") or "").lower()
+            num = den = 0.0
+            for f in self._recent_fills():
+                try:
+                    if (oid is not None and f.get("oid") == oid) or (
+                            want and str(f.get("cloid") or "").lower() == want):
+                        sz = float(f.get("sz") or 0.0)
+                        num += float(f.get("px") or 0.0) * sz
+                        den += sz
+                except (TypeError, ValueError, AttributeError):
+                    continue
+            # Accept only a COMPLETE reconstruction. A userFills snapshot
+            # (cached up to FILLS_CACHE_S, or an endpoint lagging its own
+            # orderStatus) can hold a SUBSET of a multi-print order, and a
+            # subset average is wrong in the direction that flatters
+            # slippage - the early prints of a crossing order are the
+            # best-priced ones. Short of the known filled qty, leave avg
+            # unset so the fill-watch retries with a fresher snapshot
+            # instead of recording a wrong price forever (counter-agent
+            # find 2026-09-01).
+            if den > 0 and (filled <= 0.0 or den >= filled - 1e-9):
+                avg = num / den
         return {"status": status, "filled_qty": filled,
                 "avg_price": float(avg) if avg else None}
+
+    FILLS_CACHE_S = 10.0
+
+    def _recent_fills(self) -> list[dict]:
+        """The account's recent fills (userFills), cached briefly. A failed
+        fetch returns [] and is ALSO cached for the TTL: the caller keeps
+        its fill-watch alive on an unresolved price, so a transient blip
+        costs one retry cycle, never a dropped sample - and a hard venue
+        outage cannot turn the watch poll into a request storm."""
+        now = time.time()
+        ts, fills = self._fills_cache
+        if fills is not None and now - ts < self.FILLS_CACHE_S:
+            return fills
+        try:
+            fills = self.info.user_fills(self.address) or []
+            if not isinstance(fills, list):
+                # the pinned SDK returns {"error": ...} instead of raising
+                # on a 2xx body it cannot parse - a truthy dict would
+                # iterate as its keys and crash the caller's no-raise
+                # contract (counter-agent find 2026-09-01)
+                logger.warning("user_fills(%s): non-list payload %.80r",
+                               self.address, fills)
+                fills = []
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("user_fills(%s) failed: %s", self.address, exc)
+            fills = []
+        self._fills_cache = (now, fills)
+        return fills
 
     def open_orders(self) -> list[dict]:
         """Every resting order for our coin. This is the F1 open-orders

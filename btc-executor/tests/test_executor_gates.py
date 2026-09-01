@@ -3697,6 +3697,159 @@ def test_gate_M2_fill_watch_survives_unknown_status(tmp_path):
         "the fill must still be recorded after the blip clears"
 
 
+class _PricelessFillVenue(FakeVenue):
+    """FILLED with no fill price surfaced yet - what Hyperliquid's
+    orderStatus looks like before userFills catches up (or forever, before
+    the 2026-09-01 fix resolved prices from userFills)."""
+
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        self.priceless: set = set()
+
+    def order_status(self, cloid):
+        st = super().order_status(cloid)
+        if st and cloid in self.priceless:
+            st = dict(st)
+            st["avg_price"] = None
+        return st
+
+
+def test_gate_a_filled_watch_without_a_price_is_kept_not_consumed(tmp_path):
+    """2026-09-01: Hyperliquid's orderStatus carries no avgPx, so every fill
+    resolved FILLED/avg_price=None; _record_fill dropped it silently AND the
+    watch loop consumed the watch in the same pass. The slippage sample sat
+    at 0 through the whole go-live. FILLED-without-price must keep the watch
+    (the price can resolve from userFills a cycle later) and say so."""
+    v = _PricelessFillVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    v._add("MARKET", "BUY", 0.01, "NP-1", px=60_030.0)
+    v.orders["NP-1"]["status"] = "FILLED"
+    v.priceless.add("NP-1")                         # venue: filled, price TBD
+    ex._watch_fill("trend", "entry", "NP-1", 60_000.0, "BUY")
+    ex._poll_fill_watch()
+    assert ex._fill_watch, "FILLED w/o price must KEEP the watch"
+    assert not any(f["cloid"] == "NP-1" for f in ex.state.fills)
+    assert any(e["kind"] == "fill_px_unresolved" for e in ex.state.events), \
+        "the unresolved price must be VISIBLE, not a silent drop"
+    # price resolves next cycle (userFills caught up): recorded exactly once
+    v.priceless.discard("NP-1")
+    ex._poll_fill_watch()
+    hits = [f for f in ex.state.fills if f["cloid"] == "NP-1"]
+    assert len(hits) == 1 and hits[0]["px"] == 60_030.0
+    assert not any(w["cloid"] == "NP-1" for w in ex._fill_watch)
+
+
+def test_gate_a_priceless_filled_watch_expires_loudly_after_48h(tmp_path):
+    v = _PricelessFillVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    v._add("MARKET", "BUY", 0.01, "NP-2")
+    v.orders["NP-2"]["status"] = "FILLED"
+    v.priceless.add("NP-2")
+    ex._watch_fill("trend", "entry", "NP-2", 60_000.0, "BUY")
+    ex._fill_watch[0]["ts"] -= 49 * 3600            # age it past the bound
+    ex._poll_fill_watch()
+    assert not ex._fill_watch                        # bounded, not immortal
+    assert any(e["kind"] == "fill_px_lost" for e in ex.state.events), \
+        "losing a sample must be SAID, never silent"
+
+
+def test_gate_unresolved_price_warns_once_then_says_resolved(tmp_path):
+    """One WARN when the price goes missing, one INFO when it lands - not a
+    warning per poll (surviving mutant, counter-agent 2026-09-01), and not a
+    standing scare with no all-clear."""
+    v = _PricelessFillVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    v._add("MARKET", "BUY", 0.01, "NP-3", px=60_030.0)
+    v.orders["NP-3"]["status"] = "FILLED"
+    v.priceless.add("NP-3")
+    ex._watch_fill("trend", "entry", "NP-3", 60_000.0, "BUY")
+    for _ in range(3):
+        ex._poll_fill_watch()
+    warned = [e for e in ex.state.events if e["kind"] == "fill_px_unresolved"]
+    assert len(warned) == 1, "the unresolved WARN must fire ONCE, not per poll"
+    v.priceless.discard("NP-3")
+    ex._poll_fill_watch()
+    assert any(e["kind"] == "fill_px_resolved" for e in ex.state.events), \
+        "a resolved retry must close the loop the WARN opened"
+
+
+def test_gate_cancelled_watch_is_consumed_not_kept(tmp_path):
+    """CANCELLED is terminal: the watch must be consumed without fill_px_*
+    noise. Pins the keep-branch to FILLED only (a widened branch survived
+    every prior gate - counter-agent 2026-09-01)."""
+    v = _PricelessFillVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    v._add("MARKET", "BUY", 0.01, "NP-4")
+    v.orders["NP-4"]["status"] = "CANCELLED"
+    ex._watch_fill("trend", "entry", "NP-4", 60_000.0, "BUY")
+    ex._poll_fill_watch()
+    assert not ex._fill_watch, "CANCELLED must consume the watch"
+    assert not any(f["cloid"] == "NP-4" for f in ex.state.fills)
+    assert not any(e["kind"].startswith("fill_px") for e in ex.state.events)
+
+
+def test_gate_a_late_drill_sample_resets_the_no_fill_counter(tmp_path):
+    """A drill sample that lands one poll late is still a landed sample:
+    it must reset _drill_no_fill exactly like a same-pass one."""
+    v = _PricelessFillVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    ex._drill_no_fill = 2
+    v._add("MARKET", "BUY", 0.001, "DL-1", px=60_030.0)
+    v.orders["DL-1"]["status"] = "FILLED"
+    v.priceless.add("DL-1")
+    ex._watch_fill("drill", "drill_entry", "DL-1", 60_000.0, "BUY")
+    ex._poll_fill_watch()                            # kept, price pending
+    assert ex._drill_no_fill == 2
+    v.priceless.discard("DL-1")
+    ex._poll_fill_watch()                            # sample lands late
+    assert any(f["cloid"] == "DL-1" for f in ex.state.fills)
+    assert ex._drill_no_fill == 0, \
+        "a late-landing drill sample must reset the no-fill counter"
+
+
+class _AllPricelessVenue(FakeVenue):
+    """Every FILLED order reads with no price yet - the venue-wide shape of
+    the userFills lag / 10s failure-cache window during a drill."""
+
+    def order_status(self, cloid):
+        st = super().order_status(cloid)
+        if st and st.get("status") == "FILLED":
+            st = dict(st)
+            st["avg_price"] = None
+        return st
+
+
+def test_gate_a_price_pending_drill_is_not_a_no_fill_strike(tmp_path,
+                                                            monkeypatch):
+    """Counter-agent find 2026-09-01: with 2 of 3 no-fill strikes already
+    spent on the live ramp, ONE drill whose prices resolve a poll late
+    (10s fills-cache blip) would have latched auto_drill_off and paged
+    ACTION. A drill with its watches still pending is scored as PENDING,
+    not as a no-sample strike."""
+    from app.mirror import DRILL_NO_FILL_MAX
+    cfg = Cfg()
+    cfg.state_path = str(tmp_path / "state.json")
+    cfg.dry_run = False
+    v = _AllPricelessVenue()
+    ex = Executor(v, cfg)
+    ex.cfg.auto_drill = True
+    ex.cfg.auto_drill_spacing_s = 0
+    ex.cfg.drill_cooldown_s = 0
+    sent = []
+    from app import alerts
+    monkeypatch.setattr(alerts, "send", lambda m: sent.append(m))
+    ex._drill_no_fill = DRILL_NO_FILL_MAX - 1        # one strike from latch
+    ex._maybe_auto_drill(True)
+    assert ex.state.drills and ex.state.drills[-1]["ok"] is True
+    assert ex.state.auto_drill_off is None, \
+        "a price-pending drill must NOT latch auto_drill_off"
+    assert ex._drill_no_fill == DRILL_NO_FILL_MAX - 1, \
+        "pending resolution is not a no-fill strike"
+    assert any(e["kind"] == "drill_sample_pending" for e in ex.state.events)
+    assert any(w.get("leg") == "drill" for w in ex._fill_watch), \
+        "the drill watches must be KEPT for later resolution"
+
+
 def test_gate_M1_cb_order_status_api_error_is_unknown(tmp_path, monkeypatch):
     """cb.py's exception branch must return UNKNOWN, never None (None means
     only no-handle). Pins the tri-state at the adapter."""

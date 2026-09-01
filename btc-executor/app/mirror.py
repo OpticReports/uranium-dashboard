@@ -2416,6 +2416,37 @@ class Executor:
                     keep.append(w)
                 continue
             if st.get("status") == "FILLED":
+                if not st.get("avg_price"):
+                    # FILLED with no price yet: _record_fill would drop it
+                    # SILENTLY and this loop used to consume the watch in
+                    # the same breath - the exact combination that held the
+                    # slippage sample at 0 for the entire Hyperliquid
+                    # go-live while every surface looked healthy
+                    # (2026-09-01). Keep the watch so a lagging fills
+                    # endpoint gets retried, and say so once.
+                    if time.time() - w["ts"] < 48 * 3600:
+                        if not w.get("nopx_warned"):
+                            w["nopx_warned"] = True
+                            self._event("WARN", "fill_px_unresolved",
+                                        f"{w['cloid']} FILLED but the venue "
+                                        f"has not surfaced a fill price - "
+                                        f"keeping the watch")
+                        keep.append(w)
+                    else:
+                        self._event("WARN", "fill_px_lost",
+                                    f"{w['cloid']} FILLED but no fill price "
+                                    f"within 48h - slippage sample loses "
+                                    f"this fill")
+                    continue
+                if w.get("nopx_warned"):
+                    # close the loop the WARN opened: the retry did its job
+                    self._event("INFO", "fill_px_resolved",
+                                f"{w['cloid']} fill price resolved on retry")
+                    if w.get("leg") == "drill":
+                        # this sample was still pending when its drill was
+                        # scored; a landed drill sample is the no-fill
+                        # counter's reset condition however late it arrives
+                        self._drill_no_fill = 0
                 self._record_fill(w["leg"], w["role"], w["cloid"], st,
                                   w["ref_px"], w["side"])
         self._fill_watch = keep
@@ -2732,6 +2763,7 @@ class Executor:
             self._auto_drill_wait = refusal
             return
         fills_before = self._live_fill_count()
+        drill_start = time.time()
         rec = self._drill_locked(kind)
         if rec.get("refused"):
             self._auto_drill_wait = rec["refused"]
@@ -2744,7 +2776,24 @@ class Executor:
         # Without this bound auto-drill burns the daily budget forever.
         if rec["ok"]:
             if self._live_fill_count() <= fills_before:
-                self._drill_no_fill += 1
+                # A drill leg that is FILLED at the venue but whose price
+                # has not surfaced in userFills yet is a KEPT watch, not a
+                # missing sample - it records on a later poll (resetting
+                # this counter) or expires loudly at 48h. Scoring it as a
+                # no-fill strike would let one 10s cache blip at 2/3
+                # strikes latch auto_drill_off (counter-agent find
+                # 2026-09-01), so a strike only counts when no drill watch
+                # from THIS drill is still pending.
+                pending = [w for w in self._fill_watch
+                           if w.get("leg") == "drill"
+                           and w["ts"] >= drill_start]
+                if pending:
+                    self._event("WARN", "drill_sample_pending",
+                                f"auto-drill {kind}: {len(pending)} fill(s) "
+                                f"await price resolution - no-fill strike "
+                                f"not counted")
+                else:
+                    self._drill_no_fill += 1
                 if self._drill_no_fill >= DRILL_NO_FILL_MAX:
                     self.state.auto_drill_off = (
                         f"{self._drill_no_fill} drills produced no slippage "

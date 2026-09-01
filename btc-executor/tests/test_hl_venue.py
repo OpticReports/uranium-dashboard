@@ -85,6 +85,12 @@ class _FakeInfo:
             return {"status": "unknownOid"}
         return {"status": "order", "order": rec}
 
+    def user_fills(self, address):
+        self.user_fills_calls = getattr(self, "user_fills_calls", 0) + 1
+        if getattr(self, "raise_on_fills", None):
+            raise RuntimeError(self.raise_on_fills)
+        return getattr(self, "fills", [])
+
     def open_orders(self, address, dex=""):
         return self.resting
 
@@ -801,3 +807,154 @@ def test_gate_equity_records_both_pools_for_the_operator(venue):
                         "assetPositions": []}
     venue.equity()
     assert venue.equity_parts == {"perp": 12.34, "spot": 999.00}
+
+
+# ---------------------------------------------------------------------------
+# 2026-09-01 fill-capture gates. Hyperliquid's orderStatus payload carries NO
+# avgPx (verified against the live API on a real filled order): every fill
+# resolved as FILLED/avg_price=None, _record_fill dropped it silently, and
+# the ramp's slippage sample sat at 0 through the entire go-live. Prices
+# exist only in userFills, keyed by the same oid/cloid.
+# ---------------------------------------------------------------------------
+
+def _filled_order_rec(our_cloid, oid=4242, orig="0.002"):
+    from app.hl import derive_cloid
+    return {"order": {"coin": "BTC", "side": "B", "limitPx": "60030.0",
+                      "sz": "0.0", "oid": oid, "origSz": orig,
+                      "cloid": derive_cloid(our_cloid)},
+            "status": "filled"}
+
+
+def test_gate_filled_status_resolves_avg_px_from_user_fills(venue):
+    v = venue
+    from app.hl import derive_cloid
+    v.info.orders[derive_cloid("P-1-E1")] = _filled_order_rec("P-1-E1")
+    v.info.fills = [{"coin": "BTC", "px": "60010.0", "sz": "0.002",
+                     "oid": 4242, "cloid": derive_cloid("P-1-E1")}]
+    st = v.order_status("P-1-E1")
+    assert st["status"] == "FILLED"
+    assert st["avg_price"] == pytest.approx(60010.0)
+
+
+def test_gate_partial_prints_weight_the_average(venue):
+    v = venue
+    from app.hl import derive_cloid
+    v.info.orders[derive_cloid("P-2-E1")] = _filled_order_rec("P-2-E1", oid=7,
+                                                             orig="0.003")
+    v.info.fills = [
+        {"px": "100.0", "sz": "0.001", "oid": 7, "cloid": derive_cloid("P-2-E1")},
+        {"px": "110.0", "sz": "0.002", "oid": 7, "cloid": derive_cloid("P-2-E1")},
+        {"px": "999.0", "sz": "5.0", "oid": 8, "cloid": "0xother"},  # not ours
+    ]
+    st = v.order_status("P-2-E1")
+    assert st["avg_price"] == pytest.approx((100 * 1 + 110 * 2) / 3)
+
+
+def test_gate_user_fills_is_cached_across_one_poll_pass(venue):
+    v = venue
+    from app.hl import derive_cloid
+    for i in range(5):
+        v.info.orders[derive_cloid(f"P-{i}-E1")] = _filled_order_rec(
+            f"P-{i}-E1", oid=100 + i)
+    v.info.fills = []
+    for i in range(5):
+        v.order_status(f"P-{i}-E1")
+    assert v.info.user_fills_calls == 1          # one fetch, five lookups
+
+
+def test_gate_user_fills_failure_never_breaks_order_status(venue):
+    v = venue
+    from app.hl import derive_cloid
+    v.info.orders[derive_cloid("P-9-E1")] = _filled_order_rec("P-9-E1", oid=9)
+    v.info.raise_on_fills = "info API down"
+    st = v.order_status("P-9-E1")
+    assert st["status"] == "FILLED"              # status survives
+    assert st["avg_price"] is None               # price honestly unknown
+
+
+def test_gate_a_subset_of_prints_does_not_resolve_the_average(venue):
+    """Counter-agent find 2026-09-01: a userFills snapshot (cached, or an
+    endpoint lagging its own orderStatus) can hold only SOME prints of a
+    multi-print order, and a subset average is wrong in the direction that
+    flatters slippage. Short of the known filled qty the price must stay
+    unresolved so the fill-watch retries with a fresher snapshot."""
+    v = venue
+    from app.hl import derive_cloid
+    v.info.orders[derive_cloid("P-3-E1")] = _filled_order_rec(
+        "P-3-E1", oid=33, orig="0.003")
+    v.info.fills = [{"px": "100.0", "sz": "0.001", "oid": 33,
+                     "cloid": derive_cloid("P-3-E1")}]     # 1 of 2 prints
+    st = v.order_status("P-3-E1")
+    assert st["status"] == "FILLED"
+    assert st["avg_price"] is None, \
+        "a partial reconstruction must NOT be recorded as the average"
+    # the missing print lands; a LATER pass (past the cache TTL) resolves
+    v.info.fills.append({"px": "110.0", "sz": "0.002", "oid": 33,
+                         "cloid": derive_cloid("P-3-E1")})
+    ts, cached = v._fills_cache
+    v._fills_cache = (ts - v.FILLS_CACHE_S - 1, cached)
+    st = v.order_status("P-3-E1")
+    assert st["avg_price"] == pytest.approx((100 * 1 + 110 * 2) / 3)
+
+
+def test_gate_fills_match_by_oid_alone(venue):
+    """Each match arm must work WITHOUT the other: a venue-side fill row
+    can carry the oid but no cloid echo."""
+    v = venue
+    from app.hl import derive_cloid
+    v.info.orders[derive_cloid("P-4-E1")] = _filled_order_rec("P-4-E1", oid=44)
+    v.info.fills = [{"px": "60000.0", "sz": "0.002", "oid": 44}]   # no cloid
+    assert v.order_status("P-4-E1")["avg_price"] == pytest.approx(60000.0)
+
+
+def test_gate_fills_match_by_cloid_alone_case_insensitive(venue):
+    """...and the cloid arm must work without the oid, surviving hex-case
+    drift between the echo and userFills."""
+    v = venue
+    from app.hl import derive_cloid
+    v.info.orders[derive_cloid("P-5-E1")] = _filled_order_rec("P-5-E1", oid=55)
+    v.info.fills = [{"px": "60000.0", "sz": "0.002",                # no oid
+                     "cloid": derive_cloid("P-5-E1").upper()}]
+    assert v.order_status("P-5-E1")["avg_price"] == pytest.approx(60000.0)
+
+
+def test_gate_user_fills_cache_expires_after_ttl(venue):
+    """The cache must REFRESH once the TTL passes - a never-expiring cache
+    passed every prior gate (surviving mutant, counter-agent 2026-09-01)."""
+    v = venue
+    from app.hl import derive_cloid
+    v.info.orders[derive_cloid("P-6-E1")] = _filled_order_rec("P-6-E1", oid=66)
+    v.info.fills = []
+    v.order_status("P-6-E1")
+    assert v.info.user_fills_calls == 1
+    v.order_status("P-6-E1")
+    assert v.info.user_fills_calls == 1          # inside TTL: served cached
+    ts, cached = v._fills_cache
+    v._fills_cache = (ts - v.FILLS_CACHE_S - 1, cached)
+    v.order_status("P-6-E1")
+    assert v.info.user_fills_calls == 2          # past TTL: fetched again
+
+
+def test_gate_user_fills_error_dict_payload_never_raises(venue):
+    """The pinned SDK returns {'error': ...} instead of raising on a 2xx
+    body it cannot parse. A truthy dict iterates as its KEYS - unguarded,
+    order_status raises AttributeError into the stop-maintenance path
+    (counter-agent find 2026-09-01)."""
+    v = venue
+    from app.hl import derive_cloid
+    v.info.orders[derive_cloid("P-7-E1")] = _filled_order_rec("P-7-E1", oid=77)
+    v.info.fills = {"error": "Could not parse JSON: <html>backoff</html>"}
+    st = v.order_status("P-7-E1")
+    assert st["status"] == "FILLED"
+    assert st["avg_price"] is None
+    assert v._recent_fills() == [], \
+        "the error dict must be normalized to the list contract, not cached"
+
+
+def test_gate_malformed_fill_rows_are_skipped_not_fatal(venue):
+    v = venue
+    from app.hl import derive_cloid
+    v.info.orders[derive_cloid("P-8-E1")] = _filled_order_rec("P-8-E1", oid=88)
+    v.info.fills = ["<garbage row>", None,
+                    {"px": "60000.0", "sz": "0.002", "oid": 88}]
+    assert v.order_status("P-8-E1")["avg_price"] == pytest.approx(60000.0)

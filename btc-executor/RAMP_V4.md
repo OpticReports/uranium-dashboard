@@ -49,9 +49,26 @@ cleaned by this filter — that purge is tracked separately.
 **Auto-drill is bounded** by `DRILL_NO_FILL_MAX` (3): a drill can report
 `ok` and still advance the sample by zero (venue omits
 `average_filled_price`, or `mid()` is 0 so the fill watch never queues).
+On Hyperliquid the first case was not an edge case but the STEADY STATE
+(found 2026-09-01): the venue's orderStatus payload carries no average
+fill price at all, so every fill resolved FILLED/None, `_record_fill`
+dropped it, and the watch was consumed in the same pass - the sample sat
+at 0 through the entire go-live. `hl.order_status` now resolves the
+price from `userFills` (size-weighted across partial prints, cached 10s;
+a reconstruction short of the known filled qty is rejected so a stale
+snapshot can never record a wrong average), and a FILLED watch with no
+price is KEPT and retried (`fill_px_unresolved` once, `fill_px_resolved`
+when it lands, `fill_px_lost` at 48h). A drill whose watches are still
+price-pending is scored `drill_sample_pending`, NOT as a no-fill strike.
+Known limits of the loud-loss guarantee (counter-agent 2026-09-01), all
+pre-existing to this fix: the watch queue is in-memory, so a deploy
+restart drops pending watches without an event; a watch still OPEN at
+48h (a long-resting stop) ages out silently; and a partial fill on a
+CANCELLED order is consumed without a sample.
 Three consecutive no-sample drills disable auto-drill with an ACTION page
 rather than spending the daily budget into a row that can never close. Any
-drill that DOES record a fill resets the counter.
+drill that DOES record a fill resets the counter — including a sample
+that lands on a later poll.
 
 Honesty note: drills deliberately do NOT count toward entry/exit/chase
 coverage — drill entries are market orders, organic entries go through the
