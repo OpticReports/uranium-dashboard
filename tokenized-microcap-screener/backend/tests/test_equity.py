@@ -83,3 +83,49 @@ def test_sec_user_agent_carries_a_contact_address():
     from app.config import sec_user_agent, settings
     ua = sec_user_agent(settings.sec_contact)
     assert "@" in ua and "." in ua.split("@")[-1]
+
+
+# --- the nanocap-first sweep order ----------------------------------------
+
+def _band(rows):
+    return [rows]
+
+
+def test_microcap_universe_is_ordered_smallest_first():
+    """Sweep ORDER is the whole point: the alphabetical fallback needs ~2 days
+    to reach every ticker, so nanocaps have to come first or the Farmmi shape
+    surfaces last on a fresh deploy."""
+    from app.lanes.fundamentals import parse_microcap_universe
+    out = parse_microcap_universe([[
+        {"symbol": "BIG", "marketCap": 240_000_000, "exchangeShortName": "NYSE"},
+        {"symbol": "TINY", "marketCap": 4_000_000, "exchangeShortName": "NASDAQ"},
+        {"symbol": "MID", "marketCap": 60_000_000, "exchangeShortName": "AMEX"},
+    ]])
+    assert out == ["TINY", "MID", "BIG"]
+
+
+def test_microcap_universe_drops_funds_and_foreign_venues():
+    """A tokenized wrapper for a foreign listing cannot trade against the
+    Nasdaq tape this service watches, and an ETF is not a squeeze candidate."""
+    from app.lanes.fundamentals import parse_microcap_universe
+    out = parse_microcap_universe([[
+        {"symbol": "OK", "marketCap": 10_000_000, "exchangeShortName": "NASDAQ"},
+        {"symbol": "ETF", "marketCap": 5_000_000, "exchangeShortName": "NASDAQ",
+         "isEtf": True},
+        {"symbol": "FUND", "marketCap": 6_000_000, "exchangeShortName": "AMEX",
+         "isFund": True},
+        {"symbol": "FOREIGN", "marketCap": 7_000_000, "exchangeShortName": "SHZ"},
+    ]])
+    assert out == ["OK"]
+
+
+def test_microcap_universe_dedupes_across_bands():
+    from app.lanes.fundamentals import parse_microcap_universe
+    row = {"symbol": "DUP", "marketCap": 9_000_000, "exchangeShortName": "NASDAQ"}
+    assert parse_microcap_universe([[row], [row]]) == ["DUP"]
+
+
+def test_microcap_universe_survives_junk():
+    from app.lanes.fundamentals import parse_microcap_universe
+    assert parse_microcap_universe(None) == []
+    assert parse_microcap_universe([None, "nope", [{"symbol": ""}, {}]]) == []

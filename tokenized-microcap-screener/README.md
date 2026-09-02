@@ -129,9 +129,23 @@ by something that is not short interest. `/health` reports
 
 ## Data lanes (all public; one optional key)
 
+### Sweep order matters more than sweep breadth
+
+The keyless fallback walks the 10.4k SEC tickers alphabetically and needs about
+two days to reach every name — so on a fresh deploy the wrappers that matter
+would surface last. With an FMP key the sweep is ordered by **market cap
+ascending** and covers the ~2,100 US listings under $250M in about an hour.
+
+One live 200-ticker pass of that ordering found unofficial wrappers the
+discovery feeds never carry, including `WHLR` (Wheeler REIT, on Robinhood
+Chain, a 21,783-share float) and `PPBT` (Purple Biotech, wrapper minted the
+same day). Neither is a call — a wrapper existing says a setup is possible, not
+that anything will happen.
+
 | lane | source | auth |
 |---|---|---|
 | pairs, launches | DEX Screener | none |
+| microcap sweep order | FMP `/stable/company-screener` | **optional** `FMP_API_KEY` |
 | ticker → company | SEC `company_tickers.json` | none (needs contact in UA) |
 | quote, history | stockanalysis.com | none |
 | market cap, float | FMP `/stable/profile` | **optional** `FMP_API_KEY` |
@@ -193,7 +207,7 @@ automation routes through `ibkr-executor`.
 ## Tests
 
 ```
-cd backend && python -m pytest tests/ -q     # 98 gate tests
+cd backend && python -m pytest tests/ -q     # 105 gate tests
 ```
 
 Gates run against **real captured payloads** (the Robinhood-Chain

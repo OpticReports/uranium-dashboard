@@ -7,7 +7,10 @@ Cadence is deliberately uneven, matching how fast each thing actually moves:
                                   cadence IS the signal on that rung.
   registry_sweep    default 30m — launch detection across the whole registry.
   discovery_sweep   default 10m — cheap feeds, catches a wrapper early.
-  universe_sweep    hourly      — one slice of the SEC list; full coverage ~1d.
+  priority_sweep    default 15m — the SMALLEST US listings first; covers the
+                                  ~2,100 names under $250M in about an hour.
+  universe_sweep    hourly      — one slice of the SEC list alphabetically, the
+                                  keyless completeness backstop (~2d for all).
   equity_refresh     default 5m — quotes for live candidates during US hours,
                                   because that is the only window in which the
                                   equity leg of a trade can actually be placed.
@@ -51,6 +54,10 @@ def job_universe_sweep() -> None:
     _guarded("universe_sweep", scan.universe_sweep)
 
 
+def job_priority_sweep() -> None:
+    _guarded("priority_sweep", scan.priority_sweep)
+
+
 def job_hot_sweep() -> None:
     _guarded("hot_sweep", lambda s: (scan.hot_registry_sweep(s), scan.rollup(s)))
 
@@ -74,6 +81,9 @@ def start_scheduler() -> None:
         id="registry_sweep", max_instances=1, coalesce=True)
     sched.add_job(job_universe_sweep, IntervalTrigger(hours=1),
                   id="universe_sweep", max_instances=1, coalesce=True)
+    sched.add_job(job_priority_sweep, IntervalTrigger(
+        minutes=int(cfg.get("priority_sweep_minutes", 15))),
+        id="priority_sweep", max_instances=1, coalesce=True)
     # Nanocap wrappers, tight loop during the US session — the meme rung's
     # window was 13 minutes wide.
     sched.add_job(job_hot_sweep, CronTrigger(
@@ -86,6 +96,7 @@ def start_scheduler() -> None:
         minute=f"*/{int(cfg.get('equity_refresh_minutes', 5))}"),
         id="equity_refresh", max_instances=1, coalesce=True)
     # Seed shortly after boot so a cold start is not blind for half an hour.
+    sched.add_job(job_priority_sweep, "date", id="boot_priority")
     sched.add_job(job_discovery_sweep, "date", id="boot_discovery")
     sched.add_job(job_registry_sweep, "date", id="boot_registry")
 

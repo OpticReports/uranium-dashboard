@@ -14,7 +14,12 @@ scan:
   hot_sweep_minutes: 2
   max_hot_tokens: 60
   max_registry_tokens: 400       # hard ceiling on per-sweep API spend
-  seed_tickers_top_n: 250        # ticker-sweep budget when bootstrapping
+  seed_tickers_top_n: 250        # alphabetical ticker-sweep budget per pass
+  # Nanocap-first sweep. The alphabetical sweep needs ~2 days to cover the
+  # 10.4k SEC tickers; this reaches the ~2,100 US names under $250M in about
+  # an hour, smallest first, which is where the Farmmi shape lives.
+  priority_slice: 250
+  priority_sweep_minutes: 15
 
 # Tokens that are a chain's money, never a "meme" side of a launch.
 base_assets:

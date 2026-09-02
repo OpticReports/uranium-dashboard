@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 _PROFILE = "https://financialmodelingprep.com/stable/profile"
 _FLOAT = "https://financialmodelingprep.com/stable/shares-float"
+_SCREENER = "https://financialmodelingprep.com/stable/company-screener"
 
 
 def enabled() -> bool:
@@ -113,3 +114,80 @@ def parse_profile(payload) -> dict:
         "exchange": row.get("exchange") or "",
         "industry": row.get("industry") or "",
     }
+
+
+# US venues only. A tokenized wrapper for a foreign listing would not trade
+# against the Nasdaq/NYSE tape this service watches.
+_US_EXCHANGES = {"NASDAQ", "NYSE", "AMEX"}
+
+
+def microcap_universe(bands: list[dict] | None = None, ttl: int = 12 * 3600
+                      ) -> list[str]:
+    """US operating companies under a market-cap ceiling, SMALLEST FIRST.
+
+    Exists to fix a coverage problem, not to add a datapoint. The keyless
+    fallback sweeps the SEC ticker list alphabetically, which needs roughly
+    two days to reach every name — so on a fresh deploy the wrappers that
+    actually matter (unofficial ones on nanocaps, the Farmmi shape) would
+    surface last. Ordering the sweep by market cap ascending puts them first
+    and gets the interesting half covered inside an hour.
+
+    Queried in BANDS rather than one call because the screener returns the
+    largest names under a ceiling first; banding guarantees the smallest are
+    present regardless of how the endpoint orders a page. Returns [] without a
+    key, and the caller falls back to the alphabetical sweep.
+    """
+    if not enabled():
+        return []
+    bands = bands or [
+        {"marketCapLowerThan": 25_000_000},
+        {"marketCapMoreThan": 25_000_000, "marketCapLowerThan": 75_000_000},
+        {"marketCapMoreThan": 75_000_000, "marketCapLowerThan": 250_000_000},
+    ]
+
+    def _producer():
+        out = []
+        for band in bands:
+            params = dict(band)
+            params.update({"isEtf": "false", "isFund": "false",
+                           "isActivelyTrading": "true", "limit": 1000,
+                           "apikey": settings.fmp_api_key})
+            resp = with_backoff(lambda p=params: httpx.get(
+                _SCREENER, params=p, timeout=settings.http_timeout_seconds))
+            resp.raise_for_status()
+            rows = resp.json()
+            out.append(rows if isinstance(rows, list) else [])
+        return out
+
+    try:
+        payload = cached("fmp:microcap_universe", _producer, ttl=ttl)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("FMP screener lane DARK: %s", exc)
+        return []
+    return parse_microcap_universe(payload)
+
+
+def parse_microcap_universe(payload) -> list[str]:
+    """Flatten the banded payload to US tickers, smallest market cap first."""
+    rows: list[dict] = []
+    for band in (payload or []):
+        if isinstance(band, list):
+            rows.extend(r for r in band if isinstance(r, dict))
+    keep = []
+    for r in rows:
+        sym = str(r.get("symbol") or "").strip().upper()
+        cap = r.get("marketCap")
+        if not sym or not isinstance(cap, (int, float)) or cap <= 0:
+            continue
+        if r.get("exchangeShortName") not in _US_EXCHANGES:
+            continue
+        if r.get("isEtf") or r.get("isFund"):
+            continue
+        keep.append((cap, sym))
+    keep.sort()
+    seen, out = set(), []
+    for _, sym in keep:
+        if sym not in seen:
+            seen.add(sym)
+            out.append(sym)
+    return out

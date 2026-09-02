@@ -252,3 +252,44 @@ def test_no_push_when_nothing_fires(wired, monkeypatch):
     monkeypatch.setattr(scan.alerts, "push", lambda a: sent.append(a) or True)
     _run(wired, QUOTE_MOVED)          # equity already moving -> suppressed
     assert sent == []
+
+
+def test_priority_sweep_walks_nanocaps_first(wired, monkeypatch):
+    """With an FMP key the sweep is ordered by market cap, so a fresh deploy
+    reaches the interesting names in its first pass, not its fortieth."""
+    swept = []
+    monkeypatch.setattr(scan.fundamentals, "microcap_universe",
+                        lambda *a, **k: ["FAMI", "GME", "MU"])
+    # wire() installs its own search stub, so the spy has to go on AFTER it.
+    wired(QUOTE_FLAT, load("robinhood_fami_token_pairs.json"))
+    real_search = scan.dexscreener.search
+
+    def spy(q, **k):
+        swept.append(q)
+        return real_search(q, **k)
+    monkeypatch.setattr(scan.dexscreener, "search", spy)
+    with Session(db_engine) as s:
+        out = scan.priority_sweep(s, slice_size=2)
+    assert swept == ["FAMI", "GME"], "must sweep in the order given, smallest first"
+    assert out["swept"] == 2
+    assert out["microcap_universe"] == 3
+
+
+def test_priority_sweep_degrades_without_a_key(wired, monkeypatch):
+    """No FMP key must not break the scan — the alphabetical sweep covers it."""
+    monkeypatch.setattr(scan.fundamentals, "microcap_universe", lambda *a, **k: [])
+    wired(QUOTE_FLAT, load("robinhood_fami_token_pairs.json"))
+    with Session(db_engine) as s:
+        out = scan.priority_sweep(s)
+    assert out["priority_dark"] is True
+    assert out["registry_new"] == 0
+
+
+def test_priority_cursor_advances_and_wraps(wired, monkeypatch):
+    monkeypatch.setattr(scan.fundamentals, "microcap_universe",
+                        lambda *a, **k: ["AAA", "BBB", "CCC"])
+    wired(QUOTE_FLAT, [])
+    with Session(db_engine) as s:
+        assert scan.priority_sweep(s, slice_size=2)["cursor"] == 0
+        assert scan.priority_sweep(s, slice_size=2)["cursor"] == 2
+        assert scan.priority_sweep(s, slice_size=2)["cursor"] == 1

@@ -34,6 +34,7 @@ from .models import (Candidate, EquityToken, MemeLaunch, PoolSnapshot,
 logger = logging.getLogger(__name__)
 
 _CURSOR_KEY = "universe_sweep_cursor"
+_PRIORITY_CURSOR_KEY = "priority_sweep_cursor"
 
 
 def _cfg() -> dict:
@@ -165,6 +166,47 @@ def universe_sweep(session: Session, slice_size: int | None = None) -> dict:
     session.commit()
     return {"registry_new": len(fresh), "swept": len(slice_),
             "cursor": cursor, "universe_size": len(tickers)}
+
+
+def priority_sweep(session: Session, slice_size: int | None = None) -> dict:
+    """Sweep the SMALLEST US listings first, cursored.
+
+    The alphabetical universe sweep is the completeness backstop; this is the
+    one that finds anything worth looking at on day one. Ordered by market cap
+    ascending, so the Farmmi shape - an unofficial wrapper on a nanocap nobody
+    would tokenize by accident - is reached in the first pass rather than the
+    fortieth. Falls back to a no-op (the alphabetical sweep still runs) when no
+    FMP key is configured.
+    """
+    universe = equity_lane.sec_universe()
+    if not universe:
+        return {"registry_new": 0, "universe_dark": True}
+    cfg = _cfg().get("scan", {})
+    tickers = fundamentals.microcap_universe()
+    if not tickers:
+        return {"registry_new": 0, "priority_dark": True,
+                "note": "no FMP key - alphabetical sweep covers this"}
+
+    n = int(slice_size or cfg.get("priority_slice", 250))
+    try:
+        cursor = int(_get_state(session, _PRIORITY_CURSOR_KEY, "0"))
+    except ValueError:
+        cursor = 0
+    cursor %= max(len(tickers), 1)
+    slice_ = tickers[cursor:cursor + n]
+
+    markers, bases = _markers(), _base_assets()
+    pairs: list[dict] = []
+    for ticker in slice_:
+        pairs += dexscreener.search(ticker)
+
+    views = detect.equity_tokens_in(pairs, universe, markers, bases)
+    fresh = _upsert_equity_tokens(session, views, _pair_creation_times(pairs))
+    _set_state(session, _PRIORITY_CURSOR_KEY,
+               str((cursor + n) % max(len(tickers), 1)))
+    session.commit()
+    return {"registry_new": len(fresh), "swept": len(slice_),
+            "cursor": cursor, "microcap_universe": len(tickers)}
 
 
 # --------------------------------------------------------------------------
@@ -539,6 +581,7 @@ def _push_alert(alert: dict) -> None:
 def full_scan(session: Session) -> dict:
     """Everything, in dependency order. Used by POST /scan and the boot job."""
     out = {"discovery": discovery_sweep(session)}
+    out["priority"] = priority_sweep(session)
     out["universe"] = universe_sweep(session)
     out["registry"] = registry_sweep(session)
     out["alerts"] = rollup(session)
