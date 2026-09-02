@@ -1,0 +1,27 @@
+# Frozen evidence for the RAMP_V4 slippage amendment (2026-09-02).
+# Produced by scripts/book_depth_probe.py. Re-run to check it still holds;
+# the LARGE-size cells are book-state dependent and will not reproduce
+# exactly - that is the point the amendment concedes. The load-bearing
+# claim is the SMALL sizes: median impact = half-spread, identical at
+# $151 and $281, book never exhausted.
+# Calm tape. No stressed-market sample exists.
+
+BTC: 20 snapshots 3s apart | mid 77,168-77,200
+spread 0.130-0.777 bps (half-spread 0.065-0.389 - an order that fits at best offer costs EXACTLY this)
+visible ask depth (all 20 levels) $1,727,402-$9,768,118
+
+    notional      min   median      max   book exhausted
+$        151    0.065    0.065    0.666   0/20
+$        281    0.065    0.065    0.830   0/20
+$        500    0.065    0.065    1.104   0/20
+$      1,000    0.065    0.065    1.362   0/20
+$      5,000    0.065    0.065    2.950   0/20
+$     10,000    0.065    0.065    3.160   0/20
+$     25,000    0.065    0.065    3.285   0/20
+$     56,000    0.065    0.065    3.331   0/20
+$    100,000    0.065    0.065    3.348   0/20
+$    250,000    0.065    0.313    3.360   0/20
+realized vol: 1m sd 5.48 bps (~40% annualized, 4321 candles)
+
+latency term for ONE 20s poll gap: 2.52 bps (expected |move|, modeled from realized vol - NOT a measured per-fill slip dispersion).
+Read the small sizes, not the large ones: where impact equals half-spread in every snapshot, the order fit at best offer and cost is size-INDEPENDENT. Large-size cells move with book state and are not a venue property. Calm-tape only.

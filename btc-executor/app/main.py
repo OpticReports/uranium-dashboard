@@ -18,7 +18,7 @@ from fastapi import FastAPI, HTTPException, Query, Header
 
 from .config import settings
 from .feed import EngineFeed
-from .mirror import (Executor, DRILL_CYCLE_NEED,  # noqa: F401
+from .mirror import (Executor, DRILL_CYCLE_NEED, SLIP_SANITY_MAX_BPS,  # noqa: F401
                      SLIPPAGE_SAMPLE_NEED)
 
 
@@ -474,16 +474,59 @@ def _ramp_v4(st) -> dict:
             for k, v in RAMP_V4_REQUIRED.items()}
     rows["slippage_sample"] = _row("slippage_sample", SLIPPAGE_SAMPLE_NEED,
                                    n_live, len(fills))
-    return {"spec": "RAMP_V4.md (frozen 2026-08-15; mode guard 2026-08-21)",
+    complete = all(r["met"] for r in rows.values())
+    sanity = _slip_sanity(fills)
+    return {"spec": "RAMP_V4.md (frozen 2026-08-15; mode guard 2026-08-21; "
+                    "slippage rationale 2026-09-02)",
             "basis": "live-mode events only (DRY_RUN=false)",
             "attestation": getattr(st, "attestation", None),
             "rows": rows,
-            "coverage_complete": all(r["met"] for r in rows.values()),
+            "coverage_complete": complete,
+            # The spec's own advancement sentence has ALWAYS been "coverage
+            # complete AND slippage sane", but only the first half was ever
+            # computed - the second lived in prose, so an operator reading
+            # /status saw 13/13 and no sanity verdict at all (counter-agent
+            # 2026-09-02). Both halves are machine-checked now.
+            "slippage_sanity": sanity,
+            "advance_ok": bool(complete and sanity["ok"]),
             "unattributed_total": sum(r["unattributed"] for r in rows.values()),
-            "note": "advance KELLY_M per spec only when coverage_complete "
-                    "AND slippage sane (edge-monitor slip CUSUM quiet). "
-                    "unattributed counts are pre-split or dry-run events - "
-                    "they never satisfy a row"}
+            "note": "advance KELLY_M only when advance_ok: every row met AND "
+                    "|mean slip| < 15bps. The slip CUSUM (barbell-lab edge "
+                    "monitor) is the continuous control and arms at the same "
+                    "10 fills. unattributed counts are pre-split or dry-run "
+                    "events - they never satisfy a row"}
+
+
+def _slip_sanity(fills) -> dict:
+    """The |mean slip| < 15bps gate RAMP_V4.md has cited since 2026-08-15.
+
+    It was PROSE ONLY until 2026-09-02: the ramp readout counted fills and
+    never looked at `slip_bps`, so a book could show 13/13 with systematically
+    adverse execution and nothing anywhere would say so. Found while
+    adversarially reviewing a proposal to LOWER the fill count on the
+    argument that this gate was the real control - it was not a control at
+    all. Same population as the gating count (live, non-void), so the two
+    can never disagree about which fills are evidence.
+
+    `ok` is False until the sample exists: an unmeasured book is not a sane
+    one, and this must never read as satisfied on n=0.
+    """
+    vals = []
+    for f in fills:
+        if not isinstance(f, dict) or f.get("live") is not True or f.get("void"):
+            continue
+        v = f.get("slip_bps")
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            vals.append(float(v))
+    n = len(vals)
+    mean = (sum(vals) / n) if n else None
+    worst = max((abs(v) for v in vals), default=None)
+    return {"n": n, "need": SLIPPAGE_SAMPLE_NEED,
+            "mean_bps": round(mean, 2) if mean is not None else None,
+            "worst_abs_bps": round(worst, 2) if worst is not None else None,
+            "max_abs_mean_bps": SLIP_SANITY_MAX_BPS,
+            "ok": bool(n >= SLIPPAGE_SAMPLE_NEED and mean is not None
+                       and abs(mean) < SLIP_SANITY_MAX_BPS)}
 
 
 @app.post("/coverage/attest")

@@ -41,7 +41,25 @@ BAR_SECONDS = 14_400
 # disagree about what "done" means (they did - auto-drill stopped at 3 cycles
 # = 6 fills while slippage_sample needed 10, and reported "done").
 DRILL_CYCLE_NEED = 3
+# STAYS 10, and the reason is NOT the one the spec used to give (RAMP_V4.md
+# "Slippage is an instrument check", 2026-09-02). The old rationale - "prove
+# execution cost before trading larger" - is false on this venue: walking the
+# live HL book, a $151 and a $281 order both fill at the best offer, so a
+# sample at pilot size cannot license a larger size. Casey was right about
+# that. But 10 turned out to be load-bearing for an unrelated reason found in
+# adversarial review: barbell-lab's slip CUSUM (edge/layers.py MIN_SLIP_TRADES
+# = 10) reports "insufficient" below 10 observations AND freezes its norms
+# from the first 10. Dropping this to 3 would have disarmed the continuous
+# detector that the amendment itself nominated as the real control, in exactly
+# the window where size would increase. 10 is the handoff point to the CUSUM.
+# Change it only together with MIN_SLIP_TRADES.
 SLIPPAGE_SAMPLE_NEED = 10
+# The "|mean slip| < 15bps sanity gate" RAMP_V4.md has cited since 2026-08-15
+# existed ONLY in prose until now (counter-agent 2026-09-02): the ramp readout
+# computed a fill COUNT and never looked at the slip values. A gate named in
+# the spec, believed by the operator, and absent from the code is worse than
+# no gate. _slip_sanity() in main.py implements it.
+SLIP_SANITY_MAX_BPS = 15.0
 # A stop that keeps vanishing is a venue condition, not something to retry
 # into: at poll_seconds=20 an unbounded replace loop placed 4,320 live orders
 # and 4,320 pages per day (counter-agent 2026-08-24).

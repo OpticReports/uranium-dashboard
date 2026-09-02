@@ -29,7 +29,7 @@ satisfy any row (see the mode guard below):
 | config_change detected | ≥1       | any env change redeploy           |
 | halt + resume          | ≥1 pair  | operator-triggered manual test    |
 | drill_cycle complete   | ≥3       | drill                             |
-| slippage sample        | ≥10 fills| any LIVE fill (drill fills count — they are real fills), **VOID fills excluded** |
+| slippage sample        | ≥10 fills| any LIVE fill (drill fills count — they are real fills), **VOID fills excluded**. 10 = the slip-CUSUM's arming threshold, NOT a size test; see "Slippage: right diagnosis, wrong prescription" (2026-09-02) |
 
 **Void fills (2026-08-26).** A fill whose `|slip_bps| > 500` is marked
 `void` at boot and never counts toward the slippage sample — the phantom
@@ -77,8 +77,95 @@ path. Drills own what organics produce too rarely: the stop lifecycle and
 the slippage sample. Organic entry cadence (S3+S4 ≈ 2–4 signals/week)
 completes the rest in ~2–3 weeks.
 
-Slippage sanity gate: |mean slip| < 15bps and no slip-CUSUM alarm
-(edge-monitor). P&L is explicitly NOT a gate at any stage.
+Slippage sanity gate: |mean slip| < 15bps (computed in `main._slip_sanity`,
+published as `/status.ramp_v4.slippage_sanity`; prose-only until 2026-09-02)
+and no slip-CUSUM alarm (edge-monitor). P&L is explicitly NOT a gate at any
+stage.
+
+### Slippage: right diagnosis, wrong prescription (amended 2026-09-02)
+
+**The row keeps its ≥10 bar. Its stated RATIONALE was wrong, and that is
+what changed.** Casey challenged the row as "a stupid test at this size."
+He was right about the premise and wrong about the remedy, and so was the
+first draft of this amendment, which proposed dropping the bar to 3 and was
+REJECTED by counter-agent review (3 of 4 lenses REJECT).
+
+**What the measurement established** (`scripts/book_depth_probe.py`; one
+dated run frozen alongside it as `book_depth_probe.2026-09-02.txt`): the row was written to mean "prove execution cost before
+trading larger," which only gates size if execution cost RISES with size.
+At the sizes actually in front of the ramp it does not. Across 20 snapshots
+of the live HL BTC-PERP book, a $151 order (KELLY_M 0.135) and a $281 order
+(KELLY_M 0.25) filled at the best offer in 20/20, both sides, impact
+identical to each other and equal to half the spread. The one elevated
+reading was elevated identically at both sizes because the SPREAD widened —
+a size-independent term. So a slippage sample at pilot size cannot license
+a larger size, and a sample at the larger size would not either.
+
+**Measurement honesty (counter-agent, and it corrects the first draft).**
+The first draft published a table claiming flat impact out to $250k. It
+does not reproduce and it is withdrawn. Three things were wrong with it:
+"0.06 bps" is exactly HALF THE SPREAD (spread 0.13 bps = $1 = one tick), so
+the figure is a binary did-the-order-fit-at-best-offer indicator, not an
+impact curve, and its flatness is tick quantization rather than measured
+depth resilience; HL's `l2Book` returns exactly 20 levels spanning ~3 bps,
+so "depth within 3 bps" was just the whole truncated API response; and the
+large-size cells were a single favourable draw — re-probing put $250k
+anywhere from 0.065 to 2.28 bps and visible depth as low as $305k, with
+top-of-book notional swinging ~400x across 3 seconds in a calm tape. The
+claim that survives is narrow and sufficient: **at $151 and $281 the cost
+is the spread, on both sides, in every snapshot taken.** Nothing here is
+evidence about a stressed tape, which is exactly when stops fill.
+
+**Why the bar stays at 10 anyway — the reason nobody had noticed.**
+`MIN_SLIP_TRADES = 10` in `barbell-lab/src/barbell/edge/layers.py`: the slip
+CUSUM reports `insufficient` below 10 observations AND freezes its norms
+from the first 10. Ten is not an arbitrary sample-size guess; it is the
+HANDOFF POINT to the continuous detector. Dropping it to 3 would have
+disarmed the very control the first draft nominated as the real one, in
+precisely the window where size would increase — 3 fills to arm a monitor
+that needs 10. The number survives its own falsified rationale. **Change it
+only together with `MIN_SLIP_TRADES`**, which the gate tests now enforce
+across both repos.
+
+**And the sanity gate it leaned on did not exist.** This document has cited
+"|mean slip| < 15bps" as a gate since 2026-08-15. It was PROSE ONLY: the
+ramp readout computed a fill COUNT and never once looked at `slip_bps`, so
+a book could show 13/13 with every fill 40 bps adverse and no surface
+anywhere would say so. It is implemented now (`main._slip_sanity`), reads
+the same live/non-void population the count reads, is False on an
+unmeasured book, and `/status.ramp_v4` publishes `slippage_sanity` plus
+`advance_ok` = every row met AND slippage sane. **A gate named in the spec,
+believed by the operator, and absent from the code is worse than no gate.**
+
+**What this row actually proves**, stated honestly now: that fill capture
+works end-to-end on the real venue (it did not — the sample sat at 0 from
+the Hyperliquid cutover until 2026-09-01 while every surface looked
+healthy), that no reference defect is inflating slip (the two void fills
+were 1320 bps of broken reference, never market impact), and that the
+continuous detector has enough calibrated observations to arm. It is not,
+and never was, a proof about size.
+
+**Nothing was weakened.** `entry_short` (≥2), `signal_exit` (≥2),
+`drill_cycle` (≥3), `stop_filled` (≥1) are unchanged — size makes a DEFECT
+expensive even where it does not make execution expensive, and the short
+path has fired ONCE in this system's history. `RAMP_V4_REQUIRED` is now
+pinned in full against a frozen dict, so no row can drift unnoticed.
+
+Cost of the correct answer, measured rather than asserted: post-fill-fix,
+10 fills is ~5 auto-drill cycles at 1h spacing inside a 6/day budget —
+about 5 hours and $8–10 of spread and fees. The first draft's urgency
+argument ("the row was the long pole for weeks") expired on 2026-09-01 when
+capture was fixed, one day before it was written.
+
+**Follow-on refused in advance.** The template this amendment establishes —
+"measurement falsified the row's premise" — points next at `entry_short`,
+and drill variants that route the real limit path now exist. Crediting
+drills toward `entry_short` would be the actual unlock and is refused: only
+the real path proves the real path (see the honesty note above).
+
+Follow-up identified, not implemented: measured slip is dominated by the
+reference-snapshot → order-send gap, so the lever for better execution is
+shortening that gap, not sampling more.
 
 ### Mode guard: live-mode evidence only (amended 2026-08-21)
 
@@ -98,7 +185,7 @@ executor keeps reporting healthy while every subsequent "proof" is
 synthetic.
 
 Fills carry the same tag — a `DryRunVenue` fill price is synthetic, so the
-10-fill slippage sample counts live fills only.
+slippage sample counts live fills only.
 
 **Counter-agent verdict (2026-08-21): CONFIRMED.** Differential and
 mutation testing (8 weakening mutations, all caught) established the two

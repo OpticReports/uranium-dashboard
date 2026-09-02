@@ -1858,14 +1858,24 @@ def test_gate_auto_drill_runs_cycles_in_flat_window(tmp_path, monkeypatch):
     assert venue.position() == 0.0
     assert ex.state.auto_drill_off is None
     assert sum("auto-drill cycle ok" in m for m in sent) == 3
-    # drill_cycle is met, but 3 cycles yield only 6 live fills and
-    # slippage_sample needs 10 - auto-drill must NOT report itself done with
-    # the gate stuck at 6/10 (found 2026-08-24)
-    assert ex._live_fill_count() == 6
-    assert ex._needed_auto_drill() == "cycle"
+    # The invariant (found 2026-08-24) is that auto-drill keeps going while
+    # EITHER row is unmet - it once stopped on drill_cycle alone and left
+    # the slippage row stranded, which reads as "drills complete".
+    # The drill_cycle row is met here; the slippage row is NOT (3 cycles
+    # yield 2 fills each), so this is the exact stranding state and the
+    # assertion below must execute - a counter-agent (2026-09-02) caught an
+    # earlier rewrite of this test whose loop body never ran at all.
+    assert ex.state.coverage_live.get("drill_cycle") == DRILL_CYCLE_NEED
+    assert ex._live_fill_count() == 2 * DRILL_CYCLE_NEED < SLIPPAGE_SAMPLE_NEED
+    assert ex._needed_auto_drill() == "cycle", \
+        "auto-drill reported done with the slippage row stranded"
     # ...and it keeps going until the slippage row is genuinely satisfied
-    for _ in range(6):
+    guard = 0
+    while ex._live_fill_count() < SLIPPAGE_SAMPLE_NEED:
+        assert ex._needed_auto_drill() == "cycle"
         ex.step(target())
+        guard += 1
+        assert guard < 50, "auto-drill never closed the slippage row"
     assert ex._live_fill_count() >= SLIPPAGE_SAMPLE_NEED
     assert ex._needed_auto_drill() is None            # now, and only now
     assert all(d["kind"] == "cycle" for d in ex.state.drills)   # never stopfill
@@ -3085,19 +3095,27 @@ def test_gate_slippage_readers_agree_on_void(tmp_path):
     from app.main import _ramp_v4
     v = FakeVenue(mult=0.01)
     ex = mkexec(tmp_path, v)
-    ex.state.fills = ([{"live": True} for _ in range(8)]
+    # one short of the bar, plus 2 voids that must not make up the shortfall.
+    # Threshold-relative on purpose: the 2026-09-02 amendment moved the bar
+    # 10 -> 3, and a test pinned to the literal would have re-passed while
+    # testing nothing.
+    from app.mirror import SLIPPAGE_SAMPLE_NEED
+    real = SLIPPAGE_SAMPLE_NEED - 1
+    ex.state.fills = ([{"live": True} for _ in range(real)]
                       + [{"live": True, "void": True} for _ in range(2)])
     row = _ramp_v4(ex.state)["rows"]["slippage_sample"]
-    assert row["have"] == ex._live_fill_count() == 8, \
+    assert row["have"] == ex._live_fill_count() == real, \
         f"ramp render says {row['have']}, mirror says {ex._live_fill_count()}"
-    assert row["met"] is False, "8 real fills must not read as a met 10"
+    assert row["met"] is False, \
+        f"{real} real fills + 2 voids must not read as a met " \
+        f"{SLIPPAGE_SAMPLE_NEED}"
     # ...and the terminal condition auto-drill reads must agree with both:
     # with the cycle row already satisfied, only the slippage count is left,
     # so this is exactly where the two readers used to diverge.
     from app.mirror import DRILL_CYCLE_NEED
     ex.state.coverage_live = {"drill_cycle": DRILL_CYCLE_NEED}
     assert ex._needed_auto_drill() == "cycle", \
-        "auto-drill read 8 real fills + 2 voids as a complete sample"
+        f"auto-drill read {real} real fills + 2 voids as a complete sample"
 
 
 # ---------------------------------------------------------------------------
@@ -5350,3 +5368,180 @@ def test_gate_pnl_line_fires_exactly_once_across_priceless_retry(tmp_path):
     ex._poll_fill_watch()                       # watch gone: nothing more
     ev = [e for e in ex.state.events if e["kind"] == "trade_pnl"]
     assert len(ev) == 1
+
+
+# ---------------------------------------------------------------------------
+# RAMP_V4 amendment 2026-09-02: "Slippage is an instrument check, not a size
+# gate". The ten-sample bar assumed execution cost rises with size; the live
+# HL book says impact is 0.06bps at $151 AND at $56k. The row drops to 3 (a
+# capture-pipeline proof) and the CONTINUOUS sanity gate + CUSUM become the
+# operative execution control. These gates pin what the amendment may and
+# may NOT touch - amending a frozen spec toward what the operator wants to
+# pass is the failure this repo guards against, so the guard is a test.
+# ---------------------------------------------------------------------------
+
+def test_gate_no_ramp_row_may_drift_unnoticed():
+    """EVERY row pinned against a frozen expectation, not a hand-picked
+    subset (counter-agent 2026-09-02: the first cut pinned 7 of 12, so the
+    5 unpinned rows could be weakened silently by the next 'amendment')."""
+    from app.main import RAMP_V4_REQUIRED
+    from app.mirror import DRILL_CYCLE_NEED, SLIPPAGE_SAMPLE_NEED
+    FROZEN = {"entry_long": 2, "entry_short": 2, "stop_placed": 2,
+              "stop_filled": 1, "signal_exit": 2, "chase": 1,
+              "post_only_cross": 1, "restart_with_position": 1,
+              "config_change": 1, "drill_cycle": 3, "halt": 1, "resume": 1}
+    assert RAMP_V4_REQUIRED == FROZEN, \
+        "a ramp row moved: that is a SPEC amendment and needs its own " \
+        "written rationale + counter-agent review, not a test update"
+    assert DRILL_CYCLE_NEED == 3
+    # 10 is the barbell-lab slip-CUSUM arming AND norm-freezing threshold
+    # (edge/layers.py MIN_SLIP_TRADES). Lowering it disarms the continuous
+    # detector; they move together or not at all.
+    assert SLIPPAGE_SAMPLE_NEED == 10
+
+
+def test_gate_slippage_bar_matches_the_cusum_arming_threshold(tmp_path):
+    """The executor's bar and the detector's arming threshold are ONE
+    number in two repos. If they drift, the ramp completes while the
+    continuous control is still reporting 'insufficient'."""
+    import re
+    from app.main import _ramp_v4
+    from app.mirror import SLIPPAGE_SAMPLE_NEED
+    layers = os.path.join(os.path.dirname(__file__), "..", "..",
+                          "barbell-lab", "src", "barbell", "edge", "layers.py")
+    if os.path.exists(layers):
+        m = re.search(r"MIN_RET_DAYS,\s*MIN_SLIP_TRADES,\s*MIN_DD_DAYS\s*=\s*"
+                      r"\d+,\s*(\d+)", open(layers).read())
+        assert m, "could not read MIN_SLIP_TRADES from the edge monitor"
+        assert int(m.group(1)) == SLIPPAGE_SAMPLE_NEED, \
+            "ramp bar and slip-CUSUM arming threshold have drifted apart"
+    # and the readout the operator reads must state the same number
+    ex = mkexec(tmp_path, FakeVenue(), dry_run=False)
+    rv = _ramp_v4(ex.state)
+    assert rv["rows"]["slippage_sample"]["need"] == SLIPPAGE_SAMPLE_NEED
+    assert rv["slippage_sanity"]["need"] == SLIPPAGE_SAMPLE_NEED
+
+
+def test_gate_one_short_of_the_bar_does_not_satisfy_the_row(tmp_path):
+    """The bar moved down, not away - the exact count still gates."""
+    from app.main import _ramp_v4
+    from app.mirror import SLIPPAGE_SAMPLE_NEED
+    ex = mkexec(tmp_path, FakeVenue(), dry_run=False)
+    ex.state.fills = [{"live": True} for _ in range(SLIPPAGE_SAMPLE_NEED - 1)]
+    assert _ramp_v4(ex.state)["rows"]["slippage_sample"]["met"] is False
+    ex.state.fills.append({"live": True})
+    assert _ramp_v4(ex.state)["rows"]["slippage_sample"]["met"] is True
+
+
+def test_gate_slippage_row_refuses_dry_and_void_evidence(tmp_path):
+    """The amendment relaxed the COUNT. It must not have relaxed what
+    counts - a dry-run price is synthetic and a void is fictitious."""
+    from app.main import _ramp_v4
+    from app.mirror import SLIPPAGE_SAMPLE_NEED
+    ex = mkexec(tmp_path, FakeVenue(), dry_run=False)
+    n = SLIPPAGE_SAMPLE_NEED
+    ex.state.fills = ([{"live": False} for _ in range(n)]
+                      + [{"live": True, "void": True} for _ in range(n)])
+    row = _ramp_v4(ex.state)["rows"]["slippage_sample"]
+    assert row["have"] == 0 and row["met"] is False
+    assert ex._live_fill_count() == 0
+
+
+def test_gate_spec_pins_the_slippage_amendment():
+    """Doc/code drift on the ramp gate is exactly what this repo keeps
+    re-finding - and a gate WEAKENING with no written rationale is the
+    worst version of it."""
+    spec = open(os.path.join(os.path.dirname(__file__), "..",
+                             "RAMP_V4.md")).read()
+    from app.mirror import SLIPPAGE_SAMPLE_NEED
+    assert "right diagnosis, wrong prescription" in spec
+    assert f"| slippage sample        | ≥{SLIPPAGE_SAMPLE_NEED} fills" in spec, \
+        "the spec table must state the SAME bar the code enforces"
+    # the evidence must be reproducible, and named where an operator looks
+    assert "scripts/book_depth_probe.py" in spec
+    here = os.path.dirname(__file__)
+    assert os.path.exists(os.path.join(here, "..", "scripts",
+                                       "book_depth_probe.py"))
+    # a dated run must be frozen alongside it: the first cut cited numbers
+    # that no longer reproduced and nothing in the repo recorded the run
+    frozen = [f for f in os.listdir(os.path.join(here, "..", "scripts"))
+              if f.startswith("book_depth_probe.") and f.endswith(".txt")]
+    assert frozen, "the justifying run must be committed, not just cited"
+    body = spec.split("### Slippage: right diagnosis")[1]
+    # the number must be tied to the detector, not to a size argument
+    assert "MIN_SLIP_TRADES" in body, \
+        "the spec must say WHY 10 - it is the CUSUM arming threshold"
+    assert "entry_short" in body, "and name what it refused to weaken"
+    # the withdrawn table must not survive anywhere as live evidence
+    assert "0.09-0.23" not in spec and "0.09–0.23" not in spec, \
+        "the unreproducible large-size cells were withdrawn"
+    # the sanity gate must be documented as CODE, not prose
+    assert "_slip_sanity" in spec
+
+
+# ---------------------------------------------------------------------------
+# The |mean slip| < 15bps sanity gate. RAMP_V4.md has cited it since
+# 2026-08-15; it existed ONLY in prose until 2026-09-02, when an adversarial
+# review of a proposal to LOWER the fill count found that the "continuous
+# control" the proposal leaned on was never implemented. A gate named in the
+# spec and absent from the code is worse than no gate: the operator believes
+# it is watching.
+# ---------------------------------------------------------------------------
+
+def test_gate_slip_sanity_is_computed_not_prose(tmp_path):
+    from app.main import _ramp_v4
+    ex = mkexec(tmp_path, FakeVenue(), dry_run=False)
+    ex.state.fills = [{"live": True, "slip_bps": 2.0} for _ in range(10)]
+    s = _ramp_v4(ex.state)["slippage_sanity"]
+    assert s["n"] == 10 and s["mean_bps"] == 2.0 and s["ok"] is True
+
+
+def test_gate_systematically_adverse_execution_fails_sanity(tmp_path):
+    """13/13 rows with every fill 40bps adverse must NOT read as advanceable
+    - the failure this gate exists for, and the one it could not previously
+    detect because it was never computed."""
+    from app.main import _ramp_v4
+    ex = mkexec(tmp_path, FakeVenue(), dry_run=False)
+    ex.state.fills = [{"live": True, "slip_bps": 40.0} for _ in range(10)]
+    rv = _ramp_v4(ex.state)
+    assert rv["rows"]["slippage_sample"]["met"] is True   # count satisfied...
+    assert rv["slippage_sanity"]["ok"] is False           # ...quality not
+    assert rv["advance_ok"] is False
+
+
+def test_gate_sanity_is_never_ok_on_an_unmeasured_book(tmp_path):
+    """n=0 must read as NOT sane. An unmeasured book is not a clean one,
+    and this is exactly the state the executor sat in for the whole
+    Hyperliquid go-live."""
+    from app.main import _ramp_v4
+    ex = mkexec(tmp_path, FakeVenue(), dry_run=False)
+    ex.state.fills = []
+    s = _ramp_v4(ex.state)["slippage_sanity"]
+    assert s["n"] == 0 and s["mean_bps"] is None and s["ok"] is False
+
+
+def test_gate_sanity_reads_the_same_fills_the_gate_counts(tmp_path):
+    """Dry-run and void fills are not evidence for the COUNT, so they must
+    not be evidence for the MEAN either - two populations would let a book
+    pass one half of the spec and fail the other for opposite reasons."""
+    from app.main import _ramp_v4
+    ex = mkexec(tmp_path, FakeVenue(), dry_run=False)
+    ex.state.fills = (
+        [{"live": True, "slip_bps": 1.0} for _ in range(10)]
+        + [{"live": True, "void": True, "slip_bps": 1320.0}]
+        + [{"live": False, "slip_bps": 900.0}])
+    rv = _ramp_v4(ex.state)
+    assert rv["slippage_sanity"]["n"] == rv["rows"]["slippage_sample"]["have"] == 10
+    assert rv["slippage_sanity"]["mean_bps"] == 1.0    # voids/dry excluded
+    assert rv["advance_ok"] is False    # other rows unmet - count is not enough
+
+
+def test_gate_sanity_survives_a_corrupt_fill_row(tmp_path):
+    """/pulse and /status both render this; a junk row must not 500 them."""
+    from app.main import _ramp_v4
+    ex = mkexec(tmp_path, FakeVenue(), dry_run=False)
+    ex.state.fills = ["junk", None, {"live": True, "slip_bps": "3.0"},
+                      {"live": True, "slip_bps": True},
+                      {"live": True, "slip_bps": 4.0}]
+    s = _ramp_v4(ex.state)["slippage_sanity"]
+    assert s["n"] == 1 and s["mean_bps"] == 4.0   # str and bool are not slips
