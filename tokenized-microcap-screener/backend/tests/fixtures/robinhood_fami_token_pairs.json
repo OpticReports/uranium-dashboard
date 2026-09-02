@@ -1,0 +1,787 @@
+[
+ {
+  "chainId": "robinhood",
+  "dexId": "uniswap",
+  "url": "https://dexscreener.com/robinhood/0x570d52c9a8080bf885a940791ff8e0271e18c84e6953f1c4c085b40d162d15f3",
+  "pairAddress": "0x570d52c9a8080bf885a940791ff8e0271e18c84e6953f1c4c085b40d162d15f3",
+  "baseToken": {
+   "address": "0x5D2e81cB3A6FECe856B824Dfd7e1d6D3dbaD8cd9",
+   "name": "Farmmi, Inc.",
+   "symbol": "FAMI"
+  },
+  "quoteToken": {
+   "address": "0x0000000000000000000000000000000000000000",
+   "name": "Ether",
+   "symbol": "ETH"
+  },
+  "priceUsd": "0.2136",
+  "txns": {
+   "m5": {
+    "buys": 11,
+    "sells": 3
+   },
+   "h1": {
+    "buys": 260,
+    "sells": 276
+   },
+   "h6": {
+    "buys": 13149,
+    "sells": 10551
+   },
+   "h24": {
+    "buys": 13150,
+    "sells": 10551
+   }
+  },
+  "volume": {
+   "h24": 9461048.97,
+   "h6": 9461048.96,
+   "h1": 161762.14,
+   "m5": 826.37
+  },
+  "priceChange": {
+   "m5": -0.09,
+   "h1": -20.79,
+   "h6": 78.71,
+   "h24": 78.71
+  },
+  "liquidity": {
+   "usd": 154652.46,
+   "base": 494712,
+   "quote": 20.4279
+  },
+  "fdv": 7996760,
+  "marketCap": 7996760,
+  "pairCreatedAt": 1788351745000,
+  "info": {
+   "websites": [
+    {
+     "url": "https://farmmi.onchaincoin.lol",
+     "label": "Website"
+    }
+   ],
+   "socials": []
+  }
+ },
+ {
+  "chainId": "robinhood",
+  "dexId": "up",
+  "url": "https://dexscreener.com/robinhood/0x4dcb6e3077106b7c85bf7393be86f986ac7c0d69",
+  "pairAddress": "0x4Dcb6e3077106b7C85Bf7393bE86f986aC7c0d69",
+  "baseToken": {
+   "address": "0x5D2e81cB3A6FECe856B824Dfd7e1d6D3dbaD8cd9",
+   "name": "Farmmi, Inc.",
+   "symbol": "FAMI"
+  },
+  "quoteToken": {
+   "address": "0x7aB250159c42ea5f3EC78e32D9Ff2B24D2DE45D8",
+   "name": "FAMI",
+   "symbol": "FAMI"
+  },
+  "txns": {
+   "m5": {
+    "buys": 0,
+    "sells": 0
+   },
+   "h1": {
+    "buys": 0,
+    "sells": 0
+   },
+   "h6": {
+    "buys": 6,
+    "sells": 6
+   },
+   "h24": {
+    "buys": 6,
+    "sells": 6
+   }
+  },
+  "volume": {
+   "h24": 0,
+   "h6": 0,
+   "h1": 0,
+   "m5": 0
+  },
+  "priceChange": {
+   "h6": 12.86,
+   "h24": 12.86
+  },
+  "info": {
+   "websites": [
+    {
+     "url": "https://farmmi.onchaincoin.lol",
+     "label": "Website"
+    }
+   ],
+   "socials": []
+  }
+ },
+ {
+  "chainId": "robinhood",
+  "dexId": "uniswap",
+  "url": "https://dexscreener.com/robinhood/0x48cff3c087c11b88bab76488f0d17b3e0c3dab113334e8b7a3d1205f1b31d923",
+  "pairAddress": "0x48cff3c087c11b88bab76488f0d17b3e0c3dab113334e8b7a3d1205f1b31d923",
+  "baseToken": {
+   "address": "0xe81880c1C5054245e036359f5c7be31606E79F56",
+   "name": "Money Mushroom",
+   "symbol": "JINQIAN"
+  },
+  "quoteToken": {
+   "address": "0x5D2e81cB3A6FECe856B824Dfd7e1d6D3dbaD8cd9",
+   "name": "Farmmi, Inc.",
+   "symbol": "FAMI"
+  },
+  "priceUsd": "0.005912",
+  "txns": {
+   "m5": {
+    "buys": 19,
+    "sells": 25
+   },
+   "h1": {
+    "buys": 1206,
+    "sells": 729
+   },
+   "h6": {
+    "buys": 59416,
+    "sells": 35344
+   },
+   "h24": {
+    "buys": 59416,
+    "sells": 35344
+   }
+  },
+  "volume": {
+   "h24": 93673774.82,
+   "h6": 93673774.82,
+   "h1": 1822344.04,
+   "m5": 34331.45
+  },
+  "priceChange": {
+   "m5": -1.02,
+   "h1": -30.42,
+   "h6": 501,
+   "h24": 501
+  },
+  "liquidity": {
+   "usd": 4433179.67,
+   "base": 499757598,
+   "quote": 6923861
+  },
+  "fdv": 5912818,
+  "marketCap": 5912818,
+  "pairCreatedAt": 1788355949000,
+  "info": {
+   "websites": [],
+   "socials": []
+  }
+ },
+ {
+  "chainId": "robinhood",
+  "dexId": "uniswap",
+  "url": "https://dexscreener.com/robinhood/0x842ae11630e0dcfab73a42ca7a5a000f3d95dd4c1db6ebd3f167021cbed5cc58",
+  "pairAddress": "0x842ae11630e0dcfab73a42ca7a5a000f3d95dd4c1db6ebd3f167021cbed5cc58",
+  "baseToken": {
+   "address": "0x9FbC430b96B8f24aDab5dfF9506E56b6E1561e18",
+   "name": "Forasen",
+   "symbol": "FORASEN"
+  },
+  "quoteToken": {
+   "address": "0x5D2e81cB3A6FECe856B824Dfd7e1d6D3dbaD8cd9",
+   "name": "Farmmi, Inc.",
+   "symbol": "FAMI"
+  },
+  "priceUsd": "0.000005023",
+  "txns": {
+   "m5": {
+    "buys": 3,
+    "sells": 3
+   },
+   "h1": {
+    "buys": 118,
+    "sells": 101
+   },
+   "h6": {
+    "buys": 5763,
+    "sells": 6288
+   },
+   "h24": {
+    "buys": 5763,
+    "sells": 6288
+   }
+  },
+  "volume": {
+   "h24": 620447.01,
+   "h6": 620447.01,
+   "h1": 4604.16,
+   "m5": 10.22
+  },
+  "priceChange": {
+   "m5": 0.29,
+   "h1": -62.9,
+   "h6": -38.73,
+   "h24": -38.73
+  },
+  "liquidity": {
+   "usd": 3959.82,
+   "base": 482288847,
+   "quote": 7199.4411
+  },
+  "fdv": 5024,
+  "marketCap": 5024,
+  "pairCreatedAt": 1788360153000,
+  "info": {
+   "websites": [
+    {
+     "url": "https://www.sec.gov/Archives/edgar/data/1701261/000114420417059192/tv478808_f1.htm",
+     "label": "Website"
+    }
+   ],
+   "socials": []
+  }
+ },
+ {
+  "chainId": "robinhood",
+  "dexId": "uniswap",
+  "url": "https://dexscreener.com/robinhood/0xfbe613ee9a51be18c65dab84f9105d602e5cb06df4adb056cac0ca143087758e",
+  "pairAddress": "0xfbe613ee9a51be18c65dab84f9105d602e5cb06df4adb056cac0ca143087758e",
+  "baseToken": {
+   "address": "0xFF9319E2862F3167a46032cf0b081cEd5Ae7513C",
+   "name": "pennystock",
+   "symbol": "PENNYSTOCK"
+  },
+  "quoteToken": {
+   "address": "0x5D2e81cB3A6FECe856B824Dfd7e1d6D3dbaD8cd9",
+   "name": "Farmmi, Inc.",
+   "symbol": "FAMI"
+  },
+  "priceUsd": "0.000007418",
+  "txns": {
+   "m5": {
+    "buys": 0,
+    "sells": 0
+   },
+   "h1": {
+    "buys": 0,
+    "sells": 2
+   },
+   "h6": {
+    "buys": 254,
+    "sells": 155
+   },
+   "h24": {
+    "buys": 254,
+    "sells": 155
+   }
+  },
+  "volume": {
+   "h24": 52005.7,
+   "h6": 52005.7,
+   "h1": 11.42,
+   "m5": 0
+  },
+  "priceChange": {
+   "h1": -20.93,
+   "h6": -73.07,
+   "h24": -73.07
+  },
+  "liquidity": {
+   "usd": 7396.31,
+   "base": 945826800,
+   "quote": 1587.5025
+  },
+  "fdv": 7418,
+  "marketCap": 7418,
+  "pairCreatedAt": 1788362113000,
+  "info": {
+   "websites": [],
+   "socials": [
+    {
+     "url": "https://x.com/scufffd/status/2095170923984752907",
+     "type": "twitter"
+    }
+   ]
+  }
+ },
+ {
+  "chainId": "robinhood",
+  "dexId": "uniswap",
+  "url": "https://dexscreener.com/robinhood/0x4b5c32e853e378166a1d73f04aafacdc376b437b6c6316376a8b2732258c3c2b",
+  "pairAddress": "0x4b5c32e853e378166a1d73f04aafacdc376b437b6c6316376a8b2732258c3c2b",
+  "baseToken": {
+   "address": "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168",
+   "name": "Global Dollar",
+   "symbol": "USDG"
+  },
+  "quoteToken": {
+   "address": "0x5D2e81cB3A6FECe856B824Dfd7e1d6D3dbaD8cd9",
+   "name": "Farmmi, Inc.",
+   "symbol": "FAMI"
+  },
+  "priceUsd": "1.0073",
+  "txns": {
+   "m5": {
+    "buys": 83,
+    "sells": 75
+   },
+   "h1": {
+    "buys": 1081,
+    "sells": 1664
+   },
+   "h6": {
+    "buys": 50507,
+    "sells": 78130
+   },
+   "h24": {
+    "buys": 50514,
+    "sells": 78130
+   }
+  },
+  "volume": {
+   "h24": 134189679.49,
+   "h6": 134188818.8,
+   "h1": 2717491.59,
+   "m5": 43864.85
+  },
+  "priceChange": {
+   "m5": 2.39,
+   "h1": -0.13,
+   "h6": 0.96,
+   "h24": 0.96
+  },
+  "liquidity": {
+   "usd": 3724938.91,
+   "base": 1978735,
+   "quote": 8111027
+  },
+  "fdv": 534000321,
+  "marketCap": 534000321,
+  "pairCreatedAt": 1788299691000
+ },
+ {
+  "chainId": "robinhood",
+  "dexId": "uniswap",
+  "url": "https://dexscreener.com/robinhood/0x7f0f8692f8b19a11744d92a0b99e54cad8b1828333b8a55f6805d7816946634b",
+  "pairAddress": "0x7f0f8692f8b19a11744d92a0b99e54cad8b1828333b8a55f6805d7816946634b",
+  "baseToken": {
+   "address": "0x407B85Bde1284CEb1D40f90874AF5AFF8B1c14c4",
+   "name": "Jin Chan \u91d1\u87fe",
+   "symbol": "JINCHAN"
+  },
+  "quoteToken": {
+   "address": "0x5D2e81cB3A6FECe856B824Dfd7e1d6D3dbaD8cd9",
+   "name": "Farmmi, Inc.",
+   "symbol": "FAMI"
+  },
+  "priceUsd": "0.0001719",
+  "txns": {
+   "m5": {
+    "buys": 0,
+    "sells": 0
+   },
+   "h1": {
+    "buys": 0,
+    "sells": 0
+   },
+   "h6": {
+    "buys": 13,
+    "sells": 13
+   },
+   "h24": {
+    "buys": 13,
+    "sells": 13
+   }
+  },
+  "volume": {
+   "h24": 11321.68,
+   "h6": 11321.68,
+   "h1": 0,
+   "m5": 0
+  },
+  "priceChange": {
+   "h6": -3.59,
+   "h24": -3.59
+  },
+  "liquidity": {
+   "usd": 152860.14,
+   "base": 888795463,
+   "quote": 30.3086
+  },
+  "fdv": 152860,
+  "marketCap": 152860,
+  "pairCreatedAt": 1788363390000
+ },
+ {
+  "chainId": "robinhood",
+  "dexId": "uniswap",
+  "url": "https://dexscreener.com/robinhood/0x77e4068bdf5a7983b50104a76049ea429ba4839806a53b8fb31eeaf13c48f04c",
+  "pairAddress": "0x77e4068bdf5a7983b50104a76049ea429ba4839806a53b8fb31eeaf13c48f04c",
+  "baseToken": {
+   "address": "0xD398E17C87f657300B0F007df8314eA2851031C9",
+   "name": "Gold Ingot Mushroom",
+   "symbol": "YUANBAO"
+  },
+  "quoteToken": {
+   "address": "0x5D2e81cB3A6FECe856B824Dfd7e1d6D3dbaD8cd9",
+   "name": "Farmmi, Inc.",
+   "symbol": "FAMI"
+  },
+  "priceUsd": "0.0009506",
+  "txns": {
+   "m5": {
+    "buys": 0,
+    "sells": 0
+   },
+   "h1": {
+    "buys": 0,
+    "sells": 0
+   },
+   "h6": {
+    "buys": 27,
+    "sells": 29
+   },
+   "h24": {
+    "buys": 27,
+    "sells": 29
+   }
+  },
+  "volume": {
+   "h24": 11151.99,
+   "h6": 11151.99,
+   "h1": 0,
+   "m5": 0
+  },
+  "priceChange": {
+   "h6": -14.11,
+   "h24": -14.11
+  },
+  "liquidity": {
+   "usd": 84505.41,
+   "base": 88875072,
+   "quote": 16.4555
+  },
+  "fdv": 84505,
+  "marketCap": 84505,
+  "pairCreatedAt": 1788359418000
+ },
+ {
+  "chainId": "robinhood",
+  "dexId": "uniswap",
+  "url": "https://dexscreener.com/robinhood/0x990f67836a5a40a02a47660ce1ba1254d49bbb22cfbe22559a5b7f9ec9906a2c",
+  "pairAddress": "0x990f67836a5a40a02a47660ce1ba1254d49bbb22cfbe22559a5b7f9ec9906a2c",
+  "baseToken": {
+   "address": "0xa333B57f0DE9b169cBC91F51d9680Af719161e18",
+   "name": "Mushroom Coin",
+   "symbol": "MUSHROOMCOIN"
+  },
+  "quoteToken": {
+   "address": "0x5D2e81cB3A6FECe856B824Dfd7e1d6D3dbaD8cd9",
+   "name": "Farmmi, Inc.",
+   "symbol": "FAMI"
+  },
+  "priceUsd": "0.000008821",
+  "txns": {
+   "m5": {
+    "buys": 5,
+    "sells": 4
+   },
+   "h1": {
+    "buys": 18,
+    "sells": 15
+   },
+   "h6": {
+    "buys": 6722,
+    "sells": 7183
+   },
+   "h24": {
+    "buys": 6722,
+    "sells": 7183
+   }
+  },
+  "volume": {
+   "h24": 592158.22,
+   "h6": 592158.22,
+   "h1": 378.88,
+   "m5": 96.3
+  },
+  "priceChange": {
+   "m5": -8.95,
+   "h1": -31.94,
+   "h6": -63.98,
+   "h24": -63.98
+  },
+  "liquidity": {
+   "usd": 8660.27,
+   "base": 792322274,
+   "quote": 7825.9676
+  },
+  "fdv": 8822,
+  "marketCap": 8822,
+  "pairCreatedAt": 1788359633000
+ },
+ {
+  "chainId": "robinhood",
+  "dexId": "uniswap",
+  "url": "https://dexscreener.com/robinhood/0x298c240abeb8c72e0587afc1c3bb128e07e3fc4ecab2ebd110feda3c0ddf0210",
+  "pairAddress": "0x298c240abeb8c72e0587afc1c3bb128e07e3fc4ecab2ebd110feda3c0ddf0210",
+  "baseToken": {
+   "address": "0x3522AEEE336F02C8Ac7606f5B95c7eA434bF1E18",
+   "name": "Super Farmmi",
+   "symbol": "FARMMI"
+  },
+  "quoteToken": {
+   "address": "0x5D2e81cB3A6FECe856B824Dfd7e1d6D3dbaD8cd9",
+   "name": "Farmmi, Inc.",
+   "symbol": "FAMI"
+  },
+  "priceUsd": "0.00001072",
+  "txns": {
+   "m5": {
+    "buys": 0,
+    "sells": 0
+   },
+   "h1": {
+    "buys": 6,
+    "sells": 6
+   },
+   "h6": {
+    "buys": 4302,
+    "sells": 4155
+   },
+   "h24": {
+    "buys": 4302,
+    "sells": 4155
+   }
+  },
+  "volume": {
+   "h24": 411527.27,
+   "h6": 411527.27,
+   "h1": 44.03,
+   "m5": 0
+  },
+  "priceChange": {
+   "h1": -20.55,
+   "h6": 8.26,
+   "h24": 8.26
+  },
+  "liquidity": {
+   "usd": 10842.94,
+   "base": 870607112,
+   "quote": 6384.1746
+  },
+  "fdv": 10730,
+  "marketCap": 10730,
+  "pairCreatedAt": 1788357201000
+ },
+ {
+  "chainId": "robinhood",
+  "dexId": "uniswap",
+  "url": "https://dexscreener.com/robinhood/0x80b1fe9f78d83621b8b000a261acff3e2945421f3ccd781b96816d0d159b7cc4",
+  "pairAddress": "0x80b1fe9f78d83621b8b000a261acff3e2945421f3ccd781b96816d0d159b7cc4",
+  "baseToken": {
+   "address": "0x341dbC2e911aB81D341B00fdDD9aDeC3d6361af1",
+   "name": "MUSHROOMCOIN",
+   "symbol": "MUSHROOM"
+  },
+  "quoteToken": {
+   "address": "0x5D2e81cB3A6FECe856B824Dfd7e1d6D3dbaD8cd9",
+   "name": "Farmmi, Inc.",
+   "symbol": "FAMI"
+  },
+  "priceUsd": "0.00003690",
+  "txns": {
+   "m5": {
+    "buys": 0,
+    "sells": 0
+   },
+   "h1": {
+    "buys": 0,
+    "sells": 0
+   },
+   "h6": {
+    "buys": 66,
+    "sells": 51
+   },
+   "h24": {
+    "buys": 66,
+    "sells": 51
+   }
+  },
+  "volume": {
+   "h24": 20319.97,
+   "h6": 20319.97,
+   "h1": 0,
+   "m5": 0
+  },
+  "priceChange": {
+   "h6": 12.42,
+   "h24": 12.42
+  },
+  "liquidity": {
+   "usd": 36898.85,
+   "base": 994370871,
+   "quote": 156.9041
+  },
+  "fdv": 36900,
+  "marketCap": 36900,
+  "pairCreatedAt": 1788360051000
+ },
+ {
+  "chainId": "robinhood",
+  "dexId": "uniswap",
+  "url": "https://dexscreener.com/robinhood/0x1d3773083f574551110c07c487b7ac82bc114999a067f61de2936604968afda1",
+  "pairAddress": "0x1d3773083f574551110c07c487b7ac82bc114999a067f61de2936604968afda1",
+  "baseToken": {
+   "address": "0x3CE207EbF070F1e3Ea52EF095DD71E4C509461DE",
+   "name": "RuneCrypto_",
+   "symbol": "RUNE"
+  },
+  "quoteToken": {
+   "address": "0x5D2e81cB3A6FECe856B824Dfd7e1d6D3dbaD8cd9",
+   "name": "Farmmi, Inc.",
+   "symbol": "FAMI"
+  },
+  "priceUsd": "0.00003359",
+  "txns": {
+   "m5": {
+    "buys": 0,
+    "sells": 0
+   },
+   "h1": {
+    "buys": 0,
+    "sells": 0
+   },
+   "h6": {
+    "buys": 88,
+    "sells": 87
+   },
+   "h24": {
+    "buys": 88,
+    "sells": 87
+   }
+  },
+  "volume": {
+   "h24": 24546.49,
+   "h6": 24546.49,
+   "h1": 0,
+   "m5": 0
+  },
+  "priceChange": {
+   "h6": -3.08,
+   "h24": -3.08
+  },
+  "liquidity": {
+   "usd": 33593.39,
+   "base": 998321810,
+   "quote": 46.592
+  },
+  "fdv": 33593,
+  "marketCap": 33593,
+  "pairCreatedAt": 1788360103000
+ },
+ {
+  "chainId": "robinhood",
+  "dexId": "uniswap",
+  "url": "https://dexscreener.com/robinhood/0x5e692303d968cd1de2839dc070bbe8e5405e24abf437ef2eba6bc84685eca7b4",
+  "pairAddress": "0x5e692303d968cd1de2839dc070bbe8e5405e24abf437ef2eba6bc84685eca7b4",
+  "baseToken": {
+   "address": "0xF4dd9d293Fe5ACd9B0B649cdE17e62059898ee13",
+   "name": "FamiBroker",
+   "symbol": "FamiBroker"
+  },
+  "quoteToken": {
+   "address": "0x5D2e81cB3A6FECe856B824Dfd7e1d6D3dbaD8cd9",
+   "name": "Farmmi, Inc.",
+   "symbol": "FAMI"
+  },
+  "priceUsd": "0.00003362",
+  "txns": {
+   "m5": {
+    "buys": 0,
+    "sells": 0
+   },
+   "h1": {
+    "buys": 0,
+    "sells": 0
+   },
+   "h6": {
+    "buys": 6,
+    "sells": 6
+   },
+   "h24": {
+    "buys": 6,
+    "sells": 6
+   }
+  },
+  "volume": {
+   "h24": 2530.13,
+   "h6": 2530.13,
+   "h1": 0,
+   "m5": 0
+  },
+  "priceChange": {
+   "h6": -11.32,
+   "h24": -11.32
+  },
+  "liquidity": {
+   "usd": 33621.76,
+   "base": 999897341,
+   "quote": 2.8456
+  },
+  "fdv": 33622,
+  "marketCap": 33622,
+  "pairCreatedAt": 1788360302000
+ },
+ {
+  "chainId": "robinhood",
+  "dexId": "uniswap",
+  "url": "https://dexscreener.com/robinhood/0x49c89607f18283a9da56e9b53695952f33aef74880585e61998a8c8425a03818",
+  "pairAddress": "0x49c89607f18283a9da56e9b53695952f33aef74880585e61998a8c8425a03818",
+  "baseToken": {
+   "address": "0x5d71Bd942da657913e1aaA16cc81d1E9F515c06D",
+   "name": "China",
+   "symbol": "CHINA"
+  },
+  "quoteToken": {
+   "address": "0x5D2e81cB3A6FECe856B824Dfd7e1d6D3dbaD8cd9",
+   "name": "Farmmi, Inc.",
+   "symbol": "FAMI"
+  },
+  "priceUsd": "0.00003464",
+  "txns": {
+   "m5": {
+    "buys": 0,
+    "sells": 0
+   },
+   "h1": {
+    "buys": 0,
+    "sells": 0
+   },
+   "h6": {
+    "buys": 1,
+    "sells": 1
+   },
+   "h24": {
+    "buys": 1,
+    "sells": 1
+   }
+  },
+  "volume": {
+   "h24": 142.05,
+   "h6": 142.05,
+   "h1": 0,
+   "m5": 0
+  },
+  "priceChange": {
+   "h6": 1.25,
+   "h24": 1.25
+  },
+  "liquidity": {
+   "usd": 34649.83,
+   "base": 999993814,
+   "quote": 0.1714
+  },
+  "fdv": 34650,
+  "marketCap": 34650,
+  "pairCreatedAt": 1788361242000
+ }
+]

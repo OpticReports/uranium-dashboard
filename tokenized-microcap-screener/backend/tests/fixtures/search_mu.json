@@ -1,0 +1,479 @@
+{
+ "pairs": [
+  {
+   "chainId": "robinhood",
+   "dexId": "uniswap",
+   "url": "https://dexscreener.com/robinhood/0x4d32cc447a6678feacdc39a82dba052870817b1b05499eec611ffc7395c2f201",
+   "pairAddress": "0x4d32cc447a6678feacdc39a82dba052870817b1b05499eec611ffc7395c2f201",
+   "baseToken": {
+    "address": "0x54e595a3544E8e08f39835F744E356bdA6308184",
+    "name": "MU MU THE BULL",
+    "symbol": "MU"
+   },
+   "quoteToken": {
+    "address": "0xfF080c8ce2E5feadaCa0Da81314Ae59D232d4afD",
+    "name": "Micron Technology \u2022 Robinhood Token",
+    "symbol": "MU"
+   },
+   "priceUsd": "0.0002455",
+   "txns": {
+    "m5": {
+     "buys": 0,
+     "sells": 0
+    },
+    "h1": {
+     "buys": 29,
+     "sells": 22
+    },
+    "h6": {
+     "buys": 194,
+     "sells": 209
+    },
+    "h24": {
+     "buys": 1039,
+     "sells": 1117
+    }
+   },
+   "volume": {
+    "h24": 380939.46,
+    "h6": 70474.14,
+    "h1": 12961.29,
+    "m5": 0
+   },
+   "priceChange": {
+    "h1": -3.7,
+    "h6": -15.22,
+    "h24": 60.1
+   },
+   "liquidity": {
+    "usd": 41888.37,
+    "base": 85289800,
+    "quote": 21.9622
+   },
+   "fdv": 245520,
+   "marketCap": 245520,
+   "pairCreatedAt": 1787999139000,
+   "info": {
+    "websites": [
+     {
+      "url": "https://mumuthebull.online",
+      "label": "Website"
+     },
+     {
+      "url": "https://www.ponsfamily.com/launchpad/0x54e595a3544E8e08f39835F744E356bdA6308184",
+      "label": "PONS"
+     }
+    ],
+    "socials": [
+     {
+      "url": "https://x.com/theponsbull",
+      "type": "twitter"
+     },
+     {
+      "url": "https://t.me/MUONPON",
+      "type": "telegram"
+     }
+    ]
+   }
+  },
+  {
+   "chainId": "robinhood",
+   "dexId": "uniswap",
+   "url": "https://dexscreener.com/robinhood/0xd8ca7a2d158c94ccac39f5912fc07a335b1c5f2fd7497bdfe432fc16b5270c11",
+   "pairAddress": "0xd8ca7a2d158c94ccac39f5912fc07a335b1c5f2fd7497bdfe432fc16b5270c11",
+   "baseToken": {
+    "address": "0x54e595a3544E8e08f39835F744E356bdA6308184",
+    "name": "MU MU THE BULL",
+    "symbol": "MU"
+   },
+   "quoteToken": {
+    "address": "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168",
+    "name": "Global Dollar",
+    "symbol": "USDG"
+   },
+   "priceUsd": "0.0002445",
+   "txns": {
+    "m5": {
+     "buys": 0,
+     "sells": 0
+    },
+    "h1": {
+     "buys": 6,
+     "sells": 6
+    },
+    "h6": {
+     "buys": 40,
+     "sells": 36
+    },
+    "h24": {
+     "buys": 209,
+     "sells": 211
+    }
+   },
+   "volume": {
+    "h24": 17419.83,
+    "h6": 3403.75,
+    "h1": 606.22,
+    "m5": 0
+   },
+   "priceChange": {
+    "h1": -6.54,
+    "h6": -10.72,
+    "h24": 50.81
+   },
+   "liquidity": {
+    "usd": 1417.3,
+    "base": 2977976,
+    "quote": 690.6591
+   },
+   "fdv": 244513,
+   "marketCap": 244513,
+   "pairCreatedAt": 1788000341000,
+   "info": {
+    "websites": [
+     {
+      "url": "https://mumuthebull.online",
+      "label": "Website"
+     },
+     {
+      "url": "https://www.ponsfamily.com/launchpad/0x54e595a3544E8e08f39835F744E356bdA6308184",
+      "label": "PONS"
+     }
+    ],
+    "socials": [
+     {
+      "url": "https://x.com/theponsbull",
+      "type": "twitter"
+     },
+     {
+      "url": "https://t.me/MUONPON",
+      "type": "telegram"
+     }
+    ]
+   }
+  },
+  {
+   "chainId": "robinhood",
+   "dexId": "uniswap",
+   "url": "https://dexscreener.com/robinhood/0xd057b1bc54917855bbee58ead58647f47cab35e5",
+   "pairAddress": "0xd057B1Bc54917855BBee58eAd58647f47caB35E5",
+   "baseToken": {
+    "address": "0xfF080c8ce2E5feadaCa0Da81314Ae59D232d4afD",
+    "name": "Micron Technology \u2022 Robinhood Token",
+    "symbol": "MU"
+   },
+   "quoteToken": {
+    "address": "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168",
+    "name": "Global Dollar",
+    "symbol": "USDG"
+   },
+   "priceUsd": "949.94",
+   "txns": {
+    "m5": {
+     "buys": 4,
+     "sells": 1
+    },
+    "h1": {
+     "buys": 51,
+     "sells": 55
+    },
+    "h6": {
+     "buys": 560,
+     "sells": 841
+    },
+    "h24": {
+     "buys": 2817,
+     "sells": 3303
+    }
+   },
+   "volume": {
+    "h24": 3228913.9,
+    "h6": 736421.2,
+    "h1": 64384.07,
+    "m5": 16002.05
+   },
+   "priceChange": {
+    "m5": 0.39,
+    "h1": 0.38,
+    "h6": 1.63,
+    "h24": 2.23
+   },
+   "liquidity": {
+    "usd": 529930.34,
+    "base": 152.1662,
+    "quote": 385381
+   },
+   "fdv": 3241165,
+   "marketCap": 3241165,
+   "pairCreatedAt": 1785147742000
+  },
+  {
+   "chainId": "robinhood",
+   "dexId": "uniswap",
+   "url": "https://dexscreener.com/robinhood/0x4de5bce2ea464e58916264fb120e73b30b513f133d41a26e2679171bbbb81f09",
+   "pairAddress": "0x4de5bce2ea464e58916264fb120e73b30b513f133d41a26e2679171bbbb81f09",
+   "baseToken": {
+    "address": "0xfF080c8ce2E5feadaCa0Da81314Ae59D232d4afD",
+    "name": "Micron Technology \u2022 Robinhood Token",
+    "symbol": "MU"
+   },
+   "quoteToken": {
+    "address": "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168",
+    "name": "Global Dollar",
+    "symbol": "USDG"
+   },
+   "priceUsd": "944.61",
+   "txns": {
+    "m5": {
+     "buys": 7,
+     "sells": 0
+    },
+    "h1": {
+     "buys": 22,
+     "sells": 20
+    },
+    "h6": {
+     "buys": 225,
+     "sells": 211
+    },
+    "h24": {
+     "buys": 477,
+     "sells": 454
+    }
+   },
+   "volume": {
+    "h24": 148132.48,
+    "h6": 80718.51,
+    "h1": 3765.25,
+    "m5": 204.94
+   },
+   "priceChange": {
+    "m5": 0.07,
+    "h1": 0.05,
+    "h6": 1.39,
+    "h24": 1.6
+   },
+   "liquidity": {
+    "usd": 80231.05,
+    "base": 34.1154,
+    "quote": 48110
+   },
+   "fdv": 3222991,
+   "marketCap": 3222991,
+   "pairCreatedAt": 1788318599000
+  },
+  {
+   "chainId": "robinhood",
+   "dexId": "uniswap",
+   "url": "https://dexscreener.com/robinhood/0x6fa3ee0048e78bf0a513eb0ab56f482944a767c21db990fcf555605e69f05659",
+   "pairAddress": "0x6fa3ee0048e78bf0a513eb0ab56f482944a767c21db990fcf555605e69f05659",
+   "baseToken": {
+    "address": "0xfF080c8ce2E5feadaCa0Da81314Ae59D232d4afD",
+    "name": "Micron Technology \u2022 Robinhood Token",
+    "symbol": "MU"
+   },
+   "quoteToken": {
+    "address": "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168",
+    "name": "Global Dollar",
+    "symbol": "USDG"
+   },
+   "priceUsd": "938.12",
+   "txns": {
+    "m5": {
+     "buys": 1,
+     "sells": 1
+    },
+    "h1": {
+     "buys": 26,
+     "sells": 11
+    },
+    "h6": {
+     "buys": 394,
+     "sells": 246
+    },
+    "h24": {
+     "buys": 900,
+     "sells": 825
+    }
+   },
+   "volume": {
+    "h24": 554041.28,
+    "h6": 170806.56,
+    "h1": 13328.4,
+    "m5": 82.82
+   },
+   "priceChange": {
+    "h1": -0.26,
+    "h6": 1.05,
+    "h24": 0.12
+   },
+   "liquidity": {
+    "usd": 532078.35,
+    "base": 209.5062,
+    "quote": 336269
+   },
+   "fdv": 3200849,
+   "marketCap": 3200849,
+   "pairCreatedAt": 1783457152000
+  },
+  {
+   "chainId": "robinhood",
+   "dexId": "uniswap",
+   "url": "https://dexscreener.com/robinhood/0x5fb97aef826b674c4bc76707563816f171043a3b1bf91431b7f82acd6381876b",
+   "pairAddress": "0x5fb97aef826b674c4bc76707563816f171043a3b1bf91431b7f82acd6381876b",
+   "baseToken": {
+    "address": "0xfF080c8ce2E5feadaCa0Da81314Ae59D232d4afD",
+    "name": "Micron Technology \u2022 Robinhood Token",
+    "symbol": "MU"
+   },
+   "quoteToken": {
+    "address": "0x0000000000000000000000000000000000000000",
+    "name": "Ether",
+    "symbol": "ETH"
+   },
+   "priceUsd": "959.58",
+   "txns": {
+    "m5": {
+     "buys": 3,
+     "sells": 3
+    },
+    "h1": {
+     "buys": 27,
+     "sells": 17
+    },
+    "h6": {
+     "buys": 208,
+     "sells": 218
+    },
+    "h24": {
+     "buys": 436,
+     "sells": 558
+    }
+   },
+   "volume": {
+    "h24": 392756.75,
+    "h6": 253042.23,
+    "h1": 12330.9,
+    "m5": 1139.6
+   },
+   "priceChange": {
+    "m5": 0.53,
+    "h1": 0.97,
+    "h6": 2.25,
+    "h24": 2.07
+   },
+   "liquidity": {
+    "usd": 80086.25,
+    "base": 50.5063,
+    "quote": 13.2045
+   },
+   "fdv": 3274051,
+   "marketCap": 3274051,
+   "pairCreatedAt": 1783609675000
+  },
+  {
+   "chainId": "robinhood",
+   "dexId": "uniswap",
+   "url": "https://dexscreener.com/robinhood/0xcc7044bb44107bdc638fa7cd1a87629cb7ac40006c587ff22a8f5bedb833fbb6",
+   "pairAddress": "0xcc7044bb44107bdc638fa7cd1a87629cb7ac40006c587ff22a8f5bedb833fbb6",
+   "baseToken": {
+    "address": "0x8C804359ba98319D94bF46b6E3cc455E7b3f1e18",
+    "name": "MU",
+    "symbol": "MUMU"
+   },
+   "quoteToken": {
+    "address": "0xfF080c8ce2E5feadaCa0Da81314Ae59D232d4afD",
+    "name": "Micron Technology \u2022 Robinhood Token",
+    "symbol": "MU"
+   },
+   "priceUsd": "0.00004666",
+   "txns": {
+    "m5": {
+     "buys": 0,
+     "sells": 0
+    },
+    "h1": {
+     "buys": 4,
+     "sells": 2
+    },
+    "h6": {
+     "buys": 105,
+     "sells": 90
+    },
+    "h24": {
+     "buys": 601,
+     "sells": 722
+    }
+   },
+   "volume": {
+    "h24": 70214.27,
+    "h6": 11166,
+    "h1": 156.09,
+    "m5": 0
+   },
+   "priceChange": {
+    "h1": -1.39,
+    "h6": -17.93,
+    "h24": 101
+   },
+   "liquidity": {
+    "usd": 41510.01,
+    "base": 658865330,
+    "quote": 11.3358
+   },
+   "fdv": 46668,
+   "marketCap": 46668,
+   "pairCreatedAt": 1788229177000
+  },
+  {
+   "chainId": "robinhood",
+   "dexId": "uniswap",
+   "url": "https://dexscreener.com/robinhood/0x54db4aea79bb952ccc1509d0b85331f669903533",
+   "pairAddress": "0x54db4AEa79BB952cCC1509D0b85331F669903533",
+   "baseToken": {
+    "address": "0xC1A01a9B37302268A71efE3Ab5eDD8CF25B746D1",
+    "name": "Micron Technology",
+    "symbol": "MU"
+   },
+   "quoteToken": {
+    "address": "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168",
+    "name": "Global Dollar",
+    "symbol": "USDG"
+   },
+   "priceUsd": "0.0005948",
+   "txns": {
+    "m5": {
+     "buys": 0,
+     "sells": 0
+    },
+    "h1": {
+     "buys": 0,
+     "sells": 1
+    },
+    "h6": {
+     "buys": 0,
+     "sells": 1
+    },
+    "h24": {
+     "buys": 0,
+     "sells": 1
+    }
+   },
+   "volume": {
+    "h24": 1.18,
+    "h6": 1.18,
+    "h1": 1.18,
+    "m5": 0
+   },
+   "priceChange": {},
+   "liquidity": {
+    "usd": 59483.58,
+    "base": 99999997,
+    "quote": 0.02595
+   },
+   "fdv": 59484,
+   "marketCap": 59484,
+   "pairCreatedAt": 1785196902000
+  }
+ ]
+}

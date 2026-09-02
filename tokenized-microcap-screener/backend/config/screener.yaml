@@ -1,0 +1,105 @@
+# Tunables for the tokenized-microcap screener. Hot-reloaded on mtime change.
+
+scan:
+  # Chains DEX Screener indexes where tokenized equities actually trade.
+  # "robinhood" is Robinhood Chain, where the FAMI/JINQIAN loop happened.
+  chains: [robinhood, solana, base, arbitrum, ethereum]
+  registry_sweep_minutes: 30     # re-walk every known equity token's pairs
+  discovery_sweep_minutes: 10    # boosts + stonks meta, for tokens we've not met
+  equity_refresh_minutes: 5      # quote refresh for live candidates
+  # The nanocap wrappers get a much tighter loop than the registry at large:
+  # the tradable window on the meme rung was 13 minutes, not 30.
+  hot_sweep_minutes: 2
+  max_hot_tokens: 60
+  max_registry_tokens: 400       # hard ceiling on per-sweep API spend
+  seed_tickers_top_n: 250        # ticker-sweep budget when bootstrapping
+
+# Tokens that are a chain's money, never a "meme" side of a launch.
+base_assets:
+  [ETH, WETH, USDG, USDC, USDT, DAI, SOL, WSOL, WBTC, CBBTC, USDS, PYUSD,
+   FRAX, USDE, WBNB, BNB, MATIC, POL, AERO, RETH, WSTETH, SGOV]
+
+# A name marker proves an issuer minted the wrapper. Everything without one
+# that still resolves to a listing is classified UNOFFICIAL — detected, but
+# scored as an attention-only link because it has no redemption path.
+issuer_markers:
+  - marker: "Robinhood Token"
+    issuer: robinhood
+  - marker: "xStock"
+    issuer: backed
+    symbol_suffix: "x"
+  - marker: "Ondo Global Markets"
+    issuer: ondo
+  - marker: "Dinari"
+    issuer: dinari
+
+credibility:
+  liq_floor_usd: 1000
+  liq_full_usd: 1000000
+  liq_fdv_floor: 0.01
+  liq_fdv_full: 0.15
+  txn_floor: 25
+  txn_full: 2000
+  turnover_good_lo: 0.5
+  turnover_good_hi: 40.0
+  turnover_absurd: 400.0
+  weights: {depth: 0.35, float: 0.20, two_sided: 0.15, breadth: 0.15, turnover: 0.15}
+
+heat:
+  accel_floor: 0.4
+  accel_full: 3.0
+  burst_floor: 0.5
+  burst_full: 3.0
+  vol_h1_floor: 2000
+  vol_h1_full: 2000000
+  mom_floor: -10.0
+  mom_full: 60.0
+  weights: {accel: 0.35, burst: 0.15, size: 0.30, momentum: 0.20}
+
+pumpability:
+  price_full: 1.0        # <= $1 scores full "cheap"
+  price_floor: 20.0      # >= $20 scores zero
+  advol_full: 1000000    # <= 1M median shares/day scores full "thin"
+  advol_floor: 50000000
+  mcap_full: 10000000    # only used when the FMP enrichment is on
+  mcap_floor: 2000000000
+  weights: {cheap: 0.30, thin: 0.25, beaten: 0.15, small: 0.30}
+
+earliness:
+  move_flat_pct: 3.0
+  move_spent_pct: 60.0
+  rvol_quiet: 1.5
+  rvol_spent: 40.0
+  fresh_hours: 6.0
+  stale_hours: 72.0
+  # move/quiet are the equity legs and carry the score. Freshness is a
+  # MULTIPLIER in [fresh_multiplier_floor, 1.0] — it can discount a stale
+  # setup but can never manufacture runway the tape says is gone.
+  weights: {move: 0.55, quiet: 0.45}
+  fresh_multiplier_floor: 0.7
+
+ladder:
+  ramping_heat: 45.0
+  faded_heat: 20.0
+  cluster_min_memes: 3
+  # A pool with no depth is not a participant. Dead/copycat pools are still
+  # recorded, but they do not count toward the cluster signature.
+  min_cluster_liquidity_usd: 2500
+  equity_move_pct: 15.0     # price leg of "the equity is moving"
+  equity_move_rvol: 3.0     # volume leg — BOTH required
+
+alert:
+  min_alert_score: 45.0
+  gates: {min_credibility: 30.0, min_pumpability: 35.0}
+  weights: {heat: 0.40, pumpability: 0.35, credibility: 0.25}
+  # The cold-tokenization rung. On the Farmmi timeline this was the ONLY rung
+  # with usable lead (+15.8h); the meme cascade rungs were coincident (+13 min)
+  # or lagging (-1.9h). Gated hard on nanocap-ness because a wrapper appearing
+  # for a large cap is routine and means nothing.
+  tokenized_alert: true
+  min_tokenized_pumpability: 60.0
+  min_tokenized_score: 55.0
+  cluster_min: 3
+  cluster_step: 4.0
+  cluster_cap: 5
+  official_bonus: 8.0

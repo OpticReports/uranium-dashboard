@@ -298,6 +298,56 @@ services:
       - key: FMP_API_KEY
         sync: false
 
+  # --- Tokenized Microcap Screener -----------------------------------------
+  # Screens DEX Screener for memecoins pooled against a TOKENIZED SHARE of a
+  # listed company (the FAMI/JINQIAN pattern on Robinhood Chain), maps the pool
+  # back to the US listing via the SEC ticker file, and ranks by how much of
+  # the equity move still looks to come.
+  #
+  # KEYLESS decision brain: no trading credential, no execution path. It names
+  # a ticker and a window; a human places the trade. FMP_API_KEY is the one
+  # OPTIONAL data key (market cap / float). Without it the service still runs
+  # and says on /health that the market-cap gate is degraded.
+  - type: web
+    name: tokenized-microcap-screener
+    runtime: docker
+    dockerfilePath: tokenized-microcap-screener/Dockerfile
+    dockerContext: tokenized-microcap-screener
+    plan: starter            # always-on: the 2-minute nanocap sweep is the point
+    healthCheckPath: /health
+    autoDeploy: true
+    buildFilter:
+      paths:
+        - tokenized-microcap-screener/**
+    disk:
+      name: screener-data    # registry + ladder history survive deploys, and
+      mountPath: /app/data   # the ladder history IS the lead-lag record
+      sizeGB: 1
+    envVars:
+      - key: DATABASE_URL
+        value: sqlite:////app/data/screener.db
+      - key: CACHE_DIR
+        value: /app/data/cache
+      - key: RUN_SCHEDULER
+        value: "true"
+      - key: LOG_LEVEL
+        value: INFO
+      # sec.gov answers 403 to a User-Agent with no contact address. Point this
+      # at a mailbox that is actually monitored before running at any volume.
+      - key: SEC_CONTACT
+        sync: false
+      # Optional market-cap / float enrichment. Absent => degraded, not broken.
+      - key: FMP_API_KEY
+        sync: false
+      # Optional push target for alerts (Discord/Slack/ntfy webhook URL).
+      - key: ALERT_WEBHOOK_URL
+        sync: false
+      # Optional login gate, same convention as the sibling dashboards.
+      - key: DASHBOARD_USER
+        sync: false
+      - key: DASHBOARD_PASSWORD
+        sync: false
+
   # NOTE: treasury-canary Telegram alerts — add the same TELEGRAM_BOT_TOKEN /
   # TELEGRAM_CHAT_ID secrets (plus optional TELEGRAM_MIN_SEVERITY, default
   # WARN) to the treasury-canary service env in the Render dashboard.
