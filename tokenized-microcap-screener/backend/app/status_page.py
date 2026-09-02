@@ -7,7 +7,7 @@ from __future__ import annotations
 import html
 from datetime import datetime
 
-from .models import STAGES, Candidate
+from .models import STAGES, Candidate, MemeLaunch
 
 _STAGE_COLOR = {
     "TOKENIZED": "#4b5563", "PAIRED": "#2563eb", "RAMPING": "#d97706",
@@ -72,8 +72,54 @@ def _leadlag_panel(ll: dict) -> str:
     <p class="thin">{html.escape(ll.get('caveat', ''))}</p>"""
 
 
+def _pools_section(pools_by_ticker: dict[str, list[MemeLaunch]]) -> str:
+    """The pools themselves. The ranked table says WHICH ticker; this says what
+    is actually trading against it, and links straight to each pool."""
+    if not pools_by_ticker:
+        return '<p class="thin">no pools yet — the first sweep seeds the registry</p>'
+    blocks = []
+    for ticker, pools in pools_by_ticker.items():
+        rows = []
+        for p in pools:
+            trend = p.liquidity_trend_pct
+            if trend is None:
+                tcell = '<span class="thin">first reading</span>'
+            elif trend <= -10:
+                tcell = f'<span class="drain">{trend:+.0f}%</span>'
+            elif trend >= 25:
+                tcell = f'<span class="build">{trend:+.0f}%</span>'
+            else:
+                tcell = f'{trend:+.0f}%'
+            created = (p.pair_created_at.strftime("%m-%d %H:%M")
+                       if p.pair_created_at else "—")
+            link = (f'<a href="{html.escape(p.url)}" target="_blank" '
+                    f'rel="noopener noreferrer">chart &rarr;</a>' if p.url else "")
+            rows.append(f"""
+            <tr><td><b>{html.escape(p.base_symbol)}</b>
+                    <div class="thin">{html.escape((p.base_name or '')[:26])}</div></td>
+                <td class="thin">{html.escape(p.chain_id)}/{html.escape(p.dex_id)}</td>
+                <td class="num">{_fmt_money(p.liquidity_usd)}</td>
+                <td class="num">{_fmt_money(p.volume_h24)}</td>
+                <td class="num">{_fmt_money(p.fdv)}</td>
+                <td class="num">{tcell}</td>
+                <td>{_bar(p.credibility, '#64748b', 64)}</td>
+                <td>{_bar(p.heat, '#d97706', 64)}</td>
+                <td class="thin">{created}</td>
+                <td>{link}</td></tr>""")
+        blocks.append(f"""
+        <div class="poolgrp"><h3>{html.escape(ticker)}
+          <span class="thin">{len(pools)} pool{'s' if len(pools) != 1 else ''}</span></h3>
+        <table>
+         <tr><th>meme</th><th>venue</th><th>liquidity</th><th>24h vol</th><th>FDV</th>
+             <th>liq trend</th><th>cred</th><th>heat</th><th>created</th><th></th></tr>
+         {''.join(rows)}
+        </table></div>""")
+    return "".join(blocks)
+
+
 def render_status_page(rows: list[Candidate], leadlag: dict, registry_size: int,
-                       cfg: dict) -> str:
+                       cfg: dict,
+                       pools_by_ticker: dict[str, list[MemeLaunch]] | None = None) -> str:
     body = []
     for r in rows:
         colour = _STAGE_COLOR.get(r.stage, "#4b5563")
@@ -99,6 +145,10 @@ def render_status_page(rows: list[Candidate], leadlag: dict, registry_size: int,
               (f'${r.equity_price:,.4f}' if r.equity_price else '—')}
               <div class="thin">{_fmt_pct(r.equity_change_pct)}
               {'' if r.equity_rvol is None else f' · {r.equity_rvol:,.0f}x vol'}</div></td>
+          <td class="num">{'—' if not r.equity_float_shares
+              else f'{r.equity_float_shares/1e6:,.1f}M'}
+              <div class="thin">{'' if r.equity_float_turnover is None
+              else f'{r.equity_float_turnover:,.1f}x today'}</div></td>
           <td class="thin">{html.escape(' · '.join((r.reasons or [])[:2]))}</td>
         </tr>""")
 
@@ -139,6 +189,16 @@ def render_status_page(rows: list[Candidate], leadlag: dict, registry_size: int,
  .hnum {{ font-size:12px; font-weight:700; margin-bottom:4px; }}
  .hlab {{ font-size:10px; color:#9ca3af; margin-top:6px; text-align:center; }}
  table.mini {{ max-width:520px; }}
+ a {{ color:#60a5fa; text-decoration:none; }}
+ a:hover, a:focus {{ text-decoration:underline; }}
+ a:focus-visible {{ outline:2px solid #60a5fa; outline-offset:2px; }}
+ .poolgrp {{ margin:0 0 26px; }}
+ .poolgrp h3 {{ font-size:12px; text-transform:uppercase; letter-spacing:.07em;
+                color:#e5e7eb; margin:0 0 6px; display:flex; gap:8px;
+                align-items:baseline; }}
+ .drain {{ color:#fca5a5; font-weight:700; }}
+ .build {{ color:#6ee7b7; font-weight:700; }}
+ .scrollx {{ overflow-x:auto; }}
 </style></head><body><div class="wrap">
 <h1>Tokenized Microcap Screener</h1>
 <div class="thin">{registry_size} tokenized equities in the registry ·
@@ -157,12 +217,15 @@ def render_status_page(rows: list[Candidate], leadlag: dict, registry_size: int,
 {_ladder_hist(rows)}
 
 <h2>Candidates</h2>
-<table>
+<div class="scrollx"><table>
  <tr><th>ticker</th><th>stage</th><th>alert</th><th>heat</th><th>early</th>
      <th>cred</th><th>pump</th><th>memes</th><th>onchain 24h</th>
-     <th>equity</th><th>why</th></tr>
- {''.join(body) or '<tr><td colspan="11" class="thin">no candidates yet — the first sweep seeds the registry</td></tr>'}
-</table>
+     <th>equity</th><th>float</th><th>why</th></tr>
+ {''.join(body) or '<tr><td colspan="12" class="thin">no candidates yet — the first sweep seeds the registry</td></tr>'}
+</table></div>
+
+<h2>Pools — what is actually trading against these tickers</h2>
+<div class="scrollx">{_pools_section(pools_by_ticker or {})}</div>
 
 <h2>Lead-lag (measured, not assumed)</h2>
 {_leadlag_panel(leadlag)}

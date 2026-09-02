@@ -16,12 +16,13 @@ from fastapi.responses import HTMLResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from sqlmodel import Session, select
 
+from . import alerts as alert_lane
 from . import leadlag, scan
 from . import scheduler as sched
 from .config import screener_config, settings
 from .db import engine as db_engine
 from .db import get_session, init_db
-from .models import Candidate, EquityToken, MemeLaunch, StageEvent
+from .models import Candidate, EquityToken, MemeLaunch, PoolSnapshot, StageEvent
 from .status_page import render_status_page
 
 logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
@@ -67,6 +68,13 @@ def health() -> dict:
     return {"status": "ok", "registry_tokens": registry_size,
             "candidates": candidates, "jobs": sched.job_status(),
             "market_cap_enrichment": bool(settings.fmp_api_key),
+            "float_enrichment": bool(settings.fmp_api_key),
+            # Short interest would be the natural squeeze leg. FMP returns an
+            # empty array for these microcaps, so it is absent rather than
+            # proxied by something that is not short interest.
+            "short_interest": False,
+            "telegram_alerts": alert_lane.configured(),
+            "telegram_min_severity": alert_lane.min_severity(),
             "alert_webhook": bool(settings.alert_webhook_url)}
 
 
@@ -96,6 +104,29 @@ def candidate(ticker: str, session: Session = Depends(get_session)) -> dict:
     return {"candidate": row.model_dump(),
             "launches": [l.model_dump() for l in launches],
             "ladder": [e.model_dump() for e in events]}
+
+
+@app.get("/pools", dependencies=[Depends(require_auth)])
+def pools(ticker: str | None = None, min_liquidity: float = 0.0,
+          limit: int = Query(200, le=1000),
+          session: Session = Depends(get_session)) -> list[dict]:
+    """Every meme pool pooled against a tokenized equity, deepest first."""
+    q = select(MemeLaunch).where(MemeLaunch.liquidity_usd >= min_liquidity)
+    if ticker:
+        q = q.where(MemeLaunch.ticker == ticker.upper())
+    rows = session.exec(
+        q.order_by(MemeLaunch.liquidity_usd.desc()).limit(limit)).all()
+    return [r.model_dump() for r in rows]
+
+
+@app.get("/pools/{pair_address}/history", dependencies=[Depends(require_auth)])
+def pool_history(pair_address: str, limit: int = Query(500, le=2000),
+                 session: Session = Depends(get_session)) -> list[dict]:
+    """Timestamped readings for one pool — how its liquidity actually moved."""
+    rows = session.exec(
+        select(PoolSnapshot).where(PoolSnapshot.pair_address == pair_address)
+        .order_by(PoolSnapshot.at).limit(limit)).all()
+    return [r.model_dump() for r in rows]
 
 
 @app.get("/registry", dependencies=[Depends(require_auth)])
@@ -142,5 +173,12 @@ def status_page(session: Session = Depends(get_session)) -> str:
     rows = session.exec(
         select(Candidate).order_by(Candidate.alert_score.desc()).limit(60)).all()
     registry_size = len(session.exec(select(EquityToken.id)).all())
+    # Pools for the handful of tickers actually in play — the whole table would
+    # be hundreds of dead pools and would bury the ones that matter.
+    pools_by_ticker: dict[str, list[MemeLaunch]] = {}
+    for cand in [r for r in rows if r.meme_count][:6]:
+        pools_by_ticker[cand.ticker] = session.exec(
+            select(MemeLaunch).where(MemeLaunch.ticker == cand.ticker)
+            .order_by(MemeLaunch.liquidity_usd.desc()).limit(8)).all()
     return render_status_page(rows, leadlag.measure(session), registry_size,
-                              screener_config())
+                              screener_config(), pools_by_ticker)

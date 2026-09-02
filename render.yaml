@@ -339,7 +339,19 @@ services:
       # Optional market-cap / float enrichment. Absent => degraded, not broken.
       - key: FMP_API_KEY
         sync: false
-      # Optional push target for alerts (Discord/Slack/ntfy webhook URL).
+      # Alerts ride the SAME Telegram bot as treasury-canary and the
+      # executors — one bot, one chat, several services. Unset = no-op.
+      # TELEGRAM_MIN_SEVERITY (default WARN) filters what reaches the phone;
+      # set RED to mute the CLUSTER notices, which on the Farmmi timeline
+      # arrived 1.9h AFTER the tape moved, and keep only the two rungs that
+      # leave you time to act.
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      - key: TELEGRAM_MIN_SEVERITY
+        value: RED
+      # Optional second channel (Discord/Slack/ntfy webhook URL).
       - key: ALERT_WEBHOOK_URL
         sync: false
       # Optional login gate, same convention as the sibling dashboards.

@@ -52,3 +52,23 @@ def test_config_endpoint_exposes_the_live_tunables(client):
     cfg = client.get("/config").json()
     assert cfg["ladder"]["cluster_min_memes"] >= 1
     assert "robinhood" in cfg["scan"]["chains"]
+
+
+def test_health_reports_the_alert_channels(client):
+    body = client.get("/health").json()
+    assert isinstance(body["telegram_alerts"], bool)
+    assert body["telegram_min_severity"] in ("INFO", "WARN", "RED", "CRITICAL")
+    # Short interest is genuinely unavailable for these microcaps on FMP, so
+    # it is reported absent rather than proxied by something else.
+    assert body["short_interest"] is False
+
+
+def test_pools_endpoints_exist_and_filter(client):
+    assert client.get("/pools").status_code == 200
+    assert client.get("/pools?ticker=FAMI&min_liquidity=1000").status_code == 200
+    assert client.get("/pools/0xabc/history").json() == []
+
+
+def test_status_page_has_a_pools_section(client):
+    html = client.get("/").text
+    assert "what is actually trading against these tickers" in html

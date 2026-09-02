@@ -208,3 +208,47 @@ def test_cold_tokenization_does_not_alert_on_a_large_cap(wired, monkeypatch):
     alerts, cand, _ = _run(wired, {**QUOTE_FLAT, "price": 224.0}, pairs)
     assert cand.stage == "TOKENIZED"
     assert alerts == []
+
+
+def test_alert_payload_carries_the_pools_and_their_links(wired):
+    """Casey's test: the alert has to show what is actually trading, not just
+    name a ticker."""
+    pairs = _accelerating(load("robinhood_fami_token_pairs.json"))
+    alerts, _, _ = _run(wired, QUOTE_FLAT, pairs)
+    fami = [a for a in alerts if a["ticker"] == "FAMI"][0]
+    pools = fami["pools"]
+    assert pools, "alert must carry the pools"
+    assert pools[0]["symbol"] == "JINQIAN", "deepest pool should lead"
+    assert pools[0]["url"].startswith("https://dexscreener.com/")
+    assert pools[0]["liquidity_usd"] > pools[-1]["liquidity_usd"]
+    for p in pools:
+        assert {"symbol", "url", "liquidity_usd", "volume_h24", "chain"} <= set(p)
+
+
+def test_pool_snapshots_are_recorded_for_the_trend_read(wired):
+    """Liquidity trajectory needs history; one reading is not a trajectory."""
+    from app.models import PoolSnapshot
+    _run(wired, QUOTE_FLAT)
+    with Session(db_engine) as s:
+        snaps = s.exec(select(PoolSnapshot).where(PoolSnapshot.ticker == "FAMI")).all()
+    assert snaps, "expected pool snapshots"
+    assert all(x.at is not None for x in snaps)
+    # A single reading must not fabricate a trend.
+    with Session(db_engine) as s:
+        launches = s.exec(select(MemeLaunch).where(MemeLaunch.ticker == "FAMI")).all()
+    assert all(l.liquidity_trend_pct is None for l in launches)
+
+
+def test_telegram_push_is_attempted_for_a_fired_alert(wired, monkeypatch):
+    sent = []
+    monkeypatch.setattr(scan.alerts, "push", lambda a: sent.append(a) or True)
+    pairs = _accelerating(load("robinhood_fami_token_pairs.json"))
+    _run(wired, QUOTE_FLAT, pairs)
+    assert sent and sent[0]["ticker"] == "FAMI"
+
+
+def test_no_push_when_nothing_fires(wired, monkeypatch):
+    sent = []
+    monkeypatch.setattr(scan.alerts, "push", lambda a: sent.append(a) or True)
+    _run(wired, QUOTE_MOVED)          # equity already moving -> suppressed
+    assert sent == []

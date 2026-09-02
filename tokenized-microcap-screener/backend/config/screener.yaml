@@ -7,6 +7,8 @@ scan:
   registry_sweep_minutes: 30     # re-walk every known equity token's pairs
   discovery_sweep_minutes: 10    # boosts + stonks meta, for tokens we've not met
   equity_refresh_minutes: 5      # quote refresh for live candidates
+  pools_in_alert: 5              # how many pools ride along in the alert
+  snapshot_retention_hours: 168  # pool history kept for the trend read
   # The nanocap wrappers get a much tighter loop than the registry at large:
   # the tradable window on the meme rung was 13 minutes, not 30.
   hot_sweep_minutes: 2
@@ -44,6 +46,12 @@ credibility:
   turnover_good_hi: 40.0
   turnover_absurd: 400.0
   weights: {depth: 0.35, float: 0.20, two_sided: 0.15, breadth: 0.15, turnover: 0.15}
+  # Liquidity trajectory between snapshots, applied as a MULTIPLIER. A pool
+  # whose LP is walking out cannot score well on depth alone.
+  drain_floor_pct: -10.0     # penalty starts here
+  drain_full_pct: -60.0      # penalty is at its worst here
+  drain_worst_factor: 0.45   # score multiplier at full drain
+  build_pct: 25.0            # noted as depth being added
 
 heat:
   accel_floor: 0.4
@@ -63,7 +71,14 @@ pumpability:
   advol_floor: 50000000
   mcap_full: 10000000    # only used when the FMP enrichment is on
   mcap_floor: 2000000000
-  weights: {cheap: 0.30, thin: 0.25, beaten: 0.15, small: 0.30}
+  # Free float. The most direct read on whether meme flow can move the tape:
+  # FAMI's 31.5M-share float turned over ~26x on 2026-09-02.
+  float_full: 5000000        # <= 5M shares scores full "tight"
+  float_floor: 300000000     # >= 300M scores zero
+  float_turnover_notable: 1.0
+  # Weights without a float reading, then with one.
+  weights: {cheap: 0.30, thin: 0.25, beaten: 0.15, small: 0.30,
+            cheap_f: 0.26, tight: 0.30, small_f: 0.22, thin_f: 0.12, beaten_f: 0.10}
 
 earliness:
   move_flat_pct: 3.0

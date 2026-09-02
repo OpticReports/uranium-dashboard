@@ -53,7 +53,12 @@ def _band(x: float, lo: float, good_lo: float, good_hi: float, hi: float) -> flo
     return 100.0
 
 
-def credibility(launch: LaunchView, cfg: dict) -> tuple[float, list[str]]:
+def credibility(launch: LaunchView, cfg: dict,
+                liquidity_trend_pct: float | None = None) -> tuple[float, list[str]]:
+    """`liquidity_trend_pct` is the change in pool liquidity since the earliest
+    snapshot held. A single reading cannot distinguish a pool being built from
+    one being drained; the change between readings can, and it applies as a
+    MULTIPLIER so a pool whose LP is walking out cannot score well on depth."""
     c = (cfg or {}).get("credibility", {})
     reasons: list[str] = []
 
@@ -86,6 +91,21 @@ def credibility(launch: LaunchView, cfg: dict) -> tuple[float, list[str]]:
         reasons.append(f"turnover {turnover:,.0f}x liquidity in 24h — wash-trading risk")
     if launch.socials or launch.websites:
         reasons.append("has listed socials/site")
+
+    if liquidity_trend_pct is not None:
+        drain_full = c.get("drain_full_pct", -60.0)
+        drain_floor = c.get("drain_floor_pct", -10.0)
+        if liquidity_trend_pct <= drain_floor:
+            span = max(drain_floor - drain_full, 1e-9)
+            severity = min(1.0, (drain_floor - liquidity_trend_pct) / span)
+            factor = 1.0 - severity * (1.0 - c.get("drain_worst_factor", 0.45))
+            score *= factor
+            reasons.append(
+                f"liquidity {liquidity_trend_pct:+.0f}% since first seen — "
+                "LP is leaving, not arriving")
+        elif liquidity_trend_pct >= c.get("build_pct", 25.0):
+            reasons.append(f"liquidity {liquidity_trend_pct:+.0f}% since first "
+                           "seen — depth is being added")
     return clamp(score), reasons
 
 
@@ -129,7 +149,16 @@ class EquityView:
     high_52w: float | None = None
     low_52w: float | None = None
     market_cap: float | None = None      # only when the FMP enrichment is on
+    float_shares: float | None = None    # ditto
     dark: bool = False
+
+    @property
+    def float_turnover(self) -> float | None:
+        """Today's volume as a multiple of the free float. The single most
+        direct read on whether meme flow can actually move this listing."""
+        if not (self.volume and self.float_shares) or self.float_shares <= 0:
+            return None
+        return self.volume / self.float_shares
 
 
 def pumpability(eq: EquityView, cfg: dict) -> tuple[float, list[str]]:
@@ -172,12 +201,32 @@ def pumpability(eq: EquityView, cfg: dict) -> tuple[float, list[str]]:
         small = None
         reasons.append("market cap dark (no FMP key) — size proxied by price x volume")
 
-    w = p.get("weights", {})
-    if small is None:
-        score = (cheap * 0.45 + thin * 0.35 + beaten * 0.20)
+    # Float is the most direct read of all: a small free float is what lets
+    # meme-scale flow move a listing hundreds of percent. Farmmi's float was
+    # 31.5M shares and 837M traded — the float turned over ~26 times.
+    if eq.float_shares:
+        tight = 100.0 - _log_ramp(eq.float_shares, p.get("float_full", 5e6),
+                                  p.get("float_floor", 3e8))
+        reasons.append(f"free float {eq.float_shares/1e6:,.1f}M shares")
+        turn = eq.float_turnover
+        if turn is not None and turn >= p.get("float_turnover_notable", 1.0):
+            reasons.append(f"float has turned over {turn:,.1f}x today")
     else:
+        tight = None
+        reasons.append("float dark — no float leg in this score")
+
+    w = p.get("weights", {})
+    if small is None and tight is None:
+        score = (cheap * 0.45 + thin * 0.35 + beaten * 0.20)
+    elif tight is None:
         score = (cheap * w.get("cheap", 0.30) + thin * w.get("thin", 0.25)
                  + beaten * w.get("beaten", 0.15) + small * w.get("small", 0.30))
+    elif small is None:
+        score = (cheap * 0.34 + tight * 0.34 + thin * 0.20 + beaten * 0.12)
+    else:
+        score = (cheap * w.get("cheap_f", 0.26) + tight * w.get("tight", 0.30)
+                 + small * w.get("small_f", 0.22) + thin * w.get("thin_f", 0.12)
+                 + beaten * w.get("beaten_f", 0.10))
     return clamp(score), reasons
 
 

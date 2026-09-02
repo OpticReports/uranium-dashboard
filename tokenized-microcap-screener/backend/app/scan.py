@@ -19,15 +19,17 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import httpx
 from sqlmodel import Session, select
 
+from . import alerts
 from .config import screener_config, settings
 from .engine import detect, ladder, registry, scoring
 from .lanes import dexscreener, equity as equity_lane, fundamentals
-from .models import Candidate, EquityToken, MemeLaunch, ScanState, StageEvent
+from .models import (Candidate, EquityToken, MemeLaunch, PoolSnapshot,
+                     ScanState, StageEvent)
 
 logger = logging.getLogger(__name__)
 
@@ -233,9 +235,44 @@ def hot_registry_sweep(session: Session) -> dict:
             "launches_new": new}
 
 
+def _record_snapshot(session: Session, launch: detect.LaunchView,
+                     now: datetime) -> float | None:
+    """Append a throttled pool reading and return the liquidity trend.
+
+    Throttled because the hot lane runs every 2 minutes: without it a single
+    pool would write 30 rows an hour and the table would carry no more
+    information than one row every ten minutes does.
+    """
+    cfg = _cfg()
+    window = timedelta(minutes=int(cfg.get("scan", {}).get("snapshot_minutes", 10)))
+    recent = session.exec(
+        select(PoolSnapshot)
+        .where(PoolSnapshot.pair_address == launch.pair_address)
+        .order_by(PoolSnapshot.at.desc()).limit(1)).first()
+    if recent is None or (now - recent.at) >= window:
+        session.add(PoolSnapshot(
+            pair_address=launch.pair_address, ticker=launch.equity.ticker,
+            at=now, liquidity_usd=launch.liquidity_usd,
+            volume_h1=launch.volume_h1, fdv=launch.fdv,
+            buys_h1=launch.buys_h1, sells_h1=launch.sells_h1))
+
+    retention = float(cfg.get("scan", {}).get("snapshot_retention_hours", 168))
+    earliest = session.exec(
+        select(PoolSnapshot)
+        .where(PoolSnapshot.pair_address == launch.pair_address,
+               PoolSnapshot.at >= now - timedelta(hours=retention))
+        .order_by(PoolSnapshot.at)).first()
+    if earliest is None or earliest.liquidity_usd <= 0:
+        return None
+    if (now - earliest.at) < timedelta(minutes=5):
+        return None                      # one reading is not a trajectory
+    return (launch.liquidity_usd - earliest.liquidity_usd) / earliest.liquidity_usd * 100.0
+
+
 def _upsert_launch(session: Session, launch: detect.LaunchView) -> bool:
     cfg = _cfg()
-    cred, _ = scoring.credibility(launch, cfg)
+    trend = _record_snapshot(session, launch, datetime.utcnow())
+    cred, _ = scoring.credibility(launch, cfg, liquidity_trend_pct=trend)
     ht, _ = scoring.heat(launch, cfg)
 
     row = session.exec(
@@ -268,6 +305,7 @@ def _upsert_launch(session: Session, launch: detect.LaunchView) -> bool:
     row.credibility = cred
     row.heat = ht
     row.url = launch.url
+    row.liquidity_trend_pct = trend
     session.add(row)
     return is_new
 
@@ -288,18 +326,20 @@ def _equity_view(ticker: str) -> scoring.EquityView:
     prof = fundamentals.profile(ticker)
     if avg_volume is None:
         avg_volume = prof.get("avg_volume")
+    flt = fundamentals.shares_float(ticker)
     return scoring.EquityView(
         price=q.get("price"), prev_close=q.get("prev_close"),
         change_pct=q.get("change_pct"), volume=q.get("volume"),
         avg_volume=avg_volume, high_52w=q.get("high_52w"),
-        low_52w=q.get("low_52w"), market_cap=prof.get("market_cap"), dark=False)
+        low_52w=q.get("low_52w"), market_cap=prof.get("market_cap"),
+        float_shares=flt.get("float_shares"), dark=False)
 
 
 def rollup(session: Session, now: datetime | None = None) -> list[dict]:
     """One Candidate per ticker; advance the ladder; emit alerts."""
     cfg = _cfg()
     now = now or datetime.utcnow()
-    alerts: list[dict] = []
+    fired: list[dict] = []
 
     tickers = set(session.exec(select(EquityToken.ticker)).all())
     for ticker in sorted(tickers):
@@ -350,6 +390,9 @@ def rollup(session: Session, now: datetime | None = None) -> list[dict]:
         cand.equity_avg_volume = eq.avg_volume
         cand.equity_rvol = ((eq.volume / eq.avg_volume)
                             if (eq.volume and eq.avg_volume) else None)
+        cand.equity_market_cap = eq.market_cap
+        cand.equity_float_shares = eq.float_shares
+        cand.equity_float_turnover = eq.float_turnover
 
         pump, pump_r = scoring.pumpability(eq, cfg)
         early, early_r = scoring.earliness(eq, cand.first_tokenized_at, now, cfg)
@@ -386,22 +429,49 @@ def rollup(session: Session, now: datetime | None = None) -> list[dict]:
                                         cfg, pumpability=pump)
         if fire:
             cand.alerted_at = now
-            alerts.append({"ticker": ticker, "company": cand.company,
-                           "stage": new_stage, "score": round(score, 1),
-                           "why": why, "meme": cand.top_meme_symbol,
-                           "url": cand.top_meme_url,
-                           "equity_price": eq.price,
-                           "equity_change_pct": eq.change_pct,
-                           "issuer_class": cand.issuer_class,
-                           "reasons": cand.reasons[:6]})
+            fired.append({"ticker": ticker, "company": cand.company,
+                          "stage": new_stage, "score": round(score, 1),
+                          "why": why, "meme": cand.top_meme_symbol,
+                          "url": cand.top_meme_url,
+                          "equity_price": eq.price,
+                          "equity_change_pct": eq.change_pct,
+                          "equity_rvol": cand.equity_rvol,
+                          "float_shares": eq.float_shares,
+                          "float_turnover": eq.float_turnover,
+                          "issuer_class": cand.issuer_class,
+                          "pools": pools_payload(launches, cfg),
+                          "reasons": cand.reasons[:6]})
 
         cand.updated_at = now
         session.add(cand)
 
     session.commit()
-    for alert in alerts:
+    for alert in fired:
         _push_alert(alert)
-    return alerts
+    return fired
+
+
+def pools_payload(launches: list[MemeLaunch], cfg: dict) -> list[dict]:
+    """The pools themselves, deepest first — what is actually trading against
+    this ticker, with a link to each. A ticker with no way to look at the pool
+    is not an actionable alert."""
+    n = int((cfg or {}).get("scan", {}).get("pools_in_alert", 5))
+    ordered = sorted(launches, key=lambda l: l.liquidity_usd, reverse=True)[:n]
+    out = []
+    for l in ordered:
+        trend = l.liquidity_trend_pct
+        out.append({
+            "symbol": l.base_symbol, "name": l.base_name, "url": l.url,
+            "chain": l.chain_id, "dex": l.dex_id,
+            "liquidity_usd": l.liquidity_usd, "volume_h24": l.volume_h24,
+            "fdv": l.fdv, "credibility": round(l.credibility, 1),
+            "heat": round(l.heat, 1),
+            "liquidity_trend_pct": trend,
+            "trend": ("" if trend is None
+                      else f"liq {trend:+.0f}% since first seen"),
+            "created": l.pair_created_at.isoformat() if l.pair_created_at else None,
+        })
+    return out
 
 
 def _launch_view_from_row(row: MemeLaunch) -> detect.LaunchView:
@@ -442,18 +512,23 @@ def _record_stage(session: Session, cand: Candidate, stage: str,
 
 
 def _push_alert(alert: dict) -> None:
-    """Best-effort webhook push. A failed push never fails a scan."""
-    url = settings.alert_webhook_url
+    """Best-effort push. A failed push never fails a scan.
+
+    Two independent channels: the shared Telegram bot (same token/chat as
+    treasury-canary and the executors) and an optional generic webhook.
+    """
     logger.warning("ALERT %s (%s) stage=%s score=%.0f meme=%s — %s",
                    alert["ticker"], alert["company"], alert["stage"],
                    alert["score"], alert["meme"], alert["why"])
+    try:
+        alerts.push(alert)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("telegram push failed: %s", exc)
+
+    url = settings.alert_webhook_url
     if not url:
         return
-    text = (f"[{alert['stage']}] {alert['ticker']} — {alert['company']}\n"
-            f"score {alert['score']} | meme {alert['meme']} | "
-            f"{alert['issuer_class']}\n"
-            f"equity {alert.get('equity_price')} "
-            f"({alert.get('equity_change_pct')}%)\n{alert['url']}")
+    text = alerts.format_alert(alert)
     try:
         httpx.post(url, json={"content": text, "text": text},
                    timeout=settings.http_timeout_seconds)

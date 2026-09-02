@@ -69,16 +69,63 @@ Alerts fire on a fresh climb onto `TOKENIZED` (nanocap only), `RAMPING` or
 `CLUSTER`, and are **suppressed once the equity is already moving** — by then
 an alert is an obituary.
 
+## Alerts
+
+Rides the **same Telegram bot as treasury-canary and the executors** — set
+`TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` on this service too. Unset = no-op.
+
+Severity ranks rungs by **how much runway they leave**, which inverts the
+obvious ordering:
+
+| severity | rung | why |
+|---|---|---|
+| `CRITICAL` | `RAMPING` | ~13 minutes of lead. Act now or not at all. |
+| `RED` | `TOKENIZED` | ~15.8h of lead. The rung worth waking up for. |
+| `WARN` | `CLUSTER` | Arrived 1.9h *after* the move. Context, not a call. |
+
+`TELEGRAM_MIN_SEVERITY=RED` (the deploy default) mutes the cluster notices and
+keeps the two rungs that leave time to act. Every message carries **the pools**
+— symbol, liquidity, 24h volume, liquidity trend, and a direct DEX Screener
+link each — plus float and float turnover. A ticker with no way to look at what
+is trading against it is not an actionable alert.
+
 ## Scores
 
 Four orthogonal axes, kept separate so it is visible which one failed.
 `earliness` **multiplies** rather than adds: a setup perfect on every other axis
 that has already run scores zero, not "still pretty good".
 
-- **credibility** — pool depth, liquidity/FDV, two-sidedness, breadth, turnover
+- **credibility** — pool depth, liquidity/FDV, two-sidedness, breadth, turnover,
+  and **liquidity trajectory**. One reading cannot tell a pool being built from
+  one being drained; the change between two readings can, so a pool whose LP is
+  walking out gets its score multiplied down however deep it looks right now.
 - **heat** — acceleration, not level
-- **pumpability** — cheap, thin, beaten down, small
+- **pumpability** — cheap, small cap, beaten down, and above all **free float
+  and float turnover**
 - **earliness** — how much of the equity move is still ahead
+
+### What actually separates a pumpable stock
+
+Float, by a distance. From one live sweep on 2026-09-02:
+
+| ticker | float | turnover today | mkt cap | pumpability |
+|---|---:|---:|---:|---:|
+| FAMI | 31.5M | **27.0x** | $5.8M | **80.8** |
+| RDDT | 170.1M | 0.04x | $30.4B | 19.7 |
+| USAR | 193.5M | 0.04x | $2.4B | 18.3 |
+| GME | 409.1M | 0.01x | $8.5B | 17.2 |
+| MU | 1,124.6M | 0.02x | $1.08T | 4.4 |
+| NVDA | 23,225.5M | 0.01x | $5.44T | 1.7 |
+
+MU, NVDA, CRCL and RDDT all had large, genuinely hot meme clusters pooled
+against them that day. None of them can move on meme flow, and the gate throws
+all of them away. Farmmi's entire float changed hands ~27 times in one session;
+that is what a stock that can pump looks like.
+
+**Short interest is not wired.** It would be the natural squeeze leg, but FMP
+returns an empty array for these microcaps, so it is absent rather than proxied
+by something that is not short interest. `/health` reports
+`short_interest: false`.
 
 ## Data lanes (all public; one optional key)
 
@@ -103,6 +150,8 @@ GET  /health            lane status, registry size, job schedule
 GET  /candidates        ranked, filterable by stage / min_score
 GET  /candidates/{t}    one ticker: launches + full ladder history
 GET  /registry          every tokenized equity discovered
+GET  /pools             every meme pool, deepest first (?ticker=&min_liquidity=)
+GET  /pools/{pair}/history   timestamped liquidity readings for one pool
 GET  /alerts            RAMPING / CLUSTER transitions
 GET  /leadlag           measured lead per rung, WITH sample sizes
 POST /scan              full sweep now
@@ -122,10 +171,12 @@ POST /scan              full sweep now
   filling near the high lost ~65% inside two hours. The screen finds attention,
   which is not the same as finding a profitable entry, and says nothing at all
   about exits.
-- **"Credible creator" is a pool-quality proxy, not creator identity.** DEX
-  Screener's public API exposes no deployer wallet, no LP lock state and no
-  holder distribution. A screen cannot distinguish an organic launch from a
-  well-funded one, and this one does not claim to.
+- **"Credible" means the pool, not the person.** DEX Screener's public API
+  exposes no deployer wallet, no LP lock state and no holder distribution, so
+  nothing here can tell an organic launch from a well-funded one. What it *can*
+  see is depth, two-sidedness, breadth of participation, turnover sanity, and
+  whether liquidity is arriving or leaving between snapshots. That is a real
+  signal about the pool and no signal at all about who made it.
 - **Sub-$1 nanocaps carry mechanics this service does not model**: halts (LULD),
   reverse splits, delisting timelines, dilution into strength, hard-to-borrow
   and buy-in risk on the short side. FAMI must still hold $1 for 10 consecutive
@@ -142,7 +193,7 @@ automation routes through `ibkr-executor`.
 ## Tests
 
 ```
-cd backend && python -m pytest tests/ -q     # 75 gate tests
+cd backend && python -m pytest tests/ -q     # 98 gate tests
 ```
 
 Gates run against **real captured payloads** (the Robinhood-Chain

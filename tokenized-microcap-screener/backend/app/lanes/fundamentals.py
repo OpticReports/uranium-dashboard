@@ -22,6 +22,7 @@ from ..utils import cached, with_backoff
 logger = logging.getLogger(__name__)
 
 _PROFILE = "https://financialmodelingprep.com/stable/profile"
+_FLOAT = "https://financialmodelingprep.com/stable/shares-float"
 
 
 def enabled() -> bool:
@@ -48,6 +49,53 @@ def profile(symbol: str, ttl: int = 12 * 3600) -> dict:
         logger.warning("FMP profile lane DARK for %s: %s", symbol, exc)
         return {}
     return parse_profile(payload)
+
+
+def shares_float(symbol: str, ttl: int = 24 * 3600) -> dict:
+    """{float_shares, outstanding_shares, free_float_pct}. {} when dark.
+
+    Float is the input that most directly answers "can this thing actually
+    move". Farmmi's float was 31.5M shares against 837M traded on 2026-09-02 —
+    the entire float changed hands about 26 times in one session. A name with a
+    200M-share float cannot do that on meme flow.
+
+    NOTE: short interest would be the natural companion here and is NOT
+    wired, because FMP returns an empty array for these microcaps on this
+    plan. Rather than proxy it with something that is not short interest, the
+    squeeze leg is simply absent and the dashboard says so.
+    """
+    if not enabled():
+        return {}
+
+    def _producer():
+        resp = with_backoff(lambda: httpx.get(
+            _FLOAT, params={"symbol": symbol.upper(),
+                            "apikey": settings.fmp_api_key},
+            timeout=settings.http_timeout_seconds))
+        resp.raise_for_status()
+        return resp.json()
+
+    try:
+        payload = cached(f"fmp:float:{symbol.upper()}", _producer, ttl=ttl)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("FMP float lane DARK for %s: %s", symbol, exc)
+        return {}
+    return parse_float(payload)
+
+
+def parse_float(payload) -> dict:
+    if isinstance(payload, dict):
+        payload = [payload]
+    if not isinstance(payload, list) or not payload:
+        return {}
+    row = payload[0]
+    if not isinstance(row, dict):
+        return {}
+    return {
+        "float_shares": row.get("floatShares"),
+        "outstanding_shares": row.get("outstandingShares"),
+        "free_float_pct": row.get("freeFloat"),
+    }
 
 
 def parse_profile(payload) -> dict:

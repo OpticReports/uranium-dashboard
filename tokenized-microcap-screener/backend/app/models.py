@@ -85,6 +85,29 @@ class MemeLaunch(SQLModel, table=True):
     credibility: float = 0.0
     heat: float = 0.0
     url: str = ""
+    # Percent change in pool liquidity since the earliest snapshot we hold.
+    # None until there are two readings.
+    liquidity_trend_pct: Optional[float] = None
+
+
+class PoolSnapshot(SQLModel, table=True):
+    """A timestamped reading of one pool.
+
+    Exists so liquidity can be seen MOVING. A single reading cannot tell a pool
+    that is being built from one that is being drained — both show a number.
+    The difference between two readings can, and that difference is the closest
+    thing to a rug signal the public API allows.
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    pair_address: str = Field(index=True)
+    ticker: str = Field(index=True)
+    at: DateTime = Field(default_factory=DateTime.utcnow, index=True)
+    liquidity_usd: float = 0.0
+    volume_h1: float = 0.0
+    fdv: float = 0.0
+    buys_h1: int = 0
+    sells_h1: int = 0
 
 
 class Candidate(SQLModel, table=True):
@@ -120,6 +143,10 @@ class Candidate(SQLModel, table=True):
     equity_avg_volume: Optional[float] = None
     equity_rvol: Optional[float] = None
     equity_market_status: str = ""
+    equity_market_cap: Optional[float] = None
+    equity_float_shares: Optional[float] = None
+    # Today's volume divided by the float. FAMI hit ~26x on 2026-09-02.
+    equity_float_turnover: Optional[float] = None
     equity_exchange: str = ""
     equity_dark: bool = False
 

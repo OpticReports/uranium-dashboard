@@ -1,6 +1,7 @@
 """Gate tests for the four score axes and the composite."""
 from __future__ import annotations
 
+import pytest
 from datetime import datetime, timedelta
 
 from app.engine.detect import detect_launch
@@ -106,3 +107,62 @@ def test_cluster_adds_and_is_capped(cfg):
     assert six > one
     assert huge == six          # capped, so a spam wave cannot run the score up
     assert any("cascade" in x for x in r)
+
+
+# --- float: "can this stock actually pump?" --------------------------------
+
+def test_small_float_outscores_large_float_all_else_equal(cfg):
+    """Float is the most direct read on whether meme flow can move the tape."""
+    tight = EquityView(price=0.12, avg_volume=2_500_000, volume=800_000_000,
+                       high_52w=2.05, low_52w=0.09, change_pct=0.0,
+                       market_cap=5_780_000, float_shares=31_513_560)
+    loose = EquityView(price=0.12, avg_volume=2_500_000, volume=800_000_000,
+                       high_52w=2.05, low_52w=0.09, change_pct=0.0,
+                       market_cap=5_780_000, float_shares=450_000_000)
+    assert pumpability(tight, cfg)[0] > pumpability(loose, cfg)[0]
+
+
+def test_float_turnover_is_computed_and_surfaced(cfg):
+    """FAMI: 31.5M float, 837M traded — the float turned over ~26 times."""
+    eq = EquityView(price=0.15, volume=837_515_708, avg_volume=2_454_838,
+                    float_shares=31_513_560, change_pct=27.0,
+                    high_52w=2.05, low_52w=0.09)
+    assert eq.float_turnover == pytest.approx(26.58, abs=0.1)
+    _, reasons = pumpability(eq, cfg)
+    assert any("turned over" in r for r in reasons)
+    assert any("free float" in r for r in reasons)
+
+
+def test_missing_float_is_disclosed_not_guessed(cfg):
+    _, reasons = pumpability(EquityView(price=0.12, avg_volume=3e6), cfg)
+    assert any("float dark" in r for r in reasons)
+
+
+def test_float_turnover_is_none_without_the_inputs():
+    assert EquityView(price=1.0).float_turnover is None
+    assert EquityView(price=1.0, volume=1e6, float_shares=0).float_turnover is None
+
+
+# --- liquidity trajectory: "is this a credible pair?" ----------------------
+
+def test_draining_liquidity_slashes_credibility(fami_pairs, universe, markers,
+                                                base_assets, cfg):
+    """One reading cannot tell a pool being built from one being drained. The
+    change between readings can, and LP walking out has to cost the score."""
+    launch = _jinqian(fami_pairs, universe, markers, base_assets)
+    flat, _ = credibility(launch, cfg, liquidity_trend_pct=0.0)
+    drained, reasons = credibility(launch, cfg, liquidity_trend_pct=-75.0)
+    assert drained < flat * 0.6
+    assert any("LP is leaving" in r for r in reasons)
+
+
+def test_building_liquidity_is_noted(fami_pairs, universe, markers, base_assets, cfg):
+    launch = _jinqian(fami_pairs, universe, markers, base_assets)
+    _, reasons = credibility(launch, cfg, liquidity_trend_pct=60.0)
+    assert any("depth is being added" in r for r in reasons)
+
+
+def test_no_trend_reading_leaves_credibility_untouched(fami_pairs, universe,
+                                                       markers, base_assets, cfg):
+    launch = _jinqian(fami_pairs, universe, markers, base_assets)
+    assert credibility(launch, cfg)[0] == credibility(launch, cfg, None)[0]
