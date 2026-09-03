@@ -5,7 +5,7 @@ import logging
 from collections.abc import Iterator
 from pathlib import Path
 
-from sqlalchemy import inspect, text
+from sqlalchemy import event, inspect, text
 from sqlmodel import Session, SQLModel, create_engine
 
 from .config import settings
@@ -20,6 +20,29 @@ if settings.database_url.startswith("sqlite"):
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
 
 engine = create_engine(settings.database_url, echo=False, connect_args=_connect_args)
+
+
+if settings.database_url.startswith("sqlite"):
+
+    @event.listens_for(engine, "connect")
+    def _sqlite_pragmas(dbapi_connection, _record):  # noqa: ANN001
+        """WAL + a busy timeout. Without these the service returns 500s to the
+        browser whenever a scheduler job is mid-write.
+
+        Default SQLite gives one writer that BLOCKS readers, and a contended
+        lock raises immediately instead of waiting. The scheduler writes on a
+        background thread while the web worker serves the dashboard out of the
+        same file, so every scan produced a window of "database is locked"
+        errors. WAL lets readers proceed during a write; busy_timeout turns the
+        remaining contention into a short wait instead of an exception.
+        """
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA busy_timeout=15000")
+            cursor.execute("PRAGMA synchronous=NORMAL")
+        finally:
+            cursor.close()
 
 
 def init_db() -> None:

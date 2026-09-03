@@ -192,6 +192,23 @@ registry count of 253** while every endpoint selecting a full model returned
 500 on `no such column: candidate.equity_price`. `/health` now reports
 `schema_drift` and degrades when the models and the database disagree.
 
+## Why it was returning 500s
+
+Two causes, both fixed, both worth knowing about because they are generic to
+"scheduler + SQLite + web worker in one process":
+
+1. **Schema drift** (above) — added columns were absent in the live database.
+2. **Lock contention.** Default SQLite gives one writer that BLOCKS readers,
+   and a contended lock raises immediately rather than waiting. `rollup()` held
+   a single write transaction open across ~5 blocking HTTP calls per ticker for
+   131 tickers, so every dashboard request during a scan hit
+   `database is locked`. Now: `journal_mode=WAL` (readers proceed during a
+   write), `busy_timeout=15000` (contention waits instead of erroring), and
+   `rollup()` commits per ticker so the lock window is the write itself rather
+   than the network round trip.
+
+Neither was Render. Both were this service.
+
 ## Endpoints
 
 ```
@@ -243,7 +260,7 @@ automation routes through `ibkr-executor`.
 ## Tests
 
 ```
-cd backend && python -m pytest tests/ -q     # 125 gate tests
+cd backend && python -m pytest tests/ -q     # 127 gate tests
 ```
 
 Gates run against **real captured payloads** (the Robinhood-Chain

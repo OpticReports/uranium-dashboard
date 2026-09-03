@@ -528,6 +528,12 @@ def rollup(session: Session, now: datetime | None = None) -> list[dict]:
 
         cand.updated_at = now
         session.add(cand)
+        # Commit per ticker. The loop does ~5 blocking HTTP calls per name, so
+        # a single commit at the end held one write transaction open across the
+        # whole sweep — minutes of it — and every dashboard request in that
+        # window failed. Short transactions keep the lock window to the write
+        # itself rather than the network round trip.
+        session.commit()
 
     session.commit()
     for alert in fired:
