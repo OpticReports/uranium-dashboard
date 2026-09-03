@@ -106,25 +106,47 @@ that has already run scores zero, not "still pretty good".
 
 ### What actually separates a pumpable stock
 
-Float, by a distance. From one live sweep on 2026-09-02:
+Six factors, each scored 0-100 and **reported individually** — a score nobody
+can interrogate is not analysis. Weights renormalise over whatever inputs are
+present, so a dark lane lowers confidence rather than scoring a name as if the
+missing input were bad.
 
-| ticker | float | turnover today | mkt cap | pumpability |
-|---|---:|---:|---:|---:|
-| FAMI | 31.5M | **27.0x** | $5.8M | **80.8** |
-| RDDT | 170.1M | 0.04x | $30.4B | 19.7 |
-| USAR | 193.5M | 0.04x | $2.4B | 18.3 |
-| GME | 409.1M | 0.01x | $8.5B | 17.2 |
-| MU | 1,124.6M | 0.02x | $1.08T | 4.4 |
-| NVDA | 23,225.5M | 0.01x | $5.44T | 1.7 |
+| factor | weight | what it answers |
+|---|---:|---|
+| cost to move | 0.28 | median **dollar** volume — MU trades $26.6B/day, FAMI $950K, on share volumes only ~4x apart |
+| float | 0.22 | free float. WHLR's is 21,783 shares |
+| squeeze history | 0.18 | has it *already* done a violent up-day? WHLR: +97.8%, two days over +30% |
+| capable of moving | 0.12 | realized daily vol — the NTIC control |
+| price | 0.10 | sub-$1 names travel in bigger percentages |
+| market cap | 0.10 | size, when FMP is on |
 
-MU, NVDA, CRCL and RDDT all had large, genuinely hot meme clusters pooled
-against them that day. None of them can move on meme flow, and the gate throws
-all of them away. Farmmi's entire float changed hands ~27 times in one session;
-that is what a stock that can pump looks like.
+**Cheap and illiquid is not pumpable.** NTIC has the smallest dollar volume of
+any name tested ($17.8K/day) and has never moved: 1.6% daily vol, best day
++9.9%. Squeeze history and realized vol are what separate it from WHLR, and
+float alone cannot.
 
-**Short interest is not wired.** It would be the natural squeeze leg, but FMP
-returns an empty array for these microcaps, so it is absent rather than proxied
-by something that is not short interest. `/health` reports
+Two data-quality guards, both from real readings:
+
+- A market cap of **0** (WHLR, per FMP) is a gap, not a $0 company — scored as
+  "tiny" it handed WHLR a free 100/100.
+- A market cap of **$13,605** for a NASDAQ-listed REIT is stale share data
+  after reverse splits. Nasdaq's continued-listing standards make it
+  impossible, so readings under $250K are dropped rather than rewarded.
+
+### Dilution — what you are buying
+
+Deliberately **not** folded into pumpability: printing stock does not make a
+squeeze less likely, it makes holding one dangerous. Surfaced as its own flag.
+
+Farmmi at the time of the meme: **37.4M shares outstanding against 1.84M
+weighted shares in the last annual report** — roughly 20x dilution since the
+filing — on **$804K of cash** against a **$53.1M** annual loss. That company
+issues into strength; that is what the strength is for.
+
+**Short interest and institutional ownership are not wired.** Both would be
+natural additions. FMP returns an empty array for both on this plan — including
+for `GME`, so it is a plan limitation, not a microcap data gap. They are absent
+rather than proxied by something else; `/health` reports
 `short_interest: false`.
 
 ## Data lanes (all public; one optional key)
@@ -207,7 +229,7 @@ automation routes through `ibkr-executor`.
 ## Tests
 
 ```
-cd backend && python -m pytest tests/ -q     # 105 gate tests
+cd backend && python -m pytest tests/ -q     # 117 gate tests
 ```
 
 Gates run against **real captured payloads** (the Robinhood-Chain

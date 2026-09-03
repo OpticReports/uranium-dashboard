@@ -176,9 +176,18 @@ def status_page(session: Session = Depends(get_session)) -> str:
     # Pools for the handful of tickers actually in play — the whole table would
     # be hundreds of dead pools and would bury the ones that matter.
     pools_by_ticker: dict[str, list[MemeLaunch]] = {}
+    wrapper_links: dict[str, dict] = {}
     for cand in [r for r in rows if r.meme_count][:6]:
         pools_by_ticker[cand.ticker] = session.exec(
             select(MemeLaunch).where(MemeLaunch.ticker == cand.ticker)
             .order_by(MemeLaunch.liquidity_usd.desc()).limit(8)).all()
+        tok = session.exec(
+            select(EquityToken).where(EquityToken.ticker == cand.ticker,
+                                      EquityToken.url != "")).first()
+        wrapper_links[cand.ticker] = {
+            "url": tok.url if tok else "",
+            "dilution": cand.dilution_flag,
+            "factors": cand.pump_factors or [],
+        }
     return render_status_page(rows, leadlag.measure(session), registry_size,
-                              screener_config(), pools_by_ticker)
+                              screener_config(), pools_by_ticker, wrapper_links)

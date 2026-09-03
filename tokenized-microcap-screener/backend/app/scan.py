@@ -72,8 +72,26 @@ def _set_state(session: Session, key: str, value: str) -> None:
 # 1 + 2. Registry growth
 # --------------------------------------------------------------------------
 
+def _deepest_pair_urls(pairs: list[dict]) -> dict[str, str]:
+    """Deepest pool per token address — the link that lands on that token.
+    DEX Screener's token-address pages refuse non-browser requests, so a pair
+    URL is the only one that reliably resolves."""
+    best: dict[str, tuple[float, str]] = {}
+    for p in pairs or []:
+        url = str(p.get("url") or "")
+        if not url:
+            continue
+        liq = float((p.get("liquidity") or {}).get("usd") or 0.0)
+        for side in ("baseToken", "quoteToken"):
+            addr = str((p.get(side) or {}).get("address") or "").lower()
+            if addr and (addr not in best or liq > best[addr][0]):
+                best[addr] = (liq, url)
+    return {a: u for a, (_, u) in best.items()}
+
+
 def _upsert_equity_tokens(session: Session, views: list[registry.EquityTokenView],
-                          pair_times: dict[str, datetime | None]) -> list[EquityToken]:
+                          pair_times: dict[str, datetime | None],
+                          token_urls: dict[str, str] | None = None) -> list[EquityToken]:
     fresh: list[EquityToken] = []
     for v in views:
         if v.chain_id.lower() not in _chains():
@@ -82,11 +100,12 @@ def _upsert_equity_tokens(session: Session, views: list[registry.EquityTokenView
             select(EquityToken).where(EquityToken.chain_id == v.chain_id,
                                       EquityToken.address == v.address)).first()
         created = pair_times.get(v.address.lower())
+        url = (token_urls or {}).get(v.address.lower(), "")
         if row is None:
             row = EquityToken(
                 chain_id=v.chain_id, address=v.address, symbol=v.symbol,
                 token_name=v.token_name, ticker=v.ticker, company=v.company,
-                issuer_class=v.issuer_class, first_pair_at=created)
+                issuer_class=v.issuer_class, first_pair_at=created, url=url)
             session.add(row)
             fresh.append(row)
             logger.info("registry: NEW tokenized equity %s (%s) on %s [%s]",
@@ -94,6 +113,8 @@ def _upsert_equity_tokens(session: Session, views: list[registry.EquityTokenView
         else:
             row.issuer_class = v.issuer_class
             row.token_name = v.token_name
+            if url:
+                row.url = url
             if created and (row.first_pair_at is None or created < row.first_pair_at):
                 row.first_pair_at = created
             session.add(row)
@@ -135,7 +156,8 @@ def discovery_sweep(session: Session) -> dict:
             pairs += dexscreener.token_pairs(chain, addr)
 
     views = detect.equity_tokens_in(pairs, universe, markers, bases)
-    fresh = _upsert_equity_tokens(session, views, _pair_creation_times(pairs))
+    fresh = _upsert_equity_tokens(session, views, _pair_creation_times(pairs),
+                                  _deepest_pair_urls(pairs))
     session.commit()
     return {"registry_new": len(fresh), "pairs_seen": len(pairs)}
 
@@ -161,7 +183,8 @@ def universe_sweep(session: Session, slice_size: int | None = None) -> dict:
         pairs += dexscreener.search(ticker)
 
     views = detect.equity_tokens_in(pairs, universe, markers, bases)
-    fresh = _upsert_equity_tokens(session, views, _pair_creation_times(pairs))
+    fresh = _upsert_equity_tokens(session, views, _pair_creation_times(pairs),
+                                  _deepest_pair_urls(pairs))
     _set_state(session, _CURSOR_KEY, str((cursor + n) % max(len(tickers), 1)))
     session.commit()
     return {"registry_new": len(fresh), "swept": len(slice_),
@@ -201,7 +224,8 @@ def priority_sweep(session: Session, slice_size: int | None = None) -> dict:
         pairs += dexscreener.search(ticker)
 
     views = detect.equity_tokens_in(pairs, universe, markers, bases)
-    fresh = _upsert_equity_tokens(session, views, _pair_creation_times(pairs))
+    fresh = _upsert_equity_tokens(session, views, _pair_creation_times(pairs),
+                                  _deepest_pair_urls(pairs))
     _set_state(session, _PRIORITY_CURSOR_KEY,
                str((cursor + n) % max(len(tickers), 1)))
     session.commit()
@@ -234,7 +258,7 @@ def registry_sweep(session: Session) -> dict:
         if universe:
             _upsert_equity_tokens(
                 session, detect.equity_tokens_in(pairs, universe, markers, bases),
-                _pair_creation_times(pairs))
+                _pair_creation_times(pairs), _deepest_pair_urls(pairs))
         for launch in detect.detect_launches(pairs, universe, markers, bases):
             seen_launches += 1
             if _upsert_launch(session, launch):
@@ -360,11 +384,16 @@ def _equity_view(ticker: str) -> scoring.EquityView:
     q = equity_lane.quote(ticker)
     if not q or q.get("price") is None:
         return scoring.EquityView(dark=True)
-    bars = equity_lane.history(ticker, range_="3M")
+    # 2 YEARS, not 3 months: squeeze history is the point of these bars, and a
+    # quarter-long window misses it entirely — WHLR's +97.8% session is ~2y old,
+    # and a 3M read scored its squeeze history at +10%. average_volume only
+    # looks at the last 20 bars, so one long fetch serves both.
+    bars = equity_lane.history(ticker, range_="2Y")
     # Median of recent daily bars is the primary baseline because it cannot be
     # dragged by the very spike we are hunting; FMP's averageVolume is only a
     # fallback for names with too little history.
     avg_volume = equity_lane.average_volume(bars)
+    stats = equity_lane.price_stats(bars)
     prof = fundamentals.profile(ticker)
     if avg_volume is None:
         avg_volume = prof.get("avg_volume")
@@ -374,7 +403,11 @@ def _equity_view(ticker: str) -> scoring.EquityView:
         change_pct=q.get("change_pct"), volume=q.get("volume"),
         avg_volume=avg_volume, high_52w=q.get("high_52w"),
         low_52w=q.get("low_52w"), market_cap=prof.get("market_cap"),
-        float_shares=flt.get("float_shares"), dark=False)
+        float_shares=flt.get("float_shares"),
+        dollar_volume=stats.get("dollar_volume"),
+        max_1d_gain_pct=stats.get("max_1d_gain_pct"),
+        days_over_30=stats.get("days_over_30"),
+        daily_vol_pct=stats.get("daily_vol_pct"), dark=False)
 
 
 def rollup(session: Session, now: datetime | None = None) -> list[dict]:
@@ -435,8 +468,14 @@ def rollup(session: Session, now: datetime | None = None) -> list[dict]:
         cand.equity_market_cap = eq.market_cap
         cand.equity_float_shares = eq.float_shares
         cand.equity_float_turnover = eq.float_turnover
+        dil = fundamentals.dilution(ticker)
+        cand.dilution_flag = fundamentals.dilution_flag(dil)
+        cand.share_growth_x = dil.get("share_growth_x")
+        cand.runway_months = dil.get("runway_months")
+        cand.cash = dil.get("cash")
 
-        pump, pump_r = scoring.pumpability(eq, cfg)
+        pump, pump_factors, pump_r = scoring.pumpability_factors(eq, cfg)
+        cand.pump_factors = pump_factors
         early, early_r = scoring.earliness(eq, cand.first_tokenized_at, now, cfg)
         cand.pumpability, cand.earliness = pump, early
 
@@ -481,6 +520,9 @@ def rollup(session: Session, now: datetime | None = None) -> list[dict]:
                           "float_shares": eq.float_shares,
                           "float_turnover": eq.float_turnover,
                           "issuer_class": cand.issuer_class,
+                          "dilution_flag": cand.dilution_flag,
+                          "pump_factors": pump_factors,
+                          "wrapper_url": next((t.url for t in tokens if t.url), ""),
                           "pools": pools_payload(launches, cfg),
                           "reasons": cand.reasons[:6]})
 

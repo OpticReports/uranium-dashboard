@@ -129,3 +129,22 @@ def test_microcap_universe_survives_junk():
     from app.lanes.fundamentals import parse_microcap_universe
     assert parse_microcap_universe(None) == []
     assert parse_microcap_universe([None, "nope", [{"symbol": ""}, {}]]) == []
+
+
+def test_price_stats_measures_behaviour_not_just_size():
+    """Squeeze history and realized vol come free from bars we already fetch,
+    and they answer what float cannot: has this name ever actually moved?"""
+    from app.lanes.equity import parse_history, price_stats
+    bars = parse_history(load("fami_history.json"))
+    st = price_stats(bars)
+    assert st["dollar_volume"] > 0
+    assert st["max_1d_gain_pct"] > 0
+    assert st["daily_vol_pct"] > 0
+    assert st["median_volume"] > 0
+    assert st["days_over_30"] >= 0
+
+
+def test_price_stats_needs_enough_history():
+    from app.lanes.equity import price_stats
+    assert price_stats([{"close": 1.0, "volume": 10}] * 5) == {}
+    assert price_stats([]) == {}

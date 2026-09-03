@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 _PROFILE = "https://financialmodelingprep.com/stable/profile"
 _FLOAT = "https://financialmodelingprep.com/stable/shares-float"
 _SCREENER = "https://financialmodelingprep.com/stable/company-screener"
+_INCOME = "https://financialmodelingprep.com/stable/income-statement"
+_BALANCE = "https://financialmodelingprep.com/stable/balance-sheet-statement"
 
 
 def enabled() -> bool:
@@ -114,6 +116,93 @@ def parse_profile(payload) -> dict:
         "exchange": row.get("exchange") or "",
         "industry": row.get("industry") or "",
     }
+
+
+def dilution(symbol: str, ttl: int = 24 * 3600) -> dict:
+    """Is this company printing stock? {} when dark or unkeyed.
+
+    The screener finds names that CAN pump. This says what you are buying if
+    you act on one. Farmmi at the time of the meme: 37.4M shares outstanding
+    against 1.84M weighted shares in the last annual report — roughly 20x
+    dilution since the filing — on $804K of cash and a $53.1M annual loss.
+    A company in that state issues into strength; that is what the strength is
+    FOR.
+
+    Deliberately NOT folded into pumpability. Dilution does not make a squeeze
+    less likely — it makes holding one dangerous, which is a different fact and
+    is surfaced as its own flag rather than blended into a score.
+    """
+    if not enabled():
+        return {}
+
+    def _producer():
+        out = {}
+        for key, url in (("income", _INCOME), ("balance", _BALANCE)):
+            resp = with_backoff(lambda u=url: httpx.get(
+                u, params={"symbol": symbol.upper(), "limit": 2,
+                           "period": "annual", "apikey": settings.fmp_api_key},
+                timeout=settings.http_timeout_seconds))
+            resp.raise_for_status()
+            out[key] = resp.json()
+        return out
+
+    try:
+        payload = cached(f"fmp:dilution:{symbol.upper()}", _producer, ttl=ttl)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("FMP dilution lane DARK for %s: %s", symbol, exc)
+        return {}
+    return parse_dilution(payload, shares_float(symbol).get("outstanding_shares"))
+
+
+def parse_dilution(payload: dict, outstanding_now: float | None) -> dict:
+    def _first(rows):
+        if isinstance(rows, list) and rows and isinstance(rows[0], dict):
+            return rows[0]
+        return {}
+
+    inc = _first((payload or {}).get("income"))
+    bal = _first((payload or {}).get("balance"))
+    if not inc and not bal:
+        return {}
+
+    weighted = inc.get("weightedAverageShsOut")
+    net_income = inc.get("netIncome")
+    cash = bal.get("cashAndCashEquivalents")
+
+    growth = None
+    if outstanding_now and isinstance(weighted, (int, float)) and weighted > 0:
+        growth = outstanding_now / weighted
+
+    # Months of cash at last year's loss rate. Only meaningful when losing money.
+    runway = None
+    if (isinstance(cash, (int, float)) and isinstance(net_income, (int, float))
+            and net_income < 0):
+        runway = cash / (abs(net_income) / 12.0)
+
+    return {
+        "fiscal_year": inc.get("fiscalYear") or bal.get("fiscalYear"),
+        "weighted_shares": weighted,
+        "outstanding_now": outstanding_now,
+        "share_growth_x": growth,
+        "cash": cash,
+        "net_income": net_income,
+        "runway_months": runway,
+    }
+
+
+def dilution_flag(d: dict, growth_warn: float = 1.5,
+                  runway_warn: float = 12.0) -> str:
+    """One human sentence, or "" when nothing is alarming."""
+    if not d:
+        return ""
+    bits = []
+    g = d.get("share_growth_x")
+    if isinstance(g, (int, float)) and g >= growth_warn:
+        bits.append(f"share count {g:,.1f}x its last annual figure")
+    r = d.get("runway_months")
+    if isinstance(r, (int, float)) and r <= runway_warn:
+        bits.append(f"{r:,.1f} months of cash at last year's burn")
+    return " · ".join(bits)
 
 
 # US venues only. A tokenized wrapper for a foreign listing would not trade

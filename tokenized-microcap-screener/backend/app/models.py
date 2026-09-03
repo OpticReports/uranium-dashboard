@@ -53,6 +53,10 @@ class EquityToken(SQLModel, table=True):
     first_seen_at: DateTime = Field(default_factory=DateTime.utcnow, index=True)
     # Earliest pairCreatedAt observed for this token — proxies deployment time.
     first_pair_at: Optional[DateTime] = Field(default=None, index=True)
+    # DEX Screener link to this wrapper's deepest pool. Token-address pages 403
+    # to non-browsers, so the deepest PAIR is the link that reliably lands on
+    # the wrapper.
+    url: str = ""
 
 
 class MemeLaunch(SQLModel, table=True):
@@ -147,6 +151,14 @@ class Candidate(SQLModel, table=True):
     equity_float_shares: Optional[float] = None
     # Today's volume divided by the float. FAMI hit ~26x on 2026-09-02.
     equity_float_turnover: Optional[float] = None
+    # Dilution risk. Kept OUT of the scores on purpose: printing stock does not
+    # make a squeeze less likely, it makes holding one dangerous.
+    # Per-factor pumpability breakdown — the score has to be interrogable.
+    pump_factors: list = Field(default_factory=list, sa_column=Column(JSON))
+    dilution_flag: str = ""
+    share_growth_x: Optional[float] = None
+    runway_months: Optional[float] = None
+    cash: Optional[float] = None
     equity_exchange: str = ""
     equity_dark: bool = False
 

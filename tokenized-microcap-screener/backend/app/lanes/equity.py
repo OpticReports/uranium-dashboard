@@ -155,3 +155,51 @@ def average_volume(bars: list[dict], lookback: int = 20) -> float | None:
     if len(vols) < 3:
         return None
     return float(statistics.median(vols))
+
+
+def price_stats(bars: list[dict], vol_lookback: int = 60) -> dict:
+    """Behavioural stats from daily bars. Keyless — these come from history we
+    already fetch, and they answer questions float alone cannot.
+
+    Measured on real 2-year histories, 2026-09-02:
+
+        ticker  max 1d   >30% days   $ volume/day   daily vol
+        WHLR     97.8%       2           $108K        11.5%
+        FAMI     26.5%       0           $950K        13.4%
+        NTIC      9.9%       0          $17.8K         1.6%
+        MU       19.3%       0          $26.6B         6.1%
+
+    NTIC is the control that matters: its dollar volume is the smallest on that
+    list, yet it has never moved and its daily vol is 1.6%. Cheap and illiquid
+    is not the same as pumpable — a name also has to be CAPABLE of moving, which
+    is what squeeze history and realized vol capture and float does not.
+    """
+    clean = [b for b in bars if isinstance(b.get("close"), (int, float)) and b["close"] > 0]
+    if len(clean) < 20:
+        return {}
+    rets = []
+    for i in range(1, len(clean)):
+        prev, cur = clean[i - 1]["close"], clean[i]["close"]
+        if prev:
+            rets.append((cur / prev - 1.0) * 100.0)
+    if not rets:
+        return {}
+
+    vols = [b["volume"] for b in clean[-20:]
+            if isinstance(b.get("volume"), (int, float)) and b["volume"] > 0]
+    median_volume = float(statistics.median(vols)) if len(vols) >= 3 else None
+    last_price = clean[-1]["close"]
+    recent = rets[-vol_lookback:] if len(rets) >= 5 else rets
+
+    return {
+        "price": last_price,
+        "median_volume": median_volume,
+        # The cost to move it. Far sharper than share count: MU trades $26.6B a
+        # day and FAMI $950K — five orders of magnitude, on volumes only 4x apart.
+        "dollar_volume": (median_volume * last_price) if median_volume else None,
+        "max_1d_gain_pct": max(rets),
+        "days_over_30": sum(1 for r in rets if r >= 30.0),
+        "days_over_50": sum(1 for r in rets if r >= 50.0),
+        "daily_vol_pct": statistics.pstdev(recent) if len(recent) > 1 else None,
+        "bars": len(clean),
+    }

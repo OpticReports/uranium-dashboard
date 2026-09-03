@@ -30,6 +30,16 @@ from ..utils import clamp
 from .detect import LaunchView
 
 
+def _shares_or_money(x: float, prefix: str = "") -> str:
+    """Sub-million counts must not render as "0.0M" — WHLR's float is 21,783
+    shares and that is the most interesting thing about it."""
+    if x >= 1e9:
+        return f"{prefix}{x/1e9:,.1f}B"
+    if x >= 1e6:
+        return f"{prefix}{x/1e6:,.1f}M"
+    return f"{prefix}{x:,.0f}"
+
+
 def _ramp(x: float, lo: float, hi: float) -> float:
     """0 below `lo`, 100 above `hi`, linear between."""
     if hi <= lo:
@@ -82,6 +92,26 @@ def credibility(launch: LaunchView, cfg: dict,
     score = (depth * w.get("depth", 0.35) + float_q * w.get("float", 0.20)
              + two_sided * w.get("two_sided", 0.15) + breadth * w.get("breadth", 0.15)
              + turn_q * w.get("turnover", 0.15))
+
+    # ALIVENESS. Displayed liquidity is a number anyone can manufacture: seed a
+    # pool so the USD figure is enormous and never trade it. Real examples on
+    # Ethereum, 2026-09-02 — tokens named "Micron Technology Inc. Common Stock"
+    # and "Dell Technologies Inc." showing $852M and $302M of liquidity against
+    # WETH, each with ONE trade and $0.01 of 24h volume. Scored on depth alone
+    # they reached ~55 and cleared the credibility gate.
+    #
+    # So depth only counts to the extent something trades against it. This
+    # multiplies rather than subtracts: no amount of posted liquidity earns
+    # credibility in a pool nobody touches.
+    alive = _ramp(float(total), c.get("dead_txns_24h", 2), c.get("alive_txns_24h", 40))
+    if alive < 100.0:
+        score *= alive / 100.0
+        if total <= c.get("dead_txns_24h", 2) and launch.liquidity_usd > 10_000:
+            reasons.append(
+                f"${launch.liquidity_usd:,.0f} posted against {total} trades in 24h "
+                "— liquidity is not being traded, treat the depth as fiction")
+        elif alive < 60.0:
+            reasons.append(f"only {total} trades in 24h — pool barely alive")
 
     if depth < 25:
         reasons.append(f"thin pool (${launch.liquidity_usd:,.0f} liquidity)")
@@ -150,6 +180,11 @@ class EquityView:
     low_52w: float | None = None
     market_cap: float | None = None      # only when the FMP enrichment is on
     float_shares: float | None = None    # ditto
+    # Behavioural stats from daily bars (keyless) — see equity.price_stats.
+    dollar_volume: float | None = None
+    max_1d_gain_pct: float | None = None
+    days_over_30: int | None = None
+    daily_vol_pct: float | None = None
     dark: bool = False
 
     @property
@@ -162,72 +197,127 @@ class EquityView:
 
 
 def pumpability(eq: EquityView, cfg: dict) -> tuple[float, list[str]]:
+    """Wrapper kept for callers that only want the number and the reasons."""
+    score, _factors, reasons = pumpability_factors(eq, cfg)
+    return score, reasons
+
+
+def pumpability_factors(eq: EquityView, cfg: dict
+                        ) -> tuple[float, list[dict], list[str]]:
     """How violently would this listing respond to being bid?
 
-    The FAMI setup is the archetype: a sub-$1 nanocap on a delisting clock,
-    normally trading a few million shares. Those move hundreds of percent on
-    flow that would not register on a mid-cap.
+    Float alone is not enough. Six factors, each scored 0-100 and reported
+    individually so the number can be argued with rather than trusted:
+
+      cost to move   median DOLLAR volume. Sharper than share count by orders
+                     of magnitude — MU trades $26.6B a day against FAMI's
+                     $950K on share volumes only ~4x apart.
+      float          free float. Small float, violent moves.
+      squeeze past   has this name ALREADY done a violent up-day? Names that
+                     squeeze tend to squeeze again; WHLR has printed +97.8%
+                     in a session and two days over +30% in two years.
+      capable        realized daily volatility. The control case for why cheap
+                     and illiquid is not enough: NTIC has the smallest dollar
+                     volume on the board and a 1.6% daily vol — it is illiquid
+                     but DEAD, and no amount of flow has ever moved it.
+      cheap          price level. Sub-$1 names travel in bigger percentages.
+      size           market cap, when the FMP enrichment is on.
+
+    Every absent input is dropped and the remaining weights renormalised, so a
+    dark lane lowers CONFIDENCE rather than silently scoring a name as if the
+    missing factor were bad. The factor list names what was missing.
     """
     p = (cfg or {}).get("pumpability", {})
     reasons: list[str] = []
     if eq.dark or eq.price is None:
-        return 0.0, ["equity lane dark — pumpability unscored"]
+        return 0.0, [], ["equity lane dark — pumpability unscored"]
 
-    # Cheap: 100 under $1, decaying to 0 by $20.
-    cheap = 100.0 - _ramp(eq.price, p.get("price_full", 1.0), p.get("price_floor", 20.0))
-    if eq.price < 1.0:
-        reasons.append(f"${eq.price:.4f} — sub-$1, the Nasdaq bid-price band")
+    w = p.get("weights", {})
+    factors: list[dict] = []
 
-    # Thin: median daily volume. Small = a little flow goes a long way.
-    if eq.avg_volume:
-        thin = 100.0 - _log_ramp(eq.avg_volume, p.get("advol_full", 1e6),
-                                 p.get("advol_floor", 5e7))
+    def add(key, label, score, weight, display):
+        factors.append({"key": key, "label": label, "score": round(score, 1),
+                        "weight": weight, "display": display})
+
+    # cost to move — the dominant factor
+    if eq.dollar_volume and eq.dollar_volume > 0:
+        cost = 100.0 - _log_ramp(eq.dollar_volume, p.get("dollarvol_full", 2e5),
+                                 p.get("dollarvol_floor", 5e8))
+        add("cost", "cost to move", cost, w.get("cost", 0.28),
+            f"${eq.dollar_volume:,.0f}/day")
+        if eq.dollar_volume < 5e6:
+            reasons.append(f"only ${eq.dollar_volume:,.0f} of stock trades a day")
     else:
-        thin = 50.0
-        reasons.append("no volume history — thinness defaulted")
+        reasons.append("no dollar-volume reading")
 
-    # Beaten down: position in the 52-week range (low = more room / more short
-    # interest / more delisting pressure).
-    if eq.high_52w and eq.low_52w and eq.high_52w > eq.low_52w and eq.price:
-        pos = (eq.price - eq.low_52w) / (eq.high_52w - eq.low_52w)
-        beaten = 100.0 - clamp(pos * 100.0)
-    else:
-        beaten = 50.0
-
-    if eq.market_cap is not None:
-        small = 100.0 - _log_ramp(eq.market_cap, p.get("mcap_full", 1e7),
-                                  p.get("mcap_floor", 2e9))
-    else:
-        small = None
-        reasons.append("market cap dark (no FMP key) — size proxied by price x volume")
-
-    # Float is the most direct read of all: a small free float is what lets
-    # meme-scale flow move a listing hundreds of percent. Farmmi's float was
-    # 31.5M shares and 837M traded — the float turned over ~26 times.
-    if eq.float_shares:
+    if eq.float_shares and eq.float_shares > 0:
         tight = 100.0 - _log_ramp(eq.float_shares, p.get("float_full", 5e6),
                                   p.get("float_floor", 3e8))
-        reasons.append(f"free float {eq.float_shares/1e6:,.1f}M shares")
+        add("float", "float", tight, w.get("tight", 0.22),
+            f"{_shares_or_money(eq.float_shares)} shares")
         turn = eq.float_turnover
         if turn is not None and turn >= p.get("float_turnover_notable", 1.0):
             reasons.append(f"float has turned over {turn:,.1f}x today")
     else:
-        tight = None
-        reasons.append("float dark — no float leg in this score")
+        reasons.append("float dark")
 
-    w = p.get("weights", {})
-    if small is None and tight is None:
-        score = (cheap * 0.45 + thin * 0.35 + beaten * 0.20)
-    elif tight is None:
-        score = (cheap * w.get("cheap", 0.30) + thin * w.get("thin", 0.25)
-                 + beaten * w.get("beaten", 0.15) + small * w.get("small", 0.30))
-    elif small is None:
-        score = (cheap * 0.34 + tight * 0.34 + thin * 0.20 + beaten * 0.12)
+    if eq.max_1d_gain_pct is not None:
+        best = _ramp(eq.max_1d_gain_pct, p.get("squeeze_floor_pct", 15.0),
+                     p.get("squeeze_full_pct", 80.0))
+        streak = _ramp(float(eq.days_over_30 or 0), 0.0, p.get("squeeze_days_full", 3.0))
+        hist = max(best, streak)
+        add("squeeze", "squeeze history", hist, w.get("squeeze", 0.18),
+            f"best +{eq.max_1d_gain_pct:.0f}% · {eq.days_over_30 or 0} days >30%")
+        if eq.max_1d_gain_pct >= 50:
+            reasons.append(f"has printed +{eq.max_1d_gain_pct:.0f}% in a session before")
     else:
-        score = (cheap * w.get("cheap_f", 0.26) + tight * w.get("tight", 0.30)
-                 + small * w.get("small_f", 0.22) + thin * w.get("thin_f", 0.12)
-                 + beaten * w.get("beaten_f", 0.10))
-    return clamp(score), reasons
+        reasons.append("no squeeze history")
+
+    if eq.daily_vol_pct is not None:
+        capable = _ramp(eq.daily_vol_pct, p.get("vol_dead_pct", 2.0),
+                        p.get("vol_live_pct", 12.0))
+        add("capable", "capable of moving", capable, w.get("capable", 0.12),
+            f"{eq.daily_vol_pct:.1f}% daily")
+        if eq.daily_vol_pct < p.get("vol_dead_pct", 2.0) * 1.25:
+            reasons.append(f"{eq.daily_vol_pct:.1f}% daily vol — this name does not move")
+
+    cheap = 100.0 - _ramp(eq.price, p.get("price_full", 1.0), p.get("price_floor", 20.0))
+    add("cheap", "price", cheap, w.get("cheap_f", 0.10), f"${eq.price:,.4f}")
+    if eq.price < 1.0:
+        reasons.append(f"${eq.price:.4f} — sub-$1, the Nasdaq bid-price band")
+
+    # A market cap of 0 is a DATA GAP, not a $0 company — treating it as tiny
+    # handed WHLR a free 100/100 on size. So is an IMPLAUSIBLE one: FMP reports
+    # a $13,605 cap for WHLR, a NASDAQ-listed REIT, which is stale share data
+    # after repeated reverse splits, not a $13k company. Nasdaq's own continued-
+    # listing standards make a sub-$250k market value impossible, so a reading
+    # under that floor is a data error and is dropped rather than rewarded.
+    mcap_floor_real = p.get("mcap_implausible_below", 250_000)
+    if eq.market_cap and eq.market_cap >= mcap_floor_real:
+        small = 100.0 - _log_ramp(eq.market_cap, p.get("mcap_full", 1e7),
+                                  p.get("mcap_floor", 2e9))
+        add("size", "market cap", small, w.get("small_f", 0.10),
+            _shares_or_money(eq.market_cap, "$"))
+    elif eq.market_cap and eq.market_cap > 0:
+        reasons.append(
+            f"market cap reads ${eq.market_cap:,.0f} — implausible for a US listing, "
+            "treated as stale data and dropped from the score")
+    else:
+        reasons.append("market cap missing — dropped from the score, not scored as tiny")
+
+    if not factors:
+        return 0.0, [], reasons + ["no pumpability inputs available"]
+
+    # Renormalise over the factors we actually have: a missing input must not
+    # read as a bad one.
+    total_w = sum(f["weight"] for f in factors) or 1.0
+    score = sum(f["score"] * f["weight"] for f in factors) / total_w
+    for f in factors:
+        f["contribution"] = round(f["score"] * f["weight"] / total_w, 1)
+    factors.sort(key=lambda f: -f["contribution"])
+    if len(factors) < 6:
+        reasons.append(f"scored on {len(factors)} of 6 factors")
+    return clamp(score), factors, reasons
 
 
 def earliness(eq: EquityView, first_tokenized_at: datetime | None,

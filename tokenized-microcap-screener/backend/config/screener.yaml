@@ -53,6 +53,10 @@ credibility:
   weights: {depth: 0.35, float: 0.20, two_sided: 0.15, breadth: 0.15, turnover: 0.15}
   # Liquidity trajectory between snapshots, applied as a MULTIPLIER. A pool
   # whose LP is walking out cannot score well on depth alone.
+  # Aliveness: posted liquidity is worthless unless something trades against
+  # it. Seeded-but-dead pools showing hundreds of millions are real and common.
+  dead_txns_24h: 2
+  alive_txns_24h: 40
   drain_floor_pct: -10.0     # penalty starts here
   drain_full_pct: -60.0      # penalty is at its worst here
   drain_worst_factor: 0.45   # score multiplier at full drain
@@ -69,21 +73,35 @@ heat:
   mom_full: 60.0
   weights: {accel: 0.35, burst: 0.15, size: 0.30, momentum: 0.20}
 
-pumpability:
-  price_full: 1.0        # <= $1 scores full "cheap"
-  price_floor: 20.0      # >= $20 scores zero
-  advol_full: 1000000    # <= 1M median shares/day scores full "thin"
-  advol_floor: 50000000
-  mcap_full: 10000000    # only used when the FMP enrichment is on
-  mcap_floor: 2000000000
-  # Free float. The most direct read on whether meme flow can move the tape:
-  # FAMI's 31.5M-share float turned over ~26x on 2026-09-02.
-  float_full: 5000000        # <= 5M shares scores full "tight"
-  float_floor: 300000000     # >= 300M scores zero
+pumpability: # six factors, each reported separately so the score can be argued with
+  # cost to move: median DOLLAR volume. Sharper than share count by orders of
+  # magnitude (MU $26.6B/day vs FAMI $950K on ~4x the share volume).
+  dollarvol_full: 200000       # <= $200K/day scores full
+  dollarvol_floor: 500000000   # >= $500M/day scores zero
+  # free float
+  float_full: 5000000
+  float_floor: 300000000
   float_turnover_notable: 1.0
-  # Weights without a float reading, then with one.
-  weights: {cheap: 0.30, thin: 0.25, beaten: 0.15, small: 0.30,
-            cheap_f: 0.26, tight: 0.30, small_f: 0.22, thin_f: 0.12, beaten_f: 0.10}
+  # squeeze history — names that have squeezed tend to squeeze again
+  squeeze_floor_pct: 15.0      # best 1-day gain in the window
+  squeeze_full_pct: 80.0
+  squeeze_days_full: 3.0       # days over +30% in the window
+  # capable of moving at all. NTIC is the control: smallest dollar volume on
+  # the board, 1.6% daily vol, has never moved. Illiquid is not pumpable.
+  vol_dead_pct: 2.0
+  vol_live_pct: 12.0
+  # price level and size
+  price_full: 1.0
+  price_floor: 20.0
+  mcap_full: 10000000
+  mcap_floor: 2000000000
+  # Below this, a market cap is stale share data rather than a real figure
+  # (WHLR reads $13,605 after repeated reverse splits). Dropped, not rewarded.
+  mcap_implausible_below: 250000
+  # Weights are renormalised over whatever inputs are present, so a dark lane
+  # lowers confidence rather than scoring the name as if the input were bad.
+  weights: {cost: 0.28, tight: 0.22, squeeze: 0.18, capable: 0.12,
+            cheap_f: 0.10, small_f: 0.10}
 
 earliness:
   move_flat_pct: 3.0

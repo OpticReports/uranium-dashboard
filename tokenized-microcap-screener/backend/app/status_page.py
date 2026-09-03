@@ -72,7 +72,8 @@ def _leadlag_panel(ll: dict) -> str:
     <p class="thin">{html.escape(ll.get('caveat', ''))}</p>"""
 
 
-def _pools_section(pools_by_ticker: dict[str, list[MemeLaunch]]) -> str:
+def _pools_section(pools_by_ticker: dict[str, list[MemeLaunch]],
+                   wrapper_links: dict[str, dict] | None = None) -> str:
     """The pools themselves. The ranked table says WHICH ticker; this says what
     is actually trading against it, and links straight to each pool."""
     if not pools_by_ticker:
@@ -106,9 +107,16 @@ def _pools_section(pools_by_ticker: dict[str, list[MemeLaunch]]) -> str:
                 <td>{_bar(p.heat, '#d97706', 64)}</td>
                 <td class="thin">{created}</td>
                 <td>{link}</td></tr>""")
+        meta = (wrapper_links or {}).get(ticker, {})
+        wlink = (f' <a href="{html.escape(meta.get("url", ""))}" target="_blank" '
+                 f'rel="noopener noreferrer">wrapper &rarr;</a>' if meta.get("url") else "")
+        wflag = (f'<span class="dilution">{html.escape(meta["dilution"])}</span>'
+                 if meta.get("dilution") else "")
         blocks.append(f"""
         <div class="poolgrp"><h3>{html.escape(ticker)}
-          <span class="thin">{len(pools)} pool{'s' if len(pools) != 1 else ''}</span></h3>
+          <span class="thin">{len(pools)} pool{'s' if len(pools) != 1 else ''}</span>
+          {wlink}{wflag}</h3>
+        {_factor_bar(meta.get("factors") or [])}
         <table>
          <tr><th>meme</th><th>venue</th><th>liquidity</th><th>24h vol</th><th>FDV</th>
              <th>liq trend</th><th>cred</th><th>heat</th><th>created</th><th></th></tr>
@@ -117,9 +125,24 @@ def _pools_section(pools_by_ticker: dict[str, list[MemeLaunch]]) -> str:
     return "".join(blocks)
 
 
+def _factor_bar(factors: list) -> str:
+    """The pumpability breakdown. A score nobody can interrogate is not
+    analysis, so every factor states its own reading."""
+    if not factors:
+        return ""
+    cells = []
+    for f in factors:
+        cells.append(
+            f'<span class="fac"><b>{html.escape(str(f.get("label", "")))}</b>'
+            f'<i>{html.escape(str(f.get("display", "")))}</i>'
+            f'<em>{float(f.get("score", 0)):.0f}</em></span>')
+    return f'<div class="facs">{"".join(cells)}</div>'
+
+
 def render_status_page(rows: list[Candidate], leadlag: dict, registry_size: int,
                        cfg: dict,
-                       pools_by_ticker: dict[str, list[MemeLaunch]] | None = None) -> str:
+                       pools_by_ticker: dict[str, list[MemeLaunch]] | None = None,
+                       wrapper_links: dict[str, dict] | None = None) -> str:
     body = []
     for r in rows:
         colour = _STAGE_COLOR.get(r.stage, "#4b5563")
@@ -199,6 +222,14 @@ def render_status_page(rows: list[Candidate], leadlag: dict, registry_size: int,
  .drain {{ color:#fca5a5; font-weight:700; }}
  .build {{ color:#6ee7b7; font-weight:700; }}
  .scrollx {{ overflow-x:auto; }}
+ .dilution {{ color:#fca5a5; font-size:10px; font-weight:600;
+              background:#4c1d24; padding:1px 7px; border-radius:3px; }}
+ .facs {{ display:flex; flex-wrap:wrap; gap:6px; margin:0 0 8px; }}
+ .fac {{ display:inline-flex; align-items:baseline; gap:6px; background:#1f2937;
+         border-radius:3px; padding:3px 8px; font-size:10.5px; }}
+ .fac b {{ color:#9ca3af; font-weight:600; }}
+ .fac i {{ color:#e5e7eb; font-style:normal; }}
+ .fac em {{ color:#60a5fa; font-style:normal; font-weight:700; }}
 </style></head><body><div class="wrap">
 <h1>Tokenized Microcap Screener</h1>
 <div class="thin">{registry_size} tokenized equities in the registry ·
@@ -225,7 +256,7 @@ def render_status_page(rows: list[Candidate], leadlag: dict, registry_size: int,
 </table></div>
 
 <h2>Pools — what is actually trading against these tickers</h2>
-<div class="scrollx">{_pools_section(pools_by_ticker or {})}</div>
+<div class="scrollx">{_pools_section(pools_by_ticker or {}, wrapper_links or {})}</div>
 
 <h2>Lead-lag (measured, not assumed)</h2>
 {_leadlag_panel(leadlag)}

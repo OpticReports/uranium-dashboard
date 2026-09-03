@@ -115,6 +115,20 @@ def format_alert(alert: dict) -> str:
             line += f" · {ft:,.1f}x turned over today"
         lines.append(line)
 
+    facs = alert.get("pump_factors") or []
+    if facs:
+        top = " · ".join(f"{f['label']} {f['display']}" for f in facs[:3])
+        lines.append(f"why pumpable: {top}")
+
+    dil = alert.get("dilution_flag")
+    if dil:
+        lines.append(f"⚠ dilution: {dil}")
+
+    wrapper = alert.get("wrapper_url")
+    if wrapper:
+        lines.append("")
+        lines.append(f"wrapper: {wrapper}")
+
     pools = alert.get("pools") or []
     if pools:
         lines.append("")
