@@ -1235,3 +1235,27 @@ def test_gate_status_mapping_matches_ib_async_semantics(ib_adapter):
     assert m._map_status("ValidationError") == "working"   # LIVE per ib_async
     assert m._map_status("Cancelled") == "cancelled"
     assert m._map_status("SomeFutureTransitionalState") == "working"
+
+
+def test_rejection_reason_surfaces_without_error_code(ib_adapter):
+    """An opening-auction order refused after the bell is cancelled with a
+    plain 'Order Canceled - reason: ...' log line and NO errorCode. Both the
+    synchronous raise and the reconcile-path lookup must carry it; before
+    this the five 2026-09-03 MRK rejections said only 'status Cancelled'.
+    MUTATION-VERIFIED: reverting the `dead` fallback in _trade_errors, or
+    the `reason` key in _trade_result, turns this red."""
+    fake = ib_adapter.ib
+
+    def reject(t):
+        t.orderStatus.status = "Cancelled"
+        t.log = [types.SimpleNamespace(
+            errorCode=0, message="Order Canceled - reason: OPG order "
+                                 "received after the open")]
+
+    fake.on_place = reject
+    with pytest.raises(RuntimeError, match="received after the open"):
+        ib_adapter.place_stock_order("MRK", 4, "MOO", tif="OPG",
+                                     client_order_id="blend-entry-16")
+    o = ib_adapter.find_stock_order("blend-entry-16")
+    assert o["status"] == "cancelled"
+    assert "received after the open" in o["reason"]

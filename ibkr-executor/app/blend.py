@@ -76,7 +76,8 @@ import os
 import tempfile
 import time
 from dataclasses import asdict, dataclass, field, fields
-from datetime import date
+from datetime import date, datetime, timezone
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -108,6 +109,43 @@ STALE_PAYLOAD_DAYS = 5      # as_of older than this vs today -> no decisions
                             # (5, not the review's 2: a Monday poll after a
                             # long holiday weekend legitimately sees a 4-day-
                             # old last trading day; reconciliation still runs)
+
+# ENTRY SESSION WINDOW (2026-09-03). Entries are MOO orders with TIF=OPG:
+# the venue accepts them only for the NEXT opening auction and REJECTS them
+# once the regular session is open. Placing one mid-session was never an
+# entry - it was a guaranteed rejection that first SOLD BIL to fund itself
+# (2026-08-28: NTRA/LLY, 8 rejections; 2026-09-03: MRK, 20 BIL sold, 5
+# rejections, cash stranded). The planner therefore only plans entries
+# OUTSIDE [ENTRY_CUTOFF_ET, SESSION_CLOSE_ET) on weekdays; a fire published
+# mid-session is picked up by the first post-close cycle and placed for the
+# next open. Cutoff is a few minutes before the 09:30 bell on purpose: the
+# exchange stops accepting opening-auction orders shortly before it, and a
+# skipped valid minute costs nothing while a doomed order costs a BIL
+# round-trip. Holidays are treated as weekdays (a valid placement is merely
+# delayed to the post-close window; the fire is still published).
+ENTRY_SESSION_TZ = "America/New_York"
+ENTRY_CUTOFF_ET = (9, 25)
+SESSION_CLOSE_ET = (16, 0)
+
+
+def _now_utc() -> datetime:
+    """Module-level clock so tests pin it (tests/conftest.py); production
+    reads the wall clock."""
+    return datetime.now(timezone.utc)
+
+
+def entry_window_open(now: datetime | None = None) -> bool:
+    """True when a MOO/OPG entry placed NOW would be accepted for the next
+    opening auction: any time on a weekend, and on weekdays outside
+    [09:25, 16:00) Eastern. False during the regular session."""
+    now = now or _now_utc()
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    et = now.astimezone(ZoneInfo(ENTRY_SESSION_TZ))
+    if et.weekday() >= 5:
+        return True
+    t = (et.hour, et.minute)
+    return not (ENTRY_CUTOFF_ET <= t < SESSION_CLOSE_ET)
 HISTORY_HORIZON_S = 86_400.0  # venue-history horizon (adapter review m2): a
                               # gap since the LAST successful reconcile longer
                               # than this means order history may not cover
@@ -909,7 +947,29 @@ class Blend3070Manager:
                                 "with BLEND_BUDGET set — gross exposure "
                                 "(the budget gate's basis) is not "
                                 "computable this cycle")
-        if gate_on and not naked and not budget_blind:
+        # 4a) SESSION GUARD + PAUSE GUARD (2026-09-03). Both live HERE, in
+        #     the planner, because the BIL cash-raise below is sized from the
+        #     PLANNED entries: an entry that will not be placed must not be
+        #     planned, or its funding sale still goes out. The execution-loop
+        #     breaker (intent_kind_paused) skips the ENTER but not the SWEEP
+        #     that preceded it - MRK 2026-09-03 sold 20 BIL into a paused
+        #     kind - which is why the pause is checked again here.
+        candidates = [e for e in payload.get("entries", [])
+                      if str(e.get("call_id")) not in st.positions
+                      and str(e.get("call_id")) not in st.pending_entries]
+        window_open = entry_window_open()
+        enter_paused = intent_kind_paused("ENTER")
+        if gate_on and candidates and not window_open:
+            self._event("INFO", f"entries deferred: {len(candidates)} "
+                                f"candidate(s) held for the post-close "
+                                f"window (MOO/OPG is not placeable during "
+                                f"the regular session; no cash raised)")
+        elif gate_on and candidates and enter_paused:
+            self._event("WARN", f"entries not planned: ENTER breaker is "
+                                f"open ({len(candidates)} candidate(s) "
+                                f"waiting; no cash raised)")
+        if (gate_on and not naked and not budget_blind
+                and window_open and not enter_paused):
             for e in payload.get("entries", []):
                 key = str(e["call_id"])
                 if key in st.positions or key in st.pending_entries:
@@ -2654,9 +2714,14 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
             mgr.clear_pending_entry(it["call_id"])
             mgr._record_trade(it["symbol"], "BUY", it["qty"], 0.0,
                               rec.get("date", today), "entry_rejected")
+            # The venue's own words, when the adapter could read them
+            # (2026-09-03: five MRK rejections said only "status
+            # Cancelled" and the cause had to be inferred).
+            why = o.get("reason")
+            why_sfx = f" — venue: {why}" if why else ""
             mgr._event("RED", f"entry {it['symbol']} (call {it['call_id']}) "
                               f"REJECTED by the venue — journal cleared, "
-                              f"max_open slot released")
+                              f"max_open slot released{why_sfx}")
             mgr.save()
             # This IS the ENTER outcome (placement only ever returned
             # 'working'). Book it against the breaker, or a kind that
@@ -2672,8 +2737,8 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
                       f"on the next TRADING DAY, a service restart, or "
                       f"/resume.")
             alert(f"🚨 blend ENTER {it['symbol']} (call {it['call_id']}) "
-                  f"REJECTED by the venue — nothing entered; slot released, "
-                  f"journal cleared (a republished fire may retry)")
+                  f"REJECTED by the venue{why_sfx} — nothing entered; slot "
+                  f"released, journal cleared (a republished fire may retry)")
         # status "working": an async MOO awaiting its fill — keep the journal.
 
     # 2b) write-ahead BOOK-order journal (CORE_BUY / rebalance core-sell /

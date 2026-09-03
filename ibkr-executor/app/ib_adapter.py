@@ -73,16 +73,28 @@ def _map_status(ib_status: str) -> str:
     return "working"
 
 
-def _trade_errors(trade) -> str:
+def _trade_errors(trade, dead: bool = False) -> str:
     """IB's own words for why an order died, from the trade log. Without
     this the ValidationError alert could only say 'state UNKNOWN' - the
-    reason was sitting in trade.log, discarded."""
+    reason was sitting in trade.log, discarded.
+
+    `dead=True` (the order is in a cancelled state): when no entry carries
+    an error code or 'error' text, fall back to the LAST log message. An
+    opening-auction order refused after the bell is cancelled with a plain
+    'Order Canceled - reason: ...' line and no errorCode, so the filter
+    above dropped it and five MRK rejections on 2026-09-03 read only
+    'status Cancelled' (the cause had to be inferred from the order type)."""
     out = []
+    last = ""
     for entry in (getattr(trade, "log", None) or []):
         code = getattr(entry, "errorCode", 0) or 0
         msg = (getattr(entry, "message", "") or "").strip()
+        if msg:
+            last = msg
         if code or ("rror" in msg):
             out.append(f"[{code}] {msg}" if code else msg)
+    if not out and dead and last:
+        out.append(last)
     return "; ".join(out[-3:])
 
 
@@ -513,6 +525,12 @@ class IBAdapter:
     def _trade_result(self, trade) -> dict:
         out = {"order_ref": _order_ref(trade),
                "status": _map_status(trade.orderStatus.status)}
+        if out["status"] == "cancelled":
+            # Surface the venue's reason on the reconcile path too (the
+            # async MOO/OPG outcome is only ever read from here).
+            why = _trade_errors(trade, dead=True)
+            if why:
+                out["reason"] = why
         if out["status"] == "filled":
             px = _agg_fill_price(trade)
             if px is not None:              # unknown price -> NO key, never 0.0
@@ -535,7 +553,7 @@ class IBAdapter:
             if s == "Filled":
                 return
             if s in _IB_CANCELLED:
-                why = _trade_errors(trade)
+                why = _trade_errors(trade, dead=True)
                 raise RuntimeError(
                     f"order rejected by venue (status {s})"
                     + (f": {why}" if why else ""))

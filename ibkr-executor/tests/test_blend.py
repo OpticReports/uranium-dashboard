@@ -4002,3 +4002,113 @@ def test_gate_a_failing_manager_build_alerts_and_retries(monkeypatch, tmp_path):
     assert calls["n"] == 3                                  # retried, not dead
     assert any("build failed" in m for m in sent)           # and it SAID so
     assert any("recovered" in m for m in sent)
+
+
+# --- entry session window + planner-side pause (2026-09-03) -------------------
+# MUTATION-VERIFIED: reverting the `window_open` term in step()'s entry gate
+# turns test_no_moo_and_no_bil_raise_during_session red; reverting the
+# `not enter_paused` term turns test_paused_enter_does_not_raise_cash red;
+# reverting entry_window_open's weekday/time rule turns
+# test_entry_window_open_rules red.
+
+from datetime import datetime as _dt, timezone as _tz
+from zoneinfo import ZoneInfo as _Zone
+
+_ET = _Zone("America/New_York")
+
+
+def _et(y, mo, d, h, mi):
+    return _dt(y, mo, d, h, mi, tzinfo=_ET)
+
+
+def test_entry_window_open_rules():
+    open_ = blend_mod.entry_window_open
+    assert open_(_et(2026, 9, 3, 7, 0))        # weekday pre-open
+    assert open_(_et(2026, 9, 3, 9, 24))       # last planning minute
+    assert not open_(_et(2026, 9, 3, 9, 25))   # cutoff
+    assert not open_(_et(2026, 9, 3, 9, 30))   # bell
+    assert not open_(_et(2026, 9, 3, 10, 6))   # the MRK restart minute
+    assert not open_(_et(2026, 9, 3, 15, 59))
+    assert open_(_et(2026, 9, 3, 16, 0))       # close: next-open orders accepted
+    assert open_(_et(2026, 9, 3, 19, 47))      # the evening MRK window
+    assert open_(_et(2026, 9, 5, 12, 0))       # Saturday noon
+    # naive datetimes are read as UTC; 14:06Z is 10:06 ET in September
+    assert not open_(_dt(2026, 9, 3, 14, 6))
+    assert open_(_dt(2026, 9, 3, 14, 6, tzinfo=_tz.utc).astimezone(_ET)
+                 .replace(hour=17))
+
+
+def _book_needing_bil_to_fund(tmp_path):
+    """sleeve_cash cannot fund the entry; BIL can. Pre-fix this planned
+    SWEEP -N (sell BIL) followed by ENTER — the exact MRK shape."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
+    return m
+
+
+def _intents(m, now_utc, monkeypatch):
+    monkeypatch.setattr(blend_mod, "_now_utc", lambda: now_utc)
+    return m.step("2026-08-20", payload(entries=[entry()], stops=[stop_row()]),
+                  PRICES)
+
+
+def test_no_moo_and_no_bil_raise_during_session(tmp_path, monkeypatch):
+    m = _book_needing_bil_to_fund(tmp_path)
+    in_session = _dt(2026, 9, 3, 14, 6, tzinfo=_tz.utc)      # 10:06 ET
+    out = _intents(m, in_session, monkeypatch)
+    assert not [i for i in out if i["action"] == "ENTER"]
+    assert not [i for i in out if i["action"] == "SWEEP" and i["qty"] < 0], \
+        "BIL was sold to fund an entry that cannot be placed"
+    assert any("entries deferred" in e["msg"] for e in m.state.events)
+    # The same book, post-close: the entry is planned and BIL funds it.
+    m2 = _book_needing_bil_to_fund(tmp_path / "b")
+    post_close = _dt(2026, 9, 3, 21, 0, tzinfo=_tz.utc)      # 17:00 ET
+    out2 = _intents(m2, post_close, monkeypatch)
+    acts = [i["action"] for i in out2]
+    assert "ENTER" in acts
+    sells = [i for i in out2 if i["action"] == "SWEEP" and i["qty"] < 0]
+    assert sells and acts.index("SWEEP") < acts.index("ENTER")
+
+
+def test_paused_enter_does_not_raise_cash(tmp_path, monkeypatch):
+    m = _book_needing_bil_to_fund(tmp_path)
+    post_close = _dt(2026, 9, 3, 21, 0, tzinfo=_tz.utc)
+    blend_mod.intent_breaker_clear()
+    try:
+        blend_mod._intent_fail_counts["ENTER"] = blend_mod.INTENT_BREAKER_N
+        assert blend_mod.intent_kind_paused("ENTER")
+        out = _intents(m, post_close, monkeypatch)
+        assert not [i for i in out if i["action"] == "ENTER"]
+        assert not [i for i in out if i["action"] == "SWEEP" and i["qty"] < 0]
+        assert any("ENTER breaker is open" in e["msg"] for e in m.state.events)
+        blend_mod.intent_breaker_clear()
+        out = _intents(m, post_close, monkeypatch)
+        assert [i for i in out if i["action"] == "ENTER"]
+    finally:
+        blend_mod.intent_breaker_clear()
+
+
+def test_reconcile_rejection_alert_carries_venue_reason(tmp_path):
+    """The reconcile path reads the async MOO outcome from find_stock_order;
+    a `reason` there must reach the operator (event + alert)."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=3_000.0)
+    it = {"action": "ENTER", "call_id": 16, "symbol": "MRK", "qty": 4,
+          "entry_ref": 150.0, "stop_level": 139.5, "time_stop_days": 90,
+          "reason": "test"}
+    m.record_pending_entry(it, "2026-09-03")
+
+    class Rejecting(DryAdapter):
+        def find_stock_order(self, client_order_id):
+            return {"order_ref": "x", "status": "cancelled",
+                    "reason": "Order Canceled - reason: OPG after the open"}
+
+    alerts = []
+    blend_mod.intent_breaker_clear()
+    try:
+        blend_mod.reconcile(m, Rejecting(), "2026-09-03", alerts.append)
+    finally:
+        blend_mod.intent_breaker_clear()
+    assert "16" not in m.state.pending_entries
+    assert any("OPG after the open" in a for a in alerts)
+    assert any("OPG after the open" in e["msg"] for e in m.state.events)

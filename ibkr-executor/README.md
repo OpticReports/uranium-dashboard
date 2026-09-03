@@ -268,6 +268,18 @@ unreconciled venue state. Phases IN ORDER:
    sleeve cash minus cash reserved by a pending sweep — phantom proceeds
    are never spent, re-review N5) ->
    rebalance transfer -> core buy -> BIL sweep (all journaled per 1c).
+   **Entries are only PLANNED outside the regular session** (2026-09-03):
+   a MOO/OPG order is accepted for the next opening auction and REJECTED
+   once the session is open, so a fire first seen mid-session is held for
+   the first post-close cycle (`entry_window_open`, weekdays outside
+   09:25-16:00 ET). The planner also refuses to plan entries while the
+   ENTER breaker is open. Both guards sit in the planner rather than the
+   execution loop because the BIL cash-raise is sized from the PLANNED
+   entries: an entry that will not be placed must not be planned, or its
+   funding sale still goes out - on 2026-08-28 (NTRA/LLY, 8 rejections)
+   and 2026-09-03 (MRK: 20 BIL sold, 5 rejections) the book sold BIL to
+   fund orders the venue could never accept. A rejected entry now carries
+   the venue's own reason in the alert and /status event.
    **Book-order idempotency (adapter review M1)**: while ANY book-order
    journal (CORE_BUY / rebalance core-sell / BIL sweep) is pending
    adoption, step() plans NO new book-level order — a MKT that returns
