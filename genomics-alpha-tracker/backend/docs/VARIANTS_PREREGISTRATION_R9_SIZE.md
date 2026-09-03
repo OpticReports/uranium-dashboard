@@ -81,3 +81,10 @@ baseline; paired cluster bootstrap as Stage 1.
   C_pos, survivorship of the current watchlist (names that died before 2026
   are underrepresented; direction of bias stated), and 34-name universe
   breadth limits (bucket n's shown beside every claim).
+
+## Pre-analysis amendment (2026-08-27, before any result computed)
+Z2: the PIT CT.gov store records status/phases/PCD timelines but NOT
+intervention names, so "distinct interventions" is not reconstructable.
+Z2 is REDEFINED as: count of non-terminated trials as-known-at-t (with a
+phase-weighted diagnostic variant). Amendment made at data-inspection time,
+prior to computing any forward return.
