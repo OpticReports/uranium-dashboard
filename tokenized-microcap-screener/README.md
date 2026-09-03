@@ -178,11 +178,25 @@ fabricates a call. `/health` reports which optional lanes are live.
 `sec.gov` returns **403** to a User-Agent without a contact address — set
 `SEC_CONTACT` to a monitored mailbox.
 
+## Schema changes on a persistent disk
+
+`SQLModel.metadata.create_all()` creates missing **tables** and never alters an
+existing one, and the Render disk deliberately persists `screener.db` across
+deploys — so a column added in code is simply absent in production. `init_db()`
+therefore runs `create_all()` **and** an additive `migrate()` that `ALTER`s in
+any missing columns. It only ever adds; it never drops, renames or retypes.
+
+This shipped as a real outage on 2026-09-03, and the shape of the failure is
+the lesson: `/health` selected only `id`, so it returned **200 with a healthy
+registry count of 253** while every endpoint selecting a full model returned
+500 on `no such column: candidate.equity_price`. `/health` now reports
+`schema_drift` and degrades when the models and the database disagree.
+
 ## Endpoints
 
 ```
 GET  /                  dashboard (ladder histogram + ranked candidates)
-GET  /health            lane status, registry size, job schedule
+GET  /health            lane status, registry size, job schedule, schema drift
 GET  /candidates        ranked, filterable by stage / min_score
 GET  /candidates/{t}    one ticker: launches + full ladder history
 GET  /registry          every tokenized equity discovered
@@ -229,7 +243,7 @@ automation routes through `ibkr-executor`.
 ## Tests
 
 ```
-cd backend && python -m pytest tests/ -q     # 117 gate tests
+cd backend && python -m pytest tests/ -q     # 125 gate tests
 ```
 
 Gates run against **real captured payloads** (the Robinhood-Chain

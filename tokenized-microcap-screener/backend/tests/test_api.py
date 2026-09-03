@@ -72,3 +72,9 @@ def test_pools_endpoints_exist_and_filter(client):
 def test_status_page_has_a_pools_section(client):
     html = client.get("/").text
     assert "what is actually trading against these tickers" in html
+
+
+def test_health_status_reflects_schema_integrity(client):
+    body = client.get("/health").json()
+    assert body["schema_drift"] == []
+    assert body["status"] == "ok"

@@ -21,6 +21,7 @@ from . import leadlag, scan
 from . import scheduler as sched
 from .config import screener_config, settings
 from .db import engine as db_engine
+from .db import schema_drift
 from .db import get_session, init_db
 from .models import Candidate, EquityToken, MemeLaunch, PoolSnapshot, StageEvent
 from .status_page import render_status_page
@@ -65,7 +66,10 @@ def health() -> dict:
     with Session(db_engine) as s:
         registry_size = len(s.exec(select(EquityToken.id)).all())
         candidates = len(s.exec(select(Candidate.id)).all())
-    return {"status": "ok", "registry_tokens": registry_size,
+    drift = schema_drift()
+    return {"status": "degraded" if drift else "ok",
+            "schema_drift": drift,
+            "registry_tokens": registry_size,
             "candidates": candidates, "jobs": sched.job_status(),
             "market_cap_enrichment": bool(settings.fmp_api_key),
             "float_enrichment": bool(settings.fmp_api_key),
