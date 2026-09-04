@@ -595,12 +595,20 @@ services:
       # time during the week after 01:00 ET on Sunday"). All four are
       # sync:false: they change login behaviour on a live account, and any
       # edit restarts the container (set them after 16:00 ET only).
+      # Set the VALUES in the dashboard first (after 16:00 ET), then sync:
+      # a Blueprint sync does not add sync:false keys to an existing
+      # service and prompts for/blanks unset ones. TZ must accompany
+      # TIME_ZONE (the image example sets both; TIME_ZONE applies only while
+      # no jts.ini is persisted).
+      #   TZ=America/New_York               the container clock
       #   TIME_ZONE=America/New_York        so AUTO_RESTART_TIME reads in ET
       #   AUTO_RESTART_TIME=08:30 PM         format "hh:mm AM/PM"; any hour you
       #                                      can answer SUNDAY's weekly push
       #   TWOFA_TIMEOUT_ACTION=restart       the documented companion setting
       #   RELOGIN_AFTER_TWOFA_TIMEOUT=yes    a missed push re-alerts ~3-minutely
       #                                      until tapped, instead of stalling
+      - key: TZ
+        sync: false
       - key: TIME_ZONE
         sync: false
       - key: AUTO_RESTART_TIME

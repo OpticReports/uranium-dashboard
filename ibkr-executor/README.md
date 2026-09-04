@@ -294,7 +294,19 @@ unreconciled venue state. Phases IN ORDER:
    funding sale still goes out - on 2026-08-28 (NTRA/LLY, 8 rejections)
    and 2026-09-03 (MRK: 20 BIL sold, 5 rejections) the book sold BIL to
    fund orders the venue could never accept. A rejected entry now carries
-   the venue's own reason in the alert and /status event.
+   the venue's own reason (errorEvent / advancedError) in the alert and
+   /status event.
+   **Funding, honestly (counter-agent round 1, 2026-09-04):** "placed for
+   the next open" holds only when SETTLED sleeve cash already covers the
+   entry. Idle sleeve cash is swept to BIL by design, so most entries are
+   BIL-funded, and a MKT sell of BIL placed post-close does not fill until
+   the next open. The post-close cycle therefore places the BIL sell
+   (recorded `rests_for_open`, exempt from the stuck-order cancel until the
+   session is open), the sale fills at the open, idle cash is NOT swept
+   while a candidate is deferred, and the next post-close cycle places the
+   MOO from settled cash - the entry lands at the open after next (T+2).
+   Same-day funding (raise the cash mid-session, place the MOO post-close)
+   is a trading-behaviour change and needs Casey's sign-off.
    **Book-order idempotency (adapter review M1)**: while ANY book-order
    journal (CORE_BUY / rebalance core-sell / BIL sweep) is pending
    adoption, step() plans NO new book-level order — a MKT that returns
@@ -626,8 +638,17 @@ on the loop thread) has never run against IBKR.
 4. **BLEND_ENABLED=false does not pause a live book; it abandons it.** No
    reconcile, no sweep, no stops, no feed. The service now alerts at boot
    and daily while a `real:*` book with holdings sits on disk unmanaged
-   (`/health.blend_disabled_book`). Disable deliberately: `/kill` first,
+   (`/health.blend_disabled_book` is a flag + age; the holdings breakdown
+   is on `/status`). Disable deliberately: `/kill` and let the flatten
+   complete WHILE the blend is still enabled, then set BLEND_ENABLED=false;
    or archive the state file.
+5. **Gateway env keys are set in the dashboard FIRST, then synced.** A
+   Blueprint sync does not add new `sync: false` keys to an existing
+   service and will prompt for (or blank) unset ones. Set all four values
+   by hand after 16:00 ET - `TZ=America/New_York` alongside `TIME_ZONE`
+   (the image's own example sets both, and `TIME_ZONE` only applies while
+   no jts.ini is persisted) - and `TWOFA_TIMEOUT_ACTION=restart` with
+   `RELOGIN_AFTER_TWOFA_TIMEOUT=yes` together.
 
 The original staged rehearsal, kept for the record and for any FUTURE
 strategy's cutover (the per-leg discipline still applies):
