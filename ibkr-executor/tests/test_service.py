@@ -46,3 +46,96 @@ def test_gate_offline_service_and_auth(tmp_path, monkeypatch):
         assert r.json()["halted"] == "KILL"
         r = c.get("/resume", params={"token": "sekrit"})
         assert r.json()["ok"] is True
+
+
+# --- gateway watch + disabled-book guard (2026-09-04) -------------------------
+# MUTATION-VERIFIED: dropping `since_drop <= 1` turns test_gateway_watch_stall_
+# diagnosis red (crash-loop case); dropping the weekday guard turns the
+# Saturday case red; dropping the once-per-outage flag turns the repeat case
+# red; dropping the `real:` mode check turns test_disabled_book_guard red.
+import json as _json
+from datetime import datetime as _dt
+from zoneinfo import ZoneInfo as _Zone
+
+from app import service as svc
+
+_ET = _Zone("America/New_York")
+
+
+def _ts(y, mo, d, h, mi):
+    return _dt(y, mo, d, h, mi, tzinfo=_ET).timestamp()
+
+
+def test_gateway_watch_stall_diagnosis():
+    sent = []
+    st = {"outage_since": None, "diagnosed": False, "preopen_paged": ""}
+    drop = _ts(2026, 9, 3, 19, 49)                 # the real Thursday drop
+    # 20 min in, one relaunch at the drop: too early, nothing
+    assert svc._gateway_watch(drop + 20 * 60, {"currently_down_since": drop},
+                              {"recent_ts": [drop + 5]}, sent.append, st) == []
+    # 31 min in, still only that one relaunch: alive-but-not-logged-in
+    assert svc._gateway_watch(drop + 31 * 60, {"currently_down_since": drop},
+                              {"recent_ts": [drop + 5]}, sent.append, st) == ["stall"]
+    assert "NOT logged in" in sent[-1] and "IBKR Mobile" in sent[-1]
+    # once per outage: the next cycle is silent
+    assert svc._gateway_watch(drop + 36 * 60, {"currently_down_since": drop},
+                              {"recent_ts": [drop + 5]}, sent.append, st) == []
+    # a CRASH LOOP (many relaunches since the drop) is a different problem:
+    # no stall diagnosis
+    st2 = {"outage_since": None, "diagnosed": False, "preopen_paged": ""}
+    loop = [drop + 5, drop + 20, drop + 50, drop + 110, drop + 230]
+    assert svc._gateway_watch(drop + 31 * 60, {"currently_down_since": drop},
+                              {"recent_ts": loop}, sent.append, st2) == []
+    # recovery clears the bookkeeping
+    svc._gateway_watch(drop + 40 * 60, {"currently_down_since": None},
+                       {"recent_ts": []}, sent.append, st)
+    assert st["outage_since"] is None and st["diagnosed"] is False
+
+
+def test_gateway_watch_preopen_page():
+    sent = []
+    st = {"outage_since": None, "diagnosed": False, "preopen_paged": ""}
+    drop = _ts(2026, 9, 3, 19, 49)
+    friday_0845 = _ts(2026, 9, 4, 8, 45)
+    out = svc._gateway_watch(friday_0845, {"currently_down_since": drop},
+                             {"recent_ts": [drop + 5]}, sent.append, st)
+    assert "preopen" in out
+    assert "opens in 45 min" in sent[-1]
+    # once per day
+    assert "preopen" not in svc._gateway_watch(
+        friday_0845 + 300, {"currently_down_since": drop},
+        {"recent_ts": [drop + 5]}, sent.append, st)
+    # outside the window: nothing (noon)
+    # mid-outage state, stall already diagnosed: only the window matters
+    st3 = {"outage_since": drop, "diagnosed": True, "preopen_paged": ""}
+    assert svc._gateway_watch(_ts(2026, 9, 4, 12, 0), {"currently_down_since": drop},
+                              {"recent_ts": [drop + 5]}, sent.append, st3) == []
+    # Saturday 08:45: no market, no page
+    st4 = {"outage_since": drop, "diagnosed": True, "preopen_paged": ""}
+    assert svc._gateway_watch(_ts(2026, 9, 5, 8, 45), {"currently_down_since": drop},
+                              {"recent_ts": [drop + 5]}, sent.append, st4) == []
+
+
+def test_disabled_book_guard(tmp_path):
+    p = tmp_path / "blend_state.json"
+    # a real:live book with holdings -> reported
+    p.write_text(_json.dumps({"mode": "real:live", "initialized": True,
+                              "positions": {}, "spy_qty": 45, "bil_qty": 136,
+                              "sleeve_cash": 2533.24, "halted": None}))
+    book = svc._check_disabled_blend_book(str(p))
+    assert book and book["spy_qty"] == 45 and book["bil_qty"] == 136
+    sent = []
+    svc._disabled_book_alert(book, sent.append)
+    assert "DISABLED" in sent[0] and "136 BIL" in sent[0]
+    # a dry/paper book is fiction: no claim
+    p.write_text(_json.dumps({"mode": "dry:paper", "spy_qty": 45, "bil_qty": 1,
+                              "sleeve_cash": 9.0, "positions": {}}))
+    assert svc._check_disabled_blend_book(str(p)) is None
+    # an empty real book: nothing to abandon
+    p.write_text(_json.dumps({"mode": "real:live", "spy_qty": 0, "bil_qty": 0,
+                              "sleeve_cash": 0.0, "positions": {}}))
+    assert svc._check_disabled_blend_book(str(p)) is None
+    # missing / corrupt file: never raises
+    assert svc._check_disabled_blend_book(str(tmp_path / "nope.json")) is None
+    p.write_text("{not json")
+    assert svc._check_disabled_blend_book(str(p)) is None

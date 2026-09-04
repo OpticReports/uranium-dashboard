@@ -584,6 +584,31 @@ services:
       # disarms it in the dashboard.
       - key: READ_ONLY_API
         sync: false
+      # IB Gateway daily restart + 2FA behaviour (gnzsnz image -> IBC).
+      # 2026-09-02/03: unconfigured, the gateway's built-in daily restart
+      # fell to the image default (11:45 PM in the image's UTC clock =
+      # 19:45 ET) and landed as a PROCESS EXIT: the supervisor relaunched
+      # it, the fresh login needed an IB Key push, the push was missed, and
+      # the book sat blind 13 h then 12.9 h - two nights running. A restart
+      # scheduled THROUGH IBC reuses the session credentials and needs no
+      # 2FA (IBC user guide: "authentication is only required the first
+      # time during the week after 01:00 ET on Sunday"). All four are
+      # sync:false: they change login behaviour on a live account, and any
+      # edit restarts the container (set them after 16:00 ET only).
+      #   TIME_ZONE=America/New_York        so AUTO_RESTART_TIME reads in ET
+      #   AUTO_RESTART_TIME=08:30 PM         format "hh:mm AM/PM"; any hour you
+      #                                      can answer SUNDAY's weekly push
+      #   TWOFA_TIMEOUT_ACTION=restart       the documented companion setting
+      #   RELOGIN_AFTER_TWOFA_TIMEOUT=yes    a missed push re-alerts ~3-minutely
+      #                                      until tapped, instead of stalling
+      - key: TIME_ZONE
+        sync: false
+      - key: AUTO_RESTART_TIME
+        sync: false
+      - key: TWOFA_TIMEOUT_ACTION
+        sync: false
+      - key: RELOGIN_AFTER_TWOFA_TIMEOUT
+        sync: false
       # El Nino ladder is OPT-IN (Casey 2026-08-24: off for now). Code
       # default is false; set LADDER_ENABLED=true in the dashboard before
       # the Nov 2026 window to re-arm. sync:false - trading-behavior var.

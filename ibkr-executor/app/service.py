@@ -16,6 +16,7 @@ import secrets
 import threading
 import time
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, Header, HTTPException, Query
 
@@ -95,6 +96,10 @@ def _gateway_restarts(limit: int = 20) -> dict:
     last_24h = sum(1 for r in out if _num_ts(r) >= day)
     return {"recent_shown": min(len(out), limit),
             "last_24h": last_24h,
+            # every restart ts in the tail: the gateway watch counts how many
+            # landed since the current outage began (0-1 = the process is
+            # alive but not logged in; many = a crash loop)
+            "recent_ts": [_num_ts(r) for r in out],
             # the breaker deliberately recreates a dead-gateway steady state
             # (stops hammering IBKR logins); it must be NAMED, not buried in
             # the last record's reason field (counter-agent 2026-08-24 F3)
@@ -107,6 +112,113 @@ def _num_ts(rec: dict) -> float:
         return float(rec.get("ts") or 0)
     except (TypeError, ValueError):
         return 0.0
+
+
+# --- gateway watch: the two outage shapes supervision cannot see ----------
+# (2026-09-02/03, two nights running, 13 h + 12.9 h). The gateway's daily
+# restart landed as a process exit; the supervisor relaunched it; the fresh
+# login waited on an IB Key push nobody tapped. The process was ALIVE, so
+# the supervisor (which acts only on exits) never restarted it again, the
+# 30-minute outage alert fired its generic text once, and the book sat blind
+# until a human noticed in the morning. Two additions, both service-side so
+# they see the outage ledger AND the restart log together:
+#  1. STALL DIAGNOSIS: down > STALL_DIAG_S with at most one restart since
+#     the drop = stuck at login, not crash-looping. Say so, once per outage,
+#     and say what fixes it (the phone, or a Render restart for a fresh push).
+#  2. PRE-OPEN PAGE: still down inside [08:30, 09:30) ET on a weekday - page
+#     with the minutes left, once per outage per day. A restart AFTER the
+#     open re-runs the blend mid-session (the 08-28 pattern); before it is
+#     free.
+STALL_DIAG_S = 30 * 60.0
+PREOPEN_FROM = (8, 30)
+PREOPEN_TO = (9, 30)
+MARKET_TZ = "America/New_York"
+GW_WATCH: dict = {"outage_since": None, "diagnosed": False, "preopen_paged": ""}
+
+
+def _et(now_ts: float) -> datetime:
+    return datetime.fromtimestamp(now_ts, tz=timezone.utc).astimezone(
+        ZoneInfo(MARKET_TZ))
+
+
+def _gateway_watch(now: float, summary: dict | None, restarts: dict | None,
+                   send_fn, state: dict | None = None) -> list[str]:
+    """Pure: returns which pages fired ('stall', 'preopen'); state carries
+    once-per-outage / once-per-day bookkeeping."""
+    st = GW_WATCH if state is None else state
+    down_since = (summary or {}).get("currently_down_since")
+    if not down_since:
+        st.update(outage_since=None, diagnosed=False, preopen_paged="")
+        return []
+    if st.get("outage_since") != down_since:
+        st.update(outage_since=down_since, diagnosed=False, preopen_paged="")
+    fired: list[str] = []
+    down_for = now - float(down_since)
+    since_drop = sum(1 for t in ((restarts or {}).get("recent_ts") or [])
+                     if t >= float(down_since) - 120)
+    if not st["diagnosed"] and down_for > STALL_DIAG_S and since_drop <= 1:
+        st["diagnosed"] = True
+        send_fn(f"🚨 IB gateway down {int(down_for // 60)} min with NO "
+                f"supervisor restart since the drop: the gateway process is "
+                f"alive but NOT logged in — almost always a missed IB Key "
+                f"push. It will not self-heal. Open IBKR Mobile (the request "
+                f"may still be pending); otherwise Render → ibkr-executor → "
+                f"Restart service and approve the fresh push.")
+        fired.append("stall")
+    et = _et(now)
+    if et.weekday() < 5 and PREOPEN_FROM <= (et.hour, et.minute) < PREOPEN_TO:
+        key = et.date().isoformat()
+        if st.get("preopen_paged") != key:
+            st["preopen_paged"] = key
+            mins = PREOPEN_TO[0] * 60 + PREOPEN_TO[1] - (et.hour * 60 + et.minute)
+            send_fn(f"🚨🚨 PRE-OPEN: IB gateway still down at "
+                    f"{et.strftime('%H:%M')} ET, market opens in {mins} min. "
+                    f"Restart it NOW (Render → ibkr-executor → Restart "
+                    f"service, then approve the IBKR push). After 09:30 a "
+                    f"restart re-runs the blend mid-session.")
+            fired.append("preopen")
+    return fired
+
+
+# --- a real book on disk with the blend switched off -------------------------
+# BLEND_ENABLED=false skips the manager entirely - no reconcile, no sweep,
+# no /status section, no feed - and, until now, no word about it. 2026-08-28
+# -> 09-02: a real:live book ($50k, 136 BIL + $2.5k stranded cash) sat that
+# way for five days and the only boot line said "blend unaffected".
+DISABLED_BOOK: dict | None = None
+DISABLED_BOOK_REALERT_S = 24 * 3600.0
+
+
+def _check_disabled_blend_book(path: str) -> dict | None:
+    """Pure: the persisted book's holdings if it is a REAL-mode book with
+    anything in it, else None. Never raises (a corrupt file is the blend
+    manager's problem when it IS enabled; here it just means no claim)."""
+    try:
+        with open(path) as fh:
+            raw = json.load(fh)
+    except Exception:  # noqa: BLE001
+        return None
+    if not isinstance(raw, dict) or not str(raw.get("mode", "")).startswith("real:"):
+        return None
+    pos = raw.get("positions") or {}
+    held = {"positions": len(pos),
+            "spy_qty": int(raw.get("spy_qty") or 0),
+            "bil_qty": int(raw.get("bil_qty") or 0),
+            "sleeve_cash": round(float(raw.get("sleeve_cash") or 0.0), 2)}
+    if not (pos or held["spy_qty"] or held["bil_qty"] or held["sleeve_cash"] > 0):
+        return None
+    return {"path": path, "mode": raw.get("mode"), "halted": raw.get("halted"),
+            **held}
+
+
+def _disabled_book_alert(book: dict, send_fn) -> None:
+    send_fn(f"🚨🚨 blend is DISABLED (BLEND_ENABLED unset/false) but a REAL "
+            f"book is on disk ({book['mode']}): {book['positions']} "
+            f"position(s), {book['spy_qty']} SPY, {book['bil_qty']} BIL, "
+            f"${book['sleeve_cash']:,.2f} sleeve cash. NOTHING is reconciling, "
+            f"sweeping or protecting it. Set BLEND_ENABLED=true (outside "
+            f"09:30-16:00 ET) or archive the book deliberately. This repeats "
+            f"daily until resolved.")
 
 
 def _auth(hdr: str | None, q: str | None) -> None:
@@ -137,7 +249,16 @@ def _build_managers():
              f"the venue before the ladder trades again")
     # blend3070 is opt-in: BLEND_ENABLED=false (the default) leaves the
     # service byte-for-byte as before — no manager, no polling, no /status
-    # section, no state file.
+    # section, no state file. EXCEPT that a real book already on disk must
+    # never be abandoned in silence (see _check_disabled_blend_book).
+    global DISABLED_BOOK
+    if not settings.blend_enabled:
+        DISABLED_BOOK = _check_disabled_blend_book(settings.blend_state_path)
+        if DISABLED_BOOK:
+            logger.error("blend DISABLED with a real book on disk: %s",
+                         DISABLED_BOOK)
+            _disabled_book_alert(DISABLED_BOOK, send)
+            DISABLED_BOOK["last_alert_ts"] = time.time()
     if settings.blend_enabled:
         from .blend import Blend3070Manager
         BLEND = Blend3070Manager(settings, settings.blend_state_path)
@@ -244,7 +365,10 @@ def _loop():
     send(f"🌊 ibkr-executor up — mode {LAST['mode']}, "
          + (f"ladder legs {[k for k in MGR.state.legs]}"
             if settings.ladder_enabled else "ladder DISABLED (LADDER_ENABLED "
-            "unset; blend unaffected)"))
+            "unset)")
+         + (", blend ENABLED" if settings.blend_enabled else
+            ", blend DISABLED" + (" — REAL BOOK ON DISK, see the alert above"
+                                  if DISABLED_BOOK else "")))
     while True:
         try:
             today = datetime.now(timezone.utc).date().isoformat()
@@ -321,6 +445,19 @@ def _loop():
                              f"flatten QUEUED ({exc}) — nothing flattened "
                              f"yet; the loop retries next cycle, book "
                              f"stays halted")
+            # Gateway watch (stall diagnosis + pre-open page) and the daily
+            # disabled-book re-alert. Reporting only: a raise here must not
+            # take the trading loop down, so it is guarded on its own.
+            try:
+                if OUTAGES is not None:
+                    _gateway_watch(time.time(), OUTAGES.summary(),
+                                   _gateway_restarts(), send)
+                if DISABLED_BOOK and (time.time() - DISABLED_BOOK.get(
+                        "last_alert_ts", 0.0)) > DISABLED_BOOK_REALERT_S:
+                    _disabled_book_alert(DISABLED_BOOK, send)
+                    DISABLED_BOOK["last_alert_ts"] = time.time()
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("gateway watch failed (ignored): %s", exc)
             LAST["loop_ok"] = time.time()
         except Exception as exc:  # noqa: BLE001
             logger.exception("loop error: %s", exc)
@@ -366,6 +503,12 @@ def health():
             # (2026-08-24). Age, not a boolean: watchers can threshold it.
             "quotes_missing_for_s": max(0.0, round(time.time() - qm, 1))
             if qm else None}
+    if DISABLED_BOOK:
+        # A real book the service is NOT managing - visible from outside,
+        # not only in a Telegram page that scrolled away.
+        body["blend_disabled_book"] = {k: DISABLED_BOOK[k] for k in
+                                       ("mode", "positions", "spy_qty",
+                                        "bil_qty", "sleeve_cash", "halted")}
     if OUTAGES is not None:
         # Guarded: healthCheckPath is /health, so a raise here 500s the probe
         # and Render restarts the WHOLE container - executor included,

@@ -237,6 +237,24 @@ call trigger · `retired` → failed the gate or decayed; kept for the record.
   flag-tilted sizing adds a thin +0.02 Sharpe (3/3 sub-periods); leverage,
   TSMOM overlay and vol-scaled weights all FAILED the registered bar — the
   plain 30/70 remains the construction.
+- **Live-record honesty note (2026-09-04, standing):** the R2-A shadow
+  book and the ibkr-executor's live book DIVERGED from day one and the
+  split is attributable, so no live-vs-replay comparison may be quoted
+  without it. As of 2026-09-03 the shadow tracked 14 calls (ids 2-8,
+  10-16; IONS and CMPS already at their exit signal) while the account
+  held ZERO sleeve shares - the sleeve sat in BIL from go-live. Causes,
+  dated: calls fired 08-20 -> 08-27 predate the 08-28 go-live; NTRA/LLY
+  (08-28) were placed as MOO/OPG after the open and rejected 4x each, then
+  BLEND_ENABLED was off 08-28 -> 09-02 so the post-close retry never ran;
+  MRK (09-02) fired into a 13-hour gateway outage; the tracker publishes
+  fires mid-session (`as_of` = the current session date once its bar
+  lands), so every same-day fire met the after-open rejection until the
+  executor's session guard (branch 5acccf0). Separately, the shadow carried
+  12 OPEN positions against the registered `max_open` of 10 - the cap is
+  enforced executor-side and the shadow may not apply it, which biases
+  the replay on its own (open item). The shadow record is what the account
+  WOULD have done had its entries reached the venue; it is not this
+  account's track record.
 
 ---
 

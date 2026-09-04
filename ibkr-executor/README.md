@@ -579,6 +579,41 @@ positions, so it can only be tested at a moment when flat is acceptable.
 Until then its two-stage path (journal + halt on the API thread, execute
 on the loop thread) has never run against IBKR.
 
+### Operating rules (learned 2026-08-28 -> 2026-09-04, at cost)
+
+1. **No env-var change on this service during 09:30-16:00 ET.** Any change
+   in the Render dashboard restarts the container - the `buildFilter` only
+   stops CODE pushes from doing that - and a restart re-runs the blend
+   mid-session, forces a fresh gateway login and fires an IB Key push. The
+   08-28 incident (BIL sold for a rejected entry) was a restart at 10:14;
+   the 09-03 MRK repeat was a restart at 10:06. After 16:00 ET the same
+   restart is free: sleeve entries go out post-close, the book reloads
+   intact, and there is a 17-hour buffer before the next open.
+2. **A gateway that is DOWN with no supervisor restart is stuck at the
+   login prompt, not crashed.** The supervisor acts only on process exits;
+   a process waiting on an unanswered IB Key push is alive. Nothing in the
+   container can clear that - only the phone can. The service now says so
+   after 30 minutes (`_gateway_watch`) and pages again inside 08:30-09:30
+   ET on a weekday with the minutes left. Fix: IBKR Mobile (the request may
+   still be pending), else Render -> Restart service for a fresh push -
+   BEFORE the open, per rule 1.
+3. **The daily gateway restart must be the credential-reusing kind.** IB
+   Gateway restarts once a day whether or not you configure it. Configured
+   through IBC (`AUTO_RESTART_TIME`, with `TWOFA_TIMEOUT_ACTION=restart`
+   and `TIME_ZONE` so the hour is in ET) it reuses the session and needs no
+   2FA; unconfigured, it fell to the image default of 11:45 PM in UTC
+   (19:45 ET) and landed as a process exit - a fresh login and a push every
+   night, missed two nights running for 13 h and 12.9 h. Add
+   `RELOGIN_AFTER_TWOFA_TIMEOUT=yes` so the one push that remains (IBKR's
+   mandatory Sunday re-login) re-alerts every ~3 minutes until tapped
+   instead of stalling. Change these AFTER 16:00 ET (rule 1) and watch the
+   first night: `restarts_24h` should stay 0 and no push should arrive.
+4. **BLEND_ENABLED=false does not pause a live book; it abandons it.** No
+   reconcile, no sweep, no stops, no feed. The service now alerts at boot
+   and daily while a `real:*` book with holdings sits on disk unmanaged
+   (`/health.blend_disabled_book`). Disable deliberately: `/kill` first,
+   or archive the state file.
+
 The original staged rehearsal, kept for the record and for any FUTURE
 strategy's cutover (the per-leg discipline still applies):
 
