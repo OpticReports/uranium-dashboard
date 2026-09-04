@@ -216,3 +216,73 @@ eight figures for human motion data.
 
 *Counter-agent verdict applied in full (4 mandatory corrections, 2 new
 P1s, 3 new DD rows). Panel + red team scored the corrected pack.*
+
+---
+
+# SCORING PASS — 2026-09-04 (process v1.2: full report at intake)
+
+Five scorers (distinct lenses, one rubric) + standing red team, on the
+counter-agent-corrected pack. Aggregation and EV arithmetic re-verified
+computationally (Σp = 1.000 exact; both EVs reproduce). **Rev 1 —
+PRE-DD.**
+
+## Panel (median · raw)
+
+| dimension | median | raw | note |
+|---|---|---|---|
+| Market (30) | **2** | 2,2,2,2,2 | unanimous |
+| Team (30) | **3** | 3,3,3,3,3 | unanimous — verified-real founder, rubric's academic-lineage cap |
+| Moat (15) | **2** | 2,1,2,2,2 | AI-research scorer at 1: "generated counterfactuals are self-distillation, not supervision" |
+| Traction demand (10) | **1** | 1,1,1,1,1 | unanimous — zero users, no app, both federation lanes occupied by others |
+| Traction delivery | **2** | 2,2,2,2,2 | unanimous — demo real, every eval self-reported |
+| Competition (10) | **2** | 2,2,2,2,2 | unanimous |
+| Deal & price (5) | **2** | 2,2,2,2,1 | LP-allocator at 1: "un-underwritable as offered" |
+
+**W = 2.25.**
+
+## Logged forecasts (gross)
+
+| P(next round ≤24mo) | P(<1x) | P(≥10x) |
+|---|---|---|
+| **0.35** | **0.88 — UNANIMOUS, all five** | **0.02** |
+
+vs measured seed base (81.2% / 6.1%): worse on both tails. Every scorer
+independently blended the YC uncertainty into P(next round) (~0.55–0.65
+if real, ~0.20 if not) — which is why DD #1 is the decider.
+
+**RED TEAM DIVERGENCE — the largest this ledger has logged.** Red team
+P(<1x) = **0.68** vs the panel's unanimous 0.88 — divergence 0.20,
+logged not averaged. Mechanism: the panel anchored on base rates and
+adjusted down-stage; the red team built branch-level recovery paths
+(acquihire 0.18 at 0.5x, tuck-in 0.12 at 1x) crediting the verified-real
+founder with salvage value the base rates don't see. Both are honest;
+the ledger will eventually say which method is better calibrated.
+
+## Red team EV tree (verified: Σp = 1.000)
+
+0.50 dies pre-seed ×0 · 0.18 acquihire ×0.5 · 0.12 stagnant/tuck-in ×1
+· 0.10 real product ×2.5 · 0.06 multi-sport ×5 · 0.03
+Second-Spectrum-class ×10 · 0.01 heretical branch ×40.
+
+**Gross EV 1.46x · net-if-wrapped 1.24x.** As a friend-relayed direct
+SAFE there is likely NO carry wrapper, so 1.46x gross ≈ net — thin but
+positive, with the entire excess over 1.0 living in the 4% tail, gated
+on two rungs the WWHTBT ladder grades HEROIC (license escape via
+from-scratch backbone; an unprecedented eight-figure motion-data
+buyer).
+
+## Exit odds (model; seed anchor tilted to the logged 0.88 / 0.02)
+
+P(net≥3x) **6.3%** · P(net≥10x) **1.7%** · P(net≥20x) **0.9%** ·
+P(net≥50x) **~0.3%**. Model EV capped@20x = **0.94 — below water on the
+panel's numbers**; the red-team tree (1.46x gross direct) is above it.
+The spread IS the honest answer: this deal is priced by its tail, and
+the tail is exactly what the license encumbers.
+
+## Verdict state
+
+**Rev 1 pre-DD: CONDITIONAL — PASS UNTIL DISCLOSED** (all five scorers
++ red team converge on the same gate): the instrument (which SAFE, the
+real cap, the YC acceptance) is un-underwritable as relayed. This is
+not a quality verdict — it is a documents verdict, curable by two
+emails. S3 decides after DD returns.
