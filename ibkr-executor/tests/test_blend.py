@@ -4058,13 +4058,20 @@ def _intents(m, now_utc, monkeypatch):
 
 
 def test_no_moo_and_no_bil_raise_during_session(tmp_path, monkeypatch):
+    """In session: NO ENTER is planned (the venue would reject the MOO) -
+    but under pre-fund (Casey 2026-09-04, option c) the BIL cash-raise for
+    the deferred entry IS planned now, because a MKT sell fills in session
+    and the post-close MOO needs settled cash. Post-close: ENTER is planned
+    and its funding sell precedes it."""
     m = _book_needing_bil_to_fund(tmp_path)
     in_session = _dt(2026, 9, 3, 14, 6, tzinfo=_tz.utc)      # 10:06 ET
     out = _intents(m, in_session, monkeypatch)
     assert not [i for i in out if i["action"] == "ENTER"]
-    assert not [i for i in out if i["action"] == "SWEEP" and i["qty"] < 0], \
-        "BIL was sold to fund an entry that cannot be placed"
+    assert [i for i in out if i["action"] == "SWEEP" and i["qty"] < 0], \
+        "pre-fund: the deferred entry's BIL shortfall must be raised in session"
+    assert not [i for i in out if i["action"] == "SWEEP" and i["qty"] > 0]
     assert any("entries deferred" in e["msg"] for e in m.state.events)
+    assert any("pre-funding" in e["msg"] for e in m.state.events)
     # The same book, post-close: the entry is planned and BIL funds it.
     m2 = _book_needing_bil_to_fund(tmp_path / "b")
     post_close = _dt(2026, 9, 3, 21, 0, tzinfo=_tz.utc)      # 17:00 ET
@@ -4327,3 +4334,71 @@ def test_resting_sell_is_counted_stuck_only_once_the_session_opens(tmp_path, mon
     for mi in (35, 40, 45):                                 # in session, still working
         cyc(2026, 8, 21, 9, mi)
     assert a.orders("BIL")[0]["status"] == "cancelled"      # 3 in-session cycles -> cancel
+
+
+# --- pre-fund (Casey 2026-09-04, option c) ------------------------------------
+# MUTATION-VERIFIED: dropping the pre-fund (planning only while the window is
+# open) turns test_prefund_mid_session_fire_enters_at_the_next_open red;
+# dropping the `not enter_paused` guard turns test_prefund_never_for_a_paused_
+# kind red; dropping the sweep-skip turns the fire-vanishes case red the
+# other way (cash must be re-swept ONLY after the fire is gone).
+
+def test_prefund_mid_session_fire_enters_at_the_next_open(tmp_path, monkeypatch):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
+    a = SessionDryAdapter()
+    alerts = []
+    pl = payload(entries=[entry()], stops=[stop_row()])
+    monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: PRICES)
+    cyc = lambda *t: _session_cycle(m, a, pl, alerts, monkeypatch, *t)
+
+    cyc(2026, 8, 20, 10, 35)                 # Thu, in session: fire seen
+    sells = [o for o in a.orders("BIL") if o["qty"] < 0]
+    assert len(sells) == 1 and sells[0]["status"] == "filled"   # MKT fills in session
+    assert not a.orders(order_type="MOO")                        # nothing placed
+    assert m.state.bil_qty == 27 and m.state.sleeve_cash >= 250
+    assert any("pre-funding" in e["msg"] for e in m.state.events)
+    cyc(2026, 8, 20, 10, 40)                 # idempotent: no more selling
+    cyc(2026, 8, 20, 14, 0)
+    assert len(a.orders("BIL")) == 1, "raised cash again or swept it back"
+    cyc(2026, 8, 20, 16, 5)                  # post-close: MOO from settled cash
+    moo = a.orders(order_type="MOO")
+    assert len(moo) == 1 and moo[0]["status"] == "working"
+    a.open_market()                          # Fri 09:30: fills (T+1)
+    cyc(2026, 8, 21, 9, 35)
+    assert "1" in m.state.positions and m.state.positions["1"].qty == 5
+    assert len(a.orders("BIL")) == 1 and len(a.orders(order_type="MOO")) == 1
+
+
+def test_prefund_cash_is_reswept_only_after_the_fire_is_gone(tmp_path, monkeypatch):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
+    a = SessionDryAdapter()
+    alerts = []
+    pl = payload(entries=[entry()], stops=[stop_row()])
+    monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: PRICES)
+    cyc = lambda *t: _session_cycle(m, a, pl, alerts, monkeypatch, *t)
+    cyc(2026, 8, 20, 10, 35)                 # pre-funded
+    assert m.state.bil_qty == 27
+    cyc(2026, 8, 20, 11, 0)                  # still waiting: cash stays cash
+    assert not [o for o in a.orders("BIL") if o["qty"] > 0]
+    pl["entries"] = []                       # the fire vanishes
+    cyc(2026, 8, 20, 11, 5)
+    assert [o for o in a.orders("BIL") if o["qty"] > 0], "idle cash not re-swept"
+    assert m.state.bil_qty == 30
+
+
+def test_prefund_never_for_a_paused_kind(tmp_path, monkeypatch):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
+    a = SessionDryAdapter()
+    alerts = []
+    pl = payload(entries=[entry()], stops=[stop_row()])
+    monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: PRICES)
+    blend_mod.intent_breaker_clear()
+    try:
+        blend_mod._intent_fail_counts["ENTER"] = blend_mod.INTENT_BREAKER_N
+        _session_cycle(m, a, pl, alerts, monkeypatch, 2026, 8, 20, 10, 35)
+        assert not a.orders("BIL") and m.state.bil_qty == 30
+    finally:
+        blend_mod.intent_breaker_clear()

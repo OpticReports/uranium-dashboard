@@ -1021,19 +1021,30 @@ class Blend3070Manager:
         enter_paused = intent_kind_paused("ENTER")
         plannable = gate_on and not naked and not budget_blind and bool(candidates)
         deferred = plannable and bool(waiting) and (not window_open or enter_paused)
-        if plannable and waiting and not window_open:
+        if plannable and waiting and not window_open and not enter_paused:
             self._event_once_today(
                 "INFO", "entries_deferred",
                 f"entries deferred: {len(waiting)} candidate(s) held "
                 f"for the post-close window (MOO/OPG is not placeable "
-                f"during the regular session; no cash raised, and idle "
-                f"sleeve cash is NOT swept while a candidate waits)")
+                f"during the regular session). Their cash is raised NOW "
+                f"while BIL can fill, held unswept, and the MOO goes out "
+                f"after the close for the next open (pre-fund, Casey "
+                f"2026-09-04).")
         elif plannable and waiting and enter_paused:
             self._event_once_today(
                 "WARN", "enter_breaker_open",
                 f"entries not planned: ENTER breaker is open "
                 f"({len(waiting)} candidate(s) waiting; no cash raised)")
-        if plannable and window_open and not enter_paused:
+        # PRE-FUND (Casey 2026-09-04, option c): the sizing loop runs whether
+        # or not the window is open. When it is CLOSED the ENTER intents it
+        # produces are DROPPED (nothing can place them) but their cost stays
+        # reserved in projected_cash/funds, so the BIL cash-raise below sells
+        # exactly what the post-close MOO will need - a MKT sell that FILLS,
+        # because it is in session. Idempotent: once the cash is on hand the
+        # next cycle sizes the same entries against it and raises nothing.
+        # A paused ENTER kind never pre-funds (raising cash for a kind the
+        # venue is rejecting was the MRK pattern).
+        if plannable and not enter_paused:
             for e in payload.get("entries", []):
                 key = str(e["call_id"])
                 if key in st.positions or key in st.pending_entries:
@@ -1094,6 +1105,17 @@ class Blend3070Manager:
                 projected_gross += from_cash
                 projected_cash -= cost
                 funds -= cost
+
+        prefund_usd = 0.0
+        if entry_intents and not window_open:
+            prefund_usd = sum(i["qty"] * i["entry_ref"] for i in entry_intents)
+            self._event_once_today(
+                "INFO", "prefund",
+                f"pre-funding {len(entry_intents)} deferred entry(ies): "
+                f"${prefund_usd:,.0f} reserved in sleeve cash for the "
+                f"post-close MOO" + (" (BIL sold now to cover the shortfall)"
+                                     if projected_cash < -CASH_EPS else ""))
+            entry_intents = []          # placed post-close from settled cash
 
         # 5) band rebalance (~1x/year expected): executor-side weights.
         #    M4: NEVER computed from absent prices — a missing SPY (or BIL)

@@ -300,13 +300,17 @@ unreconciled venue state. Phases IN ORDER:
    the next open" holds only when SETTLED sleeve cash already covers the
    entry. Idle sleeve cash is swept to BIL by design, so most entries are
    BIL-funded, and a MKT sell of BIL placed post-close does not fill until
-   the next open. The post-close cycle therefore places the BIL sell
-   (recorded `rests_for_open`, exempt from the stuck-order cancel until the
-   session is open), the sale fills at the open, idle cash is NOT swept
-   while a candidate is deferred, and the next post-close cycle places the
-   MOO from settled cash - the entry lands at the open after next (T+2).
-   Same-day funding (raise the cash mid-session, place the MOO post-close)
-   is a trading-behaviour change and needs Casey's sign-off.
+   the next open. So the planner PRE-FUNDS (Casey 2026-09-04): a fire seen mid-session
+   is sized then, its cost is reserved, and the BIL shortfall is sold
+   NOW - a MKT sell that fills because the session is open. The cash is
+   held unswept (step 8 never sweeps while a candidate waits) and the
+   post-close cycle places the MOO from settled cash: a fire seen at
+   10:30 fills at the NEXT open (T+1). Idempotent: once the cash is on
+   hand the next cycle raises nothing; if the fire vanishes from the
+   payload the ordinary sweep parks the cash again (one BIL round trip).
+   A paused ENTER kind never pre-funds. A fire first seen AFTER the close
+   still needs its BIL sold overnight (`rests_for_open`, exempt from the
+   stuck-order cancel until the session is open) and lands T+2.
    **Book-order idempotency (adapter review M1)**: while ANY book-order
    journal (CORE_BUY / rebalance core-sell / BIL sweep) is pending
    adoption, step() plans NO new book-level order — a MKT that returns
