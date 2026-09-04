@@ -73,7 +73,9 @@ class FakeExec:
 class FakeFill:
     def __init__(self, execution, commission=None):
         self.execution = execution
-        self.commissionReport = (types.SimpleNamespace(commission=commission)
+        self.commissionReport = (types.SimpleNamespace(commission=commission,
+                                                       execId="ex-1",
+                                                       currency="USD")
                                  if commission is not None else None)
 
 
@@ -197,6 +199,12 @@ class FakeIB:
     def accountSummary(self):
         return list(self.account_rows)
 
+    def accountValues(self):
+        return list(self.account_rows)
+
+    def managedAccounts(self):
+        return list(getattr(self, "managed", []))
+
     # venue-side test helpers
     def fill(self, trade, parts, commission=None):
         """parts: [(shares, price), ...] -> executions + Filled status.
@@ -262,6 +270,7 @@ def ib_adapter(monkeypatch):
     monkeypatch.setattr(ib_mod, "MKT_FILL_WAIT_S", 0.2)
     monkeypatch.setattr(ib_mod, "CANCEL_ACK_TIMEOUT_S", 0.2)
     monkeypatch.setattr(ib_mod, "WAIT_TICK_S", 0.0)
+    monkeypatch.setattr(ib_mod, "COMMISSION_WAIT_S", 0.05)
     a = ib_mod.IBAdapter(_Cfg())
     a.ib.prices = {"SPY": 100.0, "BIL": 100.0, "CRSP": 50.0}
     return a
@@ -1287,8 +1296,9 @@ def test_rejection_reason_surfaces_without_error_code(ib_adapter):
     assert "received after the open" in o["reason"]
 
 
-def _acct(tag, value, currency="USD"):
-    return types.SimpleNamespace(tag=tag, value=str(value), currency=currency)
+def _acct(tag, value, currency="USD", account=""):
+    return types.SimpleNamespace(tag=tag, value=str(value), currency=currency,
+                                 account=account)
 
 
 def test_account_cash_reads_total_cash_value(ib_adapter):
@@ -1348,3 +1358,45 @@ def test_rejection_reason_comes_from_error_event_not_status_echo(ib_adapter):
         ib_adapter.place_stock_order("MRK", 12, "MOO", tif="OPG",
                                      client_order_id="blend-entry-17")
     assert ib_adapter.find_stock_order("blend-entry-17")["reason"] == "no venue reason recorded"
+
+
+def test_account_cash_multi_account_is_no_claim_and_filters_managed(ib_adapter):
+    fake = ib_adapter.ib
+    fake.account_rows = [_acct("TotalCashValue", 100.0, account="DU1"),
+                         _acct("TotalCashValue", 200.0, account="DU2")]
+    assert ib_adapter.account_cash() is None            # two accounts: no claim
+    fake.managed = ["DU2"]
+    assert ib_adapter.account_cash()["total_cash"] == 200.0
+
+
+def test_commission_sentinel_is_ignored_and_report_is_awaited(ib_adapter):
+    """IB's UNSET sentinel (~1.8e308) must never reach the ledger; and a
+    report that lands one pump AFTER the fill is still read (the adapter
+    waits COMMISSION_WAIT_S for execId)."""
+    fake = ib_adapter.ib
+    fake.on_place = lambda t: fake.fill(t, [(20, 91.42)], commission=1.7976931348623157e308)
+    r = ib_adapter.place_stock_order("BIL", 20, "MKT", client_order_id="c-sent")
+    assert r["commission"] == 0.0
+    # report lands late: first pump attaches it
+    def late(t):
+        fake.fill(t, [(20, 91.42)])                       # no report yet
+        fake.on_sleep = lambda ib: setattr(
+            t.fills[0], "commissionReport",
+            types.SimpleNamespace(commission=1.0, execId="ex-late", currency="USD"))
+    fake.on_place = late
+    r = ib_adapter.place_stock_order("BIL", 20, "MKT", client_order_id="c-late")
+    assert r["commission"] == 1.0
+    fake.on_sleep = None
+
+
+def test_warning_codes_are_not_venue_reasons(ib_adapter):
+    fake = ib_adapter.ib
+
+    def reject(t):
+        fake.errorEvent.emit(t.order.orderId, 399, "Order will not be placed at the exchange until ...", t.contract)
+        t.orderStatus.status = "Cancelled"
+        t.log = [types.SimpleNamespace(errorCode=0, message="Cancelled", status="Cancelled")]
+    fake.on_place = reject
+    with pytest.raises(RuntimeError):
+        ib_adapter.place_stock_order("MRK", 1, "MOO", tif="OPG", client_order_id="w1")
+    assert ib_adapter.find_stock_order("w1")["reason"] == "no venue reason recorded"

@@ -36,6 +36,11 @@ MKT_FILL_WAIT_S = 5.0        # bounded wait for a synchronous MKT fill (liquid
                              # still working after it returns 'working'
 CANCEL_ACK_TIMEOUT_S = 10.0  # ambiguous cancel timeout -> RAISE (fail closed)
 WAIT_TICK_S = 0.25           # event-loop pump granularity inside waits
+COMMISSION_WAIT_S = 1.5      # after a synchronous fill, wait this long for
+                             # IB's commissionReport before reading it
+                             # (counter-agent round 2: read too early = 0.0)
+# ib_async warning codes: informational, never a rejection reason
+_IB_WARNING_CODES = {105, 110, 165, 321, 329, 399, 404, 434, 492, 10167}
 RECONNECT_BACKOFF_S = 15.0   # first retry delay after the gateway drops
 RECONNECT_BACKOFF_MAX_S = 300.0  # backoff cap (~one attempt per blend cycle)
 OUTAGE_ALERT_S = 30 * 60.0   # alert ONLY when down longer than this — the
@@ -122,11 +127,30 @@ def _agg_commission(trade) -> float:
     for f in (getattr(trade, "fills", []) or []):
         rep_ = getattr(f, "commissionReport", None)
         c = getattr(rep_, "commission", None) if rep_ is not None else None
+        cur = getattr(rep_, "currency", "") if rep_ is not None else ""
         try:
-            total += float(c or 0.0)
+            c = float(c)
         except (TypeError, ValueError):
-            pass
+            continue
+        # IB's UNSET sentinel is ~1.8e308; a non-USD report is not ours
+        if not (0.0 <= abs(c) < 1e6) or (cur and cur != "USD"):
+            logger.warning("commission report ignored: %r %s", c, cur)
+            continue
+        total += c
     return round(total, 4)
+
+
+def _commission_reported(trade) -> bool:
+    """True when every execution carries a commissionReport with an execId
+    - IB delivers the report a moment AFTER the fill."""
+    fills = list(getattr(trade, "fills", []) or [])
+    if not fills:
+        return True
+    for f in fills:
+        rep_ = getattr(f, "commissionReport", None)
+        if rep_ is None or not getattr(rep_, "execId", None):
+            return False
+    return True
 
 
 def _agg_fill_price(trade) -> float | None:
@@ -238,7 +262,10 @@ class IBAdapter:
         try:
             if reqId is None or int(reqId) < 0:
                 return
-            self._order_errors[int(reqId)] = f"[{errorCode}] {errorString}"
+            code = int(errorCode or 0)
+            if code in _IB_WARNING_CODES or 2100 <= code < 2200:
+                return                       # a warning is not a reason
+            self._order_errors[int(reqId)] = f"[{code}] {errorString}"
             if len(self._order_errors) > 512:
                 for k in list(self._order_errors)[:-256]:
                     self._order_errors.pop(k, None)
@@ -596,7 +623,10 @@ class IBAdapter:
             px = _agg_fill_price(trade)
             if px is not None:              # unknown price -> NO key, never 0.0
                 out["fill_price"] = float(px)
-            out["commission"] = _agg_commission(trade)
+            # commission: present only when the venue has reported it; an
+            # absent key is booked as 0 LOUDLY by the ledger (never silently)
+            if _commission_reported(trade):
+                out["commission"] = _agg_commission(trade)
         return out
 
     def _await_placement(self, trade, order_type: str) -> None:
@@ -613,6 +643,12 @@ class IBAdapter:
             self._pump()
             s = trade.orderStatus.status
             if s == "Filled":
+                # give IB's commissionReport a bounded moment to land so the
+                # ledger books the real commission, not 0.0
+                cdead = time.monotonic() + COMMISSION_WAIT_S
+                while (not _commission_reported(trade)
+                       and time.monotonic() < cdead):
+                    self.ib.sleep(WAIT_TICK_S)
                 return
             if s in _IB_CANCELLED:
                 why = _trade_errors(trade, dead=True,
@@ -767,7 +803,8 @@ class IBAdapter:
                 "qty": shares if side == "BOT" else -shares,
                 "fill_price": _agg_fill_price(trade),   # None, never 0.0
                 "action": side,
-                "commission": _agg_commission(trade),
+                "commission": (_agg_commission(trade)
+                               if _commission_reported(trade) else None),
             })
         return out
 
@@ -800,13 +837,41 @@ class IBAdapter:
         try:
             self._require_connected()
             self._pump()
+            # accountValues() is the connect-time subscription: non-blocking
+            # (accountSummary() issues a request with no timeout and could
+            # wedge the loop thread - counter-agent round 2). Fall back to
+            # the summary only when the subscription has nothing yet.
+            rows = []
+            try:
+                rows = list(self.ib.accountValues() or [])
+            except Exception:  # noqa: BLE001
+                rows = []
+            if not rows:
+                rows = list(self.ib.accountSummary() or [])
+            try:
+                accts = list(self.ib.managedAccounts() or [])
+            except Exception:  # noqa: BLE001
+                accts = []
+            want = accts[0] if accts else None
             vals: dict[str, float] = {}
-            for row in (self.ib.accountSummary() or []):
+            seen_accts: set = set()
+            for row in rows:
                 tag = getattr(row, "tag", "")
                 cur = getattr(row, "currency", "") or ""
-                if (tag in ("TotalCashValue", "NetLiquidation")
-                        and cur in ("USD", "BASE", "")):
-                    vals[tag] = float(getattr(row, "value", "nan"))
+                acct = getattr(row, "account", "") or ""
+                if tag not in ("TotalCashValue", "NetLiquidation"):
+                    continue
+                if cur not in ("USD", "BASE", ""):
+                    continue
+                if want and acct and acct != want:
+                    continue
+                if tag == "TotalCashValue" and acct:
+                    seen_accts.add(acct)
+                vals[tag] = float(getattr(row, "value", "nan"))
+            if len(seen_accts) > 1:
+                logger.warning("account_cash: %d accounts report cash (%s) - "
+                               "no claim", len(seen_accts), sorted(seen_accts))
+                return None
             if "TotalCashValue" not in vals or vals["TotalCashValue"] != vals["TotalCashValue"]:
                 return None
             return {"total_cash": vals["TotalCashValue"],

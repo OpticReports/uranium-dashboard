@@ -273,9 +273,13 @@ unreconciled venue state. Phases IN ORDER:
    `reconcile_cash` reads the account's `TotalCashValue` and compares
    DELTAS from a baseline to the ledger's two buckets - never levels,
    because the account may hold cash the book does not own. Only on quiet
-   cycles (no pending journals, no fill inside 36 h). A drift beyond
-   max($25, 0.1% of the book) for two quiet cycles alerts once, re-alerts
+   cycles (no pending journals, no fill inside 15 min - TotalCashValue
+   moves at trade time, so the window only covers IB's account-push lag;
+   counter-agent round 2). A drift must hold for two CONSECUTIVE quiet
+   cycles beyond max($25, 0.1% of the book) to alert once; it re-alerts
    only when it moves by more than the threshold, and is RED beyond 1%.
+   The baseline and every drift field survive a restart (persisted in
+   state); a seed resets them.
    Nothing is adopted; `/resume` re-baselines. `/blend/feed` and `/status`
    carry `cash: {ledger, drift, drift_age_s, baselined,
    over_threshold_cycles, commissions_paid}` - the venue's cash LEVEL is
@@ -302,12 +306,17 @@ unreconciled venue state. Phases IN ORDER:
    BIL-funded, and a MKT sell of BIL placed post-close does not fill until
    the next open. So the planner PRE-FUNDS (Casey 2026-09-04): a fire seen mid-session
    is sized then, its cost is reserved, and the BIL shortfall is sold
-   NOW - a MKT sell that fills because the session is open. The cash is
-   held unswept (step 8 never sweeps while a candidate waits) and the
-   post-close cycle places the MOO from settled cash: a fire seen at
-   10:30 fills at the NEXT open (T+1). Idempotent: once the cash is on
-   hand the next cycle raises nothing; if the fire vanishes from the
-   payload the ordinary sweep parks the cash again (one BIL round trip).
+   NOW - a MKT sell that fills because the session is open, sized with
+   a $2 headroom for the sell's own commission so the post-close belt
+   never skips the ENTER by under a dollar. The cash is held unswept by a
+   PERSISTED, date-keyed hold (`prefund_usd`/`prefund_date`: a tracker
+   blip that drops the fire mid-day cannot churn BIL) and the post-close
+   cycle places the MOO from settled cash: a fire seen at 10:30 fills at
+   the NEXT open (T+1). Idempotent: once the cash is on hand the next
+   cycle raises nothing; the hold clears when the entries are placed or
+   the date rolls, and only then does the ordinary sweep park the cash
+   again (one BIL round trip). A resting MOO reserves its cost, so a
+   second fire the same evening sizes against what is actually free.
    A paused ENTER kind never pre-funds. A fire first seen AFTER the close
    still needs its BIL sold overnight (`rests_for_open`, exempt from the
    stuck-order cancel until the session is open) and lands T+2.

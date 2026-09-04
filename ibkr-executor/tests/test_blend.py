@@ -2518,16 +2518,23 @@ def test_gate_r5_sweep_slippage_never_leaves_negative_sleeve_cash(tmp_path):
     assert any("slippage absorbed" in e["msg"] for e in m.state.events)
 
 
-def test_gate_r6_stuck_book_order_escalates_to_warn_after_age(tmp_path):
+def test_gate_r6_stuck_book_order_escalates_to_warn_after_age(tmp_path, monkeypatch):
     # Probe A5 follow-up: a venue-stuck 'working' book order froze
     # sweep/core-buy/rebalance with only a deduped INFO event.
     m = mk(tmp_path)
     _seed_initialized(m)
     m.record_pending_book_order("sweep", "BIL", 10, "2026-08-18",
-                                ref_price=100.0)
+                                ref_price=100.0)              # placed pre-open
     out = m.step("2026-08-18", payload(), PRICES)
     assert not [o for o in out if o["action"] == "ALERT"]    # fresh: quiet
+    # round 2: an order that rests for the open is NOT stale while the
+    # market is closed (the conftest pin is 07:00 ET) ...
     out = m.step("2026-08-20", payload(), PRICES)            # 2 days old
+    assert not [o for o in out if o["action"] == "ALERT"]
+    # ... but the same order still working IN SESSION two days on is
+    monkeypatch.setattr(blend_mod, "_now_utc",
+                        lambda: _dt(2026, 8, 20, 10, 0, tzinfo=_ET))
+    out = m.step("2026-08-20", payload(), PRICES)
     (al,) = [o for o in out if o["action"] == "ALERT"]
     assert "still working" in al["msg"]
     out = m.step("2026-08-21", payload(), PRICES)            # alerted ONCE
@@ -4086,6 +4093,7 @@ def test_paused_enter_does_not_raise_cash(tmp_path, monkeypatch):
     m = _book_needing_bil_to_fund(tmp_path)
     post_close = _dt(2026, 9, 3, 21, 0, tzinfo=_tz.utc)
     blend_mod.intent_breaker_clear()
+    blend_mod.intent_breaker_roll_date("2026-08-20")   # same day as the cycle
     try:
         blend_mod._intent_fail_counts["ENTER"] = blend_mod.INTENT_BREAKER_N
         assert blend_mod.intent_kind_paused("ENTER")
@@ -4279,10 +4287,10 @@ class SessionDryAdapter(DryAdapter):
                 and (order_type is None or o["order_type"] == order_type)]
 
 
-def _session_cycle(m, a, pl, alerts, monkeypatch, y, mo, d, h, mi):
+def _session_cycle(m, a, pl, alerts, monkeypatch, y, mo, d, h, mi, today="2026-08-20"):
     monkeypatch.setattr(blend_mod, "_now_utc",
                         lambda: _dt(y, mo, d, h, mi, tzinfo=_ET))
-    return run_cycle(m, a, pl, "2026-08-20", alert=alerts.append)
+    return run_cycle(m, a, pl, today, alert=alerts.append)
 
 
 def test_post_close_bil_funded_entry_reaches_the_next_open(tmp_path, monkeypatch):
@@ -4382,9 +4390,13 @@ def test_prefund_cash_is_reswept_only_after_the_fire_is_gone(tmp_path, monkeypat
     assert m.state.bil_qty == 27
     cyc(2026, 8, 20, 11, 0)                  # still waiting: cash stays cash
     assert not [o for o in a.orders("BIL") if o["qty"] > 0]
-    pl["entries"] = []                       # the fire vanishes
+    pl["entries"] = []                       # the fire vanishes (or the tracker blips)
     cyc(2026, 8, 20, 11, 5)
-    assert [o for o in a.orders("BIL") if o["qty"] > 0], "idle cash not re-swept"
+    # the pre-fund hold is PERSISTED and keyed by date: same day, the cash
+    # stays cash (a tracker blip must not churn BIL); next day it is swept
+    assert not [o for o in a.orders("BIL") if o["qty"] > 0], "hold ignored same day"
+    _session_cycle(m, a, pl, alerts, monkeypatch, 2026, 8, 21, 11, 5, today="2026-08-21")
+    assert [o for o in a.orders("BIL") if o["qty"] > 0], "idle cash not re-swept next day"
     assert m.state.bil_qty == 30
 
 
@@ -4396,9 +4408,131 @@ def test_prefund_never_for_a_paused_kind(tmp_path, monkeypatch):
     pl = payload(entries=[entry()], stops=[stop_row()])
     monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: PRICES)
     blend_mod.intent_breaker_clear()
+    blend_mod.intent_breaker_roll_date("2026-08-20")   # same day as the cycle
     try:
         blend_mod._intent_fail_counts["ENTER"] = blend_mod.INTENT_BREAKER_N
         _session_cycle(m, a, pl, alerts, monkeypatch, 2026, 8, 20, 10, 35)
         assert not a.orders("BIL") and m.state.bil_qty == 30
     finally:
         blend_mod.intent_breaker_clear()
+
+
+
+# --- counter-agent round 2 gates --------------------------------------------
+# MUTATION-VERIFIED: dropping any of the nine cash/pre-fund fields from save()
+# or _load() turns test_cash_state_survives_a_restart red; dropping the
+# resting-entry reservation turns test_second_fire_while_a_moo_rests red;
+# dropping the seed reset / `not st.initialized` guard turns
+# test_no_baseline_across_a_seed red; dropping the holiday clause in
+# entry_window_open turns test_holiday_is_a_closed_session red.
+
+def test_cash_state_survives_a_restart(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=3_000.0, spy_qty=70, core_cash=100.0)
+    a = _CashAdapter(43_100.0)
+    blend_mod.reconcile_cash(m, a, lambda *_: None)          # baseline
+    a.cash = 43_142.0
+    blend_mod.reconcile_cash(m, a, lambda *_: None)          # drift 42, cycles 1
+    m.on_sweep(1, 100.0, commission=1.0)                     # fill + commission
+    m.state.prefund_usd, m.state.prefund_date = 250.0, "2026-08-20"
+    m.save()
+    m2 = Blend3070Manager(m.cfg, m.state_path)
+    st = m2.state
+    assert st.cash_baseline == m.state.cash_baseline and st.cash_baseline is not None
+    assert st.cash_drift == 42.0 and st.commissions_paid == 1.0
+    assert st.last_fill_ts == m.state.last_fill_ts and st.last_fill_ts > 0
+    assert st.prefund_usd == 250.0 and st.prefund_date == "2026-08-20"
+    # a restart inside the quiet window stays quiet - no re-baseline
+    assert blend_mod.reconcile_cash(m2, a, lambda *_: None) is None
+    assert m2.state.cash_baseline == m.state.cash_baseline
+
+
+def test_no_baseline_across_a_seed(tmp_path):
+    m = mk(tmp_path)                                         # fresh, not initialized
+    a = _CashAdapter(50_000.0)
+    assert blend_mod.reconcile_cash(m, a, lambda *_: None) is None
+    assert m.state.cash_baseline is None
+    m.state.cash_baseline = {"venue": 1.0, "ledger": 1.0, "ts": 1.0}   # stale junk
+    m.step("2026-08-20", payload(), PRICES)                  # seeds the book
+    assert m.state.cash_baseline is None                     # reset by the seed
+
+
+def test_second_fire_while_a_moo_rests_is_funded_not_double_spent(tmp_path, monkeypatch):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=300.0, bil_qty=30)
+    a = SessionDryAdapter()
+    alerts = []
+    pl = payload(entries=[entry()], stops=[stop_row()])
+    monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: PRICES)
+    cyc = lambda *t, **k: _session_cycle(m, a, pl, alerts, monkeypatch, *t, **k)
+    cyc(2026, 8, 20, 16, 5)                                  # fire 1: MOO from cash
+    assert len(a.orders(order_type="MOO")) == 1 and m.state.pending_entries
+    assert m.reserved_sleeve_cash() >= 250.0                 # its cost is reserved
+    pl["entries"].append(entry(call_id=2, symbol="CRSP", entry_ref=50.0))
+    pl["stops"].append(stop_row(call_id=2))
+    cyc(2026, 8, 20, 16, 10)                                 # fire 2 the same evening
+    # the parked cash is NOT spent twice: a BIL raise rests for the open
+    sells = [o for o in a.orders("BIL") if o["qty"] < 0]
+    assert len(sells) == 1 and sells[0]["status"] == "working"
+    assert len(a.orders(order_type="MOO")) == 1              # fire 2 waits for its cash
+    assert m.state.sleeve_cash >= 0
+
+
+def test_holiday_is_a_closed_session(tmp_path, monkeypatch):
+    open_ = blend_mod.entry_window_open
+    assert open_(_et(2026, 9, 7, 12, 0))                     # Labor Day noon: like a weekend
+    # a resting post-close sell is not counted stuck across the holiday
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
+    a = SessionDryAdapter()
+    alerts = []
+    pl = payload(entries=[entry()], stops=[stop_row()])
+    pl["as_of"] = "2026-09-04"                               # fresh, not stale
+    monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: PRICES)
+    cyc = lambda *t, **k: _session_cycle(m, a, pl, alerts, monkeypatch, *t, **k)
+    cyc(2026, 9, 4, 16, 5, today="2026-09-04")               # Fri post-close: sell rests
+    for h in (10, 12, 15):
+        cyc(2026, 9, 7, h, 0, today="2026-09-07")            # Labor Day
+    assert a.orders("BIL")[0]["status"] == "working"
+    assert not [e for e in m.state.events if "stuck" in e["msg"]]
+    # r6: a sell resting for the open is not "still working after 3d" either
+    assert not [e for e in m.state.events if "still working" in e["msg"]]
+
+
+def test_prefund_raise_carries_the_sell_commission(tmp_path, monkeypatch):
+    # LOW (round 2): the BIL sell's own commission is netted from the
+    # proceeds; a raise sized to the dollar leaves the post-close settled-
+    # cash belt under by ~$1 and the ENTER waits a full day. Sleeve equity
+    # 3,600 -> risk $36 -> 6 sh @ $50 = $300 exactly: reserve makes it 4 BIL.
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=0.0, bil_qty=36)
+    a = SessionDryAdapter()
+    alerts = []
+    pl = payload(entries=[entry()], stops=[stop_row()])
+    monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: PRICES)
+    _session_cycle(m, a, pl, alerts, monkeypatch, 2026, 8, 20, 10, 35)
+    assert m.state.bil_qty == 32 and m.state.prefund_usd == 300.0
+    assert m.state.sleeve_cash == pytest.approx(400.0)
+    # ... and a rebalance raise stays exact (test_gate_rebalance_..._from_bil)
+
+
+def test_rebaseline_touches_nothing_else(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=3_000.0)
+    m.halt("KILL")
+    m.state.cash_baseline = {"venue": 1.0, "ledger": 1.0, "ts": 1.0}
+    m.state.cash_drift = 42.0
+    m.rebaseline_cash("operator")
+    assert m.state.cash_baseline is None and m.state.cash_drift is None
+    assert m.state.halted == "KILL"                          # untouched
+
+
+def test_commission_sanity_bound(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=1_000.0, bil_qty=0)
+    m.on_sweep(5, 100.0, commission=1.7976931348623157e308)
+    assert m.state.sleeve_cash == 500.0 and m.state.commissions_paid == 0.0
+    assert any("refused" in e["msg"] for e in m.state.events)
+    m.on_sweep(1, 100.0, commission=None)                    # unreported: loud, booked 0
+    assert m.state.sleeve_cash == 400.0
+    assert any("not yet reported" in e["msg"] for e in m.state.events)

@@ -23,7 +23,7 @@ from fastapi import FastAPI, Header, HTTPException, Query
 from .alerts import send
 from .outages import OutageLog
 from .config import settings
-from .ib_adapter import DryAdapter
+from .ib_adapter import DryAdapter, ExecutorConnectionError
 from .manager import LadderManager
 from .nino import nino34_weekly
 
@@ -186,18 +186,22 @@ def _gateway_watch(now: float, summary: dict | None, restarts: dict | None,
     grace_from = float(down_since) - poll - 120
     since_drop = sum(1 for t in (r.get("recent_ts") or []) if t >= grace_from)
     mins = int(down_for // 60)
+    if (down_for > STALL_DIAG_S and not st.get("loop_paged")
+            and (r.get("circuit_open") or since_drop > 1)):
+        # its own flag: a crash loop that develops AFTER a stall diagnosis in
+        # the same outage still pages (counter-agent round 2)
+        st["loop_paged"] = True
+        st["diagnosed"] = True
+        send_fn(f"🚨 IB gateway down {mins} min and the supervisor has "
+                f"relaunched it {since_drop} time(s) since the drop"
+                + (" — its circuit breaker is now OPEN (no more retries)"
+                   if r.get("circuit_open") else "")
+                + ": the gateway is crash-looping or dead, not waiting "
+                f"on a push. Check credentials/config, then Render → "
+                f"ibkr-executor → Restart service.")
+        fired.append("loop")
     if down_for > STALL_DIAG_S and not st.get("diagnosed"):
-        if r.get("circuit_open") or since_drop > 1:
-            st["diagnosed"] = True
-            send_fn(f"🚨 IB gateway down {mins} min and the supervisor has "
-                    f"relaunched it {since_drop} time(s) since the drop"
-                    + (" — its circuit breaker is now OPEN (no more retries)"
-                       if r.get("circuit_open") else "")
-                    + ": the gateway is crash-looping or dead, not waiting "
-                    f"on a push. Check credentials/config, then Render → "
-                    f"ibkr-executor → Restart service.")
-            fired.append("loop")
-        elif not r.get("readable", False):
+        if not r.get("readable", False):
             st["diagnosed"] = True
             send_fn(f"🚨 IB gateway down {mins} min; the supervisor restart "
                     f"log is unreadable at {r.get('path') or '?'} so I "
@@ -247,22 +251,36 @@ def _check_disabled_blend_book(path: str) -> dict | None:
     try:
         with open(path) as fh:
             raw = json.load(fh)
-        if not isinstance(raw, dict) or not str(raw.get("mode", "")).startswith("real:"):
-            return None
+    except Exception:  # noqa: BLE001
+        return None            # unreadable/unparseable: no claim
+    if not isinstance(raw, dict) or not str(raw.get("mode", "")).startswith("real:"):
+        return None
+    base = {"path": path, "mode": raw.get("mode"), "halted": raw.get("halted")}
+    try:
         pos = raw.get("positions") or {}
         held = {"positions": len(pos),
                 "spy_qty": int(raw.get("spy_qty") or 0),
                 "bil_qty": int(raw.get("bil_qty") or 0),
                 "sleeve_cash": round(float(raw.get("sleeve_cash") or 0.0), 2)}
-        if not (pos or held["spy_qty"] or held["bil_qty"] or held["sleeve_cash"] > 0):
-            return None
-        return {"path": path, "mode": raw.get("mode"),
-                "halted": raw.get("halted"), **held}
-    except Exception:  # noqa: BLE001
-        return None            # a wrong-typed field is not a claim either
+    except Exception as exc:  # noqa: BLE001
+        # A REAL-mode book whose holdings cannot be typed is still a real
+        # book: claim it and say the holdings are unreadable (fail CLOSED -
+        # counter-agent round 2).
+        return {**base, "positions": None, "spy_qty": None, "bil_qty": None,
+                "sleeve_cash": None, "parse_error": str(exc)}
+    if not (pos or held["spy_qty"] or held["bil_qty"] or held["sleeve_cash"] > 0):
+        return None
+    return {**base, **held}
 
 
 def _disabled_book_alert(book: dict, send_fn) -> None:
+    if book.get("parse_error"):
+        send_fn(f"🚨🚨 blend is DISABLED (BLEND_ENABLED unset/false) but a REAL "
+                f"book is on disk ({book['mode']}) whose holdings could not be "
+                f"read ({book['parse_error']}) - verify positions and stops "
+                f"AT THE VENUE. Nothing is reconciling, sweeping or protecting "
+                f"it. This repeats daily until resolved.")
+        return
     send_fn(f"🚨🚨 blend is DISABLED (BLEND_ENABLED unset/false) but a REAL "
             f"book is on disk ({book['mode']}): {book['positions']} "
             f"position(s), {book['spy_qty']} SPY, {book['bil_qty']} BIL, "
@@ -365,7 +383,7 @@ def _build():
 
 
 def _loop():
-    global LOOP_WAKE
+    global LOOP_WAKE, DISABLED_BOOK
     # Fresh wake event per loop thread: a superseded loop from an earlier
     # lifespan (tests spawn several; daemon threads never die) keeps
     # waiting on its OLD event, so /kill only ever wakes the CURRENT loop.
@@ -403,12 +421,17 @@ def _loop():
             # The pre-open page must work in the state its own remedy
             # creates (a Render restart whose gateway login stalls): treat
             # the first failed build as the outage start.
+            # ... but only for a CONNECTION-shaped failure after the managers
+            # built: a state-file or config raise must never be paged as a
+            # missed IB Key push (counter-agent round 2).
             try:
-                if attempt == 1:
-                    LAST["build_fail_since"] = time.time()
-                _gateway_watch(time.time(),
-                               {"currently_down_since": LAST.get("build_fail_since")},
-                               _gateway_restarts(), send)
+                if managers_built and isinstance(
+                        exc, (ExecutorConnectionError, TimeoutError, OSError)):
+                    if not LAST.get("build_fail_since"):
+                        LAST["build_fail_since"] = time.time()
+                    _gateway_watch(time.time(),
+                                   {"currently_down_since": LAST.get("build_fail_since")},
+                                   _gateway_restarts(), send)
             except Exception as exc2:  # noqa: BLE001
                 logger.warning("gateway watch (boot) failed: %s", exc2)
             # Alert on the first failure and then only rarely: a retry
@@ -421,6 +444,7 @@ def _loop():
                      f"2FA approval, approving it recovers this with no "
                      f"redeploy.")
             time.sleep(BUILD_RETRY_S)
+    LAST["build_fail_since"] = None
     if attempt:
         send(f"✅ ibkr-executor recovered after {attempt} failed build "
              f"attempt(s) — trading loop starting")
@@ -520,10 +544,8 @@ def _loop():
                     fresh = _check_disabled_blend_book(settings.blend_state_path)
                     if fresh:
                         fresh["last_alert_ts"] = time.time()
-                        DISABLED_BOOK.clear(); DISABLED_BOOK.update(fresh)
-                        _disabled_book_alert(DISABLED_BOOK, send)
-                    else:
-                        DISABLED_BOOK.clear()
+                        _disabled_book_alert(fresh, send)
+                    DISABLED_BOOK = fresh     # one assignment: readers see old or new
             except Exception as exc:  # noqa: BLE001
                 logger.warning("gateway watch failed (ignored): %s", exc)
             LAST["loop_ok"] = time.time()
@@ -737,6 +759,20 @@ def kill(x_exec_token: str | None = Header(default=None),
          f"/resume?token=YOUR_TOKEN")
     return {"ok": True, "halted": "KILL",
             "blend": "flatten_queued" if BLEND is not None else None}
+
+
+@app.api_route("/blend/cash/rebaseline", methods=["POST"])
+def blend_cash_rebaseline(x_exec_token: str | None = Header(default=None),
+                          token: str | None = Query(default=None)):
+    """Restart the cash-reconcile delta clock and touch NOTHING else - the
+    remedy the drift page names. /resume also clears halts and re-arms
+    breakers, which a cash drift never justifies (counter-agent round 2)."""
+    _auth(x_exec_token, token)
+    if BLEND is None:
+        return {"ok": False, "reason": "blend disabled"}
+    with BLEND_LOCK:
+        BLEND.rebaseline_cash("operator")
+        return {"ok": True, "cash": BLEND.cash_summary()}
 
 
 @app.api_route("/resume", methods=["GET", "POST"])

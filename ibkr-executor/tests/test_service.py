@@ -80,6 +80,12 @@ def test_gateway_watch_stall_diagnosis():
     # once per outage: the next cycle is silent
     assert svc._gateway_watch(drop + 36 * 60, {"currently_down_since": drop},
                               {"recent_ts": [drop + 5], "readable": True}, sent.append, st) == []
+    # a crash loop that develops LATER in the same outage still pages, once
+    many = [drop + 5, drop + 40 * 60, drop + 45 * 60, drop + 55 * 60]
+    assert svc._gateway_watch(drop + 60 * 60, {"currently_down_since": drop},
+                              {"recent_ts": many, "readable": True}, sent.append, st) == ["loop"]
+    assert svc._gateway_watch(drop + 65 * 60, {"currently_down_since": drop},
+                              {"recent_ts": many, "readable": True}, sent.append, st) == []
     # a CRASH LOOP (many relaunches since the drop) is a different problem:
     # no stall diagnosis
     st2 = {"outage_since": None, "diagnosed": False, "preopen_paged": ""}
@@ -166,6 +172,12 @@ def test_disabled_book_guard(tmp_path):
     assert svc._check_disabled_blend_book(str(tmp_path / "nope.json")) is None
     p.write_text("{not json")
     assert svc._check_disabled_blend_book(str(p)) is None
+    # well-formed JSON, REAL mode, one wrong-typed field: fail CLOSED - a
+    # claim with the holdings marked unreadable (counter-agent round 2)
     p.write_text(_json.dumps({"mode": "real:live", "spy_qty": "x", "bil_qty": 1,
                               "sleeve_cash": 9.0, "positions": {}}))
-    assert svc._check_disabled_blend_book(str(p)) is None
+    book = svc._check_disabled_blend_book(str(p))
+    assert book and book["parse_error"] and book["spy_qty"] is None
+    sent2 = []
+    svc._disabled_book_alert(book, sent2.append)
+    assert "could not be read" in sent2[0]
