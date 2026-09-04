@@ -67,6 +67,7 @@ def _gateway_restarts(limit: int = 20) -> dict:
     to be indistinguishable."""
     path = getattr(settings, "gateway_restart_log", "")
     out: list[dict] = []
+    readable = False
     try:
         # seek to the tail: /health is probed every few seconds and used to
         # slurp the entire unrotated file (counter-agent measured 7.5 MB per
@@ -78,6 +79,7 @@ def _gateway_restarts(limit: int = 20) -> dict:
             fh.seek(max(0, size - WINDOW))
             blob = fh.read().decode("utf-8", "replace")
         lines = blob.splitlines()
+        readable = True
         if size > WINDOW:
             lines = lines[1:]      # only THEN is the first line partial
         for line in lines:
@@ -100,6 +102,10 @@ def _gateway_restarts(limit: int = 20) -> dict:
             # landed since the current outage began (0-1 = the process is
             # alive but not logged in; many = a crash loop)
             "recent_ts": [_num_ts(r) for r in out],
+            # False = the log could not be opened/read: the watch must then
+            # say "cannot tell a stall from a crash loop", not guess
+            "readable": readable,
+            "path": path,
             # the breaker deliberately recreates a dead-gateway steady state
             # (stops hammering IBKR logins); it must be NAMED, not buried in
             # the last record's reason field (counter-agent 2026-08-24 F3)
@@ -132,48 +138,93 @@ def _num_ts(rec: dict) -> float:
 STALL_DIAG_S = 30 * 60.0
 PREOPEN_FROM = (8, 30)
 PREOPEN_TO = (9, 30)
+PREOPEN_MIN_DOWN_S = 10 * 60.0   # a blip inside the window is not a page
 MARKET_TZ = "America/New_York"
-GW_WATCH: dict = {"outage_since": None, "diagnosed": False, "preopen_paged": ""}
+_MARKET_ET = ZoneInfo(MARKET_TZ)
+GW_WATCH: dict = {"outage_since": None, "diagnosed": False,
+                  "loop_paged": False, "preopen_paged": ""}
 
 
 def _et(now_ts: float) -> datetime:
-    return datetime.fromtimestamp(now_ts, tz=timezone.utc).astimezone(
-        ZoneInfo(MARKET_TZ))
+    return datetime.fromtimestamp(now_ts, tz=timezone.utc).astimezone(_MARKET_ET)
+
+
+def _is_trading_day(d) -> bool:
+    try:
+        from .blend import is_trading_day
+        return is_trading_day(d)
+    except Exception:  # noqa: BLE001
+        return d.weekday() < 5
 
 
 def _gateway_watch(now: float, summary: dict | None, restarts: dict | None,
                    send_fn, state: dict | None = None) -> list[str]:
-    """Pure: returns which pages fired ('stall', 'preopen'); state carries
-    once-per-outage / once-per-day bookkeeping."""
+    """Pure: returns which pages fired ('stall', 'loop', 'unreadable',
+    'preopen'); state carries once-per-outage / once-per-day bookkeeping.
+
+    Counter-agent round 1: a None summary keeps state (unknown is not
+    recovered); preopen_paged is keyed by date and never wiped on an outage
+    transition (a flapping gateway paged every flap); the stall diagnosis
+    needs a READABLE restart log and names the crash-loop / breaker-open
+    shape separately; the pre-open page needs PREOPEN_MIN_DOWN_S of outage
+    and stays quiet on NYSE holidays."""
     st = GW_WATCH if state is None else state
-    down_since = (summary or {}).get("currently_down_since")
+    if summary is None:
+        return []
+    down_since = summary.get("currently_down_since")
     if not down_since:
-        st.update(outage_since=None, diagnosed=False, preopen_paged="")
+        st.update(outage_since=None, diagnosed=False, loop_paged=False)
         return []
     if st.get("outage_since") != down_since:
-        st.update(outage_since=down_since, diagnosed=False, preopen_paged="")
+        st.update(outage_since=down_since, diagnosed=False, loop_paged=False)
     fired: list[str] = []
     down_for = now - float(down_since)
-    since_drop = sum(1 for t in ((restarts or {}).get("recent_ts") or [])
-                     if t >= float(down_since) - 120)
-    if not st["diagnosed"] and down_for > STALL_DIAG_S and since_drop <= 1:
-        st["diagnosed"] = True
-        send_fn(f"🚨 IB gateway down {int(down_for // 60)} min with NO "
-                f"supervisor restart since the drop: the gateway process is "
-                f"alive but NOT logged in — almost always a missed IB Key "
-                f"push. It will not self-heal. Open IBKR Mobile (the request "
-                f"may still be pending); otherwise Render → ibkr-executor → "
-                f"Restart service and approve the fresh push.")
-        fired.append("stall")
+    r = restarts or {}
+    poll = float(getattr(settings, "poll_seconds", 300) or 300)
+    # the supervisor logs an exit BEFORE the adapter notices the drop: look
+    # back one poll interval plus grace
+    grace_from = float(down_since) - poll - 120
+    since_drop = sum(1 for t in (r.get("recent_ts") or []) if t >= grace_from)
+    mins = int(down_for // 60)
+    if down_for > STALL_DIAG_S and not st.get("diagnosed"):
+        if r.get("circuit_open") or since_drop > 1:
+            st["diagnosed"] = True
+            send_fn(f"🚨 IB gateway down {mins} min and the supervisor has "
+                    f"relaunched it {since_drop} time(s) since the drop"
+                    + (" — its circuit breaker is now OPEN (no more retries)"
+                       if r.get("circuit_open") else "")
+                    + ": the gateway is crash-looping or dead, not waiting "
+                    f"on a push. Check credentials/config, then Render → "
+                    f"ibkr-executor → Restart service.")
+            fired.append("loop")
+        elif not r.get("readable", False):
+            st["diagnosed"] = True
+            send_fn(f"🚨 IB gateway down {mins} min; the supervisor restart "
+                    f"log is unreadable at {r.get('path') or '?'} so I "
+                    f"cannot tell a login stall from a crash loop. Check the "
+                    f"container; a Render restart is the safe fallback.")
+            fired.append("unreadable")
+        else:
+            st["diagnosed"] = True
+            send_fn(f"🚨 IB gateway down {mins} min with at most one "
+                    f"supervisor relaunch since the drop (n={since_drop}): "
+                    f"the gateway process is alive but NOT logged in — "
+                    f"almost always a missed IB Key push. It will not "
+                    f"self-heal. Open IBKR Mobile (the request may still be "
+                    f"pending); otherwise Render → ibkr-executor → Restart "
+                    f"service and approve the fresh push.")
+            fired.append("stall")
     et = _et(now)
-    if et.weekday() < 5 and PREOPEN_FROM <= (et.hour, et.minute) < PREOPEN_TO:
+    if (_is_trading_day(et.date())
+            and PREOPEN_FROM <= (et.hour, et.minute) < PREOPEN_TO
+            and down_for >= PREOPEN_MIN_DOWN_S):
         key = et.date().isoformat()
         if st.get("preopen_paged") != key:
             st["preopen_paged"] = key
-            mins = PREOPEN_TO[0] * 60 + PREOPEN_TO[1] - (et.hour * 60 + et.minute)
-            send_fn(f"🚨🚨 PRE-OPEN: IB gateway still down at "
-                    f"{et.strftime('%H:%M')} ET, market opens in {mins} min. "
-                    f"Restart it NOW (Render → ibkr-executor → Restart "
+            left = PREOPEN_TO[0] * 60 + PREOPEN_TO[1] - (et.hour * 60 + et.minute)
+            send_fn(f"🚨🚨 PRE-OPEN: IB gateway down {mins} min, still down "
+                    f"at {et.strftime('%H:%M')} ET, market opens in {left} "
+                    f"min. Restart it NOW (Render → ibkr-executor → Restart "
                     f"service, then approve the IBKR push). After 09:30 a "
                     f"restart re-runs the blend mid-session.")
             fired.append("preopen")
@@ -196,19 +247,19 @@ def _check_disabled_blend_book(path: str) -> dict | None:
     try:
         with open(path) as fh:
             raw = json.load(fh)
+        if not isinstance(raw, dict) or not str(raw.get("mode", "")).startswith("real:"):
+            return None
+        pos = raw.get("positions") or {}
+        held = {"positions": len(pos),
+                "spy_qty": int(raw.get("spy_qty") or 0),
+                "bil_qty": int(raw.get("bil_qty") or 0),
+                "sleeve_cash": round(float(raw.get("sleeve_cash") or 0.0), 2)}
+        if not (pos or held["spy_qty"] or held["bil_qty"] or held["sleeve_cash"] > 0):
+            return None
+        return {"path": path, "mode": raw.get("mode"),
+                "halted": raw.get("halted"), **held}
     except Exception:  # noqa: BLE001
-        return None
-    if not isinstance(raw, dict) or not str(raw.get("mode", "")).startswith("real:"):
-        return None
-    pos = raw.get("positions") or {}
-    held = {"positions": len(pos),
-            "spy_qty": int(raw.get("spy_qty") or 0),
-            "bil_qty": int(raw.get("bil_qty") or 0),
-            "sleeve_cash": round(float(raw.get("sleeve_cash") or 0.0), 2)}
-    if not (pos or held["spy_qty"] or held["bil_qty"] or held["sleeve_cash"] > 0):
-        return None
-    return {"path": path, "mode": raw.get("mode"), "halted": raw.get("halted"),
-            **held}
+        return None            # a wrong-typed field is not a claim either
 
 
 def _disabled_book_alert(book: dict, send_fn) -> None:
@@ -349,6 +400,17 @@ def _loop():
             attempt += 1
             logger.exception("executor build failed (attempt %d): %s",
                              attempt, exc)
+            # The pre-open page must work in the state its own remedy
+            # creates (a Render restart whose gateway login stalls): treat
+            # the first failed build as the outage start.
+            try:
+                if attempt == 1:
+                    LAST["build_fail_since"] = time.time()
+                _gateway_watch(time.time(),
+                               {"currently_down_since": LAST.get("build_fail_since")},
+                               _gateway_restarts(), send)
+            except Exception as exc2:  # noqa: BLE001
+                logger.warning("gateway watch (boot) failed: %s", exc2)
             # Alert on the first failure and then only rarely: a retry
             # loop must not become a pager loop (the alert-once doctrine
             # the blend's intent breaker already follows).
@@ -454,8 +516,14 @@ def _loop():
                                    _gateway_restarts(), send)
                 if DISABLED_BOOK and (time.time() - DISABLED_BOOK.get(
                         "last_alert_ts", 0.0)) > DISABLED_BOOK_REALERT_S:
-                    _disabled_book_alert(DISABLED_BOOK, send)
-                    DISABLED_BOOK["last_alert_ts"] = time.time()
+                    # re-read: the operator may have archived the file
+                    fresh = _check_disabled_blend_book(settings.blend_state_path)
+                    if fresh:
+                        fresh["last_alert_ts"] = time.time()
+                        DISABLED_BOOK.clear(); DISABLED_BOOK.update(fresh)
+                        _disabled_book_alert(DISABLED_BOOK, send)
+                    else:
+                        DISABLED_BOOK.clear()
             except Exception as exc:  # noqa: BLE001
                 logger.warning("gateway watch failed (ignored): %s", exc)
             LAST["loop_ok"] = time.time()
@@ -505,10 +573,12 @@ def health():
             if qm else None}
     if DISABLED_BOOK:
         # A real book the service is NOT managing - visible from outside,
-        # not only in a Telegram page that scrolled away.
-        body["blend_disabled_book"] = {k: DISABLED_BOOK[k] for k in
-                                       ("mode", "positions", "spy_qty",
-                                        "bil_qty", "sleeve_cash", "halted")}
+        # not only in a Telegram page that scrolled away. /health is public:
+        # a flag and an age only; the holdings breakdown is on /status.
+        body["blend_disabled_book"] = {
+            "present": True, "mode": DISABLED_BOOK.get("mode"),
+            "alert_age_s": round(time.time()
+                                 - DISABLED_BOOK.get("last_alert_ts", 0.0), 1)}
     if OUTAGES is not None:
         # Guarded: healthCheckPath is /health, so a raise here 500s the probe
         # and Render restarts the WHOLE container - executor included,
@@ -546,6 +616,10 @@ def status(x_exec_token: str | None = Header(default=None),
             "dry_intents": getattr(ADAPTER, "log", [])[-40:]}
     # The "blend" section exists ONLY when BLEND_ENABLED: with the flag off,
     # /status is byte-identical to the pre-blend service.
+    if DISABLED_BOOK:
+        body["blend_disabled_book"] = {k: DISABLED_BOOK.get(k) for k in
+                                       ("mode", "positions", "spy_qty",
+                                        "bil_qty", "sleeve_cash", "halted")}
     if BLEND is not None:
         # M2 (thread-safety): this handler runs on a FastAPI worker thread;
         # the ib_async event loop belongs to the service loop thread. Serve
@@ -597,8 +671,11 @@ def _gateway_report() -> dict:
     if OUTAGES is None:
         return {}
     try:
+        rs = _gateway_restarts()
+        rs.pop("recent_ts", None)       # internal to the watch; not a payload
+        rs.pop("path", None)
         return {"gateway_outages": OUTAGES.summary(),
-                "gateway_restarts": _gateway_restarts()}
+                "gateway_restarts": rs}
     except Exception as exc:  # noqa: BLE001
         logger.warning("gateway report failed (ignored): %s", exc)
         return {"gateway_outages": {"error": "unavailable"}}

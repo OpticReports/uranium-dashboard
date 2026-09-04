@@ -3613,11 +3613,16 @@ class _WarnedLiveAdapter(DryAdapter):
         return True
 
 
-def test_gate_stuck_book_order_cancel_confirmed_then_replanned(tmp_path):
+def test_gate_stuck_book_order_cancel_confirmed_then_replanned(tmp_path, monkeypatch):
     """The wedge, resolved the safe way: a book order stuck 'working' for
     BOOK_ORDER_STUCK_CYCLES is CANCELLED at the venue (ACK required) before
     its journal is cleared - never assumed dead. No duplicate can arise:
     the re-plan happens only after the venue acked the cancel."""
+    # A MKT placed OUTSIDE regular hours legitimately rests for the open and
+    # is exempt from the stuck counter; this gate is about an IN-session
+    # order that stays working, so run it on an in-session clock.
+    monkeypatch.setattr(blend_mod, "_now_utc",
+                        lambda: __import__("datetime").datetime(2026, 8, 20, 14, 30, tzinfo=__import__("datetime").timezone.utc))
     from app.blend import BOOK_ORDER_STUCK_CYCLES
     m = mk(tmp_path)
     a = _WarnedLiveAdapter()
@@ -4203,3 +4208,122 @@ def test_cash_reconcile_stage1(tmp_path):
     assert r6 == {"drift": 0.0, "baselined": True}
     feed = m.feed(PRICES, "2026-08-20")
     assert feed["cash"]["baselined"] is True and "venue" not in feed["cash"]
+
+
+# --- the venue as it actually behaves around the session (counter-agent r1) ---
+# MUTATION-VERIFIED: dropping the `not deferred` term on the step-8 sweep (the
+# cash is re-swept, the ENTER never places) or the rests_for_open exemption in
+# reconcile 2b (the resting sell is cancelled overnight) turns
+# test_post_close_bil_funded_entry_reaches_the_next_open red.
+
+class SessionDryAdapter(DryAdapter):
+    """MKT fills only IN session; MKT placed outside RTH rests until
+    open_market(); MOO/OPG is accepted only OUTSIDE the session (rests until
+    open_market()) and is REJECTED in session - the real venue's shape."""
+
+    def place_stock_order(self, symbol, qty, order_type, stop_price=None,
+                          tif="DAY", ref_price=None, client_order_id=None):
+        outside = blend_mod.entry_window_open()
+        if order_type == "MOO" and not outside:
+            raise RuntimeError("order rejected by venue (status Cancelled): "
+                               "[10147] OPG order after the open")
+        if order_type in ("MKT", "MOO") and outside:
+            if client_order_id:
+                prior = self._orders.get(self._by_client.get(client_order_id, ""))
+                if prior is not None and prior["status"] in ("working", "filled"):
+                    return {**self._order_result(prior), "duplicate": True}
+            ref = f"dry-stk-{symbol}-{len(self.log)}-{int(time.time())}"
+            rec = {"order_ref": ref, "symbol": symbol, "qty": qty,
+                   "order_type": order_type, "tif": tif, "status": "working",
+                   "fill_price": None, "client_order_id": client_order_id,
+                   "ref_price": ref_price}
+            self._orders[ref] = rec
+            if client_order_id:
+                self._by_client[client_order_id] = ref
+            self._rec("place_stock_order", symbol=symbol, qty=qty,
+                      order_type=order_type, ref=ref, status="working")
+            return {"order_ref": ref, "status": "working"}
+        return super().place_stock_order(symbol, qty, order_type,
+                                         stop_price=stop_price, tif=tif,
+                                         ref_price=ref_price,
+                                         client_order_id=client_order_id)
+
+    def cancel_stock_order(self, order_ref):
+        rec = self._orders.get(order_ref)
+        if rec is not None and rec["order_type"] in ("MKT", "MOO"):
+            if rec["status"] == "filled":
+                raise RuntimeError(f"cannot cancel {order_ref}: FILLED")
+            rec["status"] = "cancelled"
+            self._rec("cancel_stock_order", ref=order_ref, found=True)
+            return True
+        return super().cancel_stock_order(order_ref)
+
+    def open_market(self):
+        for rec in self._orders.values():
+            if rec["status"] == "working" and rec["order_type"] in ("MKT", "MOO"):
+                px = rec.get("ref_price") or self.spot(rec["symbol"])
+                rec["status"], rec["fill_price"] = "filled", px
+                self._positions[rec["symbol"]] = (
+                    self._positions.get(rec["symbol"], 0) + rec["qty"])
+
+    def orders(self, symbol=None, order_type=None):
+        return [o for o in self._orders.values()
+                if (symbol is None or o["symbol"] == symbol)
+                and (order_type is None or o["order_type"] == order_type)]
+
+
+def _session_cycle(m, a, pl, alerts, monkeypatch, y, mo, d, h, mi):
+    monkeypatch.setattr(blend_mod, "_now_utc",
+                        lambda: _dt(y, mo, d, h, mi, tzinfo=_ET))
+    return run_cycle(m, a, pl, "2026-08-20", alert=alerts.append)
+
+
+def test_post_close_bil_funded_entry_reaches_the_next_open(tmp_path, monkeypatch):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)      # BIL-funded shape
+    a = SessionDryAdapter()
+    alerts = []
+    pl = payload(entries=[entry()], stops=[stop_row()])
+    monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: PRICES)
+    cyc = lambda *t: _session_cycle(m, a, pl, alerts, monkeypatch, *t)
+
+    cyc(2026, 8, 20, 16, 5)                  # Thu post-close: sell BIL to fund
+    assert len(a.orders("BIL")) == 1 and a.orders("BIL")[0]["qty"] < 0
+    assert a.orders("BIL")[0]["status"] == "working"      # rests for the open
+    assert not a.orders(order_type="MOO")                 # cash not settled
+    for h in (17, 20, 23):                    # overnight: nothing cancels it
+        cyc(2026, 8, 20, h, 5)
+    assert len(a.orders("BIL")) == 1 and a.orders("BIL")[0]["status"] == "working"
+    assert not [e for e in m.state.events if "stuck" in e["msg"]]
+    a.open_market()                           # Fri 09:30: the sell fills
+    cyc(2026, 8, 21, 9, 35)                   # in session: adopt, DEFER, no sweep
+    assert m.state.bil_qty == 27 and m.state.sleeve_cash > 250
+    assert not [o for o in a.orders("BIL") if o["qty"] > 0], "cash re-swept"
+    assert any("entries deferred" in e["msg"] for e in m.state.events)
+    cyc(2026, 8, 21, 16, 5)                   # Fri post-close: ENTER from cash
+    moo = a.orders(order_type="MOO")
+    assert len(moo) == 1 and moo[0]["status"] == "working" and moo[0]["symbol"] == "CRSP"
+    a.open_market()                           # next open: MOO fills
+    cyc(2026, 8, 22, 10, 0)                   # Sat: reconcile adopts the entry
+    assert "1" in m.state.positions and m.state.positions["1"].qty == 5
+    assert len(a.orders("BIL")) == 1          # exactly one BIL sell, no buy
+    assert len(a.orders(order_type="MOO")) == 1
+
+
+def test_resting_sell_is_counted_stuck_only_once_the_session_opens(tmp_path, monkeypatch):
+    """Same shape, but the venue never fills the resting sell at the open:
+    the stuck counter starts in session and cancels after 3 cycles."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
+    a = SessionDryAdapter()
+    alerts = []
+    pl = payload(entries=[entry()], stops=[stop_row()])
+    monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: PRICES)
+    cyc = lambda *t: _session_cycle(m, a, pl, alerts, monkeypatch, *t)
+    cyc(2026, 8, 20, 16, 5)
+    for h in (17, 20, 23):
+        cyc(2026, 8, 20, h, 5)
+    assert a.orders("BIL")[0]["status"] == "working"       # never cancelled overnight
+    for mi in (35, 40, 45):                                 # in session, still working
+        cyc(2026, 8, 21, 9, mi)
+    assert a.orders("BIL")[0]["status"] == "cancelled"      # 3 in-session cycles -> cancel

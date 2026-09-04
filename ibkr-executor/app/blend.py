@@ -138,6 +138,24 @@ CASH_PERSIST_CYCLES = 2     # a drift must hold for this many quiet cycles
 ENTRY_SESSION_TZ = "America/New_York"
 ENTRY_CUTOFF_ET = (9, 25)
 SESSION_CLOSE_ET = (16, 0)
+# Resolved ONCE at import (counter-agent round 1): a missing tz database
+# then fails at boot, where the boot alert names it, instead of inside
+# step() where it would freeze every decision - exits and stop ratchets
+# included - on every cycle. tzdata is pinned in requirements.txt as the
+# belt against a base-image change.
+_ET = ZoneInfo(ENTRY_SESSION_TZ)
+# NYSE full-day closures the clocks would otherwise treat as trading days.
+# A holiday only DELAYS a valid placement (the fire stays published), but
+# the pre-open page must not fire on one. Extend yearly.
+NYSE_HOLIDAYS = {
+    "2026-09-07", "2026-11-26", "2026-12-25",
+    "2027-01-01", "2027-01-18", "2027-02-15", "2027-03-26", "2027-05-31",
+    "2027-06-18", "2027-07-05", "2027-09-06", "2027-11-25", "2027-12-24",
+}
+
+
+def is_trading_day(d: date) -> bool:
+    return d.weekday() < 5 and d.isoformat() not in NYSE_HOLIDAYS
 
 
 def _now_utc() -> datetime:
@@ -153,7 +171,7 @@ def entry_window_open(now: datetime | None = None) -> bool:
     now = now or _now_utc()
     if now.tzinfo is None:
         now = now.replace(tzinfo=timezone.utc)
-    et = now.astimezone(ZoneInfo(ENTRY_SESSION_TZ))
+    et = now.astimezone(_ET)
     if et.weekday() >= 5:
         return True
     t = (et.hour, et.minute)
@@ -610,6 +628,21 @@ class Blend3070Manager:
                 pass
             raise
 
+    def _event_once_today(self, level: str, key: str, msg: str) -> bool:
+        """Record an event at most once per calendar day per key - for the
+        per-cycle notices (entries deferred / breaker open) that _event's
+        last-message dedupe re-logs every 5 minutes as soon as any other
+        event interleaves (counter-agent round 1). In-memory: a restart
+        re-emits once, which is the right amount of noise."""
+        today = _utc_today()
+        seen = getattr(self, "_notice_day", None)
+        if seen is None:
+            seen = self._notice_day = {}
+        if seen.get(key) == today:
+            return False
+        seen[key] = today
+        return self._event(level, msg)
+
     def _event(self, level: str, msg: str) -> bool:
         """Log a deduped event. Returns True only when the event was NEWLY
         recorded (callers use this for alert-once semantics, e.g. the M4
@@ -977,19 +1010,30 @@ class Blend3070Manager:
         candidates = [e for e in payload.get("entries", [])
                       if str(e.get("call_id")) not in st.positions
                       and str(e.get("call_id")) not in st.pending_entries]
-        window_open = entry_window_open()
+        # Already-entered ids stay in `candidates` so the planning loop can
+        # still refuse a RECYCLED id loudly; they are only excluded from
+        # the "waiting" count the notices report.
+        waiting = [e for e in candidates if e.get("call_id") not in st.entered_ids]
+        # The clock is consulted only when there is something to enter: a
+        # clock problem must never touch a cycle with nothing to plan.
+        window_open = (entry_window_open()
+                       if (gate_on and candidates) else True)
         enter_paused = intent_kind_paused("ENTER")
-        if gate_on and candidates and not window_open:
-            self._event("INFO", f"entries deferred: {len(candidates)} "
-                                f"candidate(s) held for the post-close "
-                                f"window (MOO/OPG is not placeable during "
-                                f"the regular session; no cash raised)")
-        elif gate_on and candidates and enter_paused:
-            self._event("WARN", f"entries not planned: ENTER breaker is "
-                                f"open ({len(candidates)} candidate(s) "
-                                f"waiting; no cash raised)")
-        if (gate_on and not naked and not budget_blind
-                and window_open and not enter_paused):
+        plannable = gate_on and not naked and not budget_blind and bool(candidates)
+        deferred = plannable and bool(waiting) and (not window_open or enter_paused)
+        if plannable and waiting and not window_open:
+            self._event_once_today(
+                "INFO", "entries_deferred",
+                f"entries deferred: {len(waiting)} candidate(s) held "
+                f"for the post-close window (MOO/OPG is not placeable "
+                f"during the regular session; no cash raised, and idle "
+                f"sleeve cash is NOT swept while a candidate waits)")
+        elif plannable and waiting and enter_paused:
+            self._event_once_today(
+                "WARN", "enter_breaker_open",
+                f"entries not planned: ENTER breaker is open "
+                f"({len(waiting)} candidate(s) waiting; no cash raised)")
+        if plannable and window_open and not enter_paused:
             for e in payload.get("entries", []):
                 key = str(e["call_id"])
                 if key in st.positions or key in st.pending_entries:
@@ -1143,7 +1187,12 @@ class Blend3070Manager:
         #    headroom — economically cash, but gross must never drift above
         #    BLEND_BUDGET via the cash vehicle (counter-agent minor).
         sweep_buy = None
-        if (not pending_book and bil_px > 0
+        # Counter-agent round 1 (HIGH): sweeping idle cash while an entry is
+        # DEFERRED guaranteed the post-close cycle had to sell BIL to fund it
+        # - a MKT sell that cannot fill after the bell - so the entry never
+        # placed and the cash round-tripped through BIL every session. Cash
+        # stays cash while a candidate waits; the post-close cycle spends it.
+        if (not deferred and not pending_book and bil_px > 0
                 and projected_cash > max(MIN_ORDER_USD, bil_px)):
             sweep_qty = int(projected_cash // bil_px)
             if budget > 0:
@@ -1214,9 +1263,14 @@ class Blend3070Manager:
                 return cid
         self.state.book_order_seq += 1
         cid = f"blend-{kind}-{today}-{self.state.book_order_seq}"
+        # A MKT/DAY order placed OUTSIDE regular hours legitimately rests
+        # until the next open; reconcile 2b must not count those cycles as
+        # "stuck" and cancel it (counter-agent round 1). Recorded here so the
+        # exemption survives a restart with the journal.
+        rests_for_open = entry_window_open()
         self.state.pending_book_orders[cid] = {
             "kind": kind, "symbol": symbol, "qty": qty, "date": today,
-            "ref_price": ref_price}
+            "ref_price": ref_price, "rests_for_open": rests_for_open}
         self.save()
         return cid
 
@@ -2866,6 +2920,11 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
             # overlay in BOTH directions - a live order gets cancelled
             # before re-planning (no duplicate), a dead one gets confirmed
             # dead (no wedge).
+            if rec.get("rests_for_open") and entry_window_open():
+                # Placed outside regular hours and the open has not come:
+                # it is resting for the auction, not stuck. Counting starts
+                # once the session is open and it is STILL working.
+                continue
             rec["stuck_cycles"] = rec.get("stuck_cycles", 0) + 1
             mgr.save()
             if rec["stuck_cycles"] >= BOOK_ORDER_STUCK_CYCLES:

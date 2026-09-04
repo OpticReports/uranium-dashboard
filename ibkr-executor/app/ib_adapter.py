@@ -73,7 +73,11 @@ def _map_status(ib_status: str) -> str:
     return "working"
 
 
-def _trade_errors(trade, dead: bool = False) -> str:
+_STATUS_ECHOES = {"cancelled", "apicancelled", "inactive", "submitted",
+                  "presubmitted", "filled", "pendingsubmit", "pendingcancel"}
+
+
+def _trade_errors(trade, dead: bool = False, venue: str = "") -> str:
     """IB's own words for why an order died, from the trade log. Without
     this the ValidationError alert could only say 'state UNKNOWN' - the
     reason was sitting in trade.log, discarded.
@@ -85,16 +89,26 @@ def _trade_errors(trade, dead: bool = False) -> str:
     above dropped it and five MRK rejections on 2026-09-03 read only
     'status Cancelled' (the cause had to be inferred from the order type)."""
     out = []
-    last = ""
+    dead_msg = ""
     for entry in (getattr(trade, "log", None) or []):
         code = getattr(entry, "errorCode", 0) or 0
-        msg = (getattr(entry, "message", "") or "").strip()
-        if msg:
-            last = msg
+        msg = str(getattr(entry, "message", "") or "").strip()
+        status = str(getattr(entry, "status", "") or "")
         if code or ("rror" in msg):
             out.append(f"[{code}] {msg}" if code else msg)
-    if not out and dead and last:
-        out.append(last)
+        elif (msg and status in _IB_CANCELLED
+              and msg.lower().replace(" ", "") not in _STATUS_ECHOES):
+            dead_msg = msg          # the cancel entry's own words, if any
+    # Counter-agent round 1: the reason for an after-the-bell OPG rejection
+    # is delivered on ib_async's errorEvent / trade.advancedError, not as a
+    # trade.log line - and a bare status echo ("Cancelled") is not a reason.
+    adv = str(getattr(trade, "advancedError", "") or "").strip()
+    if adv and adv not in out:
+        out.append(adv)
+    if venue and venue not in out:
+        out.append(venue)
+    if not out and dead and dead_msg:
+        out.append(dead_msg)
     return "; ".join(out[-3:])
 
 
@@ -173,6 +187,16 @@ class IBAdapter:
         self._stock_contracts: dict[str, object] = {}
         self._emitted_fill_keys: set[str] = set()
         self._requeued_fills: list[dict] = []
+        # Venue error text keyed by orderId, captured off ib_async's
+        # errorEvent (emitted unconditionally) so a rejection's REASON reaches
+        # the operator even when trade.log carries only a status change.
+        self._order_errors: dict[int, str] = {}
+        ev = getattr(self.ib, "errorEvent", None)
+        if ev is not None:
+            try:
+                ev += self._on_ib_error
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("errorEvent hook unavailable: %s", exc)
         # M5 reconnect bookkeeping: the gateway's daily auto-restart drops
         # the session — every surface reconnects with backoff via
         # _require_connected instead of staying wedged until a manual
@@ -206,6 +230,27 @@ class IBAdapter:
                 "IB_ALLOW_DELAYED=false (live orders must never price on "
                 "delayed or prior-close data) - set the env and redeploy")
         self._connect()
+
+    def _on_ib_error(self, reqId, errorCode, errorString, contract=None,
+                     *args) -> None:
+        """errorEvent handler: reqId is the orderId for order-scoped errors.
+        Bounded: only the last message per id, ids pruned above 512."""
+        try:
+            if reqId is None or int(reqId) < 0:
+                return
+            self._order_errors[int(reqId)] = f"[{errorCode}] {errorString}"
+            if len(self._order_errors) > 512:
+                for k in list(self._order_errors)[:-256]:
+                    self._order_errors.pop(k, None)
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _venue_error(self, trade) -> str:
+        oid = getattr(getattr(trade, "order", None), "orderId", None)
+        try:
+            return self._order_errors.get(int(oid), "") if oid is not None else ""
+        except (TypeError, ValueError):
+            return ""
 
     def _connect(self):
         port = 4002 if self.cfg.trading_mode == "paper" else 4001
@@ -545,9 +590,8 @@ class IBAdapter:
         if out["status"] == "cancelled":
             # Surface the venue's reason on the reconcile path too (the
             # async MOO/OPG outcome is only ever read from here).
-            why = _trade_errors(trade, dead=True)
-            if why:
-                out["reason"] = why
+            why = _trade_errors(trade, dead=True, venue=self._venue_error(trade))
+            out["reason"] = why or "no venue reason recorded"
         if out["status"] == "filled":
             px = _agg_fill_price(trade)
             if px is not None:              # unknown price -> NO key, never 0.0
@@ -571,7 +615,8 @@ class IBAdapter:
             if s == "Filled":
                 return
             if s in _IB_CANCELLED:
-                why = _trade_errors(trade, dead=True)
+                why = _trade_errors(trade, dead=True,
+                                    venue=self._venue_error(trade))
                 raise RuntimeError(
                     f"order rejected by venue (status {s})"
                     + (f": {why}" if why else ""))

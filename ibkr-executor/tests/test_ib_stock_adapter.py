@@ -83,6 +83,23 @@ class FakeTrade:
         self.order = order
         self.orderStatus = FakeStatus()
         self.fills = []
+        self.log = []
+        self.advancedError = ""
+
+
+class FakeEvent:
+    """ib_async Event stand-in: `ev += handler`, `ev.emit(*args)`."""
+
+    def __init__(self):
+        self.handlers = []
+
+    def __iadd__(self, h):
+        self.handlers.append(h)
+        return self
+
+    def emit(self, *a):
+        for h in list(self.handlers):
+            h(*a)
 
 
 class FakeTicker:
@@ -116,6 +133,7 @@ class FakeIB:
         self.on_place = None
         self.on_cancel = None
         self.on_sleep = None
+        self.errorEvent = FakeEvent()
         self.connect_calls = 0
         self.connect_fails = False        # M5: gateway down (restart window)
 
@@ -1257,8 +1275,8 @@ def test_rejection_reason_surfaces_without_error_code(ib_adapter):
     def reject(t):
         t.orderStatus.status = "Cancelled"
         t.log = [types.SimpleNamespace(
-            errorCode=0, message="Order Canceled - reason: OPG order "
-                                 "received after the open")]
+            errorCode=0, status="Cancelled",
+            message="Order Canceled - reason: OPG order received after the open")]
 
     fake.on_place = reject
     with pytest.raises(RuntimeError, match="received after the open"):
@@ -1295,3 +1313,38 @@ def test_commission_reaches_fill_results(ib_adapter):
     r = ib_adapter.place_stock_order("BIL", 20, "MKT", client_order_id="c1")
     assert r["status"] == "filled" and r["commission"] == 1.0
     assert ib_adapter.find_stock_order("c1")["commission"] == 1.0
+
+
+def test_rejection_reason_comes_from_error_event_not_status_echo(ib_adapter):
+    """Counter-agent round 1: ib_async delivers an order rejection's REASON on
+    errorEvent (keyed by orderId) / trade.advancedError; trade.log holds
+    status changes. A bare 'Cancelled' log line is not a reason.
+    MUTATION-VERIFIED: dropping the errorEvent hook, or letting a status
+    echo through as the reason, turns this red."""
+    fake = ib_adapter.ib
+
+    def reject(t):
+        t.orderStatus.status = "Cancelled"
+        t.log = [types.SimpleNamespace(errorCode=0, message="Cancelled",
+                                       status="Cancelled")]
+        fake.errorEvent.emit(t.order.orderId, 10147,
+                             "Order to be Cancelled: OPG order after the open",
+                             t.contract)
+
+    fake.on_place = reject
+    with pytest.raises(RuntimeError, match="OPG order after the open"):
+        ib_adapter.place_stock_order("MRK", 12, "MOO", tif="OPG",
+                                     client_order_id="blend-entry-16")
+    o = ib_adapter.find_stock_order("blend-entry-16")
+    assert "[10147]" in o["reason"] and "OPG order after the open" in o["reason"]
+    assert "Cancelled;" not in o["reason"]
+
+    def reject_silent(t):
+        t.orderStatus.status = "Cancelled"
+        t.log = [types.SimpleNamespace(errorCode=0, message="Cancelled",
+                                       status="Cancelled")]
+    fake.on_place = reject_silent
+    with pytest.raises(RuntimeError):
+        ib_adapter.place_stock_order("MRK", 12, "MOO", tif="OPG",
+                                     client_order_id="blend-entry-17")
+    assert ib_adapter.find_stock_order("blend-entry-17")["reason"] == "no venue reason recorded"
