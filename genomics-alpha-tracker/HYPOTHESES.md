@@ -256,10 +256,13 @@ call trigger · `retired` → failed the gate or decayed; kept for the record.
   calls; NTRA 08-28 stamped 336.62 at 09:44, actual close 326.26; mean
   |drift| 0.16 ATR, worst 0.99 on NTRA 08-28) - it feeds the executor's sizing, the day-one trail
   seed and the replay comparison, so "entered at the fire-day close" is
-  not what the shadow did on those twelve; (b) the intents endpoint
-  publishes stops for 12 ungraded calls against the registered `max_open`
-  of 10 - whether the gated R2-A shadow engine itself applies the cap is
-  an open item.
+  not what the shadow did on those twelve; (b) the tracker caps auto-call CREATION at `max_open_calls` (default
+  10, tunable via /tuning; `calls/manager.py`), but the R2-A shadow engine
+  grades every call independently with no portfolio constraint
+  (`calls/shadow.py` has no cap) and holds them longer (90-day time stop vs
+  the primary book's 45), so its open count can and does exceed 10 (12 on
+  2026-09-03). The shadow is per-call grading, not a book; a replay
+  comparison must apply the cap post-hoc.
 
 ---
 
