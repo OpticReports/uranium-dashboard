@@ -98,6 +98,23 @@ def _trade_errors(trade, dead: bool = False) -> str:
     return "; ".join(out[-3:])
 
 
+def _agg_commission(trade) -> float:
+    """Total commission the venue reported on a trade's executions (each
+    ib_async Fill carries a commissionReport once IB sends it; 0.0 until
+    then). The book debits this from the bucket that traded - before
+    2026-09-04 the ledger booked price x qty and silently drifted $1/order
+    from the account."""
+    total = 0.0
+    for f in (getattr(trade, "fills", []) or []):
+        rep_ = getattr(f, "commissionReport", None)
+        c = getattr(rep_, "commission", None) if rep_ is not None else None
+        try:
+            total += float(c or 0.0)
+        except (TypeError, ValueError):
+            pass
+    return round(total, 4)
+
+
 def _agg_fill_price(trade) -> float | None:
     """Share-weighted average price over a trade's executions. None when the
     venue reported no usable price — NEVER 0.0 (repo law: a silent zero fill
@@ -535,6 +552,7 @@ class IBAdapter:
             px = _agg_fill_price(trade)
             if px is not None:              # unknown price -> NO key, never 0.0
                 out["fill_price"] = float(px)
+            out["commission"] = _agg_commission(trade)
         return out
 
     def _await_placement(self, trade, order_type: str) -> None:
@@ -704,6 +722,7 @@ class IBAdapter:
                 "qty": shares if side == "BOT" else -shares,
                 "fill_price": _agg_fill_price(trade),   # None, never 0.0
                 "action": side,
+                "commission": _agg_commission(trade),
             })
         return out
 
@@ -724,6 +743,33 @@ class IBAdapter:
             trade = self._find_trade_by_client_id(client_order_id,
                                                   refresh=True)
         return self._trade_result(trade) if trade is not None else None
+
+    def account_cash(self) -> dict | None:
+        """The account's cash as IB reports it: {total_cash, net_liq, ts} in
+        USD, or None meaning NO CLAIM. Never raises and never fails a cycle
+        closed - in stage 1 nothing decides on it; it is the corroboration
+        the book's order-derived cash ledger never had (dividends, interest,
+        commissions and anything a human does are invisible to the ledger).
+        TotalCashValue, not AvailableFunds: the latter moves with margin and
+        open orders."""
+        try:
+            self._require_connected()
+            self._pump()
+            vals: dict[str, float] = {}
+            for row in (self.ib.accountSummary() or []):
+                tag = getattr(row, "tag", "")
+                cur = getattr(row, "currency", "") or ""
+                if (tag in ("TotalCashValue", "NetLiquidation")
+                        and cur in ("USD", "BASE", "")):
+                    vals[tag] = float(getattr(row, "value", "nan"))
+            if "TotalCashValue" not in vals or vals["TotalCashValue"] != vals["TotalCashValue"]:
+                return None
+            return {"total_cash": vals["TotalCashValue"],
+                    "net_liq": vals.get("NetLiquidation"),
+                    "ts": time.time()}
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("account_cash unavailable (no claim): %s", exc)
+            return None
 
     def stock_position(self, symbol: str) -> int:
         """Net venue holding for a SMART/USD stock — what the ACCOUNT
@@ -914,6 +960,9 @@ class DryAdapter:
     def find_stock_order(self, client_order_id: str) -> dict | None:
         rec = self._orders.get(self._by_client.get(client_order_id, ""))
         return self._order_result(rec) if rec is not None else None
+
+    def account_cash(self) -> dict | None:
+        return None                      # no venue, no claim
 
     def stock_position(self, symbol: str) -> int:
         """Net venue holding for symbol, from filled orders — mirrors the

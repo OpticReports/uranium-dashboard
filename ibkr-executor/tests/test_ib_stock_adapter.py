@@ -71,8 +71,10 @@ class FakeExec:
 
 
 class FakeFill:
-    def __init__(self, execution):
+    def __init__(self, execution, commission=None):
         self.execution = execution
+        self.commissionReport = (types.SimpleNamespace(commission=commission)
+                                 if commission is not None else None)
 
 
 class FakeTrade:
@@ -110,6 +112,7 @@ class FakeIB:
         self.connected = False
         self.prices: dict[str, float] = {}
         self.position_rows: list[FakePosition] = []
+        self.account_rows: list = []      # accountSummary() rows
         self.on_place = None
         self.on_cancel = None
         self.on_sleep = None
@@ -173,12 +176,17 @@ class FakeIB:
     def positions(self):
         return list(self.position_rows)
 
+    def accountSummary(self):
+        return list(self.account_rows)
+
     # venue-side test helpers
-    def fill(self, trade, parts):
-        """parts: [(shares, price), ...] -> executions + Filled status."""
+    def fill(self, trade, parts, commission=None):
+        """parts: [(shares, price), ...] -> executions + Filled status.
+        commission (total) is attached to the first execution's report."""
         side = "BOT" if trade.order.action == "BUY" else "SLD"
-        for shares, price in parts:
-            trade.fills.append(FakeFill(FakeExec(shares, price, side)))
+        for k, (shares, price) in enumerate(parts):
+            trade.fills.append(FakeFill(FakeExec(shares, price, side),
+                                        commission if k == 0 else None))
         tot = sum(s for s, _ in parts)
         num = sum(s * p for s, p in parts)
         trade.orderStatus.avgFillPrice = (num / tot) if tot else 0.0
@@ -1259,3 +1267,31 @@ def test_rejection_reason_surfaces_without_error_code(ib_adapter):
     o = ib_adapter.find_stock_order("blend-entry-16")
     assert o["status"] == "cancelled"
     assert "received after the open" in o["reason"]
+
+
+def _acct(tag, value, currency="USD"):
+    return types.SimpleNamespace(tag=tag, value=str(value), currency=currency)
+
+
+def test_account_cash_reads_total_cash_value(ib_adapter):
+    """MUTATION-VERIFIED: reading AvailableFunds instead, or raising on a
+    missing tag, turns this red."""
+    fake = ib_adapter.ib
+    fake.account_rows = [_acct("AvailableFunds", 51000.0),
+                         _acct("TotalCashValue", 49680.58),
+                         _acct("NetLiquidation", 99680.58),
+                         _acct("TotalCashValue", 12.5, currency="EUR")]
+    out = ib_adapter.account_cash()
+    assert out["total_cash"] == 49680.58 and out["net_liq"] == 99680.58
+    fake.account_rows = [_acct("AvailableFunds", 51000.0)]
+    assert ib_adapter.account_cash() is None          # no claim, no raise
+    fake.account_rows = None                           # venue returns junk
+    assert ib_adapter.account_cash() is None
+
+
+def test_commission_reaches_fill_results(ib_adapter):
+    fake = ib_adapter.ib
+    fake.on_place = lambda t: fake.fill(t, [(20, 91.42)], commission=1.0)
+    r = ib_adapter.place_stock_order("BIL", 20, "MKT", client_order_id="c1")
+    assert r["status"] == "filled" and r["commission"] == 1.0
+    assert ib_adapter.find_stock_order("c1")["commission"] == 1.0

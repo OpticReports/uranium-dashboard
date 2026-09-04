@@ -4112,3 +4112,94 @@ def test_reconcile_rejection_alert_carries_venue_reason(tmp_path):
     assert "16" not in m.state.pending_entries
     assert any("OPG after the open" in a for a in alerts)
     assert any("OPG after the open" in e["msg"] for e in m.state.events)
+
+
+
+# --- commissions in the ledger + stage-1 cash reconcile (2026-09-04) ----------
+# MUTATION-VERIFIED: dropping _charge's debit turns test_commissions_debit_the_
+# bucket_that_traded red; dropping the quiet-cycle check, the two-cycle
+# persistence, the re-alert-on-change guard, or computing drift from LEVELS
+# instead of deltas each turns test_cash_reconcile_stage1 red.
+import time as _time
+
+
+def test_commissions_debit_the_bucket_that_traded(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=1_000.0, spy_qty=10, bil_qty=0,
+                      core_cash=500.0)
+    m.on_sweep(5, 100.0, commission=1.0)
+    assert m.state.sleeve_cash == 1_000.0 - 500.0 - 1.0
+    m.on_core_trade(1, 100.0, commission=1.0)
+    assert m.state.core_cash == 500.0 - 100.0 - 1.0
+    assert m.state.commissions_paid == 2.0
+    assert m.state.last_fill_ts > 0
+    it = {"action": "ENTER", "call_id": 1, "symbol": "CRSP", "qty": 2,
+          "entry_ref": 50.0, "stop_level": 44.0, "time_stop_days": 90,
+          "reason": "t"}
+    m.record_pending_entry(it, "2026-08-20")
+    m.on_entered(it, 50.0, "ref", "2026-08-20", commission=1.0)
+    cash_after_entry = m.state.sleeve_cash
+    m.on_exited(1, 60.0, "trail", commission=1.0)
+    assert m.state.sleeve_cash == cash_after_entry + 120.0 - 1.0
+    assert m.state.commissions_paid == 4.0
+
+
+class _CashAdapter(DryAdapter):
+    def __init__(self, cash):
+        super().__init__()
+        self.cash = cash
+
+    def account_cash(self):
+        return None if self.cash is None else {"total_cash": self.cash,
+                                                "net_liq": None,
+                                                "ts": _time.time()}
+
+
+def test_cash_reconcile_stage1(tmp_path):
+    m = mk(tmp_path)                         # blend_book_usd 10_000 -> warn $25, red $100
+    _seed_initialized(m, sleeve_cash=3_000.0, spy_qty=70, core_cash=100.0)
+    alerts = []
+    # the account holds $40k the book does not own: a LEVEL comparison would
+    # scream; deltas must not
+    a = _CashAdapter(43_100.0)
+    r = blend_mod.reconcile_cash(m, a, alerts.append)
+    assert r == {"drift": 0.0, "baselined": True} and alerts == []
+    r = blend_mod.reconcile_cash(m, a, alerts.append)
+    assert r["drift"] == 0.0 and r["fired"] is None
+    # a BIL monthly lands: +42 in the account, ledger unchanged
+    a.cash = 43_142.0
+    r1 = blend_mod.reconcile_cash(m, a, alerts.append)
+    assert r1["drift"] == 42.0 and r1["fired"] is None and r1["cycles"] == 1
+    r2 = blend_mod.reconcile_cash(m, a, alerts.append)
+    assert r2["fired"] == "WARN" and len(alerts) == 1 and "+42.00" in alerts[0]
+    # same drift again: no re-alert
+    r3 = blend_mod.reconcile_cash(m, a, alerts.append)
+    assert r3["fired"] is None and len(alerts) == 1
+    # a book order the ledger DID book moves both sides equally: no new drift
+    m.on_sweep(10, 100.0)                    # ledger -1000
+    a.cash = 43_142.0 - 1_000.0              # venue  -1000
+    assert blend_mod.reconcile_cash(m, a, alerts.append) is None   # not quiet (fill)
+    m.state.last_fill_ts = _time.time() - blend_mod.CASH_QUIET_S - 1
+    r4 = blend_mod.reconcile_cash(m, a, alerts.append)
+    assert r4["drift"] == 42.0 and len(alerts) == 1
+    # a withdrawal of $150 nobody told the book about: the drift CHANGES by
+    # more than the threshold while already persistent, so it re-alerts at
+    # once - and at 1.08% of the book it is RED
+    a.cash -= 150.0
+    r5 = blend_mod.reconcile_cash(m, a, alerts.append)
+    assert r5["fired"] == "RED" and alerts[-1].startswith("🚨🚨")
+    assert blend_mod.reconcile_cash(m, a, alerts.append)["fired"] is None
+    assert m.state.cash_drift == -108.0
+    # pending journal -> not quiet -> skipped
+    m.state.pending_entries["9"] = {"intent": {}, "date": "2026-08-20"}
+    assert blend_mod.reconcile_cash(m, a, alerts.append) is None
+    m.state.pending_entries.clear()
+    # adapter has no claim -> nothing compared, nothing raised
+    assert blend_mod.reconcile_cash(m, _CashAdapter(None), alerts.append) is None
+    # /resume re-baselines; the next quiet cycle starts the clock over
+    m.resume("2026-08-20")
+    assert m.state.cash_baseline is None and m.state.cash_drift is None
+    r6 = blend_mod.reconcile_cash(m, a, alerts.append)
+    assert r6 == {"drift": 0.0, "baselined": True}
+    feed = m.feed(PRICES, "2026-08-20")
+    assert feed["cash"]["baselined"] is True and "venue" not in feed["cash"]
