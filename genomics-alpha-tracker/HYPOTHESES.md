@@ -238,23 +238,28 @@ call trigger · `retired` → failed the gate or decayed; kept for the record.
   TSMOM overlay and vol-scaled weights all FAILED the registered bar — the
   plain 30/70 remains the construction.
 - **Live-record honesty note (2026-09-04, standing):** the R2-A shadow
-  book and the ibkr-executor's live book DIVERGED from day one and the
+  record and the ibkr-executor's live book diverged from day one and the
   split is attributable, so no live-vs-replay comparison may be quoted
-  without it. As of 2026-09-03 the shadow tracked 14 calls (ids 2-8,
-  10-16; IONS and CMPS already at their exit signal) while the account
-  held ZERO sleeve shares - the sleeve sat in BIL from go-live. Causes,
-  dated: calls fired 08-20 -> 08-27 predate the 08-28 go-live; NTRA/LLY
-  (08-28) were placed as MOO/OPG after the open and rejected 4x each, then
-  BLEND_ENABLED was off 08-28 -> 09-02 so the post-close retry never ran;
-  MRK (09-02) fired into a 13-hour gateway outage; the tracker publishes
-  fires mid-session (`as_of` = the current session date once its bar
-  lands), so every same-day fire met the after-open rejection until the
-  executor's session guard (branch 5acccf0). Separately, the shadow carried
-  12 OPEN positions against the registered `max_open` of 10 - the cap is
-  enforced executor-side and the shadow may not apply it, which biases
-  the replay on its own (open item). The shadow record is what the account
-  WOULD have done had its entries reached the venue; it is not this
-  account's track record.
+  without it. Sixteen auto-flag calls have fired (ids 1-16, all gate-on).
+  Thirteen predate the 2026-08-28 go-live. Three were addressable and ALL
+  THREE were lost: NTRA (14) and LLY (15), created 09:44 ET mid-session on
+  08-28, were placed as MOO/OPG after the open and rejected 4x each, and
+  BLEND_ENABLED was off that evening so the post-close retry never ran;
+  MRK (16), created 21:27 ET on 09-02, fired into a 14-hour gateway
+  outage. The executor's session guard (branch 5acccf0) closes the first
+  mode; the gateway restart configuration closes the second. The shadow
+  record is what the account WOULD have done had its entries reached the
+  venue; it is not this account's track record.
+  Two tracker-side findings from the same calls log: (a) `entry_price` on
+  a call created MID-SESSION is the price at the moment the hourly calls
+  job ran, not the fire-day close the R2-A convention names (12 of 16
+  calls; NTRA 08-28 stamped 336.62 at 09:44, actual close 326.26; mean
+  |drift| 0.16 ATR, worst 0.99 on NTRA 08-28) - it feeds the executor's sizing, the day-one trail
+  seed and the replay comparison, so "entered at the fire-day close" is
+  not what the shadow did on those twelve; (b) the intents endpoint
+  publishes stops for 12 ungraded calls against the registered `max_open`
+  of 10 - whether the gated R2-A shadow engine itself applies the cap is
+  an open item.
 
 ---
 
