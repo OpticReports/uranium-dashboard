@@ -268,6 +268,21 @@ unreconciled venue state. Phases IN ORDER:
    sleeve cash minus cash reserved by a pending sweep — phantom proceeds
    are never spent, re-review N5) ->
    rebalance transfer -> core buy -> BIL sweep (all journaled per 1c).
+   **Cash is reconciled against the account, stage 1 = alert-only**
+   (2026-09-04, Casey-approved design): after the reconcile pass,
+   `reconcile_cash` reads the account's `TotalCashValue` and compares
+   DELTAS from a baseline to the ledger's two buckets - never levels,
+   because the account may hold cash the book does not own. Only on quiet
+   cycles (no pending journals, no fill inside 36 h). A drift beyond
+   max($25, 0.1% of the book) for two quiet cycles alerts once, re-alerts
+   only when it moves by more than the threshold, and is RED beyond 1%.
+   Nothing is adopted; `/resume` re-baselines. `/blend/feed` and `/status`
+   carry `cash: {ledger, drift, drift_age_s, baselined,
+   over_threshold_cycles, commissions_paid}` - the venue's cash LEVEL is
+   never published. Commissions are now debited from the bucket that
+   traded, off the venue's commissionReport, at every fill. Stage 2
+   (adopting positive drift into the ledger) is a separate, opt-in change
+   to be turned on with two weeks of stage-1 data, not before.
    **Entries are only PLANNED outside the regular session** (2026-09-03):
    a MOO/OPG order is accepted for the next opening auction and REJECTED
    once the session is open, so a fire first seen mid-session is held for
