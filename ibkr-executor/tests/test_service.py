@@ -96,13 +96,32 @@ def test_gateway_watch_stall_diagnosis():
     st2b = {"outage_since": None, "diagnosed": False, "preopen_paged": ""}
     assert svc._gateway_watch(drop + 31 * 60, {"currently_down_since": drop},
                               {"recent_ts": [drop + 5], "readable": True,
-                               "circuit_open": True}, sent.append, st2b) == ["loop"]
+                               "circuit_open": True,
+                               "last": {"ts": drop + 5, "reason": "circuit_open"}},
+                              sent.append, st2b) == ["loop"]
     assert "circuit breaker is now OPEN" in sent[-1]
+    # a breaker trip left over from a PREVIOUS outage (the log's last line,
+    # days old) is not this outage's diagnosis: stall, not loop (round 3)
+    st2d = {"outage_since": None, "diagnosed": False, "preopen_paged": ""}
+    assert svc._gateway_watch(drop + 31 * 60, {"currently_down_since": drop},
+                              {"recent_ts": [drop - 3 * 86400], "readable": True,
+                               "circuit_open": True,
+                               "last": {"ts": drop - 3 * 86400, "reason": "circuit_open"}},
+                              sent.append, st2d) == ["stall"]
     st2c = {"outage_since": None, "diagnosed": False, "preopen_paged": ""}
     assert svc._gateway_watch(drop + 31 * 60, {"currently_down_since": drop},
                               {"recent_ts": [], "readable": False, "path": "/app/data/x"},
                               sent.append, st2c) == ["unreadable"]
     assert "/app/data/x" in sent[-1]
+    # ... and once the log is readable later in the same outage the stall
+    # page still fires (round 3: 'unreadable' no longer consumes the
+    # diagnosis), once
+    assert svc._gateway_watch(drop + 36 * 60, {"currently_down_since": drop},
+                              {"recent_ts": [drop + 5], "readable": True},
+                              sent.append, st2c) == ["stall"]
+    assert svc._gateway_watch(drop + 41 * 60, {"currently_down_since": drop},
+                              {"recent_ts": [], "readable": False, "path": "/x"},
+                              sent.append, st2c) == []
     svc._gateway_watch(drop + 32 * 60, None, {"recent_ts": [], "readable": True},
                        sent.append, st)
     assert st["outage_since"] == drop and st["diagnosed"] is True
@@ -181,3 +200,68 @@ def test_disabled_book_guard(tmp_path):
     sent2 = []
     svc._disabled_book_alert(book, sent2.append)
     assert "could not be read" in sent2[0]
+
+
+def test_boot_retry_feeds_the_gateway_watch_only_for_connection_failures(monkeypatch):
+    """Round 3: the adapter's connect failure raised a plain RuntimeError, so
+    the isinstance filter in the boot-retry loop never fed the watch - no
+    stall / pre-open page in the exact state the pre-open page exists for
+    (a Render restart whose gateway login stalls on the IB Key push)."""
+    from app.ib_adapter import ExecutorConnectionError
+
+    class _Escape(BaseException):
+        pass
+
+    def run(exc):
+        calls, sent = [], []
+        n = {"i": 0}
+
+        def build_adapter():
+            n["i"] += 1
+            if n["i"] == 1:
+                raise exc
+            raise _Escape()                    # second attempt: leave the loop
+
+        monkeypatch.setattr(svc, "_build_managers", lambda: None)
+        monkeypatch.setattr(svc, "_build_adapter", build_adapter)
+        monkeypatch.setattr(svc, "BUILD_RETRY_S", 0.0)
+        monkeypatch.setattr(svc, "send", sent.append)
+        monkeypatch.setattr(svc, "_gateway_restarts",
+                            lambda: {"recent_ts": [], "readable": True})
+        monkeypatch.setattr(svc, "_gateway_watch",
+                            lambda *a, **k: calls.append(a) or [])
+        svc.LAST["build_fail_since"] = None
+        try:
+            svc._loop()
+        except _Escape:
+            pass
+        return calls, sent
+
+    calls, sent = run(ExecutorConnectionError("could not connect to IB gateway"))
+    assert len(calls) == 1 and svc.LAST["build_fail_since"]
+    assert sent and "build failed" in sent[0]
+    svc.LAST["build_fail_since"] = None
+    calls, _ = run(RuntimeError("BLEND_ENABLED with a dry adapter: refusing"))
+    assert calls == [] and not svc.LAST["build_fail_since"]
+
+
+def test_connect_failure_is_a_connection_error(monkeypatch):
+    import types
+    import pytest
+    import app.ib_adapter as A
+    from app.ib_adapter import ExecutorConnectionError
+    monkeypatch.setattr(A.time, "sleep", lambda *_: None)
+
+    class _IB:
+        def isConnected(self):
+            return False
+        def disconnect(self):
+            pass
+        def connect(self, *a, **k):
+            raise ConnectionRefusedError("gateway not listening")
+
+    ad = A.IBAdapter.__new__(A.IBAdapter)
+    ad.ib = _IB()
+    ad.cfg = types.SimpleNamespace(trading_mode="paper", ib_host="h", ib_client_id=1)
+    with pytest.raises(ExecutorConnectionError):
+        ad._connect()

@@ -280,10 +280,16 @@ unreconciled venue state. Phases IN ORDER:
    only when it moves by more than the threshold, and is RED beyond 1%.
    The baseline and every drift field survive a restart (persisted in
    state); a seed resets them.
-   Nothing is adopted; `/resume` re-baselines. `/blend/feed` and `/status`
-   carry `cash: {ledger, drift, drift_age_s, baselined,
-   over_threshold_cycles, commissions_paid}` - the venue's cash LEVEL is
-   never published. Commissions are now debited from the bucket that
+   Nothing is adopted; only `POST /blend/cash/rebaseline` (EXEC_TOKEN)
+   restarts the delta clock - `/resume` does not touch it. `/blend/feed` and `/status`
+   carry `cash: {ledger, drift, drift_age_s, baselined, baseline_age_s,
+   over_threshold_cycles, commissions_paid, commissions_unreported,
+   skipped, skipped_for_s}` - the venue's cash LEVEL is never published.
+   `skipped` names why the last cycle did not compare (pending journals,
+   an unreconciled record parked inside the last 15 min, a recent fill);
+   one reason holding for 6 h is said once a day. A parked unreconciled
+   record older than the quiet window no longer suspends the compare - its
+   proceeds show as drift, which is what the alert is for (round 3). Commissions are now debited from the bucket that
    traded, off the venue's commissionReport, at every fill. Stage 2
    (adopting positive drift into the ledger) is a separate, opt-in change
    to be turned on with two weeks of stage-1 data, not before.
@@ -313,9 +319,17 @@ unreconciled venue state. Phases IN ORDER:
    blip that drops the fire mid-day cannot churn BIL) and the post-close
    cycle places the MOO from settled cash: a fire seen at 10:30 fills at
    the NEXT open (T+1). Idempotent: once the cash is on hand the next
-   cycle raises nothing; the hold clears when the entries are placed or
-   the date rolls, and only then does the ordinary sweep park the cash
-   again (one BIL round trip). A resting MOO reserves its cost, so a
+   cycle raises nothing; the hold is released by the amount each placed
+   entry SPENDS (a second fire absent for one cycle keeps its cash held)
+   and otherwise only once the NEXT SESSION has started - `today` is the
+   UTC date and rolls at 20:00 ET, inside the post-close window, so a
+   release on the roll would have re-swept the cash at 20:05 ET (round 3).
+   Only then does the ordinary sweep park the cash again (one BIL round
+   trip). While a BIL sell or sweep is still resting, an entry the settled
+   cash cannot fund at its risk size WAITS rather than placing a dust
+   entry (a 1-share MOO would burn the call_id for good). NYSE early
+   closes (13:00 ET) are a closed venue from 13:00 (`NYSE_EARLY_CLOSES`,
+   extend yearly with `NYSE_HOLIDAYS`). A resting MOO reserves its cost, so a
    second fire the same evening sizes against what is actually free.
    A paused ENTER kind never pre-funds. A fire first seen AFTER the close
    still needs its BIL sold overnight (`rests_for_open`, exempt from the

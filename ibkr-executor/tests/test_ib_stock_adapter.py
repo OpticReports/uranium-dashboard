@@ -1376,7 +1376,7 @@ def test_commission_sentinel_is_ignored_and_report_is_awaited(ib_adapter):
     fake = ib_adapter.ib
     fake.on_place = lambda t: fake.fill(t, [(20, 91.42)], commission=1.7976931348623157e308)
     r = ib_adapter.place_stock_order("BIL", 20, "MKT", client_order_id="c-sent")
-    assert r["commission"] == 0.0
+    assert "commission" not in r          # ignored report = UNREPORTED (round 3)
     # report lands late: first pump attaches it
     def late(t):
         fake.fill(t, [(20, 91.42)])                       # no report yet
@@ -1395,8 +1395,54 @@ def test_warning_codes_are_not_venue_reasons(ib_adapter):
     def reject(t):
         fake.errorEvent.emit(t.order.orderId, 399, "Order will not be placed at the exchange until ...", t.contract)
         t.orderStatus.status = "Cancelled"
-        t.log = [types.SimpleNamespace(errorCode=0, message="Cancelled", status="Cancelled")]
+        # the real wrapper ALSO writes the warning into trade.log (round 3)
+        t.log = [types.SimpleNamespace(errorCode=399, status="ValidationError",
+                                       message="Warning 399, reqId 1: Order Message: ..."),
+                 types.SimpleNamespace(errorCode=0, message="Cancelled", status="Cancelled")]
     fake.on_place = reject
     with pytest.raises(RuntimeError):
         ib_adapter.place_stock_order("MRK", 1, "MOO", tif="OPG", client_order_id="w1")
     assert ib_adapter.find_stock_order("w1")["reason"] == "no venue reason recorded"
+
+
+# --- counter-agent round 3 ---------------------------------------------------
+
+def test_error_map_is_order_only_and_cleared_on_reconnect(ib_adapter):
+    fake = ib_adapter.ib
+    # a market-data request id (same counter) errors: not an order -> ignored
+    fake.errorEvent.emit(350, 10197, "No market data during competing live session", None)
+    assert ib_adapter._order_errors == {}
+    # an order id IS recorded ...
+    fake.on_place = None
+    ib_adapter.place_stock_order("CRSP", -5, "STP", stop_price=44.0, tif="GTC",
+                                 client_order_id="r3-stp")
+    oid = fake._trades[-1].order.orderId
+    fake.errorEvent.emit(oid, 201, "Order rejected - reason: ...", None)
+    assert ib_adapter._order_errors[oid].startswith("[201]")
+    # ... and the map is cleared by a reconnect (ids restart at nextValidId)
+    fake.connected = False
+    assert ib_adapter.spot("SPY") == 100.0                   # reconnects
+    assert ib_adapter._order_errors == {}
+
+
+def test_completed_order_without_fills_is_unreported():
+    t = types.SimpleNamespace(fills=[], orderStatus=types.SimpleNamespace(status="Filled"))
+    assert ib_mod._commission_reported(t) is False
+
+
+def test_two_managed_accounts_is_no_claim(ib_adapter):
+    fake = ib_adapter.ib
+    fake.account_rows = [_acct("TotalCashValue", 100.0, account="DU1"),
+                         _acct("TotalCashValue", 200.0, account="DU2")]
+    fake.managed = ["DU1", "DU2"]
+    assert ib_adapter.account_cash() is None
+    # a BASE row in a non-USD base is not ours either
+    fake.managed = ["DU1"]
+    fake.account_rows = [_acct("TotalCashValue", 100.0, currency="BASE", account="DU1")]
+    assert ib_adapter.account_cash() is None
+
+
+def test_dry_fill_reports_a_zero_commission():
+    a = DryAdapter()
+    r = a.place_stock_order("BIL", 3, "MKT", client_order_id="d-1")
+    assert r["status"] == "filled" and r["commission"] == 0.0

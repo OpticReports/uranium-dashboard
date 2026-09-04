@@ -173,10 +173,12 @@ def _gateway_watch(now: float, summary: dict | None, restarts: dict | None,
         return []
     down_since = summary.get("currently_down_since")
     if not down_since:
-        st.update(outage_since=None, diagnosed=False, loop_paged=False)
+        st.update(outage_since=None, diagnosed=False, loop_paged=False,
+                  unreadable_paged=False)
         return []
     if st.get("outage_since") != down_since:
-        st.update(outage_since=down_since, diagnosed=False, loop_paged=False)
+        st.update(outage_since=down_since, diagnosed=False, loop_paged=False,
+                  unreadable_paged=False)
     fired: list[str] = []
     down_for = now - float(down_since)
     r = restarts or {}
@@ -185,9 +187,13 @@ def _gateway_watch(now: float, summary: dict | None, restarts: dict | None,
     # back one poll interval plus grace
     grace_from = float(down_since) - poll - 120
     since_drop = sum(1 for t in (r.get("recent_ts") or []) if t >= grace_from)
+    # the breaker flag is the LAST record's reason, any age: a log whose tail
+    # is a breaker trip from a previous outage must not diagnose this one as
+    # crash-looping (round 3) - it counts only if it tripped since the drop
+    circuit = bool(r.get("circuit_open")) and _num_ts(r.get("last") or {}) >= grace_from
     mins = int(down_for // 60)
     if (down_for > STALL_DIAG_S and not st.get("loop_paged")
-            and (r.get("circuit_open") or since_drop > 1)):
+            and (circuit or since_drop > 1)):
         # its own flag: a crash loop that develops AFTER a stall diagnosis in
         # the same outage still pages (counter-agent round 2)
         st["loop_paged"] = True
@@ -195,14 +201,18 @@ def _gateway_watch(now: float, summary: dict | None, restarts: dict | None,
         send_fn(f"🚨 IB gateway down {mins} min and the supervisor has "
                 f"relaunched it {since_drop} time(s) since the drop"
                 + (" — its circuit breaker is now OPEN (no more retries)"
-                   if r.get("circuit_open") else "")
+                   if circuit else "")
                 + ": the gateway is crash-looping or dead, not waiting "
                 f"on a push. Check credentials/config, then Render → "
                 f"ibkr-executor → Restart service.")
         fired.append("loop")
     if down_for > STALL_DIAG_S and not st.get("diagnosed"):
         if not r.get("readable", False):
-            st["diagnosed"] = True
+            # its own flag (round 3): if the log becomes readable later in
+            # the same outage the stall page ("tap the phone") still fires
+            if st.get("unreadable_paged"):
+                return fired
+            st["unreadable_paged"] = True
             send_fn(f"🚨 IB gateway down {mins} min; the supervisor restart "
                     f"log is unreadable at {r.get('path') or '?'} so I "
                     f"cannot tell a login stall from a crash loop. Check the "
@@ -593,14 +603,14 @@ def health():
             # (2026-08-24). Age, not a boolean: watchers can threshold it.
             "quotes_missing_for_s": max(0.0, round(time.time() - qm, 1))
             if qm else None}
-    if DISABLED_BOOK:
+    db = DISABLED_BOOK          # ONE read: the loop thread reassigns it
+    if db:
         # A real book the service is NOT managing - visible from outside,
         # not only in a Telegram page that scrolled away. /health is public:
         # a flag and an age only; the holdings breakdown is on /status.
         body["blend_disabled_book"] = {
-            "present": True, "mode": DISABLED_BOOK.get("mode"),
-            "alert_age_s": round(time.time()
-                                 - DISABLED_BOOK.get("last_alert_ts", 0.0), 1)}
+            "present": True, "mode": db.get("mode"),
+            "alert_age_s": round(time.time() - db.get("last_alert_ts", 0.0), 1)}
     if OUTAGES is not None:
         # Guarded: healthCheckPath is /health, so a raise here 500s the probe
         # and Render restarts the WHOLE container - executor included,
@@ -638,8 +648,9 @@ def status(x_exec_token: str | None = Header(default=None),
             "dry_intents": getattr(ADAPTER, "log", [])[-40:]}
     # The "blend" section exists ONLY when BLEND_ENABLED: with the flag off,
     # /status is byte-identical to the pre-blend service.
-    if DISABLED_BOOK:
-        body["blend_disabled_book"] = {k: DISABLED_BOOK.get(k) for k in
+    db = DISABLED_BOOK          # ONE read (round 3)
+    if db:
+        body["blend_disabled_book"] = {k: db.get(k) for k in
                                        ("mode", "positions", "spy_qty",
                                         "bil_qty", "sleeve_cash", "halted")}
     if BLEND is not None:

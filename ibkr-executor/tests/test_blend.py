@@ -6,6 +6,7 @@ account equity; DRY_RUN defaults true). All offline."""
 from __future__ import annotations
 
 import json
+import pathlib
 import os
 import time
 
@@ -2627,10 +2628,19 @@ def test_gate_adapt_m1_pending_sweep_cash_reserved_from_entries(tmp_path):
     out = m.step("2026-08-20",
                  payload(entries=[entry()], stops=[stop_row()]),
                  PRICES)
-    (ent,) = [o for o in out if o["action"] == "ENTER"]
-    # only $100 is spendable -> 2 shares @ 50 (risk sizing alone wants 5)
-    assert ent["qty"] == 2
+    # only $100 is spendable (risk sizing wants 5 sh @ 50): the entry is NOT
+    # dust-sized to 2 while the sweep rests - it waits for adoption (round 3:
+    # a dust entry burns the call_id for good)
+    assert not [o for o in out if o["action"] == "ENTER"]
+    assert any("not placing a dust entry" in e["msg"] for e in m.state.events)
     assert not [o for o in out if o["action"] == "SWEEP"]   # kind suppressed
+    # the sweep adopts -> full risk size next cycle
+    for cid in list(m.state.pending_book_orders):
+        m.clear_pending_book_order(cid)
+    m.on_sweep(29, 100.0)
+    out = m.step("2026-08-20", payload(entries=[entry()], stops=[stop_row()]), PRICES)
+    (ent,) = [o for o in out if o["action"] == "ENTER"]
+    assert ent["qty"] == 5
 
 
 # --- mode-transition guard + N3 (resume race / atomic save) -------------------
@@ -4216,8 +4226,12 @@ def test_cash_reconcile_stage1(tmp_path):
     m.state.pending_entries.clear()
     # adapter has no claim -> nothing compared, nothing raised
     assert blend_mod.reconcile_cash(m, _CashAdapter(None), alerts.append) is None
-    # /resume re-baselines; the next quiet cycle starts the clock over
+    # /resume does NOT touch the cash clock (round 3): the baseline and the
+    # drift survive it; only the dedicated rebaseline restarts the clock
+    base_before = dict(m.state.cash_baseline)
     m.resume("2026-08-20")
+    assert m.state.cash_baseline == base_before and m.state.cash_drift == -108.0
+    m.rebaseline_cash("operator")
     assert m.state.cash_baseline is None and m.state.cash_drift is None
     r6 = blend_mod.reconcile_cash(m, a, alerts.append)
     assert r6 == {"drift": 0.0, "baselined": True}
@@ -4419,9 +4433,10 @@ def test_prefund_never_for_a_paused_kind(tmp_path, monkeypatch):
 
 
 # --- counter-agent round 2 gates --------------------------------------------
-# MUTATION-VERIFIED: dropping any of the nine cash/pre-fund fields from save()
-# or _load() turns test_cash_state_survives_a_restart red; dropping the
-# resting-entry reservation turns test_second_fire_while_a_moo_rests red;
+# MUTATION-VERIFIED: dropping any of the eleven cash/pre-fund fields from
+# save() or _load() turns test_every_cash_field_survives_a_restart (round 3)
+# red; dropping the resting-entry reservation turns
+# test_second_fire_while_a_moo_rests_is_funded_not_double_spent red;
 # dropping the seed reset / `not st.initialized` guard turns
 # test_no_baseline_across_a_seed red; dropping the holiday clause in
 # entry_window_open turns test_holiday_is_a_closed_session red.
@@ -4535,4 +4550,177 @@ def test_commission_sanity_bound(tmp_path):
     assert any("refused" in e["msg"] for e in m.state.events)
     m.on_sweep(1, 100.0, commission=None)                    # unreported: loud, booked 0
     assert m.state.sleeve_cash == 400.0
-    assert any("not yet reported" in e["msg"] for e in m.state.events)
+    assert any("not reported" in e["msg"] for e in m.state.events)
+    assert m.state.commissions_unreported == 1
+    # round 3: garbage is loud too, a bool is not a number, the cap is 1% of
+    # the notional (IB's own schedule) with a $5 floor - and a legitimately
+    # large commission on a large notional still books
+    m.on_sweep(1, 100.0, commission="abc")
+    assert m.state.sleeve_cash == 300.0 and m.state.commissions_unreported == 2
+    assert any("unreadable" in e["msg"] for e in m.state.events)
+    m.on_sweep(1, 100.0, commission=True)
+    assert m.state.sleeve_cash == 200.0 and m.state.commissions_paid == 0.0
+    m.on_sweep(1, 100.0, commission=10.0)                    # cap on $100 = $5
+    assert m.state.sleeve_cash == 100.0 and m.state.commissions_paid == 0.0
+    m.state.bil_qty = 10_000
+    m.on_sweep(-10_000, 100.0, commission=60.0)              # $1M notional: books
+    assert m.state.commissions_paid == 60.0
+    assert m.state.sleeve_cash == pytest.approx(1_000_100.0 - 60.0)
+
+
+# --- counter-agent round 3 gates --------------------------------------------
+# MUTATION-VERIFIED (round 3): reverting the in-session-only hold release
+# turns test_hold_survives_the_utc_midnight_roll red; dropping the no-dust
+# rule turns test_gate_adapt_m1_pending_sweep_cash_reserved_from_entries
+# red; dropping NYSE_EARLY_CLOSES turns test_early_close_is_a_closed_venue
+# red; releasing the whole hold on a partial placement turns
+# test_partial_placement_keeps_the_rest_held red; the unreconciled age gate,
+# the /resume no-rebaseline, the _load hardening, the clamp/charge order and
+# each of the eleven persisted cash fields have their own test below.
+
+def test_hold_survives_the_utc_midnight_roll(tmp_path, monkeypatch):
+    """`today` is the UTC date: it rolls at 20:00 ET, INSIDE the post-close
+    window. Releasing the hold on the roll re-swept the pre-funded cash at
+    20:05 ET; the fire returning at 21:00 was then dust-sized to 1 share
+    against the resting sweep and the call_id burned (round 3, HIGH)."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
+    a = SessionDryAdapter()
+    alerts = []
+    pl = payload(entries=[entry()], stops=[stop_row()])
+    monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: PRICES)
+    cyc = lambda *t, **k: _session_cycle(m, a, pl, alerts, monkeypatch, *t, **k)
+    cyc(2026, 8, 20, 14, 0)                                   # pre-funded
+    assert m.state.bil_qty == 27 and m.state.prefund_usd > 0
+    full = int(m.state.prefund_usd // 50)
+    pl["entries"] = []                                        # tracker blip
+    cyc(2026, 8, 20, 20, 5, today="2026-08-21")               # 00:05 UTC Fri
+    assert m.state.prefund_usd > 0, "hold released on the UTC roll"
+    assert not [o for o in a.orders("BIL") if o["qty"] > 0], "cash re-swept at 20:05 ET"
+    pl["entries"] = [entry()]                                 # the fire is back
+    cyc(2026, 8, 20, 21, 0, today="2026-08-21")
+    (moo,) = a.orders(order_type="MOO")
+    assert moo["qty"] == full and full >= 5                   # full size, not 1
+    assert m.state.prefund_usd == 0.0                         # spent -> released
+    # next session with the fire gone: the hold (none left) and the cash go
+    # back to BIL only once the session has started
+    a.open_market()
+    pl["entries"] = []
+    cyc(2026, 8, 21, 10, 0, today="2026-08-21")
+
+
+def test_early_close_is_a_closed_venue(tmp_path):
+    open_ = blend_mod.entry_window_open
+    assert not open_(_et(2026, 11, 27, 12, 30))               # day after Thanksgiving
+    assert open_(_et(2026, 11, 27, 13, 5))                    # 13:00 close passed
+    assert open_(_et(2026, 11, 26, 12, 30))                   # Thanksgiving itself
+    assert not open_(_et(2026, 11, 30, 14, 0))                # ordinary Monday
+    assert blend_mod.session_close_et(_dt(2026, 12, 24).date()) == (13, 0)
+
+
+def test_partial_placement_keeps_the_rest_held(tmp_path, monkeypatch):
+    """Two fires pre-funded mid-day; post-close only A is in the payload for
+    one cycle. A places, B's cash stays held (not swept), B places when it
+    is back (round 3, MED)."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=60, spy_qty=140)   # 30/70: no rebalance
+    a = SessionDryAdapter()
+    alerts = []
+    ea, eb = entry(call_id=1, symbol="CRSP"), entry(call_id=2, symbol="CRSP")
+    sa, sb = stop_row(call_id=1), stop_row(call_id=2)
+    pl = payload(entries=[ea, eb], stops=[sa, sb])
+    monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: PRICES)
+    cyc = lambda *t, **k: _session_cycle(m, a, pl, alerts, monkeypatch, *t, **k)
+    cyc(2026, 8, 20, 14, 0)
+    hold = m.state.prefund_usd
+    assert hold == 1_000.0 and m.state.bil_qty == 50          # 2 x 10 sh @ 50
+    pl["entries"], pl["stops"] = [ea], [sa]                   # B absent one cycle
+    cyc(2026, 8, 20, 16, 5)
+    assert len(a.orders(order_type="MOO")) == 1
+    assert 0 < m.state.prefund_usd < hold, "hold not reduced by what A spent"
+    assert not [o for o in a.orders("BIL") if o["qty"] > 0], "B's cash swept"
+    pl["entries"], pl["stops"] = [ea, eb], [sa, sb]
+    cyc(2026, 8, 20, 16, 10)
+    assert len(a.orders(order_type="MOO")) == 2
+    assert m.state.prefund_usd == 0.0
+
+
+def test_unreconciled_park_does_not_suspend_the_cash_reconcile_forever(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=3_000.0, spy_qty=70, core_cash=100.0)
+    a = _CashAdapter(43_100.0)
+    assert blend_mod.reconcile_cash(m, a, lambda *_: None) == {"drift": 0.0, "baselined": True}
+    # a FRESH park (inside the quiet window) skips, and says why
+    m.state.unreconciled["7"] = {"symbol": "CRSP", "qty": 3, "ts": int(time.time())}
+    assert blend_mod.reconcile_cash(m, a, lambda *_: None) is None
+    assert m.cash_summary()["skipped"] == "fresh unreconciled record"
+    # an OLD park (nothing ever pops it) no longer suspends the compare
+    m.state.unreconciled["7"]["ts"] = int(time.time()) - 2 * 3600
+    a.cash = 43_700.0                                         # its proceeds
+    r = blend_mod.reconcile_cash(m, a, lambda *_: None)
+    assert r is not None and r["drift"] == 600.0
+    assert m.cash_summary()["skipped"] is None
+    # a skip reason that holds for hours is said once a day
+    m.state.pending_entries["9"] = {"intent": {}, "date": "2026-08-20"}
+    assert blend_mod.reconcile_cash(m, a, lambda *_: None) is None
+    m._cash_skip_since = time.time() - 7 * 3600
+    assert blend_mod.reconcile_cash(m, a, lambda *_: None) is None
+    assert any("has not compared" in e["msg"] for e in m.state.events)
+    assert m.cash_summary()["skipped_for_s"] > 6 * 3600
+
+
+def test_every_cash_field_survives_a_restart(tmp_path):
+    """Round 3: the round-2 restart test asserted only the six fields whose
+    values differed from the dataclass defaults at save time."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=3_000.0, spy_qty=70, core_cash=100.0)
+    a = _CashAdapter(43_100.0)
+    blend_mod.reconcile_cash(m, a, lambda *_: None)          # baseline
+    a.cash = 43_142.0
+    blend_mod.reconcile_cash(m, a, lambda *_: None)          # cycles 1
+    r = blend_mod.reconcile_cash(m, a, lambda *_: None)      # cycles 2 -> WARN
+    assert r["fired"] == "WARN" and m.state.cash_alerted_drift == 42.0
+    m.state.last_fill_ts = 1_700_000_000.0                   # a fill long ago
+    m.state.commissions_paid, m.state.commissions_unreported = 1.5, 2
+    m.state.prefund_usd, m.state.prefund_date = 250.0, "2026-08-20"
+    m.save()
+    st = Blend3070Manager(m.cfg, m.state_path).state
+    want = {"cash_baseline": m.state.cash_baseline, "cash_drift": 42.0,
+            "cash_drift_ts": m.state.cash_drift_ts, "cash_drift_cycles": 2,
+            "cash_alerted_drift": 42.0, "cash_alerted_level": "WARN",
+            "last_fill_ts": 1_700_000_000.0, "commissions_paid": 1.5,
+            "commissions_unreported": 2, "prefund_usd": 250.0,
+            "prefund_date": "2026-08-20"}
+    for k, v in want.items():
+        assert getattr(st, k) == v, k
+    assert st.cash_baseline is not None and st.cash_drift_ts
+
+
+def test_load_hardens_garbage_cash_state(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=3_000.0)
+    m.save()
+    sp = pathlib.Path(m.state_path)
+    raw = json.loads(sp.read_text())
+    raw["cash_baseline"] = {"venue_cash": 1.0}               # mis-shaped
+    raw["cash_drift"], raw["cash_drift_ts"] = "abc", "nan"
+    sp.write_text(json.dumps(raw))
+    m2 = Blend3070Manager(m.cfg, m.state_path)
+    assert m2.state.cash_baseline is None and m2.state.cash_drift is None
+    assert m2.state.cash_drift_ts is None
+    s = m2.cash_summary()                                    # must not raise
+    assert s["baselined"] is False and s["drift"] is None
+    # ... and a fresh baseline is taken on the next quiet cycle
+    r = blend_mod.reconcile_cash(m2, _CashAdapter(43_000.0), lambda *_: None)
+    assert r == {"drift": 0.0, "baselined": True}
+
+
+def test_sweep_commission_is_charged_after_the_slippage_clamp(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=100.5, bil_qty=0)
+    m.on_sweep(1, 100.0, commission=1.0)
+    assert m.state.sleeve_cash == pytest.approx(-0.5)        # the fee is real
+    assert m.state.commissions_paid == 1.0
+    m.state.sleeve_cash = 99.5                                # slippage case
+    m.on_sweep(1, 100.0, commission=1.0)
+    assert m.state.sleeve_cash == pytest.approx(-1.0)        # clamp, THEN charge
