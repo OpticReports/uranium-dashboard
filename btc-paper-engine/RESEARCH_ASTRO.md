@@ -120,3 +120,88 @@ known-true and known-false calibration arms.
 
 Counter-agent review: 3 BLOCKING, 3 MAJOR, 5 MINOR findings, all applied
 above. Reproduce with `research/astro/*.py`.
+
+## Addendum: overlays on S6, the strategy we actually trade (2026-09-04)
+
+Casey's correction: "we don't buy and hold, we are trading S6." The section
+above tested astrology as a STANDALONE strategy against buy-and-hold, which
+answers the wrong question. The right one is whether gating, sizing or
+re-timing **S6's own trades** by astrological state beats S6. Re-run:
+
+Harness verified to reproduce `scripts/bench_blend.py`'s audited blend
+exactly. **S6 baseline: CAGR 56.95%, MaxDD -28.27%, MAR 2.014, NAV 15.73x,
+412 trades (245 S3 + 167 S4), 2020-07 to 2026-08.**
+
+**699 pre-specified overlay variants** across six families — lunar gating
+(64), retrogrades (40), all aspect pairs x angles (318 scorable), continuous
+size modulation (30), exit/stop-width re-simulation (35), zodiac/eclipse
+(110) — each scored against 2,000 MATCHED RANDOM nulls (same weights
+permuted across trades), because dropping trades moves CAGR and drawdown
+mechanically. Plus ~580 adversarial re-tests and >8,000 placebo-sky gates.
+
+**Result: 30 variants cleared the 95th percentile. Chance predicts ~29.**
+No family exceeds its own chance expectation.
+
+| overlay | CAGR | MaxDD | MAR | terminal NAV |
+|---|---|---|---|---|
+| **S6 unchanged** | **56.95%** | **-28.27%** | **2.014** | **15.73x** |
+| skip Mercury retrograde | 49.53% | -25.3% | 1.95 | 11.33x |
+| skip full-moon +/-3d | 46.71% | -37.3% | 1.252 | 10.03x |
+| only new-moon +/-3d | 20.42% | -20.96% | 0.974 | 3.04x |
+
+The folk rules are not neutral, they are **expensive**: sitting out Mercury
+retrograde costs 4.4x of terminal wealth over 6.2 years. Full moon is flatly
+null at every window from +/-0.5d to +/-5d (percentiles 16-50).
+
+**The best candidate and why it died.** "Skip entries within +/-3d of a
+Mercury station" posted CAGR 66.12%, MaxDD -24.19%, MAR 2.734, mar_pctile
+99.2, and cleared four independent nulls (matched permutation, calendar
+shift, 400 random 23-anchor calendars, max-statistic over 772 placebo
+planets). It still fails:
+- the protocol itself has a **~30% false-positive rate** — running the
+  identical best-of-search + gate on 80 placebo calendars cleared 24 of 80
+- **three trades carry 79% of the effect**, and two are the same market day;
+  re-adding 3 of the 47 removed trades collapses it to MAR 2.016, pctile 83
+- the **second half is null** (pctile 73.7; final third's CAGR is below
+  unfiltered baseline)
+- it works only on the **direct** station, not the retrograde station - the
+  half the premise rests on
+- parameter profile is a sawtooth, not a plateau
+
+**Clearing the null does not mean beating S6.** Every high-percentile "ONLY"
+gate is a *smaller* strategy: the best lunar gate keeps 13.8% of trades for
+CAGR 19.54% / NAV 2.82x. It beats randomly discarding 86% of the book; it
+loses badly to simply trading S6. A Jupiter-Saturn conjunction gate scored
+MAR 4.674 / pctile 100.0 and is a single 2020-2021 date block reproducible
+with zero astrology by a date filter - next occurrence 2040.
+
+### Additional honesty items from this pass
+
+11. **A defect in my own scorer**, found in review: `lib.score`'s null
+    permutes weights IID across trades, destroying time-clustering, which
+    biases percentiles UPWARD for any calendar-window rule (demonstrated:
+    one variant scored 95.5 on permutation vs 86.9 under a calendar-shift
+    null). The null is also not span-matched, so gates concentrating trades
+    into a short window score near 100 mechanically. A future sweep should
+    use a family-wise max-statistic under a time-shift null; under that
+    rule the lunar family sits at p=0.86 and the aspect family at p=0.50.
+12. **Power floor**: a deliberate-lookahead positive control pins at 100.0,
+    so the scorer detects real per-trade skill - but day-of-week (a real
+    crypto effect) does NOT cleanly pass, and the injected-signal power
+    curve puts 80% power at ~1.4pp per-trade. This rules out LARGE overlay
+    effects, not small ones.
+13. Sample here is 412 trades / 6.2 years, not the 15 years of the daily
+    study. Slow-planet aspects (Jupiter-Saturn synodic 19.9y) are untestable
+    by construction and should be excluded from future sweeps.
+14. Not tested: exit-TIME astrological state (only entry gating plus
+    stop-width), transaction costs of fractional resizing (every
+    size-modulated variant is strictly worse once fees are added), intraday
+    drawdown (all measurement is trade-close, so MaxDD is understated
+    uniformly), and assets other than BTC.
+
+### One non-astrological lead worth following
+
+The unconditional stop-width dose curves suggest S3's 2.5-ATR stop sits near
+a local optimum but **S4's 5.0-ATR chandelier trail is not obviously tuned**.
+That is a real engineering question with no astrology in it, and it is the
+only actionable thing this sweep produced.
