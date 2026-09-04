@@ -1,9 +1,10 @@
 # Fact pack — Nutation Research (pre-seed, $500K SAFE)
 
-Rev 1 (PRE-DD), 2026-08-25 intake; sweeps completed 2026-09-04. Three
-verification sweeps (founder/company/YC · deck-claims audit ·
-market/comps) + adversarial counter-agent pass. Deal size scales the
-depth: this is a $500K SAFE, not a $10M round — three sweeps, not six.
+Rev 1 (PRE-DD), 2026-08-25 intake; sweeps completed 2026-09-04;
+counter-agent verdict applied 2026-09-04 (first draft ruled NOT SAFE TO
+PUBLISH; four mandatory corrections applied inline as [CORRECTED], two
+NEW P1 findings added — see THE LICENSE). Three verification sweeps +
+adversarial counter-agent. Depth scaled to a $500K SAFE.
 
 **Deal:** $500K SAFE (deck). **[LP-RELAYED, OFF-DECK]:** ~$20M
 valuation; accepted into Y Combinator. Neither appears in the deck OR
@@ -85,11 +86,16 @@ pages (JS — dates corroborated-approximate); web.archive.org
 
 ## CONFLICTS / CANDOUR
 
-- **Deck vs site on the Medal story:** the SITE has it right ("Medal
-  built a consumer product… before it rejected $500M"); the DECK
-  reverses it ("General Intuition built… Medal"). Medal (2015, 10M MAU)
-  predates the lab, which spun out Oct 2025. Deck-only garble; sloppy
-  rather than deceptive, but it is the deck's flagship analogy.
+- **Deck vs site on the Medal story [CORRECTED — WRONG downgraded to
+  IMPRECISE]:** the deck's chronology is actually right (built 2015 →
+  rejected $500M late 2024 → lab spun out Oct 2025), and "it rejected"
+  is defensible under corporate continuation (GI is Medal's own lab,
+  same founder). The real defects are entity attribution ("General
+  Intuition built Medal" — Medal Inc. built Medal) and retrofitted
+  teleology ("to collect gameplay data" — Medal was a consumer
+  clip-sharing app a decade before world models were anyone's plan).
+  The site states it correctly; the deck launders a lucky data asset
+  into a deliberate strategy.
 - **The deck's own derived layer is where every defect lives.** Audit
   tally: 10 verified (all faithful copies of other people's numbers),
   1 wrong (Medal causality), 3 imprecise, 5 unverifiable — and the
@@ -98,20 +104,53 @@ pages (JS — dates corroborated-approximate); web.archive.org
   4-significant-figure cost with no source), the uncited 79/82/92
   robotics result (unlocatable in the literature), and both market
   projections ($500M, $2–3B).
-- **The ISU/USFS "opening" reads as a closing.** ISU signed Aiving
-  (skate-mounted sensors) ~Jan 2026; ISU's 6-camera judging CV has
-  been in testing for TWO YEARS (Feb 2026 was its Milano-Cortina
-  publicity, not a pilot start); Deloitte holds the ISU digital
-  mandate; and **US Figure Skating signed OOFSkate as its national AI
-  jump-metrics partner in December 2025**. A "Skate Score" AI-judging
-  app already ships on Google Play. The deck presents this news as
-  evidence of demand; the primary record shows the relationships being
-  closed by others.
-- **HY-Motion license — OPEN QUESTION, potentially P1**: the product
-  "extends Tencent's HY-Motion 1.0." Whether Tencent's release license
-  permits commercial fine-tuned derivatives (and their sublicensing)
-  is being checked by the counter-agent; if restrictive, the current
-  product sits on someone else's terms.
+- **Incumbency [CORRECTED — "lanes taken" recast as "differentiated
+  wedge, contested distribution"]:** ISU×Aiving (wearable jump
+  metrics) confirmed; USFS×OOFSkate (Dec 2025) confirmed but the
+  release **never says exclusive**; Omega ran a **14-camera** CV rig at
+  Milano-Cortina (the sweeps' "6-camera/2-year" detail did NOT
+  reproduce — struck); Deloitte's ISU deal is fan-engagement
+  consulting, not a product lane — dropped as a competitor. **New
+  adverse detail:** MIT News (2026-02-10) shows OOFSkate already ships
+  an **automated GOE classifier** — so Yuna's scoring leg is not
+  unique — and OOFSkate is incubated in the founder's own MIT MechE
+  department (Sports Lab, Prof. Hosoi). **What remains genuinely open:
+  no incumbent ships generative counterfactual video** ("the version
+  you could have landed").
+## THE LICENSE — counter-agent's decisive new finding [VERIFIED,
+## full 16KB license text pulled from huggingface.co/tencent/HY-Motion-1.0]
+
+HY-Motion 1.0 WAS publicly released (2025-12-30; weights on HF, GitHub
+inference code only — no official fine-tuning code, so Nutation wrote
+its own training loop; ask to see it). It ships under the **Tencent
+HY-Motion 1.0 Community License**, and two clauses hit this company
+specifically:
+
+1. **Territory exclusion — P1.** "'Territory' shall mean the worldwide
+   territory, excluding the territory of the European Union, United
+   Kingdom and South Korea" … "You must not use, reproduce, modify,
+   distribute, or display the … Works, **Output or results** … outside
+   the Territory." Even the model's OUTPUTS are barred there. **For a
+   figure-skating company, South Korea is one of the sport's largest
+   markets and the EU hosts much of the federation ecosystem.**
+   Governing law: Hong Kong.
+2. **The endgame is encumbered at the root — P1.** Sec 5(b): "You must
+   not use the … Works or any Output or results … **to improve any
+   other AI model** (other than [HY-Motion] or Model Derivatives
+   thereof)." And the Model Derivative definition captures distillation
+   AND "methods based on the generation of synthetic data Outputs …
+   for training that model." Nutation's stated arc — skating data →
+   train/license world models to robotics and graphics — is either
+   prohibited or produces Model Derivatives carrying Tencent's license
+   chain (with its territory exclusions) forever. **The US coaching
+   product is fine (Tencent claims no rights in Outputs as content);
+   the $2–3B licensing endgame requires a from-scratch backbone — which
+   reopens the deck's own compute-cost claims.**
+   Also: the AUP requires machine-generated content be conspicuously
+   identified — touching the counterfactual-video product directly.
+   Benign note, kept honest: the 1M-MAU clause is measured AT RELEASE
+   DATE (Dec 2025, Nutation ~0 MAU) and never binds them — do not cite
+   it as a risk.
 
 ## Market structure (comps sweep)
 
@@ -133,7 +172,10 @@ pages (JS — dates corroborated-approximate); web.archive.org
   ~$138M/yr. The deck's "$2–3B data & model contracts" exceeds every
   anchor by ~an order of magnitude.
 - **Sports-video realized ceiling, 20 years:** Second Spectrum $198.3M
-  (SEC-verified) and Hudl ~$900M private mark [SECONDARY] — both
+  (SEC 424B3, reproduced verbatim: $115.0M cash + $83.3M equity) and
+  Hudl [CORRECTED retag: **~$900M post-money, press-reported on the
+  2020 Bain-led $120M round, six years stale, unconfirmed by company**]
+  — both
   required league-official status or all-sports mass market. Mocap
   pure-plays exit small and undisclosed to strategics (Sony ×2, Epic,
   Amazon). No skating software company has demonstrably reached $5M ARR.
@@ -168,6 +210,9 @@ eight figures for human motion data.
 | 8 | P3 | Corporate: incorporation (state, date), any co-founder history, cap table (solo = short). | Hygiene | ● |
 | 9 | P3 | The deck's derived numbers: derivation of "$4,582 / 72–697x" and the source of the 79/82/92 robotics result. | Candour | ● |
 | 10 | P3 | Introduction economics: does the friend carry any interest? | Process | ● |
+| 11 | **P1** | Your legal read on HY-Motion Sec 5(b) and the EU/UK/South-Korea outputs exclusion vs the market plan — and where training/inference physically runs | Whether the endgame is legal on this backbone | ● 09-04 |
+| 12 | P2 | Your own fine-tuning code + compute receipts (also settles the "$4,582" provenance — plausibly your own bill, miscited to Tencent's paper) | Candour + feasibility | ● |
+| 13 | P2 | Does the USFS–OOFSkate agreement carry unpublished exclusivity? | Distribution ceiling | ● |
 
-*Counter-agent pass in flight at rev-1 write; corrections land inline
-as [CORRECTED] before scoring. Panel + red team follow.*
+*Counter-agent verdict applied in full (4 mandatory corrections, 2 new
+P1s, 3 new DD rows). Panel + red team scored the corrected pack.*
