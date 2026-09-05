@@ -1,0 +1,81 @@
+modern: base(5.00) MAR=1.537 cagr=43.4% dd=-28.3% | grid MAR 0.622..1.537 (argmax 5.00)
+hl: base(5.00) MAR=1.021 cagr=28.9% dd=-28.3% | grid MAR 0.316..1.088 (argmax 7.00)
+modern_A: base(5.00) MAR=2.160 cagr=59.6% dd=-27.6% | grid MAR 0.585..2.817 (argmax 4.50)
+modern_B: base(5.00) MAR=0.883 cagr=25.0% dd=-28.3% | grid MAR 0.159..0.883 (argmax 5.00)
+wrote /tmp/trail/trail_sweep.json
+
+=== dd_halt OFF (post-hoc) ===
+modern: base(5.00) MAR=1.537 cagr=43.4% dd=-28.3% | grid MAR 0.003..1.537 (argmax 5.00)
+hl: base(5.00) MAR=1.021 cagr=28.9% dd=-28.3% | grid MAR -0.109..1.088 (argmax 7.00)
+modern_A: base(5.00) MAR=2.160 cagr=59.6% dd=-27.6% | grid MAR 0.360..2.817 (argmax 4.50)
+modern_B: base(5.00) MAR=0.883 cagr=25.0% dd=-28.3% | grid MAR -0.229..0.883 (argmax 5.00)
+wrote /tmp/trail/trail_sweep_ddhalt1.json
+
+=== NULL 1: block bootstrap (live cfg) ===
+source=/tmp/trail/trail_sweep.json  resamples=2000/2000  block=30d  seed=20260905
+observed: MAR(5.00)=1.537  grid median=1.117  lift=+0.419
+
+NULL A - how big is a best-of-21 lift over the grid median, by luck?
+  bootstrap max-minus-median: median +0.668  q90 +1.401  q95 +1.754
+  observed lift of the INCUMBENT (5.00) over the median: +0.419
+  P(random best-of-21 lift >= incumbent's lift) = 0.752
+
+NULL B - is 5.00 stably the best, or best once?
+  P(5.00 is the bootstrap argmax) = 0.234   (uniform would be 0.048)
+  5.00's rank among 21: median 4  q10 1  q90 12
+  P(5.00 in top 5) = 0.635   P(5.00 in bottom half) = 0.142
+  most frequent bootstrap argmax: 5.00(0.23), 7.00(0.17), 4.25(0.13), 4.00(0.08), 3.25(0.07), 4.50(0.05)
+
+=== NULL 1: block bootstrap (halt off) ===
+source=/tmp/trail/trail_sweep_ddhalt1.json  resamples=2000/2000  block=30d  seed=20260905
+observed: MAR(5.00)=1.537  grid median=1.177  lift=+0.359
+
+NULL A - how big is a best-of-21 lift over the grid median, by luck?
+  bootstrap max-minus-median: median +0.654  q90 +1.405  q95 +1.712
+  observed lift of the INCUMBENT (5.00) over the median: +0.359
+  P(random best-of-21 lift >= incumbent's lift) = 0.811
+
+NULL B - is 5.00 stably the best, or best once?
+  P(5.00 is the bootstrap argmax) = 0.201   (uniform would be 0.048)
+  5.00's rank among 21: median 4  q10 1  q90 11
+  P(5.00 in top 5) = 0.598   P(5.00 in bottom half) = 0.129
+  most frequent bootstrap argmax: 5.00(0.20), 7.00(0.16), 6.00(0.11), 4.25(0.10), 4.50(0.08), 3.25(0.08)
+
+=== NULL 2a: time_stop placebo (degenerate) ===
+time_stop_bars   20: S6 MAR 1.505  cagr  41.8%  dd  -27.8%
+time_stop_bars   25: S6 MAR 1.417  cagr  40.4%  dd  -28.5%
+time_stop_bars   30: S6 MAR 1.261  cagr  39.0%  dd  -30.9%
+time_stop_bars   35: S6 MAR 1.481  cagr  41.9%  dd  -28.3%
+time_stop_bars   40: S6 MAR 1.494  cagr  42.2%  dd  -28.3%
+time_stop_bars   45: S6 MAR 1.510  cagr  42.7%  dd  -28.3%
+time_stop_bars   50: S6 MAR 1.507  cagr  42.6%  dd  -28.3%
+time_stop_bars   55: S6 MAR 1.537  cagr  43.4%  dd  -28.3%
+time_stop_bars   60: S6 MAR 1.537  cagr  43.4%  dd  -28.3%   <-- LIVE
+time_stop_bars   65: S6 MAR 1.537  cagr  43.4%  dd  -28.3%
+time_stop_bars   70: S6 MAR 1.537  cagr  43.4%  dd  -28.3%
+time_stop_bars   75: S6 MAR 1.537  cagr  43.4%  dd  -28.3%
+time_stop_bars   80: S6 MAR 1.537  cagr  43.4%  dd  -28.3%
+time_stop_bars   85: S6 MAR 1.537  cagr  43.4%  dd  -28.3%
+time_stop_bars   90: S6 MAR 1.537  cagr  43.4%  dd  -28.3%
+time_stop_bars   95: S6 MAR 1.537  cagr  43.4%  dd  -28.3%
+time_stop_bars  100: S6 MAR 1.537  cagr  43.4%  dd  -28.3%
+time_stop_bars  105: S6 MAR 1.537  cagr  43.4%  dd  -28.3%
+time_stop_bars  110: S6 MAR 1.537  cagr  43.4%  dd  -28.3%
+time_stop_bars  115: S6 MAR 1.537  cagr  43.4%  dd  -28.3%
+time_stop_bars  120: S6 MAR 1.537  cagr  43.4%  dd  -28.3%
+
+placebo best-of-21: 1.537 at time_stop_bars=55; median 1.537; LIFT = +0.000
+live value 60 -> MAR 1.537  (lift over median +0.000)
+
+Compare with the trail sweep's best-of-21 lift over ITS grid median.
+
+=== NULL 2b: matched random-thinning placebo ===
+source=/tmp/trail/trail_sweep.json reps=500 seed=20260905
+S4 trades at trail=5.00: 133; grid spans 71..286; keep fractions 1.00..0.53
+
+placebo best-of-21 MAR lift over own median: median +0.542  q90 +0.832  q95 +0.954
+observed trail-grid best-of-21 lift: +0.419
+P(random thinning best-of-21 lift >= observed) = 0.802
+
+placebo best-of-21 MAR level: median 2.012  q95 2.390 | observed grid max 1.537
+P(random thinning best-of-21 MAR >= observed grid max) = 1.000

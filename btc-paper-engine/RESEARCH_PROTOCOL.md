@@ -14,7 +14,19 @@ future test batch — an uncounted trial silently lowers the evidence bar.
 | Blend weight/win-rate scan | 5 | session notes 2026-07 |
 | ETH transfer test (frozen BTC params) | 1 | §10 below |
 | Forecasting foundation models (registered, NOT yet run) | 10 | RESEARCH_FORECAST_FM.md |
-| **Total** | **~1,564** | |
+| Win-rate rule battery (2026-08) | 12 | RESEARCH_WINRATE.md |
+| Astrology battery, standalone (2026-09) | 153 | RESEARCH_ASTRO.md |
+| Astrology overlays on S6 (2026-09) | 699 | RESEARCH_ASTRO.md addendum |
+| S4 trail robustness diagnostic (2026-09) | 63 | RESEARCH_TRAIL.md |
+| **Total** | **~2,491** | |
+
+Backfill note (2026-09-05): the win-rate and astrology batches had been
+documented in their own files but never added here, so the running count sat
+at ~1,564 while ~864 further configs had been evaluated. Fixed above. The
+trail row counts 63, not the 21 its pre-registration declared: 21 registered
+cells + 21 post-hoc kill-switch-off cells + 21 placebo cells were all
+evaluated on the same window, and a config evaluated is a trial spent
+whichever bucket it was labelled with.
 
 Registered-but-unrun trials are counted from registration, not from
 completion. Counting them only on success is how a registry stops
