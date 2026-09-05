@@ -1,5 +1,15 @@
 """Null calibration for the trail dose curve (PREREG.md, null #1).
 
+SUBSTITUTION, DECLARED: the pre-registration asks for a stationary block
+bootstrap over the TRADE SEQUENCE with mean block ~10 exits. That cannot be
+run as written - it also asks for one shared draw across all 21 cells, and a
+shared sequence index is undefined when the cells hold 77-286 trades each.
+Calendar blocks preserve the shared draw, which is the property that matters:
+adjacent trail cells are near-duplicates, and a null that resamples them
+INDEPENDENTLY (see null_boot_seq.py) over-disperses the best-of-21 by ~3x and
+makes the test vacuous. Block length is an unregistered knob: the headline P
+spans 0.630-0.850 over 5-120 day blocks, so read the range, not the point.
+
 The grid max is a best-of-21 statistic on highly correlated variants, so it
 is biased upward even when the trail does nothing. This resamples 30-day
 CALENDAR blocks (stationary block bootstrap) and takes, for every grid cell,
@@ -18,7 +28,7 @@ import numpy as np
 
 SRC = sys.argv[1]
 N = int(sys.argv[2]) if len(sys.argv) > 2 else 2000
-BLOCK_DAYS = 30
+BLOCK_DAYS = int(sys.argv[3]) if len(sys.argv) > 3 else 30
 SEED = 20260905                      # fixed; the study is reproducible
 
 d = json.load(open(SRC))
@@ -100,7 +110,8 @@ json.dump({"gap_max_med": [float(x) for x in gm],
            "base_rank": [int(x) for x in base_rank],
            "argmax_counts": argmax_counts, "n_eff": n_eff,
            "obs": obs, "obs_med": obs_med},
-          open(SRC.replace(".json", "_null.json"), "w"))
+          open(SRC.replace(".json", "_null.json" if BLOCK_DAYS == 30
+                           else f"_null{BLOCK_DAYS}d.json"), "w"))
 top = sorted(argmax_counts.items(), key=lambda kv: -kv[1])[:6]
 print("  most frequent bootstrap argmax: "
       + ", ".join(f"{k}({v/n_eff:.2f})" for k, v in top))

@@ -21,5 +21,9 @@ trail=5.00 on the `hl` window must equal `backend/scripts/bench_blend.py`'s
 `3.3y-full-HL S6` row on the same CSV.
 
 **Nothing here changes a config.** RESEARCH_PROTOCOL.md §7 bars adopting an
-exit-parameter change while the live gate is open, and the study's own nulls
-say the parameter is not a lever regardless.
+exit-parameter change while the live gate is open — and §9a records that
+running this study violated §7 anyway, and spent the single-touch holdout for
+S4 exit parameters. Of the study's four nulls, one is usable (`null_boot.py`),
+one cannot be run as registered (`null_boot_seq.py`), one is degenerate
+(`placebo.py`) and one is struck (`placebo_thin.py`). Read RESEARCH_TRAIL.md's
+nulls section before citing any number from here.

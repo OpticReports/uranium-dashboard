@@ -8,8 +8,15 @@ different-length event streams (77..286 S4 trades), so a shared sequence index
 is undefined. Calendar blocks were the closest faithful substitution and the
 substitution was undeclared. This file runs the registered estimator the only
 way it can be run - each cell resampled on its OWN index blocks, geometric
-block length with mean 10 - so the reader can see whether the substitution
-changed the answer. Both are reported; neither is quietly dropped.
+block length with mean 10 - so the reader can see what the substitution cost.
+
+READ THE RESULT WITH CARE. Independent per-cell draws destroy the near-
+duplication between adjacent trail cells, which inflates the best-of-21 by
+~3x (lift median +1.92 here vs +0.67 under the shared draw). Its
+P(random >= observed) = 1.000 is therefore VACUOUS - it is the same
+over-dispersion defect that sinks placebo_thin.py, not a stronger result.
+The shared-draw calendar version is the credible one. This file exists so the
+undeclared substitution is visible and priced, not to be cited as evidence.
 
     python3 research/trail/null_boot_seq.py <trail_sweep.json> [n]
 """

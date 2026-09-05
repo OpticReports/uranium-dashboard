@@ -30,12 +30,16 @@ from app.engine.replay import run_replay                        # noqa: E402
 from app.config import (RESEARCH_BOOKS, RESEARCH_SIGNAL,        # noqa: E402
                         RESEARCH_TRADE)
 
-BARS_CSV = sys.argv[1]
+# argv is read lazily: placebo.py imports blend_curve/stats from this module,
+# and reading sys.argv at import time made that import crash (counter-agent
+# D12, 2026-09-05).
+BARS_CSV = sys.argv[1] if len(sys.argv) > 1 else None
 OUT_DIR = sys.argv[2] if len(sys.argv) > 2 else HERE
 # POST-HOC (not pre-registered): override S4's dd_halt to isolate the trail's
 # own effect from the -50% book kill switch, which the registered run showed
 # fires in 13 of 21 cells. 1.0 = effectively off. Default None = live config.
 DD_HALT = float(sys.argv[3]) if len(sys.argv) > 3 else None
+
 TAG = "" if DD_HALT is None else f"_ddhalt{DD_HALT:g}"
 BAR_S = 4 * 3600
 

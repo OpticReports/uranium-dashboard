@@ -4,14 +4,14 @@ modern_A: base(5.00) MAR=2.160 cagr=59.6% dd=-27.6% | grid MAR 0.585..2.817 (arg
 modern_B: base(5.00) MAR=0.883 cagr=25.0% dd=-28.3% | grid MAR 0.159..0.883 (argmax 5.00)
 wrote /tmp/trail/trail_sweep.json
 
-=== dd_halt OFF (post-hoc) ===
+=== dd_halt OFF (post-hoc, not pre-registered) ===
 modern: base(5.00) MAR=1.537 cagr=43.4% dd=-28.3% | grid MAR 0.003..1.537 (argmax 5.00)
 hl: base(5.00) MAR=1.021 cagr=28.9% dd=-28.3% | grid MAR -0.109..1.088 (argmax 7.00)
 modern_A: base(5.00) MAR=2.160 cagr=59.6% dd=-27.6% | grid MAR 0.360..2.817 (argmax 4.50)
 modern_B: base(5.00) MAR=0.883 cagr=25.0% dd=-28.3% | grid MAR -0.229..0.883 (argmax 5.00)
 wrote /tmp/trail/trail_sweep_ddhalt1.json
 
-=== NULL 1: block bootstrap (live cfg) ===
+=== NULL 1: shared-draw calendar-block bootstrap (the usable one) ===
 source=/tmp/trail/trail_sweep.json  resamples=2000/2000  block=30d  seed=20260905
 observed: MAR(5.00)=1.537  grid median=1.117  lift=+0.419
 
@@ -26,22 +26,25 @@ NULL B - is 5.00 stably the best, or best once?
   P(5.00 in top 5) = 0.635   P(5.00 in bottom half) = 0.142
   most frequent bootstrap argmax: 5.00(0.23), 7.00(0.17), 4.25(0.13), 4.00(0.08), 3.25(0.07), 4.50(0.05)
 
-=== NULL 1: block bootstrap (halt off) ===
-source=/tmp/trail/trail_sweep_ddhalt1.json  resamples=2000/2000  block=30d  seed=20260905
-observed: MAR(5.00)=1.537  grid median=1.177  lift=+0.359
+--- block-length sensitivity of the headline P (unregistered knob) ---
+  block=5d   P(random best-of-21 lift >= incumbent's lift) = 0.833
+  block=10d   P(random best-of-21 lift >= incumbent's lift) = 0.850
+  block=20d   P(random best-of-21 lift >= incumbent's lift) = 0.752
+  block=30d   P(random best-of-21 lift >= incumbent's lift) = 0.752
+  block=45d   P(random best-of-21 lift >= incumbent's lift) = 0.677
+  block=60d   P(random best-of-21 lift >= incumbent's lift) = 0.630
+  block=90d   P(random best-of-21 lift >= incumbent's lift) = 0.801
+  block=120d   P(random best-of-21 lift >= incumbent's lift) = 0.744
 
-NULL A - how big is a best-of-21 lift over the grid median, by luck?
-  bootstrap max-minus-median: median +0.654  q90 +1.405  q95 +1.712
-  observed lift of the INCUMBENT (5.00) over the median: +0.359
-  P(random best-of-21 lift >= incumbent's lift) = 0.811
+=== NULL 1 as registered: per-cell sequence blocks (VACUOUS - over-disperses 3x) ===
+REGISTERED estimator: stationary bootstrap, mean block 10 exits, per-cell streams, 2000/2000 draws, seed 20260905
+  observed incumbent lift over grid median: +0.419
+  random best-of-21 lift: median +1.920  q95 +3.615
+  P(random best-of-21 lift >= observed) = 1.000
+  P(5.00 is argmax) = 0.096  (uniform 0.048)
+  5.00 rank among 21: median 7  top-5 0.408  bottom-half 0.316
 
-NULL B - is 5.00 stably the best, or best once?
-  P(5.00 is the bootstrap argmax) = 0.201   (uniform would be 0.048)
-  5.00's rank among 21: median 4  q10 1  q90 11
-  P(5.00 in top 5) = 0.598   P(5.00 in bottom half) = 0.129
-  most frequent bootstrap argmax: 5.00(0.20), 7.00(0.16), 6.00(0.11), 4.25(0.10), 4.50(0.08), 3.25(0.08)
-
-=== NULL 2a: time_stop placebo (degenerate) ===
+=== NULL 2a: registered time_stop placebo (DEGENERATE - 14 of 21 cells identical) ===
 time_stop_bars   20: S6 MAR 1.505  cagr  41.8%  dd  -27.8%
 time_stop_bars   25: S6 MAR 1.417  cagr  40.4%  dd  -28.5%
 time_stop_bars   30: S6 MAR 1.261  cagr  39.0%  dd  -30.9%
@@ -69,7 +72,7 @@ live value 60 -> MAR 1.537  (lift over median +0.000)
 
 Compare with the trail sweep's best-of-21 lift over ITS grid median.
 
-=== NULL 2b: matched random-thinning placebo ===
+=== NULL 2b: thinning placebo (STRUCK - see RESEARCH_TRAIL.md) ===
 source=/tmp/trail/trail_sweep.json reps=500 seed=20260905
 S4 trades at trail=5.00: 133; grid spans 71..286; keep fractions 1.00..0.53
 
@@ -78,4 +81,8 @@ observed trail-grid best-of-21 lift: +0.419
 P(random thinning best-of-21 lift >= observed) = 0.802
 
 placebo best-of-21 MAR level: median 2.012  q95 2.390 | observed grid max 1.537
-P(random thinning best-of-21 MAR >= observed grid max) = 1.000
+P(random thinning best-of-21 MAR >= observed grid max) = 1.000   <- TAUTOLOGY: variant 0 is the unthinned live cell. Ignore.
+
+within-search SD: real grid 0.228  placebo median 0.369 (1.62x more dispersed)
+standardized lift: observed 1.839  placebo median 1.544
+P(placebo standardized lift >= observed) = 0.262   <- the fair comparison; the raw figure above is a dispersion artifact

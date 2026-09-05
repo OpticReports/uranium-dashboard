@@ -85,42 +85,68 @@ any reading.
 
 A lone point standing 13% clear of a 21-cell grid, at precisely the value
 fitted on a different era, on 133 trades, is the signature of luck. The
-nulls agree.
+one null that can calibrate this search agrees: the incumbent's
+apparent edge is unremarkable.
 
-## The nulls, which are the referee
+## The nulls — one referee survived, and it is not emphatic
 
-1. **The registered estimator** — stationary block bootstrap over the trade
-   sequence, mean block 10 exits (`null_boot_seq.py`). Random best-of-21 lift
-   exceeds the incumbent's observed +0.419 in **100.0%** of 2,000 draws.
-2. **A substituted estimator** — 30-day calendar blocks, all 21 cells sharing
-   each draw (`null_boot.py`). Same direction, weaker: **75.2%**. This
-   substitution was made because the registered design is not implementable
-   as written (a shared sequence index is undefined across cells of different
-   length, 77–286 trades) — but it was undeclared in the first draft, and the
-   registered statistic `MAR(max) − MAR(5.0)` was also silently swapped for
-   `MAR(5.0) − MAR(median)`. Both estimators are now reported.
-3. **Matched random thinning** (`placebo_thin.py`, 21 arbitrary variants ×
-   500 reps): best-of-21 random thinning beats the **entire trail grid's
-   maximum in 100% of reps** (median 2.012 vs the grid's best 1.537).
-   *Discount this one:* it is only half-matched (thinning spans 133→71 trades
-   while the grid spans 71→286) and it is over-powered, because random
-   subsetting can luck into deleting the largest drawdown contributor — a
-   channel correlated parameter variants do not have. It would beat any real
-   grid, so "100%" carries little information. It was also substituted after
-   the registered placebo failed.
-4. **The registered placebo was degenerate.** Sweeping the pullback's
-   `time_stop_bars` produced exactly zero lift because only 8 of its 21 cells
-   are distinct — the time stop stops binding at 55 bars. It was a best-of-8,
-   not a best-of-21, and could never have calibrated a 21-wide search.
+1. **The one credible null: block bootstrap with a shared draw across all 21
+   cells** (`null_boot.py`). Random best-of-21 lift exceeds the incumbent's
+   observed +0.419 in **75.2%** of 2,000 draws. Sensitivity: **0.630–0.850**
+   across block lengths 5–120 days (an unregistered knob — read the range,
+   not the point), **0.752–0.782** across six seeds, and **0.688–0.894**
+   under two scale corrections a reviewer applied. Every correction pushed it
+   *up*. Reading: the incumbent being the argmax is unremarkable — not proof
+   the trail does nothing, but no evidence it does anything.
+2. **The registered estimator cannot be run as registered, and the closest
+   version is vacuous.** The pre-registration asks for trade-sequence blocks
+   *and* one shared draw across cells; those are incompatible when cells hold
+   77–286 trades. Running it per-cell (`null_boot_seq.py`) gives P = 1.000 —
+   but only because independent draws destroy the near-duplication between
+   adjacent trail cells and inflate the best-of-21 threefold (lift median
+   +1.92 vs +0.67). **I cited that 1.000 as the strong version of the result
+   before the null-validity panel reported. It is not; it is the same
+   over-dispersion defect as #4 below.** The substitution is now declared in
+   the script, and so is the swap of the registered statistic
+   `MAR(max) − MAR(5.0)` — which is identically 0 here, since 5.00 *is* the
+   argmax — for `MAR(5.0) − MAR(median)`.
+3. **The registered placebo was degenerate — and at face value it cut the
+   other way.** Sweeping `time_stop_bars` produced a lift of exactly
+   `+0.000000`, because **14 of its 21 cells are bit-identical** (the time
+   stop stops binding at 55 bars). Under the pre-registration's own rule — "a
+   placebo lift as large as the trail's means the sweep is measuring search
+   width" — a zero placebo lift is evidence *against* the search-width
+   explanation. It is genuinely degenerate and cannot calibrate a 21-wide
+   search, so it is not usable either way; but discarding it and substituting
+   a null that reversed the sign of the conclusion is a forking-paths move,
+   and it is disclosed here as loudly as the halt-off curve is.
+4. **The substituted placebo is struck.** `placebo_thin.py`'s two headline
+   numbers do not survive:
+   - "beats the entire grid's max in 100% of reps" is a **tautology** — its
+     variant 0 is the unthinned live cell itself, so the comparison is the
+     incumbent against itself.
+   - "beats the trail's lift in 80% of reps" is a **dispersion artifact**.
+     Its 21 variants carry independent random drop sets while adjacent trail
+     cells are near-duplicates, making it **1.62× more dispersed** than the
+     real grid; the lift statistic scales with dispersion. Standardized by
+     within-search SD the fair figure is **0.262** (0.20–0.28 across seeds) —
+     top quartile, not bottom fifth. It also reaches only 10 of the 21 cells
+     (thinning cannot add trades) and de-levers the S4 sleeve from 32% to 20%
+     of gross activity, so its variants are a different blend, not a different
+     trail.
+   **Net: this null does not calibrate the trail sweep and should not be
+   cited as if it did.**
+
+So the honest evidential position is narrower than the first draft claimed:
+one usable null, saying the incumbent's apparent edge is unremarkable
+(P ≈ 0.63–0.89); one that cannot be run; one degenerate; one struck.
 
 **Post-hoc and unregistered, flagged as such:** 5.00's *rank* under the
-substituted bootstrap is respectable — argmax in 23% of draws (uniform 4.8%),
-median rank 4 of 21, top-5 in 64%. Under the **registered** estimator it is
-weaker: argmax 9.6%, median rank 7, top-5 41%. The first draft led with the
-favourable version of an analysis that appears nowhere in the
-pre-registration. It is demoted here to what it is: the one encouraging
-number in the study, unregistered, and not reproduced by the registered
-estimator.
+credible null is respectable — argmax in 23% of draws (uniform 4.8%), median
+rank 4 of 21, top-5 in 64%, and it is the only cell with P(top-5) ≥ 0.50.
+Rank appears nowhere in the pre-registration. It is also an in-sample
+stability measure of an argmax chosen on those same events, over streams that
+are halt-truncated in 13 of 21 cells. Reported, demoted, not leaned on.
 
 ## Counter-agent panel (CLAUDE.md mandatory)
 
@@ -132,7 +158,7 @@ uncertain. Claims under attack frozen in `research/trail/CLAIMS.md`.
 | harness fidelity | C1 **confirmed** bit-exact; 22-books-in-one-replay proven equivalent to 22 solo replays (0 diffs, 4 windows); found the dropped-first-exit defect and the A/B seam issues |
 | selection accounting | pre-registration ordering **clean** (no peeking); **refuted** the "broad plateau" claim; found the burned holdout, the 3× trial undercount, the unregistered favourable null |
 | live-risk reading | **refuted** the "0.3pp from the halt" claim outright; found the silent-permanent-halt bug that is now the study's only real deliverable |
-| null validity | *pending — this document is amended when it lands* |
+| null validity | **struck** the thinning placebo (one statistic tautological, the other a 1.62x dispersion artifact); **confirmed** the surviving null and showed every scale correction strengthens it; found the discarded-registered-placebo forking path |
 
 Every defect the panel raised is reflected above rather than answered. Two
 claims from the first draft were withdrawn entirely ("broad plateau", "within
@@ -200,8 +226,11 @@ saw it (13 of 21 halted cells, not 16 — caught on my own re-count).
 ## What is forwardable
 
 1. **Nothing to change in the strategy.** §7 bars it, §8's path is now closed
-   for this family, and the nulls say the parameter is not a lever. Do not
-   re-run this sweep to "optimize" the trail.
+   for this family, and the one usable null finds the incumbent's apparent
+   edge unremarkable (P ≈ 0.63–0.89). Note what this does NOT say: the study
+   did not show the trail is inert, it showed this data cannot tell. Do not
+   re-run this sweep to "optimize" the trail — there is nothing left to spend
+   it on.
 2. **The real finding is an operational one the study went looking past: an
    S4 halt would be silent and permanent.** `book.halted` is set at
    `core.py:215` and cleared **only** by a manual `POST /books/S4/resume`

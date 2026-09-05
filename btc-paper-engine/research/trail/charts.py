@@ -93,9 +93,9 @@ rk = np.array(nul["base_rank"])
 rs = np.array(seq["base_rank"])
 bins = np.arange(0.5, 22.5, 1)
 ax.hist(rs, bins=bins, color=BLUE, alpha=0.85, zorder=3,
-        label="registered estimator (trade-sequence blocks)")
+        label="per-cell sequence blocks (vacuous — over-disperses 3×)")
 ax.hist(rk, bins=bins, color=ORANGE, alpha=0.55, zorder=4,
-        label="substituted estimator (30-day calendar blocks)")
+        label="shared-draw 30-day blocks (the usable null)")
 ax.axvline(float(np.median(rs)), color=BLUE, lw=2, zorder=5)
 ax.axvline(float(np.median(rk)), color=ORANGE, lw=2, zorder=5)
 ax.set_xlabel("rank of the live 5.0×ATR setting among the 21 cells",
@@ -106,9 +106,9 @@ ax.set_axisbelow(True)
 ax.legend(frameon=False, fontsize=8.4, labelcolor=SEC, loc="upper right")
 ax.set_title("The one flattering statistic is the unregistered one",
              fontsize=12.5, color=INK, fontweight="bold", loc="left", pad=36)
-ax.text(0, 1.05, f"Median rank {np.median(rs):.0f} of 21 under the estimator the pre-registration named; "
-        f"{np.median(rk):.0f} under the one\nactually run first. Rank was never a registered statistic — "
-        "it is reported here as post-hoc.",
+ax.text(0, 1.05, f"Median rank {np.median(rk):.0f} of 21 under the usable null, {np.median(rs):.0f} under the "
+        "per-cell version the prereg named.\nRank was never a registered statistic — reported here as post-hoc, "
+        "and not leaned on.",
         transform=ax.transAxes, fontsize=8.6, color=MUTED, va="bottom")
 
 # ---- D: the sweep buys less than random thinning
@@ -117,8 +117,8 @@ L = np.array(plc["lifts"])
 gm = np.array(nul["gap_max_med"])
 ax.hist(gm, bins=40, color=MUTED, alpha=0.55, zorder=2,
         label="best-of-21 lift under the block bootstrap")
-ax.hist(L, bins=40, color=AQUA, alpha=0.6, zorder=3,
-        label="best-of-21 lift from RANDOM trade thinning")
+ax.hist(L, bins=40, color=AQUA, alpha=0.45, zorder=3,
+        label="thinning placebo (STRUCK — 1.62× over-dispersed)")
 ax.axvline(plc["obs_lift"], color=RED, lw=2.4, zorder=5)
 ax.text(plc["obs_lift"] + 0.03, ax.get_ylim()[1] * 0.86,
         f"observed trail sweep\n{plc['obs_lift']:+.3f}", color=RED, fontsize=9.5,
@@ -129,13 +129,12 @@ ax.set_ylabel("draws", fontsize=10, color=SEC)
 ax.grid(axis="y", color=GRID, lw=0.8, zorder=0)
 ax.set_axisbelow(True)
 ax.legend(frameon=False, fontsize=8.6, labelcolor=SEC, loc="upper right")
-ax.set_title("Both nulls say the sweep is not measuring the trail",
+ax.set_title("One usable null, and it finds the sweep unremarkable",
              fontsize=12.5, color=INK, fontweight="bold", loc="left", pad=36)
 p1 = float((gm >= plc["obs_lift"]).mean())
 p2 = float((L >= plc["obs_lift"]).mean())
-ax.text(0, 1.05, "Under the estimator the pre-registration actually named, a random best-of-21 lift beats the\n"
-        f"observed one in 100% of draws; under the substituted one, {100*p1:.0f}%. Discount the thinning arm — "
-        "it is over-powered.",
+ax.text(0, 1.05, f"A random best-of-21 lift beats the observed one in {100*p1:.0f}% of shared-draw resamples "
+        "(0.63–0.85 across block\nlengths). The thinning arm is STRUCK: 1.62× over-dispersed, and matched it gives 0.26, not 0.80.",
         transform=ax.transAxes, fontsize=8.6, color=MUTED, va="bottom")
 
 fig.suptitle("S4 chandelier trail: INDETERMINATE — no change  ·  "
