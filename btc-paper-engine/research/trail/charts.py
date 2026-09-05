@@ -20,6 +20,7 @@ live = json.load(open(f"{D}/trail_sweep.json"))
 off = json.load(open(f"{D}/trail_sweep_ddhalt1.json"))
 nul = json.load(open(f"{D}/trail_sweep_null.json"))
 plc = json.load(open(f"{D}/trail_sweep_placebo.json"))
+seq = json.load(open(f"{D}/trail_sweep_nullseq.json"))
 G = live["grid"]
 X = np.array(G)
 
@@ -64,46 +65,50 @@ ax.text(0, 1.05, "Red bands = the book halted and stopped trading. The registere
 
 # ---- B: plateau across windows (halt off)
 ax = axs[0, 1]
-for w, c, lb in (("modern", BLUE, "2022→ (primary)"),
-                 ("hl", AQUA, "2023-05→ (S6 bench window)"),
-                 ("modern_A", MUTED, "2022→2024-06 (partly in-sample)"),
-                 ("modern_B", VIOLET, "2024-07→ (out-of-sample)")):
+for w, c, lb in (("modern", BLUE, "2022→ primary (~54% in-sample)"),
+                 ("hl", AQUA, "2023-05→ bench window (nested in primary)"),
+                 ("modern_A", MUTED, "2022→2024-06 = VALIDATE (selection window)"),
+                 ("modern_B", VIOLET, "2024-07→ = the single-touch HOLDOUT")):
     ax.plot(X, mars(off, w), "-o", color=c, ms=3.5, lw=1.7, label=lb, zorder=3)
 ax.axvspan(2.75, 7.0, color=AQUA, alpha=0.07, zorder=0)
+ax.axhline(1.362, color=MUTED, lw=1, ls="--", zorder=1)
 ax.axvline(5.0, color=INK, lw=1.1, ls=":", zorder=2)
+ax.annotate("+12.8% clear of\nthe next best cell", (5.0, 1.537),
+            xytext=(5.55, 1.95), fontsize=8.6, color=RED, fontweight="bold",
+            arrowprops=dict(arrowstyle="->", color=RED, lw=1.2))
 ax.set_xlabel("S4 chandelier trail (× ATR14)", fontsize=10, color=SEC)
 ax.set_ylabel("S6 blend MAR (kill switch off)", fontsize=10, color=SEC)
 ax.grid(color=GRID, lw=0.8, zorder=0)
 ax.set_axisbelow(True)
 ax.legend(frameon=False, fontsize=8.6, labelcolor=SEC, loc="upper left")
-ax.set_title("Above ~2.75×ATR it is a plateau, not a peak",
+ax.set_title("Not a plateau — a band with one spike on the incumbent",
              fontsize=12.5, color=INK, fontweight="bold", loc="left", pad=36)
-ax.text(0, 1.05, "The cliff is at the tight end: a 2.0×ATR trail turns the trend leg into noise.\n"
-        "Between 2.75 and 7.0 the argmax wanders by window — 4.50, 5.00, 7.00.",
+ax.text(0, 1.05, "Above 2.75×ATR every cell sits in 1.02–1.36 except 5.00 at 1.54 (z = +3.26). The registered\n"
+        "flatness test STILL FAILS here: 25.9% vs a 25% bar — and 77.1% on a sane 3.0–7.0 grid.",
         transform=ax.transAxes, fontsize=8.6, color=MUTED, va="bottom")
 
 # ---- C: bootstrap rank of the incumbent
 ax = axs[1, 0]
 rk = np.array(nul["base_rank"])
+rs = np.array(seq["base_rank"])
 bins = np.arange(0.5, 22.5, 1)
-ax.hist(rk, bins=bins, color=BLUE, alpha=0.85, zorder=3)
-ax.axvline(float(np.median(rk)), color=ORANGE, lw=2, zorder=4)
-ax.text(float(np.median(rk)) + 0.4, ax.get_ylim()[1] * 0.92,
-        f"median rank {np.median(rk):.0f} of 21", color=ORANGE, fontsize=9.5,
-        fontweight="bold")
+ax.hist(rs, bins=bins, color=BLUE, alpha=0.85, zorder=3,
+        label="registered estimator (trade-sequence blocks)")
+ax.hist(rk, bins=bins, color=ORANGE, alpha=0.55, zorder=4,
+        label="substituted estimator (30-day calendar blocks)")
+ax.axvline(float(np.median(rs)), color=BLUE, lw=2, zorder=5)
+ax.axvline(float(np.median(rk)), color=ORANGE, lw=2, zorder=5)
 ax.set_xlabel("rank of the live 5.0×ATR setting among the 21 cells",
               fontsize=10, color=SEC)
-ax.set_ylabel("bootstrap resamples (30-day blocks, n=2000)",
-              fontsize=10, color=SEC)
+ax.set_ylabel("bootstrap resamples (n=2000 each)", fontsize=10, color=SEC)
 ax.grid(axis="y", color=GRID, lw=0.8, zorder=0)
 ax.set_axisbelow(True)
-ax.set_title("5.0 is a reliable plateau member, not a demonstrable optimum",
+ax.legend(frameon=False, fontsize=8.4, labelcolor=SEC, loc="upper right")
+ax.set_title("The one flattering statistic is the unregistered one",
              fontsize=12.5, color=INK, fontweight="bold", loc="left", pad=36)
-top5 = float((rk <= 5).mean())
-bot = float((rk > 10.5).mean())
-ax.text(0, 1.05, f"Top-5 in {100*top5:.0f}% of resamples, bottom half in {100*bot:.0f}%. "
-        f"It is the argmax in {100*nul['argmax_counts']['5.00']/nul['n_eff']:.0f}%\n"
-        "of draws (uniform would be 4.8%) — good, but it shares that title with 7.00 and 4.25.",
+ax.text(0, 1.05, f"Median rank {np.median(rs):.0f} of 21 under the estimator the pre-registration named; "
+        f"{np.median(rk):.0f} under the one\nactually run first. Rank was never a registered statistic — "
+        "it is reported here as post-hoc.",
         transform=ax.transAxes, fontsize=8.6, color=MUTED, va="bottom")
 
 # ---- D: the sweep buys less than random thinning
@@ -124,16 +129,16 @@ ax.set_ylabel("draws", fontsize=10, color=SEC)
 ax.grid(axis="y", color=GRID, lw=0.8, zorder=0)
 ax.set_axisbelow(True)
 ax.legend(frameon=False, fontsize=8.6, labelcolor=SEC, loc="upper right")
-ax.set_title("Searching 21 trails buys LESS than thinning trades at random",
+ax.set_title("Both nulls say the sweep is not measuring the trail",
              fontsize=12.5, color=INK, fontweight="bold", loc="left", pad=36)
 p1 = float((gm >= plc["obs_lift"]).mean())
 p2 = float((L >= plc["obs_lift"]).mean())
-ax.text(0, 1.05, f"A random best-of-21 beats the whole trail grid's lift {100*p1:.0f}% of the time "
-        f"(bootstrap) and {100*p2:.0f}% (thinning).\nRandom thinning's best-of-21 MAR beats the grid's "
-        "MAX in 100% of reps. The parameter is not a lever.",
+ax.text(0, 1.05, "Under the estimator the pre-registration actually named, a random best-of-21 lift beats the\n"
+        f"observed one in 100% of draws; under the substituted one, {100*p1:.0f}%. Discount the thinning arm — "
+        "it is over-powered.",
         transform=ax.transAxes, fontsize=8.6, color=MUTED, va="bottom")
 
-fig.suptitle("S4 chandelier trail: robustness diagnostic, not a re-tune  ·  "
+fig.suptitle("S4 chandelier trail: INDETERMINATE — no change  ·  "
              "Bitstamp 4h, blend 75% pullback / 25% donchian @2.0×, 6bp/side, exit-step  ·  2026-09-05",
              fontsize=10.5, color=SEC, y=0.985)
 fig.tight_layout(rect=(0, 0, 1, 0.965))

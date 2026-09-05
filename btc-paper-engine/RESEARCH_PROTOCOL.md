@@ -111,6 +111,33 @@ trigger. Ties break toward NOT deploying.
    as the "n needed" context) — surfaces automatically when the gate matures.
 4. DSR/trial-count wired into /replay/compare output so every window shows
    its deflation context.
+5. **Alert on a book `halted` transition, and make the executor see it.**
+   `book.halted` is set at `core.py:215` and cleared only by a manual
+   `POST /books/<n>/resume`; it persists across restarts. btc-executor never
+   reads `legs.<leg>.halted`, so an S4 halt books as a routine
+   `INFO leg_closed engine_exit`, pages nobody, and `/pulse` reads healthy
+   while the trend leg is permanently flat and the blend runs 25% cash.
+   README's halt/resume line documents `{S1|S2|S3}` only. Found by the
+   trail study's counter-agent panel (RESEARCH_TRAIL.md, forwardable #2).
+6. Fix the blend curve's dropped first exit (`bench_blend.py:46-48` appends
+   the first point after applying the first return, so every published S5/S6
+   number silently omits one trade's P&L — +0.4% to +5.3% depending on the
+   window). Its own change, because it moves committed numbers.
+
+## 9a. Protocol violations, recorded (2026-09-05)
+
+- **§7 violated by the S4 trail robustness diagnostic** (RESEARCH_TRAIL.md).
+  §7 closes signal-space *search*, not merely adoption, and lists what stays
+  open ("portfolio-layer only" + four named items); an S4 exit-parameter
+  sweep is on none of them. Its pre-registration conceded the sweep is
+  signal-space search and then argued that barring adoption made it
+  permissible — that reads §7 as if it were §8. Recorded, not waived. The
+  `dd_halt=1.0` grid inside that study was not registered at all.
+- **The single-touch holdout for S4 exit parameters is spent.** RESEARCH_S4
+  reserved 2024-07..2026-07 for one touch; the trail study swept it 21 times
+  (63 counting the post-hoc and placebo grids). §8 requires a single-touch
+  holdout for adoption, so the §8 adoption path for the S4 exit family is
+  **closed**, not deferred. Any future work there needs genuinely new data.
 
 ## 10. ETH transfer test — pre-registered, executed 2026-07-26: DO NOT ADOPT
 
