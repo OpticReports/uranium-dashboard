@@ -1,21 +1,21 @@
 {
-  "taken_at": "2026-09-04T21:36:27+00:00",
+  "taken_at": "2026-09-07T21:36:03+00:00",
   "total_stats": {
     "pending_deploys_cash": 0,
-    "total_cash": 281.186170167,
-    "time_weighted_return": 0.686968181187511,
+    "total_cash": 280.836170167,
+    "time_weighted_return": 0.6869660394634727,
     "total_unallocated_cash": 5.436170167,
-    "portfolio_value": 275683.91,
+    "portfolio_value": 275683.56,
     "net_deposits": 247000.0,
     "pending_net_deposits": 0.0,
-    "todays_percent_change": 0.00098956593431882,
-    "simple_return": 0.11612920243420355,
-    "todays_dollar_change": 272.537714907275,
+    "todays_percent_change": 0.0009882951080880122,
+    "simple_return": 0.116127785430155,
+    "todays_dollar_change": 272.187714907275,
     "metrics": {
-      "annualized_rate_of_return": 1.0157,
+      "annualized_rate_of_return": 1.0205,
       "max_drawdown": 0.2006,
-      "sharpe_ratio": 1.9908,
-      "standard_deviation": 0.3931
+      "sharpe_ratio": 1.9927,
+      "standard_deviation": 0.3941
     },
     "pending_withdrawals": 0.0
   },
@@ -60,9 +60,9 @@
     },
     "nNdBk7hc5NiBzeRvbI5T": {
       "name": "Crash Convexity Sleeve \u2014 InverseHold + Bond Frontrunner 50/50",
-      "value": 71728.28,
-      "deposit_adjusted_value": 23083.2,
-      "cash": 71.82,
+      "value": 71727.93,
+      "deposit_adjusted_value": 23083.08,
+      "cash": 71.47,
       "holdings": {
         "TMV": 0.2496,
         "BOXX": 0.4996,
@@ -75,5 +75,5 @@
   },
   "book_drawdown": 0.063,
   "sleeve_weight": 0.1154,
-  "vix_contango": 0.212
+  "vix_contango": 0.151
 }
