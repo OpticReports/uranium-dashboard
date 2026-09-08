@@ -14,7 +14,8 @@ from fastapi.responses import StreamingResponse
 from .config import settings
 from .live import ENGINE, start_background_loop
 from .store.db import (
-    BarRow, EquitySnapRow, EventRow, SignalRow, TradeRow, init_db, session_scope,
+    BarRow, EquitySnapRow, EventRow, SignalRow, TradeRow, init_db, log_event,
+    session_scope,
 )
 
 logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
@@ -88,6 +89,7 @@ def exec_target(x_exec_token: str | None = Header(default=None)):
             pend = {"side": b.pending.side, "limit": b.pending.limit,
                     "signal_ts": b.pending.signal_ts}
         return {"book": book, "halted": b.halted,
+                "halt_reason": b.halt_reason,
                 "state": ("HALTED" if b.halted else
                           b.position.side if b.position else
                           "PENDING" if b.pending else "FLAT"),
@@ -208,8 +210,21 @@ def halt(book: str):
     b = ENGINE.books.get(book)
     if not b:
         raise HTTPException(404)
-    b.halted = True
-    return {"book": book, "halted": True}
+    # Under the engine lock: an unlocked write landing mid-bar was read by
+    # catch_up as a dd_halt edge and paged a drawdown that never happened.
+    # And drop the pending: `halted` only blocks NEW pendings, so a resting
+    # one still filled on the next bar and a halted book opened a position
+    # - which the live executor then mirrored with real money
+    # (counter-agent 2026-09-08, defects 6 and 8).
+    with ENGINE._lock:
+        b.halted = True
+        b.halt_reason = "manual"
+        dropped = b.pending is not None
+        b.pending = None
+        with session_scope() as s:
+            log_event(s, "WARN", "book_halted_manual",
+                      f"pending dropped={dropped}", book=book)
+    return {"book": book, "halted": True, "pending_dropped": dropped}
 
 
 @app.post("/books/{book}/resume")
@@ -217,8 +232,12 @@ def resume(book: str):
     b = ENGINE.books.get(book)
     if not b:
         raise HTTPException(404)
-    b.halted = False
-    b.peak_equity = b.equity          # manual reset re-anchors the dd baseline
+    with ENGINE._lock:
+        b.halted = False
+        b.halt_reason = None
+        b.peak_equity = b.equity      # manual reset re-anchors the dd baseline
+        with session_scope() as s:
+            log_event(s, "INFO", "book_resumed", "", book=book)
     return {"book": book, "halted": False}
 
 

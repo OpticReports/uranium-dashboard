@@ -130,6 +130,11 @@ class Book:
     equity: float = 0.0
     peak_equity: float = 0.0
     halted: bool = False
+    # Why `halted` is set: "dd_halt" (the book's own kill switch, set in
+    # _close_position) or "manual" (POST /books/<n>/halt). The halt page
+    # reads this so an operator halt is never reported as a drawdown that
+    # did not happen (counter-agent 2026-09-08, defect 6/8).
+    halt_reason: str | None = None
     position: Position | None = None
     pending: Pending | None = None
     trades: list[ClosedTrade] = field(default_factory=list)
@@ -213,6 +218,7 @@ def _close_position(book: Book, pos: Position, exit_ts: int, exit_price: float,
     dd = book.equity / book.peak_equity - 1
     if dd <= -book.cfg.dd_halt:
         book.halted = True
+        book.halt_reason = "dd_halt"
 
 
 def _process_donchian(book: Book, bar: Bar, ind: Ind, tcfg: TradeCfg,

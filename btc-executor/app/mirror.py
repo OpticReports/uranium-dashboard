@@ -1050,17 +1050,22 @@ class Executor:
                                  "EXEC_TOKEN and re-check /status.ramp_v4",
             # The one ACTION page whose fix is on the OTHER service. Nothing
             # in either codebase clears an engine book halt.
-            "engine_leg_halted": "this is the PAPER ENGINE's kill switch, "
+            "engine_leg_halted": "this is the PAPER ENGINE's book halt, "
                                  "not the executor's - the executor is "
-                                 "healthy and will keep mirroring the other "
-                                 "leg. The halted book places no entries "
-                                 "until a human calls POST /books/<S3|S4>/"
-                                 "resume on btc-paper-engine; it does NOT "
-                                 "clear itself and it survives restarts. "
-                                 "Check the book's drawdown FIRST - if the "
-                                 "halt is real, leaving it halted is the "
-                                 "correct action and the blend simply runs "
-                                 "the other leg plus cash",
+                                 "healthy and keeps mirroring the other "
+                                 "leg; any position the halted book still "
+                                 "holds stays protected by its stop until "
+                                 "the engine exits it. The engine opens no "
+                                 "NEW entries for this book until a human "
+                                 "calls POST /books/<S3|S4>/resume on "
+                                 "btc-paper-engine; it does NOT clear "
+                                 "itself and it survives restarts. If the "
+                                 "cause is its drawdown kill switch, "
+                                 "leaving it halted is the correct action "
+                                 "and the blend runs the other leg plus "
+                                 "cash; if you did NOT halt it yourself and "
+                                 "the cause reads operator, someone with "
+                                 "engine access did",
         }
         # Per-kind Telegram cooldown for conditions that persist across polls
         # (their msg embeds a changing float, so kind+msg dedupe never fires).
@@ -1725,18 +1730,34 @@ class Executor:
                   equity: float, entries_ok: bool) -> None:
         led: LegLedger = self.state.legs[leg]
         pend, pos = tl.get("pending"), tl.get("position")
-        halted = bool(tl.get("halted"))
-        if halted != led.engine_halted:
-            led.engine_halted = halted
-            self._save_state()           # persist BEFORE paging: a crash
-            # between the two re-pages on restart, which beats never paging.
+        # THREE-STATE. An absent/malformed field is UNKNOWN, not False: the
+        # first cut used bool(tl.get(...)), so one partial /exec/target
+        # response sent a false "trading again" all-clear on a book that was
+        # still halted, then a fresh RED when the field came back - one page
+        # per flap. Same collapse-unknown-into-convenient _ostat exists to
+        # forbid (counter-agent 2026-09-08, defect 5).
+        raw_halted = tl.get("halted")
+        halted = raw_halted if isinstance(raw_halted, bool) else led.engine_halted
+        if isinstance(raw_halted, bool) and halted != led.engine_halted:
+            # PAGE FIRST, then commit the flag. The first cut saved first, so
+            # a single failure at the page site (disk, _event raising, a kill
+            # mid-deploy) left the flag committed with no page sent and the
+            # edge could never recur - the exact silent-halt this exists to
+            # kill. Paging first means a crash between the two RE-pages on
+            # restart; a duplicate beats a loss (defect 2).
             if halted:
+                reason = tl.get("halt_reason")
+                cause = ("operator POST /halt" if reason == "manual"
+                         else "its own drawdown kill switch" if reason == "dd_halt"
+                         else "a halt (reason not reported)")
                 self._event("RED", "engine_leg_halted",
-                            f"{leg} leg's engine book hit its own drawdown "
-                            f"kill switch and will place NO further entries")
+                            f"{leg} leg's engine book is HALTED by {cause}; "
+                            f"the engine will open no NEW entries for it")
             else:
                 self._event("INFO", "engine_leg_resumed",
                             f"{leg} leg's engine book is trading again")
+            led.engine_halted = halted
+            self._save_state()
 
         # 1) engine has an open position
         if pos is not None:
@@ -1773,7 +1794,7 @@ class Executor:
             # reverse position (QA rehearsal find, 2026-08-07).
             had_qty = led.qty != 0.0
             if had_qty:
-                self._close_leg(leg, led, "engine_flat")
+                self._close_leg(leg, led, "engine_flat", halted=halted)
             if not entries_ok:
                 return
             if led.entry_cloid:
@@ -1852,7 +1873,7 @@ class Executor:
                                else "ignore")
         if led.qty != 0.0:
             self._close_leg(leg, led, "engine_halted" if halted
-                            else "engine_exit")
+                            else "engine_exit", halted=halted)
 
     def _enter_from_fill(self, leg: str, led: LegLedger, pos: dict,
                          blend: dict, equity: float,
@@ -2319,7 +2340,8 @@ class Executor:
         led.entry_cloid = led.entry_side = None
         led.entry_qty = 0.0
 
-    def _close_leg(self, leg: str, led: LegLedger, why: str) -> None:
+    def _close_leg(self, leg: str, led: LegLedger, why: str,
+                   halted: bool = False) -> None:
         # NOTE (merge 2026-08-26): an earlier hotfix cut accidentally
         # duplicated the _maintain_stop CANCELLED-page block here via an
         # unanchored replace. Restored to the simple form: on a close we
@@ -2427,7 +2449,10 @@ class Executor:
             # A kill-switch flatten is NOT evidence that signal exits work.
             # This counter feeds the RAMP v4 gate, so crediting it would let
             # a halted book buy its own scaling permission (2026-09-08).
-            if why != "engine_halted":
+            # Guarded on the flag itself, not on `why`: the engine_flat path
+            # (halted book + a pending it should not have) reached here with
+            # credit intact in the first cut (defect 7).
+            if not halted and why != "engine_halted":
                 self._cov("signal_exit")
             led.qty = 0.0
 

@@ -5647,12 +5647,96 @@ def test_gate_ordinary_exit_still_credits_signal_exit(tmp_path):
 
 
 def test_gate_pulse_exposes_engine_halt(tmp_path):
-    """A halted leg reads in_position:false — identical to a quiet leg. The
-    external monitor needs a field that distinguishes dead from idle."""
+    """A halted leg reads in_position:false - identical to a quiet leg. The
+    external monitor needs a field that distinguishes dead from idle. Hits
+    the REAL endpoint: the first cut re-implemented the dict comprehension
+    inline and the field could be deleted from main.py with a green suite.
+    No lifespan (no `with`): the app's startup builds EXEC on a background
+    thread with retries, which would race the executor installed here."""
+    from fastapi.testclient import TestClient
+    import app.main as m
     ex = mkexec(tmp_path, FakeVenue(), dry_run=False)
     ex.step(target(trend_halted=True))
-    legs = {n: {"in_position": l.qty != 0.0,
-                "engine_halted": l.engine_halted}
-            for n, l in ex.state.legs.items()}
-    assert legs["trend"] == {"in_position": False, "engine_halted": True}
-    assert legs["pullback"] == {"in_position": False, "engine_halted": False}
+    old = m.EXEC
+    m.EXEC = ex
+    try:
+        body = TestClient(m.app).get("/pulse").json()
+    finally:
+        m.EXEC = old
+    assert body["ready"] is True
+    assert body["legs"]["trend"]["engine_halted"] is True
+    assert body["legs"]["trend"]["in_position"] is False
+    assert body["legs"]["pullback"]["engine_halted"] is False
+
+
+def test_gate_engine_halt_absent_field_is_unknown_not_false(tmp_path, monkeypatch):
+    """bool(tl.get("halted")) read a MISSING key as False: one partial
+    /exec/target response sent a false 'trading again' all-clear on a book
+    still halted, then a fresh RED when the field returned - a page per flap.
+    Absent must be UNKNOWN: no transition, no page, flag untouched."""
+    sent = []
+    import app.alerts as alerts
+    monkeypatch.setattr(alerts, "send", lambda m: sent.append(m))
+    ex = mkexec(tmp_path, FakeVenue(), dry_run=False)
+    ex.step(target(trend_halted=True))
+    t = target()
+    del t["legs"]["trend"]["halted"]                 # older build / partial
+    for _ in range(3):
+        ex.step(t)
+    assert ex.state.legs["trend"].engine_halted is True
+    assert not [e for e in ex.state.events if e["kind"] == "engine_leg_resumed"]
+    assert len([e for e in ex.state.events
+                if e["kind"] == "engine_leg_halted"]) == 1
+    t["legs"]["trend"]["halted"] = "yes"              # malformed, not bool
+    ex.step(t)
+    assert ex.state.legs["trend"].engine_halted is True
+
+
+def test_gate_engine_halt_page_before_flag_commit(tmp_path, monkeypatch):
+    """The first cut saved the flag BEFORE paging: one failure at the page
+    site left it committed with no page, and the edge could never recur.
+    Page first; a failed page must leave the flag clear so the next poll
+    fires it again."""
+    ex = mkexec(tmp_path, FakeVenue(), dry_run=False)
+    real_event = ex._event
+    calls = {"n": 0}
+
+    def flaky(level, kind, msg):
+        if kind == "engine_leg_halted" and calls["n"] == 0:
+            calls["n"] += 1
+            raise RuntimeError("disk full")
+        return real_event(level, kind, msg)
+
+    monkeypatch.setattr(ex, "_event", flaky)
+    ex.step(target(trend_halted=True))                # page raises
+    assert ex.state.legs["trend"].engine_halted is False   # NOT committed
+    ex2 = mkexec(tmp_path, FakeVenue(), dry_run=False)     # nor persisted
+    assert ex2.state.legs["trend"].engine_halted is False
+    ex.step(target(trend_halted=True))                # retries the edge
+    assert ex.state.legs["trend"].engine_halted is True
+    assert [e for e in ex.state.events if e["kind"] == "engine_leg_halted"]
+
+
+def test_gate_engine_flat_close_on_halted_book_not_credited(tmp_path):
+    """The OTHER close path. A halted book that (wrongly) still presents a
+    pending for a different signal reaches _close_leg(.., "engine_flat");
+    the first cut guarded only the engine_halted reason string."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    ex.state.legs["trend"].qty = 0.01
+    ex.state.legs["trend"].signal_ts = 1
+    _hold(v, 0.01)
+    pend = {"pending": {"side": "S", "limit": -1.0, "signal_ts": 2},
+            "position": None}
+    ex.step(target(trend=pend, trend_halted=True))
+    assert ex.state.legs["trend"].qty <= 0.0             # old long closed
+    assert ex.state.coverage_live.get("signal_exit", 0) == 0
+
+
+def test_gate_engine_halt_page_names_the_cause(tmp_path):
+    ex = mkexec(tmp_path, FakeVenue(), dry_run=False)
+    t = target(trend_halted=True)
+    t["legs"]["trend"]["halt_reason"] = "manual"
+    ex.step(t)
+    msg = [e for e in ex.state.events if e["kind"] == "engine_leg_halted"][0]["msg"]
+    assert "operator" in msg and "drawdown" not in msg

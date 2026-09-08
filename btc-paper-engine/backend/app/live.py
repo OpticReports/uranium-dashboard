@@ -59,6 +59,7 @@ class Engine:
             pos["exit_flag"] = getattr(b.position, "exit_flag", None)
         return json.dumps({
             "equity": b.equity, "peak": b.peak_equity, "halted": b.halted,
+            "halt_reason": b.halt_reason,
             "position": pos,
             "pending": asdict(b.pending) if b.pending else None,
         })
@@ -66,6 +67,7 @@ class Engine:
     def _restore_book(self, b: Book, raw: str) -> None:
         d = json.loads(raw)
         b.equity, b.peak_equity, b.halted = d["equity"], d["peak"], d["halted"]
+        b.halt_reason = d.get("halt_reason")     # absent on pre-2026-09-08 rows
         if d.get("position"):
             p = dict(d["position"])
             flag = p.pop("exit_flag", None)
@@ -189,7 +191,7 @@ class Engine:
             # Snapshot BEFORE resolve_open_exit: that path closes a
             # position too, so it can trip dd_halt just as process_closed_bar
             # can. Comparing after both is the only way to catch either.
-            was_halted = {n: b.halted for n, b in self.books.items()}
+            was_halted = self._halt_snapshot()
             for b in self.books.values():
                 resolve_open_exit(b, bar, self.tcfg)
             sigs = ({"pullback": eval_signal(bar, ind, self.scfg),
@@ -214,8 +216,15 @@ class Engine:
             self._persist(s, snapshot_ts=bar.ts + BAR_SECONDS)
             self._blend_step(bar.ts + BAR_SECONDS, s)
 
+    def _halt_snapshot(self) -> dict[str, bool]:
+        """Take this immediately before ANY code that can reach
+        engine.core._close_position, and pass it to _alert_new_halts
+        immediately after. There are three such sites: resolve_open_exit and
+        process_closed_bar in catch_up, and the intrabar stop in poll."""
+        return {n: b.halted for n, b in self.books.items()}
+
     def _alert_new_halts(self, was_halted: dict[str, bool], s) -> None:
-        """Page on a book's dd_halt firing.
+        """Page on a book's halt flag turning on.
 
         `book.halted` is set in engine.core._close_position and is cleared by
         exactly one thing: a human calling POST /books/<name>/resume. It is
@@ -232,10 +241,15 @@ class Engine:
         for name, b in self.books.items():
             if b.halted and not was_halted.get(name, False):
                 dd = (b.equity / b.peak_equity - 1) if b.peak_equity else 0.0
-                detail = (f"{name} ({b.cfg.strategy}) drawdown "
-                          f"{100 * dd:.2f}% <= -{100 * b.cfg.dd_halt:.0f}% "
-                          f"dd_halt; equity {b.equity:,.0f} vs peak "
-                          f"{b.peak_equity:,.0f}")
+                if b.halt_reason == "manual":
+                    cause = "halted by operator (POST /halt)"
+                else:
+                    # dd_halt, or unknown on a row persisted before the
+                    # reason field existed - report the numbers, not a story
+                    cause = (f"drawdown {100 * dd:.2f}% <= "
+                             f"-{100 * b.cfg.dd_halt:.0f}% dd_halt")
+                detail = (f"{name} ({b.cfg.strategy}) {cause}; equity "
+                          f"{b.equity:,.0f} vs peak {b.peak_equity:,.0f}")
                 log_event(s, "RED", "book_halted", detail, book=name)
                 logger.warning("book_halted %s", detail)
                 try:
@@ -278,6 +292,14 @@ class Engine:
             if px is not None:
                 cur_bar_ts = int(time.time()) // BAR_SECONDS * BAR_SECONDS
                 with session_scope() as s:
+                    # A stop-out is the single largest loss a book takes -
+                    # the likeliest way to cross dd_halt, and the only way
+                    # to halt BETWEEN bars. The first cut of the halt alert
+                    # bracketed catch_up only; this path persisted
+                    # halted=True straight to the DB, so the next bar's
+                    # snapshot read True and the edge was gone forever
+                    # (counter-agent 2026-09-08, BLOCKING defect 1).
+                    was_halted = self._halt_snapshot()
                     for b in self.books.values():
                         pos = b.position
                         if pos is None or getattr(pos, "exit_flag", None):
@@ -289,6 +311,7 @@ class Engine:
                             _close_position(b, pos, cur_bar_ts, pos.stop_price,
                                             "STOP", self.tcfg)
                             log_event(s, "INFO", "stop_fill_live", b.cfg.name)
+                    self._alert_new_halts(was_halted, s)
                     self._persist(s)
             # bar boundary: refresh + process newly closed bars
             if not self.bars or time.time() >= self.bars[-1].ts + BAR_SECONDS:
