@@ -4766,6 +4766,16 @@ def test_partial_fill_is_adopted_at_the_executed_size(tmp_path):
     blend_mod.reconcile(m, a, "2026-08-20", alerts.append)
     assert m.state.positions["1"].qty == 6 and not m.state.pending_entries
     assert any("6 of 10" in x for x in alerts)
+    # a SELL journal (qty < 0): executions report shares, the sign is the
+    # journal's - a partial BIL sell must reduce BIL, never buy it
+    m.record_pending_book_order("sweep", "BIL", -12, "2026-08-20", ref_price=100.0)
+    a.answer = {"order_ref": "11", "status": "filled", "fill_price": 100.0,
+                "filled_qty": 7, "source": "executions"}
+    bil, cash = m.state.bil_qty, m.state.sleeve_cash
+    blend_mod.reconcile(m, a, "2026-08-20", alerts.append)
+    assert m.state.bil_qty == bil - 7
+    assert m.state.sleeve_cash == pytest.approx(cash + 700.0)
+    assert any("adopting -7" in x for x in alerts)
 
 
 def test_day_old_journal_is_held_when_history_is_unavailable(tmp_path):

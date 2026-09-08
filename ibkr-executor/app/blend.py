@@ -2663,14 +2663,17 @@ def _adopt_filled_qty(mgr: Blend3070Manager, rec: dict, o: dict, alert,
     never the journaled size (counter-agent 2026-09-08, HIGH). Returns the
     record to adopt."""
     fq = o.get("filled_qty")
-    if fq is None or int(fq) == int(rec["qty"]):
+    if fq is None or abs(int(fq)) == abs(int(rec["qty"])):
         return rec
-    msg = (f"{what}: venue executed {int(fq)} of {int(rec['qty'])} sh "
-           f"(remainder cancelled/unknown) - adopting {int(fq)}, verify "
+    # executions report SHARES (positive); the journal's sign says buy or
+    # sell (a core-rebal-sell / sweep sell journals qty < 0) - keep it
+    signed = int(math.copysign(abs(int(fq)), int(rec["qty"])))
+    msg = (f"{what}: venue executed {abs(int(fq))} of {abs(int(rec['qty']))} "
+           f"sh (remainder cancelled/unknown) - adopting {signed:+d}, verify "
            f"at the venue")
     mgr._event("RED", msg)
     alert("🚨 blend partial fill: " + msg)
-    return {**rec, "qty": int(fq)}
+    return {**rec, "qty": signed}
 
 
 def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
