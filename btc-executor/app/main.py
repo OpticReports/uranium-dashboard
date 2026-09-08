@@ -563,8 +563,10 @@ def drill(kind: str = Query("cycle"),
           x_exec_token: str | None = Header(default=None),
           token: str | None = Query(default=None)):
     """RAMP v4 drill (RAMP_V4.md): ONE min-size round trip through the real
-    order paths. Token-gated, budgeted, refuses unless the whole book is
-    flat. Never scheduled - a human calls this."""
+    order paths. kind = cycle | stopfill | short_cycle (SELL-to-open, BUY
+    stop above market, BUY reduce-only close - proves the short-side
+    mechanics; never credits entry_short). Token-gated, budgeted, refuses
+    unless the whole book is flat."""
     _auth(x_exec_token, token)
     if EXEC is None:
         raise HTTPException(status_code=503, detail="executor not ready")

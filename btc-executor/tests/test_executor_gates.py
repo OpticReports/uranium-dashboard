@@ -71,6 +71,7 @@ class FakeVenue:
 
     def place_market(self, side, qty, cloid, reduce_only=False):
         if reduce_only:
+            self.reduce_only_cloids = getattr(self, "reduce_only_cloids", []) + [cloid]
             # Model the venue's OWN semantics, not just the signature: a
             # reduce-only order against a flat or same-side book is a NO-OP,
             # and against a smaller book it clamps. Without this the fake
@@ -1886,7 +1887,7 @@ def test_gate_auto_drill_runs_cycles_in_flat_window(tmp_path, monkeypatch):
         assert guard < 50, "auto-drill never closed the slippage row"
     assert ex._live_fill_count() >= SLIPPAGE_SAMPLE_NEED
     assert ex._needed_auto_drill() is None            # now, and only now
-    assert all(d["kind"] == "cycle" for d in ex.state.drills)   # never stopfill
+    assert all(d["kind"] == "cycle" for d in ex.state.drills)   # never stopfill / short
     assert venue.position() == 0.0
     assert ex.state.auto_drill_off is None
 
@@ -5742,3 +5743,120 @@ def test_gate_pulse_exposes_engine_halt(tmp_path):
     assert body["legs"]["trend"]["engine_halted"] is True
     assert body["legs"]["trend"]["in_position"] is False
     assert body["legs"]["pullback"]["engine_halted"] is False
+
+
+# ------------------------------------------------------------ short-side drill
+# Every organic trade so far has been a long. The SELL-to-open / BUY-side
+# stop / BUY reduce-only close mapping has never touched the live venue, and
+# the ramp's entry_short row can only be closed by an organic short. A
+# short_cycle drill proves the MECHANICS at one contract before that trade
+# arrives at real size (Casey, 2026-09-08). It must never credit entry_short.
+
+
+def test_gate_short_cycle_drill_full_path(tmp_path):
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    # pin the fill-watch SIDES: slip_bps is adverse-positive per side, so a
+    # BUY-labelled SELL entry would sign-flip half the ramp's slippage
+    # sample silently (mutation caught by review)
+    watched = []
+    real_watch = ex._watch_fill
+
+    def rec(leg, role, cloid, ref_px, side):
+        watched.append((role, side))
+        return real_watch(leg, role, cloid, ref_px, side)
+
+    ex._watch_fill = rec
+    r = ex.drill("short_cycle")
+    assert ("drill_entry", "SELL") in watched and ("drill_exit", "BUY") in watched
+    assert r["ok"] is True, r
+    calls = [c for c in v.calls if c[0] in ("MARKET", "STOP", "CANCEL")]
+    kinds = [(c[0], c[1]) for c in calls]
+    assert kinds == [("MARKET", "SELL"), ("STOP", "BUY"), ("CANCEL", None),
+                     ("MARKET", "BUY")], kinds
+    stop = next(o for k, o in v.orders.items() if k.endswith("-S"))
+    assert stop["px"] > v.mid()                      # stop ABOVE market for a short
+    assert stop["status"] == "CANCELLED"
+    assert abs(v.position()) < 1e-9                  # flat at the end
+    assert r["steps"]["side"] == "short"
+    # the flatten MUST be reduce-only: on a short a plain BUY could open a
+    # long if the stop had already closed us (mutation caught by review)
+    x = next(k for k in v.orders if k.endswith("-X"))
+    assert x in getattr(v, "reduce_only_cloids", [])
+
+
+def test_gate_short_cycle_never_credits_entry_short(tmp_path):
+    """RAMP_V4 refuses drill credit toward entry_short in advance: only the
+    real engine -> limit path proves the real path."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    assert ex.drill("short_cycle")["ok"] is True
+    cov = ex.state.coverage_live
+    assert cov.get("entry_short", 0) == 0
+    assert cov.get("drill_cycle", 0) == 1
+    assert cov.get("stop_placed", 0) == 1
+    assert cov.get("drill_short_cycle", 0) == 1      # audit key, not a gate row
+
+
+def test_gate_short_cycle_fill_beats_cancel_auto_repairs(tmp_path):
+    """The BUY stop fills inside the cancel window (price spikes up): it has
+    already closed the short, so the exit must be SKIPPED - a blind BUY exit
+    here would open a naked LONG. Same race the long drill guards."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    real_cancel = v.cancel
+
+    def racing_cancel(cloid):
+        if cloid.endswith("-S") and v.orders.get(cloid, {}).get("status") == "OPEN":
+            v.orders[cloid]["status"] = "FILLED"        # fill beats the cancel
+            return
+        real_cancel(cloid)
+
+    v.cancel = racing_cancel
+    r = ex.drill("short_cycle")
+    assert r["ok"] is False                           # unverified, not credited
+    assert r["steps"]["stop_cancelled"] is False
+    assert r["steps"]["exit"] == "skipped_stop_filled"
+    assert r["steps"]["venue_flat_end"] is True
+    assert abs(v.position()) < 1e-9
+    assert ex.state.coverage_live.get("drill_cycle", 0) == 0
+    assert not [c for c in v.calls if c[0] == "MARKET" and c[3].endswith("-X")]
+
+
+def test_gate_short_cycle_exception_path_auto_repairs(tmp_path):
+    class BoomVenue(FakeVenue):
+        def place_stop(self, side, qty, trigger_px, cloid):
+            raise RuntimeError("venue rejected stop")
+    v = BoomVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    r = ex.drill("short_cycle")
+    assert r["ok"] is False and "error" in r["steps"]
+    assert abs(v.position()) < 1e-9                  # repaired: short closed
+    repair = [c for c in v.calls if c[0] == "MARKET" and c[3].endswith("-R")]
+    assert repair and repair[0][1] == "BUY"           # repair on the right side
+
+
+def test_gate_long_cycle_drill_unchanged_by_short_variant(tmp_path):
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    r = ex.drill("cycle")
+    assert r["ok"] is True and r["steps"]["side"] == "long"
+    kinds = [(c[0], c[1]) for c in v.calls if c[0] in ("MARKET", "STOP", "CANCEL")]
+    assert kinds == [("MARKET", "BUY"), ("STOP", "SELL"), ("CANCEL", None),
+                     ("MARKET", "SELL")]
+    assert ex.state.coverage_live.get("drill_short_cycle", 0) == 0
+    x = next(k for k in v.orders if k.endswith("-X"))
+    assert x in getattr(v, "reduce_only_cloids", [])
+
+
+def test_gate_auto_drill_never_schedules_short_cycle(tmp_path):
+    """Manual-only, like stopfill: its first live run is a venue experiment
+    and a re-armed breaker must never re-fire the path that just failed."""
+    ex = mkexec(tmp_path, FakeVenue(), dry_run=False)
+    for cov in ({}, {"drill_cycle": 1}, {"drill_cycle": 2},
+                {"drill_cycle": 3}, {"drill_cycle": 5}):
+        ex.state.coverage_live = cov
+        assert ex._needed_auto_drill() in ("cycle", None)
+    ex.state.drills = [{"kind": "short_cycle", "ok": False}]
+    ex.state.coverage_live = {"drill_cycle": 1}
+    assert ex._needed_auto_drill() == "cycle"
