@@ -85,9 +85,49 @@ team + founder personal financial commitment; cornered process lineage
 with the only predecessor dead; additive tail optionality not priced
 at $35M pre.
 
-### Cruxes
+**Round 4 — Casey pushed on bear #3 (anchor): "the anchor's
+enthusiasm is real, I know who it is."**
 
-*(to be found together — output of the session)*
+- New evidence logged: [LP-VERIFIED — identity] Casey knows the
+  Anchor Partner's identity (disclosed privately by the sponsor) and
+  vouches the enthusiasm is genuine. Source: LP direct knowledge;
+  the enthusiasm assessment is LP judgment, accepted as such.
+- (B1) Bear concedes, 2026-09-08: the insinuation that the anchor
+  might be inflated or misrepresented by the sponsor is WITHDRAWN.
+  The anchor is real, senior, at a real firm; the champion exists.
+- Bear retains (not conceded): a champion is not a contract.
+  Enthusiasm-without-paper still isn't demand: (i) a senior
+  engineering leader is not procurement — incumbents buy through
+  qualification committees and dual-source policy; (ii) "as much as
+  possible" is unquantified and untested against price (does the
+  interest survive if October's $0.48/ft slips to $2/ft?);
+  (iii) champion-risk is a known failure mode (reorg, departure,
+  budget cycle); (iv) even fully real, one anchor = single-anchor
+  dependence — the modal advanced-materials failure per our own
+  base rates.
+
+### Cruxes (proposed in round 5 — to be confirmed together)
+
+1. **Does the anchor's interest survive contact with paper?**
+   Not "is it real" (settled by LP) but: does ANYTHING written exist
+   — LOI, MOU, qualification plan with dates, conditional volumes at
+   a stated price? Evidence that settles it: one page of paper, or
+   the answer "nothing written," which gets priced as champion-risk.
+2. **The October price vs the September close.** $0.48/ft ships in
+   October at real volume — or it doesn't. The single cheapest
+   verification event on the whole deal lands 2–4 WEEKS AFTER the
+   2026-09-28 close. Structural question: can the close slip past
+   the milestone, or can the LP tranche/condition the check on it?
+   If neither, the timing itself is information.
+3. **The additive license: exclusive, or not?** If DexMat's license
+   to the Spanish-lab chemistry is non-exclusive (or never lands),
+   the tail branch belongs to the whole industry (concession C2) and
+   this is a specialty business at a full price. Evidence: term-sheet
+   status and the exclusivity ask.
+
+### What would move each side
+
+*(round 6 — pending)*
 
 ## S3 · THE DECISION — target on/before 2026-09-28 close
 
