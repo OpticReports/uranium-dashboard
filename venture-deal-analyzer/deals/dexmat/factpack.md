@@ -1,4 +1,4 @@
-# DexMat — grounded fact pack (2026-08-08, rev 2)
+# DexMat — grounded fact pack (2026-08-08; rev 3, 2026-09-08)
 
 Provenance tags: [VERIFIED] independently verified · [CLAIMED] company/founder
 statement, unverified · [DECK]/[DD-NOTES]/[MODEL] sponsor documents (received
@@ -408,3 +408,153 @@ SITE VISIT DELIVERABLES (what converts CLAIMED → scoreable):
     ABOVE the Zoltek-class specialty benchmark ($584M, 26 yrs). The
     specialty-only outcome at this price nets roughly 1.5–3x over ~10 yrs.
   - Fee drag unchanged: breakeven 1.02x gross; 10x net needs ≈12.5x gross.
+
+## UPDATED SPONSOR DOCS — READ 2026-09-08 [supersedes the 2026-09-05 NOT-READ entry]
+
+The two DocSend links supplied 2026-09-05 were unreadable from this
+environment (gate/403; logged NOT READ the same day, alternate supply
+requested — the standing rule worked as designed). Casey uploaded page
+captures in a zip 2026-09-08; **both documents are now READ** — the
+11-page "DexMat — Seed Extension" memo in full, and the model workbook's
+"SPC Unified Model" tab (its other four tabs are visible but not
+readable in the capture: Copper Wire Facts, Bull/Base Case Dilution &
+SPV Return, Questions to be asked — **those remain NOT READ**; export
+requested on the DD list).
+
+Full transcription, per-page content, internal-inconsistency findings,
+and what moved: **`sponsor-memo-2026-09.md`** (counter-agent verified).
+Page images archived under `sponsor-docs-2026-09/`.
+
+### Rev-3 headline deltas (v. the rev-2 record above)
+
+- **Round restated: $5–10mm seed extension at the same $35M pre, PRICED,
+  direct on cap table; target close 2026-09-28** (a ~20-day decision
+  clock). Admin: up to ~$1,250/person TOTAL, shared pro-rata, covering
+  7 years of compliance (rev-2 coverage was 5 yrs), billed pro-rata
+  after. 2% + 20% carry unchanged.
+- **Team: Oliver Dewey, PhD is CTO** (Director of Scale-Up & Mfg;
+  Pasquali-lab alum); **Tsentalovich → co-founder/"R&D partner"** (was
+  CTO). New names: Jill Dupré (CoS/GC, university-IP licensing), Asena
+  Hertz (CMO), a DuPont scale-up advisor (40 yrs). Sponsor's own words:
+  "No executive has experience in a related vertical... or cable and
+  wire manufacturing."
+- **Governance history revised: Pasquali reverse-mortgaged his house to
+  buy out "the old CEO ... not very good at business"** — vs the public
+  "planned transition" narrative rev 2 recorded. Skin-in-the-game signal
+  AND an ask (most plausibly Tsentalovich, who was CEO to 2023 — NOT
+  stated by the memo; hedged accordingly).
+- **Offtake P1 movement: "Anchor Partner" = anonymous senior engineering
+  leader at a $10bn+ wire-and-cable manufacturer**, gave the sponsor a
+  diligence interview 2026-08-28; wants "as much as possible" AFTER the
+  flagship completes qualification "over the next few months."
+  Enthusiasm-stage: no LOI, no PO, no written commitment referenced.
+  The ask goes from "none disclosed" to "described but anonymous."
+- **The additive story now comes from the sponsor's own pen**: a
+  Spanish academic lab took Galvorn-class material 6 → 24.5 MS/m;
+  DexMat in active LICENSING discussions; **"humidity removes the
+  benefits"** — lab-only today; Pasquali says field-ready in 3–5 yrs.
+  Matches the 2026-08-09 call-note hypothesis (IMDEA-class
+  intercalation) in every disclosed detail — the memo names neither
+  lab nor chemistry — including our humidity qualification gate and
+  the moat note: the endgame conductivity step is third-party IP.
+- **Traction: ~170 purchasers (was 50+), ~75 in 2026, ~35 test
+  programs, biotech multiyear agreement** (sector of the rev-2 unnamed
+  contract now disclosed). Next-round KPI "several million in annual
+  revenue" implies current revenue still below that — consistent with
+  rev 2's ~$800K–1M run rate.
+- **Near-term falsifiable milestone: list price $8.49/ft → $0.48/ft
+  "October 2026"** (plant upgrade). Verifiable within weeks of close.
+- **Sponsor EV theater persists**: outcome tree internally inconsistent
+  (bullets 25/40/5 sum to 70%; prose 35/60/5 sums to 100%; the EV
+  figures use the prose values), headline EV(MOIC) ≈ 65.75x GROSS of
+  dilution and fees with 87% of it on a 5% branch at 1144x and a
+  "Delta4 Derived" 10x P/S; the workbook ramps military aero AND space
+  to **100% of full sector volume by 2037, "no uptake cap"** by design,
+  reaching a $672bn implied 2040 market cap. The memo's Fig. 1 and the
+  workbook are two DIFFERENT model vintages ($4.501bn vs $4.576bn 2034
+  revenue), and the memo's own tree bullets match the workbook, not
+  its own figure. A 0x branch now exists (improvement over rev 2's
+  no-downside model); the dilution-free tail does not.
+- **Margin story flipped**: rev-2 DD notes said ~99% current margins,
+  50% long-term model; the memo plans a "purposeful" 20% markup on cost
+  (~16.7% gross margin). Both cannot be the same plan. Ask.
+- Sponsor candor materially better than any prior Delta4 document: bias
+  disclosure, "professor project" worry, humidity limitation, 10→7 yr
+  lead haircut, no-vertical-experience admission.
+
+### Scoring consequence (rev 3)
+
+The rev-2 panel forecasts (0.70 / 0.60 / 0.04, W 3.25) STAND — no
+re-score. Rationale: the two entries that would move the panel most
+(anchor offtake, additive) each moved half a notch in offsetting
+directions — the offtake is now described but remains one anonymous
+person's enthusiasm with qualification pending, and the additive is
+confirmed real but confirmed lab-only with the IP outside the company.
+The decision-relevant change is not the score, it is the CLOCK
+(2026-09-28 close) and the DD ledger below. S2 must run against that
+date. Note for the resolution ledger: if the extension closes as
+described, `p_next_round_24mo = 0.70` resolves YES.
+
+## PENDING DD QUESTIONS (rev 3, 2026-09-08) — ranked by weight
+
+Statuses: ● asked · ✓ answered · ◐ partially answered · ✗ refused ·
+⌛ expired (60-day rule from first ask). Carried forward from the
+2026-08-09 site-visit deliverables list; renumbered into the v1.2
+ranked format. Clock context: **round closes 2026-09-28.**
+
+**P1 — decision-gating (an answer changes the verdict):**
+1. ◐ **Anchor Partner identity + any WRITTEN commitment** (asked
+   2026-08-09 as "offtake counterparty + binding volumes"). Rev-3
+   movement: described (anonymous senior eng leader, $10bn+ wire &
+   cable mfr, sponsor interview 2026-08-28) but zero written
+   commitment; "as much as possible" is enthusiasm, not an order. What
+   it moves: the entire phase-1 revenue case and the traction score;
+   named + LOI would be the single biggest score-mover on this deal.
+2. ◐ **Spanish-lab additive: license terms, exclusivity, cost, and any
+   test data on DexMat's own wet-spun fiber** (asked 2026-08-09 as
+   additive protocol/data; NEW sub-ask on the license). Rev-3 movement:
+   confirmed real, confirmed lab-only (humidity), confirmed
+   third-party IP in "active discussions." What it moves: the entire
+   tail branch — without an exclusive, field-stable license the 5%/
+   1144x branch belongs to the whole industry, not DexMat.
+3. ● **Which outcome tree is operative — 25/40/5 or 35/60/5 — and the
+   dilution-adjusted version** (NEW, from the memo's internal
+   inconsistency; ask via sponsor). What it moves: branch-2's EV 1.5x
+   (total EV only ~4% — the 5% tail dominates either set, which is the
+   deeper problem); mainly it tests sponsor numeracy/candor directly.
+
+**P2 — score-moving:**
+4. ● **Annealed / high-purity-grade conductivity in writing** (asked
+   2026-08-09; unanswered by the memo, which uses 6 MS/m median tape
+   and never addresses the 4x annealing penalty on the space/aerospace
+   qualification path). Moves: beachhead-market score.
+5. ◐ **Basis of the parity claim** (asked 2026-08-09). Rev-3 movement:
+   memo reframes as 4x conductivity in 5 yrs (→ ~24 MS/m ≈ 41% of
+   copper VOLUMETRIC — still not volumetric parity; ~2.4–2.9x copper
+   gravimetric). Residual ask: the historical year-by-year conductivity
+   curve. Moves: technology score, tail plausibility.
+6. ● **Teijin FTO + Rice license scope/economics** (asked 2026-08-09;
+   untouched by the memo despite a GC hire whose brief is exactly
+   university-IP licensing). Moves: moat score.
+7. ● **Workbook export — the four unread tabs** (NEW: Copper Wire
+   Facts, Bull/Base Case Dilution & SPV Return, Questions to be asked).
+   Moves: lets us audit the sponsor's dilution math instead of
+   reconstructing it. Also verify on export: the workbook's SPC
+   market-size input reads ~$1.38bn CY2026 vs the memo's "$1.2bn"
+   (~15% larger base), and the Fig-1-vs-workbook vintage split.
+8. ● **October $0.48/ft price milestone** (NEW; falsifiable ~30 days).
+   Moves: cost-curve credibility — a hard, near-term check on the
+   whole roadmap.
+9. ● **Margin plan: 99%-now/50%-later (DD notes) vs 20% markup (memo)**
+   (NEW). Moves: unit-economics score; also a candor probe.
+
+**P3 — completeness:**
+10. ● Old-CEO buyout: who, when, on what terms; reconcile with the
+    "planned transition" public narrative (NEW).
+11. ● Biotech multiyear counterparty = NeuroBionics? Volume/duration
+    (NEW; sector now disclosed, name still not).
+12. ● CEO "$400M+ exits" bio math; founding-history rewrite (Mirri,
+    Goenaga) (asked 2026-08-09, unanswered).
+13. ● GP entity, GP commit, administrator, custodian, auditor, hurdle,
+    is the 2% genuinely one-time; why admin went 5 yrs → 7 (carried
+    from rev 2; still undisclosed).
