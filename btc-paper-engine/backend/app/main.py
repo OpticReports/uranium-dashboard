@@ -14,7 +14,8 @@ from fastapi.responses import StreamingResponse
 from .config import settings
 from .live import ENGINE, start_background_loop
 from .store.db import (
-    BarRow, EquitySnapRow, EventRow, SignalRow, TradeRow, init_db, session_scope,
+    BarRow, EquitySnapRow, EventRow, SignalRow, TradeRow, init_db, log_event,
+    session_scope,
 )
 
 logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
@@ -62,14 +63,28 @@ def funding():
     return MONITOR.snapshot()
 
 
+def _require_exec_token(x_exec_token: str | None) -> None:
+    """The book control surface (halt/resume/reset/resume-data) mutated a
+    live-feeding engine with NO auth on a public URL, while the runbook
+    named those very endpoints as the remedy for a halt (completeness
+    critic, 2026-09-08). Same rule as /exec/target: open only when no token
+    is configured (dev)."""
+    if settings.exec_token and x_exec_token != settings.exec_token:
+        raise HTTPException(status_code=401, detail="bad exec token")
+
+
 @app.get("/exec/target")
 def exec_target(x_exec_token: str | None = Header(default=None)):
     """Machine-readable desired state for the live executor: the S3 (pullback)
     and S4 (trend) legs of the S5 blend — pending limit orders, open positions
     with current protective levels, and data-health flags. The executor mirrors
     this; the paper engine itself never touches an exchange."""
-    if settings.exec_token and x_exec_token != settings.exec_token:
-        raise HTTPException(status_code=401, detail="bad exec token")
+    _require_exec_token(x_exec_token)
+    if not ENGINE.booted:
+        # Fresh Book() defaults are not an engine state. Serving them read
+        # as halted=False / no position / bar_ts=0 to the executor while
+        # boot() restored the DB in the background (panel, 2026-09-08).
+        raise HTTPException(status_code=503, detail="engine booting")
 
     def _leg(book):
         b = ENGINE.books.get(book)
@@ -88,6 +103,7 @@ def exec_target(x_exec_token: str | None = Header(default=None)):
             pend = {"side": b.pending.side, "limit": b.pending.limit,
                     "signal_ts": b.pending.signal_ts}
         return {"book": book, "halted": b.halted,
+                "halt_reason": b.halt_reason,
                 "state": ("HALTED" if b.halted else
                           b.position.side if b.position else
                           "PENDING" if b.pending else "FLAT"),
@@ -204,27 +220,50 @@ def conditions():
 
 
 @app.post("/books/{book}/halt")
-def halt(book: str):
+def halt(book: str, x_exec_token: str | None = Header(default=None)):
+    _require_exec_token(x_exec_token)
     b = ENGINE.books.get(book)
     if not b:
         raise HTTPException(404)
+    # NOT under ENGINE._lock: poll() holds that lock across its network
+    # fetches (up to 30s per read), so a locked /halt could stall an operator
+    # for that long during an incident (panel, 2026-09-08). Ordering does the
+    # job instead: reason is written BEFORE the flag, so a scan that sees
+    # halted=True also sees why, and the announced-flag design means the
+    # page cannot be misattributed or lost to the race. Drop the pending:
+    # `halted` only blocks NEW pendings, so a resting one still filled on
+    # the next bar and a halted book opened a position the live executor
+    # then mirrored with real money.
+    b.halt_reason = "manual"
     b.halted = True
-    return {"book": book, "halted": True}
+    dropped = b.pending is not None
+    b.pending = None
+    with session_scope() as s:
+        log_event(s, "WARN", "book_halted_manual",
+                  f"pending dropped={dropped}", book=book)
+    return {"book": book, "halted": True, "pending_dropped": dropped}
 
 
 @app.post("/books/{book}/resume")
-def resume(book: str):
+def resume(book: str, x_exec_token: str | None = Header(default=None)):
+    _require_exec_token(x_exec_token)
     b = ENGINE.books.get(book)
     if not b:
         raise HTTPException(404)
     b.halted = False
+    b.halt_reason = None
+    b.halt_announced = False          # a later halt must page again
     b.peak_equity = b.equity          # manual reset re-anchors the dd baseline
+    with session_scope() as s:
+        log_event(s, "INFO", "book_resumed", "", book=book)
     return {"book": book, "halted": False}
 
 
 @app.post("/books/reset")
 def books_reset(window: str = "2y", start: str | None = None,
-                capital: float | None = None):
+                capital: float | None = None,
+                x_exec_token: str | None = Header(default=None)):
+    _require_exec_token(x_exec_token)
     """Re-baseline ALL books from one common inception (4y|2y|1y|6m|3m|1m or
     custom start=YYYY-MM-DD), replaying history through the live code path;
     live trading continues from now. Destructive: wipes current book state."""
@@ -240,7 +279,8 @@ def books_reset(window: str = "2y", start: str | None = None,
 
 
 @app.post("/resume-data")
-def resume_data():
+def resume_data(x_exec_token: str | None = Header(default=None)):
+    _require_exec_token(x_exec_token)
     ENGINE.data_halt = False
     return {"data_halt": False}
 

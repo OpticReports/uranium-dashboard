@@ -59,8 +59,19 @@ at any bar resumes bit-identically (6-cut-point kill test).
 ## Operations
 
 - `GET /status` health + per-book state; `/conditions` = live n/6 setup strip.
-- `POST /books/{S1|S2|S3}/halt|resume` manual kill-switch (resume re-anchors
-  the drawdown baseline); `POST /resume-data` clears a price-sanity halt.
+- `POST /books/{S1|S2|S3|S4}/halt|resume` manual kill-switch (resume
+  re-anchors the drawdown baseline); `POST /resume-data` clears a
+  price-sanity halt. **S4 is included and this is the only way to clear an
+  AUTOMATIC halt too**: each book's own `dd_halt` sets `book.halted`, which
+  no code path ever clears and which is persisted across restarts. The halt
+  now pages (RED `book_halted` + Telegram) and btc-executor mirrors it as
+  `legs.<leg>.engine_halted` on `/pulse`, but neither service can resume the
+  book — a human must, with the `x-exec-token` header (all four control
+  endpoints require it whenever `EXEC_TOKEN` is set; they were open on the
+  public URL before 2026-09-08). `/halt` also drops a resting pending, since
+  a halted book would otherwise still fill it. A halted leg means any blend
+  containing it runs the remaining leg plus cash, at reduced exposure,
+  indefinitely. `/exec/target` answers 503 until boot has restored the DB.
 - `POST /replay` re-runs the acceptance replay with the active config
   (warns if config ≠ research defaults).
 - DEGRADED (no data >10 min) blocks new entries, keeps protective stops.

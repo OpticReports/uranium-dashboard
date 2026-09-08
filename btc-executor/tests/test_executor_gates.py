@@ -100,11 +100,19 @@ NOW = int(time.time()) // 14_400 * 14_400
 BLEND = {"w_trend": 0.25, "lev": 1.5}
 
 
-def target(pull=None, trend=None, bar_ts=None, degraded=False, data_halt=False):
+def target(pull=None, trend=None, bar_ts=None, degraded=False, data_halt=False,
+           pull_halted=False, trend_halted=False):
+    """`*_halted` mirrors legs.<n>.halted from /exec/target — the ENGINE
+    book's own kill switch, which the executor ignored entirely until
+    2026-09-08. Defaults False so every pre-existing test is unaffected."""
     return {"bar_ts": bar_ts if bar_ts is not None else NOW,
             "degraded": degraded, "data_halt": data_halt, "blend": BLEND,
-            "legs": {"pullback": pull or {"pending": None, "position": None},
-                     "trend": trend or {"pending": None, "position": None}}}
+            "legs": {"pullback": {**(pull or {"pending": None,
+                                              "position": None}),
+                                  "halted": pull_halted},
+                     "trend": {**(trend or {"pending": None,
+                                            "position": None}),
+                               "halted": trend_halted}}}
 
 
 def mkexec(tmp_path, venue, dry_run=None):
@@ -5545,3 +5553,192 @@ def test_gate_sanity_survives_a_corrupt_fill_row(tmp_path):
                       {"live": True, "slip_bps": 4.0}]
     s = _ramp_v4(ex.state)["slippage_sanity"]
     assert s["n"] == 1 and s["mean_bps"] == 4.0   # str and bool are not slips
+
+
+# ---------------------------------------------------------------- engine halt
+# An engine book halt was completely invisible here before 2026-09-08: the
+# executor never read legs.<n>.halted, so the leg going flat and staying flat
+# was booked as a routine INFO leg_closed engine_exit, /pulse read
+# in_position:false exactly like "flat between signals", and nobody was paged.
+# Nothing in EITHER service clears book.halted - only POST /books/<n>/resume.
+
+
+def test_gate_engine_leg_halt_pages_red_once(tmp_path, monkeypatch):
+    """Page ONCE: the condition is permanent, so a level-triggered event
+    would fire every 20s poll until a human acted."""
+    sent = []
+    import app.alerts as alerts
+    monkeypatch.setattr(alerts, "send", lambda m: sent.append(m))
+    ex = mkexec(tmp_path, FakeVenue(), dry_run=False)
+    ex.step(target(trend_halted=True))
+    reds = [e for e in ex.state.events if e["kind"] == "engine_leg_halted"]
+    assert len(reds) == 1 and reds[0]["level"] == "RED" and "trend" in reds[0]["msg"]
+    assert ex.state.legs["trend"].engine_halted is True
+    assert ex.state.legs["pullback"].engine_halted is False
+    page = [m for m in sent if "engine_leg_halted" in m]
+    assert len(page) == 1 and "/resume" in page[0]
+    for _ in range(5):
+        ex.step(target(trend_halted=True))
+    assert len([e for e in ex.state.events if e["kind"] == "engine_leg_halted"]) == 1
+    assert len([m for m in sent if "engine_leg_halted" in m]) == 1
+
+
+def test_gate_engine_leg_halt_survives_restart(tmp_path, monkeypatch):
+    """Persisted, so a restart does not RE-page a halt already reported. The
+    event history is persisted too, so the restored executor legitimately
+    carries the original event - what must not happen is a second one."""
+    ex = mkexec(tmp_path, FakeVenue(), dry_run=False)
+    ex.step(target(trend_halted=True))
+    sent = []
+    import app.alerts as alerts
+    monkeypatch.setattr(alerts, "send", lambda m: sent.append(m))
+    ex2 = mkexec(tmp_path, FakeVenue(), dry_run=False)
+    assert ex2.state.legs["trend"].engine_halted is True
+    ex2.step(target(trend_halted=True))
+    assert len([e for e in ex2.state.events if e["kind"] == "engine_leg_halted"]) == 1
+    assert not [m for m in sent if "engine_leg_halted" in m]
+
+
+def test_gate_engine_leg_resume_clears_pages_all_clear_and_rearms(tmp_path, monkeypatch):
+    sent = []
+    import app.alerts as alerts
+    monkeypatch.setattr(alerts, "send", lambda m: sent.append(m))
+    ex = mkexec(tmp_path, FakeVenue(), dry_run=False)
+    ex.step(target(trend_halted=True))
+    ex.step(target(trend_halted=False))
+    assert ex.state.legs["trend"].engine_halted is False
+    assert [e for e in ex.state.events if e["kind"] == "engine_leg_resumed"]
+    assert [m for m in sent if "engine_leg_resumed" in m]      # the phone too
+    ex.step(target(trend_halted=True))
+    assert len([e for e in ex.state.events if e["kind"] == "engine_leg_halted"]) == 2
+
+
+def test_gate_engine_halt_absent_field_is_unknown_not_false(tmp_path, monkeypatch):
+    """bool(tl.get("halted")) read a MISSING key as False: a partial
+    /exec/target sent a false 'trading again' all-clear on a still-halted
+    book, then a fresh RED when the field returned. Absent is UNKNOWN."""
+    sent = []
+    import app.alerts as alerts
+    monkeypatch.setattr(alerts, "send", lambda m: sent.append(m))
+    ex = mkexec(tmp_path, FakeVenue(), dry_run=False)
+    ex.step(target(trend_halted=True))
+    t = target()
+    del t["legs"]["trend"]["halted"]
+    for _ in range(3):
+        ex.step(t)
+    assert ex.state.legs["trend"].engine_halted is True
+    assert not [e for e in ex.state.events if e["kind"] == "engine_leg_resumed"]
+    t["legs"]["trend"]["halted"] = "yes"
+    ex.step(t)
+    assert ex.state.legs["trend"].engine_halted is True
+
+
+def test_gate_engine_halt_page_before_flag_commit(tmp_path, monkeypatch):
+    """Saving the flag BEFORE paging lost the alert permanently on any single
+    failure at the page site. Page first; a failed page leaves the flag clear
+    so the next poll fires it again."""
+    ex = mkexec(tmp_path, FakeVenue(), dry_run=False)
+    real_event = ex._event
+    calls = {"n": 0}
+
+    def flaky(level, kind, msg):
+        if kind == "engine_leg_halted" and calls["n"] == 0:
+            calls["n"] += 1
+            raise RuntimeError("disk full")
+        return real_event(level, kind, msg)
+
+    monkeypatch.setattr(ex, "_event", flaky)
+    try:
+        ex.step(target(trend_halted=True))
+    except RuntimeError:
+        pass                                          # the scan runs before
+    assert ex.state.legs["trend"].engine_halted is False
+    ex2 = mkexec(tmp_path, FakeVenue(), dry_run=False)
+    assert ex2.state.legs["trend"].engine_halted is False
+    ex.step(target(trend_halted=True))
+    assert ex.state.legs["trend"].engine_halted is True
+    assert [e for e in ex.state.events if e["kind"] == "engine_leg_halted"]
+
+
+def test_gate_engine_halt_tracked_even_while_executor_halted(tmp_path):
+    """The leg loop breaks on the executor's OWN halt. Tracked inside it, an
+    engine halt landing during that window went unpaged until /resume."""
+    ex = mkexec(tmp_path, FakeVenue(), dry_run=False)
+    ex.state.halted = "DRAWDOWN"
+    ex.step(target(trend_halted=True))
+    assert ex.state.legs["trend"].engine_halted is True
+    assert [e for e in ex.state.events if e["kind"] == "engine_leg_halted"]
+
+
+def test_gate_halted_leg_never_receives_a_new_entry(tmp_path):
+    """The engine's /halt used to leave a pending resting; the executor then
+    entered at market on a halted book (panel, 2026-09-08)."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    pend = {"pending": {"side": "S", "limit": -1.0, "signal_ts": 2}, "position": None}
+    ex.step(target(trend=pend, trend_halted=True))
+    assert ex.state.legs["trend"].qty == 0.0
+    assert not [c for c in v.calls if c[0] in ("MARKET", "LIMIT")]
+    # the OTHER leg is unaffected
+    ex.step(target(pull={"pending": {"side": "L", "limit": 100.0, "signal_ts": 3},
+                        "position": None}, trend_halted=True))
+    assert ex.state.legs["pullback"].entry_cloid is not None
+
+
+def test_gate_exit_on_a_now_halted_book_is_a_genuine_exit(tmp_path):
+    """The engine never flattens on halt: it halts AT a trade close and keeps
+    managing any position until its own exit. So a close we make beside
+    halted=True mirrors a GENUINE exit - it keeps the signal_exit gate
+    credit (the first cut withheld it on a false 'kill-switch flatten'
+    premise) and the label carries the state."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    ex.state.legs["trend"].qty = 0.01
+    _hold(v, 0.01)
+    ex.step(target(trend_halted=True))
+    assert ex.state.legs["trend"].qty == 0.0
+    closed = [e for e in ex.state.events if e["kind"] == "leg_closed"]
+    assert closed and "book halted" in closed[-1]["msg"]
+    assert ex.state.coverage_live.get("signal_exit", 0) == 1
+
+
+def test_gate_engine_flat_close_on_halted_book_does_not_reenter(tmp_path):
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    ex.state.legs["trend"].qty = 0.01
+    ex.state.legs["trend"].signal_ts = 1
+    _hold(v, 0.01)
+    pend = {"pending": {"side": "S", "limit": -1.0, "signal_ts": 2}, "position": None}
+    ex.step(target(trend=pend, trend_halted=True))
+    assert ex.state.legs["trend"].qty == 0.0            # old long closed, NO new short
+    ours = [c for c in v.calls if c[0] == "MARKET" and c[3] != "seed"]   # _hold seeds one
+    assert len(ours) == 1 and ours[0][1] == "SELL" and ours[0][2] == 0.01
+
+
+def test_gate_engine_halt_page_names_the_cause(tmp_path):
+    ex = mkexec(tmp_path, FakeVenue(), dry_run=False)
+    t = target(trend_halted=True)
+    t["legs"]["trend"]["halt_reason"] = "manual"
+    ex.step(t)
+    msg = [e for e in ex.state.events if e["kind"] == "engine_leg_halted"][0]["msg"]
+    assert "operator" in msg and "drawdown" not in msg
+
+
+def test_gate_pulse_exposes_engine_halt(tmp_path):
+    """A halted leg reads in_position:false - identical to a quiet leg. Hits
+    the REAL endpoint (no lifespan: startup builds EXEC on a background
+    thread that would race the executor installed here)."""
+    from fastapi.testclient import TestClient
+    import app.main as m
+    ex = mkexec(tmp_path, FakeVenue(), dry_run=False)
+    ex.step(target(trend_halted=True))
+    old = m.EXEC
+    m.EXEC = ex
+    try:
+        body = TestClient(m.app).get("/pulse").json()
+    finally:
+        m.EXEC = old
+    assert body["ready"] is True
+    assert body["legs"]["trend"]["engine_halted"] is True
+    assert body["legs"]["trend"]["in_position"] is False
+    assert body["legs"]["pullback"]["engine_halted"] is False

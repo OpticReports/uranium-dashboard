@@ -138,6 +138,15 @@ class LegLedger:
     # Same again for ENTRY orders (re-review 2026-08-26 binding 8): the
     # boot-mismatch resolution path re-sends an entry the venue already saw.
     entry_n: int = 0
+    # Last-seen value of the ENGINE book's own kill switch (legs.<n>.halted
+    # from /exec/target). Persisted so the page fires on the TRANSITION, not
+    # once per 20s poll forever - an engine halt is never cleared by code
+    # (paper-engine core.py sets book.halted and only POST /books/<n>/resume
+    # clears it), so a level-triggered page would run until a human acted.
+    # Before this existed the executor never read the field at all: the leg
+    # simply stopped trading, /pulse read `in_position: false` exactly like
+    # "flat between signals", and nobody was told (2026-09-08).
+    engine_halted: bool = False
     # entry_ts of an engine position whose protective stop FILLED on-venue.
     # While the engine (which only updates on 4h bar closes) keeps reporting
     # that position, case 1 must NOT re-enter from the stale entry order -
@@ -1039,6 +1048,24 @@ class Executor:
                                  "with the exec token promoted unverified "
                                  "evidence into the ramp gate - rotate "
                                  "EXEC_TOKEN and re-check /status.ramp_v4",
+            # The one ACTION page whose fix is on the OTHER service. Nothing
+            # in either codebase clears an engine book halt.
+            "engine_leg_halted": "this is the PAPER ENGINE's book halt, "
+                                 "not the executor's - the executor is "
+                                 "healthy and keeps mirroring the other "
+                                 "leg; any position the halted book still "
+                                 "holds stays protected by its stop until "
+                                 "the engine exits it. The engine opens no "
+                                 "NEW entries for this book until a human "
+                                 "calls POST /books/<S3|S4>/resume on "
+                                 "btc-paper-engine; it does NOT clear "
+                                 "itself and it survives restarts. If the "
+                                 "cause is its drawdown kill switch, "
+                                 "leaving it halted is the correct action "
+                                 "and the blend runs the other leg plus "
+                                 "cash; if you did NOT halt it yourself and "
+                                 "the cause reads operator, someone with "
+                                 "engine access did",
         }
         # Per-kind Telegram cooldown for conditions that persist across polls
         # (their msg embeds a changing float, so kind+msg dedupe never fires).
@@ -1065,6 +1092,7 @@ class Executor:
             send(f"🚨 executor {kind}: {msg}\n"
                  f"→ no action needed from you — forward this to Claude")
         elif kind in ("resume", "auto_rearm", "transfer_reconciled",
+                      "engine_leg_resumed",
                       # the provenance reset was WARN-with-no-send-branch:
                       # logged, never phoned, i.e. silent exactly where the
                       # operator looks. That defeated its whole purpose.
@@ -1645,6 +1673,10 @@ class Executor:
         self._roll_day(equity)
         self._check_agent_expiry()
         self._check_halts(equity)
+        # Engine-book halts are tracked BEFORE the executor's own halt
+        # returns: tracked inside the leg loop, an engine halt that landed
+        # while we were halted went unpaged until /resume (panel, 2026-09-08).
+        self._track_engine_halts(target)
         if self.state.halted:
             self._save_state()
             return
@@ -1698,10 +1730,56 @@ class Executor:
 
     # ---------- per-leg reconciliation ----------
 
+    def _track_engine_halts(self, target: dict) -> None:
+        """Mirror legs.<n>.halted from /exec/target into LegLedger.engine_halted
+        and page on the TRANSITION.
+
+        THREE-STATE: an absent or non-bool field is UNKNOWN, not False. The
+        first cut used bool(tl.get(...)), so one partial response sent a
+        false 'trading again' all-clear on a still-halted book, then a fresh
+        RED when the field came back - a page per flap. Same collapse-
+        unknown-into-convenient that _ostat exists to forbid.
+
+        PAGE FIRST, then commit the flag. The first cut saved first, so a
+        single failure at the page site (disk, _event raising, a kill
+        mid-deploy) left the flag committed with no page sent and the edge
+        could never recur - the exact silent halt this exists to kill. A
+        crash between the two now RE-pages on restart; a duplicate beats a
+        loss.
+        """
+        legs = target.get("legs") or {}
+        for leg in LEGS:
+            tl = legs.get(leg)
+            if not isinstance(tl, dict):
+                continue
+            led: LegLedger = self.state.legs[leg]
+            raw = tl.get("halted")
+            if not isinstance(raw, bool) or raw == led.engine_halted:
+                continue
+            if raw:
+                reason = tl.get("halt_reason")
+                cause = ("operator POST /halt" if reason == "manual"
+                         else "its own drawdown kill switch" if reason == "dd_halt"
+                         else "a halt (reason not reported)")
+                self._event("RED", "engine_leg_halted",
+                            f"{leg} leg's engine book is HALTED by {cause}; "
+                            f"the engine will open no NEW entries for it and "
+                            f"neither will this executor")
+            else:
+                self._event("INFO", "engine_leg_resumed",
+                            f"{leg} leg's engine book is trading again")
+            led.engine_halted = raw
+            self._save_state()
+
     def _sync_leg(self, leg: str, tl: dict, blend: dict,
                   equity: float, entries_ok: bool) -> None:
         led: LegLedger = self.state.legs[leg]
         pend, pos = tl.get("pending"), tl.get("position")
+        halted = led.engine_halted      # tracked in _track_engine_halts
+        # A halted engine book must never receive a NEW entry from us, even
+        # if it (wrongly) presents a pending - the engine's own /halt used to
+        # leave one resting. Existing positions keep their stops (branch 1).
+        entries_ok = entries_ok and not halted
 
         # 1) engine has an open position
         if pos is not None:
@@ -1816,7 +1894,14 @@ class Executor:
             self._cancel_entry(led, filled_action="flatten" if led.qty == 0.0
                                else "ignore")
         if led.qty != 0.0:
-            self._close_leg(leg, led, "engine_exit")
+            # A close beside halted=True is still the mirror of a GENUINE
+            # engine exit: the engine never flattens on halt, it halts AT a
+            # trade close and keeps managing any position until its own exit.
+            # The first cut labelled this a 'kill-switch flatten' and withheld
+            # the signal_exit gate credit - wrong premise (panel, 2026-09-08).
+            # The label carries the state so the event is still distinct.
+            self._close_leg(leg, led, "engine_exit (book halted)" if halted
+                            else "engine_exit")
 
     def _enter_from_fill(self, leg: str, led: LegLedger, pos: dict,
                          blend: dict, equity: float,

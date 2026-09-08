@@ -338,9 +338,14 @@ def pulse():
             "agent_days_left": (
                 round((getattr(st, "agent_valid_until", None) - now) / 86400.0, 2)
                 if getattr(st, "agent_valid_until", None) is not None else None),
+            # engine_halted is on /pulse deliberately: a halted engine book
+            # goes flat and STAYS flat, which renders here as in_position
+            # false - identical to "flat between signals". Without this field
+            # an external monitor cannot tell a dead leg from a quiet one.
             "legs": {n: {"in_position": l.qty != 0.0,
                          "entry_open": l.entry_cloid is not None,
-                         "stop_placed": l.stop_cloid is not None}
+                         "stop_placed": l.stop_cloid is not None,
+                         "engine_halted": l.engine_halted}
                      for n, l in st.legs.items()}}
 
 
