@@ -4724,3 +4724,74 @@ def test_sweep_commission_is_charged_after_the_slippage_clamp(tmp_path):
     m.state.sleeve_cash = 99.5                                # slippage case
     m.on_sweep(1, 100.0, commission=1.0)
     assert m.state.sleeve_cash == pytest.approx(-1.0)        # clamp, THEN charge
+
+
+# --- 2026-09-08: execution-report fallback consumers --------------------------
+# MUTATION-VERIFIED: booking rec["qty"] instead of filled_qty turns
+# test_partial_fill_is_adopted_at_the_executed_size red; clearing a day-old
+# journal with history unavailable turns
+# test_day_old_journal_is_held_when_history_is_unavailable red.
+
+class _HistoryAdapter(DryAdapter):
+    def __init__(self, answer, complete=True):
+        super().__init__()
+        self.answer, self.complete = answer, complete
+
+    def find_stock_order(self, client_order_id):
+        return self.answer
+
+    def history_complete(self):
+        return self.complete
+
+
+def test_partial_fill_is_adopted_at_the_executed_size(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=5_000.0, bil_qty=0)
+    alerts = []
+    m.record_pending_book_order("sweep", "BIL", 32, "2026-08-20", ref_price=100.0)
+    a = _HistoryAdapter({"order_ref": "9", "status": "filled", "fill_price": 100.0,
+                         "filled_qty": 20, "commission": 1.0, "source": "executions"},
+                        complete=False)
+    blend_mod.reconcile(m, a, "2026-08-20", alerts.append)
+    assert m.state.bil_qty == 20 and not m.state.pending_book_orders
+    assert m.state.sleeve_cash == pytest.approx(5_000.0 - 2_000.0 - 1.0)
+    assert any("partial fill" in x and "20 of 32" in x for x in alerts)
+    # an entry too: the position is what executed, not what was journaled
+    it = {"action": "ENTER", "call_id": 1, "symbol": "CRSP", "qty": 10,
+          "entry_ref": 50.0, "stop_level": 44.0, "time_stop_days": 20,
+          "reason": "test"}
+    m.record_pending_entry(it, "2026-08-20")
+    a.answer = {"order_ref": "10", "status": "filled", "fill_price": 50.0,
+                "filled_qty": 6, "source": "executions"}
+    blend_mod.reconcile(m, a, "2026-08-20", alerts.append)
+    assert m.state.positions["1"].qty == 6 and not m.state.pending_entries
+    assert any("6 of 10" in x for x in alerts)
+    # a SELL journal (qty < 0): executions report shares, the sign is the
+    # journal's - a partial BIL sell must reduce BIL, never buy it
+    m.record_pending_book_order("sweep", "BIL", -12, "2026-08-20", ref_price=100.0)
+    a.answer = {"order_ref": "11", "status": "filled", "fill_price": 100.0,
+                "filled_qty": 7, "source": "executions"}
+    bil, cash = m.state.bil_qty, m.state.sleeve_cash
+    blend_mod.reconcile(m, a, "2026-08-20", alerts.append)
+    assert m.state.bil_qty == bil - 7
+    assert m.state.sleeve_cash == pytest.approx(cash + 700.0)
+    assert any("adopting -7" in x for x in alerts)
+
+
+def test_day_old_journal_is_held_when_history_is_unavailable(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=5_000.0, bil_qty=0)
+    alerts = []
+    m.record_pending_book_order("sweep", "BIL", 32, "2026-08-19", ref_price=100.0)
+    a = _HistoryAdapter(None, complete=False)
+    blend_mod.reconcile(m, a, "2026-08-20", alerts.append)
+    assert m.state.pending_book_orders, "day-old journal cleared without proof"
+    assert any("cannot be resolved" in e["msg"] for e in m.state.events)
+    # today's journal IS covered by today's executions: cleared as before
+    m.record_pending_book_order("core_buy", "SPY", 3, "2026-08-20", ref_price=100.0)
+    blend_mod.reconcile(m, a, "2026-08-20", alerts.append)
+    assert [r["kind"] for r in m.state.pending_book_orders.values()] == ["sweep"]
+    # ... and once history is readable the old one clears too
+    a.complete = True
+    blend_mod.reconcile(m, a, "2026-08-20", alerts.append)
+    assert not m.state.pending_book_orders

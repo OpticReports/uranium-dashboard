@@ -2648,6 +2648,34 @@ def _flag_unverified(mgr: Blend3070Manager, pos: BlendPosition, detail: str,
             f"re-alerting every {UNVERIFIED_REALERT_CYCLES})")
 
 
+def _history_proves_unfilled(adapter, rec: dict, today: str) -> bool:
+    """A None from find_stock_order means "the venue never saw it" ONLY
+    when the venue's completed-order history was readable, or the journal
+    is from today (today's execution reports cover it)."""
+    complete = getattr(adapter, "history_complete", lambda: True)()
+    return bool(complete or (rec.get("date") or "") >= today)
+
+
+def _adopt_filled_qty(mgr: Blend3070Manager, rec: dict, o: dict, alert,
+                      what: str) -> dict:
+    """A result resolved from execution reports carries filled_qty and
+    cannot prove completeness: the ledger books what actually executed,
+    never the journaled size (counter-agent 2026-09-08, HIGH). Returns the
+    record to adopt."""
+    fq = o.get("filled_qty")
+    if fq is None or abs(int(fq)) == abs(int(rec["qty"])):
+        return rec
+    # executions report SHARES (positive); the journal's sign says buy or
+    # sell (a core-rebal-sell / sweep sell journals qty < 0) - keep it
+    signed = int(math.copysign(abs(int(fq)), int(rec["qty"])))
+    msg = (f"{what}: venue executed {abs(int(fq))} of {abs(int(rec['qty']))} "
+           f"sh (remainder cancelled/unknown) - adopting {signed:+d}, verify "
+           f"at the venue")
+    mgr._event("RED", msg)
+    alert("🚨 blend partial fill: " + msg)
+    return {**rec, "qty": signed}
+
+
 def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
     """Venue-truth-first pass, run BEFORE any decision in EVERY cycle —
     including tracker-outage cycles (payload=None) and /kill:
@@ -3021,6 +3049,22 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
     for key, rec in list(st.pending_entries.items()):
         it = rec["intent"]
         o = adapter.find_stock_order(entry_client_id(it["call_id"]))
+        if o is None and not _history_proves_unfilled(adapter, rec, today):
+            # The venue's completed-order history is unavailable and the
+            # journal predates today: today's executions cannot prove it
+            # never filled. Clearing it would re-plan a duplicate buy.
+            # Left PENDING (it keeps blocking its call_id) and said once a
+            # day (counter-agent 2026-09-08, MED).
+            mgr._event_once_today(
+                "RED", f"unresolved_entry_{it['call_id']}",
+                f"pending entry {it['symbol']} (call {it['call_id']}, "
+                f"journaled {rec.get('date')}) cannot be resolved: venue "
+                f"completed-order history unavailable - left pending, "
+                f"verify at the venue")
+            continue
+        if o is not None and o.get("status") == "filled":
+            it = _adopt_filled_qty(mgr, it, o, alert, f"entry {it['symbol']} "
+                                                       f"(call {it['call_id']})")
         if o is None:
             mgr.clear_pending_entry(it["call_id"])
             mgr._event("INFO", f"pending entry {it['symbol']} "
@@ -3089,6 +3133,17 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
     #     naturally by step() (counter-agent N15).
     for cid, rec in list(st.pending_book_orders.items()):
         o = adapter.find_stock_order(cid)
+        if o is None and not _history_proves_unfilled(adapter, rec, today):
+            mgr._event_once_today(
+                "RED", f"unresolved_book_{cid}",
+                f"pending {rec['kind']} {rec['symbol']} x{rec['qty']} "
+                f"(journaled {rec.get('date')}) cannot be resolved: venue "
+                f"completed-order history unavailable - left pending, "
+                f"verify at the venue")
+            continue
+        if o is not None and o.get("status") == "filled":
+            rec = _adopt_filled_qty(mgr, rec, o, alert,
+                                    f"{rec['kind']} {rec['symbol']}")
         if o is None:
             mgr.clear_pending_book_order(cid)
             mgr._event("INFO", f"pending {rec['kind']} {rec['symbol']} "
