@@ -653,6 +653,8 @@ class IBAdapter:
                         ) from exc
                     except Exception as exc:  # noqa: BLE001
                         logger.debug("%s failed: %s", fn, exc)
+                        if not required:
+                            self._completed_orders_unavailable = True
                         continue
                     for t in extra:
                         key = (t.order.orderId, getattr(t.order, "permId", 0))
@@ -669,12 +671,52 @@ class IBAdapter:
         The session's fills (synced at connect) plus a bounded
         reqExecutions refresh; a refresh timeout FAILS CLOSED (never 'no
         fills'). None when no execution carries the ref."""
-        fills = list(getattr(self.ib, "fills", lambda: [])() or [])
+        fills = self._executions_refreshed()
+        by_id: dict = {}
+        for f in fills:
+            ex = getattr(f, "execution", None)
+            if ex is None or (getattr(ex, "orderRef", "") or "") != client_order_id:
+                continue
+            by_id[getattr(ex, "execId", "") or id(f)] = f
+        if not by_id:
+            return None
+        # one orderRef can span a rejected-then-retried attempt: the LATEST
+        # orderId is the order that binds (counter-agent LOW)
+        latest = max(getattr(f.execution, "orderId", 0) for f in by_id.values())
+        fs = [f for f in by_id.values()
+              if getattr(f.execution, "orderId", 0) == latest]
+        trade = type("_Synth", (), {})()
+        trade.fills = fs
+        trade.order = type("_O", (), {})()
+        trade.order.orderId = latest
+        px = _agg_fill_price(trade)
+        out = {"order_ref": str(latest), "status": "filled",
+               # the executions cannot prove completeness: the consumer
+               # books filled_qty, never its journaled qty (counter-agent HIGH)
+               "filled_qty": int(sum(int(f.execution.shares) for f in fs)),
+               "source": "executions"}
+        if px is not None:
+            out["fill_price"] = float(px)
+        if _commission_reported(trade):
+            c = _agg_commission(trade)
+            if c is not None:
+                out["commission"] = c
+        logger.warning("order %s resolved from execution reports (completed "
+                       "orders unavailable): %s", client_order_id, out)
+        return out
+
+    def _executions_refreshed(self) -> list:
+        """The wrapper's fill store after a bounded reqExecutions refresh.
+        The store is keyed by execId and commission-patched in place; the
+        request's own return value is NOT used - ib_async appends a fresh
+        Fill with an EMPTY CommissionReport for an already-known execId,
+        which would have overwritten the reported commission
+        (counter-agent MED). A timeout fails CLOSED."""
         prev = getattr(self.ib, "RequestTimeout", 0)
         try:
             self.ib.RequestTimeout = VENUE_HISTORY_TIMEOUT_S
             try:
-                fresh = self.ib.reqExecutions() or []
+                self.ib.reqExecutions()
             except (TimeoutError, asyncio.TimeoutError) as exc:
                 try:
                     self.ib.disconnect()
@@ -686,34 +728,27 @@ class IBAdapter:
                     f"closed (restart the gateway if this persists)") from exc
             except Exception as exc:  # noqa: BLE001
                 logger.debug("reqExecutions failed: %s", exc)
-                fresh = []
         finally:
             self.ib.RequestTimeout = prev
-        by_id: dict = {}
-        for f in list(fills) + list(fresh):
+        return list(getattr(self.ib, "fills", lambda: [])() or [])
+
+    def history_complete(self) -> bool:
+        """False after a refresh in which the venue's completed-order
+        history was unavailable: a journal older than today that the
+        session does not know then CANNOT be proven never-filled (today's
+        executions do not cover yesterday) - the reconcile leaves it
+        pending instead of clearing it (counter-agent MED)."""
+        return not getattr(self, "_completed_orders_unavailable", False)
+
+    def _executed_order_ids(self) -> set:
+        out = set()
+        for f in self._executions_refreshed():
             ex = getattr(f, "execution", None)
-            if ex is None or (getattr(ex, "orderRef", "") or "") != client_order_id:
+            if ex is None:
                 continue
-            by_id[getattr(ex, "execId", "") or id(f)] = f
-        if not by_id:
-            return None
-        fs = list(by_id.values())
-        trade = type("_Synth", (), {})()
-        trade.fills = fs
-        trade.order = type("_O", (), {})()
-        trade.order.orderId = getattr(fs[0].execution, "orderId", 0)
-        px = _agg_fill_price(trade)
-        out = {"order_ref": str(trade.order.orderId), "status": "filled",
-               "filled_qty": int(sum(int(f.execution.shares) for f in fs)),
-               "source": "executions"}
-        if px is not None:
-            out["fill_price"] = float(px)
-        if _commission_reported(trade):
-            c = _agg_commission(trade)
-            if c is not None:
-                out["commission"] = c
-        logger.warning("order %s resolved from execution reports (completed "
-                       "orders unavailable): %s", client_order_id, out)
+            for k in (getattr(ex, "orderId", None), getattr(ex, "permId", None)):
+                if k:
+                    out.add(str(k))
         return out
 
     def _find_trade_by_ref(self, order_ref: str, refresh: bool = False):
@@ -867,6 +902,15 @@ class IBAdapter:
         if trade is None:
             trade = self._find_trade_by_ref(order_ref, refresh=True)
         if trade is None:
+            # Not open, not in the session. With completed orders
+            # unavailable a stop that FILLED during an outage looks exactly
+            # like "not found" - and False here is the double-sell race
+            # (law #8). The execution reports settle it (counter-agent HIGH).
+            if (getattr(self, "_completed_orders_unavailable", False)
+                    and str(order_ref) in self._executed_order_ids()):
+                raise RuntimeError(
+                    f"cannot cancel {order_ref}: order already FILLED "
+                    f"(execution reports; completed orders unavailable)")
             return False
         s = trade.orderStatus.status
         if s == "Filled":

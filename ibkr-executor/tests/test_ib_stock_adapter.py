@@ -1527,3 +1527,52 @@ def test_completed_orders_timeout_falls_back_to_executions(ib_adapter):
     with pytest.raises(ExecutorConnectionError):
         ib_adapter.find_stock_order("blend-sweep-32")
     assert not fake.isConnected()
+
+
+def test_cancel_of_an_executed_order_raises_when_history_is_unavailable(ib_adapter):
+    """Law #8 under the 2026-09-08 gateway: a stop that FILLED during an
+    outage is not open and not in the session; with completed orders
+    unavailable the execution reports must turn "not found" into RAISE."""
+    fake = ib_adapter.ib
+    fake.reqCompletedOrders = lambda apiOnly=False: (_ for _ in ()).throw(TimeoutError("x"))
+    fake.fills = lambda: [_exec_fill("blend-1-stp-44.0000", 5, 43.9, order_id=910, exec_id="s1")]
+    fake.reqExecutions = lambda *a, **k: []
+    with pytest.raises(RuntimeError) as e:
+        ib_adapter.cancel_stock_order("910")
+    assert "already FILLED" in str(e.value)
+    assert ib_adapter.cancel_stock_order("911") is False      # truly unknown
+
+
+def test_execution_refresh_reads_the_store_and_keeps_the_commission(ib_adapter):
+    """ib_async appends a fresh Fill with an EMPTY CommissionReport for an
+    already-known execId on reqExecutions: the request's return value must
+    never overwrite the store, and the store is re-read AFTER the refresh."""
+    fake = ib_adapter.ib
+    fake.reqCompletedOrders = lambda apiOnly=False: (_ for _ in ()).throw(TimeoutError("x"))
+    store = [_exec_fill("blend-sweep-x", 10, 100.0, exec_id="a", commission=1.0)]
+    called = {"n": 0}
+
+    def req_exec(*a, **k):
+        called["n"] += 1
+        store.append(_exec_fill("blend-sweep-x", 5, 101.0, exec_id="b", commission=0.5))
+        return [_exec_fill("blend-sweep-x", 10, 100.0, exec_id="a", commission=None)]
+    fake.reqExecutions = req_exec
+    fake.fills = lambda: list(store)
+    r = ib_adapter.find_stock_order("blend-sweep-x")
+    assert called["n"] == 1 and r["filled_qty"] == 15                # late fill seen
+    assert r["commission"] == 1.5                                      # not overwritten
+    # a rejected-then-retried ref: only the LATEST orderId binds
+    store[:] = [_exec_fill("blend-sweep-y", 3, 100.0, order_id=5, exec_id="c"),
+                _exec_fill("blend-sweep-y", 9, 100.0, order_id=8, exec_id="d")]
+    fake.reqExecutions = lambda *a, **k: []
+    r = ib_adapter.find_stock_order("blend-sweep-y")
+    assert r["filled_qty"] == 9 and r["order_ref"] == "8"
+    assert ib_adapter.history_complete() is False
+    # ANY failure of the completed-orders request engages the fallback, not
+    # only a timeout (counter-agent LOW)
+    def refused(apiOnly=False):
+        raise RuntimeError("not supported by this gateway")
+    fake.reqCompletedOrders = refused
+    r = ib_adapter.find_stock_order("blend-sweep-y")
+    assert r is not None and r["filled_qty"] == 9
+    assert ib_adapter.history_complete() is False
