@@ -268,6 +268,72 @@ unreconciled venue state. Phases IN ORDER:
    sleeve cash minus cash reserved by a pending sweep — phantom proceeds
    are never spent, re-review N5) ->
    rebalance transfer -> core buy -> BIL sweep (all journaled per 1c).
+   **Cash is reconciled against the account, stage 1 = alert-only**
+   (2026-09-04, Casey-approved design): after the reconcile pass,
+   `reconcile_cash` reads the account's `TotalCashValue` and compares
+   DELTAS from a baseline to the ledger's two buckets - never levels,
+   because the account may hold cash the book does not own. Only on quiet
+   cycles (no pending journals, no fill inside 15 min - TotalCashValue
+   moves at trade time, so the window only covers IB's account-push lag;
+   counter-agent round 2). A drift must hold for two CONSECUTIVE quiet
+   cycles beyond max($25, 0.1% of the book) to alert once; it re-alerts
+   only when it moves by more than the threshold, and is RED beyond 1%.
+   The baseline and every drift field survive a restart (persisted in
+   state); a seed resets them.
+   Nothing is adopted; only `POST /blend/cash/rebaseline` (EXEC_TOKEN)
+   restarts the delta clock - `/resume` does not touch it. `/blend/feed` and `/status`
+   carry `cash: {ledger, drift, drift_age_s, baselined, baseline_age_s,
+   over_threshold_cycles, commissions_paid, commissions_unreported,
+   skipped, skipped_for_s}` - the venue's cash LEVEL is never published.
+   `skipped` names why the last cycle did not compare (pending journals,
+   an unreconciled record parked inside the last 15 min, a recent fill);
+   one reason holding for 6 h is said once a day. A parked unreconciled
+   record older than the quiet window no longer suspends the compare - its
+   proceeds show as drift, which is what the alert is for (round 3). Commissions are now debited from the bucket that
+   traded, off the venue's commissionReport, at every fill. Stage 2
+   (adopting positive drift into the ledger) is a separate, opt-in change
+   to be turned on with two weeks of stage-1 data, not before.
+   **Entries are only PLANNED outside the regular session** (2026-09-03):
+   a MOO/OPG order is accepted for the next opening auction and REJECTED
+   once the session is open, so a fire first seen mid-session is held for
+   the first post-close cycle (`entry_window_open`, weekdays outside
+   09:25-16:00 ET). The planner also refuses to plan entries while the
+   ENTER breaker is open. Both guards sit in the planner rather than the
+   execution loop because the BIL cash-raise is sized from the PLANNED
+   entries: an entry that will not be placed must not be planned, or its
+   funding sale still goes out - on 2026-08-28 (NTRA/LLY, 8 rejections)
+   and 2026-09-03 (MRK: 20 BIL sold, 5 rejections) the book sold BIL to
+   fund orders the venue could never accept. A rejected entry now carries
+   the venue's own reason (errorEvent / advancedError) in the alert and
+   /status event.
+   **Funding, honestly (counter-agent round 1, 2026-09-04):** "placed for
+   the next open" holds only when SETTLED sleeve cash already covers the
+   entry. Idle sleeve cash is swept to BIL by design, so most entries are
+   BIL-funded, and a MKT sell of BIL placed post-close does not fill until
+   the next open. So the planner PRE-FUNDS (Casey 2026-09-04): a fire seen mid-session
+   is sized then, its cost is reserved, and the BIL shortfall is sold
+   NOW - a MKT sell that fills because the session is open, sized with
+   a $2 headroom for the sell's own commission so the post-close belt
+   never skips the ENTER by under a dollar. The cash is held unswept by a
+   PERSISTED, date-keyed hold (`prefund_usd`/`prefund_date`: a tracker
+   blip that drops the fire mid-day cannot churn BIL) and the post-close
+   cycle places the MOO from settled cash: a fire seen at 10:30 fills at
+   the NEXT open (T+1). Idempotent: once the cash is on hand the next
+   cycle raises nothing; the hold is released by the amount each placed
+   entry SPENDS (a second fire absent for one cycle keeps its cash held)
+   and otherwise only once the NEXT SESSION has started - `today` is the
+   UTC date and rolls at 20:00 ET, inside the post-close window, so a
+   release on the roll would have re-swept the cash at 20:05 ET (round 3).
+   Only then does the ordinary sweep park the cash again (one BIL round
+   trip). While a BIL sell or sweep is still resting, an entry the settled
+   cash cannot fund at its risk size WAITS rather than placing a dust
+   entry (a 1-share MOO would burn the call_id for good). NYSE early
+   closes (13:00 ET) are a closed venue from 13:00 (`NYSE_EARLY_CLOSES`,
+   extend yearly with `NYSE_HOLIDAYS`). A resting MOO reserves its cost, so a
+   second fire the same evening sizes against what is actually free.
+   A paused ENTER kind never pre-funds. A fire first seen AFTER the close
+   still needs its BIL sold overnight (`rests_for_open`, exempt from the
+   stuck-order cancel until the session is open) and lands T+2.
    **Book-order idempotency (adapter review M1)**: while ANY book-order
    journal (CORE_BUY / rebalance core-sell / BIL sweep) is pending
    adoption, step() plans NO new book-level order — a MKT that returns
@@ -566,6 +632,50 @@ proven in the paper week; with a live book it FLATTENS (sells) real
 positions, so it can only be tested at a moment when flat is acceptable.
 Until then its two-stage path (journal + halt on the API thread, execute
 on the loop thread) has never run against IBKR.
+
+### Operating rules (learned 2026-08-28 -> 2026-09-04, at cost)
+
+1. **No env-var change on this service during 09:30-16:00 ET.** Any change
+   in the Render dashboard restarts the container - the `buildFilter` only
+   stops CODE pushes from doing that - and a restart re-runs the blend
+   mid-session, forces a fresh gateway login and fires an IB Key push. The
+   08-28 incident (BIL sold for a rejected entry) was a restart at 10:14;
+   the 09-03 MRK repeat was a restart at 10:06. After 16:00 ET the same
+   restart is free: sleeve entries go out post-close, the book reloads
+   intact, and there is a 17-hour buffer before the next open.
+2. **A gateway that is DOWN with no supervisor restart is stuck at the
+   login prompt, not crashed.** The supervisor acts only on process exits;
+   a process waiting on an unanswered IB Key push is alive. Nothing in the
+   container can clear that - only the phone can. The service now says so
+   after 30 minutes (`_gateway_watch`) and pages again inside 08:30-09:30
+   ET on a weekday with the minutes left. Fix: IBKR Mobile (the request may
+   still be pending), else Render -> Restart service for a fresh push -
+   BEFORE the open, per rule 1.
+3. **The daily gateway restart must be the credential-reusing kind.** IB
+   Gateway restarts once a day whether or not you configure it. Configured
+   through IBC (`AUTO_RESTART_TIME`, with `TWOFA_TIMEOUT_ACTION=restart`
+   and `TIME_ZONE` so the hour is in ET) it reuses the session and needs no
+   2FA; unconfigured, it fell to the image default of 11:45 PM in UTC
+   (19:45 ET) and landed as a process exit - a fresh login and a push every
+   night, missed two nights running for 13 h and 12.9 h. Add
+   `RELOGIN_AFTER_TWOFA_TIMEOUT=yes` so the one push that remains (IBKR's
+   mandatory Sunday re-login) re-alerts every ~3 minutes until tapped
+   instead of stalling. Change these AFTER 16:00 ET (rule 1) and watch the
+   first night: `restarts_24h` should stay 0 and no push should arrive.
+4. **BLEND_ENABLED=false does not pause a live book; it abandons it.** No
+   reconcile, no sweep, no stops, no feed. The service now alerts at boot
+   and daily while a `real:*` book with holdings sits on disk unmanaged
+   (`/health.blend_disabled_book` is a flag + age; the holdings breakdown
+   is on `/status`). Disable deliberately: `/kill` and let the flatten
+   complete WHILE the blend is still enabled, then set BLEND_ENABLED=false;
+   or archive the state file.
+5. **Gateway env keys are set in the dashboard FIRST, then synced.** A
+   Blueprint sync does not add new `sync: false` keys to an existing
+   service and will prompt for (or blank) unset ones. Set all four values
+   by hand after 16:00 ET - `TZ=America/New_York` alongside `TIME_ZONE`
+   (the image's own example sets both, and `TIME_ZONE` only applies while
+   no jts.ini is persisted) - and `TWOFA_TIMEOUT_ACTION=restart` with
+   `RELOGIN_AFTER_TWOFA_TIMEOUT=yes` together.
 
 The original staged rehearsal, kept for the record and for any FUTURE
 strategy's cutover (the per-leg discipline still applies):

@@ -36,6 +36,11 @@ MKT_FILL_WAIT_S = 5.0        # bounded wait for a synchronous MKT fill (liquid
                              # still working after it returns 'working'
 CANCEL_ACK_TIMEOUT_S = 10.0  # ambiguous cancel timeout -> RAISE (fail closed)
 WAIT_TICK_S = 0.25           # event-loop pump granularity inside waits
+COMMISSION_WAIT_S = 1.5      # after a synchronous fill, wait this long for
+                             # IB's commissionReport before reading it
+                             # (counter-agent round 2: read too early = 0.0)
+# ib_async warning codes: informational, never a rejection reason
+_IB_WARNING_CODES = {105, 110, 165, 321, 329, 399, 404, 434, 492, 10167}
 RECONNECT_BACKOFF_S = 15.0   # first retry delay after the gateway drops
 RECONNECT_BACKOFF_MAX_S = 300.0  # backoff cap (~one attempt per blend cycle)
 OUTAGE_ALERT_S = 30 * 60.0   # alert ONLY when down longer than this — the
@@ -73,17 +78,86 @@ def _map_status(ib_status: str) -> str:
     return "working"
 
 
-def _trade_errors(trade) -> str:
+_STATUS_ECHOES = {"cancelled", "apicancelled", "inactive", "submitted",
+                  "presubmitted", "filled", "pendingsubmit", "pendingcancel"}
+
+
+def _trade_errors(trade, dead: bool = False, venue: str = "") -> str:
     """IB's own words for why an order died, from the trade log. Without
     this the ValidationError alert could only say 'state UNKNOWN' - the
-    reason was sitting in trade.log, discarded."""
+    reason was sitting in trade.log, discarded.
+
+    `dead=True` (the order is in a cancelled state): when no entry carries
+    an error code or 'error' text, fall back to the LAST log message. An
+    opening-auction order refused after the bell is cancelled with a plain
+    'Order Canceled - reason: ...' line and no errorCode, so the filter
+    above dropped it and five MRK rejections on 2026-09-03 read only
+    'status Cancelled' (the cause had to be inferred from the order type)."""
     out = []
+    dead_msg = ""
     for entry in (getattr(trade, "log", None) or []):
         code = getattr(entry, "errorCode", 0) or 0
-        msg = (getattr(entry, "message", "") or "").strip()
+        msg = str(getattr(entry, "message", "") or "").strip()
+        status = str(getattr(entry, "status", "") or "")
+        if dead and code and (code in _IB_WARNING_CODES or 2100 <= code < 2200):
+            # the wrapper logs warnings into trade.log too: a warning is
+            # never a CANCELLATION reason (round 3); for a live-but-warned
+            # order it is the context the UNKNOWN alert needs, so it stays
+            continue
         if code or ("rror" in msg):
             out.append(f"[{code}] {msg}" if code else msg)
+        elif (msg and status in _IB_CANCELLED
+              and msg.lower().replace(" ", "") not in _STATUS_ECHOES):
+            dead_msg = msg          # the cancel entry's own words, if any
+    # Counter-agent round 1: the reason for an after-the-bell OPG rejection
+    # is delivered on ib_async's errorEvent / trade.advancedError, not as a
+    # trade.log line - and a bare status echo ("Cancelled") is not a reason.
+    adv = str(getattr(trade, "advancedError", "") or "").strip()
+    if adv and adv not in out:
+        out.append(adv)
+    if venue and venue not in out:
+        out.append(venue)
+    if not out and dead and dead_msg:
+        out.append(dead_msg)
     return "; ".join(out[-3:])
+
+
+def _agg_commission(trade) -> float:
+    """Total commission the venue reported on a trade's executions (each
+    ib_async Fill carries a commissionReport once IB sends it; 0.0 until
+    then). The book debits this from the bucket that traded - before
+    2026-09-04 the ledger booked price x qty and silently drifted $1/order
+    from the account."""
+    total = 0.0
+    for f in (getattr(trade, "fills", []) or []):
+        rep_ = getattr(f, "commissionReport", None)
+        c = getattr(rep_, "commission", None) if rep_ is not None else None
+        cur = getattr(rep_, "currency", "") if rep_ is not None else ""
+        try:
+            c = float(c)
+        except (TypeError, ValueError):
+            return None             # unreadable = UNREPORTED, never 0.0
+        # IB's UNSET sentinel is ~1.8e308; a non-USD report is not ours.
+        # An ignored report is UNREPORTED (the ledger's loud path), not an
+        # authoritative 0.0 (round 3).
+        if not (0.0 <= abs(c) < 1e6) or (cur and cur != "USD"):
+            logger.warning("commission report ignored: %r %s", c, cur)
+            return None
+        total += c
+    return round(total, 4)
+
+
+def _commission_reported(trade) -> bool:
+    """True when every execution carries a commissionReport with an execId
+    - IB delivers the report a moment AFTER the fill."""
+    fills = list(getattr(trade, "fills", []) or [])
+    if not fills:
+        return False    # a completed-orders Trade carries no fills: no report
+    for f in fills:
+        rep_ = getattr(f, "commissionReport", None)
+        if rep_ is None or not getattr(rep_, "execId", None):
+            return False
+    return True
 
 
 def _agg_fill_price(trade) -> float | None:
@@ -144,6 +218,16 @@ class IBAdapter:
         self._stock_contracts: dict[str, object] = {}
         self._emitted_fill_keys: set[str] = set()
         self._requeued_fills: list[dict] = []
+        # Venue error text keyed by orderId, captured off ib_async's
+        # errorEvent (emitted unconditionally) so a rejection's REASON reaches
+        # the operator even when trade.log carries only a status change.
+        self._order_errors: dict[int, str] = {}
+        ev = getattr(self.ib, "errorEvent", None)
+        if ev is not None:
+            try:
+                ev += self._on_ib_error
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("errorEvent hook unavailable: %s", exc)
         # M5 reconnect bookkeeping: the gateway's daily auto-restart drops
         # the session — every surface reconnects with backoff via
         # _require_connected instead of staying wedged until a manual
@@ -178,6 +262,42 @@ class IBAdapter:
                 "delayed or prior-close data) - set the env and redeploy")
         self._connect()
 
+    def _on_ib_error(self, reqId, errorCode, errorString, contract=None,
+                     *args) -> None:
+        """errorEvent handler: reqId is the orderId for order-scoped errors.
+        Bounded: only the last message per id, ids pruned above 512."""
+        try:
+            if reqId is None or int(reqId) < 0:
+                return
+            code = int(errorCode or 0)
+            if code in _IB_WARNING_CODES or 2100 <= code < 2200:
+                return                       # a warning is not a reason
+            # reqId shares its namespace with market-data / contract
+            # requests (same counter) and the sequence restarts at the
+            # gateway's nextValidId after a reconnect: record ONLY ids that
+            # are this client's orders, else a stale quote error becomes a
+            # later order's "reason" (round 3, HIGH)
+            try:
+                order_ids = {getattr(t.order, "orderId", None)
+                             for t in (self.ib.trades() or [])}
+            except Exception:  # noqa: BLE001
+                order_ids = set()
+            if int(reqId) not in order_ids:
+                return
+            self._order_errors[int(reqId)] = f"[{code}] {errorString}"
+            if len(self._order_errors) > 512:
+                for k in list(self._order_errors)[:-256]:
+                    self._order_errors.pop(k, None)
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _venue_error(self, trade) -> str:
+        oid = getattr(getattr(trade, "order", None), "orderId", None)
+        try:
+            return self._order_errors.get(int(oid), "") if oid is not None else ""
+        except (TypeError, ValueError):
+            return ""
+
     def _connect(self):
         port = 4002 if self.cfg.trading_mode == "paper" else 4001
         for attempt in range(20):             # gateway boots slowly (~2 min)
@@ -190,7 +310,11 @@ class IBAdapter:
             except Exception as exc:  # noqa: BLE001
                 logger.info("gateway not ready (%d/20): %s", attempt + 1, exc)
                 time.sleep(15)
-        raise RuntimeError("could not connect to IB gateway")
+        # a CONNECTION failure, typed: the boot-retry loop feeds the gateway
+        # watch (stall / pre-open pages) only for this shape (round 3: a
+        # plain RuntimeError here silenced the watch in the very state the
+        # pre-open page exists for)
+        raise ExecutorConnectionError("could not connect to IB gateway")
 
     # -- the adapter's real methods (spot, chain, open_spread, marks, close)
     # are exercised ONLY in the paper phase; each call degrades to an
@@ -414,6 +538,8 @@ class IBAdapter:
         # quote-dead again after each daily gateway restart (counter-agent
         # 2026-08-24, CRITICAL).
         self._apply_market_data_type()
+        if hasattr(self, "_order_errors"):
+            self._order_errors.clear()  # order ids restart at nextValidId
         down_s = now - self._disconnected_since
         logger.info("IB gateway reconnected after %.0fs (same clientId: "
                     "orderIds stay monotone, drain-once keys persist)",
@@ -513,10 +639,21 @@ class IBAdapter:
     def _trade_result(self, trade) -> dict:
         out = {"order_ref": _order_ref(trade),
                "status": _map_status(trade.orderStatus.status)}
+        if out["status"] == "cancelled":
+            # Surface the venue's reason on the reconcile path too (the
+            # async MOO/OPG outcome is only ever read from here).
+            why = _trade_errors(trade, dead=True, venue=self._venue_error(trade))
+            out["reason"] = why or "no venue reason recorded"
         if out["status"] == "filled":
             px = _agg_fill_price(trade)
             if px is not None:              # unknown price -> NO key, never 0.0
                 out["fill_price"] = float(px)
+            # commission: present only when the venue has reported it; an
+            # absent key is booked as 0 LOUDLY by the ledger (never silently)
+            if _commission_reported(trade):
+                c = _agg_commission(trade)
+                if c is not None:
+                    out["commission"] = c
         return out
 
     def _await_placement(self, trade, order_type: str) -> None:
@@ -533,9 +670,16 @@ class IBAdapter:
             self._pump()
             s = trade.orderStatus.status
             if s == "Filled":
+                # give IB's commissionReport a bounded moment to land so the
+                # ledger books the real commission, not 0.0
+                cdead = time.monotonic() + COMMISSION_WAIT_S
+                while (not _commission_reported(trade)
+                       and time.monotonic() < cdead):
+                    self.ib.sleep(WAIT_TICK_S)
                 return
             if s in _IB_CANCELLED:
-                why = _trade_errors(trade)
+                why = _trade_errors(trade, dead=True,
+                                    venue=self._venue_error(trade))
                 raise RuntimeError(
                     f"order rejected by venue (status {s})"
                     + (f": {why}" if why else ""))
@@ -686,6 +830,8 @@ class IBAdapter:
                 "qty": shares if side == "BOT" else -shares,
                 "fill_price": _agg_fill_price(trade),   # None, never 0.0
                 "action": side,
+                "commission": (_agg_commission(trade)      # None if ignored
+                               if _commission_reported(trade) else None),
             })
         return out
 
@@ -706,6 +852,73 @@ class IBAdapter:
             trade = self._find_trade_by_client_id(client_order_id,
                                                   refresh=True)
         return self._trade_result(trade) if trade is not None else None
+
+    def account_cash(self) -> dict | None:
+        """The account's cash as IB reports it: {total_cash, net_liq, ts} in
+        USD, or None meaning NO CLAIM. Never raises and never fails a cycle
+        closed - in stage 1 nothing decides on it; it is the corroboration
+        the book's order-derived cash ledger never had (dividends, interest,
+        commissions and anything a human does are invisible to the ledger).
+        TotalCashValue, not AvailableFunds: the latter moves with margin and
+        open orders."""
+        try:
+            self._require_connected()
+            self._pump()
+            # accountValues() is the connect-time subscription: non-blocking
+            # (accountSummary() issues a request with no timeout and could
+            # wedge the loop thread - counter-agent round 2). Fall back to
+            # the summary only when the subscription has nothing yet.
+            rows = []
+            try:
+                rows = list(self.ib.accountValues() or [])
+            except Exception:  # noqa: BLE001
+                rows = []
+            if not rows:
+                # bounded: RequestTimeout defaults to 0 (= wait forever)
+                prev = getattr(self.ib, "RequestTimeout", 0)
+                try:
+                    self.ib.RequestTimeout = 5
+                    rows = list(self.ib.accountSummary() or [])
+                finally:
+                    self.ib.RequestTimeout = prev
+            try:
+                accts = list(self.ib.managedAccounts() or [])
+            except Exception:  # noqa: BLE001
+                accts = []
+            if len(accts) > 1:
+                # an advisor/master login: accts[0]'s values are consolidated
+                # across sub-accounts - never a claim (round 3)
+                logger.warning("account_cash: %d managed accounts (%s) - no "
+                               "claim", len(accts), accts)
+                return None
+            want = accts[0] if accts else None
+            vals: dict[str, float] = {}
+            seen_accts: set = set()
+            for row in rows:
+                tag = getattr(row, "tag", "")
+                cur = getattr(row, "currency", "") or ""
+                acct = getattr(row, "account", "") or ""
+                if tag not in ("TotalCashValue", "NetLiquidation"):
+                    continue
+                if cur not in ("USD", ""):      # BASE may not be USD
+                    continue
+                if want and acct and acct != want:
+                    continue
+                if tag == "TotalCashValue" and acct:
+                    seen_accts.add(acct)
+                vals[tag] = float(getattr(row, "value", "nan"))
+            if len(seen_accts) > 1:
+                logger.warning("account_cash: %d accounts report cash (%s) - "
+                               "no claim", len(seen_accts), sorted(seen_accts))
+                return None
+            if "TotalCashValue" not in vals or vals["TotalCashValue"] != vals["TotalCashValue"]:
+                return None
+            return {"total_cash": vals["TotalCashValue"],
+                    "net_liq": vals.get("NetLiquidation"),
+                    "ts": time.time()}
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("account_cash unavailable (no claim): %s", exc)
+            return None
 
     def stock_position(self, symbol: str) -> int:
         """Net venue holding for a SMART/USD stock — what the ACCOUNT
@@ -779,7 +992,9 @@ class DryAdapter:
         out = {"order_ref": rec["order_ref"], "status": rec["status"]}
         if rec.get("fill_price") is not None:
             out["fill_price"] = rec["fill_price"]
-        return out
+        if rec["status"] == "filled":
+            out["commission"] = 0.0     # synthetic fill: a REPORTED zero, so
+        return out                      # dry runs do not page "unreported"
 
     def place_stock_order(self, symbol: str, qty: int, order_type: str,
                           stop_price: float | None = None, tif: str = "DAY",
@@ -823,7 +1038,7 @@ class DryAdapter:
         self._rec("place_stock_order", symbol=symbol, qty=qty,
                   order_type=order_type, tif=tif, ref=ref, status="filled",
                   fill_price=fill)
-        return {"order_ref": ref, "status": "filled", "fill_price": fill}
+        return self._order_result(rec)
 
     def cancel_stock_order(self, order_ref: str) -> bool:
         rec = self._orders.get(order_ref)
@@ -896,6 +1111,9 @@ class DryAdapter:
     def find_stock_order(self, client_order_id: str) -> dict | None:
         rec = self._orders.get(self._by_client.get(client_order_id, ""))
         return self._order_result(rec) if rec is not None else None
+
+    def account_cash(self) -> dict | None:
+        return None                      # no venue, no claim
 
     def stock_position(self, symbol: str) -> int:
         """Net venue holding for symbol, from filled orders — mirrors the

@@ -46,3 +46,222 @@ def test_gate_offline_service_and_auth(tmp_path, monkeypatch):
         assert r.json()["halted"] == "KILL"
         r = c.get("/resume", params={"token": "sekrit"})
         assert r.json()["ok"] is True
+
+
+# --- gateway watch + disabled-book guard (2026-09-04) -------------------------
+# MUTATION-VERIFIED: dropping `since_drop <= 1` turns test_gateway_watch_stall_
+# diagnosis red (crash-loop case); dropping the weekday guard turns the
+# Saturday case red; dropping the once-per-outage flag turns the repeat case
+# red; dropping the `real:` mode check turns test_disabled_book_guard red.
+import json as _json
+from datetime import datetime as _dt
+from zoneinfo import ZoneInfo as _Zone
+
+from app import service as svc
+
+_ET = _Zone("America/New_York")
+
+
+def _ts(y, mo, d, h, mi):
+    return _dt(y, mo, d, h, mi, tzinfo=_ET).timestamp()
+
+
+def test_gateway_watch_stall_diagnosis():
+    sent = []
+    st = {"outage_since": None, "diagnosed": False, "preopen_paged": ""}
+    drop = _ts(2026, 9, 3, 19, 49)                 # the real Thursday drop
+    # 20 min in, one relaunch at the drop: too early, nothing
+    assert svc._gateway_watch(drop + 20 * 60, {"currently_down_since": drop},
+                              {"recent_ts": [drop + 5], "readable": True}, sent.append, st) == []
+    # 31 min in, still only that one relaunch: alive-but-not-logged-in
+    assert svc._gateway_watch(drop + 31 * 60, {"currently_down_since": drop},
+                              {"recent_ts": [drop + 5], "readable": True}, sent.append, st) == ["stall"]
+    assert "NOT logged in" in sent[-1] and "IBKR Mobile" in sent[-1]
+    # once per outage: the next cycle is silent
+    assert svc._gateway_watch(drop + 36 * 60, {"currently_down_since": drop},
+                              {"recent_ts": [drop + 5], "readable": True}, sent.append, st) == []
+    # a crash loop that develops LATER in the same outage still pages, once
+    many = [drop + 5, drop + 40 * 60, drop + 45 * 60, drop + 55 * 60]
+    assert svc._gateway_watch(drop + 60 * 60, {"currently_down_since": drop},
+                              {"recent_ts": many, "readable": True}, sent.append, st) == ["loop"]
+    assert svc._gateway_watch(drop + 65 * 60, {"currently_down_since": drop},
+                              {"recent_ts": many, "readable": True}, sent.append, st) == []
+    # a CRASH LOOP (many relaunches since the drop) is a different problem:
+    # no stall diagnosis
+    st2 = {"outage_since": None, "diagnosed": False, "preopen_paged": ""}
+    loop = [drop + 5, drop + 20, drop + 50, drop + 110, drop + 230]
+    assert svc._gateway_watch(drop + 31 * 60, {"currently_down_since": drop},
+                              {"recent_ts": loop, "readable": True}, sent.append, st2) == ["loop"]
+    assert "crash-looping" in sent[-1]
+    st2b = {"outage_since": None, "diagnosed": False, "preopen_paged": ""}
+    assert svc._gateway_watch(drop + 31 * 60, {"currently_down_since": drop},
+                              {"recent_ts": [drop + 5], "readable": True,
+                               "circuit_open": True,
+                               "last": {"ts": drop + 5, "reason": "circuit_open"}},
+                              sent.append, st2b) == ["loop"]
+    assert "circuit breaker is now OPEN" in sent[-1]
+    # a breaker trip left over from a PREVIOUS outage (the log's last line,
+    # days old) is not this outage's diagnosis: stall, not loop (round 3)
+    st2d = {"outage_since": None, "diagnosed": False, "preopen_paged": ""}
+    assert svc._gateway_watch(drop + 31 * 60, {"currently_down_since": drop},
+                              {"recent_ts": [drop - 3 * 86400], "readable": True,
+                               "circuit_open": True,
+                               "last": {"ts": drop - 3 * 86400, "reason": "circuit_open"}},
+                              sent.append, st2d) == ["stall"]
+    st2c = {"outage_since": None, "diagnosed": False, "preopen_paged": ""}
+    assert svc._gateway_watch(drop + 31 * 60, {"currently_down_since": drop},
+                              {"recent_ts": [], "readable": False, "path": "/app/data/x"},
+                              sent.append, st2c) == ["unreadable"]
+    assert "/app/data/x" in sent[-1]
+    # ... and once the log is readable later in the same outage the stall
+    # page still fires (round 3: 'unreadable' no longer consumes the
+    # diagnosis), once
+    assert svc._gateway_watch(drop + 36 * 60, {"currently_down_since": drop},
+                              {"recent_ts": [drop + 5], "readable": True},
+                              sent.append, st2c) == ["stall"]
+    assert svc._gateway_watch(drop + 41 * 60, {"currently_down_since": drop},
+                              {"recent_ts": [], "readable": False, "path": "/x"},
+                              sent.append, st2c) == []
+    svc._gateway_watch(drop + 32 * 60, None, {"recent_ts": [], "readable": True},
+                       sent.append, st)
+    assert st["outage_since"] == drop and st["diagnosed"] is True
+    # recovery clears the bookkeeping
+    svc._gateway_watch(drop + 40 * 60, {"currently_down_since": None},
+                       {"recent_ts": [], "readable": True}, sent.append, st)
+    assert st["outage_since"] is None and st["diagnosed"] is False
+
+
+def test_gateway_watch_preopen_page():
+    sent = []
+    st = {"outage_since": None, "diagnosed": False, "preopen_paged": ""}
+    drop = _ts(2026, 9, 3, 19, 49)
+    friday_0845 = _ts(2026, 9, 4, 8, 45)
+    out = svc._gateway_watch(friday_0845, {"currently_down_since": drop},
+                             {"recent_ts": [drop + 5], "readable": True}, sent.append, st)
+    assert "preopen" in out
+    assert "opens in 45 min" in sent[-1]
+    # once per day
+    assert "preopen" not in svc._gateway_watch(
+        friday_0845 + 300, {"currently_down_since": drop},
+        {"recent_ts": [drop + 5], "readable": True}, sent.append, st)
+    # outside the window: nothing (noon)
+    # mid-outage state, stall already diagnosed: only the window matters
+    st3 = {"outage_since": drop, "diagnosed": True, "preopen_paged": ""}
+    assert svc._gateway_watch(_ts(2026, 9, 4, 12, 0), {"currently_down_since": drop},
+                              {"recent_ts": [drop + 5], "readable": True}, sent.append, st3) == []
+    # Saturday 08:45: no market, no page
+    st4 = {"outage_since": drop, "diagnosed": True, "preopen_paged": ""}
+    assert svc._gateway_watch(_ts(2026, 9, 5, 8, 45), {"currently_down_since": drop},
+                              {"recent_ts": [drop + 5], "readable": True}, sent.append, st4) == []
+    st5 = {"outage_since": drop, "diagnosed": True, "preopen_paged": ""}
+    assert svc._gateway_watch(_ts(2026, 9, 7, 8, 45), {"currently_down_since": drop},
+                              {"recent_ts": [drop + 5], "readable": True}, sent.append, st5) == []
+    blip = _ts(2026, 9, 4, 8, 40)
+    st6 = {"outage_since": None, "diagnosed": False, "preopen_paged": ""}
+    assert svc._gateway_watch(blip + 5 * 60, {"currently_down_since": blip},
+                              {"recent_ts": [], "readable": True}, sent.append, st6) == []
+    assert svc._gateway_watch(blip + 11 * 60, {"currently_down_since": blip},
+                              {"recent_ts": [], "readable": True}, sent.append, st6) == ["preopen"]
+    svc._gateway_watch(blip + 12 * 60, {"currently_down_since": None},
+                       {"recent_ts": [], "readable": True}, sent.append, st6)
+    assert svc._gateway_watch(blip + 25 * 60, {"currently_down_since": blip + 13 * 60},
+                              {"recent_ts": [], "readable": True}, sent.append, st6) == []
+
+
+def test_disabled_book_guard(tmp_path):
+    p = tmp_path / "blend_state.json"
+    # a real:live book with holdings -> reported
+    p.write_text(_json.dumps({"mode": "real:live", "initialized": True,
+                              "positions": {}, "spy_qty": 45, "bil_qty": 136,
+                              "sleeve_cash": 2533.24, "halted": None}))
+    book = svc._check_disabled_blend_book(str(p))
+    assert book and book["spy_qty"] == 45 and book["bil_qty"] == 136
+    sent = []
+    svc._disabled_book_alert(book, sent.append)
+    assert "DISABLED" in sent[0] and "136 BIL" in sent[0]
+    # a dry/paper book is fiction: no claim
+    p.write_text(_json.dumps({"mode": "dry:paper", "spy_qty": 45, "bil_qty": 1,
+                              "sleeve_cash": 9.0, "positions": {}}))
+    assert svc._check_disabled_blend_book(str(p)) is None
+    # an empty real book: nothing to abandon
+    p.write_text(_json.dumps({"mode": "real:live", "spy_qty": 0, "bil_qty": 0,
+                              "sleeve_cash": 0.0, "positions": {}}))
+    assert svc._check_disabled_blend_book(str(p)) is None
+    # missing / corrupt file: never raises
+    assert svc._check_disabled_blend_book(str(tmp_path / "nope.json")) is None
+    p.write_text("{not json")
+    assert svc._check_disabled_blend_book(str(p)) is None
+    # well-formed JSON, REAL mode, one wrong-typed field: fail CLOSED - a
+    # claim with the holdings marked unreadable (counter-agent round 2)
+    p.write_text(_json.dumps({"mode": "real:live", "spy_qty": "x", "bil_qty": 1,
+                              "sleeve_cash": 9.0, "positions": {}}))
+    book = svc._check_disabled_blend_book(str(p))
+    assert book and book["parse_error"] and book["spy_qty"] is None
+    sent2 = []
+    svc._disabled_book_alert(book, sent2.append)
+    assert "could not be read" in sent2[0]
+
+
+def test_boot_retry_feeds_the_gateway_watch_only_for_connection_failures(monkeypatch):
+    """Round 3: the adapter's connect failure raised a plain RuntimeError, so
+    the isinstance filter in the boot-retry loop never fed the watch - no
+    stall / pre-open page in the exact state the pre-open page exists for
+    (a Render restart whose gateway login stalls on the IB Key push)."""
+    from app.ib_adapter import ExecutorConnectionError
+
+    class _Escape(BaseException):
+        pass
+
+    def run(exc):
+        calls, sent = [], []
+        n = {"i": 0}
+
+        def build_adapter():
+            n["i"] += 1
+            if n["i"] == 1:
+                raise exc
+            raise _Escape()                    # second attempt: leave the loop
+
+        monkeypatch.setattr(svc, "_build_managers", lambda: None)
+        monkeypatch.setattr(svc, "_build_adapter", build_adapter)
+        monkeypatch.setattr(svc, "BUILD_RETRY_S", 0.0)
+        monkeypatch.setattr(svc, "send", sent.append)
+        monkeypatch.setattr(svc, "_gateway_restarts",
+                            lambda: {"recent_ts": [], "readable": True})
+        monkeypatch.setattr(svc, "_gateway_watch",
+                            lambda *a, **k: calls.append(a) or [])
+        svc.LAST["build_fail_since"] = None
+        try:
+            svc._loop()
+        except _Escape:
+            pass
+        return calls, sent
+
+    calls, sent = run(ExecutorConnectionError("could not connect to IB gateway"))
+    assert len(calls) == 1 and svc.LAST["build_fail_since"]
+    assert sent and "build failed" in sent[0]
+    svc.LAST["build_fail_since"] = None
+    calls, _ = run(RuntimeError("BLEND_ENABLED with a dry adapter: refusing"))
+    assert calls == [] and not svc.LAST["build_fail_since"]
+
+
+def test_connect_failure_is_a_connection_error(monkeypatch):
+    import types
+    import pytest
+    import app.ib_adapter as A
+    from app.ib_adapter import ExecutorConnectionError
+    monkeypatch.setattr(A.time, "sleep", lambda *_: None)
+
+    class _IB:
+        def isConnected(self):
+            return False
+        def disconnect(self):
+            pass
+        def connect(self, *a, **k):
+            raise ConnectionRefusedError("gateway not listening")
+
+    ad = A.IBAdapter.__new__(A.IBAdapter)
+    ad.ib = _IB()
+    ad.cfg = types.SimpleNamespace(trading_mode="paper", ib_host="h", ib_client_id=1)
+    with pytest.raises(ExecutorConnectionError):
+        ad._connect()

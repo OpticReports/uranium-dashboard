@@ -178,7 +178,7 @@ def test_gate_feed_shape(tmp_path, monkeypatch):
     assert set(body) == {"mode", "halted", "gate", "book", "positions",
                          "trades", "equity_curve", "unreconciled",
                          "unverifiable", "unprotected",
-                         "last_cycle", "marks_age_s"}
+                         "last_cycle", "marks_age_s", "cash"}
     assert body["marks_age_s"] is not None       # cached-marks staleness
     assert body["marks_age_s"] < 60.0            # cache just refreshed
     assert set(body["book"]) == {"sleeve_cash", "core_qty", "bil_qty",

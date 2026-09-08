@@ -123,6 +123,9 @@ if [ -n "${TWS_USERID:-}" ] && [ -n "${TWS_PASSWORD:-}" ]; then
   GW="${IBGW_ENTRYPOINT:-/home/ibgateway/scripts/run.sh}"
   if [ -x "$GW" ]; then
     echo "starting IB gateway (${TRADING_MODE:-paper}) under supervision"
+    # the restart log must EXIST from the first boot: a never-restarted
+    # gateway with no file read as "log unreadable" to the service's watch
+    mkdir -p "$(dirname "$RESTART_LOG")" 2>/dev/null && : >> "$RESTART_LOG" 2>/dev/null || true
     supervise_gateway "$GW" &
     GW_SUP_PID=$!
     # NOTE (counter-agent 2026-08-24): no trap here. `exec` below replaces

@@ -76,7 +76,8 @@ import os
 import tempfile
 import time
 from dataclasses import asdict, dataclass, field, fields
-from datetime import date
+from datetime import date, datetime, timezone
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -108,6 +109,112 @@ STALE_PAYLOAD_DAYS = 5      # as_of older than this vs today -> no decisions
                             # (5, not the review's 2: a Monday poll after a
                             # long holiday weekend legitimately sees a 4-day-
                             # old last trading day; reconciliation still runs)
+# CASH RECONCILE, stage 1 (2026-09-04, Casey-approved): the book's two cash
+# buckets are moved only by orders the book placed; the account's cash also
+# moves by dividends, interest, commissions and anything a human does, and
+# nothing compared the two. reconcile_cash() compares DELTAS from a baseline
+# (never levels - the account may hold cash the book does not own) on QUIET
+# cycles only, and in stage 1 it ALERTS ONLY: no ledger change, no trading
+# impact. Stage 2 (adoption) is a separate, opt-in change.
+CASH_WARN_USD = 25.0        # warn at max($25, 0.1% of the book) ...
+CASH_WARN_FRAC = 0.001
+CASH_RED_FRAC = 0.01        # ... RED at 1% of the book
+CASH_QUIET_S = 15 * 60.0    # no fill inside this window. TotalCashValue
+                            # moves at TRADE time (not settlement); the
+                            # window only covers IB's account-push lag
+                            # (counter-agent round 2)
+CASH_PERSIST_CYCLES = 2     # a drift must hold for this many CONSECUTIVE
+                            # quiet cycles; any fill or skip resets it
+FUNDING_FEE_RESERVE_USD = 2.0   # BIL raise headroom for the sell's own
+                                # commission, so the settled-cash belt never
+                                # skips an ENTER by under a dollar
+CASH_SKIP_WARN_S = 6 * 3600.0   # the cash reconcile skipped this long for
+                                # one reason -> say so once a day (round 3:
+                                # a parked unreconciled exit had suspended it
+                                # forever, silently)
+
+
+def _num_or_none(v):
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return None if f != f else f
+
+
+def _valid_baseline(b):
+    if (isinstance(b, dict) and _num_or_none(b.get("venue")) is not None
+            and _num_or_none(b.get("ledger")) is not None):
+        return b
+    return None
+
+# ENTRY SESSION WINDOW (2026-09-03). Entries are MOO orders with TIF=OPG:
+# the venue accepts them only for the NEXT opening auction and REJECTS them
+# once the regular session is open. Placing one mid-session was never an
+# entry - it was a guaranteed rejection that first SOLD BIL to fund itself
+# (2026-08-28: NTRA/LLY, 8 rejections; 2026-09-03: MRK, 20 BIL sold, 5
+# rejections, cash stranded). The planner therefore only plans entries
+# OUTSIDE [ENTRY_CUTOFF_ET, SESSION_CLOSE_ET) on weekdays; a fire published
+# mid-session is picked up by the first post-close cycle and placed for the
+# next open. Cutoff is a few minutes before the 09:30 bell on purpose: the
+# exchange stops accepting opening-auction orders shortly before it, and a
+# skipped valid minute costs nothing while a doomed order costs a BIL
+# round-trip. Holidays are treated as weekdays (a valid placement is merely
+# delayed to the post-close window; the fire is still published).
+ENTRY_SESSION_TZ = "America/New_York"
+ENTRY_CUTOFF_ET = (9, 25)
+SESSION_CLOSE_ET = (16, 0)
+# Resolved ONCE at import (counter-agent round 1): a missing tz database
+# then fails at boot, where the boot alert names it, instead of inside
+# step() where it would freeze every decision - exits and stop ratchets
+# included - on every cycle. tzdata is pinned in requirements.txt as the
+# belt against a base-image change.
+_ET = ZoneInfo(ENTRY_SESSION_TZ)
+# NYSE full-day closures the clocks would otherwise treat as trading days.
+# A holiday only DELAYS a valid placement (the fire stays published), but
+# the pre-open page must not fire on one. Extend yearly.
+NYSE_HOLIDAYS = {
+    "2026-09-07", "2026-11-26", "2026-12-25",
+    "2027-01-01", "2027-01-18", "2027-02-15", "2027-03-26", "2027-05-31",
+    "2027-06-18", "2027-07-05", "2027-09-06", "2027-11-25", "2027-12-24",
+}
+
+
+# NYSE early closes (13:00 ET). A mid-afternoon fire on one of these days
+# is a CLOSED venue: sizing it as in-session placed a MKT BIL sell the venue
+# queued to the next session and reconcile cancelled as stuck, three times
+# an hour (counter-agent round 3). Extend yearly with NYSE_HOLIDAYS.
+NYSE_EARLY_CLOSES = {
+    "2026-11-27": (13, 0), "2026-12-24": (13, 0), "2027-11-26": (13, 0),
+}
+
+
+def is_trading_day(d: date) -> bool:
+    return d.weekday() < 5 and d.isoformat() not in NYSE_HOLIDAYS
+
+
+def session_close_et(d: date) -> tuple:
+    return NYSE_EARLY_CLOSES.get(d.isoformat(), SESSION_CLOSE_ET)
+
+
+def _now_utc() -> datetime:
+    """Module-level clock so tests pin it (tests/conftest.py); production
+    reads the wall clock."""
+    return datetime.now(timezone.utc)
+
+
+def entry_window_open(now: datetime | None = None) -> bool:
+    """True when a MOO/OPG entry placed NOW would be accepted for the next
+    opening auction: any time on a weekend, and on weekdays outside
+    [09:25, 16:00) Eastern. False during the regular session."""
+    now = now or _now_utc()
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    et = now.astimezone(_ET)
+    if not is_trading_day(et.date()):   # weekend OR NYSE closure: an OPG
+        return True                      # placed now is for the next session
+    t = (et.hour, et.minute)
+    return not (ENTRY_CUTOFF_ET <= t < session_close_et(et.date()))
 HISTORY_HORIZON_S = 86_400.0  # venue-history horizon (adapter review m2): a
                               # gap since the LAST successful reconcile longer
                               # than this means order history may not cover
@@ -258,6 +365,23 @@ class BlendState:
     equity_curve: list = field(default_factory=list)  # [[date, book_value]]
                                                       # one row per cycle day
     last_gate: bool | None = None    # last tracker gate seen (feed display)
+    # cash reconcile (stage 1): baseline pair + the running delta drift
+    cash_baseline: dict | None = None    # {venue, ledger, ts}
+    cash_drift: float | None = None      # (venue - b.venue) - (ledger - b.ledger)
+    cash_drift_ts: float | None = None
+    cash_drift_cycles: int = 0           # consecutive quiet cycles over threshold
+    cash_alerted_drift: float | None = None
+    last_fill_ts: float = 0.0            # any booked fill (quiet-cycle rule)
+    commissions_paid: float = 0.0        # debited from the buckets at fill time
+    commissions_unreported: int = 0      # fills booked at 0 because the venue
+                                         # had not reported (round 3: counted)
+    cash_alerted_level: str = ""         # WARN/RED last paged (escalation)
+    # pre-fund hold (option c): cash raised mid-session for a deferred
+    # entry is held back from the sweep until the post-close cycle spends
+    # it or the trading date rolls - persisted so a tracker blip or a
+    # restart cannot re-sweep it
+    prefund_usd: float = 0.0
+    prefund_date: str = ""
     bootstrap_ack_date: str = ""  # trading date the ack was granted on; the
                                   # ack is only honoured on that same date
     bootstrap_ack: bool = False  # operator acknowledged (via /resume) that a
@@ -400,6 +524,23 @@ class Blend3070Manager:
                 quote_alert_armed=raw.get("quote_alert_armed", True),
                 quotes_missing_since=raw.get("quotes_missing_since"),
                 last_reconcile_ts=raw.get("last_reconcile_ts", 0.0),
+                # cash reconcile / pre-fund (counter-agent round 2: these
+                # were declared but never persisted - every deploy silently
+                # re-baselined and zeroed commissions_paid)
+                # a mis-shaped baseline or a non-numeric drift in the file
+                # must not disable the reconcile silently / 500 the feed
+                # (counter-agent round 3)
+                cash_baseline=_valid_baseline(raw.get("cash_baseline")),
+                cash_drift=_num_or_none(raw.get("cash_drift")),
+                cash_drift_ts=_num_or_none(raw.get("cash_drift_ts")),
+                cash_drift_cycles=int(raw.get("cash_drift_cycles", 0) or 0),
+                cash_alerted_drift=raw.get("cash_alerted_drift"),
+                cash_alerted_level=raw.get("cash_alerted_level", "") or "",
+                last_fill_ts=float(raw.get("last_fill_ts", 0.0) or 0.0),
+                commissions_paid=float(raw.get("commissions_paid", 0.0) or 0.0),
+                commissions_unreported=int(raw.get("commissions_unreported", 0) or 0),
+                prefund_usd=float(raw.get("prefund_usd", 0.0) or 0.0),
+                prefund_date=raw.get("prefund_date", "") or "",
                 mode=stored_mode,
             )
             try:
@@ -533,6 +674,17 @@ class Blend3070Manager:
                    "quote_alert_armed": self.state.quote_alert_armed,
                    "quotes_missing_since": self.state.quotes_missing_since,
                    "last_reconcile_ts": self.state.last_reconcile_ts,
+                   "cash_baseline": self.state.cash_baseline,
+                   "cash_drift": self.state.cash_drift,
+                   "cash_drift_ts": self.state.cash_drift_ts,
+                   "cash_drift_cycles": self.state.cash_drift_cycles,
+                   "cash_alerted_drift": self.state.cash_alerted_drift,
+                   "cash_alerted_level": self.state.cash_alerted_level,
+                   "last_fill_ts": self.state.last_fill_ts,
+                   "commissions_paid": self.state.commissions_paid,
+                   "commissions_unreported": self.state.commissions_unreported,
+                   "prefund_usd": self.state.prefund_usd,
+                   "prefund_date": self.state.prefund_date,
                    "mode": self.state.mode,
                    "events": self.state.events[-300:]}
         fd, tmp_path = tempfile.mkstemp(
@@ -551,6 +703,21 @@ class Blend3070Manager:
             except OSError:
                 pass
             raise
+
+    def _event_once_today(self, level: str, key: str, msg: str) -> bool:
+        """Record an event at most once per calendar day per key - for the
+        per-cycle notices (entries deferred / breaker open) that _event's
+        last-message dedupe re-logs every 5 minutes as soon as any other
+        event interleaves (counter-agent round 1). In-memory: a restart
+        re-emits once, which is the right amount of noise."""
+        today = _utc_today()
+        seen = getattr(self, "_notice_day", None)
+        if seen is None:
+            seen = self._notice_day = {}
+        if seen.get(key) == today:
+            return False
+        seen[key] = today
+        return self._event(level, msg)
 
     def _event(self, level: str, msg: str) -> bool:
         """Log a deduped event. Returns True only when the event was NEWLY
@@ -731,6 +898,10 @@ class Blend3070Manager:
         budget = getattr(self.cfg, "blend_budget", 0.0) or 0.0
 
         if not st.initialized:
+
+            # a fresh seed's own fills must never straddle a cash baseline
+
+            self.rebaseline_cash('seed', save=False)
             book = getattr(self.cfg, "blend_book_usd", 10_000.0)
             if budget > 0:
                 book = min(book, budget)
@@ -769,7 +940,14 @@ class Blend3070Manager:
                            - date.fromisoformat(rec.get("date") or "")).days
                 except ValueError:
                     age = None
+                # a sell placed outside RTH rests until the next open: not
+                # stale while the market is still closed (weekend/holiday);
+                # in-session it is counted by reconcile 2b instead
+                resting = (rec.get("rests_for_open")
+                           and not rec.get("stuck_cycles")
+                           and entry_window_open())
                 if (age is not None and age >= BOOK_ORDER_STALE_DAYS
+                        and not resting
                         and not rec.get("stale_alerted")):
                     rec["stale_alerted"] = True
                     self.save()
@@ -909,7 +1087,51 @@ class Blend3070Manager:
                                 "with BLEND_BUDGET set — gross exposure "
                                 "(the budget gate's basis) is not "
                                 "computable this cycle")
-        if gate_on and not naked and not budget_blind:
+        # 4a) SESSION GUARD + PAUSE GUARD (2026-09-03). Both live HERE, in
+        #     the planner, because the BIL cash-raise below is sized from the
+        #     PLANNED entries: an entry that will not be placed must not be
+        #     planned, or its funding sale still goes out. The execution-loop
+        #     breaker (intent_kind_paused) skips the ENTER but not the SWEEP
+        #     that preceded it - MRK 2026-09-03 sold 20 BIL into a paused
+        #     kind - which is why the pause is checked again here.
+        candidates = [e for e in payload.get("entries", [])
+                      if str(e.get("call_id")) not in st.positions
+                      and str(e.get("call_id")) not in st.pending_entries]
+        # Already-entered ids stay in `candidates` so the planning loop can
+        # still refuse a RECYCLED id loudly; they are only excluded from
+        # the "waiting" count the notices report.
+        waiting = [e for e in candidates if e.get("call_id") not in st.entered_ids]
+        # The clock is consulted only when there is something to enter: a
+        # clock problem must never touch a cycle with nothing to plan.
+        window_open = (entry_window_open()
+                       if (gate_on and candidates) else True)
+        enter_paused = intent_kind_paused("ENTER")
+        plannable = gate_on and not naked and not budget_blind and bool(candidates)
+        deferred = plannable and bool(waiting) and (not window_open or enter_paused)
+        if plannable and waiting and not window_open and not enter_paused:
+            self._event_once_today(
+                "INFO", "entries_deferred",
+                f"entries deferred: {len(waiting)} candidate(s) held "
+                f"for the post-close window (MOO/OPG is not placeable "
+                f"during the regular session). Their cash is raised NOW "
+                f"while BIL can fill, held unswept, and the MOO goes out "
+                f"after the close for the next open (pre-fund, Casey "
+                f"2026-09-04).")
+        elif plannable and waiting and enter_paused:
+            self._event_once_today(
+                "WARN", "enter_breaker_open",
+                f"entries not planned: ENTER breaker is open "
+                f"({len(waiting)} candidate(s) waiting; no cash raised)")
+        # PRE-FUND (Casey 2026-09-04, option c): the sizing loop runs whether
+        # or not the window is open. When it is CLOSED the ENTER intents it
+        # produces are DROPPED (nothing can place them) but their cost stays
+        # reserved in projected_cash/funds, so the BIL cash-raise below sells
+        # exactly what the post-close MOO will need - a MKT sell that FILLS,
+        # because it is in session. Idempotent: once the cash is on hand the
+        # next cycle sizes the same entries against it and raises nothing.
+        # A paused ENTER kind never pre-funds (raising cash for a kind the
+        # venue is rejecting was the MRK pattern).
+        if plannable and not enter_paused:
             for e in payload.get("entries", []):
                 key = str(e["call_id"])
                 if key in st.positions or key in st.pending_entries:
@@ -944,11 +1166,22 @@ class Blend3070Manager:
                                         f"(call {e['call_id']}): skipped")
                     continue
                 risk_usd = risk_frac * sleeve_eq
-                qty = int(risk_usd // (entry_ref - trail))
+                risk_qty = int(risk_usd // (entry_ref - trail))
                 avail = max(funds, 0.0)
-                qty = min(qty, int(avail // entry_ref)) if entry_ref > 0 else 0
+                qty = min(risk_qty, int(avail // entry_ref)) if entry_ref > 0 else 0
                 if qty <= 0:
                     self._event("INFO", f"{e['symbol']} sized to zero: skipped")
+                    continue
+                if pending_book and qty < risk_qty:
+                    # the cash clip binds only because a BIL sell / sweep is
+                    # still resting: placing the clipped size would dust the
+                    # entry (1-2 sh) and burn the call_id for good (round 3).
+                    # Wait for the book order to adopt; the candidate stays.
+                    self._event_once_today(
+                        "INFO", f"entry_wait_{e['call_id']}",
+                        f"{e['symbol']} (call {e['call_id']}) waits: a book "
+                        f"order is pending and settled cash covers {qty} of "
+                        f"{risk_qty} sh - not placing a dust entry")
                     continue
                 cost = qty * entry_ref
                 # Budget binds on projected gross; the BIL-funded slice of an
@@ -970,6 +1203,37 @@ class Blend3070Manager:
                 projected_gross += from_cash
                 projected_cash -= cost
                 funds -= cost
+
+        prefund_usd = 0.0
+        prefund_now = False
+        if entry_intents and not window_open:
+            prefund_usd = sum(i["qty"] * i["entry_ref"] for i in entry_intents)
+            self._event_once_today(
+                "INFO", "prefund",
+                f"pre-funding {len(entry_intents)} deferred entry(ies): "
+                f"${prefund_usd:,.0f} reserved in sleeve cash for the "
+                f"post-close MOO" + (" (BIL sold now to cover the shortfall)"
+                                     if projected_cash < -CASH_EPS else ""))
+            entry_intents = []          # placed post-close from settled cash
+            st.prefund_usd, st.prefund_date = round(prefund_usd, 2), today
+            prefund_now = True
+        elif entry_intents:
+            # entries placed: release the hold by the amount SPENT. A second
+            # pre-funded fire absent for one cycle (partial payload, cap)
+            # keeps its cash held (counter-agent round 3, MED).
+            spent = sum(i["qty"] * i["entry_ref"] for i in entry_intents)
+            st.prefund_usd = round(max(0.0, st.prefund_usd - spent), 2)
+            if st.prefund_usd <= CASH_EPS:
+                st.prefund_usd, st.prefund_date = 0.0, ""
+        elif (st.prefund_date and st.prefund_date != today
+              and not entry_window_open()):
+            # The hold releases only once the NEXT SESSION has started.
+            # `today` is the UTC date: it rolls at 20:00 ET, inside the
+            # post-close window the hold exists to protect - releasing on
+            # the roll re-swept the cash at 20:05 ET and the returning fire
+            # was then dust-sized to 1 share (counter-agent round 3, HIGH).
+            # A same-day blip never releases it (round 2).
+            st.prefund_usd, st.prefund_date = 0.0, ""
 
         # 5) band rebalance (~1x/year expected): executor-side weights.
         #    M4: NEVER computed from absent prices — a missing SPY (or BIL)
@@ -1031,7 +1295,14 @@ class Blend3070Manager:
         bil_sell = 0
         if (not pending_book and projected_cash < -CASH_EPS
                 and bil_px > 0 and st.bil_qty > 0):
-            bil_sell = min(st.bil_qty, math.ceil(-projected_cash / bil_px))
+            # the sell's own commission is netted out of the proceeds:
+            # when the raise funds a pre-fund, add headroom so the post-
+            # close settled-cash belt does not skip the ENTER by under a
+            # dollar (which would cost a full day). A rebalance raise
+            # stays exact (counter-agent round 2, LOW).
+            reserve = FUNDING_FEE_RESERVE_USD if prefund_now else 0.0
+            bil_sell = min(st.bil_qty, math.ceil(
+                (-projected_cash + reserve) / bil_px))
             projected_cash += bil_sell * bil_px
         if projected_cash < -CASH_EPS:
             # Belt (should be unreachable): refuse rather than overdraw.
@@ -1063,9 +1334,17 @@ class Blend3070Manager:
         #    headroom — economically cash, but gross must never drift above
         #    BLEND_BUDGET via the cash vehicle (counter-agent minor).
         sweep_buy = None
+        # Pre-fund hold (round 1 -> round 2): cash raised mid-session for a
+        # deferred entry is held back from the sweep until the post-close
+        # cycle spends it or the date rolls. The hold is PERSISTED state, so
+        # a tracker blip (payload None -> no candidates) or a restart cannot
+        # re-sweep it; when the sizing loop already reserved the cost in
+        # projected_cash this double-counts and simply means no sweep.
+        held_back = st.prefund_usd          # already reduced by what was spent
+        sweepable = projected_cash - held_back
         if (not pending_book and bil_px > 0
-                and projected_cash > max(MIN_ORDER_USD, bil_px)):
-            sweep_qty = int(projected_cash // bil_px)
+                and sweepable > max(MIN_ORDER_USD, bil_px)):
+            sweep_qty = int(sweepable // bil_px)
             if budget > 0:
                 gross_proj = projected_gross
                 if (rebalance_intent is not None
@@ -1134,25 +1413,38 @@ class Blend3070Manager:
                 return cid
         self.state.book_order_seq += 1
         cid = f"blend-{kind}-{today}-{self.state.book_order_seq}"
+        # A MKT/DAY order placed OUTSIDE regular hours legitimately rests
+        # until the next open; reconcile 2b must not count those cycles as
+        # "stuck" and cancel it (counter-agent round 1). Recorded here so the
+        # exemption survives a restart with the journal.
+        rests_for_open = entry_window_open()
         self.state.pending_book_orders[cid] = {
             "kind": kind, "symbol": symbol, "qty": qty, "date": today,
-            "ref_price": ref_price}
+            "ref_price": ref_price, "rests_for_open": rests_for_open}
         self.save()
         return cid
 
     def reserved_sleeve_cash(self) -> float:
         """Sleeve cash a pending (working, not yet adopted) BIL sweep BUY
         will debit at adoption — never spendable by entries (M1)."""
-        return sum(rec["qty"] * (rec.get("ref_price") or 0.0)
-                   for rec in self.state.pending_book_orders.values()
-                   if rec["kind"] == "sweep" and rec["qty"] > 0)
+        swept = sum(rec["qty"] * (rec.get("ref_price") or 0.0)
+                    for rec in self.state.pending_book_orders.values()
+                    if rec["kind"] == "sweep" and rec["qty"] > 0)
+        # A journaled ENTER that is resting for the open (MOO/OPG placed
+        # post-close) will debit its cost at adoption: a second fire the
+        # same evening must not size against that cash (counter-agent
+        # round 2 - the ledger went negative on two fires one night).
+        resting = sum((rec.get("intent") or {}).get("qty", 0)
+                      * (rec.get("intent") or {}).get("entry_ref", 0.0)
+                      for rec in self.state.pending_entries.values())
+        return swept + resting
 
     def clear_pending_book_order(self, client_id: str) -> None:
         if self.state.pending_book_orders.pop(client_id, None) is not None:
             self.save()
 
     def on_entered(self, intent: dict, fill_price: float, order_ref: str,
-                   today: str) -> None:
+                   today: str, commission: float = 0.0) -> None:
         from datetime import date, timedelta
 
         d = date.fromisoformat(today)
@@ -1175,6 +1467,7 @@ class Blend3070Manager:
                                       if k in keep}
         self.state.pending_entries.pop(key, None)   # journal fulfilled
         self.state.sleeve_cash -= pos.qty * fill_price
+        self._charge(commission, "sleeve", pos.qty * fill_price)
         self._record_trade(pos.symbol, "BUY", pos.qty, fill_price, today,
                            "entry")
         self._event("INFO", f"ENTER {pos.symbol} x{pos.qty} @ {fill_price:.2f} "
@@ -1216,7 +1509,8 @@ class Blend3070Manager:
                             f"every {ORPHAN_REALERT_CYCLES}")
         self.save()
 
-    def on_exited(self, call_id: int, fill_price: float, reason: str) -> None:
+    def on_exited(self, call_id: int, fill_price: float, reason: str,
+                  commission: float = 0.0) -> None:
         """fill_price is REQUIRED (repo law: no silent zero). A missing fill
         price must route through on_exit_unreconciled instead."""
         if fill_price is None:
@@ -1227,6 +1521,7 @@ class Blend3070Manager:
             return
         pnl = (fill_price - pos.fill_price) * pos.qty
         self.state.sleeve_cash += pos.qty * fill_price
+        self._charge(commission, "sleeve", pos.qty * fill_price)
         r_mult = ((fill_price - pos.fill_price) / pos.risk_per_share
                   if pos.risk_per_share > 0 else None)
         self._record_trade(pos.symbol, "SELL", pos.qty, fill_price,
@@ -1236,7 +1531,7 @@ class Blend3070Manager:
         self.save()
 
     def on_partial_exit(self, call_id: int, shares: int, fill_price: float,
-                        reason: str) -> None:
+                        reason: str, commission: float = 0.0) -> None:
         """Book a PARTIAL stop fill (adapter review M3): ONLY the filled
         shares leave the book; the remainder keeps the position — with the
         stop marked MISSING, because a polled stop event is TERMINAL at the
@@ -1250,10 +1545,11 @@ class Blend3070Manager:
             return
         shares = min(shares, pos.qty)
         if shares == pos.qty:
-            self.on_exited(call_id, fill_price, reason)
+            self.on_exited(call_id, fill_price, reason, commission=commission)
             return
         pnl = (fill_price - pos.fill_price) * shares
         self.state.sleeve_cash += shares * fill_price
+        self._charge(commission, "sleeve", shares * fill_price)
         pos.qty -= shares
         pos.stop_order_ref = None
         pos.stop_missing = True
@@ -1278,19 +1574,68 @@ class Blend3070Manager:
         self.state.unreconciled[str(call_id)] = {**asdict(pos),
                                                  "reason": reason,
                                                  "ts": int(time.time())}
+        self.state.last_fill_ts = time.time()     # cash moved at the venue
+        self.state.cash_drift_cycles = 0
         self._event("RED", f"UNRECONCILED exit {pos.symbol} x{pos.qty} "
                            f"(call {call_id}): {reason} — proceeds NOT "
                            f"booked, manual reconciliation required")
         self.save()
 
-    def on_core_trade(self, qty_delta: int, price: float) -> None:
+    def _charge(self, commission, bucket: str, notional: float = 0.0) -> None:
+        """Debit a venue-reported commission from the bucket that traded,
+        stamp the fill clock (quiet-cycle rule for reconcile_cash) and break
+        the drift-persistence chain. None = the venue had not reported the
+        commission when the fill was read: booked as 0, said once a day.
+        A commission beyond max($50, 2% of notional) is refused (IB's UNSET
+        sentinel is ~1.8e308) - counter-agent round 2."""
+        self.state.last_fill_ts = time.time()
+        self.state.cash_drift_cycles = 0
+        if commission is None or isinstance(commission, bool):
+            self.state.commissions_unreported += 1
+            self._event_once_today(
+                "WARN", "commission_unreported",
+                f"a fill's commission was not reported by the venue when "
+                f"booked - charged 0 ({self.state.commissions_unreported} "
+                f"such fills since the seed); the cash reconcile shows them "
+                f"as drift")
+            return
+        try:
+            c = float(commission)
+        except (TypeError, ValueError):
+            self.state.commissions_unreported += 1
+            self._event_once_today("WARN", "commission_garbage",
+                                   f"commission {commission!r} unreadable - "
+                                   f"booked 0, verify at the venue")
+            return
+        if c <= 0:
+            return
+        # IB's fixed schedule caps at 1% of trade value; the old $50 floor
+        # let a $49 commission through on a $150 sweep (round 3). $50 only
+        # when the notional is unknown.
+        n = abs(float(notional or 0.0))
+        cap = max(5.0, 0.01 * n) if n > 0 else 50.0
+        if c > cap:
+            self._event("WARN", f"commission {c:,.2f} refused (cap {cap:,.2f} "
+                                f"on notional {abs(float(notional or 0.0)):,.2f}) "
+                                f"- booked 0, verify at the venue")
+            return
+        if bucket == "core":
+            self.state.core_cash -= c
+        else:
+            self.state.sleeve_cash -= c
+        self.state.commissions_paid = round(self.state.commissions_paid + c, 4)
+
+    def on_core_trade(self, qty_delta: int, price: float,
+                      commission: float = 0.0) -> None:
         self.state.spy_qty += qty_delta
         self.state.core_cash -= qty_delta * price
+        self._charge(commission, "core", qty_delta * price)
         self._record_trade(CORE, "BUY" if qty_delta > 0 else "SELL",
                            qty_delta, price, _utc_today(), "core")
         self.save()
 
-    def on_sweep(self, qty_delta: int, price: float) -> None:
+    def on_sweep(self, qty_delta: int, price: float,
+                 commission: float = 0.0) -> None:
         self.state.bil_qty += qty_delta
         self.state.sleeve_cash -= qty_delta * price
         if qty_delta > 0 and self.state.sleeve_cash < 0:
@@ -1300,6 +1645,10 @@ class Blend3070Manager:
             self._event("INFO", f"sweep slippage absorbed: sleeve cash "
                                 f"{self.state.sleeve_cash:.2f} clamped to 0")
             self.state.sleeve_cash = 0.0
+        # the commission is charged AFTER the clamp: charging first let the
+        # clamp eat it, under-debiting the ledger by $1 per tight sweep
+        # while commissions_paid counted it (round 3)
+        self._charge(commission, "sleeve", qty_delta * price)
         self._record_trade(CASH_VEHICLE, "BUY" if qty_delta > 0 else "SELL",
                            qty_delta, price, _utc_today(), "sweep")
         self.save()
@@ -1368,8 +1717,52 @@ class Blend3070Manager:
             self.state.flatten_request = None
             self._event("WARN", "resume: queued kill-flatten request "
                                 "cleared before execution")
+        # /resume does NOT touch the cash clock (round 3): an alerted drift
+        # survives a resume; POST /blend/cash/rebaseline is the only lever.
+        if self.state.cash_alerted_drift is not None:
+            self._event("INFO", f"resume: the alerted cash drift "
+                                f"{self.state.cash_alerted_drift:+,.2f} stays "
+                                f"on the clock (rebaseline is a separate call)")
         self._event("INFO", "blend resumed")
         self.save()
+
+    def rebaseline_cash(self, reason: str = "operator", save: bool = True) -> None:
+        """Start the cash-reconcile delta clock over - and NOTHING else. The
+        drift page must never send an operator to /resume for this: /resume
+        clears every halt, re-arms the breakers and can grant a seed ack
+        (counter-agent round 2, HIGH). Exposed as POST /blend/cash/rebaseline."""
+        st = self.state
+        st.cash_baseline = None
+        st.cash_drift = None
+        st.cash_drift_ts = None
+        st.cash_drift_cycles = 0
+        st.cash_alerted_drift = None
+        st.cash_alerted_level = ""
+        self._event("INFO", f"cash reconcile re-baselined ({reason})")
+        if save:
+            self.save()
+
+    def cash_summary(self) -> dict:
+        """Public-safe: ledger cash, the delta drift and its age, commissions.
+        Never the venue's cash LEVEL (the account may hold cash the book
+        does not own)."""
+        st = self.state
+        return {"ledger": round(st.sleeve_cash + st.core_cash, 2),
+                "drift": (round(st.cash_drift, 2)
+                          if st.cash_drift is not None else None),
+                "drift_age_s": (round(time.time() - st.cash_drift_ts, 1)
+                                if st.cash_drift_ts else None),
+                "baselined": st.cash_baseline is not None,
+                "baseline_age_s": (round(time.time() - float(st.cash_baseline.get("ts") or 0), 1)
+                                   if st.cash_baseline and st.cash_baseline.get("ts") else None),
+                "over_threshold_cycles": st.cash_drift_cycles,
+                "commissions_paid": round(st.commissions_paid, 2),
+                "commissions_unreported": st.commissions_unreported,
+                # why the last cycle did NOT compare (None = it did), and
+                # for how long that reason has held (round 3)
+                "skipped": getattr(self, "_cash_skip_reason", None),
+                "skipped_for_s": (round(time.time() - self._cash_skip_since, 1)
+                                  if getattr(self, "_cash_skip_reason", None) else None)}
 
     def status_summary(self, prices: dict[str, float] | None = None) -> dict:
         st = self.state
@@ -1467,6 +1860,7 @@ class Blend3070Manager:
                                 if p.history_gap),
             "unprotected": sum(1 for p in st.positions.values()
                                if _is_unprotected(p)),
+            "cash": self.cash_summary(),
         }
 
 
@@ -1642,7 +2036,8 @@ def _ingest_one_fill(mgr: Blend3070Manager, adapter, f: dict, alert) -> None:
             # filled shares; the remainder stays held (and unprotected
             # until pass 4 re-places its stop). Booking the full book qty
             # here was the oversell/short the adapter review flagged.
-            mgr.on_partial_exit(pos.call_id, filled, fill, "stop_filled")
+            mgr.on_partial_exit(pos.call_id, filled, fill, "stop_filled",
+                                commission=f.get("commission"))
             alert(f"⚠️ blend stop PARTIAL fill {pos.symbol} {filled} of "
                   f"{held} @ {fill:.2f} (call {pos.call_id}) — "
                   f"{held - filled} remain held, "
@@ -1658,7 +2053,8 @@ def _ingest_one_fill(mgr: Blend3070Manager, adapter, f: dict, alert) -> None:
                      if gap_note else "stop re-placed by reconcile")
                   + gap_note)
         else:
-            mgr.on_exited(pos.call_id, fill, "stop_filled")
+            mgr.on_exited(pos.call_id, fill, "stop_filled",
+                          commission=f.get("commission"))
             alert(("🚨 blend stop FILLED " if gap_note
                    else "🧬 blend STOP FILLED ")
                   + f"{pos.symbol} x{held} @ {fill:.2f} "
@@ -1667,7 +2063,7 @@ def _ingest_one_fill(mgr: Blend3070Manager, adapter, f: dict, alert) -> None:
     elif ref in st.orphan_stop_refs:
         info = st.orphan_stop_refs.pop(ref)
         st.unreconciled[f"orphan-{ref}"] = {
-            **info, "fill_price": f.get("fill_price"),
+            **info, "fill_price": f.get("fill_price"), "ts": int(time.time()),
             "reason": "retired stop filled after a failed cancel "
                       "(possible short at the venue)"}
         mgr.save()
@@ -1723,19 +2119,20 @@ def _ingest_fills(mgr: Blend3070Manager, adapter, alert) -> None:
             raise
 
 
-def _apply_book_order(mgr: Blend3070Manager, rec: dict, fill: float) -> None:
+def _apply_book_order(mgr: Blend3070Manager, rec: dict, fill: float,
+                      commission: float = 0.0) -> None:
     """Book a filled book-level order into the ledgers by journal kind."""
     kind, qty = rec["kind"], rec["qty"]
     if kind == "core-buy":
-        mgr.on_core_trade(qty, fill)
+        mgr.on_core_trade(qty, fill, commission=commission)
     elif kind == "core-rebal-sell":
-        mgr.on_core_trade(qty, fill)          # qty is negative (a sell)
+        mgr.on_core_trade(qty, fill, commission=commission)  # qty < 0 (a sell)
         mgr.on_transfer(-qty * fill)          # proceeds move core -> sleeve
     elif kind == "sweep":
-        mgr.on_sweep(qty, fill)
+        mgr.on_sweep(qty, fill, commission=commission)
     else:  # unknown journal kind: freeze for manual reconciliation
         mgr.state.unreconciled[f"book-{kind}-{int(time.time())}"] = {
-            **rec, "fill_price": fill,
+            **rec, "fill_price": fill, "ts": int(time.time()),
             "reason": "unknown book-order journal kind"}
         mgr.save()
 
@@ -2390,7 +2787,8 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
             # the position in `gap_stops` so the comparison below keeps it
             # flagged, re-covers what it may, and stays loud.
             booked = pos.qty
-            mgr.on_partial_exit(pos.call_id, covered, fill, "stop_filled")
+            mgr.on_partial_exit(pos.call_id, covered, fill, "stop_filled",
+                                commission=(stop or {}).get("commission"))
             alert(f"🚨 blend: {pos.symbol} — a RESIZED stop fill from the "
                   f"blackout window recovered from venue history: booked "
                   f"x{covered} @ {fill:.2f} (call {pos.call_id}), the "
@@ -2413,7 +2811,8 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
                   f"proceeds NOT booked, manual booking needed"
                   + _venue_share_note(held_now, pos.symbol))
         else:
-            mgr.on_exited(pos.call_id, fill, "stop_filled")
+            mgr.on_exited(pos.call_id, fill, "stop_filled",
+                          commission=(stop or {}).get("commission"))
             # Z2: the booking is right (order-scoped venue truth), the
             # silence was not — this position was never PROVEN to own the
             # shares its stop just sold.
@@ -2634,7 +3033,8 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
                 alert(f"⚠️ blend: reconciled entry {it['symbol']} "
                       f"(call {it['call_id']}) has no venue fill price — "
                       f"booked at entry_ref {fill:.2f} (basis provisional)")
-            mgr.on_entered(it, fill, o["order_ref"], rec.get("date", today))
+            mgr.on_entered(it, fill, o["order_ref"], rec.get("date", today),
+                           commission=o.get("commission"))
             # THE entry outcome: a real fill. ENTER is async-outcome, so
             # placement credits nothing - without this the counter only
             # ever rises and a healthy book loses its entries for the day
@@ -2654,9 +3054,14 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
             mgr.clear_pending_entry(it["call_id"])
             mgr._record_trade(it["symbol"], "BUY", it["qty"], 0.0,
                               rec.get("date", today), "entry_rejected")
+            # The venue's own words, when the adapter could read them
+            # (2026-09-03: five MRK rejections said only "status
+            # Cancelled" and the cause had to be inferred).
+            why = o.get("reason")
+            why_sfx = f" — venue: {why}" if why else ""
             mgr._event("RED", f"entry {it['symbol']} (call {it['call_id']}) "
                               f"REJECTED by the venue — journal cleared, "
-                              f"max_open slot released")
+                              f"max_open slot released{why_sfx}")
             mgr.save()
             # This IS the ENTER outcome (placement only ever returned
             # 'working'). Book it against the breaker, or a kind that
@@ -2672,8 +3077,8 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
                       f"on the next TRADING DAY, a service restart, or "
                       f"/resume.")
             alert(f"🚨 blend ENTER {it['symbol']} (call {it['call_id']}) "
-                  f"REJECTED by the venue — nothing entered; slot released, "
-                  f"journal cleared (a republished fire may retry)")
+                  f"REJECTED by the venue{why_sfx} — nothing entered; slot "
+                  f"released, journal cleared (a republished fire may retry)")
         # status "working": an async MOO awaiting its fill — keep the journal.
 
     # 2b) write-ahead BOOK-order journal (CORE_BUY / rebalance core-sell /
@@ -2701,7 +3106,7 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
                       f"x{rec['qty']} has no venue fill price — booked at "
                       f"spot {fill:.2f} (basis PROVISIONAL, verify manually)")
             st.pending_book_orders.pop(cid, None)
-            _apply_book_order(mgr, rec, fill)
+            _apply_book_order(mgr, rec, fill, o.get("commission"))
             alert(f"🧬 blend reconciled orphan {rec['kind']} {rec['symbol']} "
                   f"x{rec['qty']} @ {fill:.2f} from venue order history "
                   f"(crash-window recovery)")
@@ -2729,6 +3134,11 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
             # overlay in BOTH directions - a live order gets cancelled
             # before re-planning (no duplicate), a dead one gets confirmed
             # dead (no wedge).
+            if rec.get("rests_for_open") and entry_window_open():
+                # Placed outside regular hours and the open has not come:
+                # it is resting for the auction, not stuck. Counting starts
+                # once the session is open and it is STILL working.
+                continue
             rec["stuck_cycles"] = rec.get("stuck_cycles", 0) + 1
             mgr.save()
             if rec["stuck_cycles"] >= BOOK_ORDER_STUCK_CYCLES:
@@ -2835,6 +3245,116 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
     mgr.save()
 
 
+def reconcile_cash(mgr: Blend3070Manager, adapter, alert) -> dict | None:
+    """Stage 1 cash reconcile: compare the ACCOUNT's cash to the book's two
+    buckets as DELTAS from a baseline, on quiet cycles, and ALERT ONLY.
+
+    Quiet = nothing in flight (no pending entry / book-order journal) and no
+    fill booked inside CASH_QUIET_S (T+1 settlement). The first quiet cycle
+    captures the baseline pair; each later one computes
+        drift = (venue - b.venue) - (ledger - b.ledger)
+    so cash the account holds that the book does not own contributes zero
+    while it sits still, and shows up as drift only when it MOVES. A drift
+    beyond max(CASH_WARN_USD, CASH_WARN_FRAC x book) for CASH_PERSIST_CYCLES
+    quiet cycles alerts once, and again only when it changes by more than
+    the threshold; beyond CASH_RED_FRAC x book it is RED. Nothing here
+    changes the ledger or any decision. Never raises (reporting must never
+    fail a cycle closed). Returns the drift record for tests, or None when
+    nothing was compared."""
+    st = mgr.state
+    try:
+        if not st.initialized:
+            return None            # a seed's own fills must never straddle a baseline
+        now = time.time()
+        # A parked unreconciled record used to suspend the reconcile FOREVER
+        # (nothing ever pops it): round 3 gates on its AGE - once the park is
+        # older than the quiet window its proceeds simply show as drift,
+        # which is what the alert is for.
+        fresh_unrec = [k for k, r in st.unreconciled.items()
+                       if now - float((r or {}).get("ts") or 0) < CASH_QUIET_S]
+        skip = ("pending journals" if (st.pending_entries or st.pending_book_orders)
+                else "fresh unreconciled record" if fresh_unrec
+                else "recent fill" if (st.last_fill_ts and now - st.last_fill_ts < CASH_QUIET_S)
+                else None)
+        if skip:
+            st.cash_drift_cycles = 0     # persistence = CONSECUTIVE quiet cycles
+            _note_cash_skip(mgr, skip, now)
+            return None
+        _note_cash_skip(mgr, None, now)
+        venue = adapter.account_cash()
+        if not venue or venue.get("total_cash") is None:
+            mgr._event_once_today("WARN", "cash_no_claim",
+                                  "cash reconcile: the adapter returned no "
+                                  "account cash on a quiet cycle (no claim)")
+            return None
+        ledger = st.sleeve_cash + st.core_cash
+        if st.cash_baseline is None:
+            st.cash_baseline = {"venue": float(venue["total_cash"]),
+                                "ledger": round(ledger, 4),
+                                "ts": time.time()}
+            st.cash_drift, st.cash_drift_ts, st.cash_drift_cycles = 0.0, time.time(), 0
+            mgr._event("INFO", "cash reconcile baselined (venue vs ledger "
+                               "deltas from here on)")
+            mgr.save()
+            return {"drift": 0.0, "baselined": True}
+        b = st.cash_baseline
+        drift = (float(venue["total_cash"]) - b["venue"]) - (ledger - b["ledger"])
+        st.cash_drift, st.cash_drift_ts = round(drift, 4), time.time()
+        book = float(getattr(mgr.cfg, "blend_book_usd", 0.0) or 0.0)
+        warn_at = max(CASH_WARN_USD, CASH_WARN_FRAC * book)
+        red_at = max(warn_at, CASH_RED_FRAC * book)
+        if abs(drift) > warn_at:
+            st.cash_drift_cycles += 1
+        else:
+            st.cash_drift_cycles = 0
+            st.cash_alerted_drift = None
+        fired = None
+        level = "RED" if abs(drift) > red_at else "WARN"
+        if (st.cash_drift_cycles >= CASH_PERSIST_CYCLES
+                and (st.cash_alerted_drift is None
+                     or abs(drift - st.cash_alerted_drift) > warn_at
+                     or (level == "RED" and st.cash_alerted_level != "RED"))):
+            st.cash_alerted_drift = round(drift, 4)
+            st.cash_alerted_level = level
+            b_day = time.strftime("%Y-%m-%d", time.gmtime(float(b.get("ts") or 0)))
+            msg = (f"cash drift {drift:+,.2f}: the account's cash moved "
+                   f"{drift:+,.2f} more than the book's ledger since the "
+                   f"baseline of {b_day} ({st.cash_drift_cycles} quiet cycles). "
+                   + ("Dividends/interest the ledger cannot see, or a deposit"
+                      if drift > 0 else
+                      "Fees, slippage the ledger did not charge, or a withdrawal")
+                   + ". Stage 1 is alert-only: nothing adopted."
+                   + (f" NOTE: the book is HALTED ({st.halted}) - that is "
+                      f"separate; do not /resume for this." if st.halted else "")
+                   + " Once accounted for, POST /blend/cash/rebaseline "
+                     "(EXEC_TOKEN) restarts the delta clock and touches "
+                     "nothing else.")
+            mgr._event(level, msg)
+            alert(("🚨🚨 " if level == "RED" else "⚠️ ") + "blend " + msg)
+            fired = level
+        mgr.save()
+        return {"drift": round(drift, 4), "fired": fired,
+                "cycles": st.cash_drift_cycles}
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("reconcile_cash failed (ignored): %s", exc)
+        return None
+
+
+def _note_cash_skip(mgr: Blend3070Manager, reason, now: float) -> None:
+    """Track why the cash reconcile is not comparing, and say so once a day
+    when one reason has held for CASH_SKIP_WARN_S (round 3: silence was
+    indistinguishable from health)."""
+    if reason != getattr(mgr, "_cash_skip_reason", None):
+        mgr._cash_skip_reason, mgr._cash_skip_since = reason, now
+        return
+    if reason and now - mgr._cash_skip_since > CASH_SKIP_WARN_S:
+        mgr._event_once_today(
+            "WARN", "cash_suspended",
+            f"cash reconcile has not compared for "
+            f"{(now - mgr._cash_skip_since) / 3600:.0f}h ({reason}) - the "
+            f"account's cash is not being watched meanwhile")
+
+
 def _execute_enter(mgr: Blend3070Manager, adapter, it: dict, today: str,
                    alert) -> None:
     """Write-ahead journal -> MOO with deterministic client_order_id ->
@@ -2858,7 +3378,8 @@ def _execute_enter(mgr: Blend3070Manager, adapter, it: dict, today: str,
         fill = it["entry_ref"]
         alert(f"⚠️ blend ENTER {it['symbol']}: venue ack without fill price — "
               f"booked at entry_ref {fill:.2f}, basis provisional")
-    mgr.on_entered(it, fill, r["order_ref"], today)
+    mgr.on_entered(it, fill, r["order_ref"], today,
+                   commission=r.get("commission"))
     _intent_success("ENTER")        # a real fill: see the reconcile branch
     pos = mgr.state.positions[str(it["call_id"])]
     _ensure_stop(mgr, adapter, pos, alert)
@@ -2994,7 +3515,8 @@ def _execute_exit(mgr: Blend3070Manager, adapter, it: dict,
               f"fill price from the venue — proceeds NOT booked, manual "
               f"reconciliation needed")
         return False
-    mgr.on_exited(it["call_id"], fill, it["reason"])
+    mgr.on_exited(it["call_id"], fill, it["reason"],
+                  commission=r.get("commission"))
     alert(f"🧬 blend EXIT {it['symbol']} x{qty} ({it['reason']})")
     return True
 
@@ -3098,7 +3620,8 @@ def execute_flatten(mgr: Blend3070Manager, adapter, alert) -> None:
                       f"no fill price — proceeds NOT booked, manual "
                       f"reconciliation needed")
             else:
-                mgr.on_exited(pos.call_id, fill, "manual kill")
+                mgr.on_exited(pos.call_id, fill, "manual kill",
+                              commission=r.get("commission"))
                 closed.append(sym)
         except Exception as exc:  # noqa: BLE001
             logger.exception("kill flatten close %s failed: %s", key, exc)
@@ -3231,6 +3754,8 @@ def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
     # this counter exists to catch.
     intent_breaker_roll_date(today)
     reconcile(mgr, adapter, today, alert)
+    # Stage-1 cash reconcile: reporting only, never fails the cycle.
+    reconcile_cash(mgr, adapter, alert)
 
     # PHASE 0b — a journaled /kill flatten request executes HERE, on the
     # loop thread that owns the adapter's event loop (R2). Reconcile above
@@ -3375,7 +3900,7 @@ def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
                         # Journal kept: reconcile adopts at spot, loudly.
                         raise RuntimeError("core buy fill price unknown")
                     mgr.state.pending_book_orders.pop(cid, None)
-                    mgr.on_core_trade(qty, fill)   # saves journal-pop + booking
+                    mgr.on_core_trade(qty, fill, commission=r.get("commission"))
                     alert(f"🧬 blend CORE buy {CORE} x{qty}")
             elif act == "SWEEP":
                 if any(rec["kind"] == "sweep"
@@ -3413,7 +3938,7 @@ def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
                     if not fill:
                         raise RuntimeError("sweep fill price unknown")
                     mgr.state.pending_book_orders.pop(cid, None)
-                    mgr.on_sweep(qty, fill)        # saves journal-pop + booking
+                    mgr.on_sweep(qty, fill, commission=r.get("commission"))
                     alert(f"🧬 blend SWEEP {CASH_VEHICLE} "
                           f"{'+' if qty > 0 else ''}{qty}")
         except Exception as exc:  # noqa: BLE001
@@ -3469,7 +3994,7 @@ def _execute_rebalance(mgr: Blend3070Manager, adapter, it: dict,
         if fill is None:
             fill = spy_px
         mgr.state.pending_book_orders.pop(cid, None)
-        mgr.on_core_trade(-qty, fill)       # saves journal-pop + booking
+        mgr.on_core_trade(-qty, fill, commission=r.get("commission"))
         mgr.on_transfer(qty * fill)
         return True
     moved = min(usd, max(mgr.state.sleeve_cash, 0.0))

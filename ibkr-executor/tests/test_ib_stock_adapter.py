@@ -71,8 +71,12 @@ class FakeExec:
 
 
 class FakeFill:
-    def __init__(self, execution):
+    def __init__(self, execution, commission=None):
         self.execution = execution
+        self.commissionReport = (types.SimpleNamespace(commission=commission,
+                                                       execId="ex-1",
+                                                       currency="USD")
+                                 if commission is not None else None)
 
 
 class FakeTrade:
@@ -81,6 +85,23 @@ class FakeTrade:
         self.order = order
         self.orderStatus = FakeStatus()
         self.fills = []
+        self.log = []
+        self.advancedError = ""
+
+
+class FakeEvent:
+    """ib_async Event stand-in: `ev += handler`, `ev.emit(*args)`."""
+
+    def __init__(self):
+        self.handlers = []
+
+    def __iadd__(self, h):
+        self.handlers.append(h)
+        return self
+
+    def emit(self, *a):
+        for h in list(self.handlers):
+            h(*a)
 
 
 class FakeTicker:
@@ -110,9 +131,11 @@ class FakeIB:
         self.connected = False
         self.prices: dict[str, float] = {}
         self.position_rows: list[FakePosition] = []
+        self.account_rows: list = []      # accountSummary() rows
         self.on_place = None
         self.on_cancel = None
         self.on_sleep = None
+        self.errorEvent = FakeEvent()
         self.connect_calls = 0
         self.connect_fails = False        # M5: gateway down (restart window)
 
@@ -173,12 +196,23 @@ class FakeIB:
     def positions(self):
         return list(self.position_rows)
 
+    def accountSummary(self):
+        return list(self.account_rows)
+
+    def accountValues(self):
+        return list(self.account_rows)
+
+    def managedAccounts(self):
+        return list(getattr(self, "managed", []))
+
     # venue-side test helpers
-    def fill(self, trade, parts):
-        """parts: [(shares, price), ...] -> executions + Filled status."""
+    def fill(self, trade, parts, commission=None):
+        """parts: [(shares, price), ...] -> executions + Filled status.
+        commission (total) is attached to the first execution's report."""
         side = "BOT" if trade.order.action == "BUY" else "SLD"
-        for shares, price in parts:
-            trade.fills.append(FakeFill(FakeExec(shares, price, side)))
+        for k, (shares, price) in enumerate(parts):
+            trade.fills.append(FakeFill(FakeExec(shares, price, side),
+                                        commission if k == 0 else None))
         tot = sum(s for s, _ in parts)
         num = sum(s * p for s, p in parts)
         trade.orderStatus.avgFillPrice = (num / tot) if tot else 0.0
@@ -236,6 +270,7 @@ def ib_adapter(monkeypatch):
     monkeypatch.setattr(ib_mod, "MKT_FILL_WAIT_S", 0.2)
     monkeypatch.setattr(ib_mod, "CANCEL_ACK_TIMEOUT_S", 0.2)
     monkeypatch.setattr(ib_mod, "WAIT_TICK_S", 0.0)
+    monkeypatch.setattr(ib_mod, "COMMISSION_WAIT_S", 0.05)
     a = ib_mod.IBAdapter(_Cfg())
     a.ib.prices = {"SPY": 100.0, "BIL": 100.0, "CRSP": 50.0}
     return a
@@ -1235,3 +1270,179 @@ def test_gate_status_mapping_matches_ib_async_semantics(ib_adapter):
     assert m._map_status("ValidationError") == "working"   # LIVE per ib_async
     assert m._map_status("Cancelled") == "cancelled"
     assert m._map_status("SomeFutureTransitionalState") == "working"
+
+
+def test_rejection_reason_surfaces_without_error_code(ib_adapter):
+    """An opening-auction order refused after the bell is cancelled with a
+    plain 'Order Canceled - reason: ...' log line and NO errorCode. Both the
+    synchronous raise and the reconcile-path lookup must carry it; before
+    this the five 2026-09-03 MRK rejections said only 'status Cancelled'.
+    MUTATION-VERIFIED: reverting the `dead` fallback in _trade_errors, or
+    the `reason` key in _trade_result, turns this red."""
+    fake = ib_adapter.ib
+
+    def reject(t):
+        t.orderStatus.status = "Cancelled"
+        t.log = [types.SimpleNamespace(
+            errorCode=0, status="Cancelled",
+            message="Order Canceled - reason: OPG order received after the open")]
+
+    fake.on_place = reject
+    with pytest.raises(RuntimeError, match="received after the open"):
+        ib_adapter.place_stock_order("MRK", 4, "MOO", tif="OPG",
+                                     client_order_id="blend-entry-16")
+    o = ib_adapter.find_stock_order("blend-entry-16")
+    assert o["status"] == "cancelled"
+    assert "received after the open" in o["reason"]
+
+
+def _acct(tag, value, currency="USD", account=""):
+    return types.SimpleNamespace(tag=tag, value=str(value), currency=currency,
+                                 account=account)
+
+
+def test_account_cash_reads_total_cash_value(ib_adapter):
+    """MUTATION-VERIFIED: reading AvailableFunds instead, or raising on a
+    missing tag, turns this red."""
+    fake = ib_adapter.ib
+    fake.account_rows = [_acct("AvailableFunds", 51000.0),
+                         _acct("TotalCashValue", 49680.58),
+                         _acct("NetLiquidation", 99680.58),
+                         _acct("TotalCashValue", 12.5, currency="EUR")]
+    out = ib_adapter.account_cash()
+    assert out["total_cash"] == 49680.58 and out["net_liq"] == 99680.58
+    fake.account_rows = [_acct("AvailableFunds", 51000.0)]
+    assert ib_adapter.account_cash() is None          # no claim, no raise
+    fake.account_rows = None                           # venue returns junk
+    assert ib_adapter.account_cash() is None
+
+
+def test_commission_reaches_fill_results(ib_adapter):
+    fake = ib_adapter.ib
+    fake.on_place = lambda t: fake.fill(t, [(20, 91.42)], commission=1.0)
+    r = ib_adapter.place_stock_order("BIL", 20, "MKT", client_order_id="c1")
+    assert r["status"] == "filled" and r["commission"] == 1.0
+    assert ib_adapter.find_stock_order("c1")["commission"] == 1.0
+
+
+def test_rejection_reason_comes_from_error_event_not_status_echo(ib_adapter):
+    """Counter-agent round 1: ib_async delivers an order rejection's REASON on
+    errorEvent (keyed by orderId) / trade.advancedError; trade.log holds
+    status changes. A bare 'Cancelled' log line is not a reason.
+    MUTATION-VERIFIED: dropping the errorEvent hook, or letting a status
+    echo through as the reason, turns this red."""
+    fake = ib_adapter.ib
+
+    def reject(t):
+        t.orderStatus.status = "Cancelled"
+        t.log = [types.SimpleNamespace(errorCode=0, message="Cancelled",
+                                       status="Cancelled")]
+        fake.errorEvent.emit(t.order.orderId, 10147,
+                             "Order to be Cancelled: OPG order after the open",
+                             t.contract)
+
+    fake.on_place = reject
+    with pytest.raises(RuntimeError, match="OPG order after the open"):
+        ib_adapter.place_stock_order("MRK", 12, "MOO", tif="OPG",
+                                     client_order_id="blend-entry-16")
+    o = ib_adapter.find_stock_order("blend-entry-16")
+    assert "[10147]" in o["reason"] and "OPG order after the open" in o["reason"]
+    assert "Cancelled;" not in o["reason"]
+
+    def reject_silent(t):
+        t.orderStatus.status = "Cancelled"
+        t.log = [types.SimpleNamespace(errorCode=0, message="Cancelled",
+                                       status="Cancelled")]
+    fake.on_place = reject_silent
+    with pytest.raises(RuntimeError):
+        ib_adapter.place_stock_order("MRK", 12, "MOO", tif="OPG",
+                                     client_order_id="blend-entry-17")
+    assert ib_adapter.find_stock_order("blend-entry-17")["reason"] == "no venue reason recorded"
+
+
+def test_account_cash_multi_account_is_no_claim_and_filters_managed(ib_adapter):
+    fake = ib_adapter.ib
+    fake.account_rows = [_acct("TotalCashValue", 100.0, account="DU1"),
+                         _acct("TotalCashValue", 200.0, account="DU2")]
+    assert ib_adapter.account_cash() is None            # two accounts: no claim
+    fake.managed = ["DU2"]
+    assert ib_adapter.account_cash()["total_cash"] == 200.0
+
+
+def test_commission_sentinel_is_ignored_and_report_is_awaited(ib_adapter):
+    """IB's UNSET sentinel (~1.8e308) must never reach the ledger; and a
+    report that lands one pump AFTER the fill is still read (the adapter
+    waits COMMISSION_WAIT_S for execId)."""
+    fake = ib_adapter.ib
+    fake.on_place = lambda t: fake.fill(t, [(20, 91.42)], commission=1.7976931348623157e308)
+    r = ib_adapter.place_stock_order("BIL", 20, "MKT", client_order_id="c-sent")
+    assert "commission" not in r          # ignored report = UNREPORTED (round 3)
+    # report lands late: first pump attaches it
+    def late(t):
+        fake.fill(t, [(20, 91.42)])                       # no report yet
+        fake.on_sleep = lambda ib: setattr(
+            t.fills[0], "commissionReport",
+            types.SimpleNamespace(commission=1.0, execId="ex-late", currency="USD"))
+    fake.on_place = late
+    r = ib_adapter.place_stock_order("BIL", 20, "MKT", client_order_id="c-late")
+    assert r["commission"] == 1.0
+    fake.on_sleep = None
+
+
+def test_warning_codes_are_not_venue_reasons(ib_adapter):
+    fake = ib_adapter.ib
+
+    def reject(t):
+        fake.errorEvent.emit(t.order.orderId, 399, "Order will not be placed at the exchange until ...", t.contract)
+        t.orderStatus.status = "Cancelled"
+        # the real wrapper ALSO writes the warning into trade.log (round 3)
+        t.log = [types.SimpleNamespace(errorCode=399, status="ValidationError",
+                                       message="Warning 399, reqId 1: Order Message: ..."),
+                 types.SimpleNamespace(errorCode=0, message="Cancelled", status="Cancelled")]
+    fake.on_place = reject
+    with pytest.raises(RuntimeError):
+        ib_adapter.place_stock_order("MRK", 1, "MOO", tif="OPG", client_order_id="w1")
+    assert ib_adapter.find_stock_order("w1")["reason"] == "no venue reason recorded"
+
+
+# --- counter-agent round 3 ---------------------------------------------------
+
+def test_error_map_is_order_only_and_cleared_on_reconnect(ib_adapter):
+    fake = ib_adapter.ib
+    # a market-data request id (same counter) errors: not an order -> ignored
+    fake.errorEvent.emit(350, 10197, "No market data during competing live session", None)
+    assert ib_adapter._order_errors == {}
+    # an order id IS recorded ...
+    fake.on_place = None
+    ib_adapter.place_stock_order("CRSP", -5, "STP", stop_price=44.0, tif="GTC",
+                                 client_order_id="r3-stp")
+    oid = fake._trades[-1].order.orderId
+    fake.errorEvent.emit(oid, 201, "Order rejected - reason: ...", None)
+    assert ib_adapter._order_errors[oid].startswith("[201]")
+    # ... and the map is cleared by a reconnect (ids restart at nextValidId)
+    fake.connected = False
+    assert ib_adapter.spot("SPY") == 100.0                   # reconnects
+    assert ib_adapter._order_errors == {}
+
+
+def test_completed_order_without_fills_is_unreported():
+    t = types.SimpleNamespace(fills=[], orderStatus=types.SimpleNamespace(status="Filled"))
+    assert ib_mod._commission_reported(t) is False
+
+
+def test_two_managed_accounts_is_no_claim(ib_adapter):
+    fake = ib_adapter.ib
+    fake.account_rows = [_acct("TotalCashValue", 100.0, account="DU1"),
+                         _acct("TotalCashValue", 200.0, account="DU2")]
+    fake.managed = ["DU1", "DU2"]
+    assert ib_adapter.account_cash() is None
+    # a BASE row in a non-USD base is not ours either
+    fake.managed = ["DU1"]
+    fake.account_rows = [_acct("TotalCashValue", 100.0, currency="BASE", account="DU1")]
+    assert ib_adapter.account_cash() is None
+
+
+def test_dry_fill_reports_a_zero_commission():
+    a = DryAdapter()
+    r = a.place_stock_order("BIL", 3, "MKT", client_order_id="d-1")
+    assert r["status"] == "filled" and r["commission"] == 0.0
