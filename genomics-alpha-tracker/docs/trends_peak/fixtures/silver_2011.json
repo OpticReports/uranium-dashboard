@@ -1,0 +1,1322 @@
+{
+"event": "silver_2011",
+"keyword": "silver price",
+"timeframe": "2009-01-01 2013-12-31",
+"geo": "worldwide",
+"granularity": "weekly (week starts Sunday)",
+"trends_source": "Google Trends via pytrends, pulled 2026-09-08 (same index DataForSEO serves)",
+"price_symbol": "SLV",
+"price_source": "FMP historical EOD close, last trading day of each Google week",
+"weeks": [
+{
+"date": "2008-12-28",
+"interest": 14,
+"close": 11.41
+},
+{
+"date": "2009-01-04",
+"interest": 12,
+"close": 11.097
+},
+{
+"date": "2009-01-11",
+"interest": 11,
+"close": 11.11
+},
+{
+"date": "2009-01-18",
+"interest": 11,
+"close": 11.85
+},
+{
+"date": "2009-01-25",
+"interest": 14,
+"close": 12.52
+},
+{
+"date": "2009-02-01",
+"interest": 12,
+"close": 12.91
+},
+{
+"date": "2009-02-08",
+"interest": 14,
+"close": 13.54
+},
+{
+"date": "2009-02-15",
+"interest": 16,
+"close": 14.25
+},
+{
+"date": "2009-02-22",
+"interest": 16,
+"close": 12.88
+},
+{
+"date": "2009-03-01",
+"interest": 15,
+"close": 13.18
+},
+{
+"date": "2009-03-08",
+"interest": 13,
+"close": 13.05
+},
+{
+"date": "2009-03-15",
+"interest": 14,
+"close": 13.61
+},
+{
+"date": "2009-03-22",
+"interest": 12,
+"close": 13.15
+},
+{
+"date": "2009-03-29",
+"interest": 12,
+"close": 12.6
+},
+{
+"date": "2009-04-05",
+"interest": 12,
+"close": 12.17
+},
+{
+"date": "2009-04-12",
+"interest": 11,
+"close": 11.68
+},
+{
+"date": "2009-04-19",
+"interest": 11,
+"close": 12.67
+},
+{
+"date": "2009-04-26",
+"interest": 10,
+"close": 12.31
+},
+{
+"date": "2009-05-03",
+"interest": 10,
+"close": 13.79
+},
+{
+"date": "2009-05-10",
+"interest": 11,
+"close": 13.77
+},
+{
+"date": "2009-05-17",
+"interest": 11,
+"close": 14.5
+},
+{
+"date": "2009-05-24",
+"interest": 12,
+"close": 15.47
+},
+{
+"date": "2009-05-31",
+"interest": 13,
+"close": 15.01
+},
+{
+"date": "2009-06-07",
+"interest": 11,
+"close": 14.63
+},
+{
+"date": "2009-06-14",
+"interest": 11,
+"close": 13.99
+},
+{
+"date": "2009-06-21",
+"interest": 11,
+"close": 13.9
+},
+{
+"date": "2009-06-28",
+"interest": 11,
+"close": 13.16
+},
+{
+"date": "2009-07-05",
+"interest": 10,
+"close": 12.5
+},
+{
+"date": "2009-07-12",
+"interest": 10,
+"close": 13.17
+},
+{
+"date": "2009-07-19",
+"interest": 11,
+"close": 13.66
+},
+{
+"date": "2009-07-26",
+"interest": 11,
+"close": 13.7
+},
+{
+"date": "2009-08-02",
+"interest": 12,
+"close": 14.39
+},
+{
+"date": "2009-08-09",
+"interest": 11,
+"close": 14.429
+},
+{
+"date": "2009-08-16",
+"interest": 11,
+"close": 13.92
+},
+{
+"date": "2009-08-23",
+"interest": 10,
+"close": 14.5
+},
+{
+"date": "2009-08-30",
+"interest": 12,
+"close": 15.97
+},
+{
+"date": "2009-09-06",
+"interest": 15,
+"close": 16.5
+},
+{
+"date": "2009-09-13",
+"interest": 15,
+"close": 16.7
+},
+{
+"date": "2009-09-20",
+"interest": 14,
+"close": 15.74
+},
+{
+"date": "2009-09-27",
+"interest": 12,
+"close": 15.82
+},
+{
+"date": "2009-10-04",
+"interest": 17,
+"close": 17.44
+},
+{
+"date": "2009-10-11",
+"interest": 17,
+"close": 17.18
+},
+{
+"date": "2009-10-18",
+"interest": 13,
+"close": 17.4
+},
+{
+"date": "2009-10-25",
+"interest": 13,
+"close": 16.07
+},
+{
+"date": "2009-11-01",
+"interest": 15,
+"close": 17.09
+},
+{
+"date": "2009-11-08",
+"interest": 18,
+"close": 17.15
+},
+{
+"date": "2009-11-15",
+"interest": 18,
+"close": 18.22
+},
+{
+"date": "2009-11-22",
+"interest": 18,
+"close": 17.95
+},
+{
+"date": "2009-11-29",
+"interest": 19,
+"close": 18.15
+},
+{
+"date": "2009-12-06",
+"interest": 17,
+"close": 16.87
+},
+{
+"date": "2009-12-13",
+"interest": 15,
+"close": 16.95
+},
+{
+"date": "2009-12-20",
+"interest": 13,
+"close": 17.17
+},
+{
+"date": "2009-12-27",
+"interest": 13,
+"close": 16.539
+},
+{
+"date": "2010-01-03",
+"interest": 15,
+"close": 18.15
+},
+{
+"date": "2010-01-10",
+"interest": 14,
+"close": 18.05
+},
+{
+"date": "2010-01-17",
+"interest": 13,
+"close": 16.78
+},
+{
+"date": "2010-01-24",
+"interest": 14,
+"close": 15.9
+},
+{
+"date": "2010-01-31",
+"interest": 13,
+"close": 14.9
+},
+{
+"date": "2010-02-07",
+"interest": 13,
+"close": 15.24
+},
+{
+"date": "2010-02-14",
+"interest": 13,
+"close": 15.97
+},
+{
+"date": "2010-02-21",
+"interest": 12,
+"close": 16.07
+},
+{
+"date": "2010-02-28",
+"interest": 13,
+"close": 17.01
+},
+{
+"date": "2010-03-07",
+"interest": 13,
+"close": 16.76
+},
+{
+"date": "2010-03-14",
+"interest": 13,
+"close": 16.65
+},
+{
+"date": "2010-03-21",
+"interest": 12,
+"close": 16.61
+},
+{
+"date": "2010-03-28",
+"interest": 13,
+"close": 17.54
+},
+{
+"date": "2010-04-04",
+"interest": 13,
+"close": 18.01
+},
+{
+"date": "2010-04-11",
+"interest": 13,
+"close": 17.41
+},
+{
+"date": "2010-04-18",
+"interest": 12,
+"close": 17.91
+},
+{
+"date": "2010-04-25",
+"interest": 13,
+"close": 18.26
+},
+{
+"date": "2010-05-02",
+"interest": 15,
+"close": 18
+},
+{
+"date": "2010-05-09",
+"interest": 18,
+"close": 18.93
+},
+{
+"date": "2010-05-16",
+"interest": 17,
+"close": 17.29
+},
+{
+"date": "2010-05-23",
+"interest": 14,
+"close": 18.03
+},
+{
+"date": "2010-05-30",
+"interest": 13,
+"close": 17.05
+},
+{
+"date": "2010-06-06",
+"interest": 14,
+"close": 17.85
+},
+{
+"date": "2010-06-13",
+"interest": 13,
+"close": 18.75
+},
+{
+"date": "2010-06-20",
+"interest": 13,
+"close": 18.67
+},
+{
+"date": "2010-06-27",
+"interest": 13,
+"close": 17.46
+},
+{
+"date": "2010-07-04",
+"interest": 13,
+"close": 17.73
+},
+{
+"date": "2010-07-11",
+"interest": 13,
+"close": 17.49
+},
+{
+"date": "2010-07-18",
+"interest": 12,
+"close": 17.72
+},
+{
+"date": "2010-07-25",
+"interest": 13,
+"close": 17.58
+},
+{
+"date": "2010-08-01",
+"interest": 13,
+"close": 18.07
+},
+{
+"date": "2010-08-08",
+"interest": 13,
+"close": 17.74
+},
+{
+"date": "2010-08-15",
+"interest": 13,
+"close": 17.59
+},
+{
+"date": "2010-08-22",
+"interest": 15,
+"close": 18.7
+},
+{
+"date": "2010-08-29",
+"interest": 15,
+"close": 19.42
+},
+{
+"date": "2010-09-05",
+"interest": 15,
+"close": 19.42
+},
+{
+"date": "2010-09-12",
+"interest": 18,
+"close": 20.29
+},
+{
+"date": "2010-09-19",
+"interest": 20,
+"close": 21.01
+},
+{
+"date": "2010-09-26",
+"interest": 19,
+"close": 21.65
+},
+{
+"date": "2010-10-03",
+"interest": 24,
+"close": 22.73
+},
+{
+"date": "2010-10-10",
+"interest": 24,
+"close": 23.75
+},
+{
+"date": "2010-10-17",
+"interest": 21,
+"close": 22.76
+},
+{
+"date": "2010-10-24",
+"interest": 19,
+"close": 24.17
+},
+{
+"date": "2010-10-31",
+"interest": 28,
+"close": 26.2
+},
+{
+"date": "2010-11-07",
+"interest": 35,
+"close": 25.518
+},
+{
+"date": "2010-11-14",
+"interest": 27,
+"close": 26.74
+},
+{
+"date": "2010-11-21",
+"interest": 24,
+"close": 26.19
+},
+{
+"date": "2010-11-28",
+"interest": 27,
+"close": 28.5975
+},
+{
+"date": "2010-12-05",
+"interest": 33,
+"close": 27.98
+},
+{
+"date": "2010-12-12",
+"interest": 27,
+"close": 28.5075
+},
+{
+"date": "2010-12-19",
+"interest": 27,
+"close": 28.61
+},
+{
+"date": "2010-12-26",
+"interest": 32,
+"close": 30.18
+},
+{
+"date": "2011-01-02",
+"interest": 33,
+"close": 28.1
+},
+{
+"date": "2011-01-09",
+"interest": 28,
+"close": 27.74
+},
+{
+"date": "2011-01-16",
+"interest": 29,
+"close": 26.83
+},
+{
+"date": "2011-01-23",
+"interest": 27,
+"close": 27.3
+},
+{
+"date": "2011-01-30",
+"interest": 25,
+"close": 28.4
+},
+{
+"date": "2011-02-06",
+"interest": 26,
+"close": 29.21
+},
+{
+"date": "2011-02-13",
+"interest": 29,
+"close": 31.7875
+},
+{
+"date": "2011-02-20",
+"interest": 35,
+"close": 32.56
+},
+{
+"date": "2011-02-27",
+"interest": 35,
+"close": 34.6925
+},
+{
+"date": "2011-03-06",
+"interest": 41,
+"close": 35.029
+},
+{
+"date": "2011-03-13",
+"interest": 34,
+"close": 34.27
+},
+{
+"date": "2011-03-20",
+"interest": 34,
+"close": 36.39
+},
+{
+"date": "2011-03-27",
+"interest": 33,
+"close": 36.86
+},
+{
+"date": "2011-04-03",
+"interest": 44,
+"close": 39.86
+},
+{
+"date": "2011-04-10",
+"interest": 50,
+"close": 41.84
+},
+{
+"date": "2011-04-17",
+"interest": 75,
+"close": 45.535
+},
+{
+"date": "2011-04-24",
+"interest": 90,
+"close": 46.88
+},
+{
+"date": "2011-05-01",
+"interest": 100,
+"close": 34.48
+},
+{
+"date": "2011-05-08",
+"interest": 80,
+"close": 34.391
+},
+{
+"date": "2011-05-15",
+"interest": 56,
+"close": 34.18
+},
+{
+"date": "2011-05-22",
+"interest": 45,
+"close": 37.03
+},
+{
+"date": "2011-05-29",
+"interest": 37,
+"close": 35.34
+},
+{
+"date": "2011-06-05",
+"interest": 32,
+"close": 35.25
+},
+{
+"date": "2011-06-12",
+"interest": 34,
+"close": 34.95
+},
+{
+"date": "2011-06-19",
+"interest": 32,
+"close": 33.36
+},
+{
+"date": "2011-06-26",
+"interest": 31,
+"close": 33
+},
+{
+"date": "2011-07-03",
+"interest": 31,
+"close": 35.751
+},
+{
+"date": "2011-07-10",
+"interest": 35,
+"close": 38.24
+},
+{
+"date": "2011-07-17",
+"interest": 43,
+"close": 39.07
+},
+{
+"date": "2011-07-24",
+"interest": 41,
+"close": 38.85
+},
+{
+"date": "2011-07-31",
+"interest": 53,
+"close": 37.32
+},
+{
+"date": "2011-08-07",
+"interest": 65,
+"close": 38.12
+},
+{
+"date": "2011-08-14",
+"interest": 50,
+"close": 41.68
+},
+{
+"date": "2011-08-21",
+"interest": 53,
+"close": 40.41
+},
+{
+"date": "2011-08-28",
+"interest": 38,
+"close": 42.18
+},
+{
+"date": "2011-09-04",
+"interest": 39,
+"close": 40.52
+},
+{
+"date": "2011-09-11",
+"interest": 35,
+"close": 39.39
+},
+{
+"date": "2011-09-18",
+"interest": 48,
+"close": 29.98
+},
+{
+"date": "2011-09-25",
+"interest": 75,
+"close": 28.91
+},
+{
+"date": "2011-10-02",
+"interest": 46,
+"close": 30.23
+},
+{
+"date": "2011-10-09",
+"interest": 35,
+"close": 31.34
+},
+{
+"date": "2011-10-16",
+"interest": 32,
+"close": 30.48
+},
+{
+"date": "2011-10-23",
+"interest": 34,
+"close": 34.27
+},
+{
+"date": "2011-10-30",
+"interest": 31,
+"close": 33.2
+},
+{
+"date": "2011-11-06",
+"interest": 31,
+"close": 33.74
+},
+{
+"date": "2011-11-13",
+"interest": 29,
+"close": 31.4
+},
+{
+"date": "2011-11-20",
+"interest": 28,
+"close": 30.2
+},
+{
+"date": "2011-11-27",
+"interest": 29,
+"close": 31.65
+},
+{
+"date": "2011-12-04",
+"interest": 26,
+"close": 31.33
+},
+{
+"date": "2011-12-11",
+"interest": 30,
+"close": 28.85
+},
+{
+"date": "2011-12-18",
+"interest": 28,
+"close": 28.28
+},
+{
+"date": "2011-12-25",
+"interest": 34,
+"close": 26.94
+},
+{
+"date": "2012-01-01",
+"interest": 30,
+"close": 27.91
+},
+{
+"date": "2012-01-08",
+"interest": 27,
+"close": 28.82
+},
+{
+"date": "2012-01-15",
+"interest": 25,
+"close": 31.22
+},
+{
+"date": "2012-01-22",
+"interest": 27,
+"close": 32.96
+},
+{
+"date": "2012-01-29",
+"interest": 28,
+"close": 32.69
+},
+{
+"date": "2012-02-05",
+"interest": 25,
+"close": 32.51
+},
+{
+"date": "2012-02-12",
+"interest": 24,
+"close": 32.278
+},
+{
+"date": "2012-02-19",
+"interest": 26,
+"close": 34.37
+},
+{
+"date": "2012-02-26",
+"interest": 29,
+"close": 33.76
+},
+{
+"date": "2012-03-04",
+"interest": 26,
+"close": 33.22
+},
+{
+"date": "2012-03-11",
+"interest": 24,
+"close": 31.59
+},
+{
+"date": "2012-03-18",
+"interest": 23,
+"close": 31.24
+},
+{
+"date": "2012-03-25",
+"interest": 22,
+"close": 31.38
+},
+{
+"date": "2012-04-01",
+"interest": 22,
+"close": 30.72
+},
+{
+"date": "2012-04-08",
+"interest": 22,
+"close": 30.55
+},
+{
+"date": "2012-04-15",
+"interest": 21,
+"close": 30.75
+},
+{
+"date": "2012-04-22",
+"interest": 24,
+"close": 30.37
+},
+{
+"date": "2012-04-29",
+"interest": 21,
+"close": 29.412
+},
+{
+"date": "2012-05-06",
+"interest": 23,
+"close": 28.08
+},
+{
+"date": "2012-05-13",
+"interest": 26,
+"close": 27.79
+},
+{
+"date": "2012-05-20",
+"interest": 23,
+"close": 27.62
+},
+{
+"date": "2012-05-27",
+"interest": 23,
+"close": 27.62
+},
+{
+"date": "2012-06-03",
+"interest": 28,
+"close": 27.75
+},
+{
+"date": "2012-06-10",
+"interest": 24,
+"close": 27.81
+},
+{
+"date": "2012-06-17",
+"interest": 24,
+"close": 26.15
+},
+{
+"date": "2012-06-24",
+"interest": 25,
+"close": 26.65
+},
+{
+"date": "2012-07-01",
+"interest": 23,
+"close": 26.3
+},
+{
+"date": "2012-07-08",
+"interest": 23,
+"close": 26.44
+},
+{
+"date": "2012-07-15",
+"interest": 25,
+"close": 26.48
+},
+{
+"date": "2012-07-22",
+"interest": 23,
+"close": 26.955
+},
+{
+"date": "2012-07-29",
+"interest": 23,
+"close": 26.96
+},
+{
+"date": "2012-08-05",
+"interest": 22,
+"close": 27.26
+},
+{
+"date": "2012-08-12",
+"interest": 23,
+"close": 27.23
+},
+{
+"date": "2012-08-19",
+"interest": 27,
+"close": 29.74
+},
+{
+"date": "2012-08-26",
+"interest": 27,
+"close": 30.79
+},
+{
+"date": "2012-09-02",
+"interest": 32,
+"close": 32.64
+},
+{
+"date": "2012-09-09",
+"interest": 34,
+"close": 33.6
+},
+{
+"date": "2012-09-16",
+"interest": 31,
+"close": 33.48
+},
+{
+"date": "2012-09-23",
+"interest": 28,
+"close": 33.48
+},
+{
+"date": "2012-09-30",
+"interest": 27,
+"close": 33.45
+},
+{
+"date": "2012-10-07",
+"interest": 24,
+"close": 32.45
+},
+{
+"date": "2012-10-14",
+"interest": 24,
+"close": 31.0945
+},
+{
+"date": "2012-10-21",
+"interest": 23,
+"close": 31.08
+},
+{
+"date": "2012-10-28",
+"interest": 22,
+"close": 29.95
+},
+{
+"date": "2012-11-04",
+"interest": 28,
+"close": 31.54
+},
+{
+"date": "2012-11-11",
+"interest": 26,
+"close": 31.21
+},
+{
+"date": "2012-11-18",
+"interest": 25,
+"close": 32.98
+},
+{
+"date": "2012-11-25",
+"interest": 26,
+"close": 32.36
+},
+{
+"date": "2012-12-02",
+"interest": 23,
+"close": 32.03
+},
+{
+"date": "2012-12-09",
+"interest": 26,
+"close": 31.17
+},
+{
+"date": "2012-12-16",
+"interest": 26,
+"close": 29
+},
+{
+"date": "2012-12-23",
+"interest": 27,
+"close": 29.1
+},
+{
+"date": "2012-12-30",
+"interest": 28,
+"close": 29.2376
+},
+{
+"date": "2013-01-06",
+"interest": 25,
+"close": 29.48
+},
+{
+"date": "2013-01-13",
+"interest": 25,
+"close": 30.81
+},
+{
+"date": "2013-01-20",
+"interest": 26,
+"close": 30.21
+},
+{
+"date": "2013-01-27",
+"interest": 25,
+"close": 30.78
+},
+{
+"date": "2013-02-03",
+"interest": 23,
+"close": 30.43
+},
+{
+"date": "2013-02-10",
+"interest": 26,
+"close": 28.8333
+},
+{
+"date": "2013-02-17",
+"interest": 31,
+"close": 27.83
+},
+{
+"date": "2013-02-24",
+"interest": 30,
+"close": 27.62
+},
+{
+"date": "2013-03-03",
+"interest": 26,
+"close": 28.005
+},
+{
+"date": "2013-03-10",
+"interest": 22,
+"close": 27.799
+},
+{
+"date": "2013-03-17",
+"interest": 24,
+"close": 27.75
+},
+{
+"date": "2013-03-24",
+"interest": 22,
+"close": 27.43
+},
+{
+"date": "2013-03-31",
+"interest": 31,
+"close": 26.39
+},
+{
+"date": "2013-04-07",
+"interest": 29,
+"close": 25.28
+},
+{
+"date": "2013-04-14",
+"interest": 65,
+"close": 22.4
+},
+{
+"date": "2013-04-21",
+"interest": 40,
+"close": 23.1
+},
+{
+"date": "2013-04-28",
+"interest": 30,
+"close": 23.29
+},
+{
+"date": "2013-05-05",
+"interest": 27,
+"close": 22.98
+},
+{
+"date": "2013-05-12",
+"interest": 27,
+"close": 21.4
+},
+{
+"date": "2013-05-19",
+"interest": 28,
+"close": 21.61
+},
+{
+"date": "2013-05-26",
+"interest": 23,
+"close": 21.435
+},
+{
+"date": "2013-06-02",
+"interest": 22,
+"close": 20.86
+},
+{
+"date": "2013-06-09",
+"interest": 22,
+"close": 21.33
+},
+{
+"date": "2013-06-16",
+"interest": 29,
+"close": 19.389
+},
+{
+"date": "2013-06-23",
+"interest": 39,
+"close": 18.97
+},
+{
+"date": "2013-06-30",
+"interest": 32,
+"close": 18.21
+},
+{
+"date": "2013-07-07",
+"interest": 27,
+"close": 19.21
+},
+{
+"date": "2013-07-14",
+"interest": 25,
+"close": 18.88
+},
+{
+"date": "2013-07-21",
+"interest": 28,
+"close": 19.32
+},
+{
+"date": "2013-07-28",
+"interest": 25,
+"close": 19.12
+},
+{
+"date": "2013-08-04",
+"interest": 26,
+"close": 19.76
+},
+{
+"date": "2013-08-11",
+"interest": 36,
+"close": 22.34
+},
+{
+"date": "2013-08-18",
+"interest": 29,
+"close": 23.15
+},
+{
+"date": "2013-08-25",
+"interest": 34,
+"close": 22.6
+},
+{
+"date": "2013-09-01",
+"interest": 27,
+"close": 22.97
+},
+{
+"date": "2013-09-08",
+"interest": 25,
+"close": 21.42
+},
+{
+"date": "2013-09-15",
+"interest": 25,
+"close": 20.999
+},
+{
+"date": "2013-09-22",
+"interest": 23,
+"close": 20.96
+},
+{
+"date": "2013-09-29",
+"interest": 24,
+"close": 20.93
+},
+{
+"date": "2013-10-06",
+"interest": 25,
+"close": 20.52
+},
+{
+"date": "2013-10-13",
+"interest": 26,
+"close": 21.11
+},
+{
+"date": "2013-10-20",
+"interest": 24,
+"close": 21.71
+},
+{
+"date": "2013-10-27",
+"interest": 27,
+"close": 21.08
+},
+{
+"date": "2013-11-03",
+"interest": 19,
+"close": 20.69
+},
+{
+"date": "2013-11-10",
+"interest": 22,
+"close": 20
+},
+{
+"date": "2013-11-17",
+"interest": 24,
+"close": 19.13
+},
+{
+"date": "2013-11-24",
+"interest": 21,
+"close": 19.24
+},
+{
+"date": "2013-12-01",
+"interest": 26,
+"close": 18.76
+},
+{
+"date": "2013-12-08",
+"interest": 24,
+"close": 18.95
+},
+{
+"date": "2013-12-15",
+"interest": 25,
+"close": 18.62
+},
+{
+"date": "2013-12-22",
+"interest": 26,
+"close": 19.27
+},
+{
+"date": "2013-12-29",
+"interest": 26,
+"close": 19.42
+}
+]
+}

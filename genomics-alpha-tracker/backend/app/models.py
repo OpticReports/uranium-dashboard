@@ -146,6 +146,24 @@ class SocialMention(SQLModel, table=True):
     source: str = "stocktwits"
 
 
+class TrendPoint(SQLModel, table=True):
+    """One weekly Google Trends interest value for a keyword (0-100, relative
+    to the request window). Cross-asset: no foreign key to security. A
+    refresh replaces the keyword's whole series (window renormalisation)."""
+
+    __tablename__ = "trend_point"
+    __table_args__ = (UniqueConstraint("keyword", "date", name="uq_trend_keyword_date"),)
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    keyword: str = Field(index=True)
+    date: Date = Field(index=True)          # week start (Sunday) per Google
+    value: float = 0.0
+    missing: bool = False
+    window: str = "past_5_years"
+    fetched_at: Optional[DateTime] = None
+    source: str = "dataforseo"
+
+
 class InsiderTxn(SQLModel, table=True):
     """An insider transaction (Form 4 style), ingested best-effort."""
 

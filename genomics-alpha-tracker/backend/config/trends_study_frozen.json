@@ -1,0 +1,1413 @@
+{
+ "params": {
+  "record_window": 156,
+  "record_min_history": 52,
+  "noise_floor": 10.0,
+  "median_window": 52,
+  "median_mult": 2.0,
+  "parabolic_weeks": 4,
+  "parabolic_mult": 2.0,
+  "smooth": 3,
+  "price_high_window": 52,
+  "climax_price_within": 0.1,
+  "post_window": 8,
+  "fade_drop": 0.35,
+  "fading_price_within": 0.15,
+  "diverge_price_within": 0.03,
+  "diverge_interest_max": 0.6,
+  "diverge_peak_vs_record": 0.8
+ },
+ "horizons_weeks": [
+  4,
+  12,
+  26
+ ],
+ "events": {
+  "silver_2011": {
+   "keyword": "silver price",
+   "price_symbol": "SLV",
+   "timeframe": "2009-01-01 2013-12-31",
+   "weeks": 262,
+   "price_peak": "2011-04-24",
+   "trend_peak": "2011-05-01",
+   "trend_peak_minus_price_peak_wk": 1,
+   "flags": {
+    "climax": [
+     {
+      "date": "2011-04-17",
+      "wk_vs_price_peak": -1,
+      "interest": 75,
+      "intensity": 1.5,
+      "stage": 1,
+      "close": 45.535,
+      "r4": -24.9,
+      "r12": -16.0,
+      "r26": -33.1,
+      "dd26": -36.5,
+      "up26": 3.0,
+      "note": [
+       "record attention 75 vs prior 50 (1.50x), 2.2x 4wk ago; stage 1"
+      ]
+     }
+    ],
+    "fading": [],
+    "divergence": [],
+    "cooled": [
+     {
+      "date": "2011-05-29",
+      "wk_vs_price_peak": 5,
+      "interest": 37,
+      "intensity": 0.37,
+      "stage": null,
+      "close": 35.34,
+      "r4": -6.6,
+      "r12": 14.3,
+      "r26": -10.4,
+      "dd26": -18.2,
+      "up26": 19.4,
+      "note": [
+       "interest -49%, price -25% - top confirmed"
+      ]
+     }
+    ]
+   },
+   "states_tail": [
+    [
+     "2013-11-24",
+     "QUIET"
+    ],
+    [
+     "2013-12-01",
+     "QUIET"
+    ],
+    [
+     "2013-12-08",
+     "QUIET"
+    ],
+    [
+     "2013-12-15",
+     "QUIET"
+    ],
+    [
+     "2013-12-22",
+     "QUIET"
+    ],
+    [
+     "2013-12-29",
+     "QUIET"
+    ]
+   ],
+   "climax_within_10wk_before_price_peak": true,
+   "divergence_within_10wk_before_price_peak": false
+  },
+  "silver_2026": {
+   "keyword": "silver price",
+   "price_symbol": "SLV",
+   "timeframe": "2022-01-01 2026-09-07",
+   "weeks": 246,
+   "price_peak": "2026-01-18",
+   "trend_peak": "2026-01-25",
+   "trend_peak_minus_price_peak_wk": 1,
+   "flags": {
+    "climax": [
+     {
+      "date": "2025-10-12",
+      "wk_vs_price_peak": -14,
+      "interest": 36,
+      "intensity": 1.44,
+      "stage": 1,
+      "close": 46.99,
+      "r4": -2.2,
+      "r12": 54.0,
+      "r26": 56.7,
+      "dd26": -6.5,
+      "up26": 97.7,
+      "note": [
+       "record attention 36 vs prior 25 (1.44x), 2.6x 4wk ago; stage 1"
+      ]
+     },
+     {
+      "date": "2025-12-21",
+      "wk_vs_price_peak": -4,
+      "interest": 36,
+      "intensity": 1.0,
+      "stage": 2,
+      "close": 71.12,
+      "r4": 30.6,
+      "r12": -13.5,
+      "r26": -25.1,
+      "dd26": -25.1,
+      "up26": 30.6,
+      "note": [
+       "record attention 36 vs prior 36 (1.00x), 2.2x 4wk ago; stage 2"
+      ]
+     }
+    ],
+    "fading": [
+     {
+      "date": "2025-11-09",
+      "wk_vs_price_peak": -10,
+      "interest": 17,
+      "intensity": 0.472,
+      "stage": null,
+      "close": 45.96,
+      "r4": 22.1,
+      "r12": 52.7,
+      "r26": 50.2,
+      "dd26": -1.4,
+      "up26": 102.2,
+      "note": [
+       "interest -43% from climax, price -2% vs post-climax high"
+      ]
+     },
+     {
+      "date": "2026-02-22",
+      "wk_vs_price_peak": 5,
+      "interest": 31,
+      "intensity": 0.31,
+      "stage": null,
+      "close": 84.99,
+      "r4": -25.4,
+      "r12": -19.6,
+      "r26": -29.4,
+      "dd26": -40.3,
+      "up26": 0.0,
+      "note": [
+       "interest -57% from climax, price -9% vs post-climax high"
+      ]
+     }
+    ],
+    "divergence": [
+     {
+      "date": "2025-11-09",
+      "wk_vs_price_peak": -10,
+      "interest": 17,
+      "intensity": 0.472,
+      "stage": null,
+      "close": 45.96,
+      "r4": 22.1,
+      "r12": 52.7,
+      "r26": 50.2,
+      "dd26": -1.4,
+      "up26": 102.2,
+      "note": [
+       "interest -43% from climax, price -2% vs post-climax high"
+      ]
+     }
+    ],
+    "cooled": [
+     {
+      "date": "2026-02-15",
+      "wk_vs_price_peak": 4,
+      "interest": 31,
+      "intensity": 0.31,
+      "stage": null,
+      "close": 76.62,
+      "r4": -19.7,
+      "r12": -9.9,
+      "r26": -18.1,
+      "dd26": -33.7,
+      "up26": 10.9,
+      "note": [
+       "interest -36%, price -18% - top confirmed"
+      ]
+     }
+    ]
+   },
+   "states_tail": [
+    [
+     "2026-08-02",
+     "QUIET"
+    ],
+    [
+     "2026-08-09",
+     "QUIET"
+    ],
+    [
+     "2026-08-16",
+     "QUIET"
+    ],
+    [
+     "2026-08-23",
+     "QUIET"
+    ],
+    [
+     "2026-08-30",
+     "QUIET"
+    ],
+    [
+     "2026-09-06",
+     "QUIET"
+    ]
+   ],
+   "climax_within_10wk_before_price_peak": true,
+   "divergence_within_10wk_before_price_peak": true
+  },
+  "bitcoin_2017": {
+   "keyword": "bitcoin",
+   "price_symbol": "BTCUSD",
+   "timeframe": "2015-01-01 2019-12-31",
+   "weeks": 262,
+   "price_peak": "2017-12-10",
+   "trend_peak": "2017-12-17",
+   "trend_peak_minus_price_peak_wk": 1,
+   "flags": {
+    "climax": [
+     {
+      "date": "2017-05-07",
+      "wk_vs_price_peak": -31,
+      "interest": 10,
+      "intensity": 1.429,
+      "stage": 1,
+      "close": 1792.73,
+      "r4": 63.5,
+      "r12": 80.9,
+      "r26": 254.0,
+      "dd26": 0.0,
+      "up26": 313.5,
+      "note": [
+       "record attention 10 vs prior 7 (1.43x), 2.0x 4wk ago; stage 1"
+      ]
+     },
+     {
+      "date": "2017-10-29",
+      "wk_vs_price_peak": -6,
+      "interest": 27,
+      "intensity": 1.286,
+      "stage": 2,
+      "close": 7412.55,
+      "r4": 47.5,
+      "r12": 52.7,
+      "r26": 32.2,
+      "dd26": -14.4,
+      "up26": 165.1,
+      "note": [
+       "record attention 27 vs prior 21 (1.29x), 2.2x 4wk ago; stage 2"
+      ]
+     }
+    ],
+    "fading": [],
+    "divergence": [],
+    "cooled": [
+     {
+      "date": "2018-01-07",
+      "wk_vs_price_peak": 4,
+      "interest": 43,
+      "intensity": 0.43,
+      "stage": null,
+      "close": 14187.95,
+      "r4": -39.8,
+      "r12": -51.4,
+      "r26": -56.0,
+      "dd26": -56.5,
+      "up26": 0.0,
+      "note": [
+       "interest -44%, price -28% - top confirmed"
+      ]
+     }
+    ]
+   },
+   "states_tail": [
+    [
+     "2019-11-24",
+     "QUIET"
+    ],
+    [
+     "2019-12-01",
+     "QUIET"
+    ],
+    [
+     "2019-12-08",
+     "QUIET"
+    ],
+    [
+     "2019-12-15",
+     "QUIET"
+    ],
+    [
+     "2019-12-22",
+     "QUIET"
+    ],
+    [
+     "2019-12-29",
+     "QUIET"
+    ]
+   ],
+   "climax_within_10wk_before_price_peak": true,
+   "divergence_within_10wk_before_price_peak": false
+  },
+  "bitcoin_2021": {
+   "keyword": "bitcoin",
+   "price_symbol": "BTCUSD",
+   "timeframe": "2019-06-01 2023-06-30",
+   "weeks": 214,
+   "price_peak": "2021-11-07",
+   "trend_peak": "2021-05-16",
+   "trend_peak_minus_price_peak_wk": -25,
+   "flags": {
+    "climax": [
+     {
+      "date": "2021-01-03",
+      "wk_vs_price_peak": -44,
+      "interest": 81,
+      "intensity": 1.653,
+      "stage": 1,
+      "close": 40257.43,
+      "r4": -2.5,
+      "r12": 41.8,
+      "r26": -16.7,
+      "dd26": -20.2,
+      "up26": 52.0,
+      "note": [
+       "record attention 81 vs prior 49 (1.65x), 4.0x 4wk ago; stage 1"
+      ]
+     }
+    ],
+    "fading": [],
+    "divergence": [
+     {
+      "date": "2021-04-04",
+      "wk_vs_price_peak": -31,
+      "interest": 39,
+      "intensity": 0.481,
+      "stage": null,
+      "close": 59778.6,
+      "r4": -1.4,
+      "r12": -42.0,
+      "r26": -8.1,
+      "dd26": -47.2,
+      "up26": 0.5,
+      "note": [
+       "price at 52wk high on 56% of peak attention"
+      ]
+     }
+    ],
+    "cooled": []
+   },
+   "states_tail": [
+    [
+     "2023-05-21",
+     "QUIET"
+    ],
+    [
+     "2023-05-28",
+     "QUIET"
+    ],
+    [
+     "2023-06-04",
+     "QUIET"
+    ],
+    [
+     "2023-06-11",
+     "QUIET"
+    ],
+    [
+     "2023-06-18",
+     "QUIET"
+    ],
+    [
+     "2023-06-25",
+     "QUIET"
+    ]
+   ],
+   "climax_within_10wk_before_price_peak": false,
+   "divergence_within_10wk_before_price_peak": false
+  },
+  "bitcoin_2025": {
+   "keyword": "bitcoin",
+   "price_symbol": "BTCUSD",
+   "timeframe": "2022-06-01 2026-09-07",
+   "weeks": 224,
+   "price_peak": "2025-09-28",
+   "trend_peak": "2022-06-12",
+   "trend_peak_minus_price_peak_wk": -172,
+   "flags": {
+    "climax": [],
+    "fading": [],
+    "divergence": [
+     {
+      "date": "2025-06-22",
+      "wk_vs_price_peak": -14,
+      "interest": 30,
+      "intensity": 0.312,
+      "stage": null,
+      "close": 107352.2,
+      "r4": 9.9,
+      "r12": 7.8,
+      "r26": -18.2,
+      "dd26": -21.1,
+      "up26": 14.1,
+      "note": [
+       "price at 52wk high on 37% of peak attention"
+      ]
+     }
+    ],
+    "cooled": []
+   },
+   "states_tail": [
+    [
+     "2026-08-02",
+     "QUIET"
+    ],
+    [
+     "2026-08-09",
+     "QUIET"
+    ],
+    [
+     "2026-08-16",
+     "QUIET"
+    ],
+    [
+     "2026-08-23",
+     "QUIET"
+    ],
+    [
+     "2026-08-30",
+     "QUIET"
+    ],
+    [
+     "2026-09-06",
+     "QUIET"
+    ]
+   ],
+   "climax_within_10wk_before_price_peak": false,
+   "divergence_within_10wk_before_price_peak": true
+  },
+  "arkg_2021": {
+   "keyword": "ARKG",
+   "price_symbol": "ARKG",
+   "timeframe": "2019-01-01 2023-12-31",
+   "weeks": 262,
+   "price_peak": "2021-02-07",
+   "trend_peak": "2020-12-27",
+   "trend_peak_minus_price_peak_wk": -6,
+   "flags": {
+    "climax": [
+     {
+      "date": "2020-11-29",
+      "wk_vs_price_peak": -10,
+      "interest": 16,
+      "intensity": 1.455,
+      "stage": 1,
+      "close": 89.67,
+      "r4": 4.0,
+      "r12": 4.3,
+      "r26": -10.5,
+      "dd26": -14.6,
+      "up26": 24.9,
+      "note": [
+       "record attention 16 vs prior 11 (1.45x), 2.7x 4wk ago; stage 1"
+      ]
+     }
+    ],
+    "fading": [],
+    "divergence": [],
+    "cooled": []
+   },
+   "states_tail": [
+    [
+     "2023-11-26",
+     "QUIET"
+    ],
+    [
+     "2023-12-03",
+     "QUIET"
+    ],
+    [
+     "2023-12-10",
+     "QUIET"
+    ],
+    [
+     "2023-12-17",
+     "QUIET"
+    ],
+    [
+     "2023-12-24",
+     "QUIET"
+    ],
+    [
+     "2023-12-31",
+     "QUIET"
+    ]
+   ],
+   "climax_within_10wk_before_price_peak": true,
+   "divergence_within_10wk_before_price_peak": false
+  },
+  "crispr_2021": {
+   "keyword": "CRISPR stocks",
+   "price_symbol": "ARKG",
+   "timeframe": "2019-01-01 2023-12-31",
+   "weeks": 262,
+   "price_peak": "2021-02-07",
+   "trend_peak": "2020-12-27",
+   "trend_peak_minus_price_peak_wk": -6,
+   "flags": {
+    "climax": [
+     {
+      "date": "2020-07-05",
+      "wk_vs_price_peak": -31,
+      "interest": 37,
+      "intensity": 1.057,
+      "stage": 1,
+      "close": 55.72,
+      "r4": 0.8,
+      "r12": 13.8,
+      "r26": 90.0,
+      "dd26": -3.6,
+      "up26": 90.0,
+      "note": [
+       "record attention 37 vs prior 35 (1.06x), 37.0x 4wk ago; stage 1"
+      ]
+     },
+     {
+      "date": "2020-12-06",
+      "wk_vs_price_peak": -9,
+      "interest": 63,
+      "intensity": 1.615,
+      "stage": 2,
+      "close": 95.86,
+      "r4": 10.4,
+      "r12": -11.2,
+      "r26": -9.3,
+      "dd26": -20.1,
+      "up26": 16.8,
+      "note": [
+       "record attention 63 vs prior 39 (1.62x), 2.9x 4wk ago; stage 2"
+      ]
+     }
+    ],
+    "fading": [
+     {
+      "date": "2020-08-30",
+      "wk_vs_price_peak": -23,
+      "interest": 0,
+      "intensity": 0.0,
+      "stage": null,
+      "close": 56.3,
+      "r4": 12.6,
+      "r12": 41.4,
+      "r26": 51.2,
+      "dd26": 0.0,
+      "up26": 99.0,
+      "note": [
+       "interest -72% from climax, price -11% vs post-climax high"
+      ]
+     }
+    ],
+    "divergence": [],
+    "cooled": []
+   },
+   "states_tail": [
+    [
+     "2023-11-26",
+     "QUIET"
+    ],
+    [
+     "2023-12-03",
+     "QUIET"
+    ],
+    [
+     "2023-12-10",
+     "QUIET"
+    ],
+    [
+     "2023-12-17",
+     "QUIET"
+    ],
+    [
+     "2023-12-24",
+     "QUIET"
+    ],
+    [
+     "2023-12-31",
+     "QUIET"
+    ]
+   ],
+   "climax_within_10wk_before_price_peak": true,
+   "divergence_within_10wk_before_price_peak": false
+  },
+  "uranium_2021": {
+   "keyword": "uranium stocks",
+   "price_symbol": "URA",
+   "timeframe": "2019-06-01 2024-05-31",
+   "weeks": 262,
+   "price_peak": "2024-05-12",
+   "trend_peak": "2021-09-12",
+   "trend_peak_minus_price_peak_wk": -139,
+   "flags": {
+    "climax": [
+     {
+      "date": "2020-12-06",
+      "wk_vs_price_peak": -179,
+      "interest": 20,
+      "intensity": 1.176,
+      "stage": 1,
+      "close": 14.35,
+      "r4": 14.3,
+      "r12": 24.5,
+      "r26": 63.6,
+      "dd26": 0.0,
+      "up26": 63.6,
+      "note": [
+       "record attention 20 vs prior 17 (1.18x), 3.3x 4wk ago; stage 1"
+      ]
+     },
+     {
+      "date": "2021-02-07",
+      "wk_vs_price_peak": -170,
+      "interest": 37,
+      "intensity": 1.088,
+      "stage": 2,
+      "close": 17.82,
+      "r4": 6.2,
+      "r12": 24.6,
+      "r26": 6.5,
+      "dd26": -1.8,
+      "up26": 31.7,
+      "note": [
+       "record attention 37 vs prior 34 (1.09x), 2.1x 4wk ago; stage 2"
+      ]
+     },
+     {
+      "date": "2021-09-12",
+      "wk_vs_price_peak": -139,
+      "interest": 100,
+      "intensity": 1.786,
+      "stage": 3,
+      "close": 25.56,
+      "r4": 7.7,
+      "r12": -5.4,
+      "r26": 0.4,
+      "dd26": -21.9,
+      "up26": 17.9,
+      "note": [
+       "record attention 100 vs prior 56 (1.79x), 12.5x 4wk ago; stage 3"
+      ]
+     }
+    ],
+    "fading": [
+     {
+      "date": "2021-03-07",
+      "wk_vs_price_peak": -166,
+      "interest": 22,
+      "intensity": 0.393,
+      "stage": null,
+      "close": 18.93,
+      "r4": 6.3,
+      "r12": 23.1,
+      "r26": 39.1,
+      "dd26": -5.9,
+      "up26": 39.1,
+      "note": [
+       "interest -44% from climax, price +0% vs post-climax high"
+      ]
+     },
+     {
+      "date": "2021-10-03",
+      "wk_vs_price_peak": -136,
+      "interest": 15,
+      "intensity": 0.15,
+      "stage": null,
+      "close": 23.61,
+      "r4": 23.1,
+      "r12": -3.3,
+      "r26": 16.5,
+      "dd26": -15.4,
+      "up26": 27.7,
+      "note": [
+       "interest -62% from climax, price -8% vs post-climax high"
+      ]
+     }
+    ],
+    "divergence": [],
+    "cooled": []
+   },
+   "states_tail": [
+    [
+     "2024-04-21",
+     "QUIET"
+    ],
+    [
+     "2024-04-28",
+     "QUIET"
+    ],
+    [
+     "2024-05-05",
+     "QUIET"
+    ],
+    [
+     "2024-05-12",
+     "QUIET"
+    ],
+    [
+     "2024-05-19",
+     "QUIET"
+    ],
+    [
+     "2024-05-26",
+     "QUIET"
+    ]
+   ],
+   "climax_within_10wk_before_price_peak": false,
+   "divergence_within_10wk_before_price_peak": false
+  },
+  "uranium_2024": {
+   "keyword": "uranium stocks",
+   "price_symbol": "URA",
+   "timeframe": "2022-01-01 2026-09-07",
+   "weeks": 246,
+   "price_peak": "2026-01-18",
+   "trend_peak": "2026-01-25",
+   "trend_peak_minus_price_peak_wk": 1,
+   "flags": {
+    "climax": [
+     {
+      "date": "2025-08-03",
+      "wk_vs_price_peak": -24,
+      "interest": 29,
+      "intensity": 1.16,
+      "stage": 1,
+      "close": 39.95,
+      "r4": 2.0,
+      "r12": 38.0,
+      "r26": 30.6,
+      "dd26": -2.4,
+      "up26": 42.7,
+      "note": [
+       "record attention 29 vs prior 25 (1.16x), 3.2x 4wk ago; stage 1"
+      ]
+     },
+     {
+      "date": "2026-01-04",
+      "wk_vs_price_peak": -2,
+      "interest": 60,
+      "intensity": 1.091,
+      "stage": 2,
+      "close": 50.31,
+      "r4": 3.7,
+      "r12": -2.8,
+      "r26": -14.6,
+      "dd26": -14.6,
+      "up26": 13.3,
+      "note": [
+       "record attention 60 vs prior 55 (1.09x), 2.1x 4wk ago; stage 2"
+      ]
+     }
+    ],
+    "fading": [
+     {
+      "date": "2026-02-15",
+      "wk_vs_price_peak": 4,
+      "interest": 31,
+      "intensity": 0.31,
+      "stage": null,
+      "close": 54.36,
+      "r4": -14.6,
+      "r12": -8.1,
+      "r26": -15.3,
+      "dd26": -28.8,
+      "up26": 2.8,
+      "note": [
+       "interest -48% from climax, price -1% vs post-climax high"
+      ]
+     }
+    ],
+    "divergence": [],
+    "cooled": [
+     {
+      "date": "2025-11-16",
+      "wk_vs_price_peak": -9,
+      "interest": 25,
+      "intensity": 0.455,
+      "stage": null,
+      "close": 41.59,
+      "r4": 10.3,
+      "r12": 24.8,
+      "r26": 17.7,
+      "dd26": 0.0,
+      "up26": 37.1,
+      "note": [
+       "interest -42%, price -25% - top confirmed"
+      ]
+     }
+    ]
+   },
+   "states_tail": [
+    [
+     "2026-08-02",
+     "QUIET"
+    ],
+    [
+     "2026-08-09",
+     "QUIET"
+    ],
+    [
+     "2026-08-16",
+     "QUIET"
+    ],
+    [
+     "2026-08-23",
+     "QUIET"
+    ],
+    [
+     "2026-08-30",
+     "QUIET"
+    ],
+    [
+     "2026-09-06",
+     "QUIET"
+    ]
+   ],
+   "climax_within_10wk_before_price_peak": true,
+   "divergence_within_10wk_before_price_peak": false
+  },
+  "gme_2021": {
+   "keyword": "gamestop stock",
+   "price_symbol": "GME",
+   "timeframe": "2019-06-01 2022-12-31",
+   "weeks": 188,
+   "price_peak": "2021-01-24",
+   "trend_peak": "2021-01-24",
+   "trend_peak_minus_price_peak_wk": 0,
+   "flags": {
+    "climax": [
+     {
+      "date": "2021-01-24",
+      "wk_vs_price_peak": 0,
+      "interest": 100,
+      "intensity": 33.333,
+      "stage": 1,
+      "close": 81.25,
+      "r4": -68.7,
+      "r12": -53.5,
+      "r26": -50.4,
+      "dd26": -87.5,
+      "up26": 0.0,
+      "note": [
+       "record attention 100 vs prior 3 (33.33x), 100.0x 4wk ago; stage 1"
+      ]
+     }
+    ],
+    "fading": [],
+    "divergence": [],
+    "cooled": [
+     {
+      "date": "2021-02-14",
+      "wk_vs_price_peak": 3,
+      "interest": 5,
+      "intensity": 0.05,
+      "stage": null,
+      "close": 10.15,
+      "r4": 393.3,
+      "r12": 293.9,
+      "r26": 292.4,
+      "dd26": 0.0,
+      "up26": 551.5,
+      "note": [
+       "interest -60%, price -88% - top confirmed"
+      ]
+     }
+    ]
+   },
+   "states_tail": [
+    [
+     "2022-11-20",
+     "QUIET"
+    ],
+    [
+     "2022-11-27",
+     "QUIET"
+    ],
+    [
+     "2022-12-04",
+     "QUIET"
+    ],
+    [
+     "2022-12-11",
+     "QUIET"
+    ],
+    [
+     "2022-12-18",
+     "QUIET"
+    ],
+    [
+     "2022-12-25",
+     "QUIET"
+    ]
+   ],
+   "climax_within_10wk_before_price_peak": true,
+   "divergence_within_10wk_before_price_peak": false
+  },
+  "gold_2026": {
+   "keyword": "gold price",
+   "price_symbol": "GLD",
+   "timeframe": "2022-01-01 2026-09-07",
+   "weeks": 246,
+   "price_peak": "2026-02-22",
+   "trend_peak": "2026-01-25",
+   "trend_peak_minus_price_peak_wk": -4,
+   "flags": {
+    "climax": [
+     {
+      "date": "2025-04-06",
+      "wk_vs_price_peak": -46,
+      "interest": 33,
+      "intensity": 1.435,
+      "stage": 1,
+      "close": 297.93,
+      "r4": 3.0,
+      "r12": 3.1,
+      "r26": 23.9,
+      "dd26": -1.2,
+      "up26": 23.9,
+      "note": [
+       "record attention 33 vs prior 23 (1.43x), 2.1x 4wk ago; stage 1"
+      ]
+     },
+     {
+      "date": "2025-08-10",
+      "wk_vs_price_peak": -28,
+      "interest": 33,
+      "intensity": 1.0,
+      "stage": 2,
+      "close": 307.43,
+      "r4": 9.1,
+      "r12": 19.8,
+      "r26": 50.5,
+      "dd26": 0.0,
+      "up26": 50.5,
+      "note": [
+       "record attention 33 vs prior 33 (1.00x), 2.1x 4wk ago; stage 2"
+      ]
+     },
+     {
+      "date": "2026-01-25",
+      "wk_vs_price_peak": -4,
+      "interest": 100,
+      "intensity": 1.587,
+      "stage": 3,
+      "close": 444.95,
+      "r4": 8.7,
+      "r12": -2.6,
+      "r26": -16.5,
+      "dd26": -17.2,
+      "up26": 8.7,
+      "note": [
+       "record attention 100 vs prior 63 (1.59x), 2.6x 4wk ago; stage 3"
+      ]
+     }
+    ],
+    "fading": [
+     {
+      "date": "2025-05-25",
+      "wk_vs_price_peak": -39,
+      "interest": 15,
+      "intensity": 0.455,
+      "stage": null,
+      "close": 303.6,
+      "r4": -0.8,
+      "r12": 2.3,
+      "r26": 27.8,
+      "dd26": -0.8,
+      "up26": 28.1,
+      "note": [
+       "interest -37% from climax, price -2% vs post-climax high"
+      ]
+     },
+     {
+      "date": "2026-02-22",
+      "wk_vs_price_peak": 0,
+      "interest": 37,
+      "intensity": 0.37,
+      "stage": null,
+      "close": 483.75,
+      "r4": -14.3,
+      "r12": -14.5,
+      "r26": -15.5,
+      "dd26": -23.8,
+      "up26": 0.0,
+      "note": [
+       "interest -51% from climax, price +0% vs post-climax high"
+      ]
+     }
+    ],
+    "divergence": [
+     {
+      "date": "2025-06-01",
+      "wk_vs_price_peak": -38,
+      "interest": 16,
+      "intensity": 0.485,
+      "stage": null,
+      "close": 305.18,
+      "r4": 0.6,
+      "r12": 4.2,
+      "r26": 26.6,
+      "dd26": -1.3,
+      "up26": 27.5,
+      "note": [
+       "interest -43% from climax, price -1% vs post-climax high"
+      ]
+     },
+     {
+      "date": "2025-11-23",
+      "wk_vs_price_peak": -13,
+      "interest": 32,
+      "intensity": 0.508,
+      "stage": null,
+      "close": 387.88,
+      "r4": 7.4,
+      "r12": 20.8,
+      "r26": 7.5,
+      "dd26": -0.4,
+      "up26": 24.7,
+      "note": [
+       "price at 52wk high on 58% of peak attention"
+      ]
+     },
+     {
+      "date": "2026-02-22",
+      "wk_vs_price_peak": 0,
+      "interest": 37,
+      "intensity": 0.37,
+      "stage": null,
+      "close": 483.75,
+      "r4": -14.3,
+      "r12": -14.5,
+      "r26": -15.5,
+      "dd26": -23.8,
+      "up26": 0.0,
+      "note": [
+       "interest -51% from climax, price +0% vs post-climax high"
+      ]
+     }
+    ],
+    "cooled": []
+   },
+   "states_tail": [
+    [
+     "2026-08-02",
+     "QUIET"
+    ],
+    [
+     "2026-08-09",
+     "QUIET"
+    ],
+    [
+     "2026-08-16",
+     "QUIET"
+    ],
+    [
+     "2026-08-23",
+     "QUIET"
+    ],
+    [
+     "2026-08-30",
+     "QUIET"
+    ],
+    [
+     "2026-09-06",
+     "QUIET"
+    ]
+   ],
+   "climax_within_10wk_before_price_peak": true,
+   "divergence_within_10wk_before_price_peak": true
+  }
+ },
+ "pooled": {
+  "base_rate": {
+   "r4": {
+    "n": 1816,
+    "median": 1.8,
+    "mean": 5.2,
+    "pct_negative": 42,
+    "pct_dd_worse_than_20": null
+   },
+   "r12": {
+    "n": 1816,
+    "median": 5.2,
+    "mean": 17.4,
+    "pct_negative": 40,
+    "pct_dd_worse_than_20": null
+   },
+   "r26": {
+    "n": 1811,
+    "median": 10.1,
+    "mean": 49.3,
+    "pct_negative": 39,
+    "pct_dd_worse_than_20": null
+   },
+   "dd26": {
+    "n": 1816,
+    "median": -9.9,
+    "mean": -14.9,
+    "pct_negative": 81,
+    "pct_dd_worse_than_20": 30
+   },
+   "up26": {
+    "n": 1816,
+    "median": 23.2,
+    "mean": 96.6,
+    "pct_negative": 0,
+    "pct_dd_worse_than_20": null
+   }
+  },
+  "climax": {
+   "episodes": 18,
+   "r4": {
+    "n": 18,
+    "median": 5.1,
+    "mean": 6.3,
+    "pct_negative": 22,
+    "pct_dd_worse_than_20": null
+   },
+   "r12": {
+    "n": 18,
+    "median": 9.1,
+    "mean": 14.0,
+    "pct_negative": 39,
+    "pct_dd_worse_than_20": null
+   },
+   "r26": {
+    "n": 18,
+    "median": 3.5,
+    "mean": 24.0,
+    "pct_negative": 44,
+    "pct_dd_worse_than_20": null
+   },
+   "dd26": {
+    "n": 18,
+    "median": -14.5,
+    "mean": -16.0,
+    "pct_negative": 83,
+    "pct_dd_worse_than_20": 33
+   },
+   "up26": {
+    "n": 18,
+    "median": 31.1,
+    "mean": 58.1,
+    "pct_negative": 0,
+    "pct_dd_worse_than_20": null
+   }
+  },
+  "fading": {
+   "episodes": 8,
+   "r4": {
+    "n": 8,
+    "median": 2.8,
+    "mean": 1.1,
+    "pct_negative": 50,
+    "pct_dd_worse_than_20": null
+   },
+   "r12": {
+    "n": 8,
+    "median": -0.5,
+    "mean": 9.2,
+    "pct_negative": 50,
+    "pct_dd_worse_than_20": null
+   },
+   "r26": {
+    "n": 8,
+    "median": 22.1,
+    "mean": 15.6,
+    "pct_negative": 38,
+    "pct_dd_worse_than_20": null
+   },
+   "dd26": {
+    "n": 8,
+    "median": -10.7,
+    "mean": -14.6,
+    "pct_negative": 88,
+    "pct_dd_worse_than_20": 38
+   },
+   "up26": {
+    "n": 8,
+    "median": 27.9,
+    "mean": 37.4,
+    "pct_negative": 0,
+    "pct_dd_worse_than_20": null
+   }
+  },
+  "divergence": {
+   "episodes": 6,
+   "r4": {
+    "n": 6,
+    "median": 4.0,
+    "mean": 4.0,
+    "pct_negative": 33,
+    "pct_dd_worse_than_20": null
+   },
+   "r12": {
+    "n": 6,
+    "median": 6.0,
+    "mean": 4.8,
+    "pct_negative": 33,
+    "pct_dd_worse_than_20": null
+   },
+   "r26": {
+    "n": 6,
+    "median": -0.3,
+    "mean": 7.1,
+    "pct_negative": 50,
+    "pct_dd_worse_than_20": null
+   },
+   "dd26": {
+    "n": 6,
+    "median": -11.2,
+    "mean": -15.9,
+    "pct_negative": 100,
+    "pct_dd_worse_than_20": 50
+   },
+   "up26": {
+    "n": 6,
+    "median": 19.4,
+    "mean": 28.2,
+    "pct_negative": 0,
+    "pct_dd_worse_than_20": null
+   }
+  },
+  "cooled": {
+   "episodes": 5,
+   "r4": {
+    "n": 5,
+    "median": -6.6,
+    "mean": 67.5,
+    "pct_negative": 60,
+    "pct_dd_worse_than_20": null
+   },
+   "r12": {
+    "n": 5,
+    "median": 14.3,
+    "mean": 54.3,
+    "pct_negative": 40,
+    "pct_dd_worse_than_20": null
+   },
+   "r26": {
+    "n": 5,
+    "median": -10.4,
+    "mean": 45.1,
+    "pct_negative": 60,
+    "pct_dd_worse_than_20": null
+   },
+   "dd26": {
+    "n": 5,
+    "median": -18.2,
+    "mean": -21.7,
+    "pct_negative": 60,
+    "pct_dd_worse_than_20": 40
+   },
+   "up26": {
+    "n": 5,
+    "median": 19.4,
+    "mean": 123.8,
+    "pct_negative": 0,
+    "pct_dd_worse_than_20": null
+   }
+  },
+  "climax_stage1": {
+   "episodes": 10,
+   "r4": {
+    "n": 10,
+    "median": 1.4,
+    "mean": -1.1,
+    "pct_negative": 40,
+    "pct_dd_worse_than_20": null
+   },
+   "r12": {
+    "n": 10,
+    "median": 19.1,
+    "mean": 19.1,
+    "pct_negative": 20,
+    "pct_dd_worse_than_20": null
+   },
+   "r26": {
+    "n": 10,
+    "median": 27.2,
+    "mean": 40.8,
+    "pct_negative": 40,
+    "pct_dd_worse_than_20": null
+   },
+   "dd26": {
+    "n": 10,
+    "median": -5.0,
+    "mean": -17.2,
+    "pct_negative": 80,
+    "pct_dd_worse_than_20": 30
+   },
+   "up26": {
+    "n": 10,
+    "median": 47.4,
+    "mean": 71.1,
+    "pct_negative": 0,
+    "pct_dd_worse_than_20": null
+   },
+   "weeks_to_price_peak": [
+    -179,
+    -46,
+    -44,
+    -31,
+    -31,
+    -24,
+    -14,
+    -10,
+    -1,
+    0
+   ],
+   "post_hoc": true
+  },
+  "climax_stage2plus": {
+   "episodes": 8,
+   "r4": {
+    "n": 8,
+    "median": 8.9,
+    "mean": 15.5,
+    "pct_negative": 0,
+    "pct_dd_worse_than_20": null
+   },
+   "r12": {
+    "n": 8,
+    "median": -2.7,
+    "mean": 7.7,
+    "pct_negative": 62,
+    "pct_dd_worse_than_20": null
+   },
+   "r26": {
+    "n": 8,
+    "median": -4.5,
+    "mean": 3.0,
+    "pct_negative": 50,
+    "pct_dd_worse_than_20": null
+   },
+   "dd26": {
+    "n": 8,
+    "median": -15.9,
+    "mean": -14.4,
+    "pct_negative": 88,
+    "pct_dd_worse_than_20": 38
+   },
+   "up26": {
+    "n": 8,
+    "median": 24.2,
+    "mean": 41.8,
+    "pct_negative": 0,
+    "pct_dd_worse_than_20": null
+   },
+   "weeks_to_price_peak": [
+    -170,
+    -139,
+    -28,
+    -9,
+    -6,
+    -4,
+    -4,
+    -2
+   ],
+   "post_hoc": true
+  },
+  "recall": {
+   "price_peaks": 11,
+   "with_climax_within_10wk": 8,
+   "with_climax_or_divergence_within_10wk": 9
+  }
+ },
+ "n_base_weeks": 1816
+}

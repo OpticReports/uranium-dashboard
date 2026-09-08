@@ -1,0 +1,1082 @@
+{
+"event": "bitcoin_2021",
+"keyword": "bitcoin",
+"timeframe": "2019-06-01 2023-06-30",
+"geo": "worldwide",
+"granularity": "weekly (week starts Sunday)",
+"trends_source": "Google Trends via pytrends, pulled 2026-09-08 (same index DataForSEO serves)",
+"price_symbol": "BTCUSD",
+"price_source": "FMP historical EOD close, last trading day of each Google week",
+"weeks": [
+{
+"date": "2019-05-26",
+"interest": 17,
+"close": 8558.95
+},
+{
+"date": "2019-06-02",
+"interest": 15,
+"close": 7930.14
+},
+{
+"date": "2019-06-09",
+"interest": 13,
+"close": 8860.23
+},
+{
+"date": "2019-06-16",
+"interest": 20,
+"close": 10666.86
+},
+{
+"date": "2019-06-23",
+"interest": 30,
+"close": 11865.29
+},
+{
+"date": "2019-06-30",
+"interest": 20,
+"close": 11237.77
+},
+{
+"date": "2019-07-07",
+"interest": 20,
+"close": 11370.08
+},
+{
+"date": "2019-07-14",
+"interest": 20,
+"close": 10761.03
+},
+{
+"date": "2019-07-21",
+"interest": 16,
+"close": 9479.98
+},
+{
+"date": "2019-07-28",
+"interest": 15,
+"close": 10820.76
+},
+{
+"date": "2019-08-04",
+"interest": 18,
+"close": 11280.95
+},
+{
+"date": "2019-08-11",
+"interest": 15,
+"close": 10217.79
+},
+{
+"date": "2019-08-18",
+"interest": 14,
+"close": 10147.96
+},
+{
+"date": "2019-08-25",
+"interest": 14,
+"close": 9600.86
+},
+{
+"date": "2019-09-01",
+"interest": 13,
+"close": 10484.37
+},
+{
+"date": "2019-09-08",
+"interest": 11,
+"close": 10360.25
+},
+{
+"date": "2019-09-15",
+"interest": 11,
+"close": 9973.99
+},
+{
+"date": "2019-09-22",
+"interest": 14,
+"close": 8217.47
+},
+{
+"date": "2019-09-29",
+"interest": 12,
+"close": 8147.63
+},
+{
+"date": "2019-10-06",
+"interest": 11,
+"close": 8309.03
+},
+{
+"date": "2019-10-13",
+"interest": 10,
+"close": 7965.28
+},
+{
+"date": "2019-10-20",
+"interest": 13,
+"close": 9259.78
+},
+{
+"date": "2019-10-27",
+"interest": 12,
+"close": 9308.52
+},
+{
+"date": "2019-11-03",
+"interest": 11,
+"close": 8807.89
+},
+{
+"date": "2019-11-10",
+"interest": 10,
+"close": 8481
+},
+{
+"date": "2019-11-17",
+"interest": 11,
+"close": 7329.29
+},
+{
+"date": "2019-11-24",
+"interest": 12,
+"close": 7555.92
+},
+{
+"date": "2019-12-01",
+"interest": 11,
+"close": 7502.19
+},
+{
+"date": "2019-12-08",
+"interest": 10,
+"close": 7062.91
+},
+{
+"date": "2019-12-15",
+"interest": 12,
+"close": 7143.01
+},
+{
+"date": "2019-12-22",
+"interest": 10,
+"close": 7302.67
+},
+{
+"date": "2019-12-29",
+"interest": 10,
+"close": 7348.63
+},
+{
+"date": "2020-01-05",
+"interest": 13,
+"close": 8020
+},
+{
+"date": "2020-01-12",
+"interest": 13,
+"close": 8909.32
+},
+{
+"date": "2020-01-19",
+"interest": 12,
+"close": 8326.81
+},
+{
+"date": "2020-01-26",
+"interest": 12,
+"close": 9380.18
+},
+{
+"date": "2020-02-02",
+"interest": 12,
+"close": 9905.64
+},
+{
+"date": "2020-02-09",
+"interest": 15,
+"close": 9911.22
+},
+{
+"date": "2020-02-16",
+"interest": 14,
+"close": 9668.23
+},
+{
+"date": "2020-02-23",
+"interest": 13,
+"close": 8525.07
+},
+{
+"date": "2020-03-01",
+"interest": 12,
+"close": 8901.37
+},
+{
+"date": "2020-03-08",
+"interest": 23,
+"close": 5165.25
+},
+{
+"date": "2020-03-15",
+"interest": 25,
+"close": 6198.78
+},
+{
+"date": "2020-03-22",
+"interest": 18,
+"close": 6251.82
+},
+{
+"date": "2020-03-29",
+"interest": 16,
+"close": 6874.77
+},
+{
+"date": "2020-04-05",
+"interest": 16,
+"close": 6889.65
+},
+{
+"date": "2020-04-12",
+"interest": 15,
+"close": 7261.76
+},
+{
+"date": "2020-04-19",
+"interest": 15,
+"close": 7547.61
+},
+{
+"date": "2020-04-26",
+"interest": 19,
+"close": 8985.58
+},
+{
+"date": "2020-05-03",
+"interest": 21,
+"close": 9537.21
+},
+{
+"date": "2020-05-10",
+"interest": 24,
+"close": 9383.16
+},
+{
+"date": "2020-05-17",
+"interest": 17,
+"close": 9181.76
+},
+{
+"date": "2020-05-24",
+"interest": 16,
+"close": 9700.33
+},
+{
+"date": "2020-05-31",
+"interest": 14,
+"close": 9671.7
+},
+{
+"date": "2020-06-07",
+"interest": 13,
+"close": 9475
+},
+{
+"date": "2020-06-14",
+"interest": 13,
+"close": 9355.74
+},
+{
+"date": "2020-06-21",
+"interest": 13,
+"close": 9002.46
+},
+{
+"date": "2020-06-28",
+"interest": 12,
+"close": 9138.51
+},
+{
+"date": "2020-07-05",
+"interest": 12,
+"close": 9235
+},
+{
+"date": "2020-07-12",
+"interest": 14,
+"close": 9175.85
+},
+{
+"date": "2020-07-19",
+"interest": 12,
+"close": 9711.33
+},
+{
+"date": "2020-07-26",
+"interest": 19,
+"close": 11810.07
+},
+{
+"date": "2020-08-02",
+"interest": 18,
+"close": 11774.98
+},
+{
+"date": "2020-08-09",
+"interest": 16,
+"close": 11859.24
+},
+{
+"date": "2020-08-16",
+"interest": 16,
+"close": 11672.93
+},
+{
+"date": "2020-08-23",
+"interest": 13,
+"close": 11474.31
+},
+{
+"date": "2020-08-30",
+"interest": 14,
+"close": 10168.36
+},
+{
+"date": "2020-09-06",
+"interest": 13,
+"close": 10446.52
+},
+{
+"date": "2020-09-13",
+"interest": 12,
+"close": 11080
+},
+{
+"date": "2020-09-20",
+"interest": 11,
+"close": 10730
+},
+{
+"date": "2020-09-27",
+"interest": 10,
+"close": 10551.65
+},
+{
+"date": "2020-10-04",
+"interest": 10,
+"close": 11299.5
+},
+{
+"date": "2020-10-11",
+"interest": 11,
+"close": 11367.89
+},
+{
+"date": "2020-10-18",
+"interest": 15,
+"close": 13126.24
+},
+{
+"date": "2020-10-25",
+"interest": 16,
+"close": 13804.81
+},
+{
+"date": "2020-11-01",
+"interest": 18,
+"close": 14834.09
+},
+{
+"date": "2020-11-08",
+"interest": 18,
+"close": 16082.01
+},
+{
+"date": "2020-11-15",
+"interest": 25,
+"close": 18721.21
+},
+{
+"date": "2020-11-22",
+"interest": 28,
+"close": 17739.85
+},
+{
+"date": "2020-11-29",
+"interest": 25,
+"close": 19158.96
+},
+{
+"date": "2020-12-06",
+"interest": 20,
+"close": 18821.28
+},
+{
+"date": "2020-12-13",
+"interest": 31,
+"close": 23849.99
+},
+{
+"date": "2020-12-20",
+"interest": 34,
+"close": 26475.35
+},
+{
+"date": "2020-12-27",
+"interest": 49,
+"close": 32225.91
+},
+{
+"date": "2021-01-03",
+"interest": 81,
+"close": 40257.43
+},
+{
+"date": "2021-01-10",
+"interest": 77,
+"close": 36006.94
+},
+{
+"date": "2021-01-17",
+"interest": 49,
+"close": 32112.01
+},
+{
+"date": "2021-01-24",
+"interest": 46,
+"close": 34315.63
+},
+{
+"date": "2021-01-31",
+"interest": 42,
+"close": 39265.43
+},
+{
+"date": "2021-02-07",
+"interest": 75,
+"close": 47232.45
+},
+{
+"date": "2021-02-14",
+"interest": 70,
+"close": 55923.52
+},
+{
+"date": "2021-02-21",
+"interest": 80,
+"close": 46180.75
+},
+{
+"date": "2021-02-28",
+"interest": 53,
+"close": 48909.84
+},
+{
+"date": "2021-03-07",
+"interest": 48,
+"close": 61178.5
+},
+{
+"date": "2021-03-14",
+"interest": 50,
+"close": 58116.7
+},
+{
+"date": "2021-03-21",
+"interest": 43,
+"close": 55856.53
+},
+{
+"date": "2021-03-28",
+"interest": 44,
+"close": 57094.34
+},
+{
+"date": "2021-04-04",
+"interest": 39,
+"close": 59778.6
+},
+{
+"date": "2021-04-11",
+"interest": 49,
+"close": 60058.86
+},
+{
+"date": "2021-04-18",
+"interest": 66,
+"close": 50089.15
+},
+{
+"date": "2021-04-25",
+"interest": 49,
+"close": 57859.28
+},
+{
+"date": "2021-05-02",
+"interest": 42,
+"close": 58958.05
+},
+{
+"date": "2021-05-09",
+"interest": 55,
+"close": 46775.51
+},
+{
+"date": "2021-05-16",
+"interest": 100,
+"close": 37476.83
+},
+{
+"date": "2021-05-23",
+"interest": 66,
+"close": 34627.82
+},
+{
+"date": "2021-05-30",
+"interest": 48,
+"close": 35539.49
+},
+{
+"date": "2021-06-06",
+"interest": 50,
+"close": 35557.33
+},
+{
+"date": "2021-06-13",
+"interest": 41,
+"close": 35484.79
+},
+{
+"date": "2021-06-20",
+"interest": 45,
+"close": 32275.19
+},
+{
+"date": "2021-06-27",
+"interest": 33,
+"close": 34682.16
+},
+{
+"date": "2021-07-04",
+"interest": 28,
+"close": 33515.35
+},
+{
+"date": "2021-07-11",
+"interest": 28,
+"close": 31533.91
+},
+{
+"date": "2021-07-18",
+"interest": 30,
+"close": 34283.01
+},
+{
+"date": "2021-07-25",
+"interest": 36,
+"close": 41495.01
+},
+{
+"date": "2021-08-01",
+"interest": 30,
+"close": 44637.34
+},
+{
+"date": "2021-08-08",
+"interest": 34,
+"close": 47109.65
+},
+{
+"date": "2021-08-15",
+"interest": 31,
+"close": 48867.02
+},
+{
+"date": "2021-08-22",
+"interest": 30,
+"close": 48942.94
+},
+{
+"date": "2021-08-29",
+"interest": 26,
+"close": 49942.98
+},
+{
+"date": "2021-09-05",
+"interest": 36,
+"close": 45171.83
+},
+{
+"date": "2021-09-12",
+"interest": 25,
+"close": 48314.56
+},
+{
+"date": "2021-09-19",
+"interest": 31,
+"close": 42705.51
+},
+{
+"date": "2021-09-26",
+"interest": 27,
+"close": 47657.69
+},
+{
+"date": "2021-10-03",
+"interest": 32,
+"close": 54962.29
+},
+{
+"date": "2021-10-10",
+"interest": 34,
+"close": 60877.42
+},
+{
+"date": "2021-10-17",
+"interest": 45,
+"close": 61300.01
+},
+{
+"date": "2021-10-24",
+"interest": 35,
+"close": 61892.41
+},
+{
+"date": "2021-10-31",
+"interest": 29,
+"close": 61539.31
+},
+{
+"date": "2021-11-07",
+"interest": 36,
+"close": 64400.01
+},
+{
+"date": "2021-11-14",
+"interest": 35,
+"close": 59760.76
+},
+{
+"date": "2021-11-21",
+"interest": 33,
+"close": 54759.05
+},
+{
+"date": "2021-11-28",
+"interest": 36,
+"close": 49241.12
+},
+{
+"date": "2021-12-05",
+"interest": 37,
+"close": 49407.75
+},
+{
+"date": "2021-12-12",
+"interest": 33,
+"close": 46859.46
+},
+{
+"date": "2021-12-19",
+"interest": 29,
+"close": 50428.31
+},
+{
+"date": "2021-12-26",
+"interest": 30,
+"close": 47733.43
+},
+{
+"date": "2022-01-02",
+"interest": 38,
+"close": 41684.84
+},
+{
+"date": "2022-01-09",
+"interest": 36,
+"close": 43098.2
+},
+{
+"date": "2022-01-16",
+"interest": 38,
+"close": 35066.43
+},
+{
+"date": "2022-01-23",
+"interest": 51,
+"close": 38191.1
+},
+{
+"date": "2022-01-30",
+"interest": 37,
+"close": 41404.85
+},
+{
+"date": "2022-02-06",
+"interest": 36,
+"close": 42244.97
+},
+{
+"date": "2022-02-13",
+"interest": 30,
+"close": 40101.94
+},
+{
+"date": "2022-02-20",
+"interest": 38,
+"close": 39137.8
+},
+{
+"date": "2022-02-27",
+"interest": 36,
+"close": 39402.43
+},
+{
+"date": "2022-03-06",
+"interest": 30,
+"close": 38813.02
+},
+{
+"date": "2022-03-13",
+"interest": 26,
+"close": 42232.26
+},
+{
+"date": "2022-03-20",
+"interest": 26,
+"close": 44539.42
+},
+{
+"date": "2022-03-27",
+"interest": 28,
+"close": 45826.27
+},
+{
+"date": "2022-04-03",
+"interest": 24,
+"close": 42766.93
+},
+{
+"date": "2022-04-10",
+"interest": 24,
+"close": 40387.6
+},
+{
+"date": "2022-04-17",
+"interest": 21,
+"close": 39465.87
+},
+{
+"date": "2022-04-24",
+"interest": 22,
+"close": 37644.1
+},
+{
+"date": "2022-05-01",
+"interest": 24,
+"close": 35458
+},
+{
+"date": "2022-05-08",
+"interest": 53,
+"close": 30041.88
+},
+{
+"date": "2022-05-15",
+"interest": 36,
+"close": 29408.26
+},
+{
+"date": "2022-05-22",
+"interest": 29,
+"close": 29008.99
+},
+{
+"date": "2022-05-29",
+"interest": 24,
+"close": 29843.18
+},
+{
+"date": "2022-06-05",
+"interest": 23,
+"close": 28388.63
+},
+{
+"date": "2022-06-12",
+"interest": 64,
+"close": 18948.89
+},
+{
+"date": "2022-06-19",
+"interest": 49,
+"close": 21478.04
+},
+{
+"date": "2022-06-26",
+"interest": 35,
+"close": 19224.03
+},
+{
+"date": "2022-07-03",
+"interest": 33,
+"close": 21583.99
+},
+{
+"date": "2022-07-10",
+"interest": 28,
+"close": 21189.68
+},
+{
+"date": "2022-07-17",
+"interest": 30,
+"close": 22450.69
+},
+{
+"date": "2022-07-24",
+"interest": 25,
+"close": 23650.13
+},
+{
+"date": "2022-07-31",
+"interest": 23,
+"close": 22960.93
+},
+{
+"date": "2022-08-07",
+"interest": 20,
+"close": 24456.49
+},
+{
+"date": "2022-08-14",
+"interest": 22,
+"close": 21139.23
+},
+{
+"date": "2022-08-21",
+"interest": 20,
+"close": 20036.69
+},
+{
+"date": "2022-08-28",
+"interest": 21,
+"close": 19835.47
+},
+{
+"date": "2022-09-04",
+"interest": 21,
+"close": 21651.52
+},
+{
+"date": "2022-09-11",
+"interest": 21,
+"close": 20113.37
+},
+{
+"date": "2022-09-18",
+"interest": 22,
+"close": 18923.2
+},
+{
+"date": "2022-09-25",
+"interest": 19,
+"close": 19315.27
+},
+{
+"date": "2022-10-02",
+"interest": 17,
+"close": 19419.39
+},
+{
+"date": "2022-10-09",
+"interest": 17,
+"close": 19070.24
+},
+{
+"date": "2022-10-16",
+"interest": 16,
+"close": 19209.1
+},
+{
+"date": "2022-10-23",
+"interest": 17,
+"close": 20823.53
+},
+{
+"date": "2022-10-30",
+"interest": 17,
+"close": 21300.45
+},
+{
+"date": "2022-11-06",
+"interest": 32,
+"close": 16783.33
+},
+{
+"date": "2022-11-13",
+"interest": 30,
+"close": 16683.02
+},
+{
+"date": "2022-11-20",
+"interest": 22,
+"close": 16450.93
+},
+{
+"date": "2022-11-27",
+"interest": 19,
+"close": 16888.53
+},
+{
+"date": "2022-12-04",
+"interest": 18,
+"close": 17128.1
+},
+{
+"date": "2022-12-11",
+"interest": 19,
+"close": 16782.25
+},
+{
+"date": "2022-12-18",
+"interest": 17,
+"close": 16837.12
+},
+{
+"date": "2022-12-25",
+"interest": 17,
+"close": 16530.35
+},
+{
+"date": "2023-01-01",
+"interest": 17,
+"close": 16942.37
+},
+{
+"date": "2023-01-08",
+"interest": 19,
+"close": 20957.02
+},
+{
+"date": "2023-01-15",
+"interest": 23,
+"close": 22789.37
+},
+{
+"date": "2023-01-22",
+"interest": 21,
+"close": 23028.95
+},
+{
+"date": "2023-01-29",
+"interest": 20,
+"close": 23328.87
+},
+{
+"date": "2023-02-05",
+"interest": 19,
+"close": 21863.73
+},
+{
+"date": "2023-02-12",
+"interest": 19,
+"close": 24636.23
+},
+{
+"date": "2023-02-19",
+"interest": 19,
+"close": 23159.71
+},
+{
+"date": "2023-02-26",
+"interest": 17,
+"close": 22350.95
+},
+{
+"date": "2023-03-05",
+"interest": 19,
+"close": 20620.54
+},
+{
+"date": "2023-03-12",
+"interest": 24,
+"close": 26980.35
+},
+{
+"date": "2023-03-19",
+"interest": 26,
+"close": 27488.18
+},
+{
+"date": "2023-03-26",
+"interest": 22,
+"close": 28471.46
+},
+{
+"date": "2023-04-02",
+"interest": 20,
+"close": 27958.81
+},
+{
+"date": "2023-04-09",
+"interest": 23,
+"close": 30324.11
+},
+{
+"date": "2023-04-16",
+"interest": 21,
+"close": 27821.41
+},
+{
+"date": "2023-04-23",
+"interest": 20,
+"close": 29249.35
+},
+{
+"date": "2023-04-30",
+"interest": 19,
+"close": 28902.66
+},
+{
+"date": "2023-05-07",
+"interest": 18,
+"close": 26789.48
+},
+{
+"date": "2023-05-14",
+"interest": 16,
+"close": 27113.61
+},
+{
+"date": "2023-05-21",
+"interest": 15,
+"close": 26867.99
+},
+{
+"date": "2023-05-28",
+"interest": 16,
+"close": 27077.6
+},
+{
+"date": "2023-06-04",
+"interest": 17,
+"close": 25856.1
+},
+{
+"date": "2023-06-11",
+"interest": 17,
+"close": 26506.56
+},
+{
+"date": "2023-06-18",
+"interest": 20,
+"close": 30547.18
+},
+{
+"date": "2023-06-25",
+"interest": 20,
+"close": 30587.21
+}
+]
+}

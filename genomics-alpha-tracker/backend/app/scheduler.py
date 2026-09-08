@@ -31,6 +31,7 @@ _JOB_FUNCS = {
     "short_interest": runner.run_short_interest,
     "benchmarks": lambda session: runner.run_benchmarks(session),
     "news": runner.run_news,
+    "trends": runner.run_trends,
 }
 
 

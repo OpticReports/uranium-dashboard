@@ -37,6 +37,7 @@ from .routers import (
     tuning,
     universe,
     views,
+    trends,
 )
 from .scheduler import shutdown_scheduler, start_scheduler
 from .universe.manager import sync_from_yaml
@@ -190,6 +191,7 @@ app.include_router(tuning.router)
 app.include_router(discovery.router)
 app.include_router(shadow.router)
 app.include_router(blend.router)
+app.include_router(trends.router)
 
 
 @app.get("/health", tags=["meta"])
@@ -202,6 +204,7 @@ def health():
             "polygon": bool(settings.polygon_api_key),
             "fmp": bool(settings.fmp_api_key),
             "tiingo": bool(settings.tiingo_api_key),
+            "dataforseo": bool(settings.dataforseo_login and settings.dataforseo_password),
             "x_twitter": bool(settings.x_bearer_token),
             "reddit": bool(settings.reddit_client_id),
             "llm_backend": ("anthropic" if settings.anthropic_api_key else

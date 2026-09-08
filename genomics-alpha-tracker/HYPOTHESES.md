@@ -269,3 +269,26 @@ call trigger · `retired` → failed the gate or decayed; kept for the record.
 _Add new hypotheses at the bottom of the backlog. When one changes status,
 edit its entry — this file is the audit trail of what the research suggested
 and whether the market agreed._
+
+### H14 — Attention climax (Google Trends) marks the late stage of a run
+- **Hypothesis:** when weekly Google search interest for an asset's theme
+  sets a multi-year record, doubles in four weeks and doubles its trailing
+  median while price sits near a 52-week high (CLIMAX), the run is late.
+  Specifically: a SECOND-or-later climax within 52 weeks (stage 2+) is
+  followed by a worse 26-week forward return and drawdown than the base
+  rate; a FIRST climax is not.
+- **Prediction:** stage-2+ CLIMAX → median 26w return < 0 and 26w max DD
+  worse than the base −10%; stage-1 CLIMAX → no edge. DIVERGENCE (new
+  price high on ≤ 60% of peak attention) → 26w max DD worse than base.
+- **How to implement:** built. `backend/app/trends/detector.py`, fed by
+  DataForSEO (`ingestion/trends.py`, `config/trends.yaml`), served at
+  `/trends`, shown on the Attention Tops tab. Flags are logged weekly
+  from 2026-09-08 forward; grade forward returns at 12w/26w per keyword.
+- **Source:** Casey 2026-09-08 (friend's silver call) + the frozen study
+  `docs/trends_peak/TRENDS_PEAK_STUDY.md` (11 series in-sample: stage-2+
+  n=8 median 26w −4.5% / DD −15.9%; stage-1 n=10 +27.2% / −5.0%; base
+  +10.1% / −9.9%). Stage split is post hoc — that is why this is here.
+- **Status:** `observing` — cross-asset, observe-only, feeds no score and
+  never generates a call. Promotion gate as usual (n ≥ 20 out-of-sample
+  stage-2+ episodes across keywords, Wilson lower bound on "26w DD worse
+  than base" > 0.50).

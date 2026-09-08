@@ -141,3 +141,8 @@ def run_all(session: Session, symbols: list[str] | None = None) -> dict:
 def run_news(session: Session, symbols: list[str] | None = None) -> int:
     from .news_tiingo import run_news as _rn
     return _rn(session, symbols)
+
+
+def run_trends(session: Session, symbols: list[str] | None = None) -> int:
+    from .trends import run_trends as _rt
+    return _rt(session, symbols)

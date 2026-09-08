@@ -27,6 +27,10 @@ async function req(path, opts = {}) {
 export const api = {
   health: () => req("/health"),
 
+  // Google Trends attention-top detector (observe-only)
+  trends: (weeks = 156) => req(`/trends?weeks=${weeks}`),
+  trendsStudy: () => req("/trends/study"),
+
   // Universe
   listUniverse: (includeInactive = true) =>
     req(`/universe?include_inactive=${includeInactive}`),

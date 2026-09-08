@@ -1,0 +1,59 @@
+# Google Trends attention-top detector: keyword -> traded proxy map.
+# Cross-asset by design (Casey 2026-09-08): the positions this is meant to
+# guard sit in different services (genomics universe here, BTC in
+# btc-executor, PHYS in barbell-lab, uranium/silver discretionary), so the
+# keywords live in one place and the detector runs on all of them.
+#
+# One DataForSEO request per keyword per UTC day ($0.009 each). Keep the
+# list short - 10 keywords is ~$3/month. Google Trends only works for terms
+# the public actually searches: use THEMES and household names, not
+# small-cap tickers (a $300M biotech's ticker is rounding noise on 0-100).
+#
+# Fields: keyword (what Google is asked), label, price_symbol (traded proxy
+# for the price-side conditions; must resolve at the market provider - FMP
+# handles ETFs and BTCUSD/ETHUSD), theme, positions (free text: which book
+# it guards). Optional: type (web|news|youtube), location_code (omit =
+# worldwide).
+time_range: past_5_years          # weekly points; the study's granularity
+
+keywords:
+  - keyword: silver price
+    label: Silver
+    price_symbol: SLV
+    theme: metals
+    positions: "discretionary silver; the 2026-01 blow-off is the reference case"
+  - keyword: gold price
+    label: Gold
+    price_symbol: GLD
+    theme: metals
+    positions: "PHYS sleeve (barbell-lab)"
+  - keyword: bitcoin
+    label: Bitcoin
+    price_symbol: BTCUSD
+    theme: crypto
+    positions: "btc-executor S5 live mirror; btc-paper-engine books"
+  - keyword: ethereum
+    label: Ethereum
+    price_symbol: ETHUSD
+    theme: crypto
+    positions: "crypto beta read-through"
+  - keyword: uranium stocks
+    label: Uranium
+    price_symbol: URA
+    theme: energy
+    positions: "uranium thesis (legacy dashboard names)"
+  - keyword: CRISPR stocks
+    label: Gene editing
+    price_symbol: ARKG
+    theme: genomics
+    positions: "genomics universe - editing names"
+  - keyword: biotech stocks
+    label: Biotech
+    price_symbol: XBI
+    theme: genomics
+    positions: "genomics universe - sector beta"
+  - keyword: gene therapy
+    label: Gene therapy
+    price_symbol: ARKG
+    theme: genomics
+    positions: "genomics universe - therapy names"

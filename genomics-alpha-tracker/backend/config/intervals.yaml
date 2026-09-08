@@ -45,3 +45,8 @@ jobs:
     # Daily: the census is cached 24h anyway; thresholds live in discovery.yaml.
     enabled: true
     interval_minutes: 1440
+  trends:
+    # Google Trends attention gauge via DataForSEO: 1 request/keyword/UTC day
+    # ($0.009 each). The lane itself dedupes per day, so daily is the floor.
+    enabled: true
+    interval_minutes: 1440

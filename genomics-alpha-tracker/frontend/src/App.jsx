@@ -10,6 +10,7 @@ import CallsLog from "./views/CallsLog";
 import Today from "./views/Today";
 import Discovery from "./views/Discovery";
 import Execution from "./views/Execution";
+import Trends from "./views/Trends";
 
 const TABS = [
   { id: "today", label: "Today" },
@@ -18,6 +19,7 @@ const TABS = [
   { id: "discovery", label: "Discovery" },
   { id: "catalysts", label: "Catalyst Calendar" },
   { id: "movers", label: "Movers in Narrative" },
+  { id: "trends", label: "Attention Tops" },
   { id: "calls", label: "Calls Log" },
   { id: "execution", label: "Execution" },
   { id: "chat", label: "Analyst Chat" },
@@ -78,6 +80,7 @@ export default function App() {
             {tab === "discovery" && <Discovery onPick={pick} />}
             {tab === "catalysts" && <CatalystCalendar onPick={pick} />}
             {tab === "movers" && <Movers onPick={pick} />}
+            {tab === "trends" && <Trends />}
             {tab === "calls" && <CallsLog onPick={pick} />}
             {tab === "execution" && <Execution />}
             {tab === "chat" && <Chat onPick={pick} />}

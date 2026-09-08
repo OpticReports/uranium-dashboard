@@ -1,0 +1,1322 @@
+{
+"event": "bitcoin_2017",
+"keyword": "bitcoin",
+"timeframe": "2015-01-01 2019-12-31",
+"geo": "worldwide",
+"granularity": "weekly (week starts Sunday)",
+"trends_source": "Google Trends via pytrends, pulled 2026-09-08 (same index DataForSEO serves)",
+"price_symbol": "BTCUSD",
+"price_source": "FMP historical EOD close, last trading day of each Google week",
+"weeks": [
+{
+"date": "2014-12-28",
+"interest": 2,
+"close": 278.22
+},
+{
+"date": "2015-01-04",
+"interest": 2,
+"close": 276.03
+},
+{
+"date": "2015-01-11",
+"interest": 3,
+"close": 201.09
+},
+{
+"date": "2015-01-18",
+"interest": 2,
+"close": 248.66
+},
+{
+"date": "2015-01-25",
+"interest": 2,
+"close": 215.8
+},
+{
+"date": "2015-02-01",
+"interest": 2,
+"close": 228.8
+},
+{
+"date": "2015-02-08",
+"interest": 2,
+"close": 257
+},
+{
+"date": "2015-02-15",
+"interest": 2,
+"close": 245.54
+},
+{
+"date": "2015-02-22",
+"interest": 2,
+"close": 255.7
+},
+{
+"date": "2015-03-01",
+"interest": 2,
+"close": 276.97
+},
+{
+"date": "2015-03-08",
+"interest": 2,
+"close": 282.6
+},
+{
+"date": "2015-03-15",
+"interest": 2,
+"close": 260.47
+},
+{
+"date": "2015-03-22",
+"interest": 2,
+"close": 252.95
+},
+{
+"date": "2015-03-29",
+"interest": 2,
+"close": 253.6
+},
+{
+"date": "2015-04-05",
+"interest": 2,
+"close": 236.86
+},
+{
+"date": "2015-04-12",
+"interest": 2,
+"close": 223.08
+},
+{
+"date": "2015-04-19",
+"interest": 2,
+"close": 226.01
+},
+{
+"date": "2015-04-26",
+"interest": 2,
+"close": 234.81
+},
+{
+"date": "2015-05-03",
+"interest": 2,
+"close": 242.54
+},
+{
+"date": "2015-05-10",
+"interest": 2,
+"close": 235.7
+},
+{
+"date": "2015-05-17",
+"interest": 2,
+"close": 238.81
+},
+{
+"date": "2015-05-24",
+"interest": 2,
+"close": 232.54
+},
+{
+"date": "2015-05-31",
+"interest": 2,
+"close": 225.66
+},
+{
+"date": "2015-06-07",
+"interest": 2,
+"close": 232.87
+},
+{
+"date": "2015-06-14",
+"interest": 2,
+"close": 245.38
+},
+{
+"date": "2015-06-21",
+"interest": 2,
+"close": 251.61
+},
+{
+"date": "2015-06-28",
+"interest": 2,
+"close": 260.58
+},
+{
+"date": "2015-07-05",
+"interest": 2,
+"close": 293.18
+},
+{
+"date": "2015-07-12",
+"interest": 2,
+"close": 277.25
+},
+{
+"date": "2015-07-19",
+"interest": 2,
+"close": 289.37
+},
+{
+"date": "2015-07-26",
+"interest": 2,
+"close": 280.31
+},
+{
+"date": "2015-08-02",
+"interest": 2,
+"close": 261.34
+},
+{
+"date": "2015-08-09",
+"interest": 2,
+"close": 262.2
+},
+{
+"date": "2015-08-16",
+"interest": 2,
+"close": 230.27
+},
+{
+"date": "2015-08-23",
+"interest": 2,
+"close": 230.75
+},
+{
+"date": "2015-08-30",
+"interest": 2,
+"close": 235.84
+},
+{
+"date": "2015-09-06",
+"interest": 2,
+"close": 235.77
+},
+{
+"date": "2015-09-13",
+"interest": 2,
+"close": 232.09
+},
+{
+"date": "2015-09-20",
+"interest": 2,
+"close": 234.63
+},
+{
+"date": "2015-09-27",
+"interest": 2,
+"close": 239.79
+},
+{
+"date": "2015-10-04",
+"interest": 2,
+"close": 246.01
+},
+{
+"date": "2015-10-11",
+"interest": 2,
+"close": 272.9
+},
+{
+"date": "2015-10-18",
+"interest": 2,
+"close": 284.19
+},
+{
+"date": "2015-10-25",
+"interest": 2,
+"close": 316
+},
+{
+"date": "2015-11-01",
+"interest": 4,
+"close": 384.99
+},
+{
+"date": "2015-11-08",
+"interest": 3,
+"close": 333.37
+},
+{
+"date": "2015-11-15",
+"interest": 2,
+"close": 327.84
+},
+{
+"date": "2015-11-22",
+"interest": 2,
+"close": 358.6
+},
+{
+"date": "2015-11-29",
+"interest": 2,
+"close": 389.79
+},
+{
+"date": "2015-12-06",
+"interest": 4,
+"close": 435.61
+},
+{
+"date": "2015-12-13",
+"interest": 3,
+"close": 462.44
+},
+{
+"date": "2015-12-20",
+"interest": 3,
+"close": 416.51
+},
+{
+"date": "2015-12-27",
+"interest": 2,
+"close": 435.4
+},
+{
+"date": "2016-01-03",
+"interest": 2,
+"close": 450.38
+},
+{
+"date": "2016-01-10",
+"interest": 3,
+"close": 388.7
+},
+{
+"date": "2016-01-17",
+"interest": 3,
+"close": 387.5
+},
+{
+"date": "2016-01-24",
+"interest": 2,
+"close": 378.46
+},
+{
+"date": "2016-01-31",
+"interest": 2,
+"close": 375.44
+},
+{
+"date": "2016-02-07",
+"interest": 2,
+"close": 390.99
+},
+{
+"date": "2016-02-14",
+"interest": 3,
+"close": 437.46
+},
+{
+"date": "2016-02-21",
+"interest": 3,
+"close": 433.12
+},
+{
+"date": "2016-02-28",
+"interest": 2,
+"close": 396.08
+},
+{
+"date": "2016-03-06",
+"interest": 2,
+"close": 410.58
+},
+{
+"date": "2016-03-13",
+"interest": 2,
+"close": 410.2
+},
+{
+"date": "2016-03-20",
+"interest": 2,
+"close": 416.97
+},
+{
+"date": "2016-03-27",
+"interest": 2,
+"close": 419.95
+},
+{
+"date": "2016-04-03",
+"interest": 2,
+"close": 419.46
+},
+{
+"date": "2016-04-10",
+"interest": 2,
+"close": 433.39
+},
+{
+"date": "2016-04-17",
+"interest": 2,
+"close": 455.69
+},
+{
+"date": "2016-04-24",
+"interest": 3,
+"close": 454.02
+},
+{
+"date": "2016-05-01",
+"interest": 4,
+"close": 461.91
+},
+{
+"date": "2016-05-08",
+"interest": 3,
+"close": 458.9
+},
+{
+"date": "2016-05-15",
+"interest": 2,
+"close": 446.28
+},
+{
+"date": "2016-05-22",
+"interest": 2,
+"close": 523.25
+},
+{
+"date": "2016-05-29",
+"interest": 3,
+"close": 576.31
+},
+{
+"date": "2016-06-05",
+"interest": 3,
+"close": 609.5
+},
+{
+"date": "2016-06-12",
+"interest": 4,
+"close": 758.99
+},
+{
+"date": "2016-06-19",
+"interest": 4,
+"close": 673.71
+},
+{
+"date": "2016-06-26",
+"interest": 3,
+"close": 704.95
+},
+{
+"date": "2016-07-03",
+"interest": 3,
+"close": 657.61
+},
+{
+"date": "2016-07-10",
+"interest": 3,
+"close": 666.32
+},
+{
+"date": "2016-07-17",
+"interest": 2,
+"close": 657.5
+},
+{
+"date": "2016-07-24",
+"interest": 2,
+"close": 655.87
+},
+{
+"date": "2016-07-31",
+"interest": 3,
+"close": 591.71
+},
+{
+"date": "2016-08-07",
+"interest": 2,
+"close": 586.45
+},
+{
+"date": "2016-08-14",
+"interest": 2,
+"close": 581.87
+},
+{
+"date": "2016-08-21",
+"interest": 2,
+"close": 570.84
+},
+{
+"date": "2016-08-28",
+"interest": 2,
+"close": 600.91
+},
+{
+"date": "2016-09-04",
+"interest": 3,
+"close": 623.74
+},
+{
+"date": "2016-09-11",
+"interest": 3,
+"close": 607.92
+},
+{
+"date": "2016-09-18",
+"interest": 2,
+"close": 603.68
+},
+{
+"date": "2016-09-25",
+"interest": 2,
+"close": 615.65
+},
+{
+"date": "2016-10-02",
+"interest": 3,
+"close": 619.5
+},
+{
+"date": "2016-10-09",
+"interest": 3,
+"close": 638.16
+},
+{
+"date": "2016-10-16",
+"interest": 2,
+"close": 652.75
+},
+{
+"date": "2016-10-23",
+"interest": 3,
+"close": 714.28
+},
+{
+"date": "2016-10-30",
+"interest": 3,
+"close": 706.99
+},
+{
+"date": "2016-11-06",
+"interest": 3,
+"close": 704.53
+},
+{
+"date": "2016-11-13",
+"interest": 3,
+"close": 750.77
+},
+{
+"date": "2016-11-20",
+"interest": 3,
+"close": 735.7
+},
+{
+"date": "2016-11-27",
+"interest": 3,
+"close": 766.98
+},
+{
+"date": "2016-12-04",
+"interest": 3,
+"close": 775.87
+},
+{
+"date": "2016-12-11",
+"interest": 3,
+"close": 788.57
+},
+{
+"date": "2016-12-18",
+"interest": 4,
+"close": 891.5
+},
+{
+"date": "2016-12-25",
+"interest": 5,
+"close": 973.37
+},
+{
+"date": "2017-01-01",
+"interest": 7,
+"close": 909
+},
+{
+"date": "2017-01-08",
+"interest": 6,
+"close": 828
+},
+{
+"date": "2017-01-15",
+"interest": 4,
+"close": 925.06
+},
+{
+"date": "2017-01-22",
+"interest": 4,
+"close": 924.98
+},
+{
+"date": "2017-01-29",
+"interest": 4,
+"close": 1035.54
+},
+{
+"date": "2017-02-05",
+"interest": 4,
+"close": 1018.65
+},
+{
+"date": "2017-02-12",
+"interest": 4,
+"close": 1062.15
+},
+{
+"date": "2017-02-19",
+"interest": 5,
+"close": 1158
+},
+{
+"date": "2017-02-26",
+"interest": 6,
+"close": 1273.97
+},
+{
+"date": "2017-03-05",
+"interest": 6,
+"close": 1188.08
+},
+{
+"date": "2017-03-12",
+"interest": 5,
+"close": 970
+},
+{
+"date": "2017-03-19",
+"interest": 5,
+"close": 963.89
+},
+{
+"date": "2017-03-26",
+"interest": 5,
+"close": 1092
+},
+{
+"date": "2017-04-02",
+"interest": 5,
+"close": 1184.5
+},
+{
+"date": "2017-04-09",
+"interest": 5,
+"close": 1178.85
+},
+{
+"date": "2017-04-16",
+"interest": 5,
+"close": 1247
+},
+{
+"date": "2017-04-23",
+"interest": 5,
+"close": 1365.43
+},
+{
+"date": "2017-04-30",
+"interest": 7,
+"close": 1585.39
+},
+{
+"date": "2017-05-07",
+"interest": 10,
+"close": 1792.73
+},
+{
+"date": "2017-05-14",
+"interest": 11,
+"close": 2058.91
+},
+{
+"date": "2017-05-21",
+"interest": 19,
+"close": 2099.99
+},
+{
+"date": "2017-05-28",
+"interest": 12,
+"close": 2548.05
+},
+{
+"date": "2017-06-04",
+"interest": 12,
+"close": 2931.15
+},
+{
+"date": "2017-06-11",
+"interest": 13,
+"close": 2634.94
+},
+{
+"date": "2017-06-18",
+"interest": 11,
+"close": 2574.84
+},
+{
+"date": "2017-06-25",
+"interest": 11,
+"close": 2423.63
+},
+{
+"date": "2017-07-02",
+"interest": 9,
+"close": 2561.11
+},
+{
+"date": "2017-07-09",
+"interest": 9,
+"close": 1964.31
+},
+{
+"date": "2017-07-16",
+"interest": 12,
+"close": 2825.27
+},
+{
+"date": "2017-07-23",
+"interest": 11,
+"close": 2700.21
+},
+{
+"date": "2017-07-30",
+"interest": 15,
+"close": 3243.49
+},
+{
+"date": "2017-08-06",
+"interest": 14,
+"close": 3874
+},
+{
+"date": "2017-08-13",
+"interest": 20,
+"close": 4157.41
+},
+{
+"date": "2017-08-20",
+"interest": 16,
+"close": 4344.32
+},
+{
+"date": "2017-08-27",
+"interest": 17,
+"close": 4649.99
+},
+{
+"date": "2017-09-03",
+"interest": 18,
+"close": 4334.36
+},
+{
+"date": "2017-09-10",
+"interest": 21,
+"close": 3726.51
+},
+{
+"date": "2017-09-17",
+"interest": 16,
+"close": 3787.33
+},
+{
+"date": "2017-09-24",
+"interest": 12,
+"close": 4339
+},
+{
+"date": "2017-10-01",
+"interest": 12,
+"close": 4425
+},
+{
+"date": "2017-10-08",
+"interest": 19,
+"close": 5819.13
+},
+{
+"date": "2017-10-15",
+"interest": 19,
+"close": 6024.86
+},
+{
+"date": "2017-10-22",
+"interest": 20,
+"close": 5752.01
+},
+{
+"date": "2017-10-29",
+"interest": 27,
+"close": 7412.55
+},
+{
+"date": "2017-11-05",
+"interest": 29,
+"close": 6346.7
+},
+{
+"date": "2017-11-12",
+"interest": 31,
+"close": 7777.01
+},
+{
+"date": "2017-11-19",
+"interest": 27,
+"close": 8795.5
+},
+{
+"date": "2017-11-26",
+"interest": 62,
+"close": 10930.24
+},
+{
+"date": "2017-12-03",
+"interest": 89,
+"close": 15309.98
+},
+{
+"date": "2017-12-10",
+"interest": 83,
+"close": 19650.01
+},
+{
+"date": "2017-12-17",
+"interest": 100,
+"close": 15075.89
+},
+{
+"date": "2017-12-24",
+"interest": 63,
+"close": 12839.99
+},
+{
+"date": "2017-12-31",
+"interest": 47,
+"close": 17098.99
+},
+{
+"date": "2018-01-07",
+"interest": 43,
+"close": 14187.95
+},
+{
+"date": "2018-01-14",
+"interest": 57,
+"close": 12762.8
+},
+{
+"date": "2018-01-21",
+"interest": 39,
+"close": 11319
+},
+{
+"date": "2018-01-28",
+"interest": 40,
+"close": 9240
+},
+{
+"date": "2018-02-04",
+"interest": 47,
+"close": 8547.49
+},
+{
+"date": "2018-02-11",
+"interest": 28,
+"close": 11121.5
+},
+{
+"date": "2018-02-18",
+"interest": 23,
+"close": 9688.62
+},
+{
+"date": "2018-02-25",
+"interest": 19,
+"close": 11432.5
+},
+{
+"date": "2018-03-04",
+"interest": 19,
+"close": 8795.44
+},
+{
+"date": "2018-03-11",
+"interest": 19,
+"close": 7865.02
+},
+{
+"date": "2018-03-18",
+"interest": 18,
+"close": 8531.34
+},
+{
+"date": "2018-03-25",
+"interest": 18,
+"close": 6928.5
+},
+{
+"date": "2018-04-01",
+"interest": 17,
+"close": 6894.01
+},
+{
+"date": "2018-04-08",
+"interest": 15,
+"close": 8003.11
+},
+{
+"date": "2018-04-15",
+"interest": 14,
+"close": 8915.42
+},
+{
+"date": "2018-04-22",
+"interest": 14,
+"close": 9329.99
+},
+{
+"date": "2018-04-29",
+"interest": 13,
+"close": 9800
+},
+{
+"date": "2018-05-06",
+"interest": 12,
+"close": 8475
+},
+{
+"date": "2018-05-13",
+"interest": 11,
+"close": 8235.6
+},
+{
+"date": "2018-05-20",
+"interest": 11,
+"close": 7337.95
+},
+{
+"date": "2018-05-27",
+"interest": 11,
+"close": 7636.42
+},
+{
+"date": "2018-06-03",
+"interest": 10,
+"close": 7496.4
+},
+{
+"date": "2018-06-10",
+"interest": 12,
+"close": 6484.29
+},
+{
+"date": "2018-06-17",
+"interest": 10,
+"close": 6178.29
+},
+{
+"date": "2018-06-24",
+"interest": 10,
+"close": 6383.19
+},
+{
+"date": "2018-07-01",
+"interest": 10,
+"close": 6753.28
+},
+{
+"date": "2018-07-08",
+"interest": 9,
+"close": 6248.65
+},
+{
+"date": "2018-07-15",
+"interest": 11,
+"close": 7408
+},
+{
+"date": "2018-07-22",
+"interest": 12,
+"close": 8228.9
+},
+{
+"date": "2018-07-29",
+"interest": 10,
+"close": 7005
+},
+{
+"date": "2018-08-05",
+"interest": 11,
+"close": 6235.56
+},
+{
+"date": "2018-08-12",
+"interest": 10,
+"close": 6396.64
+},
+{
+"date": "2018-08-19",
+"interest": 9,
+"close": 6737.52
+},
+{
+"date": "2018-08-26",
+"interest": 9,
+"close": 7191.08
+},
+{
+"date": "2018-09-02",
+"interest": 11,
+"close": 6188
+},
+{
+"date": "2018-09-09",
+"interest": 9,
+"close": 6518.68
+},
+{
+"date": "2018-09-16",
+"interest": 8,
+"close": 6707.33
+},
+{
+"date": "2018-09-23",
+"interest": 8,
+"close": 6581
+},
+{
+"date": "2018-09-30",
+"interest": 8,
+"close": 6552.43
+},
+{
+"date": "2018-10-07",
+"interest": 8,
+"close": 6196
+},
+{
+"date": "2018-10-14",
+"interest": 8,
+"close": 6414
+},
+{
+"date": "2018-10-21",
+"interest": 7,
+"close": 6409.12
+},
+{
+"date": "2018-10-28",
+"interest": 7,
+"close": 6331.96
+},
+{
+"date": "2018-11-04",
+"interest": 8,
+"close": 6347.42
+},
+{
+"date": "2018-11-11",
+"interest": 10,
+"close": 5504.17
+},
+{
+"date": "2018-11-18",
+"interest": 14,
+"close": 3774.99
+},
+{
+"date": "2018-11-25",
+"interest": 14,
+"close": 4142.01
+},
+{
+"date": "2018-12-02",
+"interest": 12,
+"close": 3401
+},
+{
+"date": "2018-12-09",
+"interest": 11,
+"close": 3183
+},
+{
+"date": "2018-12-16",
+"interest": 12,
+"close": 3980.46
+},
+{
+"date": "2018-12-23",
+"interest": 10,
+"close": 3729.31
+},
+{
+"date": "2018-12-30",
+"interest": 9,
+"close": 3798.62
+},
+{
+"date": "2019-01-06",
+"interest": 9,
+"close": 3619.41
+},
+{
+"date": "2019-01-13",
+"interest": 8,
+"close": 3682.65
+},
+{
+"date": "2019-01-20",
+"interest": 7,
+"close": 3556.07
+},
+{
+"date": "2019-01-27",
+"interest": 7,
+"close": 3468.43
+},
+{
+"date": "2019-02-03",
+"interest": 8,
+"close": 3623.73
+},
+{
+"date": "2019-02-10",
+"interest": 7,
+"close": 3582.37
+},
+{
+"date": "2019-02-17",
+"interest": 8,
+"close": 4110
+},
+{
+"date": "2019-02-24",
+"interest": 8,
+"close": 3809.7
+},
+{
+"date": "2019-03-03",
+"interest": 7,
+"close": 3917
+},
+{
+"date": "2019-03-10",
+"interest": 7,
+"close": 3990
+},
+{
+"date": "2019-03-17",
+"interest": 7,
+"close": 3983.43
+},
+{
+"date": "2019-03-24",
+"interest": 7,
+"close": 4094.14
+},
+{
+"date": "2019-03-31",
+"interest": 12,
+"close": 5049.22
+},
+{
+"date": "2019-04-07",
+"interest": 10,
+"close": 5066.22
+},
+{
+"date": "2019-04-14",
+"interest": 8,
+"close": 5319.89
+},
+{
+"date": "2019-04-21",
+"interest": 9,
+"close": 5170.6
+},
+{
+"date": "2019-04-28",
+"interest": 8,
+"close": 5770.01
+},
+{
+"date": "2019-05-05",
+"interest": 11,
+"close": 7219.95
+},
+{
+"date": "2019-05-12",
+"interest": 19,
+"close": 7262.4
+},
+{
+"date": "2019-05-19",
+"interest": 14,
+"close": 8063.81
+},
+{
+"date": "2019-05-26",
+"interest": 14,
+"close": 8558.95
+},
+{
+"date": "2019-06-02",
+"interest": 12,
+"close": 7930.14
+},
+{
+"date": "2019-06-09",
+"interest": 11,
+"close": 8860.23
+},
+{
+"date": "2019-06-16",
+"interest": 17,
+"close": 10666.86
+},
+{
+"date": "2019-06-23",
+"interest": 25,
+"close": 11865.29
+},
+{
+"date": "2019-06-30",
+"interest": 17,
+"close": 11237.77
+},
+{
+"date": "2019-07-07",
+"interest": 16,
+"close": 11370.08
+},
+{
+"date": "2019-07-14",
+"interest": 16,
+"close": 10761.03
+},
+{
+"date": "2019-07-21",
+"interest": 13,
+"close": 9479.98
+},
+{
+"date": "2019-07-28",
+"interest": 12,
+"close": 10820.76
+},
+{
+"date": "2019-08-04",
+"interest": 14,
+"close": 11280.95
+},
+{
+"date": "2019-08-11",
+"interest": 12,
+"close": 10217.79
+},
+{
+"date": "2019-08-18",
+"interest": 12,
+"close": 10147.96
+},
+{
+"date": "2019-08-25",
+"interest": 11,
+"close": 9600.86
+},
+{
+"date": "2019-09-01",
+"interest": 11,
+"close": 10484.37
+},
+{
+"date": "2019-09-08",
+"interest": 9,
+"close": 10360.25
+},
+{
+"date": "2019-09-15",
+"interest": 9,
+"close": 9973.99
+},
+{
+"date": "2019-09-22",
+"interest": 11,
+"close": 8217.47
+},
+{
+"date": "2019-09-29",
+"interest": 9,
+"close": 8147.63
+},
+{
+"date": "2019-10-06",
+"interest": 9,
+"close": 8309.03
+},
+{
+"date": "2019-10-13",
+"interest": 8,
+"close": 7965.28
+},
+{
+"date": "2019-10-20",
+"interest": 10,
+"close": 9259.78
+},
+{
+"date": "2019-10-27",
+"interest": 10,
+"close": 9308.52
+},
+{
+"date": "2019-11-03",
+"interest": 9,
+"close": 8807.89
+},
+{
+"date": "2019-11-10",
+"interest": 8,
+"close": 8481
+},
+{
+"date": "2019-11-17",
+"interest": 9,
+"close": 7329.29
+},
+{
+"date": "2019-11-24",
+"interest": 10,
+"close": 7555.92
+},
+{
+"date": "2019-12-01",
+"interest": 9,
+"close": 7502.19
+},
+{
+"date": "2019-12-08",
+"interest": 8,
+"close": 7062.91
+},
+{
+"date": "2019-12-15",
+"interest": 10,
+"close": 7143.01
+},
+{
+"date": "2019-12-22",
+"interest": 8,
+"close": 7302.67
+},
+{
+"date": "2019-12-29",
+"interest": 9,
+"close": 7348.63
+}
+]
+}

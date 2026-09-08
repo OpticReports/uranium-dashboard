@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     polygon_api_key: str | None = None
     fmp_api_key: str | None = None
     tiingo_api_key: str | None = None
+    # DataForSEO (Google Trends attention gauge; per-request billed). Both or neither.
+    dataforseo_login: str | None = None
+    dataforseo_password: str | None = None
 
     # --- Analyst data (FMP gives estimates/PT revisions on free-ish tier) ---
     analyst_provider: str = "fmp"  # falls back to yfinance recommendations
