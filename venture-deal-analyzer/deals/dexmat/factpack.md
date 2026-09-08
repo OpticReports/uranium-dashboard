@@ -408,3 +408,20 @@ SITE VISIT DELIVERABLES (what converts CLAIMED → scoreable):
     ABOVE the Zoltek-class specialty benchmark ($584M, 26 yrs). The
     specialty-only outcome at this price nets roughly 1.5–3x over ~10 yrs.
   - Fee drag unchanged: breakeven 1.02x gross; 10x net needs ≈12.5x gross.
+
+## UPDATED SPONSOR DOCS — SUPPLIED BUT NOT READ (2026-09-05)
+
+Casey supplied two DocSend links from the sponsor ("updated docs on
+DexMat"):
+- docsend.com/view/hdpqpkc7jp5ti9t8
+- docsend.com/view/9tyeiy9tt4d6f5a2
+
+**NEITHER COULD BE OPENED** from this environment — the DocSend viewer
+requires JS + CAPTCHA/email gate; direct fetch 403, browser-UA curl
+returns only the gate shell, headless Chromium connection-reset through
+the proxy. Per the standing rule (origin: the Quaise teaser, where
+exactly this became a two-revision silent gap): logged NOT READ the
+same day, alternate supply requested — Casey to download the PDFs from
+DocSend and upload them directly, the path that worked for the Quaise
+and Matter documents. **No DexMat conclusion may be updated, and rev 3
+may not ship, until these are read.** Contents not guessed.
