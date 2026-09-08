@@ -1452,25 +1452,34 @@ def test_dry_fill_reports_a_zero_commission():
 # --- 2026-09-08: venue order-history requests are bounded --------------------
 # MUTATION-VERIFIED: dropping the RequestTimeout assignment turns
 # test_order_history_refresh_is_bounded red (the fake sees 0 = forever);
-# turning the timeout into `continue` turns it red (a timeout must fail
-# CLOSED, never read as "venue never saw the order"); dropping the
-# ib.disconnect() turns it red. NOT catchable here: narrowing the except
-# to the builtin TimeoutError alone - on 3.11+ asyncio.TimeoutError IS
-# TimeoutError, so the 3.10 case can only be pinned by the base image.
+# turning the OPEN-orders timeout into `continue` turns it red (a timeout
+# there must fail CLOSED, never read as "venue never saw the order");
+# dropping the ib.disconnect() turns it red; dropping the executions
+# fallback turns test_completed_orders_timeout_falls_back_to_executions
+# red; reading a reqExecutions timeout as "no fills" turns it red.
+# NOT catchable here: narrowing the except to the builtin TimeoutError
+# alone - on 3.11+ asyncio.TimeoutError IS TimeoutError.
+
+def _exec_fill(ref, shares, price, order_id=77, exec_id="ex-1", commission=1.0):
+    return types.SimpleNamespace(
+        execution=types.SimpleNamespace(orderRef=ref, shares=shares, price=price,
+                                        orderId=order_id, execId=exec_id, side="SLD"),
+        commissionReport=types.SimpleNamespace(commission=commission, execId=exec_id,
+                                               currency="USD"))
+
 
 def test_order_history_refresh_is_bounded(ib_adapter):
     fake = ib_adapter.ib
     fake.RequestTimeout = 0                        # ib_async default: forever
     seen = {}
 
-    def completed(apiOnly=True):
+    def open_hang():
         seen["timeout"] = fake.RequestTimeout
         if not fake.RequestTimeout:
-            raise AssertionError("reqCompletedOrders issued with no timeout: "
+            raise AssertionError("reqAllOpenOrders issued with no timeout: "
                                  "this is the 2026-09-08 loop hang")
-        raise TimeoutError("completedOrdersEnd never arrived")
-    fake.reqCompletedOrders = completed
-    # a journaled order the session does not know -> refresh -> bounded
+        raise TimeoutError("openOrderEnd never arrived")
+    fake.reqAllOpenOrders = open_hang
     with pytest.raises(ExecutorConnectionError) as e:
         ib_adapter.find_stock_order("blend-sweep-wedged")
     assert "timed out" in str(e.value) and "fails closed" in str(e.value)
@@ -1478,22 +1487,43 @@ def test_order_history_refresh_is_bounded(ib_adapter):
     assert fake.RequestTimeout == 0                # restored
     assert not fake.isConnected(), "session must be dropped so _reconnect pages"
     # a venue that answers "nothing" is still "venue never saw it" (the
-    # adapter reconnects transparently), and the timeout is restored on the
-    # success path too
-    fake.reqCompletedOrders = lambda apiOnly=True: []
+    # adapter reconnects transparently), timeout restored on success too
+    fake.reqAllOpenOrders = lambda: []
     assert ib_adapter.find_stock_order("blend-sweep-wedged") is None
     assert fake.RequestTimeout == 0 and fake.isConnected()
-    # the open-orders request is bounded as well
-    def open_hang():
-        if not fake.RequestTimeout:
-            raise AssertionError("reqAllOpenOrders issued with no timeout")
-        raise asyncio.TimeoutError("openOrderEnd never arrived")   # 3.10 class
-    fake.reqAllOpenOrders = open_hang
-    with pytest.raises(ExecutorConnectionError):
-        ib_adapter.find_stock_order("blend-sweep-wedged")
-    fake.reqAllOpenOrders = lambda: []
-    # ... and a non-timeout venue error on the refresh is still tolerated
-    def boom(apiOnly=True):
+    # a non-timeout venue error on either refresh is still tolerated
+    def boom(*a, **k):
         raise RuntimeError("gateway said no")
     fake.reqCompletedOrders = boom
     assert ib_adapter.find_stock_order("blend-sweep-wedged") is None
+    fake.reqCompletedOrders = lambda apiOnly=True: []
+
+
+def test_completed_orders_timeout_falls_back_to_executions(ib_adapter):
+    """The 2026-09-08 gateway never answered reqCompletedOrders on any
+    session. That request is best effort: the fill question is answered
+    from execution reports, the session is KEPT, the cycle completes."""
+    fake = ib_adapter.ib
+
+    def completed_hang(apiOnly=False):
+        assert fake.RequestTimeout == ib_mod.VENUE_HISTORY_TIMEOUT_S
+        raise asyncio.TimeoutError("completedOrdersEnd never arrived")   # 3.10 class
+    fake.reqCompletedOrders = completed_hang
+    fake.fills = lambda: [_exec_fill("blend-sweep-32", 20, 91.20, exec_id="a"),
+                          _exec_fill("blend-sweep-32", 12, 91.30, exec_id="b"),
+                          _exec_fill("blend-other", 5, 50.0, exec_id="c")]
+    fake.reqExecutions = lambda *a, **k: [_exec_fill("blend-sweep-32", 12, 91.30, exec_id="b")]
+    r = ib_adapter.find_stock_order("blend-sweep-32")
+    assert r["status"] == "filled" and r["filled_qty"] == 32      # exec b not double counted
+    assert r["fill_price"] == pytest.approx((20 * 91.20 + 12 * 91.30) / 32)
+    assert r["commission"] == 2.0 and r["source"] == "executions"
+    assert fake.isConnected() and fake.RequestTimeout == 0
+    # no execution carries the ref -> the venue never filled it
+    assert ib_adapter.find_stock_order("blend-sweep-never") is None
+    # executions ALSO unanswered -> fail closed, session dropped
+    def exec_hang(*a, **k):
+        raise TimeoutError("execDetailsEnd never arrived")
+    fake.reqExecutions = exec_hang
+    with pytest.raises(ExecutorConnectionError):
+        ib_adapter.find_stock_order("blend-sweep-32")
+    assert not fake.isConnected()
