@@ -1446,3 +1446,37 @@ def test_dry_fill_reports_a_zero_commission():
     a = DryAdapter()
     r = a.place_stock_order("BIL", 3, "MKT", client_order_id="d-1")
     assert r["status"] == "filled" and r["commission"] == 0.0
+
+
+# --- 2026-09-08: venue order-history requests are bounded --------------------
+# MUTATION-VERIFIED: dropping the RequestTimeout assignment turns
+# test_order_history_refresh_is_bounded red (the fake sees 0 = forever);
+# turning the timeout into `continue` turns it red (a timeout must fail
+# CLOSED, never read as "venue never saw the order").
+
+def test_order_history_refresh_is_bounded(ib_adapter):
+    fake = ib_adapter.ib
+    fake.RequestTimeout = 0                        # ib_async default: forever
+    seen = {}
+
+    def completed(apiOnly=True):
+        seen["timeout"] = fake.RequestTimeout
+        if not fake.RequestTimeout:
+            raise AssertionError("reqCompletedOrders issued with no timeout: "
+                                 "this is the 2026-09-08 loop hang")
+        raise TimeoutError("completedOrdersEnd never arrived")
+    fake.reqCompletedOrders = completed
+    # a journaled order the session does not know -> refresh -> bounded
+    with pytest.raises(ExecutorConnectionError) as e:
+        ib_adapter.find_stock_order("blend-sweep-wedged")
+    assert "timed out" in str(e.value) and "fails closed" in str(e.value)
+    assert seen["timeout"] == ib_mod.VENUE_HISTORY_TIMEOUT_S
+    assert fake.RequestTimeout == 0                # restored
+    # a venue that answers "nothing" is still "venue never saw it"
+    fake.reqCompletedOrders = lambda apiOnly=True: []
+    assert ib_adapter.find_stock_order("blend-sweep-wedged") is None
+    # ... and a non-timeout venue error on the refresh is still tolerated
+    def boom(apiOnly=True):
+        raise RuntimeError("gateway said no")
+    fake.reqCompletedOrders = boom
+    assert ib_adapter.find_stock_order("blend-sweep-wedged") is None

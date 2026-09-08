@@ -29,6 +29,12 @@ UNDERLYINGS = {
 # -- stock/ETF (blend3070 paper phase) -----------------------------------------
 STOCK_EXCHANGE = "SMART"
 STOCK_CURRENCY = "USD"
+VENUE_HISTORY_TIMEOUT_S = 20.0  # bound on reqAllOpenOrders / reqCompletedOrders.
+                             # ib_async's RequestTimeout defaults to 0 = wait
+                             # FOREVER; on 2026-09-08 the gateway never
+                             # answered reqCompletedOrders after a relogin and
+                             # the loop thread hung on the first cycle with
+                             # /health reading "ok" (loop_age null) for 15 min.
 PLACE_ACK_TIMEOUT_S = 10.0   # no venue ack within this -> raise (idempotent
                              # retry via the deterministic client_order_id)
 MKT_FILL_WAIT_S = 5.0        # bounded wait for a synchronous MKT fill (liquid
@@ -597,18 +603,34 @@ class IBAdapter:
         if refresh:
             seen = {(t.order.orderId, getattr(t.order, "permId", 0))
                     for t in trades}
-            for fn, args in (("reqAllOpenOrders", ()),
-                             ("reqCompletedOrders", (True,))):
-                try:
-                    extra = getattr(self.ib, fn)(*args) or []
-                except Exception as exc:  # noqa: BLE001
-                    logger.debug("%s failed: %s", fn, exc)
-                    continue
-                for t in extra:
-                    key = (t.order.orderId, getattr(t.order, "permId", 0))
-                    if key not in seen:
-                        seen.add(key)
-                        trades.append(t)
+            # BOUNDED (2026-09-08): RequestTimeout=0 waits forever, and a
+            # gateway that never sends completedOrdersEnd wedged the loop
+            # thread for good. A timeout is NOT "no extra orders" - treating
+            # it so would let a reconcile clear a journal the venue may
+            # still hold and re-place the order. It fails the cycle CLOSED.
+            prev = getattr(self.ib, "RequestTimeout", 0)
+            try:
+                self.ib.RequestTimeout = VENUE_HISTORY_TIMEOUT_S
+                for fn, args in (("reqAllOpenOrders", ()),
+                                 ("reqCompletedOrders", (True,))):
+                    try:
+                        extra = getattr(self.ib, fn)(*args) or []
+                    except TimeoutError as exc:      # asyncio.TimeoutError alias (3.11+)
+                        raise ExecutorConnectionError(
+                            f"{fn} timed out after {VENUE_HISTORY_TIMEOUT_S:.0f}s: "
+                            f"venue order history unavailable - cycle fails "
+                            f"closed (restart the gateway if this persists)"
+                        ) from exc
+                    except Exception as exc:  # noqa: BLE001
+                        logger.debug("%s failed: %s", fn, exc)
+                        continue
+                    for t in extra:
+                        key = (t.order.orderId, getattr(t.order, "permId", 0))
+                        if key not in seen:
+                            seen.add(key)
+                            trades.append(t)
+            finally:
+                self.ib.RequestTimeout = prev
         return trades
 
     def _find_trade_by_ref(self, order_ref: str, refresh: bool = False):
