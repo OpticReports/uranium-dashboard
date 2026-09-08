@@ -290,5 +290,7 @@ and whether the market agreed._
   +10.1% / −9.9%). Stage split is post hoc — that is why this is here.
 - **Status:** `observing` — cross-asset, observe-only, feeds no score and
   never generates a call. Promotion gate as usual (n ≥ 20 out-of-sample
-  stage-2+ episodes across keywords, Wilson lower bound on "26w DD worse
-  than base" > 0.50).
+  stage-2+ episodes across ALL configured keywords, including the three
+  not in the study — ethereum, biotech stocks, gene therapy — with the
+  Wilson lower bound on "26w DD worse than base" > 0.50). Counter-agent
+  2026-09-08: in-sample the same gate gives 0.41; stage split p ≈ 0.36.

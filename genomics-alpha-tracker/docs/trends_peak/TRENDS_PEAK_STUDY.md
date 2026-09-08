@@ -67,8 +67,11 @@ different keywords but not independent tops. Effective n of tops ≈ 9.
 | COOLED | 5 | +14.3% | −10.4% | −18.2% | 40% |
 
 Recall: 8/11 price tops had a CLIMAX in the prior 10 weeks; 9/11 had a
-CLIMAX or a DIVERGENCE. Stage-2+ climaxes sat 2–9 weeks before the top in
-6 of 8 cases (the misses: uranium Feb-21 and gold Aug-25, both mid-run).
+CLIMAX or a DIVERGENCE. "Top" is the window's max close, so uranium 2021
+counts as a miss (its Nov-21 local top is 8 wks after the Sep-21 stage-3
+climax; under a local-top rule recall is 9/11). Stage-2+ climaxes sat 2–9
+weeks before the top in 5 of 8 cases (misses: uranium Feb-21, uranium
+Sep-21 vs the window top, gold Aug-25).
 
 ### Read-through for the books
 
@@ -93,13 +96,30 @@ CLIMAX or a DIVERGENCE. Stage-2+ climaxes sat 2–9 weeks before the top in
 - **In-sample.** Every threshold was chosen looking at these 11 series.
   The stage split was noticed AFTER the first run of the study (post hoc);
   it is the hypothesis to test out of sample, not a result.
-- **n is tiny**: 18 climax episodes, ~9 independent tops. The stage-2+ vs
-  stage-1 gap (−4.5% vs +27.2% at 26w) is 8 vs 10 episodes; a bootstrap
-  would not separate them from noise with confidence. Treat as a lead.
+- **n is tiny**: 18 climax episodes. The stage-2+ vs stage-1 gap (−4.5%
+  vs +27.2% at 26w) is 8 vs 10 episodes: permutation p = 0.36, bootstrap
+  90% CI of the median difference [−17, +72] (counter-agent). H14's own
+  gate applied in-sample gives a Wilson lower bound of 0.41 (< 0.50): it
+  would not pass today. Treat as a lead.
 - **Weekly closes, MTM.** Forward returns are from the flag week's close.
   Blow-offs move 20–100% inside the 2–6 weeks between the flag and the top;
-  the median 26w max *upside* after any CLIMAX is +31%. Selling a CLIMAX
-  outright underperformed holding (median 26w +3.5% vs base +10.1%).
+  the median 26w max *upside* after any CLIMAX is +31%. Two separate
+  facts: holding through a CLIMAX still returned a median +3.5% over 26w
+  (selling the print gave that up), and post-climax weeks were worse than
+  the average week (+10.1%).
+- **Timing.** The Google week is final on Saturday; the equity close used
+  is Friday, so the first executable price is the following Monday.
+  Entering one week later (25w horizon): stage-2+ 26w −4.5% → −2.9%, DD
+  −15.9% → −16.3% (robust); stage-1 +27.2% → +45.2% (tail-driven: GME
+  flips from −50% to +153%). The stage-1 "early" read rests on tails.
+- **Effective n ≈ 6–7, not 9.** Silver and uranium topped the same week
+  (2026-01-18), gold five weeks later, bitcoin four months earlier: one
+  macro episode. The base rate double-counts ARKG (two keywords, one price
+  series) and bitcoin Jun-22 to Jun-23 (two windows).
+- **Sampling jitter.** Google Trends values differ by a few points between
+  pulls. With ±2 points of noise, 88% of CLIMAX episodes and 81% of
+  stage-2+ labels survive; at ±3, 82% / 76%. About one in five stage-2+
+  labels is within noise of flipping.
 - **Look-ahead**: none in the detector (gate G2). The price top itself is
   known only in hindsight and is used here only to measure lead time.
 - **Renormalisation**: Google rescales 0–100 per request window; the
@@ -124,4 +144,7 @@ n ≥ 20 by the standard gate. Next steps (not done): daily-granularity
 overlay (DataForSEO `past_90_days`), a second keyword per asset, and the
 non-mania false-positive study.
 
-Counter-agent verdict: `counter_agent_verdict.md` (alongside).
+Counter-agent verdict: `counter_agent_verdict.md` — SAFE AFTER CORRECTIONS
+(2026-09-08); all four required corrections applied in this revision
+(5-of-8 wording, honesty-box additions, DB-backed dedupe + code-family
+breaker in the lane, truncated-horizon guard in the study runner).

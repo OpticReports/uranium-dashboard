@@ -36,18 +36,23 @@ def fwd(close: list, i: int, h: int):
     return round(100 * (close[i + h] / close[i] - 1), 1)
 
 
-def maxdd(close: list, i: int, h: int = 26):
-    seg = [c for c in close[i:i + h + 1] if c is not None]
-    if len(seg) < 2:
+def _segment(close: list, i: int, h: int):
+    # Full horizon required (counter-agent 2026-09-08): a flag inside the
+    # last h weeks must not pool a truncated drawdown as an h-week one.
+    if i + h >= len(close) or close[i] is None:
         return None
-    return round(100 * (min(seg) / seg[0] - 1), 1)
+    seg = [c for c in close[i:i + h + 1] if c is not None]
+    return seg if len(seg) >= 2 else None
+
+
+def maxdd(close: list, i: int, h: int = 26):
+    seg = _segment(close, i, h)
+    return None if seg is None else round(100 * (min(seg) / seg[0] - 1), 1)
 
 
 def maxup(close: list, i: int, h: int = 26):
-    seg = [c for c in close[i:i + h + 1] if c is not None]
-    if len(seg) < 2:
-        return None
-    return round(100 * (max(seg) / seg[0] - 1), 1)
+    seg = _segment(close, i, h)
+    return None if seg is None else round(100 * (max(seg) / seg[0] - 1), 1)
 
 
 def study() -> dict:

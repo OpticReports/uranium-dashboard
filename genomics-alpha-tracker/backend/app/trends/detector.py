@@ -35,7 +35,7 @@ The flags (all weekly):
               last 52 wks, 2+ if the run already produced one. In the study
               the FIRST climax of a run usually came early (price went on to
               double); the tops were stage-2+ climaxes. Found post hoc on
-              seven episodes - treat as a hypothesis, not a rule.
+              eight stage-2+ episodes - treat as a hypothesis, not a rule.
 
 Parameters are frozen in PARAMS and were chosen on the eleven series in the
 study (in-sample; see the honesty box in the study doc).

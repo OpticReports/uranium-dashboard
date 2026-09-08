@@ -7,10 +7,15 @@ are: an INACTIVE Security row (subsector ["trends_proxy"]) so it holds
 price_bar rows without entering scoring or the universe views.
 
 Budget rules (same shape as news_tiingo.py / social.py):
-- $0.009 per request, one request per keyword per UTC day. A keyword
-  already refreshed today is skipped, so a restart never double-spends.
-- TRENDS_DAILY_CAP (default 40) hard in-process cap per UTC day.
-- 401/402/403 trips a 24h breaker (bad key / no funds / forbidden).
+- $0.009 per request, one request per keyword per UTC day. The dedupe is
+  DB-backed (max trend_point.fetched_at per keyword), so a restart or a
+  redeploy - which fires the job immediately - never double-spends.
+- TRENDS_DAILY_CAP (default 40) hard in-process cap per UTC day (resets on
+  restart; the DB dedupe is what bounds spend across restarts).
+- Any 401xx/402xx task status (bad key, unverified account, no funds,
+  paused, cost limit, IP not whitelisted...) or HTTP 403 trips a 24h
+  breaker; 402x2/402x9 rate limits get 1h. DataForSEO returns HTTP 200 with
+  the error in the task status, so the match is by code family, not code.
 - No credentials: log once and return 0. The router serves what's stored.
 
 Because the 0-100 index is renormalised per request window, a successful
@@ -66,15 +71,40 @@ def _spend(cost: float = 0.0) -> bool:
     return True
 
 
-def _already_today(keyword: str) -> bool:
+def _already_today(keyword: str, session: Session | None = None) -> bool:
     today = _today()
     if _FETCHED["day"] != today:
         _FETCHED.update({"day": today, "keywords": set()})
-    return keyword in _FETCHED["keywords"]
+    if keyword in _FETCHED["keywords"]:
+        return True
+    if session is not None:
+        # survives restarts: the stored series carries its fetch time
+        last = session.exec(select(TrendPoint.fetched_at)
+                            .where(TrendPoint.keyword == keyword)
+                            .order_by(TrendPoint.fetched_at.desc()).limit(1)).first()
+        if last is not None and last.date().isoformat() == today:
+            _FETCHED["keywords"].add(keyword)
+            return True
+    return False
+
+
+_RATE_LIMIT_CODES = {40202, 40209}
+
+
+def breaker_hours(status: int | None) -> int:
+    """0 = not a breaker condition. Family match: 401xx auth/verification,
+    402xx billing/limits (40200 payment, 40210 insufficient funds, 40201
+    paused, 40203 cost limit, 40204 subscription, 40207 IP), HTTP 401/402/403."""
+    if status is None:
+        return 0
+    if status in _RATE_LIMIT_CODES:
+        return 1
+    fam = status // 100 if status >= 10000 else status
+    return 24 if fam in (401, 402, 403) else 0
 
 
 def trip_breaker(status: int | None) -> None:
-    hours = 24 if status in (401, 402, 403, 40100, 40200) else 6
+    hours = breaker_hours(status) or 6
     _BREAKER.update({"until": time.time() + hours * 3600, "reason": status})
     logger.warning("trends: DataForSEO status %s - pausing %dh", status, hours)
 
@@ -138,7 +168,7 @@ def run_trends(session: Session, symbols: list[str] | None = None) -> int:
     stored = 0
     for k in kws:
         kw = k["keyword"]
-        if _already_today(kw):
+        if _already_today(kw, session):
             continue
         if not _spend():
             logger.warning("trends: daily cap %d reached - deferring rest", _cap())
@@ -149,7 +179,7 @@ def run_trends(session: Session, symbols: list[str] | None = None) -> int:
                                           location_code=k.get("location_code"))
             _BUDGET["cost_usd"] += cost
         except TrendsError as exc:
-            if exc.status in (401, 402, 403, 40100, 40200):
+            if breaker_hours(exc.status):
                 trip_breaker(exc.status)
                 return stored
             logger.warning("trends: %s failed: %s", kw, redact(str(exc)))

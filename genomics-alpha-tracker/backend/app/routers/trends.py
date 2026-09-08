@@ -47,8 +47,12 @@ def _weekly_closes(session: Session, symbol: str, week_starts: list) -> list:
 
 
 def _series(session: Session, kw: dict) -> dict:
-    rows = session.exec(select(TrendPoint).where(TrendPoint.keyword == kw["keyword"])
-                        .order_by(TrendPoint.date)).all()
+    rows = list(session.exec(select(TrendPoint).where(TrendPoint.keyword == kw["keyword"])
+                             .order_by(TrendPoint.date)).all())
+    # DataForSEO's last point is the in-progress week (missing_data=true):
+    # a partial week would flip the state mid-week, so it is not scored.
+    while rows and rows[-1].missing:
+        rows.pop()
     dates = [r.date for r in rows]
     interest = [r.value for r in rows]
     close = _weekly_closes(session, kw["price_symbol"], dates) if kw.get("price_symbol") else None

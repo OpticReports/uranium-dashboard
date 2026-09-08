@@ -157,3 +157,44 @@ def test_router_pairs_price_and_reports_state(session, monkeypatch):
         assert c.get("/health").json()["optional_keys"]["dataforseo"] is False
     finally:
         app.dependency_overrides.clear()
+
+
+def test_dedupe_survives_restart_via_db(session, monkeypatch):
+    """Counter-agent 2026-09-08: a redeploy fires the job immediately; the
+    in-process set is gone, so the DB's fetched_at must carry the dedupe."""
+    monkeypatch.setattr(lane.settings, "dataforseo_login", "u")
+    monkeypatch.setattr(lane.settings, "dataforseo_password", "p")
+    calls = {"n": 0}
+
+    def fake(*a, **k):
+        calls["n"] += 1
+        return dfs.parse_graph(_payload(60)), 0.009
+    monkeypatch.setattr(lane, "fetch_interest", fake)
+    assert lane.run_trends(session) == 120 and calls["n"] == 2
+    # simulate a restart: process state wiped, DB intact
+    lane._FETCHED.update({"day": None, "keywords": set()})
+    lane._BUDGET.update({"day": None, "used": 0, "cost_usd": 0.0})
+    assert lane.run_trends(session) == 0 and calls["n"] == 2
+
+
+@pytest.mark.parametrize("status,hours", [(40210, 24), (40201, 24), (40207, 24), (40104, 24),
+                                          (40202, 1), (40501, 0), (None, 0)])
+def test_breaker_matches_code_family(status, hours):
+    assert lane.breaker_hours(status) == hours
+
+
+def test_router_drops_partial_trailing_week(session):
+    from app.main import app
+    from app.routers.trends import get_session
+    start = date(2020, 1, 5)
+    for k in range(60):
+        session.add(TrendPoint(keyword="silver price", date=start + timedelta(weeks=k), value=20.0,
+                               missing=(k == 59)))
+    session.commit()
+    app.dependency_overrides[get_session] = lambda: session
+    try:
+        body = TestClient(app).get("/trends/silver%20price").json()
+        assert body["summary"]["weeks"] == 59
+        assert body["points"][-1]["date"] == (start + timedelta(weeks=58)).isoformat()
+    finally:
+        app.dependency_overrides.clear()
