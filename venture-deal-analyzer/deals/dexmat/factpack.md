@@ -429,8 +429,9 @@ Page images archived under `sponsor-docs-2026-09/`.
 
 - **Round restated: $5–10mm seed extension at the same $35M pre, PRICED,
   direct on cap table; target close 2026-09-28** (a ~20-day decision
-  clock). Admin fee now ~$1,250/person/yr for 7 years (was 5). 2% + 20%
-  carry unchanged.
+  clock). Admin: up to ~$1,250/person TOTAL, shared pro-rata, covering
+  7 years of compliance (rev-2 coverage was 5 yrs), billed pro-rata
+  after. 2% + 20% carry unchanged.
 - **Team: Oliver Dewey, PhD is CTO** (Director of Scale-Up & Mfg;
   Pasquali-lab alum); **Tsentalovich → co-founder/"R&D partner"** (was
   CTO). New names: Jill Dupré (CoS/GC, university-IP licensing), Asena
@@ -448,13 +449,14 @@ Page images archived under `sponsor-docs-2026-09/`.
   flagship completes qualification "over the next few months."
   Enthusiasm-stage: no LOI, no PO, no written commitment referenced.
   The ask goes from "none disclosed" to "described but anonymous."
-- **The additive story is CONFIRMED from the sponsor's own pen**: a
+- **The additive story now comes from the sponsor's own pen**: a
   Spanish academic lab took Galvorn-class material 6 → 24.5 MS/m;
   DexMat in active LICENSING discussions; **"humidity removes the
   benefits"** — lab-only today; Pasquali says field-ready in 3–5 yrs.
-  This confirms the 2026-08-09 call-note hypothesis (IMDEA-class
-  intercalation) including our humidity qualification gate and the moat
-  note: the endgame conductivity step is third-party IP.
+  Matches the 2026-08-09 call-note hypothesis (IMDEA-class
+  intercalation) in every disclosed detail — the memo names neither
+  lab nor chemistry — including our humidity qualification gate and
+  the moat note: the endgame conductivity step is third-party IP.
 - **Traction: ~170 purchasers (was 50+), ~75 in 2026, ~35 test
   programs, biotech multiyear agreement** (sector of the rev-2 unnamed
   contract now disclosed). Next-round KPI "several million in annual
@@ -468,9 +470,11 @@ Page images archived under `sponsor-docs-2026-09/`.
   dilution and fees with 87% of it on a 5% branch at 1144x and a
   "Delta4 Derived" 10x P/S; the workbook ramps military aero AND space
   to **100% of full sector volume by 2037, "no uptake cap"** by design,
-  reaching a $672bn implied 2040 market cap. A 0x branch now exists
-  (improvement over rev 2's no-downside model); the dilution-free tail
-  does not.
+  reaching a $672bn implied 2040 market cap. The memo's Fig. 1 and the
+  workbook are two DIFFERENT model vintages ($4.501bn vs $4.576bn 2034
+  revenue), and the memo's own tree bullets match the workbook, not
+  its own figure. A 0x branch now exists (improvement over rev 2's
+  no-downside model); the dilution-free tail does not.
 - **Margin story flipped**: rev-2 DD notes said ~99% current margins,
   50% long-term model; the memo plans a "purposeful" 20% markup on cost
   (~16.7% gross margin). Both cannot be the same plan. Ask.
@@ -515,8 +519,9 @@ ranked format. Clock context: **round closes 2026-09-28.**
    1144x branch belongs to the whole industry, not DexMat.
 3. ● **Which outcome tree is operative — 25/40/5 or 35/60/5 — and the
    dilution-adjusted version** (NEW, from the memo's internal
-   inconsistency; ask via sponsor). What it moves: the sponsor's own
-   EV by ~1.6x, and it tests sponsor numeracy/candor directly.
+   inconsistency; ask via sponsor). What it moves: branch-2's EV 1.5x
+   (total EV only ~4% — the 5% tail dominates either set, which is the
+   deeper problem); mainly it tests sponsor numeracy/candor directly.
 
 **P2 — score-moving:**
 4. ● **Annealed / high-purity-grade conductivity in writing** (asked
@@ -534,7 +539,9 @@ ranked format. Clock context: **round closes 2026-09-28.**
 7. ● **Workbook export — the four unread tabs** (NEW: Copper Wire
    Facts, Bull/Base Case Dilution & SPV Return, Questions to be asked).
    Moves: lets us audit the sponsor's dilution math instead of
-   reconstructing it.
+   reconstructing it. Also verify on export: the workbook's SPC
+   market-size input reads ~$1.38bn CY2026 vs the memo's "$1.2bn"
+   (~15% larger base), and the Fig-1-vs-workbook vintage split.
 8. ● **October $0.48/ft price milestone** (NEW; falsifiable ~30 days).
    Moves: cost-curve credibility — a hard, near-term check on the
    whole roadmap.

@@ -31,9 +31,11 @@ be biased."
 - Round: seed extension, **$5–10mm raise, $35mm pre-money, PRICED round**;
   target fund invests **directly on the cap table** (not stacked SPV).
 - **Target close: September 28, 2026.** Liquidity estimate 7–10 years.
-- Fees: **2% one-time + 20% carry + ~$1,250/person/yr admin** (billed for
-  7 years of compliance, pro-rata after). [Rev-2 docs said 5 years —
-  changed to 7.]
+- Fees: **2% one-time + 20% carry + admin of UP TO ~$1,250/person TOTAL,
+  shared pro-rata, covering 7 years of compliance; billed pro-rata
+  after.** [Rev-2 docs said the admin coverage ran 5 years — now 7.
+  CORRECTED per counter-agent: this is a one-time capped charge, not
+  per-year.]
 - Sponsor self-disclosure of financial interest (quoted above).
 
 **p.2 — Anchor Partner + team:**
@@ -71,6 +73,13 @@ be biased."
   growing ~7.3%/yr**; author: replacing a meaningful portion "could
   provide a 20x return in just 5 years."
 
+Also p.3 (not p.4): the author's own worry, verbatim, that DexMat was a
+"**professor project**" — "excellent technical talent but limited
+commercial capabilities" — "greatly reduced" after speaking with the
+Anchor Partner's manufacturer. And two cheap falsifiable timing claims:
+PMF expected "during the next twelve months"; "a visible probability
+that serious orders will arrive during the next six to twelve months."
+
 **p.4 — Phases 2–3 and diligence basis:**
 - Phase 2: cost **$0.063/ft ($0.21/m)** → copper price parity, predicted
   **2028–29**. Phase 3: **$0.012/ft ($0.04/m)** vs copper-wire expected
@@ -84,10 +93,6 @@ be biased."
   claims ~10-year manufacturing lead; **author cuts it to ~7** citing a
   Pasquali-lab alum who founded a competitor in 2019 that is "not doing
   very well."
-- Author's own worry, verbatim: that DexMat was a "**professor
-  project**" — "excellent technical talent but limited commercial
-  capabilities." Worry "greatly reduced" after speaking with the Anchor
-  Partner's manufacturer.
 
 **p.5 — Governance history + the Spanish lab:**
 - **Pasquali "got a reverse mortgage on his house to buy out the old CEO
@@ -102,16 +107,33 @@ be biased."
   breakthrough."** Works only in the lab: "**humidity removes the
   benefits of the chemical they add**." Pasquali confident it's
   field-ready in **3–5 years**.
-  [This CONFIRMS, from the sponsor's own pen, the fact pack's 2026-08-09
-  call-note hypothesis: IMDEA (Madrid) AlCl4⁻ intercalation, 24.5 MS/m,
-  moisture-sensitive — including our flagged qualification gate
-  (humidity) and our moat note: the next conductivity step is
-  THIRD-PARTY licensed IP from open science, not DexMat's own.]
+  [This MATCHES the fact pack's 2026-08-09 call-note hypothesis — IMDEA
+  (Madrid) AlCl4⁻ intercalation, 24.5 MS/m, moisture-sensitive — in
+  every disclosed detail (the memo names neither the lab nor the
+  chemistry: "an academic laboratory in Spain"). Including our flagged
+  qualification gate (humidity) and our moat note: the next
+  conductivity step is THIRD-PARTY licensed IP from open science, not
+  DexMat's own.]
 - Financial projections (Fig. 1, "at just 20% markup over production
   cost"): total revenue $0.011bn (2027) → $4.501bn (2034); P/S multiple
   ("Delta4 Derived") 0x → 10x; **implied exit market cap $45.0bn by
   2034**. Note verbatim: "DexMat is purposefully choosing to charge only
   20% markup on cost."
+
+**p.6 — Bargaining Power [added per counter-agent — omitted first pass]:**
+- The 20% markup is justified as "in line with the lowest markups earned
+  by processors in other specialty items like Kevlar or Carbon Fiber. If
+  DexMat shows strong commercial prowess, it could charge more" (and Fig.
+  1's note adds "Should it choose to be more aggressive, the revenue
+  numbers would scale accordingly") — i.e., the memo presents 20% as a
+  deliberate floor, not a ceiling.
+- Position-improvement plans: (1) vertical integration — "DexMat is
+  already in discussions with its suppliers about cornering the market
+  for high quality CNTs, and **a friend of the firm's is thinking about
+  starting a manufacturing plant for ultra-pure CNTs where DexMat would
+  be a shareholder and exclusive offtaker**" [related-party-flavored
+  feedstock plan; bears directly on the fact pack's "upstream supplier
+  dependence" flag]; (2) branding; (3) joint development with partners.
 
 **p.6–7 — Outcome probability tree [INTERNALLY INCONSISTENT — see §3]:**
 - Branch 1 (fail, "professor project"): text "**medium probability
@@ -179,7 +201,10 @@ assumptions and SPV terms are author-supplied."
 - Outputs: total revenue $0.007bn (2027) → $4.576bn (2034) → **$67.2bn
   (2040)**; P/S ("Delta4 Derived") to 10x; **implied exit market cap
   $45.757bn (2034) → $672.5bn (2040)**.
-- The memo's Fig. 1 is the 2027–2034 slice of this sheet.
+- [CORRECTED per counter-agent] The memo's Fig. 1 is NOT a slice of this
+  sheet — every row differs (Fig. 1: 2034 total revenue $4.501bn, exit
+  cap $45.010bn; workbook: $4.576bn, $45.757bn). Two model vintages —
+  see §3.8.
 - Tabs not readable (NOT READ): Copper Wire Facts, Bull Case Dilution &
   SPV Return, Base Case Dilution & SPV Return, Questions to be asked.
 
@@ -190,7 +215,10 @@ assumptions and SPV terms are author-supplied."
 1. **Probability tree does not cohere.** Bullets: 25% + 40% + 5% = 70%
    (30% of probability mass missing). Prose: 35% + 60% + 5% = 100%. The
    EV bullets (0 / 8.55 / 57.2) are computed FROM THE PROSE values
-   (14.25 × 0.60 = 8.55). Which set is operative changes EV by ~1.6x.
+   (14.25 × 0.60 = 8.55). [Corrected per counter-agent:] which set is
+   operative changes branch-2's EV 1.5x (8.55 → 5.70) but total EV only
+   ~4% (65.75 → 62.90) — because the 5% tail dominates either way,
+   which is itself the point of §3.2.
 2. **EV theater, again.** Headline EV(MOIC) ≈ 65.75x is gross of
    dilution AND fees, and 87% of it sits on a 5% branch at 1144x whose
    P/S input is the sponsor's own ("Delta4 Derived") 10x — against the
@@ -201,10 +229,18 @@ assumptions and SPV terms are author-supplied."
 3. **Margin story flipped.** Rev-2 DD notes: current margins ~99%,
    long-term model 50%. This memo: "purposefully" 20% markup on cost
    ⇒ ~16.7% gross margin — below the sponsor comp set's specialty
-   EBITDA margins. Both cannot describe the same plan.
+   EBITDA margins. Both cannot describe the same plan. [Fairness note,
+   per counter-agent: the memo does state its rationale — 20% matches
+   the lowest Kevlar/carbon-fiber processor markups and is presented as
+   a floor it "could charge more" than. The conflict with the 50%
+   long-term-margin model stands; the ask is which is the plan.]
 4. **"98% as conductive per kg" vs its own declared 6 MS/m median
    basis** (see p.8–9 note) — the filament-vs-shipping-product thumb,
-   third appearance across three sponsor documents.
+   third appearance across three sponsor documents. Same family, also
+   memo-internal: p.3 says "3x stronger" and "6x lighter" than copper
+   while its own p.8 summary table says 7.9x stronger and 5.63x
+   lighter. (Minor: the memo table prints thermal 446 W/m·K vs the
+   rev-2 deck's 450 — near-identical, not identical.)
 5. **Round size** now $5–10mm (rev-2 docs: $10M cap, $15M interest);
    **admin years** 5 → 7. Same $35M pre.
 6. **Governance history**: "planned CEO→CTO transition" (public
@@ -217,6 +253,13 @@ assumptions and SPV terms are author-supplied."
    100% of FULL sector volume by 2037 with "no uptake cap" by design —
    a share no defense supplier of anything achieves (dual-sourcing is
    procurement doctrine).
+8. **The memo contradicts itself between its figure and its tree**
+   [counter-agent finding]. The p.6–7 branch-3 bullets ($4.576bn 2034
+   revenue, $45.76bn cap) match the WORKBOOK; the memo's own Fig. 1
+   (p.5) says $4.501bn and $45.010bn. Two model vintages circulating in
+   one document. Related, for the workbook-export ask: the workbook's
+   SPC market-size input reads ~$1.38bn CY2026 vs the memo's "$1.2
+   billion" — ~15% larger base; verify on export rather than asserted.
 
 ## §4 — What genuinely moved (for the DD ledger and scoring)
 
@@ -245,3 +288,29 @@ AGAINST / unresolved:
 - Teijin FTO, annealed-grade conductivity, wet-spun additive transfer
   data: all still open.
 - **Clock: close Sept 28, 2026 — 20 days.** S2/S3 must run against this.
+
+---
+
+## Counter-agent verdict (2026-09-08, logged per standing rule)
+
+**SAFE AFTER CORRECTIONS — all applied above.** An independent
+adversarial pass re-read every page image and the fact pack. It verified
+clean: all p.1 terms, the anchor quotes, team changes, every
+probability-tree number, all MOIC/EV arithmetic (570/40 = 14.25;
+45,760/40 = 1,144; 8.55 + 57.2 = 65.75; 87% tail share), the
+$8.49→$0.48 = 17.7x ratio, the 6 MS/m ⇒ 58–71%-of-copper gravimetric
+math, 20% markup ⇒ 16.7% GM (confirmed against Fig. 1's own
+gross-profit rows), the appendix tables, and the workbook ramps/tabs.
+It caught and we corrected: (1) BLOCKER — the admin fee is up to
+~$1,250/person TOTAL covering 7 years, not per-year (first draft
+overstated admin drag ~7x); (2) the tree inconsistency moves total EV
+~4%, not 1.6x (the tail dominates either set); (3) Fig. 1 is a
+DIFFERENT model vintage than the workbook, and the memo's own tree
+bullets match the workbook, not its own figure (promoted to §3.8);
+(4) the omitted p.6 Bargaining Power section (CNT-feedstock cornering +
+friend-of-the-firm exclusive-offtake plant; 20%-markup rationale);
+plus page-attribution, hedging ("matches," not "confirms," on the
+IMDEA hypothesis — the memo names no lab), and completeness notes
+(3x/7.9x stronger memo-internal conflict; 12-month PMF and 6–12-month
+orders timing claims). Spelling note: the memo itself spells
+"Tsentalovitch" (p.2) vs "Tsentalovich" (p.10).
