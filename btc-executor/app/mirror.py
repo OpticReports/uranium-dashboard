@@ -138,6 +138,15 @@ class LegLedger:
     # Same again for ENTRY orders (re-review 2026-08-26 binding 8): the
     # boot-mismatch resolution path re-sends an entry the venue already saw.
     entry_n: int = 0
+    # Last-seen value of the ENGINE book's own kill switch (legs.<n>.halted
+    # from /exec/target). Persisted so the page fires on the TRANSITION, not
+    # once per 20s poll forever - an engine halt is never cleared by code
+    # (paper-engine core.py sets book.halted and only POST /books/<n>/resume
+    # clears it), so a level-triggered page would run until a human acted.
+    # Before this existed the executor never read the field at all: the leg
+    # simply stopped trading, /pulse read `in_position: false` exactly like
+    # "flat between signals", and nobody was told (2026-09-08).
+    engine_halted: bool = False
     # entry_ts of an engine position whose protective stop FILLED on-venue.
     # While the engine (which only updates on 4h bar closes) keeps reporting
     # that position, case 1 must NOT re-enter from the stale entry order -
@@ -1039,6 +1048,19 @@ class Executor:
                                  "with the exec token promoted unverified "
                                  "evidence into the ramp gate - rotate "
                                  "EXEC_TOKEN and re-check /status.ramp_v4",
+            # The one ACTION page whose fix is on the OTHER service. Nothing
+            # in either codebase clears an engine book halt.
+            "engine_leg_halted": "this is the PAPER ENGINE's kill switch, "
+                                 "not the executor's - the executor is "
+                                 "healthy and will keep mirroring the other "
+                                 "leg. The halted book places no entries "
+                                 "until a human calls POST /books/<S3|S4>/"
+                                 "resume on btc-paper-engine; it does NOT "
+                                 "clear itself and it survives restarts. "
+                                 "Check the book's drawdown FIRST - if the "
+                                 "halt is real, leaving it halted is the "
+                                 "correct action and the blend simply runs "
+                                 "the other leg plus cash",
         }
         # Per-kind Telegram cooldown for conditions that persist across polls
         # (their msg embeds a changing float, so kind+msg dedupe never fires).
@@ -1065,6 +1087,7 @@ class Executor:
             send(f"🚨 executor {kind}: {msg}\n"
                  f"→ no action needed from you — forward this to Claude")
         elif kind in ("resume", "auto_rearm", "transfer_reconciled",
+                      "engine_leg_resumed",
                       # the provenance reset was WARN-with-no-send-branch:
                       # logged, never phoned, i.e. silent exactly where the
                       # operator looks. That defeated its whole purpose.
@@ -1702,6 +1725,18 @@ class Executor:
                   equity: float, entries_ok: bool) -> None:
         led: LegLedger = self.state.legs[leg]
         pend, pos = tl.get("pending"), tl.get("position")
+        halted = bool(tl.get("halted"))
+        if halted != led.engine_halted:
+            led.engine_halted = halted
+            self._save_state()           # persist BEFORE paging: a crash
+            # between the two re-pages on restart, which beats never paging.
+            if halted:
+                self._event("RED", "engine_leg_halted",
+                            f"{leg} leg's engine book hit its own drawdown "
+                            f"kill switch and will place NO further entries")
+            else:
+                self._event("INFO", "engine_leg_resumed",
+                            f"{leg} leg's engine book is trading again")
 
         # 1) engine has an open position
         if pos is not None:
@@ -1816,7 +1851,8 @@ class Executor:
             self._cancel_entry(led, filled_action="flatten" if led.qty == 0.0
                                else "ignore")
         if led.qty != 0.0:
-            self._close_leg(leg, led, "engine_exit")
+            self._close_leg(leg, led, "engine_halted" if halted
+                            else "engine_exit")
 
     def _enter_from_fill(self, leg: str, led: LegLedger, pos: dict,
                          blend: dict, equity: float,
@@ -2388,7 +2424,11 @@ class Executor:
                                 reduce_only=True)
             self._watch_fill(leg, "close", cloid, ref, _close_side(led.qty))
             self._event("INFO", "leg_closed", f"{leg} {why} qty={led.qty}")
-            self._cov("signal_exit")
+            # A kill-switch flatten is NOT evidence that signal exits work.
+            # This counter feeds the RAMP v4 gate, so crediting it would let
+            # a halted book buy its own scaling permission (2026-09-08).
+            if why != "engine_halted":
+                self._cov("signal_exit")
             led.qty = 0.0
 
     def _report_post_only_crosses(self) -> None:

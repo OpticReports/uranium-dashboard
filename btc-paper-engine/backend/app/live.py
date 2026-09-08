@@ -18,6 +18,7 @@ import threading
 import time
 from dataclasses import asdict
 
+from . import alerts
 from .config import load_strategy, settings
 from .engine.core import (
     BAR_SECONDS, Bar, Book, Pending, Position,
@@ -47,6 +48,7 @@ class Engine:
         self._persisted_trades: dict[str, int] = {c.name: 0 for c in self.books_cfg}
         self._blend_state: dict[str, dict] = {}
         self._lock = threading.Lock()
+        self.alert_fn = alerts.send      # injected in tests
 
     # ---------- persistence ----------
 
@@ -184,6 +186,10 @@ class Engine:
                 inds = compute_indicators(self.bars)
             ind = inds[i]
             warm = i >= min(settings.warmup_bars, len(self.bars) - 1) or ind.sma200 is not None
+            # Snapshot BEFORE resolve_open_exit: that path closes a
+            # position too, so it can trip dd_halt just as process_closed_bar
+            # can. Comparing after both is the only way to catch either.
+            was_halted = {n: b.halted for n, b in self.books.items()}
             for b in self.books.values():
                 resolve_open_exit(b, bar, self.tcfg)
             sigs = ({"pullback": eval_signal(bar, ind, self.scfg),
@@ -203,9 +209,47 @@ class Engine:
                 process_closed_bar(b, bar, ind, self.scfg, self.tcfg,
                                    sigs[b.cfg.strategy])
                 accrue_cash_yield(b, settings.cash_apy)
+            self._alert_new_halts(was_halted, s)
             self.last_processed = bar.ts
             self._persist(s, snapshot_ts=bar.ts + BAR_SECONDS)
             self._blend_step(bar.ts + BAR_SECONDS, s)
+
+    def _alert_new_halts(self, was_halted: dict[str, bool], s) -> None:
+        """Page on a book's dd_halt firing.
+
+        `book.halted` is set in engine.core._close_position and is cleared by
+        exactly one thing: a human calling POST /books/<name>/resume. It is
+        persisted and restored on boot, so a halt is permanent until someone
+        acts. Until 2026-09-08 nothing announced it: the book simply stopped
+        taking entries, /books still returned 200, and the live executor
+        (which never read legs.<n>.halted) booked the leg going flat as a
+        routine exit. A leg that silently never trades again is the
+        healthy-while-doing-nothing failure mode - it has to reach the phone.
+
+        Fires on the false->true edge only, so it cannot repeat per bar, and
+        never on boot (restore happens outside this loop).
+        """
+        for name, b in self.books.items():
+            if b.halted and not was_halted.get(name, False):
+                dd = (b.equity / b.peak_equity - 1) if b.peak_equity else 0.0
+                detail = (f"{name} ({b.cfg.strategy}) drawdown "
+                          f"{100 * dd:.2f}% <= -{100 * b.cfg.dd_halt:.0f}% "
+                          f"dd_halt; equity {b.equity:,.0f} vs peak "
+                          f"{b.peak_equity:,.0f}")
+                log_event(s, "RED", "book_halted", detail, book=name)
+                logger.warning("book_halted %s", detail)
+                try:
+                    self.alert_fn(
+                        f"\U0001f6d1 ACTION NEEDED - paper engine book "
+                        f"{name} HALTED\n{detail}\n"
+                        f"This book will place NO further entries. It does "
+                        f"NOT clear itself and it survives restarts - a "
+                        f"human must POST /books/{name}/resume. Until then "
+                        f"any blend containing it runs the remaining leg "
+                        f"plus cash, at reduced exposure.")
+                except Exception as exc:  # noqa: BLE001
+                    # alerting must never be able to stall the bar loop
+                    logger.warning("halt alert failed: %s", exc)
 
     # ---------- poll ----------
 
