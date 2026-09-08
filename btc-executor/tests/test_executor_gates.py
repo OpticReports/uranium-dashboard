@@ -1862,10 +1862,13 @@ def test_gate_auto_drill_runs_cycles_in_flat_window(tmp_path, monkeypatch):
         ex.step(target())
     assert ex.state.coverage_live.get("drill_cycle") == DRILL_CYCLE_NEED
     assert ex.state.coverage.get("drill_cycle") == DRILL_CYCLE_NEED
-    assert all(d["kind"] == "cycle" and d["ok"] for d in ex.state.drills)
+    # long -> short_cycle (once, 2026-09-08) -> long; all verified
+    assert all(d["kind"] in ("cycle", "short_cycle") and d["ok"]
+               for d in ex.state.drills)
+    assert [d["kind"] for d in ex.state.drills] == ["cycle", "short_cycle", "cycle"]
     assert venue.position() == 0.0
     assert ex.state.auto_drill_off is None
-    assert sum("auto-drill cycle ok" in m for m in sent) == 3
+    assert sum("auto-drill" in m and " ok" in m for m in sent) == 3
     # The invariant (found 2026-08-24) is that auto-drill keeps going while
     # EITHER row is unmet - it once stopped on drill_cycle alone and left
     # the slippage row stranded, which reads as "drills complete".
@@ -1880,13 +1883,14 @@ def test_gate_auto_drill_runs_cycles_in_flat_window(tmp_path, monkeypatch):
     # ...and it keeps going until the slippage row is genuinely satisfied
     guard = 0
     while ex._live_fill_count() < SLIPPAGE_SAMPLE_NEED:
-        assert ex._needed_auto_drill() == "cycle"
+        assert ex._needed_auto_drill() == "cycle"      # short already ran once
         ex.step(target())
         guard += 1
         assert guard < 50, "auto-drill never closed the slippage row"
     assert ex._live_fill_count() >= SLIPPAGE_SAMPLE_NEED
     assert ex._needed_auto_drill() is None            # now, and only now
-    assert all(d["kind"] == "cycle" for d in ex.state.drills)   # never stopfill
+    assert all(d["kind"] != "stopfill" for d in ex.state.drills)   # never stopfill
+    assert sum(d["kind"] == "short_cycle" for d in ex.state.drills) == 1
     assert venue.position() == 0.0
     assert ex.state.auto_drill_off is None
 
@@ -2065,6 +2069,10 @@ def test_gate_auto_drill_reads_gate_source_not_all_modes_total(tmp_path):
     # slippage sample too, not just drill_cycle
     ex.state.coverage_live = {"drill_cycle": 3}
     assert _ramp_v4(ex.state)["rows"]["drill_cycle"]["met"] is True
+    # slippage still 0/10 so a drill is still wanted; with >=1 long cycle
+    # done and no short cycle yet, that drill is the short one (2026-09-08)
+    assert ex._needed_auto_drill() == "short_cycle"
+    ex.state.coverage_live = {"drill_cycle": 3, "drill_short_cycle": 1}
     assert ex._needed_auto_drill() == "cycle"       # slippage still 0/10
     ex.state.fills = [{"slip_bps": 1.0, "live": True}] * 10
     assert ex._needed_auto_drill() is None
@@ -3122,7 +3130,7 @@ def test_gate_slippage_readers_agree_on_void(tmp_path):
     # so this is exactly where the two readers used to diverge.
     from app.mirror import DRILL_CYCLE_NEED
     ex.state.coverage_live = {"drill_cycle": DRILL_CYCLE_NEED}
-    assert ex._needed_auto_drill() == "cycle", \
+    assert ex._needed_auto_drill() in ("cycle", "short_cycle"), \
         f"auto-drill read {real} real fills + 2 voids as a complete sample"
 
 
@@ -4268,7 +4276,7 @@ def test_gate_dry_run_fills_never_close_the_slippage_gate(tmp_path):
     ex.state.fills = [{"slip_bps": 1.0, "live": False}] * 20
     assert ex._live_fill_count() == 0
     ex.state.coverage_live = {"drill_cycle": 3}
-    assert ex._needed_auto_drill() == "cycle"
+    assert ex._needed_auto_drill() in ("cycle", "short_cycle")   # a drill, either side
 
 
 # --- whole-chain review fixes (2026-08-24) ---------------------------------
@@ -5742,3 +5750,104 @@ def test_gate_pulse_exposes_engine_halt(tmp_path):
     assert body["legs"]["trend"]["engine_halted"] is True
     assert body["legs"]["trend"]["in_position"] is False
     assert body["legs"]["pullback"]["engine_halted"] is False
+
+
+# ------------------------------------------------------------ short-side drill
+# Every organic trade so far has been a long. The SELL-to-open / BUY-side
+# stop / BUY reduce-only close mapping has never touched the live venue, and
+# the ramp's entry_short row can only be closed by an organic short. A
+# short_cycle drill proves the MECHANICS at one contract before that trade
+# arrives at real size (Casey, 2026-09-08). It must never credit entry_short.
+
+
+def test_gate_short_cycle_drill_full_path(tmp_path):
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    r = ex.drill("short_cycle")
+    assert r["ok"] is True, r
+    calls = [c for c in v.calls if c[0] in ("MARKET", "STOP", "CANCEL")]
+    kinds = [(c[0], c[1]) for c in calls]
+    assert kinds == [("MARKET", "SELL"), ("STOP", "BUY"), ("CANCEL", None),
+                     ("MARKET", "BUY")], kinds
+    stop = next(o for k, o in v.orders.items() if k.endswith("-S"))
+    assert stop["px"] > v.mid()                      # stop ABOVE market for a short
+    assert stop["status"] == "CANCELLED"
+    assert abs(v.position()) < 1e-9                  # flat at the end
+    assert r["steps"]["side"] == "short"
+
+
+def test_gate_short_cycle_never_credits_entry_short(tmp_path):
+    """RAMP_V4 refuses drill credit toward entry_short in advance: only the
+    real engine -> limit path proves the real path."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    assert ex.drill("short_cycle")["ok"] is True
+    cov = ex.state.coverage_live
+    assert cov.get("entry_short", 0) == 0
+    assert cov.get("drill_cycle", 0) == 1
+    assert cov.get("stop_placed", 0) == 1
+    assert cov.get("drill_short_cycle", 0) == 1      # audit key, not a gate row
+
+
+def test_gate_short_cycle_fill_beats_cancel_auto_repairs(tmp_path):
+    """The BUY stop fills inside the cancel window (price spikes up): it has
+    already closed the short, so the exit must be SKIPPED - a blind BUY exit
+    here would open a naked LONG. Same race the long drill guards."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    real_cancel = v.cancel
+
+    def racing_cancel(cloid):
+        if cloid.endswith("-S") and v.orders.get(cloid, {}).get("status") == "OPEN":
+            v.orders[cloid]["status"] = "FILLED"        # fill beats the cancel
+            return
+        real_cancel(cloid)
+
+    v.cancel = racing_cancel
+    r = ex.drill("short_cycle")
+    assert r["ok"] is False                           # unverified, not credited
+    assert r["steps"]["stop_cancelled"] is False
+    assert r["steps"]["exit"] == "skipped_stop_filled"
+    assert r["steps"]["venue_flat_end"] is True
+    assert abs(v.position()) < 1e-9
+    assert ex.state.coverage_live.get("drill_cycle", 0) == 0
+    assert not [c for c in v.calls if c[0] == "MARKET" and c[3].endswith("-X")]
+
+
+def test_gate_short_cycle_exception_path_auto_repairs(tmp_path):
+    class BoomVenue(FakeVenue):
+        def place_stop(self, side, qty, trigger_px, cloid):
+            raise RuntimeError("venue rejected stop")
+    v = BoomVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    r = ex.drill("short_cycle")
+    assert r["ok"] is False and "error" in r["steps"]
+    assert abs(v.position()) < 1e-9                  # repaired: short closed
+    repair = [c for c in v.calls if c[0] == "MARKET" and c[3].endswith("-R")]
+    assert repair and repair[0][1] == "BUY"           # repair on the right side
+
+
+def test_gate_long_cycle_drill_unchanged_by_short_variant(tmp_path):
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    r = ex.drill("cycle")
+    assert r["ok"] is True and r["steps"]["side"] == "long"
+    kinds = [(c[0], c[1]) for c in v.calls if c[0] in ("MARKET", "STOP", "CANCEL")]
+    assert kinds == [("MARKET", "BUY"), ("STOP", "SELL"), ("CANCEL", None),
+                     ("MARKET", "SELL")]
+    assert ex.state.coverage_live.get("drill_short_cycle", 0) == 0
+
+
+def test_gate_auto_drill_schedules_short_cycle_once_after_first_long(tmp_path):
+    """Long first (the known path), the short cycle exactly once, then the
+    remaining long cycles. stopfill stays excluded."""
+    ex = mkexec(tmp_path, FakeVenue(), dry_run=False)
+    ex.state.coverage_live = {}
+    assert ex._needed_auto_drill() == "cycle"
+    ex.state.coverage_live = {"drill_cycle": 1}
+    assert ex._needed_auto_drill() == "short_cycle"
+    ex.state.coverage_live = {"drill_cycle": 2, "drill_short_cycle": 1}
+    assert ex._needed_auto_drill() == "cycle"
+    ex.state.coverage_live = {"drill_cycle": 5, "drill_short_cycle": 1}
+    assert ex._needed_auto_drill() in (None, "cycle")   # only the slippage tail
+    assert ex._needed_auto_drill() != "stopfill"

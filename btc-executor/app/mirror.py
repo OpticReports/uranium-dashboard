@@ -2697,7 +2697,7 @@ class Executor:
         it. Endpoint-only (token-gated); never called by any scheduler.
         Fills are recorded (leg='drill') so they feed slippage stats, and
         are excluded from every P&L metric by that tag."""
-        if kind not in ("cycle", "stopfill"):
+        if kind not in ("cycle", "stopfill", "short_cycle"):
             return {"ok": False, "refused": f"unknown kind {kind}"}
         if not self._venue_lock.acquire(timeout=30):
             return {"ok": False, "refused": "executor busy (step running)"}
@@ -2724,14 +2724,29 @@ class Executor:
         # fully verified — a failed drill advancing ramp-authorizing rows let
         # broken mechanics count as proven (referee 2026-08-17)
         covs: list[str] = []
+        # SHORT-SIDE DRILL (2026-09-08, Casey: "is there a way to test the
+        # short path without waiting?"). Every organic trade so far has been
+        # a long, so the SELL-to-open / BUY-side stop / BUY reduce-only close
+        # mapping has never touched the live venue. `short_cycle` runs the
+        # cycle with the sides mirrored. It proves MECHANICS - side mapping,
+        # a protective stop on the correct side of the market, reduce-only
+        # on a short - at one contract. It does NOT credit entry_short:
+        # RAMP_V4.md refuses that in advance, because the organic short goes
+        # engine -> /exec/target -> the pullback's limit path, which no drill
+        # routes. Only the real path proves the real path.
+        short = kind == "short_cycle"
+        open_side, close_side = ("SELL", "BUY") if short else ("BUY", "SELL")
         try:
             mid = self.venue.mid()
-            self.venue.place_market("BUY", q, f"{base}-E")
-            self._watch_fill("drill", "drill_entry", f"{base}-E", mid, "BUY")
+            self.venue.place_market(open_side, q, f"{base}-E")
+            self._watch_fill("drill", "drill_entry", f"{base}-E", mid, open_side)
             steps["entry"] = "sent"
-            if kind == "cycle":
-                trig = mid * 0.99
-                self.venue.place_stop("SELL", q, trig, f"{base}-S")
+            steps["side"] = "short" if short else "long"
+            if kind in ("cycle", "short_cycle"):
+                # protective stop on the LOSING side: below market for a
+                # long, ABOVE market for a short
+                trig = mid * (1.01 if short else 0.99)
+                self.venue.place_stop(close_side, q, trig, f"{base}-S")
                 covs.append("stop_placed")
                 st = self.venue.order_status(f"{base}-S")
                 steps["stop_open"] = bool(st and st.get("status") == "OPEN")
@@ -2743,16 +2758,19 @@ class Executor:
                 # unconditional exit after a filled stop sold us short
                 # (referee 2026-08-15, executed repro)
                 if steps["stop_cancelled"]:
-                    self.venue.place_market("SELL", q, f"{base}-X",
+                    self.venue.place_market(close_side, q, f"{base}-X",
                                             reduce_only=True)
                     self._watch_fill("drill", "drill_exit", f"{base}-X",
-                                     mid, "SELL")
+                                     mid, close_side)
                     steps["exit"] = "sent"
                 else:
                     steps["exit"] = "skipped_stop_filled"
                 ok = steps["stop_open"] and steps["stop_cancelled"]
                 if ok:
                     covs.append("drill_cycle")
+                    if short:
+                        # audit-trail key, NOT a gate row (see above)
+                        covs.append("drill_short_cycle")
             else:  # stopfill: trigger just above market -> fires immediately
                 trig = mid * 1.005
                 filled = False
@@ -2846,6 +2864,18 @@ class Executor:
         # advancing the ramp gate, with no error anywhere. Read the same
         # source the gate reads.
         cov = getattr(self.state, "coverage_live", {}) or {}
+        # Order INSIDE the drills-still-needed window: one LONG cycle first
+        # (the path 15 live fills have already exercised), then the SHORT
+        # cycle once (the path nothing has), then whatever long cycles
+        # remain. It counts toward drill_cycle like any cycle and never
+        # touches entry_short. Deliberately NOT scheduled once coverage is
+        # complete - "auto-drill stops at coverage complete" is a contract
+        # (drills must not run forever); a human can still POST it.
+        needed = (cov.get("drill_cycle", 0) < DRILL_CYCLE_NEED
+                  or self._live_fill_count() < SLIPPAGE_SAMPLE_NEED)
+        if (needed and cov.get("drill_cycle", 0) >= 1
+                and cov.get("drill_short_cycle", 0) == 0):
+            return "short_cycle"
         if cov.get("drill_cycle", 0) < DRILL_CYCLE_NEED:
             return "cycle"
         # slippage_sample ALSO gates coverage_complete, and one cycle drill
