@@ -15,6 +15,7 @@ mocked ib_async module — no live gateway exists here. Gates:
 """
 from __future__ import annotations
 
+import asyncio
 import sys
 import types
 
@@ -1452,7 +1453,10 @@ def test_dry_fill_reports_a_zero_commission():
 # MUTATION-VERIFIED: dropping the RequestTimeout assignment turns
 # test_order_history_refresh_is_bounded red (the fake sees 0 = forever);
 # turning the timeout into `continue` turns it red (a timeout must fail
-# CLOSED, never read as "venue never saw the order").
+# CLOSED, never read as "venue never saw the order"); dropping the
+# ib.disconnect() turns it red. NOT catchable here: narrowing the except
+# to the builtin TimeoutError alone - on 3.11+ asyncio.TimeoutError IS
+# TimeoutError, so the 3.10 case can only be pinned by the base image.
 
 def test_order_history_refresh_is_bounded(ib_adapter):
     fake = ib_adapter.ib
@@ -1472,9 +1476,22 @@ def test_order_history_refresh_is_bounded(ib_adapter):
     assert "timed out" in str(e.value) and "fails closed" in str(e.value)
     assert seen["timeout"] == ib_mod.VENUE_HISTORY_TIMEOUT_S
     assert fake.RequestTimeout == 0                # restored
-    # a venue that answers "nothing" is still "venue never saw it"
+    assert not fake.isConnected(), "session must be dropped so _reconnect pages"
+    # a venue that answers "nothing" is still "venue never saw it" (the
+    # adapter reconnects transparently), and the timeout is restored on the
+    # success path too
     fake.reqCompletedOrders = lambda apiOnly=True: []
     assert ib_adapter.find_stock_order("blend-sweep-wedged") is None
+    assert fake.RequestTimeout == 0 and fake.isConnected()
+    # the open-orders request is bounded as well
+    def open_hang():
+        if not fake.RequestTimeout:
+            raise AssertionError("reqAllOpenOrders issued with no timeout")
+        raise asyncio.TimeoutError("openOrderEnd never arrived")   # 3.10 class
+    fake.reqAllOpenOrders = open_hang
+    with pytest.raises(ExecutorConnectionError):
+        ib_adapter.find_stock_order("blend-sweep-wedged")
+    fake.reqAllOpenOrders = lambda: []
     # ... and a non-timeout venue error on the refresh is still tolerated
     def boom(apiOnly=True):
         raise RuntimeError("gateway said no")

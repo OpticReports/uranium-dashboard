@@ -13,6 +13,7 @@ Everything venue-real is validated in the PAPER phase before live matters.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import math
 import time
@@ -615,7 +616,20 @@ class IBAdapter:
                                  ("reqCompletedOrders", (True,))):
                     try:
                         extra = getattr(self.ib, fn)(*args) or []
-                    except TimeoutError as exc:      # asyncio.TimeoutError alias (3.11+)
+                    except (TimeoutError, asyncio.TimeoutError) as exc:
+                        # (aliases on 3.11+, distinct classes on 3.10: both,
+                        # or an older base image reads a timeout as "venue
+                        # never saw it" - counter-agent MED)
+                        # Drop the session: the next _require_connected runs
+                        # _reconnect (backoff, outage ledger, the 30-min page,
+                        # the pre-open page) and a fresh wrapper - a wedged-
+                        # but-connected gateway is otherwise invisible: the
+                        # cycle would fail closed every 5 min with /health
+                        # "ok" and nobody told (counter-agent MED).
+                        try:
+                            self.ib.disconnect()
+                        except Exception:  # noqa: BLE001
+                            pass
                         raise ExecutorConnectionError(
                             f"{fn} timed out after {VENUE_HISTORY_TIMEOUT_S:.0f}s: "
                             f"venue order history unavailable - cycle fails "
