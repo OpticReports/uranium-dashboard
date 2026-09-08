@@ -66,8 +66,12 @@ at any bar resumes bit-identically (6-cut-point kill test).
   no code path ever clears and which is persisted across restarts. The halt
   now pages (RED `book_halted` + Telegram) and btc-executor mirrors it as
   `legs.<leg>.engine_halted` on `/pulse`, but neither service can resume the
-  book — a human must. A halted leg means any blend containing it runs the
-  remaining leg plus cash, at reduced exposure, indefinitely.
+  book — a human must, with the `x-exec-token` header (all four control
+  endpoints require it whenever `EXEC_TOKEN` is set; they were open on the
+  public URL before 2026-09-08). `/halt` also drops a resting pending, since
+  a halted book would otherwise still fill it. A halted leg means any blend
+  containing it runs the remaining leg plus cash, at reduced exposure,
+  indefinitely. `/exec/target` answers 503 until boot has restored the DB.
 - `POST /replay` re-runs the acceptance replay with the active config
   (warns if config ≠ research defaults).
 - DEGRADED (no data >10 min) blocks new entries, keeps protective stops.

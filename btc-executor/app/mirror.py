@@ -1673,6 +1673,10 @@ class Executor:
         self._roll_day(equity)
         self._check_agent_expiry()
         self._check_halts(equity)
+        # Engine-book halts are tracked BEFORE the executor's own halt
+        # returns: tracked inside the leg loop, an engine halt that landed
+        # while we were halted went unpaged until /resume (panel, 2026-09-08).
+        self._track_engine_halts(target)
         if self.state.halted:
             self._save_state()
             return
@@ -1726,38 +1730,56 @@ class Executor:
 
     # ---------- per-leg reconciliation ----------
 
-    def _sync_leg(self, leg: str, tl: dict, blend: dict,
-                  equity: float, entries_ok: bool) -> None:
-        led: LegLedger = self.state.legs[leg]
-        pend, pos = tl.get("pending"), tl.get("position")
-        # THREE-STATE. An absent/malformed field is UNKNOWN, not False: the
-        # first cut used bool(tl.get(...)), so one partial /exec/target
-        # response sent a false "trading again" all-clear on a book that was
-        # still halted, then a fresh RED when the field came back - one page
-        # per flap. Same collapse-unknown-into-convenient _ostat exists to
-        # forbid (counter-agent 2026-09-08, defect 5).
-        raw_halted = tl.get("halted")
-        halted = raw_halted if isinstance(raw_halted, bool) else led.engine_halted
-        if isinstance(raw_halted, bool) and halted != led.engine_halted:
-            # PAGE FIRST, then commit the flag. The first cut saved first, so
-            # a single failure at the page site (disk, _event raising, a kill
-            # mid-deploy) left the flag committed with no page sent and the
-            # edge could never recur - the exact silent-halt this exists to
-            # kill. Paging first means a crash between the two RE-pages on
-            # restart; a duplicate beats a loss (defect 2).
-            if halted:
+    def _track_engine_halts(self, target: dict) -> None:
+        """Mirror legs.<n>.halted from /exec/target into LegLedger.engine_halted
+        and page on the TRANSITION.
+
+        THREE-STATE: an absent or non-bool field is UNKNOWN, not False. The
+        first cut used bool(tl.get(...)), so one partial response sent a
+        false 'trading again' all-clear on a still-halted book, then a fresh
+        RED when the field came back - a page per flap. Same collapse-
+        unknown-into-convenient that _ostat exists to forbid.
+
+        PAGE FIRST, then commit the flag. The first cut saved first, so a
+        single failure at the page site (disk, _event raising, a kill
+        mid-deploy) left the flag committed with no page sent and the edge
+        could never recur - the exact silent halt this exists to kill. A
+        crash between the two now RE-pages on restart; a duplicate beats a
+        loss.
+        """
+        legs = target.get("legs") or {}
+        for leg in LEGS:
+            tl = legs.get(leg)
+            if not isinstance(tl, dict):
+                continue
+            led: LegLedger = self.state.legs[leg]
+            raw = tl.get("halted")
+            if not isinstance(raw, bool) or raw == led.engine_halted:
+                continue
+            if raw:
                 reason = tl.get("halt_reason")
                 cause = ("operator POST /halt" if reason == "manual"
                          else "its own drawdown kill switch" if reason == "dd_halt"
                          else "a halt (reason not reported)")
                 self._event("RED", "engine_leg_halted",
                             f"{leg} leg's engine book is HALTED by {cause}; "
-                            f"the engine will open no NEW entries for it")
+                            f"the engine will open no NEW entries for it and "
+                            f"neither will this executor")
             else:
                 self._event("INFO", "engine_leg_resumed",
                             f"{leg} leg's engine book is trading again")
-            led.engine_halted = halted
+            led.engine_halted = raw
             self._save_state()
+
+    def _sync_leg(self, leg: str, tl: dict, blend: dict,
+                  equity: float, entries_ok: bool) -> None:
+        led: LegLedger = self.state.legs[leg]
+        pend, pos = tl.get("pending"), tl.get("position")
+        halted = led.engine_halted      # tracked in _track_engine_halts
+        # A halted engine book must never receive a NEW entry from us, even
+        # if it (wrongly) presents a pending - the engine's own /halt used to
+        # leave one resting. Existing positions keep their stops (branch 1).
+        entries_ok = entries_ok and not halted
 
         # 1) engine has an open position
         if pos is not None:
@@ -1794,7 +1816,7 @@ class Executor:
             # reverse position (QA rehearsal find, 2026-08-07).
             had_qty = led.qty != 0.0
             if had_qty:
-                self._close_leg(leg, led, "engine_flat", halted=halted)
+                self._close_leg(leg, led, "engine_flat")
             if not entries_ok:
                 return
             if led.entry_cloid:
@@ -1872,8 +1894,14 @@ class Executor:
             self._cancel_entry(led, filled_action="flatten" if led.qty == 0.0
                                else "ignore")
         if led.qty != 0.0:
-            self._close_leg(leg, led, "engine_halted" if halted
-                            else "engine_exit", halted=halted)
+            # A close beside halted=True is still the mirror of a GENUINE
+            # engine exit: the engine never flattens on halt, it halts AT a
+            # trade close and keeps managing any position until its own exit.
+            # The first cut labelled this a 'kill-switch flatten' and withheld
+            # the signal_exit gate credit - wrong premise (panel, 2026-09-08).
+            # The label carries the state so the event is still distinct.
+            self._close_leg(leg, led, "engine_exit (book halted)" if halted
+                            else "engine_exit")
 
     def _enter_from_fill(self, leg: str, led: LegLedger, pos: dict,
                          blend: dict, equity: float,
@@ -2340,8 +2368,7 @@ class Executor:
         led.entry_cloid = led.entry_side = None
         led.entry_qty = 0.0
 
-    def _close_leg(self, leg: str, led: LegLedger, why: str,
-                   halted: bool = False) -> None:
+    def _close_leg(self, leg: str, led: LegLedger, why: str) -> None:
         # NOTE (merge 2026-08-26): an earlier hotfix cut accidentally
         # duplicated the _maintain_stop CANCELLED-page block here via an
         # unanchored replace. Restored to the simple form: on a close we
@@ -2446,14 +2473,7 @@ class Executor:
                                 reduce_only=True)
             self._watch_fill(leg, "close", cloid, ref, _close_side(led.qty))
             self._event("INFO", "leg_closed", f"{leg} {why} qty={led.qty}")
-            # A kill-switch flatten is NOT evidence that signal exits work.
-            # This counter feeds the RAMP v4 gate, so crediting it would let
-            # a halted book buy its own scaling permission (2026-09-08).
-            # Guarded on the flag itself, not on `why`: the engine_flat path
-            # (halted book + a pending it should not have) reached here with
-            # credit intact in the first cut (defect 7).
-            if not halted and why != "engine_halted":
-                self._cov("signal_exit")
+            self._cov("signal_exit")
             led.qty = 0.0
 
     def _report_post_only_crosses(self) -> None:

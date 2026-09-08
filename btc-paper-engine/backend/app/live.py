@@ -49,6 +49,13 @@ class Engine:
         self._blend_state: dict[str, dict] = {}
         self._lock = threading.Lock()
         self.alert_fn = alerts.send      # injected in tests
+        # /exec/target refuses to serve until boot() has restored the DB:
+        # before this, the app answered with fresh Book() defaults
+        # (halted=False, no position, bar_ts=0) while boot ran in the
+        # background thread, and the executor read that as a real engine
+        # state - a false 'resumed' page then a fresh RED on every restart,
+        # and (pre-existing) a routine engine_exit flatten of a live leg.
+        self.booted = False
 
     # ---------- persistence ----------
 
@@ -59,7 +66,7 @@ class Engine:
             pos["exit_flag"] = getattr(b.position, "exit_flag", None)
         return json.dumps({
             "equity": b.equity, "peak": b.peak_equity, "halted": b.halted,
-            "halt_reason": b.halt_reason,
+            "halt_reason": b.halt_reason, "halt_announced": b.halt_announced,
             "position": pos,
             "pending": asdict(b.pending) if b.pending else None,
         })
@@ -68,6 +75,10 @@ class Engine:
         d = json.loads(raw)
         b.equity, b.peak_equity, b.halted = d["equity"], d["peak"], d["halted"]
         b.halt_reason = d.get("halt_reason")     # absent on pre-2026-09-08 rows
+        # A halted row written before the flag existed is treated as already
+        # announced - a restore is never an edge, and re-paging every restart
+        # is the failure mode the executor side had to be fixed for too.
+        b.halt_announced = d.get("halt_announced", b.halted)
         if d.get("position"):
             p = dict(d["position"])
             flag = p.pop("exit_flag", None)
@@ -75,7 +86,14 @@ class Engine:
             if flag:
                 b.position.exit_flag = flag  # type: ignore[attr-defined]
         if d.get("pending"):
-            b.pending = Pending(**d["pending"])
+            if b.halted:
+                # `halted` blocks NEW pendings only; a restored one still
+                # filled on the next bar, so a halted book opened a position
+                # the live executor then mirrored at market (panel, 2026-09-08)
+                logger.warning("%s: dropping pending restored onto a halted book",
+                               b.cfg.name)
+            else:
+                b.pending = Pending(**d["pending"])
 
     def _persist(self, s, snapshot_ts: int | None = None) -> None:
         for name, b in self.books.items():
@@ -154,8 +172,10 @@ class Engine:
             # from first boot rather than waiting for the next 4h bar close.
             if self.bars:
                 self._blend_step(self.bars[-1].ts + BAR_SECONDS, s)
+            self._announce_halts(s)
             log_event(s, "INFO", "boot",
                       f"bars={len(self.bars)} last_processed={self.last_processed}")
+        self.booted = True
 
     def refresh_bars(self) -> None:
         """Top up the bar window from REST (persist any new finalized bars)."""
@@ -188,10 +208,6 @@ class Engine:
                 inds = compute_indicators(self.bars)
             ind = inds[i]
             warm = i >= min(settings.warmup_bars, len(self.bars) - 1) or ind.sma200 is not None
-            # Snapshot BEFORE resolve_open_exit: that path closes a
-            # position too, so it can trip dd_halt just as process_closed_bar
-            # can. Comparing after both is the only way to catch either.
-            was_halted = self._halt_snapshot()
             for b in self.books.values():
                 resolve_open_exit(b, bar, self.tcfg)
             sigs = ({"pullback": eval_signal(bar, ind, self.scfg),
@@ -211,59 +227,67 @@ class Engine:
                 process_closed_bar(b, bar, ind, self.scfg, self.tcfg,
                                    sigs[b.cfg.strategy])
                 accrue_cash_yield(b, settings.cash_apy)
-            self._alert_new_halts(was_halted, s)
+            self._announce_halts(s)        # before _persist: flag rides along
             self.last_processed = bar.ts
             self._persist(s, snapshot_ts=bar.ts + BAR_SECONDS)
             self._blend_step(bar.ts + BAR_SECONDS, s)
 
-    def _halt_snapshot(self) -> dict[str, bool]:
-        """Take this immediately before ANY code that can reach
-        engine.core._close_position, and pass it to _alert_new_halts
-        immediately after. There are three such sites: resolve_open_exit and
-        process_closed_bar in catch_up, and the intrabar stop in poll."""
-        return {n: b.halted for n, b in self.books.items()}
+    BLEND_INGREDIENTS = ("S3", "S4")     # the books the live blends trade
 
-    def _alert_new_halts(self, was_halted: dict[str, bool], s) -> None:
-        """Page on a book's halt flag turning on.
+    def _announce_halts(self, s) -> None:
+        """Page every book whose halt has not been announced yet.
 
-        `book.halted` is set in engine.core._close_position and is cleared by
-        exactly one thing: a human calling POST /books/<name>/resume. It is
-        persisted and restored on boot, so a halt is permanent until someone
-        acts. Until 2026-09-08 nothing announced it: the book simply stopped
-        taking entries, /books still returned 200, and the live executor
+        `book.halted` is set by engine.core._close_position (dd_halt), by
+        POST /books/<n>/halt, or arrives already set from reset_books; it is
+        cleared by exactly one thing, POST /books/<n>/resume, and it persists
+        across restarts. Until 2026-09-08 nothing announced it: the book just
+        stopped taking entries, /books still returned 200, and the executor
         (which never read legs.<n>.halted) booked the leg going flat as a
         routine exit. A leg that silently never trades again is the
-        healthy-while-doing-nothing failure mode - it has to reach the phone.
+        healthy-while-doing-nothing failure mode.
 
-        Fires on the false->true edge only, so it cannot repeat per bar, and
-        never on boot (restore happens outside this loop).
+        Announced-vs-halted rather than snapshot-vs-now: the panel that
+        reviewed the snapshot design showed it lost the edge to the poll()
+        stop path it did not bracket and to any exception between the
+        halting close and the compare. This scan is idempotent and runs at
+        every persist site, so whichever path set the flag, the next scan
+        pages it once. A restore is never an edge (see _restore_book).
+        Call BEFORE _persist so halt_announced is written with the page.
         """
         for name, b in self.books.items():
-            if b.halted and not was_halted.get(name, False):
-                dd = (b.equity / b.peak_equity - 1) if b.peak_equity else 0.0
-                if b.halt_reason == "manual":
-                    cause = "halted by operator (POST /halt)"
-                else:
-                    # dd_halt, or unknown on a row persisted before the
-                    # reason field existed - report the numbers, not a story
-                    cause = (f"drawdown {100 * dd:.2f}% <= "
-                             f"-{100 * b.cfg.dd_halt:.0f}% dd_halt")
-                detail = (f"{name} ({b.cfg.strategy}) {cause}; equity "
-                          f"{b.equity:,.0f} vs peak {b.peak_equity:,.0f}")
-                log_event(s, "RED", "book_halted", detail, book=name)
-                logger.warning("book_halted %s", detail)
-                try:
-                    self.alert_fn(
-                        f"\U0001f6d1 ACTION NEEDED - paper engine book "
-                        f"{name} HALTED\n{detail}\n"
-                        f"This book will place NO further entries. It does "
-                        f"NOT clear itself and it survives restarts - a "
-                        f"human must POST /books/{name}/resume. Until then "
-                        f"any blend containing it runs the remaining leg "
-                        f"plus cash, at reduced exposure.")
-                except Exception as exc:  # noqa: BLE001
-                    # alerting must never be able to stall the bar loop
-                    logger.warning("halt alert failed: %s", exc)
+            if not b.halted or b.halt_announced:
+                continue
+            dd = (b.equity / b.peak_equity - 1) if b.peak_equity else 0.0
+            if b.halt_reason == "manual":
+                cause = "halted by operator (POST /halt)"
+            else:
+                cause = (f"drawdown {100 * dd:.2f}% <= "
+                         f"-{100 * b.cfg.dd_halt:.0f}% dd_halt")
+            detail = (f"{name} ({b.cfg.strategy}) {cause}; equity "
+                      f"{b.equity:,.0f} vs peak {b.peak_equity:,.0f}")
+            if name in self.BLEND_INGREDIENTS:
+                tail = (f"Until then the live blend runs the other leg plus "
+                        f"cash, at reduced exposure.")
+            else:
+                tail = (f"{name} is a research-only book: nothing trades it "
+                        f"live, so this is dashboard-only.")
+            log_event(s, "RED", "book_halted", detail, book=name)
+            logger.warning("book_halted %s", detail)
+            try:
+                self.alert_fn(
+                    f"\U0001f6d1 ACTION NEEDED - paper engine book "
+                    f"{name} HALTED\n{detail}\n"
+                    f"The engine opens NO new entries for this book; any "
+                    f"position it still holds keeps its stop until the "
+                    f"engine exits it. It does NOT clear itself and it "
+                    f"survives restarts - a human must POST "
+                    f"/books/{name}/resume. {tail}")
+            except Exception as exc:  # noqa: BLE001
+                # alerting must never be able to stall the bar loop; the
+                # flag stays clear so the next scan retries the page
+                logger.warning("halt alert failed: %s", exc)
+                continue
+            b.halt_announced = True
 
     # ---------- poll ----------
 
@@ -295,11 +319,7 @@ class Engine:
                     # A stop-out is the single largest loss a book takes -
                     # the likeliest way to cross dd_halt, and the only way
                     # to halt BETWEEN bars. The first cut of the halt alert
-                    # bracketed catch_up only; this path persisted
-                    # halted=True straight to the DB, so the next bar's
-                    # snapshot read True and the edge was gone forever
-                    # (counter-agent 2026-09-08, BLOCKING defect 1).
-                    was_halted = self._halt_snapshot()
+                    # missed this path entirely (BLOCKING, 2026-09-08).
                     for b in self.books.values():
                         pos = b.position
                         if pos is None or getattr(pos, "exit_flag", None):
@@ -311,7 +331,7 @@ class Engine:
                             _close_position(b, pos, cur_bar_ts, pos.stop_price,
                                             "STOP", self.tcfg)
                             log_event(s, "INFO", "stop_fill_live", b.cfg.name)
-                    self._alert_new_halts(was_halted, s)
+                    self._announce_halts(s)
                     self._persist(s)
             # bar boundary: refresh + process newly closed bars
             if not self.bars or time.time() >= self.bars[-1].ts + BAR_SECONDS:

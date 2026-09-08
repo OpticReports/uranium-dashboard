@@ -111,7 +111,15 @@ trigger. Ties break toward NOT deploying.
    as the "n needed" context) — surfaces automatically when the gate matures.
 4. DSR/trial-count wired into /replay/compare output so every window shows
    its deflation context.
-5. **Alert on a book `halted` transition, and make the executor see it.**
+5. ~~**Alert on a book `halted` transition, and make the executor see it.**~~
+   DONE 2026-09-08 (three passes under two adversarial panels; see the
+   commit trail on `claude/s6-win-rate-study-nx5m1d`). Left over from those
+   panels, pre-existing and NOT fixed there: btc-executor `/resume` does not
+   reset `_breach_count`, so a resumed executor can re-halt DRAWDOWN on the
+   very next poll; the blend curve in `live._blend_step` mis-steps on any
+   multi-bar catch-up with an open S3/S4 position (halt or not); S5/S6 rows
+   report `halted:false` while an ingredient is halted; the engine test
+   suite is not hermetic (`data/paperengine.db`).
    `book.halted` is set at `core.py:215` and cleared only by a manual
    `POST /books/<n>/resume`; it persists across restarts. btc-executor never
    reads `legs.<leg>.halted`, so an S4 halt books as a routine

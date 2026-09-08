@@ -135,6 +135,13 @@ class Book:
     # reads this so an operator halt is never reported as a drawdown that
     # did not happen (counter-agent 2026-09-08, defect 6/8).
     halt_reason: str | None = None
+    # Has the halt been paged? Compared against `halted` by
+    # live._announce_halts, so a halt is announced no matter WHICH code path
+    # set it (three in the engine, plus /halt and reset_books) and even if
+    # an exception intervened between the halting close and the scan - the
+    # snapshot-vs-now design the workflow panel broke needed every path
+    # bracketed by hand and lost the edge to any raise in between.
+    halt_announced: bool = False
     position: Position | None = None
     pending: Pending | None = None
     trades: list[ClosedTrade] = field(default_factory=list)
