@@ -2864,18 +2864,13 @@ class Executor:
         # advancing the ramp gate, with no error anywhere. Read the same
         # source the gate reads.
         cov = getattr(self.state, "coverage_live", {}) or {}
-        # Order INSIDE the drills-still-needed window: one LONG cycle first
-        # (the path 15 live fills have already exercised), then the SHORT
-        # cycle once (the path nothing has), then whatever long cycles
-        # remain. It counts toward drill_cycle like any cycle and never
-        # touches entry_short. Deliberately NOT scheduled once coverage is
-        # complete - "auto-drill stops at coverage complete" is a contract
-        # (drills must not run forever); a human can still POST it.
-        needed = (cov.get("drill_cycle", 0) < DRILL_CYCLE_NEED
-                  or self._live_fill_count() < SLIPPAGE_SAMPLE_NEED)
-        if (needed and cov.get("drill_cycle", 0) >= 1
-                and cov.get("drill_short_cycle", 0) == 0):
-            return "short_cycle"
+        # short_cycle is MANUAL-ONLY, exactly like stopfill and for the same
+        # reason: its first live run is a venue experiment (whether the
+        # venue accepts a BUY stop-loss above mark is the one thing no test
+        # here can prove). A supervised POST /drill?kind=short_cycle with the
+        # drill record read afterwards is the bar; auto-drill must never be
+        # the thing that discovers a rejection, and a re-armed breaker must
+        # never re-fire the path that just failed (counter-agent 2026-09-08).
         if cov.get("drill_cycle", 0) < DRILL_CYCLE_NEED:
             return "cycle"
         # slippage_sample ALSO gates coverage_complete, and one cycle drill
@@ -3007,7 +3002,7 @@ class Executor:
                      "forward the drill record to Claude)")
             else:
                 send(f"🔴 ACTION NEEDED (you) — auto-drill {kind} FAILED and "
-                     "flatness could NOT be verified: open Coinbase NOW and "
+                     "flatness could NOT be verified: open the venue UI NOW and "
                      "check for a residual position; then forward the drill "
                      "record to Claude. Auto-drill is disabled.")
 

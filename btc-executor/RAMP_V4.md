@@ -269,7 +269,9 @@ it never actually had.
 ## Drills (the accelerator)
 
 Token-gated `POST /drill?kind=cycle|stopfill|short_cycle` — one deliberate min-size
-(1 contract, 0.01 BTC) round trip through the REAL live code paths:
+(one venue lot cleared above the venue's notional floor — 0.01 BTC on
+Coinbase, ~0.00011 BTC ≈ $12 on Hyperliquid) round trip through the REAL
+live code paths:
 
 - `cycle`: market entry → protective stop placed → stop verified OPEN →
   stop cancelled → market flatten → venue position verified back to start.
@@ -292,7 +294,14 @@ Token-gated `POST /drill?kind=cycle|stopfill|short_cycle` — one deliberate min
   otherwise be the first test of it at full size. Credits `stop_placed`,
   `drill_cycle` and an audit-only `drill_short_cycle`; **never
   `entry_short`** (refused above — only the engine → limit path proves the
-  real path). Auto-drill schedules it once, after the first long cycle.
+  real path). **Manual-only, like `stopfill`, for the same reason**: its
+  first live run is a venue experiment — whether Hyperliquid accepts a BUY
+  `sl` trigger above mark is the one thing no local test proves (counter-
+  agent 2026-09-08: the SDK does no side validation and `hl.py` is
+  side-symmetric, so the expectation is yes; if not, the entry is repaired
+  flat, the breaker latches once and it pages). Run it supervised with the
+  token when both legs are flat, then read the drill record in `/status`:
+  `POST /drill?kind=short_cycle`. Auto-drill never schedules it.
 - AUTO-REPAIR tail (all kinds, all exception paths): residual venue
   position after a drill is flattened immediately with a reducing market
   order, recorded as `auto_repair`, and the drill event escalates to RED
