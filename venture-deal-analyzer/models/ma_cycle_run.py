@@ -21,13 +21,19 @@ H = mc.MOMENTUM_LOOKBACK_QUARTERS   # clock momentum, NOT the 5y cycle horizon
 def _regime_ok(sid, quarters, i, h):
     """Momentum may not straddle a definitional break.
 
-    A lookback from just after the HSR threshold change reaches back
-    across it and would read a legislative redefinition as a collapse
-    in deal activity. Momentum is only defined once BOTH endpoints sit
-    inside the same regime.
+    Two components carry a scoring floor and both would be corrupted by
+    a lookback that reaches across it:
+
+      HSR_COUNT     - a lookback from just after the 2001 threshold
+                      change reads a legislative redefinition as a
+                      collapse in deal activity
+      EDGAR_PROXIES - a lookback from 1997 into the pre-mandate years
+                      reads EDGAR ADOPTION as a surge in deal-making
+
+    Momentum is only defined once BOTH endpoints sit above the floor.
+    Generalized rather than special-cased on HSR so that adding a third
+    floored component cannot silently skip this check.
     """
-    if sid != "HSR_COUNT":
-        return True
     j = i - h
     if j < 0:
         return False

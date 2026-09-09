@@ -137,6 +137,13 @@ HSR_REGIME_BREAK = "2001Q1"
 # clears the 60% coverage rule.
 HSR_SCORE_FROM = "2001Q2"
 
+# EDGAR only SCORES from here. Electronic filing became mandatory in
+# May 1996; before that a filing count measures EDGAR ADOPTION, not
+# deal activity - DEFM14A per quarter runs 8 (1994Q1) -> 27 (1996Q1)
+# -> 92 (2000Q1). Ingested from 1994 anyway so the ramp is visible on
+# the chart and the cutoff is arguable from the data.
+EDGAR_SCORE_FROM = "1997Q1"
+
 # Derived, not fetched.
 DERIVED = {
     "GZ_SPREAD": (
@@ -148,6 +155,16 @@ DERIVED = {
         "tight spread must score high. Harford's own variable was the "
         "C&I rate spread over Fed Funds; GZ is its modern analogue and "
         "reaches back to 1973."),
+    "EDGAR_PROXIES": (
+        "Merger proxies filed (DEFM14A + PREM14A), quarterly (SEC)",
+        False,
+        "NOT inverted. High merger-proxy volume is late-cycle activity. "
+        "THIS IS THE NOWCAST LAYER: HSR is the official count but runs "
+        "a ~10-month publication lag, while EDGAR's form index is "
+        "current to yesterday. Counts DISTINCT ACCESSIONS, not index "
+        "rows - form.idx emits one row per filer, and counting rows "
+        "inflates S-4 by up to 8.7x. DEFM14A/PREM14A are the only two "
+        "forms that are 1:1 with filings. See ma_edgar."),
     "HSR_COUNT": (
         "HSR reportable transactions, quarterly (FTC/DOJ)", False,
         "NOT inverted. High deal count is late-cycle activity. Note the "
@@ -256,6 +273,20 @@ def load_hsr(path=None):
     return out
 
 
+def load_edgar(path=None):
+    """Monthly merger-proxy counts, built by ma_edgar.
+
+    DISTINCT ACCESSIONS, not index rows. Current to within a day, which
+    is the point - it covers the ~10 months HSR has not yet published.
+    """
+    path = path or os.path.join(_HERE, "edgar_monthly.csv")
+    out = []
+    with open(path) as f:
+        for row in csv.DictReader(f):
+            out.append((row["month"] + "-01", float(row["merger_proxies"])))
+    return out
+
+
 def _fetch_fred(sid, timeout=90):
     url = FRED_CSV.format(sid=sid)
     text = _get(url, timeout=timeout)
@@ -342,6 +373,25 @@ def build(refresh=True):
     quarterly["GZ_SPREAD"] = to_quarterly(gzraw["obs"], "mean")
     quarterly["EBP"] = to_quarterly(gzraw["ebp_obs"], "mean")
 
+    # EDGAR merger proxies: also a flow, also summed
+    try:
+        eg = load_edgar()
+        eq = {}
+        for date, v in eg:
+            y, m = int(date[:4]), int(date[5:7])
+            eq.setdefault(f"{y}Q{(m - 1) // 3 + 1}", []).append(v)
+        quarterly["EDGAR_PROXIES"] = {k: sum(v) for k, v in eq.items()
+                                      if len(v) == 3}
+        raw["EDGAR_PROXIES"] = {
+            "series_id": "EDGAR_PROXIES", "n_obs": len(eg),
+            "source_url": "https://www.sec.gov/Archives/edgar/full-index/",
+            "first": eg[0], "last": eg[-1]}
+    except FileNotFoundError:
+        quarterly["EDGAR_PROXIES"] = {}
+        raw["EDGAR_PROXIES"] = {"series_id": "EDGAR_PROXIES", "n_obs": 0,
+                                "source_url": "not built", "first": None,
+                                "last": None}
+
     # HSR: sum months into quarters (a count is a flow, not a level -
     # averaging it would silently rescale the series by 1/3)
     hsr = load_hsr()
@@ -375,10 +425,13 @@ def scoreable(sid, quarter):
     Only HSR is restricted, and only before 2001Q2 - see HSR_SCORE_FROM.
     Charting is unrestricted; this gates scoring alone.
     """
-    if sid != "HSR_COUNT":
+    floors = {"HSR_COUNT": HSR_SCORE_FROM,
+              "EDGAR_PROXIES": EDGAR_SCORE_FROM}
+    floor = floors.get(sid)
+    if floor is None:
         return True
     qy, qq = int(quarter[:4]), int(quarter[5])
-    fy, fq = int(HSR_SCORE_FROM[:4]), int(HSR_SCORE_FROM[5])
+    fy, fq = int(floor[:4]), int(floor[5])
     return (qy, qq) >= (fy, fq)
 
 
@@ -386,7 +439,7 @@ def scoreable(sid, quarter):
 # to EQUITY_Q and are deliberately absent - scoring a numerator and its
 # own ratio would double-count the same information.
 COMPONENTS = ["GZ_SPREAD", "DRTSCILM", "DRSDCILM", "NFCI",
-              "NCBCEBQ027S", "EQUITY_Q", "HSR_COUNT"]
+              "NCBCEBQ027S", "EQUITY_Q", "HSR_COUNT", "EDGAR_PROXIES"]
 
 if __name__ == "__main__":
     raw, q = build()
