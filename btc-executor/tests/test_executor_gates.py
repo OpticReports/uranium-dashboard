@@ -379,7 +379,67 @@ def test_gate_daily_loss_halt_flattens_and_blocks(tmp_path):
     n = len(v.calls)
     ex.step(target(pull=pos))                             # halted -> inert
     assert len(v.calls) == n
-    ex.resume()
+    # CONTRACT CHANGED 2026-09-09 (Casey's call): a plain /resume on a loss
+    # halt whose breach is STILL LIVE is refused. It used to clear the flag
+    # and re-halt on the next poll - a loop only a redeploy escaped.
+    assert ex.resume() is False
+    assert ex.state.halted == "DAILY_LOSS"
+    assert any(e["kind"] == "resume_refused" for e in ex.state.events)
+    # equity recovering above the line makes a plain resume work again
+    v._equity = 9_800.0
+    assert ex.resume() is True
+    assert ex.state.halted is None
+
+
+def test_gate_resume_reanchor_forgives_a_live_breach(tmp_path):
+    """The deliberate escape from the refusal above. ?reanchor=1 moves the
+    marks to current equity so the breach clears - and says so loudly,
+    because it FORGIVES the drawdown: the next one is measured from here."""
+    v = FakeVenue(equity=10_000.0)
+    ex = mkexec(tmp_path, v)
+    ex.state.day_start_equity = 10_000.0
+    ex.state.high_water = 10_000.0
+    v._equity = 9_000.0
+    ex.halt("DAILY_LOSS", "test")
+
+    assert ex.resume() is False, "plain resume must still refuse"
+    assert ex.resume(reanchor=True) is True
+    assert ex.state.halted is None
+    assert ex.state.day_start_equity == 9_000.0
+    assert ex.state.high_water == 9_000.0
+    assert any(e["kind"] == "resume_reanchored" for e in ex.state.events)
+    # and it must actually stick: the next poll must not re-halt
+    ex.step(target())
+    assert ex.state.halted is None
+
+
+def test_gate_resume_refuses_when_equity_is_unreadable(tmp_path):
+    """A resume on an account we cannot read is a guess, not a decision."""
+    class _BlindEquity(FakeVenue):
+        def equity(self):
+            raise RuntimeError("balance endpoint down")
+
+    v = _BlindEquity(equity=10_000.0)
+    ex = mkexec(tmp_path, v)
+    ex.state.day_start_equity = 10_000.0
+    ex.state.halted = "DRAWDOWN"
+    ex.state.high_water = 10_000.0
+
+    assert ex.resume() is False
+    assert ex.state.halted == "DRAWDOWN"
+    assert any("unreadable" in e["msg"] for e in ex.state.events
+               if e["kind"] == "resume_refused")
+
+
+def test_gate_resume_still_clears_a_non_loss_halt_outright(tmp_path):
+    """Fence: KILL and the operational halts are NOT loss halts and must
+    keep clearing on a plain resume, breach arithmetic or not."""
+    v = FakeVenue(equity=9_000.0)
+    ex = mkexec(tmp_path, v)
+    ex.state.day_start_equity = 10_000.0        # a live loss breach exists
+    ex.state.high_water = 10_000.0
+    ex.halt("KILL", "operator")
+    assert ex.resume() is True
     assert ex.state.halted is None
 
 

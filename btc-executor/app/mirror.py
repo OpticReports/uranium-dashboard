@@ -1239,6 +1239,25 @@ class Executor:
                         f"{self.state.high_water:.0f}")
         self._last_flat_equity = equity
 
+    def _breach_for(self, equity: float) -> tuple[str, str] | None:
+        """Is a loss threshold breached RIGHT NOW? Extracted so /resume asks
+        the same question _check_halts does (2026-09-09). Duplicating this
+        arithmetic in two places is how a resume that "worked" and a halt
+        that immediately re-fired could ever disagree."""
+        st = self.state
+        base_d, base_h = self._base(st.day_start_equity), self._base(st.high_water)
+        if st.day_start_equity > 0 and \
+                equity < st.day_start_equity - self.cfg.daily_loss_halt_pct * base_d:
+            return ("DAILY_LOSS",
+                    f"equity {equity:.0f} < day start {st.day_start_equity:.0f}"
+                    f" - {self.cfg.daily_loss_halt_pct:.0%} of base {base_d:.0f}")
+        if st.high_water > 0 and \
+                equity < st.high_water - self.cfg.dd_halt_pct * base_h:
+            return ("DRAWDOWN",
+                    f"equity {equity:.0f} < HWM {st.high_water:.0f}"
+                    f" - {self.cfg.dd_halt_pct:.0%} of base {base_h:.0f}")
+        return None
+
     def _check_halts(self, equity: float) -> None:
         """Loss thresholds are percentages OF THE SIZING BASE: with a fixed
         base and a small account, a -6%-of-base day is the same dollar event
@@ -1291,17 +1310,7 @@ class Executor:
                                 f"({need / cap_notional:.1f}x). Raise "
                                 f"MAX_NOTIONAL_USD or lower SIZING_BASE_USD; "
                                 f"they have to move together")
-        breach = None
-        if st.day_start_equity > 0 and \
-                equity < st.day_start_equity - self.cfg.daily_loss_halt_pct * base_d:
-            breach = ("DAILY_LOSS",
-                      f"equity {equity:.0f} < day start {st.day_start_equity:.0f}"
-                      f" - {self.cfg.daily_loss_halt_pct:.0%} of base {base_d:.0f}")
-        elif st.high_water > 0 and \
-                equity < st.high_water - self.cfg.dd_halt_pct * base_h:
-            breach = ("DRAWDOWN",
-                      f"equity {equity:.0f} < HWM {st.high_water:.0f}"
-                      f" - {self.cfg.dd_halt_pct:.0%} of base {base_h:.0f}")
+        breach = self._breach_for(equity)
         if breach is None:
             self._breach_count = 0
             return
@@ -1426,12 +1435,14 @@ class Executor:
             self._event("RED", "halt_error", str(exc))
         self._save_state()
 
-    def resume(self, adopt_venue: bool = False) -> bool:
+    def resume(self, adopt_venue: bool = False,
+               reanchor: bool = False) -> bool:
         """Returns whether an adopt, if requested, actually happened."""
         with self._venue_lock:
-            return self._resume_locked(adopt_venue)
+            return self._resume_locked(adopt_venue, reanchor)
 
-    def _resume_locked(self, adopt_venue: bool = False) -> bool:
+    def _resume_locked(self, adopt_venue: bool = False,
+                       reanchor: bool = False) -> bool:
         # The outcome is plumbed back to /resume (re-gate 2026-08-27 N3):
         # the endpoint echoed the QUERY PARAMETER, so a refused adopt on a
         # blind venue returned a body byte-identical to a successful one -
@@ -1450,6 +1461,52 @@ class Executor:
                         "then start from a clean state file.")
             self._save_state()
             return False
+        # A LOSS HALT WHOSE BREACH IS STILL LIVE CANNOT BE RESUMED AWAY
+        # (Casey's call, 2026-09-09). /resume cleared the flag but left
+        # high_water and day_start_equity untouched, so _check_halts saw the
+        # same breach on the very next poll and re-halted - and because
+        # _breach_count is never reset, it re-halted IMMEDIATELY rather than
+        # after the usual debounce. That is a loop, not a resume, and the
+        # only escape was a redeploy.
+        # Refusing is the honest default: the money really is below the line,
+        # and nothing about pressing resume changes that. Forgiving it is a
+        # separate, deliberate act - ?reanchor=1 - which moves the marks to
+        # current equity so the NEXT 35% is measured from here. Say it out
+        # loud rather than letting a plain resume do it silently. Same shape
+        # as ?adopt_venue=1: the dangerous option needs its own flag.
+        if self.state.halted in ("DAILY_LOSS", "DRAWDOWN"):
+            try:
+                eq = self.venue.equity()
+            except Exception as exc:  # noqa: BLE001
+                self._event("RED", "resume_refused",
+                            f"cannot verify the {self.state.halted} breach - "
+                            f"venue equity unreadable ({exc}). Refusing: a "
+                            f"resume on an unreadable account is a guess")
+                self._save_state()
+                return False
+            live = self._breach_for(eq)
+            if live is not None and not reanchor:
+                self._event("RED", "resume_refused",
+                            f"{self.state.halted} is still breached: "
+                            f"{live[1]}. A plain /resume would clear the flag "
+                            f"and re-halt on the next poll. Either wait for "
+                            f"equity to recover above the line, or call "
+                            f"/resume?reanchor=1 to move the marks to current "
+                            f"equity - which FORGIVES this drawdown, so the "
+                            f"next one is measured from here")
+                self._save_state()
+                return False
+            if reanchor:
+                old_hw, old_ds = self.state.high_water, self.state.day_start_equity
+                self.state.high_water = eq
+                self.state.day_start_equity = eq
+                self._breach_count = 0
+                self._event("RED", "resume_reanchored",
+                            f"marks moved to equity {eq:.0f} (was HWM "
+                            f"{old_hw:.0f} / day start {old_ds:.0f}) - this "
+                            f"FORGIVES the {self.state.halted} drawdown; the "
+                            f"next breach is measured from here")
+        self._breach_count = 0
         self._cov("resume")
         self._event("INFO", "resume", f"cleared {self.state.halted}")
         self.state.halted = None
