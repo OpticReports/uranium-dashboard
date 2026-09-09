@@ -40,6 +40,38 @@ def _regime_ok(sid, quarters, i, h):
     return md.scoreable(sid, quarters[j]) and md.scoreable(sid, quarters[i])
 
 
+def _lfl_delta(prev, lv, components):
+    """Level change vs the previous quarter on the COMMON component set.
+
+    Why this is not optional. The composite averages over the
+    components AVAILABLE in a quarter, so it moves when the panel
+    changes even if nothing in the market did. Measured on real data at
+    the 2026Q1->2026Q2 seam, where the Z.1 flow-of-funds series and HSR
+    have not yet published:
+
+        naive Q1 -> Q2          +0.017   (reads as strengthening)
+        like-for-like Q1 -> Q2  -0.086   (actually weakening)
+
+    The SIGN of the quarter-on-quarter move flips. Anyone comparing two
+    published levels across a coverage change is reading composition,
+    not the cycle. This field is the honest delta; the raw level
+    difference is not.
+
+    Parameter-free: it simply restricts both quarters to the components
+    they both have.
+    """
+    if prev is None:
+        return None
+    cur = {c: v for c, v in zip(components, lv) if v is not None}
+    old = prev.get("components") or {}
+    common = [c for c in cur if old.get(c) is not None]
+    if not common:
+        return None
+    a = sum(cur[c] for c in common) / len(common)
+    b = sum(old[c] for c in common) / len(common)
+    return a - b
+
+
 def build_readings():
     _, q = md.build(refresh=False)
     oriented = {sid: md.oriented(q, sid) for sid in md.COMPONENTS}
@@ -84,8 +116,11 @@ def build_readings():
         level, cov = mc.composite(lv, mo)
         momentum, _ = mc.composite(mo, mo)
         diff = mc.diffusion([cols[s] for s in md.COMPONENTS], i)
+        prev = readings[-1] if readings else None
         readings.append({
             "quarter": t,
+            "provisional": cov < 1.0,
+            "delta_like_for_like": _lfl_delta(prev, lv, md.COMPONENTS),
             "phase": mc.classify_phase(level, momentum),
             "level": level, "momentum": momentum,
             "diffusion": diff, "breadth": mc.breadth_qualifier(diff),

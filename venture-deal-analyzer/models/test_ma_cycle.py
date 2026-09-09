@@ -216,3 +216,42 @@ def test_momentum_horizon_sensitivity_is_monotone():
     for h in (2, 4, 8):
         assert mc.momentum_change(rising, 30, h) > 0
         assert mc.momentum_change(falling, 30, h) < 0
+
+
+# --- GATE 6: cross-quarter comparisons must control for coverage ----
+
+def test_like_for_like_delta_ignores_component_dropout():
+    """Regression gate for a real defect.
+
+    The composite averages over AVAILABLE components, so it shifts when
+    the panel changes even if nothing moved. On real data at the
+    2026Q1->2026Q2 seam the naive delta read +0.017 (strengthening)
+    while the like-for-like delta read -0.086 (weakening) - the SIGN
+    flipped purely on composition.
+
+    Here: two quarters where every shared component is UNCHANGED, but a
+    high-scoring component drops out. The naive level falls; the
+    like-for-like delta must be exactly zero.
+    """
+    import ma_cycle_run as run
+    comps = ["A", "B", "C"]
+    prev = {"components": {"A": 0.1, "B": 0.2, "C": 0.9}}
+    lv = [0.1, 0.2, None]          # C dropped out; A and B unmoved
+    naive = (0.1 + 0.2) / 2 - (0.1 + 0.2 + 0.9) / 3
+    assert naive < -0.2, "control: naive delta should look like a fall"
+    assert run._lfl_delta(prev, lv, comps) == 0.0, (
+        "like-for-like delta is tracking composition, not the cycle")
+
+
+def test_like_for_like_delta_still_sees_real_moves():
+    import ma_cycle_run as run
+    comps = ["A", "B"]
+    prev = {"components": {"A": 0.0, "B": 0.0}}
+    assert run._lfl_delta(prev, [0.5, 0.5], comps) == 0.5
+
+
+def test_like_for_like_delta_is_none_without_overlap():
+    import ma_cycle_run as run
+    prev = {"components": {"A": 0.1}}
+    assert run._lfl_delta(prev, [None, 0.4], ["A", "B"]) is None
+    assert run._lfl_delta(None, [0.4], ["A"]) is None

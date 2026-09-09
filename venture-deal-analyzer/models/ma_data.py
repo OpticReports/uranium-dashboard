@@ -67,6 +67,7 @@ EBP is cached alongside as a counter-check, and is not scored.
 import csv
 import json
 import os
+import time
 import urllib.request
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -373,15 +374,27 @@ def build(refresh=True):
     quarterly["GZ_SPREAD"] = to_quarterly(gzraw["obs"], "mean")
     quarterly["EBP"] = to_quarterly(gzraw["ebp_obs"], "mean")
 
-    # EDGAR merger proxies: also a flow, also summed
+    # EDGAR merger proxies: also a flow, also summed.
+    #
+    # THE CURRENT QUARTER IS DROPPED, and a month-count guard is not
+    # enough to do it. EDGAR is current to yesterday, so the quarter in
+    # progress has all three month buckets present but the last one only
+    # partly elapsed - 2026-09 read 12 filings on the 9th against a ~33
+    # run rate. Summed as-is that lands as a 60% collapse in deal
+    # activity that is purely the calendar. A quarter counts only once
+    # its final month is fully behind us.
     try:
         eg = load_edgar()
+        today = time.strftime("%Y-%m")
+        cy, cm = int(today[:4]), int(today[5:7])
+        current_q = (cy, (cm - 1) // 3 + 1)
         eq = {}
         for date, v in eg:
             y, m = int(date[:4]), int(date[5:7])
-            eq.setdefault(f"{y}Q{(m - 1) // 3 + 1}", []).append(v)
-        quarterly["EDGAR_PROXIES"] = {k: sum(v) for k, v in eq.items()
-                                      if len(v) == 3}
+            eq.setdefault((y, (m - 1) // 3 + 1), []).append(v)
+        quarterly["EDGAR_PROXIES"] = {
+            f"{y}Q{q}": sum(v) for (y, q), v in eq.items()
+            if len(v) == 3 and (y, q) < current_q}
         raw["EDGAR_PROXIES"] = {
             "series_id": "EDGAR_PROXIES", "n_obs": len(eg),
             "source_url": "https://www.sec.gov/Archives/edgar/full-index/",
