@@ -1938,11 +1938,27 @@ class Executor:
                 # size, but it still reads as our protection while protecting
                 # nothing. Retry next poll.
                 return
-            if not entries_ok:
-                return
+            # CLEANUP RUNS BEFORE THE FEED GATE, NOT AFTER IT (counter-agent
+            # round 2, 2026-09-09). `if not entries_ok: return` used to sit
+            # ABOVE this, so a stale or degraded feed skipped the cleanup
+            # entirely - and for the pullback leg that is exactly the case
+            # that needs it: a post-only maker entry can fill at the venue
+            # without ever being booked into led.qty (branch 2 records only
+            # entry_cloid/entry_qty), so had_qty is False, the action is
+            # "flatten", and this is the ONLY code that unwinds it. Skipping
+            # it left a real venue position with no ledger row, no stop and
+            # no exit, for as long as the feed stayed degraded.
+            # entries_ok exists to stop us ADDING risk while blind. Cancelling
+            # a stale order and unwinding an orphan fill REMOVES risk, and
+            # `flatten` sends a reduce-only order, so it can only reduce.
+            # Branch 3 already does this cleanup with no entries_ok gate at
+            # all - this just makes branch 2 agree with the doctrine branch 3
+            # already follows.
             if led.entry_cloid:
                 self._cancel_entry(led, filled_action="ignore" if had_qty
                                    else "flatten")
+            if not entries_ok:
+                return
             limit_px = pend.get("limit")
             if not limit_px or limit_px <= 0:      # -1.0 = market-entry sentinel
                 limit_px = self.venue.mid()

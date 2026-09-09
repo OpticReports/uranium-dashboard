@@ -6387,3 +6387,35 @@ def test_gate_a_genuinely_unreadable_stop_still_halts(tmp_path):
 
     assert ex.state.halted == "LEDGER_DIVERGENCE", \
         "a real divergence was explained away as a stop fill"
+
+
+def test_gate_orphan_entry_fill_is_unwound_even_on_a_degraded_feed(tmp_path):
+    """A post-only pullback entry can fill at the venue without ever being
+    booked into led.qty, so had_qty is False and _cancel_entry's "flatten" is
+    the ONLY code that unwinds it. `if not entries_ok: return` used to sit
+    above that cleanup, so a degraded feed left a real venue position with no
+    ledger row, no stop and no exit for as long as the feed stayed bad.
+    entries_ok exists to stop us ADDING risk; flatten is reduce-only and can
+    only remove it. Branch 3 has always done this cleanup ungated."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    led = ex.state.legs["pullback"]
+    v.place_limit("BUY", 0.01, 59_000.0, "P-x-E1")
+    v.orders["P-x-E1"]["status"] = "FILLED"          # the venue filled it
+    led.entry_cloid, led.entry_side, led.entry_qty = "P-x-E1", "L", 0.01
+    led.signal_ts = NOW - 14_400
+    assert led.qty == 0.0, "precondition: the fill was never booked"
+    assert abs(v.position() - 0.01) < 1e-9
+
+    # a DIFFERENT signal arrives while the feed is degraded
+    ex.step(target(pull={"pending": {"side": "L", "limit": 59_500.0,
+                                     "signal_ts": NOW + 14_400},
+                        "position": None},
+                   degraded=True))
+
+    assert led.entry_cloid is None, "orphan ref left dangling"
+    assert any(e["kind"] == "orphan_fill_unwound" for e in ex.state.events), \
+        "orphan venue fill never unwound on a degraded feed"
+    assert abs(v.position()) < 1e-9, "venue still holds an untracked position"
+    # and no NEW risk was added while blind
+    assert not [e for e in ex.state.events if e["kind"] == "entry_order"]
