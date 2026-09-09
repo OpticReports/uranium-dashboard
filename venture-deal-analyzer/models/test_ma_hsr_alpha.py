@@ -90,3 +90,69 @@ def test_elasticity_sign():
     by ~10% when alpha is 1."""
     assert h.elasticity(1.0) == -1.0
     assert h.elasticity(1.5) == -1.5
+
+
+# --- Within-regime drift correction and the ship test ---------------
+
+def test_drift_correction_direction():
+    """A year whose threshold was real-terms LOOSER than the reference
+    (smaller share of GDP, so catching more small deals) must be
+    revised DOWN. Backwards, this would amplify bracket creep instead
+    of removing it - and would make the 1990s look like a bigger boom
+    than the raw data already does."""
+    counts = {1990: 1000, 2000: 1000}
+    thr = {1990: 15.0, 2000: 15.0}
+    gdp = {1990: 6000.0, 2000: 10000.0}   # threshold erodes as GDP grows
+    out = h.correct_drift(counts, thr, gdp, 1.4, 2000)
+    assert out[2000] == 1000
+    assert out[1990] > 1000, (
+        "1990 had a real-terms TIGHTER threshold, so its count must be "
+        "revised UP relative to 2000")
+
+
+def test_drift_correction_is_identity_at_reference():
+    counts = {1995: 2778, 2000: 4810}
+    thr = {1995: 15.0, 2000: 15.0}
+    gdp = {1995: 7640.0, 2000: 10250.0}
+    out = h.correct_drift(counts, thr, gdp, 1.3, 2000)
+    assert abs(out[2000] - 4810) < 1e-9
+
+
+def test_drift_correction_vanishes_at_alpha_zero():
+    counts = {1990: 1952, 2000: 4810}
+    thr = {1990: 15.0, 2000: 15.0}
+    gdp = {1990: 5963.0, 2000: 10250.0}
+    out = h.correct_drift(counts, thr, gdp, 0.0, 2000)
+    assert abs(out[1990] - 1952) < 1e-9
+
+
+def test_rank_stability_detects_reordering():
+    """The ship test must actually FAIL when it should. Measured on the
+    real 1990s series across a wide alpha range (0.8-2.0) the ordering
+    is NOT stable - 9 distinct orderings, max rank shift 5, with 1990
+    (the raw-terms trough) promoted into the top three at alpha=2.0.
+    If this gate ever passes on that interval, the test has stopped
+    testing."""
+    counts = {y: c for y, c in zip(
+        range(1990, 2001),
+        [1952, 1537, 1621, 1966, 2476, 2778, 3222, 4044, 4577, 4828, 4810])}
+    thr = {y: 15.0 for y in counts}
+    gdp = {y: g for y, g in zip(range(1990, 2001), [
+        5963, 6158, 6520, 6859, 7287, 7640, 8073, 8578, 9063, 9631, 10251])}
+    inv, shift, _ = h.rank_stability(counts, thr, gdp, 0.8, 2.0, 2000)
+    assert inv > 0 and shift >= 3, (
+        "a 1.2-wide alpha interval must reorder the 1990s - if it does "
+        "not, the stability test is not measuring anything")
+
+
+def test_rank_stability_passes_on_a_tight_interval():
+    """And must PASS when alpha is pinned. A degenerate interval cannot
+    reorder anything."""
+    counts = {y: c for y, c in zip(
+        range(1990, 2001),
+        [1952, 1537, 1621, 1966, 2476, 2778, 3222, 4044, 4577, 4828, 4810])}
+    thr = {y: 15.0 for y in counts}
+    gdp = {y: g for y, g in zip(range(1990, 2001), [
+        5963, 6158, 6520, 6859, 7287, 7640, 8073, 8578, 9063, 9631, 10251])}
+    inv, shift, _ = h.rank_stability(counts, thr, gdp, 1.40, 1.40, 2000)
+    assert inv == 0 and shift == 0

@@ -155,3 +155,80 @@ def elasticity(alpha):
     unindexed pre-2001 threshold such a large problem.
     """
     return -alpha
+
+
+# --------------------------------------------------------------------
+# WITHIN-REGIME DRIFT CORRECTION
+# --------------------------------------------------------------------
+#
+# The pre-2001 threshold never moved in NOMINAL terms - $15M flat from
+# 1978 to 2001. So there is no nominal cutoff artifact inside the
+# regime. What drifts is the threshold's REAL selectivity: as the
+# economy grew past a fixed $15M bar, progressively smaller deals
+# cleared it, and the count rose for that reason alone.
+#
+# This is a within-regime TREND, not a level splice, and that
+# distinction is what makes the correction tractable. The composite
+# scores regime-split percentile RANKS, so ranks are computed inside
+# each regime and the cross-regime level offset - the part that is most
+# violently alpha-sensitive - never enters the composite at all.
+#
+# Correction: express the threshold as a share of nominal GDP, pick a
+# reference year inside the regime, and restate every year's count onto
+# that reference share.
+
+
+def real_threshold_share(threshold_usd_m, gdp_usd_b):
+    """Threshold as parts-per-million of nominal GDP."""
+    return threshold_usd_m / (gdp_usd_b * 1000.0) * 1e6
+
+
+def correct_drift(counts_by_year, threshold_by_year, gdp_by_year, alpha,
+                  reference_year):
+    """Restate counts onto the reference year's REAL threshold share.
+
+    A year whose threshold was real-terms LOOSER than the reference
+    (a smaller share of GDP, so catching more small deals) has its
+    count revised DOWN. Returns {year: corrected_count}.
+    """
+    ref = real_threshold_share(threshold_by_year[reference_year],
+                              gdp_by_year[reference_year])
+    out = {}
+    for y, n in counts_by_year.items():
+        if y not in threshold_by_year or y not in gdp_by_year:
+            continue
+        share = real_threshold_share(threshold_by_year[y], gdp_by_year[y])
+        out[y] = restate_count(n, share, ref, alpha)
+    return out
+
+
+def rank_stability(counts_by_year, threshold_by_year, gdp_by_year,
+                   alpha_lo, alpha_hi, reference_year, steps=25):
+    """THE SHIP TEST, declared before the estimate was seen.
+
+    The correction is only usable if the ORDERING of corrected years is
+    stable across the alpha confidence interval. If two years swap
+    places depending on where in the CI alpha sits, the corrected level
+    is not recoverable and the regime must stay unscored - whatever the
+    point estimate says.
+
+    Returns (n_inversions, max_rank_shift, orderings_seen). Zero
+    inversions across the interval is a pass.
+    """
+    orderings = set()
+    max_shift = 0
+    base = None
+    for i in range(steps):
+        a = alpha_lo + (alpha_hi - alpha_lo) * i / (steps - 1)
+        corr = correct_drift(counts_by_year, threshold_by_year,
+                             gdp_by_year, a, reference_year)
+        order = tuple(sorted(corr, key=lambda y: corr[y]))
+        orderings.add(order)
+        if base is None:
+            base = order
+        else:
+            pos = {y: k for k, y in enumerate(order)}
+            bpos = {y: k for k, y in enumerate(base)}
+            max_shift = max(max_shift,
+                            max(abs(pos[y] - bpos[y]) for y in pos))
+    return len(orderings) - 1, max_shift, orderings
