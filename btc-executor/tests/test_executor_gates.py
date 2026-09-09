@@ -6464,3 +6464,56 @@ def test_gate_coherent_halt_and_cap_config_is_not_flagged(tmp_path):
     ex._check_halts(100_000.0)
 
     assert not [e for e in ex.state.events if e["kind"] == "halt_config"]
+
+
+def test_gate_exit_flag_stops_dead_if_maintain_stop_halts(tmp_path):
+    """Moving _maintain_stop to the head of the exit_flag branch put a call
+    that CAN halt ahead of _cancel_entry and _close_leg. On the halt_error
+    path _halt_locked deliberately KEEPS the ledger - it is the only record
+    of what we believe we hold, and the page tells the operator to flatten by
+    hand off it. Running on would clear the entry ref underneath that page."""
+    class _FlattenFailsVenue(FakeVenue):
+        def position(self):
+            raise RuntimeError("venue position unreadable")
+
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    led = ex.state.legs["trend"]
+    led.qty = 0.01
+    _hold(v, 0.01)
+    ex.step(target(trend=_pos()))
+    led.entry_cloid, led.entry_side, led.entry_qty = "T-keepme", "L", 0.01
+    ex.halt("KILL", "operator")                       # halt already standing
+    ex.state.legs["trend"].qty = 0.01                 # a ledger that survived
+    led.entry_cloid = "T-keepme"
+
+    ex._sync_leg("trend", {"pending": None,
+                           "position": _pos(flag="SIGNAL")["position"],
+                           "halted": False},
+                 BLEND, 10_000.0, entries_ok=True)
+
+    assert led.entry_cloid == "T-keepme", \
+        "cleared the order ref the halt deliberately kept"
+
+
+def test_gate_exit_flag_flatten_arm_unwinds_a_partial_maker_fill(tmp_path):
+    """The branch's `filled_action="flatten"` arm fires when the ledger holds
+    NOTHING but an entry order does - a post-only maker entry that partially
+    filled at the venue and was never booked. That partial is a real position
+    with no stop and no exit, and this is the only code that unwinds it."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    led = ex.state.legs["pullback"]
+    v.place_limit("BUY", 0.01, 59_000.0, "P-p-E1")
+    v.orders["P-p-E1"]["status"] = "FILLED"           # the venue filled it
+    led.entry_cloid, led.entry_side, led.entry_qty = "P-p-E1", "L", 0.01
+    led.signal_ts = NOW - 14_400
+    assert led.qty == 0.0, "precondition: nothing booked"
+    assert abs(v.position() - 0.01) < 1e-9
+
+    ex.step(target(pull=_pos(flag="SIGNAL")))
+
+    assert led.entry_cloid is None
+    assert any(e["kind"] == "orphan_fill_unwound" for e in ex.state.events), \
+        "an unbooked maker fill was left naked on the venue"
+    assert abs(v.position()) < 1e-9

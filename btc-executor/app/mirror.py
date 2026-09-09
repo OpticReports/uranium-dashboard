@@ -1865,6 +1865,23 @@ class Executor:
                 # makes this a status read.
                 if led.qty != 0.0:
                     self._maintain_stop(leg, led, pos)
+                if self.state.halted:
+                    # _maintain_stop CAN HALT - LEDGER_DIVERGENCE at its
+                    # placement choke point, or STOP_UNPLACEABLE past the
+                    # replace cap - and moving it to the head of this branch
+                    # put a halting call AHEAD of _cancel_entry and
+                    # _close_leg for the first time (round 2, 2026-09-09).
+                    # Usually harmless, because _halt_locked zeroes qty and
+                    # both refs so the calls below no-op. NOT harmless on the
+                    # halt_error path: when the flatten FAILS, _halt_locked
+                    # deliberately KEEPS the ledger - "it is the only record
+                    # of what we believe we hold" - and its ACTION page tells
+                    # the operator to go and flatten by hand. Running on would
+                    # clear entry_cloid/entry_side/entry_qty underneath that
+                    # page, destroying the record it just told them to use.
+                    # Same doctrine as branch 2's guard: a halt stops the leg
+                    # that raised it, not merely the next one.
+                    return
                 # Same order branch 3 uses: clear a stale entry ref first, so
                 # a resting or partly-filled entry cannot fill us back in
                 # after we have closed.
