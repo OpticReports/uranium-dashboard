@@ -6319,3 +6319,71 @@ def test_gate_halted_executor_never_chases_at_market(tmp_path):
     assert not [c for c in v.calls[n_before:] if c[0] == "MARKET"], \
         "chased at market on a halted executor"
     assert any(e["kind"] == "entries_blocked" for e in ex.state.events)
+
+
+class _LateFillVenue(FakeVenue):
+    """Models what the LIVE adapter does at the instant a stop fires, which
+    FakeVenue does not: hl.py maps the raw status "triggered" to OPEN
+    (hl.py:520), so the first read after firing says the stop is still
+    working while the position is already gone. `open_reads` is how many
+    reads report OPEN before the truth shows up."""
+
+    def __init__(self, *a, open_reads=1, **kw):
+        super().__init__(*a, **kw)
+        self.stop_cloid_watch = None
+        self.open_reads = open_reads
+
+    def order_status(self, cloid):
+        if cloid == self.stop_cloid_watch and self.open_reads > 0:
+            self.open_reads -= 1
+            return {"status": "OPEN", "filled_qty": 0.0, "avg_price": None}
+        return super().order_status(cloid)
+
+
+def test_gate_stop_that_reads_open_then_filled_does_not_halt_the_book(tmp_path):
+    """BLOCKING, round 2. The absorption reads the stop status BEFORE
+    _stop_backing reads the position, so a stop landing between those two
+    reads looks still-working on the first and already gone on the second -
+    and on Hyperliquid the raw status "triggered" maps to OPEN anyway, so the
+    first read cannot see it even with no race. Against a fake that reports
+    FILLED immediately the fix looked right; against the venue's real
+    behaviour it halted the book on an ordinary stop-out."""
+    v = _LateFillVenue(open_reads=1)
+    ex = mkexec(tmp_path, v, dry_run=False)
+    ex.state.legs["trend"].qty = 0.01
+    _hold(v, 0.01)
+    ex.step(target(trend=_pos()))
+    sc = ex.state.legs["trend"].stop_cloid
+    assert sc
+    v.stop_cloid_watch = sc                 # first read after this says OPEN
+    v.orders[sc]["status"] = "FILLED"       # but the venue is already flat
+    assert abs(v.position()) < 1e-9
+
+    ex.step(target())                        # engine goes flat -> branch 3
+
+    led = ex.state.legs["trend"]
+    assert ex.state.halted is None, "halted the book on an ordinary stop-out"
+    assert led.qty == 0.0 and led.stop_cloid is None
+    kinds = [e["kind"] for e in ex.state.events]
+    assert "stop_filled_on_venue" in kinds and "ledger_divergence" not in kinds
+    assert ex.state.coverage_live.get("stop_filled", 0) == 1
+
+
+def test_gate_a_genuinely_unreadable_stop_still_halts(tmp_path):
+    """Fence for the above: the second look must not explain away a REAL
+    divergence. An UNKNOWN status (what both adapters return on an API
+    failure) is not evidence the stop fired, so the halt must still fire."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    ex.state.legs["trend"].qty = 0.01
+    _hold(v, 0.01)
+    ex.step(target(trend=_pos()))
+    sc = ex.state.legs["trend"].stop_cloid
+    v.orders[sc]["status"] = "CANCELLED"     # venue killed it; we are NOT flat
+    v.orders["seed"]["status"] = "CANCELLED"  # and the position vanished too
+    assert abs(v.position()) < 1e-9
+
+    ex.step(target())
+
+    assert ex.state.halted == "LEDGER_DIVERGENCE", \
+        "a real divergence was explained away as a stop fill"

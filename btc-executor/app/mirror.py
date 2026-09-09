@@ -2374,6 +2374,24 @@ class Executor:
                         f"position); position may be UNPROTECTED, retrying "
                         f"next poll")
             return
+        if verdict == "diverged" and self._absorb_fired_stop(leg, led):
+            # SECOND LOOK BEFORE HALTING ON WHAT IS ONLY A STOP-OUT (round 2,
+            # 2026-09-09). The first call above reads the stop status BEFORE
+            # _stop_backing reads the position, so a stop that lands between
+            # those two reads looks still-working on the first and already
+            # gone on the second - and that ORDERING is the common case, not
+            # an exotic one. Worse, hl.py maps the raw status "triggered" -
+            # the state a trigger order occupies the instant it fires - to
+            # OPEN, so the first read cannot see it even with no race at all.
+            # Re-reading AFTER the position read is what makes the absorption
+            # actually work against the live adapter rather than only against
+            # a test fake that reports FILLED immediately.
+            # DISCLOSED LIMIT: a status that reads UNKNOWN (both adapters
+            # return that on an API failure) still falls through to the halt
+            # below. That is deliberate - an unreadable venue is exactly when
+            # a divergence must not be explained away - but it means a stop
+            # fill during an API outage still halts the book.
+            return
         if verdict == "diverged":
             self._event("RED", "ledger_divergence",
                         f"{leg} needs a stop but the venue does not back the "
@@ -2483,30 +2501,37 @@ class Executor:
         self._cov("stop_placed")
 
     def _cancel_entry(self, led: LegLedger, filled_action: str) -> None:
-        # CANCEL UNLESS THE VENUE CONFIRMED IT IS FILLED (counter-agent panel,
-        # 2026-09-09). The old test was `if st and ...`, so an UNREADABLE
-        # status - order_status returns None on an API failure - sent no
-        # cancel at all, and the ref was cleared two lines below anyway. That
-        # left a live maker entry resting at the venue that nothing tracked:
-        # it could fill later and open a position with no ledger entry, no
-        # stop, and no exit. Reproduced with a blipped read while an exit_flag
-        # was set - the order stayed OPEN and no CANCEL was ever sent.
-        # This is the same doctrine the entry path already states for itself
-        # ("an unverifiable order is treated as POSSIBLY LIVE ... clear only
-        # on a venue-CONFIRMED terminal-and-unfilled read"); the cancel path
-        # was the side that broke it. Cancelling an order the venue has
-        # already filled or expired is a harmless no-op, so an unreadable
-        # status must resolve toward SENDING the cancel, not skipping it.
+        # CANCEL UNLESS THE VENUE CONFIRMED IT IS FILLED.
+        #
+        # CORRECTION (round 2, 2026-09-09). The first cut of this comment, and
+        # the commit and EXECUTOR.md rail that went with it, said an API
+        # failure makes order_status return None and so sent no cancel. THAT
+        # WAS WRONG about both shipping adapters, and it is corrected here
+        # rather than left standing: hl.order_status returns
+        # {"status": "UNKNOWN"} on any exception and says so in its own
+        # docstring ("never a bare None on error"), and cb.order_status
+        # returns UNKNOWN too - None there means ONLY an order-map miss, i.e.
+        # we hold no venue handle at all. UNKNOWN is truthy and is not
+        # "FILLED", so the OLD predicate already sent the cancel. The live
+        # hole this was said to close was not open on that path.
+        #
+        # The predicate still changes one real case - a None read, where we
+        # have no handle - and resolving that toward SENDING is right on the
+        # merits: cancelling an order the venue has already filled or expired
+        # is a harmless no-op, while skipping it can strand a live maker
+        # entry. So it stays. But it is defence in depth, NOT a fix for an
+        # observed live failure, and it must not be described as one.
+        #
+        # Note also what this canNOT page on: both adapters swallow cancel
+        # failures internally (hl.cancel and cb.cancel both wrap the call in
+        # `except Exception: logger.warning`), so a wrapper here would never
+        # see one. An earlier cut added exactly that wrapper plus a RED
+        # entry_cancel_failed; it was unreachable code asserting a safety
+        # property we do not have, and it was removed. Making that page real
+        # means having the adapters propagate, which is a change to them.
         st = self.venue.order_status(led.entry_cloid)
         if not st or st.get("status") != "FILLED":
-            try:
-                self.venue.cancel(led.entry_cloid)
-            except Exception:  # noqa: BLE001
-                # The ref is cleared below either way; a cancel we could not
-                # send is surfaced so the orphan is not silent.
-                self._event("RED", "entry_cancel_failed",
-                            f"{led.entry_cloid} could not be cancelled - "
-                            f"check for a resting order at the venue")
+            self.venue.cancel(led.entry_cloid)
         filled = (st or {}).get("filled_qty", 0.0)
         if filled > 0 and filled_action == "flatten":
             side = "SELL" if led.entry_side == "L" else "BUY"
@@ -2517,6 +2542,37 @@ class Executor:
                         f"{led.entry_cloid} filled {filled} but engine cancelled")
         led.entry_cloid = led.entry_side = None
         led.entry_qty = 0.0
+
+    def _absorb_fired_stop(self, leg: str, led: LegLedger) -> bool:
+        """A stop that has already FILLED is not protection - it IS the exit.
+
+        Absorbing it has to happen before _stop_backing renders a verdict:
+        a fired stop leaves the venue flat while the ledger still holds, which
+        is indistinguishable from a real ledger divergence, and the divergence
+        path HALTS THE WHOLE BOOK and demands a manual /resume on what is only
+        an ordinary stop-out (counter-agent rounds 1 and 2, 2026-09-09).
+
+        It lives here, on _close_leg's path, rather than at each caller
+        because branches 2 and 3 of _sync_leg run with `pos is None` and so
+        can never reach _maintain_stop, which was the only other code that
+        absorbed a stop fill. Returns True when it took the leg flat.
+
+        The consumed entry ref is cleared for the same reason _maintain_stop
+        clears it: that fill was closed BY the stop, so leaving the ref set
+        lets branch 3's orphan-flatten re-close it into a naked reverse.
+        """
+        if led.qty == 0.0 or not led.stop_cloid:
+            return False
+        st = self.venue.order_status(led.stop_cloid)
+        if not st or st.get("status") != "FILLED":
+            return False
+        self._event("INFO", "stop_filled_on_venue",
+                    f"{leg} stop fired before the close - absorbed")
+        self._cov("stop_filled")
+        led.qty, led.stop_cloid, led.stop_px = 0.0, None, None
+        led.entry_cloid = led.entry_side = None
+        led.entry_qty = 0.0
+        return True
 
     def _close_leg(self, leg: str, led: LegLedger, why: str) -> None:
         # NOTE (merge 2026-08-26): an earlier hotfix cut accidentally
@@ -2564,16 +2620,8 @@ class Executor:
         # The consumed entry ref is cleared for the same reason _maintain_stop
         # clears it: that fill was closed BY the stop, and leaving the ref set
         # lets branch 3's orphan-flatten re-close it into a naked reverse.
-        if led.qty != 0.0 and led.stop_cloid:
-            st = self.venue.order_status(led.stop_cloid)
-            if st and st.get("status") == "FILLED":
-                self._event("INFO", "stop_filled_on_venue",
-                            f"{leg} stop fired before the close - absorbed")
-                self._cov("stop_filled")
-                led.qty, led.stop_cloid, led.stop_px = 0.0, None, None
-                led.entry_cloid = led.entry_side = None
-                led.entry_qty = 0.0
-                return
+        if self._absorb_fired_stop(leg, led):
+            return
         # CORROBORATE BEFORE TOUCHING ANYTHING (re-gate 2026-08-27 B2). This
         # was the one write path that never asked the venue: side AND size
         # came straight off the ledger, and the only reads were
@@ -2592,6 +2640,24 @@ class Executor:
                         f"UNREADABLE - cancelling nothing and closing "
                         f"nothing; the stop stays armed and this retries "
                         f"next poll")
+            return
+        if verdict == "diverged" and self._absorb_fired_stop(leg, led):
+            # SECOND LOOK BEFORE HALTING ON WHAT IS ONLY A STOP-OUT (round 2,
+            # 2026-09-09). The call above reads the stop status BEFORE
+            # _stop_backing reads the position, so a stop landing between
+            # those two reads looks still-working on the first and already
+            # gone on the second - and that ORDERING is the common case, not
+            # an exotic one. Worse, hl.py maps the raw status "triggered" -
+            # the state a trigger order occupies the instant it fires - to
+            # OPEN, so the first read cannot see it even with no race at all.
+            # Re-reading AFTER the position read is what makes the absorption
+            # work against the live adapter rather than only against a test
+            # fake that reports FILLED the moment it is set.
+            # DISCLOSED LIMIT: an UNKNOWN status (what both adapters return on
+            # an API failure) still falls through to the halt below. That is
+            # deliberate - an unreadable venue is exactly when a divergence
+            # must not be explained away - so a stop fill during an API
+            # outage still halts the book.
             return
         if verdict == "diverged":
             self._event("RED", "ledger_divergence",
