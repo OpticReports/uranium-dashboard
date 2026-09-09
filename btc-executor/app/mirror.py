@@ -2186,6 +2186,19 @@ class Executor:
         # the target (live find, 2026-08-10). Round the shortfall down and
         # accept the tracking error instead.
         missing = self.venue.quantize(max(0.0, round(want - filled, 8)))
+        if missing > 0 and self._below_venue_floor(missing):
+            # A remainder the venue will REFUSE must not be sent. place_market
+            # raises on it, and that raise lands BEFORE `led.qty = ...` below,
+            # so the ledger stays at 0 while the venue holds everything that
+            # did fill - a real leg, up to $3,797, with no ledger row and no
+            # stop (Coinbase-era audit, 2026-09-09). Booking what verifiably
+            # filled and accepting the tracking error is the whole point of
+            # the quantize above; the $10 floor just moved where the line is.
+            self._event("RED", "sub_min_size",
+                        f"{leg} chase remainder {missing} BTC is under the "
+                        f"venue's minimum order value - booking the "
+                        f"{filled} that filled and leaving the rest")
+            missing = 0.0
         if missing > 0 and self.state.halted:
             # A market chase is NEW RISK and a halt means no new risk, ever.
             # entries_ok tracks the FEED and the engine book, not our own
@@ -2666,6 +2679,45 @@ class Executor:
         led.entry_cloid = led.entry_side = None
         led.entry_qty = 0.0
 
+    def _below_venue_floor(self, qty: float) -> bool:
+        """Will the venue actually ACCEPT an order for this size?
+
+        NOT the same question as `quantize(qty) > 0`, and the difference is a
+        Coinbase-era assumption that broke silently on the venue switch
+        (Coinbase-era audit, 2026-09-09). On CDE nano futures quantize()
+        rounded to whole 0.01-BTC contracts, so anything the venue would
+        refuse also quantized to ZERO - representable and sendable were the
+        same test. Hyperliquid quantizes to a 1e-5 lot but refuses any order
+        under $10 (MinTradeNtl, no reduce-only exemption), so the whole band
+        from one lot (~$0.79) up to $10 is representable and UNSENDABLE.
+        Reproduced: a 0.00005 BTC residue passed the old dust test, so
+        _close_leg cancelled the protective stop and then raised on the
+        rejected order - leaving the leg with no stop, no close, and not even
+        an event, because the raise came before the first _event call.
+
+        An unreadable mid returns False. Declaring dust on a guess would
+        clear a REAL position out of the ledger, which is worse than the
+        loop this exists to prevent.
+        """
+        q = abs(qty)
+        try:
+            q = self.venue.quantize(q)
+        except Exception:  # noqa: BLE001
+            pass
+        if q <= 0.0:
+            return True
+        floor = getattr(self.venue, "min_notional_usd", 0.0) or 0.0
+        if not floor:
+            inner = getattr(self.venue, "inner", None)
+            floor = getattr(inner, "min_notional_usd", 0.0) or 0.0
+        if floor <= 0.0:
+            return False
+        try:
+            px = float(self.venue.mid() or 0.0)
+        except Exception:  # noqa: BLE001
+            return False
+        return bool(px) and q * px < floor
+
     def _absorb_fired_stop(self, leg: str, led: LegLedger) -> bool:
         """A stop that has already FILLED is not protection - it IS the exit.
 
@@ -2712,11 +2764,8 @@ class Executor:
         # dust against a flat venue is numerically a mismatch, and halting
         # the whole book over it would be a false halt on sub-contract noise.)
         if led.qty != 0.0:
-            try:
-                holdable = self.venue.quantize(abs(led.qty))
-            except Exception:  # noqa: BLE001
-                holdable = abs(led.qty)
-            if holdable <= 0.0:
+            # SENDABILITY, not representability - see _below_venue_floor.
+            if self._below_venue_floor(led.qty):
                 if led.stop_cloid:
                     try:
                         self.venue.cancel(led.stop_cloid)

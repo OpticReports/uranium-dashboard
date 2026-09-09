@@ -6577,3 +6577,102 @@ def test_gate_exit_flag_flatten_arm_unwinds_a_partial_maker_fill(tmp_path):
     assert any(e["kind"] == "orphan_fill_unwound" for e in ex.state.events), \
         "an unbooked maker fill was left naked on the venue"
     assert abs(v.position()) < 1e-9
+
+
+# ---- Coinbase-era assumption: quantize() meant "sendable" on CDE, not on HL
+
+class HLSemanticsVenue(FakeVenue):
+    """The two facts about Hyperliquid that CDE nano futures did NOT share:
+    a fine 1e-5 size lot, AND a $10 minimum order VALUE that the lot size
+    knows nothing about. On CDE, quantize() rounded to whole 0.01-BTC
+    contracts, so anything the venue would refuse also quantized to zero and
+    the two tests coincided. Here the whole band from one lot (~$0.79) to $10
+    is representable and unsendable, and the old dust guard tested the wrong
+    one of the two."""
+    min_notional_usd = 10.0
+
+    def quantize(self, q):
+        step = 1e-5
+        return int(abs(q) / step + 1e-9) * step * (1 if q >= 0 else -1)
+
+    def place_market(self, side, qty, cloid, reduce_only=False):
+        if qty * self._mid < self.min_notional_usd:
+            raise RuntimeError(f"MinNotionalRejected {qty * self._mid:.2f}")
+        return super().place_market(side, qty, cloid, reduce_only=reduce_only)
+
+    def place_stop(self, side, qty, trigger_px, cloid):
+        if qty * self._mid < self.min_notional_usd:
+            raise RuntimeError(f"MinNotionalRejected {qty * self._mid:.2f}")
+        return super().place_stop(side, qty, trigger_px, cloid)
+
+
+def test_gate_hl_unsendable_residue_is_dust_and_keeps_nothing_armed(tmp_path):
+    """BLOCKING, Coinbase-era audit. A 0.00005 BTC residue (~$3) passes
+    `quantize(q) > 0` on Hyperliquid, so the dust branch was skipped, the
+    protective stop was cancelled on the way to an order the venue then
+    REFUSED, and _close_leg raised before emitting a single event. The leg
+    was left with no stop, no close, and nothing in the log."""
+    v = HLSemanticsVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    led = ex.state.legs["trend"]
+    led.qty = 5e-5
+    v._add("MARKET", "BUY", 5e-5, "seed")
+    led.stop_cloid, led.stop_px = "T-1-S56500-1", 56_500.0
+    v._add("STOP", "SELL", 5e-5, "T-1-S56500-1", px=56_500.0)
+    assert v.quantize(led.qty) > 0.0, "fixture must be lot-representable"
+
+    ex._close_leg("trend", led, "engine_flat")          # must not raise
+
+    assert led.qty == 0.0 and led.stop_cloid is None
+    assert any(e["kind"] == "ledger_dust_cleared" for e in ex.state.events)
+    assert not [c for c in v.calls if c[0] == "MARKET" and c[3] != "seed"], \
+        "sent an order the venue cannot accept"
+
+
+def test_gate_hl_sendable_residue_still_closes_normally(tmp_path):
+    """Fence: the guard must only catch what the venue would refuse."""
+    v = HLSemanticsVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    led = ex.state.legs["trend"]
+    led.qty = 0.01                                       # $600, well over $10
+    v._add("MARKET", "BUY", 0.01, "seed")
+    ex._close_leg("trend", led, "engine_flat")
+    assert led.qty == 0.0
+    assert [c for c in v.calls if c[0] == "MARKET" and c[3] != "seed"]
+    assert not [e for e in ex.state.events if e["kind"] == "ledger_dust_cleared"]
+
+
+def test_gate_hl_unsendable_chase_books_what_filled(tmp_path):
+    """The same Coinbase-era assumption on the ENTRY side. place_market on a
+    sub-$10 remainder raises, and that raise lands BEFORE `led.qty = ...`, so
+    the ledger stayed at 0 while the venue held everything that did fill - a
+    real leg with no ledger row and no stop."""
+    v = HLSemanticsVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    led = ex.state.legs["pullback"]
+    # entry order 99.9% filled; the remainder is worth well under $10
+    v.place_limit("BUY", 0.05, 60_000.0, "P-x-E1")
+    v.orders["P-x-E1"]["status"] = "OPEN"
+    v.orders["P-x-E1"]["part"] = 0.04995
+    led.entry_cloid, led.entry_side, led.entry_qty = "P-x-E1", "L", 0.05
+
+    ex._enter_from_fill("pullback", led,
+                        _pos()["position"], BLEND, 100_000.0, entries_ok=True)
+
+    assert led.qty > 0.0, "the venue holds a position the ledger forgot"
+    assert abs(led.qty - 0.04995) < 1e-8, led.qty
+    assert any(e["kind"] == "sub_min_size" for e in ex.state.events)
+
+
+def test_gate_below_venue_floor_never_guesses_on_an_unreadable_mid(tmp_path):
+    """Declaring dust clears a position out of the ledger. On a mid we cannot
+    read that would be a guess, and the wrong guess is worse than the loop
+    this guard exists to prevent - so it must decline to call it dust."""
+    class _NoMid(HLSemanticsVenue):
+        def mid(self):
+            raise RuntimeError("mid unreadable")
+
+    v = _NoMid()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    assert ex._below_venue_floor(5e-5) is False
+    assert ex._below_venue_floor(1e-9) is True, "sub-lot is still dust"
