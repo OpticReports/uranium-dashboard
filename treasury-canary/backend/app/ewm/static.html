@@ -156,6 +156,11 @@ input.pin:focus{border-color:var(--pri2);outline:none}
 <div class="dim" id="liveft" style="font-size:10px;margin-top:6px"></div>
 </div>
 
+<div class="panel"><span class="lbl">What the deal market is tracking &mdash; driver overlays &amp; rolling correlation<span class="hq" data-h="drivers">?</span></span>
+<div id="drvchips" style="display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 8px"></div>
+<div id="drvwrap"><svg id="drvchart" viewBox="0 0 880 300" style="width:100%;height:auto;overflow:visible"></svg></div>
+<div class="dim" id="drvft" style="font-size:10px;margin-top:6px;line-height:1.6"></div>
+</div>
 <div class="panel"><span class="lbl">Close calendar &mdash; feasibility, sign-by deadlines &amp; the event gauntlet<span class="hq" data-h="safety">?</span></span>
 <div class="tl" id="tl"></div>
 <div id="calsum" style="margin-top:12px;font-size:12px;line-height:1.7"></div>
@@ -196,6 +201,7 @@ set_rev:"<b>Revenue run-rate @ Dec 2026.</b> Your stated waypoint: ~$105M run-ra
 set_target:"<b>Target value.</b> The valuation you expect at July 31 2027 if the company stays on pace. Default now tracks the company plan's Q2'27&rarr;Q3'27 EV band ($227&ndash;242M, Aug 2026; previously $200&ndash;225M from the operator report). Legacy-mode only (anchoring off): the engine back-solves the revenue needed at the modal-path multiple and builds the growth ramp to hit it.",
 set_dis:"<b>Dissent cluster.</b> The Jul 29 2026 FOMC hold passed 9-3 with three hawkish dissents — the first unified three-way dissent since Sept 2016 (which preceded a December hike). Toggling this shifts +3pp of probability into the 3&ndash;4-hike tail, funded from the dove rows.",
 set_pin:"<b>Pin to report.</b> Report-fidelity mode: revenue pinned at the report's $105M basis, ramp off. The table then reproduces your report cell-for-cell — useful for checking the engine against the source document.",
+drivers:"<b>Driver overlays.</b> The deal-state marker says BOOM/NORMAL/COOLING/STALL; this says what the market is tracking, and whether that relationship is strengthening or decaying. Toggle any driver on to overlay it. <b>Measured over 97 quarters (2001Q2&ndash;2026Q2), rates are the WEAKEST driver in the set and the sign is backwards from intuition</b> &mdash; the 2y yield correlates &minus;0.03 with deal activity's deviation from its own trend, indistinguishable from nothing, and what signal exists in the change is POSITIVE, because rates and deal-making both track the same expansion. What moves deal-making is CREDIT AVAILABILITY: bank lending standards lead by a quarter at &minus;0.60 and are the strongest relationship anywhere in the set. That is Harford (2005 JFE) measured on our own data &mdash; capital liquidity drives merger waves. Everything is z-scored so the overlays share one axis (a dual-axis chart can manufacture any apparent relationship by choice of scaling) and sign-oriented so UP always means better for deals. The lower strip is a trailing 20-quarter correlation: a driver heading toward zero has stopped explaining the market, which a single full-sample number hides. <b>Not causal, not a forecast</b> &mdash; ~5 independent cycles on overlapping windows, and even the strongest driver has flipped sign within the sample (lending standards ran +0.92 in 2013, &minus;0.58 in 2016, +0.92 now). VIX is shown but carries the standing caveat below: the couplings research found a documented null for PRIVATE-target deals, and this series is public-target.",
 live:"<b>Live market couplings.</b> Canary data feeding the exit model, one primary trigger per channel to avoid counting the same stress twice. AUTO = live feed; MANUAL = your stored value wins; every override is logged. VIX is deliberately absent: the research found a documented null for private-target deals.",
 lv_fcix:"<b>Financing conditions (FCI-X).</b> Chicago Fed National Financial Conditions Index, z-scored: 0 = average, positive = tighter than average. Feeds 25% of the window score. Tighter financing = worse close windows.",
 lv_dmhi:"<b>Deal-market health.</b> 0&ndash;1, 1 = healthy. Blends how aggressively banks are tightening business lending (SLOOS survey, quarterly) with the private-credit pin channel (daily) — the closest live read on whether a sponsor can finance a ~$200M deal.",
@@ -537,6 +543,99 @@ function runSim(){
 
 document.getElementById('runsim').onclick=runSim;
 document.getElementById('t_hz').onchange=()=>{if(LASTSIM)drawFan(LASTSIM);};
+
+/* ---- driver overlays: what the deal market is tracking ---------------- */
+/* Palette validated against this surface for 6 categorical slots: passes
+   lightness band, chroma floor and contrast; CVD separation lands in the
+   6-8 floor band, which is legal ONLY with secondary encoding - hence the
+   coloured toggle chips and the direct end-labels on every line. */
+const DRV_COL={'lending standards':'#0284c7','financial conditions':'#059669',
+  'credit spread':'#d97706','equity market':'#db2777','volatility':'#8b5cf6',
+  '2y yield':'#ea580c'};
+let DRV=null, DRV_ON=new Set(['lending standards']);
+
+function drvChips(){
+  const el=document.getElementById('drvchips'); if(!el||!DRV) return;
+  el.innerHTML=Object.keys(DRV.drivers).map(k=>{
+    const on=DRV_ON.has(k), m=DRV.meta[k]||{}, c=DRV_COL[k]||'#64748b';
+    const r=(m.latest_r==null)?'':' '+(m.latest_r>0?'+':'')+m.latest_r.toFixed(2);
+    return `<button data-d="${k}" style="cursor:pointer;border-radius:99px;`+
+      `padding:4px 11px;font-size:11px;font-family:inherit;`+
+      `border:1px solid ${on?c:'var(--outline2)'};`+
+      `background:${on?c+'22':'transparent'};color:${on?'var(--txt)':'var(--txt2)'}">`+
+      `<span style="display:inline-block;width:8px;height:8px;border-radius:99px;`+
+      `background:${c};margin-right:6px;vertical-align:middle;opacity:${on?1:.45}"></span>`+
+      `${k}<span style="font-variant-numeric:tabular-nums;color:var(--txt3)">${r}</span></button>`;
+  }).join('');
+  el.querySelectorAll('button').forEach(b=>b.onclick=()=>{
+    const k=b.dataset.d; DRV_ON.has(k)?DRV_ON.delete(k):DRV_ON.add(k);
+    drvChips(); drvChart();
+  });
+}
+
+function drvChart(){
+  const sv=document.getElementById('drvchart'); if(!sv||!DRV) return;
+  const qs=Object.keys(DRV.deal).sort();
+  if(!qs.length){sv.innerHTML='';return;}
+  const X0=54,X1=700,Y0=16,Y1=180,C0=210,C1=286;  // X1 leaves room for end-labels inside the viewBox
+  const xs=i=>X0+i*(X1-X0)/Math.max(1,qs.length-1);
+  const lo=-3,hi=3, ys=v=>Y1-((Math.max(lo,Math.min(hi,v))-lo)/(hi-lo))*(Y1-Y0);
+  const cy=r=>C1-((Math.max(-1,Math.min(1,r))+1)/2)*(C1-C0);
+  const path=(get)=>{let d='',pen=false;
+    qs.forEach((q,i)=>{const v=get(q);
+      if(v==null){pen=false;return;}
+      d+=(pen?' L ':' M ')+xs(i).toFixed(1)+' '+get.__y(v).toFixed(1);pen=true;});
+    return d.trim();};
+  const P=(g,yf)=>{g.__y=yf;return path(g);};
+  let out='';
+  // zero lines
+  out+=`<line x1="${X0}" y1="${ys(0)}" x2="${X1}" y2="${ys(0)}" stroke="var(--outline)"/>`;
+  out+=`<line x1="${X0}" y1="${cy(0)}" x2="${X1}" y2="${cy(0)}" stroke="var(--outline)" stroke-dasharray="3 3"/>`;
+  out+=`<text x="${X0-8}" y="${ys(0)+4}" text-anchor="end" fill="var(--txt3)" font-size="10">0</text>`;
+  out+=`<text x="${X0-8}" y="${ys(2)+4}" text-anchor="end" fill="var(--txt3)" font-size="10">+2&sigma;</text>`;
+  out+=`<text x="${X0-8}" y="${ys(-2)+4}" text-anchor="end" fill="var(--txt3)" font-size="10">&minus;2&sigma;</text>`;
+  out+=`<text x="${X0-8}" y="${cy(1)+4}" text-anchor="end" fill="var(--txt3)" font-size="10">+1</text>`;
+  out+=`<text x="${X0-8}" y="${cy(-1)+4}" text-anchor="end" fill="var(--txt3)" font-size="10">&minus;1</text>`;
+  out+=`<text x="${X0}" y="${C0-8}" fill="var(--txt2)" font-size="10">trailing ${DRV.window}q correlation vs deal activity</text>`;
+  // deal measure, bold
+  out+=`<path d="${P(q=>DRV.deal[q],ys)}" fill="none" stroke="var(--txt)" stroke-width="2.2" stroke-linejoin="round"/>`;
+  // Direct end-labels are REQUIRED, not decorative: this palette's CVD
+  // separation sits in the 6-8 floor band, which is legal only with a
+  // secondary encoding. Collect them first, then spread so they cannot
+  // overlap - stacked labels are the same failure as no labels.
+  const labs=[{y:ys(DRV.deal[qs[qs.length-1]]),t:'deal activity',c:'var(--txt)',w:600}];
+  [...DRV_ON].forEach(k=>{
+    const c=DRV_COL[k]||'#64748b', ser=DRV.drivers[k]||{}, rc=DRV.rolling_corr[k]||{};
+    out+=`<path d="${P(q=>ser[q]==null?null:ser[q],ys)}" fill="none" stroke="${c}" stroke-width="1.5" opacity=".9" stroke-linejoin="round"/>`;
+    out+=`<path d="${P(q=>rc[q]==null?null:rc[q],cy)}" fill="none" stroke="${c}" stroke-width="1.6" stroke-linejoin="round"/>`;
+    const last=[...qs].reverse().find(q=>ser[q]!=null);
+    if(last) labs.push({y:ys(ser[last]),t:k,c:c,w:400});
+  });
+  labs.sort((a,b)=>a.y-b.y);
+  for(let i=1;i<labs.length;i++)
+    if(labs[i].y-labs[i-1].y<13) labs[i].y=labs[i-1].y+13;
+  labs.forEach(l=>{out+=`<text x="${X1+8}" y="${l.y+4}" fill="${l.c}" `+
+    `font-size="10.5" font-weight="${l.w}">${l.t}</text>`;});
+  // year ticks
+  qs.forEach((q,i)=>{if(q.endsWith('Q1')&&+q.slice(0,4)%4===0)
+    out+=`<text x="${xs(i)}" y="${C1+14}" text-anchor="middle" fill="var(--txt3)" font-size="10">${q.slice(0,4)}</text>`;});
+  sv.innerHTML=out;
+  const ft=document.getElementById('drvft');
+  if(ft){
+    const rows=[...DRV_ON].map(k=>{const m=DRV.meta[k]||{};
+      return `<b style="color:${DRV_COL[k]}">${k}</b>: full-sample r ${m.full_sample_r}, latest ${m.latest_r} (${m.trend})${m.inverted?' &middot; inverted so up = better for deals':''}`;}).join('<br>');
+    ft.innerHTML=(rows||'No driver selected.')+'<br><br>'+DRV.caveat;
+  }
+}
+
+function loadDrivers(){
+  return fetch('api/ewm/drivers').then(r=>r.json()).then(d=>{
+    if(!d||!d.available){const f=document.getElementById('drvft');
+      if(f)f.textContent='Driver overlays unavailable: '+((d&&d.reason)||'feed error');return;}
+    DRV=d; drvChips(); drvChart();
+  }).catch(()=>{});
+}
+
 function refreshBoard(){return fetch('api/ewm/board').then(r=>r.json()).then(b=>{render(b);runSim();});}
 
 function loadRates(){fetch('api/ewm/rates').then(r=>r.json()).then(d=>{
@@ -605,5 +704,6 @@ document.getElementById('planreset').onclick=()=>{
 };
 
 fetch('api/ewm/board').then(r=>r.json()).then(b=>{render(b);runSim();});
+loadDrivers();
 loadRates();
 </script></body></html>

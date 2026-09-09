@@ -260,6 +260,29 @@ def set_inputs(body: Inputs):
     return {"ok": True, "inputs": cur}
 
 
+@router.get("/api/ewm/drivers")
+def drivers():
+    """What the deal market is currently tracking, and whether those
+    relationships are strengthening or decaying.
+
+    Serves z-SCORES, never levels - the chart needs one shared axis (a
+    dual-axis overlay can manufacture any apparent relationship by choice of
+    scaling), and a z-score is a derived statistic so the redistribution
+    restrictions on NFCI and VIX levels do not apply.
+    """
+    from .drivers import build
+    try:
+        from ..sources.fred import fetch_bundle
+        bundle = fetch_bundle()
+    except Exception:  # noqa: BLE001
+        bundle = {}
+    out = build(bundle)
+    if out is None:
+        return {"available": False,
+                "reason": "deal-activity series or driver feeds unavailable"}
+    return {"available": True, **out}
+
+
 @router.get("/api/ewm/rates")
 def ewm_rates():
     """FOMC probability ensemble, re-served under the EWM prefix.

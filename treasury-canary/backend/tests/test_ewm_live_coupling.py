@@ -340,3 +340,89 @@ def test_fast_chip_is_display_only():
     from app.ewm.deal_state import step
     src = inspect.getsource(step)
     assert "chip" not in src
+
+
+# ---------- driver overlays ----------
+
+def _fake_bundle():
+    """Synthetic bundle: one driver that tracks a ramp, one that opposes it."""
+    from datetime import date
+    ds = [date(1998 + i // 4, 1 + 3 * (i % 4), 1) for i in range(112)]
+    up = [float(i) for i in range(112)]
+    return {"sloos": (ds, [-v for v in up]), "nfci": (ds, up), "2y": (ds, up)}
+
+
+def test_drivers_are_served_as_z_scores_not_levels():
+    """Two reasons that coincide. Overlays need ONE shared axis - a dual-axis
+    chart can manufacture any apparent relationship by choice of scaling.
+    And NFCI (Chicago Fed) and VIX (Cboe) are licence-restricted for
+    redistribution as LEVELS, while a z-score is a derived statistic. If raw
+    levels ever start being served this gate should fail."""
+    from app.ewm.drivers import build
+    out = build(_fake_bundle())
+    assert out is not None
+    for _label, ser in out["drivers"].items():
+        vals = [v for v in ser.values()]
+        assert vals, "empty driver series"
+        # z-scores live in single digits; raw NFCI/VIX/yield levels would not
+        assert max(abs(v) for v in vals) < 12, "looks like levels, not z"
+
+
+def test_driver_zscore_is_causal():
+    """Expanding window: the value at t is standardised only against history
+    up to t. Appending future data must not change any past reading, or the
+    overlay is a hindsight chart."""
+    from app.ewm.drivers import _zscore
+    base = {(2000 + i // 4, 1 + i % 4): float(i % 7) for i in range(40)}
+    ext = dict(base)
+    ext.update({(2020 + i // 4, 1 + i % 4): 999.0 for i in range(8)})
+    a, b = _zscore(base), _zscore(ext)
+    for k in a:
+        assert abs(a[k] - b[k]) < 1e-12, f"look-ahead leak at {k}"
+
+
+def test_rolling_correlation_tracks_a_decaying_relationship():
+    """The whole point of the strip. A relationship that holds then breaks
+    must show as a falling trailing correlation - a single full-sample number
+    averages exactly that away."""
+    from app.ewm.drivers import rolling_corr
+    deal, drv = {}, {}
+    for i in range(60):
+        k = (2000 + i // 4, 1 + i % 4)
+        deal[k] = float(i % 5)
+        # tracks for the first half, then inverts
+        drv[k] = deal[k] if i < 30 else -deal[k]
+    r = rolling_corr(drv, deal, window=12)
+    ks = sorted(r)
+    assert r[ks[0]] > 0.8, "should start correlated"
+    assert r[ks[-1]] < -0.5, "should end anti-correlated"
+
+
+def test_inverted_drivers_are_flagged_and_oriented():
+    """Every overlay must read UP = better for deals, or comparing two lines
+    on one axis is meaningless. Inversion has to be declared, not silent."""
+    from app.ewm.drivers import DRIVERS, build
+    assert DRIVERS["lending standards"][1] is True, "tightening must invert"
+    assert DRIVERS["2y yield"][1] is False
+    out = build(_fake_bundle())
+    assert out["meta"]["lending standards"]["inverted"] is True
+
+
+def test_rates_are_documented_as_the_weak_driver():
+    """Guards the finding against quiet reversion. Measured over 97 quarters,
+    the 2y yield correlates -0.03 with deal activity's deviation from its own
+    trend - indistinguishable from nothing - while bank lending standards
+    lead by a quarter at -0.60. Rates are a confounded proxy, not a channel.
+    The note must keep saying so."""
+    from app.ewm.drivers import DRIVERS
+    note = DRIVERS["2y yield"][2]
+    assert "WEAK" in note and "-0.03" in note
+    assert "confounded" in note
+
+
+def test_drivers_degrade_rather_than_zero_fill():
+    """A dead feed must drop that driver, never contribute zeros - a flat
+    zero line reads as 'no relationship' when it means 'no data'."""
+    from app.ewm.drivers import build
+    out = build({})
+    assert out is None or out["drivers"] == {}
