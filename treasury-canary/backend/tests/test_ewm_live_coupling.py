@@ -240,3 +240,103 @@ def test_credit_dmhi_survives_only_as_a_labelled_fallback():
     from app.ewm.live import dmhi_from_sloos_pins
     d = dmhi_from_sloos_pins({"sloos": _series([10.0] * 4)})
     assert d is not None and "SLOOS" in d["source"]
+
+
+# ---------- DEAL_STATE boom/stall bands ----------
+
+def test_deal_state_reads_and_is_advisory_about_boom():
+    """The bands the operator asked for: is the deal market booming or
+    declining. Four states on the same EDGAR series the DMHI uses."""
+    from app.ewm.deal_state import deal_state
+    d = deal_state()
+    assert d is not None
+    assert d["state"] in {"BOOM", "NORMAL", "COOLING", "STALL"}
+    # BOOM occupancy (10.9%) sits AT its own noise floor (9.5-13.4%), so it
+    # must never be presented as actionable
+    assert "ADVISORY" in d["note"]
+
+
+def test_deal_state_never_enters_the_window_score():
+    """Load-bearing gate. window_scores() takes fcix_z, dmhi01, canary01 and
+    stage - deal_state is NOT among them, and must not become one without a
+    deliberate recalibration. BOOM fires no more often on the real market
+    than on a null series with the same persistence; wiring it into the
+    score would be acting on noise."""
+    import inspect
+    from app.ewm.core import window_scores
+    params = set(inspect.signature(window_scores).parameters)
+    assert "deal_state" not in params
+    assert not any("deal" in p for p in params)
+
+
+def test_hsr_corroboration_is_publication_gated():
+    """FY y is only readable from (y+1)Q3 - a ~10 month lag. Without the
+    gate, standing at 2026Q2 the ledger hands back FY2025, which does not
+    publish until 2026Q3: a live look-ahead leak. This bug was introduced
+    once during porting and caught by inspection."""
+    from app.ewm.deal_state import hsr_asof
+    led = {2022: {}, 2023: {}, 2024: {}, 2025: {}}
+    assert hsr_asof(led, (2026, 2)) == 2024, "FY2025 is not published yet"
+    assert hsr_asof(led, (2026, 3)) == 2025, "FY2025 publishes in 2026Q3"
+    # FY2023 publishes 2024Q3, so at 2024Q1 the newest readable is FY2022
+    assert hsr_asof(led, (2024, 1)) == 2022
+    assert hsr_asof(led, (2024, 3)) == 2023
+    # nothing published yet -> None, and the caller must handle it
+    assert hsr_asof({2025: {}}, (2020, 1)) is None
+
+
+def test_hsr_ledger_lands_exactly_on_the_stall_years():
+    """The arrears ledger's discriminating power is the reason it was
+    grafted in: 4 corroborations in 32 evaluable years, landing on exactly
+    the ground-truth stall list with zero extras, and declining every year
+    across the declared not-a-stall window FY2012-2019."""
+    from app.ewm.deal_state import hsr_ledger, _deal_activity
+    led = hsr_ledger(_deal_activity()["hsr_tier_150_300m"]["by_fiscal_year"])
+    fired = {y for y, r in led.items() if r["corroborates"]}
+    assert fired == {2001, 2009, 2020, 2023}, fired
+    assert not any(2012 <= y <= 2019 for y in fired)
+
+
+def test_state_machine_cannot_latch_on_a_secular_decline():
+    """THE bug this design exists to prevent. A series declining steadily at
+    ANY rate, with no cycle in it, must read NORMAL forever - a percentile-
+    on-level machine latched into 12 consecutive quarters of false STALL
+    across 2012Q1-2015Q1. Every coordinate here is measured against the
+    series' own trailing trend, so a log-linear trend is absorbed exactly by
+    the OLS fit."""
+    from app.ewm.deal_state import step
+    state, pend = "NORMAL", None
+    for _ in range(80):
+        # steady decline -> drift-adjusted speed and trend deviation are 0
+        state, pend = step(state, pend, 0.0, 0.0, 0.0)
+    assert state == "NORMAL", f"latched to {state} on a pure trend"
+
+
+def test_exits_are_not_confirmation_gated():
+    """Entering a state that alters a sale decision needs 2 quarters; LEAVING
+    a stall must be prompt. An exit held hostage to confirmation keeps the
+    'market closed' flag up after it reopens."""
+    from app.ewm.deal_state import step
+    s, p = step("STALL", None, 0.0, 0.0, 0.0)
+    assert s == "COOLING", "stall exit was confirmation-gated"
+
+
+def test_boom_reversal_lands_in_cooling_not_normal():
+    """A BOOM whose downside entry condition is already met has REVERSED,
+    not lapsed. Routing it through NORMAL prints 'no signal' in the quarter
+    the reversal is most extreme - it did exactly that at 2022Q3
+    (zs = -1.98) before this correction."""
+    from app.ewm.deal_state import step
+    s, _ = step("BOOM", None, -1.98, -0.79, 0.5)
+    assert s == "COOLING", f"reversal printed {s}"
+
+
+def test_fast_chip_is_display_only():
+    """The chip catches single-quarter air pockets the trailing-year measure
+    is structurally blind to (2025Q2, z = -1.95). It fires 5.9% of the time,
+    which is what an uncorrected pointwise 5% test does BY CONSTRUCTION, so
+    it must never reach the state machine."""
+    import inspect
+    from app.ewm.deal_state import step
+    src = inspect.getsource(step)
+    assert "chip" not in src

@@ -4,6 +4,9 @@ ewm/CANARY_COUPLING_RESEARCH.md (operator-approved build).
 One primary trigger per channel (double-counting rule):
   fcix_z      <- Chicago Fed NFCI, trailing z (raw NFCI would pin the
                  window-score transfer function; z-scoring restores range)
+  deal_state  <- four-state boom/stall marker on the same EDGAR series,
+                 trend-relative so it cannot latch on the secular decline in
+                 listed companies. ADVISORY: never enters the Window Score.
   dmhi01      <- DEAL activity: EDGAR merger proxies (~1d lag, live) and
                  HSR $150-300M tier volume (~10mo lag, damped 0.5x, anchor).
                  Replaces a credit proxy (inverted SLOOS + private-credit
@@ -376,6 +379,20 @@ def live_snapshot(weights: list[float], hikes: list[int],
     snap["fcix"] = fcix_from_nfci(bundle)
     # Deal data first; the credit proxy survives ONLY as a fallback when
     # the committed series is missing, and its provenance string says so.
+    # Boom/stall bands. DISPLAY AND ADVISORY ONLY - deliberately NOT fed
+    # into the Window Score. BOOM's 10.9% occupancy sits at its own
+    # 9.5-13.4% noise floor, so acting on it would be acting on noise;
+    # STALL is the load-bearing state and reaches the operator as a label,
+    # not as a silent multiplier. See ewm/deal_state.py.
+    try:
+        from .deal_state import deal_state
+        snap["deal_state"] = deal_state(
+            st.get("deal_state", "NORMAL"), st.get("deal_pending"))
+        if snap["deal_state"]:
+            st["deal_state"] = snap["deal_state"]["state"]
+            st["deal_pending"] = snap["deal_state"]["pending"]
+    except Exception:  # noqa: BLE001
+        snap["deal_state"] = None
     snap["dmhi"] = dmhi_from_deal_activity()
     if snap["dmhi"] is None:
         fb = dmhi_from_sloos_pins(bundle)

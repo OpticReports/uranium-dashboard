@@ -68,7 +68,9 @@ def _resolve(inp: dict, live: dict) -> dict:
     fin = live.get("financing")
     if auto.get("stall_mult") and fin is not None:
         mult, mult_src = fin["stall_mult"], f"AUTO — {fin['source']}"
-    return {"fcix_z": float(fcix), "dmhi01": float(dmhi),
+    ds = live.get("deal_state")
+    return {"deal_state": ds,
+            "fcix_z": float(fcix), "dmhi01": float(dmhi),
             "stress_prob": float(stress), "spike_pos": bool(spike),
             "stall_mult": float(mult),
             "provenance": {"fcix_z": fcix_src, "dmhi01": dmhi_src,
