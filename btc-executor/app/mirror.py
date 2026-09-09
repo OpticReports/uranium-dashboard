@@ -1790,6 +1790,96 @@ class Executor:
                 # position (counter-agent find 2026-08-11). Wait it out.
                 return
             led.stopped_entry_ts = None
+            # The engine has FLAGGED this position to exit at its next bar
+            # open. Act NOW instead of waiting for it to report flat, which
+            # is a full 4h bar later. Measured on the live record, every exit
+            # landed exactly one bar late while entries landed in 37s:
+            #   engine 08-31 16:00 -> venue 20:00
+            #   engine 09-03 16:00 -> venue 20:01
+            #   engine 09-09 08:00 -> venue 12:00
+            # because nothing here read exit_flag - the field reached us on
+            # every poll and appeared only in test fixtures (2026-09-09).
+            #
+            # Safe because the flag is TERMINAL: core.py:336 sets it once,
+            # resolve_open_exit closes unconditionally on the next bar, and
+            # live.py:325 makes the intrabar stop SKIP a flagged position.
+            # There is no path where it is set and the position survives.
+            # Closing here also lands us at the engine's own fill reference
+            # (that next bar's open), so it tightens tracking, not loosens.
+            #
+            # Never gated on entries_ok or on the engine book being halted:
+            # an exit must always be able to run. That is why this sits
+            # above every entry path.
+            if pos.get("exit_flag"):
+                # ABSORB A VENUE STOP FILL FIRST (panel BLOCKING 2,
+                # 2026-09-09). _close_leg opens with _stop_backing(), and a
+                # stop that just fired is indistinguishable from a ledger
+                # divergence to it - venue flat, ledger still long - so it
+                # HALTS THE WHOLE BOOK and demands a manual /resume.
+                # _maintain_stop is the code that exists to absorb exactly
+                # this (INFO stop_filled_on_venue, _cov("stop_filled"), the
+                # re-entry guard, clearing the consumed entry ref), and the
+                # pre-change flow always reached it first. Reproduced both
+                # ways on identical input: with the flag ->
+                # halted=LEDGER_DIVERGENCE; without -> a clean
+                # stop_filled_on_venue. The two events are CORRELATED, not
+                # independent: the bar that gaps through our stop is the bar
+                # likeliest to flip the signal and set this flag.
+                # Cost: if the trail has ratcheted >5bp, _maintain_stop
+                # replaces a stop that _close_leg then cancels - one wasted
+                # order pair. Only donchian ratchets and donchian never sets
+                # exit_flag (core.py _process_donchian exits via the trail
+                # alone), so on the only reachable path the trigger is fixed
+                # and the churn guard makes this a status read.
+                if led.qty != 0.0:
+                    self._maintain_stop(leg, led, pos)
+                # Same order branch 3 uses: clear a stale entry ref first, so
+                # a resting or partly-filled entry cannot fill us back in
+                # after we have closed.
+                if led.entry_cloid:
+                    self._cancel_entry(led, filled_action="flatten"
+                                       if led.qty == 0.0 else "ignore")
+                if led.qty != 0.0:
+                    self._close_leg(leg, led,
+                                    f"engine_exit_flag {pos['exit_flag']}")
+                    if led.qty == 0.0:
+                        # Re-entry guard, reusing the stop path's mechanism:
+                        # the engine goes on reporting this position (flag and
+                        # all) until its next bar, so without it the very next
+                        # poll would see qty==0 against a live engine position
+                        # and _enter_from_fill would chase straight back in at
+                        # market - a close/reopen loop every 20s for a whole
+                        # bar.
+                        # The condition is "are we FLAT", not "did we send an
+                        # order": _close_leg zeroes led.qty on three different
+                        # outcomes - the close was sent, the stop had already
+                        # filled, or the residue was sub-contract dust cleared
+                        # without an order - and all three mean we hold
+                        # nothing, so all three must block re-entry. What it
+                        # deliberately excludes is a close that was REFUSED or
+                        # raised: qty survives, the guard stays clear, and the
+                        # next poll retries rather than latching a half-exit.
+                        led.stopped_entry_ts = pos.get("entry_ts")
+                self._save_state()
+                # A REFUSED close needs no re-arm here, and this is load
+                # bearing rather than an omission (panel BLOCKING 1,
+                # 2026-09-09). _close_leg can decline to close - unreadable
+                # venue, or a net that cannot back this leg - and leave
+                # led.qty intact, which is why the first cut of this branch
+                # left the leg NAKED for the whole flag window: back then
+                # _close_leg cancelled the stop before either refusal check
+                # ran, and this early return then skipped stop maintenance on
+                # every later poll. That is now fixed AT SOURCE (_close_leg
+                # drops the stop only once it is committed to sending the
+                # close), and the _maintain_stop call at the head of this
+                # branch has already run this poll on exactly the qty that
+                # survives a refusal - so a second call here is a no-op.
+                # A tail re-arm was written first and then removed: mutation
+                # testing showed deleting it broke nothing, because the head
+                # call reaches every case (if led.qty is 0 at entry we never
+                # attempt the close, and if it is not, the head call ran).
+                # Untestable defensive code is a liability, not depth.
+                return
             if led.qty == 0.0:
                 self._enter_from_fill(leg, led, pos, blend, equity,
                                       entries_ok)
@@ -2354,9 +2444,30 @@ class Executor:
         self._cov("stop_placed")
 
     def _cancel_entry(self, led: LegLedger, filled_action: str) -> None:
+        # CANCEL UNLESS THE VENUE CONFIRMED IT IS FILLED (counter-agent panel,
+        # 2026-09-09). The old test was `if st and ...`, so an UNREADABLE
+        # status - order_status returns None on an API failure - sent no
+        # cancel at all, and the ref was cleared two lines below anyway. That
+        # left a live maker entry resting at the venue that nothing tracked:
+        # it could fill later and open a position with no ledger entry, no
+        # stop, and no exit. Reproduced with a blipped read while an exit_flag
+        # was set - the order stayed OPEN and no CANCEL was ever sent.
+        # This is the same doctrine the entry path already states for itself
+        # ("an unverifiable order is treated as POSSIBLY LIVE ... clear only
+        # on a venue-CONFIRMED terminal-and-unfilled read"); the cancel path
+        # was the side that broke it. Cancelling an order the venue has
+        # already filled or expired is a harmless no-op, so an unreadable
+        # status must resolve toward SENDING the cancel, not skipping it.
         st = self.venue.order_status(led.entry_cloid)
-        if st and st.get("status") != "FILLED":
-            self.venue.cancel(led.entry_cloid)
+        if not st or st.get("status") != "FILLED":
+            try:
+                self.venue.cancel(led.entry_cloid)
+            except Exception:  # noqa: BLE001
+                # The ref is cleared below either way; a cancel we could not
+                # send is surfaced so the orphan is not silent.
+                self._event("RED", "entry_cancel_failed",
+                            f"{led.entry_cloid} could not be cancelled - "
+                            f"check for a resting order at the venue")
         filled = (st or {}).get("filled_qty", 0.0)
         if filled > 0 and filled_action == "flatten":
             side = "SELL" if led.entry_side == "L" else "BUY"
@@ -2427,13 +2538,37 @@ class Executor:
             self.halt("LEDGER_DIVERGENCE",
                       f"{leg} close: venue net {net} vs ledger sum {want}")
             return
+        # A REFUSAL BELOW MUST NOT COST US THE STOP (counter-agent panel,
+        # 2026-09-09). This block used to cancel the working stop here,
+        # unconditionally, before either refusal check had run - so
+        # `close_refused_unbacked` returned having stripped protection off a
+        # leg it had just declined to close, and nothing re-armed it:
+        # _verify_stop_refs runs only on resume and the day roll, _check_drift
+        # sees no drift (venue and ledger agree in AGGREGATE, which is exactly
+        # the state that triggers the refusal), and _event dedupes the RED
+        # line for 600s so it is near-silent after the first page. Reproduced
+        # on the engine-flat path with perfectly healthy reads - i.e. this was
+        # already live, not a consequence of the exit_flag branch - whenever
+        # the exiting leg's sign opposes the venue net (a partly-filled
+        # pullback against an open trend leg) or the two legs net to ~zero.
+        # test_gate_B2_close_leg_blind_venue_touches_nothing already pins this
+        # exact invariant for the blind path; the unbacked path broke it.
+        # A stop that has already FILLED is different: it is not protection
+        # any more, it IS the exit, so absorb it here.
         if led.stop_cloid:
             st = self.venue.order_status(led.stop_cloid)
             if st and st.get("status") == "FILLED":
                 led.qty = 0.0          # stop beat the signal exit; already flat
-            else:
+                led.stop_cloid, led.stop_px = None, None
+        if led.qty == 0.0:
+            # Nothing to close. A stop may never rest on a flat leg - if it
+            # triggered it would OPEN the reverse side - so drop any ref that
+            # survived (today every caller checks qty first, so this is a
+            # guard for future ones, not a live path).
+            if led.stop_cloid:
                 self.venue.cancel(led.stop_cloid)
-            led.stop_cloid, led.stop_px = None, None
+                led.stop_cloid, led.stop_px = None, None
+            return
         if led.qty != 0.0:
             # Quantize the close: a stale sub-contract residue (old-format
             # persisted state) would make place_market raise AFTER the stop
@@ -2464,6 +2599,14 @@ class Executor:
                             f"{leg} exit wants {led.qty} but the venue net "
                             f"{net} quantizes to nothing closeable")
                 return
+            # COMMITTED to sending the close: only now does the protective
+            # stop come down. Order matters - place_market can raise, and a
+            # cancel-then-raise is the "permanent naked, stopless loop" the
+            # 2026-08-11 find named. Cancelling immediately before the send
+            # keeps that window as small as the venue allows.
+            if led.stop_cloid:
+                self.venue.cancel(led.stop_cloid)
+                led.stop_cloid, led.stop_px = None, None
             cloid = f"{leg[0].upper()}-{int(time.time())}-X"
             try:
                 ref = self.venue.mid()

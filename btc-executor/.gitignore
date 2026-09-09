@@ -2,3 +2,6 @@ __pycache__/
 *.pyc
 .env
 data/
+
+# scratch state-save temps (mirror.py _save_state atomic write)
+*.tmp

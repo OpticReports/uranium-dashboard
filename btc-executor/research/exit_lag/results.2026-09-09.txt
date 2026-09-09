@@ -1,0 +1,17 @@
+bars                 10002  1640995200 .. 1785009600  (4.56y from 1640995200)
+S3 trades            190
+  affected (SIGNAL/TIME) 124  (65.3%)
+  unaffected (STOP)      66
+per affected trade, change in exit price vs the old late fill:
+  mean               +0.0039%
+  median             +0.0959%
+  stdev              0.8580%
+  mean 95% CI        [-0.1461%, +0.1571%]  INCLUDES ZERO
+  better             69/124 (55.6%)
+  worse              55/124 (44.4%)
+  best / worst       +3.297% / -2.453%
+total over the window +0.478% of leg notional = +0.105%/yr
+at base $25,000 (pullback leg $3,797): +4/yr
+
+READ THIS AS: one bar of unmodelled exposure removed, not a money-maker. The mean is a rounding error against its own stdev.
+wrote research/exit_lag/measure.csv  (124 rows)

@@ -21,8 +21,19 @@ btc-executor  --Coinbase Advanced API-->  BTC perp product
   on fill as a venue stop-limit.
 - **Trend leg**: engine channel-break pending -> market entry; chandelier
   trail mirrored as a venue stop, replaced when the trail ratchets >5bp.
-- **Exits**: engine position vanishes -> cancel stop, close at market. If the
-  venue stop fired first, the ledger reconciles without double-closing.
+- **Exits**: two paths, both cancel the stop and close at market, and the
+  ledger reconciles without double-closing if the venue stop fired first.
+  1. `position.exit_flag` set (the engine decided a SIGNAL/TIME exit at this
+     bar's close and will book the fill at the NEXT bar's open) -> close NOW.
+     The flag is terminal engine-side, so acting on it lands us at the
+     engine's own reference price instead of a full 4h bar later. Until
+     2026-09-09 this path did not exist and every close-based exit was one
+     bar late — three for three on the live record (research/exit_lag/).
+     A re-entry guard (`stopped_entry_ts`) holds until the engine catches up.
+  2. engine position vanishes (a stop the engine filled, a reset, anything
+     the flag did not cover) -> close at market.
+  Neither path is gated on `entries_ok` or on the engine book being halted:
+  an exit must always be able to run.
 - **Sizing**: leg notional = KELLY_M x 1.5 x weight x sizing base. The base
   is live account equity by default, or the fixed SIZING_BASE_USD when set —
   the small-deposit construction (e.g. ~$40k USDC trading a $128k base; the
@@ -53,6 +64,8 @@ btc-executor  --Coinbase Advanced API-->  BTC perp product
 | corroboration is AGGREGATE | `venue.position()` is the NET across both legs on one product, so it is compared against the ledger SUM (`sum(l.qty)`), never one leg. Per-leg comparison was wrong in both directions: it false-halted an ordinary S3-long/S4-short book (net 0 read as "the venue holds nothing", including on the silent 00:00 UTC rearm), and it let a phantom leg hide behind a real one (ledger 0.01 real + 0.01 phantom vs venue 0.01 — same sign, non-zero, so it passed, and 0.02 of stops went out against 0.01 of position). Divergence = the venue holds LESS than the ledger claims, or holds it the other way round. Holding MORE is fine **only when no leg opposes the sum** — the stop is sized on ONE leg while the check compares the SUM, and for a leg whose sign opposes the net the stop's side moves the net AWAY from zero, so it OPENS size instead of closing it (re-gate 2026-08-27: venue +0.34, ledger {+0.34, -0.14 phantom}, sum +0.20 read "ok" and armed 0.14 BTC of unmanaged long). With any opposed leg the venue must AGREE within one contract; a surplus cannot vouch for a leg pointing the other way. A ledger summing to ZERO is checked too — it is not vacuously safe, and the old early return skipped it in both directions. **DISCLOSED LIMIT:** on a netted venue a ledger whose legs cancel is indistinguishable from a wholly phantom one — both read 0 — so per-leg stops on an opposite-side book rest on ledger belief alone. No position read can fix this; it needs the open-orders sweep (F1) |
 | halt on a BLIND venue | position unreadable at halt time -> cancel NOTHING (the resting stop stays alive), page ACTION-NEEDED, still halt trading. A halt may only cancel/flatten/zero after the venue confirms: probe -> cancel_all -> verify our orders terminal -> re-read (retried) -> flatten (2026-08-26 incident: the old order stripped the stop then aborted) |
 | stale engine | feed stale/degraded -> new entries blocked (RED alert, rate-limited), exits still run |
+| a REFUSED close keeps its stop | `_close_leg` drops the protective stop only once it is committed to sending the close. It used to cancel up front, so `close_refused_unbacked` — which fires with perfectly healthy reads whenever the exiting leg's sign opposes the venue net, or the legs net to ~zero — returned having stripped protection off a leg it had just declined to close, and nothing re-armed it: `_verify_stop_refs` runs only on resume and the day roll, `_check_drift` sees no drift (venue and ledger agree in AGGREGATE, which is the very state that triggers the refusal), and `_event` dedupes the RED line for 600s. The blind path had this invariant pinned since 2026-08-26; the unbacked path did not (counter-agent panel 2026-09-09, live in 35ec560). A stop that has already FILLED is absorbed instead — it is the exit, not protection. The `exit_flag` path additionally re-arms via `_maintain_stop` when a close is refused |
+| an UNREADABLE order status cancels anyway | `_cancel_entry` sends the cancel unless the venue CONFIRMS the order is FILLED. It used to skip the cancel when `order_status` returned `None` (an API failure) while clearing the reference regardless, leaving a live maker entry resting at the venue that nothing tracked — able to fill into a position with no ledger row, no stop and no exit. Cancelling an already-filled or expired order is a harmless no-op, so blindness must resolve toward SENDING the cancel. A cancel that itself raises pages `entry_cancel_failed` rather than going silent |
 | drift check | venue vs ledger position mismatch > 1% of equity (below one CDE contract) -> RED event. A FAILED venue read is itself a RED (venue_read_failed, 30-min cooldown) - blindness is never silent (2026-08-26: 3 silent days) |
 | orphan fills | our limit filled but paper cancelled -> unwound at market |
 | restart | ledger + order map persisted; reboot re-places nothing. Boot RECONCILES venue vs ledger: venue-confirmed-flat vs ledger-long -> adopt flat, cancel the trap stop, page (the phantom class); venue-holds vs ledger-flat -> page + BLOCK entries, adopt nothing; unreadable -> page, adopt nothing |
