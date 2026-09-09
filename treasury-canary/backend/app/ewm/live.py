@@ -4,9 +4,13 @@ ewm/CANARY_COUPLING_RESEARCH.md (operator-approved build).
 One primary trigger per channel (double-counting rule):
   fcix_z      <- Chicago Fed NFCI, trailing z (raw NFCI would pin the
                  window-score transfer function; z-scoring restores range)
-  dmhi01      <- mean of inverted SLOOS C&I tightening and the inverted
-                 private-credit pin channel (the implemented proxy for the
-                 direct-lending market a ~$200M deal actually prices in)
+  dmhi01      <- DEAL activity: EDGAR merger proxies (~1d lag, live) and
+                 HSR $150-300M tier volume (~10mo lag, damped 0.5x, anchor).
+                 Replaces a credit proxy (inverted SLOOS + private-credit
+                 pin) that contained no deal data and duplicated fcix_z,
+                 which is itself NFCI - the two correlate +0.673, so 0.45 of
+                 the Window Score sat on one channel. That version is kept
+                 as a labelled fallback only.
   spike_pos   <- rate-shock panel SPIKE x POS (labeled recession-risk caution
                  per the frozen study: NOT a stock-sell signal, p=0.21)
   financing   <- HY OAS level + 90d change, three states with dual-threshold
@@ -124,6 +128,104 @@ def dmhi_from_sloos_pins(bundle) -> dict | None:
     return {"value": round(sum(legs.values()) / len(legs), 3),
             "components": {k: round(v, 3) for k, v in legs.items()},
             "source": "inverted SLOOS C&I + private-credit pin channel"}
+
+
+def _deal_activity() -> dict | None:
+    """Load the committed deal-activity series. None if absent."""
+    import json
+    import os
+    fp = os.path.join(os.path.dirname(__file__), "data",
+                      "deal_activity.json")
+    try:
+        with open(fp, encoding="utf-8") as fh:
+            return json.load(fh)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _pct_rank(value: float, history: list[float]) -> float | None:
+    """Percentile of `value` within `history`, 0..1. Expanding-window by
+    construction here: the committed baseline only ever contains
+    completed periods, so no future data can enter a reading."""
+    hist = [h for h in history if h is not None]
+    if len(hist) < 12:
+        return None
+    below = sum(1 for h in hist if h < value)
+    equal = sum(1 for h in hist if h == value)
+    return (below + 0.5 * equal) / len(hist)
+
+
+def dmhi_from_deal_activity() -> dict | None:
+    """0..1 DEAL-market health, 1 = healthy. Two legs, deliberately unequal.
+
+    WHY THIS REPLACED A CREDIT PROXY. The DMHI carries w_dmhi = 0.20 of
+    the Window Score and is named the Deal Market Health Index, but it
+    was computed from inverted SLOOS C&I tightening plus the private-
+    credit pin channel - two CREDIT measures containing no deal data at
+    all. Since fcix_z is itself an NFCI z-score, and NFCI correlates
+    +0.673 with SLOOS over 146 quarters, 0.45 of the Window Score sat on
+    two overlapping credit signals while deal-market activity carried
+    0.00. The spec's own double-counting rule ("one primary trigger per
+    channel") was written to prevent exactly that.
+
+    The cost was a blind spot, not a bias. In 2025Q2 merger-proxy
+    filings hit the 3.9th percentile - 65 in the quarter, near a record
+    low - while credit was historically loose. The credit-based DMHI
+    read ~0.5 through it. A deal-based one reads 0.039, a 9.2-point
+    swing in the Window Score.
+
+    LEGS:
+      live   EDGAR merger proxies (DEFM14A + PREM14A), ~1 day lag,
+             percentile-ranked against the committed 1997Q1+ baseline.
+             PUBLIC-TARGET deals standing in for private mid-market
+             conditions - a proxy, and labelled as one.
+      anchor HSR $150-300M tier volume, ~10 MONTH lag, damped 0.5x
+             toward neutral in the GF Data pattern. Tier-specific to the
+             band the sale sits in, and immune to the threshold erosion
+             that contaminates HSR's total count (the threshold has
+             never exceeded $133.9M, below this tier's $150M floor).
+
+    The anchor is damped because a 10-month-lagged annual figure should
+    not move a monthly window score much; it is context, not signal.
+    """
+    da = _deal_activity()
+    if not da:
+        return None
+    legs, notes = {}, {}
+
+    eg = (da.get("edgar_merger_proxies") or {}).get("by_quarter") or {}
+    if eg:
+        qs = sorted(eg)
+        latest = qs[-1]
+        hist = [float(eg[k]) for k in qs[:-1]]
+        pr = _pct_rank(float(eg[latest]), hist)
+        if pr is not None:
+            legs["edgar_live"] = pr
+            notes["edgar_live"] = (f"{latest}: {eg[latest]} merger proxies, "
+                                   f"{pr:.0%}ile since 1997")
+
+    hs = (da.get("hsr_tier_150_300m") or {}).get("by_fiscal_year") or {}
+    if hs:
+        fys = sorted(hs, key=int)
+        latest = fys[-1]
+        hist = [float(hs[k]) for k in fys[:-1]]
+        pr = _pct_rank(float(hs[latest]), hist)
+        if pr is not None:
+            # damp 0.5x toward neutral: a 10-month-old annual number is
+            # context for a monthly score, not a driver
+            legs["hsr_anchor"] = 0.5 + 0.5 * (pr - 0.5)
+            notes["hsr_anchor"] = (f"FY{latest}: {hs[latest]} deals in the "
+                                   f"$150-300M tier, {pr:.0%}ile since 1987 "
+                                   f"(damped 0.5x, ~10mo lag)")
+
+    if not legs:
+        return None
+    val = sum(legs.values()) / len(legs)
+    return {"value": round(val, 3),
+            "components": {k: round(v, 3) for k, v in legs.items()},
+            "notes": notes,
+            "source": "EDGAR merger proxies (live) + HSR $150-300M tier "
+                      "(anchor, ~10mo lag, damped)"}
 
 
 def spike_pos_live() -> dict | None:
@@ -272,7 +374,14 @@ def live_snapshot(weights: list[float], hikes: list[int],
     except Exception:  # noqa: BLE001
         bundle = {}
     snap["fcix"] = fcix_from_nfci(bundle)
-    snap["dmhi"] = dmhi_from_sloos_pins(bundle)
+    # Deal data first; the credit proxy survives ONLY as a fallback when
+    # the committed series is missing, and its provenance string says so.
+    snap["dmhi"] = dmhi_from_deal_activity()
+    if snap["dmhi"] is None:
+        fb = dmhi_from_sloos_pins(bundle)
+        if fb is not None:
+            fb["source"] = ("FALLBACK (no deal data): " + fb["source"])
+        snap["dmhi"] = fb
     snap["spike_pos"] = spike_pos_live()
     snap["financing"] = financing_state(bundle, st.get("financing", "BENIGN"))
     snap["headwind"] = headwind_chip(bundle)

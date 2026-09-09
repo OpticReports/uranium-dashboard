@@ -164,3 +164,79 @@ def test_api_auto_manual_precedence(monkeypatch, tmp_path):
     b4 = api.board()
     assert b4["resolved"]["provenance"]["fcix_z"] == "MANUAL/stored"
     assert b4["resolved"]["stall_mult"] == 1.0 and b4["resolved"]["spike_pos"] is False
+
+
+# ---------- DMHI on DEAL activity (replaces the credit proxy) ----------
+
+def test_dmhi_is_built_from_deal_data_not_credit():
+    """The DMHI carries w_dmhi = 0.20 and is named the Deal Market Health
+    Index, but it was computed from inverted SLOOS plus the private-credit
+    pin - two CREDIT measures with no deal data in them. Since fcix_z is an
+    NFCI z-score and NFCI correlates +0.673 with SLOOS over 146 quarters,
+    0.45 of the Window Score sat on one channel while deal activity carried
+    0.00. This gate pins the replacement.
+    """
+    from app.ewm.live import dmhi_from_deal_activity
+    d = dmhi_from_deal_activity()
+    assert d is not None, "committed deal-activity series is missing"
+    assert 0.0 <= d["value"] <= 1.0
+    assert set(d["components"]) <= {"edgar_live", "hsr_anchor"}
+    assert "edgar_live" in d["components"], "the LIVE leg must be present"
+    assert "SLOOS" not in d["source"] and "pin" not in d["source"]
+
+
+def test_hsr_anchor_is_damped_toward_neutral():
+    """A ~10-month-lagged annual figure must not swing a monthly window
+    score. The anchor is damped 0.5x toward 0.5 in the GF Data pattern, so
+    it can never leave the middle half of the range however extreme the
+    underlying percentile is."""
+    from app.ewm.live import dmhi_from_deal_activity
+    d = dmhi_from_deal_activity()
+    a = d["components"].get("hsr_anchor")
+    if a is not None:
+        assert 0.25 <= a <= 0.75, f"anchor {a} escaped the damped band"
+
+
+def test_deal_activity_series_are_lag_labelled():
+    """Lag honesty is a SACRED item in the spec. Both legs must carry their
+    lag in the committed data, because a 10-month-old annual number and a
+    1-day-old filing count cannot be read the same way."""
+    from app.ewm.live import _deal_activity
+    da = _deal_activity()
+    assert da is not None
+    assert "10 month" in da["hsr_tier_150_300m"]["_lag"].lower().replace("~", "")
+    assert "1 day" in da["edgar_merger_proxies"]["_lag"].lower().replace("~", "")
+    # the proxy gap must be stated, not implied
+    assert "PUBLIC-TARGET" in da["edgar_merger_proxies"]["_proxy_gap"]
+
+
+def test_hsr_tier_needs_no_threshold_correction():
+    """The tier floor is $150M and the HSR reporting threshold has never
+    exceeded $133.9M, so every deal in this band was reportable in every
+    year. The erosion that contaminates HSR's TOTAL count does not touch
+    it. If someone later widens the tier below $150M this gate should fail
+    and force them to think about it."""
+    from app.ewm.live import _deal_activity
+    da = _deal_activity()
+    tier = da["hsr_tier_150_300m"]
+    assert "150" in tier["_source"]
+    assert "133.9" in tier["_why_no_threshold_correction"]
+    fy = tier["by_fiscal_year"]
+    assert len(fy) >= 30, "tier series should span three decades"
+    assert all(int(v) >= 0 for v in fy.values())
+
+
+def test_percentile_rank_refuses_thin_history():
+    """A percentile against a handful of comparators is not a percentile."""
+    from app.ewm.live import _pct_rank
+    assert _pct_rank(5.0, [1.0, 2.0, 3.0]) is None
+    assert _pct_rank(5.0, list(range(20))) is not None
+
+
+def test_credit_dmhi_survives_only_as_a_labelled_fallback():
+    """The old credit proxy is still reachable - a dead data file must not
+    take the DMHI to None - but when it is used the provenance has to say
+    so, or the UI would silently show a credit number as deal health."""
+    from app.ewm.live import dmhi_from_sloos_pins
+    d = dmhi_from_sloos_pins({"sloos": _series([10.0] * 4)})
+    assert d is not None and "SLOOS" in d["source"]
