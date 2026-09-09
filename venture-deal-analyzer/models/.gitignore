@@ -1,0 +1,14 @@
+# Fetched raw vendor levels — NOT committed. This repository is PUBLIC,
+# and the cache holds Tier 2 licensed data (Chicago Fed NFCI levels, and
+# any Moody's-derived series added later) whose terms permit internal
+# computation but not redistribution. Committing it here would BE
+# redistribution. See the licence tiers in ma_data.py.
+#
+# Losing it costs nothing: `python3 ma_data.py` rebuilds it from the
+# source URLs recorded in that module, and each cache entry stores its
+# own fetch date and source URL so a published reading stays traceable.
+#
+# What IS committed is derived only — percentile ranks, composites,
+# phase labels — plus hsr_monthly.csv, which is US Government work and
+# public domain.
+ma_cycle_cache/

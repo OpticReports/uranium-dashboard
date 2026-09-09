@@ -168,3 +168,51 @@ def test_ties_do_not_drift():
     flat = [7] * 10
     for i in range(1, 10):
         assert mc.percentile_rank_expanding(flat, i) == 0.0
+
+
+# --- GATE 5: the two clock axes must not be the same variable -------
+
+def test_momentum_is_not_the_cycle_horizon():
+    """Regression gate for a real defect.
+
+    The clock's momentum axis was originally the Hamilton 5-year
+    difference. That is a CYCLICAL-COMPONENT horizon - "how far from a
+    full cycle-length ago" - which is a level-like question. Using it as
+    momentum made both axes measure the same thing: measured
+    corr(level, momentum) = +0.822 on real data, collapsing the clock
+    onto its diagonal and leaving "early" occupied ONCE in 123
+    quarters. Switching momentum to a year-on-year change dropped it to
+    +0.478 and repopulated the quadrants.
+
+    This gate pins the two horizons apart so they cannot be silently
+    reunified by someone tidying up the constants.
+    """
+    assert mc.MOMENTUM_LOOKBACK_QUARTERS < mc.CYCLE_H_QUARTERS
+    assert mc.MOMENTUM_LOOKBACK_QUARTERS <= 8, (
+        "momentum horizon has drifted toward the cycle horizon; the "
+        "clock axes will re-correlate")
+
+
+def test_momentum_change_cannot_see_the_future():
+    base = [1, 4, 2, 8, 5, 7, 3, 9, 6]
+    ext = base + [500, -500]
+    for i in range(len(base)):
+        assert mc.momentum_change(base, i, h=4) == \
+               mc.momentum_change(ext, i, h=4)
+
+
+def test_momentum_change_refuses_before_enough_history():
+    s = list(range(20))
+    for i in range(mc.MOMENTUM_LOOKBACK_QUARTERS):
+        assert mc.momentum_change(s, i) is None
+    assert mc.momentum_change(s, mc.MOMENTUM_LOOKBACK_QUARTERS) is not None
+
+
+def test_momentum_horizon_sensitivity_is_monotone():
+    """Direction must not flip with the declared lookback. A series
+    rising throughout must read positive momentum at every horizon."""
+    rising = list(range(40))
+    falling = list(range(40, 0, -1))
+    for h in (2, 4, 8):
+        assert mc.momentum_change(rising, 30, h) > 0
+        assert mc.momentum_change(falling, 30, h) < 0

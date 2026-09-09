@@ -71,7 +71,26 @@ where composite indicators leak most often. Gate-tested.
 # work (vs h = 8 quarters for business cycles). Merger waves are credit
 # cycles - Harford (2005): the C&I rate spread leads market-to-book at
 # lag correlation -0.38 while the reverse is insignificant (-0.03).
-MOMENTUM_H_QUARTERS = 20  # 5 years
+#
+# THIS IS A CYCLICAL-COMPONENT HORIZON, NOT A MOMENTUM HORIZON, and
+# conflating the two is a mistake this module made and had to correct.
+# y_t - y_{t-20} answers "how far are we from a full cycle-length ago",
+# which is a LEVEL-like question. Using it as the clock's second axis
+# made both axes measure the same thing: measured corr(level, momentum)
+# = +0.822, which collapsed the clock onto its diagonal and left the
+# "early" quadrant occupied ONCE in 123 quarters. Kept here because it
+# is the right tool for extracting a cyclical component, and used for
+# exactly that - never as momentum.
+CYCLE_H_QUARTERS = 20  # 5 years
+MOMENTUM_H_QUARTERS = CYCLE_H_QUARTERS  # back-compat alias; do not use as momentum
+
+# The clock's momentum axis: year-on-year change. Declared prior, not
+# fitted - it is the standard clock convention (the OECD and Eurostat
+# business-cycle clocks use the short change against the level), it
+# kills seasonality in quarterly data, and it matches the diffusion
+# lookback so the two breadth-and-direction measures agree on what
+# "recently" means. Sensitivity at 2 and 8 quarters is gate-tested.
+MOMENTUM_LOOKBACK_QUARTERS = 4
 
 # OECD CLI: compute a composite for a period only if >=60% of component
 # series are available. Prevents a thin month masquerading as a reading.
@@ -115,7 +134,25 @@ def percentile_rank_expanding(series, i):
     return 2.0 * p - 1.0
 
 
-def hamilton_difference(series, i, h=MOMENTUM_H_QUARTERS):
+def momentum_change(series, i, h=MOMENTUM_LOOKBACK_QUARTERS):
+    """Year-on-year change: the clock's momentum axis.
+
+    Deliberately SHORT. This must answer "which way are we moving now",
+    a different question from "where are we in the cycle", or the two
+    clock axes degenerate into one - see the note on CYCLE_H_QUARTERS.
+    Same zero-look-ahead property as the Hamilton difference: it reads
+    only backwards and estimates nothing.
+    """
+    j = i - h
+    if j < 0:
+        return None
+    a, b = series[i], series[j]
+    if a is None or b is None:
+        return None
+    return a - b
+
+
+def hamilton_difference(series, i, h=CYCLE_H_QUARTERS):
     """Hamilton (2018) parameter-free cyclical component: y_t - y_{t-h}.
 
     This is his equation (22), the random-walk special case toward
