@@ -1,0 +1,160 @@
+<title>Does deal count lead deal value?</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📉</text></svg>">
+<style>
+:root{--paper:#F7F8F7;--card:#FFF;--ink:#1A2422;--muted:#56675F;--line:#DCE3DF;--accent:#0E7E53;--neg:#9E3B1E;--d1:#0E7E53;--d2:#A85F00;--wash:#EEF3F0;--warn:#F6EEE2;--grid:#E8EDEA;--rec:#E4E9E6;}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--paper:#131A18;--card:#1A2320;--ink:#E4EBE7;--muted:#92A29A;--line:#2A3733;--accent:#45C69E;--neg:#E0805F;--d1:#279B79;--d2:#C56F33;--wash:#1F2A26;--warn:#2A2119;--grid:#232E2A;--rec:#212C28;}}
+:root[data-theme="dark"]{--paper:#131A18;--card:#1A2320;--ink:#E4EBE7;--muted:#92A29A;--line:#2A3733;--accent:#45C69E;--neg:#E0805F;--d1:#279B79;--d2:#C56F33;--wash:#1F2A26;--warn:#2A2119;--grid:#232E2A;--rec:#212C28;}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:15.5px;line-height:1.55;margin:0}
+.wrap{max-width:940px;margin:0 auto;padding:38px 20px 70px}
+h1,h2{font-family:Charter,"Bitstream Charter",Cambria,Georgia,serif;text-wrap:balance}
+h1{font-size:1.85rem;margin:6px 0 6px}
+h2{font-size:1.18rem;margin:0 0 3px}
+.eyebrow{font-family:ui-monospace,Menlo,monospace;font-size:.7rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.sub{color:var(--muted);max-width:74ch;margin:0 0 22px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px 18px 12px;margin:20px 0}
+.rule{border:0;border-top:1px solid var(--line);margin:30px 0 24px}
+.num{font-family:ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums}
+svg{display:block;width:100%;height:auto;overflow:visible}
+.ax{font-family:ui-monospace,Menlo,monospace;font-size:11px;fill:var(--muted)}
+.dl{font-family:ui-monospace,Menlo,monospace;font-size:12px;font-weight:650}
+.pk{font-family:ui-monospace,Menlo,monospace;font-size:10px;fill:var(--muted)}
+.cap{font-size:.79rem;color:var(--muted);line-height:1.45;margin:8px 2px 4px}
+table{border-collapse:collapse;width:100%;font-size:.86rem;margin:6px 0}
+th,td{text-align:left;padding:6px 9px;border-bottom:1px solid var(--line)}
+th{font-family:ui-monospace,Menlo,monospace;font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+td.n{font-family:ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums;text-align:right}
+.box{background:var(--warn);border:1px solid var(--line);border-radius:9px;padding:14px 16px;margin:20px 0}
+.box b{color:var(--ink)}
+details{margin:14px 0}
+summary{cursor:pointer;font-family:ui-monospace,Menlo,monospace;font-size:.72rem;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+#tt{position:fixed;pointer-events:none;opacity:0;transition:opacity .1s;background:#22302B;color:#EDF3EF;border-radius:7px;padding:8px 10px;font-size:.76rem;font-family:ui-monospace,Menlo,monospace;line-height:1.5;z-index:9;box-shadow:0 4px 16px rgba(0,0,0,.28)}
+.hit{fill:transparent;cursor:crosshair}
+</style>
+<div class="wrap">
+<div class="eyebrow">OpticReports · Deal Analyzer · Validation study · 2026-09-09</div>
+<h1>Does deal count turn before deal value?</h1>
+<p class="sub">A viral chart claims M&amp;A <em>deal count</em> is the early-warning series and aggregate <em>value</em> is flattered by mega-deals. We tested it. The answer is not the one either side wants: the claim is <strong>untested, and untestable at annual frequency</strong> — not refuted.</p>
+
+<div class="card">
+<h2>Both series, indexed to 2000 = 100</h2>
+<p class="cap">One axis, both series indexed to a common base — a dual-axis version of this chart can manufacture any lead you like by choosing the two scales. Shaded bands are NBER recessions. Circles mark strict interior local maxima.</p>
+<svg viewBox="0 0 880 330" role="img" aria-label="Global M&amp;A deal count and deal value, both indexed to 2000 = 100, 2000 to 2025, with NBER recessions shaded and local peaks marked">
+  <rect x="112.6" y="28" width="20.7" height="272" fill="var(--rec)"/>
+  <rect x="320.7" y="28" width="46.6" height="272" fill="var(--rec)"/>
+  <rect x="696.2" y="28" width="5.6" height="272" fill="var(--rec)"/>
+  <line x1="74" y1="300" x2="846" y2="300" stroke="var(--line)"/>
+  <line x1="74" y1="185.5" x2="846" y2="185.5" stroke="var(--grid)" stroke-dasharray="3 3"/>
+  <text class="ax" x="30" y="189">100</text>
+  <text class="ax" x="30" y="32">195</text>
+  <text class="ax" x="36" y="303">30</text>
+  <text class="ax" x="66" y="320">2000</text><text class="ax" x="222" y="320">2005</text><text class="ax" x="376" y="320">2010</text><text class="ax" x="530" y="320">2015</text><text class="ax" x="684" y="320">2020</text><text class="ax" x="826" y="320">2025</text>
+  <path id="pC" fill="none" stroke="var(--d1)" stroke-width="2" stroke-linejoin="round" d="M 74.0 184.6 L 104.9 234.0 L 135.8 242.3 L 166.7 231.3 L 197.6 200.6 L 228.5 170.4 L 259.4 140.1 L 290.4 96.2 L 321.3 142.6 L 352.2 205.6 L 383.1 164.4 L 414.0 153.4 L 444.9 161.7 L 475.8 170.4 L 506.7 153.4 L 537.6 134.2 L 568.5 128.7 L 599.4 125.9 L 630.4 123.1 L 661.3 136.9 L 692.2 140.1 L 723.1 38.6 L 754.0 112.1 L 784.9 172.5 L 815.8 150.6 L 846.0 128.7"/>
+  <path id="pV" fill="none" stroke="var(--d2)" stroke-width="2" stroke-linejoin="round" stroke-dasharray="6 3" d="M 74.0 184.6 L 104.9 264.5 L 135.8 284.3 L 166.7 279.4 L 197.6 244.4 L 228.5 204.5 L 259.4 154.6 L 290.4 119.6 L 321.3 199.6 L 352.2 244.4 L 383.1 219.4 L 414.0 214.5 L 444.9 219.4 L 475.8 209.5 L 506.7 169.6 L 537.6 124.6 L 568.5 154.6 L 599.4 164.5 L 630.4 139.6 L 661.3 149.5 L 692.2 174.5 L 723.1 69.7 L 754.0 169.6 L 784.9 194.5 L 815.8 174.5 L 846.0 104.7"/>
+  <g fill="none" stroke="var(--d1)" stroke-width="2">
+    <circle cx="290.4" cy="96.2" r="4.5"/><circle cx="414.0" cy="153.4" r="4.5"/><circle cx="630.4" cy="123.1" r="4.5"/><circle cx="723.1" cy="38.6" r="4.5"/>
+  </g>
+  <g fill="none" stroke="var(--d2)" stroke-width="2">
+    <circle cx="290.4" cy="119.6" r="4.5"/><circle cx="414.0" cy="214.5" r="4.5"/><circle cx="537.6" cy="124.6" r="4.5"/><circle cx="630.4" cy="139.6" r="4.5"/><circle cx="723.1" cy="69.7" r="4.5"/>
+  </g>
+  <text class="dl" x="736" y="32" fill="var(--d1)">Deal count</text>
+  <text class="dl" x="700" y="62" fill="var(--d2)">Deal value</text>
+  <g stroke="var(--neg)" stroke-width="1.5" fill="none"><path d="M 537.6 112 L 537.6 86 L 508 86"/></g>
+  <text class="pk" text-anchor="end" x="502" y="79" fill="var(--neg)">2015: value peaks,</text>
+  <text class="pk" text-anchor="end" x="502" y="91" fill="var(--neg)">count keeps rising 3 more yrs</text>
+  <text class="pk" x="268" y="86">2007</text><text class="pk" x="700" y="30">2021</text>
+  <g id="hits"></g>
+</svg>
+<p class="cap"><b>What the eye should catch:</b> the two lines peak in the <em>same year</em> at every major turn — 2007, 2011, 2018, 2021. The single exception in 26 years is 2015, and it runs <em>against</em> the claim: value turned down while count climbed for three more years.</p>
+</div>
+
+<div class="card">
+<h2>The lead-lag correlation is not stable, and the test has no power</h2>
+<p class="cap">Correlation of Δvalue<sub>t</sub> with Δcount<sub>t−1</sub> — the "count leads" test — across six specifications. The shaded band is the region where a correlation is <em>statistically indistinguishable from zero</em> at n=24.</p>
+<svg viewBox="0 0 880 250" role="img" aria-label="Count-leads-value correlation across six specifications, all falling inside the statistically-indistinguishable-from-zero band">
+  <rect x="234.3" y="34" width="471.4" height="170" fill="var(--wash)"/>
+  <line x1="470" y1="34" x2="470" y2="204" stroke="var(--line)" stroke-width="1.5"/>
+  <text class="ax" x="455" y="228">0</text>
+  <text class="ax" x="130" y="228">−0.6</text><text class="ax" x="790" y="228">+0.6</text>
+  <text class="ax" x="196" y="228">−0.4</text><text class="ax" x="686" y="228">+0.4</text>
+  <line x1="234.3" y1="34" x2="234.3" y2="204" stroke="var(--muted)" stroke-dasharray="3 3"/>
+  <line x1="705.7" y1="34" x2="705.7" y2="204" stroke="var(--muted)" stroke-dasharray="3 3"/>
+  <text class="pk" x="380" y="26">← cannot be distinguished from zero at n=24 →</text>
+  <line x1="166.7" y1="52" x2="627.5" y2="52" stroke="var(--d2)" stroke-width="2"/>
+  <line x1="166.7" y1="47" x2="166.7" y2="57" stroke="var(--d2)" stroke-width="2"/>
+  <line x1="627.5" y1="47" x2="627.5" y2="57" stroke="var(--d2)" stroke-width="2"/>
+  <circle cx="381.9" cy="52" r="5" fill="var(--d2)"/>
+  <text class="ax" x="60" y="56">as given</text><text class="ax" x="640" y="56">95% CI</text>
+  <circle cx="359.7" cy="80" r="5" fill="var(--d1)"/><text class="ax" x="60" y="84">drop 2025</text>
+  <circle cx="381.9" cy="106" r="5" fill="var(--d1)"/><text class="ax" x="60" y="110">2025 annualized</text>
+  <circle cx="510.8" cy="132" r="5" fill="var(--d1)"/><text class="ax" x="60" y="136">drop 2021 spike</text>
+  <circle cx="498.6" cy="158" r="5" fill="var(--d1)"/><text class="ax" x="60" y="162">log differences</text>
+  <circle cx="526.0" cy="184" r="5" fill="var(--d1)"/><text class="ax" x="60" y="188">Spearman rank</text>
+  <text class="pk" x="330" y="246" fill="var(--neg)">sign flips negative → positive depending on specification</text>
+</svg>
+<p class="cap">Every specification lands inside the band. Three are negative, three positive. The sign of the headline number is carried by the 2021 SPAC/COVID spike alone.</p>
+</div>
+
+<div class="box">
+<b>The honest reading.</b> At annual frequency, changes in deal count and deal value are strongly contemporaneous (r = <span class="num">+0.883</span>, n = 25, p &lt; 0.001). Neither leads the other at a one-year lag: count-leads ranges <span class="num">−0.19</span> to <span class="num">+0.07</span>, value-leads <span class="num">+0.07</span> to <span class="num">+0.27</span>, all p &gt; 0.2, sign specification-dependent. <b>This does not refute a sub-annual lead.</b> Annual data cannot resolve a ~12-month lead — a true 12-month lead would appear in annual data as exactly the contemporaneous correlation we measure. At n = 24 the critical |r| for p &lt; 0.05 is <span class="num">0.404</span> and the minimum detectable |r| at 80% power is <span class="num">0.545</span>; detecting a moderate lead of r = 0.30 would need <span class="num">n ≈ 85</span> annual observations, or roughly three and a half centuries. Settling this requires monthly or quarterly deal data.
+</div>
+
+<h2>What survives, and what dies</h2>
+<table>
+<tr><th>Claim</th><th>Status</th></tr>
+<tr><td>M&amp;A activity rolls over ahead of recessions</td><td><b>Consistent with the data.</b> Both series peaked 0–2 years before every recession in the window (2000→2001, 2007→2007, 2018→2020).</td></tr>
+<tr><td>Count is the early-warning series; value lags</td><td><b>Dies — of insufficient power, not contrary evidence.</b> Count and value peak in the <em>same year</em> in all three episodes. The one direct observation of a divergence (2015) runs the other way.</td></tr>
+<tr><td>Volume is flattered by a handful of mega-deals</td><td><b>Separately true, and measurable.</b> Average deal size in 2025 is ~$632M against a $450M mean for 2000–2024 — the highest in the 26-year series. This is a level diagnostic, not a timing signal.</td></tr>
+</table>
+
+<details>
+<summary>Underlying data (table view)</summary>
+<table>
+<tr><th>Year</th><th>Value $T</th><th>Count 000s</th><th>Value idx</th><th>Count idx</th></tr>
+<tr><td>2000</td><td class="n">3.3</td><td class="n">6.0</td><td class="n">100</td><td class="n">100</td></tr>
+<tr><td>2001</td><td class="n">1.7</td><td class="n">4.2</td><td class="n">52</td><td class="n">70</td></tr>
+<tr><td>2002</td><td class="n">1.3</td><td class="n">3.9</td><td class="n">39</td><td class="n">65</td></tr>
+<tr><td>2003</td><td class="n">1.4</td><td class="n">4.3</td><td class="n">42</td><td class="n">72</td></tr>
+<tr><td>2004</td><td class="n">2.1</td><td class="n">5.4</td><td class="n">64</td><td class="n">90</td></tr>
+<tr><td>2005</td><td class="n">2.9</td><td class="n">6.5</td><td class="n">88</td><td class="n">108</td></tr>
+<tr><td>2006</td><td class="n">3.9</td><td class="n">7.6</td><td class="n">118</td><td class="n">127</td></tr>
+<tr><td>2007</td><td class="n">4.6</td><td class="n">9.2</td><td class="n">139</td><td class="n">153</td></tr>
+<tr><td>2008</td><td class="n">3.0</td><td class="n">7.5</td><td class="n">91</td><td class="n">125</td></tr>
+<tr><td>2009</td><td class="n">2.1</td><td class="n">5.2</td><td class="n">64</td><td class="n">87</td></tr>
+<tr><td>2010</td><td class="n">2.6</td><td class="n">6.7</td><td class="n">79</td><td class="n">112</td></tr>
+<tr><td>2011</td><td class="n">2.7</td><td class="n">7.1</td><td class="n">82</td><td class="n">118</td></tr>
+<tr><td>2012</td><td class="n">2.6</td><td class="n">6.8</td><td class="n">79</td><td class="n">113</td></tr>
+<tr><td>2013</td><td class="n">2.8</td><td class="n">6.5</td><td class="n">85</td><td class="n">108</td></tr>
+<tr><td>2014</td><td class="n">3.6</td><td class="n">7.1</td><td class="n">109</td><td class="n">118</td></tr>
+<tr><td>2015</td><td class="n">4.5</td><td class="n">7.8</td><td class="n">136</td><td class="n">130</td></tr>
+<tr><td>2016</td><td class="n">3.9</td><td class="n">8.0</td><td class="n">118</td><td class="n">133</td></tr>
+<tr><td>2017</td><td class="n">3.7</td><td class="n">8.1</td><td class="n">112</td><td class="n">135</td></tr>
+<tr><td>2018</td><td class="n">4.2</td><td class="n">8.2</td><td class="n">127</td><td class="n">137</td></tr>
+<tr><td>2019</td><td class="n">4.0</td><td class="n">7.7</td><td class="n">121</td><td class="n">128</td></tr>
+<tr><td>2020</td><td class="n">3.5</td><td class="n">7.6</td><td class="n">106</td><td class="n">127</td></tr>
+<tr><td>2021</td><td class="n">5.6</td><td class="n">11.3</td><td class="n">170</td><td class="n">188</td></tr>
+<tr><td>2022</td><td class="n">3.6</td><td class="n">8.6</td><td class="n">109</td><td class="n">143</td></tr>
+<tr><td>2023</td><td class="n">3.1</td><td class="n">6.4</td><td class="n">94</td><td class="n">107</td></tr>
+<tr><td>2024</td><td class="n">3.5</td><td class="n">7.2</td><td class="n">106</td><td class="n">120</td></tr>
+<tr><td>2025E</td><td class="n">4.8</td><td class="n">7.6</td><td class="n">145</td><td class="n">127</td></tr>
+</table>
+</details>
+
+<hr class="rule">
+<p class="cap"><b>Source and basis.</b> Bain &amp; Company 2026 Global M&amp;A Report (2025 Lookback), sourced to Dealogic as of 18 November 2025. Count is deals &gt;$30M; the value series states no threshold. Both series are <em>printed data labels</em> recovered from the report's chart text layer, not read off bar heights — verified 26/26 on each by an independent counter-agent pass. Rounding to 1 d.p. is immaterial: a 20,000-draw Monte Carlo perturbing every label by ±0.05 moves the correlations by sd ≈ 0.005–0.011.<br><br>
+<b>Known inconsistency, not smoothed over.</b> Bain's chart note says 2025 "includes actuals through November 15th and an estimate through end of year" while its source line says 2025 is YTD. If the count is YTD-only the annualized figure is ~8.7. All three treatments (as-given, annualized, excluded) were tested; the conclusion is unchanged in each.<br><br>
+<b>Not modeled.</b> Sub-annual dynamics — the frequency at which the original claim actually lives. Deal counts below the $30M floor. Any universe-drift in Dealogic's coverage over 26 years.</p>
+</div>
+<div id="tt"></div>
+<script>
+const V=[[74,184.6,2000,100],[104.9,264.5,2001,52],[135.8,284.3,2002,39],[166.7,279.4,2003,42],[197.6,244.4,2004,64],[228.5,204.5,2005,88],[259.4,154.6,2006,118],[290.4,119.6,2007,139],[321.3,199.6,2008,91],[352.2,244.4,2009,64],[383.1,219.4,2010,79],[414,214.5,2011,82],[444.9,219.4,2012,79],[475.8,209.5,2013,85],[506.7,169.6,2014,109],[537.6,124.6,2015,136],[568.5,154.6,2016,118],[599.4,164.5,2017,112],[630.4,139.6,2018,127],[661.3,149.5,2019,121],[692.2,174.5,2020,106],[723.1,69.7,2021,170],[754,169.6,2022,109],[784.9,194.5,2023,94],[815.8,174.5,2024,106],[846,104.7,2025,145]];
+const C=[[74,184.6,2000,100],[104.9,234,2001,70],[135.8,242.3,2002,65],[166.7,231.3,2003,72],[197.6,200.6,2004,90],[228.5,170.4,2005,108],[259.4,140.1,2006,127],[290.4,96.2,2007,153],[321.3,142.6,2008,125],[352.2,205.6,2009,87],[383.1,164.4,2010,112],[414,153.4,2011,118],[444.9,161.7,2012,113],[475.8,170.4,2013,108],[506.7,153.4,2014,118],[537.6,134.2,2015,130],[568.5,128.7,2016,133],[599.4,125.9,2017,135],[630.4,123.1,2018,137],[661.3,136.9,2019,128],[692.2,140.1,2020,127],[723.1,38.6,2021,188],[754,112.1,2022,143],[784.9,172.5,2023,107],[815.8,150.6,2024,120],[846,128.7,2025,127]];
+const RAWV=[3.3,1.7,1.3,1.4,2.1,2.9,3.9,4.6,3.0,2.1,2.6,2.7,2.6,2.8,3.6,4.5,3.9,3.7,4.2,4.0,3.5,5.6,3.6,3.1,3.5,4.8];
+const RAWC=[6.0,4.2,3.9,4.3,5.4,6.5,7.6,9.2,7.5,5.2,6.7,7.1,6.8,6.5,7.1,7.8,8.0,8.1,8.2,7.7,7.6,11.3,8.6,6.4,7.2,7.6];
+const tt=document.getElementById('tt'), g=document.getElementById('hits'), NS='http://www.w3.org/2000/svg';
+V.forEach((p,i)=>{const r=document.createElementNS(NS,'rect');r.setAttribute('x',p[0]-15);r.setAttribute('y',28);r.setAttribute('width',30);r.setAttribute('height',272);r.setAttribute('class','hit');
+ r.addEventListener('pointerenter',e=>{tt.innerHTML=`<b>${p[2]}${p[2]===2025?'E':''}</b><br>count ${RAWC[i].toFixed(1)}k &nbsp;idx ${C[i][3]}<br>value $${RAWV[i].toFixed(1)}T &nbsp;idx ${p[3]}`;tt.style.opacity=1;});
+ r.addEventListener('pointermove',e=>{tt.style.left=Math.min(e.clientX+14,innerWidth-190)+'px';tt.style.top=(e.clientY-58)+'px';});
+ r.addEventListener('pointerleave',()=>tt.style.opacity=0);
+ g.appendChild(r);});
+</script>
