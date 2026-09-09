@@ -678,7 +678,17 @@ def test_gate_network_is_recorded_not_just_used(venue):
     assert venue.testnet is True
 
 
-def test_gate_mainnet_is_the_default_and_is_labelled(monkeypatch):
+def test_gate_mainnet_is_the_default_and_is_labelled(venue, monkeypatch):
+    """Uses the `venue` fixture ONLY for its fake SDK, then builds a second
+    venue through the real __init__.
+
+    It used to construct HyperliquidVenue directly, which reaches the LIVE
+    Hyperliquid API inside __init__ (_coin_meta -> info.meta()). That made a
+    merge-blocking gate fail on HTTP 429 whenever the venue throttled us -
+    reproduced 2026-09-09, and it fails identically on unmodified code, so it
+    reports the network rather than the diff. A gate that goes red for
+    reasons outside the repo teaches people to ignore red.
+    """
     import app.hl as hlmod
 
     class Cfg:
@@ -1003,3 +1013,25 @@ def test_gate_fill_pnl_maker_rebate_keeps_its_sign(venue):
     d = v.fill_pnl("P-3-X")
     assert d["pnl"] == pytest.approx(-3.0)
     assert d["fee"] == pytest.approx(-0.05)
+
+
+def test_gate_delisted_coin_is_reported_as_untradable(venue):
+    """The boot tradability gate was structurally DEAD on Hyperliquid:
+    product_flags read self._meta["delisted"], and _coin_meta returned only
+    sz_decimals / max_leverage / isolated_only - so the key was always None
+    and trading_disabled was always False. The executor would have booted
+    "ready" into a delisted coin and discovered it one rejected order at a
+    time, including a rejected protective stop (Coinbase-era audit,
+    2026-09-09). list_perp_candidates two methods below was already reading
+    the venue's real field name, isDelisted."""
+    assert venue.product_flags["trading_disabled"] is False
+
+    venue.info.meta = lambda dex="": {
+        "universe": [{"name": "BTC", "szDecimals": 5, "maxLeverage": 40,
+                      "isDelisted": True}]}
+    venue._meta = venue._coin_meta()
+
+    flags = venue.product_flags
+    assert flags["trading_disabled"] is True, \
+        "a delisted coin still reported as tradable"
+    assert flags["venue"] == "hyperliquid"

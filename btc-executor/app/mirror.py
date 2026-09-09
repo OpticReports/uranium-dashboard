@@ -459,7 +459,7 @@ class Executor:
             self._event("RED", "product_untradable",
                         f"configured product is {why} on venue "
                         f"{flags.get('venue')} - every order will be "
-                        f"rejected; fix CB_PRODUCT_ID before trusting any "
+                        f"rejected; fix {self._product_var()} before trusting any "
                         f"'ready' signal")
 
     def _check_agent_expiry(self) -> None:
@@ -657,7 +657,7 @@ class Executor:
                 self._event("RED", "position_drift",
                             f"boot: venue holds {net:.5f} BTC but the ledger "
                             f"is FLAT - NOT auto-fixed; new entries BLOCKED "
-                            f"until this reconciles. Verify on Coinbase.")
+                            f"until this reconciles. Verify on {self._venue_label()}.")
             return
         if abs(net) < 1e-9:
             for name, l in self.state.legs.items():
@@ -682,7 +682,7 @@ class Executor:
         elif abs(net - ledger_net) > 1e-9:
             self._event("RED", "position_drift",
                         f"boot: venue={net:.5f} ledger={ledger_net:.5f} BTC "
-                        f"- NOT auto-fixed (ambiguous); verify on Coinbase")
+                        f"- NOT auto-fixed (ambiguous); verify on {self._venue_label()}")
 
     def attest_coverage(self, note: str = "",
                         acknowledge_unwitnessed: bool = False) -> dict:
@@ -1010,9 +1010,9 @@ class Executor:
                            "overwrote it - reset DRY_RUN in the Render "
                            "dashboard (it is sync:false now, so this should "
                            "not recur)",
-            "halt_error": "closing positions during the halt FAILED — open "
-                          "Coinbase NOW, check positions, flatten manually "
-                          "if any remain",
+            "halt_error": f"closing positions during the halt FAILED — "
+                          f"open {self._venue_label()} NOW, check positions, "
+                          f"flatten manually if any remain",
             "venue_changed": "the state file was written by a DIFFERENT "
                              "venue. Its ledger positions and order refs "
                              "mean nothing here. Flatten and cancel on the "
@@ -1020,23 +1020,25 @@ class Executor:
                              "this one from a clean state file (delete "
                              "executor_state.json) - do NOT /resume into a "
                              "ledger that describes another exchange",
-            "product_untradable": "CB_PRODUCT_ID points at a product this "
-                                  "key cannot trade (view_only/disabled) - "
-                                  "every order will be rejected. Check "
-                                  "/status venue_products for the entry "
-                                  "marked (configured) and fix the Render "
-                                  "env var",
-            "stop_ref_unverified": "a /resume found a stop the venue would "
-                                   "not confirm AND could not read the "
-                                   "position - open Coinbase, confirm the "
-                                   "stop is really resting against the "
-                                   "position, and place one manually if it "
-                                   "is not; the executor deliberately did "
-                                   "NOT re-place it blind",
-            "entry_unconfirmed": "an entry order could not be verified - "
-                                 "check Coinbase OPEN ORDERS for the cloid "
-                                 "named above if this repeats; the ref is "
-                                 "kept so the executor will not re-send",
+            "product_untradable": f"{self._product_var()} points at a "
+                                  f"product this key cannot trade "
+                                  f"(view_only/disabled/delisted) - every "
+                                  f"order will be rejected. Check /status "
+                                  f"venue_products for the entry marked "
+                                  f"(configured) and fix the Render env var",
+            "stop_ref_unverified": f"a /resume found a stop the venue "
+                                   f"would not confirm AND could not read "
+                                   f"the position - open "
+                                   f"{self._venue_label()}, confirm the stop "
+                                   f"is really resting against the position, "
+                                   f"and place one manually if it is not; the "
+                                   f"executor deliberately did NOT re-place "
+                                   f"it blind",
+            "entry_unconfirmed": f"an entry order could not be verified - "
+                                 f"check {self._venue_label()} OPEN ORDERS "
+                                 f"for the cloid named above if this repeats; "
+                                 f"the ref is kept so the executor will not "
+                                 f"re-send",
             "config_change": "sizing/risk config changed - if this was you "
                              "(ramp step, base change), ignore; if NOT, a "
                              "sync or fat-finger altered live risk limits - "
@@ -1359,7 +1361,7 @@ class Executor:
                         f"halt requested but the venue position is "
                         f"UNREADABLE ({exc}) - no orders were cancelled, "
                         f"the protective stop is still resting. Flatten "
-                        f"and cancel MANUALLY on Coinbase, then /resume.")
+                        f"and cancel MANUALLY on {self._venue_label()}, then /resume.")
             self._save_state()
             return
         try:
@@ -1382,7 +1384,23 @@ class Executor:
                     if attempt == 2:
                         raise
                     time.sleep(2)
-            if abs(net) > 1e-6:
+            if abs(net) > 1e-6 and self._below_venue_floor(net):
+                # A residue under the venue's minimum order VALUE cannot be
+                # flattened by any order we send - not this one, not a stop,
+                # not a later close (Coinbase-era audit, 2026-09-09). The old
+                # 1e-6 threshold is a SIZE test from the CDE era, where sub-
+                # contract size and unsendable size were the same thing.
+                # Attempting it here raised inside the try below and reported
+                # halt_error, which reads as "the flatten failed, go look" -
+                # true, but it hid WHY and offered no remedy. cancel_all has
+                # already stripped this residue's stop, so say plainly that it
+                # is stranded and must be closed by hand on the venue UI.
+                self._event("RED", "halt_residue_unsendable",
+                            f"halt left {net} BTC on the venue - under the "
+                            f"minimum order value, so NO order can close it. "
+                            f"Its stop is already cancelled. Close it by hand "
+                            f"on the venue UI; trading stays halted")
+            elif abs(net) > 1e-6:
                 # THE flatten. reduce_only or it is the naked-order bug:
                 # if the position closed a moment ago (the stop filled, an
                 # operator flattened by hand) this opens an equal and
@@ -1620,7 +1638,8 @@ class Executor:
                         f"operator adopted: venue holds {net} but the ledger "
                         f"claimed {before} (sum {want}) - the ledger cannot "
                         f"be attributed to legs, so the HALT STANDS and no "
-                        f"stop was cancelled. Flatten manually on Coinbase, "
+                        f"stop was cancelled. Flatten manually on "
+                        f"{self._venue_label()}, "
                         f"then run adopt again to go clean and resume.")
             self._boot_mismatch = True
             self._save_state()
@@ -1640,11 +1659,16 @@ class Executor:
 
         CORROBORATED on legs the ledger believes HOLD (fusion gate
         2026-08-26): clearing the ref hands _maintain_stop a placement path,
-        and place_stop is not reduce-only, so on a venue that is actually
-        flat - precisely the state a failed halt leaves behind - that arms a
-        full-size NAKED stop: the incident's own phenotype, re-created by
-        its own repair. A held leg's ref is cleared only once the venue
-        BACKS the ledger.
+        and a placement the ledger cannot vouch for is protection in name
+        only. On Coinbase, where this rule was written, place_stop was not
+        reduce-only and the failure was loud: a full-size NAKED stop against
+        a flat venue - the incident's own phenotype, re-created by its own
+        repair. Hyperliquid's stops ARE reduce-only (hl.py place_stop), which
+        makes the same mistake QUIETER, not safer: the venue cancels the
+        mis-sided order and the leg is simply unprotected, with the ledger
+        still advertising a stop. The refusal is right on both venues; only
+        the shape of the damage differs (Coinbase-era audit, 2026-09-09).
+        A held leg's ref is cleared only once the venue BACKS the ledger.
 
         ORDER MATTERS (re-gate 2026-08-26 B2). The cancel-on-UNKNOWN must
         come AFTER the decision to clear, never before it. Cancelling first
@@ -1673,7 +1697,8 @@ class Executor:
                                 f"(status={stat}) and the venue position is "
                                 f"UNREADABLE - left strictly alone (neither "
                                 f"cancelled nor cleared); the position may "
-                                f"be UNPROTECTED, verify on Coinbase")
+                                f"be UNPROTECTED, verify on "
+                                f"{self._venue_label()}")
                     continue
                 if verdict == "diverged":
                     self._event("RED", "ledger_divergence",
@@ -2112,7 +2137,8 @@ class Executor:
                     self._event("RED", "entry_unconfirmed",
                                 f"{leg} entry {cloid} unverifiable - ref "
                                 f"KEPT as possibly live; verify the order "
-                                f"under Coinbase open orders if this "
+                                f"under {self._venue_label()} open "
+                                f"orders if this "
                                 f"persists")
             else:
                 self.venue.place_market(side, qty, cloid)
@@ -2393,7 +2419,8 @@ class Executor:
         Three things this must NOT do, each a counter-agent find:
         - re-arm the FULL size when the stop was partially filled before it
           died (Coinbase reports EXPIRED with filled_size > 0);
-        - place a stop the venue cannot back: place_stop is NOT reduce-only,
+        - place a stop the venue cannot back. On Coinbase place_stop was NOT
+          reduce-only, so this OPENED size;
           so replacing against a flat or opposite venue OPENS a position;
         - retry forever into a venue that keeps cancelling.
         """
@@ -2505,10 +2532,12 @@ class Executor:
         if verdict == "blind":
             self._event("RED", "stop_backing_blind",
                         f"{leg} needs a stop but the venue position is "
-                        f"UNREADABLE - placing NOTHING (place_stop is not "
-                        f"reduce-only, so a blind placement can OPEN a "
-                        f"position); position may be UNPROTECTED, retrying "
-                        f"next poll")
+                        f"UNREADABLE - placing NOTHING (a stop we cannot "
+                        f"corroborate is protection in name only: on a venue "
+                        f"without reduce-only it OPENS size, and on one with "
+                        f"it the order is silently cancelled and the leg is "
+                        f"bare); position may be UNPROTECTED, retrying next "
+                        f"poll")
             return
         if verdict == "diverged" and self._absorb_fired_stop(leg, led):
             # SECOND LOOK BEFORE HALTING ON WHAT IS ONLY A STOP-OUT (round 2,
@@ -2678,6 +2707,24 @@ class Executor:
                         f"{led.entry_cloid} filled {filled} but engine cancelled")
         led.entry_cloid = led.entry_side = None
         led.entry_qty = 0.0
+
+    def _venue_label(self) -> str:
+        """The exchange the operator has to open, by name.
+
+        Every ACTION page below used to say "Coinbase" as a literal, written
+        when that was the only venue. On a Hyperliquid book those pages fire
+        precisely when a position is unprotected and seconds matter, and they
+        sent Casey to the wrong exchange (Coinbase-era audit, 2026-09-09).
+        Reads the same cfg.venue the VENUE_CHANGED rail keys off, so a label
+        and a ledger stamp can never disagree.
+        """
+        v = str(getattr(self.cfg, "venue", "") or "").strip().lower()
+        return {"hyperliquid": "Hyperliquid",
+                "coinbase": "Coinbase"}.get(v, v.title() or "the venue")
+
+    def _product_var(self) -> str:
+        v = str(getattr(self.cfg, "venue", "") or "").strip().lower()
+        return "HL_COIN" if v == "hyperliquid" else "CB_PRODUCT_ID"
 
     def _below_venue_floor(self, qty: float) -> bool:
         """Will the venue actually ACCEPT an order for this size?
