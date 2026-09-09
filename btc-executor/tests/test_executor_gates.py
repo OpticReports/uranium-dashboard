@@ -6419,3 +6419,48 @@ def test_gate_orphan_entry_fill_is_unwound_even_on_a_degraded_feed(tmp_path):
     assert abs(v.position()) < 1e-9, "venue still holds an untracked position"
     # and no NEW risk was added while blind
     assert not [e for e in ex.state.events if e["kind"] == "entry_order"]
+
+
+def test_gate_halt_line_bigger_than_the_notional_cap_is_flagged(tmp_path):
+    """SIZING_BASE_USD and MAX_NOTIONAL_USD are independent env vars set in
+    different places, so they drift apart silently. Raising the base
+    1000 -> 25000 without touching the cap moved the drawdown line from a
+    17.5% adverse move to 437.5% - mathematically unable to fire - while
+    every health surface stayed green. The pre-existing guard compares the
+    halt against the ACCOUNT and cannot see this; this one compares it
+    against the EXPOSURE the caps permit."""
+    v = FakeVenue(equity=100_000.0)
+    ex = mkexec(tmp_path, v, dry_run=False)
+    ex.cfg.sizing_base_usd = 25_000.0
+    ex.cfg.max_notional_usd = 2_000.0
+    ex.cfg.max_account_lev = 2.0
+    ex.cfg.dd_halt_pct = 0.35
+    ex.cfg.daily_loss_halt_pct = 0.06
+    ex.state.high_water = 100_000.0
+    ex.state.day_start_equity = 100_000.0
+
+    ex._check_halts(100_000.0)
+
+    msgs = [e["msg"] for e in ex.state.events if e["kind"] == "halt_config"]
+    assert any("DRAWDOWN" in m for m in msgs), \
+        "a drawdown breaker that cannot fire was not flagged"
+    assert any("4.4x" in m for m in msgs), msgs
+    assert ex.state.halted is None, "the guard must warn, not halt"
+
+
+def test_gate_coherent_halt_and_cap_config_is_not_flagged(tmp_path):
+    """Fence: the pre-change config (base 1000, cap 2000) is coherent - the
+    drawdown line is a 17.5% move - and must stay quiet."""
+    v = FakeVenue(equity=100_000.0)
+    ex = mkexec(tmp_path, v, dry_run=False)
+    ex.cfg.sizing_base_usd = 1_000.0
+    ex.cfg.max_notional_usd = 2_000.0
+    ex.cfg.max_account_lev = 2.0
+    ex.cfg.dd_halt_pct = 0.35
+    ex.cfg.daily_loss_halt_pct = 0.06
+    ex.state.high_water = 100_000.0
+    ex.state.day_start_equity = 100_000.0
+
+    ex._check_halts(100_000.0)
+
+    assert not [e for e in ex.state.events if e["kind"] == "halt_config"]

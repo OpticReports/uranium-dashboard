@@ -1258,6 +1258,39 @@ class Executor:
                         f"DD halt {self.cfg.dd_halt_pct:.0%} of base "
                         f"{base_h:.0f} exceeds 80% of account {equity:.0f} - "
                         "lower DD_HALT_PCT or raise the deposit")
+        # SECOND COHERENCE GUARD: the halt line against the EXPOSURE, where
+        # the guard above compares it against the ACCOUNT (2026-09-09).
+        # SIZING_BASE_USD and MAX_NOTIONAL_USD are independent env vars set
+        # in different places, so they drift apart silently - raising the
+        # base 1000 -> 25000 without touching the cap 2000 left the drawdown
+        # line at 8,750 against at most 2,000 of notional, while /pulse,
+        # /status and every test stayed green. render.yaml's own comment
+        # warns that changing the base "WOULD HAVE DISARMED A HALT"; nothing
+        # enforced it until now.
+        # The test is deliberately the CONSERVATIVE one: a threshold larger
+        # than the whole cap means even a TOTAL loss of the largest position
+        # the caps permit would not trip the breaker. It does not claim the
+        # halt can never fire - drawdown accrues across trades, so enough
+        # consecutive losers still reach it - only that no single position
+        # can, which is a statement that needs no assumption about stop
+        # distance, trade frequency or win rate. A tighter ratio was tried
+        # first and it fired on a config the existing coherence test calls
+        # sound, which is the right way round for a guard to fail.
+        cap_notional = min(self.cfg.max_notional_usd,
+                           self.cfg.max_account_lev * base_h)
+        if cap_notional > 0:
+            for label, pct in (("DRAWDOWN", self.cfg.dd_halt_pct),
+                               ("DAILY_LOSS", self.cfg.daily_loss_halt_pct)):
+                need = pct * base_h
+                if need > cap_notional:
+                    self._event("WARN", "halt_config",
+                                f"{label} halt needs a {need:.0f} loss but "
+                                f"the caps allow at most {cap_notional:.0f} "
+                                f"of notional - a TOTAL loss of the largest "
+                                f"position permitted still would not fire it "
+                                f"({need / cap_notional:.1f}x). Raise "
+                                f"MAX_NOTIONAL_USD or lower SIZING_BASE_USD; "
+                                f"they have to move together")
         breach = None
         if st.day_start_equity > 0 and \
                 equity < st.day_start_equity - self.cfg.daily_loss_halt_pct * base_d:
