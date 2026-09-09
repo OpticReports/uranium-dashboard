@@ -232,3 +232,36 @@ def rank_stability(counts_by_year, threshold_by_year, gdp_by_year,
             max_shift = max(max_shift,
                             max(abs(pos[y] - bpos[y]) for y in pos))
     return len(orderings) - 1, max_shift, orderings
+
+
+def correct_drift_varying(counts_by_year, threshold_by_year, gdp_by_year,
+                          alpha_by_year, reference_year):
+    """Drift correction using each year's OWN measured exponent.
+
+    Why not a single alpha: the exponent is not stationary even inside
+    the 1990s regime. Fitted per year on the $15M-up brackets it falls
+    monotonically from 0.772 (FY1992) to 0.575 (FY2000) - a spread of
+    0.197 against per-year bootstrap CIs of 0.03-0.07, so the drift is
+    real and not estimation noise. The 1992 and 2000 confidence
+    intervals are disjoint ([0.733, 0.807] vs [0.560, 0.591]).
+
+    A single pooled alpha would impose a shape the data rejects. Each
+    year is restated with the local exponent of its OWN size
+    distribution, which is the quantity the restatement actually needs.
+
+    The single-alpha version is retained as correct_drift() because the
+    ship test is run against it across the observed alpha range - that
+    test is what establishes the ranking is insensitive to the choice,
+    and it must keep operating on the simpler object it was defined on.
+    """
+    ref = real_threshold_share(threshold_by_year[reference_year],
+                              gdp_by_year[reference_year])
+    out = {}
+    for y, n in counts_by_year.items():
+        if y not in threshold_by_year or y not in gdp_by_year:
+            continue
+        if y not in alpha_by_year:
+            continue
+        share = real_threshold_share(threshold_by_year[y], gdp_by_year[y])
+        out[y] = restate_count(n, share, ref, alpha_by_year[y])
+    return out

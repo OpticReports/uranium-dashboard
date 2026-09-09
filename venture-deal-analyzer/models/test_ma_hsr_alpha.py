@@ -156,3 +156,28 @@ def test_rank_stability_passes_on_a_tight_interval():
         5963, 6158, 6520, 6859, 7287, 7640, 8073, 8578, 9063, 9631, 10251])}
     inv, shift, _ = h.rank_stability(counts, thr, gdp, 1.40, 1.40, 2000)
     assert inv == 0 and shift == 0
+
+
+def test_varying_alpha_matches_fixed_when_alpha_is_constant():
+    """The per-year-alpha correction must reduce to the single-alpha one
+    when every year carries the same exponent. Guards against the two
+    code paths silently diverging."""
+    counts = {1990: 1952, 1995: 2778, 2000: 4810}
+    thr = {y: 15.0 for y in counts}
+    gdp = {1990: 5963.0, 1995: 7640.0, 2000: 10251.0}
+    fixed = h.correct_drift(counts, thr, gdp, 0.7, 2000)
+    vary = h.correct_drift_varying(counts, thr, gdp,
+                                   {y: 0.7 for y in counts}, 2000)
+    for y in counts:
+        assert abs(fixed[y] - vary[y]) < 1e-9
+
+
+def test_varying_alpha_skips_years_without_an_estimate():
+    """A year with no fitted exponent must be DROPPED, never silently
+    given a neighbour's or a pooled default - that would smuggle an
+    assumption into a series whose whole point is being measured."""
+    counts = {1990: 1952, 1995: 2778}
+    thr = {y: 15.0 for y in counts}
+    gdp = {1990: 5963.0, 1995: 7640.0}
+    out = h.correct_drift_varying(counts, thr, gdp, {1990: 0.73}, 1990)
+    assert 1995 not in out and 1990 in out
