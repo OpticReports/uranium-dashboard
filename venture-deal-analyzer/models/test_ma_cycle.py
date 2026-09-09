@@ -108,15 +108,29 @@ def test_regime_split_actually_isolates_regimes():
     this gate fails, every post-2001 month reads as a historic collapse
     and the indicator is measuring a legislative change.
     """
-    # high regime, then a definitional step down to a low regime
-    series = [900, 950, 1000, 880, 920] + [300, 310, 290, 305, 295]
-    starts = [5]
+    # high regime, then a definitional step down to a low regime.
+    # Both regimes must be at least MIN_RANK_WINDOW long or the rank is
+    # (correctly) refused before the regime logic is ever exercised.
+    n = mc.MIN_RANK_WINDOW
+    hi_regime = [900 + 8 * i for i in range(n)]
+    # spread the low regime, then make the FINAL point deliberately
+    # mid-pack within it - that is the case the gate is about
+    lo_regime = [300 + 2 * i for i in range(n - 1)] + [300 + (n - 1)]
+    series = hi_regime + lo_regime
+    starts = [n]
+    last = len(series) - 1
     # last point is mid-pack WITHIN its own regime -> near zero
-    within = mc.percentile_rank_within_regime(series, 9, starts)
+    within = mc.percentile_rank_within_regime(series, last, starts)
     # against the whole history it would be pinned to the floor
-    naive = mc.percentile_rank_expanding(series, 9)
-    assert within > -0.5, f"regime split not applied: {within}"
-    assert naive < -0.5, f"control failed, naive should be near floor: {naive}"
+    naive = mc.percentile_rank_expanding(series, last)
+    # The claim is not about absolute levels - it is that scoring
+    # WITHIN the regime puts a mid-pack point near the middle, while
+    # scoring against the whole history drags it toward the floor.
+    assert abs(within) < 0.2, (
+        f"within-regime rank should be near mid-pack, got {within}")
+    assert within - naive > 0.3, (
+        f"regime split barely moved the answer: within={within} "
+        f"naive={naive} - the split is not being applied")
 
 
 def test_regime_split_matches_plain_rank_when_no_break():
@@ -165,8 +179,9 @@ def test_exit_exposure_refuses_beyond_horizon():
 
 def test_ties_do_not_drift():
     """A flat series must read 0.0, not wander with tie-break order."""
-    flat = [7] * 10
-    for i in range(1, 10):
+    n = mc.MIN_RANK_WINDOW
+    flat = [7] * (n + 6)
+    for i in range(n - 1, n + 6):
         assert mc.percentile_rank_expanding(flat, i) == 0.0
 
 
@@ -255,3 +270,29 @@ def test_like_for_like_delta_is_none_without_overlap():
     prev = {"components": {"A": 0.1}}
     assert run._lfl_delta(prev, [None, 0.4], ["A", "B"]) is None
     assert run._lfl_delta(None, [0.4], ["A"]) is None
+
+
+def test_min_rank_window_refuses_degenerate_percentiles():
+    """A percentile against a handful of comparators is not a
+    percentile. Raised by adversarial review of the 1990s HSR work:
+    the first observation in a regime ranks 1.000 against a one-element
+    window regardless of any correction applied to it, and the next few
+    swing between extremes on noise - which looks exactly like a
+    violent early cycle."""
+    s = list(range(60))
+    for i in range(mc.MIN_RANK_WINDOW - 1):
+        assert mc.percentile_rank_expanding(s, i) is None
+    assert mc.percentile_rank_expanding(s, mc.MIN_RANK_WINDOW - 1) is not None
+
+
+def test_min_rank_window_applies_within_regimes_too():
+    """A new regime starts its window over. Otherwise the first
+    post-break quarter inherits the pre-break sample size and scores a
+    confident rank against data from a different definition."""
+    n = mc.MIN_RANK_WINDOW
+    series = list(range(n + 10)) + list(range(1000, 1000 + n + 10))
+    starts = [n + 10]
+    for k in range(starts[0], starts[0] + n - 1):
+        assert mc.percentile_rank_within_regime(series, k, starts) is None
+    assert mc.percentile_rank_within_regime(
+        series, starts[0] + n - 1, starts) is not None

@@ -1,4 +1,4 @@
-"""Gate tests for the HSR power-law exponent and threshold restatement.
+"""Gate tests for the HSR threshold-drift correction.
 
 These gates exist because the correction they guard is LARGE and highly
 sensitive to alpha: restating a $15M-threshold count onto a $50M
@@ -7,7 +7,7 @@ spread across a plausible alpha range. An estimator bug here would not
 look like a bug; it would look like a finding about the 1990s.
 """
 
-import ma_hsr_alpha as h
+import ma_hsr_threshold as h
 
 
 def test_recovers_known_exponent_from_binned_data():
@@ -181,3 +181,103 @@ def test_varying_alpha_skips_years_without_an_estimate():
     gdp = {1990: 5963.0, 1995: 7640.0}
     out = h.correct_drift_varying(counts, thr, gdp, {1990: 0.73}, 1990)
     assert 1995 not in out and 1990 in out
+
+
+# --- The SHIPPED, model-free correction ----------------------------
+
+BR_1995 = [(15, 25, 607), (25, 50, 697), (50, 100, 465), (100, 150, 209),
+           (150, 200, 136), (200, 300, 127), (300, 500, 102),
+           (500, 1000, 74), (1000, None, 79)]
+
+
+def test_survival_matches_bracket_edges_exactly():
+    """At a bracket boundary the interpolation must return the exact
+    published survival - no smoothing across the edge."""
+    total = sum(c for _, _, c in BR_1995)
+    assert abs(h.survival_at(BR_1995, 15) - total) < 1e-9
+    assert abs(h.survival_at(BR_1995, 25) - (total - 607)) < 1e-9
+    assert abs(h.survival_at(BR_1995, 50) - (total - 607 - 697)) < 1e-9
+
+
+def test_survival_is_monotone_decreasing():
+    prev = float("inf")
+    for v in (15, 18, 25, 40, 50, 90, 100, 175, 250, 400, 900, 1500):
+        cur = h.survival_at(BR_1995, v)
+        assert cur <= prev, f"survival rose at {v}"
+        prev = cur
+
+
+def test_survival_interpolates_inside_a_bracket():
+    """Strictly between edges, strictly between the edge values."""
+    hi = h.survival_at(BR_1995, 15)
+    lo = h.survival_at(BR_1995, 25)
+    mid = h.survival_at(BR_1995, 20)
+    assert lo < mid < hi
+
+
+def test_drift_factors_are_at_most_one_with_earliest_reference():
+    """With the reference at the EARLIEST year, every later year is
+    compared against a real-terms tighter bar, so every factor must be
+    <= 1. A factor above 1 means the reference is not the earliest and
+    the correction has become an extrapolation below the data."""
+    brackets = {1990: BR_1995, 1995: BR_1995, 2000: BR_1995}
+    gdp = {1990: 5963.0, 1995: 7640.0, 2000: 10251.0}
+    f = h.drift_factors(brackets, gdp, 15.0, 1990)
+    assert abs(f[1990] - 1.0) < 1e-9
+    for y in (1995, 2000):
+        assert f[y] < 1.0
+
+
+def test_correction_shrinks_the_apparent_1990s_boom():
+    """The headline: raw fiscal-year rise 2.18x, corrected 1.70x, so
+    bracket creep explains ~22% - NOT the 33% the rejected power-law
+    version claimed. Pinned so a regression cannot quietly restore the
+    overcorrection."""
+    counts = {1990: 2262.0, 2000: 4926.0}
+    factors = {1990: 1.000, 2000: 0.780}
+    out = h.correct_measured(counts, factors)
+    raw = counts[2000] / counts[1990]
+    corr = out[2000] / out[1990]
+    creep = 1 - corr / raw
+    assert 0.18 < creep < 0.26, f"creep {creep:.3f} outside the measured band"
+
+
+def test_correct_measured_drops_years_without_a_factor():
+    """An uncorrected year silently mixed among corrected ones is the
+    exact artifact this module removes."""
+    out = h.correct_measured({1990: 100.0, 1999: 200.0}, {1990: 1.0})
+    assert 1999 not in out and 1990 in out
+
+
+def test_closed_top_bin_likelihood_is_normalized():
+    """Latent defect found by adversarial review: with a closed final
+    edge the bin probabilities summed to 0.90, so the 'likelihood' was
+    not one and the restricted-range MLE was badly wrong (1.221 against
+    a correct 0.335 on one test case). Recovery on a truncated sample
+    is the check that it is now normalized."""
+    import random
+    random.seed(5)
+    true, b0, bk = 0.8, 15.0, 100.0
+    vals = []
+    while len(vals) < 60000:
+        v = b0 * (1 - random.random()) ** (-1 / true)
+        if v < bk:
+            vals.append(v)
+    edges = [15, 25, 50, 100]
+    counts = [0, 0, 0]
+    for v in vals:
+        for i in range(3):
+            if edges[i] <= v < edges[i + 1]:
+                counts[i] += 1
+                break
+    est, _ = h.fit_binned(edges, counts)
+    assert abs(est - true) < 0.03, f"truncated MLE off: {est}"
+
+
+def test_open_bin_fits_unchanged_by_the_normalization_fix():
+    """Regression pin: the shipped diagnostic exponents must not have
+    moved when the closed-bin path was fixed."""
+    edges = [15, 25, 50, 100, 150, 200, 300, 500, 1000, None]
+    counts = [607, 697, 465, 209, 136, 127, 102, 74, 79]
+    est, _ = h.fit_binned(edges, counts)
+    assert abs(est - 0.6906) < 0.002

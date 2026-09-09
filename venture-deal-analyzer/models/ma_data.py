@@ -136,7 +136,51 @@ HSR_REGIME_BREAK = "2001Q1"
 # fitted parameter smuggled in as a fix. Pre-2001 HSR is CHARTED and
 # NOT SCORED; the other five components carry the 1990s, which still
 # clears the 60% coverage rule.
-HSR_SCORE_FROM = "2001Q2"
+# HSR now scores from 1994Q1, not 2001Q2. The 1990s threshold-erosion
+# artifact is CORRECTED (see ma_hsr_threshold) rather than avoided:
+# raw counts rose 2.18x over FY1990-2000 and 22.0% of that is bracket
+# creep, leaving a real 1.70x rise. 1990-1993 remain unscored - not
+# because of the correction but because the expanding percentile window
+# is degenerate there (MIN_RANK_WINDOW = 16 quarters).
+#
+# The correction was BUILT TWICE. The first version fitted a Pareto
+# exponent per year; adversarial review rejected the family outright
+# (chi-square p < 1e-8 in all 11 years, lognormal preferred by AIC
+# 40-134) and showed the full-range exponent was measured in the wrong
+# place - the correction only traverses $15-25.8M, where the local
+# slope is 0.46-0.64, not the fitted 0.57-0.77. It overcorrected by
+# about half. The shipped correction is model-free: read N(>v) straight
+# off each year's published bracket table by log-linear interpolation.
+HSR_SCORE_FROM = "1994Q1"
+
+# Pre-2001 quarterly HSR counts are multiplied by their fiscal year's
+# measured drift factor before scoring. Post-2001 is left alone: the
+# threshold has been GNP-indexed since FY2005 and its share of GDP is
+# flat to within about +/-11%, so there is no comparable artifact to
+# remove and inventing one would add noise.
+HSR_DRIFT_FACTORS_FY = {
+    1990: 1.000, 1991: 0.983, 1992: 0.951, 1993: 0.926, 1994: 0.903,
+    1995: 0.882, 1996: 0.867, 1997: 0.847, 1998: 0.812, 1999: 0.795,
+    2000: 0.780,
+}
+HSR_DRIFT_REFERENCE_FY = 1990
+HSR_DRIFT_DEFLATOR = "nominal GDP (FRED GDPA)"
+
+# THE TRANSITION QUARTERS ARE DROPPED, NOT SCORED. Pub. L. 106-553 took
+# effect 2001-02-01, mid-quarter, so 2001Q1 is one month of the old
+# regime and two of the new. FY2001 as a whole is blended - its own
+# Table V splits it into 1,317 filings under old-regime thresholds and
+# 920 under new. It is neither a pre- nor a post-break observation and
+# the FTC's tables say so.
+#
+# 2000Q4 goes too, for a separate and less obvious reason: it falls in
+# FISCAL 2001, which has no measured drift factor (the regime changed
+# inside it), so it would be the one old-regime quarter carried through
+# UNCORRECTED while every neighbour was corrected - a step artifact
+# manufactured by the fix itself. Ending the corrected regime at 2000Q3
+# keeps every corrected quarter wholly inside a fiscal year with a
+# measured factor, and requires no extrapolation.
+HSR_EXCLUDE_QUARTERS = {"2000Q4", "2001Q1"}
 
 # EDGAR only SCORES from here. Electronic filing became mandatory in
 # May 1996; before that a filing count measures EDGAR ADOPTION, not
@@ -411,6 +455,12 @@ def build(refresh=True):
     hq = {}
     for date, v in hsr:
         y, m = int(date[:4]), int(date[5:7])
+        # Threshold-drift correction, applied on the FISCAL year the
+        # bracket tables and the factors are both defined on (Oct-Sep).
+        # Aligning these matters: FY1990 and CY1990 differ by 16% in
+        # the base year of the headline ratio.
+        fyr = y + 1 if m >= 10 else y
+        v *= HSR_DRIFT_FACTORS_FY.get(fyr, 1.0)
         hq.setdefault(f"{y}Q{(m - 1) // 3 + 1}", []).append(v)
     # drop part-quarters at the seams so a 2-month quarter cannot read
     # as a collapse
@@ -438,6 +488,8 @@ def scoreable(sid, quarter):
     Only HSR is restricted, and only before 2001Q2 - see HSR_SCORE_FROM.
     Charting is unrestricted; this gates scoring alone.
     """
+    if sid == "HSR_COUNT" and quarter in HSR_EXCLUDE_QUARTERS:
+        return False
     floors = {"HSR_COUNT": HSR_SCORE_FROM,
               "EDGAR_PROXIES": EDGAR_SCORE_FROM}
     floor = floors.get(sid)

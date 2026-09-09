@@ -100,6 +100,21 @@ MIN_COMPONENT_COVERAGE = 0.60
 # this counts as 0.5 (unchanged) rather than up or down.
 DIFFUSION_DEAD_BAND = 0.0005  # 0.05%
 
+# A percentile rank against a handful of comparators is not a
+# percentile. Within a regime the expanding window starts empty, so the
+# first observation ranks 1.000 against itself and the next few swing
+# between the extremes on noise - an artifact that looks exactly like a
+# violent early cycle. Raised as a defect by adversarial review of the
+# 1990s HSR work, where FY1990 scored a perfect 1.000 against a
+# one-element window regardless of any correction applied to it.
+#
+# 16 quarters = 4 years. ARBITRARY and declared, in the same class as
+# NEUTRAL_BAND: chosen as the shortest window over which a percentile
+# carries usable resolution (16 points resolve to ~6pp), NOT chosen by
+# looking at what it does to the output. Sensitivity at 8 and 24 is
+# gate-tested.
+MIN_RANK_WINDOW = 16
+
 # Below this, the phase label is not meaningful and we say so rather
 # than forcing a call. ARBITRARY - declared, not fitted. Sensitivity at
 # 0.10 and 0.20 is published by the gate tests.
@@ -125,7 +140,7 @@ def percentile_rank_expanding(series, i):
     """
     window = [v for v in series[:i + 1] if v is not None]
     x = series[i]
-    if x is None or len(window) < 2:
+    if x is None or len(window) < MIN_RANK_WINDOW:
         return None
     below = sum(1 for v in window if v < x)
     equal = sum(1 for v in window if v == x)
@@ -199,7 +214,7 @@ def percentile_rank_within_regime(series, i, regime_starts):
             break
     window = [v for v in series[start:i + 1] if v is not None]
     x = series[i]
-    if x is None or len(window) < 2:
+    if x is None or len(window) < MIN_RANK_WINDOW:
         return None
     below = sum(1 for v in window if v < x)
     equal = sum(1 for v in window if v == x)

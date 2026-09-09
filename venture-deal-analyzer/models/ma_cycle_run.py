@@ -88,9 +88,11 @@ def build_readings():
     cols = {sid: [oriented[sid].get(t) for t in quarters]
             for sid in md.COMPONENTS}
 
-    hsr_break = [i for i, t in enumerate(quarters)
-                 if not md.scoreable("HSR_COUNT", t)]
-    hsr_regime_starts = [max(hsr_break) + 1] if hsr_break else []
+    # Regime boundary = the 2001 definitional break, NOT simply "the
+    # last unscoreable quarter" - that would also catch the pre-1994
+    # window floor and put the regime start in the wrong place.
+    hsr_regime_starts = [i for i, t in enumerate(quarters)
+                         if t == "2001Q2"]
 
     readings = []
     for i, t in enumerate(quarters):
