@@ -1811,26 +1811,25 @@ class Executor:
             # an exit must always be able to run. That is why this sits
             # above every entry path.
             if pos.get("exit_flag"):
-                # ABSORB A VENUE STOP FILL FIRST (panel BLOCKING 2,
-                # 2026-09-09). _close_leg opens with _stop_backing(), and a
-                # stop that just fired is indistinguishable from a ledger
-                # divergence to it - venue flat, ledger still long - so it
-                # HALTS THE WHOLE BOOK and demands a manual /resume.
-                # _maintain_stop is the code that exists to absorb exactly
-                # this (INFO stop_filled_on_venue, _cov("stop_filled"), the
-                # re-entry guard, clearing the consumed entry ref), and the
-                # pre-change flow always reached it first. Reproduced both
-                # ways on identical input: with the flag ->
-                # halted=LEDGER_DIVERGENCE; without -> a clean
-                # stop_filled_on_venue. The two events are CORRELATED, not
-                # independent: the bar that gaps through our stop is the bar
-                # likeliest to flip the signal and set this flag.
-                # Cost: if the trail has ratcheted >5bp, _maintain_stop
-                # replaces a stop that _close_leg then cancels - one wasted
-                # order pair. Only donchian ratchets and donchian never sets
-                # exit_flag (core.py _process_donchian exits via the trail
-                # alone), so on the only reachable path the trigger is fixed
-                # and the churn guard makes this a status read.
+                # MAINTAIN THE STOP BEFORE ATTEMPTING THE CLOSE. Two jobs,
+                # and only the second one still needs this call:
+                #  - absorbing a stop that FIRED on this same poll. Round 1
+                #    put that here; round 2 showed the same trap lives on
+                #    branches 2 and 3, which have no `pos` and so can never
+                #    call _maintain_stop at all, so the absorption moved down
+                #    into _close_leg where every caller gets it.
+                #  - re-placing a stop the venue VANISHED (a CANCELLED
+                #    trigger) while a close is being refused poll after poll.
+                #    Nothing else re-arms it inside that window, and it is
+                #    exactly the window where the leg is still held. That is
+                #    what test_gate_exit_flag_refused_close_keeps_protection_
+                #    through_the_window pins, and it fails without this line.
+                # Cost: if the trail has ratcheted >5bp this replaces a stop
+                # that _close_leg then cancels - one wasted order pair. Only
+                # donchian ratchets and donchian never sets exit_flag (core.py
+                # _process_donchian exits via the trail alone), so on the only
+                # reachable path the trigger is fixed and the churn guard
+                # makes this a status read.
                 if led.qty != 0.0:
                     self._maintain_stop(leg, led, pos)
                 # Same order branch 3 uses: clear a stale entry ref first, so
@@ -1907,6 +1906,38 @@ class Executor:
             had_qty = led.qty != 0.0
             if had_qty:
                 self._close_leg(leg, led, "engine_flat")
+            if self.state.halted:
+                # A HALT RAISED INSIDE _close_leg MUST STOP THIS LEG DEAD
+                # (counter-agent round 2, 2026-09-09). _close_leg can halt on
+                # LEDGER_DIVERGENCE, and nothing here re-read our own halt:
+                # `entries_ok` is gated on led.engine_halted, the ENGINE
+                # book's flag, never on self.state.halted. So the sequence ran
+                # ledger_divergence -> halt -> cancel_all -> MARKET SELL, i.e.
+                # the executor paged that the book was halted, stripped every
+                # order, and then opened a fresh naked position - which the
+                # step loop's own `if self.state.halted: break` then skipped
+                # on every later poll, so it was never stopped, never closed
+                # and never seen again. Reproduced: 0.035 BTC short opened
+                # AFTER the halt page.
+                # This is the 2026-08-24 finding (see the loop comment above)
+                # reached through the SAME leg instead of the next one: that
+                # guard was placed BETWEEN legs, and a halt raised mid-leg
+                # walks straight past it.
+                return
+            if had_qty and led.qty != 0.0:
+                # The close was REFUSED and we still hold. Do not build a
+                # second position on top of the first: close_refused_unbacked
+                # says in its own words that it is "leaving the ledger for the
+                # drift check and boot reconcile to resolve", and entering
+                # again is the opposite of resolving it. It would also carry
+                # this leg's retained stop - retained deliberately, so a
+                # refusal cannot strip protection - across a leg REBUILD,
+                # leaving a stale wrong-sided trigger of the old size behind
+                # (counter-agent round 2, 2026-09-09). Hyperliquid's stops are
+                # reduce-only so such a trigger cancels rather than opening
+                # size, but it still reads as our protection while protecting
+                # nothing. Retry next poll.
+                return
             if not entries_ok:
                 return
             if led.entry_cloid:
@@ -2032,6 +2063,14 @@ class Executor:
         # the target (live find, 2026-08-10). Round the shortfall down and
         # accept the tracking error instead.
         missing = self.venue.quantize(max(0.0, round(want - filled, 8)))
+        if missing > 0 and self.state.halted:
+            # A market chase is NEW RISK and a halt means no new risk, ever.
+            # entries_ok tracks the FEED and the engine book, not our own
+            # halt, so it cannot stand in for this (round 2, 2026-09-09).
+            self._event("RED", "entries_blocked",
+                        f"{leg} chase of {missing} BTC suppressed: executor "
+                        f"is HALTED ({self.state.halted})")
+            missing = 0.0
         if missing > 0 and not entries_ok:
             self._event("RED", "entries_blocked",
                         f"{leg} chase of {missing} BTC suppressed: feed "
@@ -2509,6 +2548,31 @@ class Executor:
                             f"{leg} qty {led.qty} below venue minimum - "
                             f"cleared without an order (verify flat on venue)")
                 led.qty = 0.0
+                return
+        # ABSORB A FIRED STOP BEFORE ASKING _stop_backing ANYTHING (counter-
+        # agent round 2, 2026-09-09). A stop that has just filled leaves the
+        # venue flat while the ledger still holds - which is indistinguishable
+        # from a real divergence to the corroboration below, so it HALTED THE
+        # WHOLE BOOK and demanded a manual /resume on what is only an ordinary
+        # stop-out. It has to live HERE rather than at each caller: branches 2
+        # and 3 of _sync_leg run with `pos is None` and so can never call
+        # _maintain_stop, which was the only other code that absorbed a stop
+        # fill. Reproduced on all three branches; only branch 1 was clean.
+        # This also closes a silent coverage gap - the old absorption further
+        # down zeroed led.qty and emitted nothing at all, so a stop fill taken
+        # on the close path never reached the ramp's stop_filled sample.
+        # The consumed entry ref is cleared for the same reason _maintain_stop
+        # clears it: that fill was closed BY the stop, and leaving the ref set
+        # lets branch 3's orphan-flatten re-close it into a naked reverse.
+        if led.qty != 0.0 and led.stop_cloid:
+            st = self.venue.order_status(led.stop_cloid)
+            if st and st.get("status") == "FILLED":
+                self._event("INFO", "stop_filled_on_venue",
+                            f"{leg} stop fired before the close - absorbed")
+                self._cov("stop_filled")
+                led.qty, led.stop_cloid, led.stop_px = 0.0, None, None
+                led.entry_cloid = led.entry_side = None
+                led.entry_qty = 0.0
                 return
         # CORROBORATE BEFORE TOUCHING ANYTHING (re-gate 2026-08-27 B2). This
         # was the one write path that never asked the venue: side AND size
