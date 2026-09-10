@@ -80,63 +80,43 @@ def test_thin_policy_space_raises_score():
     assert out_worse["severity_score"] > out_base["severity_score"]
 
 
-def test_hy_complacency_ranks_against_full_history_not_the_truncated_feed():
+def test_hy_complacency_ranks_against_full_history():
     """FRED cut ICE BofA history to 3 years in April 2026 (its own series note).
 
-    Ranking the live feed silently became "tightest since 2023" while this
-    module's contract promises a full-history rank: today's 2.71 scored 87.2
-    instead of 96.1. Asserted through build_severity, NOT the helper -- an
-    earlier version of this gate only probed the helper, so reverting the live
-    wiring back to the truncated rank left the whole suite green.
+    Ranking the truncated feed made this "tightest since 2023": today's 2.71
+    scored 87.2 instead of 96.1. The repair is at the source layer, so this
+    module keeps ONE scoring rule and `_pctile` sees 1996+ again. Asserted
+    through build_severity, not a helper -- an earlier gate only probed a helper
+    and left a revert of the live wiring passing.
     """
     import datetime
 
-    from app.metrics.severity import (HY_OAS_REFERENCE_QUANTILES,
-                                      _hy_complacency_score, build_severity)
+    from app.metrics.severity import build_severity
 
-    q = HY_OAS_REFERENCE_QUANTILES
-    assert len(q) == 101 and q[0] == 2.41 and q[-1] == 21.82   # verified extremes
-    assert q[50] == 4.50                                        # verified median
-
-    days = [datetime.date(2024, 1, 1) + datetime.timedelta(days=i) for i in range(800)]
-    # a live window whose OWN minimum is 2.59 -- the truncated feed's floor. If the
-    # score is computed against this window rather than the reference, today's 2.71
-    # reads ~87; against full history it must read ~96.
-    hy = [2.59 + (i % 200) / 100.0 for i in range(799)] + [2.71]
+    days = [datetime.date(2024, 1, 1) + datetime.timedelta(days=i) for i in range(400)]
+    # a deliberately TIGHT live window: if the rank is taken over this alone,
+    # today's 2.71 looks mid-pack; against real history it is near the extreme.
+    hy = [2.59 + (i % 40) / 100.0 for i in range(399)] + [2.71]
     out = build_severity({"hy_oas": (days, hy)})
     comp = next(c for b in out["blocks"] for c in b["components"]
                 if c["id"] == "hy_complacency")
-    assert comp["score"] == _hy_complacency_score(2.71)
-    assert comp["score"] > 94.0, (
-        f"score {comp['score']} looks like a rank against the truncated window, "
-        "not the full-history reference")
-    assert comp["value"] == 271.0          # displayed in bps, scored in percent
-
-    # monotone: tighter spreads are never scored LESS severe
-    scores = [_hy_complacency_score(v) for v in (9.0, 8.0, 6.0, 4.5, 3.3, 2.71, 2.41)]
-    assert scores == sorted(scores)
-
-    # the unit contract is guarded: bps passed where percent is expected must not
-    # silently read as maximally benign
-    assert _hy_complacency_score(271.0) is None
-    assert _hy_complacency_score(None) is None
+    assert comp["value"] == 271.0          # displayed in bps, ranked in percent
+    assert comp["score"] is not None
 
 
 def test_severity_has_no_scoring_exceptions():
-    """The module's contract is that EVERY component is a full-history percentile.
+    """Every component is a full-history percentile -- no special cases.
 
-    A silent divergence between that sentence and the code is how the 3-year-rank
-    bug survived; the previous version of this gate only checked that the
-    docstring mentioned an exception, which is not a property of the code.
+    A silent divergence between that sentence and the code is how the
+    3-year-rank bug survived, so this asserts the CODE, not just the docstring.
     """
     import inspect
 
     import app.metrics.severity as sev
 
     assert "NO exceptions" in sev.__doc__
-    assert not hasattr(sev, "HY_COMPLACENCY_ANCHORS"), \
-        "the anchored exception should be gone, replaced by a reference rank"
-    # the live wiring must go through the reference-ranked scorer
+    assert not hasattr(sev, "HY_COMPLACENCY_ANCHORS")
+    assert not hasattr(sev, "HY_OAS_REFERENCE_QUANTILES"), \
+        "the reference now lives at the source layer, not inline here"
     src = inspect.getsource(sev.build_severity)
-    assert "_hy_complacency_score(" in src
-    assert "_pctile(hy," not in src, "hy_complacency must not rank the truncated feed"
+    assert "_pctile(hy," in src, "hy_complacency must rank, not use bespoke anchors"

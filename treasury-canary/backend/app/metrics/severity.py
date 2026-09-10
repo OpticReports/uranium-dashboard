@@ -12,10 +12,10 @@ Evidence base (each component's note cites its rationale):
 
 Scoring: every component -> percentile of its full own history, oriented so
 HIGHER = MORE severe conditions (0-100). Blocks average their live components,
-with NO exceptions. hy_complacency ranks against a frozen full-history reference
-(HY_OAS_REFERENCE_QUANTILES) because FRED truncated ICE BofA history to 3 years
-in April 2026; every other component ranks against its own live series. Sources
-are Fed, BIS, BEA, Census, Treasury, Freddie Mac, FINRA and ICE.
+with NO exceptions. The ICE BofA series FRED truncated in April 2026 are
+repaired at the source layer (sources/ice_reference.py), so every component here
+ranks against its full history. Sources are Fed, BIS, BEA, Census, Treasury,
+Freddie Mac, FINRA and ICE.
     severity = 0.35*A + 0.25*B + 0.20*C + 0.20*F   (amplifiers)
                + 0.15*(D-50)                        (thin policy space worsens)
                - 0.15*(E-50)                        (dampeners soften)
@@ -103,55 +103,12 @@ def _change_series(vals: list[float], lag: int) -> list[float]:
     return [vals[i] - vals[i - lag] for i in range(lag, len(vals))]
 
 
-# HY OAS reference distribution - 101 quantile knots (p0..p100) of the FULL
-# 1996-12-31..2026-09-09 history of BAMLH0A0HYM2, n=7,754.
-#
-# WHY THIS EXISTS. FRED's note on the ICE BofA series reads: "Starting in April
-# 2026, this series will only include 3 years of observations." Ranking against
-# the live feed therefore silently became a THREE-YEAR rank in April 2026 while
-# this module's contract says "percentile of its full own history" - today's
-# 2.71 scored 87.2 (tightest 13% of 3 years) instead of 96.1 (tightest 4% since
-# 1996). Ranking against this frozen reference restores the stated contract, so
-# this module has NO scoring exceptions.
-#
-# PROVENANCE. Reconstructed from four mutually-independent public mirrors that
-# agree with each other and with FRED's authoritative 787-observation window to
-# 0.0000 on every one of the 787 overlapping dates, and whose extremes match the
-# published record low 2.41 (2007-06-01) and high 21.82 (2008-12-15) exactly.
-# Only the QUANTILES are stored, never the series: 101 knots are a summary
-# statistic rather than a redistribution of ICE's proprietary index, and they
-# reproduce the full-series percentile to within 0.96pp worst case (0.1pp at
-# today's level). Median 4.50, mean 5.16, p20 3.30, p90 8.05.
-#
-# REFRESH. Frozen at 2026-09-09. A spread beyond either end clamps at 0 or 100,
-# correct for "outside anything on record", but refresh the knots if the regime
-# moves persistently outside this range.
-HY_OAS_REFERENCE_QUANTILES: list[float] = [
-    2.41, 2.59, 2.65, 2.69, 2.72, 2.78, 2.81, 2.84, 2.88, 2.91,
-    2.94, 2.99, 3.04, 3.08, 3.11, 3.15, 3.17, 3.2, 3.24, 3.27,
-    3.3, 3.33, 3.36, 3.39, 3.42, 3.46, 3.5, 3.53, 3.57, 3.6,
-    3.64, 3.68, 3.72, 3.75, 3.78, 3.82, 3.85, 3.89, 3.93, 3.97,
-    4, 4.03, 4.07, 4.12, 4.17, 4.22, 4.27, 4.32, 4.37, 4.42,
-    4.5, 4.54, 4.6, 4.64, 4.68, 4.72, 4.76, 4.79, 4.84, 4.9,
-    4.96, 5.01, 5.07, 5.14, 5.19, 5.27, 5.35, 5.42, 5.51, 5.59,
-    5.68, 5.78, 5.87, 5.96, 6.04, 6.13, 6.21, 6.32, 6.4, 6.52,
-    6.63, 6.77, 6.9, 7.05, 7.17, 7.33, 7.52, 7.62, 7.76, 7.91,
-    8.05, 8.17, 8.29, 8.44, 8.9, 9.15, 9.69, 10.41, 12.85, 16.73,
-    21.82
-]
-
-
-def _hy_complacency_score(hy_now: float | None) -> float | None:
-    """Inverted percentile of the spread against the FULL-history reference.
-
-    Higher = tighter = more severe, matching every other component here.
-    Unit contract: PERCENT, not basis points - 271.0 is not a spread.
-    """
-    if hy_now is None:
-        return None
-    if hy_now > 50.0:            # beyond the 21.82 record: a bps/percent mix-up
-        return None
-    return _pctile(HY_OAS_REFERENCE_QUANTILES, hy_now, invert=True)
+# NOTE: hy_oas (BAMLH0A0HYM2) is an ICE BofA series whose FRED history was cut
+# to a rolling 3 years in April 2026 -- which silently made this component a
+# 3-year rank (87.2) instead of the full-history one this module promises (96.1).
+# That is now repaired at the SOURCE layer: sources/ice_reference.py splices the
+# frozen pre-truncation history back on, so `_pctile` below ranks against 1996+
+# again and this module keeps its single scoring rule with no exceptions.
 
 
 def _level_comp(cid, label, pair, unit, note, invert=False, scale=1.0) -> Component:
@@ -226,12 +183,11 @@ def build_severity(bundle: dict) -> dict:
                     "The 1990-recession channel; banks' concentrated exposure."),
         Component("hy_complacency", "HY spread complacency",
                   round(hy[-1] * 100, 0) if hy else None, "bps",
-                  _hy_complacency_score(hy[-1] if hy else None),
+                  _pctile(hy, hy[-1] if hy else None, invert=True),
                   "TIGHT spreads = maximal repricing room when the cycle turns (loaded spring). "
-                  "Scored against ABSOLUTE documented levels, not a percentile: FRED cut ICE "
-                  "BofA history to 3 years in April 2026, which turned the old rank into "
-                  "'tightest since 2023'. Anchors: 2.41% record low (Jun-2007), 21.82% record "
-                  "high (Dec-2008)."),
+                  "Ranked against the full 1996+ history: FRED cut ICE BofA to 3 years in "
+                  "April 2026 and a frozen reference restores it, so this is not "
+                  "'tightest since 2023'. Record low 2.41% (Jun-2007), high 21.82% (Dec-2008)."),
     ])
 
     # Block D — policy space (higher score = LESS space = worse)

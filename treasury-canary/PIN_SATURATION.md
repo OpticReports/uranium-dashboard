@@ -546,6 +546,49 @@ peaked at **15.60 — below 16**, so that anchor did not do what its own comment
 reports off its 3-year window. That is the clearest single statement of what the April-2026
 truncation did to this channel.
 
+## DD Q24 — RESOLVED 2026-09-10: history frozen, recalibration reverted
+
+Casey approved freezing the ICE reference history. That removes the constraint everything else was
+working around, so the interim recalibration is **reverted rather than kept**.
+
+**What shipped.** `app/data/ice_reference/` holds the dropped pre-truncation history for four
+series, with a MANIFEST carrying sha256s, every upstream URL, and the reconciliation counts.
+`app/sources/ice_reference.py` splices it onto the live feed **at the source layer**, so every
+consumer is repaired at once and none of them needs to know:
+
+| series | rows | range | vs FRED live |
+|---|---|---|---|
+| `BAMLH0A3HYC` CCC | 6,660 | 1996-12-31 .. 2022-07-06 | 787 overlaps, **0 mismatches** |
+| `BAMLC0A4CBBB` BBB | 6,967 | 1996-12-31 .. 2023-09-08 | 787 overlaps, **0 mismatches** |
+| `BAMLH0A0HYM2` HY | 6,967 | 1996-12-31 .. 2023-09-08 | 787 overlaps, **0 mismatches** |
+| `BAMLC0A0CM` IG | 6,183 | 2000-01-03 .. 2023-09-08 | 778 overlaps, **0 mismatches** |
+
+Live FRED always wins on overlap; the frozen files only cover dates FRED no longer returns and are
+never fetched at runtime.
+
+**What was reverted.** The interim absolute-level trigger leg (`CCC-and-lower OAS`) is **deleted**.
+Both percentile legs go back to `(50, 85, 95, 100)` with cap 100 — they carry RED again. The label
+returns to `(vs 1996+)`, which is true once more. `severity.py` drops its inline quantile reference
+and simply calls `_pctile` again, so that module keeps one scoring rule with no exceptions.
+
+**And the answer to the question that started all of this.** On real history, private_credit is
+not distressed at all:
+
+| leg | 3-year window (deployed today) | **full 1996+ history** |
+|---|---|---|
+| CCC spread percentile | 99.2 → 96.8 **RED** | **62.3 → 17.6 GREEN** |
+| CCC−BBB dispersion | 99.7 → 98.8 **RED** | **71.2 → 30.3 GREEN** |
+| Bank loans to NDFIs | 8.3% → 17.0 GREEN | 17.0 GREEN |
+| **channel** | **RED 98.8** | **GREEN 30.3** |
+
+CCC at 10.64% is the **62nd percentile** since 1996, not the 99th. The severity index's
+`hy_complacency` moves the other way for the same reason — 87.2 → ~96.1 — because there the
+truncation was *understating* risk.
+
+So the "99" that prompted "why is Corporate & private credit not at critical?" was an artifact of
+FRED's April-2026 truncation. The channel has been reporting RED for five months on a reading that
+is unremarkable against its own history.
+
 ## Pending DD questions
 
 | # | P | Question | What it would move |
@@ -563,9 +606,9 @@ truncation did to this channel.
 | 11 | P2 | `RESERVES_MIN_BASE_M` is a nominal-dollar constant and will drift toward the ample regime as nominal GDP grows. Reserves/GDP or reserves/bank-assets (the Fed's own ample-reserves framing) would need no gate at all. | The gate is a defensible interim — small, reversible, testable — but the reserves *metric* is the real defect: `_pct_change` on a series with a 300x regime break is the wrong statistic. |
 | ~~12~~ | ~~P1~~ | **RESOLVED 2026-09-10 — see the section above.** Zero status flips, zero episode changes; 4 of 140 months move, largest -1.10 points. | The full 1996+ series does not exist in the pipeline; the real base is a rolling ~3-year window. |
 | ~~14~~ | ~~P1~~ | **RESOLVED 2026-09-10 — see the section above.** Percentiles demoted to gauges; a level trigger carries RED. | private_credit goes RED -> YELLOW on the live board. |
-| 15 | **P1** | **Restore a full-history CCC/BBB source** (paid FRED tier, ICE direct, or another provider). FRED restricted ICE BofA to 3 years in April 2026. | This is the BETTER fix: it would make the original `(50, 85, 95, 100)` percentile calibration valid again and render the new level leg redundant. Recalibrating around a source regression is a workaround, not a repair. |
+| ~~15~~ | ~~P1~~ | **RESOLVED by DD Q24.** ~~Restore a full-history CCC/BBB source~~ (paid FRED tier, ICE direct, or another provider). FRED restricted ICE BofA to 3 years in April 2026. | This is the BETTER fix: it would make the original `(50, 85, 95, 100)` percentile calibration valid again and render the new level leg redundant. Recalibrating around a source regression is a workaround, not a repair. |
 | ~~16~~ | ~~P1~~ | **RESOLVED 2026-09-10 — see the section above.** Peaks measured; red 14.0 validated from both sides. | The calibration no longer contains an unsourced number. |
-| 24 | **P1 — CASEY'S CALL, BLOCKING** | **May we freeze redistributed ICE index history into this repo?** The full CCC/BBB/HY series exist on public GitHub mirrors and reconcile exactly with FRED, but they are third-party redistributions of ICE Data Indices content that ICE evidently asked FRED to stop serving. Freezing them is redistribution. | **This decides whether the whole private_credit recalibration gets REVERTED.** If yes: restore `(50, 85, 95, 100)` against a frozen reference, delete the level leg, and DD Q15 closes. If no: the level leg stays as the licensed-route interim and we buy a paid FRED tier or ICE direct. I have not committed any series data pending this. |
+| ~~24~~ | ~~P1~~ | **RESOLVED — approved 2026-09-10, see above.** ~~May we freeze redistributed ICE index history into this repo?~~ The full CCC/BBB/HY series exist on public GitHub mirrors and reconcile exactly with FRED, but they are third-party redistributions of ICE Data Indices content that ICE evidently asked FRED to stop serving. Freezing them is redistribution. | **This decides whether the whole private_credit recalibration gets REVERTED.** If yes: restore `(50, 85, 95, 100)` against a frozen reference, delete the level leg, and DD Q15 closes. If no: the level leg stays as the licensed-route interim and we buy a paid FRED tier or ICE direct. I have not committed any series data pending this. |
 | 18 | **P2** | Should `ewm/live.py`'s DMHI leg read UNCAPPED pin leg scores, so a display cap cannot move a deal-timing recommendation? | +1.98 points on every EWM window score today, purely from the gauge caps. |
 | 19 | **P2** | Should the channel use a CONJUNCTION (percentile >= 95 AND level >= 10) rather than a bare level threshold? | Would restore a credit-pricing trigger that can fire before full crisis, without claiming a 30-year rank. The level leg alone is coincident, not leading: CCC only reached ~18-20% in Mar-2020 *after* SPX had fallen ~30%, which the hindcast's own `(1, 6)` lag window would score a miss. |
 | 20 | **P1** | Promote DD Q5 (`pins_schema_rev`) to blocking. | Two anchor changes landed in one day and `pins_overall` is persisted daily with no version stamp, so the track record now mixes pre- and post-recalibration semantics. |

@@ -283,61 +283,14 @@ ANCHORS: dict[str, tuple] = {
     # it sat at the ceiling for long stretches (72% of the channel's 95+ months).
     # The level leg above is the trigger and is uncapped.
     "Positioning percentile (vs 2010+)": (50, 85, 95, 100, True, 79),
-    # CCC LEVEL is the channel's trigger, in absolute OAS percent.
-    #
-    # WHY THIS LEG EXISTS. FRED's own series note reads: "Starting in April 2026,
-    # this series will only include 3 years of observations." So the percentile
-    # legs below were CORRECT when written -- ICE BofA history ran to 1996 -- and
-    # silently became 3-year percentiles in April 2026 when the licence changed
-    # under them. A percentile against a rolling ~3-year window cannot say
-    # "credit is distressed", only "worse than the recent past", so the absolute
-    # level carries the RED and the percentiles are demoted to gauges.
-    #
-    # ANCHOR PROVENANCE, one line each, because three of these four were guesses
-    # in the first draft of this leg and one of those was simply wrong:
-    #   4.14 benign   VERIFIED series record low (Jun-2007, the pre-GFC peak of
-    #                 complacency). An earlier draft used 6.0 with no source.
-    #   10.0 yellow   CITED, not judgement: Fridson's distress convention, the
-    #                 market standard since ~1990 -- OAS >= +1000bps is distressed.
-    #                 Today's index prints 1064bps, i.e. the AVERAGE CCC credit is
-    #                 already trading distressed by that convention.
-    #   14.0 red      MEASURED. The full 1996+ CCC series was reconstructed from
-    #                 public mirrors and reconciles with FRED's authoritative
-    #                 787-day window on all 787 overlapping dates, 0 mismatches;
-    #                 its record high/low match the published 44.29 (2008-12-15)
-    #                 and 4.14 (2007-06-05) exactly. Measured episode peaks:
-    #                     2011-10-04  15.60      2016-02-11  20.66
-    #                     2020-03-23  19.62      2019-01-03  11.16 (the 2018 selloff)
-    #                     2022-07-05  12.26
-    #                 14.0 sits between the 2018/2022 SELLOFFS (11.2, 12.3) and the
-    #                 2011 DISTRESS episode (15.60), so it fires on all three named
-    #                 distress episodes and on neither selloff. On the real
-    #                 distribution (n=7,447) that is about p78; p50 is 9.32.
-    #                 NOTE the earlier inference in this comment was WRONG: applying
-    #                 the Dec-2008 CCC/HY ratio of 2.03x put 2011 at 18.5 (actual
-    #                 15.60, +18% error), 2016 at 18.0 (actual 20.66, -13%) and 2020
-    #                 at 22.1 (actual 19.62, +12%). That ratio ranges 1.71-2.33x and
-    #                 is LOWEST at the episodes it was applied to. Measurement
-    #                 replaced it; the conclusion held only by luck of the margin.
-    #   44.3 extreme  VERIFIED series record high 44.29 (Dec-2008).
-    #
-    # The better fix remains PIN_SATURATION.md DD Q15: restore a full-history
-    # source and the original percentile calibration becomes valid again, making
-    # this leg redundant.
-    "CCC-and-lower OAS": (4.14, 10.0, 14.0, 44.3, True, 100),
-    # NOT "vs 1996+", despite the config comment on the series id. FRED serves
-    # ICE BofA (BAML*) series under a licence that returns only a ROLLING ~3-year
-    # window -- 787 daily observations as of 2026-09, verified by reproducing the
-    # live board's 99.2 and 99.7 percentiles exactly off that window. So the 95
-    # anchor here means "highest in ~3 years", NOT "highest since 1996", which is
-    # a materially weaker claim than the channel's documentation implies. The
-    # 504-obs warmup also eats two thirds of the window, so these legs only went
-    # live around 2025-10. See PIN_SATURATION.md DD Q14 before trusting the band.
-    # Both percentile legs cap at YELLOW: against a rolling ~3-year base a 95th
-    # percentile means "worst ~39 days in 3 years", which is local deterioration,
-    # not absolute distress. Same gauge semantics as SPY/RSP, VRP and positioning.
-    "CCC spread percentile (vs available history)": (50, 85, 95, 100, True, 79),
-    "CCC−BBB dispersion percentile": (50, 85, 95, 100, True, 79),
+    # Ranked against the FULL 1996+ history again. FRED truncated ICE BofA to a
+    # rolling 3 years in April 2026, silently turning these into 3-year
+    # percentiles -- CCC read 99.2 when its true full-history rank was ~62. The
+    # frozen reference in app/data/ice_reference restores the real distribution
+    # at the SOURCE layer, so this original calibration is valid once more and
+    # the interim absolute-level trigger leg has been removed. DD Q24.
+    "CCC spread percentile (vs 1996+)": (50, 85, 95, 100, True, 100),
+    "CCC−BBB dispersion percentile": (50, 85, 95, 100, True, 100),
     "Bank loans to NDFIs, m/m ann. growth": (10, 5, 0, -10, False, 100),
     "USD/JPY, 1-month change": (0, -4, -7, -12, False, 100),             # Aug-2024 ~ -8%/1m
     "10y JGB yield, 12-month change": (0, 50, 100, 150, True, 79),       # cushion leg: caps YELLOW
@@ -579,27 +532,12 @@ def build_pin_board(bundle: dict) -> dict:
     ndfi = bundle.get("ndfi_loans", ([], []))[1]
     ndfi_now = _clean(ndfi)[-1] if _clean(ndfi) else None
     parts = [
-        PinPart("CCC-and-lower OAS", ccc_now, "%",
-                _grade(ccc_now, ANCHORS["CCC-and-lower OAS"][1],
-                       ANCHORS["CCC-and-lower OAS"][2]),
-                "The channel's TRIGGER: absolute distress pricing in the public proxy for "
-                "private-credit marks. Anchors, with their sources: 4.14% is the series "
-                "record low (Jun-2007) and 44.29% the record high (Dec-2008), both verified; "
-                "10% is Fridson's distress convention (>=+1000bps), the market standard since "
-                "~1990 — at 1064bps today the average CCC credit is already trading distressed "
-                "by it. The 14% red line is MEASURED against the reconstructed 1996+ "
-                "series: it fires on the 2011 (15.60%), 2016 (20.66%) and 2020 (19.62%) "
-                "distress peaks and on neither the 2018 (11.16%) nor 2022 (12.26%) "
-                "selloff. Today's 10.64% is about the 62nd percentile of real history, "
-                "against the 99th the 3-year window reports. The percentile legs below became 3-YEAR "
-                "percentiles when FRED restricted ICE BofA history in April 2026, so they are "
-                "relative gauges capped at YELLOW; only this leg can take the channel RED."),
-        PinPart("CCC spread percentile (vs available history)", ccc_pctl, "%ile",
+        PinPart("CCC spread percentile (vs 1996+)", ccc_pctl, "%ile",
                 _grade(ccc_pctl, 85.0, 95.0),
                 f"CCC-and-lower OAS now {ccc_now if ccc_now is not None else 'n/a'}% — "
                 "where refinancing distress prices first; private-credit marks follow with a lag. "
-                "RANKED AGAINST A ROLLING ~3-YEAR WINDOW, not 1996+: FRED's licence for ICE BofA "
-                "series serves only recent history, so this reads 'highest in ~3 years'."),
+                "Ranked against the full 1996+ distribution: FRED cut ICE BofA history to 3 years "
+                "in April 2026, and a frozen reference restores it (see PIN_SATURATION.md DD Q24)."),
         PinPart("CCC−BBB dispersion percentile", disp_pctl, "%ile",
                 _grade(disp_pctl, 85.0, 95.0),
                 f"Gap now {disp_now if disp_now is not None else 'n/a'}pp. IG priced for "

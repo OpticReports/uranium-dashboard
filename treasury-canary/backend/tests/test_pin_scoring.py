@@ -302,76 +302,71 @@ def test_rounding_never_manufactures_the_extreme_but_real_extremes_still_reach_i
     assert _pscore(4.0, 2, 4, 5.5, 8) == 50.0
 
 
-def test_ccc_percentile_label_does_not_claim_history_it_does_not_have():
-    """FRED's ICE BofA licence serves a rolling ~3-year window, not 1996+.
+def test_ccc_percentile_label_claims_only_history_it_actually_has():
+    """The label and the data must agree, in whichever direction.
 
-    The old label "(vs 1996+)" was false: the live board's 99.2 CCC percentile
-    and 99.7 dispersion percentile reproduce EXACTLY off 787 daily observations
-    (2023-09..2026-09). Today's 10.64% CCC OAS is nowhere near the 99th
-    percentile of true 1996+ history, which includes ~40% in 2008-09 and ~18%
-    in 2020. If a future data source restores the full history, change the
-    label and re-check the anchors deliberately -- do not let it drift back.
+    Between April and September 2026 this label said "(vs 1996+)" while FRED
+    served only 3 years, and the board reported 99.2 for a reading whose true
+    full-history rank was ~62. It was briefly renamed to match the truncated
+    feed; with the frozen reference in place the original claim is true again.
+    Whichever way it goes, the label and the frozen history must not diverge.
     """
-    assert "CCC spread percentile (vs available history)" in ANCHORS
-    assert not any("1996+" in label for label in ANCHORS), \
-        "no anchor may claim a history depth the data source does not serve"
+    from app.sources.ice_reference import frozen_history
+
+    assert "CCC spread percentile (vs 1996+)" in ANCHORS
+    d, _ = frozen_history("BAMLH0A3HYC")
+    assert d and d[0].year <= 1996, \
+        "the label claims 1996+; the frozen reference must actually start there"
 
 
-def test_private_credit_percentiles_cannot_carry_red_alone():
-    """The 2026-09-10 recalibration: a rolling ~3-year percentile is a gauge.
+def test_ccc_percentile_ranks_against_full_history_again():
+    """DD Q24: the interim level-trigger leg is gone; the 1996+ rank is back.
 
-    Before it, CCC at a 3-year high scored 96.8 and took the channel RED on its
-    own — i.e. "highest in ~3 years" was being reported as absolute distress.
+    FRED cut ICE BofA history to a rolling 3 years in April 2026, which made this
+    a 3-year percentile -- CCC read 99.2 when its true full-history rank was ~62.
+    The frozen reference restores the real distribution at the source layer, so
+    the original (50, 85, 95, 100) calibration is valid again.
     """
-    for label in ("CCC spread percentile (vs available history)",
-                  "CCC−BBB dispersion percentile"):
+    for label in ("CCC spread percentile (vs 1996+)", "CCC−BBB dispersion percentile"):
         b, y, r, e, hi, cap = ANCHORS[label]
-        assert cap == 79.0
-        assert _pscore(100.0, b, y, r, e, hi, cap) == 79.0   # a 3-year high: YELLOW
-        assert _status_from_score(_pscore(100.0, b, y, r, e, hi, cap)) == "YELLOW"
+        assert (b, y, r, e) == (50, 85, 95, 100)
+        assert cap == 100.0, "these legs carry RED again; they are not gauges"
+        assert _status_from_score(_pscore(96.0, b, y, r, e, hi, cap)) == "RED"
+    assert "CCC-and-lower OAS" not in ANCHORS, \
+        "the interim absolute-level trigger should be gone, not left dormant"
 
 
-def test_ccc_level_trigger_registers_the_documented_episodes():
-    """The level leg must fire on real distress and stay calm below it.
+def test_frozen_ice_reference_is_present_and_reconciles():
+    """The frozen history is load-bearing: without it every rank above is a lie."""
+    from app.sources.ice_reference import FROZEN_SERIES, frozen_history, splice
+    import datetime
 
-    Deliberately NOT asserting anything about today's print. An earlier version
-    of this gate hard-coded `10.64 -> GREEN`, which put the live price inside the
-    calibration test and made the yellow anchor unfalsifiable by construction.
-    """
-    b, y, r, e, hi, cap = ANCHORS["CCC-and-lower OAS"]
-    assert cap == 100.0                                    # this leg IS the trigger
-    assert (b, y, r, e) == (4.14, 10.0, 14.0, 44.3)
+    for sid in ("BAMLH0A3HYC", "BAMLC0A4CBBB", "BAMLH0A0HYM2", "BAMLC0A0CM"):
+        d, v = frozen_history(sid)
+        assert len(d) > 6000, f"{sid} frozen history missing or truncated ({len(d)})"
+        assert d[0].year <= 2000 and d == tuple(sorted(d))
 
-    # VERIFIED endpoints
-    assert _pscore(4.14, b, y, r, e, hi, cap) == 0.0        # record low, Jun-2007
-    assert _pscore(44.3, b, y, r, e, hi, cap) == 100.0      # record high, Dec-2008
+    # the verified extremes of the CCC series must survive the freeze
+    d, v = frozen_history("BAMLH0A3HYC")
+    assert max(v) == 44.29 and d[v.index(max(v))] == datetime.date(2008, 12, 15)
+    assert min(v) == 4.14 and d[v.index(min(v))] == datetime.date(2007, 6, 5)
 
-    # Fridson's +1000bps distress convention must be the YELLOW line, not above it
-    assert y == 10.0
-    assert _status_from_score(_pscore(10.0, b, y, r, e, hi, cap)) == "YELLOW"
+    # live values win on overlap, and a non-ICE series passes straight through
+    today = datetime.date(2026, 9, 9)
+    sd, sv = splice("BAMLH0A3HYC", [today], [10.64])
+    assert sv[-1] == 10.64 and len(sd) == len(d) + 1
+    assert splice("DGS10", [today], [4.0]) == ([today], [4.0])
+    assert "DGS10" not in FROZEN_SERIES
 
-    # RED must be reachable by real episodes -- pinned from BOTH sides, because a
-    # from-above-only gate let red drift from 14 to 16 undetected, and 16 would
-    # have missed the 2011 euro crisis (CCC est. ~15.5%) entirely.
-    assert r > y, "red must sit above the distress convention"
-    # MEASURED episode peaks from the reconstructed 1996+ CCC series, which
-    # reconciles with FRED's authoritative window on all 787 overlapping dates
-    # with zero mismatches. These replace an earlier ratio INFERENCE that was
-    # wrong by up to 18% at every episode.
-    DISTRESS = {"2011-10-04": 15.60, "2016-02-11": 20.66, "2020-03-23": 19.62}
-    SELLOFFS = {"2019-01-03": 11.16, "2022-07-05": 12.26}
-    for when, peak in DISTRESS.items():
-        assert _status_from_score(_pscore(peak, b, y, r, e, hi, cap)) == "RED", \
-            f"the {when} distress peak of {peak}% must fire RED"
-    for when, peak in SELLOFFS.items():
-        assert _status_from_score(_pscore(peak, b, y, r, e, hi, cap)) != "RED", \
-            f"the {when} selloff at {peak}% is not distress and must not fire RED"
-    assert r < min(DISTRESS.values()), "red must sit below every distress peak"
-    assert r > max(SELLOFFS.values()), "red must sit above the ordinary selloffs"
-    assert _status_from_score(_pscore(44.3, b, y, r, e, hi, cap)) == "RED"
-    # ... and must NOT fire on merely-calm spreads
-    for calm in (4.14, 6.0, 8.0):
-        assert _status_from_score(_pscore(calm, b, y, r, e, hi, cap)) == "GREEN"
+
+def test_ccc_reference_gap_is_left_as_a_hole():
+    """2022-07-07..2023-09-10 is missing upstream. Interpolating it would
+    fabricate history in the series used to rank distress."""
+    import datetime
+    from app.sources.ice_reference import frozen_history
+
+    d, _ = frozen_history("BAMLH0A3HYC")
+    assert d[-1] == datetime.date(2022, 7, 6), "CCC frozen history should stop at the gap"
 
 
 def test_every_live_channel_leg_is_also_hindcast():
