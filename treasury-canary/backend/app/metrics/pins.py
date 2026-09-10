@@ -283,7 +283,15 @@ ANCHORS: dict[str, tuple] = {
     # it sat at the ceiling for long stretches (72% of the channel's 95+ months).
     # The level leg above is the trigger and is uncapped.
     "Positioning percentile (vs 2010+)": (50, 85, 95, 100, True, 79),
-    "CCC spread percentile (vs 1996+)": (50, 85, 95, 100, True, 100),
+    # NOT "vs 1996+", despite the config comment on the series id. FRED serves
+    # ICE BofA (BAML*) series under a licence that returns only a ROLLING ~3-year
+    # window -- 787 daily observations as of 2026-09, verified by reproducing the
+    # live board's 99.2 and 99.7 percentiles exactly off that window. So the 95
+    # anchor here means "highest in ~3 years", NOT "highest since 1996", which is
+    # a materially weaker claim than the channel's documentation implies. The
+    # 504-obs warmup also eats two thirds of the window, so these legs only went
+    # live around 2025-10. See PIN_SATURATION.md DD Q14 before trusting the band.
+    "CCC spread percentile (vs available history)": (50, 85, 95, 100, True, 100),
     "CCC−BBB dispersion percentile": (50, 85, 95, 100, True, 100),
     "Bank loans to NDFIs, m/m ann. growth": (10, 5, 0, -10, False, 100),
     "USD/JPY, 1-month change": (0, -4, -7, -12, False, 100),             # Aug-2024 ~ -8%/1m
@@ -526,10 +534,12 @@ def build_pin_board(bundle: dict) -> dict:
     ndfi = bundle.get("ndfi_loans", ([], []))[1]
     ndfi_now = _clean(ndfi)[-1] if _clean(ndfi) else None
     parts = [
-        PinPart("CCC spread percentile (vs 1996+)", ccc_pctl, "%ile",
+        PinPart("CCC spread percentile (vs available history)", ccc_pctl, "%ile",
                 _grade(ccc_pctl, 85.0, 95.0),
                 f"CCC-and-lower OAS now {ccc_now if ccc_now is not None else 'n/a'}% — "
-                "where refinancing distress prices first; private-credit marks follow with a lag."),
+                "where refinancing distress prices first; private-credit marks follow with a lag. "
+                "RANKED AGAINST A ROLLING ~3-YEAR WINDOW, not 1996+: FRED's licence for ICE BofA "
+                "series serves only recent history, so this reads 'highest in ~3 years'."),
         PinPart("CCC−BBB dispersion percentile", disp_pctl, "%ile",
                 _grade(disp_pctl, 85.0, 95.0),
                 f"Gap now {disp_now if disp_now is not None else 'n/a'}pp. IG priced for "

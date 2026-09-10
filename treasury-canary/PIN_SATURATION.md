@@ -323,6 +323,49 @@ historical extreme", not "newest record".
 approached asymptotically and never reached (at n = 7500 the max score is ~99.97). That is
 intended. The same holds at the bottom for the VRP leg, whose extreme is 0.
 
+## DD Q12 — resolved 2026-09-10, and it found something bigger
+
+**The question could not be answered as posed, because the data it assumed does not exist in
+the pipeline.** FRED serves ICE BofA (`BAML*`) series under a licence that returns only a
+**rolling ~3-year window** — 787 daily observations as of 2026-09 — for `BAMLH0A3HYC` (CCC)
+and `BAMLC0A4CBBB` (BBB). Verified three ways: all three `BAML*` series I tried return exactly
+787 observations while `DGS10` returns 16,156 (1962+), `VIXCLS` 9,270 and `USEPUINDXD` 15,227
+from the same endpoint; and the live board's percentiles reproduce **exactly** off that
+787-point window — CCC 99.2 and dispersion 99.7, against raw values of 10.64% and 9.65pp that
+the deployed board reports.
+
+**So the label was false.** `"CCC spread percentile (vs 1996+)"` was ranking against ~3 years.
+Today's 10.64% CCC OAS is nowhere near the 99th percentile of real 1996+ history, which
+includes ~40% in 2008-09, ~30% in 2002 and ~18% in 2020 — it is the 99th percentile of
+2023-2026. The 95 anchor therefore means **"highest in ~3 years"**, not "highest since 1996",
+which is a materially weaker claim than the channel's documentation implies. Renamed to
+`(vs available history)`, with the constraint documented at the anchor, in the part detail
+string, in `HISTORY_NOTES` and in `config.py`, and a gate test that refuses any anchor label
+claiming a history depth the source does not serve.
+
+This closes the loop on the question that started this whole thread — "why is Corporate &
+private credit not at critical? its scored at 99". The 99 is a three-year percentile.
+
+**The measurement itself, on the real comparison base** (private_credit, 140 months,
+2015-02..2026-09):
+
+| | before | after |
+|---|---|---|
+| RED months | 19 | **19** |
+| status flips | — | **none** |
+| at-ceiling months | 4 | **4** (all NDFI level extremes) |
+| months whose score moved at all | — | **4 of 140** |
+| mean / largest score move | — | **-0.43 / -1.10 points** |
+
+All four moved months (2025-10, 2025-11, 2025-12, 2026-02) are far from the RED line. The
+504-obs warmup consumes two thirds of the 787-point window, so the CCC legs only go live
+around 2025-10 — every private_credit RED month before then is the NDFI level leg alone,
+which independently confirms the counter-agent's finding that the four ceiling months are
+NDFI extremes.
+
+**Conclusion: the mid-rank estimator is safe to ship.** Zero status flips and zero episode
+changes on the only channel where a flip was possible.
+
 **Measured tie impact, with its limits stated.** On the CCC series available without a FRED
 key (2023-09..2026-09, n=787, 87% of observations in a tie group, largest group 10) the
 mid-rank form shifts **80.6% of scored points**, mean -0.20pp, most negative -0.70pp, and
@@ -366,7 +409,8 @@ output rather than the property they were named for:
 | ~~9~~ | ~~P1~~ | **DONE 2026-09-10 — see the section above.** ~~Apply the Hazen plotting position~~ `(r-0.5)/n` to `_percentile` and `_expanding_percentile`. On the real COT series it takes exact-100 weeks 85 -> **0** and at-ceiling months 40 -> **0**, while RED months barely move (94 -> 93). | This is the actual fix for the ceiling artifact — the cap only masks it, and the level leg still supplies 19 at-ceiling months. It generalises to CCC, CCC−BBB, EPU, SPY/RSP and VRP, and is a **better answer to Q1 than the ceiling marker** in the primary spec above. Do as a separate change. |
 | 10 | P2 | `"Positioning percentile (vs 2010+)"` actually ranks against the full CFTC series from **2006-06-13** — 186 of 1056 observations (17.6%) predate 2010. Relabel or actually slice. | The label is factually wrong in user-facing text. Pre-existing, but this change puts that gauge under a spotlight. |
 | 11 | P2 | `RESERVES_MIN_BASE_M` is a nominal-dollar constant and will drift toward the ample regime as nominal GDP grows. Reserves/GDP or reserves/bank-assets (the Fed's own ample-reserves framing) would need no gate at all. | The gate is a defensible interim — small, reversible, testable — but the reserves *metric* is the real defect: `_pct_change` on a series with a 300x regime break is the wrong statistic. |
-| 12 | **P1** | Measure private_credit RED-months / episodes / ceiling-months before-and-after the mid-rank estimator on the FULL 1996+ CCC and CCC−BBB series, and freeze the numbers. | The keyless FRED endpoint truncates to 2023+, where the shift causes zero status flips — but a 1.5pp shift at the 95 anchor is 6 score points, enough to flip RED and redraw episode boundaries on the full history. Needs the deployed service or a keyed fetch. |
+| ~~12~~ | ~~P1~~ | **RESOLVED 2026-09-10 — see the section above.** Zero status flips, zero episode changes; 4 of 140 months move, largest -1.10 points. | The full 1996+ series does not exist in the pipeline; the real base is a rolling ~3-year window. |
+| 14 | **P1** | The CCC/dispersion anchors `(50, 85, 95, 100)` were calibrated as if ranking against 1996+. Against a rolling ~3-year window, does "95th percentile = RED" still mean anything? | **This is now the live board's private_credit reading.** CCC scores 96.8 and dispersion 98.8 today off a 3-year rank. Either recalibrate for the real window, source full ICE history another way, or replace the percentile legs with a level-anchored measure. |
 | 13 | P3 | `base.py::percentile_rank` and severity `_pctile` still use `count(v <= x)/n` and still return exactly 100.0 (`tests/test_severity.py:14` asserts it). Converge them or leave them scoped as separate instruments. | Consistency of the percentile treatment across the dashboard. |
 ## Counter-agent log (mandatory pass, CLAUDE.md)
 

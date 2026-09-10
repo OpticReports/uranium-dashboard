@@ -300,3 +300,18 @@ def test_rounding_never_manufactures_the_extreme_but_real_extremes_still_reach_i
     # the other anchors are untouched
     assert _pscore(5.5, 2, 4, 5.5, 8) == 80.0
     assert _pscore(4.0, 2, 4, 5.5, 8) == 50.0
+
+
+def test_ccc_percentile_label_does_not_claim_history_it_does_not_have():
+    """FRED's ICE BofA licence serves a rolling ~3-year window, not 1996+.
+
+    The old label "(vs 1996+)" was false: the live board's 99.2 CCC percentile
+    and 99.7 dispersion percentile reproduce EXACTLY off 787 daily observations
+    (2023-09..2026-09). Today's 10.64% CCC OAS is nowhere near the 99th
+    percentile of true 1996+ history, which includes ~40% in 2008-09 and ~18%
+    in 2020. If a future data source restores the full history, change the
+    label and re-check the anchors deliberately -- do not let it drift back.
+    """
+    assert "CCC spread percentile (vs available history)" in ANCHORS
+    assert not any("1996+" in label for label in ANCHORS), \
+        "no anchor may claim a history depth the data source does not serve"

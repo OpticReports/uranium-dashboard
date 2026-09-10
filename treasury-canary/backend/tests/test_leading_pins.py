@@ -149,7 +149,7 @@ def test_pin_board_private_credit_bifurcation():
     ch = by["private_credit"]
     assert ch["status"] == "RED"
     parts = {p["label"]: p for p in ch["parts"]}
-    assert parts["CCC spread percentile (vs 1996+)"]["status"] == "RED"
+    assert parts["CCC spread percentile (vs available history)"]["status"] == "RED"
     assert parts["CCC−BBB dispersion percentile"]["status"] == "RED"
     assert parts["Bank loans to NDFIs, m/m ann. growth"]["status"] == "RED"
     # attributes ride along for the frontend badges
