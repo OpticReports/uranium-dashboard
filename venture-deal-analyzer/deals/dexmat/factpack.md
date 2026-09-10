@@ -507,9 +507,14 @@ ranked format. Clock context: **round closes 2026-09-28.**
    2026-08-09 as "offtake counterparty + binding volumes"). Rev-3
    movement: described (anonymous senior eng leader, $10bn+ wire &
    cable mfr, sponsor interview 2026-08-28) but zero written
-   commitment; "as much as possible" is enthusiasm, not an order. What
-   it moves: the entire phase-1 revenue case and the traction score;
-   named + LOI would be the single biggest score-mover on this deal.
+   commitment; "as much as possible" is enthusiasm, not an order.
+   **UPDATE 2026-09-08 (S2 open): the sponsor disclosed the identity
+   to Casey PRIVATELY — status answered-to-LP-privately, not in this
+   record.** Remaining: whether the identity/category enters the
+   record; independent role confirmation; anything WRITTEN behind the
+   enthusiasm. What it moves: the entire phase-1 revenue case and the
+   traction score; named + LOI would be the single biggest score-mover
+   on this deal.
 2. ◐ **Spanish-lab additive: license terms, exclusivity, cost, and any
    test data on DexMat's own wet-spun fiber** (asked 2026-08-09 as
    additive protocol/data; NEW sub-ask on the license). Rev-3 movement:
