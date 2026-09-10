@@ -604,7 +604,8 @@ def kill(x_exec_token: str | None = Header(default=None),
 @app.api_route("/resume", methods=["GET", "POST"])
 def resume(x_exec_token: str | None = Header(default=None),
            token: str | None = Query(default=None),
-           adopt_venue: int = Query(default=0)):
+           adopt_venue: int = Query(default=0),
+           reanchor: int = Query(default=0)):
     """adopt_venue=1 resets the LEDGER to what the venue actually holds
     before clearing the halt.
 
@@ -621,7 +622,13 @@ def resume(x_exec_token: str | None = Header(default=None),
     # echoing the query parameter made a REFUSED adopt on a blind venue
     # indistinguishable from a successful one, hiding that the stops the
     # operator believes were cancelled are still armed.
-    ok = EXEC.resume(adopt_venue=bool(adopt_venue))
-    return {"ok": True, "halted": EXEC.state.halted,
+    ok = EXEC.resume(adopt_venue=bool(adopt_venue), reanchor=bool(reanchor))
+    # `halted` after the call is the honest answer to "did this work": a
+    # DAILY_LOSS/DRAWDOWN resume is REFUSED while the breach is still live,
+    # and the flag stays set. reanchor=1 moves the marks to current equity
+    # and forgives the drawdown - see _resume_locked.
+    return {"ok": bool(ok) or EXEC.state.halted is None,
+            "halted": EXEC.state.halted,
             "adopt_requested": bool(adopt_venue),
-            "adopted": bool(adopt_venue) and bool(ok)}
+            "adopted": bool(adopt_venue) and bool(ok),
+            "reanchor_requested": bool(reanchor)}

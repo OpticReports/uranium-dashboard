@@ -459,7 +459,7 @@ class Executor:
             self._event("RED", "product_untradable",
                         f"configured product is {why} on venue "
                         f"{flags.get('venue')} - every order will be "
-                        f"rejected; fix CB_PRODUCT_ID before trusting any "
+                        f"rejected; fix {self._product_var()} before trusting any "
                         f"'ready' signal")
 
     def _check_agent_expiry(self) -> None:
@@ -657,7 +657,7 @@ class Executor:
                 self._event("RED", "position_drift",
                             f"boot: venue holds {net:.5f} BTC but the ledger "
                             f"is FLAT - NOT auto-fixed; new entries BLOCKED "
-                            f"until this reconciles. Verify on Coinbase.")
+                            f"until this reconciles. Verify on {self._venue_label()}.")
             return
         if abs(net) < 1e-9:
             for name, l in self.state.legs.items():
@@ -682,7 +682,7 @@ class Executor:
         elif abs(net - ledger_net) > 1e-9:
             self._event("RED", "position_drift",
                         f"boot: venue={net:.5f} ledger={ledger_net:.5f} BTC "
-                        f"- NOT auto-fixed (ambiguous); verify on Coinbase")
+                        f"- NOT auto-fixed (ambiguous); verify on {self._venue_label()}")
 
     def attest_coverage(self, note: str = "",
                         acknowledge_unwitnessed: bool = False) -> dict:
@@ -1010,9 +1010,9 @@ class Executor:
                            "overwrote it - reset DRY_RUN in the Render "
                            "dashboard (it is sync:false now, so this should "
                            "not recur)",
-            "halt_error": "closing positions during the halt FAILED — open "
-                          "Coinbase NOW, check positions, flatten manually "
-                          "if any remain",
+            "halt_error": f"closing positions during the halt FAILED — "
+                          f"open {self._venue_label()} NOW, check positions, "
+                          f"flatten manually if any remain",
             "venue_changed": "the state file was written by a DIFFERENT "
                              "venue. Its ledger positions and order refs "
                              "mean nothing here. Flatten and cancel on the "
@@ -1020,23 +1020,25 @@ class Executor:
                              "this one from a clean state file (delete "
                              "executor_state.json) - do NOT /resume into a "
                              "ledger that describes another exchange",
-            "product_untradable": "CB_PRODUCT_ID points at a product this "
-                                  "key cannot trade (view_only/disabled) - "
-                                  "every order will be rejected. Check "
-                                  "/status venue_products for the entry "
-                                  "marked (configured) and fix the Render "
-                                  "env var",
-            "stop_ref_unverified": "a /resume found a stop the venue would "
-                                   "not confirm AND could not read the "
-                                   "position - open Coinbase, confirm the "
-                                   "stop is really resting against the "
-                                   "position, and place one manually if it "
-                                   "is not; the executor deliberately did "
-                                   "NOT re-place it blind",
-            "entry_unconfirmed": "an entry order could not be verified - "
-                                 "check Coinbase OPEN ORDERS for the cloid "
-                                 "named above if this repeats; the ref is "
-                                 "kept so the executor will not re-send",
+            "product_untradable": f"{self._product_var()} points at a "
+                                  f"product this key cannot trade "
+                                  f"(view_only/disabled/delisted) - every "
+                                  f"order will be rejected. Check /status "
+                                  f"venue_products for the entry marked "
+                                  f"(configured) and fix the Render env var",
+            "stop_ref_unverified": f"a /resume found a stop the venue "
+                                   f"would not confirm AND could not read "
+                                   f"the position - open "
+                                   f"{self._venue_label()}, confirm the stop "
+                                   f"is really resting against the position, "
+                                   f"and place one manually if it is not; the "
+                                   f"executor deliberately did NOT re-place "
+                                   f"it blind",
+            "entry_unconfirmed": f"an entry order could not be verified - "
+                                 f"check {self._venue_label()} OPEN ORDERS "
+                                 f"for the cloid named above if this repeats; "
+                                 f"the ref is kept so the executor will not "
+                                 f"re-send",
             "config_change": "sizing/risk config changed - if this was you "
                              "(ramp step, base change), ignore; if NOT, a "
                              "sync or fat-finger altered live risk limits - "
@@ -1239,6 +1241,25 @@ class Executor:
                         f"{self.state.high_water:.0f}")
         self._last_flat_equity = equity
 
+    def _breach_for(self, equity: float) -> tuple[str, str] | None:
+        """Is a loss threshold breached RIGHT NOW? Extracted so /resume asks
+        the same question _check_halts does (2026-09-09). Duplicating this
+        arithmetic in two places is how a resume that "worked" and a halt
+        that immediately re-fired could ever disagree."""
+        st = self.state
+        base_d, base_h = self._base(st.day_start_equity), self._base(st.high_water)
+        if st.day_start_equity > 0 and \
+                equity < st.day_start_equity - self.cfg.daily_loss_halt_pct * base_d:
+            return ("DAILY_LOSS",
+                    f"equity {equity:.0f} < day start {st.day_start_equity:.0f}"
+                    f" - {self.cfg.daily_loss_halt_pct:.0%} of base {base_d:.0f}")
+        if st.high_water > 0 and \
+                equity < st.high_water - self.cfg.dd_halt_pct * base_h:
+            return ("DRAWDOWN",
+                    f"equity {equity:.0f} < HWM {st.high_water:.0f}"
+                    f" - {self.cfg.dd_halt_pct:.0%} of base {base_h:.0f}")
+        return None
+
     def _check_halts(self, equity: float) -> None:
         """Loss thresholds are percentages OF THE SIZING BASE: with a fixed
         base and a small account, a -6%-of-base day is the same dollar event
@@ -1258,17 +1279,40 @@ class Executor:
                         f"DD halt {self.cfg.dd_halt_pct:.0%} of base "
                         f"{base_h:.0f} exceeds 80% of account {equity:.0f} - "
                         "lower DD_HALT_PCT or raise the deposit")
-        breach = None
-        if st.day_start_equity > 0 and \
-                equity < st.day_start_equity - self.cfg.daily_loss_halt_pct * base_d:
-            breach = ("DAILY_LOSS",
-                      f"equity {equity:.0f} < day start {st.day_start_equity:.0f}"
-                      f" - {self.cfg.daily_loss_halt_pct:.0%} of base {base_d:.0f}")
-        elif st.high_water > 0 and \
-                equity < st.high_water - self.cfg.dd_halt_pct * base_h:
-            breach = ("DRAWDOWN",
-                      f"equity {equity:.0f} < HWM {st.high_water:.0f}"
-                      f" - {self.cfg.dd_halt_pct:.0%} of base {base_h:.0f}")
+        # SECOND COHERENCE GUARD: the halt line against the EXPOSURE, where
+        # the guard above compares it against the ACCOUNT (2026-09-09).
+        # SIZING_BASE_USD and MAX_NOTIONAL_USD are independent env vars set
+        # in different places, so they drift apart silently - raising the
+        # base 1000 -> 25000 without touching the cap 2000 left the drawdown
+        # line at 8,750 against at most 2,000 of notional, while /pulse,
+        # /status and every test stayed green. render.yaml's own comment
+        # warns that changing the base "WOULD HAVE DISARMED A HALT"; nothing
+        # enforced it until now.
+        # The test is deliberately the CONSERVATIVE one: a threshold larger
+        # than the whole cap means even a TOTAL loss of the largest position
+        # the caps permit would not trip the breaker. It does not claim the
+        # halt can never fire - drawdown accrues across trades, so enough
+        # consecutive losers still reach it - only that no single position
+        # can, which is a statement that needs no assumption about stop
+        # distance, trade frequency or win rate. A tighter ratio was tried
+        # first and it fired on a config the existing coherence test calls
+        # sound, which is the right way round for a guard to fail.
+        cap_notional = min(self.cfg.max_notional_usd,
+                           self.cfg.max_account_lev * base_h)
+        if cap_notional > 0:
+            for label, pct in (("DRAWDOWN", self.cfg.dd_halt_pct),
+                               ("DAILY_LOSS", self.cfg.daily_loss_halt_pct)):
+                need = pct * base_h
+                if need > cap_notional:
+                    self._event("WARN", "halt_config",
+                                f"{label} halt needs a {need:.0f} loss but "
+                                f"the caps allow at most {cap_notional:.0f} "
+                                f"of notional - a TOTAL loss of the largest "
+                                f"position permitted still would not fire it "
+                                f"({need / cap_notional:.1f}x). Raise "
+                                f"MAX_NOTIONAL_USD or lower SIZING_BASE_USD; "
+                                f"they have to move together")
+        breach = self._breach_for(equity)
         if breach is None:
             self._breach_count = 0
             return
@@ -1317,7 +1361,7 @@ class Executor:
                         f"halt requested but the venue position is "
                         f"UNREADABLE ({exc}) - no orders were cancelled, "
                         f"the protective stop is still resting. Flatten "
-                        f"and cancel MANUALLY on Coinbase, then /resume.")
+                        f"and cancel MANUALLY on {self._venue_label()}, then /resume.")
             self._save_state()
             return
         try:
@@ -1340,7 +1384,23 @@ class Executor:
                     if attempt == 2:
                         raise
                     time.sleep(2)
-            if abs(net) > 1e-6:
+            if abs(net) > 1e-6 and self._below_venue_floor(net):
+                # A residue under the venue's minimum order VALUE cannot be
+                # flattened by any order we send - not this one, not a stop,
+                # not a later close (Coinbase-era audit, 2026-09-09). The old
+                # 1e-6 threshold is a SIZE test from the CDE era, where sub-
+                # contract size and unsendable size were the same thing.
+                # Attempting it here raised inside the try below and reported
+                # halt_error, which reads as "the flatten failed, go look" -
+                # true, but it hid WHY and offered no remedy. cancel_all has
+                # already stripped this residue's stop, so say plainly that it
+                # is stranded and must be closed by hand on the venue UI.
+                self._event("RED", "halt_residue_unsendable",
+                            f"halt left {net} BTC on the venue - under the "
+                            f"minimum order value, so NO order can close it. "
+                            f"Its stop is already cancelled. Close it by hand "
+                            f"on the venue UI; trading stays halted")
+            elif abs(net) > 1e-6:
                 # THE flatten. reduce_only or it is the naked-order bug:
                 # if the position closed a moment ago (the stop filled, an
                 # operator flattened by hand) this opens an equal and
@@ -1393,12 +1453,14 @@ class Executor:
             self._event("RED", "halt_error", str(exc))
         self._save_state()
 
-    def resume(self, adopt_venue: bool = False) -> bool:
+    def resume(self, adopt_venue: bool = False,
+               reanchor: bool = False) -> bool:
         """Returns whether an adopt, if requested, actually happened."""
         with self._venue_lock:
-            return self._resume_locked(adopt_venue)
+            return self._resume_locked(adopt_venue, reanchor)
 
-    def _resume_locked(self, adopt_venue: bool = False) -> bool:
+    def _resume_locked(self, adopt_venue: bool = False,
+                       reanchor: bool = False) -> bool:
         # The outcome is plumbed back to /resume (re-gate 2026-08-27 N3):
         # the endpoint echoed the QUERY PARAMETER, so a refused adopt on a
         # blind venue returned a body byte-identical to a successful one -
@@ -1417,6 +1479,52 @@ class Executor:
                         "then start from a clean state file.")
             self._save_state()
             return False
+        # A LOSS HALT WHOSE BREACH IS STILL LIVE CANNOT BE RESUMED AWAY
+        # (Casey's call, 2026-09-09). /resume cleared the flag but left
+        # high_water and day_start_equity untouched, so _check_halts saw the
+        # same breach on the very next poll and re-halted - and because
+        # _breach_count is never reset, it re-halted IMMEDIATELY rather than
+        # after the usual debounce. That is a loop, not a resume, and the
+        # only escape was a redeploy.
+        # Refusing is the honest default: the money really is below the line,
+        # and nothing about pressing resume changes that. Forgiving it is a
+        # separate, deliberate act - ?reanchor=1 - which moves the marks to
+        # current equity so the NEXT 35% is measured from here. Say it out
+        # loud rather than letting a plain resume do it silently. Same shape
+        # as ?adopt_venue=1: the dangerous option needs its own flag.
+        if self.state.halted in ("DAILY_LOSS", "DRAWDOWN"):
+            try:
+                eq = self.venue.equity()
+            except Exception as exc:  # noqa: BLE001
+                self._event("RED", "resume_refused",
+                            f"cannot verify the {self.state.halted} breach - "
+                            f"venue equity unreadable ({exc}). Refusing: a "
+                            f"resume on an unreadable account is a guess")
+                self._save_state()
+                return False
+            live = self._breach_for(eq)
+            if live is not None and not reanchor:
+                self._event("RED", "resume_refused",
+                            f"{self.state.halted} is still breached: "
+                            f"{live[1]}. A plain /resume would clear the flag "
+                            f"and re-halt on the next poll. Either wait for "
+                            f"equity to recover above the line, or call "
+                            f"/resume?reanchor=1 to move the marks to current "
+                            f"equity - which FORGIVES this drawdown, so the "
+                            f"next one is measured from here")
+                self._save_state()
+                return False
+            if reanchor:
+                old_hw, old_ds = self.state.high_water, self.state.day_start_equity
+                self.state.high_water = eq
+                self.state.day_start_equity = eq
+                self._breach_count = 0
+                self._event("RED", "resume_reanchored",
+                            f"marks moved to equity {eq:.0f} (was HWM "
+                            f"{old_hw:.0f} / day start {old_ds:.0f}) - this "
+                            f"FORGIVES the {self.state.halted} drawdown; the "
+                            f"next breach is measured from here")
+        self._breach_count = 0
         self._cov("resume")
         self._event("INFO", "resume", f"cleared {self.state.halted}")
         self.state.halted = None
@@ -1530,7 +1638,8 @@ class Executor:
                         f"operator adopted: venue holds {net} but the ledger "
                         f"claimed {before} (sum {want}) - the ledger cannot "
                         f"be attributed to legs, so the HALT STANDS and no "
-                        f"stop was cancelled. Flatten manually on Coinbase, "
+                        f"stop was cancelled. Flatten manually on "
+                        f"{self._venue_label()}, "
                         f"then run adopt again to go clean and resume.")
             self._boot_mismatch = True
             self._save_state()
@@ -1550,11 +1659,16 @@ class Executor:
 
         CORROBORATED on legs the ledger believes HOLD (fusion gate
         2026-08-26): clearing the ref hands _maintain_stop a placement path,
-        and place_stop is not reduce-only, so on a venue that is actually
-        flat - precisely the state a failed halt leaves behind - that arms a
-        full-size NAKED stop: the incident's own phenotype, re-created by
-        its own repair. A held leg's ref is cleared only once the venue
-        BACKS the ledger.
+        and a placement the ledger cannot vouch for is protection in name
+        only. On Coinbase, where this rule was written, place_stop was not
+        reduce-only and the failure was loud: a full-size NAKED stop against
+        a flat venue - the incident's own phenotype, re-created by its own
+        repair. Hyperliquid's stops ARE reduce-only (hl.py place_stop), which
+        makes the same mistake QUIETER, not safer: the venue cancels the
+        mis-sided order and the leg is simply unprotected, with the ledger
+        still advertising a stop. The refusal is right on both venues; only
+        the shape of the damage differs (Coinbase-era audit, 2026-09-09).
+        A held leg's ref is cleared only once the venue BACKS the ledger.
 
         ORDER MATTERS (re-gate 2026-08-26 B2). The cancel-on-UNKNOWN must
         come AFTER the decision to clear, never before it. Cancelling first
@@ -1583,7 +1697,8 @@ class Executor:
                                 f"(status={stat}) and the venue position is "
                                 f"UNREADABLE - left strictly alone (neither "
                                 f"cancelled nor cleared); the position may "
-                                f"be UNPROTECTED, verify on Coinbase")
+                                f"be UNPROTECTED, verify on "
+                                f"{self._venue_label()}")
                     continue
                 if verdict == "diverged":
                     self._event("RED", "ledger_divergence",
@@ -1790,6 +1905,112 @@ class Executor:
                 # position (counter-agent find 2026-08-11). Wait it out.
                 return
             led.stopped_entry_ts = None
+            # The engine has FLAGGED this position to exit at its next bar
+            # open. Act NOW instead of waiting for it to report flat, which
+            # is a full 4h bar later. Measured on the live record, every exit
+            # landed exactly one bar late while entries landed in 37s:
+            #   engine 08-31 16:00 -> venue 20:00
+            #   engine 09-03 16:00 -> venue 20:01
+            #   engine 09-09 08:00 -> venue 12:00
+            # because nothing here read exit_flag - the field reached us on
+            # every poll and appeared only in test fixtures (2026-09-09).
+            #
+            # Safe because the flag is TERMINAL: core.py:336 sets it once,
+            # resolve_open_exit closes unconditionally on the next bar, and
+            # live.py:325 makes the intrabar stop SKIP a flagged position.
+            # There is no path where it is set and the position survives.
+            # Closing here also lands us at the engine's own fill reference
+            # (that next bar's open), so it tightens tracking, not loosens.
+            #
+            # Never gated on entries_ok or on the engine book being halted:
+            # an exit must always be able to run. That is why this sits
+            # above every entry path.
+            if pos.get("exit_flag"):
+                # MAINTAIN THE STOP BEFORE ATTEMPTING THE CLOSE. Two jobs,
+                # and only the second one still needs this call:
+                #  - absorbing a stop that FIRED on this same poll. Round 1
+                #    put that here; round 2 showed the same trap lives on
+                #    branches 2 and 3, which have no `pos` and so can never
+                #    call _maintain_stop at all, so the absorption moved down
+                #    into _close_leg where every caller gets it.
+                #  - re-placing a stop the venue VANISHED (a CANCELLED
+                #    trigger) while a close is being refused poll after poll.
+                #    Nothing else re-arms it inside that window, and it is
+                #    exactly the window where the leg is still held. That is
+                #    what test_gate_exit_flag_refused_close_keeps_protection_
+                #    through_the_window pins, and it fails without this line.
+                # Cost: if the trail has ratcheted >5bp this replaces a stop
+                # that _close_leg then cancels - one wasted order pair. Only
+                # donchian ratchets and donchian never sets exit_flag (core.py
+                # _process_donchian exits via the trail alone), so on the only
+                # reachable path the trigger is fixed and the churn guard
+                # makes this a status read.
+                if led.qty != 0.0:
+                    self._maintain_stop(leg, led, pos)
+                if self.state.halted:
+                    # _maintain_stop CAN HALT - LEDGER_DIVERGENCE at its
+                    # placement choke point, or STOP_UNPLACEABLE past the
+                    # replace cap - and moving it to the head of this branch
+                    # put a halting call AHEAD of _cancel_entry and
+                    # _close_leg for the first time (round 2, 2026-09-09).
+                    # Usually harmless, because _halt_locked zeroes qty and
+                    # both refs so the calls below no-op. NOT harmless on the
+                    # halt_error path: when the flatten FAILS, _halt_locked
+                    # deliberately KEEPS the ledger - "it is the only record
+                    # of what we believe we hold" - and its ACTION page tells
+                    # the operator to go and flatten by hand. Running on would
+                    # clear entry_cloid/entry_side/entry_qty underneath that
+                    # page, destroying the record it just told them to use.
+                    # Same doctrine as branch 2's guard: a halt stops the leg
+                    # that raised it, not merely the next one.
+                    return
+                # Same order branch 3 uses: clear a stale entry ref first, so
+                # a resting or partly-filled entry cannot fill us back in
+                # after we have closed.
+                if led.entry_cloid:
+                    self._cancel_entry(led, filled_action="flatten"
+                                       if led.qty == 0.0 else "ignore")
+                if led.qty != 0.0:
+                    self._close_leg(leg, led,
+                                    f"engine_exit_flag {pos['exit_flag']}")
+                    if led.qty == 0.0:
+                        # Re-entry guard, reusing the stop path's mechanism:
+                        # the engine goes on reporting this position (flag and
+                        # all) until its next bar, so without it the very next
+                        # poll would see qty==0 against a live engine position
+                        # and _enter_from_fill would chase straight back in at
+                        # market - a close/reopen loop every 20s for a whole
+                        # bar.
+                        # The condition is "are we FLAT", not "did we send an
+                        # order": _close_leg zeroes led.qty on three different
+                        # outcomes - the close was sent, the stop had already
+                        # filled, or the residue was sub-contract dust cleared
+                        # without an order - and all three mean we hold
+                        # nothing, so all three must block re-entry. What it
+                        # deliberately excludes is a close that was REFUSED or
+                        # raised: qty survives, the guard stays clear, and the
+                        # next poll retries rather than latching a half-exit.
+                        led.stopped_entry_ts = pos.get("entry_ts")
+                self._save_state()
+                # A REFUSED close needs no re-arm here, and this is load
+                # bearing rather than an omission (panel BLOCKING 1,
+                # 2026-09-09). _close_leg can decline to close - unreadable
+                # venue, or a net that cannot back this leg - and leave
+                # led.qty intact, which is why the first cut of this branch
+                # left the leg NAKED for the whole flag window: back then
+                # _close_leg cancelled the stop before either refusal check
+                # ran, and this early return then skipped stop maintenance on
+                # every later poll. That is now fixed AT SOURCE (_close_leg
+                # drops the stop only once it is committed to sending the
+                # close), and the _maintain_stop call at the head of this
+                # branch has already run this poll on exactly the qty that
+                # survives a refusal - so a second call here is a no-op.
+                # A tail re-arm was written first and then removed: mutation
+                # testing showed deleting it broke nothing, because the head
+                # call reaches every case (if led.qty is 0 at entry we never
+                # attempt the close, and if it is not, the head call ran).
+                # Untestable defensive code is a liability, not depth.
+                return
             if led.qty == 0.0:
                 self._enter_from_fill(leg, led, pos, blend, equity,
                                       entries_ok)
@@ -1817,11 +2038,59 @@ class Executor:
             had_qty = led.qty != 0.0
             if had_qty:
                 self._close_leg(leg, led, "engine_flat")
-            if not entries_ok:
+            if self.state.halted:
+                # A HALT RAISED INSIDE _close_leg MUST STOP THIS LEG DEAD
+                # (counter-agent round 2, 2026-09-09). _close_leg can halt on
+                # LEDGER_DIVERGENCE, and nothing here re-read our own halt:
+                # `entries_ok` is gated on led.engine_halted, the ENGINE
+                # book's flag, never on self.state.halted. So the sequence ran
+                # ledger_divergence -> halt -> cancel_all -> MARKET SELL, i.e.
+                # the executor paged that the book was halted, stripped every
+                # order, and then opened a fresh naked position - which the
+                # step loop's own `if self.state.halted: break` then skipped
+                # on every later poll, so it was never stopped, never closed
+                # and never seen again. Reproduced: 0.035 BTC short opened
+                # AFTER the halt page.
+                # This is the 2026-08-24 finding (see the loop comment above)
+                # reached through the SAME leg instead of the next one: that
+                # guard was placed BETWEEN legs, and a halt raised mid-leg
+                # walks straight past it.
                 return
+            if had_qty and led.qty != 0.0:
+                # The close was REFUSED and we still hold. Do not build a
+                # second position on top of the first: close_refused_unbacked
+                # says in its own words that it is "leaving the ledger for the
+                # drift check and boot reconcile to resolve", and entering
+                # again is the opposite of resolving it. It would also carry
+                # this leg's retained stop - retained deliberately, so a
+                # refusal cannot strip protection - across a leg REBUILD,
+                # leaving a stale wrong-sided trigger of the old size behind
+                # (counter-agent round 2, 2026-09-09). Hyperliquid's stops are
+                # reduce-only so such a trigger cancels rather than opening
+                # size, but it still reads as our protection while protecting
+                # nothing. Retry next poll.
+                return
+            # CLEANUP RUNS BEFORE THE FEED GATE, NOT AFTER IT (counter-agent
+            # round 2, 2026-09-09). `if not entries_ok: return` used to sit
+            # ABOVE this, so a stale or degraded feed skipped the cleanup
+            # entirely - and for the pullback leg that is exactly the case
+            # that needs it: a post-only maker entry can fill at the venue
+            # without ever being booked into led.qty (branch 2 records only
+            # entry_cloid/entry_qty), so had_qty is False, the action is
+            # "flatten", and this is the ONLY code that unwinds it. Skipping
+            # it left a real venue position with no ledger row, no stop and
+            # no exit, for as long as the feed stayed degraded.
+            # entries_ok exists to stop us ADDING risk while blind. Cancelling
+            # a stale order and unwinding an orphan fill REMOVES risk, and
+            # `flatten` sends a reduce-only order, so it can only reduce.
+            # Branch 3 already does this cleanup with no entries_ok gate at
+            # all - this just makes branch 2 agree with the doctrine branch 3
+            # already follows.
             if led.entry_cloid:
                 self._cancel_entry(led, filled_action="ignore" if had_qty
                                    else "flatten")
+            if not entries_ok:
+                return
             limit_px = pend.get("limit")
             if not limit_px or limit_px <= 0:      # -1.0 = market-entry sentinel
                 limit_px = self.venue.mid()
@@ -1868,7 +2137,8 @@ class Executor:
                     self._event("RED", "entry_unconfirmed",
                                 f"{leg} entry {cloid} unverifiable - ref "
                                 f"KEPT as possibly live; verify the order "
-                                f"under Coinbase open orders if this "
+                                f"under {self._venue_label()} open "
+                                f"orders if this "
                                 f"persists")
             else:
                 self.venue.place_market(side, qty, cloid)
@@ -1942,6 +2212,27 @@ class Executor:
         # the target (live find, 2026-08-10). Round the shortfall down and
         # accept the tracking error instead.
         missing = self.venue.quantize(max(0.0, round(want - filled, 8)))
+        if missing > 0 and self._below_venue_floor(missing):
+            # A remainder the venue will REFUSE must not be sent. place_market
+            # raises on it, and that raise lands BEFORE `led.qty = ...` below,
+            # so the ledger stays at 0 while the venue holds everything that
+            # did fill - a real leg, up to $3,797, with no ledger row and no
+            # stop (Coinbase-era audit, 2026-09-09). Booking what verifiably
+            # filled and accepting the tracking error is the whole point of
+            # the quantize above; the $10 floor just moved where the line is.
+            self._event("RED", "sub_min_size",
+                        f"{leg} chase remainder {missing} BTC is under the "
+                        f"venue's minimum order value - booking the "
+                        f"{filled} that filled and leaving the rest")
+            missing = 0.0
+        if missing > 0 and self.state.halted:
+            # A market chase is NEW RISK and a halt means no new risk, ever.
+            # entries_ok tracks the FEED and the engine book, not our own
+            # halt, so it cannot stand in for this (round 2, 2026-09-09).
+            self._event("RED", "entries_blocked",
+                        f"{leg} chase of {missing} BTC suppressed: executor "
+                        f"is HALTED ({self.state.halted})")
+            missing = 0.0
         if missing > 0 and not entries_ok:
             self._event("RED", "entries_blocked",
                         f"{leg} chase of {missing} BTC suppressed: feed "
@@ -2128,7 +2419,8 @@ class Executor:
         Three things this must NOT do, each a counter-agent find:
         - re-arm the FULL size when the stop was partially filled before it
           died (Coinbase reports EXPIRED with filled_size > 0);
-        - place a stop the venue cannot back: place_stop is NOT reduce-only,
+        - place a stop the venue cannot back. On Coinbase place_stop was NOT
+          reduce-only, so this OPENED size;
           so replacing against a flat or opposite venue OPENS a position;
         - retry forever into a venue that keeps cancelling.
         """
@@ -2240,10 +2532,30 @@ class Executor:
         if verdict == "blind":
             self._event("RED", "stop_backing_blind",
                         f"{leg} needs a stop but the venue position is "
-                        f"UNREADABLE - placing NOTHING (place_stop is not "
-                        f"reduce-only, so a blind placement can OPEN a "
-                        f"position); position may be UNPROTECTED, retrying "
-                        f"next poll")
+                        f"UNREADABLE - placing NOTHING (a stop we cannot "
+                        f"corroborate is protection in name only: on a venue "
+                        f"without reduce-only it OPENS size, and on one with "
+                        f"it the order is silently cancelled and the leg is "
+                        f"bare); position may be UNPROTECTED, retrying next "
+                        f"poll")
+            return
+        if verdict == "diverged" and self._absorb_fired_stop(leg, led):
+            # SECOND LOOK BEFORE HALTING ON WHAT IS ONLY A STOP-OUT (round 2,
+            # 2026-09-09). The first call above reads the stop status BEFORE
+            # _stop_backing reads the position, so a stop that lands between
+            # those two reads looks still-working on the first and already
+            # gone on the second - and that ORDERING is the common case, not
+            # an exotic one. Worse, hl.py maps the raw status "triggered" -
+            # the state a trigger order occupies the instant it fires - to
+            # OPEN, so the first read cannot see it even with no race at all.
+            # Re-reading AFTER the position read is what makes the absorption
+            # actually work against the live adapter rather than only against
+            # a test fake that reports FILLED immediately.
+            # DISCLOSED LIMIT: a status that reads UNKNOWN (both adapters
+            # return that on an API failure) still falls through to the halt
+            # below. That is deliberate - an unreadable venue is exactly when
+            # a divergence must not be explained away - but it means a stop
+            # fill during an API outage still halts the book.
             return
         if verdict == "diverged":
             self._event("RED", "ledger_divergence",
@@ -2354,8 +2666,36 @@ class Executor:
         self._cov("stop_placed")
 
     def _cancel_entry(self, led: LegLedger, filled_action: str) -> None:
+        # CANCEL UNLESS THE VENUE CONFIRMED IT IS FILLED.
+        #
+        # CORRECTION (round 2, 2026-09-09). The first cut of this comment, and
+        # the commit and EXECUTOR.md rail that went with it, said an API
+        # failure makes order_status return None and so sent no cancel. THAT
+        # WAS WRONG about both shipping adapters, and it is corrected here
+        # rather than left standing: hl.order_status returns
+        # {"status": "UNKNOWN"} on any exception and says so in its own
+        # docstring ("never a bare None on error"), and cb.order_status
+        # returns UNKNOWN too - None there means ONLY an order-map miss, i.e.
+        # we hold no venue handle at all. UNKNOWN is truthy and is not
+        # "FILLED", so the OLD predicate already sent the cancel. The live
+        # hole this was said to close was not open on that path.
+        #
+        # The predicate still changes one real case - a None read, where we
+        # have no handle - and resolving that toward SENDING is right on the
+        # merits: cancelling an order the venue has already filled or expired
+        # is a harmless no-op, while skipping it can strand a live maker
+        # entry. So it stays. But it is defence in depth, NOT a fix for an
+        # observed live failure, and it must not be described as one.
+        #
+        # Note also what this canNOT page on: both adapters swallow cancel
+        # failures internally (hl.cancel and cb.cancel both wrap the call in
+        # `except Exception: logger.warning`), so a wrapper here would never
+        # see one. An earlier cut added exactly that wrapper plus a RED
+        # entry_cancel_failed; it was unreachable code asserting a safety
+        # property we do not have, and it was removed. Making that page real
+        # means having the adapters propagate, which is a change to them.
         st = self.venue.order_status(led.entry_cloid)
-        if st and st.get("status") != "FILLED":
+        if not st or st.get("status") != "FILLED":
             self.venue.cancel(led.entry_cloid)
         filled = (st or {}).get("filled_qty", 0.0)
         if filled > 0 and filled_action == "flatten":
@@ -2367,6 +2707,94 @@ class Executor:
                         f"{led.entry_cloid} filled {filled} but engine cancelled")
         led.entry_cloid = led.entry_side = None
         led.entry_qty = 0.0
+
+    def _venue_label(self) -> str:
+        """The exchange the operator has to open, by name.
+
+        Every ACTION page below used to say "Coinbase" as a literal, written
+        when that was the only venue. On a Hyperliquid book those pages fire
+        precisely when a position is unprotected and seconds matter, and they
+        sent Casey to the wrong exchange (Coinbase-era audit, 2026-09-09).
+        Reads the same cfg.venue the VENUE_CHANGED rail keys off, so a label
+        and a ledger stamp can never disagree.
+        """
+        v = str(getattr(self.cfg, "venue", "") or "").strip().lower()
+        return {"hyperliquid": "Hyperliquid",
+                "coinbase": "Coinbase"}.get(v, v.title() or "the venue")
+
+    def _product_var(self) -> str:
+        v = str(getattr(self.cfg, "venue", "") or "").strip().lower()
+        return "HL_COIN" if v == "hyperliquid" else "CB_PRODUCT_ID"
+
+    def _below_venue_floor(self, qty: float) -> bool:
+        """Will the venue actually ACCEPT an order for this size?
+
+        NOT the same question as `quantize(qty) > 0`, and the difference is a
+        Coinbase-era assumption that broke silently on the venue switch
+        (Coinbase-era audit, 2026-09-09). On CDE nano futures quantize()
+        rounded to whole 0.01-BTC contracts, so anything the venue would
+        refuse also quantized to ZERO - representable and sendable were the
+        same test. Hyperliquid quantizes to a 1e-5 lot but refuses any order
+        under $10 (MinTradeNtl, no reduce-only exemption), so the whole band
+        from one lot (~$0.79) up to $10 is representable and UNSENDABLE.
+        Reproduced: a 0.00005 BTC residue passed the old dust test, so
+        _close_leg cancelled the protective stop and then raised on the
+        rejected order - leaving the leg with no stop, no close, and not even
+        an event, because the raise came before the first _event call.
+
+        An unreadable mid returns False. Declaring dust on a guess would
+        clear a REAL position out of the ledger, which is worse than the
+        loop this exists to prevent.
+        """
+        q = abs(qty)
+        try:
+            q = self.venue.quantize(q)
+        except Exception:  # noqa: BLE001
+            pass
+        if q <= 0.0:
+            return True
+        floor = getattr(self.venue, "min_notional_usd", 0.0) or 0.0
+        if not floor:
+            inner = getattr(self.venue, "inner", None)
+            floor = getattr(inner, "min_notional_usd", 0.0) or 0.0
+        if floor <= 0.0:
+            return False
+        try:
+            px = float(self.venue.mid() or 0.0)
+        except Exception:  # noqa: BLE001
+            return False
+        return bool(px) and q * px < floor
+
+    def _absorb_fired_stop(self, leg: str, led: LegLedger) -> bool:
+        """A stop that has already FILLED is not protection - it IS the exit.
+
+        Absorbing it has to happen before _stop_backing renders a verdict:
+        a fired stop leaves the venue flat while the ledger still holds, which
+        is indistinguishable from a real ledger divergence, and the divergence
+        path HALTS THE WHOLE BOOK and demands a manual /resume on what is only
+        an ordinary stop-out (counter-agent rounds 1 and 2, 2026-09-09).
+
+        It lives here, on _close_leg's path, rather than at each caller
+        because branches 2 and 3 of _sync_leg run with `pos is None` and so
+        can never reach _maintain_stop, which was the only other code that
+        absorbed a stop fill. Returns True when it took the leg flat.
+
+        The consumed entry ref is cleared for the same reason _maintain_stop
+        clears it: that fill was closed BY the stop, so leaving the ref set
+        lets branch 3's orphan-flatten re-close it into a naked reverse.
+        """
+        if led.qty == 0.0 or not led.stop_cloid:
+            return False
+        st = self.venue.order_status(led.stop_cloid)
+        if not st or st.get("status") != "FILLED":
+            return False
+        self._event("INFO", "stop_filled_on_venue",
+                    f"{leg} stop fired before the close - absorbed")
+        self._cov("stop_filled")
+        led.qty, led.stop_cloid, led.stop_px = 0.0, None, None
+        led.entry_cloid = led.entry_side = None
+        led.entry_qty = 0.0
+        return True
 
     def _close_leg(self, leg: str, led: LegLedger, why: str) -> None:
         # NOTE (merge 2026-08-26): an earlier hotfix cut accidentally
@@ -2383,11 +2811,8 @@ class Executor:
         # dust against a flat venue is numerically a mismatch, and halting
         # the whole book over it would be a false halt on sub-contract noise.)
         if led.qty != 0.0:
-            try:
-                holdable = self.venue.quantize(abs(led.qty))
-            except Exception:  # noqa: BLE001
-                holdable = abs(led.qty)
-            if holdable <= 0.0:
+            # SENDABILITY, not representability - see _below_venue_floor.
+            if self._below_venue_floor(led.qty):
                 if led.stop_cloid:
                     try:
                         self.venue.cancel(led.stop_cloid)
@@ -2399,6 +2824,23 @@ class Executor:
                             f"cleared without an order (verify flat on venue)")
                 led.qty = 0.0
                 return
+        # ABSORB A FIRED STOP BEFORE ASKING _stop_backing ANYTHING (counter-
+        # agent round 2, 2026-09-09). A stop that has just filled leaves the
+        # venue flat while the ledger still holds - which is indistinguishable
+        # from a real divergence to the corroboration below, so it HALTED THE
+        # WHOLE BOOK and demanded a manual /resume on what is only an ordinary
+        # stop-out. It has to live HERE rather than at each caller: branches 2
+        # and 3 of _sync_leg run with `pos is None` and so can never call
+        # _maintain_stop, which was the only other code that absorbed a stop
+        # fill. Reproduced on all three branches; only branch 1 was clean.
+        # This also closes a silent coverage gap - the old absorption further
+        # down zeroed led.qty and emitted nothing at all, so a stop fill taken
+        # on the close path never reached the ramp's stop_filled sample.
+        # The consumed entry ref is cleared for the same reason _maintain_stop
+        # clears it: that fill was closed BY the stop, and leaving the ref set
+        # lets branch 3's orphan-flatten re-close it into a naked reverse.
+        if self._absorb_fired_stop(leg, led):
+            return
         # CORROBORATE BEFORE TOUCHING ANYTHING (re-gate 2026-08-27 B2). This
         # was the one write path that never asked the venue: side AND size
         # came straight off the ledger, and the only reads were
@@ -2418,6 +2860,24 @@ class Executor:
                         f"nothing; the stop stays armed and this retries "
                         f"next poll")
             return
+        if verdict == "diverged" and self._absorb_fired_stop(leg, led):
+            # SECOND LOOK BEFORE HALTING ON WHAT IS ONLY A STOP-OUT (round 2,
+            # 2026-09-09). The call above reads the stop status BEFORE
+            # _stop_backing reads the position, so a stop landing between
+            # those two reads looks still-working on the first and already
+            # gone on the second - and that ORDERING is the common case, not
+            # an exotic one. Worse, hl.py maps the raw status "triggered" -
+            # the state a trigger order occupies the instant it fires - to
+            # OPEN, so the first read cannot see it even with no race at all.
+            # Re-reading AFTER the position read is what makes the absorption
+            # work against the live adapter rather than only against a test
+            # fake that reports FILLED the moment it is set.
+            # DISCLOSED LIMIT: an UNKNOWN status (what both adapters return on
+            # an API failure) still falls through to the halt below. That is
+            # deliberate - an unreadable venue is exactly when a divergence
+            # must not be explained away - so a stop fill during an API
+            # outage still halts the book.
+            return
         if verdict == "diverged":
             self._event("RED", "ledger_divergence",
                         f"{leg} exit requested but the venue does not back "
@@ -2427,13 +2887,37 @@ class Executor:
             self.halt("LEDGER_DIVERGENCE",
                       f"{leg} close: venue net {net} vs ledger sum {want}")
             return
+        # A REFUSAL BELOW MUST NOT COST US THE STOP (counter-agent panel,
+        # 2026-09-09). This block used to cancel the working stop here,
+        # unconditionally, before either refusal check had run - so
+        # `close_refused_unbacked` returned having stripped protection off a
+        # leg it had just declined to close, and nothing re-armed it:
+        # _verify_stop_refs runs only on resume and the day roll, _check_drift
+        # sees no drift (venue and ledger agree in AGGREGATE, which is exactly
+        # the state that triggers the refusal), and _event dedupes the RED
+        # line for 600s so it is near-silent after the first page. Reproduced
+        # on the engine-flat path with perfectly healthy reads - i.e. this was
+        # already live, not a consequence of the exit_flag branch - whenever
+        # the exiting leg's sign opposes the venue net (a partly-filled
+        # pullback against an open trend leg) or the two legs net to ~zero.
+        # test_gate_B2_close_leg_blind_venue_touches_nothing already pins this
+        # exact invariant for the blind path; the unbacked path broke it.
+        # A stop that has already FILLED is different: it is not protection
+        # any more, it IS the exit, so absorb it here.
         if led.stop_cloid:
             st = self.venue.order_status(led.stop_cloid)
             if st and st.get("status") == "FILLED":
                 led.qty = 0.0          # stop beat the signal exit; already flat
-            else:
+                led.stop_cloid, led.stop_px = None, None
+        if led.qty == 0.0:
+            # Nothing to close. A stop may never rest on a flat leg - if it
+            # triggered it would OPEN the reverse side - so drop any ref that
+            # survived (today every caller checks qty first, so this is a
+            # guard for future ones, not a live path).
+            if led.stop_cloid:
                 self.venue.cancel(led.stop_cloid)
-            led.stop_cloid, led.stop_px = None, None
+                led.stop_cloid, led.stop_px = None, None
+            return
         if led.qty != 0.0:
             # Quantize the close: a stale sub-contract residue (old-format
             # persisted state) would make place_market raise AFTER the stop
@@ -2464,6 +2948,14 @@ class Executor:
                             f"{leg} exit wants {led.qty} but the venue net "
                             f"{net} quantizes to nothing closeable")
                 return
+            # COMMITTED to sending the close: only now does the protective
+            # stop come down. Order matters - place_market can raise, and a
+            # cancel-then-raise is the "permanent naked, stopless loop" the
+            # 2026-08-11 find named. Cancelling immediately before the send
+            # keeps that window as small as the venue allows.
+            if led.stop_cloid:
+                self.venue.cancel(led.stop_cloid)
+                led.stop_cloid, led.stop_px = None, None
             cloid = f"{leg[0].upper()}-{int(time.time())}-X"
             try:
                 ref = self.venue.mid()

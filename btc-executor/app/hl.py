@@ -187,7 +187,16 @@ class HyperliquidVenue:
             if u.get("name") == self.coin:
                 return {"sz_decimals": int(u.get("szDecimals", 3)),
                         "max_leverage": u.get("maxLeverage"),
-                        "isolated_only": bool(u.get("onlyIsolated"))}
+                        "isolated_only": bool(u.get("onlyIsolated")),
+                        # product_flags reads "delisted"; without this key it
+                        # read None forever and the boot tradability gate was
+                        # structurally DEAD on Hyperliquid - the executor would
+                        # boot "ready" into a delisted coin and discover it one
+                        # rejected order at a time, including a rejected
+                        # protective stop (Coinbase-era audit, 2026-09-09).
+                        # The venue spells it isDelisted; list_perp_candidates
+                        # was already reading it correctly two methods below.
+                        "delisted": bool(u.get("isDelisted"))}
         raise RuntimeError(
             f"{self.coin} is not in the Hyperliquid perp universe - check "
             f"HL_COIN")

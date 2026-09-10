@@ -379,7 +379,67 @@ def test_gate_daily_loss_halt_flattens_and_blocks(tmp_path):
     n = len(v.calls)
     ex.step(target(pull=pos))                             # halted -> inert
     assert len(v.calls) == n
-    ex.resume()
+    # CONTRACT CHANGED 2026-09-09 (Casey's call): a plain /resume on a loss
+    # halt whose breach is STILL LIVE is refused. It used to clear the flag
+    # and re-halt on the next poll - a loop only a redeploy escaped.
+    assert ex.resume() is False
+    assert ex.state.halted == "DAILY_LOSS"
+    assert any(e["kind"] == "resume_refused" for e in ex.state.events)
+    # equity recovering above the line makes a plain resume work again
+    v._equity = 9_800.0
+    assert ex.resume() is True
+    assert ex.state.halted is None
+
+
+def test_gate_resume_reanchor_forgives_a_live_breach(tmp_path):
+    """The deliberate escape from the refusal above. ?reanchor=1 moves the
+    marks to current equity so the breach clears - and says so loudly,
+    because it FORGIVES the drawdown: the next one is measured from here."""
+    v = FakeVenue(equity=10_000.0)
+    ex = mkexec(tmp_path, v)
+    ex.state.day_start_equity = 10_000.0
+    ex.state.high_water = 10_000.0
+    v._equity = 9_000.0
+    ex.halt("DAILY_LOSS", "test")
+
+    assert ex.resume() is False, "plain resume must still refuse"
+    assert ex.resume(reanchor=True) is True
+    assert ex.state.halted is None
+    assert ex.state.day_start_equity == 9_000.0
+    assert ex.state.high_water == 9_000.0
+    assert any(e["kind"] == "resume_reanchored" for e in ex.state.events)
+    # and it must actually stick: the next poll must not re-halt
+    ex.step(target())
+    assert ex.state.halted is None
+
+
+def test_gate_resume_refuses_when_equity_is_unreadable(tmp_path):
+    """A resume on an account we cannot read is a guess, not a decision."""
+    class _BlindEquity(FakeVenue):
+        def equity(self):
+            raise RuntimeError("balance endpoint down")
+
+    v = _BlindEquity(equity=10_000.0)
+    ex = mkexec(tmp_path, v)
+    ex.state.day_start_equity = 10_000.0
+    ex.state.halted = "DRAWDOWN"
+    ex.state.high_water = 10_000.0
+
+    assert ex.resume() is False
+    assert ex.state.halted == "DRAWDOWN"
+    assert any("unreadable" in e["msg"] for e in ex.state.events
+               if e["kind"] == "resume_refused")
+
+
+def test_gate_resume_still_clears_a_non_loss_halt_outright(tmp_path):
+    """Fence: KILL and the operational halts are NOT loss halts and must
+    keep clearing on a plain resume, breach arithmetic or not."""
+    v = FakeVenue(equity=9_000.0)
+    ex = mkexec(tmp_path, v)
+    ex.state.day_start_equity = 10_000.0        # a live loss breach exists
+    ex.state.high_water = 10_000.0
+    ex.halt("KILL", "operator")
+    assert ex.resume() is True
     assert ex.state.halted is None
 
 
@@ -5860,3 +5920,759 @@ def test_gate_auto_drill_never_schedules_short_cycle(tmp_path):
     ex.state.drills = [{"kind": "short_cycle", "ok": False}]
     ex.state.coverage_live = {"drill_cycle": 1}
     assert ex._needed_auto_drill() == "cycle"
+
+
+# ------------------------------------------------------------- exit_flag lag
+# The engine flags a position to exit at its NEXT bar open. Nothing here read
+# that field until 2026-09-09 - it arrived on every poll and appeared only in
+# test fixtures - so the executor closed only once the engine reported FLAT,
+# a full 4h bar later. Live: entries landed in 37s, every exit landed one bar
+# late (engine 16:00 -> venue 20:00, three for three).
+
+
+def _pos(entry_ts=NOW, side="L", stop=56_500.0, flag=None):
+    return {"pending": None,
+            "position": {"side": side, "entry_price": 60_000.0,
+                         "entry_ts": entry_ts, "signal_ts": entry_ts - 14_400,
+                         "stop": stop, "exit_flag": flag}}
+
+
+def test_gate_exit_flag_closes_now_not_a_bar_later(tmp_path):
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    ex.state.legs["trend"].qty = 0.01
+    _hold(v, 0.01)
+    ex.step(target(trend=_pos(flag="SIGNAL")))
+    assert ex.state.legs["trend"].qty == 0.0
+    closed = [e for e in ex.state.events if e["kind"] == "leg_closed"]
+    assert closed and "engine_exit_flag SIGNAL" in closed[-1]["msg"]
+    assert ex.state.coverage_live.get("signal_exit", 0) == 1
+
+
+def test_gate_exit_flag_does_not_reenter_while_engine_lags(tmp_path):
+    """THE ONE THAT MATTERS. The engine keeps reporting this position, flag
+    and all, until its next bar. Without the re-entry guard the next poll
+    sees qty==0 against a live engine position and _enter_from_fill chases
+    straight back in at market - a close/reopen loop every 20s for 4 hours."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    ex.state.legs["trend"].qty = 0.01
+    _hold(v, 0.01)
+    t = target(trend=_pos(flag="SIGNAL"))
+    ex.step(t)
+    n_orders = len(v.calls)
+    for _ in range(12):                       # 4 minutes of polling
+        ex.step(t)
+    assert ex.state.legs["trend"].qty == 0.0
+    assert len(v.calls) == n_orders, "executor re-entered a flagged position"
+    assert len([e for e in ex.state.events if e["kind"] == "leg_closed"]) == 1
+    assert ex.state.coverage_live.get("signal_exit", 0) == 1
+
+
+def test_gate_exit_flag_guard_blocks_reentry_if_the_flag_vanishes(tmp_path):
+    """What the guard is ACTUALLY for. The exit_flag branch already returns
+    early on later polls, so it alone prevents re-entry while the flag is
+    present - the first cut of the test above passed with the guard removed
+    (mutation test, 2026-09-09). The guard earns its place in the one case
+    the branch cannot cover: the engine reports the SAME position with the
+    flag GONE - a state row written before the flag was persisted, or an
+    engine-side bug. Without it that reads as a live position we are flat
+    on, and _enter_from_fill chases back in at market."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    ex.state.legs["trend"].qty = 0.01
+    _hold(v, 0.01)
+    ex.step(target(trend=_pos(flag="SIGNAL")))
+    assert ex.state.legs["trend"].qty == 0.0
+    n = len(v.calls)
+    for _ in range(6):
+        ex.step(target(trend=_pos(flag=None)))      # same position, flag gone
+    assert ex.state.legs["trend"].qty == 0.0, "re-entered a closed position"
+    assert len(v.calls) == n
+
+
+def test_gate_exit_flag_guard_survives_restart(tmp_path):
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    ex.state.legs["trend"].qty = 0.01
+    _hold(v, 0.01)
+    t = target(trend=_pos(flag="SIGNAL"))
+    ex.step(t)
+    ex2 = mkexec(tmp_path, FakeVenue(), dry_run=False)
+    assert ex2.state.legs["trend"].stopped_entry_ts == NOW
+    ex2.step(t)
+    assert ex2.state.legs["trend"].qty == 0.0
+    assert not [e for e in ex2.state.events if e["kind"] == "entry_order"]
+
+
+def test_gate_exit_flag_runs_even_when_entries_blocked(tmp_path):
+    """An exit must never be gated on entries_ok. A stale/degraded feed
+    blocks NEW risk; it must not strand us in a position the engine exited."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    ex.state.legs["trend"].qty = 0.01
+    _hold(v, 0.01)
+    ex.step(target(trend=_pos(flag="SIGNAL"), degraded=True))
+    assert ex.state.legs["trend"].qty == 0.0
+
+
+def test_gate_exit_flag_runs_on_a_halted_engine_book(tmp_path):
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    ex.state.legs["trend"].qty = 0.01
+    _hold(v, 0.01)
+    ex.step(target(trend=_pos(flag="SIGNAL"), trend_halted=True))
+    assert ex.state.legs["trend"].qty == 0.0
+
+
+def test_gate_exit_flag_time_stop_also_exits(tmp_path):
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    ex.state.legs["trend"].qty = 0.01
+    _hold(v, 0.01)
+    ex.step(target(trend=_pos(flag="TIME")))
+    assert ex.state.legs["trend"].qty == 0.0
+    assert "engine_exit_flag TIME" in [e["msg"] for e in ex.state.events
+                                       if e["kind"] == "leg_closed"][-1]
+
+
+def test_gate_exit_flag_no_second_close_when_engine_goes_flat(tmp_path):
+    """After we close early the engine eventually reports flat. That must not
+    close again or double-credit the ramp gate."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    ex.state.legs["trend"].qty = 0.01
+    _hold(v, 0.01)
+    ex.step(target(trend=_pos(flag="SIGNAL")))
+    ex.step(target())                                  # engine now flat
+    assert len([e for e in ex.state.events if e["kind"] == "leg_closed"]) == 1
+    assert ex.state.coverage_live.get("signal_exit", 0) == 1
+
+
+def test_gate_exit_flag_guard_is_not_sticky_for_the_next_trade(tmp_path):
+    """The guard is per engine-position. A genuinely NEW position must enter."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    ex.state.legs["trend"].qty = 0.01
+    _hold(v, 0.01)
+    ex.step(target(trend=_pos(flag="SIGNAL")))
+    ex.step(target())                                  # engine flat
+    ex.step(target(trend={"pending": {"side": "L", "limit": -1.0,
+                                      "signal_ts": NOW + 14_400},
+                          "position": None}))
+    assert ex.state.legs["trend"].qty > 0, "guard blocked a new trade"
+
+
+def test_gate_unflagged_position_is_untouched(tmp_path):
+    """Regression fence: exit_flag None must behave exactly as before -
+    stop maintained, position held, nothing closed."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    ex.state.legs["trend"].qty = 0.01
+    _hold(v, 0.01)
+    ex.step(target(trend=_pos(flag=None)))
+    assert ex.state.legs["trend"].qty == 0.01
+    assert not [e for e in ex.state.events if e["kind"] == "leg_closed"]
+    assert ex.state.legs["trend"].stop_cloid is not None
+
+
+def test_gate_exit_flag_with_no_position_held_does_not_enter(tmp_path):
+    """We never filled (or already closed). Chasing into a position the
+    engine is exiting is pointless risk - _enter_from_fill must not run."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    ex.step(target(trend=_pos(flag="SIGNAL")))
+    assert ex.state.legs["trend"].qty == 0.0
+    assert not [c for c in v.calls if c[0] in ("MARKET", "LIMIT")]
+
+
+# ---- the two BLOCKING regressions the counter-agent panel found (2026-09-09)
+# Both were introduced by the exit_flag branch above and both were reproduced
+# end-to-end before the fix landed. Neither is exotic.
+
+
+def test_gate_exit_flag_absorbs_a_venue_stop_fill_instead_of_halting(tmp_path):
+    """PANEL BLOCKING 2. The bar that gaps through our stop is the bar
+    likeliest to flip the signal, so a venue stop fill and the exit_flag
+    arrive on the SAME poll. _close_leg opens with _stop_backing(), which
+    reads 'venue flat, ledger long' as a LEDGER_DIVERGENCE and halts the
+    whole book. _maintain_stop absorbs it properly, and the pre-change flow
+    always reached _maintain_stop first - so the branch must too."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    ex.state.legs["trend"].qty = 0.01
+    _hold(v, 0.01)
+    ex.step(target(trend=_pos()))                       # arm the stop
+    stop_cloid = ex.state.legs["trend"].stop_cloid
+    assert stop_cloid
+    v.orders[stop_cloid]["status"] = "FILLED"           # the stop FIRES
+    assert abs(v.position()) < 1e-9
+
+    ex.step(target(trend=_pos(flag="SIGNAL")))
+
+    led = ex.state.legs["trend"]
+    assert ex.state.halted is None, "a routine stop-out halted the book"
+    assert led.qty == 0.0
+    assert led.stopped_entry_ts == NOW, "re-entry guard not set"
+    assert ex.state.coverage_live.get("stop_filled", 0) == 1
+    kinds = [e["kind"] for e in ex.state.events]
+    assert "stop_filled_on_venue" in kinds
+    assert "ledger_divergence" not in kinds
+
+
+def test_gate_exit_flag_refused_close_leaves_the_stop_armed(tmp_path):
+    """PANEL BLOCKING 1. _close_leg cancels the stop BEFORE the unbacked
+    check can refuse, so a refusal strips protection. The early return then
+    skipped _maintain_stop on this and every later poll and nothing else
+    re-arms it: _verify_stop_refs runs only on resume/day-roll, _check_drift
+    sees no drift (venue and ledger agree in aggregate), and _event dedupes
+    the refusal for 600s. Reachable with perfectly healthy reads whenever
+    this leg's sign opposes the venue net."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    ex.state.legs["pullback"].qty = 0.03
+    ex.state.legs["trend"].qty = -0.01
+    _hold(v, 0.02)                       # venue backs the NET, not each leg
+    ex.step(target(pull=_pos(side="L"), trend=_pos(side="S", stop=63_500.0)))
+    assert ex.state.legs["trend"].stop_cloid, "precondition: stop armed"
+
+    for _ in range(4):
+        ex.step(target(pull=_pos(side="L"),
+                       trend=_pos(side="S", stop=63_500.0, flag="SIGNAL")))
+        led = ex.state.legs["trend"]
+        assert led.qty == -0.01, "close should have been refused"
+        assert led.stop_cloid, "leg left NAKED after a refused close"
+    assert "close_refused_unbacked" in [e["kind"] for e in ex.state.events]
+
+
+def test_gate_exit_flag_still_closes_when_the_stop_is_merely_open(tmp_path):
+    """Fence for the fix above: running _maintain_stop first must not stop
+    the ordinary path from closing, and must not leave a stop behind."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    ex.state.legs["trend"].qty = 0.01
+    _hold(v, 0.01)
+    ex.step(target(trend=_pos()))
+    assert ex.state.legs["trend"].stop_cloid
+    ex.step(target(trend=_pos(flag="SIGNAL")))
+    led = ex.state.legs["trend"]
+    assert led.qty == 0.0
+    assert led.stop_cloid is None, "orphan stop left at the venue"
+    assert ex.state.coverage_live.get("signal_exit", 0) == 1
+
+
+def test_gate_cancel_entry_unreadable_status_still_sends_the_cancel(tmp_path):
+    """PANEL. order_status returns None on an API failure. The old test was
+    `if st and status != FILLED`, so an unreadable read sent NO cancel while
+    the ref was cleared anyway - leaving a live maker entry resting at the
+    venue that nothing tracked, able to fill later into a position with no
+    ledger row, no stop and no exit. Cancelling an already-filled or expired
+    order is a harmless no-op, so an unreadable status must resolve toward
+    SENDING the cancel."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    led = ex.state.legs["pullback"]
+    v.place_limit("BUY", 0.01, 59_000.0, "P-x-E1")
+    led.entry_cloid, led.entry_side, led.entry_qty = "P-x-E1", "L", 0.01
+    led.signal_ts = NOW - 14_400
+    v.order_status = lambda c: None                  # the read blips
+    ex.step(target(pull=_pos(flag="SIGNAL")))
+    assert led.entry_cloid is None
+    assert any(c[0] == "CANCEL" and c[3] == "P-x-E1" for c in v.calls), \
+        "left a live entry order resting at the venue with no ref to it"
+
+
+def test_gate_cancel_entry_does_not_cancel_a_confirmed_fill(tmp_path):
+    """Fence for the change above: a venue-CONFIRMED FILLED entry must still
+    not be cancelled — the fill is real and is absorbed, not withdrawn."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    led = ex.state.legs["pullback"]
+    v.place_limit("BUY", 0.01, 59_000.0, "P-y-E1")
+    v.orders["P-y-E1"]["status"] = "FILLED"
+    led.entry_cloid, led.entry_side, led.entry_qty = "P-y-E1", "L", 0.01
+    led.signal_ts = NOW - 14_400
+    ex.step(target(pull=_pos(flag="SIGNAL")))
+    assert not [c for c in v.calls if c[0] == "CANCEL" and c[3] == "P-y-E1"]
+
+
+def test_gate_close_leg_refusal_never_strips_the_stop(tmp_path):
+    """PANEL, and PRE-EXISTING (live in 35ec560): _close_leg cancelled the
+    working stop before either refusal check ran, so a refused close left the
+    leg naked. The blind path already had this invariant pinned by
+    test_gate_B2_close_leg_blind_venue_touches_nothing; the unbacked path
+    broke it. Driven directly, with no exit_flag involved."""
+    v = FakeVenue(mult=0.01)
+    ex = mkexec(tmp_path, v)
+    v._add("MARKET", "SELL", 0.01, "seed")           # venue net -0.01
+    _legs(ex, +0.01, -0.02)                          # ledger sum -0.01: agrees
+    led = ex.state.legs["pullback"]                  # +0.01 OPPOSES the net
+    led.stop_cloid, led.stop_px = "P-1-S56500-1", 56_500.0
+    v._add("STOP", "SELL", 0.01, "P-1-S56500-1", px=56_500.0)
+    assert ex._stop_backing()[0] == "ok", "fixture must reach the clamp"
+
+    ex._close_leg("pullback", led, "engine_flat")
+
+    assert led.qty == 0.01, "fixture must be refused, not closed"
+    assert led.stop_cloid == "P-1-S56500-1", "refusal stripped the stop"
+    assert v.orders["P-1-S56500-1"]["status"] == "OPEN", \
+        "cancelled protection it then declined to replace"
+    assert any(e["kind"] == "close_refused_unbacked" for e in ex.state.events)
+
+
+def test_gate_close_leg_committed_close_still_cancels_the_stop(tmp_path):
+    """Fence for the reorder: when the close IS sent, the stop must come
+    down — an orphan stop on a flat leg opens the reverse side."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    ex.state.legs["trend"].qty = 0.01
+    _hold(v, 0.01)
+    ex.step(target(trend=_pos()))
+    led = ex.state.legs["trend"]
+    stop_cloid = led.stop_cloid
+    assert stop_cloid
+    ex._close_leg("trend", led, "engine_flat")
+    assert led.qty == 0.0
+    assert led.stop_cloid is None
+    assert v.orders[stop_cloid]["status"] == "CANCELLED"
+
+
+def test_gate_exit_flag_refused_close_keeps_protection_through_the_window(tmp_path):
+    """The end-to-end invariant behind panel BLOCKING 1: a flagged leg whose
+    close keeps being REFUSED must stay protected for the whole 4h window,
+    including when the venue kills the stop out from under us mid-window.
+    Two things carry it — _close_leg no longer strips the stop on a refusal,
+    and the _maintain_stop call at the head of the exit_flag branch still
+    runs every poll on a leg we still hold, so a vanished stop is re-placed."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    ex.state.legs["pullback"].qty = 0.01
+    ex.state.legs["trend"].qty = -0.02
+    _hold(v, -0.01)                      # net -0.01: pullback OPPOSES it
+    ex.step(target(pull=_pos(side="L"), trend=_pos(side="S", stop=63_500.0)))
+    first = ex.state.legs["pullback"].stop_cloid
+    assert first
+    v.orders[first]["status"] = "CANCELLED"        # the venue kills it
+
+    for _ in range(3):
+        ex.step(target(pull=_pos(side="L", flag="SIGNAL"),
+                       trend=_pos(side="S", stop=63_500.0)))
+
+    led = ex.state.legs["pullback"]
+    assert led.qty == 0.01, "fixture must stay refused, not close"
+    assert led.stop_cloid and led.stop_cloid != first, "stop not re-placed"
+    assert v.orders[led.stop_cloid]["status"] == "OPEN", "leg left unprotected"
+    kinds = [e["kind"] for e in ex.state.events]
+    assert "stop_vanished" in kinds and "close_refused_unbacked" in kinds
+    assert ex.state.halted is None
+
+
+# ---- counter-agent round 2 (2026-09-09): three defects the first fixes missed
+
+
+def _armed_then_fired(tmp_path):
+    """A leg holding 0.01 whose venue stop has just FILLED, so the venue is
+    flat while the ledger still holds - the state _stop_backing cannot tell
+    apart from a real divergence."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    ex.state.legs["trend"].qty = 0.01
+    _hold(v, 0.01)
+    ex.step(target(trend=_pos()))
+    v.orders[ex.state.legs["trend"].stop_cloid]["status"] = "FILLED"
+    assert abs(v.position()) < 1e-9
+    return ex, v
+
+
+def test_gate_close_leg_absorbs_a_fired_stop_on_the_engine_flat_branch(tmp_path):
+    """Round 1 put the absorption in the exit_flag branch only. Branches 2
+    and 3 run with `pos is None` and so can NEVER call _maintain_stop, so an
+    ordinary stop-out landing on the same poll as the engine's exit still
+    halted the whole book. The absorption belongs in _close_leg, where all
+    three callers get it."""
+    ex, v = _armed_then_fired(tmp_path)
+    ex.step(target())                                    # engine goes flat
+    led = ex.state.legs["trend"]
+    assert ex.state.halted is None, "a routine stop-out halted the book"
+    assert led.qty == 0.0 and led.stop_cloid is None
+    kinds = [e["kind"] for e in ex.state.events]
+    assert "stop_filled_on_venue" in kinds and "ledger_divergence" not in kinds
+    assert ex.state.coverage_live.get("stop_filled", 0) == 1, \
+        "stop fill absorbed on the close path missed the ramp sample"
+
+
+def test_gate_close_leg_absorbs_a_fired_stop_on_the_pending_flip_branch(tmp_path):
+    ex, v = _armed_then_fired(tmp_path)
+    ex.step(target(trend={"pending": {"side": "S", "limit": -1.0,
+                                      "signal_ts": NOW + 14_400},
+                          "position": None}))
+    led = ex.state.legs["trend"]
+    assert ex.state.halted is None
+    assert ex.state.coverage_live.get("stop_filled", 0) == 1
+    # absorbed, so the new entry is legitimate - and the books must AGREE
+    assert abs(led.qty - v.position()) < 1e-9, "ledger and venue diverged"
+
+
+def test_gate_halt_inside_close_leg_blocks_the_same_leg_from_entering(tmp_path):
+    """THE ONE THAT MATTERS. _close_leg can raise LEDGER_DIVERGENCE, and
+    nothing re-read our own halt: entries_ok is gated on the ENGINE book's
+    flag, never on self.state.halted. So the executor paged the book halted,
+    ran cancel_all, and then opened a fresh naked position that the step
+    loop's own halt check skipped forever after. This is the 2026-08-24
+    finding reached through the SAME leg - that guard sits BETWEEN legs."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    ex.state.legs["trend"].qty = 0.01          # ledger holds, venue is flat,
+    assert abs(v.position()) < 1e-9            # and there is NO stop to absorb
+    n_before = len(v.calls)
+
+    ex.step(target(trend={"pending": {"side": "S", "limit": -1.0,
+                                      "signal_ts": NOW + 14_400},
+                          "position": None}))
+
+    assert ex.state.halted == "LEDGER_DIVERGENCE", "fixture must halt"
+    opened = [c for c in v.calls[n_before:]
+              if c[0] in ("MARKET", "LIMIT") and c[3] != "seed"]
+    assert not opened, f"opened a position AFTER the halt page: {opened}"
+    assert "entry_order" not in [e["kind"] for e in ex.state.events]
+
+
+def test_gate_refused_close_does_not_build_a_second_position(tmp_path):
+    """A refused close leaves the leg held AND (deliberately) keeps its stop.
+    Entering again on top would stack a second position on an unresolved one
+    and carry the retained stop across a leg REBUILD, leaving a stale
+    wrong-sided trigger of the old size behind it."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    ex.state.legs["pullback"].qty = 0.01
+    ex.state.legs["trend"].qty = -0.02
+    _hold(v, -0.01)                            # pullback's sign opposes the net
+    ex.step(target(pull=_pos(side="L"), trend=_pos(side="S", stop=63_500.0)))
+    led = ex.state.legs["pullback"]
+    stop_before = led.stop_cloid
+    assert stop_before
+
+    ex.step(target(pull={"pending": {"side": "S", "limit": 61_000.0,
+                                     "signal_ts": NOW + 14_400},
+                         "position": None},
+                   trend=_pos(side="S", stop=63_500.0)))
+
+    assert led.qty == 0.01, "close should have been refused"
+    assert led.stop_cloid == stop_before, "refusal stripped the stop"
+    assert not [e for e in ex.state.events if e["kind"] == "entry_order"], \
+        "stacked a new position on top of an unresolved one"
+    assert any(e["kind"] == "close_refused_unbacked" for e in ex.state.events)
+
+
+def test_gate_halted_executor_never_chases_at_market(tmp_path):
+    """A market chase is new risk and a halt means no new risk. entries_ok
+    tracks the FEED and the engine's book, not our own halt, so it could not
+    stand in for this."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    ex.state.halted = "LEDGER_DIVERGENCE"
+    led = ex.state.legs["trend"]
+    n_before = len(v.calls)
+    ex._enter_from_fill("trend", led, _pos()["position"], BLEND, 10_000.0,
+                        entries_ok=True)
+    assert led.qty == 0.0
+    assert not [c for c in v.calls[n_before:] if c[0] == "MARKET"], \
+        "chased at market on a halted executor"
+    assert any(e["kind"] == "entries_blocked" for e in ex.state.events)
+
+
+class _LateFillVenue(FakeVenue):
+    """Models what the LIVE adapter does at the instant a stop fires, which
+    FakeVenue does not: hl.py maps the raw status "triggered" to OPEN
+    (hl.py:520), so the first read after firing says the stop is still
+    working while the position is already gone. `open_reads` is how many
+    reads report OPEN before the truth shows up."""
+
+    def __init__(self, *a, open_reads=1, **kw):
+        super().__init__(*a, **kw)
+        self.stop_cloid_watch = None
+        self.open_reads = open_reads
+
+    def order_status(self, cloid):
+        if cloid == self.stop_cloid_watch and self.open_reads > 0:
+            self.open_reads -= 1
+            return {"status": "OPEN", "filled_qty": 0.0, "avg_price": None}
+        return super().order_status(cloid)
+
+
+def test_gate_stop_that_reads_open_then_filled_does_not_halt_the_book(tmp_path):
+    """BLOCKING, round 2. The absorption reads the stop status BEFORE
+    _stop_backing reads the position, so a stop landing between those two
+    reads looks still-working on the first and already gone on the second -
+    and on Hyperliquid the raw status "triggered" maps to OPEN anyway, so the
+    first read cannot see it even with no race. Against a fake that reports
+    FILLED immediately the fix looked right; against the venue's real
+    behaviour it halted the book on an ordinary stop-out."""
+    v = _LateFillVenue(open_reads=1)
+    ex = mkexec(tmp_path, v, dry_run=False)
+    ex.state.legs["trend"].qty = 0.01
+    _hold(v, 0.01)
+    ex.step(target(trend=_pos()))
+    sc = ex.state.legs["trend"].stop_cloid
+    assert sc
+    v.stop_cloid_watch = sc                 # first read after this says OPEN
+    v.orders[sc]["status"] = "FILLED"       # but the venue is already flat
+    assert abs(v.position()) < 1e-9
+
+    ex.step(target())                        # engine goes flat -> branch 3
+
+    led = ex.state.legs["trend"]
+    assert ex.state.halted is None, "halted the book on an ordinary stop-out"
+    assert led.qty == 0.0 and led.stop_cloid is None
+    kinds = [e["kind"] for e in ex.state.events]
+    assert "stop_filled_on_venue" in kinds and "ledger_divergence" not in kinds
+    assert ex.state.coverage_live.get("stop_filled", 0) == 1
+
+
+def test_gate_a_genuinely_unreadable_stop_still_halts(tmp_path):
+    """Fence for the above: the second look must not explain away a REAL
+    divergence. An UNKNOWN status (what both adapters return on an API
+    failure) is not evidence the stop fired, so the halt must still fire."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    ex.state.legs["trend"].qty = 0.01
+    _hold(v, 0.01)
+    ex.step(target(trend=_pos()))
+    sc = ex.state.legs["trend"].stop_cloid
+    v.orders[sc]["status"] = "CANCELLED"     # venue killed it; we are NOT flat
+    v.orders["seed"]["status"] = "CANCELLED"  # and the position vanished too
+    assert abs(v.position()) < 1e-9
+
+    ex.step(target())
+
+    assert ex.state.halted == "LEDGER_DIVERGENCE", \
+        "a real divergence was explained away as a stop fill"
+
+
+def test_gate_orphan_entry_fill_is_unwound_even_on_a_degraded_feed(tmp_path):
+    """A post-only pullback entry can fill at the venue without ever being
+    booked into led.qty, so had_qty is False and _cancel_entry's "flatten" is
+    the ONLY code that unwinds it. `if not entries_ok: return` used to sit
+    above that cleanup, so a degraded feed left a real venue position with no
+    ledger row, no stop and no exit for as long as the feed stayed bad.
+    entries_ok exists to stop us ADDING risk; flatten is reduce-only and can
+    only remove it. Branch 3 has always done this cleanup ungated."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    led = ex.state.legs["pullback"]
+    v.place_limit("BUY", 0.01, 59_000.0, "P-x-E1")
+    v.orders["P-x-E1"]["status"] = "FILLED"          # the venue filled it
+    led.entry_cloid, led.entry_side, led.entry_qty = "P-x-E1", "L", 0.01
+    led.signal_ts = NOW - 14_400
+    assert led.qty == 0.0, "precondition: the fill was never booked"
+    assert abs(v.position() - 0.01) < 1e-9
+
+    # a DIFFERENT signal arrives while the feed is degraded
+    ex.step(target(pull={"pending": {"side": "L", "limit": 59_500.0,
+                                     "signal_ts": NOW + 14_400},
+                        "position": None},
+                   degraded=True))
+
+    assert led.entry_cloid is None, "orphan ref left dangling"
+    assert any(e["kind"] == "orphan_fill_unwound" for e in ex.state.events), \
+        "orphan venue fill never unwound on a degraded feed"
+    assert abs(v.position()) < 1e-9, "venue still holds an untracked position"
+    # and no NEW risk was added while blind
+    assert not [e for e in ex.state.events if e["kind"] == "entry_order"]
+
+
+def test_gate_halt_line_bigger_than_the_notional_cap_is_flagged(tmp_path):
+    """SIZING_BASE_USD and MAX_NOTIONAL_USD are independent env vars set in
+    different places, so they drift apart silently. Raising the base
+    1000 -> 25000 without touching the cap moved the drawdown line from a
+    17.5% adverse move to 437.5% - mathematically unable to fire - while
+    every health surface stayed green. The pre-existing guard compares the
+    halt against the ACCOUNT and cannot see this; this one compares it
+    against the EXPOSURE the caps permit."""
+    v = FakeVenue(equity=100_000.0)
+    ex = mkexec(tmp_path, v, dry_run=False)
+    ex.cfg.sizing_base_usd = 25_000.0
+    ex.cfg.max_notional_usd = 2_000.0
+    ex.cfg.max_account_lev = 2.0
+    ex.cfg.dd_halt_pct = 0.35
+    ex.cfg.daily_loss_halt_pct = 0.06
+    ex.state.high_water = 100_000.0
+    ex.state.day_start_equity = 100_000.0
+
+    ex._check_halts(100_000.0)
+
+    msgs = [e["msg"] for e in ex.state.events if e["kind"] == "halt_config"]
+    assert any("DRAWDOWN" in m for m in msgs), \
+        "a drawdown breaker that cannot fire was not flagged"
+    assert any("4.4x" in m for m in msgs), msgs
+    assert ex.state.halted is None, "the guard must warn, not halt"
+
+
+def test_gate_coherent_halt_and_cap_config_is_not_flagged(tmp_path):
+    """Fence: the pre-change config (base 1000, cap 2000) is coherent - the
+    drawdown line is a 17.5% move - and must stay quiet."""
+    v = FakeVenue(equity=100_000.0)
+    ex = mkexec(tmp_path, v, dry_run=False)
+    ex.cfg.sizing_base_usd = 1_000.0
+    ex.cfg.max_notional_usd = 2_000.0
+    ex.cfg.max_account_lev = 2.0
+    ex.cfg.dd_halt_pct = 0.35
+    ex.cfg.daily_loss_halt_pct = 0.06
+    ex.state.high_water = 100_000.0
+    ex.state.day_start_equity = 100_000.0
+
+    ex._check_halts(100_000.0)
+
+    assert not [e for e in ex.state.events if e["kind"] == "halt_config"]
+
+
+def test_gate_exit_flag_stops_dead_if_maintain_stop_halts(tmp_path):
+    """Moving _maintain_stop to the head of the exit_flag branch put a call
+    that CAN halt ahead of _cancel_entry and _close_leg. On the halt_error
+    path _halt_locked deliberately KEEPS the ledger - it is the only record
+    of what we believe we hold, and the page tells the operator to flatten by
+    hand off it. Running on would clear the entry ref underneath that page."""
+    class _FlattenFailsVenue(FakeVenue):
+        def position(self):
+            raise RuntimeError("venue position unreadable")
+
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    led = ex.state.legs["trend"]
+    led.qty = 0.01
+    _hold(v, 0.01)
+    ex.step(target(trend=_pos()))
+    led.entry_cloid, led.entry_side, led.entry_qty = "T-keepme", "L", 0.01
+    ex.halt("KILL", "operator")                       # halt already standing
+    ex.state.legs["trend"].qty = 0.01                 # a ledger that survived
+    led.entry_cloid = "T-keepme"
+
+    ex._sync_leg("trend", {"pending": None,
+                           "position": _pos(flag="SIGNAL")["position"],
+                           "halted": False},
+                 BLEND, 10_000.0, entries_ok=True)
+
+    assert led.entry_cloid == "T-keepme", \
+        "cleared the order ref the halt deliberately kept"
+
+
+def test_gate_exit_flag_flatten_arm_unwinds_a_partial_maker_fill(tmp_path):
+    """The branch's `filled_action="flatten"` arm fires when the ledger holds
+    NOTHING but an entry order does - a post-only maker entry that partially
+    filled at the venue and was never booked. That partial is a real position
+    with no stop and no exit, and this is the only code that unwinds it."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    led = ex.state.legs["pullback"]
+    v.place_limit("BUY", 0.01, 59_000.0, "P-p-E1")
+    v.orders["P-p-E1"]["status"] = "FILLED"           # the venue filled it
+    led.entry_cloid, led.entry_side, led.entry_qty = "P-p-E1", "L", 0.01
+    led.signal_ts = NOW - 14_400
+    assert led.qty == 0.0, "precondition: nothing booked"
+    assert abs(v.position() - 0.01) < 1e-9
+
+    ex.step(target(pull=_pos(flag="SIGNAL")))
+
+    assert led.entry_cloid is None
+    assert any(e["kind"] == "orphan_fill_unwound" for e in ex.state.events), \
+        "an unbooked maker fill was left naked on the venue"
+    assert abs(v.position()) < 1e-9
+
+
+# ---- Coinbase-era assumption: quantize() meant "sendable" on CDE, not on HL
+
+class HLSemanticsVenue(FakeVenue):
+    """The two facts about Hyperliquid that CDE nano futures did NOT share:
+    a fine 1e-5 size lot, AND a $10 minimum order VALUE that the lot size
+    knows nothing about. On CDE, quantize() rounded to whole 0.01-BTC
+    contracts, so anything the venue would refuse also quantized to zero and
+    the two tests coincided. Here the whole band from one lot (~$0.79) to $10
+    is representable and unsendable, and the old dust guard tested the wrong
+    one of the two."""
+    min_notional_usd = 10.0
+
+    def quantize(self, q):
+        step = 1e-5
+        return int(abs(q) / step + 1e-9) * step * (1 if q >= 0 else -1)
+
+    def place_market(self, side, qty, cloid, reduce_only=False):
+        if qty * self._mid < self.min_notional_usd:
+            raise RuntimeError(f"MinNotionalRejected {qty * self._mid:.2f}")
+        return super().place_market(side, qty, cloid, reduce_only=reduce_only)
+
+    def place_stop(self, side, qty, trigger_px, cloid):
+        if qty * self._mid < self.min_notional_usd:
+            raise RuntimeError(f"MinNotionalRejected {qty * self._mid:.2f}")
+        return super().place_stop(side, qty, trigger_px, cloid)
+
+
+def test_gate_hl_unsendable_residue_is_dust_and_keeps_nothing_armed(tmp_path):
+    """BLOCKING, Coinbase-era audit. A 0.00005 BTC residue (~$3) passes
+    `quantize(q) > 0` on Hyperliquid, so the dust branch was skipped, the
+    protective stop was cancelled on the way to an order the venue then
+    REFUSED, and _close_leg raised before emitting a single event. The leg
+    was left with no stop, no close, and nothing in the log."""
+    v = HLSemanticsVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    led = ex.state.legs["trend"]
+    led.qty = 5e-5
+    v._add("MARKET", "BUY", 5e-5, "seed")
+    led.stop_cloid, led.stop_px = "T-1-S56500-1", 56_500.0
+    v._add("STOP", "SELL", 5e-5, "T-1-S56500-1", px=56_500.0)
+    assert v.quantize(led.qty) > 0.0, "fixture must be lot-representable"
+
+    ex._close_leg("trend", led, "engine_flat")          # must not raise
+
+    assert led.qty == 0.0 and led.stop_cloid is None
+    assert any(e["kind"] == "ledger_dust_cleared" for e in ex.state.events)
+    assert not [c for c in v.calls if c[0] == "MARKET" and c[3] != "seed"], \
+        "sent an order the venue cannot accept"
+
+
+def test_gate_hl_sendable_residue_still_closes_normally(tmp_path):
+    """Fence: the guard must only catch what the venue would refuse."""
+    v = HLSemanticsVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    led = ex.state.legs["trend"]
+    led.qty = 0.01                                       # $600, well over $10
+    v._add("MARKET", "BUY", 0.01, "seed")
+    ex._close_leg("trend", led, "engine_flat")
+    assert led.qty == 0.0
+    assert [c for c in v.calls if c[0] == "MARKET" and c[3] != "seed"]
+    assert not [e for e in ex.state.events if e["kind"] == "ledger_dust_cleared"]
+
+
+def test_gate_hl_unsendable_chase_books_what_filled(tmp_path):
+    """The same Coinbase-era assumption on the ENTRY side. place_market on a
+    sub-$10 remainder raises, and that raise lands BEFORE `led.qty = ...`, so
+    the ledger stayed at 0 while the venue held everything that did fill - a
+    real leg with no ledger row and no stop."""
+    v = HLSemanticsVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    led = ex.state.legs["pullback"]
+    # entry order 99.9% filled; the remainder is worth well under $10
+    v.place_limit("BUY", 0.05, 60_000.0, "P-x-E1")
+    v.orders["P-x-E1"]["status"] = "OPEN"
+    v.orders["P-x-E1"]["part"] = 0.04995
+    led.entry_cloid, led.entry_side, led.entry_qty = "P-x-E1", "L", 0.05
+
+    ex._enter_from_fill("pullback", led,
+                        _pos()["position"], BLEND, 100_000.0, entries_ok=True)
+
+    assert led.qty > 0.0, "the venue holds a position the ledger forgot"
+    assert abs(led.qty - 0.04995) < 1e-8, led.qty
+    assert any(e["kind"] == "sub_min_size" for e in ex.state.events)
+
+
+def test_gate_below_venue_floor_never_guesses_on_an_unreadable_mid(tmp_path):
+    """Declaring dust clears a position out of the ledger. On a mid we cannot
+    read that would be a guess, and the wrong guess is worse than the loop
+    this guard exists to prevent - so it must decline to call it dust."""
+    class _NoMid(HLSemanticsVenue):
+        def mid(self):
+            raise RuntimeError("mid unreadable")
+
+    v = _NoMid()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    assert ex._below_venue_floor(5e-5) is False
+    assert ex._below_venue_floor(1e-9) is True, "sub-lot is still dust"
