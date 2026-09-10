@@ -137,7 +137,11 @@ def test_pin_board_empty_is_stale():
 
 def test_pin_board_private_credit_bifurcation():
     # 200 calm days of CCC ~7 / BBB ~1.5, then CCC gaps to 12 while BBB stays
-    # tight -> CCC pctile RED, dispersion pctile RED. NDFI growth stalls to -2 -> RED.
+    # tight, NDFI growth stalls to -2. Since the 2026-09-10 recalibration the two
+    # percentile legs are GAUGES capped at YELLOW -- against a rolling ~3-year base
+    # a 95th percentile means "worst ~39 days in 3 years", which is local
+    # deterioration, not absolute distress -- so the channel goes RED on its
+    # triggers (the CCC level leg and NDFI), never on relative crowding alone.
     days = _days(201)
     ccc = [7.0] * 200 + [12.0]
     bbb = [1.5] * 201
@@ -149,9 +153,12 @@ def test_pin_board_private_credit_bifurcation():
     ch = by["private_credit"]
     assert ch["status"] == "RED"
     parts = {p["label"]: p for p in ch["parts"]}
-    assert parts["CCC spread percentile (vs available history)"]["status"] == "RED"
-    assert parts["CCC−BBB dispersion percentile"]["status"] == "RED"
+    # the gauges register the move but cannot carry RED
+    assert parts["CCC spread percentile (vs available history)"]["status"] == "YELLOW"
+    assert parts["CCC−BBB dispersion percentile"]["status"] == "YELLOW"
+    # the triggers do
     assert parts["Bank loans to NDFIs, m/m ann. growth"]["status"] == "RED"
+    assert parts["CCC-and-lower OAS"]["value"] == 12.0
     # attributes ride along for the frontend badges
     assert ch["mass"] and ch["speed"] and ch["kill_rate"]
 

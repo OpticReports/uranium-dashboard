@@ -283,6 +283,26 @@ ANCHORS: dict[str, tuple] = {
     # it sat at the ceiling for long stretches (72% of the channel's 95+ months).
     # The level leg above is the trigger and is uncapped.
     "Positioning percentile (vs 2010+)": (50, 85, 95, 100, True, 79),
+    # CCC LEVEL is the channel's trigger, in absolute OAS percent.
+    #
+    # WHY THIS LEG EXISTS. FRED's own series note reads: "Starting in April 2026,
+    # this series will only include 3 years of observations." So the percentile
+    # legs below were CORRECT when written -- ICE BofA history ran to 1996 -- and
+    # silently became 3-year percentiles in April 2026 when the licence changed
+    # under them. A percentile against a rolling ~3-year window cannot say
+    # "credit is distressed", only "worse than the recent past", so the absolute
+    # level now carries the RED and the percentiles are demoted to gauges.
+    #
+    # ANCHORS, documented episode levels, never fitted. VERIFIED: the series
+    # record high is 44.29 (Dec-2008) and record low 4.14 (Jun-2007), both
+    # confirmed against Trading Economics' record of the same FRED series.
+    # JUDGEMENT, not verified against data (the feed serves only ~3 years, so
+    # these could not be checked directly): yellow 11 as the elevated-but-not-
+    # distressed band, and red 16 chosen to sit under the 2011/2016/2020 distress
+    # peaks so those episodes register RED. See PIN_SATURATION.md DD Q15 -- the
+    # BETTER fix is restoring a full-history source, which would make the
+    # original percentile calibration valid again and this leg redundant.
+    "CCC-and-lower OAS": (6.0, 11.0, 16.0, 44.0, True, 100),
     # NOT "vs 1996+", despite the config comment on the series id. FRED serves
     # ICE BofA (BAML*) series under a licence that returns only a ROLLING ~3-year
     # window -- 787 daily observations as of 2026-09, verified by reproducing the
@@ -291,8 +311,11 @@ ANCHORS: dict[str, tuple] = {
     # a materially weaker claim than the channel's documentation implies. The
     # 504-obs warmup also eats two thirds of the window, so these legs only went
     # live around 2025-10. See PIN_SATURATION.md DD Q14 before trusting the band.
-    "CCC spread percentile (vs available history)": (50, 85, 95, 100, True, 100),
-    "CCC−BBB dispersion percentile": (50, 85, 95, 100, True, 100),
+    # Both percentile legs cap at YELLOW: against a rolling ~3-year base a 95th
+    # percentile means "worst ~39 days in 3 years", which is local deterioration,
+    # not absolute distress. Same gauge semantics as SPY/RSP, VRP and positioning.
+    "CCC spread percentile (vs available history)": (50, 85, 95, 100, True, 79),
+    "CCC−BBB dispersion percentile": (50, 85, 95, 100, True, 79),
     "Bank loans to NDFIs, m/m ann. growth": (10, 5, 0, -10, False, 100),
     "USD/JPY, 1-month change": (0, -4, -7, -12, False, 100),             # Aug-2024 ~ -8%/1m
     "10y JGB yield, 12-month change": (0, 50, 100, 150, True, 79),       # cushion leg: caps YELLOW
@@ -534,6 +557,13 @@ def build_pin_board(bundle: dict) -> dict:
     ndfi = bundle.get("ndfi_loans", ([], []))[1]
     ndfi_now = _clean(ndfi)[-1] if _clean(ndfi) else None
     parts = [
+        PinPart("CCC-and-lower OAS", ccc_now, "%",
+                _grade(ccc_now, 11.0, 16.0),
+                "The channel's TRIGGER: absolute distress pricing in the public proxy for "
+                "private-credit marks. Episode anchors — 2007/2021 lows ~6%, 2018-Q4 ~11%, "
+                "2016 energy bust ~20% and 2020 COVID ~18% (both above the 16% red line), "
+                "Dec-2008 peak ~44%. The percentile legs below are relative gauges and "
+                "cap at YELLOW; only this leg can take the channel RED."),
         PinPart("CCC spread percentile (vs available history)", ccc_pctl, "%ile",
                 _grade(ccc_pctl, 85.0, 95.0),
                 f"CCC-and-lower OAS now {ccc_now if ccc_now is not None else 'n/a'}% — "

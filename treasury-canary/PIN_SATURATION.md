@@ -394,6 +394,56 @@ output rather than the property they were named for:
   would not have caught a genuine live-vs-hindcast estimator drift. Now asserted to the
   rounding precision it actually has.
 
+## DD Q14 — recalibration for the real window, 2026-09-10
+
+**The cause has a date.** FRED's own note on `BAMLH0A3HYC` reads: *"Starting in April 2026, this
+series will only include 3 years of observations."* So the `(50, 85, 95, 100)` percentile anchors
+and the `(vs 1996+)` label were **correct when written** — ICE BofA history on FRED ran to 1996 —
+and silently became 3-year percentiles in **April 2026**, five months ago, when the licence
+changed underneath them. This is a data-source regression with a known date, not a long-standing
+calibration error.
+
+**The recalibration.** A percentile against a rolling ~3-year base cannot say "credit is
+distressed", only "worse than the recent past". So:
+
+1. Both percentile legs are **demoted to gauges** (cap 100 -> 79), the same semantics the board
+   already gives SPY/RSP, VRP, RRP buffer, 10y JGB and basis_trade positioning.
+2. A new **level trigger** carries the RED: `"CCC-and-lower OAS": (6.0, 11.0, 16.0, 44.0)`, in
+   absolute OAS percent, added to both the live board and the hindcast.
+
+**Anchor provenance, stated exactly.** Verified: the series record high is **44.29 (Dec-2008)**
+and record low **4.14 (Jun-2007)**, both confirmed against Trading Economics' record of the same
+FRED series. Judgement, NOT verified against data (the feed serves only ~3 years): **yellow 11**
+as the elevated-but-not-distressed band, and **red 16**, chosen to sit under the 2011/2016/2020
+distress peaks so those episodes register RED. I could not obtain CCC-specific values for those
+peaks; the closest evidence is the broad HY index peaking ~10.87% on 2020-03-23, and CCC runs
+well above the broad index in stress.
+
+**Impact — this changes the live board's headline.**
+
+| | before | after |
+|---|---|---|
+| private_credit, live | **RED 98.8** | **YELLOW 79.0** |
+| CCC level leg (trigger) | — | 10.64% -> 46.4 GREEN |
+| CCC percentile (now gauge) | 99.2 -> 96.8 RED | 99.2 -> 79.0 YELLOW |
+| dispersion percentile (now gauge) | 99.7 -> 98.8 RED | 99.7 -> 79.0 YELLOW |
+| hindcast RED months | 19 | 13 |
+
+The 6 removed hindcast months are 2026-03/04/06/07/08/09 — every one of them RED purely on the
+3-year percentile. The 13 that remain are NDFI-driven. The CCC level never exceeds 11.37% anywhere
+in the available window, so the new trigger never fires in 2023-2026, which is the correct reading:
+there was no absolute credit distress in that period.
+
+**The honest tension, stated rather than buried.** This trades a false RED for a possible false
+GREEN. Today's reading says "spreads at a 3-year high (gauge YELLOW) but not absolutely
+distressed" — defensible, since 10.64% is unremarkable against a series that reached 44.29% in
+2008. But the channel's stated purpose is detecting *this cycle's untested leverage*, and a book
+at record size deteriorating from a low base is exactly what an absolute-level anchor is worst at
+seeing. The gauges are what carry that signal now, and they cap at YELLOW.
+
+**The better fix is not this one.** Restoring a full-history source would make the original
+percentile calibration valid again and make this level leg redundant. That is DD Q15.
+
 ## Pending DD questions
 
 | # | P | Question | What it would move |
@@ -410,7 +460,10 @@ output rather than the property they were named for:
 | 10 | P2 | `"Positioning percentile (vs 2010+)"` actually ranks against the full CFTC series from **2006-06-13** — 186 of 1056 observations (17.6%) predate 2010. Relabel or actually slice. | The label is factually wrong in user-facing text. Pre-existing, but this change puts that gauge under a spotlight. |
 | 11 | P2 | `RESERVES_MIN_BASE_M` is a nominal-dollar constant and will drift toward the ample regime as nominal GDP grows. Reserves/GDP or reserves/bank-assets (the Fed's own ample-reserves framing) would need no gate at all. | The gate is a defensible interim — small, reversible, testable — but the reserves *metric* is the real defect: `_pct_change` on a series with a 300x regime break is the wrong statistic. |
 | ~~12~~ | ~~P1~~ | **RESOLVED 2026-09-10 — see the section above.** Zero status flips, zero episode changes; 4 of 140 months move, largest -1.10 points. | The full 1996+ series does not exist in the pipeline; the real base is a rolling ~3-year window. |
-| 14 | **P1** | The CCC/dispersion anchors `(50, 85, 95, 100)` were calibrated as if ranking against 1996+. Against a rolling ~3-year window, does "95th percentile = RED" still mean anything? | **This is now the live board's private_credit reading.** CCC scores 96.8 and dispersion 98.8 today off a 3-year rank. Either recalibrate for the real window, source full ICE history another way, or replace the percentile legs with a level-anchored measure. |
+| ~~14~~ | ~~P1~~ | **RESOLVED 2026-09-10 — see the section above.** Percentiles demoted to gauges; a level trigger carries RED. | private_credit goes RED -> YELLOW on the live board. |
+| 15 | **P1** | **Restore a full-history CCC/BBB source** (paid FRED tier, ICE direct, or another provider). FRED restricted ICE BofA to 3 years in April 2026. | This is the BETTER fix: it would make the original `(50, 85, 95, 100)` percentile calibration valid again and render the new level leg redundant. Recalibrating around a source regression is a workaround, not a repair. |
+| 16 | **P2** | Ground the `yellow 11` and `red 16` CCC level anchors against actual 2011/2016/2020 CCC peaks. | They are currently judgement calls. Only the 44.29 extreme and 4.14 floor are verified. |
+| 17 | **P1** | **CONFIRMED, second instrument hit.** `severity.py:174` ranks HY OAS against its own history via `_pctile(hy, hy[-1], invert=True)`, and `hy_oas` is `BAMLH0A0HYM2` — another ICE series truncated in April 2026. The live board's `hy_complacency` score of **87.2** reproduces EXACTLY as the inverted rank of today's 2.71% against the 787-point window (100 - 12.8). So "HY spread complacency" now means "tightest 13% of the last 3 years", not "since 1996". | Outside the pin board, so not fixed here. The severity index is a separate instrument with the same defect and needs the same decision: restore full history (Q15) or re-anchor on levels. `crossasset.hy_oas`/`ig_oas` are NOT affected — they threshold on fixed levels, so truncation changes their history depth but not their reading. |
 | 13 | P3 | `base.py::percentile_rank` and severity `_pctile` still use `count(v <= x)/n` and still return exactly 100.0 (`tests/test_severity.py:14` asserts it). Converge them or leave them scoped as separate instruments. | Consistency of the percentile treatment across the dashboard. |
 ## Counter-agent log (mandatory pass, CLAUDE.md)
 

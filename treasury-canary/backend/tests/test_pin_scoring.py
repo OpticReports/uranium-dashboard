@@ -315,3 +315,31 @@ def test_ccc_percentile_label_does_not_claim_history_it_does_not_have():
     assert "CCC spread percentile (vs available history)" in ANCHORS
     assert not any("1996+" in label for label in ANCHORS), \
         "no anchor may claim a history depth the data source does not serve"
+
+
+def test_private_credit_percentiles_cannot_carry_red_alone():
+    """The 2026-09-10 recalibration: a rolling ~3-year percentile is a gauge.
+
+    Before it, CCC at a 3-year high scored 96.8 and took the channel RED on its
+    own — i.e. "highest in ~3 years" was being reported as absolute distress.
+    """
+    for label in ("CCC spread percentile (vs available history)",
+                  "CCC−BBB dispersion percentile"):
+        b, y, r, e, hi, cap = ANCHORS[label]
+        assert cap == 79.0
+        assert _pscore(100.0, b, y, r, e, hi, cap) == 79.0   # a 3-year high: YELLOW
+        assert _status_from_score(_pscore(100.0, b, y, r, e, hi, cap)) == "YELLOW"
+
+
+def test_ccc_level_trigger_registers_the_documented_episodes():
+    """The level leg must fire on the episodes its anchors cite, and stay calm below."""
+    b, y, r, e, hi, cap = ANCHORS["CCC-and-lower OAS"]
+    assert cap == 100.0                                    # this leg IS the trigger
+    assert _status_from_score(_pscore(6.0, b, y, r, e, hi, cap)) == "GREEN"    # 2007/2021 lows
+    assert _status_from_score(_pscore(11.0, b, y, r, e, hi, cap)) == "YELLOW"  # 2018-Q4
+    assert _status_from_score(_pscore(16.0, b, y, r, e, hi, cap)) == "RED"
+    assert _status_from_score(_pscore(18.0, b, y, r, e, hi, cap)) == "RED"     # 2020 COVID
+    assert _status_from_score(_pscore(20.0, b, y, r, e, hi, cap)) == "RED"     # 2016 energy
+    assert _pscore(44.0, b, y, r, e, hi, cap) == 100.0                         # Dec-2008 peak
+    # today's 10.64% is NOT distressed by absolute standards, whatever its 3y rank
+    assert _status_from_score(_pscore(10.64, b, y, r, e, hi, cap)) == "GREEN"

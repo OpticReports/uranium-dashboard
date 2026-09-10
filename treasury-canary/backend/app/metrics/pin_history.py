@@ -232,6 +232,7 @@ def _parts_for_channel(cid: str, bundle: dict) -> list[tuple[str, tuple[list[dat
         disp = [a - b for a, b in zip(av, bv)]
         nd, nv = _series(bundle, "ndfi_loans")
         return [
+            ("CCC-and-lower OAS", (cd, cv)),
             ("CCC spread percentile (vs available history)", _expanding_percentile(cd, cv, 504)),
             ("CCC−BBB dispersion percentile", _expanding_percentile(dd, disp, 504)),
             ("Bank loans to NDFIs, m/m ann. growth", (nd, nv)),
