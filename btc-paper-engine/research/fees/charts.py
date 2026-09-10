@@ -30,7 +30,8 @@ entries = [("08-31 00:00", 151.36), ("09-01 16:01", 151.07),
            ("09-08 08:00", 151.24), ("09-09 16:00", 1949.00)]
 y = np.arange(len(entries))
 ax.barh(y, [4.32] * 4, color=RED, height=0.5, zorder=3)
-ax.axvline(0, color=AQUA, lw=2.5, zorder=5)
+ax.barh(y, [1.44] * 4, color=AQUA, height=0.5, zorder=4)
+
 for i, (lab, ntl) in enumerate(entries):
     ax.text(4.45, i, f"${ntl:,.0f}", va="center", fontsize=8.2, color=SEC)
 ax.set_yticks(y, [e[0] for e in entries], fontsize=8.4)
@@ -38,7 +39,7 @@ ax.set_xlim(-0.35, 6.6); ax.set_ylim(3.6, -1.75);
 ax.set_xlabel("entry fee actually charged, bps")
 ax.set_title("1. The post-only entry has never rested")
 ax.grid(axis="x", lw=0.6, zorder=0)
-ax.text(0.12, -1.15, "modelled:\nmaker, 0 bps", color=AQUA, fontsize=8.2,
+ax.text(0.72, -1.15, "modelled:\nmaker, 1.44 bps", color=AQUA, fontsize=8.2,
         ha="center", va="center", fontweight="bold")
 ax.text(4.32, -1.15, "actually paid:\ntaker, 4.32 bps", color=RED, fontsize=8.2,
         ha="center", va="center", fontweight="bold")
@@ -58,9 +59,13 @@ for wname, col, mk in (("full", BLUE, "o"), ("hl_era", VIOLET, "s")):
 base_full = [g for g in grid if g["arm"] == "baseline_6.0" and g["window"] == "full"][0]
 ax.axhline(base_full["stats"]["S3"]["cagr_pct"], color=MUTED, ls="--", lw=1.1,
            zorder=2)
-ax.text(2, base_full["stats"]["S3"]["cagr_pct"] + 0.12,
-        f"as modelled today ({base_full['stats']['S3']['cagr_pct']}%)",
+ax.text(2, base_full["stats"]["S3"]["cagr_pct"] + 0.10,
+        f"as modelled today ({base_full['stats']['S3']['cagr_pct']}%) — which "
+        f"is only ~8% crossing",
         fontsize=8, color=MUTED)
+ax.axvline(8.33, color=AQUA, ls="-.", lw=1.3, zorder=3)
+ax.text(9.5, 16.55, "the shipped model\nassumes ~8% cross", color=AQUA,
+        fontsize=8, va="bottom")
 ax.axvline(100, color=RED, ls=":", lw=1.4, zorder=3)
 ax.text(97, 18.6, "live: 4 of 4", color=RED, fontsize=8.2, ha="right", rotation=90)
 ax.set_xlabel("share of entries that CROSS (pay taker), %")

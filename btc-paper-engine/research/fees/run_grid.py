@@ -23,8 +23,14 @@ BARS_CSV = sys.argv[1]
 OUT = sys.argv[2] if len(sys.argv) > 2 else HERE
 
 # PRE-REGISTERED. Do not edit after 2026-09-10.
-TAKER = RESEARCH_TRADE.taker_fee_bps          # 6.0, the model's own number
-HL_TAKER = 4.32                               # measured on all 17 live fills
+# AMENDMENT 1 (PREREG): both rates read off the venue, not assumed.
+# userCrossRate 0.00045 and userAddRate 0.00015, both less the 4% referral
+# discount that demonstrably applies (4.32 reproduces the fee on every fill).
+# The first cut priced the maker leg at ZERO, which is wrong and flattered
+# every frac<1 arm. The engine's own 6.0 is a Coinbase-era number, unused.
+HL_TAKER = 4.32                               # measured on all live fills
+HL_MAKER = 1.44                               # userAddRate, same discount
+_UNUSED_ENGINE_TAKER = RESEARCH_TRADE.taker_fee_bps    # 6.0, kept for the record
 FRACS = [0.00, 0.25, 0.50, 0.66, 0.75, 1.00]
 WINDOWS = {"full": 1640995200, "hl_era": 1683849600}   # 2022-01-01 / 2023-05-12
 
@@ -86,7 +92,9 @@ def main():
     # 12 declared grid cells
     for wname, start in WINDOWS.items():
         for f in FRACS:
-            fee = f * HL_TAKER + HL_TAKER      # entry share crossed + taker exit
+            # entry: f crosses at taker, (1-f) rests at MAKER (not free).
+            # exit is always taker.
+            fee = f * HL_TAKER + (1 - f) * HL_MAKER + HL_TAKER
             st = run(bars, fee, start)
             rows.append({"arm": f"frac_{f:.2f}", "window": wname,
                          "fee_bps": round(fee, 4), "frac": f, "stats": st})

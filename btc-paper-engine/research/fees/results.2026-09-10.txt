@@ -1,16 +1,16 @@
 [baseline] full    fee 6.00  S3 ret   107.9%  CAGR 18.0  n=190
 [baseline] hl_era  fee 6.00  S3 ret    66.7%  CAGR 17.5  n=141
-[grid]     full    frac 0.00 fee  4.32  S3 ret   114.6%  CAGR 18.9  MTM DD -21.75%
-[grid]     full    frac 0.25 fee  5.40  S3 ret   110.2%  CAGR 18.3  MTM DD -22.04%
-[grid]     full    frac 0.50 fee  6.48  S3 ret   106.0%  CAGR 17.8  MTM DD -22.31%
-[grid]     full    frac 0.66 fee  7.17  S3 ret   103.3%  CAGR 17.5  MTM DD -22.49%
-[grid]     full    frac 0.75 fee  7.56  S3 ret   101.8%  CAGR 17.3  MTM DD -22.59%
+[grid]     full    frac 0.00 fee  5.76  S3 ret   108.8%  CAGR 18.2  MTM DD -22.13%
+[grid]     full    frac 0.25 fee  6.48  S3 ret   106.0%  CAGR 17.8  MTM DD -22.31%
+[grid]     full    frac 0.50 fee  7.20  S3 ret   103.2%  CAGR 17.4  MTM DD -22.50%
+[grid]     full    frac 0.66 fee  7.66  S3 ret   101.4%  CAGR 17.2  MTM DD -22.62%
+[grid]     full    frac 0.75 fee  7.92  S3 ret   100.4%  CAGR 17.1  MTM DD -22.69%
 [grid]     full    frac 1.00 fee  8.64  S3 ret    97.7%  CAGR 16.7  MTM DD -22.87%
-[grid]     hl_era  frac 0.00 fee  4.32  S3 ret    70.6%  CAGR 18.4  MTM DD -21.75%
-[grid]     hl_era  frac 0.25 fee  5.40  S3 ret    68.1%  CAGR 17.9  MTM DD -22.04%
-[grid]     hl_era  frac 0.50 fee  6.48  S3 ret    65.5%  CAGR 17.3  MTM DD -22.31%
-[grid]     hl_era  frac 0.66 fee  7.17  S3 ret    63.9%  CAGR 16.9  MTM DD -22.49%
-[grid]     hl_era  frac 0.75 fee  7.56  S3 ret    63.0%  CAGR 16.7  MTM DD -22.59%
+[grid]     hl_era  frac 0.00 fee  5.76  S3 ret    67.2%  CAGR 17.7  MTM DD -22.13%
+[grid]     hl_era  frac 0.25 fee  6.48  S3 ret    65.5%  CAGR 17.3  MTM DD -22.31%
+[grid]     hl_era  frac 0.50 fee  7.20  S3 ret    63.9%  CAGR 16.9  MTM DD -22.50%
+[grid]     hl_era  frac 0.66 fee  7.66  S3 ret    62.8%  CAGR 16.7  MTM DD -22.62%
+[grid]     hl_era  frac 0.75 fee  7.92  S3 ret    62.2%  CAGR 16.5  MTM DD -22.69%
 [grid]     hl_era  frac 1.00 fee  8.64  S3 ret    60.6%  CAGR 16.2  MTM DD -22.87%
 
 wrote research/fees/grid.json  (14 arms)

@@ -122,3 +122,108 @@ registered trial counts from registration, not from success.
 - Not out-of-sample. Every number will be in-sample on a fixture already used
   for ~2,491 prior trials, and per §2 of the protocol must be read as an
   **upper bound**.
+
+---
+
+# AMENDMENT 1 — 2026-09-10, after the first counter-agent pass
+
+Recorded under §7's own rule that corrections go in a dated amendment rather
+than editing frozen text. Two deviations, one of them an error I introduced.
+
+## A1.1 — the maker leg was priced at ZERO. It is 1.44 bps. (ERROR, corrected)
+
+`run_grid.py` used `fee = frac * 4.32 + 4.32`, which charges the non-crossing
+share nothing. Hyperliquid does charge it. Verified directly from `userFees`
+on the live account:
+
+```
+userCrossRate 0.00045  ->  4.50 bps list  ->  4.32 after the 4% referral discount
+userAddRate   0.00015  ->  1.50 bps list  ->  1.44 after the same discount
+activeReferralDiscount 0.04
+```
+
+The 4.32 cross rate reproduces the fee on all 18 fills exactly, which is what
+makes the 1.44 add rate credible: the same discount demonstrably applies.
+
+Corrected parameterisation: `frac*4.32 + (1-frac)*1.44 + 4.32`.
+
+| frac | as first run | corrected |
+|---|---|---|
+| 0.00 | 4.32 | **5.76** |
+| 0.50 | 6.48 | 7.20 |
+| 0.66 | 7.17 | **7.66** |
+| 1.00 | 8.64 | 8.64 — unchanged |
+
+**The headline arm is untouched.** The live regime is all-crossing, so frac=1
+has no maker component and the 8.64 figure, the H1/H2/H3 results and the
+ladder decision all stand. What moves is every `frac < 1` arm, which was
+optimistic by `1.44 × (1-frac)`.
+
+Two consequences beyond the grid, both of which pointed the flattering way:
+
+- The old chart implied the shipped 6.00 model corresponds to ~39% of entries
+  crossing. With maker priced correctly the equivalence is `(6.00-5.76)/2.88`
+  ≈ **8%**. The shipped model is far more optimistic than the first chart made
+  it look, which strengthens the study's own case rather than weakening it.
+- §8's "$45/yr" for making post-only actually rest was computed against a
+  0-bps counterfactual. The real saving is `4.32 − 1.44 = 2.88` bps, about
+  **$30/yr** — and even that ignores that entries which then rest may never
+  fill at all, a selection effect rather than a fee change.
+
+## A1.2 — `TAKER` vs `HL_TAKER` (silent deviation from frozen text, now declared)
+
+§4.1 registered the model as `entry_taker_frac * taker + taker`. Read
+literally with the engine's own `RESEARCH_TRADE.taker_fee_bps = 6.0`, that is
+a 6–12 bps grid. `run_grid.py` instead used the measured venue rate 4.32 for
+both terms, leaving the 6.0 constant defined but unused.
+
+The script's choice is the empirically correct one — 6.0 is a Coinbase-era
+number and the venue demonstrably charges 4.32 — but it is a deviation from
+frozen text that moved the answer in the flattering direction, and it went
+undeclared until a reviewer found it. Declared here.
+
+## A1.3 — 8.64 is the engine's convention, not the realised number
+
+The engine charges the whole round trip on ENTRY notional. Hyperliquid charges
+the exit on EXIT notional. Realised on the three completed live round trips:
+
+| entry | realised round trip, on entry notional |
+|---|---|
+| E1 | 8.71 bps |
+| E2 | 8.84 bps |
+| E3 | 8.70 bps |
+| notional-weighted | **8.75 bps** |
+
+The bias is systematic: it understates for winners and overstates for losers,
+and this book wins 63% with positive expectancy, so it nets an understatement.
+Small (~0.11 bps to date) and it makes the study CONSERVATIVE, but the claim
+should read "8.64 by the engine's convention; 8.75 realised to date".
+
+## A1.4 — scope: three books were corrected, not one
+
+S1 and S2 are also pullback books and also move across arms. Correct
+behaviour, but `run_grid.py`'s docstring says "the PULLBACK book's Position"
+in the singular and the framing reads as S3-only. The S4 donchian book is
+bit-identical across all 14 arms, which is the isolation evidence.
+
+## A1.5 — NOT fixed here, carried forward as separate work
+
+The pullback fee is hard-wired to the `Position` dataclass default and does
+not track config: `load_strategy()` accepts `trade.taker_fee_bps` from YAML,
+and changing it moves the donchian book while every pullback book stays pinned
+at 6.0. A third, independent fee expression lives at `replay.py`
+`research_basis_stats` (flat `tcfg.taker_fee_bps` per trade, ignoring
+`Position.fee_bps`), and `main.py` serves it to the API as `research_basis` —
+still reporting the uncorrected number. Any real fix has to move all three
+sites together. That is an engine change, out of scope for a measurement
+study, and it is not being smuggled in here.
+
+## A1.6 — an unmeasured offset, flagged rather than modelled
+
+A post-only rejected as marketable retries as a crossing limit and fills at
+the ask, which is at or inside our limit, while the engine books the entry at
+exactly the limit. So the live entry PRICE is weakly better than modelled,
+partly offsetting the 4.32. Sizing it needs the live engine's pending limit
+for those four `signal_ts`, which we do not have. Per CLAUDE.md that is an
+input to request, not to model around, so the study does not estimate it and
+the reported cost is an upper bound on the fee channel alone.
