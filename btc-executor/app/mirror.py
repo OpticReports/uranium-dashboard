@@ -63,6 +63,31 @@ BAR_SECONDS = 14_400
 # over-sized leg exits on its own signal rather than being part-closed by a
 # deploy.
 KELLY_M_CAP = 0.20
+# WHAT THE CAP DOES NOT DO, made explicit because two counter-agents found it
+# independently (2026-09-10, both BLOCKING): leg notional is
+# `kelly_m * lev * weight * base`, and KELLY_M_CAP bounds ONE factor. With
+# KELLY_M pinned at 0.20, SIZING_BASE_USD 1000 -> 3000 deploys MORE than the
+# retired rung D, and an engine payload with lev=10 deploys 6.7x what the cap
+# authorises - the first costs one dashboard field, the second costs us
+# nothing at all because `blend` arrives unvalidated from /exec/target.
+# Neither produced a single event before these three constants existed.
+#
+# So the invariant is stated where the Kelly envelope actually lives - as a
+# fraction of CAPITAL, not as one multiplier:
+#   gross deployed notional / equity  <=  MAX_EXPOSURE_FRAC
+# which is the same 0.30 the cap authorises at the blend we actually ship.
+# _check_exposure pages when the CONFIG would breach it. It pages rather than
+# clamps deliberately: clamping on live equity would shrink entry size during
+# a drawdown, which is a real change to how the book trades and is Casey's
+# call, not a side effect of a documentation change. Note the corollary - a
+# deep drawdown raises the ratio on its own, so this can page without anyone
+# touching the config. That is Kelly telling the truth, not a false alarm.
+REFERENCE_LEV = 1.5          # the blend /exec/target actually ships (S5)
+MAX_EXPOSURE_FRAC = KELLY_M_CAP * REFERENCE_LEV        # 0.30 of equity, gross
+# The largest blend leverage the engine publishes (S6 = 2.0x, bench_blend.py).
+# Anything above this is a malformed or hostile payload, not a strategy
+# change, and is clamped at the door.
+MAX_BLEND_LEV = 2.0
 # RAMP v4 gate requirements that auto-drill must also respect. Single source
 # of truth: main.py imports these, so the drill loop and the gate can never
 # disagree about what "done" means (they did - auto-drill stopped at 3 cycles
@@ -360,15 +385,92 @@ class Executor:
         RAMP v4's execution criteria, the env takes the new value, and nothing
         anywhere says the number is outside the Kelly envelope. Clamping
         without paging would be the same silence with different arithmetic, so
-        the clamp and the page ship together."""
-        cap = globals().get("KELLY_M_CAP", KELLY_M_CAP)
-        raw = float(getattr(self.cfg, "kelly_m", 0.0) or 0.0)
-        if raw <= cap:
+        the clamp and the page ship together.
+
+        RUNS EVERY POLL, not once at boot (counter-agent 2026-09-10,
+        BLOCKING). Over-cap is a PERSISTENT condition and the first cut
+        treated it as an event. Three ways that lost the only page: (a)
+        `_event`s dedupe compares against state.events[-1], which is
+        PERSISTED, so a container recycle within 10 minutes matched the dead
+        process`s own event and returned silently - the running process had
+        never paged; (b) alerts.send is fire-and-forget and drops on any
+        failure, and there was no second chance; (c) it landed in the noisiest
+        minute of a deploy. Every other persistent RED here (halt_config,
+        cap_clamp, sub_min_size, entries_blocked, stop_vanished) re-fires each
+        poll and is throttled by RATE_LIMITED instead; kelly_over_cap now
+        matches that pattern."""
+        raw = float(self.cfg.kelly_m)
+        if raw <= KELLY_M_CAP:
             return
+        cap = KELLY_M_CAP
         self._event("RED", "kelly_over_cap",
                     f"KELLY_M {raw} exceeds the repo cap {cap} - legs are "
                     f"being sized at {cap}, NOT at {raw}. Positions already "
                     f"open are left alone and exit on their own signal.")
+
+    def _sane_blend(self, blend: dict) -> dict:
+        """Bound the two engine-supplied multipliers before they reach sizing.
+
+        `blend` arrives verbatim from /exec/target with no schema check
+        (main.py hands raw JSON to step()), and BOTH of its fields multiply
+        straight through KELLY_M_CAP. Measured by the counter-agent: lev=10
+        with KELLY_M at exactly the cap deploys $1,500 against a $1,000 base
+        and emits NOTHING - the only backstop, cap_notional, is itself two env
+        vars. w_trend is worse than unbounded: at 3.0 the pullback weight goes
+        NEGATIVE, _leg_qty returns a negative qty, and the entry branch drops
+        it at `if qty <= 0: return` - a whole leg goes dark silently.
+
+        Clamping here (rather than paging and proceeding) is right because a
+        malformed multiplier is not a strategy the engine is entitled to
+        express; the defaults ARE the shipped blend."""
+        out = dict(blend or {})
+        try:
+            lev = float(out.get("lev", REFERENCE_LEV))
+        except (TypeError, ValueError):
+            lev = float("nan")
+        if not (lev == lev) or lev <= 0.0 or lev > MAX_BLEND_LEV:
+            self._event("RED", "blend_out_of_range",
+                        f"engine blend lev={out.get('lev')!r} is outside "
+                        f"(0, {MAX_BLEND_LEV}] - sizing at {REFERENCE_LEV}")
+            lev = REFERENCE_LEV
+        out["lev"] = lev
+        try:
+            w = float(out.get("w_trend", 0.25))
+        except (TypeError, ValueError):
+            w = float("nan")
+        if not (w == w) or w < 0.0 or w > 1.0:
+            self._event("RED", "blend_out_of_range",
+                        f"engine blend w_trend={out.get('w_trend')!r} is "
+                        f"outside [0, 1] - sizing at 0.25")
+            w = 0.25
+        out["w_trend"] = w
+        return out
+
+    def _check_exposure(self, equity: float, blend: dict) -> None:
+        """Page when the CONFIG would deploy more than MAX_EXPOSURE_FRAC.
+
+        This is the check that makes KELLY_M_CAP a risk control rather than a
+        bound on one float. It reads the whole product - kelly x lev x base -
+        against equity, so the SIZING_BASE_USD route to a retired rung is
+        loud instead of silent. It deliberately does NOT clamp; see
+        MAX_EXPOSURE_FRAC."""
+        if not equity or equity <= 0:
+            return
+        base = self._base(equity)
+        lev = float(blend.get("lev", REFERENCE_LEV))
+        gross = self._effective_kelly_m() * lev * base
+        frac = gross / equity
+        # 1% tolerance: at the live config frac sits exactly ON the line, and
+        # a control that pages at its own design point is noise.
+        if frac <= MAX_EXPOSURE_FRAC * 1.01:
+            return
+        self._event("RED", "exposure_over_cap",
+                    f"configured gross exposure ${gross:,.0f} is "
+                    f"{frac:.0%} of ${equity:,.0f} equity, over the "
+                    f"{MAX_EXPOSURE_FRAC:.0%} ceiling. KELLY_M "
+                    f"{self._effective_kelly_m()} is inside its cap - the "
+                    f"size is coming from SIZING_BASE_USD ${base:,.0f} "
+                    f"and/or blend lev {lev}.")
 
     def _check_venue_continuity(self) -> None:
         """A ledger belongs to ONE exchange. Refuse to run it against another.
@@ -1095,6 +1197,21 @@ class Executor:
                                "evidence justifies a higher ceiling, raise "
                                "KELLY_M_CAP in the repo (code change + "
                                "review + redeploy, on purpose)",
+            "exposure_over_cap": "KELLY_M is inside its cap but the SIZE is "
+                                 "not - SIZING_BASE_USD (or the engine's "
+                                 "blend leverage) is deploying more than the "
+                                 "ramp ceiling authorises. Capping KELLY_M "
+                                 "bounds one factor of a product; this is "
+                                 "the other factors. Lower SIZING_BASE_USD, "
+                                 "or accept it deliberately and say so",
+            "blend_out_of_range": "the PAPER ENGINE sent a blend leverage or "
+                                  "weight outside the range this executor "
+                                  "will trade. Sizing fell back to the "
+                                  "shipped blend (1.5x, 25% trend) and "
+                                  "trading continues - but /exec/target is "
+                                  "publishing something unexpected, so check "
+                                  "the engine before trusting its next "
+                                  "signal",
             "config_change": "sizing/risk config changed - if this was you "
                              "(ramp step, base change), ignore; if NOT, a "
                              "sync or fat-finger altered live risk limits - "
@@ -1132,6 +1249,12 @@ class Executor:
         # still LOGGED - only the phone pings are rate-limited. Halts, mode
         # changes and live-trade events are never suppressed.
         RATE_LIMITED = {"halt_config", "cap_clamp", "leg_sync_error",
+                        # persistent by nature: true every poll until the
+                        # operator edits the env or the cap is raised
+                        "kelly_over_cap", "exposure_over_cap",
+                        # every poll for as long as the engine keeps sending
+                        # the same malformed blend
+                        "blend_out_of_range",
                         "stop_unconfirmed", "entry_unconfirmed",
                         "stop_ref_cleared",
                         "position_drift", "entries_blocked", "sub_min_size",
@@ -1173,11 +1296,25 @@ class Executor:
         """KELLY_M as SIZING actually uses it: the env value, clamped to
         KELLY_M_CAP.
 
-        Read the module attribute rather than closing over the constant so a
-        test (or a future guarded override) can move the cap without patching
-        every call site."""
-        cap = globals().get("KELLY_M_CAP", KELLY_M_CAP)
-        return min(float(getattr(self.cfg, "kelly_m", 0.0) or 0.0), cap)
+        A bare module reference already resolves through globals at CALL
+        time, so monkeypatching mirror.KELLY_M_CAP works without the
+        globals().get() dance the first cut used - which advertised an
+        override path that main.py's by-value import would then disagree
+        with (counter-agent 2026-09-10, M1).
+
+        No `or 0.0` fallback: a cfg with a missing or None kelly_m should
+        raise loudly, not silently size every leg at zero and never say so
+        (M2 - _leg_qty's sub_min_size page needs want > 0 to fire, so a
+        zero target produces no event at all)."""
+        m = float(self.cfg.kelly_m)
+        # min() is NOT NaN-safe: min(nan, 0.20) is nan, which then flows into
+        # _leg_frac -> _leg_qty, passes `want > room` (False), passes
+        # `qty <= 0` (False), and reaches the venue as a NaN order size while
+        # the page claims we are "sizing at 0.2" (counter-agent M7). A NaN
+        # kelly is a broken config, so it sizes at nothing.
+        if m != m:
+            return 0.0
+        return min(m, KELLY_M_CAP)
 
     def _leg_frac(self, leg: str, blend: dict) -> float:
         w = blend.get("w_trend", 0.25)
@@ -1233,12 +1370,27 @@ class Executor:
             # rearm would clear the only breaker reachable during the ramp,
             # granting a fresh full budget at 00:00 UTC mid-move. This rule
             # was doc-only until 2026-08-11 (counter-agent find).
+            #
+            # EFFECTIVE, not raw (counter-agent 2026-09-10, BLOCKING). The
+            # first cut of the cap read raw kelly_m here on the argument that
+            # raw "errs strict". It does the opposite. With KELLY_M_CAP at
+            # 0.20, raw > 0.30 is reachable ONLY in the clamped state - i.e.
+            # only when the book is trading at the SAFE size - so the rule's
+            # own premise ("at that size a breach is meaningful evidence") is
+            # false in every state that can reach it. A fat-fingered
+            # KELLY_M=0.56 plus one ordinary -6% day would then hold
+            # DAILY_LOSS through every rollover, and _step_locked returns at
+            # `if self.state.halted` BEFORE stop maintenance and engine-exit
+            # mirroring. That is the same unmanaged-book harm the cap
+            # deliberately refuses to cause by halting, arrived at sideways.
+            # Reading effective makes the rule dormant while the cap is below
+            # 0.30 and revives it automatically if the cap is ever raised.
             if self.state.day_key and self.state.halted == "DAILY_LOSS":
-                if getattr(self.cfg, "kelly_m", 0.0) > 0.30:
+                if self._effective_kelly_m() > 0.30:
                     self._event("RED", "halt",
                                 f"DAILY_LOSS held through UTC rollover {day}: "
-                                f"KELLY_M {self.cfg.kelly_m} > 0.30 requires "
-                                f"MANUAL resume (ramp v3 rule)")
+                                f"KELLY_M {self._effective_kelly_m()} > 0.30 "
+                                f"requires MANUAL resume (ramp v3 rule)")
                 else:
                     self.state.halted = None
                     self._breach_count = 0
@@ -1841,11 +1993,8 @@ class Executor:
                      for k, v in snap.items() if prev_snap.get(k) != v]
             self._event("RED", "config_change", "; ".join(diffs))
             self._cov("config_change")
-            # A cap breach introduced WITHOUT a restart (a test, or a future
-            # hot-reload) must page too - boot is not the only way KELLY_M
-            # can change.
-            if prev_snap.get("kelly_m") != snap.get("kelly_m"):
-                self._check_kelly_cap()
+            # (the cap re-check used to live here; _step_locked now runs it
+            # every poll, which covers this case and the restart case both)
         self.state.last_config = snap
 
     def step(self, target: dict) -> None:
@@ -1855,6 +2004,7 @@ class Executor:
     def _step_locked(self, target: dict) -> None:
         self._step_errors = 0          # a step that starts clean clears the run
         self._check_mode_change()
+        self._check_kelly_cap()        # persistent condition, throttled page
         equity = self.venue.equity()
         self._reconcile_transfers(equity)
         self._rebaseline_rails_if_stale(equity)
@@ -1882,7 +2032,8 @@ class Executor:
             self._event("RED", "entries_blocked",
                         f"stale={stale} degraded={target.get('degraded')} "
                         f"data_halt={target.get('data_halt')}")
-        blend = target.get("blend", {})
+        blend = self._sane_blend(target.get("blend", {}))
+        self._check_exposure(equity, blend)
         for leg in LEGS:
             # A halt can now fire MID-LOOP (_handle_stop_vanished halts on
             # ledger divergence / unplaceable stops). Without this check the
@@ -3186,6 +3337,15 @@ class Executor:
                                  "px": round(float(px), 2),
                                  "ref_px": round(float(ref_px), 2),
                                  "slip_bps": round(bps, 2),
+                                 # THE SIZE THIS FILL WAS TAKEN AT. Without
+                                 # it, fills booked while KELLY_M sat over the
+                                 # cap enter slippage_sample and the RAMP v4
+                                 # coverage rows with no record that the
+                                 # executor traded 0.20 while the operator
+                                 # believed 0.56 - mislabelled rungs written
+                                 # into the very evidence base the cap exists
+                                 # to protect (counter-agent 2026-09-10).
+                                 "kelly_m": round(self._effective_kelly_m(), 4),
                                  # a DryRunVenue "fill" is a synthetic price:
                                  # it must not feed the slippage sample
                                  "live": self._is_live()})

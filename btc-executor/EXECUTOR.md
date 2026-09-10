@@ -152,32 +152,85 @@ first one has ever been checked here. That gap is what this ceiling closes.
 `btc-paper-engine/RESEARCH_FEES.md` (2026-09-10) re-fitted Kelly on returns
 charged the fee we ACTUALLY pay. Four of four intended-maker pullback entries
 crossed and paid taker, so the true round trip is 8.64 bps against a modelled
-6.00. On the conservative specification the binding S6 recommended m is
-**0.22**, which puts rungs C, D and the 0.80 ceiling outside the envelope.
-The 0.135 → 0.20 step clears in every specification tested. Robustness: at
-the study's registered 66% crossing rate rather than the observed 100%, the
-binding cell reads 0.27 — same decision.
+6.00. On the conservative specification the binding recommended m is **0.30
+for S5** and **0.22 for S6**.
+
+`/exec/target` ships `{"w_trend": 0.25, "lev": 1.5}`, which is **S5** — so
+S5's 0.30 is the row that applies to the deployed blend. 0.20 clears the
+tighter of the two either way, and rung C (0.35) fails **both**, so the
+decision is robust to which row you read. The 0.135 → 0.20 step clears in
+every specification tested. Robustness on the crossing rate: at the study's
+registered 66% rather than the observed 100%, the binding cell reads 0.27 —
+same decision.
 
 Per KELLY.md's own doctrine, over-betting destroys growth faster than
 under-betting gives it up, so when defensible specifications disagree about
 size the smaller one governs.
 
+### What the cap does NOT do — read this before trusting it
+
+**Capping `KELLY_M` bounds one factor of a four-factor product.** Leg
+notional is `kelly_m × lev × weight × base`. Two counter-agents independently
+reached the retired rungs with `KELLY_M` pinned at exactly 0.20:
+
+| route | result at KELLY_M 0.20 | pages, before this change |
+|---|---|---|
+| `SIZING_BASE_USD` 1000 → 3000 | more than retired rung D | one generic `config_change` |
+| `SIZING_BASE_USD` 1000 → 10000 | ≈ KELLY_M 2.0 equivalent | none |
+| engine sends `blend.lev = 10` | 6.7× the authorised notional | **none at all** |
+
+So the invariant is now stated where the Kelly envelope actually lives —
+as a fraction of **capital**, not as one multiplier:
+
+- `MAX_EXPOSURE_FRAC = 0.30` — `_check_exposure` pages `exposure_over_cap`
+  when `kelly × lev × base / equity` breaches it, naming
+  `SIZING_BASE_USD` rather than blaming `KELLY_M`. It **pages, it does not
+  clamp**: clamping on live equity would shrink entry size during a
+  drawdown, which is a real change to how the book trades and is Casey's
+  call, not a side effect. Corollary, stated so it is not a surprise — a
+  deep drawdown raises the ratio on its own and can page with the config
+  untouched. That is Kelly telling the truth.
+- `MAX_BLEND_LEV = 2.0` — `_sane_blend` clamps the engine's `lev` to
+  `(0, 2.0]` and `w_trend` to `[0, 1]` at the door. `/exec/target` was
+  parsed with no schema check, and `w_trend > 1` made the pullback weight
+  negative, which dropped a whole leg silently at `if qty <= 0: return`.
+
 **Enforced in code, not just here.** `mirror.KELLY_M_CAP = 0.20`:
 
-- it **clamps**, it does not refuse to boot. A boot refusal on an over-cap
-  env would leave live positions with no stop maintenance, no exit_flag
-  handling and no halt machinery — trading over-sizing risk for
-  naked-position risk, which is strictly worse. Over-cap pages `🔴 ACTION
-  NEEDED kelly_over_cap` and sizes at the cap;
+- it **clamps**, it does not refuse to boot — but the reason is narrower than
+  first written. A crash-looping container does **not** leave a naked
+  position: HL stops are reduce-only and rest at the venue. What a refusal
+  loses is trail ratcheting, engine-exit mirroring and the halt machinery.
+  The real alternative is refusing new *entries* while over-cap; clamping
+  still wins, because over-cap is an operator config error rather than a
+  market condition, and refusing entries desynchronises the book from the
+  engine. Halting is ruled out outright — `halt()` flattens, i.e. sends real
+  market orders because an env var is wrong;
+- the page **repeats**. `kelly_over_cap` fires every poll under a 30-minute
+  phone throttle, like every other persistent RED here. A one-shot boot page
+  was swallowed entirely by a container recycle inside 10 minutes, because
+  `_event`'s dedupe compares against the *persisted* last event;
 - **open positions are never force-resized.** Sizing is consulted for NEW
   entries only, so a leg opened above the cap exits on its own engine signal
   rather than being part-closed by a deploy;
-- it is a **repo constant, not a Settings field**. An env-overridable ceiling
-  is not a ceiling, it is a second env var to fat-finger. Raising it costs a
-  code change, a review and a redeploy — deliberately;
-- `/status` reports `kelly_m_effective` and `kelly_m_cap` alongside the
-  configured value, so the readout can never state a size the executor is not
-  using.
+- it is a **repo constant, not a Settings field**, and a test asserts the
+  literal `0.20`. Every other gate computes its expectation *from* the
+  constant, so the suite stayed green with the cap silently moved to 0.29 —
+  a +45% size raise as a one-character diff;
+- `advance_ok` on `/ramp` is **cap-aware**. It was pure execution evidence,
+  with the cap mentioned only in a prose note — so the machine-readable field
+  the dashboard reads could still say "advance" toward a retired rung;
+- fills record the `kelly_m` they were taken at, so trades booked while the
+  env sat over the cap cannot write mislabelled rungs into the RAMP v4
+  evidence base;
+- `/status` reports `kelly_m_effective`, `kelly_m_cap` and
+  `max_exposure_frac` alongside the configured value, so the readout can
+  never state a size the executor is not using.
+
+**Still env-only, and deliberately unresolved here:** `SIZING_BASE_USD`,
+`MAX_NOTIONAL_USD` and `MAX_ACCOUNT_LEV` have no repo ceiling. The exposure
+check makes a breach loud; it does not make it impossible. Bounding those in
+code is a separate decision about how much authority the dashboard keeps.
 
 **This is reversible, and the trigger is evidence, not a date.** The envelope
 behind 0.22 is in-sample, one cell of four, and rests on n=4 fills for the

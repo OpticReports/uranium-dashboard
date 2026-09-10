@@ -5,6 +5,7 @@ import time
 
 import pytest
 
+from app import mirror
 from app.mirror import Executor, ExecState
 
 
@@ -1013,16 +1014,17 @@ def test_gate_slippage_sign_adverse_positive(tmp_path):
     assert s1 == pytest.approx(10.0) and s2 == pytest.approx(10.0)
 
 
-def test_gate_daily_loss_manual_resume_above_030(tmp_path):
+def test_gate_daily_loss_manual_resume_above_030(tmp_path, monkeypatch):
     """Ramp v3's "manual resume above KELLY_M 0.30" was doc-only (counter-
     agent 2026-08-11): _roll_day cleared DAILY_LOSS unconditionally."""
     v = FakeVenue()
     ex = mkexec(tmp_path, v)
-    # The RAW env value, over the repo cap on purpose. _roll_day reads raw
-    # kelly_m, not the clamped one, and must keep doing so: KELLY_M_CAP is
-    # 0.20, so an effective-value test could never exceed 0.30 and this rule
-    # would be dead code. Raw also errs the safe way - an over-cap env is an
-    # anomalous state and manual resume is the stricter branch.
+    # _roll_day reads the EFFECTIVE kelly (counter-agent 2026-09-10): with
+    # KELLY_M_CAP at 0.20 this rule is DORMANT, because a book clamped to
+    # 0.20 is not the "meaningful evidence" size the rule was written for.
+    # Exercising it therefore needs a cap that permits >0.30 - which is also
+    # the state the rule revives itself in if the ceiling is ever raised.
+    monkeypatch.setattr(mirror, "KELLY_M_CAP", 0.80)
     ex.cfg.kelly_m = 0.56
     ex.state.halted = "DAILY_LOSS"
     ex.state.day_key = "2020-01-01"                       # force a rollover
@@ -6768,18 +6770,60 @@ def test_gate_kelly_cap_never_resizes_an_open_position(tmp_path):
                 if c[0] == "MARKET"], "no resize order may be sent"
 
 
-def test_gate_kelly_cap_is_not_env_overridable(tmp_path):
+def test_gate_kelly_cap_value_is_pinned():
+    """The NUMBER, pinned literally.
+
+    Every other gate here computes its expectation FROM KELLY_M_CAP, which
+    makes them tautologies with respect to its value: the counter-agent set
+    the constant to 0.29 and the entire suite stayed green, so a +45% size
+    raise was a one-character diff past a merge-blocking gate. The whole
+    control rests on the number being reviewed, so the number is asserted."""
+    assert mirror.KELLY_M_CAP == 0.20
+    # and the two factors it is only meaningful alongside
+    assert mirror.REFERENCE_LEV == 1.5
+    assert mirror.MAX_EXPOSURE_FRAC == pytest.approx(0.30)
+    assert mirror.MAX_BLEND_LEV == 2.0
+
+
+def test_gate_kelly_cap_is_not_env_overridable(tmp_path, monkeypatch):
     """The cap is a REPO constant. An env-overridable ceiling is not a
-    ceiling, it is a second env var to fat-finger — and the whole point is
-    that raising it costs a code change and a review."""
+    ceiling, it is a second env var to fat-finger.
+
+    The first cut asserted that a `kelly_m_cap` attribute on the cfg object
+    was ignored — vacuous, because the clamp never reads cfg. The
+    counter-agent then replaced the clamp with
+    `os.environ.get("KELLY_M_CAP")` and all six gates stayed green, because
+    the var is unset in CI. So the assertion is made where it bites: with
+    the env var SET."""
     from app.config import Settings
     assert "kelly_m_cap" not in Settings.model_fields
-    # and a cfg object carrying one is ignored by the clamp
-    from app.mirror import KELLY_M_CAP
+    monkeypatch.setenv("KELLY_M_CAP", "0.80")
+    monkeypatch.setenv("MAX_EXPOSURE_FRAC", "9.0")
     ex = mkexec(tmp_path, FakeVenue())
     ex.cfg.kelly_m = 0.80
     ex.cfg.kelly_m_cap = 0.80                              # wishful thinking
-    assert ex._effective_kelly_m() == pytest.approx(KELLY_M_CAP)
+    assert ex._effective_kelly_m() == pytest.approx(mirror.KELLY_M_CAP)
+    assert mirror.KELLY_M_CAP == 0.20                      # env did not move it
+
+
+def test_gate_kelly_cap_page_actually_reaches_the_phone(tmp_path, monkeypatch):
+    """_event appends to state.events BEFORE the rate-limit early-return and
+    before the send dispatch, so every events-based assertion in this file is
+    blind to the page being silenced. Deleting kelly_over_cap's ACTION entry,
+    or suppressing its send, was undetectable by the whole suite — and the
+    change's stated rationale is that clamping silently would be the same
+    failure with better arithmetic. Assert on the SEND."""
+    sent = []
+    import app.alerts as alerts
+    monkeypatch.setattr(alerts, "send", lambda msg: sent.append(msg))
+    cfg = Cfg()
+    cfg.state_path = str(tmp_path / "state.json")
+    cfg.kelly_m = 0.56
+    Executor(FakeVenue(), cfg, cfg.state_path)
+    hits = [m for m in sent if "kelly_over_cap" in m]
+    assert hits, "the over-cap condition must reach the phone, not just the log"
+    # ACTION tier: this is a "you must fix the env" page, not an FYI
+    assert hits[0].startswith("🔴 ACTION NEEDED")
 
 
 def test_gate_kelly_cap_change_under_a_running_process_pages(tmp_path):
@@ -6789,3 +6833,102 @@ def test_gate_kelly_cap_change_under_a_running_process_pages(tmp_path):
     ex.cfg.kelly_m = 0.56
     ex.step(target())
     assert [e for e in ex.state.events if e["kind"] == "kelly_over_cap"]
+
+
+# --- the bypasses. Capping KELLY_M bounds ONE factor of a four-factor
+# product; both counter-agents reached the retired rungs with KELLY_M pinned
+# at the cap and got no event at all. These gate the other factors.
+
+def test_gate_exposure_over_cap_catches_the_sizing_base_bypass(tmp_path):
+    """SIZING_BASE_USD 1000 -> 3000 deploys MORE than the retired rung D with
+    KELLY_M at exactly the cap, for the price of one dashboard field. Before
+    _check_exposure the only page was a generic config_change whose own ACTION
+    text says "if this was you (ramp step, base change), ignore"."""
+    v = FakeVenue(equity=1_000.0)
+    ex = mkexec(tmp_path, v)
+    ex.cfg.sizing_base_usd = 1_000.0                       # at the cap
+    ex.cfg.max_notional_usd = 1_000_000.0                  # rails out of the way
+    ex.step(target())
+    assert not [e for e in ex.state.events if e["kind"] == "exposure_over_cap"]
+    ex.cfg.sizing_base_usd = 3_000.0                       # > retired rung D
+    ex.step(target())
+    ev = [e for e in ex.state.events if e["kind"] == "exposure_over_cap"]
+    assert ev and ev[0]["level"] == "RED"
+    # and it must name the real culprit, not blame KELLY_M
+    assert "SIZING_BASE_USD" in ev[0]["msg"]
+
+
+def test_gate_engine_cannot_lever_past_the_cap(tmp_path):
+    """`blend` arrives verbatim from /exec/target with no schema check and
+    multiplies straight through the clamp. lev=10 at KELLY_M 0.20 deployed
+    6.7x the authorised notional and emitted nothing."""
+    v = FakeVenue(equity=1_000.0)
+    ex = mkexec(tmp_path, v)
+    ex.cfg.sizing_base_usd = 1_000.0
+    hostile = {"w_trend": 0.25, "lev": 10.0}
+    t = target(pull={"pending": {"side": "L", "limit": 59_000.0,
+                                 "signal_ts": NOW}, "position": None})
+    t["blend"] = hostile
+    ex.step(t)
+    assert [e for e in ex.state.events if e["kind"] == "blend_out_of_range"]
+    _, _, qty, _ = v.calls[0]
+    # sized at the SHIPPED blend (1.5x), not at the engine's 10x
+    assert qty == pytest.approx(0.20 * 1.5 * 0.75 * 1_000 / 59_000, abs=1e-5)
+
+
+def test_gate_negative_blend_weight_does_not_silently_kill_a_leg(tmp_path):
+    """w_trend=3.0 makes the pullback weight -2.0, _leg_qty returns a negative
+    qty and the entry branch drops it at `if qty <= 0: return` — a whole leg
+    goes dark with no event."""
+    v = FakeVenue(equity=1_000.0)
+    ex = mkexec(tmp_path, v)
+    ex.cfg.sizing_base_usd = 1_000.0
+    t = target(pull={"pending": {"side": "L", "limit": 59_000.0,
+                                 "signal_ts": NOW}, "position": None})
+    t["blend"] = {"w_trend": 3.0, "lev": 1.5}
+    ex.step(t)
+    assert [e for e in ex.state.events if e["kind"] == "blend_out_of_range"]
+    assert v.calls and v.calls[0][0] == "LIMIT"            # leg still traded
+    assert v.calls[0][2] > 0
+
+
+def test_gate_nan_kelly_sizes_at_nothing(tmp_path):
+    """min() is not NaN-safe. A NaN kelly passed `want > room`, passed
+    `qty <= 0`, and reached the venue as a NaN order size while the page
+    claimed we were "sizing at 0.2"."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    ex.cfg.kelly_m = float("nan")
+    assert ex._effective_kelly_m() == 0.0
+    ex.step(target(pull={"pending": {"side": "L", "limit": 59_000.0,
+                                     "signal_ts": NOW}, "position": None}))
+    assert not [c for c in v.calls if c[0] == "LIMIT"]
+
+
+def test_gate_advance_ok_is_false_at_the_ceiling(tmp_path, monkeypatch):
+    """The first cut edited only /ramp's prose and left advance_ok as pure
+    execution evidence — so the machine-readable field could still say
+    "advance" when the next rung is retired."""
+    import app.main as m
+    assert m._next_rung() is not None or True              # sanity: callable
+    monkeypatch.setattr(m.settings, "kelly_m", 0.10)
+    assert m._next_rung() == pytest.approx(0.20)           # B is reachable
+    monkeypatch.setattr(m.settings, "kelly_m", 0.20)
+    assert m._next_rung() is None                          # C is retired
+    # and no retired rung is even listed
+    assert all(r <= mirror.KELLY_M_CAP for r in m.RAMP_RUNGS)
+
+
+def test_gate_fills_record_the_size_they_were_taken_at(tmp_path):
+    """Fills booked while KELLY_M sat over the cap fed slippage_sample and the
+    RAMP v4 rows with no record that the executor traded 0.20 while the
+    operator believed 0.56 — mislabelled rungs in the evidence base the cap
+    exists to protect."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    ex.cfg.kelly_m = 0.56
+    ex.step(target(trend={"pending": {"side": "S", "limit": -1.0,
+                                      "signal_ts": NOW}, "position": None}))
+    fills = getattr(ex.state, "fills", []) or []
+    assert fills, "setup: the market entry must book a fill"
+    assert fills[-1]["kelly_m"] == pytest.approx(mirror.KELLY_M_CAP)

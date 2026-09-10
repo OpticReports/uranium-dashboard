@@ -547,10 +547,21 @@ services:
       # 4 of 4 intended-maker entries crossed and paid taker, not the
       # modelled 6.00) and the binding S6 envelope is 0.22. Setting KELLY_M
       # above 0.20 here does NOT take effect: mirror.KELLY_M_CAP clamps
-      # sizing to the cap and pages kelly_over_cap. The executor keeps
-      # running and keeps protecting open positions - it does not refuse to
-      # boot, because an unmanaged live book is worse than an over-sized
-      # one. Raising the ceiling is a repo change plus review, on purpose.
+      # sizing to the cap and pages kelly_over_cap every poll (throttled to
+      # one phone ping per 30 min). The executor keeps running and keeps
+      # protecting open positions - it does not refuse to boot, because an
+      # unmanaged live book is worse than an over-sized one. Raising the
+      # ceiling is a repo change plus review, on purpose.
+      #
+      # BUT KELLY_M IS ONE FACTOR OF FOUR. Leg notional is
+      # kelly_m * lev * weight * SIZING_BASE_USD, so raising the BASE
+      # reproduces a retired rung with KELLY_M pinned at 0.20 - 1000 -> 3000
+      # deploys more than the old rung D. SIZING_BASE_USD, MAX_NOTIONAL_USD
+      # and MAX_ACCOUNT_LEV have NO repo ceiling; they are still yours to
+      # set. What the code does now is make a breach LOUD:
+      # mirror.MAX_EXPOSURE_FRAC (0.30 of equity, gross) pages
+      # exposure_over_cap and names the base rather than blaming KELLY_M.
+      # Loud is not impossible. Treat a base change as a ramp step.
       # Change KELLY_M one step at a time, never alongside SIZING_BASE_USD.
       # Current dashboard values (2026-09-10, Hyperliquid live-test phase):
       # KELLY_M 0.135, SIZING_BASE_USD 1000, MAX_NOTIONAL_USD 10000,

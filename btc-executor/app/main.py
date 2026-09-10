@@ -18,8 +18,8 @@ from fastapi import FastAPI, HTTPException, Query, Header
 
 from .config import settings
 from .feed import EngineFeed
+from . import mirror
 from .mirror import (Executor, DRILL_CYCLE_NEED, SLIP_SANITY_MAX_BPS,  # noqa: F401
-                     KELLY_M_CAP,
                      SLIPPAGE_SAMPLE_NEED)
 
 
@@ -380,13 +380,17 @@ def status(x_exec_token: str | None = Header(default=None),
            # the moment KELLY_M goes over the cap - the same "healthy while
            # doing something else" phenotype the boot gates exist to kill.
            "kelly_m_effective": EXEC._effective_kelly_m(),
-           "kelly_m_cap": KELLY_M_CAP,
+           "kelly_m_cap": mirror.KELLY_M_CAP,
            "sizing_config": {
                "sizing_base_usd": settings.sizing_base_usd or "account equity",
                "kelly_m": settings.kelly_m,
                "kelly_m_effective": EXEC._effective_kelly_m(),
-               "kelly_m_cap": KELLY_M_CAP,
-               "kelly_over_cap": settings.kelly_m > KELLY_M_CAP,
+               "kelly_m_cap": mirror.KELLY_M_CAP,
+               # read the EXECUTOR's cfg, not the module-level settings: they
+               # are the same object in production and only in production
+               # (counter-agent M4)
+               "kelly_over_cap": EXEC.cfg.kelly_m > mirror.KELLY_M_CAP,
+               "max_exposure_frac": mirror.MAX_EXPOSURE_FRAC,
                "max_notional_usd": settings.max_notional_usd,
                "max_account_lev": settings.max_account_lev,
                "daily_loss_halt_pct": settings.daily_loss_halt_pct,
@@ -503,10 +507,19 @@ def _ramp_v4(st) -> dict:
             # /status saw 13/13 and no sanity verdict at all (counter-agent
             # 2026-09-02). Both halves are machine-checked now.
             "slippage_sanity": sanity,
-            "advance_ok": bool(complete and sanity["ok"]),
+            # CAP-AWARE (counter-agent 2026-09-10). The first cut edited only
+            # the note below and left this boolean pure execution evidence -
+            # so the machine-readable field that the dashboard and any
+            # automation read could still say "advance" when the next rung is
+            # 0.35. That is precisely the failure KELLY_M_CAP exists to stop,
+            # left computationally intact.
+            "next_rung": _next_rung(),
+            "next_rung_within_cap": _next_rung() is not None,
+            "advance_ok": bool(complete and sanity["ok"]
+                               and _next_rung() is not None),
             "unattributed_total": sum(r["unattributed"] for r in rows.values()),
             "note": f"advance KELLY_M only when advance_ok AND the target "
-                    f"rung is <= KELLY_M_CAP ({KELLY_M_CAP}): these rows are "
+                    f"rung is <= KELLY_M_CAP ({mirror.KELLY_M_CAP}): these rows "
                     f"EXECUTION evidence and say nothing about the Kelly "
                     f"envelope, which RESEARCH_FEES.md puts at 0.22. "
                     f"advance_ok means every row met AND "
@@ -514,6 +527,18 @@ def _ramp_v4(st) -> dict:
                     "monitor) is the continuous control and arms at the same "
                     "10 fills. unattributed counts are pre-split or dry-run "
                     "events - they never satisfy a row"}
+
+
+# EXECUTOR.md "The schedule". Rungs above KELLY_M_CAP are RETIRED and are
+# deliberately absent - this list is what /ramp is allowed to point at.
+RAMP_RUNGS = (0.05, 0.10, 0.20)
+
+
+def _next_rung() -> float | None:
+    """The rung a successful step would move to, or None at the ceiling."""
+    cur = settings.kelly_m
+    nxt = [r for r in RAMP_RUNGS if r > cur and r <= mirror.KELLY_M_CAP]
+    return min(nxt) if nxt else None
 
 
 def _slip_sanity(fills) -> dict:
