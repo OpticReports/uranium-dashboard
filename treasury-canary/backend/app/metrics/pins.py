@@ -137,11 +137,32 @@ def _pct_change(vals: list, window: int, min_base: float | None = None) -> float
     return round((c[-1] - base) / base * 100.0, 1)
 
 
+def hazen_pct(rank: int, n: int) -> float:
+    """Hazen plotting position (rank - 0.5) / n, as a percentage.
+
+    The naive rank/n returns EXACTLY 100.0 whenever the value is the running
+    maximum, so under the (50, 85, 95, 100) percentile anchors any new high hits
+    the extreme anchor BY CONSTRUCTION -- and a secularly trending series then
+    sits pinned at the ceiling for years rather than for a reason. On the CFTC
+    leveraged-net-short series that was 85 of 953 weeks at exactly 100.
+
+    Hazen is the standard plotting position for this job: it never returns 0 or
+    100, so the extreme stays a statement about the ANCHOR rather than an
+    artifact of being the newest record. Bounds are (0.5/n, 100 - 0.5/n), so a
+    percentile leg approaches 100 asymptotically with sample size and reaches it
+    never. Every percentile on this board goes through here so the three call
+    sites cannot drift apart.
+    """
+    if n <= 0:
+        return 0.0
+    return max(0.0, 100.0 * (rank - 0.5) / n)
+
+
 def _percentile(vals: list, value: float | None) -> float | None:
     c = _clean(vals)
     if value is None or not c:
         return None
-    return round(100.0 * sum(1 for v in c if v <= value) / len(c), 1)
+    return round(hazen_pct(sum(1 for v in c if v <= value), len(c)), 1)
 
 
 # --- continuous severity scoring (0-100) --------------------------------------

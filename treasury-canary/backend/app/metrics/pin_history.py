@@ -28,7 +28,7 @@ from __future__ import annotations
 import bisect
 from datetime import date
 
-from .pins import ANCHORS, RESERVES_MIN_BASE_M, _pscore
+from .pins import ANCHORS, RESERVES_MIN_BASE_M, _pscore, hazen_pct
 
 # (lag_min_months, lag_max_months, documented basis) per channel. These size
 # the gray band drawn after a red episode: "when the pain from this spark has
@@ -103,13 +103,14 @@ def _roll_pct_change(dates: list[date], vals: list[float], window: int,
 def _expanding_percentile(dates: list[date], vals: list[float], min_obs: int
                           ) -> tuple[list[date], list[float]]:
     """Percentile of each value vs history up to AND INCLUDING that date (the
-    live board's _percentile is <=-inclusive, so the last point matches it)."""
+    live board's _percentile is <=-inclusive, so the last point matches it).
+    Hazen plotting position, same estimator as the live board."""
     out_d, out_v, seen = [], [], []
     for d, v in zip(dates, vals):
         bisect.insort(seen, v)
         if len(seen) >= min_obs:
             out_d.append(d)
-            out_v.append(100.0 * bisect.bisect_right(seen, v) / len(seen))
+            out_v.append(hazen_pct(bisect.bisect_right(seen, v), len(seen)))
     return out_d, out_v
 
 
@@ -128,7 +129,7 @@ def _expanding_pctl_vs_raw(dates: list[date], vals: list[float], window: int,
         if i >= window - 1 and len(seen) >= min_obs:
             avg = run / window
             out_d.append(d)
-            out_v.append(100.0 * bisect.bisect_right(seen, avg) / len(seen))
+            out_v.append(hazen_pct(bisect.bisect_right(seen, avg), len(seen)))
     return out_d, out_v
 
 

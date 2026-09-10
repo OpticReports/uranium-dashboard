@@ -236,6 +236,53 @@ the redeploy and the numbers re-frozen at every hard-coded site.
    exactly 100.0 whenever the current value is the running max, and leveraged-fund net short has a
    secular uptrend — so it has been pinned for long stretches since 2010.
 
+## The percentile estimator (Hazen) — implemented 2026-09-10
+
+DD Q9, done. All three percentile paths now go through one shared `hazen_pct(rank, n)` in
+`pins.py` — `_percentile` (live), `_expanding_percentile` and `_expanding_pctl_vs_raw`
+(hindcast) — so the live board and the history cannot drift apart.
+
+**The defect.** `rank / n` returns *exactly* 100.0 whenever the value is the running
+maximum. The percentile legs are anchored `(50, 85, 95, 100)`, so **any new all-time high
+scored the extreme anchor by construction** — not because the reading was extreme, but
+because it was the newest record. On the CFTC series that was 87 of 953 weeks at exactly
+100.0.
+
+**The fix.** Hazen's plotting position `(rank - 0.5) / n`, bounded `(0.5/n, 100 - 0.5/n)`.
+Verified: exactly 100.0 is unreachable for every n from 2 to 5000; the CFTC maximum drops
+from 100.0000 to 99.9502, and exact-100 weeks go 87 -> 0.
+
+**Honest scope of the benefit — this is structural, not backtest-improving.** Because the
+basis_trade cap already removed that channel's percentile leg from contention, Hazen changes
+almost nothing in the *current* hindcast: basis_trade RED months (38) and at-ceiling months
+(19) are **unchanged**, since those 19 now come from the uncapped level leg. Live-board
+percentiles shift by less than 0.05pp across every leg (positioning -0.047, CCC -0.007,
+EPU -0.005, SPY/RSP -0.013), all inside the displayed rounding.
+
+What it actually buys is a *guarantee*: no percentile leg can ever again print the extreme
+anchor merely by being the newest record, on any future data. Auditing the deployed pre-fix
+hindcast, the only uncapped percentile-driven ceiling months were private_credit's four
+(2015-11 and 2020-05..07 — the 2015 energy-HY and COVID credit blowouts). Every other
+at-ceiling month — oil_shock 18, policy_shock 4, vol_supply 4, carry_unwind 4 — comes from a
+**level** leg hitting a genuine documented extreme, which is the anchor working as designed.
+
+So after all three fixes the ceiling means what it is supposed to mean: "at a documented
+historical extreme", not "newest record".
+
+**Anchor semantics, stated explicitly.** `extreme = 100` on a percentile leg is now
+approached asymptotically and never reached (at n = 7500 the max score is ~99.97). That is
+intended. The same holds at the bottom for the VRP leg, whose extreme is 0.
+
+**Two existing tests were rewritten**, because they asserted the old estimator's exact-100
+output rather than the property they were named for:
+- `test_expanding_percentile_has_no_lookahead` asserted `pv == [100.0] * 5`. The no-lookahead
+  property is preserved and now asserted as such (each running max sits at the highest
+  attainable percentile for its n, and a later maximum cannot demote an earlier record).
+- `test_latest_hindcast_point_matches_live_formula` compared to 1e-9, which only ever passed
+  because both sides returned exactly 100.0 — `_percentile` rounds to 1dp, so that tolerance
+  would not have caught a genuine live-vs-hindcast estimator drift. Now asserted to the
+  rounding precision it actually has.
+
 ## Pending DD questions
 
 | # | P | Question | What it would move |
@@ -248,7 +295,7 @@ the redeploy and the numbers re-frozen at every hard-coded site.
 | 6 | P1 | Re-run `pin_rule_hindcast.py` after redeploy and re-freeze "44% / 5 of 11" at all five hard-coded sites. | Those numbers are currently STALE and displayed as live truth in the UI. |
 | 7 | P2 | Is the basis_trade level anchor `(2, 4, 5.5, 8)` M contracts still right for a book that grew ~2.5x since 2020? After the cap the level leg alone reaches RED only from 2023-08. | Decides whether the channel has any usable pre-2023 history at all. |
 | 8 | P2 | The channel never flagged March 2020 — its own founding episode — peaking at 79.1, a tenth of a point under RED. Pre-existing, not caused by the fix. | Face validity of the basis_trade channel. |
-| 9 | **P1** | Apply the **Hazen plotting position** `(r-0.5)/n` to `_percentile` and `_expanding_percentile`. On the real COT series it takes exact-100 weeks 85 -> **0** and at-ceiling months 40 -> **0**, while RED months barely move (94 -> 93). | This is the actual fix for the ceiling artifact — the cap only masks it, and the level leg still supplies 19 at-ceiling months. It generalises to CCC, CCC−BBB, EPU, SPY/RSP and VRP, and is a **better answer to Q1 than the ceiling marker** in the primary spec above. Do as a separate change. |
+| ~~9~~ | ~~P1~~ | **DONE 2026-09-10 — see the section above.** ~~Apply the Hazen plotting position~~ `(r-0.5)/n` to `_percentile` and `_expanding_percentile`. On the real COT series it takes exact-100 weeks 85 -> **0** and at-ceiling months 40 -> **0**, while RED months barely move (94 -> 93). | This is the actual fix for the ceiling artifact — the cap only masks it, and the level leg still supplies 19 at-ceiling months. It generalises to CCC, CCC−BBB, EPU, SPY/RSP and VRP, and is a **better answer to Q1 than the ceiling marker** in the primary spec above. Do as a separate change. |
 | 10 | P2 | `"Positioning percentile (vs 2010+)"` actually ranks against the full CFTC series from **2006-06-13** — 186 of 1056 observations (17.6%) predate 2010. Relabel or actually slice. | The label is factually wrong in user-facing text. Pre-existing, but this change puts that gauge under a spotlight. |
 | 11 | P2 | `RESERVES_MIN_BASE_M` is a nominal-dollar constant and will drift toward the ample regime as nominal GDP grows. Reserves/GDP or reserves/bank-assets (the Fed's own ample-reserves framing) would need no gate at all. | The gate is a defensible interim — small, reversible, testable — but the reserves *metric* is the real defect: `_pct_change` on a series with a 300x regime break is the wrong statistic. |
 ## Counter-agent log (mandatory pass, CLAUDE.md)

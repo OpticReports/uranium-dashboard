@@ -2,6 +2,8 @@
 monthly-max sampling, and damage-window overlap in the collective series."""
 from datetime import date, timedelta
 
+import pytest
+
 from app.metrics.pin_history import (
     LAG_WINDOWS,
     _add_months,
@@ -25,12 +27,38 @@ def test_add_months_wraps_year():
 
 def test_expanding_percentile_has_no_lookahead():
     dts = [date(2020, 1, 1) + timedelta(days=i) for i in range(5)]
-    # 5 rising values: each is the max of history-so-far -> always 100th pctile
+    # 5 rising values: each is the max of history-so-far, so each must sit at the
+    # HIGHEST ATTAINABLE percentile for its sample size. Under the Hazen plotting
+    # position that ceiling is (n - 0.5)/n, never exactly 100 -- see hazen_pct.
     _, pv = _expanding_percentile(dts, [1, 2, 3, 4, 5], min_obs=1)
-    assert pv == [100.0] * 5
+    assert pv == [50.0, 75.0, pytest.approx(83.333, abs=1e-3), 87.5, 90.0]
+    assert all(p < 100.0 for p in pv)
     # a mid-history spike ranks against PAST data only, not the later maximum
     _, pv = _expanding_percentile(dts, [1, 2, 10, 3, 50], min_obs=1)
-    assert pv[2] == 100.0  # 10 was the max at the time, later 50 can't demote it
+    assert pv[2] == pytest.approx(100.0 * 2.5 / 3)  # max attainable at n=3
+    assert pv[2] > pv[3]                            # later 50 cannot demote it
+
+
+def test_percentile_never_returns_exactly_100():
+    """The ceiling artifact this estimator exists to remove.
+
+    rank/n hits exactly 100.0 on every running max, so a percentile leg anchored
+    (50, 85, 95, 100) scored the EXTREME by construction on any new high.
+    """
+    from app.metrics.pins import _percentile, hazen_pct
+
+    for n in (2, 10, 100, 1000, 10_000):
+        assert hazen_pct(n, n) == pytest.approx(100.0 - 50.0 / n)
+        assert hazen_pct(n, n) < 100.0
+    # approaches 100 asymptotically, reaches it never
+    assert hazen_pct(10_000, 10_000) > hazen_pct(100, 100)
+
+    rising = list(range(1, 501))
+    assert _percentile(rising, rising[-1]) < 100.0      # an all-time high
+    assert _percentile(rising, rising[0]) > 0.0         # an all-time low
+    dts = [date(2020, 1, 1) + timedelta(days=i) for i in range(500)]
+    _, pv = _expanding_percentile(dts, [float(x) for x in rising], min_obs=1)
+    assert max(pv) < 100.0 and min(pv) > 0.0
 
 
 def test_monthly_max_keeps_intra_month_spike():
@@ -99,7 +127,11 @@ def test_latest_hindcast_point_matches_live_formula():
     dts = [date(2025, 1, 1) + timedelta(days=7 * i) for i in range(len(vals))]
     _, pv = _expanding_percentile(dts, vals, min_obs=1)
     from app.metrics.pins import _percentile
-    assert abs(pv[-1] - _percentile(vals, vals[-1])) < 1e-9
+    # _percentile rounds to 1dp, so parity is asserted to that precision. The old
+    # 1e-9 tolerance only passed because rank/n returned exactly 100.0 here --
+    # it would not have caught a genuine live-vs-hindcast estimator drift.
+    assert pv[-1] == pytest.approx(_percentile(vals, vals[-1]), abs=0.05)
+    assert pv[-1] < 100.0
 
 
 def test_every_lag_channel_has_anchor_backed_parts():
