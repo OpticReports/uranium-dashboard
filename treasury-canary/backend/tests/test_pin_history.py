@@ -2,6 +2,8 @@
 monthly-max sampling, and damage-window overlap in the collective series."""
 from datetime import date, timedelta
 
+import pytest
+
 from app.metrics.pin_history import (
     LAG_WINDOWS,
     _add_months,
@@ -25,12 +27,43 @@ def test_add_months_wraps_year():
 
 def test_expanding_percentile_has_no_lookahead():
     dts = [date(2020, 1, 1) + timedelta(days=i) for i in range(5)]
-    # 5 rising values: each is the max of history-so-far -> always 100th pctile
+    # 5 rising values: each is the max of history-so-far, so each must sit at the
+    # HIGHEST ATTAINABLE percentile for its sample size. Under the Hazen plotting
+    # position that ceiling is (n - 0.5)/n, never exactly 100 -- see rank_pct.
     _, pv = _expanding_percentile(dts, [1, 2, 3, 4, 5], min_obs=1)
-    assert pv == [100.0] * 5
+    assert pv == [50.0, 75.0, pytest.approx(83.333, abs=1e-3), 87.5, 90.0]
+    assert all(p < 100.0 for p in pv)
     # a mid-history spike ranks against PAST data only, not the later maximum
     _, pv = _expanding_percentile(dts, [1, 2, 10, 3, 50], min_obs=1)
-    assert pv[2] == 100.0  # 10 was the max at the time, later 50 can't demote it
+    assert pv[2] == pytest.approx(100.0 * 2.5 / 3)  # max attainable at n=3
+    assert pv[2] > pv[3]                            # later 50 cannot demote it
+
+
+def test_percentile_never_returns_exactly_100():
+    """The ceiling artifact this estimator exists to remove.
+
+    rank/n hits exactly 100.0 on every running max, so a percentile leg anchored
+    (50, 85, 95, 100) scored the EXTREME by construction on any new high.
+    """
+    from app.metrics.pins import _percentile, rank_pct
+
+    for n in (2, 10, 100, 1000, 10_000):
+        # an untied all-time high: below = n-1, equal = 1
+        assert rank_pct(n - 1, 1, n) == pytest.approx(100.0 - 50.0 / n)
+        assert rank_pct(n - 1, 1, n) < 100.0
+        assert rank_pct(0, 1, n) > 0.0                      # an all-time low
+    # approaches 100 asymptotically, reaches it never
+    assert rank_pct(9_999, 1, 10_000) > rank_pct(99, 1, 100)
+    # the not-in-sample path (a rolling mean above every raw print) is clamped
+    assert rank_pct(500, 0, 500) < 100.0
+    assert rank_pct(0, 0, 500) > 0.0
+
+    rising = list(range(1, 1201))   # past n=1000, where the rounding bug appeared
+    assert _percentile(rising, rising[-1]) < 100.0      # an all-time high
+    assert _percentile(rising, rising[0]) > 0.0         # an all-time low
+    dts = [date(2020, 1, 1) + timedelta(days=i) for i in range(1200)]
+    _, pv = _expanding_percentile(dts, [float(x) for x in rising], min_obs=1)
+    assert max(pv) < 100.0 and min(pv) > 0.0
 
 
 def test_monthly_max_keeps_intra_month_spike():
@@ -99,7 +132,11 @@ def test_latest_hindcast_point_matches_live_formula():
     dts = [date(2025, 1, 1) + timedelta(days=7 * i) for i in range(len(vals))]
     _, pv = _expanding_percentile(dts, vals, min_obs=1)
     from app.metrics.pins import _percentile
-    assert abs(pv[-1] - _percentile(vals, vals[-1])) < 1e-9
+    # _percentile rounds to 1dp, so parity is asserted to that precision. The old
+    # 1e-9 tolerance only passed because rank/n returned exactly 100.0 here --
+    # it would not have caught a genuine live-vs-hindcast estimator drift.
+    assert pv[-1] == pytest.approx(_percentile(vals, vals[-1]), abs=0.05)
+    assert pv[-1] < 100.0
 
 
 def test_every_lag_channel_has_anchor_backed_parts():
@@ -246,3 +283,63 @@ def test_overlap_validation_counts_hits_vs_base_rate():
     assert 0.0 <= v["base_rate"] <= 1.0
     # conditional months are few; the caveat must always ride along
     assert "never a calibrated probability" in conf["caveat"]
+
+
+def test_mid_rank_reduces_to_hazen_when_untied():
+    """The mid-rank form must not move anything on untied data."""
+    from app.metrics.pins import rank_pct
+
+    for n in (2, 7, 100, 1056, 7_500):
+        for rank in (1, 2, n // 2, n - 1, n):
+            hazen = 100.0 * (rank - 0.5) / n
+            assert rank_pct(rank - 1, 1, n) == pytest.approx(hazen, abs=1e-12)
+
+
+def test_ties_share_the_midpoint_of_their_block():
+    """Highest-rank-on-ties scored every member as if it were the top of the block.
+
+    CCC OAS is quoted to 2dp and its percentile is the primary private-credit
+    driver, so this bias is not cosmetic.
+    """
+    from app.metrics.pins import _percentile, rank_pct
+
+    # 10-way tie occupying ranks 91..100 of 1000
+    assert rank_pct(90, 10, 1000) == pytest.approx(9.5)
+    assert 100.0 * (100 - 0.5) / 1000 == pytest.approx(9.95)   # the old, biased value
+
+    # every member of a tie block gets the SAME percentile, and it is the midpoint
+    vals = [1.0] * 5 + [2.0] * 10 + [3.0] * 5
+    assert _percentile(vals, 2.0) == pytest.approx(50.0)       # 5 below + 10/2 = 10 of 20
+    assert _percentile(vals, 1.0) == pytest.approx(12.5)       # 0 below + 5/2 = 2.5 of 20
+    assert _percentile(vals, 3.0) == pytest.approx(87.5)       # 15 below + 5/2 of 20
+    # and a tied all-time high is no longer scored as an untied one
+    assert _percentile(vals, 3.0) < 100.0 - 50.0 / len(vals)
+
+
+def test_live_and_hindcast_agree_on_a_tied_series():
+    """Parity must survive ties, not just the untied happy path."""
+    from app.metrics.pins import _percentile
+
+    vals = [5.0, 5.0, 7.0, 5.0, 9.0, 7.0, 9.0, 9.0]
+    dts = [date(2025, 1, 1) + timedelta(days=7 * i) for i in range(len(vals))]
+    _, pv = _expanding_percentile(dts, vals, min_obs=1)
+    assert pv[-1] == pytest.approx(_percentile(vals, vals[-1]), abs=0.05)
+
+
+
+def test_live_and_hindcast_agree_at_a_REALISTIC_sample_size():
+    """The small-n parity tests ran where rounding does not bite.
+
+    At n=1,056 the live/hindcast gap from the ceiling bug was 0.047 -- INSIDE
+    the 0.05 tolerance the other parity tests use, so they passed while the live
+    board returned exactly 100.0 and the hindcast did not.
+    """
+    from app.metrics.pins import _percentile
+
+    n = 1200
+    vals = [float(x) for x in range(n)]
+    dts = [date(2000, 1, 1) + timedelta(days=i) for i in range(n)]
+    _, pv = _expanding_percentile(dts, vals, min_obs=1)
+    live = _percentile(vals, vals[-1])
+    assert live < 100.0 and pv[-1] < 100.0          # the invariant, on BOTH sides
+    assert pv[-1] == pytest.approx(live, abs=0.1)   # 1dp rounding band at this n

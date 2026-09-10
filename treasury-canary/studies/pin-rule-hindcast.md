@@ -1,5 +1,44 @@
 # Can pin-board reds / convergence improve recession prediction? (v2)
 
+> **⚠ NUMBERS STALE AS OF 2026-09-10 — RE-RUN REQUIRED BEFORE CITING.**
+> Two scoring bugs were fixed in the underlying instrument on 2026-09-10 (see
+> `../PIN_SATURATION.md`), and both affected channels are in `FAST_HIGH_MASS`,
+> which is exactly the channel set this study's `fast_red` rules key on:
+> - **plumbing** — the `Reserves, 26-week change` leg is now gated on a $100B
+>   base, removing 42 spurious RED months (all 2003-11..2008-03, on a pre-QE
+>   level base of $2.8B-$47B) and all 24 of its at-ceiling months. RED months
+>   64 -> 22. The `2007-08..2008-03` episode credited with the 2008-01 onset
+>   disappears.
+> - **basis_trade** — the positioning-percentile crowding gauge now caps at
+>   YELLOW, taking its RED months from 101 to 38 and its at-ceiling months from
+>   53 to 19. The `2017-12..2019-11` episode credited with the 2018-09 drawdown
+>   disappears (a 24-month contiguous RED run driven entirely by the gauge).
+>   `2023-04..2026-09` does NOT disappear — it shrinks to `2023-08..2026-09`
+>   and remains a hit.
+>
+> Two of the hindcast's 14 hits are therefore removed (14 -> 12; episodes
+> 115 -> 102), so **"44% vs a 20% base, 5 of 11 signal-clusters" below is no
+> longer the measured result.**
+>
+> An independent counter-agent re-ran this study's rule end-to-end against the
+> patched instrument and got **38% on 48 signal months, 4 of 11 clusters** (its
+> "before" reproduced the frozen 43-44% / 5-of-11 within data vintage). Treat
+> that as an indication of direction and size, **not** as the new frozen result:
+> the official number must come from running `pin_rule_hindcast.py` itself.
+> Critically, the `2007-08..2008-02` cluster disappears — the 2007 fast-red was
+> plumbing via the spurious reserves leg, and `credit_event` does not
+> independently flag 2007 in this hindcast. **The 2008 recession is the only NBER
+> onset this gauge ever caught, and the patched configuration no longer flags
+> it.** 1998, 2019 and 2025 survive.
+>
+> The script reads the deployed `/pins/history`, so re-run AFTER the
+> treasury-canary redeploy and re-freeze the numbers here and at every site that
+> hard-codes them (all now carry an inline PENDING marker):
+> `backend/app/metrics/pins.py` (accident-composite comment + `accident_gauge["basis"]`),
+> `backend/app/metrics/pin_history.py` (`measured_roles`),
+> `frontend/src/components/PinBoard.tsx` (L124), `frontend/src/lib/glossary.ts`
+> (L487-488), and `composer/scripts/monitor.py` (L11, L85).
+
 **Study date:** 2026-07-16 (v2, same day — see "QA corrections" below) ·
 **Script:** `pin_rule_hindcast.py` (reproducible — live `/pins/history` hindcast,
 daily ^GSPC downsampled to true monthly, daily FRED 3m10y via the canary's

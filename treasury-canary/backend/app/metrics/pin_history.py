@@ -28,7 +28,7 @@ from __future__ import annotations
 import bisect
 from datetime import date
 
-from .pins import ANCHORS, _pscore
+from .pins import ANCHORS, RESERVES_MIN_BASE_M, _pscore, rank_pct
 
 # (lag_min_months, lag_max_months, documented basis) per channel. These size
 # the gray band drawn after a red episode: "when the pain from this spark has
@@ -82,26 +82,36 @@ def _roll_change(dates: list[date], vals: list[float], window: int, scale: float
     return out_d, out_v
 
 
-def _roll_pct_change(dates: list[date], vals: list[float], window: int
+def _roll_pct_change(dates: list[date], vals: list[float], window: int,
+                     min_base: float | None = None
                      ) -> tuple[list[date], list[float]]:
+    """Rolling percent change. `min_base` drops points whose base is too small for
+    a ratio to carry meaning, mirroring the live board's _pct_change gate so the
+    hindcast and the live pill measure the same thing."""
     out_d, out_v = [], []
     for i in range(window, len(vals)):
-        if vals[i - window]:
-            out_d.append(dates[i])
-            out_v.append((vals[i] - vals[i - window]) / vals[i - window] * 100.0)
+        base = vals[i - window]
+        if not base:
+            continue
+        if min_base is not None and abs(base) < min_base:
+            continue
+        out_d.append(dates[i])
+        out_v.append((vals[i] - base) / base * 100.0)
     return out_d, out_v
 
 
 def _expanding_percentile(dates: list[date], vals: list[float], min_obs: int
                           ) -> tuple[list[date], list[float]]:
     """Percentile of each value vs history up to AND INCLUDING that date (the
-    live board's _percentile is <=-inclusive, so the last point matches it)."""
+    live board's _percentile is <=-inclusive, so the last point matches it).
+    Hazen plotting position, same estimator as the live board."""
     out_d, out_v, seen = [], [], []
     for d, v in zip(dates, vals):
         bisect.insort(seen, v)
         if len(seen) >= min_obs:
             out_d.append(d)
-            out_v.append(100.0 * bisect.bisect_right(seen, v) / len(seen))
+            lo = bisect.bisect_left(seen, v)
+            out_v.append(rank_pct(lo, bisect.bisect_right(seen, v) - lo, len(seen)))
     return out_d, out_v
 
 
@@ -120,7 +130,8 @@ def _expanding_pctl_vs_raw(dates: list[date], vals: list[float], window: int,
         if i >= window - 1 and len(seen) >= min_obs:
             avg = run / window
             out_d.append(d)
-            out_v.append(100.0 * bisect.bisect_right(seen, avg) / len(seen))
+            lo = bisect.bisect_left(seen, avg)
+            out_v.append(rank_pct(lo, bisect.bisect_right(seen, avg) - lo, len(seen)))
     return out_d, out_v
 
 
@@ -203,7 +214,8 @@ def _parts_for_channel(cid: str, bundle: dict) -> list[tuple[str, tuple[list[dat
         pd_, pv = _series(bundle, "rrp")
         return [
             ("SOFR − IORB", (dts, [(a - b) * 100.0 for a, b in zip(sv, iv)])),
-            ("Reserves, 26-week change", _roll_pct_change(rd, rv, 26)),
+            ("Reserves, 26-week change",
+             _roll_pct_change(rd, rv, 26, min_base=RESERVES_MIN_BASE_M)),
             ("RRP buffer", (pd_, pv)),
         ]
 
@@ -282,10 +294,24 @@ HISTORY_NOTES: dict[str, str] = {
     "vol_supply": "FRED's SP500 series is ~10y deep, so the VRP leg starts late; "
                   "the VIX-spike leg covers 1990+.",
     "private_credit": "NDFI loan series starts 2015; CCC/BBB percentiles warm up "
-                      "through 1998.",
+                      "through 1998 against the frozen 1996+ reference (FRED cut ICE "
+                      "BofA history to 3 years in April 2026). The CCC reference has a "
+                      "known 432-day hole, 2022-07-07..2023-09-10, left unfilled rather "
+                      "than interpolated.",
+
     "concentration": "Depth limited by FMP daily history for SPY/RSP.",
     "basis_trade": "CFTC TFF disaggregation begins 2006; percentile warms up "
-                   "through 2008.",
+                   "through 2008. The positioning leg is a crowding GAUGE and "
+                   "caps at YELLOW, so only the level leg can take this channel "
+                   "RED — and that leg is an absolute-notional anchor (red 5.5M, "
+                   "extreme 8M contracts) that the book first reached in 2023-08. "
+                   "The pre-2023 line is therefore structurally GREEN/YELLOW: "
+                   "read it as 'the book was smaller then', not as 'calm'.",
+    "plumbing": "Effectively starts 2009. The reserves leg is gated to the "
+                "ample-reserves regime (a 26-week % change on a $3-47B pre-QE "
+                "base is noise), RRP is near-empty before 2013 and SOFR-IORB "
+                "only aligns from 2021 — so for most of 2003-2008 the channel "
+                "had no readable part and reports STALE, not GREEN.",
 }
 
 
@@ -421,7 +447,11 @@ def build_pin_history(bundle: dict) -> dict:
             "yield curve — 31% precision, 4/4 onsets caught — and nothing "
             "built from pin reds reliably improved on it; raw convergence "
             "counts scored BELOW base rate (6% vs 12%). Pin reds earn their "
-            "keep on market accidents: fast-channel red on a flat/inverted "
+            "keep on market accidents — but the accident figures that "
+            "followed here are PENDING RE-MEASUREMENT after the 2026-09-10 "
+            "plumbing/basis_trade anchor fixes (both are fast channels, and "
+            "the 2007 cluster came from the since-removed pre-QE reserves "
+            "artifact). Superseded: fast-channel red on a flat/inverted "
             "curve preceded a ≥15% drawdown start within 12m in 44% of months "
             "vs a 20% base (5 of 11 signal-clusters hit: 1998 LTCM 4m early, "
             "2007 up to 12m, 2019 11m, 2025 12m; missed 2018 and 2021). "

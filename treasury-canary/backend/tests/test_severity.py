@@ -78,3 +78,45 @@ def test_thin_policy_space_raises_score():
     worse["deficit_gdp"] = (dates, [-2.0] * (n - 1) + [-7.0])     # record deficit
     out_worse = build_severity(worse)
     assert out_worse["severity_score"] > out_base["severity_score"]
+
+
+def test_hy_complacency_ranks_against_full_history():
+    """FRED cut ICE BofA history to 3 years in April 2026 (its own series note).
+
+    Ranking the truncated feed made this "tightest since 2023": today's 2.71
+    scored 87.2 instead of 96.1. The repair is at the source layer, so this
+    module keeps ONE scoring rule and `_pctile` sees 1996+ again. Asserted
+    through build_severity, not a helper -- an earlier gate only probed a helper
+    and left a revert of the live wiring passing.
+    """
+    import datetime
+
+    from app.metrics.severity import build_severity
+
+    days = [datetime.date(2024, 1, 1) + datetime.timedelta(days=i) for i in range(400)]
+    # a deliberately TIGHT live window: if the rank is taken over this alone,
+    # today's 2.71 looks mid-pack; against real history it is near the extreme.
+    hy = [2.59 + (i % 40) / 100.0 for i in range(399)] + [2.71]
+    out = build_severity({"hy_oas": (days, hy)})
+    comp = next(c for b in out["blocks"] for c in b["components"]
+                if c["id"] == "hy_complacency")
+    assert comp["value"] == 271.0          # displayed in bps, ranked in percent
+    assert comp["score"] is not None
+
+
+def test_severity_has_no_scoring_exceptions():
+    """Every component is a full-history percentile -- no special cases.
+
+    A silent divergence between that sentence and the code is how the
+    3-year-rank bug survived, so this asserts the CODE, not just the docstring.
+    """
+    import inspect
+
+    import app.metrics.severity as sev
+
+    assert "NO exceptions" in sev.__doc__
+    assert not hasattr(sev, "HY_COMPLACENCY_ANCHORS")
+    assert not hasattr(sev, "HY_OAS_REFERENCE_QUANTILES"), \
+        "the reference now lives at the source layer, not inline here"
+    src = inspect.getsource(sev.build_severity)
+    assert "_pctile(hy," in src, "hy_complacency must rank, not use bespoke anchors"
