@@ -128,7 +128,11 @@ def _pct_change(vals: list, window: int, min_base: float | None = None) -> float
     if len(c) <= window or not c[-1 - window]:
         return None
     base = c[-1 - window]
-    if min_base is not None and abs(base) < min_base:
+    # Gate on BOTH ends, never the base alone: a real drain that takes the level
+    # BELOW the gate must keep reporting, or the monitor goes quiet exactly after
+    # the worst outcome. Both ends are small only in the pre-QE regime.
+    if (min_base is not None and abs(base) < min_base
+            and abs(c[-1]) < min_base):
         return None
     return round((c[-1] - base) / base * 100.0, 1)
 
@@ -176,13 +180,20 @@ def _status_from_score(score: float | None) -> str:
 
 
 # Reserve balances (FRED WRESBAL, $M) only support a percent-change reading in the
-# ample-reserves regime. Pre-QE balances ran $3-24B, where a 26-week % change is
-# noise, not a drain: stdev 104% (vs 21% post-2009), hitting the -15% RED anchor
-# 26.1% of the time and the -25% extreme 30 times -- versus never once since 2009.
+# ample-reserves regime. Pre-QE levels ran $2.8B-$47B through 2008-09-17, where a
+# 26-week % change is noise, not a drain: stdev 104% (vs 21% post-2009), hitting
+# the -15% RED anchor 26.1% of the time and the -25% extreme 30 times. Post-2009
+# the same reading has never gone below -24.8%, i.e. it has never reached the
+# extreme -- but only by 0.2pp, so do not read that as headroom.
 # The anchor below is documented as "beyond-2019 drain pace", i.e. calibrated for
-# the ample-reserves regime only. Below this base the part reports no value.
-# $100B separates the regimes with room to spare: the pre-QE peak base was $24B,
-# the post-QE trough $603B.
+# the ample-reserves regime only. The honest case for the gate is not the stdev:
+# it is that plumbing was RED in 42 of the 53 months from 2003-11 to 2008-03 (79%
+# of the time), so "it caught 2007" was a stopped clock, not a signal.
+# The first >=$100B print is 2008-09-24 ($104.5B) as the crisis facilities
+# exploded; the post-2009-06 minimum is $692.5B. The boundary is monotone
+# (2008-09-17 $47B -> 2008-09-24 $104.5B), so no flicker exists in the data.
+# NOTE: a nominal-dollar constant will drift toward the ample regime as nominal
+# GDP grows -- see PIN_SATURATION.md DD Q11 for the reserves/GDP alternative.
 RESERVES_MIN_BASE_M = 100_000.0
 
 # (benign, yellow, red, extreme, higher_is_worse, cap) per part label.
@@ -689,6 +700,9 @@ def build_pin_board(bundle: dict) -> dict:
                  "on that market too but its $1.5T book is its own exposure."),
     }
 
+    # NOTE (2026-09-10): the 44% / 5-of-11 figures below are STALE — the
+    # plumbing and basis_trade anchor fixes changed the fast-channel set this
+    # rule keys on. Re-run studies/pin_rule_hindcast.py after deploy.
     # Accident composite (studies/pin-rule-hindcast v2, 1981-2026): a
     # FAST_HIGH_MASS channel red while the daily 3m10y spread touched <+0.25pp
     # within the trailing 183 days — the same instrument and window the study
@@ -702,9 +716,18 @@ def build_pin_board(bundle: dict) -> dict:
     fast_live = [ch for ch in channels if ch.channel_id in FAST_HIGH_MASS
                  and ch.status != "STALE"]
     fast_red_now = [ch.label for ch in fast_live if ch.status == "RED"]
-    # condition 1 is UNKNOWN (None) when no fast channel reports at all —
-    # "no data" must never display as "condition false"
-    fast_red: bool | None = bool(fast_red_now) if fast_live else None
+    fast_stale = [ch.label for ch in channels if ch.channel_id in FAST_HIGH_MASS
+                  and ch.status == "STALE"]
+    # condition 1 is UNKNOWN (None) whenever ANY fast channel is dark and none of
+    # the live ones is RED. Reporting False while a fast channel is unreadable is
+    # a silent all-clear -- the one failure mode this board must never have. Only
+    # an actual RED (which no amount of missing data can retract) reads True.
+    if fast_red_now:
+        fast_red: bool | None = True
+    elif fast_stale or not fast_live:
+        fast_red = None
+    else:
+        fast_red = False
     t3m = dict(zip(*bundle.get("3mo", ([], []))))
     t10 = dict(zip(*bundle.get("10y", ([], []))))
     pairs = [(d, round(t10[d] - t3m[d], 2)) for d in sorted(set(t3m) & set(t10))
@@ -737,15 +760,22 @@ def build_pin_board(bundle: dict) -> dict:
         "curve_flat": curve_flat,
         "unknown": [name for name, c in (("fast channels", fast_red),
                                          ("curve", curve_flat)) if c is None],
+        "fast_stale_channels": fast_stale,
         "curve_threshold_pp": 0.25,
         "spread_3m10y_now": spread_now,
         "spread_3m10y_min_6m": spread_min_6m,
-        "basis": ("Hindcast 1981-2026 (in-sample, ~11 signal clusters — wide "
-                  "error bars): this configuration preceded a >=15% drawdown "
-                  "start within 12m in 44% of months vs a 20% base; 5 of 11 "
-                  "clusters hit — 1998 LTCM flagged 4m early, 2007 up to 12m, "
-                  "2019 11m, 2025 12m. Missed 2018 (curve steep) and 2021 "
-                  "(policy-driven). Descriptive context, not a calibrated "
+        "basis": ("PENDING RE-MEASUREMENT (2026-09-10): two anchor bugs were "
+                  "fixed in the plumbing and basis_trade channels, both of which "
+                  "are in the fast set this rule keys on, so the figures below "
+                  "are stale — the 2007 cluster in particular came from the "
+                  "since-removed pre-QE reserves artifact. Re-run "
+                  "studies/pin_rule_hindcast.py after deploy and re-freeze. "
+                  "Superseded numbers: hindcast 1981-2026 (in-sample, ~11 signal "
+                  "clusters — wide error bars): this configuration preceded a "
+                  ">=15% drawdown start within 12m in 44% of months vs a 20% "
+                  "base; 5 of 11 clusters hit — 1998 LTCM flagged 4m early, 2007 "
+                  "up to 12m, 2019 11m, 2025 12m. Missed 2018 (curve steep) and "
+                  "2021 (policy-driven). Descriptive context, never a calibrated "
                   "probability."),
     }
 

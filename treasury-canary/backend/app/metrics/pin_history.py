@@ -294,7 +294,17 @@ HISTORY_NOTES: dict[str, str] = {
                       "through 1998.",
     "concentration": "Depth limited by FMP daily history for SPY/RSP.",
     "basis_trade": "CFTC TFF disaggregation begins 2006; percentile warms up "
-                   "through 2008.",
+                   "through 2008. The positioning leg is a crowding GAUGE and "
+                   "caps at YELLOW, so only the level leg can take this channel "
+                   "RED — and that leg is an absolute-notional anchor (red 5.5M, "
+                   "extreme 8M contracts) that the book first reached in 2023-08. "
+                   "The pre-2023 line is therefore structurally GREEN/YELLOW: "
+                   "read it as 'the book was smaller then', not as 'calm'.",
+    "plumbing": "Effectively starts 2009. The reserves leg is gated to the "
+                "ample-reserves regime (a 26-week % change on a $3-47B pre-QE "
+                "base is noise), RRP is near-empty before 2013 and SOFR-IORB "
+                "only aligns from 2021 — so for most of 2003-2008 the channel "
+                "had no readable part and reports STALE, not GREEN.",
 }
 
 
@@ -430,7 +440,11 @@ def build_pin_history(bundle: dict) -> dict:
             "yield curve — 31% precision, 4/4 onsets caught — and nothing "
             "built from pin reds reliably improved on it; raw convergence "
             "counts scored BELOW base rate (6% vs 12%). Pin reds earn their "
-            "keep on market accidents: fast-channel red on a flat/inverted "
+            "keep on market accidents — but the accident figures that "
+            "followed here are PENDING RE-MEASUREMENT after the 2026-09-10 "
+            "plumbing/basis_trade anchor fixes (both are fast channels, and "
+            "the 2007 cluster came from the since-removed pre-QE reserves "
+            "artifact). Superseded: fast-channel red on a flat/inverted "
             "curve preceded a ≥15% drawdown start within 12m in 44% of months "
             "vs a 20% base (5 of 11 signal-clusters hit: 1998 LTCM 4m early, "
             "2007 up to 12m, 2019 11m, 2025 12m; missed 2018 and 2021). "

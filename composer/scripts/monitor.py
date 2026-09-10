@@ -8,7 +8,9 @@ compares against the previous snapshot. Alerts on:
   - a queued deploy appearing
   - rebalance scheduled today
   - the canary ACCIDENT COMPOSITE tripping (fast-channel red on a flat curve —
-    a measured pins->market configuration: 44% vs 20% base odds of a >=15%
+    a measured pins->market configuration. NOTE 2026-09-10: these odds are
+    PENDING RE-MEASUREMENT after the treasury-canary plumbing/basis_trade anchor
+    fixes (both are fast channels this rule keys on). Superseded: 44% vs 20% base odds of a >=15%
     drawdown starting within 12m, in-sample over ~11 signal clusters; see
     treasury-canary/studies/pin-rule-hindcast v2)
 
@@ -82,7 +84,8 @@ def check_accident_gauge(state, alerts, url, now):
     state["accident_gauge"] = status
     if status == "RED" and prev != "RED":
         alerts.append("ACCIDENT COMPOSITE TRIPPED — fast-channel red on a flat "
-                      "curve (hindcast: 44% vs 20% base odds of a >=15% drawdown "
+                      "curve (hindcast PENDING re-measurement after the 2026-09-10 "
+                      "anchor fixes; superseded: 44% vs 20% base odds of a >=15% drawdown "
                       "starting within 12m — descriptive, ~11 clusters — leads of "
                       "4-12m on 1998/2007/2019/2025). Verify sleeve "
                       "at target; expect gap risk. " + line)

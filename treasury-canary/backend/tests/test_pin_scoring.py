@@ -164,8 +164,8 @@ def test_positioning_percentile_is_a_capped_crowding_gauge():
     assert _status_from_score(_pscore(100.0, b, y, r, e, hi, cap)) == "YELLOW"
 
 
-def test_every_crowding_gauge_caps_at_yellow():
-    """Regression guard: gauges measure how loaded the spring is, triggers fire it."""
+def test_gauge_and_cushion_legs_cap_at_yellow():
+    """Regression guard: gauges/cushions measure how loaded the spring is; triggers fire it."""
     gauges = [
         "Positioning percentile (vs 2010+)",
         "SPY/RSP ratio percentile (vs 2010+)",
@@ -196,3 +196,70 @@ def test_hindcast_and_live_board_share_the_reserves_gate():
     small = [20_000.0] * 26 + [14_000.0] * 4
     d, v = pin_history._roll_pct_change(days, small, 26, min_base=RESERVES_MIN_BASE_M)
     assert d == [] and v == []
+
+
+def test_reserves_gate_is_wired_into_the_live_board():
+    """INTEGRATION gate: asserting the parameter exists is not asserting it is used.
+
+    Deleting `min_base=` at the pins.py call site must fail HERE, not pass.
+    """
+    import datetime
+    weeks = [datetime.date(2003, 1, 1) + datetime.timedelta(weeks=i) for i in range(30)]
+    pre_qe = [20_000.0] * 26 + [14_000.0] * 4      # $20B -> $14B, -30% of noise
+    board = build_pin_board({"reserves": (weeks, pre_qe)})
+    plumb = next(c for c in board["channels"] if c["channel_id"] == "plumbing")
+    res = next(p for p in plumb["parts"] if p["label"].startswith("Reserves"))
+    assert res["value"] is None and res["status"] == "STALE"
+    assert plumb["status"] == "STALE"          # not GREEN — we cannot see, we do not guess
+    assert plumb["score"] is None
+
+    ample = [3_000_000.0] * 26 + [2_550_000.0] * 4  # $3T -> $2.55T, a real -15% drain
+    board = build_pin_board({"reserves": (weeks, ample)})
+    plumb = next(c for c in board["channels"] if c["channel_id"] == "plumbing")
+    res = next(p for p in plumb["parts"] if p["label"].startswith("Reserves"))
+    assert res["value"] == -15.0 and res["status"] == "RED"
+
+
+def test_reserves_gate_is_wired_into_the_hindcast():
+    """INTEGRATION gate for the pin_history call site (same mutation test)."""
+    import datetime
+    from app.metrics.pin_history import _parts_for_channel
+
+    weeks = [datetime.date(2003, 1, 1) + datetime.timedelta(weeks=i) for i in range(30)]
+    parts = dict(_parts_for_channel("plumbing", {"reserves": (weeks, [20_000.0] * 26 + [14_000.0] * 4)}))
+    assert parts["Reserves, 26-week change"] == ([], [])
+
+    parts = dict(_parts_for_channel("plumbing", {"reserves": (weeks, [3_000_000.0] * 26 + [2_550_000.0] * 4)}))
+    d, v = parts["Reserves, 26-week change"]
+    assert len(d) == 4 and all(abs(x - -15.0) < 1e-9 for x in v)
+
+
+def test_gate_does_not_silence_a_drain_through_the_floor():
+    """A monitor must never go quiet AFTER the worst outcome.
+
+    Gating on the base alone would mute a catastrophic drain that takes the level
+    below the gate. Gate on both ends: only when BOTH are small is it pre-QE noise.
+    """
+    from app.metrics.pins import RESERVES_MIN_BASE_M, _pct_change
+
+    collapse = [3_000_000.0] * 26 + [50_000.0]   # $3T -> $50B: the end of the world
+    assert _pct_change(collapse, 26, min_base=RESERVES_MIN_BASE_M) == -98.3
+
+    rebuild = [50_000.0] * 26 + [3_000_000.0]    # small -> ample: still reported
+    assert _pct_change(rebuild, 26, min_base=RESERVES_MIN_BASE_M) is not None
+
+    noise = [20_000.0] * 26 + [14_000.0]         # both ends small: the actual bug
+    assert _pct_change(noise, 26, min_base=RESERVES_MIN_BASE_M) is None
+
+
+def test_stale_fast_channel_never_reads_as_a_silent_all_clear():
+    """fast_red=False while a FAST_HIGH_MASS channel is dark is a false all-clear."""
+    import datetime
+    days = [datetime.date(2024, 1, 1) + datetime.timedelta(days=i) for i in range(60)]
+    # credit_event readable and calm; plumbing dark. Condition 1 must be UNKNOWN.
+    board = build_pin_board({"hy_oas": (days, [300.0] * 60)})
+    g = board["accident_gauge"]
+    assert g["fast_red"] is None, "a dark fast channel must not report 'condition false'"
+    assert "fast channels" in g["unknown"]
+    assert g["fast_stale_channels"], "the dark channels must be named, not just counted"
+    assert g["status"] != "GREEN"

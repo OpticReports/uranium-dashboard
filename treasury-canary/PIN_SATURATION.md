@@ -155,15 +155,17 @@ assert transmission_note(board_with("credit_event", 100.0), 35.0)["active"] is T
 
 ## Honesty box (frozen 2026-09-10)
 
-- n = 3,984 channel-months / 115 episodes / **14 hits**. Underpowered for any stratification.
+- n = 3,984 channel-months / 115 episodes / **14 hits** (pre-fix). Post-fix: 102 episodes /
+  12 hits. Underpowered for any stratification either way.
 - The 14 hits map to only **8 distinct macro events** — `2018-09`, `2020-03` and `2025-01` supply
   3 each. Effective n for the outcome is ~8, not 107.
 - My first-pass reasoning was **wrong in method**: the cluster bootstrap by channel is
   *anti-conservative* here (90% CI [-1.5, +16.9] is narrower than the naive iid resample's
   [-3.7, +20.2]) and clusters on the wrong axis. Time-clustering is the binding problem. The
   conclusion survived; the route to it did not.
-- 65% of all 95+ months are the anchor clamp, dominated by `basis_trade` (72% of its 95+ months
-  are exactly 100) and `plumbing` (86%).
+- 65% of all 95+ months were the anchor clamp, dominated by `basis_trade` (72% of its 95+
+  months exactly 100) and `plumbing` (86%). These shares are **pre-fix** and are now stale —
+  the clamp pile-up drops from 111 RED months to roughly 53.
 - Four cushion legs cap at 79 (RRP buffer, 10y JGB, SPY/RSP, VRP) and can never reach the ceiling.
 - Five channels (`credit_event`, `fiscal`, `uncertainty`, `demand_strike`, `concentration`) never
   reach 100 at all, so the marker is structurally a basis_trade / plumbing / oil badge.
@@ -177,23 +179,46 @@ percentile 62.6, net short 93.1, reserves 25.0 — all identical); only the hind
 
 | | before | after |
 |---|---|---|
-| plumbing RED months | 60 | **18** |
+| plumbing RED months | 64 | **22** |
 | plumbing at-ceiling (100) months | 24 (all 2003-11..2008-03) | **0** |
 | basis_trade RED months | 101 | **38** |
 | basis_trade at-ceiling months | 53 | **19** |
+| episodes / hits / misses (all channels) | 115 / 14 / 93 | **102 / 12 / 82** |
+| episode precision | 13.1% | **12.8%** |
 
-Face validity holds: plumbing's surviving REDs are exactly the ample-reserves QT drains
+Face validity holds: plumbing's surviving REDs are the ample-reserves QT drains
 (2018-08..12, 2019-01..05 — the drain that produced the Sept-2019 repo spasm — and
-2022-04..10), with zero pre-2009 noise. The gate degrades to STALE, and a STALE fast
-channel reports `fast_red: None` (unknown) with `unknown: ["fast channels"]`, never a
-silent all-clear — verified.
+2022-04..10), with zero pre-2009 noise.
 
-**Three of the hindcast's 14 hits disappear**, all of them artifacts: plumbing 2007-10
-(credited with the 2008-01 onset, from the pre-QE reserve artifact), and basis_trade
-2017-12 and 2023-04/05 (credited with the 2018-09 and 2025-01 drawdowns, both driven
-entirely by the crowding gauge, not the level leg). The 2023-05 episode is the same one
-the statistics counter-agent flagged as the worst lookahead offender — a 43-month damage
-window off a documented 2-month lag.
+**Correction to an earlier claim in this doc.** I wrote that a STALE fast channel already
+reported `fast_red: None`, "verified". That was only true when *all four* fast channels
+were stale. With one readable calm channel and plumbing dark, the gauge returned
+`fast_red: False` and status GREEN — a silent all-clear, with the dark channel disclosed
+nowhere. Found by the counter-agent, now fixed: `fast_red` is `None` whenever any
+FAST_HIGH_MASS channel is STALE and none of the live ones is RED, the dark channels are
+named in a new `fast_stale_channels` field, and a gate test covers it.
+
+Two further fixes from the same pass: the reserves gate now tests **both ends**, not the
+base alone (gating on the base would mute a catastrophic drain that takes the level below
+$100B — the monitor going quiet after the worst outcome), and the constant's justifying
+comment had two false statements corrected (pre-QE *levels* ran $2.8B-$47B, not "$3-24B",
+which was the max *base*; and the post-QE minimum is -24.8%, only 0.2pp from the extreme,
+so "never reaches it" is true by a rounding error and is not headroom).
+
+**Two of the hindcast's 14 hits disappear**, both artifacts:
+- plumbing `2007-08..2008-03` (peak 100, credited with the 2008-01 recession onset) — the
+  pre-QE reserves artifact. Note what this costs: the 2008 onset is the *only* NBER
+  recession the accident gauge ever caught, and after the fix the configuration no longer
+  flags it. The honest defence is that plumbing was RED in 42 of the 53 months from
+  2003-11 to 2008-03 — **79% of the time** — so "it caught 2007" was a stopped clock.
+- basis_trade `2017-12..2019-11` (peak 100, credited with the 2018-09 drawdown) — a
+  **24-month contiguous RED run** driven entirely by the crowding gauge. Crediting an
+  always-on state with catching an event inside it is the same stopped clock.
+
+The third episode I originally reported as removed, basis_trade `2023-04..2026-09`, does
+**not** disappear — it shrinks to `2023-08..2026-09` and remains a `hit_drawdown`. That
+correction came from the counter-agent; my own reconstruction was reserves-only and
+undercounted (plumbing before was 64 RED months, not 60).
 
 Consequence: `studies/pin-rule-hindcast.md`'s "44% vs a 20% base, 5 of 11 clusters" is
 **no longer the measured result** — both fixed channels are in `FAST_HIGH_MASS`, the set
@@ -223,7 +248,9 @@ the redeploy and the numbers re-frozen at every hard-coded site.
 | 6 | P1 | Re-run `pin_rule_hindcast.py` after redeploy and re-freeze "44% / 5 of 11" at all five hard-coded sites. | Those numbers are currently STALE and displayed as live truth in the UI. |
 | 7 | P2 | Is the basis_trade level anchor `(2, 4, 5.5, 8)` M contracts still right for a book that grew ~2.5x since 2020? After the cap the level leg alone reaches RED only from 2023-08. | Decides whether the channel has any usable pre-2023 history at all. |
 | 8 | P2 | The channel never flagged March 2020 — its own founding episode — peaking at 79.1, a tenth of a point under RED. Pre-existing, not caused by the fix. | Face validity of the basis_trade channel. |
-
+| 9 | **P1** | Apply the **Hazen plotting position** `(r-0.5)/n` to `_percentile` and `_expanding_percentile`. On the real COT series it takes exact-100 weeks 85 -> **0** and at-ceiling months 40 -> **0**, while RED months barely move (94 -> 93). | This is the actual fix for the ceiling artifact — the cap only masks it, and the level leg still supplies 19 at-ceiling months. It generalises to CCC, CCC−BBB, EPU, SPY/RSP and VRP, and is a **better answer to Q1 than the ceiling marker** in the primary spec above. Do as a separate change. |
+| 10 | P2 | `"Positioning percentile (vs 2010+)"` actually ranks against the full CFTC series from **2006-06-13** — 186 of 1056 observations (17.6%) predate 2010. Relabel or actually slice. | The label is factually wrong in user-facing text. Pre-existing, but this change puts that gauge under a spotlight. |
+| 11 | P2 | `RESERVES_MIN_BASE_M` is a nominal-dollar constant and will drift toward the ample regime as nominal GDP grows. Reserves/GDP or reserves/bank-assets (the Fed's own ample-reserves framing) would need no gate at all. | The gate is a defensible interim — small, reversible, testable — but the reserves *metric* is the real defect: `_pct_change` on a series with a 300x regime break is the wrong statistic. |
 ## Counter-agent log (mandatory pass, CLAUDE.md)
 
 **Counter-agent A — statistics/data integrity.** Verdict: conclusion CORRECT in direction,
@@ -242,4 +269,32 @@ cross-service false Telegram, the gray-render failures in `PinBoard.tsx`/`ui.tsx
 `RED_LINE`-is-frozen argument, and the persisted-`pins_overall` comparability break. Supplied the
 additive-subset-field design adopted above.
 
-Both verdicts were adopted. The 95+ threshold in rev 1 was **withdrawn** as a result of pass A.
+**Counter-agent C — verification of the two anchor fixes (2026-09-10).** Verdict: **SHIP WITH
+CHANGES**. Reproduced every figure independently from keyless FRED and the live CFTC endpoint,
+driving the repo's own code paths, using the deployed pre-fix API as an oracle. It confirmed the
+diagnosis on both bugs and could not break it — but found two blockers and corrected several of
+my numbers:
+
+- **BLOCKER (closed):** my reserves gate tests did not gate the fix. Mutation-testing showed that
+  deleting `min_base=` from *either* production call site left the full suite green — the tests
+  proved a parameter existed, not that the bug was fixed. Replaced with integration assertions
+  through `build_pin_board` and `_parts_for_channel`. All five mutations (both call sites, the
+  cap, the base-only gate, the `fast_red` regression) are now caught.
+- **BLOCKER (addressed):** the change falsifies the dashboard's headline empirical claim at seven
+  sites of hard-coded prose that do not recompute on redeploy. All seven now carry an inline
+  PENDING marker; the re-run is DD Q6 and the deploy is gated on it.
+- **Corrected my numbers:** plumbing RED 64->22 (not 60->18 — my reconstruction was reserves-only);
+  hits 14->12, not 14->11; the plumbing episode is `2007-08..2008-03`, not "2007-10"; the
+  basis_trade `2023-04..2026-09` episode shrinks rather than disappears.
+- **Corrected a false safety claim of mine** about `fast_red` — see the correction box above.
+- On the level-leg question it ruled **keep the cap, do not rescale the anchor**: the anchor's own
+  comment documents it as "~2x the 2020 book" and Feb-2020 peaked at 3.758M, so red 5.5 / extreme
+  8 is exactly what that means. "No pre-2023 RED history" is a true statement about the world, not
+  an instrument bug; rescaling to manufacture pre-2023 reds would be fitting. What was missing was
+  **disclosure**, now added as `HISTORY_NOTES` for both channels.
+- It also noted the episode-level record does **not** improve (precision 13.1% -> 12.8%). The case
+  for these fixes is that the removed signal was artifact, not that the instrument scores better.
+
+Both earlier verdicts were adopted. The 95+ threshold in rev 1 was **withdrawn** as a result of
+pass A. All six of pass C's required changes are implemented; its one *recommended-separately*
+item, the Hazen plotting position, is logged as DD Q9.
