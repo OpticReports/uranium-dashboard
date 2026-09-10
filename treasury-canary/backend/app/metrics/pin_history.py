@@ -28,7 +28,7 @@ from __future__ import annotations
 import bisect
 from datetime import date
 
-from .pins import ANCHORS, _pscore
+from .pins import ANCHORS, RESERVES_MIN_BASE_M, _pscore
 
 # (lag_min_months, lag_max_months, documented basis) per channel. These size
 # the gray band drawn after a red episode: "when the pain from this spark has
@@ -82,13 +82,21 @@ def _roll_change(dates: list[date], vals: list[float], window: int, scale: float
     return out_d, out_v
 
 
-def _roll_pct_change(dates: list[date], vals: list[float], window: int
+def _roll_pct_change(dates: list[date], vals: list[float], window: int,
+                     min_base: float | None = None
                      ) -> tuple[list[date], list[float]]:
+    """Rolling percent change. `min_base` drops points whose base is too small for
+    a ratio to carry meaning, mirroring the live board's _pct_change gate so the
+    hindcast and the live pill measure the same thing."""
     out_d, out_v = [], []
     for i in range(window, len(vals)):
-        if vals[i - window]:
-            out_d.append(dates[i])
-            out_v.append((vals[i] - vals[i - window]) / vals[i - window] * 100.0)
+        base = vals[i - window]
+        if not base:
+            continue
+        if min_base is not None and abs(base) < min_base:
+            continue
+        out_d.append(dates[i])
+        out_v.append((vals[i] - base) / base * 100.0)
     return out_d, out_v
 
 
@@ -203,7 +211,8 @@ def _parts_for_channel(cid: str, bundle: dict) -> list[tuple[str, tuple[list[dat
         pd_, pv = _series(bundle, "rrp")
         return [
             ("SOFR − IORB", (dts, [(a - b) * 100.0 for a, b in zip(sv, iv)])),
-            ("Reserves, 26-week change", _roll_pct_change(rd, rv, 26)),
+            ("Reserves, 26-week change",
+             _roll_pct_change(rd, rv, 26, min_base=RESERVES_MIN_BASE_M)),
             ("RRP buffer", (pd_, pv)),
         ]
 

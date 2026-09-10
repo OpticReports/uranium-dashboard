@@ -1,5 +1,26 @@
 # Can pin-board reds / convergence improve recession prediction? (v2)
 
+> **⚠ NUMBERS STALE AS OF 2026-09-10 — RE-RUN REQUIRED BEFORE CITING.**
+> Two scoring bugs were fixed in the underlying instrument on 2026-09-10 (see
+> `../PIN_SATURATION.md`), and both affected channels are in `FAST_HIGH_MASS`,
+> which is exactly the channel set this study's `fast_red` rules key on:
+> - **plumbing** — the `Reserves, 26-week change` leg is now gated on a $100B
+>   base, removing 42 spurious RED months (all 2003-11..2008-03, on a $3-24B
+>   pre-QE base) and all 24 of its at-ceiling months. The plumbing 2007-10
+>   episode credited with the 2008-01 onset disappears.
+> - **basis_trade** — the positioning-percentile crowding gauge now caps at
+>   YELLOW, taking its RED months from 101 to 38 and its at-ceiling months from
+>   53 to 19. The 2017-12 and 2023-04/05 episodes credited with the 2018-09 and
+>   2025-01 drawdowns disappear; both were driven entirely by the gauge.
+>
+> Three of the hindcast's 14 hits are therefore removed, so **"44% vs a 20% base,
+> 5 of 11 signal-clusters" below is no longer the measured result.** The script
+> reads the deployed `/pins/history`, so re-run `pin_rule_hindcast.py` AFTER the
+> treasury-canary redeploy and re-freeze the numbers here and at every site that
+> hard-codes them: `backend/app/metrics/pins.py` (~L695, ~L745),
+> `backend/app/metrics/pin_history.py` (~L434), `frontend/src/components/PinBoard.tsx`
+> (L124), `frontend/src/lib/glossary.ts` (L487-488).
+
 **Study date:** 2026-07-16 (v2, same day — see "QA corrections" below) ·
 **Script:** `pin_rule_hindcast.py` (reproducible — live `/pins/history` hindcast,
 daily ^GSPC downsampled to true monthly, daily FRED 3m10y via the canary's

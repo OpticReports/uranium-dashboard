@@ -120,3 +120,79 @@ def test_scores_flow_from_synthetic_data():
     assert ch["status"] == "RED"
     assert 80.0 <= ch["score"] <= 100.0
     assert board["pressure"] is not None
+
+
+# --- anchor-bug regression gates (2026-09-10) ---------------------------------
+# Two scoring bugs found during the pin-band calibration study. Both distorted the
+# hindcast by pinning a channel at the score ceiling for structural reasons rather
+# than stress. These gates are merge-blocking: they encode the fix, not the symptom.
+
+def test_reserves_pct_change_gated_on_base():
+    """A 26-week % change on a pre-QE reserve base is noise, not a drain.
+
+    WRESBAL ran $3-24B pre-QE (stdev of the 26w change: 104%, hitting the -15%
+    RED anchor 26.1% of the time and the -25% extreme 30 times) versus $603B+
+    post-QE (stdev 21%, never once reaching the extreme).
+    """
+    from app.metrics.pins import RESERVES_MIN_BASE_M, _pct_change
+
+    small = [20_000.0] * 26 + [14_000.0]        # $20B -> $14B: -30%, pure noise
+    assert _pct_change(small, 26) == -30.0                      # ungated: spurious
+    assert _pct_change(small, 26, min_base=RESERVES_MIN_BASE_M) is None
+
+    ample = [3_000_000.0] * 26 + [2_700_000.0]  # $3T -> $2.7T: a real -10% drain
+    assert _pct_change(ample, 26, min_base=RESERVES_MIN_BASE_M) == -10.0
+
+
+def test_reserves_gate_separates_the_two_regimes():
+    """The gate must sit clear of BOTH regimes, not bisect either one."""
+    from app.metrics.pins import RESERVES_MIN_BASE_M
+
+    assert 24_000.0 < RESERVES_MIN_BASE_M < 603_000.0   # pre-QE peak / post-QE trough
+
+
+def test_positioning_percentile_is_a_capped_crowding_gauge():
+    """Crowding alone must not take basis_trade RED, and must not pin at 100.
+
+    The channel's own certainty note says the unwind trigger "arrives via the
+    other channels". Uncapped, a new expanding-window high scored exactly 100 by
+    construction, and leveraged-fund net short trends secularly.
+    """
+    b, y, r, e, hi, cap = ANCHORS["Positioning percentile (vs 2010+)"]
+    assert cap == 79.0
+    assert _pscore(100.0, b, y, r, e, hi, cap) == 79.0      # an all-time high: still YELLOW
+    assert _status_from_score(_pscore(100.0, b, y, r, e, hi, cap)) == "YELLOW"
+
+
+def test_every_crowding_gauge_caps_at_yellow():
+    """Regression guard: gauges measure how loaded the spring is, triggers fire it."""
+    gauges = [
+        "Positioning percentile (vs 2010+)",
+        "SPY/RSP ratio percentile (vs 2010+)",
+        "Vol-risk premium percentile (VIX − realized)",
+        "RRP buffer",
+        "10y JGB yield, 12-month change",
+    ]
+    for label in gauges:
+        assert ANCHORS[label][5] == 79.0, f"{label} must cap at YELLOW"
+
+
+def test_basis_trade_still_reaches_red_via_its_level_leg():
+    """The cap must not neuter the channel — the level leg is uncapped."""
+    b, y, r, e, hi, cap = ANCHORS["Leveraged-fund net short, UST futures"]
+    assert cap == 100.0
+    assert _pscore(5.5, b, y, r, e, hi, cap) == 80.0        # red anchor still red
+    assert _pscore(8.0, b, y, r, e, hi, cap) == 100.0       # extreme still reachable
+
+
+def test_hindcast_and_live_board_share_the_reserves_gate():
+    """If these drift apart the history stops measuring what the pill shows."""
+    from app.metrics import pin_history
+    from app.metrics.pins import RESERVES_MIN_BASE_M
+    import datetime
+
+    assert pin_history.RESERVES_MIN_BASE_M is RESERVES_MIN_BASE_M
+    days = [datetime.date(2003, 1, 1) + datetime.timedelta(weeks=i) for i in range(30)]
+    small = [20_000.0] * 26 + [14_000.0] * 4
+    d, v = pin_history._roll_pct_change(days, small, 26, min_base=RESERVES_MIN_BASE_M)
+    assert d == [] and v == []

@@ -169,7 +169,38 @@ assert transmission_note(board_with("credit_event", 100.0), 35.0)["active"] is T
   reach 100 at all, so the marker is structurally a basis_trade / plumbing / oil badge.
 - NOT modelled: whether saturation frequency has itself changed over time.
 
-## Two source bugs found en route — separate tickets, not this change
+## Two source bugs found en route — FIXED 2026-09-10
+
+Both are now fixed in `pins.py` / `pin_history.py` with merge-blocking gate tests in
+`tests/test_pin_scoring.py`. **Today's live board is bit-for-bit unchanged** (positioning
+percentile 62.6, net short 93.1, reserves 25.0 — all identical); only the hindcast moves.
+
+| | before | after |
+|---|---|---|
+| plumbing RED months | 60 | **18** |
+| plumbing at-ceiling (100) months | 24 (all 2003-11..2008-03) | **0** |
+| basis_trade RED months | 101 | **38** |
+| basis_trade at-ceiling months | 53 | **19** |
+
+Face validity holds: plumbing's surviving REDs are exactly the ample-reserves QT drains
+(2018-08..12, 2019-01..05 — the drain that produced the Sept-2019 repo spasm — and
+2022-04..10), with zero pre-2009 noise. The gate degrades to STALE, and a STALE fast
+channel reports `fast_red: None` (unknown) with `unknown: ["fast channels"]`, never a
+silent all-clear — verified.
+
+**Three of the hindcast's 14 hits disappear**, all of them artifacts: plumbing 2007-10
+(credited with the 2008-01 onset, from the pre-QE reserve artifact), and basis_trade
+2017-12 and 2023-04/05 (credited with the 2018-09 and 2025-01 drawdowns, both driven
+entirely by the crowding gauge, not the level leg). The 2023-05 episode is the same one
+the statistics counter-agent flagged as the worst lookahead offender — a 43-month damage
+window off a documented 2-month lag.
+
+Consequence: `studies/pin-rule-hindcast.md`'s "44% vs a 20% base, 5 of 11 clusters" is
+**no longer the measured result** — both fixed channels are in `FAST_HIGH_MASS`, the set
+those rules key on. That doc is marked STALE; `pin_rule_hindcast.py` must be re-run after
+the redeploy and the numbers re-frozen at every hard-coded site.
+
+### The original diagnosis
 
 1. **`plumbing` reserves anchor is meaningless pre-2008.** All 24 of plumbing's exactly-100 months
    fall in 2003-11..2008-03. `Reserves, 26-week change` anchors `(0,-8,-15,-25)`; pre-QE reserve
@@ -185,10 +216,13 @@ assert transmission_note(board_with("credit_event", 100.0), 35.0)["active"] is T
 | # | P | Question | What it would move |
 |---|---|---|---|
 | 1 | P1 | Should the extreme anchors be re-calibrated so 100 is genuinely rare, rather than layering a marker on a saturating scale? | Would replace this spec. The real defect may be anchor calibration, not the colour map. |
-| 2 | P1 | Fix the two source bugs above before or after this change? | Fixing them first changes which channels the ceiling marker ever lights. |
+| 2 | ~~P1~~ | ~~Fix the two source bugs before or after this change?~~ **RESOLVED 2026-09-10 — both fixed first.** | The ceiling marker will now light on genuine readings only; the clamp pile-up drops from 111 RED months to ~53. |
 | 3 | P2 | Should `monitor.py` alert on `n_at_ceiling`, and at what cadence? | Decides whether the additive fields earn their place over a pure CSS ramp. |
 | 4 | P2 | Should `_episodes` gain a real-time-computable window alongside the retrospective one? | Would make every hindcast hit-rate on this board prospectively honest. |
 | 5 | P3 | Should `pins_overall` get a `pins_schema_rev` stamp for R2 calibration comparability? | Track-record continuity across deploys. |
+| 6 | P1 | Re-run `pin_rule_hindcast.py` after redeploy and re-freeze "44% / 5 of 11" at all five hard-coded sites. | Those numbers are currently STALE and displayed as live truth in the UI. |
+| 7 | P2 | Is the basis_trade level anchor `(2, 4, 5.5, 8)` M contracts still right for a book that grew ~2.5x since 2020? After the cap the level leg alone reaches RED only from 2023-08. | Decides whether the channel has any usable pre-2023 history at all. |
+| 8 | P2 | The channel never flagged March 2020 — its own founding episode — peaking at 79.1, a tenth of a point under RED. Pre-existing, not caused by the fix. | Face validity of the basis_trade channel. |
 
 ## Counter-agent log (mandatory pass, CLAUDE.md)
 

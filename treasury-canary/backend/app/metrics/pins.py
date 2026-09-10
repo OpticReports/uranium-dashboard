@@ -120,11 +120,17 @@ def _change(vals: list, window: int) -> float | None:
     return c[-1] - c[-1 - window]
 
 
-def _pct_change(vals: list, window: int) -> float | None:
+def _pct_change(vals: list, window: int, min_base: float | None = None) -> float | None:
+    """Percent change over `window` observations. `min_base` refuses the reading
+    when the base is too small for a ratio to carry meaning (see
+    RESERVES_MIN_BASE_M) -> None -> STALE -> excluded from the channel score."""
     c = _clean(vals)
     if len(c) <= window or not c[-1 - window]:
         return None
-    return round((c[-1] - c[-1 - window]) / c[-1 - window] * 100.0, 1)
+    base = c[-1 - window]
+    if min_base is not None and abs(base) < min_base:
+        return None
+    return round((c[-1] - base) / base * 100.0, 1)
 
 
 def _percentile(vals: list, value: float | None) -> float | None:
@@ -169,6 +175,16 @@ def _status_from_score(score: float | None) -> str:
     return "RED" if score >= 80.0 else "YELLOW" if score >= 50.0 else "GREEN"
 
 
+# Reserve balances (FRED WRESBAL, $M) only support a percent-change reading in the
+# ample-reserves regime. Pre-QE balances ran $3-24B, where a 26-week % change is
+# noise, not a drain: stdev 104% (vs 21% post-2009), hitting the -15% RED anchor
+# 26.1% of the time and the -25% extreme 30 times -- versus never once since 2009.
+# The anchor below is documented as "beyond-2019 drain pace", i.e. calibrated for
+# the ample-reserves regime only. Below this base the part reports no value.
+# $100B separates the regimes with room to spare: the pre-QE peak base was $24B,
+# the post-QE trough $603B.
+RESERVES_MIN_BASE_M = 100_000.0
+
 # (benign, yellow, red, extreme, higher_is_worse, cap) per part label.
 # Extreme anchors cite the episode that printed them.
 ANCHORS: dict[str, tuple] = {
@@ -182,7 +198,13 @@ ANCHORS: dict[str, tuple] = {
     "Reserves, 26-week change": (0, -8, -15, -25, False, 100),           # beyond-2019 drain pace
     "RRP buffer": (600, 100, 20, 0, False, 79),                          # cushion leg: caps YELLOW
     "Leveraged-fund net short, UST futures": (2, 4, 5.5, 8, True, 100),  # ~2x the 2020 book
-    "Positioning percentile (vs 2010+)": (50, 85, 95, 100, True, 100),
+    # crowding gauge: caps YELLOW. The channel's own certainty note says the
+    # unwind trigger "arrives via the other channels" -- crowding alone must not
+    # take the channel RED. Uncapped, this leg also pinned at exactly 100 on every
+    # new expanding-window high, and leveraged-fund net short trends secularly, so
+    # it sat at the ceiling for long stretches (72% of the channel's 95+ months).
+    # The level leg above is the trigger and is uncapped.
+    "Positioning percentile (vs 2010+)": (50, 85, 95, 100, True, 79),
     "CCC spread percentile (vs 1996+)": (50, 85, 95, 100, True, 100),
     "CCC−BBB dispersion percentile": (50, 85, 95, 100, True, 100),
     "Bank loans to NDFIs, m/m ann. growth": (10, 5, 0, -10, False, 100),
@@ -356,7 +378,7 @@ def build_pin_board(bundle: dict) -> dict:
     if _clean(sofr) and _clean(iorb):
         si = round((_clean(sofr)[-1] - _clean(iorb)[-1]) * 100.0, 1)
     res = bundle.get("reserves", ([], []))[1]
-    res_26w = _pct_change(res, 26)
+    res_26w = _pct_change(res, 26, min_base=RESERVES_MIN_BASE_M)
     rrp = bundle.get("rrp", ([], []))[1]
     rrp_bil = round(_clean(rrp)[-1], 1) if _clean(rrp) else None  # already $B
     parts = [
