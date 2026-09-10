@@ -53,6 +53,89 @@ This service reconciles intents against its own persisted book
 time-stop exits, band rebalances, and BIL sweeps through the same adapter
 modes as the ladder (OFFLINE -> DRY -> PAPER -> LIVE, DRY_RUN default true).
 
+### Error 321 has TWO causes, not one (2026-09-10)
+
+`main`'s write-arming note says the remedy for error 321 is
+`READ_ONLY_API=no` in the Render dashboard. That is necessary and it is NOT
+sufficient, and the difference cost a full session and a missed entry on
+2026-09-10. Both causes produce the identical symptom: the gateway logs in,
+streams quotes, reports positions, `/health` says `mode: LIVE` — and every
+`placeOrder` AND every `cancelOrder` is refused with
+
+    [321] Error validating request ... The API interface is currently in
+    Read-Only mode.
+
+**Cause A — the config layer.** `READ_ONLY_API` unset or `yes`. Check it in
+one command inside the container; if `config.ini` disagrees with the env, the
+`envsubst` step is the problem:
+
+    grep -i readonly /home/ibgateway/ibc/config.ini      # want ReadOnlyApi=no
+
+**Cause B — the DIALOG layer, which nothing in this repo documented.** IBC
+does not write the read-only setting into any file: `ReadOnlyApi=no` is a UI
+automation instruction. After login IBC opens the Gateway's Global
+Configuration dialog and clicks the "Read-Only API" checkbox, found by its
+English label. It fails SOFT by design — a miss is logged and IBC returns
+without throwing ("we don't throw here because older TWS versions did not
+have this setting"), and in Gateway mode it also skips the one assertion that
+throws in TWS mode. Worse, the Gateway's authoritative store is `ibg.xml`
+under the settings path, whose factory default is `readOnlyApi="true"`, and
+`/home/ibgateway/Jts` is rebuilt on every boot — so nothing persists and the
+UI click is the ONLY thing standing between this service and read-only, every
+single restart.
+
+On 2026-09-10 IBC's click SUCCEEDED and the session was still read-only,
+because eight seconds later the executor's connection raised a second dialog
+that IBC has no handler for at all:
+
+    IBC: Setting ReadOnlyApi
+    IBC: Read-Only API checkbox is now set to: false        <- config layer OK
+    ...
+    IBC: detected dialog entitled:
+         API client needs write access action confirmation; event=Opened
+                                                            <- never answered
+
+`TWS_ACCEPT_INCOMING=accept` does NOT answer this one — that setting handles
+IBC's "incoming connection attempt" dialog, which is a different dialog.
+IBC was archived upstream on 2026-09-01, so no handler is coming.
+
+**Triage order, cheapest first.**
+
+1. Read the IBC log (container stdout, i.e. the Render service log) for this
+   exact pair. `Setting ReadOnlyApi` WITHOUT a following
+   `Read-Only API checkbox is now set to: false` is cause A. Both lines
+   present plus `API client needs write access action confirmation` is
+   cause B.
+2. IBKR Client Portal -> Settings -> Trading Platform -> **Read-Only Access**
+   for the `TWS_USERID` username. This is an account-level switch OUTSIDE the
+   container that no gateway setting can override, and it survives every
+   restart, env change and image rebuild.
+3. `TWS_SETTINGS_PATH` pointed at a directory on the mounted `ibkr-data` disk
+   so `ibg.xml` persists and the grant is not re-rolled on every boot.
+
+**What is NOT the cause** (checked and eliminated on 2026-09-10, so the next
+round does not repeat it): IBC/Gateway version skew — IBC 3.24.1 applied the
+checkbox cleanly to Gateway 10.45.1j; a stale persisted setting — `Jts/` is
+rebuilt each boot; and missing trading permissions — those produce 201-class
+rejections, never 321.
+
+**Second-order damage, worth knowing.** A write-denied session ALSO never
+answers `reqCompletedOrders`. On 2026-09-08 that was diagnosed separately and
+generalised into "the gateway never answers reqCompletedOrders on ANY
+session" (`VENUE_HISTORY_TIMEOUT_S`'s rationale, and the execution-report
+fallback in `find_stock_order`). It was one cause, not two: a read-only
+session. And because `_history_proves_unfilled` needs readable history for any
+journal older than today, a book order journaled on a read-only day can NEVER
+resolve — it froze the sweep/core-buy/rebalance lane for two days, which in
+turn starved every entry to `sized to zero`. One disarmed gateway, three
+symptoms, none of which named it.
+
+**The standing gap.** Nothing pages on "this service cannot write to the
+venue". The 321 arrives as a per-intent `RED` that de-dupes on an unchanged
+reason, so a totally disarmed executor looks like one grumpy order. A
+write-armed signal on `/health`, and an escalating page for a read-only
+refusal, are the obvious follow-ups and are NOT built.
+
 ### When the poll goes blind (2026-09-10)
 
 A failed poll used to be indistinguishable from a healthy one. `fetch_intents`
