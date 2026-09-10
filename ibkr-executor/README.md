@@ -110,8 +110,23 @@ IBC was archived upstream on 2026-09-01, so no handler is coming.
    for the `TWS_USERID` username. This is an account-level switch OUTSIDE the
    container that no gateway setting can override, and it survives every
    restart, env change and image rebuild.
-3. `TWS_SETTINGS_PATH` pointed at a directory on the mounted `ibkr-data` disk
-   so `ibg.xml` persists and the grant is not re-rolled on every boot.
+3. **THE FIX, confirmed 2026-09-10 14:53 ET** — persist the Gateway's
+   settings so the checkbox is already `false` at login and there is no
+   change for the Gateway to ask a human to confirm. Two dashboard vars:
+
+       TWS_SETTINGS_PATH = /app/data/tws-settings    (the mounted ibkr-data disk)
+       SAVE_TWS_SETTINGS = Every 5 mins              (IBC SaveTwsSettingsAt)
+
+   Then TWO restarts, each with an IB Key push. Restart 1 still comes up
+   read-only (the dialog fires as usual) but writes the settings file to the
+   disk AFTER IBC's checkbox click; Restart 2 boots from that file, IBC
+   logs `already set to: false` instead of `now set to: false`, the
+   write-access dialog never appears, and the first order is accepted.
+   The settings file is `<path>/<obfuscated-user-dir>/ibgateway.<date>.<time>.ibgzenc`
+   — ENCRYPTED, so there is no `ibg.xml` to grep; verify by the IBC log
+   line and by the first 🧬 sweep alert instead of by the file's contents.
+   First accepted order after the fix: `🧬 blend SWEEP BIL -10`, one cycle
+   after Restart 2, after two days of 🚨 321s.
 
 **What is NOT the cause** (checked and eliminated on 2026-09-10, so the next
 round does not repeat it): IBC/Gateway version skew — IBC 3.24.1 applied the
