@@ -1168,6 +1168,23 @@ def test_gate_m1min_rejected_entry_releases_slot_and_logs(tmp_path,
     assert len(moos) == 2                     # a fresh retry order
 
 
+def test_gate_r19_a_cancelled_trade_reports_its_executions(tmp_path, ib_adapter):
+    """CASH-3 (round 19): a cancelled order can carry a partial fill. The
+    adapter must surface it (filled_qty) so blend's cancelled branch does
+    not treat 'cancelled' as 'nothing happened' and re-hold the full cost."""
+    fake = ib_adapter.ib
+    m = _mgr(tmp_path)
+    run_cycle(m, ib_adapter, _payload(), "2026-08-20", alert=lambda _: None)
+    (cid,) = list(m.state.pending_book_orders)
+    t = fake.trade_by_ref(ib_adapter.find_stock_order(cid)["order_ref"])
+    t.orderStatus.status = "Cancelled"
+    t.orderStatus.filled = 2
+    o = ib_adapter.find_stock_order(cid)
+    assert o["status"] == "cancelled" and o["filled_qty"] == 2, o
+    t.orderStatus.filled = 0
+    assert "filled_qty" not in ib_adapter.find_stock_order(cid)
+
+
 def test_gate_m1min_rejected_book_order_cleared_and_replanned(tmp_path,
                                                               ib_adapter):
     fake = ib_adapter.ib

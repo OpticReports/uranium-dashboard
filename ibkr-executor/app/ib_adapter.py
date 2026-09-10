@@ -885,6 +885,15 @@ class IBAdapter:
             # async MOO/OPG outcome is only ever read from here).
             why = _trade_errors(trade, dead=True, venue=self._venue_error(trade))
             out["reason"] = why or "no venue reason recorded"
+            # ... and any EXECUTIONS the cancelled order carries (a partial
+            # fill before the cancel): the caller must not treat "cancelled"
+            # as "nothing happened" (round 19 review, CASH-3).
+            try:
+                filled = int(getattr(trade.orderStatus, "filled", 0) or 0)
+            except (TypeError, ValueError):
+                filled = 0
+            if filled > 0:
+                out["filled_qty"] = filled
         if out["status"] == "filled":
             px = _agg_fill_price(trade)
             if px is not None:              # unknown price -> NO key, never 0.0

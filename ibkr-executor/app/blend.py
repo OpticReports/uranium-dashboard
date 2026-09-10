@@ -165,13 +165,14 @@ def _valid_baseline(b):
 # entry - it was a guaranteed rejection that first SOLD BIL to fund itself
 # (2026-08-28: NTRA/LLY, 8 rejections; 2026-09-03: MRK, 20 BIL sold, 5
 # rejections, cash stranded). The planner therefore only plans entries
-# OUTSIDE [ENTRY_CUTOFF_ET, SESSION_CLOSE_ET) on weekdays; a fire published
-# mid-session is picked up by the first post-close cycle and placed for the
-# next open. Cutoff is a few minutes before the 09:30 bell on purpose: the
+# OUTSIDE [ENTRY_CUTOFF_ET, opg_accept_from_et) on trading days - the
+# venue's "open" for this check runs through after-hours (round 19, below);
+# a fire published mid-session is picked up by the first cycle after 20:00
+# ET and placed for the next open. Cutoff is a few minutes before the 09:30 bell on purpose: the
 # exchange stops accepting opening-auction orders shortly before it, and a
 # skipped valid minute costs nothing while a doomed order costs a BIL
-# round-trip. Holidays are treated as weekdays (a valid placement is merely
-# delayed to the post-close window; the fire is still published).
+# round-trip. NYSE closures are open all day (an OPG placed on one is for
+# the next session); the fire is still published.
 ENTRY_SESSION_TZ = "America/New_York"
 ENTRY_CUTOFF_ET = (9, 25)
 SESSION_OPEN_ET = (9, 30)
@@ -184,7 +185,10 @@ SESSION_CLOSE_ET = (16, 0)
 # kind, the placements had already released the cash hold, and the sweep
 # bought the entry's cash back into BIL at 16:19. The window therefore
 # closes AFTER_HOURS_H after the session close - 20:00 ET, 17:00 on an
-# early-close day. Two clocks now, because the venue has two: MKT/DAY
+# early-close day. The REJECTION side is measured (through 16:14 ET); the
+# ACCEPTANCE at close + 4h is IBKR's published extended-hours end, INFERRED
+# until the first live 20:0x placement is accepted - log its order ref and
+# time in docs/verdicts/INDEX.md when it lands. Two clocks now, because the venue has two: MKT/DAY
 # orders fill only INSIDE regular hours (`regular_session_open`), OPG is
 # accepted only OUTSIDE extended hours (`entry_window_open`); between 16:00
 # and 20:00 ET both are false. The pre-market side (04:00-09:25) is
@@ -1378,11 +1382,11 @@ class Blend3070Manager:
             self._event_once_today(
                 "INFO", "entries_deferred",
                 f"entries deferred: {len(waiting)} candidate(s) held "
-                f"for the post-close window (MOO/OPG is not placeable "
-                f"during the regular session). Their cash is raised NOW "
-                f"while BIL can fill, held unswept, and the MOO goes out "
-                f"after the close for the next open (pre-fund, Casey "
-                f"2026-09-04).")
+                f"until extended hours end (20:00 ET, 17:00 on an early "
+                f"close: IBKR rejects OPG [202] while its market is open, "
+                f"09:25-20:00 ET). Their cash is raised NOW if BIL can "
+                f"fill, held unswept, and the MOO goes out after 20:00 ET "
+                f"for the next open (pre-fund, Casey 2026-09-04).")
         elif plannable and waiting and enter_paused:
             self._event_once_today(
                 "WARN", "enter_breaker_open",
@@ -1525,7 +1529,8 @@ class Blend3070Manager:
                 "INFO", "prefund",
                 f"pre-funding {len(entry_intents)} deferred entry(ies): "
                 f"${prefund_usd:,.0f} reserved in sleeve cash for the "
-                f"post-close MOO" + (" (BIL sold now to cover the shortfall)"
+                f"MOO placed after extended hours (20:00 ET)"
+                + (" (BIL sold now to cover the shortfall)"
                                      if projected_cash < -CASH_EPS else ""))
             entry_intents = []          # placed post-close from settled cash
             st.prefund_usd, st.prefund_date = round(prefund_usd, 2), _et_today()
@@ -1540,7 +1545,7 @@ class Blend3070Manager:
             if st.prefund_usd <= CASH_EPS:
                 st.prefund_usd, st.prefund_date = 0.0, ""
         elif (st.prefund_date and st.prefund_date != _et_today()
-              and regular_session_open()):
+              and regular_session_open() and not enter_paused):
             # The hold releases only once the NEXT SESSION has started -
             # keyed on the SESSION date and the regular-hours clock. `today`
             # is the UTC date: it rolls at 20:00 ET (19:00 ET in winter),
@@ -1549,7 +1554,13 @@ class Blend3070Manager:
             # (counter-agent round 3, HIGH - and, with the window now
             # opening at 20:00, the winter roll would land inside the
             # closed after-hours and do it again). A same-day blip never
-            # releases it (round 2).
+            # releases it (round 2). And NEVER while ENTER is paused
+            # (round 19 review, CLOCK-1 HIGH): the breaker rolls on the UTC
+            # date and the window opens AT or AFTER that roll in both
+            # seasons, so an evening rejection burst is booked under the
+            # next UTC day and pauses ENTER through the following session;
+            # releasing the re-armed hold at that session's 09:30 handed
+            # the cash back to the sweep before the re-plan could run.
             st.prefund_usd, st.prefund_date = 0.0, ""
 
         # 5) band rebalance (~1x/year expected): executor-side weights.
@@ -3657,12 +3668,29 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
             # journal's resting-cost reserve went with the journal, so
             # nothing held the cash and the sweep bought it back
             # (2026-09-10: GH, BIL +10 at 16:19 ET; the entry lost a
-            # session). Re-arm the hold at the CHARGED cost so the re-plan
-            # - the same evening once the breaker re-arms, or the next
-            # window - sizes full; it releases like any pre-fund hold,
-            # once the next regular session has started.
-            st.prefund_usd = round(st.prefund_usd
-                                   + it["qty"] * _intent_size_ref(it), 2)
+            # session). Re-arm the hold at the CHARGED cost. The breaker
+            # rolls on the UTC date and the window opens at or after that
+            # roll, so a burst of rejections pauses ENTER through the NEXT
+            # session; the release branch carries a hold across a pause,
+            # and the re-plan at that evening's window sizes from held
+            # cash (round 19 review, CLOCK-1).
+            # A cancelled order can carry EXECUTIONS (an OPG partially
+            # filled at the open, remainder cancelled): those shares are at
+            # the venue and NOT in the ledger - a pre-existing gap this
+            # branch never booked. Say so, loudly, and hold only the
+            # unexecuted remainder (round 19 review, CASH-3).
+            filled = int(o.get("filled_qty") or 0)
+            if filled > 0:
+                msg = (f"entry {it['symbol']} (call {it['call_id']}) was "
+                       f"cancelled at the venue with {filled} of "
+                       f"{it['qty']} sh EXECUTED - those shares are held at "
+                       f"the venue and NOT booked in the ledger; book them "
+                       f"by hand (basis: venue execution report)")
+                mgr._event("RED", msg)
+                alert(f"🚨🚨 blend: {msg}")
+            st.prefund_usd = round(
+                st.prefund_usd
+                + max(it["qty"] - filled, 0) * _intent_size_ref(it), 2)
             st.prefund_date = _et_today()
             # The venue's own words, when the adapter could read them
             # (2026-09-03: five MRK rejections said only "status
@@ -3684,7 +3712,7 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
                 alert(f"🔴 ACTION NEEDED (you) — blend ENTER has been "
                       f"REJECTED by the venue {n} times in a row (latest: "
                       f"{it['symbol']}). Pausing ENTER planning; it resumes "
-                      f"on the next TRADING DAY, a service restart, or "
+                      f"on the next UTC day roll (20:00 ET, 19:00 ET in winter), a service restart, or "
                       f"/resume.")
             alert(f"🚨 blend ENTER {it['symbol']} (call {it['call_id']}) "
                   f"REJECTED by the venue{why_sfx} — nothing entered; slot "
@@ -3767,12 +3795,15 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
             # otherwise accumulate forever while blocking its kind, M1)
             # and let step() re-plan a fresh intent next cycle.
             mgr.clear_pending_book_order(cid)
+            why = o.get("reason")
+            why_sfx = f" — venue: {why}" if why else ""
             mgr._event("RED", f"{rec['kind']} {rec['symbol']} x{rec['qty']} "
-                              f"REJECTED by the venue — journal cleared, "
-                              f"re-planned next cycle")
+                              f"cancelled or REJECTED at the venue{why_sfx} — "
+                              f"journal cleared, re-planned next cycle")
             alert(f"🚨 blend {rec['kind']} {rec['symbol']} x{rec['qty']} "
-                  f"REJECTED by the venue — journal cleared, re-planned "
-                  f"next cycle")
+                  f"cancelled or REJECTED at the venue{why_sfx} — journal "
+                  f"cleared, re-planned next cycle (an operator cancel in "
+                  f"the IBKR app lands here too)")
         else:
             # status "working": async order awaiting its fill - keep the
             # journal (step() plans no new order of this kind, M1). But a
@@ -4630,7 +4661,7 @@ def _intent_failure_alert(mgr, it, exc, alert) -> None:
         alert(f"🔴 ACTION NEEDED (you) — blend {kind} has failed "
               f"{n} consecutive cycles (latest: {reason}). Pausing {kind} "
               f"planning until the cause is fixed. It resumes on the next "
-              f"TRADING DAY, on a service restart, or on /resume — a paused "
+              f"UTC day roll (20:00 ET, 19:00 ET in winter), on a service restart, or on /resume — a paused "
               f"kind is never retried within the day, so it cannot clear "
               f"itself. The book takes no {kind} decisions meanwhile.")
 

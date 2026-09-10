@@ -529,9 +529,11 @@ unreconciled venue state. Phases IN ORDER:
    once the session is open, so a fire first seen mid-session is held for
    the first cycle after EXTENDED hours end (`entry_window_open`: trading
    days outside 09:25-20:00 ET, 17:00 on early-close days - IBKR's "market
-   is open" for OPG runs through the after-hours session, learned
-   2026-09-10 from GH's [202] rejections at 16:03, 16:09 and 16:14 ET; the
-   pre-market side 04:00-09:25 is unchanged and still unverified live).
+   is open" for OPG runs through the after-hours session: rejections
+   measured 2026-09-10 on GH at 16:03, 16:09 and 16:14 ET; acceptance at
+   close + 4h is IBKR's published extended-hours end, inferred until the
+   first live 20:0x placement is accepted and logged in the verdict index;
+   the pre-market side 04:00-09:25 is unchanged and still unverified live).
    A second clock, `regular_session_open` (09:30-close), decides whether a
    MKT order fills now or rests for the open; between the close and 20:00
    ET both are false. The planner also refuses to plan entries while the
@@ -563,8 +565,14 @@ unreconciled venue state. Phases IN ORDER:
    ET (19:00 ET in winter), so a release on the roll would re-sweep the
    cash before the 20:00 placement (round 3; re-cut at the 2026-09-10
    window fix). A venue-REJECTED entry re-arms the hold at its charged
-   cost, so the re-plan sizes full instead of the sweep eating the cash
-   (2026-09-10: GH, BIL bought back at 16:19 ET after five rejections).
+   cost, and a hold is never released while ENTER is paused: the breaker
+   rolls on the UTC date and the window opens at or after that roll, so an
+   evening rejection burst pauses ENTER through the NEXT session and the
+   hold is carried across it; the re-plan at that evening's window then
+   sizes full instead of the sweep eating the cash (2026-09-10: GH, BIL
+   bought back at 16:19 ET after five rejections). A cancelled order that
+   carries executions is alerted RED (those shares are at the venue, not
+   in the ledger) and only the unexecuted remainder is held.
    Only then does the ordinary sweep park the cash again (one BIL round
    trip). While a BIL sell or sweep is still resting, an entry the settled
    cash cannot fund at its risk size WAITS rather than placing a dust
@@ -1119,8 +1127,10 @@ on the loop thread) has never run against IBKR.
    mid-session, forces a fresh gateway login and fires an IB Key push. The
    08-28 incident (BIL sold for a rejected entry) was a restart at 10:14;
    the 09-03 MRK repeat was a restart at 10:06. After 16:00 ET the same
-   restart is free: sleeve entries go out post-close, the book reloads
-   intact, and there is a 17-hour buffer before the next open.
+   restart is free of that hazard (between 16:00 and 20:00 ET it places
+   nothing: OPG is refused until extended hours end), sleeve entries go
+   out after 20:00 ET, the book reloads intact, and there is a buffer
+   before the next open.
 2. **A gateway that is DOWN with no supervisor restart is stuck at the
    login prompt, not crashed.** The supervisor acts only on process exits;
    a process waiting on an unanswered IB Key push is alive. Nothing in the

@@ -98,13 +98,15 @@ them three suites appear to regress and none of it is real:
    off). `attack_mf2` A4 and A10 drive the ladder through the real loop and
    land with it off (measured 2026-09-10: 52/56 without, 54/56 with). No
    other suite depends on it.
-2. **Pin the clock outside the session.** `blend.entry_window_open()` now
-   defers MOO entries during 09:25-16:00 ET. pytest is pinned by
-   `tests/conftest.py`; these standalone scripts are NOT. Run in-session,
-   `attack_reround` TRACEBACKS (`TypeError: 'NoneType' object is not
-   subscriptable` - its adapter setup expects an entry the window deferred)
-   and `attack_zfinal` lands `ZF-E1b`; run after 16:00 ET both reproduce
-   their marks with no pin at all (measured 2026-09-10 16:23 ET, with and
+2. **Pin the clock outside the window.** `blend.entry_window_open()` now
+   defers MOO entries during 09:25-20:00 ET (round 19: the venue refuses OPG
+   through after-hours). pytest is pinned by `tests/conftest.py`; these
+   standalone scripts are NOT. Run inside that window, `attack_reround`
+   TRACEBACKS (`TypeError: 'NoneType' object is not subscriptable` - its
+   adapter setup expects an entry the window deferred) and `attack_zfinal`
+   lands `ZF-E1b`; run after 20:00 ET or on a weekend both reproduce their
+   marks with no pin at all (measured 2026-09-10 16:23 ET on the
+   pre-round-19 tree, when the window still closed at 16:00; with and
    without the ladder flag - the flag is not their precondition). Pin
    `blend._now_utc` to the same 07:00 ET the suite uses so the marks do not
    depend on when you run them.

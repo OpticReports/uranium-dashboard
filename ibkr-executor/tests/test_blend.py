@@ -7196,11 +7196,28 @@ class SessionDryAdapter(DryAdapter):
     REJECTED [202] through the regular session AND after-hours - the
     2026-09-10 shape, where 16:03-16:14 ET placements all died."""
 
+    def __init__(self, *a, **k):
+        super().__init__(*a, **k)
+        self.rejected: list[tuple] = []     # every MOO the venue refused
+
+    def find_stock_order(self, client_order_id):
+        o = super().find_stock_order(client_order_id)
+        rec = self._orders.get(self._by_client.get(client_order_id, ""))
+        if o is not None and rec is not None and rec.get("reason"):
+            o["reason"] = rec["reason"]     # the real adapter surfaces it too
+        if o is not None and rec is not None and rec.get("filled_qty"):
+            o["filled_qty"] = rec["filled_qty"]
+        return o
+
     def place_stock_order(self, symbol, qty, order_type, stop_price=None,
                           tif="DAY", ref_price=None, client_order_id=None):
         opg_ok = blend_mod.entry_window_open()
         rests = not blend_mod.regular_session_open()
         if order_type == "MOO" and not opg_ok:
+            # recorded BEFORE raising: a gate must be able to see an
+            # ATTEMPTED placement, not only a surviving order (round 19
+            # review, TESTS-2)
+            self.rejected.append((symbol, qty, client_order_id))
             raise RuntimeError("order rejected by venue (status Cancelled): "
                                "[202] Order Canceled - reason:On-open orders "
                                "cannot be placed when market is open.")
@@ -7814,27 +7831,54 @@ def test_gate_resting_entry_reserves_its_charged_cost(tmp_path, monkeypatch):
 
 
 # --- round 19 (2026-09-10): OPG acceptance ends with extended hours --------
-# MUTATION-VERIFIED (docs/verdicts/INDEX.md, round 19): the after-hours
-# window (opg_accept_from_et back to the session close), the regular-hours
-# resting rule (rests_for_open / reconcile 2b back to entry_window_open),
-# the ET-keyed hold release (back to the UTC `today`) and the rejection
-# re-arm (removed) each turn their gate red.
+# MUTATION-VERIFIED (docs/verdicts/INDEX.md, round 19 - the exact mutants
+# and outcomes are listed there): the after-hours window (opg_accept_from_et
+# back to the session close); the regular-hours resting rule (rests_for_open
+# and reconcile 2b back to entry_window_open, each alone); the stale-alert
+# exemption back to entry_window_open; the hold release's full revert to
+# the UTC `today` + `not entry_window_open()`, and each of its three clauses
+# dropped alone (ET date, regular_session_open, not enter_paused); the
+# prefund stamp back to `today`; the rejection re-arm removed; the re-arm
+# ignoring executions; SESSION_OPEN_ET at the planning cutoff.
+
+_R202 = ("[202] Order Canceled - reason:On-open orders cannot be placed "
+         "when market is open.")
+
 
 class VenueRejectsMooAdapter(SessionDryAdapter):
-    """The real venue's rejection SHAPE: placeOrder is acknowledged and the
-    MOO is journaled 'working'; the venue then cancels it with IBKR's [202]
-    text, which reconcile reads on the next cycle. SessionDryAdapter's
-    raise-at-placement models a synchronous refusal; this models the
-    asynchronous one the live book took on 2026-09-10."""
+    """ASYNCHRONOUS rejection shape: placeOrder is acknowledged, the MOO is
+    journaled 'working', the venue cancels it afterwards and reconcile
+    reads the cancelled trade (with its reason) on the next cycle. One
+    breaker count per placement. `partial` > 0 models a cancel that
+    carries executions (an OPG partly filled at the open)."""
     reject = True
+    partial = 0
 
     def place_stock_order(self, symbol, qty, order_type, **kw):
         r = super().place_stock_order(symbol, qty, order_type, **kw)
         if order_type == "MOO" and self.reject and r.get("status") == "working":
             rec = self._orders[r["order_ref"]]
-            rec["status"] = "cancelled"
-            rec["reason"] = ("[202] Order Canceled - reason:On-open orders "
-                             "cannot be placed when market is open.")
+            rec["status"], rec["reason"] = "cancelled", _R202
+            if self.partial:
+                rec["filled_qty"] = self.partial
+        return r
+
+
+class VenueRejectsMooSyncAdapter(VenueRejectsMooAdapter):
+    """SYNCHRONOUS rejection shape - what the live book actually took on
+    2026-09-10: IBAdapter._await_placement sees the [202] inside
+    PLACE_ACK_TIMEOUT_S and RAISES, run_cycle books one breaker count, the
+    write-ahead journal stays pending, and the next reconcile finds the
+    cancelled trade and books a SECOND count. Three placements = five
+    counts (16:03, 16:09, 16:14 ET; paused at 5) - the breaker trips
+    earlier than its N says, never later. Recorded as accepted behaviour,
+    not changed, in the round-19 verdict."""
+
+    def place_stock_order(self, symbol, qty, order_type, **kw):
+        r = super().place_stock_order(symbol, qty, order_type, **kw)
+        if order_type == "MOO" and self.reject:
+            raise RuntimeError("order rejected by venue (status Cancelled): "
+                               + _R202)
         return r
 
 
@@ -7870,6 +7914,7 @@ def test_gate_r19_no_moo_goes_out_in_after_hours(tmp_path, monkeypatch):
     for h, mi in ((16, 3), (16, 9), (16, 14), (17, 0), (19, 55)):
         cyc(2026, 8, 20, h, mi)
         assert not a.orders(order_type="MOO"), f"MOO placed at {h}:{mi:02d} ET"
+        assert not a.rejected, f"MOO ATTEMPTED at {h}:{mi:02d} ET: {a.rejected}"
     assert not [o for o in a.orders("BIL") if o["qty"] > 0], "cash swept in after-hours"
     assert m.state.prefund_usd == 250.0
     cyc(2026, 8, 20, 20, 5, today="2026-08-21")               # 00:05 UTC: accepted
@@ -7878,69 +7923,228 @@ def test_gate_r19_no_moo_goes_out_in_after_hours(tmp_path, monkeypatch):
     assert m.state.prefund_usd == 0.0
 
 
+def _reject_then_recover(m, a, pl, alerts, monkeypatch, placements_to_pause):
+    """Shared timeline for the two rejection shapes, on the dates the
+    service actually produces: at 20:05 ET (EDT) the UTC `today` is already
+    the next date, so the rejections are booked under 08-21 and the breaker
+    stays paused through Friday's session; it re-arms at Friday 20:00 ET
+    (today 08-22)."""
+    cyc = lambda *t, **k: _session_cycle(m, a, pl, alerts, monkeypatch, *t, **k)
+    cyc(2026, 8, 20, 10, 35)                                  # Thu in session: pre-funded
+    assert m.state.prefund_usd == 450.0 and m.state.bil_qty == 25   # 5 sh @ size_ref 90
+    for mi in (5, 10, 15, 20, 25, 30, 35):                    # Thu evening: UTC date 08-21
+        cyc(2026, 8, 20, 20, mi, today="2026-08-21")
+    assert blend_mod.intent_kind_paused("ENTER"), "breaker did not pause"
+    attempts = [o for o in a.orders(order_type="MOO") if o["status"] == "cancelled"]
+    assert len(attempts) == placements_to_pause, len(attempts)
+    assert m.state.prefund_usd == 450.0, "hold not re-armed at the charged cost"
+    assert not [o for o in a.orders("BIL") if o["qty"] > 0], "the sweep ate the entry's cash"
+    assert any("[202]" in x for x in alerts), "venue reason not surfaced"
+    cyc(2026, 8, 20, 21, 0, today="2026-08-21")               # same UTC day: still paused
+    assert blend_mod.intent_kind_paused("ENTER")
+    cyc(2026, 8, 21, 9, 35, today="2026-08-21")               # Fri in session, still paused
+    assert m.state.prefund_usd == 450.0, "hold released while ENTER was paused"
+    assert not [o for o in a.orders("BIL") if o["qty"] > 0], "cash re-swept on Friday"
+    a.reject = False                                          # the venue now accepts
+    cyc(2026, 8, 21, 20, 5, today="2026-08-22")               # Fri 20:05: breaker rolls
+    working = [o for o in a.orders(order_type="MOO") if o["status"] == "working"]
+    assert len(working) == 1 and working[0]["qty"] == 5, "re-plan not full size"
+    assert m.state.prefund_usd == 0.0
+
+
 def test_gate_r19_a_venue_rejected_entry_keeps_its_cash_held(tmp_path, monkeypatch):
-    """The knock-on of 2026-09-10: five [202] rejections paused ENTER, the
-    placements had 'spent' the hold, and the sweep bought the entry's cash
-    back (BIL +10 at 16:19 ET) - the entry then needed a human to cancel
-    the sweep by hand or lose a session. A rejection must re-arm the hold
-    at the charged cost; the paused book keeps the cash; the re-plan after
-    the breaker re-arms places full size."""
+    """The knock-on of 2026-09-10: rejections paused ENTER, the placements
+    had 'spent' the hold, and the sweep bought the entry's cash back (BIL
+    +10 at 16:19 ET) - the entry then needed a human to cancel the sweep by
+    hand or lose a session. A rejection must re-arm the hold at the CHARGED
+    cost (gapped quote: size_ref 90 vs entry_ref 50); the paused book keeps
+    the cash through the next session; the re-plan when the breaker rolls
+    places full size. Asynchronous shape: one count per placement."""
     blend_mod.intent_breaker_clear()
     m = mk(tmp_path)
     _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
     a = VenueRejectsMooAdapter()
     alerts = []
     pl = payload(entries=[entry()], stops=[stop_row()])
-    monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: PRICES)
+    monkeypatch.setattr(blend_mod, "reference_prices",
+                        lambda *_a, **_k: {**PRICES, "CRSP": 90.0})
+    try:
+        _reject_then_recover(m, a, pl, alerts, monkeypatch, placements_to_pause=5)
+    finally:
+        blend_mod.intent_breaker_clear()
+
+
+def test_gate_r19_the_synchronous_rejection_shape_recovers_the_same_way(tmp_path, monkeypatch):
+    """The live shape (TESTS-1 / CASH-2): the placement RAISES, the journal
+    stays pending, reconcile re-arms the hold a cycle later and books a
+    second count - so three placements trip the breaker. Between the raise
+    and the re-arm nothing may sweep the cash (the planning cycle already
+    reserved it)."""
+    blend_mod.intent_breaker_clear()
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
+    a = VenueRejectsMooSyncAdapter()
+    alerts = []
+    pl = payload(entries=[entry()], stops=[stop_row()])
+    monkeypatch.setattr(blend_mod, "reference_prices",
+                        lambda *_a, **_k: {**PRICES, "CRSP": 90.0})
+    try:
+        _reject_then_recover(m, a, pl, alerts, monkeypatch, placements_to_pause=3)
+    finally:
+        blend_mod.intent_breaker_clear()
+
+
+def test_gate_r19_a_cancel_with_executions_is_loud_and_holds_only_the_remainder(tmp_path, monkeypatch):
+    """CASH-3: a cancelled order can carry a partial fill. Those shares are
+    at the venue and not in the ledger (pre-existing gap, now RED); the
+    re-arm must cover only the unexecuted remainder, or the re-plan sizes
+    full against cash the venue has already debited."""
+    blend_mod.intent_breaker_clear()
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
+    a = VenueRejectsMooAdapter()
+    a.partial = 2
+    alerts = []
+    pl = payload(entries=[entry()], stops=[stop_row()])
+    monkeypatch.setattr(blend_mod, "reference_prices",
+                        lambda *_a, **_k: {**PRICES, "CRSP": 90.0})
     cyc = lambda *t, **k: _session_cycle(m, a, pl, alerts, monkeypatch, *t, **k)
     try:
-        cyc(2026, 8, 20, 10, 35)                              # pre-funded
-        assert m.state.prefund_usd == 250.0 and m.state.bil_qty == 27
-        # 20:05 places (the venue cancels it); each later cycle reads the
-        # rejection, re-arms the hold, re-plans and places again - until
-        # the breaker pauses ENTER on the fifth rejection
-        for mi in (5, 10, 15, 20, 25, 30, 35):
-            cyc(2026, 8, 20, 20, mi)
-        assert blend_mod.intent_kind_paused("ENTER"), "breaker did not pause"
-        rejected = [o for o in a.orders(order_type="MOO") if o["status"] == "cancelled"]
-        assert len(rejected) == 5, len(rejected)
-        assert m.state.prefund_usd == 250.0, "hold not re-armed by the rejection"
-        assert not [o for o in a.orders("BIL") if o["qty"] > 0], "the sweep ate the entry's cash"
-        # the breaker re-arms on the day roll; the venue now accepts
-        a.reject = False
-        cyc(2026, 8, 20, 21, 0, today="2026-08-21")
-        working = [o for o in a.orders(order_type="MOO") if o["status"] == "working"]
-        assert len(working) == 1 and working[0]["qty"] == 5, "re-plan not full size"
+        cyc(2026, 8, 20, 10, 35)
+        cyc(2026, 8, 20, 20, 5, today="2026-08-21")           # placed, cancelled with 2 executed
+        assert m.state.prefund_usd == 0.0
+        a.reject = False                                      # no further rejections
+        cyc(2026, 8, 20, 20, 10, today="2026-08-21")          # reconcile reads the cancel
+        assert any("2 of 5 sh EXECUTED" in x and "NOT booked" in x for x in alerts), alerts
+        # the re-arm held 3 x 90 = 270, then the same cycle re-planned and spent it
+        held_then_spent = [e for e in m.state.events if "EXECUTED" in e["msg"]]
+        assert held_then_spent
+        (moo,) = [o for o in a.orders(order_type="MOO") if o["status"] == "working"]
+        assert moo["qty"] == 5                                # cash 460 covers 450
         assert m.state.prefund_usd == 0.0
     finally:
         blend_mod.intent_breaker_clear()
+
+
+def _utc_cycle(m, a, pl, alerts, monkeypatch, y, mo, d, h, mi, today):
+    """Like _session_cycle but pinned to a UTC-tz datetime, so the ET
+    conversion the code performs is real (round 19 review, TESTS-4)."""
+    monkeypatch.setattr(blend_mod, "_now_utc",
+                        lambda: _dt(y, mo, d, h, mi, tzinfo=_tz.utc))
+    return run_cycle(m, a, pl, today, alert=alerts.append)
+
+
+def _winter_book(tmp_path, monkeypatch):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
+    a = SessionDryAdapter()
+    e = entry()
+    e["fire_date"] = "2027-01-14"
+    pl = payload(entries=[e], stops=[stop_row()])
+    pl["as_of"] = "2027-01-14"
+    monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: PRICES)
+    return m, a, pl, e
 
 
 def test_gate_r19_hold_survives_the_winter_utc_roll(tmp_path, monkeypatch):
     """In EST the UTC date rolls at 19:00 ET - inside the after-hours window
     this round closes. A release keyed on `today` would re-sweep the cash
     at 19:05 and dust-size the 20:05 placement: round 3's bug, one hour
-    earlier. The release keys on the SESSION date and regular hours."""
+    earlier. The release keys on the SESSION date and regular hours. The
+    clock is pinned in UTC here: 00:05Z Fri IS 19:05 EST Thu."""
+    m, a, pl, e = _winter_book(tmp_path, monkeypatch)
+    alerts = []
+    cyc = lambda *t, **k: _utc_cycle(m, a, pl, alerts, monkeypatch, *t, **k)
+    cyc(2027, 1, 14, 19, 0, today="2027-01-14")               # 14:00 EST Thu: pre-funded
+    assert m.state.prefund_usd == 250.0 and m.state.bil_qty == 27
+    assert m.state.prefund_date == "2027-01-14"
+    pl["entries"] = []                                        # tracker blip
+    cyc(2027, 1, 15, 0, 5, today="2027-01-15")                # 19:05 EST Thu
+    assert m.state.prefund_usd == 250.0, "hold released on the winter UTC roll"
+    assert not [o for o in a.orders("BIL") if o["qty"] > 0], "cash re-swept at 19:05 ET"
+    pl["entries"] = [e]                                       # the fire is back
+    cyc(2027, 1, 15, 1, 5, today="2027-01-15")                # 20:05 EST Thu
+    (moo,) = a.orders(order_type="MOO")
+    assert moo["qty"] == 5 and m.state.prefund_usd == 0.0
+
+
+def test_gate_r19_prefund_stamps_the_session_date_not_utc(tmp_path, monkeypatch):
+    """A pre-fund made in after-hours after the winter UTC roll (19:30 EST =
+    00:30Z next date) must be stamped with the SESSION date, or the next
+    morning's release compares equal dates and never fires."""
+    m, a, pl, e = _winter_book(tmp_path, monkeypatch)
+    alerts = []
+    cyc = lambda *t, **k: _utc_cycle(m, a, pl, alerts, monkeypatch, *t, **k)
+    cyc(2027, 1, 15, 0, 30, today="2027-01-15")               # 19:30 EST Thu: deferred, pre-funded
+    assert m.state.prefund_usd == 250.0
+    assert m.state.prefund_date == "2027-01-14", m.state.prefund_date
+    pl["entries"] = []                                        # fire gone for good
+    a.open_market()                                           # the BIL sell fills at the open
+    cyc(2027, 1, 15, 14, 35, today="2027-01-15")              # 09:35 EST Fri: released, swept
+    assert m.state.prefund_usd == 0.0 and m.state.prefund_date == ""
+    assert [o for o in a.orders("BIL") if o["qty"] > 0], "idle cash not re-swept"
+
+
+def test_gate_r19_hold_survives_an_et_date_roll_outside_regular_hours(tmp_path, monkeypatch):
+    """VENUE-1: the regular_session_open clause of the release is load-
+    bearing on its own. Pre-fund Friday, blip the fire; at 00:05 ET
+    Saturday the ET date HAS rolled but no session has started - the hold
+    must stay (else the sweep rests a BUY for Monday and the returning fire
+    cannot fund until Tuesday). It releases at the next regular session."""
     m = mk(tmp_path)
     _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
     a = SessionDryAdapter()
     alerts = []
-    e = entry()
-    e["fire_date"] = "2027-01-14"
-    pl = payload(entries=[e], stops=[stop_row()])
-    pl["as_of"] = "2027-01-14"
+    pl = payload(entries=[entry()], stops=[stop_row()])
+    pl["as_of"] = "2026-08-21"
     monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: PRICES)
     cyc = lambda *t, **k: _session_cycle(m, a, pl, alerts, monkeypatch, *t, **k)
-    cyc(2027, 1, 14, 14, 0, today="2027-01-14")               # Thu, pre-funded
-    assert m.state.prefund_usd == 250.0 and m.state.bil_qty == 27
-    pl["entries"] = []                                        # tracker blip
-    cyc(2027, 1, 14, 19, 5, today="2027-01-15")               # 00:05 UTC Fri = 19:05 ET Thu
-    assert m.state.prefund_usd == 250.0, "hold released on the winter UTC roll"
-    assert not [o for o in a.orders("BIL") if o["qty"] > 0], "cash re-swept at 19:05 ET"
-    pl["entries"] = [e]                                       # the fire is back
-    cyc(2027, 1, 14, 20, 5, today="2027-01-15")
+    cyc(2026, 8, 21, 10, 35, today="2026-08-21")              # Fri: pre-funded
+    assert m.state.prefund_usd == 250.0
+    pl["entries"] = []
+    cyc(2026, 8, 21, 20, 5, today="2026-08-22")               # Fri 20:05: blip
+    cyc(2026, 8, 22, 0, 5, today="2026-08-22")                # Sat 00:05 ET: date rolled, no session
+    assert m.state.prefund_usd == 250.0, "hold released on the ET date roll"
+    assert not [o for o in a.orders("BIL") if o["qty"] > 0], "sweep BUY resting for Monday"
+    pl["entries"] = [entry()]
+    cyc(2026, 8, 22, 10, 0, today="2026-08-22")               # Sat 10:00: fire back, placed
     (moo,) = a.orders(order_type="MOO")
     assert moo["qty"] == 5 and m.state.prefund_usd == 0.0
+    # and the hold DOES release once a regular session starts with the fire gone
+    m2 = mk(tmp_path / "b")
+    _seed_initialized(m2, sleeve_cash=10.0, bil_qty=30)
+    a2 = SessionDryAdapter()
+    cyc2 = lambda *t, **k: _session_cycle(m2, a2, pl, alerts, monkeypatch, *t, **k)
+    pl["entries"] = [entry()]
+    cyc2(2026, 8, 21, 10, 35, today="2026-08-21")
+    pl["entries"] = []
+    pl["as_of"] = "2026-08-24"
+    cyc2(2026, 8, 24, 9, 35, today="2026-08-24")              # Mon in session: released
+    assert m2.state.prefund_usd == 0.0
+    assert [o for o in a2.orders("BIL") if o["qty"] > 0], "idle cash not re-swept"
+
+
+def test_gate_r19_stale_alert_exempts_a_sell_resting_before_the_bell(tmp_path, monkeypatch):
+    """TESTS-5: the stale-order WARN ('still working after Nd') exempts an
+    order resting for the open while the regular session is not open. A
+    sell placed Friday after-hours is 3 days old at Monday 09:27 ET - not
+    stale, the bell has not rung. Keyed on the OPG window it would page."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
+    a = SessionDryAdapter()
+    alerts = []
+    pl = payload(entries=[entry()], stops=[stop_row()])
+    pl["as_of"] = "2026-08-21"
+    monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: PRICES)
+    cyc = lambda *t, **k: _session_cycle(m, a, pl, alerts, monkeypatch, *t, **k)
+    cyc(2026, 8, 21, 16, 5, today="2026-08-21")               # Fri after-hours: BIL sell rests
+    (sell,) = a.orders("BIL")
+    assert sell["status"] == "working"
+    pl["as_of"] = "2026-08-24"
+    cyc(2026, 8, 24, 9, 27, today="2026-08-24")               # Mon, before the bell, 3d old
+    assert sell["status"] == "working"
+    assert not [ev for ev in m.state.events if "still working" in ev["msg"]], "paged stale before the bell"
+    assert not any(rec.get("stale_alerted") for rec in m.state.pending_book_orders.values())
 
 
 def test_gate_r19_a_resting_sell_is_not_stuck_during_after_hours(tmp_path, monkeypatch):

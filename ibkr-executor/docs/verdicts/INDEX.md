@@ -610,7 +610,8 @@ name, reconstruct it from `git log origin/main -- ibkr-executor/`.
     resting sweep is cancelled by hand at 20:00 ET. Systematic for every
     mid-session fire. Fix: close the window at 20:00 ET (17:00 on
     early-close days) AND keep the hold through a venue rejection. Its own
-    round, with gates — the FIRST post-merge item.
+    round, with gates — the FIRST post-merge item. **Closed by round 19,
+    below, the same evening.**
   * **Pre-open 09:25 ET tracker rung** (README "Not covered" 3): helpers
     in scope since this merge; unbuilt.
   * `VENUE_HISTORY_TIMEOUT_S` rationale comment: still wrong (see the B9
@@ -629,6 +630,122 @@ name, reconstruct it from `git log origin/main -- ibkr-executor/`.
   merge after GH's stop is resting, never mid-window.
 * **Suite:** 431 passed; the eight attack probes at their documented marks
   under the corrected preconditions.
+
+---
+
+## Round 19 — OPG acceptance ends with extended hours (corrective, 2026-09-10)
+
+* **Reviewed:** `69c9548` (the round-19 build: two session clocks, the
+  hold re-armed on a venue rejection, the ET-keyed release, the three-state
+  venue double, five gates). Five counter-agent lenses in parallel — venue
+  semantics, cash composition, clock/DST, test honesty, deploy-time live
+  state — every finding verified by two skeptics who reproduced or refuted
+  it in a scratch copy (51 agents).
+* **Verdicts:** venue PASS WITH CORRECTIONS · cash PASS WITH CORRECTIONS ·
+  clock **FAIL** · tests PASS WITH CORRECTIONS · deploy PASS WITH
+  CORRECTIONS ("safe to deploy tonight": restarts at 19:00, 20:15 with
+  GH's MOO resting, and 21:00 with the sweep still resting were each
+  walked — nothing duplicated, cancelled or sized to zero forever).
+* **Remediated by:** the commit that carries this entry. Every gate below
+  mutation-verified in the same pass.
+* **Materials and status:**
+  * **CLOCK-1 = CASH-1 = DEPLOY-1** (HIGH) `closed` — the build's re-armed
+    hold was released at the next 09:30 while ENTER was still paused. The
+    breaker rolls on the UTC date and the new window opens AT or AFTER
+    that roll in both seasons (20:00 ET = 00:00Z in EDT; 19:00 ET roll <
+    20:00 open in EST), so every evening rejection burst is booked under
+    the NEXT UTC day and pauses ENTER through the following session; the
+    sweep took the released cash and the re-plan was BIL-funded and
+    skipped — the round's stated goal did not hold. Fix: a hold never
+    releases while ENTER is paused. Gates: both rejection gates now run on
+    the dates the service produces (today rolls at 20:00 ET; Friday 09:35
+    paused, hold intact, no BIL buy; Friday 20:05 re-plan full size from
+    held cash). Mutant: clause dropped → red.
+  * **CLOCK-2 = DEPLOY-2** (MED) `closed` — the build's rejection gate
+    kept `today` at 08-20 through the 20:xx cycles and "rolled" at 21:00,
+    a timeline the service never produces. Rewritten as above.
+  * **CASH-2 = TESTS-1** (MED) `accepted-risk`, gated — the live
+    rejection shape is SYNCHRONOUS: `_await_placement` raises on [202],
+    run_cycle books one count, the write-ahead journal stays pending, and
+    the next reconcile reads the cancelled trade and books a SECOND count.
+    Three placements = five counts — exactly today's record (16:03, 16:09,
+    16:14; paused at 5). The breaker trips earlier than N says, never
+    later; the re-arm still lands through the pending journal a cycle
+    later, with nothing able to sweep in between (the planning cycle
+    reserved the cost). Gate
+    `test_gate_r19_the_synchronous_rejection_shape_recovers_the_same_way`
+    pins both. Dedupe is a follow-up, not tonight.
+  * **CASH-3** (MED) `closed` — a cancelled order can carry executions (an
+    OPG partly filled at the open, remainder cancelled); the re-arm held
+    the FULL cost. Now: the adapter emits `filled_qty` on cancelled
+    trades; the re-arm holds only the unexecuted remainder and alerts RED
+    that the executed shares are at the venue and NOT in the ledger.
+    Booking them automatically is a pre-existing gap, `open`. Gates:
+    adapter (`..._a_cancelled_trade_reports_its_executions`) and blend
+    (`..._a_cancel_with_executions_is_loud_and_holds_only_the_remainder`).
+    Mutants: `filled = 0`, adapter drops the key → red.
+  * **VENUE-1** (MED) `closed` — the `regular_session_open` clause of the
+    release was load-bearing and ungated (deleting it passed the suite:
+    Sat 00:05 ET would release, the sweep rest a BUY for Monday, the
+    returning fire wait until Tuesday). Gate
+    `..._hold_survives_an_et_date_roll_outside_regular_hours`. Mutant → red.
+  * **VENUE-2 = DEPLOY-3** (MED/LOW) `closed` — the "entries deferred"
+    and "pre-funding" feed texts named the 16:00 window; they name 20:00
+    and the [202] reason now.
+  * **TESTS-2** (MED) `closed` — the after-hours gate could not see an
+    ATTEMPTED placement (the double raised before recording). It records
+    rejected attempts; the gate asserts none.
+  * **TESTS-3** (MED) `closed` — the re-arm "at the charged cost" was
+    indistinguishable from `entry_ref` at the test's prices; both
+    rejection gates run on a gapped quote (size_ref 90 vs entry_ref 50).
+    Mutant: re-arm at `entry_ref` → red.
+  * **TESTS-4** (MED) `closed` — the winter gate pinned an ET-aware clock,
+    so the ET/UTC conversion was never exercised; it is pinned in UTC
+    (00:05Z = 19:05 EST) and a new gate asserts a pre-fund made after the
+    winter roll stamps the SESSION date. The header lists the exact
+    mutants instead of a blanket claim.
+  * **TESTS-5** (LOW) `closed` — the stale-alert exemption re-key had no
+    gate; `..._stale_alert_exempts_a_sell_resting_before_the_bell` (a
+    3-day-old resting sell at Monday 09:27 ET does not page). Mutant → red.
+  * **TESTS-6** (LOW) `closed` — the double's [202] reason was dead data
+    (`find_stock_order` dropped it); it is surfaced, and the rejection
+    gates assert the text reaches the operator alert.
+  * **VENUE-3 = DEPLOY-5** (LOW) `closed` — probes README precondition,
+    README operating rule 1 and the blend.py section header said 16:00.
+  * **VENUE-4 = TESTS-7** (LOW) `closed` — this entry; the merge round's
+    open item is closed above.
+  * **VENUE-5** (LOW) `closed` — acceptance at close + 4h is IBKR's
+    published extended-hours end, INFERRED; only the rejections are
+    measured. Stated so in code and README. **Confirm on the first live
+    20:0x placement and log the order ref and time here.**
+  * **CLOCK-3** (LOW) `closed` — the re-arm comment, README and the
+    breaker alert name the real resume boundary: the next UTC roll (20:00
+    ET; 19:00 ET in winter), not "the next trading day".
+  * **DEPLOY-4** (LOW) `closed` — an operator cancel of a resting book
+    order read as a venue rejection; it reads "cancelled or REJECTED at
+    the venue — venue: <reason>" and says an app cancel lands there.
+* **Mutants run, all killed** — build: window back to the session close;
+  `rests_for_open` and reconcile 2b keyed on the OPG window (each alone);
+  release keyed on the UTC date; re-arm removed; `SESSION_OPEN_ET` at the
+  planning cutoff. Remediation: release without `not enter_paused`;
+  without `regular_session_open()`; without the ET-date clause; full
+  revert to `today` + `not entry_window_open()`; pre-fund stamps the UTC
+  date; stale exemption on the OPG window; re-arm ignores executions;
+  adapter drops `filled_qty`; re-arm removed (both shapes); re-arm at
+  `entry_ref`.
+* **Open, recorded here:** roll the ENTER breaker on the ET session date
+  so a transient evening rejection recovers the same night for the same
+  open (today it pauses through the next session); dedupe the breaker's
+  double count on the synchronous shape; book the executed shares of a
+  cancelled entry automatically; pre-market (04:00-09:25 ET) OPG
+  acceptance unverified live; cancel-to-fund (the executor cancelling its
+  own resting sweep BUY when an entry needs the cash — tonight's manual
+  step).
+* **Suite:** 442 passed; the eight attack probes at their documented
+  marks under the corrected preconditions.
+* **Live confirmation pending:** the first 20:0x OPG accepted by the
+  venue (GH, call 18, expected 2026-09-10 after the 20:00 ET re-arm on
+  the pre-round-19 code) — record it here with the order ref.
 
 ---
 
