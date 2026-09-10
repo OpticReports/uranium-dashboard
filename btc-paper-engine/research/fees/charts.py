@@ -43,7 +43,7 @@ ax.text(0.72, -1.15, "modelled:\nmaker, 1.44 bps", color=AQUA, fontsize=8.2,
         ha="center", va="center", fontweight="bold")
 ax.text(4.32, -1.15, "actually paid:\ntaker, 4.32 bps", color=RED, fontsize=8.2,
         ha="center", va="center", fontweight="bold")
-ax.text(0.0, -0.235, "4 of 4 crossed. n=4, so the point estimate is 100% — which is "
+ax.text(0.0, -0.315, "4 of 4 crossed. n=4, so the point estimate is 100% — which is "
                      "NOT the same as established.",
         transform=ax.transAxes, fontsize=8, color=RED, va="top")
 
@@ -59,50 +59,65 @@ for wname, col, mk in (("full", BLUE, "o"), ("hl_era", VIOLET, "s")):
 base_full = [g for g in grid if g["arm"] == "baseline_6.0" and g["window"] == "full"][0]
 ax.axhline(base_full["stats"]["S3"]["cagr_pct"], color=MUTED, ls="--", lw=1.1,
            zorder=2)
-ax.text(2, base_full["stats"]["S3"]["cagr_pct"] + 0.10,
+ax.text(2, base_full["stats"]["S3"]["cagr_pct"] - 0.10,
         f"as modelled today ({base_full['stats']['S3']['cagr_pct']}%) — which "
         f"is only ~8% crossing",
-        fontsize=8, color=MUTED)
+        fontsize=8, color=MUTED, va="top")
 ax.axvline(8.33, color=AQUA, ls="-.", lw=1.3, zorder=3)
-ax.text(9.5, 16.55, "the shipped model\nassumes ~8% cross", color=AQUA,
+ax.text(10.5, 15.98, "the shipped model\nassumes ~8% cross", color=AQUA,
         fontsize=8, va="bottom")
 ax.axvline(100, color=RED, ls=":", lw=1.4, zorder=3)
-ax.text(97, 18.6, "live: 4 of 4", color=RED, fontsize=8.2, ha="right", rotation=90)
+ax.text(103, 16.3, "live: 4 of 4", color=RED, fontsize=8.2, ha="left",
+        va="bottom", rotation=90)
+ax.set_xlim(-5, 113); ax.set_ylim(15.85, 18.45)
 ax.set_xlabel("share of entries that CROSS (pay taker), %")
 ax.set_ylabel("S3 CAGR, % (in-sample)")
 ax.set_title("2. What the true fee costs S3")
-ax.legend(frameon=False, fontsize=8.2); ax.grid(lw=0.6, zorder=0)
+ax.legend(frameon=False, fontsize=8.2, loc="upper right"); ax.grid(lw=0.6, zorder=0)
 
 # ---- 3. the decision -----------------------------------------------------
+# Four cells: {2y, full} x {cash_apy 0.04, 0.00}. All four are declared in
+# PREREG AMENDMENT 2; the first cut reported only one of them and got the
+# headline backwards. See A2.4/A2.5.
 ax = axes[2]
-books = ["S3", "S5", "S6"]
-base = [kel["baseline_6.0"][b]["recommended_m"] for b in books]
-corr = [kel["live_8.64"][b]["recommended_m"] for b in books]
-x = np.arange(len(books)); w = 0.34
+CELLS = [("2y_cash0.04", "2y\ncash 4%"), ("2y_cash0.00", "2y\ncash 0%"),
+         ("full_cash0.04", "full\ncash 4%"), ("full_cash0.00", "full\ncash 0%")]
+base = [kel[c]["baseline_6.0"]["S6"]["recommended_m"] for c, _ in CELLS]
+corr = [kel[c]["live_8.64"]["S6"]["recommended_m"] for c, _ in CELLS]
+x = np.arange(len(CELLS)); w = 0.34
 ax.bar(x - w/2, base, w, color=AQUA, zorder=3, label="as modelled (6.00 bps)")
 ax.bar(x + w/2, corr, w, color=MAGENTA, zorder=3, label="fee-corrected (8.64 bps)")
 for i, (a, b) in enumerate(zip(base, corr)):
-    ax.text(i - w/2, a + 0.02, f"{a:.2f}", ha="center", fontsize=8.3, color=SEC)
-    ax.text(i + w/2, b + 0.02, f"{b:.2f}", ha="center", fontsize=8.3, color=SEC)
+    ax.text(i - w/2, a + 0.018, f"{a:.2f}", ha="center", fontsize=7.9, color=SEC)
+    ax.text(i + w/2, b + 0.085, f"{b:.2f}", ha="center", fontsize=7.9,
+            color=RED if b < 0.35 else SEC,
+            fontweight="bold" if b < 0.35 else "normal")
+
 for rung, style in ((0.135, "-"), (0.20, "--"), (0.35, ":")):
     ax.axhline(rung, color=ORANGE, ls=style, lw=1.5, zorder=5)
-    pass
-ax.set_xticks(x, books); ax.set_xlim(-0.5, 2.95)
-ax.set_ylim(0, 1.45)
-ax.set_ylabel("recommended m (KELLY.md envelope)")
-ax.set_title("3. The ladder stays inside the envelope")
-ax.legend(frameon=False, fontsize=8, loc="upper left"); ax.grid(axis="y", lw=0.6, zorder=0)
-s6b, s6c = kel["baseline_6.0"]["S6"]["recommended_m"], kel["live_8.64"]["S6"]["recommended_m"]
-ax.text(2.90, 0.035, "KELLY_M ladder: 0.135 · 0.20 · 0.35", color=ORANGE,
-        fontsize=8, ha="right", va="bottom", fontweight="bold")
-ax.text(2.90, 1.00, f"S6  {s6b:.2f} -> {s6c:.2f}\n({(s6c-s6b)/s6b*100:+.1f}%)\n"
-                    f"top rung clears\nby {s6c/0.35:.1f}x",
-        transform=ax.transData, fontsize=8.2, color=SEC, ha="right", va="top")
+
+# the cell that fails the top rung is the one that governs (A2.5)
+binding = corr[1]
+ax.axvspan(0.5, 1.5, color=RED, alpha=0.055, zorder=1)
+ax.annotate(f"0.35 rung\nnot cleared\nbinding size {binding:.2f}",
+            xy=(0.98, 0.42), xytext=(0.42, 1.24),
+            color=RED, fontsize=8.4, fontweight="bold", ha="center", va="top",
+            arrowprops=dict(arrowstyle="->", color=RED, lw=1.2))
+
+ax.set_xticks(x, [lab for _, lab in CELLS], fontsize=8.4)
+ax.set_xlim(-0.6, 3.72); ax.set_ylim(0, 1.30)
+ax.set_ylabel("S6 recommended m (KELLY.md envelope)")
+ax.set_title("3. The 0.35 rung does not clear", pad=7)
+ax.legend(frameon=False, fontsize=8, loc="upper right"); ax.grid(axis="y", lw=0.6, zorder=0)
+for rung, lab in ((0.135, "0.135"), (0.20, "0.20"), (0.35, "0.35")):
+    ax.text(3.70, rung + 0.012, lab, color=ORANGE, fontsize=7.8,
+            ha="right", va="bottom", fontweight="bold")
 
 fig.suptitle("S3 fee model: the backtest gives the entry away free, the venue never has",
              fontsize=12, fontweight="bold", y=0.99)
-fig.text(0.008, 0.015, "Pre-registered 2026-09-10 (commit dbab333) before any run. 14 declared trials. "
-                       "In-sample on a fixture already used for ~2,491 prior trials — read as an UPPER bound.",
+fig.text(0.008, 0.015, "Pre-registered 2026-09-10 (commit dbab333) before any run; window and cash_apy "
+                       "declared retroactively in AMENDMENT 2. In-sample on a fixture already used for "
+                       "~2,491 prior trials \u2014 read as an UPPER bound. Panel 3 n = 146 (2y) / 318 (full) blend steps.",
          fontsize=7.8, color=MUTED)
 fig.tight_layout(rect=(0, 0.075, 1, 0.945))
 p = os.path.join(OUT, "fee_study.png"); fig.savefig(p, dpi=150)

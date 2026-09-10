@@ -18,7 +18,15 @@ future test batch — an uncounted trial silently lowers the evidence bar.
 | Astrology battery, standalone (2026-09) | 153 | RESEARCH_ASTRO.md |
 | Astrology overlays on S6 (2026-09) | 699 | RESEARCH_ASTRO.md addendum |
 | S4 trail robustness diagnostic (2026-09) | 63 | RESEARCH_TRAIL.md |
-| **Total** | **~2,491** | |
+| S3 fee-model correction (2026-09) | 24 | RESEARCH_FEES.md |
+| **Total** | **~2,515** | |
+
+Fee-study note (2026-09-10): the fee row counts 24, not the 14 its
+pre-registration declared — 14 registered grid arms, plus 8 Kelly re-fits
+(4 window/cash cells x 2 fee arms) that PREREG section 4.4 fixed the pipeline
+for but never enumerated as cells, plus 2 post-hoc Kelly re-fits at the
+registered 0.66 fee level for a robustness check. Declared retroactively in
+its AMENDMENT 2 and counted here.
 
 Backfill note (2026-09-05): the win-rate and astrology batches had been
 documented in their own files but never added here, so the running count sat
