@@ -354,18 +354,20 @@ def test_ccc_level_trigger_registers_the_documented_episodes():
     # from-above-only gate let red drift from 14 to 16 undetected, and 16 would
     # have missed the 2011 euro crisis (CCC est. ~15.5%) entirely.
     assert r > y, "red must sit above the distress convention"
-    # RED must be reachable by the named episodes under the ADVERSARIAL ratio
-    # floor, not just under a fitted model. CCC is a subset of HY and always its
-    # widest tier; the most compressed CCC/HY ratio ever measured is 2.03x
-    # (Dec-2008, 44.29/21.82, both verified). Applying it to the PUBLISHED broad-HY
-    # peaks is a hard lower bound on each episode's CCC level.
-    RATIO_FLOOR = 2.03
-    HY_PEAKS = {"2016-02 energy": 8.87, "2020-03 COVID": 10.87, "2011 euro": 9.10}
-    for episode, hy_peak in HY_PEAKS.items():
-        ccc_floor = hy_peak * RATIO_FLOOR
-        assert r <= ccc_floor, (
-            f"red {r} must sit below {episode}'s CCC floor of {ccc_floor:.1f}%")
-        assert _status_from_score(_pscore(ccc_floor, b, y, r, e, hi, cap)) == "RED"
+    # MEASURED episode peaks from the reconstructed 1996+ CCC series, which
+    # reconciles with FRED's authoritative window on all 787 overlapping dates
+    # with zero mismatches. These replace an earlier ratio INFERENCE that was
+    # wrong by up to 18% at every episode.
+    DISTRESS = {"2011-10-04": 15.60, "2016-02-11": 20.66, "2020-03-23": 19.62}
+    SELLOFFS = {"2019-01-03": 11.16, "2022-07-05": 12.26}
+    for when, peak in DISTRESS.items():
+        assert _status_from_score(_pscore(peak, b, y, r, e, hi, cap)) == "RED", \
+            f"the {when} distress peak of {peak}% must fire RED"
+    for when, peak in SELLOFFS.items():
+        assert _status_from_score(_pscore(peak, b, y, r, e, hi, cap)) != "RED", \
+            f"the {when} selloff at {peak}% is not distress and must not fire RED"
+    assert r < min(DISTRESS.values()), "red must sit below every distress peak"
+    assert r > max(SELLOFFS.values()), "red must sit above the ordinary selloffs"
     assert _status_from_score(_pscore(44.3, b, y, r, e, hi, cap)) == "RED"
     # ... and must NOT fire on merely-calm spreads
     for calm in (4.14, 6.0, 8.0):

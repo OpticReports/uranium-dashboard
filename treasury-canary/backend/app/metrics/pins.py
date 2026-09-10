@@ -301,24 +301,24 @@ ANCHORS: dict[str, tuple] = {
     #                 market standard since ~1990 -- OAS >= +1000bps is distressed.
     #                 Today's index prints 1064bps, i.e. the AVERAGE CCC credit is
     #                 already trading distressed by that convention.
-    #   14.0 red      BOUNDED, not guessed. The CCC series is licence-locked, but
-    #                 the BROAD HY index (BAMLH0A0HYM2) full history IS obtainable
-    #                 and its episode peaks are measured: 21.82% 2008-12-15,
-    #                 10.87% 2020-03-23, 9.10% 2011-10-04, 8.87% 2016-02-11,
-    #                 5.38% 2018-12-27. CCC is a subset of HY and always its widest
-    #                 tier, so CCC/HY is structurally > 1; the most COMPRESSED that
-    #                 ratio has ever been measured is 2.03x at the Dec-2008 crisis
-    #                 (44.29/21.82, both endpoints verified), against 2.23-3.97x
-    #                 over the 787 live observations. Applying that adversarial
-    #                 floor to the measured HY peaks bounds each episode's CCC low:
-    #                     2016-02  >= 18.0%     2020-03  >= 22.1%     2011  >= 18.5%
-    #                 all far above this line -- 2016 would only fall under 14 at a
-    #                 ratio of 1.58x, never observed. So RED is robust for the named
-    #                 episodes regardless of the ratio model. What is NOT settled is
-    #                 milder events: Dec-2018 (HY 5.38%) bounds only to >= 10.9%,
-    #                 and a log-log ratio fit puts it near 14.1 -- so whether this
-    #                 line catches a 2018-magnitude selloff is genuinely unknown.
-    #                 DD Q16 still wants measured CCC peaks to settle that.
+    #   14.0 red      MEASURED. The full 1996+ CCC series was reconstructed from
+    #                 public mirrors and reconciles with FRED's authoritative
+    #                 787-day window on all 787 overlapping dates, 0 mismatches;
+    #                 its record high/low match the published 44.29 (2008-12-15)
+    #                 and 4.14 (2007-06-05) exactly. Measured episode peaks:
+    #                     2011-10-04  15.60      2016-02-11  20.66
+    #                     2020-03-23  19.62      2019-01-03  11.16 (the 2018 selloff)
+    #                     2022-07-05  12.26
+    #                 14.0 sits between the 2018/2022 SELLOFFS (11.2, 12.3) and the
+    #                 2011 DISTRESS episode (15.60), so it fires on all three named
+    #                 distress episodes and on neither selloff. On the real
+    #                 distribution (n=7,447) that is about p78; p50 is 9.32.
+    #                 NOTE the earlier inference in this comment was WRONG: applying
+    #                 the Dec-2008 CCC/HY ratio of 2.03x put 2011 at 18.5 (actual
+    #                 15.60, +18% error), 2016 at 18.0 (actual 20.66, -13%) and 2020
+    #                 at 22.1 (actual 19.62, +12%). That ratio ranges 1.71-2.33x and
+    #                 is LOWEST at the episodes it was applied to. Measurement
+    #                 replaced it; the conclusion held only by luck of the margin.
     #   44.3 extreme  VERIFIED series record high 44.29 (Dec-2008).
     #
     # The better fix remains PIN_SATURATION.md DD Q15: restore a full-history
@@ -587,11 +587,11 @@ def build_pin_board(bundle: dict) -> dict:
                 "record low (Jun-2007) and 44.29% the record high (Dec-2008), both verified; "
                 "10% is Fridson's distress convention (>=+1000bps), the market standard since "
                 "~1990 — at 1064bps today the average CCC credit is already trading distressed "
-                "by it. The 14% red line is BOUNDED rather than guessed: applying the most "
-                "compressed CCC/HY ratio ever recorded (2.03x, Dec-2008) to the measured "
-                "broad-HY peaks puts 2016 at >=18.0%, 2020 at >=22.1% and 2011 at >=18.5%, "
-                "all far above it. Whether it catches a milder 2018-magnitude selloff is "
-                "not established. The percentile legs below became 3-YEAR "
+                "by it. The 14% red line is MEASURED against the reconstructed 1996+ "
+                "series: it fires on the 2011 (15.60%), 2016 (20.66%) and 2020 (19.62%) "
+                "distress peaks and on neither the 2018 (11.16%) nor 2022 (12.26%) "
+                "selloff. Today's 10.64% is about the 62nd percentile of real history, "
+                "against the 99th the 3-year window reports. The percentile legs below became 3-YEAR "
                 "percentiles when FRED restricted ICE BofA history in April 2026, so they are "
                 "relative gauges capped at YELLOW; only this leg can take the channel RED."),
         PinPart("CCC spread percentile (vs available history)", ccc_pctl, "%ile",

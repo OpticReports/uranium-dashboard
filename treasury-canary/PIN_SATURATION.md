@@ -511,6 +511,41 @@ including that exact revert. A bps/percent unit guard was added: the anchored fo
 returned "maximally benign" for a value passed in basis points, a failure mode the rank form was
 immune to and which is live elsewhere in this repo on the same bundle key.
 
+## DD Q16 — resolved 2026-09-10: the CCC peaks are MEASURED
+
+The full 1996+ CCC series was reconstructed from public mirrors. I verified it before using it:
+it reconciles with FRED's authoritative 787-day window on **all 787 overlapping dates, zero
+mismatches**, and its record high/low match the published **44.29 (2008-12-15)** and **4.14
+(2007-06-05)** exactly. One documented gap remains: 2022-07-06..2023-09-11 (432 days, 5.8%),
+which contains neither the record extremes nor any of the episode peaks below.
+
+| episode | **measured CCC peak** | fires at red 14.0? |
+|---|---|---|
+| 2011-10-04 euro crisis | **15.60** | yes |
+| 2016-02-11 energy bust | **20.66** | yes |
+| 2020-03-23 COVID | **19.62** | yes |
+| 2019-01-03 (the 2018 selloff) | 11.16 | no — correctly |
+| 2022-07-05 selloff | 12.26 | no — correctly |
+
+**red = 14.0 stands, now on measurement rather than inference.** It sits between the two ordinary
+selloffs (11.2, 12.3) and the mildest genuine distress episode (15.60), which is exactly the
+separation the anchor should encode. On the real distribution (n = 7,447) that is about p78;
+p50 is 9.32. The gate test now pins it from both sides against these measured values.
+
+**My ratio inference was wrong and I should not have trusted the margin.** Applying the Dec-2008
+CCC/HY ratio of 2.03x put 2011 at 18.5 (actual **15.60**, +18% error), 2016 at 18.0 (actual
+20.66, −13%) and 2020 at 22.1 (actual 19.62, +12%). The ratio ranges 1.71–2.33x and is *lowest*
+at the very episodes I applied it to. The conclusion — that red 14 catches all three — survived
+only because the margin was wide, not because the method was sound.
+
+**And it falsified the previous draft outright:** the `red 16.0` I shipped two commits ago was
+documented as "sized to sit under the 2011/2016/2020 peaks so those register RED". Measured, 2011
+peaked at **15.60 — below 16**, so that anchor did not do what its own comment claimed.
+
+**Today's 10.64% is about the 62nd percentile of real CCC history**, against the 99.2 the board
+reports off its 3-year window. That is the clearest single statement of what the April-2026
+truncation did to this channel.
+
 ## Pending DD questions
 
 | # | P | Question | What it would move |
@@ -529,12 +564,14 @@ immune to and which is live elsewhere in this repo on the same bundle key.
 | ~~12~~ | ~~P1~~ | **RESOLVED 2026-09-10 — see the section above.** Zero status flips, zero episode changes; 4 of 140 months move, largest -1.10 points. | The full 1996+ series does not exist in the pipeline; the real base is a rolling ~3-year window. |
 | ~~14~~ | ~~P1~~ | **RESOLVED 2026-09-10 — see the section above.** Percentiles demoted to gauges; a level trigger carries RED. | private_credit goes RED -> YELLOW on the live board. |
 | 15 | **P1** | **Restore a full-history CCC/BBB source** (paid FRED tier, ICE direct, or another provider). FRED restricted ICE BofA to 3 years in April 2026. | This is the BETTER fix: it would make the original `(50, 85, 95, 100)` percentile calibration valid again and render the new level leg redundant. Recalibrating around a source regression is a workaround, not a repair. |
-| 16 | **P1** | **Obtain measured CCC OAS peaks for 2011, 2016-02, 2018-12 and 2020-03** (paid FRED tier / ICE direct / Bloomberg) and replace `red = 14.0`. | It is the last unsourced number in the calibration and it decides when the channel can fire at all. Blocking under CLAUDE.md's missing-inputs rule. |
+| ~~16~~ | ~~P1~~ | **RESOLVED 2026-09-10 — see the section above.** Peaks measured; red 14.0 validated from both sides. | The calibration no longer contains an unsourced number. |
+| 24 | **P1 — CASEY'S CALL, BLOCKING** | **May we freeze redistributed ICE index history into this repo?** The full CCC/BBB/HY series exist on public GitHub mirrors and reconcile exactly with FRED, but they are third-party redistributions of ICE Data Indices content that ICE evidently asked FRED to stop serving. Freezing them is redistribution. | **This decides whether the whole private_credit recalibration gets REVERTED.** If yes: restore `(50, 85, 95, 100)` against a frozen reference, delete the level leg, and DD Q15 closes. If no: the level leg stays as the licensed-route interim and we buy a paid FRED tier or ICE direct. I have not committed any series data pending this. |
 | 18 | **P2** | Should `ewm/live.py`'s DMHI leg read UNCAPPED pin leg scores, so a display cap cannot move a deal-timing recommendation? | +1.98 points on every EWM window score today, purely from the gauge caps. |
 | 19 | **P2** | Should the channel use a CONJUNCTION (percentile >= 95 AND level >= 10) rather than a bare level threshold? | Would restore a credit-pricing trigger that can fire before full crisis, without claiming a 30-year rank. The level leg alone is coincident, not leading: CCC only reached ~18-20% in Mar-2020 *after* SPX had fallen ~30%, which the hindcast's own `(1, 6)` lag window would score a miss. |
 | 20 | **P1** | Promote DD Q5 (`pins_schema_rev`) to blocking. | Two anchor changes landed in one day and `pins_overall` is persisted daily with no version stamp, so the track record now mixes pre- and post-recalibration semantics. |
 | ~~17~~ | ~~P1~~ | **RESOLVED 2026-09-10 — see the section above.** `hy_complacency` now ranks against a verified frozen full-history reference. | severity index 69.0 -> 69.6, class unchanged. |
-| 21 | **P1** | **Can CCC and BBB full history be reconstructed the same way HY was?** Four public mirrors served the complete 1996+ HY series and reconciled with FRED exactly. | If yes, DD Q15 resolves, the original `(50, 85, 95, 100)` CCC calibration becomes valid again, and the entire private_credit level-leg recalibration should be **reverted** rather than kept. This is the highest-value open question on this branch. |
+| ~~21~~ | ~~P1~~ | **ANSWERED: yes.** CCC n=7,447 (one 432-day gap) and BBB n=7,754, both reconciling with FRED at zero mismatches. | Which makes DD Q24 the binding constraint, not data availability. |
+| 25 | P2 | Close the CCC gap 2022-07-06..2023-09-11 from a pre-April-2026 FRED download or a Wayback capture — do not interpolate. | 5.8% of the series. Changes no anchor, but shifts percentile knots if a reference is ever frozen. |
 | 22 | P2 | Stamp `severity_schema_rev` in the severity payload. | The index has an undisclosed level break of +0.6 at this change; R2 calibration compares readings across time. |
 | 23 | P3 | Emit `history_start` and `n_obs` per severity component. | Several components rank against much shallower bases than "full history" implies — `dsr` starts 2005, `effr` 2000 — so the depth of every rank should be visible rather than asserted. |
 | 13 | P3 | `base.py::percentile_rank` and severity `_pctile` still use `count(v <= x)/n` and still return exactly 100.0 (`tests/test_severity.py:14` asserts it). Converge them or leave them scoped as separate instruments. | Consistency of the percentile treatment across the dashboard. |
