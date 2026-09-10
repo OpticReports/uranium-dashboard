@@ -538,12 +538,40 @@ services:
       # the single source of truth; the executor pages on any change via the
       # config_change guard, and code defaults fail safe (kelly 0.05).
       # Ramp is a STAIRCASE - v3, EXECUTOR.md "Ramp schedule": 0.05 -> 0.10
-      # -> 0.20 -> 0.35 -> 0.56, advance after 4 trades at a rung AND
-      # cumulative ramp P&L >= 0; step DOWN a rung at -$5,000 ramp drawdown.
+      # -> 0.20, advance after 4 trades at a rung AND cumulative ramp P&L
+      # >= 0; step DOWN a rung at -$5,000 ramp drawdown.
+      #
+      # THE STAIRCASE NOW ENDS AT 0.20 (2026-09-10). Rungs 0.35 and 0.56 and
+      # the old 0.80 ceiling are RETIRED: btc-paper-engine/RESEARCH_FEES.md
+      # re-fitted Kelly on the fee we actually pay (8.64 bps round trip -
+      # 4 of 4 intended-maker entries crossed and paid taker, not the
+      # modelled 6.00) and the binding S6 envelope is 0.22. Setting KELLY_M
+      # above 0.20 here does NOT take effect: mirror.KELLY_M_CAP clamps
+      # sizing to the cap and pages kelly_over_cap every poll (throttled to
+      # one phone ping per 30 min). The executor keeps running and keeps
+      # protecting open positions - it does not refuse to boot, because an
+      # unmanaged live book is worse than an over-sized one. Raising the
+      # ceiling is a repo change plus review, on purpose.
+      #
+      # BUT KELLY_M IS ONE FACTOR OF FOUR. Leg notional is
+      # kelly_m * lev * weight * SIZING_BASE_USD, so raising the BASE
+      # reproduces a retired rung with KELLY_M pinned at 0.20 - 1000 -> 3000
+      # deploys more than the old rung D. SIZING_BASE_USD, MAX_NOTIONAL_USD
+      # and MAX_ACCOUNT_LEV have NO repo ceiling; they are still yours to
+      # set. What the code does now is make a breach LOUD:
+      # mirror.MAX_EXPOSURE_FRAC (0.30 of equity, gross) pages
+      # exposure_over_cap and names the base rather than blaming KELLY_M.
+      # Loud is not impossible. Treat a base change as a ramp step.
       # Change KELLY_M one step at a time, never alongside SIZING_BASE_USD.
-      # Current dashboard values (2026-08-28, Hyperliquid live-test phase):
-      # KELLY_M 0.135, SIZING_BASE_USD 1000, MAX_NOTIONAL_USD 2000,
+      # Current dashboard values (2026-09-10, Hyperliquid live-test phase):
+      # KELLY_M 0.135, SIZING_BASE_USD 1000, MAX_NOTIONAL_USD 10000,
       # MAX_ACCOUNT_LEV 2.0, DD_HALT_PCT 0.35 (% of sizing base).
+      # MAX_NOTIONAL_USD was 2000 until 2026-09-10 and that was INCOHERENT
+      # with the sizing base: at 2000 the whole-account cap bound before
+      # max_account_lev ever did on a real ramp step, so cap_clamp fired on
+      # ordinary sizing rather than on a runaway. Raised to 10000, which
+      # leaves the lev ceiling (2.0 x 1000 = 2000) as the binding rail it
+      # was designed to be. Set by Casey in the dashboard; recorded here.
       # (was 0.05 / 50000 / 80000 through the Coinbase phase.)
       #
       # KELLY_M 0.135 is deliberately OFF the ramp staircase, and is not

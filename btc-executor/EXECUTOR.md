@@ -121,19 +121,129 @@ most of the v2 staircase's reasoning. What they established, with numbers:
 
 ### The schedule
 
+**CAPPED AT STEP B (0.20) since 2026-09-10 — see "The ceiling" below.**
+
 | step | KELLY_M | advance at | pullback entry | max step |
 |---|---|---|---|---|
 | token (live) | 0.05 | — | $2,813 | — |
 | A | 0.10 | 4 trades | $5,625 | 2.0x |
-| B | 0.20 | 8 cumulative | $11,250 | 2.0x |
-| C | 0.35 | 12 cumulative | $19,688 | 1.75x |
-| D | 0.56 | 16 cumulative | $31,500 | 1.6x |
-| ceiling | up to 0.80 | +15-20 at 0.56, quarterly Kelly re-run | $45,000 | 1.4x |
+| **B — the ceiling** | **0.20** | 8 cumulative | $11,250 | 2.0x |
+| ~~C~~ | ~~0.35~~ | **RETIRED** — outside the Kelly envelope | ~~$19,688~~ | — |
+| ~~D~~ | ~~0.56~~ | **RETIRED** — outside the Kelly envelope | ~~$31,500~~ | — |
+| ~~ceiling~~ | ~~up to 0.80~~ | **RETIRED** — outside the Kelly envelope | ~~$45,000~~ | — |
+
+Live `KELLY_M` is **0.135**, which is not ramp progress and not a rung: it is
+the venue-mechanics floor (Hyperliquid's $10 `MinTradeNtl`), deliberately off
+the staircase and comfortably under the ceiling.
 
 Tested against the alternatives: this rung shape cuts deployed notional 25%
 and worst-trade loss 22% vs v2 at identical timing, and **strictly dominates
 it** on every risk metric. Sizes at SIZING_BASE_USD=50000; trend-leg entries
 are 1/3 of these.
+
+### The ceiling — why the ramp stops at 0.20
+
+**The advance criteria below are entirely EXECUTION evidence.** Trade count,
+cumulative P&L, fill quality, no halts, legs reconciled — every one of them
+answers "is the machinery working", and none of them answers "is this size
+inside the drawdown budget". Those are different questions, and only the
+first one has ever been checked here. That gap is what this ceiling closes.
+
+`btc-paper-engine/RESEARCH_FEES.md` (2026-09-10) re-fitted Kelly on returns
+charged the fee we ACTUALLY pay. Four of four intended-maker pullback entries
+crossed and paid taker, so the true round trip is 8.64 bps against a modelled
+6.00. On the conservative specification the binding recommended m is **0.30
+for S5** and **0.22 for S6**.
+
+`/exec/target` ships `{"w_trend": 0.25, "lev": 1.5}`, which is **S5** — so
+S5's 0.30 is the row that applies to the deployed blend. 0.20 clears the
+tighter of the two either way, and rung C (0.35) fails **both**, so the
+decision is robust to which row you read. The 0.135 → 0.20 step clears in
+every specification tested. Robustness on the crossing rate: at the study's
+registered 66% rather than the observed 100%, the binding cell reads 0.27 —
+same decision.
+
+Per KELLY.md's own doctrine, over-betting destroys growth faster than
+under-betting gives it up, so when defensible specifications disagree about
+size the smaller one governs.
+
+### What the cap does NOT do — read this before trusting it
+
+**Capping `KELLY_M` bounds one factor of a four-factor product.** Leg
+notional is `kelly_m × lev × weight × base`. Two counter-agents independently
+reached the retired rungs with `KELLY_M` pinned at exactly 0.20:
+
+| route | result at KELLY_M 0.20 | pages, before this change |
+|---|---|---|
+| `SIZING_BASE_USD` 1000 → 3000 | more than retired rung D | one generic `config_change` |
+| `SIZING_BASE_USD` 1000 → 10000 | ≈ KELLY_M 2.0 equivalent | none |
+| engine sends `blend.lev = 10` | 6.7× the authorised notional | **none at all** |
+
+So the invariant is now stated where the Kelly envelope actually lives —
+as a fraction of **capital**, not as one multiplier:
+
+- `MAX_EXPOSURE_FRAC = 0.30` — `_check_exposure` pages `exposure_over_cap`
+  when `kelly × lev × base / equity` breaches it, naming
+  `SIZING_BASE_USD` rather than blaming `KELLY_M`. It **pages, it does not
+  clamp**: clamping on live equity would shrink entry size during a
+  drawdown, which is a real change to how the book trades and is Casey's
+  call, not a side effect. Corollary, stated so it is not a surprise — a
+  deep drawdown raises the ratio on its own and can page with the config
+  untouched. That is Kelly telling the truth.
+- `MAX_BLEND_LEV = 2.0` — `_sane_blend` clamps the engine's `lev` to
+  `(0, 2.0]` and `w_trend` to `[0, 1]` at the door. `/exec/target` was
+  parsed with no schema check, and `w_trend > 1` made the pullback weight
+  negative, which dropped a whole leg silently at `if qty <= 0: return`.
+
+**Enforced in code, not just here.** `mirror.KELLY_M_CAP = 0.20`:
+
+- it **clamps**, it does not refuse to boot — but the reason is narrower than
+  first written. A crash-looping container does **not** leave a naked
+  position: HL stops are reduce-only and rest at the venue. What a refusal
+  loses is trail ratcheting, engine-exit mirroring and the halt machinery.
+  The real alternative is refusing new *entries* while over-cap; clamping
+  still wins, because over-cap is an operator config error rather than a
+  market condition, and refusing entries desynchronises the book from the
+  engine. Halting is ruled out outright — `halt()` flattens, i.e. sends real
+  market orders because an env var is wrong;
+- the page **repeats**. `kelly_over_cap` fires every poll under a 30-minute
+  phone throttle, like every other persistent RED here. A one-shot boot page
+  was swallowed entirely by a container recycle inside 10 minutes, because
+  `_event`'s dedupe compares against the *persisted* last event;
+- **open positions are never force-resized.** Sizing is consulted for NEW
+  entries only, so a leg opened above the cap exits on its own engine signal
+  rather than being part-closed by a deploy;
+- it is a **repo constant, not a Settings field**, and a test asserts the
+  literal `0.20`. Every other gate computes its expectation *from* the
+  constant, so the suite stayed green with the cap silently moved to 0.29 —
+  a +45% size raise as a one-character diff;
+- `advance_ok` on `/ramp` is **cap-aware**. It was pure execution evidence,
+  with the cap mentioned only in a prose note — so the machine-readable field
+  the dashboard reads could still say "advance" toward a retired rung;
+- fills record the `kelly_m` they were taken at, so trades booked while the
+  env sat over the cap cannot write mislabelled rungs into the RAMP v4
+  evidence base;
+- `/status` reports `kelly_m_effective`, `kelly_m_cap` and
+  `max_exposure_frac` alongside the configured value, so the readout can
+  never state a size the executor is not using.
+
+**Mutation-verified, including its own failures.** The protection was broken
+16 different ways; 13 were killed by exactly the gate written for them. Three
+survived the first sweep and are worth recording, because two were against
+the panel's own BLOCKING fixes: reverting `_roll_day` to the raw `KELLY_M`,
+reverting `advance_ok` to execution-only, and deleting `exposure_over_cap`'s
+ACTION entry all passed a green suite. Gates added, re-mutated, all three now
+die. A fix whose gate does not bind is a fix on paper.
+
+**Still env-only, and deliberately unresolved here:** `SIZING_BASE_USD`,
+`MAX_NOTIONAL_USD` and `MAX_ACCOUNT_LEV` have no repo ceiling. The exposure
+check makes a breach loud; it does not make it impossible. Bounding those in
+code is a separate decision about how much authority the dashboard keeps.
+
+**This is reversible, and the trigger is evidence, not a date.** The envelope
+behind 0.22 is in-sample, one cell of four, and rests on n=4 fills for the
+crossing rate. A Kelly re-fit on enough LIVE trades is what reopens rung C —
+not a calendar quarter, and not a good run of fills.
 
 ### Advance criteria (ALL must hold)
 
