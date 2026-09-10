@@ -31,11 +31,38 @@ scorers and the red team all land PASS-REVISIT**, and the single most useful
 fact is that the evidence needed to flip it is cheap, dated, and mostly already
 exists inside the company.
 
-## 1 · THE ASK — MISSING, AND THEREFORE NOT SCORED
+## 1 · THE ASK — ARRIVED 2026-09-11 [rev 1.1]
 
-The deck has **no ask slide**: no raise amount, no valuation or cap, no
-instrument, no use of funds, no close date, no cap table, no burn, no runway,
-no unit price, no BOM, no named customer.
+> **UPDATE 2026-09-11 (Casey): "The round is now priced: $35mil for vernius.
+> $25k check from me."** P1 #9 answered → **deal & price is now scoreable**
+> (§8.1). Still open on the terms themselves: **pre or post**, **priced equity
+> or SAFE cap**, round size, use of funds, close date, and whether any
+> side-letter rights are on offer.
+
+At $35M **post**, a $25K check is **0.0714% (7.14 bps)**; at $35M pre on a $5M
+round it is 0.0625%. The difference is ~13% of the position and is worth one
+email, not a negotiation.
+
+**Market read: $35M is normal, not generous and not a rip-off.** YC's W26
+default round was **$4M on $40M post**; post-Demo-Day caps cluster **$15–25M
+with a $20M baseline and $30–50M+ for hot companies**; ~10 W26 companies
+cleared $100M+ and one ~$200M. The nearest sector comp is **9 Mothers (YC
+Spring 2026), a counter-drone company with $1.6M of booked sales, which VCs
+were willing to fund at "upward of $200 million."** So Vernius at $35M is
+**below its batch's default** and one-sixth of the hottest counter-UAS comp —
+while carrying **$60K of revenue against 9 Mothers' $1.6M**. On revenue
+multiple Vernius is *dearer* (≈583x vs ≈125x); on cohort pricing it is
+*cheaper*. Both are true and neither decides anything at seed.
+
+**What the price actually does is set the shape of the outcome, not the
+entry.** See §8.1.
+
+---
+
+*(Original rev-1 record, retained: the deck itself had* **no ask slide** *— no
+raise amount, no valuation or cap, no instrument, no use of funds, no close
+date, no cap table, no burn, no runway, no unit price, no BOM, no named
+customer.)*
 
 Per the standing house rule (*missing key inputs: ask, don't analyze around
 them*), **deal & price is NOT SCORED in this intake** and the weighted total is
@@ -319,6 +346,65 @@ Deal & price **not scored** (no terms supplied); W computed ex-price over 95.
 
 **W = 2.00 — the lowest weighted total this ledger has logged** (previous floor:
 Oligo 2.20, Nutation 2.25). Median-of-totals is 1.97; both are floor values.
+
+### 8.1 · DEAL & PRICE — scored 2026-09-11 at $35M · **3/5** · W becomes **2.05**
+
+Scored **3 — at benchmark**, on the rubric's own terms: at seed, entry price is
+a second-order return driver (AngelList: across a 5x valuation spread in seed
+deals, no difference in markup rates or multiples), so this dimension is mainly
+an ownership-and-fee-drag input. $35M sits **below the batch default** (§1), and
+a **direct $25K check carries no SPV fee drag** — no 2%, no 20% carry, no admin.
+That is a materially cleaner wrapper than DexMat's or Quaise's, and it is worth
+saying plainly. *(A dissenting scorer would say 2, on the price-vs-fundamentals
+mismatch below; the tension is recorded rather than split.)*
+
+**Recomputed:** W = (2×30 + 2×30 + 2×15 + 2×10 + 2×10 + **3×5**)/100 = **2.05**.
+Still the ledger's floor.
+
+**But "market-normal" is not "good," and here is the tension the 3 conceals.**
+$25K at 7.14 bps needs the outcomes below:
+
+| dilution to exit | exit value needed for **10x** ($250K) |
+|---|---|
+| 0% | $350M |
+| 50% | $700M |
+| 60% | **$875M** |
+| 70% | $1,167M |
+
+Against §6: the base case is **$15M of revenue in 2029** (→ ~$75–150M at 5–10x
+revenue, i.e. **~1–1.7x after dilution**), and the structural ceiling is that
+**seeker-eligible demand caps out around 10,000–15,000 units/yr for ALL merchant
+vendors combined** — roughly **$16–25M/yr for the entire category, worldwide.**
+
+**So at $35M the entry price is ~1.4–2.2x the annual revenue of the whole
+merchant seeker category — before Vernius wins any of it, against Boeing ULCS,
+Lockheed Strigo, Valkyrie at ~$480, Radionix, and OEMs that keep integrating
+seekers themselves.** A 10x therefore cannot come from the seeker business as
+scoped. It has to come from the company becoming something else: the automation
+pipeline being real, a US program of record, or a strategic premium paid for
+team + qualification + channel rather than for cash flow. **That is a legitimate
+thing to underwrite — most 10x seed outcomes are — but it should be underwritten
+consciously, because it is not what the deck is selling.**
+
+**And the acquihire floor is below water at this price.** The red team's live
+1–3x salvage branch was a defense-tech acquihire at **$20–60M** — which at a
+$35M entry is **0.6–1.7x gross, ~0.3–0.7x after dilution.** The price removes
+the soft landing.
+
+### 8.2 · EV at these terms (house exit-curve model, seed calibration)
+
+Tilted to the logged forecasts, **capped at 20x, direct check (carry = 0)**:
+
+| basis | EV (capped@20x) | P(≥1x) | P(≥3x) | P(≥10x) | P(≥20x) |
+|---|---|---|---|---|---|
+| panel (0.85 / 0.05) | **1.57x** | 15.0% | 9.96% | 5.00% | 2.81% |
+| red team (0.87 / 0.04) | **1.37x** | 13.0% | 8.46% | 4.00% | 2.25% |
+| *(same, if it were an SPV at 2/20)* | *1.35x* | *15.0%* | *9.25%* | *4.28%* | *2.29%* |
+
+Read it honestly: **EV is above water on both bases, and ~85% of the
+probability mass is a loss.** The directness of the check is worth ~0.22x of EV
+— roughly the whole gap between the panel and red-team cases — which is the
+strongest purely structural thing this deal has going for it.
 
 **Verdicts: 4× PASS-REVISIT, 1× CONDITIONAL, red team PASS-REVISIT.** Note the
 unusual structure: **the red team is no more negative on verdict than the
