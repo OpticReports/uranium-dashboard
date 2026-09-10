@@ -174,15 +174,24 @@ def _valid_baseline(b):
 # delayed to the post-close window; the fire is still published).
 ENTRY_SESSION_TZ = "America/New_York"
 ENTRY_CUTOFF_ET = (9, 25)
+SESSION_OPEN_ET = (9, 30)
 SESSION_CLOSE_ET = (16, 0)
-# OPEN ITEM (2026-09-10, merge round - recorded, NOT changed in the merge):
-# IBKR refuses an OPG order "when market is open" until EXTENDED hours end
-# at 20:00 ET, not 16:00. Measured today: GH's MOO placed 16:03 ET was
-# rejected [202] five times, the ENTER breaker paused the kind, the
-# pre-fund hold had already been released by the placements, and the sweep
-# bought the entry's cash back into BIL at 16:19. The breaker's UTC-date
-# roll (20:00 ET) is what re-plans the entry. The window should close at
-# 20:00 ET (17:00 on early-close days) - its own round, with gates.
+# OPG ACCEPTANCE ENDS WITH EXTENDED HOURS (2026-09-10, corrective round on
+# the merge's open item). IBKR refuses an OPG order "when market is open",
+# and for that check its market is open through the AFTER-HOURS session:
+# until 20:00 ET, not 16:00. Measured: GH's MOO placed 16:03 ET was
+# rejected [202] at 16:03, 16:09 and 16:14, the ENTER breaker paused the
+# kind, the placements had already released the cash hold, and the sweep
+# bought the entry's cash back into BIL at 16:19. The window therefore
+# closes AFTER_HOURS_H after the session close - 20:00 ET, 17:00 on an
+# early-close day. Two clocks now, because the venue has two: MKT/DAY
+# orders fill only INSIDE regular hours (`regular_session_open`), OPG is
+# accepted only OUTSIDE extended hours (`entry_window_open`); between 16:00
+# and 20:00 ET both are false. The pre-market side (04:00-09:25) is
+# UNCHANGED and UNVERIFIED - no OPG has ever been placed there live; if the
+# venue's "open" covers pre-market too, the breaker bounds the cost to five
+# rejections and the same evening's 20:00 placement.
+AFTER_HOURS_H = 4
 # Resolved ONCE at import (counter-agent round 1): a missing tz database
 # then fails at boot, where the boot alert names it, instead of inside
 # step() where it would freeze every decision - exits and stop ratchets
@@ -216,24 +225,56 @@ def session_close_et(d: date) -> tuple:
     return NYSE_EARLY_CLOSES.get(d.isoformat(), SESSION_CLOSE_ET)
 
 
+def opg_accept_from_et(d: date) -> tuple:
+    """The minute the venue starts accepting next-open OPG orders on trading
+    day d: the session close plus the after-hours session."""
+    h, m = session_close_et(d)
+    return (h + AFTER_HOURS_H, m)
+
+
 def _now_utc() -> datetime:
     """Module-level clock so tests pin it (tests/conftest.py); production
     reads the wall clock."""
     return datetime.now(timezone.utc)
 
 
-def entry_window_open(now: datetime | None = None) -> bool:
-    """True when a MOO/OPG entry placed NOW would be accepted for the next
-    opening auction: any time on a weekend, and on weekdays outside
-    [09:25, 16:00) Eastern. False during the regular session."""
+def _now_et(now: datetime | None = None) -> datetime:
     now = now or _now_utc()
     if now.tzinfo is None:
         now = now.replace(tzinfo=timezone.utc)
-    et = now.astimezone(_ET)
+    return now.astimezone(_ET)
+
+
+def _et_today(now: datetime | None = None) -> str:
+    """The Eastern calendar date - the SESSION date. `today` elsewhere is
+    the UTC date, which rolls at 20:00 ET (19:00 ET in winter): anything
+    that means "the next session has started" must key on this one."""
+    return _now_et(now).date().isoformat()
+
+
+def regular_session_open(now: datetime | None = None) -> bool:
+    """True during the regular session (09:30 to the close, Eastern, on a
+    trading day): when a MKT/DAY order fills now instead of resting for
+    the next open. NOT the complement of `entry_window_open` - between the
+    close and 20:00 ET both are false."""
+    et = _now_et(now)
+    if not is_trading_day(et.date()):
+        return False
+    t = (et.hour, et.minute)
+    return SESSION_OPEN_ET <= t < session_close_et(et.date())
+
+
+def entry_window_open(now: datetime | None = None) -> bool:
+    """True when a MOO/OPG entry placed NOW is accepted for the next opening
+    auction: any time on a weekend or NYSE closure, and on trading days
+    outside [09:25, close + after-hours) Eastern - not before 20:00 ET
+    (17:00 on an early-close day). False through the regular session AND
+    the after-hours session, where the venue rejects it [202]."""
+    et = _now_et(now)
     if not is_trading_day(et.date()):   # weekend OR NYSE closure: an OPG
         return True                      # placed now is for the next session
     t = (et.hour, et.minute)
-    return not (ENTRY_CUTOFF_ET <= t < session_close_et(et.date()))
+    return not (ENTRY_CUTOFF_ET <= t < opg_accept_from_et(et.date()))
 HISTORY_HORIZON_S = 86_400.0  # venue-history horizon (adapter review m2): a
                               # gap since the LAST successful reconcile longer
                               # than this means order history may not cover
@@ -1170,7 +1211,7 @@ class Blend3070Manager:
                 # in-session it is counted by reconcile 2b instead
                 resting = (rec.get("rests_for_open")
                            and not rec.get("stuck_cycles")
-                           and entry_window_open())
+                           and not regular_session_open())
                 if (age is not None and age >= BOOK_ORDER_STALE_DAYS
                         and not resting
                         and not rec.get("stale_alerted")):
@@ -1487,7 +1528,7 @@ class Blend3070Manager:
                 f"post-close MOO" + (" (BIL sold now to cover the shortfall)"
                                      if projected_cash < -CASH_EPS else ""))
             entry_intents = []          # placed post-close from settled cash
-            st.prefund_usd, st.prefund_date = round(prefund_usd, 2), today
+            st.prefund_usd, st.prefund_date = round(prefund_usd, 2), _et_today()
             prefund_now = True
         elif entry_intents:
             # entries placed: release the hold by the amount SPENT. A second
@@ -1498,14 +1539,17 @@ class Blend3070Manager:
             st.prefund_usd = round(max(0.0, st.prefund_usd - spent), 2)
             if st.prefund_usd <= CASH_EPS:
                 st.prefund_usd, st.prefund_date = 0.0, ""
-        elif (st.prefund_date and st.prefund_date != today
-              and not entry_window_open()):
-            # The hold releases only once the NEXT SESSION has started.
-            # `today` is the UTC date: it rolls at 20:00 ET, inside the
-            # post-close window the hold exists to protect - releasing on
-            # the roll re-swept the cash at 20:05 ET and the returning fire
-            # was then dust-sized to 1 share (counter-agent round 3, HIGH).
-            # A same-day blip never releases it (round 2).
+        elif (st.prefund_date and st.prefund_date != _et_today()
+              and regular_session_open()):
+            # The hold releases only once the NEXT SESSION has started -
+            # keyed on the SESSION date and the regular-hours clock. `today`
+            # is the UTC date: it rolls at 20:00 ET (19:00 ET in winter),
+            # and a release on that roll re-swept the cash before the
+            # placement; the returning fire was then dust-sized to 1 share
+            # (counter-agent round 3, HIGH - and, with the window now
+            # opening at 20:00, the winter roll would land inside the
+            # closed after-hours and do it again). A same-day blip never
+            # releases it (round 2).
             st.prefund_usd, st.prefund_date = 0.0, ""
 
         # 5) band rebalance (~1x/year expected): executor-side weights.
@@ -1690,7 +1734,7 @@ class Blend3070Manager:
         # until the next open; reconcile 2b must not count those cycles as
         # "stuck" and cancel it (counter-agent round 1). Recorded here so the
         # exemption survives a restart with the journal.
-        rests_for_open = entry_window_open()
+        rests_for_open = not regular_session_open()
         self.state.pending_book_orders[cid] = {
             "kind": kind, "symbol": symbol, "qty": qty, "date": today,
             "ref_price": ref_price, "rests_for_open": rests_for_open}
@@ -3609,6 +3653,17 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
             mgr.clear_pending_entry(it["call_id"])
             mgr._record_trade(it["symbol"], "BUY", it["qty"], 0.0,
                               rec.get("date", today), "entry_rejected")
+            # The placement released the pre-fund hold ("spent") and the
+            # journal's resting-cost reserve went with the journal, so
+            # nothing held the cash and the sweep bought it back
+            # (2026-09-10: GH, BIL +10 at 16:19 ET; the entry lost a
+            # session). Re-arm the hold at the CHARGED cost so the re-plan
+            # - the same evening once the breaker re-arms, or the next
+            # window - sizes full; it releases like any pre-fund hold,
+            # once the next regular session has started.
+            st.prefund_usd = round(st.prefund_usd
+                                   + it["qty"] * _intent_size_ref(it), 2)
+            st.prefund_date = _et_today()
             # The venue's own words, when the adapter could read them
             # (2026-09-03: five MRK rejections said only "status
             # Cancelled" and the cause had to be inferred).
@@ -3731,7 +3786,7 @@ def reconcile(mgr: Blend3070Manager, adapter, today: str, alert) -> None:
             # overlay in BOTH directions - a live order gets cancelled
             # before re-planning (no duplicate), a dead one gets confirmed
             # dead (no wedge).
-            if rec.get("rests_for_open") and entry_window_open():
+            if rec.get("rests_for_open") and not regular_session_open():
                 # Placed outside regular hours and the open has not come:
                 # it is resting for the auction, not stuck. Counting starts
                 # once the session is open and it is STILL working.

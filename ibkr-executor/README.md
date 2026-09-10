@@ -527,8 +527,14 @@ unreconciled venue state. Phases IN ORDER:
    **Entries are only PLANNED outside the regular session** (2026-09-03):
    a MOO/OPG order is accepted for the next opening auction and REJECTED
    once the session is open, so a fire first seen mid-session is held for
-   the first post-close cycle (`entry_window_open`, weekdays outside
-   09:25-16:00 ET). The planner also refuses to plan entries while the
+   the first cycle after EXTENDED hours end (`entry_window_open`: trading
+   days outside 09:25-20:00 ET, 17:00 on early-close days - IBKR's "market
+   is open" for OPG runs through the after-hours session, learned
+   2026-09-10 from GH's [202] rejections at 16:03, 16:09 and 16:14 ET; the
+   pre-market side 04:00-09:25 is unchanged and still unverified live).
+   A second clock, `regular_session_open` (09:30-close), decides whether a
+   MKT order fills now or rests for the open; between the close and 20:00
+   ET both are false. The planner also refuses to plan entries while the
    ENTER breaker is open. Both guards sit in the planner rather than the
    execution loop because the BIL cash-raise is sized from the PLANNED
    entries: an entry that will not be placed must not be planned, or its
@@ -552,9 +558,13 @@ unreconciled venue state. Phases IN ORDER:
    the NEXT open (T+1). Idempotent: once the cash is on hand the next
    cycle raises nothing; the hold is released by the amount each placed
    entry SPENDS (a second fire absent for one cycle keeps its cash held)
-   and otherwise only once the NEXT SESSION has started - `today` is the
-   UTC date and rolls at 20:00 ET, inside the post-close window, so a
-   release on the roll would have re-swept the cash at 20:05 ET (round 3).
+   and otherwise only once the NEXT regular SESSION has started, keyed on
+   the Eastern session date - `today` is the UTC date and rolls at 20:00
+   ET (19:00 ET in winter), so a release on the roll would re-sweep the
+   cash before the 20:00 placement (round 3; re-cut at the 2026-09-10
+   window fix). A venue-REJECTED entry re-arms the hold at its charged
+   cost, so the re-plan sizes full instead of the sweep eating the cash
+   (2026-09-10: GH, BIL bought back at 16:19 ET after five rejections).
    Only then does the ordinary sweep park the cash again (one BIL round
    trip). While a BIL sell or sweep is still resting, an entry the settled
    cash cannot fund at its risk size WAITS rather than placing a dust
