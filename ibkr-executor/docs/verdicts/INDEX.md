@@ -419,6 +419,7 @@ bypassed · `TRACKER_URL` removed from render.yaml.
 | R17-O4 (revised) | the in-memory watch is defeated by a restart loop in TWO ways, not one: a container restarting faster than 3 polls never reaches the transient threshold (recorded), and `_reset_tracker_watch` now also re-arms BOTH daily budgets on every boot (not recorded until now). | `accepted-risk` |
 | R17-O1 | the pre-open 09:25 ET rung, unchanged and still the most valuable page not built. Gated on the branch merging `main`. | `open` |
 | R17-O2 | a stale-but-successful payload still plans zero entries with `tracker.ok: true`. | `open` |
+| T8 (r17 verify) | `_tracker_watch` uses wall-clock `time.time()`, which is not monotonic. A backward NTP step mid-outage makes `blind_for` negative; `_tracker_step(negative)` returns 0, so an escalation rung is delayed until the clock catches up. Never silence — the count-based first page and the config first-page are unaffected — but a rung can arrive late. Confirmed 2/2 by the round-17 verify pass, which completed after round 18 shipped. | `accepted-risk` — the loop has no monotonic clock source today; recorded so it is not rediscovered |
 | R18R-0 | **process finding.** Three reviewers read a tree that was being edited under them, and one snapshot they took was RED (a mid-edit gate failing). Their findings were still sound, but a review of a moving target is a review of nothing in particular. Next round: snapshot with `git archive` and review the snapshot. | `closed` (recorded as the rule for the next round) |
 
 ### Corrections to round 17's own record
