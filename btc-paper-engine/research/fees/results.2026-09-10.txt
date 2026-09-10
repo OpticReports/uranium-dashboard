@@ -14,28 +14,17 @@
 [grid]     hl_era  frac 1.00 fee  8.64  S3 ret    60.6%  CAGR 16.2  MTM DD -22.87%
 
 wrote research/fees/grid.json  (14 arms)
+=== HARNESS VALIDATION: does 2y/cash0.04 reproduce KELLY.md? ===
+  KELLY.md published: S3 rec 0.60 | S4 killed 0.0 | S6 rec 0.70
+  reproduced here   : S3 rec 0.60 | S4 rec 0.00 | S6 rec 0.70   (n: S3 88, S4 58, S6 146)
 
-=== baseline_6.0  (pullback fee 6.00 bps round trip) ===
-book     n     m*    p10  halfK     c*   ddm30    REC  verdict
-S1     190   3.12   1.60   1.56   0.78    0.73   0.73  OVERSIZED: engine supports only ~0.7x current 
-S2     190   2.42   1.20   1.21   0.79    0.58   0.58  OVERSIZED: engine supports only ~0.6x current 
-S3     190   4.00   1.97   2.00   0.78    0.99   0.99  size is roughly right (within the noise band)
-S4     128   1.41   0.29   0.70   0.59    0.43   0.29  OVERSIZED: engine supports only ~0.3x current 
-S5     317   3.56   2.01   1.78   0.82    0.78   0.78  OVERSIZED: engine supports only ~0.8x current 
-S6     317   2.67   1.51   1.33   0.82    0.59   0.59  OVERSIZED: engine supports only ~0.6x current 
+=== S6 RECOMMENDED m ACROSS ALL FOUR CELLS ===
+cell               n  baseline  corrected  fee effect  top rung  §5 decision
+2y_cash0.04      146      0.70       0.59      -15.7%      0.35  proceed unchanged
+2y_cash0.00      146      0.36       0.22      -38.9%       0.2  retire the 0.35 rung, stop at 0.20
+full_cash0.04    318      0.63       0.62       -1.6%      0.35  proceed unchanged
+full_cash0.00    318      0.60       0.58       -3.3%      0.35  proceed unchanged
 
-=== live_8.64  (pullback fee 8.64 bps round trip) ===
-book     n     m*    p10  halfK     c*   ddm30    REC  verdict
-S1     190   2.91   1.39   1.45   0.76    0.72   0.72  OVERSIZED: engine supports only ~0.7x current 
-S2     190   2.28   1.05   1.14   0.76    0.56   0.56  OVERSIZED: engine supports only ~0.6x current 
-S3     190   3.82   1.73   1.91   0.75    0.96   0.96  size is roughly right (within the noise band)
-S4     128   1.41   0.29   0.70   0.59    0.43   0.29  OVERSIZED: engine supports only ~0.3x current 
-S5     317   3.41   1.86   1.70   0.81    0.76   0.76  OVERSIZED: engine supports only ~0.8x current 
-S6     317   2.55   1.39   1.27   0.81    0.57   0.57  OVERSIZED: engine supports only ~0.6x current 
+  The four cells DISAGREE on the §5 decision. See RESEARCH_FEES.md.
 
-=== DECISION (PREREG §5), on S6 ===
-  S6 recommended m: baseline 0.59  ->  fee-corrected 0.57 (-3.4%)
-    ladder rung 0.135 vs corrected 0.57  -> INSIDE the envelope
-    ladder rung 0.2   vs corrected 0.57  -> INSIDE the envelope
-    ladder rung 0.35  vs corrected 0.57  -> INSIDE the envelope
-  RULE: ladder proceeds unchanged.
+[exited with code 0]

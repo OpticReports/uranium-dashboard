@@ -227,3 +227,99 @@ partly offsetting the 4.32. Sizing it needs the live engine's pending limit
 for those four `signal_ts`, which we do not have. Per CLAUDE.md that is an
 input to request, not to model around, so the study does not estimate it and
 the reported cost is an upper bound on the fee channel alone.
+
+---
+
+# AMENDMENT 2 — 2026-09-10, after the second counter-agent pass
+
+This one overturns the first cut's headline. Recorded in full because the
+conclusion I initially reached was wrong, and the way it was wrong is the
+interesting part.
+
+## A2.1 — the Kelly WINDOW and `cash_apy` were never pre-registered
+
+§4.4 fixed the Kelly *pipeline* and §4.2 fixed the *replay* window, but the
+Kelly re-fit silently inherited one window (full, 2022-) and one cash setting
+(`cash_apy=0.0`) without either being declared. I then reported that single
+cell's answer as though it were the answer.
+
+Declared retroactively, and reported in full below: **{2y, full} × {cash_apy
+0.04, 0.00}**. 2y = `last_bar - 730d`; 0.04 is `settings.cash_apy`, the value
+KELLY.md's own `/kelly/compare` endpoint uses.
+
+## A2.2 — "different window" was the WRONG explanation for 0.59 vs 0.70
+
+The first cut explained the gap from KELLY.md's published S6 of 0.70 as a
+window difference. That is not what it is. Decomposed:
+
+| step | S6 rec |
+|---|---|
+| 2y, cash 0.04, shipped steps — **KELLY.md's config** | 0.70 |
+| same window, cash **0.00** | 0.36 |
+| full window, cash 0.00 | 0.60 |
+| full window, cash 0.00, first cut's own blend steps | 0.59 |
+
+`cash_apy` moves S6 by **−0.34 on the same window**; the window moves it back
+**+0.24**; the dropped blend step takes another −0.01. They happen to net to
+the −0.11 I attributed wholly to "window". A near-cancellation of two large
+effects is not a window difference, and calling it one was exactly the
+papering-over the verification exists to catch.
+
+**Mechanism.** Per-trade streams are immune to idle-cash accrual, which lands
+between trades. Blend steps are built from `equity_after / start_equity`, so
+they DO capture it in the gaps. KELLY.md's S5/S6 therefore carry a 4% cash
+yield that its own S1–S4 rows do not. That is a shipped-pipeline
+inconsistency, inherited here and now named.
+
+## A2.3 — the blend steps were not the shipped ones
+
+The first cut rebuilt blend steps from `bench_blend.blend_curve`'s NAV as
+`nav[i]/nav[i-1]-1`, which silently drops the first step (n=317 vs the shipped
+318), and the dropped element was favourable. `refit_kelly.py` now uses the
+function that actually produced KELLY.md, replicated verbatim from
+`main.py:501-513` (it is nested inside the endpoint and cannot be imported).
+
+**Harness validation, which §7 asked for and the first cut never did:** the
+2y/cash0.04 cell now reproduces KELLY.md's published table exactly —
+S3 0.60, S4 killed at 0.00, S6 0.70, n = 88 / 58 / 146.
+
+## A2.4 — THE RESULT: four cells, and they disagree
+
+| cell | n | baseline | fee-corrected | fee effect | §5 decision |
+|---|---:|---:|---:|---:|---|
+| 2y, cash 0.04 | 146 | 0.70 | 0.59 | −15.7% | proceed unchanged |
+| **2y, cash 0.00** | 146 | 0.36 | **0.22** | **−38.9%** | **retire the 0.35 rung** |
+| full, cash 0.04 | 318 | 0.63 | 0.62 | −1.6% | proceed unchanged |
+| full, cash 0.00 | 318 | 0.60 | 0.58 | −3.3% | proceed unchanged |
+
+The fee effect is **not window-stable**: −1.6% to −38.9% depending on
+specification. The first cut reported −3.4% as if it were a property of the
+correction. It is a property of one cell.
+
+## A2.5 — which cell governs, and why the conservative one wins
+
+Three of four cells say proceed; one says retire the 0.35 rung. That is not a
+vote. Two things break the tie, both pointing the same way:
+
+1. `cash_apy=0.00` is the more defensible setting, not the flattering one.
+   It is `run_replay`'s default and the research-basis convention, and per
+   A2.2 the 0.04 variants credit the blend with a cash yield the single books
+   never get — an inconsistency, not a feature.
+2. KELLY.md's own doctrine: *"over-betting destroys growth faster than
+   under-betting gives it up (the g-curve is asymmetric), so the conservative
+   envelope is the honest size."* When defensible specifications disagree
+   about size, the smaller one governs. That rule is already in the repo and
+   it was written for exactly this situation.
+
+**Binding number: 0.22.** The 0.135 → 0.20 step clears in every cell. The
+0.35 rung does not clear the conservative cell and is retired pending live
+evidence.
+
+Stated plainly: this REVERSES the first cut's "ladder proceeds unchanged".
+
+## A2.6 — not fixed, said out loud
+
+The S5/S6 corrected numbers still charge the donchian leg 12.0 bps while the
+venue charges 4.32 taker. In scope per §8 (only `fee_bps` may move), and it
+biases the blends CONSERVATIVE, but it means the blend rows are not a clean
+"live fee" measurement. A full-venue-fee blend is separate work.
