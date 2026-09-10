@@ -445,6 +445,43 @@ removed. Every one caught by a named gate.
 
 ---
 
+## 2026-09-10 — B9 partially discharged: the first real venue fill
+
+* **B9** (round 15, by the judge's instruction: "the blend book has never
+  taken a real fill in any mode — a PROCESS gate, not a code fix; note it,
+  do not close it") has been open since it was written. Today the book took
+  its first real fill, supervised: `🧬 blend SWEEP BIL -10` accepted at
+  14:53 ET, one cycle after Restart 2, and booked correctly —
+  `sleeve_cash 66.34 → 980.02`, `bil_qty 163 → 153`, the ledger moving by
+  exactly the fill.
+* **Why it had never happened.** Not a code defect. The IB Gateway session
+  had been write-denied since 2026-09-08: IBC set the Read-Only API checkbox
+  to false on every boot, and the Gateway then raised an "API client needs
+  write access action confirmation" dialog that IBC has no handler for.
+  Every `placeOrder` and every `cancelOrder` returned 321. Fixed by
+  persisting the Gateway's settings on the mounted disk
+  (`TWS_SETTINGS_PATH` + `SAVE_TWS_SETTINGS`) so the checkbox is already
+  false at login and there is no change to confirm. Runbook in README.
+* **What is NOT yet discharged.** The judge's B9 named the full chain: a MOO
+  entry adopted by reconcile after the open, its GTC stop landing, and the
+  first ratchet cancel/replace. Today's fill is a book-level sweep. The
+  entry chain is in flight: GH (call 18, ~6 sh, $966) goes out as MOO after
+  16:00 ET today for Friday's open. **B9 stays `open` until GH's stop is
+  resting at the venue.** Close it then, with the order refs.
+* **Second-order corrections this discharges.** The 2026-09-08 finding that
+  "the gateway never answers `reqCompletedOrders` on ANY session"
+  (`VENUE_HISTORY_TIMEOUT_S`'s rationale, the execution-report fallback in
+  `find_stock_order`) was a symptom of the same write-denied session, not a
+  gateway limitation. The fallback is harmless and stays; the rationale
+  comment is now wrong and should be corrected when that file is next
+  touched.
+* **Exposed credentials to rotate.** `TRACKER_API_TOKEN`/`BLEND_API_TOKEN`
+  (a value was legible in a screenshot) and `EXEC_TOKEN` (pasted as a bare
+  word into a shell command). Both are burned; rotate after GH's stop lands,
+  never mid-window.
+
+---
+
 ## Standing UNKNOWNs
 
 * `mf-6`, `mf-11`, `mf-12`, `mf3-12` — referenced by id in this campaign's
