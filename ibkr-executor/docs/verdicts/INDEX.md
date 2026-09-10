@@ -376,6 +376,74 @@ bypassed · `TRACKER_URL` removed from render.yaml.
 
 ---
 
+## Round 18 — re-review of round 17's remediation
+
+* **Reviewed:** `0dcd845` (round 17's fix) plus the uncommitted layer on top
+  of it, across three lenses: new-code defects, regression, claims-and-gates.
+* **Verdict:** **FAIL** — 3/3 lenses FAIL, 26 findings. The regression
+  question itself came back a genuine PASS (all 8 probe suites land on their
+  README marks, `BLEND_ENABLED=false` boot proven byte-identical by diff, no
+  order dependence), so the round's shape is the campaign's standing answer
+  once again: **no regression, new harms.**
+* **Remediated by:** this commit.
+* **The finding that mattered most, and it is the same shape as round 17's:**
+  round 17's headline gate was STILL decorative. It monkeypatched
+  `service._tracker_watch` with a spy, proving only that the loop called
+  *some* function with the right string. Passing a throwaway state dict at
+  the call site — `_tracker_watch(now, reason, send, dict(TRACKER_WATCH))` —
+  restored the 2026-09-10 defect in full (steady `transport` → 0 pages/day
+  forever; steady `auth` → 288/day; `/health` pinned at `ok: null`) with all
+  316 tests green. Two rounds running, the gate for "this must not fail
+  silently" could itself be removed silently.
+
+| id | finding | status |
+|---|---|---|
+| R18R-1 | the loop gate asserted on a SPY, not on the module-global `TRACKER_WATCH` that `/health`, the ladder, the floor and both budgets all read | `closed` — the gate now lets the real decision function run and asserts the global advanced AND `/health` changed AND the page went out; verified failing against the throwaway-dict mutant |
+| R18-1 | the shared daily budget could starve the round's own headline guarantee: a flapping transient spends all six pages, then a rotated token (`auth`) is suppressed for up to 20.5h — measured — with a documented promise of an immediate page | `closed` — config diagnoses bypass the floor and draw on a reserved `TRACKER_MAX_CONFIG_PAGES_PER_DAY` |
+| R18-2 | the 30-min floor swallowed the RECOVERED line for the most common outage lengths (15-35 min) while the state reset regardless: the operator got 🚨 BLIND and then permanent silence | `closed` — recovery is exempt from both limits; it is self-bounding, since it only fires for an outage that already paged |
+| R17R-1 · R18-4 · R17R-5 | the floor suppressed silently, contradicting "a suppressed page is still logged, never invisible"; and `_page` spent the floor and the budget BEFORE `send_fn` returned, so one broken transport muted the next real page and a raising pager aborted the decision mid-way | `closed` — every refusal logs; the send is attempted first and guarded, and stamps only on success |
+| R18R-2 | both budget gates were TAUTOLOGICAL — they imported the constant under test and asserted against it, so setting either to 10**9 left the suite green and the budget could be removed in production | `closed` — absolute bounds, with the constants pinned separately |
+| R18R-3 | four round-17 rows marked `closed` were code-only and ungated: the watch's try/except, its position after `_superseded`, the escalation rung's remedy `tail`, and `_TRACKER_BLAST`'s corrected blast-radius text. All four could be deleted with 316/316 green | `closed` — one gate each |
+| R17R-2 · R18-3 · R18R-8 | the tri-state did not cover the likelier shape: a loop wedged AFTER one good poll reported `ok: true` forever on a stamp hours old. Round 17's R17-O3 claimed the tri-state covered it; that claim was false when written | `closed` — `null` now also means "last success older than max(3 × POLL_SECONDS, 900s)" |
+| R17R-3 · R18R-4 | a hand-typed `TRACKER_URL` with a stray space (it is `sync: false`, so it IS hand-typed) was classified `transport`, the self-healing bucket — the exact misdiagnosis the round exists to prevent. And the `.strip()` that fixed it, plus `_reset_tracker_watch`, were themselves ungated | `closed` — value stripped, and one gate each |
+| R17R-4 | `TRACKER_WATCH` was never re-initialised per lifespan, unlike `LADDER_KILL`, so one lifespan's blind state made the next boot's `/health` lie | `closed` — `_start_loop` resets it |
+| R18-6 | `_LAST_INTENTS_REASON`'s docstring asserted single-thread access, which `_stop_loop`'s timed join makes untrue | `closed` — docstring states the real window and why the worst case is a mislabelled reason, never a wrong payload |
+| R18-7 · R18R-9 | 404 was promoted to a never-self-heals config reason (`no_route`) on the strength of an unsourced claim about Render's edge ("a tracker mid-deploy answers 502/503, not 404") | **REVERTED, not fixed.** 404 stays transient. A single 404 from a router or WAF would have paged 🚨🚨 "this will NOT self-heal" on the first poll, and the justification was an assertion about a third party that nothing here establishes — the house rule is not to publish a verdict conditioned on an input we do not have. The 10-minute transient threshold is a small price. |
+| R18R-6 · R18R-7 · R18R-11 | README claims that did not match the code: the budget table implied a config outage's escalation rungs draw on the reserved budget (they are tagged by rung, so they draw on the shared one); the tri-state was said to cover a `_build` raise (that leaves `BLEND` None, so the whole section is ABSENT, not null); "the three that never self-heal" against a four-member set; no composite worst case stated | `closed` |
+
+### Found by this round, NOT closed
+
+| id | finding | status |
+|---|---|---|
+| R18R-12 · CA-8 | a tracker failing 2 of every 3 polls — losing two thirds of every entry window — produces ZERO pages over seven simulated days, because an `ok` resets `fails` before the 3-consecutive threshold is met, and `/health` sampled after any good poll reads `ok: true`. There is no cumulative failure-rate signal anywhere. Worse than CA-8's one-line round-17 entry implied. | `open` |
+| R17-O4 (revised) | the in-memory watch is defeated by a restart loop in TWO ways, not one: a container restarting faster than 3 polls never reaches the transient threshold (recorded), and `_reset_tracker_watch` now also re-arms BOTH daily budgets on every boot (not recorded until now). | `accepted-risk` |
+| R17-O1 | the pre-open 09:25 ET rung, unchanged and still the most valuable page not built. Gated on the branch merging `main`. | `open` |
+| R17-O2 | a stale-but-successful payload still plans zero entries with `tracker.ok: true`. | `open` |
+| R18R-0 | **process finding.** Three reviewers read a tree that was being edited under them, and one snapshot they took was RED (a mid-edit gate failing). Their findings were still sound, but a review of a moving target is a review of nothing in particular. Next round: snapshot with `git archive` and review the snapshot. | `closed` (recorded as the rule for the next round) |
+
+### Corrections to round 17's own record
+
+Round 17 stated three things this round found to be wrong, corrected here
+rather than left standing:
+
+* **"36-42 pages/day"** is the floor-PRESENT, budget-ABSENT figure. The
+  pre-remediation code had neither, and measures **96-288/day**. Round 17
+  understated the harm it was fixing by 4-8x.
+* **R17-O3's mitigation sentence** ("/health's tri-state null surfaces
+  both") was false when written — see R17R-2 above.
+* **CA-8** was recorded as "never pages and never shows blind". The second
+  half flatters it: after any good poll `/health` reads `ok: true`, which is
+  worse than "never shows blind".
+
+**Gates, mutation-verified.** Round 17's nine plus this round's: throwaway
+state dict at the call site · shared budget removed · config budget removed ·
+watch try/except removed · escalation remedy dropped · per-lifespan reset
+removed · `if sent:` guard removed · reserved config budget removed ·
+recovery no longer floor-exempt · wedged staleness removed · `.strip()`
+removed. Every one caught by a named gate.
+
+---
+
 ## Standing UNKNOWNs
 
 * `mf-6`, `mf-11`, `mf-12`, `mf3-12` — referenced by id in this campaign's

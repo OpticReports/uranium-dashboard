@@ -64,7 +64,7 @@ UNDECLARED in render.yaml: `config.py` defaults it to `""`, and an empty base
 returns `None` before any request, with no exception and nothing in the
 negative cache.
 
-Every no-payload outcome now carries a REASON, and the three that never
+Every no-payload outcome now carries a REASON, and the four that never
 self-heal are paged immediately rather than waited out:
 
 | reason | meaning | self-heals? |
@@ -72,6 +72,7 @@ self-heal are paged immediately rather than waited out:
 | `no_url` | `TRACKER_URL` unset — the service never even asks | never |
 | `auth` | 401/403: `TRACKER_API_TOKEN` no longer matches the tracker's `BLEND_API_TOKEN` | never |
 | `redirect` | 3xx: `TRACKER_URL` is an alias host, and httpx does not follow redirects | never |
+| `bad_url` | `TRACKER_URL` is malformed or not http(s), so the request never leaves the process. The value is `.strip()`ed first: a hand-typed env var with a stray space used to land here | never |
 | `http_<n>` | any other non-2xx (5xx usually transient) | usually |
 | `deadline` | the whole fetch blew `FEED_TIMEOUT` | usually |
 | `decode` | a 200 that is not JSON — a tracker-side bug | usually |
@@ -121,10 +122,17 @@ there:
 1. **A dead loop thread.** A `_build` raise alerts once and returns; an
    exception in the ladder section skips the blend block entirely. In both
    cases the poll never runs, so nothing increments and no tracker page can
-   fire. This is why `/health`'s `tracker.ok` is TRI-STATE: `null` means no
-   poll has ever succeeded, which is exactly the state those two failures
-   leave behind, and reporting it as `true` would rebuild the green lie.
-   `loop_age_s` is the only other signal, and nothing pages on it yet.
+   fire. `/health`'s `tracker.ok` is TRI-STATE and covers the WEDGED case:
+   `null` means UNKNOWN — no poll has ever succeeded, **or** the last success
+   is older than `max(3 x POLL_SECONDS, 900s)`, which is what a loop wedged
+   after one good poll looks like. Reporting either as `true` would rebuild
+   the green lie one step further along.
+
+   It does NOT cover a `_build` raise. That leaves `BLEND` as `None`, and the
+   whole `blend_loop`/`tracker` section is then ABSENT from `/health` rather
+   than `null` — a monitor keying on `tracker.ok` sees no field at all. The
+   one-shot "FAILED TO BUILD" alert and `loop_age_s` are the only signals for
+   that, and nothing pages on `loop_age_s` yet.
 2. **A stale-but-successful payload.** `payload_is_stale` nulls the payload
    INSIDE `run_cycle`, after the poll has already been recorded as healthy, so
    a tracker whose bar feed has stalled plans zero entries with
@@ -145,10 +153,38 @@ there:
    failed poll), and a service restarting every few minutes has a louder
    problem — but it is a real hole, not a theoretical one.
 
-**Page budget.** At most one page per 30 min and `TRACKER_MAX_PAGES_PER_DAY`
-(6) per UTC day, across every rung including recovery. A flapping tracker
-measured 36-42 pages/day without it. A page the budget suppresses is still
-written to the log and still visible on `/health` — capped, never invisible.
+**Page budget — three classes, because one shared budget let the least
+important pages starve the most important one.**
+
+| class | floor | budget |
+| --- | --- | --- |
+| `recovered` | exempt | exempt |
+| a config DIAGNOSIS — the first page of a config outage, and the page for a NEW config reason | exempt | `TRACKER_MAX_CONFIG_PAGES_PER_DAY` (3), reserved |
+| everything else — the first transient page, and every escalation rung **including a config outage's rungs** | 30 min | `TRACKER_MAX_PAGES_PER_DAY` (6) |
+
+The third row is the one to read twice: escalation rungs are tagged by RUNG,
+not by reason, so a config outage's 1h and 4h rungs are charged to the shared
+budget. Only its diagnosis pages come out of the reserved one. Composite worst
+case, stated rather than left to be derived: **≤3 config + ≤6 shared alarms,
+plus at most one recovery line per alarm that fired** — so ≤18 in a
+pathological day, against 288 polls.
+
+Config pages bypass the floor so "pages on the FIRST failed poll" is true as
+written, and draw on their own reserved budget so a flapping transient can
+never spend the allowance a permanent diagnosis needs. Recovery is exempt
+from both: an operator told `🚨 BLIND` and then never told it came back is
+worse off than one told nothing at all — so a recovery line can never
+outnumber the alarms that earned it, and the worst case is twice the budget
+rather than the budget.
+
+A flapping tracker measured 36-42 pages/day with no limits at all. **Every
+suppression is logged** — the floor and both budgets — so a condition is
+never invisible, only un-paged, and `/health` carries the full state either
+way.
+
+A failing `send` costs nothing: the page is attempted BEFORE the floor and
+the budget are stamped, so one broken transport cannot mute the next real
+page, and a raising pager can never abort the decision it was reporting on.
 
 ### Cycle order (reconciliation-first — counter-agent-mandated law)
 

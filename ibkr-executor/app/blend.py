@@ -1703,6 +1703,15 @@ def _intents_reason(exc: Exception) -> str:
         if 300 <= code < 400:
             # httpx's raise_for_status() raises on ANY non-2xx, 3xx included.
             return "redirect"
+        # 404 is deliberately NOT a config reason. It looks like one (a wrong
+        # base URL answers 404), but promoting it would page 🚨🚨 "this will
+        # NOT self-heal" on a SINGLE poll for something a tracker deploy, a
+        # router or a WAF can emit transiently — and the justification for
+        # promoting it ("a tracker mid-deploy answers 502/503, not 404") is an
+        # assertion about Render's edge that nothing here establishes. House
+        # rule: do not publish a verdict conditioned on an input we do not
+        # have. It waits out the 10-minute transient threshold instead
+        # (re-review R18R-9).
         return f"http_{code}"
     if isinstance(exc, ValueError):     # json.JSONDecodeError subclasses this
         return "decode"
@@ -1728,7 +1737,12 @@ def _fetch_intents_impl(cfg) -> tuple[dict | None, str]:
 
     MF-A: an httpx timeout is PER-OPERATION and never bounded the call, so
     the fetch runs under a TOTAL deadline (feeds.with_deadline)."""
-    base = (getattr(cfg, "tracker_url", "") or "").rstrip("/")
+    # .strip() first: TRACKER_URL is sync:false, i.e. hand-typed into the
+    # Render dashboard, and a leading/trailing space made httpx raise through
+    # the transport layer — filed as "transport", the self-healing bucket, for
+    # a config error that never heals (re-review R17R-3). Stripping fixes it
+    # outright rather than merely classifying it better.
+    base = (getattr(cfg, "tracker_url", "") or "").strip().rstrip("/")
     if not base:
         # The quietest blind state there is: no request, no exception, and
         # nothing written to the negative cache. It used to leave no trace.
@@ -1775,8 +1789,14 @@ def _fetch_intents_impl(cfg) -> tuple[dict | None, str]:
 # and the MF-2 live-fire probes (tests/probes/mf2/scen.py) replace
 # `blend_mod.fetch_intents` wholesale, and a loop that called a NEW function
 # instead would sail straight past all seven of those patch sites — the
-# MF-1 slow-feed gate among them (counter-agent CA-1/CA-2). Written and read
-# on the single loop thread inside one cycle.
+# MF-1 slow-feed gate among them (counter-agent CA-1/CA-2).
+#
+# Threading, stated accurately (R18-6): this is written and read within ONE
+# fetch_intents_reason call, and only the loop thread calls it — but
+# _stop_loop joins with a timeout and logs when a thread outlives it, so a
+# superseded loop CAN briefly still be running. The window is one statement
+# wide and the worst case is a mislabelled reason on a single cycle, never a
+# wrong payload: the payload is a return value, not shared state.
 _LAST_INTENTS_REASON: dict = {"v": None}
 
 

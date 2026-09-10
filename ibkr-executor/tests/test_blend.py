@@ -6288,13 +6288,19 @@ def test_gate_fetch_intents_keeps_its_payload_only_contract(monkeypatch):
 
 
 def test_gate_the_loop_actually_arms_the_tracker_watch(tmp_path, monkeypatch):
-    """THE gate for this round. Every other tracker test exercises the PURE
-    _tracker_watch with an injected state dict, so deleting the one line in
-    _loop that arms it left the whole suite green — the fix was decorative at
-    the only level that matters (counter-agent SB-1/T1/T5).
+    """THE gate for this round, and the second attempt at it.
 
-    Boots the real service with TRACKER_URL unset (the 2026-09-10 shape) and
-    asserts the loop reached _tracker_watch with the reason that says so."""
+    Attempt one monkeypatched service._tracker_watch with a spy, which proved
+    only that the loop called SOME function with the right reason string.
+    Nothing bound the loop to the module-global TRACKER_WATCH that /health
+    reads and that the ladder, the floor and both budgets accumulate in — so
+    changing the call site to pass a throwaway dict,
+    `_tracker_watch(now, reason, send, dict(TRACKER_WATCH))`, restored the
+    2026-09-10 defect in full with the whole suite green (re-review R18R-1).
+
+    So this asserts on STATE and on the page, never on the call: the real
+    decision function runs, and what it wrote must be visible where the
+    operator actually looks."""
     import time as _time
 
     from app.config import settings
@@ -6302,34 +6308,61 @@ def test_gate_the_loop_actually_arms_the_tracker_watch(tmp_path, monkeypatch):
     from app.service import app as service_app
     from fastapi.testclient import TestClient
 
-    seen = []
-
-    def spy(now, reason, send_fn, state=None):
-        seen.append(reason)
-        return []
-
-    monkeypatch.setattr(blend_mod, "run_cycle",
-                        lambda *a, **kw: [])
-    monkeypatch.setattr(service, "_tracker_watch", spy)
+    pages = []
+    monkeypatch.setattr(blend_mod, "run_cycle", lambda *a, **kw: [])
+    monkeypatch.setattr(service, "send", pages.append)
     monkeypatch.setattr(settings, "state_path", str(tmp_path / "s.json"))
     monkeypatch.setattr(settings, "blend_state_path", str(tmp_path / "b.json"))
     monkeypatch.setattr(settings, "exec_token", "sekrit")
     monkeypatch.setattr(settings, "tws_userid", "")
     monkeypatch.setattr(settings, "blend_enabled", True)
     monkeypatch.setattr(settings, "poll_seconds", 3600)
-    assert settings.tracker_url == ""
+    assert settings.tracker_url == ""      # -> no_url, a CONFIG reason
     try:
-        with TestClient(service_app):
+        with TestClient(service_app) as c:
             for _ in range(200):
-                if seen:
+                if service.TRACKER_WATCH.get("fails"):
                     break
                 _time.sleep(0.05)
-        assert seen, "the loop never called _tracker_watch"
-        # and it passed the REASON through, not a bare 'something failed'
-        assert seen[0] == "no_url", seen
+            watch = dict(service.TRACKER_WATCH)
+            body = c.get("/health").json()
+        # the MODULE-GLOBAL the rest of the service reads was advanced
+        assert watch["fails"] >= 1, watch
+        assert watch["reason"] == "no_url", watch
+        assert watch["blind_since"] is not None, watch
+        # ...the page went out, on the first failed poll, with its remedy
+        assert any("NOT self-heal" in m for m in pages), pages
+        # ...and /health tells the truth rather than the green lie
+        assert body["status"] == "ok"
+        assert body["tracker"]["ok"] is False, body["tracker"]
+        assert body["tracker"]["reason"] == "no_url", body["tracker"]
+        assert body["tracker"]["blind_polls"] >= 1, body["tracker"]
     finally:
         service.BLEND = None
         service.MGR = None
+        service._reset_tracker_watch()
+
+
+def test_gate_a_boot_never_inherits_a_previous_lifespans_watch(tmp_path,
+                                                               monkeypatch):
+    """TRACKER_WATCH is process-global and was never re-initialised per
+    lifespan, unlike LADDER_KILL. A watch left blind by one lifespan made the
+    next boot's /health report a tracker it had never polled (R17R-4)."""
+    from app import service
+
+    service.TRACKER_WATCH.update(blind_since=1.0, fails=9, reason="auth",
+                                 paged_level=0, page_count=6)
+    try:
+        service._reset_tracker_watch()
+        assert service.TRACKER_WATCH["fails"] == 0
+        assert service.TRACKER_WATCH["blind_since"] is None
+        assert service.TRACKER_WATCH["reason"] is None
+        assert service.TRACKER_WATCH["page_count"] == 0
+        # and _start_loop is what calls it, so a boot cannot skip it
+        import inspect
+        assert "_reset_tracker_watch()" in inspect.getsource(service._start_loop)
+    finally:
+        service._reset_tracker_watch()
 
 
 def test_gate_a_null_json_body_is_not_a_healthy_poll(monkeypatch):
@@ -6397,3 +6430,40 @@ def test_gate_fetch_intents_is_still_the_seam_the_probes_patch(monkeypatch):
     monkeypatch.setattr(blend_mod, "fetch_intents", lambda _c: {"entries": []})
     payload, reason = fetch_intents_reason(Cfg())
     assert payload == {"entries": []} and reason == "ok"
+
+
+def test_gate_a_hand_typed_tracker_url_survives_stray_whitespace(monkeypatch):
+    """TRACKER_URL is `sync: false` — it is TYPED into the Render dashboard by
+    hand — and a leading/trailing space made httpx raise through the transport
+    layer, so a permanent config error was filed as `transport`, the bucket
+    described to the operator as "usually heals" (re-review R17R-3). Stripping
+    fixes it outright instead of merely classifying it better."""
+    from app.blend import fetch_intents_reason
+
+    seen = {}
+
+    class R:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"as_of": "2026-09-10", "entries": []}
+
+    def fake_get(url, **kw):
+        seen["url"] = url
+        return R()
+
+    monkeypatch.setattr(blend_mod.httpx, "get", fake_get)
+    for raw in ("  https://research.optic.capital  ",
+                "\thttps://research.optic.capital\n",
+                "https://research.optic.capital/  "):
+        blend_mod._INTENTS_FAIL.clear()
+
+        class C(Cfg):
+            tracker_url = raw
+
+        payload, reason = fetch_intents_reason(C())
+        assert reason == "ok", (raw, reason)
+        assert seen["url"] == (
+            "https://research.optic.capital/blend3070/intents"), seen["url"]
+    blend_mod._INTENTS_FAIL.clear()

@@ -176,6 +176,14 @@ TRACKER_BLIND_MIN_S = 600.0     # ...AND this long blind. Both, because the
 TRACKER_ESCALATE_S = (3600.0, 14_400.0)   # re-page crossing 1h, then 4h...
 TRACKER_DAILY_S = 86_400.0                # ...then at most once a day.
 
+TRACKER_MAX_CONFIG_PAGES_PER_DAY = 3   # a RESERVED budget for the diagnoses
+                                       # that never self-heal. Separate on
+                                       # purpose: a flapping transient must
+                                       # not be able to spend the budget that
+                                       # a no_url/auth/redirect page needs,
+                                       # which is what silently overrode this
+                                       # round's own headline guarantee
+                                       # (re-review R18-1).
 TRACKER_MAX_PAGES_PER_DAY = 6     # a hard daily budget on top of the floor.
                                   # The floor alone caps at 48/day, and a
                                   # flapping tracker really does reach ~40
@@ -205,7 +213,8 @@ TRACKER_MIN_PAGE_GAP_S = 1800.0   # hard floor between ANY two tracker pages.
 # service restarting every few minutes has a louder problem than this watch.
 TRACKER_WATCH: dict = {"blind_since": None, "fails": 0, "last_ok": None,
                        "reason": None, "paged_level": -1, "paged_reason": "",
-                       "last_page": None, "page_day": None, "page_count": 0}
+                       "last_page": None, "page_day": None, "page_count": 0,
+                       "config_count": 0}
 
 _TRACKER_WHY = {
     "no_url": ("TRACKER_URL is not set on this service, so it never even "
@@ -225,6 +234,16 @@ _TRACKER_WHY = {
 
 def _tracker_why(reason: str) -> str:
     return _TRACKER_WHY.get(reason) or f"the tracker answered {reason}"
+
+
+def _reset_tracker_watch() -> None:
+    """Never inherit a previous lifespan's watch, exactly as _start_loop
+    already does for LADDER_KILL. A test (or a re-boot in-process) that left
+    the watch blind made the next boot's /health lie about a tracker it had
+    never polled (re-review R17R-4)."""
+    TRACKER_WATCH.update(blind_since=None, fails=0, last_ok=None, reason=None,
+                         paged_level=-1, paged_reason="", last_page=None,
+                         page_day=None, page_count=0, config_count=0)
 
 
 def _tracker_step(blind_for: float) -> int:
@@ -276,24 +295,55 @@ def _tracker_watch(now: float, reason: str, send_fn, state: dict | None = None
     fired: list[str] = []
 
     def _page(text: str, kind: str) -> bool:
-        """Send unless the floor or the daily budget blocks it. Returns
-        whether it went out, so no caller advances its rung on a page nobody
-        received."""
-        last = st.get("last_page")
-        if last is not None and now - float(last) < TRACKER_MIN_PAGE_GAP_S:
-            return False
+        """Send unless a rate limit blocks it. Returns whether it went out, so
+        no caller advances its rung on a page nobody received.
+
+        Three classes, because one shared budget let the least important
+        pages starve the most important ones (re-review R18-1/R18-2):
+          recovered - the line that closes the loop. Bounded already, since
+                      it only fires for an outage that DID page, so it
+                      bypasses both limits: an operator told "BLIND" and then
+                      nothing is worse off than one told nothing at all.
+          config    - a diagnosis that never self-heals. Bypasses the floor
+                      and the shared budget so "pages on the first failed
+                      poll" is true as written, and draws on its own small
+                      reserved budget instead.
+          otherwise - floor + shared daily budget.
+        NOTHING is suppressed silently: every refusal is logged, so the
+        condition is never invisible, only un-paged."""
         day = int(now // 86_400)
         if st.get("page_day") != day:
-            st["page_day"], st["page_count"] = day, 0
-        if int(st.get("page_count", 0)) >= TRACKER_MAX_PAGES_PER_DAY:
-            # Budget spent. NOT silent: the log still carries it, and
-            # /health still shows blind_for_s / blind_polls / reason.
-            logger.warning("tracker page suppressed (%d already sent today): "
-                           "%s", st["page_count"], text)
+            st["page_day"], st["page_count"], st["config_count"] = day, 0, 0
+        reserved = kind == "config"
+        if kind != "recovered":
+            last = st.get("last_page")
+            if (not reserved and last is not None
+                    and now - float(last) < TRACKER_MIN_PAGE_GAP_S):
+                logger.warning("tracker page suppressed (%.0fs since the last "
+                               "one, floor is %.0fs): %s",
+                               now - float(last), TRACKER_MIN_PAGE_GAP_S, text)
+                return False
+            key = "config_count" if reserved else "page_count"
+            cap = (TRACKER_MAX_CONFIG_PAGES_PER_DAY if reserved
+                   else TRACKER_MAX_PAGES_PER_DAY)
+            if int(st.get(key, 0)) >= cap:
+                logger.warning("tracker page suppressed (%d %s pages already "
+                               "sent today): %s", st.get(key, 0),
+                               "config" if reserved else "", text)
+                return False
+        try:
+            send_fn(text)
+        except Exception as exc:      # noqa: BLE001
+            # Spending the floor and the budget on a page nobody received
+            # would let one broken transport mute the next real one — and an
+            # escaping raise would abort the rest of this decision, including
+            # the recovery path's state reset (R18-4/R17R-5).
+            logger.exception("tracker page could not be sent: %s", exc)
             return False
-        st["page_count"] = int(st.get("page_count", 0)) + 1
+        if kind != "recovered":
+            key = "config_count" if reserved else "page_count"
+            st[key] = int(st.get(key, 0)) + 1
         st["last_page"] = now
-        send_fn(text)
         fired.append(kind)
         return True
 
@@ -842,6 +892,7 @@ def _start_loop() -> tuple[threading.Thread, threading.Event, int]:
                                 # new loop re-arms from it after _build
                                 # (MF2-2) — this only stops a superseded
                                 # lifespan's flag from riding along.
+    _reset_tracker_watch()      # same doctrine, same reason (R17R-4)
     wake = threading.Event()
     with LOOP_GEN_LOCK:
         LOOP_GEN += 1
@@ -921,8 +972,18 @@ def health():
         # rebuild the exact green lie this block exists to end
         # (counter-agent SB-3/T6/CA-7).
         polled = last_ok is not None or blind_since is not None
+        # ...and "has polled recently". A loop wedged AFTER one good poll (a
+        # ladder-section raise skips the blend block every iteration) would
+        # otherwise hold ok:true forever on a stamp from hours ago — the same
+        # green lie, one step further along (re-review R17R-2/R18-3). Null
+        # therefore means "unknown": never polled, OR not polling now.
+        _poll_s = float(getattr(settings, "poll_seconds", 300) or 300)
+        stale_after = max(3.0 * _poll_s, 900.0)
+        wedged = (blind_since is None and last_ok is not None
+                  and time.time() - float(last_ok) > stale_after)
         body["tracker"] = {
-            "ok": (blind_since is None) if polled else None,
+            "ok": None if (not polled or wedged) else (blind_since is None),
+            "stale_after_s": round(stale_after, 1),
             "reason": tw.get("reason"),
             "blind_for_s": (round(time.time() - float(blind_since), 1)
                             if blind_since else None),

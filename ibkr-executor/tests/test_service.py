@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 from app.config import settings
 from app.ib_adapter import DryAdapter, pick_expiry, pick_strike, size_combos
 from app.service import app
+from app import blend as blend_mod
 
 
 def test_gate_adapter_helpers():
@@ -185,7 +186,8 @@ def test_gate_b8_ib_async_is_pinned_to_a_major():
 def _fresh_watch() -> dict:
     return {"blind_since": None, "fails": 0, "last_ok": None,
             "reason": None, "paged_level": -1, "paged_reason": "",
-            "last_page": None, "page_day": None, "page_count": 0}
+            "last_page": None, "page_day": None, "page_count": 0,
+            "config_count": 0}
 
 
 def test_gate_the_blend_path_declares_every_env_var_it_needs():
@@ -361,13 +363,14 @@ def test_gate_tracker_a_new_permanent_reason_repages():
     for dt in (0, 300, 601):
         _tracker_watch(t0 + dt, "transport", pages.append, st)
     pages.clear()
-    # ...but only once clear of the page floor: a new permanent reason is
-    # still a page, not a licence to page every cycle.
-    assert _tracker_watch(t0 + 900, "auth", pages.append, st) == []
-    assert _tracker_watch(t0 + 2500, "auth", pages.append, st) == ["config"]
+    # A permanent diagnosis bypasses the floor — "pages on the first failed
+    # poll" has to be true as written — and is bounded by its OWN reserved
+    # budget instead, so a flapping transient can never spend it.
+    assert _tracker_watch(t0 + 900, "auth", pages.append, st) == ["config"]
     assert "NEW reason" in pages[0]
     assert "NOT self-heal" in pages[0]
-    assert _tracker_watch(t0 + 2800, "auth", pages.append, st) == []
+    # ...and it does not then re-page every cycle for the SAME reason
+    assert _tracker_watch(t0 + 1200, "auth", pages.append, st) == []
 
 
 def test_gate_health_surfaces_tracker_blindness_without_flipping_status():
@@ -430,10 +433,16 @@ def test_gate_tracker_ok_is_null_until_a_poll_has_actually_succeeded():
         svc.BLEND = object()
         svc.TRACKER_WATCH = _fresh_watch()           # never polled
         assert svc.health()["tracker"]["ok"] is None
-        svc.TRACKER_WATCH = dict(_fresh_watch(), last_ok=1_000_000.0)
+        import time as _t
+        svc.TRACKER_WATCH = dict(_fresh_watch(), last_ok=_t.time())
         assert svc.health()["tracker"]["ok"] is True
-        svc.TRACKER_WATCH = dict(_fresh_watch(), blind_since=1_000_000.0)
+        svc.TRACKER_WATCH = dict(_fresh_watch(), blind_since=_t.time())
         assert svc.health()["tracker"]["ok"] is False
+        # a loop WEDGED after one good poll (a ladder-section raise skips the
+        # blend block every iteration) must not hold ok:true on an ancient
+        # stamp — null means "unknown", which covers both never and no-longer
+        svc.TRACKER_WATCH = dict(_fresh_watch(), last_ok=_t.time() - 86_400)
+        assert svc.health()["tracker"]["ok"] is None
     finally:
         svc.BLEND, svc.TRACKER_WATCH = old_blend, old_watch
 
@@ -455,15 +464,35 @@ def test_gate_a_flapping_tracker_cannot_page_every_cycle():
         reason = "ok" if cycle % 4 == 3 else "transport"
         _tracker_watch(t, reason, pages.append, st)
         t += 300
-    assert len(pages) <= TRACKER_MAX_PAGES_PER_DAY, len(pages)
+    # The budget bounds ALARM pages. Recovery lines are exempt on purpose —
+    # an operator told "BLIND" and then never told it came back is worse off
+    # than one told nothing (R18-2) — so the real invariant is: recoveries
+    # never outnumber the alarms that earned them, and the total is bounded
+    # at twice the budget rather than at the budget.
+    alarms = [m for m in pages if m.startswith("🚨")]
+    recoveries = [m for m in pages if m.startswith("✅")]
+    assert TRACKER_MAX_PAGES_PER_DAY == 6      # the budget itself is pinned
+    assert len(alarms) <= 6, len(alarms)       # ...and the bound is absolute:
+                                               # asserting against the imported
+                                               # constant passes for any value
+                                               # of it, budget removed included
+                                               # (re-review R18R-2)
+    assert len(recoveries) <= len(alarms), (len(recoveries), len(alarms))
+    assert len(pages) <= 12, len(pages)
 
     # and two CONFIG reasons alternating, each of which pages on first sight
+    # and bypasses the floor: bounded by the RESERVED budget instead
+    from app.service import TRACKER_MAX_CONFIG_PAGES_PER_DAY
     st2, p2 = _fresh_watch(), []
     t = t0
     for cycle in range(288):
         _tracker_watch(t, "auth" if cycle % 2 else "no_url", p2.append, st2)
         t += 300
-    assert len(p2) <= TRACKER_MAX_PAGES_PER_DAY, len(p2)
+    # Two budgets are in play: the reserved one for the DIAGNOSIS pages, and
+    # the shared one for the escalation rungs that follow them. Both bound
+    # it; the contract is that the sum is a handful, against 288 cycles.
+    assert TRACKER_MAX_CONFIG_PAGES_PER_DAY == 3
+    assert len(p2) <= 9, len(p2)               # 3 config + 6 shared, absolute
 
     # a STEADY three-day outage stays in single digits, and still pages on
     # each new day rather than going permanently quiet
@@ -473,3 +502,171 @@ def test_gate_a_flapping_tracker_cannot_page_every_cycle():
         _tracker_watch(t, "transport", p3.append, st3)
         t += 300
     assert 3 <= len(p3) <= 9, len(p3)
+
+
+def test_gate_a_config_page_cannot_be_starved_by_a_flapping_transient():
+    """One shared budget let the LEAST important pages starve the MOST
+    important one: a flapping transient spent all six, and the no_url/auth
+    that followed — the diagnosis that never self-heals and that the round
+    promises pages on the FIRST failed poll — was silently suppressed
+    (re-review R18-1)."""
+    from app.service import _tracker_watch
+
+    t0 = 86_400_000.0
+    st, pages = _fresh_watch(), []
+    t = t0
+    for cycle in range(120):            # burn the shared budget on transients
+        _tracker_watch(t, "ok" if cycle % 4 == 3 else "transport",
+                       pages.append, st)
+        t += 300
+    assert st["page_count"] >= 6, st["page_count"]
+    pages.clear()
+    # now a permanent cause appears, same UTC day, seconds after the last page
+    assert _tracker_watch(t, "auth", pages.append, st) == ["config"]
+    assert "NOT self-heal" in pages[0]
+
+
+def test_gate_a_recovery_is_never_swallowed_by_the_page_floor():
+    """The floor ate the RECOVERED line for the most common outage lengths
+    while the state reset regardless, so the operator got '🚨 BLIND' and then
+    silence, with nothing ever closing the loop (re-review R18-2)."""
+    from app.service import _tracker_watch
+
+    t0 = 86_400_000.0
+    st, pages = _fresh_watch(), []
+    for dt in (0, 300, 601):
+        _tracker_watch(t0 + dt, "transport", pages.append, st)
+    assert len(pages) == 1
+    # recovery lands well inside the 30-minute floor
+    assert _tracker_watch(t0 + 900, "ok", pages.append, st) == ["recovered"]
+    assert pages[-1].startswith("✅")
+
+
+def test_gate_a_raising_pager_costs_nothing_and_stops_nothing():
+    """_page spent the floor and the budget BEFORE send_fn returned, so one
+    broken transport muted the next real page — and the raise escaped
+    _tracker_watch, skipping the recovery path's own state reset
+    (re-review R18-4/R17R-5)."""
+    from app.service import _tracker_watch
+
+    t0 = 86_400_000.0
+    st = _fresh_watch()
+
+    def boom(_msg):
+        raise RuntimeError("telegram down")
+
+    for dt in (0, 300, 601):
+        assert _tracker_watch(t0 + dt, "transport", boom, st) == []
+    assert st["page_count"] == 0 and st["last_page"] is None
+    assert st["paged_level"] == -1          # nothing advanced on a lost page
+    # the transport heals: the page that was never delivered is not owed to
+    # a spent budget, and the watch itself never stopped counting
+    pages = []
+    assert _tracker_watch(t0 + 900, "transport", pages.append, st) == ["blind"]
+
+
+def test_gate_a_suppressed_page_never_advances_the_rung():
+    """The `if sent:` guard is what stops a suppressed page from burning a
+    rung it never announced. It was a surviving mutation — deleting it left
+    all 312 tests green (re-review R18-5)."""
+    from app.service import _tracker_watch
+
+    t0 = 86_400_000.0
+    st, pages = _fresh_watch(), []
+    for dt in (0, 300, 601):
+        _tracker_watch(t0 + dt, "transport", pages.append, st)
+    assert st["paged_level"] == 0 and len(pages) == 1
+    # 1h rung falls inside the floor -> suppressed, and the rung must NOT
+    # advance, or the escalation is silently skipped for good
+    assert _tracker_watch(t0 + 1900, "transport", pages.append, st) == []
+    assert st["paged_level"] == 0, st["paged_level"]
+    # once the floor clears, the rung it was owed still fires
+    assert _tracker_watch(t0 + 3700, "transport", pages.append, st) == ["escalate"]
+    assert st["paged_level"] == 1
+
+
+def test_gate_the_page_text_carries_its_remedy_and_its_blast_radius():
+    """Both were code-only and ungated: emptying _TRACKER_BLAST, or dropping
+    the config `tail` from the escalation rungs, left the whole suite green
+    while every page silently lost the half that makes it actionable
+    (re-review R18R-3, round-17 T9/T5 and T2-doctrine)."""
+    from app.service import _tracker_watch
+
+    t0 = 86_400_000.0
+    st, pages = _fresh_watch(), []
+    for dt in (0, 300, 601):
+        _tracker_watch(t0 + dt, "transport", pages.append, st)
+    first = pages[0]
+    assert "no cash is raised" in first
+    assert "GTC stops" in first and "90-day time stop" in first
+    assert "delayed, not lost" in first          # exits, stated correctly
+    assert "ARE lost" in first                   # entries, stated correctly
+
+    # a CONFIG outage's escalation rung must still name the fix
+    st2, p2 = _fresh_watch(), []
+    _tracker_watch(t0, "auth", p2.append, st2)
+    assert "NOT self-heal" in p2[0]
+    assert _tracker_watch(t0 + 3700, "auth", p2.append, st2) == ["escalate"]
+    assert "NOT self-heal" in p2[-1], p2[-1]
+
+
+def test_gate_a_raising_watch_cannot_stop_the_protective_cycle(tmp_path,
+                                                               monkeypatch):
+    """The watch is a REPORTING call sitting in front of the protective one.
+    Deleting its try/except left the suite green while anything raising inside
+    it — alerts.send, a malformed state dict — aborted the iteration before
+    _blend_cycle: the watchdog killing the thing it guards (re-review
+    R18R-3, round-17 CA-5/SB-5).
+
+    _tracker_watch itself is made to raise, which is exactly what the guard
+    at the call site exists for; patching `send` instead would kill the loop
+    at its boot alert, long before the blend block."""
+    import time as _time
+
+    from app.config import settings
+    from app import service
+    from app.service import app as service_app
+    from fastapi.testclient import TestClient
+
+    cycles = []
+
+    def boom(*a, **kw):
+        raise RuntimeError("watch exploded")
+
+    monkeypatch.setattr(service, "_tracker_watch", boom)
+    monkeypatch.setattr(settings, "state_path", str(tmp_path / "s.json"))
+    monkeypatch.setattr(settings, "blend_state_path", str(tmp_path / "b.json"))
+    monkeypatch.setattr(settings, "exec_token", "sekrit")
+    monkeypatch.setattr(settings, "tws_userid", "")
+    monkeypatch.setattr(settings, "blend_enabled", True)
+    monkeypatch.setattr(settings, "poll_seconds", 3600)
+    monkeypatch.setattr(blend_mod, "run_cycle",
+                        lambda *a, **kw: (cycles.append(a[2]), [])[1])
+    try:
+        with TestClient(service_app):
+            for _ in range(200):
+                if cycles:
+                    break
+                _time.sleep(0.05)
+        assert cycles, "the protective cycle never ran behind a raising watch"
+    finally:
+        service.BLEND = None
+        service.MGR = None
+        service._reset_tracker_watch()
+
+
+def test_gate_the_watch_runs_after_the_supersede_checkpoint():
+    """MF-2's law: a bumped generation must not act. The watch was originally
+    called BEFORE `if _superseded(gen): return`, so a superseded lifespan
+    still paged and still mutated the module-global watch. Ordering is the
+    behaviour here, and nothing else pins it (re-review R18R-3 / CA-6)."""
+    import inspect
+
+    from app import service
+
+    src = inspect.getsource(service._loop)
+    guard = src.index("if _superseded(gen):\n                    return")
+    call = src.index("_tracker_watch(time.time(), reason, send)")
+    assert guard < call, "the watch must sit after the supersede checkpoint"
+    # ...and inside the guard that stops it killing the cycle
+    assert "try:\n                    _tracker_watch(" in src
