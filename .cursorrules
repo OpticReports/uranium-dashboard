@@ -89,6 +89,20 @@ them to one line each. No restating context Casey already has.
 - Honesty rules: state measurement basis (trade-close vs MTM), in-sample
   caveats, and what was NOT modeled. Never present in-sample CAGR as a
   forecast.
+- HYPERLIQUID BALANCES: NEVER ask Casey to move funds (Casey, 2026-09-10,
+  after this was raised SEVERAL TIMES). The account's value is ~$100k of
+  **spot USDC** and it backs the perp book.
+  `clearinghouseState.marginSummary.accountValue` is the **PERP POOL ONLY**
+  — it reads ~$64 and is not buying power, not collateral, and not a balance
+  to top up. There has NEVER been a spot->perp `accountClassTransfer` on this
+  account and none is needed: the book has traded perps for weeks without
+  one, and there is no transfer procedure to hand over. Authoritative reads
+  are the `portfolio` endpoint's `accountValue`, or spot + perp — which is
+  exactly what `hl.py`'s `equity()` already does and documents in its own
+  docstring. Before raising ANY margin/funding/balance alarm, query
+  `portfolio` and `spotClearinghouseState` and quote them. The general form
+  of the error: a small number in ONE wallet is not a shortfall, and a chain
+  of consequences built on one unverified premise is not a finding.
 - Live trading separation of powers: strategy engines are ALWAYS keyless
   decision brains; credentials live only in executor services — btc-executor
   (trade-only Coinbase key) and ibkr-executor (IBKR connection; ALL
