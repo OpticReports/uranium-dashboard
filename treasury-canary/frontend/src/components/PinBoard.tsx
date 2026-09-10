@@ -121,7 +121,7 @@ function AccidentGauge({ board }: { board: PinBoardData }) {
         <StatusPill status={g.status} pulse={g.status === "RED"} />
         <span className="text-[11px] text-slate-400">{statusText}</span>
         <span className="text-[10px] text-slate-500">
-          — hindcast figures pending re-measurement after the 2026-09-10 anchor fixes; superseded: 44% odds of a ≥15% drawdown within 12m when both fire, vs 20% base (5 of 11 clusters — context, not calibration)
+          — hindcast (re-measured 2026-09-10): 34% odds of a ≥15% drawdown within 12m when both fire, vs 20% base (4 of 13 clusters — context, not calibration)
         </span>
       </div>
       <div className="mb-2 flex flex-wrap gap-1.5">

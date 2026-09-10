@@ -780,18 +780,21 @@ def build_pin_board(bundle: dict) -> dict:
                  "on that market too but its $1.5T book is its own exposure."),
     }
 
-    # NOTE (2026-09-10): the 44% / 5-of-11 figures below are STALE — the
-    # plumbing and basis_trade anchor fixes changed the fast-channel set this
-    # rule keys on. Re-run studies/pin_rule_hindcast.py after deploy.
-    # Accident composite (studies/pin-rule-hindcast v2, 1981-2026): a
-    # FAST_HIGH_MASS channel red while the daily 3m10y spread touched <+0.25pp
-    # within the trailing 183 days — the same instrument and window the study
-    # measured. In-sample: a >=15% SPX drawdown started within 12m in 44% of
-    # signal months vs a 20% base; 5 of 11 signal-clusters were followed by
-    # one (1998 LTCM 4m early, 2007 up to 12m, 2019 11m, 2025 12m; missed
-    # 2018 curve-steep and 2021 policy-driven). The sibling rule
-    # oil/policy-window+curve scores the same within noise — this is A
-    # measured configuration, not THE one. Descriptive, never calibrated.
+    # Accident composite (studies/pin-rule-hindcast v3, re-measured 2026-09-10
+    # after the plumbing/basis_trade anchor fixes and the ICE history
+    # restoration): a FAST_HIGH_MASS channel red while the daily 3m10y spread
+    # touched <+0.25pp within the trailing 183 days — the same instrument and
+    # window the study measured. In-sample: a >=15% SPX drawdown started
+    # within 12m in 34% of signal months vs a 20% base; 4 of 13 signal-clusters
+    # were followed by one (1998 LTCM 4m early, 2019 11-7m, 2025 12m; missed
+    # 2007, 2018 curve-steep and 2021 policy-driven). On recession onsets it
+    # scores 6% vs a 9% base — BELOW base rate. The v2 figures (44%, 5/11,
+    # "2007 up to 12m") included a 2007 catch that came entirely from the
+    # since-removed pre-QE reserves artifact. The sibling rule
+    # oil/policy-window+curve (45%, 5/6 on drawdowns; 37%, 4/4 on onsets) is
+    # no longer "the same within noise" — it is the stronger configuration.
+    # This remains A measured configuration, not THE one. Descriptive, never
+    # calibrated.
     # GREEN = disarmed, YELLOW = one condition met (armed), RED = both.
     fast_live = [ch for ch in channels if ch.channel_id in FAST_HIGH_MASS
                  and ch.status != "STALE"]
@@ -844,19 +847,17 @@ def build_pin_board(bundle: dict) -> dict:
         "curve_threshold_pp": 0.25,
         "spread_3m10y_now": spread_now,
         "spread_3m10y_min_6m": spread_min_6m,
-        "basis": ("PENDING RE-MEASUREMENT (2026-09-10): two anchor bugs were "
-                  "fixed in the plumbing and basis_trade channels, both of which "
-                  "are in the fast set this rule keys on, so the figures below "
-                  "are stale — the 2007 cluster in particular came from the "
-                  "since-removed pre-QE reserves artifact. Re-run "
-                  "studies/pin_rule_hindcast.py after deploy and re-freeze. "
-                  "Superseded numbers: hindcast 1981-2026 (in-sample, ~11 signal "
-                  "clusters — wide error bars): this configuration preceded a "
-                  ">=15% drawdown start within 12m in 44% of months vs a 20% "
-                  "base; 5 of 11 clusters hit — 1998 LTCM flagged 4m early, 2007 "
-                  "up to 12m, 2019 11m, 2025 12m. Missed 2018 (curve steep) and "
-                  "2021 (policy-driven). Descriptive context, never a calibrated "
-                  "probability."),
+        "basis": ("Hindcast 1981-2026, re-measured 2026-09-10 (in-sample, 13 "
+                  "signal clusters — wide error bars): this configuration preceded "
+                  "a >=15% drawdown start within 12m in 34% of months vs a 20% "
+                  "base; 4 of 13 clusters hit — 1998 LTCM flagged 4m early, 2019 "
+                  "11-7m, 2025 12m. Missed 2007, 2018 (curve steep) and 2021 "
+                  "(policy-driven). On recession onsets it scores 6% vs a 9% base, "
+                  "below base rate. The earlier 44% / 5-of-11 figure included a "
+                  "2007 catch that came from a since-removed pre-QE reserves "
+                  "artifact. The sibling oil/policy-window+curve rule (45%, 5/6) "
+                  "is now the stronger configuration. Descriptive context, never "
+                  "a calibrated probability."),
     }
 
     return {

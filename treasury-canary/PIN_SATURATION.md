@@ -155,8 +155,9 @@ assert transmission_note(board_with("credit_event", 100.0), 35.0)["active"] is T
 
 ## Honesty box (frozen 2026-09-10)
 
-- n = 3,984 channel-months / 115 episodes / **14 hits** (pre-fix). Post-fix: 102 episodes /
-  12 hits. Underpowered for any stratification either way.
+- n = 3,984 channel-months / 115 episodes / **14 hits** (pre-fix). Post-fix, as deployed with the
+  ICE history restored: **120 episodes / 15 hits / 98 misses** (precision 12.5%). Underpowered for
+  any stratification either way.
 - The 14 hits map to only **8 distinct macro events** — `2018-09`, `2020-03` and `2025-01` supply
   3 each. Effective n for the outcome is ~8, not 107.
 - My first-pass reasoning was **wrong in method**: the cluster bootstrap by channel is
@@ -598,7 +599,7 @@ is unremarkable against its own history.
 | 3 | P2 | Should `monitor.py` alert on `n_at_ceiling`, and at what cadence? | Decides whether the additive fields earn their place over a pure CSS ramp. |
 | 4 | P2 | Should `_episodes` gain a real-time-computable window alongside the retrospective one? | Would make every hindcast hit-rate on this board prospectively honest. |
 | 5 | P3 | Should `pins_overall` get a `pins_schema_rev` stamp for R2 calibration comparability? | Track-record continuity across deploys. |
-| 6 | P1 | Re-run `pin_rule_hindcast.py` after redeploy and re-freeze "44% / 5 of 11" at all five hard-coded sites. | Those numbers are currently STALE and displayed as live truth in the UI. |
+| ~~6~~ | ~~P1~~ | **RESOLVED 2026-09-10.** Study re-run against the deployed v3 build; all seven sites re-frozen. fast-red+curve: 44% / 5-of-11 → **34% / 4-of-13** on drawdowns, 24% → **6%** (below base) on onsets. | The 2007 catch was the pre-QE reserves artifact; oil/policy+curve (45%, 5/6) is now the stronger rule. Details in `studies/pin-rule-hindcast.md` §v3. |
 | 7 | P2 | Is the basis_trade level anchor `(2, 4, 5.5, 8)` M contracts still right for a book that grew ~2.5x since 2020? After the cap the level leg alone reaches RED only from 2023-08. | Decides whether the channel has any usable pre-2023 history at all. |
 | 8 | P2 | The channel never flagged March 2020 — its own founding episode — peaking at 79.1, a tenth of a point under RED. Pre-existing, not caused by the fix. | Face validity of the basis_trade channel. |
 | ~~9~~ | ~~P1~~ | **DONE 2026-09-10 — see the section above.** ~~Apply the Hazen plotting position~~ `(r-0.5)/n` to `_percentile` and `_expanding_percentile`. On the real COT series it takes exact-100 weeks 85 -> **0** and at-ceiling months 40 -> **0**, while RED months barely move (94 -> 93). | This is the actual fix for the ceiling artifact — the cap only masks it, and the level leg still supplies 19 at-ceiling months. It generalises to CCC, CCC−BBB, EPU, SPY/RSP and VRP, and is a **better answer to Q1 than the ceiling marker** in the primary spec above. Do as a separate change. |

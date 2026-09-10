@@ -8,11 +8,10 @@ compares against the previous snapshot. Alerts on:
   - a queued deploy appearing
   - rebalance scheduled today
   - the canary ACCIDENT COMPOSITE tripping (fast-channel red on a flat curve —
-    a measured pins->market configuration. NOTE 2026-09-10: these odds are
-    PENDING RE-MEASUREMENT after the treasury-canary plumbing/basis_trade anchor
-    fixes (both are fast channels this rule keys on). Superseded: 44% vs 20% base odds of a >=15%
-    drawdown starting within 12m, in-sample over ~11 signal clusters; see
-    treasury-canary/studies/pin-rule-hindcast v2)
+    a measured pins->market configuration: 34% vs 20% base odds of a >=15%
+    drawdown starting within 12m, in-sample over 13 signal clusters, re-measured
+    2026-09-10 after the plumbing/basis_trade anchor fixes; see
+    treasury-canary/studies/pin-rule-hindcast v3)
 
 Exit code: 0 = quiet, 2 = alerts fired (easy to wire into cron/CI/triggers).
 Read-only. State lives in composer/results/monitor/state.json (tracked peaks
@@ -84,10 +83,10 @@ def check_accident_gauge(state, alerts, url, now):
     state["accident_gauge"] = status
     if status == "RED" and prev != "RED":
         alerts.append("ACCIDENT COMPOSITE TRIPPED — fast-channel red on a flat "
-                      "curve (hindcast PENDING re-measurement after the 2026-09-10 "
-                      "anchor fixes; superseded: 44% vs 20% base odds of a >=15% drawdown "
-                      "starting within 12m — descriptive, ~11 clusters — leads of "
-                      "4-12m on 1998/2007/2019/2025). Verify sleeve "
+                      "curve (hindcast v3, re-measured 2026-09-10: 34% vs 20% base "
+                      "odds of a >=15% drawdown starting within 12m — descriptive, "
+                      "13 clusters — leads of 4-12m on 1998/2019/2025; missed 2007). "
+                      "Verify sleeve "
                       "at target; expect gap risk. " + line)
     elif status == "RED" and now.weekday() == 0:
         alerts.append("accident composite STILL TRIPPED (weekly reminder) — " + line)
