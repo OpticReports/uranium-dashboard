@@ -176,7 +176,10 @@ frozen text said `HL_TAKER` — both declared rather than quietly fixed.
   the conclusion does not rest on the 1.00 cell alone, and **it does not**:
   re-fitting the binding cell at the registered 0.66 level (7.66 bps) gives
   S6 **0.27** — still inside §5's 0.20–0.35 band, same decision. The verdict
-  survives dropping the live crossing rate from 100% to 66%. (That re-fit is
+  survives dropping the live crossing rate from 100% to 66%. The same run's
+  8.64 rows reproduce the frozen four-cell numbers exactly (S6 0.22 / 0.59,
+  S5 0.30 / 0.79), so this is a reproducibility check as well as a robustness
+  one. Frozen in `research/fees/probe_066.2026-09-10.txt`. (The re-fit is
   post-hoc as a *Kelly* cell; the fee level itself was registered. Logged in
   the trial count.)
 - **Trade-close (exit-step) basis** for CAGR and Kelly; MTM drawdowns run
