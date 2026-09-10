@@ -89,6 +89,40 @@ durability warning) changed **no probe file at all**. All eight `attack_*`
 files were re-run from `ibkr-executor/` before and after the fixes and every
 one landed on its documented mark, unchanged:
 
+### Run preconditions (post-merge, 2026-09-10)
+
+Two things `main` introduced change how these scripts must be RUN; without
+them three suites appear to regress and none of it is real:
+
+1. **`LADDER_ENABLED=true`.** The El Niño ladder became opt-in (default
+   off). `attack_mf2` A4 and A10 drive the ladder through the real loop and
+   land with it off (measured 2026-09-10: 52/56 without, 54/56 with). No
+   other suite depends on it.
+2. **Pin the clock outside the session.** `blend.entry_window_open()` now
+   defers MOO entries during 09:25-16:00 ET. pytest is pinned by
+   `tests/conftest.py`; these standalone scripts are NOT. Run in-session,
+   `attack_reround` TRACEBACKS (`TypeError: 'NoneType' object is not
+   subscriptable` - its adapter setup expects an entry the window deferred)
+   and `attack_zfinal` lands `ZF-E1b`; run after 16:00 ET both reproduce
+   their marks with no pin at all (measured 2026-09-10 16:23 ET, with and
+   without the ladder flag - the flag is not their precondition). Pin
+   `blend._now_utc` to the same 07:00 ET the suite uses so the marks do not
+   depend on when you run them.
+
+The one-liner that reproduces every mark in the tables below, from
+`ibkr-executor/`:
+
+    for p in tests/probes/attack_*.py; do LADDER_ENABLED=true PYTHONPATH=. python3 -c "
+    import app.blend as b; from datetime import datetime, timezone
+    b._now_utc = lambda: datetime(2026, 8, 20, 11, 0, tzinfo=timezone.utc)
+    import runpy; runpy.run_path('$p', run_name='__main__')" | tail -1; done
+
+Measured on the merged tree with exactly that: `attack_mf2` 54/56 (A6, C1
+by design), `attack_n1n2` 14/14, `attack_n3guard` 10/10, `attack_r1r2` 7/7,
+`attack_reround` 9/9, `attack_x1x4` 39/40 (X-B by design), `attack_z1`
+20/21 (Z-1b by design), `attack_zfinal` 41/43 (ZF-A9c, ZF-G4 by design) —
+every documented mark, unchanged.
+
 | probe | before MF3 | after MF3 |
 |---|---|---|
 | `attack_reround.py` | 9/9 | 9/9 |

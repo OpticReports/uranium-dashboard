@@ -6,6 +6,12 @@ Question (Casey, 2026-08-17): top quant desks run 54–55% win rates; get S6
 2021-01 →, research basis (cash_apy 0, 6bp fees), engine code path untouched.
 Script: `backend/scripts/research_winrate.py` (pre-registration in docstring).
 
+Reproduce: `python3 backend/scripts/fetch_bars.py bars.csv` regenerates the
+dataset from Bitstamp (the CSV itself is not committed); then
+`python3 backend/scripts/research_winrate.py bars.csv` and
+`python3 backend/scripts/research_winrate_null.py bars.csv`. Verified
+2026-08-24: both rerun to the identical table values.
+
 ## Headline answer
 
 1. **S6 already sits in the zone on the full sample: 54.8%** (387 ingredient

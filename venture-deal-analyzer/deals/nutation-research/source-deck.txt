@@ -1,0 +1,174 @@
+Nutation Research
+World action models for the hardest movements humans
+perform.
+
+
+
+
+AUGUST 2026                                            nutationresearch.com
+     Nutation Research
+
+
+FOUNDER
+
+
+
+
+                                                       S
+                                          Shiva Mudide
+                         MIT Ph.D. Candidate in Physics-Informed ML (Withdrew to build)
+                                      M.S. Mechanical Engineering at MIT
+                                            B.S. in Physics at Caltech
+                              Ex: R&D Scientist at Onto (Chips), ML SWE at Amazon
+     Nutation Research
+
+
+THE PROBLEM
+
+World models for robotics and graphics still struggle with complex
+biomechanics.
+
+    1. Most datasets only contain simple demonstrations.                               2. Existing benchmarks don’t verify the physics well.
+
+    Most world models are only trained on videos demonstrating simple tasks with no    Ask for rotations in the air and the body flails and angular momentum isn't
+    counterfactual data which tells these models what is wrong and how to improve      conserved. A model can break conservation on every clip and still lead the field.
+    their motions with reinforcement learning.
+
+
+
+
+    3. The field is 62x short on data.                                                 4. And the data is the cost, not the compute.
+
+    Tencent's 3,000 hour dataset behind HY-Motion 1.0 is 324M frames. Their            Retraining HY-Motion costs about $4,582 of GPU. The data behind it costs 72x to
+    one-billion-parameter model should be using roughly 20B for good generalization.   697x that. Tencent's own scaling work concluded data curation is "the decisive
+    that’s 62x more than what exists. Text models train on 46,296x more.               factor."
+     Nutation Research
+
+
+THE PROBLEM
+
+World models for robotics and graphics still struggle with complex
+biomechanics.
+       Nutation Research
+
+
+THE SOLUTION
+
+
+Yuna is the instrument to push our world model performance beyond SOTA.
+General Intuition built a consumer product, Medal, to collect gameplay data before it rejected $500M from OpenAI.
+We're building the same for the physical space, for the most complex biomechanical motion humans can perform to train world models with RL.
+We collect the data with a tool people already want to use.
+
+
+                                                                                                                    Generalization
+
+
+
+                                                                                                                    On held-out everyday prompts, such as tripping on a
+                                                                                                                    curb, slipping on a wet floor, carrying a box
+                                                                                                                    downstairs (lower error is better performance):
+
+                                                                                                                      ●    grip needed to stay upright fell 0.61 → 0.34
+                                                                                                                      ●    sinking through the floor 19 mm → 8 mm
+                                                                                                                      ●    flight path error 9.4 cm → 3.1 cm.
+      Nutation Research · Yuna
+
+
+YUNA · THE FIRST PRODUCT
+
+
+Feed it a skating video.                                                                           LIVE ELEMENT
+
+
+
+It hands back the better skate.
+Yuna watches ordinary broadcast or rinkside footage, detects every jump and spin, grades it, and
+then shows the athlete the version of that attempt they could have landed, with actionable
+feedback to get there
+
+
+     Coaching
+     Per-attempt breakdown plus the specific correction to practice next.
+
+     Judging
+     Accurate scoring with interpretability displayed over the motion trail.
+
+     Broadcast
+     Show the fan the landed version beside the failed one, with the score explained.
+                                                                                                      4T · GOE +1.5
+
+     → Data
+                                                                                                   air time 0.61s · height 58cm · rotation 4.02
+     Every interaction writes a labeled, counterfactual-rich example back to the model.
+       Nutation Research
+
+
+WHY SKATING FIRST
+
+
+The largest expert-graded motion dataset on earth is unclaimed, and the
+skating governing body needs the technology now.
+
+   Skating federation is                      Figure skating is                         Preference data is readily             Counterfactual data vastly
+   investing in AI.                           biomechanically complex.                  available.                             improves models.
+
+   ISU has been expanding integrations                                                   Tencent paid to annotate 40,000       Recent robotics work: a scoring
+   with technology: a January 2026            If a world model can accurately            comparison pairs to teach HY-Motion   head trained only on successes
+   sensor-data partnership and a              predict and correct a skater landing       which of two motions was better.      made the model worse: 79%
+   February 2026 pilot using AI to            on a 4mm blade with 5G’s of force,         Skating has been generating such      against an 82% baseline and it only
+   support technical scoring. Neither of      then a robot recovering its balance        annotated record (scored against a    reached 92% once it had seen
+   these use SOTA world model                 when it bumps into a kitchen               published rubric) since 2004.         failures too. Figure skating training
+   technology.                                counter is a trivial sub-problem.                                                data provides vast counterfactuals.
+
+
+
+
+There is a clear need from the skating federation for SOTA technology. We generate synthetic action labels and futures from the public data, and our private
+data fills in the counterfactuals that the public can't cover. That proprietary dataset is our moat.
+      Nutation Research
+
+
+THE MARKET OPPORTUNITY
+
+
+The product is a good business. The data is the outsized one.
+
+
+
+   $10M                                                $500M                                             $2B - 3B
+   ADDRESSABLE ARR IN FIGURE SKATING                   ADDRESSABLE ARR ACROSS SPORTS                     DATA & MODEL CONTRACTS
+
+   ~$50K-100K per annual contract with clubs,          Scale the same model to gymnastics, diving, and   Robotics, physical AI, and 3D graphics companies
+   teams, federations, and broadcast rights holders.   every other judged or coached discipline.         licensing the corpus and the world model.
+   ~$1K per individual athlete/coach x ~10K users      Eventually reach sports with multiplayers: MMA,
+                                                       American football, etc.
+       Nutation Research
+
+
+THE ASK
+
+
+Seeking a $500K SAFE
+A small SAFE to secure the first few customers and publish our research before a seed round.
+
+
+
+
+   $60K                                      $200K                                     $80K                          $60K
+   Data operation                            Team & ops                                Compute                       GTM & partners
+
+                                                                                                                     Athlete ambassadors and federation
+                                                                                       GPUs for pre/post training.
+   Coach/athlete data labeling.              Research, engineering, sales.                                           travel.
+
+================================================================================
+IMAGE-CONTENT NOTE (standing rule after the Oligo page-3 miss): all 9
+pages were ALSO rendered to PNG and read visually at intake. The images
+add, beyond the text layer: the p.5 eval bar chart ("Physical error on
+skating prompts", HY-Motion 1.0 vs +skating data vs +physics, six error
+categories, dashed line = real skaters through the same pipeline) and
+the p.2 founder card (no photo - an "S" avatar; Caltech/MIT/Amazon/Onto
+logos). No named people, terms, or figures exist in images that are
+absent from the text layer. Nothing hidden; no silent gaps.
+================================================================================

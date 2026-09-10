@@ -8,6 +8,10 @@ from app.main import app
 
 
 def test_exec_target_shape_and_states():
+    # /exec/target answers 503 until boot() has restored the DB (2026-09-08):
+    # fresh Book() defaults served during boot read as a real engine state
+    # to the executor. These tests are about shape and auth, so mark booted.
+    ENGINE.booted = True
     with TestClient(app) as c:
         r = c.get("/exec/target")
         assert r.status_code == 200
@@ -44,6 +48,7 @@ def test_exec_target_shape_and_states():
 
 def test_exec_target_token_auth():
     old = settings.exec_token
+    ENGINE.booted = True
     try:
         settings.exec_token = "sekrit"
         with TestClient(app) as c:

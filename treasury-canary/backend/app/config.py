@@ -159,8 +159,12 @@ FRED_PINS: dict[str, str] = {
     "interest_gdp": "FYOIGDA188S", # federal interest outlays as % of GDP (annual)
     # Corporate & private credit pin: distress tier vs IG, and bank funding TO
     # private-credit vehicles (the H.8 NDFI breakout the Fed added for this).
-    "ccc_oas": "BAMLH0A3HYC",      # CCC-and-lower OAS (daily, 1996+)
-    "bbb_oas": "BAMLC0A4CBBB",     # BBB OAS (daily, 1996+)
+    # ICE BofA series: nominally 1996+, but FRED's licence returns only a ROLLING
+    # ~3-year window (787 daily obs as of 2026-09) whether keyed or not. Anything
+    # ranking these against "history" is ranking against ~3 years. See
+    # treasury-canary/PIN_SATURATION.md DD Q14.
+    "ccc_oas": "BAMLH0A3HYC",      # CCC-and-lower OAS (daily, ~3y rolling)
+    "bbb_oas": "BAMLC0A4CBBB",     # BBB OAS (daily, ~3y rolling)
     "ndfi_loans": "B1030NCBCMG",   # loans to nondepository fin. inst., m/m ann. growth
     # Carry-unwind pin: yen appreciation forces levered unwinds (Aug 2024).
     "jpy": "DEXJPUS",              # USD/JPY daily (falling = yen appreciating)

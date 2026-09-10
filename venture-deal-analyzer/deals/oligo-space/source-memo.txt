@@ -1,0 +1,192 @@
+Oligo Space | Memo
+Oligo Space is building the manufacturing infrastructure that will allow enterprises to own application-specific orbital
+infrastructure without becoming space companies themselves. The company combines AI-native spacecraft design,
+vertically integrated manufacturing, testing and operations to make customized satellites faster and cheaper than
+traditional aerospace manufacturers.
+The core thesis is simple: launch has become cheap and abundant; satellite manufacturing and mission
+design are now the bottleneck. Oligo is building the production system for the next phase of the space
+economy.
+
+
+
+Key Investment Highlights
+
+    ●​ Space is moving from standardized satellites to application-specific orbital infrastructure.
+    ●​ Existing manufacturers optimize for either customization or scale, but struggle to deliver both simultaneously.
+    ●​ Oligo is attacking the manufacturing process itself, using AI to reduce the engineering burden associated
+       with customization.
+    ●​ Vertical integration gives Oligo control over the design-to-manufacturing loop.
+    ●​ Every spacecraft creates proprietary design, manufacturing, testing and flight data, creating a compounding
+       closed-loop advantage.
+    ●​ The founder is an MIT dropout and a Thiel Fellow and the team combines hands-on manufacturing,
+       aerospace engineering, NASA/space-industry experience and AI/software expertise.
+    ●​ Oligo Space has already raised $7M to date from investors including Lux Capital, Soma Capital,
+       Alumni Ventures and Kakao Ventures.
+
+
+
+The Opportunity
+
+Space is undergoing a structural transition from government-led, bespoke aerospace programs to commercial,
+application-specific orbital infrastructure.
+Launch costs have fallen dramatically. Falcon 9 reduced the cost of reaching Low Earth Orbit (LEO) by >95% versus
+the Space Shuttle, while Starship targets sub-$100/kg economics. Global orbital launches increased from 87 in 2015
+to 259 in 2024 and >320 in 2025. Active satellites increased from ~1,000-1,400 a decade ago to >13,000 by late
+2025.
+The industry is moving from “Can we get something into space?” to “What should we put into space for a
+specific business?”
+The launch and manufacturing represent only 7% of the $613B global space economy, while 93% flows through
+applications, services and ground infrastructure. The application layer determines whether infrastructure gets built.
+Enterprises can either rent data/capacity or own the means of production. A 1997 GAO analysis found that the DoD
+could meet needs 14x more cheaply by owning capacity rather than leasing it. As costs fall, ownership becomes
+accessible to enterprises with persistent or proprietary demand.
+Oligo addresses the gap between buying generic satellite data/services and building an expensive, slow
+internal aerospace program.
+
+
+
+The Oligo System: Product, Advantage, and Moat
+
+Oligo is effectively building the infrastructure layer that lets an enterprise define a mission and own the spacecraft
+infrastructure required to execute it. This vertical integration spans the entire lifecycle: business requirement →
+spacecraft architecture → AI-assisted design → manufacturing → testing → launch → operations → data.
+Oligo’s AI-driven processes are designed to compress spacecraft development timelines from years to months, while
+reducing costs from traditional tens of millions of dollars to a fraction of that. Oligo is not an aerospace software
+company with a manufacturing component; it is building an AI-native physical manufacturing system where software
+directly improves the economics of producing spacecraft.
+Oligo wins by offering a fundamentally better manufacturing system than existing project-based models. Most of the
+~120 satellite manufacturers remain engineering-heavy; every new customer requires substantial human involvement
+in architecture, simulation, component selection, integration, and testing. This creates a linear relationship where
+more customers require more engineering headcount.
+In contrast, Oligo is building Zenith, an AI-native system that turns spacecraft engineering into a repeatable
+production process. Zenith assists with mission requirements, architectures, design evaluation, and optimization. The
+real moat is the closed-loop manufacturing data flywheel. Every spacecraft Oligo produces generates data across
+Design → Simulation → Manufacturing → Testing → Flight → Performance. This feedback loop ensures that each
+spacecraft makes the next one faster to design, cheaper to manufacture, easier to test, and more reliable.
+Over time, Oligo builds a proprietary dataset connecting physical design and manufacturing outcomes to in-orbit
+performance. The company does not need to be just another satellite manufacturer; it aims to be the production
+platform that makes customized spacecraft manufacturing economically scalable.
+
+
+
+Why Now
+
+Launch is no longer the primary bottleneck. Reusable launch has fundamentally changed space economics and
+increased orbital access.
+Satellite hardware is becoming standardized. The Space Development Agency’s order for 126 identical buses is a
+strong signal that mass production is becoming the expected model.
+There is already demand building up visible in the following sectors:
+
+
+    ●​ Financial: Hedge funds spent $2.8B on alternative data in 2025, including satellite imagery for market pricing.
+    ●​ Manufacturing: Varda is using microgravity for pharmaceutical manufacturing and has raised $329M.
+    ●​ RF: Deloitte is flying nine satellites for RF monitoring.
+    ●​ Mining / Energy: Satellite data is used for deposit location and methane leak detection.
+    ●​ Automotive: Geely is investing $637M in a vehicle-connectivity constellation.
+    ●​ Agriculture / Consumer: Nestlé, Cargill and Unilever use space for crop-yield forecasting and deforestation
+       verification.
+    ●​ Insurance: AXA and Munich Re use satellite data to trigger insurance policies.
+    ●​ Connectivity: Apple has committed $1.95B to Globalstar for direct satellite connectivity.
+
+Accenture reports that 80% of executives view space technology as vital for growth, but only 18% have integrated it.
+This suggests significant adoption headroom.
+Global telecom operators alone spent $299.4B in capex in 2024, roughly 38x the total venture funding deployed into
+space that year. Companies such as Amazon and AT&T operate at a scale where annual capex plans dwarf the
+space startup ecosystem of the past decade.
+Much of the corporate capital is currently flowing into AI infrastructure. As AI capex eventually normalizes,
+enterprises may seek another strategic frontier for large-scale investment. Space could become a major next
+corporate spending cycle because orbital data, connectivity and infrastructure provide capabilities that cannot simply
+be replicated on Earth.
+Competitive Landscape
+
+ Category                      Customization                Repeatability               Enterprise fit
+ Legacy defense primes         High                         Low                         Low
+ Commercial bus builders       Low                          High                        Medium
+ Data / service providers      None                         High                        High
+ Space infrastructure giants   Medium                       High                        Medium
+ Oligo Space                   High                         High                        High
+
+Legacy defense primes: Lockheed Martin and Northrop Grumman offer high customization but low repeatability,
+with cost-plus structures and multi-year timelines.
+Commercial platform builders: Apex, Rocket Lab and Terran Orbital offer repeatability but require missions to fit
+pre-cataloged hardware.
+Data and service operators: Planet and Spire sell generic data feeds, leaving customers exposed to perpetual
+margins and data-rights limitations.
+Infrastructure and utility giants: SpaceX's Starshield adapts standardized buses for government payloads, while
+Blue Origin's Blue Ring focuses on orbital utility services.
+Oligo’s target quadrant is customization + repeatability.
+
+
+
+Team
+
+Founder(CEO), Jacob Rodriguez brings hands-on manufacturing and aerospace engineering experience. He
+worked as an aerospace machine-shop technician producing hardware for Virgin Galactic, Rocket Lab, and SpaceX
+across 3- and 5-axis CNCs. He later studied AeroAstro, physics, and AI at MIT while working six internships at NASA
+JPL and Goddard. He is also a Thiel Fellow and 776 Fellow.
+Progress So Far
+
+    ●​ Established a 14,000 sq. ft. spacecraft production facility in Hawthorne, next to SpaceX.
+    ●​ Built in-house cleanroom, TVAC, vibration testing, ADCS testing, machining and waterjet capabilities.
+    ●​ Built up the capability to produce over 10 custom spacecraft ranging between 100-400kg at their
+       facility in Hawthorne every year.
+    ●​ Booked and paid for the launch of its first 100kg satellite, CHIMERA1, in April 2027.
+    ●​ Acquired customers for CHIMERA1 and CHIMERA2 both scheduled to launch in 2027 with a possible
+       revenue on each CHIMERA ranging from $15M-$37M.
+    ●​ Continued development of Zenith, its AI-enabled spacecraft design automation platform.
+    ●​ Built automated design, testing and manufacturing workflows that improve with every customer and
+       spacecraft build.
+
+
+
+Investment Status
+
+    ●​ Oligo Space has raised $7M to date from investors including Lux Capital, Soma Capital, Alumni Ventures
+       and Kakao Ventures.
+    ●​ The last strategic round was closed at a $50M valuation.
+    ●​ The company is currently raising $10M at a $100M valuation.
+
+
+
+Conclusion
+
+Oligo Space is a bet on the next manufacturing layer of the space economy. Declining launch costs and standardized
+satellite platforms have created a new bottleneck: how enterprises efficiently design and manufacture spacecraft
+optimized for their specific applications.
+Oligo can win not by competing head-on with every satellite manufacturer, but by changing the economics of
+customization itself. If it converts spacecraft engineering from a labor-intensive project business into an AI-driven,
+repeatable manufacturing process, its advantage should compound with every spacecraft it builds.
+Bottom line: Oligo offers a differentiated way to invest in the transition from “space as a service” to “space
+as enterprise-owned infrastructure.”
+
+================================================================================
+CORRECTION 2026-08-25: pdftotext DROPS PAGE 3, which is a full-page raster
+image (2048x1045, sole image in the PDF). Transcription of that slide,
+read from the extracted image during verification:
+
+"Assembled a team of veteran engineers that have worked on the world's
+most advanced flagship missions" - 70+ YRS OF FLIGHT EXPERIENCE - 25+
+FLAGSHIP MISSIONS WORKED ON
+
+Andrew Shapiro, PhD - CHIEF TECHNOLOGIST - "20+ yrs previous NASA JPL
+Manager of Technology Formulation and Division Chief Technologist where he
+spearheaded early-stage innovation and funded seeded over 12 advanced
+missions across NASA Lectured at Caltech and UC Irvine. Former Proteus
+Space Co-Founder/CTO."
+Carlos Deccia, PhD - CHIEF MISSION ARCHITECT - astrodynamics PhD, ML lead;
+$8.4M NASA research grant; led AI at Canaria
+Carlyn Lee - SOFTWARE SYSTEMS LEAD - DARPA SubT autonomy co-author; JPL
+supercomputer sims; automated ops for 3 flagship missions
+Samuel Villarreal - HEAD OF FLIGHT SOFTWARE - Mars 2020, Curiosity, Psyche
+Warren Kaye - SENIOR FLIGHT SOFTWARE - 10 yrs JPL; Lunar Flashlight;
+Cassini Grand Finale; Psyche; ex Call of Duty developer
+Liliana Reyes - SENIOR AVIONICS - 4 full ESPA spacecraft at Momentus and
+Proteus Space
+Richard Guerrero - MANUFACTURING LEAD - 25 yrs JPL flight hardware; USAF
+veteran; harnessing vertical integration at Proteus Space
+Corey Mack - HEAD OF OPERATIONS - 20+ yrs JPL ops; 190-engineer robotics
+section
+Khari Lobin - MANUFACTURING TECHNICIAN - BMW automotive manufacturing
+
+Logos on slide: Cal, UCLA, Caltech, NASA, JPL, USAF.
+================================================================================

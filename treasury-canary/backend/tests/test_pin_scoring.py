@@ -120,3 +120,288 @@ def test_scores_flow_from_synthetic_data():
     assert ch["status"] == "RED"
     assert 80.0 <= ch["score"] <= 100.0
     assert board["pressure"] is not None
+
+
+# --- anchor-bug regression gates (2026-09-10) ---------------------------------
+# Two scoring bugs found during the pin-band calibration study. Both distorted the
+# hindcast by pinning a channel at the score ceiling for structural reasons rather
+# than stress. These gates are merge-blocking: they encode the fix, not the symptom.
+
+def test_reserves_pct_change_gated_on_base():
+    """A 26-week % change on a pre-QE reserve base is noise, not a drain.
+
+    WRESBAL ran $3-24B pre-QE (stdev of the 26w change: 104%, hitting the -15%
+    RED anchor 26.1% of the time and the -25% extreme 30 times) versus $603B+
+    post-QE (stdev 21%, never once reaching the extreme).
+    """
+    from app.metrics.pins import RESERVES_MIN_BASE_M, _pct_change
+
+    small = [20_000.0] * 26 + [14_000.0]        # $20B -> $14B: -30%, pure noise
+    assert _pct_change(small, 26) == -30.0                      # ungated: spurious
+    assert _pct_change(small, 26, min_base=RESERVES_MIN_BASE_M) is None
+
+    ample = [3_000_000.0] * 26 + [2_700_000.0]  # $3T -> $2.7T: a real -10% drain
+    assert _pct_change(ample, 26, min_base=RESERVES_MIN_BASE_M) == -10.0
+
+
+def test_reserves_gate_separates_the_two_regimes():
+    """The gate must sit clear of BOTH regimes, not bisect either one."""
+    from app.metrics.pins import RESERVES_MIN_BASE_M
+
+    assert 24_000.0 < RESERVES_MIN_BASE_M < 603_000.0   # pre-QE peak / post-QE trough
+
+
+def test_positioning_percentile_is_a_capped_crowding_gauge():
+    """Crowding alone must not take basis_trade RED, and must not pin at 100.
+
+    The channel's own certainty note says the unwind trigger "arrives via the
+    other channels". Uncapped, a new expanding-window high scored exactly 100 by
+    construction, and leveraged-fund net short trends secularly.
+    """
+    b, y, r, e, hi, cap = ANCHORS["Positioning percentile (vs 2010+)"]
+    assert cap == 79.0
+    assert _pscore(100.0, b, y, r, e, hi, cap) == 79.0      # an all-time high: still YELLOW
+    assert _status_from_score(_pscore(100.0, b, y, r, e, hi, cap)) == "YELLOW"
+
+
+def test_gauge_and_cushion_legs_cap_at_yellow():
+    """Regression guard: gauges/cushions measure how loaded the spring is; triggers fire it."""
+    gauges = [
+        "Positioning percentile (vs 2010+)",
+        "SPY/RSP ratio percentile (vs 2010+)",
+        "Vol-risk premium percentile (VIX − realized)",
+        "RRP buffer",
+        "10y JGB yield, 12-month change",
+    ]
+    for label in gauges:
+        assert ANCHORS[label][5] == 79.0, f"{label} must cap at YELLOW"
+
+
+def test_basis_trade_still_reaches_red_via_its_level_leg():
+    """The cap must not neuter the channel — the level leg is uncapped."""
+    b, y, r, e, hi, cap = ANCHORS["Leveraged-fund net short, UST futures"]
+    assert cap == 100.0
+    assert _pscore(5.5, b, y, r, e, hi, cap) == 80.0        # red anchor still red
+    assert _pscore(8.0, b, y, r, e, hi, cap) == 100.0       # extreme still reachable
+
+
+def test_hindcast_and_live_board_share_the_reserves_gate():
+    """If these drift apart the history stops measuring what the pill shows."""
+    from app.metrics import pin_history
+    from app.metrics.pins import RESERVES_MIN_BASE_M
+    import datetime
+
+    assert pin_history.RESERVES_MIN_BASE_M is RESERVES_MIN_BASE_M
+    days = [datetime.date(2003, 1, 1) + datetime.timedelta(weeks=i) for i in range(30)]
+    small = [20_000.0] * 26 + [14_000.0] * 4
+    d, v = pin_history._roll_pct_change(days, small, 26, min_base=RESERVES_MIN_BASE_M)
+    assert d == [] and v == []
+
+
+def test_reserves_gate_is_wired_into_the_live_board():
+    """INTEGRATION gate: asserting the parameter exists is not asserting it is used.
+
+    Deleting `min_base=` at the pins.py call site must fail HERE, not pass.
+    """
+    import datetime
+    weeks = [datetime.date(2003, 1, 1) + datetime.timedelta(weeks=i) for i in range(30)]
+    pre_qe = [20_000.0] * 26 + [14_000.0] * 4      # $20B -> $14B, -30% of noise
+    board = build_pin_board({"reserves": (weeks, pre_qe)})
+    plumb = next(c for c in board["channels"] if c["channel_id"] == "plumbing")
+    res = next(p for p in plumb["parts"] if p["label"].startswith("Reserves"))
+    assert res["value"] is None and res["status"] == "STALE"
+    assert plumb["status"] == "STALE"          # not GREEN — we cannot see, we do not guess
+    assert plumb["score"] is None
+
+    ample = [3_000_000.0] * 26 + [2_550_000.0] * 4  # $3T -> $2.55T, a real -15% drain
+    board = build_pin_board({"reserves": (weeks, ample)})
+    plumb = next(c for c in board["channels"] if c["channel_id"] == "plumbing")
+    res = next(p for p in plumb["parts"] if p["label"].startswith("Reserves"))
+    assert res["value"] == -15.0 and res["status"] == "RED"
+
+
+def test_reserves_gate_is_wired_into_the_hindcast():
+    """INTEGRATION gate for the pin_history call site (same mutation test)."""
+    import datetime
+    from app.metrics.pin_history import _parts_for_channel
+
+    weeks = [datetime.date(2003, 1, 1) + datetime.timedelta(weeks=i) for i in range(30)]
+    parts = dict(_parts_for_channel("plumbing", {"reserves": (weeks, [20_000.0] * 26 + [14_000.0] * 4)}))
+    assert parts["Reserves, 26-week change"] == ([], [])
+
+    parts = dict(_parts_for_channel("plumbing", {"reserves": (weeks, [3_000_000.0] * 26 + [2_550_000.0] * 4)}))
+    d, v = parts["Reserves, 26-week change"]
+    assert len(d) == 4 and all(abs(x - -15.0) < 1e-9 for x in v)
+
+
+def test_gate_does_not_silence_a_drain_through_the_floor():
+    """A monitor must never go quiet AFTER the worst outcome.
+
+    Gating on the base alone would mute a catastrophic drain that takes the level
+    below the gate. Gate on both ends: only when BOTH are small is it pre-QE noise.
+    """
+    from app.metrics.pins import RESERVES_MIN_BASE_M, _pct_change
+
+    collapse = [3_000_000.0] * 26 + [50_000.0]   # $3T -> $50B: the end of the world
+    assert _pct_change(collapse, 26, min_base=RESERVES_MIN_BASE_M) == -98.3
+
+    rebuild = [50_000.0] * 26 + [3_000_000.0]    # small -> ample: still reported
+    assert _pct_change(rebuild, 26, min_base=RESERVES_MIN_BASE_M) is not None
+
+    noise = [20_000.0] * 26 + [14_000.0]         # both ends small: the actual bug
+    assert _pct_change(noise, 26, min_base=RESERVES_MIN_BASE_M) is None
+
+
+def test_stale_fast_channel_never_reads_as_a_silent_all_clear():
+    """fast_red=False while a FAST_HIGH_MASS channel is dark is a false all-clear."""
+    import datetime
+    days = [datetime.date(2024, 1, 1) + datetime.timedelta(days=i) for i in range(60)]
+    # credit_event readable and calm; plumbing dark. Condition 1 must be UNKNOWN.
+    board = build_pin_board({"hy_oas": (days, [300.0] * 60)})
+    g = board["accident_gauge"]
+    assert g["fast_red"] is None, "a dark fast channel must not report 'condition false'"
+    assert "fast channels" in g["unknown"]
+    assert g["fast_stale_channels"], "the dark channels must be named, not just counted"
+    assert g["status"] != "GREEN"
+
+
+
+def test_percentile_never_reaches_the_ceiling_at_REALISTIC_sample_sizes():
+    """The end-to-end gate. rank_pct stopping at (n-0.5)/n is not enough.
+
+    round(99.9933, 1) is 100.0, so _percentile handed back the exact ceiling for
+    every n >= 1000 -- which is every percentile leg on the board except CFTC
+    (CCC ~7,500; dispersion ~7,500; EPU 15,227; SPY/RSP ~3,900; VRP ~2,500).
+    An earlier version of this gate used n=500, one step below where the bug
+    appears, so it passed while the board was broken.
+    """
+    from app.metrics.pins import _percentile
+
+    for n in (500, 1000, 4001, 7500, 15227, 20000):
+        rising = list(range(n))
+        high = _percentile(rising, rising[-1])
+        low = _percentile(rising, rising[0])
+        assert high < 100.0, f"all-time high hit the ceiling at n={n}"
+        assert low > 0.0, f"all-time low hit the floor at n={n}"
+        # and the SCORE must not manufacture the extreme by rounding either
+        assert _pscore(high, 50, 85, 95, 100) < 100.0, f"score hit 100 at n={n}"
+        assert _pscore(high, 50, 90, 97.5, 100) < 100.0, f"EPU-anchored score hit 100 at n={n}"
+
+
+def test_rounding_never_manufactures_the_extreme_but_real_extremes_still_reach_it():
+    """The guard must not cost a genuine documented extreme its 100."""
+    # at or beyond the extreme anchor -> still exactly 100
+    assert _pscore(8.0, 2, 4, 5.5, 8) == 100.0          # net short at the extreme
+    assert _pscore(500, 0, 25, 50, 100) == 100.0        # WTI far beyond it
+    assert _pscore(-10, 10, 5, 0, -10, False, 100) == 100.0   # lower-is-worse extreme
+    assert _pscore(-36.1, 10, 5, 0, -10, False, 100) == 100.0  # beyond it
+    # just short of the extreme -> must NOT round up into it
+    assert _pscore(7.999, 2, 4, 5.5, 8) < 100.0
+    # the other anchors are untouched
+    assert _pscore(5.5, 2, 4, 5.5, 8) == 80.0
+    assert _pscore(4.0, 2, 4, 5.5, 8) == 50.0
+
+
+def test_ccc_percentile_label_claims_only_history_it_actually_has():
+    """The label and the data must agree, in whichever direction.
+
+    Between April and September 2026 this label said "(vs 1996+)" while FRED
+    served only 3 years, and the board reported 99.2 for a reading whose true
+    full-history rank was ~62. It was briefly renamed to match the truncated
+    feed; with the frozen reference in place the original claim is true again.
+    Whichever way it goes, the label and the frozen history must not diverge.
+    """
+    from app.sources.ice_reference import frozen_history
+
+    assert "CCC spread percentile (vs 1996+)" in ANCHORS
+    d, _ = frozen_history("BAMLH0A3HYC")
+    assert d and d[0].year <= 1996, \
+        "the label claims 1996+; the frozen reference must actually start there"
+
+
+def test_ccc_percentile_ranks_against_full_history_again():
+    """DD Q24: the interim level-trigger leg is gone; the 1996+ rank is back.
+
+    FRED cut ICE BofA history to a rolling 3 years in April 2026, which made this
+    a 3-year percentile -- CCC read 99.2 when its true full-history rank was ~62.
+    The frozen reference restores the real distribution at the source layer, so
+    the original (50, 85, 95, 100) calibration is valid again.
+    """
+    for label in ("CCC spread percentile (vs 1996+)", "CCC−BBB dispersion percentile"):
+        b, y, r, e, hi, cap = ANCHORS[label]
+        assert (b, y, r, e) == (50, 85, 95, 100)
+        assert cap == 100.0, "these legs carry RED again; they are not gauges"
+        assert _status_from_score(_pscore(96.0, b, y, r, e, hi, cap)) == "RED"
+    assert "CCC-and-lower OAS" not in ANCHORS, \
+        "the interim absolute-level trigger should be gone, not left dormant"
+
+
+def test_frozen_ice_reference_is_present_and_reconciles():
+    """The frozen history is load-bearing: without it every rank above is a lie."""
+    from app.sources.ice_reference import FROZEN_SERIES, frozen_history, splice
+    import datetime
+
+    for sid in ("BAMLH0A3HYC", "BAMLC0A4CBBB", "BAMLH0A0HYM2", "BAMLC0A0CM"):
+        d, v = frozen_history(sid)
+        assert len(d) > 6000, f"{sid} frozen history missing or truncated ({len(d)})"
+        assert d[0].year <= 2000 and d == tuple(sorted(d))
+
+    # the verified extremes of the CCC series must survive the freeze
+    d, v = frozen_history("BAMLH0A3HYC")
+    assert max(v) == 44.29 and d[v.index(max(v))] == datetime.date(2008, 12, 15)
+    assert min(v) == 4.14 and d[v.index(min(v))] == datetime.date(2007, 6, 5)
+
+    # live values win on overlap, and a non-ICE series passes straight through
+    today = datetime.date(2026, 9, 9)
+    sd, sv = splice("BAMLH0A3HYC", [today], [10.64])
+    assert sv[-1] == 10.64 and len(sd) == len(d) + 1
+    assert splice("DGS10", [today], [4.0]) == ([today], [4.0])
+    assert "DGS10" not in FROZEN_SERIES
+
+
+def test_ccc_reference_gap_is_left_as_a_hole():
+    """2022-07-07..2023-09-10 is missing upstream. Interpolating it would
+    fabricate history in the series used to rank distress."""
+    import datetime
+    from app.sources.ice_reference import frozen_history
+
+    d, _ = frozen_history("BAMLH0A3HYC")
+    assert d[-1] == datetime.date(2022, 7, 6), "CCC frozen history should stop at the gap"
+
+
+def test_every_live_channel_leg_is_also_hindcast():
+    """Live board and hindcast must carry the SAME legs.
+
+    Dropping the CCC level leg from pin_history alone left the whole suite green,
+    so the two surfaces could silently diverge -- the hindcast would score a
+    channel on fewer legs than the live pill shows.
+    """
+    from app.metrics.pin_history import LAG_WINDOWS, _parts_for_channel
+
+    # Divergences that are DELIBERATE and documented in pin_history.HISTORY_NOTES.
+    # Anything not listed here is a bug: the hindcast would score a channel on
+    # fewer legs than the live pill shows.
+    DOCUMENTED_GAPS = {
+        ("demand_strike", "Coupon bid-to-cover, last 4 auctions"),
+        ("demand_strike", "Indirect (foreign) share, last 4 auctions"),
+    }
+
+    board = build_pin_board({})
+    for ch in board["channels"]:
+        cid = ch["channel_id"]
+        if cid not in LAG_WINDOWS:
+            continue
+        hindcast_labels = {label for label, _ in _parts_for_channel(cid, {})}
+        for part in ch["parts"]:
+            label = part["label"]
+            if label not in ANCHORS:
+                continue          # unanchored parts are display-only by design
+            if (cid, label) in DOCUMENTED_GAPS:
+                continue
+            assert label in hindcast_labels, (
+                f"{cid}: live leg {label!r} is missing from the hindcast")
+
+    # and the documented gaps must still BE documented
+    from app.metrics.pin_history import HISTORY_NOTES
+    for cid, _label in DOCUMENTED_GAPS:
+        assert HISTORY_NOTES.get(cid), f"{cid} has an undocumented hindcast gap"

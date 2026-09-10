@@ -130,6 +130,18 @@ class Book:
     equity: float = 0.0
     peak_equity: float = 0.0
     halted: bool = False
+    # Why `halted` is set: "dd_halt" (the book's own kill switch, set in
+    # _close_position) or "manual" (POST /books/<n>/halt). The halt page
+    # reads this so an operator halt is never reported as a drawdown that
+    # did not happen (counter-agent 2026-09-08, defect 6/8).
+    halt_reason: str | None = None
+    # Has the halt been paged? Compared against `halted` by
+    # live._announce_halts, so a halt is announced no matter WHICH code path
+    # set it (three in the engine, plus /halt and reset_books) and even if
+    # an exception intervened between the halting close and the scan - the
+    # snapshot-vs-now design the workflow panel broke needed every path
+    # bracketed by hand and lost the edge to any raise in between.
+    halt_announced: bool = False
     position: Position | None = None
     pending: Pending | None = None
     trades: list[ClosedTrade] = field(default_factory=list)
@@ -213,6 +225,7 @@ def _close_position(book: Book, pos: Position, exit_ts: int, exit_price: float,
     dd = book.equity / book.peak_equity - 1
     if dd <= -book.cfg.dd_halt:
         book.halted = True
+        book.halt_reason = "dd_halt"
 
 
 def _process_donchian(book: Book, bar: Bar, ind: Ind, tcfg: TradeCfg,

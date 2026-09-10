@@ -30,6 +30,14 @@ class Settings(BaseSettings):
     cash_apy: float = 0.04           # idle capital earns T-bill-ish yield
     history_bars: int = 800              # indicator window kept in memory/DB
 
+    # Funding-regime monitor (RESEARCH_CARRY.md deployment policy): 30d
+    # trailing mean annualized BTC perp funding, ARM >= arm_pct with
+    # hysteresis (DISARM < disarm_pct). Research signal only - no trading.
+    run_funding_monitor: bool = True
+    funding_check_seconds: int = 21600           # 4 checks/day
+    funding_arm_pct: float = 8.0
+    funding_disarm_pct: float = 5.0
+
     frontend_dist: str | None = None
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
     log_level: str = "INFO"

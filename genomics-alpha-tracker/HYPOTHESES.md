@@ -237,6 +237,32 @@ call trigger · `retired` → failed the gate or decayed; kept for the record.
   flag-tilted sizing adds a thin +0.02 Sharpe (3/3 sub-periods); leverage,
   TSMOM overlay and vol-scaled weights all FAILED the registered bar — the
   plain 30/70 remains the construction.
+- **Live-record honesty note (2026-09-04, standing):** the R2-A shadow
+  record and the ibkr-executor's live book diverged from day one and the
+  split is attributable, so no live-vs-replay comparison may be quoted
+  without it. Sixteen auto-flag calls have fired (ids 1-16, all gate-on).
+  Thirteen predate the 2026-08-28 go-live. Three were addressable and ALL
+  THREE were lost: NTRA (14) and LLY (15), created 09:44 ET mid-session on
+  08-28, were placed as MOO/OPG after the open and rejected 4x each, and
+  BLEND_ENABLED was off that evening so the post-close retry never ran;
+  MRK (16), created 21:27 ET on 09-02, fired into a 14-hour gateway
+  outage. The executor's session guard (branch 5acccf0) closes the first
+  mode; the gateway restart configuration closes the second. The shadow
+  record is what the account WOULD have done had its entries reached the
+  venue; it is not this account's track record.
+  Two tracker-side findings from the same calls log: (a) `entry_price` on
+  a call created MID-SESSION is the price at the moment the hourly calls
+  job ran, not the fire-day close the R2-A convention names (12 of 16
+  calls; NTRA 08-28 stamped 336.62 at 09:44, actual close 326.26; mean
+  |drift| 0.16 ATR, worst 0.99 on NTRA 08-28) - it feeds the executor's sizing, the day-one trail
+  seed and the replay comparison, so "entered at the fire-day close" is
+  not what the shadow did on those twelve; (b) the tracker caps auto-call CREATION at `max_open_calls` (default
+  10, tunable via /tuning; `calls/manager.py`), but the R2-A shadow engine
+  grades every call independently with no portfolio constraint
+  (`calls/shadow.py` has no cap) and holds them longer (90-day time stop vs
+  the primary book's 45), so its open count can and does exceed 10 (12 on
+  2026-09-03). The shadow is per-call grading, not a book; a replay
+  comparison must apply the cap post-hoc.
 
 ---
 

@@ -1,0 +1,26 @@
+[Unit]
+Description=Forward shadow forecast for the forecasting-foundation-model study
+Documentation=https://github.com/OpticReports/uranium-dashboard/blob/main/btc-paper-engine/RESEARCH_FORECAST_FM.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/uranium-dashboard/btc-paper-engine/backend
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=%h/.venvs/fmstudy/bin/python -m research.forecast_fm.shadow_cli --log %h/fm-shadow/forecasts.jsonl
+
+# READ-ONLY EVERYWHERE EXCEPT ITS OWN LOG. This job holds no credentials
+# and needs none: it reads a public endpoint and appends to one file. A
+# research job on the same box as a trading assistant should not be able to
+# write anywhere else, and saying so here is cheaper than trusting it to.
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/fm-shadow
+PrivateTmp=true
+NoNewPrivileges=true
+
+# Fail loudly rather than retry into a stale feed: the timer runs again in
+# four hours, and a job that silently retried a broken feed would fill the
+# record with forecasts made from bad bars.
+Restart=no

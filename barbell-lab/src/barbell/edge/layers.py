@@ -103,9 +103,12 @@ def check_dd(con, sid, base) -> dict:
 
 
 def check_slippage(con, sid, base) -> dict:
+    # quarantined rows are EXCLUDED: they are broken measurements, not
+    # observations (db.quarantine_trades). This filter is the whole point of
+    # the quarantine — without it the purge marks rows and changes nothing.
     rows = con.execute(
         "SELECT slip_bps FROM edge_trades WHERE strategy_id=? AND slip_bps "
-        "IS NOT NULL ORDER BY ts_utc", (sid,)).fetchall()
+        "IS NOT NULL AND quarantined=0 ORDER BY ts_utc", (sid,)).fetchall()
     slips = np.array([r[0] for r in rows], dtype=float)
     if len(slips) < MIN_SLIP_TRADES:
         return {"metric": "slip_cusum", "status": "insufficient",
@@ -152,7 +155,8 @@ def check_behavior(con, sid, base) -> dict:
     A strategy suddenly trading 3x more/less than its backtest changed
     upstream, whatever the P&L says."""
     n_tr = con.execute(
-        "SELECT COUNT(*) FROM edge_trades WHERE strategy_id=?", (sid,)).fetchone()[0]
+        "SELECT COUNT(*) FROM edge_trades WHERE strategy_id=? "
+        "AND quarantined=0", (sid,)).fetchone()[0]
     n_days = con.execute(
         "SELECT COUNT(*) FROM edge_nav_daily WHERE strategy_id=?", (sid,)).fetchone()[0]
     exp = base.get("expected_trades_per_day") or \

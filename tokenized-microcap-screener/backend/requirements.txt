@@ -1,0 +1,21 @@
+# Core API (versions track catalyst-options-engine/backend/requirements.txt)
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+pydantic-settings==2.7.1
+sqlmodel==0.0.22
+SQLAlchemy==2.0.36
+
+# Scheduling + config
+APScheduler==3.11.0
+PyYAML==6.0.2
+
+# HTTP (every data lane is a keyless httpx call)
+httpx==0.28.1
+
+# Tests
+pytest==8.3.4
+
+# NOTE: deliberately NO exchange/broker SDKs and NO credentialed providers.
+# This service is a keyless decision brain (CLAUDE.md separation of powers):
+# it names tickers and a window, it never places a trade.

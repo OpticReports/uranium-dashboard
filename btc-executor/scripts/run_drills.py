@@ -11,6 +11,9 @@ proves the real path). This script closes the rest:
 Cost ~= spread + taker fees ~ $1-2 per drill, one venue contract (0.01 BTC),
 hard-bounded in code — no parameter here can raise the size.
 
+Prefer AUTO_DRILL=true (RAMP_V4.md): the executor runs these itself in
+flat windows. This script is the manual fallback when you need drills now.
+
 Usage:
     EXEC_TOKEN=... python3 scripts/run_drills.py [--url URL] [--cycles N]
                                                  [--stopfill] [--wait-mins M]
@@ -90,8 +93,14 @@ def main() -> int:
     ap.add_argument("--url", default=os.environ.get("EXEC_URL", DEFAULT_URL))
     ap.add_argument("--cycles", type=int, default=3,
                     help="cycle drills to run (spec needs 3)")
-    ap.add_argument("--stopfill", action="store_true", default=True,
-                    help="also run one stopfill drill (spec needs 1)")
+    ap.add_argument("--stopfill", action=argparse.BooleanOptionalAction,
+                    default=False,
+                    help="also run one stopfill drill. DEFAULT OFF: Coinbase "
+                         "preview-rejects an above-market STOP_DOWN sell, so "
+                         "an unsupervised stopfill fails deterministically "
+                         "(RAMP_V4.md); the stop_filled row fills organically "
+                         "from a real S4 stop. Pass --stopfill only for a "
+                         "supervised attempt.")
     ap.add_argument("--wait-mins", type=int, default=45,
                     help="how long to wait for a flat book before giving up")
     a = ap.parse_args()
@@ -105,6 +114,14 @@ def main() -> int:
     pulse = _get(f"{a.url}/pulse")
     print(f"executor: dry_run={pulse['dry_run']} halted={pulse['halted']} "
           f"ramp_v4={pulse['ramp_v4_met']}")
+    # auto-drill (RAMP_V4.md amendment 2026-08-17) makes this script mostly
+    # unnecessary: the executor drills itself in flat windows. Running both
+    # can burn the shared daily budget (6) mid-run.
+    ad = pulse.get("auto_drill")
+    if ad and ad not in ("disarmed",):
+        print(f"NOTE: auto-drill is armed (state: {ad}) - the executor "
+              f"drills itself in flat windows. This script spends the same "
+              f"daily budget; only run it if you need drills NOW.")
     if pulse["dry_run"]:
         print("\nREFUSING: DRY_RUN=true. Drills would run against DryRunVenue "
               "and prove nothing about the venue — synthetic fills cannot "
@@ -134,8 +151,13 @@ def main() -> int:
                   file=sys.stderr)
             return 5
         res = _post(f"{a.url}/drill?kind={kind}", token)
-        if not res.get("ok", True) or res.get("refused"):
-            print(f"  ! refused: {res.get('refused') or res}")
+        if res.get("refused"):
+            print(f"  ! refused: {res['refused']}")
+        elif not res.get("ok", True):
+            # ran and FAILED is not a refusal: the auto-repair tail ran and
+            # the breaker may be latched - stop spending
+            print(f"  ! drill FAILED (not refused): {json.dumps(res)[:300]}")
+            return 7
             if str(res.get("refused", "")).startswith(("halted",
                                                        "daily_budget")):
                 return 6

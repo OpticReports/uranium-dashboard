@@ -482,6 +482,156 @@ removed. Every one caught by a named gate.
 
 ---
 
+## `main` lineage (not indexed round-by-round)
+
+`main` ran its own counter-agent rounds on the same book between 2026-08-24
+and 2026-09-08 while this branch was cut: the market-data posture, the cash
+reconcile and funding rules, MF-A / MF-1..3, B8, CR-N2, L-E1. Their verdict
+documents were never committed either; their findings are cited inline in
+README.md and in the code by id. They are NOT reconstructed here — the
+merge round below reviews the COMPOSITION of the two lines, not `main`'s
+rounds themselves. If a finding id from that lineage is ever needed by
+name, reconstruct it from `git log origin/main -- ibkr-executor/`.
+
+---
+
+## Merge round — `origin/main` (4cab3e2) into this branch, 2026-09-10
+
+* **Reviewed:** the staged merge — 10 conflicts resolved by anchor-based
+  hunk composition, the composed test files, the probes README run
+  preconditions. Five counter-agents in parallel, one lens each:
+  composition (does `main`'s L-E1 / cash / B8 work compose with the branch's
+  tracker watch), emergent (interactions neither line had alone), test-edits
+  (are the post-merge test rewrites honest or vacuous), docs/config
+  (render.yaml, both READMEs, this index), deploy (what the LIVE service
+  sees when `main` takes this).
+* **Verdicts:** composition PASS WITH CORRECTIONS · emergent PASS WITH
+  CORRECTIONS · test-edits PASS WITH CORRECTIONS · docs/config PASS WITH
+  CORRECTIONS · deploy **FAIL** (one HIGH: the merge would have flipped the
+  live IB client id on the very deploy that restarts the gateway).
+* **Remediated by:** the merge commit itself (rule below: verdict and
+  remediation in one commit). Every gate below was mutation-verified in the
+  same pass — the fix reverted, the gate red, the fix restored.
+* **Materials and status:**
+  * **Deploy F1** (HIGH) `closed` — render.yaml `IB_CLIENT_ID` kept at the
+    code default 17 (the branch had 1701); the B10 gate now asserts
+    declared == code default so a blueprint sync is a no-op on the live
+    service. The branch's collision story was also wrong and is corrected
+    in the comment, the README row and the gate: `_connect` retries 20 x
+    (15s + 15s), ~10 min, then raises `ExecutorConnectionError`, which the
+    boot-retry loop CATCHES and pages — the loop thread does not die; and
+    the gateway is in-container (`TrustedIPs=127.0.0.1`), so no external
+    client can hold the id at all. Mutant: value 1701 → red.
+  * **Composition F1** (HIGH) `closed` — the pre-fund hold and its release
+    charged `entry_ref`; `main`'s L-E1 charges `size_ref` =
+    max(entry_ref, venue quote). On a gapped-up quote the BIL raise covered
+    the real cost, the hold covered the reference cost, the gap read as
+    idle and the sweep bought it back; the post-close placement then
+    clipped. Both sites now use `_intent_size_ref`. Gate:
+    `test_gate_prefund_hold_is_at_the_charged_price_not_entry_ref`.
+    Mutants: each site reverted → red.
+  * **Composition F2** (MED) `closed` — `reserved_sleeve_cash()`'s
+    resting-entry term at `_intent_size_ref`. Gate:
+    `test_gate_resting_entry_reserves_its_charged_cost` (two fires one
+    evening on a gapped quote: B may not place against A's reserve; ledger
+    ≥ 0 at the open). Mutant: reverted → red.
+  * **Composition F3** (MED) `closed` — dead `_await_tick` / `_ticker_price`
+    deleted from ib_adapter.py; the three market-data tests that exercised
+    the dead twin retargeted at `_await_quote`, asserting the source tuple.
+  * **F4 / T2** (LOW) `closed` — the B8 type-before-subscribe gate was
+    satisfiable by `connect()` alone. It now clears the connect-time
+    request and asserts ORDER on an event log. Mutant: the
+    `_apply_market_data_type` call removed from `spot_ex` → red.
+  * **T3** (LOW) `closed` — the retire-on-failure gate compared multisets;
+    it now asserts strict sub/cancel alternation. Mutant: cancel removed →
+    red.
+  * **F5** (LOW) `closed` — the MF-A mid-section kill consumption and
+    `MGR.save()` sat inside `if settings.ladder_enabled`: with the ladder
+    disabled (the deployed posture) a /kill landing after the
+    top-of-iteration pass waited a whole poll interval. Dedented. Gate:
+    `test_gate_f5_a_kill_landing_mid_iteration_is_consumed_with_the_ladder_off`.
+    Mutant: block re-gated on the flag → red.
+  * **F6** (LOW) `closed` — the B8 pin rationale claimed `marketPrice()`
+    lost its close fallback between ib_async majors. The 1.0.1 and 2.1.0
+    sources were fetched and diffed: byte-identical, and neither has a
+    close fallback (that was ib_insync's, before the fork). Corrected in
+    requirements.txt, both B8 docstrings and the `spot_ex` comment; the pin
+    stays as dependency hygiene.
+  * **T1** (MED) `closed` — the boot-retry gate's bare try/except passed
+    vacuously on a loop that returned without retrying. Now
+    `pytest.raises(_Escape)` and attempt == 2. Mutant: early return → red.
+  * **EM-1** (LOW) `closed` — the MF-2 supersede checkpoint sat in the
+    retry branch only; a loop superseded DURING a successful build walked
+    on to announce itself and trade beside the current loop. Checkpoint
+    added on the success path. Gate:
+    `test_gate_em1_a_loop_superseded_during_a_successful_build_exits`.
+    Mutant: check removed → red.
+  * **EM-2** (LOW) `open` — during a boot login stall (the state the
+    boot-time `_gateway_watch` pages for) `/health` reports
+    `mode: OFFLINE` and `gateway.down_since: null` while Telegram says the
+    gateway is down: the boot watch is fed `LAST["build_fail_since"]`, which
+    the outage ledger and `/health` never see (`IBAdapter._connect` never
+    calls `outages.start()`). Two observability surfaces disagree. Not
+    fixed in the merge (neither line's regression); follow-up.
+  * **EM-3** (LOW) `open` — a payload whose `as_of` is older than
+    `STALE_PAYLOAD_DAYS` is fetched with reason `ok`: TRACKER_WATCH records
+    ok, `/health tracker.ok` is true, and the loop plans nothing. LOUD,
+    not silent — `main`'s per-cycle "tracker payload is stale" alert fires
+    every cycle, 288/day, the exact storm shape the branch's decaying
+    ladder exists to prevent. README "Not covered" item 2 already names the
+    gap; the fix is a `stale` reason routed through the ladder. Follow-up.
+  * **DOC-1..7** `closed` — IB_CLIENT_ID comment and README row (DOC-1);
+    the orphaned READ_ONLY_API paragraph (main's, stranded when the
+    duplicate key was deduped) folded into the key's comment, and the
+    outage-ledger paragraph moved onto its keys (DOC-2);
+    `TWS_SETTINGS_PATH` (literal — it must be on the disk) and
+    `SAVE_TWS_SETTINGS` (sync:false) declared, README write-arming
+    paragraph cross-referenced to "Error 321 has TWO causes" (DOC-3);
+    README "Not covered" item 3 reworded — the ET helpers are in scope since
+    the merge, the rung is unbuilt by scope alone, and it named
+    `PREOPEN_FROM/TO`, which does not exist (DOC-4); the README index
+    paragraph scoped to this branch's rounds with the lineage stub above
+    (DOC-5); probes README preconditions corrected BY EXECUTION —
+    `attack_reround`'s traceback and `ZF-E1b` are the session clock, not
+    the ladder flag (both reproduce their marks after 16:00 ET with no pin
+    and no flag); `attack_mf2` A4/A10 are the flag (52/56 → 54/56) (DOC-6);
+    the TRACKER_URL comment rewritten to the incident as it happened — set
+    by hand, undeclared — and its "MUST be the canonical host" claim
+    corrected: the tracker 308-redirects only `REDIRECT_HOSTS`
+    (`genomics.optic.capital`); the onrender host answers directly and is
+    what the live service polls at 200 (DOC-7).
+* **Open items recorded here, deliberately NOT changed in the merge:**
+  * **OPG window.** `SESSION_CLOSE_ET = (16, 0)`, but IBKR refuses an OPG
+    order "when market is open" until EXTENDED hours end at 20:00 ET.
+    Measured 2026-09-10: GH's MOO placed 16:03 ET rejected `[202]` five
+    times → the ENTER breaker paused the kind → the pre-fund hold had
+    already been released by the placements → the sweep bought the entry's
+    cash back (`BIL +10`, 16:19 ET) → the entry slips a session unless the
+    resting sweep is cancelled by hand at 20:00 ET. Systematic for every
+    mid-session fire. Fix: close the window at 20:00 ET (17:00 on
+    early-close days) AND keep the hold through a venue rejection. Its own
+    round, with gates — the FIRST post-merge item.
+  * **Pre-open 09:25 ET tracker rung** (README "Not covered" 3): helpers
+    in scope since this merge; unbuilt.
+  * `VENUE_HISTORY_TIMEOUT_S` rationale comment: still wrong (see the B9
+    entry above); correct when the file is next touched.
+* **Deploy-time change list — what the live service sees when `main` takes
+  this:** `IB_CLIENT_ID` unchanged at 17; new blueprint keys
+  `BLEND_ENABLED` / `BLEND_BOOK_USD` / `BLEND_BUDGET` / `TRACKER_URL` /
+  `TRACKER_API_TOKEN` / `SAVE_TWS_SETTINGS` are sync:false (a sync does not
+  add sync:false keys to an existing service; the dashboard already holds
+  them); `TWS_SETTINGS_PATH` is a literal equal to the dashboard's current
+  value (no-op); `READ_ONLY_API` declared once (was twice in the raw
+  merge); the tracker-blind watch goes live (pages on the first config
+  failure, decaying ladder on transients, tri-state `/health tracker.ok`);
+  F1/F2 change the hold/reserve arithmetic on the next gapped-up fire. The
+  deploy restarts the container and forces a gateway login + IB Key push:
+  merge after GH's stop is resting, never mid-window.
+* **Suite:** 431 passed; the eight attack probes at their documented marks
+  under the corrected preconditions.
+
+---
+
 ## Standing UNKNOWNs
 
 * `mf-6`, `mf-11`, `mf-12`, `mf3-12` — referenced by id in this campaign's

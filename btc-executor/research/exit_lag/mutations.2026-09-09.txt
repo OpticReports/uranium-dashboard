@@ -1,0 +1,29 @@
+Mutation sweep, run in an isolated copy of btc-executor against the full suite
+(393 passed, 1 skipped clean). Each row reverts ONE behaviour of the change and
+reports the first test that catches it (pytest -x, so only the first failure
+shows).
+
+M1 drop the whole exit_flag branch          CAUGHT  exit_flag_closes_now_not_a_bar_later
+M2 skip the stop-fill absorption            CAUGHT  exit_flag_absorbs_a_venue_stop_fill_instead_of_halting
+M3 drop the head _maintain_stop             CAUGHT  exit_flag_absorbs_a_venue_stop_fill_instead_of_halting
+M4 drop the re-entry guard                  CAUGHT  exit_flag_guard_blocks_reentry_if_the_flag_vanishes
+M5 match only SIGNAL, miss TIME exits       CAUGHT  exit_flag_time_stop_also_exits
+M6 restore _close_leg's up-front cancel     CAUGHT  exit_flag_refused_close_leaves_the_stop_armed
+M7 restore _cancel_entry's `if st and`      CAUGHT  cancel_entry_unreadable_status_still_sends_the_cancel
+M8 drop the branch's entry cancel           CAUGHT  cancel_entry_unreadable_status_still_sends_the_cancel
+
+M3 run again WITHOUT -x, to check the claim in _sync_leg's comment that the head
+_maintain_stop call is what carries a refused-close window:
+
+  FAILED exit_flag_absorbs_a_venue_stop_fill_instead_of_halting
+  FAILED exit_flag_refused_close_keeps_protection_through_the_window
+  2 failed, 19 passed
+
+Both hold it to account, so the comment is accurate.
+
+SURVIVOR, earlier cut: an additional _maintain_stop re-arm placed at the TAIL of
+the branch (after the close attempt) could be deleted with the whole suite still
+green. The head call already reaches every case - a leg flat at entry never
+attempts the close at all - so the tail call was redundant. It was REMOVED
+rather than kept as defensive code no test could hold to account. This file is
+the record of why.

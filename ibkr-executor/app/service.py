@@ -10,18 +10,21 @@ exercised in PAPER mode (DRY_RUN=false, TRADING_MODE=paper).
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import secrets
 import threading
 import time
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, Header, HTTPException, Query
 
 from .alerts import send
+from .outages import OutageLog
 from .config import settings
-from .ib_adapter import DryAdapter
+from .ib_adapter import DryAdapter, ExecutorConnectionError
 from .manager import LadderManager
 from .nino import FEED_TIMEOUT, nino34_weekly
 
@@ -155,10 +158,256 @@ LOOP_GEN_LOCK = threading.Lock()   # to leak a daemon loop thread that never
                                    # touch nothing".
 ADAPTER = None
 LAST: dict = {"loop_ok": 0.0, "nino34": None, "mode": "OFFLINE"}
+# Boot retry (2026-08-28): _build() connects to the gateway, which cannot
+# finish logging in until a 2FA push is approved. A failed build is
+# therefore usually TEMPORARY and must be retried, not fatal.
+BUILD_RETRY_S = 60.0        # tests monkeypatch this to 0
+BUILD_ALERT_EVERY = 30      # ~1 page per 30 min while it keeps failing
 # Last blend cycle outcome (feed's last_cycle + /health blend_loop): a
 # silently failing blend loop must be visible from the outside.
 BLEND_CYCLE: dict = {"date": None, "ok": None, "error": None,
                      "error_ts": None}
+# Persisted gateway-outage ledger (built with the live adapter only).
+OUTAGES = None
+
+
+def _gateway_restarts(limit: int = 20) -> dict:
+    """Restart records written by start.sh's supervisor. A gateway that keeps
+    dying is a different problem from IBKR being unreachable, and the two used
+    to be indistinguishable."""
+    path = getattr(settings, "gateway_restart_log", "")
+    out: list[dict] = []
+    readable = False
+    try:
+        # seek to the tail: /health is probed every few seconds and used to
+        # slurp the entire unrotated file (counter-agent measured 7.5 MB per
+        # call on a one-year log)
+        WINDOW = 256 * 1024
+        with open(path, "rb") as fh:
+            fh.seek(0, 2)
+            size = fh.tell()
+            fh.seek(max(0, size - WINDOW))
+            blob = fh.read().decode("utf-8", "replace")
+        lines = blob.splitlines()
+        readable = True
+        if size > WINDOW:
+            lines = lines[1:]      # only THEN is the first line partial
+        for line in lines:
+            try:
+                rec = json.loads(line)
+            except Exception:  # noqa: BLE001
+                continue
+            if isinstance(rec, dict):
+                out.append(rec)
+    except Exception:  # noqa: BLE001
+        pass
+    day = time.time() - 86400
+    # count over EVERYTHING in the tail, then truncate for display: applying
+    # the limit first made last_24h saturate at exactly the storm it exists
+    # to reveal
+    last_24h = sum(1 for r in out if _num_ts(r) >= day)
+    return {"recent_shown": min(len(out), limit),
+            "last_24h": last_24h,
+            # every restart ts in the tail: the gateway watch counts how many
+            # landed since the current outage began (0-1 = the process is
+            # alive but not logged in; many = a crash loop)
+            "recent_ts": [_num_ts(r) for r in out],
+            # False = the log could not be opened/read: the watch must then
+            # say "cannot tell a stall from a crash loop", not guess
+            "readable": readable,
+            "path": path,
+            # the breaker deliberately recreates a dead-gateway steady state
+            # (stops hammering IBKR logins); it must be NAMED, not buried in
+            # the last record's reason field (counter-agent 2026-08-24 F3)
+            "circuit_open": bool(out) and out[-1].get("reason") == "circuit_open",
+            "last": out[-1] if out else None}
+
+
+def _num_ts(rec: dict) -> float:
+    try:
+        return float(rec.get("ts") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+# --- gateway watch: the two outage shapes supervision cannot see ----------
+# (2026-09-02/03, two nights running, 13 h + 12.9 h). The gateway's daily
+# restart landed as a process exit; the supervisor relaunched it; the fresh
+# login waited on an IB Key push nobody tapped. The process was ALIVE, so
+# the supervisor (which acts only on exits) never restarted it again, the
+# 30-minute outage alert fired its generic text once, and the book sat blind
+# until a human noticed in the morning. Two additions, both service-side so
+# they see the outage ledger AND the restart log together:
+#  1. STALL DIAGNOSIS: down > STALL_DIAG_S with at most one restart since
+#     the drop = stuck at login, not crash-looping. Say so, once per outage,
+#     and say what fixes it (the phone, or a Render restart for a fresh push).
+#  2. PRE-OPEN PAGE: still down inside [08:30, 09:30) ET on a weekday - page
+#     with the minutes left, once per outage per day. A restart AFTER the
+#     open re-runs the blend mid-session (the 08-28 pattern); before it is
+#     free.
+STALL_DIAG_S = 30 * 60.0
+PREOPEN_FROM = (8, 30)
+PREOPEN_TO = (9, 30)
+PREOPEN_MIN_DOWN_S = 10 * 60.0   # a blip inside the window is not a page
+MARKET_TZ = "America/New_York"
+_MARKET_ET = ZoneInfo(MARKET_TZ)
+GW_WATCH: dict = {"outage_since": None, "diagnosed": False,
+                  "loop_paged": False, "preopen_paged": ""}
+
+
+def _et(now_ts: float) -> datetime:
+    return datetime.fromtimestamp(now_ts, tz=timezone.utc).astimezone(_MARKET_ET)
+
+
+def _is_trading_day(d) -> bool:
+    try:
+        from .blend import is_trading_day
+        return is_trading_day(d)
+    except Exception:  # noqa: BLE001
+        return d.weekday() < 5
+
+
+def _gateway_watch(now: float, summary: dict | None, restarts: dict | None,
+                   send_fn, state: dict | None = None) -> list[str]:
+    """Pure: returns which pages fired ('stall', 'loop', 'unreadable',
+    'preopen'); state carries once-per-outage / once-per-day bookkeeping.
+
+    Counter-agent round 1: a None summary keeps state (unknown is not
+    recovered); preopen_paged is keyed by date and never wiped on an outage
+    transition (a flapping gateway paged every flap); the stall diagnosis
+    needs a READABLE restart log and names the crash-loop / breaker-open
+    shape separately; the pre-open page needs PREOPEN_MIN_DOWN_S of outage
+    and stays quiet on NYSE holidays."""
+    st = GW_WATCH if state is None else state
+    if summary is None:
+        return []
+    down_since = summary.get("currently_down_since")
+    if not down_since:
+        st.update(outage_since=None, diagnosed=False, loop_paged=False,
+                  unreadable_paged=False)
+        return []
+    if st.get("outage_since") != down_since:
+        st.update(outage_since=down_since, diagnosed=False, loop_paged=False,
+                  unreadable_paged=False)
+    fired: list[str] = []
+    down_for = now - float(down_since)
+    r = restarts or {}
+    poll = float(getattr(settings, "poll_seconds", 300) or 300)
+    # the supervisor logs an exit BEFORE the adapter notices the drop: look
+    # back one poll interval plus grace
+    grace_from = float(down_since) - poll - 120
+    since_drop = sum(1 for t in (r.get("recent_ts") or []) if t >= grace_from)
+    # the breaker flag is the LAST record's reason, any age: a log whose tail
+    # is a breaker trip from a previous outage must not diagnose this one as
+    # crash-looping (round 3) - it counts only if it tripped since the drop
+    circuit = bool(r.get("circuit_open")) and _num_ts(r.get("last") or {}) >= grace_from
+    mins = int(down_for // 60)
+    if (down_for > STALL_DIAG_S and not st.get("loop_paged")
+            and (circuit or since_drop > 1)):
+        # its own flag: a crash loop that develops AFTER a stall diagnosis in
+        # the same outage still pages (counter-agent round 2)
+        st["loop_paged"] = True
+        st["diagnosed"] = True
+        send_fn(f"🚨 IB gateway down {mins} min and the supervisor has "
+                f"relaunched it {since_drop} time(s) since the drop"
+                + (" — its circuit breaker is now OPEN (no more retries)"
+                   if circuit else "")
+                + ": the gateway is crash-looping or dead, not waiting "
+                f"on a push. Check credentials/config, then Render → "
+                f"ibkr-executor → Restart service.")
+        fired.append("loop")
+    if down_for > STALL_DIAG_S and not st.get("diagnosed"):
+        if not r.get("readable", False):
+            # its own flag (round 3): if the log becomes readable later in
+            # the same outage the stall page ("tap the phone") still fires
+            if st.get("unreadable_paged"):
+                return fired
+            st["unreadable_paged"] = True
+            send_fn(f"🚨 IB gateway down {mins} min; the supervisor restart "
+                    f"log is unreadable at {r.get('path') or '?'} so I "
+                    f"cannot tell a login stall from a crash loop. Check the "
+                    f"container; a Render restart is the safe fallback.")
+            fired.append("unreadable")
+        else:
+            st["diagnosed"] = True
+            send_fn(f"🚨 IB gateway down {mins} min with at most one "
+                    f"supervisor relaunch since the drop (n={since_drop}): "
+                    f"the gateway process is alive but NOT logged in — "
+                    f"almost always a missed IB Key push. It will not "
+                    f"self-heal. Open IBKR Mobile (the request may still be "
+                    f"pending); otherwise Render → ibkr-executor → Restart "
+                    f"service and approve the fresh push.")
+            fired.append("stall")
+    et = _et(now)
+    if (_is_trading_day(et.date())
+            and PREOPEN_FROM <= (et.hour, et.minute) < PREOPEN_TO
+            and down_for >= PREOPEN_MIN_DOWN_S):
+        key = et.date().isoformat()
+        if st.get("preopen_paged") != key:
+            st["preopen_paged"] = key
+            left = PREOPEN_TO[0] * 60 + PREOPEN_TO[1] - (et.hour * 60 + et.minute)
+            send_fn(f"🚨🚨 PRE-OPEN: IB gateway down {mins} min, still down "
+                    f"at {et.strftime('%H:%M')} ET, market opens in {left} "
+                    f"min. Restart it NOW (Render → ibkr-executor → Restart "
+                    f"service, then approve the IBKR push). After 09:30 a "
+                    f"restart re-runs the blend mid-session.")
+            fired.append("preopen")
+    return fired
+
+
+# --- a real book on disk with the blend switched off -------------------------
+# BLEND_ENABLED=false skips the manager entirely - no reconcile, no sweep,
+# no /status section, no feed - and, until now, no word about it. 2026-08-28
+# -> 09-02: a real:live book ($50k, 136 BIL + $2.5k stranded cash) sat that
+# way for five days and the only boot line said "blend unaffected".
+DISABLED_BOOK: dict | None = None
+DISABLED_BOOK_REALERT_S = 24 * 3600.0
+
+
+def _check_disabled_blend_book(path: str) -> dict | None:
+    """Pure: the persisted book's holdings if it is a REAL-mode book with
+    anything in it, else None. Never raises (a corrupt file is the blend
+    manager's problem when it IS enabled; here it just means no claim)."""
+    try:
+        with open(path) as fh:
+            raw = json.load(fh)
+    except Exception:  # noqa: BLE001
+        return None            # unreadable/unparseable: no claim
+    if not isinstance(raw, dict) or not str(raw.get("mode", "")).startswith("real:"):
+        return None
+    base = {"path": path, "mode": raw.get("mode"), "halted": raw.get("halted")}
+    try:
+        pos = raw.get("positions") or {}
+        held = {"positions": len(pos),
+                "spy_qty": int(raw.get("spy_qty") or 0),
+                "bil_qty": int(raw.get("bil_qty") or 0),
+                "sleeve_cash": round(float(raw.get("sleeve_cash") or 0.0), 2)}
+    except Exception as exc:  # noqa: BLE001
+        # A REAL-mode book whose holdings cannot be typed is still a real
+        # book: claim it and say the holdings are unreadable (fail CLOSED -
+        # counter-agent round 2).
+        return {**base, "positions": None, "spy_qty": None, "bil_qty": None,
+                "sleeve_cash": None, "parse_error": str(exc)}
+    if not (pos or held["spy_qty"] or held["bil_qty"] or held["sleeve_cash"] > 0):
+        return None
+    return {**base, **held}
+
+
+def _disabled_book_alert(book: dict, send_fn) -> None:
+    if book.get("parse_error"):
+        send_fn(f"🚨🚨 blend is DISABLED (BLEND_ENABLED unset/false) but a REAL "
+                f"book is on disk ({book['mode']}) whose holdings could not be "
+                f"read ({book['parse_error']}) - verify positions and stops "
+                f"AT THE VENUE. Nothing is reconciling, sweeping or protecting "
+                f"it. This repeats daily until resolved.")
+        return
+    send_fn(f"🚨🚨 blend is DISABLED (BLEND_ENABLED unset/false) but a REAL "
+            f"book is on disk ({book['mode']}): {book['positions']} "
+            f"position(s), {book['spy_qty']} SPY, {book['bil_qty']} BIL, "
+            f"${book['sleeve_cash']:,.2f} sleeve cash. NOTHING is reconciling, "
+            f"sweeping or protecting it. Set BLEND_ENABLED=true (outside "
+            f"09:30-16:00 ET) or archive the book deliberately. This repeats "
+            f"daily until resolved.")
 
 # --- tracker-blind watch ------------------------------------------------------
 # A reconcile-only cycle (payload=None) completes NORMALLY, so _blend_cycle
@@ -467,8 +716,20 @@ def _auth(hdr: str | None, q: str | None) -> None:
     raise HTTPException(status_code=401, detail="bad exec token")
 
 
-def _build():
-    global MGR, ADAPTER, BLEND
+def _build_managers():
+    """Construct the state-owning managers EXACTLY ONCE per process.
+
+    Split out of _build (counter-agent 2026-08-28): the boot retry loop calls
+    the adapter build repeatedly, and re-running this part reassigns the MGR
+    and BLEND globals with no lock while /kill and /resume mutate those same
+    objects under MGR_LOCK/BLEND_LOCK from API threads. A /kill landing in
+    that window wrote `halted` + the flatten journal onto an object the
+    rebuild then replaced, and the swapped-in manager's next save() erased
+    it. That window used to be one ~5-minute boot; with retries it would be
+    open for as long as the gateway stays unreachable - exactly while the
+    operator is reacting to 'build failed' pages and most likely to hit
+    /kill."""
+    global MGR, BLEND
     MGR = LadderManager(settings, settings.state_path)
     if MGR.archived_state:
         # x12: an unreadable ladder file used to become a fresh, un-halted
@@ -478,7 +739,16 @@ def _build():
              f"the venue before the ladder trades again")
     # blend3070 is opt-in: BLEND_ENABLED=false (the default) leaves the
     # service byte-for-byte as before — no manager, no polling, no /status
-    # section, no state file.
+    # section, no state file. EXCEPT that a real book already on disk must
+    # never be abandoned in silence (see _check_disabled_blend_book).
+    global DISABLED_BOOK
+    if not settings.blend_enabled:
+        DISABLED_BOOK = _check_disabled_blend_book(settings.blend_state_path)
+        if DISABLED_BOOK:
+            logger.error("blend DISABLED with a real book on disk: %s",
+                         DISABLED_BOOK)
+            _disabled_book_alert(DISABLED_BOOK, send)
+            DISABLED_BOOK["last_alert_ts"] = time.time()
     if settings.blend_enabled:
         from .blend import Blend3070Manager
         BLEND = Blend3070Manager(settings, settings.blend_state_path)
@@ -495,6 +765,11 @@ def _build():
                 # another mode (e.g. DRY placeholder prices) — starting clean.
                 logger.warning("blend: %s", BLEND.archived_state)
                 send(f"⚠️ blend: starting a FRESH book — {BLEND.archived_state}")
+
+
+def _build_adapter():
+    """Adapter/gateway only - the part the boot loop RETRIES."""
+    global ADAPTER, OUTAGES
     if not (settings.tws_userid and settings.tws_password):
         ADAPTER = DryAdapter()
         LAST["mode"] = "OFFLINE"
@@ -504,10 +779,28 @@ def _build():
         ADAPTER = DryAdapter()
         LAST["mode"] = f"DRY ({settings.trading_mode})"
         logger.warning("DRY_RUN with credentials: mutations stay simulated")
+        # the gateway + supervisor run in DRY too (creds exist) - without a
+        # ledger the /health gateway block was dark in exactly the rehearsal
+        # mode that precedes live (counter-agent 2026-08-24 F6-ii). The
+        # DryAdapter never calls the hooks, so this records restarts only.
+        global OUTAGES
+        OUTAGES = OutageLog(settings.outage_log_path)
         return
     from .ib_adapter import IBAdapter
-    ADAPTER = IBAdapter(settings)
+    OUTAGES = OutageLog(settings.outage_log_path)
+    if OUTAGES.history and OUTAGES.history[-1].get("ended_by") == "process_restart":
+        # the previous process died mid-outage: it did NOT self-heal, and
+        # that is precisely the case supervision is meant to eliminate
+        logger.warning("previous gateway outage ended by process restart, "
+                       "not by reconnect: %s", OUTAGES.history[-1])
+    ADAPTER = IBAdapter(settings, outage_log=OUTAGES)
     LAST["mode"] = settings.trading_mode.upper()
+
+
+def _build():
+    """Full single-shot build (tests and any non-retrying caller)."""
+    _build_managers()
+    _build_adapter()
 
 
 def _superseded(gen: int) -> bool:
@@ -677,21 +970,89 @@ def _consume_ladder_kill(today: str) -> str | None:
 
 
 def _loop(gen: int, wake: threading.Event):
+    global DISABLED_BOOK
     # `wake` is THIS loop's own event (created by _start_loop, which also
     # published it as LOOP_WAKE for /kill). A superseded loop waits on and
     # clears its OWN event, never the current loop's (MF-2).
-    try:
-        _build()
-    except Exception as exc:  # noqa: BLE001
-        # A constructor raise (gateway auth, ib_async loop binding) must
-        # never kill the loop thread SILENTLY (adapter review M2 sub-note):
-        # alert loudly and stop — /health then shows loop_age_s as None.
-        logger.exception("executor build failed: %s", exc)
-        send(f"🚨🚨 ibkr-executor FAILED TO BUILD ({exc}) — NO trading "
-             f"loop is running; fix config/gateway and redeploy")
+    # A constructor raise (gateway auth, ib_async loop binding) must never
+    # kill the loop thread SILENTLY (adapter review M2 sub-note): alert
+    # loudly. It must ALSO NOT kill it PERMANENTLY (2026-08-28): the old
+    # code `return`ed here, so a boot that merely lost a race with the
+    # gateway's login left the service alive, serving /health, and inert
+    # FOREVER - no loop, no reconcile, no alerts - until a human noticed
+    # and redeployed. With 2FA in the login path that race is routine: the
+    # gateway cannot finish logging in until the operator taps approve on
+    # their phone, which is often longer than _connect()'s ~5 minute
+    # budget. Retry with backoff so a late approval self-heals.
+    attempt = 0
+    managers_built = False
+    while True:
+        try:
+            # Managers build ONCE (never reassigned under a live /kill) but
+            # INSIDE the guarded loop: a raise from LadderManager or
+            # Blend3070Manager - both of which touch the persistent disk on
+            # construction - used to kill this thread with no alert at all
+            # once the build was split (counter-agent re-review 2026-08-28,
+            # FATAL). That is the exact "alive, serving /health, inert
+            # forever" mode this batch exists to remove.
+            if not managers_built:
+                _build_managers()
+                managers_built = True
+            _build_adapter()
+            break
+        except Exception as exc:  # noqa: BLE001
+            attempt += 1
+            logger.exception("executor build failed (attempt %d): %s",
+                             attempt, exc)
+            # The pre-open page must work in the state its own remedy
+            # creates (a Render restart whose gateway login stalls): treat
+            # the first failed build as the outage start.
+            # ... but only for a CONNECTION-shaped failure after the managers
+            # built: a state-file or config raise must never be paged as a
+            # missed IB Key push (counter-agent round 2).
+            try:
+                if managers_built and isinstance(
+                        exc, (ExecutorConnectionError, TimeoutError, OSError)):
+                    if not LAST.get("build_fail_since"):
+                        LAST["build_fail_since"] = time.time()
+                    _gateway_watch(time.time(),
+                                   {"currently_down_since": LAST.get("build_fail_since")},
+                                   _gateway_restarts(), send)
+            except Exception as exc2:  # noqa: BLE001
+                logger.warning("gateway watch (boot) failed: %s", exc2)
+            # Alert on the first failure and then only rarely: a retry
+            # loop must not become a pager loop (the alert-once doctrine
+            # the blend's intent breaker already follows).
+            if attempt == 1 or attempt % BUILD_ALERT_EVERY == 0:
+                send(f"🚨🚨 ibkr-executor build failed ({exc}) — NO trading "
+                     f"loop yet; retrying every {BUILD_RETRY_S:.0f}s "
+                     f"(attempt {attempt}). If the gateway is waiting on a "
+                     f"2FA approval, approving it recovers this with no "
+                     f"redeploy.")
+            time.sleep(BUILD_RETRY_S)
+            if _superseded(gen):
+                # MF-2 applies to the boot retry too: _build_adapter()
+                # reassigns the ADAPTER global, so a superseded loop that
+                # kept retrying would swap the CURRENT loop's adapter out
+                # from under it. Exit at this checkpoint instead.
+                return
+    if _superseded(gen):
+        # EM-1 (merge review 2026-09-10): the checkpoint above sits in the
+        # retry branch, so a loop superseded DURING a build that then
+        # SUCCEEDED walked on to announce itself and trade beside the
+        # current loop. Same exit, on the success path.
         return
+    LAST["build_fail_since"] = None
+    if attempt:
+        send(f"✅ ibkr-executor recovered after {attempt} failed build "
+             f"attempt(s) — trading loop starting")
     send(f"🌊 ibkr-executor up — mode {LAST['mode']}, "
-         f"ladder legs {[k for k in MGR.state.legs]}")
+         + (f"ladder legs {[k for k in MGR.state.legs]}"
+            if settings.ladder_enabled else "ladder DISABLED (LADDER_ENABLED "
+            "unset)")
+         + (", blend ENABLED" if settings.blend_enabled else
+            ", blend DISABLED" + (" — REAL BOOK ON DISK, see the alert above"
+                                  if DISABLED_BOOK else "")))
     if MGR.kill_pending:
         # MF2-2: a /kill whose leg closes had not completed when the
         # service went down. The halt came back with the book (the
@@ -769,61 +1130,70 @@ def _loop(gen: int, wake: threading.Event):
             # as BLEND_LOCK serializes the blend (alerts are sent outside
             # the lock so a slow Telegram call never holds it).
             ladder_alerts: list[str] = []
+            # ladder gate below: when disabled, no marks, no step(), no
+            # intents - nothing can open or close. State untouched; /kill
+            # still works on any previously-open leg (MGR stays built).
             with MGR_LOCK:
-                for key, leg in MGR.state.legs.items():
-                    if leg.status == "OPEN" and leg.order_ref:
+                if settings.ladder_enabled:
+                    for key, leg in MGR.state.legs.items():
+                        if leg.status == "OPEN" and leg.order_ref:
+                            try:
+                                marks[key] = ADAPTER.mark(leg.order_ref)
+                            except Exception as exc:  # noqa: BLE001
+                                logger.warning("mark %s failed: %s", key, exc)
+                    intents = MGR.step(today, nino, marks)
+                    # MF3-5: the halt that `step()` itself may have just raised
+                    # (EVENT_COLLAPSE, whose CLOSE intents MUST still run) is
+                    # the plan's OWN halt. Anything that appears AFTER this
+                    # point landed mid-cycle and the plan predates it.
+                    planned_under = MGR.state.halted
+                    for i, it in enumerate(intents):
+                        if MGR.state.halted != planned_under:
+                            # MF3-5: MF2-5 gave the blend's intent loop exactly
+                            # this guard and the LADDER's — the other of the two
+                            # intent loops in this service — never got it. /kill
+                            # sets `halted` from an API thread WITHOUT MGR_LOCK
+                            # (it must: the lock is held across gateway I/O), so
+                            # it lands mid-plan: measured, this loop OPENED two
+                            # spreads with `halted: KILL` already on disk and the
+                            # "ladder KILLED" alert already sent. The ladder
+                            # windows open 2026-11-01, so an OPEN here is live
+                            # money in the gate month. The rest of the plan is
+                            # abandoned; the kill's own closes run below.
+                            dropped = [f"{x['action']} {x['leg']}"
+                                       for x in intents[i:]]
+                            ladder_alerts.append(
+                                f"🛑 ibkr ladder: HALTED ({MGR.state.halted}) "
+                                f"mid-cycle — {len(dropped)} planned action(s) "
+                                f"were NOT executed ({', '.join(dropped)}); the "
+                                f"plan predates the halt. A queued /kill closes "
+                                f"any leg still OPEN in this same pass.")
+                            break
                         try:
-                            marks[key] = ADAPTER.mark(leg.order_ref)
+                            if it["action"] == "OPEN":
+                                r = ADAPTER.open_spread(it["structure"], it["budget"])
+                                MGR.on_opened(it["leg"], r["premium"], r["order_ref"], today)
+                                ladder_alerts.append(
+                                    f"⚡ ibkr ladder OPEN {it['leg']}: {it['reason']} "
+                                    f"(premium ${r['premium']:,.0f}, mode {LAST['mode']})")
+                            elif it["action"] == "CLOSE":
+                                leg = MGR.state.legs[it["leg"]]
+                                r = ADAPTER.close_spread(leg.order_ref)
+                                MGR.on_closed(it["leg"], r["value"], it["reason"], today)
+                                ladder_alerts.append(
+                                    f"⚡ ibkr ladder CLOSE {it['leg']}: {it['reason']} "
+                                    f"-> ${r['value']:,.0f}")
                         except Exception as exc:  # noqa: BLE001
-                            logger.warning("mark %s failed: %s", key, exc)
-                intents = MGR.step(today, nino, marks)
-                # MF3-5: the halt that `step()` itself may have just raised
-                # (EVENT_COLLAPSE, whose CLOSE intents MUST still run) is
-                # the plan's OWN halt. Anything that appears AFTER this
-                # point landed mid-cycle and the plan predates it.
-                planned_under = MGR.state.halted
-                for i, it in enumerate(intents):
-                    if MGR.state.halted != planned_under:
-                        # MF3-5: MF2-5 gave the blend's intent loop exactly
-                        # this guard and the LADDER's — the other of the two
-                        # intent loops in this service — never got it. /kill
-                        # sets `halted` from an API thread WITHOUT MGR_LOCK
-                        # (it must: the lock is held across gateway I/O), so
-                        # it lands mid-plan: measured, this loop OPENED two
-                        # spreads with `halted: KILL` already on disk and the
-                        # "ladder KILLED" alert already sent. The ladder
-                        # windows open 2026-11-01, so an OPEN here is live
-                        # money in the gate month. The rest of the plan is
-                        # abandoned; the kill's own closes run below.
-                        dropped = [f"{x['action']} {x['leg']}"
-                                   for x in intents[i:]]
-                        ladder_alerts.append(
-                            f"🛑 ibkr ladder: HALTED ({MGR.state.halted}) "
-                            f"mid-cycle — {len(dropped)} planned action(s) "
-                            f"were NOT executed ({', '.join(dropped)}); the "
-                            f"plan predates the halt. A queued /kill closes "
-                            f"any leg still OPEN in this same pass.")
-                        break
-                    try:
-                        if it["action"] == "OPEN":
-                            r = ADAPTER.open_spread(it["structure"], it["budget"])
-                            MGR.on_opened(it["leg"], r["premium"], r["order_ref"], today)
+                            logger.exception("intent %s failed: %s", it, exc)
                             ladder_alerts.append(
-                                f"⚡ ibkr ladder OPEN {it['leg']}: {it['reason']} "
-                                f"(premium ${r['premium']:,.0f}, mode {LAST['mode']})")
-                        elif it["action"] == "CLOSE":
-                            leg = MGR.state.legs[it["leg"]]
-                            r = ADAPTER.close_spread(leg.order_ref)
-                            MGR.on_closed(it["leg"], r["value"], it["reason"], today)
-                            ladder_alerts.append(
-                                f"⚡ ibkr ladder CLOSE {it['leg']}: {it['reason']} "
-                                f"-> ${r['value']:,.0f}")
-                    except Exception as exc:  # noqa: BLE001
-                        logger.exception("intent %s failed: %s", it, exc)
-                        ladder_alerts.append(
-                            f"🚨 ibkr intent failed ({it['action']} {it['leg']}): {exc}\n"
-                            f"→ no action needed from you — forward this to Claude "
-                            f"(if it repeats, gateway/credentials may need you)")
+                                f"🚨 ibkr intent failed ({it['action']} {it['leg']}): {exc}\n"
+                                f"→ no action needed from you — forward this to Claude "
+                                f"(if it repeats, gateway/credentials may need you)")
+                # Outside the ladder gate ON PURPOSE (merge review
+                # 2026-09-10, F5): a /kill that lands mid-section must
+                # close a leg left OPEN from an earlier enabled run even
+                # while the ladder is disabled, and MGR.save() persists
+                # it either way.
                 if LADDER_KILL.is_set() and not kill_handled:
                     # MF-A: a /kill landed while THIS section held MGR_LOCK.
                     # The ladder was halted the instant the operator hit
@@ -873,6 +1243,28 @@ def _loop(gen: int, wake: threading.Event):
                 except Exception as exc:    # noqa: BLE001
                     logger.exception("tracker watch failed: %s", exc)
                 _blend_cycle(payload, today)
+            # Gateway watch (stall diagnosis + pre-open page) and the daily
+            # disabled-book re-alert. Reporting only: a raise here must not
+            # take the trading loop down, so it is guarded on its own.
+            if _superseded(gen):
+                return      # MF-2's law holds for this watch too: a
+                            # superseded loop neither pages nor mutates
+                            # GW_WATCH/DISABLED_BOOK (the blend cycle above
+                            # is venue I/O with no deadline)
+            try:
+                if OUTAGES is not None:
+                    _gateway_watch(time.time(), OUTAGES.summary(),
+                                   _gateway_restarts(), send)
+                if DISABLED_BOOK and (time.time() - DISABLED_BOOK.get(
+                        "last_alert_ts", 0.0)) > DISABLED_BOOK_REALERT_S:
+                    # re-read: the operator may have archived the file
+                    fresh = _check_disabled_blend_book(settings.blend_state_path)
+                    if fresh:
+                        fresh["last_alert_ts"] = time.time()
+                        _disabled_book_alert(fresh, send)
+                    DISABLED_BOOK = fresh     # one assignment: readers see old or new
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("gateway watch failed (ignored): %s", exc)
             LAST["loop_ok"] = time.time()
         except Exception as exc:  # noqa: BLE001
             logger.exception("loop error: %s", exc)
@@ -944,6 +1336,11 @@ app = FastAPI(title="IBKR Executor", version="0.1.0", lifespan=lifespan)
 
 @app.get("/health")
 def health():
+    # Gateway reliability, deliberately NOT part of the health verdict:
+    # tying it to `status` would make Render restart the whole container -
+    # executor included, possibly mid-order - on every routine gateway blip,
+    # including its mandatory daily restart. Supervision restarts the gateway
+    # process alone; this block only reports.
     body = {"status": "ok", "service": "ibkr-executor", "mode": LAST["mode"],
             "loop_age_s": round(time.time() - LAST["loop_ok"], 1)
             if LAST["loop_ok"] else None}
@@ -952,10 +1349,17 @@ def health():
     # main loop and would otherwise fail silently — surface it here.
     if BLEND is not None:
         err_ts = BLEND_CYCLE.get("error_ts")
+        qm = getattr(BLEND.state, "quotes_missing_since", None)
         body["blend_loop"] = {
             "ok": BLEND_CYCLE["ok"] is not False,
             "last_error_age_s": round(time.time() - err_ts, 1)
-            if err_ts else None}
+            if err_ts else None,
+            # a cycle that skips every decision on absent quotes is a
+            # SUCCESSFUL cycle, so ok:true said nothing about whether the
+            # book could trade - one Telegram alert then permanent silence
+            # (2026-08-24). Age, not a boolean: watchers can threshold it.
+            "quotes_missing_for_s": max(0.0, round(time.time() - qm, 1))
+            if qm else None}
         # blend_loop.ok only ever meant "the cycle did not RAISE" — and a
         # cycle that plans nothing because the tracker is unreachable raises
         # nothing at all. This block is the missing half; keep both.
@@ -996,6 +1400,32 @@ def health():
             "alerts_configured": bool(os.environ.get("TELEGRAM_BOT_TOKEN")
                                       and os.environ.get("TELEGRAM_CHAT_ID")),
         }
+    db = DISABLED_BOOK          # ONE read: the loop thread reassigns it
+    if db:
+        # A real book the service is NOT managing - visible from outside,
+        # not only in a Telegram page that scrolled away. /health is public:
+        # a flag and an age only; the holdings breakdown is on /status.
+        body["blend_disabled_book"] = {
+            "present": True, "mode": db.get("mode"),
+            "alert_age_s": round(time.time() - db.get("last_alert_ts", 0.0), 1)}
+    if OUTAGES is not None:
+        # Guarded: healthCheckPath is /health, so a raise here 500s the probe
+        # and Render restarts the WHOLE container - executor included,
+        # possibly mid-order. That is the exact outcome the comment above
+        # says this block avoids, reached by another route (counter-agent
+        # 2026-08-24, CRITICAL). Reporting must never fail the verdict.
+        try:
+            summ = OUTAGES.summary() or {}
+            body["gateway"] = {
+                "down_since": summ.get("currently_down_since"),
+                "outages_30d": summ.get("outages"),
+                "self_healed_30d": summ.get("self_healed"),
+                "needed_a_restart_30d": summ.get("needed_a_restart"),
+                "restarts_24h": (_gr := _gateway_restarts()).get("last_24h"),
+                "circuit_open": _gr.get("circuit_open")}
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("gateway health block failed (ignored): %s", exc)
+            body["gateway"] = {"error": "unavailable"}
     return body
 
 
@@ -1007,6 +1437,7 @@ def status(x_exec_token: str | None = Header(default=None),
         return {"ready": False}
     body = {"ready": True, "mode": LAST["mode"], "dry_run": settings.dry_run,
             "nino34_weekly": LAST["nino34"],
+            "ladder_enabled": settings.ladder_enabled,
             "ladder": {k: vars(v) for k, v in MGR.state.legs.items()},
             "banked": MGR.state.banked, "halted": MGR.state.halted,
             "leg_budget": MGR.leg_budget(),
@@ -1014,6 +1445,11 @@ def status(x_exec_token: str | None = Header(default=None),
             "dry_intents": getattr(ADAPTER, "log", [])[-40:]}
     # The "blend" section exists ONLY when BLEND_ENABLED: with the flag off,
     # /status is byte-identical to the pre-blend service.
+    db = DISABLED_BOOK          # ONE read (round 3)
+    if db:
+        body["blend_disabled_book"] = {k: db.get(k) for k in
+                                       ("mode", "positions", "spy_qty",
+                                        "bil_qty", "sleeve_cash", "halted")}
     if BLEND is not None:
         # M2 (thread-safety): this handler runs on a FastAPI worker thread;
         # the ib_async event loop belongs to the service loop thread. Serve
@@ -1024,6 +1460,9 @@ def status(x_exec_token: str | None = Header(default=None),
         ts = marks.get("ts")
         body["blend"]["marks_age_s"] = (round(time.time() - ts, 1)
                                         if ts else None)
+    # /status is the operator's incident endpoint - it was the one place
+    # blind to gateway state (counter-agent 2026-08-24)
+    body.update(_gateway_report())
     return body
 
 
@@ -1053,7 +1492,23 @@ def blend_feed(x_read_token: str | None = Header(default=None)):
     body["mode"] = LAST["mode"]
     body["last_cycle"] = {"date": BLEND_CYCLE["date"], "ok": BLEND_CYCLE["ok"],
                           "error": BLEND_CYCLE["error"]}
+    body.update(_gateway_report())
     return body
+
+
+def _gateway_report() -> dict:
+    """Gateway reliability for operator endpoints. Never raises."""
+    if OUTAGES is None:
+        return {}
+    try:
+        rs = _gateway_restarts()
+        rs.pop("recent_ts", None)       # internal to the watch; not a payload
+        rs.pop("path", None)
+        return {"gateway_outages": OUTAGES.summary(),
+                "gateway_restarts": rs}
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("gateway report failed (ignored): %s", exc)
+        return {"gateway_outages": {"error": "unavailable"}}
 
 
 # B3 (live-blocker): POST only. `/kill` used to answer GET, so any GET of
@@ -1371,6 +1826,20 @@ def kill(x_exec_token: str | None = Header(default=None),
             "ladder": ladder_state, "blend": blend_state}
 
 
+@app.api_route("/blend/cash/rebaseline", methods=["POST"])
+def blend_cash_rebaseline(x_exec_token: str | None = Header(default=None),
+                          token: str | None = Query(default=None)):
+    """Restart the cash-reconcile delta clock and touch NOTHING else - the
+    remedy the drift page names. /resume also clears halts and re-arms
+    breakers, which a cash drift never justifies (counter-agent round 2)."""
+    _auth(x_exec_token, token)
+    if BLEND is None:
+        return {"ok": False, "reason": "blend disabled"}
+    with BLEND_LOCK:
+        BLEND.rebaseline_cash("operator")
+        return {"ok": True, "cash": BLEND.cash_summary()}
+
+
 @app.post("/resume")            # B3: POST only, same reason as /kill
 def resume(x_exec_token: str | None = Header(default=None),
            token: str | None = Query(default=None)):
@@ -1418,6 +1887,8 @@ def resume(x_exec_token: str | None = Header(default=None),
                                             # way; the flag must match
         MGR.save()                  # ALWAYS: the resume must reach disk
     blend_prior = None
+    breakers_cleared: list = []
+    seed_acked = False
     if BLEND is not None:
         # N3: /resume must not race the loop thread's cycle (a resume
         # interleaved with execute_flatten un-halts a book that is being
@@ -1428,7 +1899,10 @@ def resume(x_exec_token: str | None = Header(default=None),
         # clear. Lock order is always BLEND_LOCK -> BLEND_HALT_LOCK.
         with BLEND_LOCK, BLEND_HALT_LOCK:
             blend_prior = BLEND.state.halted
-            BLEND.resume()
+            from .blend import intent_breaker_state
+            breakers_cleared = sorted(intent_breaker_state())
+            BLEND.resume(datetime.now(timezone.utc).date().isoformat())
+            seed_acked = BLEND.state.bootstrap_ack
     drift = "SCHEMA_DRIFT" in (prior, blend_prior)
     sentinel_note = ("" if sentinel_err is None else
                      f"\n⚠️ the kill journal could not be deleted "
@@ -1444,6 +1918,11 @@ def resume(x_exec_token: str | None = Header(default=None),
             if ladder_kill_dropped else "")
          + (f"; blend book resumed (cleared halt: {blend_prior})"
             if blend_prior else "")
+         + (f"; blend intent breaker(s) RE-ARMED: {', '.join(breakers_cleared)}"
+            if breakers_cleared else "")
+         + ("\n→ this ALSO authorized the blend to seed a fresh book on top "
+            "of existing venue holdings, TODAY ONLY. If that is not what you "
+            "meant, /kill revokes it." if seed_acked else "")
          + ("\n→ SCHEMA_DRIFT was a data-integrity halt, not a kill: those "
             "rows came from a build this one does not fully understand. "
             "Every field this build knows was kept and nothing live was "

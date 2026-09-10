@@ -11,7 +11,11 @@ Evidence base (each component's note cites its rationale):
   * Policy space bounds the rescue; structural dampeners bound the spiral.
 
 Scoring: every component -> percentile of its full own history, oriented so
-HIGHER = MORE severe conditions (0-100). Blocks average their live components.
+HIGHER = MORE severe conditions (0-100). Blocks average their live components,
+with NO exceptions. The ICE BofA series FRED truncated in April 2026 are
+repaired at the source layer (sources/ice_reference.py), so every component here
+ranks against its full history. Sources are Fed, BIS, BEA, Census, Treasury,
+Freddie Mac, FINRA and ICE.
     severity = 0.35*A + 0.25*B + 0.20*C + 0.20*F   (amplifiers)
                + 0.15*(D-50)                        (thin policy space worsens)
                - 0.15*(E-50)                        (dampeners soften)
@@ -99,6 +103,14 @@ def _change_series(vals: list[float], lag: int) -> list[float]:
     return [vals[i] - vals[i - lag] for i in range(lag, len(vals))]
 
 
+# NOTE: hy_oas (BAMLH0A0HYM2) is an ICE BofA series whose FRED history was cut
+# to a rolling 3 years in April 2026 -- which silently made this component a
+# 3-year rank (87.2) instead of the full-history one this module promises (96.1).
+# That is now repaired at the SOURCE layer: sources/ice_reference.py splices the
+# frozen pre-truncation history back on, so `_pctile` below ranks against 1996+
+# again and this module keeps its single scoring rule with no exceptions.
+
+
 def _level_comp(cid, label, pair, unit, note, invert=False, scale=1.0) -> Component:
     _, v = _clean(pair)
     v = [x * scale for x in v]
@@ -172,7 +184,10 @@ def build_severity(bundle: dict) -> dict:
         Component("hy_complacency", "HY spread complacency",
                   round(hy[-1] * 100, 0) if hy else None, "bps",
                   _pctile(hy, hy[-1] if hy else None, invert=True),
-                  "TIGHT spreads = maximal repricing room when the cycle turns (loaded spring)."),
+                  "TIGHT spreads = maximal repricing room when the cycle turns (loaded spring). "
+                  "Ranked against the full 1996+ history: FRED cut ICE BofA to 3 years in "
+                  "April 2026 and a frozen reference restores it, so this is not "
+                  "'tightest since 2023'. Record low 2.41% (Jun-2007), high 21.82% (Dec-2008)."),
     ])
 
     # Block D — policy space (higher score = LESS space = worse)

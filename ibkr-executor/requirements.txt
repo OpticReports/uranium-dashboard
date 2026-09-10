@@ -2,9 +2,16 @@ fastapi>=0.110
 uvicorn[standard]>=0.29
 pydantic-settings>=2.2
 httpx>=0.27
-# B8: PINNED to the 2.x line (resolved: 2.1.0). `>=1.0` floated across a
-# MAJOR: ib_async changed `Ticker.marketPrice()` (the previous-close
-# fallback was removed) and `qualifyContracts()` semantics between majors,
-# so an unpinned rebuild could silently change what a mark IS on a live
-# money book. Bump deliberately, with the adapter suite re-run.
+# B8: PINNED to the 2.x line (resolved: 2.1.0, what the live service runs).
+# `>=1.0` floated across a MAJOR. Corrected at the 2026-09-10 merge review:
+# `Ticker.marketPrice()` is byte-identical in 1.0.1 and 2.1.0 (last if
+# inside the spread, else midpoint, else last - and NO previous-close
+# fallback in either; that was ib_insync's, before the fork), so the pin
+# did not change what a mark IS. It stays because a float across a major is
+# an unreviewed dependency change on a live-money book: bump deliberately,
+# with the adapter suite re-run.
 ib_async>=2.1,<3
+# The ET session clocks (blend.py ENTRY_SESSION_TZ, service.py MARKET_TZ)
+# resolve ZoneInfo at import; tzdata is the belt against a base-image
+# change that ships no tz database (counter-agent round 1).
+tzdata>=2024.1

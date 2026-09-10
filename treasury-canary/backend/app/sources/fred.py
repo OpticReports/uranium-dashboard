@@ -67,6 +67,13 @@ def _get_with_backoff(params: dict, tries: int = 4) -> dict | None:
     return None
 
 
+def _splice_frozen(series_id: str, dates, values):
+    """Prepend frozen pre-truncation history for the ICE series FRED cut in
+    April 2026. No-op for every other series. See sources/ice_reference.py."""
+    from .ice_reference import splice
+    return splice(series_id, list(dates), list(values))
+
+
 def fetch_series(
     series_id: str, start: str = "1976-01-01", use_cache: bool = True
 ) -> tuple[list[date], list[float | None]]:
@@ -81,7 +88,7 @@ def fetch_series(
         if age < settings.cache_ttl_seconds:
             try:
                 raw = json.load(open(cache))
-                return _parse(raw)
+                return _splice_frozen(series_id, *_parse(raw))
             except Exception:  # noqa: BLE001
                 pass
 
@@ -95,7 +102,7 @@ def fetch_series(
         json.dump(data, open(cache, "w"))
     except Exception:  # noqa: BLE001
         pass
-    return _parse(data)
+    return _splice_frozen(series_id, *_parse(data))
 
 
 def _parse(data: dict) -> tuple[list[date], list[float | None]]:

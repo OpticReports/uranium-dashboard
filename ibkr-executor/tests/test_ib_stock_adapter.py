@@ -15,6 +15,7 @@ mocked ib_async module — no live gateway exists here. Gates:
 """
 from __future__ import annotations
 
+import asyncio
 import sys
 import types
 
@@ -71,8 +72,12 @@ class FakeExec:
 
 
 class FakeFill:
-    def __init__(self, execution):
+    def __init__(self, execution, commission=None):
         self.execution = execution
+        self.commissionReport = (types.SimpleNamespace(commission=commission,
+                                                       execId="ex-1",
+                                                       currency="USD")
+                                 if commission is not None else None)
 
 
 class FakeTrade:
@@ -81,6 +86,23 @@ class FakeTrade:
         self.order = order
         self.orderStatus = FakeStatus()
         self.fills = []
+        self.log = []
+        self.advancedError = ""
+
+
+class FakeEvent:
+    """ib_async Event stand-in: `ev += handler`, `ev.emit(*args)`."""
+
+    def __init__(self):
+        self.handlers = []
+
+    def __iadd__(self, h):
+        self.handlers.append(h)
+        return self
+
+    def emit(self, *a):
+        for h in list(self.handlers):
+            h(*a)
 
 
 class FakeTicker:
@@ -123,13 +145,16 @@ class FakeIB:
         self.connected = False
         self.prices: dict[str, float] = {}
         self.position_rows: list[FakePosition] = []
+        self.account_rows: list = []      # accountSummary() rows
         self.on_place = None
         self.on_cancel = None
         self.on_sleep = None
+        self.errorEvent = FakeEvent()
         self.connect_calls = 0
         self.connect_fails = False        # M5: gateway down (restart window)
         self.tickers: dict[str, FakeTicker] = {}   # B8: explicit override
         self.market_data_types: list[int] = []     # B8: reqMarketDataType log
+        self.md_events: list[tuple] = []           # ordered type/sub/cancel log
 
     # connection
     def connect(self, host, port, clientId, timeout=15):
@@ -150,15 +175,17 @@ class FakeIB:
 
     def reqMarketDataType(self, data_type):
         self.market_data_types.append(data_type)
+        self.md_events.append(("type", data_type))
 
     def reqMktData(self, contract, generic, snapshot, regulatory):
+        self.md_events.append(("sub", contract.symbol))
         t = self.tickers.get(contract.symbol)
         if t is not None:
             return t
         return FakeTicker(self.prices.get(contract.symbol, float("nan")))
 
     def cancelMktData(self, contract):
-        pass
+        self.md_events.append(("cancel", contract.symbol))
 
     # orders
     def placeOrder(self, contract, order):
@@ -194,12 +221,23 @@ class FakeIB:
     def positions(self):
         return list(self.position_rows)
 
+    def accountSummary(self):
+        return list(self.account_rows)
+
+    def accountValues(self):
+        return list(self.account_rows)
+
+    def managedAccounts(self):
+        return list(getattr(self, "managed", []))
+
     # venue-side test helpers
-    def fill(self, trade, parts):
-        """parts: [(shares, price), ...] -> executions + Filled status."""
+    def fill(self, trade, parts, commission=None):
+        """parts: [(shares, price), ...] -> executions + Filled status.
+        commission (total) is attached to the first execution's report."""
         side = "BOT" if trade.order.action == "BUY" else "SLD"
-        for shares, price in parts:
-            trade.fills.append(FakeFill(FakeExec(shares, price, side)))
+        for k, (shares, price) in enumerate(parts):
+            trade.fills.append(FakeFill(FakeExec(shares, price, side),
+                                        commission if k == 0 else None))
         tot = sum(s for s, _ in parts)
         num = sum(s * p for s, p in parts)
         trade.orderStatus.avgFillPrice = (num / tot) if tot else 0.0
@@ -265,6 +303,7 @@ def ib_adapter(monkeypatch):
     # on their own assertions rather than on a missing attribute.
     monkeypatch.setattr(ib_mod, "QUOTE_WAIT_S", 0.3, raising=False)
     monkeypatch.setattr(ib_mod, "QUOTE_TICK_S", 0.0, raising=False)
+    monkeypatch.setattr(ib_mod, "COMMISSION_WAIT_S", 0.05)
     a = ib_mod.IBAdapter(_Cfg())
     a.ib.prices = {"SPY": 100.0, "BIL": 100.0, "CRSP": 50.0}
     return a
@@ -1348,16 +1387,34 @@ def test_gate_b8_spot_asks_for_a_market_data_type_before_subscribing(
     request (error 354) and the ticker never gets a field — reported as
     "no market price", the SAME line a thin quote produces. The book would
     simply never trade, with no distinguishing symptom."""
+    # MERGE NOTE (2026-09-10): the branch's B8 requested one fixed type
+    # (delayed-frozen, 4) per spot() call. main's market-data work
+    # supersedes that: the CONFIGURED type is applied at connect (and
+    # re-applied on reconnect — tests/test_market_data.py pins both) and
+    # again per spot() call, and spot_ex escalates to DELAYED (3) only when
+    # the configured feed is dry and IB_ALLOW_DELAYED permits it. The
+    # guarantee this gate exists for is ORDER: a type request precedes the
+    # first subscription of THIS call. The connect-time request is cleared
+    # first so it cannot satisfy the assertion on the call's behalf
+    # (merge review F4/T2: the earlier form was satisfiable by connect()
+    # alone, with spot() requesting nothing).
+    ib_adapter.ib.md_events.clear()
+    ib_adapter.ib.market_data_types.clear()
     assert ib_adapter.spot("SPY") == pytest.approx(100.0)
-    assert ib_adapter.ib.market_data_types == [ib_mod.MKT_DATA_TYPE]
+    kinds = [k for k, _ in ib_adapter.ib.md_events]
+    assert "sub" in kinds, "spot() never subscribed"
+    assert "type" in kinds[:kinds.index("sub")], (
+        f"no reqMarketDataType before the first reqMktData: "
+        f"{ib_adapter.ib.md_events}")
+    assert all(t in (1, 2, 3, 4) for t in ib_adapter.ib.market_data_types)
 
 
 def test_gate_b8_spot_falls_back_to_the_previous_close(ib_adapter):
-    """B8: under the PINNED ib_async 2.x, `Ticker.marketPrice()` returns
-    last-or-midpoint and has NO close fallback (it did in the 1.x line this
-    code was written against, and `ib_async>=1.0` let the resolver cross
-    that major). Outside RTH that is nan forever. The close is read
-    explicitly now."""
+    """B8: `Ticker.marketPrice()` returns last-or-midpoint and has NO close
+    fallback - in ANY ib_async release: the 1.0.1 and 2.1.0 sources are
+    byte-identical here, and the fallback this code assumed was
+    ib_insync's, before the fork (verified at the 2026-09-10 merge review).
+    Outside RTH that is nan forever. The close is read explicitly now."""
     ib_adapter.ib.tickers["CRSP"] = FakeTicker(float("nan"), close=48.25)
     assert ib_adapter.spot("CRSP") == pytest.approx(48.25)
 
@@ -1399,9 +1456,439 @@ def test_gate_b8_spot_retires_its_subscription_on_the_failure_path(
     now also holds when the WAIT itself raises, which the old straight-line
     body did not — pinned here so a later edit cannot leak a subscription
     per failed quote."""
-    cancelled: list[str] = []
-    ib_adapter.ib.cancelMktData = lambda c: cancelled.append(c.symbol)
+    ib_adapter.ib.md_events.clear()
     ib_adapter.ib.tickers["ZZZZ"] = FakeTicker(float("nan"))
     with pytest.raises(RuntimeError):
         ib_adapter.spot("ZZZZ")
-    assert cancelled == ["ZZZZ"]
+    # MERGE NOTE (2026-09-10): main's spot_ex makes up to TWO attempts on a
+    # dry configured feed (configured type, then DELAYED), each with its own
+    # subscription — so "exactly one cancel" was the branch's single-attempt
+    # shape, not the invariant. The invariant is: every subscription is
+    # retired BEFORE the next is opened and none is retired twice — strict
+    # sub/cancel alternation (merge review T3: an equal-multiset check
+    # would have passed two subscribes followed by two cancels).
+    subs = [e for e in ib_adapter.ib.md_events if e[0] in ("sub", "cancel")]
+    assert subs and len(subs) % 2 == 0, subs
+    for i in range(0, len(subs), 2):
+        assert subs[i][0] == "sub" and subs[i + 1] == ("cancel", subs[i][1]), subs
+
+
+# --- ValidationError semantics (live find 2026-08-25; corrected same day) ---
+# ib_async sets 'ValidationError' CLIENT-SIDE for warning-class error codes
+# on an order that is STILL LIVE at the broker (ActiveStates/WorkingStates,
+# not DoneStates). The first fix treated it as terminal - counter-agent
+# FATAL: dedupe re-placed live orders (180 SPY where the book meant 90) and
+# journals cleared working orders whose fills nothing would book. These
+# gates encode the CORRECT model.
+class _LogEntry:
+    def __init__(self, code, message):
+        self.errorCode = code
+        self.message = message
+
+
+def _warned_live_ib(ib, code=321, msg="Error validating request: the API "
+                                      "interface is currently in Read-Only "
+                                      "mode."):
+    """Order gets a warning-class error: status ValidationError, order LIVE."""
+    def on_place(trade):
+        trade.orderStatus.status = "ValidationError"
+        trade.log = [_LogEntry(0, "submitted"), _LogEntry(code, msg)]
+    ib.on_place = on_place
+
+
+def test_gate_warned_order_raises_unknown_with_the_reason(ib_adapter):
+    """A warned order is neither acked nor dead: the placement must raise
+    the UNKNOWN-timeout path (never 'rejected by venue') and carry IB's own
+    words so the alert names the cause."""
+    import pytest as _pytest
+    _warned_live_ib(ib_adapter.ib)
+    with _pytest.raises(RuntimeError) as e:
+        ib_adapter.place_stock_order("SPY", 10, "MKT",
+                                     client_order_id="blend-core-buy-t-0")
+    msg = str(e.value)
+    assert "state UNKNOWN" in msg
+    assert "rejected by venue" not in msg
+    assert "321" in msg, "IB's reason must reach the alert"
+
+
+def test_gate_warned_order_retry_is_duplicate_suppressed(ib_adapter):
+    """THE FATAL INVERSION, pinned the right way round: the order may be
+    LIVE, so the idempotent retry must be duplicate-suppressed - re-placing
+    is the 180-SPY-instead-of-90 route."""
+    import pytest as _pytest
+    _warned_live_ib(ib_adapter.ib)
+    with _pytest.raises(RuntimeError):
+        ib_adapter.place_stock_order("SPY", 10, "MKT",
+                                     client_order_id="blend-core-buy-t-1")
+    ib_adapter.ib.on_place = None
+    out = ib_adapter.place_stock_order("SPY", 10, "MKT",
+                                       client_order_id="blend-core-buy-t-1")
+    assert out.get("duplicate") is True, "re-placed against a possibly-live order"
+    placed = [t for t in ib_adapter.ib._trades
+              if getattr(t.order, "orderRef", "") == "blend-core-buy-t-1"]
+    assert len(placed) == 1, f"venue holds {len(placed)} orders for one intent"
+
+
+def test_gate_warned_order_reports_working_not_cancelled(ib_adapter):
+    """find_stock_order must report 'working' so the journal KEEPS the
+    entry; the unwedge is pass 2b's cancel-confirmation, never an assumed
+    death."""
+    import pytest as _pytest
+    _warned_live_ib(ib_adapter.ib)
+    with _pytest.raises(RuntimeError):
+        ib_adapter.place_stock_order("BIL", 32, "MKT",
+                                     client_order_id="blend-sweep-t-2")
+    o = ib_adapter.find_stock_order("blend-sweep-t-2")
+    assert o is not None and o["status"] == "working", o
+
+
+def test_gate_warned_order_cancel_actually_sends_the_cancel(ib_adapter):
+    """PROBE B's first half: cancel_stock_order on a warned order used to
+    return False WITHOUT sending cancelOrder, leaving a live stop resting
+    while the caller believed it gone (double-stop route)."""
+    import pytest as _pytest
+    _warned_live_ib(ib_adapter.ib)
+    with _pytest.raises(RuntimeError):
+        ib_adapter.place_stock_order("SPY", -10, "STP", stop_price=90.0,
+                                     client_order_id="blend-stop-t-3")
+    cancels = []
+    orig_cancel = ib_adapter.ib.cancelOrder
+    ib_adapter.ib.on_cancel = None
+    def counting_cancel(order):
+        cancels.append(order)
+        orig_cancel(order)
+    ib_adapter.ib.cancelOrder = counting_cancel
+    # cancel takes the adapter's orderId handle (what _trade_result returns),
+    # not the client id
+    trade = ib_adapter._find_trade_by_client_id("blend-stop-t-3")
+    ok = ib_adapter.cancel_stock_order(str(trade.order.orderId))
+    assert cancels, "cancelOrder was never sent for a possibly-live order"
+    assert ok is True
+
+
+def test_gate_hard_reject_still_fast_with_reason(ib_adapter):
+    """A REAL rejection (status Cancelled) fails fast and names the code."""
+    import pytest as _pytest
+    import time as _time
+    def on_place(trade):
+        trade.orderStatus.status = "Cancelled"
+        trade.log = [_LogEntry(201, "Order rejected - reason: simulated")]
+    ib_adapter.ib.on_place = on_place
+    t0 = _time.monotonic()
+    with _pytest.raises(RuntimeError) as e:
+        ib_adapter.place_stock_order("SPY", 10, "MKT",
+                                     client_order_id="blend-core-buy-t-4")
+    assert "rejected by venue" in str(e.value) and "201" in str(e.value)
+    assert _time.monotonic() - t0 < 2.0
+
+
+def test_gate_status_mapping_matches_ib_async_semantics(ib_adapter):
+    import app.ib_adapter as m
+    assert m._map_status("ValidationError") == "working"   # LIVE per ib_async
+    assert m._map_status("Cancelled") == "cancelled"
+    assert m._map_status("SomeFutureTransitionalState") == "working"
+
+
+def test_rejection_reason_surfaces_without_error_code(ib_adapter):
+    """An opening-auction order refused after the bell is cancelled with a
+    plain 'Order Canceled - reason: ...' log line and NO errorCode. Both the
+    synchronous raise and the reconcile-path lookup must carry it; before
+    this the five 2026-09-03 MRK rejections said only 'status Cancelled'.
+    MUTATION-VERIFIED: reverting the `dead` fallback in _trade_errors, or
+    the `reason` key in _trade_result, turns this red."""
+    fake = ib_adapter.ib
+
+    def reject(t):
+        t.orderStatus.status = "Cancelled"
+        t.log = [types.SimpleNamespace(
+            errorCode=0, status="Cancelled",
+            message="Order Canceled - reason: OPG order received after the open")]
+
+    fake.on_place = reject
+    with pytest.raises(RuntimeError, match="received after the open"):
+        ib_adapter.place_stock_order("MRK", 4, "MOO", tif="OPG",
+                                     client_order_id="blend-entry-16")
+    o = ib_adapter.find_stock_order("blend-entry-16")
+    assert o["status"] == "cancelled"
+    assert "received after the open" in o["reason"]
+
+
+def _acct(tag, value, currency="USD", account=""):
+    return types.SimpleNamespace(tag=tag, value=str(value), currency=currency,
+                                 account=account)
+
+
+def test_account_cash_reads_total_cash_value(ib_adapter):
+    """MUTATION-VERIFIED: reading AvailableFunds instead, or raising on a
+    missing tag, turns this red."""
+    fake = ib_adapter.ib
+    fake.account_rows = [_acct("AvailableFunds", 51000.0),
+                         _acct("TotalCashValue", 49680.58),
+                         _acct("NetLiquidation", 99680.58),
+                         _acct("TotalCashValue", 12.5, currency="EUR")]
+    out = ib_adapter.account_cash()
+    assert out["total_cash"] == 49680.58 and out["net_liq"] == 99680.58
+    fake.account_rows = [_acct("AvailableFunds", 51000.0)]
+    assert ib_adapter.account_cash() is None          # no claim, no raise
+    fake.account_rows = None                           # venue returns junk
+    assert ib_adapter.account_cash() is None
+
+
+def test_commission_reaches_fill_results(ib_adapter):
+    fake = ib_adapter.ib
+    fake.on_place = lambda t: fake.fill(t, [(20, 91.42)], commission=1.0)
+    r = ib_adapter.place_stock_order("BIL", 20, "MKT", client_order_id="c1")
+    assert r["status"] == "filled" and r["commission"] == 1.0
+    assert ib_adapter.find_stock_order("c1")["commission"] == 1.0
+
+
+def test_rejection_reason_comes_from_error_event_not_status_echo(ib_adapter):
+    """Counter-agent round 1: ib_async delivers an order rejection's REASON on
+    errorEvent (keyed by orderId) / trade.advancedError; trade.log holds
+    status changes. A bare 'Cancelled' log line is not a reason.
+    MUTATION-VERIFIED: dropping the errorEvent hook, or letting a status
+    echo through as the reason, turns this red."""
+    fake = ib_adapter.ib
+
+    def reject(t):
+        t.orderStatus.status = "Cancelled"
+        t.log = [types.SimpleNamespace(errorCode=0, message="Cancelled",
+                                       status="Cancelled")]
+        fake.errorEvent.emit(t.order.orderId, 10147,
+                             "Order to be Cancelled: OPG order after the open",
+                             t.contract)
+
+    fake.on_place = reject
+    with pytest.raises(RuntimeError, match="OPG order after the open"):
+        ib_adapter.place_stock_order("MRK", 12, "MOO", tif="OPG",
+                                     client_order_id="blend-entry-16")
+    o = ib_adapter.find_stock_order("blend-entry-16")
+    assert "[10147]" in o["reason"] and "OPG order after the open" in o["reason"]
+    assert "Cancelled;" not in o["reason"]
+
+    def reject_silent(t):
+        t.orderStatus.status = "Cancelled"
+        t.log = [types.SimpleNamespace(errorCode=0, message="Cancelled",
+                                       status="Cancelled")]
+    fake.on_place = reject_silent
+    with pytest.raises(RuntimeError):
+        ib_adapter.place_stock_order("MRK", 12, "MOO", tif="OPG",
+                                     client_order_id="blend-entry-17")
+    assert ib_adapter.find_stock_order("blend-entry-17")["reason"] == "no venue reason recorded"
+
+
+def test_account_cash_multi_account_is_no_claim_and_filters_managed(ib_adapter):
+    fake = ib_adapter.ib
+    fake.account_rows = [_acct("TotalCashValue", 100.0, account="DU1"),
+                         _acct("TotalCashValue", 200.0, account="DU2")]
+    assert ib_adapter.account_cash() is None            # two accounts: no claim
+    fake.managed = ["DU2"]
+    assert ib_adapter.account_cash()["total_cash"] == 200.0
+
+
+def test_commission_sentinel_is_ignored_and_report_is_awaited(ib_adapter):
+    """IB's UNSET sentinel (~1.8e308) must never reach the ledger; and a
+    report that lands one pump AFTER the fill is still read (the adapter
+    waits COMMISSION_WAIT_S for execId)."""
+    fake = ib_adapter.ib
+    fake.on_place = lambda t: fake.fill(t, [(20, 91.42)], commission=1.7976931348623157e308)
+    r = ib_adapter.place_stock_order("BIL", 20, "MKT", client_order_id="c-sent")
+    assert "commission" not in r          # ignored report = UNREPORTED (round 3)
+    # report lands late: first pump attaches it
+    def late(t):
+        fake.fill(t, [(20, 91.42)])                       # no report yet
+        fake.on_sleep = lambda ib: setattr(
+            t.fills[0], "commissionReport",
+            types.SimpleNamespace(commission=1.0, execId="ex-late", currency="USD"))
+    fake.on_place = late
+    r = ib_adapter.place_stock_order("BIL", 20, "MKT", client_order_id="c-late")
+    assert r["commission"] == 1.0
+    fake.on_sleep = None
+
+
+def test_warning_codes_are_not_venue_reasons(ib_adapter):
+    fake = ib_adapter.ib
+
+    def reject(t):
+        fake.errorEvent.emit(t.order.orderId, 399, "Order will not be placed at the exchange until ...", t.contract)
+        t.orderStatus.status = "Cancelled"
+        # the real wrapper ALSO writes the warning into trade.log (round 3)
+        t.log = [types.SimpleNamespace(errorCode=399, status="ValidationError",
+                                       message="Warning 399, reqId 1: Order Message: ..."),
+                 types.SimpleNamespace(errorCode=0, message="Cancelled", status="Cancelled")]
+    fake.on_place = reject
+    with pytest.raises(RuntimeError):
+        ib_adapter.place_stock_order("MRK", 1, "MOO", tif="OPG", client_order_id="w1")
+    assert ib_adapter.find_stock_order("w1")["reason"] == "no venue reason recorded"
+
+
+# --- counter-agent round 3 ---------------------------------------------------
+
+def test_error_map_is_order_only_and_cleared_on_reconnect(ib_adapter):
+    fake = ib_adapter.ib
+    # a market-data request id (same counter) errors: not an order -> ignored
+    fake.errorEvent.emit(350, 10197, "No market data during competing live session", None)
+    assert ib_adapter._order_errors == {}
+    # an order id IS recorded ...
+    fake.on_place = None
+    ib_adapter.place_stock_order("CRSP", -5, "STP", stop_price=44.0, tif="GTC",
+                                 client_order_id="r3-stp")
+    oid = fake._trades[-1].order.orderId
+    fake.errorEvent.emit(oid, 201, "Order rejected - reason: ...", None)
+    assert ib_adapter._order_errors[oid].startswith("[201]")
+    # ... and the map is cleared by a reconnect (ids restart at nextValidId)
+    fake.connected = False
+    assert ib_adapter.spot("SPY") == 100.0                   # reconnects
+    assert ib_adapter._order_errors == {}
+
+
+def test_completed_order_without_fills_is_unreported():
+    t = types.SimpleNamespace(fills=[], orderStatus=types.SimpleNamespace(status="Filled"))
+    assert ib_mod._commission_reported(t) is False
+
+
+def test_two_managed_accounts_is_no_claim(ib_adapter):
+    fake = ib_adapter.ib
+    fake.account_rows = [_acct("TotalCashValue", 100.0, account="DU1"),
+                         _acct("TotalCashValue", 200.0, account="DU2")]
+    fake.managed = ["DU1", "DU2"]
+    assert ib_adapter.account_cash() is None
+    # a BASE row in a non-USD base is not ours either
+    fake.managed = ["DU1"]
+    fake.account_rows = [_acct("TotalCashValue", 100.0, currency="BASE", account="DU1")]
+    assert ib_adapter.account_cash() is None
+
+
+def test_dry_fill_reports_a_zero_commission():
+    a = DryAdapter()
+    r = a.place_stock_order("BIL", 3, "MKT", client_order_id="d-1")
+    assert r["status"] == "filled" and r["commission"] == 0.0
+
+
+# --- 2026-09-08: venue order-history requests are bounded --------------------
+# MUTATION-VERIFIED: dropping the RequestTimeout assignment turns
+# test_order_history_refresh_is_bounded red (the fake sees 0 = forever);
+# turning the OPEN-orders timeout into `continue` turns it red (a timeout
+# there must fail CLOSED, never read as "venue never saw the order");
+# dropping the ib.disconnect() turns it red; dropping the executions
+# fallback turns test_completed_orders_timeout_falls_back_to_executions
+# red; reading a reqExecutions timeout as "no fills" turns it red.
+# NOT catchable here: narrowing the except to the builtin TimeoutError
+# alone - on 3.11+ asyncio.TimeoutError IS TimeoutError.
+
+def _exec_fill(ref, shares, price, order_id=77, exec_id="ex-1", commission=1.0):
+    return types.SimpleNamespace(
+        execution=types.SimpleNamespace(orderRef=ref, shares=shares, price=price,
+                                        orderId=order_id, execId=exec_id, side="SLD"),
+        commissionReport=types.SimpleNamespace(commission=commission, execId=exec_id,
+                                               currency="USD"))
+
+
+def test_order_history_refresh_is_bounded(ib_adapter):
+    fake = ib_adapter.ib
+    fake.RequestTimeout = 0                        # ib_async default: forever
+    seen = {}
+
+    def open_hang():
+        seen["timeout"] = fake.RequestTimeout
+        if not fake.RequestTimeout:
+            raise AssertionError("reqAllOpenOrders issued with no timeout: "
+                                 "this is the 2026-09-08 loop hang")
+        raise TimeoutError("openOrderEnd never arrived")
+    fake.reqAllOpenOrders = open_hang
+    with pytest.raises(ExecutorConnectionError) as e:
+        ib_adapter.find_stock_order("blend-sweep-wedged")
+    assert "timed out" in str(e.value) and "fails closed" in str(e.value)
+    assert seen["timeout"] == ib_mod.VENUE_HISTORY_TIMEOUT_S
+    assert fake.RequestTimeout == 0                # restored
+    assert not fake.isConnected(), "session must be dropped so _reconnect pages"
+    # a venue that answers "nothing" is still "venue never saw it" (the
+    # adapter reconnects transparently), timeout restored on success too
+    fake.reqAllOpenOrders = lambda: []
+    assert ib_adapter.find_stock_order("blend-sweep-wedged") is None
+    assert fake.RequestTimeout == 0 and fake.isConnected()
+    # a non-timeout venue error on either refresh is still tolerated
+    def boom(*a, **k):
+        raise RuntimeError("gateway said no")
+    fake.reqCompletedOrders = boom
+    assert ib_adapter.find_stock_order("blend-sweep-wedged") is None
+    fake.reqCompletedOrders = lambda apiOnly=True: []
+
+
+def test_completed_orders_timeout_falls_back_to_executions(ib_adapter):
+    """The 2026-09-08 gateway never answered reqCompletedOrders on any
+    session. That request is best effort: the fill question is answered
+    from execution reports, the session is KEPT, the cycle completes."""
+    fake = ib_adapter.ib
+
+    def completed_hang(apiOnly=False):
+        assert fake.RequestTimeout == ib_mod.VENUE_HISTORY_TIMEOUT_S
+        raise asyncio.TimeoutError("completedOrdersEnd never arrived")   # 3.10 class
+    fake.reqCompletedOrders = completed_hang
+    fake.fills = lambda: [_exec_fill("blend-sweep-32", 20, 91.20, exec_id="a"),
+                          _exec_fill("blend-sweep-32", 12, 91.30, exec_id="b"),
+                          _exec_fill("blend-other", 5, 50.0, exec_id="c")]
+    fake.reqExecutions = lambda *a, **k: [_exec_fill("blend-sweep-32", 12, 91.30, exec_id="b")]
+    r = ib_adapter.find_stock_order("blend-sweep-32")
+    assert r["status"] == "filled" and r["filled_qty"] == 32      # exec b not double counted
+    assert r["fill_price"] == pytest.approx((20 * 91.20 + 12 * 91.30) / 32)
+    assert r["commission"] == 2.0 and r["source"] == "executions"
+    assert fake.isConnected() and fake.RequestTimeout == 0
+    # no execution carries the ref -> the venue never filled it
+    assert ib_adapter.find_stock_order("blend-sweep-never") is None
+    # executions ALSO unanswered -> fail closed, session dropped
+    def exec_hang(*a, **k):
+        raise TimeoutError("execDetailsEnd never arrived")
+    fake.reqExecutions = exec_hang
+    with pytest.raises(ExecutorConnectionError):
+        ib_adapter.find_stock_order("blend-sweep-32")
+    assert not fake.isConnected()
+
+
+def test_cancel_of_an_executed_order_raises_when_history_is_unavailable(ib_adapter):
+    """Law #8 under the 2026-09-08 gateway: a stop that FILLED during an
+    outage is not open and not in the session; with completed orders
+    unavailable the execution reports must turn "not found" into RAISE."""
+    fake = ib_adapter.ib
+    fake.reqCompletedOrders = lambda apiOnly=False: (_ for _ in ()).throw(TimeoutError("x"))
+    fake.fills = lambda: [_exec_fill("blend-1-stp-44.0000", 5, 43.9, order_id=910, exec_id="s1")]
+    fake.reqExecutions = lambda *a, **k: []
+    with pytest.raises(RuntimeError) as e:
+        ib_adapter.cancel_stock_order("910")
+    assert "already FILLED" in str(e.value)
+    assert ib_adapter.cancel_stock_order("911") is False      # truly unknown
+
+
+def test_execution_refresh_reads_the_store_and_keeps_the_commission(ib_adapter):
+    """ib_async appends a fresh Fill with an EMPTY CommissionReport for an
+    already-known execId on reqExecutions: the request's return value must
+    never overwrite the store, and the store is re-read AFTER the refresh."""
+    fake = ib_adapter.ib
+    fake.reqCompletedOrders = lambda apiOnly=False: (_ for _ in ()).throw(TimeoutError("x"))
+    store = [_exec_fill("blend-sweep-x", 10, 100.0, exec_id="a", commission=1.0)]
+    called = {"n": 0}
+
+    def req_exec(*a, **k):
+        called["n"] += 1
+        store.append(_exec_fill("blend-sweep-x", 5, 101.0, exec_id="b", commission=0.5))
+        return [_exec_fill("blend-sweep-x", 10, 100.0, exec_id="a", commission=None)]
+    fake.reqExecutions = req_exec
+    fake.fills = lambda: list(store)
+    r = ib_adapter.find_stock_order("blend-sweep-x")
+    assert called["n"] == 1 and r["filled_qty"] == 15                # late fill seen
+    assert r["commission"] == 1.5                                      # not overwritten
+    # a rejected-then-retried ref: only the LATEST orderId binds
+    store[:] = [_exec_fill("blend-sweep-y", 3, 100.0, order_id=5, exec_id="c"),
+                _exec_fill("blend-sweep-y", 9, 100.0, order_id=8, exec_id="d")]
+    fake.reqExecutions = lambda *a, **k: []
+    r = ib_adapter.find_stock_order("blend-sweep-y")
+    assert r["filled_qty"] == 9 and r["order_ref"] == "8"
+    assert ib_adapter.history_complete() is False
+    # ANY failure of the completed-orders request engages the fallback, not
+    # only a timeout (counter-agent LOW)
+    def refused(apiOnly=False):
+        raise RuntimeError("not supported by this gateway")
+    fake.reqCompletedOrders = refused
+    r = ib_adapter.find_stock_order("blend-sweep-y")
+    assert r is not None and r["filled_qty"] == 9
+    assert ib_adapter.history_complete() is False

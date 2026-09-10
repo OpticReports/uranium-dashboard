@@ -1,0 +1,16 @@
+[Unit]
+Description=Run the forward shadow forecast every 4h, on the bar boundary
+
+[Timer]
+# BARS CLOSE AT 00/04/08/12/16/20 UTC. The forecast is made at the newest
+# bar whose window has not closed, so running a few minutes after the
+# boundary means it stands on a bar that is actually complete. Running ON
+# the boundary would race the engine's own ingest.
+OnCalendar=*-*-* 00,04,08,12,16,20:07:00 UTC
+Persistent=true
+# Spread across a minute so a restart of the box does not fire every timer
+# at the same instant.
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

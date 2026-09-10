@@ -76,11 +76,15 @@ def build_crossasset_metrics(bundle: dict[str, tuple[list, list]]) -> list[Metri
     out.append(simple_metric(
         "crossasset.hy_oas", "H", "HY OAS", hy[0], hy[1], unit="bps", scale=100.0,
         source="FRED:BAMLH0A0HYM2",
-        note="Credit cross-confirmation: Treasury stress + widening HY = higher-conviction recession signal."))
+        note="Credit cross-confirmation: Treasury stress + widening HY = higher-conviction recession signal. "
+             "STATUS is threshold-based and unaffected, but the displayed PERCENTILE ranks against a rolling "
+             "~3-year window: FRED restricted ICE BofA history in April 2026. Read it as 'vs the last 3 years'."))
     ig = bundle.get("ig_oas", ([], []))
     out.append(simple_metric(
         "crossasset.ig_oas", "H", "IG OAS", ig[0], ig[1], unit="bps", scale=100.0,
-        source="FRED:BAMLC0A0CM", note="Investment-grade credit spread trend."))
+        source="FRED:BAMLC0A0CM",
+        note="Investment-grade credit spread trend. Same caveat as HY OAS: the displayed PERCENTILE "
+             "ranks against a rolling ~3-year window since FRED's April-2026 ICE BofA restriction."))
     out.extend(_margin_metrics(bundle, sp))
     return out
 

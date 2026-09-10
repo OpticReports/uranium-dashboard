@@ -1,10 +1,16 @@
 # Can pin-board reds / convergence improve recession prediction? (v2)
 
-**Study date:** 2026-07-16 (v2, same day — see "QA corrections" below) ·
-**Script:** `pin_rule_hindcast.py` (reproducible — live `/pins/history` hindcast,
-daily ^GSPC downsampled to true monthly, daily FRED 3m10y via the canary's
-public `/curve` endpoint) · **Design:** seven pre-specified rules, zero fitted
-parameters; channel sets and thresholds come from the board's documented design.
+> **RE-MEASURED 2026-09-10 (v3).** The v2 numbers below were frozen against an instrument
+> that has since changed three ways: the plumbing reserves leg is gated to the ample-reserves
+> regime (its pre-QE readings were noise), the basis_trade positioning percentile is capped as a
+> gauge, and the ICE BofA series FRED truncated in April 2026 are restored from a frozen
+> reference (so the credit_event and private_credit legs now carry 1996+ history). The script
+> was re-run against the deployed `/pins/history` after that build went live; the diff is in
+> **"v3 re-measurement"** below. The headline moved: **fast-red AND curve 44% / 5-of-11 → 34% /
+> 4-of-13** on drawdowns, and on recession onsets **24% → 6%, below base rate**. The 2007 catch —
+> the only NBER onset this gauge ever flagged — was the pre-QE reserves artifact. The sibling
+> oil/policy-window+curve rule is unchanged at 45% / 5-of-6 and is now clearly the stronger
+> configuration, not "the same within noise". Sections below are kept verbatim as the v2 record.
 
 ## QA corrections (v1 → v2)
 
@@ -77,6 +83,64 @@ begin ~2002-2006; only the carry channel existed earlier.
    this board as an accident radar sized by the mass map. Never blend them —
    with ~11 clusters and 6 onsets, any fitted blend is data-snooping.
 
+
+## v3 re-measurement (2026-09-10)
+
+Same script, same pre-specified rules, same event sets. Only the deployed instrument changed.
+Baseline run against the pre-change deployment reproduced v2 within data vintage (43% / 5-of-11).
+
+### vs ≥15% SPX drawdown starts
+
+| rule | v2 (frozen) | **v3 (re-measured)** | moved by |
+|---|---|---|---|
+| windows_open ≥ 2 | 26% · 8/22 · 184 mo | 23% · 8/24 · 183 mo | private_credit history now 1998+ |
+| fast-channel window open | 25% · 9/31 · 232 mo | 18% · 8/33 · 177 mo | plumbing gate, basis cap, HY history |
+| fast-channel red | 26% · 9/38 · 188 mo | 22% · 9/46 · 111 mo | same |
+| oil/policy window open | 27% · 8/13 · 218 mo | 27% · 8/13 · 218 mo | — |
+| curve flat/inverted | 37% · 6/9 · 156 mo | 37% · 6/9 · 156 mo | — |
+| **fast-red AND curve** | **44% · 5/11 · 77 mo** | **34% · 4/13 · 50 mo** | lost the 2007 cluster |
+| **oil/policy window AND curve** | 46% · 5/6 · 82 mo | **45% · 5/6 · 84 mo** | — (now the stronger rule) |
+
+Base rate 20% throughout (22% for the 1987+ windows).
+
+### vs NBER recession onsets
+
+| rule | v2 (frozen) | **v3 (re-measured)** |
+|---|---|---|
+| windows_open ≥ 2 | 7% · 2/22 | 10% · 3/24 |
+| fast-channel red | 10% · 3/38 | 3% · 2/46 |
+| curve flat/inverted | 30% · 4/9 · recall 4/4 | 30% · 4/9 · recall 4/4 |
+| **fast-red AND curve** | 24% · 3/11 · recall 2/4 | **6% · 2/13 · recall 2/4** |
+| **oil/policy window AND curve** | 37% · 4/6 · recall 4/4 | 37% · 4/6 · recall 4/4 |
+
+Base rate 9–12%.
+
+### fast-red AND curve, per-drawdown detail (v3)
+
+caught 1998 LTCM (4m early), 2019 (11–7m early), 2025 (12m early); **missed 2007** (v2 had it
+"up to 12m early" — that firing was the plumbing reserves leg reading a pre-QE $3–47B base as a
+drain), 2018 (curve stayed steep), 2021 (policy-driven). The 2019 lead narrowed from 11–1m to
+11–7m because the basis_trade cap removed the late-run months that had been pinned at 100.
+
+### What changes in the conclusions
+
+1. **Recessions still belong to the yield curve** (30%, 4/4). Unchanged.
+2. **Raw convergence counts still score below base rate on recessions** (10% vs 12%). Unchanged
+   in direction, narrower in margin.
+3. **Pin reds earn their keep on market accidents — more modestly than v2 said.** 34% vs 20%
+   base on 4 of 13 clusters is still above base, but the 2007 catch that anchored the v2 story
+   was an artifact, and on recession onsets the composite is now *below* base rate. The
+   sibling `oil/policy window + curve` (45%, 5/6; 37%, 4/4 on onsets) is no longer "the same
+   within noise" — it is the better configuration on both event sets, on fewer, cleaner
+   clusters. The accident gauge as shipped remains *a* measured configuration; v3 makes it
+   clearer that it is not *the* one.
+4. **Never blend them.** Unchanged, and reinforced: v2's headline moved by 10 points from data
+   corrections alone, which is the noise floor a 13-cluster sample carries.
+
+Episode-level record for the whole board, all channels: v2 115 episodes / 14 hits / 93 misses;
+v3 **120 / 15 / 98** (precision 13.1% → 12.5%). Live `_overlap_validation` (recomputed
+server-side): base 12.3%; k=1 10.2% (n=353), k=2 10.3% (n=195), k=3 9.3% (n=86), k=4 15.4%
+(n=26).
 ## Honest limitations
 
 ~11 signal clusters (episode-level 95% CI ≈ ±30pp); serially-correlated

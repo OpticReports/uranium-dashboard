@@ -1,0 +1,37 @@
+{
+ "0": {
+  "cik_str": 1045810,
+  "ticker": "NVDA",
+  "title": "NVIDIA CORP"
+ },
+ "9": {
+  "cik_str": 723125,
+  "ticker": "MU",
+  "title": "MICRON TECHNOLOGY INC"
+ },
+ "490": {
+  "cik_str": 1713445,
+  "ticker": "RDDT",
+  "title": "Reddit, Inc."
+ },
+ "1125": {
+  "cik_str": 1326380,
+  "ticker": "GME",
+  "title": "GameStop Corp."
+ },
+ "2349": {
+  "cik_str": 1577526,
+  "ticker": "AI",
+  "title": "C3.ai, Inc."
+ },
+ "6356": {
+  "cik_str": 1701261,
+  "ticker": "FAMI",
+  "title": "Farmmi, Inc."
+ },
+ "7168": {
+  "cik_str": 884394,
+  "ticker": "SPY",
+  "title": "SPDR S&P 500 ETF TRUST"
+ }
+}
