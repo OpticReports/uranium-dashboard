@@ -121,19 +121,68 @@ most of the v2 staircase's reasoning. What they established, with numbers:
 
 ### The schedule
 
+**CAPPED AT STEP B (0.20) since 2026-09-10 — see "The ceiling" below.**
+
 | step | KELLY_M | advance at | pullback entry | max step |
 |---|---|---|---|---|
 | token (live) | 0.05 | — | $2,813 | — |
 | A | 0.10 | 4 trades | $5,625 | 2.0x |
-| B | 0.20 | 8 cumulative | $11,250 | 2.0x |
-| C | 0.35 | 12 cumulative | $19,688 | 1.75x |
-| D | 0.56 | 16 cumulative | $31,500 | 1.6x |
-| ceiling | up to 0.80 | +15-20 at 0.56, quarterly Kelly re-run | $45,000 | 1.4x |
+| **B — the ceiling** | **0.20** | 8 cumulative | $11,250 | 2.0x |
+| ~~C~~ | ~~0.35~~ | **RETIRED** — outside the Kelly envelope | ~~$19,688~~ | — |
+| ~~D~~ | ~~0.56~~ | **RETIRED** — outside the Kelly envelope | ~~$31,500~~ | — |
+| ~~ceiling~~ | ~~up to 0.80~~ | **RETIRED** — outside the Kelly envelope | ~~$45,000~~ | — |
+
+Live `KELLY_M` is **0.135**, which is not ramp progress and not a rung: it is
+the venue-mechanics floor (Hyperliquid's $10 `MinTradeNtl`), deliberately off
+the staircase and comfortably under the ceiling.
 
 Tested against the alternatives: this rung shape cuts deployed notional 25%
 and worst-trade loss 22% vs v2 at identical timing, and **strictly dominates
 it** on every risk metric. Sizes at SIZING_BASE_USD=50000; trend-leg entries
 are 1/3 of these.
+
+### The ceiling — why the ramp stops at 0.20
+
+**The advance criteria below are entirely EXECUTION evidence.** Trade count,
+cumulative P&L, fill quality, no halts, legs reconciled — every one of them
+answers "is the machinery working", and none of them answers "is this size
+inside the drawdown budget". Those are different questions, and only the
+first one has ever been checked here. That gap is what this ceiling closes.
+
+`btc-paper-engine/RESEARCH_FEES.md` (2026-09-10) re-fitted Kelly on returns
+charged the fee we ACTUALLY pay. Four of four intended-maker pullback entries
+crossed and paid taker, so the true round trip is 8.64 bps against a modelled
+6.00. On the conservative specification the binding S6 recommended m is
+**0.22**, which puts rungs C, D and the 0.80 ceiling outside the envelope.
+The 0.135 → 0.20 step clears in every specification tested. Robustness: at
+the study's registered 66% crossing rate rather than the observed 100%, the
+binding cell reads 0.27 — same decision.
+
+Per KELLY.md's own doctrine, over-betting destroys growth faster than
+under-betting gives it up, so when defensible specifications disagree about
+size the smaller one governs.
+
+**Enforced in code, not just here.** `mirror.KELLY_M_CAP = 0.20`:
+
+- it **clamps**, it does not refuse to boot. A boot refusal on an over-cap
+  env would leave live positions with no stop maintenance, no exit_flag
+  handling and no halt machinery — trading over-sizing risk for
+  naked-position risk, which is strictly worse. Over-cap pages `🔴 ACTION
+  NEEDED kelly_over_cap` and sizes at the cap;
+- **open positions are never force-resized.** Sizing is consulted for NEW
+  entries only, so a leg opened above the cap exits on its own engine signal
+  rather than being part-closed by a deploy;
+- it is a **repo constant, not a Settings field**. An env-overridable ceiling
+  is not a ceiling, it is a second env var to fat-finger. Raising it costs a
+  code change, a review and a redeploy — deliberately;
+- `/status` reports `kelly_m_effective` and `kelly_m_cap` alongside the
+  configured value, so the readout can never state a size the executor is not
+  using.
+
+**This is reversible, and the trigger is evidence, not a date.** The envelope
+behind 0.22 is in-sample, one cell of four, and rests on n=4 fills for the
+crossing rate. A Kelly re-fit on enough LIVE trades is what reopens rung C —
+not a calendar quarter, and not a good run of fills.
 
 ### Advance criteria (ALL must hold)
 

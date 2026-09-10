@@ -9,7 +9,13 @@ from app.mirror import Executor, ExecState
 
 
 class Cfg:
-    kelly_m = 0.56
+    # AT the repo cap (mirror.KELLY_M_CAP), not above it. This was 0.56 - the
+    # old ramp rung D - which is now unreachable, so a fixture set there was
+    # testing a state the executor can no longer be in, and every sizing
+    # assertion below was silently exercising the clamp instead of the
+    # formula it claimed to check. Over-cap behaviour has its own tests
+    # (test_gate_kelly_cap_*); everything else sizes at a legal value.
+    kelly_m = 0.20
     sizing_base_usd = 0.0
     max_notional_usd = 25_000.0
     max_account_lev = 2.0
@@ -148,8 +154,8 @@ def test_gate_pullback_entry_sizing_and_lifecycle(tmp_path):
     ex.step(target(pull=pend))
     kind, side, qty, cloid = v.calls[0]
     assert (kind, side) == ("LIMIT", "BUY") and cloid == f"P-{NOW}-E1"
-    # 0.56 * 1.5 * 0.75 * 10k / 59k = 0.10678 BTC
-    assert qty == pytest.approx(0.56 * 1.5 * 0.75 * 10_000 / 59_000, abs=1e-4)
+    # 0.20 * 1.5 * 0.75 * 10k / 59k = 0.03814 BTC
+    assert qty == pytest.approx(0.20 * 1.5 * 0.75 * 10_000 / 59_000, abs=1e-4)
     # same pending again -> no duplicate order
     ex.step(target(pull=pend))
     assert len([c for c in v.calls if c[0] == "LIMIT"]) == 1
@@ -189,7 +195,7 @@ def test_gate_trend_market_entry_and_trail_ratchet(tmp_path):
     ex.step(target(trend=pend))
     kind, side, qty, _ = v.calls[0]
     assert (kind, side) == ("MARKET", "SELL")             # trend enters at market
-    assert qty == pytest.approx(0.56 * 1.5 * 0.25 * 10_000 / 60_000, abs=1e-4)
+    assert qty == pytest.approx(0.20 * 1.5 * 0.25 * 10_000 / 60_000, abs=1e-4)
     pos = {"pending": None,
            "position": {"side": "S", "entry_price": 60_000.0, "entry_ts": NOW,
                         "signal_ts": NOW, "stop": 63_000.0, "exit_flag": None}}
@@ -244,7 +250,10 @@ def test_gate_size_quantized_to_contracts(tmp_path):
     rounded DOWN before ordering so the ledger equals the real position —
     ordering 0.01466 BTC and recording 0.01466 while the venue filled 0.01
     desynchronises every stop and exit that follows (live find, 2026-08-10)."""
-    v = FakeVenue(mult=0.01)
+    # equity 28k at kelly 0.20 = the same 0.035 BTC target this test was
+    # written against at 10k/0.56. The quantity is the fixture here, so it is
+    # held by scaling the ACCOUNT rather than by an over-cap kelly_m.
+    v = FakeVenue(mult=0.01, equity=28_000.0)
     ex = mkexec(tmp_path, v)
     ex.step(target(trend={"pending": {"side": "S", "limit": -1.0,
                                       "signal_ts": NOW}, "position": None}))
@@ -259,7 +268,7 @@ def test_gate_sub_contract_chase_not_sent(tmp_path):
     """A shortfall under one contract is not chaseable. The old code sent it
     and the venue's max(1, ...) floor rounded it up to a FULL contract,
     overshooting the target instead of under-filling it."""
-    v = FakeVenue(mult=0.01)
+    v = FakeVenue(mult=0.01, equity=28_000.0)   # -> 0.035 target, as before
     ex = mkexec(tmp_path, v)
     pos = {"pending": None,
            "position": {"side": "S", "entry_price": 60_000.0, "entry_ts": NOW,
@@ -272,7 +281,7 @@ def test_gate_sub_contract_chase_not_sent(tmp_path):
     assert len(chases) == 1 and chases[0][2] == pytest.approx(0.01)
     assert ex.state.legs["trend"].qty == pytest.approx(-0.03)
     # now the same setup with a sub-contract shortfall: no chase at all
-    v2 = FakeVenue(mult=0.01)
+    v2 = FakeVenue(mult=0.01, equity=28_000.0)
     ex2 = mkexec(tmp_path / "b", v2)
     ex2.state.legs["trend"].entry_cloid = f"T-{NOW}-E"
     v2.orders[f"T-{NOW}-E"] = {"type": "MARKET", "side": "SELL", "qty": 0.028,
@@ -493,7 +502,7 @@ def test_gate_sizing_base_overrides_equity(tmp_path):
             "position": None}
     ex.step(target(pull=pend))
     _, _, qty, _ = v.calls[0]
-    assert qty == pytest.approx(0.56 * 1.5 * 0.75 * 128_000 / 59_000, abs=1e-4)
+    assert qty == pytest.approx(0.20 * 1.5 * 0.75 * 128_000 / 59_000, abs=1e-4)
     # -6% of the ACCOUNT (=$1.5k) must NOT halt: threshold is 6% of base
     v._equity = 23_400.0
     ex.step(target(pull=pend))
@@ -1008,7 +1017,13 @@ def test_gate_daily_loss_manual_resume_above_030(tmp_path):
     """Ramp v3's "manual resume above KELLY_M 0.30" was doc-only (counter-
     agent 2026-08-11): _roll_day cleared DAILY_LOSS unconditionally."""
     v = FakeVenue()
-    ex = mkexec(tmp_path, v)                              # Cfg.kelly_m = 0.56
+    ex = mkexec(tmp_path, v)
+    # The RAW env value, over the repo cap on purpose. _roll_day reads raw
+    # kelly_m, not the clamped one, and must keep doing so: KELLY_M_CAP is
+    # 0.20, so an effective-value test could never exceed 0.30 and this rule
+    # would be dead code. Raw also errs the safe way - an over-cap env is an
+    # anomalous state and manual resume is the stricter branch.
+    ex.cfg.kelly_m = 0.56
     ex.state.halted = "DAILY_LOSS"
     ex.state.day_key = "2020-01-01"                       # force a rollover
     ex.step(target())
@@ -1028,10 +1043,10 @@ def test_gate_config_change_pages(tmp_path):
     change between polls must produce a config_change event."""
     ex = mkexec(tmp_path, FakeVenue())
     ex.step(target())                                     # snapshot stored
-    ex.cfg.kelly_m = 0.20
+    ex.cfg.kelly_m = 0.10
     ex.step(target())
     ev = [e for e in ex.state.events if e["kind"] == "config_change"]
-    assert len(ev) == 1 and "kelly_m: 0.56 -> 0.2" in ev[0]["msg"]
+    assert len(ev) == 1 and "kelly_m: 0.2 -> 0.1" in ev[0]["msg"]
     ex.step(target())                                     # stable -> no repeat
     assert len([e for e in ex.state.events
                 if e["kind"] == "config_change"]) == 1
@@ -2198,7 +2213,7 @@ def test_gate_reentry_after_resume_is_protected(tmp_path):
     trailing stop, /kill, /resume, and step against the SAME engine target
     (the engine's trail has not moved). The re-entered position must carry a
     real venue stop, not an inherited price."""
-    v = FakeVenue(mult=0.01, mid=77_500.0)
+    v = FakeVenue(mult=0.01, mid=77_500.0, equity=28_000.0)
     ex = mkexec(tmp_path, v)
     ets, stop = NOW - 14_400, 71_520.89
     ex.step(_long_target(ets, stop))                 # enter + protect
@@ -6676,3 +6691,101 @@ def test_gate_below_venue_floor_never_guesses_on_an_unreadable_mid(tmp_path):
     ex = mkexec(tmp_path, v, dry_run=False)
     assert ex._below_venue_floor(5e-5) is False
     assert ex._below_venue_floor(1e-9) is True, "sub-lot is still dust"
+
+
+# ---------------------------------------------------------------------------
+# KELLY_M cap (mirror.KELLY_M_CAP) — RESEARCH_FEES.md 2026-09-10.
+#
+# The ramp's advance criteria are all EXECUTION evidence (trade count, P&L,
+# fill quality, no halts, legs reconciled) and say nothing about the Kelly
+# envelope, so "the ramp is going well" could authorise a rung the sizing
+# evidence does not support. These gates pin the four properties that make the
+# cap a control rather than a comment.
+# ---------------------------------------------------------------------------
+
+def test_gate_kelly_cap_clamps_entry_size(tmp_path):
+    """An over-cap KELLY_M sizes at the CAP, not at the env value."""
+    from app.mirror import KELLY_M_CAP
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    ex.cfg.kelly_m = 0.56                                  # retired rung D
+    pend = {"pending": {"side": "L", "limit": 59_000.0, "signal_ts": NOW},
+            "position": None}
+    ex.step(target(pull=pend))
+    _, _, qty, _ = v.calls[0]
+    assert qty == pytest.approx(KELLY_M_CAP * 1.5 * 0.75 * 10_000 / 59_000,
+                                abs=1e-4)
+    # and emphatically NOT the env value
+    assert qty < 0.56 * 1.5 * 0.75 * 10_000 / 59_000 * 0.9
+
+
+def test_gate_kelly_cap_pages_at_boot(tmp_path):
+    """Clamping silently would be the same failure with better arithmetic."""
+    cfg = Cfg()
+    cfg.state_path = str(tmp_path / "state.json")
+    cfg.kelly_m = 0.35                                     # retired rung C
+    ex = Executor(FakeVenue(), cfg, cfg.state_path)
+    ev = [e for e in ex.state.events if e["kind"] == "kelly_over_cap"]
+    assert len(ev) == 1 and ev[0]["level"] == "RED"
+    assert "0.35" in ev[0]["msg"] and "0.2" in ev[0]["msg"]
+
+
+def test_gate_kelly_cap_silent_when_within(tmp_path):
+    """No page for a legal value — an alert that always fires is not an alert."""
+    ex = mkexec(tmp_path, FakeVenue())                     # Cfg.kelly_m = 0.20
+    assert not [e for e in ex.state.events if e["kind"] == "kelly_over_cap"]
+    ex.cfg.kelly_m = 0.135                                 # live size
+    ex.step(target())
+    assert not [e for e in ex.state.events if e["kind"] == "kelly_over_cap"]
+
+
+def test_gate_kelly_cap_never_resizes_an_open_position(tmp_path):
+    """The cap must not part-close a leg that was opened above it.
+
+    A deploy that clamps sizing AND force-reduces open legs would turn a
+    documentation change into an unscheduled market order against a live
+    book. Sizing is consulted for NEW entries only; an over-sized leg exits
+    on its own engine signal."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    ex.cfg.kelly_m = 0.56
+    pend = {"pending": {"side": "L", "limit": 59_000.0, "signal_ts": NOW},
+            "position": None}
+    ex.step(target(pull=pend))
+    v.orders[f"P-{NOW}-E1"]["status"] = "FILLED"
+    pos = {"pending": None,
+           "position": {"side": "L", "entry_price": 59_000.0, "entry_ts": NOW,
+                        "signal_ts": NOW, "stop": 56_500.0, "exit_flag": None}}
+    ex.step(target(pull=pos))
+    held = ex.state.legs["pullback"].qty
+    assert held > 0
+    n_before = len(v.calls)
+    ex.cfg.kelly_m = 0.10                                  # well under the cap
+    for _ in range(3):
+        ex.step(target(pull=pos))
+    assert ex.state.legs["pullback"].qty == pytest.approx(held)
+    assert not [c for c in v.calls[n_before:]
+                if c[0] == "MARKET"], "no resize order may be sent"
+
+
+def test_gate_kelly_cap_is_not_env_overridable(tmp_path):
+    """The cap is a REPO constant. An env-overridable ceiling is not a
+    ceiling, it is a second env var to fat-finger — and the whole point is
+    that raising it costs a code change and a review."""
+    from app.config import Settings
+    assert "kelly_m_cap" not in Settings.model_fields
+    # and a cfg object carrying one is ignored by the clamp
+    from app.mirror import KELLY_M_CAP
+    ex = mkexec(tmp_path, FakeVenue())
+    ex.cfg.kelly_m = 0.80
+    ex.cfg.kelly_m_cap = 0.80                              # wishful thinking
+    assert ex._effective_kelly_m() == pytest.approx(KELLY_M_CAP)
+
+
+def test_gate_kelly_cap_change_under_a_running_process_pages(tmp_path):
+    """Boot is not the only way KELLY_M can change."""
+    ex = mkexec(tmp_path, FakeVenue())
+    ex.step(target())                                      # snapshot stored
+    ex.cfg.kelly_m = 0.56
+    ex.step(target())
+    assert [e for e in ex.state.events if e["kind"] == "kelly_over_cap"]

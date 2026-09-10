@@ -36,6 +36,33 @@ from typing import Protocol
 logger = logging.getLogger(__name__)
 
 BAR_SECONDS = 14_400
+# HARD CEILING on KELLY_M, deliberately a REPO CONSTANT and not a Settings
+# field. KELLY_M is a Render env var: an env-overridable ceiling is not a
+# ceiling, it is a second env var to fat-finger. Raising this is a code
+# change, a review and a redeploy - which is the whole point, because the
+# thing it guards against is a ramp step taken on execution evidence alone.
+#
+# WHY 0.20 (RESEARCH_FEES.md, 2026-09-10). The fee study re-fit Kelly on
+# returns charged the fee we ACTUALLY pay (8.64 bps round trip: 4/4 intended-
+# maker entries crossed and paid taker) instead of the modelled 6.00. On the
+# conservative specification the binding S6 recommended m is 0.22, so ramp
+# rung C (0.35), rung D (0.56) and the 0.80 ceiling all sit OUTSIDE the
+# drawdown-budget envelope. The RAMP v4 advance criteria - trade count,
+# cumulative P&L >= 0, fill quality, no halts, legs reconciled - are entirely
+# about EXECUTION and say nothing about the envelope, so "the ramp is going
+# well" could authorise a step the sizing evidence does not support. This
+# constant is what stops that.
+#
+# IT CLAMPS, IT DOES NOT REFUSE TO BOOT. A boot refusal on an over-cap env
+# would leave live positions with no stop maintenance, no exit_flag handling
+# and no halt machinery - trading the over-sizing risk for a naked-position
+# risk, which is strictly worse. Over-cap therefore pages and SIZES AT THE
+# CAP; the process keeps running and keeps protecting what is already open.
+# Positions opened before a cap change are never force-resized (see
+# _leg_qty's call sites: sizing is consulted for NEW entries only), so an
+# over-sized leg exits on its own signal rather than being part-closed by a
+# deploy.
+KELLY_M_CAP = 0.20
 # RAMP v4 gate requirements that auto-drill must also respect. Single source
 # of truth: main.py imports these, so the drill loop and the gate can never
 # disagree about what "done" means (they did - auto-drill stopped at 3 cycles
@@ -313,6 +340,7 @@ class Executor:
         self._stop_ok_polls: dict[str, int] = {}
         self._stamp_witnessing()
         self._check_dry_run_flip()
+        self._check_kelly_cap()
         self._migrate_ledger_granularity()
         self._warn_unattributed_coverage()
         self._void_absurd_fills()
@@ -322,6 +350,25 @@ class Executor:
         self._reconcile_boot()
         if any(l.qty != 0.0 for l in self.state.legs.values()):
             self._cov("restart_with_position")
+
+    def _check_kelly_cap(self) -> None:
+        """Page when KELLY_M is set above the repo cap, and say what size is
+        actually being used.
+
+        Deliberately NOT a halt and NOT a boot refusal - see KELLY_M_CAP. The
+        failure mode this replaces is silent: an operator advances the ramp on
+        RAMP v4's execution criteria, the env takes the new value, and nothing
+        anywhere says the number is outside the Kelly envelope. Clamping
+        without paging would be the same silence with different arithmetic, so
+        the clamp and the page ship together."""
+        cap = globals().get("KELLY_M_CAP", KELLY_M_CAP)
+        raw = float(getattr(self.cfg, "kelly_m", 0.0) or 0.0)
+        if raw <= cap:
+            return
+        self._event("RED", "kelly_over_cap",
+                    f"KELLY_M {raw} exceeds the repo cap {cap} - legs are "
+                    f"being sized at {cap}, NOT at {raw}. Positions already "
+                    f"open are left alone and exit on their own signal.")
 
     def _check_venue_continuity(self) -> None:
         """A ledger belongs to ONE exchange. Refuse to run it against another.
@@ -1039,6 +1086,15 @@ class Executor:
                                  f"for the cloid named above if this repeats; "
                                  f"the ref is kept so the executor will not "
                                  f"re-send",
+            "kelly_over_cap": "the ramp cannot go here. RESEARCH_FEES.md "
+                               "puts the binding S6 Kelly envelope at 0.22, "
+                               "so rungs C (0.35), D (0.56) and the 0.80 "
+                               "ceiling are outside it - trading CONTINUES, "
+                               "sized at the cap. Either lower KELLY_M in "
+                               "the Render env to <= the cap, or, if new "
+                               "evidence justifies a higher ceiling, raise "
+                               "KELLY_M_CAP in the repo (code change + "
+                               "review + redeploy, on purpose)",
             "config_change": "sizing/risk config changed - if this was you "
                              "(ramp step, base change), ignore; if NOT, a "
                              "sync or fat-finger altered live risk limits - "
@@ -1113,11 +1169,23 @@ class Executor:
 
     # ---------- sizing ----------
 
+    def _effective_kelly_m(self) -> float:
+        """KELLY_M as SIZING actually uses it: the env value, clamped to
+        KELLY_M_CAP.
+
+        Read the module attribute rather than closing over the constant so a
+        test (or a future guarded override) can move the cap without patching
+        every call site."""
+        cap = globals().get("KELLY_M_CAP", KELLY_M_CAP)
+        return min(float(getattr(self.cfg, "kelly_m", 0.0) or 0.0), cap)
+
     def _leg_frac(self, leg: str, blend: dict) -> float:
         w = blend.get("w_trend", 0.25)
         lev = blend.get("lev", 1.5)
         weight = w if leg == "trend" else 1.0 - w
-        return self.cfg.kelly_m * lev * weight
+        # EFFECTIVE, not raw: an over-cap env sizes at the cap. See
+        # KELLY_M_CAP for why this clamps instead of refusing to run.
+        return self._effective_kelly_m() * lev * weight
 
     def _base(self, equity: float) -> float:
         """Sizing base: fixed SIZING_BASE_USD when configured, else account
@@ -1773,6 +1841,11 @@ class Executor:
                      for k, v in snap.items() if prev_snap.get(k) != v]
             self._event("RED", "config_change", "; ".join(diffs))
             self._cov("config_change")
+            # A cap breach introduced WITHOUT a restart (a test, or a future
+            # hot-reload) must page too - boot is not the only way KELLY_M
+            # can change.
+            if prev_snap.get("kelly_m") != snap.get("kelly_m"):
+                self._check_kelly_cap()
         self.state.last_config = snap
 
     def step(self, target: dict) -> None:

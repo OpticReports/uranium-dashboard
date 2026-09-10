@@ -19,6 +19,7 @@ from fastapi import FastAPI, HTTPException, Query, Header
 from .config import settings
 from .feed import EngineFeed
 from .mirror import (Executor, DRILL_CYCLE_NEED, SLIP_SANITY_MAX_BPS,  # noqa: F401
+                     KELLY_M_CAP,
                      SLIPPAGE_SAMPLE_NEED)
 
 
@@ -374,9 +375,18 @@ def status(x_exec_token: str | None = Header(default=None),
            "venue_products": LAST.get("venue_products"),
            "product": settings.cb_product_id,
            "kelly_m": settings.kelly_m,
+           # The EFFECTIVE size, next to the configured one. /status reporting
+           # only the env value would state a size the executor is not using
+           # the moment KELLY_M goes over the cap - the same "healthy while
+           # doing something else" phenotype the boot gates exist to kill.
+           "kelly_m_effective": EXEC._effective_kelly_m(),
+           "kelly_m_cap": KELLY_M_CAP,
            "sizing_config": {
                "sizing_base_usd": settings.sizing_base_usd or "account equity",
                "kelly_m": settings.kelly_m,
+               "kelly_m_effective": EXEC._effective_kelly_m(),
+               "kelly_m_cap": KELLY_M_CAP,
+               "kelly_over_cap": settings.kelly_m > KELLY_M_CAP,
                "max_notional_usd": settings.max_notional_usd,
                "max_account_lev": settings.max_account_lev,
                "daily_loss_halt_pct": settings.daily_loss_halt_pct,
@@ -495,7 +505,11 @@ def _ramp_v4(st) -> dict:
             "slippage_sanity": sanity,
             "advance_ok": bool(complete and sanity["ok"]),
             "unattributed_total": sum(r["unattributed"] for r in rows.values()),
-            "note": "advance KELLY_M only when advance_ok: every row met AND "
+            "note": f"advance KELLY_M only when advance_ok AND the target "
+                    f"rung is <= KELLY_M_CAP ({KELLY_M_CAP}): these rows are "
+                    f"EXECUTION evidence and say nothing about the Kelly "
+                    f"envelope, which RESEARCH_FEES.md puts at 0.22. "
+                    f"advance_ok means every row met AND "
                     "|mean slip| < 15bps. The slip CUSUM (barbell-lab edge "
                     "monitor) is the continuous control and arms at the same "
                     "10 fills. unattributed counts are pre-split or dry-run "
