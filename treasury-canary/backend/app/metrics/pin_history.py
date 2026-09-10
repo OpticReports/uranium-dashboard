@@ -28,7 +28,7 @@ from __future__ import annotations
 import bisect
 from datetime import date
 
-from .pins import ANCHORS, RESERVES_MIN_BASE_M, _pscore, hazen_pct
+from .pins import ANCHORS, RESERVES_MIN_BASE_M, _pscore, rank_pct
 
 # (lag_min_months, lag_max_months, documented basis) per channel. These size
 # the gray band drawn after a red episode: "when the pain from this spark has
@@ -110,7 +110,8 @@ def _expanding_percentile(dates: list[date], vals: list[float], min_obs: int
         bisect.insort(seen, v)
         if len(seen) >= min_obs:
             out_d.append(d)
-            out_v.append(hazen_pct(bisect.bisect_right(seen, v), len(seen)))
+            lo = bisect.bisect_left(seen, v)
+            out_v.append(rank_pct(lo, bisect.bisect_right(seen, v) - lo, len(seen)))
     return out_d, out_v
 
 
@@ -129,7 +130,8 @@ def _expanding_pctl_vs_raw(dates: list[date], vals: list[float], window: int,
         if i >= window - 1 and len(seen) >= min_obs:
             avg = run / window
             out_d.append(d)
-            out_v.append(hazen_pct(bisect.bisect_right(seen, avg), len(seen)))
+            lo = bisect.bisect_left(seen, avg)
+            out_v.append(rank_pct(lo, bisect.bisect_right(seen, avg) - lo, len(seen)))
     return out_d, out_v
 
 

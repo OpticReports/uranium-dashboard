@@ -45,13 +45,18 @@ def test_percentile_never_returns_exactly_100():
     rank/n hits exactly 100.0 on every running max, so a percentile leg anchored
     (50, 85, 95, 100) scored the EXTREME by construction on any new high.
     """
-    from app.metrics.pins import _percentile, hazen_pct
+    from app.metrics.pins import _percentile, rank_pct
 
     for n in (2, 10, 100, 1000, 10_000):
-        assert hazen_pct(n, n) == pytest.approx(100.0 - 50.0 / n)
-        assert hazen_pct(n, n) < 100.0
+        # an untied all-time high: below = n-1, equal = 1
+        assert rank_pct(n - 1, 1, n) == pytest.approx(100.0 - 50.0 / n)
+        assert rank_pct(n - 1, 1, n) < 100.0
+        assert rank_pct(0, 1, n) > 0.0                      # an all-time low
     # approaches 100 asymptotically, reaches it never
-    assert hazen_pct(10_000, 10_000) > hazen_pct(100, 100)
+    assert rank_pct(9_999, 1, 10_000) > rank_pct(99, 1, 100)
+    # the not-in-sample path (a rolling mean above every raw print) is clamped
+    assert rank_pct(500, 0, 500) < 100.0
+    assert rank_pct(0, 0, 500) > 0.0
 
     rising = list(range(1, 501))
     assert _percentile(rising, rising[-1]) < 100.0      # an all-time high
@@ -278,3 +283,44 @@ def test_overlap_validation_counts_hits_vs_base_rate():
     assert 0.0 <= v["base_rate"] <= 1.0
     # conditional months are few; the caveat must always ride along
     assert "never a calibrated probability" in conf["caveat"]
+
+
+def test_mid_rank_reduces_to_hazen_when_untied():
+    """The mid-rank form must not move anything on untied data."""
+    from app.metrics.pins import rank_pct
+
+    for n in (2, 7, 100, 1056, 7_500):
+        for rank in (1, 2, n // 2, n - 1, n):
+            hazen = 100.0 * (rank - 0.5) / n
+            assert rank_pct(rank - 1, 1, n) == pytest.approx(hazen, abs=1e-12)
+
+
+def test_ties_share_the_midpoint_of_their_block():
+    """Highest-rank-on-ties scored every member as if it were the top of the block.
+
+    CCC OAS is quoted to 2dp and its percentile is the primary private-credit
+    driver, so this bias is not cosmetic.
+    """
+    from app.metrics.pins import _percentile, rank_pct
+
+    # 10-way tie occupying ranks 91..100 of 1000
+    assert rank_pct(90, 10, 1000) == pytest.approx(9.5)
+    assert 100.0 * (100 - 0.5) / 1000 == pytest.approx(9.95)   # the old, biased value
+
+    # every member of a tie block gets the SAME percentile, and it is the midpoint
+    vals = [1.0] * 5 + [2.0] * 10 + [3.0] * 5
+    assert _percentile(vals, 2.0) == pytest.approx(50.0)       # 5 below + 10/2 = 10 of 20
+    assert _percentile(vals, 1.0) == pytest.approx(12.5)       # 0 below + 5/2 = 2.5 of 20
+    assert _percentile(vals, 3.0) == pytest.approx(87.5)       # 15 below + 5/2 of 20
+    # and a tied all-time high is no longer scored as an untied one
+    assert _percentile(vals, 3.0) < 100.0 - 50.0 / len(vals)
+
+
+def test_live_and_hindcast_agree_on_a_tied_series():
+    """Parity must survive ties, not just the untied happy path."""
+    from app.metrics.pins import _percentile
+
+    vals = [5.0, 5.0, 7.0, 5.0, 9.0, 7.0, 9.0, 9.0]
+    dts = [date(2025, 1, 1) + timedelta(days=7 * i) for i in range(len(vals))]
+    _, pv = _expanding_percentile(dts, vals, min_obs=1)
+    assert pv[-1] == pytest.approx(_percentile(vals, vals[-1]), abs=0.05)

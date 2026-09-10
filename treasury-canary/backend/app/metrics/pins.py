@@ -137,32 +137,48 @@ def _pct_change(vals: list, window: int, min_base: float | None = None) -> float
     return round((c[-1] - base) / base * 100.0, 1)
 
 
-def hazen_pct(rank: int, n: int) -> float:
-    """Hazen plotting position (rank - 0.5) / n, as a percentage.
+def rank_pct(below: int, equal: int, n: int) -> float:
+    """Mid-rank plotting position (below + equal/2) / n, as a percentage.
 
-    The naive rank/n returns EXACTLY 100.0 whenever the value is the running
-    maximum, so under the (50, 85, 95, 100) percentile anchors any new high hits
-    the extreme anchor BY CONSTRUCTION -- and a secularly trending series then
-    sits pinned at the ceiling for years rather than for a reason. On the CFTC
-    leveraged-net-short series that was 85 of 953 weeks at exactly 100.
+    Two defects in the naive rank/n this replaces:
 
-    Hazen is the standard plotting position for this job: it never returns 0 or
-    100, so the extreme stays a statement about the ANCHOR rather than an
-    artifact of being the newest record. Bounds are (0.5/n, 100 - 0.5/n), so a
-    percentile leg approaches 100 asymptotically with sample size and reaches it
-    never. Every percentile on this board goes through here so the three call
-    sites cannot drift apart.
+    1. It returns EXACTLY 100.0 whenever the value is the running maximum. The
+       percentile legs are anchored (50, 85, 95, 100), so any new all-time high
+       scored the EXTREME anchor by construction -- not because the reading was
+       extreme, but because it was the newest record. On the CFTC series that
+       was 87 of 953 weeks pinned at exactly 100.0.
+    2. Passing the HIGHEST rank in a tie block scores every member of the block
+       as if it were the top of it. Ties are dense on quoted series -- CCC OAS
+       is quoted to 2dp, and its percentile is the primary private-credit
+       driver -- so that bias is not cosmetic.
+
+    The mid-rank form fixes both. For an untied value that is itself in the
+    sample (equal == 1) it reduces EXACTLY to the Hazen position (rank - 0.5)/n,
+    so nothing moves on untied data; ties share the midpoint of their block
+    instead of all taking the top.
+
+    For any value drawn from the sample the result lies naturally in
+    [0.5/n, (n - 0.5)/n] -- it can never be 0 or 100. The clamp exists only for
+    the one caller that ranks a value NOT in the sample (_expanding_pctl_vs_raw
+    ranks a rolling MEAN against the raw prints, and a mean can sit outside
+    their range); without it that path could still print exactly 0 or 100.
+
+    Every percentile on this board goes through here so the live board and the
+    hindcast cannot drift apart.
     """
     if n <= 0:
         return 0.0
-    return max(0.0, 100.0 * (rank - 0.5) / n)
+    pct = 100.0 * (below + equal / 2.0) / n
+    return min(max(pct, 100.0 * 0.5 / n), 100.0 * (n - 0.5) / n)
 
 
 def _percentile(vals: list, value: float | None) -> float | None:
     c = _clean(vals)
     if value is None or not c:
         return None
-    return round(hazen_pct(sum(1 for v in c if v <= value), len(c)), 1)
+    below = sum(1 for v in c if v < value)
+    equal = sum(1 for v in c if v == value)
+    return round(rank_pct(below, equal, len(c)), 1)
 
 
 # --- continuous severity scoring (0-100) --------------------------------------

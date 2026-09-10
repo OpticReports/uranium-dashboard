@@ -236,19 +236,34 @@ the redeploy and the numbers re-frozen at every hard-coded site.
    exactly 100.0 whenever the current value is the running max, and leveraged-fund net short has a
    secular uptrend — so it has been pinned for long stretches since 2010.
 
-## The percentile estimator (Hazen) — implemented 2026-09-10
+## The percentile estimator (mid-rank) — implemented 2026-09-10
 
-DD Q9, done. All three percentile paths now go through one shared `hazen_pct(rank, n)` in
-`pins.py` — `_percentile` (live), `_expanding_percentile` and `_expanding_pctl_vs_raw`
-(hindcast) — so the live board and the history cannot drift apart.
+DD Q9, done. All three percentile paths now go through one shared
+`rank_pct(below, equal, n)` in `pins.py` — `_percentile` (live),
+`_expanding_percentile` and `_expanding_pctl_vs_raw` (hindcast) — so the live board and
+the history cannot drift apart.
 
-**The defect.** `rank / n` returns *exactly* 100.0 whenever the value is the running
+**The first defect.** `rank / n` returns *exactly* 100.0 whenever the value is the running
 maximum. The percentile legs are anchored `(50, 85, 95, 100)`, so **any new all-time high
 scored the extreme anchor by construction** — not because the reading was extreme, but
 because it was the newest record. On the CFTC series that was 87 of 953 weeks at exactly
 100.0.
 
-**The fix.** Hazen's plotting position `(rank - 0.5) / n`, bounded `(0.5/n, 100 - 0.5/n)`.
+**A second defect, found while implementing the first.** All three call sites passed
+`bisect_right` — the *highest* rank in a tie block — so every member of a tie group scored
+as if it were the top of the block. That is not cosmetic here: CCC OAS is quoted to 2dp and
+its percentile is the primary private_credit driver. On the CFTC series 13.4% of points
+shift under a mid-rank form (mean +0.21pp, max +1.52pp); for a 10-way tie in n = 1000 the
+bias is 0.45pp.
+
+**The fix.** The mid-rank plotting position `(below + equal/2) / n`. For an untied value
+that is in the sample (`equal == 1`) this reduces **exactly** to Hazen `(rank - 0.5)/n`, so
+nothing moves on untied data; ties share the midpoint of their block. For any value drawn
+from the sample the result lies naturally in `[0.5/n, (n - 0.5)/n]` and can never be 0 or
+100. The clamp exists solely for `_expanding_pctl_vs_raw`, which ranks a rolling *mean*
+against raw prints — a mean can sit outside their range, and without the clamp that one path
+could still print exactly 0 or 100.
+
 Verified: exactly 100.0 is unreachable for every n from 2 to 5000; the CFTC maximum drops
 from 100.0000 to 99.9502, and exact-100 weeks go 87 -> 0.
 
@@ -272,6 +287,11 @@ historical extreme", not "newest record".
 **Anchor semantics, stated explicitly.** `extreme = 100` on a percentile leg is now
 approached asymptotically and never reached (at n = 7500 the max score is ~99.97). That is
 intended. The same holds at the bottom for the VRP leg, whose extreme is 0.
+
+**Mutation-tested.** Six mutations, all caught: reverting to naive `rank/n`; restoring
+highest-rank-on-ties; dropping the clamp; an off-by-one `below/n`; a Weibull `(n+1)`
+denominator; and a one-sided change to the hindcast only, which the live-vs-hindcast parity
+test catches.
 
 **Two existing tests were rewritten**, because they asserted the old estimator's exact-100
 output rather than the property they were named for:
