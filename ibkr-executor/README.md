@@ -53,6 +53,103 @@ This service reconciles intents against its own persisted book
 time-stop exits, band rebalances, and BIL sweeps through the same adapter
 modes as the ladder (OFFLINE -> DRY -> PAPER -> LIVE, DRY_RUN default true).
 
+### When the poll goes blind (2026-09-10)
+
+A failed poll used to be indistinguishable from a healthy one. `fetch_intents`
+returned `None` for every failure, the loop logged one line, and the cycle then
+completed normally — so `BLEND_CYCLE` was stamped `ok: True` and `/health`
+reported `blend_loop.ok: true` while the service planned no entries, raised no
+cash and placed no orders. The quietest case of all was `TRACKER_URL` being
+UNDECLARED in render.yaml: `config.py` defaults it to `""`, and an empty base
+returns `None` before any request, with no exception and nothing in the
+negative cache.
+
+Every no-payload outcome now carries a REASON, and the three that never
+self-heal are paged immediately rather than waited out:
+
+| reason | meaning | self-heals? |
+| --- | --- | --- |
+| `no_url` | `TRACKER_URL` unset — the service never even asks | never |
+| `auth` | 401/403: `TRACKER_API_TOKEN` no longer matches the tracker's `BLEND_API_TOKEN` | never |
+| `redirect` | 3xx: `TRACKER_URL` is an alias host, and httpx does not follow redirects | never |
+| `http_<n>` | any other non-2xx (5xx usually transient) | usually |
+| `deadline` | the whole fetch blew `FEED_TIMEOUT` | usually |
+| `decode` | a 200 that is not JSON — a tracker-side bug | usually |
+| `transport` | DNS/connect/read failure, typically a tracker redeploy | usually |
+| `cache_skip` | `FEED_FAIL_TTL` suppressed the fetch — NOT an attempt, and counted as neither blindness nor recovery | n/a |
+
+Paging cadence (`_tracker_watch`): a config reason pages on the FIRST failed
+poll; a transient reason needs BOTH 3 failed polls AND 10 minutes blind — the
+count alone over-fires when `/kill` wakes the loop and stacks attempts in
+seconds, the clock alone over-fires when the loop is parked on a wedged
+gateway. After the first page the cadence DECAYS: crossing 1h, then 4h, then
+at most once a day, plus one recovery line. A three-day outage pages a handful
+of times, not 864 — burying the channel the kill switch needs is its own
+failure mode.
+
+`GET /health` grows a `tracker` block: `ok`, `reason`, `blind_for_s`,
+`blind_polls`, `last_ok_age_s`, and `alerts_configured`. That last one matters
+— `alerts.send` is a silent no-op when `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID`
+are unset, so an alerting fix that cannot reach anyone is the same bug wearing
+a hat. The HTTP status stays 200 regardless: `/health` is Render's
+`healthCheckPath`, and restarting the container does not fix a dead tracker —
+it just restart-loops a live-money service.
+
+**Runbook when the page fires.** `no_url` / `bad_url` / `auth` / `redirect` are
+all fixed in Render → ibkr-executor → Environment, never by retrying: set
+`TRACKER_URL` to the CANONICAL host (`research.optic.capital` — the alias
+308-redirects and httpx does not follow it), and `TRACKER_API_TOKEN` to the
+tracker's current `BLEND_API_TOKEN`.
+
+What a blind stretch costs, precisely — the first draft of this section got it
+wrong and the counter-agent caught it, so it is spelled out rather than
+summarised:
+
+- **Unaffected**, because they never needed the tracker: stops already resting
+  GTC at the venue, and this service's own 90-calendar-day time stop, which
+  runs on the payload-`None` path specifically so it survives an outage.
+- **Delayed, not lost**: exit SIGNALS. A blind executor receives no intents at
+  all, exits included — but the tracker echoes exits for `_EXIT_ECHO_DAYS` (7),
+  so they are picked up on recovery inside that window.
+- **Lost outright**: entries. The feed only ever carries the CURRENT session's
+  fires (`call_date == as_of`), so a fire published while blind is gone. There
+  is no catch-up path, and the recovery page says so rather than implying one.
+
+**Not covered by this watch.** Stated so nobody reads more into it than is
+there:
+
+1. **A dead loop thread.** A `_build` raise alerts once and returns; an
+   exception in the ladder section skips the blend block entirely. In both
+   cases the poll never runs, so nothing increments and no tracker page can
+   fire. This is why `/health`'s `tracker.ok` is TRI-STATE: `null` means no
+   poll has ever succeeded, which is exactly the state those two failures
+   leave behind, and reporting it as `true` would rebuild the green lie.
+   `loop_age_s` is the only other signal, and nothing pages on it yet.
+2. **A stale-but-successful payload.** `payload_is_stale` nulls the payload
+   INSIDE `run_cycle`, after the poll has already been recorded as healthy, so
+   a tracker whose bar feed has stalled plans zero entries with
+   `tracker.ok: true`. Same symptom, different cause, not covered here.
+3. **A pre-open (09:25 ET) escalation.** The single most valuable rung and it
+   is NOT built: the ET/holiday machinery (`entry_window_open`,
+   `PREOPEN_FROM/TO`, the NYSE holiday set) lives only on `main`, and defining
+   a second copy here would collide with it at merge, where Python silently
+   takes the later definition. The cost is real and named rather than buried:
+   because the ladder decays to once-a-day after 4h, a tracker blind since
+   Monday pages at 10:10, 11:00, 14:00, then Tue 14:00 — **never before an
+   open on days 2+**, so each subsequent day's fires are lost with the warning
+   arriving after the fact. Build this rung immediately after the branch
+   merges `main`, when `_is_trading_day` and the ET helpers are in scope.
+4. **A restart cadence faster than the transient threshold.** The watch state
+   is in memory, so a service restarting more often than 3 polls never reaches
+   the transient page. Config reasons are immune (they page on the first
+   failed poll), and a service restarting every few minutes has a louder
+   problem — but it is a real hole, not a theoretical one.
+
+**Page budget.** At most one page per 30 min and `TRACKER_MAX_PAGES_PER_DAY`
+(6) per UTC day, across every rung including recovery. A flapping tracker
+measured 36-42 pages/day without it. A page the budget suppresses is still
+written to the log and still visible on `/health` — capped, never invisible.
+
 ### Cycle order (reconciliation-first — counter-agent-mandated law)
 
 `run_cycle` runs EVERY loop iteration — a tracker outage does NOT skip it:

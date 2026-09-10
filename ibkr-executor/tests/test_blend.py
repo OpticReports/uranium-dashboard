@@ -6178,3 +6178,222 @@ def test_gate_crn2_an_orphan_book_order_waits_for_a_real_quote(tmp_path):
     run_cycle(m, a, None, "2026-08-22", alert=alerts.append)
     assert cid not in m.state.pending_book_orders
     assert m.state.spy_qty == 5
+
+
+# --- intents failure taxonomy (2026-09-10) ------------------------------------
+
+def _fake_intents(monkeypatch, *, raise_on_get=None, status=None, decode=False):
+    """Install a fake httpx.get for fetch_intents_reason."""
+    import httpx as _httpx
+
+    class R:
+        def raise_for_status(self):
+            if status is not None:
+                raise _httpx.HTTPStatusError(
+                    f"HTTP {status}",
+                    request=_httpx.Request("GET", "https://x/blend3070/intents"),
+                    response=_httpx.Response(status))
+
+        def json(self):
+            if decode:
+                raise ValueError("Expecting value: line 1 column 1 (char 0)")
+            return {"as_of": "2026-09-10", "entries": []}
+
+    def fake_get(url, **kw):
+        if raise_on_get is not None:
+            raise raise_on_get
+        return R()
+
+    monkeypatch.setattr(blend_mod.httpx, "get", fake_get)
+
+
+def test_gate_intents_reason_taxonomy(monkeypatch):
+    """Every blind state used to collapse into a bare None, so a 401 that
+    will NEVER self-heal was indistinguishable from a tracker redeploy that
+    heals in ninety seconds. The caller pages differently on each, so the
+    classification is load-bearing."""
+    from app.blend import TRACKER_CONFIG_REASONS, fetch_intents_reason
+    from app.feeds import FeedDeadline
+
+    # no TRACKER_URL: no request at all, and historically no trace of any kind
+    payload, reason = fetch_intents_reason(Cfg())
+    assert (payload, reason) == (None, "no_url")
+
+    cases = [
+        (dict(status=401), "auth"),
+        (dict(status=403), "auth"),
+        (dict(status=308), "redirect"),      # httpx does NOT follow redirects
+        (dict(status=500), "http_500"),
+        (dict(status=404), "http_404"),
+        (dict(decode=True), "decode"),
+        (dict(raise_on_get=RuntimeError("dns")), "transport"),
+        (dict(raise_on_get=FeedDeadline("slow")), "deadline"),
+    ]
+    for i, (kwargs, expected) in enumerate(cases):
+        blend_mod._INTENTS_FAIL.clear()
+
+        class C(Cfg):
+            tracker_url = f"https://taxonomy-{i}.invalid"
+
+        _fake_intents(monkeypatch, **kwargs)
+        payload, reason = fetch_intents_reason(C())
+        assert (payload, reason) == (None, expected), (kwargs, reason)
+
+    # the ones a retry can never clear
+    assert TRACKER_CONFIG_REASONS == {"no_url", "bad_url", "auth", "redirect"}
+
+    # ...and the happy path still returns a payload
+    blend_mod._INTENTS_FAIL.clear()
+
+    class Ok(Cfg):
+        tracker_url = "https://taxonomy-ok.invalid"
+
+    _fake_intents(monkeypatch)
+    payload, reason = fetch_intents_reason(Ok())
+    assert reason == "ok" and payload["as_of"] == "2026-09-10"
+
+
+def test_gate_intents_negative_cache_reports_cache_skip_not_a_failure(monkeypatch):
+    """A /kill wakes the loop seconds after a failure; the negative cache then
+    returns without asking the tracker. Reporting that as another failure
+    would let a single outage page on attempts that never happened."""
+    from app.blend import fetch_intents_reason
+
+    blend_mod._INTENTS_FAIL.clear()
+
+    class C(Cfg):
+        tracker_url = "https://cache-skip.invalid"
+
+    _fake_intents(monkeypatch, raise_on_get=RuntimeError("down"))
+    assert fetch_intents_reason(C()) == (None, "transport")
+    # immediately again: suppressed by FEED_FAIL_TTL, and labelled as such
+    assert fetch_intents_reason(C()) == (None, "cache_skip")
+    blend_mod._INTENTS_FAIL.clear()
+
+
+def test_gate_fetch_intents_keeps_its_payload_only_contract(monkeypatch):
+    """The cycle and its existing gates only ever ask whether there is a
+    payload; the reason is additive."""
+    blend_mod._INTENTS_FAIL.clear()
+
+    class C(Cfg):
+        tracker_url = "https://contract.invalid"
+
+    _fake_intents(monkeypatch, status=401)
+    assert fetch_intents(C()) is None
+    blend_mod._INTENTS_FAIL.clear()      # else the next call is a cache_skip
+    _fake_intents(monkeypatch)
+    assert fetch_intents(C())["entries"] == []
+    blend_mod._INTENTS_FAIL.clear()
+
+
+def test_gate_the_loop_actually_arms_the_tracker_watch(tmp_path, monkeypatch):
+    """THE gate for this round. Every other tracker test exercises the PURE
+    _tracker_watch with an injected state dict, so deleting the one line in
+    _loop that arms it left the whole suite green — the fix was decorative at
+    the only level that matters (counter-agent SB-1/T1/T5).
+
+    Boots the real service with TRACKER_URL unset (the 2026-09-10 shape) and
+    asserts the loop reached _tracker_watch with the reason that says so."""
+    import time as _time
+
+    from app.config import settings
+    from app import service
+    from app.service import app as service_app
+    from fastapi.testclient import TestClient
+
+    seen = []
+
+    def spy(now, reason, send_fn, state=None):
+        seen.append(reason)
+        return []
+
+    monkeypatch.setattr(blend_mod, "run_cycle",
+                        lambda *a, **kw: [])
+    monkeypatch.setattr(service, "_tracker_watch", spy)
+    monkeypatch.setattr(settings, "state_path", str(tmp_path / "s.json"))
+    monkeypatch.setattr(settings, "blend_state_path", str(tmp_path / "b.json"))
+    monkeypatch.setattr(settings, "exec_token", "sekrit")
+    monkeypatch.setattr(settings, "tws_userid", "")
+    monkeypatch.setattr(settings, "blend_enabled", True)
+    monkeypatch.setattr(settings, "poll_seconds", 3600)
+    assert settings.tracker_url == ""
+    try:
+        with TestClient(service_app):
+            for _ in range(200):
+                if seen:
+                    break
+                _time.sleep(0.05)
+        assert seen, "the loop never called _tracker_watch"
+        # and it passed the REASON through, not a bare 'something failed'
+        assert seen[0] == "no_url", seen
+    finally:
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_a_null_json_body_is_not_a_healthy_poll(monkeypatch):
+    """A 200 whose body is literally `null` makes r.json() return None. That
+    used to be reported as (None, "ok") — a payload-less HEALTHY poll, i.e.
+    the exact silent-blind state this round exists to end."""
+    from app.blend import fetch_intents_reason
+
+    for body in (None, [], "nope", 3):
+        blend_mod._INTENTS_FAIL.clear()
+
+        class R:
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return body
+
+        monkeypatch.setattr(blend_mod.httpx, "get", lambda url, **kw: R())
+
+        class C(Cfg):
+            tracker_url = "https://nulljson.invalid"
+
+        payload, reason = fetch_intents_reason(C())
+        assert payload is None
+        assert reason == "decode", (body, reason)
+    blend_mod._INTENTS_FAIL.clear()
+
+
+def test_gate_a_malformed_tracker_url_is_a_config_error_not_a_transient(
+        monkeypatch):
+    """httpx.InvalidURL / UnsupportedProtocol raise through the transport
+    layer, so a catch-all filed a typo'd TRACKER_URL under "usually heals"
+    and told the operator the opposite of the truth."""
+    import httpx as _httpx
+
+    from app.blend import TRACKER_CONFIG_REASONS, fetch_intents_reason
+
+    for exc in (_httpx.InvalidURL("bad"), _httpx.UnsupportedProtocol("nope")):
+        blend_mod._INTENTS_FAIL.clear()
+
+        def boom(url, **kw):
+            raise exc
+
+        monkeypatch.setattr(blend_mod.httpx, "get", boom)
+
+        class C(Cfg):
+            tracker_url = "htp:/typo"
+
+        assert fetch_intents_reason(C()) == (None, "bad_url")
+    assert "bad_url" in TRACKER_CONFIG_REASONS
+    blend_mod._INTENTS_FAIL.clear()
+
+
+def test_gate_fetch_intents_is_still_the_seam_the_probes_patch(monkeypatch):
+    """tests/probes/mf2/scen.py and the MF-1 slow-feed gate replace
+    `blend_mod.fetch_intents` wholesale. Routing the loop through a NEW
+    function silently sailed past all seven patch sites and switched two
+    phases of the live-fire probe suite off (counter-agent CA-1/CA-2)."""
+    from app.blend import fetch_intents_reason
+
+    monkeypatch.setattr(blend_mod, "fetch_intents", lambda _c: None)
+    assert fetch_intents_reason(Cfg()) == (None, "transport")
+
+    monkeypatch.setattr(blend_mod, "fetch_intents", lambda _c: {"entries": []})
+    payload, reason = fetch_intents_reason(Cfg())
+    assert payload == {"entries": []} and reason == "ok"

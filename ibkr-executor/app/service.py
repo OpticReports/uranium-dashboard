@@ -11,6 +11,7 @@ exercised in PAPER mode (DRY_RUN=false, TRADING_MODE=paper).
 from __future__ import annotations
 
 import logging
+import os
 import secrets
 import threading
 import time
@@ -158,6 +159,222 @@ LAST: dict = {"loop_ok": 0.0, "nino34": None, "mode": "OFFLINE"}
 # silently failing blend loop must be visible from the outside.
 BLEND_CYCLE: dict = {"date": None, "ok": None, "error": None,
                      "error_ts": None}
+
+# --- tracker-blind watch ------------------------------------------------------
+# A reconcile-only cycle (payload=None) completes NORMALLY, so _blend_cycle
+# stamps BLEND_CYCLE ok:True and /health stayed green while the executor
+# planned nothing. That is the whole defect: live money, failing quietly.
+# The doctrine here is blend.py's own — "loud on record, then every N
+# retries — never per-cycle spam, never silent" — with the cadence DECAYING,
+# because 288 cycles/day of one alarm buries the channel the kill switch
+# needs (blend.FLATTEN_MAX_ATTEMPTS records that arithmetic).
+TRACKER_BLIND_CYCLES = 3        # attempted-and-failed polls before the 1st page
+TRACKER_BLIND_MIN_S = 600.0     # ...AND this long blind. Both, because the
+                                # count alone over-fires when /kill wakes the
+                                # loop and the clock alone over-fires when the
+                                # loop is parked on a wedged gateway.
+TRACKER_ESCALATE_S = (3600.0, 14_400.0)   # re-page crossing 1h, then 4h...
+TRACKER_DAILY_S = 86_400.0                # ...then at most once a day.
+
+TRACKER_MAX_PAGES_PER_DAY = 6     # a hard daily budget on top of the floor.
+                                  # The floor alone caps at 48/day, and a
+                                  # flapping tracker really does reach ~40
+                                  # (measured). "A handful, not hundreds" has
+                                  # to be enforced, not just intended. A page
+                                  # the budget suppresses is still LOGGED, so
+                                  # the condition is never invisible — only
+                                  # un-paged.
+TRACKER_MIN_PAGE_GAP_S = 1800.0   # hard floor between ANY two tracker pages.
+                                  # Without it a tracker that FLAPS (ok, fail,
+                                  # ok, fail) re-arms the ladder on every
+                                  # recovery and pages on every failure, and
+                                  # two config reasons alternating page every
+                                  # cycle — 288/day, the exact spam the
+                                  # decaying ladder exists to prevent
+                                  # (counter-agent T2/T3/CA-4).
+
+# NOTE (deliberate, and NOT for the reason first written here): this state is
+# in-memory only. BlendState._load reads every key with raw.get and ignores
+# unknown ones, so persisting a field would NOT risk a SCHEMA_DRIFT halt —
+# that claim was wrong and the counter-agent caught it. The real reason is
+# that it buys little: a deploy (autoDeploy: true) re-arms the watch, and
+# re-paging a still-broken tracker after a deploy is desirable, not noise.
+# The honest cost, stated rather than hidden: a service restarting more often
+# than TRACKER_BLIND_CYCLES polls would never reach the transient threshold.
+# Config reasons are immune — they page on the FIRST failed poll — and a
+# service restarting every few minutes has a louder problem than this watch.
+TRACKER_WATCH: dict = {"blind_since": None, "fails": 0, "last_ok": None,
+                       "reason": None, "paged_level": -1, "paged_reason": "",
+                       "last_page": None, "page_day": None, "page_count": 0}
+
+_TRACKER_WHY = {
+    "no_url": ("TRACKER_URL is not set on this service, so it never even "
+               "asks the tracker"),
+    "bad_url": ("TRACKER_URL is malformed or is not an http(s) URL, so the "
+                "request never leaves this process"),
+    "auth": ("the tracker answered 401/403 — TRACKER_API_TOKEN no longer "
+             "matches the tracker's BLEND_API_TOKEN"),
+    "redirect": ("the tracker answered a redirect — TRACKER_URL is almost "
+                 "certainly the alias host, and httpx does not follow "
+                 "redirects"),
+    "deadline": "the fetch blew its total deadline",
+    "decode": "the tracker answered with something that is not JSON",
+    "transport": "the tracker is unreachable",
+}
+
+
+def _tracker_why(reason: str) -> str:
+    return _TRACKER_WHY.get(reason) or f"the tracker answered {reason}"
+
+
+def _tracker_step(blind_for: float) -> int:
+    """Which rung of the decaying ladder this outage has reached: 0 = the
+    first page, 1 = crossed 1h, 2 = crossed 4h, 3+ = one per day after."""
+    if blind_for < TRACKER_ESCALATE_S[0]:
+        return 0
+    if blind_for < TRACKER_ESCALATE_S[1]:
+        return 1
+    return 2 + int((blind_for - TRACKER_ESCALATE_S[1]) // TRACKER_DAILY_S)
+
+
+# What a blind stretch does and does NOT cost, in the page itself so nobody
+# has to reason it out at 09:00. The first draft said exits were "not
+# affected" — FALSE, and the counter-agent was right to call it: a blind
+# executor receives NO intents at all, exit signals included. What saves them
+# is that the tracker ECHOES exits for 7 days (_EXIT_ECHO_DAYS), so they are
+# picked up on recovery inside that window — delayed, not lost. What is
+# genuinely unaffected is what does not need the tracker at all: stops
+# already resting GTC at the venue, and this service's own 90-calendar-day
+# time stop, which runs on the payload-None path precisely so it survives an
+# outage. Entries are the irrecoverable half: the feed only ever carries the
+# CURRENT session's fires (routers/blend.py: call_date == as_of).
+_TRACKER_BLAST = ("No entries are planned and no cash is raised while this "
+                  "lasts. Still protecting the book without the tracker: "
+                  "resting GTC stops at the venue, and this service's own "
+                  "90-day time stop. Exit SIGNALS are NOT arriving either — "
+                  "the tracker echoes them 7 days, so they land on recovery "
+                  "inside that window: delayed, not lost. Fires published "
+                  "while blind ARE lost — the feed only ever carries the "
+                  "current session's fires.")
+
+
+def _tracker_watch(now: float, reason: str, send_fn, state: dict | None = None
+                   ) -> list[str]:
+    """Pure: decide which tracker pages fire this cycle, given the reason the
+    last poll produced. Returns the kinds that fired ('config', 'blind',
+    'escalate', 'recovered'); `state` carries once-per-outage bookkeeping.
+
+    Shaped as a pure function with an injected state dict so it can be
+    tested without a loop and so it merges as a sibling of origin/main's
+    _gateway_watch rather than a second private implementation.
+    """
+    # Lazy, like every other blend import here: BLEND_ENABLED=false must
+    # boot byte-identical to the pre-blend service.
+    from .blend import TRACKER_CONFIG_REASONS
+
+    st = TRACKER_WATCH if state is None else state
+    fired: list[str] = []
+
+    def _page(text: str, kind: str) -> bool:
+        """Send unless the floor or the daily budget blocks it. Returns
+        whether it went out, so no caller advances its rung on a page nobody
+        received."""
+        last = st.get("last_page")
+        if last is not None and now - float(last) < TRACKER_MIN_PAGE_GAP_S:
+            return False
+        day = int(now // 86_400)
+        if st.get("page_day") != day:
+            st["page_day"], st["page_count"] = day, 0
+        if int(st.get("page_count", 0)) >= TRACKER_MAX_PAGES_PER_DAY:
+            # Budget spent. NOT silent: the log still carries it, and
+            # /health still shows blind_for_s / blind_polls / reason.
+            logger.warning("tracker page suppressed (%d already sent today): "
+                           "%s", st["page_count"], text)
+            return False
+        st["page_count"] = int(st.get("page_count", 0)) + 1
+        st["last_page"] = now
+        send_fn(text)
+        fired.append(kind)
+        return True
+
+    if reason == "cache_skip":
+        # The negative cache suppressed the fetch (a /kill wake seconds after
+        # a failure). NO attempt was made, so this is evidence of neither
+        # blindness nor recovery: touch nothing.
+        return fired
+
+    if reason == "ok":
+        if st.get("blind_since") is not None and st.get("paged_level", -1) >= 0:
+            # Only announce a recovery we actually paged about; a blip that
+            # never reached the threshold must not generate a message.
+            blind_for = now - float(st["blind_since"])
+            _page(f"✅ blend tracker poll RECOVERED after "
+                  f"{int(blind_for // 60)} min ({st.get('fails', 0)} failed "
+                  f"polls). Any fires published while blind are gone from the "
+                  f"feed and will not be entered.", "recovered")
+        # last_page deliberately SURVIVES the reset: it is what stops a
+        # flapping tracker from re-arming into a page every single cycle.
+        st.update(blind_since=None, fails=0, last_ok=now, reason="ok",
+                  paged_level=-1, paged_reason="")
+        return fired
+
+    # An attempted poll that failed.
+    if st.get("blind_since") is None:
+        st["blind_since"] = now
+    st["fails"] = int(st.get("fails", 0)) + 1
+    st["reason"] = reason
+    blind_for = now - float(st["blind_since"])
+    mins = int(blind_for // 60)
+    is_config = reason in TRACKER_CONFIG_REASONS
+
+    if st.get("paged_level", -1) < 0:
+        # A config error never self-heals — a human must edit a Render env
+        # var — so waiting out the transient threshold buys nothing and
+        # spends a window that may only be hours long.
+        ready = (st["fails"] >= 1 if is_config
+                 else (st["fails"] >= TRACKER_BLIND_CYCLES
+                       and blind_for >= TRACKER_BLIND_MIN_S))
+        if not ready:
+            return fired
+        if is_config:
+            sent = _page(f"🚨🚨 blend is BLIND to the tracker: "
+                         f"{_tracker_why(reason)}. This will NOT self-heal — "
+                         f"fix it in Render → ibkr-executor → Environment. "
+                         f"{_TRACKER_BLAST}", "config")
+        else:
+            sent = _page(f"🚨 blend is BLIND to the tracker for {mins} min "
+                         f"({st['fails']} failed polls): "
+                         f"{_tracker_why(reason)}. {_TRACKER_BLAST}", "blind")
+        if sent:
+            st["paged_level"] = _tracker_step(blind_for)
+            st["paged_reason"] = reason
+        return fired
+
+    if is_config and st.get("paged_reason") != reason:
+        # The diagnosis changed under us (a tracker that came back but now
+        # rejects the token). A new permanent cause deserves its own page
+        # rather than waiting for the next rung — but through the floor, or
+        # two alternating config reasons page every cycle forever.
+        if _page(f"🚨🚨 blend is STILL blind, for a NEW reason: "
+                 f"{_tracker_why(reason)}. This will NOT self-heal — fix it "
+                 f"in Render → ibkr-executor → Environment.", "config"):
+            st["paged_reason"] = reason
+        return fired
+
+    step = _tracker_step(blind_for)
+    if step > st.get("paged_level", -1):
+        # Carry the remedy on every rung: for a config reason the remedy IS
+        # the alert, and dropping it after the first page was a real loss
+        # (counter-agent T9/T5).
+        tail = (" This will NOT self-heal — fix it in Render → ibkr-executor "
+                "→ Environment." if is_config else "")
+        if _page(f"🚨 blend STILL blind to the tracker — {mins} min, "
+                 f"{st['fails']} failed polls: {_tracker_why(reason)}.{tail}",
+                 "escalate"):
+            st["paged_level"] = step
+            st["paged_reason"] = reason
+    return fired
+
 
 
 def _offline() -> bool:
@@ -572,15 +789,15 @@ def _loop(gen: int, wake: threading.Event):
             for msg in ladder_alerts:
                 send(msg)
             if BLEND is not None:
-                from .blend import fetch_intents
+                from .blend import fetch_intents_reason
                 try:
-                    payload = fetch_intents(settings)
+                    payload, reason = fetch_intents_reason(settings)
                 except Exception as exc:  # noqa: BLE001
                     # fetch_intents already swallows transport errors; if it
                     # ever raises anyway the CYCLE must still run (reconcile
                     # + a queued flatten are unconditional) and be recorded.
                     logger.exception("blend intents fetch raised: %s", exc)
-                    payload = None
+                    payload, reason = None, "transport"
                 if payload is None:
                     # Tracker outage: the cycle STILL runs — reconcile
                     # (stop-fill ingestion, orphan cancel retries,
@@ -592,6 +809,19 @@ def _loop(gen: int, wake: threading.Event):
                                    "decisions)")
                 if _superseded(gen):
                     return      # the tracker poll is the other park (MF-2)
+                # AFTER the supersede check (a bumped generation must not page
+                # or mutate the watch — MF-2's law), and wrapped, because this
+                # is a REPORTING call sitting in front of the protective one:
+                # alerts.send can raise, and an unguarded watchdog that kills
+                # the cycle it guards is worse than no watchdog
+                # (counter-agent CA-5/CA-6/SB-5/T6).
+                # On EVERY outcome including "ok" — this is the only place
+                # that knows a None means the TRACKER is blind, since the two
+                # other _blend_cycle call sites pass None deliberately.
+                try:
+                    _tracker_watch(time.time(), reason, send)
+                except Exception as exc:    # noqa: BLE001
+                    logger.exception("tracker watch failed: %s", exc)
                 _blend_cycle(payload, today)
             LAST["loop_ok"] = time.time()
         except Exception as exc:  # noqa: BLE001
@@ -675,6 +905,36 @@ def health():
             "ok": BLEND_CYCLE["ok"] is not False,
             "last_error_age_s": round(time.time() - err_ts, 1)
             if err_ts else None}
+        # blend_loop.ok only ever meant "the cycle did not RAISE" — and a
+        # cycle that plans nothing because the tracker is unreachable raises
+        # nothing at all. This block is the missing half; keep both.
+        # The HTTP status stays 200 whatever this says: /health is Render's
+        # healthCheckPath, and restarting does not fix a dead tracker — it
+        # just restart-loops a live-money container.
+        tw = TRACKER_WATCH
+        blind_since = tw.get("blind_since")
+        last_ok = tw.get("last_ok")
+        # TRI-STATE, and the null matters: `blind_since is None` alone is
+        # ALSO true for a service that has never completed a single poll —
+        # a dead loop thread, a ladder-section raise before the blend block,
+        # or a boot that never got that far. Reporting those as ok:true would
+        # rebuild the exact green lie this block exists to end
+        # (counter-agent SB-3/T6/CA-7).
+        polled = last_ok is not None or blind_since is not None
+        body["tracker"] = {
+            "ok": (blind_since is None) if polled else None,
+            "reason": tw.get("reason"),
+            "blind_for_s": (round(time.time() - float(blind_since), 1)
+                            if blind_since else None),
+            "blind_polls": tw.get("fails", 0),
+            "last_ok_age_s": (round(time.time() - float(last_ok), 1)
+                              if last_ok else None),
+            # If this is false, NOTHING in this service can page anyone —
+            # every alert, this one included, is a silent no-op (alerts.send
+            # returns early when the Telegram env is unset).
+            "alerts_configured": bool(os.environ.get("TELEGRAM_BOT_TOKEN")
+                                      and os.environ.get("TELEGRAM_CHAT_ID")),
+        }
     return body
 
 

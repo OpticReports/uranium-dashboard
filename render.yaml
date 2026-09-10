@@ -386,6 +386,39 @@ services:
         # also what made the restart-boundary double-sell (B1) a ROUTINE
         # event rather than an exotic one — a deploy is a restart.
         value: /app/data/blend_state.json
+      - key: BLEND_ENABLED
+        # The flag the whole blend path hangs off, and it was UNDECLARED here
+        # while every setting it gates was declared — the same defect class as
+        # B2 and TRACKER_URL below. config.py defaults it to false, so an
+        # environment built from this file alone runs the blend book not at
+        # all, silently. sync:false: the value stays operator-set in the
+        # dashboard, this only guarantees the key is not forgotten.
+        sync: false
+      - key: BLEND_BOOK_USD
+        sync: false
+      - key: BLEND_BUDGET
+        sync: false
+      - key: TRACKER_URL
+        # B2's twin, found 2026-09-10: UNDECLARED while BLEND_ENABLED was on.
+        # app/config.py defaults tracker_url to "", and fetch_intents returns
+        # None the instant it is empty — before any request, with no
+        # exception and nothing written to the negative cache. The executor
+        # therefore polled NOTHING, planned no entries and raised no cash,
+        # while /health reported blend_loop.ok: true, because a cycle that
+        # decides nothing does not raise. Declared here so the service can
+        # never again be built with a blend book and no way to reach the
+        # brain that fills it.
+        # MUST be the CANONICAL host (research.optic.capital). The tracker
+        # 308-redirects its aliases and httpx does not follow redirects, so
+        # the alias host is permanent blindness one hop from a live tracker.
+        sync: false
+      - key: TRACKER_API_TOKEN
+        # The tracker's BLEND_API_TOKEN — a dedicated READ-ONLY intents
+        # token, so the executor never holds the dashboard password
+        # (TRACKER_USER/TRACKER_PASSWORD remain the Basic-auth fallback).
+        # Rotating it on the tracker without rotating it here is a 401 on
+        # every poll: silent before this round, now an immediate page.
+        sync: false
       - key: IB_CLIENT_ID
         # B10 (live-blocker): DECLARED, and deliberately NOT the code
         # default of 17. An IB gateway/TWS accepts one session per client

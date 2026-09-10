@@ -324,6 +324,58 @@ attempted. That is a scope decision, not a claim that they do not matter.
 
 ---
 
+## Round 17 — counter-agent review of the tracker-blind watch
+
+* **Reviewed:** the tracker-blind alerting change (reason taxonomy in
+  `fetch_intents`, `_tracker_watch`, the `/health` `tracker` block,
+  render.yaml declarations, gate tests) — reviewed at its pre-remediation
+  state, diff preserved during the round.
+* **Verdict:** **FAIL** — five independent lenses (state machine, silent
+  failure, live-trading risk, test honesty, doctrine/merge), all five FAIL,
+  45 findings. Every finding below was reproduced by execution before it was
+  acted on; the fix's own author had shipped the round green at 306 tests.
+* **Remediated by:** this commit.
+* **The finding that mattered most:** the change was DECORATIVE at the only
+  level that counts. Every gate exercised the pure `_tracker_watch` with an
+  injected state dict, and nothing bound the loop to it — deleting the single
+  line in `_loop` that arms the watch left the full suite green. A fix for
+  silent failure that could itself be silently deleted.
+
+| id | finding | status |
+|---|---|---|
+| SB-1 · T1 · T5 | the loop call site was ungated: five mutations that each restore the 2026-09-10 defect left all 306 tests passing | `closed` — `test_gate_the_loop_actually_arms_the_tracker_watch` boots the real service with TRACKER_URL unset and asserts the reason reached the watch; verified failing with the call site deleted |
+| SB-2 · T1 · CA-3 | a 200 whose JSON body is `null` made `r.json()` return None, so the taxonomy returned `(None, "ok")` — a payload-less HEALTHY poll, the exact silent-blind shape the round exists to kill | `closed` — non-dict payloads raise into `decode` |
+| CA-1 · CA-2 | the rename ORPHANED the seam: `tests/probes/mf2/scen.py` (6 sites) and the MF-1 slow-feed gate patch `blend_mod.fetch_intents`, and the loop no longer went through it — two phases of the live-fire probe suite and one merge-blocking gate silently stopped testing anything | `closed` — the wrapper is inverted so `fetch_intents` is still THE seam; a replaced seam is honoured and its reason inferred |
+| SB-3 · T6 · CA-7 | `/health` reported `tracker.ok: true` for a service that had NEVER polled — the states a dead loop thread and a ladder-section raise leave behind — rebuilding the green lie inside the block written to end it | `closed` — tri-state; `null` means no poll has ever succeeded |
+| T2 · T3 · CA-4 | a FLAPPING tracker re-armed the ladder on every recovery and the new-permanent-reason branch had no rate limit at all: measured 36-42 pages/day, against a README promise of "a handful, not hundreds" | `closed` — 30-min floor between any two pages plus `TRACKER_MAX_PAGES_PER_DAY`; measured ≤6, and a suppressed page is still logged |
+| CA-5 · CA-6 · SB-5 | the watch was called UNGUARDED and BEFORE the `_superseded` checkpoint: `alerts.send` can raise, so a reporting call could abort the iteration before the protective `_blend_cycle` ran, and a superseded generation could page (against MF-2's law) | `closed` — moved after the checkpoint, wrapped |
+| T4 · SB-9 | a malformed `TRACKER_URL` (`httpx.InvalidURL` / `UnsupportedProtocol`) was classified `transport`, the "usually heals" bucket, telling the operator the opposite of the truth about a permanent config error | `closed` — new `bad_url` config reason |
+| T2 (doctrine) | the operator page asserted, as fact, that exits are "NOT affected" during a blind stretch. FALSE: a blind executor receives no intents at all. What saves exits is the tracker's 7-day echo — delayed, not lost | `closed` — page and README corrected; a confidently wrong claim in a live-money file is itself a defect |
+| T3 (doctrine) | the recorded justification for in-memory watch state ("an unknown key on rollback is a SCHEMA_DRIFT halt") was FALSE — `BlendState._load` reads every key with `raw.get` and ignores unknown ones | `closed` — comment replaced with the true reason and the real cost named |
+| SB-6 | `BLEND_ENABLED` — the flag the whole fix hangs off — was itself UNDECLARED in render.yaml, the identical defect class to B2 and to the incident being fixed | `closed` — declared, with `BLEND_BOOK_USD` / `BLEND_BUDGET` |
+| T4 · CA-10 | the render.yaml gate was a substring check that still passed against configurations reproducing the incident | `closed` — structural: if the blend path is declared, its tracker wiring must be too; verified failing with `TRACKER_URL` removed |
+| T9 · T5 | escalation rungs dropped the remediation instruction for config reasons — where the remedy IS the alert | `closed` |
+
+### Found by this round, NOT closed
+
+| id | finding | status |
+|---|---|---|
+| R17-O1 | **the pre-open (09:25 ET) rung is not built** — the most valuable page of the set. The ET/holiday machinery lives only on `main`, and a second copy here would collide at merge (Python silently takes the later definition). Cost, named rather than buried: the ladder decays to once-a-day after 4h, so a tracker blind since Monday pages at 10:10, 11:00, 14:00, then Tue 14:00 — never before an open on days 2+, and each day's fires are lost with the warning arriving after the fact. Build it immediately after the branch merges `main`. | `open` |
+| R17-O2 | a STALE-but-successful payload plans zero entries with `tracker.ok: true`. `payload_is_stale` nulls the payload inside `run_cycle`, after the poll was already recorded healthy. Same symptom, different cause. | `open` |
+| R17-O3 | nothing pages on a DEAD loop thread or a ladder-section raise. `/health`'s tri-state `null` surfaces both, and `loop_age_s` is the only other signal, but neither pages. | `open` |
+| R17-O4 | the watch state is in memory, so a service restarting more often than 3 polls never reaches the transient threshold. Config reasons are immune (first-poll page). | `accepted-risk` |
+| CA-9 | `/health` is unauthenticated and now tells any anonymous caller that the executor is blind, for how long and why. Judged acceptable: the endpoint already publishes `mode: LIVE` and, on `main`, gateway outage counts. Recorded rather than silently accepted. | `accepted-risk` |
+| CA-8 | an INTERMITTENTLY failing tracker (never 3 consecutive) never pages and never shows blind. No cumulative failure-rate signal exists. | `open` |
+| T7 (doctrine) | branch and `main` have diverged BOTH ways; a real `git merge origin/main` conflicts in 10 files, and `main` carries the SAME underlying bug. This change is written to merge as a sibling of `_gateway_watch` rather than duplicate it, but the merge itself is a human job and is not attempted here. | `open` |
+
+**Gates, mutation-verified.** Nine mutations, nine caught, each by a named
+gate: call site deleted · `cache_skip` counts as a failure · clock guard
+dropped · page floor removed · `tracker.ok` reverted to two-state · null-JSON
+guard removed · `bad_url` classification removed · `fetch_intents` seam
+bypassed · `TRACKER_URL` removed from render.yaml.
+
+---
+
 ## Standing UNKNOWNs
 
 * `mf-6`, `mf-11`, `mf-12`, `mf3-12` — referenced by id in this campaign's

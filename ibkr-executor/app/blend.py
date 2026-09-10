@@ -80,7 +80,7 @@ from datetime import date
 
 import httpx
 
-from .feeds import with_deadline
+from .feeds import FeedDeadline, with_deadline
 
 logger = logging.getLogger(__name__)
 
@@ -1664,11 +1664,59 @@ class Blend3070Manager:
 
 # ---------- tracker poll + cycle execution ------------------------------------
 
-def fetch_intents(cfg) -> dict | None:
-    """GET the tracker's intent set. A bare authenticated GET: no params, no
-    body — the tracker never learns positions or account equity. None on any
-    failure (a dead tracker blocks NEW actions; resting GTC stops and the
-    time-stop belt still protect the book).
+# Why a fetch produced no payload. The blind states are NOT equivalent and
+# must never be collapsed back into a bare None (2026-09-10: BLEND_ENABLED
+# was on, TRACKER_URL was never declared in render.yaml, and the executor
+# planned nothing for weeks while /health stayed green):
+#   ok        - a payload came back
+#   no_url    - TRACKER_URL unset; we never even ask. NEVER self-heals.
+#   bad_url   - TRACKER_URL is malformed or not http(s). NEVER self-heals, and
+#               it looks exactly like a transport failure if you only catch
+#               Exception (counter-agent T4/SB-9).
+#   auth      - 401/403: the token/password no longer matches. NEVER self-heals.
+#   redirect  - 3xx: httpx does not follow redirects, so a TRACKER_URL pointed
+#               at the alias host is permanent blindness one hop from a
+#               healthy tracker. NEVER self-heals.
+#   http_<n>  - any other non-2xx (5xx usually does self-heal)
+#   deadline  - the whole fetch blew its total deadline (feeds.with_deadline)
+#   decode    - a 200 that is not JSON: a tracker-side bug
+#   transport - DNS/connect/read failure: usually a redeploy, usually heals
+#   cache_skip- the negative cache suppressed the fetch. NOT AN ATTEMPT, and
+#               therefore neither evidence of blindness nor of recovery.
+TRACKER_CONFIG_REASONS = frozenset({"no_url", "bad_url", "auth", "redirect"})
+
+
+def _intents_reason(exc: Exception) -> str:
+    """Classify a failed intents fetch. Order matters: FeedDeadline is not an
+    httpx error, and json's decode error is a ValueError subclass."""
+    if isinstance(exc, FeedDeadline):
+        return "deadline"
+    if isinstance(exc, (httpx.InvalidURL, httpx.UnsupportedProtocol)):
+        # A typo'd or schemeless TRACKER_URL. It raises through the transport
+        # layer, so the generic fallback below would file it under "usually
+        # heals" and tell the operator the opposite of the truth.
+        return "bad_url"
+    if isinstance(exc, httpx.HTTPStatusError):
+        code = exc.response.status_code
+        if code in (401, 403):
+            return "auth"
+        if 300 <= code < 400:
+            # httpx's raise_for_status() raises on ANY non-2xx, 3xx included.
+            return "redirect"
+        return f"http_{code}"
+    if isinstance(exc, ValueError):     # json.JSONDecodeError subclasses this
+        return "decode"
+    return "transport"
+
+
+def _fetch_intents_impl(cfg) -> tuple[dict | None, str]:
+    """GET the tracker's intent set, with WHY when there is no payload.
+
+    A bare authenticated GET: no params, no body — the tracker never learns
+    positions or account equity. Returns (payload, "ok") or (None, reason)
+    from the taxonomy above; the caller pages on the reason, because a
+    reconcile-only cycle is otherwise indistinguishable from a healthy one
+    (see _tracker_watch in service.py).
 
     MF-1: the loop runs one iteration per poll interval, and this is the
     second of its two feeds. A 30s timeout whose failures were never cached
@@ -1682,12 +1730,16 @@ def fetch_intents(cfg) -> dict | None:
     the fetch runs under a TOTAL deadline (feeds.with_deadline)."""
     base = (getattr(cfg, "tracker_url", "") or "").rstrip("/")
     if not base:
-        return None
+        # The quietest blind state there is: no request, no exception, and
+        # nothing written to the negative cache. It used to leave no trace.
+        logger.warning("blend intents: TRACKER_URL is not set — the executor "
+                       "polls nothing and plans nothing")
+        return None, "no_url"
     failed_at = _INTENTS_FAIL.get(base)
     if failed_at and time.time() - failed_at < FEED_FAIL_TTL:
         logger.warning("blend intents: %s failed <%ss ago; skipping the "
                        "fetch this cycle", base, FEED_FAIL_TTL)
-        return None
+        return None, "cache_skip"
     kwargs: dict = {"timeout": FEED_TIMEOUT}
     token = getattr(cfg, "tracker_api_token", "")
     if token:
@@ -1703,12 +1755,49 @@ def fetch_intents(cfg) -> dict | None:
                           f"{base}/blend3070/intents", **kwargs)
         r.raise_for_status()
         payload = r.json()
+        if not isinstance(payload, dict):
+            # r.json() returns None for a body of `null`, so this used to
+            # produce (None, "ok"): a payload-less HEALTHY poll, which is
+            # precisely the silent-blind shape this round exists to kill.
+            # ValueError routes it to "decode" (counter-agent SB-2/T1/CA-3).
+            raise ValueError(f"intents payload is "
+                             f"{type(payload).__name__}, not an object")
         _INTENTS_FAIL.pop(base, None)
-        return payload
+        return payload, "ok"
     except Exception as exc:  # noqa: BLE001
         _INTENTS_FAIL[base] = time.time()
         logger.warning("blend intents fetch failed: %s", exc)
-        return None
+        return None, _intents_reason(exc)
+
+
+# The reason of the most recent fetch_intents() call. A module global rather
+# than a return value BECAUSE fetch_intents is the seam: tests/test_blend.py
+# and the MF-2 live-fire probes (tests/probes/mf2/scen.py) replace
+# `blend_mod.fetch_intents` wholesale, and a loop that called a NEW function
+# instead would sail straight past all seven of those patch sites — the
+# MF-1 slow-feed gate among them (counter-agent CA-1/CA-2). Written and read
+# on the single loop thread inside one cycle.
+_LAST_INTENTS_REASON: dict = {"v": None}
+
+
+def fetch_intents(cfg) -> dict | None:
+    """Payload-only fetch. THE seam — patch this, not the impl."""
+    payload, reason = _fetch_intents_impl(cfg)
+    _LAST_INTENTS_REASON["v"] = reason
+    return payload
+
+
+def fetch_intents_reason(cfg) -> tuple[dict | None, str]:
+    """(payload, reason), going THROUGH fetch_intents so a replaced seam is
+    still honoured. A replacement cannot set the reason, so it is inferred
+    from the payload — conservatively, since a stub that returns None is
+    standing in for an unreachable tracker."""
+    _LAST_INTENTS_REASON["v"] = None
+    payload = fetch_intents(cfg)
+    reason = _LAST_INTENTS_REASON["v"]
+    if reason is None:                  # fetch_intents was replaced
+        reason = "ok" if payload is not None else "transport"
+    return payload, reason
 
 
 def payload_is_stale(payload: dict, today: str) -> bool:
