@@ -29,7 +29,7 @@ def test_expanding_percentile_has_no_lookahead():
     dts = [date(2020, 1, 1) + timedelta(days=i) for i in range(5)]
     # 5 rising values: each is the max of history-so-far, so each must sit at the
     # HIGHEST ATTAINABLE percentile for its sample size. Under the Hazen plotting
-    # position that ceiling is (n - 0.5)/n, never exactly 100 -- see hazen_pct.
+    # position that ceiling is (n - 0.5)/n, never exactly 100 -- see rank_pct.
     _, pv = _expanding_percentile(dts, [1, 2, 3, 4, 5], min_obs=1)
     assert pv == [50.0, 75.0, pytest.approx(83.333, abs=1e-3), 87.5, 90.0]
     assert all(p < 100.0 for p in pv)
@@ -58,10 +58,10 @@ def test_percentile_never_returns_exactly_100():
     assert rank_pct(500, 0, 500) < 100.0
     assert rank_pct(0, 0, 500) > 0.0
 
-    rising = list(range(1, 501))
+    rising = list(range(1, 1201))   # past n=1000, where the rounding bug appeared
     assert _percentile(rising, rising[-1]) < 100.0      # an all-time high
     assert _percentile(rising, rising[0]) > 0.0         # an all-time low
-    dts = [date(2020, 1, 1) + timedelta(days=i) for i in range(500)]
+    dts = [date(2020, 1, 1) + timedelta(days=i) for i in range(1200)]
     _, pv = _expanding_percentile(dts, [float(x) for x in rising], min_obs=1)
     assert max(pv) < 100.0 and min(pv) > 0.0
 
@@ -324,3 +324,22 @@ def test_live_and_hindcast_agree_on_a_tied_series():
     dts = [date(2025, 1, 1) + timedelta(days=7 * i) for i in range(len(vals))]
     _, pv = _expanding_percentile(dts, vals, min_obs=1)
     assert pv[-1] == pytest.approx(_percentile(vals, vals[-1]), abs=0.05)
+
+
+
+def test_live_and_hindcast_agree_at_a_REALISTIC_sample_size():
+    """The small-n parity tests ran where rounding does not bite.
+
+    At n=1,056 the live/hindcast gap from the ceiling bug was 0.047 -- INSIDE
+    the 0.05 tolerance the other parity tests use, so they passed while the live
+    board returned exactly 100.0 and the hindcast did not.
+    """
+    from app.metrics.pins import _percentile
+
+    n = 1200
+    vals = [float(x) for x in range(n)]
+    dts = [date(2000, 1, 1) + timedelta(days=i) for i in range(n)]
+    _, pv = _expanding_percentile(dts, vals, min_obs=1)
+    live = _percentile(vals, vals[-1])
+    assert live < 100.0 and pv[-1] < 100.0          # the invariant, on BOTH sides
+    assert pv[-1] == pytest.approx(live, abs=0.1)   # 1dp rounding band at this n

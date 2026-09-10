@@ -158,18 +158,40 @@ def rank_pct(below: int, equal: int, n: int) -> float:
     instead of all taking the top.
 
     For any value drawn from the sample the result lies naturally in
-    [0.5/n, (n - 0.5)/n] -- it can never be 0 or 100. The clamp exists only for
-    the one caller that ranks a value NOT in the sample (_expanding_pctl_vs_raw
-    ranks a rolling MEAN against the raw prints, and a mean can sit outside
-    their range); without it that path could still print exactly 0 or 100.
+    [0.5/n, (n - 0.5)/n] -- it can never be 0 or 100. The clamp is the backstop
+    for any caller that ranks a value NOT in its own sample, where equal == 0 and
+    an all-time high gives below == n -> exactly 100.0. NOTE: it is NOT needed by
+    _expanding_pctl_vs_raw, as was first assumed -- that ranks a rolling mean over
+    a sub-window of `seen`, which is bounded by min(seen) <= avg <= max(seen) by
+    construction, so it can never land outside the range (verified: 0 occurrences
+    over the real 15,227-point EPU series). It IS reachable wherever a caller
+    ranks a transformed value against an untransformed series.
 
-    Every percentile on this board goes through here so the live board and the
-    hindcast cannot drift apart.
+    Every percentile on the PIN BOARD goes through here so the live board and the
+    hindcast cannot drift apart. base.py::percentile_rank and severity._pctile are
+    separate instruments and still use count(v <= x)/n.
     """
     if n <= 0:
         return 0.0
     pct = 100.0 * (below + equal / 2.0) / n
     return min(max(pct, 100.0 * 0.5 / n), 100.0 * (n - 0.5) / n)
+
+
+def _round_pctl(p: float) -> float:
+    """Round to the DISPLAYED 1dp without crossing the attainable band.
+
+    rank_pct correctly stops at (n - 0.5)/n, but round() then threw that away:
+    round(99.9933, 1) is 100.0, so on any series with n >= 1000 the naive round
+    handed the leg back the exact ceiling this estimator exists to prevent --
+    which is every percentile leg on the board except the CFTC one. The band is
+    open at both ends, so the rounded value must be too.
+    """
+    r = round(p, 1)
+    if r >= 100.0:
+        return 99.9
+    if r <= 0.0 and p > 0.0:
+        return 0.1
+    return r
 
 
 def _percentile(vals: list, value: float | None) -> float | None:
@@ -178,7 +200,7 @@ def _percentile(vals: list, value: float | None) -> float | None:
         return None
     below = sum(1 for v in c if v < value)
     equal = sum(1 for v in c if v == value)
-    return round(rank_pct(below, equal, len(c)), 1)
+    return _round_pctl(rank_pct(below, equal, len(c)))
 
 
 # --- continuous severity scoring (0-100) --------------------------------------
@@ -207,7 +229,15 @@ def _pscore(value: float | None, benign: float, yellow: float, red: float,
         sc = 80.0 + 20.0 * (v - r) / (e - r) if e != r else 100.0
     else:
         sc = 100.0
-    return round(min(sc, cap), 1)
+    out = round(min(sc, cap), 1)
+    # Rounding must never MANUFACTURE the extreme. On a percentile leg anchored
+    # (.., 95, 100) the score is 80 + 4*(p - 95), so p >= 99.9875 rounds to
+    # 100.0 -- i.e. once n passed ~4000 an all-time high scored the EXTREME
+    # anchor again, by rounding, after rank_pct had just prevented exactly that.
+    # A value genuinely AT or beyond the extreme still scores 100.
+    if out >= 100.0 and v < e:
+        out = 99.9
+    return out
 
 
 def _status_from_score(score: float | None) -> str:
@@ -486,8 +516,13 @@ def build_pin_board(bundle: dict) -> dict:
     cm = {d: v for d, v in zip(ccc_d, ccc_v) if v is not None}
     bm = {d: v for d, v in zip(bbb_d, bbb_v) if v is not None}
     disp_series = [cm[d] - bm[d] for d in sorted(set(cm) & set(bm))]
-    disp_now = round(disp_series[-1], 2) if disp_series else None
-    disp_pctl = _percentile(disp_series, disp_now)
+    # Rank the UNROUNDED value; round only for display. Ranking the rounded one
+    # meant the current value was not in its own sample (equal == 0), so the
+    # mid-rank term did nothing on this leg and the live board and the hindcast
+    # (which ranks unrounded) were not computing the same statistic.
+    disp_raw = disp_series[-1] if disp_series else None
+    disp_now = round(disp_raw, 2) if disp_raw is not None else None
+    disp_pctl = _percentile(disp_series, disp_raw)
     ndfi = bundle.get("ndfi_loans", ([], []))[1]
     ndfi_now = _clean(ndfi)[-1] if _clean(ndfi) else None
     parts = [

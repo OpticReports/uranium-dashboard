@@ -263,3 +263,40 @@ def test_stale_fast_channel_never_reads_as_a_silent_all_clear():
     assert "fast channels" in g["unknown"]
     assert g["fast_stale_channels"], "the dark channels must be named, not just counted"
     assert g["status"] != "GREEN"
+
+
+
+def test_percentile_never_reaches_the_ceiling_at_REALISTIC_sample_sizes():
+    """The end-to-end gate. rank_pct stopping at (n-0.5)/n is not enough.
+
+    round(99.9933, 1) is 100.0, so _percentile handed back the exact ceiling for
+    every n >= 1000 -- which is every percentile leg on the board except CFTC
+    (CCC ~7,500; dispersion ~7,500; EPU 15,227; SPY/RSP ~3,900; VRP ~2,500).
+    An earlier version of this gate used n=500, one step below where the bug
+    appears, so it passed while the board was broken.
+    """
+    from app.metrics.pins import _percentile
+
+    for n in (500, 1000, 4001, 7500, 15227, 20000):
+        rising = list(range(n))
+        high = _percentile(rising, rising[-1])
+        low = _percentile(rising, rising[0])
+        assert high < 100.0, f"all-time high hit the ceiling at n={n}"
+        assert low > 0.0, f"all-time low hit the floor at n={n}"
+        # and the SCORE must not manufacture the extreme by rounding either
+        assert _pscore(high, 50, 85, 95, 100) < 100.0, f"score hit 100 at n={n}"
+        assert _pscore(high, 50, 90, 97.5, 100) < 100.0, f"EPU-anchored score hit 100 at n={n}"
+
+
+def test_rounding_never_manufactures_the_extreme_but_real_extremes_still_reach_it():
+    """The guard must not cost a genuine documented extreme its 100."""
+    # at or beyond the extreme anchor -> still exactly 100
+    assert _pscore(8.0, 2, 4, 5.5, 8) == 100.0          # net short at the extreme
+    assert _pscore(500, 0, 25, 50, 100) == 100.0        # WTI far beyond it
+    assert _pscore(-10, 10, 5, 0, -10, False, 100) == 100.0   # lower-is-worse extreme
+    assert _pscore(-36.1, 10, 5, 0, -10, False, 100) == 100.0  # beyond it
+    # just short of the extreme -> must NOT round up into it
+    assert _pscore(7.999, 2, 4, 5.5, 8) < 100.0
+    # the other anchors are untouched
+    assert _pscore(5.5, 2, 4, 5.5, 8) == 80.0
+    assert _pscore(4.0, 2, 4, 5.5, 8) == 50.0

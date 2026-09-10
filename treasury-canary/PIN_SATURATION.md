@@ -253,19 +253,45 @@ because it was the newest record. On the CFTC series that was 87 of 953 weeks at
 `bisect_right` — the *highest* rank in a tie block — so every member of a tie group scored
 as if it were the top of the block. That is not cosmetic here: CCC OAS is quoted to 2dp and
 its percentile is the primary private_credit driver. On the CFTC series 13.4% of points
-shift under a mid-rank form (mean +0.21pp, max +1.52pp); for a 10-way tie in n = 1000 the
-bias is 0.45pp.
+shift under a mid-rank form (mean -0.21pp, max -1.52pp -- mid-rank is always <= highest-rank);
+for a 10-way tie in n = 1000 the bias is 0.45pp.
 
 **The fix.** The mid-rank plotting position `(below + equal/2) / n`. For an untied value
 that is in the sample (`equal == 1`) this reduces **exactly** to Hazen `(rank - 0.5)/n`, so
 nothing moves on untied data; ties share the midpoint of their block. For any value drawn
 from the sample the result lies naturally in `[0.5/n, (n - 0.5)/n]` and can never be 0 or
-100. The clamp exists solely for `_expanding_pctl_vs_raw`, which ranks a rolling *mean*
-against raw prints — a mean can sit outside their range, and without the clamp that one path
-could still print exactly 0 or 100.
+100.
 
-Verified: exactly 100.0 is unreachable for every n from 2 to 5000; the CFTC maximum drops
-from 100.0000 to 99.9502, and exact-100 weeks go 87 -> 0.
+**Correction to the clamp's stated rationale.** I justified it by `_expanding_pctl_vs_raw`
+ranking a rolling mean that "can sit outside" the raw range. That is provably false: the
+window is always a sub-window of `seen`, so `min(seen) <= avg <= max(seen)` by construction,
+and over the real 15,227-point EPU series `rank == 0` occurs zero times. The clamp *is*
+load-bearing, but for a caller I had not identified — the **CCC−BBB dispersion leg**, which
+ranked a value rounded to 2dp against the *unrounded* series, so `equal == 0` and an all-time
+high gave `below == n` -> exactly 100.0. That leg now ranks the unrounded value and rounds only
+for display, so the live board and the hindcast compute the same statistic; the clamp remains
+as the backstop for any future caller that ranks a transformed value against an
+untransformed series.
+
+**A third defect, found by the counter-agent AFTER the first two were committed — the
+estimator alone did not deliver the guarantee.** `rank_pct` correctly stops at
+`(n - 0.5)/n`, and then `round(p, 1)` threw that away: `round(99.9933, 1) == 100.0`. So
+`_percentile` returned **exactly 100.0 on any all-time high for every n >= 1000** — which is
+every percentile leg on the board except the CFTC one (CCC ~7,500; dispersion ~7,500; EPU
+15,227; SPY/RSP ~3,900; VRP ~2,500). `_pscore` rounds again, manufacturing a score of exactly
+100.0 for n >= 4001 on the `(50, 85, 95, 100)` legs and n >= 8000 on EPU's.
+
+My original verification — "unreachable for every n from 2 to 5000" — was run against
+`rank_pct` directly, **not against `_percentile`, which is what the board actually calls.**
+The gate test I wrote used `n = 500`, one step below where the bug appears. Both are now
+fixed: `_round_pctl` rounds without crossing the attainable band, `_pscore` refuses to round
+*into* the extreme unless the value is genuinely at or beyond it, and the gates run at
+n in {500, 1000, 4001, 7500, 15227, 20000} end-to-end through `_percentile` and `_pscore`.
+
+Verified after the fix: `_percentile` and `_pscore` never return exactly 100.0 or 0.0 for any
+n tested up to 20,000, while genuine level extremes still score exactly 100 (net short at 8M,
+WTI beyond +100%, NDFI at -10). The CFTC maximum drops from 100.0000 to 99.9502 and exact-100
+weeks go 87 -> 0.
 
 **Honest scope of the benefit — this is structural, not backtest-improving.** Because the
 basis_trade cap already removed that channel's percentile leg from contention, Hazen changes
@@ -274,12 +300,21 @@ almost nothing in the *current* hindcast: basis_trade RED months (38) and at-cei
 percentiles shift by less than 0.05pp across every leg (positioning -0.047, CCC -0.007,
 EPU -0.005, SPY/RSP -0.013), all inside the displayed rounding.
 
-What it actually buys is a *guarantee*: no percentile leg can ever again print the extreme
-anchor merely by being the newest record, on any future data. Auditing the deployed pre-fix
-hindcast, the only uncapped percentile-driven ceiling months were private_credit's four
-(2015-11 and 2020-05..07 — the 2015 energy-HY and COVID credit blowouts). Every other
-at-ceiling month — oil_shock 18, policy_shock 4, vol_supply 4, carry_unwind 4 — comes from a
-**level** leg hitting a genuine documented extreme, which is the anchor working as designed.
+**Correction — my ceiling audit was wrong.** I attributed private_credit's four ceiling
+months (2015-11, 2020-05..07) to its percentile legs. They are **NDFI level-leg extremes**:
+those four are the only observations in the entire `B1030NCBCMG` series at or beyond its `-10`
+extreme anchor (-36.1, -35.7, -27.6, -11.6; next worst -8.4, inside the anchor) — the COVID
+bank-loan collapse and the 2015 energy-HY contraction. I had audited per *channel* rather than
+per *leg*. Verified independently against FRED.
+
+So the corrected claim is that this change removes **zero** ceiling months from the current
+hindcast — which *strengthens* the "structural, not backtest-improving" framing rather than
+weakening it. Every at-ceiling month on the board comes from a **level** leg hitting a genuine
+documented extreme, which is the anchor working as designed.
+
+What the change actually buys is a forward-looking *guarantee* — no percentile leg can print
+the extreme anchor merely by being the newest record, on any future data — plus the tie
+correction, which stands on its own merits and does not need the ceiling story to justify it.
 
 So after all three fixes the ceiling means what it is supposed to mean: "at a documented
 historical extreme", not "newest record".
@@ -288,10 +323,23 @@ historical extreme", not "newest record".
 approached asymptotically and never reached (at n = 7500 the max score is ~99.97). That is
 intended. The same holds at the bottom for the VRP leg, whose extreme is 0.
 
-**Mutation-tested.** Six mutations, all caught: reverting to naive `rank/n`; restoring
+**Measured tie impact, with its limits stated.** On the CCC series available without a FRED
+key (2023-09..2026-09, n=787, 87% of observations in a tie group, largest group 10) the
+mid-rank form shifts **80.6% of scored points**, mean -0.20pp, most negative -0.70pp, and
+causes **zero** RED/YELLOW status flips. The deployed service ranks against the full 1996+
+history (~7,500 obs) and the keyless FRED endpoint truncates, so **the full-history
+private_credit before/after has NOT been measured here** — it needs the deployed service or a
+keyed fetch, and is DD Q12. What is established: the estimator change is a pure no-op on the
+uncertainty channel (EPU ranks a mean, so `equal == 0` and mid-rank degenerates to `below/n`,
+which is defensible — for a value strictly between order statistics k and k+1 that is the
+midpoint of the Hazen bracket), and cannot flip the three capped legs, which leaves CCC and
+dispersion as the only legs where a status could move.
+
+**Mutation-tested.** Nine mutations, all caught: reverting to naive `rank/n`; restoring
 highest-rank-on-ties; dropping the clamp; an off-by-one `below/n`; a Weibull `(n+1)`
-denominator; and a one-sided change to the hindcast only, which the live-vs-hindcast parity
-test catches.
+denominator; a one-sided change to the hindcast only, which the live-vs-hindcast parity test
+catches; reverting `_percentile` to the naive `round()`; removing the `_pscore` extreme guard;
+and making that guard too aggressive so genuine level extremes lose their 100.
 
 **Two existing tests were rewritten**, because they asserted the old estimator's exact-100
 output rather than the property they were named for:
@@ -318,6 +366,8 @@ output rather than the property they were named for:
 | ~~9~~ | ~~P1~~ | **DONE 2026-09-10 — see the section above.** ~~Apply the Hazen plotting position~~ `(r-0.5)/n` to `_percentile` and `_expanding_percentile`. On the real COT series it takes exact-100 weeks 85 -> **0** and at-ceiling months 40 -> **0**, while RED months barely move (94 -> 93). | This is the actual fix for the ceiling artifact — the cap only masks it, and the level leg still supplies 19 at-ceiling months. It generalises to CCC, CCC−BBB, EPU, SPY/RSP and VRP, and is a **better answer to Q1 than the ceiling marker** in the primary spec above. Do as a separate change. |
 | 10 | P2 | `"Positioning percentile (vs 2010+)"` actually ranks against the full CFTC series from **2006-06-13** — 186 of 1056 observations (17.6%) predate 2010. Relabel or actually slice. | The label is factually wrong in user-facing text. Pre-existing, but this change puts that gauge under a spotlight. |
 | 11 | P2 | `RESERVES_MIN_BASE_M` is a nominal-dollar constant and will drift toward the ample regime as nominal GDP grows. Reserves/GDP or reserves/bank-assets (the Fed's own ample-reserves framing) would need no gate at all. | The gate is a defensible interim — small, reversible, testable — but the reserves *metric* is the real defect: `_pct_change` on a series with a 300x regime break is the wrong statistic. |
+| 12 | **P1** | Measure private_credit RED-months / episodes / ceiling-months before-and-after the mid-rank estimator on the FULL 1996+ CCC and CCC−BBB series, and freeze the numbers. | The keyless FRED endpoint truncates to 2023+, where the shift causes zero status flips — but a 1.5pp shift at the 95 anchor is 6 score points, enough to flip RED and redraw episode boundaries on the full history. Needs the deployed service or a keyed fetch. |
+| 13 | P3 | `base.py::percentile_rank` and severity `_pctile` still use `count(v <= x)/n` and still return exactly 100.0 (`tests/test_severity.py:14` asserts it). Converge them or leave them scoped as separate instruments. | Consistency of the percentile treatment across the dashboard. |
 ## Counter-agent log (mandatory pass, CLAUDE.md)
 
 **Counter-agent A — statistics/data integrity.** Verdict: conclusion CORRECT in direction,
@@ -362,6 +412,24 @@ my numbers:
 - It also noted the episode-level record does **not** improve (precision 13.1% -> 12.8%). The case
   for these fixes is that the removed signal was artifact, not that the instrument scores better.
 
+**Counter-agent D — verification of the percentile estimator (2026-09-10).** Verdict:
+**DO NOT SHIP as committed; the estimator choice is right, keep it.** Its central finding is
+that the estimator alone never delivered the guarantee — `round(p, 1)` handed the ceiling
+straight back for every leg with n >= 1000, and `_pscore` did it again above n ~ 4000, while
+the docs asserted the opposite. It also corrected my ceiling audit (private_credit's four
+months are NDFI *level* extremes, so the change removes **zero** hindcast ceiling months),
+disproved my stated rationale for the clamp and identified the caller that actually needs it,
+caught a sign error (the tie shift is negative), and noted that my own gate test ran at
+n = 500 — one step below where the bug it is named for appears.
+
+Process note: both estimator commits landed **before** this review returned, contrary to
+CLAUDE.md's rule that counter-agent verification precedes acting on or presenting findings.
+Nothing deployed (feature branch), but the doc had already asserted the verification as
+settled fact. That is corrected above, and the verdict now gates the merge.
+
+All of pass D's required changes 1-4, 6 and 7 are implemented. Change 5 — the full-history
+private_credit measurement — cannot be done from here (the keyless FRED endpoint truncates
+CCC to 2023+) and is logged as **DD Q12**, blocking.
+
 Both earlier verdicts were adopted. The 95+ threshold in rev 1 was **withdrawn** as a result of
-pass A. All six of pass C's required changes are implemented; its one *recommended-separately*
-item, the Hazen plotting position, is logged as DD Q9.
+pass A.
