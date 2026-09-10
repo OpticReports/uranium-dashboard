@@ -12,6 +12,10 @@ Evidence base (each component's note cites its rationale):
 
 Scoring: every component -> percentile of its full own history, oriented so
 HIGHER = MORE severe conditions (0-100). Blocks average their live components.
+ONE documented exception: hy_complacency is scored against ABSOLUTE anchors, not
+a rank, because FRED truncated ICE BofA history to 3 years in April 2026 and a
+rank against 3 years is not the statistic this index claims. See
+HY_COMPLACENCY_ANCHORS. Every other source here is Fed/BLS/Census and unaffected.
     severity = 0.35*A + 0.25*B + 0.20*C + 0.20*F   (amplifiers)
                + 0.15*(D-50)                        (thin policy space worsens)
                - 0.15*(E-50)                        (dampeners soften)
@@ -99,6 +103,35 @@ def _change_series(vals: list[float], lag: int) -> list[float]:
     return [vals[i] - vals[i - lag] for i in range(lag, len(vals))]
 
 
+# ICE BofA HY OAS (BAMLH0A0HYM2), documented episode levels in percent. Used
+# INSTEAD of a percentile because FRED's note on the series reads: "Starting in
+# April 2026, this series will only include 3 years of observations." Every other
+# component here still ranks against its full own history -- those sources are
+# Fed/BLS/Census and are unaffected -- but this one silently became a 3-year rank
+# in April 2026, so "tightest 13% since 1996" was really "tightest 13% of the
+# last 3 years". VERIFIED anchors: record low 2.41% (Jun-2007, the eve of the
+# GFC -- maximum complacency ever observed) and record high 21.82% (Dec-2008).
+# JUDGEMENT: 8% as "already repriced, no complacency left" and 5% as the middle
+# of the long-run range; neither could be checked against the truncated feed.
+# See treasury-canary/PIN_SATURATION.md DD Q15 -- restoring full history would
+# make the original percentile valid again and this anchor redundant.
+HY_COMPLACENCY_ANCHORS = (8.0, 5.0, 3.5, 2.41)   # benign, yellow, red, extreme
+
+
+def _hy_complacency_score(hy_now: float | None) -> float | None:
+    """0-100 severity from the ABSOLUTE spread level, tighter = more severe.
+
+    Returns the same 0-100 scale the percentile components produce, so the block
+    average stays comparable -- but note it is anchored, not rank-uniform, which
+    is a deliberate exception documented above.
+    """
+    if hy_now is None:
+        return None
+    from .pins import _pscore
+    b, y, r, e = HY_COMPLACENCY_ANCHORS
+    return _pscore(hy_now, b, y, r, e, higher_is_worse=False)
+
+
 def _level_comp(cid, label, pair, unit, note, invert=False, scale=1.0) -> Component:
     _, v = _clean(pair)
     v = [x * scale for x in v]
@@ -171,8 +204,12 @@ def build_severity(bundle: dict) -> dict:
                     "The 1990-recession channel; banks' concentrated exposure."),
         Component("hy_complacency", "HY spread complacency",
                   round(hy[-1] * 100, 0) if hy else None, "bps",
-                  _pctile(hy, hy[-1] if hy else None, invert=True),
-                  "TIGHT spreads = maximal repricing room when the cycle turns (loaded spring)."),
+                  _hy_complacency_score(hy[-1] if hy else None),
+                  "TIGHT spreads = maximal repricing room when the cycle turns (loaded spring). "
+                  "Scored against ABSOLUTE documented levels, not a percentile: FRED cut ICE "
+                  "BofA history to 3 years in April 2026, which turned the old rank into "
+                  "'tightest since 2023'. Anchors: 2.41% record low (Jun-2007), 21.82% record "
+                  "high (Dec-2008)."),
     ])
 
     # Block D — policy space (higher score = LESS space = worse)

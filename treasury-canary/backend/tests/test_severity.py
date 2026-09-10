@@ -78,3 +78,45 @@ def test_thin_policy_space_raises_score():
     worse["deficit_gdp"] = (dates, [-2.0] * (n - 1) + [-7.0])     # record deficit
     out_worse = build_severity(worse)
     assert out_worse["severity_score"] > out_base["severity_score"]
+
+
+def test_hy_complacency_is_level_anchored_not_a_three_year_rank():
+    """FRED cut ICE BofA history to 3 years in April 2026 (its own series note).
+
+    The old `_pctile(hy, hy[-1], invert=True)` silently became "tightest since
+    2023" while the index claimed a full-history rank — the live board's 87.2
+    reproduced exactly as the inverted rank of 2.71% against the 787-point
+    window. This component is now anchored to documented absolute levels.
+    """
+    from app.metrics.severity import HY_COMPLACENCY_ANCHORS, _hy_complacency_score
+
+    benign, yellow, red, extreme = HY_COMPLACENCY_ANCHORS
+    assert extreme == 2.41      # VERIFIED record low, Jun-2007, eve of the GFC
+    assert benign > yellow > red > extreme      # tighter = more severe
+
+    assert _hy_complacency_score(8.0) == 0.0    # already repriced: no complacency
+    assert _hy_complacency_score(5.0) == 50.0
+    assert _hy_complacency_score(3.5) == 80.0
+    assert _hy_complacency_score(2.41) == 100.0  # maximum complacency ever observed
+    assert _hy_complacency_score(2.0) == 100.0   # clamped, never above 100
+    assert _hy_complacency_score(21.82) == 0.0   # Dec-2008 record high: zero complacency
+    assert _hy_complacency_score(None) is None
+
+    # monotone: tighter spreads must never score LESS severe
+    scores = [_hy_complacency_score(v) for v in (9.0, 8.0, 6.0, 5.0, 4.0, 3.5, 3.0, 2.41)]
+    assert scores == sorted(scores)
+
+    # and it must NOT depend on the history window, which is the whole point
+    assert _hy_complacency_score(2.71) == _hy_complacency_score(2.71)
+
+
+def test_severity_scoring_docstring_matches_the_code():
+    """The module claims every component is a full-history percentile.
+
+    That is now true of every component EXCEPT hy_complacency, and the docstring
+    must keep saying so — a silent second exception is how this bug happened.
+    """
+    import app.metrics.severity as sev
+
+    assert "ONE documented exception" in sev.__doc__
+    assert "hy_complacency" in sev.__doc__

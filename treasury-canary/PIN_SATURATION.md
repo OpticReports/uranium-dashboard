@@ -444,6 +444,39 @@ seeing. The gauges are what carry that signal now, and they cap at YELLOW.
 **The better fix is not this one.** Restoring a full-history source would make the original
 percentile calibration valid again and make this level leg redundant. That is DD Q15.
 
+## DD Q17 — the same regression in the severity index, fixed 2026-09-10
+
+`severity.py` is by design a rank-uniform instrument: its docstring says *"every component ->
+percentile of its full own history"*. One of its inputs, `hy_oas` = `BAMLH0A0HYM2`, is an ICE
+BofA series, so in April 2026 `hy_complacency` silently became a **3-year** rank while the module
+kept claiming a full-history one. Confirmed exactly: the live score of **87.2** reproduces as the
+inverted rank of today's 2.71% against the 787-point window (100 − 12.8).
+
+**Note the direction — the bug was understating the risk, not inflating it.** The 3-year window's
+own minimum (2.59%) sits close to today's 2.71%, so today looked mid-pack. Against real history,
+which reaches a record low of 2.41%, today's spread is near the tightest ever recorded. The
+component exists to measure exactly that ("TIGHT spreads = maximal repricing room when the cycle
+turns"), and truncation was blunting it.
+
+**Fix:** `hy_complacency` is now scored against absolute documented levels,
+`HY_COMPLACENCY_ANCHORS = (8.0, 5.0, 3.5, 2.41)`. Verified: record low **2.41% (Jun-2007**, the
+eve of the GFC — maximum complacency ever observed) and record high **21.82% (Dec-2008)**.
+Judgement, unverified: 8.0 as "already repriced, no complacency left" and 5.0 as the long-run
+middle. The module docstring now names this as its one exception, and a test asserts it keeps
+saying so — a silent second exception is how this bug survived.
+
+| | before | after |
+|---|---|---|
+| hy_complacency | 87.2 | **94.5** |
+| Block C (Amplification) | 47.2 | **49.7** |
+| severity index | 69.0 | **69.5** |
+| class | SEVERE | SEVERE (unchanged) |
+
+**Known design tension, not hidden:** this injects one anchored, non-rank-uniform component into
+a block average of percentiles. That is a deliberate exception and it is the reason the docstring
+gate exists. `crossasset.hy_oas` / `ig_oas` are NOT affected — they threshold on fixed levels, so
+truncation changes their history depth but not their reading.
+
 ## Pending DD questions
 
 | # | P | Question | What it would move |
@@ -463,7 +496,7 @@ percentile calibration valid again and make this level leg redundant. That is DD
 | ~~14~~ | ~~P1~~ | **RESOLVED 2026-09-10 — see the section above.** Percentiles demoted to gauges; a level trigger carries RED. | private_credit goes RED -> YELLOW on the live board. |
 | 15 | **P1** | **Restore a full-history CCC/BBB source** (paid FRED tier, ICE direct, or another provider). FRED restricted ICE BofA to 3 years in April 2026. | This is the BETTER fix: it would make the original `(50, 85, 95, 100)` percentile calibration valid again and render the new level leg redundant. Recalibrating around a source regression is a workaround, not a repair. |
 | 16 | **P2** | Ground the `yellow 11` and `red 16` CCC level anchors against actual 2011/2016/2020 CCC peaks. | They are currently judgement calls. Only the 44.29 extreme and 4.14 floor are verified. |
-| 17 | **P1** | **CONFIRMED, second instrument hit.** `severity.py:174` ranks HY OAS against its own history via `_pctile(hy, hy[-1], invert=True)`, and `hy_oas` is `BAMLH0A0HYM2` — another ICE series truncated in April 2026. The live board's `hy_complacency` score of **87.2** reproduces EXACTLY as the inverted rank of today's 2.71% against the 787-point window (100 - 12.8). So "HY spread complacency" now means "tightest 13% of the last 3 years", not "since 1996". | Outside the pin board, so not fixed here. The severity index is a separate instrument with the same defect and needs the same decision: restore full history (Q15) or re-anchor on levels. `crossasset.hy_oas`/`ig_oas` are NOT affected — they threshold on fixed levels, so truncation changes their history depth but not their reading. |
+| ~~17~~ | ~~P1~~ | **RESOLVED 2026-09-10 — see the section above.** `hy_complacency` re-anchored on absolute levels. | severity index 69.0 -> 69.5, class unchanged. |
 | 13 | P3 | `base.py::percentile_rank` and severity `_pctile` still use `count(v <= x)/n` and still return exactly 100.0 (`tests/test_severity.py:14` asserts it). Converge them or leave them scoped as separate instruments. | Consistency of the percentile treatment across the dashboard. |
 ## Counter-agent log (mandatory pass, CLAUDE.md)
 
