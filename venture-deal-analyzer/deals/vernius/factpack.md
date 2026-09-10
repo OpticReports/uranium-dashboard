@@ -128,14 +128,44 @@ make the entire EV exercise decorative.
   advisors (YC Launch post, self-reported). Samuel P.N. Cook appears to be an
   **advisor** ("privilege to work with the Vernius team from the beginning").
   **[NOT FOUND] Josh Cohen has no findable public connection to Vernius.**
-- [VERIFIED — the genuinely impressive part, stated without hedging] They spent
-  the S26 batch **in-theatre rather than in SF** (YC GP Brad Flora, 24 Aug
-  2026); they **physically integrated Archimedes 1A onto Wild Hornets' Sting**,
-  a real fielded Ukrainian interceptor; and they **took an order from a real
-  military customer inside eight weeks.** That is speed almost no seed company
-  has. *Caveat the critic added:* every account of the Wild Hornets integration
-  traces back to Vernius or to a single writer relaying Vernius — **no Wild
-  Hornets statement mentioning Vernius was found.**
+- [CLAIMED — **downgraded from VERIFIED, 2026-09-11**] They spent the S26 batch
+  **in-theatre rather than in SF** (this part is corroborated by YC GP Brad
+  Flora, 24 Aug 2026); they **integrated Archimedes 1A onto Wild Hornets'
+  Sting**; and they **took an order from a real military customer inside eight
+  weeks.** If true, that is speed almost no seed company has.
+  **CORRECTION (adversarial pass): the Wild Hornets integration is NOT
+  independently reported.** Every account reduces to the phrasing "already
+  demonstrated it mounted on Wild Hornets' Sting," which the one writer carrying
+  it attributes to a Dealroom company note — i.e. back to Vernius. Searches of
+  Wild Hornets' own channels surface Sting rankings and Sting 2.0 development
+  but **no reference to Vernius or Archimedes**. Rev 1 of this pack called it
+  "third-party reported"; that was wrong and is withdrawn.
+
+- **[SYSTEMATIC CORRECTION, 2026-09-11 — the most important framing on this
+  whole section] The YC company page is COMPANY-AUTHORED COPY, not
+  verification.** All three sweeps initially labelled it PRIMARY for founder
+  credentials, the LOI total and the investor roster. YC does not verify founder
+  bios or traction claims. **Therefore every one of the following rests on the
+  founders' own word and nothing else:** "6+ years in RF PCB engineering" ·
+  "led 14 engineers at Defense Tech for Ukraine" · "Solutions Architect at
+  Sandia National Labs under Q clearance, architecting secure comms for US Navy
+  Tomahawk fleet" · "developed proposals for Pratt & Whitney's $2.6B USAF B-52
+  program" · "$580M in letters of intent" · "Our early investors include…".
+  Note the asymmetry this creates: the *conflict* between the deck's "over a
+  decade" and YC's "6+ years" is still real and still damaging, because it is
+  the company contradicting itself in two places — but the "6+ years" is not an
+  independent check, it is the same source telling a smaller version.
+
+- **[PARTIAL — NEW, and the single best behavioural proxy in the file]
+  Auctify appears not to have delivered its hardware presale.** A backer comment
+  surfaced in search indexing of Auctify's own Facebook page asks: *"are you
+  ever going to either deliver the product you keep promising or have the
+  decency to refund people?"* **Caveat, stated plainly: direct fetch hit a login
+  wall, so the comment and its date could not be verified at source.** If it
+  holds, it is the closest available evidence on whether these two founders
+  convert a presale into shipped product — the exact question Vernius's $60K of
+  presales and 45 units now poses — and it points negative. **Ask them directly;
+  it is a fair question and the answer is diagnostic.**
 
 ## 3 · THE PRODUCT — what it is, and what the physics allows
 
