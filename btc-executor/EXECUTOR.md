@@ -227,6 +227,14 @@ as a fraction of **capital**, not as one multiplier:
   `max_exposure_frac` alongside the configured value, so the readout can
   never state a size the executor is not using.
 
+**Mutation-verified, including its own failures.** The protection was broken
+16 different ways; 13 were killed by exactly the gate written for them. Three
+survived the first sweep and are worth recording, because two were against
+the panel's own BLOCKING fixes: reverting `_roll_day` to the raw `KELLY_M`,
+reverting `advance_ok` to execution-only, and deleting `exposure_over_cap`'s
+ACTION entry all passed a green suite. Gates added, re-mutated, all three now
+die. A fix whose gate does not bind is a fix on paper.
+
 **Still env-only, and deliberately unresolved here:** `SIZING_BASE_USD`,
 `MAX_NOTIONAL_USD` and `MAX_ACCOUNT_LEV` have no repo ceiling. The exposure
 check makes a breach loud; it does not make it impossible. Bounding those in

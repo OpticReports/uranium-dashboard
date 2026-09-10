@@ -6932,3 +6932,72 @@ def test_gate_fills_record_the_size_they_were_taken_at(tmp_path):
     fills = getattr(ex.state, "fills", []) or []
     assert fills, "setup: the market entry must book a fill"
     assert fills[-1]["kelly_m"] == pytest.approx(mirror.KELLY_M_CAP)
+
+
+# --- gaps found by the round-2 mutation sweep: three mutations SURVIVED, two
+# of them against the panel's own BLOCKING fixes. Written after the fact and
+# said out loud, because a fix whose gate does not bind is a fix on paper.
+
+def test_gate_over_cap_env_does_not_hold_daily_loss_hostage(tmp_path):
+    """The BLOCKING trap, gated at last (mutation M10 survived without this).
+
+    A clamped book trades at 0.20. If _roll_day reads the RAW env instead of
+    the effective size, a fat-fingered KELLY_M=0.56 plus one ordinary -6% day
+    holds DAILY_LOSS through EVERY rollover — and a halted step returns before
+    stop maintenance and engine-exit mirroring. That is the unmanaged-book
+    harm the cap refuses to cause by halting, reached sideways.
+
+    The existing above-0.30 test raises the cap to 0.80, where raw and
+    effective are equal, so it cannot see this. This one pins the gap
+    between them."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    ex.cfg.kelly_m = 0.56                     # raw > 0.30 ...
+    assert ex._effective_kelly_m() == pytest.approx(0.20)   # ... effective is not
+    ex.state.halted = "DAILY_LOSS"
+    ex.state.day_key = "2020-01-01"           # force a rollover
+    ex.step(target())
+    assert ex.state.halted is None, (
+        "a book clamped to 0.20 is not the 'meaningful evidence' size the "
+        "manual-resume rule was written for - it must auto-rearm")
+
+
+def test_gate_advance_ok_itself_is_false_at_the_ceiling(tmp_path, monkeypatch):
+    """Mutation M12 survived: the previous gate only exercised _next_rung(),
+    never advance_ok, so reverting the boolean to pure execution evidence was
+    invisible. Assert the FIELD the dashboard reads."""
+    from app.main import RAMP_V4_REQUIRED, _ramp_v4
+    import app.main as m
+    from app.mirror import ExecState
+    st = ExecState()
+    st.coverage = {k: v for k, v in RAMP_V4_REQUIRED.items()}
+    st.coverage_live = {k: v for k, v in RAMP_V4_REQUIRED.items()}
+    st.fills = [{"slip_bps": 1.0, "live": True}] * 10
+    # every EXECUTION row met and slippage sane: the old boolean said "go"
+    monkeypatch.setattr(m.settings, "kelly_m", 0.10)
+    r = _ramp_v4(st)
+    assert r["coverage_complete"] is True and r["slippage_sanity"]["ok"] is True
+    assert r["advance_ok"] is True                     # rung B is reachable
+    monkeypatch.setattr(m.settings, "kelly_m", 0.20)   # already at the ceiling
+    r2 = _ramp_v4(st)
+    assert r2["coverage_complete"] is True             # execution still perfect
+    assert r2["advance_ok"] is False, (
+        "flawless execution must not green-light a retired rung")
+    assert r2["next_rung"] is None
+
+
+def test_gate_exposure_page_reaches_the_phone(tmp_path, monkeypatch):
+    """Mutation M6 targeted exposure_over_cap's ACTION entry and survived —
+    the phone test only covered kelly_over_cap. Same argument, other page:
+    a bypass that pages nobody is the bypass."""
+    sent = []
+    import app.alerts as alerts
+    monkeypatch.setattr(alerts, "send", lambda msg: sent.append(msg))
+    v = FakeVenue(equity=1_000.0)
+    ex = mkexec(tmp_path, v)
+    ex.cfg.sizing_base_usd = 10_000.0          # the SIZING_BASE_USD bypass
+    ex.cfg.max_notional_usd = 1_000_000.0
+    ex.step(target())
+    hits = [msg for msg in sent if "exposure_over_cap" in msg]
+    assert hits, "the base bypass must reach the phone"
+    assert hits[0].startswith("🔴 ACTION NEEDED")
