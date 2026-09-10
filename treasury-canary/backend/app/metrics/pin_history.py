@@ -298,8 +298,11 @@ HISTORY_NOTES: dict[str, str] = {
                       "legs do NOT run from 1998: FRED serves ICE BofA series under a "
                       "licence limited to a rolling ~3-year window (787 daily obs as of "
                       "2026-09), and the 504-obs warmup consumes two thirds of that, so "
-                      "those legs only go live from ~2025-10. Every RED month before then "
-                      "is the NDFI level leg alone.",
+                      "those legs only go live from ~2025-10, and since 2026-09-10 they are "
+                      "capped at YELLOW. The channel's RED now comes from the CCC-and-lower "
+                      "OAS LEVEL leg (anchored 4.14/10/14/44.3) or from NDFI. The level leg "
+                      "covers the whole ~3-year window but never exceeds 11.37% in it, so "
+                      "every RED month in this hindcast is the NDFI leg alone.",
     "concentration": "Depth limited by FMP daily history for SPY/RSP.",
     "basis_trade": "CFTC TFF disaggregation begins 2006; percentile warms up "
                    "through 2008. The positioning leg is a crowding GAUGE and "

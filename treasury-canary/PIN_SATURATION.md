@@ -408,23 +408,25 @@ distressed", only "worse than the recent past". So:
 
 1. Both percentile legs are **demoted to gauges** (cap 100 -> 79), the same semantics the board
    already gives SPY/RSP, VRP, RRP buffer, 10y JGB and basis_trade positioning.
-2. A new **level trigger** carries the RED: `"CCC-and-lower OAS": (6.0, 11.0, 16.0, 44.0)`, in
+2. A new **level trigger** carries the RED: `"CCC-and-lower OAS": (4.14, 10.0, 14.0, 44.3)`, in
    absolute OAS percent, added to both the live board and the hindcast.
 
-**Anchor provenance, stated exactly.** Verified: the series record high is **44.29 (Dec-2008)**
-and record low **4.14 (Jun-2007)**, both confirmed against Trading Economics' record of the same
-FRED series. Judgement, NOT verified against data (the feed serves only ~3 years): **yellow 11**
-as the elevated-but-not-distressed band, and **red 16**, chosen to sit under the 2011/2016/2020
-distress peaks so those episodes register RED. I could not obtain CCC-specific values for those
-peaks; the closest evidence is the broad HY index peaking ~10.87% on 2020-03-23, and CCC runs
-well above the broad index in stress.
+**Anchor provenance, one line each.** The first draft of this leg used `(6.0, 11.0, 16.0, 44.0)`
+and the counter-agent took it apart; all three of its unsourced numbers were replaced.
+
+| anchor | value | provenance |
+|---|---|---|
+| benign | **4.14** | **VERIFIED** series record low, Jun-2007. The first draft used 6.0 with no source and did not disclose it as a guess. |
+| yellow | **10.0** | **CITED** — Fridson's distress convention (market standard since ~1990): OAS >= +1000bps is distressed. Today's index prints **1064bps**, so the average CCC credit is already trading distressed by that convention. The first draft's 11.0 sat 3.4% *above* today's print and was the sole reason today read GREEN — textbook fitting. |
+| red | **14.0** | **JUDGEMENT — the one remaining guess, and the weakest number on the board.** Sized to catch the 2011 euro crisis, whose CCC peak estimates at ~15.5% by applying the one verified CCC/HY ratio (44.29/21.82 = 2.03x at Dec-2008) to that episode's documented ~9.1% broad-HY peak. The first draft's 16.0 would have missed 2011 entirely and read GREEN through the whole Dec-2018 selloff. |
+| extreme | **44.3** | **VERIFIED** series record high 44.29, Dec-2008. |
 
 **Impact — this changes the live board's headline.**
 
 | | before | after |
 |---|---|---|
 | private_credit, live | **RED 98.8** | **YELLOW 79.0** |
-| CCC level leg (trigger) | — | 10.64% -> 46.4 GREEN |
+| CCC level leg (trigger) | — | 10.64% -> **54.8 YELLOW** |
 | CCC percentile (now gauge) | 99.2 -> 96.8 RED | 99.2 -> 79.0 YELLOW |
 | dispersion percentile (now gauge) | 99.7 -> 98.8 RED | 99.7 -> 79.0 YELLOW |
 | hindcast RED months | 19 | 13 |
@@ -441,7 +443,22 @@ distressed" — defensible, since 10.64% is unremarkable against a series that r
 at record size deteriorating from a low base is exactly what an absolute-level anchor is worst at
 seeing. The gauges are what carry that signal now, and they cap at YELLOW.
 
-**The better fix is not this one.** Restoring a full-history source would make the original
+**Two side effects the counter-agent surfaced, disclosed rather than buried.**
+- **EWM deal timing moves.** `ewm/live.py:115-119` feeds the private_credit channel score into
+  the DMHI leg as `1 - score/100`. Capping the gauges lifts DMHI **0.381 -> 0.480**, which at
+  `w_dmhi = 0.20` is **+1.98 points on every EWM window score** against bands green 70 / amber 45
+  — enough to flip a window near a boundary. An unrelated decision surface got healthier because
+  a display convention changed. See DD Q18.
+- **Cap-pinning at the top of the range.** The channel now reads exactly **79.0 in 6 of the last
+  7 months**, i.e. no resolution at the top — structurally the same at-ceiling defect DD Q9
+  removed from the positioning leg, reintroduced at 79 instead of 100.
+
+**What the counter-agent got right that this doc previously got wrong:** the claim that today's
+10.64% is "historically unremarkable" is not defensible as stated. It is above the market's own
+distress convention, it is a 3-year high, the book is at record size, and dispersion is 9.65pp.
+"Unremarkable" was true only against a full-cycle distribution the feed no longer serves.
+
+**The better fix is still not this one.** Restoring a full-history source would make the original
 percentile calibration valid again and make this level leg redundant. That is DD Q15.
 
 ## DD Q17 — the same regression in the severity index, fixed 2026-09-10
@@ -495,7 +512,10 @@ truncation changes their history depth but not their reading.
 | ~~12~~ | ~~P1~~ | **RESOLVED 2026-09-10 — see the section above.** Zero status flips, zero episode changes; 4 of 140 months move, largest -1.10 points. | The full 1996+ series does not exist in the pipeline; the real base is a rolling ~3-year window. |
 | ~~14~~ | ~~P1~~ | **RESOLVED 2026-09-10 — see the section above.** Percentiles demoted to gauges; a level trigger carries RED. | private_credit goes RED -> YELLOW on the live board. |
 | 15 | **P1** | **Restore a full-history CCC/BBB source** (paid FRED tier, ICE direct, or another provider). FRED restricted ICE BofA to 3 years in April 2026. | This is the BETTER fix: it would make the original `(50, 85, 95, 100)` percentile calibration valid again and render the new level leg redundant. Recalibrating around a source regression is a workaround, not a repair. |
-| 16 | **P2** | Ground the `yellow 11` and `red 16` CCC level anchors against actual 2011/2016/2020 CCC peaks. | They are currently judgement calls. Only the 44.29 extreme and 4.14 floor are verified. |
+| 16 | **P1** | **Obtain measured CCC OAS peaks for 2011, 2016-02, 2018-12 and 2020-03** (paid FRED tier / ICE direct / Bloomberg) and replace `red = 14.0`. | It is the last unsourced number in the calibration and it decides when the channel can fire at all. Blocking under CLAUDE.md's missing-inputs rule. |
+| 18 | **P2** | Should `ewm/live.py`'s DMHI leg read UNCAPPED pin leg scores, so a display cap cannot move a deal-timing recommendation? | +1.98 points on every EWM window score today, purely from the gauge caps. |
+| 19 | **P2** | Should the channel use a CONJUNCTION (percentile >= 95 AND level >= 10) rather than a bare level threshold? | Would restore a credit-pricing trigger that can fire before full crisis, without claiming a 30-year rank. The level leg alone is coincident, not leading: CCC only reached ~18-20% in Mar-2020 *after* SPX had fallen ~30%, which the hindcast's own `(1, 6)` lag window would score a miss. |
+| 20 | **P1** | Promote DD Q5 (`pins_schema_rev`) to blocking. | Two anchor changes landed in one day and `pins_overall` is persisted daily with no version stamp, so the track record now mixes pre- and post-recalibration semantics. |
 | ~~17~~ | ~~P1~~ | **RESOLVED 2026-09-10 — see the section above.** `hy_complacency` re-anchored on absolute levels. | severity index 69.0 -> 69.5, class unchanged. |
 | 13 | P3 | `base.py::percentile_rank` and severity `_pctile` still use `count(v <= x)/n` and still return exactly 100.0 (`tests/test_severity.py:14` asserts it). Converge them or leave them scoped as separate instruments. | Consistency of the percentile treatment across the dashboard. |
 ## Counter-agent log (mandatory pass, CLAUDE.md)
@@ -541,6 +561,26 @@ my numbers:
   **disclosure**, now added as `HISTORY_NOTES` for both channels.
 - It also noted the episode-level record does **not** improve (precision 13.1% -> 12.8%). The case
   for these fixes is that the removed signal was artifact, not that the instrument scores better.
+
+**Counter-agent E — verification of the private_credit recalibration (2026-09-10).** Verdict:
+**DO NOT SHIP as first committed.** It confirmed the direction (a rolling 3-year percentile is a
+gauge; demoting it is correct) and then found three blockers, all now fixed:
+- **The RED band rested on unverified numbers, one of them simply wrong.** `benign 6.0` contradicts
+  the verified 4.14 record low; `yellow 11.0` sat 3.4% above today's print and was the sole reason
+  today read GREEN; `red 16.0` would have missed the 2011 euro crisis and read GREEN through the
+  entire Dec-2018 selloff. It supplied the replacement set and the Fridson +1000bps distress
+  convention — the only externally citable threshold in that band, which I had missed.
+- **The channel was left with no trigger that could fire**, which is the failure mode this board
+  must never have. Fixed by the lower red line; DD Q19 tracks the stronger conjunction rule.
+- **The false "since 1996" survived in the place users actually read it** —
+  `frontend/src/lib/glossary.ts` — while three commits and a gate test existed to kill that claim
+  in the backend. Fixed and rebuilt.
+- **Two gate tests were theatre.** `red 16 -> 14` and dropping the level leg from the hindcast
+  alone both left the suite green; and the gate hard-coded `10.64 -> GREEN`, putting today's price
+  inside the calibration test. All three fixed; six mutations now caught, including both that
+  previously survived.
+One reviewer reference I could not reproduce: `ewm/CANARY_COUPLING_RESEARCH.md` does not exist in
+this repo, and no doc contains the leg list it quoted.
 
 **Counter-agent D — verification of the percentile estimator (2026-09-10).** Verdict:
 **DO NOT SHIP as committed; the estimator choice is right, keep it.** Its central finding is

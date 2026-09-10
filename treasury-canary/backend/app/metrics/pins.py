@@ -291,18 +291,30 @@ ANCHORS: dict[str, tuple] = {
     # silently became 3-year percentiles in April 2026 when the licence changed
     # under them. A percentile against a rolling ~3-year window cannot say
     # "credit is distressed", only "worse than the recent past", so the absolute
-    # level now carries the RED and the percentiles are demoted to gauges.
+    # level carries the RED and the percentiles are demoted to gauges.
     #
-    # ANCHORS, documented episode levels, never fitted. VERIFIED: the series
-    # record high is 44.29 (Dec-2008) and record low 4.14 (Jun-2007), both
-    # confirmed against Trading Economics' record of the same FRED series.
-    # JUDGEMENT, not verified against data (the feed serves only ~3 years, so
-    # these could not be checked directly): yellow 11 as the elevated-but-not-
-    # distressed band, and red 16 chosen to sit under the 2011/2016/2020 distress
-    # peaks so those episodes register RED. See PIN_SATURATION.md DD Q15 -- the
-    # BETTER fix is restoring a full-history source, which would make the
-    # original percentile calibration valid again and this leg redundant.
-    "CCC-and-lower OAS": (6.0, 11.0, 16.0, 44.0, True, 100),
+    # ANCHOR PROVENANCE, one line each, because three of these four were guesses
+    # in the first draft of this leg and one of those was simply wrong:
+    #   4.14 benign   VERIFIED series record low (Jun-2007, the pre-GFC peak of
+    #                 complacency). An earlier draft used 6.0 with no source.
+    #   10.0 yellow   CITED, not judgement: Fridson's distress convention, the
+    #                 market standard since ~1990 -- OAS >= +1000bps is distressed.
+    #                 Today's index prints 1064bps, i.e. the AVERAGE CCC credit is
+    #                 already trading distressed by that convention.
+    #   14.0 red      JUDGEMENT, the one remaining guess. Sized to catch the 2011
+    #                 euro crisis, whose CCC peak is estimated ~15.5% by applying
+    #                 the one verified CCC/HY ratio (44.29/21.82 = 2.03x at
+    #                 Dec-2008) to that episode's documented ~9.1% broad-HY peak.
+    #                 An earlier draft used 16.0, which would have missed 2011
+    #                 entirely and read GREEN through the whole Dec-2018 selloff.
+    #                 DD-A must replace this with a measured 2011/2016/2018/2020
+    #                 CCC peak; until then it is the weakest number on this board.
+    #   44.3 extreme  VERIFIED series record high 44.29 (Dec-2008).
+    #
+    # The better fix remains PIN_SATURATION.md DD Q15: restore a full-history
+    # source and the original percentile calibration becomes valid again, making
+    # this leg redundant.
+    "CCC-and-lower OAS": (4.14, 10.0, 14.0, 44.3, True, 100),
     # NOT "vs 1996+", despite the config comment on the series id. FRED serves
     # ICE BofA (BAML*) series under a licence that returns only a ROLLING ~3-year
     # window -- 787 daily observations as of 2026-09, verified by reproducing the
@@ -558,12 +570,17 @@ def build_pin_board(bundle: dict) -> dict:
     ndfi_now = _clean(ndfi)[-1] if _clean(ndfi) else None
     parts = [
         PinPart("CCC-and-lower OAS", ccc_now, "%",
-                _grade(ccc_now, 11.0, 16.0),
+                _grade(ccc_now, ANCHORS["CCC-and-lower OAS"][1],
+                       ANCHORS["CCC-and-lower OAS"][2]),
                 "The channel's TRIGGER: absolute distress pricing in the public proxy for "
-                "private-credit marks. Episode anchors — 2007/2021 lows ~6%, 2018-Q4 ~11%, "
-                "2016 energy bust ~20% and 2020 COVID ~18% (both above the 16% red line), "
-                "Dec-2008 peak ~44%. The percentile legs below are relative gauges and "
-                "cap at YELLOW; only this leg can take the channel RED."),
+                "private-credit marks. Anchors, with their sources: 4.14% is the series "
+                "record low (Jun-2007) and 44.29% the record high (Dec-2008), both verified; "
+                "10% is Fridson's distress convention (>=+1000bps), the market standard since "
+                "~1990 — at 1064bps today the average CCC credit is already trading distressed "
+                "by it. The 14% red line is an ESTIMATE sized to catch the 2011 euro crisis and "
+                "is the weakest number on this board. The percentile legs below became 3-YEAR "
+                "percentiles when FRED restricted ICE BofA history in April 2026, so they are "
+                "relative gauges capped at YELLOW; only this leg can take the channel RED."),
         PinPart("CCC spread percentile (vs available history)", ccc_pctl, "%ile",
                 _grade(ccc_pctl, 85.0, 95.0),
                 f"CCC-and-lower OAS now {ccc_now if ccc_now is not None else 'n/a'}% — "

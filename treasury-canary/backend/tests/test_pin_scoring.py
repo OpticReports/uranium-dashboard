@@ -332,14 +332,69 @@ def test_private_credit_percentiles_cannot_carry_red_alone():
 
 
 def test_ccc_level_trigger_registers_the_documented_episodes():
-    """The level leg must fire on the episodes its anchors cite, and stay calm below."""
+    """The level leg must fire on real distress and stay calm below it.
+
+    Deliberately NOT asserting anything about today's print. An earlier version
+    of this gate hard-coded `10.64 -> GREEN`, which put the live price inside the
+    calibration test and made the yellow anchor unfalsifiable by construction.
+    """
     b, y, r, e, hi, cap = ANCHORS["CCC-and-lower OAS"]
     assert cap == 100.0                                    # this leg IS the trigger
-    assert _status_from_score(_pscore(6.0, b, y, r, e, hi, cap)) == "GREEN"    # 2007/2021 lows
-    assert _status_from_score(_pscore(11.0, b, y, r, e, hi, cap)) == "YELLOW"  # 2018-Q4
-    assert _status_from_score(_pscore(16.0, b, y, r, e, hi, cap)) == "RED"
-    assert _status_from_score(_pscore(18.0, b, y, r, e, hi, cap)) == "RED"     # 2020 COVID
-    assert _status_from_score(_pscore(20.0, b, y, r, e, hi, cap)) == "RED"     # 2016 energy
-    assert _pscore(44.0, b, y, r, e, hi, cap) == 100.0                         # Dec-2008 peak
-    # today's 10.64% is NOT distressed by absolute standards, whatever its 3y rank
-    assert _status_from_score(_pscore(10.64, b, y, r, e, hi, cap)) == "GREEN"
+    assert (b, y, r, e) == (4.14, 10.0, 14.0, 44.3)
+
+    # VERIFIED endpoints
+    assert _pscore(4.14, b, y, r, e, hi, cap) == 0.0        # record low, Jun-2007
+    assert _pscore(44.3, b, y, r, e, hi, cap) == 100.0      # record high, Dec-2008
+
+    # Fridson's +1000bps distress convention must be the YELLOW line, not above it
+    assert y == 10.0
+    assert _status_from_score(_pscore(10.0, b, y, r, e, hi, cap)) == "YELLOW"
+
+    # RED must be reachable by real episodes -- pinned from BOTH sides, because a
+    # from-above-only gate let red drift from 14 to 16 undetected, and 16 would
+    # have missed the 2011 euro crisis (CCC est. ~15.5%) entirely.
+    assert r <= 15.0, "red must sit below the 2011 euro-crisis CCC estimate (~15.5%)"
+    assert r > y, "red must sit above the distress convention"
+    for episode in (15.5, 19.0, 22.0, 44.3):               # 2011, 2020, 2016, 2008
+        assert _status_from_score(_pscore(episode, b, y, r, e, hi, cap)) == "RED"
+    # ... and must NOT fire on merely-calm spreads
+    for calm in (4.14, 6.0, 8.0):
+        assert _status_from_score(_pscore(calm, b, y, r, e, hi, cap)) == "GREEN"
+
+
+def test_every_live_channel_leg_is_also_hindcast():
+    """Live board and hindcast must carry the SAME legs.
+
+    Dropping the CCC level leg from pin_history alone left the whole suite green,
+    so the two surfaces could silently diverge -- the hindcast would score a
+    channel on fewer legs than the live pill shows.
+    """
+    from app.metrics.pin_history import LAG_WINDOWS, _parts_for_channel
+
+    # Divergences that are DELIBERATE and documented in pin_history.HISTORY_NOTES.
+    # Anything not listed here is a bug: the hindcast would score a channel on
+    # fewer legs than the live pill shows.
+    DOCUMENTED_GAPS = {
+        ("demand_strike", "Coupon bid-to-cover, last 4 auctions"),
+        ("demand_strike", "Indirect (foreign) share, last 4 auctions"),
+    }
+
+    board = build_pin_board({})
+    for ch in board["channels"]:
+        cid = ch["channel_id"]
+        if cid not in LAG_WINDOWS:
+            continue
+        hindcast_labels = {label for label, _ in _parts_for_channel(cid, {})}
+        for part in ch["parts"]:
+            label = part["label"]
+            if label not in ANCHORS:
+                continue          # unanchored parts are display-only by design
+            if (cid, label) in DOCUMENTED_GAPS:
+                continue
+            assert label in hindcast_labels, (
+                f"{cid}: live leg {label!r} is missing from the hindcast")
+
+    # and the documented gaps must still BE documented
+    from app.metrics.pin_history import HISTORY_NOTES
+    for cid, _label in DOCUMENTED_GAPS:
+        assert HISTORY_NOTES.get(cid), f"{cid} has an undocumented hindcast gap"
