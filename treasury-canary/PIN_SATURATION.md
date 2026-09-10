@@ -463,36 +463,53 @@ percentile calibration valid again and make this level leg redundant. That is DD
 
 ## DD Q17 — the same regression in the severity index, fixed 2026-09-10
 
-`severity.py` is by design a rank-uniform instrument: its docstring says *"every component ->
-percentile of its full own history"*. One of its inputs, `hy_oas` = `BAMLH0A0HYM2`, is an ICE
-BofA series, so in April 2026 `hy_complacency` silently became a **3-year** rank while the module
-kept claiming a full-history one. Confirmed exactly: the live score of **87.2** reproduces as the
-inverted rank of today's 2.71% against the 787-point window (100 − 12.8).
+`severity.py` is by design rank-uniform: its docstring says *"every component -> percentile of
+its full own history"*. One input, `hy_oas` = `BAMLH0A0HYM2`, is an ICE BofA series, so
+`hy_complacency` silently became a **3-year** rank in April 2026. Confirmed exactly: the live
+score of **87.2** reproduces as the inverted rank of today's 2.71% against the 787-point window.
 
-**Note the direction — the bug was understating the risk, not inflating it.** The 3-year window's
-own minimum (2.59%) sits close to today's 2.71%, so today looked mid-pack. Against real history,
-which reaches a record low of 2.41%, today's spread is near the tightest ever recorded. The
-component exists to measure exactly that ("TIGHT spreads = maximal repricing room when the cycle
-turns"), and truncation was blunting it.
+**Note the direction — the bug understated risk.** The 3-year window's own minimum (2.59%) sits
+close to today's 2.71%, so today looked mid-pack. Against real history, which reaches a record
+low of 2.41%, today's spread is near the tightest ever recorded — exactly what the component
+exists to measure.
 
-**Fix:** `hy_complacency` is now scored against absolute documented levels,
-`HY_COMPLACENCY_ANCHORS = (8.0, 5.0, 3.5, 2.41)`. Verified: record low **2.41% (Jun-2007**, the
-eve of the GFC — maximum complacency ever observed) and record high **21.82% (Dec-2008)**.
-Judgement, unverified: 8.0 as "already repriced, no complacency left" and 5.0 as the long-run
-middle. The module docstring now names this as its one exception, and a test asserts it keeps
-saying so — a silent second exception is how this bug survived.
+**The fix, after the counter-agent rejected my first attempt.** I first re-anchored the component
+on absolute levels. That was wrong: it injected a non-rank-uniform component into a rank-uniform
+average (+4.4 mean bias over history), and its premise — that full history was unobtainable —
+turned out to be false. **Full history IS obtainable.** The counter-agent reconstructed
+BAMLH0A0HYM2 back to 1996-12-31 (n = 7,754) from four mutually-independent public mirrors. I
+verified that reconstruction myself before using it:
 
-| | before | after |
-|---|---|---|
-| hy_complacency | 87.2 | **94.5** |
-| Block C (Amplification) | 47.2 | **49.7** |
-| severity index | 69.0 | **69.5** |
-| class | SEVERE | SEVERE (unchanged) |
+- **All 787** of FRED's authoritative dates match to **0.0000 — zero mismatches**.
+- The three mirrors agree with each other across 6,962-7,599 overlapping dates, zero mismatches.
+- Extremes match the published record low **2.41% (2007-06-01)** and high **21.82% (2008-12-15)**.
 
-**Known design tension, not hidden:** this injects one anchored, non-rank-uniform component into
-a block average of percentiles. That is a deliberate exception and it is the reason the docstring
-gate exists. `crossasset.hy_oas` / `ig_oas` are NOT affected — they threshold on fixed levels, so
-truncation changes their history depth but not their reading.
+So `hy_complacency` now ranks against a **frozen full-history reference**, restoring the module's
+stated contract with **no exceptions**. Only the **101 quantile knots** are stored, never the
+series — a summary statistic rather than a redistribution of ICE's proprietary index, which also
+sidesteps the licensing question. They reproduce the full-series percentile to within **0.96pp**
+worst case and **0.1pp** at today's level.
+
+| | hy_complacency | Block C | severity index |
+|---|---|---|---|
+| deployed today (3-year rank) | 87.2 | 47.20 | 69.00 |
+| my first attempt (anchored) — **rejected** | 94.5 | 49.63 | 69.49 |
+| **reference rank (shipped)** | **96.0** | **50.13** | **69.59** |
+
+Class stays SEVERE throughout.
+
+**Retraction.** I claimed `crossasset.hy_oas` / `ig_oas` were unaffected because they threshold on
+fixed levels. Half right: their *status* is threshold-based, but `assemble.py` attaches a
+`percentile` via `base.py::percentile_rank` over the same truncated series, and that percentile is
+rendered in the main metric table. Both now carry the caveat in their note. Two instruments were
+remediated and I declared the third clean without checking its payload.
+
+**Also fixed from that pass:** the gate test never asserted the live path — reverting the wiring to
+the truncated rank left the whole suite green — and the "docstring matches the code" test only
+checked that a docstring mentioned an exception. Both replaced; four mutations now caught,
+including that exact revert. A bps/percent unit guard was added: the anchored form would have
+returned "maximally benign" for a value passed in basis points, a failure mode the rank form was
+immune to and which is live elsewhere in this repo on the same bundle key.
 
 ## Pending DD questions
 
@@ -516,7 +533,10 @@ truncation changes their history depth but not their reading.
 | 18 | **P2** | Should `ewm/live.py`'s DMHI leg read UNCAPPED pin leg scores, so a display cap cannot move a deal-timing recommendation? | +1.98 points on every EWM window score today, purely from the gauge caps. |
 | 19 | **P2** | Should the channel use a CONJUNCTION (percentile >= 95 AND level >= 10) rather than a bare level threshold? | Would restore a credit-pricing trigger that can fire before full crisis, without claiming a 30-year rank. The level leg alone is coincident, not leading: CCC only reached ~18-20% in Mar-2020 *after* SPX had fallen ~30%, which the hindcast's own `(1, 6)` lag window would score a miss. |
 | 20 | **P1** | Promote DD Q5 (`pins_schema_rev`) to blocking. | Two anchor changes landed in one day and `pins_overall` is persisted daily with no version stamp, so the track record now mixes pre- and post-recalibration semantics. |
-| ~~17~~ | ~~P1~~ | **RESOLVED 2026-09-10 — see the section above.** `hy_complacency` re-anchored on absolute levels. | severity index 69.0 -> 69.5, class unchanged. |
+| ~~17~~ | ~~P1~~ | **RESOLVED 2026-09-10 — see the section above.** `hy_complacency` now ranks against a verified frozen full-history reference. | severity index 69.0 -> 69.6, class unchanged. |
+| 21 | **P1** | **Can CCC and BBB full history be reconstructed the same way HY was?** Four public mirrors served the complete 1996+ HY series and reconciled with FRED exactly. | If yes, DD Q15 resolves, the original `(50, 85, 95, 100)` CCC calibration becomes valid again, and the entire private_credit level-leg recalibration should be **reverted** rather than kept. This is the highest-value open question on this branch. |
+| 22 | P2 | Stamp `severity_schema_rev` in the severity payload. | The index has an undisclosed level break of +0.6 at this change; R2 calibration compares readings across time. |
+| 23 | P3 | Emit `history_start` and `n_obs` per severity component. | Several components rank against much shallower bases than "full history" implies — `dsr` starts 2005, `effr` 2000 — so the depth of every rank should be visible rather than asserted. |
 | 13 | P3 | `base.py::percentile_rank` and severity `_pctile` still use `count(v <= x)/n` and still return exactly 100.0 (`tests/test_severity.py:14` asserts it). Converge them or leave them scoped as separate instruments. | Consistency of the percentile treatment across the dashboard. |
 ## Counter-agent log (mandatory pass, CLAUDE.md)
 

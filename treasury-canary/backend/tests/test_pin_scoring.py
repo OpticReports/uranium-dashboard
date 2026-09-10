@@ -353,10 +353,20 @@ def test_ccc_level_trigger_registers_the_documented_episodes():
     # RED must be reachable by real episodes -- pinned from BOTH sides, because a
     # from-above-only gate let red drift from 14 to 16 undetected, and 16 would
     # have missed the 2011 euro crisis (CCC est. ~15.5%) entirely.
-    assert r <= 15.0, "red must sit below the 2011 euro-crisis CCC estimate (~15.5%)"
     assert r > y, "red must sit above the distress convention"
-    for episode in (15.5, 19.0, 22.0, 44.3):               # 2011, 2020, 2016, 2008
-        assert _status_from_score(_pscore(episode, b, y, r, e, hi, cap)) == "RED"
+    # RED must be reachable by the named episodes under the ADVERSARIAL ratio
+    # floor, not just under a fitted model. CCC is a subset of HY and always its
+    # widest tier; the most compressed CCC/HY ratio ever measured is 2.03x
+    # (Dec-2008, 44.29/21.82, both verified). Applying it to the PUBLISHED broad-HY
+    # peaks is a hard lower bound on each episode's CCC level.
+    RATIO_FLOOR = 2.03
+    HY_PEAKS = {"2016-02 energy": 8.87, "2020-03 COVID": 10.87, "2011 euro": 9.10}
+    for episode, hy_peak in HY_PEAKS.items():
+        ccc_floor = hy_peak * RATIO_FLOOR
+        assert r <= ccc_floor, (
+            f"red {r} must sit below {episode}'s CCC floor of {ccc_floor:.1f}%")
+        assert _status_from_score(_pscore(ccc_floor, b, y, r, e, hi, cap)) == "RED"
+    assert _status_from_score(_pscore(44.3, b, y, r, e, hi, cap)) == "RED"
     # ... and must NOT fire on merely-calm spreads
     for calm in (4.14, 6.0, 8.0):
         assert _status_from_score(_pscore(calm, b, y, r, e, hi, cap)) == "GREEN"

@@ -11,11 +11,11 @@ Evidence base (each component's note cites its rationale):
   * Policy space bounds the rescue; structural dampeners bound the spiral.
 
 Scoring: every component -> percentile of its full own history, oriented so
-HIGHER = MORE severe conditions (0-100). Blocks average their live components.
-ONE documented exception: hy_complacency is scored against ABSOLUTE anchors, not
-a rank, because FRED truncated ICE BofA history to 3 years in April 2026 and a
-rank against 3 years is not the statistic this index claims. See
-HY_COMPLACENCY_ANCHORS. Every other source here is Fed/BLS/Census and unaffected.
+HIGHER = MORE severe conditions (0-100). Blocks average their live components,
+with NO exceptions. hy_complacency ranks against a frozen full-history reference
+(HY_OAS_REFERENCE_QUANTILES) because FRED truncated ICE BofA history to 3 years
+in April 2026; every other component ranks against its own live series. Sources
+are Fed, BIS, BEA, Census, Treasury, Freddie Mac, FINRA and ICE.
     severity = 0.35*A + 0.25*B + 0.20*C + 0.20*F   (amplifiers)
                + 0.15*(D-50)                        (thin policy space worsens)
                - 0.15*(E-50)                        (dampeners soften)
@@ -103,33 +103,55 @@ def _change_series(vals: list[float], lag: int) -> list[float]:
     return [vals[i] - vals[i - lag] for i in range(lag, len(vals))]
 
 
-# ICE BofA HY OAS (BAMLH0A0HYM2), documented episode levels in percent. Used
-# INSTEAD of a percentile because FRED's note on the series reads: "Starting in
-# April 2026, this series will only include 3 years of observations." Every other
-# component here still ranks against its full own history -- those sources are
-# Fed/BLS/Census and are unaffected -- but this one silently became a 3-year rank
-# in April 2026, so "tightest 13% since 1996" was really "tightest 13% of the
-# last 3 years". VERIFIED anchors: record low 2.41% (Jun-2007, the eve of the
-# GFC -- maximum complacency ever observed) and record high 21.82% (Dec-2008).
-# JUDGEMENT: 8% as "already repriced, no complacency left" and 5% as the middle
-# of the long-run range; neither could be checked against the truncated feed.
-# See treasury-canary/PIN_SATURATION.md DD Q15 -- restoring full history would
-# make the original percentile valid again and this anchor redundant.
-HY_COMPLACENCY_ANCHORS = (8.0, 5.0, 3.5, 2.41)   # benign, yellow, red, extreme
+# HY OAS reference distribution - 101 quantile knots (p0..p100) of the FULL
+# 1996-12-31..2026-09-09 history of BAMLH0A0HYM2, n=7,754.
+#
+# WHY THIS EXISTS. FRED's note on the ICE BofA series reads: "Starting in April
+# 2026, this series will only include 3 years of observations." Ranking against
+# the live feed therefore silently became a THREE-YEAR rank in April 2026 while
+# this module's contract says "percentile of its full own history" - today's
+# 2.71 scored 87.2 (tightest 13% of 3 years) instead of 96.1 (tightest 4% since
+# 1996). Ranking against this frozen reference restores the stated contract, so
+# this module has NO scoring exceptions.
+#
+# PROVENANCE. Reconstructed from four mutually-independent public mirrors that
+# agree with each other and with FRED's authoritative 787-observation window to
+# 0.0000 on every one of the 787 overlapping dates, and whose extremes match the
+# published record low 2.41 (2007-06-01) and high 21.82 (2008-12-15) exactly.
+# Only the QUANTILES are stored, never the series: 101 knots are a summary
+# statistic rather than a redistribution of ICE's proprietary index, and they
+# reproduce the full-series percentile to within 0.96pp worst case (0.1pp at
+# today's level). Median 4.50, mean 5.16, p20 3.30, p90 8.05.
+#
+# REFRESH. Frozen at 2026-09-09. A spread beyond either end clamps at 0 or 100,
+# correct for "outside anything on record", but refresh the knots if the regime
+# moves persistently outside this range.
+HY_OAS_REFERENCE_QUANTILES: list[float] = [
+    2.41, 2.59, 2.65, 2.69, 2.72, 2.78, 2.81, 2.84, 2.88, 2.91,
+    2.94, 2.99, 3.04, 3.08, 3.11, 3.15, 3.17, 3.2, 3.24, 3.27,
+    3.3, 3.33, 3.36, 3.39, 3.42, 3.46, 3.5, 3.53, 3.57, 3.6,
+    3.64, 3.68, 3.72, 3.75, 3.78, 3.82, 3.85, 3.89, 3.93, 3.97,
+    4, 4.03, 4.07, 4.12, 4.17, 4.22, 4.27, 4.32, 4.37, 4.42,
+    4.5, 4.54, 4.6, 4.64, 4.68, 4.72, 4.76, 4.79, 4.84, 4.9,
+    4.96, 5.01, 5.07, 5.14, 5.19, 5.27, 5.35, 5.42, 5.51, 5.59,
+    5.68, 5.78, 5.87, 5.96, 6.04, 6.13, 6.21, 6.32, 6.4, 6.52,
+    6.63, 6.77, 6.9, 7.05, 7.17, 7.33, 7.52, 7.62, 7.76, 7.91,
+    8.05, 8.17, 8.29, 8.44, 8.9, 9.15, 9.69, 10.41, 12.85, 16.73,
+    21.82
+]
 
 
 def _hy_complacency_score(hy_now: float | None) -> float | None:
-    """0-100 severity from the ABSOLUTE spread level, tighter = more severe.
+    """Inverted percentile of the spread against the FULL-history reference.
 
-    Returns the same 0-100 scale the percentile components produce, so the block
-    average stays comparable -- but note it is anchored, not rank-uniform, which
-    is a deliberate exception documented above.
+    Higher = tighter = more severe, matching every other component here.
+    Unit contract: PERCENT, not basis points - 271.0 is not a spread.
     """
     if hy_now is None:
         return None
-    from .pins import _pscore
-    b, y, r, e = HY_COMPLACENCY_ANCHORS
-    return _pscore(hy_now, b, y, r, e, higher_is_worse=False)
+    if hy_now > 50.0:            # beyond the 21.82 record: a bps/percent mix-up
+        return None
+    return _pctile(HY_OAS_REFERENCE_QUANTILES, hy_now, invert=True)
 
 
 def _level_comp(cid, label, pair, unit, note, invert=False, scale=1.0) -> Component:

@@ -301,14 +301,24 @@ ANCHORS: dict[str, tuple] = {
     #                 market standard since ~1990 -- OAS >= +1000bps is distressed.
     #                 Today's index prints 1064bps, i.e. the AVERAGE CCC credit is
     #                 already trading distressed by that convention.
-    #   14.0 red      JUDGEMENT, the one remaining guess. Sized to catch the 2011
-    #                 euro crisis, whose CCC peak is estimated ~15.5% by applying
-    #                 the one verified CCC/HY ratio (44.29/21.82 = 2.03x at
-    #                 Dec-2008) to that episode's documented ~9.1% broad-HY peak.
-    #                 An earlier draft used 16.0, which would have missed 2011
-    #                 entirely and read GREEN through the whole Dec-2018 selloff.
-    #                 DD-A must replace this with a measured 2011/2016/2018/2020
-    #                 CCC peak; until then it is the weakest number on this board.
+    #   14.0 red      BOUNDED, not guessed. The CCC series is licence-locked, but
+    #                 the BROAD HY index (BAMLH0A0HYM2) full history IS obtainable
+    #                 and its episode peaks are measured: 21.82% 2008-12-15,
+    #                 10.87% 2020-03-23, 9.10% 2011-10-04, 8.87% 2016-02-11,
+    #                 5.38% 2018-12-27. CCC is a subset of HY and always its widest
+    #                 tier, so CCC/HY is structurally > 1; the most COMPRESSED that
+    #                 ratio has ever been measured is 2.03x at the Dec-2008 crisis
+    #                 (44.29/21.82, both endpoints verified), against 2.23-3.97x
+    #                 over the 787 live observations. Applying that adversarial
+    #                 floor to the measured HY peaks bounds each episode's CCC low:
+    #                     2016-02  >= 18.0%     2020-03  >= 22.1%     2011  >= 18.5%
+    #                 all far above this line -- 2016 would only fall under 14 at a
+    #                 ratio of 1.58x, never observed. So RED is robust for the named
+    #                 episodes regardless of the ratio model. What is NOT settled is
+    #                 milder events: Dec-2018 (HY 5.38%) bounds only to >= 10.9%,
+    #                 and a log-log ratio fit puts it near 14.1 -- so whether this
+    #                 line catches a 2018-magnitude selloff is genuinely unknown.
+    #                 DD Q16 still wants measured CCC peaks to settle that.
     #   44.3 extreme  VERIFIED series record high 44.29 (Dec-2008).
     #
     # The better fix remains PIN_SATURATION.md DD Q15: restore a full-history
@@ -577,8 +587,11 @@ def build_pin_board(bundle: dict) -> dict:
                 "record low (Jun-2007) and 44.29% the record high (Dec-2008), both verified; "
                 "10% is Fridson's distress convention (>=+1000bps), the market standard since "
                 "~1990 — at 1064bps today the average CCC credit is already trading distressed "
-                "by it. The 14% red line is an ESTIMATE sized to catch the 2011 euro crisis and "
-                "is the weakest number on this board. The percentile legs below became 3-YEAR "
+                "by it. The 14% red line is BOUNDED rather than guessed: applying the most "
+                "compressed CCC/HY ratio ever recorded (2.03x, Dec-2008) to the measured "
+                "broad-HY peaks puts 2016 at >=18.0%, 2020 at >=22.1% and 2011 at >=18.5%, "
+                "all far above it. Whether it catches a milder 2018-magnitude selloff is "
+                "not established. The percentile legs below became 3-YEAR "
                 "percentiles when FRED restricted ICE BofA history in April 2026, so they are "
                 "relative gauges capped at YELLOW; only this leg can take the channel RED."),
         PinPart("CCC spread percentile (vs available history)", ccc_pctl, "%ile",

@@ -80,43 +80,63 @@ def test_thin_policy_space_raises_score():
     assert out_worse["severity_score"] > out_base["severity_score"]
 
 
-def test_hy_complacency_is_level_anchored_not_a_three_year_rank():
+def test_hy_complacency_ranks_against_full_history_not_the_truncated_feed():
     """FRED cut ICE BofA history to 3 years in April 2026 (its own series note).
 
-    The old `_pctile(hy, hy[-1], invert=True)` silently became "tightest since
-    2023" while the index claimed a full-history rank — the live board's 87.2
-    reproduced exactly as the inverted rank of 2.71% against the 787-point
-    window. This component is now anchored to documented absolute levels.
+    Ranking the live feed silently became "tightest since 2023" while this
+    module's contract promises a full-history rank: today's 2.71 scored 87.2
+    instead of 96.1. Asserted through build_severity, NOT the helper -- an
+    earlier version of this gate only probed the helper, so reverting the live
+    wiring back to the truncated rank left the whole suite green.
     """
-    from app.metrics.severity import HY_COMPLACENCY_ANCHORS, _hy_complacency_score
+    import datetime
 
-    benign, yellow, red, extreme = HY_COMPLACENCY_ANCHORS
-    assert extreme == 2.41      # VERIFIED record low, Jun-2007, eve of the GFC
-    assert benign > yellow > red > extreme      # tighter = more severe
+    from app.metrics.severity import (HY_OAS_REFERENCE_QUANTILES,
+                                      _hy_complacency_score, build_severity)
 
-    assert _hy_complacency_score(8.0) == 0.0    # already repriced: no complacency
-    assert _hy_complacency_score(5.0) == 50.0
-    assert _hy_complacency_score(3.5) == 80.0
-    assert _hy_complacency_score(2.41) == 100.0  # maximum complacency ever observed
-    assert _hy_complacency_score(2.0) == 100.0   # clamped, never above 100
-    assert _hy_complacency_score(21.82) == 0.0   # Dec-2008 record high: zero complacency
-    assert _hy_complacency_score(None) is None
+    q = HY_OAS_REFERENCE_QUANTILES
+    assert len(q) == 101 and q[0] == 2.41 and q[-1] == 21.82   # verified extremes
+    assert q[50] == 4.50                                        # verified median
 
-    # monotone: tighter spreads must never score LESS severe
-    scores = [_hy_complacency_score(v) for v in (9.0, 8.0, 6.0, 5.0, 4.0, 3.5, 3.0, 2.41)]
+    days = [datetime.date(2024, 1, 1) + datetime.timedelta(days=i) for i in range(800)]
+    # a live window whose OWN minimum is 2.59 -- the truncated feed's floor. If the
+    # score is computed against this window rather than the reference, today's 2.71
+    # reads ~87; against full history it must read ~96.
+    hy = [2.59 + (i % 200) / 100.0 for i in range(799)] + [2.71]
+    out = build_severity({"hy_oas": (days, hy)})
+    comp = next(c for b in out["blocks"] for c in b["components"]
+                if c["id"] == "hy_complacency")
+    assert comp["score"] == _hy_complacency_score(2.71)
+    assert comp["score"] > 94.0, (
+        f"score {comp['score']} looks like a rank against the truncated window, "
+        "not the full-history reference")
+    assert comp["value"] == 271.0          # displayed in bps, scored in percent
+
+    # monotone: tighter spreads are never scored LESS severe
+    scores = [_hy_complacency_score(v) for v in (9.0, 8.0, 6.0, 4.5, 3.3, 2.71, 2.41)]
     assert scores == sorted(scores)
 
-    # and it must NOT depend on the history window, which is the whole point
-    assert _hy_complacency_score(2.71) == _hy_complacency_score(2.71)
+    # the unit contract is guarded: bps passed where percent is expected must not
+    # silently read as maximally benign
+    assert _hy_complacency_score(271.0) is None
+    assert _hy_complacency_score(None) is None
 
 
-def test_severity_scoring_docstring_matches_the_code():
-    """The module claims every component is a full-history percentile.
+def test_severity_has_no_scoring_exceptions():
+    """The module's contract is that EVERY component is a full-history percentile.
 
-    That is now true of every component EXCEPT hy_complacency, and the docstring
-    must keep saying so — a silent second exception is how this bug happened.
+    A silent divergence between that sentence and the code is how the 3-year-rank
+    bug survived; the previous version of this gate only checked that the
+    docstring mentioned an exception, which is not a property of the code.
     """
+    import inspect
+
     import app.metrics.severity as sev
 
-    assert "ONE documented exception" in sev.__doc__
-    assert "hy_complacency" in sev.__doc__
+    assert "NO exceptions" in sev.__doc__
+    assert not hasattr(sev, "HY_COMPLACENCY_ANCHORS"), \
+        "the anchored exception should be gone, replaced by a reference rank"
+    # the live wiring must go through the reference-ranked scorer
+    src = inspect.getsource(sev.build_severity)
+    assert "_hy_complacency_score(" in src
+    assert "_pctile(hy," not in src, "hy_complacency must not rank the truncated feed"
