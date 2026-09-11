@@ -100,6 +100,8 @@ app.include_router(routes_pins.router)
 app.include_router(routes_track.router)
 app.include_router(routes_severity.router)
 app.include_router(routes_statregime.router)
+from .api import routes_squeeze  # noqa: E402
+app.include_router(routes_squeeze.router)
 
 
 @app.post("/telegram/webhook")

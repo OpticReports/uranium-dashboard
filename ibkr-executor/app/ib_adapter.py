@@ -43,6 +43,32 @@ MKT_FILL_WAIT_S = 5.0        # bounded wait for a synchronous MKT fill (liquid
                              # still working after it returns 'working'
 CANCEL_ACK_TIMEOUT_S = 10.0  # ambiguous cancel timeout -> RAISE (fail closed)
 WAIT_TICK_S = 0.25           # event-loop pump granularity inside waits
+QUOTE_WAIT_S = 8.0           # B8: bounded WAIT-FOR-TICK for spot() when the
+                             # config carries no `ib_quote_wait_s` (the real
+                             # Config does: 6.0). The fixed `sleep(3)` this
+                             # replaced was a guess in both directions: it
+                             # burned 3s on every quote that had already
+                             # arrived, and it gave up on every one that had
+                             # not (a cold subscription on a thin name
+                             # routinely needs longer).
+MKT_DATA_TYPE_DELAYED = 3    # reqMarketDataType(3) = delayed: the PER-CALL
+                             # escalation target when the configured feed
+                             # (`ib_market_data_type`, default 1 = live)
+                             # returns nothing and `ib_allow_delayed` permits
+                             # it. B8 asked for 4 (delayed-frozen) so that an
+                             # UNENTITLED instrument degrades instead of
+                             # returning nan forever (the gateway answers an
+                             # unentitled request with error 354 and NO tick
+                             # at all, which `marketPrice()` reports as nan —
+                             # the exact symptom of an ordinary missing
+                             # quote). The merge keeps that intent but makes
+                             # the degradation EXPLICIT: escalated per call,
+                             # alerted once, refused under the go-live
+                             # posture; the "frozen" half is served by the
+                             # explicit previous-close read in the walk.
+                             # Marks are never fill prices (fills come back
+                             # from the venue), and a delayed or close-derived
+                             # mark is logged as such, never silently adopted.
 COMMISSION_WAIT_S = 1.5      # after a synchronous fill, wait this long for
                              # IB's commissionReport before reading it
                              # (counter-agent round 2: read too early = 0.0)
@@ -74,6 +100,17 @@ class ExecutorConnectionError(RuntimeError):
     """The gateway connection is down: every stock-order surface raises this
     instead of guessing — the blend cycle FAILS CLOSED on it (reconcile
     raises, no decision is taken against unreconciled venue state)."""
+
+
+def _usable_px(value) -> float | None:
+    """A price we are willing to act on: finite, positive, float-able."""
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return None
+    if v != v or v <= 0:                    # NaN or non-positive
+        return None
+    return v
 
 
 def _map_status(ib_status: str) -> str:
@@ -344,39 +381,21 @@ class IBAdapter:
         except Exception as exc:  # noqa: BLE001
             logger.warning("reqMarketDataType(%d) failed: %s", want, exc)
 
-    def _await_tick(self, ticker, wait_s: float, symbol: str = "?",
-                    allow_close: bool = True) -> float:
-        """Poll for a usable price until wait_s. The old code slept a flat 3s
-        and read once - too short for a delayed feed's first tick, so even a
-        working subscription could read as 'no market price'.
-
-        allow_close: IB delivers yesterday's CLOSE in the initial tick
-        snapshot even on an otherwise-dry live feed - exactly during feed
-        warm-up and pre-open, when the cycle prices. With the delayed
-        fallback disallowed (go-live), close is excluded too: a prior-close
-        print is stale data by another name (counter-agent A4, executed
-        proof: allow_delayed=False still returned 600.0 = yesterday's
-        close). When permitted, a close-sourced price is logged per symbol,
-        never silent.
-        """
-        fields = ("last", "bid", "ask") + (("close",) if allow_close else ())
-        deadline = time.monotonic() + max(0.5, wait_s)
-        px = float("nan")
-        while time.monotonic() < deadline:
-            self.ib.sleep(WAIT_TICK_S)
-            px = ticker.marketPrice()
-            if px == px and px > 0:
-                return float(px)
-            for attr in fields:
-                v = getattr(ticker, attr, None)
-                if v is not None and v == v and v > 0:
-                    if attr == "close":
-                        logger.warning("%s priced from PRIOR CLOSE (no live "
-                                       "tick yet)", symbol)
-                    return float(v)
-        return px
-
     def spot(self, symbol: str) -> float:
+        return self.spot_ex(symbol)[0]
+
+    def spot_ex(self, symbol: str) -> tuple[float, str]:
+        """(price, source) with source in {live, last, close}.
+
+        CR-N2: B8 gave the quote walk a previous-CLOSE fallback so that a
+        thin or out-of-RTH quote stops being indistinguishable from a
+        missing market-data subscription. That is right for SIZING and
+        VALUATION and wrong for a FILL: a previous session's close is not
+        a price anything traded at today. `spot()` alone cannot say which
+        it returned, so the two callers that adopt a venue fill lacking a
+        reported price were booking a close as a fill basis where the
+        pre-B8 code raised and failed closed. The source is the caller's
+        only way to tell, so it is returned rather than merely logged."""
         from ib_async import Future, Stock
         self._require_connected()
         # Symbols outside the El Nino table (SPY/BIL/sleeve names from the
@@ -391,7 +410,23 @@ class IBAdapter:
                        key=lambda d: d.contract.lastTradeDateOrContractMonth
                        )[0].contract
         self.ib.qualifyContracts(c)
-        wait = float(getattr(self.cfg, "ib_quote_wait_s", 6.0))
+        # B8 + the market-data posture (2026-08-24), composed at the merge:
+        #  * a data type is requested BEFORE subscribing (B8: without it an
+        #    unentitled request gets error 354 and never a single field,
+        #    reported as the SAME "no market price" a thin quote produces)
+        #  * WHICH type is the operator's `ib_market_data_type` (default 1,
+        #    live), never a hard-coded delayed-frozen: delayed data is a
+        #    visible, deliberate degradation - escalated per call, alerted
+        #    once, and refused outright under the go-live posture
+        #    (`ib_allow_delayed=false`, enforced at boot in live mode)
+        #  * the previous CLOSE is read explicitly (B8: ib_async's
+        #    marketPrice() has no close fallback, in any release) but ONLY
+        #    while delayed
+        #    data is allowed - a prior-close print is stale data by another
+        #    name (counter-agent A4, executed proof: allow=False still
+        #    returned yesterday's 600.0) - and the SOURCE goes back to the
+        #    caller so a close is never booked as a fill basis (CR-N2)
+        wait = float(getattr(self.cfg, "ib_quote_wait_s", QUOTE_WAIT_S))
         allow = bool(getattr(self.cfg, "ib_allow_delayed", True))
         configured = int(getattr(self.cfg, "ib_market_data_type", 1))
         # Escalation is PER CALL, bracketed by these two applies: the first
@@ -402,11 +437,18 @@ class IBAdapter:
         # never left parked on delayed for other reqMktData users.
         self._apply_market_data_type(configured)
         try:
-            t = self.ib.reqMktData(c, "", False, False)
-            px = self._await_tick(t, wait, symbol, allow_close=allow)
-            self.ib.cancelMktData(c)
+            px, source, mdt = self._quote_once(c, symbol, wait,
+                                               allow_close=allow)
             if px == px and px > 0:
-                return float(px)
+                if source != "live" or (mdt is not None and mdt != 1):
+                    # Honesty: say what actually backed the mark. Delayed/
+                    # frozen/close-derived marks are usable for sizing and
+                    # valuation (they are never fill prices) but they must
+                    # never look like live.
+                    logger.warning("spot(%s) = %.4f from %s data "
+                                   "(marketDataType=%s) — not a live tick",
+                                   symbol, px, source, mdt)
+                return float(px), source
             # Configured feed returned nothing. Escalate to delayed only if
             # allowed - and say so: a degradation that prices real orders
             # must be visible, never inferred. Disallowed (go-live posture)
@@ -415,19 +457,26 @@ class IBAdapter:
                 raise RuntimeError(
                     f"no market price for {symbol} (market-data type "
                     f"{configured}; delayed fallback disabled)")
-            if configured == 3:
+            if configured == MKT_DATA_TYPE_DELAYED:
                 raise RuntimeError(
                     f"no market price for {symbol} on the configured "
-                    f"DELAYED feed - check this account's IB market-data "
-                    f"entitlements")
-            self._apply_market_data_type(3)
-            t = self.ib.reqMktData(c, "", False, False)
-            px = self._await_tick(t, wait, symbol, allow_close=True)
-            self.ib.cancelMktData(c)
+                    f"DELAYED feed after {wait:.0f}s: no tick, no last, and "
+                    f"NO PREVIOUS CLOSE - usually a MISSING MARKET-DATA "
+                    f"SUBSCRIPTION / entitlement for {symbol}; check this "
+                    f"account's IB market-data subscription")
+            self._apply_market_data_type(MKT_DATA_TYPE_DELAYED)
+            px, source, mdt = self._quote_once(c, symbol, wait,
+                                               allow_close=True)
             if px != px or px <= 0:
                 raise RuntimeError(
                     f"no market price for {symbol} on live OR delayed data "
-                    f"- check this account's IB market-data subscription")
+                    f"after {wait:.0f}s each: no live tick, no last, and NO "
+                    f"PREVIOUS CLOSE. A quote that is merely thin still "
+                    f"carries a close, so on a real gateway this is usually "
+                    f"a MISSING MARKET-DATA SUBSCRIPTION / entitlement for "
+                    f"{symbol} (or the wrong data type) - check this "
+                    f"account's IB market-data subscription before assuming "
+                    f"the feed is slow")
             if not self._delayed_announced:
                 self._delayed_announced = True
                 from .alerts import send
@@ -437,11 +486,63 @@ class IBAdapter:
                      "rebalancing on delayed prices. Acceptable on paper; "
                      "attach a subscription and set IB_ALLOW_DELAYED=false "
                      "BEFORE switching to live money.")
-            logger.warning("%s priced on DELAYED data", symbol)
-            return float(px)
+            logger.warning("spot(%s) = %.4f priced on DELAYED data (from %s, "
+                           "marketDataType=%s) — not a live tick",
+                           symbol, px, source, mdt)
+            return float(px), source
         finally:
             if getattr(self, "_md_type", configured) != configured:
                 self._apply_market_data_type(configured)
+
+    def _quote_once(self, contract, symbol: str, wait_s: float,
+                    allow_close: bool) -> tuple[float, str, int | None]:
+        """One subscription, one bounded wait, one guaranteed cancel.
+
+        Returns (price, source, marketDataType as served); price is nan when
+        nothing usable arrived. The subscription is ALWAYS retired, even
+        when the wait raises - the pre-B8 body leaked it on every failure
+        path."""
+        t = self.ib.reqMktData(contract, "", False, False)
+        try:
+            px, source = self._await_quote(t, wait_s, symbol,
+                                           allow_close=allow_close)
+        finally:
+            try:
+                self.ib.cancelMktData(contract)
+            except Exception as exc:        # noqa: BLE001
+                logger.debug("cancelMktData(%s) failed: %s", symbol, exc)
+        return px, source, getattr(t, "marketDataType", None)
+
+    def _await_quote(self, ticker, wait_s: float, symbol: str = "?",
+                     allow_close: bool = True) -> tuple[float, str]:
+        """B8: wait for a usable tick, bounded - not a blind fixed sleep -
+        and report WHICH field backed it.
+
+        Field chain: live marketPrice, then last, bid, ask, and close only
+        when allowed. source in {live, last, bid, ask, close}, or
+        (nan, "none") when nothing usable arrived inside wait_s.
+        Pumps the ib_async event loop the way every other bounded wait in
+        this adapter does. A close-sourced price is logged per symbol,
+        never silent."""
+        fields = ("last", "bid", "ask") + (("close",) if allow_close else ())
+        deadline = time.monotonic() + max(0.5, wait_s)
+        while True:
+            self.ib.sleep(WAIT_TICK_S)
+            try:
+                px = _usable_px(ticker.marketPrice())
+            except Exception:               # noqa: BLE001  (a fake/partial
+                px = None                   # ticker must not break the walk)
+            if px is not None:
+                return px, "live"
+            for attr in fields:
+                px = _usable_px(getattr(ticker, attr, None))
+                if px is not None:
+                    if attr == "close":
+                        logger.warning("%s priced from PRIOR CLOSE (no live "
+                                       "tick yet)", symbol)
+                    return px, attr
+            if time.monotonic() >= deadline:
+                return float("nan"), "none"
 
     def open_spread(self, structure: dict, budget: float) -> dict:
         """Build+place the combo; returns {order_ref, premium} once filled.
@@ -784,6 +885,15 @@ class IBAdapter:
             # async MOO/OPG outcome is only ever read from here).
             why = _trade_errors(trade, dead=True, venue=self._venue_error(trade))
             out["reason"] = why or "no venue reason recorded"
+            # ... and any EXECUTIONS the cancelled order carries (a partial
+            # fill before the cancel): the caller must not treat "cancelled"
+            # as "nothing happened" (round 19 review, CASH-3).
+            try:
+                filled = int(getattr(trade.orderStatus, "filled", 0) or 0)
+            except (TypeError, ValueError):
+                filled = 0
+            if filled > 0:
+                out["filled_qty"] = filled
         if out["status"] == "filled":
             px = _agg_fill_price(trade)
             if px is not None:              # unknown price -> NO key, never 0.0
@@ -860,7 +970,30 @@ class IBAdapter:
         self._require_connected()
         if client_order_id:
             self._pump()
+            # B1 (live-blocker, naked-short path): the idempotency key must
+            # be resolved against the VENUE, not against this process's
+            # trade list. `_find_trade_by_client_id` with the default
+            # refresh=False reads `self.ib.trades()`, which is THIS SESSION
+            # ONLY: after a restart — a Render deploy, an OOM, a gateway
+            # reconnect that rebuilt the client — it is EMPTY, so a retry
+            # carrying the same deterministic client id (e.g. the flatten's
+            # `blend-{call_id}-kill`) saw no prior and placed a SECOND sell
+            # of shares the first sell had already sold. Reproduced: venue
+            # CRSP -10 against a 5-share book position, reported to the
+            # operator as "flatten complete", with zero alerts mentioning a
+            # short. `find_stock_order` — the boot/crash reconcile's own
+            # lookup — has always used the two-stage form; the placement
+            # path, the one that can actually create the short, did not.
+            #
+            # Fast path first (a binding order already in this session needs
+            # no round-trip), then ask the venue for open + completed orders
+            # whenever this session holds nothing that still binds.
             prior = self._find_trade_by_client_id(client_order_id)
+            if (prior is None
+                    or _map_status(prior.orderStatus.status) == "cancelled"):
+                prior = (self._find_trade_by_client_id(client_order_id,
+                                                       refresh=True)
+                         or prior)
             if (prior is not None
                     and _map_status(prior.orderStatus.status) != "cancelled"):
                 # Venue-side dedupe by orderRef (pinned contract): a working
@@ -1118,6 +1251,21 @@ class DryAdapter:
             return self._last_px[symbol]
         return {"NG": 2.6, "SB": 15.6, "SLV": 55.9}.get(symbol, 100.0)
 
+    def spot_ex(self, symbol: str) -> tuple[float, str]:
+        """Dry quotes are synthetic but they are never STALE — every one is
+        produced for the cycle asking for it, so none of them is the
+        previous-close case CR-N2 guards against."""
+        return self.spot(symbol), "live"
+
+    def seed_price(self, symbol: str, px: float) -> None:
+        """Anchor a dry quote to a REAL input (a tracker entry_ref) before
+        any fill exists for that symbol. Without it a dry sleeve name
+        quotes at a fictional flat 100, which the entry_ref sanity band
+        would read as a 10x mispricing on a $9 stock and refuse. A real
+        fill still wins: this only fills in a symbol never seen."""
+        if px and px > 0 and symbol not in self._last_px:
+            self._last_px[symbol] = float(px)
+
     def open_spread(self, structure: dict, budget: float) -> dict:
         ref = f"dry-{structure['underlying']}-{int(time.time())}"
         self._open[ref] = budget
@@ -1275,3 +1423,14 @@ class DryAdapter:
         IBAdapter positions surface (the R1 blackout guard's positive-
         verification basis)."""
         return self._positions.get(symbol, 0)
+
+    def seed_position(self, symbol: str, qty: int) -> None:
+        """Assert what the ACCOUNT holds without routing an order through
+        the fill path — the same class of simulation hook as
+        `trigger_stop`/`trigger_stop_partial`. A book seeded straight into
+        the manager (a restored state file, a test fixture) describes shares
+        this adapter never filled, and the flatten's venue ceiling reads
+        THIS surface: without a seed such a book looks like a naked short to
+        every guard, which is exactly right and exactly not what those
+        setups mean."""
+        self._positions[symbol] = self._positions.get(symbol, 0) + int(qty)

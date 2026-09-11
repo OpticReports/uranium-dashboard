@@ -106,13 +106,15 @@ def test_live_quote_never_touches_delayed(md_adapter):
     assert 3 not in md_adapter.ib.md_requests
 
 
-def test_await_tick_falls_back_through_tick_fields(md_adapter):
+def test_await_quote_falls_back_through_tick_fields(md_adapter):
     """A flat 3s sleep + single marketPrice() read missed feeds that only
-    populate last/close/bid - a WORKING subscription read as no-price."""
+    populate last/close/bid - a WORKING subscription read as no-price.
+    (Merge 2026-09-10: retargeted from the branch's `_await_tick`, which
+    main's `_await_quote` superseded; the dead twin is deleted.)"""
     from tests.test_ib_stock_adapter import FakeTicker
     t = FakeTicker(float("nan"))
     t.close = 639.9
-    assert md_adapter._await_tick(t, 0.3) == 639.9
+    assert md_adapter._await_quote(t, 0.3) == (639.9, "close")
 
 
 def test_persistent_quote_outage_stays_visible_on_health():
@@ -184,7 +186,8 @@ def test_stale_close_never_prices_the_go_live_posture(md_adapter):
     t = FakeTicker(float("nan"))
     t.close = 600.0
     md_adapter.cfg.ib_allow_delayed = False
-    assert md_adapter._await_tick(t, 0.3, "SPY", allow_close=False) != 600.0
+    px, src = md_adapter._await_quote(t, 0.3, "SPY", allow_close=False)
+    assert px != px and src == "none", (px, src)     # nan, not the close
     # full path: live feed serves close-only -> hard failure, not 600.0
     orig = md_adapter.ib.reqMktData
     md_adapter.ib.reqMktData = lambda *a, **k: t
@@ -201,8 +204,8 @@ def test_stale_close_is_logged_when_permitted(md_adapter, caplog):
     t = FakeTicker(float("nan"))
     t.close = 600.0
     with caplog.at_level(logging.WARNING):
-        px = md_adapter._await_tick(t, 0.3, "SPY", allow_close=True)
-    assert px == 600.0
+        px, src = md_adapter._await_quote(t, 0.3, "SPY", allow_close=True)
+    assert (px, src) == (600.0, "close")
     assert any("PRIOR CLOSE" in r.message for r in caplog.records)
 
 

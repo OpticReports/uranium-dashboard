@@ -801,7 +801,30 @@ export interface RateEnsemble {
 // Endpoint bindings
 // ---------------------------------------------------------------------------
 
+export interface SqueezeCondition {
+  id: string;
+  label: string;
+  threshold: string;
+  state: "MET" | "PARTIAL" | "NOT_MET" | "UNVERIFIED" | "STALE";
+  value: number | null;
+  unit: string;
+  detail: string;
+  asof: string | null;
+}
+
+export interface SqueezeRadarData {
+  asof: string;
+  fuel: SqueezeCondition[];
+  triggers: SqueezeCondition[];
+  fuel_score: number;
+  trigger_score: number;
+  calendar: Array<{ event: string; date: string; estimated: boolean }>;
+  spec: string;
+  honesty: string[];
+}
+
 export const api = {
+  squeezeRadar: () => getJson<SqueezeRadarData>("/squeeze/radar"),
   cycle: () => getJson<any>("/cycle"),
   cycleAnalog: () => getJson<any>("/cycle/analog"),
   health: () => getJson<Health>("/health"),

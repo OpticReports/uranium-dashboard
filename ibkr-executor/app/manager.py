@@ -96,6 +96,10 @@ class LadderManager:
         # ZF-7: did the preserve rename actually SUCCEED? The Z-J boot save
         # below is conditional on it.
         self._evidence_preserved = False
+        # MF2-2: an operator /kill whose leg closes have not completed yet
+        # (the sentinel is still on disk). Set by _load; the service re-arms
+        # the deferred close from it after a restart.
+        self.kill_pending = False
         self.state = self._load()
         if self.archived_state and self._evidence_preserved:
             # Z-J: the corrupt/drift branches move the file aside and set
@@ -110,6 +114,22 @@ class LadderManager:
             self.save()
 
     def _load(self) -> LadderState:
+        st = self._load_book()
+        # MF2-2: /kill journals its halt as a SEPARATE sentinel file, because
+        # an API thread may not read-modify-write `legs` (x12) and so may not
+        # call save() at all when the loop holds MGR_LOCK. Measured before
+        # this: /kill answered "The ladder is halted from now" while the book
+        # on disk said halted=None with the leg still OPEN, so a restart in
+        # that window — the restart a wedged gateway invites — came back
+        # UN-halted. An existing halt reason is more specific than KILL
+        # (SCHEMA_DRIFT is a data-integrity halt), so it is kept; either way
+        # nothing trades until the operator /resume-s.
+        if os.path.exists(self.kill_sentinel):
+            self.kill_pending = True
+            st.halted = st.halted or "KILL"
+        return st
+
+    def _load_book(self) -> LadderState:
         try:
             raw = json.load(open(self.state_path))
         except FileNotFoundError:
@@ -171,6 +191,49 @@ class LadderManager:
             st.legs.setdefault(s.key, LegState())
         st.events = raw.get("events", [])[-300:]
         return st
+
+    @property
+    def kill_sentinel(self) -> str:
+        """MF2-2: the /kill journal, the ladder's answer to the blend's
+        `flatten_request`. A file of its OWN, next to the book: writing it
+        touches no field the loop thread is mutating, so /kill can make the
+        halt DURABLE without MGR_LOCK and without the cross-thread
+        read-modify-write of `legs` that save() performs (x12's law)."""
+        return f"{self.state_path}.kill"
+
+    def journal_kill(self, today: str) -> None:
+        """Record an operator /kill on disk. Atomic (same mkstemp + fsync +
+        rename as save()), takes NO lock, and is safe from any thread. The
+        record is consumed by the loop once the legs are actually closed,
+        and deleted by /resume."""
+        directory = os.path.dirname(self.state_path) or "."
+        os.makedirs(directory, exist_ok=True)
+        fd, tmp_path = tempfile.mkstemp(
+            dir=directory, prefix=os.path.basename(self.kill_sentinel) + ".",
+            suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as fh:
+                json.dump({"ts": int(time.time()), "date": today}, fh)
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp_path, self.kill_sentinel)
+        except BaseException:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
+        self.kill_pending = True
+
+    def clear_kill(self) -> None:
+        """Consume the sentinel: the kill has been executed (the loop closed
+        what it could) or the operator has /resume-d. The halt itself lives
+        in the book from here on."""
+        try:
+            os.unlink(self.kill_sentinel)
+        except FileNotFoundError:
+            pass
+        self.kill_pending = False
 
     def save(self) -> None:
         """Atomic write with a UNIQUE temp file per writer (x12): the plain

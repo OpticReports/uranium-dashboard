@@ -11,6 +11,7 @@ import CycleTracker from "./components/CycleTracker";
 import LaborPanel from "./components/LaborPanel";
 import FlightToQuality from "./components/FlightToQuality";
 import FlowCompass from "./components/FlowCompass";
+import SqueezeRadar from "./components/SqueezeRadar";
 import MarginLeverageChart from "./components/MarginLeverageChart";
 import RateShockPanel from "./components/RateShockPanel";
 import RateShockSimulator from "./components/RateShockSimulator";
@@ -199,6 +200,8 @@ export default function App() {
           </div>
 
           <FlowCompass />
+
+          <SqueezeRadar />
 
           <RateShockPanel />
 

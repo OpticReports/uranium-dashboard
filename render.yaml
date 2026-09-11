@@ -658,22 +658,6 @@ services:
         sync: false          # PAPER username first (usually starts with 'D')
       - key: TWS_PASSWORD
         sync: false
-      # Gateway-outage ledger + supervisor restart records. These MUST sit
-      # on the mounted disk (/app/data): the code defaults are ./data, which
-      # resolves to /opt/executor/data on the EPHEMERAL container layer, so
-      # with autoDeploy every push wiped the whole history - including, in
-      # its own motivating case, the open outage record when a human
-      # redeploys to fix a wedged gateway (counter-agent 2026-08-24).
-      # Gateway API write-arming (IBC ReadOnlyApi, via the gnzsnz image).
-      # IBC DEFAULTS to read-only: every order the executor placed was
-      # refused with error 321 "API interface is currently in Read-Only
-      # mode" - the book's first live orders on 2026-08-25 died here.
-      # Set READ_ONLY_API=no in the dashboard to arm order placement.
-      # sync:false (AUTO_DRILL precedent): an ARMING variable must never be
-      # a blueprint literal a sync could silently re-arm after Casey
-      # disarms it in the dashboard.
-      - key: READ_ONLY_API
-        sync: false
       # IB Gateway daily restart + 2FA behaviour (gnzsnz image -> IBC).
       # 2026-09-02/03: unconfigured, the gateway's built-in daily restart
       # fell to the image default (11:45 PM in the image's UTC clock =
@@ -712,6 +696,12 @@ services:
       # the Nov 2026 window to re-arm. sync:false - trading-behavior var.
       - key: LADDER_ENABLED
         sync: false
+      # Gateway-outage ledger + supervisor restart records. These MUST sit
+      # on the mounted disk (/app/data): the code defaults are ./data, which
+      # resolves to /opt/executor/data on the EPHEMERAL container layer, so
+      # with autoDeploy every push wiped the whole history - including, in
+      # its own motivating case, the open outage record when a human
+      # redeploys to fix a wedged gateway (counter-agent 2026-08-24).
       - key: OUTAGE_LOG_PATH
         value: /app/data/gateway_outages.json
       - key: GATEWAY_RESTART_LOG
@@ -729,8 +719,30 @@ services:
         # never blueprint-managed (see btc-executor note); dashboard owns it
         sync: false
       - key: READ_ONLY_API
-        # "no" = gateway accepts orders. sync:false so a defensive dashboard
-        # flip to "yes" mid-incident cannot be silently reverted by a sync.
+        # "no" = gateway accepts orders (IBC ReadOnlyApi, via the gnzsnz
+        # image). IBC DEFAULTS to read-only: every order the executor placed
+        # was refused with error 321 "API interface is currently in
+        # Read-Only mode" - the book's first live orders on 2026-08-25 died
+        # here. This is cause A of TWO (README "Error 321 has TWO causes");
+        # cause B is the Gateway's own write-access dialog, cured by the two
+        # keys below. sync:false (AUTO_DRILL precedent): an ARMING variable
+        # is never a blueprint literal a sync could silently re-arm after
+        # Casey disarms it in the dashboard.
+        sync: false
+      # Cause B of error 321, fixed 2026-09-10 (README runbook): the
+      # Gateway's settings store (.ibgzenc) lived on the ephemeral layer, so
+      # every login started from the factory default (Read-Only API ON), IBC
+      # clicked it off, and the Gateway then raised an "API client needs
+      # write access action confirmation" dialog IBC has no handler for -
+      # every placeOrder/cancelOrder returned 321 while /health was green.
+      # Persisting the settings on the mounted disk means the checkbox is
+      # already off at login and no dialog fires. The path is a literal:
+      # like the ledgers above it MUST be on the disk. The save cadence is
+      # sync:false ("Every 5 mins" for the fix; relax to "Every 30 mins"
+      # once two clean boots are on record).
+      - key: TWS_SETTINGS_PATH
+        value: /app/data/tws-settings
+      - key: SAVE_TWS_SETTINGS
         sync: false
       - key: EXEC_TOKEN
         sync: false          # /status /kill /resume auth (reuse existing)
@@ -750,17 +762,75 @@ services:
       # FATAL for a live book, which must survive deploys (found 2026-08-27,
       # pre-go-live).
       - key: BLEND_STATE_PATH
+        # B2 (live-blocker): DECLARED, and onto the mounted disk above.
+        # Undeclared, app/config.py's default `./data/blend_state.json`
+        # resolved to the container's EPHEMERAL layer — NOT the ibkr-data
+        # disk mounted at /app/data, which STATE_PATH has always used. Every
+        # deploy (autoDeploy: true) therefore destroyed the live blend book
+        # and re-seeded a FRESH one on top of shares the account still held:
+        # positions forgotten, resting GTC stops orphaned, `halted` and any
+        # queued /kill flatten lost, and the entry ledger reset. That is
+        # also what made the restart-boundary double-sell (B1) a ROUTINE
+        # event rather than an exotic one — a deploy is a restart.
         value: /app/data/blend_state.json
       # blend3070 arming + sizing — trading-behavior vars, dashboard-owned
       # (sync:false, AUTO_DRILL/DRY_RUN precedent). BLEND_BOOK_USD is read
       # ONCE, when the live book first initializes; BLEND_BUDGET is the
       # hard gross-notional cap the 85% utilization alarm binds on.
       - key: BLEND_ENABLED
+        # The flag the whole blend path hangs off, and it was UNDECLARED here
+        # while every setting it gates was declared — the same defect class as
+        # B2 and TRACKER_URL below. config.py defaults it to false, so an
+        # environment built from this file alone runs the blend book not at
+        # all, silently. sync:false: the value stays operator-set in the
+        # dashboard, this only guarantees the key is not forgotten.
         sync: false
       - key: BLEND_BOOK_USD
         sync: false
       - key: BLEND_BUDGET
         sync: false
+      - key: TRACKER_URL
+        # B2's twin, found 2026-09-10: UNDECLARED here while BLEND_ENABLED
+        # was on. It had been set BY HAND in the dashboard, so the live
+        # service was polling; an environment rebuilt from this file alone
+        # would not have been. app/config.py defaults tracker_url to "",
+        # and fetch_intents returns None the instant it is empty - before
+        # any request, with no exception and nothing written to the
+        # negative cache - and a cycle that decides nothing does not raise,
+        # so /health would have said blend_loop.ok: true throughout. The
+        # tracker-blind watch now pages that state (reason no_url); this
+        # declaration keeps the key from being forgotten. sync:false: the
+        # value stays operator-set.
+        # The host must be one the tracker answers on DIRECTLY: the
+        # canonical research.optic.capital, or the service's own
+        # onrender.com host (what the live service polls; 200 on
+        # 2026-09-10). genomics.optic.capital is 308-redirected to the
+        # canonical host (tracker REDIRECT_HOSTS) and httpx does not follow
+        # redirects, so that alias is permanent blindness one hop from a
+        # live tracker - the watch pages it as reason `redirect`.
+        sync: false
+      - key: TRACKER_API_TOKEN
+        # The tracker's BLEND_API_TOKEN — a dedicated READ-ONLY intents
+        # token, so the executor never holds the dashboard password
+        # (TRACKER_USER/TRACKER_PASSWORD remain the Basic-auth fallback).
+        # Rotating it on the tracker without rotating it here is a 401 on
+        # every poll: silent before this round, now an immediate page.
+        sync: false
+      - key: IB_CLIENT_ID
+        # B10: DECLARED so a rebuild from this file cannot lose it, and
+        # pinned to the code default (17) ON PURPOSE at the 2026-09-10
+        # merge: the branch chose 1701, but a blueprint sync would then
+        # flip the live session's client id on the same deploy that
+        # restarts the gateway - a second variable in a deploy that
+        # already needs an IB Key push. What a collision actually costs
+        # (corrected from the branch's comment): _connect retries 20 x
+        # (15s timeout + 15s sleep), ~10 min, then raises
+        # ExecutorConnectionError, which the boot-retry loop CATCHES and
+        # pages - the loop thread does not die. And the topology makes a
+        # collision unreachable: the gateway runs INSIDE this container
+        # with TrustedIPs=127.0.0.1, so no desktop TWS or notebook can hold
+        # this id. Change it only with the gateway idle (after 16:00 ET).
+        value: "17"
       - key: LOG_LEVEL
         value: INFO
       # Same Canary Optics bot as btc-executor/canary. Unset = silent no-op.

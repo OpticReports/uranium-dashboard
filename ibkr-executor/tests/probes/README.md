@@ -2,7 +2,7 @@
 
 These files are the counter-agent probe suites written against the
 blend3070 executor across the review rounds that produced N1/N2, R1/R2, N3,
-X1–X4/Y1, Z1/Z2/y2 and ZF-1..ZF-9. They are committed as the **audit record** of what
+X1–X4/Y1, Z1/Z2/y2, ZF-1..ZF-9 and MF2-1..MF2-5. They are committed as the **audit record** of what
 was attacked and what landed — the thing a later reviewer needs in order to
 tell a probe that got HARDER from one that got quietly softened.
 
@@ -27,7 +27,23 @@ Run them by hand from `ibkr-executor/`:
 python tests/probes/attack_z1.py
 ```
 
-Each prints `N/M probes passed; landed attacks: [...]` on the last line.
+Each prints its result on the last line. Six of the eight end with
+`N/M probes passed; landed attacks: [...]`; `attack_reround.py` and
+`attack_r1r2.py` end with `N/M probes passed; failures: [...]` — same
+meaning, older wording, and left as written per rule 1 below.
+
+`attack_mf2.py` drives its service-level scenarios out to subprocesses
+(`probes/mf2/scen.py`, one scenario per process because they mutate module
+globals), so that directory travels with it. `probes/mf2/flake_repro.py`
+and `probes/mf2/linger.py` are the two deterministic reproductions behind
+the MF-1 gate's flake ruling; they run the OLD body of that test on
+purpose, as the record of what was measured, and are NOT gates.
+`probes/mf3/save_race.py` is the same kind of artefact for the MF3 round:
+the reproduction whose numbers the `save()` comments and the executor
+README cite for mf3-10. It exits non-zero when the race LANDS.
+`probes/corrective/status_race.py` and `probes/corrective/kill_resume_race.py`
+are the same kind of artefact for the corrective round (B6 and B7). Both
+exit non-zero when their race LANDS.
 
 ## Rules for touching them
 
@@ -42,8 +58,140 @@ Each prints `N/M probes passed; landed attacks: [...]` on the last line.
 
 ## Standing results at the time of this commit
 
+The MF-1/MF-2/MF-3 round (the whole-branch counter-review's three
+MATERIALs) changed no probe file: all seven were re-run from
+`ibkr-executor/` at the marks below, before and after the fixes, and every
+one landed on its documented mark. The reviewer's own re-attack suite for
+that round (`scratchpad/attack_final.py`, 29 checks) went 28/29 -> 29/29,
+the one flip being `F4g` — the MF-3 defect it found.
+
+The MF-A/MF-B/MF-C round (the counter-review OF that round: the false
+kill-switch bound, the stand-in flag that cleared in one cycle, and the
+NEW harm where a stand-in row's fabricated identity cancelled a real
+working stop) again changed no probe file. All seven were re-run from
+`ibkr-executor/` before and after, every one on its documented mark, and
+`scratchpad/attack_final.py` stayed 29/29.
+
+The MF2 round (the counter-review OF the MF-A/MF-B/MF-C round: the ladder
+half of the kill switch — a `/kill` that made an uncapped gateway call on
+the API thread, a deferred halt that never reached disk, a queued kill that
+outlived `/resume`, and a `ladder: "closed"` when nothing closed) changed no
+existing probe file either. All seven were re-run before and after, every
+one on its documented mark, `scratchpad/attack_final.py` stayed 29/29, and
+the round's own suite is landed below as `attack_mf2.py`.
+
+The MF3 round (the counter-review OF the MF2 round: MF3-1 `/kill`'s blend
+stage with no exception guard, MF3-2 MF2-3 not actually closed, MF3-3 a
+false retry claim whose true behaviour was the wrong one, MF3-4 the halt
+break swallowing every ALERT intent, MF3-5 the halt guard reaching only one
+of the two intent loops, MF3-6 an unconditional and sometimes-false
+durability warning) changed **no probe file at all**. All eight `attack_*`
+files were re-run from `ibkr-executor/` before and after the fixes and every
+one landed on its documented mark, unchanged:
+
+### Run preconditions (post-merge, 2026-09-10)
+
+Two things `main` introduced change how these scripts must be RUN; without
+them three suites appear to regress and none of it is real:
+
+1. **`LADDER_ENABLED=true`.** The El Niño ladder became opt-in (default
+   off). `attack_mf2` A4 and A10 drive the ladder through the real loop and
+   land with it off (measured 2026-09-10: 52/56 without, 54/56 with). No
+   other suite depends on it.
+2. **Pin the clock outside the window.** `blend.entry_window_open()` now
+   defers MOO entries during 09:25-20:00 ET (round 19: the venue refuses OPG
+   through after-hours). pytest is pinned by `tests/conftest.py`; these
+   standalone scripts are NOT. Run inside that window, `attack_reround`
+   TRACEBACKS (`TypeError: 'NoneType' object is not subscriptable` - its
+   adapter setup expects an entry the window deferred) and `attack_zfinal`
+   lands `ZF-E1b`; run after 20:00 ET or on a weekend both reproduce their
+   marks with no pin at all (measured 2026-09-10 16:23 ET on the
+   pre-round-19 tree, when the window still closed at 16:00; with and
+   without the ladder flag - the flag is not their precondition). Pin
+   `blend._now_utc` to the same 07:00 ET the suite uses so the marks do not
+   depend on when you run them.
+
+The one-liner that reproduces every mark in the tables below, from
+`ibkr-executor/`:
+
+    for p in tests/probes/attack_*.py; do LADDER_ENABLED=true PYTHONPATH=. python3 -c "
+    import app.blend as b; from datetime import datetime, timezone
+    b._now_utc = lambda: datetime(2026, 8, 20, 11, 0, tzinfo=timezone.utc)
+    import runpy; runpy.run_path('$p', run_name='__main__')" | tail -1; done
+
+Measured on the merged tree with exactly that: `attack_mf2` 54/56 (A6, C1
+by design), `attack_n1n2` 14/14, `attack_n3guard` 10/10, `attack_r1r2` 7/7,
+`attack_reround` 9/9, `attack_x1x4` 39/40 (X-B by design), `attack_z1`
+20/21 (Z-1b by design), `attack_zfinal` 41/43 (ZF-A9c, ZF-G4 by design) —
+every documented mark, unchanged.
+
+| probe | before MF3 | after MF3 |
+|---|---|---|
+| `attack_reround.py` | 9/9 | 9/9 |
+| `attack_r1r2.py` | 7/7 | 7/7 |
+| `attack_n3guard.py` | 10/10 | 10/10 |
+| `attack_n1n2.py` | 14/14 | 14/14 |
+| `attack_x1x4.py` | 39/40 | 39/40 |
+| `attack_zfinal.py` | 41/43 | 41/43 |
+| `attack_z1.py` | 20/21 | 20/21 |
+| `attack_mf2.py` | 54/56 | 54/56 |
+
+(`attack_mf2.py` reads 54/56 rather than the table's 55/57 only because no
+`probes/base9b` worktree is present: `C1` lands as SKIPPED and `C2` never
+runs, exactly as its row below documents. `A6` still lands, still by design
+— the one order it counts is the one whose `place_stock_order` the probe is
+blocked INSIDE when the kill lands.)
+
+The round's own gates live in the pytest suite (`test_gate_mf3_1` ..
+`test_gate_mf3_10`), each verified FAILING at `09aa936` and passing after.
+Two EXISTING assertions were reversed rather than deleted, both in the
+`flatten_request is None` line that MF3-3 identifies as the defect itself:
+`test_gate_kd_kill_raising_cancel_never_market_sells` and
+`test_gate_r2_flatten_raising_cancel_parks_never_sells` now assert the
+request STAYS queued, and each gained a check the old line could never
+reach — that K-d survives the RETRY too (no MKT sell on a second pass).
+Every other assertion in both tests is untouched; nothing was removed.
+
 | probe | result | note |
 |---|---|---|
+The CORRECTIVE round (the judge's MERGE: NO / LIVE-READY: NO on cc03347 —
+three regressions cc03347 introduced plus ten live blockers) changed **two
+probe files, in one mechanical way, with no assertion touched**:
+`probes/mf2/scen.py` (17 call sites) and `probes/mf2/flake_repro.py` (1)
+now drive `/kill` and `/resume` with `c.post(...)` instead of `c.get(...)`.
+B3 made both mutations POST-only — `/kill` answering GET meant a crawler, a
+chat link-unfurl or a mail prefetch of the tokenised URL could flatten a
+live book — so the OLD verb now returns 405 and every probe that used it
+would have measured nothing at all. Per rule 2: the contract legitimately
+changed, the check that changed is the HTTP METHOD and nothing else, and
+`scen.py`'s concurrency scenario additionally got the method-aware dispatch
+its four-path hammer needs (`/status` and `/health` stay GET). Every
+assertion, every scenario and every recorded expectation in both files is
+byte-identical. All eight `attack_*` files were re-run from
+`ibkr-executor/` before and after and every one landed on its documented
+mark:
+
+| probe | before the corrective round | after |
+|---|---|---|
+| `attack_reround.py` | 9/9 | 9/9 |
+| `attack_r1r2.py` | 7/7 | 7/7 |
+| `attack_n3guard.py` | 10/10 | 10/10 |
+| `attack_n1n2.py` | 14/14 | 14/14 |
+| `attack_x1x4.py` | 39/40 | 39/40 |
+| `attack_zfinal.py` | 41/43 | 41/43 |
+| `attack_z1.py` | 20/21 | 20/21 |
+| `attack_mf2.py` | 54/56 | 54/56 |
+
+The round's own gates live in the pytest suite (`test_gate_b1_*`,
+`test_gate_b3_*`, `test_gate_b4_*`, `test_gate_b5_*`, `test_gate_b6_*`,
+`test_gate_b7_*`, `test_gate_b8_*`, `test_gate_b10_*`, `test_gate_b2_*`,
+`test_gate_rb_*`, `test_gate_rc_*`), each verified FAILING at `cc03347` and
+passing after, plus five explicitly labelled CONTROLS that pass on BOTH
+trees because their job is to catch an OVER-fix. Two of cc03347's own
+assertions changed, both of them the unbounded-retry promise B4 names as
+the defect (`"RETRIES every cycle"`); each test gained the bound the old
+line could not express, and both tests are strictly harder than before.
+
 | `attack_reround.py` | 9/9 | |
 | `attack_r1r2.py` | 7/7 | |
 | `attack_n3guard.py` | 10/10 | |
@@ -51,3 +199,4 @@ Each prints `N/M probes passed; landed attacks: [...]` on the last line.
 | `attack_x1x4.py` | 39/40 | `X-B[consequence]` lands BY DESIGN — its author withdrew it (a bounded liquidation at a chosen price beats unbounded naked downside); do not code to it |
 | `attack_zfinal.py` | 41/43 | The whole-branch review's suite, committed byte-identical to the file its author ran. Two land and BOTH are by design. `ZF-A9c` is a recorded SCOPE statement, not a defect: outside a flagged cell reconcile never reads `held`, so the invariant is "cover <= held **in cells where `held` was verified this cycle**" — identical at main, and closing it is a new periodic-sweep feature. `ZF-G4` ASSERTS the ZF-2 defect (pass 4 adopting an already-FILLED order as working protection, `stop_missing=False` with nothing resting): it PASSED while the defect existed and now FAILS because `_ensure_stop` refuses a non-`working` duplicate — its own detail line shows the corrected end state (`stop_missing=True`, `naked=True`). It is left exactly as written, per rule 3 above. `ZF-D3` needs `ZF_MAIN_WORKTREE=<a worktree at e750abd>` to mean anything; without it the subprocess re-imports HEAD and reports a false PASS. The rollback it measures is unfixable from this side — see the deploy note in the executor README (ZF-3). |
 | `attack_z1.py` | 20/21 | `Z-1b` lands and is left landing on purpose: it directly contradicts `Z-1`, the hand-derived allocation table in the same file. `Z-1` pins `held > book` to `{1:2,2:2,3:1}`; `Z-1b` demands every allocation be `<= that position's own qty`. Both cannot hold. `held > book` is unreachable from the only call site (it enters on `held < book_qty`) and every result is capped at `min(alloc, qty)` before it can reach the venue, so the cell is a documentation defect, not a live one — and preserving the reviewer's verified table was judged worth more than silencing a probe about an unreachable input. `Z-1c` (negative/zero qty) WAS fixed. |
+| `attack_mf2.py` | 55/57 | The MF2 round's suite (57 checks), committed byte-identical to the file its author ran, with its drivers in `probes/mf2/`. It was **48/57 at 499aed1** (landed: `A3`, `A4`, `A5`, `A6`, `A8`, `A9`, `B5`, `B6`, `C2`) and is **55/57** here: `A3`/`A4`/`A5`/`A8`/`A9` were closed on the merits by MF2-1/MF2-2/MF2-3/MF2-4 (`/kill` makes no venue call at all now, the halt is journalled to `<STATE_PATH>.kill`, `/resume` cancels a queued kill, and the reply/alert report what actually happened) and `B5`/`B6` by mf2-9/mf2-10. Note that `A9` was PRE-EXISTING at main, not this round's harm; it closed as a side effect of MF2-1. Two still land and BOTH are by design. `A6` asks that a book halted mid-cycle place NO further order in the cycle already in flight: the intent loop breaks on a halt now (MF2-5), so the four measured venue BUYs became ONE — and that one is the order whose `place_stock_order` call the probe itself is blocked INSIDE when the kill lands. Nothing in this process can withdraw a call already made to the venue, so the check cannot reach zero as it is constructed; it is a residual of the probe's shape, not an open finding. `C2` is the accepted ZF-3 one-way rollback door in its MF-C form: an older build loads a `stand_in_rows` book without crashing and then runs reconcile pass 1b on the INVENTED symbol, deleting the row while the venue still holds the shares and the real GTC stop still rests there (`ROWS_AFTER [] | VENUE 5 | STOP working`). The fix would have to live in the build being rolled AWAY from, so it is unreachable from this side — named in the executor README's deploy note. Running it: `python tests/probes/attack_mf2.py` from `ibkr-executor/`; `C1`/`C2` additionally need a git worktree of `9b33081` at `tests/probes/base9b` (without one, `C1` lands as SKIPPED and `C2` never runs), and `A9` compares against that same worktree. |

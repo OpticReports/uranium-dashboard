@@ -6,6 +6,7 @@ account equity; DRY_RUN defaults true). All offline."""
 from __future__ import annotations
 
 import json
+import threading
 import pathlib
 import os
 import time
@@ -84,10 +85,16 @@ def _wait_until(cond, timeout=10.0):
 
 def _held_position(m, call_id=1, symbol="CRSP", qty=5, fill=50.0,
                    stop_level=44.0, entry_date="2026-08-01",
-                   time_stop="2026-10-30", stop_ref="old-stop"):
+                   time_stop="2026-10-30", stop_ref="old-stop", adapter=None):
+    """Book a held position. `adapter` seeds the VENUE to match, which any
+    test that later flattens MUST pass: the flatten's ceiling is what the
+    account holds, and a book asserting shares the venue does not report is
+    the naked-short state the ceiling exists to catch."""
     m.on_entered({"call_id": call_id, "symbol": symbol, "qty": qty,
                   "entry_ref": fill, "stop_level": stop_level},
                  fill, "entry-ref", entry_date)
+    if adapter is not None:
+        adapter.seed_position(symbol, qty)
     pos = m.state.positions[str(call_id)]
     pos.time_stop = time_stop
     pos.stop_order_ref = stop_ref
@@ -415,13 +422,13 @@ def test_gate_blend_enabled_status_and_kill(tmp_path, monkeypatch):
             # /kill halts the blend book IMMEDIATELY and queues the flatten
             # for the execution loop (R2 two-stage), which closes positions
             # within seconds (LOOP_WAKE).
-            r = c.get("/kill", params={"token": "sekrit"})
+            r = c.post("/kill", params={"token": "sekrit"})
             assert r.json()["blend"] == "flatten_queued"
             assert service.BLEND.state.halted == "KILL"
             assert _wait_until(
                 lambda: service.BLEND.state.positions == {}
                 and service.BLEND.state.flatten_request is None)
-            c.get("/resume", params={"token": "sekrit"})
+            c.post("/resume", params={"token": "sekrit"})
             assert service.BLEND.state.halted is None
     finally:
         service.BLEND = None
@@ -1064,7 +1071,7 @@ def test_gate_n14_kill_does_not_double_sell_a_stop_filled_position(
                 _time.sleep(0.05)
             B, A = service.BLEND, service.ADAPTER
             _seed_initialized(B, sleeve_cash=2_750.0)
-            _held_position(B, stop_ref=None)
+            _held_position(B, stop_ref=None, adapter=A)
             pos = B.state.positions["1"]
             rs = A.place_stock_order("CRSP", -5, "STP", stop_price=44.0,
                                      tif="GTC",
@@ -1073,7 +1080,7 @@ def test_gate_n14_kill_does_not_double_sell_a_stop_filled_position(
             B.save()
             A.trigger_stop(pos.stop_order_ref)   # fills; NOT yet polled
             cash_before = B.state.sleeve_cash
-            r = c.get("/kill", params={"token": "sekrit"})
+            r = c.post("/kill", params={"token": "sekrit"})
             assert r.json()["halted"] == "KILL"
             # R2: the loop thread reconciles-first then flattens
             assert _wait_until(lambda: B.state.flatten_request is None)
@@ -1117,7 +1124,7 @@ def test_gate_n14_kill_refuses_blind_flatten_when_reconcile_fails(
                 raise RuntimeError("venue unreachable (simulated)")
 
             monkeypatch.setattr(A, "poll_stock_fills", boom)
-            r = c.get("/kill", params={"token": "sekrit"})
+            r = c.post("/kill", params={"token": "sekrit"})
             assert r.json()["halted"] == "KILL"
             assert B.state.halted == "KILL"      # halt is IMMEDIATE
             # R2: wait for the loop's flatten attempt — reconcile fails,
@@ -1446,7 +1453,7 @@ def test_gate_kd_kill_raising_cancel_never_market_sells(tmp_path, monkeypatch):
                 _time.sleep(0.05)
             B, A = service.BLEND, service.ADAPTER
             _seed_initialized(B, sleeve_cash=2_750.0)
-            _held_position(B, stop_ref=None)
+            _held_position(B, stop_ref=None, adapter=A)
             pos = B.state.positions["1"]
             rs = A.place_stock_order("CRSP", -5, "STP", stop_price=44.0,
                                      tif="GTC",
@@ -1458,10 +1465,16 @@ def test_gate_kd_kill_raising_cancel_never_market_sells(tmp_path, monkeypatch):
                 raise RuntimeError("order already filled")
             monkeypatch.setattr(A, "cancel_stock_order", raising_cancel)
 
-            r = c.get("/kill", params={"token": "sekrit"})
+            r = c.post("/kill", params={"token": "sekrit"})
             assert r.json()["halted"] == "KILL"
             # R2: the loop thread executes the flatten; K-d must survive.
-            assert _wait_until(lambda: B.state.flatten_request is None)
+            # MF3-3: a flatten that closed NOTHING now stays QUEUED and
+            # retries, so "the journal cleared" is no longer the signal that
+            # it ran — wait on K-d's own effect (the park) instead, and then
+            # assert the queue state the old line asserted the inverse of.
+            assert _wait_until(
+                lambda: pos.stop_order_ref in B.state.orphan_stop_refs)
+            assert B.state.flatten_request is not None
             # No market sell may be placed against the maybe-filled stop.
             mkt_sells = [e for e in _executions(A, "CRSP")
                          if e["action"] != "stop_triggered"]
@@ -1541,7 +1554,7 @@ def test_gate_adapt_m3_kill_after_partial_stop_never_oversells(
                 _time.sleep(0.05)
             B, A = service.BLEND, service.ADAPTER
             _seed_initialized(B, sleeve_cash=2_750.0)
-            _held_position(B, stop_ref=None)
+            _held_position(B, stop_ref=None, adapter=A)
             pos = B.state.positions["1"]
             rs = A.place_stock_order("CRSP", -5, "STP", stop_price=44.0,
                                      tif="GTC",
@@ -1549,7 +1562,7 @@ def test_gate_adapt_m3_kill_after_partial_stop_never_oversells(
             pos.stop_order_ref = rs["order_ref"]
             B.save()
             A.trigger_stop_partial(rs["order_ref"], 3)   # 3 fill, stop dies
-            c.get("/kill", params={"token": "sekrit"})
+            c.post("/kill", params={"token": "sekrit"})
             # R2: loop-thread flatten — partial booked by reconcile first
             assert _wait_until(
                 lambda: B.state.positions == {}
@@ -2323,10 +2336,42 @@ def test_gate_r2_flatten_raising_cancel_parks_never_sells(tmp_path):
     assert "1" in m.state.positions                  # parked, not sold
     assert "old-stop" in m.state.orphan_stop_refs    # settled by reconcile
     assert _executions(a, "CRSP") == []
-    assert m.state.flatten_request is None
+    # MF3-3: the request STAYS queued — this flatten closed nothing, and an
+    # emergency stop does not give up after one pass. The old line asserted
+    # `is None` here, which is the defect MF3-3 names.
+    assert m.state.flatten_request is not None
     (summary,) = [msg for msg in alerts if "flatten finished" in msg]
     assert "0 closed" in summary or "none" in summary
     assert "NOT closed" in summary and "CRSP" in summary
+    # B4 supersedes cc03347's "RETRIES every cycle": that promise was
+    # unbounded and, for a row nothing could close, false. The retry is
+    # bounded and the summary says so, with the attempt number in it.
+    assert "RETRIES on the next cycle" in summary
+    assert f"attempt 1 of {blend_mod.FLATTEN_MAX_ATTEMPTS}" in summary
+    assert "every position is closed" not in summary
+    # ...and K-d survives the RETRY too, which the old assertion could never
+    # reach: a second cycle re-parks and still places no MKT sell.
+    retry: list[str] = []
+    run_cycle(m, a, None, "2026-08-21", alert=retry.append)
+    assert "1" in m.state.positions
+    assert _executions(a, "CRSP") == []
+    assert m.state.halted == "KILL"
+    assert m.state.flatten_request is not None
+    # B4: and the retry TERMINATES. Burn the rest of the budget: the request
+    # is dropped, the operator is told once that it stopped, the book stays
+    # HALTED, and K-d still holds on the very last pass (no MKT sell ever).
+    last: list[str] = []
+    for _ in range(blend_mod.FLATTEN_MAX_ATTEMPTS):
+        last = []
+        run_cycle(m, a, None, "2026-08-21", alert=last.append)
+        if m.state.flatten_request is None:
+            break
+    assert m.state.flatten_request is None, "the retry never terminated"
+    assert m.state.halted == "KILL"
+    assert "1" in m.state.positions
+    assert _executions(a, "CRSP") == []
+    (final,) = [msg for msg in last if "flatten finished" in msg]
+    assert "NO LONGER RETRYING" in final and "BY HAND" in final
 
 
 def test_gate_r2_resume_clears_a_queued_flatten(tmp_path):
@@ -2388,7 +2433,15 @@ def test_gate_r2_kill_never_touches_the_adapter_from_the_api_thread(
     """The old /kill pumped the adapter from a FastAPI worker thread — on
     the real IBAdapter every wait timed out (ib_async resolves its loop
     per thread) and the flatten deterministically failed. Now every
-    adapter call must come from ONE thread: the service loop."""
+    adapter call must come from ONE thread: the service loop.
+
+    MF-2 added the second assertion below. The set-equality on thread ids is
+    kept exactly as it was — it also excludes any THIRD thread, e.g. the
+    superseded loop that used to satisfy (or fail) this gate for the wrong
+    reason — and on top of it the gate now pins DIRECTLY the thing it exists
+    to pin: no thread that served an API request may appear in the adapter's
+    call set. Strictly additive: nothing was relaxed."""
+    import threading
     import time as _time
 
     from app.config import settings
@@ -2402,6 +2455,14 @@ def test_gate_r2_kill_never_touches_the_adapter_from_the_api_thread(
     monkeypatch.setattr(settings, "tws_userid", "")
     monkeypatch.setattr(settings, "blend_enabled", True)
     monkeypatch.setattr(service, "DryAdapter", _ThreadRecordingAdapter)
+    api_threads: set[int] = set()
+    _real_auth = service._auth
+
+    def _recording_auth(hdr, q):
+        api_threads.add(threading.get_ident())   # every API handler starts here
+        return _real_auth(hdr, q)
+
+    monkeypatch.setattr(service, "_auth", _recording_auth)
     try:
         with TestClient(service_app) as c:
             for _ in range(200):
@@ -2413,7 +2474,7 @@ def test_gate_r2_kill_never_touches_the_adapter_from_the_api_thread(
             loop_threads = set(A.call_threads)           # THE loop thread
             assert len(loop_threads) == 1
             _seed_initialized(B, sleeve_cash=2_750.0)
-            _held_position(B, stop_ref=None)
+            _held_position(B, stop_ref=None, adapter=A)
             pos = B.state.positions["1"]
             rs = A.place_stock_order("CRSP", -5, "STP", stop_price=44.0,
                                      tif="GTC",
@@ -2421,13 +2482,16 @@ def test_gate_r2_kill_never_touches_the_adapter_from_the_api_thread(
             pos.stop_order_ref = rs["order_ref"]
             B.save()
             A.call_threads.clear()           # only post-kill calls count
-            c.get("/kill", params={"token": "sekrit"})
+            c.post("/kill", params={"token": "sekrit"})
             assert _wait_until(
                 lambda: B.state.positions == {}
                 and B.state.flatten_request is None)
             # the flatten DID run (cancel + MKT sell) — and every adapter
             # call came from THE loop thread, none from the API thread
             assert A.call_threads == loop_threads
+            assert api_threads                      # /kill really was served
+            assert not (A.call_threads & api_threads), (
+                "an API thread touched the adapter")
     finally:
         service.BLEND = None
         service.MGR = None
@@ -2454,12 +2518,12 @@ def test_gate_r2_kill_alerts_are_honest_two_stage(tmp_path, monkeypatch):
                 if service.BLEND is not None and service.ADAPTER is not None:
                     break
                 _time.sleep(0.05)
-            B = service.BLEND
+            B, A = service.BLEND, service.ADAPTER
             _seed_initialized(B, sleeve_cash=2_750.0)
-            _held_position(B, stop_ref=None)
+            _held_position(B, stop_ref=None, adapter=A)
             sent: list[str] = []
             monkeypatch.setattr(service, "send", sent.append)
-            r = c.get("/kill", params={"token": "sekrit"})
+            r = c.post("/kill", params={"token": "sekrit"})
             assert r.json()["blend"] == "flatten_queued"
             (kill_msg,) = [msg for msg in sent if "KILLED" in msg]
             assert "flatten QUEUED" in kill_msg
@@ -2810,8 +2874,8 @@ def test_gate_n3_resume_blocks_behind_blend_lock(tmp_path, monkeypatch):
             done = threading.Event()
             with service.BLEND_LOCK:       # a cycle is "in flight"
                 t = threading.Thread(
-                    target=lambda: (c.get("/resume",
-                                          params={"token": "sekrit"}),
+                    target=lambda: (c.post("/resume",
+                                           params={"token": "sekrit"}),
                                     done.set()))
                 t.start()
                 time.sleep(0.4)
@@ -3387,6 +3451,15 @@ def test_gate_zf1_a_book_already_inside_the_invariant_loses_no_cover(tmp_path):
     # (R1's blackout guard flags both peers on the shortfall — that is
     # pre-existing and correct; what the resize may not do is CAP a peer
     # whose cover it never had to touch)
+    # mf-4: this next line is a BELT here and the review was right that it
+    # cannot fail in THIS cell — R1 flips peer 2's `history_gap` False->True
+    # before `_resize_peer_cover` runs, so `newly_capped` excludes it either
+    # way. The claim it is trying to make ("the resize never mothballs a
+    # healthy peer") is gated where it is real, at the unit level, by
+    # test_gate_zf1_the_resize_never_mothballs_a_healthy_peer below. The
+    # load-bearing assertions in this cell are `after == [4]`,
+    # `stop_cover_qty == 0`, the absent "protection were REMOVED" clause and
+    # the invariant check.
     assert not any("UNVERIFIABLE too" in msg for msg in alerts)
     assert not any("share(s) of protection were REMOVED" in msg
                    for msg in alerts)
@@ -3605,6 +3678,2872 @@ def test_gate_zf3_the_readme_does_not_overstate_rollback_protection():
     # never the one away from this build
     assert ("cannot protect a rollback FROM this build to an older one"
             in readme)
+
+
+# --- the final counter-review's MATERIALS (MF-1..MF-3) ------------------------
+
+def _service_client(tmp_path, monkeypatch, adapter=None):
+    """Boot the real service (one lifespan, one loop thread) the way the R2
+    gates do, and hand back the TestClient context manager unentered."""
+    from app.config import settings
+    from app import service
+    from app.service import app as service_app
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setattr(settings, "state_path", str(tmp_path / "s.json"))
+    monkeypatch.setattr(settings, "blend_state_path", str(tmp_path / "b.json"))
+    monkeypatch.setattr(settings, "exec_token", "sekrit")
+    monkeypatch.setattr(settings, "tws_userid", "")
+    monkeypatch.setattr(settings, "blend_enabled", True)
+    # main made the El Nino ladder OPT-IN (LADDER_ENABLED, default off); the
+    # MF-A/MF2/MF3 gates below drive the ladder through the real loop, so
+    # they need it on — the same way they need the blend on.
+    monkeypatch.setattr(settings, "ladder_enabled", True)
+    if adapter is not None:
+        monkeypatch.setattr(service, "DryAdapter", adapter)
+    # Earlier service tests leave MGR/BLEND/ADAPTER set on the module, so a
+    # "wait until they are not None" loop would return the PREVIOUS test's
+    # objects. Clear them for the duration (monkeypatch restores them).
+    monkeypatch.setattr(service, "ADAPTER", None)
+    monkeypatch.setattr(service, "BLEND", None)
+    monkeypatch.setattr(service, "MGR", None)
+    # `LAST` is exactly the same kind of leak and was missed: it carries the
+    # PREVIOUS test's `loop_ok` timestamp, so a test guarding on "cycle 1 is
+    # complete -> the loop is parked" was vacuous in a shared-process run
+    # (counter-review MF2 §5 — the root cause of the MF-1 gate's flake).
+    monkeypatch.setattr(service, "LAST",
+                        {"loop_ok": 0.0, "nino34": None, "mode": "OFFLINE"})
+    return TestClient(service_app), service
+
+
+def _kill_ready_position(B, A):
+    """A held position with a REAL resting stop at the venue — the shape the
+    /kill flatten actually has to close."""
+    _seed_initialized(B, sleeve_cash=2_750.0)
+    _held_position(B, stop_ref=None, adapter=A)
+    pos = B.state.positions["1"]
+    rs = A.place_stock_order("CRSP", -5, "STP", stop_price=44.0, tif="GTC",
+                             client_order_id="blend-1-stp-44.0000")
+    pos.stop_order_ref = rs["order_ref"]
+    B.save()
+
+
+def test_gate_mf1_a_queued_kill_flatten_never_waits_for_a_SLOW_FEED(
+        tmp_path, monkeypatch):
+    """MF-1 (pre-existing at main, live-relevant): the queued /kill flatten
+    ran at the END of the loop iteration — behind `nino34_weekly()`
+    (httpx, 30s, failures never cached) and `fetch_intents` (30s) — so
+    kill-to-flatten was exactly the loop's feed latency: 3s feed -> 3.01s,
+    8s -> 8.01s, 25s -> no flatten inside 20s, while the code comment and
+    the operator alert promised "within seconds". The flatten now runs
+    FIRST in the iteration, ahead of both feeds, with reconcile-first (N14)
+    preserved inside run_cycle.
+
+    Measured here, not argued: both feeds are made to hang for FEED_HANG
+    seconds from the second call on (the first cycle is fast so the loop is
+    parked in its poll wait when /kill lands, which is the deployed shape),
+    and the flatten must run without a single feed call in between.
+
+    The assertion is the PROPERTY, not a stopwatch (counter-review MF2 §5):
+    "kill -> flatten did not wait for a feed" is exactly "no feed call
+    happened between the two", and that is what is checked. The wall-clock
+    form (`latency < FEED_HANG/2`) measured the stubbed hang rather than the
+    ordering, and it passed or failed on which module globals the rest of
+    the suite had left behind."""
+    import threading
+    import time as _time
+
+    FEED_HANG = 6.0
+    release = threading.Event()          # lets shutdown cut the hang short
+    calls = {"nino": 0, "intents": 0}
+
+    def _hang(which):
+        calls[which] += 1
+        if calls[which] > 1:             # cycle 1 stays fast
+            release.wait(FEED_HANG)
+
+    from app import service
+
+    def slow_nino():
+        _hang("nino")
+        return 2.7
+
+    def slow_intents(_cfg):
+        _hang("intents")
+        return None
+
+    monkeypatch.setattr(service, "nino34_weekly", slow_nino)
+    monkeypatch.setattr(blend_mod, "fetch_intents", slow_intents)
+
+    flat = {"nino_at_entry": None}
+    real_flatten = blend_mod.execute_flatten
+
+    def watched_flatten(mgr, adapter, alert):
+        if flat["nino_at_entry"] is None:
+            flat["nino_at_entry"] = calls["nino"]
+        return real_flatten(mgr, adapter, alert)
+
+    monkeypatch.setattr(blend_mod, "execute_flatten", watched_flatten)
+    client, service = _service_client(tmp_path, monkeypatch)
+    try:
+        with client as c:
+            for _ in range(200):
+                if service.BLEND is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            B, A = service.BLEND, service.ADAPTER
+            # cycle 1 complete -> the loop is parked in its poll wait
+            assert _wait_until(lambda: service.LAST["loop_ok"] > 0)
+            assert _wait_until(lambda: calls["nino"] >= 1)
+            _kill_ready_position(B, A)
+            nino_at_kill = calls["nino"]
+            r = c.post("/kill", params={"token": "sekrit"})
+            assert r.json()["blend"] == "flatten_queued"
+            assert _wait_until(lambda: B.state.flatten_request is None
+                               and B.state.positions == {}, timeout=20.0)
+            # the flatten did not wait out a single feed, let alone two:
+            # not one feed call happened between the kill and it starting
+            assert flat["nino_at_entry"] == nino_at_kill, (
+                f"the queued flatten waited for "
+                f"{flat['nino_at_entry'] - nino_at_kill} feed call(s)")
+            assert _executions(A, "CRSP")           # it really sold
+            # and the loop DID go on to pay the slow feeds afterwards — the
+            # ordering is what changed, not the feeds being skipped
+            assert _wait_until(lambda: calls["nino"] >= 2, timeout=20.0)
+    finally:
+        release.set()
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_mf1_the_kill_alert_states_the_real_bound(tmp_path, monkeypatch):
+    """MF-1's other half: a comment and an alert that promise "within
+    seconds" while the code waits out two 30s timeouts is the defect. The
+    operator text must say what is actually true — the flatten runs FIRST in
+    the loop's next iteration, and the only thing that can precede it is a
+    cycle already in flight, whose feeds are capped."""
+    import time as _time
+
+    client, service = _service_client(tmp_path, monkeypatch)
+    try:
+        with client as c:
+            for _ in range(200):
+                if service.BLEND is not None:
+                    break
+                _time.sleep(0.05)
+            sent: list[str] = []
+            monkeypatch.setattr(service, "send", sent.append)
+            _seed_initialized(service.BLEND, sleeve_cash=2_750.0)
+            _held_position(service.BLEND, stop_ref=None)
+            c.post("/kill", params={"token": "sekrit"})
+            (kill_msg,) = [m for m in sent if "KILLED" in m]
+            assert "flatten QUEUED" in kill_msg
+            assert "runs FIRST in the loop's next iteration" in kill_msg
+            assert "already in flight" in kill_msg
+    finally:
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_mf1_a_failing_feed_is_not_re_paid_every_cycle(monkeypatch):
+    """MF-1's third half: neither feed cached its FAILURES, so an
+    unreachable dependency cost the loop a full 30s timeout EVERY cycle —
+    `nino.py:32` returned the stale value without ever writing `_CACHE`.
+    Both feeds are capped at a few seconds now and a failure is
+    negative-cached, so one hanging dependency cannot pace the loop."""
+    from app import nino as nino_mod
+    from app.nino import nino34_weekly
+
+    assert nino_mod.FEED_TIMEOUT <= 10 and blend_mod.FEED_TIMEOUT <= 10
+    monkeypatch.setattr(nino_mod, "_CACHE", {})
+    seen = {"n": 0, "timeout": None}
+
+    def boom(url, **kw):
+        seen["n"] += 1
+        seen["timeout"] = kw.get("timeout")
+        raise RuntimeError("NOAA unreachable")
+
+    monkeypatch.setattr(nino_mod.httpx, "get", boom)
+    assert nino34_weekly() is None and seen["n"] == 1
+    assert seen["timeout"] == nino_mod.FEED_TIMEOUT     # not 30s
+    assert nino34_weekly() is None and seen["n"] == 1   # negative-cached
+    # a dead feed is RE-TRIED on a schedule, never abandoned
+    nino_mod._CACHE["fail"] = time.time() - nino_mod.FAIL_TTL - 1
+    assert nino34_weekly() is None and seen["n"] == 2
+    # ...and a success clears the negative cache
+    good = {"n": 0}
+
+    class R:
+        text = "\n".join(["x " * 0 + " ".join(["1"] * 9)])
+
+        def __init__(self):
+            good["n"] += 1
+
+    monkeypatch.setattr(nino_mod.httpx, "get", lambda url, **kw: R())
+    nino_mod._CACHE["fail"] = time.time()
+    nino_mod._CACHE.pop("v", None)
+    assert nino34_weekly() is None                      # retry not due yet
+    nino_mod._CACHE["fail"] = time.time() - nino_mod.FAIL_TTL - 1
+    assert nino34_weekly() == 1.0 and "fail" not in nino_mod._CACHE
+
+    # the tracker poll, same treatment — keyed per URL, so one dead tracker
+    # never silences another
+    monkeypatch.setattr(blend_mod, "_INTENTS_FAIL", {})
+    hits = {"n": 0, "timeout": None}
+
+    def boom2(url, **kw):
+        hits["n"] += 1
+        hits["timeout"] = kw.get("timeout")
+        raise RuntimeError("tracker unreachable")
+
+    monkeypatch.setattr(blend_mod.httpx, "get", boom2)
+
+    class C(Cfg):
+        tracker_url = "https://tracker.invalid"
+
+    assert fetch_intents(C()) is None and hits["n"] == 1
+    assert hits["timeout"] == blend_mod.FEED_TIMEOUT    # not 30s
+    assert fetch_intents(C()) is None and hits["n"] == 1     # negative-cached
+    assert blend_mod.FEED_FAIL_TTL < 300                # < the poll interval:
+    blend_mod._INTENTS_FAIL["https://tracker.invalid"] = (   # a SCHEDULED
+        time.time() - blend_mod.FEED_FAIL_TTL - 1)           # cycle re-tries
+    assert fetch_intents(C()) is None and hits["n"] == 2
+
+
+class _IdentRecordingAdapter(_ThreadRecordingAdapter):
+    """R2's thread recorder plus the THREAD OBJECTS, for the MF-2 lifecycle
+    gate: a thread ident is recycled once the thread really exits, so only
+    the object identifies "the loop thread of lifespan 1" across lifespans."""
+
+    def __init__(self):
+        super().__init__()
+        import threading
+        self.call_thread_objs: set = set()
+        self._cur = threading.current_thread
+
+    def _note(self):
+        super()._note()
+        self.call_thread_objs.add(self._cur())
+
+
+def test_gate_mf2_a_superseded_loop_thread_stops_running_cycles(
+        tmp_path, monkeypatch):
+    """MF-2 (pre-existing at main): `_loop` had NO lifecycle. Every lifespan
+    started a daemon thread that never exited and kept reading the module
+    globals MGR/ADAPTER/BLEND, so a SUPERSEDED loop ran full cycles against
+    the CURRENT test's manager and adapter — in the reviewer's reproduction
+    a stale loop performed the emergency flatten, which is what made the R2
+    gate fail intermittently (I/O latency, never CPU contention).
+
+    Two lifespans, a fast poll so a stale loop would wake repeatedly: the
+    first lifespan's loop thread must be GONE, and the second lifespan's
+    adapter must be touched by exactly one thread — the current loop."""
+    import threading
+    import time as _time
+
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "poll_seconds", 1)
+    client1, service = _service_client(tmp_path, monkeypatch,
+                                       adapter=_IdentRecordingAdapter)
+    try:
+        with client1:
+            for _ in range(200):
+                if service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            A = service.ADAPTER
+            assert _wait_until(lambda: A.call_threads)
+            (stale_loop,) = tuple(A.call_thread_objs)
+            e1 = service.LOOP_WAKE
+        # the lifespan ended: its loop thread must END too (this is the
+        # whole finding — at main it lives forever)
+        assert _wait_until(lambda: not stale_loop.is_alive(), timeout=5.0), (
+            "the superseded loop thread is still alive")
+
+        client2, service = _service_client(tmp_path, monkeypatch,
+                                           adapter=_IdentRecordingAdapter)
+        with client2:
+            for _ in range(200):
+                if service.ADAPTER is not None and service.ADAPTER is not A:
+                    break
+                _time.sleep(0.05)
+            B = service.ADAPTER
+            assert B is not A
+            assert service.LOOP_WAKE is not e1      # a fresh wake event
+            assert _wait_until(lambda: B.call_threads)
+            _time.sleep(2.5)            # >= 2 poll intervals: a stale loop
+                                        # would have woken and cycled twice
+            assert stale_loop not in B.call_thread_objs, (
+                "a SUPERSEDED loop thread ran a cycle against the current "
+                "adapter")
+            assert len(B.call_thread_objs) == 1
+            # the current loop still works: its wake event is the live one
+            assert service.LOOP_WAKE.__class__ is threading.Event
+    finally:
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_mf3_a_drifted_stand_in_row_never_exits_as_x0(tmp_path):
+    """MF-3 (NEW, introduced by ZF-4, found by the whole-branch review's
+    probe F4g): a drift that REMOVES `qty` rebuilt the row with the stand-in
+    `qty = 0`. The book was halted and the alert named the field — but one
+    /resume later a tracker EXIT booked it as a green `blend EXIT CRSP x0`,
+    DELETED the row, and left 5 REAL shares at the venue untracked with
+    has_naked_position() False.
+
+    A row carrying stand-ins is UNVERIFIABLE by construction: it is flagged
+    `history_gap`, so the existing machinery defers the exit, keeps the row,
+    alerts the 5-vs-0 discrepancy and blocks entries."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    _held_position(m, stop_ref=None)
+    pos = m.state.positions["1"]
+    rs = a.place_stock_order("CRSP", -5, "STP", stop_price=44.0, tif="GTC",
+                             client_order_id="blend-1-stp-44.0000")
+    pos.stop_order_ref = rs["order_ref"]
+    a._positions["CRSP"] = 5
+    m.state.halted = "KILL"
+    m.save()
+    raw = json.load(open(m.state_path))
+    raw["positions"]["1"].pop("qty")            # the drift: `qty` renamed away
+    with open(m.state_path, "w") as fh:
+        json.dump(raw, fh)
+
+    m2 = mk(tmp_path)
+    assert m2.state.halted == "SCHEMA_DRIFT" or m2.state.halted == "KILL"
+    assert "1" in m2.state.positions
+    p = m2.state.positions["1"]
+    assert p.qty == 0 and p.history_gap is True      # the stand-in is flagged
+    assert "flagged UNVERIFIABLE" in m2.archived_state
+    # the stand-in provenance is visible where every other unverifiable row
+    # is visible
+    assert m2.status_summary()["unverifiable"] == ["1"]
+    assert m2.feed(PRICES, "2026-08-22")["unverifiable"] == 1
+    assert m2.feed(PRICES, "2026-08-22")["positions"][0]["unverifiable"] is True
+
+    m2.resume()                                  # the operator clears the halt
+    alerts: list[str] = []
+    run_cycle(m2, a, payload(exits=[{"call_id": 1, "symbol": "CRSP",
+                                     "reason": "exit"}],
+                             stops=[stop_row()]),
+              "2026-08-22", alert=alerts.append)
+    assert "1" in m2.state.positions             # the row is NOT deleted
+    assert a._positions["CRSP"] == 5             # the shares are NOT abandoned
+    assert m2.has_naked_position()               # entries stay BLOCKED
+    assert not any("EXIT CRSP x0" in msg for msg in alerts)
+    assert any("EXIT CRSP deferred" in msg and "UNVERIFIABLE" in msg
+               for msg in alerts)
+    assert any("holds 5 shares vs 0 booked" in msg for msg in alerts)
+    assert m2.status_summary()["unverifiable"] == ["1"]
+
+
+def test_gate_zf1_the_resize_never_mothballs_a_healthy_peer(tmp_path):
+    """mf-4: the non-vacuous half of the ZF-1 gate. Driving
+    `_resize_peer_cover` directly — the way reconcile pass 1b calls it — a
+    HEALTHY, UNFLAGGED peer resting full cover of 4 against 5 held, whose
+    zero-cover peer cannot be restored (its own unACKed orphan), must come
+    out unflagged, uncapped and uncut: at the parent commit it was cut to 2
+    AND mothballed UNVERIFIABLE to satisfy an invariant that already held.
+    (The reviewer's probe F1b, promoted to a gate.)"""
+    from app.blend import _resize_peer_cover
+
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    # call 1: flagged, cover retired, restore blocked by its own orphan
+    _held_position(m, call_id=1, qty=5, stop_level=44.0, stop_ref=None)
+    p1 = m.state.positions["1"]
+    p1.history_gap, p1.stop_missing, p1.stop_order_ref = True, True, None
+    m.record_orphan_stop("ghost-1", {"symbol": "CRSP", "qty": -5,
+                                     "call_id": 1})
+    # call 2: healthy, UNFLAGGED, fully covered by a real resting stop
+    old2 = _blackout_stop(m, a, call_id=2, qty=4, level=43.0)
+    p2 = m.state.positions["2"]
+    p2.history_gap = False
+    a._positions["CRSP"] = 5          # 4 resting <= 5 held: ALREADY compliant
+    alerts: list[str] = []
+    gap_stops = {"1": {"status": "dead", "order_ref": None}}   # flagged peers only
+    _resize_peer_cover(m, a, 5, list(m.state.positions.values()), gap_stops,
+                       alerts.append)
+    assert sum(-o["qty"] for o in a._stops.values()) == 4      # nothing cut
+    assert a._orders[old2]["status"] == "working"
+    assert p2.stop_order_ref == old2 and not p2.stop_missing
+    assert p2.stop_cover_qty == 0                              # not capped
+    assert p2.history_gap is False                             # not mothballed
+    assert not any("UNVERIFIABLE too" in msg for msg in alerts)
+    assert not any("share(s) of protection were REMOVED" in msg
+                   for msg in alerts)
+
+
+def test_gate_mf2_shutting_down_an_older_lifespan_leaves_the_live_loop_running(
+        tmp_path, monkeypatch):
+    """MF-2, second pass on my own machinery: superseding is generation-based,
+    so a shutdown must bump the generation ONLY while its own loop is still
+    the current one. An unconditional bump at shutdown would supersede a
+    NEWER, live loop — the lifecycle killing the very thing it exists to keep
+    single. Overlapping lifespans, older one shut down second: the live loop
+    must keep cycling."""
+    import time as _time
+
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "poll_seconds", 1)
+    client1, service = _service_client(tmp_path, monkeypatch,
+                                       adapter=_IdentRecordingAdapter)
+    client1.__enter__()
+    try:
+        for _ in range(200):
+            if service.ADAPTER is not None:
+                break
+            _time.sleep(0.05)
+        A = service.ADAPTER
+        assert _wait_until(lambda: A.call_threads)
+        client2, service = _service_client(tmp_path, monkeypatch,
+                                           adapter=_IdentRecordingAdapter)
+        with client2:
+            for _ in range(200):
+                if service.ADAPTER is not None and service.ADAPTER is not A:
+                    break
+                _time.sleep(0.05)
+            B = service.ADAPTER
+            assert _wait_until(lambda: B.call_thread_objs)
+            client1.__exit__(None, None, None)      # the OLDER one shuts down
+            B.call_threads.clear()
+            B.call_thread_objs.clear()
+            assert _wait_until(lambda: B.call_thread_objs, timeout=8.0), (
+                "the LIVE loop stopped when an older lifespan shut down")
+            assert len(B.call_thread_objs) == 1
+    finally:
+        client1.__exit__(None, None, None)
+        service.BLEND = None
+        service.MGR = None
+
+
+def _drifted_book_missing(tmp_path, field: str):
+    """Seed a real 5-share CRSP position protected by a real working GTC
+    stop, then drop ONE required field from the persisted row — the schema
+    drift a deploy ROLLBACK produces (ZF-4/MF-3's reachability class).
+    Returns (rebuilt manager, adapter)."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    _held_position(m, stop_ref=None)
+    pos = m.state.positions["1"]
+    rs = a.place_stock_order("CRSP", -5, "STP", stop_price=44.0, tif="GTC",
+                             client_order_id="blend-1-stp-44.0000")
+    pos.stop_order_ref = rs["order_ref"]
+    a._positions["CRSP"] = 5
+    m.state.halted = "KILL"
+    m.save()
+    raw = json.load(open(m.state_path))
+    raw["positions"]["1"].pop(field)
+    with open(m.state_path, "w") as fh:
+        json.dump(raw, fh)
+    return mk(tmp_path), a
+
+
+def test_gate_mfc_a_stand_in_row_never_addresses_the_venue(tmp_path):
+    """MF-C (NEW harm, introduced by MF-3 — the only cell where this branch
+    was WORSE than main): flagging a stand-in row `history_gap` routed it
+    into reconcile pass 1b, which then made venue decisions using the
+    FABRICATED identity. With `symbol` defaulted to "", `stock_position("")`
+    answers 0, so the book concluded the 5 booked shares were gone,
+    CANCELLED the real working GTC stop on 5 REAL shares and DELETED the
+    row — measured `rows=[] venue CRSP=5 stop cancelled naked=False`, while
+    9b33081 left the row and its working stop alone.
+
+    A row whose identity this build invented must never be used to address,
+    cancel or match a venue order: it is kept OUT of pass 1b's venue
+    comparison entirely."""
+    m2, a = _drifted_book_missing(tmp_path, "symbol")
+    assert m2.state.positions["1"].symbol == ""      # the stand-in identity
+    stop_ref = m2.state.positions["1"].stop_order_ref
+    m2.resume()                                  # the operator clears the halt
+    alerts: list[str] = []
+    run_cycle(m2, a, None, "2026-08-22", alert=alerts.append)
+
+    # the REAL protection is untouched
+    assert a.find_stock_order("blend-1-stp-44.0000")["status"] == "working"
+    assert stop_ref in a._stops                  # still resting at the venue
+    assert a._positions["CRSP"] == 5             # the real shares are there
+    assert not any(e.get("action") == "cancel_stock_order" for e in a.log)
+    # the book still knows about them
+    assert "1" in m2.state.positions
+    assert m2.state.unreconciled == {}
+    assert m2.has_naked_position()               # entries stay BLOCKED
+    assert m2.status_summary()["unverifiable"] == ["1"]
+    # and the operator is told why, loudly — never silently
+    assert any("REBUILT from STAND-INS" in msg and "symbol" in msg
+               for msg in alerts)
+    # with an invented symbol there is no honest venue question to ask, so
+    # the alert reports no share count at all
+    assert not any("the account holds" in msg for msg in alerts)
+    # the provenance carrier: book-level, so it survives a reconcile
+    assert m2.state.stand_in_rows == {"1": ["symbol"]}
+    assert m2.status_summary()["stand_in_rows"] == {"1": ["symbol"]}
+
+
+def test_gate_mfb_the_stand_in_flag_survives_every_reconcile(tmp_path):
+    """MF-B: MF-3's flag did not survive. `history_gap` clears on positive
+    venue evidence about QUANTITY (`held == book_qty`, reconcile pass 1b),
+    which is satisfied whenever `qty` is not the defaulted field — so 6 of
+    the 7 stand-in fields cleared on the NEXT reconcile. Worst measured:
+    `time_stop` defaulted to "" made the row "POSITIVELY verified" and then
+    `🧬 blend EXIT CRSP x5 (time_stop)` liquidated 5 REAL shares on a
+    FABRICATED time stop, green alert, same cycle. The boot alert's
+    "nothing exits, re-stops or flattens them" was false in cycle 1.
+
+    The provenance lives at BOOK level (`state.stand_in_rows`, not a
+    persisted BlendPosition field — that is ZF-3's one-way rollback door),
+    so it outlives every reconcile, every /resume and every restart."""
+    m2, a = _drifted_book_missing(tmp_path, "time_stop")
+    assert m2.state.positions["1"].time_stop == ""   # the stand-in
+    m2.resume()
+    alerts: list[str] = []
+    for _ in range(3):                       # three consecutive reconciles
+        run_cycle(m2, a, None, "2026-08-22", alert=alerts.append)
+        assert m2.state.positions["1"].history_gap is True
+
+    # the fabricated `time_stop` of "" DOES fire the local 90-day belt every
+    # cycle — and is refused every cycle, instead of selling on cycle 1
+    assert any("EXIT CRSP deferred" in msg and "STAND-INS" in msg
+               for msg in alerts)
+    assert not any("🧬 blend EXIT" in msg for msg in alerts)
+    assert not any("POSITIVELY verified" in msg for msg in alerts)
+    assert a._positions["CRSP"] == 5
+    assert a.find_stock_order("blend-1-stp-44.0000")["status"] == "working"
+    assert not [t for t in m2.state.trades if t["kind"] != "entry"]
+    assert "1" in m2.state.positions
+    assert m2.state.stand_in_rows == {"1": ["time_stop"]}
+
+    # ...and it survives a RESTART, because the carrier is persisted
+    m3 = mk(tmp_path)
+    assert m3.state.stand_in_rows == {"1": ["time_stop"]}
+    assert m3.state.positions["1"].history_gap is True
+    # a hand-edit that clears the flag without restoring the value does NOT
+    # un-park the row
+    raw = json.load(open(m3.state_path))
+    raw["positions"]["1"]["history_gap"] = False
+    with open(m3.state_path, "w") as fh:
+        json.dump(raw, fh)
+    m4 = mk(tmp_path)
+    assert m4.state.positions["1"].history_gap is True
+    # the ONLY resolution is restoring the row and dropping its entry
+    raw = json.load(open(m4.state_path))
+    raw["positions"]["1"]["time_stop"] = "2026-12-30"
+    raw["positions"]["1"]["history_gap"] = False
+    raw["stand_in_rows"] = {}
+    with open(m4.state_path, "w") as fh:
+        json.dump(raw, fh)
+    m5 = mk(tmp_path)
+    assert m5.state.stand_in_rows == {}
+    assert m5.state.positions["1"].history_gap is False
+
+
+def test_gate_mfa_the_halt_and_the_kill_response_never_wait_for_a_cycle(
+        tmp_path, monkeypatch):
+    """MF-A (1): `/kill`'s OWN halt used to block behind an in-flight cycle.
+    The handler took BLEND_LOCK, which `run_cycle` holds for its whole
+    duration — venue round-trips included. Measured at 6542d6f and
+    identically at 9b33081: the `/kill` HTTP call took 19.505s with NO
+    halt, NO ladder close, NO Telegram and NO response for the entire
+    window, while the comment said it "halts the book immediately".
+
+    The journal write has its own short-held lock now (BLEND_HALT_LOCK,
+    microseconds, never across I/O), so the halt, the journal and the HTTP
+    response are immediate whatever the loop is doing. The FLATTEN still
+    waits for the loop thread — only it may touch the adapter (R2) — and
+    that is what the operator is now told."""
+    import threading
+    import time as _time
+
+    HOLD = 6.0
+    release = threading.Event()
+    cycles = {"n": 0}
+    real_cycle = blend_mod.run_cycle
+
+    def holding_cycle(*a, **kw):
+        cycles["n"] += 1
+        if cycles["n"] > 1:              # cycle 1 boots the loop
+            release.wait(HOLD)           # ...then BLEND_LOCK is held here
+        return real_cycle(*a, **kw)
+
+    monkeypatch.setattr(blend_mod, "run_cycle", holding_cycle)
+    client, service = _service_client(tmp_path, monkeypatch)
+    try:
+        with client as c:
+            for _ in range(200):
+                if service.BLEND is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            B, A = service.BLEND, service.ADAPTER
+            assert _wait_until(lambda: service.LAST["loop_ok"] > 0)
+            n0 = cycles["n"]
+            service.LOOP_WAKE.set()      # drive the loop into a held cycle
+            assert _wait_until(lambda: cycles["n"] > n0)
+            _time.sleep(0.5)
+            assert service.BLEND_LOCK.locked()      # the cycle owns it
+            _kill_ready_position(B, A)
+            t0 = _time.time()
+            r = c.post("/kill", params={"token": "sekrit"})
+            elapsed = _time.time() - t0
+            # the response, the halt and the journal all landed immediately
+            assert elapsed < HOLD / 4, f"/kill blocked {elapsed:.2f}s"
+            assert r.json()["blend"] == "flatten_queued"
+            assert B.state.halted == "KILL"
+            assert B.state.flatten_request is not None
+            # ...and it is on DISK, so a crash inside that cycle keeps it
+            assert json.load(open(B.state_path))["flatten_request"] is not None
+        release.set()
+    finally:
+        release.set()
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_mfa_the_kill_response_never_waits_for_the_ladder_lock(
+        tmp_path, monkeypatch):
+    """MF-A (1), the other lock: the ladder section holds MGR_LOCK across
+    UNCAPPED gateway round-trips (`ADAPTER.mark`, `open_spread`,
+    `close_spread`; `IBAdapter._connect` alone retries 20 x (15s + 15s)).
+    /kill waited for it unconditionally — measured 19.401s of dead air with
+    a 20s-hanging mark(), at 6542d6f and at 9b33081 alike.
+
+    The wait is bounded now (KILL_LOCK_WAIT_S). If the loop holds the lock
+    the ladder halts in memory immediately and the LEG CLOSES are handed to
+    the loop thread, which is inside that very section and owns the
+    adapter — an API thread must never touch it (R2)."""
+    import threading
+    import time as _time
+
+    HANG = 6.0
+    release = threading.Event()
+    marks = {"n": 0}
+
+    class _SlowLadderAdapter(DryAdapter):
+        def mark(self, ref):
+            marks["n"] += 1
+            release.wait(HANG)
+            return 1.0
+
+    client, service = _service_client(tmp_path, monkeypatch,
+                                      adapter=_SlowLadderAdapter)
+    try:
+        with client as c:
+            for _ in range(200):
+                if service.MGR is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            assert _wait_until(lambda: service.LAST["loop_ok"] > 0)
+            with service.MGR_LOCK:      # give the ladder an OPEN leg to mark
+                leg = list(service.MGR.state.legs)[0]
+                service.MGR.on_opened(leg, 10_000, "ref-1", "2026-08-01")
+                service.MGR.save()
+            n0 = marks["n"]
+            service.LOOP_WAKE.set()
+            assert _wait_until(lambda: marks["n"] > n0)
+            _time.sleep(0.4)            # inside the uncapped round-trip
+            assert service.MGR_LOCK.locked()
+            t0 = _time.time()
+            r = c.post("/kill", params={"token": "sekrit"})
+            elapsed = _time.time() - t0
+            assert elapsed < HANG / 4, f"/kill blocked {elapsed:.2f}s"
+            assert elapsed >= 0          # bounded by KILL_LOCK_WAIT_S
+            assert service.KILL_LOCK_WAIT_S <= 1.0
+            assert r.json()["ladder"] == "close_queued"
+            assert service.MGR.state.halted == "KILL"   # halted right now
+            assert service.LADDER_KILL.is_set()         # closes handed over
+            release.set()
+            # the loop closes the legs itself, as the last act of the very
+            # section that held the lock — and says so
+            assert _wait_until(
+                lambda: service.MGR.state.legs[leg].status != "OPEN",
+                timeout=20.0)
+            assert not service.LADDER_KILL.is_set()
+            assert json.load(open(service.MGR.state_path))["halted"] == "KILL"
+    finally:
+        release.set()
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_mfa_a_trickling_feed_cannot_exceed_its_total_deadline():
+    """MF-A (2): `FEED_TIMEOUT` was passed to httpx, whose timeouts are
+    PER-OPERATION. A server emitting one chunk every 4s keeps every single
+    read inside 8s while the call runs arbitrarily long — measured,
+    `nino34_weekly()` took 32.09s with FEED_TIMEOUT at 8.0, and an
+    in-flight kill->flatten took 31.57s, while the operator alert printed
+    "feeds capped at 8s each". A per-operation timeout is not a bound; the
+    fetch runs under a TOTAL deadline now."""
+    import socket
+    import threading
+    import time as _time
+
+    from app import nino as nino_mod
+
+    srv = socket.socket()
+    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(1)
+    port = srv.getsockname()[1]
+    stop = threading.Event()
+
+    gap = nino_mod.FEED_TIMEOUT / 2      # every single read stays "in time"
+    chunks = 8                           # ...and the WHOLE body takes 4x the cap
+
+    def serve():
+        try:
+            conn, _ = srv.accept()
+            conn.recv(65535)
+            conn.sendall(b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n"
+                         b"Transfer-Encoding: chunked\r\n\r\n")
+            for _ in range(chunks):
+                if stop.wait(gap):
+                    break
+                conn.sendall(b"28\r\n" + b"x" * 40 + b"\r\n")
+            conn.sendall(b"0\r\n\r\n")     # a bounded body: at 6542d6f the
+            conn.close()                    # call RETURNS, late, and FAILS
+        except OSError:
+            pass
+
+    t = threading.Thread(target=serve, daemon=True)
+    t.start()
+    url, cache = nino_mod._URL, nino_mod._CACHE
+    try:
+        nino_mod._URL = f"http://127.0.0.1:{port}/"
+        nino_mod._CACHE = {}
+        t0 = _time.time()
+        assert nino_mod.nino34_weekly() is None      # degrades, as always
+        elapsed = _time.time() - t0
+        # the WHOLE fetch is bounded, not each read of it. Without the
+        # total deadline this same server measures gap * chunks (~32s).
+        assert gap * chunks > 3 * nino_mod.FEED_TIMEOUT      # a real attack
+        assert elapsed < nino_mod.FEED_TIMEOUT + 2.0, (
+            f"a trickling server ran the feed to {elapsed:.2f}s with "
+            f"FEED_TIMEOUT at {nino_mod.FEED_TIMEOUT}")
+    finally:
+        stop.set()
+        nino_mod._URL, nino_mod._CACHE = url, cache
+        srv.close()
+
+
+def test_gate_mfa_the_kill_alert_states_a_bound_the_code_holds(
+        tmp_path, monkeypatch):
+    """MF-A (3): under this repo's honesty rule an emergency-stop alert may
+    not state a bound the code does not hold. The alert said "feeds capped
+    at {N}s each" — wrong twice over: it interpolated only
+    nino.FEED_TIMEOUT while saying "each" (mf-10), and a per-operation
+    timeout caps nothing. It also implied the in-flight wait was bounded by
+    those feeds, when it is set by UNCAPPED gateway round-trips.
+
+    What the alert must now say: the halt is immediate; the flatten is
+    immediate when the loop is idle; a cycle in flight is waited out; the
+    feeds carry a TOTAL cap; and the gateway carries none, so no number is
+    promised for it."""
+    import time as _time
+
+    from app import nino as nino_mod
+
+    client, service = _service_client(tmp_path, monkeypatch)
+    try:
+        with client as c:
+            for _ in range(200):
+                if service.BLEND is not None:
+                    break
+                _time.sleep(0.05)
+            sent: list[str] = []
+            monkeypatch.setattr(service, "send", sent.append)
+            _seed_initialized(service.BLEND, sleeve_cash=2_750.0)
+            _held_position(service.BLEND, stop_ref=None)
+            c.post("/kill", params={"token": "sekrit"})
+            (kill_msg,) = [m for m in sent if "KILLED" in m]
+            # the halt no longer claims to be the flatten
+            assert "flatten QUEUED" in kill_msg
+            assert "runs FIRST in the loop's next iteration" in kill_msg
+            assert "already in flight" in kill_msg
+            # the discarded overclaim
+            assert "capped at 8s each" not in kill_msg
+            assert "each" not in kill_msg
+            # mf-10: BOTH feed caps are named, never one standing for two
+            assert f"{nino_mod.FEED_TIMEOUT:.0f}s (NOAA)" in kill_msg
+            assert f"{blend_mod.FEED_TIMEOUT:.0f}s (tracker)" in kill_msg
+            assert "TOTAL" in kill_msg
+            # the path that genuinely cannot be bounded is named as such
+            assert "gateway round-trips are NOT bounded" in kill_msg
+            assert "no bound this code can state" in kill_msg
+    finally:
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_mf8_the_wake_event_is_published_under_the_generation_lock():
+    """mf-8: `_start_loop` bumped LOOP_GEN under LOOP_GEN_LOCK and then
+    assigned `LOOP_WAKE = wake` OUTSIDE it. Two concurrent starts could
+    publish in reverse order, leaving LOOP_WAKE owned by the loop that is
+    ALREADY superseded — `/kill` would then wake nobody and the queued
+    flatten would wait a full poll interval (300s in production).
+
+    Reproduced the way the reviewer did: widen the window by making one
+    thread's `threading.Event()` slow, start two loops concurrently, and
+    check who owns the published event. Unreachable in production (one
+    uvicorn worker, one lifespan) — a one-line fix all the same."""
+    import threading
+    import time as _time
+
+    from app import service
+
+    real_event, real_loop = service.threading.Event, service._loop
+    real_gen, real_wake = service.LOOP_GEN, service.LOOP_WAKE
+    slow = {"tid": None}
+
+    def slow_event():
+        e = real_event()
+        if threading.get_ident() == slow["tid"]:
+            _time.sleep(0.4)             # preempted around the publish
+        return e
+
+    out: dict = {}
+
+    def start(tag, is_slow):
+        if is_slow:
+            slow["tid"] = threading.get_ident()
+        out[tag] = service._start_loop()
+
+    try:
+        service._loop = lambda gen, wake: None   # the body is not under test
+        service.threading.Event = slow_event
+        service.LOOP_GEN = 0
+        a = threading.Thread(target=start, args=("A", True))
+        b = threading.Thread(target=start, args=("B", False))
+        a.start()
+        _time.sleep(0.05)
+        b.start()
+        a.join()
+        b.join()
+        published = service.LOOP_WAKE            # read BEFORE restoring
+        live_gen = service.LOOP_GEN
+    finally:
+        service.threading.Event = real_event
+        service._loop = real_loop
+        service.LOOP_GEN = real_gen
+        service.LOOP_WAKE = real_wake
+
+    live = max(out, key=lambda k: out[k][2])     # highest generation wins
+    stale = "A" if live == "B" else "B"
+    assert out[live][2] == live_gen == 2 and out[stale][2] == 1
+    assert out[live][1] is not out[stale][1]
+    # the published wake belongs to the LIVE loop, never the superseded one.
+    # At 6542d6f this is `out[stale][1]` — /kill would wake nobody.
+    assert published is out[live][1]
+
+
+def test_gate_mf9_an_unparseable_200_is_negative_cached_too(monkeypatch):
+    """mf-9: nino's negative cache missed the parse-failure path. A 200 the
+    parser cannot read left `last is None` and wrote neither `_CACHE["v"]`
+    nor `_CACHE["fail"]`, so that failure mode re-paid the whole timeout
+    EVERY cycle (measured: 2 fetches in 2 calls). The exception path cached
+    correctly; this one now does too."""
+    from app import nino as nino_mod
+
+    monkeypatch.setattr(nino_mod, "_CACHE", {})
+    hits = {"n": 0}
+
+    class R:
+        text = "not a NOAA table at all\nnor is this line\n"
+
+        def __init__(self):
+            hits["n"] += 1
+
+    monkeypatch.setattr(nino_mod.httpx, "get", lambda url, **kw: R())
+    assert nino_mod.nino34_weekly() is None and hits["n"] == 1
+    assert "fail" in nino_mod._CACHE
+    assert nino_mod.nino34_weekly() is None and hits["n"] == 1   # not re-paid
+    # ...and it is still RE-TRIED on the schedule, never abandoned
+    nino_mod._CACHE["fail"] = time.time() - nino_mod.FAIL_TTL - 1
+    assert nino_mod.nino34_weekly() is None and hits["n"] == 2
+
+
+# --- the MF2 counter-review's MATERIALS (the LADDER half of the kill) ---------
+
+def test_gate_mf2_1_kill_never_makes_the_ladder_close_on_the_API_thread(
+        tmp_path, monkeypatch):
+    """MF2-1: `KILL_LOCK_WAIT_S` bounds the WAIT for `MGR_LOCK`, never
+    `/kill` itself. With the loop PARKED — the deployed steady state on a
+    300s cadence, so `MGR_LOCK` is free >99% of the time — `/kill` took the
+    lock instantly and then made the UNCAPPED `close_spread` call itself,
+    on the API thread, holding the lock: measured 20.008s of dead air with
+    a wedged gateway and one OPEN leg, no halt on disk, no Telegram and no
+    HTTP response for the whole window, while README §6 said "the halt, the
+    journal write and the HTTP response are unconditional".
+
+    Every leg close belongs to the loop thread now, exactly as the blend
+    flatten already did (R2: it owns the adapter's event loop)."""
+    import threading
+    import time as _time
+
+    HANG = 8.0
+    release = threading.Event()
+    closes = {"threads": [], "n": 0}
+
+    class _WedgedGateway(DryAdapter):
+        def close_spread(self, ref):
+            closes["n"] += 1
+            closes["threads"].append(threading.get_ident())
+            release.wait(HANG)
+            return {"value": 1.0}
+
+    client, service = _service_client(tmp_path, monkeypatch,
+                                      adapter=_WedgedGateway)
+    try:
+        with client as c:
+            for _ in range(200):
+                if service.MGR is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            assert _wait_until(lambda: service.LAST["loop_ok"] > 0)
+            with service.MGR_LOCK:
+                leg = list(service.MGR.state.legs)[0]
+                service.MGR.on_opened(leg, 10_000, "ref-1", "2026-08-01")
+                service.MGR.save()
+            _time.sleep(0.3)
+            assert not service.MGR_LOCK.locked()    # the loop is PARKED
+            api_thread = threading.get_ident()
+            t0 = _time.time()
+            r = c.post("/kill", params={"token": "sekrit"})
+            elapsed = _time.time() - t0
+            # the response is prompt even though the gateway is wedged
+            assert elapsed < HANG / 4, f"/kill blocked {elapsed:.2f}s"
+            assert r.json()["ladder"] == "close_queued"
+            assert service.MGR.state.halted == "KILL"
+            # ...and the API thread never reached the adapter at all
+            assert api_thread not in closes["threads"]
+            assert service.LADDER_KILL.is_set()
+            release.set()
+            assert _wait_until(
+                lambda: service.MGR.state.legs[leg].status != "OPEN",
+                timeout=20.0)
+            assert closes["n"] >= 1                 # the LOOP closed it
+            assert api_thread not in closes["threads"]
+    finally:
+        release.set()
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_mf2_2_a_queued_ladder_kill_survives_a_restart(
+        tmp_path, monkeypatch):
+    """MF2-2: the deferred ladder halt lived in MEMORY ONLY while the
+    operator was told it was in force. Measured: `/kill` answered in 0.505s
+    with "The ladder is halted from now", and on disk the book said
+    `halted: None` with the leg still OPEN — so a restart in that window
+    (the restart a wedged gateway invites) came back UN-HALTED with an open
+    leg. The window is the wedged ladder section: unbounded.
+
+    `MGR.save()` from an API thread is not the fix (x12 forbids the
+    cross-thread read-modify-write of `legs`); the kill is JOURNALLED to a
+    sentinel of its own, the way the blend flatten request is, and `_load`
+    re-asserts the halt from it."""
+    import threading
+    import time as _time
+
+    from app.manager import LadderManager
+    from app.config import settings
+
+    HANG = 8.0
+    release = threading.Event()
+    marks = {"n": 0}
+
+    class _SlowLadderAdapter(DryAdapter):
+        def mark(self, ref):
+            marks["n"] += 1
+            release.wait(HANG)
+            return 1.0
+
+    client, service = _service_client(tmp_path, monkeypatch,
+                                      adapter=_SlowLadderAdapter)
+    try:
+        with client as c:
+            for _ in range(200):
+                if service.MGR is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            assert _wait_until(lambda: service.LAST["loop_ok"] > 0)
+            with service.MGR_LOCK:
+                leg = list(service.MGR.state.legs)[0]
+                service.MGR.on_opened(leg, 10_000, "ref-1", "2026-08-01")
+                service.MGR.save()
+            n0 = marks["n"]
+            service.LOOP_WAKE.set()
+            assert _wait_until(lambda: marks["n"] > n0)
+            _time.sleep(0.3)
+            assert service.MGR_LOCK.locked()        # wedged INSIDE the section
+            r = c.post("/kill", params={"token": "sekrit"})
+            assert r.json()["ladder"] == "close_queued"
+            # the book itself cannot be written from here — the loop owns it
+            on_disk = json.load(open(service.MGR.state_path))
+            assert [k for k, v in on_disk["legs"].items()
+                    if v["status"] == "OPEN"] == [leg]
+            # ...so what a CRASH right here comes back as is the whole point
+            crashed = LadderManager(settings, service.MGR.state_path)
+            assert crashed.state.halted == "KILL"
+            assert crashed.kill_pending is True
+            assert crashed.state.legs[leg].status == "OPEN"   # still open
+            release.set()
+            # once the loop has closed the legs the sentinel is consumed
+            assert _wait_until(
+                lambda: service.MGR.state.legs[leg].status != "OPEN",
+                timeout=20.0)
+            assert _wait_until(
+                lambda: not os.path.exists(service.MGR.kill_sentinel))
+            assert LadderManager(settings,
+                                 service.MGR.state_path).state.halted == "KILL"
+    finally:
+        release.set()
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_mf2_3_resume_cancels_a_queued_ladder_kill(
+        tmp_path, monkeypatch):
+    """MF2-3 (new harm this round): `/resume` cleared `halted` but not the
+    QUEUED ladder kill, so a deferred kill fired at a RESUMED ladder — the
+    measured harm was a leg the operator had deliberately re-opened after
+    resuming being CLOSED by the stale kill. The blend half has had exactly
+    this guard since R2 ("a stale kill must never flatten a resumed
+    book").
+
+    Reproduced the way the reviewer did: the operator double-taps `/kill`
+    because the first one has not answered (its close is wedged on the
+    gateway), so the second one is DEFERRED; the loop then parks in its
+    NOAA fetch, which is what lets `/resume` land before the deferred kill
+    is consumed."""
+    import threading
+    import time as _time
+
+    from app import service as service_mod
+    from app.config import settings as settings_mod
+
+    CLOSE_HANG, FEED_HANG = 8.0, 10.0
+    release, release_feed = threading.Event(), threading.Event()
+    closes = {"n": 0}
+    ninos = {"n": 0}
+
+    def slow_nino():
+        ninos["n"] += 1
+        if ninos["n"] > 1:              # cycle 1 stays fast
+            release_feed.wait(FEED_HANG)
+        return 2.7
+
+    class _WedgedClose(DryAdapter):
+        def close_spread(self, ref):
+            closes["n"] += 1
+            if closes["n"] == 1:
+                release.wait(CLOSE_HANG)
+            return {"value": 1.0}
+
+    monkeypatch.setattr(service_mod, "nino34_weekly", slow_nino)
+    client, service = _service_client(tmp_path, monkeypatch,
+                                      adapter=_WedgedClose)
+    monkeypatch.setattr(settings_mod, "blend_enabled", False)   # ladder only
+    try:
+        with client as c:
+            for _ in range(200):
+                if service.MGR is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            assert _wait_until(lambda: service.LAST["loop_ok"] > 0)
+            legs = list(service.MGR.state.legs)
+            with service.MGR_LOCK:
+                service.MGR.on_opened(legs[0], 10_000, "ref-1", "2026-08-01")
+                service.MGR.save()
+            # kill #1: its close wedges on the gateway, holding MGR_LOCK
+            k1: dict = {}
+            t1 = threading.Thread(
+                target=lambda: k1.update(
+                    c.post("/kill", params={"token": "sekrit"}).json()))
+            t1.start()
+            assert _wait_until(lambda: closes["n"] >= 1, timeout=20.0)
+            # kill #2, the operator double-tap: DEFERRED, whoever holds it
+            assert c.post("/kill", params={"token": "sekrit"}
+                         ).json()["ladder"] == "close_queued"
+            assert service.LADDER_KILL.is_set()
+            release.set()
+            t1.join(timeout=20)
+            assert _wait_until(
+                lambda: service.MGR.state.legs[legs[0]].status != "OPEN",
+                timeout=20.0)
+            # the loop is now parked in its (slow) NOAA fetch, so /resume
+            # lands BEFORE the ladder section could consume a queued kill
+            assert _wait_until(lambda: ninos["n"] >= 2, timeout=20.0)
+            with service.MGR_LOCK:
+                service.MGR.on_opened(legs[1], 10_000, "ref-2", "2026-08-02")
+                service.MGR.save()
+            c.post("/kill", params={"token": "sekrit"})
+            # the operator changes their mind before the loop gets there
+            assert c.post("/resume", params={"token": "sekrit"}
+                         ).json()["cleared"] == "KILL"
+            assert not service.LADDER_KILL.is_set()
+            assert not os.path.exists(service.MGR.kill_sentinel)
+            # ...and re-opens a third leg deliberately
+            with service.MGR_LOCK:
+                service.MGR.on_opened(legs[2], 10_000, "ref-3", "2026-08-03")
+                service.MGR.save()
+            release_feed.set()
+            # the loop runs its ladder section: no stale kill may fire there
+            assert _wait_until(lambda: ninos["n"] >= 3, timeout=20.0)
+            _time.sleep(0.3)
+            assert service.MGR.state.legs[legs[1]].status == "OPEN"
+            assert service.MGR.state.legs[legs[2]].status == "OPEN"
+            assert service.MGR.state.halted is None
+    finally:
+        release.set()
+        release_feed.set()
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_mf2_4_the_kill_never_reports_legs_it_did_not_close(
+        tmp_path, monkeypatch):
+    """MF2-4: `_kill_ladder` swallowed every per-leg `close_spread` failure
+    with a log line, and `/kill` answered `ladder: "closed"` with the alert
+    "all legs closed" — measured with a gateway that rejected every close,
+    while the leg was still OPEN at the venue. The blend's own
+    `execute_flatten` already models the right behaviour ("closed vs
+    parked", `WITH EXCEPTIONS`); the machine-readable `ladder` field and
+    the operator alert must both report what ACTUALLY happened."""
+    import threading
+    import time as _time
+
+    class _RejectingGateway(DryAdapter):
+        def close_spread(self, ref):
+            raise RuntimeError("gateway rejected the close")
+
+    client, service = _service_client(tmp_path, monkeypatch,
+                                      adapter=_RejectingGateway)
+    try:
+        with client as c:
+            for _ in range(200):
+                if service.MGR is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            assert _wait_until(lambda: service.LAST["loop_ok"] > 0)
+            with service.MGR_LOCK:
+                leg = list(service.MGR.state.legs)[0]
+                service.MGR.on_opened(leg, 10_000, "ref-1", "2026-08-01")
+                service.MGR.save()
+            sent: list[str] = []
+            monkeypatch.setattr(service, "send", sent.append)
+            r = c.post("/kill", params={"token": "sekrit"})
+            # nothing has closed at the moment this answers, and it says so
+            assert r.json()["ladder"] != "closed"
+            (kill_msg,) = [m for m in sent if "KILLED" in m]
+            assert "all legs closed" not in kill_msg
+            # the loop tries, fails, and REPORTS the failure by leg name
+            assert _wait_until(
+                lambda: any("could NOT close" in m for m in sent),
+                timeout=20.0)
+            fail_msgs = [m for m in sent if "could NOT close" in m]
+            assert leg in fail_msgs[0] and "STILL OPEN" in fail_msgs[0]
+            # ...and it is not consumed: a kill that could not close its
+            # legs stays queued and is retried, never quietly dropped
+            assert service.LADDER_KILL.is_set()
+            assert os.path.exists(service.MGR.kill_sentinel)
+            assert service.MGR.state.legs[leg].status == "OPEN"
+            assert service.MGR.state.halted == "KILL"
+    finally:
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_mf2_5_a_halt_landing_mid_cycle_stops_the_rest_of_the_plan(
+        tmp_path):
+    """MF2-5: `step()`'s `if st.halted: return []` guard is BEHIND the
+    intent-execution loop, which never re-checked. Since MF-A the halt
+    lands the instant the operator hits `/kill` — in the middle of a cycle
+    — and the plan made before it kept executing: measured, four venue BUYs
+    (AAA, BBB, SPY, BIL) placed with `halted='KILL', flatten_pending=True`,
+    while `request_flatten` promised "halt the book immediately (no new
+    entries)" and `/status` showed the book halted.
+
+    Base places the same four, so this is a false CLAIM rather than a new
+    harm — and the free win MF-A left on the table."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=5_000.0, spy_qty=0, core_cash=7_000.0)
+    buys: list[tuple] = []
+
+    class _KillOnFirstBuy(DryAdapter):
+        def place_stock_order(self, symbol, qty, kind, **kw):
+            if qty > 0:
+                buys.append((symbol, m.state.halted))
+                if len(buys) == 1:      # the operator hits /kill right here
+                    m.request_flatten("2026-08-20")
+            return super().place_stock_order(symbol, qty, kind, **kw)
+
+        def stock_price(self, symbol):
+            return 10.0
+
+    a = _KillOnFirstBuy()
+    pl = payload(entries=[entry(call_id=11, symbol="AAA", entry_ref=10.0),
+                          entry(call_id=12, symbol="BBB", entry_ref=10.0)],
+                 stops=[stop_row(11, "AAA", 9.0), stop_row(12, "BBB", 9.0)])
+    run_cycle(m, a, pl, "2026-08-20", alert=lambda _m: None)
+    # the plan was made before the halt; nothing after it reached the venue
+    assert [s for s, halted in buys if halted] == [], (
+        f"orders placed AFTER the halt: {buys}")
+    assert len(buys) == 1 and buys[0][1] is None
+    assert m.state.halted == "KILL" and m.state.flatten_request is not None
+
+
+def test_gate_mf2_9_10_the_stand_in_register_never_outlives_its_row(
+        tmp_path):
+    """mf2-9: the register was pruned only on `_load`, so a row that left
+    the book was SAVED as a dangling entry. mf2-10 (new this round): a
+    fresh, fully-known row reusing that retired key was then poisoned
+    permanently — flagged UNVERIFIABLE for good, never exited, re-stopped
+    or flattened, blocking every entry, while the alert told the operator
+    to restore values that were never invented for it."""
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    _held_position(m)
+    m.state.stand_in_rows["1"] = ["time_stop"]
+    m.state.positions["1"].history_gap = True
+    m.save()
+    assert json.load(open(m.state_path))["stand_in_rows"] == {"1": ["time_stop"]}
+
+    m.state.positions.pop("1")          # the row leaves the book
+    m.save()
+    assert json.load(open(m.state_path))["stand_in_rows"] == {}
+
+    # ...and a NEW row that reuses the key is built from a complete intent
+    m.state.stand_in_rows["1"] = ["time_stop"]      # as a stale save left it
+    m.on_entered({"call_id": 1, "symbol": "NEWCO", "qty": 9,
+                  "entry_ref": 10.0, "stop_level": 9.0}, 10.0, "ref",
+                 "2026-08-20")
+    assert m.state.stand_in_rows == {}
+    assert m.state.positions["1"].history_gap is False
+    m2 = Blend3070Manager(m.cfg, m.state_path)
+    assert m2.state.stand_in_rows == {}
+    assert m2.state.positions["1"].history_gap is False
+    assert m2.state.positions["1"].symbol == "NEWCO"
+
+    # and an exit takes the register entry with it
+    m.state.stand_in_rows["1"] = ["time_stop"]
+    m.on_exited(1, 11.0, "signal")
+    assert m.state.stand_in_rows == {}
+
+
+# --- MF3 round: the six MATERIALs that block real money ----------------------
+
+
+def test_gate_mf3_1_a_failing_blend_journal_never_500s_and_still_kills(
+        tmp_path, monkeypatch):
+    """MF3-1: `/kill`'s BLEND stage had NO exception guard. `request_flatten`
+    ends in `save()`, so a full disk — or mf3-10's concurrent-mutation
+    RuntimeError, which comes out of that very call — raised straight out of
+    the handler: HTTP 500, ZERO Telegram, and the LADDER stage below never
+    reached AT ALL: no halt in the book, no sentinel on disk, the leg still
+    OPEN. mf2-11 gave the ladder half exactly this guard and left the half
+    holding real shares bare.
+
+    The halt must be attempted and REPORTED even when persistence fails, and
+    the operator must be told precisely what is and is not durable."""
+    import threading
+    import time as _time
+
+    client, service = _service_client(tmp_path, monkeypatch)
+    try:
+        with client as c:
+            # Wait for a COMPLETED cycle, not just "MGR is not None": `_build`
+            # runs on the loop thread and replaces MGR/BLEND, so a seed written
+            # before it lands goes onto an object the service then discards
+            # (the `LAST` leak `_service_client` documents, same root cause).
+            assert _wait_until(lambda: service.LAST["loop_ok"] > 0)
+            B, A = service.BLEND, service.ADAPTER
+            sent: list[str] = []
+            monkeypatch.setattr(service, "send", sent.append)
+            # This gate is about /kill's OWN stage: what the handler halts,
+            # persists and reports before the loop thread does anything. Give
+            # /kill a wake event the parked loop is not waiting on, so stage 2
+            # cannot race the assertions below.
+            monkeypatch.setattr(service, "LOOP_WAKE", threading.Event())
+            _seed_initialized(B, sleeve_cash=2_750.0)
+            _held_position(B, stop_ref=None, adapter=A)
+            with service.MGR_LOCK:      # a real OPEN ladder leg to halt
+                leg = list(service.MGR.state.legs)[0]
+                service.MGR.on_opened(leg, 10_000, "ref-1", "2026-08-01")
+
+            def boom():
+                raise OSError("[Errno 28] No space left on device")
+            monkeypatch.setattr(B, "save", lambda: boom())
+
+            r = c.post("/kill", params={"token": "sekrit"})
+
+            # 1. never a 500, and the ladder half of the answer is intact
+            assert r.status_code == 200, r.status_code
+            assert r.json()["halted"] == "KILL"
+            assert r.json()["ladder"] == "close_queued"
+            assert r.json()["blend"] == "flatten_queued_unpersisted"
+            # 2. the operator IS told — one alert, not silence
+            (msg,) = [m for m in sent if "KILLED" in m]
+            # 3. the blend halt is IN FORCE even though it is not durable
+            assert B.state.halted == "KILL"
+            assert B.state.flatten_request is not None
+            # 4. ...and the note says exactly which half is durable —
+            #    without contradicting itself one clause earlier
+            assert "could NOT be written to disk" in msg
+            assert "No space left on device" in msg
+            assert "a RESTART would lose them" in msg
+            assert "journalled the moment you hit /kill" not in msg, msg
+            assert "in force from the moment you hit /kill, but NOT written" \
+                in msg
+            # 5. the LADDER stage ran: halted, sentinel on disk, close queued
+            assert service.MGR.state.halted == "KILL"
+            assert os.path.exists(service.MGR.kill_sentinel)
+            assert service.LADDER_KILL.is_set()
+            assert json.load(open(service.MGR.state_path))["halted"] == "KILL"
+    finally:
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_mf3_2_a_resumed_ladder_is_never_closed_by_a_queued_kill(
+        tmp_path, monkeypatch):
+    """MF3-2: MF2-3 was NOT closed. `_loop` tests `LADDER_KILL.is_set()`
+    OUTSIDE `MGR_LOCK` and `_consume_ladder_kill` re-checked nothing inside
+    it, so a `/resume` landing in the window was overtaken: measured,
+    /resume cleared halt + flag + sentinel, the operator re-opened a leg,
+    and the loop still closed ref-2 and re-halted the ladder.
+
+    Reproduced deterministically the way the window actually opens: the test
+    holds MGR_LOCK (as an in-flight ladder section does), the loop reads the
+    flag outside the lock and blocks, /resume's clear happens under the lock,
+    and only then does the loop get in."""
+    import threading
+    import time as _time
+
+    closes: list[str] = []
+
+    class _RecordingAdapter(DryAdapter):
+        def close_spread(self, ref):
+            closes.append(ref)
+            return super().close_spread(ref)
+
+        def mark(self, ref):
+            raise RuntimeError("no mark this cycle")   # plan nothing
+
+    client, service = _service_client(tmp_path, monkeypatch,
+                                      adapter=_RecordingAdapter)
+    try:
+        with client as c:
+            for _ in range(200):
+                if service.MGR is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            assert _wait_until(lambda: service.LAST["loop_ok"] > 0)
+            monkeypatch.setattr(service, "send", lambda _m: None)
+            leg = list(service.MGR.state.legs)[0]
+
+            entered = threading.Event()
+            real_consume = service._consume_ladder_kill
+
+            def watched(today):
+                entered.set()
+                return real_consume(today)
+            monkeypatch.setattr(service, "_consume_ladder_kill", watched)
+
+            service.MGR_LOCK.acquire()
+            try:
+                # a /kill lands and the loop wakes: it sees the flag OUTSIDE
+                # the lock and then blocks on it — the exact window
+                service.MGR.state.halted = "KILL"
+                service.MGR.journal_kill("2026-08-24")
+                service.LADDER_KILL.set()
+                service.LOOP_WAKE.set()
+                _time.sleep(0.3)
+                assert not entered.is_set()     # parked on MGR_LOCK
+                # /resume: clears halt, flag and sentinel UNDER this lock
+                service.MGR.state.halted = None
+                service.LADDER_KILL.clear()
+                service.MGR.clear_kill()
+                # ...and the operator re-opens a leg on the resumed ladder
+                service.MGR.on_opened(leg, 10_000, "ref-2", "2026-08-24")
+            finally:
+                service.MGR_LOCK.release()
+
+            assert _wait_until(entered.is_set)
+            _time.sleep(0.3)
+            # the re-opened leg is UNTOUCHED and the ladder stays resumed
+            assert closes == [], f"a resumed ladder was closed: {closes}"
+            assert service.MGR.state.legs[leg].status == "OPEN"
+            assert service.MGR.state.legs[leg].order_ref == "ref-2"
+            assert service.MGR.state.halted is None
+            assert not os.path.exists(service.MGR.kill_sentinel)
+    finally:
+        service.MGR = None
+        service.BLEND = None
+
+
+def test_gate_mf3_3_a_flatten_that_closed_nothing_retries_until_it_lands(
+        tmp_path):
+    """MF3-3: README §6, `_consume_ladder_kill`'s docstring and 83fc6cc all
+    said a failing ladder kill retries "exactly as a failing blend
+    kill-flatten does". Measured: a blend flatten whose every close RAISED
+    cleared `flatten_request` in its `finally` and was NEVER retried — the
+    claim was false and the behaviour it described was the right one.
+
+    The BEHAVIOUR is what changed: a flatten that could not close a position
+    stays QUEUED and retries every cycle until it lands or the operator
+    /resumes. Reconcile-first still holds, so nothing already sold is sold
+    again."""
+    fail = {"on": True}
+
+    class _CancelFailsThenWorks(DryAdapter):
+        def cancel_stock_order(self, ref):
+            if fail["on"]:
+                raise RuntimeError("venue cancel error (simulated)")
+            return super().cancel_stock_order(ref)
+
+    m = mk(tmp_path)
+    a = _CancelFailsThenWorks()
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m, adapter=a)
+    m.request_flatten("2026-08-21")
+
+    # cycle 1: nothing closes -> the request SURVIVES (at 0433d4a it did not)
+    c1: list[str] = []
+    run_cycle(m, a, None, "2026-08-21", alert=c1.append)
+    assert "1" in m.state.positions
+    assert m.state.flatten_request is not None, "the kill gave up after one pass"
+    assert m.state.halted == "KILL"
+    assert any("RETRIES on the next cycle" in msg for msg in c1)
+    assert any(f"attempt 1 of {blend_mod.FLATTEN_MAX_ATTEMPTS}" in msg
+               for msg in c1)
+
+    # cycle 2: the venue recovers -> the SAME queued request lands
+    fail["on"] = False
+    c2: list[str] = []
+    run_cycle(m, a, None, "2026-08-21", alert=c2.append)
+    assert "1" not in m.state.positions, "the retry never closed the position"
+    assert m.state.flatten_request is None, "a landed flatten must clear"
+    assert m.state.halted == "KILL"
+    assert any("flatten complete" in msg for msg in c2)
+    # and the retry sold the position exactly ONCE across both cycles
+    sells = [e for e in _executions(a, "CRSP") if e["action"] != "stop_triggered"]
+    assert len(sells) == 1, sells
+
+
+def test_gate_mf3_4_a_halt_mid_cycle_never_swallows_an_alert(tmp_path):
+    """MF3-4: `step()` appends its ALERT intents LAST, so MF2-5's halt break
+    delivered [] — the operator got "N planned action(s) were NOT executed"
+    and nothing else, instead of e.g. "REFUSED exit for call 2: tracker says
+    'WRONG' but book holds CRSP — tracker DB reset? ... manual review
+    needed". Worse: an alert that consumes a PERSISTED one-shot first
+    (`stale_alerted` here, already `save()`d to disk) was not deferred, it
+    was gone FOREVER.
+
+    The break must stop ACTIONS, never suppress INFORMATION."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m)                                   # call 1, CRSP
+
+    class _HaltOnFirstAction(_NoSpyQuoteAdapter):
+        """No SPY quote (burns the persisted `quote_alert_armed` one-shot),
+        and the operator hits /kill on the cycle's first venue action."""
+        def cancel_stock_order(self, ref):
+            m.state.halted = "KILL"
+            return super().cancel_stock_order(ref)
+
+    a = _HaltOnFirstAction()
+    # call 1 exits (an ACTION, planned first); a SECOND row for the same call
+    # with a mismatched symbol is REFUSED -> an ALERT intent, assembled LAST
+    pl = payload(exits=[{"call_id": 1, "symbol": "WRONG"},
+                        {"call_id": 1, "symbol": "CRSP"}])
+    assert m.state.quote_alert_armed is True
+    alerts: list[str] = []
+    run_cycle(m, a, pl, "2026-08-21", alert=alerts.append)
+
+    assert any("HALTED (KILL) mid-cycle" in msg for msg in alerts)
+    # 1. the REFUSED-exit warning reached the operator
+    assert any("REFUSED exit for call 1" in msg for msg in alerts), alerts
+    assert any("manual review needed" in msg for msg in alerts)
+    # 2. so did the one-shot whose flag this cycle already burned to DISK
+    assert any("rebalance/valuation SKIPPED" in msg for msg in alerts), alerts
+    assert m.state.quote_alert_armed is False
+    assert json.load(open(m.state_path))["quote_alert_armed"] is False, (
+        "the one-shot was consumed on disk — had the alert been dropped it "
+        "could never fire again for this outage")
+
+
+def test_gate_mf3_5_a_halt_landing_mid_plan_never_opens_a_ladder_spread(
+        tmp_path, monkeypatch):
+    """MF3-5: MF2-5's guard went to ONE of the TWO intent loops in this
+    service. The LADDER section never got it, so it kept executing a plan
+    made before the halt: measured, two spreads OPENED with `halted: KILL`
+    already on disk and the "ladder KILLED" alert already sent. The ladder
+    windows open 2026-11-01 — this is live money in the gate month.
+
+    Driven end to end: the loop is inside its ladder section executing a
+    real two-intent plan (close leg 1 on target, open leg 2) when /kill
+    lands from an API thread. The CLOSE in flight finishes; the OPEN must
+    be refused."""
+    import threading
+    import time as _time
+    from datetime import datetime as _dt, timezone as _tz
+
+    in_close = threading.Event()
+    proceed = threading.Event()
+    opens: list[dict] = []
+
+    class _BlockingCloseAdapter(DryAdapter):
+        def close_spread(self, ref):
+            in_close.set()
+            proceed.wait(10)
+            return super().close_spread(ref)
+
+        def open_spread(self, structure, budget):
+            opens.append({"structure": structure,
+                          "halted": service.MGR.state.halted})
+            return super().open_spread(structure, budget)
+
+    client, service = _service_client(tmp_path, monkeypatch,
+                                      adapter=_BlockingCloseAdapter)
+
+    class _FrozenDatetime(_dt):
+        @classmethod
+        def now(cls, tz=None):
+            return _dt(2026, 11, 20, 12, 0, tzinfo=tz or _tz.utc)
+
+    try:
+        with client as c:
+            for _ in range(200):
+                if service.MGR is not None and service.ADAPTER is not None:
+                    break
+                _time.sleep(0.05)
+            assert _wait_until(lambda: service.LAST["loop_ok"] > 0)
+            monkeypatch.setattr(service, "send", lambda _m: None)
+            monkeypatch.setattr(service, "datetime", _FrozenDatetime)
+            monkeypatch.setattr(service, "nino34_weekly", lambda: 2.5)
+            keys = list(service.MGR.state.legs)
+            with service.MGR_LOCK:
+                # leg 1 OPEN and at target -> a CLOSE intent; leg 2's window
+                # is open and the event is at strength -> an OPEN intent
+                service.MGR.on_opened(keys[0], 1_000, "ref-1", "2026-11-01")
+                service.ADAPTER._open["ref-1"] = 9_000.0   # mark >> target
+                service.MGR.save()
+            plan = service.MGR.step("2026-11-20", 2.5, {keys[0]: 9_000.0})
+            assert [it["action"] for it in plan] == ["CLOSE", "OPEN"], plan
+
+            service.LOOP_WAKE.set()
+            assert in_close.wait(10), "the loop never reached the close"
+            # the operator hits /kill while the CLOSE is in flight
+            r = c.post("/kill", params={"token": "sekrit"})
+            assert r.status_code == 200
+            assert service.MGR.state.halted == "KILL"
+            proceed.set()
+            assert _wait_until(lambda: not service.LADDER_KILL.is_set(), 10)
+
+            # the plan's OPEN was refused: no spread opened under the halt
+            assert [o for o in opens if o["halted"]] == [], (
+                f"spread(s) OPENED with the ladder halted: {opens}")
+            assert opens == [], f"a spread opened after /kill: {opens}"
+            assert service.MGR.state.legs[keys[1]].status == "WAITING"
+    finally:
+        proceed.set()
+        service.MGR = None
+        service.BLEND = None
+
+
+def test_gate_mf3_6_the_durability_note_says_what_is_actually_on_disk(
+        tmp_path, monkeypatch):
+    """MF3-6: the warning was emitted the instant the SENTINEL write failed
+    and always read "a RESTART would lose it" — false whenever the book save
+    that follows succeeded, because `_load_book` reads `halted` straight back
+    out of the book. Say what is true, per case."""
+    import threading
+
+    client, service = _service_client(tmp_path, monkeypatch)
+    try:
+        with client as c:
+            assert _wait_until(lambda: service.LAST["loop_ok"] > 0)
+            sent: list[str] = []
+            monkeypatch.setattr(service, "send", sent.append)
+            monkeypatch.setattr(service, "LOOP_WAKE", threading.Event())
+            monkeypatch.setattr(service.MGR, "journal_kill",
+                                lambda today: (_ for _ in ()).throw(
+                                    OSError("read-only file system")))
+
+            # case A: sentinel FAILED, book save SUCCEEDS -> the halt IS durable
+            c.post("/kill", params={"token": "sekrit"})
+            (msg,) = [m for m in sent if "KILLED" in m]
+            assert json.load(open(service.MGR.state_path))["halted"] == "KILL"
+            assert "a RESTART would lose it" not in msg, msg
+            assert "the halt itself IS on disk" in msg
+            assert "still comes back HALTED" in msg
+            assert "would NOT re-arm is the queued leg close" in msg
+
+            # case B: sentinel AND book both fail -> the old wording, now true
+            sent.clear()
+            service.LADDER_KILL.clear()
+            monkeypatch.setattr(service.MGR, "save",
+                                lambda: (_ for _ in ()).throw(
+                                    OSError("read-only file system")))
+            c.post("/kill", params={"token": "sekrit"})
+            (msg2,) = [m for m in sent if "KILLED" in m]
+            assert "a RESTART would lose it" in msg2, msg2
+            assert "the halt itself IS on disk" not in msg2
+    finally:
+        service.MGR = None
+        service.BLEND = None
+
+
+# --- MF3 round: the cheap minors --------------------------------------------
+
+
+def test_gate_mf3_7_a_sentinel_that_will_not_unlink_alerts_once_not_forever(
+        tmp_path, monkeypatch):
+    """mf3-7: `clear_kill()` raising AFTER the legs were closed escaped as a
+    raise, which `_loop` reported as "the /kill could not be completed... the
+    loop retries it every cycle" — and every retry found nothing to close and
+    failed the same unlink, alerting FOREVER. The work is done: consume the
+    flag, report the leftover journal ONCE, and say what it actually costs."""
+    from app import service
+
+    class _MGR:
+        kill_sentinel = "/nope/ladder.json.kill"
+
+        def __init__(self):
+            self.state = type("S", (), {"legs": {}, "halted": None})()
+            self.saved = 0
+
+        def save(self):
+            self.saved += 1
+
+        def clear_kill(self):
+            raise OSError("[Errno 16] Device or resource busy")
+
+    mgr = _MGR()
+    monkeypatch.setattr(service, "MGR", mgr)
+    service.LADDER_KILL.set()
+    try:
+        msg = service._consume_ladder_kill("2026-08-24")
+    finally:
+        service.LADDER_KILL.clear()
+        service.MGR = None
+
+    # the kill is CONSUMED (no raise, no forever-retry) and the halt stands
+    assert msg is not None
+    assert "no OPEN legs to close" in msg
+    assert "could not be removed" in msg
+    assert "Device or resource busy" in msg
+    assert "re-run this kill as a no-op" in msg
+    assert mgr.state.halted == "KILL"
+
+
+def test_gate_mf3_8_a_kill_never_clobbers_the_more_specific_halt(tmp_path):
+    """mf3-8: `_load` deliberately keeps SCHEMA_DRIFT over a sentinel's KILL
+    ("an existing halt reason is more specific than KILL"), and `_kill_ladder`
+    then overwrote it on the very next iteration, when the loop re-armed that
+    sentinel — losing the data-integrity reason that drives /resume's
+    stand-in warning."""
+    from app import service
+    from app.manager import LadderManager
+
+    path = str(tmp_path / "ladder.json")
+    json.dump({"legs": {"NG": {"status": "WAITING", "unknown_future": 1}},
+               "banked": 0.0, "halted": None, "events": []},
+              open(path, "w"))
+    mgr = LadderManager(Cfg(), path)
+    assert mgr.state.halted == "SCHEMA_DRIFT"
+    open(mgr.kill_sentinel, "w").write("{}")
+    mgr2 = LadderManager(Cfg(), path)
+    assert mgr2.kill_pending and mgr2.state.halted == "SCHEMA_DRIFT"
+
+    real_mgr, real_adapter = service.MGR, service.ADAPTER
+    service.MGR, service.ADAPTER = mgr2, DryAdapter()
+    try:
+        closed, still_open = service._kill_ladder("2026-08-24")
+    finally:
+        service.MGR, service.ADAPTER = real_mgr, real_adapter
+    assert (closed, still_open) == ([], [])
+    assert mgr2.state.halted == "SCHEMA_DRIFT", "the drift reason was clobbered"
+    assert json.load(open(path))["halted"] == "SCHEMA_DRIFT"
+
+
+def test_gate_mf3_9_the_kill_alert_names_what_actually_runs_first(
+        tmp_path, monkeypatch):
+    """mf3-9: /kill told the operator the ladder closes are "the FIRST thing
+    it does". They are not — `_loop` runs a queued BLEND flatten ahead of
+    them (MF-1's order: real shares before options). Three of this round's
+    six findings are claim-defects; this is the seventh claim, made true."""
+    import threading
+
+    client, service = _service_client(tmp_path, monkeypatch)
+    try:
+        with client as c:
+            assert _wait_until(lambda: service.LAST["loop_ok"] > 0)
+            sent: list[str] = []
+            monkeypatch.setattr(service, "send", sent.append)
+            monkeypatch.setattr(service, "LOOP_WAKE", threading.Event())
+            with service.MGR_LOCK:
+                leg = list(service.MGR.state.legs)[0]
+                service.MGR.on_opened(leg, 10_000, "ref-1", "2026-08-01")
+            c.post("/kill", params={"token": "sekrit"})
+            (msg,) = [m for m in sent if "KILLED" in m]
+            assert "as the FIRST thing it does" not in msg, msg
+            assert "at the TOP of its next iteration" in msg
+            assert "a queued blend flatten is the one thing that runs first" \
+                in msg
+            # ...and the source of that order is still exactly what runs
+            src = open(service.__file__).read()
+            flatten_at = src.index("flatten_ran = True")
+            kill_at = src.index("kill_handled = True")
+            assert flatten_at < kill_at
+    finally:
+        service.MGR = None
+        service.BLEND = None
+
+
+def test_gate_mf3_10_save_never_raises_while_the_book_is_mutated(tmp_path):
+    """mf3-10: mf2-9's prune made `save()` walk a LIVE dict — under the very
+    comment arguing the state object is safe because it is "mutated
+    field-by-field under the GIL". A Python-level walk yields between
+    elements, so a concurrent insert makes CPython raise "dictionary changed
+    size during iteration": reproduced by two API savers against three
+    mutators, 1-10 raises per 8s run over 8 runs (0 over 6 after the fix —
+    tests/probes/mf3/save_race.py), straight out of `/kill`'s
+    `request_flatten`.
+    This is a REAL CRASH of the kill switch's persistence, not a style note.
+
+    Two gates, because the race needs both: a deterministic stand-in for the
+    concurrent insert, and the threaded stress that found it."""
+    import threading
+
+    class _MutatedDuringIteration(dict):
+        """Iteration observes an insert — exactly what the other thread's
+        write does, made deterministic. `dict(d)` does NOT go through this
+        (it is a C-level copy), which is the whole point of the fix."""
+        def __iter__(self):
+            it = dict.__iter__(self)
+            first = next(it)
+            dict.__setitem__(self, f"injected-{len(self)}", ["qty"])
+            yield first
+            yield from it
+
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    _held_position(m)
+    m.state.stand_in_rows = _MutatedDuringIteration(
+        {"1": ["time_stop"], "97": ["qty"], "98": ["qty"], "99": ["qty"]})
+    m.save()            # at 0433d4a: RuntimeError out of the mf2-9 prune
+    on_disk = json.load(open(m.state_path))["stand_in_rows"]
+    assert "1" in on_disk                       # the live row is kept
+    assert "97" not in on_disk                  # mf2-9's prune still happens
+    assert m.state.stand_in_rows.get("97") is None
+
+    # ...and the same property under the concurrency it actually has
+    m2 = mk(tmp_path / "b2")
+    _seed_initialized(m2)
+    _held_position(m2)
+    for i in range(2_000):
+        m2.state.stand_in_rows[f"x{i}"] = ["qty"]
+    stop, errs = threading.Event(), []
+
+    def mutate():
+        i = 100_000
+        while not stop.is_set():
+            m2.state.stand_in_rows[str(i)] = ["qty"]
+            m2.state.stand_in_rows.pop(str(i), None)
+            i += 1
+
+    def persist():
+        while not stop.is_set():
+            try:
+                m2.save()
+            except Exception as exc:            # noqa: BLE001
+                errs.append(f"{type(exc).__name__}: {exc}")
+
+    old_interval = os.sys.getswitchinterval()
+    os.sys.setswitchinterval(1e-6)              # widen the window (mf-8 idiom)
+    ts = [threading.Thread(target=mutate, daemon=True) for _ in range(3)]
+    ts += [threading.Thread(target=persist, daemon=True) for _ in range(2)]
+    try:
+        for t in ts:
+            t.start()
+        time.sleep(3.0)
+        stop.set()
+        for t in ts:
+            t.join(timeout=5)
+    finally:
+        os.sys.setswitchinterval(old_interval)
+    assert errs == [], f"save() raised under concurrent mutation: {errs[:3]}"
+
+
+# --- corrective round: the three cc03347 regressions and the live blockers ---
+
+
+def test_gate_rb_a_stand_in_row_never_keeps_the_flatten_queued_forever(
+        tmp_path):
+    """Regression R-b (introduced by cc03347) — the retry that never
+    terminates.
+
+    A STAND-IN row is parked BEFORE any venue call, by design, and its own
+    alert says "no reconcile will clear that". cc03347 nevertheless kept
+    the flatten QUEUED for it and re-alerted every cycle, forever. Base
+    behaviour was to alert once and clear.
+
+    A row nothing can ever close must not hold the request open — and the
+    operator must be told that, once."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m, stop_ref=None)
+    m.state.positions["1"].history_gap = True
+    m.state.stand_in_rows["1"] = ["qty", "time_stop"]
+    a = DryAdapter()
+    m.request_flatten("2026-08-21")
+
+    c1: list[str] = []
+    run_cycle(m, a, None, "2026-08-21", alert=c1.append)
+    assert "1" in m.state.positions                  # never sold
+    assert _executions(a, "CRSP") == []
+    assert m.state.halted == "KILL"                  # the HALT still stands
+    assert m.state.flatten_request is None, \
+        "a row no retry can ever close kept the flatten queued forever"
+    assert any("REBUILT from STAND-INS" in msg for msg in c1)
+    (summary,) = [msg for msg in c1 if "flatten finished" in msg]
+    assert "NOTHING here can be closed by this service" in summary
+    assert "can NEVER be closed by this service" in summary
+    assert "every position is closed" not in summary   # B4's false promise
+
+    # and a further cycle says NOTHING more about it — the channel stays
+    # usable for the next emergency.
+    c2: list[str] = []
+    run_cycle(m, a, None, "2026-08-21", alert=c2.append)
+    assert not [msg for msg in c2 if "kill" in msg.lower()], c2
+
+
+def test_gate_b4_the_flatten_retry_is_bounded_and_stops_shouting(tmp_path):
+    """B4 (live-blocker): unbounded retry + a false convergence promise.
+
+    cc03347's summary said the flatten "RETRIES every cycle until every
+    position is closed" — for a row whose own alert said nothing would ever
+    close it. At the deployed 5-minute cadence that is >=576 and likely
+    ~1,150 Telegram messages a day, forever, burying the emergency channel
+    the kill switch exists to serve.
+
+    Bounded, and quiet after the first pass unless the REASON changes."""
+    class _AlwaysFails(DryAdapter):
+        def cancel_stock_order(self, ref):
+            raise RuntimeError("venue cancel error (simulated)")
+
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m)
+    a = _AlwaysFails()
+    m.request_flatten("2026-08-21")
+
+    per_cycle: list[list[str]] = []
+    for _ in range(blend_mod.FLATTEN_MAX_ATTEMPTS + 4):
+        msgs: list[str] = []
+        run_cycle(m, a, None, "2026-08-21", alert=msgs.append)
+        per_cycle.append(msgs)
+        if m.state.flatten_request is None:
+            break
+
+    # 1. it TERMINATES, and within the documented budget
+    assert m.state.flatten_request is None, "the retry never terminated"
+    assert len(per_cycle) == blend_mod.FLATTEN_MAX_ATTEMPTS, len(per_cycle)
+    # 2. the halt is NOT what was given up on
+    assert m.state.halted == "KILL"
+    assert "1" in m.state.positions          # K-d: still never MKT-sold
+    assert _executions(a, "CRSP") == []
+    # 3. the per-row alarm is emitted ONCE for the reason, not once a cycle
+    row_alerts = [msg for cyc in per_cycle for msg in cyc
+                  if "NOT flattened" in msg]
+    assert len(row_alerts) == 1, row_alerts
+    # 4. the last word tells the operator the machine has stopped
+    (final,) = [msg for msg in per_cycle[-1] if "flatten finished" in msg]
+    assert "NO LONGER RETRYING" in final and "BY HAND" in final
+    # 5. and a fresh /kill re-arms the whole thing (the bound is per
+    #    REQUEST, never a permanent refusal to try again)
+    m.request_flatten("2026-08-22")
+    again: list[str] = []
+    run_cycle(m, a, None, "2026-08-22", alert=again.append)
+    assert m.state.flatten_request is not None
+    assert any("NOT flattened" in msg for msg in again)
+
+
+def test_gate_b4_the_bound_survives_a_restart(tmp_path):
+    """B4: the attempt count rides on the PERSISTED request, so a restart
+    cannot reset the budget and restart the shouting."""
+    class _AlwaysFails(DryAdapter):
+        def cancel_stock_order(self, ref):
+            raise RuntimeError("venue cancel error (simulated)")
+
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m)
+    a = _AlwaysFails()
+    m.request_flatten("2026-08-21")
+    run_cycle(m, a, None, "2026-08-21", alert=lambda _m: None)
+    assert m.state.flatten_request["attempts"] == 1
+
+    reloaded = Blend3070Manager(Cfg(), str(tmp_path / "blend.json"))
+    assert reloaded.state.flatten_request["attempts"] == 1
+    assert reloaded.state.flatten_request["alerted"]["1"] == "cancel_raised"
+    # ...and the re-loaded book does not re-shout the same park
+    msgs: list[str] = []
+    run_cycle(reloaded, a, None, "2026-08-21", alert=msgs.append)
+    assert reloaded.state.flatten_request["attempts"] == 2
+    assert not [m2 for m2 in msgs if "NOT flattened" in m2], msgs
+
+
+def test_gate_b4_a_blackout_row_still_retries_within_the_bound(tmp_path):
+    """CONTROL (passes before and after — it guards against OVER-fixing B4
+    into "never retry"): the bound must not become a refusal to retry what a
+    retry CAN fix. A
+    blackout (history_gap) row is cleared by reconcile on positive venue
+    evidence, so the flatten keeps its place in the queue until then."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10_000.0)
+    a = _NoVenuePositionsAdapter()           # R1 flag cannot be verified
+    run_cycle(m, a, payload(entries=[entry()], stops=[stop_row()]),
+              "2026-08-20", alert=lambda _m: None)
+    m.state.positions["1"].history_gap = True        # blackout-parked
+    m.request_flatten("2026-08-21")
+    run_cycle(m, a, None, "2026-08-21", alert=lambda _m: None)
+    assert "1" in m.state.positions
+    assert m.state.flatten_request is not None, "a recoverable park gave up"
+    # the blackout lifts (what reconcile pass 1b does on positive evidence)
+    m.state.positions["1"].history_gap = False
+    msgs: list[str] = []
+    run_cycle(m, a, None, "2026-08-21", alert=msgs.append)
+    assert "1" not in m.state.positions, "the retry never closed it"
+    assert m.state.flatten_request is None
+    assert any("flatten complete" in msg for msg in msgs)
+
+
+def test_gate_b6_status_and_feed_survive_threaded_load_during_a_flatten(
+        tmp_path):
+    """B6 (live-blocker): mf3-10's snapshot was applied to `save()` ONLY.
+
+    `status_summary()` and `feed()` — which run on FastAPI WORKER threads —
+    kept iterating the live shared dicts the loop thread mutates, so
+    /status returned HTTP 500 on a measured 10-16% of requests during a
+    flatten. That is the exact window and the exact surface /kill's own
+    alert tells the operator to watch, and the only surface carrying
+    flatten_pending, unprotected, unverifiable and stand_in_rows.
+
+    Reproduced the way `probes/mf3/save_race.py` reproduces its sibling: the
+    GIL switch interval is narrowed so the race is frequent rather than
+    merely possible."""
+    import sys
+    import threading
+
+    from app.blend import BlendPosition, execute_flatten
+
+    old_interval = sys.getswitchinterval()
+    sys.setswitchinterval(1e-6)
+    try:
+        m = mk(tmp_path)
+        _seed_initialized(m, sleeve_cash=50_000.0)
+        for i in range(300):
+            m.state.positions[str(i)] = BlendPosition(
+                call_id=i, symbol="AAA", qty=1, entry_ref=1.0,
+                fill_price=1.0, entry_date="2026-08-01",
+                time_stop="2026-11-01", stop_level=0.5)
+            m.state.stand_in_rows[str(i)] = ["qty"]
+            m.state.unreconciled[str(i)] = {"symbol": "AAA", "qty": 1}
+        for i in range(5_000):
+            m.state.stand_in_rows[f"x{i}"] = ["qty"]
+            m.state.unreconciled[f"x{i}"] = {"symbol": "AAA", "qty": 1}
+        m.request_flatten("2026-08-21")
+
+        stop = threading.Event()
+        errs: list[str] = []
+
+        def reader():
+            while not stop.is_set():
+                try:
+                    m.status_summary(PRICES)
+                    m.feed(PRICES, "2026-08-21")
+                    m.has_naked_position()
+                except Exception as exc:            # noqa: BLE001
+                    errs.append(f"{type(exc).__name__}: {exc}")
+
+        def mutator():
+            """Exactly what the loop thread does to these containers while a
+            flatten runs: rows enter and leave `positions`, and the stand-in
+            / unreconciled registers move with them."""
+            i = 1_000_000
+            while not stop.is_set():
+                key = str(i)
+                m.state.positions[key] = BlendPosition(
+                    call_id=i, symbol="BBB", qty=1, entry_ref=1.0,
+                    fill_price=1.0, entry_date="2026-08-01",
+                    time_stop="2026-11-01", stop_level=0.5)
+                m.state.stand_in_rows[key] = ["qty"]
+                m.state.unreconciled[key] = {"symbol": "BBB", "qty": 1}
+                m.state.positions.pop(key, None)
+                m.state.stand_in_rows.pop(key, None)
+                m.state.unreconciled.pop(key, None)
+                i += 1
+
+        def flattener():
+            a = DryAdapter()
+            while not stop.is_set():
+                try:
+                    m.state.flatten_request = {"ts": 0, "date": "2026-08-21"}
+                    execute_flatten(m, a, lambda _msg: None)
+                except Exception as exc:            # noqa: BLE001
+                    errs.append(f"flatten {type(exc).__name__}: {exc}")
+
+        threads = ([threading.Thread(target=reader, daemon=True)
+                    for _ in range(4)]
+                   + [threading.Thread(target=mutator, daemon=True)
+                      for _ in range(3)]
+                   + [threading.Thread(target=flattener, daemon=True)])
+        for t in threads:
+            t.start()
+        time.sleep(2.0)
+        stop.set()
+        for t in threads:
+            t.join(20)
+        assert errs == [], errs[:5]
+    finally:
+        sys.setswitchinterval(old_interval)
+
+
+def _ladder_only_service(tmp_path, monkeypatch):
+    """MGR wired up with NO loop thread: B7 is about two API threads racing
+    each other on the kill RECORD, and a live loop only adds noise."""
+    import threading
+
+    from app import service
+    from app.config import settings
+    from app.manager import LadderManager
+
+    monkeypatch.setattr(settings, "state_path", str(tmp_path / "s.json"))
+    monkeypatch.setattr(settings, "exec_token", "sekrit")
+    monkeypatch.setattr(settings, "tws_userid", "")
+    monkeypatch.setattr(settings, "blend_enabled", False)
+    mgr = LadderManager(settings, settings.state_path)
+    monkeypatch.setattr(service, "MGR", mgr)
+    monkeypatch.setattr(service, "BLEND", None)
+    monkeypatch.setattr(service, "ADAPTER", None)
+    monkeypatch.setattr(service, "send", lambda *_a, **_k: None)
+    monkeypatch.setattr(service, "LOOP_WAKE", threading.Event())
+    service.LADDER_KILL.clear()
+    # an OPEN leg, so /kill leaves the kill QUEUED rather than consuming it
+    leg = list(mgr.state.legs)[0]
+    mgr.on_opened(leg, 10_000, "ref-1", "2026-08-01")
+    return service, mgr
+
+
+def _kill_record(service, mgr) -> tuple:
+    return (mgr.state.halted == "KILL",
+            service.LADDER_KILL.is_set(),
+            os.path.exists(mgr.kill_sentinel),
+            mgr.kill_pending)
+
+
+def test_gate_b7_a_kill_racing_a_resume_never_leaves_a_split_record(
+        tmp_path, monkeypatch):
+    """B7 (live-blocker): the THREE halves of the ladder kill record — the
+    book's `halted`, the `LADDER_KILL` event and the on-disk sentinel — were
+    written by /kill under NO LOCK, while /resume wrote all three under
+    MGR_LOCK. The judge measured 143 of 400 concurrent pairs reaching a
+    state NEITHER serial order can (this repo's own rig,
+    `tests/probes/corrective/kill_resume_race.py`, lands it 2-3 times per
+    1200 pairs — the rate is not the finding, the reachability is): /kill
+    answered `close_queued`, /resume cleared everything in the middle, and
+    /kill's sentinel write landed AFTER it — so the kill was silently
+    dropped, the leg stayed OPEN forever, and the surviving sentinel
+    RESURRECTED the cancelled kill on the next restart.
+
+    Deterministic form: /kill is held inside its critical section while
+    /resume tries to overtake it. With the record's own lock, /resume simply
+    cannot get in, so the outcome is the resume-last SERIAL state; without
+    it, /resume overtakes and the record splits."""
+    import threading
+
+    service, mgr = _ladder_only_service(tmp_path, monkeypatch)
+    inside = threading.Event()
+    resume_done = threading.Event()
+    real_journal = mgr.journal_kill
+
+    def slow_journal(today):
+        inside.set()
+        # Bounded on purpose: with B7's lock /resume CANNOT finish inside
+        # this window, so the wait times out and the pair serialises. The
+        # test therefore terminates on the fixed code and reproduces the
+        # split record on the broken one.
+        resume_done.wait(1.5)
+        return real_journal(today)
+
+    monkeypatch.setattr(mgr, "journal_kill", slow_journal)
+
+    kt = threading.Thread(
+        target=lambda: service.kill(x_exec_token="sekrit", token=None))
+    kt.start()
+    assert inside.wait(5), "/kill never reached its journal write"
+
+    def do_resume():
+        service.resume(x_exec_token="sekrit", token=None)
+        resume_done.set()
+
+    rt = threading.Thread(target=do_resume)
+    rt.start()
+    kt.join(10)
+    rt.join(10)
+    assert not kt.is_alive() and not rt.is_alive()
+
+    halted, flag, sentinel, pending = _kill_record(service, mgr)
+    assert (halted, flag, sentinel, pending) in (
+        (True, True, True, True),        # kill last  — all three set
+        (False, False, False, False),    # resume last — all three cleared
+    ), (halted, flag, sentinel, pending)
+    # the persisted book must agree with memory, or a restart disagrees
+    on_disk = json.load(open(mgr.state_path))["halted"]
+    assert (on_disk == "KILL") == halted, (on_disk, halted)
+
+
+def test_gate_b7_concurrent_kill_resume_pairs_stay_serialisable(
+        tmp_path, monkeypatch):
+    """B7 under real concurrency rather than a forced interleaving: many
+    /kill+/resume pairs, each checked against the two states a serial
+    execution can produce. This is the form the reviewer measured at
+    143/400; the GIL switch interval is narrowed so the window is frequent
+    rather than merely possible, the way `probes/mf3/save_race.py` does."""
+    import sys
+    import threading
+
+    service, mgr = _ladder_only_service(tmp_path, monkeypatch)
+    bad: list[tuple] = []
+    old_interval = sys.getswitchinterval()
+    sys.setswitchinterval(1e-6)
+    try:
+        for _ in range(240):
+            start = threading.Barrier(2)
+
+            def do_kill():
+                start.wait()
+                service.kill(x_exec_token="sekrit", token=None)
+
+            def do_resume():
+                start.wait()
+                service.resume(x_exec_token="sekrit", token=None)
+
+            kt = threading.Thread(target=do_kill)
+            rt = threading.Thread(target=do_resume)
+            kt.start()
+            rt.start()
+            kt.join(10)
+            rt.join(10)
+            rec = _kill_record(service, mgr)
+            if rec not in ((True, True, True, True),
+                           (False, False, False, False)):
+                bad.append(rec)
+            # reset for the next pair
+            service.resume(x_exec_token="sekrit", token=None)
+            mgr.on_opened(list(mgr.state.legs)[0], 10_000, "ref-1",
+                          "2026-08-01")
+    finally:
+        sys.setswitchinterval(old_interval)
+    assert bad == [], bad[:5]
+
+
+def test_gate_b5_a_failing_kill_cleanup_never_rewrites_a_SUCCESSFUL_halt(
+        tmp_path, monkeypatch):
+    """B5 (live-blocker) + regression R-c (cc03347 deviation #4).
+
+    `/kill`'s `MGR.clear_kill()` sat UNGUARDED inside the outer `try`, and
+    `clear_kill` catches only FileNotFoundError. Any other unlink error
+    therefore jumped to the outer handler, which reported
+    `ladder: "halt_failed"` and emitted "the ladder is NOT halted by this
+    service — halt it at the venue" — in the SAME message that said the
+    halt IS on disk, with a response body reading `halted: KILL` beside
+    `ladder: halt_failed`.
+
+    And this is the DEFAULT path, not a corner: every ladder leg is WAITING
+    until 2026-11-01, so `open_legs == []` on EVERY /kill in the current
+    deployment. A kill switch may not lie about whether it fired."""
+    service, mgr = _ladder_only_service(tmp_path, monkeypatch)
+    # back to the deployed shape: nothing open, so /kill consumes its own
+    # kill and reaches the cleanup that used to poison the whole handler
+    mgr.state.legs[list(mgr.state.legs)[0]].status = "WAITING"
+    sent: list[str] = []
+    monkeypatch.setattr(service, "send", sent.append)
+
+    def boom():
+        raise PermissionError("[Errno 13] Permission denied: read-only disk")
+    monkeypatch.setattr(mgr, "clear_kill", lambda: boom())
+
+    body = service.kill(x_exec_token="sekrit", token=None)
+
+    # 1. the halt is REPORTED as what it is — in force
+    assert body["halted"] == "KILL"
+    assert body["ladder"] != "halt_failed", body
+    assert mgr.state.halted == "KILL"
+    assert json.load(open(mgr.state_path))["halted"] == "KILL"
+    # 2. and the operator is never told to go halt an already-halted ladder
+    (msg,) = sent
+    assert "the ladder is NOT halted by this service" not in msg, msg
+    assert "HALT THE LADDER BY HAND" not in msg, msg
+    assert ", ladder halted" in msg
+    # 3. the failure that DID happen is still reported, honestly
+    assert "journal could not be removed" in msg
+    assert "Permission denied" in msg
+
+
+def test_gate_b5_resume_still_reaches_disk_when_the_sentinel_will_not_unlink(
+        tmp_path, monkeypatch):
+    """B5, second half: `/resume` — the remedy the /kill alert prescribes —
+    500'd AFTER setting `halted = None` in memory and clearing LADDER_KILL,
+    but BEFORE `MGR.save()`. So the book on disk stayed HALTED, the sentinel
+    survived, and the next restart RESURRECTED the kill the operator had
+    just cancelled."""
+    service, mgr = _ladder_only_service(tmp_path, monkeypatch)
+    sent: list[str] = []
+    monkeypatch.setattr(service, "send", sent.append)
+    service.kill(x_exec_token="sekrit", token=None)
+    assert mgr.state.halted == "KILL" and os.path.exists(mgr.kill_sentinel)
+
+    def boom():
+        raise PermissionError("[Errno 13] Permission denied: read-only disk")
+    monkeypatch.setattr(mgr, "clear_kill", lambda: boom())
+
+    body = service.resume(x_exec_token="sekrit", token=None)   # must not 500
+    assert body["ok"] is True
+    assert body["kill_journal_cleared"] is False
+    # the resume REACHED DISK — the whole point
+    assert mgr.state.halted is None
+    assert json.load(open(mgr.state_path))["halted"] is None
+    assert not service.LADDER_KILL.is_set()
+    assert mgr.kill_pending is False
+    # ...and the leftover file is named, with what it actually costs
+    assert any("kill journal could not be deleted" in m for m in sent)
+    assert any(mgr.kill_sentinel in m for m in sent)
+
+
+def test_gate_rc_the_kill_response_and_its_alert_never_contradict(
+        tmp_path, monkeypatch):
+    """Regression R-c, stated as the invariant rather than one path: the
+    response body's `halted`, the alert's state clause and the alert's tail
+    all describe the SAME fact, on every exit from /kill."""
+    service, mgr = _ladder_only_service(tmp_path, monkeypatch)
+    for breaker in ("clear_kill", "save"):
+        mgr.state.halted = None
+        service.LADDER_KILL.clear()
+        mgr.kill_pending = False
+        mgr.state.legs[list(mgr.state.legs)[0]].status = "WAITING"
+        sent: list[str] = []
+        monkeypatch.setattr(service, "send", sent.append)
+        with monkeypatch.context() as mp:
+            def boom():
+                raise OSError(f"{breaker} exploded")
+            mp.setattr(mgr, breaker, lambda: boom())
+            body = service.kill(x_exec_token="sekrit", token=None)
+        (msg,) = sent
+        halted = body["halted"] == "KILL"
+        says_halted = ", ladder halted" in msg
+        says_not_halted = "the ladder is NOT halted by this service" in msg
+        assert halted == says_halted, (breaker, body, msg)
+        assert halted != says_not_halted, (breaker, body, msg)
+
+
+# --- L-E1: the tracker's entry_ref is checked against the VENUE ---------------
+# Until now `reference_prices` fetched a real spot for every payload entry
+# symbol and the one place that sizes real orders from `entry_ref` never
+# read it. At a $10k book that is a 50x ledger-vs-account divergence on the
+# FIRST trade, and every gate computed downstream runs on the fiction.
+
+def test_gate_le1_a_placeholder_entry_ref_is_refused_not_sized(tmp_path):
+    """entry_ref 1.00 on a $50 name: ~300 shares sized, $300 booked, ~$15,000
+    filled. Refused outright — an order-of-magnitude gap is a broken input,
+    not a price."""
+    class _RealVenueQuote(DryAdapter):
+        # The venue prices CRSP at 50 and says so regardless of what the
+        # tracker asserts — a dry seed must never be able to talk it down.
+        def spot(self, symbol):
+            return 50.0 if symbol == "CRSP" else super().spot(symbol)
+
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10_000.0)
+    a = _RealVenueQuote()
+    alerts: list[str] = []
+    run_cycle(m, a, payload(entries=[entry(entry_ref=1.00)],
+                            stops=[stop_row(trail=0.88)]),
+              "2026-08-20", alert=alerts.append)
+    assert m.state.positions == {}, m.state.positions
+    assert _executions(a, "CRSP") == []
+    assert not [e for e in a.log
+                if e.get("symbol") == "CRSP" and e.get("qty", 0) > 0]
+    assert any("REFUSED entry CRSP" in msg and "1.00" in msg
+               for msg in alerts), alerts
+
+
+def test_gate_le1_an_entry_with_no_venue_quote_is_refused(tmp_path):
+    """Never buy what cannot be priced — the same law the rebalance quote
+    gate already keeps for SPY/BIL."""
+    class _NoQuoteForEntry(DryAdapter):
+        def spot(self, symbol):
+            if symbol == "CRSP":
+                raise RuntimeError("no market price for CRSP (simulated)")
+            return super().spot(symbol)
+
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10_000.0)
+    a = _NoQuoteForEntry()
+    alerts: list[str] = []
+    run_cycle(m, a, payload(entries=[entry()], stops=[stop_row()]),
+              "2026-08-20", alert=alerts.append)
+    assert m.state.positions == {}
+    assert any("REFUSED entry CRSP" in msg and "no venue quote" in msg
+               for msg in alerts), alerts
+
+
+def test_gate_le1_sizing_charges_the_higher_of_ref_and_quote(tmp_path):
+    """The RISK unit stays frozen at the tracker reference (the
+    pre-registered contract). What the shares COST must not: with the venue
+    above the fire-day close, the cash clamp has to bind on the venue price
+    or the sleeve overdraws."""
+    class _GappedUp(DryAdapter):
+        def spot(self, symbol):
+            return 90.0 if symbol == "CRSP" else super().spot(symbol)
+
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=900.0)
+    a = _GappedUp()
+    # A TIGHT stop, so the CASH clamp binds rather than the risk unit:
+    # risk 1% of $900 = $9 at $0.50/share = 18 shares by risk, but $900
+    # buys only 10 at the venue's $90. Sizing on the fire-day close bought
+    # 18 and booked them at $900 while the account paid $1,620.
+    run_cycle(m, a, payload(entries=[entry(entry_ref=50.0)],
+                            stops=[stop_row(trail=49.5)]),
+              "2026-08-20", alert=lambda _: None)
+    buys = [e for e in a.log
+            if e.get("symbol") == "CRSP" and e.get("qty", 0) > 0]
+    assert buys, a.log
+    assert buys[0]["qty"] == 10, buys           # 900/90, never 900/50 = 18
+    assert m.state.sleeve_cash >= -1e-6, m.state.sleeve_cash
+
+
+# --- L1-L5: the /kill flatten may never sell more than the ACCOUNT holds -----
+
+def _flatten_fixture(tmp_path, book_qty, venue_qty, adapter=None):
+    from app.blend import execute_flatten
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = adapter or DryAdapter()
+    _held_position(m, qty=book_qty, stop_ref=None)
+    a.seed_position("CRSP", venue_qty)
+    m.request_flatten("2026-08-21")
+    m.state.last_reconcile_ts = time.time()
+    alerts: list[str] = []
+    execute_flatten(m, a, alerts.append)
+    return m, a, alerts
+
+
+def test_gate_l1_flatten_never_sells_what_the_venue_does_not_hold(tmp_path):
+    """The naked-short class, one root, five blockers: the MKT sell was
+    sized from the BOOK and nothing asked the account. A stop that filled
+    inside the cancel window leaves the book believing in shares that are
+    gone; selling them SHORTS the account, and CR-N1 then tells the operator
+    to sell them a THIRD time by hand."""
+    m, a, alerts = _flatten_fixture(tmp_path, book_qty=5, venue_qty=0)
+    assert _executions(a, "CRSP") == [], a.log
+    assert a.stock_position("CRSP") == 0, "the account was shorted"
+    assert "1" not in m.state.positions          # booked out, not left open
+    assert m.state.unreconciled, "the exit price is unknown — say so"
+    assert any("VENUE HOLDS NONE" in msg for msg in alerts), alerts
+    # CR-N1: never tell the operator to hand-sell what is already sold
+    assert any("Do NOT sell it by hand" in msg for msg in alerts), alerts
+    summary = [msg for msg in alerts if "flatten finished" in msg
+               or "flatten complete" in msg]
+    assert not any("CLOSE CRSP" in msg for msg in summary), summary
+
+
+def test_gate_l1_flatten_clamps_to_the_venue_when_the_book_overcounts(tmp_path):
+    """Book says 5, account holds 2: sell 2, never 5."""
+    m, a, alerts = _flatten_fixture(tmp_path, book_qty=5, venue_qty=2)
+    sold = -sum(e["qty"] for e in _executions(a, "CRSP"))
+    assert sold == 2, a.log
+    assert a.stock_position("CRSP") == 0
+    assert any("the book claimed 5" in msg and "venue held 2" in msg
+               for msg in alerts), alerts
+
+
+def test_gate_l1_two_book_rows_cannot_spend_the_same_venue_shares(tmp_path):
+    """One symbol, two rows, five shares at the venue. The pass must not
+    sell five twice."""
+    from app.blend import execute_flatten
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    _held_position(m, call_id=1, qty=5, stop_ref=None)
+    _held_position(m, call_id=2, qty=5, stop_ref=None)
+    a.seed_position("CRSP", 5)                   # the account holds FIVE
+    m.request_flatten("2026-08-21")
+    m.state.last_reconcile_ts = time.time()
+    alerts: list[str] = []
+    execute_flatten(m, a, alerts.append)
+    sold = -sum(e["qty"] for e in _executions(a, "CRSP"))
+    assert sold == 5, (sold, a.log)
+    assert a.stock_position("CRSP") == 0, "the account was shorted"
+
+
+def test_gate_l1_an_unreachable_positions_api_does_not_disable_the_kill(
+        tmp_path):
+    """Failing closed on the positions query alone would let one flaky
+    endpoint disable the EMERGENCY STOP. A row inside the venue-history
+    horizon was reconciled recently and its qty is venue-derived: sell it,
+    and say what backed the decision."""
+    class _NoPositions(DryAdapter):
+        def stock_position(self, symbol):
+            raise RuntimeError("positions unavailable (simulated)")
+
+    from app.blend import execute_flatten
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = _NoPositions()
+    _held_position(m, qty=5, stop_ref=None)
+    m.request_flatten("2026-08-21")
+    m.state.last_reconcile_ts = time.time()      # fresh: verified recently
+    alerts: list[str] = []
+    execute_flatten(m, a, alerts.append)
+    assert -sum(e["qty"] for e in _executions(a, "CRSP")) == 5, a.log
+    assert any("would not report its position" in msg for msg in alerts)
+
+
+def test_gate_l1_an_unreachable_positions_api_past_the_horizon_parks(tmp_path):
+    """...but past the venue-history horizon nothing verifies the row at
+    all, and that is the R1 case where the law is already park-never-sell."""
+    class _NoPositions(DryAdapter):
+        def stock_position(self, symbol):
+            raise RuntimeError("positions unavailable (simulated)")
+
+    from app.blend import execute_flatten
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = _NoPositions()
+    _held_position(m, qty=5, stop_ref=None)
+    m.request_flatten("2026-08-21")
+    m.state.last_reconcile_ts = time.time() - 3 * 86_400
+    m._reconcile_gap_s = 3 * 86_400.0       # what the reconcile pass would set
+    alerts: list[str] = []
+    execute_flatten(m, a, alerts.append)
+    assert _executions(a, "CRSP") == [], a.log
+    assert "1" in m.state.positions              # parked, not sold
+    assert any("NOT flattened" in msg and "UNVERIFIED" in msg
+               for msg in alerts), alerts
+
+
+# --- CR-N2: a previous CLOSE is never adopted as a FILL price ----------------
+
+def test_gate_crn2_spot_reports_which_source_backed_the_price():
+    """`spot()` alone cannot say whether it returned a live tick or last
+    session's close. The callers that book fills need to know."""
+    a = DryAdapter()
+    px, source = a.spot_ex("CRSP")
+    assert px > 0 and source == "live"
+
+
+def test_gate_crn2_a_close_is_not_booked_as_a_fill_basis(tmp_path):
+    """B8 gave the quote walk a previous-CLOSE fallback so a thin quote
+    stops looking like a missing subscription — right for sizing, wrong for
+    a fill. The pre-B8 code raised here and failed closed; adopting the
+    close silently writes a basis nothing traded at."""
+    from app.blend import _fill_grade_price
+
+    class _CloseOnly(DryAdapter):
+        def spot_ex(self, symbol):
+            return 101.5, "close"
+
+    class _LiveAgain(_CloseOnly):
+        def spot_ex(self, symbol):
+            return 101.5, "live"
+
+    assert _fill_grade_price(_CloseOnly(), "BIL") is None
+    assert _fill_grade_price(_LiveAgain(), "BIL") == pytest.approx(101.5)
+
+
+def test_gate_crn2_an_orphan_book_order_waits_for_a_real_quote(tmp_path):
+    """No venue fill price AND only a close: the journal is KEPT (so the
+    holding stays tracked and visible), the alert fires ONCE, and the next
+    cycle with a real quote adopts it."""
+    class _NoFillPriceCloseOnly(DryAdapter):
+        source = "close"
+
+        def find_stock_order(self, client_order_id):
+            rec = self._orders.get(self._by_client.get(client_order_id, ""))
+            if rec is None:
+                return None
+            return {"order_ref": rec["order_ref"], "status": "filled"}
+
+        def spot_ex(self, symbol):
+            return self.spot(symbol), self.source
+
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=1_000.0, spy_qty=0, core_cash=1_000.0)
+    a = _NoFillPriceCloseOnly()
+    cid = m.record_pending_book_order("core-buy", "SPY", 5, "2026-08-20",
+                                      ref_price=100.0)
+    a.place_stock_order("SPY", 5, "MKT", ref_price=100.0, client_order_id=cid)
+    alerts: list[str] = []
+    run_cycle(m, a, None, "2026-08-20", alert=alerts.append)
+    assert cid in m.state.pending_book_orders, "the holding stopped being tracked"
+    assert m.state.spy_qty == 0, "a CLOSE was booked as a fill basis"
+    assert sum("no live quote to stand in" in msg for msg in alerts) == 1
+
+    # ...and it does not re-shout every cycle
+    alerts.clear()
+    run_cycle(m, a, None, "2026-08-21", alert=alerts.append)
+    assert not any("no live quote to stand in" in msg for msg in alerts), alerts
+
+    # ...and a real quote adopts it
+    a.source = "live"
+    alerts.clear()
+    run_cycle(m, a, None, "2026-08-22", alert=alerts.append)
+    assert cid not in m.state.pending_book_orders
+    assert m.state.spy_qty == 5
+
+
+# --- intents failure taxonomy (2026-09-10) ------------------------------------
+
+def _fake_intents(monkeypatch, *, raise_on_get=None, status=None, decode=False):
+    """Install a fake httpx.get for fetch_intents_reason."""
+    import httpx as _httpx
+
+    class R:
+        def raise_for_status(self):
+            if status is not None:
+                raise _httpx.HTTPStatusError(
+                    f"HTTP {status}",
+                    request=_httpx.Request("GET", "https://x/blend3070/intents"),
+                    response=_httpx.Response(status))
+
+        def json(self):
+            if decode:
+                raise ValueError("Expecting value: line 1 column 1 (char 0)")
+            return {"as_of": "2026-09-10", "entries": []}
+
+    def fake_get(url, **kw):
+        if raise_on_get is not None:
+            raise raise_on_get
+        return R()
+
+    monkeypatch.setattr(blend_mod.httpx, "get", fake_get)
+
+
+def test_gate_intents_reason_taxonomy(monkeypatch):
+    """Every blind state used to collapse into a bare None, so a 401 that
+    will NEVER self-heal was indistinguishable from a tracker redeploy that
+    heals in ninety seconds. The caller pages differently on each, so the
+    classification is load-bearing."""
+    from app.blend import TRACKER_CONFIG_REASONS, fetch_intents_reason
+    from app.feeds import FeedDeadline
+
+    # no TRACKER_URL: no request at all, and historically no trace of any kind
+    payload, reason = fetch_intents_reason(Cfg())
+    assert (payload, reason) == (None, "no_url")
+
+    cases = [
+        (dict(status=401), "auth"),
+        (dict(status=403), "auth"),
+        (dict(status=308), "redirect"),      # httpx does NOT follow redirects
+        (dict(status=500), "http_500"),
+        (dict(status=404), "http_404"),
+        (dict(decode=True), "decode"),
+        (dict(raise_on_get=RuntimeError("dns")), "transport"),
+        (dict(raise_on_get=FeedDeadline("slow")), "deadline"),
+    ]
+    for i, (kwargs, expected) in enumerate(cases):
+        blend_mod._INTENTS_FAIL.clear()
+
+        class C(Cfg):
+            tracker_url = f"https://taxonomy-{i}.invalid"
+
+        _fake_intents(monkeypatch, **kwargs)
+        payload, reason = fetch_intents_reason(C())
+        assert (payload, reason) == (None, expected), (kwargs, reason)
+
+    # the ones a retry can never clear
+    assert TRACKER_CONFIG_REASONS == {"no_url", "bad_url", "auth", "redirect"}
+
+    # ...and the happy path still returns a payload
+    blend_mod._INTENTS_FAIL.clear()
+
+    class Ok(Cfg):
+        tracker_url = "https://taxonomy-ok.invalid"
+
+    _fake_intents(monkeypatch)
+    payload, reason = fetch_intents_reason(Ok())
+    assert reason == "ok" and payload["as_of"] == "2026-09-10"
+
+
+def test_gate_intents_negative_cache_reports_cache_skip_not_a_failure(monkeypatch):
+    """A /kill wakes the loop seconds after a failure; the negative cache then
+    returns without asking the tracker. Reporting that as another failure
+    would let a single outage page on attempts that never happened."""
+    from app.blend import fetch_intents_reason
+
+    blend_mod._INTENTS_FAIL.clear()
+
+    class C(Cfg):
+        tracker_url = "https://cache-skip.invalid"
+
+    _fake_intents(monkeypatch, raise_on_get=RuntimeError("down"))
+    assert fetch_intents_reason(C()) == (None, "transport")
+    # immediately again: suppressed by FEED_FAIL_TTL, and labelled as such
+    assert fetch_intents_reason(C()) == (None, "cache_skip")
+    blend_mod._INTENTS_FAIL.clear()
+
+
+def test_gate_fetch_intents_keeps_its_payload_only_contract(monkeypatch):
+    """The cycle and its existing gates only ever ask whether there is a
+    payload; the reason is additive."""
+    blend_mod._INTENTS_FAIL.clear()
+
+    class C(Cfg):
+        tracker_url = "https://contract.invalid"
+
+    _fake_intents(monkeypatch, status=401)
+    assert fetch_intents(C()) is None
+    blend_mod._INTENTS_FAIL.clear()      # else the next call is a cache_skip
+    _fake_intents(monkeypatch)
+    assert fetch_intents(C())["entries"] == []
+    blend_mod._INTENTS_FAIL.clear()
+
+
+def test_gate_the_loop_actually_arms_the_tracker_watch(tmp_path, monkeypatch):
+    """THE gate for this round, and the second attempt at it.
+
+    Attempt one monkeypatched service._tracker_watch with a spy, which proved
+    only that the loop called SOME function with the right reason string.
+    Nothing bound the loop to the module-global TRACKER_WATCH that /health
+    reads and that the ladder, the floor and both budgets accumulate in — so
+    changing the call site to pass a throwaway dict,
+    `_tracker_watch(now, reason, send, dict(TRACKER_WATCH))`, restored the
+    2026-09-10 defect in full with the whole suite green (re-review R18R-1).
+
+    So this asserts on STATE and on the page, never on the call: the real
+    decision function runs, and what it wrote must be visible where the
+    operator actually looks."""
+    import time as _time
+
+    from app.config import settings
+    from app import service
+    from app.service import app as service_app
+    from fastapi.testclient import TestClient
+
+    pages = []
+    monkeypatch.setattr(blend_mod, "run_cycle", lambda *a, **kw: [])
+    monkeypatch.setattr(service, "send", pages.append)
+    monkeypatch.setattr(settings, "state_path", str(tmp_path / "s.json"))
+    monkeypatch.setattr(settings, "blend_state_path", str(tmp_path / "b.json"))
+    monkeypatch.setattr(settings, "exec_token", "sekrit")
+    monkeypatch.setattr(settings, "tws_userid", "")
+    monkeypatch.setattr(settings, "blend_enabled", True)
+    monkeypatch.setattr(settings, "poll_seconds", 3600)
+    assert settings.tracker_url == ""      # -> no_url, a CONFIG reason
+    try:
+        with TestClient(service_app) as c:
+            for _ in range(200):
+                if service.TRACKER_WATCH.get("fails"):
+                    break
+                _time.sleep(0.05)
+            watch = dict(service.TRACKER_WATCH)
+            body = c.get("/health").json()
+        # the MODULE-GLOBAL the rest of the service reads was advanced
+        assert watch["fails"] >= 1, watch
+        assert watch["reason"] == "no_url", watch
+        assert watch["blind_since"] is not None, watch
+        # ...the page went out, on the first failed poll, with its remedy
+        assert any("NOT self-heal" in m for m in pages), pages
+        # ...and /health tells the truth rather than the green lie
+        assert body["status"] == "ok"
+        assert body["tracker"]["ok"] is False, body["tracker"]
+        assert body["tracker"]["reason"] == "no_url", body["tracker"]
+        assert body["tracker"]["blind_polls"] >= 1, body["tracker"]
+    finally:
+        service.BLEND = None
+        service.MGR = None
+        service._reset_tracker_watch()
+
+
+def test_gate_f5_a_kill_landing_mid_iteration_is_consumed_with_the_ladder_off(
+        tmp_path, monkeypatch):
+    """Merge review 2026-09-10, F5. The MF-A consumption of a /kill that
+    lands AFTER the top-of-iteration pass sat inside `if
+    settings.ladder_enabled`, so with the ladder disabled - the deployed
+    posture - such a kill waited a whole poll interval for the next
+    top-of-iteration pass: the exact latency MF-A was built to remove.
+    Simulated: the kill lands during the NOAA feed call; it must be
+    consumed before the loop parks."""
+    import time as _time
+
+    from app.config import settings
+    from app import service
+    from app.service import app as service_app
+    from fastapi.testclient import TestClient
+
+    consumed = []
+
+    def feed():
+        service.LADDER_KILL.set()          # /kill, landing while the feed runs
+        return 0.0
+
+    monkeypatch.setattr(service, "nino34_weekly", feed)
+    monkeypatch.setattr(service, "_consume_ladder_kill",
+                        lambda today: consumed.append(today) or None)
+    monkeypatch.setattr(service, "send", lambda m: None)
+    monkeypatch.setattr(settings, "state_path", str(tmp_path / "s.json"))
+    monkeypatch.setattr(settings, "blend_state_path", str(tmp_path / "b.json"))
+    monkeypatch.setattr(settings, "exec_token", "sekrit")
+    monkeypatch.setattr(settings, "tws_userid", "")
+    monkeypatch.setattr(settings, "ladder_enabled", False)
+    monkeypatch.setattr(settings, "blend_enabled", False)
+    monkeypatch.setattr(settings, "poll_seconds", 3600)
+    try:
+        with TestClient(service_app):
+            for _ in range(200):
+                if consumed:
+                    break
+                _time.sleep(0.05)
+        assert consumed, "the kill waited for the next poll interval"
+    finally:
+        service.LADDER_KILL.clear()
+        service.BLEND = None
+        service.MGR = None
+
+
+def test_gate_a_boot_never_inherits_a_previous_lifespans_watch(tmp_path,
+                                                               monkeypatch):
+    """TRACKER_WATCH is process-global and was never re-initialised per
+    lifespan, unlike LADDER_KILL. A watch left blind by one lifespan made the
+    next boot's /health report a tracker it had never polled (R17R-4)."""
+    from app import service
+
+    service.TRACKER_WATCH.update(blind_since=1.0, fails=9, reason="auth",
+                                 paged_level=0, page_count=6)
+    try:
+        service._reset_tracker_watch()
+        assert service.TRACKER_WATCH["fails"] == 0
+        assert service.TRACKER_WATCH["blind_since"] is None
+        assert service.TRACKER_WATCH["reason"] is None
+        assert service.TRACKER_WATCH["page_count"] == 0
+        # and _start_loop is what calls it, so a boot cannot skip it
+        import inspect
+        assert "_reset_tracker_watch()" in inspect.getsource(service._start_loop)
+    finally:
+        service._reset_tracker_watch()
+
+
+def test_gate_a_null_json_body_is_not_a_healthy_poll(monkeypatch):
+    """A 200 whose body is literally `null` makes r.json() return None. That
+    used to be reported as (None, "ok") — a payload-less HEALTHY poll, i.e.
+    the exact silent-blind state this round exists to end."""
+    from app.blend import fetch_intents_reason
+
+    for body in (None, [], "nope", 3):
+        blend_mod._INTENTS_FAIL.clear()
+
+        class R:
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return body
+
+        monkeypatch.setattr(blend_mod.httpx, "get", lambda url, **kw: R())
+
+        class C(Cfg):
+            tracker_url = "https://nulljson.invalid"
+
+        payload, reason = fetch_intents_reason(C())
+        assert payload is None
+        assert reason == "decode", (body, reason)
+    blend_mod._INTENTS_FAIL.clear()
+
+
+def test_gate_a_malformed_tracker_url_is_a_config_error_not_a_transient(
+        monkeypatch):
+    """httpx.InvalidURL / UnsupportedProtocol raise through the transport
+    layer, so a catch-all filed a typo'd TRACKER_URL under "usually heals"
+    and told the operator the opposite of the truth."""
+    import httpx as _httpx
+
+    from app.blend import TRACKER_CONFIG_REASONS, fetch_intents_reason
+
+    for exc in (_httpx.InvalidURL("bad"), _httpx.UnsupportedProtocol("nope")):
+        blend_mod._INTENTS_FAIL.clear()
+
+        def boom(url, **kw):
+            raise exc
+
+        monkeypatch.setattr(blend_mod.httpx, "get", boom)
+
+        class C(Cfg):
+            tracker_url = "htp:/typo"
+
+        assert fetch_intents_reason(C()) == (None, "bad_url")
+    assert "bad_url" in TRACKER_CONFIG_REASONS
+    blend_mod._INTENTS_FAIL.clear()
+
+
+def test_gate_fetch_intents_is_still_the_seam_the_probes_patch(monkeypatch):
+    """tests/probes/mf2/scen.py and the MF-1 slow-feed gate replace
+    `blend_mod.fetch_intents` wholesale. Routing the loop through a NEW
+    function silently sailed past all seven patch sites and switched two
+    phases of the live-fire probe suite off (counter-agent CA-1/CA-2)."""
+    from app.blend import fetch_intents_reason
+
+    monkeypatch.setattr(blend_mod, "fetch_intents", lambda _c: None)
+    assert fetch_intents_reason(Cfg()) == (None, "transport")
+
+    monkeypatch.setattr(blend_mod, "fetch_intents", lambda _c: {"entries": []})
+    payload, reason = fetch_intents_reason(Cfg())
+    assert payload == {"entries": []} and reason == "ok"
+
+
+def test_gate_a_hand_typed_tracker_url_survives_stray_whitespace(monkeypatch):
+    """TRACKER_URL is `sync: false` — it is TYPED into the Render dashboard by
+    hand — and a leading/trailing space made httpx raise through the transport
+    layer, so a permanent config error was filed as `transport`, the bucket
+    described to the operator as "usually heals" (re-review R17R-3). Stripping
+    fixes it outright instead of merely classifying it better."""
+    from app.blend import fetch_intents_reason
+
+    seen = {}
+
+    class R:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"as_of": "2026-09-10", "entries": []}
+
+    def fake_get(url, **kw):
+        seen["url"] = url
+        return R()
+
+    monkeypatch.setattr(blend_mod.httpx, "get", fake_get)
+    for raw in ("  https://research.optic.capital  ",
+                "\thttps://research.optic.capital\n",
+                "https://research.optic.capital/  "):
+        blend_mod._INTENTS_FAIL.clear()
+
+        class C(Cfg):
+            tracker_url = raw
+
+        payload, reason = fetch_intents_reason(C())
+        assert reason == "ok", (raw, reason)
+        assert seen["url"] == (
+            "https://research.optic.capital/blend3070/intents"), seen["url"]
+    blend_mod._INTENTS_FAIL.clear()
 
 
 # --- stuck book order: cancel-confirmation unwedge (2026-08-25) ------------
@@ -4020,7 +6959,7 @@ def test_gate_a_failing_manager_build_alerts_and_retries(monkeypatch, tmp_path):
     monkeypatch.setattr(svc, "_build_managers", flaky_managers)
     monkeypatch.setattr(svc, "_build_adapter", lambda: None)
     with pytest.raises(_Stop):
-        svc._loop()
+        svc._loop(svc.LOOP_GEN, threading.Event())
     assert calls["n"] == 3                                  # retried, not dead
     assert any("build failed" in m for m in sent)           # and it SAID so
     assert any("recovered" in m for m in sent)
@@ -4051,13 +6990,18 @@ def test_entry_window_open_rules():
     assert not open_(_et(2026, 9, 3, 9, 30))   # bell
     assert not open_(_et(2026, 9, 3, 10, 6))   # the MRK restart minute
     assert not open_(_et(2026, 9, 3, 15, 59))
-    assert open_(_et(2026, 9, 3, 16, 0))       # close: next-open orders accepted
-    assert open_(_et(2026, 9, 3, 19, 47))      # the evening MRK window
+    assert not open_(_et(2026, 9, 3, 16, 0))   # close: after-hours, OPG still refused [202]
+    assert not open_(_et(2026, 9, 3, 19, 47))  # "the evening MRK window" - it never was one
+    assert not open_(_et(2026, 9, 3, 19, 59))
+    assert open_(_et(2026, 9, 3, 20, 0))       # extended hours end: accepted
+    assert open_(_et(2026, 9, 3, 23, 30))
     assert open_(_et(2026, 9, 5, 12, 0))       # Saturday noon
     # naive datetimes are read as UTC; 14:06Z is 10:06 ET in September
     assert not open_(_dt(2026, 9, 3, 14, 6))
+    assert not open_(_dt(2026, 9, 3, 14, 6, tzinfo=_tz.utc).astimezone(_ET)
+                     .replace(hour=17))                         # 17:06 ET: after-hours
     assert open_(_dt(2026, 9, 3, 14, 6, tzinfo=_tz.utc).astimezone(_ET)
-                 .replace(hour=17))
+                 .replace(hour=20))                             # 20:06 ET
 
 
 def _book_needing_bil_to_fund(tmp_path):
@@ -4091,7 +7035,7 @@ def test_no_moo_and_no_bil_raise_during_session(tmp_path, monkeypatch):
     assert any("pre-funding" in e["msg"] for e in m.state.events)
     # The same book, post-close: the entry is planned and BIL funds it.
     m2 = _book_needing_bil_to_fund(tmp_path / "b")
-    post_close = _dt(2026, 9, 3, 21, 0, tzinfo=_tz.utc)      # 17:00 ET
+    post_close = _dt(2026, 9, 4, 0, 30, tzinfo=_tz.utc)      # 20:30 ET Sep 3: after extended hours
     out2 = _intents(m2, post_close, monkeypatch)
     acts = [i["action"] for i in out2]
     assert "ENTER" in acts
@@ -4101,7 +7045,7 @@ def test_no_moo_and_no_bil_raise_during_session(tmp_path, monkeypatch):
 
 def test_paused_enter_does_not_raise_cash(tmp_path, monkeypatch):
     m = _book_needing_bil_to_fund(tmp_path)
-    post_close = _dt(2026, 9, 3, 21, 0, tzinfo=_tz.utc)
+    post_close = _dt(2026, 9, 4, 0, 30, tzinfo=_tz.utc)      # 20:30 ET Sep 3
     blend_mod.intent_breaker_clear()
     blend_mod.intent_breaker_roll_date("2026-08-20")   # same day as the cycle
     try:
@@ -4246,17 +7190,38 @@ def test_cash_reconcile_stage1(tmp_path):
 # test_post_close_bil_funded_entry_reaches_the_next_open red.
 
 class SessionDryAdapter(DryAdapter):
-    """MKT fills only IN session; MKT placed outside RTH rests until
-    open_market(); MOO/OPG is accepted only OUTSIDE the session (rests until
-    open_market()) and is REJECTED in session - the real venue's shape."""
+    """The real venue's three states. MKT fills only in REGULAR hours and
+    otherwise rests until open_market(); MOO/OPG is accepted only once
+    EXTENDED hours have ended (20:00 ET; rests until open_market()) and is
+    REJECTED [202] through the regular session AND after-hours - the
+    2026-09-10 shape, where 16:03-16:14 ET placements all died."""
+
+    def __init__(self, *a, **k):
+        super().__init__(*a, **k)
+        self.rejected: list[tuple] = []     # every MOO the venue refused
+
+    def find_stock_order(self, client_order_id):
+        o = super().find_stock_order(client_order_id)
+        rec = self._orders.get(self._by_client.get(client_order_id, ""))
+        if o is not None and rec is not None and rec.get("reason"):
+            o["reason"] = rec["reason"]     # the real adapter surfaces it too
+        if o is not None and rec is not None and rec.get("filled_qty"):
+            o["filled_qty"] = rec["filled_qty"]
+        return o
 
     def place_stock_order(self, symbol, qty, order_type, stop_price=None,
                           tif="DAY", ref_price=None, client_order_id=None):
-        outside = blend_mod.entry_window_open()
-        if order_type == "MOO" and not outside:
+        opg_ok = blend_mod.entry_window_open()
+        rests = not blend_mod.regular_session_open()
+        if order_type == "MOO" and not opg_ok:
+            # recorded BEFORE raising: a gate must be able to see an
+            # ATTEMPTED placement, not only a surviving order (round 19
+            # review, TESTS-2)
+            self.rejected.append((symbol, qty, client_order_id))
             raise RuntimeError("order rejected by venue (status Cancelled): "
-                               "[10147] OPG order after the open")
-        if order_type in ("MKT", "MOO") and outside:
+                               "[202] Order Canceled - reason:On-open orders "
+                               "cannot be placed when market is open.")
+        if order_type == "MOO" or (order_type == "MKT" and rests):
             if client_order_id:
                 prior = self._orders.get(self._by_client.get(client_order_id, ""))
                 if prior is not None and prior["status"] in ("working", "filled"):
@@ -4329,7 +7294,7 @@ def test_post_close_bil_funded_entry_reaches_the_next_open(tmp_path, monkeypatch
     assert m.state.bil_qty == 27 and m.state.sleeve_cash > 250
     assert not [o for o in a.orders("BIL") if o["qty"] > 0], "cash re-swept"
     assert any("entries deferred" in e["msg"] for e in m.state.events)
-    cyc(2026, 8, 21, 16, 5)                   # Fri post-close: ENTER from cash
+    cyc(2026, 8, 21, 20, 5)                   # Fri after extended hours: ENTER from cash
     moo = a.orders(order_type="MOO")
     assert len(moo) == 1 and moo[0]["status"] == "working" and moo[0]["symbol"] == "CRSP"
     a.open_market()                           # next open: MOO fills
@@ -4383,7 +7348,7 @@ def test_prefund_mid_session_fire_enters_at_the_next_open(tmp_path, monkeypatch)
     cyc(2026, 8, 20, 10, 40)                 # idempotent: no more selling
     cyc(2026, 8, 20, 14, 0)
     assert len(a.orders("BIL")) == 1, "raised cash again or swept it back"
-    cyc(2026, 8, 20, 16, 5)                  # post-close: MOO from settled cash
+    cyc(2026, 8, 20, 20, 5)                  # after extended hours: MOO from settled cash
     moo = a.orders(order_type="MOO")
     assert len(moo) == 1 and moo[0]["status"] == "working"
     a.open_market()                          # Fri 09:30: fills (T+1)
@@ -4480,12 +7445,12 @@ def test_second_fire_while_a_moo_rests_is_funded_not_double_spent(tmp_path, monk
     pl = payload(entries=[entry()], stops=[stop_row()])
     monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: PRICES)
     cyc = lambda *t, **k: _session_cycle(m, a, pl, alerts, monkeypatch, *t, **k)
-    cyc(2026, 8, 20, 16, 5)                                  # fire 1: MOO from cash
+    cyc(2026, 8, 20, 20, 5)                                  # fire 1: MOO from cash
     assert len(a.orders(order_type="MOO")) == 1 and m.state.pending_entries
     assert m.reserved_sleeve_cash() >= 250.0                 # its cost is reserved
     pl["entries"].append(entry(call_id=2, symbol="CRSP", entry_ref=50.0))
     pl["stops"].append(stop_row(call_id=2))
-    cyc(2026, 8, 20, 16, 10)                                 # fire 2 the same evening
+    cyc(2026, 8, 20, 20, 10)                                 # fire 2 the same evening
     # the parked cash is NOT spent twice: a BIL raise rests for the open
     sells = [o for o in a.orders("BIL") if o["qty"] < 0]
     assert len(sells) == 1 and sells[0]["status"] == "working"
@@ -4612,7 +7577,10 @@ def test_hold_survives_the_utc_midnight_roll(tmp_path, monkeypatch):
 def test_early_close_is_a_closed_venue(tmp_path):
     open_ = blend_mod.entry_window_open
     assert not open_(_et(2026, 11, 27, 12, 30))               # day after Thanksgiving
-    assert open_(_et(2026, 11, 27, 13, 5))                    # 13:00 close passed
+    assert not open_(_et(2026, 11, 27, 13, 5))                # 13:00 close: after-hours
+    assert not open_(_et(2026, 11, 27, 16, 59))
+    assert open_(_et(2026, 11, 27, 17, 0))                    # early close + 4h: accepted
+    assert blend_mod.opg_accept_from_et(_dt(2026, 11, 27).date()) == (17, 0)
     assert open_(_et(2026, 11, 26, 12, 30))                   # Thanksgiving itself
     assert not open_(_et(2026, 11, 30, 14, 0))                # ordinary Monday
     assert blend_mod.session_close_et(_dt(2026, 12, 24).date()) == (13, 0)
@@ -4635,12 +7603,12 @@ def test_partial_placement_keeps_the_rest_held(tmp_path, monkeypatch):
     hold = m.state.prefund_usd
     assert hold == 1_000.0 and m.state.bil_qty == 50          # 2 x 10 sh @ 50
     pl["entries"], pl["stops"] = [ea], [sa]                   # B absent one cycle
-    cyc(2026, 8, 20, 16, 5)
+    cyc(2026, 8, 20, 20, 5)
     assert len(a.orders(order_type="MOO")) == 1
     assert 0 < m.state.prefund_usd < hold, "hold not reduced by what A spent"
     assert not [o for o in a.orders("BIL") if o["qty"] > 0], "B's cash swept"
     pl["entries"], pl["stops"] = [ea, eb], [sa, sb]
-    cyc(2026, 8, 20, 16, 10)
+    cyc(2026, 8, 20, 20, 10)
     assert len(a.orders(order_type="MOO")) == 2
     assert m.state.prefund_usd == 0.0
 
@@ -4795,3 +7763,412 @@ def test_day_old_journal_is_held_when_history_is_unavailable(tmp_path):
     a.complete = True
     blend_mod.reconcile(m, a, "2026-08-20", alerts.append)
     assert not m.state.pending_book_orders
+
+
+# --- merge round 2026-09-10 gates (composition F1 / F2) -----------------------
+# The L-E1 charge basis (`size_ref` = max(entry_ref, venue quote)) reached
+# the sizing and the ledger on `main`; the pre-fund hold, its release and the
+# resting-entry reserve still used `entry_ref`. Three sites, one number.
+# MUTATION-VERIFIED: see docs/verdicts/INDEX.md (merge round).
+
+def test_gate_prefund_hold_is_at_the_charged_price_not_entry_ref(tmp_path, monkeypatch):
+    """Composition F1. On a gapped-up quote (90 vs a 50 fire-day close) the
+    BIL raise covered the real cost, the hold covered only the reference
+    cost, the difference read as idle cash and the sweep bought it straight
+    back - the post-close placement then clipped to what was left. The hold
+    must be the charged cost, the release the same number, and nothing in
+    between may sweep the gap."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
+    a = SessionDryAdapter()
+    alerts = []
+    pl = payload(entries=[entry()], stops=[stop_row()])            # entry_ref 50
+    gapped = {**PRICES, "CRSP": 90.0}                             # venue opened up
+    monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: gapped)
+    cyc = lambda *t: _session_cycle(m, a, pl, alerts, monkeypatch, *t)
+    cyc(2026, 8, 20, 10, 35)                                      # in session: pre-fund
+    assert m.state.prefund_usd == pytest.approx(5 * 90.0), "hold is at entry_ref"
+    assert not [o for o in a.orders("BIL") if o["qty"] > 0], "the sweep ate the gap"
+    cyc(2026, 8, 20, 20, 5)                                       # after extended hours: place
+    (moo,) = a.orders(order_type="MOO")
+    assert moo["qty"] == 5, "placement clipped by the swept gap"
+    assert m.state.prefund_usd == 0.0, "release on a different basis than the hold"
+    assert not [o for o in a.orders("BIL") if o["qty"] > 0]
+
+
+def test_gate_resting_entry_reserves_its_charged_cost(tmp_path, monkeypatch):
+    """Composition F2. A journalled ENTER resting for the open reserves its
+    cost so a second fire the same evening cannot size against it (round
+    2). The reserve used `entry_ref`; the fill debits `size_ref`. On a
+    gapped-up quote the second fire saw the gap as free cash, placed, and
+    the ledger went negative at the open. BIL is priced at 1,000 here so
+    the 650 left after A is below one share and the residual sweep - a
+    separate reserve, correct on its own - cannot muddy the number."""
+    m = mk(tmp_path)
+    # sleeve 6,400 (1,400 cash + 5 BIL @ 1,000): risk 64 / 6 -> 10 sh; core 149 SPY ~70%
+    _seed_initialized(m, sleeve_cash=1_400.0, bil_qty=5, spy_qty=149)
+    a = SessionDryAdapter()
+    alerts = []
+    ea, eb = entry(call_id=1, symbol="CRSP"), entry(call_id=2, symbol="CRSP")
+    pl = payload(entries=[ea], stops=[stop_row(call_id=1)])
+    gapped = {**PRICES, "CRSP": 75.0, "BIL": 1_000.0}
+    monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: gapped)
+    cyc = lambda *t: _session_cycle(m, a, pl, alerts, monkeypatch, *t)
+    cyc(2026, 8, 20, 20, 5)                                       # A: 10 sh @ 75 from cash
+    (moo,) = a.orders(order_type="MOO")
+    assert moo["qty"] == 10
+    assert not a.orders("BIL"), "the residual was swept: the number below is not isolated"
+    assert m.reserved_sleeve_cash() == pytest.approx(750.0), "reserve is at entry_ref"
+    pl["entries"] = [ea, eb]
+    pl["stops"] = [stop_row(call_id=1), stop_row(call_id=2)]
+    cyc(2026, 8, 20, 20, 10)                                      # B, the same evening
+    # settled cash net of A's reserve (1,400 - 750 = 650) does not cover B:
+    # it must raise BIL and wait, never place against A's cash
+    assert len(a.orders(order_type="MOO")) == 1, "B placed against A's reserved cash"
+    a.open_market()
+    cyc(2026, 8, 21, 9, 35)
+    assert m.state.sleeve_cash >= -blend_mod.CASH_EPS, "ledger overdrawn by the two fires"
+
+
+# --- round 19 (2026-09-10): OPG acceptance ends with extended hours --------
+# MUTATION-VERIFIED (docs/verdicts/INDEX.md, round 19 - the exact mutants
+# and outcomes are listed there): the after-hours window (opg_accept_from_et
+# back to the session close); the regular-hours resting rule (rests_for_open
+# and reconcile 2b back to entry_window_open, each alone); the stale-alert
+# exemption back to entry_window_open; the hold release's full revert to
+# the UTC `today` + `not entry_window_open()`, and each of its three clauses
+# dropped alone (ET date, regular_session_open, not enter_paused); the
+# prefund stamp back to `today`; the rejection re-arm removed; the re-arm
+# ignoring executions; SESSION_OPEN_ET at the planning cutoff.
+
+_R202 = ("[202] Order Canceled - reason:On-open orders cannot be placed "
+         "when market is open.")
+
+
+class VenueRejectsMooAdapter(SessionDryAdapter):
+    """ASYNCHRONOUS rejection shape: placeOrder is acknowledged, the MOO is
+    journaled 'working', the venue cancels it afterwards and reconcile
+    reads the cancelled trade (with its reason) on the next cycle. One
+    breaker count per placement. `partial` > 0 models a cancel that
+    carries executions (an OPG partly filled at the open)."""
+    reject = True
+    partial = 0
+
+    def place_stock_order(self, symbol, qty, order_type, **kw):
+        r = super().place_stock_order(symbol, qty, order_type, **kw)
+        if order_type == "MOO" and self.reject and r.get("status") == "working":
+            rec = self._orders[r["order_ref"]]
+            rec["status"], rec["reason"] = "cancelled", _R202
+            if self.partial:
+                rec["filled_qty"] = self.partial
+        return r
+
+
+class VenueRejectsMooSyncAdapter(VenueRejectsMooAdapter):
+    """SYNCHRONOUS rejection shape - what the live book actually took on
+    2026-09-10: IBAdapter._await_placement sees the [202] inside
+    PLACE_ACK_TIMEOUT_S and RAISES, run_cycle books one breaker count, the
+    write-ahead journal stays pending, and the next reconcile finds the
+    cancelled trade and books a SECOND count. Three placements = five
+    counts (16:03, 16:09, 16:14 ET; paused at 5) - the breaker trips
+    earlier than its N says, never later. Recorded as accepted behaviour,
+    not changed, in the round-19 verdict."""
+
+    def place_stock_order(self, symbol, qty, order_type, **kw):
+        r = super().place_stock_order(symbol, qty, order_type, **kw)
+        if order_type == "MOO" and self.reject:
+            raise RuntimeError("order rejected by venue (status Cancelled): "
+                               + _R202)
+        return r
+
+
+def test_gate_r19_two_clocks():
+    """regular_session_open (MKT fills) and entry_window_open (OPG accepted)
+    are not complements: after-hours is false for both."""
+    rth, opg = blend_mod.regular_session_open, blend_mod.entry_window_open
+    assert not rth(_et(2026, 9, 3, 9, 29)) and rth(_et(2026, 9, 3, 9, 30))
+    assert rth(_et(2026, 9, 3, 15, 59)) and not rth(_et(2026, 9, 3, 16, 0))
+    assert not rth(_et(2026, 9, 5, 12, 0)) and opg(_et(2026, 9, 5, 12, 0))   # Saturday
+    for h, mi in ((16, 0), (17, 30), (19, 59)):                            # after-hours
+        assert not rth(_et(2026, 9, 3, h, mi)), (h, mi)
+        assert not opg(_et(2026, 9, 3, h, mi)), (h, mi)
+    assert opg(_et(2026, 9, 3, 20, 0)) and not rth(_et(2026, 9, 3, 20, 0))
+    assert blend_mod.opg_accept_from_et(_dt(2026, 9, 3).date()) == (20, 0)
+    assert blend_mod._et_today(_et(2026, 9, 3, 20, 5)) == "2026-09-03"        # UTC says 09-04
+    assert blend_mod._et_today(_et(2027, 1, 14, 19, 5)) == "2027-01-14"       # UTC says 01-15
+
+
+def test_gate_r19_no_moo_goes_out_in_after_hours(tmp_path, monkeypatch):
+    """The 2026-09-10 failure end to end: a mid-session fire is pre-funded;
+    16:00-20:00 ET nothing is placed (the venue would reject it), the hold
+    stays, the cash is not swept; at 20:05 the MOO goes out at full size."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
+    a = SessionDryAdapter()
+    alerts = []
+    pl = payload(entries=[entry()], stops=[stop_row()])
+    monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: PRICES)
+    cyc = lambda *t, **k: _session_cycle(m, a, pl, alerts, monkeypatch, *t, **k)
+    cyc(2026, 8, 20, 10, 35)                                  # pre-funded: 3 BIL sold
+    assert m.state.bil_qty == 27 and m.state.prefund_usd == 250.0
+    for h, mi in ((16, 3), (16, 9), (16, 14), (17, 0), (19, 55)):
+        cyc(2026, 8, 20, h, mi)
+        assert not a.orders(order_type="MOO"), f"MOO placed at {h}:{mi:02d} ET"
+        assert not a.rejected, f"MOO ATTEMPTED at {h}:{mi:02d} ET: {a.rejected}"
+    assert not [o for o in a.orders("BIL") if o["qty"] > 0], "cash swept in after-hours"
+    assert m.state.prefund_usd == 250.0
+    cyc(2026, 8, 20, 20, 5, today="2026-08-21")               # 00:05 UTC: accepted
+    (moo,) = a.orders(order_type="MOO")
+    assert moo["qty"] == 5 and moo["status"] == "working"
+    assert m.state.prefund_usd == 0.0
+
+
+def _reject_then_recover(m, a, pl, alerts, monkeypatch, placements_to_pause):
+    """Shared timeline for the two rejection shapes, on the dates the
+    service actually produces: at 20:05 ET (EDT) the UTC `today` is already
+    the next date, so the rejections are booked under 08-21 and the breaker
+    stays paused through Friday's session; it re-arms at Friday 20:00 ET
+    (today 08-22)."""
+    cyc = lambda *t, **k: _session_cycle(m, a, pl, alerts, monkeypatch, *t, **k)
+    cyc(2026, 8, 20, 10, 35)                                  # Thu in session: pre-funded
+    assert m.state.prefund_usd == 450.0 and m.state.bil_qty == 25   # 5 sh @ size_ref 90
+    for mi in (5, 10, 15, 20, 25, 30, 35):                    # Thu evening: UTC date 08-21
+        cyc(2026, 8, 20, 20, mi, today="2026-08-21")
+    assert blend_mod.intent_kind_paused("ENTER"), "breaker did not pause"
+    attempts = [o for o in a.orders(order_type="MOO") if o["status"] == "cancelled"]
+    assert len(attempts) == placements_to_pause, len(attempts)
+    assert m.state.prefund_usd == 450.0, "hold not re-armed at the charged cost"
+    assert not [o for o in a.orders("BIL") if o["qty"] > 0], "the sweep ate the entry's cash"
+    assert any("[202]" in x for x in alerts), "venue reason not surfaced"
+    cyc(2026, 8, 20, 21, 0, today="2026-08-21")               # same UTC day: still paused
+    assert blend_mod.intent_kind_paused("ENTER")
+    cyc(2026, 8, 21, 9, 35, today="2026-08-21")               # Fri in session, still paused
+    assert m.state.prefund_usd == 450.0, "hold released while ENTER was paused"
+    assert not [o for o in a.orders("BIL") if o["qty"] > 0], "cash re-swept on Friday"
+    a.reject = False                                          # the venue now accepts
+    cyc(2026, 8, 21, 20, 5, today="2026-08-22")               # Fri 20:05: breaker rolls
+    working = [o for o in a.orders(order_type="MOO") if o["status"] == "working"]
+    assert len(working) == 1 and working[0]["qty"] == 5, "re-plan not full size"
+    assert m.state.prefund_usd == 0.0
+
+
+def test_gate_r19_a_venue_rejected_entry_keeps_its_cash_held(tmp_path, monkeypatch):
+    """The knock-on of 2026-09-10: rejections paused ENTER, the placements
+    had 'spent' the hold, and the sweep bought the entry's cash back (BIL
+    +10 at 16:19 ET) - the entry then needed a human to cancel the sweep by
+    hand or lose a session. A rejection must re-arm the hold at the CHARGED
+    cost (gapped quote: size_ref 90 vs entry_ref 50); the paused book keeps
+    the cash through the next session; the re-plan when the breaker rolls
+    places full size. Asynchronous shape: one count per placement."""
+    blend_mod.intent_breaker_clear()
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
+    a = VenueRejectsMooAdapter()
+    alerts = []
+    pl = payload(entries=[entry()], stops=[stop_row()])
+    monkeypatch.setattr(blend_mod, "reference_prices",
+                        lambda *_a, **_k: {**PRICES, "CRSP": 90.0})
+    try:
+        _reject_then_recover(m, a, pl, alerts, monkeypatch, placements_to_pause=5)
+    finally:
+        blend_mod.intent_breaker_clear()
+
+
+def test_gate_r19_the_synchronous_rejection_shape_recovers_the_same_way(tmp_path, monkeypatch):
+    """The live shape (TESTS-1 / CASH-2): the placement RAISES, the journal
+    stays pending, reconcile re-arms the hold a cycle later and books a
+    second count - so three placements trip the breaker. Between the raise
+    and the re-arm nothing may sweep the cash (the planning cycle already
+    reserved it)."""
+    blend_mod.intent_breaker_clear()
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
+    a = VenueRejectsMooSyncAdapter()
+    alerts = []
+    pl = payload(entries=[entry()], stops=[stop_row()])
+    monkeypatch.setattr(blend_mod, "reference_prices",
+                        lambda *_a, **_k: {**PRICES, "CRSP": 90.0})
+    try:
+        _reject_then_recover(m, a, pl, alerts, monkeypatch, placements_to_pause=3)
+    finally:
+        blend_mod.intent_breaker_clear()
+
+
+def test_gate_r19_a_cancel_with_executions_is_loud_and_holds_only_the_remainder(tmp_path, monkeypatch):
+    """CASH-3: a cancelled order can carry a partial fill. Those shares are
+    at the venue and not in the ledger (pre-existing gap, now RED); the
+    re-arm must cover only the unexecuted remainder, or the re-plan sizes
+    full against cash the venue has already debited."""
+    blend_mod.intent_breaker_clear()
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
+    a = VenueRejectsMooAdapter()
+    a.partial = 2
+    alerts = []
+    pl = payload(entries=[entry()], stops=[stop_row()])
+    monkeypatch.setattr(blend_mod, "reference_prices",
+                        lambda *_a, **_k: {**PRICES, "CRSP": 90.0})
+    cyc = lambda *t, **k: _session_cycle(m, a, pl, alerts, monkeypatch, *t, **k)
+    try:
+        cyc(2026, 8, 20, 10, 35)
+        cyc(2026, 8, 20, 20, 5, today="2026-08-21")           # placed, cancelled with 2 executed
+        assert m.state.prefund_usd == 0.0
+        a.reject = False                                      # no further rejections
+        cyc(2026, 8, 20, 20, 10, today="2026-08-21")          # reconcile reads the cancel
+        assert any("2 of 5 sh EXECUTED" in x and "NOT booked" in x for x in alerts), alerts
+        # the re-arm held 3 x 90 = 270, then the same cycle re-planned and spent it
+        held_then_spent = [e for e in m.state.events if "EXECUTED" in e["msg"]]
+        assert held_then_spent
+        (moo,) = [o for o in a.orders(order_type="MOO") if o["status"] == "working"]
+        assert moo["qty"] == 5                                # cash 460 covers 450
+        assert m.state.prefund_usd == 0.0
+    finally:
+        blend_mod.intent_breaker_clear()
+
+
+def _utc_cycle(m, a, pl, alerts, monkeypatch, y, mo, d, h, mi, today):
+    """Like _session_cycle but pinned to a UTC-tz datetime, so the ET
+    conversion the code performs is real (round 19 review, TESTS-4)."""
+    monkeypatch.setattr(blend_mod, "_now_utc",
+                        lambda: _dt(y, mo, d, h, mi, tzinfo=_tz.utc))
+    return run_cycle(m, a, pl, today, alert=alerts.append)
+
+
+def _winter_book(tmp_path, monkeypatch):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
+    a = SessionDryAdapter()
+    e = entry()
+    e["fire_date"] = "2027-01-14"
+    pl = payload(entries=[e], stops=[stop_row()])
+    pl["as_of"] = "2027-01-14"
+    monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: PRICES)
+    return m, a, pl, e
+
+
+def test_gate_r19_hold_survives_the_winter_utc_roll(tmp_path, monkeypatch):
+    """In EST the UTC date rolls at 19:00 ET - inside the after-hours window
+    this round closes. A release keyed on `today` would re-sweep the cash
+    at 19:05 and dust-size the 20:05 placement: round 3's bug, one hour
+    earlier. The release keys on the SESSION date and regular hours. The
+    clock is pinned in UTC here: 00:05Z Fri IS 19:05 EST Thu."""
+    m, a, pl, e = _winter_book(tmp_path, monkeypatch)
+    alerts = []
+    cyc = lambda *t, **k: _utc_cycle(m, a, pl, alerts, monkeypatch, *t, **k)
+    cyc(2027, 1, 14, 19, 0, today="2027-01-14")               # 14:00 EST Thu: pre-funded
+    assert m.state.prefund_usd == 250.0 and m.state.bil_qty == 27
+    assert m.state.prefund_date == "2027-01-14"
+    pl["entries"] = []                                        # tracker blip
+    cyc(2027, 1, 15, 0, 5, today="2027-01-15")                # 19:05 EST Thu
+    assert m.state.prefund_usd == 250.0, "hold released on the winter UTC roll"
+    assert not [o for o in a.orders("BIL") if o["qty"] > 0], "cash re-swept at 19:05 ET"
+    pl["entries"] = [e]                                       # the fire is back
+    cyc(2027, 1, 15, 1, 5, today="2027-01-15")                # 20:05 EST Thu
+    (moo,) = a.orders(order_type="MOO")
+    assert moo["qty"] == 5 and m.state.prefund_usd == 0.0
+
+
+def test_gate_r19_prefund_stamps_the_session_date_not_utc(tmp_path, monkeypatch):
+    """A pre-fund made in after-hours after the winter UTC roll (19:30 EST =
+    00:30Z next date) must be stamped with the SESSION date, or the next
+    morning's release compares equal dates and never fires."""
+    m, a, pl, e = _winter_book(tmp_path, monkeypatch)
+    alerts = []
+    cyc = lambda *t, **k: _utc_cycle(m, a, pl, alerts, monkeypatch, *t, **k)
+    cyc(2027, 1, 15, 0, 30, today="2027-01-15")               # 19:30 EST Thu: deferred, pre-funded
+    assert m.state.prefund_usd == 250.0
+    assert m.state.prefund_date == "2027-01-14", m.state.prefund_date
+    pl["entries"] = []                                        # fire gone for good
+    a.open_market()                                           # the BIL sell fills at the open
+    cyc(2027, 1, 15, 14, 35, today="2027-01-15")              # 09:35 EST Fri: released, swept
+    assert m.state.prefund_usd == 0.0 and m.state.prefund_date == ""
+    assert [o for o in a.orders("BIL") if o["qty"] > 0], "idle cash not re-swept"
+
+
+def test_gate_r19_hold_survives_an_et_date_roll_outside_regular_hours(tmp_path, monkeypatch):
+    """VENUE-1: the regular_session_open clause of the release is load-
+    bearing on its own. Pre-fund Friday, blip the fire; at 00:05 ET
+    Saturday the ET date HAS rolled but no session has started - the hold
+    must stay (else the sweep rests a BUY for Monday and the returning fire
+    cannot fund until Tuesday). It releases at the next regular session."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
+    a = SessionDryAdapter()
+    alerts = []
+    pl = payload(entries=[entry()], stops=[stop_row()])
+    pl["as_of"] = "2026-08-21"
+    monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: PRICES)
+    cyc = lambda *t, **k: _session_cycle(m, a, pl, alerts, monkeypatch, *t, **k)
+    cyc(2026, 8, 21, 10, 35, today="2026-08-21")              # Fri: pre-funded
+    assert m.state.prefund_usd == 250.0
+    pl["entries"] = []
+    cyc(2026, 8, 21, 20, 5, today="2026-08-22")               # Fri 20:05: blip
+    cyc(2026, 8, 22, 0, 5, today="2026-08-22")                # Sat 00:05 ET: date rolled, no session
+    assert m.state.prefund_usd == 250.0, "hold released on the ET date roll"
+    assert not [o for o in a.orders("BIL") if o["qty"] > 0], "sweep BUY resting for Monday"
+    pl["entries"] = [entry()]
+    cyc(2026, 8, 22, 10, 0, today="2026-08-22")               # Sat 10:00: fire back, placed
+    (moo,) = a.orders(order_type="MOO")
+    assert moo["qty"] == 5 and m.state.prefund_usd == 0.0
+    # and the hold DOES release once a regular session starts with the fire gone
+    m2 = mk(tmp_path / "b")
+    _seed_initialized(m2, sleeve_cash=10.0, bil_qty=30)
+    a2 = SessionDryAdapter()
+    cyc2 = lambda *t, **k: _session_cycle(m2, a2, pl, alerts, monkeypatch, *t, **k)
+    pl["entries"] = [entry()]
+    cyc2(2026, 8, 21, 10, 35, today="2026-08-21")
+    pl["entries"] = []
+    pl["as_of"] = "2026-08-24"
+    cyc2(2026, 8, 24, 9, 35, today="2026-08-24")              # Mon in session: released
+    assert m2.state.prefund_usd == 0.0
+    assert [o for o in a2.orders("BIL") if o["qty"] > 0], "idle cash not re-swept"
+
+
+def test_gate_r19_stale_alert_exempts_a_sell_resting_before_the_bell(tmp_path, monkeypatch):
+    """TESTS-5: the stale-order WARN ('still working after Nd') exempts an
+    order resting for the open while the regular session is not open. A
+    sell placed Friday after-hours is 3 days old at Monday 09:27 ET - not
+    stale, the bell has not rung. Keyed on the OPG window it would page."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
+    a = SessionDryAdapter()
+    alerts = []
+    pl = payload(entries=[entry()], stops=[stop_row()])
+    pl["as_of"] = "2026-08-21"
+    monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: PRICES)
+    cyc = lambda *t, **k: _session_cycle(m, a, pl, alerts, monkeypatch, *t, **k)
+    cyc(2026, 8, 21, 16, 5, today="2026-08-21")               # Fri after-hours: BIL sell rests
+    (sell,) = a.orders("BIL")
+    assert sell["status"] == "working"
+    pl["as_of"] = "2026-08-24"
+    cyc(2026, 8, 24, 9, 27, today="2026-08-24")               # Mon, before the bell, 3d old
+    assert sell["status"] == "working"
+    assert not [ev for ev in m.state.events if "still working" in ev["msg"]], "paged stale before the bell"
+    assert not any(rec.get("stale_alerted") for rec in m.state.pending_book_orders.values())
+
+
+def test_gate_r19_a_resting_sell_is_not_stuck_during_after_hours(tmp_path, monkeypatch):
+    """A MKT sell placed after the close rests at the venue until the open.
+    With the OPG window now closed 16:00-20:00, the resting exemption must
+    key on REGULAR hours, or reconcile 2b counts the after-hours cycles as
+    stuck and cancels the sell at 16:20 - the round-1 wedge, reborn. The
+    count starts at the 09:30 bell, not the 09:25 planning cutoff."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=10.0, bil_qty=30)
+    a = SessionDryAdapter()
+    alerts = []
+    pl = payload(entries=[entry()], stops=[stop_row()])
+    monkeypatch.setattr(blend_mod, "reference_prices", lambda *_a, **_k: PRICES)
+    cyc = lambda *t: _session_cycle(m, a, pl, alerts, monkeypatch, *t)
+    cyc(2026, 8, 20, 16, 5)                                   # deferred + pre-fund: BIL sell rests
+    (sell,) = a.orders("BIL")
+    assert sell["qty"] < 0 and sell["status"] == "working"
+    for h, mi in ((16, 10), (16, 15), (16, 20), (16, 25), (19, 55), (20, 5), (23, 0)):
+        cyc(2026, 8, 20, h, mi)
+    assert sell["status"] == "working", "resting sell cancelled as stuck in after-hours"
+    assert not [ev for ev in m.state.events if "stuck" in ev["msg"]]
+    cyc(2026, 8, 21, 9, 29)                                   # pre-bell: still resting
+    assert sell["status"] == "working"
+    for mi in (35, 40, 45):                                   # in session and unfilled: stuck
+        cyc(2026, 8, 21, 9, mi)
+    assert sell["status"] == "cancelled"
