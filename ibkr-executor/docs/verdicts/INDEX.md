@@ -936,10 +936,75 @@ name, reconstruct it from `git log origin/main -- ibkr-executor/`.
     `entry_ref`). Kept as defense in depth; recorded, not hidden.
 * **Suite:** 465 passed (23 round-20 gates); the eight attack probes at
   their documented marks.
-* **B9 status.** Still `open`, and this is why: the chain the judge named —
-  MOO adopted, GTC stop resting, first ratchet — has now reached "adopted"
-  and stopped at the stop. Close it when a stop of this book's own making
-  is confirmed resting at the venue, with its order ref.
+* **B9 status: CLOSED 2026-09-11 15:12:51 ET.** The chain the judge named
+  ran end to end, live: `🧬 blend ENTER GH x6 MOO accepted` 09:06 ET → fill
+  159.24 at the 09:30 open, adopted by reconcile 09:26-09:30 → protective
+  stop **341** resting at 137.05 (14:09 ET, first cycle of round 20) → first
+  ratchet `137.05 -> 137.20`, stop **405** resting (15:12:51 ET, first
+  cycle of round 21). It took two live-blocker rounds in one day to get
+  from "adopted" to "ratcheted"; both are below.
+* **Round 20 live record.** Deployed 14:09 ET, mid-session, at the
+  operator's explicit call over the reviewer's after-close recommendation
+  (the position was naked and the STOP_MISSING alert fired every cycle).
+  Restart ~1 min, no 2FA push needed. First cycle placed 341 at 137.05 —
+  and then round 21's incident began (below).
+
+---
+
+## Round 21 — the ratchet stacked Inactive stops (LIVE BLOCKER, 2026-09-11)
+
+* **The incident.** 14:09-15:10 ET, the first cycles after round 20: with
+  341 resting at 137.05 and the tracker publishing 137.205, every cycle the
+  ratchet placed a SECOND 6-share sell-stop at 137.20 before cancelling 341
+  — the "no naked window" design of pass 3. IBKR answered **`Inactive`**
+  each time. `_IB_CANCELLED` lists Inactive as dead, so `_await_placement`
+  raised "rejected", the book alerted "replace REJECTED, old stop kept",
+  recorded nothing, cancelled nothing — and the dedupe next cycle ranked
+  the Inactive prior as cancelled and placed ANOTHER. At IBKR an Inactive
+  order is accepted-not-active: cancellable, and able to go live later.
+  Four stops on six shares inside fifteen minutes, then one more every five
+  minutes, invisible to every invariant (none was the book's), each a short
+  on a trigger. The operator cancelled them by hand; the `BLEND_ENABLED`
+  circuit breaker was asked for but the fix landed first.
+* **Why the book could not see it.** Two blind spots, both now closed:
+  the venue reason for the refusal was suppressed (round 20's CAUSE-3 had
+  just fixed 110/321/404 — Inactive carried none of those), and the
+  ratchet's rejection path wrote a Telegram line but no book event, so
+  `/status` showed nothing after 12:19 ET while the loop was misbehaving.
+* **Remediated by:** `b08f237`, deployed as PR #57 (`8007599`) at 15:12 ET
+  **before its counter-agent review, at the operator's explicit call** —
+  the live book was adding a stop every cycle. The review ran immediately
+  after; its verdict is appended below when it lands.
+  * `_execute_adjust_stop` is cancel-THEN-place: the old stop is cancelled
+    and ACKed first, the new level placed only then. The naked window is
+    the round-trip between two acks. A refused new level re-places the OLD
+    level at once (`_ensure_stop`; the old id holds only a cancelled
+    prior); a cancel that raises (FILLED / state UNKNOWN) defers the whole
+    ratchet with the old stop untouched. Outcomes are book events.
+  * `_await_placement` cancels an Inactive order before raising: the
+    adapter reports it dead, so it makes it dead.
+  * Gates: a stacking-venue double (three cycles, one stop at the new
+    level throughout, nothing left behind); a refused new level restores
+    the old one; an unresolved cancel places nothing; an already-gone old
+    stop does not block; the adapter cancels Inactive. The two M5 gates and
+    round 20's dedupe-adopt gate re-pinned on the new invariant. Trade-off
+    stated in the M5 gate: a venue that refuses EVERY stop now leaves the
+    position STOP_MISSING and loud, where the old design kept the old stop
+    — the old design also stacked, which is what happened.
+  * Mutants (4): place-then-cancel restored, fallback removed, cancel guard
+    removed, Inactive-cancel removed — all killed. 470 tests.
+* **Live confirmation.** First cycle after the restart, 15:12:51 ET:
+  `stop ratchet GH (call 18): trail ratchet 137.05 -> 137.20`; 341
+  cancelled, 405 resting; `stop_missing` False, no orphans, no unprotected
+  rows, entries unblocked.
+* **Open.** Leftover Inactive ghosts at the venue from 14:09-15:10 are the
+  operator's to cancel (the book never owned them); a reconcile-time
+  same-symbol open-order census (sum of resting sell-stop qty vs held)
+  would have made every stacked stop visible — DEPLOY-6 from round 20,
+  still open. CAUSE-6 (`outsideRth` unset) still open.
+
+---
+
 
 ---
 
