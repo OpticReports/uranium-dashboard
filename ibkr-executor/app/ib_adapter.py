@@ -1002,6 +1002,23 @@ class IBAdapter:
             if s in _IB_CANCELLED:
                 why = _trade_errors(trade, dead=True,
                                     venue=self._venue_error(trade))
+                if s == "Inactive":
+                    # ROUND 21 (2026-09-11, live). IB's "Inactive" is NOT
+                    # dead: the order was accepted by the system and is
+                    # merely not active - it is cancellable, and it can go
+                    # LIVE later. This method reports it as a rejection
+                    # (the caller must not count on it), so make the two
+                    # agree: cancel it. Four such stops stacked on GH in
+                    # fifteen minutes when the ratchet's second sell-stop
+                    # came back Inactive each cycle and was left resting.
+                    try:
+                        self.ib.cancelOrder(trade.order)
+                        logger.warning("order %s came back Inactive - "
+                                       "cancelled so it cannot go live "
+                                       "unrecorded", _order_ref(trade))
+                    except Exception as exc:    # noqa: BLE001
+                        logger.warning("cancel of Inactive order %s failed: "
+                                       "%s", _order_ref(trade), exc)
                 raise RuntimeError(
                     f"order rejected by venue (status {s})"
                     + (f": {why}" if why else ""))

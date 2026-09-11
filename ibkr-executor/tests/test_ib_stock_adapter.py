@@ -492,6 +492,27 @@ def test_gate_r20b_a_rejection_code_is_reported_not_suppressed(ib_adapter):
     assert "110" in ib_adapter.find_stock_order("r110")["reason"]
 
 
+def test_gate_r21_an_inactive_order_is_cancelled_on_sight(ib_adapter):
+    """Round 21: IB's `Inactive` is accepted-not-active, cancellable, and
+    can go live later. The adapter reports it as a rejection, so it must
+    also make it dead - otherwise the caller places again next cycle and
+    the Inactive orders stack (four on GH in fifteen minutes, live)."""
+    fake = ib_adapter.ib
+    cancelled = []
+
+    def go_inactive(t):
+        t.orderStatus.status = "Inactive"
+        t.log = [types.SimpleNamespace(errorCode=201, status="Inactive",
+                                       message="Order rejected - reason: test")]
+    fake.on_place = go_inactive
+    fake.on_cancel = lambda t: (cancelled.append(t.order.orderRef),
+                                setattr(t.orderStatus, "status", "Cancelled"))
+    with pytest.raises(RuntimeError, match="Inactive"):
+        ib_adapter.place_stock_order("GH", -6, "STP", stop_price=137.2,
+                                     tif="GTC", client_order_id="blend-18-stp-137.2000")
+    assert cancelled == ["blend-18-stp-137.2000"], "Inactive order left at the venue"
+
+
 def test_mkt_is_day_market_order_and_signed_qty_maps_sides(ib_adapter):
     ib_adapter.place_stock_order("SPY", 70, "MKT")
     ib_adapter.place_stock_order("SPY", -30, "MKT")

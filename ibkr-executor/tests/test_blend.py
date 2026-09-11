@@ -715,7 +715,13 @@ def test_gate_m4_recycled_call_id_refused_with_alert(tmp_path):
 # M5: stop replace is place-NEW-first, cancel-old-second; a rejected
 # replacement keeps the old stop.
 
-def test_gate_m5_replace_places_new_stop_before_cancelling_old(tmp_path):
+def test_gate_m5_replace_cancels_old_then_places_new_and_one_stop_rests(tmp_path):
+    """M5, re-pinned in round 21. The original gate asserted place-NEW-then-
+    cancel-old ("no naked window"). Live, that order of operations stacked
+    Inactive second stops at the venue every cycle (2026-09-11). The
+    invariant that actually protects the book is: the old stop is cancelled
+    and ACKed BEFORE the new one is placed, and exactly one stop rests at
+    the new level when the cycle ends."""
     m = mk(tmp_path)
     _seed_initialized(m, sleeve_cash=2_750.0)
     _held_position(m)
@@ -724,38 +730,68 @@ def test_gate_m5_replace_places_new_stop_before_cancelling_old(tmp_path):
               alert=lambda _: None)
     ops = [e for e in a.log
            if e["action"] in ("place_stock_order", "cancel_stock_order")]
-    assert ops[0]["action"] == "place_stock_order"      # NEW stop first
-    assert ops[0]["order_type"] == "STP" and ops[0]["stop_price"] == 47.0
-    assert ops[1]["action"] == "cancel_stock_order"     # old cancelled after
-    assert ops[1]["ref"] == "old-stop"
+    assert ops[0]["action"] == "cancel_stock_order"     # old retired FIRST
+    assert ops[0]["ref"] == "old-stop"
+    assert ops[1]["action"] == "place_stock_order"      # then the new level
+    assert ops[1]["order_type"] == "STP" and ops[1]["stop_price"] == 47.0
+    resting = [o for o in a._orders.values()
+               if o["order_type"] == "STP" and o["status"] == "working"]
+    assert len(resting) == 1 and resting[0]["stop_price"] == 47.0
     assert m.state.positions["1"].stop_level == 47.0
 
 
-def test_gate_m5_rejected_replacement_keeps_old_stop_working(tmp_path, monkeypatch):
+def test_gate_m5_rejected_replacement_restores_the_old_level_or_says_naked(tmp_path, monkeypatch):
+    """M5, re-pinned in round 21. Before: a rejected replacement left the
+    old stop untouched (it had never been cancelled). Now the old stop is
+    already gone when the new level is refused, so the book must (a) put
+    the OLD level straight back when the venue will take it, and (b) when
+    the venue refuses every stop, end STOP_MISSING and LOUD - a known naked
+    position with entries blocked, never a silent one. Both halves here."""
     monkeypatch.setattr(blend_mod, "STOP_RETRY_SLEEP_S", 0)
+    # (a) the venue takes the old level, refuses the new one
     m = mk(tmp_path)
     _seed_initialized(m)
-    a = _RejectStopAdapter()
-    a.reject_stp = False
+    a = _FlakyStopAdapter.__mro__[1]()          # a plain DryAdapter
     run_cycle(m, a, payload(entries=[entry()], stops=[stop_row()]),
               "2026-08-20", alert=lambda _: None)
     old_ref = m.state.positions["1"].stop_order_ref
-    assert old_ref in a._stops
-    a.reject_stp = True                           # the replacement will fail
+    real_place = a.place_stock_order
+
+    def refuse_47(symbol, qty, order_type, stop_price=None, **kw):
+        if order_type == "STP" and stop_price == 47.0:
+            raise RuntimeError("venue reject (simulated)")
+        return real_place(symbol, qty, order_type, stop_price=stop_price, **kw)
+    a.place_stock_order = refuse_47
     alerts: list[str] = []
     run_cycle(m, a, payload(stops=[stop_row(trail=47.0)]), "2026-08-21",
               alert=alerts.append)
     pos = m.state.positions["1"]
-    assert pos.stop_order_ref == old_ref          # old stop untouched
-    assert pos.stop_level == 44.0                 # ratchet not recorded
-    assert old_ref in a._stops                    # ...and still WORKING
-    assert any("REJECTED" in msg for msg in alerts)
-    # Level unchanged means the ratchet retries next cycle once the venue
-    # heals — never a naked window in between.
-    a.reject_stp = False
+    resting = [o for o in a._orders.values()
+               if o["order_type"] == "STP" and o["status"] == "working"]
+    assert len(resting) == 1 and resting[0]["stop_price"] == 44.0
+    assert pos.stop_order_ref == resting[0]["order_ref"] != old_ref
+    assert pos.stop_level == 44.0 and not pos.stop_missing
+    assert any("REJECTED" in x for x in alerts) and any("restored" in x for x in alerts)
+    # the venue heals: the ratchet lands next cycle
+    a.place_stock_order = real_place
     run_cycle(m, a, payload(stops=[stop_row(trail=47.0)]), "2026-08-22",
               alert=alerts.append)
     assert m.state.positions["1"].stop_level == 47.0
+    # (b) the venue refuses EVERY stop: naked, and it says so
+    m2 = mk(tmp_path / "b")
+    _seed_initialized(m2)
+    a2 = _RejectStopAdapter()
+    a2.reject_stp = False
+    run_cycle(m2, a2, payload(entries=[entry()], stops=[stop_row()]),
+              "2026-08-20", alert=lambda _: None)
+    a2.reject_stp = True
+    alerts2: list[str] = []
+    run_cycle(m2, a2, payload(stops=[stop_row(trail=47.0)]), "2026-08-21",
+              alert=alerts2.append)
+    p2 = m2.state.positions["1"]
+    assert p2.stop_missing and p2.stop_order_ref is None
+    assert blend_mod._is_unprotected(p2) and m2.has_naked_position()
+    assert any("STOP_MISSING" in x for x in alerts2), alerts2
 
 
 # M6: write-ahead journal + deterministic client order ids close the
@@ -8261,11 +8297,12 @@ def test_gate_r20b_an_unchanged_off_grid_trail_never_re_places_the_stop(tmp_path
     assert not [x for x in alerts if "naked" in x or "CANCELLED" in x], alerts
 
 
-def test_gate_r20b_a_duplicate_suppressed_replace_never_cancels_the_resting_stop(tmp_path):
-    """The belt behind the ingestion snap. If an ADJUST_STOP is ever planned
-    at the level the resting order already carries, the adapter returns that
-    same order (dedupe by orderRef) — and cancelling `old_ref` then retires
-    the book's only protection. Adopt and stop instead."""
+def test_gate_r20b_a_replace_at_the_resting_level_leaves_exactly_one_stop(tmp_path):
+    """Round 20 pinned "a duplicate-suppressed replace never cancels the
+    resting stop". Round 21 changed the mechanism (cancel first, then
+    place) so the property is re-stated as the invariant it protected: an
+    ADJUST_STOP planned at the level already resting ends with exactly one
+    working stop at that level and the position protected."""
     from app.blend import _execute_adjust_stop
 
     m = mk(tmp_path)
@@ -8281,9 +8318,10 @@ def test_gate_r20b_a_duplicate_suppressed_replace_never_cancels_the_resting_stop
                                 "stop_level": 44.05, "reason": "trail ratchet",
                                 "old_ref": rs["order_ref"]},
                          alerts.append)
-    assert alerts == [], "an adopt onto the resting order is not a ratchet event"
-    assert a._orders[rs["order_ref"]]["status"] == "working", "cancelled its own stop"
-    assert pos.stop_order_ref == rs["order_ref"] and not pos.stop_missing
+    resting = [o for o in a._orders.values()
+               if o["order_type"] == "STP" and o["status"] == "working"]
+    assert len(resting) == 1 and resting[0]["stop_price"] == 44.05
+    assert pos.stop_order_ref == resting[0]["order_ref"] and not pos.stop_missing
     assert not blend_mod._is_unprotected(pos)
 
 
@@ -8513,3 +8551,140 @@ def test_gate_r20b_a_venue_side_cancel_is_still_detected_after_the_snap(tmp_path
                if o["order_type"] == "STP" and o["status"] == "working"]
     assert len(resting) == 1 and resting[0]["stop_price"] == 44.05
     assert m.state.positions["1"].stop_order_ref == resting[0]["order_ref"]
+
+
+# --- round 21 (2026-09-11): the ratchet is cancel-then-place ----------------
+# Live, first cycles after round 20: the ratchet's SECOND sell-stop against
+# GH's six shares came back `Inactive` from the venue every cycle; the book
+# reported it rejected, kept the old stop, recorded nothing, cancelled
+# nothing - and next cycle placed another. Four stops on six shares in
+# fifteen minutes. MUTATION-VERIFIED (docs/verdicts/INDEX.md, round 21):
+# place-then-cancel restored, the post-cancel fallback removed, the cancel
+# guard removed, and the adapter's cancel-on-Inactive removed each turn a
+# gate red.
+
+class StackRejectingAdapter(DryAdapter):
+    """The venue's shape on 2026-09-11: a second sell-stop on a symbol that
+    already has one resting is accepted-but-Inactive - reported to the
+    caller as a rejection - and it STAYS at the venue unless cancelled."""
+
+    def __init__(self, *a, **k):
+        super().__init__(*a, **k)
+        self.inactive: list[str] = []
+
+    def place_stock_order(self, symbol, qty, order_type, **kw):
+        if order_type == "STP" and qty < 0:
+            resting = [o for o in self._orders.values()
+                       if o["symbol"] == symbol and o["order_type"] == "STP"
+                       and o["qty"] < 0 and o["status"] == "working"]
+            if resting:
+                ref = f"inactive-{symbol}-{len(self.inactive)}"
+                self.inactive.append(ref)
+                raise RuntimeError("order rejected by venue (status Inactive)")
+        return super().place_stock_order(symbol, qty, order_type, **kw)
+
+
+class RefusesNewLevelAdapter(DryAdapter):
+    """Refuses every STP placement except at `allowed` levels: the shape
+    where the venue takes the OLD level and refuses the NEW one."""
+    allowed = (44.05,)
+
+    def place_stock_order(self, symbol, qty, order_type, stop_price=None, **kw):
+        if order_type == "STP" and round(float(stop_price), 2) not in self.allowed:
+            raise RuntimeError("order rejected by venue (status Cancelled): [201] test")
+        return super().place_stock_order(symbol, qty, order_type,
+                                         stop_price=stop_price, **kw)
+
+
+def _resting_stops(a):
+    return [o for o in a._orders.values()
+            if o["order_type"] == "STP" and o["status"] == "working"]
+
+
+def test_gate_r21_ratchet_never_rests_two_stops_on_a_venue_that_stacks(tmp_path):
+    """THE gate. A venue that Inactive-s a second sell-stop: with
+    place-then-cancel the book keeps the old stop and leaves an Inactive
+    order behind every cycle; with cancel-then-place exactly one stop rests
+    at the NEW level after the cycle and nothing was left behind."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = StackRejectingAdapter()
+    a.seed_position("CRSP", 5)
+    first = a.place_stock_order("CRSP", -5, "STP", stop_price=44.05, tif="GTC",
+                                client_order_id=blend_mod.stop_client_id(1, 44.05))
+    _held_position(m, stop_level=44.05, stop_ref=first["order_ref"])
+    pos = m.state.positions["1"]
+    alerts = []
+    for day in ("2026-08-21", "2026-08-24", "2026-08-25"):
+        run_cycle(m, a, payload(stops=[stop_row(trail=44.2)]), day, alert=alerts.append)
+        resting = _resting_stops(a)
+        assert len(resting) == 1, (day, resting)
+        assert resting[0]["stop_price"] == 44.2 and resting[0]["order_ref"] == pos.stop_order_ref
+        assert a.inactive == [], "a second stop reached the venue"
+    assert pos.stop_level == 44.2 and not pos.stop_missing
+    assert a._orders[first["order_ref"]]["status"] == "cancelled"
+
+
+def test_gate_r21_a_refused_new_level_re_places_the_old_one_at_once(tmp_path):
+    """If the venue refuses the NEW level after the old stop is cancelled,
+    the position is naked NOW - the old level goes straight back, loudly,
+    and the ratchet is retried next cycle."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = RefusesNewLevelAdapter()
+    first = a.place_stock_order("CRSP", -5, "STP", stop_price=44.05, tif="GTC",
+                                client_order_id=blend_mod.stop_client_id(1, 44.05))
+    _held_position(m, stop_level=44.05, stop_ref=first["order_ref"])
+    pos = m.state.positions["1"]
+    alerts = []
+    blend_mod.STOP_RETRY_SLEEP_S, keep = 0.0, blend_mod.STOP_RETRY_SLEEP_S
+    try:
+        run_cycle(m, a, payload(stops=[stop_row(trail=44.2)]), "2026-08-21",
+                  alert=alerts.append)
+    finally:
+        blend_mod.STOP_RETRY_SLEEP_S = keep
+    resting = _resting_stops(a)
+    assert len(resting) == 1 and resting[0]["stop_price"] == 44.05, resting
+    assert resting[0]["order_ref"] == pos.stop_order_ref != first["order_ref"]
+    assert pos.stop_level == 44.05 and not pos.stop_missing
+    assert not blend_mod._is_unprotected(pos)
+    assert any("REJECTED" in x and "re-placing" in x for x in alerts), alerts
+    assert any("restored" in x for x in alerts), alerts
+
+
+def test_gate_r21_an_unresolved_cancel_defers_the_ratchet_and_places_nothing(tmp_path):
+    """A cancel that raises (FILLED, or state UNKNOWN) means the old stop
+    may still rest: placing the new one would be the stack. Defer."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    first = a.place_stock_order("CRSP", -5, "STP", stop_price=44.05, tif="GTC",
+                                client_order_id=blend_mod.stop_client_id(1, 44.05))
+    _held_position(m, stop_level=44.05, stop_ref=first["order_ref"])
+    pos = m.state.positions["1"]
+
+    def boom(ref):
+        raise RuntimeError(f"cancel of {ref} not acknowledged — state UNKNOWN")
+    a.cancel_stock_order = boom
+    alerts = []
+    run_cycle(m, a, payload(stops=[stop_row(trail=44.2)]), "2026-08-21",
+              alert=alerts.append)
+    resting = _resting_stops(a)
+    assert len(resting) == 1 and resting[0]["order_ref"] == first["order_ref"]
+    assert pos.stop_level == 44.05 and pos.stop_order_ref == first["order_ref"]
+    assert any("DEFERRED" in x for x in alerts), alerts
+
+
+def test_gate_r21_an_already_gone_old_stop_does_not_block_the_new_one(tmp_path):
+    """cancel_stock_order returning False (not found / already cancelled)
+    is not a stack risk: the new level is placed."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    _held_position(m, stop_level=44.05, stop_ref="vanished-ref")
+    pos = m.state.positions["1"]
+    run_cycle(m, a, payload(stops=[stop_row(trail=44.2)]), "2026-08-21",
+              alert=lambda _: None)
+    resting = _resting_stops(a)
+    assert len(resting) == 1 and resting[0]["stop_price"] == 44.2
+    assert pos.stop_order_ref == resting[0]["order_ref"] and pos.stop_level == 44.2
