@@ -4165,44 +4165,70 @@ def _execute_enter(mgr: Blend3070Manager, adapter, it: dict, today: str,
 
 def _execute_adjust_stop(mgr: Blend3070Manager, adapter, it: dict,
                          alert) -> None:
-    """Cancel/replace with NO naked window: place the NEW stop first, cancel
-    the old second. A rejected replacement keeps the old stop working; a
-    failed cancel of the old leaves it tracked as an orphan (retried every
-    cycle, its fill alerted RED)."""
-    try:
-        rs = adapter.place_stock_order(
-            it["symbol"], -it["qty"], "STP", stop_price=it["stop_level"],
-            tif="GTC",
-            client_order_id=stop_client_id(it["call_id"], it["stop_level"]))
-    except Exception as exc:  # noqa: BLE001
-        alert(f"⚠️ blend stop replace REJECTED for {it['symbol']} at "
-              f"{it['stop_level']:.2f} ({exc}) — old stop kept working, "
-              f"will retry next cycle")
-        return
-    mgr.on_stop_placed(it["call_id"], rs["order_ref"], it["stop_level"])
+    """Cancel THEN place (round 21). The book never has two protective
+    stops resting for one position, not even for a second.
+
+    The original design placed the NEW stop first "so there is no naked
+    window", then cancelled the old. Live, 2026-09-11 14:09-14:45 ET: the
+    venue answered every second sell-stop against GH's six shares with
+    `Inactive` — accepted, not active, cancellable, able to go live later.
+    The adapter reported that as a rejection, the book kept the old stop,
+    recorded nothing, cancelled nothing, and the next cycle placed another:
+    four stops on six shares inside fifteen minutes, invisible to every
+    invariant (they were never the book's), each one a short on a trigger.
+    The operator cancelled them by hand and switched the book off.
+
+    Now: the old stop is cancelled and ACKed first; only then is the new
+    one placed. The naked window is the round-trip between the two acks,
+    measured in seconds, and if the new placement is refused the OLD level
+    is re-placed at once by `_ensure_stop` (its id is free again: the
+    venue holds only a cancelled prior under it). A cancel that raises
+    (FILLED, or an ambiguous ack) defers the whole ratchet: the old stop
+    is left exactly as it is and the next cycle tries again."""
+    sym, call_id, new_lvl = it["symbol"], it["call_id"], it["stop_level"]
     old_ref = it.get("old_ref")
-    if old_ref and old_ref == rs["order_ref"]:
-        # The venue returned the order that is ALREADY resting (dedupe by
-        # orderRef: the replacement's id is the id it carries). Nothing was
-        # replaced, so cancelling `old_ref` here would retire the only stop
-        # this position has — measured, on this exact path, by the round-20
-        # counter-agent. Adopt and stop (round 20).
-        mgr._event("INFO", f"stop replace for {it['symbol']} (call "
-                           f"{it['call_id']}) resolved to the order already "
-                           f"resting at {it['stop_level']:.2f} — nothing "
-                           f"cancelled")
-        return
     if old_ref:
         try:
-            adapter.cancel_stock_order(old_ref)   # False = already gone: fine
+            adapter.cancel_stock_order(old_ref)   # True, or False = already gone
         except Exception as exc:  # noqa: BLE001
-            mgr.record_orphan_stop(old_ref, {"symbol": it["symbol"],
-                                             "qty": -it["qty"],
-                                             "call_id": it["call_id"]})
-            alert(f"⚠️ blend: cancel of retired stop {old_ref} failed "
-                  f"({exc}) — TWO stops may rest for {it['symbol']}; "
-                  f"retrying cancel every cycle")
-    alert(f"🧬 blend STOP {it['symbol']}: {it['reason']}")
+            # FILLED (reconcile books it next pass) or state UNKNOWN: the
+            # old order may still rest, so nothing new may be placed.
+            mgr._event("WARN", f"stop ratchet for {sym} (call {call_id}) "
+                               f"deferred: cancel of {old_ref} unresolved "
+                               f"({exc})")
+            alert(f"⚠️ blend stop replace DEFERRED for {sym} at "
+                  f"{new_lvl:.2f}: the resting stop's cancel is unresolved "
+                  f"({exc}) — old stop left as is, retry next cycle")
+            return
+    try:
+        rs = adapter.place_stock_order(
+            sym, -it["qty"], "STP", stop_price=new_lvl, tif="GTC",
+            client_order_id=stop_client_id(call_id, new_lvl))
+        if rs.get("duplicate") and rs.get("status") != "working":
+            raise RuntimeError(f"the venue's order under the new stop id is "
+                               f"{rs.get('status')}, not working — id spent")
+    except Exception as exc:  # noqa: BLE001
+        # The old stop is already gone: the position is NAKED right now.
+        # Say so, and put the old level straight back — its id holds only
+        # a cancelled prior at the venue, so it is placeable again.
+        mgr._event("RED", f"stop ratchet for {sym} (call {call_id}) to "
+                          f"{new_lvl:.2f} REFUSED after the old stop was "
+                          f"cancelled ({exc}) — re-placing the old level")
+        alert(f"🚨🚨 blend stop replace REJECTED for {sym} at "
+              f"{new_lvl:.2f} ({exc}) — the old stop was already cancelled; "
+              f"re-placing the previous level NOW")
+        pos = mgr.state.positions.get(str(call_id))
+        if pos is not None:
+            mgr.mark_stop_missing(call_id)
+            if _ensure_stop(mgr, adapter, pos, alert):
+                alert(f"🧬 blend: protective stop restored for {sym} (call "
+                      f"{call_id}) at {pos.stop_level:.2f} — the ratchet to "
+                      f"{new_lvl:.2f} is retried next cycle")
+        return
+    mgr.on_stop_placed(call_id, rs["order_ref"], new_lvl)
+    mgr._event("INFO", f"stop ratchet {sym} (call {call_id}): "
+                       f"{it.get('reason', f'-> {new_lvl:.2f}')}")
+    alert(f"🧬 blend STOP {sym}: {it['reason']}")
 
 
 def _execute_exit(mgr: Blend3070Manager, adapter, it: dict,
