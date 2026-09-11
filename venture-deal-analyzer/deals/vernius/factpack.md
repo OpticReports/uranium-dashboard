@@ -333,9 +333,27 @@ error.
   **seekers** on a common architecture, with a committed **$250M** product
   centre — announced **10 Aug 2026**.
 - **Both landed one month before this deck was written. Neither is in it.**
-- [VERIFIED] **Valkyrie Dynamics "Vega"** — active radar homing head, <200 g,
-  5 W, **~$480** — presented to Ukrainian units March 2026. Roughly one-eighth
-  of Archimedes' reported price.
+- **[CORRECTED 2026-09-11 — a basis error of ours, withdrawn]
+  Valkyrie Dynamics "Vega"** — active radar homing head, <200 g, 5 W,
+  **~$460–480**, presented to Ukrainian units March 2026. Rev 1 of this pack
+  called it "roughly one-eighth of Archimedes' reported price" and the S1
+  landscape called it "the closest comp." **Both are withdrawn.** Vega detects
+  **Class 1 / Mavic-type drones at 100 m** and displays range, azimuth,
+  vertical angle and speed **to the operator's screen** (Militarnyi, Mar 2026;
+  suasnews, Jul 2026). Archimedes claims **Shahed-class at ~1 km**. That is
+  **10x the range against a larger, faster target class** — and since radar
+  range scales as the fourth root of the power-aperture-RCS product, the
+  capability gap is on the order of hundreds of times, not eight. Vega is also
+  a **pilot aid**; Archimedes is meant to remove the pilot. **These are
+  different products and the price comparison was invalid.**
+  *This is the same failure mode the pack criticises DexMat for — comparing
+  across an unstated basis — committed by us, against the company, and caught
+  only when the LP pushed on the wording.*
+  **What survives:** Valkyrie is a real competitor in the right category with
+  its lab inside Ukraine, and its second product **HEIMDALL** (Jul 2026),
+  marketed as a "miniaturized, AI-powered radar for drone interceptors," may
+  well be the genuine comp — but it has **NO published specifications**, so the
+  threat is **real and unquantified**, not established. Added to DD as a P2.
 - [VERIFIED] **Alexa Spatium** — a turbojet Ukrainian interceptor **already in
   service (Aug 2026) carrying its own X-band seeker in the nose.**
 - [VERIFIED] **Radionix** — established Ukrainian merchant seeker house, ~250
