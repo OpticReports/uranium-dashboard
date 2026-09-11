@@ -17,6 +17,7 @@ import asyncio
 import logging
 import math
 import time
+from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal, InvalidOperation
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +75,19 @@ COMMISSION_WAIT_S = 1.5      # after a synchronous fill, wait this long for
                              # (counter-agent round 2: read too early = 0.0)
 # ib_async warning codes: informational, never a rejection reason
 _IB_WARNING_CODES = {105, 110, 165, 321, 329, 399, 404, 434, 492, 10167}
+# ... except these, which KILL an order rather than annotate it, and are
+# therefore the reason a dead one died. Round 20 (2026-09-11): 110 was in
+# the suppression set, so the three refused GH stops — refused for exactly
+# this, "the price does not conform to the minimum price variation" — each
+# reported "no venue reason recorded", and the cause had to be inferred
+# from the price rather than read. Deliberately a SHORT list: only codes
+# this book has seen kill an order (110 today; 321 the read-only refusals
+# of 2026-09-08..10) or that cannot mean anything else (404, shares not
+# available for short sale). Everything else keeps round 3's behaviour —
+# a 399 "your order will not be placed until ..." on a cancelled order is
+# still not why it was cancelled. Add to this set when a new code is
+# OBSERVED killing an order, never on a guess.
+_IB_DEAD_REASON_CODES = {110, 321, 404}
 RECONNECT_BACKOFF_S = 15.0   # first retry delay after the gateway drops
 RECONNECT_BACKOFF_MAX_S = 300.0  # backoff cap (~one attempt per blend cycle)
 OUTAGE_ALERT_S = 30 * 60.0   # alert ONLY when down longer than this — the
@@ -113,6 +127,62 @@ def _usable_px(value) -> float | None:
     return v
 
 
+# VENUE PRICE INCREMENTS (live blocker, 2026-09-11). US equities quote in
+# whole CENTS at or above $1.00 and in $0.0001 increments below it (SEC Rule
+# 612). IBKR REJECTS an order whose price is not a multiple of the increment
+# — error 110, "The price does not conform to the minimum price variation
+# for this contract" — and the order comes back Cancelled. The tracker
+# publishes trail levels to four decimals (`trail_level` in the payload is
+# `round(level, 4)`), so the FIRST protective stop this book ever sent live
+# was 137.0507 on GH: refused three times, the position left naked and all
+# new entries blocked. Nothing between the tracker and `placeOrder` had ever
+# snapped a price to the venue's grid.
+TICK_AT_OR_ABOVE_1 = Decimal("0.01")
+TICK_BELOW_1 = Decimal("0.0001")
+
+
+def stock_tick(price: Decimal) -> Decimal:
+    """The venue's minimum price increment for a US equity at `price`."""
+    return TICK_BELOW_1 if price < Decimal("1") else TICK_AT_OR_ABOVE_1
+
+
+def round_stop_to_tick(stop_price: float, action: str) -> float:
+    """Snap a protective stop to a price the venue will accept, NEVER
+    tightening it.
+
+    A SELL stop protects a long: rounding DOWN can only trigger it later,
+    which is the conservative direction — the pre-registered risk per share
+    (`entry_ref - trail`) is never silently reduced by a rounding. A BUY
+    stop covers a short, so it rounds UP for the same reason. The move is
+    at most one tick (half a cent on the GH case) and is LOGGED by the
+    caller, never silent.
+
+    Decimal, not `round()`: binary floats put 137.0507 fractionally below
+    the value a decimal reader sees, and a stop is the one price on this
+    book that must be exactly what the venue can hold."""
+    try:
+        px = Decimal(str(float(stop_price)))
+    except (InvalidOperation, TypeError, ValueError) as exc:
+        raise ValueError(f"stop price {stop_price!r} is not a number") from exc
+    if not px.is_finite() or px <= 0:      # NaN first: it compares by raising
+        raise ValueError(f"stop price {stop_price!r} must be a positive number")
+    tick = stock_tick(px)
+    mode = ROUND_FLOOR if action.upper() == "SELL" else ROUND_CEILING
+    try:
+        snapped = px.quantize(tick, rounding=mode)
+    except (InvalidOperation, ValueError) as exc:   # past Decimal's context
+        raise ValueError(                           # precision, e.g. 1e26
+            f"stop price {stop_price!r} cannot be expressed on the venue's "
+            f"{tick} grid") from exc
+    if snapped <= 0:
+        # a sub-tick stop that floors to zero is not a stop the venue can
+        # hold; fail closed rather than send a price of 0.00
+        raise ValueError(
+            f"stop price {stop_price!r} rounds to {snapped} at the venue's "
+            f"{tick} increment — no protective stop is placeable there")
+    return float(snapped)
+
+
 def _map_status(ib_status: str) -> str:
     """IB order state -> the adapter contract's {filled, working, cancelled}."""
     if ib_status == "Filled":
@@ -143,10 +213,12 @@ def _trade_errors(trade, dead: bool = False, venue: str = "") -> str:
         code = getattr(entry, "errorCode", 0) or 0
         msg = str(getattr(entry, "message", "") or "").strip()
         status = str(getattr(entry, "status", "") or "")
-        if dead and code and (code in _IB_WARNING_CODES or 2100 <= code < 2200):
+        if (dead and code and code not in _IB_DEAD_REASON_CODES
+                and (code in _IB_WARNING_CODES or 2100 <= code < 2200)):
             # the wrapper logs warnings into trade.log too: a warning is
             # never a CANCELLATION reason (round 3); for a live-but-warned
-            # order it is the context the UNKNOWN alert needs, so it stays
+            # order it is the context the UNKNOWN alert needs, so it stays.
+            # The exception is _IB_DEAD_REASON_CODES — see there.
             continue
         if code or ("rror" in msg):
             out.append(f"[{code}] {msg}" if code else msg)
@@ -1001,11 +1073,21 @@ class IBAdapter:
                 # never re-placed.
                 logger.info("stock order %s duplicate-suppressed by orderRef "
                             "(prior %s)", client_order_id, _order_ref(prior))
-                return {**self._trade_result(prior), "duplicate": True}
+                out = {**self._trade_result(prior), "duplicate": True}
+                aux = _usable_px(getattr(prior.order, "auxPrice", None))
+                if aux is not None:     # the price the PRIOR order holds,
+                    out["stop_price"] = aux    # never the one just asked for
+                return out
         from ib_async import MarketOrder, StopOrder
         action = "BUY" if qty > 0 else "SELL"
+        placed_stop = None
         if order_type == "STP":
-            order = StopOrder(action, abs(qty), float(stop_price))
+            placed_stop = round_stop_to_tick(stop_price, action)
+            if placed_stop != float(stop_price):
+                logger.info("stop %s %s snapped %s -> %s (venue price "
+                            "increment)", action, symbol, stop_price,
+                            placed_stop)
+            order = StopOrder(action, abs(qty), placed_stop)
             order.tif = "GTC"               # protective stops always rest GTC
         else:
             order = MarketOrder(action, abs(qty))
@@ -1016,6 +1098,10 @@ class IBAdapter:
         trade = self.ib.placeOrder(contract, order)
         self._await_placement(trade, order_type)
         out = self._trade_result(trade)
+        if placed_stop is not None:
+            # the price the venue actually holds, so the book can record it
+            # and its next idempotency key matches what rests
+            out["stop_price"] = placed_stop
         logger.info("stock order placed: %s %s x%d %s -> %s (%s)",
                     action, symbol, abs(qty), order_type, out["status"],
                     out["order_ref"])
@@ -1311,11 +1397,19 @@ class DryAdapter:
                 self._rec("duplicate_suppressed", symbol=symbol, qty=qty,
                           client_order_id=client_order_id,
                           ref=prior["order_ref"])
-                return {**self._order_result(prior), "duplicate": True}
+                out = {**self._order_result(prior), "duplicate": True}
+                if prior.get("stop_price") is not None:
+                    out["stop_price"] = prior["stop_price"]
+                return out
         ref = f"dry-stk-{symbol}-{len(self.log)}-{int(time.time())}"
         if order_type == "STP":
             if stop_price is None:
                 raise ValueError("STP order requires stop_price")
+            # Snapped exactly as the live adapter snaps it: a paper run that
+            # rests a price the real venue would REJECT is the simulation
+            # lying about the one order that protects the book.
+            stop_price = round_stop_to_tick(
+                stop_price, "BUY" if qty > 0 else "SELL")
             self._stops[ref] = {"symbol": symbol, "qty": qty,
                                 "stop_price": stop_price, "tif": tif}
             rec = {"order_ref": ref, "symbol": symbol, "qty": qty,
@@ -1328,7 +1422,8 @@ class DryAdapter:
             self._rec("place_stock_order", symbol=symbol, qty=qty,
                       order_type=order_type, stop_price=stop_price, tif=tif,
                       ref=ref, status="working")
-            return {"order_ref": ref, "status": "working"}
+            return {"order_ref": ref, "status": "working",
+                    "stop_price": stop_price}
         fill = ref_price if ref_price is not None else self.spot(symbol)
         self._last_px[symbol] = fill
         self._positions[symbol] = self._positions.get(symbol, 0) + qty

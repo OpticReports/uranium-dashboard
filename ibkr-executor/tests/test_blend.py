@@ -8172,3 +8172,344 @@ def test_gate_r19_a_resting_sell_is_not_stuck_during_after_hours(tmp_path, monke
     for mi in (35, 40, 45):                                   # in session and unfilled: stuck
         cyc(2026, 8, 21, 9, mi)
     assert sell["status"] == "cancelled"
+
+
+# --- round 20 (2026-09-11): the book records the price the VENUE holds -------
+
+def test_gate_r20_the_book_records_the_snapped_stop_not_the_published_one(tmp_path):
+    """The tracker publishes trail levels to four decimals (`trail_level` is
+    `round(level, 4)`); the venue holds cents. After placement the ledger,
+    /status and the next idempotency key must all mean the order that is
+    actually resting - otherwise the book reports protection at a price
+    nothing is working at. Modelled on the live GH shape: trail 137.0507."""
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    a = DryAdapter()
+    run_cycle(m, a, payload(entries=[entry()],
+                            stops=[stop_row(trail=44.0507)]),
+              "2026-08-20", alert=lambda _: None)
+    pos = m.state.positions["1"]
+    assert pos.stop_order_ref and not pos.stop_missing
+    assert a._stops[pos.stop_order_ref]["stop_price"] == 44.05
+    assert pos.stop_level == 44.05, pos.stop_level
+    # the id re-derived from the book's level RESOLVES to the resting order
+    # (the first review's TESTS-2: asserting the string alone passed while
+    # the venue held the order under a different id entirely)
+    cid = blend_mod.stop_client_id(pos.call_id, pos.stop_level)
+    assert cid.endswith("44.0500")
+    found = a.find_stock_order(cid)
+    assert found and found["order_ref"] == pos.stop_order_ref
+    assert found["status"] == "working"
+
+
+def test_gate_r20_the_ratchet_replace_also_records_the_snapped_level(tmp_path):
+    """The ratchet is the stop path that runs every cycle for the life of a
+    position - it cancels and re-places at each new published trail. It
+    must snap and record exactly as the first placement does, or the book
+    drifts off the venue one ratchet at a time (and the id it would reuse
+    names a price nothing holds)."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m)
+    a = DryAdapter()
+    out = run_cycle(m, a, payload(stops=[stop_row(trail=47.0507)]),
+                    "2026-08-21", alert=lambda _: None)
+    (adj,) = [o for o in out if o["action"] == "ADJUST_STOP"]
+    assert adj["old_ref"] == "old-stop"
+    pos = m.state.positions["1"]
+    assert a._stops[pos.stop_order_ref]["stop_price"] == 47.05
+    assert pos.stop_level == 47.05, pos.stop_level
+    cid = blend_mod.stop_client_id(pos.call_id, pos.stop_level)
+    assert cid.endswith("47.0500")
+    found = a.find_stock_order(cid)
+    assert found and found["order_ref"] == pos.stop_order_ref
+    assert found["status"] == "working"
+
+
+# --- round 20 remediation (counter-agent, 2026-09-11) ------------------------
+# The first build snapped ONLY at the venue boundary and recorded the snapped
+# price in `pos.stop_level`, while the idempotency key and the ratchet
+# comparand still came from the tracker's off-grid level. Five lenses
+# reproduced the same HIGH: the ratchet fires every cycle at an unchanged
+# level, the replacement is placed under the id the RESTING order carries,
+# the adapter duplicate-suppresses it, and the cancel that follows retires
+# the only stop there was — naked position, `stop_missing` False, entries
+# unblocked. The level is snapped at INGESTION now, so the price, the key
+# and the comparand are one number. These gates are the ones that would
+# have caught it.
+
+def test_gate_r20b_an_unchanged_off_grid_trail_never_re_places_the_stop(tmp_path):
+    """THE gate for the remediation. Three cycles, the same published
+    137.0507-shaped trail: exactly ONE placement, one working stop resting
+    at the end of EVERY cycle, and no ADJUST_STOP after the first."""
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    a = DryAdapter()
+    pl = payload(entries=[entry()], stops=[stop_row(trail=44.0507)])
+    adjusts, alerts = 0, []
+    for day in ("2026-08-20", "2026-08-21", "2026-08-24"):
+        out = run_cycle(m, a, pl, day, alert=alerts.append)
+        adjusts += len([o for o in out if o["action"] == "ADJUST_STOP"])
+        pos = m.state.positions["1"]
+        resting = [o for o in a._orders.values()
+                   if o["order_type"] == "STP" and o["status"] == "working"]
+        assert len(resting) == 1, (day, resting)          # never zero, never two
+        assert resting[0]["stop_price"] == 44.05
+        assert resting[0]["order_ref"] == pos.stop_order_ref
+        assert not pos.stop_missing and not blend_mod._is_unprotected(pos)
+    assert adjusts == 0, "a republished sub-tick level ratcheted"
+    assert not [x for x in alerts if "naked" in x or "CANCELLED" in x], alerts
+
+
+def test_gate_r20b_a_duplicate_suppressed_replace_never_cancels_the_resting_stop(tmp_path):
+    """The belt behind the ingestion snap. If an ADJUST_STOP is ever planned
+    at the level the resting order already carries, the adapter returns that
+    same order (dedupe by orderRef) — and cancelling `old_ref` then retires
+    the book's only protection. Adopt and stop instead."""
+    from app.blend import _execute_adjust_stop
+
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    _held_position(m, stop_level=44.05, stop_ref=None)
+    pos = m.state.positions["1"]
+    rs = a.place_stock_order("CRSP", -5, "STP", stop_price=44.05, tif="GTC",
+                             client_order_id=blend_mod.stop_client_id(1, 44.05))
+    m.on_stop_placed(1, rs["order_ref"], 44.05)
+    alerts = []
+    _execute_adjust_stop(m, a, {"call_id": 1, "symbol": "CRSP", "qty": 5,
+                                "stop_level": 44.05, "reason": "trail ratchet",
+                                "old_ref": rs["order_ref"]},
+                         alerts.append)
+    assert alerts == [], "an adopt onto the resting order is not a ratchet event"
+    assert a._orders[rs["order_ref"]]["status"] == "working", "cancelled its own stop"
+    assert pos.stop_order_ref == rs["order_ref"] and not pos.stop_missing
+    assert not blend_mod._is_unprotected(pos)
+
+
+def test_gate_r20b_entry_risk_is_measured_to_the_stop_that_will_rest(tmp_path):
+    """Sizing divides the risk dollars by `entry_ref - trail`. If the trail
+    is snapped only later, the risk unit is measured to a price no order
+    will ever hold. Snapped at ingestion: 50 - 44.0507 -> 50 - 44.05."""
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    # numbers chosen so the tick MOVES the share count: risk $30 over
+    # 50 - 45.7143 = 4.2857 -> 7 sh unsnapped; over 50 - 45.71 = 4.29 -> 6
+    out = m.step("2026-08-20", payload(entries=[entry()],
+                                       stops=[stop_row(trail=45.7143)]), PRICES)
+    (ent,) = [o for o in out if o["action"] == "ENTER"]
+    assert ent["stop_level"] == 45.71
+    assert ent["qty"] == 6, ent["qty"]                     # 7 would be the unsnapped unit
+
+
+def test_gate_r20b_a_legacy_off_grid_level_keeps_its_handle_and_rests_on_grid(tmp_path):
+    """The live GH row was journalled at 137.0507 before any of this
+    existed. The first remediation NORMALIZED it in `_ensure_stop` - and the
+    second review reproduced why that is wrong: the level is the id, the id
+    is the only durable venue handle, and re-minting it strands anything
+    that already rests under the old one. So: the id stays, the adapter
+    snaps the PRICE, and the order is findable by the id the book re-derives."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    _held_position(m, stop_level=44.0507, stop_ref=None)
+    pos = m.state.positions["1"]
+    pos.stop_missing = True
+    assert blend_mod._ensure_stop(m, a, pos, lambda _m: None)
+    assert pos.stop_level == 44.0507                       # handle untouched
+    assert a._stops[pos.stop_order_ref]["stop_price"] == 44.05   # price on grid
+    found = a.find_stock_order(blend_mod.stop_client_id(1, pos.stop_level))
+    assert found and found["order_ref"] == pos.stop_order_ref
+
+
+def test_gate_r20b_an_unacked_stop_under_the_old_id_is_adopted_not_stacked(tmp_path):
+    """REGR-1, reproduced by the second review against the first
+    remediation: an order that DID land under the off-grid id (ack timeout,
+    or a kill between placeOrder and on_stop_placed) while the book shows
+    stop_order_ref None. Re-minting the id would place a SECOND 6-share
+    stop - cover above held. The unchanged id lets the venue dedupe adopt
+    it instead."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    ghost = a.place_stock_order("CRSP", -5, "STP", stop_price=44.0507, tif="GTC",
+                                client_order_id=blend_mod.stop_client_id(1, 44.0507))
+    _held_position(m, stop_level=44.0507, stop_ref=None)
+    pos = m.state.positions["1"]
+    pos.stop_missing = True
+    assert blend_mod._ensure_stop(m, a, pos, lambda _m: None)
+    resting = [o for o in a._orders.values() if o["order_type"] == "STP" and o["status"] == "working"]
+    assert len(resting) == 1, "a second stop was stacked on the un-ACKed one"
+    assert pos.stop_order_ref == ghost["order_ref"] and not pos.stop_missing
+
+
+def test_gate_r20b_no_stop_is_placed_over_an_unconfirmed_orphan(tmp_path):
+    """MIGR-1: `_resize_peer_cover`'s restore leg refuses to place while an
+    earlier cover of the same position is still unconfirmed at the venue;
+    `_ensure_stop` had no such guard. With one, the honest state is
+    STOP_MISSING - not a second order that could take cover above held."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    _held_position(m, stop_level=44.05, stop_ref=None)
+    pos = m.state.positions["1"]
+    pos.stop_missing = True
+    m.record_orphan_stop("ghost-1", {"symbol": "CRSP", "qty": -5, "call_id": 1})
+    alerts = []
+    assert not blend_mod._ensure_stop(m, a, pos, alerts.append)
+    assert not [o for o in a._orders.values() if o["order_type"] == "STP"]
+    assert pos.stop_missing and pos.stop_order_ref is None
+    assert any("orphan" in e["msg"] for e in m.state.events)
+
+
+def test_gate_r20b_the_live_state_shape_through_the_real_cycle(tmp_path):
+    """TEST-8, the strongest gate that was missing: the exact row tonight's
+    deploy meets, driven through run_cycle (reconcile, the stops pass, the
+    ratchet comparand), not through _ensure_stop alone. Off-grid level ON
+    DISK, no stop, the tracker republishing the same off-grid level. Four
+    cycles: one working stop at 137.05 throughout, the id re-derived from
+    the book's level resolves to it, no ADJUST_STOP ever."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=23.58, bil_qty=153, spy_qty=45)
+    a = DryAdapter()
+    _held_position(m, symbol="GH", qty=6, fill=159.24, stop_level=137.0507,
+                   stop_ref=None, adapter=a)
+    pos = m.state.positions["1"]
+    pos.stop_missing = True
+    pl = payload(stops=[stop_row(symbol="GH", trail=137.0507)])
+    pl["as_of"] = "2026-09-11"
+    prices = {**PRICES, "GH": 159.24}
+    adjusts = 0
+    for day in ("2026-09-11", "2026-09-12", "2026-09-14", "2026-09-15"):
+        out = run_cycle(m, a, pl, day, alert=lambda _m: None)
+        adjusts += len([o for o in out if o["action"] == "ADJUST_STOP"])
+        resting = [o for o in a._orders.values()
+                   if o["order_type"] == "STP" and o["status"] == "working"]
+        assert len(resting) == 1 and resting[0]["stop_price"] == 137.05, (day, resting)
+        assert resting[0]["order_ref"] == pos.stop_order_ref
+        assert not pos.stop_missing and not blend_mod._is_unprotected(pos)
+        found = a.find_stock_order(blend_mod.stop_client_id(1, pos.stop_level))
+        assert found and found["order_ref"] == pos.stop_order_ref
+    assert adjusts == 0
+    # ... and when the tracker then publishes a HIGHER off-grid level, the
+    # ratchet fires exactly once, re-mints the id on the grid, and holds
+    pl["stops"] = [stop_row(symbol="GH", trail=137.205)]
+    for day in ("2026-09-16", "2026-09-17"):
+        out = run_cycle(m, a, pl, day, alert=lambda _m: None)
+        adjusts += len([o for o in out if o["action"] == "ADJUST_STOP"])
+        resting = [o for o in a._orders.values()
+                   if o["order_type"] == "STP" and o["status"] == "working"]
+        assert len(resting) == 1 and resting[0]["stop_price"] == 137.2, (day, resting)
+    assert adjusts == 1 and pos.stop_level == 137.2
+    assert blend_mod.stop_client_id(1, pos.stop_level).endswith("137.2000")
+
+
+def test_gate_r20b_the_smallest_real_ratchet_still_fires(tmp_path):
+    """TEST-6, the mirror of the unchanged-trail gate: a ONE-tick move is a
+    real ratchet. Without this, STOP_EPS could widen to two cents and every
+    stop would freeze at its first level for the life of the position."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m, stop_level=44.05)
+    a = DryAdapter()
+    out = run_cycle(m, a, payload(stops=[stop_row(trail=44.06)]),
+                    "2026-08-21", alert=lambda _: None)
+    assert len([o for o in out if o["action"] == "ADJUST_STOP"]) == 1
+    pos = m.state.positions["1"]
+    assert pos.stop_level == 44.06
+    assert a._stops[pos.stop_order_ref]["stop_price"] == 44.06
+    found = a.find_stock_order(blend_mod.stop_client_id(1, 44.06))
+    assert found and found["order_ref"] == pos.stop_order_ref
+
+
+def test_gate_r20b_a_trail_at_or_within_a_tick_of_entry_ref_is_refused(tmp_path):
+    """INGE-1: the ordering guard used to run AFTER the floor-snap, which
+    only widens the distance - so a trail EQUAL to entry_ref (a halted
+    name, ATR 0) passed the guard with a sub-tick risk unit and the cash
+    clamp was the only thing bounding a several-thousand-share order."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=100_000.0)
+    e = entry(entry_ref=12.3456)
+    for trail in (12.3456, 12.3441, 12.34, 12.35):
+        out = m.step("2026-08-20", payload(entries=[e], stops=[stop_row(trail=trail)]),
+                     {**PRICES, "CRSP": 12.35})
+        assert not [o for o in out if o["action"] == "ENTER"], trail
+    # a full-tick distance is a real stop distance and sizes normally
+    out = m.step("2026-08-20", payload(entries=[e], stops=[stop_row(trail=12.33)]),
+                 {**PRICES, "CRSP": 12.35})
+    (ent,) = [o for o in out if o["action"] == "ENTER"]
+    assert ent["stop_level"] == 12.33
+
+
+def test_gate_r20b_unsnappable_trails_fail_closed_on_both_arms(tmp_path):
+    """TEST-4: both new fail-closed arms for a POSITIVE trail that cannot be
+    snapped were untested (the existing gate uses -1.0, which short-circuits
+    before the snap)."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m, stop_level=44.05)
+    # (a) the stops pass: an absurd level is a WARN, not a ratchet, not a raise
+    out = m.step("2026-08-21", payload(stops=[stop_row(trail=1e26)]), PRICES)
+    assert not [o for o in out if o["action"] == "ADJUST_STOP"]
+    assert any("unusable trail" in e["msg"] for e in m.state.events)
+    # (b) pass 4: a level that rounds off the board is STOP_MISSING, loudly
+    m2 = mk(tmp_path / "b")
+    _seed_initialized(m2, sleeve_cash=2_750.0)
+    _held_position(m2, stop_level=0.00001, stop_ref=None)
+    p2 = m2.state.positions["1"]
+    p2.stop_missing = True
+    alerts = []
+    blend_mod.STOP_RETRY_SLEEP_S, keep = 0.0, blend_mod.STOP_RETRY_SLEEP_S
+    try:
+        assert not blend_mod._ensure_stop(m2, DryAdapter(), p2, alerts.append)
+    finally:
+        blend_mod.STOP_RETRY_SLEEP_S = keep
+    assert p2.stop_missing and any("STOP_MISSING" in x for x in alerts)
+
+
+def test_gate_r20b_cover_restore_keeps_an_off_grid_peer_level_and_resolves(tmp_path):
+    """TEST-1: the two `_resize_peer_cover` on_stop_placed sites were
+    covered by no gate for the property that matters - the recorded level
+    stays the book's own (off-grid or not), so the re-derived id resolves
+    to the order that rests. Same drive as the Z1 restore gate, with an
+    off-grid level on the resized peer."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    a = DryAdapter()
+    _blackout_stop(m, a, call_id=1, qty=5, level=44.0)
+    _blackout_stop(m, a, call_id=2, qty=4, level=43.0507)
+    a._positions["CRSP"] = 6
+    run_cycle(m, a, None, "2026-08-24", alert=lambda _msg: None)
+    a._positions["CRSP"] = 9
+    m.state.last_reconcile_ts = time.time()
+    run_cycle(m, a, None, "2026-08-25", alert=lambda _msg: None)
+    p2 = m.state.positions["2"]
+    assert not p2.stop_missing and p2.stop_level == 43.0507
+    assert a._stops[p2.stop_order_ref]["stop_price"] == 43.05
+    found = a.find_stock_order(blend_mod.stop_client_id(2, p2.stop_level))
+    assert found and found["order_ref"] == p2.stop_order_ref
+    assert sum(-o["qty"] for o in a._stops.values()) <= a._positions["CRSP"]
+
+
+def test_gate_r20b_a_venue_side_cancel_is_still_detected_after_the_snap(tmp_path):
+    """Reconcile's stop verification addresses the resting order by the id
+    re-derived from `pos.stop_level`. If that id stopped naming the real
+    order, the ONLY detector of a venue-side cancel of a GTC stop would go
+    blind — silently. Kill the stop at the venue and the book must see it."""
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    a = DryAdapter()
+    pl = payload(entries=[entry()], stops=[stop_row(trail=44.0507)])
+    alerts = []
+    run_cycle(m, a, pl, "2026-08-20", alert=alerts.append)
+    pos = m.state.positions["1"]
+    ref = pos.stop_order_ref
+    a._orders[ref]["status"] = "cancelled"      # the venue kills it overnight
+    a._stops.pop(ref, None)
+    alerts.clear()
+    run_cycle(m, a, pl, "2026-08-21", alert=alerts.append)
+    assert any("naked" in x.lower() or "cancelled" in x.lower() for x in alerts), alerts
+    resting = [o for o in a._orders.values()
+               if o["order_type"] == "STP" and o["status"] == "working"]
+    assert len(resting) == 1 and resting[0]["stop_price"] == 44.05
+    assert m.state.positions["1"].stop_order_ref == resting[0]["order_ref"]
