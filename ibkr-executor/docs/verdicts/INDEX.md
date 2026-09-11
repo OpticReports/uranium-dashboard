@@ -766,6 +766,122 @@ name, reconstruct it from `git log origin/main -- ibkr-executor/`.
 
 ---
 
+## Round 20 — the venue's price increment (LIVE BLOCKER, 2026-09-11)
+
+* **The incident.** GH x6 filled at 159.24 at the 09:30 open — the book's
+  first real entry. The protective stop that must follow it was refused
+  three times, `order rejected by venue (status Cancelled)` with **no venue
+  reason recorded**: it carried the tracker's published trail level,
+  `137.0507`. US equities quote in whole cents at or above $1 (SEC Rule
+  612) and IBKR rejects a price off that grid — error 110, "the price does
+  not conform to the minimum price variation". Nothing between the
+  tracker's `trail_level` (published as `round(level, 4)`) and `placeOrder`
+  had ever snapped a price to the grid, and **no protective stop had ever
+  been placed live before** (B9), so nothing had ever exercised it. The
+  position was left naked and the book — correctly — blocked every new
+  entry. Independently confirmed at the venue the same morning: the IBKR
+  app itself refuses to accept `137.0507` for a manual stop on GH.
+* **Reviewed:** `b126476` (the first build: snap at the adapter boundary,
+  record the snapped price) and then the remediation this entry carries.
+  Two counter-agent passes, 65 + agents; every finding verified by two
+  independent skeptics who reproduced or refuted it in a scratch copy.
+* **Verdict, pass 1 (on `b126476`): FAIL on all five lenses** — cause,
+  rounding, ledger, deploy, tests. Not because the snap was wrong, but
+  because of where it was applied.
+* **The FAIL, and why it mattered more than the bug it fixed.**
+  `pos.stop_level` feeds THREE things: the price sent to the venue, the
+  ratchet comparand (`lvl > pos.stop_level + STOP_EPS`, `STOP_EPS` 1e-6)
+  and the idempotency key (`stop_client_id` = `blend-{id}-stp-{level:.4f}`).
+  Snapping at the adapter while recording the snapped value made those
+  three numbers diverge: the book records 137.05, the tracker keeps
+  publishing 137.0507, so the ratchet fires EVERY cycle at an unchanged
+  level; the replacement is placed under the id the RESTING order already
+  carries; the adapter duplicate-suppresses it; and the cancel of `old_ref`
+  that follows retires the only stop there was. End state each cycle:
+  nothing resting at the venue, `stop_missing` False, `_is_unprotected`
+  False, entries unblocked, and one cheerful `trail ratchet 137.05 ->
+  137.05` line. Reproduced end to end on the real code path by three
+  separate lenses. It would have shipped green: 449 tests passed over it,
+  because every stop gate in the suite ran exactly ONE cycle.
+* **Remediated by:** the commit carrying this entry.
+  * `snap_stop_level()` snaps the published trail at **ingestion** — the
+    stops pass and the entry path (before sizing, so the risk unit
+    `entry_ref - trail` is the distance to the stop that will actually
+    rest) — so the price, the key and the comparand are one number and a
+    republished sub-tick level is not a ratchet.
+  * The four `on_stop_placed` sites go back to the book's own level: a
+    level that comes from the adapter can diverge from the one the key is
+    built on (and the duplicate-suppressed path returned none at all).
+  * `_execute_adjust_stop` adopts and returns when the placement was
+    deduped onto the order it was about to cancel — the belt behind the
+    ingestion snap.
+  * `_ensure_stop` normalizes a legacy off-grid level, but only while
+    nothing rests under the old id (the live GH row, 137.0507).
+  * Both adapters report the PRIOR order's stop price on the
+    duplicate-suppressed path instead of omitting it.
+  * `round_stop_to_tick`: Decimal, tick 0.01 at/above $1 and 0.0001 below,
+    SELL floors and BUY ceils so a protective stop is never silently
+    tightened below its pre-registered risk per share, raises on
+    non-finite/non-positive, on a price that rounds off the board, and on
+    one past Decimal's context precision.
+* **CAUSE-3 (MED) `closed` — why we could not READ the reason.** Error 110
+  sat in `_IB_WARNING_CODES`, which `_trade_errors` discards when the order
+  is dead, so all three refusals reported "no venue reason recorded" and
+  the cause had to be inferred from the price. 404 ("shares not available
+  for short sale") and 321 are in the same set and would have produced
+  byte-identical evidence — the alternative hypotheses could not be
+  excluded from the logs at all. `_IB_DEAD_REASON_CODES = {110, 321, 404}`
+  are now never suppressed on a dead order; the rest keep round 3's
+  behaviour (a 399 "will not be placed until ..." is still not a
+  cancellation reason). Deliberately short: add a code when it is OBSERVED
+  killing an order, never on a guess.
+* **CAUSE-4 / DEPLOY-6 (HIGH, operational) `closed` by sequencing.** The
+  snap puts the book's stop at 137.05 — the same price as the operator's
+  hand-placed manual stop, which the book cannot see (no orderRef). During
+  an overlap, 12 shares of sell-stop rest against 6 held and both trigger
+  on one tick: the account goes SHORT 6 GH. The `cover <= held` invariant
+  cannot catch it — it counts only orders the book placed. **The manual
+  stop is cancelled BEFORE the book places its own, after 16:00 ET, when
+  the naked window cannot trade.** (Earlier guidance said the opposite;
+  corrected.)
+* **CAUSE-6 (LOW) `open`.** The protective STP is built `tif=GTC` with
+  `outsideRth` unset, so it is an RTH-only stop while the alerting presents
+  it as continuous protection. Not a rejection cause. Casey's call — a stop
+  that can trigger in a thin pre-market is not obviously better — but the
+  book should say which it is.
+* **Other findings `closed`:** CAUSE-2 / ROUNDING-1,2 / LEDGER-1,2 /
+  DEPLOY-1,2 (all the same divergence, fixed at ingestion);
+  ROUNDING-3 / LEDGER-3 / DEPLOY-4 (duplicate path reports the resting
+  price); ROUNDING-5 (quantize overflow); CAUSE-5 / ROUNDING-4 / TESTS-1,2
+  (the first build's two blend gates asserted the divergence as if it were
+  the invariant, and ran one cycle); TESTS-3 (uncovered `_resize_peer_cover`
+  sites), TESTS-4 (BUY side), TESTS-6 (duplicate path), TESTS-7 (this
+  entry). DEPLOY-5 (ratchet wording) is moot: a no-op ratchet can no longer
+  be planned.
+* **Gates (16) and mutants (19, all killed).** The gate the first build
+  lacked: `test_gate_r20b_an_unchanged_off_grid_trail_never_re_places_the_stop`
+  — three cycles at the same off-grid trail, asserting exactly one working
+  stop at the venue at the end of EVERY cycle and no ADJUST_STOP after the
+  first. Plus: the resting order must RESOLVE under the id re-derived from
+  the book's level (not merely match a string); a duplicate-suppressed
+  replace must not cancel the resting order; entry risk measured to the
+  snapped trail; a legacy off-grid level normalized before placement; a
+  venue-side cancel still detected after the snap; the BUY side through
+  both adapters; the duplicate path reporting the prior price; a rejection
+  code reported; an unplaceable or overflowing price failing closed.
+* **Deploy rehearsal.** Driven against the exact live state shape (GH x6,
+  `stop_level` 137.0507 on disk, `stop_order_ref` None, `stop_missing`
+  true, sleeve_cash 23.58, BIL 153, SPY 45): four cycles, one stop resting
+  at 137.05 throughout, findable by its re-derived id, `stop_missing`
+  cleared, entries unblocked, no churn.
+* **Suite:** 457 passed; the eight attack probes at their documented marks.
+* **B9 status.** Still `open`, and this is why: the chain the judge named —
+  MOO adopted, GTC stop resting, first ratchet — has now reached "adopted"
+  and stopped at the stop. Close it when a stop of this book's own making
+  is confirmed resting at the venue, with its order ref.
+
+---
+
 ## Standing UNKNOWNs
 
 * `mf-6`, `mf-11`, `mf-12`, `mf3-12` — referenced by id in this campaign's

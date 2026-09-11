@@ -75,6 +75,19 @@ COMMISSION_WAIT_S = 1.5      # after a synchronous fill, wait this long for
                              # (counter-agent round 2: read too early = 0.0)
 # ib_async warning codes: informational, never a rejection reason
 _IB_WARNING_CODES = {105, 110, 165, 321, 329, 399, 404, 434, 492, 10167}
+# ... except these, which KILL an order rather than annotate it, and are
+# therefore the reason a dead one died. Round 20 (2026-09-11): 110 was in
+# the suppression set, so the three refused GH stops — refused for exactly
+# this, "the price does not conform to the minimum price variation" — each
+# reported "no venue reason recorded", and the cause had to be inferred
+# from the price rather than read. Deliberately a SHORT list: only codes
+# this book has seen kill an order (110 today; 321 the read-only refusals
+# of 2026-09-08..10) or that cannot mean anything else (404, shares not
+# available for short sale). Everything else keeps round 3's behaviour —
+# a 399 "your order will not be placed until ..." on a cancelled order is
+# still not why it was cancelled. Add to this set when a new code is
+# OBSERVED killing an order, never on a guess.
+_IB_DEAD_REASON_CODES = {110, 321, 404}
 RECONNECT_BACKOFF_S = 15.0   # first retry delay after the gateway drops
 RECONNECT_BACKOFF_MAX_S = 300.0  # backoff cap (~one attempt per blend cycle)
 OUTAGE_ALERT_S = 30 * 60.0   # alert ONLY when down longer than this — the
@@ -155,7 +168,12 @@ def round_stop_to_tick(stop_price: float, action: str) -> float:
         raise ValueError(f"stop price {stop_price!r} must be a positive number")
     tick = stock_tick(px)
     mode = ROUND_FLOOR if action.upper() == "SELL" else ROUND_CEILING
-    snapped = px.quantize(tick, rounding=mode)
+    try:
+        snapped = px.quantize(tick, rounding=mode)
+    except (InvalidOperation, ValueError) as exc:   # past Decimal's context
+        raise ValueError(                           # precision, e.g. 1e26
+            f"stop price {stop_price!r} cannot be expressed on the venue's "
+            f"{tick} grid") from exc
     if snapped <= 0:
         # a sub-tick stop that floors to zero is not a stop the venue can
         # hold; fail closed rather than send a price of 0.00
@@ -195,10 +213,12 @@ def _trade_errors(trade, dead: bool = False, venue: str = "") -> str:
         code = getattr(entry, "errorCode", 0) or 0
         msg = str(getattr(entry, "message", "") or "").strip()
         status = str(getattr(entry, "status", "") or "")
-        if dead and code and (code in _IB_WARNING_CODES or 2100 <= code < 2200):
+        if (dead and code and code not in _IB_DEAD_REASON_CODES
+                and (code in _IB_WARNING_CODES or 2100 <= code < 2200)):
             # the wrapper logs warnings into trade.log too: a warning is
             # never a CANCELLATION reason (round 3); for a live-but-warned
-            # order it is the context the UNKNOWN alert needs, so it stays
+            # order it is the context the UNKNOWN alert needs, so it stays.
+            # The exception is _IB_DEAD_REASON_CODES — see there.
             continue
         if code or ("rror" in msg):
             out.append(f"[{code}] {msg}" if code else msg)
@@ -1053,7 +1073,11 @@ class IBAdapter:
                 # never re-placed.
                 logger.info("stock order %s duplicate-suppressed by orderRef "
                             "(prior %s)", client_order_id, _order_ref(prior))
-                return {**self._trade_result(prior), "duplicate": True}
+                out = {**self._trade_result(prior), "duplicate": True}
+                aux = _usable_px(getattr(prior.order, "auxPrice", None))
+                if aux is not None:     # the price the PRIOR order holds,
+                    out["stop_price"] = aux    # never the one just asked for
+                return out
         from ib_async import MarketOrder, StopOrder
         action = "BUY" if qty > 0 else "SELL"
         placed_stop = None
@@ -1373,7 +1397,10 @@ class DryAdapter:
                 self._rec("duplicate_suppressed", symbol=symbol, qty=qty,
                           client_order_id=client_order_id,
                           ref=prior["order_ref"])
-                return {**self._order_result(prior), "duplicate": True}
+                out = {**self._order_result(prior), "duplicate": True}
+                if prior.get("stop_price") is not None:
+                    out["stop_price"] = prior["stop_price"]
+                return out
         ref = f"dry-stk-{symbol}-{len(self.log)}-{int(time.time())}"
         if order_type == "STP":
             if stop_price is None:

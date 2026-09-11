@@ -417,6 +417,79 @@ def test_gate_r20_the_dry_adapter_rests_a_price_the_venue_could_hold():
     assert a._stops[r["order_ref"]]["stop_price"] == 137.05
 
 
+def test_gate_r20b_huge_price_fails_closed():
+    """ROUNDING-5: past Decimal's 28-digit context the quantize itself
+    raises InvalidOperation, which is not the ValueError every caller
+    catches - it would escape the stop path as an unhandled exception."""
+    from app.ib_adapter import round_stop_to_tick
+
+    with pytest.raises(ValueError):
+        round_stop_to_tick(1e26, "SELL")
+
+
+def test_gate_r20b_the_buy_side_is_wired_to_the_other_rounding(ib_adapter):
+    """TESTS-4: both adapter gates placed a SELL, so the line that picks the
+    direction (`action = "BUY" if qty > 0 else "SELL"`) was untested on one
+    side in each adapter. A buy stop covering a short must round UP."""
+    from app.ib_adapter import DryAdapter
+
+    r = ib_adapter.place_stock_order("GH", +6, "STP", stop_price=137.0507,
+                                     tif="GTC", client_order_id="buy-stp-1")
+    (t,) = ib_adapter.ib.trades()
+    assert t.order.action == "BUY" and t.order.auxPrice == 137.06
+    assert r["stop_price"] == 137.06
+
+    d = DryAdapter()
+    rd = d.place_stock_order("GH", +6, "STP", stop_price=137.0507, tif="GTC",
+                             client_order_id="buy-stp-2")
+    assert rd["stop_price"] == 137.06
+    assert d._stops[rd["order_ref"]]["stop_price"] == 137.06
+
+
+def test_gate_r20b_a_duplicate_reports_the_price_the_prior_order_holds(ib_adapter):
+    """TESTS-6 / ROUNDING-3: the duplicate-suppressed early return is the
+    path a retry, a crash recovery and a deploy all take. It used to omit
+    `stop_price` entirely, so a caller reading it back learned the price it
+    had ASKED for rather than the one resting."""
+    from app.ib_adapter import DryAdapter
+
+    cid = "blend-9-stp-137.0507"
+    first = ib_adapter.place_stock_order("GH", -6, "STP", stop_price=137.0507,
+                                         tif="GTC", client_order_id=cid)
+    again = ib_adapter.place_stock_order("GH", -6, "STP", stop_price=137.0507,
+                                         tif="GTC", client_order_id=cid)
+    assert again.get("duplicate") and again["order_ref"] == first["order_ref"]
+    assert again["stop_price"] == 137.05, again
+
+    d = DryAdapter()
+    f2 = d.place_stock_order("GH", -6, "STP", stop_price=137.0507, tif="GTC",
+                             client_order_id=cid)
+    a2 = d.place_stock_order("GH", -6, "STP", stop_price=137.0507, tif="GTC",
+                             client_order_id=cid)
+    assert a2.get("duplicate") and a2["order_ref"] == f2["order_ref"]
+    assert a2["stop_price"] == 137.05, a2
+
+
+def test_gate_r20b_a_rejection_code_is_reported_not_suppressed(ib_adapter):
+    """CAUSE-3: 110 — the code that refused all three GH stops — sat in the
+    warning-suppression set, so the operator was told "no venue reason
+    recorded" and the cause had to be inferred. A code that KILLS an order
+    is the reason it died."""
+    fake = ib_adapter.ib
+
+    def reject(t):
+        t.orderStatus.status = "Cancelled"
+        t.log = [types.SimpleNamespace(
+            errorCode=110, status="Cancelled",
+            message="The price does not conform to the minimum price "
+                    "variation for this contract.")]
+    fake.on_place = reject
+    with pytest.raises(RuntimeError, match=r"110"):
+        ib_adapter.place_stock_order("GH", -6, "STP", stop_price=137.05,
+                                     tif="GTC", client_order_id="r110")
+    assert "110" in ib_adapter.find_stock_order("r110")["reason"]
+
+
 def test_mkt_is_day_market_order_and_signed_qty_maps_sides(ib_adapter):
     ib_adapter.place_stock_order("SPY", 70, "MKT")
     ib_adapter.place_stock_order("SPY", -30, "MKT")

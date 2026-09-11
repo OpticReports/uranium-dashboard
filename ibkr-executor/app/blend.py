@@ -365,6 +365,33 @@ def stop_client_id(call_id: int, level: float) -> str:
     return f"blend-{call_id}-stp-{level:.4f}"
 
 
+def snap_stop_level(level: float) -> float | None:
+    """The tracker's published trail level, on the venue's price grid — or
+    None when no stop can exist there.
+
+    ROUND 20, THE SECOND HALF OF THE LIVE BLOCKER. The venue holds cents
+    (`round_stop_to_tick`), and the book uses its stop level for THREE
+    things: the price it sends, the ratchet comparand
+    (`lvl > pos.stop_level + STOP_EPS`) and the idempotency key
+    (`stop_client_id`). Snapping only at the venue boundary let those three
+    numbers diverge, and the first counter-agent pass reproduced what that
+    costs: the book records 137.05, the tracker keeps publishing 137.0507,
+    so the ratchet fires EVERY cycle at an unchanged level, the replacement
+    is placed under the id the resting order already carries, the adapter
+    duplicate-suppresses it — and the cancel of `old_ref` that follows
+    retires the only stop there was. Naked position, `stop_missing` False,
+    entries unblocked, one cheerful "trail ratchet 137.05 -> 137.05" line.
+
+    So the level is snapped HERE, the moment it enters the book, and every
+    downstream use is the same number. The adapter still snaps defensively;
+    with this in front of it that snap is a no-op."""
+    from .ib_adapter import round_stop_to_tick
+    try:
+        return round_stop_to_tick(level, "SELL")   # the book is long-only
+    except ValueError:
+        return None
+
+
 def exit_client_id(call_id: int) -> str:
     return f"blend-{call_id}-exit"
 
@@ -1315,10 +1342,13 @@ class Blend3070Manager:
                 alerts.append(msg)
                 continue
             lvl = s.get("trail_level")
-            if lvl is None or lvl <= 0:
-                self._event("WARN", f"non-positive trail {lvl} for "
-                                    f"{pos.symbol} (call {pos.call_id}): ignored")
+            if lvl is None or lvl <= 0 or (lvl := snap_stop_level(lvl)) is None:
+                self._event("WARN", f"unusable trail {s.get('trail_level')} "
+                                    f"for {pos.symbol} (call {pos.call_id}): "
+                                    f"ignored")
                 continue
+            # snapped-to-snapped: a republished level that only differs
+            # below the venue's tick is NOT a ratchet (round 20)
             if lvl > pos.stop_level + STOP_EPS:
                 adjust_intents.append({"action": "ADJUST_STOP",
                                        "call_id": pos.call_id,
@@ -1430,6 +1460,13 @@ class Blend3070Manager:
                     alerts.append(msg)
                     continue
                 trail = (srow or {}).get("trail_level")
+                if trail is not None and trail > 0:
+                    # snapped BEFORE it sizes anything: the risk unit
+                    # (entry_ref - trail) must be the distance to the stop
+                    # that will actually rest, and the same number becomes
+                    # the position's stop_level and its idempotency key
+                    # (round 20)
+                    trail = snap_stop_level(trail)
                 if (not entry_ref or trail is None or trail <= 0
                         or entry_ref <= trail):
                     self._event("WARN", f"no sizing reference for {e['symbol']} "
@@ -1813,10 +1850,13 @@ class Blend3070Manager:
         self.save()
 
     def on_stop_placed(self, call_id: int, order_ref: str, level: float) -> None:
-        """`level` is what the VENUE holds (the adapter snaps a stop to the
-        venue's price increment and reports it back), not what the tracker
-        published: the ledger, the /status view and the next placement's
-        idempotency key all have to mean the resting order (2026-09-11)."""
+        """`level` is the book's OWN level — already on the venue's price
+        grid, because `snap_stop_level` normalized it the moment the
+        tracker published it (round 20). It is deliberately NOT the price
+        the adapter reports back: the level recorded here is the one
+        `stop_client_id` re-derives to find this order and the one the
+        ratchet compares against, and a level that comes from anywhere
+        else can diverge from both (counter-agent, 2026-09-11)."""
         pos = self.state.positions.get(str(call_id))
         if pos is not None:
             pos.stop_order_ref = order_ref
@@ -2473,6 +2513,25 @@ def _ensure_stop(mgr: Blend3070Manager, adapter, pos: BlendPosition,
               f"(call {pos.call_id}) has a non-positive stop level "
               f"({pos.stop_level}) — no stop placeable; new entries BLOCKED")
         return False
+    # A row journalled before round 20 carries an OFF-GRID level (the live
+    # GH position was 137.0507). Normalize it here, where the id is built
+    # and the order placed, so all three uses are one number — and ONLY
+    # while nothing rests under the old id, which is exactly the state this
+    # function is called in.
+    snapped = snap_stop_level(pos.stop_level)
+    if snapped is None:
+        mgr.mark_stop_missing(pos.call_id)
+        alert(f"🚨🚨 blend STOP_MISSING: {pos.symbol} x{pos.qty} "
+              f"(call {pos.call_id}): no stop is placeable at "
+              f"{pos.stop_level} on the venue's price grid — new entries "
+              f"BLOCKED")
+        return False
+    if snapped != pos.stop_level and pos.stop_order_ref is None:
+        mgr._event("INFO", f"stop level for {pos.symbol} (call "
+                           f"{pos.call_id}) snapped {pos.stop_level} -> "
+                           f"{snapped} (venue price grid)")
+        pos.stop_level = snapped
+        mgr.save()
     last_exc: Exception | None = None
     for attempt in range(STOP_RETRY_ATTEMPTS):
         try:
@@ -2490,8 +2549,7 @@ def _ensure_stop(mgr: Blend3070Manager, adapter, pos: BlendPosition,
                       f"UNPROTECTED and new entries are BLOCKED — only you "
                       f"can resolve it")
                 return False
-            mgr.on_stop_placed(pos.call_id, rs["order_ref"],
-                               rs.get("stop_price", pos.stop_level))
+            mgr.on_stop_placed(pos.call_id, rs["order_ref"], pos.stop_level)
             return True
         except Exception as exc:  # noqa: BLE001
             last_exc = exc
@@ -2973,8 +3031,7 @@ def _resize_peer_cover(mgr: Blend3070Manager, adapter, held: int,
                 lines.append(f"call {p.call_id}: 0 -> UNKNOWN (venue "
                              f"returned an existing order)")
                 continue
-            mgr.on_stop_placed(p.call_id, rs["order_ref"],
-                               rs.get("stop_price", p.stop_level))
+            mgr.on_stop_placed(p.call_id, rs["order_ref"], p.stop_level)
             p.stop_cover_qty = new if new < p.qty else 0
             mgr.save()
             lines.append(f"call {p.call_id}: 0 -> {new} (cover RE-PLACED at "
@@ -3031,8 +3088,7 @@ def _resize_peer_cover(mgr: Blend3070Manager, adapter, held: int,
             lines.append(f"call {p.call_id}: {cur} -> UNKNOWN (venue "
                          f"returned an existing order)")
             continue
-        mgr.on_stop_placed(p.call_id, rs["order_ref"],
-                           rs.get("stop_price", p.stop_level))
+        mgr.on_stop_placed(p.call_id, rs["order_ref"], p.stop_level)
         p.stop_cover_qty = new
         mgr.save()
         lines.append(f"call {p.call_id}: {cur} -> {new}")
@@ -4093,9 +4149,19 @@ def _execute_adjust_stop(mgr: Blend3070Manager, adapter, it: dict,
               f"{it['stop_level']:.2f} ({exc}) — old stop kept working, "
               f"will retry next cycle")
         return
-    mgr.on_stop_placed(it["call_id"], rs["order_ref"],
-                       rs.get("stop_price", it["stop_level"]))
+    mgr.on_stop_placed(it["call_id"], rs["order_ref"], it["stop_level"])
     old_ref = it.get("old_ref")
+    if old_ref and old_ref == rs["order_ref"]:
+        # The venue returned the order that is ALREADY resting (dedupe by
+        # orderRef: the replacement's id is the id it carries). Nothing was
+        # replaced, so cancelling `old_ref` here would retire the only stop
+        # this position has — measured, on this exact path, by the round-20
+        # counter-agent. Adopt and stop (round 20).
+        mgr._event("INFO", f"stop replace for {it['symbol']} (call "
+                           f"{it['call_id']}) resolved to the order already "
+                           f"resting at {it['stop_level']:.2f} — nothing "
+                           f"cancelled")
+        return
     if old_ref:
         try:
             adapter.cancel_stock_order(old_ref)   # False = already gone: fine
