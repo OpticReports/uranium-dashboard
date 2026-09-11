@@ -714,9 +714,10 @@ name, reconstruct it from `git log origin/main -- ibkr-executor/`.
     README operating rule 1 and the blend.py section header said 16:00.
   * **VENUE-4 = TESTS-7** (LOW) `closed` — this entry; the merge round's
     open item is closed above.
-  * **VENUE-5** (LOW) `closed` — acceptance at close + 4h was IBKR's
-    published extended-hours end, INFERRED at review time; measured the
-    same evening (below): GH x6 MOO accepted 20:06 ET.
+  * **VENUE-5** (LOW) `open` — acceptance at close + 4h is IBKR's
+    published extended-hours end, INFERRED; the rejections (through 16:14
+    ET) and a PRE-MARKET acceptance (09:06 ET, below) are measured; the
+    first 20:0x acceptance is still to be logged here.
   * **CLOCK-3** (LOW) `closed` — the re-arm comment, README and the
     breaker alert name the real resume boundary: the next UTC roll (20:00
     ET; 19:00 ET in winter), not "the next trading day".
@@ -742,15 +743,26 @@ name, reconstruct it from `git log origin/main -- ibkr-executor/`.
   step).
 * **Suite:** 442 passed; the eight attack probes at their documented
   marks under the corrected preconditions.
-* **Live confirmation — LANDED.** 2026-09-10 20:06 ET, on the
-  pre-round-19 code after the breaker's 20:00 re-arm and an operator
-  cancel of the resting sweep BUY at ~20:01: `🧬 blend ENTER GH x6 MOO
-  accepted, awaiting fill`. The first OPG the venue has ever accepted from
-  this book, six minutes after extended hours ended — the close + 4h
-  boundary holds on the acceptance side too (VENUE-5 discharged; order ref
-  to be copied from /status when B9 is closed). The same evening's 16:03,
-  16:09 and 16:14 rejections and this 20:06 acceptance bracket the window
-  to within the poll cadence.
+* **Live confirmation — LANDED, and on the OTHER side of the window.**
+  The resting sweep BUY was not cancelled Thursday evening; the operator
+  cancelled it at ~09:05 ET on Friday 2026-09-11, and the next cycle
+  placed `🧬 blend ENTER GH x6 MOO accepted, awaiting fill` at **09:06 ET,
+  pre-market**, for that morning's 09:30 open — accepted. (An earlier
+  revision of this line mis-stamped it as Thursday 20:06 ET; corrected.)
+  So the measured facts are: rejected at 16:03, 16:09, 16:14 ET
+  (after-hours); accepted at 09:06 ET (pre-market, 19 minutes before the
+  planning cutoff). The pre-market side, flagged UNVERIFIED in round 19,
+  is verified ACCEPTED. The evening side of the boundary (close + 4h,
+  20:00 ET) remains inferred from IBKR's published extended-hours end —
+  the first 20:0x acceptance is still to be logged here. Order ref: copy
+  from /status when B9 is closed.
+* **Deploy note, at cost.** `main` took this branch (PR #55, `ddac0a5`)
+  at ~09:08 ET Friday — at the open, with GH's MOO resting — because the
+  operator's Friday-morning go was read as Thursday evening. The order
+  fills at the venue regardless; the exposure was the executor being
+  back (IB Key push) in time to adopt the fill and place the stop.
+  Operating rule 1 (no restart 09:25-16:00) exists for this; the session
+  clock, not the conversation, decides when a deploy is safe.
 
 ---
 
