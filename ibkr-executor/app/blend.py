@@ -365,6 +365,14 @@ def stop_client_id(call_id: int, level: float) -> str:
     return f"blend-{call_id}-stp-{level:.4f}"
 
 
+def _min_risk_unit(entry_ref: float) -> float:
+    """One venue price increment at `entry_ref`: the smallest distance a
+    real stop can sit from the reference."""
+    from decimal import Decimal
+    from .ib_adapter import stock_tick
+    return float(stock_tick(Decimal(str(float(entry_ref)))))
+
+
 def snap_stop_level(level: float) -> float | None:
     """The tracker's published trail level, on the venue's price grid — or
     None when no stop can exist there.
@@ -1459,18 +1467,32 @@ class Blend3070Manager:
                     self._event("RED", msg)
                     alerts.append(msg)
                     continue
-                trail = (srow or {}).get("trail_level")
-                if trail is not None and trail > 0:
-                    # snapped BEFORE it sizes anything: the risk unit
-                    # (entry_ref - trail) must be the distance to the stop
-                    # that will actually rest, and the same number becomes
-                    # the position's stop_level and its idempotency key
-                    # (round 20)
-                    trail = snap_stop_level(trail)
-                if (not entry_ref or trail is None or trail <= 0
-                        or entry_ref <= trail):
+                raw_trail = (srow or {}).get("trail_level")
+                if (not entry_ref or raw_trail is None or raw_trail <= 0
+                        or entry_ref <= raw_trail):
+                    # the ordering guard runs on the PUBLISHED numbers: a
+                    # floor-snap only ever widens `entry_ref - trail`, so
+                    # snapping first would ADMIT a trail at or above
+                    # entry_ref that this guard exists to refuse (round 20
+                    # second pass, INGE-1)
                     self._event("WARN", f"no sizing reference for {e['symbol']} "
                                         f"(call {e['call_id']}): skipped")
+                    continue
+                # snapped BEFORE it sizes anything: the risk unit
+                # (entry_ref - trail) must be the distance to the stop that
+                # will actually rest, and the same number becomes the
+                # position's stop_level and its idempotency key (round 20)
+                trail = snap_stop_level(raw_trail)
+                if trail is None or entry_ref - trail < _min_risk_unit(entry_ref):
+                    # a risk unit under one venue tick is a data bug (a
+                    # halted name whose ATR is 0), never a several-thousand-
+                    # share order sized only by the cash clamp (INGE-1)
+                    msg = (f"REFUSED entry {e['symbol']} (call {e['call_id']}): "
+                           f"trail {raw_trail} is within one price increment "
+                           f"of entry_ref {entry_ref} — a risk unit that "
+                           f"small is a data defect, not a stop distance")
+                    self._event("RED", msg)
+                    alerts.append(msg)
                     continue
                 # L-E1 (live blocker): `entry_ref` is the TRACKER's fire-day
                 # close and NOTHING checked it against the venue —
@@ -2513,25 +2535,33 @@ def _ensure_stop(mgr: Blend3070Manager, adapter, pos: BlendPosition,
               f"(call {pos.call_id}) has a non-positive stop level "
               f"({pos.stop_level}) — no stop placeable; new entries BLOCKED")
         return False
-    # A row journalled before round 20 carries an OFF-GRID level (the live
-    # GH position was 137.0507). Normalize it here, where the id is built
-    # and the order placed, so all three uses are one number — and ONLY
-    # while nothing rests under the old id, which is exactly the state this
-    # function is called in.
-    snapped = snap_stop_level(pos.stop_level)
-    if snapped is None:
+    # `pos.stop_level` is NOT normalized here, even for a row journalled
+    # before round 20 with an off-grid level (the live GH position:
+    # 137.0507). `stop_client_id(call_id, stop_level)` is the position's
+    # ONLY durable handle on the venue — the persisted order ref is
+    # session-scoped (x13) — and rewriting the level re-mints the id: an
+    # un-ACKed placement that DID land under the old id (ack timeout, a
+    # container kill between placeOrder and on_stop_placed) could then never
+    # be adopted, and this placement would STACK a second stop on it — cover
+    # above held, a venue short on one tick (round 20 second pass, REGR-1 /
+    # MIGR-1, reproduced). The adapter snaps the PRICE to the grid; the id
+    # keeps naming whatever rests; the level goes on-grid at the first
+    # genuine ratchet, which re-mints the id in the one place that is
+    # allowed to (place new, then cancel old).
+    if any(i.get("call_id") == pos.call_id
+           for i in mgr.state.orphan_stop_refs.values()):
+        # The guard `_resize_peer_cover`'s restore leg already has, and this
+        # path lacked (MIGR-1): an earlier cover of THIS position was never
+        # ACK-cancelled and may still rest, so placing here could put cover
+        # above held. X2's machinery owns that residual and alerts on its
+        # own cadence; the honest state here is STOP_MISSING, without a
+        # second alert line per cycle.
         mgr.mark_stop_missing(pos.call_id)
-        alert(f"🚨🚨 blend STOP_MISSING: {pos.symbol} x{pos.qty} "
-              f"(call {pos.call_id}): no stop is placeable at "
-              f"{pos.stop_level} on the venue's price grid — new entries "
-              f"BLOCKED")
+        mgr._event("INFO", f"stop for {pos.symbol} (call {pos.call_id}) "
+                           f"not placed: a retired stop of this position is "
+                           f"still unconfirmed at the venue (orphan) — "
+                           f"placing could stack cover above held")
         return False
-    if snapped != pos.stop_level and pos.stop_order_ref is None:
-        mgr._event("INFO", f"stop level for {pos.symbol} (call "
-                           f"{pos.call_id}) snapped {pos.stop_level} -> "
-                           f"{snapped} (venue price grid)")
-        pos.stop_level = snapped
-        mgr.save()
     last_exc: Exception | None = None
     for attempt in range(STOP_RETRY_ATTEMPTS):
         try:

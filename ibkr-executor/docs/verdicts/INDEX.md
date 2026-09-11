@@ -835,15 +835,18 @@ name, reconstruct it from `git log origin/main -- ibkr-executor/`.
   behaviour (a 399 "will not be placed until ..." is still not a
   cancellation reason). Deliberately short: add a code when it is OBSERVED
   killing an order, never on a guess.
-* **CAUSE-4 / DEPLOY-6 (HIGH, operational) `closed` by sequencing.** The
-  snap puts the book's stop at 137.05 — the same price as the operator's
+* **CAUSE-4 / DEPLOY-6 / MIGR-4 (HIGH, operational) `closed` by
+  sequencing.** The book's stop lands within a tick of the operator's
   hand-placed manual stop, which the book cannot see (no orderRef). During
   an overlap, 12 shares of sell-stop rest against 6 held and both trigger
   on one tick: the account goes SHORT 6 GH. The `cover <= held` invariant
-  cannot catch it — it counts only orders the book placed. **The manual
-  stop is cancelled BEFORE the book places its own, after 16:00 ET, when
-  the naked window cannot trade.** (Earlier guidance said the opposite;
-  corrected.)
+  cannot catch it — it counts only orders the book placed. And the second
+  pass (MIGR-4) showed the sequence "cancel before the book places its
+  own" is only satisfiable by cancelling BEFORE THE DEPLOY: reconcile runs
+  first in the very first cycle after the gateway connects and pass 4
+  places the stop then. **Runbook: cancel the manual stop, THEN merge.**
+  The naked window is the deploy itself (~10-15 min). (Earlier guidance
+  said the opposite twice; corrected.)
 * **CAUSE-6 (LOW) `open`.** The protective STP is built `tif=GTC` with
   `outsideRth` unset, so it is an RTH-only stop while the alerting presents
   it as continuous protection. Not a rejection cause. Casey's call — a stop
@@ -874,7 +877,65 @@ name, reconstruct it from `git log origin/main -- ibkr-executor/`.
   true, sleeve_cash 23.58, BIL 153, SPY 45): four cycles, one stop resting
   at 137.05 throughout, findable by its re-derived id, `stop_missing`
   cleared, entries unblocked, no churn.
-* **Suite:** 457 passed; the eight attack probes at their documented marks.
+* **Second pass — on the remediation itself (same day).** Four lenses:
+  regression **FAIL**, ingestion PASS WITH CORRECTIONS, migration PASS WITH
+  CORRECTIONS, tests PASS WITH CORRECTIONS. 45 verified findings.
+  * **REGR-1 = MIGR-1 (HIGH) `closed`.** The remediation's
+    `_ensure_stop` normalized a legacy off-grid `pos.stop_level` in place.
+    That REWRITES `stop_client_id`, the position's only durable venue
+    handle (the persisted order ref is session-scoped, x13): an un-ACKed
+    placement that DID land under the old id — ack timeout, a container
+    kill between `placeOrder` and `on_stop_placed` — can then never be
+    adopted, and the placement STACKS a second stop on it: 12 shares of
+    cover against 6 held, a venue short on one tick. Reproduced A/B on the
+    real path. Fix: the block is DELETED — the level is never rewritten;
+    the adapter snaps the PRICE, the id keeps naming whatever rests, and
+    the level goes on-grid at the first genuine ratchet, the one place
+    allowed to re-mint an id (place new, cancel old). Plus the orphan
+    guard `_resize_peer_cover`'s restore leg already had and `_ensure_stop`
+    lacked: no placement while a retired stop of this position is still
+    unconfirmed at the venue (STOP_MISSING instead, no extra alert line).
+    Gates: the un-ACKed order under the old id is ADOPTED not stacked; the
+    legacy level keeps its handle and rests on-grid; no stop over an
+    orphan; and TEST-8 — the exact live row (137.0507 on disk, no stop,
+    the tracker republishing it) through `run_cycle` for four cycles, then
+    the tracker publishing 137.205 → exactly one ratchet to 137.20 and
+    stable.
+  * **INGE-1 (MED) `closed`.** Snapping the entry trail BEFORE the
+    `entry_ref <= trail` guard let a trail EQUAL to entry_ref through (a
+    halted name, ATR 0) with a sub-tick risk unit — the cash clamp the only
+    bound on a several-thousand-share order. The guard runs on the raw
+    numbers first; then the snap; then a risk unit under one venue tick is
+    REFUSED as a data defect. Gate: trail at / within a tick of entry_ref
+    never enters; one full tick sizes normally.
+  * **INGE-2 = TEST-2 (MED) `closed`.** The sizing gate's numbers could
+    not tell snapped from unsnapped (both gave 5 shares). Re-cut so the
+    tick moves the count (risk $30 over 4.2857 → 7 vs over 4.29 → 6).
+  * **TEST-1, 3, 4, 5, 6, 7 (MED) `closed`** — the `_resize_peer_cover`
+    restore leg gated with an off-grid peer (level kept, id resolves,
+    cover ≤ held); the smallest real ratchet (one tick) still fires, so
+    `STOP_EPS` cannot widen silently; both unsnappable-trail arms gated
+    (1e26 in the stops pass is a WARN not a raise; a level that rounds off
+    the board is STOP_MISSING, loudly); the overflow gate pins the
+    conversion text; the dedupe-adopt gate feeds a realistic intent and
+    pins that an adopt onto the resting order sends no operator alert.
+  * **MIGR-2 (MED) `open`, runbook item.** Rows the FIRST build (b126476)
+    would have written — snapped level, order resting under the off-grid
+    id — have no detector. None exist: b126476 never ran live and the only
+    position has no stop. Pre-deploy check, for the record: every position
+    with `stop_order_ref` set must have a venue order whose orderRef equals
+    `stop_client_id(call_id, stop_level)`. Vacuous tonight.
+  * **MIGR-3 (MED) `accepted-risk`.** A flagged (`history_gap`) row with a
+    legacy off-grid level is never normalized while flagged; the adapter's
+    price snap still places it and the id stays consistent, so lookups
+    work; `pos.stop_level` misreports the resting price by up to a tick on
+    `/status` until the next genuine ratchet. Cosmetic; no live rows.
+  * **Mutants (8): 7 killed, 1 EQUIVALENT** — dropping the raw ordering
+    clause survives because the new sub-tick risk-unit guard subsumes it
+    (`entry_ref - trail < tick` refuses every trail at or above
+    `entry_ref`). Kept as defense in depth; recorded, not hidden.
+* **Suite:** 465 passed (23 round-20 gates); the eight attack probes at
+  their documented marks.
 * **B9 status.** Still `open`, and this is why: the chain the judge named —
   MOO adopted, GTC stop resting, first ratchet — has now reached "adopted"
   and stopped at the stop. Close it when a stop of this book's own making

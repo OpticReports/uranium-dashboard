@@ -423,8 +423,10 @@ def test_gate_r20b_huge_price_fails_closed():
     catches - it would escape the stop path as an unhandled exception."""
     from app.ib_adapter import round_stop_to_tick
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="cannot be expressed on the venue"):
         round_stop_to_tick(1e26, "SELL")
+    with pytest.raises(ValueError, match="cannot be expressed on the venue"):
+        round_stop_to_tick(1e27, "BUY")
 
 
 def test_gate_r20b_the_buy_side_is_wired_to_the_other_rounding(ib_adapter):
