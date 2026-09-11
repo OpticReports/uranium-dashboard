@@ -19,6 +19,14 @@ to audit it) · `dd-questions-draft.md` (the pre-fleet question bank).
 HTTP 402 through this environment's proxy, mirrors also failed. Logged the same
 day per the standing rule; contents not guessed. **Casey can paste the text.**
 
+### Published exhibits
+
+| exhibit | what it carries | url |
+|---|---|---|
+| **The Mesh Gap** | The three tiers of "mesh," the 1.25 mm vs 10–30 mm sync gap on a log scale, the datalink ladder, and what CHAOS actually is (§11) | https://claude.ai/code/artifact/bf8d5eea-77d9-40af-8a75-5bd94c020a2e |
+| **Who Else Builds The Seeker** | Competitive positioning map (sensing approach × business model), the price ladder, and the merchant-vs-vertical evidence (§7) | https://claude.ai/code/artifact/c5b45109-add5-4fd2-920b-cef4bdff4a1e |
+| **Ledger dashboard** | The live deal card | https://claude.ai/code/artifact/debab3ea-1024-43f4-bb0e-29aa532e59de |
+
 ---
 
 ## 0 · THE ONE-LINE READ
