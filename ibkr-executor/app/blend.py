@@ -1813,6 +1813,10 @@ class Blend3070Manager:
         self.save()
 
     def on_stop_placed(self, call_id: int, order_ref: str, level: float) -> None:
+        """`level` is what the VENUE holds (the adapter snaps a stop to the
+        venue's price increment and reports it back), not what the tracker
+        published: the ledger, the /status view and the next placement's
+        idempotency key all have to mean the resting order (2026-09-11)."""
         pos = self.state.positions.get(str(call_id))
         if pos is not None:
             pos.stop_order_ref = order_ref
@@ -2486,7 +2490,8 @@ def _ensure_stop(mgr: Blend3070Manager, adapter, pos: BlendPosition,
                       f"UNPROTECTED and new entries are BLOCKED — only you "
                       f"can resolve it")
                 return False
-            mgr.on_stop_placed(pos.call_id, rs["order_ref"], pos.stop_level)
+            mgr.on_stop_placed(pos.call_id, rs["order_ref"],
+                               rs.get("stop_price", pos.stop_level))
             return True
         except Exception as exc:  # noqa: BLE001
             last_exc = exc
@@ -2968,7 +2973,8 @@ def _resize_peer_cover(mgr: Blend3070Manager, adapter, held: int,
                 lines.append(f"call {p.call_id}: 0 -> UNKNOWN (venue "
                              f"returned an existing order)")
                 continue
-            mgr.on_stop_placed(p.call_id, rs["order_ref"], p.stop_level)
+            mgr.on_stop_placed(p.call_id, rs["order_ref"],
+                               rs.get("stop_price", p.stop_level))
             p.stop_cover_qty = new if new < p.qty else 0
             mgr.save()
             lines.append(f"call {p.call_id}: 0 -> {new} (cover RE-PLACED at "
@@ -3025,7 +3031,8 @@ def _resize_peer_cover(mgr: Blend3070Manager, adapter, held: int,
             lines.append(f"call {p.call_id}: {cur} -> UNKNOWN (venue "
                          f"returned an existing order)")
             continue
-        mgr.on_stop_placed(p.call_id, rs["order_ref"], p.stop_level)
+        mgr.on_stop_placed(p.call_id, rs["order_ref"],
+                           rs.get("stop_price", p.stop_level))
         p.stop_cover_qty = new
         mgr.save()
         lines.append(f"call {p.call_id}: {cur} -> {new}")
@@ -4086,7 +4093,8 @@ def _execute_adjust_stop(mgr: Blend3070Manager, adapter, it: dict,
               f"{it['stop_level']:.2f} ({exc}) — old stop kept working, "
               f"will retry next cycle")
         return
-    mgr.on_stop_placed(it["call_id"], rs["order_ref"], it["stop_level"])
+    mgr.on_stop_placed(it["call_id"], rs["order_ref"],
+                       rs.get("stop_price", it["stop_level"]))
     old_ref = it.get("old_ref")
     if old_ref:
         try:

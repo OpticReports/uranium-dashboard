@@ -17,6 +17,7 @@ import asyncio
 import logging
 import math
 import time
+from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal, InvalidOperation
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +112,57 @@ def _usable_px(value) -> float | None:
     if v != v or v <= 0:                    # NaN or non-positive
         return None
     return v
+
+
+# VENUE PRICE INCREMENTS (live blocker, 2026-09-11). US equities quote in
+# whole CENTS at or above $1.00 and in $0.0001 increments below it (SEC Rule
+# 612). IBKR REJECTS an order whose price is not a multiple of the increment
+# — error 110, "The price does not conform to the minimum price variation
+# for this contract" — and the order comes back Cancelled. The tracker
+# publishes trail levels to four decimals (`trail_level` in the payload is
+# `round(level, 4)`), so the FIRST protective stop this book ever sent live
+# was 137.0507 on GH: refused three times, the position left naked and all
+# new entries blocked. Nothing between the tracker and `placeOrder` had ever
+# snapped a price to the venue's grid.
+TICK_AT_OR_ABOVE_1 = Decimal("0.01")
+TICK_BELOW_1 = Decimal("0.0001")
+
+
+def stock_tick(price: Decimal) -> Decimal:
+    """The venue's minimum price increment for a US equity at `price`."""
+    return TICK_BELOW_1 if price < Decimal("1") else TICK_AT_OR_ABOVE_1
+
+
+def round_stop_to_tick(stop_price: float, action: str) -> float:
+    """Snap a protective stop to a price the venue will accept, NEVER
+    tightening it.
+
+    A SELL stop protects a long: rounding DOWN can only trigger it later,
+    which is the conservative direction — the pre-registered risk per share
+    (`entry_ref - trail`) is never silently reduced by a rounding. A BUY
+    stop covers a short, so it rounds UP for the same reason. The move is
+    at most one tick (half a cent on the GH case) and is LOGGED by the
+    caller, never silent.
+
+    Decimal, not `round()`: binary floats put 137.0507 fractionally below
+    the value a decimal reader sees, and a stop is the one price on this
+    book that must be exactly what the venue can hold."""
+    try:
+        px = Decimal(str(float(stop_price)))
+    except (InvalidOperation, TypeError, ValueError) as exc:
+        raise ValueError(f"stop price {stop_price!r} is not a number") from exc
+    if not px.is_finite() or px <= 0:      # NaN first: it compares by raising
+        raise ValueError(f"stop price {stop_price!r} must be a positive number")
+    tick = stock_tick(px)
+    mode = ROUND_FLOOR if action.upper() == "SELL" else ROUND_CEILING
+    snapped = px.quantize(tick, rounding=mode)
+    if snapped <= 0:
+        # a sub-tick stop that floors to zero is not a stop the venue can
+        # hold; fail closed rather than send a price of 0.00
+        raise ValueError(
+            f"stop price {stop_price!r} rounds to {snapped} at the venue's "
+            f"{tick} increment — no protective stop is placeable there")
+    return float(snapped)
 
 
 def _map_status(ib_status: str) -> str:
@@ -1004,8 +1056,14 @@ class IBAdapter:
                 return {**self._trade_result(prior), "duplicate": True}
         from ib_async import MarketOrder, StopOrder
         action = "BUY" if qty > 0 else "SELL"
+        placed_stop = None
         if order_type == "STP":
-            order = StopOrder(action, abs(qty), float(stop_price))
+            placed_stop = round_stop_to_tick(stop_price, action)
+            if placed_stop != float(stop_price):
+                logger.info("stop %s %s snapped %s -> %s (venue price "
+                            "increment)", action, symbol, stop_price,
+                            placed_stop)
+            order = StopOrder(action, abs(qty), placed_stop)
             order.tif = "GTC"               # protective stops always rest GTC
         else:
             order = MarketOrder(action, abs(qty))
@@ -1016,6 +1074,10 @@ class IBAdapter:
         trade = self.ib.placeOrder(contract, order)
         self._await_placement(trade, order_type)
         out = self._trade_result(trade)
+        if placed_stop is not None:
+            # the price the venue actually holds, so the book can record it
+            # and its next idempotency key matches what rests
+            out["stop_price"] = placed_stop
         logger.info("stock order placed: %s %s x%d %s -> %s (%s)",
                     action, symbol, abs(qty), order_type, out["status"],
                     out["order_ref"])
@@ -1316,6 +1378,11 @@ class DryAdapter:
         if order_type == "STP":
             if stop_price is None:
                 raise ValueError("STP order requires stop_price")
+            # Snapped exactly as the live adapter snaps it: a paper run that
+            # rests a price the real venue would REJECT is the simulation
+            # lying about the one order that protects the book.
+            stop_price = round_stop_to_tick(
+                stop_price, "BUY" if qty > 0 else "SELL")
             self._stops[ref] = {"symbol": symbol, "qty": qty,
                                 "stop_price": stop_price, "tif": tif}
             rec = {"order_ref": ref, "symbol": symbol, "qty": qty,
@@ -1328,7 +1395,8 @@ class DryAdapter:
             self._rec("place_stock_order", symbol=symbol, qty=qty,
                       order_type=order_type, stop_price=stop_price, tif=tif,
                       ref=ref, status="working")
-            return {"order_ref": ref, "status": "working"}
+            return {"order_ref": ref, "status": "working",
+                    "stop_price": stop_price}
         fill = ref_price if ref_price is not None else self.spot(symbol)
         self._last_px[symbol] = fill
         self._positions[symbol] = self._positions.get(symbol, 0) + qty

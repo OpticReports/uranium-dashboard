@@ -8172,3 +8172,45 @@ def test_gate_r19_a_resting_sell_is_not_stuck_during_after_hours(tmp_path, monke
     for mi in (35, 40, 45):                                   # in session and unfilled: stuck
         cyc(2026, 8, 21, 9, mi)
     assert sell["status"] == "cancelled"
+
+
+# --- round 20 (2026-09-11): the book records the price the VENUE holds -------
+
+def test_gate_r20_the_book_records_the_snapped_stop_not_the_published_one(tmp_path):
+    """The tracker publishes trail levels to four decimals (`trail_level` is
+    `round(level, 4)`); the venue holds cents. After placement the ledger,
+    /status and the next idempotency key must all mean the order that is
+    actually resting - otherwise the book reports protection at a price
+    nothing is working at. Modelled on the live GH shape: trail 137.0507."""
+    m = mk(tmp_path)
+    _seed_initialized(m)
+    a = DryAdapter()
+    run_cycle(m, a, payload(entries=[entry()],
+                            stops=[stop_row(trail=44.0507)]),
+              "2026-08-20", alert=lambda _: None)
+    pos = m.state.positions["1"]
+    assert pos.stop_order_ref and not pos.stop_missing
+    assert a._stops[pos.stop_order_ref]["stop_price"] == 44.05
+    assert pos.stop_level == 44.05, pos.stop_level
+    # the id the NEXT placement would use names the price that is resting
+    assert blend_mod.stop_client_id(pos.call_id, pos.stop_level).endswith("44.0500")
+
+
+def test_gate_r20_the_ratchet_replace_also_records_the_snapped_level(tmp_path):
+    """The ratchet is the stop path that runs every cycle for the life of a
+    position - it cancels and re-places at each new published trail. It
+    must snap and record exactly as the first placement does, or the book
+    drifts off the venue one ratchet at a time (and the id it would reuse
+    names a price nothing holds)."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=2_750.0)
+    _held_position(m)
+    a = DryAdapter()
+    out = run_cycle(m, a, payload(stops=[stop_row(trail=47.0507)]),
+                    "2026-08-21", alert=lambda _: None)
+    (adj,) = [o for o in out if o["action"] == "ADJUST_STOP"]
+    assert adj["old_ref"] == "old-stop"
+    pos = m.state.positions["1"]
+    assert a._stops[pos.stop_order_ref]["stop_price"] == 47.05
+    assert pos.stop_level == 47.05, pos.stop_level
+    assert blend_mod.stop_client_id(pos.call_id, pos.stop_level).endswith("47.0500")

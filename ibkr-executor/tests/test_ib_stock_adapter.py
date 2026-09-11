@@ -16,6 +16,7 @@ mocked ib_async module — no live gateway exists here. Gates:
 from __future__ import annotations
 
 import asyncio
+from decimal import Decimal
 import sys
 import types
 
@@ -335,6 +336,85 @@ def test_stp_is_stop_order_with_gtc_tif(ib_adapter):
     assert t.order.auxPrice == 44.0
     assert t.order.action == "SELL" and t.order.totalQuantity == 5
     assert r["status"] == "working"
+
+
+# --- round 20 (2026-09-11): the venue's price increment ----------------------
+# THE live blocker. GH x6 filled at 159.24 and the first protective stop this
+# book ever sent live carried the tracker's four-decimal trail level,
+# 137.0507. IBKR refuses a price off the increment grid (error 110, "does not
+# conform to the minimum price variation") — three attempts, all Cancelled,
+# the position naked and every new entry blocked. MUTATION-VERIFIED (see
+# docs/verdicts/INDEX.md, round 20): dropping the snap, rounding to NEAREST
+# instead of away from the trigger, using cents below $1, and dropping the
+# reported `stop_price` each turn a gate below red.
+
+def test_gate_r20_a_sub_tick_stop_reaches_the_venue_on_the_grid(ib_adapter):
+    """The GH case, end to end: the price that reaches `placeOrder` is one
+    the venue can hold, and the caller is told which price that is."""
+    r = ib_adapter.place_stock_order("GH", -6, "STP", stop_price=137.0507,
+                                     tif="GTC",
+                                     client_order_id="blend-18-stp-137.0507")
+    (t,) = ib_adapter.ib.trades()
+    assert t.order.auxPrice == 137.05, t.order.auxPrice
+    assert Decimal(str(t.order.auxPrice)) % Decimal("0.01") == 0
+    assert r["stop_price"] == 137.05, r
+    assert t.order.orderType == "STP" and t.order.tif == "GTC"
+
+
+def test_gate_r20_rounding_never_tightens_a_protective_stop():
+    """Direction is not cosmetic: a SELL stop protects a long, so it rounds
+    DOWN (trigger later, risk per share never silently reduced below the
+    pre-registered `entry_ref - trail`); a BUY stop covering a short rounds
+    UP for the same reason. Nearest-rounding would tighten half of all
+    stops."""
+    from app.ib_adapter import round_stop_to_tick as snap
+
+    assert snap(137.0507, "SELL") == 137.05
+    assert snap(137.0507, "BUY") == 137.06
+    assert snap(137.0593, "SELL") == 137.05      # nearest would say 137.06
+    assert snap(137.0507, "sell") == 137.05      # case-insensitive
+    assert snap(44.0, "SELL") == 44.0 and snap(44.0, "BUY") == 44.0
+
+
+def test_gate_r20_sub_dollar_stocks_use_the_finer_increment():
+    """Below $1 the venue quotes in $0.0001 (SEC Rule 612). Snapping those
+    to a cent would move a stop by up to 1% of the price - on the penny
+    names this sleeve actually holds."""
+    from app.ib_adapter import round_stop_to_tick as snap, stock_tick
+
+    assert snap(0.87654, "SELL") == 0.8765
+    assert snap(0.87651, "BUY") == 0.8766
+    assert snap(0.9999, "SELL") == 0.9999
+    assert snap(1.0007, "SELL") == 1.0          # at $1 the grid is cents
+    assert stock_tick(Decimal("0.999")) == Decimal("0.0001")
+    assert stock_tick(Decimal("1")) == Decimal("0.01")
+
+
+def test_gate_r20_a_stop_that_cannot_exist_fails_closed():
+    """A price that rounds off the board is not a stop. Fail closed (the
+    caller's STOP_MISSING path alerts and blocks entries) rather than send
+    0.00 - which the venue would either reject or, worse, hold."""
+    import pytest
+    from app.ib_adapter import round_stop_to_tick as snap
+
+    for bad in (0.0, -1.0, 0.00004):
+        with pytest.raises(ValueError):
+            snap(bad, "SELL")
+    with pytest.raises(ValueError):
+        snap(float("nan"), "SELL")
+
+
+def test_gate_r20_the_dry_adapter_rests_a_price_the_venue_could_hold():
+    """The paper double must snap exactly as the live adapter does: a dry
+    run that rests 137.0507 is the simulation lying about the one order
+    that protects the book - which is how this shipped."""
+    from app.ib_adapter import DryAdapter
+
+    a = DryAdapter()
+    r = a.place_stock_order("GH", -6, "STP", stop_price=137.0507, tif="GTC",
+                            client_order_id="blend-18-stp-137.0507")
+    assert r["stop_price"] == 137.05
+    assert a._stops[r["order_ref"]]["stop_price"] == 137.05
 
 
 def test_mkt_is_day_market_order_and_signed_qty_maps_sides(ib_adapter):
