@@ -714,10 +714,9 @@ name, reconstruct it from `git log origin/main -- ibkr-executor/`.
     README operating rule 1 and the blend.py section header said 16:00.
   * **VENUE-4 = TESTS-7** (LOW) `closed` — this entry; the merge round's
     open item is closed above.
-  * **VENUE-5** (LOW) `closed` — acceptance at close + 4h is IBKR's
-    published extended-hours end, INFERRED; only the rejections are
-    measured. Stated so in code and README. **Confirm on the first live
-    20:0x placement and log the order ref and time here.**
+  * **VENUE-5** (LOW) `closed` — acceptance at close + 4h was IBKR's
+    published extended-hours end, INFERRED at review time; measured the
+    same evening (below): GH x6 MOO accepted 20:06 ET.
   * **CLOCK-3** (LOW) `closed` — the re-arm comment, README and the
     breaker alert name the real resume boundary: the next UTC roll (20:00
     ET; 19:00 ET in winter), not "the next trading day".
@@ -743,9 +742,15 @@ name, reconstruct it from `git log origin/main -- ibkr-executor/`.
   step).
 * **Suite:** 442 passed; the eight attack probes at their documented
   marks under the corrected preconditions.
-* **Live confirmation pending:** the first 20:0x OPG accepted by the
-  venue (GH, call 18, expected 2026-09-10 after the 20:00 ET re-arm on
-  the pre-round-19 code) — record it here with the order ref.
+* **Live confirmation — LANDED.** 2026-09-10 20:06 ET, on the
+  pre-round-19 code after the breaker's 20:00 re-arm and an operator
+  cancel of the resting sweep BUY at ~20:01: `🧬 blend ENTER GH x6 MOO
+  accepted, awaiting fill`. The first OPG the venue has ever accepted from
+  this book, six minutes after extended hours ended — the close + 4h
+  boundary holds on the acceptance side too (VENUE-5 discharged; order ref
+  to be copied from /status when B9 is closed). The same evening's 16:03,
+  16:09 and 16:14 rejections and this 20:06 acceptance bracket the window
+  to within the poll cadence.
 
 ---
 
