@@ -1,261 +1,193 @@
-# DexMat / Galvorn — cost per kilogram, derived
+# DexMat / Galvorn — cost per kilogram
 
-Date: 2026-09-12 · Status: **DERIVED, not disclosed — reported as a band**
-Counter-agent: reviewed, verdict FAIL-as-first-framed; rebuilt to its
-required corrections (basis flipped, cross-check deleted, three
-basis-independent findings added). Companion visual: `cost-per-kg.html`
+Date: 2026-09-12 · **rev 2, ANCHORED** (rev 1 shipped an 8.92x band)
+Companion visual: `cost-per-kg.html`
 
-## Why this is a band and not a number
+## The anchor
 
-Casey asked what Galvorn costs per kilogram today and as it scales.
-**No DexMat or sponsor document states a $/kg anywhere.** The deck, the
-Sept-2026 sponsor memo and the model workbook (SPC Unified Model tab) are
-denominated entirely in metres and feet. `factpack.md` already records
-the gap:
+No DexMat or sponsor document states a $/kg; the deck, the Sept-2026 memo
+and the model workbook are denominated entirely in metres and feet, and
+`factpack.md` records `$/kg: [UNKNOWN] — never disclosed`. Rev 1
+therefore shipped a band 8.92x wide, with the linear density as a P1 ask.
 
-> Absolute capacity (kg/yr) and $/kg: [UNKNOWN] — never disclosed.
+**Casey supplied it 2026-09-12: production cost after the new plant is
+$1,389.20/kg.** That pins the density and collapses the band.
 
-Converting their $/m roadmap to $/kg needs one number nobody has given
-us: **the linear density (g/m) of the SKU the roadmap prices.** The
-roadmap is tagged "26 AWG equivalent," and that phrase has two readings
-whose answers differ by **8.92x**:
+### It ties out exactly — which tells us what it is
 
-| Reading | What it means | Galvorn mass | $/kg effect |
-|---|---|---|---|
-| **Equal cross-section** | a fibre the same physical size as 26 AWG copper | 0.1674 g/m | **CENTRAL** |
-| Equal DC resistance | a fibre that carries the same current: 8.92x the area, 1.29x copper's mass | 1.4936 g/m | lower bound, 8.92x lower $/kg |
+The deck's 3 t/yr revenue target is $5M on 3,000 kg of nameplate. At the
+memo's own 20% markup:
 
-26 AWG copper: d = 0.40489 mm, A = 0.12876 mm², 1.1537 g/m. Galvorn
-properties are the shipping SKU (Galvorn 1000 tow, 6.5 MS/m, 1.30 g/cc).
+    $5,000,000 / 3,000 kg / 1.20 = $1,388.89/kg
 
-### Which reading — the discriminating test
+against the supplied $1,389.20 — a **0.02%** match. So the anchor is the
+**3 t/yr pilot** step ($1.33/m), and it is the sponsor's own model
+arithmetic expressed in mass units, not an independent cost disclosure.
+Internally consistent; not external corroboration. A cost figure that
+falls out of a revenue target is a plan, not a measurement.
 
-Take the deck's own by-plant revenue targets and the sponsor memo's own
-stated markup ("at just 20% markup over production cost") and solve for
-how many kilograms must be sold. Equal-cross-section fits inside the
-plants; equal-resistance does not:
+### What the anchor reveals about the product being priced
 
-| Plant | Nameplate | Revenue target | Utilisation, EQUAL X-SECTION | Utilisation, EQUAL RESISTANCE |
-|---|---|---|---|---|
-| 3 t/yr pilot | 3,000 kg | $5M | 17% | **156%** |
-| 30 t/yr demo | 30,000 kg | $44M | **97%** | **869%** |
-| 3 kt/yr commercial | 3,000,000 kg | $330M | 38% | **342%** |
+$1.33/m ÷ $1,389.20/kg = **0.9574 g/m**. Working backwards:
 
-The equal-resistance reading requires DexMat to sell 1.6–8.7x more
-product than its own plants can make. The 30 t row landing at 97% of
-nameplate is a tight enough fit to suggest the sponsor's model is in fact
-built on ~0.167 g/m.
+| Quantity | Value | Meaning |
+|---|---|---|
+| Linear density | 0.9574 g/m | **0.830x** copper's mass per metre — lighter than the copper it replaces |
+| Cross-section (at 1.30 g/cc) | 0.7365 mm² | 5.72x the 26 AWG copper area |
+| **Implied conductivity** | **10.14 MS/m** | **The deck's best single filament (10), not the shipping tow (6.5)** |
 
-Two further checks agree, and the second needs no markup assumption:
-
-- **"2M+ metres produced" against "capacity 15 → 300 kg."**
-  Equal-x-section → 335 kg cumulative ≈ 1.1 years at the new 300 kg/yr
-  line. Equal-resistance → 2,987 kg ≈ **10 years** at a capacity that was
-  15 kg until recently. Only the first is possible.
-- **The sponsor's own weight claims are equal-volume claims.** Memo p.3:
-  "less conductive per cross-section, but **6x lighter**." 8.96/1.30 =
-  6.89 — that is the *density ratio*, true only at equal volume. At equal
-  resistance Galvorn is **1.29x heavier** than copper and the entire
-  Phase-1 weight-saving pitch reverses sign.
-
-**So the central case is equal-cross-section, and the earlier
-resistance-basis figures were 8.92x too low.** Neither reading is
-established from the file; this is an unresolved fork, now P1 ask #1.
+This is the fact pack's standing candor pattern, now located inside the
+cost roadmap. The record already establishes that the deck quotes
+best-filament performance as if it were the product. **If the real
+shipping tow (6.5 MS/m) is used, the same electrical job needs 1.56x more
+mass per metre** — so every figure below understates cost per delivered
+function by about half as much again.
 
 ## THE TABLE
 
-Cost is DexMat's stated production cost. Price applies the memo's own 20%
-markup. Copper at $13,387/t = **$13.39/kg — the January 2026 LME record
-high**, eight months stale and a high-water mark; the parity target
-scales linearly, so use `0.772 x (copper $/kg)` to rescale.
+Converts the deck's $/m roadmap at the anchored 0.9574 g/m. Price applies
+the memo's stated 20% markup. Copper at $13,387/t = **$13.39/kg, the
+January 2026 LME record**; rescale the parity line with
+`1.205 x (copper $/kg)`.
 
-| Scale step | Date | Cost $/m | **COST $/kg** (central, equal x-section) | PRICE $/kg (+20%) | Lower bound (equal resistance) | x copper per kg |
+| Scale step | Date | Cost $/m | Cost $/ft | **COST $/kg** | Price $/kg (+20%) | x Cu per kg |
 |---|---|---|---|---|---|---|
-| **Today** — 15→300 kg/yr line | 2026 now | 5.11 | **$30,529** | $36,635 | $3,421 | 2,280x |
-| 3 t/yr pilot | 2026–27 | 1.33 | **$7,946** | $9,535 | $890 | 594x |
-| 30 t/yr demo ($2–5M capex) | 2028–29 | 0.21 | **$1,255** | $1,506 | $141 | 94x |
-| 3 kt/yr commercial (~$40M capex) | 2030–31 | 0.04 | **$239** | $287 | $27 | 17.9x |
-| "Long-term" deck claim [SELF-REFUTING] | n.d. | 0.001 | $5.97 | $7.17 | $0.67 | 0.45x |
+| **Today** — 15→300 kg/yr line | 2026 now | 5.11 | 1.56 | **$5,337** | $6,405 | 399x |
+| **3 t/yr pilot — SUPPLIED ANCHOR** | 2026–27 | 1.33 | 0.41 | **$1,389** | $1,667 | 104x |
+| 30 t/yr demo ($2–5M capex) | 2028–29 | 0.21 | 0.064 | **$219** | $263 | 16.4x |
+| 3 kt/yr commercial (~$40M capex) | 2030–31 | 0.04 | 0.012 | **$41.78** | $50.14 | 3.1x |
+| "Long-term" deck claim [SELF-REFUTING] | n.d. | 0.001 | 0.0003 | $1.04 | $1.25 | 0.08x |
 
-Same roadmap in the units they actually publish, for reference:
-$5.11/m → $1.33/m → $0.21/m → $0.04/m, i.e. $1.56/ft → $0.41/ft →
-$0.064/ft → $0.012/ft. **A 128x cost decline in ~5 years.**
+A **128x** cost decline in ~5 years. Sanity: today's $5,337/kg is
+2.7–10.7x the independent CNT-fibre cost class of $500–2,000/kg — high,
+but that class describes established producers at volume and DexMat runs
+a 300 kg/yr line. Far closer to it than rev 1's $30,529.
 
-## What survives the 8.92x fork
+## The model is exact at the pilot and breaks at scale-up
 
-These four hold under **both** readings, which makes them more useful
-than the table itself.
+Same test across all three plants, now with density known:
 
-### 1. The "long-term $0.001/m" claim is below its own feedstock floor
-DexMat does not make its own CNT powder (fact pack: upstream supplier
-dependence), so its fibre cannot cost less per kg than the powder it
-buys, at any yield. $0.001/m is **$5.97/kg** (central) or **$0.67/kg**
-(lower bound) — 84x to 2,985x below the fact pack's independent
-CNT-fibre cost class of $500–2,000/kg, and below copper metal. Not a
-stretch target; arithmetically impossible. It is in the deck.
+| Plant | Nameplate | Revenue target | Implied utilisation | |
+|---|---|---|---|---|
+| 3 t/yr pilot | 3,000 kg | $5M | **100.0%** | exact — the anchor's origin |
+| 30 t/yr demo | 30,000 kg | $44M | **557%** | needs 5.6x more than the plant can make |
+| 3 kt/yr | 3,000,000 kg | $330M | **219%** | needs 2.2x more |
 
-### 2. The sponsor's 2034 model needs more CNT than the world makes
-At the memo's own Phase-3 cost + 20% markup ($0.048/m), Fig. 1's
-**$4.501bn 2034 revenue** requires 93.8 billion metres/yr:
+The pilot year is fully specified and coherent. The two scale-up years
+are not: at the roadmap's own costs and the memo's own markup their
+revenue targets require selling 5.6x and 2.2x nameplate. Either the
+capacities are understated, the prices assume a much fatter markup than
+20%, or the targets are unanchored. **New P1** — it sits under the $44M
+and $330M lines the whole ramp runs through.
 
-| | Fibre needed | vs world named CNT powder capacity (~6,200 t/yr: LG Chem 6,100 + OCSiAl 100) |
-|---|---|---|
-| Equal x-section | 15,700 t/yr | **2.5x the world's supply** |
-| Equal resistance | 140,100 t/yr | **22.6x** |
+## What the anchor changed, and what it didn't
 
-The workbook's 2040 $67.2bn needs 234,500–2,092,500 t/yr — **38x to 338x**.
-It is also 5.2x–46.7x the entire 3 kt plant, of which the model builds
-one. This is the strongest single finding here and it is basis-independent.
+### REVERSED — the per-kilogram parity finding
+Rev 1 said Galvorn must reach **0.772x** copper's $/kg for per-metre
+parity, because the equal-resistance tow is 1.29x *heavier* than copper.
+On the anchored density this flips: at 0.9574 g/m the conductor is
+**0.830x copper's mass**, so it may cost **1.205x copper's $/kg** —
+**$16.13/kg** — and still tie per metre. A modest mass dividend, not a
+penalty. The 2030–31 endpoint of $41.78/kg is still **2.6x** that
+threshold, so parity with copper metal is still not reached; but the
+direction of the argument was wrong in rev 1.
 
-### 3. The October price cut is mostly margin, not cost
-$8.49/ft → $0.48/ft is a **17.7x price cut**, against a **3.84x cost
-cut** ($5.11/m → $1.33/m) over the same step. Gross margin goes
-**82% → 15.5%**. The "99% margins" in the DD notes cannot coexist with
-the deck's own $5.11/m cost at the $8.49/ft list — that combination gives
-82%, and for 99% to hold cost would have to be $0.28/m, 18x below the
-deck's own figure. The only place the documents cohere is October 2026:
-$0.48/ft price on $1.33/m cost = 18% markup ≈ the memo's stated 20%.
+### SURVIVES — the "long-term $0.001/m" claim is below its feedstock floor
+**$1.04/kg**: 479–1,915x below the independent CNT-fibre cost class, and
+1/13th of copper metal. DexMat does not make its own CNT powder, so its
+fibre cannot cost less per kg than the powder it buys, at any yield.
 
-### 4. Our own record's copper-parity line is wrong — correct it
-`factpack.md` L64 says the roadmap "only reaches approximate copper
-parity ($0.04/m at 26 AWG)"; `memo.md` makes the same claim without the
-figures ("reaches copper *parity* only at the 3kt plant in 2030–31").
-That is wrong on both
-available benchmarks: $0.04/m is **2.6x dearer** than 26 AWG copper metal
-($0.01544/m) and **12.3x cheaper** than the memo's own "expected copper
-wire" of $0.15/ft ($0.492/m). Neither is parity. This matters because the
-line is load-bearing — it is the record's rebuttal of the sponsor's "3x
-cheaper than copper by 2031." Separately, the sponsor's two copper
-benchmarks contradict each other: $0.063/ft is called "copper price
-parity" in 2028–29, then $0.15/ft is the "expected" copper wire price in
-2030–31 — **2.38x apart in two years**, an unstated copper price rise.
+### SURVIVES, now pinned — 2034 needs more CNT than the world makes
+Fig. 1's $4.501bn 2034 revenue at $0.048/m = 93.8bn metres =
+**89,775 t/yr** of fibre against ~6,200 t/yr of world named CNT powder
+capacity — **14.5x global supply**, and 30x the entire 3 kt plant, of
+which the model builds one. Rev 1 could only bound this at 2.5–22.6x.
 
-## The per-kilogram framing cuts against DexMat
+### UNCHANGED — the October price cut is mostly margin, not cost
+All in $/m. $8.49/ft → $0.48/ft is a 17.7x price cut against a 3.84x cost
+cut; gross margin 82% → 15.5%. "~99% margins" cannot coexist with the
+deck's own $5.11/m at the $8.49/ft list.
 
-Because the shipping tow needs **1.29x copper's mass** to carry the same
-current, matching copper's $/kg is **not** cost parity. Galvorn must
-reach **0.772 x copper's price per kg** — $10.34/kg at the Jan-2026
-record — before a metre of equal-resistance Galvorn costs what a metre of
-copper costs. Even the optimistic lower-bound endpoint of $27/kg is 2.6x
-that. (This is not an independent result: 0.772 is the gravimetric
-conductivity ratio 5,000/6,473 already in the fact pack, restated in
-dollars.) At equal resistance it also needs **8.92x the cross-section**
-— ~3x the diameter, ~9.5 gauge sizes larger — which is a connector,
-conduit and bend-radius problem, not a price problem.
+### UNCHANGED — our own record's copper-parity line is still wrong
+`factpack.md` L64 ("approximate copper parity ($0.04/m at 26 AWG)") and
+`memo.md` (same claim, no figures): $0.04/m is **2.6x dearer** than
+26 AWG copper metal ($0.01544/m) and **12.3x cheaper** than the memo's
+own "expected copper wire" at $0.15/ft. Neither is parity.
 
-What this does NOT touch: the beachhead — but state it correctly. The
-deck's parity claim is a **cost** claim: $1.56/ft to make vs silver-plated
-copper wire (SPCW) wholesaling at $2.86–3.15/ft. At the price DexMat
-actually posts today, **$8.49/ft, it is 2.7–3.0x dearer than SPCW**, and
-even at a 20% markup on cost ($1.87/ft) that is not what it charges.
-Price parity in its own beachhead arrives only with the October
-$0.48/ft — which is precisely why that milestone, and its position after
-the 2026-09-28 close, matters more than the 2030 endpoint. The
-per-kilogram table is the right lens for the bulk-copper TAM story and
-the wrong lens for the business that exists.
+## The beachhead, stated correctly
+
+The deck's parity claim is a **cost** claim: $1.56/ft to make vs
+silver-plated copper wire at $2.86–3.15/ft wholesale. At the price DexMat
+actually posts, **$8.49/ft, it is 2.7–3.0x dearer than SPCW** — and even
+a 20% markup on cost ($1.87/ft) is not what it charges. Price parity in
+its own beachhead arrives only with the October $0.48/ft, which lands
+*after* the 2026-09-28 close.
 
 ## HONESTY BOX
 
-- **Nothing here is a DexMat disclosure.** $/kg has never been given by
-  the company or any sponsor document. This is our conversion.
-- **The band is 8.92x wide and the fork is unresolved.** We favour
-  equal-cross-section on three independent tests, but "favour" is not
-  "establish." Every headline figure could be the lower-bound column.
-- **The $30/kg literature model is NOT corroboration** and an earlier
-  draft of this analysis wrongly used it as such. It is a 144 t/yr plant
-  vs a 3,000 t/yr plant — 21x the scale — and it is the same unbuilt-plant
-  TEA the fact pack already cites. On the central basis the 3 kt endpoint
-  ($239/kg) is **8x above** that model, which is a tension, not support.
-- **Copper at $13.39/kg is the Jan-2026 record**, not spot on 2026-09-12.
-  It flatters Galvorn by raising the parity target. Rescale with
-  `0.772 x (copper $/kg)`.
-- **The dates are the company's.** Standing view unchanged: carbon fibre
-  took ~50 years to fall ~40x. A 128x decline in 5 years has no precedent
-  in advanced fibres.
-- **SKU mixing is a live risk.** At least seven distinct products appear
-  across the file (26 AWG roadmap item; 2-ply yarn at $8.49/ft; Galvorn
-  1000 tow; 6 MS/m median tape; single filament; film/braid/cathodes; the
-  separate "$22/m → $4/m" cost series). The "$22/m → $4/m" line is a
-  **third, inconsistent** cost curve — 4.31x and 3.01x the roadmap's
-  corresponding steps, with a different reduction rate (81.8% vs 74.0%),
-  so it is not the same series rescaled.
-- **Within the equal-resistance family alone the answer still spans 1.7x**
-  depending on which property table is used (deck filament 10 MS/m ·
-  1.6 g/cc → $4,277/kg today; tow 6.5 · 1.30 → $3,421; memo's declared
-  6 MS/m tape → $3,158; 800 tow 4.8 · 1.30 → $2,527).
-- **Not modelled:** yield/scrap per plant step, insulation and cabling
-  conversion cost, feedstock CNT price path, whether $5.11/m is
-  fully-loaded or variable cost, and the annealing penalty — a
-  high-purity space-qualified grade loses up to 4x conductivity, which
-  needs up to 4x the mass per equivalent metre. Note the direction: on a
-  fixed $/m that *divides* the equal-resistance $/kg column by up to 4x
-  (today $3,421 → ~$855/kg), widening the band downward while raising
-  cost per delivered function 4x. The central column is unaffected.
+- **The anchor is the sponsor's own arithmetic**, matching $5M/3,000/1.2
+  to 0.02%. It makes the model legible; it does not verify DexMat can
+  produce at that cost.
+- **Only the 3 t/yr row is supplied.** Every other row is derived from
+  the $/m roadmap at the anchored density.
+- **The density is 0.9574 g/m only if "the new plant" is the 3 t/yr
+  pilot.** If it means the 30 t demo, density is 0.1512 g/m and every
+  figure is 6.3x higher. The exact 100.0% tie makes the pilot reading
+  near-certain, but it is an inference — confirm it.
+- **The roadmap prices a 10 MS/m conductor**; the shipping tow is 6.5.
+  Cost per delivered function is ~1.56x worse than every figure here.
+- **Copper at $13.39/kg is the Jan-2026 record**, not spot.
+- **The dates are the company's.** Carbon fibre took ~50 years to fall
+  ~40x; 128x in 5 years has no precedent in advanced fibres.
+- **SKU mixing remains live.** The "$22/m → $4/m" line is a third,
+  inconsistent cost curve (4.31x and 3.01x the roadmap's steps,
+  reduction rate 81.8% vs 74.0%).
+- **Not modelled:** yield/scrap, insulation and cabling conversion,
+  feedstock CNT price path, whether $5.11/m is fully-loaded or variable,
+  and the annealing penalty (a high-purity space grade loses up to 4x
+  conductivity, needing up to 4x the mass per equivalent metre).
+- **Verification:** rev 1 was counter-agent reviewed twice (first framing
+  returned FAIL — wrong mass basis, invalid cross-check; second pass
+  caught six arithmetic errors). **Rev 2 has not yet had an independent
+  adversarial pass** — one is running. The reversal above is the most
+  likely thing to move.
 
-## PENDING DD QUESTIONS (from this analysis, 2026-09-12)
-
-Ranked per protocol v1.2. Statuses: ● asked · ✓ answered · ◐ partial ·
-✗ refused · ⌛ expired (60 days from first ask). **Round closes 2026-09-28.**
+## PENDING DD QUESTIONS
 
 **P1 — decision-gating:**
-1. ● **NEW · Linear density (g/m or tex) of the SKU the cost roadmap
-   prices, and the definition of "26 AWG equivalent"** — same resistance
-   or same cross-section? *Moves:* every $/kg figure by 8.92x, and with
-   it the entire cost-parity conclusion that the phase-1 thesis rests on.
-   One email, answerable before the close. **Note:** the Galvorn 1000
-   datasheet and "Miralon Yarn TDS_2025" are both cited in our record but
-   **neither document is archived in this deal folder** — only a
-   one-line transcription of the annealing claim. Request both; fibre
-   datasheets state tex or denier, so the number is very likely already
-   sitting in a document we were shown and did not keep.
-2. ● **NEW · DexMat's own $/kg for the current line and each roadmap
-   step**, so we stop deriving it. *Moves:* collapses the band entirely.
-3. ● **NEW · How does the 2034 revenue model obtain 15,700–140,000 t/yr
-   of CNT fibre** when world named CNT powder capacity is ~6,200 t/yr?
-   *Moves:* finding 2 above is basis-independent and, if unanswered, caps
-   the copper-adjacency tail branch directly.
+1. ✓ **RESOLVED · Linear density** — supplied via the anchor, 0.9574 g/m.
+   Residual: confirm directly, and confirm which plant "the new plant" is.
+2. ● **NEW · Is the cost roadmap denominated at 10 MS/m or the shipping
+   tow's 6.5?** The anchored density implies 10.14. *Moves:* cost per
+   delivered function by 1.56x; the candor pattern inside the cost model.
+3. ● **NEW · How do the 30 t and 3 kt revenue targets work at 557% and
+   219% of nameplate?** *Moves:* the $44M and $330M lines.
+4. ● **NEW · How does 2034 source 89,775 t/yr of CNT** against ~6,200
+   t/yr world capacity? *Moves:* caps the tail branch.
 
 **P2 — score-moving:**
-4. ● **SHARPENED (was Q9) · Is $5.11/m fully-loaded or variable cost**,
-   and reconcile "~99% margins" with it at the $8.49/ft list — those give
-   82%, not 99%. *Moves:* unit economics; an arithmetic candor probe now.
-5. ● **NEW · Is the Oct-2026 $0.48/ft the same 2-ply yarn as today's
-   $8.49/ft?** A 17.7x price cut against a 3.84x cost cut is not
-   self-consistent on one SKU. *Moves:* whether the October milestone
-   tests the cost curve at all, or just a repricing.
-6. ● **NEW · Which SKU is the "$22/m → $4/m total Galvorn cost" line?**
-   It is a third cost curve, 3.0–4.3x the roadmap. *Moves:* whether the
-   deck's cost narratives are mutually consistent.
-7. ● **CARRIED (Q8) · The October 2026 $0.48/ft milestone** — with a
-   timing trap: it is targeted for **October** and the round closes
-   **2026-09-28**, so the test lands *after* the money is committed.
-   Residual ask: evidence the upgrade is on schedule — commissioning
-   status, an updated price list, a customer quote at the new price —
-   **before** 2026-09-28.
+5. ● Is $5.11/m fully-loaded or variable cost; reconcile "~99% margins."
+6. ● Is the Oct-2026 $0.48/ft the same SKU as today's $8.49/ft?
+7. ● Which SKU is the "$22/m → $4/m" line?
+8. ● **CARRIED (Q8)** October $0.48/ft milestone — targeted for October,
+   round closes 2026-09-28. Ask for commissioning status or a customer
+   quote at the new price **before** the close.
 
 **P3 — completeness:**
-8. ● **NEW · Feedstock CNT cost per kg and its assumed path.** At a
-   $239/kg finished product, feedstock plausibly dominates. *Moves:*
-   whether the 3 kt endpoint is reachable at all.
-9. ● **NEW · $/kg for the annealed / high-purity space grade**, which
-   carries the up-to-4x conductivity penalty on their own beachhead's
-   qualification path. *Moves:* beachhead economics.
+9. ● Feedstock CNT cost per kg and its path. At $41.78/kg finished,
+   feedstock dominates.
+10. ● $/kg for the annealed / high-purity space grade.
 
 ## Corrections owed to the existing record
 
-- `factpack.md` L64 ("approximate copper parity ($0.04/m at 26 AWG)")
-  and `memo.md` (same claim, no figures) are wrong on both benchmarks —
-  finding 4 above. Flagged, **not yet edited**: it is load-bearing inside
-  a frozen memo, so the edit is Casey's call.
+- `factpack.md` L64 and `memo.md`: the copper-parity line is wrong on
+  both benchmarks. Flagged, **not yet edited** — load-bearing inside a
+  frozen memo, so Casey's call.
 
 ## Sources
 
-- `factpack.md` rev 3 (2026-09-08) — cost roadmap, specific-conductivity
-  table, capacity and by-plant revenue targets, copper LME, CNT powder
-  capacity, literature scale-up model
-- `sponsor-memo-2026-09.md` — $8.49/ft list, $0.48/ft Oct-2026 target,
-  phase costs in $/ft, 20% markup, Fig. 1 revenue path
-- `sponsor-docs-2026-09/model-workbook-spc-tab.png` — $0.40/ft production
-  cost, $0.48/ft price to wire maker; confirms no mass unit anywhere
+`factpack.md` rev 3, `sponsor-memo-2026-09.md`,
+`sponsor-docs-2026-09/model-workbook-spc-tab.png`, and the $1,389.20/kg
+production cost supplied by Casey 2026-09-12.
 
-Deal status unchanged by this analysis: **borderline pass / watch**, S2 open.
+Deal status unchanged: **borderline pass / watch**, S2 open.
