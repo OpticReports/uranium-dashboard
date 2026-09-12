@@ -71,10 +71,10 @@ scales linearly, so use `0.772 x (copper $/kg)` to rescale.
 
 | Scale step | Date | Cost $/m | **COST $/kg** (central, equal x-section) | PRICE $/kg (+20%) | Lower bound (equal resistance) | x copper per kg |
 |---|---|---|---|---|---|---|
-| **Today** — 15→300 kg/yr line | 2026 now | 5.11 | **~$30,500** | $36,600 | $3,421 | 2,280x |
-| 3 t/yr pilot | 2026–27 | 1.33 | **~$7,950** | $9,535 | $890 | 594x |
-| 30 t/yr demo ($2–5M capex) | 2028–29 | 0.21 | **~$1,255** | $1,506 | $141 | 94x |
-| 3 kt/yr commercial (~$40M capex) | 2030–31 | 0.04 | **~$239** | $287 | $27 | 17.9x |
+| **Today** — 15→300 kg/yr line | 2026 now | 5.11 | **$30,529** | $36,635 | $3,421 | 2,280x |
+| 3 t/yr pilot | 2026–27 | 1.33 | **$7,946** | $9,535 | $890 | 594x |
+| 30 t/yr demo ($2–5M capex) | 2028–29 | 0.21 | **$1,255** | $1,506 | $141 | 94x |
+| 3 kt/yr commercial (~$40M capex) | 2030–31 | 0.04 | **$239** | $287 | $27 | 17.9x |
 | "Long-term" deck claim [SELF-REFUTING] | n.d. | 0.001 | $5.97 | $7.17 | $0.67 | 0.45x |
 
 Same roadmap in the units they actually publish, for reference:
@@ -104,7 +104,7 @@ At the memo's own Phase-3 cost + 20% markup ($0.048/m), Fig. 1's
 | Equal resistance | 140,100 t/yr | **22.6x** |
 
 The workbook's 2040 $67.2bn needs 234,500–2,092,500 t/yr — **38x to 338x**.
-It is also 5.2x–46.4x the entire 3 kt plant, of which the model builds
+It is also 5.2x–46.7x the entire 3 kt plant, of which the model builds
 one. This is the strongest single finding here and it is basis-independent.
 
 ### 3. The October price cut is mostly margin, not cost
@@ -117,8 +117,10 @@ deck's own figure. The only place the documents cohere is October 2026:
 $0.48/ft price on $1.33/m cost = 18% markup ≈ the memo's stated 20%.
 
 ### 4. Our own record's copper-parity line is wrong — correct it
-`factpack.md` L64 and `memo.md` both say the roadmap "only reaches
-approximate copper parity ($0.04/m at 26 AWG)." That is wrong on both
+`factpack.md` L64 says the roadmap "only reaches approximate copper
+parity ($0.04/m at 26 AWG)"; `memo.md` makes the same claim without the
+figures ("reaches copper *parity* only at the 3kt plant in 2030–31").
+That is wrong on both
 available benchmarks: $0.04/m is **2.6x dearer** than 26 AWG copper metal
 ($0.01544/m) and **12.3x cheaper** than the memo's own "expected copper
 wire" of $0.15/ft ($0.492/m). Neither is parity. This matters because the
@@ -141,11 +143,16 @@ dollars.) At equal resistance it also needs **8.92x the cross-section**
 — ~3x the diameter, ~9.5 gauge sizes larger — which is a connector,
 conduit and bend-radius problem, not a price problem.
 
-What this does NOT touch: the beachhead. Silver-plated copper aerospace
-wire wholesales at $2.86–3.15/ft against Galvorn's $1.56/ft today. Per
-foot, in the market DexMat actually sells into, it is already cheaper.
-The per-kilogram table is the right lens for the bulk-copper TAM story
-and the wrong lens for the business that exists.
+What this does NOT touch: the beachhead — but state it correctly. The
+deck's parity claim is a **cost** claim: $1.56/ft to make vs silver-plated
+copper wire (SPCW) wholesaling at $2.86–3.15/ft. At the price DexMat
+actually posts today, **$8.49/ft, it is 2.7–3.0x dearer than SPCW**, and
+even at a 20% markup on cost ($1.87/ft) that is not what it charges.
+Price parity in its own beachhead arrives only with the October
+$0.48/ft — which is precisely why that milestone, and its position after
+the 2026-09-28 close, matters more than the 2030 endpoint. The
+per-kilogram table is the right lens for the bulk-copper TAM story and
+the wrong lens for the business that exists.
 
 ## HONESTY BOX
 
@@ -174,13 +181,16 @@ and the wrong lens for the business that exists.
   so it is not the same series rescaled.
 - **Within the equal-resistance family alone the answer still spans 1.7x**
   depending on which property table is used (deck filament 10 MS/m ·
-  1.6 g/cc → $4,299/kg today; tow 6.5 · 1.30 → $3,421; memo's declared
-  6 MS/m tape → $3,174; 800 tow 4.8 · 1.30 → $2,539).
+  1.6 g/cc → $4,277/kg today; tow 6.5 · 1.30 → $3,421; memo's declared
+  6 MS/m tape → $3,158; 800 tow 4.8 · 1.30 → $2,527).
 - **Not modelled:** yield/scrap per plant step, insulation and cabling
   conversion cost, feedstock CNT price path, whether $5.11/m is
   fully-loaded or variable cost, and the annealing penalty — a
-  high-purity space-qualified grade loses up to 4x conductivity, raising
-  the mass needed and every equal-resistance $/kg figure by up to 4x again.
+  high-purity space-qualified grade loses up to 4x conductivity, which
+  needs up to 4x the mass per equivalent metre. Note the direction: on a
+  fixed $/m that *divides* the equal-resistance $/kg column by up to 4x
+  (today $3,421 → ~$855/kg), widening the band downward while raising
+  cost per delivered function 4x. The central column is unaffected.
 
 ## PENDING DD QUESTIONS (from this analysis, 2026-09-12)
 
@@ -233,9 +243,10 @@ Ranked per protocol v1.2. Statuses: ● asked · ✓ answered · ◐ partial ·
 
 ## Corrections owed to the existing record
 
-- `factpack.md` L64 and `memo.md`: "$0.04/m at 26 AWG ≈ approximate
-  copper parity" is wrong on both benchmarks (finding 4 above). Flagged,
-  not yet edited — Casey's call, since it is load-bearing in a frozen memo.
+- `factpack.md` L64 ("approximate copper parity ($0.04/m at 26 AWG)")
+  and `memo.md` (same claim, no figures) are wrong on both benchmarks —
+  finding 4 above. Flagged, **not yet edited**: it is load-bearing inside
+  a frozen memo, so the edit is Casey's call.
 
 ## Sources
 
