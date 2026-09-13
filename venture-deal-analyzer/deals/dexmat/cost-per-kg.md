@@ -460,3 +460,57 @@ Branch probabilities .61/.27/.08/.04; failure recovery ≈ $15K.
 path — a **2.9x spread** that has nothing to do with whether Galvorn
 works. That is why the dilution question, not the probability argument,
 is the one to resolve before the 28th.
+
+---
+
+# PART 6 — FOLLOW-ON: +$200K AT THE SERIES A
+
+Modelled on the sponsor's own path: **A = $20M at $100M post**.
+
+- Your $200K buys **0.200%** — against a pro-rata entitlement of **$47,619**
+- **You would be buying up 4.2x, not defending**
+- Combined after the A: 0.1905% (seed, diluted 20%) + 0.200% = **0.3905%**
+
+**The follow-on is conditional, and that is what makes it work.** No A →
+you keep the $200K and only $100K is at risk. At the ledger's own
+`p_next_round = 70%`: 30% no A; conditional on reaching it the branches
+renormalise to **44.3% fail / 38.6% specialty / 11.4% defense / 5.7%
+tail**. Expected capital deployed: **$240K**, not $300K.
+
+| Dilution | $100K only EV $ | EV x | +$200K EV $ | EV x (on $240K exp.) |
+|---|---|---|---|---|
+| 42% | $448K | **4.48x** | $923K | 3.84x |
+| **60%** | $313K | **3.13x** | $646K | 2.69x |
+| 70% | $238K | **2.38x** | $492K | 2.05x |
+| 81% | $156K | **1.56x** | $323K | 1.34x |
+
+**The re-up roughly doubles the dollars and cuts the multiple by 14%**,
+identically at every dilution level. You pay 2.4x the seed price per
+share; information is what you get for it.
+
+## The decision threshold
+
+The re-up becomes multiple-accretive once the conditional failure
+probability at the A falls below **34.5%** — from the naive 44.3%
+carry-forward, a **22% improvement**. That threshold is **34.3–34.6%
+across all four dilution scenarios**, i.e. it does not move.
+
+**So dilution decides the size of the prize; it does not decide whether
+to re-up.** What decides that is whether reaching the A actually
+improves the odds — the October $0.48/ft milestone landing, a converted
+anchor-partner order, and a funded 30 t line would plausibly do it.
+
+Marginal dollar: at 60% dilution the extra $140K of expected capital
+returns **2.37x** against 3.13x on the seed — lower, still well above 1x.
+
+## Two things that could take the decision away
+
+1. **No right to $200K.** That is 4.2x pro-rata. A well-performing round
+   is oversubscribed and the allocation becomes a favour.
+2. **Good news raises the price.** At a $150M post your $200K buys
+   0.133% not 0.200%, and the $2.75bn outcome falls from $4,862K to
+   $3,910K on $300K. The scenario where you most want to re-up is the
+   one where it costs most.
+
+**Which makes the pro-rata right the thing to negotiate now**, not at
+the A — and worth more than the carry point by a wide margin.
