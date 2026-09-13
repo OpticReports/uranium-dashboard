@@ -117,6 +117,12 @@
   .c3 { fill:none; stroke:var(--danger); stroke-width:2; stroke-dasharray:2 3; }
   .ownlbl { font-size:10.5px; font-weight:700; }
   .lead { stroke:var(--line); stroke-width:1; }
+  .outbar { fill:var(--data-1); opacity:.22; }
+  .rowlbl { fill:var(--ink); font-size:12px; font-weight:600; }
+  .rowp { fill:var(--muted); font-size:10.5px; }
+  .outlbl { fill:var(--ink); font-size:11.5px; font-weight:700; }
+  .outlbl.fail { fill:var(--danger); }
+  .breakeven { fill:var(--muted); font-size:10.5px; font-style:italic; }
   .faildot { fill:var(--danger); }
   .c1t { fill:var(--data-1); } .c2t { fill:var(--data-1); opacity:.75; } .c3t { fill:var(--danger); }
   .key { display:flex; flex-direction:column; gap:5px; margin:14px 0 4px; }
@@ -499,6 +505,71 @@
   <div class="kbox" style="border-left-color:var(--accent)">
     <p><b>What is worth negotiating.</b> Carry 20% → 10% is worth <b>+0.27x</b> EV. Defending ownership from 0.42% to 1.27% — pro-rata rights, anti-dilution, participation in the A and B — is worth <b>+2.68x</b>. <b>Pro-rata is worth ~10x the carry point.</b> Take the carry if it is free, but do not trade a pro-rata right for it.</p>
   </div>
+
+
+  <hr class="rule">
+  <div class="eyebrow" style="margin-bottom:6px"><b>Added 2026-09-13</b> · the actual position</div>
+  <h2>$100,000 at $35M pre / $42M post</h2>
+  <div class="kbox" style="border-left-color:var(--danger)">
+    <p><b>Correcting a confusing presentation.</b> Earlier figures were quoted as <i>exit</i> ownership <i>per $1M</i> at a $45M post. Casey's 0.25% is <i>entry</i> ownership on a <i>$100K</i> cheque. Different quantity, different cheque size — both correct, neither comparable. <b>At $42M post, $100,000 buys 0.238% at close</b> (0.25% implies a ~$40M post). Per dollar invested that is <b>~9% better</b> than the $45M-post terms modelled before. The SPV admin in the record is a flat <b>~$1,250/person</b>, which is 1.25% on a $100K cheque — not the 2% of commitment assumed earlier.</p>
+  </div>
+  <p><b>Entry ownership is not what pays out.</b> 0.238% at close becomes <b>0.138% / 0.095% / 0.071% / 0.045%</b> at exit under 42% / 60% / 70% / 81% cumulative dilution. That range — not the probability argument — is what decides the outcome.</p>
+
+  <figure>
+    <div class="grp" style="margin-bottom:2px">What $100,000 returns, by branch &#183; bars span the dilution range (81% &#8594; 42%)</div>
+    <div class="axlbl" style="font-size:.72rem;margin-bottom:10px">Log scale, net of 10% carry. Left end of each bar = the EV tree's implicit 81% dilution; right end = the model's own 42%.</div>
+    <svg viewBox="0 0 760 340" width="100%" role="img" aria-label="Outcome ladder for a $100,000 investment. Failure, 61% probability, returns about $15K. Specialty at a $490M exit, 27% probability, returns $222K to $677K. Defense at $1.35bn, 8% probability, returns $611K to $1,864K. Copper tail at $2.75bn, 4% probability, returns $1,244K to $3,798K. Each range spans 81% to 42% cumulative dilution.">
+    <line class="grid" x1="227.4" y1="58" x2="227.4" y2="306"/>
+    <text class="axlbl" x="227.4" y="326" text-anchor="middle">$10K</text>
+    <line class="grid" x1="386.8" y1="58" x2="386.8" y2="306"/>
+    <text class="axlbl" x="386.8" y="326" text-anchor="middle">$100K</text>
+    <line class="grid" x1="546.1" y1="58" x2="546.1" y2="306"/>
+    <text class="axlbl" x="546.1" y="326" text-anchor="middle">$1M</text>
+    <line class="grid" x1="657.5" y1="58" x2="657.5" y2="306"/>
+    <text class="axlbl" x="657.5" y="326" text-anchor="middle">$5M</text>
+    <line class="thr-hi" x1="386.8" y1="58" x2="386.8" y2="306"/>
+    <text class="breakeven" x="386.8" y="50" text-anchor="middle">your $100,000 back</text>
+    <text class="rowlbl" x="198" y="93.2" text-anchor="end">Failure / sub-1x</text>
+    <text class="rowp" x="198" y="107.2" text-anchor="end">p 61%</text>
+    <circle class="faildot" cx="255.5" cy="95.2" r="6"><title>Failure / sub-1x: ~$15K recovery</title></circle>
+    <text class="outlbl fail" x="267.5" y="99.2">~$15K</text>
+    <text class="rowlbl" x="198" y="151.8" text-anchor="end">Specialty (Zoltek-class)</text>
+    <text class="rowp" x="198" y="165.8" text-anchor="end">p 27% &#183; $0.49bn exit</text>
+    <rect class="outbar" x="437.9" y="144.8" width="75.0" height="18" rx="4"><title>Specialty (Zoltek-class): $209K at 81% dilution to $619K at 42% &#8212; net of 10% carry</title></rect>
+    <circle class="dot" cx="437.9" cy="153.8" r="4.5"/><circle class="dot" cx="512.9" cy="153.8" r="4.5"/>
+    <text class="outlbl" x="428.9" y="157.8" text-anchor="end">$209K</text>
+    <text class="outlbl" x="521.9" y="157.8">$619K</text>
+    <text class="rowlbl" x="198" y="210.2" text-anchor="end">Defense / industrial</text>
+    <text class="rowp" x="198" y="224.2" text-anchor="end">p 8% &#183; $1.35bn exit</text>
+    <rect class="outbar" x="505.9" y="203.2" width="76.4" height="18" rx="4"><title>Defense / industrial: $560K at 81% dilution to $1,688K at 42% &#8212; net of 10% carry</title></rect>
+    <circle class="dot" cx="505.9" cy="212.2" r="4.5"/><circle class="dot" cx="582.3" cy="212.2" r="4.5"/>
+    <text class="outlbl" x="496.9" y="216.2" text-anchor="end">$560K</text>
+    <text class="outlbl" x="591.3" y="216.2">$1,688K</text>
+    <text class="rowlbl" x="198" y="268.8" text-anchor="end">Copper-adjacency tail</text>
+    <text class="rowp" x="198" y="282.8" text-anchor="end">p 4% &#183; $2.75bn exit</text>
+    <rect class="outbar" x="554.5" y="261.8" width="76.8" height="18" rx="4"><title>Copper-adjacency tail: $1,130K at 81% dilution to $3,428K at 42% &#8212; net of 10% carry</title></rect>
+    <circle class="dot" cx="554.5" cy="270.8" r="4.5"/><circle class="dot" cx="631.4" cy="270.8" r="4.5"/>
+    <text class="outlbl" x="545.5" y="274.8" text-anchor="end">$1,130K</text>
+    <text class="outlbl" x="640.4" y="274.8">$3,428K</text>
+
+    </svg>
+    <figcaption>The width of every bar is one unresolved assumption. <b>Probability-weighted, the whole position is worth $156K to $448K</b> — EV <b>1.56x to 4.48x</b> — and which end you land on depends entirely on the dilution path, not on whether Galvorn works.</figcaption>
+  </figure>
+
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th>Exit</th><th>42% dil.<br><span style="text-transform:none">0.138%</span></th><th>60%<br><span style="text-transform:none">0.095%</span></th><th>70%<br><span style="text-transform:none">0.071%</span></th><th>81%<br><span style="text-transform:none">0.045%</span></th></tr></thead>
+    <tbody>
+      <tr><td>Specialty (Zoltek) $490M &#183; p 27%</td><td class="num">$619K <b>6.2x</b></td><td class="num">$430K 4.3x</td><td class="num">$325K 3.3x</td><td class="num">$209K 2.1x</td></tr>
+      <tr><td>Defense/industrial $1.35bn &#183; p 8%</td><td class="num">$1,688K <b>16.9x</b></td><td class="num">$1,167K 11.7x</td><td class="num">$878K 8.8x</td><td class="num">$560K 5.6x</td></tr>
+      <tr><td>Tail $1.5bn</td><td class="num">$1,874K <b>18.7x</b></td><td class="num">$1,296K 13.0x</td><td class="num">$974K 9.7x</td><td class="num">$621K 6.2x</td></tr>
+      <tr style="background:var(--wash)"><td><b>Tail $2.75bn &#183; p 4%</b></td><td class="num hero">$3,428K <b>34.3x</b></td><td class="num hero">$2,367K <b>23.7x</b></td><td class="num">$1,778K <b>17.8x</b></td><td class="num">$1,130K <b>11.3x</b></td></tr>
+      <tr><td>Tail $4bn</td><td class="num">$4,981K <b>49.8x</b></td><td class="num">$3,439K 34.4x</td><td class="num">$2,581K 25.8x</td><td class="num">$1,639K 16.4x</td></tr>
+      <tr style="border-top:2px solid var(--line)"><td><b>Probability-weighted EV</b></td><td class="num hero">$448K <b>4.48x</b></td><td class="num hero">$313K <b>3.13x</b></td><td class="num">$238K <b>2.38x</b></td><td class="num">$156K <b>1.56x</b></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p style="font-size:.88rem">Branch probabilities .61 / .27 / .08 / .04 (counter-agent's vector); failure recovery 0.15x &#8776; $15K. Net of 10% carry throughout.</p>
 
   <div class="honesty">
     <div class="lbl">Honesty box</div>

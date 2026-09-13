@@ -424,3 +424,39 @@ mode the standing verification rule exists to prevent.
 **New P1:** which dilution basis is operative — the EV tree's implicit
 ~81% or the fact pack's stated 50–70%? *Moves EV by 2.0x, every branch
 multiple, and the 10x hurdle by $1.4–2.7bn.*
+
+---
+
+# PART 5 — THE ACTUAL POSITION: $100,000 at $35M pre / $42M post
+
+**Correcting a confusing presentation.** Earlier figures were quoted as
+*exit* ownership *per $1M* at a $45M post. Casey's 0.25% is *entry*
+ownership on a *$100K* cheque. Different quantity, different cheque —
+both correct, neither comparable.
+
+- **$100,000 at $42M post = 0.238% at close** (0.25% implies ~$40M post)
+- Per dollar this is **~9% better** than the $45M-post terms modelled before
+- SPV admin in the record is a flat **~$1,250/person** = 1.25% on a $100K
+  cheque, not the 2% of commitment assumed earlier
+
+**Entry ownership is not what pays out.** 0.238% becomes **0.138% /
+0.095% / 0.071% / 0.045%** at exit under 42% / 60% / 70% / 81%
+cumulative dilution.
+
+## What $100,000 returns, net of 10% carry
+
+| Exit | 42% dil. (0.138%) | 60% (0.095%) | 70% (0.071%) | 81% (0.045%) |
+|---|---|---|---|---|
+| Specialty $490M · p27% | $619K **6.2x** | $430K 4.3x | $325K 3.2x | $209K 2.1x |
+| Defense $1.35bn · p8% | $1,688K **16.9x** | $1,167K 11.7x | $878K 8.8x | $560K 5.6x |
+| Tail $1.5bn | $1,874K 18.7x | $1,296K 13.0x | $974K 9.7x | $621K 6.2x |
+| **Tail $2.75bn · p4%** | **$3,428K 34.3x** | **$2,367K 23.7x** | $1,778K 17.8x | $1,130K 11.3x |
+| Tail $4bn | $4,981K 49.8x | $3,439K 34.4x | $2,581K 25.8x | $1,639K 16.4x |
+| **Prob-weighted EV** | **$448K 4.48x** | **$313K 3.13x** | $238K 2.38x | $156K 1.56x |
+
+Branch probabilities .61/.27/.08/.04; failure recovery ≈ $15K.
+
+**The whole position is worth $156K–$448K** depending on the dilution
+path — a **2.9x spread** that has nothing to do with whether Galvorn
+works. That is why the dilution question, not the probability argument,
+is the one to resolve before the 28th.
