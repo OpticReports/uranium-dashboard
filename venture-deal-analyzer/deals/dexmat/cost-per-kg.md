@@ -270,3 +270,73 @@ prices, market volumes, $0.40/ft cost and $0.48/ft price inputs), and the
 $1,389.20/kg figure supplied by Casey 2026-09-12.
 
 Deal status unchanged: **borderline pass / watch**, S2 open.
+
+---
+
+# PART 3 — THE SPONSOR'S SIX-STEP PLAN, TESTED (2026-09-13)
+
+Casey supplied the plan. Four steps hold, two break — and testing it
+**corrected two of this analysis's own findings**.
+
+| Step | Verdict | Binding number |
+|---|---|---|
+| 1 · beachhead traction | holds, **not on price** | Galvorn is 1.11x the military tier copper-equivalent today. Traction must come from weight/flex/EMI. The price-led beachhead is **3.0% of SPC volume, 9.9% of value** (~$137M/yr) |
+| 2 · Series A unlocks lower price | holds | $0.40/ft post-upgrade cost, per the roadmap |
+| 3 · undercut beachhead 50%+, **and** compete in broad copper | **half breaks** | Military tier: $0.843/ft vs $0.40 cost = 2.1x markup, 53% GM ✓. **$0.73 tier (97% of volume): needs $0.234/ft = 58% of cost ✗.** Best available there is parity at $0.468/ft — exactly the memo's $0.48/ft target |
+| 4 · domination → demand → bigger line | **inverts** | A 30 t line makes **102.8M ft/yr = 1.72x the entire military+space volume** (59.9M ft). 3 kt makes 172x it, **5.1x the whole SPC market**. Beachhead domination cannot fill the demo plant |
+| 5 · upgrade from gross profit or raise | holds | Beachhead at 100% share = **$50M/yr at 53% GM = $27M/yr gross profit**. Funds the 30 t ($2–5M); the 3 kt (~$40M) is ~1.5 yrs of it or another raise |
+| 6 · 300–500% markup, undercut copper **and aluminium** | **copper yes, aluminium no** | Copper-equivalent $0.076–0.114/ft: beats copper wire ($0.15) by 24–49% ✓, SPCW ✓. But **16–24x copper's metal content** and **173–260x aluminium's**. Aluminium fails by two orders of magnitude |
+
+## Two of my own findings, corrected
+
+Both assumed the memo's "purposefully 20% markup over production cost."
+The plan — and the workbook, which holds price flat at **$0.48/ft through
+2040** while cost falls to $0.012/ft — says that is not operative beyond
+the first step.
+
+- **557%/219% over-capacity — DISSOLVED.** At $0.48/ft the 30 t line runs
+  at **89%** of nameplate and the 3 kt at **7%**.
+- **"2034 needs 14.5x named CNT capacity" — DISSOLVED.** Used $0.048/m
+  instead of $1.575/m: a 32.8x price error. Corrected: **~2,736 t/yr =
+  0.44x** the named capacity.
+
+## EV RE-RUN
+
+| Branch | Net | Logged | Revised | Δ |
+|---|---|---|---|---|
+| Failure / sub-1x | 0.15x | .60 | **.64** | +.04 |
+| Specialty niche (Zoltek-class) | 1.75x | .26 | **.24** | −.02 |
+| Defense/industrial growth | 5.00x | .10 | **.08** | −.02 |
+| Copper-adjacency tail | 15.0x | .04 | **.04** | — |
+
+- **Panel EV 1.65x → 1.52x net** (−8%) · **Red team 2.76x → 2.50x** (−9%)
+- P(lose money) 60% → **64%** · P(≥3x net) 14% → **12%** · P(≥10x) **4%**
+- **Tail-dependence has flipped.** At tail p=0 the panel tree falls to
+  **0.92x** (was 1.05x). Audit finding 9 — "DexMat's EV>1 is NOT
+  tail-dependent" — no longer holds. It crosses 1.0x at tail p ≈ 0.5%.
+
+Movement rests on four surviving findings: cost-parity-today refuted; the
+price-led beachhead is 3.0% of volume; parity-not-undercut with the 97%
+tier until 2028–29; step 3's broad-market leg and step 6's aluminium leg
+both failing. The record's two misattributions widen uncertainty but do
+not move the mean.
+
+## EXIT SIZES — per $1M at $45M post (2.18% at close)
+
+| Net multiple | model dilution (1.27%) | "realistic" 50–70% (0.87%) | EV tree's implied (~0.42%) |
+|---|---|---|---|
+| 1x (break even) | $87M | $128M | $265M |
+| 1.75x — specialty | $153M | $223M | $461M |
+| 3x | $276M | $402M | $833M |
+| 5x — defense/industrial | $472M | $690M | $1,429M |
+| 10x | $965M | $1,408M | $2,917M |
+| 15x — tail | $1,457M | $2,126M | $4,405M |
+
+**NEW P1:** the EV tree's own anchors imply ~**0.42%** exit ownership
+(defense branch net 5x at its stated $1.2–1.5B; specialty net 1.75x at
+its stated $400–585M Zoltek band) — **3x heavier dilution** than the
+factpack's headline 1.27%. One of the two is wrong, and it moves every
+exit threshold by 3x.
+
+**Status:** this re-weighting is one analyst's, pending the panel re-run
+and a counter-agent pass (running). Not yet written to `ledger.csv`.

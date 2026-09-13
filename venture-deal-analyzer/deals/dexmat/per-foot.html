@@ -1,0 +1,266 @@
+<title>Galvorn Per-Foot Ladder</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Sans+Condensed:wght@600&display=swap">
+<style>
+:root{
+  color-scheme: light;
+  --surface-1:#fcfcfb; --surface-2:#f3f2ef; --line:#e3e1db; --rule:#b9b7b0;
+  --text-primary:#0b0b0b; --text-secondary:#52514e; --text-muted:#78776f;
+  --s-galvorn:#2a78d6; --s-sponsor:#eb6834; --s-verified:#1baf7a;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+    --surface-1:#1a1a19; --surface-2:#232321; --line:#3a3a37; --rule:#55544f;
+    --text-primary:#ffffff; --text-secondary:#c3c2b7; --text-muted:#93928a;
+    --s-galvorn:#3987e5; --s-sponsor:#d95926; --s-verified:#199e70;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --surface-1:#1a1a19; --surface-2:#232321; --line:#3a3a37; --rule:#55544f;
+  --text-primary:#ffffff; --text-secondary:#c3c2b7; --text-muted:#93928a;
+  --s-galvorn:#3987e5; --s-sponsor:#d95926; --s-verified:#199e70;
+}
+*{box-sizing:border-box}
+body{
+  background:var(--surface-1); color:var(--text-primary);
+  font-family:"IBM Plex Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font-size:14px; line-height:1.5;
+}
+.wrap{max-width:1020px; margin:0 auto; padding-block:30px 40px; padding-left:20px; padding-right:20px}
+.eyebrow{
+  font-family:"IBM Plex Sans Condensed","IBM Plex Sans",sans-serif; font-weight:600;
+  font-size:11px; letter-spacing:.13em; text-transform:uppercase; color:var(--text-muted); margin:0 0 8px;
+}
+h1{font-size:27px; line-height:1.18; margin:0 0 10px; font-weight:600; letter-spacing:-.018em; text-wrap:balance; max-width:24ch}
+h2{font-size:16px; margin:0; font-weight:600; letter-spacing:-.008em}
+.sub{color:var(--text-secondary); margin:0; font-size:14px; max-width:68ch}
+.note{color:var(--text-muted); font-size:12.5px; margin:0; max-width:74ch}
+.meta{
+  font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:11.5px; color:var(--text-muted);
+  margin:14px 0 0; padding-top:10px; border-top:1px solid var(--line);
+}
+.head{display:flex; flex-direction:column; gap:10px}
+section{margin-top:38px; display:flex; flex-direction:column; gap:10px}
+.legend{display:flex; flex-wrap:wrap; gap:7px 18px; font-size:12.5px; color:var(--text-secondary); align-items:center}
+.legend span{display:inline-flex; align-items:center; gap:7px}
+.legend i{width:11px; height:11px; border-radius:50%; flex:none}
+.legend i.ring{background:var(--surface-1); border:2.5px solid var(--text-muted)}
+.legend i.lnk{width:22px; height:2px; border-radius:1px; background:var(--s-galvorn); opacity:.5}
+
+.plot{border-top:1px solid var(--rule)}
+.row{padding:9px 0 11px; border-bottom:1px solid var(--line)}
+.row:hover{background:var(--surface-2)}
+.rhead{display:flex; gap:10px 14px; align-items:baseline; justify-content:space-between; flex-wrap:wrap}
+.rname{display:flex; gap:9px; align-items:baseline; flex-wrap:wrap; min-width:0}
+.rname b{font-weight:600; font-size:13px}
+.tag{
+  font-family:"IBM Plex Sans Condensed","IBM Plex Sans",sans-serif; font-weight:600;
+  font-size:10px; letter-spacing:.07em; text-transform:uppercase; color:var(--text-muted);
+  border:1px solid var(--line); border-radius:3px; padding:1px 5px; white-space:nowrap;
+}
+.rval{font-family:"IBM Plex Mono",monospace; font-size:12.5px; font-variant-numeric:tabular-nums; color:var(--text-secondary); white-space:nowrap}
+.rval em{font-style:normal; color:var(--text-muted)}
+.track{position:relative; height:22px; margin-top:5px}
+.track .grid{position:absolute; top:0; bottom:0; width:1px; background:var(--line)}
+.dot{position:absolute; top:50%; width:11px; height:11px; border-radius:50%; transform:translate(-50%,-50%); box-shadow:0 0 0 2px var(--surface-1)}
+.dot.ring{background:var(--surface-1); border:2.5px solid currentColor}
+.dot.eq{opacity:.95}
+.bar{position:absolute; top:50%; height:5px; transform:translateY(-50%); border-radius:2.5px; opacity:.8}
+.link{position:absolute; top:50%; height:2px; transform:translateY(-50%); background:var(--s-galvorn); opacity:.45}
+.axis{position:relative; height:18px}
+.axis span{position:absolute; transform:translateX(-50%); font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--text-muted)}
+
+.brow{display:grid; grid-template-columns:minmax(0,215px) 1fr; gap:14px; align-items:center; padding:3px 0}
+.brow:hover{background:var(--surface-2)}
+.bl{font-size:12.5px; text-align:right; color:var(--text-primary)}
+.btrack{position:relative; height:19px; background:linear-gradient(var(--line),var(--line)) left bottom/100% 1px no-repeat}
+.bfill{position:absolute; left:0; top:3px; bottom:1px; border-radius:0 3px 3px 0}
+.bval{position:absolute; top:50%; transform:translateY(-50%); margin-left:9px; font-family:"IBM Plex Mono",monospace; font-size:11.5px; font-variant-numeric:tabular-nums; color:var(--text-secondary); white-space:nowrap}
+
+details{margin-top:34px}
+summary{cursor:pointer; font-size:13px; color:var(--text-secondary); padding:7px 0}
+summary:focus-visible{outline:2px solid var(--s-galvorn); outline-offset:2px}
+.tblwrap{overflow-x:auto}
+table{border-collapse:collapse; width:100%; font-size:12px; margin-top:6px; min-width:640px}
+th,td{text-align:left; padding:6px 9px; border-bottom:1px solid var(--line); vertical-align:top}
+th{color:var(--text-secondary); font-weight:600; white-space:nowrap; border-bottom:1px solid var(--rule)}
+td.n{text-align:right; font-family:"IBM Plex Mono",monospace; font-variant-numeric:tabular-nums; white-space:nowrap}
+.foot{margin-top:32px; padding-top:16px; border-top:1px solid var(--rule); color:var(--text-muted); font-size:12px; display:flex; flex-direction:column; gap:9px}
+.foot p{margin:0; max-width:88ch}
+.foot b{color:var(--text-secondary); font-weight:600}
+#tip{position:fixed; z-index:9; pointer-events:none; background:var(--surface-1); color:var(--text-primary);
+  border:1px solid var(--rule); border-radius:7px; padding:9px 11px; font-size:12.5px; line-height:1.45; max-width:300px;
+  box-shadow:0 6px 20px rgba(0,0,0,.18); opacity:0; transition:opacity .1s}
+#tip b{display:block; margin-bottom:4px; font-size:12.5px}
+#tip u{display:block; text-decoration:none; font-family:"IBM Plex Mono",monospace; color:var(--text-muted); font-size:11.5px; margin-bottom:5px}
+#tip s{display:block; text-decoration:none; color:var(--text-secondary)}
+@media (prefers-reduced-motion: reduce){ #tip{transition:none} }
+@media (max-width:640px){
+  h1{font-size:23px}
+  .brow{grid-template-columns:1fr; gap:1px; padding:6px 0}
+  .bl{text-align:left}
+  .rval{font-size:12px}
+}
+</style>
+
+<div class="wrap">
+
+<div class="head">
+  <p class="eyebrow">DexMat / Galvorn SPV &nbsp;·&nbsp; per-foot synthesis &nbsp;·&nbsp; 2026-09-13</p>
+  <h1>One foot of wire, at 26&nbsp;AWG</h1>
+  <p class="sub">Every per-foot figure in the deal record on one log axis, each marked for what it actually is — a <b>cost</b> or a <b>price</b>, a <b>bare conductor</b> or a <b>finished insulated wire</b>. Silently mixing those two distinctions is how this comparison goes wrong, and the sponsor's documents mix both.</p>
+  <p class="meta">gauge basis 26 AWG &nbsp;·&nbsp; 0.128756 mm² &nbsp;·&nbsp; 40.815 Ω/1000 ft &nbsp;·&nbsp; 1.1537 g/m &nbsp;·&nbsp; 58 MS/m</p>
+</div>
+
+<section>
+  <h2>The ladder — dollars per foot</h2>
+  <p class="note">Galvorn rows carry a second, dashed mark: the same foot corrected to deliver 26 AWG copper's conductance. On the roadmap's own denomination that correction is <b>×1.560</b>.</p>
+  <div class="legend">
+    <span><i style="background:var(--s-galvorn)"></i>Galvorn / DexMat</span>
+    <span><i style="background:var(--s-sponsor)"></i>Sponsor-asserted incumbent</span>
+    <span><i style="background:var(--s-verified)"></i>Verified market price</span>
+    <span><i class="ring"></i>hollow = cost</span>
+    <span><i style="background:var(--text-muted)"></i>solid = price</span>
+    <span><i class="lnk"></i>equivalence correction</span>
+  </div>
+  <div class="plot" id="plot"></div>
+  <div class="axis" id="axis"></div>
+</section>
+
+<section>
+  <h2>Why the correction exists — and why ×1.560 is a floor, not a point estimate</h2>
+  <p class="note">Specific conductivity of every Galvorn SKU DexMat actually sells today, against what the roadmap's priced foot requires. Scaling a CNT fibre up toward wire gauge <b>loses</b> conductivity per kilogram. The roadmap assumes the opposite.</p>
+  <div id="bars"></div>
+</section>
+
+<details>
+  <summary>Show every figure as a table, with provenance</summary>
+  <div class="tblwrap"><table id="tbl"></table></div>
+</details>
+
+<div class="foot">
+  <p><b>Verified 2026-09-13 by direct fetch.</b> WireMasters M22759/11-26-0 — silver-plated copper, extruded PTFE, 200 °C, 600 V, QPL — $0.38/ft at 1 ft down to $0.32/ft at 2,500 ft. SkyGeek M22759/11-26-2 — 26 AWG, 19/38 stranding, silver-plated copper, PTFE — $48.00 per 100 ft = $0.48/ft. Perigee Direct <b>Miralon 2-ply yarn, 1-foot sample, $8.49</b> (SKU MIRALON_YARN_2PLY_100549_001FT_SAMPLE) — Huntsman's product, not DexMat's. dexmat.com/store catalogue prices with datasheet linear densities and resistances.</p>
+  <p><b>Carried from earlier sweeps, not re-verified here.</b> M22759/32-26 tin-plated $0.09/ft · M22759/12-26 nickel-plated $0.21/ft · MIL-C-27500 26 AWG 2-conductor shielded $1.99–2.12/ft · UL1007 hookup $0.12/ft.</p>
+  <p><b>The sponsor figures carry no gauge.</b> $2.86–3.15, $2.63, $0.73, $0.15, $0.48 and $0.40 per foot appear in the memo and workbook with no gauge and no bare-or-finished designation anywhere in any document. They are plotted at 26 AWG because that is the only gauge label in the entire record — and it is attached to the deck's per-metre <em>cost</em> roadmap, never to a price.</p>
+  <p>Copper metal content uses LME $13,387/t, the January 2026 record high and eight months stale. It is the floor beneath a wire price, not a wire price.</p>
+</div>
+</div>
+
+<div id="tip" role="status" aria-live="polite"></div>
+
+<script>
+const LO = 0.0028, HI = 460, LG = Math.log10;
+const L = v => (LG(v) - LG(LO)) / (LG(HI) - LG(LO)) * 100;
+const CC = {galvorn:'var(--s-galvorn)', sponsor:'var(--s-sponsor)', verified:'var(--s-verified)'};
+const PROV = {galvorn:'DexMat / sponsor', sponsor:'Sponsor-asserted', verified:'Verified external'};
+const m = v => v>=10 ? '$'+v.toFixed(0) : v>=1 ? '$'+v.toFixed(2) : v>=0.01 ? '$'+v.toFixed(3) : '$'+v.toFixed(4);
+
+const ROWS = [
+ {v:115.44, eq:301.72, c:'galvorn', cost:false, lab:'Galvorn 1000 Braided Yarn — posted list', tag:'price · bare',
+  note:'The only catalogue SKU in the 26 AWG mass class: 900 mg/m against copper’s 1,154 mg/m. $378.73/m. It delivers 38.3% of 26 AWG copper’s conductance, so one foot of equal electrical function costs $301.72.'},
+ {v:8.49, c:'verified', cost:false, lab:'Miralon 2-ply yarn, 1-ft sample (Huntsman)', tag:'price · bare',
+  note:'This is the memo’s "$8.49 a foot." Verified as Huntsman’s Miralon, sold by Perigee Direct as a ONE-FOOT SAMPLE — the smallest and dearest quantity tier there is. DexMat sells no 2-ply yarn at all.'},
+ {v:2.86, v2:3.15, c:'sponsor', cost:false, lab:'SPCW "wholesale" — memo p.3', tag:'price · gauge unstated',
+  note:'The Phase-1 benchmark, and 6.0–9.8× the verified price of the finished M22759/11 26 AWG silver-plated wire the memo names by specification. It matches a MIL-C-27500 shielded cable, or ~10 AWG wire.'},
+ {v:2.63, c:'sponsor', cost:false, lab:'Workbook incumbent — military aero & space', tag:'price · gauge unstated',
+  note:'Applies to 2.95% of the feet and 9.9% of the dollars in the sponsor’s own model. Appeared in no markdown in the deal folder before this pass.'},
+ {v:1.99, v2:2.12, c:'verified', cost:false, lab:'MIL-C-27500 26 AWG 2-cond shielded cable', tag:'price · finished cable',
+  note:'A finished, shielded, jacketed multi-conductor assembly. This is the rung the memo’s $2.86–3.15/ft actually sits on — a cable, not a wire.'},
+ {v:1.5575, eq:2.4298, c:'galvorn', cost:true, lab:'Galvorn roadmap — today, 15→300 kg/yr line', tag:'cost · bare',
+  note:'$5.11/m. A production cost — which the memo then compares against incumbent prices.'},
+ {v:0.73, c:'sponsor', cost:false, lab:'Workbook incumbent — commercial + rest of SPC', tag:'price · gauge unstated',
+  note:'Covers 97.05% of the feet in the sponsor’s own model. The memo’s prose never mentions that most of its own beachhead is priced here rather than at ~$3/ft.'},
+ {v:0.48, eq:0.7489, c:'galvorn', cost:false, lab:'Galvorn — October 2026 target price', tag:'price · bare',
+  note:'"Galvorn price to wire maker" per the workbook — a bare conductor sold to a converter. Lands after the 2026-09-28 close. Numerically identical to both the verified SkyGeek finished-wire price and the memo’s own 2030-31 SPCW forecast.'},
+ {v:0.4054, eq:0.6324, c:'galvorn', cost:true, lab:'Galvorn roadmap — 3 t/yr pilot, 2026-27', tag:'cost · bare',
+  note:'$1.33/m. The memo rounds this down to $0.40/ft; our own record rounds the same step up to $0.41/ft.'},
+ {v:0.32, v2:0.48, c:'verified', cost:false, lab:'M22759/11-26 SPCW — finished QPL wire', tag:'price · finished',
+  note:'THE PHASE-1 TARGET, verified: silver-plated copper, extruded PTFE, 200 °C, 600 V, QPL, in stock, 3–6 qualified manufacturers. $0.32/ft at 2,500 ft; $0.48/ft at retail. Galvorn’s bare October target equals it.'},
+ {v:0.15, c:'sponsor', cost:false, lab:'Copper wire "expected" 2030-31 — memo p.4', tag:'price · gauge unstated',
+  note:'The one sponsor benchmark that survives contact with a price list: ordinary insulated 26 AWG copper hookup wire runs about $0.12/ft. As bare metal the same figure would be ~11 AWG.'},
+ {v:0.09, c:'verified', cost:false, lab:'M22759/32-26 tin-plated — finished QPL wire', tag:'price · finished',
+  note:'A COMPLETE finished aerospace wire — conductor, insulation, QPL testing, distributor margin — at $0.09/ft. This bounds the bare plated-copper conductor at under $0.09/ft.'},
+ {v:0.064, eq:0.0999, c:'galvorn', cost:true, lab:'Galvorn roadmap — 30 t/yr demo, 2028-29', tag:'cost · bare',
+  note:'$0.21/m. The first step at which Galvorn is genuinely cheap per foot — two years out and one plant further on.'},
+ {v:0.0122, eq:0.0190, c:'galvorn', cost:true, lab:'Galvorn roadmap — 3 kt/yr commercial, 2030-31', tag:'cost · bare',
+  note:'$0.04/m. Our own record calls this "approximate copper parity." It is 2.6× copper metal and 12.3× below the memo’s own $0.15/ft copper wire. Neither is parity.'},
+ {v:0.0047, c:'verified', cost:true, lab:'26 AWG copper metal content', tag:'cost · metal only',
+  note:'1.1537 g/m at LME $13,387/t. Not a wire price — the floor beneath one. It is 1.5% of the finished M22759/11 price, which is why the copper price is not the lever the roadmap treats it as.'},
+];
+
+const TICKS=[0.01,0.1,1,10,100], plot=document.getElementById('plot');
+ROWS.forEach(r=>{
+  const row=document.createElement('div'); row.className='row';
+  const val = (r.v2? m(r.v)+'–'+m(r.v2) : m(r.v)) + (r.eq? `<em>  →  ${m(r.eq)} equal-function</em>`:'');
+  row.innerHTML=`<div class="rhead"><div class="rname"><b>${r.lab}</b><span class="tag">${r.tag}</span></div>`+
+                `<div class="rval">${val}</div></div>`;
+  const tr=document.createElement('div'); tr.className='track';
+  TICKS.forEach(t=>{const g=document.createElement('div'); g.className='grid'; g.style.left=L(t)+'%'; tr.appendChild(g);});
+  const col=CC[r.c];
+  if(r.eq){const lk=document.createElement('div'); lk.className='link';
+    lk.style.left=L(r.v)+'%'; lk.style.width=(L(r.eq)-L(r.v))+'%'; tr.appendChild(lk);}
+  if(r.v2){const b=document.createElement('div'); b.className='bar';
+    b.style.left=L(r.v)+'%'; b.style.width=(L(r.v2)-L(r.v))+'%'; b.style.background=col; tr.appendChild(b);}
+  const mk=(x,eq)=>{const d=document.createElement('div');
+    d.className='dot'+(r.cost||eq?' ring':''); d.style.left=L(x)+'%'; d.style.color=col;
+    if(!r.cost && !eq) d.style.background=col;
+    if(eq) d.style.borderStyle='dashed';
+    tr.appendChild(d);};
+  mk(r.v,false); if(r.eq) mk(r.eq,true);
+  row.appendChild(tr); plot.appendChild(row);
+  row.addEventListener('mousemove',e=>tipOn(e,r.lab,(r.v2?m(r.v)+'–'+m(r.v2):m(r.v))+(r.eq?'  →  '+m(r.eq)+' equal-function':''),r.note));
+  row.addEventListener('mouseleave',tipOff);
+});
+const ax=document.getElementById('axis');
+TICKS.forEach(t=>{const s=document.createElement('span'); s.style.left=L(t)+'%'; s.textContent='$'+t; ax.appendChild(s);});
+
+const SC=[
+ {n:'Roadmap price requires', v:7800, c:'sponsor', note:'The specific conductivity implied if the roadmap’s 0.9574 g/m foot is to match 26 AWG copper’s resistance — 1.21× copper. No document claims such a material exists, and nothing DexMat sells comes close.'},
+ {n:'Copper, 100% IACS', v:6473, c:'verified', note:'58 MS/m ÷ 8.96 g/cc.'},
+ {n:'Fiber Tow, 10 filament', v:5051, c:'galvorn', note:'5.5 mg/m, 36 Ω/m — 0.37% of 26 AWG copper’s conductance. Datasheet states 5,000 ± 300 S·m²/kg.'},
+ {n:'Twisted Yarn, 500 µm', v:4902, c:'galvorn', note:'170 mg/m, 1.2 Ω/m.'},
+ {n:'Twisted Yarn, 150 µm', v:4902, c:'galvorn', note:'17 mg/m, 12 Ω/m.'},
+ {n:'Twisted Yarn, 200 µm', v:4591, c:'galvorn', note:'33 mg/m, 6.6 Ω/m.'},
+ {n:'Braided Yarn, 1000 µm', v:3175, c:'galvorn', note:'900 mg/m, 0.35 Ω/m. THE ONLY SKU AT WIRE GAUGE — and 37% worse per kilogram than the thin tow, 2.46× short of what the roadmap’s own price requires.'},
+];
+const SMAX=8900, bars=document.getElementById('bars');
+SC.forEach(s=>{
+  const r=document.createElement('div'); r.className='brow';
+  r.innerHTML=`<div class="bl">${s.n}</div><div class="btrack">`+
+    `<div class="bfill" style="width:${s.v/SMAX*100}%;background:${CC[s.c]}"></div>`+
+    `<div class="bval" style="left:${s.v/SMAX*100}%">${s.v.toLocaleString()} S·m²/kg</div></div>`;
+  bars.appendChild(r);
+  r.addEventListener('mousemove',e=>tipOn(e,s.n,s.v.toLocaleString()+' S·m²/kg',s.note));
+  r.addEventListener('mouseleave',tipOff);
+});
+
+const TB=document.getElementById('tbl');
+TB.innerHTML='<thead><tr><th>Row</th><th>Basis</th><th class="n">$/ft as quoted</th><th class="n">$/ft equal-function</th><th>Provenance</th></tr></thead>';
+const tb=document.createElement('tbody');
+ROWS.forEach(r=>{const tr=document.createElement('tr');
+  tr.innerHTML=`<td>${r.lab}</td><td>${r.tag}</td><td class="n">${r.v2?m(r.v)+'–'+m(r.v2):m(r.v)}</td>`+
+               `<td class="n">${r.eq?m(r.eq):'—'}</td><td>${PROV[r.c]}</td>`; tb.appendChild(tr);});
+[['Galvorn 1000 Fiber Tow — posted list','price · bare','$0.7041','$189.29','DexMat catalogue — $2.31/m, 5.5 mg/m, 36 Ω/m'],
+ ['Galvorn 1000 Twisted Yarn 200 µm — posted list','price · bare','$2.1793','$107.41','DexMat catalogue — $7.15/m, 33 mg/m, 6.6 Ω/m'],
+ ['Galvorn — workbook production cost','cost · bare','$0.4000','$0.6240','Workbook INPUTS, held flat 2027→2040'],
+ ['SPCW "expected" 2030-31','price · gauge unstated','$0.48','—','Memo p.4 — omitted from our own transcription'],
+ ['M22759/12-26 nickel-plated PTFE','price · finished','$0.21','—','Earlier sweep, not re-verified'],
+ ['UL1007 26 AWG hookup wire','price · finished','$0.12','—','Earlier sweep, not re-verified'],
+ ['Galvorn "long-term" deck claim','cost · bare','$0.000305','$0.000475','Deck — flagged self-refuting']
+].forEach(e=>{const tr=document.createElement('tr');
+  tr.innerHTML=`<td>${e[0]}</td><td>${e[1]}</td><td class="n">${e[2]}</td><td class="n">${e[3]}</td><td>${e[4]}</td>`;
+  tb.appendChild(tr);});
+TB.appendChild(tb);
+
+const tip=document.getElementById('tip');
+function tipOn(e,name,val,note){
+  tip.innerHTML=`<b>${name}</b><u>${val}</u><s>${note||''}</s>`;
+  tip.style.opacity='1';
+  const w=Math.min(300,window.innerWidth-24);
+  let x=e.clientX+16; if(x+w>window.innerWidth-10) x=Math.max(8,e.clientX-w-16);
+  let y=e.clientY+16; if(y+170>window.innerHeight) y=Math.max(8,e.clientY-180);
+  tip.style.left=x+'px'; tip.style.top=y+'px';
+}
+function tipOff(){ tip.style.opacity='0'; }
+</script>

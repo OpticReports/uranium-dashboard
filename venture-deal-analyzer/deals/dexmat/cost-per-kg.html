@@ -103,6 +103,10 @@
   .listmark { fill:var(--data-2); }
   .listlbl { fill:var(--data-2); font-size:11px; font-weight:700; }
   .anclbl { fill:var(--muted); font-size:11px; font-style:italic; }
+  .al { stroke:var(--danger); stroke-width:2; stroke-dasharray:4 3; }
+  .altag { fill:var(--danger); font-size:11px; font-weight:700; }
+  .pass { fill:var(--accent-ink); font-size:11px; font-weight:600; }
+  .fail { fill:var(--danger); font-size:11px; font-weight:600; }
   .key { display:flex; flex-direction:column; gap:5px; margin:14px 0 4px; }
   .krow { font-size:.79rem; color:var(--ink); display:grid; grid-template-columns:18px max-content 1fr; gap:0 9px; align-items:baseline; }
   @media (max-width:560px) { .krow { grid-template-columns:18px 1fr; } .krow > :last-child { grid-column:2; } }
@@ -241,6 +245,75 @@
     <p style="margin-top:10px"><b>Even at DexMat's own planned markup it is dearer than both incumbent tiers.</b> The parity claim survives on one basis only — bare-fibre <i>cost</i> against finished-wire <i>price</i>, unadjusted for conductivity, against the tier that is 3.0% of volume. Three thumbs, one direction.</p>
     <p><b>The cross-check cited to support it refutes it.</b> <code>factpack.md</code> L105 bracketed the claim as "consistent with independent beachhead pricing of $100s&#8211;$1,000+/kg." Galvorn's cost today is <b>$5,337/kg</b> &#8212; <b>5.3x the top of that range</b>. Corrected in the fact pack 2026-09-13.</p>
     <p style="color:var(--muted);font-size:.85rem">Still open, and both run in Galvorn's favour: Galvorn's figures are <b>bare fibre</b> while every copper comparator is <b>finished insulated wire</b> (insulation, jacketing and qualification are unquantified per-foot costs on Galvorn's side); and the workbook's $2.63/ft is 9&#8211;20% below the memo's own $2.86&#8211;3.15/ft for the same product, with no gauge stated for either.</p>
+  </div>
+
+
+  <hr class="rule">
+  <div class="eyebrow" style="margin-bottom:6px"><b>Added 2026-09-13</b> · the sponsor's six-step plan, tested</div>
+  <h2>Does the plan survive the per-foot arithmetic?</h2>
+  <p>Casey supplied the sponsor's commercialisation plan. Tested against the price-per-foot work, <b>four steps hold and two break</b> — and testing it corrected two of this analysis's own findings.</p>
+
+  <figure>
+    <div class="grp" style="margin-bottom:4px">Galvorn copper-equivalent price at each plan stage, vs every alternative</div>
+    <div class="legend">
+      <span class="lg"><svg width="26" height="10" aria-hidden="true"><line x1="1" y1="5" x2="25" y2="5" stroke="var(--data-1)" stroke-width="2.5"/><circle cx="13" cy="5" r="4" fill="var(--data-1)"/></svg> Galvorn at the plan's own pricing, copper-equivalent</span>
+      <span class="lg"><svg width="26" height="10" aria-hidden="true"><line x1="1" y1="5" x2="25" y2="5" stroke="var(--data-2)" stroke-width="1.5"/></svg> Copper alternatives</span>
+      <span class="lg"><svg width="26" height="10" aria-hidden="true"><line x1="1" y1="5" x2="25" y2="5" stroke="var(--danger)" stroke-width="2" stroke-dasharray="4 3"/></svg> Aluminium</span>
+    </div>
+    <svg viewBox="0 0 760 400" width="100%" role="img" aria-label="Log-scale chart. Galvorn's copper-equivalent price falls from $2.92 per foot today to $1.315 after the plant upgrade, $0.668 to $0.749 at the 30 tonne line, and $0.076 to $0.114 at the 3 kiloton line. It crosses below silver-plated copper's military tier at $2.63 and its commercial tier at $0.73, and below the memo's $0.15 copper wire benchmark, but remains 16 to 24 times copper's metal content at $0.0047 and 173 to 260 times aluminium's at $0.00044.">
+      <text class="axlbl" x="16" y="34">$/ft</text>
+    <line class="grid" x1="126" y1="297.1" x2="690" y2="297.1"/><text class="axlbl" x="118" y="301.1" text-anchor="end">$0.001</text>
+    <line class="grid" x1="126" y1="234.9" x2="690" y2="234.9"/><text class="axlbl" x="118" y="238.9" text-anchor="end">$0.010</text>
+    <line class="grid" x1="126" y1="172.7" x2="690" y2="172.7"/><text class="axlbl" x="118" y="176.7" text-anchor="end">$0.100</text>
+    <line class="grid" x1="126" y1="110.6" x2="690" y2="110.6"/><text class="axlbl" x="118" y="114.6" text-anchor="end">$1.000</text>
+    <line class="cu-hi" x1="126" y1="84.4" x2="690" y2="84.4"/>
+    <text class="cutag" x="696" y="88.4">$2.63</text>
+    <line class="cu-hi" x1="126" y1="119.1" x2="690" y2="119.1"/>
+    <text class="cutag" x="696" y="123.1">$0.73</text>
+    <line class="cu-md" x1="126" y1="161.8" x2="690" y2="161.8"/>
+    <text class="cutag" x="696" y="165.8">$0.15</text>
+    <line class="cu-lo" x1="126" y1="255.3" x2="690" y2="255.3"/>
+    <text class="cutag" x="696" y="259.3">$0.0047</text>
+    <line class="al" x1="126" y1="319.3" x2="690" y2="319.3"/>
+    <text class="altag" x="696" y="323.3">$0.00044</text>
+    <polygon class="band" points="172,81.6 329,103.2 487,118.4 644,169.2 644,180.1 487,121.4 329,103.2 172,81.6"/>
+    <polyline class="curve" points="172,81.6 329,103.2 487,119.9 644,174.1"/>
+    <g class="pt"><circle class="halo" cx="172" cy="81.6" r="8"/><circle class="dot" cx="172" cy="81.6" r="5"/><title>Today (step 1) &#8212; copper-equivalent $2.916/ft</title></g>
+    <text class="vallbl" x="172" y="67.6" text-anchor="middle">$2.916</text>
+    <text class="axlbl" x="172" y="364" text-anchor="middle">Today</text><text class="axlbl2" x="172" y="378" text-anchor="middle">step 1</text>
+    <g class="pt"><circle class="halo" cx="329" cy="103.2" r="8"/><circle class="dot" cx="329" cy="103.2" r="5"/><title>Post-upgrade (steps 2-3) &#8212; copper-equivalent $1.315/ft</title></g>
+    <text class="vallbl" x="329" y="89.2" text-anchor="middle">$1.315</text>
+    <text class="axlbl" x="329" y="364" text-anchor="middle">Post-upgrade</text><text class="axlbl2" x="329" y="378" text-anchor="middle">steps 2-3</text>
+    <g class="pt"><circle class="halo" cx="487" cy="119.9" r="8"/><circle class="dot" cx="487" cy="119.9" r="5"/><title>30 t line (steps 4-5) &#8212; copper-equivalent $0.668&#8211;0.749/ft</title></g>
+    <text class="vallbl" x="487" y="105.9" text-anchor="middle">$0.668&#8211;0.749</text>
+    <text class="axlbl" x="487" y="364" text-anchor="middle">30 t line</text><text class="axlbl2" x="487" y="378" text-anchor="middle">steps 4-5</text>
+    <g class="pt"><circle class="halo" cx="644" cy="174.1" r="8"/><circle class="dot" cx="644" cy="174.1" r="5"/><title>3 kt line (step 6) &#8212; copper-equivalent $0.076&#8211;0.114/ft</title></g>
+    <text class="vallbl" x="644" y="160.1" text-anchor="middle">$0.076&#8211;0.114</text>
+    <text class="axlbl" x="644" y="364" text-anchor="middle">3 kt line</text><text class="axlbl2" x="644" y="378" text-anchor="middle">step 6</text>
+    <text class="pass" x="684" y="76.4" text-anchor="end">&#10003; step 3 beats the military tier &#8212; 50% undercut at 2.1x markup</text>
+    <text class="fail" x="132" y="136.1">&#10007; step 3: a 50% undercut of $0.73 needs $0.234/ft against a $0.40 cost</text>
+    <text class="pass" x="132" y="178.8">&#10003; step 6 beats the memo&#8217;s copper-wire benchmark</text>
+    <text class="fail" x="132" y="310.3">&#10007; step 6 vs ALUMINIUM: still 173&#8211;260x dearer &#8212; the leg that fails</text>
+    </svg>
+    <figcaption>* Aluminium 1350-H19 sized for equal resistance to 26 AWG copper = 0.576 g/m, priced at an <b>assumed</b> $2,500/t — not a figure sourced in the deal record, and a P1 ask. Galvorn's line is the plan's own pricing (50%+ undercut of the beachhead at the upgrade; the workbook's flat $0.48/ft at the 30 t line; 300–500% markup at the 3 kt line), converted to copper-equivalent at &times;1.56.</figcaption>
+  </figure>
+
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th>Step</th><th>Verdict</th><th>The binding number</th></tr></thead>
+    <tbody>
+      <tr><td><b>1</b> · traction in the beachhead</td><td><span class="chip plaus">holds, but not on price</span></td><td>Today Galvorn is <b>1.11x</b> the military tier copper-equivalent. Traction has to come from weight, flex and EMI — which the record supports. But the price-led beachhead is only <b>3.0% of SPC volume, 9.9% of value</b> (~$137M/yr of incumbent spend).</td></tr>
+      <tr><td><b>2</b> · Series A unlocks lower price</td><td><span class="chip plaus">holds</span></td><td>Consistent with the roadmap's $0.40/ft post-upgrade cost.</td></tr>
+      <tr style="background:var(--warn-wash)"><td><b>3</b> · undercut beachhead 50%+, and compete in broad copper</td><td><span class="chip heroic">half breaks</span></td><td>Undercutting the <b>military tier</b> by 50% needs $0.843/ft against a $0.40 cost — <b>2.1x markup, 53% GM. Works.</b> Undercutting the <b>$0.73 tier (97% of volume)</b> by 50% needs <b>$0.234/ft — 58% of cost. Fails.</b> Best available there is parity at $0.468/ft, which is exactly the memo's own $0.48/ft target.</td></tr>
+      <tr style="background:var(--warn-wash)"><td><b>4</b> · domination → more demand → bigger line</td><td><span class="chip heroic">inverts</span></td><td>A 30 t line makes <b>102.8M ft/yr = 1.72x the entire military+space volume</b> (59.9M ft). The 3 kt line makes <b>172x</b> it — and <b>5.1x the whole SPC market</b>. Beachhead domination cannot fill even the demo plant; breaking into the 97% tier is a precondition, not a consequence.</td></tr>
+      <tr><td><b>5</b> · upgrade from gross profit or fundraising</td><td><span class="chip plaus">holds</span></td><td>Beachhead at 100% share = <b>$50M/yr at 53% GM = $27M/yr gross profit</b>. Funds the 30 t demo ($2–5M) easily; the 3 kt (~$40M) is ~1.5 years of it or another raise. Feedstock integration — "an order of magnitude more capital intensive" — is not funded by this.</td></tr>
+      <tr style="background:var(--warn-wash)"><td><b>6</b> · 300–500% markup, still undercut copper <i>and aluminium</i></td><td><span class="chip heroic">copper yes, aluminium no</span></td><td>At 300–500% markup on the 3 kt cost, copper-equivalent <b>$0.076–0.114/ft</b>: undercuts the memo's copper wire ($0.15) by <b>24–49%</b> ✓ and SPCW comfortably ✓. But it is <b>16–24x copper's metal content</b> and <b>173–260x aluminium's</b>. The aluminium leg fails by two orders of magnitude — and the fact pack already names aluminium/CCA as the substitute that actually wins bulk lightweighting today.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="kbox" style="border-left-color:var(--accent)">
+    <p><b>Testing the plan killed two of my own findings.</b> Both assumed the memo's "purposefully 20% markup over production cost." The plan — and the workbook, which holds price flat at $0.48/ft through 2040 while cost falls to $0.012/ft — says that is not the operative assumption beyond the first step. <b>(1) The 557%/219% over-capacity finding dissolves:</b> at $0.48/ft the 30 t line runs at <b>89%</b> of nameplate and the 3 kt at <b>7%</b>. <b>(2) The "2034 needs 14.5x the world's named CNT capacity" finding dissolves:</b> it used $0.048/m instead of $1.575/m — a 32.8x price error, hence a 32.8x volume error. Corrected, 2034 needs <b>~2,736 t/yr = 0.44x</b> the named capacity. Both were pillars of my first-pass downgrade.</p>
   </div>
 
   <hr class="rule">
