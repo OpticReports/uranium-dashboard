@@ -107,6 +107,18 @@
   .altag { fill:var(--danger); font-size:11px; font-weight:700; }
   .pass { fill:var(--accent-ink); font-size:11px; font-weight:600; }
   .fail { fill:var(--danger); font-size:11px; font-weight:600; }
+  .exband { fill:var(--data-mute); opacity:.18; }
+  .bandlbl { fill:var(--ink); font-size:10.5px; font-weight:700; }
+  .bandp { fill:var(--muted); font-size:10px; }
+  .thr { stroke:var(--line); stroke-width:1; stroke-dasharray:3 3; }
+  .thr-hi { stroke:var(--muted); stroke-width:1.5; }
+  .c1 { fill:none; stroke:var(--data-1); stroke-width:2.5; }
+  .c2 { fill:none; stroke:var(--data-1); stroke-width:2; stroke-dasharray:6 4; opacity:.7; }
+  .c3 { fill:none; stroke:var(--danger); stroke-width:2; stroke-dasharray:2 3; }
+  .ownlbl { font-size:10.5px; font-weight:700; }
+  .lead { stroke:var(--line); stroke-width:1; }
+  .faildot { fill:var(--danger); }
+  .c1t { fill:var(--data-1); } .c2t { fill:var(--data-1); opacity:.75; } .c3t { fill:var(--danger); }
   .key { display:flex; flex-direction:column; gap:5px; margin:14px 0 4px; }
   .krow { font-size:.79rem; color:var(--ink); display:grid; grid-template-columns:18px max-content 1fr; gap:0 9px; align-items:baseline; }
   @media (max-width:560px) { .krow { grid-template-columns:18px 1fr; } .krow > :last-child { grid-column:2; } }
@@ -413,6 +425,79 @@
   <div class="panel flip" style="margin-top:14px">
     <h3>4 · Our own record's copper-parity line is wrong — and "parity" needs one benchmark, not two</h3>
     <p><code>factpack.md</code> L64 says the roadmap "only reaches approximate copper parity ($0.04/m at 26 AWG)"; <code>memo.md</code> makes the same claim without figures. Against <b>copper metal</b> ($0.01544/m) $0.04/m is <b>2.59x dearer</b>; against the memo's <b>"expected copper wire"</b> at $0.15/ft ($0.49213/m) it is <b>12.3x cheaper</b>. Neither is parity, and the two benchmarks differ by 32x. The sponsor's TAM story is "30% of global copper <i>wire</i>," so the wire benchmark is the operative one — but $0.04/m is a <b>bare-conductor cost</b> and $0.15/ft is a <b>finished insulated-wire price</b>, so even that comparison is not like-for-like.</p>
+  </div>
+
+
+  <hr class="rule">
+  <div class="eyebrow" style="margin-bottom:6px"><b>Added 2026-09-13</b> · exit math, at 10% carry</div>
+  <h2>The dominant error: two exit-ownership regimes, ~3x apart</h2>
+  <p>Casey: <i>"if it's $1.5–4b valuation it's much more than 15x."</i> Correct — and the counter-agent reached the same conclusion independently, rating it <b>the single largest error in the analysis, swinging EV ~10x harder than the entire probability re-weighting.</b></p>
+
+  <div class="kbox" style="border-left-color:var(--danger)">
+    <p>The EV tree's branch multiples back-solve to an exit ownership of <b>~0.42%</b> — about <b>81% cumulative dilution</b> — which no document states. <code>factpack.md</code> L68-70 says <b>2.18% at close → 1.27%</b> (model's own dilution) or <b>0.65–1.09%</b> (realistic 50–70%). Both regimes are live in the record simultaneously. <b>The same $1.2–1.5bn exit is 10x net in the fact pack and 5x net in the EV tree.</b> The contradiction originates inside <code>memo.md</code> itself, which states 50–70% dilution on page 1 and "$400–585M ⇒ 1.5–3x net" in its risk section — figures that require 81–87%.</p>
+  </div>
+
+  <figure>
+    <div class="grp" style="margin-bottom:4px">Net multiple vs exit valuation, per $1M at $45M post &#183; <b>10% carry</b></div>
+    <div class="legend">
+      <span class="lg"><svg width="26" height="10" aria-hidden="true"><line x1="1" y1="5" x2="25" y2="5" stroke="var(--data-1)" stroke-width="2.5"/></svg> 1.27% &#8212; model's own dilution (42%)</span>
+      <span class="lg"><svg width="26" height="10" aria-hidden="true"><line x1="1" y1="5" x2="25" y2="5" stroke="var(--data-1)" stroke-width="2" stroke-dasharray="6 4" opacity=".7"/></svg> 0.87% &#8212; realistic (60%)</span>
+      <span class="lg"><svg width="26" height="10" aria-hidden="true"><line x1="1" y1="5" x2="25" y2="5" stroke="var(--danger)" stroke-width="2" stroke-dasharray="2 3"/></svg> 0.42% &#8212; what the EV tree implies (81%)</span>
+    </div>
+    <svg viewBox="0 0 760 400" width="100%" role="img" aria-label="Log-log chart of net multiple against exit valuation at 10 percent carry. Three ownership curves: 1.27 percent, 0.87 percent and 0.42 percent. A $2.75 billion exit returns 31.5x, 21.7x or 10.5x net depending on which is used. Shaded bands mark the specialty exit range of $400-585M, the defense range of $1.2-1.5bn, and the copper tail range of $1.5-4bn.">
+      <text class="axlbl" x="16" y="36">net</text>
+    <rect class="exband" x="320.0" y="76" width="36.9" height="260"><title>Specialty &#8212; p 24% &#8212; $0.40&#8211;0.58bn</title></rect>
+    <text class="bandlbl" x="338.5" y="30" text-anchor="middle">Specialty <tspan class="bandp">p 24%</tspan></text>
+    <line class="lead" x1="338.5" y1="34" x2="338.5" y2="74"/>
+    <rect class="exband" x="426.7" y="76" width="21.7" height="260"><title>Defense &#8212; p 8% &#8212; $1.20&#8211;1.50bn</title></rect>
+    <text class="bandlbl" x="437.5" y="48" text-anchor="middle">Defense <tspan class="bandp">p 8%</tspan></text>
+    <line class="lead" x1="437.5" y1="52" x2="437.5" y2="74"/>
+    <rect class="exband" x="448.4" y="76" width="95.3" height="260"><title>Copper tail &#8212; p 4% &#8212; $1.50&#8211;4.00bn</title></rect>
+    <text class="bandlbl" x="496.0" y="66" text-anchor="middle">Copper tail <tspan class="bandp">p 4%</tspan></text>
+    <line class="lead" x1="496.0" y1="70" x2="496.0" y2="74"/>
+    <line class="grid" x1="185.3" y1="76" x2="185.3" y2="336"/>
+    <text class="axlbl" x="185.3" y="358" text-anchor="middle">$100M</text>
+    <line class="grid" x1="341.7" y1="76" x2="341.7" y2="336"/>
+    <text class="axlbl" x="341.7" y="358" text-anchor="middle">$500M</text>
+    <line class="grid" x1="409.0" y1="76" x2="409.0" y2="336"/>
+    <text class="axlbl" x="409.0" y="358" text-anchor="middle">$1bn</text>
+    <line class="grid" x1="565.3" y1="76" x2="565.3" y2="336"/>
+    <text class="axlbl" x="565.3" y="358" text-anchor="middle">$5bn</text>
+    <line class="grid" x1="632.7" y1="76" x2="632.7" y2="336"/>
+    <text class="axlbl" x="632.7" y="358" text-anchor="middle">$10bn</text>
+    <line class="thr-hi" x1="118" y1="278.8" x2="700" y2="278.8"/><text class="axlbl" x="110" y="282.8" text-anchor="end">1x</text>
+    <line class="thr" x1="118" y1="239.7" x2="700" y2="239.7"/><text class="axlbl" x="110" y="243.7" text-anchor="end">3x</text>
+    <line class="thr" x1="118" y1="196.9" x2="700" y2="196.9"/><text class="axlbl" x="110" y="200.9" text-anchor="end">10x</text>
+    <line class="thr" x1="118" y1="139.7" x2="700" y2="139.7"/><text class="axlbl" x="110" y="143.7" text-anchor="end">50x</text>
+    <polyline class="c1" points="118.0,298.7 122.9,296.9 127.7,295.1 132.6,293.3 137.4,291.6 142.2,289.8 147.1,288.0 151.9,286.2 156.8,284.5 161.6,282.7 166.5,277.3 171.4,275.7 176.2,274.1 181.1,272.5 185.9,270.9 190.8,269.2 195.6,267.6 200.5,265.9 205.3,264.3 210.1,262.6 215.0,260.9 219.9,259.3 224.7,257.6 229.5,255.9 234.4,254.2 239.2,252.6 244.1,250.9 249.0,249.2 253.8,247.5 258.6,245.8 263.5,244.1 268.4,242.3 273.2,240.6 278.0,238.9 282.9,237.2 287.8,235.5 292.6,233.8 297.5,232.0 302.3,230.3 307.1,228.6 312.0,226.8 316.9,225.1 321.7,223.4 326.5,221.6 331.4,219.9 336.2,218.1 341.1,216.4 346.0,214.7 350.8,212.9 355.6,211.2 360.5,209.4 365.4,207.7 370.2,205.9 375.0,204.2 379.9,202.4 384.8,200.6 389.6,198.9 394.5,197.1 399.3,195.4 404.1,193.6 409.0,191.9 413.9,190.1 418.7,188.3 423.5,186.6 428.4,184.8 433.2,183.1 438.1,181.3 443.0,179.5 447.8,177.8 452.6,176.0 457.5,174.2 462.4,172.5 467.2,170.7 472.0,168.9 476.9,167.2 481.8,165.4 486.6,163.6 491.5,161.9 496.3,160.1 501.1,158.3 506.0,156.6 510.9,154.8 515.7,153.0 520.5,151.2 525.4,149.5 530.2,147.7 535.1,145.9 540.0,144.2 544.8,142.4 549.6,140.6 554.5,138.8 559.4,137.1 564.2,135.3 569.0,133.5 573.9,131.8 578.8,130.0 583.6,128.2 588.5,126.4 593.3,124.7 598.1,122.9 603.0,121.1 607.9,119.3 612.7,117.6 617.5,115.8 622.4,114.0 627.2,112.3 632.1,110.5 637.0,108.7 641.8,106.9 646.6,105.2 651.5,103.4 656.4,101.6 661.2,99.8 666.0,98.1 670.9,96.3 675.8,94.5 680.6,92.7 685.5,91.0 690.3,89.2 695.1,87.4 700.0,85.6"><title>model's own dilution 42% &#8212; exit ownership 1.27%</title></polyline>
+    <text class="ownlbl c1t" x="705" y="98.7">1.27%</text>
+    <polyline class="c2" points="118.0,312.1 122.9,310.3 127.7,308.5 132.6,306.8 137.4,305.0 142.2,303.2 147.1,301.4 151.9,299.7 156.8,297.9 161.6,296.1 166.5,294.3 171.4,292.6 176.2,290.8 181.1,289.0 185.9,287.2 190.8,285.5 195.6,283.7 200.5,278.2 205.3,276.6 210.1,275.0 215.0,273.4 219.9,271.8 224.7,270.1 229.5,268.5 234.4,266.8 239.2,265.2 244.1,263.5 249.0,261.9 253.8,260.2 258.6,258.5 263.5,256.9 268.4,255.2 273.2,253.5 278.0,251.8 282.9,250.1 287.8,248.4 292.6,246.7 297.5,245.0 302.3,243.3 307.1,241.6 312.0,239.9 316.9,238.1 321.7,236.4 326.5,234.7 331.4,233.0 336.2,231.3 341.1,229.5 346.0,227.8 350.8,226.1 355.6,224.3 360.5,222.6 365.4,220.8 370.2,219.1 375.0,217.4 379.9,215.6 384.8,213.9 389.6,212.1 394.5,210.4 399.3,208.6 404.1,206.9 409.0,205.1 413.9,203.4 418.7,201.6 423.5,199.9 428.4,198.1 433.2,196.3 438.1,194.6 443.0,192.8 447.8,191.1 452.6,189.3 457.5,187.6 462.4,185.8 467.2,184.0 472.0,182.3 476.9,180.5 481.8,178.7 486.6,177.0 491.5,175.2 496.3,173.4 501.1,171.7 506.0,169.9 510.9,168.1 515.7,166.4 520.5,164.6 525.4,162.8 530.2,161.1 535.1,159.3 540.0,157.5 544.8,155.8 549.6,154.0 554.5,152.2 559.4,150.5 564.2,148.7 569.0,146.9 573.9,145.1 578.8,143.4 583.6,141.6 588.5,139.8 593.3,138.1 598.1,136.3 603.0,134.5 607.9,132.7 612.7,131.0 617.5,129.2 622.4,127.4 627.2,125.6 632.1,123.9 637.0,122.1 641.8,120.3 646.6,118.6 651.5,116.8 656.4,115.0 661.2,113.2 666.0,111.5 670.9,109.7 675.8,107.9 680.6,106.1 685.5,104.4 690.3,102.6 695.1,100.8 700.0,99.0"><title>realistic 60% &#8212; exit ownership 0.87%</title></polyline>
+    <text class="ownlbl c2t" x="705" y="112.1">0.87%</text>
+    <polyline class="c3" points="127.7,334.5 132.6,332.7 137.4,330.9 142.2,329.1 147.1,327.4 151.9,325.6 156.8,323.8 161.6,322.0 166.5,320.3 171.4,318.5 176.2,316.7 181.1,314.9 185.9,313.2 190.8,311.4 195.6,309.6 200.5,307.8 205.3,306.1 210.1,304.3 215.0,302.5 219.9,300.7 224.7,299.0 229.5,297.2 234.4,295.4 239.2,293.6 244.1,291.9 249.0,290.1 253.8,288.3 258.6,286.5 263.5,284.8 268.4,283.0 273.2,277.6 278.0,276.0 282.9,274.4 287.8,272.7 292.6,271.1 297.5,269.5 302.3,267.8 307.1,266.2 312.0,264.5 316.9,262.9 321.7,261.2 326.5,259.6 331.4,257.9 336.2,256.2 341.1,254.5 346.0,252.8 350.8,251.1 355.6,249.4 360.5,247.7 365.4,246.0 370.2,244.3 375.0,242.6 379.9,240.9 384.8,239.2 389.6,237.5 394.5,235.8 399.3,234.0 404.1,232.3 409.0,230.6 413.9,228.8 418.7,227.1 423.5,225.4 428.4,223.6 433.2,221.9 438.1,220.2 443.0,218.4 447.8,216.7 452.6,214.9 457.5,213.2 462.4,211.4 467.2,209.7 472.0,207.9 476.9,206.2 481.8,204.4 486.6,202.7 491.5,200.9 496.3,199.2 501.1,197.4 506.0,195.7 510.9,193.9 515.7,192.1 520.5,190.4 525.4,188.6 530.2,186.9 535.1,185.1 540.0,183.3 544.8,181.6 549.6,179.8 554.5,178.0 559.4,176.3 564.2,174.5 569.0,172.7 573.9,171.0 578.8,169.2 583.6,167.4 588.5,165.7 593.3,163.9 598.1,162.1 603.0,160.4 607.9,158.6 612.7,156.8 617.5,155.1 622.4,153.3 627.2,151.5 632.1,149.8 637.0,148.0 641.8,146.2 646.6,144.4 651.5,142.7 656.4,140.9 661.2,139.1 666.0,137.4 670.9,135.6 675.8,133.8 680.6,132.0 685.5,130.3 690.3,128.5 695.1,126.7 700.0,125.0"><title>what the EV tree implies, 81% &#8212; exit ownership 0.42%</title></polyline>
+    <text class="ownlbl c3t" x="705" y="138.0">0.42%</text>
+    <circle class="dot" cx="507.3" cy="156.1" r="5"/>
+    <text class="ownlbl c1t" x="498.3" y="160.1" text-anchor="end">31.5x</text>
+    <circle class="faildot" cx="507.3" cy="195.2" r="5"/>
+    <text class="ownlbl c3t" x="498.3" y="199.2" text-anchor="end">10.5x</text>
+
+    </svg>
+    <figcaption>The vertical spread between the three curves at any exit value <b>is the unresolved question</b>. At a $2.75bn exit it is the difference between <b>10.5x and 31.5x net</b>. Every branch multiple in the logged EV tree sits on the bottom curve; every exit threshold the fact pack quotes Casey sits on the top one.</figcaption>
+  </figure>
+
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th>Panel EV, 10% carry</th><th>EV tree's ~0.42%</th><th>realistic 0.87%</th><th>model's 1.27%</th></tr></thead>
+    <tbody>
+      <tr><td>logged vector .60/.26/.10/.04</td><td class="num">1.54x</td><td class="num">3.05x</td><td class="num">4.39x</td></tr>
+      <tr><td>my re-weighting .64/.24/.08/.04</td><td class="num">1.40x</td><td class="num">2.76x</td><td class="num">3.97x</td></tr>
+      <tr style="background:var(--wash)"><td><b>counter-agent's .61/.27/.08/.04</b></td><td class="num hero">1.45x</td><td class="num hero">2.88x</td><td class="num hero">4.13x</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p style="font-size:.9rem"><b>Read the rows against the columns.</b> The entire probability argument — three analysts, a full adversarial pass — moves EV by <b>±0.14x</b>. The ownership assumption nobody wrote down moves it by <b>±2.7x</b>.</p>
+
+  <div class="kbox" style="border-left-color:var(--accent)">
+    <p><b>What is worth negotiating.</b> Carry 20% → 10% is worth <b>+0.27x</b> EV. Defending ownership from 0.42% to 1.27% — pro-rata rights, anti-dilution, participation in the A and B — is worth <b>+2.68x</b>. <b>Pro-rata is worth ~10x the carry point.</b> Take the carry if it is free, but do not trade a pro-rata right for it.</p>
   </div>
 
   <div class="honesty">

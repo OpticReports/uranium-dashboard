@@ -340,3 +340,87 @@ exit threshold by 3x.
 
 **Status:** this re-weighting is one analyst's, pending the panel re-run
 and a counter-agent pass (running). Not yet written to `ledger.csv`.
+
+---
+
+# PART 4 — EXIT MATH (2026-09-13, 10% carry)
+
+Casey: *"if it's $1.5–4b valuation it's much more than 15x."* Correct. The
+counter-agent reached the same conclusion independently and rates it **the
+single largest error in the analysis — it swings EV ~10x harder than the
+entire probability re-weighting.**
+
+## Two exit-ownership regimes, both live in the record
+
+The EV tree's branch multiples back-solve to **~0.42%** exit ownership
+(≈81% cumulative dilution), which no document states. `factpack.md`
+L68-70 says **2.18% at close → 1.27%** (model) or **0.65–1.09%**
+(realistic 50–70%). **The same $1.2–1.5bn exit is 10x net in the fact
+pack and 5x net in the EV tree.** The contradiction originates inside
+`memo.md`, which states 50–70% dilution on page 1 and "$400–585M ⇒
+1.5–3x net" in its risk section — figures requiring 81–87%.
+
+## A $1.5–4bn exit, at 10% carry
+
+| Exit | EV tree's 0.42% | realistic 0.87% | model's 1.27% |
+|---|---|---|---|
+| $1.50bn | 5.8x | **11.9x** | 17.2x |
+| $2.75bn | 10.5x | **21.7x** | 31.5x |
+| $4.00bn | 15.2x | **31.5x** | 45.8x |
+
+The logged tree called the tail **15x**. At the record's own realistic
+dilution a $1.5–4bn exit is **11.9–31.5x**.
+
+## Panel EV, every combination (10% carry)
+
+| Vector | 0.42% | 0.87% | 1.27% |
+|---|---|---|---|
+| logged .60/.26/.10/.04 | 1.54x | 3.05x | 4.39x |
+| mine .64/.24/.08/.04 | 1.40x | 2.76x | 3.97x |
+| **counter-agent .61/.27/.08/.04** | **1.45x** | **2.88x** | **4.13x** |
+
+The entire probability argument moves EV **±0.14x**. The ownership
+assumption nobody wrote down moves it **±2.7x**.
+
+## What is worth negotiating
+
+- Carry 20% → 10%: **+0.27x** EV
+- Ownership 0.42% → 1.27% (pro-rata, anti-dilution, A/B participation):
+  **+2.68x** EV
+- **Pro-rata is worth ~10x the carry point.** Take the carry if free;
+  never trade a pro-rata right for it.
+
+## THREE CORRECTIONS I OWE (counter-agent, rev-3 pass)
+
+1. **"The workbook implies a ~40x markup by 2030-31" — WRONG.** The
+   workbook holds price *and* cost flat ($0.48 / $0.40 inputs) at a
+   constant ~16.7% gross margin 2027→2040. It **is** the 20%-markup
+   model at a frozen cost. My 40x spliced the workbook's price to the
+   memo's cost roadmap — the same basis error twice over.
+2. **The aluminium leg of step 6 — OVERSTATED by an order of
+   magnitude.** I compared aluminium *metal content* ($0.00044/ft) to
+   Galvorn's *finished price*. Copper's metal→wire conversion is ~32x;
+   applying it, plain aluminium wire ≈ $0.014/ft and the gap is
+   **5.4–8.1x**, not 173–260x. Still a real gap; not two orders.
+3. **Finding 5 (CNT supply) does NOT fully dissolve.** I priced all of
+   2034 at $0.48/ft, but the $4.576bn is two legs: SPC $0.566bn **plus
+   bare copper wire $4.010bn**, which cannot sell at $0.48/ft when the
+   memo's own copper benchmark is $0.15/ft. Correct range: **1.3–4.0x**
+   the named CNT capacity, not 0.44x and not 14.5x.
+
+Also: the 3 kt leg of the capacity finding **inverts** rather than
+dissolving — the plant reaches only **44.7%** utilisation on the
+sponsor's own SPC model in **2040**. Its justification lives entirely in
+the unread `Copper Wire Facts` tab. $40M of capex underwritten by a tab
+we have not read.
+
+## GATE
+
+**Nothing goes to `ledger.csv` until the dilution question is resolved.**
+A re-score 15 days before close, on a pipeline with six same-class
+attribution errors and a live 2x ownership contradiction, is the failure
+mode the standing verification rule exists to prevent.
+
+**New P1:** which dilution basis is operative — the EV tree's implicit
+~81% or the fact pack's stated 50–70%? *Moves EV by 2.0x, every branch
+multiple, and the 10x hurdle by $1.4–2.7bn.*
