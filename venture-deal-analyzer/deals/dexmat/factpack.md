@@ -108,8 +108,7 @@ deal), and whether the 2% is genuinely one-time.
   independent beachhead pricing of $100s–$1,000+/kg"; that endorsement is
   backwards — Galvorn's cost today is **$5,337/kg**, 5.3x the TOP of the
   range cited to support it. Per foot, on every basis a buyer can act on:
-  posted list $8.49/ft = **5.0x** the $2.63/ft military-tier incumbent and
-  **18.1x** the $0.73/ft tier that is 97% of SPC volume; DexMat's own
+  DexMat's own
   intended price (cost +20%, copper-equivalent) = **1.11x** the military
   tier and **3.99x** the $0.73 tier. The claim survives only by comparing
   DexMat's BARE-FIBRE COST to a finished-wire PRICE, unadjusted for
@@ -473,6 +472,14 @@ Page images archived under `sponsor-docs-2026-09/`.
   contract now disclosed). Next-round KPI "several million in annual
   revenue" implies current revenue still below that — consistent with
   rev 2's ~$800K–1M run rate.
+- [**CORRECTED 2026-09-13** — the $8.49/ft below is **HUNTSMAN's Miralon**,
+  not DexMat's Galvorn. Verified against memo-page-02/03.png: "While
+  Huntsman doesn't make its production price known, it sells its 2-ply
+  yarn for $8.49 a foot," and the NEXT sentence re-introduces DexMat by
+  name. **No document in this record states DexMat's price per foot.**
+  The "17.7x price cut" is therefore a Miralon-today vs Galvorn-future
+  comparison, not a DexMat price cut. A counter-agent previously signed
+  this off clean — see cost-per-kg.md Part 1.]
 - **Near-term falsifiable milestone: list price $8.49/ft → $0.48/ft
   "October 2026"** (plant upgrade). Verifiable within weeks of close.
 - **Sponsor EV theater persists**: outcome tree internally inconsistent

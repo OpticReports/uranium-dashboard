@@ -36,7 +36,7 @@ against is 3.0% of the market by volume, 9.9% by value.**
 
 | Galvorn, per foot | Date | As quoted | Copper-equivalent (x1.56) | vs $2.63 | vs $0.73 | vs $0.0047 Cu metal |
 |---|---|---|---|---|---|---|
-| **Posted list today** (2-ply yarn) | now | **$8.49** | $13.245 | 5.04x | **18.1x** | 2,814x |
+| Huntsman Miralon 2-ply yarn — **NOT DexMat** | now | $8.49 | — | — | — | — |
 | Today — cost +20% | 2026 | $1.869 | $2.916 | 1.11x | 3.99x | 619x |
 | 3 t/yr pilot / plant upgrade | 2026–27 | $0.486 | **$0.759** | 0.29x | **1.04x** | 161x |
 | **30 t/yr demo — first real win** | 2028–29 | $0.077 | $0.120 | 0.05x | **0.16x** | 25.5x |
@@ -74,9 +74,10 @@ the $/kg table is not.**
    3%-of-volume military tier.
 2. **First genuine price win is 2028–29** at the 30 t demo plant
    ($0.120/ft vs $0.73) — two years later and one plant further out.
-3. **A buyer faces $8.49/ft today**, not $1.56/ft: 18x what 97% of the
-   market pays, 5x the military tier. "At/below cost parity today" is a
-   statement about DexMat's cost, not any price a customer can buy at.
+3. **We do not know what a buyer faces today.** The $8.49/ft long
+   carried as DexMat's list price is **Huntsman's Miralon** — verified at
+   source (memo p.2–3). **No document states DexMat's price per foot.**
+   Every conclusion here rests on sponsor cost × sponsor markup.
 4. **Galvorn never reaches copper's metal content** — 4.8x it in
    2030–31, and that floor *falls* 27% at a mid-cycle copper price.
 
@@ -86,7 +87,8 @@ Prompted by Casey 2026-09-13: "it's def not cheaper now." He is right.
 
 | Basis | $/ft | Copper-equivalent | vs $2.63 (3% of mkt) | vs $0.73 (97%) |
 |---|---|---|---|---|
-| What a customer actually pays | $8.490 | $13.245 | **5.04x** | **18.1x** |
+| What a customer actually pays | **unknown** | — | — | — |
+| DexMat's intended price, **as quoted** (no conductance adj.) | $1.869 | $1.869 | **0.71x** | **2.56x** |
 | DexMat's own intended price (cost +20%) | $1.869 | $2.916 | **1.11x** | **3.99x** |
 | DexMat's bare-fibre cost | $1.558 | $2.430 | 0.92x | **3.33x** |
 
@@ -141,7 +143,6 @@ and every $/kg rises 1.35%.
 
 | Scale step | Date | Cost $/m | COST $/kg | Price $/kg | x Cu per kg |
 |---|---|---|---|---|---|
-| **Today — ACTUAL posted list** ($8.49/ft) | now | — | — | **$29,094** | 2,173x |
 | Today — 15→300 kg/yr line | 2026 | 5.11 | **$5,337** | $6,405 (cost+20%) | 399x |
 | **3 t/yr pilot / upgrade — ANCHOR** | 2026–27 | 1.33 | **$1,389** | $1,667 | 104x |
 | 30 t/yr demo | 2028–29 | 0.21 | **$219** | $263 | 16.4x |
@@ -193,8 +194,12 @@ The finding stands; the claim that the anchor produced it does not.
    in our record** (LG Chem 6,100 + OCSiAl 100 — cited in `factpack.md`
    as evidence CNT powder is industrialised, *not* as a global total),
    and 29.9x the entire 3 kt plant, of which the model builds one.
-3. **The October cut is mostly margin:** 17.7x on price vs 3.84x on cost;
-   GM 82% → 15.5%. "~99% margins" cannot coexist with $5.11/m at $8.49/ft.
+3. **WITHDRAWN — the margin-compression finding.** It rested entirely on
+   $8.49/ft being DexMat's list. It is Huntsman's. There is no DexMat
+   price series, so there is no margin-compression finding. What
+   survives: the 3.84x cost cut ($5.11/m → $1.33/m) is the deck's own,
+   and the DD notes' "~99% margins" stays unreconciled against it —
+   but we cannot say by how much without a price.
 4. **Our own record's copper-parity line is wrong.** `factpack.md` L64
    ("approximate copper parity ($0.04/m at 26 AWG)"); `memo.md` same
    claim, no figures. vs copper **metal** $0.04/m is 2.59x dearer; vs the
@@ -245,7 +250,9 @@ The finding stands; the claim that the anchor produced it does not.
 **P2 — score-moving:**
 6. ● What do insulation, jacketing and qualification add per foot?
 7. ● Is $5.11/m fully-loaded or variable; reconcile "~99% margins."
-8. ● Is the Oct-2026 $0.48/ft the same SKU as today's $8.49/ft?
+8. ● **P1 · What is DexMat's actual current list price per foot?** No
+   document states it; the cost-parity refutation rests on sponsor cost
+   x sponsor markup without it.
 9. ● True global CNT powder capacity.
 10. ● **CARRIED (Q8)** October $0.48/ft milestone — targeted for October,
     round closes 2026-09-28. Ask for commissioning status or a customer

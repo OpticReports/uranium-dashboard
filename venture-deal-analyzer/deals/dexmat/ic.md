@@ -80,7 +80,7 @@ Conceded on #6 (price/tail), 2026-09-08:
 Recorded in the session transcript; summary: phase-1 needs no
 conductivity parity (SPCW replacement at 6x weight saving in a market
 paying for weight); price collapse verifiable within weeks
-($8.49→$0.48/ft Oct target); named-to-LP anchor demand; complete
+($0.48/ft Oct target; the $8.49 baseline was Huntsman's Miralon, corrected 2026-09-13); named-to-LP anchor demand; complete
 team + founder personal financial commitment; cornered process lineage
 with the only predecessor dead; additive tail optionality not priced
 at $35M pre.
