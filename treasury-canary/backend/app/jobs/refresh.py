@@ -214,11 +214,10 @@ def run_refresh(session: Session) -> dict:
     # (condition, state) per ISO week so a boundary oscillation cannot flood
     # the channel. Pre-briefs fire once per (event, date) at T-minus-3.
     try:
+        from ..alerts import squeeze_flip_text, squeeze_prebrief_text
         from ..api.routes_squeeze import assemble_radar
         radar = assemble_radar()
         conds = radar["fuel"] + radar["triggers"]
-        score_line = (f"fuel {radar['fuel_score']:.1f}/4, "
-                      f"triggers {radar['trigger_score']:.1f}/5")
         sq_rows = session.execute(
             select(MetricSnapshot)
             .where(MetricSnapshot.metric_id.like("squeeze.%"))
@@ -241,9 +240,8 @@ def run_refresh(session: Session) -> dict:
                 event_type="squeeze_condition_flip", severity=sev,
                 asof=today,
                 dedup_key=f"{c['id']}:{c['state']}:{iso_wk}",
-                rationale=(f"Squeeze Radar {c['id']} ({c['label']}) "
-                           f"{prev} -> {c['state']}: {c.get('detail','')} "
-                           f"[{score_line}]"),
+                rationale=squeeze_flip_text(c, prev, radar["fuel_score"],
+                                            radar["trigger_score"]),
                 detail=c))
         for ev in radar.get("calendar", []):
             try:
@@ -252,14 +250,12 @@ def run_refresh(session: Session) -> dict:
                 continue
             days_out = (edate - today).days
             if 0 <= days_out <= 3:
-                approx = "≈" if ev.get("estimated") else ""
                 new_events.append(Event(
                     event_type="squeeze_prebrief", severity="WARN", asof=today,
                     dedup_key=f"{ev['event']}:{ev['date']}",
-                    rationale=(f"Squeeze Radar pre-brief: {ev['event']} "
-                               f"{approx}{ev['date']} (T-{days_out}). "
-                               f"Scorecard now: {score_line}. Triggers ignite "
-                               f"on scheduled dates — watch this one."),
+                    rationale=squeeze_prebrief_text(
+                        ev["event"], edate, days_out, bool(ev.get("estimated")),
+                        radar["fuel_score"], radar["trigger_score"]),
                     detail=ev))
     except Exception as exc:  # noqa: BLE001
         logger.warning("squeeze radar refresh failed: %s", exc)
