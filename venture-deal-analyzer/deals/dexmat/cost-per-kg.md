@@ -80,12 +80,39 @@ the $/kg table is not.**
 4. **Galvorn never reaches copper's metal content** — 4.8x it in
    2030–31, and that floor *falls* 27% at a mid-cycle copper price.
 
-**Two things this cannot settle.** (1) Galvorn's figures are **bare
-fibre**; every copper comparator is **finished insulated wire**.
-Insulation, jacketing and qualification are unquantified per-foot costs
-on the Galvorn side — the comparison flatters Galvorn by that amount.
-(2) The workbook's $2.63/ft is 9–20% below the memo's own $2.86–3.15/ft
-for the same product, and neither states a gauge.
+## REFUTED — "at/below cost parity TODAY"
+
+Prompted by Casey 2026-09-13: "it's def not cheaper now." He is right.
+
+| Basis | $/ft | Copper-equivalent | vs $2.63 (3% of mkt) | vs $0.73 (97%) |
+|---|---|---|---|---|
+| What a customer actually pays | $8.490 | $13.245 | **5.04x** | **18.1x** |
+| DexMat's own intended price (cost +20%) | $1.869 | $2.916 | **1.11x** | **3.99x** |
+| DexMat's bare-fibre cost | $1.558 | $2.430 | 0.92x | **3.33x** |
+
+**Even at DexMat's own planned markup it is dearer than both incumbent
+tiers.** The parity claim survives on one basis only — bare-fibre *cost*
+against finished-wire *price*, unadjusted for conductivity, against the
+tier that is 3.0% of volume. Three thumbs, one direction.
+
+**The cross-check cited to support it refutes it.** `factpack.md` L105
+bracketed the claim as "consistent with independent beachhead pricing of
+$100s–$1,000+/kg." Galvorn's cost today is **$5,337/kg** — **5.3x the top
+of that range**. Corrected in the fact pack 2026-09-13.
+
+Carried as a POSITIVE in three places; factpack now corrected, the other
+two are frozen rev-2 artifacts awaiting Casey's call:
+- `factpack.md` L105 — the bracketed endorsement ✓ **corrected**
+- `memo.md` L92 — "beachhead cost parity today" under **What improved**
+- `memo.html` L91 — "credible beachhead cost parity vs silver-plated aero
+  cable today", in the memo's page-one synthesis
+
+**Two things this still cannot settle**, both running in Galvorn's
+favour. (1) Galvorn's figures are **bare fibre**; every copper comparator
+is **finished insulated wire** — insulation, jacketing and qualification
+are unquantified per-foot costs on the Galvorn side. (2) The workbook's
+$2.63/ft is 9–20% below the memo's own $2.86–3.15/ft for the same
+product, and neither states a gauge.
 
 Workbook note: the tab's footnote says revenue = Galvorn feet x $0.72/ft,
 but every computed cell uses $0.48/ft (2028: $17M/35.3 M ft = $0.4816;

@@ -103,8 +103,19 @@ deal), and whether the 2% is genuinely one-time.
 ## COST & SCALE-UP (deck + DD notes)
 - [DECK] Total Galvorn cost $22/m → $4/m in 24 months (82% reduction);
   claims **at/below cost parity TODAY with aerospace-grade (silver-plated)
-  copper signal cable** [consistent with independent beachhead pricing of
-  $100s–$1,000+/kg]. Roadmap (26 AWG equivalent): $5.11/m now → $1.33 (3t
+  copper signal cable** — [**REFUTED 2026-09-13**, prompted by Casey:
+  "it's def not cheaper now." The prior bracket read "consistent with
+  independent beachhead pricing of $100s–$1,000+/kg"; that endorsement is
+  backwards — Galvorn's cost today is **$5,337/kg**, 5.3x the TOP of the
+  range cited to support it. Per foot, on every basis a buyer can act on:
+  posted list $8.49/ft = **5.0x** the $2.63/ft military-tier incumbent and
+  **18.1x** the $0.73/ft tier that is 97% of SPC volume; DexMat's own
+  intended price (cost +20%, copper-equivalent) = **1.11x** the military
+  tier and **3.99x** the $0.73 tier. The claim survives only by comparing
+  DexMat's BARE-FIBRE COST to a finished-wire PRICE, unadjusted for
+  conductivity (the product carries 64.1% of 26 AWG copper's conductance),
+  against the tier that is 3.0% of volume — three thumbs, one direction.
+  Full working: deals/dexmat/cost-per-kg.md Part 1.] Roadmap (26 AWG equivalent): $5.11/m now → $1.33 (3t
   pilot, 2026-27) → $0.21 (30t demo, 2028-29) → $0.04 (3kt commercial,
   2030-31) → long-term $0.001/m claim.
 - [DECK] Capacity 15→300 kg (20x); 2M+ meters produced; annualized revenue
