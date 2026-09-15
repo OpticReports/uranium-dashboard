@@ -141,6 +141,67 @@ Episode-level record for the whole board, all channels: v2 115 episodes / 14 hit
 v3 **120 / 15 / 98** (precision 13.1% → 12.5%). Live `_overlap_validation` (recomputed
 server-side): base 12.3%; k=1 10.2% (n=353), k=2 10.3% (n=195), k=3 9.3% (n=86), k=4 15.4%
 (n=26).
+## v4 split of the slow-lethal pair (2026-09-15)
+
+Same script, same rules, same deployed history (`/pins/history`, read 2026-09-15). The only
+change is that the `slow_window` rule (oil_shock OR policy_shock damage window open) is now
+also reported per channel, so oil is measured ALONE for the first time (the "Always" row of
+`studies/oil-shock-recession-weight.md` §5). One correction to the script: the ^GSPC pull now
+starts at the index's first trade (1927) instead of `period1=0` (= 1970-01-02), which had
+left-censored the 1968-11 peak and stamped a spurious 1970-03 "drawdown start"; every event
+inside the evaluable windows (1976+) is identical, so v2/v3 numbers are unaffected.
+
+**The "oil/policy window" rule was oil all along.** The deployed policy_shock history only
+begins 2001-07 (EFFR 12-month change) and its one red episode (2022-09..2023-09) cast a window
+that contained no onset — every `slow_window` signal month before 2022 was an oil window.
+
+### vs NBER onsets (window 1987-01+, 4 onsets in window)
+
+| rule | signal months | clusters hit | precision | base | recall |
+|---|---|---|---|---|---|
+| slow_window (oil OR policy) + curve — v3 headline | 84 | 4/6 | 37% | 10% | 4/4 |
+| **oil_shock window + curve** | 64 | **4/5** | **48%** | 10% | 4/4 |
+| oil_shock RED + curve | 20 | 3/7 | 65% | 10% | 3/4 |
+| oil_shock window alone | 198 | 4/12 | 16% | 10% | 4/4 |
+| oil_shock RED alone | 94 | 3/20 | 14% | 10% | 3/4 |
+| policy_shock window / red (2001-07+) | 20 / 13 | 0/1 | 0% | 8% | 0/2 |
+
+Per-onset detail, oil window + curve: 1990-08 fired 7–2m before; 2001-04 12–1m; 2008-01 12–8m;
+**2020-03 12–5m — but that catch is the 2018-10 red episode's damage window (open to 2019-10)
+meeting the 2019 inversion, and the onset it "caught" was the pandemic.** Read it as 3 of 4
+legitimate. Oil RED alone: 1990-08 (11–10m), 2001-04 (12–5m), 2008-01 (3–1m), missed 2020;
+17 of its 20 clusters were false positives (2002–03, 2004–06 ×5, 2009–10, 2011, 2017, 2018 …).
+
+### vs ≥15% SPX drawdown starts (window 1987-01+, 9 events in window)
+
+| rule | signal months | clusters hit | precision | base | recall |
+|---|---|---|---|---|---|
+| slow_window + curve — v3 headline | 84 | 5/6 | 45% | 22% | 5/9 |
+| **oil_shock window + curve** | 64 | 4/5 | 42% | 22% | 4/9 |
+| oil_shock RED + curve | 20 | 2/7 | 35% | 22% | 2/9 |
+| oil_shock window alone | 198 | 7/12 | 24% | 22% | 7/9 |
+| oil_shock RED alone | 94 | 6/20 | 33% | 22% | 5/9 |
+
+Oil window + curve caught 1990-05 (4–1m), 2000-08 (5–1m), 2007-10 (12–5m), 2019-12 (11–2m);
+missed 1987-08 (curve steep), 1998-06, 2018-09, 2021-12 (curve steep), 2025-01. The v3 rule's
+fifth cluster hit was 2025-01, caught by the 2022–23 policy episode's damage window on the
+2022–24 inversion — the only signal the policy leg has ever contributed.
+
+### What this changes
+
+1. The sibling rule the v3 write-up called "oil/policy window + curve" is **the oil channel's
+   damage window on a flat curve**: 48% / 4-of-5 on onsets (3 legitimate), 42% / 4-of-5 on
+   drawdowns, vs a fast-red+curve rule at 6% / 2-of-13 and 34% / 4-of-13. On the deployed
+   1987+ history oil-on-a-flat-curve is the strongest pre-specified configuration on the
+   board — with 5 clusters, i.e. an effective sample of five.
+2. Oil ALONE is not a recession signal on this history: 14% precision (base 10%), 17 of 20
+   red clusters false positives. Its information is conditional on the curve — the same
+   division of labour the v2/v3 conclusions drew for the fast channels.
+3. This is the deployed (1987+) instrument. The full postwar record — 1973, 1979–80, and the
+   pre-1986 shocks the Hamilton claim rests on — is measured in
+   `studies/oil-shock-recession-weight.md`, which also asks the out-of-sample weighting
+   question this hindcast cannot (it has no probit and no walk-forward).
+
 ## Honest limitations
 
 ~11 signal clusters (episode-level 95% CI ≈ ±30pp); serially-correlated
