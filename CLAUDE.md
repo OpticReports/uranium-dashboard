@@ -112,9 +112,13 @@ them to one line each. No restating context Casey already has.
 
 ## Agent orchestration: cost discipline, never quality (STANDING)
 
-Casey, 2026-09-16, after one task (the btc-executor netting fix) burned
-~7.7M subagent tokens across three workflows. Cut the DUPLICATION, never
-the thinking — this is a live-money path.
+REPO-WIDE — every service here, not just the executors: treasury-canary,
+the research dashboards, edge-monitor and the deal analyzer included
+(Casey, 2026-09-16). Origin: one btc-executor task burned ~7.7M subagent
+tokens across three workflows. Cut the DUPLICATION, never the thinking.
+What is at stake differs by service and never changes the rule — real
+money on the executors; on the research side a wrong number Casey acts on,
+or a dashboard that misreports while looking healthy.
 
 - **Read once, pass down.** One digest pass maps the relevant code paths
   and exact line ranges; downstream agents read only the functions they
@@ -125,8 +129,8 @@ the thinking — this is a live-money path.
 - **Scale the fan-out to severity.** Two independent verifiers for
   BLOCKING/SERIOUS, one for MINOR, none for NOTE (record and move on).
 - **NEVER downgrade the model or the effort** (Casey's explicit call). Full
-  model, high effort on every stage touching correctness, tests, or live
-  money — mechanical-looking stages included. This caps the achievable
+  model, high effort on every stage touching correctness, tests, a number
+  Casey will act on, or live money — mechanical-looking stages included. This caps the achievable
   saving at roughly a third rather than half; that is the intended trade.
 - **No speculative breadth.** Two candidate designs, not four, once a
   measurement has ruled the others out. Never build a phase whose result
@@ -135,6 +139,7 @@ the thinking — this is a live-money path.
 THE ONE PASS NEVER TO CUT: independent verification by agents that did not
 write the code. On that task it found nine defects the author's own
 self-review missed, including one that would have halted the live book on
-its first boot. Note also that a mid-run spend limit kills agents whose
+its first boot. The same applies to a study, a dataset or a scoring
+instrument — it is the counter-agent rule above, staffed properly. Note also that a mid-run spend limit kills agents whose
 tokens are already spent — prefer fewer, better-scoped agents over a wide
 fan-out that may die halfway.
