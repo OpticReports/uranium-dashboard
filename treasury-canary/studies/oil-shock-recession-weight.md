@@ -537,6 +537,7 @@ curve 48% 4/5 (1987+); R0+R1 +19.5pp vs R2+R3 −5.4pp; H4a −0.12 / −0.42 (D
 | 5 | P3 | ALFRED vintages for the walk-forward | asked — not needed for the verdict (literal-L sensitivity ≤ 0.004) |
 | 6 | P3 | Oil & gas employment / IPMINE for the shale-offset leg | asked — open |
 | 7 | P3 | Extend the TIC file to the 2026 prints and re-read the 2026-04 episode | new 2026-09-16 — open |
+| 8 | P2 | Re-run `studies/pin_rule_hindcast.py` (v5) against the deployed NOPI-leg history and re-freeze the oil-window+curve numbers (48% / 4-of-5 is pre-switch) | new 2026-09-16 — blocked on deploy |
 
 ## §8 Counter-agent log — entry 2 (post-result, 2026-09-16)
 
@@ -567,4 +568,15 @@ convention) rather than 1950-01; no event lost. (k) After results, the data buil
 fixed to read FRED's pre-2007 custody zeros and TIC's Norway zeros as missing; the blocks had
 already treated them as missing, so no number moved. (l) The oil-alone / policy-alone
 hindcast split (v4) ran before the blocks; the event block's speculation that the bundled
-rule was "carried by policy" is superseded by v4's measured opposite.
+rule was "carried by policy" is superseded by v4's measured opposite. (m) Post-commit code
+review (2026-09-16, verdict PARTLY — code and numbers confirmed, seven wording defects fixed in
+the follow-up commit): §5's phrase "+10 (Hamilton's published cumulative threshold)" is wrong
+and contradicts §4 — the ≥ 10 cut-off is this spec's own; the shipped text now says so. (n)
+Hindcast v4's 48% / 4-of-5 was measured on the 12-month rule's red episodes; after this commit
+that leg can no longer open a damage window, so the figure is labelled "pre-switch" everywhere
+it is quoted and a v5 re-run against the deployed NOPI history is ledger item §7 #8. (o) The
+"energy ~4% vs ~6%" comparison mixed two series; corrected to the panel's own goods-and-services
+share (~4% now vs ~9% in 1980). (p) "Measured leads −1 to 15 months" were Hamilton's narrative
+lags, not this instrument's; the NOPI leg's measured first-ON leads are 4–44 months (last-ON
+1–12). (q) The R2+R3 effect is worded "unidentified, consistent with at most half", and the
+petrodollar sentence carries both anchor months and the 2022 share rise.

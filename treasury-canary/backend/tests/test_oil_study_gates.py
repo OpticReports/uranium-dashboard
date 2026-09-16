@@ -19,7 +19,7 @@ from app.metrics.pins import ANCHORS, build_pin_board, nopi12_series
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 PANEL = os.path.join(ROOT, "studies", "oil_shock_weight", "data", "panel.csv")
-NOPI_LABEL = "Net oil price increase, 12m cumulative (vs 3-year high)"
+NOPI_LABEL = "Net oil price increase, 12m (vs 3-yr high)"
 
 
 def _panel():
@@ -77,3 +77,87 @@ def test_hindcast_keeps_the_oil_alone_split():
     src = open(os.path.join(ROOT, "studies", "pin_rule_hindcast.py")).read()
     for rule in ("oil_shock_window+curve", "oil_shock_red", "policy_shock_window+curve"):
         assert f'"{rule}"' in src
+
+
+# --- post-review gates (2026-09-16 counter-agent: blind spots in the first set) ---
+
+def _daily(start: datetime.date, vals):
+    return [start + datetime.timedelta(days=i) for i in range(len(vals))], list(vals)
+
+
+def test_nopi12_window_is_exactly_36_prior_months():
+    # a high exactly 36 months back must still suppress the reading; 37 back must not
+    base = datetime.date(2010, 1, 1)
+    months = 120
+    for gap, expect_zero in ((36, True), (37, False)):
+        vals = []
+        for m in range(months):
+            v = 100.0 if m == (months - 1 - gap) else 50.0
+            vals.append(v)
+        # one print per month, dated the 1st
+        dates = [datetime.date(base.year + (base.month - 1 + m) // 12, (base.month - 1 + m) % 12 + 1, 1)
+                 for m in range(months)]
+        vals[-1] = 100.0  # today's print equals the old high
+        d, v = nopi12_series(dates, vals)
+        assert d[-1] == dates[-1]
+        assert (v[-1] == 0.0) is expect_zero, (gap, v[-1])
+
+
+def test_nopi12_gap_month_blanks_and_never_stretches():
+    # remove one calendar month: no output for the next 48 months, identical after
+    n = 365 * 8
+    dates, vals = _daily(datetime.date(2015, 1, 1), [50.0 + (i % 400) / 10.0 for i in range(n)])
+    full = dict(zip(*nopi12_series(dates, vals)))
+    keep = [(d, x) for d, x in zip(dates, vals) if not (d.year == 2018 and d.month == 6)]
+    gapped = dict(zip(*nopi12_series([d for d, _ in keep], [x for _, x in keep])))
+    assert datetime.date(2018, 6, 1) not in gapped
+    blanked = [m for m in full if datetime.date(2018, 6, 1) <= m < datetime.date(2022, 6, 1)]
+    assert blanked and all(m not in gapped for m in blanked)
+    resumed = [m for m in full if m >= datetime.date(2022, 6, 1)]
+    assert resumed and all(gapped[m] == full[m] for m in resumed)
+
+
+def test_channel_strings_match_the_frozen_study_numbers():
+    import json
+    blocks = os.path.join(ROOT, "studies", "oil_shock_weight", "blocks")
+    ev = json.load(open(os.path.join(blocks, "event", "numbers.json")))
+    wk = json.load(open(os.path.join(blocks, "walk", "numbers.json")))
+    wk = wk["decision_h12_L_primary_oil12m"]["value"]["inputs"]
+
+    def val(d, k):
+        x = d[k]
+        return x["value"] if isinstance(x, dict) and "value" in x else x
+
+    d2_hits = int(str(val(ev, "D2_h12_recall_caught")).split("/")[0])
+    d2_fp = val(ev, "D2_h12_false_positives")
+    d1_recall = val(ev, "Q1_primary_recall")
+    d1_fp = val(ev, "Q1_primary_false_positives")
+    month = round(val(ev, "Q1_primary_month_precision") * 100)
+    base = round(val(ev, "Q1_primary_base_rate") * 100)
+    dd = round(val(ev, "curve5_B1_D1-RED_alone_h12_month_precision") * 100)
+    ddb = round(val(ev, "curve5_B1_D1-RED_alone_h12_base") * 100)
+    a_dauc, b_dauc = wk["A"]["delta_auc"], wk["B"]["delta_auc"]
+
+    n = 365 * 6
+    board = build_pin_board({"oil": _daily(datetime.date(2019, 1, 1), [60.0] * n)})
+    oil = next(c for c in board["channels"] if c["channel_id"] == "oil_shock")
+    text = " ".join([oil["basis"], oil["certainty"], oil["kill_rate"]])
+    assert f"{d2_hits} of 11" in text and f"{d2_fp} named false positives" in text
+    assert f"{d1_recall.replace('/', ' of ')}" in text and f"{d1_fp} false positives" in text
+    assert f"{month}% vs {base}%" in text
+    assert f"{dd}% vs {ddb}% base" in " ".join(p["detail"] for p in oil["parts"])
+    assert f"dAUC {b_dauc:.3f} to {a_dauc:.3f}" in text
+
+
+def test_anchor_comment_episode_peaks_are_the_panel_readings():
+    # "+25 = its red anchor -- 1990 / 2000 / 2022 printed 52 / 30 / 48"
+    dates, wti, ref = _panel()
+    peaks = {}
+    for name, lo, hi in (("1990", (1990, 1), (1991, 12)), ("2000", (1999, 1), (2001, 12)), ("2022", (2021, 1), (2023, 12))):
+        peaks[name] = max(v for k, v in ref.items() if datetime.date(*lo, 1) <= k <= datetime.date(*hi, 1))
+    assert [round(peaks[k]) for k in ("1990", "2000", "2022")] == [52, 30, 48]
+    n = 365 * 6
+    board = build_pin_board({"oil": _daily(datetime.date(2019, 1, 1), [60.0] * n)})
+    oil = next(c for c in board["channels"] if c["channel_id"] == "oil_shock")
+    detail = next(p["detail"] for p in oil["parts"] if p["label"] == NOPI_LABEL)
+    assert "52 / 30 / 48" in detail

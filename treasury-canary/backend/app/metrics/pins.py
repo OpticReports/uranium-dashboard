@@ -321,13 +321,15 @@ RESERVES_MIN_BASE_M = 100_000.0
 # Extreme anchors cite the episode that printed them.
 ANCHORS: dict[str, tuple] = {
     # Oil trigger leg (2026-09-16, studies/oil-shock-recession-weight.md §5): the
-    # 3-year-high net increase cumulated over 12 months. +10 = Hamilton's
-    # published cumulative threshold, +25 = the 1990 / 2000 / 2022-class prints
-    # (52 / 30 / 48), extreme 104.4 = the 1973-74 embargo episode's peak
+    # 3-year-high net increase cumulated over 12 months. +10 = the study's
+    # pre-registered ON cut-off (Hamilton never dichotomises), +25 = its red
+    # anchor (1990 / 2000 / 2022 printed 52 / 30 / 48; 1990 was coincident with
+    # its onset, 2022 a false positive), extreme 104.4 = the 1973-74 embargo
+    # episode's peak
     # (1974-01 on WTISPLC), the worst postwar reading. Measured on 1953-2025 it
     # preceded 6 of 11 onsets with 3 named false positives; the 12-month rule
     # below preceded 3 with 7. Anchors are episode readings, never hit rates.
-    "Net oil price increase, 12m cumulative (vs 3-year high)": (0, 10, 25, 104.4, True, 100),
+    "Net oil price increase, 12m (vs 3-yr high)": (0, 10, 25, 104.4, True, 100),
     # Context gauge since 2026-09-16: caps at YELLOW. On its own the 12-month
     # change reads at the base rate on recession onsets (18% vs 17%) but 51% vs
     # 23% on >=15% S&P drawdown starts -- an accident tell, not a recession one.
@@ -444,36 +446,41 @@ def build_pin_board(bundle: dict) -> dict:
     channels.append(PinChannel(
         "oil_shock", "Oil / energy shock",
         _grade(nopi12, 10.0, 25.0),
-        [PinPart("Net oil price increase, 12m cumulative (vs 3-year high)", nopi12, "log-%",
+        [PinPart("Net oil price increase, 12m (vs 3-yr high)", nopi12, "log-%",
                  _grade(nopi12, 10.0, 25.0),
                  "Hamilton's transform: the last 12 months' rises above the prior 3-year "
-                 "high, summed (monthly means). +10 = new highs forming; +25 = the "
-                 "1990 / 2000 / 2022 prints; 104 = the 1973-74 embargo."),
+                 "high, summed (monthly means). +10 = the study's ON cut-off (new highs "
+                 "forming); +25 = its red anchor -- 1990 / 2000 / 2022 printed 52 / 30 / "
+                 "48, and 1990 was coincident, 2022 a false positive; 104 = the 1973-74 "
+                 "embargo."),
          PinPart("WTI, 12-month change", oil_12m, "%", _grade(oil_12m, 25.0, 50.0),
                  "Context gauge (caps at YELLOW): at the base rate on recession onsets, "
                  "but a >=15% S&P drawdown began within a year of a +50% print in 51% "
                  "of months vs 23% base (1953-2025).")],
         basis="Hamilton 2011: all but one of the 11 recessions 1948-2007 followed an oil "
               "price rise (exception 1960) -- a count that includes rises of +7-10% and "
-              "one coincident month. Re-measured 1953-2025: the NOPI rule preceded 6 of "
-              "11 onsets (3 named false positives, 1 coincident), a +50% 12-month rise 3 "
-              "of 11 (7 false positives, 2 coincident).",
+              "one coincident month. Re-measured on onsets 1953-2020: the NOPI rule "
+              "preceded 6 of 11 (3 named false positives, 1 coincident), a +50% 12-month "
+              "rise 3 of 11 (7 false positives, 2 coincident).",
         certainty="Oil alone reads at the base rate on recession onsets (18% vs 17%) and "
-                  "adds NO out-of-sample skill to the curve probit (walk-forward 1970-2024, "
-                  "dAUC -0.015 to -0.035) -- the dial never blends it. It earns its keep on "
-                  "a flat curve (oil damage window + flat curve: 48%, 4 of 5 clusters on the "
-                  "1987+ history, 3 legitimate) and on market accidents. Regime note: the "
-                  "US has been a net petroleum exporter since 2020; on 2009+ data the "
-                  "measured onset effect of a +50% shock is at most half the 1953-2008 "
-                  "effect (one-episode sample), and 2022 fired on every definition with no "
+                  "added no out-of-sample skill to the curve probit on the pre-registered "
+                  "decision test (walk-forward 1970-2024, dAUC -0.015 to -0.035) -- the dial "
+                  "never blends it. It earned its keep on a flat curve (the 12-month rule's "
+                  "damage window + flat curve: 48%, 4 of 5 clusters on the 1987+ history, 3 "
+                  "legitimate -- measured before this leg switch; the NOPI leg is re-scored "
+                  "after deploy) and on market accidents. Regime note: the US has been a "
+                  "net petroleum exporter since 2020; on 2009+ data the onset effect of a "
+                  "+50% shock is unidentified (one episode) and consistent with at most "
+                  "half the 1953-2008 effect, and 2022 fired on every definition with no "
                   "recession.",
-        mass="US petroleum bill ~$0.9T/yr (~3% of GDP vs ~8% in 1980; energy ~4% of "
-             "consumer spending vs ~6%) -- the income squeeze this channel used to be "
-             "sized at $20T of consumption is a fraction of that",
+        mass="US petroleum bill ~$0.9T/yr (~3% of GDP vs ~8% in 1980; energy goods and "
+             "services ~4% of consumer spending vs ~9% in 1980) -- the income squeeze this "
+             "channel used to be sized at $20T of consumption is a fraction of that",
         mass_trillions=0.9,
         leverage="unlevered — a broad income squeeze, not a margin call; partly offset "
                  "since 2020 by US producer income",
-        speed="3–12 months (Hamilton); measured leads −1 to 15 months",
+        speed="3–12 months (Hamilton's narrative lags −1 to 15m); NOPI first-ON leads "
+              "4–44m, last-ON 1–12m",
         kill_rate="Measured 1953-2020: NOPI rule 6 of 11 onsets preceded, 3 named false "
                   "positives (1976, 1996, 2021); 12-month rule 3 of 11, 7 false positives. "
                   "Hamilton's '10 of 11' (1948-2007) counts rises this channel would not trip."))
@@ -745,11 +752,12 @@ def build_pin_board(bundle: dict) -> dict:
               "of that imbalance forming.",
         certainty="Auction data is exact but episodic (per-auction); custody is weekly. "
                   "A weak single auction is noise — a weak RUN of them is the signal. "
-                  "Petrodollar recycling, measured 2026-09-16: the oil-exporter share of "
-                  "foreign Treasury holdings did not rise with oil in 2000-11 or 2012-25 "
-                  "(annual changes r -0.12 / -0.42; the sign flips with the anchor month "
-                  "at n = 11 / 13), the 2014-16 crash saw the share RISE and 2022 saw "
-                  "custody fall 4.8% -- treat oil as no reliable bid for Treasuries.",
+                  "Petrodollar recycling, measured 2026-09-16: annual changes in the "
+                  "oil-exporter share of foreign Treasury holdings carry no reliable sign "
+                  "against oil (December-anchored r -0.12 / -0.42, June-anchored +0.09 / "
+                  "+0.20; n = 11 / 13); the 2014-16 crash saw the share RISE, and in 2022 "
+                  "the share rose 0.4pp while Fed custody fell 4.8% -- unmeasurable at "
+                  "this granularity, so treat oil as no reliable bid for Treasuries.",
         mass="$28T+ Treasury market; ~$3.3T foreign-official custody",
         mass_trillions=28.0,
         leverage="overlaps the fiscal pin — same underlying market",
@@ -895,7 +903,9 @@ def build_pin_board(bundle: dict) -> dict:
     # damage window alone (hindcast v4, 2026-09-15: the policy leg's history
     # starts 2001 and contributed one signal): oil window + flat curve reads
     # 48% / 4 of 5 on onsets (3 legitimate, the 2020 catch was the pandemic)
-    # and 42% / 4 of 5 on drawdowns.
+    # and 42% / 4 of 5 on drawdowns -- measured on the 12-month rule's red
+    # episodes BEFORE the 2026-09-16 switch to the NOPI trigger leg; v5 re-runs
+    # against the deployed NOPI history.
     # This remains A measured configuration, not THE one. Descriptive, never
     # calibrated.
     # GREEN = disarmed, YELLOW = one condition met (armed), RED = both.
@@ -962,8 +972,9 @@ def build_pin_board(bundle: dict) -> dict:
                   "(45%, 5/6) was the oil channel's damage window alone (the policy "
                   "leg contributed one signal in its history): oil window + flat "
                   "curve reads 48% / 4 of 5 on onsets, 3 legitimate, and 42% / 4 of 5 "
-                  "on drawdowns (hindcast v4, 2026-09-15). Descriptive context, never "
-                  "a calibrated probability."),
+                  "on drawdowns (hindcast v4, 2026-09-15, on the 12-month rule's windows "
+                  "before the NOPI leg switch). Descriptive context, never a calibrated "
+                  "probability."),
     }
 
     return {
