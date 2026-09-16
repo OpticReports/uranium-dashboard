@@ -6,8 +6,9 @@
 > Cursor/Composer and other AI tools load the same conventions. Whenever
 > this file changes — including from Casey's feedback on the methodology —
 > regenerate both mirrors IN THE SAME COMMIT:
->   `tail -n +2 CLAUDE.md | sed '1i # Working conventions for this repo (agent rules)'`
->   with the mirror header, written to AGENTS.md and copied to .cursorrules.
+>   `{ head -3 AGENTS.md; tail -n +3 CLAUDE.md; } > /tmp/m && cp /tmp/m AGENTS.md && cp /tmp/m .cursorrules`
+>   (the mirrors are the 2-line HTML provenance header + a blank line +
+>   CLAUDE.md from its SYNC RULE line on; verify with `diff AGENTS.md .cursorrules`).
 
 Monorepo of Casey's research dashboards (genomics-alpha-tracker,
 treasury-canary, btc-paper-engine, btc-executor, barbell-lab), deployed on
@@ -109,3 +110,32 @@ them to one line each. No restating context Casey already has.
   automated IBKR trading routes through it). DRY_RUN defaults + staged
   rollout gates (EXECUTOR.md / ibkr-executor/README.md) are the law.
   Model IDs never appear in commits, PRs, or code comments.
+
+## Agent orchestration: cost discipline, never quality (STANDING)
+
+Casey, 2026-09-16, after one task (the btc-executor netting fix) burned
+~7.7M subagent tokens across three workflows. Cut the DUPLICATION, never
+the thinking — this is a live-money path.
+
+- **Read once, pass down.** One digest pass maps the relevant code paths
+  and exact line ranges; downstream agents read only the functions they
+  are actually working on. In that task 24 verifiers each independently
+  read the same ~4k-line file — ~22% of the whole spend on re-reading.
+  EXCEPTION: an adversarial reviewer still reads the REAL code for what it
+  attacks; a summary can hide the bug it was sent to find.
+- **Scale the fan-out to severity.** Two independent verifiers for
+  BLOCKING/SERIOUS, one for MINOR, none for NOTE (record and move on).
+- **NEVER downgrade the model or the effort** (Casey's explicit call). Full
+  model, high effort on every stage touching correctness, tests, or live
+  money — mechanical-looking stages included. This caps the achievable
+  saving at roughly a third rather than half; that is the intended trade.
+- **No speculative breadth.** Two candidate designs, not four, once a
+  measurement has ruled the others out. Never build a phase whose result
+  cannot change the decision.
+
+THE ONE PASS NEVER TO CUT: independent verification by agents that did not
+write the code. On that task it found nine defects the author's own
+self-review missed, including one that would have halted the live book on
+its first boot. Note also that a mid-run spend limit kills agents whose
+tokens are already spent — prefer fewer, better-scoped agents over a wide
+fan-out that may die halfway.
