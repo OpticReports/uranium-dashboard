@@ -789,6 +789,8 @@ export interface RateEnsembleMeeting {
   missing?: Record<string, string>;
   /** set when the futures leg anchored on spot EFFR instead of a contract */
   anchor?: string | null;
+  /** set when the futures leg had to solve a poorly-conditioned side */
+  soft?: string | null;
   blend: Record<string, number>;
 }
 

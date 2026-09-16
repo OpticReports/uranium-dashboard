@@ -273,8 +273,26 @@ def test_gate_t5_short_history_is_stale_not_a_verdict():
 
 
 def test_gate_calendar_fomc_exhaustion_is_loud():
-    cal = build_calendar(date(2027, 1, 5))
+    # the table is shared with sources/fed_futures.py and is published through
+    # 2027, so exhaustion now lands in 2028 — it must still be LOUD when it does
+    cal = build_calendar(date(2028, 1, 5))
     assert any(e.get("warning") and "EXHAUSTED" in e["event"] for e in cal), cal
+
+
+def test_gate_fomc_table_is_extended_before_it_runs_out():
+    """Fails in CI ~9 months before the panel would start degrading.
+
+    The rate-path panel prints six upcoming meetings, about nine months out,
+    and the futures leg needs to know which months hold a decision; past the
+    table every month reads UNKNOWN and the anchors quietly get worse. When
+    this fails, transcribe the next year's dates from
+    federalreserve.gov/monetarypolicy/fomccalendars.htm into
+    app/sources/fed_futures.py FOMC_MEETINGS (both days of each meeting).
+    """
+    from app.sources.fed_futures import DECISION_DAYS
+    need = date.today() + timedelta(days=275)
+    assert max(DECISION_DAYS) >= need, (
+        f"FOMC table ends {max(DECISION_DAYS)}, needs to reach {need}")
 
 
 # ── the two calibration points the registration was validated on ─────────────

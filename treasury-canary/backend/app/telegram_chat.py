@@ -110,11 +110,17 @@ def build_context() -> str:
     try:
         from .sources.rate_markets import ensemble
         ens = ensemble()
-        parts.append("RATE-PATH ODDS (accuracy-weighted Polymarket+Kalshi):")
+        parts.append("RATE-PATH ODDS (accuracy-weighted Polymarket+Kalshi"
+                     "+fed-funds futures):")
         for m in ens.get("meetings", [])[:4]:
             b = m.get("blend") or {}
+            n_src = len(m.get("sources") or {})
+            priced = sum(1 for p in (m.get("sources") or {}).values() if p)
+            # say how THIN the blend is: a 2-of-3 renormalized row should not
+            # be quoted with the same confidence as a 3-of-3 one
             parts.append(f"  {m['date']}: " + " ".join(
-                f"{k}={v:.0%}" for k, v in b.items()))
+                f"{k}={v:.0%}" for k, v in b.items())
+                + f" [{priced}/{n_src} sources]")
         w = ens.get("weights", {})
         parts.append("  source weights: " + ", ".join(
             f"{k} {v['weight']:.0%} (brier {v['brier']}, n={v['n']})"

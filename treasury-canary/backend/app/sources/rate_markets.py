@@ -307,7 +307,18 @@ def ensemble(now: float | None = None) -> dict:
             else:
                 hit["sources"][src] = probs
                 hit["date"] = min(hit["date"], d)
-    upcoming = sorted(m["date"] for m in merged if m["date"] >= today)
+    # both venues date a meeting from their own UTC close timestamp, which can
+    # land a day either side of the decision; snap to the Fed's own published
+    # day so the label, the ZQ day-count and the two venues all agree
+    try:
+        from .fed_futures import snap_to_decision
+        for mm in merged:
+            snapped = snap_to_decision(datetime.fromisoformat(mm["date"]).date())
+            if snapped is not None:
+                mm["date"] = snapped.isoformat()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("FOMC date snap failed: %s", exc)
+    upcoming = sorted({m["date"] for m in merged if m["date"] >= today})
     fut_notes: dict[str, str] = {}
     try:
         from .fed_futures import implied_probs
@@ -333,6 +344,7 @@ def ensemble(now: float | None = None) -> dict:
         meetings.append({"date": m["date"], "sources": per,
                          "missing": missing,
                          "anchor": fut_notes.get("_anchor:" + m["date"]),
+                         "soft": fut_notes.get("_soft:" + m["date"]),
                          "blend": blend(per, weights)})
     return {"meetings": meetings[:6], "weights": weights,
             "buckets": BUCKETS, "labels": LABELS,

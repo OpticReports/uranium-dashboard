@@ -1,5 +1,7 @@
 """Rate-ensemble gates: bucket parsing, weight math, blend normalization,
 degradation. All offline."""
+from datetime import date
+
 from app.sources.rate_markets import (BACKTEST, BUCKETS, blend, brier,
                                       _bucket_kalshi, _bucket_pm, _norm,
                                       source_weights)
@@ -150,102 +152,200 @@ def test_gate_buckets_stable():
 # The panel showed "2/3 sources" on the two NEAREST meetings: the prior
 # meeting-free month's ZQ contract had expired and stopped quoting, which left
 # the first meeting with no r_start, and the broken chain then took out the
-# second one too. These gates encode the anchor ladder and the late-month rule.
+# second one too. These gates encode the anchor ladder, the well-conditioned
+# leg choice, and the reason strings a dash on the panel now carries.
 
 _QUOTES = {(2026, 9): 96.265, (2026, 10): 96.125, (2026, 11): 96.03,
            (2026, 12): 95.91, (2027, 1): 95.85, (2027, 2): 95.78}
 _MEETINGS = ["2026-09-16", "2026-10-28", "2026-12-09", "2027-01-27"]
+_TODAY = date(2026, 9, 16)
+
+
+def _probs(meetings=None, quotes=None, effr=3.63, notes=None, today=_TODAY,
+           effr_date=None):
+    from app.sources.fed_futures import implied_probs
+    return implied_probs(meetings or _MEETINGS, prices=quotes or _QUOTES,
+                         effr=effr, notes=notes, today=today,
+                         effr_date=effr_date)
 
 
 def test_gate_expired_prior_contract_does_not_blank_the_near_meetings():
-    from app.sources.fed_futures import implied_probs
-    # August 2026 has settled and no longer quotes -> without a spot anchor
-    # BOTH nearest meetings drop out, each with a stated reason
+    # August 2026 has settled and no longer quotes, so the September row has no
+    # anchor and drops out with a stated reason (October survives on its own
+    # because a late-month meeting solves r_start from its own contract)
     notes: dict = {}
-    bare = implied_probs(_MEETINGS, prices=_QUOTES, notes=notes)
-    assert "2026-09-16" not in bare and "2026-10-28" not in bare
-    assert "anchor" in notes["2026-09-16"] and "anchor" in notes["2026-10-28"]
-    # spot EFFR restores them: ZQ settles on the average of exactly this rate
+    bare = _probs(effr=None, notes=notes)
+    assert "2026-09-16" not in bare
+    assert "expired" in notes["2026-09-16"] or "not quoted" in notes["2026-09-16"]
+    assert "spot EFFR is unavailable" in notes["2026-09-16"]
+    # spot EFFR restores it: ZQ settles on the average of exactly this rate
     notes2: dict = {}
-    out = implied_probs(_MEETINGS, prices=_QUOTES, effr=3.63, notes=notes2)
+    out = _probs(notes=notes2)
     assert set(out) == set(_MEETINGS), "every meeting must price"
     for d in _MEETINGS:
         assert abs(sum(out[d].values()) - 1.0) < 1e-6
-    # Sep 16, 30-day month: 3.735 = (16/30)*3.63 + (14/30)*r_end -> r_end 3.855
-    # -> delta +0.225 -> 0.900 steps -> hold 0.100 / hike 0.900
-    assert abs(out["2026-09-16"]["hike25p"] - 0.900) < 0.005
-    assert abs(out["2026-09-16"]["hold"] - 0.100) < 0.005
-    assert notes2["_anchor:2026-09-16"].startswith("r_start anchored on spot EFFR")
-    # the anchor note is for the FIRST meeting only
+    # Sep 16, 30-day month, next month holds a decision so the month average
+    # solves r_end: 3.735 = (16/30)*3.63 + (14/30)*r_end -> 3.855, delta +22.5bp
+    # -> 0.900 steps -> hold 0.100 / hike 0.900
+    assert out["2026-09-16"] == {"cut50p": 0.0, "cut25": 0.0,
+                                 "hold": 0.1, "hike25p": 0.9}
+    # the anchor note names WHY the contract leg was skipped. Offline the
+    # reason is "not quoted" (injected prices have no expiry by design); the
+    # live path says "has expired" — both come from the same variable, so the
+    # skip note and the anchor note can never disagree
+    assert notes2["_anchor:2026-09-16"].startswith("r_start is spot EFFR 3.63%")
+    assert "not quoted" in notes2["_anchor:2026-09-16"]
     assert not any(k.startswith("_anchor:") and k != "_anchor:2026-09-16"
                    for k in notes2)
 
 
-def test_gate_effr_anchors_only_the_first_meeting():
-    from app.sources.fed_futures import implied_probs
+def test_gate_late_month_solves_the_side_the_month_measures():
+    # Oct 28 leaves post_frac 0.097: solving r_end would divide by 0.097 and
+    # amplify quote error ~10x, so r_end comes off the meeting-free November
+    # contract (3.97) and the month average solves r_start (divide by 0.903).
+    # r_start = (3.875 - 0.0968*3.97)/0.9032 = 3.8649 -> delta +10.5bp
+    # -> 0.4204 steps -> hold 0.5796 / hike 0.4204
+    out = _probs()
+    assert abs(out["2026-10-28"]["hike25p"] - 0.4204) < 0.001
+    # the row must depend on its OWN month's contract — the earlier attempt
+    # took r_start from the chain and ignored it entirely
+    moved = _probs(quotes={**_QUOTES, (2026, 10): 96.145})
+    assert moved["2026-10-28"] != out["2026-10-28"]
+    # ...and must NOT inherit the chain: breaking the September row leaves
+    # October priced, because the late-month form is self-contained
+    q = {k: v for k, v in _QUOTES.items() if k != (2026, 9)}
+    solo = _probs(quotes=q)
+    assert solo["2026-10-28"] == out["2026-10-28"]
+    # the well-conditioned rows are untouched by any of this
+    assert abs(out["2026-12-09"]["hike25p"] - 0.6764) < 0.001
+
+
+def test_gate_ill_conditioned_readings_say_so():
+    from app.sources.fed_futures import SOFT_FRAC
+    # drop November: October can no longer read r_end off it and must divide
+    # by 0.097 — the answer still prints, but flagged with its amplification
+    notes: dict = {}
+    q = {k: v for k, v in _QUOTES.items() if k != (2026, 11)}
+    out = _probs(quotes=q, notes=notes)
+    assert "2026-10-28" in out
+    soft = notes["_soft:2026-10-28"]
+    assert "10x" in soft and "is not quoted" in soft
+    assert 3 / 31 < SOFT_FRAC
+
+
+def test_gate_effr_anchors_only_the_first_upcoming_meeting():
     # the first meeting's own month has no contract, so it cannot price; the
     # second must NOT then borrow spot EFFR — a decision sits in between
-    q = {k: v for k, v in _QUOTES.items() if k != (2026, 9)}
     notes: dict = {}
-    out = implied_probs(_MEETINGS, prices=q, effr=3.63, notes=notes)
-    assert "2026-09-16" not in out and "2026-10-28" not in out
+    q = {k: v for k, v in _QUOTES.items() if k != (2026, 9)}
+    out = _probs(quotes=q, notes=notes)
+    assert "2026-09-16" not in out
     assert "no ZQ contract quoted for 2026-09" in notes["2026-09-16"]
-    assert "2026-12-09" in out          # re-anchors on meeting-free November
+    assert not any(k.startswith("_anchor:") for k in notes)
+    # a PAST meeting never takes today's spot rate as its anchor
+    notes2: dict = {}
+    _probs(meetings=["2026-07-29"] + _MEETINGS, notes=notes2,
+           today=date(2026, 9, 16))
+    assert "_anchor:2026-07-29" not in notes2
 
 
-def test_gate_late_month_meeting_uses_the_next_contract():
-    from app.sources.fed_futures import implied_probs, NEXT_MONTH_PREF
-    # Oct 28 of a 31-day month leaves post_frac 0.097: solving the month
-    # average would amplify quote error ~10x, so r_end must come from the
-    # meeting-free November contract instead (96.03 -> 3.97)
-    assert 3 / 31 < NEXT_MONTH_PREF
-    out = implied_probs(_MEETINGS, prices=_QUOTES, effr=3.63)
-    # r_start = Sep's implied r_end 3.8551, r_end = 3.97 -> delta 0.1149
-    # -> 0.4596 steps -> hold 0.540 / hike 0.460
-    assert abs(out["2026-10-28"]["hike25p"] - 0.460) < 0.01
-    # perturbing ONLY the October contract must barely move the answer; under
-    # the month-average solve the same perturbation moves it ~10x as far
-    q2 = {**_QUOTES, (2026, 10): 96.125 - 0.02}
-    out2 = implied_probs(_MEETINGS, prices=q2, effr=3.63)
-    assert abs(out2["2026-10-28"]["hike25p"] - out["2026-10-28"]["hike25p"]) < 1e-9
+def test_gate_a_skipped_meeting_breaks_the_chain():
+    # Strip October's own contract AND November's: October cannot price, so
+    # December — whose prior-month anchor is the missing November contract —
+    # has only the chain left. That chain now holds SEPTEMBER's r_end, a rate
+    # from before the October decision, and must be refused rather than used.
+    notes: dict = {}
+    q = {k: v for k, v in _QUOTES.items() if k not in ((2026, 10), (2026, 11))}
+    out = _probs(quotes=q, notes=notes)
+    assert "2026-09-16" in out                      # still anchors on spot EFFR
+    assert "2026-10-28" not in out
+    assert "2026-12-09" not in out, "a stale chain must never price a row"
+    assert "no anchor rate" in notes["2026-12-09"]
 
 
-def test_gate_next_month_anchor_refuses_a_meeting_month():
-    from app.sources.fed_futures import implied_probs, _meeting_month
-    # December 2026 holds a meeting, so a late-November meeting could not read
-    # r_end off it; and a month outside the verified table is never "free"
-    assert _meeting_month(2026, 12, set()) is True
+def test_gate_meeting_days_come_from_the_fed_not_the_markets():
+    from app.sources.fed_futures import (DECISION_DAYS, FOMC_MONTHS,
+                                         snap_to_decision, _meeting_month)
+    # a market date a day either side of the decision snaps to the Fed's day,
+    # so post_frac is not driven by a UTC truncation artifact
+    assert snap_to_decision(date(2026, 9, 17)) == date(2026, 9, 16)
+    assert snap_to_decision(date(2026, 9, 15)) == date(2026, 9, 16)
+    assert snap_to_decision(date(2026, 9, 21)) is None
+    off_by_one = _probs(meetings=["2026-09-17"] + _MEETINGS[1:])
+    assert off_by_one["2026-09-17"] == {"cut50p": 0.0, "cut25": 0.0,
+                                        "hold": 0.1, "hike25p": 0.9}
+    # the month set is DERIVED from both days of every meeting, so a meeting
+    # spanning a month boundary would mark both months
+    assert (2026, 9) in FOMC_MONTHS and (2026, 11) not in FOMC_MONTHS
     assert _meeting_month(2026, 11, set()) is False
-    assert _meeting_month(2029, 5, set()) is None
-    assert _meeting_month(2026, 11, {(2026, 11)}) is True    # caller-supplied
-    # a late-month meeting whose next month is a meeting month falls back to
-    # the month-average solve rather than borrowing a blended contract
-    out = implied_probs(["2026-11-25"], prices={(2026, 10): 96.125,
-                                                (2026, 11): 96.03}, effr=3.63)
-    assert out and abs(sum(out["2026-11-25"].values()) - 1.0) < 1e-6
+    assert _meeting_month(2029, 5, set()) is None      # past the table
+    assert date(2027, 12, 8) in DECISION_DAYS          # published through 2027
+
+
+def test_gate_duplicate_meeting_dates_cannot_corrupt_the_chain():
+    dup = _probs(meetings=["2026-09-16", "2026-09-16", "2026-10-28"])
+    clean = _probs(meetings=["2026-09-16", "2026-10-28"])
+    assert dup == clean
 
 
 def test_gate_injected_prices_never_hit_the_network():
     import app.sources.fed_futures as ff
     calls = []
     real = ff.current_effr
-    ff.current_effr = lambda: calls.append(1) or 3.63          # type: ignore
+    ff.current_effr = lambda *a, **k: calls.append(1) or (3.63, _TODAY)  # type: ignore
     try:
-        ff.implied_probs(_MEETINGS, prices=_QUOTES)
+        ff.implied_probs(_MEETINGS, prices=_QUOTES, today=_TODAY)
     finally:
-        ff.current_effr = real                                  # type: ignore
+        ff.current_effr = real                                           # type: ignore
     assert calls == [], "offline test path must not fetch a live EFFR"
 
 
-def test_gate_missing_sources_state_a_reason():
-    from app.sources.rate_markets import blend
-    # the ensemble payload shape the panel reads: every empty source carries a
-    # reason, and the blend renormalizes over the sources that DID price
-    per = {"polymarket": {}, "kalshi": {"hold": 0.6, "hike25p": 0.4},
-           "futures": {"hold": 0.5, "hike25p": 0.5}}
-    missing = {s: "no market listed for this meeting yet"
-               for s, p in per.items() if not p}
-    assert list(missing) == ["polymarket"]
-    b = blend(per, source_weights())
-    assert abs(sum(b.values()) - 1.0) < 1e-6
-    assert 0.4 < b["hike25p"] < 0.5
+def test_gate_effr_is_never_a_pre_decision_rate():
+    import app.sources.fed_futures as ff
+    # the NY Fed publishes EFFR for day T on T+1, so for a day after a decision
+    # the newest print is still the OLD stance. Anchoring the meeting that IS
+    # that decision is fine — the pre-decision rate is exactly r_start — but
+    # carrying it to the NEXT meeting is not.
+    pre = date(2026, 9, 15)
+    assert _probs(notes={}, effr=3.63, effr_date=pre)["2026-09-16"]["hike25p"] == 0.9
+    notes: dict = {}
+    after = _probs(meetings=["2026-10-28", "2026-12-09"], effr=3.63,
+                   effr_date=date(2026, 9, 16), notes=notes,
+                   today=date(2026, 9, 17),
+                   quotes={k: v for k, v in _QUOTES.items()
+                           if k not in ((2026, 11),)})
+    assert "2026-10-28" not in after
+    assert "has not printed since the 2026-09-16 decision" in notes["2026-10-28"]
+    # the median shrugs off a firm month-end print, and the stance filter uses
+    # the newest print's own decision boundary
+    ff._EFFR_CACHE.clear()
+    ff._effr_nyfed = lambda: [(date(2026, 9, 15), 3.63), (date(2026, 9, 14), 3.63),
+                              (date(2026, 8, 31), 3.71)]                  # type: ignore
+    ff._effr_fred = lambda: []                                            # type: ignore
+    try:
+        assert ff.current_effr() == (3.63, date(2026, 9, 15))
+    finally:
+        ff._EFFR_CACHE.clear()
+
+
+def test_gate_ensemble_payload_carries_the_reasons():
+    import app.sources.rate_markets as rm
+    two = {"2026-09-16": {"hold": 0.11, "hike25p": 0.89},
+           "2027-03-17": {"hold": 0.66, "hike25p": 0.34}}
+    orig = (rm.fetch_polymarket, rm.fetch_kalshi, rm._save_store)
+    rm.fetch_polymarket = lambda: {"2026-09-16": two["2026-09-16"]}       # type: ignore
+    rm.fetch_kalshi = lambda: two                                          # type: ignore
+    rm._save_store = lambda d: None                                        # type: ignore
+    try:
+        out = rm.ensemble()
+    finally:
+        rm.fetch_polymarket, rm.fetch_kalshi, rm._save_store = orig        # type: ignore
+    by = {m["date"]: m for m in out["meetings"]}
+    assert "2027-03-17" in by
+    far = by["2027-03-17"]
+    assert far["missing"]["polymarket"] == "no market listed for this meeting yet"
+    assert set(far["sources"]) == {"polymarket", "kalshi", "futures"}
+    assert abs(sum(far["blend"].values()) - 1.0) < 1e-6
+    for m in out["meetings"]:                      # every empty source explains
+        for src, probs in m["sources"].items():
+            assert bool(probs) != (src in m["missing"])

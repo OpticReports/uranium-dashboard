@@ -265,10 +265,14 @@ def cond_t5(move_dates: list, move_vals: list,
 
 
 # ── calendar (the "get in earlier" mechanism) ────────────────────────────────
-# FOMC dates are the Fed's published 2026 schedule; verify against
-# federalreserve.gov when 2027 is added. Everything estimated is flagged.
-FOMC_2026 = ["2026-09-15", "2026-09-16", "2026-10-27", "2026-10-28",
-             "2026-12-08", "2026-12-09"]
+# FOMC dates come from ONE transcribed table, shared with the futures source
+# (sources/fed_futures.py FOMC_MEETINGS, from federalreserve.gov, retrieved
+# 2026-09-16, published through 2027). Keeping a second hand-written copy here
+# is how the two drift apart; the flattened day list below is the same shape
+# this module always used. Everything estimated is flagged.
+from ..sources.fed_futures import FOMC_MEETINGS as _FOMC_MEETINGS  # noqa: E402
+
+FOMC_2026 = [d for pair in _FOMC_MEETINGS for d in pair]
 
 
 def _next_qra(today: date) -> date:
