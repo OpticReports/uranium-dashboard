@@ -345,7 +345,17 @@ def pulse():
             # an external monitor cannot tell a dead leg from a quiet one.
             "legs": {n: {"in_position": l.qty != 0.0,
                          "entry_open": l.entry_cloid is not None,
+                         # a VENUE stop only. A subordinate leg on an
+                         # opposed book reads false here with
+                         # stop_mode "engine" (docs/NETTING_FIX_DESIGN.md)
                          "stop_placed": l.stop_cloid is not None,
+                         "stop_mode": getattr(l, "stop_mode", None),
+                         # exposure the venue netted away that is owed to
+                         # the engine's position (flag only: no sizes on
+                         # the unauthenticated surface)
+                         "netted": bool(getattr(l, "netted_qty", 0.0)),
+                         "reest_open": getattr(l, "reest_cloid", None)
+                         is not None,
                          "engine_halted": l.engine_halted}
                      for n, l in st.legs.items()}}
 
@@ -433,7 +443,12 @@ RAMP_V4_REQUIRED = {"entry_long": 2, "entry_short": 2, "stop_placed": 2,
                     "stop_filled": 1, "signal_exit": 2, "chase": 1,
                     "post_only_cross": 1, "restart_with_position": 1,
                     "config_change": 1, "drill_cycle": DRILL_CYCLE_NEED,
-                    "halt": 1, "resume": 1}
+                    "halt": 1, "resume": 1,
+                    # netted venue (docs/NETTING_FIX_DESIGN.md): the R
+                    # order is a NEW live order class - exposure the venue
+                    # netted away re-opened toward the engine. Unwitnessed
+                    # until an opposed episode ends in a netting event.
+                    "netted_reopen": 1}
 
 
 def _ramp_v4(st) -> dict:

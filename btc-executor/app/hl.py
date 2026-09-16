@@ -570,8 +570,11 @@ class HyperliquidVenue:
             # find 2026-09-01).
             if den > 0 and (filled <= 0.0 or den >= filled - 1e-9):
                 avg = num / den
+        # `raw` is the venue's own word (e.g. reduceOnlyCanceled vs
+        # canceled) so a CANCELLED read can be told apart in the event log
+        # (docs/NETTING_FIX_DESIGN.md N10); no caller branches on it.
         return {"status": status, "filled_qty": filled,
-                "avg_price": float(avg) if avg else None}
+                "avg_price": float(avg) if avg else None, "raw": raw}
 
     FILLS_CACHE_S = 10.0
 
