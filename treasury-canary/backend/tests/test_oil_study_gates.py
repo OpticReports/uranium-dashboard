@@ -145,7 +145,7 @@ def test_channel_strings_match_the_frozen_study_numbers():
     assert f"{d2_hits} of 11" in text and f"{d2_fp} named false positives" in text
     assert f"{d1_recall.replace('/', ' of ')}" in text and f"{d1_fp} false positives" in text
     assert f"{month}% vs {base}%" in text
-    assert f"{dd}% vs {ddb}% base" in " ".join(p["detail"] for p in oil["parts"])
+    assert f"{dd}% of months vs {ddb}% base" in " ".join(p["detail"] for p in oil["parts"])
     assert f"dAUC {b_dauc:.3f} to {a_dauc:.3f}" in text
 
 
