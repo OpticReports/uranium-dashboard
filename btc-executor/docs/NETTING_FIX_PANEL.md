@@ -80,3 +80,108 @@ Files under the session scratchpad (not committed). "pinned" = the test asserted
 | test_scratch_netting_integrity A (TI-1 correct) | fail | still fails on its own fixture (seeds a live trend ref without `entry_booked`, which no code path produces); the scenario is the R1 gate ×6 |
 | test_scratch_B2 (TI-2) | fail | pass |
 | test_scratch_F2 (TI-4, TI-8) | fail | fail — disclosed above |
+
+---
+
+# Independent verification (round 2) — 2026-09-16
+
+The stages the panel could not run (verify, mutation sweep) ran here, on the
+second pass `980c3f3`: **24 skeptic agents** (two per finding — "is it really
+fixed" and "did the fix break something", each writing and running repros
+against the real executor) and a **24-mutation sweep**. 28 of 29 agents
+completed; only the synthesis write-up hit the spend limit, so this record is
+written by the builder from the agents' own returned data and repros.
+
+## VERDICT: MERGE WITH FIXES — all applied in the round-3 commit on this branch.
+
+Every one of the eleven fixes verified as genuinely fixed, across variants the
+builder had not tested (both LEGS orders, engine-flat vs still-reporting,
+partial fills, UNKNOWN reads at the worst moment, restarts mid-flow, the venue's
+`triggered`→OPEN instant). **The fixes themselves introduced nine defects, six
+SERIOUS** — all reproduced, all now fixed and gated.
+
+## Fixes verified (11/11)
+
+| finding | verdict | decided by |
+|---|---|---|
+| PL-1 residue | FIXED | 15 variants incl. partial trigger fill, opposed dominant, under-floor residue, restart |
+| PL-2 floor/corroboration | FIXED | 12 variants; the same file on `cfd2936` reproduces the original in every one |
+| R1/F5/TI-1 trend-dominant | FIXED | 20 variants; all 6 `R1_original` variants halt on `cfd2936` |
+| R2 under-floor close | FIXED | no order storm; ledger intact |
+| R3/F2 close ref | FIXED | persisted before the send, survives crash/restart, partial, reject, unfilled IOC |
+| F1/F2 unsettled R | FIXED | deferral holds 5 polls, books once on recovery, survives a fresh boot |
+| F3 exact cancel | FIXED | no `leg_sync_error`, closes cleanly |
+| F4 top-up | FIXED | tops up once; restart-mid-flow clean |
+| F1-engine/F6 entry_booked | FIXED | 7 variants; one "not fixed" verdict's variant **also reproduces on `cfd2936`** (pre-existing, not a regression of the fix) |
+| TI-2 lag | FIXED | 84-case sweep |
+| TI-3/R5/R6 R gating | FIXED | cap, engine-halt, blind, diverged, restart, partial-R all correct |
+
+## Regressions the fixes introduced — all fixed in round 3
+
+| id | sev | what the fix broke | round-3 fix | gate |
+|---|---|---|---|---|
+| V1 | SERIOUS | `_absorb_fired_stop` now means "took the leg flat", but the second look read it as "the stop filled" — a residue absorbed there halted on the ledger it had just corrected, on all three diverged doors | re-check `_stop_backing` on any RE-ATTRIBUTION, not only on flat | `test_gate_V1_…` (×6: 3 doors × 1–2 `triggered` reads) |
+| V2 | SERIOUS | `blind` was folded into `resolved`, so the subordinate head demoted — cancelling a REAL stop — with the venue unreadable | `blind` is its own return; every caller touches nothing | `test_gate_V2_…` |
+| V4 | SERIOUS | the FILLED door fell through to placement when the attribution FAILED → placed a stop off belief and overwrote the FILLED ref, losing the fill | fall through only when the attribution succeeded | `test_gate_V4_…` |
+| V5 | MINOR | the choke point's resolved path never re-applied the subordinate rule → a wrong-sided stop sized to the whole net | `_subordinate()` helper called from both places | covered by V1/V2 fixtures |
+| V6 | SERIOUS | the lag heuristic fired on a close whose leg was already flat (its stop absorbed it first) — "no change" is correct there — burning the counter into a false halt that flattened a healthy book | the rule applies only while the leg still holds what the fill should have removed | `test_gate_V6_…` |
+| V7 | SERIOUS | `entry_accounted` was reset only by `clear_entry()`, but four sites null the ref directly and it persists → the first entry after a halt/resume was cancelled or its fill orphaned, ending in double exposure | every ref drop goes through `clear_entry()`; a fresh entry resets the marker | `test_gate_V7_…` |
+| V9 | SERIOUS | `target_qty` survived a halt → after a KELLY_M cut every adverse move sent a taker top-up toward the OLD size, which `test_gate_F4b` claims is impossible | zeroed with the ledger; a new entry sizes itself | `test_gate_V9_…` |
+| V10 | SERIOUS | the top-up chase had no venue corroboration (unlike the R order) → market-bought a hand-closed leg back off belief | requires `_stop_backing == ok`, else pages `leg_unmirrored` | `test_gate_V10_…` |
+| V11 | SERIOUS | the `entry_booked` migration read "what the leg holds now" — wrong for a leg reduced by netting → **the first boot of the new build on the live state file re-books the difference and halts** | migrate from what the ref booked; carry the old ACCOUNTED marker | `test_gate_V11_…` |
+| V12 | SERIOUS | **grace defers the halt but the leg loop keeps going**, so the other leg's entry/chase/R went out against a venue already judged not to back the ledger — defeating `test_gate_netting_opening_orders_need_exact_corroboration` for exactly that window | an unresolved mismatch sets `entries_ok = False` for every leg | `test_gate_V12_…` |
+| V13 | MINOR | the mismatch counter was never reset by a clean poll, so one stale read stole grace from the next, unrelated event for the life of the process | a clean poll ends the run | `test_gate_V13_…` |
+| V14 | MINOR | the cross-leg re-open ignored `exit_flag`, buying a position the same poll's exit branch calls "nothing to re-open" | skip and release the debt | `test_gate_V14_…` |
+| V15 | NOTE | an R that filled but read UNKNOWN forever left the venue holding an unstopped position with a flat ledger, under the drift tolerance and silent | RED `reest_unsettled` | verified by event-log read |
+
+## Mutation sweep: 19 of 24 killed, 5 survivors — all now gated
+
+| survivor | why the suite missed it | gate added |
+|---|---|---|
+| M11 close ref not persisted before the send | no gate sent a close the venue ACCEPTED and then failed to answer for | `test_gate_M11_…` (asserts the ref is on disk) |
+| M16 `clear_netting` also clears the R ref | **equivalent mutant today** — every call site settles first; the I7 property was asserted nowhere at the ledger level | `test_gate_M16_…` |
+| M20 absorb doesn't clear the stop ref on a residue | PL-1's residue differs from `stop_qty`, so the churn guard lets the placement through anyway | `test_gate_M20_…` (residue == stale size) |
+| M21 `_under_mirrored` uses fresh sizing | F4/F4b only cover the direction where today's sizing ≥ the entry's, where the chase's own `min()` hides the basis | `test_gate_M21_…` |
+| M23 `_settle_close` cancels the stop before knowing the fill | no gate sent an X the venue leaves UNFILLED | `test_gate_M23_…` |
+
+## Round 3 introduced nothing (A/B verified)
+
+Every verification repro was re-run against round 3 and against a worktree at
+`980c3f3`. The eight that still fail behave **identically on both**, so they are
+pre-existing, not new. The repros that *pinned* the nine regressions have all
+flipped to failing — that is the proof the regressions are gone.
+
+## Pre-existing, disclosed, NOT fixed here
+
+- **A restart inside the ≤20s window after a stop fill re-enters the leg.** Boot's
+  phantom-clear (which predates all netting work) adopts the flat venue and zeroes
+  the legs; the engine polls its own stop every 60s, so it still reports the
+  position and the chase re-enters it. `stopped_entry_ts` is the guard and the
+  phantom-clear does not set it. Cost: one taker round trip, then the engine
+  catches up. Repro `test_ti2_restart.py::test_D0`.
+- **PL-3 class** (a swallowed cancel of a consumed leg's maker remainder; a late
+  print on an ACCOUNTED ref) — the round-1 disclosure that "`entry_booked` keeps
+  any later prints correctly attributed" is **false as written**: `_release_entry_ref`
+  clears an ACCOUNTED ref that reads FILLED without booking the remainder. Repros
+  `test_f3_attack2.py`, `test_f1e_f6_verify.py`.
+- **A consumed print that was never booked** (the maker fill and the stop land in
+  one poll and the entry read blips UNKNOWN once) is re-booked from its record on
+  the next poll. Reproduces on `cfd2936` too.
+- **`netted_shortfall` parks a still-held leg on `stopped_entry_ts`**, so branch 1
+  returns before the `exit_flag` fast path and the stop goes unmaintained until the
+  engine reports flat — one bar late. Present since `cfd2936`.
+- The venue's own reduce-only rejection is still not modelled by the stock
+  `FakeVenue`; `FakeVenue.order_status` returns `None` for an unknown cloid where
+  `hl` returns CANCELLED.
+
+## Honesty box
+
+- Could not be tested without the live venue: real `reduceOnlyCanceled` timing,
+  real partial-trigger behaviour, real rate-limit shapes. Everything here is
+  `HLFake2`, which models the venue from its own order records.
+- The mismatch counter is in-memory: a restart mid-grace restarts the 3-poll budget.
+- Grace costs up to ~60s before a genuine divergence halts. During it **no order of
+  any kind goes out** (V12), and the halt's flatten is unchanged.
+- Three rounds of review on this change found 16 → 9 → 0 new defects. The last
+  round is the first with a clean ratio, and it is the first that was verified by
+  agents that did not write the code.
