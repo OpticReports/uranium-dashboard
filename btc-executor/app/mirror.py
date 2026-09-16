@@ -122,6 +122,15 @@ STOP_REPLACE_MAX = 3
 # storm fails), short enough that isolated blips cannot accumulate across a
 # multi-week position (re-gate 2026-08-27 N1).
 STOP_OK_DECAY_POLLS = 20
+# Re-establish attempts per netting event before the consumed exposure is
+# dropped with a RED netted_shortfall (docs/NETTING_FIX_DESIGN.md N2). Same
+# shape as STOP_REPLACE_MAX: bounded, then loud, never a storm.
+REEST_MAX = 3
+# A consumption postcondition (ledger sum == venue net after a netted fill)
+# that keeps failing for this many polls halts LEDGER_DIVERGENCE (N6). One
+# miss is a read racing its own fill; three in a row is a real divergence.
+NETTING_MISMATCH_HALT_POLLS = 3
+NETTING_REREAD_SLEEP_S = 2.0       # between position re-reads on a mismatch
 # Hyperliquid agent (API) wallets expire on a date the venue tells us.
 # Expiry is a TOTAL loss of write access, protective orders included, so the
 # halt must fire while the key still WORKS - a halt at T-0 cannot flatten.
@@ -205,6 +214,48 @@ class LegLedger:
     # doing so resurrected a phantom ledger position and armed a live stop on
     # a flat venue (counter-agent find 2026-08-11, pre-existing FATAL class).
     stopped_entry_ts: int | None = None
+    # ---- netted venue (docs/NETTING_FIX_DESIGN.md, 2026-09-16) ----
+    # Hyperliquid holds ONE net position per coin. When the two legs
+    # oppose each other the venue sees only their sum, and a per-leg order
+    # sized to one leg is resized (a stop) or flipped through (an entry) by
+    # the venue with nothing telling the other leg. Both 2026-09 halts.
+    # Size the resting protective stop was placed at. On an opposed book
+    # that is abs(sum of legs), not abs(led.qty); the churn guard compares
+    # it so the stop is re-sized whenever the OTHER leg changes.
+    stop_qty: float = 0.0
+    # "venue": a reduce-only stop rests at the venue for this leg.
+    # "engine": this leg is the SUBORDINATE of an opposed book; its level
+    # is enforced by the engine's own intrabar stop and mirrored here
+    # within a poll. A reduce-only stop for it cannot rest: it points the
+    # wrong way for the net and the venue reduceOnlyCancels it on the next
+    # fill (observed 2026-09-10 23:08:57 and 2026-09-14 00:03:32).
+    stop_mode: str | None = None
+    # SIGNED exposure the ENGINE still reports for this leg but the VENUE
+    # no longer holds, because a reduce-only fill on the other leg netted
+    # it away. Set ONLY by _absorb_netted_fill after a venue-confirmed fill
+    # of our own reduce-only order plus a fresh position read - never from
+    # a position read alone. Re-opened by _reestablish through an
+    # entry-class order, only while the engine keeps reporting the leg.
+    netted_qty: float = 0.0
+    netted_entry_ts: int | None = None
+    # The re-establish (R) order, persisted BEFORE the send like every other
+    # entry-class order (branch 2's "belief is recorded before the
+    # confirm"): reest_n is the burned salt, reest_event_n counts attempts
+    # for the CURRENT consumption event and caps them at REEST_MAX.
+    reest_cloid: str | None = None
+    reest_side: str | None = None
+    reest_qty: float = 0.0
+    reest_n: int = 0
+    reest_event_n: int = 0
+
+    def clear_netting(self) -> None:
+        self.netted_qty, self.netted_entry_ts = 0.0, None
+        self.reest_cloid = self.reest_side = None
+        self.reest_qty, self.reest_event_n = 0.0, 0
+
+    def clear_stop(self) -> None:
+        self.stop_cloid, self.stop_px = None, None
+        self.stop_qty, self.stop_mode = 0.0, None
 
 
 @dataclass
@@ -334,6 +385,16 @@ class Executor:
         self._last_flat_equity = None      # transfer-reconciliation baseline
         self._fill_watch: list[dict] = []  # orders pending a fill-price read
         self._sent_at: dict[str, float] = {}   # per-kind Telegram cooldown
+        # The poll's inputs, stashed by _step_locked so a netted fill on one
+        # leg can re-establish the OTHER leg in the same poll regardless of
+        # LEGS order (docs/NETTING_FIX_DESIGN.md §4.2 _step_locked).
+        self._cur_target: dict = {}
+        self._cur_blend: dict = {}
+        self._cur_equity: float = 0.0
+        self._cur_entries_ok: bool = False
+        # consecutive polls on which a netted-fill attribution failed its
+        # postcondition (N6); reset on any clean attribution
+        self._netting_mismatch_polls: int = 0
         # step() and drill() must never interleave venue mutations: a drill
         # mid-step (or vice versa) would trip the drift check and could
         # entangle drill orders with leg management (RAMP v4)
@@ -782,6 +843,17 @@ class Executor:
             return
         if self.state.halted == "VENUE_CHANGED":
             return          # the ledger describes another exchange entirely
+        # A re-establish order in flight across the restart is booked from
+        # the venue's answer BEFORE the ledger is compared (N9b): a crash
+        # after the R send otherwise reads as a phantom or a surplus.
+        for name, l in self.state.legs.items():
+            if l.reest_cloid:
+                try:
+                    self._settle_reest(name, l)
+                except Exception as exc:  # noqa: BLE001
+                    self._event("RED", "venue_read_failed",
+                                f"boot: {name} re-establish {l.reest_cloid} "
+                                f"unreadable ({exc})")
         ledger_net = sum(l.qty for l in self.state.legs.values())
         net = None
         for attempt in range(3):       # one boot-time blip must not disarm
@@ -827,11 +899,20 @@ class Executor:
                 l.entry_cloid = l.stop_cloid = None
                 l.stop_px = None
                 l.entry_side, l.entry_qty = None, 0.0
+                l.stop_qty, l.stop_mode = 0.0, None
+                l.clear_netting()
             self._save_state()
         elif abs(net - ledger_net) > 1e-9:
+            # BLOCK ENTRIES, not just page (N3): a stale opposed ledger that
+            # the venue does not back must not be allowed to start a
+            # trading loop off its own belief. Same latch the flat-ledger
+            # branch above uses; cleared by _check_drift on exact agreement.
+            self._boot_mismatch = True
             self._event("RED", "position_drift",
                         f"boot: venue={net:.5f} ledger={ledger_net:.5f} BTC "
-                        f"- NOT auto-fixed (ambiguous); verify on {self._venue_label()}")
+                        f"- NOT auto-fixed (ambiguous); new entries BLOCKED "
+                        f"until this reconciles; verify on "
+                        f"{self._venue_label()}")
 
     def attest_coverage(self, note: str = "",
                         acknowledge_unwitnessed: bool = False) -> dict:
@@ -1257,6 +1338,10 @@ class Executor:
                         "blend_out_of_range",
                         "stop_unconfirmed", "entry_unconfirmed",
                         "stop_ref_cleared",
+                        # netted venue (docs/NETTING_FIX_DESIGN.md): true
+                        # every poll while the condition stands
+                        "leg_unmirrored", "unbooked_fill_unprotected",
+                        "book_stop_under_floor", "netting_inconsistent",
                         "position_drift", "entries_blocked", "sub_min_size",
                         # a persistent accept-then-cancel venue condition
                         # paged 4,320x/day before this (2026-08-24)
@@ -1280,7 +1365,12 @@ class Executor:
                       "coverage_provenance_reset", "auto_drill_rearmed"):
             send(f"✅ executor {kind}: {msg} — no action needed")
         elif kind in ("entry_order", "leg_closed", "entry_chase",
-                      "stop_filled_on_venue", "orphan_fill_unwound",
+                      "stop_filled_on_venue", "orphan_fill_booked",
+                      # netted venue: a real order re-opening exposure, and
+                      # the two ledger-only events a human must be able to
+                      # follow on the phone
+                      "reest_order", "leg_reestablished", "leg_netted_out",
+                      "leg_closed_by_netting", "entry_filled_early",
                       # the P&L line for a real exit (Casey 2026-09-01):
                       # amount and % from the venue's own closedPnl
                       "trade_pnl") \
@@ -1334,7 +1424,10 @@ class Executor:
         stays inside max_notional_usd and max_account_lev (of the base)."""
         base = self._base(equity)
         want = self._leg_frac(leg, blend) * base / px
-        other = sum(abs(l.qty) for n, l in self.state.legs.items() if n != leg)
+        # netted_qty counts: it is engine exposure the venue is about to
+        # re-hold, so a fresh entry must leave room for it under the caps
+        other = sum(abs(l.qty) + abs(l.netted_qty)
+                    for n, l in self.state.legs.items() if n != leg)
         cap_notional = min(self.cfg.max_notional_usd,
                            self.cfg.max_account_lev * base)
         room = max(0.0, cap_notional / px - other)
@@ -1635,7 +1728,7 @@ class Executor:
             # first hotfix cut, 2026-08-26). This now governs ONLY whether
             # the LEDGER is zeroed; the flatten above has already happened.
             for name, l in self.state.legs.items():
-                for cloid in (l.entry_cloid, l.stop_cloid):
+                for cloid in (l.entry_cloid, l.stop_cloid, l.reest_cloid):
                     if not cloid:
                         continue
                     stat = self._ostat(cloid)
@@ -1656,6 +1749,8 @@ class Executor:
             for l in self.state.legs.values():
                 l.qty = 0.0
                 l.entry_cloid = l.stop_cloid = None
+                l.stop_qty, l.stop_mode = 0.0, None
+                l.clear_netting()          # nothing is owed on a flat book
                 # stop_px MUST die with the order (live find 2026-08-23):
                 # leaving it set made _maintain_stop's churn guard read the
                 # stale price as "the stop is already where it belongs" and
@@ -1834,6 +1929,8 @@ class Executor:
                 l.qty = 0.0
                 l.entry_cloid = l.stop_cloid = l.entry_side = None
                 l.entry_qty, l.stop_px = 0.0, None
+                l.stop_qty, l.stop_mode = 0.0, None
+                l.clear_netting()
             self._event("RED", "adopt_venue",
                         f"operator adopted venue truth: venue is FLAT, ledger "
                         f"claimed {before} (sum {want}) - all legs zeroed, "
@@ -2034,6 +2131,9 @@ class Executor:
                         f"data_halt={target.get('data_halt')}")
         blend = self._sane_blend(target.get("blend", {}))
         self._check_exposure(equity, blend)
+        # stashed for the cross-leg calls a netted fill makes (see __init__)
+        self._cur_target, self._cur_blend = target, blend
+        self._cur_equity, self._cur_entries_ok = equity, entries_ok
         for leg in LEGS:
             # A halt can now fire MID-LOOP (_handle_stop_vanished halts on
             # ledger divergence / unplaceable stops). Without this check the
@@ -2115,6 +2215,11 @@ class Executor:
         led: LegLedger = self.state.legs[leg]
         pend, pos = tl.get("pending"), tl.get("position")
         halted = led.engine_halted      # tracked in _track_engine_halts
+        # An in-flight re-establish order is settled from a venue read
+        # before anything else reads this leg's qty (I7): belief before
+        # confirm, on every branch, regardless of what the engine reports.
+        if led.reest_cloid:
+            self._settle_reest(leg, led)
         # A halted engine book must never receive a NEW entry from us, even
         # if it (wrongly) presents a pending - the engine's own /halt used to
         # leave one resting. Existing positions keep their stops (branch 1).
@@ -2150,6 +2255,15 @@ class Executor:
             # an exit must always be able to run. That is why this sits
             # above every entry path.
             if pos.get("exit_flag"):
+                if led.netted_qty:
+                    # the venue already nets this exposure away and the
+                    # engine is exiting it: there is nothing to re-open and
+                    # nothing to close
+                    self._event("INFO", "netting_released",
+                                f"{leg} exiting per the engine while netted "
+                                f"away ({led.netted_qty}) - nothing to "
+                                f"re-establish")
+                    led.clear_netting()
                 # MAINTAIN THE STOP BEFORE ATTEMPTING THE CLOSE. Two jobs,
                 # and only the second one still needs this call:
                 #  - absorbing a stop that FIRED on this same poll. Round 1
@@ -2192,8 +2306,12 @@ class Executor:
                 # a resting or partly-filled entry cannot fill us back in
                 # after we have closed.
                 if led.entry_cloid:
-                    self._cancel_entry(led, filled_action="flatten"
-                                       if led.qty == 0.0 else "ignore")
+                    r = self._cancel_entry(leg, led, filled_action="flatten"
+                                           if led.qty == 0.0 else "ignore")
+                    if r == "closed":
+                        self._close_leg(leg, led, "orphan_fill")
+                        if self.state.halted:
+                            return
                 if led.qty != 0.0:
                     self._close_leg(leg, led,
                                     f"engine_exit_flag {pos['exit_flag']}")
@@ -2235,7 +2353,16 @@ class Executor:
                 # attempt the close, and if it is not, the head call ran).
                 # Untestable defensive code is a liability, not depth.
                 return
-            if led.qty == 0.0:
+            if led.netted_qty:
+                # exposure the venue netted away: re-open it toward this
+                # engine position through the R order (I6), never through
+                # the chase - the two would overwrite each other's booking
+                self._reestablish(leg, led, tl, blend, equity, entries_ok)
+            elif led.qty == 0.0 or (leg == "pullback" and led.entry_cloid):
+                # qty 0: the ordinary chase. An early-booked maker fill
+                # (defect B) still carries its entry ref: run the same,
+                # idempotent path once so the ref is released and the
+                # entry counted exactly once.
                 self._enter_from_fill(leg, led, pos, blend, equity,
                                       entries_ok)
             if led.qty != 0.0:
@@ -2253,8 +2380,40 @@ class Executor:
             # Identity is the SIGNAL, not the cloid string: entry cloids are
             # salted now (re-review 2026-08-26 binding 8), so the same
             # signal produces different ids across attempts.
-            if led.entry_cloid and led.signal_ts == pend["signal_ts"]:
+            same_signal = led.signal_ts == pend["signal_ts"]
+            if same_signal and led.netted_qty:
+                # consumed while the engine still shows the pending we
+                # filled for: re-open toward it, nothing else this poll
+                self._reestablish(leg, led, tl, blend, equity, entries_ok)
                 return
+            if same_signal and (led.entry_cloid or led.qty != 0.0):
+                # THIS signal's cycle, whether the entry still rests, has
+                # filled and been booked early, or was netted away and
+                # re-established (then it holds qty with no entry ref - a
+                # ref-only check read that as an old cycle and closed it,
+                # then placed a second full-size entry: N1 through the
+                # identity door).
+                # DEFECT B: the venue may have filled a resting entry
+                # already; the engine will not book it until its bar close.
+                # Book it now so every ledger-sum comparison sees it.
+                if led.entry_cloid:
+                    self._book_maker_fill(leg, led)
+                if led.qty != 0.0:
+                    # held on the venue with no engine stop level yet (the
+                    # engine publishes one only with the position). The
+                    # pre-existing unprotected entry window, now LOUD.
+                    self._event("RED", "unbooked_fill_unprotected",
+                                f"{leg} holds {led.qty} BTC filled at the "
+                                f"venue; the engine has not booked it (bar "
+                                f"close) so it has NO stop level and no "
+                                f"venue stop until then")
+                return
+            if led.netted_qty:
+                self._event("INFO", "netting_released",
+                            f"{leg} engine moved to a new signal while "
+                            f"{led.netted_qty} was netted away - nothing "
+                            f"to re-establish")
+                led.clear_netting()
             # Different signal: any qty here is from an older cycle. A fill
             # already carried in led.qty is closed by _close_leg — unwinding
             # it again in _cancel_entry would double-close and leave a naked
@@ -2311,8 +2470,16 @@ class Executor:
             # all - this just makes branch 2 agree with the doctrine branch 3
             # already follows.
             if led.entry_cloid:
-                self._cancel_entry(led, filled_action="ignore" if had_qty
-                                   else "flatten")
+                r = self._cancel_entry(leg, led, filled_action="ignore"
+                                       if had_qty else "flatten")
+                if r == "closed":
+                    self._close_leg(leg, led, "orphan_fill")
+                    if self.state.halted or led.qty != 0.0:
+                        return
+                if r == "unresolved":
+                    # the old order's state is not confirmed: placing a new
+                    # one would overwrite the only handle to it (N1)
+                    return
             if not entries_ok:
                 return
             limit_px = pend.get("limit")
@@ -2379,14 +2546,26 @@ class Executor:
             return
 
         # 3) engine is flat with no pending
+        if led.netted_qty:
+            # the engine no longer holds what the venue netted away:
+            # nothing to re-open, and nothing on the venue to close
+            self._event("INFO", "netting_released",
+                        f"{leg} engine flat while {led.netted_qty} was "
+                        f"netted away - nothing to re-establish")
+            led.clear_netting()
         if led.entry_cloid:
             # orphan-unwind ONLY for an unabsorbed fill (led.qty still 0):
             # a fill living in led.qty is closed once, below. The old
             # unconditional flatten double-closed trend exits — market entry
             # keeps entry_cloid for the position's life — leaving a naked
             # reverse position on the venue (QA rehearsal find, 2026-08-07).
-            self._cancel_entry(led, filled_action="flatten" if led.qty == 0.0
-                               else "ignore")
+            # The orphan is now BOOKED and closed through _close_leg, which
+            # corroborates against the venue and is netting-aware.
+            r = self._cancel_entry(leg, led, filled_action="flatten"
+                                   if led.qty == 0.0 else "ignore")
+            if r == "closed":
+                self._close_leg(leg, led, "orphan_fill")
+                return
         if led.qty != 0.0:
             # A close beside halted=True is still the mirror of a GENUINE
             # engine exit: the engine never flattens on halt, it halts AT a
@@ -2428,7 +2607,19 @@ class Executor:
             if led.entry_qty and led.entry_qty > 0:
                 want = min(want, led.entry_qty)
             st = self.venue.order_status(led.entry_cloid)
-            filled = (st or {}).get("filled_qty", 0.0)
+            if not st or st.get("status") not in ("OPEN", "FILLED",
+                                                  "CANCELLED"):
+                # N4: an UNKNOWN read must not chase full size on top of a
+                # fill that may already rest at the venue. Keep the ref,
+                # book nothing new, retry next poll.
+                self._event("RED", "entry_unconfirmed",
+                            f"{leg} entry {led.entry_cloid} unverifiable at "
+                            f"booking - not chasing; retrying next poll")
+                return
+            filled = float((st or {}).get("filled_qty") or 0.0)
+            # an early-booked fill (defect B) is a confirmed prior read; a
+            # later smaller read must not discard it
+            filled = max(filled, abs(led.qty))
             if st and st.get("status") == "OPEN" and filled < want:
                 self.venue.cancel(led.entry_cloid)
         # A remainder below one contract is NOT chaseable — the old code sent
@@ -2559,10 +2750,13 @@ class Executor:
         """May we place a protective stop at all? -> (verdict, net, want)
         where verdict is "ok" | "diverged" | "blind".
 
-        `place_stop` is NOT reduce-only on this venue, so a stop the venue
-        cannot back OPENS a position instead of closing one. That is the
-        entire 2026-08-26 incident, and it is why every placement path has
-        to ask this question.
+        On Coinbase `place_stop` was NOT reduce-only, so a stop the venue
+        could not back OPENED a position instead of closing one - the
+        entire 2026-08-26 incident, and why every placement path asks this
+        question. Hyperliquid's stops ARE reduce-only (hl.place_stop,
+        always); there the same mistake is quieter, not safer: the venue
+        cancels the mis-sided order and the leg is simply unprotected while
+        the ledger still advertises a stop (Coinbase-era audit, 2026-09-09).
 
         AGGREGATE, not per-leg (re-gate 2026-08-26 B1): pullback and trend
         trade the SAME product, so `venue.position()` returns their NET.
@@ -2600,14 +2794,16 @@ class Executor:
         and `(want > 0)` being False at zero masked net < 0. A flat ledger
         against a venue holding anything is a contradiction like any other.
 
-        DISCLOSED LIMIT (unchanged, and now the ONLY hole): on a netted
-        venue a ledger whose legs cancel AND whose venue really is flat
-        (pullback +0.01, trend -0.01, net 0) is indistinguishable from a
-        wholly phantom ledger. Both read 0 and both pass. Per-leg stops on
-        an opposite-side book therefore still rest on ledger belief alone -
-        and firing one genuinely does open the other side. No position read
-        can separate these; it needs the open-orders sweep (F1). Do not let
-        EXECUTOR.md claim more than this."""
+        DISCLOSED LIMIT (narrowed 2026-09-16, docs/NETTING_FIX_DESIGN.md):
+        on a netted venue a ledger whose legs cancel exactly AND whose venue
+        really is flat (pullback +0.01, trend -0.01, net 0) is still
+        indistinguishable from a wholly phantom ledger by a position read.
+        What changed is what rests on that belief: NOTHING is armed for a
+        cancelling book (a size-0 stop is not a stop), no reduce-only close
+        is sent (net 0), and exposure is re-opened only toward what the
+        engine reports, stop-protected, through _reestablish. A forgotten
+        ARMED order remains detectable only by an open-orders sweep (F1).
+        Do not let EXECUTOR.md claim more than this."""
         legs = [l.qty for l in self.state.legs.values() if abs(l.qty) > 1e-9]
         want = round(sum(legs), 8)
         try:
@@ -2634,6 +2830,428 @@ class Executor:
         if abs(net) + 1e-9 < abs(want) or (net > 0) != (want > 0):
             return "diverged", net, want
         return "ok", net, want
+
+    # ---------- netted venue (docs/NETTING_FIX_DESIGN.md, 2026-09-16) ------
+    #
+    # Hyperliquid holds ONE net BTC position. The ledger is per-leg and,
+    # until this block, every order was per-leg too. On an opposed book
+    # (pullback long, trend short or vice versa) the venue resized the
+    # dominant leg's stop to the net at trigger and reduceOnlyCancelled the
+    # subordinate's, and a maker entry flipped straight through the other
+    # leg - each time leaving one leg claiming exposure the venue no longer
+    # held, which the divergence guard (correctly) refused to trust. Two
+    # halts: 2026-09-10 23:08:57 and 2026-09-14 00:03:34. Both replayed from
+    # the venue's own records in tests/test_netting_gates.py.
+    #
+    # The rule set (invariants I1-I11 in the design doc): the venue holds
+    # the SUM; an opposed book carries exactly ONE reduce-only stop, sized
+    # to the sum, at the dominant leg's level; a fill of ours that nets the
+    # other leg away moves that leg to `netted_qty`, and it is re-opened
+    # ONLY toward what the engine reports, through an entry-class order
+    # with entry doctrine. Every reduce-only order stays reduce-only; no
+    # third order category exists.
+
+    def _book_shape(self) -> tuple[str, str | None, float]:
+        """Pure function of the LEDGER -> (shape, dominant, want).
+
+        shape: "flat" | "single" | "same" | "opposed"; want is the signed
+        sum of the legs - what the venue should hold. On an opposed book
+        the DOMINANT leg is the one whose sign matches the sum; the other
+        is the SUBORDINATE. No venue read: corroboration stays in
+        _stop_backing. Callers book maker fills first (N5) or a fill the
+        venue has already confirmed is missing from the sum."""
+        held = {n: l.qty for n, l in self.state.legs.items()
+                if abs(l.qty) > 1e-9}
+        want = round(sum(held.values()), 8)
+        if not held:
+            return "flat", None, 0.0
+        if len(held) == 1:
+            return "single", next(iter(held)), want
+        if len({q > 0 for q in held.values()}) == 1:
+            return "same", None, want
+        if abs(want) <= 1e-9:
+            # exactly cancelling: no leg dominates, the venue holds nothing
+            # and no reduce-only order could act on it
+            return "opposed", None, 0.0
+        dom = next(n for n, q in held.items() if (q > 0) == (want > 0))
+        return "opposed", dom, want
+
+    def _book_maker_fill(self, leg: str, led: LegLedger) -> None:
+        """Book a fill the VENUE has confirmed on this leg's resting entry
+        BEFORE the engine reports the position (defect B).
+
+        The engine resolves a pullback pending only at its bar close
+        (core.py: "pending limit entry resolves against this bar"), so a
+        maker fill can rest on the venue for up to 4h with led.qty still
+        0. Every ledger-sum comparison then missed it; on an opposed book
+        that read as a sign flip and halted the whole book (2026-09-14
+        00:03:34). Reads only, never sends. Only a venue-CONFIRMED FILLED,
+        or OPEN with filled_qty > 0, books anything; UNKNOWN/None books
+        nothing. The entry refs are KEPT: branch 2's identity dedupe needs
+        them, and an order still partly resting must not be forgotten
+        (N1). A leg in a consumed state is owned by _reestablish and is
+        never re-booked from its (consumed) entry."""
+        if not led.entry_cloid or not led.entry_side:
+            return
+        if led.netted_qty or led.reest_cloid:
+            return
+        if led.qty == 0.0 and led.entry_qty == 0.0:
+            # an ACCOUNTED ref (see _release_entry_ref): the fill this
+            # order produced has already been consumed or closed; a cancel
+            # is pending. Progress the ref instead of re-booking the fill.
+            self._release_entry_ref(leg, led, "accounted")
+            return
+        st = self.venue.order_status(led.entry_cloid)
+        status = (st or {}).get("status")
+        if status not in ("FILLED", "OPEN"):
+            return
+        filled = float((st or {}).get("filled_qty") or 0.0)
+        if filled <= 0.0:
+            return
+        try:
+            filled = self.venue.quantize(filled)
+        except Exception:  # noqa: BLE001
+            pass
+        booked = _side_sign(led.entry_side) * round(filled, 8)
+        if abs(booked - led.qty) <= 1e-9:
+            return
+        led.qty = booked
+        self._event("INFO", "entry_filled_early",
+                    f"{leg} entry {led.entry_cloid} filled {filled} at the "
+                    f"venue before the engine booked it - ledger now "
+                    f"{led.qty} (the engine books at its bar close)")
+        self._save_state()
+
+    def _book_maker_fills(self) -> None:
+        for n, l in self.state.legs.items():
+            if l.entry_cloid:
+                self._book_maker_fill(n, l)
+
+    def _release_entry_ref(self, leg: str, led: LegLedger, why: str) -> None:
+        """Release the entry ref of a leg whose venue exposure is gone,
+        WITHOUT forgetting a live order (N1, both lenses BLOCKING).
+
+        A FILLED ref is fully accounted for (booked, then consumed or
+        stopped) and is cleared as today's FILLED door does. An OPEN ref is
+        a maker order that may still be partly resting: cancel it - that
+        only removes risk - but KEEP the ref until a venue-confirmed
+        terminal read, because clearing it lets branch 2's identity dedupe
+        miss the live order and re-send full size beside the remainder.
+        UNKNOWN keeps the ref: an unverifiable order is possibly live."""
+        if not led.entry_cloid:
+            return
+        st = self.venue.order_status(led.entry_cloid)
+        status = (st or {}).get("status")
+        if status == "OPEN":
+            try:
+                self.venue.cancel(led.entry_cloid)
+            except Exception:  # noqa: BLE001
+                pass
+            # entry_qty 0 marks the ref ACCOUNTED: its fill so far has been
+            # consumed or closed, so _book_maker_fill must not book it
+            # again from the same order while the cancel lands
+            led.entry_qty = 0.0
+            self._event("WARN", "entry_cancelled_on_netting",
+                        f"{leg} entry {led.entry_cloid} was still resting "
+                        f"when its fill was {why} - cancel sent; ref kept "
+                        f"until the venue confirms it terminal")
+            return
+        if status in ("FILLED", "CANCELLED"):
+            led.entry_cloid = led.entry_side = None
+            led.entry_qty = 0.0
+
+    def _plan_attribution(self, leg: str, led: LegLedger,
+                          net: float) -> dict | None:
+        """Given the venue's net AFTER a reduce-only fill on `leg`, propose
+        new qtys for every leg such that their sum == net. None when no
+        consistent attribution exists (an external fill, a read racing its
+        own fill). Pure: nothing is written."""
+        others = {n: l for n, l in self.state.legs.items()
+                  if n != leg and abs(l.qty) > 1e-9}
+        d_pos = led.qty > 0
+        plan = {"consumed": [], "stopped_same": [], "qty": {}}
+        if abs(net) <= 1e-9:
+            plan["qty"][leg] = 0.0
+            for n, l in others.items():
+                if (l.qty > 0) != d_pos:
+                    plan["consumed"].append(n)          # netted away by D
+                    plan["qty"][n] = 0.0
+                else:
+                    # a same-sign leg cannot have been consumed by OUR fill
+                    # (the order was sized to at most the net, which
+                    # includes it): venue flat means its OWN stop fired
+                    st = self.venue.order_status(l.stop_cloid) \
+                        if l.stop_cloid else None
+                    if st and st.get("status") == "FILLED":
+                        plan["stopped_same"].append(n)
+                        plan["qty"][n] = 0.0
+                    else:
+                        return None
+            return plan
+        d_new = round(net - sum(l.qty for l in others.values()), 8)
+        if abs(d_new) <= 1e-9:
+            # D fully closed and the net is exactly the other legs: the
+            # other side flipped the book while D's stop fired (a
+            # subordinate stop that filled BEFORE the flip). Nothing is
+            # consumed - the others hold what the venue holds.
+            plan["qty"][leg] = 0.0
+            return plan
+        if (d_new > 0) != d_pos or abs(d_new) > abs(led.qty) + 1e-9:
+            return None
+        plan["qty"][leg] = d_new
+        return plan
+
+    def _absorb_netted_fill(self, leg: str, led: LegLedger,
+                            entry_ts: int | None, via: str,
+                            net_before: float | None = None,
+                            confirmed_fill: float = 0.0) -> bool:
+        """A reduce-only order of OURS on leg D (`leg`) has FILLED. Re-split
+        the venue's new net across BOTH legs (I4) instead of zeroing D
+        alone, which is what stranded the other leg in both incidents.
+
+        Attributes from the POSITION READ, never from the order's
+        filled_qty: the venue resizes a reduce-only stop to the net at
+        trigger and still records it as origSz filled (09-10: 0.02481 stop,
+        0.00843 traded, order 'filled'), so order_status over-reports
+        exactly when it matters (N6).
+
+        net == 0: D is flat (the stop path also arms stopped_entry_ts);
+        every other leg whose sign OPPOSES D was netted away by this same
+        fill and moves to netted_qty for _reestablish (I6); a SAME-sign
+        other leg is absorbed only if its own stop reads FILLED, otherwise
+        the attribution is inconsistent (N8 - the 2026-08-11 resurrection
+        trap otherwise). 0 < |net| with D's sign: D keeps the remainder.
+        Anything else is re-read; a mismatch that persists
+        NETTING_MISMATCH_HALT_POLLS polls halts (N6). A read equal to
+        `net_before` after a venue-CONFIRMED fill (`confirmed_fill` > 0) is
+        the position endpoint lagging its own fill, and is re-read too.
+        Returns True when the ledger was re-attributed."""
+        plan, net = None, None
+        for attempt in range(3):
+            try:
+                net = self.venue.position()
+            except Exception as exc:  # noqa: BLE001
+                if attempt == 2:
+                    self._event("RED", "netting_blind",
+                                f"{leg} {via} fill confirmed but the venue "
+                                f"position is UNREADABLE ({exc}) - ledger "
+                                f"untouched, retrying next poll")
+                    return False
+                time.sleep(NETTING_REREAD_SLEEP_S)
+                continue
+            self.state.last_venue_read_ts = int(time.time())
+            lagging = (net_before is not None and confirmed_fill > 0
+                       and abs(net - net_before) <= 1e-9)
+            plan = None if lagging else self._plan_attribution(leg, led, net)
+            if plan is not None:
+                break
+            if attempt < 2:
+                time.sleep(NETTING_REREAD_SLEEP_S)
+        if plan is None:
+            self._netting_mismatch_polls += 1
+            n = self._netting_mismatch_polls
+            legs = {k: l.qty for k, l in self.state.legs.items()}
+            self._event("RED", "netting_inconsistent",
+                        f"{leg} {via} fill confirmed but the venue net {net} "
+                        f"cannot be attributed to the ledger {legs} - ledger "
+                        f"untouched ({n}/{NETTING_MISMATCH_HALT_POLLS})")
+            if n >= NETTING_MISMATCH_HALT_POLLS:
+                self.halt("LEDGER_DIVERGENCE",
+                          f"{leg} {via}: venue net {net} vs ledger {legs} "
+                          f"for {n} polls")
+            return False
+        self._netting_mismatch_polls = 0
+        target_legs = (self._cur_target.get("legs") or {})
+        old = led.qty
+        led.qty = plan["qty"][leg]
+        if led.qty == 0.0:
+            led.clear_stop()
+            if via == "stop":
+                led.stopped_entry_ts = entry_ts
+            self._release_entry_ref(leg, led, f"closed by its {via}")
+        for n in plan["stopped_same"]:
+            l = self.state.legs[n]
+            self._event("INFO", "stop_filled_on_venue",
+                        f"{n} stop fired on the same poll as {leg}'s")
+            self._cov("stop_filled")
+            pos = (target_legs.get(n) or {}).get("position") or {}
+            l.qty = 0.0
+            l.clear_stop()
+            l.stopped_entry_ts = pos.get("entry_ts") or l.stopped_entry_ts
+            self._release_entry_ref(n, l, "closed by its stop")
+        for n in plan["consumed"]:
+            l = self.state.legs[n]
+            consumed = l.qty
+            pos = (target_legs.get(n) or {}).get("position") or {}
+            l.qty = 0.0
+            l.netted_qty = round(l.netted_qty + consumed, 8)
+            l.netted_entry_ts = pos.get("entry_ts") if pos else None
+            l.reest_event_n = 0
+            if l.stop_cloid:
+                try:
+                    self.venue.cancel(l.stop_cloid)
+                except Exception:  # noqa: BLE001
+                    pass
+            l.clear_stop()
+            self._release_entry_ref(n, l, "netted away")
+            self._event("WARN", "leg_netted_out",
+                        f"{n} {consumed} BTC was closed by the venue netting "
+                        f"{leg}'s {via} fill - the engine still holds it; "
+                        f"re-establishing toward the engine")
+        if led.qty != 0.0 and abs(led.qty - old) > 1e-9:
+            self._event("INFO", "leg_partially_closed",
+                        f"{leg} {via} fill left {led.qty} (was {old}) per "
+                        f"the venue net {net}")
+        self._save_state()
+        # re-open consumed exposure in THIS poll when the target is known,
+        # regardless of LEGS order
+        for n in plan["consumed"]:
+            tl = target_legs.get(n)
+            if isinstance(tl, dict):
+                self._reestablish(n, self.state.legs[n], tl, self._cur_blend,
+                                  self._cur_equity, self._cur_entries_ok)
+        return True
+
+    def _settle_reest(self, leg: str, led: LegLedger) -> bool:
+        """Resolve an in-flight re-establish order from a venue read.
+        Returns True when there is no order in flight afterwards. Belief
+        before confirm (I7): FILLED/CANCELLED book what the venue confirms
+        and clear the ref; OPEN/UNKNOWN book nothing, drop nothing, and
+        re-send nothing."""
+        if not led.reest_cloid:
+            return True
+        st = self.venue.order_status(led.reest_cloid)
+        status = (st or {}).get("status")
+        if status not in ("FILLED", "CANCELLED"):
+            return False
+        filled = float((st or {}).get("filled_qty") or 0.0)
+        cloid = led.reest_cloid
+        if filled > 0:
+            sgn = _side_sign(led.reest_side or "L")
+            booked = round(filled, 8)
+            led.qty = round(led.qty + sgn * booked, 8)
+            led.netted_qty = round(led.netted_qty - sgn * booked, 8)
+            if sgn * led.netted_qty < 0:
+                led.netted_qty = 0.0
+            self._cov("netted_reopen")
+            self._event("INFO", "leg_reestablished",
+                        f"{leg} re-opened {booked} BTC ({cloid}) after the "
+                        f"venue netted it away - ledger {led.qty}, "
+                        f"still owed {led.netted_qty}")
+        else:
+            self._event("RED", "reest_unfilled",
+                        f"{leg} re-establish {cloid} confirmed terminal and "
+                        f"UNFILLED - attempt {led.reest_event_n} of "
+                        f"{REEST_MAX}")
+        led.reest_cloid = led.reest_side = None
+        led.reest_qty = 0.0
+        self._save_state()
+        return True
+
+    def _reestablish(self, leg: str, led: LegLedger, tl: dict, blend: dict,
+                     equity: float, entries_ok: bool) -> None:
+        """Re-open exposure the venue netted away, toward what the ENGINE
+        reports (I6), through an entry-class order under entry doctrine
+        (I7): refs persisted BEFORE the send, booked only from a venue-
+        confirmed read, UNKNOWN never books / drops / re-sends, attempts
+        capped at REEST_MAX per event. It is the same order category as
+        the trend's branch-2 market entry and the chase (I2) - never
+        reduce-only, because its whole purpose is to open - and it is sent
+        only when the venue corroborates the ledger EXACTLY (I5)."""
+        if not self._settle_reest(leg, led):
+            return
+        if abs(led.netted_qty) <= 1e-9:
+            led.clear_netting()
+            return
+        if led.qty == 0.0 and led.entry_cloid:
+            self._release_entry_ref(leg, led, "netted away")
+        pos, pend = tl.get("position"), tl.get("pending")
+        side_want = "L" if led.netted_qty > 0 else "S"
+        ok_pos = bool(pos) and pos.get("side") == side_want and (
+            led.netted_entry_ts is None
+            or pos.get("entry_ts") == led.netted_entry_ts)
+        ok_pend = (not pos) and bool(pend) and pend.get("side") == side_want \
+            and pend.get("signal_ts") == led.signal_ts
+        if not (ok_pos or ok_pend):
+            self._event("INFO", "netting_released",
+                        f"{leg} is no longer reported by the engine as "
+                        f"{side_want} {led.netted_qty} - nothing to "
+                        f"re-establish")
+            led.clear_netting()
+            self._save_state()
+            return
+        if led.reest_event_n >= REEST_MAX:
+            self._event("RED", "netted_shortfall",
+                        f"{leg} {led.netted_qty} BTC could not be "
+                        f"re-established in {REEST_MAX} attempts - dropping "
+                        f"it; the engine's position is UNMIRRORED until its "
+                        f"next entry")
+            # do not let the chase re-open it at fresh size behind the cap
+            led.stopped_entry_ts = led.netted_entry_ts or led.stopped_entry_ts
+            led.clear_netting()
+            self._save_state()
+            return
+        blocker = None
+        if self.state.halted:
+            blocker = f"executor HALTED ({self.state.halted})"
+        elif not entries_ok:
+            blocker = "feed stale/degraded or boot mismatch"
+        if blocker:
+            self._event("RED", "leg_unmirrored",
+                        f"{leg} {led.netted_qty} BTC owed to the engine's "
+                        f"position is NOT on the venue: {blocker}; will "
+                        f"re-establish when it clears")
+            return
+        try:
+            px = float(self.venue.mid())
+        except Exception as exc:  # noqa: BLE001
+            self._event("RED", "leg_unmirrored",
+                        f"{leg} {led.netted_qty} BTC owed: mid unreadable "
+                        f"({exc})")
+            return
+        size = min(abs(led.netted_qty), self._leg_qty(leg, blend, px, equity))
+        try:
+            size = self.venue.quantize(round(size, 8))
+        except Exception:  # noqa: BLE001
+            pass
+        if size <= 0.0 or self._below_venue_floor(size):
+            self._event("RED", "netted_shortfall",
+                        f"{leg} {led.netted_qty} BTC owed is under the venue "
+                        f"minimum - dropping it; the engine's position is "
+                        f"mirrored short by that much")
+            led.clear_netting()
+            self._save_state()
+            return
+        verdict, net, want = self._stop_backing()
+        if verdict != "ok":
+            self._event("RED", "leg_unmirrored",
+                        f"{leg} {led.netted_qty} BTC owed but the venue does "
+                        f"not corroborate the ledger ({verdict}: net {net} vs "
+                        f"ledger sum {want}) - not opening on it")
+            return
+        led.reest_n += 1
+        led.reest_event_n += 1
+        stamp = pos.get("entry_ts") if ok_pos else pend.get("signal_ts")
+        cloid = f"{leg[0].upper()}-{stamp}-R{led.reest_n}"
+        side = _order_side(side_want)
+        led.reest_cloid, led.reest_side, led.reest_qty = cloid, side_want, size
+        self._save_state()                 # belief BEFORE the send
+        try:
+            self.venue.place_market(side, size, cloid)
+        except Exception as exc:  # noqa: BLE001
+            # the order may or may not exist: keep the ref, the next poll's
+            # read settles it (unknownOid reads CANCELLED and is counted)
+            self._event("RED", "reest_rejected",
+                        f"{leg} re-establish {cloid} raised "
+                        f"({type(exc).__name__}: {exc}) - ref kept as "
+                        f"possibly live; attempt {led.reest_event_n} of "
+                        f"{REEST_MAX}")
+            return
+        self._watch_fill(leg, "reestablish", cloid, px, side)
+        self._event("WARN", "reest_order",
+                    f"{leg} {side} {size} at market to re-establish exposure "
+                    f"the venue netted away (engine still holds it)")
+        self._settle_reest(leg, led)
 
     def _handle_stop_vanished(self, leg: str, led: LegLedger, pos: dict,
                               st: dict | None) -> bool:
@@ -2694,6 +3312,8 @@ class Executor:
         if not trigger or led.qty == 0.0:
             return
         bumped = False                      # this poll already counted a miss
+        cancelled = False                   # own stop read CANCELLED this poll
+        st = None
         # Check for an on-venue stop FILL before the churn guard: the old
         # order hid a fired stop for as long as the trail moved < 5bp, then
         # the flat ledger + engine-still-reports-position window resurrected
@@ -2714,33 +3334,118 @@ class Executor:
             # QUEUED/PENDING/CANCEL_QUEUED to OPEN and returns None on an API
             # failure, and neither may ever provoke a duplicate stop.
             if status == "CANCELLED":
-                if self._handle_stop_vanished(leg, led, pos, st) is False:
-                    return
-                bumped = True
+                # decided AFTER the book shape is known (N5/I9): on a
+                # corroborated SUBORDINATE this is the venue's own
+                # reduceOnlyCancel, expected and silent, not a vanish
+                cancelled = True
             elif st and status == "FILLED":
-                # protective stop fired on-venue; ledger goes flat, and
-                # stopped_entry_ts blocks re-entry from this same engine
-                # position until the engine catches up at its own stop logic
+                # protective stop fired on-venue. RE-ATTRIBUTE THE NET, do
+                # not zero this leg alone (I4): on an opposed book the venue
+                # resized this stop to the net and closed the OTHER leg's
+                # exposure with it (2026-09-10 23:08:57). _absorb_netted_fill
+                # arms stopped_entry_ts for this leg, releases its entry
+                # ref, and moves a netted-away leg to netted_qty.
                 self._event("INFO", "stop_filled_on_venue", f"{leg}")
                 self._cov("stop_filled")
-                led.qty, led.stop_cloid, led.stop_px = 0.0, None, None
-                led.stopped_entry_ts = pos.get("entry_ts")
-                # the entry order is consumed - its fill was closed BY the
-                # stop. Trend keeps entry_cloid for the position's life, so
-                # without this, case 3's orphan-flatten would re-close the
-                # filled entry and open a naked reverse position.
-                led.entry_cloid = led.entry_side = None
-                led.entry_qty = 0.0
+                self._absorb_netted_fill(leg, led, pos.get("entry_ts"), "stop")
                 return
             elif status == "OPEN":
                 self._decay_stop_vanish(leg, pos)
+        # BOOK SHAPE AFTER MAKER FILLS (N5): the other leg's resting entry may
+        # have filled at the venue since the engine last booked anything,
+        # and that fill decides who is dominant.
+        self._book_maker_fills()
+        shape, dominant, want = self._book_shape()
+        if shape == "opposed" and leg != dominant:
+            # ---- SUBORDINATE HEAD (I3/I9) ---------------------------------
+            # This leg's sign opposes the net. A reduce-only stop for it
+            # cannot rest: it points the wrong way for the position the
+            # venue actually holds, and the venue reduceOnlyCancels it on
+            # the next fill (observed twice). Its level is enforced by the
+            # engine's own intrabar stop and mirrored here within a poll -
+            # and that level sits on the PROFITABLE side of the net, so an
+            # outage there costs tracking of a take-profit, not protection
+            # of the account's actual exposure, which the dominant's stop
+            # covers at abs(sum).
+            # CORROBORATE FIRST (N3): demoting on ledger belief alone would
+            # cancel a REAL stop off a phantom dominant. Only `ok` may
+            # subordinate; `diverged` takes the existing path.
+            verdict, net, want_ = self._stop_backing()
+            if verdict == "blind":
+                return
+            if verdict == "diverged":
+                if self._absorb_fired_stop(leg, led):
+                    return
+                self._book_maker_fills()                   # second look
+                shape, dominant, want = self._book_shape()
+                verdict, net, want_ = self._stop_backing()
+                if verdict != "ok":
+                    self._event("RED", "ledger_divergence",
+                                f"{leg} opposes the net but the venue does "
+                                f"not back the ledger (venue net {net}, "
+                                f"ledger sum {want_}) - halting")
+                    self.halt("LEDGER_DIVERGENCE",
+                              f"{leg}: venue net {net} vs ledger sum {want_}")
+                    return
+            if shape == "opposed" and leg != dominant:
+                if led.stop_cloid:
+                    try:
+                        self.venue.cancel(led.stop_cloid)
+                    except Exception:  # noqa: BLE001
+                        pass
+                first = led.stop_mode != "engine"
+                led.clear_stop()
+                led.stop_mode = "engine"
+                if first:
+                    self._event("INFO", "stop_subordinated",
+                                f"{leg} {led.qty} opposes the net {want}: no "
+                                f"venue stop (it would be reduce-only "
+                                f"cancelled); its level {trigger} is enforced "
+                                f"by the engine and mirrored within a poll; "
+                                f"the net is protected by {dominant}'s stop")
+                self._save_state()
+                return
+        if cancelled:
+            if self._handle_stop_vanished(leg, led, pos, st) is False:
+                return
+            bumped = True
+        # SIZE OF THE STOP (I3): the whole net on an opposed book - a stop
+        # sized to this leg alone is resized to the net at trigger anyway,
+        # and the difference is exactly what stranded the other leg; this
+        # leg alone otherwise.
+        size_for_stop = abs(want) if shape == "opposed" else abs(led.qty)
         # The churn guard may only suppress a REPLACEMENT, never the first
         # placement: with no stop_cloid there is no venue order to churn, so
         # a stale stop_px must not be able to talk us out of protecting a
         # live position (live find 2026-08-23, /kill -> /resume).
+        # It also compares SIZE: when the other leg enters or leaves, the
+        # trigger does not move but the net does, and a stop left at the old
+        # size either strands the other leg or under-protects this one.
         if led.stop_cloid and led.stop_px \
                 and abs(trigger - led.stop_px) / led.stop_px \
-                < self.cfg.stop_replace_bps / 10_000.0:
+                < self.cfg.stop_replace_bps / 10_000.0 \
+                and abs(led.stop_qty - size_for_stop) <= 1e-9:
+            return
+        if shape == "opposed" and self._below_venue_floor(size_for_stop):
+            # N7: a nearly-cancelling book nets to less than the venue's
+            # minimum order value; the venue would reject the stop and
+            # STOP_UNPLACEABLE would then force-flatten a healthy book.
+            # Nothing to arm; both legs are engine-enforced until the net
+            # grows. No vanish bump: this is not the venue misbehaving.
+            if led.stop_cloid:
+                try:
+                    self.venue.cancel(led.stop_cloid)
+                except Exception:  # noqa: BLE001
+                    pass
+            for l in self.state.legs.values():
+                if abs(l.qty) > 1e-9:
+                    l.clear_stop()
+                    l.stop_mode = "engine"
+            self._event("RED", "book_stop_under_floor",
+                        f"opposed book nets to {want} BTC, under the venue "
+                        f"minimum order value - no venue stop can rest; both "
+                        f"legs are engine-enforced until the net grows")
+            self._save_state()
             return
         # ---- THE PLACEMENT CHOKE POINT (re-gate 2026-08-26 B1a/B3) -------
         # Every path that sends a stop passes through here: first placement,
@@ -2801,7 +3506,7 @@ class Executor:
             self.venue.cancel(led.stop_cloid)
         placed = True
         try:
-            self.venue.place_stop(_close_side(led.qty), abs(led.qty),
+            self.venue.place_stop(_close_side(led.qty), size_for_stop,
                                   trigger, cloid)
         except Exception as exc:  # noqa: BLE001
             # A RAISE bypassed the whole STOP_UNPLACEABLE machinery
@@ -2854,6 +3559,7 @@ class Executor:
                 # _halt_locked either verifies it terminal or refuses to
                 # zero and pages halt_error.
                 led.stop_cloid, led.stop_px = cloid, trigger
+                led.stop_qty, led.stop_mode = size_for_stop, "venue"
                 self.halt("STOP_UNPLACEABLE",
                           f"{leg} after {n} unconfirmed placements")
                 return
@@ -2876,6 +3582,7 @@ class Executor:
             return
         self._watch_fill(leg, "stop", cloid, trigger, _close_side(led.qty))
         led.stop_cloid, led.stop_px = cloid, trigger
+        led.stop_qty, led.stop_mode = size_for_stop, "venue"
         # Protection that WORKED resets the counter - but only if this poll
         # did not itself record a failure (re-gate N1). Without the reset,
         # four isolated read blips spread over twenty healthy ratchets
@@ -2889,7 +3596,8 @@ class Executor:
             self._clear_stop_vanish(leg, pos)
         self._cov("stop_placed")
 
-    def _cancel_entry(self, led: LegLedger, filled_action: str) -> None:
+    def _cancel_entry(self, leg: str, led: LegLedger,
+                      filled_action: str) -> str:
         # CANCEL UNLESS THE VENUE CONFIRMED IT IS FILLED.
         #
         # CORRECTION (round 2, 2026-09-09). The first cut of this comment, and
@@ -2918,19 +3626,45 @@ class Executor:
         # entry_cancel_failed; it was unreachable code asserting a safety
         # property we do not have, and it was removed. Making that page real
         # means having the adapters propagate, which is a change to them.
+        #
+        # NETTED VENUE (docs/NETTING_FIX_DESIGN.md): the orphan unwind is no
+        # longer a blind reduce-only `-UNWIND` off this leg's own fill. On an
+        # opposed book that fill may be INSIDE the net (a maker long that
+        # filled through a trend short), and a reduce-only unwind of it
+        # clamps to the net and strands the other leg - incident 2's shape
+        # through the orphan door. The fill is BOOKED into led.qty and the
+        # caller routes it through _close_leg, which corroborates and is
+        # consumption-aware. Returns "closed" (caller must _close_leg),
+        # "cleared" (ref released, nothing held) or "unresolved" (the venue
+        # could not confirm the order's state: cancel sent, ref KEPT - N1 -
+        # so branch 2 must not place over it this poll).
         st = self.venue.order_status(led.entry_cloid)
-        if not st or st.get("status") != "FILLED":
+        status = (st or {}).get("status")
+        if status != "FILLED":
             self.venue.cancel(led.entry_cloid)
-        filled = (st or {}).get("filled_qty", 0.0)
+        if status not in ("FILLED", "CANCELLED", "OPEN"):
+            return "unresolved"
+        filled = float((st or {}).get("filled_qty") or 0.0)
+        if status == "OPEN":
+            # cancel sent against a resting order; until the venue confirms
+            # it terminal a late fill is still possible, so keep the handle
+            return "unresolved"
         if filled > 0 and filled_action == "flatten":
-            side = "SELL" if led.entry_side == "L" else "BUY"
-            self.venue.place_market(side, filled,
-                                    f"{led.entry_cloid}-UNWIND",
-                                    reduce_only=True)
-            self._event("WARN", "orphan_fill_unwound",
-                        f"{led.entry_cloid} filled {filled} but engine cancelled")
+            try:
+                filled = self.venue.quantize(filled)
+            except Exception:  # noqa: BLE001
+                pass
+            led.qty = _side_sign(led.entry_side or "L") * round(filled, 8)
+            self._event("WARN", "orphan_fill_booked",
+                        f"{led.entry_cloid} filled {filled} but the engine "
+                        f"cancelled - booked {led.qty} for a corroborated "
+                        f"close")
+            led.entry_cloid = led.entry_side = None
+            led.entry_qty = 0.0
+            return "closed"
         led.entry_cloid = led.entry_side = None
         led.entry_qty = 0.0
+        return "cleared"
 
     def _venue_label(self) -> str:
         """The exchange the operator has to open, by name.
@@ -3015,9 +3749,14 @@ class Executor:
         self._event("INFO", "stop_filled_on_venue",
                     f"{leg} stop fired before the close - absorbed")
         self._cov("stop_filled")
-        led.qty, led.stop_cloid, led.stop_px = 0.0, None, None
-        led.entry_cloid = led.entry_side = None
-        led.entry_qty = 0.0
+        # RE-ATTRIBUTE, never zero one leg (I4): the fill may have netted
+        # the other leg away. True whenever the stop DID fill - if the
+        # attribution itself cannot be made this poll the ledger is left
+        # untouched and N6's per-poll counter decides, not the caller's
+        # immediate halt.
+        pos = (((self._cur_target.get("legs") or {}).get(leg) or {})
+               .get("position") or {})
+        self._absorb_netted_fill(leg, led, pos.get("entry_ts"), "stop")
         return True
 
     def _close_leg(self, leg: str, led: LegLedger, why: str) -> None:
@@ -3127,12 +3866,13 @@ class Executor:
         # test_gate_B2_close_leg_blind_venue_touches_nothing already pins this
         # exact invariant for the blind path; the unbacked path broke it.
         # A stop that has already FILLED is different: it is not protection
-        # any more, it IS the exit, so absorb it here.
+        # any more, it IS the exit, so absorb it here - re-attributed across
+        # both legs (I4), never zeroed one-sidedly.
         if led.stop_cloid:
             st = self.venue.order_status(led.stop_cloid)
             if st and st.get("status") == "FILLED":
-                led.qty = 0.0          # stop beat the signal exit; already flat
-                led.stop_cloid, led.stop_px = None, None
+                self._absorb_fired_stop(leg, led)
+                return
         if led.qty == 0.0:
             # Nothing to close. A stop may never rest on a flat leg - if it
             # triggered it would OPEN the reverse side - so drop any ref that
@@ -3140,8 +3880,107 @@ class Executor:
             # guard for future ones, not a live path).
             if led.stop_cloid:
                 self.venue.cancel(led.stop_cloid)
-                led.stop_cloid, led.stop_px = None, None
+                led.clear_stop()
             return
+        # ---- NETTED VENUE (docs/NETTING_FIX_DESIGN.md §4.2 _close_leg) ----
+        shape, dominant, want = self._book_shape()
+        target_legs = (self._cur_target.get("legs") or {})
+        if shape == "opposed" and leg != dominant:
+            # SUBORDINATE exit. The venue holds nothing of this leg to
+            # close: its exposure lives INSIDE the net as a reduction of the
+            # dominant's. Closing it means the dominant must grow back by
+            # |S| - an OPENING order, which is exactly what the reduce-only
+            # close refused forever (close_refused_unbacked on every poll).
+            # Ledger-only here: S goes flat, D's venue-held part shrinks by
+            # |S| and D is owed |S| in netted_qty; _reestablish re-opens it
+            # toward what the engine reports through the R order, under
+            # entry doctrine. No order is sent off this leg's belief.
+            dom = self.state.legs[dominant]
+            s_qty = led.qty
+            if led.stop_cloid:
+                try:
+                    self.venue.cancel(led.stop_cloid)
+                except Exception:  # noqa: BLE001
+                    pass
+            led.qty = 0.0
+            led.clear_stop()
+            self._release_entry_ref(leg, led, "netted into the other leg")
+            dom.qty = round(dom.qty + s_qty, 8)
+            dom.netted_qty = round(dom.netted_qty - s_qty, 8)
+            pos_d = (target_legs.get(dominant) or {}).get("position") or {}
+            dom.netted_entry_ts = pos_d.get("entry_ts") if pos_d else None
+            dom.reest_event_n = 0
+            self._event("INFO", "leg_closed_by_netting",
+                        f"{leg} {why} qty={s_qty}: its exposure was inside "
+                        f"the net, no venue order needed; {dominant} is owed "
+                        f"{dom.netted_qty} back and its stop re-sizes")
+            self._cov("signal_exit")
+            self._save_state()
+            tl_d = target_legs.get(dominant)
+            if isinstance(tl_d, dict):
+                self._reestablish(dominant, dom, tl_d, self._cur_blend,
+                                  self._cur_equity, self._cur_entries_ok)
+            return
+        if shape == "opposed":
+            # DOMINANT exit. The venue holds only the net of this leg; the
+            # reduce-only close is sized to it (corroborated == abs(want)),
+            # and when it fills the venue is flat - which nets the
+            # subordinate away too. _absorb_netted_fill re-attributes off
+            # the position read, moves the subordinate to netted_qty and
+            # re-establishes it in this same poll (2026-09-10's shape,
+            # arrived at through the exit door; gate 3).
+            qty = abs(net)
+            try:
+                qty = self.venue.quantize(qty)
+            except Exception:  # noqa: BLE001
+                pass
+            if qty <= 0.0:
+                self._event("RED", "close_refused_unbacked",
+                            f"{leg} exit wants {led.qty} but the venue net "
+                            f"{net} quantizes to nothing closeable")
+                return
+            cloid = f"{leg[0].upper()}-{int(time.time())}-X"
+            try:
+                ref = self.venue.mid()
+            except Exception:  # noqa: BLE001
+                ref = 0.0
+            # The stop stays up until the close is CONFIRMED (N9d): a raise
+            # here (the stop fired inside the cancel window, a reject) must
+            # leave protection standing, and a fired stop is then absorbed
+            # by the same re-attribution.
+            try:
+                self.venue.place_market(_close_side(led.qty), qty, cloid,
+                                        reduce_only=True)
+            except Exception as exc:  # noqa: BLE001
+                self._event("RED", "close_rejected",
+                            f"{leg} close {cloid} raised "
+                            f"({type(exc).__name__}: {exc}) - stop left "
+                            f"standing; retrying next poll")
+                self._absorb_fired_stop(leg, led)
+                return
+            self._watch_fill(leg, "close", cloid, ref, _close_side(led.qty))
+            if led.stop_cloid:
+                try:
+                    self.venue.cancel(led.stop_cloid)
+                except Exception:  # noqa: BLE001
+                    pass
+                led.clear_stop()
+            before = led.qty
+            st_x = self.venue.order_status(cloid) or {}
+            confirmed = float(st_x.get("filled_qty") or 0.0) \
+                if st_x.get("status") in ("FILLED", "CANCELLED") else 0.0
+            self._absorb_netted_fill(leg, led, None, "close",
+                                     net_before=net, confirmed_fill=confirmed)
+            if led.qty == 0.0:
+                self._event("INFO", "leg_closed", f"{leg} {why} qty={before}")
+                self._cov("signal_exit")
+            elif abs(led.qty - before) <= 1e-9:
+                self._event("RED", "close_unconfirmed",
+                            f"{leg} close {cloid} did not move the venue "
+                            f"({net}) - stop dropped; re-arming and retrying "
+                            f"next poll")
+            return
+        # ---- single leg / same-side book: today's path ----------------------
         if led.qty != 0.0:
             # Quantize the close: a stale sub-contract residue (old-format
             # persisted state) would make place_market raise AFTER the stop
@@ -3179,7 +4018,7 @@ class Executor:
             # keeps that window as small as the venue allows.
             if led.stop_cloid:
                 self.venue.cancel(led.stop_cloid)
-                led.stop_cloid, led.stop_px = None, None
+                led.clear_stop()
             cloid = f"{leg[0].upper()}-{int(time.time())}-X"
             try:
                 ref = self.venue.mid()
@@ -3190,6 +4029,19 @@ class Executor:
             self._watch_fill(leg, "close", cloid, ref, _close_side(led.qty))
             self._event("INFO", "leg_closed", f"{leg} {why} qty={led.qty}")
             self._cov("signal_exit")
+            # BOOK BY THE CONFIRMED FILL (N9e): a partial IOC keeps its
+            # residue in the ledger instead of vanishing behind an intent
+            # of zero. UNKNOWN books the intent, as every close did before.
+            st_x = self.venue.order_status(cloid)
+            filled = float((st_x or {}).get("filled_qty") or 0.0)
+            if (st_x or {}).get("status") in ("FILLED", "CANCELLED") \
+                    and 0.0 < filled + 1e-9 < qty:
+                sgn = 1.0 if led.qty > 0 else -1.0
+                led.qty = round(sgn * (abs(led.qty) - filled), 8)
+                self._event("RED", "close_partial",
+                            f"{leg} close {cloid} filled {filled} of {qty} - "
+                            f"ledger keeps {led.qty}; retrying next poll")
+                return
             led.qty = 0.0
 
     def _report_post_only_crosses(self) -> None:

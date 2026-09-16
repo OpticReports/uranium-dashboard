@@ -197,12 +197,6 @@ def stop_covers_net(v, where):
         f"{where}: stop {s['qty']} vs net {net}"
 
 
-# RED until the netting fix lands: strict, so the day one of these passes
-# without the fix being the reason, the suite says so.
-RED = pytest.mark.xfail(strict=True,
-                        reason="netting fix not built yet (task #40)")
-
-
 # --------------------------------------------------------------------------
 # fixtures that walk the executor INTO the two live shapes through its own
 # entry paths, so the ledger refs are the ones the real code leaves behind
@@ -255,7 +249,6 @@ def pullback_long_booked(ex, v, stop=76_642.0):
 # GATE 1 - 2026-09-10 23:08:57. The dominant leg's stop fires on the net.
 # --------------------------------------------------------------------------
 
-@RED
 def test_gate_netting_dominant_stop_fill_does_not_strand_the_other_leg(tmp_path):
     """Pullback long 0.04943 (stop below) and trend short 0.01647 (stop
     above) on one netted venue: net +0.03296. Price hits the pullback stop.
@@ -315,7 +308,6 @@ def test_gate_netting_dominant_stop_fill_does_not_strand_the_other_leg(tmp_path)
 # and rests unbooked until the engine's bar close.
 # --------------------------------------------------------------------------
 
-@RED
 def test_gate_netting_maker_fill_through_the_other_leg_does_not_halt(tmp_path):
     """Trend short 0.01647 on. Pullback's post-only BUY 0.04943 rests, then
     fills at the venue: net -0.01647 -> +0.03296, and the venue cancels the
@@ -379,7 +371,6 @@ def test_gate_netting_maker_fill_through_the_other_leg_does_not_halt(tmp_path):
 # signal while the minority leg is still on. Its close has to cross flat.
 # --------------------------------------------------------------------------
 
-@RED
 def test_gate_netting_dominant_signal_exit_re_establishes_the_minority_leg(tmp_path):
     """Booked opposed book, net +0.03296. The engine exits the pullback
     (position gone at bar close). Today _close_leg clamps the close to the
@@ -414,7 +405,6 @@ def test_gate_netting_dominant_signal_exit_re_establishes_the_minority_leg(tmp_p
     assert ex.state.coverage_live.get("signal_exit", 0) == 1
 
 
-@RED
 def test_gate_netting_minority_signal_exit_unwinds_the_hedge(tmp_path):
     """Mirror image: the engine exits the TREND short while the pullback
     long is still on. In net terms that close is an OPENING buy - the hedge
@@ -445,7 +435,6 @@ def test_gate_netting_minority_signal_exit_unwinds_the_hedge(tmp_path):
 # when the venue agrees with the ledger exactly; anything else still halts.
 # --------------------------------------------------------------------------
 
-@RED
 def test_gate_netting_opening_orders_need_exact_corroboration(tmp_path):
     """The whole 2026-08-26 chain is 'never send an opening order off ledger
     belief'. Crossing flat to keep the minority leg mirrored IS an opening
@@ -499,3 +488,823 @@ def test_gate_netting_same_side_book_is_untouched(tmp_path):
     assert len(stops) == 2 and all(s["side"] == "SELL" for s in stops)
     assert abs(sum(s["qty"] for s in stops) - v.position()) < 1e-9
     assert abs(v.position() - (Q_P + Q_T)) < 1e-9
+
+
+# ==========================================================================
+# B. Exact-number reproductions - the ledger seeded with the live sizes and
+#    the venue holding what it held (docs/NETTING_FIX_DESIGN.md §4.6.B)
+# ==========================================================================
+
+INC1_P, INC1_T, INC1_NET = 0.02481, 0.01638, 0.00843
+INC1_P_TS, INC1_T_TS = 1788969600, 1789056000       # engine entry bars
+INC2_T, INC2_P, INC2_NET = 0.0164, 0.04943, 0.03303
+INC2_SIG, INC2_P_TS = 1789329600, 1789344000
+
+
+class HLFake2(HLFake):
+    """HLFake plus the knobs the folded-fix gates need: partial prints on a
+    resting maker order, a partial IOC, a position read that lags its own
+    fill, reads that come back UNKNOWN, an IOC the venue leaves unfilled,
+    and an order the venue rejects."""
+
+    def __init__(self, *a, **k):
+        super().__init__(*a, **k)
+        self.unknown_reads: dict = {}       # cloid prefix -> reads left
+        self.unfilled_prefix: str | None = None
+        self.reject_prefix: str | None = None
+        self.partial_market_qty: float | None = None
+        self.lag_reads = 0                  # position() reads that lag
+        self._pos_history = [0.0]
+        self.on_reject = None
+
+    def position(self):
+        now = super().position()
+        if self.lag_reads > 0 and self._pos_history:
+            self.lag_reads -= 1
+            return self._pos_history[-1]
+        self._pos_history.append(now)
+        return now
+
+    def _add(self, kind, side, qty, cloid, px=None):
+        if kind == "MARKET" and self.partial_market_qty is not None:
+            qty, self.partial_market_qty = self.partial_market_qty, None
+        super()._add(kind, side, qty, cloid, px)
+        self._pos_history.append(super().position())
+
+    def order_status(self, cloid):
+        for pref, n in list(self.unknown_reads.items()):
+            if cloid.startswith(pref) and n > 0:
+                self.unknown_reads[pref] = n - 1
+                return {"status": "UNKNOWN", "filled_qty": 0.0,
+                        "avg_price": None}
+        return super().order_status(cloid)
+
+    def place_market(self, side, qty, cloid, reduce_only=False):
+        if self.reject_prefix and cloid.startswith(self.reject_prefix):
+            if self.on_reject:
+                self.on_reject()
+            raise RuntimeError("order rejected: simulated")
+        if self.unfilled_prefix and cloid.startswith(self.unfilled_prefix):
+            self.orders[cloid] = {"type": "MARKET", "side": side, "qty": qty,
+                                  "px": None, "status": "CANCELLED",
+                                  "part": 0.0}
+            self.calls.append(("MARKET_UNFILLED", side, round(qty, 5), cloid))
+            return
+        super().place_market(side, qty, cloid, reduce_only=reduce_only)
+
+    def partial_fill(self, cloid, qty):
+        """A resting maker order prints `qty` and keeps resting."""
+        o = self.orders[cloid]
+        assert o["type"] == "LIMIT" and o["status"] == "OPEN"
+        o["part"] = round(o.get("part", 0.0) + qty, 8)
+        n = sum(1 for c in self.orders if c.startswith(cloid + "-part"))
+        self.orders[f"{cloid}-part{n + 1}"] = {
+            "type": "MARKET", "side": o["side"], "qty": qty, "px": o["px"],
+            "status": "FILLED"}
+        self._pos_history.append(super().position())
+        self._sweep()
+
+
+def _open_stops(v):
+    return [o for o in v.orders.values()
+            if o["type"] == "STOP" and o["status"] == "OPEN"]
+
+
+def _mkts(v, since=0):
+    return [c for c in v.calls[since:] if c[0] == "MARKET"]
+
+
+def test_gate_cloid_pin_observed_ids_and_the_R_letter():
+    """The attribution in this file's docstring is only as good as the
+    derivation: pin the four observed venue ids to their executor strings,
+    and pin that the new R letter cannot collide with any other path's."""
+    from app.hl import derive_cloid
+    assert derive_cloid("P-1789329600-E5").startswith("0x9801d99dec")
+    assert derive_cloid("halt-1789344214").startswith("0x1459893a92")
+    assert derive_cloid("P-1788969600-S76641-4").startswith("0x0109a2c125")
+    assert derive_cloid("T-1789056000-S80906-9").startswith("0x65502ceef5")
+    assert derive_cloid("T-1789056000-S79849-12").startswith("0x879afcb767")
+    r = derive_cloid("T-1789056000-R1")
+    for other in ("T-1789056000-E1", "T-1789056000-C1",
+                  "T-1789056000-S80906-1", "T-1789056000-X",
+                  "T-1789056000-E1-UNWIND"):
+        assert r[:14] != derive_cloid(other)[:14]
+
+
+def _seed_inc1(tmp_path):
+    v = HLFake2(mid=76_600.0)
+    ex = mk(tmp_path, v)
+    v._add("MARKET", "BUY", INC1_P, "P-1788969600-E4")
+    v._add("MARKET", "SELL", INC1_T, "T-1789056000-E1")
+    assert abs(v.position() - INC1_NET) < 1e-9
+    p, t = ex.state.legs["pullback"], ex.state.legs["trend"]
+    p.qty, p.signal_ts, p.entry_n = INC1_P, INC1_P_TS - 14_400, 4
+    p.stop_cloid, p.stop_px = "P-1788969600-S76641-3", 76_641.73
+    p.stop_qty, p.stop_mode, p.stop_n = INC1_P, "venue", 3
+    v.place_stop("SELL", INC1_P, 76_641.73, "P-1788969600-S76641-3")
+    t.qty, t.signal_ts, t.entry_n = -INC1_T, INC1_T_TS - 14_400, 1
+    t.entry_cloid, t.entry_side, t.entry_qty = "T-1789056000-E1", "S", INC1_T
+    s3 = _pos(entry_ts=INC1_P_TS, side="L", stop=76_641.73)
+    s4 = _pos(entry_ts=INC1_T_TS, side="S", stop=80_906.0)
+    return ex, v, s3, s4
+
+
+@pytest.mark.parametrize("engine_still_reports_s3", [True, False])
+def test_gate_inc1_exact_replay(tmp_path, engine_still_reports_s3):
+    """2026-09-10 23:08:57 with the live numbers. The first poll must
+    re-size the pullback's stop from 0.02481 to the net 0.00843 - and mint
+    exactly the id the venue recorded, `P-1788969600-S76641-4` - and must
+    NOT place the trend's `T-1789056000-S80906-9`. When the stop fires the
+    venue trades 0.00843 and goes flat; the next poll re-establishes the
+    trend short through `T-1789056000-R1` (entry-class), whichever way the
+    engine reports S3 at that moment."""
+    ex, v, s3, s4 = _seed_inc1(tmp_path)
+    ex.step(target(pull=s3, trend=s4))
+    p, t = ex.state.legs["pullback"], ex.state.legs["trend"]
+    stops = _open_stops(v)
+    assert len(stops) == 1 and stops[0]["side"] == "SELL" \
+        and abs(stops[0]["qty"] - INC1_NET) < 1e-9, stops
+    assert p.stop_cloid == "P-1788969600-S76641-4"
+    assert abs(p.stop_qty - INC1_NET) < 1e-9 and p.stop_mode == "venue"
+    assert t.stop_cloid is None and t.stop_mode == "engine"
+    assert "T-1789056000-S80906-9" not in v.orders
+    assert "stop_vanished" not in [e["kind"] for e in ex.state.events]
+
+    done = v.fire_stop(p.stop_cloid)
+    assert abs(done - INC1_NET) < 1e-9 and abs(v.position()) < 1e-9
+
+    n0 = len(v.calls)
+    ex.step(target(pull=s3 if engine_still_reports_s3 else None, trend=s4))
+    assert ex.state.halted is None
+    kinds = [e["kind"] for e in ex.state.events]
+    assert "ledger_divergence" not in kinds
+    assert "leg_netted_out" in kinds and "leg_reestablished" in kinds
+    assert p.qty == 0.0
+    if engine_still_reports_s3:
+        assert p.stopped_entry_ts == INC1_P_TS
+    r = [c for c in v.calls[n0:] if c[0] == "MARKET" and c[3].endswith("-R1")]
+    assert r == [("MARKET", "SELL", INC1_T, "T-1789056000-R1")], r
+    assert "T-1789056000-R1" not in getattr(v, "reduce_only_cloids", [])
+    assert abs(v.position() + INC1_T) < 1e-9
+    assert abs(t.qty + INC1_T) < 1e-9 and t.netted_qty == 0.0
+    stops = _open_stops(v)
+    assert len(stops) == 1 and stops[0]["side"] == "BUY" \
+        and abs(stops[0]["qty"] - INC1_T) < 1e-9 \
+        and abs(stops[0]["px"] - 80_906.0) < 1e-9, stops
+    assert ex.state.coverage_live.get("stop_filled", 0) == 1
+    assert ex.state.coverage_live.get("netted_reopen", 0) == 1
+
+
+def _seed_inc2(tmp_path):
+    v = HLFake2(mid=MID)
+    ex = mk(tmp_path, v)
+    v._add("MARKET", "SELL", INC2_T, "T-1789056000-C3")
+    t = ex.state.legs["trend"]
+    t.qty, t.signal_ts, t.chase_n = -INC2_T, INC1_T_TS - 14_400, 3
+    t.stop_cloid, t.stop_px = "T-1789056000-S79910-11", 79_910.0
+    t.stop_qty, t.stop_mode, t.stop_n = INC2_T, "venue", 11
+    v.place_stop("BUY", INC2_T, 79_910.0, "T-1789056000-S79910-11")
+    s4 = _pos(entry_ts=INC1_T_TS, side="S", stop=79_910.0)
+    pend = target(pull={"pending": {"side": "L", "limit": MID,
+                                    "signal_ts": INC2_SIG},
+                        "position": None}, trend=s4)
+    return ex, v, s4, pend
+
+
+def test_gate_inc2_exact_replay(tmp_path):
+    """2026-09-14 00:00-00:03 with the live numbers, then the 04:00 booking
+    and the trend's later exit. The maker fill flips the venue to +0.03303
+    and the venue cancels the trend's stop; the poll after must halt
+    nothing, send nothing (no `halt-…` flatten, no 0.03303 SELL), book the
+    fill early, and subordinate the trend silently. At 04:00 the pullback
+    is booked without a chase and ONE stop rests, sized to the net at the
+    pullback's level. When the trend exits, the pullback is made whole
+    through `P-1789344000-R1` and its stop re-sizes."""
+    ex, v, s4, pend = _seed_inc2(tmp_path)
+    ex.step(pend)
+    p, t = ex.state.legs["pullback"], ex.state.legs["trend"]
+    assert p.entry_cloid == "P-1789329600-E1" and p.qty == 0.0
+    assert v.orders[p.entry_cloid]["status"] == "OPEN"
+    assert abs(v.orders[p.entry_cloid]["qty"] - INC2_P) < 1e-9
+
+    v.fill_limit(p.entry_cloid)
+    assert abs(v.position() - INC2_NET) < 1e-9
+    assert v.orders[t.stop_cloid]["status"] == "CANCELLED"
+    assert v.orders[t.stop_cloid].get("raw") == "reduceOnlyCanceled"
+
+    n0 = len(v.calls)
+    ex.step(pend)
+    assert ex.state.halted is None
+    assert not _mkts(v, n0), f"sent a market order in the window: {_mkts(v, n0)}"
+    assert not [c for c in v.orders if c.startswith("halt-")]
+    assert abs(p.qty - INC2_P) < 1e-9 and p.entry_cloid == "P-1789329600-E1"
+    assert t.stop_cloid is None and t.stop_mode == "engine"
+    kinds = [e["kind"] for e in ex.state.events]
+    assert "stop_subordinated" in kinds and "entry_filled_early" in kinds
+    assert "stop_vanished" not in kinds and "ledger_divergence" not in kinds
+    assert not (getattr(ex.state, "stop_vanish", None) or {})
+    assert abs(v.position() - sum(l.qty for l in ex.state.legs.values())) < 1e-9
+    assert kinds.count("unbooked_fill_unprotected") == 1
+    for _ in range(3):                                # the rest of the window
+        ex.step(pend)
+    assert ex.state.halted is None and not _mkts(v, n0)
+
+    booked = target(pull=_pos(entry_ts=INC2_P_TS, side="L", stop=75_900.0),
+                    trend=s4)
+    ex.step(booked)
+    assert p.entry_cloid is None and abs(p.qty - INC2_P) < 1e-9
+    assert "entry_chase" not in [e["kind"] for e in ex.state.events]
+    stops = _open_stops(v)
+    assert len(stops) == 1 and stops[0]["side"] == "SELL" \
+        and abs(stops[0]["qty"] - INC2_NET) < 1e-9 \
+        and abs(stops[0]["px"] - 75_900.0) < 1e-9, stops
+    assert abs(v.position() - INC2_NET) < 1e-9
+
+    # the trend's trail is hit: the engine drops S4
+    n1 = len(v.calls)
+    alone = target(pull=_pos(entry_ts=INC2_P_TS, side="L", stop=75_900.0))
+    ex.step(alone)
+    assert ex.state.halted is None
+    ro = [c for c in v.calls[n1:] if c[0] == "MARKET"
+          and c[3] in getattr(v, "reduce_only_cloids", [])]
+    assert not ro, f"reduce-only order sent for a subordinate exit: {ro}"
+    r = [c for c in v.calls[n1:] if c[0] == "MARKET" and c[3].endswith("-R1")]
+    assert r == [("MARKET", "BUY", INC2_T, "P-1789344000-R1")], r
+    assert abs(v.position() - INC2_P) < 1e-9 and abs(p.qty - INC2_P) < 1e-9
+    assert t.qty == 0.0 and p.netted_qty == 0.0
+    ex.step(alone)
+    stops = _open_stops(v)
+    assert len(stops) == 1 and abs(stops[0]["qty"] - INC2_P) < 1e-9, stops
+    assert ex.state.coverage_live.get("signal_exit", 0) == 1
+
+
+def test_gate_inc2_engine_declines_the_pullback_after_the_window(tmp_path):
+    """Same window, but at 04:00 the engine reports the pullback FLAT: the
+    early-booked fill is an orphan. No `-UNWIND`; a reduce-only close of
+    the NET, which nets the trend away, and the trend is re-established
+    through its R order so the venue ends holding S4 alone."""
+    ex, v, s4, pend = _seed_inc2(tmp_path)
+    ex.step(pend)
+    p, t = ex.state.legs["pullback"], ex.state.legs["trend"]
+    v.fill_limit(p.entry_cloid)
+    ex.step(pend)
+    n0 = len(v.calls)
+    ex.step(target(trend=s4))
+    assert ex.state.halted is None
+    assert not [c for c in v.orders if c.endswith("-UNWIND")]
+    mk_calls = _mkts(v, n0)
+    assert len(mk_calls) == 2, mk_calls
+    x, r = mk_calls
+    assert x[1] == "SELL" and abs(x[2] - INC2_NET) < 1e-9 and x[3].endswith("-X")
+    assert x[3] in v.reduce_only_cloids
+    assert r == ("MARKET", "SELL", INC2_T, "T-1789056000-R1")
+    assert r[3] not in v.reduce_only_cloids
+    assert abs(v.position() + INC2_T) < 1e-9
+    assert p.qty == 0.0 and abs(t.qty + INC2_T) < 1e-9 and t.netted_qty == 0.0
+    stops = _open_stops(v)
+    assert len(stops) == 1 and stops[0]["side"] == "BUY" \
+        and abs(stops[0]["qty"] - INC2_T) < 1e-9, stops
+
+
+# ==========================================================================
+# C. Gates for the folded critique fixes N1-N10
+# ==========================================================================
+
+def test_gate_N1_consumption_never_forgets_a_resting_maker_order(tmp_path):
+    """BLOCKING (both lenses). A pullback maker order printed 0.01 of
+    0.04943 and keeps resting; the trend's stop (now the dominant, net
+    -0.00647) fires and the venue goes flat, consuming the 0.01. The
+    consumed leg's entry ref must not be cleared while the order may still
+    be live: the remainder is CANCELLED, the ref is kept until the venue
+    confirms it terminal, no second entry is ever sent, and the 0.01 is
+    re-established through the R order (stamped with the signal_ts, N9c)."""
+    v = HLFake2()
+    ex = mk(tmp_path, v)
+    trend_tl = _pos(entry_ts=T_ENTRY, side="S", stop=79_850.0)
+    trend_short(ex, v, stop=79_850.0)
+    pcloid = pullback_limit(ex, v, trend_tl)
+    pend = target(pull={"pending": {"side": "L", "limit": MID,
+                                    "signal_ts": S_PULL}, "position": None},
+                  trend=trend_tl)
+    v.partial_fill(pcloid, 0.01)
+    assert abs(v.position() + (Q_T - 0.01)) < 1e-9
+    ex.step(pend)
+    p, t = ex.state.legs["pullback"], ex.state.legs["trend"]
+    assert abs(p.qty - 0.01) < 1e-9 and p.entry_cloid == pcloid
+    stops = _open_stops(v)
+    assert len(stops) == 1 and abs(stops[0]["qty"] - (Q_T - 0.01)) < 1e-9
+
+    v.fire_stop(t.stop_cloid)
+    assert abs(v.position()) < 1e-9
+    entries_before = [c for c in v.calls if c[0] == "LIMIT"]
+    for i in range(10):
+        ex.step(pend)
+        assert_mirrored(ex, v, f"poll {i}")
+        assert [c for c in v.calls if c[0] == "LIMIT"] == entries_before, \
+            "a second full-size entry was sent beside the remainder"
+    assert v.orders[pcloid]["status"] == "CANCELLED", "remainder left resting"
+    assert p.entry_cloid is None, "ref not released after a confirmed terminal"
+    assert abs(p.qty - 0.01) < 1e-9 and p.netted_qty == 0.0
+    assert abs(v.position() - 0.01) < 1e-9
+    r = [c for c in v.calls if c[0] == "MARKET" and c[3].endswith("-R1")]
+    assert r == [("MARKET", "BUY", 0.01, f"P-{S_PULL}-R1")], r
+    assert t.qty == 0.0 and t.stopped_entry_ts == T_ENTRY
+
+
+def test_gate_N2_R_order_is_belief_before_confirm(tmp_path):
+    """BLOCKING (both lenses). The R order's refs are persisted BEFORE the
+    send; an UNKNOWN confirm books nothing, drops nothing and re-sends
+    nothing (no chase either); the next confirmed read books it."""
+    ex, v, s3, s4 = _seed_inc1(tmp_path)
+    ex.step(target(pull=s3, trend=s4))
+    v.fire_stop(ex.state.legs["pullback"].stop_cloid)
+    v.unknown_reads["T-1789056000-R"] = 3
+    saved = []
+    real_save = ex._save_state
+
+    def spy():
+        real_save()
+        t = ex.state.legs["trend"]
+        saved.append((t.reest_cloid, len([c for c in v.calls
+                                          if c[3] == "T-1789056000-R1"])))
+    ex._save_state = spy
+    ex.step(target(pull=s3, trend=s4))
+    t = ex.state.legs["trend"]
+    assert t.reest_cloid == "T-1789056000-R1" and t.qty == 0.0
+    assert abs(t.netted_qty + INC1_T) < 1e-9, "netted dropped on UNKNOWN"
+    assert ("T-1789056000-R1", 0) in saved, "ref not persisted before the send"
+    ex.step(target(pull=s3, trend=s4))                 # still UNKNOWN
+    rs = [c for c in v.calls if c[3].startswith("T-1789056000-R")]
+    assert len(rs) == 1, f"re-sent while unconfirmed: {rs}"
+    assert "entry_chase" not in [e["kind"] for e in ex.state.events]
+    assert ex.state.halted is None
+    ex.step(target(pull=s3, trend=s4))                 # read resolves
+    assert t.reest_cloid is None and abs(t.qty + INC1_T) < 1e-9
+    assert t.netted_qty == 0.0 and abs(v.position() + INC1_T) < 1e-9
+    assert len([c for c in v.calls if c[3].startswith("T-1789056000-R")]) == 1
+
+
+def test_gate_N2_unfilled_R_orders_are_capped_then_dropped_loudly(tmp_path):
+    """A venue-confirmed unfilled IOC may be re-sent, REEST_MAX times per
+    event, then the owed exposure is dropped with a RED and the chase is
+    kept from re-opening it at fresh size behind the cap."""
+    ex, v, s3, s4 = _seed_inc1(tmp_path)
+    ex.step(target(pull=s3, trend=s4))
+    v.fire_stop(ex.state.legs["pullback"].stop_cloid)
+    v.unfilled_prefix = "T-1789056000-R"
+    for _ in range(6):
+        ex.step(target(pull=s3, trend=s4))
+        assert ex.state.halted is None
+    rs = [c for c in v.calls if c[3].startswith("T-1789056000-R")]
+    assert len(rs) == mirror.REEST_MAX, rs
+    t = ex.state.legs["trend"]
+    assert t.netted_qty == 0.0 and t.qty == 0.0 and t.reest_cloid is None
+    kinds = [e["kind"] for e in ex.state.events]
+    assert "netted_shortfall" in kinds
+    assert "entry_chase" not in kinds, "the chase re-opened it behind the cap"
+    assert abs(v.position()) < 1e-9
+
+
+def test_gate_N3_phantom_dominant_halts_instead_of_stripping_a_real_stop(tmp_path):
+    """SERIOUS (phantom lens). Ledger {pullback +0.04943 PHANTOM, trend
+    -0.0164 real}, venue -0.0164 with a real BUY stop. The ledger says the
+    trend is the subordinate; corroboration must run BEFORE anything is
+    demoted. Outcome: LEDGER_DIVERGENCE, the halt's own reduce-only flatten
+    off a fresh read, no R order, no entry-class order of any kind."""
+    v = HLFake2()
+    ex = mk(tmp_path, v)
+    trend_short(ex, v, stop=79_850.0)
+    p = ex.state.legs["pullback"]
+    p.qty, p.signal_ts = Q_P, S_PULL                   # the phantom
+    n0 = len(v.calls)
+    ex.step(target(pull=_pos(entry_ts=S_PULL + 14_400, side="L",
+                             stop=75_300.0),
+                   trend=_pos(entry_ts=T_ENTRY, side="S", stop=79_850.0)))
+    assert ex.state.halted == "LEDGER_DIVERGENCE"
+    opened = [c for c in v.calls[n0:] if c[0] in ("MARKET", "LIMIT")
+              and c[3] not in v.reduce_only_cloids]
+    assert not opened, f"entry-class order off a phantom: {opened}"
+    assert not [c for c in v.calls if c[3] and c[3].endswith("-R1")]
+    assert abs(v.position()) < 1e-9, "halt did not flatten off the read"
+    assert "stop_subordinated" not in [e["kind"] for e in ex.state.events]
+
+
+def test_gate_N3_boot_other_mismatch_blocks_entries(tmp_path):
+    """`_reconcile_boot`'s ambiguous-mismatch branch now latches
+    _boot_mismatch (entries blocked) instead of only paging."""
+    v = HLFake2()
+    ex = mk(tmp_path, v)
+    trend_short(ex, v, stop=79_850.0)
+    ex.state.legs["pullback"].qty = Q_P                  # stale opposed ledger
+    ex._save_state()
+    ex2 = mk(tmp_path, v)                                # restart
+    assert ex2._boot_mismatch is True
+    assert "position_drift" in [e["kind"] for e in ex2.state.events]
+
+
+def test_gate_N4_unknown_entry_read_at_booking_does_not_chase(tmp_path):
+    """SERIOUS (phantom lens), universal under early booking: the engine
+    books the position while the entry read blips UNKNOWN. No chase on top
+    of a fill that already rests, qty unchanged, ref kept, one RED."""
+    v = HLFake2()
+    ex = mk(tmp_path, v)
+    trend_tl = _pos(entry_ts=T_ENTRY, side="S", stop=79_850.0)
+    trend_short(ex, v, stop=79_850.0)
+    pcloid = pullback_limit(ex, v, trend_tl)
+    pend = target(pull={"pending": {"side": "L", "limit": MID,
+                                    "signal_ts": S_PULL}, "position": None},
+                  trend=trend_tl)
+    v.fill_limit(pcloid)
+    ex.step(pend)                                         # early-booked
+    p = ex.state.legs["pullback"]
+    assert abs(p.qty - Q_P) < 1e-9
+    v.unknown_reads[pcloid] = 5
+    n0 = len(v.calls)
+    booked = target(pull=_pos(entry_ts=S_PULL + 14_400, side="L",
+                              stop=75_300.0), trend=trend_tl)
+    ex.step(booked)
+    assert not _mkts(v, n0), f"chased on an UNKNOWN read: {_mkts(v, n0)}"
+    assert abs(p.qty - Q_P) < 1e-9 and p.entry_cloid == pcloid
+    kinds = [e["kind"] for e in ex.state.events]
+    assert kinds.count("entry_unconfirmed") == 1
+    assert ex.state.halted is None
+    assert abs(v.position() - belief(ex, v)) < 1e-9
+
+
+def test_gate_N5_fill_landing_between_the_two_legs_is_not_a_vanish(tmp_path):
+    """SERIOUS (live lens). The maker fill lands AFTER the pullback's
+    _sync_leg read its order (OPEN/0) and BEFORE the trend's _maintain_stop
+    read its stop (now reduceOnlyCanceled). The trend must see the fill
+    when it decides the book shape: no halt, no order, no vanish count."""
+    v = HLFake2()
+    ex = mk(tmp_path, v)
+    trend_tl = _pos(entry_ts=T_ENTRY, side="S", stop=79_850.0)
+    trend_short(ex, v, stop=79_850.0)
+    pcloid = pullback_limit(ex, v, trend_tl)
+    pend = target(pull={"pending": {"side": "L", "limit": MID,
+                                    "signal_ts": S_PULL}, "position": None},
+                  trend=trend_tl)
+    real = v.order_status
+    fired = {"done": False}
+
+    def racing(cloid):
+        st = real(cloid)
+        if cloid == pcloid and not fired["done"]:
+            fired["done"] = True
+            v.fill_limit(pcloid)              # lands right after this read
+            return {"status": "OPEN", "filled_qty": 0.0, "avg_price": None}
+        return st
+    v.order_status = racing
+    n0 = len(v.calls)
+    ex.step(pend)
+    assert ex.state.halted is None
+    assert not _mkts(v, n0)
+    assert not (getattr(ex.state, "stop_vanish", None) or {})
+    kinds = [e["kind"] for e in ex.state.events]
+    assert "stop_subordinated" in kinds and "stop_vanished" not in kinds
+    assert abs(ex.state.legs["pullback"].qty - Q_P) < 1e-9
+    assert abs(v.position() - belief(ex, v)) < 1e-9
+
+
+def test_gate_N5_subordinate_stop_that_filled_before_the_flip_is_absorbed(tmp_path):
+    """The trend's stop fires (venue flat), THEN the pullback's maker order
+    fills (venue +0.04943). The trend leg is fully closed by its own stop
+    and nothing was netted away - the FILLED door runs before the
+    subordinate head and the attribution reads 'D closed, others hold the
+    venue' rather than an inconsistency."""
+    v = HLFake2()
+    ex = mk(tmp_path, v)
+    trend_tl = _pos(entry_ts=T_ENTRY, side="S", stop=79_850.0)
+    trend_short(ex, v, stop=79_850.0)
+    pcloid = pullback_limit(ex, v, trend_tl)
+    pend = target(pull={"pending": {"side": "L", "limit": MID,
+                                    "signal_ts": S_PULL}, "position": None},
+                  trend=trend_tl)
+    v.fire_stop(ex.state.legs["trend"].stop_cloid)
+    v.fill_limit(pcloid)
+    assert abs(v.position() - Q_P) < 1e-9
+    n0 = len(v.calls)
+    ex.step(pend)
+    assert ex.state.halted is None and not _mkts(v, n0)
+    t, p = ex.state.legs["trend"], ex.state.legs["pullback"]
+    assert t.qty == 0.0 and t.netted_qty == 0.0 and t.stopped_entry_ts == T_ENTRY
+    assert abs(p.qty - Q_P) < 1e-9 and p.netted_qty == 0.0
+    kinds = [e["kind"] for e in ex.state.events]
+    assert "leg_netted_out" not in kinds and "netting_inconsistent" not in kinds
+    assert ex.state.coverage_live.get("stop_filled", 0) == 1
+
+
+def test_gate_N6_position_read_lagging_its_own_fill_is_re_read(tmp_path, monkeypatch):
+    """SERIOUS (live lens). After the dominant's reduce-only close the
+    position endpoint answers with the PRE-close net once. That read
+    contradicts the venue-confirmed fill and must be re-read, not booked
+    as 'the close did nothing' and not halted."""
+    monkeypatch.setattr(mirror, "NETTING_REREAD_SLEEP_S", 0.0)
+    v = HLFake2()
+    ex = mk(tmp_path, v)
+    trend_tl = _pos(entry_ts=T_ENTRY, side="S", stop=79_850.0)
+    trend_short(ex, v)
+    v.fill_limit(pullback_limit(ex, v, trend_tl))
+    booked = target(pull=_pos(entry_ts=S_PULL + 14_400, side="L",
+                              stop=75_300.0), trend=trend_tl)
+    ex.step(booked)
+    ex.step(booked)
+    real_pm = v.place_market
+
+    def lagging_pm(side, qty, cloid, reduce_only=False):
+        real_pm(side, qty, cloid, reduce_only=reduce_only)
+        if cloid.endswith("-X"):
+            v.lag_reads = 1                   # the next read is stale
+    v.place_market = lagging_pm
+    ex.step(target(trend=trend_tl))           # pullback exits
+    assert ex.state.halted is None
+    kinds = [e["kind"] for e in ex.state.events]
+    assert "close_unconfirmed" not in kinds and "ledger_divergence" not in kinds
+    assert ex.state.legs["pullback"].qty == 0.0
+    assert abs(v.position() + Q_T) < 1e-9
+    assert abs(ex.state.legs["trend"].qty + Q_T) < 1e-9
+
+
+def test_gate_N6_persistent_inconsistency_halts_after_three_polls(tmp_path, monkeypatch):
+    """A stop fill whose attribution cannot be made (the venue reports a
+    net no split of the ledger explains) leaves the ledger untouched and
+    counts; the third consecutive poll halts. One bad read is not a
+    divergence; three in a row is."""
+    monkeypatch.setattr(mirror, "NETTING_REREAD_SLEEP_S", 0.0)
+    v = HLFake2()
+    ex = mk(tmp_path, v)
+    pullback_long_booked(ex, v, stop=76_642.0)
+    pull_tl = _pos(entry_ts=S_PULL + 14_400, side="L", stop=76_642.0)
+    p = ex.state.legs["pullback"]
+    v.orders[p.stop_cloid]["status"] = "FILLED"          # stop 'fired'...
+    v._add("MARKET", "BUY", 0.09, "external")            # ...but the venue
+    v.orders["external"]["status"] = "FILLED"            # holds MORE long
+    polls = 0
+    while ex.state.halted is None and polls < 6:
+        ex.step(target(pull=pull_tl))
+        polls += 1
+    assert ex.state.halted == "LEDGER_DIVERGENCE"
+    assert polls == mirror.NETTING_MISMATCH_HALT_POLLS, polls
+    kinds = [e["kind"] for e in ex.state.events]
+    assert kinds.count("netting_inconsistent") == mirror.NETTING_MISMATCH_HALT_POLLS
+
+
+def test_gate_N7_net_under_the_floor_arms_nothing_and_does_not_halt(tmp_path):
+    """SERIOUS (live lens). {+0.0165, -0.0164} nets to 0.0001 BTC ($7.66 at
+    76,600): no stop the venue would accept exists. Place none, mark both
+    legs engine-enforced, one RED, no vanish count, no halt; when the net
+    grows past the floor the stop is placed."""
+    v = HLFake2(mid=76_600.0)
+    ex = mk(tmp_path, v)
+    v._add("MARKET", "BUY", 0.0165, "p-seed")
+    v._add("MARKET", "SELL", 0.0164, "t-seed")
+    p, t = ex.state.legs["pullback"], ex.state.legs["trend"]
+    p.qty, t.qty = 0.0165, -0.0164
+    s3 = _pos(entry_ts=S_PULL + 14_400, side="L", stop=75_000.0)
+    s4 = _pos(entry_ts=T_ENTRY, side="S", stop=80_000.0)
+    for _ in range(3):
+        ex.step(target(pull=s3, trend=s4))
+    assert ex.state.halted is None
+    assert not [c for c in v.calls if c[0] == "STOP"]
+    assert p.stop_mode == "engine" and t.stop_mode == "engine"
+    kinds = [e["kind"] for e in ex.state.events]
+    assert kinds.count("book_stop_under_floor") == 1
+    assert "stop_unconfirmed" not in kinds and "stop_unplaceable" not in kinds
+    # the net grows past $10
+    v._add("MARKET", "BUY", 0.01, "p-more")
+    p.qty = 0.0265
+    ex.step(target(pull=s3, trend=s4))
+    stops = _open_stops(v)
+    assert len(stops) == 1 and abs(stops[0]["qty"] - 0.0101) < 1e-9, stops
+    assert p.stop_mode == "venue"
+
+
+def test_gate_N8_same_side_stop_outs_are_never_consumption(tmp_path):
+    """BLOCKING (found in MINIMAL-PATCH's identical primitive). Two SAME-
+    sign legs, both stops fill on one poll, venue flat: each is its own
+    stop-out. Nothing is 'netted out', nothing is re-opened, no order is
+    sent, both re-entry guards arm."""
+    v = HLFake2()
+    ex = mk(tmp_path, v)
+    pullback_long_booked(ex, v, stop=76_642.0)
+    pull_tl = _pos(entry_ts=S_PULL + 14_400, side="L", stop=76_642.0)
+    ex.step(target(pull=pull_tl,
+                   trend={"pending": {"side": "L", "limit": -1.0,
+                                      "signal_ts": T_ENTRY - 14_400},
+                          "position": None}))
+    both = target(pull=pull_tl, trend=_pos(entry_ts=T_ENTRY, side="L",
+                                           stop=74_000.0))
+    ex.step(both)
+    p, t = ex.state.legs["pullback"], ex.state.legs["trend"]
+    assert p.stop_cloid and t.stop_cloid
+    v.fire_stop(p.stop_cloid)
+    v.fire_stop(t.stop_cloid)
+    assert abs(v.position()) < 1e-9
+    n0 = len(v.calls)
+    ex.step(both)
+    assert ex.state.halted is None and not _mkts(v, n0)
+    assert p.qty == 0.0 and t.qty == 0.0
+    assert p.netted_qty == 0.0 and t.netted_qty == 0.0
+    assert p.stopped_entry_ts == S_PULL + 14_400 and t.stopped_entry_ts == T_ENTRY
+    kinds = [e["kind"] for e in ex.state.events]
+    assert "leg_netted_out" not in kinds and "netting_inconsistent" not in kinds
+    assert ex.state.coverage_live.get("stop_filled", 0) == 2
+
+
+def test_gate_N8_only_one_same_side_stop_fills_leaves_the_other_alone(tmp_path):
+    v = HLFake2()
+    ex = mk(tmp_path, v)
+    pullback_long_booked(ex, v, stop=76_642.0)
+    pull_tl = _pos(entry_ts=S_PULL + 14_400, side="L", stop=76_642.0)
+    ex.step(target(pull=pull_tl,
+                   trend={"pending": {"side": "L", "limit": -1.0,
+                                      "signal_ts": T_ENTRY - 14_400},
+                          "position": None}))
+    both = target(pull=pull_tl, trend=_pos(entry_ts=T_ENTRY, side="L",
+                                           stop=74_000.0))
+    ex.step(both)
+    p, t = ex.state.legs["pullback"], ex.state.legs["trend"]
+    v.fire_stop(p.stop_cloid)
+    assert abs(v.position() - Q_T) < 1e-9
+    n0 = len(v.calls)
+    ex.step(both)
+    assert ex.state.halted is None and not _mkts(v, n0)
+    assert p.qty == 0.0 and abs(t.qty - Q_T) < 1e-9 and t.netted_qty == 0.0
+    assert t.stop_cloid and v.orders[t.stop_cloid]["status"] == "OPEN"
+    assert "leg_netted_out" not in [e["kind"] for e in ex.state.events]
+
+
+def test_gate_N9a_engine_flipping_the_consumed_leg_releases_the_debt(tmp_path):
+    """A consumed SHORT whose engine then reports a LONG with a new
+    entry_ts: nothing to re-establish at the stale size - the debt is
+    released silently and the ordinary entry path takes over."""
+    ex, v, s3, s4 = _seed_inc1(tmp_path)
+    ex.step(target(pull=s3, trend=s4))
+    v.fire_stop(ex.state.legs["pullback"].stop_cloid)
+    # a degraded feed blocks the same-poll re-open, so the debt is owed
+    ex.step(target(pull=s3, trend=s4, degraded=True))
+    t = ex.state.legs["trend"]
+    assert "leg_unmirrored" in [e["kind"] for e in ex.state.events]
+    assert abs(t.netted_qty + INC1_T) < 1e-9
+    flipped = _pos(entry_ts=INC1_T_TS + 14_400, side="L", stop=70_000.0)
+    n0 = len(v.calls)
+    ex.step(target(trend=flipped))
+    assert t.netted_qty == 0.0 and t.reest_cloid is None
+    assert not [c for c in v.calls[n0:] if c[3].endswith("-R1")]
+    kinds = [e["kind"] for e in ex.state.events]
+    assert "netting_released" in kinds
+    ex.step(target(trend=flipped))           # next poll: the ordinary chase
+    assert t.qty > 0, "ordinary entry path did not take over"
+    assert not [c for c in v.calls[n0:] if c[3] and c[3].endswith("-R1")]
+
+
+def test_gate_N9b_crash_after_the_R_send_is_booked_at_boot(tmp_path):
+    """The process dies between the R send and its confirm. A fresh
+    Executor from the state file reads the persisted reest_cloid, books the
+    venue's answer BEFORE the ledger is compared, and protects the leg on
+    its first poll. No _boot_mismatch."""
+    ex, v, s3, s4 = _seed_inc1(tmp_path)
+    ex.step(target(pull=s3, trend=s4))
+    v.fire_stop(ex.state.legs["pullback"].stop_cloid)
+    v.unknown_reads["T-1789056000-R"] = 3            # confirm blips, then die
+    ex.step(target(pull=s3, trend=s4))
+    t = ex.state.legs["trend"]
+    assert t.reest_cloid == "T-1789056000-R1" and t.qty == 0.0
+    assert abs(v.position() + INC1_T) < 1e-9        # the R did fill
+    ex2 = mk(tmp_path, v)                            # restart
+    t2 = ex2.state.legs["trend"]
+    assert t2.reest_cloid is None and abs(t2.qty + INC1_T) < 1e-9
+    assert t2.netted_qty == 0.0
+    assert ex2._boot_mismatch is False
+    assert "phantom_position_cleared" not in [e["kind"] for e in ex2.state.events]
+    ex2.step(target(trend=s4))
+    assert ex2.state.halted is None
+    stops = _open_stops(v)
+    assert len(stops) == 1 and abs(stops[0]["qty"] - INC1_T) < 1e-9
+
+
+def test_gate_N9d_close_rejected_because_the_stop_fired_is_absorbed(tmp_path):
+    """The dominant's X order is rejected because its stop fired inside
+    the cancel window. The stop was kept up until the confirm, so it is
+    re-read FILLED and absorbed - the netted trend is re-established, no
+    halt, nothing naked."""
+    v = HLFake2()
+    ex = mk(tmp_path, v)
+    trend_tl = _pos(entry_ts=T_ENTRY, side="S", stop=79_850.0)
+    trend_short(ex, v)
+    v.fill_limit(pullback_limit(ex, v, trend_tl))
+    booked = target(pull=_pos(entry_ts=S_PULL + 14_400, side="L",
+                              stop=75_300.0), trend=trend_tl)
+    ex.step(booked)
+    ex.step(booked)
+    p = ex.state.legs["pullback"]
+    stop_cloid = p.stop_cloid
+    v.reject_prefix = "P-"
+    v.on_reject = lambda: v.fire_stop(stop_cloid)
+    ex.step(target(trend=trend_tl))
+    assert ex.state.halted is None
+    kinds = [e["kind"] for e in ex.state.events]
+    assert "close_rejected" in kinds and "stop_filled_on_venue" in kinds
+    assert p.qty == 0.0
+    v.reject_prefix = None
+    ex.step(target(trend=trend_tl))
+    assert_mirrored(ex, v, "settled")
+    assert abs(v.position() + Q_T) < 1e-9
+
+
+def test_gate_N9e_partial_market_entry_is_booked_by_the_confirmed_fill(tmp_path):
+    """The trend's IOC fills 0.015 of 0.01647: the ledger carries 0.015,
+    the stop is sized 0.015, nothing halts."""
+    v = HLFake2()
+    ex = mk(tmp_path, v)
+    v.partial_market_qty = 0.015
+    ex.step(target(trend={"pending": {"side": "S", "limit": -1.0,
+                                      "signal_ts": T_ENTRY - 14_400},
+                          "position": None}))
+    ex.step(target(trend=_pos(entry_ts=T_ENTRY, side="S", stop=79_850.0)))
+    t = ex.state.legs["trend"]
+    assert ex.state.halted is None
+    assert abs(t.qty + 0.015) < 1e-9
+    stops = _open_stops(v)
+    assert len(stops) == 1 and abs(stops[0]["qty"] - 0.015) < 1e-9
+    assert abs(v.position() + 0.015) < 1e-9
+
+
+def test_gate_N10_pulse_shows_the_new_leg_state_without_sizes(tmp_path):
+    import app.main as m
+    from fastapi.testclient import TestClient
+    from app.main import app
+    v = HLFake2()
+    ex = mk(tmp_path, v)
+    t = ex.state.legs["trend"]
+    t.stop_mode, t.netted_qty, t.reest_cloid = "engine", -0.0164, "T-1-R1"
+    old = m.EXEC
+    m.EXEC = ex
+    try:
+        with TestClient(app) as c:
+            body = c.get("/pulse").json()
+    finally:
+        m.EXEC = old
+    leg = body["legs"]["trend"]
+    assert leg["stop_placed"] is False and leg["stop_mode"] == "engine"
+    assert leg["netted"] is True and leg["reest_open"] is True
+    assert "0.0164" not in str(body) and "netted_qty" not in leg
+
+
+def test_gate_every_non_reduce_only_market_order_is_entry_class():
+    """Static pin of I2: every `venue.place_market` in mirror.py either
+    passes reduce_only=True or lives in one of the entry-class functions.
+    A third order category cannot appear without editing this list."""
+    import inspect
+    import re
+    src = inspect.getsource(mirror)
+    lines = src.splitlines()
+    allowed = {"_sync_leg", "_enter_from_fill", "_reestablish",
+               "_drill_locked", "_drill_stopfill_locked"}
+    hits = []
+    for i, line in enumerate(lines):
+        if "self.venue.place_market(" not in line:
+            continue
+        call = " ".join(lines[i:i + 4])
+        j = i
+        while j >= 0 and not re.match(r"\s{4}def (\w+)", lines[j]):
+            j -= 1
+        fn = re.match(r"\s{4}def (\w+)", lines[j]).group(1)
+        if "reduce_only=True" in call:
+            continue
+        hits.append(fn)
+    assert set(hits) <= allowed, set(hits) - allowed
+    assert "_reestablish" in hits and "_enter_from_fill" in hits
+
+
+def test_gate_N1_subordinate_exit_with_a_resting_remainder_is_not_rebooked(tmp_path):
+    """The close-door twin of N1: a pullback maker order printed 0.01 and
+    keeps resting; the engine exits the pullback by SIGNAL while it is the
+    subordinate (trend -0.01647 dominant). Its 0.01 moves into the
+    dominant's debt, the remainder is cancelled, and the accounted ref must
+    never re-book the consumed 0.01 while the cancel lands. Venue == ledger
+    on every poll, no halt, no second entry."""
+    v = HLFake2()
+    ex = mk(tmp_path, v)
+    trend_tl = _pos(entry_ts=T_ENTRY, side="S", stop=79_850.0)
+    trend_short(ex, v, stop=79_850.0)
+    pcloid = pullback_limit(ex, v, trend_tl)
+    v.partial_fill(pcloid, 0.01)
+    pend = target(pull={"pending": {"side": "L", "limit": MID,
+                                    "signal_ts": S_PULL}, "position": None},
+                  trend=trend_tl)
+    ex.step(pend)                                        # books the 0.01
+    p, t = ex.state.legs["pullback"], ex.state.legs["trend"]
+    assert abs(p.qty - 0.01) < 1e-9
+    entries_before = [c for c in v.calls if c[0] == "LIMIT"]
+    # engine drops the pullback entirely (pending cancelled, nothing held)
+    for i in range(4):
+        ex.step(target(trend=trend_tl))
+        assert_mirrored(ex, v, f"poll {i}")
+        assert [c for c in v.calls if c[0] == "LIMIT"] == entries_before
+    assert p.qty == 0.0 and p.entry_cloid is None
+    assert v.orders[pcloid]["status"] == "CANCELLED"
+    assert abs(t.qty + Q_T) < 1e-9 and t.netted_qty == 0.0
+    assert abs(v.position() + Q_T) < 1e-9
+    kinds = [e["kind"] for e in ex.state.events]
+    assert "ledger_divergence" not in kinds
