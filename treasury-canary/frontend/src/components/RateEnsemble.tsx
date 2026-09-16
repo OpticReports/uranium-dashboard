@@ -69,8 +69,8 @@ export default function RateEnsemble() {
               title: "Rate-path odds (accuracy-weighted ensemble)",
               what: "Blend of prediction-market prices for each upcoming FOMC decision, weighted by each source's BACKTESTED forecast accuracy — the weights are earned from history, not assigned.",
               calc: `Each source is scored by the Brier score of its price one week before every resolved FOMC meeting vs the actual outcome (lower = sharper). Weights ∝ 1/Brier with small-sample shrinkage. Current: Polymarket ${Math.round((wPm?.weight ?? 0) * 100)}% (Brier ${wPm?.brier}, n=${wPm?.n}) · Kalshi ${Math.round((wKa?.weight ?? 0) * 100)}% (Brier ${wKa?.brier}, n=${wKa?.n}).`,
-              read: "Weights re-learn after every meeting resolves — a source that misprices meetings loses influence automatically.",
-              caveat: "Display-only (never feeds the composite). CME FedWatch has no keyless feed and is not yet a column. Prediction markets carry longshot bias at extreme prices; T-7d is one horizon, not a curve.",
+              read: "Weights re-learn after every meeting resolves — a source that misprices meetings loses influence automatically. The sources column counts how many priced each meeting; hover it to see why any of them didn't.",
+              caveat: "Display-only (never feeds the composite). The third column computes the FedWatch METHOD from the fed-funds futures curve (CME's own published probabilities have no keyless feed): the rate going into a meeting comes from the prior meeting-free month's contract, the chain, or spot EFFR for the nearest meeting; for a meeting in the last quarter of its month the post-decision rate is read off the next month's contract, because solving the month average there would amplify quote error up to ~15x. Prediction markets carry longshot bias at extreme prices; T-7d is one horizon, not a curve.",
             }}
           />
         </span>
@@ -101,9 +101,12 @@ export default function RateEnsemble() {
                         const w = data.weights[s]?.weight ?? 0;
                         const name = s === "futures" ? "Fed-funds futures" :
                           s.charAt(0).toUpperCase() + s.slice(1);
-                        return `${name}: ${v === undefined ? "no market" :
+                        // a dash always says WHY, never just "no market"
+                        return `${name}: ${v === undefined ?
+                          (m.missing?.[s] ?? "not priced") :
                           `${(v * 100).toFixed(1)}%`}  (weight ${Math.round(w * 100)}%)`;
                       }),
+                      ...(m.anchor ? [`futures anchor — ${m.anchor}`] : []),
                       `→ blend: ${m.blend[b] !== undefined ?
                         `${(m.blend[b] * 100).toFixed(1)}%` : "—"}  ` +
                       `(weighted avg over sources with a market, renormalized)`,
@@ -125,7 +128,20 @@ export default function RateEnsemble() {
                     </div>
                   </td>
                 ))}
-                <td className="pl-3 py-1.5 text-right text-[9px] text-slate-600">
+                <td
+                  className="pl-3 py-1.5 text-right text-[9px] text-slate-600 cursor-help"
+                  title={
+                    Object.keys(m.missing ?? {}).length === 0
+                      ? "all sources priced this meeting"
+                      : Object.entries(m.missing ?? {})
+                          .map(([s, why]) => {
+                            const name = s === "futures" ? "Fed-funds futures" :
+                              s.charAt(0).toUpperCase() + s.slice(1);
+                            return `${name}: ${why}`;
+                          })
+                          .join("\n")
+                  }
+                >
                   {srcs.filter((s) => m.sources[s] && Object.keys(m.sources[s]).length > 0).length}/{srcs.length}
                 </td>
               </tr>

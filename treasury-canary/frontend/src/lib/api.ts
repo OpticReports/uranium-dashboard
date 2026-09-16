@@ -785,6 +785,10 @@ export interface RateEnsembleSource {
 export interface RateEnsembleMeeting {
   date: string;
   sources: Record<string, Record<string, number>>;
+  /** why a source is empty for this meeting — keyed by source id */
+  missing?: Record<string, string>;
+  /** set when the futures leg anchored on spot EFFR instead of a contract */
+  anchor?: string | null;
   blend: Record<string, number>;
 }
 

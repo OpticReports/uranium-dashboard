@@ -20,10 +20,11 @@ futures ~21%, KA ~19%.
 Every fetch snapshots forecasts to disk; after each meeting resolves the
 archive re-scores and the weights update — the blend keeps earning itself.
 
-NOT modeled: CME FedWatch (no keyless feed — futures-implied probabilities
-would be a third column if a data path appears). Prediction markets carry
-their own microstructure (fees, longshot bias at <2c); T-7d is one horizon,
-not a curve.
+NOT modeled: CME FedWatch's own published probabilities (no keyless feed) —
+the futures column computes the FedWatch METHOD from the ZQ curve instead.
+Prediction markets carry their own microstructure (fees, longshot bias at
+<2c); T-7d is one horizon, not a curve. Every meeting a source cannot price
+carries a reason in `missing`, so a dash on the panel always says why.
 """
 from __future__ import annotations
 
@@ -307,12 +308,13 @@ def ensemble(now: float | None = None) -> dict:
                 hit["sources"][src] = probs
                 hit["date"] = min(hit["date"], d)
     upcoming = sorted(m["date"] for m in merged if m["date"] >= today)
+    fut_notes: dict[str, str] = {}
     try:
         from .fed_futures import implied_probs
-        fut = implied_probs(upcoming[:6])
+        fut = implied_probs(upcoming[:6], notes=fut_notes)
     except Exception as exc:  # noqa: BLE001
         logger.warning("futures-implied probs failed: %s", exc)
-        fut = {}
+        fut, fut_notes = {}, {}
     meetings = []
     for m in sorted(merged, key=lambda x: x["date"]):
         if m["date"] < today:
@@ -320,7 +322,17 @@ def ensemble(now: float | None = None) -> dict:
         per = {"polymarket": m["sources"].get("polymarket") or {},
                "kalshi": m["sources"].get("kalshi") or {},
                "futures": fut.get(m["date"]) or {}}
+        # a missing source always says WHY: the prediction markets simply have
+        # nothing listed that far out, while the futures method reports its own
+        # reason through `notes`. A dash on the panel is never unexplained.
+        missing = {src: (fut_notes.get(m["date"])
+                         or "the ZQ curve could not price this meeting")
+                   if src == "futures" else
+                   "no market listed for this meeting yet"
+                   for src, probs in per.items() if not probs}
         meetings.append({"date": m["date"], "sources": per,
+                         "missing": missing,
+                         "anchor": fut_notes.get("_anchor:" + m["date"]),
                          "blend": blend(per, weights)})
     return {"meetings": meetings[:6], "weights": weights,
             "buckets": BUCKETS, "labels": LABELS,
