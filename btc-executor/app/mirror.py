@@ -3249,8 +3249,8 @@ class Executor:
             return
         self._watch_fill(leg, "reestablish", cloid, px, side)
         self._event("WARN", "reest_order",
-                    f"{leg} {side} {size} at market to re-establish exposure "
-                    f"the venue netted away (engine still holds it)")
+                    f"{leg} {side} {round(size, 8)} at market to re-establish "
+                    f"exposure the venue netted away (engine still holds it)")
         self._settle_reest(leg, led)
 
     def _handle_stop_vanished(self, leg: str, led: LegLedger, pos: dict,
