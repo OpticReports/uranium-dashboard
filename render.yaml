@@ -564,14 +564,26 @@ services:
       # Loud is not impossible. Treat a base change as a ramp step.
       # Change KELLY_M one step at a time, never alongside SIZING_BASE_USD.
       # Current dashboard values (2026-09-10, Hyperliquid live-test phase):
-      # KELLY_M 0.135, SIZING_BASE_USD 1000, MAX_NOTIONAL_USD 10000,
+      # KELLY_M 0.135, SIZING_BASE_USD 25000, MAX_NOTIONAL_USD 10000,
       # MAX_ACCOUNT_LEV 2.0, DD_HALT_PCT 0.35 (% of sizing base).
-      # MAX_NOTIONAL_USD was 2000 until 2026-09-10 and that was INCOHERENT
-      # with the sizing base: at 2000 the whole-account cap bound before
-      # max_account_lev ever did on a real ramp step, so cap_clamp fired on
-      # ordinary sizing rather than on a runaway. Raised to 10000, which
-      # leaves the lev ceiling (2.0 x 1000 = 2000) as the binding rail it
-      # was designed to be. Set by Casey in the dashboard; recorded here.
+      #
+      # SIZING_BASE_USD IS 25000, NOT 1000. This comment said 1000 until
+      # 2026-09-10 18:30 and it was stale by two days. Back-calculated from
+      # the venue rather than guessed: the 09-10 16:00 trend entry was
+      # 0.01638 BTC @ 77,221 = $1,264.88 and was NOT cap-clamped, and
+      # 1264.88 / (0.135 x 1.5 x 0.25) = $24,985. Cross-checks on the
+      # pullback: at base 1000 the 09-08 entry was $151, and at base 25000
+      # the 09-09 entry wanted $3,797 and got 0.02481 BTC - exactly
+      # min(2000, ...)/78557 minus the 0.00064 trend leg. Both agree.
+      #
+      # WHICH RAIL BINDS, corrected with it: cap_notional is
+      # min(MAX_NOTIONAL_USD, MAX_ACCOUNT_LEV x base) = min(10000, 50000)
+      # = 10000, so MAX_NOTIONAL_USD is the binding rail and the lev ceiling
+      # is not - the reverse of what this comment claimed an hour ago. At
+      # 2000 it clamped ordinary sizing (the 09-09 entry took 0.02481
+      # instead of 0.04833); at 10000 the full gross target of
+      # 0.135 x 1.5 x 25000 = $5,062 fits under it with room, which is what
+      # raising it was for. Set by Casey in the dashboard; recorded here.
       # (was 0.05 / 50000 / 80000 through the Coinbase phase.)
       #
       # KELLY_M 0.135 is deliberately OFF the ramp staircase, and is not

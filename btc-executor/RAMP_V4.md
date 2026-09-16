@@ -29,6 +29,7 @@ satisfy any row (see the mode guard below):
 | config_change detected | ≥1       | any env change redeploy           |
 | halt + resume          | ≥1 pair  | operator-triggered manual test    |
 | drill_cycle complete   | ≥3       | drill                             |
+| netted_reopen          | ≥1       | organic only: an opposed S3/S4 book on the netted venue ends in a fill of ours that nets the other leg away, and the R order re-opens it toward the engine (docs/NETTING_FIX_DESIGN.md, 2026-09-16). A new live order class; it stays a gate row until witnessed |
 | slippage sample        | ≥10 fills| any LIVE fill (drill fills count — they are real fills), **VOID fills excluded**. 10 = the slip-CUSUM's arming threshold, NOT a size test; see "Slippage: right diagnosis, wrong prescription" (2026-09-02) |
 
 **Void fills (2026-08-26).** A fill whose `|slip_bps| > 500` is marked
@@ -81,6 +82,29 @@ Slippage sanity gate: |mean slip| < 15bps (computed in `main._slip_sanity`,
 published as `/status.ramp_v4.slippage_sanity`; prose-only until 2026-09-02)
 and no slip-CUSUM alarm (edge-monitor). P&L is explicitly NOT a gate at any
 stage.
+
+### `netted_reopen`: a new live order class (amended 2026-09-16)
+
+**A row was ADDED, not moved.** The netted-venue fix
+(`docs/NETTING_FIX_DESIGN.md`, built after two LEDGER_DIVERGENCE halts on
+2026-09-10 and 2026-09-14) introduces one new order the executor can send
+live: the **R order** — an entry-class (non-reduce-only) market order that
+re-opens exposure the venue netted away when one leg's fill closed the
+other leg's position too. It is sent only toward a position the engine
+still reports, under every entry gate plus exact venue corroboration, and
+it is capped at `REEST_MAX` attempts per event. At the venue it is the same
+IOC the trend's market entry and the chase already use; what is new is the
+ledger re-attribution that decides to send it. The ramp's rule is that
+every event class is witnessed live before size increases, and a class
+that can only be produced by an opposed S3/S4 book ending in a netting
+event (upper bound ~25 episodes/yr from the 2022-26 overlap study, not all
+of which net) has not been. So it is a gate row until it is.
+
+**Cost of the row, stated plainly:** it can hold the ramp at 0.135 for
+weeks. That is the doctrine's price, and it is Casey's call to waive it
+(`RAMP_V4_REQUIRED["netted_reopen"]` in `main.py`, with the frozen pin in
+`test_gate_no_ramp_row_may_drift_unnoticed`). No drill can produce it:
+only the real path proves the real path.
 
 ### Slippage: right diagnosis, wrong prescription (amended 2026-09-02)
 
