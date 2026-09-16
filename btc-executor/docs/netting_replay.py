@@ -7,7 +7,6 @@ the same commit renders old vs new. usage:
 (old build: git archive <sha> btc-executor/app btc-executor/tests into a
 scratch dir and point app_root/tests_dir at it)
 """
-"""
 import json
 import os
 import sys
