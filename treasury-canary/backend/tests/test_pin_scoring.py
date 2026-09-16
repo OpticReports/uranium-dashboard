@@ -101,20 +101,25 @@ def test_accident_gauge_stale_curve_tape_is_unknown_not_green():
 
 
 def test_exposure_counts_red_mass():
-    # +100% oil yoy -> oil channel RED -> its $20T consumption base counts red
+    # +100% oil to a new 3-year high -> oil channel RED -> its mass counts red.
+    # Mass re-labelled 2026-09-16 to the ~$0.9T US petroleum bill (was $20T of
+    # consumption): studies/oil-shock-recession-weight.md §5, effect-size row.
     import datetime
-    days = [datetime.date(2024, 1, 1) + datetime.timedelta(days=i) for i in range(400)]
-    vals = [50.0] * 337 + [100.0] * 63
+    n = 365 * 5 + 63
+    days = [datetime.date(2019, 1, 1) + datetime.timedelta(days=i) for i in range(n)]
+    vals = [50.0] * (n - 63) + [100.0] * 63
     board = build_pin_board({"oil": (days, vals)})
     oil = next(c for c in board["channels"] if c["channel_id"] == "oil_shock")
     assert oil["status"] == "RED"
-    assert board["exposure"]["red_trillions"] == 20.0
+    assert board["exposure"]["red_trillions"] == 0.9
 
 
 def test_scores_flow_from_synthetic_data():
-    # oil +60% y/y -> RED with score in (80, 100)
-    dates = [None] * 260
-    oil = [100.0] * 130 + [160.0] * 130
+    # oil +60% to a new 3-year high -> RED with score in (80, 100)
+    import datetime
+    n = 365 * 5 + 130
+    dates = [datetime.date(2019, 1, 1) + datetime.timedelta(days=i) for i in range(n)]
+    oil = [100.0] * (n - 130) + [160.0] * 130
     board = build_pin_board({"oil": (dates, oil)})
     ch = next(c for c in board["channels"] if c["channel_id"] == "oil_shock")
     assert ch["status"] == "RED"

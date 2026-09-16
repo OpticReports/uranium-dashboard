@@ -1,0 +1,6054 @@
+{
+ "ia_d1_months": {
+  "value": 476,
+  "def": "month-ends 1987-01..2026-08 with both oil_12m_pct and wti_daily_252_pct"
+ },
+ "ia_d1_grade_agreement": {
+  "value": 0.9244,
+  "def": "share of month-ends where 3-level D1 grade (benign/yellow/red at 25/50) agrees, monthly-mean vs daily 252-obs point"
+ },
+ "ia_d1_onoff_agreement": {
+  "value": 0.9643,
+  "def": "share of month-ends where ON(=RED) agrees, monthly-mean vs daily point construction"
+ },
+ "ia_d1_live_red_panel_not": {
+  "value": 10,
+  "def": "months daily-point RED but monthly-mean not RED"
+ },
+ "ia_d1_panel_red_live_not": {
+  "value": 7,
+  "def": "months monthly-mean RED but daily-point not RED"
+ },
+ "ia_d1_replace_monthly_with_daily": {
+  "value": false,
+  "def": "True iff the spec's <90% ON/OFF agreement clause triggers"
+ },
+ "ia_d1_grade_disagreement_months": {
+  "value": [
+   "1987-03",
+   "1987-06",
+   "1987-08",
+   "1989-06",
+   "1989-07",
+   "1989-08",
+   "1989-09",
+   "1989-12",
+   "1990-11",
+   "1991-05",
+   "1994-12",
+   "2000-08",
+   "2000-10",
+   "2002-09",
+   "2002-10",
+   "2002-12",
+   "2003-03",
+   "2005-03",
+   "2005-05",
+   "2005-06",
+   "2005-08",
+   "2006-02",
+   "2007-10",
+   "2007-11",
+   "2007-12",
+   "2011-07",
+   "2017-04",
+   "2017-11",
+   "2018-07",
+   "2018-10",
+   "2019-12",
+   "2021-02",
+   "2021-11",
+   "2022-06",
+   "2026-05",
+   "2026-07"
+  ],
+  "def": "month-ends where 3-level D1 grade differs (live vs panel)"
+ },
+ "ia_curve_months": {
+  "value": 536,
+  "def": "months 1982-01..2026-08 with both curve_flat_gs6m and curve_flat_daily183"
+ },
+ "ia_curve_agreement": {
+  "value": 0.9104,
+  "def": "share of months where curve_flat_gs6m (min spread_gs over 6 months < 0.25) == curve_flat_daily183 (deployed: min daily 3m10y over 183 days < 0.25)"
+ },
+ "ia_curve_disagreement_months": {
+  "value": [
+   "1982-02:daily-only",
+   "1982-03:daily-only",
+   "1982-04:daily-only",
+   "1982-05:daily-only",
+   "1982-06:daily-only",
+   "1982-07:daily-only",
+   "1982-08:daily-only",
+   "1982-09:daily-only",
+   "1989-02:daily-only",
+   "1989-03:daily-only",
+   "1989-04:daily-only",
+   "1989-05:daily-only",
+   "1990-06:daily-only",
+   "1995-12:daily-only",
+   "1996-01:daily-only",
+   "1996-02:daily-only",
+   "1996-03:daily-only",
+   "1996-04:daily-only",
+   "1996-05:daily-only",
+   "1998-01:daily-only",
+   "1998-02:daily-only",
+   "1998-03:daily-only",
+   "1998-04:daily-only",
+   "1998-05:daily-only",
+   "1998-06:daily-only",
+   "1998-07:daily-only",
+   "1998-08:daily-only",
+   "1999-03:daily-only",
+   "1999-04:daily-only",
+   "1999-05:daily-only",
+   "1999-06:daily-only",
+   "1999-07:daily-only",
+   "2000-03:daily-only",
+   "2000-04:daily-only",
+   "2000-05:daily-only",
+   "2000-06:daily-only",
+   "2001-08:daily-only",
+   "2008-01:daily-only",
+   "2008-02:daily-only",
+   "2018-12:daily-only",
+   "2019-01:daily-only",
+   "2019-02:daily-only",
+   "2020-08:daily-only",
+   "2022-07:daily-only",
+   "2022-08:daily-only",
+   "2022-09:daily-only",
+   "2022-10:daily-only",
+   "2026-04:daily-only"
+  ],
+  "def": "months where the two curve-flat rules disagree"
+ },
+ "ia_cmt_months": {
+  "value": 531,
+  "def": "months (1982-06..2026-08) with a 6-month min of spread_cmt available"
+ },
+ "ia_cmt_agreement": {
+  "value": 0.9699,
+  "def": "share of months where flat condition (6m min < 0.25) agrees between T10Y3M (CMT, monthly mean) and GS10\u2212TB3MS"
+ },
+ "ia_cmt_disagreements": {
+  "value": 16,
+  "def": "count of disagreement months, CMT-flat-only + GS-flat-only"
+ },
+ "ia_cmt_disagreement_months": {
+  "value": [
+   "1982-06:CMT-only",
+   "1982-07:CMT-only",
+   "1989-03:CMT-only",
+   "1989-04:CMT-only",
+   "1989-05:CMT-only",
+   "1999-03:CMT-only",
+   "1999-04:CMT-only",
+   "1999-05:CMT-only",
+   "2000-04:CMT-only",
+   "2000-05:CMT-only",
+   "2000-06:CMT-only",
+   "2019-02:CMT-only",
+   "2022-08:CMT-only",
+   "2022-09:CMT-only",
+   "2022-10:CMT-only",
+   "2026-04:CMT-only"
+  ],
+  "def": "months where CMT and GS flat conditions disagree"
+ },
+ "episodes_D1-RED": {
+  "value": [
+   {
+    "start": "1948-01",
+    "end": "1948-03",
+    "n_on0": 3,
+    "raw_span": "1948-01..1948-03",
+    "n_on": 3,
+    "peak": 58.64,
+    "peak_month": "1948-01"
+   },
+   {
+    "start": "\u2014",
+    "end": "\u2014",
+    "n_on0": 0,
+    "raw_span": "1974-01..1974-12",
+    "n_on": 12,
+    "peak": 183.99,
+    "peak_month": "1974-01"
+   },
+   {
+    "start": "1979-08",
+    "end": "1980-01",
+    "n_on0": 6,
+    "raw_span": "1979-08..1980-07",
+    "n_on": 12,
+    "peak": 149.21,
+    "peak_month": "1980-04"
+   },
+   {
+    "start": "1987-07",
+    "end": "1987-07",
+    "n_on0": 1,
+    "raw_span": "1987-07..1987-07",
+    "n_on": 1,
+    "peak": 84.49,
+    "peak_month": "1987-07"
+   },
+   {
+    "start": "\u2014",
+    "end": "\u2014",
+    "n_on0": 0,
+    "raw_span": "1990-09..1990-11",
+    "n_on": 3,
+    "peak": 78.8,
+    "peak_month": "1990-10"
+   },
+   {
+    "start": "1999-08",
+    "end": "2000-06",
+    "n_on0": 10,
+    "raw_span": "1999-08..2000-06",
+    "n_on": 10,
+    "peak": 144.38,
+    "peak_month": "2000-02"
+   },
+   {
+    "start": "2002-12",
+    "end": "2003-02",
+    "n_on0": 3,
+    "raw_span": "2002-12..2003-02",
+    "n_on": 3,
+    "peak": 72.95,
+    "peak_month": "2003-02"
+   },
+   {
+    "start": "2004-09",
+    "end": "2004-11",
+    "n_on0": 3,
+    "raw_span": "2004-09..2004-11",
+    "n_on": 3,
+    "peak": 75.17,
+    "peak_month": "2004-10"
+   },
+   {
+    "start": "2007-11",
+    "end": "2007-11",
+    "n_on0": 1,
+    "raw_span": "2007-11..2008-08",
+    "n_on": 9,
+    "peak": 98.47,
+    "peak_month": "2008-06"
+   },
+   {
+    "start": "2009-12",
+    "end": "2010-04",
+    "n_on0": 5,
+    "raw_span": "2009-12..2010-04",
+    "n_on": 5,
+    "peak": 95.15,
+    "peak_month": "2010-02"
+   },
+   {
+    "start": "2017-01",
+    "end": "2017-02",
+    "n_on0": 2,
+    "raw_span": "2017-01..2017-02",
+    "n_on": 2,
+    "peak": 76.35,
+    "peak_month": "2017-02"
+   },
+   {
+    "start": "2018-06",
+    "end": "2018-07",
+    "n_on0": 2,
+    "raw_span": "2018-06..2018-07",
+    "n_on": 2,
+    "peak": 52.22,
+    "peak_month": "2018-07"
+   },
+   {
+    "start": "2021-03",
+    "end": "2022-06",
+    "n_on0": 16,
+    "raw_span": "2021-03..2022-06",
+    "n_on": 16,
+    "peak": 272.93,
+    "peak_month": "2021-04"
+   },
+   {
+    "start": "2026-04",
+    "end": "2026-05",
+    "n_on0": 2,
+    "raw_span": "2026-04..2026-05",
+    "n_on": 2,
+    "peak": 64.28,
+    "peak_month": "2026-05"
+   }
+  ],
+  "def": "D1-RED: oil_12m_pct >= 50; episode rule \u00a74"
+ },
+ "episodes_D1-YELLOW": {
+  "value": [
+   {
+    "start": "1947-01",
+    "end": "1948-10",
+    "n_on0": 19,
+    "raw_span": "1947-01..1948-10",
+    "n_on": 19,
+    "peak": 58.64,
+    "peak_month": "1948-01"
+   },
+   {
+    "start": "\u2014",
+    "end": "\u2014",
+    "n_on0": 0,
+    "raw_span": "1974-01..1974-12",
+    "n_on": 12,
+    "peak": 183.99,
+    "peak_month": "1974-01"
+   },
+   {
+    "start": "1979-06",
+    "end": "1980-09",
+    "n_on0": 10,
+    "raw_span": "1979-06..1980-09",
+    "n_on": 16,
+    "peak": 149.21,
+    "peak_month": "1980-04"
+   },
+   {
+    "start": "1987-03",
+    "end": "1987-10",
+    "n_on0": 8,
+    "raw_span": "1987-03..1987-10",
+    "n_on": 8,
+    "peak": 84.49,
+    "peak_month": "1987-07"
+   },
+   {
+    "start": "1989-07",
+    "end": "1990-01",
+    "n_on0": 6,
+    "raw_span": "1989-07..1990-12",
+    "n_on": 11,
+    "peak": 78.8,
+    "peak_month": "1990-10"
+   },
+   {
+    "start": "1995-02",
+    "end": "1995-03",
+    "n_on0": 2,
+    "raw_span": "1995-02..1995-03",
+    "n_on": 2,
+    "peak": 26.53,
+    "peak_month": "1995-03"
+   },
+   {
+    "start": "1996-09",
+    "end": "1997-01",
+    "n_on0": 5,
+    "raw_span": "1996-09..1997-01",
+    "n_on": 5,
+    "peak": 42.78,
+    "peak_month": "1996-10"
+   },
+   {
+    "start": "1999-06",
+    "end": "2000-11",
+    "n_on0": 18,
+    "raw_span": "1999-06..2000-11",
+    "n_on": 18,
+    "peak": 144.38,
+    "peak_month": "2000-02"
+   },
+   {
+    "start": "2002-10",
+    "end": "2003-03",
+    "n_on0": 6,
+    "raw_span": "2002-10..2003-03",
+    "n_on": 6,
+    "peak": 72.95,
+    "peak_month": "2003-02"
+   },
+   {
+    "start": "2004-04",
+    "end": "2006-07",
+    "n_on0": 23,
+    "raw_span": "2004-04..2006-07",
+    "n_on": 23,
+    "peak": 75.17,
+    "peak_month": "2004-10"
+   },
+   {
+    "start": "2007-09",
+    "end": "2007-12",
+    "n_on0": 4,
+    "raw_span": "2007-09..2008-09",
+    "n_on": 13,
+    "peak": 98.47,
+    "peak_month": "2008-06"
+   },
+   {
+    "start": "2009-11",
+    "end": "2010-04",
+    "n_on0": 6,
+    "raw_span": "2009-11..2010-04",
+    "n_on": 6,
+    "peak": 95.15,
+    "peak_month": "2010-02"
+   },
+   {
+    "start": "2011-03",
+    "end": "2011-07",
+    "n_on0": 5,
+    "raw_span": "2011-03..2011-07",
+    "n_on": 5,
+    "peak": 37.23,
+    "peak_month": "2011-05"
+   },
+   {
+    "start": "2016-12",
+    "end": "2017-04",
+    "n_on0": 5,
+    "raw_span": "2016-12..2017-04",
+    "n_on": 5,
+    "peak": 76.35,
+    "peak_month": "2017-02"
+   },
+   {
+    "start": "2018-03",
+    "end": "2018-10",
+    "n_on0": 8,
+    "raw_span": "2018-03..2018-10",
+    "n_on": 8,
+    "peak": 52.22,
+    "peak_month": "2018-07"
+   },
+   {
+    "start": "2021-03",
+    "end": "2022-08",
+    "n_on0": 18,
+    "raw_span": "2021-03..2022-08",
+    "n_on": 18,
+    "peak": 272.93,
+    "peak_month": "2021-04"
+   },
+   {
+    "start": "2026-03",
+    "end": "2026-08",
+    "n_on0": 4,
+    "raw_span": "2026-03..2026-08",
+    "n_on": 4,
+    "peak": 64.28,
+    "peak_month": "2026-05"
+   }
+  ],
+  "def": "D1-YELLOW: oil_12m_pct >= 25; episode rule \u00a74"
+ },
+ "episodes_D2": {
+  "value": [
+   {
+    "start": "1973-08",
+    "end": "1973-11",
+    "n_on0": 4,
+    "raw_span": "1973-08..1974-12",
+    "n_on": 17,
+    "peak": 104.38,
+    "peak_month": "1974-01"
+   },
+   {
+    "start": "1976-09",
+    "end": "1977-08",
+    "n_on0": 12,
+    "raw_span": "1976-09..1977-08",
+    "n_on": 12,
+    "peak": 21.96,
+    "peak_month": "1976-09"
+   },
+   {
+    "start": "1979-05",
+    "end": "1981-01",
+    "n_on0": 15,
+    "raw_span": "1979-05..1981-01",
+    "n_on": 21,
+    "peak": 91.31,
+    "peak_month": "1980-04"
+   },
+   {
+    "start": "1991-04",
+    "end": "1991-08",
+    "n_on0": 5,
+    "raw_span": "1990-08..1991-08",
+    "n_on": 13,
+    "peak": 52.01,
+    "peak_month": "1990-10"
+   },
+   {
+    "start": "1996-04",
+    "end": "1997-03",
+    "n_on0": 12,
+    "raw_span": "1996-04..1997-03",
+    "n_on": 12,
+    "peak": 22.14,
+    "peak_month": "1996-12"
+   },
+   {
+    "start": "2000-02",
+    "end": "2001-03",
+    "n_on0": 14,
+    "raw_span": "2000-02..2001-05",
+    "n_on": 16,
+    "peak": 30.37,
+    "peak_month": "2000-11"
+   },
+   {
+    "start": "2004-05",
+    "end": "2007-12",
+    "n_on0": 38,
+    "raw_span": "2004-05..2009-04",
+    "n_on": 54,
+    "peak": 58.77,
+    "peak_month": "2008-06"
+   },
+   {
+    "start": "2018-04",
+    "end": "2019-03",
+    "n_on0": 12,
+    "raw_span": "2018-04..2019-03",
+    "n_on": 12,
+    "peak": 17.11,
+    "peak_month": "2018-07"
+   },
+   {
+    "start": "2021-10",
+    "end": "2023-02",
+    "n_on0": 17,
+    "raw_span": "2021-10..2023-02",
+    "n_on": 17,
+    "peak": 47.55,
+    "peak_month": "2022-06"
+   },
+   {
+    "start": "2026-04",
+    "end": "2026-08",
+    "n_on0": 5,
+    "raw_span": "2026-04..2026-08",
+    "n_on": 5,
+    "peak": 13.28,
+    "peak_month": "2026-05"
+   }
+  ],
+  "def": "D2: nopi36_sum12 >= 10; episode rule \u00a74"
+ },
+ "episodes_D3-RED": {
+  "value": [
+   {
+    "start": "\u2014",
+    "end": "\u2014",
+    "n_on0": 0,
+    "raw_span": "1974-01..1974-12",
+    "n_on": 12,
+    "peak": 159.11,
+    "peak_month": "1974-01"
+   },
+   {
+    "start": "1979-08",
+    "end": "1980-01",
+    "n_on0": 6,
+    "raw_span": "1979-08..1980-07",
+    "n_on": 12,
+    "peak": 117.48,
+    "peak_month": "1980-04"
+   },
+   {
+    "start": "1987-07",
+    "end": "1987-07",
+    "n_on0": 1,
+    "raw_span": "1987-07..1987-07",
+    "n_on": 1,
+    "peak": 77.52,
+    "peak_month": "1987-07"
+   },
+   {
+    "start": "\u2014",
+    "end": "\u2014",
+    "n_on0": 0,
+    "raw_span": "1990-09..1990-11",
+    "n_on": 3,
+    "peak": 68.07,
+    "peak_month": "1990-10"
+   },
+   {
+    "start": "1999-08",
+    "end": "2000-06",
+    "n_on0": 10,
+    "raw_span": "1999-08..2000-06",
+    "n_on": 10,
+    "peak": 136.76,
+    "peak_month": "2000-02"
+   },
+   {
+    "start": "2003-01",
+    "end": "2003-02",
+    "n_on0": 2,
+    "raw_span": "2003-01..2003-02",
+    "n_on": 2,
+    "peak": 67.68,
+    "peak_month": "2003-02"
+   },
+   {
+    "start": "2004-09",
+    "end": "2004-11",
+    "n_on0": 3,
+    "raw_span": "2004-09..2004-11",
+    "n_on": 3,
+    "peak": 69.76,
+    "peak_month": "2004-10"
+   },
+   {
+    "start": "2007-11",
+    "end": "2007-11",
+    "n_on0": 1,
+    "raw_span": "2007-11..2008-08",
+    "n_on": 9,
+    "peak": 89.83,
+    "peak_month": "2008-05"
+   },
+   {
+    "start": "2009-12",
+    "end": "2010-04",
+    "n_on0": 5,
+    "raw_span": "2009-12..2010-04",
+    "n_on": 5,
+    "peak": 91.04,
+    "peak_month": "2010-02"
+   },
+   {
+    "start": "2017-01",
+    "end": "2017-02",
+    "n_on0": 2,
+    "raw_span": "2017-01..2017-02",
+    "n_on": 2,
+    "peak": 71.53,
+    "peak_month": "2017-02"
+   },
+   {
+    "start": "2021-03",
+    "end": "2022-05",
+    "n_on0": 12,
+    "raw_span": "2021-03..2022-05",
+    "n_on": 12,
+    "peak": 258.13,
+    "peak_month": "2021-04"
+   },
+   {
+    "start": "2026-04",
+    "end": "2026-05",
+    "n_on0": 2,
+    "raw_span": "2026-04..2026-05",
+    "n_on": 2,
+    "peak": 57.7,
+    "peak_month": "2026-05"
+   }
+  ],
+  "def": "D3-RED: real_oil_12m_pct >= 50; episode rule \u00a74"
+ },
+ "episodes_D3-YELLOW": {
+  "value": [
+   {
+    "start": "1948-01",
+    "end": "1948-10",
+    "n_on0": 10,
+    "raw_span": "1948-01..1948-10",
+    "n_on": 10,
+    "peak": 48.52,
+    "peak_month": "1948-03"
+   },
+   {
+    "start": "\u2014",
+    "end": "\u2014",
+    "n_on0": 0,
+    "raw_span": "1974-01..1974-12",
+    "n_on": 12,
+    "peak": 159.11,
+    "peak_month": "1974-01"
+   },
+   {
+    "start": "1979-07",
+    "end": "1980-08",
+    "n_on0": 8,
+    "raw_span": "1979-07..1980-08",
+    "n_on": 14,
+    "peak": 117.48,
+    "peak_month": "1980-04"
+   },
+   {
+    "start": "1987-03",
+    "end": "1987-10",
+    "n_on0": 7,
+    "raw_span": "1987-03..1987-10",
+    "n_on": 7,
+    "peak": 77.52,
+    "peak_month": "1987-07"
+   },
+   {
+    "start": "1989-09",
+    "end": "1989-11",
+    "n_on0": 3,
+    "raw_span": "1989-09..1989-11",
+    "n_on": 3,
+    "peak": 39.22,
+    "peak_month": "1989-10"
+   },
+   {
+    "start": "\u2014",
+    "end": "\u2014",
+    "n_on0": 0,
+    "raw_span": "1990-08..1990-11",
+    "n_on": 4,
+    "peak": 68.07,
+    "peak_month": "1990-10"
+   },
+   {
+    "start": "1996-09",
+    "end": "1997-01",
+    "n_on0": 5,
+    "raw_span": "1996-09..1997-01",
+    "n_on": 5,
+    "peak": 38.53,
+    "peak_month": "1996-10"
+   },
+   {
+    "start": "1999-06",
+    "end": "2000-11",
+    "n_on0": 18,
+    "raw_span": "1999-06..2000-11",
+    "n_on": 18,
+    "peak": 136.76,
+    "peak_month": "2000-02"
+   },
+   {
+    "start": "2002-10",
+    "end": "2003-03",
+    "n_on0": 6,
+    "raw_span": "2002-10..2003-03",
+    "n_on": 6,
+    "peak": 67.68,
+    "peak_month": "2003-02"
+   },
+   {
+    "start": "2004-04",
+    "end": "2006-05",
+    "n_on0": 20,
+    "raw_span": "2004-04..2006-05",
+    "n_on": 20,
+    "peak": 69.76,
+    "peak_month": "2004-10"
+   },
+   {
+    "start": "2007-10",
+    "end": "2007-12",
+    "n_on0": 3,
+    "raw_span": "2007-10..2008-08",
+    "n_on": 11,
+    "peak": 89.83,
+    "peak_month": "2008-05"
+   },
+   {
+    "start": "2009-11",
+    "end": "2010-04",
+    "n_on0": 6,
+    "raw_span": "2009-11..2010-04",
+    "n_on": 6,
+    "peak": 91.04,
+    "peak_month": "2010-02"
+   },
+   {
+    "start": "2011-04",
+    "end": "2011-05",
+    "n_on0": 2,
+    "raw_span": "2011-04..2011-05",
+    "n_on": 2,
+    "peak": 32.64,
+    "peak_month": "2011-05"
+   },
+   {
+    "start": "2016-12",
+    "end": "2017-03",
+    "n_on0": 4,
+    "raw_span": "2016-12..2017-03",
+    "n_on": 4,
+    "peak": 71.53,
+    "peak_month": "2017-02"
+   },
+   {
+    "start": "2018-04",
+    "end": "2018-10",
+    "n_on0": 7,
+    "raw_span": "2018-04..2018-10",
+    "n_on": 7,
+    "peak": 48.0,
+    "peak_month": "2018-07"
+   },
+   {
+    "start": "2021-03",
+    "end": "2022-08",
+    "n_on0": 18,
+    "raw_span": "2021-03..2022-08",
+    "n_on": 18,
+    "peak": 258.13,
+    "peak_month": "2021-04"
+   },
+   {
+    "start": "2026-03",
+    "end": "2026-08",
+    "n_on0": 4,
+    "raw_span": "2026-03..2026-08",
+    "n_on": 4,
+    "peak": 57.7,
+    "peak_month": "2026-05"
+   }
+  ],
+  "def": "D3-YELLOW: real_oil_12m_pct >= 25; episode rule \u00a74"
+ },
+ "episodes_PPI-RED": {
+  "value": [
+   {
+    "start": "1948-01",
+    "end": "1948-02",
+    "n_on0": 2,
+    "raw_span": "1948-01..1948-02",
+    "n_on": 2,
+    "peak": 57.53,
+    "peak_month": "1948-01"
+   },
+   {
+    "start": "\u2014",
+    "end": "\u2014",
+    "n_on0": 0,
+    "raw_span": "1974-01..1974-12",
+    "n_on": 12,
+    "peak": 78.49,
+    "peak_month": "1974-08"
+   },
+   {
+    "start": "1979-12",
+    "end": "1980-01",
+    "n_on0": 2,
+    "raw_span": "1979-12..1980-06",
+    "n_on": 7,
+    "peak": 63.6,
+    "peak_month": "1980-04"
+   },
+   {
+    "start": "1981-02",
+    "end": "1981-05",
+    "n_on0": 4,
+    "raw_span": "1981-02..1981-05",
+    "n_on": 4,
+    "peak": 63.68,
+    "peak_month": "1981-02"
+   },
+   {
+    "start": "1987-07",
+    "end": "1987-08",
+    "n_on0": 2,
+    "raw_span": "1987-07..1987-08",
+    "n_on": 2,
+    "peak": 69.72,
+    "peak_month": "1987-08"
+   },
+   {
+    "start": "\u2014",
+    "end": "\u2014",
+    "n_on0": 0,
+    "raw_span": "1990-09..1990-11",
+    "n_on": 3,
+    "peak": 104.86,
+    "peak_month": "1990-10"
+   },
+   {
+    "start": "1999-08",
+    "end": "2000-10",
+    "n_on0": 14,
+    "raw_span": "1999-08..2000-10",
+    "n_on": 14,
+    "peak": 218.7,
+    "peak_month": "2000-02"
+   },
+   {
+    "start": "2002-12",
+    "end": "2003-02",
+    "n_on0": 3,
+    "raw_span": "2002-12..2003-02",
+    "n_on": 3,
+    "peak": 77.94,
+    "peak_month": "2003-02"
+   },
+   {
+    "start": "2004-09",
+    "end": "2005-07",
+    "n_on0": 5,
+    "raw_span": "2004-09..2005-07",
+    "n_on": 5,
+    "peak": 71.24,
+    "peak_month": "2004-10"
+   },
+   {
+    "start": "2007-11",
+    "end": "2007-12",
+    "n_on0": 2,
+    "raw_span": "2007-11..2008-08",
+    "n_on": 10,
+    "peak": 107.16,
+    "peak_month": "2008-06"
+   },
+   {
+    "start": "2009-12",
+    "end": "2010-04",
+    "n_on0": 5,
+    "raw_span": "2009-12..2010-04",
+    "n_on": 5,
+    "peak": 129.29,
+    "peak_month": "2010-01"
+   },
+   {
+    "start": "2017-01",
+    "end": "2017-02",
+    "n_on0": 2,
+    "raw_span": "2017-01..2017-02",
+    "n_on": 2,
+    "peak": 106.19,
+    "peak_month": "2017-02"
+   },
+   {
+    "start": "2018-05",
+    "end": "2018-07",
+    "n_on0": 3,
+    "raw_span": "2018-05..2018-07",
+    "n_on": 3,
+    "peak": 63.59,
+    "peak_month": "2018-07"
+   },
+   {
+    "start": "2021-03",
+    "end": "2022-06",
+    "n_on0": 16,
+    "raw_span": "2021-03..2022-06",
+    "n_on": 16,
+    "peak": 260.0,
+    "peak_month": "2021-04"
+   },
+   {
+    "start": "2026-04",
+    "end": "2026-05",
+    "n_on0": 2,
+    "raw_span": "2026-04..2026-05",
+    "n_on": 2,
+    "peak": 70.95,
+    "peak_month": "2026-05"
+   }
+  ],
+  "def": "PPI-RED: ppi_crude_12m_pct >= 50; episode rule \u00a74"
+ },
+ "episodes_PPI-D2": {
+  "value": [
+   {
+    "start": "1953-06",
+    "end": "1953-07",
+    "n_on0": 2,
+    "raw_span": "1953-06..1954-01",
+    "n_on": 8,
+    "peak": 10.8,
+    "peak_month": "1953-06"
+   },
+   {
+    "start": "1973-09",
+    "end": "1976-05",
+    "n_on0": 17,
+    "raw_span": "1973-09..1976-05",
+    "n_on": 33,
+    "peak": 57.94,
+    "peak_month": "1974-08"
+   },
+   {
+    "start": "1978-09",
+    "end": "1981-07",
+    "n_on0": 24,
+    "raw_span": "1978-09..1982-01",
+    "n_on": 36,
+    "peak": 49.27,
+    "peak_month": "1981-02"
+   },
+   {
+    "start": "1991-04",
+    "end": "1991-09",
+    "n_on0": 6,
+    "raw_span": "1990-08..1991-09",
+    "n_on": 14,
+    "peak": 65.82,
+    "peak_month": "1990-10"
+   },
+   {
+    "start": "1996-04",
+    "end": "1997-08",
+    "n_on0": 17,
+    "raw_span": "1996-04..1997-08",
+    "n_on": 17,
+    "peak": 23.72,
+    "peak_month": "1997-01"
+   },
+   {
+    "start": "2000-02",
+    "end": "2001-03",
+    "n_on0": 14,
+    "raw_span": "2000-02..2001-05",
+    "n_on": 16,
+    "peak": 31.37,
+    "peak_month": "2000-11"
+   },
+   {
+    "start": "2004-05",
+    "end": "2007-12",
+    "n_on0": 38,
+    "raw_span": "2004-05..2009-04",
+    "n_on": 54,
+    "peak": 64.32,
+    "peak_month": "2008-07"
+   },
+   {
+    "start": "2018-04",
+    "end": "2019-03",
+    "n_on0": 12,
+    "raw_span": "2018-04..2019-03",
+    "n_on": 12,
+    "peak": 21.02,
+    "peak_month": "2018-10"
+   },
+   {
+    "start": "2022-01",
+    "end": "2023-05",
+    "n_on0": 17,
+    "raw_span": "2022-01..2023-05",
+    "n_on": 17,
+    "peak": 46.85,
+    "peak_month": "2022-06"
+   },
+   {
+    "start": "2026-04",
+    "end": "2026-08",
+    "n_on0": 5,
+    "raw_span": "2026-04..2026-08",
+    "n_on": 5,
+    "peak": 18.73,
+    "peak_month": "2026-05"
+   }
+  ],
+  "def": "PPI-D2: ppi_nopi36_sum12 >= 10; episode rule \u00a74"
+ },
+ "D1-RED_h12_episodes": {
+  "value": 13,
+  "def": "D1-RED episodes with raw first ON \u2265 1953-04, scored vs NBER onsets at h=12"
+ },
+ "D1-RED_h12_hits": {
+  "value": 3,
+  "def": "episodes crediting \u22651 onset"
+ },
+ "D1-RED_h12_false_positives": {
+  "value": 7,
+  "def": "resolved episodes crediting no onset and not coincident"
+ },
+ "D1-RED_h12_coincident": {
+  "value": 2,
+  "def": "episodes whose raw first ON is in [onset, onset+3]"
+ },
+ "D1-RED_h12_pending": {
+  "value": 1,
+  "def": "episodes containing an unresolved month"
+ },
+ "D1-RED_h12_episode_precision": {
+  "value": 0.3,
+  "def": "hits / (hits + false positives)"
+ },
+ "D1-RED_h12_recall_caught": {
+  "value": 3,
+  "def": "onsets 1953-08..2020-03 with an ON (USREC=0) month in [e\u2212h, e\u22121] (1981-08: 1980-08..1981-07)"
+ },
+ "D1-RED_h12_recall_evaluable": {
+  "value": 11,
+  "def": "evaluable onsets in the common window"
+ },
+ "D1-RED_h12_month_precision": {
+  "value": 0.1837,
+  "def": "share of ON months (USREC=0, resolved, 1953-04+) followed by an onset within h"
+ },
+ "D1-RED_h12_month_precision_n_on": {
+  "value": 49,
+  "def": "ON months in the precision denominator"
+ },
+ "D1-RED_h12_month_precision_excl_coincident": {
+  "value": 0.1837,
+  "def": "same, excluding months belonging to coincident episodes"
+ },
+ "D1-RED_h12_base_rate": {
+  "value": 0.1667,
+  "def": "share of resolved USREC=0 months 1953-04+ with an onset in t+1..t+h"
+ },
+ "D1-RED_h12_false_positive_names": {
+  "value": [
+   "1987-07",
+   "2002-12",
+   "2004-09",
+   "2009-12",
+   "2017-01",
+   "2018-06",
+   "2021-03"
+  ],
+  "def": "first ON month of each false-positive episode"
+ },
+ "D1-RED_h12_hit_names": {
+  "value": [
+   "1979-08\u21921980-02",
+   "1999-08\u21922001-04",
+   "2007-11\u21922008-01"
+  ],
+  "def": "hit episodes and the onsets they credit"
+ },
+ "D1-RED_h12_coincident_names": {
+  "value": [
+   "1974-01~1973-12",
+   "1990-09~1990-08"
+  ],
+  "def": "coincident episodes (raw first ON ~ onset)"
+ },
+ "D1-RED_h12_pending_names": {
+  "value": [
+   "2026-04"
+  ],
+  "def": "pending episodes"
+ },
+ "D1-RED_h12_event_categories": {
+  "value": {
+   "1953-08": "missed",
+   "1957-09": "missed",
+   "1960-05": "missed",
+   "1970-01": "missed",
+   "1973-12": "coincident",
+   "1980-02": "caught",
+   "1981-08": "missed",
+   "1990-08": "coincident",
+   "2001-04": "caught",
+   "2008-01": "caught",
+   "2020-03": "missed"
+  },
+  "def": "per-onset category"
+ },
+ "D1-RED_h12_event_leads": {
+  "value": {
+   "1953-08": null,
+   "1957-09": null,
+   "1960-05": null,
+   "1970-01": null,
+   "1973-12": -1,
+   "1980-02": 6,
+   "1981-08": null,
+   "1990-08": -1,
+   "2001-04": 20,
+   "2008-01": 2,
+   "2020-03": null
+  },
+  "def": "lead in months from the crediting episode's first ON month to the onset (negative = coincident, months after onset)"
+ },
+ "D1-YELLOW_h12_episodes": {
+  "value": 16,
+  "def": "D1-YELLOW episodes with raw first ON \u2265 1953-04, scored vs NBER onsets at h=12"
+ },
+ "D1-YELLOW_h12_hits": {
+  "value": 4,
+  "def": "episodes crediting \u22651 onset"
+ },
+ "D1-YELLOW_h12_false_positives": {
+  "value": 10,
+  "def": "resolved episodes crediting no onset and not coincident"
+ },
+ "D1-YELLOW_h12_coincident": {
+  "value": 1,
+  "def": "episodes whose raw first ON is in [onset, onset+3]"
+ },
+ "D1-YELLOW_h12_pending": {
+  "value": 1,
+  "def": "episodes containing an unresolved month"
+ },
+ "D1-YELLOW_h12_episode_precision": {
+  "value": 0.2857,
+  "def": "hits / (hits + false positives)"
+ },
+ "D1-YELLOW_h12_recall_caught": {
+  "value": 5,
+  "def": "onsets 1953-08..2020-03 with an ON (USREC=0) month in [e\u2212h, e\u22121] (1981-08: 1980-08..1981-07)"
+ },
+ "D1-YELLOW_h12_recall_evaluable": {
+  "value": 11,
+  "def": "evaluable onsets in the common window"
+ },
+ "D1-YELLOW_h12_month_precision": {
+  "value": 0.2177,
+  "def": "share of ON months (USREC=0, resolved, 1953-04+) followed by an onset within h"
+ },
+ "D1-YELLOW_h12_month_precision_n_on": {
+  "value": 124,
+  "def": "ON months in the precision denominator"
+ },
+ "D1-YELLOW_h12_month_precision_excl_coincident": {
+  "value": 0.2177,
+  "def": "same, excluding months belonging to coincident episodes"
+ },
+ "D1-YELLOW_h12_base_rate": {
+  "value": 0.1667,
+  "def": "share of resolved USREC=0 months 1953-04+ with an onset in t+1..t+h"
+ },
+ "D1-YELLOW_h12_false_positive_names": {
+  "value": [
+   "1987-03",
+   "1995-02",
+   "1996-09",
+   "2002-10",
+   "2004-04",
+   "2009-11",
+   "2011-03",
+   "2016-12",
+   "2018-03",
+   "2021-03"
+  ],
+  "def": "first ON month of each false-positive episode"
+ },
+ "D1-YELLOW_h12_hit_names": {
+  "value": [
+   "1979-06\u21921980-02,1981-08",
+   "1989-07\u21921990-08",
+   "1999-06\u21922001-04",
+   "2007-09\u21922008-01"
+  ],
+  "def": "hit episodes and the onsets they credit"
+ },
+ "D1-YELLOW_h12_coincident_names": {
+  "value": [
+   "1974-01~1973-12"
+  ],
+  "def": "coincident episodes (raw first ON ~ onset)"
+ },
+ "D1-YELLOW_h12_pending_names": {
+  "value": [
+   "2026-03"
+  ],
+  "def": "pending episodes"
+ },
+ "D1-YELLOW_h12_event_categories": {
+  "value": {
+   "1953-08": "missed",
+   "1957-09": "missed",
+   "1960-05": "missed",
+   "1970-01": "missed",
+   "1973-12": "coincident",
+   "1980-02": "caught",
+   "1981-08": "caught",
+   "1990-08": "caught",
+   "2001-04": "caught",
+   "2008-01": "caught",
+   "2020-03": "missed"
+  },
+  "def": "per-onset category"
+ },
+ "D1-YELLOW_h12_event_leads": {
+  "value": {
+   "1953-08": null,
+   "1957-09": null,
+   "1960-05": null,
+   "1970-01": null,
+   "1973-12": -1,
+   "1980-02": 8,
+   "1981-08": 26,
+   "1990-08": 13,
+   "2001-04": 22,
+   "2008-01": 4,
+   "2020-03": null
+  },
+  "def": "lead in months from the crediting episode's first ON month to the onset (negative = coincident, months after onset)"
+ },
+ "D2_h12_episodes": {
+  "value": 10,
+  "def": "D2 episodes with raw first ON \u2265 1953-04, scored vs NBER onsets at h=12"
+ },
+ "D2_h12_hits": {
+  "value": 5,
+  "def": "episodes crediting \u22651 onset"
+ },
+ "D2_h12_false_positives": {
+  "value": 3,
+  "def": "resolved episodes crediting no onset and not coincident"
+ },
+ "D2_h12_coincident": {
+  "value": 1,
+  "def": "episodes whose raw first ON is in [onset, onset+3]"
+ },
+ "D2_h12_pending": {
+  "value": 1,
+  "def": "episodes containing an unresolved month"
+ },
+ "D2_h12_episode_precision": {
+  "value": 0.625,
+  "def": "hits / (hits + false positives)"
+ },
+ "D2_h12_recall_caught": {
+  "value": 6,
+  "def": "onsets 1953-08..2020-03 with an ON (USREC=0) month in [e\u2212h, e\u22121] (1981-08: 1980-08..1981-07)"
+ },
+ "D2_h12_recall_evaluable": {
+  "value": 11,
+  "def": "evaluable onsets in the common window"
+ },
+ "D2_h12_month_precision": {
+  "value": 0.2946,
+  "def": "share of ON months (USREC=0, resolved, 1953-04+) followed by an onset within h"
+ },
+ "D2_h12_month_precision_n_on": {
+  "value": 129,
+  "def": "ON months in the precision denominator"
+ },
+ "D2_h12_month_precision_excl_coincident": {
+  "value": 0.3065,
+  "def": "same, excluding months belonging to coincident episodes"
+ },
+ "D2_h12_base_rate": {
+  "value": 0.1667,
+  "def": "share of resolved USREC=0 months 1953-04+ with an onset in t+1..t+h"
+ },
+ "D2_h12_false_positive_names": {
+  "value": [
+   "1976-09",
+   "1996-04",
+   "2021-10"
+  ],
+  "def": "first ON month of each false-positive episode"
+ },
+ "D2_h12_hit_names": {
+  "value": [
+   "1973-08\u21921973-12",
+   "1979-05\u21921980-02,1981-08",
+   "2000-02\u21922001-04",
+   "2004-05\u21922008-01",
+   "2018-04\u21922020-03"
+  ],
+  "def": "hit episodes and the onsets they credit"
+ },
+ "D2_h12_coincident_names": {
+  "value": [
+   "1990-08~1990-08"
+  ],
+  "def": "coincident episodes (raw first ON ~ onset)"
+ },
+ "D2_h12_pending_names": {
+  "value": [
+   "2026-04"
+  ],
+  "def": "pending episodes"
+ },
+ "D2_h12_event_categories": {
+  "value": {
+   "1953-08": "missed",
+   "1957-09": "missed",
+   "1960-05": "missed",
+   "1970-01": "missed",
+   "1973-12": "caught",
+   "1980-02": "caught",
+   "1981-08": "caught",
+   "1990-08": "coincident",
+   "2001-04": "caught",
+   "2008-01": "caught",
+   "2020-03": "caught"
+  },
+  "def": "per-onset category"
+ },
+ "D2_h12_event_leads": {
+  "value": {
+   "1953-08": null,
+   "1957-09": null,
+   "1960-05": null,
+   "1970-01": null,
+   "1973-12": 4,
+   "1980-02": 9,
+   "1981-08": 27,
+   "1990-08": 0,
+   "2001-04": 14,
+   "2008-01": 44,
+   "2020-03": 23
+  },
+  "def": "lead in months from the crediting episode's first ON month to the onset (negative = coincident, months after onset)"
+ },
+ "D3-RED_h12_episodes": {
+  "value": 12,
+  "def": "D3-RED episodes with raw first ON \u2265 1953-04, scored vs NBER onsets at h=12"
+ },
+ "D3-RED_h12_hits": {
+  "value": 3,
+  "def": "episodes crediting \u22651 onset"
+ },
+ "D3-RED_h12_false_positives": {
+  "value": 6,
+  "def": "resolved episodes crediting no onset and not coincident"
+ },
+ "D3-RED_h12_coincident": {
+  "value": 2,
+  "def": "episodes whose raw first ON is in [onset, onset+3]"
+ },
+ "D3-RED_h12_pending": {
+  "value": 1,
+  "def": "episodes containing an unresolved month"
+ },
+ "D3-RED_h12_episode_precision": {
+  "value": 0.3333,
+  "def": "hits / (hits + false positives)"
+ },
+ "D3-RED_h12_recall_caught": {
+  "value": 3,
+  "def": "onsets 1953-08..2020-03 with an ON (USREC=0) month in [e\u2212h, e\u22121] (1981-08: 1980-08..1981-07)"
+ },
+ "D3-RED_h12_recall_evaluable": {
+  "value": 11,
+  "def": "evaluable onsets in the common window"
+ },
+ "D3-RED_h12_month_precision": {
+  "value": 0.2143,
+  "def": "share of ON months (USREC=0, resolved, 1953-04+) followed by an onset within h"
+ },
+ "D3-RED_h12_month_precision_n_on": {
+  "value": 42,
+  "def": "ON months in the precision denominator"
+ },
+ "D3-RED_h12_month_precision_excl_coincident": {
+  "value": 0.2143,
+  "def": "same, excluding months belonging to coincident episodes"
+ },
+ "D3-RED_h12_base_rate": {
+  "value": 0.1667,
+  "def": "share of resolved USREC=0 months 1953-04+ with an onset in t+1..t+h"
+ },
+ "D3-RED_h12_false_positive_names": {
+  "value": [
+   "1987-07",
+   "2003-01",
+   "2004-09",
+   "2009-12",
+   "2017-01",
+   "2021-03"
+  ],
+  "def": "first ON month of each false-positive episode"
+ },
+ "D3-RED_h12_hit_names": {
+  "value": [
+   "1979-08\u21921980-02",
+   "1999-08\u21922001-04",
+   "2007-11\u21922008-01"
+  ],
+  "def": "hit episodes and the onsets they credit"
+ },
+ "D3-RED_h12_coincident_names": {
+  "value": [
+   "1974-01~1973-12",
+   "1990-09~1990-08"
+  ],
+  "def": "coincident episodes (raw first ON ~ onset)"
+ },
+ "D3-RED_h12_pending_names": {
+  "value": [
+   "2026-04"
+  ],
+  "def": "pending episodes"
+ },
+ "D3-RED_h12_event_categories": {
+  "value": {
+   "1953-08": "missed",
+   "1957-09": "missed",
+   "1960-05": "missed",
+   "1970-01": "missed",
+   "1973-12": "coincident",
+   "1980-02": "caught",
+   "1981-08": "missed",
+   "1990-08": "coincident",
+   "2001-04": "caught",
+   "2008-01": "caught",
+   "2020-03": "missed"
+  },
+  "def": "per-onset category"
+ },
+ "D3-RED_h12_event_leads": {
+  "value": {
+   "1953-08": null,
+   "1957-09": null,
+   "1960-05": null,
+   "1970-01": null,
+   "1973-12": -1,
+   "1980-02": 6,
+   "1981-08": null,
+   "1990-08": -1,
+   "2001-04": 20,
+   "2008-01": 2,
+   "2020-03": null
+  },
+  "def": "lead in months from the crediting episode's first ON month to the onset (negative = coincident, months after onset)"
+ },
+ "D3-YELLOW_h12_episodes": {
+  "value": 16,
+  "def": "D3-YELLOW episodes with raw first ON \u2265 1953-04, scored vs NBER onsets at h=12"
+ },
+ "D3-YELLOW_h12_hits": {
+  "value": 4,
+  "def": "episodes crediting \u22651 onset"
+ },
+ "D3-YELLOW_h12_false_positives": {
+  "value": 9,
+  "def": "resolved episodes crediting no onset and not coincident"
+ },
+ "D3-YELLOW_h12_coincident": {
+  "value": 2,
+  "def": "episodes whose raw first ON is in [onset, onset+3]"
+ },
+ "D3-YELLOW_h12_pending": {
+  "value": 1,
+  "def": "episodes containing an unresolved month"
+ },
+ "D3-YELLOW_h12_episode_precision": {
+  "value": 0.3077,
+  "def": "hits / (hits + false positives)"
+ },
+ "D3-YELLOW_h12_recall_caught": {
+  "value": 5,
+  "def": "onsets 1953-08..2020-03 with an ON (USREC=0) month in [e\u2212h, e\u22121] (1981-08: 1980-08..1981-07)"
+ },
+ "D3-YELLOW_h12_recall_evaluable": {
+  "value": 11,
+  "def": "evaluable onsets in the common window"
+ },
+ "D3-YELLOW_h12_month_precision": {
+  "value": 0.2056,
+  "def": "share of ON months (USREC=0, resolved, 1953-04+) followed by an onset within h"
+ },
+ "D3-YELLOW_h12_month_precision_n_on": {
+  "value": 107,
+  "def": "ON months in the precision denominator"
+ },
+ "D3-YELLOW_h12_month_precision_excl_coincident": {
+  "value": 0.2056,
+  "def": "same, excluding months belonging to coincident episodes"
+ },
+ "D3-YELLOW_h12_base_rate": {
+  "value": 0.1667,
+  "def": "share of resolved USREC=0 months 1953-04+ with an onset in t+1..t+h"
+ },
+ "D3-YELLOW_h12_false_positive_names": {
+  "value": [
+   "1987-03",
+   "1996-09",
+   "2002-10",
+   "2004-04",
+   "2009-11",
+   "2011-04",
+   "2016-12",
+   "2018-04",
+   "2021-03"
+  ],
+  "def": "first ON month of each false-positive episode"
+ },
+ "D3-YELLOW_h12_hit_names": {
+  "value": [
+   "1979-07\u21921980-02,1981-08",
+   "1989-09\u21921990-08",
+   "1999-06\u21922001-04",
+   "2007-10\u21922008-01"
+  ],
+  "def": "hit episodes and the onsets they credit"
+ },
+ "D3-YELLOW_h12_coincident_names": {
+  "value": [
+   "1974-01~1973-12",
+   "1990-08~1990-08"
+  ],
+  "def": "coincident episodes (raw first ON ~ onset)"
+ },
+ "D3-YELLOW_h12_pending_names": {
+  "value": [
+   "2026-03"
+  ],
+  "def": "pending episodes"
+ },
+ "D3-YELLOW_h12_event_categories": {
+  "value": {
+   "1953-08": "missed",
+   "1957-09": "missed",
+   "1960-05": "missed",
+   "1970-01": "missed",
+   "1973-12": "coincident",
+   "1980-02": "caught",
+   "1981-08": "caught",
+   "1990-08": "caught",
+   "2001-04": "caught",
+   "2008-01": "caught",
+   "2020-03": "missed"
+  },
+  "def": "per-onset category"
+ },
+ "D3-YELLOW_h12_event_leads": {
+  "value": {
+   "1953-08": null,
+   "1957-09": null,
+   "1960-05": null,
+   "1970-01": null,
+   "1973-12": -1,
+   "1980-02": 7,
+   "1981-08": 25,
+   "1990-08": 11,
+   "2001-04": 22,
+   "2008-01": 3,
+   "2020-03": null
+  },
+  "def": "lead in months from the crediting episode's first ON month to the onset (negative = coincident, months after onset)"
+ },
+ "PPI-RED_h12_episodes": {
+  "value": 14,
+  "def": "PPI-RED episodes with raw first ON \u2265 1953-04, scored vs NBER onsets at h=12"
+ },
+ "PPI-RED_h12_hits": {
+  "value": 4,
+  "def": "episodes crediting \u22651 onset"
+ },
+ "PPI-RED_h12_false_positives": {
+  "value": 7,
+  "def": "resolved episodes crediting no onset and not coincident"
+ },
+ "PPI-RED_h12_coincident": {
+  "value": 2,
+  "def": "episodes whose raw first ON is in [onset, onset+3]"
+ },
+ "PPI-RED_h12_pending": {
+  "value": 1,
+  "def": "episodes containing an unresolved month"
+ },
+ "PPI-RED_h12_episode_precision": {
+  "value": 0.3636,
+  "def": "hits / (hits + false positives)"
+ },
+ "PPI-RED_h12_recall_caught": {
+  "value": 4,
+  "def": "onsets 1953-08..2020-03 with an ON (USREC=0) month in [e\u2212h, e\u22121] (1981-08: 1980-08..1981-07)"
+ },
+ "PPI-RED_h12_recall_evaluable": {
+  "value": 11,
+  "def": "evaluable onsets in the common window"
+ },
+ "PPI-RED_h12_month_precision": {
+  "value": 0.2414,
+  "def": "share of ON months (USREC=0, resolved, 1953-04+) followed by an onset within h"
+ },
+ "PPI-RED_h12_month_precision_n_on": {
+  "value": 58,
+  "def": "ON months in the precision denominator"
+ },
+ "PPI-RED_h12_month_precision_excl_coincident": {
+  "value": 0.2414,
+  "def": "same, excluding months belonging to coincident episodes"
+ },
+ "PPI-RED_h12_base_rate": {
+  "value": 0.1667,
+  "def": "share of resolved USREC=0 months 1953-04+ with an onset in t+1..t+h"
+ },
+ "PPI-RED_h12_false_positive_names": {
+  "value": [
+   "1987-07",
+   "2002-12",
+   "2004-09",
+   "2009-12",
+   "2017-01",
+   "2018-05",
+   "2021-03"
+  ],
+  "def": "first ON month of each false-positive episode"
+ },
+ "PPI-RED_h12_hit_names": {
+  "value": [
+   "1979-12\u21921980-02",
+   "1981-02\u21921981-08",
+   "1999-08\u21922001-04",
+   "2007-11\u21922008-01"
+  ],
+  "def": "hit episodes and the onsets they credit"
+ },
+ "PPI-RED_h12_coincident_names": {
+  "value": [
+   "1974-01~1973-12",
+   "1990-09~1990-08"
+  ],
+  "def": "coincident episodes (raw first ON ~ onset)"
+ },
+ "PPI-RED_h12_pending_names": {
+  "value": [
+   "2026-04"
+  ],
+  "def": "pending episodes"
+ },
+ "PPI-RED_h12_event_categories": {
+  "value": {
+   "1953-08": "missed",
+   "1957-09": "missed",
+   "1960-05": "missed",
+   "1970-01": "missed",
+   "1973-12": "coincident",
+   "1980-02": "caught",
+   "1981-08": "caught",
+   "1990-08": "coincident",
+   "2001-04": "caught",
+   "2008-01": "caught",
+   "2020-03": "missed"
+  },
+  "def": "per-onset category"
+ },
+ "PPI-RED_h12_event_leads": {
+  "value": {
+   "1953-08": null,
+   "1957-09": null,
+   "1960-05": null,
+   "1970-01": null,
+   "1973-12": -1,
+   "1980-02": 2,
+   "1981-08": 6,
+   "1990-08": -1,
+   "2001-04": 20,
+   "2008-01": 2,
+   "2020-03": null
+  },
+  "def": "lead in months from the crediting episode's first ON month to the onset (negative = coincident, months after onset)"
+ },
+ "PPI-D2_h12_episodes": {
+  "value": 10,
+  "def": "PPI-D2 episodes with raw first ON \u2265 1953-04, scored vs NBER onsets at h=12"
+ },
+ "PPI-D2_h12_hits": {
+  "value": 6,
+  "def": "episodes crediting \u22651 onset"
+ },
+ "PPI-D2_h12_false_positives": {
+  "value": 2,
+  "def": "resolved episodes crediting no onset and not coincident"
+ },
+ "PPI-D2_h12_coincident": {
+  "value": 1,
+  "def": "episodes whose raw first ON is in [onset, onset+3]"
+ },
+ "PPI-D2_h12_pending": {
+  "value": 1,
+  "def": "episodes containing an unresolved month"
+ },
+ "PPI-D2_h12_episode_precision": {
+  "value": 0.75,
+  "def": "hits / (hits + false positives)"
+ },
+ "PPI-D2_h12_recall_caught": {
+  "value": 7,
+  "def": "onsets 1953-08..2020-03 with an ON (USREC=0) month in [e\u2212h, e\u22121] (1981-08: 1980-08..1981-07)"
+ },
+ "PPI-D2_h12_recall_evaluable": {
+  "value": 11,
+  "def": "evaluable onsets in the common window"
+ },
+ "PPI-D2_h12_month_precision": {
+  "value": 0.3197,
+  "def": "share of ON months (USREC=0, resolved, 1953-04+) followed by an onset within h"
+ },
+ "PPI-D2_h12_month_precision_n_on": {
+  "value": 147,
+  "def": "ON months in the precision denominator"
+ },
+ "PPI-D2_h12_month_precision_excl_coincident": {
+  "value": 0.3333,
+  "def": "same, excluding months belonging to coincident episodes"
+ },
+ "PPI-D2_h12_base_rate": {
+  "value": 0.1667,
+  "def": "share of resolved USREC=0 months 1953-04+ with an onset in t+1..t+h"
+ },
+ "PPI-D2_h12_false_positive_names": {
+  "value": [
+   "1996-04",
+   "2022-01"
+  ],
+  "def": "first ON month of each false-positive episode"
+ },
+ "PPI-D2_h12_hit_names": {
+  "value": [
+   "1953-06\u21921953-08",
+   "1973-09\u21921973-12",
+   "1978-09\u21921980-02,1981-08",
+   "2000-02\u21922001-04",
+   "2004-05\u21922008-01",
+   "2018-04\u21922020-03"
+  ],
+  "def": "hit episodes and the onsets they credit"
+ },
+ "PPI-D2_h12_coincident_names": {
+  "value": [
+   "1990-08~1990-08"
+  ],
+  "def": "coincident episodes (raw first ON ~ onset)"
+ },
+ "PPI-D2_h12_pending_names": {
+  "value": [
+   "2026-04"
+  ],
+  "def": "pending episodes"
+ },
+ "PPI-D2_h12_event_categories": {
+  "value": {
+   "1953-08": "caught",
+   "1957-09": "missed",
+   "1960-05": "missed",
+   "1970-01": "missed",
+   "1973-12": "caught",
+   "1980-02": "caught",
+   "1981-08": "caught",
+   "1990-08": "coincident",
+   "2001-04": "caught",
+   "2008-01": "caught",
+   "2020-03": "caught"
+  },
+  "def": "per-onset category"
+ },
+ "PPI-D2_h12_event_leads": {
+  "value": {
+   "1953-08": 2,
+   "1957-09": null,
+   "1960-05": null,
+   "1970-01": null,
+   "1973-12": 3,
+   "1980-02": 17,
+   "1981-08": 35,
+   "1990-08": 0,
+   "2001-04": 14,
+   "2008-01": 44,
+   "2020-03": 23
+  },
+  "def": "lead in months from the crediting episode's first ON month to the onset (negative = coincident, months after onset)"
+ },
+ "base_rate_common_h12": {
+  "value": 0.1667,
+  "def": "base rate, common window, h=12"
+ },
+ "base_rate_common_h12_n_months": {
+  "value": 744,
+  "def": "resolved USREC=0 months in the common window"
+ },
+ "D1-RED_h18_episodes": {
+  "value": 13,
+  "def": "D1-RED episodes with raw first ON \u2265 1953-04, scored vs NBER onsets at h=18"
+ },
+ "D1-RED_h18_hits": {
+  "value": 3,
+  "def": "episodes crediting \u22651 onset"
+ },
+ "D1-RED_h18_false_positives": {
+  "value": 7,
+  "def": "resolved episodes crediting no onset and not coincident"
+ },
+ "D1-RED_h18_coincident": {
+  "value": 2,
+  "def": "episodes whose raw first ON is in [onset, onset+3]"
+ },
+ "D1-RED_h18_pending": {
+  "value": 1,
+  "def": "episodes containing an unresolved month"
+ },
+ "D1-RED_h18_episode_precision": {
+  "value": 0.3,
+  "def": "hits / (hits + false positives)"
+ },
+ "D1-RED_h18_recall_caught": {
+  "value": 3,
+  "def": "onsets 1953-08..2020-03 with an ON (USREC=0) month in [e\u2212h, e\u22121] (1981-08: 1980-08..1981-07)"
+ },
+ "D1-RED_h18_recall_evaluable": {
+  "value": 11,
+  "def": "evaluable onsets in the common window"
+ },
+ "D1-RED_h18_month_precision": {
+  "value": 0.3061,
+  "def": "share of ON months (USREC=0, resolved, 1953-04+) followed by an onset within h"
+ },
+ "D1-RED_h18_month_precision_n_on": {
+  "value": 49,
+  "def": "ON months in the precision denominator"
+ },
+ "D1-RED_h18_month_precision_excl_coincident": {
+  "value": 0.3061,
+  "def": "same, excluding months belonging to coincident episodes"
+ },
+ "D1-RED_h18_base_rate": {
+  "value": 0.2412,
+  "def": "share of resolved USREC=0 months 1953-04+ with an onset in t+1..t+h"
+ },
+ "D1-RED_h18_false_positive_names": {
+  "value": [
+   "1987-07",
+   "2002-12",
+   "2004-09",
+   "2009-12",
+   "2017-01",
+   "2018-06",
+   "2021-03"
+  ],
+  "def": "first ON month of each false-positive episode"
+ },
+ "D1-RED_h18_hit_names": {
+  "value": [
+   "1979-08\u21921980-02",
+   "1999-08\u21922001-04",
+   "2007-11\u21922008-01"
+  ],
+  "def": "hit episodes and the onsets they credit"
+ },
+ "D1-RED_h18_coincident_names": {
+  "value": [
+   "1974-01~1973-12",
+   "1990-09~1990-08"
+  ],
+  "def": "coincident episodes (raw first ON ~ onset)"
+ },
+ "D1-RED_h18_pending_names": {
+  "value": [
+   "2026-04"
+  ],
+  "def": "pending episodes"
+ },
+ "D1-RED_h18_event_categories": {
+  "value": {
+   "1953-08": "missed",
+   "1957-09": "missed",
+   "1960-05": "missed",
+   "1970-01": "missed",
+   "1973-12": "coincident",
+   "1980-02": "caught",
+   "1981-08": "missed",
+   "1990-08": "coincident",
+   "2001-04": "caught",
+   "2008-01": "caught",
+   "2020-03": "missed"
+  },
+  "def": "per-onset category"
+ },
+ "D1-RED_h18_event_leads": {
+  "value": {
+   "1953-08": null,
+   "1957-09": null,
+   "1960-05": null,
+   "1970-01": null,
+   "1973-12": -1,
+   "1980-02": 6,
+   "1981-08": null,
+   "1990-08": -1,
+   "2001-04": 20,
+   "2008-01": 2,
+   "2020-03": null
+  },
+  "def": "lead in months from the crediting episode's first ON month to the onset (negative = coincident, months after onset)"
+ },
+ "D1-YELLOW_h18_episodes": {
+  "value": 16,
+  "def": "D1-YELLOW episodes with raw first ON \u2265 1953-04, scored vs NBER onsets at h=18"
+ },
+ "D1-YELLOW_h18_hits": {
+  "value": 5,
+  "def": "episodes crediting \u22651 onset"
+ },
+ "D1-YELLOW_h18_false_positives": {
+  "value": 9,
+  "def": "resolved episodes crediting no onset and not coincident"
+ },
+ "D1-YELLOW_h18_coincident": {
+  "value": 1,
+  "def": "episodes whose raw first ON is in [onset, onset+3]"
+ },
+ "D1-YELLOW_h18_pending": {
+  "value": 1,
+  "def": "episodes containing an unresolved month"
+ },
+ "D1-YELLOW_h18_episode_precision": {
+  "value": 0.3571,
+  "def": "hits / (hits + false positives)"
+ },
+ "D1-YELLOW_h18_recall_caught": {
+  "value": 6,
+  "def": "onsets 1953-08..2020-03 with an ON (USREC=0) month in [e\u2212h, e\u22121] (1981-08: 1980-08..1981-07)"
+ },
+ "D1-YELLOW_h18_recall_evaluable": {
+  "value": 11,
+  "def": "evaluable onsets in the common window"
+ },
+ "D1-YELLOW_h18_month_precision": {
+  "value": 0.2984,
+  "def": "share of ON months (USREC=0, resolved, 1953-04+) followed by an onset within h"
+ },
+ "D1-YELLOW_h18_month_precision_n_on": {
+  "value": 124,
+  "def": "ON months in the precision denominator"
+ },
+ "D1-YELLOW_h18_month_precision_excl_coincident": {
+  "value": 0.2984,
+  "def": "same, excluding months belonging to coincident episodes"
+ },
+ "D1-YELLOW_h18_base_rate": {
+  "value": 0.2412,
+  "def": "share of resolved USREC=0 months 1953-04+ with an onset in t+1..t+h"
+ },
+ "D1-YELLOW_h18_false_positive_names": {
+  "value": [
+   "1987-03",
+   "1995-02",
+   "1996-09",
+   "2002-10",
+   "2007-09",
+   "2009-11",
+   "2011-03",
+   "2016-12",
+   "2021-03"
+  ],
+  "def": "first ON month of each false-positive episode"
+ },
+ "D1-YELLOW_h18_hit_names": {
+  "value": [
+   "1979-06\u21921980-02,1981-08",
+   "1989-07\u21921990-08",
+   "1999-06\u21922001-04",
+   "2004-04\u21922008-01",
+   "2018-03\u21922020-03"
+  ],
+  "def": "hit episodes and the onsets they credit"
+ },
+ "D1-YELLOW_h18_coincident_names": {
+  "value": [
+   "1974-01~1973-12"
+  ],
+  "def": "coincident episodes (raw first ON ~ onset)"
+ },
+ "D1-YELLOW_h18_pending_names": {
+  "value": [
+   "2026-03"
+  ],
+  "def": "pending episodes"
+ },
+ "D1-YELLOW_h18_event_categories": {
+  "value": {
+   "1953-08": "missed",
+   "1957-09": "missed",
+   "1960-05": "missed",
+   "1970-01": "missed",
+   "1973-12": "coincident",
+   "1980-02": "caught",
+   "1981-08": "caught",
+   "1990-08": "caught",
+   "2001-04": "caught",
+   "2008-01": "caught",
+   "2020-03": "caught"
+  },
+  "def": "per-onset category"
+ },
+ "D1-YELLOW_h18_event_leads": {
+  "value": {
+   "1953-08": null,
+   "1957-09": null,
+   "1960-05": null,
+   "1970-01": null,
+   "1973-12": -1,
+   "1980-02": 8,
+   "1981-08": 26,
+   "1990-08": 13,
+   "2001-04": 22,
+   "2008-01": 45,
+   "2020-03": 24
+  },
+  "def": "lead in months from the crediting episode's first ON month to the onset (negative = coincident, months after onset)"
+ },
+ "D2_h18_episodes": {
+  "value": 10,
+  "def": "D2 episodes with raw first ON \u2265 1953-04, scored vs NBER onsets at h=18"
+ },
+ "D2_h18_hits": {
+  "value": 5,
+  "def": "episodes crediting \u22651 onset"
+ },
+ "D2_h18_false_positives": {
+  "value": 3,
+  "def": "resolved episodes crediting no onset and not coincident"
+ },
+ "D2_h18_coincident": {
+  "value": 1,
+  "def": "episodes whose raw first ON is in [onset, onset+3]"
+ },
+ "D2_h18_pending": {
+  "value": 1,
+  "def": "episodes containing an unresolved month"
+ },
+ "D2_h18_episode_precision": {
+  "value": 0.625,
+  "def": "hits / (hits + false positives)"
+ },
+ "D2_h18_recall_caught": {
+  "value": 6,
+  "def": "onsets 1953-08..2020-03 with an ON (USREC=0) month in [e\u2212h, e\u22121] (1981-08: 1980-08..1981-07)"
+ },
+ "D2_h18_recall_evaluable": {
+  "value": 11,
+  "def": "evaluable onsets in the common window"
+ },
+ "D2_h18_month_precision": {
+  "value": 0.4031,
+  "def": "share of ON months (USREC=0, resolved, 1953-04+) followed by an onset within h"
+ },
+ "D2_h18_month_precision_n_on": {
+  "value": 129,
+  "def": "ON months in the precision denominator"
+ },
+ "D2_h18_month_precision_excl_coincident": {
+  "value": 0.4194,
+  "def": "same, excluding months belonging to coincident episodes"
+ },
+ "D2_h18_base_rate": {
+  "value": 0.2412,
+  "def": "share of resolved USREC=0 months 1953-04+ with an onset in t+1..t+h"
+ },
+ "D2_h18_false_positive_names": {
+  "value": [
+   "1976-09",
+   "1996-04",
+   "2021-10"
+  ],
+  "def": "first ON month of each false-positive episode"
+ },
+ "D2_h18_hit_names": {
+  "value": [
+   "1973-08\u21921973-12",
+   "1979-05\u21921980-02,1981-08",
+   "2000-02\u21922001-04",
+   "2004-05\u21922008-01",
+   "2018-04\u21922020-03"
+  ],
+  "def": "hit episodes and the onsets they credit"
+ },
+ "D2_h18_coincident_names": {
+  "value": [
+   "1990-08~1990-08"
+  ],
+  "def": "coincident episodes (raw first ON ~ onset)"
+ },
+ "D2_h18_pending_names": {
+  "value": [
+   "2026-04"
+  ],
+  "def": "pending episodes"
+ },
+ "D2_h18_event_categories": {
+  "value": {
+   "1953-08": "missed",
+   "1957-09": "missed",
+   "1960-05": "missed",
+   "1970-01": "missed",
+   "1973-12": "caught",
+   "1980-02": "caught",
+   "1981-08": "caught",
+   "1990-08": "coincident",
+   "2001-04": "caught",
+   "2008-01": "caught",
+   "2020-03": "caught"
+  },
+  "def": "per-onset category"
+ },
+ "D2_h18_event_leads": {
+  "value": {
+   "1953-08": null,
+   "1957-09": null,
+   "1960-05": null,
+   "1970-01": null,
+   "1973-12": 4,
+   "1980-02": 9,
+   "1981-08": 27,
+   "1990-08": 0,
+   "2001-04": 14,
+   "2008-01": 44,
+   "2020-03": 23
+  },
+  "def": "lead in months from the crediting episode's first ON month to the onset (negative = coincident, months after onset)"
+ },
+ "D3-RED_h18_episodes": {
+  "value": 12,
+  "def": "D3-RED episodes with raw first ON \u2265 1953-04, scored vs NBER onsets at h=18"
+ },
+ "D3-RED_h18_hits": {
+  "value": 3,
+  "def": "episodes crediting \u22651 onset"
+ },
+ "D3-RED_h18_false_positives": {
+  "value": 6,
+  "def": "resolved episodes crediting no onset and not coincident"
+ },
+ "D3-RED_h18_coincident": {
+  "value": 2,
+  "def": "episodes whose raw first ON is in [onset, onset+3]"
+ },
+ "D3-RED_h18_pending": {
+  "value": 1,
+  "def": "episodes containing an unresolved month"
+ },
+ "D3-RED_h18_episode_precision": {
+  "value": 0.3333,
+  "def": "hits / (hits + false positives)"
+ },
+ "D3-RED_h18_recall_caught": {
+  "value": 3,
+  "def": "onsets 1953-08..2020-03 with an ON (USREC=0) month in [e\u2212h, e\u22121] (1981-08: 1980-08..1981-07)"
+ },
+ "D3-RED_h18_recall_evaluable": {
+  "value": 11,
+  "def": "evaluable onsets in the common window"
+ },
+ "D3-RED_h18_month_precision": {
+  "value": 0.3571,
+  "def": "share of ON months (USREC=0, resolved, 1953-04+) followed by an onset within h"
+ },
+ "D3-RED_h18_month_precision_n_on": {
+  "value": 42,
+  "def": "ON months in the precision denominator"
+ },
+ "D3-RED_h18_month_precision_excl_coincident": {
+  "value": 0.3571,
+  "def": "same, excluding months belonging to coincident episodes"
+ },
+ "D3-RED_h18_base_rate": {
+  "value": 0.2412,
+  "def": "share of resolved USREC=0 months 1953-04+ with an onset in t+1..t+h"
+ },
+ "D3-RED_h18_false_positive_names": {
+  "value": [
+   "1987-07",
+   "2003-01",
+   "2004-09",
+   "2009-12",
+   "2017-01",
+   "2021-03"
+  ],
+  "def": "first ON month of each false-positive episode"
+ },
+ "D3-RED_h18_hit_names": {
+  "value": [
+   "1979-08\u21921980-02",
+   "1999-08\u21922001-04",
+   "2007-11\u21922008-01"
+  ],
+  "def": "hit episodes and the onsets they credit"
+ },
+ "D3-RED_h18_coincident_names": {
+  "value": [
+   "1974-01~1973-12",
+   "1990-09~1990-08"
+  ],
+  "def": "coincident episodes (raw first ON ~ onset)"
+ },
+ "D3-RED_h18_pending_names": {
+  "value": [
+   "2026-04"
+  ],
+  "def": "pending episodes"
+ },
+ "D3-RED_h18_event_categories": {
+  "value": {
+   "1953-08": "missed",
+   "1957-09": "missed",
+   "1960-05": "missed",
+   "1970-01": "missed",
+   "1973-12": "coincident",
+   "1980-02": "caught",
+   "1981-08": "missed",
+   "1990-08": "coincident",
+   "2001-04": "caught",
+   "2008-01": "caught",
+   "2020-03": "missed"
+  },
+  "def": "per-onset category"
+ },
+ "D3-RED_h18_event_leads": {
+  "value": {
+   "1953-08": null,
+   "1957-09": null,
+   "1960-05": null,
+   "1970-01": null,
+   "1973-12": -1,
+   "1980-02": 6,
+   "1981-08": null,
+   "1990-08": -1,
+   "2001-04": 20,
+   "2008-01": 2,
+   "2020-03": null
+  },
+  "def": "lead in months from the crediting episode's first ON month to the onset (negative = coincident, months after onset)"
+ },
+ "D3-YELLOW_h18_episodes": {
+  "value": 16,
+  "def": "D3-YELLOW episodes with raw first ON \u2265 1953-04, scored vs NBER onsets at h=18"
+ },
+ "D3-YELLOW_h18_hits": {
+  "value": 5,
+  "def": "episodes crediting \u22651 onset"
+ },
+ "D3-YELLOW_h18_false_positives": {
+  "value": 8,
+  "def": "resolved episodes crediting no onset and not coincident"
+ },
+ "D3-YELLOW_h18_coincident": {
+  "value": 2,
+  "def": "episodes whose raw first ON is in [onset, onset+3]"
+ },
+ "D3-YELLOW_h18_pending": {
+  "value": 1,
+  "def": "episodes containing an unresolved month"
+ },
+ "D3-YELLOW_h18_episode_precision": {
+  "value": 0.3846,
+  "def": "hits / (hits + false positives)"
+ },
+ "D3-YELLOW_h18_recall_caught": {
+  "value": 6,
+  "def": "onsets 1953-08..2020-03 with an ON (USREC=0) month in [e\u2212h, e\u22121] (1981-08: 1980-08..1981-07)"
+ },
+ "D3-YELLOW_h18_recall_evaluable": {
+  "value": 11,
+  "def": "evaluable onsets in the common window"
+ },
+ "D3-YELLOW_h18_month_precision": {
+  "value": 0.2804,
+  "def": "share of ON months (USREC=0, resolved, 1953-04+) followed by an onset within h"
+ },
+ "D3-YELLOW_h18_month_precision_n_on": {
+  "value": 107,
+  "def": "ON months in the precision denominator"
+ },
+ "D3-YELLOW_h18_month_precision_excl_coincident": {
+  "value": 0.2804,
+  "def": "same, excluding months belonging to coincident episodes"
+ },
+ "D3-YELLOW_h18_base_rate": {
+  "value": 0.2412,
+  "def": "share of resolved USREC=0 months 1953-04+ with an onset in t+1..t+h"
+ },
+ "D3-YELLOW_h18_false_positive_names": {
+  "value": [
+   "1987-03",
+   "1996-09",
+   "2002-10",
+   "2004-04",
+   "2009-11",
+   "2011-04",
+   "2016-12",
+   "2021-03"
+  ],
+  "def": "first ON month of each false-positive episode"
+ },
+ "D3-YELLOW_h18_hit_names": {
+  "value": [
+   "1979-07\u21921980-02,1981-08",
+   "1989-09\u21921990-08",
+   "1999-06\u21922001-04",
+   "2007-10\u21922008-01",
+   "2018-04\u21922020-03"
+  ],
+  "def": "hit episodes and the onsets they credit"
+ },
+ "D3-YELLOW_h18_coincident_names": {
+  "value": [
+   "1974-01~1973-12",
+   "1990-08~1990-08"
+  ],
+  "def": "coincident episodes (raw first ON ~ onset)"
+ },
+ "D3-YELLOW_h18_pending_names": {
+  "value": [
+   "2026-03"
+  ],
+  "def": "pending episodes"
+ },
+ "D3-YELLOW_h18_event_categories": {
+  "value": {
+   "1953-08": "missed",
+   "1957-09": "missed",
+   "1960-05": "missed",
+   "1970-01": "missed",
+   "1973-12": "coincident",
+   "1980-02": "caught",
+   "1981-08": "caught",
+   "1990-08": "caught",
+   "2001-04": "caught",
+   "2008-01": "caught",
+   "2020-03": "caught"
+  },
+  "def": "per-onset category"
+ },
+ "D3-YELLOW_h18_event_leads": {
+  "value": {
+   "1953-08": null,
+   "1957-09": null,
+   "1960-05": null,
+   "1970-01": null,
+   "1973-12": -1,
+   "1980-02": 7,
+   "1981-08": 25,
+   "1990-08": 11,
+   "2001-04": 22,
+   "2008-01": 3,
+   "2020-03": 23
+  },
+  "def": "lead in months from the crediting episode's first ON month to the onset (negative = coincident, months after onset)"
+ },
+ "PPI-RED_h18_episodes": {
+  "value": 14,
+  "def": "PPI-RED episodes with raw first ON \u2265 1953-04, scored vs NBER onsets at h=18"
+ },
+ "PPI-RED_h18_hits": {
+  "value": 4,
+  "def": "episodes crediting \u22651 onset"
+ },
+ "PPI-RED_h18_false_positives": {
+  "value": 7,
+  "def": "resolved episodes crediting no onset and not coincident"
+ },
+ "PPI-RED_h18_coincident": {
+  "value": 2,
+  "def": "episodes whose raw first ON is in [onset, onset+3]"
+ },
+ "PPI-RED_h18_pending": {
+  "value": 1,
+  "def": "episodes containing an unresolved month"
+ },
+ "PPI-RED_h18_episode_precision": {
+  "value": 0.3636,
+  "def": "hits / (hits + false positives)"
+ },
+ "PPI-RED_h18_recall_caught": {
+  "value": 4,
+  "def": "onsets 1953-08..2020-03 with an ON (USREC=0) month in [e\u2212h, e\u22121] (1981-08: 1980-08..1981-07)"
+ },
+ "PPI-RED_h18_recall_evaluable": {
+  "value": 11,
+  "def": "evaluable onsets in the common window"
+ },
+ "PPI-RED_h18_month_precision": {
+  "value": 0.3448,
+  "def": "share of ON months (USREC=0, resolved, 1953-04+) followed by an onset within h"
+ },
+ "PPI-RED_h18_month_precision_n_on": {
+  "value": 58,
+  "def": "ON months in the precision denominator"
+ },
+ "PPI-RED_h18_month_precision_excl_coincident": {
+  "value": 0.3448,
+  "def": "same, excluding months belonging to coincident episodes"
+ },
+ "PPI-RED_h18_base_rate": {
+  "value": 0.2412,
+  "def": "share of resolved USREC=0 months 1953-04+ with an onset in t+1..t+h"
+ },
+ "PPI-RED_h18_false_positive_names": {
+  "value": [
+   "1987-07",
+   "2002-12",
+   "2004-09",
+   "2009-12",
+   "2017-01",
+   "2018-05",
+   "2021-03"
+  ],
+  "def": "first ON month of each false-positive episode"
+ },
+ "PPI-RED_h18_hit_names": {
+  "value": [
+   "1979-12\u21921980-02",
+   "1981-02\u21921981-08",
+   "1999-08\u21922001-04",
+   "2007-11\u21922008-01"
+  ],
+  "def": "hit episodes and the onsets they credit"
+ },
+ "PPI-RED_h18_coincident_names": {
+  "value": [
+   "1974-01~1973-12",
+   "1990-09~1990-08"
+  ],
+  "def": "coincident episodes (raw first ON ~ onset)"
+ },
+ "PPI-RED_h18_pending_names": {
+  "value": [
+   "2026-04"
+  ],
+  "def": "pending episodes"
+ },
+ "PPI-RED_h18_event_categories": {
+  "value": {
+   "1953-08": "missed",
+   "1957-09": "missed",
+   "1960-05": "missed",
+   "1970-01": "missed",
+   "1973-12": "coincident",
+   "1980-02": "caught",
+   "1981-08": "caught",
+   "1990-08": "coincident",
+   "2001-04": "caught",
+   "2008-01": "caught",
+   "2020-03": "missed"
+  },
+  "def": "per-onset category"
+ },
+ "PPI-RED_h18_event_leads": {
+  "value": {
+   "1953-08": null,
+   "1957-09": null,
+   "1960-05": null,
+   "1970-01": null,
+   "1973-12": -1,
+   "1980-02": 2,
+   "1981-08": 6,
+   "1990-08": -1,
+   "2001-04": 20,
+   "2008-01": 2,
+   "2020-03": null
+  },
+  "def": "lead in months from the crediting episode's first ON month to the onset (negative = coincident, months after onset)"
+ },
+ "PPI-D2_h18_episodes": {
+  "value": 10,
+  "def": "PPI-D2 episodes with raw first ON \u2265 1953-04, scored vs NBER onsets at h=18"
+ },
+ "PPI-D2_h18_hits": {
+  "value": 6,
+  "def": "episodes crediting \u22651 onset"
+ },
+ "PPI-D2_h18_false_positives": {
+  "value": 2,
+  "def": "resolved episodes crediting no onset and not coincident"
+ },
+ "PPI-D2_h18_coincident": {
+  "value": 1,
+  "def": "episodes whose raw first ON is in [onset, onset+3]"
+ },
+ "PPI-D2_h18_pending": {
+  "value": 1,
+  "def": "episodes containing an unresolved month"
+ },
+ "PPI-D2_h18_episode_precision": {
+  "value": 0.75,
+  "def": "hits / (hits + false positives)"
+ },
+ "PPI-D2_h18_recall_caught": {
+  "value": 7,
+  "def": "onsets 1953-08..2020-03 with an ON (USREC=0) month in [e\u2212h, e\u22121] (1981-08: 1980-08..1981-07)"
+ },
+ "PPI-D2_h18_recall_evaluable": {
+  "value": 11,
+  "def": "evaluable onsets in the common window"
+ },
+ "PPI-D2_h18_month_precision": {
+  "value": 0.4218,
+  "def": "share of ON months (USREC=0, resolved, 1953-04+) followed by an onset within h"
+ },
+ "PPI-D2_h18_month_precision_n_on": {
+  "value": 147,
+  "def": "ON months in the precision denominator"
+ },
+ "PPI-D2_h18_month_precision_excl_coincident": {
+  "value": 0.4397,
+  "def": "same, excluding months belonging to coincident episodes"
+ },
+ "PPI-D2_h18_base_rate": {
+  "value": 0.2412,
+  "def": "share of resolved USREC=0 months 1953-04+ with an onset in t+1..t+h"
+ },
+ "PPI-D2_h18_false_positive_names": {
+  "value": [
+   "1996-04",
+   "2022-01"
+  ],
+  "def": "first ON month of each false-positive episode"
+ },
+ "PPI-D2_h18_hit_names": {
+  "value": [
+   "1953-06\u21921953-08",
+   "1973-09\u21921973-12",
+   "1978-09\u21921980-02,1981-08",
+   "2000-02\u21922001-04",
+   "2004-05\u21922008-01",
+   "2018-04\u21922020-03"
+  ],
+  "def": "hit episodes and the onsets they credit"
+ },
+ "PPI-D2_h18_coincident_names": {
+  "value": [
+   "1990-08~1990-08"
+  ],
+  "def": "coincident episodes (raw first ON ~ onset)"
+ },
+ "PPI-D2_h18_pending_names": {
+  "value": [
+   "2026-04"
+  ],
+  "def": "pending episodes"
+ },
+ "PPI-D2_h18_event_categories": {
+  "value": {
+   "1953-08": "caught",
+   "1957-09": "missed",
+   "1960-05": "missed",
+   "1970-01": "missed",
+   "1973-12": "caught",
+   "1980-02": "caught",
+   "1981-08": "caught",
+   "1990-08": "coincident",
+   "2001-04": "caught",
+   "2008-01": "caught",
+   "2020-03": "caught"
+  },
+  "def": "per-onset category"
+ },
+ "PPI-D2_h18_event_leads": {
+  "value": {
+   "1953-08": 2,
+   "1957-09": null,
+   "1960-05": null,
+   "1970-01": null,
+   "1973-12": 3,
+   "1980-02": 17,
+   "1981-08": 35,
+   "1990-08": 0,
+   "2001-04": 14,
+   "2008-01": 44,
+   "2020-03": 23
+  },
+  "def": "lead in months from the crediting episode's first ON month to the onset (negative = coincident, months after onset)"
+ },
+ "base_rate_common_h18": {
+  "value": 0.2412,
+  "def": "base rate, common window, h=18"
+ },
+ "base_rate_common_h18_n_months": {
+  "value": 738,
+  "def": "resolved USREC=0 months in the common window"
+ },
+ "Q1_primary_episode_precision": {
+  "value": 0.3,
+  "def": "D1-RED h=12 NBER episode precision = hits/(hits+FP), common window"
+ },
+ "Q1_primary_hits": {
+  "value": 3,
+  "def": "D1-RED h=12 hit episodes"
+ },
+ "Q1_primary_false_positives": {
+  "value": 7,
+  "def": "D1-RED h=12 false-positive episodes"
+ },
+ "Q1_primary_recall": {
+  "value": "3/11",
+  "def": "D1-RED h=12 onsets caught / evaluable, 1953-08..2020-03"
+ },
+ "Q1_primary_month_precision": {
+  "value": 0.1837,
+  "def": "D1-RED h=12 month-level precision"
+ },
+ "Q1_primary_base_rate": {
+  "value": 0.1667,
+  "def": "h=12 base rate, common window"
+ },
+ "s5_D2_beats_D1": {
+  "value": true,
+  "def": "D2 better than D1 by \u22651 episode on precision with \u2265 recall (h=12 NBER common window)"
+ },
+ "s5_D3_beats_D1_D2": {
+  "value": false,
+  "def": "D3 beats D1 and D2 on episode precision with \u2265 recall"
+ },
+ "full_D1-RED_h12_month_precision": {
+  "value": 0.2308,
+  "def": "full window 1947-01+ month precision"
+ },
+ "full_D1-RED_h12_base": {
+  "value": 0.1782,
+  "def": "full window base rate"
+ },
+ "full_D1-RED_h12_hits_fp": {
+  "value": "4/7",
+  "def": "full window episode hits / false positives"
+ },
+ "full_D1-RED_h12_recall": {
+  "value": "4/12",
+  "def": "full window recall"
+ },
+ "full_D1-YELLOW_h12_month_precision": {
+  "value": 0.2657,
+  "def": "full window 1947-01+ month precision"
+ },
+ "full_D1-YELLOW_h12_base": {
+  "value": 0.1782,
+  "def": "full window base rate"
+ },
+ "full_D1-YELLOW_h12_hits_fp": {
+  "value": "5/10",
+  "def": "full window episode hits / false positives"
+ },
+ "full_D1-YELLOW_h12_recall": {
+  "value": "6/12",
+  "def": "full window recall"
+ },
+ "full_D2_h12_month_precision": {
+  "value": 0.2946,
+  "def": "full window 1947-01+ month precision"
+ },
+ "full_D2_h12_base": {
+  "value": 0.1782,
+  "def": "full window base rate"
+ },
+ "full_D2_h12_hits_fp": {
+  "value": "5/3",
+  "def": "full window episode hits / false positives"
+ },
+ "full_D2_h12_recall": {
+  "value": "6/11",
+  "def": "full window recall"
+ },
+ "full_D3-RED_h12_month_precision": {
+  "value": 0.2143,
+  "def": "full window 1947-01+ month precision"
+ },
+ "full_D3-RED_h12_base": {
+  "value": 0.1782,
+  "def": "full window base rate"
+ },
+ "full_D3-RED_h12_hits_fp": {
+  "value": "3/6",
+  "def": "full window episode hits / false positives"
+ },
+ "full_D3-RED_h12_recall": {
+  "value": "3/11",
+  "def": "full window recall"
+ },
+ "full_D3-YELLOW_h12_month_precision": {
+  "value": 0.2735,
+  "def": "full window 1947-01+ month precision"
+ },
+ "full_D3-YELLOW_h12_base": {
+  "value": 0.1782,
+  "def": "full window base rate"
+ },
+ "full_D3-YELLOW_h12_hits_fp": {
+  "value": "5/9",
+  "def": "full window episode hits / false positives"
+ },
+ "full_D3-YELLOW_h12_recall": {
+  "value": "5/11",
+  "def": "full window recall"
+ },
+ "full_PPI-RED_h12_month_precision": {
+  "value": 0.2667,
+  "def": "full window 1947-01+ month precision"
+ },
+ "full_PPI-RED_h12_base": {
+  "value": 0.1782,
+  "def": "full window base rate"
+ },
+ "full_PPI-RED_h12_hits_fp": {
+  "value": "5/7",
+  "def": "full window episode hits / false positives"
+ },
+ "full_PPI-RED_h12_recall": {
+  "value": "4/11",
+  "def": "full window recall"
+ },
+ "full_PPI-D2_h12_month_precision": {
+  "value": 0.3197,
+  "def": "full window 1947-01+ month precision"
+ },
+ "full_PPI-D2_h12_base": {
+  "value": 0.1782,
+  "def": "full window base rate"
+ },
+ "full_PPI-D2_h12_hits_fp": {
+  "value": "6/2",
+  "def": "full window episode hits / false positives"
+ },
+ "full_PPI-D2_h12_recall": {
+  "value": "7/11",
+  "def": "full window recall"
+ },
+ "full_D1-RED_h18_month_precision": {
+  "value": 0.3462,
+  "def": "full window 1947-01+ month precision"
+ },
+ "full_D1-RED_h18_base": {
+  "value": 0.2618,
+  "def": "full window base rate"
+ },
+ "full_D1-RED_h18_hits_fp": {
+  "value": "4/7",
+  "def": "full window episode hits / false positives"
+ },
+ "full_D1-RED_h18_recall": {
+  "value": "4/12",
+  "def": "full window recall"
+ },
+ "full_D1-YELLOW_h18_month_precision": {
+  "value": 0.3566,
+  "def": "full window 1947-01+ month precision"
+ },
+ "full_D1-YELLOW_h18_base": {
+  "value": 0.2618,
+  "def": "full window base rate"
+ },
+ "full_D1-YELLOW_h18_hits_fp": {
+  "value": "6/9",
+  "def": "full window episode hits / false positives"
+ },
+ "full_D1-YELLOW_h18_recall": {
+  "value": "7/12",
+  "def": "full window recall"
+ },
+ "full_D2_h18_month_precision": {
+  "value": 0.4031,
+  "def": "full window 1947-01+ month precision"
+ },
+ "full_D2_h18_base": {
+  "value": 0.2618,
+  "def": "full window base rate"
+ },
+ "full_D2_h18_hits_fp": {
+  "value": "5/3",
+  "def": "full window episode hits / false positives"
+ },
+ "full_D2_h18_recall": {
+  "value": "6/11",
+  "def": "full window recall"
+ },
+ "full_D3-RED_h18_month_precision": {
+  "value": 0.3571,
+  "def": "full window 1947-01+ month precision"
+ },
+ "full_D3-RED_h18_base": {
+  "value": 0.2618,
+  "def": "full window base rate"
+ },
+ "full_D3-RED_h18_hits_fp": {
+  "value": "3/6",
+  "def": "full window episode hits / false positives"
+ },
+ "full_D3-RED_h18_recall": {
+  "value": "3/11",
+  "def": "full window recall"
+ },
+ "full_D3-YELLOW_h18_month_precision": {
+  "value": 0.3419,
+  "def": "full window 1947-01+ month precision"
+ },
+ "full_D3-YELLOW_h18_base": {
+  "value": 0.2618,
+  "def": "full window base rate"
+ },
+ "full_D3-YELLOW_h18_hits_fp": {
+  "value": "6/8",
+  "def": "full window episode hits / false positives"
+ },
+ "full_D3-YELLOW_h18_recall": {
+  "value": "6/11",
+  "def": "full window recall"
+ },
+ "full_PPI-RED_h18_month_precision": {
+  "value": 0.3667,
+  "def": "full window 1947-01+ month precision"
+ },
+ "full_PPI-RED_h18_base": {
+  "value": 0.2618,
+  "def": "full window base rate"
+ },
+ "full_PPI-RED_h18_hits_fp": {
+  "value": "5/7",
+  "def": "full window episode hits / false positives"
+ },
+ "full_PPI-RED_h18_recall": {
+  "value": "4/11",
+  "def": "full window recall"
+ },
+ "full_PPI-D2_h18_month_precision": {
+  "value": 0.4218,
+  "def": "full window 1947-01+ month precision"
+ },
+ "full_PPI-D2_h18_base": {
+  "value": 0.2618,
+  "def": "full window base rate"
+ },
+ "full_PPI-D2_h18_hits_fp": {
+  "value": "6/2",
+  "def": "full window episode hits / false positives"
+ },
+ "full_PPI-D2_h18_recall": {
+  "value": "7/11",
+  "def": "full window recall"
+ },
+ "kill_rate_D1-RED": {
+  "value": "3 of 11 postwar onsets (1953-08..2020-03) preceded, 7 named false positives (1987-07, 2002-12, 2004-09, 2009-12, 2017-01, 2018-06, 2021-03), 2 coincident (1974-01, 1990-09)",
+  "def": "measured kill_rate string, ON in [e\u221212, e\u22121], common window"
+ },
+ "kill_rate_D1-YELLOW": {
+  "value": "5 of 11 postwar onsets (1953-08..2020-03) preceded, 10 named false positives (1987-03, 1995-02, 1996-09, 2002-10, 2004-04, 2009-11, 2011-03, 2016-12, 2018-03, 2021-03), 1 coincident (1974-01)",
+  "def": "measured kill_rate string, ON in [e\u221212, e\u22121], common window"
+ },
+ "kill_rate_D2": {
+  "value": "6 of 11 postwar onsets (1953-08..2020-03) preceded, 3 named false positives (1976-09, 1996-04, 2021-10), 1 coincident (1990-08)",
+  "def": "measured kill_rate string, ON in [e\u221212, e\u22121], common window"
+ },
+ "kill_rate_D3-RED": {
+  "value": "3 of 11 postwar onsets (1953-08..2020-03) preceded, 6 named false positives (1987-07, 2003-01, 2004-09, 2009-12, 2017-01, 2021-03), 2 coincident (1974-01, 1990-09)",
+  "def": "measured kill_rate string, ON in [e\u221212, e\u22121], common window"
+ },
+ "kill_rate_D3-YELLOW": {
+  "value": "5 of 11 postwar onsets (1953-08..2020-03) preceded, 9 named false positives (1987-03, 1996-09, 2002-10, 2004-04, 2009-11, 2011-04, 2016-12, 2018-04, 2021-03), 2 coincident (1974-01, 1990-08)",
+  "def": "measured kill_rate string, ON in [e\u221212, e\u22121], common window"
+ },
+ "kill_rate_PPI-RED": {
+  "value": "4 of 11 postwar onsets (1953-08..2020-03) preceded, 7 named false positives (1987-07, 2002-12, 2004-09, 2009-12, 2017-01, 2018-05, 2021-03), 2 coincident (1974-01, 1990-09)",
+  "def": "measured kill_rate string, ON in [e\u221212, e\u22121], common window"
+ },
+ "kill_rate_PPI-D2": {
+  "value": "7 of 11 postwar onsets (1953-08..2020-03) preceded, 2 named false positives (1996-04, 2022-01), 1 coincident (1990-08)",
+  "def": "measured kill_rate string, ON in [e\u221212, e\u22121], common window"
+ },
+ "ppi_row_D1-RED_vs_PPI-RED_1953-08": {
+  "value": "miss/miss",
+  "def": "D1-RED / PPI-RED per-event outcome for onset 1953-08, h=12; first ON months \u2014 / \u2014"
+ },
+ "ppi_row_D1-RED_vs_PPI-RED_1957-09": {
+  "value": "miss/miss",
+  "def": "D1-RED / PPI-RED per-event outcome for onset 1957-09, h=12; first ON months \u2014 / \u2014"
+ },
+ "ppi_row_D1-RED_vs_PPI-RED_1960-05": {
+  "value": "miss/miss",
+  "def": "D1-RED / PPI-RED per-event outcome for onset 1960-05, h=12; first ON months \u2014 / \u2014"
+ },
+ "ppi_row_D1-RED_vs_PPI-RED_1970-01": {
+  "value": "miss/miss",
+  "def": "D1-RED / PPI-RED per-event outcome for onset 1970-01, h=12; first ON months \u2014 / \u2014"
+ },
+ "ppi_row_D1-RED_vs_PPI-RED_1973-12": {
+  "value": "coincident/coincident",
+  "def": "D1-RED / PPI-RED per-event outcome for onset 1973-12, h=12; first ON months 1974-01 / 1974-01"
+ },
+ "ppi_row_D1-RED_vs_PPI-RED_1980-02": {
+  "value": "hit/hit",
+  "def": "D1-RED / PPI-RED per-event outcome for onset 1980-02, h=12; first ON months 1979-08 / 1979-12"
+ },
+ "ppi_row_D1-RED_vs_PPI-RED_1981-08": {
+  "value": "miss/hit",
+  "def": "D1-RED / PPI-RED per-event outcome for onset 1981-08, h=12; first ON months \u2014 / 1981-02"
+ },
+ "ppi_row_D2_vs_PPI-D2_1953-08": {
+  "value": "miss/hit",
+  "def": "D2 / PPI-D2 per-event outcome for onset 1953-08, h=12; first ON months \u2014 / 1953-06"
+ },
+ "ppi_row_D2_vs_PPI-D2_1957-09": {
+  "value": "miss/miss",
+  "def": "D2 / PPI-D2 per-event outcome for onset 1957-09, h=12; first ON months \u2014 / \u2014"
+ },
+ "ppi_row_D2_vs_PPI-D2_1960-05": {
+  "value": "miss/miss",
+  "def": "D2 / PPI-D2 per-event outcome for onset 1960-05, h=12; first ON months \u2014 / \u2014"
+ },
+ "ppi_row_D2_vs_PPI-D2_1970-01": {
+  "value": "miss/miss",
+  "def": "D2 / PPI-D2 per-event outcome for onset 1970-01, h=12; first ON months \u2014 / \u2014"
+ },
+ "ppi_row_D2_vs_PPI-D2_1973-12": {
+  "value": "hit/hit",
+  "def": "D2 / PPI-D2 per-event outcome for onset 1973-12, h=12; first ON months 1973-08 / 1973-09"
+ },
+ "ppi_row_D2_vs_PPI-D2_1980-02": {
+  "value": "hit/hit",
+  "def": "D2 / PPI-D2 per-event outcome for onset 1980-02, h=12; first ON months 1979-05 / 1978-09"
+ },
+ "ppi_row_D2_vs_PPI-D2_1981-08": {
+  "value": "hit/hit",
+  "def": "D2 / PPI-D2 per-event outcome for onset 1981-08, h=12; first ON months 1979-05 / 1978-09"
+ },
+ "expect_1973_D1-RED": {
+  "value": "coincident",
+  "def": "1973-12 per-event outcome under D1-RED, h=12 (pre-declared: coincident/missed)"
+ },
+ "expect_1973_D2": {
+  "value": "caught",
+  "def": "1973-12 per-event outcome under D2, h=12 (pre-declared: coincident/missed)"
+ },
+ "expect_1973_D3-RED": {
+  "value": "coincident",
+  "def": "1973-12 per-event outcome under D3-RED, h=12 (pre-declared: coincident/missed)"
+ },
+ "expect_1973_PPI-RED": {
+  "value": "coincident",
+  "def": "1973-12 per-event outcome under PPI-RED, h=12 (pre-declared: coincident/missed)"
+ },
+ "expect_1973_PPI-D2": {
+  "value": "caught",
+  "def": "1973-12 per-event outcome under PPI-D2, h=12 (pre-declared: coincident/missed)"
+ },
+ "expect_1990_D1-RED": {
+  "value": "coincident",
+  "def": "1990-08 per-event outcome under D1-RED, h=12 (pre-declared: coincident)"
+ },
+ "expect_1990_D2": {
+  "value": "coincident",
+  "def": "1990-08 per-event outcome under D2, h=12 (pre-declared: coincident)"
+ },
+ "expect_1990_D3-RED": {
+  "value": "coincident",
+  "def": "1990-08 per-event outcome under D3-RED, h=12 (pre-declared: coincident)"
+ },
+ "expect_1990_PPI-RED": {
+  "value": "coincident",
+  "def": "1990-08 per-event outcome under PPI-RED, h=12 (pre-declared: coincident)"
+ },
+ "expect_1990_PPI-D2": {
+  "value": "coincident",
+  "def": "1990-08 per-event outcome under PPI-D2, h=12 (pre-declared: coincident)"
+ },
+ "expect_2022_D1-RED_h12": {
+  "value": "false positive",
+  "def": "status of the 2021-22 D1-RED episode at h=12 (pre-declared: false positive)"
+ },
+ "expect_2022_D1-RED_h18": {
+  "value": "false positive",
+  "def": "status of the 2021-22 D1-RED episode at h=18 (pre-declared: false positive)"
+ },
+ "expect_2022_D2_h12": {
+  "value": "false positive",
+  "def": "status of the 2021-22 D2 episode at h=12 (pre-declared: false positive)"
+ },
+ "expect_2022_D2_h18": {
+  "value": "false positive",
+  "def": "status of the 2021-22 D2 episode at h=18 (pre-declared: false positive)"
+ },
+ "expect_2022_D3-RED_h12": {
+  "value": "false positive",
+  "def": "status of the 2021-22 D3-RED episode at h=12 (pre-declared: false positive)"
+ },
+ "expect_2022_D3-RED_h18": {
+  "value": "false positive",
+  "def": "status of the 2021-22 D3-RED episode at h=18 (pre-declared: false positive)"
+ },
+ "curve5_NBER_curve_flat_alone_h12_month_precision": {
+  "value": 0.5517,
+  "def": "curve flat alone vs NBER onsets, h=12: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_NBER_curve_flat_alone_h12_base": {
+  "value": 0.1622,
+  "def": "base rate vs NBER onsets, h=12, 1953-09+"
+ },
+ "curve5_NBER_curve_flat_alone_h12_hits": {
+  "value": 9,
+  "def": "hit episodes"
+ },
+ "curve5_NBER_curve_flat_alone_h12_false_positives": {
+  "value": 2,
+  "def": "false-positive episodes"
+ },
+ "curve5_NBER_curve_flat_alone_h12_recall": {
+  "value": "10/10",
+  "def": "events caught / evaluable"
+ },
+ "curve5_NBER_curve_flat_alone_h12_false_positive_names": {
+  "value": [
+   "1965-12",
+   "1998-09"
+  ],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_NBER_curve_flat_alone_h12_caught_events": {
+  "value": [
+   "1957-09",
+   "1960-05",
+   "1970-01",
+   "1973-12",
+   "1980-02",
+   "1981-08",
+   "1990-08",
+   "2001-04",
+   "2008-01",
+   "2020-03"
+  ],
+  "def": "events caught"
+ },
+ "curve5_NBER_D1-RED_alone_h12_month_precision": {
+  "value": 0.1837,
+  "def": "D1-RED alone vs NBER onsets, h=12: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_NBER_D1-RED_alone_h12_base": {
+  "value": 0.1622,
+  "def": "base rate vs NBER onsets, h=12, 1953-09+"
+ },
+ "curve5_NBER_D1-RED_alone_h12_hits": {
+  "value": 3,
+  "def": "hit episodes"
+ },
+ "curve5_NBER_D1-RED_alone_h12_false_positives": {
+  "value": 7,
+  "def": "false-positive episodes"
+ },
+ "curve5_NBER_D1-RED_alone_h12_recall": {
+  "value": "3/10",
+  "def": "events caught / evaluable"
+ },
+ "curve5_NBER_D1-RED_alone_h12_false_positive_names": {
+  "value": [
+   "1987-07",
+   "2002-12",
+   "2004-09",
+   "2009-12",
+   "2017-01",
+   "2018-06",
+   "2021-03"
+  ],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_NBER_D1-RED_alone_h12_caught_events": {
+  "value": [
+   "1980-02",
+   "2001-04",
+   "2008-01"
+  ],
+  "def": "events caught"
+ },
+ "curve5_NBER_D1-RED_AND_curve_flat_h12_month_precision": {
+  "value": 1.0,
+  "def": "D1-RED AND curve flat vs NBER onsets, h=12: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_NBER_D1-RED_AND_curve_flat_h12_base": {
+  "value": 0.1622,
+  "def": "base rate vs NBER onsets, h=12, 1953-09+"
+ },
+ "curve5_NBER_D1-RED_AND_curve_flat_h12_hits": {
+  "value": 2,
+  "def": "hit episodes"
+ },
+ "curve5_NBER_D1-RED_AND_curve_flat_h12_false_positives": {
+  "value": 0,
+  "def": "false-positive episodes"
+ },
+ "curve5_NBER_D1-RED_AND_curve_flat_h12_recall": {
+  "value": "2/10",
+  "def": "events caught / evaluable"
+ },
+ "curve5_NBER_D1-RED_AND_curve_flat_h12_false_positive_names": {
+  "value": [],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_NBER_D1-RED_AND_curve_flat_h12_caught_events": {
+  "value": [
+   "1980-02",
+   "2008-01"
+  ],
+  "def": "events caught"
+ },
+ "curve5_NBER_D2_alone_h12_month_precision": {
+  "value": 0.2946,
+  "def": "D2 alone vs NBER onsets, h=12: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_NBER_D2_alone_h12_base": {
+  "value": 0.1622,
+  "def": "base rate vs NBER onsets, h=12, 1953-09+"
+ },
+ "curve5_NBER_D2_alone_h12_hits": {
+  "value": 5,
+  "def": "hit episodes"
+ },
+ "curve5_NBER_D2_alone_h12_false_positives": {
+  "value": 3,
+  "def": "false-positive episodes"
+ },
+ "curve5_NBER_D2_alone_h12_recall": {
+  "value": "6/10",
+  "def": "events caught / evaluable"
+ },
+ "curve5_NBER_D2_alone_h12_false_positive_names": {
+  "value": [
+   "1976-09",
+   "1996-04",
+   "2021-10"
+  ],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_NBER_D2_alone_h12_caught_events": {
+  "value": [
+   "1973-12",
+   "1980-02",
+   "1981-08",
+   "2001-04",
+   "2008-01",
+   "2020-03"
+  ],
+  "def": "events caught"
+ },
+ "curve5_NBER_D2_AND_curve_flat_h12_month_precision": {
+  "value": 0.6863,
+  "def": "D2 AND curve flat vs NBER onsets, h=12: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_NBER_D2_AND_curve_flat_h12_base": {
+  "value": 0.1622,
+  "def": "base rate vs NBER onsets, h=12, 1953-09+"
+ },
+ "curve5_NBER_D2_AND_curve_flat_h12_hits": {
+  "value": 5,
+  "def": "hit episodes"
+ },
+ "curve5_NBER_D2_AND_curve_flat_h12_false_positives": {
+  "value": 1,
+  "def": "false-positive episodes"
+ },
+ "curve5_NBER_D2_AND_curve_flat_h12_recall": {
+  "value": "6/10",
+  "def": "events caught / evaluable"
+ },
+ "curve5_NBER_D2_AND_curve_flat_h12_false_positive_names": {
+  "value": [
+   "2022-11"
+  ],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_NBER_D2_AND_curve_flat_h12_caught_events": {
+  "value": [
+   "1973-12",
+   "1980-02",
+   "1981-08",
+   "2001-04",
+   "2008-01",
+   "2020-03"
+  ],
+  "def": "events caught"
+ },
+ "curve5_NBER_D3-RED_alone_h12_month_precision": {
+  "value": 0.2143,
+  "def": "D3-RED alone vs NBER onsets, h=12: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_NBER_D3-RED_alone_h12_base": {
+  "value": 0.1622,
+  "def": "base rate vs NBER onsets, h=12, 1953-09+"
+ },
+ "curve5_NBER_D3-RED_alone_h12_hits": {
+  "value": 3,
+  "def": "hit episodes"
+ },
+ "curve5_NBER_D3-RED_alone_h12_false_positives": {
+  "value": 6,
+  "def": "false-positive episodes"
+ },
+ "curve5_NBER_D3-RED_alone_h12_recall": {
+  "value": "3/10",
+  "def": "events caught / evaluable"
+ },
+ "curve5_NBER_D3-RED_alone_h12_false_positive_names": {
+  "value": [
+   "1987-07",
+   "2003-01",
+   "2004-09",
+   "2009-12",
+   "2017-01",
+   "2021-03"
+  ],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_NBER_D3-RED_alone_h12_caught_events": {
+  "value": [
+   "1980-02",
+   "2001-04",
+   "2008-01"
+  ],
+  "def": "events caught"
+ },
+ "curve5_NBER_D3-RED_AND_curve_flat_h12_month_precision": {
+  "value": 1.0,
+  "def": "D3-RED AND curve flat vs NBER onsets, h=12: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_NBER_D3-RED_AND_curve_flat_h12_base": {
+  "value": 0.1622,
+  "def": "base rate vs NBER onsets, h=12, 1953-09+"
+ },
+ "curve5_NBER_D3-RED_AND_curve_flat_h12_hits": {
+  "value": 2,
+  "def": "hit episodes"
+ },
+ "curve5_NBER_D3-RED_AND_curve_flat_h12_false_positives": {
+  "value": 0,
+  "def": "false-positive episodes"
+ },
+ "curve5_NBER_D3-RED_AND_curve_flat_h12_recall": {
+  "value": "2/10",
+  "def": "events caught / evaluable"
+ },
+ "curve5_NBER_D3-RED_AND_curve_flat_h12_false_positive_names": {
+  "value": [],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_NBER_D3-RED_AND_curve_flat_h12_caught_events": {
+  "value": [
+   "1980-02",
+   "2008-01"
+  ],
+  "def": "events caught"
+ },
+ "curve5_NBER_curve_flat_alone_h18_month_precision": {
+  "value": 0.6726,
+  "def": "curve flat alone vs NBER onsets, h=18: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_NBER_curve_flat_alone_h18_base": {
+  "value": 0.2371,
+  "def": "base rate vs NBER onsets, h=18, 1953-09+"
+ },
+ "curve5_NBER_curve_flat_alone_h18_hits": {
+  "value": 9,
+  "def": "hit episodes"
+ },
+ "curve5_NBER_curve_flat_alone_h18_false_positives": {
+  "value": 2,
+  "def": "false-positive episodes"
+ },
+ "curve5_NBER_curve_flat_alone_h18_recall": {
+  "value": "10/10",
+  "def": "events caught / evaluable"
+ },
+ "curve5_NBER_curve_flat_alone_h18_false_positive_names": {
+  "value": [
+   "1965-12",
+   "1998-09"
+  ],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_NBER_curve_flat_alone_h18_caught_events": {
+  "value": [
+   "1957-09",
+   "1960-05",
+   "1970-01",
+   "1973-12",
+   "1980-02",
+   "1981-08",
+   "1990-08",
+   "2001-04",
+   "2008-01",
+   "2020-03"
+  ],
+  "def": "events caught"
+ },
+ "curve5_NBER_D1-RED_alone_h18_month_precision": {
+  "value": 0.3061,
+  "def": "D1-RED alone vs NBER onsets, h=18: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_NBER_D1-RED_alone_h18_base": {
+  "value": 0.2371,
+  "def": "base rate vs NBER onsets, h=18, 1953-09+"
+ },
+ "curve5_NBER_D1-RED_alone_h18_hits": {
+  "value": 3,
+  "def": "hit episodes"
+ },
+ "curve5_NBER_D1-RED_alone_h18_false_positives": {
+  "value": 7,
+  "def": "false-positive episodes"
+ },
+ "curve5_NBER_D1-RED_alone_h18_recall": {
+  "value": "3/10",
+  "def": "events caught / evaluable"
+ },
+ "curve5_NBER_D1-RED_alone_h18_false_positive_names": {
+  "value": [
+   "1987-07",
+   "2002-12",
+   "2004-09",
+   "2009-12",
+   "2017-01",
+   "2018-06",
+   "2021-03"
+  ],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_NBER_D1-RED_alone_h18_caught_events": {
+  "value": [
+   "1980-02",
+   "2001-04",
+   "2008-01"
+  ],
+  "def": "events caught"
+ },
+ "curve5_NBER_D1-RED_AND_curve_flat_h18_month_precision": {
+  "value": 1.0,
+  "def": "D1-RED AND curve flat vs NBER onsets, h=18: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_NBER_D1-RED_AND_curve_flat_h18_base": {
+  "value": 0.2371,
+  "def": "base rate vs NBER onsets, h=18, 1953-09+"
+ },
+ "curve5_NBER_D1-RED_AND_curve_flat_h18_hits": {
+  "value": 2,
+  "def": "hit episodes"
+ },
+ "curve5_NBER_D1-RED_AND_curve_flat_h18_false_positives": {
+  "value": 0,
+  "def": "false-positive episodes"
+ },
+ "curve5_NBER_D1-RED_AND_curve_flat_h18_recall": {
+  "value": "2/10",
+  "def": "events caught / evaluable"
+ },
+ "curve5_NBER_D1-RED_AND_curve_flat_h18_false_positive_names": {
+  "value": [],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_NBER_D1-RED_AND_curve_flat_h18_caught_events": {
+  "value": [
+   "1980-02",
+   "2008-01"
+  ],
+  "def": "events caught"
+ },
+ "curve5_NBER_D2_alone_h18_month_precision": {
+  "value": 0.4031,
+  "def": "D2 alone vs NBER onsets, h=18: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_NBER_D2_alone_h18_base": {
+  "value": 0.2371,
+  "def": "base rate vs NBER onsets, h=18, 1953-09+"
+ },
+ "curve5_NBER_D2_alone_h18_hits": {
+  "value": 5,
+  "def": "hit episodes"
+ },
+ "curve5_NBER_D2_alone_h18_false_positives": {
+  "value": 3,
+  "def": "false-positive episodes"
+ },
+ "curve5_NBER_D2_alone_h18_recall": {
+  "value": "6/10",
+  "def": "events caught / evaluable"
+ },
+ "curve5_NBER_D2_alone_h18_false_positive_names": {
+  "value": [
+   "1976-09",
+   "1996-04",
+   "2021-10"
+  ],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_NBER_D2_alone_h18_caught_events": {
+  "value": [
+   "1973-12",
+   "1980-02",
+   "1981-08",
+   "2001-04",
+   "2008-01",
+   "2020-03"
+  ],
+  "def": "events caught"
+ },
+ "curve5_NBER_D2_AND_curve_flat_h18_month_precision": {
+  "value": 0.8039,
+  "def": "D2 AND curve flat vs NBER onsets, h=18: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_NBER_D2_AND_curve_flat_h18_base": {
+  "value": 0.2371,
+  "def": "base rate vs NBER onsets, h=18, 1953-09+"
+ },
+ "curve5_NBER_D2_AND_curve_flat_h18_hits": {
+  "value": 5,
+  "def": "hit episodes"
+ },
+ "curve5_NBER_D2_AND_curve_flat_h18_false_positives": {
+  "value": 1,
+  "def": "false-positive episodes"
+ },
+ "curve5_NBER_D2_AND_curve_flat_h18_recall": {
+  "value": "6/10",
+  "def": "events caught / evaluable"
+ },
+ "curve5_NBER_D2_AND_curve_flat_h18_false_positive_names": {
+  "value": [
+   "2022-11"
+  ],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_NBER_D2_AND_curve_flat_h18_caught_events": {
+  "value": [
+   "1973-12",
+   "1980-02",
+   "1981-08",
+   "2001-04",
+   "2008-01",
+   "2020-03"
+  ],
+  "def": "events caught"
+ },
+ "curve5_NBER_D3-RED_alone_h18_month_precision": {
+  "value": 0.3571,
+  "def": "D3-RED alone vs NBER onsets, h=18: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_NBER_D3-RED_alone_h18_base": {
+  "value": 0.2371,
+  "def": "base rate vs NBER onsets, h=18, 1953-09+"
+ },
+ "curve5_NBER_D3-RED_alone_h18_hits": {
+  "value": 3,
+  "def": "hit episodes"
+ },
+ "curve5_NBER_D3-RED_alone_h18_false_positives": {
+  "value": 6,
+  "def": "false-positive episodes"
+ },
+ "curve5_NBER_D3-RED_alone_h18_recall": {
+  "value": "3/10",
+  "def": "events caught / evaluable"
+ },
+ "curve5_NBER_D3-RED_alone_h18_false_positive_names": {
+  "value": [
+   "1987-07",
+   "2003-01",
+   "2004-09",
+   "2009-12",
+   "2017-01",
+   "2021-03"
+  ],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_NBER_D3-RED_alone_h18_caught_events": {
+  "value": [
+   "1980-02",
+   "2001-04",
+   "2008-01"
+  ],
+  "def": "events caught"
+ },
+ "curve5_NBER_D3-RED_AND_curve_flat_h18_month_precision": {
+  "value": 1.0,
+  "def": "D3-RED AND curve flat vs NBER onsets, h=18: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_NBER_D3-RED_AND_curve_flat_h18_base": {
+  "value": 0.2371,
+  "def": "base rate vs NBER onsets, h=18, 1953-09+"
+ },
+ "curve5_NBER_D3-RED_AND_curve_flat_h18_hits": {
+  "value": 2,
+  "def": "hit episodes"
+ },
+ "curve5_NBER_D3-RED_AND_curve_flat_h18_false_positives": {
+  "value": 0,
+  "def": "false-positive episodes"
+ },
+ "curve5_NBER_D3-RED_AND_curve_flat_h18_recall": {
+  "value": "2/10",
+  "def": "events caught / evaluable"
+ },
+ "curve5_NBER_D3-RED_AND_curve_flat_h18_false_positive_names": {
+  "value": [],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_NBER_D3-RED_AND_curve_flat_h18_caught_events": {
+  "value": [
+   "1980-02",
+   "2008-01"
+  ],
+  "def": "events caught"
+ },
+ "curve5_B1_curve_flat_alone_h12_month_precision": {
+  "value": 0.3103,
+  "def": "curve flat alone vs B1 drawdown starts, h=12: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_B1_curve_flat_alone_h12_base": {
+  "value": 0.2257,
+  "def": "base rate vs B1 drawdown starts, h=12, 1953-09+"
+ },
+ "curve5_B1_curve_flat_alone_h12_hits": {
+  "value": 8,
+  "def": "hit episodes"
+ },
+ "curve5_B1_curve_flat_alone_h12_false_positives": {
+  "value": 3,
+  "def": "false-positive episodes"
+ },
+ "curve5_B1_curve_flat_alone_h12_recall": {
+  "value": "8/15",
+  "def": "events caught / evaluable"
+ },
+ "curve5_B1_curve_flat_alone_h12_false_positive_names": {
+  "value": [
+   "1957-02",
+   "1959-12",
+   "1973-06"
+  ],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_B1_curve_flat_alone_h12_caught_events": {
+  "value": [
+   "1966-01",
+   "1968-11",
+   "1980-11",
+   "1990-05",
+   "2000-08",
+   "2007-10",
+   "2019-12",
+   "2025-01"
+  ],
+  "def": "events caught"
+ },
+ "curve5_B1_D1-RED_alone_h12_month_precision": {
+  "value": 0.5102,
+  "def": "D1-RED alone vs B1 drawdown starts, h=12: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_B1_D1-RED_alone_h12_base": {
+  "value": 0.2257,
+  "def": "base rate vs B1 drawdown starts, h=12, 1953-09+"
+ },
+ "curve5_B1_D1-RED_alone_h12_hits": {
+  "value": 5,
+  "def": "hit episodes"
+ },
+ "curve5_B1_D1-RED_alone_h12_false_positives": {
+  "value": 4,
+  "def": "false-positive episodes"
+ },
+ "curve5_B1_D1-RED_alone_h12_recall": {
+  "value": "5/15",
+  "def": "events caught / evaluable"
+ },
+ "curve5_B1_D1-RED_alone_h12_false_positive_names": {
+  "value": [
+   "2002-12",
+   "2004-09",
+   "2009-12",
+   "2017-01"
+  ],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_B1_D1-RED_alone_h12_caught_events": {
+  "value": [
+   "1980-11",
+   "1987-08",
+   "2000-08",
+   "2018-09",
+   "2021-12"
+  ],
+  "def": "events caught"
+ },
+ "curve5_B1_D1-RED_AND_curve_flat_h12_month_precision": {
+  "value": 0.4286,
+  "def": "D1-RED AND curve flat vs B1 drawdown starts, h=12: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_B1_D1-RED_AND_curve_flat_h12_base": {
+  "value": 0.2257,
+  "def": "base rate vs B1 drawdown starts, h=12, 1953-09+"
+ },
+ "curve5_B1_D1-RED_AND_curve_flat_h12_hits": {
+  "value": 1,
+  "def": "hit episodes"
+ },
+ "curve5_B1_D1-RED_AND_curve_flat_h12_false_positives": {
+  "value": 0,
+  "def": "false-positive episodes"
+ },
+ "curve5_B1_D1-RED_AND_curve_flat_h12_recall": {
+  "value": "1/15",
+  "def": "events caught / evaluable"
+ },
+ "curve5_B1_D1-RED_AND_curve_flat_h12_false_positive_names": {
+  "value": [],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_B1_D1-RED_AND_curve_flat_h12_caught_events": {
+  "value": [
+   "1980-11"
+  ],
+  "def": "events caught"
+ },
+ "curve5_B1_D2_alone_h12_month_precision": {
+  "value": 0.2248,
+  "def": "D2 alone vs B1 drawdown starts, h=12: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_B1_D2_alone_h12_base": {
+  "value": 0.2257,
+  "def": "base rate vs B1 drawdown starts, h=12, 1953-09+"
+ },
+ "curve5_B1_D2_alone_h12_hits": {
+  "value": 5,
+  "def": "hit episodes"
+ },
+ "curve5_B1_D2_alone_h12_false_positives": {
+  "value": 3,
+  "def": "false-positive episodes"
+ },
+ "curve5_B1_D2_alone_h12_recall": {
+  "value": "6/15",
+  "def": "events caught / evaluable"
+ },
+ "curve5_B1_D2_alone_h12_false_positive_names": {
+  "value": [
+   "1973-08",
+   "1976-09",
+   "1996-04"
+  ],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_B1_D2_alone_h12_caught_events": {
+  "value": [
+   "1980-11",
+   "2000-08",
+   "2007-10",
+   "2018-09",
+   "2019-12",
+   "2021-12"
+  ],
+  "def": "events caught"
+ },
+ "curve5_B1_D2_AND_curve_flat_h12_month_precision": {
+  "value": 0.2745,
+  "def": "D2 AND curve flat vs B1 drawdown starts, h=12: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_B1_D2_AND_curve_flat_h12_base": {
+  "value": 0.2257,
+  "def": "base rate vs B1 drawdown starts, h=12, 1953-09+"
+ },
+ "curve5_B1_D2_AND_curve_flat_h12_hits": {
+  "value": 4,
+  "def": "hit episodes"
+ },
+ "curve5_B1_D2_AND_curve_flat_h12_false_positives": {
+  "value": 2,
+  "def": "false-positive episodes"
+ },
+ "curve5_B1_D2_AND_curve_flat_h12_recall": {
+  "value": "4/15",
+  "def": "events caught / evaluable"
+ },
+ "curve5_B1_D2_AND_curve_flat_h12_false_positive_names": {
+  "value": [
+   "1973-08",
+   "2022-11"
+  ],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_B1_D2_AND_curve_flat_h12_caught_events": {
+  "value": [
+   "1980-11",
+   "2000-08",
+   "2007-10",
+   "2019-12"
+  ],
+  "def": "events caught"
+ },
+ "curve5_B1_D3-RED_alone_h12_month_precision": {
+  "value": 0.5476,
+  "def": "D3-RED alone vs B1 drawdown starts, h=12: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_B1_D3-RED_alone_h12_base": {
+  "value": 0.2257,
+  "def": "base rate vs B1 drawdown starts, h=12, 1953-09+"
+ },
+ "curve5_B1_D3-RED_alone_h12_hits": {
+  "value": 4,
+  "def": "hit episodes"
+ },
+ "curve5_B1_D3-RED_alone_h12_false_positives": {
+  "value": 4,
+  "def": "false-positive episodes"
+ },
+ "curve5_B1_D3-RED_alone_h12_recall": {
+  "value": "4/15",
+  "def": "events caught / evaluable"
+ },
+ "curve5_B1_D3-RED_alone_h12_false_positive_names": {
+  "value": [
+   "2003-01",
+   "2004-09",
+   "2009-12",
+   "2017-01"
+  ],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_B1_D3-RED_alone_h12_caught_events": {
+  "value": [
+   "1980-11",
+   "1987-08",
+   "2000-08",
+   "2021-12"
+  ],
+  "def": "events caught"
+ },
+ "curve5_B1_D3-RED_AND_curve_flat_h12_month_precision": {
+  "value": 0.4286,
+  "def": "D3-RED AND curve flat vs B1 drawdown starts, h=12: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_B1_D3-RED_AND_curve_flat_h12_base": {
+  "value": 0.2257,
+  "def": "base rate vs B1 drawdown starts, h=12, 1953-09+"
+ },
+ "curve5_B1_D3-RED_AND_curve_flat_h12_hits": {
+  "value": 1,
+  "def": "hit episodes"
+ },
+ "curve5_B1_D3-RED_AND_curve_flat_h12_false_positives": {
+  "value": 0,
+  "def": "false-positive episodes"
+ },
+ "curve5_B1_D3-RED_AND_curve_flat_h12_recall": {
+  "value": "1/15",
+  "def": "events caught / evaluable"
+ },
+ "curve5_B1_D3-RED_AND_curve_flat_h12_false_positive_names": {
+  "value": [],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_B1_D3-RED_AND_curve_flat_h12_caught_events": {
+  "value": [
+   "1980-11"
+  ],
+  "def": "events caught"
+ },
+ "curve5_B1_curve_flat_alone_h18_month_precision": {
+  "value": 0.4286,
+  "def": "curve flat alone vs B1 drawdown starts, h=18: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_B1_curve_flat_alone_h18_base": {
+  "value": 0.3297,
+  "def": "base rate vs B1 drawdown starts, h=18, 1953-09+"
+ },
+ "curve5_B1_curve_flat_alone_h18_hits": {
+  "value": 7,
+  "def": "hit episodes"
+ },
+ "curve5_B1_curve_flat_alone_h18_false_positives": {
+  "value": 5,
+  "def": "false-positive episodes"
+ },
+ "curve5_B1_curve_flat_alone_h18_recall": {
+  "value": "9/15",
+  "def": "events caught / evaluable"
+ },
+ "curve5_B1_curve_flat_alone_h18_false_positive_names": {
+  "value": [
+   "1957-02",
+   "1959-12",
+   "1968-05",
+   "1973-06",
+   "2000-07"
+  ],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_B1_curve_flat_alone_h18_caught_events": {
+  "value": [
+   "1966-01",
+   "1968-11",
+   "1980-11",
+   "1990-05",
+   "2000-08",
+   "2007-10",
+   "2019-12",
+   "2021-12",
+   "2025-01"
+  ],
+  "def": "events caught"
+ },
+ "curve5_B1_D1-RED_alone_h18_month_precision": {
+  "value": 0.5714,
+  "def": "D1-RED alone vs B1 drawdown starts, h=18: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_B1_D1-RED_alone_h18_base": {
+  "value": 0.3297,
+  "def": "base rate vs B1 drawdown starts, h=18, 1953-09+"
+ },
+ "curve5_B1_D1-RED_alone_h18_hits": {
+  "value": 5,
+  "def": "hit episodes"
+ },
+ "curve5_B1_D1-RED_alone_h18_false_positives": {
+  "value": 4,
+  "def": "false-positive episodes"
+ },
+ "curve5_B1_D1-RED_alone_h18_recall": {
+  "value": "6/15",
+  "def": "events caught / evaluable"
+ },
+ "curve5_B1_D1-RED_alone_h18_false_positive_names": {
+  "value": [
+   "2002-12",
+   "2004-09",
+   "2009-12",
+   "2017-01"
+  ],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_B1_D1-RED_alone_h18_caught_events": {
+  "value": [
+   "1980-11",
+   "1987-08",
+   "2000-08",
+   "2018-09",
+   "2019-12",
+   "2021-12"
+  ],
+  "def": "events caught"
+ },
+ "curve5_B1_D1-RED_AND_curve_flat_h18_month_precision": {
+  "value": 0.8571,
+  "def": "D1-RED AND curve flat vs B1 drawdown starts, h=18: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_B1_D1-RED_AND_curve_flat_h18_base": {
+  "value": 0.3297,
+  "def": "base rate vs B1 drawdown starts, h=18, 1953-09+"
+ },
+ "curve5_B1_D1-RED_AND_curve_flat_h18_hits": {
+  "value": 1,
+  "def": "hit episodes"
+ },
+ "curve5_B1_D1-RED_AND_curve_flat_h18_false_positives": {
+  "value": 0,
+  "def": "false-positive episodes"
+ },
+ "curve5_B1_D1-RED_AND_curve_flat_h18_recall": {
+  "value": "1/15",
+  "def": "events caught / evaluable"
+ },
+ "curve5_B1_D1-RED_AND_curve_flat_h18_false_positive_names": {
+  "value": [],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_B1_D1-RED_AND_curve_flat_h18_caught_events": {
+  "value": [
+   "1980-11"
+  ],
+  "def": "events caught"
+ },
+ "curve5_B1_D2_alone_h18_month_precision": {
+  "value": 0.3721,
+  "def": "D2 alone vs B1 drawdown starts, h=18: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_B1_D2_alone_h18_base": {
+  "value": 0.3297,
+  "def": "base rate vs B1 drawdown starts, h=18, 1953-09+"
+ },
+ "curve5_B1_D2_alone_h18_hits": {
+  "value": 6,
+  "def": "hit episodes"
+ },
+ "curve5_B1_D2_alone_h18_false_positives": {
+  "value": 2,
+  "def": "false-positive episodes"
+ },
+ "curve5_B1_D2_alone_h18_recall": {
+  "value": "7/15",
+  "def": "events caught / evaluable"
+ },
+ "curve5_B1_D2_alone_h18_false_positive_names": {
+  "value": [
+   "1973-08",
+   "1976-09"
+  ],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_B1_D2_alone_h18_caught_events": {
+  "value": [
+   "1980-11",
+   "1998-06",
+   "2000-08",
+   "2007-10",
+   "2018-09",
+   "2019-12",
+   "2021-12"
+  ],
+  "def": "events caught"
+ },
+ "curve5_B1_D2_AND_curve_flat_h18_month_precision": {
+  "value": 0.5098,
+  "def": "D2 AND curve flat vs B1 drawdown starts, h=18: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_B1_D2_AND_curve_flat_h18_base": {
+  "value": 0.3297,
+  "def": "base rate vs B1 drawdown starts, h=18, 1953-09+"
+ },
+ "curve5_B1_D2_AND_curve_flat_h18_hits": {
+  "value": 4,
+  "def": "hit episodes"
+ },
+ "curve5_B1_D2_AND_curve_flat_h18_false_positives": {
+  "value": 2,
+  "def": "false-positive episodes"
+ },
+ "curve5_B1_D2_AND_curve_flat_h18_recall": {
+  "value": "4/15",
+  "def": "events caught / evaluable"
+ },
+ "curve5_B1_D2_AND_curve_flat_h18_false_positive_names": {
+  "value": [
+   "1973-08",
+   "2022-11"
+  ],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_B1_D2_AND_curve_flat_h18_caught_events": {
+  "value": [
+   "1980-11",
+   "2000-08",
+   "2007-10",
+   "2019-12"
+  ],
+  "def": "events caught"
+ },
+ "curve5_B1_D3-RED_alone_h18_month_precision": {
+  "value": 0.619,
+  "def": "D3-RED alone vs B1 drawdown starts, h=18: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_B1_D3-RED_alone_h18_base": {
+  "value": 0.3297,
+  "def": "base rate vs B1 drawdown starts, h=18, 1953-09+"
+ },
+ "curve5_B1_D3-RED_alone_h18_hits": {
+  "value": 4,
+  "def": "hit episodes"
+ },
+ "curve5_B1_D3-RED_alone_h18_false_positives": {
+  "value": 4,
+  "def": "false-positive episodes"
+ },
+ "curve5_B1_D3-RED_alone_h18_recall": {
+  "value": "4/15",
+  "def": "events caught / evaluable"
+ },
+ "curve5_B1_D3-RED_alone_h18_false_positive_names": {
+  "value": [
+   "2003-01",
+   "2004-09",
+   "2009-12",
+   "2017-01"
+  ],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_B1_D3-RED_alone_h18_caught_events": {
+  "value": [
+   "1980-11",
+   "1987-08",
+   "2000-08",
+   "2021-12"
+  ],
+  "def": "events caught"
+ },
+ "curve5_B1_D3-RED_AND_curve_flat_h18_month_precision": {
+  "value": 0.8571,
+  "def": "D3-RED AND curve flat vs B1 drawdown starts, h=18: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_B1_D3-RED_AND_curve_flat_h18_base": {
+  "value": 0.3297,
+  "def": "base rate vs B1 drawdown starts, h=18, 1953-09+"
+ },
+ "curve5_B1_D3-RED_AND_curve_flat_h18_hits": {
+  "value": 1,
+  "def": "hit episodes"
+ },
+ "curve5_B1_D3-RED_AND_curve_flat_h18_false_positives": {
+  "value": 0,
+  "def": "false-positive episodes"
+ },
+ "curve5_B1_D3-RED_AND_curve_flat_h18_recall": {
+  "value": "1/15",
+  "def": "events caught / evaluable"
+ },
+ "curve5_B1_D3-RED_AND_curve_flat_h18_false_positive_names": {
+  "value": [],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_B1_D3-RED_AND_curve_flat_h18_caught_events": {
+  "value": [
+   "1980-11"
+  ],
+  "def": "events caught"
+ },
+ "curve5_B2_curve_flat_alone_h12_month_precision": {
+  "value": 0.3678,
+  "def": "curve flat alone vs B2 drawdown starts, h=12: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_B2_curve_flat_alone_h12_base": {
+  "value": 0.2716,
+  "def": "base rate vs B2 drawdown starts, h=12, 1953-09+"
+ },
+ "curve5_B2_curve_flat_alone_h12_hits": {
+  "value": 8,
+  "def": "hit episodes"
+ },
+ "curve5_B2_curve_flat_alone_h12_false_positives": {
+  "value": 3,
+  "def": "false-positive episodes"
+ },
+ "curve5_B2_curve_flat_alone_h12_recall": {
+  "value": "9/18",
+  "def": "events caught / evaluable"
+ },
+ "curve5_B2_curve_flat_alone_h12_false_positive_names": {
+  "value": [
+   "1957-02",
+   "1959-12",
+   "1973-06"
+  ],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_B2_curve_flat_alone_h12_caught_events": {
+  "value": [
+   "1966-01",
+   "1968-11",
+   "1980-01",
+   "1980-11",
+   "1990-05",
+   "2000-08",
+   "2007-10",
+   "2019-12",
+   "2025-01"
+  ],
+  "def": "events caught"
+ },
+ "curve5_B2_D1-RED_alone_h12_month_precision": {
+  "value": 0.5918,
+  "def": "D1-RED alone vs B2 drawdown starts, h=12: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_B2_D1-RED_alone_h12_base": {
+  "value": 0.2716,
+  "def": "base rate vs B2 drawdown starts, h=12, 1953-09+"
+ },
+ "curve5_B2_D1-RED_alone_h12_hits": {
+  "value": 6,
+  "def": "hit episodes"
+ },
+ "curve5_B2_D1-RED_alone_h12_false_positives": {
+  "value": 3,
+  "def": "false-positive episodes"
+ },
+ "curve5_B2_D1-RED_alone_h12_recall": {
+  "value": "7/18",
+  "def": "events caught / evaluable"
+ },
+ "curve5_B2_D1-RED_alone_h12_false_positive_names": {
+  "value": [
+   "2002-12",
+   "2004-09",
+   "2017-01"
+  ],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_B2_D1-RED_alone_h12_caught_events": {
+  "value": [
+   "1980-01",
+   "1980-11",
+   "1987-08",
+   "2000-08",
+   "2011-04",
+   "2018-09",
+   "2021-12"
+  ],
+  "def": "events caught"
+ },
+ "curve5_B2_D1-RED_AND_curve_flat_h12_month_precision": {
+  "value": 0.8571,
+  "def": "D1-RED AND curve flat vs B2 drawdown starts, h=12: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_B2_D1-RED_AND_curve_flat_h12_base": {
+  "value": 0.2716,
+  "def": "base rate vs B2 drawdown starts, h=12, 1953-09+"
+ },
+ "curve5_B2_D1-RED_AND_curve_flat_h12_hits": {
+  "value": 1,
+  "def": "hit episodes"
+ },
+ "curve5_B2_D1-RED_AND_curve_flat_h12_false_positives": {
+  "value": 0,
+  "def": "false-positive episodes"
+ },
+ "curve5_B2_D1-RED_AND_curve_flat_h12_recall": {
+  "value": "2/18",
+  "def": "events caught / evaluable"
+ },
+ "curve5_B2_D1-RED_AND_curve_flat_h12_false_positive_names": {
+  "value": [],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_B2_D1-RED_AND_curve_flat_h12_caught_events": {
+  "value": [
+   "1980-01",
+   "1980-11"
+  ],
+  "def": "events caught"
+ },
+ "curve5_B2_D2_alone_h12_month_precision": {
+  "value": 0.2946,
+  "def": "D2 alone vs B2 drawdown starts, h=12: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_B2_D2_alone_h12_base": {
+  "value": 0.2716,
+  "def": "base rate vs B2 drawdown starts, h=12, 1953-09+"
+ },
+ "curve5_B2_D2_alone_h12_hits": {
+  "value": 6,
+  "def": "hit episodes"
+ },
+ "curve5_B2_D2_alone_h12_false_positives": {
+  "value": 2,
+  "def": "false-positive episodes"
+ },
+ "curve5_B2_D2_alone_h12_recall": {
+  "value": "8/18",
+  "def": "events caught / evaluable"
+ },
+ "curve5_B2_D2_alone_h12_false_positive_names": {
+  "value": [
+   "1973-08",
+   "1996-04"
+  ],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_B2_D2_alone_h12_caught_events": {
+  "value": [
+   "1976-12",
+   "1980-01",
+   "1980-11",
+   "2000-08",
+   "2007-10",
+   "2018-09",
+   "2019-12",
+   "2021-12"
+  ],
+  "def": "events caught"
+ },
+ "curve5_B2_D2_AND_curve_flat_h12_month_precision": {
+  "value": 0.3922,
+  "def": "D2 AND curve flat vs B2 drawdown starts, h=12: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_B2_D2_AND_curve_flat_h12_base": {
+  "value": 0.2716,
+  "def": "base rate vs B2 drawdown starts, h=12, 1953-09+"
+ },
+ "curve5_B2_D2_AND_curve_flat_h12_hits": {
+  "value": 4,
+  "def": "hit episodes"
+ },
+ "curve5_B2_D2_AND_curve_flat_h12_false_positives": {
+  "value": 2,
+  "def": "false-positive episodes"
+ },
+ "curve5_B2_D2_AND_curve_flat_h12_recall": {
+  "value": "5/18",
+  "def": "events caught / evaluable"
+ },
+ "curve5_B2_D2_AND_curve_flat_h12_false_positive_names": {
+  "value": [
+   "1973-08",
+   "2022-11"
+  ],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_B2_D2_AND_curve_flat_h12_caught_events": {
+  "value": [
+   "1980-01",
+   "1980-11",
+   "2000-08",
+   "2007-10",
+   "2019-12"
+  ],
+  "def": "events caught"
+ },
+ "curve5_B2_D3-RED_alone_h12_month_precision": {
+  "value": 0.6429,
+  "def": "D3-RED alone vs B2 drawdown starts, h=12: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_B2_D3-RED_alone_h12_base": {
+  "value": 0.2716,
+  "def": "base rate vs B2 drawdown starts, h=12, 1953-09+"
+ },
+ "curve5_B2_D3-RED_alone_h12_hits": {
+  "value": 5,
+  "def": "hit episodes"
+ },
+ "curve5_B2_D3-RED_alone_h12_false_positives": {
+  "value": 3,
+  "def": "false-positive episodes"
+ },
+ "curve5_B2_D3-RED_alone_h12_recall": {
+  "value": "6/18",
+  "def": "events caught / evaluable"
+ },
+ "curve5_B2_D3-RED_alone_h12_false_positive_names": {
+  "value": [
+   "2003-01",
+   "2004-09",
+   "2017-01"
+  ],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_B2_D3-RED_alone_h12_caught_events": {
+  "value": [
+   "1980-01",
+   "1980-11",
+   "1987-08",
+   "2000-08",
+   "2011-04",
+   "2021-12"
+  ],
+  "def": "events caught"
+ },
+ "curve5_B2_D3-RED_AND_curve_flat_h12_month_precision": {
+  "value": 0.8571,
+  "def": "D3-RED AND curve flat vs B2 drawdown starts, h=12: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_B2_D3-RED_AND_curve_flat_h12_base": {
+  "value": 0.2716,
+  "def": "base rate vs B2 drawdown starts, h=12, 1953-09+"
+ },
+ "curve5_B2_D3-RED_AND_curve_flat_h12_hits": {
+  "value": 1,
+  "def": "hit episodes"
+ },
+ "curve5_B2_D3-RED_AND_curve_flat_h12_false_positives": {
+  "value": 0,
+  "def": "false-positive episodes"
+ },
+ "curve5_B2_D3-RED_AND_curve_flat_h12_recall": {
+  "value": "2/18",
+  "def": "events caught / evaluable"
+ },
+ "curve5_B2_D3-RED_AND_curve_flat_h12_false_positive_names": {
+  "value": [],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_B2_D3-RED_AND_curve_flat_h12_caught_events": {
+  "value": [
+   "1980-01",
+   "1980-11"
+  ],
+  "def": "events caught"
+ },
+ "curve5_B2_curve_flat_alone_h18_month_precision": {
+  "value": 0.4643,
+  "def": "curve flat alone vs B2 drawdown starts, h=18: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_B2_curve_flat_alone_h18_base": {
+  "value": 0.3924,
+  "def": "base rate vs B2 drawdown starts, h=18, 1953-09+"
+ },
+ "curve5_B2_curve_flat_alone_h18_hits": {
+  "value": 7,
+  "def": "hit episodes"
+ },
+ "curve5_B2_curve_flat_alone_h18_false_positives": {
+  "value": 5,
+  "def": "false-positive episodes"
+ },
+ "curve5_B2_curve_flat_alone_h18_recall": {
+  "value": "10/18",
+  "def": "events caught / evaluable"
+ },
+ "curve5_B2_curve_flat_alone_h18_false_positive_names": {
+  "value": [
+   "1957-02",
+   "1959-12",
+   "1968-05",
+   "1973-06",
+   "2000-07"
+  ],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_B2_curve_flat_alone_h18_caught_events": {
+  "value": [
+   "1966-01",
+   "1968-11",
+   "1980-01",
+   "1980-11",
+   "1990-05",
+   "2000-08",
+   "2007-10",
+   "2019-12",
+   "2021-12",
+   "2025-01"
+  ],
+  "def": "events caught"
+ },
+ "curve5_B2_D1-RED_alone_h18_month_precision": {
+  "value": 0.6735,
+  "def": "D1-RED alone vs B2 drawdown starts, h=18: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_B2_D1-RED_alone_h18_base": {
+  "value": 0.3924,
+  "def": "base rate vs B2 drawdown starts, h=18, 1953-09+"
+ },
+ "curve5_B2_D1-RED_alone_h18_hits": {
+  "value": 6,
+  "def": "hit episodes"
+ },
+ "curve5_B2_D1-RED_alone_h18_false_positives": {
+  "value": 3,
+  "def": "false-positive episodes"
+ },
+ "curve5_B2_D1-RED_alone_h18_recall": {
+  "value": "8/18",
+  "def": "events caught / evaluable"
+ },
+ "curve5_B2_D1-RED_alone_h18_false_positive_names": {
+  "value": [
+   "2002-12",
+   "2004-09",
+   "2017-01"
+  ],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_B2_D1-RED_alone_h18_caught_events": {
+  "value": [
+   "1980-01",
+   "1980-11",
+   "1987-08",
+   "2000-08",
+   "2011-04",
+   "2018-09",
+   "2019-12",
+   "2021-12"
+  ],
+  "def": "events caught"
+ },
+ "curve5_B2_D1-RED_AND_curve_flat_h18_month_precision": {
+  "value": 0.8571,
+  "def": "D1-RED AND curve flat vs B2 drawdown starts, h=18: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_B2_D1-RED_AND_curve_flat_h18_base": {
+  "value": 0.3924,
+  "def": "base rate vs B2 drawdown starts, h=18, 1953-09+"
+ },
+ "curve5_B2_D1-RED_AND_curve_flat_h18_hits": {
+  "value": 1,
+  "def": "hit episodes"
+ },
+ "curve5_B2_D1-RED_AND_curve_flat_h18_false_positives": {
+  "value": 0,
+  "def": "false-positive episodes"
+ },
+ "curve5_B2_D1-RED_AND_curve_flat_h18_recall": {
+  "value": "2/18",
+  "def": "events caught / evaluable"
+ },
+ "curve5_B2_D1-RED_AND_curve_flat_h18_false_positive_names": {
+  "value": [],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_B2_D1-RED_AND_curve_flat_h18_caught_events": {
+  "value": [
+   "1980-01",
+   "1980-11"
+  ],
+  "def": "events caught"
+ },
+ "curve5_B2_D2_alone_h18_month_precision": {
+  "value": 0.3953,
+  "def": "D2 alone vs B2 drawdown starts, h=18: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_B2_D2_alone_h18_base": {
+  "value": 0.3924,
+  "def": "base rate vs B2 drawdown starts, h=18, 1953-09+"
+ },
+ "curve5_B2_D2_alone_h18_hits": {
+  "value": 7,
+  "def": "hit episodes"
+ },
+ "curve5_B2_D2_alone_h18_false_positives": {
+  "value": 1,
+  "def": "false-positive episodes"
+ },
+ "curve5_B2_D2_alone_h18_recall": {
+  "value": "9/18",
+  "def": "events caught / evaluable"
+ },
+ "curve5_B2_D2_alone_h18_false_positive_names": {
+  "value": [
+   "1973-08"
+  ],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_B2_D2_alone_h18_caught_events": {
+  "value": [
+   "1976-12",
+   "1980-01",
+   "1980-11",
+   "1998-06",
+   "2000-08",
+   "2007-10",
+   "2018-09",
+   "2019-12",
+   "2021-12"
+  ],
+  "def": "events caught"
+ },
+ "curve5_B2_D2_AND_curve_flat_h18_month_precision": {
+  "value": 0.5098,
+  "def": "D2 AND curve flat vs B2 drawdown starts, h=18: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_B2_D2_AND_curve_flat_h18_base": {
+  "value": 0.3924,
+  "def": "base rate vs B2 drawdown starts, h=18, 1953-09+"
+ },
+ "curve5_B2_D2_AND_curve_flat_h18_hits": {
+  "value": 4,
+  "def": "hit episodes"
+ },
+ "curve5_B2_D2_AND_curve_flat_h18_false_positives": {
+  "value": 2,
+  "def": "false-positive episodes"
+ },
+ "curve5_B2_D2_AND_curve_flat_h18_recall": {
+  "value": "5/18",
+  "def": "events caught / evaluable"
+ },
+ "curve5_B2_D2_AND_curve_flat_h18_false_positive_names": {
+  "value": [
+   "1973-08",
+   "2022-11"
+  ],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_B2_D2_AND_curve_flat_h18_caught_events": {
+  "value": [
+   "1980-01",
+   "1980-11",
+   "2000-08",
+   "2007-10",
+   "2019-12"
+  ],
+  "def": "events caught"
+ },
+ "curve5_B2_D3-RED_alone_h18_month_precision": {
+  "value": 0.7381,
+  "def": "D3-RED alone vs B2 drawdown starts, h=18: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_B2_D3-RED_alone_h18_base": {
+  "value": 0.3924,
+  "def": "base rate vs B2 drawdown starts, h=18, 1953-09+"
+ },
+ "curve5_B2_D3-RED_alone_h18_hits": {
+  "value": 5,
+  "def": "hit episodes"
+ },
+ "curve5_B2_D3-RED_alone_h18_false_positives": {
+  "value": 3,
+  "def": "false-positive episodes"
+ },
+ "curve5_B2_D3-RED_alone_h18_recall": {
+  "value": "6/18",
+  "def": "events caught / evaluable"
+ },
+ "curve5_B2_D3-RED_alone_h18_false_positive_names": {
+  "value": [
+   "2003-01",
+   "2004-09",
+   "2017-01"
+  ],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_B2_D3-RED_alone_h18_caught_events": {
+  "value": [
+   "1980-01",
+   "1980-11",
+   "1987-08",
+   "2000-08",
+   "2011-04",
+   "2021-12"
+  ],
+  "def": "events caught"
+ },
+ "curve5_B2_D3-RED_AND_curve_flat_h18_month_precision": {
+  "value": 0.8571,
+  "def": "D3-RED AND curve flat vs B2 drawdown starts, h=18: month-level precision (ON, USREC=0, resolved, 1953-09+)"
+ },
+ "curve5_B2_D3-RED_AND_curve_flat_h18_base": {
+  "value": 0.3924,
+  "def": "base rate vs B2 drawdown starts, h=18, 1953-09+"
+ },
+ "curve5_B2_D3-RED_AND_curve_flat_h18_hits": {
+  "value": 1,
+  "def": "hit episodes"
+ },
+ "curve5_B2_D3-RED_AND_curve_flat_h18_false_positives": {
+  "value": 0,
+  "def": "false-positive episodes"
+ },
+ "curve5_B2_D3-RED_AND_curve_flat_h18_recall": {
+  "value": "2/18",
+  "def": "events caught / evaluable"
+ },
+ "curve5_B2_D3-RED_AND_curve_flat_h18_false_positive_names": {
+  "value": [],
+  "def": "false-positive episode first ON months"
+ },
+ "curve5_B2_D3-RED_AND_curve_flat_h18_caught_events": {
+  "value": [
+   "1980-01",
+   "1980-11"
+  ],
+  "def": "events caught"
+ },
+ "regime_R0_h12_base": {
+  "value": 0.2405,
+  "def": "base rate in R0 (resolved USREC=0 months, 1953-04+)"
+ },
+ "regime_R0_h12_n_months": {
+  "value": 316,
+  "def": "resolved USREC=0 months in R0"
+ },
+ "regime_R0_D1-RED_h12_on_months": {
+  "value": 6,
+  "def": "D1-RED ON months (USREC=0, resolved) in R0"
+ },
+ "regime_R0_D1-RED_h12_episodes": {
+  "value": 2,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R0_D1-RED_h12_hits": {
+  "value": 1,
+  "def": "hits"
+ },
+ "regime_R0_D1-RED_h12_false_positives": {
+  "value": 0,
+  "def": "false positives"
+ },
+ "regime_R0_D1-RED_h12_month_precision": {
+  "value": 1.0,
+  "def": "month precision within regime"
+ },
+ "regime_R0_D1-RED_h12_false_positive_names": {
+  "value": [],
+  "def": "named false positives"
+ },
+ "regime_R0_D1-RED_h12_coincident_names": {
+  "value": [
+   "1974-01"
+  ],
+  "def": "coincident episodes"
+ },
+ "regime_R0_D2_h12_on_months": {
+  "value": 31,
+  "def": "D2 ON months (USREC=0, resolved) in R0"
+ },
+ "regime_R0_D2_h12_episodes": {
+  "value": 3,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R0_D2_h12_hits": {
+  "value": 2,
+  "def": "hits"
+ },
+ "regime_R0_D2_h12_false_positives": {
+  "value": 1,
+  "def": "false positives"
+ },
+ "regime_R0_D2_h12_month_precision": {
+  "value": 0.6129,
+  "def": "month precision within regime"
+ },
+ "regime_R0_D2_h12_false_positive_names": {
+  "value": [
+   "1976-09"
+  ],
+  "def": "named false positives"
+ },
+ "regime_R0_D2_h12_coincident_names": {
+  "value": [],
+  "def": "coincident episodes"
+ },
+ "regime_R0_D3-RED_h12_on_months": {
+  "value": 6,
+  "def": "D3-RED ON months (USREC=0, resolved) in R0"
+ },
+ "regime_R0_D3-RED_h12_episodes": {
+  "value": 2,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R0_D3-RED_h12_hits": {
+  "value": 1,
+  "def": "hits"
+ },
+ "regime_R0_D3-RED_h12_false_positives": {
+  "value": 0,
+  "def": "false positives"
+ },
+ "regime_R0_D3-RED_h12_month_precision": {
+  "value": 1.0,
+  "def": "month precision within regime"
+ },
+ "regime_R0_D3-RED_h12_false_positive_names": {
+  "value": [],
+  "def": "named false positives"
+ },
+ "regime_R0_D3-RED_h12_coincident_names": {
+  "value": [
+   "1974-01"
+  ],
+  "def": "coincident episodes"
+ },
+ "regime_R0_D1-YELLOW_h12_on_months": {
+  "value": 10,
+  "def": "D1-YELLOW ON months (USREC=0, resolved) in R0"
+ },
+ "regime_R0_D1-YELLOW_h12_episodes": {
+  "value": 2,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R0_D1-YELLOW_h12_hits": {
+  "value": 1,
+  "def": "hits"
+ },
+ "regime_R0_D1-YELLOW_h12_false_positives": {
+  "value": 0,
+  "def": "false positives"
+ },
+ "regime_R0_D1-YELLOW_h12_month_precision": {
+  "value": 1.0,
+  "def": "month precision within regime"
+ },
+ "regime_R0_D1-YELLOW_h12_false_positive_names": {
+  "value": [],
+  "def": "named false positives"
+ },
+ "regime_R0_D1-YELLOW_h12_coincident_names": {
+  "value": [
+   "1974-01"
+  ],
+  "def": "coincident episodes"
+ },
+ "regime_R0_D3-YELLOW_h12_on_months": {
+  "value": 8,
+  "def": "D3-YELLOW ON months (USREC=0, resolved) in R0"
+ },
+ "regime_R0_D3-YELLOW_h12_episodes": {
+  "value": 2,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R0_D3-YELLOW_h12_hits": {
+  "value": 1,
+  "def": "hits"
+ },
+ "regime_R0_D3-YELLOW_h12_false_positives": {
+  "value": 0,
+  "def": "false positives"
+ },
+ "regime_R0_D3-YELLOW_h12_month_precision": {
+  "value": 1.0,
+  "def": "month precision within regime"
+ },
+ "regime_R0_D3-YELLOW_h12_false_positive_names": {
+  "value": [],
+  "def": "named false positives"
+ },
+ "regime_R0_D3-YELLOW_h12_coincident_names": {
+  "value": [
+   "1974-01"
+  ],
+  "def": "coincident episodes"
+ },
+ "regime_R1_h12_base": {
+  "value": 0.1452,
+  "def": "base rate in R1 (resolved USREC=0 months, 1953-04+)"
+ },
+ "regime_R1_h12_n_months": {
+  "value": 248,
+  "def": "resolved USREC=0 months in R1"
+ },
+ "regime_R1_D1-RED_h12_on_months": {
+  "value": 18,
+  "def": "D1-RED ON months (USREC=0, resolved) in R1"
+ },
+ "regime_R1_D1-RED_h12_episodes": {
+  "value": 6,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R1_D1-RED_h12_hits": {
+  "value": 2,
+  "def": "hits"
+ },
+ "regime_R1_D1-RED_h12_false_positives": {
+  "value": 3,
+  "def": "false positives"
+ },
+ "regime_R1_D1-RED_h12_month_precision": {
+  "value": 0.1667,
+  "def": "month precision within regime"
+ },
+ "regime_R1_D1-RED_h12_false_positive_names": {
+  "value": [
+   "1987-07",
+   "2002-12",
+   "2004-09"
+  ],
+  "def": "named false positives"
+ },
+ "regime_R1_D1-RED_h12_coincident_names": {
+  "value": [
+   "1990-09"
+  ],
+  "def": "coincident episodes"
+ },
+ "regime_R1_D2_h12_on_months": {
+  "value": 69,
+  "def": "D2 ON months (USREC=0, resolved) in R1"
+ },
+ "regime_R1_D2_h12_episodes": {
+  "value": 4,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R1_D2_h12_hits": {
+  "value": 2,
+  "def": "hits"
+ },
+ "regime_R1_D2_h12_false_positives": {
+  "value": 1,
+  "def": "false positives"
+ },
+ "regime_R1_D2_h12_month_precision": {
+  "value": 0.2609,
+  "def": "month precision within regime"
+ },
+ "regime_R1_D2_h12_false_positive_names": {
+  "value": [
+   "1996-04"
+  ],
+  "def": "named false positives"
+ },
+ "regime_R1_D2_h12_coincident_names": {
+  "value": [
+   "1990-08"
+  ],
+  "def": "coincident episodes"
+ },
+ "regime_R1_D3-RED_h12_on_months": {
+  "value": 17,
+  "def": "D3-RED ON months (USREC=0, resolved) in R1"
+ },
+ "regime_R1_D3-RED_h12_episodes": {
+  "value": 6,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R1_D3-RED_h12_hits": {
+  "value": 2,
+  "def": "hits"
+ },
+ "regime_R1_D3-RED_h12_false_positives": {
+  "value": 3,
+  "def": "false positives"
+ },
+ "regime_R1_D3-RED_h12_month_precision": {
+  "value": 0.1765,
+  "def": "month precision within regime"
+ },
+ "regime_R1_D3-RED_h12_false_positive_names": {
+  "value": [
+   "1987-07",
+   "2003-01",
+   "2004-09"
+  ],
+  "def": "named false positives"
+ },
+ "regime_R1_D3-RED_h12_coincident_names": {
+  "value": [
+   "1990-09"
+  ],
+  "def": "coincident episodes"
+ },
+ "regime_R1_D1-YELLOW_h12_on_months": {
+  "value": 72,
+  "def": "D1-YELLOW ON months (USREC=0, resolved) in R1"
+ },
+ "regime_R1_D1-YELLOW_h12_episodes": {
+  "value": 8,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R1_D1-YELLOW_h12_hits": {
+  "value": 3,
+  "def": "hits"
+ },
+ "regime_R1_D1-YELLOW_h12_false_positives": {
+  "value": 5,
+  "def": "false positives"
+ },
+ "regime_R1_D1-YELLOW_h12_month_precision": {
+  "value": 0.2361,
+  "def": "month precision within regime"
+ },
+ "regime_R1_D1-YELLOW_h12_false_positive_names": {
+  "value": [
+   "1987-03",
+   "1995-02",
+   "1996-09",
+   "2002-10",
+   "2004-04"
+  ],
+  "def": "named false positives"
+ },
+ "regime_R1_D1-YELLOW_h12_coincident_names": {
+  "value": [],
+  "def": "coincident episodes"
+ },
+ "regime_R1_D3-YELLOW_h12_on_months": {
+  "value": 62,
+  "def": "D3-YELLOW ON months (USREC=0, resolved) in R1"
+ },
+ "regime_R1_D3-YELLOW_h12_episodes": {
+  "value": 8,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R1_D3-YELLOW_h12_hits": {
+  "value": 3,
+  "def": "hits"
+ },
+ "regime_R1_D3-YELLOW_h12_false_positives": {
+  "value": 4,
+  "def": "false positives"
+ },
+ "regime_R1_D3-YELLOW_h12_month_precision": {
+  "value": 0.2258,
+  "def": "month precision within regime"
+ },
+ "regime_R1_D3-YELLOW_h12_false_positive_names": {
+  "value": [
+   "1987-03",
+   "1996-09",
+   "2002-10",
+   "2004-04"
+  ],
+  "def": "named false positives"
+ },
+ "regime_R1_D3-YELLOW_h12_coincident_names": {
+  "value": [
+   "1990-08"
+  ],
+  "def": "coincident episodes"
+ },
+ "regime_R2_h12_base": {
+  "value": 0.0794,
+  "def": "base rate in R2 (resolved USREC=0 months, 1953-04+)"
+ },
+ "regime_R2_h12_n_months": {
+  "value": 126,
+  "def": "resolved USREC=0 months in R2"
+ },
+ "regime_R2_D1-RED_h12_on_months": {
+  "value": 9,
+  "def": "D1-RED ON months (USREC=0, resolved) in R2"
+ },
+ "regime_R2_D1-RED_h12_episodes": {
+  "value": 3,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R2_D1-RED_h12_hits": {
+  "value": 0,
+  "def": "hits"
+ },
+ "regime_R2_D1-RED_h12_false_positives": {
+  "value": 3,
+  "def": "false positives"
+ },
+ "regime_R2_D1-RED_h12_month_precision": {
+  "value": 0.0,
+  "def": "month precision within regime"
+ },
+ "regime_R2_D1-RED_h12_false_positive_names": {
+  "value": [
+   "2009-12",
+   "2017-01",
+   "2018-06"
+  ],
+  "def": "named false positives"
+ },
+ "regime_R2_D1-RED_h12_coincident_names": {
+  "value": [],
+  "def": "coincident episodes"
+ },
+ "regime_R2_D2_h12_on_months": {
+  "value": 12,
+  "def": "D2 ON months (USREC=0, resolved) in R2"
+ },
+ "regime_R2_D2_h12_episodes": {
+  "value": 1,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R2_D2_h12_hits": {
+  "value": 1,
+  "def": "hits"
+ },
+ "regime_R2_D2_h12_false_positives": {
+  "value": 0,
+  "def": "false positives"
+ },
+ "regime_R2_D2_h12_month_precision": {
+  "value": 0.0833,
+  "def": "month precision within regime"
+ },
+ "regime_R2_D2_h12_false_positive_names": {
+  "value": [],
+  "def": "named false positives"
+ },
+ "regime_R2_D2_h12_coincident_names": {
+  "value": [],
+  "def": "coincident episodes"
+ },
+ "regime_R2_D3-RED_h12_on_months": {
+  "value": 7,
+  "def": "D3-RED ON months (USREC=0, resolved) in R2"
+ },
+ "regime_R2_D3-RED_h12_episodes": {
+  "value": 2,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R2_D3-RED_h12_hits": {
+  "value": 0,
+  "def": "hits"
+ },
+ "regime_R2_D3-RED_h12_false_positives": {
+  "value": 2,
+  "def": "false positives"
+ },
+ "regime_R2_D3-RED_h12_month_precision": {
+  "value": 0.0,
+  "def": "month precision within regime"
+ },
+ "regime_R2_D3-RED_h12_false_positive_names": {
+  "value": [
+   "2009-12",
+   "2017-01"
+  ],
+  "def": "named false positives"
+ },
+ "regime_R2_D3-RED_h12_coincident_names": {
+  "value": [],
+  "def": "coincident episodes"
+ },
+ "regime_R2_D1-YELLOW_h12_on_months": {
+  "value": 24,
+  "def": "D1-YELLOW ON months (USREC=0, resolved) in R2"
+ },
+ "regime_R2_D1-YELLOW_h12_episodes": {
+  "value": 4,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R2_D1-YELLOW_h12_hits": {
+  "value": 0,
+  "def": "hits"
+ },
+ "regime_R2_D1-YELLOW_h12_false_positives": {
+  "value": 4,
+  "def": "false positives"
+ },
+ "regime_R2_D1-YELLOW_h12_month_precision": {
+  "value": 0.0,
+  "def": "month precision within regime"
+ },
+ "regime_R2_D1-YELLOW_h12_false_positive_names": {
+  "value": [
+   "2009-11",
+   "2011-03",
+   "2016-12",
+   "2018-03"
+  ],
+  "def": "named false positives"
+ },
+ "regime_R2_D1-YELLOW_h12_coincident_names": {
+  "value": [],
+  "def": "coincident episodes"
+ },
+ "regime_R2_D3-YELLOW_h12_on_months": {
+  "value": 19,
+  "def": "D3-YELLOW ON months (USREC=0, resolved) in R2"
+ },
+ "regime_R2_D3-YELLOW_h12_episodes": {
+  "value": 4,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R2_D3-YELLOW_h12_hits": {
+  "value": 0,
+  "def": "hits"
+ },
+ "regime_R2_D3-YELLOW_h12_false_positives": {
+  "value": 4,
+  "def": "false positives"
+ },
+ "regime_R2_D3-YELLOW_h12_month_precision": {
+  "value": 0.0,
+  "def": "month precision within regime"
+ },
+ "regime_R2_D3-YELLOW_h12_false_positive_names": {
+  "value": [
+   "2009-11",
+   "2011-04",
+   "2016-12",
+   "2018-04"
+  ],
+  "def": "named false positives"
+ },
+ "regime_R2_D3-YELLOW_h12_coincident_names": {
+  "value": [],
+  "def": "coincident episodes"
+ },
+ "regime_R3_h12_base": {
+  "value": 0.037,
+  "def": "base rate in R3 (resolved USREC=0 months, 1953-04+)"
+ },
+ "regime_R3_h12_n_months": {
+  "value": 54,
+  "def": "resolved USREC=0 months in R3"
+ },
+ "regime_R3_D1-RED_h12_on_months": {
+  "value": 16,
+  "def": "D1-RED ON months (USREC=0, resolved) in R3"
+ },
+ "regime_R3_D1-RED_h12_episodes": {
+  "value": 2,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R3_D1-RED_h12_hits": {
+  "value": 0,
+  "def": "hits"
+ },
+ "regime_R3_D1-RED_h12_false_positives": {
+  "value": 1,
+  "def": "false positives"
+ },
+ "regime_R3_D1-RED_h12_month_precision": {
+  "value": 0.0,
+  "def": "month precision within regime"
+ },
+ "regime_R3_D1-RED_h12_false_positive_names": {
+  "value": [
+   "2021-03"
+  ],
+  "def": "named false positives"
+ },
+ "regime_R3_D1-RED_h12_coincident_names": {
+  "value": [],
+  "def": "coincident episodes"
+ },
+ "regime_R3_D2_h12_on_months": {
+  "value": 17,
+  "def": "D2 ON months (USREC=0, resolved) in R3"
+ },
+ "regime_R3_D2_h12_episodes": {
+  "value": 2,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R3_D2_h12_hits": {
+  "value": 0,
+  "def": "hits"
+ },
+ "regime_R3_D2_h12_false_positives": {
+  "value": 1,
+  "def": "false positives"
+ },
+ "regime_R3_D2_h12_month_precision": {
+  "value": 0.0,
+  "def": "month precision within regime"
+ },
+ "regime_R3_D2_h12_false_positive_names": {
+  "value": [
+   "2021-10"
+  ],
+  "def": "named false positives"
+ },
+ "regime_R3_D2_h12_coincident_names": {
+  "value": [],
+  "def": "coincident episodes"
+ },
+ "regime_R3_D3-RED_h12_on_months": {
+  "value": 12,
+  "def": "D3-RED ON months (USREC=0, resolved) in R3"
+ },
+ "regime_R3_D3-RED_h12_episodes": {
+  "value": 2,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R3_D3-RED_h12_hits": {
+  "value": 0,
+  "def": "hits"
+ },
+ "regime_R3_D3-RED_h12_false_positives": {
+  "value": 1,
+  "def": "false positives"
+ },
+ "regime_R3_D3-RED_h12_month_precision": {
+  "value": 0.0,
+  "def": "month precision within regime"
+ },
+ "regime_R3_D3-RED_h12_false_positive_names": {
+  "value": [
+   "2021-03"
+  ],
+  "def": "named false positives"
+ },
+ "regime_R3_D3-RED_h12_coincident_names": {
+  "value": [],
+  "def": "coincident episodes"
+ },
+ "regime_R3_D1-YELLOW_h12_on_months": {
+  "value": 18,
+  "def": "D1-YELLOW ON months (USREC=0, resolved) in R3"
+ },
+ "regime_R3_D1-YELLOW_h12_episodes": {
+  "value": 2,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R3_D1-YELLOW_h12_hits": {
+  "value": 0,
+  "def": "hits"
+ },
+ "regime_R3_D1-YELLOW_h12_false_positives": {
+  "value": 1,
+  "def": "false positives"
+ },
+ "regime_R3_D1-YELLOW_h12_month_precision": {
+  "value": 0.0,
+  "def": "month precision within regime"
+ },
+ "regime_R3_D1-YELLOW_h12_false_positive_names": {
+  "value": [
+   "2021-03"
+  ],
+  "def": "named false positives"
+ },
+ "regime_R3_D1-YELLOW_h12_coincident_names": {
+  "value": [],
+  "def": "coincident episodes"
+ },
+ "regime_R3_D3-YELLOW_h12_on_months": {
+  "value": 18,
+  "def": "D3-YELLOW ON months (USREC=0, resolved) in R3"
+ },
+ "regime_R3_D3-YELLOW_h12_episodes": {
+  "value": 2,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R3_D3-YELLOW_h12_hits": {
+  "value": 0,
+  "def": "hits"
+ },
+ "regime_R3_D3-YELLOW_h12_false_positives": {
+  "value": 1,
+  "def": "false positives"
+ },
+ "regime_R3_D3-YELLOW_h12_month_precision": {
+  "value": 0.0,
+  "def": "month precision within regime"
+ },
+ "regime_R3_D3-YELLOW_h12_false_positive_names": {
+  "value": [
+   "2021-03"
+  ],
+  "def": "named false positives"
+ },
+ "regime_R3_D3-YELLOW_h12_coincident_names": {
+  "value": [],
+  "def": "coincident episodes"
+ },
+ "regime_R0_h18_base": {
+  "value": 0.3354,
+  "def": "base rate in R0 (resolved USREC=0 months, 1953-04+)"
+ },
+ "regime_R0_h18_n_months": {
+  "value": 316,
+  "def": "resolved USREC=0 months in R0"
+ },
+ "regime_R0_D1-RED_h18_on_months": {
+  "value": 6,
+  "def": "D1-RED ON months (USREC=0, resolved) in R0"
+ },
+ "regime_R0_D1-RED_h18_episodes": {
+  "value": 2,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R0_D1-RED_h18_hits": {
+  "value": 1,
+  "def": "hits"
+ },
+ "regime_R0_D1-RED_h18_false_positives": {
+  "value": 0,
+  "def": "false positives"
+ },
+ "regime_R0_D1-RED_h18_month_precision": {
+  "value": 1.0,
+  "def": "month precision within regime"
+ },
+ "regime_R0_D1-RED_h18_false_positive_names": {
+  "value": [],
+  "def": "named false positives"
+ },
+ "regime_R0_D1-RED_h18_coincident_names": {
+  "value": [
+   "1974-01"
+  ],
+  "def": "coincident episodes"
+ },
+ "regime_R0_D2_h18_on_months": {
+  "value": 31,
+  "def": "D2 ON months (USREC=0, resolved) in R0"
+ },
+ "regime_R0_D2_h18_episodes": {
+  "value": 3,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R0_D2_h18_hits": {
+  "value": 2,
+  "def": "hits"
+ },
+ "regime_R0_D2_h18_false_positives": {
+  "value": 1,
+  "def": "false positives"
+ },
+ "regime_R0_D2_h18_month_precision": {
+  "value": 0.6129,
+  "def": "month precision within regime"
+ },
+ "regime_R0_D2_h18_false_positive_names": {
+  "value": [
+   "1976-09"
+  ],
+  "def": "named false positives"
+ },
+ "regime_R0_D2_h18_coincident_names": {
+  "value": [],
+  "def": "coincident episodes"
+ },
+ "regime_R0_D3-RED_h18_on_months": {
+  "value": 6,
+  "def": "D3-RED ON months (USREC=0, resolved) in R0"
+ },
+ "regime_R0_D3-RED_h18_episodes": {
+  "value": 2,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R0_D3-RED_h18_hits": {
+  "value": 1,
+  "def": "hits"
+ },
+ "regime_R0_D3-RED_h18_false_positives": {
+  "value": 0,
+  "def": "false positives"
+ },
+ "regime_R0_D3-RED_h18_month_precision": {
+  "value": 1.0,
+  "def": "month precision within regime"
+ },
+ "regime_R0_D3-RED_h18_false_positive_names": {
+  "value": [],
+  "def": "named false positives"
+ },
+ "regime_R0_D3-RED_h18_coincident_names": {
+  "value": [
+   "1974-01"
+  ],
+  "def": "coincident episodes"
+ },
+ "regime_R0_D1-YELLOW_h18_on_months": {
+  "value": 10,
+  "def": "D1-YELLOW ON months (USREC=0, resolved) in R0"
+ },
+ "regime_R0_D1-YELLOW_h18_episodes": {
+  "value": 2,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R0_D1-YELLOW_h18_hits": {
+  "value": 1,
+  "def": "hits"
+ },
+ "regime_R0_D1-YELLOW_h18_false_positives": {
+  "value": 0,
+  "def": "false positives"
+ },
+ "regime_R0_D1-YELLOW_h18_month_precision": {
+  "value": 1.0,
+  "def": "month precision within regime"
+ },
+ "regime_R0_D1-YELLOW_h18_false_positive_names": {
+  "value": [],
+  "def": "named false positives"
+ },
+ "regime_R0_D1-YELLOW_h18_coincident_names": {
+  "value": [
+   "1974-01"
+  ],
+  "def": "coincident episodes"
+ },
+ "regime_R0_D3-YELLOW_h18_on_months": {
+  "value": 8,
+  "def": "D3-YELLOW ON months (USREC=0, resolved) in R0"
+ },
+ "regime_R0_D3-YELLOW_h18_episodes": {
+  "value": 2,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R0_D3-YELLOW_h18_hits": {
+  "value": 1,
+  "def": "hits"
+ },
+ "regime_R0_D3-YELLOW_h18_false_positives": {
+  "value": 0,
+  "def": "false positives"
+ },
+ "regime_R0_D3-YELLOW_h18_month_precision": {
+  "value": 1.0,
+  "def": "month precision within regime"
+ },
+ "regime_R0_D3-YELLOW_h18_false_positive_names": {
+  "value": [],
+  "def": "named false positives"
+ },
+ "regime_R0_D3-YELLOW_h18_coincident_names": {
+  "value": [
+   "1974-01"
+  ],
+  "def": "coincident episodes"
+ },
+ "regime_R1_h18_base": {
+  "value": 0.2177,
+  "def": "base rate in R1 (resolved USREC=0 months, 1953-04+)"
+ },
+ "regime_R1_h18_n_months": {
+  "value": 248,
+  "def": "resolved USREC=0 months in R1"
+ },
+ "regime_R1_D1-RED_h18_on_months": {
+  "value": 18,
+  "def": "D1-RED ON months (USREC=0, resolved) in R1"
+ },
+ "regime_R1_D1-RED_h18_episodes": {
+  "value": 6,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R1_D1-RED_h18_hits": {
+  "value": 2,
+  "def": "hits"
+ },
+ "regime_R1_D1-RED_h18_false_positives": {
+  "value": 3,
+  "def": "false positives"
+ },
+ "regime_R1_D1-RED_h18_month_precision": {
+  "value": 0.5,
+  "def": "month precision within regime"
+ },
+ "regime_R1_D1-RED_h18_false_positive_names": {
+  "value": [
+   "1987-07",
+   "2002-12",
+   "2004-09"
+  ],
+  "def": "named false positives"
+ },
+ "regime_R1_D1-RED_h18_coincident_names": {
+  "value": [
+   "1990-09"
+  ],
+  "def": "coincident episodes"
+ },
+ "regime_R1_D2_h18_on_months": {
+  "value": 69,
+  "def": "D2 ON months (USREC=0, resolved) in R1"
+ },
+ "regime_R1_D2_h18_episodes": {
+  "value": 4,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R1_D2_h18_hits": {
+  "value": 2,
+  "def": "hits"
+ },
+ "regime_R1_D2_h18_false_positives": {
+  "value": 1,
+  "def": "false positives"
+ },
+ "regime_R1_D2_h18_month_precision": {
+  "value": 0.3768,
+  "def": "month precision within regime"
+ },
+ "regime_R1_D2_h18_false_positive_names": {
+  "value": [
+   "1996-04"
+  ],
+  "def": "named false positives"
+ },
+ "regime_R1_D2_h18_coincident_names": {
+  "value": [
+   "1990-08"
+  ],
+  "def": "coincident episodes"
+ },
+ "regime_R1_D3-RED_h18_on_months": {
+  "value": 17,
+  "def": "D3-RED ON months (USREC=0, resolved) in R1"
+ },
+ "regime_R1_D3-RED_h18_episodes": {
+  "value": 6,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R1_D3-RED_h18_hits": {
+  "value": 2,
+  "def": "hits"
+ },
+ "regime_R1_D3-RED_h18_false_positives": {
+  "value": 3,
+  "def": "false positives"
+ },
+ "regime_R1_D3-RED_h18_month_precision": {
+  "value": 0.5294,
+  "def": "month precision within regime"
+ },
+ "regime_R1_D3-RED_h18_false_positive_names": {
+  "value": [
+   "1987-07",
+   "2003-01",
+   "2004-09"
+  ],
+  "def": "named false positives"
+ },
+ "regime_R1_D3-RED_h18_coincident_names": {
+  "value": [
+   "1990-09"
+  ],
+  "def": "coincident episodes"
+ },
+ "regime_R1_D1-YELLOW_h18_on_months": {
+  "value": 72,
+  "def": "D1-YELLOW ON months (USREC=0, resolved) in R1"
+ },
+ "regime_R1_D1-YELLOW_h18_episodes": {
+  "value": 8,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R1_D1-YELLOW_h18_hits": {
+  "value": 3,
+  "def": "hits"
+ },
+ "regime_R1_D1-YELLOW_h18_false_positives": {
+  "value": 5,
+  "def": "false positives"
+ },
+ "regime_R1_D1-YELLOW_h18_month_precision": {
+  "value": 0.3472,
+  "def": "month precision within regime"
+ },
+ "regime_R1_D1-YELLOW_h18_false_positive_names": {
+  "value": [
+   "1987-03",
+   "1995-02",
+   "1996-09",
+   "2002-10",
+   "2007-09"
+  ],
+  "def": "named false positives"
+ },
+ "regime_R1_D1-YELLOW_h18_coincident_names": {
+  "value": [],
+  "def": "coincident episodes"
+ },
+ "regime_R1_D3-YELLOW_h18_on_months": {
+  "value": 62,
+  "def": "D3-YELLOW ON months (USREC=0, resolved) in R1"
+ },
+ "regime_R1_D3-YELLOW_h18_episodes": {
+  "value": 8,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R1_D3-YELLOW_h18_hits": {
+  "value": 3,
+  "def": "hits"
+ },
+ "regime_R1_D3-YELLOW_h18_false_positives": {
+  "value": 4,
+  "def": "false positives"
+ },
+ "regime_R1_D3-YELLOW_h18_month_precision": {
+  "value": 0.3226,
+  "def": "month precision within regime"
+ },
+ "regime_R1_D3-YELLOW_h18_false_positive_names": {
+  "value": [
+   "1987-03",
+   "1996-09",
+   "2002-10",
+   "2004-04"
+  ],
+  "def": "named false positives"
+ },
+ "regime_R1_D3-YELLOW_h18_coincident_names": {
+  "value": [
+   "1990-08"
+  ],
+  "def": "coincident episodes"
+ },
+ "regime_R2_h18_base": {
+  "value": 0.127,
+  "def": "base rate in R2 (resolved USREC=0 months, 1953-04+)"
+ },
+ "regime_R2_h18_n_months": {
+  "value": 126,
+  "def": "resolved USREC=0 months in R2"
+ },
+ "regime_R2_D1-RED_h18_on_months": {
+  "value": 9,
+  "def": "D1-RED ON months (USREC=0, resolved) in R2"
+ },
+ "regime_R2_D1-RED_h18_episodes": {
+  "value": 3,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R2_D1-RED_h18_hits": {
+  "value": 0,
+  "def": "hits"
+ },
+ "regime_R2_D1-RED_h18_false_positives": {
+  "value": 3,
+  "def": "false positives"
+ },
+ "regime_R2_D1-RED_h18_month_precision": {
+  "value": 0.0,
+  "def": "month precision within regime"
+ },
+ "regime_R2_D1-RED_h18_false_positive_names": {
+  "value": [
+   "2009-12",
+   "2017-01",
+   "2018-06"
+  ],
+  "def": "named false positives"
+ },
+ "regime_R2_D1-RED_h18_coincident_names": {
+  "value": [],
+  "def": "coincident episodes"
+ },
+ "regime_R2_D2_h18_on_months": {
+  "value": 12,
+  "def": "D2 ON months (USREC=0, resolved) in R2"
+ },
+ "regime_R2_D2_h18_episodes": {
+  "value": 1,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R2_D2_h18_hits": {
+  "value": 1,
+  "def": "hits"
+ },
+ "regime_R2_D2_h18_false_positives": {
+  "value": 0,
+  "def": "false positives"
+ },
+ "regime_R2_D2_h18_month_precision": {
+  "value": 0.5833,
+  "def": "month precision within regime"
+ },
+ "regime_R2_D2_h18_false_positive_names": {
+  "value": [],
+  "def": "named false positives"
+ },
+ "regime_R2_D2_h18_coincident_names": {
+  "value": [],
+  "def": "coincident episodes"
+ },
+ "regime_R2_D3-RED_h18_on_months": {
+  "value": 7,
+  "def": "D3-RED ON months (USREC=0, resolved) in R2"
+ },
+ "regime_R2_D3-RED_h18_episodes": {
+  "value": 2,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R2_D3-RED_h18_hits": {
+  "value": 0,
+  "def": "hits"
+ },
+ "regime_R2_D3-RED_h18_false_positives": {
+  "value": 2,
+  "def": "false positives"
+ },
+ "regime_R2_D3-RED_h18_month_precision": {
+  "value": 0.0,
+  "def": "month precision within regime"
+ },
+ "regime_R2_D3-RED_h18_false_positive_names": {
+  "value": [
+   "2009-12",
+   "2017-01"
+  ],
+  "def": "named false positives"
+ },
+ "regime_R2_D3-RED_h18_coincident_names": {
+  "value": [],
+  "def": "coincident episodes"
+ },
+ "regime_R2_D1-YELLOW_h18_on_months": {
+  "value": 24,
+  "def": "D1-YELLOW ON months (USREC=0, resolved) in R2"
+ },
+ "regime_R2_D1-YELLOW_h18_episodes": {
+  "value": 4,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R2_D1-YELLOW_h18_hits": {
+  "value": 1,
+  "def": "hits"
+ },
+ "regime_R2_D1-YELLOW_h18_false_positives": {
+  "value": 3,
+  "def": "false positives"
+ },
+ "regime_R2_D1-YELLOW_h18_month_precision": {
+  "value": 0.0833,
+  "def": "month precision within regime"
+ },
+ "regime_R2_D1-YELLOW_h18_false_positive_names": {
+  "value": [
+   "2009-11",
+   "2011-03",
+   "2016-12"
+  ],
+  "def": "named false positives"
+ },
+ "regime_R2_D1-YELLOW_h18_coincident_names": {
+  "value": [],
+  "def": "coincident episodes"
+ },
+ "regime_R2_D3-YELLOW_h18_on_months": {
+  "value": 19,
+  "def": "D3-YELLOW ON months (USREC=0, resolved) in R2"
+ },
+ "regime_R2_D3-YELLOW_h18_episodes": {
+  "value": 4,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R2_D3-YELLOW_h18_hits": {
+  "value": 1,
+  "def": "hits"
+ },
+ "regime_R2_D3-YELLOW_h18_false_positives": {
+  "value": 3,
+  "def": "false positives"
+ },
+ "regime_R2_D3-YELLOW_h18_month_precision": {
+  "value": 0.1053,
+  "def": "month precision within regime"
+ },
+ "regime_R2_D3-YELLOW_h18_false_positive_names": {
+  "value": [
+   "2009-11",
+   "2011-04",
+   "2016-12"
+  ],
+  "def": "named false positives"
+ },
+ "regime_R2_D3-YELLOW_h18_coincident_names": {
+  "value": [],
+  "def": "coincident episodes"
+ },
+ "regime_R3_h18_base": {
+  "value": 0.0417,
+  "def": "base rate in R3 (resolved USREC=0 months, 1953-04+)"
+ },
+ "regime_R3_h18_n_months": {
+  "value": 48,
+  "def": "resolved USREC=0 months in R3"
+ },
+ "regime_R3_D1-RED_h18_on_months": {
+  "value": 16,
+  "def": "D1-RED ON months (USREC=0, resolved) in R3"
+ },
+ "regime_R3_D1-RED_h18_episodes": {
+  "value": 2,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R3_D1-RED_h18_hits": {
+  "value": 0,
+  "def": "hits"
+ },
+ "regime_R3_D1-RED_h18_false_positives": {
+  "value": 1,
+  "def": "false positives"
+ },
+ "regime_R3_D1-RED_h18_month_precision": {
+  "value": 0.0,
+  "def": "month precision within regime"
+ },
+ "regime_R3_D1-RED_h18_false_positive_names": {
+  "value": [
+   "2021-03"
+  ],
+  "def": "named false positives"
+ },
+ "regime_R3_D1-RED_h18_coincident_names": {
+  "value": [],
+  "def": "coincident episodes"
+ },
+ "regime_R3_D2_h18_on_months": {
+  "value": 17,
+  "def": "D2 ON months (USREC=0, resolved) in R3"
+ },
+ "regime_R3_D2_h18_episodes": {
+  "value": 2,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R3_D2_h18_hits": {
+  "value": 0,
+  "def": "hits"
+ },
+ "regime_R3_D2_h18_false_positives": {
+  "value": 1,
+  "def": "false positives"
+ },
+ "regime_R3_D2_h18_month_precision": {
+  "value": 0.0,
+  "def": "month precision within regime"
+ },
+ "regime_R3_D2_h18_false_positive_names": {
+  "value": [
+   "2021-10"
+  ],
+  "def": "named false positives"
+ },
+ "regime_R3_D2_h18_coincident_names": {
+  "value": [],
+  "def": "coincident episodes"
+ },
+ "regime_R3_D3-RED_h18_on_months": {
+  "value": 12,
+  "def": "D3-RED ON months (USREC=0, resolved) in R3"
+ },
+ "regime_R3_D3-RED_h18_episodes": {
+  "value": 2,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R3_D3-RED_h18_hits": {
+  "value": 0,
+  "def": "hits"
+ },
+ "regime_R3_D3-RED_h18_false_positives": {
+  "value": 1,
+  "def": "false positives"
+ },
+ "regime_R3_D3-RED_h18_month_precision": {
+  "value": 0.0,
+  "def": "month precision within regime"
+ },
+ "regime_R3_D3-RED_h18_false_positive_names": {
+  "value": [
+   "2021-03"
+  ],
+  "def": "named false positives"
+ },
+ "regime_R3_D3-RED_h18_coincident_names": {
+  "value": [],
+  "def": "coincident episodes"
+ },
+ "regime_R3_D1-YELLOW_h18_on_months": {
+  "value": 18,
+  "def": "D1-YELLOW ON months (USREC=0, resolved) in R3"
+ },
+ "regime_R3_D1-YELLOW_h18_episodes": {
+  "value": 2,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R3_D1-YELLOW_h18_hits": {
+  "value": 0,
+  "def": "hits"
+ },
+ "regime_R3_D1-YELLOW_h18_false_positives": {
+  "value": 1,
+  "def": "false positives"
+ },
+ "regime_R3_D1-YELLOW_h18_month_precision": {
+  "value": 0.0,
+  "def": "month precision within regime"
+ },
+ "regime_R3_D1-YELLOW_h18_false_positive_names": {
+  "value": [
+   "2021-03"
+  ],
+  "def": "named false positives"
+ },
+ "regime_R3_D1-YELLOW_h18_coincident_names": {
+  "value": [],
+  "def": "coincident episodes"
+ },
+ "regime_R3_D3-YELLOW_h18_on_months": {
+  "value": 18,
+  "def": "D3-YELLOW ON months (USREC=0, resolved) in R3"
+ },
+ "regime_R3_D3-YELLOW_h18_episodes": {
+  "value": 2,
+  "def": "episodes starting in the regime"
+ },
+ "regime_R3_D3-YELLOW_h18_hits": {
+  "value": 0,
+  "def": "hits"
+ },
+ "regime_R3_D3-YELLOW_h18_false_positives": {
+  "value": 1,
+  "def": "false positives"
+ },
+ "regime_R3_D3-YELLOW_h18_month_precision": {
+  "value": 0.0,
+  "def": "month precision within regime"
+ },
+ "regime_R3_D3-YELLOW_h18_false_positive_names": {
+  "value": [
+   "2021-03"
+  ],
+  "def": "named false positives"
+ },
+ "regime_R3_D3-YELLOW_h18_coincident_names": {
+  "value": [],
+  "def": "coincident episodes"
+ },
+ "q5_live_pct": {
+  "value": 52.4,
+  "def": "live deployed WTI 12m % (daily 252-obs point, print 2026-09-09)"
+ },
+ "q5_live_grade": {
+  "value": "RED",
+  "def": "live channel grade"
+ },
+ "q5_monthly_D1_2026_08": {
+  "value": 29.3555,
+  "def": "oil_12m_pct 2026-08"
+ },
+ "q5_monthly_D1_grade": {
+  "value": "yellow",
+  "def": "D1 grade 2026-08"
+ },
+ "q5_monthly_D3_2026_08": {
+  "value": 25.1589,
+  "def": "real_oil_12m_pct 2026-08"
+ },
+ "q5_monthly_D3_grade": {
+  "value": "yellow",
+  "def": "D3 grade 2026-08"
+ },
+ "q5_D2_2026_08": {
+  "value": 13.279,
+  "def": "nopi36_sum12 2026-08 (log-pct)"
+ },
+ "q5_D2_on_8": {
+  "value": true,
+  "def": "D2 ON at 8"
+ },
+ "q5_D2_on_10": {
+  "value": true,
+  "def": "D2 ON at 10 (headline)"
+ },
+ "q5_D2_on_12": {
+  "value": true,
+  "def": "D2 ON at 12"
+ },
+ "q5_spread_gs_2026_08": {
+  "value": 0.96,
+  "def": "spread_gs 2026-08"
+ },
+ "q5_curve_flat_gs6m_2026_08": {
+  "value": false,
+  "def": "curve_flat_gs6m 2026-08"
+ },
+ "q5_analogs_D1-RED": {
+  "value": [
+   {
+    "first_on": "2002-12",
+    "peak": "73.0",
+    "curve": "not flat",
+    "outcome": "FALSE POSITIVE"
+   },
+   {
+    "first_on": "2004-09",
+    "peak": "75.2",
+    "curve": "not flat",
+    "outcome": "FALSE POSITIVE"
+   },
+   {
+    "first_on": "2018-06",
+    "peak": "52.2",
+    "curve": "not flat",
+    "outcome": "FALSE POSITIVE"
+   },
+   {
+    "first_on": "2017-01",
+    "peak": "76.4",
+    "curve": "not flat",
+    "outcome": "FALSE POSITIVE"
+   }
+  ],
+  "def": "4 nearest episodes by |peak \u2212 current peak|"
+ },
+ "q5_analogs_D2": {
+  "value": [
+   {
+    "first_on": "2018-04",
+    "peak": "17.1",
+    "curve": "not flat",
+    "outcome": "HIT"
+   },
+   {
+    "first_on": "1976-09",
+    "peak": "22.0",
+    "curve": "not flat",
+    "outcome": "FALSE POSITIVE"
+   },
+   {
+    "first_on": "1996-04",
+    "peak": "22.1",
+    "curve": "not flat",
+    "outcome": "FALSE POSITIVE"
+   },
+   {
+    "first_on": "2000-02",
+    "peak": "30.4",
+    "curve": "not flat",
+    "outcome": "HIT"
+   }
+  ],
+  "def": "4 nearest episodes by |peak \u2212 current peak|"
+ },
+ "q5_analogs_D3-RED": {
+  "value": [
+   {
+    "first_on": "2003-01",
+    "peak": "67.7",
+    "curve": "not flat",
+    "outcome": "FALSE POSITIVE"
+   },
+   {
+    "first_on": "1990-09",
+    "peak": "68.1",
+    "curve": "not flat",
+    "outcome": "COINCIDENT"
+   },
+   {
+    "first_on": "2004-09",
+    "peak": "69.8",
+    "curve": "not flat",
+    "outcome": "FALSE POSITIVE"
+   },
+   {
+    "first_on": "2017-01",
+    "peak": "71.5",
+    "curve": "not flat",
+    "outcome": "FALSE POSITIVE"
+   }
+  ],
+  "def": "4 nearest episodes by |peak \u2212 current peak|"
+ }
+}

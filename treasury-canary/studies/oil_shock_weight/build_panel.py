@@ -57,7 +57,7 @@ P["fedfunds"] = fred("FEDFUNDS")
 P["unrate"] = fred("UNRATE")
 P["indpro"] = fred("INDPRO")
 P["payems"] = fred("PAYEMS")
-P["custody_bn"] = monthly_mean(fred("WMTSECL1")) / 1000.0
+P["custody_bn"] = monthly_mean(fred("WMTSECL1").replace(0.0, np.nan)) / 1000.0   # FRED prints 0 before 2007-07-04 (not yet reported): NaN, not zero
 # broad dollar: DTWEXM (majors, 1973-2019) ratio-spliced onto DTWEXBGS (broad, 2006+)
 m_old = monthly_mean(fred("DTWEXM")); m_new = monthly_mean(fred("DTWEXBGS"))
 ratio = (m_new.loc["2006-01-01":"2006-12-01"] / m_old.loc["2006-01-01":"2006-12-01"]).mean()
@@ -133,7 +133,7 @@ P["spread_spliced_do_not_fit"] = P["spread_cmt"].where(P["spread_cmt"].notna(), 
 P["indpro_12m_pct"] = P["indpro"].pct_change(12) * 100.0
 P["ff_12m_chg_bps"] = P["fedfunds"].diff(12) * 100.0
 P["usd_12m_pct"] = P["usd_broad"].pct_change(12) * 100.0
-P["custody_12m_pct"] = P["custody_bn"].pct_change(12) * 100.0
+P["custody_12m_pct"] = (P["custody_bn"].pct_change(12) * 100.0).replace([np.inf, -np.inf], np.nan)
 if "igrea" in P:
     P["igrea_12m_chg"] = P["igrea"].diff(12)
 

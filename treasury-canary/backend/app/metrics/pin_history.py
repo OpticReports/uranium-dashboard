@@ -28,7 +28,7 @@ from __future__ import annotations
 import bisect
 from datetime import date
 
-from .pins import ANCHORS, RESERVES_MIN_BASE_M, _pscore, rank_pct
+from .pins import ANCHORS, RESERVES_MIN_BASE_M, _pscore, nopi12_series, rank_pct
 
 # (lag_min_months, lag_max_months, documented basis) per channel. These size
 # the gray band drawn after a red episode: "when the pain from this spark has
@@ -186,7 +186,11 @@ def _monthly_max(dates: list[date], scores: list[float]) -> dict[str, float]:
 def _parts_for_channel(cid: str, bundle: dict) -> list[tuple[str, tuple[list[date], list[float]]]]:
     if cid == "oil_shock":
         d, v = _series(bundle, "oil")
-        return [("WTI, 12-month change", _roll_pct_change(d, v, 252))]
+        # trigger leg = Hamilton NOPI12 on calendar-month means (same helper as
+        # the live board, so live and hindcast cannot drift); the 12-month change
+        # stays as the capped context gauge
+        return [("Net oil price increase, 12m cumulative (vs 3-year high)", nopi12_series(d, v)),
+                ("WTI, 12-month change", _roll_pct_change(d, v, 252))]
 
     if cid == "policy_shock":
         d, v = _series(bundle, "effr")
@@ -289,6 +293,11 @@ def _parts_for_channel(cid: str, bundle: dict) -> list[tuple[str, tuple[list[dat
 
 # Channels whose hindcast is knowingly shallower/narrower than the live board.
 HISTORY_NOTES: dict[str, str] = {
+    "oil_shock": "The NOPI trigger leg needs 48 months of daily WTI to warm up, so "
+                 "on FRED's 1986+ series it starts 1990; the 12-month gauge covers "
+                 "1987+ but caps at YELLOW, so 1987-89 can only read yellow. The "
+                 "full 1947+ record (1973, 1979-80, 1990 on the monthly spot series) "
+                 "is measured in studies/oil-shock-recession-weight.md.",
     "demand_strike": "Hindcast from weekly Fed custody only — the auction tape "
                      "is too short a history to hindcast.",
     "vol_supply": "FRED's SP500 series is ~10y deep, so the VRP leg starts late; "
@@ -453,8 +462,12 @@ def build_pin_history(bundle: dict) -> dict:
             "(4 of 13 signal-clusters hit: 1998 LTCM 4m early, 2019 11–7m, "
             "2025 12m; missed 2007, 2018 and 2021). The v2 44% / 5-of-11 "
             "included a 2007 catch that came from a since-removed pre-QE "
-            "reserves artifact. Oil/policy-window+curve (45%, 5/6) is now the "
-            "stronger of the pair, not the same within noise — 13 clusters is "
+            "reserves artifact. The rule measured as oil/policy-window+curve "
+            "(45%, 5/6) was the oil channel's damage window alone: oil window + "
+            "flat curve 48% / 4 of 5 on onsets (3 legitimate), 42% / 4 of 5 on "
+            "drawdowns (hindcast v4). On the full 1953–2025 record oil alone reads "
+            "at the base rate on onsets and adds no out-of-sample skill to the "
+            "curve probit (studies/oil-shock-recession-weight.md) — 13 clusters is "
             "a small sample; treat as context. Read the curve model for "
             "recession odds; read this board as an accident radar."
         ),

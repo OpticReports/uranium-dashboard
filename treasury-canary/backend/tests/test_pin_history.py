@@ -104,8 +104,9 @@ def test_separate_red_runs_are_separate_episodes():
 
 
 def test_build_history_oil_red_projects_window():
-    # 2 years of flat oil, then a +100% jump held for ~3 months -> RED episode
-    flat = [50.0] * 504
+    # 5 years of flat oil (the NOPI leg needs 48 months to warm up), then a
+    # +100% jump to a new 3-year high held for ~3 months -> RED episode
+    flat = [50.0] * (365 * 5)
     spike = [100.0] * 63
     bundle = {"oil": _daily(date(2024, 1, 1), flat + spike)}
     hist = build_pin_history(bundle)
@@ -248,7 +249,8 @@ def test_recession_spans_extracted():
 
 def test_confluence_forward_window_is_intersection_arithmetic():
     # oil red episode -> its 3-12m damage window ahead must be the peak window
-    flat = [50.0] * 504
+    # (5 years flat: the NOPI trigger leg needs 48 months to warm up)
+    flat = [50.0] * (365 * 5)
     spike = [100.0] * 63
     bundle = {"oil": _daily(date(2024, 1, 1), flat + spike)}
     conf = build_pin_history(bundle)["confluence"]
@@ -263,15 +265,16 @@ def test_confluence_forward_window_is_intersection_arithmetic():
 def test_overlap_validation_counts_hits_vs_base_rate():
     # a +100% oil spike in the MIDDLE of history, so its 3-12m damage window
     # falls inside observed months, plus a synthetic USREC onset inside it
-    vals = [50.0] * 504 + [100.0] * 63 + [50.0] * 504
+    vals = [50.0] * (365 * 5) + [100.0] * 63 + [50.0] * 504
     oil_dates = [date(2022, 1, 1) + timedelta(days=i) for i in range(len(vals))]
-    # spike ~2023-05..07 -> red peak ~2023-07 -> window ~2023-10..2024-07;
-    # recession onset 2024-01 sits inside it
+    # spike 2027-01..03 -> the NOPI12 leg (a trailing-12-month sum) stays red
+    # 2027-01..2027-12 -> window 2027-04..2028-12; recession onset 2028-01
+    # sits inside it
     rec_dates, rec_vals = [], []
     d = date(2020, 1, 1)
-    while d <= date(2027, 12, 1):
+    while d <= date(2029, 12, 1):
         rec_dates.append(d)
-        rec_vals.append(1.0 if date(2024, 1, 1) <= d <= date(2024, 6, 1) else 0.0)
+        rec_vals.append(1.0 if date(2028, 1, 1) <= d <= date(2028, 6, 1) else 0.0)
         d = date(d.year + (d.month == 12), d.month % 12 + 1, 1)
     bundle = {"oil": (oil_dates, vals), "recession": (rec_dates, rec_vals)}
     conf = build_pin_history(bundle)["confluence"]

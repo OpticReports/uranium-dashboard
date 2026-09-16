@@ -46,6 +46,8 @@ for line in open(f"{D}/mfhhis01.txt", encoding="latin-1"):
             rows.setdefault(k, {})[WANT[key]] = x
 df = pd.DataFrame.from_dict(rows, orient="index").sort_index()
 df.index.name = "date"
+# a printed 0.0 holding is "not listed" (Norway 2004-07, six months), never a zero position
+df = df.mask(df == 0.0)
 df["basket3"] = df[["saudi", "uae", "kuwait"]].sum(axis=1, min_count=3)   # seg2 primary (always reported 2012+)
 df["basket4"] = df[["saudi", "uae", "kuwait", "iraq"]].sum(axis=1, min_count=4)  # +Iraq where reported
 df["seg1_share_pct"] = df["oil_exporters"] / df["grand_total"] * 100.0

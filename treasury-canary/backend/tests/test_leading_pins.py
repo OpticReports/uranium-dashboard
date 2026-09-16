@@ -85,8 +85,10 @@ def test_worst_ignores_stale():
 
 
 def test_pin_board_oil_shock_red():
-    n = 260
-    oil = [60.0] * (n - 1) + [95.0]   # +58% vs 252 obs ago
+    # NOPI trigger leg (2026-09-16): needs 48 months to warm up, then a +58%
+    # jump to a new 3-year high = ln(95/60)*100 = 46 log-% cumulative -> RED
+    n = 365 * 5 + 90
+    oil = [60.0] * (n - 90) + [95.0] * 90
     bundle = {"oil": (_days(n), oil)}
     board = build_pin_board(bundle)
     by = {c["channel_id"]: c for c in board["channels"]}
