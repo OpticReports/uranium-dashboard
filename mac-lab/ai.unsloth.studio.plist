@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Unsloth Studio as a system LaunchDaemon: starts at boot with no login
+     session, which is the point — after a power cut the box must come back
+     by itself. Binds the Tailscale address, never 0.0.0.0, so the UI is
+     reachable from the tailnet and not from the LAN. KeepAlive covers the
+     boot race where tailscaled has not yet brought 100.93.59.14 up. -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>ai.unsloth.studio</string>
+  <key>UserName</key><string>aibot</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/aibot/.local/bin/unsloth</string>
+    <string>studio</string>
+    <string>-H</string><string>100.93.59.14</string>
+    <string>-p</string><string>8888</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/aibot</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key><string>/Users/aibot</string>
+    <key>PATH</key><string>/Users/aibot/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>15</integer>
+  <key>StandardOutPath</key><string>/Users/aibot/.unsloth/studio/logs/launchd.out.log</string>
+  <key>StandardErrorPath</key><string>/Users/aibot/.unsloth/studio/logs/launchd.err.log</string>
+</dict>
+</plist>

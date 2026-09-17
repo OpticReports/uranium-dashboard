@@ -82,6 +82,12 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Barbell Lab", lifespan=lifespan)
 
+# Read-only research export for the Tier-0 lab box (mac-mini-lab). Every route
+# is a 404 until LAB_READ_TOKEN is set in the Render dashboard — see export.py.
+from .export import router as _export_router  # noqa: E402 — app must exist first
+
+app.include_router(_export_router)
+
 _STYLE = """
 <style>
  body{font-family:ui-monospace,Menlo,monospace;background:#0b1120;color:#d8e1ef;

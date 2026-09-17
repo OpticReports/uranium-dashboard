@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Nightly research-data pull, 05:20 local. A LaunchAgent (not a daemon):
+     it runs as aibot and needs nothing before login-time privileges. Missed
+     runs are not replayed — the next night's incremental pull covers the gap,
+     because every table is fetched from its watermark forward. -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.optic.labpull</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/aibot/lab/bin/pull.sh</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key><string>/Users/aibot</string>
+    <key>PATH</key><string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key><integer>5</integer>
+    <key>Minute</key><integer>20</integer>
+  </dict>
+  <key>StandardOutPath</key><string>/Users/aibot/lab/logs/pull.out.log</string>
+  <key>StandardErrorPath</key><string>/Users/aibot/lab/logs/pull.err.log</string>
+</dict>
+</plist>

@@ -129,6 +129,13 @@ services:
         sync: false            # optional third feed
       - key: EXEC_TOKEN
         sync: false            # btc-executor /status read secret (edge-monitor S5 feed; without it the feed reports BLIND, never crashes)
+      # Tier-0 lab export (/api/export/*) for the mac-mini-lab training box.
+      # A THIRD credential, weaker than EXEC_TOKEN (moves a book) and
+      # READ_TOKEN (reads live book state): it reads allow-listed research
+      # tables and nothing else. Unset (the default) keeps every export route
+      # a 404, so nothing is exposed until Casey sets it. See mac-lab/README.md.
+      - key: LAB_READ_TOKEN
+        sync: false
       - key: ANTHROPIC_API_KEY
         sync: false            # chat analyst, native key (preferred if set)
       - key: OPENROUTER_API_KEY
