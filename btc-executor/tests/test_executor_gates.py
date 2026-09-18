@@ -7058,3 +7058,55 @@ def test_gate_exposure_page_reaches_the_phone(tmp_path, monkeypatch):
     hits = [msg for msg in sent if "exposure_over_cap" in msg]
     assert hits, "the base bypass must reach the phone"
     assert hits[0].startswith("🔴 ACTION NEEDED")
+
+
+# --- /pulse RED breakdown (2026-09-18) -------------------------------------
+# A stopless window on 09-18 logged unbooked_fill_unprotected once per poll
+# and drove red_events_24h from 1 to 28 in nine hours. The phone was already
+# throttled (mirror.RATE_LIMITED, 1800s per kind); the LOG is deliberately
+# not, so the total is the wrong instrument for "did something NEW break".
+
+
+def test_gate_pulse_breaks_reds_down_by_kind(tmp_path, monkeypatch):
+    """The failure this prevents: one persistent condition inflates the only
+    number an unauthenticated monitor can see, and a genuinely new RED
+    arriving mid-window is invisible in it."""
+    from fastapi.testclient import TestClient
+    import app.main as m
+    ex, v, pos = _armed_leg(tmp_path)
+    now = time.time()
+    ex.state.events = (
+        [{"ts": now - 600, "level": "RED",
+          "kind": "unbooked_fill_unprotected", "msg": "x"}] * 27
+        + [{"ts": now - 60, "level": "RED", "kind": "stop_residue",
+            "msg": "x"},
+           # NOT a RED, and outside the window: neither may be counted
+           {"ts": now - 30, "level": "WARN", "kind": "halt_config", "msg": "x"},
+           {"ts": now - 90_000, "level": "RED", "kind": "cap_clamp",
+            "msg": "x"}])
+    monkeypatch.setattr(m, "EXEC", ex)
+    monkeypatch.setattr(m.settings, "exec_token", "")
+    body = TestClient(m.app).get("/pulse").json()
+    assert body["red_events_24h"] == 28
+    assert body["red_kinds_24h"] == {"unbooked_fill_unprotected": 27,
+                                     "stop_residue": 1}
+    # the total can never disagree with the breakdown that explains it
+    assert sum(body["red_kinds_24h"].values()) == body["red_events_24h"]
+    # the new kind is visible even though it is 1 of 28
+    assert "stop_residue" in body["red_kinds_24h"]
+
+
+def test_gate_pulse_red_kinds_carry_no_sizes_or_prices(tmp_path, monkeypatch):
+    """/pulse's docstring promises no position sizes or order details. The
+    breakdown publishes KIND names only - never the msg, which embeds qty
+    and price on most of these kinds."""
+    from fastapi.testclient import TestClient
+    import app.main as m
+    ex, v, pos = _armed_leg(tmp_path)
+    ex.state.events = [{"ts": time.time() - 10, "level": "RED",
+                        "kind": "unbooked_fill_unprotected",
+                        "msg": "trend holds 0.03134 BTC filled at 80757.0"}]
+    monkeypatch.setattr(m, "EXEC", ex)
+    monkeypatch.setattr(m.settings, "exec_token", "")
+    body = TestClient(m.app).get("/pulse").text
+    assert "0.03134" not in body and "80757" not in body, body
