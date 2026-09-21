@@ -39,11 +39,11 @@ The archetype is already on the record: the 8.64-vs-6.00 bps finding came from
 
 ## 1. Two live defects found on the way (both re-verified by running the code)
 
-### 1a. S3/S1/S2 fee accounting is disconnected from config — MERGE-BLOCKING
+### 1a. Pullback fee accounting is disconnected from config — FIXED 2026-09-21
 
-`core.py:305` builds the pullback `Position(...)` with **no `fee_bps`**, so it
-takes the dataclass default 6.0 (`core.py:93`). `core.py:246`, the donchian
-path, passes `fee_bps=2 * tcfg.taker_fee_bps`. Measured on the full fixture:
+`core.py` built the pullback `Position(...)` with **no `fee_bps`**, so it took
+the dataclass default 6.0; the donchian path passes `2 * tcfg.taker_fee_bps`.
+Measured on the full fixture before the fix:
 
 | taker_fee_bps | S3 equity | S3 fees | S4 equity | S4 fees |
 |---|---|---|---|---|
@@ -52,18 +52,46 @@ path, passes `fee_bps=2 * tcfg.taker_fee_bps`. Measured on the full fixture:
 | 8.00 | 207,863 | 17,290 | 206,185 | 35,585 |
 | 20.00 | **207,863** | **17,290** | 112,461 | 58,667 |
 
-S3 has **one** distinct equity value across a 4.6x fee range. S4 has five.
-With the fee wired as S4 already does it, at the measured 8.64 bps round trip:
-S3 equity **197,725**, fees **24,225** — a **$10,138 / 10.1pp overstatement**
-over 4.57y on a $100k base.
+S3 had **one** distinct equity across a 4.6x fee range; S4 had five. S1 and S2
+are pullback books and were equally pinned.
 
-Consequences: S5 (the live blend) is 75% S3, so three quarters of the deployed
-blend's backtest has been priced at a fee no config can change, while the two
-legs sit on different fee bases under the same `TradeCfg` (S3 6.00 round trip,
-S4 12.00). RESEARCH_FEES.md's Kelly re-fit — which retired three rungs and set
-`KELLY_M_CAP = 0.20` — ran on that stream. The critic measured S2 at
-**-$26,437**, 2.6x S3's dollar error; S1 and S2 are pullback books and equally
-pinned.
+**Fixed:** the pullback path now stamps `fee_bps=2 * tcfg.taker_fee_bps`, and
+`backend/tests/test_fee_wiring.py` (10 gates, mutation-checked — reverting the
+wiring fails 8) asserts every book's dollars move with the config and that
+fees equal `notional x 2 x taker / 10_000` exactly.
+
+**CORRECTION to the first statement of this finding.** The restatement was
+first reported as $10,138 / 10.1pp. That figure is the wiring fix **plus**
+re-basing `taker_fee_bps` to the measured 4.32/side. The wiring fix alone, at
+the **shipped default of 6.00/side**, restates S3's dollar equity from
+**207,863 to 185,531 — -$22,332 / -22.3pp**, because the default charges a
+12.00 bps round trip. The larger number is the one that ships.
+
+**The sharper finding underneath it.** The engine carried TWO fee models that
+disagreed by 2x. `research_basis_stats` charges `2 * tcfg.taker_fee_bps` and
+reproduces the reference backtest **exactly at 6.00/side — a 12.00 bps round
+trip — and at no other value** (measured: S3 48.1/-14.2, S1 64.5/-22.3, S2
+101.4/-22.9 land on the reference at 6.00; at 4.32 they read 50.3 / 68.3 /
+106.6). Meanwhile the dollar path charged pullback books 6.00 **round trip**.
+So the registered objective is 12.00 bps round trip, RESEARCH_FEES.md measured
+**8.64**, and the dollar path was running 6.00. Three numbers, one book.
+
+`taker_fee_bps` has therefore been **left at 6.0**. Re-registering the
+objective at the measured fee restates every published MAR in the repo and is
+a dated protocol amendment Casey signs — P1 question 4 below — not a default
+an agent edits while fixing a wiring bug.
+
+**A second defect the fix exposed.** `test_dollar_vs_research_basis_gap_is_
+short_squared_terms` asserted `research - dollar < 10.0` and passed at 9.6
+**only because the dollar path was under-charging S3 by half the fee**. With
+both bases on 12.00 the true gap is 13.7pp (research 48.1, dollar 34.4). The
+guard was calibrated against the defect. It is now a two-sided band
+(11.5 < gap < 16.0), so if a pullback book ever stops charging the configured
+fee the gap collapses toward 9.6 and the LOWER bound fires. A one-sided bound
+is what let this sit undetected.
+
+Engine suite after the fix: **102 passed** (baseline 92, plus the 10 new
+gates, zero regressions).
 
 ### 1b. barbell-lab is live, publicly reachable and has no authentication
 

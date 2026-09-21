@@ -75,10 +75,31 @@ def test_acceptance_table():
 
 
 def test_dollar_vs_research_basis_gap_is_short_squared_terms():
-    """The live dollar book must land BELOW the research basis (short accounting)
-    but within a bounded gap — a guard against silently changing either basis."""
+    """The live dollar book must land BELOW the research basis (short
+    accounting) within a BOUNDED BAND — a guard against silently changing
+    either basis.
+
+    REBASED 2026-09-21, and the reason is the point of the test. The old
+    bound was one-sided, `research - dollar < 10.0`, and it passed at 9.6
+    ONLY because the dollar path was under-charging S3. `_process_pullback`
+    built its Position without `fee_bps`, taking the 6.0 default, while
+    `research_basis_stats` charges `2 * tcfg.taker_fee_bps` = 12.00 — so the
+    two bases were running on fees that differed by 2x and the accidental
+    offset flattered the dollar book into the bound. With the wiring fixed
+    both bases charge 12.00 and the true basis gap is 13.7pp
+    (research 48.1, dollar 34.4).
+
+    Now TWO-SIDED, so the defect cannot return quietly: if a pullback book
+    ever stops charging the configured fee again, its dollar return rises,
+    the gap collapses back toward 9.6 and the LOWER bound fires. A one-sided
+    bound is what let this sit undetected.
+    """
     res = _replay()
     dollar = book_stats(res.books["S3"])["total_return_pct"]
     research = research_basis_stats(res.books["S3"].trades, TradeCfg(), BOOKS)["S3"]["total_return_pct"]
+    gap = research - dollar
     assert research > dollar          # ratio basis flatters shorts
-    assert research - dollar < 10.0   # but only by the sum of ret^2 terms
+    assert 11.5 < gap < 16.0, (
+        f"basis gap {gap:.1f}pp is outside the band measured on a correctly "
+        f"charged engine (13.7pp); below it usually means a book stopped "
+        f"charging the configured fee")

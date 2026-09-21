@@ -62,6 +62,16 @@ class SignalCfg:
 class TradeCfg:
     stop_atr: float = 2.5
     time_stop_bars: int = 60
+    # PER SIDE; both Position construction sites charge 2 x this, so the
+    # round trip is 12.00 bps at this default. DELIBERATELY NOT MOVED to the
+    # 4.32 that RESEARCH_FEES.md measured (8.64 round trip), because this
+    # value IS the registered objective: research_basis_stats reproduces the
+    # reference backtest EXACTLY at 6.00 and at no other value (measured -
+    # S3 48.1/-14.2, S1 64.5/-22.3, S2 101.4/-22.9 land on the reference at
+    # 6.00; at 4.32 they read 50.3 / 68.3 / 106.6). Re-registering the
+    # objective at the measured fee restates every published MAR in the repo
+    # and is a dated protocol amendment Casey signs, not a default someone
+    # edits. See RESEARCH_SELF_LEARNING.md P1 question 4.
     taker_fee_bps: float = 6.0
     maker_fee_bps: float = 0.0
 
@@ -90,7 +100,12 @@ class Position:
     stop_price: float
     atr_at_entry: float
     signal_ts: int               # signal bar open ts
-    fee_bps: float = 6.0         # round-trip taker bps charged at exit
+    # ROUND-TRIP taker bps charged at exit. Both construction sites now pass
+    # this explicitly (core.py, donchian and pullback), so the default is a
+    # backstop for hand-built Positions in tests, never a live path. It is
+    # deliberately NOT lowered to the measured rate: a default that silently
+    # prices a real book is the defect this comment exists because of.
+    fee_bps: float = 6.0
     trail: float | None = None   # donchian chandelier level (ratchets)
 
 
@@ -305,7 +320,21 @@ def _process_pullback(book: Book, bar: Bar, ind: Ind,
                 book.position = Position(
                     side=p.side, entry_ts=bar.ts, entry_price=p.limit,
                     qty=qty, notional=notional, stop_price=stop,
-                    atr_at_entry=a_e, signal_ts=p.signal_ts)
+                    atr_at_entry=a_e, signal_ts=p.signal_ts,
+                    # STAMPED FROM CONFIG, as the donchian path above already
+                    # does. Omitting it took Position's 6.0 default, so every
+                    # pullback book (S1, S2, S3 - and S5/S6, which are 75%
+                    # S3) priced fees at a constant no env var could reach.
+                    # Measured on the 10,002-bar fixture before the fix: S3's
+                    # equity and fees were identical TO THE CENT at
+                    # taker_fee_bps 4.32, 6.00, 8.00 and 20.00 - a 4.6x range
+                    # - while S4 moved 226,501 -> 112,461. The two legs of
+                    # one deployed blend were on different fee bases under
+                    # the same TradeCfg (S3 6.00 round trip, S4 12.00), and
+                    # RESEARCH_FEES.md's Kelly re-fit - the study that
+                    # retired three sizing rungs and set KELLY_M_CAP - ran on
+                    # that stream. See test_pullback_fees_track_config.
+                    fee_bps=2 * tcfg.taker_fee_bps)
             # Stop is NOT active on the fill bar itself (reference log has no
             # bars_held=0 trades) and the fill bar's close is exit-ineligible.
             return
