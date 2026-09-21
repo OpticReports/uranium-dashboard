@@ -12,6 +12,13 @@ Test: for every crossing episode since 1955, compare the month the bill's
 12-month change crosses +0.50pp against the month fed funds does.
   lead = bill_month - ff_month   (negative = the bill fires EARLIER)
 
+NOTE on the series: the flag reads DGS3MO live (constant-maturity, 1981+); this
+test runs on TB3MS (discount basis, 1934+) because it is the only monthly bill
+series that reaches the 1950s. The two are not interchangeable in LEVELS
+(BACKTEST.md: ~20-40bp convention gap), but the 12-month DIFFERENCE cancels it
+— they give the same flag boolean in 527 of 528 months since 1982 (only
+2019-05, +0.504 vs +0.490, straddles the bar).
+
 Re-run:  python3 studies/fed_tightened_series_audit.py [datadir]
 Data:    keyless FRED CSV (TB3MS, FEDFUNDS, DFEDTARU, DGS3MO), cached in datadir.
 Written up in MARGIN_DEBT.md, "Flag definition audit (2026-09-21)".
@@ -24,7 +31,12 @@ import sys
 
 BAR = 0.50          # percentage points, the flag's threshold
 EPISODE_GAP = 12    # months: re-crossings inside a year are the same cycle
-PAIR_WINDOW = 24    # months: how far apart two series may fire and still pair
+PAIR_WINDOW = 12    # months: how far apart two series may fire and still pair.
+#                     12, not 24: a 24-month window lets the greedy walk hand
+#                     1964-06 (funds) the 1965-12 bill episode 18 months away
+#                     and strand 1966-01 one month from it, which alone flips
+#                     the mean lead's sign. 6/9/12 and an optimal min-|lead|
+#                     matching all agree: median -1, mean -0.24, max |lead| 6.
 
 FRED = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={}"
 
@@ -111,13 +123,17 @@ def main(datadir: str) -> None:
     print(f"coverage: TB3MS from {stamp(min(bill))}, FEDFUNDS from {stamp(min(ff))}")
 
     # Would any alternative series flip the flag TODAY?
-    print("\nlive readings (12-month change):")
+    print("\nlive readings (12-month change) — each stamped with its OWN as-of "
+          "date; the monthly rows are pre-hike averages, not a series effect:")
     for label, s in (("TB3MS  3-month bill (monthly)", bill),
                      ("FEDFUNDS effective (monthly)", ff)):
         k = max(s)
         print(f"  {label}: {stamp(k)}  {s[k] - s[(k[0] - 1, k[1])]:+.2f}pp")
-    for label, sid in (("DGS3MO 3-month bill (daily, what the flag reads)", "DGS3MO"),
-                       ("DFEDTARU target upper bound (daily)", "DFEDTARU")):
+    for label, sid in (("DGS3MO 3-month CMT (daily, what the flag reads)", "DGS3MO"),
+                       ("DTB3   3-month bill, discount (daily)", "DTB3"),
+                       ("DFF    fed funds effective (daily)", "DFF"),
+                       ("DFEDTARU target upper bound (daily)", "DFEDTARU"),
+                       ("DFEDTARL target lower bound (daily)", "DFEDTARL")):
         daily = list(read_csv(fetch(sid, datadir)))
         d, v = daily[-1]
         back = d - dt.timedelta(days=365)

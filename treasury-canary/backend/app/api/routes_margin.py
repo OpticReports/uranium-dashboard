@@ -32,20 +32,23 @@ THRESHOLDS = {"blowoff_excess": 25.0, "elevated_excess": 15.0,
 # real blowoffs from false positives. Historical outcomes are FROZEN study
 # constants; the flags themselves compute LIVE so the count moves with data.
 #
-# SERIES CHOICE, tested 2026-09-21 (studies/fed_tightened_series_audit.py;
-# written up in MARGIN_DEBT.md "Flag definition audit"): fed_tightened reads the
-# 3-month BILL, not the fed funds rate, and for this test the two are
-# interchangeable. Across 19 crossing episodes since 1955 their 12-month changes
-# cross +0.50pp a MEDIAN OF 0 MONTHS APART (mean +0.9; bill tied-or-earlier
-# 13/17 paired), and since 1972 they fire within one month of each other in 9 of
-# 10 cycles — 1983 (bill 4 months earlier) is the lone exception; all the larger
-# gaps are pre-1970, when the funds rate was choppy around a decoupled bill. The
-# bill wins on coverage (1934 vs 1954) and is what the historical scoring used,
-# so it stays. No alternative flips the flag today either: bill +0.10pp daily,
-# fed funds -0.70pp, target -0.25pp. Do NOT re-pick the series or the threshold
-# against a live reading: the study's own limits say the cuts were chosen with
-# the data in view and n=16 carries real overfit risk, and its per-episode
-# scoring is not reproducible from this repo.
+# SERIES CHOICE, tested 2026-09-21 — MARGIN_DEBT.md "Flag definition audit",
+# scripts studies/fed_tightened_series_audit.py and
+# studies/corroboration_episode_reconstruction.py. fed_tightened reads the
+# 3-month rate, not the fed funds rate, and the choice is immaterial BOTH ways:
+#   timing  — across 19 crossing episodes since 1955 the two cross +0.50pp a
+#             median of 1 month apart (mean -0.24, bill tied-or-earlier in 14 of
+#             17 paired; within a month in 9 of 10 cycles since 1972);
+#   scoring — re-scoring the 16 peaks with fed funds in place of the bill
+#             reproduces the frozen split EXACTLY: >=4 flags 4/4 bears, <=2
+#             flags 4/12, base 8/16. Only 1955 moves, and only because FEDFUNDS
+#             starts 1954-07 so the flag reads unknown there.
+# Provenance: the LIVE series is DGS3MO (constant maturity, 1981+); the history
+# runs on TB3MS (discount basis, 1934+). Levels differ by ~20-40bp (BACKTEST.md)
+# but the 12-month DIFFERENCE cancels it — same boolean in 527 of 528 months
+# since 1982. Do NOT re-pick the series or the threshold against a live reading:
+# the cuts were chosen with the data in view and n=16 overfit risk is real. A
+# proposed change must be re-scored with the reconstruction script first.
 CORROBORATION_STATS = {
     "high_flags": {"label": ">=4 flags (late-cycle: 1967/1998/2000/2007)",
                    "bears": 4, "n": 4, "prob_note": "4/4 became bears — est. 65-85% (small n)"},
@@ -102,28 +105,48 @@ def late_cycle_flags(bundle, cur_excess) -> dict:
     known = {k: v for k, v in flags.items() if v is not None}
     n_true = sum(1 for v in known.values() if v)
 
-    # Each chip carries its own READING and the bar it is judged against. A
-    # bare struck-through label reads as a fault; "+0.10pp of +0.50" reads as
-    # a measurement (2026-09-21: the Sept hike landed and the chip stayed
-    # dark, because two cuts sit inside the same 12-month window).
-    def _d(v, fmt: str, bar: str) -> str | None:
-        return None if v is None else f"{fmt.format(v)} · {bar}"
+    # Each chip carries its own READING, the bar, and the verdict. A bare
+    # struck-through label reads as a fault; "+0.10 of +0.50 · not firing"
+    # reads as a measurement (2026-09-21: the Sept hike landed and the chip
+    # stayed dark, because two cuts sit inside the same 12-month window).
+    # `short` is rendered ON the chip — a hover does not exist on a phone —
+    # and both forms state the value to enough precision that a reading and
+    # its bar can never render identically on opposite sides of the line.
+    def _d(key: str, v, fmt: str, bar: str) -> str | None:
+        if v is None:
+            return None
+        verdict = "firing" if flags[key] else "not firing"
+        return f"{fmt.format(v)} · {bar} · {verdict}"
+
+    def _s(v, fmt: str) -> str | None:
+        return None if v is None else fmt.format(v)
 
     details = {
-        "flat_curve": _d(curve, "10y−3m {:+.2f}pp", "fires below +1.00pp"),
+        "flat_curve": _d("flat_curve", curve, "10y−3m {:+.3f}pp",
+                         "fires below +1.00pp"),
         "fed_tightened": _d(
-            d_rate, "3-month bill {:+.2f}pp over 12 months",
+            "fed_tightened", d_rate, "3-month rate {:+.3f}pp over 12 months",
             "fires above +0.50pp — a tightening CYCLE, not the last meeting"),
-        "late_expansion": _d(mo_since, "{:.0f} months since the last recession",
+        "late_expansion": _d("late_expansion", mo_since,
+                             "{:.0f} months since the last recession",
                              "fires at 48+"),
-        "low_unemployment": _d(un, "unemployment {:.1f}%", "fires below 5.0%"),
-        "extended_market": _d(spx3y, "S&P {:+.0f}% over 3 years",
+        "low_unemployment": _d("low_unemployment", un, "unemployment {:.1f}%",
+                               "fires below 5.0%"),
+        "extended_market": _d("extended_market", spx3y, "S&P {:+.1f}% over 3 years",
                               "fires above +50%"),
-        "high_excess": _d(cur_excess, "margin excess {:+.1f}pp",
+        "high_excess": _d("high_excess", cur_excess, "margin excess {:+.1f}pp",
                           "fires at +25pp or more"),
     }
+    short = {
+        "flat_curve": _s(curve, "{:+.2f}/<1.00"),
+        "fed_tightened": _s(d_rate, "{:+.2f}/>+0.50"),
+        "late_expansion": _s(mo_since, "{:.0f}/48+"),
+        "low_unemployment": _s(un, "{:.1f}%/<5.0"),
+        "extended_market": _s(spx3y, "{:+.0f}%/>+50"),
+        "high_excess": _s(cur_excess, "{:+.1f}/≥+25"),
+    }
     return {"flags": flags, "n_true": n_true, "n_known": len(known),
-            "details": details,
+            "details": details, "short": short,
             "values": {"curve_10y3m": curve and round(curve, 2),
                        "d_rate_12m": d_rate and round(d_rate, 2),
                        "months_since_recession": mo_since,

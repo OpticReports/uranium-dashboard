@@ -160,9 +160,9 @@ blowoffs are late-cycle speculation** (flat curve, low unemployment, extended
 market, long expansion — 1967/1998/2000/2007). Same normalization-vs-
 deterioration logic as the labor V/U conditioning.
 
-Six pre-specified late-cycle flags (curve <1pp · tightening cycle, 3m rate
->+0.5pp over 12m ·
-expansion ≥48m · unemployment <5% · S&P 3y >+50% · excess ≥+25pp):
+Six pre-specified late-cycle flags (curve <1pp · tightening cycle, 3m rate up
+>0.5pp over 12m · expansion ≥48m · unemployment <5% · S&P 3y >+50% · excess
+≥+25pp):
 
 - **≥4 flags: 4/4 became bears** (1967, 1998, 2000, 2007)
 - **≤2 flags: 4/12 became bears** (~the unconditional blowoff rate)
@@ -172,6 +172,9 @@ expansion ≥48m · unemployment <5% · S&P 3y >+50% · excess ≥+25pp):
   (Laplace ~83%, wide small-n band), not certainty. Thresholds were chosen
   with the data in view — n=16 overfit risk is real even though each flag is
   macro-logical.
+- Reproducible since 2026-09-21: `studies/corroboration_episode_reconstruction.py`
+  rebuilds the 18-episode list and re-derives 4/4, 4/12 and 8/16 from the
+  shipped splice, so a proposed flag change can be re-scored before it ships.
 
 **2026-06 reading: 5 of 6 flags** (curve +0.81 · 74m expansion · unemployment
 4.2% · S&P 3y +69% · excess +28pp; only missing fed_tightened — the Fed eased
@@ -180,15 +183,19 @@ expansion ≥48m · unemployment <5% · S&P 3y >+50% · excess ≥+25pp):
 
 ## Flag definition audit (2026-09-21)
 
-Trigger: two business days after a live 25bp hike (2026-09-16), the panel's
-"Fed tightened" chip rendered dark and struck through. **The flag was not
-broken.** It tests a 12-month tightening CYCLE, and two cuts (2025-10-30,
-2025-12-11) sit inside the same window, so the 3-month bill is only **+0.10pp**
-over 12 months against a **+0.50pp** bar.
+Trigger: three business days after a live 25bp hike (announced 2026-09-16,
+effective 09-17), the panel's "Fed tightened" chip rendered dark and struck
+through. **The flag was not broken.** It tests a 12-month tightening CYCLE, and
+two cuts (effective 2025-10-30 and 2025-12-11) sit inside the same window, so
+the 3-month rate is only **+0.10pp** over 12 months against a **+0.50pp** bar.
 
-Before touching the definition, the series choice was tested —
-`studies/fed_tightened_series_audit.py` (keyless FRED, re-runnable). Question:
-would reading the FED FUNDS rate instead of the 3-month bill fire earlier?
+Two tests ran before anything was touched. Both say keep the definition.
+
+### 1. Series choice — timing
+
+`studies/fed_tightened_series_audit.py` (keyless FRED, re-runnable). Would
+reading the FED FUNDS rate instead of the 3-month bill have fired earlier?
+**Lead = bill month − fed funds month; negative means the BILL fires first.**
 
 | fed funds fires | 3m bill fires | lead (mo) |
 |---|---|---|
@@ -197,8 +204,8 @@ would reading the FED FUNDS rate instead of the 3-month bill fire earlier?
 | 1959-02 | 1959-02 | +0 |
 | 1962-01 | 1962-07 | +6 |
 | 1963-05 | 1963-09 | +4 |
-| 1964-06 | 1965-12 | +18 |
-| 1966-01 | — | |
+| 1964-06 | — | |
+| 1966-01 | 1965-12 | −1 |
 | 1968-03 | 1968-03 | +0 |
 | — | 1969-06 | |
 | 1972-12 | 1972-11 | −1 |
@@ -212,37 +219,94 @@ would reading the FED FUNDS rate instead of the 3-month bill fire earlier?
 | 2017-04 | 2017-04 | +0 |
 | 2022-05 | 2022-04 | −1 |
 
-19 episodes since 1955, 17 paired. **Median lead +0 months** (mean +0.9; bill
-tied-or-earlier in 13 of 17). Since 1972 the two fire **within one month of
-each other in 9 of 10 cycles** — 1983 (bill 4 months earlier) is the lone
-exception, and every larger gap is pre-1970, when the funds rate chopped around
-a bill that had decoupled from it. The bill also covers 1934 vs FEDFUNDS' 1954,
-and is the series the historical scoring above used. **Verdict: switching is
-predictively immaterial and costs 20 years of history — definition unchanged.**
+19 episodes since 1955, 17 paired. **Median lead −1 month**, mean −0.24, bill
+tied-or-earlier in 14 of 17, within one month in 12 of 17 full-sample and **9
+of 10 since 1972** (1983 the exception; both larger gaps are pre-1970, when the
+funds rate chopped around a bill that had decoupled from it). Robust to the
+threshold (BAR 0.25→1.00) and the episode gap (6→24 months). One trap worth
+recording: pairing episodes inside a 24-month window lets the greedy walk hand
+1964-06 the 1965-12 bill episode 18 months away and strand 1966-01 one month
+from it, which alone flips the mean's sign (+0.88 vs −0.24). The window is 12.
 
-Nor does any alternative flip the flag today (12-month change, read
-2026-09-21): 3-month bill daily **+0.10pp** · 3-month bill monthly −0.40pp ·
-fed funds effective −0.70pp · target upper bound −0.25pp. The Fed has NET EASED
-over the trailing year; the September hike is one step against two cuts.
+### 2. Series choice — scoring
 
-**Reproducibility gap (recorded, not papered over).** The 16-episode scoring
-behind "≥4 flags: 4/4 became bears" cannot be re-derived from this repo or the
-deployed series: reconstructing the peak list gives 13 threshold episodes / 11
-local peaks, with 1955, 1980 and 1998 absent and 1949 extra. That is the
-binding reason not to re-tune the flag — a redefinition could not be re-scored
-against the frozen statistic, so any "improvement" would be unfalsifiable. The
-definitions are frozen until the episode list is reconstructible.
+Timing is not what the corroboration study is about, so the flag was re-scored
+at the peaks themselves: `studies/corroboration_episode_reconstruction.py`
+rebuilds the episode list from the SHIPPED splice and YoY code, then computes
+all six flags at each peak twice — once with the bill, once with fed funds.
 
-**What changed instead (presentation only).** The label now reads "tightening
-cycle", not "Fed tightened", and every chip carries its live reading and its
-bar on hover (`details` in the `/margin/leverage` payload) — "3-month bill
-+0.10pp over 12 months · fires above +0.50pp — a tightening CYCLE, not the last
-meeting". A bare struck-through chip reads as a fault; a reading reads as a
-measurement.
+The reconstruction matches the published study: at an 18-month dedup window,
+**18 episodes 1949-2026**, containing **all 16 scoreable peaks** (1949 falls
+outside the 1951+ drawdown ground truth, 2026-05 has no outcome yet). And the
+frozen statistics re-derive exactly:
 
-**Forward note:** base effects alone carry the 12-month change to roughly
-+0.45pp by year end — just under the bar. One more 25bp hike takes it to
-~+0.65–0.70pp and the flag flips TRUE, putting the panel at 5 of 6.
+| flag count at peak | bill (shipped) | fed funds |
+|---|---|---|
+| ≥4 flags | **4/4 bears** | **4/4 bears** |
+| ≤2 flags | **4/12 bears** | **4/12 bears** |
+| base rate | 8/16 | 8/16 |
+
+**Identical.** The only peak that moves at all is 1955-01, where the fed funds
+series has no 12-month base (FEDFUNDS starts 1954-07) so the flag reads
+unknown and the denominator drops to 5 — the count itself is unchanged. The
+two series disagree in 62 of 854 months since 1955 (7.3%), and in 7 of the 16
+episode YEARS at least one month disagrees, but **at the peak months that
+actually score, never**.
+
+**Verdict: the series choice is immaterial to both the timing and the scoring.
+Definition unchanged.**
+
+### Series provenance (the live flag reads a different series than the study)
+
+The live flag reads **DGS3MO** (constant maturity, starts **1981-09**); the
+historical work runs on **TB3MS** (discount basis, starts 1934-01), the only
+monthly bill series reaching the 1950s. These are NOT interchangeable in
+levels — BACKTEST.md records the ~20-40bp convention gap that erased 1989's
+inversion — but the 12-month DIFFERENCE cancels it: the two give the **same
+flag boolean in 527 of 528 months since 1982**, the lone exception 2019-05
+(+0.504 vs +0.490) straddling the bar. So splicing TB3MS behind DGS3MO for
+history is sound; claiming the live series has "1934 coverage" is not — against
+FEDFUNDS (1954-07) the LIVE series is 27 years shorter, not 20 years longer.
+
+### Nothing flips it today
+
+12-month change, each stamped with its own as-of date:
+
+| series | as-of | 12m change |
+|---|---|---|
+| DGS3MO 3m CMT (the live flag) | 2026-09-17 | **+0.10pp** |
+| DTB3 3m bill, discount | 2026-09-17 | +0.09pp |
+| DFF fed funds effective | 2026-09-17 | −0.45pp |
+| DFEDTARU / DFEDTARL target | 2026-09-20 | −0.25pp |
+| TB3MS 3m bill, monthly avg | Aug-2026 | −0.40pp |
+| FEDFUNDS, monthly avg | Aug-2026 | −0.70pp |
+
+Seven series, maximum +0.10pp against a +0.50pp bar. The two monthly rows are
+*pre-hike averages* — like-for-like, DGS3MO's Aug-2026 average is −0.43pp
+against TB3MS's −0.40pp, so the daily/monthly gap is the hike, not the series.
+The Fed has NET EASED over the trailing year; September is one step against two
+cuts.
+
+### What changed instead (presentation only)
+
+The label now reads "tightening cycle", not "Fed tightened", and every chip
+carries its live reading, its bar and its verdict (`details` in the
+`/margin/leverage` payload) rendered ON the chip, not only in a hover — a bare
+struck-through label reads as a fault, "+0.10 of +0.50 · not firing" reads as a
+measurement, and a hover does not exist on a phone.
+
+Standing limit, unchanged and still the reason not to re-tune: the thresholds
+were chosen with the history in view, n=16, so the flag set is frozen. What the
+reconstruction adds is that a proposed change can now be RE-SCORED against the
+frozen statistics before it ships — it is falsifiable, which it was not while
+the episode list lived only in a working session.
+
+**Forward note:** holding the bill flat at 4.12, base effects alone put the
+12-month change at +0.23pp end-October, +0.31pp end-November and **+0.45pp at
+year end** — just under the bar. A 25bp hike takes those to +0.48 / **+0.56** /
+**+0.70**, so an October hike flips the flag in November, before year end. On
+today's 4-of-6 reading (margin excess has fallen back to +18.2pp from June's
++28pp, so `high_excess` is dark) that is a fifth flag and the bear cluster.
 
 ## Limits (stated on the tiles)
 

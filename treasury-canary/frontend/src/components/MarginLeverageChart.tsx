@@ -661,8 +661,11 @@ function StateBanner({ data }: { data: MarginLeverage }) {
 
 // "Fed tightened" read as "did they hike lately?" — it tests a 12-month
 // tightening CYCLE, which is why the chip stayed dark through the Sept-2026
-// hike (two cuts sat inside the same window). The label now says what it tests
-// and every chip carries its reading in a hover.
+// hike (two cuts sat inside the same window). Every chip now renders its
+// READING against its bar (backend `short`), because a struck-through label on
+// its own reads as a broken indicator and a hover reaches neither a phone nor
+// a keyboard. Strikethrough is gone for the same reason; dark vs lit carries
+// the state. Full reading + verdict stays in the title and for screen readers.
 const FLAG_LABELS: Record<string, string> = {
   flat_curve: "flat curve",
   fed_tightened: "tightening cycle",
@@ -715,14 +718,18 @@ function CorroborationLine({
                         borderColor: `${countColor}80`,
                         backgroundColor: `${countColor}14`,
                       }
-                    : {
-                        color: "#64748b",
-                        borderColor: "#33415580",
-                        textDecoration: "line-through",
-                      }
+                    : { color: "#94a3b8", borderColor: "#33415580" }
                 }
               >
                 {FLAG_LABELS[k] ?? k}
+                {c.short?.[k] && (
+                  <span
+                    className="ml-1 font-mono tabular-nums"
+                    style={{ opacity: v ? 0.85 : 0.65 }}
+                  >
+                    {c.short[k]}
+                  </span>
+                )}
                 {c.details?.[k] && (
                   <span className="sr-only"> — {c.details[k]}</span>
                 )}

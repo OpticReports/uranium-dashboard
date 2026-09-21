@@ -249,18 +249,31 @@ def test_late_cycle_flags_live_computation():
     c2 = late_cycle_flags({"recession": ([], [])}, None)
     assert c2["n_known"] == 0
 
-    # GATE (2026-09-21): a dark chip must carry its READING and its BAR, or it
-    # reads as a broken indicator — which is exactly how the struck-through
-    # "Fed tightened" chip was read two days after a live hike. Every known flag
-    # gets a detail string; fed_tightened's must name the 12-month window so the
-    # chip cannot be mistaken for "the Fed has not hiked".
-    d = c["details"]
-    assert set(d) == set(f)
-    assert all(d[k] for k in f if f[k] is not None)
-    assert "+0.40pp over 12 months" in d["fed_tightened"]
-    assert "+0.50pp" in d["fed_tightened"] and "CYCLE" in d["fed_tightened"]
-    assert "3-month bill" in d["fed_tightened"]
-    assert all(v is None for k, v in c2["details"].items())
+    # GATE (2026-09-21): a dark chip must carry its READING, its BAR and its
+    # VERDICT, or it reads as a broken indicator — which is exactly how the
+    # struck-through "Fed tightened" chip was read two days after a live hike.
+    # Each phrase pins DIRECTION and UNITS (a flipped "fires below" would slip
+    # past a bare threshold check), and the verdict suffix is asserted against
+    # the boolean so a string can never contradict its own chip.
+    d, sh = c["details"], c["short"]
+    bars = {
+        "flat_curve": "fires below +1.00pp",
+        "fed_tightened": "fires above +0.50pp",
+        "late_expansion": "fires at 48+",
+        "low_unemployment": "fires below 5.0%",
+        "extended_market": "fires above +50%",
+        "high_excess": "fires at +25pp or more",
+    }
+    assert set(d) == set(f) and set(sh) == set(f)
+    for k, phrase in bars.items():
+        assert phrase in d[k], (k, d[k])
+        assert d[k].endswith("firing")
+        assert d[k].endswith("· not firing") is not f[k]
+        assert sh[k], k
+    assert "3-month rate +0.400pp over 12 months" in d["fed_tightened"]
+    assert "CYCLE" in d["fed_tightened"] and "+0.40/>+0.50" == sh["fed_tightened"]
+    assert all(v is None for v in c2["details"].values())
+    assert all(v is None for v in c2["short"].values())
 
 
 # ---------------------------------------------------------------------------
