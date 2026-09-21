@@ -24,6 +24,8 @@ data legs pulled keylessly:
   - FINRA margin statistics (1997+) via the app's own keyless fetcher.
 
 Re-run:  python3 studies/corroboration_episode_reconstruction.py
+Data:    studies/data_fedflag/ is the committed 2026-09-21 vintage; FINRA and
+         the S&P leg are fetched live, so peaks after 2026-05 can move.
 Writes nothing. Findings recorded in MARGIN_DEBT.md, "Flag definition audit".
 """
 from __future__ import annotations

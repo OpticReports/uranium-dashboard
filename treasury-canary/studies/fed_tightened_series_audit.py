@@ -20,7 +20,9 @@ series that reaches the 1950s. The two are not interchangeable in LEVELS
 2019-05, +0.504 vs +0.490, straddles the bar).
 
 Re-run:  python3 studies/fed_tightened_series_audit.py [datadir]
-Data:    keyless FRED CSV (TB3MS, FEDFUNDS, DFEDTARU, DGS3MO), cached in datadir.
+Data:    keyless FRED CSV. studies/data_fedflag/ holds the COMMITTED 2026-09-21
+         vintage the writeup quotes — delete a file there to re-pull it, or
+         pass another datadir to leave the frozen copies alone.
 Written up in MARGIN_DEBT.md, "Flag definition audit (2026-09-21)".
 """
 import csv
