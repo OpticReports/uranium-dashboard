@@ -563,9 +563,33 @@ services:
       # exposure_over_cap and names the base rather than blaming KELLY_M.
       # Loud is not impossible. Treat a base change as a ramp step.
       # Change KELLY_M one step at a time, never alongside SIZING_BASE_USD.
-      # Current dashboard values (2026-09-16, Hyperliquid live phase):
-      # KELLY_M 0.135, SIZING_BASE_USD 50000, MAX_NOTIONAL_USD 20000,
+      # Current dashboard values (2026-09-21, Hyperliquid live phase):
+      # KELLY_M 0.20, SIZING_BASE_USD 50000, MAX_NOTIONAL_USD 20000,
       # MAX_ACCOUNT_LEV 2.0, DD_HALT_PCT 0.35 (% of sizing base).
+      #
+      # KELLY_M REACHED THE CEILING 2026-09-21 (Casey's call). 0.135 -> 0.20
+      # is step B of the v3 staircase and the last rung that exists: C and D
+      # are retired as outside the Kelly envelope. Pullback entry $11,250,
+      # trend $3,750, gross $15,000 = 15.0% of a ~$99.9k account, net $7,500
+      # = 7.5% when the legs oppose. KELLY_M_CAP is 0.20, so this sits ON the
+      # cap, not over it - kelly_over_cap does not fire, and there is no
+      # further step without a repo change plus review. Nothing else moved:
+      # raising SIZING_BASE_USD instead would reach the retired rungs, and
+      # the standing rule is one lever at a time.
+      #
+      # TAKEN WITH THE RAMP'S P&L GATE NOT MET, recorded rather than hidden:
+      # advance to B wants 8 cumulative trades AND cumulative ramp P&L >= 0.
+      # Trade count passed (11 non-drill closing fills); P&L did not, at
+      # -$12.11 gross and -$22.03 net of $9.92 in fees, still climbing out of
+      # the 09-10 halt sequence (-$38.29) and the 09-18 trail (-$42.68).
+      # Casey took the step anyway with tripwires instead of a gate:
+      # revert to 0.135 on realized P&L <= -$500 since 09-21, any new halt,
+      # a cap_clamp RED, equity <= $97,900, or exposure/kelly_over_cap.
+      # Those tripwires do the bounding here because the DRAWDOWN halt
+      # ($17,500) is LARGER than the whole gross book ($15,000) - a total
+      # loss of every open position still could not trip it. Lowering
+      # DD_HALT_PCT to 0.25 would put the halt inside the book; not done,
+      # because that is a separate decision from the sizing step.
       #
       # THE 2x SIZE STEP (2026-09-16, Casey's call): base 25000 -> 50000 and
       # cap 10000 -> 20000, TOGETHER. Net exposure 2.53% -> 5.07% of the
