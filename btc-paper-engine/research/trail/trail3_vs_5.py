@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt                          # noqa: E402
 spath, out = sys.argv[1], sys.argv[2]
 d = json.load(open(spath))
 g = [float(x) for x in d["grid"]]
-A, B, M, S4, N = d["A"], d["B"], d["mod"], d["s4_mod"], d["n_mod"]
+A, B = d["A"], d["B"]
 
 BLUE, ORANGE, AQUA = "#2a78d6", "#eb6834", "#1baf7a"
 RED, INK, SEC = "#e34948", "#0b0b0b", "#52514e"
@@ -52,42 +52,43 @@ for i, col, lab in ((i5, AQUA, "5.0 incumbent"), (i3, RED, "3.0 proposed")):
 a.annotate(f"holdout MAR {B[i3]:.3f}", xy=(g[i3], B[i3]),
            xytext=(g[i3] - 0.75, B[i3] + 0.62), color=RED, fontsize=9,
            fontweight="bold", arrowprops=dict(arrowstyle="->", color=RED, lw=1.2))
-a.annotate(f"holdout MAR {B[i5]:.3f}\nstill the best cell", xy=(g[i5], B[i5]),
+a.annotate(f"holdout MAR {B[i5]:.3f}\nbest of 21, by 0.35 sd", xy=(g[i5], B[i5]),
            xytext=(g[i5] + 0.35, B[i5] + 0.72), color=AQUA, fontsize=9,
            fontweight="bold", arrowprops=dict(arrowstyle="->", color=AQUA, lw=1.2))
 a.set_xlabel("trail_atr  (chandelier multiple)", color=SEC, fontsize=10)
 a.set_ylabel("S6 blend MAR", color=SEC, fontsize=10)
 a.set_ylim(-0.15, 2.45)
-a.set_title(f"The two curves barely relate: Spearman rho = {d['rho']:+.3f}",
+a.set_title(f"The two curves barely relate: rho = {d['rho']:+.3f}  (p = 0.94)",
             color=INK, fontsize=12, fontweight="bold", loc="left")
 a.legend(frameon=False, fontsize=8.6, labelcolor=SEC, loc="upper left")
 
-# --- B: what tightening actually buys ---------------------------------------
-lab = ["S6 MAR\nin-sample", "S6 MAR\nholdout", "S6 MAR\nfull 2022+",
-       "S4 leg MAR\nfull 2022+"]
-v3 = [A[i3], B[i3], M[i3], S4[i3]]
-v5 = [A[i5], B[i5], M[i5], S4[i5]]
-x = range(len(lab))
-b.bar([i - 0.19 for i in x], v3, 0.36, color=RED, zorder=3, label="3.0x")
-b.bar([i + 0.19 for i in x], v5, 0.36, color=AQUA, zorder=3, label="5.0x")
-b.axhline(0, color=AX, lw=1.2, zorder=4)
-for i in x:
-    for off, v in ((-0.19, v3[i]), (0.19, v5[i])):
-        b.text(i + off, v + (0.05 if v >= 0 else -0.14), f"{v:.2f}",
-               ha="center", color=INK, fontsize=8.8, fontweight="bold")
-b.set_xticks(list(x))
-b.set_xticklabels(lab, fontsize=8.2, color=SEC)
-b.set_ylabel("MAR", color=SEC, fontsize=10)
-b.set_ylim(-0.35, 2.05)
-b.set_title("3.0 loses on every window tested", color=INK, fontsize=12,
-            fontweight="bold", loc="left")
-b.legend(frameon=False, fontsize=9, labelcolor=SEC, loc="upper right")
-b.text(1.5, 1.62, f"and it trades {N[i3]} times vs {N[i5]}\non 2022+ — "
-       f"{N[i3]/N[i5]:.1f}x the fee drag\nfor a worse result",
-       color=ORANGE, fontsize=9, ha="center", fontweight="bold")
+# --- B: the ONLY window that is out of sample ------------------------------
+order = sorted(range(len(g)), key=lambda i: -B[i])
+xs = list(range(len(g)))
+cols = [AQUA if g[i] == 5.0 else (RED if g[i] == 3.0 else MUTED) for i in order]
+b.bar(xs, [B[i] for i in order], 0.72, color=cols, zorder=3)
+b.axhline(0, color=AX, lw=1.1, zorder=4)
+for pos, i in enumerate(order[:2]):
+    b.text(pos, B[i] + 0.022, f"{g[i]:.2f}\n{B[i]:.3f}", ha="center",
+           color=INK, fontsize=9.2, fontweight="bold")
+b.set_xticks(xs)
+b.set_xticklabels([f"{g[i]:.2f}" for i in order], fontsize=6.4, color=SEC,
+                  rotation=90)
+b.set_ylabel("S6 blend MAR, HOLDOUT only", color=SEC, fontsize=10)
+b.set_ylim(-0.08, 0.99)
+b.set_title("On the holdout they are 1st and 2nd, 0.35 sd apart",
+            color=INK, fontsize=12, fontweight="bold", loc="left")
+b.text(4.6, 0.86, "21 cells ranked on the HOLDOUT\n"
+       f"gap {d['gap']:+.3f} MAR = {d['gap_sd']:.2f} grid sd\n"
+       "a shared-draw bootstrap puts\nP(3.0 >= 5.0) at 0.35",
+       color=SEC, fontsize=9, va="top")
+b.text(11.2, 0.60, "IN-SAMPLE the order inverts:\n"
+       f"5.0 ranks {d['rkA5']}/21, 3.0 ranks {d['rkA3']}/21.\n"
+       "The big gaps live in the window\n5.0 was fitted on.",
+       color=ORANGE, fontsize=9, va="top", fontweight="bold")
 
-fig.suptitle("S4 chandelier trail — tightening 5.0x to 3.0x, on the "
-             "pre-registered 21-cell grid", color=INK, fontsize=13,
+fig.suptitle("S4 chandelier trail, 3.0x vs 5.0x — INDETERMINATE, as the "
+             "registered study already concluded", color=INK, fontsize=13,
              fontweight="bold", x=0.008, ha="left", y=0.985)
 fig.tight_layout(rect=(0, 0, 1, 0.94))
 fig.savefig(out, dpi=150, facecolor=SURF)

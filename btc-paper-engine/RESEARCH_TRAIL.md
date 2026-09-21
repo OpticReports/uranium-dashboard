@@ -257,3 +257,80 @@ saw it (13 of 21 halted cells, not 16 — caught on my own re-count).
    the parameter is not dead in general (values ≤50 move MAR by 0.25), and it
    does not apply to S4 at all: `_process_donchian` never reads it, so the
    trend leg has no time bound by construction.
+
+---
+
+## ADDENDUM 2026-09-21 — re-run at Casey's request, and what it cost
+
+Casey asked to tighten `trail_atr` to 3.0 and see the backtest. **No change
+was made.** The registered 21-cell grid was re-run through the committed
+harness on `backend/tests/fixtures/bars_4h_btcusd.csv`. A counter-agent then
+attacked the result and **refuted two of the claims the first write-up made**;
+both are corrected here rather than quietly fixed.
+
+### The verdict is unchanged: INDETERMINATE
+
+| window | 3.00 | 5.00 | gap |
+|---|---|---|---|
+| in-sample `modern_A` (5.0 was SELECTED here) | 1.106 | 1.635 | +0.528 = 1.24 sd |
+| **holdout `modern_B` (the only OOS window)** | **0.622** | **0.697** | **+0.075 = 0.35 sd** |
+| `modern` (~54% in-sample) | 0.827 | 1.153 | +0.326 |
+
+On the holdout 5.00 ranks **1 of 21** and 3.00 ranks **2 of 21**, 0.35 grid
+standard deviations apart. A shared-draw block bootstrap of
+`MAR(5.00) − MAR(3.00)` puts **P(3.00 ≥ 5.00) = 0.35** (counter-agent run,
+2,000 draws, 30-day blocks). In-sample the order inverts: 5.00 ranks 8/21 and
+3.00 ranks 18/21 — **the large gaps all live in the window 5.0 was fitted
+on.** Spearman ρ between the two rankings is **−0.017 (p = 0.94)**, reproducing
+this study's original −0.064.
+
+**The defensible statement is "this data cannot tell", not "3.0 measurably
+loses."**
+
+### Two claims the counter-agent refuted
+
+1. **"~2× the fee drag" was WRONG.** Trade count is 1.97× (252 vs 128) but
+   fees are **1.40× ($38,367 vs $27,433)**, and fees explain only **9.2%** of
+   the $119,414 net-P&L gap. At zero fees 3.00 still makes $35.9k against
+   5.00's $144.4k. The first write-up named the wrong cause for 91% of the
+   effect. Independently recomputed and confirmed.
+2. **The `dd_halt` confound runs the OPPOSITE way to the one anticipated.**
+   3.00 halts on `modern` and `modern_B`; 5.00 never halts. With the halt
+   disabled 3.00 gets *worse* (modern 0.827 → 0.792; holdout 0.622 → 0.551)
+   and the gaps widen. The kill switch was flattering 3.00 by stopping a
+   bleeding book. Direction survives; the confound does not rescue 3.0.
+
+Also noted: a 50bp exit haircut — inside btc-executor's own 0.5% stop-limit
+band — moves the grid argmax to 6.50 and drops 5.00 to rank 5 of 21. The
+incumbent's argmax status is not robust to a realistic execution assumption.
+
+### VINTAGE BREAK — every S6 number in this document is now stale
+
+Today's fee-wiring fix (`132e0a6`) made pullback books charge
+`2 × taker_fee_bps` instead of a hardcoded 6.0. `sweep.py:31` imports
+`RESEARCH_TRADE`, whose `taker_fee_bps` is 6.0, so the S3 leg now pays a
+**12.00 bps round trip where it previously paid 6.00**, and every blend number
+moves by roughly **−20%**.
+
+- This document's `hl`/5.00 row certified bit-exact agreement with
+  `bench_blend.py` ("delta exactly 0.0 on every field": CAGR 28.85895828867131,
+  MAR 1.0207857060772934, 244 curve points). Post-fix the same cell reads
+  **CAGR 23.936, MAR 0.799, 237 points**. Running it against `132e0a6^`
+  reproduces the certified maxDD `−28.27131896230346` bit-for-bit, which
+  proves the bars are the registered ones and the fee wiring is the mover.
+- **The harness-fidelity gate in this study therefore no longer holds**, and
+  the tables above must not be quoted alongside the 2026-09-05 tables. The
+  fixture also ends 2026-07-25, short of this document's 2026-08.
+- Ranking is stable across the fix (pre-fix gaps: modern +0.374, A +0.552,
+  B +0.065), so the conclusion does not depend on the vintage.
+
+### What this re-run spent — PROTOCOL §9
+
+This study already recorded the single-touch S4 exit holdout as **burned** and
+the §8 adoption path for this parameter family as **CLOSED**, and it says in
+terms: *"Do not re-run this sweep to 'optimize' the trail."* This re-run
+touched that holdout **21 more times**, plus **21** in the counter-agent's
+halt-off run — **42 further configs**. Logged as a second §7/§9 violation,
+disclosed rather than absorbed. It was run because the operator asked for the
+evidence; the evidence is that there is none, and the cost of establishing
+that again is recorded above.
