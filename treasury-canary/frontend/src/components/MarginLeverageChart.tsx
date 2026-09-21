@@ -659,9 +659,13 @@ function StateBanner({ data }: { data: MarginLeverage }) {
   );
 }
 
+// "Fed tightened" read as "did they hike lately?" — it tests a 12-month
+// tightening CYCLE, which is why the chip stayed dark through the Sept-2026
+// hike (two cuts sat inside the same window). The label now says what it tests
+// and every chip carries its reading in a hover.
 const FLAG_LABELS: Record<string, string> = {
   flat_curve: "flat curve",
-  fed_tightened: "Fed tightened",
+  fed_tightened: "tightening cycle",
   late_expansion: "late expansion",
   low_unemployment: "low unemployment",
   extended_market: "extended market",
@@ -702,7 +706,8 @@ function CorroborationLine({
             v === null ? null : (
               <span
                 key={k}
-                className="rounded-full border px-1.5 py-px text-[9px]"
+                title={c.details?.[k] ?? undefined}
+                className="cursor-help rounded-full border px-1.5 py-px text-[9px]"
                 style={
                   v
                     ? {
@@ -718,6 +723,9 @@ function CorroborationLine({
                 }
               >
                 {FLAG_LABELS[k] ?? k}
+                {c.details?.[k] && (
+                  <span className="sr-only"> — {c.details[k]}</span>
+                )}
               </span>
             ),
           )}

@@ -249,6 +249,19 @@ def test_late_cycle_flags_live_computation():
     c2 = late_cycle_flags({"recession": ([], [])}, None)
     assert c2["n_known"] == 0
 
+    # GATE (2026-09-21): a dark chip must carry its READING and its BAR, or it
+    # reads as a broken indicator — which is exactly how the struck-through
+    # "Fed tightened" chip was read two days after a live hike. Every known flag
+    # gets a detail string; fed_tightened's must name the 12-month window so the
+    # chip cannot be mistaken for "the Fed has not hiked".
+    d = c["details"]
+    assert set(d) == set(f)
+    assert all(d[k] for k in f if f[k] is not None)
+    assert "+0.40pp over 12 months" in d["fed_tightened"]
+    assert "+0.50pp" in d["fed_tightened"] and "CYCLE" in d["fed_tightened"]
+    assert "3-month bill" in d["fed_tightened"]
+    assert all(v is None for k, v in c2["details"].items())
+
 
 # ---------------------------------------------------------------------------
 # POST_BLOWOFF path-aware state (rule frozen 2026-08-15, study_post_blowoff.py)

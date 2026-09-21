@@ -458,6 +458,9 @@ export interface LeverageCorroboration {
   flags: Record<string, boolean | null>;
   n_true: number;
   n_known: number;
+  /** per-flag "READING · the bar it is judged against" — a struck-through chip
+   *  on its own reads as a fault; the reading makes it a measurement. */
+  details?: Record<string, string | null>;
   values: Record<string, number | null>;
   stats: Record<string, { label: string; bears: number; n: number; prob_note: string }>;
   reading: string;

@@ -31,6 +31,21 @@ THRESHOLDS = {"blowoff_excess": 25.0, "elevated_excess": 15.0,
 # Blowoff corroboration (MARGIN_DEBT.md study): six late-cycle flags separate
 # real blowoffs from false positives. Historical outcomes are FROZEN study
 # constants; the flags themselves compute LIVE so the count moves with data.
+#
+# SERIES CHOICE, tested 2026-09-21 (studies/fed_tightened_series_audit.py;
+# written up in MARGIN_DEBT.md "Flag definition audit"): fed_tightened reads the
+# 3-month BILL, not the fed funds rate, and for this test the two are
+# interchangeable. Across 19 crossing episodes since 1955 their 12-month changes
+# cross +0.50pp a MEDIAN OF 0 MONTHS APART (mean +0.9; bill tied-or-earlier
+# 13/17 paired), and since 1972 they fire within one month of each other in 9 of
+# 10 cycles — 1983 (bill 4 months earlier) is the lone exception; all the larger
+# gaps are pre-1970, when the funds rate was choppy around a decoupled bill. The
+# bill wins on coverage (1934 vs 1954) and is what the historical scoring used,
+# so it stays. No alternative flips the flag today either: bill +0.10pp daily,
+# fed funds -0.70pp, target -0.25pp. Do NOT re-pick the series or the threshold
+# against a live reading: the study's own limits say the cuts were chosen with
+# the data in view and n=16 carries real overfit risk, and its per-episode
+# scoring is not reproducible from this repo.
 CORROBORATION_STATS = {
     "high_flags": {"label": ">=4 flags (late-cycle: 1967/1998/2000/2007)",
                    "bears": 4, "n": 4, "prob_note": "4/4 became bears — est. 65-85% (small n)"},
@@ -86,7 +101,29 @@ def late_cycle_flags(bundle, cur_excess) -> dict:
     }
     known = {k: v for k, v in flags.items() if v is not None}
     n_true = sum(1 for v in known.values() if v)
+
+    # Each chip carries its own READING and the bar it is judged against. A
+    # bare struck-through label reads as a fault; "+0.10pp of +0.50" reads as
+    # a measurement (2026-09-21: the Sept hike landed and the chip stayed
+    # dark, because two cuts sit inside the same 12-month window).
+    def _d(v, fmt: str, bar: str) -> str | None:
+        return None if v is None else f"{fmt.format(v)} · {bar}"
+
+    details = {
+        "flat_curve": _d(curve, "10y−3m {:+.2f}pp", "fires below +1.00pp"),
+        "fed_tightened": _d(
+            d_rate, "3-month bill {:+.2f}pp over 12 months",
+            "fires above +0.50pp — a tightening CYCLE, not the last meeting"),
+        "late_expansion": _d(mo_since, "{:.0f} months since the last recession",
+                             "fires at 48+"),
+        "low_unemployment": _d(un, "unemployment {:.1f}%", "fires below 5.0%"),
+        "extended_market": _d(spx3y, "S&P {:+.0f}% over 3 years",
+                              "fires above +50%"),
+        "high_excess": _d(cur_excess, "margin excess {:+.1f}pp",
+                          "fires at +25pp or more"),
+    }
     return {"flags": flags, "n_true": n_true, "n_known": len(known),
+            "details": details,
             "values": {"curve_10y3m": curve and round(curve, 2),
                        "d_rate_12m": d_rate and round(d_rate, 2),
                        "months_since_recession": mo_since,
