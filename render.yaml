@@ -129,6 +129,23 @@ services:
         sync: false            # optional third feed
       - key: EXEC_TOKEN
         sync: false            # btc-executor /status read secret (edge-monitor S5 feed; without it the feed reports BLIND, never crashes)
+      # WRITE AUTH for this app's own mutating routes (2026-09-21). Until
+      # this existed, src/barbell/web/app.py contained no auth construct of
+      # any kind and POST /api/promote - "this changes the live book's
+      # targets" - answered the public internet on the onrender.com origin.
+      # The module docstring says it is "served behind the optic.capital gate
+      # hub", and it is, but the origin was never the only door and the gate
+      # was doing all the work unknowingly. The typed-label confirmation was
+      # no defence either: GET /api/versions serves the label unauthenticated.
+      # UNSET MEANS WRITE ROUTES RETURN 503, not open - the opposite of
+      # btc-executor's EXEC_TOKEN, on purpose. That service refuses to run
+      # rather than leave a live position unmanaged, so fail-open is the
+      # lesser evil there; nothing here holds a position, so an unconfigured
+      # token must mean the promote button is OFF.
+      # To use the UI, open any page once as ?token=<value>; it is kept in
+      # sessionStorage and stripped from the address bar.
+      - key: BARBELL_TOKEN
+        sync: false
       - key: ANTHROPIC_API_KEY
         sync: false            # chat analyst, native key (preferred if set)
       - key: OPENROUTER_API_KEY

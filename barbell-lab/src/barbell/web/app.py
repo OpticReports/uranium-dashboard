@@ -21,7 +21,9 @@ import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 
-from fastapi import FastAPI, HTTPException
+import hmac
+
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.responses import HTMLResponse, PlainTextResponse, StreamingResponse
 
 from .. import db
@@ -31,6 +33,47 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)
+
+
+WRITE_ROUTES = (
+    "/api/run/tearsheet", "/api/run/book", "/api/run/window",
+    "/api/propose", "/api/promote", "/api/chat", "/api/chat/stream",
+)
+"""Every route that MUTATES state or SPENDS something. This tuple is the
+subject of test_every_mutating_route_requires_a_token, which enumerates the
+live app and fails if a POST route exists that is not listed here — so a new
+endpoint cannot be added without an explicit decision about its auth."""
+
+
+def _tok_eq(a: str | None, b: str | None) -> bool:
+    return bool(a) and bool(b) and hmac.compare_digest(str(a), str(b))
+
+
+def require_write(x_barbell_token: str | None = Header(default=None),
+                  token: str | None = Query(default=None)) -> None:
+    """WRITE authority for this app. FAILS CLOSED, which is the whole point.
+
+    This module's own docstring says it is "served behind the optic.capital
+    gate hub" — and it is, but the Render origin answers the public internet
+    too, so the gate was never the only door. Until 2026-09-21 there was no
+    auth construct of any kind in this file and POST /api/promote ("this
+    changes the live book's targets") was reachable by anyone who found the
+    onrender.com hostname. Its typed-label confirmation is not a secret
+    either: GET /api/versions hands the label out unauthenticated.
+
+    Fail CLOSED rather than open, which is the opposite of btc-executor's
+    _auth. That service is a credentialed executor whose refusal to run would
+    leave a live position unmanaged, so opening up when unconfigured is the
+    lesser evil there. Here nothing is holding a position; an unconfigured
+    token means an unprotected promote button, so the safe default is 503.
+    """
+    secret = os.getenv("BARBELL_TOKEN", "").strip()
+    if not secret:
+        raise HTTPException(503, "BARBELL_TOKEN is not configured; "
+                                 "write routes are disabled")
+    if _tok_eq(x_barbell_token, secret) or _tok_eq(token, secret):
+        return
+    raise HTTPException(401, "bad or missing token")
 
 
 def _nightly_job() -> None:
@@ -136,6 +179,38 @@ def _md_table_to_html(md: str) -> str:
     while "**" in text:
         text = text.replace("**", "<b>", 1).replace("**", "</b>", 1)
     return text
+
+
+# Attached to _STYLE, which every page in this module injects, so one shim
+# covers every POST call site — including any added later that forgets.
+# Visit any page once as ?token=<BARBELL_TOKEN>; the token is kept in
+# sessionStorage (per-tab, cleared on close) and stripped from the address bar
+# so it does not linger in history, bookmarks or a screenshot.
+_TOKEN_JS = """
+<script>
+(function(){
+  var K='barbell_token';
+  try{
+    var u=new URL(window.location.href), t=u.searchParams.get('token');
+    if(t){ sessionStorage.setItem(K,t); u.searchParams.delete('token');
+           window.history.replaceState({}, '', u.toString()); }
+  }catch(e){}
+  var orig=window.fetch;
+  window.fetch=function(input, init){
+    init=init||{};
+    var m=(init.method||'GET').toUpperCase();
+    if(m!=='GET'&&m!=='HEAD'){
+      var tok=null; try{tok=sessionStorage.getItem(K);}catch(e){}
+      if(tok){ var h=new Headers(init.headers||{});
+               h.set('X-Barbell-Token', tok); init.headers=h; }
+    }
+    return orig.call(this, input, init);
+  };
+})();
+</script>
+"""
+
+_STYLE = _STYLE + _TOKEN_JS
 
 
 _LAB_HTML = """<!doctype html><html><head><title>Barbell Lab — workbench</title>
@@ -497,7 +572,7 @@ def _lab_con():
     return db.connect()
 
 
-@app.post("/api/run/tearsheet")
+@app.post("/api/run/tearsheet", dependencies=[Depends(require_write)])
 def api_run_tearsheet(payload: dict):
     from ..chat.agent import _tool_get_tearsheet
     con = _lab_con()
@@ -511,7 +586,7 @@ def api_run_tearsheet(payload: dict):
         con.close()
 
 
-@app.post("/api/run/book")
+@app.post("/api/run/book", dependencies=[Depends(require_write)])
 def api_run_book(payload: dict):
     from ..chat.agent import _tool_simulate_book, _tool_sweep_bot_fraction
     con = _lab_con()
@@ -537,7 +612,7 @@ def api_run_book(payload: dict):
         con.close()
 
 
-@app.post("/api/run/window")
+@app.post("/api/run/window", dependencies=[Depends(require_write)])
 def api_run_window(payload: dict):
     from ..chat.agent import _tool_window_stats
     con = _lab_con()
@@ -892,7 +967,7 @@ def api_versions():
         con.close()
 
 
-@app.post("/api/propose")
+@app.post("/api/propose", dependencies=[Depends(require_write)])
 def api_propose(payload: dict):
     """File a candidate: {"weights": {..}?, "bot_frac": f?, "rationale": str}."""
     from ..portfolio import registry
@@ -922,7 +997,7 @@ def api_compare(a: int, b: int):
         con.close()
 
 
-@app.post("/api/promote")
+@app.post("/api/promote", dependencies=[Depends(require_write)])
 def api_promote(payload: dict):
     """Promote a candidate: {"version_id": n, "confirm": "<exact label>"}.
     Typed confirmation is mandatory — this changes the live book's targets."""
@@ -1012,7 +1087,7 @@ document.querySelectorAll('.pbtn').forEach(b=>b.onclick=async()=>{{
 
 
 # ------------------------------------------------------------------ chat
-@app.post("/api/chat")
+@app.post("/api/chat", dependencies=[Depends(require_write)])
 def api_chat(payload: dict):
     """Grounded quant analyst with persistent memory.
 
@@ -1045,7 +1120,7 @@ def api_chat(payload: dict):
         raise HTTPException(503, str(exc)) from None
 
 
-@app.post("/api/chat/stream")
+@app.post("/api/chat/stream", dependencies=[Depends(require_write)])
 def api_chat_stream(payload: dict):
     """Streaming variant: NDJSON progress events while the analyst works.
 
