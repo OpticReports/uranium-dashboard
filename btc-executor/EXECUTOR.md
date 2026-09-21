@@ -44,7 +44,14 @@ btc-executor  --Coinbase Advanced API-->  BTC perp product
 - **Telemetry**: one equity/position mark per UTC day persists in state
   (/status "marks") — the raw series for live-vs-paper tracking error and
   funding-cost decomposition during the token phase. /pulse is a public,
-  non-sensitive heartbeat (flags only) for automated monitoring.
+  non-sensitive heartbeat (flags only) for automated monitoring. It carries
+  `red_events_24h` AND `red_kinds_24h` ({kind: count}, summing to it): the
+  phone ping for a persisting condition is throttled per kind (30 min,
+  mirror.RATE_LIMITED) but the LOG is not, on purpose, so the bare total
+  tracks how long a condition has stood rather than how many things are
+  wrong — on 2026-09-18 one stopless window took it 1 -> 28 in nine hours.
+  Read the breakdown, not the total; a kind that was not there before is
+  the signal. Kind names only — never the msg, which embeds qty and price.
 
 ## Safety rails
 

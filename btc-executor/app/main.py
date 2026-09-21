@@ -255,8 +255,23 @@ def pulse():
         return {"ready": False, "build": _build_sha()}
     st = EXEC.state
     now = time.time()
-    red_24h = sum(1 for e in st.events
-                  if e.get("level") == "RED" and now - e.get("ts", 0) < 86_400)
+    # WHICH REDs, not just how many. A condition that persists logs one RED
+    # per poll - the PHONE ping is throttled by mirror.RATE_LIMITED, the log
+    # deliberately is not - so a single stopless window (the 09-18 16:00Z
+    # entry, unprotected until the engine's 20:00Z bar close) took this count
+    # 1 -> 28 in nine hours. On a bare total, a genuinely NEW kind arriving
+    # in that stretch is indistinguishable from the same one repeating, and
+    # /pulse is the only unauthenticated surface. Kind names carry no sizes,
+    # prices or order ids - the same reason auto_drill publishes a bare
+    # reason token rather than its {pos} / {exc} detail.
+    red_kinds_24h: dict[str, int] = {}
+    for e in st.events:
+        if e.get("level") == "RED" and now - e.get("ts", 0) < 86_400:
+            red_kinds_24h[str(e.get("kind", "?"))] = \
+                red_kinds_24h.get(str(e.get("kind", "?")), 0) + 1
+    # computed from the SAME pass, so the total can never disagree with the
+    # breakdown that explains it
+    red_24h = sum(red_kinds_24h.values())
     _rv = _ramp_v4(st)
     rv = _rv["rows"]
     return {"ready": True, "dry_run": settings.dry_run,
@@ -268,6 +283,8 @@ def pulse():
             # catch, and this is the only unauthenticated surface.
             "venue": LAST.get("venue_name", "coinbase"),
             "halted": st.halted, "red_events_24h": red_24h,
+            # {kind: count}; sum(values()) == red_events_24h by construction
+            "red_kinds_24h": red_kinds_24h,
             "ramp_v4_met": f"{sum(r['met'] for r in rv.values())}/{len(rv)}",
             # without this a 13/13 -> 0/13 drop at the provenance split reads
             # as data loss to whoever is watching the heartbeat
