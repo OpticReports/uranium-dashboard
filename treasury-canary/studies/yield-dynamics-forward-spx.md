@@ -104,3 +104,92 @@ R5 alt speed: 12m change relative to level (Δ / L_{t−12}).
 ~55 non-overlapping 12-month windows since 1971; ~37 at 18 months. Rates are
 one input; earnings, valuation and shocks are not modeled. Any conditional
 cell with < 5 independent episodes is labelled anecdotal.
+
+---
+
+## SPEC v1 — amendments after counter-agent review, still BEFORE any forward return
+
+Counter-agent verdict on v0: "sound enough to run once B1-B3 are amended". Its
+synthetic power check (walk-forward on a 0.97-persistent feature, h=12, OOS
+from month 240): the v0 gate passed ~3-5% of the time on NO effect, and only
+~5-7% at a realistic effect (a rate variable explaining 3-8% of 12m return
+variance). With 39 gateable cells, a v0 pass would more likely be noise than
+signal. Every item below SUPERSEDES the v0 text it names.
+
+**A1 (B1) — ONE confirmatory test.** The gate is model (c) SMALL at h = 12
+only. Pass = v0 conditions 1 and 2 AND R1 sign agreement AND R3 sign
+agreement, where for SMALL: **R1** = each of its three logistic coefficients
+has the same sign fitted on 1971-1999 origins and on 2000-end origins; **R3**
+= each keeps its full-sample sign with the 20y-splice origins removed. Code:
+`yield_dynamics/study.py::gate_small`, the SAME function `power.py` calls. Every other model × horizon cell is EXPLORATORY: reported with its
+CI, never the headline. The gate's POWER is measured before the run by a
+simulation on the REAL feature paths (synthetic returns whose 12m variance is
+0 / 2 / 5 / 10 / 15 / 20 / 30% explained by the SMALL features, overlap
+reproduced by summing monthly shocks; 200 simulations per size). A failed gate is reported as "base rate; any rate effect is
+below the detectable size of ~X", never as "rates don't matter".
+
+**A2 (B2) — base rate is specified.** Headline base rate = the 1971+ grid,
+with a 90% CI from the stationary bootstrap (A3). 1928+ ^GSPC shown as a
+sensitivity.
+
+**A3 (B3) — inference that respects persistent predictors.** M1/M2 p-values
+from a CIRCULAR-SHIFT null: rotate each feature series against the outcomes
+by every shift ≥ 36 months (preserves both autocorrelations). CIs: stationary
+bootstrap, mean block = max(h, 24). M3 BSS CI: stationary bootstrap, mean
+block = 2h. EPISODE = a run of qualifying origins, runs < h months apart
+merged; a cell with < 5 episodes is labelled anecdotal.
+
+**A4 (S1) — real-time splice.** 20y fill = DGS30 + mean(DGS20 − DGS30) over
+1986-01..1986-12 (known in real time). Counter-agent measured the method's
+error where both series exist: RMSE 0.21pp in level, 0.15pp in 12m change.
+
+**A5 (S2) — feature set.** dC20_3 is an exact identity (S20_12 − S3_12) and
+is REPLACED by **SB_12 = 12m change in the 3-month bill (DTB3)** — the policy
+stance, which v0 listed but never used. Also in the kNN set. DISCLOSED: this
+swap was chosen after seeing today's features (3y +138bp vs bill +22bp: the
+market pricing a Fed that has not moved) but before any forward return.
+
+**A6 (S3) — overlap weighting in models.** Ridge (d): sample weight 1/h so
+C = 1.0 regularizes against the real sample size. kNN: neighbours ≥ max(h,
+12) months apart; P = (ups + 2·base)/(k + 2) — no 0/1 forecasts from 10
+analogs.
+
+**A7 (S4) — regime deadband per leg.** |x| < 0.25pp counts as 0. Both 0 →
+QUIET; opposite nonzero signs → TWIST; one leg 0 → classified by the other
+(a>0 BEAR-FLAT, b>0 BEAR-STEEP, a<0 BULL-STEEP, b<0 BULL-FLAT). M2 is
+DESCRIPTIVE only (not in the FDR family).
+
+**A8 (S5) — outcomes that match the decision.** Secondary, descriptive,
+never gated: P(r_h ≤ −10%), P(r_h ≤ −20%), P(worst drawdown inside the
+window ≤ −20%, daily closes), and P(r_h < 3-month-bill carry over h) — cash
+is the real hurdle for sale proceeds, not zero. R4 total return = ^GSPC
+month-end closes plus Shiller monthly dividend yield accrued /12 per month
+(multpl mirror; matches Shiller's own file within 0.01 over 630 overlapping
+months).
+
+**A9 (S6) — valuation.** Shiller CAPE as an M4/M5 stratifier (analogs split
+above/below the median CAPE) and R6: does SMALL's coefficient survive adding
+CAPE? No gate tests added. The stock-bond correlation regime is covered by
+RATE_SHOCK.md and is cited, not re-tested.
+
+**A10 (S7) — robustness can overturn a pass.** A gate pass whose R1 or R3
+sign flips is downgraded to exploratory.
+
+**A11 (NITs).** CPI YoY from CPIAUCNS (never revised), lagged one month on a
+calendar index, last published print carried ≤ 2 months (Oct-2025 shutdown).
+TODAY's origin = closes of 2026-09-24 (yields) / 2026-09-25 (^GSPC), a
+PARTIAL month; 12m changes vs the 2025-09 month-end. R2 uses NBER dates known
+only in hindsight — labelled. PRIOR KNOWLEDGE disclosed: RATE_SHOCK.md already
+related long-yield moves to 12m forward S&P (1977+), so this pre-registration
+is not blind on S20_12 / S10_12.
+
+**Not adopted:** Holm-adjusted CIs on the exploratory cells (tail quantiles at
+0.1/38 are unstable at 2,000 resamples). Exploratory cells carry unadjusted
+90% CIs, are labelled exploratory, and cannot be the headline — that is the
+protection.
+
+### Counter-agent log
+
+| review | verdict | adopted |
+|---|---|---|
+| spec v0 (2026-09-27) | sound once B1-B3 amended; v0 gate ≈ its own false-positive rate at realistic effects | B1-B3, S1-S7, NITs (A1-A11); Holm CIs declined, reason above |

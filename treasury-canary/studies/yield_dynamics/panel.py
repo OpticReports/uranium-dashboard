@@ -20,7 +20,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "data")
 START = "1971-01"          # first origin
 SPLICE = ("1987-01-01", "1993-09-30")   # DGS20 missing; filled from DGS30
-SEAM = ("1993-10-01", "1994-09-30")     # window that sets the splice offset
+SEAM = ("1986-01-01", "1986-12-31")     # sets the splice offset — known in real time (spec A4)
 
 
 def fred_daily(sid: str) -> pd.Series:
@@ -46,9 +46,10 @@ def month_end(s: pd.Series) -> pd.Series:
 
 def twenty_year() -> tuple[pd.Series, float]:
     """DGS20 with the 1987-01..1993-09 hole filled by DGS30 + a constant.
-    The constant is the mean DGS20-DGS30 over the 12 months after DGS20
-    resumed — a level adjustment only; it cancels in every 12m CHANGE that
-    lies wholly inside the splice."""
+    The constant is the mean DGS20-DGS30 over 1986, the last year both
+    existed — known in real time (spec A4; v0 used 1993-94, a look-ahead).
+    A level adjustment only; it cancels in every 12m CHANGE wholly inside
+    the splice. Measured fill error: RMSE 0.21pp level, 0.15pp 12m change."""
     d20, d30 = fred_daily("DGS20"), fred_daily("DGS30")
     both = pd.concat([d20, d30], axis=1, sort=True).dropna().loc[SEAM[0]:SEAM[1]]
     offset = float((both["DGS20"] - both["DGS30"]).mean())
@@ -67,7 +68,8 @@ def build() -> pd.DataFrame:
     bill = month_end(fred_daily("DTB3"))
     spx = month_end(gspc_daily())
 
-    cpi = pd.read_csv(os.path.join(DATA, "CPIAUCSL.csv"), na_values=".")
+    # CPIAUCNS: never revised, so the YoY is what was published (spec A11)
+    cpi = pd.read_csv(os.path.join(DATA, "CPIAUCNS.csv"), na_values=".")
     cpi.columns = ["date", "cpi"]
     cpi = cpi.set_index(pd.to_datetime(cpi["date"]).dt.to_period("M"))["cpi"]
     full = pd.period_range(cpi.index[0], pd.Timestamp.today().to_period("M"), freq="M")
@@ -83,8 +85,12 @@ def build() -> pd.DataFrame:
     rec.columns = ["date", "rec"]
     rec = rec.set_index(pd.to_datetime(rec["date"]).dt.to_period("M"))["rec"]
 
+    val = pd.read_csv(os.path.join(DATA, "valuation_monthly.csv"))
+    val = val.set_index(pd.PeriodIndex(val["Date"], freq="M"))
+
     p = pd.DataFrame({"y3": y3, "y10": y10, "y20": y20, "bill": bill,
-                      "spx": spx, "cpi_yoy_lag": cpi_yoy_lag, "rec": rec})
+                      "spx": spx, "cpi_yoy_lag": cpi_yoy_lag, "rec": rec,
+                      "cape": val["cape"], "dy": val["dy"]})
     p = p.loc["1962-01":]
     p["L10"] = p["y10"]
     p["L10_dev"] = p["y10"] - p["y10"].rolling(60, min_periods=60).mean()
@@ -95,7 +101,8 @@ def build() -> pd.DataFrame:
     p["S10_6"] = p["y10"] - p["y10"].shift(6)
     p["C10_3"] = p["y10"] - p["y3"]
     p["C20_3"] = p["y20"] - p["y3"]
-    p["dC20_3"] = p["C20_3"] - p["C20_3"].shift(12)
+    p["dC20_3"] = p["C20_3"] - p["C20_3"].shift(12)   # = S20_12 - S3_12; not a feature (A5)
+    p["SB_12"] = p["bill"] - p["bill"].shift(12)       # policy stance (A5)
     # R5 alt speed: change relative to the starting level
     p["S10_12_rel"] = p["S10_12"] / p["y10"].shift(12)
     # R3 flag: any 20y input inside the splice (level now, or 12 months ago)
@@ -109,35 +116,65 @@ def build() -> pd.DataFrame:
 
 
 FEATURES = ["L10", "L10_dev", "R10", "S3_12", "S10_12", "S20_12", "S10_6",
-            "C10_3", "C20_3", "dC20_3"]
+            "C10_3", "C20_3", "SB_12"]
 DEADBAND = 0.25
 
 
 def regime(a: float, b: float) -> str | None:
-    """Curve-move regime from the 12m change in the 3y (a) and 20y (b)."""
+    """Curve-move regime from the 12m change in the 3y (a) and 20y (b).
+    Deadband PER LEG (spec A7): a leg inside +/-0.25pp counts as flat, so
+    3y +0.05 / 20y -0.60 is a bull-flattener, not a twist."""
     if pd.isna(a) or pd.isna(b):
         return None
-    if abs(a) < DEADBAND and abs(b) < DEADBAND:
+    sa = 0 if abs(a) < DEADBAND else (1 if a > 0 else -1)
+    sb = 0 if abs(b) < DEADBAND else (1 if b > 0 else -1)
+    if sa == 0 and sb == 0:
         return "QUIET"
-    if a > 0 and b > 0:
+    if sa * sb < 0:
+        return "TWIST"
+    if sa > 0 or sb > 0:                      # bear: at least one leg up
         return "BEAR-FLAT" if a > b else "BEAR-STEEP"
-    if a < 0 and b < 0:
-        return "BULL-STEEP" if a < b else "BULL-FLAT"
-    return "TWIST"
+    return "BULL-STEEP" if a < b else "BULL-FLAT"
 
 
 def outcomes(p: pd.DataFrame, horizons=(6, 12, 18)) -> pd.DataFrame:
-    """Forward S&P price returns. Kept apart from build() on purpose."""
+    """Forward S&P outcomes. Kept apart from build() on purpose.
+
+    r{h}    price return, month-end to month-end (the headline outcome)
+    tr{h}   total return: monthly price relative + dividend yield/12 accrued
+    dd{h}   worst drawdown from the origin close, DAILY closes, inside (t, t+h]
+    carry{h} 3-month-bill carry over the window (bill yield at t x h/12) —
+             the cash hurdle for proceeds; discount-basis bill, ~bp-level bias
+    """
     out = pd.DataFrame(index=p.index)
+    daily = gspc_daily()
+    dper = daily.index.to_period("M")
+    spx = p["spx"].copy()
+    # A month whose last close is before its last business day is PARTIAL
+    # (today: 2026-09-25). It may be an ORIGIN (today's reading) but never a
+    # return ENDPOINT — that would be an h-month return missing its last days.
+    last = daily.index[-1]
+    if last < last + pd.offsets.BMonthEnd(0):
+        spx.iloc[-1] = np.nan
+    rel = (spx / spx.shift(1)).shift(-1)                    # month m -> m+1
+    div = (p["dy"] / 100 / 12)
     for h in horizons:
-        out[f"r{h}"] = p["spx"].shift(-h) / p["spx"] - 1
+        out[f"r{h}"] = spx.shift(-h) / p["spx"] - 1
         out[f"up{h}"] = (out[f"r{h}"] > 0).where(out[f"r{h}"].notna())
+        growth = (rel + div).rolling(h).apply(np.prod, raw=True).shift(-(h - 1))
+        out[f"tr{h}"] = (growth - 1).where(out[f"r{h}"].notna())
+        out[f"carry{h}"] = p["bill"] / 100 * h / 12
+        dd = []
+        for per, ok in zip(p.index, out[f"r{h}"].notna()):
+            w = daily[(dper > per) & (dper <= per + h)] if ok else ()
+            dd.append(w.min() / p.at[per, "spx"] - 1 if len(w) else np.nan)
+        out[f"dd{h}"] = pd.Series(dd, index=p.index).where(out[f"r{h}"].notna())
     return out
 
 
 if __name__ == "__main__":
     p = build()
-    print(f"splice offset (DGS20-DGS30, 1993-10..1994-09): "
+    print(f"splice offset (DGS20-DGS30, 1986): "
           f"{p.attrs['splice_offset']:+.3f}pp")
     q = p.loc[START:]
     print(f"origins {q.index[0]}..{q.index[-1]}  n={len(q)}")
