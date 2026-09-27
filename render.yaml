@@ -449,6 +449,18 @@ services:
         sync: false
       - key: GITHUB_REPO
         value: OpticReports/uranium-dashboard
+      - key: SLAV_LAB_TOKEN
+        # FINE-GRAINED, OpticReports/slav-lab ONLY, Contents: read+write — the
+        # sandbox's OWN token (guard.py policies()). Never the same token as
+        # GITHUB_TOKEN and never a fallback to it: a slav-lab token that cannot
+        # reach this repo is the isolation. Unset = slav-lab refused at task
+        # time. EXPIRES on a fixed date and GitHub does not tell the service:
+        # /health keeps saying token_ready (the var is set, just dead) and the
+        # first symptom is a failed push. On the expiry email, regenerate and
+        # paste the new value here. SLAV_LAB_REPO / SLAV_LAB_PUSH_MAIN are
+        # optional with safe defaults in code and deliberately NOT declared —
+        # a blueprint value would overwrite whatever the dashboard holds.
+        sync: false
       - key: OPENROUTER_API_KEY
         sync: false
       - key: CODE_MODEL
