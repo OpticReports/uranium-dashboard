@@ -164,7 +164,9 @@ def m1_terciles(d: pd.DataFrame, h: int, feats: list) -> tuple[dict, dict]:
         n = len(x)
         null = np.array([up[np.roll(t, s) == 2].mean() - up[np.roll(t, s) == 0].mean()
                          for s in range(SHIFT_MIN, n - SHIFT_MIN + 1)])
-        p = float((np.abs(null) >= abs(diff) - 1e-12).mean())
+        # (1 + #extreme) / (1 + N): the observed statistic counts as one draw
+        # of the null (counter-agent B, N4) — never reports p = 0
+        p = float((1 + (np.abs(null) >= abs(diff) - 1e-12).sum()) / (1 + len(null)))
 
         def stat(ix):
             tb, ub = t[ix], up[ix]
@@ -333,6 +335,41 @@ def spx_long_outcomes(h: int) -> pd.Series:
     return (me.shift(-h) / me - 1)
 
 
+def shift_vs_base(d: pd.DataFrame, h: int, mask: np.ndarray, seed: int,
+                  col: str | None = None) -> dict:
+    """P(event | mask) minus P(event) overall, 90% stationary-bootstrap CI
+    (paired resampling, mean block max(h, 24)) and a circular-shift p for the
+    mask. Used for the effect-size BOUNDS (counter-agent B, S2) and for every
+    exploratory split, so valuation gets the SAME test the rates got (B2)."""
+    ev = ((d[f"r{h}"] > 0) if col is None else d[col]).values.astype(float)
+    m = np.asarray(mask, bool)
+    obs = ev[m].mean() - ev.mean()
+
+    def stat(ix):
+        mb, eb = m[ix], ev[ix]
+        return eb[mb].mean() - eb.mean() if mb.any() else np.nan
+    ci, _ = boot_ci(stat, len(ev), max(h, 24), seed)
+    n = len(ev)
+    null = np.array([ev[np.roll(m, k)].mean() - ev.mean()
+                     for k in range(SHIFT_MIN, n - SHIFT_MIN + 1)])
+    p = float((1 + (np.abs(null) >= abs(obs) - 1e-12).sum()) / (1 + len(null)))
+    return {"n": int(m.sum()), "episodes": episodes(d.index[m], h),
+            "p_event": float(ev[m].mean()), "p_base": float(ev.mean()),
+            "shift": float(obs), "ci90": ci, "p_shift": p}
+
+
+def eras(idx, gap: int = 12) -> list:
+    """Contiguous stretches (runs split by > gap months) as (start, end)."""
+    idx = sorted(idx)
+    out, start = [], idx[0]
+    for a, b in zip(idx, idx[1:]):
+        if (b - a).n > gap:
+            out.append((str(start), str(a)))
+            start = b
+    out.append((str(start), str(idx[-1])))
+    return out
+
+
 # ---------------------------------------------------------------- main
 
 
@@ -382,6 +419,53 @@ def main() -> dict:
                                            ["S20_12", "C20_3"])
         R["R5_rel_speed"], _ = m1_terciles(d, h, ["S10_12_rel"])
         res["h"][h] = R
+    # ---- counter-agent B additions (all descriptive / exploratory) ----------
+    for h in H:
+        d = df[df[f"r{h}"].notna()].copy()
+        R = res["h"][h]
+        # S2 bounds: today's tercile vs base, per feature
+        R["bounds_today_tercile"] = {}
+        for i, f in enumerate(feats):
+            lo, hi = R["terciles"][f]["cuts"]
+            cell = R["today_tercile"][f]
+            m = (d[f] <= lo) if cell == "low" else ((d[f] > hi) if cell == "high"
+                                                    else ((d[f] > lo) & (d[f] <= hi)))
+            R["bounds_today_tercile"][f] = shift_vs_base(d, h, m.values, SEED + 300 + i)
+        # S4 cash hurdle on TOTAL return, with CI
+        d["tr_below"] = (d[f"tr{h}"] < d[f"carry{h}"]).astype(float)
+        tb = d["tr_below"].values
+        R["base"]["tr_p_below_cash_ci90"], _ = boot_ci(lambda ix: tb[ix].mean(), len(tb),
+                                                       max(h, 24), SEED + 400 + h)
+        # S5 closer match to today — DEFINED FROM TODAY'S READING, post hoc
+        close = ((d["S3_12"] >= 1.0) & (d["S20_12"] >= 0.5)).values
+        R["close_match_posthoc"] = {
+            "rule": "S3_12 >= +1.00pp and S20_12 >= +0.50pp",
+            "up": shift_vs_base(d, h, close, SEED + 500 + h),
+            "below_cash": float((d[f"r{h}"] < d[f"carry{h}"])[close].mean()),
+            "fell20": float((d[f"dd{h}"] <= -0.20)[close].mean()),
+            "eras": eras(d.index[close])}
+        # B2 valuation, SAME test as the rates: pre-registered median split
+        # (A9) first, then the exploratory cutoffs
+        med = float(df["cape"].median())
+        V = {"median_split_prereg": shift_vs_base(d, h, (d["cape"] > med).values,
+                                                  SEED + 600 + h)}
+        for c in (25, 30, 35, 40):
+            m = (d["cape"] >= c).values
+            V[f"cape_ge_{c}"] = {
+                "up": shift_vs_base(d, h, m, SEED + 700 + c + h),
+                "fell20": shift_vs_base(d.assign(_f=(d[f"dd{h}"] <= -0.20)), h, m,
+                                        SEED + 900 + c + h, col="_f"),
+                "eras": eras(d.index[m]),
+                "by_era": [{"era": f"{a}..{b}",
+                            "n": int(((d.index >= pd.Period(a, "M")) &
+                                      (d.index <= pd.Period(b, "M")) & m).sum()),
+                            "p_up": float((d.loc[a:b][f"r{h}"][d.loc[a:b, "cape"] >= c] > 0).mean()),
+                            "p_fell20": float((d.loc[a:b][f"dd{h}"][d.loc[a:b, "cape"] >= c] <= -0.20).mean())}
+                           for a, b in eras(d.index[m])]}
+        R["valuation"] = V
+        R["base"].pop("episodes", None)                  # N2: meaningless for the grid
+        for mm in R["wf_exploratory"].values():          # N3: AUC tracks drift only
+            mm.pop("auc", None)
     res["fdr_exploratory"] = bh(pvals, 0.10)
     res["pvals_shift"] = pvals
 
@@ -396,6 +480,12 @@ def main() -> dict:
         "coef_with_cape": logit_fit(Z, dd["up12"].astype(float).values, 1e-6)[1:].tolist(),
         "order": cols}
     res["analogs"] = analogs(df, now)
+    d30 = P.fred_daily("DGS30")
+    res["rate_shock_state"] = {"asof": str(d30.index[-1].date()),
+                               "d60_30y_pp": float(d30.iloc[-1] - d30.iloc[-61]),
+                               "spike_if_ge": 0.75,
+                               "curve_10y_3m_pp": float(P.fred_daily("DGS10").iloc[-1]
+                                                        - P.fred_daily("DGS3MO").iloc[-1])}
     med_cape = float(df["cape"].median())
     res["cape_median_1971"] = med_cape
     json.dump(res, open(os.path.join(HERE, "results.json"), "w"), indent=1, default=str)

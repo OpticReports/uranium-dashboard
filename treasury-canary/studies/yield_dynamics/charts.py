@@ -127,6 +127,12 @@ def fig2():
         hi = a["cape"] > med
         ax.plot(np.arange(len(v)), v, color=S2 if hi else S1, lw=1.3, alpha=0.9)
         ax.text(18.2, v[-1], a["month"][:4], fontsize=7, color=INK2, va="center")
+        if a["cape"] >= 35:
+            k = int(np.argmin(v))
+            ax.annotate(f"{a['month'][:4]}: the only match at today's valuation\n"
+                        f"(CAPE {a['cape']:.0f}) — the one that fell",
+                        xy=(k, v[k]), xytext=(2.2, 0.84), fontsize=8,
+                        color=INK, arrowprops=dict(arrowstyle="->", color=INK2, lw=0.9))
     ax.plot([], [], color=S2, label=f"analog, CAPE above {med:.0f} (median)")
     ax.plot([], [], color=S1, label="analog, CAPE below median")
     ax.axhline(1, color=INK2, lw=0.8)
@@ -152,41 +158,86 @@ def fig2():
 
 # ------------------------------------------------------------ fig 3
 def fig3():
-    p = P.build()
-    o = P.outcomes(p)
-    d = p.join(o).loc[P.START:]
-    rows = [("higher", lambda x, h: (x[f"r{h}"] > 0)),
-            ("below 3-month-bill cash", lambda x, h: (x[f"r{h}"] < x[f"carry{h}"])),
-            ("fell ≥20% at some point in the window", lambda x, h: (x[f"dd{h}"] <= -0.20)),
-            ("ended ≥20% lower", lambda x, h: (x[f"r{h}"] <= -0.20))]
-    fig, axes = plt.subplots(1, 3, figsize=(10.4, 4.6), sharey=True)
+    """The headline: base-rate odds by horizon, with 90% CIs, and the long
+    (1928+) record as a check on how kind the post-1971 era was."""
+    fig, axes = plt.subplots(1, 3, figsize=(10.6, 4.4), sharey=True)
     fig.patch.set_facecolor(SURF)
-    for ax, h in zip(axes, (6, 12, 18)):
+    rows = ["higher (price)", "higher (1928+ record)", "trailed 3-month bills\n(incl. dividends)",
+            "fell ≥20% below start\nat some point", "ended ≥20% lower"]
+    for ax, h in zip(axes, ("6", "12", "18")):
         style(ax)
-        x = d[d[f"r{h}"].notna()]
-        hi = x[x["cape"] >= 30]
+        R_ = R["h"][h]
+        b = R_["base"]
+        vals = [(b["p_up"], b["p_up_ci90"]), (R_["base_1928"]["p_up"], None),
+                (b["tr_p_below_cash"], b["tr_p_below_cash_ci90"]),
+                (b["p_dd20"], None), (b["p_dn20"], None)]
+        cols = [S1, BASE, S2, CRIT, CRIT]
         ys = np.arange(len(rows))[::-1]
-        for y, (lab, fn) in zip(ys, rows):
-            a, b = fn(x, h).mean(), fn(hi, h).mean()
-            ax.barh(y + 0.18, a, height=0.34, color=BASE)
-            ax.barh(y - 0.18, b, height=0.34, color=S2)
-            ax.text(a + 0.01, y + 0.18, pct(a), va="center", fontsize=7.5, color=INK)
-            ax.text(b + 0.01, y - 0.18, pct(b), va="center", fontsize=7.5, color=INK)
-        ax.set_xlim(0, 1.05)
+        for y, (v, ci), c in zip(ys, vals, cols):
+            ax.barh(y, v, height=0.56, color=c, alpha=0.9)
+            if ci:
+                ax.plot(ci, [y, y], color=INK, lw=1.2)
+                ax.plot([ci[0], ci[0]], [y - 0.12, y + 0.12], color=INK, lw=1.2)
+                ax.plot([ci[1], ci[1]], [y - 0.12, y + 0.12], color=INK, lw=1.2)
+            ax.text((ci[1] if ci else v) + 0.02, y, pct(v), va="center", fontsize=8.5,
+                    color=INK, weight="bold" if y == ys[0] else None)
+        ax.set_xlim(0, 1.0)
         ax.xaxis.set_major_formatter(plt.FuncFormatter(pct))
-        ax.set_title(f"{h} months later", fontsize=10, color=INK, loc="left")
+        ax.set_title(f"{h} months out", fontsize=10, color=INK, loc="left")
     axes[0].set_yticks(np.arange(len(rows))[::-1])
-    axes[0].set_yticklabels([r[0] for r in rows])
-    from matplotlib.patches import Patch
-    fig.legend(handles=[Patch(color=BASE, label="all months since 1971"),
-                        Patch(color=S2, label="months with CAPE ≥ 30 (today 41) — EXPLORATORY")],
-               loc="lower center", ncol=2, fontsize=8, frameon=False)
-    fig.suptitle("S&P 500 odds by horizon — the base rate, and the one split that "
-                 "moves it (valuation, not rates)\nCAPE ≥ 30 = essentially two eras "
-                 "(1997-2001, 2017-2026): a hypothesis, not a validated signal",
+    axes[0].set_yticklabels(rows, fontsize=8.5)
+    fig.suptitle("The answer: the S&P's historical odds — rates don't measurably move them\n"
+                 "1971+ month-end origins; bars = 90% CI (stationary bootstrap). The 1928+ "
+                 "record, Depression included, runs ~5-7pp lower.",
                  x=0.01, ha="left", fontsize=11, color=INK)
-    fig.tight_layout(rect=(0, 0.07, 1, 0.86))
+    fig.tight_layout(rect=(0, 0, 1, 0.88))
     fig.savefig(os.path.join(OUT, "fig3_odds.png"), dpi=160, facecolor=SURF)
+
+
+# ------------------------------------------------------------ fig 5
+def fig5():
+    """Valuation, shown with the SAME test the rates got — and its episode
+    count, which is the honest n."""
+    fig, axes = plt.subplots(1, 2, figsize=(10.4, 4.6))
+    fig.patch.set_facecolor(SURF)
+    labels = ["all months", "CAPE above\nmedian (22)\npre-registered", "CAPE ≥ 25",
+              "CAPE ≥ 30", "CAPE ≥ 35", "CAPE ≥ 40"]
+    for ax, (key, title) in zip(axes, (("up", "higher 18 months later"),
+                                       ("fell20", "fell ≥20% below start within 18 months"))):
+        style(ax)
+        V = R["h"]["18"]["valuation"]
+        cells = [None, V["median_split_prereg"]] + [V[f"cape_ge_{c}"] for c in (25, 30, 35, 40)]
+        xs = np.arange(len(labels))
+        for x, c in zip(xs, cells):
+            if c is None:
+                v = R["h"]["18"]["base"]["p_up" if key == "up" else "p_dd20"]
+                ax.bar(x, v, color=BASE, width=0.62)
+                ax.text(x, v + 0.02, pct(v), ha="center", fontsize=8, color=INK)
+                continue
+            cc = c if "p_event" in c else c[key]
+            if key == "fell20" and "p_event" in c:          # median split row: up only
+                ax.text(x, 0.03, "n/a", ha="center", fontsize=7.5, color=INK2)
+                continue
+            v, (lo, hi) = cc["p_event"], cc["ci90"]
+            ax.bar(x, v, color=S2 if x > 1 else S1, width=0.62)
+            ax.plot([x, x], [max(0, cc["p_base"] + lo), min(1, cc["p_base"] + hi)], color=INK, lw=1.1)
+            n_eras = len(c["eras"]) if "eras" in c else None
+            ax.text(x, v + 0.02, pct(v), ha="center", fontsize=8, color=INK)
+            k_ = n_eras or cc["episodes"]
+            ax.text(x, -0.1, f"{k_} era{'s' if k_ != 1 else ''}", ha="center",
+                    fontsize=7.5, color=INK2)
+        ax.set_xticks(xs)
+        ax.set_xticklabels(labels, fontsize=7.5)
+        ax.set_ylim(-0.14, 1.0)
+        ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda v, _: "" if v < 0 else pct(v)))
+        ax.set_title(title, fontsize=10, color=INK, loc="left")
+    fig.suptitle(f"Valuation: a risk to plan around, not a validated signal (today CAPE "
+                 f"{R['today']['cape']:.0f})\nThe pre-registered split shows nothing; "
+                 "the cutoffs were chosen after seeing the data and rest on 1-3 eras; "
+                 "every CI crosses the base rate",
+                 x=0.01, ha="left", fontsize=10.5, color=INK)
+    fig.tight_layout(rect=(0, 0, 1, 0.86))
+    fig.savefig(os.path.join(OUT, "fig5_valuation.png"), dpi=160, facecolor=SURF)
 
 
 # ------------------------------------------------------------ fig 4
@@ -210,13 +261,13 @@ def fig4():
     ax.set_yticks([0, 0.05, 0.10, 0.15, 0.20])
     ax.set_xlabel("share of 12-month S&P variance a rate signal would explain (%)")
     ax.set_ylabel("chance the test detects it")
-    ax.set_title("Why 'no signal found' ≠ 'rates don't matter'\n55 years is too "
-                 "little data to confirm a realistic rate effect: the test catches it "
-                 "≤3% of the time", loc="left", fontsize=11, color=INK)
+    ax.set_title("Why 'no signal found' ≠ 'rates don't matter'\n55 years can't confirm "
+                 "a rate effect even one moving 12m odds ~60%→82% per SD (10% here): "
+                 "caught ≤3% of the time", loc="left", fontsize=10.5, color=INK)
     fig.tight_layout()
     fig.savefig(os.path.join(OUT, "fig4_power.png"), dpi=160, facecolor=SURF)
 
 
 if __name__ == "__main__":
-    fig1(); fig2(); fig3(); fig4()
+    fig1(); fig2(); fig3(); fig4(); fig5()
     print("written to", OUT)

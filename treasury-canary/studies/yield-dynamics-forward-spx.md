@@ -220,9 +220,105 @@ trade off. It is left as registered — changing the gate after seeing its
 power, however well-meant, is a fork — and it does not change the verdict:
 c1 and c2 alone already cap power at ≤25%.
 
+---
+
+## RESULTS — frozen 2026-09-28 (`yield_dynamics/results.json`, one pre-registered run + verifier fixes)
+
+**Today (2026-09-24/25 closes, partial month):** 10y 5.18% · 3y +1.38pp / 10y
++1.02pp / 20y +0.82pp over 12 months · 3-month bill +0.22pp · 10y 1.34pp above
+its 5-year mean · regime **BEAR-FLAT** (front-end-led) · CAPE 40.9.
+
+### Verdict
+
+**Confirmatory gate: FAIL** — SMALL @12m out-of-sample Brier skill −0.032
+(90% CI −0.082 … +0.028), negative in both halves (−0.045 / −0.011); R1 and R3
+fail too. As the pre-run power analysis said it would (≤3% power at realistic
+effects). **Headline = the base rate.** The fail means the data cannot resolve
+a rate effect of up to ~±10pp on the odds — NOT that the effect is zero.
+
+### The odds (S&P 500, 1971+ month-end origins; 90% CI stationary bootstrap)
+
+| | 6 months | 12 months | 18 months |
+|---|---|---|---|
+| **higher (price)** | **71%** (64-77) | **76%** (68-83) | **79%** (70-87) |
+| higher, full 1928+ record (Depression included) | 67% | 69% | 73% |
+| trailed 3-month bills, total return | 31% (25-38) | 25% (17-32) | 24% (16-34) |
+| trailed bills, price only | 36% | 31% | 30% |
+| fell ≥20% below the start at some point | 6% | 13% | 17% |
+| ended ≥20% lower | 2% | 5% | 6% |
+| median return | +4.9% | +11.2% | +14.9% |
+
+Read the 12m odds as **~70-76%** (the post-1971 era was kind). With today's
+1.1% dividend yield (vs 2.7% average since 1971) the cash-hurdle figure is
+between the total-return and price-only rows: **~25-31%**.
+
+### Rates: what they did and didn't do (fig1, fig4)
+
+- **0 of 30** tercile tests pass BH-FDR; smallest circular-shift p = 0.22. All
+  13 walk-forward models have out-of-sample skill ≤ ~0 vs the base rate at every
+  horizon (the 10-feature ridge is significantly WORSE).
+- **Bounds, not "no effect":** today's tercile vs the base rate at 12m — 3y speed
+  +0.5pp (CI −8.5…+8.6), 10y speed +2.0 (−5.3…+9.9), 20y speed +0.6 (−7.5…+9.5),
+  10y 6m speed +1.6 (−4.8…+7.9), 10y vs 5-yr mean −0.7 (−9.3…+6.5). History pins
+  the effect of today's rate SPEED and SHAPE to within about **±10pp** of the base
+  rate, point estimates −1 to +2pp. The level features (10y, real 10y) sit in a
+  non-monotone middle tercile (−9 to −10pp) — with 30 comparisons, noise.
+- High-speed terciles did NOT carry fatter tails: ≥20% falls within 12m in 9-13%
+  of cases vs 12.7% overall.
+- **Today's configuration:** BEAR-FLAT regime 78% up at 12m (12 episodes). A
+  closer match drawn post hoc from today's reading (3y ≥ +1.00pp AND 20y ≥
+  +0.50pp): 77% up at 12m (12 episodes) but it **trailed cash 36%** of the time
+  and fell ≥20% below its start within 18m in **21%**. The two BEAR-FLAT
+  failures: 1972-76 (33% up; the oil-shock stagflation bear, CAPE ~15 — NOT
+  expensive) and 1999-2000 (20% up; CAPE 43).
+- **RATE_SHOCK context:** the 30y is +0.56pp over 60 trading days — below that
+  study's +0.75pp SPIKE line. Spikes there roughly doubled 12m recession odds
+  (44% vs 21%) without a significant equity signal: rates bite through
+  recession risk, which this equity-odds study does not model. The 3m10y curve
+  is +0.94pp (not inverted).
+
+### Analogs (fig2) — illustrations, not odds
+
+10 nearest rate-matched months (≥18 months apart): 9/10 higher at 12m, median
++16%; 8 of 10 beat cash. But the analog method's out-of-sample skill is worse
+than the base rate (12m −0.065, CI −0.17…+0.01; 18m −0.079, CI −0.18…−0.003).
+They match on rates, not valuation — four had CAPE under 10. **The only analog at
+today's valuation, Nov-1999 (CAPE 43), is the one that fell**: −5% at 12m and 21%
+below its start within 18m.
+
+### Valuation (fig5) — a risk to plan around, not a validated signal
+
+The PRE-REGISTERED split (CAPE above/below its 1971+ median, 21.7) shows
+nothing: +0.3pp at 12m (p = 0.96). Cutoffs drawn after seeing the data show a
+steady gradient at 18m — CAPE ≥25: 75% up · ≥30: 64% · ≥35: 45% · ≥40: 29% (vs
+79%); a ≥20% fall within 18m: 24 / 31 / 36 / 48% (vs 17%). But every cutoff
+rests on 1-3 eras, the CIs all cross the base rate, and the two inference
+methods disagree on the strongest cell (CAPE ≥ 35 at 18m: circular-shift p =
+0.002, bootstrap CI −60…+2pp). By era, CAPE ≥ 30: 1997-2002 → 53% up at 12m, 38%
+fell ≥20%; 2017-2025 → 78% up, 13% fell ≥20%. **Today's CAPE of 41 has one
+precedent (1999-2000).**
+
+### Honesty box
+
+- Basis: S&P 500 PRICE index, month-end to month-end; total return accrues
+  Shiller dividends monthly. Cash = 3-month bill at the origin × h/12 (discount
+  basis, no roll). Nothing is a trade simulation.
+- Sample: 1971-01 → 2025-08 origins at 12m (656 overlapping months ≈ 55
+  independent years; ≈ 37 at 18m). Month-weighted, so long regimes count more.
+- In-sample: tercile cut points, regime counts and every valuation cutoff.
+  Out-of-sample: only the walk-forward skill scores (1991+).
+- Pre-registration was disclosed as not blind on 10y/20y speed (RATE_SHOCK.md);
+  SB_12 was chosen after seeing today's features, before any return.
+- NOT modeled: earnings, recession probability, fiscal/term-premium shocks, the
+  stock-bond correlation regime, anything after 2026-09-25.
+- This is not a forecast of the next 6/12/18 months; it is what history says
+  about how much the rate picture should move a prior. Answer: not detectably.
+
 ### Counter-agent log
 
 | review | verdict | adopted |
 |---|---|---|
 | spec v0 (2026-09-27) | sound once B1-B3 amended; v0 gate ≈ its own false-positive rate at realistic effects | B1-B3, S1-S7, NITs (A1-A11); Holm CIs declined, reason above |
 | gate power (2026-09-28) | measured before the run: ≤3% power at realistic effects; R1 collinearity flaw | recorded, gate unchanged |
+| results, verifier A (2026-09-28) — independent re-derivation from raw data | every headline number reproduced exactly; ONE bug: the "1928+" sensitivity was silently 1962+ (75.4% reported vs 69.4% true at 12m) | fixed (7df4afd), results regenerated |
+| results, verifier B (2026-09-28) — methodology/inference | no code bug moves a rate number; B2: the draft treated valuation more generously than rates (CAPE ≥30 fails the same test, p 0.15-0.39; pre-registered median split null); S1-S7 wording, TR cash hurdle, bounds, analog honesty, RATE_SHOCK context, missing input (sale structure) | all adopted after re-deriving each number; two of B's own claims were wrong and corrected ('five analogs CAPE < 10' → four; 'both BEAR-FLAT failures high-valuation' → 1972-76 was CAPE ~15); p-values now (1+#)/(1+N); AUC dropped; sale structure asked of Casey |
