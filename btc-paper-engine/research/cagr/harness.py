@@ -210,6 +210,10 @@ class LegSpec:
     trades: list[Trade]
     weight: float                # notional fraction of equity at k = 1
     asset: str = "btcusd"
+    # Optional time-varying weight, evaluated at each ENTRY bar's open ts.
+    # It must only use information from bars strictly before that ts; the
+    # callers in candidates.py enforce this with a one-bar shift.
+    weight_fn: Callable[[int], float] | None = None
 
 
 @dataclass
@@ -285,7 +289,9 @@ def simulate(legs: list[LegSpec], closes: dict[str, dict[int, float]],
         for li, t in entries.get(ts, []):
             if eq_now <= 0:
                 break
-            notional = legs[li].weight * k * eq_now
+            lg = legs[li]
+            w = lg.weight_fn(t.entry_ts) if lg.weight_fn is not None else lg.weight
+            notional = w * k * eq_now
             if notional <= 0:
                 continue
             qty = notional / t.entry_price

@@ -106,3 +106,23 @@ changing the live engine (RESEARCH_PROTOCOL.md §8).
 Live realized drawdown past −20% within the first 90 days of a changed
 engine, or its first 30 live trades showing a win rate more than 2 binomial
 SE below the backtest's → revert to the engine as it stood 2026-09-28.
+
+## AMENDMENT 1 (2026-09-29) — written after H1–H4, BEFORE H5 was run
+
+**What happened.** H1, H2a and H2b passed; H3 and H4 failed. H2a (walk-forward
+inverse-vol, which settles at ~67/33 pullback/trend) and H2b (static 50/50
+dollars) are MUTUALLY EXCLUSIVE weightings. §H5 said "the combination of
+whichever pass" and did not anticipate two passers that cannot be combined.
+
+**Resolution, fixed now:** run BOTH combinations — H5a = H1 + H2a,
+H5b = H1 + H2b — and count **2** trials, not 1. Batch total 6 → **7**,
+registry ~2,522. Neither is preferred by rule. The report presents both,
+with E5 behaviour shown, and both go to counter-agent review.
+
+**What I already know that bears on the choice, recorded so it cannot be
+quietly used:** H2b's advantage is concentrated in E1–E2 (Sharpe 1.15 vs 0.46,
+0.80 vs −0.05) — the 2013–2019 eras where trend dominated — and it is WORSE
+than baseline on E5 (0.70 vs 1.00). H2a is better in all four decision eras
+but by smaller margins, and slightly worse on E5 (0.92 vs 1.00). E5 still
+decides nothing; this note exists so the eventual recommendation can be
+checked against it.

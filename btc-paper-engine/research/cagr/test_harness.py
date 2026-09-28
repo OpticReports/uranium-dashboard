@@ -129,3 +129,14 @@ def test_k_safe_is_monotone_in_target():
 
 
 BAR_S = H.BAR_S
+
+
+def test_weight_fn_overrides_static_weight_at_entry():
+    closes = {"btcusd": {0: 100.0, BAR_S: 110.0, 2 * BAR_S: 100.0,
+                         3 * BAR_S: 110.0}}
+    tr = [H.Trade("p", "L", 0, 100.0, BAR_S, 110.0, "S"),
+          H.Trade("p", "L", 2 * BAR_S, 100.0, 3 * BAR_S, 110.0, "S")]
+    wf = lambda ts: 1.0 if ts == 0 else 0.0     # second trade gets zero size
+    r = H.simulate([H.LegSpec(tr, 5.0, weight_fn=wf)], closes, k=1.0,
+                   fee_bps=0.0, start_equity=1000.0)
+    assert r.equity[-1] == pytest.approx(1100.0)   # only the first trade
