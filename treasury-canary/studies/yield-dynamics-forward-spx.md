@@ -314,6 +314,22 @@ precedent (1999-2000).**
 - This is not a forecast of the next 6/12/18 months; it is what history says
   about how much the rate picture should move a prior. Answer: not detectably.
 
+### What this means for the sale — ASSUMPTION: all cash at close (Casey, 2026-09-28; may change)
+
+- With all-cash consideration in ~July 2027, the market odds that touch the
+  proceeds start AT CLOSE, not today. The 6m and 12m windows measured from
+  today mostly end before the money arrives; they describe the sale-price
+  environment, not the proceeds.
+- Because no rate feature moved the odds detectably, the July-2027 starting
+  odds are the same base rates (≈70-76% up over 12m; ~25-31% chance of
+  trailing bills) — unless valuation is still near today's level, the one
+  unvalidated risk flagged above.
+- Re-read the state at signing/close with `python3 yield_dynamics/study.py`
+  (refresh the data files first); the study's conclusions don't need
+  re-running, only today's reading.
+- If the consideration changes (stock, earnout, equity-linked), the relevant
+  windows start TODAY and the 6/12m rows above apply directly.
+
 ### Counter-agent log
 
 | review | verdict | adopted |
