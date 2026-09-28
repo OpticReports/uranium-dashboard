@@ -1,0 +1,223 @@
+{
+ "checks": [
+  {
+   "name": "TODAY is perfectly immune to an equity read error in SIZING",
+   "pass": true,
+   "detail": "base is a constant, so sizing never reads equity at all"
+  },
+  {
+   "name": "STEP 1's oversize is BOUNDED by the absolute ceiling",
+   "pass": true,
+   "detail": "worst 1.50x = MAX_NOTIONAL_USD / target = 22,500 / 15,008"
+  },
+  {
+   "name": "WITHOUT the absolute ceiling the error passes through UNBOUNDED",
+   "pass": true,
+   "detail": "worst 100x at a 100x read - this is why a purely fractional rail set is WRONG"
+  },
+  {
+   "name": "_check_exposure pages but cannot clamp - confirmed on the base route",
+   "pass": true,
+   "detail": "gross 300% of equity with rails lifted, 0 clamps - only a RED event stands between that and the venue"
+  },
+  {
+   "name": "STEP 1 CLOSES the unbounded exposure route: with base==equity the worst CONFIGURABLE gross/equity is KELLY_M_CAP x MAX_BLEND_LEV",
+   "pass": true,
+   "detail": "0.20 x 2.0 = 0.40 of equity, vs UNBOUNDED today (base route ships 300%)"
+  },
+  {
+   "name": "after STEP 1 KELLY_M_CAP becomes a real bound on gross/equity",
+   "pass": true,
+   "detail": "the identity MAX_EXPOSURE_FRAC = KELLY_M_CAP * REFERENCE_LEV closes"
+  }
+ ],
+ "A2_bad_equity_read": [
+  {
+   "e": 0.1,
+   "today": {
+    "gross": 15000.000000000002,
+    "x_intent": 1.0
+   },
+   "step1": {
+    "gross": 1500.8250000000003,
+    "x_intent": 0.1
+   },
+   "noceiling": {
+    "gross": 1500.8250000000003,
+    "x_intent": 0.1
+   }
+  },
+  {
+   "e": 0.5,
+   "today": {
+    "gross": 15000.000000000002,
+    "x_intent": 1.0
+   },
+   "step1": {
+    "gross": 7504.125000000001,
+    "x_intent": 0.5
+   },
+   "noceiling": {
+    "gross": 7504.125000000001,
+    "x_intent": 0.5
+   }
+  },
+  {
+   "e": 1.0,
+   "today": {
+    "gross": 15000.000000000002,
+    "x_intent": 1.0
+   },
+   "step1": {
+    "gross": 15008.250000000002,
+    "x_intent": 1.0
+   },
+   "noceiling": {
+    "gross": 15008.250000000002,
+    "x_intent": 1.0
+   }
+  },
+  {
+   "e": 2.0,
+   "today": {
+    "gross": 15000.000000000002,
+    "x_intent": 1.0
+   },
+   "step1": {
+    "gross": 22500.0,
+    "x_intent": 1.4991754535005746
+   },
+   "noceiling": {
+    "gross": 30016.500000000004,
+    "x_intent": 2.0
+   }
+  },
+  {
+   "e": 5.0,
+   "today": {
+    "gross": 15000.000000000002,
+    "x_intent": 1.0
+   },
+   "step1": {
+    "gross": 22500.0,
+    "x_intent": 1.4991754535005746
+   },
+   "noceiling": {
+    "gross": 75041.25000000001,
+    "x_intent": 5.0
+   }
+  },
+  {
+   "e": 10.0,
+   "today": {
+    "gross": 15000.000000000002,
+    "x_intent": 1.0
+   },
+   "step1": {
+    "gross": 22500.0,
+    "x_intent": 1.4991754535005746
+   },
+   "noceiling": {
+    "gross": 150082.50000000003,
+    "x_intent": 10.0
+   }
+  },
+  {
+   "e": 100.0,
+   "today": {
+    "gross": 15000.000000000002,
+    "x_intent": 1.0
+   },
+   "step1": {
+    "gross": 22500.0,
+    "x_intent": 1.4991754535005746
+   },
+   "noceiling": {
+    "gross": 1500825.0000000002,
+    "x_intent": 100.0
+   }
+  }
+ ],
+ "headroom_dial": {
+  "h=1.333": {
+   "max_notional_usd": 20005.99725,
+   "proportional_to_equity": 133373.315,
+   "worst_bad_read_oversize": 1.333
+  },
+  "h=1.5": {
+   "max_notional_usd": 22512.375,
+   "proportional_to_equity": 150082.5,
+   "worst_bad_read_oversize": 1.5
+  },
+  "h=2.0": {
+   "max_notional_usd": 30016.5,
+   "proportional_to_equity": 200110.0,
+   "worst_bad_read_oversize": 2.0
+  },
+  "h=3.0": {
+   "max_notional_usd": 45024.75,
+   "proportional_to_equity": 300165.0,
+   "worst_bad_read_oversize": 3.0
+  }
+ },
+ "A1_blast_radius": [
+  {
+   "equity": 100055.0,
+   "today_worst": 20000.0,
+   "today_frac": 0.1998900604667433,
+   "step1_worst": 20011.0,
+   "step1_frac": 0.2
+  },
+  {
+   "equity": 500000.0,
+   "today_worst": 20000.0,
+   "today_frac": 0.04,
+   "step1_worst": 22500.0,
+   "step1_frac": 0.045
+  },
+  {
+   "equity": 1000000.0,
+   "today_worst": 20000.0,
+   "today_frac": 0.02,
+   "step1_worst": 22500.0,
+   "step1_frac": 0.0225
+  },
+  {
+   "equity": 6673668.0,
+   "today_worst": 20000.0,
+   "today_frac": 0.0029968527052889058,
+   "step1_worst": 22500.0,
+   "step1_frac": 0.003371459293450019
+  }
+ ],
+ "A3_ladder_restatement": [
+  {
+   "rung": "token",
+   "old_kelly_m": 0.05,
+   "gross": 3750.0000000000005,
+   "gross_frac": 0.037479386337514374,
+   "new_kelly_m": 0.024986257558342915
+  },
+  {
+   "rung": "A",
+   "old_kelly_m": 0.1,
+   "gross": 7500.000000000001,
+   "gross_frac": 0.07495877267502875,
+   "new_kelly_m": 0.04997251511668583
+  },
+  {
+   "rung": "B = ceiling",
+   "old_kelly_m": 0.2,
+   "gross": 15000.000000000002,
+   "gross_frac": 0.1499175453500575,
+   "new_kelly_m": 0.09994503023337166
+  },
+  {
+   "rung": "live (0.135)",
+   "old_kelly_m": 0.135,
+   "gross": 10125.0,
+   "gross_frac": 0.10119434311128879,
+   "new_kelly_m": 0.06746289540752586
+  }
+ ]
+}

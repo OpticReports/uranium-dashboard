@@ -1,0 +1,384 @@
+{
+ "basis": "all numbers measured 2026-09-28 from Hyperliquid public endpoints; read-only, no orders placed.",
+ "A_slice_benefit": {
+  "n_samples": 440,
+  "span_min": 21.942316666666667,
+  "window_utc": [
+   "2026-09-28T17:25:43.258000Z",
+   "2026-09-28T17:47:39.797000Z"
+  ],
+  "SELECTION_BIAS_FOUND": "In the fine (default 20-level) book, 10 of 440 snapshots could not show a full $1m on the ask -- min visible ask depth $608,504. Those are exactly the THIN snapshots, and excluding them biases the fine-book $1m distribution LOW. The $1m reference below therefore comes from the coarse (nSigFigs=4) probe, where all 160 samples filled.",
+  "plans": {
+   "buy 1x1,000,000": {
+    "slip_p50_bp": 0.5403622621613646,
+    "slip_p90_bp": 1.790283024788453,
+    "slip_worst_bp": 2.785111501770743,
+    "saving_vs_one_shot_p50_bp": 0.44712540671620893,
+    "saving_vs_one_shot_p90_bp": 0.6300446953193537,
+    "saving_vs_one_shot_worst_bp": 1.5480311978732786,
+    "saving_usd_on_1m_p50": 44.71254067162089,
+    "saving_usd_on_1m_worst": 154.80311978732786,
+    "n_slices": 1,
+    "incomplete_snapshots": 10
+   },
+   "buy 2x500,000": {
+    "slip_p50_bp": 0.16116281688405287,
+    "slip_p90_bp": 1.5697519615927036,
+    "slip_worst_bp": 3.414086771986735,
+    "saving_vs_one_shot_p50_bp": 0.8263248519935207,
+    "saving_vs_one_shot_p90_bp": 0.850575758515103,
+    "saving_vs_one_shot_worst_bp": 0.9190559276572863,
+    "saving_usd_on_1m_p50": 82.63248519935206,
+    "saving_usd_on_1m_worst": 91.90559276572863,
+    "n_slices": 2,
+    "incomplete_snapshots": 0
+   },
+   "buy 4x250,000": {
+    "slip_p50_bp": 0.05959653148090993,
+    "slip_p90_bp": 1.2826876175271456,
+    "slip_worst_bp": 3.1420352754896186,
+    "saving_vs_one_shot_p50_bp": 0.9278911373966636,
+    "saving_vs_one_shot_p90_bp": 1.137640102580661,
+    "saving_vs_one_shot_worst_bp": 1.1911074241544028,
+    "saving_usd_on_1m_p50": 92.78911373966636,
+    "saving_usd_on_1m_worst": 119.11074241544028,
+    "n_slices": 4,
+    "incomplete_snapshots": 0
+   },
+   "buy 10x100,000": {
+    "slip_p50_bp": 0.0595794879743039,
+    "slip_p90_bp": 0.9938216612697115,
+    "slip_worst_bp": 2.878629703597646,
+    "saving_vs_one_shot_p50_bp": 0.9279081809032697,
+    "saving_vs_one_shot_p90_bp": 1.4265060588380951,
+    "saving_vs_one_shot_worst_bp": 1.4545129960463754,
+    "saving_usd_on_1m_p50": 92.79081809032697,
+    "saving_usd_on_1m_worst": 145.45129960463754,
+    "n_slices": 10,
+    "incomplete_snapshots": 0
+   },
+   "sell 1x1,000,000": {
+    "slip_p50_bp": 0.3995852059834881,
+    "slip_p90_bp": 1.627114102877858,
+    "slip_worst_bp": 3.7541718007894076,
+    "saving_vs_one_shot_p50_bp": 0.6765536020314489,
+    "saving_vs_one_shot_p90_bp": 0.821944151984666,
+    "saving_vs_one_shot_worst_bp": -0.5423386191061308,
+    "saving_usd_on_1m_p50": 67.65536020314488,
+    "saving_usd_on_1m_worst": -54.23386191061308,
+    "n_slices": 1,
+    "incomplete_snapshots": 0
+   },
+   "sell 2x500,000": {
+    "slip_p50_bp": 0.08774302249658916,
+    "slip_p90_bp": 1.3553239833971054,
+    "slip_worst_bp": 3.439161399818591,
+    "saving_vs_one_shot_p50_bp": 0.9883957855183478,
+    "saving_vs_one_shot_p90_bp": 1.0937342714654186,
+    "saving_vs_one_shot_worst_bp": -0.22732821813531423,
+    "saving_usd_on_1m_p50": 98.83957855183479,
+    "saving_usd_on_1m_worst": -22.732821813531423,
+    "n_slices": 2,
+    "incomplete_snapshots": 0
+   },
+   "sell 4x250,000": {
+    "slip_p50_bp": 0.05959795221444075,
+    "slip_p90_bp": 1.1177995058199166,
+    "slip_worst_bp": 3.1170857673268326,
+    "saving_vs_one_shot_p50_bp": 1.0165408558004962,
+    "saving_vs_one_shot_p90_bp": 1.3312587490426073,
+    "saving_vs_one_shot_worst_bp": 0.09474741435644418,
+    "saving_usd_on_1m_p50": 101.65408558004962,
+    "saving_usd_on_1m_worst": 9.474741435644418,
+    "n_slices": 4,
+    "incomplete_snapshots": 0
+   },
+   "sell 10x100,000": {
+    "slip_p50_bp": 0.05958161788777172,
+    "slip_p90_bp": 0.9195340618292082,
+    "slip_worst_bp": 2.3755559530613812,
+    "saving_vs_one_shot_p50_bp": 1.0165571901271653,
+    "saving_vs_one_shot_p90_bp": 1.5295241930333159,
+    "saving_vs_one_shot_worst_bp": 0.8362772286218956,
+    "saving_usd_on_1m_p50": 101.65571901271653,
+    "saving_usd_on_1m_worst": 83.62772286218956,
+    "n_slices": 10,
+    "incomplete_snapshots": 0
+   }
+  },
+  "buy_one_shot_1m": {
+   "p50": 0.9874876688775736,
+   "p90": 2.4203277201078066,
+   "worst": 4.333142699644021,
+   "n_complete": 160,
+   "n_incomplete": 0,
+   "source": "book_deep (nSigFigs=4), all samples filled"
+  },
+  "sell_one_shot_1m": {
+   "p50": 1.076138808014937,
+   "p90": 2.449058254862524,
+   "worst": 3.211833181683277,
+   "n_complete": 160,
+   "n_incomplete": 0,
+   "source": "book_deep (nSigFigs=4), all samples filled"
+  }
+ },
+ "B_replenishment": {
+  "band_bp": 10.0,
+  "n_intervals": 299,
+  "caveat": "added size at a price level includes levels that merely came INTO the band as mid drifted -> an UPPER bound on true refill.",
+  "ask": {
+   "gross_added_usd_per_s": {
+    "p50": 477818.1980947955,
+    "p10": 106292.5207307613,
+    "p90": 1303940.931829377
+   },
+   "net_change_usd_per_s_p50": 22341.73582902768,
+   "band_depth_usd": {
+    "p10": 1554627.323146,
+    "p50": 2667931.2194799995,
+    "p90": 4618290.082814
+   },
+   "seconds_to_refill_1m_at_p50_rate": 2.0928461996368073
+  },
+  "bid": {
+   "gross_added_usd_per_s": {
+    "p50": 801302.5785011847,
+    "p10": 176107.59128723212,
+    "p90": 2354850.3427034407
+   },
+   "net_change_usd_per_s_p50": 19100.73728557996,
+   "band_depth_usd": {
+    "p10": 2556856.623958,
+    "p50": 4538006.20178,
+    "p90": 7993594.928913998
+   },
+   "seconds_to_refill_1m_at_p50_rate": 1.2479680295931077
+  }
+ },
+ "C_timing_risk": {
+  "n_1m_candles": 5170,
+  "first_utc": "2026-09-25T03:39:00Z",
+  "last_utc": "2026-09-28T17:48:00Z",
+  "horizons": {
+   "1min": {
+    "sigma_bp": 4.17340081183814,
+    "mean_abs_bp": 2.572247420799278,
+    "median_abs_bp": 1.5487252799628592,
+    "p90_abs_bp": 6.168202518003872,
+    "p99_abs_bp": 14.834970251875696,
+    "max_abs_bp": 43.55525774182745,
+    "n": 5169
+   },
+   "2min": {
+    "sigma_bp": 6.079061518591622,
+    "mean_abs_bp": 3.878952987465619,
+    "median_abs_bp": 2.4866490627706295,
+    "p90_abs_bp": 9.104359123991324,
+    "p99_abs_bp": 22.095442057291304,
+    "max_abs_bp": 59.598456889653484,
+    "n": 5168
+   },
+   "5min": {
+    "sigma_bp": 9.944028494695502,
+    "mean_abs_bp": 6.39023717788517,
+    "median_abs_bp": 4.093081488436567,
+    "p90_abs_bp": 14.61156730280445,
+    "p99_abs_bp": 36.89038067841534,
+    "max_abs_bp": 92.08190882342481,
+    "n": 5165
+   },
+   "10min": {
+    "sigma_bp": 13.679116717366066,
+    "mean_abs_bp": 8.959777439716888,
+    "median_abs_bp": 5.770000886549109,
+    "p90_abs_bp": 20.622219321938754,
+    "p99_abs_bp": 52.737446173691474,
+    "max_abs_bp": 105.28319394710883,
+    "n": 5160
+   },
+   "15min": {
+    "sigma_bp": 16.008990639164068,
+    "mean_abs_bp": 10.784325008473113,
+    "median_abs_bp": 6.9031183051659895,
+    "p90_abs_bp": 25.15129951770636,
+    "p99_abs_bp": 58.51874608229699,
+    "max_abs_bp": 90.03899326479936,
+    "n": 5155
+   },
+   "30min": {
+    "sigma_bp": 20.39791341539251,
+    "mean_abs_bp": 14.332215040611468,
+    "median_abs_bp": 9.744099407662521,
+    "p90_abs_bp": 33.161222124785695,
+    "p99_abs_bp": 67.80396892634103,
+    "max_abs_bp": 129.35535934681442,
+    "n": 5140
+   }
+  }
+ },
+ "D_breakeven": {
+  "buy 1x1,000,000": {
+   "saving_bp": 0.44712540671620893,
+   "sigma_1min_bp": 4.17340081183814,
+   "breakeven_window_min": 0.011478324648939569,
+   "breakeven_window_s": 0.6886994789363741,
+   "saving_worst_case_bp": 1.5480311978732786,
+   "breakeven_window_s_worst_case": 8.255254674152742,
+   "verdict": "timing risk swamps the saving"
+  },
+  "buy 2x500,000": {
+   "saving_bp": 0.8263248519935207,
+   "sigma_1min_bp": 4.17340081183814,
+   "breakeven_window_min": 0.03920319263737779,
+   "breakeven_window_s": 2.352191558242667,
+   "saving_worst_case_bp": 0.9190559276572863,
+   "breakeven_window_s_worst_case": 2.9097450560469054,
+   "verdict": "timing risk swamps the saving"
+  },
+  "buy 4x250,000": {
+   "saving_bp": 0.9278911373966636,
+   "sigma_1min_bp": 4.17340081183814,
+   "breakeven_window_min": 0.04943264636231165,
+   "breakeven_window_s": 2.965958781738699,
+   "saving_worst_case_bp": 1.1911074241544028,
+   "breakeven_window_s_worst_case": 4.887344145195663,
+   "verdict": "timing risk swamps the saving"
+  },
+  "buy 10x100,000": {
+   "saving_bp": 0.9279081809032697,
+   "sigma_1min_bp": 4.17340081183814,
+   "breakeven_window_min": 0.049434462336919976,
+   "breakeven_window_s": 2.9660677402151987,
+   "saving_worst_case_bp": 1.4545129960463754,
+   "breakeven_window_s_worst_case": 7.287964861176379,
+   "verdict": "timing risk swamps the saving"
+  },
+  "sell 1x1,000,000": {
+   "saving_bp": 0.6765536020314489,
+   "sigma_1min_bp": 4.17340081183814,
+   "breakeven_window_min": 0.026279931497033834,
+   "breakeven_window_s": 1.57679588982203,
+   "saving_worst_case_bp": -0.5423386191061308,
+   "breakeven_window_s_worst_case": 1.01323951875211,
+   "verdict": "timing risk swamps the saving"
+  },
+  "sell 2x500,000": {
+   "saving_bp": 0.9883957855183478,
+   "sigma_1min_bp": 4.17340081183814,
+   "breakeven_window_min": 0.056089501145257716,
+   "breakeven_window_s": 3.365370068715463,
+   "saving_worst_case_bp": -0.22732821813531423,
+   "breakeven_window_s_worst_case": 0.1780236715443496,
+   "verdict": "timing risk swamps the saving"
+  },
+  "sell 4x250,000": {
+   "saving_bp": 1.0165408558004962,
+   "sigma_1min_bp": 4.17340081183814,
+   "breakeven_window_min": 0.05932933543802792,
+   "breakeven_window_s": 3.5597601262816756,
+   "saving_worst_case_bp": 0.09474741435644418,
+   "breakeven_window_s_worst_case": 0.03092472112659119,
+   "verdict": "timing risk swamps the saving"
+  },
+  "sell 10x100,000": {
+   "saving_bp": 1.0165571901271653,
+   "sigma_1min_bp": 4.17340081183814,
+   "breakeven_window_min": 0.05933124212486028,
+   "breakeven_window_s": 3.559874527491617,
+   "saving_worst_case_bp": 0.8362772286218956,
+   "breakeven_window_s_worst_case": 2.409193044594518,
+   "verdict": "timing risk swamps the saving"
+  },
+  "reading": "A slice plan is only worth it if the execution window it needs is SHORTER than the break-even window. Spacing slices far enough apart for the book to refill costs multiples of the slip it saves."
+ },
+ "E_twap_1m_explicit": {
+  "max_slip_saving_available_bp": 1.0165571901271653,
+  "max_slip_saving_usd_on_1m": 101.65571901271653,
+  "5min_window_sigma_bp": 9.944028494695502,
+  "5min_window_sigma_usd_on_1m": 994.4028494695501,
+  "5min_p90_abs_move_usd_on_1m": 1461.1567302804451,
+  "30min_window_sigma_usd_on_1m": 2039.7913415392509,
+  "30min_p99_abs_move_usd_on_1m": 6780.396892634103,
+  "risk_over_reward_5min": 9.782064984904158,
+  "note": "unconditional vol is zero-mean, so this is variance added, not expected loss. For a signal-triggered entry the conditional drift is the wrong way (you delay buying a market the signal says is moving), so the unconditional figure UNDERSTATES the cost of delay."
+ },
+ "F_volume_tiers": {
+  "annual_volume_per_dollar_of_gross_notional": 68.5005,
+  "basis": "pullback leg only (0.75 weight, 45.667 round trips/yr measured). The trend leg adds turnover, so tiers arrive SOONER than this.",
+  "by_gross_notional": {
+   "15000": {
+    "volume_14d_usd": 39411.24657534246,
+    "volume_yr_usd": 1027507.5,
+    "tier": 0,
+    "taker_bp_after_referral_disc": 4.32,
+    "round_trip_taker_bp": 8.64,
+    "vs_today_rt_bp": 0.0
+   },
+   "100000": {
+    "volume_14d_usd": 262741.6438356164,
+    "volume_yr_usd": 6850050.0,
+    "tier": 0,
+    "taker_bp_after_referral_disc": 4.32,
+    "round_trip_taker_bp": 8.64,
+    "vs_today_rt_bp": 0.0
+   },
+   "250000": {
+    "volume_14d_usd": 656854.1095890411,
+    "volume_yr_usd": 17125125.0,
+    "tier": 0,
+    "taker_bp_after_referral_disc": 4.32,
+    "round_trip_taker_bp": 8.64,
+    "vs_today_rt_bp": 0.0
+   },
+   "1000000": {
+    "volume_14d_usd": 2627416.4383561644,
+    "volume_yr_usd": 68500500.0,
+    "tier": 0,
+    "taker_bp_after_referral_disc": 4.32,
+    "round_trip_taker_bp": 8.64,
+    "vs_today_rt_bp": 0.0
+   },
+   "2000000": {
+    "volume_14d_usd": 5254832.876712329,
+    "volume_yr_usd": 137001000.0,
+    "tier": 1,
+    "taker_bp_after_referral_disc": 3.84,
+    "round_trip_taker_bp": 7.68,
+    "vs_today_rt_bp": -0.9600000000000009
+   },
+   "10000000": {
+    "volume_14d_usd": 26274164.383561645,
+    "volume_yr_usd": 685005000.0,
+    "tier": 2,
+    "taker_bp_after_referral_disc": 3.3600000000000003,
+    "round_trip_taker_bp": 6.720000000000001,
+    "vs_today_rt_bp": -1.92
+   }
+  },
+  "thresholds": {
+   "tier1_at_14d_vol_5,000,000": {
+    "gross_notional_needed_usd": 1903010.0927313357,
+    "taker_bp": 3.84,
+    "rt_saving_vs_tier0_bp": 0.9599999999999995,
+    "rt_saving_pct_of_notional_per_yr": 0.43840319999999977
+   },
+   "tier2_at_14d_vol_25,000,000": {
+    "gross_notional_needed_usd": 9515050.463656679,
+    "taker_bp": 3.3600000000000003,
+    "rt_saving_vs_tier0_bp": 1.919999999999999,
+    "rt_saving_pct_of_notional_per_yr": 0.8768063999999995
+   },
+   "tier3_at_14d_vol_100,000,000": {
+    "gross_notional_needed_usd": 38060201.854626715,
+    "taker_bp": 2.88,
+    "rt_saving_vs_tier0_bp": 2.88,
+    "rt_saving_pct_of_notional_per_yr": 1.3152096
+   }
+  },
+  "live_rates_measured": {
+   "taker_bp": 4.32,
+   "maker_bp": 1.44
+  }
+ }
+}

@@ -1,0 +1,559 @@
+{
+  "lever1_voltarget": {
+    "risk_match_per_leg_frac_equity_at_k1": {
+      "pullback": 0.03970151224538881,
+      "trend": 0.027048281071386564
+    },
+    "kmax_at_P_dd30_le_10pct": {
+      "FIXED": 0.6775,
+      "VOLTARGET": 0.6761111111111111,
+      "k_uplift_x": 0.997949979499795
+    },
+    "at_own_kmax": {
+      "FIXED": {
+        "cagr_pct": 19.361059050462302,
+        "maxdd_pct": -15.493780879100338,
+        "mar": 1.2496019662042956,
+        "total_pct": 118.22837073455088,
+        "gross_usd": {
+          "median": 101680.89374999999,
+          "p90": 101680.89374999999,
+          "p99": 101680.89374999999,
+          "max": 101680.89374999999
+        }
+      },
+      "VOLTARGET": {
+        "cagr_pct": 23.39233516563619,
+        "maxdd_pct": -15.060328299077774,
+        "mar": 1.5532420476563338,
+        "total_pct": 152.64911410824737,
+        "gross_usd": {
+          "median": 104111.96181747147,
+          "p90": 166331.97701257942,
+          "p99": 265353.57211156964,
+          "max": 320199.1751765132
+        }
+      }
+    },
+    "at_MATCHED_k": {
+      "0.0999": {
+        "FIXED": {
+          "cagr_pct": 2.9232949684524945,
+          "maxdd_pct": -2.41633047307398,
+          "mar": 1.2098075991789194,
+          "total_pct": 13.547266402193593,
+          "gross_usd": {
+            "median": 14993.241750000001,
+            "p90": 14993.241750000001,
+            "p99": 14993.241750000001,
+            "max": 14993.241750000001
+          }
+        },
+        "VOLTARGET": {
+          "cagr_pct": 3.5057916976832137,
+          "maxdd_pct": -2.3405663995520687,
+          "mar": 1.4978390266365196,
+          "total_pct": 16.40825208080212,
+          "gross_usd": {
+            "median": 15383.248129842004,
+            "p90": 24576.6771622038,
+            "p99": 39207.78910197408,
+            "max": 47311.59875122482
+          }
+        },
+        "cagr_uplift_x": 1.1992603331230292,
+        "maxdd_ratio": 0.9686449869476974
+      },
+      "0.2": {
+        "FIXED": {
+          "cagr_pct": 5.837221946201043,
+          "maxdd_pct": -4.7908167408241775,
+          "mar": 1.2184189590180086,
+          "total_pct": 28.421710911899865,
+          "gross_usd": {
+            "median": 30016.500000000004,
+            "p90": 30016.500000000004,
+            "p99": 30016.500000000004,
+            "max": 30016.500000000004
+          }
+        },
+        "VOLTARGET": {
+          "cagr_pct": 7.011219078364861,
+          "maxdd_pct": -4.645136362522995,
+          "mar": 1.5093677625766693,
+          "total_pct": 34.822668718676766,
+          "gross_usd": {
+            "median": 30797.29355323725,
+            "p90": 49202.5568812889,
+            "p99": 78494.0722762244,
+            "max": 94717.91541786751
+          }
+        },
+        "cagr_uplift_x": 1.201122579025434,
+        "maxdd_ratio": 0.9695917447520397
+      },
+      "0.3": {
+        "FIXED": {
+          "cagr_pct": 8.727727215185755,
+          "maxdd_pct": -7.11689222763442,
+          "mar": 1.226339662879335,
+          "total_pct": 44.622426596747175,
+          "gross_usd": {
+            "median": 45024.74999999999,
+            "p90": 45024.74999999999,
+            "p99": 45024.74999999999,
+            "max": 45024.74999999999
+          }
+        },
+        "VOLTARGET": {
+          "cagr_pct": 10.499681665167127,
+          "maxdd_pct": -6.907104315290158,
+          "mar": 1.520127854725479,
+          "total_pct": 55.307401250549624,
+          "gross_usd": {
+            "median": 46195.94032985587,
+            "p90": 73803.83532193334,
+            "p99": 117741.10841433656,
+            "max": 142076.87312680125
+          }
+        },
+        "cagr_uplift_x": 1.203025874468014,
+        "maxdd_ratio": 0.9705225391035613
+      },
+      "0.65": {
+        "FIXED": {
+          "cagr_pct": 18.605235418506673,
+          "maxdd_pct": -14.904676388370785,
+          "mar": 1.2482817428376511,
+          "total_pct": 112.20069087926193,
+          "gross_usd": {
+            "median": 97553.62500000001,
+            "p90": 97553.62500000001,
+            "p99": 97553.62500000001,
+            "max": 97553.62500000001
+          }
+        },
+        "VOLTARGET": {
+          "cagr_pct": 22.513249372987353,
+          "maxdd_pct": -14.512123329633397,
+          "mar": 1.5513408246066829,
+          "total_pct": 144.80840651563085,
+          "gross_usd": {
+            "median": 100091.20404802106,
+            "p90": 159908.30986418892,
+            "p99": 255105.73489772924,
+            "max": 307833.2251080694
+          }
+        },
+        "cagr_uplift_x": 1.2100491537233315,
+        "maxdd_ratio": 0.9736624232215016
+      }
+    },
+    "trade_set_identical": true,
+    "note": "same entries/exits/win-rate in both columns: only notional moves"
+  },
+  "lever1_clamp_cost_both_rules": {
+    "k0.2_FIXED": {
+      "20000": {
+        "cagr_pct": 3.8963640797197607,
+        "maxdd_pct": -3.212829566956088,
+        "mar": 1.2127515632306851,
+        "total_pct": 18.357576776915852,
+        "pct_trades_clamped": 100.0
+      },
+      "30000": {
+        "cagr_pct": 5.834031878985235,
+        "maxdd_pct": -4.788234255203772,
+        "mar": 1.2184098705373299,
+        "total_pct": 28.40464427126166,
+        "pct_trades_clamped": 100.0
+      },
+      "50000": {
+        "cagr_pct": 5.837221946201043,
+        "maxdd_pct": -4.7908167408241775,
+        "mar": 1.2184189590180086,
+        "total_pct": 28.421710911899865,
+        "pct_trades_clamped": 0.0
+      },
+      "100000": {
+        "cagr_pct": 5.837221946201043,
+        "maxdd_pct": -4.7908167408241775,
+        "mar": 1.2184189590180086,
+        "total_pct": 28.421710911899865,
+        "pct_trades_clamped": 0.0
+      },
+      "200000": {
+        "cagr_pct": 5.837221946201043,
+        "maxdd_pct": -4.7908167408241775,
+        "mar": 1.2184189590180086,
+        "total_pct": 28.421710911899865,
+        "pct_trades_clamped": 0.0
+      },
+      "1000000000": {
+        "cagr_pct": 5.837221946201043,
+        "maxdd_pct": -4.7908167408241775,
+        "mar": 1.2184189590180086,
+        "total_pct": 28.421710911899865,
+        "pct_trades_clamped": 0.0
+      }
+    },
+    "k0.2_VOLTARGET": {
+      "20000": {
+        "cagr_pct": 3.8268113460009356,
+        "maxdd_pct": -3.2128295669561213,
+        "mar": 1.191103127710104,
+        "total_pct": 18.008609419752663,
+        "pct_trades_clamped": 90.88050314465409
+      },
+      "30000": {
+        "cagr_pct": 5.00861575504794,
+        "maxdd_pct": -4.42639773614194,
+        "mar": 1.131533145824682,
+        "total_pct": 24.04729089958202,
+        "pct_trades_clamped": 54.71698113207547
+      },
+      "50000": {
+        "cagr_pct": 6.1908621639208405,
+        "maxdd_pct": -4.589915576086723,
+        "mar": 1.3487965216996551,
+        "total_pct": 30.32456481504868,
+        "pct_trades_clamped": 8.80503144654088
+      },
+      "100000": {
+        "cagr_pct": 7.011219078364861,
+        "maxdd_pct": -4.645136362522995,
+        "mar": 1.5093677625766693,
+        "total_pct": 34.822668718676766,
+        "pct_trades_clamped": 0.0
+      },
+      "200000": {
+        "cagr_pct": 7.011219078364861,
+        "maxdd_pct": -4.645136362522995,
+        "mar": 1.5093677625766693,
+        "total_pct": 34.822668718676766,
+        "pct_trades_clamped": 0.0
+      },
+      "1000000000": {
+        "cagr_pct": 7.011219078364861,
+        "maxdd_pct": -4.645136362522995,
+        "mar": 1.5093677625766693,
+        "total_pct": 34.822668718676766,
+        "pct_trades_clamped": 0.0
+      }
+    },
+    "k0.3_FIXED": {
+      "20000": {
+        "cagr_pct": 3.8963640797197607,
+        "maxdd_pct": -3.21282956695611,
+        "mar": 1.2127515632306767,
+        "total_pct": 18.357576776915852,
+        "pct_trades_clamped": 100.0
+      },
+      "30000": {
+        "cagr_pct": 5.834031878985235,
+        "maxdd_pct": -4.788234255203772,
+        "mar": 1.2184098705373299,
+        "total_pct": 28.40464427126166,
+        "pct_trades_clamped": 100.0
+      },
+      "50000": {
+        "cagr_pct": 8.727727215185755,
+        "maxdd_pct": -7.11689222763442,
+        "mar": 1.226339662879335,
+        "total_pct": 44.622426596747175,
+        "pct_trades_clamped": 0.0
+      },
+      "100000": {
+        "cagr_pct": 8.727727215185755,
+        "maxdd_pct": -7.11689222763442,
+        "mar": 1.226339662879335,
+        "total_pct": 44.622426596747175,
+        "pct_trades_clamped": 0.0
+      },
+      "200000": {
+        "cagr_pct": 8.727727215185755,
+        "maxdd_pct": -7.11689222763442,
+        "mar": 1.226339662879335,
+        "total_pct": 44.622426596747175,
+        "pct_trades_clamped": 0.0
+      },
+      "1000000000": {
+        "cagr_pct": 8.727727215185755,
+        "maxdd_pct": -7.11689222763442,
+        "mar": 1.226339662879335,
+        "total_pct": 44.622426596747175,
+        "pct_trades_clamped": 0.0
+      }
+    },
+    "k0.3_VOLTARGET": {
+      "20000": {
+        "cagr_pct": 3.8963640797197607,
+        "maxdd_pct": -3.21282956695611,
+        "mar": 1.2127515632306767,
+        "total_pct": 18.357576776915852,
+        "pct_trades_clamped": 100.0
+      },
+      "30000": {
+        "cagr_pct": 5.729726145536063,
+        "maxdd_pct": -4.7882342552037604,
+        "mar": 1.196626113124918,
+        "total_pct": 27.847581148022506,
+        "pct_trades_clamped": 90.88050314465409
+      },
+      "50000": {
+        "cagr_pct": 7.938830199026259,
+        "maxdd_pct": -6.783803637825736,
+        "mar": 1.1702623812340651,
+        "total_pct": 40.052463378993,
+        "pct_trades_clamped": 45.28301886792453
+      },
+      "100000": {
+        "cagr_pct": 9.868636687242294,
+        "maxdd_pct": -6.90710431529018,
+        "mar": 1.4287661278542156,
+        "total_pct": 51.43453124910562,
+        "pct_trades_clamped": 1.8867924528301887
+      },
+      "200000": {
+        "cagr_pct": 10.499681665167127,
+        "maxdd_pct": -6.907104315290158,
+        "mar": 1.520127854725479,
+        "total_pct": 55.307401250549624,
+        "pct_trades_clamped": 0.0
+      },
+      "1000000000": {
+        "cagr_pct": 10.499681665167127,
+        "maxdd_pct": -6.907104315290158,
+        "mar": 1.520127854725479,
+        "total_pct": 55.307401250549624,
+        "pct_trades_clamped": 0.0
+      }
+    }
+  },
+  "window_crosscheck_vs_KELLY_md": {
+    "full_window_kmax_dd30": {
+      "FIXED": 0.6775,
+      "VOLTARGET": 0.6761111111111111
+    },
+    "last_2y_window_kmax_dd30": {
+      "FIXED": 0.7326666666666667,
+      "VOLTARGET": 0.6817073170731708
+    },
+    "n_trades_2y": 151,
+    "KELLY_md_S5_fee_corrected": {
+      "2y_cash0_BINDING": 0.3,
+      "2y_cash4": 0.79,
+      "full_cash0": 0.78,
+      "full_cash4": 0.83
+    },
+    "note": "my fee is the engine's 12bp round trip (MORE conservative than the 8.64bp RESEARCH_FEES measured) and cash_apy is 0."
+  },
+  "lever2_stop_width_sweep_S3_pullback": {
+    "1.0": {
+      "n_trades": 266,
+      "win_rate_pct": 39.849624060150376,
+      "exit_mix": {
+        "STOP": 160,
+        "SIGNAL": 106
+      },
+      "stop_frac_median_pct": 1.356141018222555,
+      "mean_r_bps_per_dollar_notional": 24.296103361868994,
+      "median_r_bps": -107.64886439834271,
+      "expectancy_per_unit_RISK": 0.14166307810292617,
+      "mean_win_bps": 288.0648624552352,
+      "mean_loss_bps": -150.45069953748606,
+      "notional_at_1000_risk_median_usd": 73740.06180453417,
+      "notional_at_1000_risk_p90_usd": 112507.87201170568,
+      "equity_at_constant_0.397pct_risk": {
+        "cagr_pct": 3.3184891740659417,
+        "maxdd_pct": -4.714332109690689,
+        "mar": 0.7039150184698529,
+        "total_pct": 15.477128653200634,
+        "gross_usd_median": 29290.905678895087,
+        "gross_usd_p99": 74209.36644373213
+      },
+      "years": 4.407939767282683
+    },
+    "1.5": {
+      "n_trades": 231,
+      "win_rate_pct": 49.78354978354979,
+      "exit_mix": {
+        "SIGNAL": 116,
+        "STOP": 115
+      },
+      "stop_frac_median_pct": 2.043130709669057,
+      "mean_r_bps_per_dollar_notional": 33.02675964661959,
+      "median_r_bps": -22.95544784542859,
+      "expectancy_per_unit_RISK": 0.13560544952583267,
+      "mean_win_bps": 284.8198245276178,
+      "mean_loss_bps": -216.5956753647148,
+      "notional_at_1000_risk_median_usd": 48944.49460661175,
+      "notional_at_1000_risk_p90_usd": 74435.60349461531,
+      "equity_at_constant_0.397pct_risk": {
+        "cagr_pct": 2.789443197105501,
+        "maxdd_pct": -2.811894711244378,
+        "mar": 0.9920155210473932,
+        "total_pct": 12.89475882443487,
+        "gross_usd_median": 19441.651389222217,
+        "gross_usd_p99": 48785.18991678266
+      },
+      "years": 4.408396075747205
+    },
+    "2.0": {
+      "n_trades": 208,
+      "win_rate_pct": 56.730769230769226,
+      "exit_mix": {
+        "SIGNAL": 119,
+        "STOP": 89
+      },
+      "stop_frac_median_pct": 2.7768826248219467,
+      "mean_r_bps_per_dollar_notional": 28.713034770860798,
+      "median_r_bps": 122.78380320673926,
+      "expectancy_per_unit_RISK": 0.10039471416090465,
+      "mean_win_bps": 274.70277154591474,
+      "mean_loss_bps": -293.80684233420993,
+      "notional_at_1000_risk_median_usd": 36011.61568616946,
+      "notional_at_1000_risk_p90_usd": 57216.06174591886,
+      "equity_at_constant_0.397pct_risk": {
+        "cagr_pct": 1.8538155251558663,
+        "maxdd_pct": -2.859360514095166,
+        "mar": 0.6483322113519845,
+        "total_pct": 8.439860544654621,
+        "gross_usd_median": 14304.47456369435,
+        "gross_usd_p99": 36949.46598715051
+      },
+      "years": 4.411133926534337
+    },
+    "2.5": {
+      "n_trades": 190,
+      "win_rate_pct": 63.1578947368421,
+      "exit_mix": {
+        "SIGNAL": 124,
+        "STOP": 66
+      },
+      "stop_frac_median_pct": 3.4426787625928803,
+      "mean_r_bps_per_dollar_notional": 37.87798888353683,
+      "median_r_bps": 139.89050014365634,
+      "expectancy_per_unit_RISK": 0.10100052284517402,
+      "mean_win_bps": 259.39757093656294,
+      "mean_loss_bps": -341.8698660645078,
+      "notional_at_1000_risk_median_usd": 29047.20007726327,
+      "notional_at_1000_risk_p90_usd": 45887.19191574042,
+      "equity_at_constant_0.397pct_risk": {
+        "cagr_pct": 1.7137115960766947,
+        "maxdd_pct": -2.4873153358762723,
+        "mar": 0.6889804325807207,
+        "total_pct": 7.783423244763155,
+        "gross_usd_median": 11538.080886810389,
+        "gross_usd_p99": 29944.741490985733
+      },
+      "years": 4.411133926534337
+    },
+    "3.0": {
+      "n_trades": 183,
+      "win_rate_pct": 65.57377049180327,
+      "exit_mix": {
+        "SIGNAL": 124,
+        "STOP": 59
+      },
+      "stop_frac_median_pct": 4.163046655914005,
+      "mean_r_bps_per_dollar_notional": 28.69585051401906,
+      "median_r_bps": 144.33965695318636,
+      "expectancy_per_unit_RISK": 0.06391423547312187,
+      "mean_win_bps": 257.86614408768014,
+      "mean_loss_bps": -407.8189943881925,
+      "notional_at_1000_risk_median_usd": 24020.869393318102,
+      "notional_at_1000_risk_p90_usd": 38592.31404713323,
+      "equity_at_constant_0.397pct_risk": {
+        "cagr_pct": 1.0362552421281812,
+        "maxdd_pct": -2.1902466131839105,
+        "mar": 0.4731226318947715,
+        "total_pct": 4.652525018343412,
+        "gross_usd_median": 9541.530105979316,
+        "gross_usd_p99": 25111.65110336048
+      },
+      "years": 4.411133926534337
+    },
+    "3.5": {
+      "n_trades": 178,
+      "win_rate_pct": 67.97752808988764,
+      "exit_mix": {
+        "SIGNAL": 129,
+        "STOP": 49
+      },
+      "stop_frac_median_pct": 4.841541574238624,
+      "mean_r_bps_per_dollar_notional": 29.467758964829528,
+      "median_r_bps": 144.33422585430375,
+      "expectancy_per_unit_RISK": 0.048369837280810374,
+      "mean_win_bps": 247.15755265996114,
+      "mean_loss_bps": -432.64566273887084,
+      "notional_at_1000_risk_median_usd": 20654.785912884632,
+      "notional_at_1000_risk_p90_usd": 32863.01156038999,
+      "equity_at_constant_0.397pct_risk": {
+        "cagr_pct": 0.761354780847201,
+        "maxdd_pct": -2.068744679567347,
+        "mar": 0.3680274266645748,
+        "total_pct": 3.4023161912034583,
+        "gross_usd_median": 8204.459979919278,
+        "gross_usd_p99": 21620.823309536903
+      },
+      "years": 4.411133926534337
+    },
+    "4.0": {
+      "n_trades": 172,
+      "win_rate_pct": 70.93023255813954,
+      "exit_mix": {
+        "SIGNAL": 134,
+        "STOP": 38
+      },
+      "stop_frac_median_pct": 5.533190370558428,
+      "mean_r_bps_per_dollar_notional": 43.27575117084016,
+      "median_r_bps": 145.15438300064818,
+      "expectancy_per_unit_RISK": 0.06472800100553742,
+      "mean_win_bps": 241.15148778913257,
+      "mean_loss_bps": -439.54104617779336,
+      "notional_at_1000_risk_median_usd": 18072.937673774053,
+      "notional_at_1000_risk_p90_usd": 28982.05561935166,
+      "equity_at_constant_0.397pct_risk": {
+        "cagr_pct": 0.9944469296309322,
+        "maxdd_pct": -1.7082417312236475,
+        "mar": 0.5821464910113102,
+        "total_pct": 4.461636924949608,
+        "gross_usd_median": 7178.902482429367,
+        "gross_usd_p99": 19019.598877834145
+      },
+      "years": 4.411133926534337
+    },
+    "5.0": {
+      "n_trades": 164,
+      "win_rate_pct": 71.34146341463415,
+      "exit_mix": {
+        "SIGNAL": 138,
+        "STOP": 24,
+        "TIME": 2
+      },
+      "stop_frac_median_pct": 6.916487963198034,
+      "mean_r_bps_per_dollar_notional": 43.93060036272035,
+      "median_r_bps": 144.6222733986781,
+      "expectancy_per_unit_RISK": 0.05468034483046066,
+      "mean_win_bps": 230.6854845878286,
+      "mean_loss_bps": -420.9698561125491,
+      "notional_at_1000_risk_median_usd": 14458.350139019243,
+      "notional_at_1000_risk_p90_usd": 23125.13236107855,
+      "equity_at_constant_0.397pct_risk": {
+        "cagr_pct": 0.8023056975419607,
+        "maxdd_pct": -1.6582321757173335,
+        "mar": 0.4838319442178788,
+        "total_pct": 3.5878192919410523,
+        "gross_usd_median": 5743.121985943494,
+        "gross_usd_p99": 15323.81614972264
+      },
+      "years": 4.411133926534337
+    }
+  },
+  "lever2_caveats": [
+    "IN-SAMPLE over the whole fixture, NOT pre-registered. RESEARCH_TRAIL.md is the cautionary precedent: a sweep like this on the selection window returned rho = -0.064 transfer to holdout. Treat as a MEASUREMENT of the trade-off shape, not as a parameter recommendation.",
+    "stop_atr=2.5 is the shipped value and IS the registered objective (TradeCfg comment): moving it restates every published MAR in the repo.",
+    "The sim fills STOP exits AT the stop price. No gap-through, no slippage. Tighter stops are therefore flattered here - they are hit more often and each hit is the one most exposed to real gap risk."
+  ]
+}

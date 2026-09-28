@@ -1,0 +1,923 @@
+{
+ "checks": [
+  {
+   "name": "V1 from-flat gross target == $15,000 (published live size)",
+   "pass": true,
+   "detail": "$15,000.00"
+  },
+  {
+   "name": "V2 engine trade counts == published (S3 190 / S4 128)",
+   "pass": true,
+   "detail": "S3 190 / S4 128"
+  },
+  {
+   "name": "V3 simulate() == independent_path() when no rail binds",
+   "pass": true,
+   "detail": "128631.075193 vs 128631.075193  clamps=0"
+  },
+  {
+   "name": "V4 fractional rails: mult and maxDD invariant to a 100x equity step",
+   "pass": true,
+   "detail": "mult 1.285603670 vs 1.285603670 | maxDD -4.783614% vs -4.783614%"
+  },
+  {
+   "name": "V5 fixed-dollar rails: the same step is NOT invariant",
+   "pass": true,
+   "detail": "mult 1.129284 vs 1.001293  (base is fixed, so notional does not follow equity)"
+  },
+  {
+   "name": "M4 invariant MAX_NOTIONAL_FRAC >= DD_HALT_PCT reproduces guard2 exactly",
+   "pass": true,
+   "detail": "0 mismatches over 240 (phi, dd) pairs"
+  }
+ ],
+ "checks_window": {
+  "n_pullback": 190,
+  "n_trend": 128
+ },
+ "M1_scale_together": [
+  {
+   "f": 1.0,
+   "equity": 100055.0,
+   "want_gross": 15000.000000000002,
+   "today_gross": 15000.000000000002,
+   "today_frac": 0.1499175453500575,
+   "today_delivered": 1.0,
+   "today_max_gross": 16309.784512964263,
+   "b_gross": 30016.500000000004,
+   "b_frac": 0.30000000000000004,
+   "b_delivered": 1.0,
+   "b_max_gross": 39214.351867967525,
+   "today_mult": 1.1292130480689406,
+   "b_mult": 1.2856036699164426,
+   "today_maxdd": -2.212773069764651,
+   "b_maxdd": -4.783614085086874
+  },
+  {
+   "f": 1.333,
+   "equity": 133373.315,
+   "want_gross": 19995.000000000004,
+   "today_gross": 19995.000000000004,
+   "today_frac": 0.1499175453500575,
+   "today_delivered": 0.9931853965988073,
+   "today_max_gross": 20000.000000000004,
+   "b_gross": 40011.99450000001,
+   "b_frac": 0.30000000000000004,
+   "b_delivered": 1.0,
+   "b_max_gross": 52272.73104000065,
+   "today_mult": 1.1267524882039646,
+   "b_mult": 1.2856036699164413,
+   "today_maxdd": -2.206569748763876,
+   "b_maxdd": -4.783614085086874
+  },
+  {
+   "f": 1.5,
+   "equity": 150082.5,
+   "want_gross": 22500.000000000004,
+   "today_gross": 20000.0,
+   "today_frac": 0.1332600403111622,
+   "today_delivered": 0.9234582833827563,
+   "today_max_gross": 20000.000000000004,
+   "b_gross": 45024.75000000001,
+   "b_frac": 0.30000000000000004,
+   "b_delivered": 1.0,
+   "b_max_gross": 58821.52780195135,
+   "today_mult": 1.1172119659277089,
+   "b_mult": 1.2856036699164444,
+   "today_maxdd": -1.9981244388274755,
+   "b_maxdd": -4.783614085086862
+  },
+  {
+   "f": 2.0,
+   "equity": 200110.0,
+   "want_gross": 30000.000000000004,
+   "today_gross": 20000.0,
+   "today_frac": 0.09994503023337165,
+   "today_delivered": 0.7410878462163125,
+   "today_max_gross": 20000.000000000004,
+   "b_gross": 60033.00000000001,
+   "b_frac": 0.30000000000000004,
+   "b_delivered": 1.0,
+   "b_max_gross": 78428.70373593505,
+   "today_mult": 1.096776960331924,
+   "b_mult": 1.2856036699164426,
+   "today_maxdd": -1.599388842853422,
+   "b_maxdd": -4.783614085086874
+  },
+  {
+   "f": 3.0,
+   "equity": 300165.0,
+   "want_gross": 45000.00000000001,
+   "today_gross": 20000.0,
+   "today_frac": 0.0666300201555811,
+   "today_delivered": 0.49905708316081576,
+   "today_max_gross": 20000.0,
+   "b_gross": 90049.50000000001,
+   "b_frac": 0.30000000000000004,
+   "b_delivered": 1.0,
+   "b_max_gross": 117643.0556039027,
+   "today_mult": 1.0731586030852027,
+   "b_mult": 1.2856036699164444,
+   "today_maxdd": -1.3369963938967389,
+   "b_maxdd": -4.783614085086862
+  },
+  {
+   "f": 5.0,
+   "equity": 500275.0,
+   "want_gross": 75000.00000000001,
+   "today_gross": 20000.0,
+   "today_frac": 0.039978012093348655,
+   "today_delivered": 0.30688144714672294,
+   "today_max_gross": 20000.0,
+   "b_gross": 150082.50000000003,
+   "b_frac": 0.30000000000000004,
+   "b_delivered": 1.0,
+   "b_max_gross": 196071.75933983762,
+   "today_mult": 1.0543046707674961,
+   "b_mult": 1.285603669916443,
+   "today_maxdd": -1.2465373225806653,
+   "b_maxdd": -4.783614085086874
+  },
+  {
+   "f": 10.0,
+   "equity": 1000550.0,
+   "want_gross": 150000.00000000003,
+   "today_gross": 20000.0,
+   "today_frac": 0.019989006046674328,
+   "today_delivered": 0.15459847029563623,
+   "today_max_gross": 20000.0,
+   "b_gross": 300165.00000000006,
+   "b_frac": 0.30000000000000004,
+   "b_delivered": 1.0,
+   "b_max_gross": 392143.51867967524,
+   "today_mult": 1.0280685355335293,
+   "b_mult": 1.285603669916443,
+   "today_maxdd": -0.6614445660687474,
+   "b_maxdd": -4.783614085086874
+  },
+  {
+   "f": 20.0,
+   "equity": 2001100.0,
+   "want_gross": 300000.00000000006,
+   "today_gross": 20000.0,
+   "today_frac": 0.009994503023337164,
+   "today_delivered": 0.07729923514781811,
+   "today_max_gross": 20000.0,
+   "b_gross": 600330.0000000001,
+   "b_frac": 0.30000000000000004,
+   "b_delivered": 1.0,
+   "b_max_gross": 784287.0373593505,
+   "today_mult": 1.0140342677667653,
+   "b_mult": 1.285603669916443,
+   "today_maxdd": -0.33193718043001974,
+   "b_maxdd": -4.783614085086874
+  },
+  {
+   "f": 66.7,
+   "equity": 6673668.5,
+   "want_gross": 1000500.0000000001,
+   "today_gross": 20000.0,
+   "today_frac": 0.002996852480760769,
+   "today_delivered": 0.023178181453618617,
+   "today_max_gross": 20000.0,
+   "b_gross": 2002100.5500000003,
+   "b_frac": 0.30000000000000004,
+   "b_delivered": 1.0,
+   "b_max_gross": 2615597.2695934307,
+   "today_mult": 1.0042081762419084,
+   "b_mult": 1.285603669916442,
+   "today_maxdd": -0.09978804104616712,
+   "b_maxdd": -4.783614085086874
+  }
+ ],
+ "M1b_base_step": [
+  {
+   "base": 50000.0,
+   "want": 15000.000000000002,
+   "cap": 20000.0,
+   "got": 15000.000000000002,
+   "frac": 0.1499175453500575,
+   "max_gross": 16309.784512964263,
+   "delivered": 1.0,
+   "mult": 1.1292130480689406,
+   "maxdd": -2.212773069764651,
+   "halted": null,
+   "exposure_page": false
+  },
+  {
+   "base": 66667.0,
+   "want": 20000.100000000002,
+   "cap": 20000.0,
+   "got": 20000.0,
+   "frac": 0.1998900604667433,
+   "max_gross": 20000.000000000004,
+   "delivered": 0.99310516396894,
+   "mult": 1.1689442811227164,
+   "maxdd": -2.854834539270079,
+   "halted": null,
+   "exposure_page": false
+  },
+  {
+   "base": 75000.0,
+   "want": 22500.000000000004,
+   "cap": 20000.0,
+   "got": 20000.0,
+   "frac": 0.1998900604667433,
+   "max_gross": 20000.000000000004,
+   "delivered": 0.9234582833827563,
+   "mult": 1.175817948891561,
+   "maxdd": -2.871551541786721,
+   "halted": null,
+   "exposure_page": false
+  },
+  {
+   "base": 100055.0,
+   "want": 30016.500000000004,
+   "cap": 20000.0,
+   "got": 20000.0,
+   "frac": 0.1998900604667433,
+   "max_gross": 20000.000000000004,
+   "delivered": 0.740688715268447,
+   "mult": 1.1935825473849557,
+   "maxdd": -2.9660332120471478,
+   "halted": null,
+   "exposure_page": false
+  },
+  {
+   "base": 150000.0,
+   "want": 45000.00000000001,
+   "cap": 20000.0,
+   "got": 20000.0,
+   "frac": 0.1998900604667433,
+   "max_gross": 20000.0,
+   "delivered": 0.49905708316081576,
+   "mult": 1.219475809255607,
+   "maxdd": -3.859660945331067,
+   "halted": null,
+   "exposure_page": true
+  },
+  {
+   "base": 200110.0,
+   "want": 60033.00000000001,
+   "cap": 20000.0,
+   "got": 20000.0,
+   "frac": 0.1998900604667433,
+   "max_gross": 20000.0,
+   "delivered": 0.3778688605690175,
+   "mult": 1.2454886112132968,
+   "maxdd": -4.891707061251916,
+   "halted": null,
+   "exposure_page": true
+  },
+  {
+   "base": 333333.0,
+   "want": 99999.90000000001,
+   "cap": 20000.0,
+   "got": 20000.0,
+   "frac": 0.1998900604667433,
+   "max_gross": 20000.0,
+   "delivered": 0.23189793734139116,
+   "mult": 1.2806853553352964,
+   "maxdd": -6.205617141720121,
+   "halted": null,
+   "exposure_page": true
+  }
+ ],
+ "M2_ladder": {
+  "A TODAY  base 50k fixed, cap $20k fixed": [
+   {
+    "equity": 100055.0,
+    "gross": 15000.000000000002,
+    "frac": 0.1499175453500575,
+    "max_gross": 16309.784512964263,
+    "mean_gross": 11854.280341206586,
+    "cap": 20000.0,
+    "delivered": 1.0,
+    "mult": 1.1292130480689406,
+    "maxdd": -2.212773069764651,
+    "cum10": 75000.0,
+    "cum10_frac": 0.7495877267502873,
+    "worst_pos": 20000.0,
+    "worst_pos_frac": 0.1998900604667433,
+    "halted": null
+   },
+   {
+    "equity": 200000.0,
+    "gross": 15000.000000000002,
+    "frac": 0.07500000000000001,
+    "max_gross": 16309.784512964263,
+    "mean_gross": 11854.280341206586,
+    "cap": 20000.0,
+    "delivered": 1.0,
+    "mult": 1.0646420576226894,
+    "maxdd": -1.1612312988089069,
+    "cum10": 75000.0,
+    "cum10_frac": 0.375,
+    "worst_pos": 20000.0,
+    "worst_pos_frac": 0.1,
+    "halted": null
+   },
+   {
+    "equity": 500000.0,
+    "gross": 15000.000000000002,
+    "frac": 0.030000000000000002,
+    "max_gross": 16309.784512964263,
+    "mean_gross": 11854.280341206586,
+    "cap": 20000.0,
+    "delivered": 1.0,
+    "mult": 1.0258568230490748,
+    "maxdd": -0.47857646377710283,
+    "cum10": 75000.0,
+    "cum10_frac": 0.15,
+    "worst_pos": 20000.0,
+    "worst_pos_frac": 0.04,
+    "halted": null
+   },
+   {
+    "equity": 1000000.0,
+    "gross": 15000.000000000002,
+    "frac": 0.015000000000000001,
+    "max_gross": 16309.784512964263,
+    "mean_gross": 11854.280341206586,
+    "cap": 20000.0,
+    "delivered": 1.0,
+    "mult": 1.0129284115245387,
+    "maxdd": -0.24173142292807093,
+    "cum10": 75000.0,
+    "cum10_frac": 0.075,
+    "worst_pos": 20000.0,
+    "worst_pos_frac": 0.02,
+    "halted": null
+   },
+   {
+    "equity": 2000000.0,
+    "gross": 15000.000000000002,
+    "frac": 0.007500000000000001,
+    "max_gross": 16309.784512964263,
+    "mean_gross": 11854.280341206586,
+    "cap": 20000.0,
+    "delivered": 1.0,
+    "mult": 1.0064642057622686,
+    "maxdd": -0.12148591181576629,
+    "cum10": 75000.0,
+    "cum10_frac": 0.0375,
+    "worst_pos": 20000.0,
+    "worst_pos_frac": 0.01,
+    "halted": null
+   },
+   {
+    "equity": 6670000.0,
+    "gross": 15000.000000000002,
+    "frac": 0.002248875562218891,
+    "max_gross": 16309.784512964263,
+    "mean_gross": 11854.280341206586,
+    "cap": 20000.0,
+    "delivered": 1.0,
+    "mult": 1.001938292582388,
+    "maxdd": -0.03655890463549749,
+    "cum10": 75000.0,
+    "cum10_frac": 0.011244377811094454,
+    "worst_pos": 20000.0,
+    "worst_pos_frac": 0.0029985007496251873,
+    "halted": null
+   }
+  ],
+  "A' TODAY-scaled  base=f*50k, cap $20k FIXED": [
+   {
+    "equity": 100055.0,
+    "gross": 15000.000000000002,
+    "frac": 0.1499175453500575,
+    "max_gross": 16309.784512964263,
+    "mean_gross": 11854.280341206586,
+    "cap": 20000.0,
+    "delivered": 1.0,
+    "mult": 1.1292130480689406,
+    "maxdd": -2.212773069764651,
+    "cum10": 75000.0,
+    "cum10_frac": 0.7495877267502873,
+    "worst_pos": 20000.0,
+    "worst_pos_frac": 0.1998900604667433,
+    "halted": null
+   },
+   {
+    "equity": 200000.0,
+    "gross": 20000.0,
+    "frac": 0.1,
+    "max_gross": 20000.000000000004,
+    "mean_gross": 16978.495387990944,
+    "cap": 20000.0,
+    "delivered": 0.7414871966861983,
+    "mult": 1.0968158742995535,
+    "maxdd": -1.6001291555573283,
+    "cum10": 108447.98749375486,
+    "cum10_frac": 0.5422399374687743,
+    "worst_pos": 20000.0,
+    "worst_pos_frac": 0.1,
+    "halted": null
+   },
+   {
+    "equity": 500000.0,
+    "gross": 20000.0,
+    "frac": 0.04,
+    "max_gross": 20000.0,
+    "mean_gross": 19687.22619189523,
+    "cap": 20000.0,
+    "delivered": 0.3070369518769881,
+    "mult": 1.0543197727307287,
+    "maxdd": -1.2466149090686662,
+    "cum10": 121097.81844640632,
+    "cum10_frac": 0.24219563689281265,
+    "worst_pos": 20000.0,
+    "worst_pos_frac": 0.04,
+    "halted": null
+   },
+   {
+    "equity": 1000000.0,
+    "gross": 20000.0,
+    "frac": 0.02,
+    "max_gross": 20000.0,
+    "mean_gross": 20000.0,
+    "cap": 20000.0,
+    "delivered": 0.15468349945429782,
+    "mult": 1.0280839732280727,
+    "maxdd": -0.66180569613431,
+    "cum10": 122515.72394252128,
+    "cum10_frac": 0.12251572394252128,
+    "worst_pos": 20000.0,
+    "worst_pos_frac": 0.02,
+    "halted": null
+   },
+   {
+    "equity": 2000000.0,
+    "gross": 20000.0,
+    "frac": 0.01,
+    "max_gross": 20000.0,
+    "mean_gross": 20000.0,
+    "cap": 20000.0,
+    "delivered": 0.07734174972714891,
+    "mult": 1.014041986614037,
+    "maxdd": -0.3321190748636016,
+    "cum10": 122515.72394252128,
+    "cum10_frac": 0.06125786197126064,
+    "worst_pos": 20000.0,
+    "worst_pos_frac": 0.01,
+    "halted": null
+   },
+   {
+    "equity": 6670000.0,
+    "gross": 20000.0,
+    "frac": 0.0029985007496251873,
+    "max_gross": 20000.0,
+    "mean_gross": 20000.0,
+    "cap": 20000.0,
+    "delivered": 0.023190929453418094,
+    "mult": 1.0042104907388414,
+    "maxdd": -0.09984286382604957,
+    "cum10": 122515.72394252128,
+    "cum10_frac": 0.018368174504126127,
+    "worst_pos": 20000.0,
+    "worst_pos_frac": 0.0029985007496251873,
+    "halted": null
+   }
+  ],
+  "B CANDIDATE B  base=equity, cap 0.35*base, halts re-cut": [
+   {
+    "equity": 100055.0,
+    "gross": 30016.500000000004,
+    "frac": 0.30000000000000004,
+    "max_gross": 39214.351867967525,
+    "mean_gross": 27523.884204251037,
+    "cap": 35019.25,
+    "delivered": 1.0,
+    "mult": 1.2856036699164426,
+    "maxdd": -4.783614085086874,
+    "cum10": 150053.66294743345,
+    "cum10_frac": 1.4997117879909394,
+    "worst_pos": 35019.25,
+    "worst_pos_frac": 0.35,
+    "halted": null
+   },
+   {
+    "equity": 200000.0,
+    "gross": 60000.00000000001,
+    "frac": 0.30000000000000004,
+    "max_gross": 78385.59166052182,
+    "mean_gross": 55017.5087786738,
+    "cap": 70000.0,
+    "delivered": 1.0,
+    "mult": 1.2856036699164435,
+    "maxdd": -4.783614085086862,
+    "cum10": 299942.35759818787,
+    "cum10_frac": 1.4997117879909394,
+    "worst_pos": 70000.0,
+    "worst_pos_frac": 0.35,
+    "halted": null
+   },
+   {
+    "equity": 500000.0,
+    "gross": 150000.00000000003,
+    "frac": 0.30000000000000004,
+    "max_gross": 195963.97915130435,
+    "mean_gross": 137543.77194668443,
+    "cap": 175000.0,
+    "delivered": 1.0,
+    "mult": 1.2856036699164426,
+    "maxdd": -4.783614085086874,
+    "cum10": 749855.8939954697,
+    "cum10_frac": 1.4997117879909394,
+    "worst_pos": 175000.0,
+    "worst_pos_frac": 0.35,
+    "halted": null
+   },
+   {
+    "equity": 1000000.0,
+    "gross": 300000.00000000006,
+    "frac": 0.30000000000000004,
+    "max_gross": 391927.9583026087,
+    "mean_gross": 275087.54389336886,
+    "cap": 350000.0,
+    "delivered": 1.0,
+    "mult": 1.2856036699164426,
+    "maxdd": -4.783614085086874,
+    "cum10": 1499711.7879909393,
+    "cum10_frac": 1.4997117879909394,
+    "worst_pos": 350000.0,
+    "worst_pos_frac": 0.35,
+    "halted": null
+   },
+   {
+    "equity": 2000000.0,
+    "gross": 600000.0000000001,
+    "frac": 0.30000000000000004,
+    "max_gross": 783855.9166052174,
+    "mean_gross": 550175.0877867377,
+    "cap": 700000.0,
+    "delivered": 1.0,
+    "mult": 1.2856036699164426,
+    "maxdd": -4.783614085086874,
+    "cum10": 2999423.5759818787,
+    "cum10_frac": 1.4997117879909394,
+    "worst_pos": 700000.0,
+    "worst_pos_frac": 0.35,
+    "halted": null
+   },
+   {
+    "equity": 6670000.0,
+    "gross": 2001000.0000000002,
+    "frac": 0.30000000000000004,
+    "max_gross": 2614159.4818784017,
+    "mean_gross": 1834833.9177687715,
+    "cap": 2334500.0,
+    "delivered": 1.0,
+    "mult": 1.2856036699164435,
+    "maxdd": -4.783614085086885,
+    "cum10": 10003077.625899568,
+    "cum10_frac": 1.4997117879909398,
+    "worst_pos": 2334500.0,
+    "worst_pos_frac": 0.35,
+    "halted": null
+   }
+  ],
+  "C NAIVE FRACTIONAL  no absolute ceiling at all, halts NOT re-cut": [
+   {
+    "equity": 100055.0,
+    "gross": 30016.500000000004,
+    "frac": 0.30000000000000004,
+    "max_gross": 39214.351867967525,
+    "mean_gross": 27523.884204251037,
+    "cap": 35019.25,
+    "delivered": 1.0,
+    "mult": 1.2856036699164426,
+    "maxdd": -4.783614085086874,
+    "cum10": 150053.66294743345,
+    "cum10_frac": 1.4997117879909394,
+    "worst_pos": 35019.25,
+    "worst_pos_frac": 0.35,
+    "halted": null
+   },
+   {
+    "equity": 200000.0,
+    "gross": 60000.00000000001,
+    "frac": 0.30000000000000004,
+    "max_gross": 78385.59166052182,
+    "mean_gross": 55017.5087786738,
+    "cap": 70000.0,
+    "delivered": 1.0,
+    "mult": 1.2856036699164435,
+    "maxdd": -4.783614085086862,
+    "cum10": 299942.35759818787,
+    "cum10_frac": 1.4997117879909394,
+    "worst_pos": 70000.0,
+    "worst_pos_frac": 0.35,
+    "halted": null
+   },
+   {
+    "equity": 500000.0,
+    "gross": 150000.00000000003,
+    "frac": 0.30000000000000004,
+    "max_gross": 195963.97915130435,
+    "mean_gross": 137543.77194668443,
+    "cap": 175000.0,
+    "delivered": 1.0,
+    "mult": 1.2856036699164426,
+    "maxdd": -4.783614085086874,
+    "cum10": 749855.8939954697,
+    "cum10_frac": 1.4997117879909394,
+    "worst_pos": 175000.0,
+    "worst_pos_frac": 0.35,
+    "halted": null
+   },
+   {
+    "equity": 1000000.0,
+    "gross": 300000.00000000006,
+    "frac": 0.30000000000000004,
+    "max_gross": 391927.9583026087,
+    "mean_gross": 275087.54389336886,
+    "cap": 350000.0,
+    "delivered": 1.0,
+    "mult": 1.2856036699164426,
+    "maxdd": -4.783614085086874,
+    "cum10": 1499711.7879909393,
+    "cum10_frac": 1.4997117879909394,
+    "worst_pos": 350000.0,
+    "worst_pos_frac": 0.35,
+    "halted": null
+   },
+   {
+    "equity": 2000000.0,
+    "gross": 600000.0000000001,
+    "frac": 0.30000000000000004,
+    "max_gross": 783855.9166052174,
+    "mean_gross": 550175.0877867377,
+    "cap": 700000.0,
+    "delivered": 1.0,
+    "mult": 1.2856036699164426,
+    "maxdd": -4.783614085086874,
+    "cum10": 2999423.5759818787,
+    "cum10_frac": 1.4997117879909394,
+    "worst_pos": 700000.0,
+    "worst_pos_frac": 0.35,
+    "halted": null
+   },
+   {
+    "equity": 6670000.0,
+    "gross": 2001000.0000000002,
+    "frac": 0.30000000000000004,
+    "max_gross": 2614159.4818784017,
+    "mean_gross": 1834833.9177687715,
+    "cap": 2334500.0,
+    "delivered": 1.0,
+    "mult": 1.2856036699164435,
+    "maxdd": -4.783614085086885,
+    "cum10": 10003077.625899568,
+    "cum10_frac": 1.4997117879909398,
+    "worst_pos": 2334500.0,
+    "worst_pos_frac": 0.35,
+    "halted": null
+   }
+  ]
+ },
+ "M1c_matched_risk": {
+  "rows": [
+   {
+    "equity": 100055.0,
+    "fixed_dollar": {
+     "gross": 15000.000000000002,
+     "frac": 0.1499175453500575,
+     "mult": 1.1292130480689406,
+     "maxdd": -2.212773069764651
+    },
+    "fixed_frac": {
+     "gross": 15008.250000000002,
+     "frac": 0.15000000000000002,
+     "mult": 1.1359186224500022,
+     "maxdd": -2.4168727755628505
+    }
+   },
+   {
+    "equity": 200110.0,
+    "fixed_dollar": {
+     "gross": 15000.000000000002,
+     "frac": 0.07495877267502875,
+     "mult": 1.0646065240344704,
+     "maxdd": -1.1606242649569776
+    },
+    "fixed_frac": {
+     "gross": 30016.500000000004,
+     "frac": 0.15000000000000002,
+     "mult": 1.1359186224500022,
+     "maxdd": -2.4168727755628505
+    }
+   },
+   {
+    "equity": 500275.0,
+    "fixed_dollar": {
+     "gross": 15000.000000000002,
+     "frac": 0.0299835090700115,
+     "mult": 1.0258426096137871,
+     "maxdd": -0.4783187063176486
+    },
+    "fixed_frac": {
+     "gross": 75041.25000000001,
+     "frac": 0.15000000000000002,
+     "mult": 1.1359186224500024,
+     "maxdd": -2.4168727755628616
+    }
+   },
+   {
+    "equity": 1000550.0,
+    "fixed_dollar": {
+     "gross": 15000.000000000002,
+     "frac": 0.01499175453500575,
+     "mult": 1.012921304806895,
+     "maxdd": -0.2415998997197688
+    },
+    "fixed_frac": {
+     "gross": 150082.50000000003,
+     "frac": 0.15000000000000002,
+     "mult": 1.1359186224500024,
+     "maxdd": -2.4168727755628616
+    }
+   },
+   {
+    "equity": 6673668.0,
+    "fixed_dollar": {
+     "gross": 15000.000000000002,
+     "frac": 0.0022476395289666795,
+     "mult": 1.0019372272526186,
+     "maxdd": -0.036538842039468555
+    },
+    "fixed_frac": {
+     "gross": 1001050.2000000002,
+     "frac": 0.15000000000000002,
+     "mult": 1.1359186224500037,
+     "maxdd": -2.416872775562884
+    }
+   }
+  ],
+  "fixed_frac_invariant": true
+ },
+ "M3_blast_radius": [
+  {
+   "equity": 100055.0,
+   "today": {
+    "worst_pos": 20000.0,
+    "worst_pos_frac": 0.1998900604667433,
+    "cum10": 75000.0,
+    "cum10_frac": 0.7495877267502873
+   },
+   "b": {
+    "worst_pos": 35019.25,
+    "worst_pos_frac": 0.35,
+    "cum10": 150053.66294743345,
+    "cum10_frac": 1.4997117879909394
+   }
+  },
+  {
+   "equity": 200000.0,
+   "today": {
+    "worst_pos": 20000.0,
+    "worst_pos_frac": 0.1,
+    "cum10": 75000.0,
+    "cum10_frac": 0.375
+   },
+   "b": {
+    "worst_pos": 70000.0,
+    "worst_pos_frac": 0.35,
+    "cum10": 299942.35759818787,
+    "cum10_frac": 1.4997117879909394
+   }
+  },
+  {
+   "equity": 500000.0,
+   "today": {
+    "worst_pos": 20000.0,
+    "worst_pos_frac": 0.04,
+    "cum10": 75000.0,
+    "cum10_frac": 0.15
+   },
+   "b": {
+    "worst_pos": 175000.0,
+    "worst_pos_frac": 0.35,
+    "cum10": 749855.8939954697,
+    "cum10_frac": 1.4997117879909394
+   }
+  },
+  {
+   "equity": 1000000.0,
+   "today": {
+    "worst_pos": 20000.0,
+    "worst_pos_frac": 0.02,
+    "cum10": 75000.0,
+    "cum10_frac": 0.075
+   },
+   "b": {
+    "worst_pos": 350000.0,
+    "worst_pos_frac": 0.35,
+    "cum10": 1499711.7879909393,
+    "cum10_frac": 1.4997117879909394
+   }
+  },
+  {
+   "equity": 2000000.0,
+   "today": {
+    "worst_pos": 20000.0,
+    "worst_pos_frac": 0.01,
+    "cum10": 75000.0,
+    "cum10_frac": 0.0375
+   },
+   "b": {
+    "worst_pos": 700000.0,
+    "worst_pos_frac": 0.35,
+    "cum10": 2999423.5759818787,
+    "cum10_frac": 1.4997117879909394
+   }
+  },
+  {
+   "equity": 6670000.0,
+   "today": {
+    "worst_pos": 20000.0,
+    "worst_pos_frac": 0.0029985007496251873,
+    "cum10": 75000.0,
+    "cum10_frac": 0.011244377811094454
+   },
+   "b": {
+    "worst_pos": 2334500.0,
+    "worst_pos_frac": 0.35,
+    "cum10": 10003077.625899568,
+    "cum10_frac": 1.4997117879909398
+   }
+  }
+ ],
+ "M4_coherence": {
+  "cases": [
+   {
+    "case": "TODAY  base 50k, cap 20k, dd .35/.06",
+    "base_h": 50000.0,
+    "cap": 20000.0,
+    "dd_halt": 0.35,
+    "daily_halt": 0.06,
+    "guard1_warn": false,
+    "guard2_warn": []
+   },
+   {
+    "case": "NAIVE  base=eq, cap 20k UNCHANGED",
+    "base_h": 100055.0,
+    "cap": 20000.0,
+    "dd_halt": 0.35,
+    "daily_halt": 0.06,
+    "guard1_warn": false,
+    "guard2_warn": [
+     {
+      "label": "DRAWDOWN",
+      "ratio": 1.7509625
+     }
+    ]
+   },
+   {
+    "case": "NAIVE  base=eq, cap 20k, halts re-cut",
+    "base_h": 100055.0,
+    "cap": 20000.0,
+    "dd_halt": 0.175,
+    "daily_halt": 0.03,
+    "guard1_warn": false,
+    "guard2_warn": []
+   },
+   {
+    "case": "CAND B base=eq, cap .35*base, dd .175",
+    "base_h": 100055.0,
+    "cap": 35019.25,
+    "dd_halt": 0.175,
+    "daily_halt": 0.03,
+    "guard1_warn": false,
+    "guard2_warn": []
+   },
+   {
+    "case": "CAND B base=eq, cap .35*base, dd .35",
+    "base_h": 100055.0,
+    "cap": 35019.25,
+    "dd_halt": 0.35,
+    "daily_halt": 0.06,
+    "guard1_warn": false,
+    "guard2_warn": []
+   },
+   {
+    "case": "CAND B base=eq, cap .40*base, dd .35",
+    "base_h": 100055.0,
+    "cap": 40022.0,
+    "dd_halt": 0.35,
+    "daily_halt": 0.06,
+    "guard1_warn": false,
+    "guard2_warn": []
+   }
+  ],
+  "grid_mismatches": 0
+ },
+ "M5_recut": {
+  "today_dd_halt_frac_of_equity": 0.17490380290840038,
+  "today_daily_halt_frac_of_equity": 0.029983509070011495,
+  "loosening_factor": 2.0011,
+  "equivalence_dd_halt_pct": 0.17490380290840038,
+  "equivalence_daily_halt_pct": 0.029983509070011495
+ }
+}

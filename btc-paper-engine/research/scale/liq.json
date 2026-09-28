@@ -1,0 +1,98 @@
+{
+ "btc_tiers": [
+  {
+   "lowerBound": "0.0",
+   "maxLeverage": 40
+  },
+  {
+   "lowerBound": "150000000.0",
+   "maxLeverage": 20
+  }
+ ],
+ "btc_max_lev": 40,
+ "equity": 100020.9062,
+ "maint_ratio": 0.012499999973042953,
+ "perp_pool": 1496.614944,
+ "pullback stop (2.5 ATR)": {
+  "median": 0.03346845295582406,
+  "p90": 0.056113858276553234,
+  "p99": 0.09576818205539278,
+  "max": 0.13734647802580705
+ },
+ "S4 chandelier trail (5.0 ATR)": {
+  "median": 0.06693690591164812,
+  "p90": 0.11222771655310647,
+  "p99": 0.19153636411078556,
+  "max": 0.2746929560516141
+ },
+ "liq": [
+  {
+   "N": 13924.0,
+   "N_over_E": 0.1392108962915995,
+   "liq_move": -7.261615947523424,
+   "survives_trail_median": true,
+   "survives_trail_p99": true,
+   "survives_trail_max": true
+  },
+  {
+   "N": 15000.0,
+   "N_over_E": 0.14996864725466766,
+   "liq_move": -6.739808013345423,
+   "survives_trail_median": true,
+   "survives_trail_p99": true,
+   "survives_trail_max": true
+  },
+  {
+   "N": 30010.0,
+   "N_over_E": 0.3000372736075051,
+   "liq_move": -3.362449856734298,
+   "survives_trail_median": true,
+   "survives_trail_p99": true,
+   "survives_trail_max": true
+  },
+  {
+   "N": 100000.0,
+   "N_over_E": 0.9997909816977844,
+   "liq_move": -1.0002117083544246,
+   "survives_trail_median": true,
+   "survives_trail_p99": true,
+   "survives_trail_max": true
+  },
+  {
+   "N": 200000.0,
+   "N_over_E": 1.9995819633955687,
+   "liq_move": -0.4937767402669836,
+   "survives_trail_median": true,
+   "survives_trail_p99": true,
+   "survives_trail_max": true
+  },
+  {
+   "N": 500000.0,
+   "N_over_E": 4.998954908488922,
+   "liq_move": -0.18991575941451896,
+   "survives_trail_median": true,
+   "survives_trail_p99": false,
+   "survives_trail_max": false
+  },
+  {
+   "N": 1000000.0,
+   "N_over_E": 9.997909816977844,
+   "liq_move": -0.08862876579703076,
+   "survives_trail_median": true,
+   "survives_trail_p99": false,
+   "survives_trail_max": false
+  }
+ ],
+ "crossover_5ATR median": {
+  "gross": 1272527.4632792405,
+  "x_equity": 12.722614817493431
+ },
+ "crossover_5ATR p99": {
+  "gross": 496031.71494176425,
+  "x_equity": 4.95928035234862
+ },
+ "crossover_5ATR max": {
+  "gross": 352485.04026550683,
+  "x_equity": 3.524113644408341
+ }
+}

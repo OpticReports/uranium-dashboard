@@ -1,0 +1,62 @@
+{
+ "baseline_authorised_gross_usd": 54029.700000000004,
+ "live_gross_usd": 15000.000000000002,
+ "ranking": [
+  {
+   "lever": "FIX 1 \u2014 make the entry actually rest (maker)",
+   "extra_authorised_gross_usd": 27014.85,
+   "implementation_risk": "LOWEST",
+   "risk_evidence": "measured passive fill rate 99.04% (516/521); only 1.2% of fills penetrate <2bps; worst-case rate if EVERY marginal fill missed = 97.9%. The backtest ALREADY cancels non-fills, so the selection cost is already inside every published number. One code change in hl.place_limit (do not re-send Gtc on Alo rejection; re-price and rest).",
+   "change": "executor only; no strategy change; no rail change"
+  },
+  {
+   "lever": "Rails: MAX_NOTIONAL_USD / SIZING_BASE_USD (NOT an edge lever)",
+   "extra_authorised_gross_usd": null,
+   "implementation_risk": "n/a \u2014 this is the binding constraint, not a lever",
+   "risk_evidence": "even the UN-fixed edge authorises $54,030, 3.6x the live $15,000. MAX_NOTIONAL_USD $20,000 clamps first. The edge side is not what holds the book at $15,000.",
+   "change": "config; out of scope for this study"
+  },
+  {
+   "lever": "Charge the TREND leg its real fee (documentation defect, not a change)",
+   "extra_authorised_gross_usd": "folded into every arm above",
+   "implementation_risk": "NONE \u2014 it is a measurement correction",
+   "risk_evidence": "RESEARCH_FEES.md honesty box item 5: its S5/S6 rows charged the donchian leg 12.0 bps while the venue charges 4.32. Every arm here charges each leg its own real fee.",
+   "change": "research only"
+  },
+  {
+   "lever": "FIX 2 \u2014 rest the SIGNAL/TIME exits as maker (INCREMENTAL over FIX 1)",
+   "extra_authorised_gross_usd": 4502.474999999991,
+   "note": "nominal (un-risk-adjusted) incremental would be +$18,010; the risk-adjusted figure is the one to use",
+   "implementation_risk": "MEDIUM",
+   "risk_evidence": "measured net +1.09 bps per exit, NOT the nominal +2.86: the passive exit gives up 1.76 bps of PRICE because the shipped exit at the next bar's open captures the momentum continuation. Price-effect sd is 4 bps \u2014 an order of magnitude above the fee being saved, so the sign of the mean is not established at n=124.",
+   "change": "executor; changes WHEN you are flat, so it touches the strategy's risk"
+  },
+  {
+   "lever": "VIP fee tier \u2014 a free consequence of scaling, not a lever",
+   "extra_authorised_gross_usd": 9004.950000000012,
+   "implementation_risk": "NONE, but it is CONDITIONAL on already being large",
+   "risk_evidence": "tier 1 needs $5m of 14-day notional. At 42.5 pullback + 28.6 trend trades/yr that is ~2.7 round trips per 14 days, so it needs ~$925k of gross per trade. It arrives only at Casey's $1m target and cannot help him get there.",
+   "change": "none; it happens on its own"
+  },
+  {
+   "lever": "3rd uncorrelated leg",
+   "extra_authorised_gross_usd": "NOT MEASURABLE \u2014 no third strategy exists",
+   "implementation_risk": "HIGHEST",
+   "risk_evidence": "the simulated third leg is non-monotone in rho rho -0.1783: 1.10x, rho +0.0000: 0.93x, rho +0.1000: 1.03x, rho +0.2500: 0.75x, rho +0.5000: 0.73x \u2014 a non-monotone response IS the signature of noise, so this measurement does not resolve the question. The 2-leg 1.34x IS measured and block-robust; N>=3 is not.",
+   "change": "a whole new validated strategy + a new leg in the executor"
+  },
+  {
+   "lever": "Hyperliquid NEGATIVE maker fee (MM rebate tiers)",
+   "extra_authorised_gross_usd": 0.0,
+   "implementation_risk": "NOT REACHABLE",
+   "risk_evidence": "fetched schedule: the mm tiers key on makerFractionCutoff = the account's maker share of EXCHANGE volume. The lowest tier is 0.5% and pays only -0.1 bp. Exchange volume in the fetched dailyUserVlm is $3.2bn-$12.2bn/day, so 0.5% is $16m-$61m/day of maker flow. This book does ~71 trades/yr. The rebate case is priced at zero, not modelled optimistically.",
+   "change": "none"
+  }
+ ],
+ "charts": [
+  "edge_fig1_authorised_notional.png",
+  "edge_fig2_fee_axis.png",
+  "edge_fig3_maker_achievable.png",
+  "edge_fig4_diversification.png"
+ ]
+}
