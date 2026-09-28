@@ -322,6 +322,17 @@ def analogs(df: pd.DataFrame, now: pd.Series, k: int = K) -> list:
     return rows
 
 
+def spx_long_outcomes(h: int) -> pd.Series:
+    """h-month S&P price return from every month-end since the series starts
+    (1927-12), with the same partial-month endpoint rule as panel.outcomes."""
+    daily = P.gspc_daily()
+    me = P.month_end(daily)
+    last = daily.index[-1]
+    if last < last + pd.offsets.BMonthEnd(0):
+        me = me.iloc[:-1]
+    return (me.shift(-h) / me - 1)
+
+
 # ---------------------------------------------------------------- main
 
 
@@ -341,9 +352,15 @@ def main() -> dict:
     for h in H:
         d = df[df[f"r{h}"].notna()]
         R = {"base": base_with_ci(d, h, SEED + h)}
-        sens = full.loc["1928-01":][full.loc["1928-01":, f"r{h}"].notna()]
-        R["base_1928"] = {"n": int(len(sens)),
-                          "p_up": float((sens[f"r{h}"] > 0).mean())}
+        # Long-history sensitivity from the S&P alone. NOT from `full`: the
+        # panel starts in 1962 (yield history), so a "1928+" slice of it was
+        # silently 1962+ — caught by counter-agent A (reported 75.4% at 12m;
+        # the true 1928+ figure is ~69%, the Depression is in the long sample).
+        long = spx_long_outcomes(h)
+        for lab, start in (("1928", "1928-01"), ("1962", "1962-01")):
+            x = long.loc[start:].dropna()
+            R[f"base_{lab}"] = {"n": int(len(x)), "p_up": float((x > 0).mean()),
+                                "first": str(x.index[0])}
         R["terciles"], pv = m1_terciles(d, h, feats)
         pvals |= {f"{f}@{h}": v for f, v in pv.items()}
         R["today_tercile"] = {f: ("low" if now[f] <= R["terciles"][f]["cuts"][0]
