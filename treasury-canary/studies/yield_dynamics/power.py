@@ -21,6 +21,12 @@ import os
 import sys
 from multiprocessing import Pool
 
+# One math thread per worker. Without this each of the 4 workers spawns its
+# own BLAS pool and 4 cores thrash ~16 threads — the first run spent 2h40m
+# at full CPU without finishing (a single sim is ~1.6s single-threaded).
+for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+    os.environ.setdefault(_v, "1")
+
 import numpy as np
 import pandas as pd
 
@@ -62,8 +68,12 @@ def one(args) -> dict:
 if __name__ == "__main__":
     nsim = int(sys.argv[1]) if len(sys.argv) > 1 else 100
     jobs = [(r2, s) for r2 in EFFECTS for s in range(nsim)]
+    rows = []
     with Pool(4) as pool:
-        rows = pool.map(one, jobs, chunksize=4)
+        for i, r in enumerate(pool.imap_unordered(one, jobs, chunksize=4), 1):
+            rows.append(r)
+            if i % 100 == 0 or i == len(jobs):
+                print(f"progress {i}/{len(jobs)}", flush=True)
     df = pd.DataFrame(rows)
     summ = df.groupby("r2").agg(power=("pass", "mean"), c1=("c1", "mean"),
                                 c2=("c2", "mean"), r1=("r1", "mean"),
