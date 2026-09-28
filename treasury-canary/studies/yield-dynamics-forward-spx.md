@@ -188,8 +188,41 @@ is not blind on S20_12 / S10_12.
 90% CIs, are labelled exploratory, and cannot be the headline — that is the
 protection.
 
+### Gate power — measured 2026-09-28, BEFORE the real run (`yield_dynamics/power.py`)
+
+200 simulations per effect size on the REAL feature paths, synthetic S&P-like
+12m returns (mean ~9%, sd ~15%, overlap reproduced), effect placed exactly
+where the gate looks (a combination of the SMALL features):
+
+| rate effect (% of 12m return variance) | gate passes | c1 skill+CI | c2 both halves | R1 | R3 | median OOS skill |
+|---|---|---|---|---|---|---|
+| 0% (false-positive rate) | **0.5%** | 0.5% | 2.0% | 21% | 68% | −0.044 |
+| 2% | 1.0% | 1.5% | 7.5% | 20% | 69% | −0.041 |
+| 5% | 3.0% | 5.5% | 12.5% | 22% | 70% | −0.034 |
+| 10% | 2.5% | 4.5% | 12.0% | 29% | 77% | −0.016 |
+| 15% | 1.5% | 4.0% | 21.0% | 34% | 78% | −0.001 |
+| 20% | 6.0% | 10.5% | 29.5% | 46% | 87% | +0.024 |
+| 30% | 14.0% | 25.0% | 45.5% | 51% | 92% | +0.061 |
+
+**What this means, fixed before the answer is known:** the confirmatory gate
+cannot detect a rate effect of any realistic size (2-10%) in 1971-2026 data —
+it passes ~1-3% of the time, barely above its 0.5% false-positive rate. Median
+out-of-sample skill stays NEGATIVE until rates would explain ~15% of 12-month
+return variance. This is a limit of ~55 independent years, not of this test.
+Therefore: a FAIL is the expected outcome and is uninformative about whether
+rates matter; a PASS would be strong evidence. The headline will almost
+certainly be the base rate, with the conditional history as context.
+
+**Known flaw, recorded rather than fixed:** R1 as defined (every coefficient
+keeps its sign across 1971-99 / 2000+) passes only ~50% even at a 30% effect,
+because the three SMALL features are correlated and individual coefficients
+trade off. It is left as registered — changing the gate after seeing its
+power, however well-meant, is a fork — and it does not change the verdict:
+c1 and c2 alone already cap power at ≤25%.
+
 ### Counter-agent log
 
 | review | verdict | adopted |
 |---|---|---|
 | spec v0 (2026-09-27) | sound once B1-B3 amended; v0 gate ≈ its own false-positive rate at realistic effects | B1-B3, S1-S7, NITs (A1-A11); Holm CIs declined, reason above |
+| gate power (2026-09-28) | measured before the run: ≤3% power at realistic effects; R1 collinearity flaw | recorded, gate unchanged |
