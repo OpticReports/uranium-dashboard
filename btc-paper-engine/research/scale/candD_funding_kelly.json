@@ -1,0 +1,120 @@
+{
+  "windows": {
+    "funding_window_2023-05_to_2026-09": {
+      "no_funding": {
+        "n": 237,
+        "mean_pct": 0.328,
+        "sd_pct": 3.4,
+        "kelly_m": 3.02,
+        "p10": 0.98,
+        "dd30_m": 0.77,
+        "recommended_m": 0.77,
+        "authorised_gross_usd": 115563.52500000001,
+        "prob_negative_edge": 0.021
+      },
+      "with_funding": {
+        "n": 237,
+        "mean_pct": 0.288,
+        "sd_pct": 3.34,
+        "kelly_m": 2.72,
+        "p10": 0.68,
+        "dd30_m": 0.73,
+        "recommended_m": 0.68,
+        "authorised_gross_usd": 102056.1,
+        "prob_negative_edge": 0.038
+      },
+      "paired_funding_ratio": {
+        "mean": 0.9368104483236062,
+        "sd": 0.023656093316844054,
+        "min": 0.8831168831168832,
+        "max": 0.9615384615384615,
+        "n_below_1": 8,
+        "n_seeds": 8
+      },
+      "basis_applied": false
+    },
+    "basis_window_2024-06_to_2026-07": {
+      "no_funding": {
+        "n": 155,
+        "mean_pct": 0.29,
+        "sd_pct": 3.26,
+        "kelly_m": 2.83,
+        "p10": 0.45,
+        "dd30_m": 0.92,
+        "recommended_m": 0.45,
+        "authorised_gross_usd": 67537.125,
+        "prob_negative_edge": 0.07
+      },
+      "with_funding": {
+        "n": 155,
+        "mean_pct": 0.287,
+        "sd_pct": 3.24,
+        "kelly_m": 2.84,
+        "p10": 0.44,
+        "dd30_m": 0.93,
+        "recommended_m": 0.44,
+        "authorised_gross_usd": 66036.3,
+        "prob_negative_edge": 0.073
+      },
+      "paired_funding_ratio": {
+        "mean": 0.9846846213991441,
+        "sd": 0.04957456225250102,
+        "min": 0.9148936170212766,
+        "max": 1.0625,
+        "n_below_1": 4,
+        "n_seeds": 8
+      },
+      "basis_applied": true
+    }
+  },
+  "funding_by_year": {
+    "2023": {
+      "S3": -0.02734263849999961,
+      "S4": -0.06313401809999918,
+      "S3_n": 29,
+      "S4_n": 21,
+      "S3_long": 17,
+      "S4_long": 10,
+      "hours": 6560.0,
+      "coverage_frac_of_year": 0.6410958904109589,
+      "blend_pct_of_gross_per_year": -5.660695060256333,
+      "mean_funding_rate_pct_per_year": null
+    },
+    "2024": {
+      "S3": -0.016685156300002016,
+      "S4": -0.08085180170000077,
+      "S3_n": 41,
+      "S4_n": 33,
+      "S3_long": 26,
+      "S4_long": 18,
+      "hours": 9780.0,
+      "coverage_frac_of_year": 1.0,
+      "blend_pct_of_gross_per_year": -3.2726817650001703,
+      "mean_funding_rate_pct_per_year": null
+    },
+    "2025": {
+      "S3": 0.004261894100013097,
+      "S4": -0.0005624221999843693,
+      "S3_n": 49,
+      "S4_n": 30,
+      "S3_long": 17,
+      "S4_long": 14,
+      "hours": 10168.0,
+      "coverage_frac_of_year": 1.0,
+      "blend_pct_of_gross_per_year": 0.30558150250137306,
+      "mean_funding_rate_pct_per_year": null
+    },
+    "2026": {
+      "S3": 0.0017886973000015849,
+      "S4": 0.006542732400012907,
+      "S3_n": 22,
+      "S4_n": 12,
+      "S3_long": 13,
+      "S4_long": 6,
+      "hours": 5096.0,
+      "coverage_frac_of_year": 0.7416666666666667,
+      "blend_pct_of_gross_per_year": 0.40142104382082006,
+      "mean_funding_rate_pct_per_year": null
+    }
+  }
+}

@@ -1,0 +1,107 @@
+{
+  "funding_window_unix": [
+    1683849600,
+    1790614800
+  ],
+  "funding_stamps": 29088,
+  "years": 3.3831850330823636,
+  "legs": {
+    "pullback_S3": {
+      "n": 141,
+      "n_long": 73,
+      "n_short": 68,
+      "short_frac": 0.48226950354609927,
+      "mean_hold_hours": 42.46808510638298,
+      "total_held_hours": 5988.0,
+      "time_in_market_frac": 0.20190848703510134,
+      "signed_bps_per_trade": {
+        "mean": -2.693418680850138,
+        "median": -0.5426429999997109,
+        "sd": 9.861036544794537,
+        "min": -57.351838000000015,
+        "max": 21.51219099999907,
+        "total": -379.77203399986945
+      },
+      "pct_of_own_notional_per_year": -1.1225281215371938,
+      "weight_in_gross": 0.75,
+      "pct_of_GROSS_notional_per_year": -0.8418960911528954,
+      "hot_regime": {
+        "n": 76,
+        "short_frac": 0.2894736842105263,
+        "mean_bps": -5.5479374605265805
+      },
+      "cold_regime": {
+        "n": 65,
+        "short_frac": 0.7076923076923077,
+        "mean_bps": 0.6441725076946258
+      },
+      "all_long_bound_pct_of_own_notional_per_year": -2.2880622207508603,
+      "all_long_exact_pct_of_own_notional_per_year": -2.2880622207508603
+    },
+    "trend_S4": {
+      "n": 96,
+      "n_long": 48,
+      "n_short": 48,
+      "short_frac": 0.5,
+      "mean_hold_hours": 266.8333333333333,
+      "total_held_hours": 25616.0,
+      "time_in_market_frac": 0.8637421182182958,
+      "signed_bps_per_trade": {
+        "mean": -14.375573916663688,
+        "median": -1.040686000000901,
+        "sd": 73.70528594573686,
+        "min": -371.35596499999576,
+        "max": 119.70230700008189,
+        "total": -1380.0550959997145
+      },
+      "pct_of_own_notional_per_year": -4.07915937941582,
+      "weight_in_gross": 0.25,
+      "pct_of_GROSS_notional_per_year": -1.019789844853955,
+      "hot_regime": {
+        "n": 55,
+        "short_frac": 0.4,
+        "mean_bps": -28.776138436370598
+      },
+      "cold_regime": {
+        "n": 41,
+        "short_frac": 0.6341463414634146,
+        "mean_bps": 4.942256536601679
+      },
+      "all_long_bound_pct_of_own_notional_per_year": -12.044121672794917,
+      "all_long_exact_pct_of_own_notional_per_year": -12.044121672794917
+    }
+  },
+  "blend_funding_pct_of_gross_per_year": -1.8616859360068505,
+  "blend_all_long_bound_pct_of_gross_per_year": -4.727077083761874,
+  "funding_regime": {
+    "window_mean_pct_per_year": 14.23217479760726,
+    "worst_90d_pct_per_year": 44.098463136110766,
+    "best_90d_pct_per_year": -1.2799995199999106,
+    "stress_multiple": 3.098504885108963
+  },
+  "blend_all_long_WORST_REGIME_pct_of_gross_per_year": -14.6468714363228,
+  "fee_pct_of_gross_per_year": 3.313563961290758,
+  "at_notional": {
+    "15000": {
+      "funding_usd_per_year": -279.25289040102757,
+      "funding_all_long_usd_per_year": -709.0615625642811,
+      "funding_all_long_worst_regime_usd_per_year": -2197.03071544842,
+      "fees_usd_per_year": -497.0345941936137,
+      "funding_as_frac_of_fees": 0.5618379357559327
+    },
+    "100000": {
+      "funding_usd_per_year": -1861.6859360068506,
+      "funding_all_long_usd_per_year": -4727.077083761874,
+      "funding_all_long_worst_regime_usd_per_year": -14646.871436322801,
+      "fees_usd_per_year": -3313.563961290758,
+      "funding_as_frac_of_fees": 0.5618379357559327
+    },
+    "1000000": {
+      "funding_usd_per_year": -18616.859360068505,
+      "funding_all_long_usd_per_year": -47270.770837618744,
+      "funding_all_long_worst_regime_usd_per_year": -146468.714363228,
+      "fees_usd_per_year": -33135.63961290758,
+      "funding_as_frac_of_fees": 0.5618379357559327
+    }
+  }
+}

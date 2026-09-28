@@ -1,0 +1,121 @@
+{
+  "V1_alignment": {
+    "n_common": 4612,
+    "spot_ts_off_4h_grid": 0,
+    "perp_ts_off_4h_grid": 0,
+    "shift_sd_bps": {
+      "-2": {
+        "mean": 2.031982729377096,
+        "sd": 139.8030060275432,
+        "n": 4610
+      },
+      "-1": {
+        "mean": 1.517918492125177,
+        "sd": 99.42142601401002,
+        "n": 4611
+      },
+      "0": {
+        "mean": 0.980329902954388,
+        "sd": 7.308233341721056,
+        "n": 4612
+      },
+      "1": {
+        "mean": 1.4196399963623918,
+        "sd": 98.67634428575681,
+        "n": 4612
+      },
+      "2": {
+        "mean": 1.8539367661925896,
+        "sd": 138.31007754256288,
+        "n": 4612
+      }
+    },
+    "verdict": "CONFIRMED: shift 0 has the smallest dispersion by a wide margin, so the join is bar-aligned"
+  },
+  "V5_basis_tails": {
+    "tails": [
+      {
+        "ts": 1733529600,
+        "basis_bps": -92.79933017024788,
+        "spot_close": 100324.0,
+        "perp_close": 99393.0,
+        "spot_range_bps": 85.92161397073482,
+        "perp_range_bps": 122.64445182256296
+      },
+      {
+        "ts": 1745337600,
+        "basis_bps": -22.827559089518836,
+        "spot_close": 91556.0,
+        "perp_close": 91347.0,
+        "spot_range_bps": 115.33924592599064,
+        "perp_range_bps": 118.44942910002518
+      },
+      {
+        "ts": 1732291200,
+        "basis_bps": -21.229286353895425,
+        "spot_close": 99391.0,
+        "perp_close": 99180.0,
+        "spot_range_bps": 143.57436790051412,
+        "perp_range_bps": 133.79713651945957
+      },
+      {
+        "ts": 1735732800,
+        "basis_bps": 33.00084889643395,
+        "spot_close": 94240.0,
+        "perp_close": 94551.0,
+        "spot_range_bps": 114.28268251273344,
+        "perp_range_bps": 124.27155714905184
+      },
+      {
+        "ts": 1737302400,
+        "basis_bps": 34.59750935641104,
+        "spot_close": 106077.0,
+        "perp_close": 106444.0,
+        "spot_range_bps": 158.6583330976555,
+        "perp_range_bps": 177.6520987561535
+      },
+      {
+        "ts": 1737345600,
+        "basis_bps": 35.1582589181354,
+        "spot_close": 106945.0,
+        "perp_close": 107321.0,
+        "spot_range_bps": 741.1286175136753,
+        "perp_range_bps": 971.0121970536987
+      }
+    ],
+    "verdict": "outliers sit in HIGH-RANGE bars (a 4h close is a snapshot of two venues at slightly different microseconds, and the gap widens with volatility) - consistent with real basis, not a join error, which V1 already excludes"
+  },
+  "V2_perp_transform_max_abs_diff": 1.1102230246251565e-16,
+  "V3_funding": {
+    "n_trades": 93,
+    "n_long": 44,
+    "n_short": 49,
+    "held_hours": 3760.0,
+    "years": 2.10403832991102,
+    "signed_pct_of_notional_per_year": 0.05555028078134658,
+    "phase1_pullback_pct_per_year": 0.0202,
+    "verdict": "sign and order of magnitude AGREE with phase 1's independent pullback figure (+0.0202%/yr on a different 90-trade window); a sign flip would show as a large negative"
+  },
+  "V4_trade_set_fee_invariant": {
+    "n_ref": 93,
+    "identical_to_ref": {
+      "8.64": true,
+      "5.76": true,
+      "2.88": true,
+      "12.0": true
+    },
+    "counts": {
+      "8.64": 93,
+      "5.76": 93,
+      "2.88": 93,
+      "12.0": 93
+    },
+    "verdict": "CONFIRMED: entry/exit decisions are price-based, so the fee axis changes only what trades KEEP, never which trades happen - the arms are a paired comparison"
+  },
+  "V6_blend_equiv": {
+    "n_ref": 155,
+    "n_mine": 155,
+    "max_abs_diff": 2.393918396847994e-16,
+    "verdict": "CONFIRMED"
+  }
+}
