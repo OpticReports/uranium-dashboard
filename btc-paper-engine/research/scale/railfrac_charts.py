@@ -62,10 +62,11 @@ a1.plot(eq, today_scaled, color=ORANGE, lw=2.4,
 a1.plot(eq, step1, color=BLUE, lw=2.6, label="STEP 1 (fractional rails)")
 a1.plot(eq, step2, color=AQUA, lw=2.0, ls="-.", label="STEP 2 (the free 2×)")
 a1.axhline(1_000_000, color=INK, lw=0.9, ls=":")
-a1.text(8.2e4, 1.08e6, "$1m of gross notional", fontsize=7.6, color=INK)
+a1.text(7.8e6, 1.15e6, "$1m of gross notional", fontsize=7.8, color=INK, ha="right")
 a1.scatter([E0], [15_000], color=RED, s=46, zorder=6)
-a1.annotate("live today $15,000\n(STEP 1 ships the same)", (E0, 15_000), (1.9e5, 6_200),
-            fontsize=7.6, color=RED, arrowprops=dict(arrowstyle="-", color=RED, lw=0.8))
+a1.annotate("live today $15,000\n(STEP 1 ships the same)", (E0, 15_000), (5.0e5, 28_500),
+            fontsize=7.6, color=RED,
+            arrowprops=dict(arrowstyle="->", color=RED, lw=0.8))
 a1.annotate("STEP 1 stops being proportional here\n($225k) — BY DESIGN: cap_clamp RED\n"
             "fires on every entry from here on",
             (225_000, 45_000), (2.9e5, 2.4e5), fontsize=7.4, color=BLUE,
@@ -73,7 +74,7 @@ a1.annotate("STEP 1 stops being proportional here\n($225k) — BY DESIGN: cap_cl
 a1.set_title("Gross notional the rails actually deliver")
 a1.set_ylabel("gross notional deployed")
 a1.legend(frameon=False, fontsize=7.6, loc="upper left",
-          bbox_to_anchor=(0.005, 0.995))
+          bbox_to_anchor=(0.005, 0.94))
 
 a2.yaxis.set_major_formatter(pct); a2.set_ylim(0, 0.34)
 a2.plot(eq, intent / eq, color=MUTED, lw=1.4, ls="--")
@@ -85,7 +86,7 @@ a2.axhline(0.30, color=INK, lw=0.8, ls=":")
 a2.text(1.45e6, 0.307, "MAX_EXPOSURE_FRAC 0.30", fontsize=7.4, color=INK)
 a2.text(1.45e6, 0.157, "15% — today's risk, held", fontsize=7.4, color=BLUE)
 a2.annotate("today's book stops betting\nas the account grows",
-            (6.0e5, 0.025), (1.15e5, 0.058), fontsize=7.6, color=RED,
+            (5.0e5, 0.030), (1.05e6, 0.105), fontsize=7.6, color=RED,
             arrowprops=dict(arrowstyle="->", color=RED, lw=0.9))
 a2.set_title("The same thing as RISK: gross notional ÷ equity")
 a2.set_ylabel("gross notional as a fraction of equity")
@@ -113,13 +114,13 @@ b1.plot(xe, ff_dd, color=BLUE, lw=2.6, marker="o", ms=5,
 b1.plot(xe, fd_dd, color=RED, lw=2.4, marker="s", ms=5,
         label="fixed DOLLAR (today)")
 b1.axhline(2.42, color=BLUE, lw=0.8, ls=":")
-b1.text(1.02e5, 2.20, "−2.42% at EVERY equity level", fontsize=7.8, color=BLUE)
+b1.text(1.75e5, 2.13, "−2.42% at EVERY equity level", fontsize=7.8, color=BLUE)
 b1.set_ylim(0, 3.4)
 for x, g in zip(xe, ff_g):
     b1.annotate(f"${g/1e3:.0f}k" if g < 1e6 else f"${g/1e6:.2f}m",
                 (x, 2.42), (x, 2.72), fontsize=7.0, color=BLUE, ha="center")
 b1.set_title("Casey's premise, measured\nsame proportion → same drawdown")
-b1.set_ylabel("in-sample max drawdown (%)"); b1.set_xlabel("account equity")
+b1.set_ylabel("in-sample max drawdown (%)"); b1.set_xlabel("account equity"); b1.set_xlim(8.2e4, 1.05e7)
 b1.legend(frameon=False, fontsize=7.8, loc="upper right")
 b1.text(1.02e5, 0.18, "labels above the flat line = gross notional\n"
         "carried, at identical measured risk", fontsize=7.0, color=MUTED)
@@ -135,7 +136,7 @@ b2.axhline(0.20, color=MUTED, lw=0.8, ls=":")
 b2.text(8.4e4, 0.205, "20% of equity", fontsize=7.4, color=MUTED)
 b2.set_ylim(0, 0.26)
 b2.annotate("the fixed rail stops being a risk\ncontrol and becomes a throttle",
-            (1.0e6, 0.020), (1.45e5, 0.055), fontsize=7.6, color=RED,
+            (2.4e6, 0.0083), (1.15e6, 0.088), fontsize=7.6, color=RED,
             arrowprops=dict(arrowstyle="->", color=RED, lw=0.9))
 b2.set_title("Blast radius: worst single position\nif a latent bug loses 100% of it")
 b2.set_ylabel("worst position ÷ equity"); b2.set_xlabel("account equity")
@@ -187,14 +188,16 @@ for i in range(M.shape[0]):
     for j in range(M.shape[1]):
         c1.text(j, i, f"{M[i,j]:.0%}", ha="center", va="center", fontsize=7.0,
                 color="white" if M[i, j] > 0.55 else INK)
-c1.set_xlabel("DD_HALT_PCT (with base = equity, this IS the drawdown % that halts)")
+c1.set_xlabel("DD_HALT_PCT  —  with base = equity this IS the drawdown % that halts.\n"
+              "Blue column = the proposed 0.175", fontsize=8.4)
 c1.set_title("Breaker FALSE-FIRE rate: P(a clean 4.4y path\ntrips the halt), "
              "bootstrapped (kelly.dd_prob)")
 c1.grid(False)
 c1.add_patch(plt.Rectangle((lv.index(0.175) - .5, -.5), 1, M.shape[0],
                            fill=False, edgecolor=BLUE, lw=2.4))
-c1.text(lv.index(0.175), -0.78, "proposed 0.175", fontsize=8.0,
-        color=BLUE, ha="center", weight="bold")
+for t in c1.get_xticklabels():
+    if t.get_text() == "17.5%":
+        t.set_color(BLUE); t.set_fontweight("bold"); t.set_fontsize(8.4)
 plt.colorbar(im, ax=c1, fraction=0.035, pad=0.02).set_label("P(fire | no bug)",
                                                             fontsize=7.6)
 
@@ -208,11 +211,11 @@ c2.yaxis.set_major_formatter(pct); c2.set_ylim(0, 0.42)
 for i, b in enumerate(bars):
     c2.text(i, b[1] + 0.012, f"{b[1]:.1%}", ha="center", fontsize=9, weight="bold",
             color=b[2])
-c2.text(1, 0.175, "fires only AFTER\nthe budget is blown", ha="center", fontsize=8.0,
-        color="white", weight="bold")
+c2.text(1, 0.168, "fires only\nAFTER the\nbudget is\nblown", ha="center", fontsize=7.8,
+        color="white", weight="bold", linespacing=1.35)
 for i in (0, 2):
-    c2.text(i, 0.072, "inside the budget:\nprotects it", ha="center", fontsize=8.0,
-            color="white", weight="bold")
+    c2.text(i, 0.062, "inside the\nbudget:\nprotects it", ha="center", fontsize=7.8,
+            color="white", weight="bold", linespacing=1.35)
 c2.set_title("Where the drawdown breaker actually sits,\nas a % of the REAL account")
 c2.set_ylabel("drawdown that halts the book")
 
@@ -251,7 +254,7 @@ for i, (v, w) in enumerate(zip(need_100k, need_1m)):
     d1.text(w * 1.08, i + 0.2, f"${w/1e6:.2f}m", fontsize=7.4, va="center", color=INK)
 d1.set_xlabel("equity required")
 d1.set_title("Equity required for Casey's targets.\nCandidate B moves NONE of these bars.")
-d1.legend(frameon=False, fontsize=7.8, loc="center right")
+d1.legend(frameon=False, fontsize=7.8, loc="lower right", bbox_to_anchor=(1.0, 0.02))
 d1.invert_yaxis()
 
 what = [("gross notional the rails deliver at today's equity", "$15,000", "$30,017", AQUA),
