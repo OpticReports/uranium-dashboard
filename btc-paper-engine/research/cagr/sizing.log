@@ -1,0 +1,24 @@
+baseline     from 2013  k_safe 0.424  k_dd 0.396  k_use 0.396  CAGR   8.8%  DD  -30.0%  peak gross 0.69x
+baseline     from 2014  k_safe 0.513  k_dd 0.499  k_use 0.499  CAGR  10.4%  DD  -30.0%  peak gross 0.86x
+baseline     from 2015  k_safe 0.500  k_dd 0.499  k_use 0.499  CAGR  10.9%  DD  -30.0%  peak gross 0.86x
+baseline     from 2016  k_safe 0.515  k_dd 0.499  k_use 0.499  CAGR  11.8%  DD  -30.0%  peak gross 0.86x
+baseline     from 2017  k_safe 0.497  k_dd 0.499  k_use 0.497  CAGR  11.7%  DD  -29.9%  peak gross 0.85x
+baseline     from 2018  k_safe 0.602  k_dd 0.768  k_use 0.602  CAGR  16.7%  DD  -24.1%  peak gross 1.03x
+baseline     from 2019  k_safe 0.746  k_dd 0.768  k_use 0.746  CAGR  25.7%  DD  -29.2%  peak gross 1.25x
+baseline     from 2020  k_safe 0.764  k_dd 0.914  k_use 0.764  CAGR  29.6%  DD  -25.6%  peak gross 1.28x
+H5a H1+H2a   from 2013  k_safe 0.450  k_dd 0.390  k_use 0.390  CAGR  11.5%  DD  -30.0%  peak gross 0.73x
+H5a H1+H2a   from 2014  k_safe 0.577  k_dd 0.568  k_use 0.568  CAGR  16.3%  DD  -30.0%  peak gross 0.93x
+H5a H1+H2a   from 2015  k_safe 0.551  k_dd 0.568  k_use 0.551  CAGR  16.3%  DD  -29.2%  peak gross 0.91x
+H5a H1+H2a   from 2016  k_safe 0.573  k_dd 0.568  k_use 0.568  CAGR  17.5%  DD  -30.0%  peak gross 0.93x
+H5a H1+H2a   from 2017  k_safe 0.562  k_dd 0.568  k_use 0.562  CAGR  17.6%  DD  -29.7%  peak gross 0.92x
+H5a H1+H2a   from 2018  k_safe 0.675  k_dd 0.829  k_use 0.675  CAGR  22.8%  DD  -25.0%  peak gross 1.07x
+H5a H1+H2a   from 2019  k_safe 0.751  k_dd 0.829  k_use 0.751  CAGR  27.1%  DD  -27.5%  peak gross 1.17x
+H5a H1+H2a   from 2020  k_safe 0.779  k_dd 0.982  k_use 0.779  CAGR  30.6%  DD  -24.4%  peak gross 1.22x
+H5b H1+H2b   from 2013  k_safe 0.411  k_dd 0.308  k_use 0.308  CAGR  17.5%  DD  -30.0%  peak gross 0.59x
+H5b H1+H2b   from 2014  k_safe 0.501  k_dd 0.488  k_use 0.488  CAGR  24.8%  DD  -30.0%  peak gross 0.88x
+H5b H1+H2b   from 2015  k_safe 0.488  k_dd 0.488  k_use 0.488  CAGR  24.1%  DD  -30.0%  peak gross 0.88x
+H5b H1+H2b   from 2016  k_safe 0.483  k_dd 0.488  k_use 0.483  CAGR  23.4%  DD  -29.7%  peak gross 0.87x
+H5b H1+H2b   from 2017  k_safe 0.489  k_dd 0.488  k_use 0.488  CAGR  23.6%  DD  -30.0%  peak gross 0.88x
+H5b H1+H2b   from 2018  k_safe 0.562  k_dd 0.694  k_use 0.562  CAGR  26.6%  DD  -25.3%  peak gross 0.96x
+H5b H1+H2b   from 2019  k_safe 0.564  k_dd 0.694  k_use 0.564  CAGR  25.3%  DD  -25.3%  peak gross 0.96x
+H5b H1+H2b   from 2020  k_safe 0.598  k_dd 0.770  k_use 0.598  CAGR  29.2%  DD  -24.0%  peak gross 1.02x
