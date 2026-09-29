@@ -140,6 +140,22 @@ def h4_ensemble(W, t0, t1):
     return legs, {"btcusd": W.closes["btcusd"]}
 
 
+def _with_resting_stop(build):
+    """Wrap a construction so its BTC trend leg uses the H1 resting stop.
+    Rebuilds the trend leg's trades; weights/weight_fn are kept as-is."""
+    def wrapped(W, t0, t1):
+        legs, closes = build(W, t0, t1)
+        out = []
+        for lg in legs:
+            if lg.trades and lg.trades[0].leg == "donchian" and lg.asset == "btcusd":
+                tr = W.trades("btcusd", "donchian", t0, t1,
+                              donchian_fn=H.process_donchian_resting_stop)
+                lg = H.LegSpec(tr, lg.weight, lg.asset, lg.weight_fn)
+            out.append(lg)
+        return out, closes
+    return wrapped
+
+
 CANDIDATES = {
     "baseline": baseline,
     "H1 resting-stop": h1_resting_stop,
@@ -147,6 +163,9 @@ CANDIDATES = {
     "H2b 50/50": h2b_5050,
     "H3 x-asset trend": h3_xasset_trend,
     "H4 trend ensemble": h4_ensemble,
+    # AMENDMENT 1: both combinations, 2 trials
+    "H5a H1+H2a": _with_resting_stop(h2a_invvol),
+    "H5b H1+H2b": _with_resting_stop(h2b_5050),
 }
 
 

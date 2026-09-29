@@ -140,3 +140,33 @@ def test_weight_fn_overrides_static_weight_at_entry():
     r = H.simulate([H.LegSpec(tr, 5.0, weight_fn=wf)], closes, k=1.0,
                    fee_bps=0.0, start_equity=1000.0)
     assert r.equity[-1] == pytest.approx(1100.0)   # only the first trade
+
+
+def test_entry_sizing_does_not_see_its_own_bars_close():
+    """Leg A is open; leg B enters on a bar where A's asset gaps. B's size
+    must use equity marked at the PREVIOUS close (audit a3)."""
+    closes = {"btcusd": {0: 100.0, BAR_S: 100.0, 2 * BAR_S: 200.0,
+                         3 * BAR_S: 220.0}}
+    a = [H.Trade("a", "L", 0, 100.0, None, None, "OPEN")]
+    b = [H.Trade("b", "L", 2 * BAR_S, 200.0, None, None, "OPEN")]
+    r = H.simulate([H.LegSpec(a, 1.0), H.LegSpec(b, 1.0)], closes, k=1.0,
+                   fee_bps=0.0, start_equity=1000.0)
+    # At bar 2's open equity is 1000 (A still marked at bar 1's 100), so
+    # B = 1000/200 = 5 qty. Sized off bar 2's OWN close it would be 10.
+    # A: 10 * (220-100) = 1200.  B: 5 * (220-200) = 100.  -> 2300 (not 2400)
+    assert r.equity[-1] == pytest.approx(2300.0)
+
+
+def test_stats_measure_from_start_equity():
+    """Entered at 100, first close 80: that is a -20% drawdown (audit a5)."""
+    closes = {"btcusd": {0: 80.0, BAR_S: 90.0}}
+    tr = [H.Trade("p", "L", 0, 100.0, None, None, "OPEN")]
+    r = H.simulate([H.LegSpec(tr, 1.0)], closes, k=1.0, fee_bps=0.0,
+                   start_equity=1000.0)
+    assert H.stats(r)["maxdd"] == pytest.approx(-0.20)
+
+
+def test_channel_mismatch_with_precomputed_inds_is_refused():
+    inds20 = H.compute_indicators(BARS[:600], 20)
+    with pytest.raises(ValueError):
+        H.leg_trades(BARS[:600], "donchian", channel=55, inds=inds20)

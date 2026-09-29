@@ -7,7 +7,7 @@ Design: the ENGINE decides trades, the PORTFOLIO layer sizes and marks them.
    `app.engine.replay.run_replay`, with two hooks a study can override:
    the donchian processing function and the channel lookback. With the
    hooks at their defaults it reproduces run_replay's trade list EXACTLY
-   (tests/test_harness_equivalence.py enforces this). Books run with
+   (test_harness.py enforces this). Books run with
    dd_halt disabled and unit size, so the trade list is a property of the
    RULES, not of any sizing or halt state - core.py's one-way book.halted
    (RESEARCH_SCALE.md defect table) cannot leak in.
@@ -118,6 +118,13 @@ def leg_trades(bars: list[Bar], strategy: str, *,
     it swaps a whole function, never a keyword default."""
     scfg = scfg or SignalCfg()
     tcfg = tcfg or TradeCfg(taker_fee_bps=LIVE_TAKER_BPS)
+    if inds is not None and channel != 20:
+        # a precomputed inds carries ITS OWN channel; passing channel=N with
+        # someone else's inds silently tested channel 20 (audit a9). The
+        # caller must hand in inds built for this channel - checked here.
+        probe = compute_indicators(bars[:channel + 2], channel)[channel]
+        if inds[channel].hi20 != probe.hi20:
+            raise ValueError(f"inds were not built for channel={channel}")
     inds = inds if inds is not None else compute_indicators(bars, channel)
     cfg = BookCfg(name=leg or strategy, sizing="fixed", strategy=strategy,
                   trail_atr=trail_atr, leverage=1.0, cap=1.0,
@@ -225,6 +232,7 @@ class SimResult:
     fees: float
     ruined: bool = False
     trade_pnl: list = field(default_factory=list)
+    start_equity: float = 100_000.0
 
 
 def simulate(legs: list[LegSpec], closes: dict[str, dict[int, float]],
@@ -260,12 +268,13 @@ def simulate(legs: list[LegSpec], closes: dict[str, dict[int, float]],
     fees = 0.0
     n = 0
     pnl_log = []
+    # last_close holds each asset's most recent close KNOWN BEFORE this bar
+    # opens; it is advanced to this bar's close only at the mark step. Entry
+    # sizing therefore never sees the close of the bar it fills in (audit
+    # 2026-09-29, a3: it used to, which was slightly pessimistic).
     last_close: dict[str, float] = {}
     ruined = False
     for ts in grid:
-        for a, c in closes.items():
-            if ts in c:
-                last_close[a] = c[ts]
         # 1) exits
         for li, t in exits.get(ts, []):
             key = (li, t.entry_ts)
@@ -302,7 +311,10 @@ def simulate(legs: list[LegSpec], closes: dict[str, dict[int, float]],
             open_pos[(li, t.entry_ts)] = dict(
                 qty=qty, entry_price=t.entry_price, notional=notional,
                 sgn=1.0 if t.side == "L" else -1.0, efee=fee)
-        # 3) mark to market at this close
+        # 3) advance to this bar's closes, then mark to market
+        for a, c in closes.items():
+            if ts in c:
+                last_close[a] = c[ts]
         unreal, gross_n = 0.0, 0.0
         for (li, _), p in open_pos.items():
             px = last_close.get(legs[li].asset, p["entry_price"])
@@ -317,7 +329,8 @@ def simulate(legs: list[LegSpec], closes: dict[str, dict[int, float]],
     ts_arr = np.array(grid[:len(eq_out)], dtype=np.int64)
     return SimResult(ts=ts_arr, equity=np.array(eq_out),
                      gross_lev=np.array(lev_out), n_trades=n, fees=fees,
-                     ruined=ruined, trade_pnl=pnl_log)
+                     ruined=ruined, trade_pnl=pnl_log,
+                     start_equity=start_equity)
 
 
 # --------------------------------------------------------------------------
@@ -335,11 +348,15 @@ def stats(r: SimResult) -> dict:
     if len(eq) < 2 or r.ruined:
         return dict(cagr=-1.0, maxdd=-1.0, mar=None, sharpe=None,
                     n=r.n_trades, years=0.0, ruined=True)
+    # Measured from START EQUITY, not from bar 0's close: a position that
+    # loses on its first bar is a real drawdown (audit 2026-09-29, a5).
+    e0 = r.start_equity
+    path = np.concatenate([[e0], eq])
     yrs = (r.ts[-1] - r.ts[0] + BAR_S) / (365.25 * 86400)
-    tot = eq[-1] / eq[0]
+    tot = eq[-1] / e0
     cagr = tot ** (1 / yrs) - 1 if yrs > 0 and tot > 0 else -1.0
-    mdd = max_dd(np.concatenate([[eq[0]], eq]))
-    ret = np.diff(eq) / eq[:-1]
+    mdd = max_dd(path)
+    ret = np.diff(path) / path[:-1]
     sd = ret.std()
     sharpe = float(ret.mean() / sd * math.sqrt(BARS_PER_YEAR)) if sd > 0 else None
     return dict(cagr=float(cagr), maxdd=float(mdd),
@@ -352,7 +369,11 @@ def stats(r: SimResult) -> dict:
 def k_at_dd(legs, closes, target_dd: float = 0.30, lo: float = 0.01,
             hi: float = 25.0, iters: int = 40, **kw) -> float:
     """Largest k whose REALISED MTM max drawdown is <= target (bisection).
-    Single-path and therefore the MOST optimistic sizing - see k_safe."""
+
+    NOT necessarily more or less conservative than k_safe - on the BTC
+    2013+ sample it is the LOWER of the two (0.396 vs k_safe 0.434, whose
+    realised DD is -32.3%). Anything that turns these into a live size must
+    take min(k_at_dd, k_safe) (audit 2026-09-29, a8)."""
     def dd(k):
         r = simulate(legs, closes, k=k, **kw)
         return 1.0 if r.ruined else -max_dd(np.concatenate([[r.equity[0]], r.equity]))
