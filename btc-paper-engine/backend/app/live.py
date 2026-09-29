@@ -19,7 +19,7 @@ import time
 from dataclasses import asdict
 
 from . import alerts
-from .config import load_strategy, settings
+from .config import LIVE_LEV, LIVE_W_TREND, load_strategy, settings
 from .engine.core import (
     BAR_SECONDS, Bar, Book, Pending, Position,
     eval_donchian, eval_signal, process_closed_bar, resolve_open_exit,
@@ -459,7 +459,7 @@ class Engine:
     # pullback book (S3) and the 1x trend book (S4), levered. Weights/leverage
     # from the RESEARCH_S4.md sizing frontier (75/25 @ 1.5x dominates the pure
     # pullback at equal CAGR with half the DD; 2x is the aggressive seat).
-    BLENDS = {"S5": (0.25, 1.5), "S6": (0.25, 2.0)}   # (w_trend, leverage)
+    BLENDS = {"S5": (LIVE_W_TREND, LIVE_LEV), "S6": (0.25, 2.0)}   # (w_trend, leverage)
 
     def _blend_step(self, snapshot_ts: int, s) -> None:
         """Advance blend equities one snapshot using S3/S4 marked returns."""

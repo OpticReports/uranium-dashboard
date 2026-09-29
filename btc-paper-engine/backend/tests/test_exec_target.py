@@ -18,7 +18,7 @@ def test_exec_target_shape_and_states():
         d = r.json()
         assert set(d) >= {"bar_ts", "price", "degraded", "data_halt",
                           "blend", "legs"}
-        assert d["blend"] == {"w_trend": 0.25, "lev": 1.5}
+        assert d["blend"] == {"w_trend": 0.30, "lev": 1.5}
         assert set(d["legs"]) == {"pullback", "trend"}
 
         # inject a pending on S3 and a trailed position on S4

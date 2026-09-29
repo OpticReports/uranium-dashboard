@@ -261,16 +261,28 @@ def _process_donchian(book: Book, bar: Bar, ind: Ind, tcfg: TradeCfg,
                     fee_bps=2 * tcfg.taker_fee_bps)
     pos = book.position
     if pos is not None:
-        if ind.atr14 is not None:
+        # 1) the RESTING stop is tested first. During bar t the venue holds the
+        #    trail published at close(t-1) (/exec/target -> btc-executor's
+        #    reduce-only stop). The old order ratcheted from close(t) FIRST and
+        #    tested bar t's own low against that higher level - a level no
+        #    resting order could have held while the low printed - so the
+        #    engine booked exits the venue never took and the executor chased
+        #    them at market (RESEARCH_CAGR.md H1, 2026-09-29). A bar that
+        #    opens through the stop fills at the open, not at the level.
+        if pos.trail is not None and bar.ts > pos.entry_ts:
+            hit = (bar.low <= pos.trail if pos.side == "L" else bar.high >= pos.trail)
+            if hit:
+                fill = (min(pos.trail, bar.open) if pos.side == "L"
+                        else max(pos.trail, bar.open))
+                _close_position(book, pos, bar.ts, fill, "STOP", tcfg)
+                pos = None
+        # 2) survivors ratchet the trail from this close, for the NEXT bar
+        if pos is not None and ind.atr14 is not None:
             lvl = (bar.close - book.cfg.trail_atr * ind.atr14 if pos.side == "L"
                    else bar.close + book.cfg.trail_atr * ind.atr14)
             pos.trail = (lvl if pos.trail is None else
                          (max(pos.trail, lvl) if pos.side == "L" else min(pos.trail, lvl)))
             pos.stop_price = pos.trail
-        if pos.trail is not None and bar.ts > pos.entry_ts:
-            hit = (bar.low <= pos.trail if pos.side == "L" else bar.high >= pos.trail)
-            if hit:
-                _close_position(book, pos, bar.ts, pos.trail, "STOP", tcfg)
     if (book.position is None and book.pending is None and not book.halted
             and signal is not None):
         book.pending = Pending(side=signal, limit=-1.0, signal_ts=bar.ts,

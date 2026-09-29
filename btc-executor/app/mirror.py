@@ -62,7 +62,12 @@ BAR_SECONDS = 14_400
 # _leg_qty's call sites: sizing is consulted for NEW entries only), so an
 # over-sized leg exits on its own signal rather than being part-closed by a
 # deploy.
-KELLY_M_CAP = 0.20
+# RAISED 0.20 -> 0.30 (Casey, 2026-09-29, RESEARCH_CAGR.md). The fee-corrected
+# Kelly envelope that set 0.20 bound on a 2-year cell; the 13-year, fixed-base,
+# mark-to-market study puts the -30%-drawdown size at ~0.39-0.50 and the
+# DAILY_LOSS manual-resume line (strictly > 0.30, see _roll_day) at 0.30. The
+# cap sits ON that line so the daily-loss halt keeps auto-rearming.
+KELLY_M_CAP = 0.30
 # WHAT THE CAP DOES NOT DO, made explicit because two counter-agents found it
 # independently (2026-09-10, both BLOCKING): leg notional is
 # `kelly_m * lev * weight * base`, and KELLY_M_CAP bounds ONE factor. With
@@ -83,7 +88,7 @@ KELLY_M_CAP = 0.20
 # deep drawdown raises the ratio on its own, so this can page without anyone
 # touching the config. That is Kelly telling the truth, not a false alarm.
 REFERENCE_LEV = 1.5          # the blend /exec/target actually ships (S5)
-MAX_EXPOSURE_FRAC = KELLY_M_CAP * REFERENCE_LEV        # 0.30 of equity, gross
+MAX_EXPOSURE_FRAC = KELLY_M_CAP * REFERENCE_LEV        # 0.45 of equity, gross
 # The largest blend leverage the engine publishes (S6 = 2.0x, bench_blend.py).
 # Anything above this is a malformed or hostile payload, not a strategy
 # change, and is clamped at the door.
@@ -557,7 +562,17 @@ class Executor:
         base = self._base(equity)
         lev = float(blend.get("lev", REFERENCE_LEV))
         gross = self._effective_kelly_m() * lev * base
-        frac = gross / equity
+        # Against the account's HIGH WATER, not today's equity (2026-09-29).
+        # This check exists to catch a CONFIG that deploys more than the cap
+        # authorises - a base or lev set too high. Measured against current
+        # equity, the live config sits exactly ON the line at KELLY_M_CAP, so
+        # any drawdown past 1% paged every poll: alert noise that trains the
+        # operator to ignore the one page that catches a fat-fingered base.
+        # High water still catches every config breach (a base above the
+        # account's peak is exactly the bypass this was built for); drawdown
+        # is DRAWDOWN_HALT's job. max() because high_water is 0 until the
+        # first _roll_day.
+        frac = gross / max(equity, self.state.high_water)
         # 1% tolerance: at the live config frac sits exactly ON the line, and
         # a control that pages at its own design point is noise.
         if frac <= MAX_EXPOSURE_FRAC * 1.01:

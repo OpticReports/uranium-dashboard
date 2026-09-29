@@ -67,6 +67,13 @@ RESEARCH_BOOKS = [
             leverage=1.0, long_mult=1.0, cap=1.0,
             start_equity=100_000.0, dd_halt=0.50),
 ]
+# The blend /exec/target publishes and btc-executor sizes from, and the S5
+# dashboard row. 0.25 -> 0.30 (Casey, 2026-09-29, RESEARCH_CAGR.md): the
+# pullback leg lost money in every 2013-2018 year bar one, eras out of sample
+# for it; a modest shift toward the trend leg. S6 stays the 0.25 @2.0x
+# research reference.
+LIVE_W_TREND = 0.30
+LIVE_LEV = 1.5
 RESEARCH_SIGNAL = SignalCfg()
 RESEARCH_TRADE = TradeCfg()
 
