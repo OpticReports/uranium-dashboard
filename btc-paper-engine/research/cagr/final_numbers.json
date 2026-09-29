@@ -1,0 +1,66 @@
+{
+ "2014+ | live today (75/25, k=0.20)": {
+  "avg_pnl_per_yr": 4687.953408250814,
+  "pct_per_yr_on_100k": 4.687953408250815,
+  "max_dd_usd": -13004.095694181262,
+  "max_dd_pct": -0.1120996168519739,
+  "daily_loss_breaches": 0,
+  "peak_gross_usd": 36941.22349685681
+ },
+ "2014+ | 75/25, k=0.30": {
+  "avg_pnl_per_yr": 7031.930112376606,
+  "pct_per_yr_on_100k": 7.031930112376607,
+  "max_dd_usd": -19506.143541271857,
+  "max_dd_pct": -0.1572984407588347,
+  "daily_loss_breaches": 1,
+  "peak_gross_usd": 55411.83524528521
+ },
+ "2014+ | REC: H1 + 70/30, k=0.30": {
+  "avg_pnl_per_yr": 8929.364652097725,
+  "pct_per_yr_on_100k": 8.929364652097725,
+  "max_dd_usd": -19108.867763339265,
+  "max_dd_pct": -0.13886902839978854,
+  "daily_loss_breaches": 0,
+  "peak_gross_usd": 57143.98688633414
+ },
+ "2014+ | H1 + 70/30, k=0.45 (rejected size)": {
+  "avg_pnl_per_yr": 13394.046978146334,
+  "pct_per_yr_on_100k": 13.394046978146335,
+  "max_dd_usd": -28663.30164500908,
+  "max_dd_pct": -0.18326299716318395,
+  "daily_loss_breaches": 5,
+  "peak_gross_usd": 85715.98032950121
+ },
+ "2019+ | live today (75/25, k=0.20)": {
+  "avg_pnl_per_yr": 6957.973288830811,
+  "pct_per_yr_on_100k": 6.957973288830811,
+  "max_dd_usd": -8716.60209274423,
+  "max_dd_pct": -0.08112276756851777,
+  "daily_loss_breaches": 0,
+  "peak_gross_usd": 33764.082768835695
+ },
+ "2019+ | 75/25, k=0.30": {
+  "avg_pnl_per_yr": 10436.95993324675,
+  "pct_per_yr_on_100k": 10.436959933246749,
+  "max_dd_usd": -13074.9031391163,
+  "max_dd_pct": -0.11760727288935435,
+  "daily_loss_breaches": 0,
+  "peak_gross_usd": 50646.124153253535
+ },
+ "2019+ | REC: H1 + 70/30, k=0.30": {
+  "avg_pnl_per_yr": 11261.5022554131,
+  "pct_per_yr_on_100k": 11.261502255413099,
+  "max_dd_usd": -12370.156057317217,
+  "max_dd_pct": -0.10843555773989844,
+  "daily_loss_breaches": 0,
+  "peak_gross_usd": 50831.00063827473
+ },
+ "2019+ | H1 + 70/30, k=0.45 (rejected size)": {
+  "avg_pnl_per_yr": 16892.253383119405,
+  "pct_per_yr_on_100k": 16.892253383119407,
+  "max_dd_usd": -18555.234085976335,
+  "max_dd_pct": -0.15320012695998098,
+  "daily_loss_breaches": 2,
+  "peak_gross_usd": 76246.50095741209
+ }
+}

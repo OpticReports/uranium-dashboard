@@ -11,7 +11,7 @@ bars = W.bars["btcusd"]; by = {b.ts: b for b in bars}
 BASE = 100_000.0; F = 4.32e-4
 d = lambda t: time.strftime("%Y-%m-%d %H", time.gmtime(t))
 
-def live_sim(legs, k, t0, t1, dd_halt=0.30, daily=0.06, stop_on_halt=True, compound=False):
+def live_sim(legs, k, t0, t1, dd_halt=0.30, daily=0.06, stop_on_halt=True, compound=False, basis="extreme"):
     """Fixed-base sizing (live) unless compound. MTM at close and at the bar's
     adverse extreme (low for longs / high for shorts). Breach tests use the
     extreme (the executor polls every 20s, so intrabar breaches are seen).
@@ -47,7 +47,7 @@ def live_sim(legs, k, t0, t1, dd_halt=0.30, daily=0.06, stop_on_halt=True, compo
                 n = w*k*(e_now if compound else BASE)
                 cash -= F*n
                 op[(li, t.entry_ts)] = (n/t.entry_price, 1 if t.side == "L" else -1, t.entry_price)
-        ex = cash + sum(q*((b.low if s > 0 else b.high)-ep)*s for q, s, ep in op.values())
+        ex = cash + sum(q*(((b.low if s > 0 else b.high) if basis == "extreme" else b.close)-ep)*s for q, s, ep in op.values())
         ec = cash + sum(q*(b.close-ep)*s for q, s, ep in op.values())
         g = sum(q*b.close for q, s, ep in op.values()); gmax = max(gmax, g/ max(ec, 1))
         if ex - prev < worst[0]: worst = (ex - prev, ts)

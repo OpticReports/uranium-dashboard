@@ -170,3 +170,12 @@ def test_channel_mismatch_with_precomputed_inds_is_refused():
     inds20 = H.compute_indicators(BARS[:600], 20)
     with pytest.raises(ValueError):
         H.leg_trades(BARS[:600], "donchian", channel=55, inds=inds20)
+
+
+def test_fixed_base_does_not_compound():
+    closes = {"btcusd": {0: 100.0, BAR_S: 200.0, 2 * BAR_S: 200.0, 3 * BAR_S: 400.0}}
+    tr = [H.Trade("p", "L", 0, 100.0, BAR_S, 200.0, "S"),
+          H.Trade("p", "L", 2 * BAR_S, 200.0, 3 * BAR_S, 400.0, "S")]
+    r = H.simulate([H.LegSpec(tr, 1.0)], closes, k=1.0, fee_bps=0.0,
+                   start_equity=1000.0, fixed_base=1000.0)
+    assert r.equity[-1] == pytest.approx(3000.0)     # +1000 twice, not x4

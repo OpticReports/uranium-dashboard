@@ -238,7 +238,8 @@ class SimResult:
 def simulate(legs: list[LegSpec], closes: dict[str, dict[int, float]],
              k: float = 1.0, start_ts: int | None = None,
              end_ts: int | None = None, fee_bps: float = LIVE_TAKER_BPS,
-             start_equity: float = 100_000.0) -> SimResult:
+             start_equity: float = 100_000.0,
+             fixed_base: float | None = None) -> SimResult:
     """Replay engine trades against one shared MTM equity.
 
     Ordering within a bar: exits first (their P&L realised), then entries
@@ -300,7 +301,9 @@ def simulate(legs: list[LegSpec], closes: dict[str, dict[int, float]],
                 break
             lg = legs[li]
             w = lg.weight_fn(t.entry_ts) if lg.weight_fn is not None else lg.weight
-            notional = w * k * eq_now
+            # fixed_base = how btc-executor actually sizes (SIZING_BASE_USD,
+            # no compounding); None = compound off current MTM equity.
+            notional = w * k * (fixed_base if fixed_base else eq_now)
             if notional <= 0:
                 continue
             qty = notional / t.entry_price
