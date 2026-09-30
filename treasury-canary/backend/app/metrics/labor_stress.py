@@ -3,7 +3,9 @@ from raw FRED observations. The study imports THIS module, so the backtest
 scores exactly what the dashboard shows.
 
 Pure functions over monthly dicts keyed by (year, month). Conventions (spec):
-- a weekly series enters a month as its last weekly value dated in it;
+- a weekly series enters month M as the week ending 7 days after the CPS
+  reference week (the Sun-Sat week containing the 12th) — released the
+  Thursday before M's jobs report (spec v1 A6);
 - missing months are skipped, never interpolated; a 3-month average needs
   >= 2 values; 12-/24-month windows use whatever months exist;
 - every threshold comparison is on values rounded to 3 decimals.
@@ -53,6 +55,38 @@ def monthly(dates: list[date], vals: list[float | None]) -> dict[YM, float]:
     return out
 
 
+def ref_week_plus7(k: YM) -> date:
+    """Saturday ending the week after the CPS reference week of month k."""
+    d12 = date(k[0], k[1], 12)
+    sat = d12 + timedelta(days=(5 - d12.weekday()) % 7)
+    return sat + timedelta(days=7)
+
+
+def weekly_to_month(dates: list[date], vals: list[float | None]) -> dict[YM, float]:
+    """Weekly -> month via the knowable week (A6): the observation dated the
+    target Saturday, else the latest one within the 6 days before it."""
+    pts = sorted((d, v) for d, v in zip(dates, vals) if v is not None)
+    if not pts:
+        return {}
+    by = dict(pts)
+    ds = [d for d, _ in pts]
+    out: dict[YM, float] = {}
+    k = ym(ds[0])
+    import bisect
+    while True:
+        t = ref_week_plus7(k)
+        if t > ds[-1] + timedelta(days=6):
+            break
+        if t in by:
+            out[k] = by[t]
+        else:
+            i = bisect.bisect_right(ds, t) - 1
+            if i >= 0 and (t - ds[i]).days <= 6:
+                out[k] = pts[i][1]
+        k = ym_add(k, 1)
+    return out
+
+
 def _months(x: dict[YM, float]) -> list[YM]:
     return sorted(x)
 
@@ -95,33 +129,43 @@ def sos(dates: list[date], iursa: list[float | None]) -> dict[YM, float]:
     for i in range(25, len(pts)):
         avg.append((pts[i][0], sum(v for _, v in pts[i - 25:i + 1]) / 26))
     wk: list[tuple[date, float]] = []
-    for i in range(52, len(avg)):
+    for i in range(52, len(avg)):                       # weeks t-52..t-1
         wk.append((avg[i][0], round(avg[i][1] - min(v for _, v in avg[i - 52:i]), 3)))
-    return monthly([d for d, _ in wk], [v for _, v in wk])
+    return weekly_to_month([d for d, _ in wk], [v for _, v in wk])
 
 
-def claims_yoy(dates: list[date], ccnsa: list[float | None]) -> dict[YM, float]:
-    """4-week average of NSA continuing claims vs the same 4 weeks 52 weeks
-    earlier (364 days — the same weekday), in %; weekly -> month via last week."""
+def claims_yoy(dates: list[date], ccnsa: list[float | None],
+               denom: tuple[list[date], list[float | None]] | None = None
+               ) -> dict[YM, float]:
+    """4-week average of NSA continuing claims vs the 4-week average exactly 52
+    observations earlier, in %. With `denom` (COVEMP), claims are first divided
+    by covered employment (the v1 sensitivity). Weekly -> month via A6."""
     pts = [(d, float(v)) for d, v in zip(dates, ccnsa) if v is not None]
-    by = {d: v for d, v in pts}
+    if denom is not None:
+        dv = sorted((d, float(v)) for d, v in zip(*denom) if v is not None)
+        import bisect
+        dd = [d for d, _ in dv]
+        norm = []
+        for d, v in pts:
+            i = bisect.bisect_right(dd, d) - 1
+            if i >= 0:
+                norm.append((d, v / dv[i][1]))
+        pts = norm
     out_d, out_v = [], []
-    for i in range(3, len(pts)):
-        d = pts[i][0]
-        cur = [pts[j][1] for j in range(i - 3, i + 1)]
-        prev = [by.get(pts[j][0] - timedelta(days=364)) for j in range(i - 3, i + 1)]
-        if None in prev:
-            continue
-        out_d.append(d)
-        out_v.append(round(100 * (sum(cur) / sum(prev) - 1), 3))
-    return monthly(out_d, out_v)
+    for i in range(55, len(pts)):
+        cur = sum(pts[j][1] for j in range(i - 3, i + 1))
+        prev = sum(pts[j][1] for j in range(i - 55, i - 51))
+        out_d.append(pts[i][0])
+        out_v.append(round(100 * (cur / prev - 1), 3))
+    return weekly_to_month(out_d, out_v)
 
 
 def paur(unemploy: dict[YM, float], clf: dict[YM, float],
          lfpr_prime: dict[YM, float], pop: dict[YM, float]) -> dict[YM, float]:
     """Participation-adjusted unemployment rate: add back as unemployed the
-    prime-age participation shortfall vs its 24-month high, scaled to the 16+
-    population. An UPPER bound — every shortfall counts as hidden unemployment."""
+    prime-age participation shortfall vs its 24-month high, times the 25-54
+    population (LNU00000060). An UPPER bound — every shortfall counts as
+    hidden unemployment."""
     out = {}
     for k in _months(unemploy):
         if k not in clf or k not in lfpr_prime or k not in pop:
@@ -132,30 +176,71 @@ def paur(unemploy: dict[YM, float], clf: dict[YM, float],
     return out
 
 
-def rule_values(series: dict[str, tuple[list[date], list[float | None]]]
-                ) -> dict[str, dict[YM, float]]:
-    """All six rule VALUES (not yet thresholded). `series` keys:
-    iursa, ccnsa, job_losers, clf, epop_prime, lfpr_prime, pop16, unemploy, sahm."""
-    g = {k: monthly(*v) for k, v in series.items() if k not in ("iursa", "ccnsa")}
+def remove_january_steps(x: dict[YM, float], years: tuple[int, ...]) -> dict[YM, float]:
+    """v1 A7 sensitivity: remove the EXCESS Dec->Jan step (Jan-Dec minus the
+    median Jan-Dec of all other years) in the listed years by shifting every
+    pre-January value, so level breaks from population controls vanish."""
+    steps = {y: x[(y, 1)] - x[(y - 1, 12)] for y in range(1949, 2100)
+             if (y, 1) in x and (y - 1, 12) in x}
+    normal = sorted(v for y, v in steps.items() if y not in years)
+    med = normal[len(normal) // 2] if normal else 0.0
+    out = dict(x)
+    for y in sorted(years):
+        if y not in steps:
+            continue
+        excess = steps[y] - med
+        for k in list(out):
+            if k < (y, 1):
+                out[k] += excess
+    return out
+
+
+POP_CONTROL_YEARS = (2000, 2003, 2004, 2008, 2011, 2022, 2025, 2026)
+
+
+def rule_values(series: dict[str, tuple[list[date], list[float | None]]], *,
+                sahm_from: str = "series", a3_normalize: bool = False,
+                pop_control_adjust: bool = False) -> dict[str, dict[YM, float]]:
+    """All six rule VALUES (not yet thresholded). `series` keys: iursa, ccnsa,
+    covemp (optional), job_losers, clf, epop_prime, lfpr_prime, pop_prime,
+    unemploy, sahm and/or unrate.
+    sahm_from: "series" = SAHMREALTIME (live panel); "unrate" = recomputed from
+    current-vintage UNRATE (the study — one vintage for every rule, v1 A5)."""
+    weekly = ("iursa", "ccnsa", "covemp")
+    g = {k: monthly(*v) for k, v in series.items() if k not in weekly}
+    if pop_control_adjust:
+        for k in ("epop_prime", "lfpr_prime"):
+            if k in g:
+                g[k] = remove_january_steps(g[k], POP_CONTROL_YEARS)
     jl = {k: 100 * g["job_losers"][k] / g["clf"][k]
           for k in g.get("job_losers", {}) if k in g.get("clf", {})}
     pa = paur(g.get("unemploy", {}), g.get("clf", {}), g.get("lfpr_prime", {}),
-              g.get("pop16", {}))
+              g.get("pop_prime", {}))
+    if sahm_from == "unrate":
+        from .labor import _sahm_from_unrate
+        ud, uv = series["unrate"]
+        sd, sv = _sahm_from_unrate(ud, uv)
+        c1 = {ym(d): round(v, 3) for d, v in zip(sd, sv) if v is not None}
+    else:
+        c1 = {k: round(v, 3) for k, v in g.get("sahm", {}).items()}
     return {
         "A1": sos(*series["iursa"]) if "iursa" in series else {},
         "A2": rise_over_prior_min(jl),
-        "A3": claims_yoy(*series["ccnsa"]) if "ccnsa" in series else {},
+        "A3": (claims_yoy(*series["ccnsa"],
+                          denom=series.get("covemp") if a3_normalize else None)
+               if "ccnsa" in series else {}),
         "B1": drawdown_from_prior_max(g.get("epop_prime", {})),
         "B2": rise_over_prior_min(pa),
-        "C1": {k: round(v, 3) for k, v in g.get("sahm", {}).items()},
+        "C1": c1,
         "_paur": pa,
     }
 
 
-def lit(values: dict[str, dict[YM, float]]) -> dict[str, dict[YM, bool]]:
+def lit(values: dict[str, dict[YM, float]],
+        thresholds: dict[str, float] | None = None) -> dict[str, dict[YM, bool]]:
     out = {}
     for rid, spec in RULES.items():
-        t = spec["threshold"]
+        t = (thresholds or {}).get(rid, spec["threshold"])
         out[rid] = {k: (round(v, 3) > t if spec["strict"] else round(v, 3) >= t)
                     for k, v in values.get(rid, {}).items()}
     return out
@@ -184,7 +269,7 @@ def board(lit_map: dict[str, dict[YM, bool]], window: int = 1) -> dict[YM, str]:
 # PAUR is labelled an upper bound with its gap in persons; the Jan-2026 NEI
 # spike is flagged; nativity series (not seasonally adjusted) show the
 # 12-month change only.
-STRIP_KEYS = ("unemploy", "clf", "lfpr_prime", "pop16", "u6", "nilfwjn", "nei",
+STRIP_KEYS = ("unemploy", "clf", "lfpr_prime", "pop_prime", "u6", "nilfwjn", "nei",
               "epop_prime", "ue_flow", "jolts_hires", "jolts_quits", "jolts_layoffs",
               "lt_share", "lt_level", "med_dur", "hours", "fb_lfpr", "nb_lfpr")
 
@@ -214,12 +299,12 @@ def strip(series: dict[str, tuple[list[date], list[float | None]]]) -> list[dict
     g = {k: monthly(*v) for k, v in series.items() if v and v[0]}
     un, lf = g.get("unemploy", {}), g.get("clf", {})
     u3 = {k: 100 * un[k] / lf[k] for k in un if k in lf}
-    pa = paur(un, lf, g.get("lfpr_prime", {}), g.get("pop16", {}))
+    pa = paur(un, lf, g.get("lfpr_prime", {}), g.get("pop_prime", {}))
     gap_persons = {}
     for k in pa:
         hist = [g["lfpr_prime"][j] for j in (ym_add(k, -i) for i in range(24))
                 if j in g["lfpr_prime"]]
-        gap_persons[k] = max(0.0, max(hist) - g["lfpr_prime"][k]) / 100 * g["pop16"][k]
+        gap_persons[k] = max(0.0, max(hist) - g["lfpr_prime"][k]) / 100 * g["pop_prime"][k]
     wj = g.get("nilfwjn", {})
     u3wj = {k: 100 * (un[k] + wj[k]) / (lf[k] + wj[k]) for k in un if k in lf and k in wj}
     ue = g.get("ue_flow", {})

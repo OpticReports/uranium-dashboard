@@ -56,7 +56,7 @@ BOARD_SERIES = {
     # rule inputs
     "iursa": "IURSA", "ccnsa": "CCNSA", "covemp": "COVEMP",
     "job_losers": "LNS13023621", "clf": "CLF16OV", "epop_prime": "LNS12300060",
-    "lfpr_prime": "LNS11300060", "pop16": "LNU00000060", "unemploy": "UNEMPLOY",
+    "lfpr_prime": "LNS11300060", "pop_prime": "LNU00000060", "unemploy": "UNEMPLOY",
     "unrate": "UNRATE", "sahm": "SAHMREALTIME",
     # strip-only
     "u6": "U6RATE", "nilfwjn": "NILFWJN", "nei": "NEIM156SFRBRIC",
