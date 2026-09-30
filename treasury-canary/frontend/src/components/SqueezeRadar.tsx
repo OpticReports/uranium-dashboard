@@ -27,7 +27,11 @@ function ConditionRow({ c }: { c: SqueezeRadarData["fuel"][number] }) {
         {c.label}
       </td>
       <td className="py-1.5 pr-2 text-right font-mono text-xs text-slate-300">
-        {c.value !== null && c.value !== undefined ? `${c.value}${c.unit ? ` ${c.unit}` : ""}` : "—"}
+        {c.display
+          ? c.display
+          : c.value !== null && c.value !== undefined
+            ? `${c.value}${c.unit ? ` ${c.unit}` : ""}`
+            : "—"}
       </td>
       <td className="py-1.5 pr-2 text-right text-[10px] text-slate-500">{c.asof ?? ""}</td>
       <td className="py-1.5 text-right">

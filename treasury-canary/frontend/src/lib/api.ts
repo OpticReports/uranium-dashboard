@@ -906,6 +906,8 @@ export interface SqueezeCondition {
   unit: string;
   detail: string;
   asof: string | null;
+  /** plain reading shown instead of value+unit when set (T1: "+66bp hikes priced") */
+  display?: string | null;
 }
 
 export interface SqueezeRadarData {
