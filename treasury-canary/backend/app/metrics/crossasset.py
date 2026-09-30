@@ -48,6 +48,7 @@ def _rolling_corr(a: list[float], b: list[float], win: int = 60) -> list[float |
 
 
 FTQ_WINDOWS = (20, 60, 120)
+FTQ_STATUS_WINDOW = 60
 
 
 def flight_to_quality_windows(dates: list, sp_ret: list[float],
@@ -94,18 +95,22 @@ def build_crossasset_metrics(bundle: dict[str, tuple[list, list]]) -> list[Metri
         note="Negative = diversification intact (flight-to-quality works); positive flip = regime break."))
 
     # Flight-to-quality: fraction of recent equity down-days on which bonds rallied.
+    # Status window 60 trading days (~33 down days; 2026-09-30, Casey): the 20d
+    # window holds ~10 down days, so one day moved it ~0.1 and it read RED on
+    # 35% of days 2016-2026 (31 episodes); at 60d, 26% (13), concentrated in
+    # the 2021-26 positive-correlation regime. Thresholds unchanged.
     ftq_dates, ftq_vals = [], []
-    win = 20
+    win = FTQ_STATUS_WINDOW
     for i in range(len(sp_ret)):
         lo = max(0, i - win + 1)
         downs = [(s, br) for s, br in zip(sp_ret[lo:i + 1], bond_ret[lo:i + 1]) if s < 0]
         ftq_dates.append(dates[i])
         ftq_vals.append(round(sum(1 for _, br in downs if br > 0) / len(downs), 2) if downs else None)
     ftq = simple_metric(
-        "crossasset.flight_to_quality", "H", "Flight-to-quality (20d)", ftq_dates, ftq_vals,
+        "crossasset.flight_to_quality", "H", "Flight-to-quality (60d)", ftq_dates, ftq_vals,
         unit="frac", source="FRED:SP500,DGS10",
         note=("Share of S&P 500 down days on which the 10y yield fell (a Treasury bid). "
-              "Status uses the 20-day window; the longer windows show whether it is noise."))
+              "Status uses the 60-day window; 20d is the fast read, 120d the slow one."))
     ftq.extra = flight_to_quality_windows(dates, sp_ret, bond_ret)
     out.append(ftq)
 

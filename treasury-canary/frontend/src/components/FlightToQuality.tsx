@@ -164,26 +164,28 @@ function shortDate(iso: string): string {
   });
 }
 
-/* "0 of 13 down days" with its period, plus the longer windows so a 20-day
-   reading (~10 down days: one day moves it ~0.1) can be told from noise. */
+/* "N of M down days" over the 60-day status window with its dates, plus the
+   20-day (fast, noisy: ~10 down days) and 120-day (slow) windows. */
 function FtqCounts({ metric }: { metric: Metric }) {
   const ex = metric.extra as { windows?: FtqWindow[]; base_rate?: number | null; history_from?: string | null };
   const ws = ex?.windows ?? [];
-  const w20 = ws.find((w) => w.days === 20);
-  if (!w20) return null;
+  const main = ws.find((w) => w.days === 60);
+  if (!main) return null;
   const since = ex.history_from ? ex.history_from.slice(0, 4) : null;
+  const rank = (w: FtqWindow) =>
+    `${w.pctile <= 1 ? "lowest 1%" : `${w.pctile.toFixed(0)}th pctile`}${since ? ` since ${since}` : ""}`;
   return (
     <>
       <p className="mt-1 font-mono text-lg text-slate-100">
-        {w20.bid} of {w20.down} <span className="text-xs text-slate-400">down days had a bond bid</span>
+        {main.bid} of {main.down} <span className="text-xs text-slate-400">down days had a bond bid</span>
       </p>
       <p className="text-[10px] text-slate-400">
-        last 20 trading days · {shortDate(w20.start)}–{shortDate(w20.end)} (status uses this window)
+        last 60 trading days · {shortDate(main.start)}–{shortDate(main.end)} (status uses this window) · {rank(main)}
       </p>
       <p className="mt-1 text-[10px] leading-snug text-slate-400">
         {ws
-          .filter((w) => w.days !== 20)
-          .map((w) => `${w.days}d: ${w.bid} of ${w.down} (${w.pctile <= 1 ? "lowest 1%" : `${w.pctile.toFixed(0)}th pctile`}${since ? ` since ${since}` : ""})`)
+          .filter((w) => w.days !== 60)
+          .map((w) => `${w.days}d: ${w.bid} of ${w.down} (${rank(w)})`)
           .join(" · ")}
         {ex.base_rate != null ? ` · typical: ${Math.round(ex.base_rate * 100)}% of down days` : ""}
       </p>
