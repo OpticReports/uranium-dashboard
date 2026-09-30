@@ -191,8 +191,8 @@ reached the retired rungs with `KELLY_M` pinned at exactly 0.20:
 So the invariant is now stated where the Kelly envelope actually lives —
 as a fraction of **capital**, not as one multiplier:
 
-- `MAX_EXPOSURE_FRAC = 0.30` — `_check_exposure` pages `exposure_over_cap`
-  when `kelly × lev × base / equity` breaches it, naming
+- `MAX_EXPOSURE_FRAC = 0.45` (0.30 cap × 1.5, since 2026-09-30) — `_check_exposure` pages `exposure_over_cap`
+  when `kelly × lev × base / max(equity, high_water)` breaches it, naming
   `SIZING_BASE_USD` rather than blaming `KELLY_M`. It **pages, it does not
   clamp**: clamping on live equity would shrink entry size during a
   drawdown, which is a real change to how the book trades and is Casey's

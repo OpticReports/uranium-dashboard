@@ -6786,7 +6786,9 @@ def test_gate_kelly_cap_pages_at_boot(tmp_path):
     ex = Executor(FakeVenue(), cfg, cfg.state_path)
     ev = [e for e in ex.state.events if e["kind"] == "kelly_over_cap"]
     assert len(ev) == 1 and ev[0]["level"] == "RED"
-    assert "0.35" in ev[0]["msg"] and "0.3" in ev[0]["msg"]
+    assert "0.35" in ev[0]["msg"]
+    assert f"repo cap {mirror.KELLY_M_CAP}" in ev[0]["msg"]
+    assert f"sized at {mirror.KELLY_M_CAP}" in ev[0]["msg"]
 
 
 def test_gate_kelly_cap_silent_when_within(tmp_path):

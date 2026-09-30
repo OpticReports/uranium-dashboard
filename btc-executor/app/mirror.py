@@ -568,10 +568,13 @@ class Executor:
         # equity, the live config sits exactly ON the line at KELLY_M_CAP, so
         # any drawdown past 1% paged every poll: alert noise that trains the
         # operator to ignore the one page that catches a fat-fingered base.
-        # High water still catches every config breach (a base above the
-        # account's peak is exactly the bypass this was built for); drawdown
-        # is DRAWDOWN_HALT's job. max() because high_water is 0 until the
-        # first _roll_day.
+        # High water still catches a base set above the account's PEAK (the
+        # bypass this was built for); drawdown is DRAWDOWN_HALT's job.
+        # KNOWN GAP (review 2026-09-30): a withdrawal made while a position is
+        # open does not lower high_water (_reconcile_transfers only runs when
+        # flat), so a base between current equity and the old peak no longer
+        # pages until the book is flat. Page-only check; the rails still bind.
+        # max() because high_water is 0 until the first _roll_day.
         frac = gross / max(equity, self.state.high_water)
         # 1% tolerance: at the live config frac sits exactly ON the line, and
         # a control that pages at its own design point is noise.

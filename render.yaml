@@ -574,8 +574,9 @@ services:
       # the old 0.80 ceiling are RETIRED: btc-paper-engine/RESEARCH_FEES.md
       # re-fitted Kelly on the fee we actually pay (8.64 bps round trip -
       # 4 of 4 intended-maker entries crossed and paid taker, not the
-      # modelled 6.00) and the binding S6 envelope is 0.22. Setting KELLY_M
-      # above 0.20 here does NOT take effect: mirror.KELLY_M_CAP clamps
+      # modelled 6.00) and the binding S6 envelope is 0.22. KELLY_M_CAP was
+      # raised to 0.30 on 2026-09-30 (RESEARCH_CAGR.md, Casey's approval).
+      # Setting KELLY_M above 0.30 here does NOT take effect: the cap clamps
       # sizing to the cap and pages kelly_over_cap every poll (throttled to
       # one phone ping per 30 min). The executor keeps running and keeps
       # protecting open positions - it does not refuse to boot, because an
@@ -588,13 +589,20 @@ services:
       # deploys more than the old rung D. SIZING_BASE_USD, MAX_NOTIONAL_USD
       # and MAX_ACCOUNT_LEV have NO repo ceiling; they are still yours to
       # set. What the code does now is make a breach LOUD:
-      # mirror.MAX_EXPOSURE_FRAC (0.30 of equity, gross) pages
+      # mirror.MAX_EXPOSURE_FRAC (0.45 of the account's peak, gross) pages
       # exposure_over_cap and names the base rather than blaming KELLY_M.
       # Loud is not impossible. Treat a base change as a ramp step.
       # Change KELLY_M one step at a time, never alongside SIZING_BASE_USD.
-      # Current dashboard values (2026-09-28, Hyperliquid live phase):
-      # KELLY_M 0.20, SIZING_BASE_USD 100000, MAX_NOTIONAL_USD 40000,
-      # MAX_ACCOUNT_LEV 2.0, DD_HALT_PCT 0.35 (% of sizing base).
+      # Current dashboard values (2026-09-30, Hyperliquid live phase):
+      # KELLY_M 0.30, SIZING_BASE_USD 100000, MAX_NOTIONAL_USD 60000,
+      # MAX_ACCOUNT_LEV 2.0, DD_HALT_PCT 0.30 (% of sizing base),
+      # DAILY_LOSS_HALT_PCT 0.06. Engine blend 70/30 @1.5x.
+      # THE 0.30 STEP (Casey, 2026-09-30, RESEARCH_CAGR.md): gross
+      # 0.30 x 1.5 x 100000 = $45,000 (pullback 31,500 / trend 13,500).
+      # DD halt $30,000 (Casey's -30%) sits inside cap_notional 60,000, so the
+      # coherence guard is quiet. 0.30 is ON _roll_day's strictly-greater
+      # manual-resume line, so DAILY_LOSS still auto-rearms; going past 0.30
+      # needs a repo change AND a decision about that rule.
       #
       # THE 2x BASE STEP (2026-09-28, Casey's call): base 50000 -> 100000 and
       # cap 20000 -> 40000, TOGETHER. Gross deployed 15000 -> 30000 = 30.0% of
