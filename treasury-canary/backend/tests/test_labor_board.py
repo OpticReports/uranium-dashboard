@@ -132,10 +132,16 @@ def test_missing_rules_never_read_clear():
         p = RL.board_payload(s)
         assert p["month"] == "2026-08" and p["state"] == "INCOMPLETE"
         assert p["missing"] == ["C1"] and p["c1_source"] == "SAHMREALTIME"
-    # no jobs-report month at all -> no state, never CLEAR
-    s = dict(series)
-    s["sahm"], s["unrate"] = ([], []), ([], [])
-    p = RL.board_payload(s)
+    # double fault: UNRATE fetch failed AND real-time Sahm a month behind ->
+    # still the Aug-2026 CPS month (from the other CPS rules), C1 missing
+    for sahm in (([], []), (series["sahm"][0][:-1], series["sahm"][1][:-1])):
+        s = dict(series)
+        s["unrate"], s["sahm"] = ([], []), sahm
+        p = RL.board_payload(s)
+        assert p["month"] == "2026-08" and p["state"] == "INCOMPLETE"
+        assert p["missing"] == ["C1"]
+    # no CPS series at all -> no state, never CLEAR
+    p = RL.board_payload({k: ([], []) for k in series})
     assert p["state"] is None and p["month"] is None
 
 

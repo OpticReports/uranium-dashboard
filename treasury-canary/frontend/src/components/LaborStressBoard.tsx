@@ -107,7 +107,7 @@ export default function LaborStressBoard() {
           </span>
           <span className="text-xs text-slate-300">
             {data.state == null
-              ? "no data — the jobs-report month cannot be set (UNRATE and Sahm unavailable)"
+              ? "no data — the jobs-report month cannot be set (no CPS series available)"
               : data.missing.length > 0
                 ? `${data.n_lit} of ${data.n_evaluated} available rules lit — ${data.missing.join(", ")} not yet available for ${data.month}`
                 : `${data.n_lit} of ${data.n_rules} rules lit`}

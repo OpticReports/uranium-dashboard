@@ -103,17 +103,30 @@ def _persist_event(session: Session, ev: Event) -> bool:
     here used to discard every snapshot and event written earlier in the
     same refresh whenever a detector re-emitted a known key — e.g. a curve
     re-steepening held for weeks, or a labor ledger onset — while events
-    already paged were never stored, so they re-paged.)"""
-    if session.execute(select(EventLog.id).where(
+    already paged were never stored, so they re-paged.)
+    INSERT ... ON CONFLICT DO NOTHING stays inside the refresh transaction,
+    so a crash before commit un-logs the row and the next refresh pages it
+    again (at-least-once). A SAVEPOINT would not: under pysqlite's deferred
+    BEGIN, a SAVEPOINT issued before any other write commits on RELEASE."""
+    values = dict(event_type=ev.event_type, severity=ev.severity, asof=ev.asof,
+                  dedup_key=ev.dedup_key, rationale=ev.rationale,
+                  detail_json=ev.detail_json())
+    dialect = session.get_bind().dialect.name
+    if dialect in ("sqlite", "postgresql"):
+        if dialect == "sqlite":
+            from sqlalchemy.dialects.sqlite import insert as _insert
+        else:
+            from sqlalchemy.dialects.postgresql import insert as _insert
+        res = session.execute(_insert(EventLog.__table__).values(**values)
+                              .on_conflict_do_nothing(index_elements=["event_type", "dedup_key"]))
+        return res.rowcount == 1
+    if session.execute(select(EventLog.id).where(          # other backends
             EventLog.event_type == ev.event_type,
             EventLog.dedup_key == ev.dedup_key)).first():
         return False
     try:
-        with session.begin_nested():     # SAVEPOINT: a race loses only this row
-            session.add(EventLog(
-                event_type=ev.event_type, severity=ev.severity, asof=ev.asof,
-                dedup_key=ev.dedup_key, rationale=ev.rationale,
-                detail_json=ev.detail_json()))
+        with session.begin_nested():
+            session.add(EventLog(**values))
         return True
     except IntegrityError:
         return False
@@ -255,8 +268,8 @@ def run_refresh(session: Session) -> dict:
                                         board_ledger_events, board_payload)
         payload = board_payload(_board_series())
         if payload.get("state") is None:
-            logger.warning("labor board unavailable: no jobs-report month (UNRATE and "
-                           "SAHMREALTIME empty)")
+            logger.warning("labor board unavailable: no jobs-report month (no CPS series "
+                           "returned data)")
         elif payload.get("missing"):
             logger.warning("labor board INCOMPLETE for %s: %s not available",
                            payload.get("month"), ", ".join(payload["missing"]))

@@ -80,3 +80,23 @@ def test_duplicate_as_the_first_write_of_a_refresh(tmp_path):
     with SL() as s:
         assert [r.asof for r in s.execute(select(MetricSnapshot)).scalars()] == [d2]
         assert {r.dedup_key for r in s.execute(select(EventLog)).scalars()} == {"k", "k2"}
+
+
+def test_a_crash_before_commit_pages_again_next_refresh(tmp_path):
+    # at-least-once: a new event written as the FIRST statement of a refresh
+    # must stay inside the refresh transaction (a pysqlite SAVEPOINT issued
+    # before any other write commits on RELEASE, so a crash between logging
+    # and paging would drop the page for good)
+    SL = _session_factory(tmp_path)
+    d1 = date(2026, 10, 3)
+    with SL() as s:
+        assert _persist_event(s, _ev("band:LOW->HIGH", d1))
+        s.rollback()                                     # process died before commit
+    with SL() as s:
+        assert s.execute(select(EventLog)).first() is None
+        assert _persist_event(s, _ev("band:LOW->HIGH", d1))   # so it pages again
+        s.commit()
+    with SL() as s:
+        row = s.execute(select(EventLog)).scalars().one()
+        assert row.dedup_key == "band:LOW->HIGH" and row.alert_sent is False
+        assert row.created_at is not None                # column defaults still applied

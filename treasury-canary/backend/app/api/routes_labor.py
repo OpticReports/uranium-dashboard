@@ -107,7 +107,7 @@ LEDGER_FROM = (2026, 9)     # out-of-sample begins with this data month (spec v1
 def board_payload(series: dict, *, sahm_from: str = "series") -> dict:
     """Pure: raw FRED observations -> the panel payload (testable offline).
     Evaluated on the monthly jobs-report grid: the Board's month is the
-    latest CPS month (UNRATE, or C1 if later); weekly legs map to that grid
+    latest CPS month (UNRATE or any monthly CPS rule); weekly legs map to that grid
     (spec A6). A rule with no value for that month — empty, all-None or
     lagging, SAHMREALTIME included — is MISSING, never counted as unlit: the
     state is then INCOMPLETE, not CLEAR (a missing rule can only lower the
@@ -119,7 +119,9 @@ def board_payload(series: dict, *, sahm_from: str = "series") -> dict:
     lit = L.lit(vals)
     states = L.board(lit)
     ud, uv = series.get("unrate") or ([], [])
-    cps = sorted(set(L.monthly(ud, uv)) | set(vals.get("C1", {})))
+    # every monthly CPS-derived rule counts, so one failed fetch (UNRATE) plus
+    # one lagging series (SAHMREALTIME) cannot pin the Board to an older month
+    cps = sorted(set(L.monthly(ud, uv)).union(*(vals.get(r, {}) for r in ("A2", "B1", "B2", "C1"))))
     months = cps[-BOARD_CHART_MONTHS:]
     last = months[-1] if months else None
     missing = [rid for rid in L.RULES if last is None or last not in vals.get(rid, {})]
