@@ -199,6 +199,10 @@ def _fetch_bundle_uncached(start: str) -> dict[str, tuple[list[date], list[float
     bundle["ofr_fsi"] = fetch_fsi()
     bundle["cot_net_short"] = fetch_lev_net_short()
     bundle.update(fetch_margin_stats())
+    from .household_debt import extend_household_debt
+    bundle["hh_debt_gdp"] = extend_household_debt(
+        bundle.get("hh_debt_gdp", ([], [])), bundle.get("hh_debt_z1", ([], [])),
+        bundle.get("gdp", ([], [])))
     return bundle
 
 

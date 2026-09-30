@@ -32,8 +32,10 @@ def payload(bundle):
 
 def test_today_is_the_live_index(bundle, payload):
     # the frozen bundle reproduces the live /severity of 2026-09-30 exactly
-    assert build_severity(bundle)["severity_score"] == 68.9
-    assert payload["today"] == {"score": 68.9, "class": "SEVERE"}
+    # (68.9 before household debt/GDP was extended back with Z.1; 67.7 after)
+    assert build_severity(load.bundle(extend=False))["severity_score"] == 68.9
+    assert build_severity(bundle)["severity_score"] == 67.7
+    assert payload["today"] == {"score": 67.7, "class": "SEVERE"}
 
 
 def test_no_observation_is_used_before_it_was_published(bundle):
@@ -62,9 +64,11 @@ def test_lags_are_no_shorter_than_the_real_release_schedule(bundle):
 
 
 def test_late_starting_inputs_enter_ten_years_later(bundle):
-    # household debt/GDP and debt service start 2005 on FRED: absent until 2016
-    assert SH.as_of(bundle, date(2015, 12, 31))["hh_debt_gdp"] == ([], [])
-    assert SH.as_of(bundle, date(2016, 6, 30))["hh_debt_gdp"][0]
+    # debt service starts 2005 on FRED: absent until ~2015
+    assert SH.as_of(bundle, date(2014, 12, 31))["dsr"] == ([], [])
+    assert SH.as_of(bundle, date(2016, 6, 30))["dsr"][0]
+    # household debt/GDP, extended back with Z.1, is live from 1987
+    assert SH.as_of(bundle, date(1990, 6, 30))["hh_debt_gdp"][0]
     assert SH.as_of(bundle, date(2008, 6, 30))["effr"] == ([], [])      # EFFR from 2000-07
 
 
@@ -72,15 +76,15 @@ def test_payload_matches_the_frozen_study_and_serialises(payload):
     frozen = json.load(open(os.path.join(STUDY, "results.json")))
     assert json.loads(json.dumps(payload, allow_nan=False)) == frozen
     s = {r["month"]: r for r in payload["series"]}
-    assert s["2007-11"]["score"] == 71.4 and s["2023-12"]["score"] == 51.5
+    assert s["2007-11"]["score"] == 72.4 and s["2023-12"]["score"] == 49.2
     # the months the drawn rule actually hides (4 of 23 components live)
     for m in ("1986-03", "1986-04", "1986-05"):
         assert s[m]["score"] is not None and not s[m]["drawn"]
     # shares and percentiles on comparable inputs, not the thin early years
-    assert (payload["share_severe"], payload["today_pctile"], payload["pctile_from"]) == (42, 82, "2001-06")
+    assert (payload["share_severe"], payload["today_pctile"], payload["pctile_from"]) == (43, 85, "1999-12")
     assert (payload["share_severe_all_inputs"], payload["pctile_all_inputs"],
-            payload["all_inputs_from"]) == (23, 96, "2016-04")
-    assert "lacks the index's main predictor" in payload["method"]
+            payload["all_inputs_from"]) == (14, 97, "2015-06")
+    assert "extended back to 1976 with the Fed's Z.1" in payload["method"]
     assert "the dot is today's live reading" in payload["method"]
 
 
@@ -119,13 +123,50 @@ def test_recession_outcomes_are_the_data():
 
 def test_analogs(payload):
     starts = {s["peak"]: s for s in payload["analogs"]["recession_starts"]}
-    assert starts["2007-12"]["reading"] == 71.4 and starts["2020-02"]["exogenous"]
-    assert starts["1990-07"]["reading"] == 63.2
+    assert starts["2007-12"]["reading"] == 72.4 and starts["2020-02"]["exogenous"]
+    assert starts["1990-07"]["reading"] == 64.9
     near = payload["analogs"]["nearest"]
-    assert [(n["from"], n["to"]) for n in near] == [("2001-06", "2002-02"), ("2007-03", "2010-04"),
-                                                    ("2012-09", "2015-05")]
+    assert [(n["from"], n["to"]) for n in near] == [("1999-12", "2002-05"), ("2006-08", "2007-11"),
+                                                    ("2008-06", "2010-06"), ("2012-12", "2015-05")]
     assert all(n["live"] >= 0.75 * n["total"] for n in near)
-    assert near[0]["already_in_recession"] and near[1]["recession_within_24m"] == "2007-12"
-    assert near[2]["recession_within_24m"] is None and near[2]["unemployment_chg_24m"] == -1.9
+    assert near[0]["recession_within_24m"] == "2001-03" and near[1]["recession_within_24m"] == "2007-12"
+    assert near[2]["already_in_recession"]
+    assert near[3]["recession_within_24m"] is None and near[3]["unemployment_chg_24m"] == -2.3
     # the current stretch is never its own analog (no outcome yet)
     assert all(n["to"] < "2024-10" for n in near)
+
+
+# ── household debt/GDP back-extension (sources/household_debt.py) ───────────
+def test_household_debt_splice():
+    from app.sources.household_debt import extend_household_debt, z1_ratio
+    raw = load.bundle(extend=False)
+    pub, z1, gdp = raw["hh_debt_gdp"], raw["hh_debt_z1"], raw["gdp"]
+    d, v = extend_household_debt(pub, z1, gdp)
+    ext = dict(zip(d, v))
+    first = next(x for x, y in zip(*pub) if y is not None)
+    assert first == date(2005, 1, 1) and d[0] == date(1976, 1, 1)
+    # the published series wins wherever it exists, untouched
+    assert all(ext[x] == y for x, y in zip(*pub) if y is not None)
+    # the join is continuous: the back-extension is Z.1 shifted by the gap at
+    # the FIRST overlapping quarter only, so its 3-year changes are pure Z.1
+    z = z1_ratio(z1, gdp)
+    shift = ext[first] - z[first]
+    assert abs(shift - (-0.4)) < 0.1
+    assert all(abs(ext[x] - (z[x] + shift)) < 1e-3 for x in d if x < first)
+    # the Z.1 ratio tracks the published one: 3-year changes corr ~0.97
+    ov = sorted(x for x in z if x in ext and x >= first)
+    a = [ext[ov[i]] - ext[ov[i - 12]] for i in range(12, len(ov))]
+    b = [z[ov[i]] - z[ov[i - 12]] for i in range(12, len(ov))]
+    ma, mb = sum(a) / len(a), sum(b) / len(b)
+    corr = (sum((x - ma) * (y - mb) for x, y in zip(a, b))
+            / (sum((x - ma) ** 2 for x in a) * sum((y - mb) ** 2 for y in b)) ** 0.5)
+    assert corr > 0.95
+
+
+def test_household_debt_splice_refuses_to_substitute():
+    from app.sources.household_debt import extend_household_debt
+    raw = load.bundle(extend=False)
+    # a failed fetch of the published series stays empty (STALE), never
+    # silently becomes the Z.1 series; a missing Z.1 leaves it unchanged
+    assert extend_household_debt(([], []), raw["hh_debt_z1"], raw["gdp"]) == ([], [])
+    assert extend_household_debt(raw["hh_debt_gdp"], ([], []), raw["gdp"]) == raw["hh_debt_gdp"]

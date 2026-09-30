@@ -180,8 +180,9 @@ export default function SeverityHistoryPanel() {
             </tbody>
           </table>
           <p className="mt-1 text-[10px] text-slate-500">
-            These readings use 14-20 of 23 components and lack household debt; three data points do not show the
-            reading predicts depth.
+            These readings use {Math.min(...starts.filter((s) => !s.exogenous).map((s) => s.live ?? 0))}-
+            {Math.max(...starts.filter((s) => !s.exogenous).map((s) => s.live ?? 0))} of 23 components (no debt-service
+            ratio before 2015); three data points do not show the reading predicts depth.
           </p>
         </div>
         <div>
@@ -224,13 +225,13 @@ export default function SeverityHistoryPanel() {
         </div>
       </div>
       <p className="mt-2 text-[10px] leading-relaxed text-slate-500">
-        Descriptive only: three recessions the index is built for since 1986 cannot validate it. Every past reading
-        here lacks household debt/GDP and debt service (FRED data start 2005, so they enter in 2016); today&apos;s
-        includes them, so those readings are a smaller index, not today&apos;s.
+        Descriptive only: three recessions the index is built for since 1986 cannot validate it. Household
+        debt/GDP is extended back to 1976 with the Fed&apos;s Z.1; the debt-service ratio starts in 2005 on FRED, so
+        readings before 2015 run without it and use fewer components than today&apos;s.
         {s2007?.reading != null && s2001?.reading != null
           ? ` The highest pre-recession reading (${s2007.peak.slice(0, 4)}, ${s2007.reading.toFixed(0)}) came before the deepest recession, but ${s2001.peak.slice(0, 4)} read ${s2001.reading.toFixed(0)} and was mild.`
           : ""}
-        {calm.map((n) => ` ${n.from.slice(0, 4)}-${n.to.slice(0, 4)} averaged ${n.mean_reading.toFixed(0)} with no recession${n.from.startsWith("2012") ? " (about 2-3 points lower with household debt included)" : ""}.`).join("")}
+        {calm.map((n) => ` ${n.from.slice(0, 4)}-${n.to.slice(0, 4)} averaged ${n.mean_reading.toFixed(0)} with no recession.`).join("")}
         {" "}Current-vintage data; the weights were set in 2026 with this history in view.
       </p>
     </Panel>
