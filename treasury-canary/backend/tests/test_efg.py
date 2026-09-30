@@ -67,3 +67,20 @@ def test_foreign_custody_26w():
     assert selling.value is not None and selling.value <= -5.0
     assert selling.status is Status.RED
     assert build_foreign_metrics({})[0].status is Status.STALE
+
+def test_flight_to_quality_counts_carry_their_window():
+    """The card shows 'N of M down days' with dates; the fraction alone
+    ('0.000 frac') read as missing data, and a 20-day window is noisy."""
+    from datetime import date, timedelta
+    from app.metrics.crossasset import flight_to_quality_windows
+    n = 200
+    dates = [date(2026, 1, 1) + timedelta(days=i) for i in range(n)]
+    sp = [(-0.01 if i % 2 else 0.01) for i in range(n)]            # every other day down
+    br = [(0.001 if i < 150 else -0.001) for i in range(n)]         # bonds stop bidding at 150
+    ex = flight_to_quality_windows(dates, sp, br)
+    w = {x["days"]: x for x in ex["windows"]}
+    assert (w[20]["bid"], w[20]["down"]) == (0, 10)
+    assert w[20]["start"] == dates[-20].isoformat() and w[20]["end"] == dates[-1].isoformat()
+    assert (w[60]["bid"], w[60]["down"]) == (5, 30)
+    assert (w[120]["bid"], w[120]["down"]) == (35, 60)
+    assert w[20]["pctile"] < 30 and 0 < ex["base_rate"] < 1

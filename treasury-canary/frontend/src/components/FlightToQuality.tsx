@@ -98,6 +98,7 @@ export default function FlightToQuality({ metrics }: { metrics: Metric[] }) {
               <InfoTip metricId="crossasset.flight_to_quality" />
             </>
           }
+          body={ftq ? <FtqCounts metric={ftq} /> : undefined}
         />
       </div>
 
@@ -155,12 +156,49 @@ export default function FlightToQuality({ metrics }: { metrics: Metric[] }) {
   );
 }
 
+type FtqWindow = { days: number; bid: number; down: number; start: string; end: string; pctile: number };
+
+function shortDate(iso: string): string {
+  return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", {
+    month: "short", day: "numeric", timeZone: "UTC",
+  });
+}
+
+/* "0 of 13 down days" with its period, plus the longer windows so a 20-day
+   reading (~10 down days: one day moves it ~0.1) can be told from noise. */
+function FtqCounts({ metric }: { metric: Metric }) {
+  const ex = metric.extra as { windows?: FtqWindow[]; base_rate?: number | null; history_from?: string | null };
+  const ws = ex?.windows ?? [];
+  const w20 = ws.find((w) => w.days === 20);
+  if (!w20) return null;
+  const since = ex.history_from ? ex.history_from.slice(0, 4) : null;
+  return (
+    <>
+      <p className="mt-1 font-mono text-lg text-slate-100">
+        {w20.bid} of {w20.down} <span className="text-xs text-slate-400">down days had a bond bid</span>
+      </p>
+      <p className="text-[10px] text-slate-400">
+        last 20 trading days · {shortDate(w20.start)}–{shortDate(w20.end)} (status uses this window)
+      </p>
+      <p className="mt-1 text-[10px] leading-snug text-slate-400">
+        {ws
+          .filter((w) => w.days !== 20)
+          .map((w) => `${w.days}d: ${w.bid} of ${w.down} (${w.pctile <= 1 ? "lowest 1%" : `${w.pctile.toFixed(0)}th pctile`}${since ? ` since ${since}` : ""})`)
+          .join(" · ")}
+        {ex.base_rate != null ? ` · typical: ${Math.round(ex.base_rate * 100)}% of down days` : ""}
+      </p>
+    </>
+  );
+}
+
 function MetricCard({
   metric,
   label,
+  body,
 }: {
   metric: Metric | undefined;
   label: ReactNode;
+  body?: ReactNode;
 }) {
   return (
     <div className="rounded border border-panelborder bg-slate-900/40 px-3 py-2">
@@ -170,9 +208,11 @@ function MetricCard({
         </p>
         {metric && <StatusPill status={metric.status} />}
       </div>
-      <p className="mt-1 font-mono text-lg text-slate-100">
-        {metric ? formatValue(metric.value, metric.unit) : "n/a"}
-      </p>
+      {body ?? (
+        <p className="mt-1 font-mono text-lg text-slate-100">
+          {metric ? formatValue(metric.value, metric.unit) : "n/a"}
+        </p>
+      )}
       {metric?.note && (
         <p className="mt-0.5 text-[10px] text-slate-500">{metric.note}</p>
       )}
