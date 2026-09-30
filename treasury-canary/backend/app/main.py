@@ -45,6 +45,11 @@ def _start_scheduler(app: FastAPI) -> None:
                 logger.info("Scheduled refresh: %s", run_refresh(s))
         except Exception as exc:  # noqa: BLE001
             logger.warning("Scheduled refresh failed: %s", exc)
+        try:   # severity history is ~10-40s of CPU: rebuild here, not on a page view
+            from .api.routes_severity import warm_history
+            warm_history(force=True)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Severity history warm-up failed: %s", exc)
 
     from datetime import datetime, timedelta, timezone
     sched.add_job(_job, IntervalTrigger(minutes=settings.refresh_interval_minutes),

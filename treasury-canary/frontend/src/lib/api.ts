@@ -798,6 +798,34 @@ export interface SeverityBlock {
   components: SeverityComponent[];
 }
 
+export interface SeverityHistory {
+  series: Array<{ month: string; score: number | null; class: string | null; live: number; total: number; drawn: boolean }>;
+  blocks: Array<Record<string, number | string | null>>;
+  today: { score: number | null; class: string | null };
+  today_pctile: number | null;
+  pctile_from: string | null;
+  share_severe: number | null;
+  share_severe_all_inputs: number | null;
+  pctile_all_inputs: number | null;
+  all_inputs_from: string | null;
+  bands: { mild_below: number; severe_above: number };
+  recessions: Array<{ start: string; end: string; exogenous: boolean }>;
+  analogs: {
+    band: number;
+    recession_starts: Array<{
+      peak: string; trough: string; reading: number | null; class: string | null;
+      live: number | null; total: number | null; months?: number;
+      unemployment_rise_pp?: number; real_gdp_pct?: number; exogenous?: boolean;
+    }>;
+    nearest: Array<{
+      from: string; to: string; months: number; mean_reading: number; live: number; total: number;
+      already_in_recession: boolean; recession_within_24m: string | null;
+      unemployment_chg_24m: number | null;
+    }>;
+  };
+  method: string;
+}
+
 export interface SeverityIndex {
   blocks: SeverityBlock[];
   severity_score: number | null;
@@ -963,6 +991,7 @@ export const api = {
   pinsHistory: () => getJson<PinHistory>("/pins/history"),
   trackRecord: () => getJson<TrackRecord>("/track-record"),
   severity: () => getJson<SeverityIndex>("/severity"),
+  severityHistory: () => getJson<SeverityHistory>("/severity/history"),
   refresh: () =>
     getJson<unknown>("/refresh", { method: "POST" }),
 };

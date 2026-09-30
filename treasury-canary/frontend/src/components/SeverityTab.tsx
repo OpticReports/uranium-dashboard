@@ -16,6 +16,7 @@ import { IMPACT_DATA } from "../lib/severityImpact";
 import { Panel, InlineError, Loading } from "./ui";
 import { errorMessage, formatValue } from "../lib/format";
 import InfoTip from "./InfoTip";
+import SeverityHistoryPanel from "./SeverityHistoryPanel";
 
 // ---------------------------------------------------------------------------
 // Loosened view of the generated `as const` impact data so we can index
@@ -177,6 +178,7 @@ export default function SeverityTab() {
       {!loading && !error && data && (
         <>
           <SeverityHeader data={data} />
+          <SeverityHistoryPanel />
           {data.blocks.map((b) => (
             <BlockPanel key={b.id} block={b} />
           ))}
