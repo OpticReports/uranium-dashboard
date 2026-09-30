@@ -7,6 +7,7 @@ import StressGauge from "./components/StressGauge";
 import MetricTable from "./components/MetricTable";
 import ReSteepenAlert from "./components/ReSteepenAlert";
 import SahmChart from "./components/SahmChart";
+import LaborStressBoard from "./components/LaborStressBoard";
 import CycleTracker from "./components/CycleTracker";
 import LaborPanel from "./components/LaborPanel";
 import FlightToQuality from "./components/FlightToQuality";
@@ -158,6 +159,7 @@ export default function App() {
 
           <CycleTracker />
           <SahmChart />
+          <LaborStressBoard />
 
           {metrics ? (
             <LeadingStack metrics={metrics.metrics} />

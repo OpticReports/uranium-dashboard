@@ -271,11 +271,13 @@ between the total-return and price-only rows: **~25-31%**.
   and fell ≥20% below its start within 18m in **21%**. The two BEAR-FLAT
   failures: 1972-76 (33% up; the oil-shock stagflation bear, CAPE ~15 — NOT
   expensive) and 1999-2000 (20% up; CAPE 43).
-- **RATE_SHOCK context:** the 30y is +0.56pp over 60 trading days — below that
-  study's +0.75pp SPIKE line. Spikes there roughly doubled 12m recession odds
-  (44% vs 21%) without a significant equity signal: rates bite through
-  recession risk, which this equity-odds study does not model. The 3m10y curve
-  is +0.94pp (not inverted).
+- **RATE_SHOCK context (corrected 2026-09-30):** the 30y is +0.56pp over 60
+  trading days — below the +0.75pp spike line. RATE_SHOCK's "spikes roughly
+  doubled recession odds (44% vs 21%)" did not survive a re-test: a recession
+  began within 12 months after 3 of 20 spike episodes (15% vs 20%), all by
+  1990, none of the 13 since, and inseparable from the yield curve
+  (`studies/rate-spike-recession.md`). The 3m10y curve is +0.94pp (not
+  inverted).
 
 ### Analogs (fig2) — illustrations, not odds
 

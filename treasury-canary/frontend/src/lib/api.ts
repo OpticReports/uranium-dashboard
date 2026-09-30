@@ -611,6 +611,74 @@ export interface MarginFast {
 export type RateShockState = "SPIKE" | "PLUNGE" | "NEUTRAL";
 export type CorrRegime = "POS" | "MIXED" | "NEG";
 
+/** INCOMPLETE = at least one rule has no value for the Board month (a missing
+    rule is never counted as unlit, so the Board cannot claim CLEAR) */
+export type LaborBoardState = "CLEAR" | "WATCH" | "ALERT" | "INCOMPLETE";
+
+export interface LaborBoardRule {
+  id: string;
+  leg: "A" | "B" | "C";
+  label: string;
+  threshold: number;
+  unit: string;
+  watch: number | null;
+  value: number | null;
+  month: string | null;
+  /** null when the rule has no value for the Board month */
+  lit: boolean | null;
+  /** the value shown is from an earlier month than the Board month */
+  stale: boolean;
+  /** value / threshold — 1.0 is the trigger line */
+  ratio: number | null;
+}
+
+export interface LaborStripItem {
+  key: string;
+  label: string;
+  month: string;
+  value: number | null;
+  chg_12m: number | null;
+  /** 12-month change direction; "flat" inside the ±0.05 dead band */
+  trend: "worse" | "better" | "flat" | null;
+  percentile: number | null;
+  pct_from: string | null;
+  unit: string;
+  worse: "up" | "down";
+  note: string;
+}
+
+export interface LaborBoard {
+  state: LaborBoardState | null;
+  /** rules lit this month (any single rule was lit in 40% of months since
+      2021, above the spec's 33% ceiling, so the panel shows this count rather
+      than a WATCH state) */
+  n_lit: number;
+  n_rules: number;
+  n_evaluated: number;
+  missing: string[];
+  c1_source: string;
+  month: string | null;
+  rules: LaborBoardRule[];
+  /** state is null for a CPS month no rule has reached yet */
+  history: Array<{ month: string; state: LaborBoardState | null } & Record<string, number | null | string>>;
+  strip: LaborStripItem[];
+  /** computed one-line answer to "is the headline rate too good?" */
+  strip_verdict: string | null;
+  record: {
+    hits: number;
+    peaks: number;
+    false_alarms_1972_2020: number;
+    sahm_false_alarms_1972_2020: number;
+    paired_timing_vs_sahm: number;
+    fired_2024: string;
+    red_gate: string;
+    text: string;
+  };
+  ledger: Array<{ month: string; kind: string; event: string; value?: number }>;
+  ledger_from: string;
+  note: string;
+}
+
 export interface RateShockCell {
   n: number;
   episodes: number;
@@ -639,6 +707,23 @@ export interface RateShock {
   shock_stats: Record<RateShockState, RateShockCell & { label: string }>;
   matrix: Record<RateShockState, Record<CorrRegime, RateShockCell>>;
   thresholds: Record<string, number>;
+  /** re-tested per-alert recession record (studies/rate-spike-recession.md) */
+  spike_recession?: {
+    episodes: number;
+    episode_hits: number;
+    episode_rate_pct: number;
+    base_pct: number;
+    hits_by: string;
+    since_1990: { from: string; episodes: number; hits: number };
+    alerts: { n: number; hits: number; lead: number; late: number };
+    gate_2x: string;
+    ex_volcker_ratio: number;
+    beyond_curve: string;
+    power_note: string;
+  };
+  /** live 12-month yield-curve recession probability (quoted beside spikes) */
+  curve_prob_pct?: number | null;
+  spike_label?: string;
   note: string;
 }
 
@@ -851,6 +936,7 @@ export const api = {
     ),
   recessionModel: () => getJson<RecessionModel>("/recession-model"),
   laborSahm: () => getJson<SahmSeries>("/labor/sahm"),
+  laborBoard: () => getJson<LaborBoard>("/labor/board"),
   marginLeverage: () => getJson<MarginLeverage>("/margin/leverage"),
   marginFast: () => getJson<MarginFast>("/margin/fast"),
   ratesShock: () => getJson<RateShock>("/rates/shock"),

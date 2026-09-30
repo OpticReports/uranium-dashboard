@@ -25,7 +25,7 @@ export default function LaborPanel({ metrics }: { metrics: Metric[] }) {
   return (
     <Panel
       title="Labor Market"
-      subtitle="Sahm Rule leads; claims and unemployment confirm"
+      subtitle="Layoff measures have lit first historically; the Sahm Rule confirms"
     >
       {sahmTriggered && (
         <div className="mb-3 animate-pulse rounded-lg border border-canary-critical bg-canary-critical/15 px-4 py-2.5">

@@ -5,6 +5,16 @@ how does a rising 20y/30y affect recession odds and stock prices, and are we
 tracking it?" This study answers it with the same discipline as the margin
 work: pre-registered rules, one evaluation, frozen stats, bootstrap evidence.
 
+> **ERRATUM (2026-09-30):** the SPIKE recession figure (44% vs 21%, "roughly
+> doubled") does not survive a re-test. Of the 68 spike weeks it scored as
+> hits, 64 were 1979-82 and 4 fell inside the already-announced 2008-09
+> recession; the other 83 spike weeks had none (vs a 14% base). Counted per
+> spike episode, with outcomes a real-time reader could use, a recession began
+> within 12 months after 3 of 20 episodes (15% vs 20% for a random day), all
+> by 1990, none of the 13 since; the effect can't be separated from the yield
+> curve, and with 6 recessions it can be neither confirmed nor ruled out. See
+> `studies/rate-spike-recession.md`. The stock-return findings are unaffected.
+
 ## Method (pre-registered before any forward return was computed)
 
 - Long yield: DGS30 (1977-02+) spliced with DGS20 across the 2002-02..2006-02

@@ -98,16 +98,37 @@ def _upsert_snapshot(session: Session, **kw) -> None:
 
 
 def _persist_event(session: Session, ev: Event) -> bool:
-    row = EventLog(
-        event_type=ev.event_type, severity=ev.severity, asof=ev.asof,
-        dedup_key=ev.dedup_key, rationale=ev.rationale, detail_json=ev.detail_json(),
-    )
-    session.add(row)
+    """Idempotent per (event_type, dedup_key): an event already logged is
+    skipped WITHOUT touching the rest of the refresh. (A session.rollback()
+    here used to discard every snapshot and event written earlier in the
+    same refresh whenever a detector re-emitted a known key — e.g. a curve
+    re-steepening held for weeks, or a labor ledger onset — while events
+    already paged were never stored, so they re-paged.)
+    INSERT ... ON CONFLICT DO NOTHING stays inside the refresh transaction,
+    so a crash before commit un-logs the row and the next refresh pages it
+    again (at-least-once). A SAVEPOINT would not: under pysqlite's deferred
+    BEGIN, a SAVEPOINT issued before any other write commits on RELEASE."""
+    values = dict(event_type=ev.event_type, severity=ev.severity, asof=ev.asof,
+                  dedup_key=ev.dedup_key, rationale=ev.rationale,
+                  detail_json=ev.detail_json())
+    dialect = session.get_bind().dialect.name
+    if dialect in ("sqlite", "postgresql"):
+        if dialect == "sqlite":
+            from sqlalchemy.dialects.sqlite import insert as _insert
+        else:
+            from sqlalchemy.dialects.postgresql import insert as _insert
+        res = session.execute(_insert(EventLog.__table__).values(**values)
+                              .on_conflict_do_nothing(index_elements=["event_type", "dedup_key"]))
+        return res.rowcount == 1
+    if session.execute(select(EventLog.id).where(          # other backends
+            EventLog.event_type == ev.event_type,
+            EventLog.dedup_key == ev.dedup_key)).first():
+        return False
     try:
-        session.flush()
+        with session.begin_nested():
+            session.add(EventLog(**values))
         return True
     except IntegrityError:
-        session.rollback()   # already logged this transition -> idempotent skip
         return False
 
 
@@ -203,6 +224,61 @@ def run_refresh(session: Session) -> dict:
                 rationale=msg, detail={"source": "business_cycle"}))
     except Exception as exc:  # noqa: BLE001
         logger.warning("cycle phase check failed: %s", exc)
+
+    # --- long-yield spike line (+75bp / 60 trading days) --------------------
+    # studies/rate-spike-recession.md: the words carry the measured record
+    # (3 of 20 episodes, all by 1990) and quote the curve model's probability,
+    # not "recession odds doubled". Stateless replay -> once per crossing; a
+    # crossing within 26 weeks of the last reads "re-crossing, same episode".
+    try:
+        from ..api.routes_rates import RATE_THRESHOLDS as RT
+        from ..api.routes_rates import spike_alert_template, spike_recross_template
+        from ..scoring.events import detect_rate_spike
+        ld, lv = bundle.get("30y", ([], []))
+        pts = [(d, v) for d, v in zip(ld, lv) if v is not None]
+        w = int(RT["window_bdays"])
+        sd = [pts[i][0] for i in range(w, len(pts))]
+        sv = [round((pts[i][1] - pts[i - w][1]) * 100) for i in range(w, len(pts))]
+        curve_pct = None
+        try:
+            from ..metrics.recession_model import cached_models_and_spread, predict
+            _m, _sp = cached_models_and_spread()
+            if _m.get(12) and _sp is not None:
+                curve_pct = predict(_m[12]["b0"], _m[12]["b1"], _m[12]["cov"],
+                                    _sp)["probability_pct"]
+        except Exception:  # noqa: BLE001
+            pass
+        new_events.extend(detect_rate_spike(
+            sd, sv, today, spike_bp=RT["spike_bp"], rearm_bp=RT["rearm_bp"],
+            approach_bp=RT["approach_bp"], approach_rearm_bp=RT["approach_rearm_bp"],
+            recent_days=10, spike_severity="WARN", approach_severity="INFO",
+            spike_text=spike_alert_template(curve_pct),
+            recross_text=spike_recross_template(curve_pct),
+            approach_text=("The 30-year yield is up {d60:+.0f}bp in 60 trading days "
+                           "(crossed on {date}), approaching the +75bp spike line. "
+                           "No odds claim attaches to this level.")))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("rate spike check failed: %s", exc)
+
+    # --- Labor Stress Board (studies/labor-stress-board.md): WARN on a new
+    # ALERT episode. The RED gate failed (it lit in Aug 2024 with no
+    # recession), so this never pages at RED; the text carries the record.
+    try:
+        from ..api.routes_labor import (_board_series, board_alert_event,
+                                        board_ledger_events, board_payload)
+        payload = board_payload(_board_series())
+        if payload.get("state") is None:
+            logger.warning("labor board unavailable: no jobs-report month (no CPS series "
+                           "returned data)")
+        elif payload.get("missing"):
+            logger.warning("labor board INCOMPLETE for %s: %s not available",
+                           payload.get("month"), ", ".join(payload["missing"]))
+        ev = board_alert_event(payload, today)
+        if ev:
+            new_events.append(ev)
+        new_events.extend(board_ledger_events(payload, today))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("labor board check failed: %s", exc)
 
     # --- Duration Squeeze Radar: condition flips + calendar pre-briefs -------
     # Pre-registered scorecard (docs/research/tlt-squeeze-2026, spec v2): a
