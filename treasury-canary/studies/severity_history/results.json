@@ -1,0 +1,8435 @@
+{
+ "series": [
+  {
+   "month": "1986-01",
+   "score": null,
+   "class": null,
+   "live": 1,
+   "total": 23,
+   "drawn": false
+  },
+  {
+   "month": "1986-02",
+   "score": null,
+   "class": null,
+   "live": 1,
+   "total": 23,
+   "drawn": false
+  },
+  {
+   "month": "1986-03",
+   "score": 97.2,
+   "class": "SEVERE",
+   "live": 4,
+   "total": 23,
+   "drawn": false
+  },
+  {
+   "month": "1986-04",
+   "score": 78.1,
+   "class": "SEVERE",
+   "live": 4,
+   "total": 23,
+   "drawn": false
+  },
+  {
+   "month": "1986-05",
+   "score": 82.3,
+   "class": "SEVERE",
+   "live": 4,
+   "total": 23,
+   "drawn": false
+  },
+  {
+   "month": "1986-06",
+   "score": 85.5,
+   "class": "SEVERE",
+   "live": 13,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1986-07",
+   "score": 85.8,
+   "class": "SEVERE",
+   "live": 13,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1986-08",
+   "score": 86.7,
+   "class": "SEVERE",
+   "live": 13,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1986-09",
+   "score": 92.4,
+   "class": "SEVERE",
+   "live": 13,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1986-10",
+   "score": 92.5,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1986-11",
+   "score": 93.4,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1986-12",
+   "score": 83.7,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1987-01",
+   "score": 83.1,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1987-02",
+   "score": 83.1,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1987-03",
+   "score": 85.7,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1987-04",
+   "score": 86.8,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1987-05",
+   "score": 87.1,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1987-06",
+   "score": 84.0,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1987-07",
+   "score": 84.3,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1987-08",
+   "score": 84.1,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1987-09",
+   "score": 84.5,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1987-10",
+   "score": 82.7,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1987-11",
+   "score": 82.6,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1987-12",
+   "score": 82.8,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1988-01",
+   "score": 83.3,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1988-02",
+   "score": 83.4,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1988-03",
+   "score": 64.9,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1988-04",
+   "score": 63.9,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1988-05",
+   "score": 62.7,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1988-06",
+   "score": 69.7,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1988-07",
+   "score": 68.9,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1988-08",
+   "score": 69.3,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1988-09",
+   "score": 67.8,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1988-10",
+   "score": 67.1,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1988-11",
+   "score": 66.4,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1988-12",
+   "score": 62.7,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1989-01",
+   "score": 63.0,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1989-02",
+   "score": 63.0,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1989-03",
+   "score": 60.0,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1989-04",
+   "score": 60.0,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1989-05",
+   "score": 62.0,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1989-06",
+   "score": 67.7,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1989-07",
+   "score": 67.4,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1989-08",
+   "score": 65.6,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1989-09",
+   "score": 68.5,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1989-10",
+   "score": 68.9,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1989-11",
+   "score": 67.7,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1989-12",
+   "score": 69.1,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1990-01",
+   "score": 70.9,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1990-02",
+   "score": 70.6,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1990-03",
+   "score": 61.4,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1990-04",
+   "score": 61.2,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1990-05",
+   "score": 60.4,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1990-06",
+   "score": 60.9,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1990-07",
+   "score": 61.4,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1990-08",
+   "score": 60.5,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1990-09",
+   "score": 55.5,
+   "class": "MODERATE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1990-10",
+   "score": 56.2,
+   "class": "MODERATE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1990-11",
+   "score": 57.1,
+   "class": "MODERATE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1990-12",
+   "score": 45.1,
+   "class": "MODERATE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1991-01",
+   "score": 42.7,
+   "class": "MODERATE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1991-02",
+   "score": 43.1,
+   "class": "MODERATE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1991-03",
+   "score": 59.2,
+   "class": "MODERATE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1991-04",
+   "score": 60.6,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1991-05",
+   "score": 58.9,
+   "class": "MODERATE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1991-06",
+   "score": 54.4,
+   "class": "MODERATE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1991-07",
+   "score": 53.2,
+   "class": "MODERATE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1991-08",
+   "score": 55.0,
+   "class": "MODERATE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1991-09",
+   "score": 50.6,
+   "class": "MODERATE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1991-10",
+   "score": 51.8,
+   "class": "MODERATE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1991-11",
+   "score": 49.9,
+   "class": "MODERATE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1991-12",
+   "score": 50.7,
+   "class": "MODERATE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1992-01",
+   "score": 49.4,
+   "class": "MODERATE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1992-02",
+   "score": 49.4,
+   "class": "MODERATE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1992-03",
+   "score": 47.3,
+   "class": "MODERATE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1992-04",
+   "score": 47.9,
+   "class": "MODERATE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1992-05",
+   "score": 47.9,
+   "class": "MODERATE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1992-06",
+   "score": 46.4,
+   "class": "MODERATE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1992-07",
+   "score": 45.7,
+   "class": "MODERATE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1992-08",
+   "score": 46.6,
+   "class": "MODERATE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1992-09",
+   "score": 48.6,
+   "class": "MODERATE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1992-10",
+   "score": 50.4,
+   "class": "MODERATE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1992-11",
+   "score": 52.2,
+   "class": "MODERATE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1992-12",
+   "score": 51.1,
+   "class": "MODERATE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1993-01",
+   "score": 45.2,
+   "class": "MODERATE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1993-02",
+   "score": 45.3,
+   "class": "MODERATE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1993-03",
+   "score": 51.9,
+   "class": "MODERATE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1993-04",
+   "score": 51.0,
+   "class": "MODERATE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1993-05",
+   "score": 50.7,
+   "class": "MODERATE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1993-06",
+   "score": 59.6,
+   "class": "MODERATE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1993-07",
+   "score": 60.6,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1993-08",
+   "score": 60.8,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1993-09",
+   "score": 65.8,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1993-10",
+   "score": 64.7,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1993-11",
+   "score": 64.8,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1993-12",
+   "score": 65.6,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1994-01",
+   "score": 61.5,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1994-02",
+   "score": 61.4,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1994-03",
+   "score": 67.3,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1994-04",
+   "score": 65.8,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1994-05",
+   "score": 66.0,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1994-06",
+   "score": 69.0,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1994-07",
+   "score": 70.3,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1994-08",
+   "score": 70.3,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1994-09",
+   "score": 67.1,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1994-10",
+   "score": 65.7,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1994-11",
+   "score": 64.7,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1994-12",
+   "score": 67.8,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1995-01",
+   "score": 68.1,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1995-02",
+   "score": 68.3,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1995-03",
+   "score": 71.2,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1995-04",
+   "score": 71.2,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1995-05",
+   "score": 72.0,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1995-06",
+   "score": 75.7,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1995-07",
+   "score": 75.4,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1995-08",
+   "score": 74.4,
+   "class": "SEVERE",
+   "live": 14,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1995-09",
+   "score": 76.1,
+   "class": "SEVERE",
+   "live": 15,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1995-10",
+   "score": 75.1,
+   "class": "SEVERE",
+   "live": 15,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1995-11",
+   "score": 74.4,
+   "class": "SEVERE",
+   "live": 15,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1995-12",
+   "score": 77.9,
+   "class": "SEVERE",
+   "live": 15,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1996-01",
+   "score": 77.6,
+   "class": "SEVERE",
+   "live": 15,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1996-02",
+   "score": 77.7,
+   "class": "SEVERE",
+   "live": 15,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1996-03",
+   "score": 80.8,
+   "class": "SEVERE",
+   "live": 15,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1996-04",
+   "score": 80.3,
+   "class": "SEVERE",
+   "live": 15,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1996-05",
+   "score": 80.0,
+   "class": "SEVERE",
+   "live": 15,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1996-06",
+   "score": 80.2,
+   "class": "SEVERE",
+   "live": 15,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1996-07",
+   "score": 79.8,
+   "class": "SEVERE",
+   "live": 15,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1996-08",
+   "score": 80.4,
+   "class": "SEVERE",
+   "live": 15,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1996-09",
+   "score": 76.8,
+   "class": "SEVERE",
+   "live": 15,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1996-10",
+   "score": 77.1,
+   "class": "SEVERE",
+   "live": 15,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1996-11",
+   "score": 78.3,
+   "class": "SEVERE",
+   "live": 15,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1996-12",
+   "score": 77.6,
+   "class": "SEVERE",
+   "live": 15,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1997-01",
+   "score": 77.2,
+   "class": "SEVERE",
+   "live": 15,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1997-02",
+   "score": 77.7,
+   "class": "SEVERE",
+   "live": 15,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1997-03",
+   "score": 73.7,
+   "class": "SEVERE",
+   "live": 15,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1997-04",
+   "score": 73.1,
+   "class": "SEVERE",
+   "live": 15,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1997-05",
+   "score": 73.5,
+   "class": "SEVERE",
+   "live": 15,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1997-06",
+   "score": 62.6,
+   "class": "SEVERE",
+   "live": 16,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1997-07",
+   "score": 63.0,
+   "class": "SEVERE",
+   "live": 16,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1997-08",
+   "score": 63.4,
+   "class": "SEVERE",
+   "live": 16,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1997-09",
+   "score": 65.3,
+   "class": "SEVERE",
+   "live": 16,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1997-10",
+   "score": 65.2,
+   "class": "SEVERE",
+   "live": 16,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1997-11",
+   "score": 65.4,
+   "class": "SEVERE",
+   "live": 16,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1997-12",
+   "score": 67.1,
+   "class": "SEVERE",
+   "live": 16,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1998-01",
+   "score": 67.2,
+   "class": "SEVERE",
+   "live": 16,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1998-02",
+   "score": 67.2,
+   "class": "SEVERE",
+   "live": 16,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1998-03",
+   "score": 66.9,
+   "class": "SEVERE",
+   "live": 16,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1998-04",
+   "score": 66.8,
+   "class": "SEVERE",
+   "live": 16,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1998-05",
+   "score": 67.1,
+   "class": "SEVERE",
+   "live": 16,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1998-06",
+   "score": 68.8,
+   "class": "SEVERE",
+   "live": 16,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1998-07",
+   "score": 68.9,
+   "class": "SEVERE",
+   "live": 16,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1998-08",
+   "score": 68.9,
+   "class": "SEVERE",
+   "live": 16,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1998-09",
+   "score": 71.0,
+   "class": "SEVERE",
+   "live": 16,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1998-10",
+   "score": 71.5,
+   "class": "SEVERE",
+   "live": 16,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1998-11",
+   "score": 71.7,
+   "class": "SEVERE",
+   "live": 16,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1998-12",
+   "score": 72.0,
+   "class": "SEVERE",
+   "live": 16,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1999-01",
+   "score": 72.2,
+   "class": "SEVERE",
+   "live": 16,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1999-02",
+   "score": 72.2,
+   "class": "SEVERE",
+   "live": 16,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1999-03",
+   "score": 72.0,
+   "class": "SEVERE",
+   "live": 16,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1999-04",
+   "score": 72.8,
+   "class": "SEVERE",
+   "live": 16,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1999-05",
+   "score": 72.2,
+   "class": "SEVERE",
+   "live": 16,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1999-06",
+   "score": 72.4,
+   "class": "SEVERE",
+   "live": 16,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1999-07",
+   "score": 72.7,
+   "class": "SEVERE",
+   "live": 16,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1999-08",
+   "score": 72.2,
+   "class": "SEVERE",
+   "live": 16,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1999-09",
+   "score": 72.6,
+   "class": "SEVERE",
+   "live": 16,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1999-10",
+   "score": 72.8,
+   "class": "SEVERE",
+   "live": 16,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1999-11",
+   "score": 73.0,
+   "class": "SEVERE",
+   "live": 16,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "1999-12",
+   "score": 69.9,
+   "class": "SEVERE",
+   "live": 17,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2000-01",
+   "score": 69.8,
+   "class": "SEVERE",
+   "live": 17,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2000-02",
+   "score": 69.8,
+   "class": "SEVERE",
+   "live": 17,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2000-03",
+   "score": 65.5,
+   "class": "SEVERE",
+   "live": 17,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2000-04",
+   "score": 65.8,
+   "class": "SEVERE",
+   "live": 17,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2000-05",
+   "score": 65.5,
+   "class": "SEVERE",
+   "live": 17,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2000-06",
+   "score": 67.3,
+   "class": "SEVERE",
+   "live": 17,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2000-07",
+   "score": 67.4,
+   "class": "SEVERE",
+   "live": 17,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2000-08",
+   "score": 67.1,
+   "class": "SEVERE",
+   "live": 17,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2000-09",
+   "score": 66.3,
+   "class": "SEVERE",
+   "live": 17,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2000-10",
+   "score": 66.4,
+   "class": "SEVERE",
+   "live": 17,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2000-11",
+   "score": 66.5,
+   "class": "SEVERE",
+   "live": 17,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2000-12",
+   "score": 67.6,
+   "class": "SEVERE",
+   "live": 17,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2001-01",
+   "score": 67.6,
+   "class": "SEVERE",
+   "live": 17,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2001-02",
+   "score": 67.6,
+   "class": "SEVERE",
+   "live": 17,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2001-03",
+   "score": 68.1,
+   "class": "SEVERE",
+   "live": 17,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2001-04",
+   "score": 67.5,
+   "class": "SEVERE",
+   "live": 17,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2001-05",
+   "score": 67.6,
+   "class": "SEVERE",
+   "live": 17,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2001-06",
+   "score": 72.2,
+   "class": "SEVERE",
+   "live": 18,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2001-07",
+   "score": 72.6,
+   "class": "SEVERE",
+   "live": 18,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2001-08",
+   "score": 72.5,
+   "class": "SEVERE",
+   "live": 18,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2001-09",
+   "score": 69.5,
+   "class": "SEVERE",
+   "live": 18,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2001-10",
+   "score": 69.6,
+   "class": "SEVERE",
+   "live": 18,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2001-11",
+   "score": 71.1,
+   "class": "SEVERE",
+   "live": 18,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2001-12",
+   "score": 71.6,
+   "class": "SEVERE",
+   "live": 18,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2002-01",
+   "score": 71.7,
+   "class": "SEVERE",
+   "live": 18,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2002-02",
+   "score": 71.7,
+   "class": "SEVERE",
+   "live": 18,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2002-03",
+   "score": 62.2,
+   "class": "SEVERE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2002-04",
+   "score": 62.2,
+   "class": "SEVERE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2002-05",
+   "score": 62.5,
+   "class": "SEVERE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2002-06",
+   "score": 59.3,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2002-07",
+   "score": 59.6,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2002-08",
+   "score": 60.5,
+   "class": "SEVERE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2002-09",
+   "score": 54.8,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2002-10",
+   "score": 55.8,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2002-11",
+   "score": 55.5,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2002-12",
+   "score": 54.0,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2003-01",
+   "score": 54.4,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2003-02",
+   "score": 54.4,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2003-03",
+   "score": 53.1,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2003-04",
+   "score": 53.3,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2003-05",
+   "score": 53.6,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2003-06",
+   "score": 48.4,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2003-07",
+   "score": 47.9,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2003-08",
+   "score": 47.0,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2003-09",
+   "score": 48.3,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2003-10",
+   "score": 50.7,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2003-11",
+   "score": 50.8,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2003-12",
+   "score": 49.3,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2004-01",
+   "score": 49.3,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2004-02",
+   "score": 49.4,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2004-03",
+   "score": 49.3,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2004-04",
+   "score": 48.8,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2004-05",
+   "score": 48.6,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2004-06",
+   "score": 47.1,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2004-07",
+   "score": 47.4,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2004-08",
+   "score": 48.4,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2004-09",
+   "score": 50.2,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2004-10",
+   "score": 50.4,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2004-11",
+   "score": 50.1,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2004-12",
+   "score": 50.3,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2005-01",
+   "score": 48.3,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2005-02",
+   "score": 48.2,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2005-03",
+   "score": 56.2,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2005-04",
+   "score": 56.4,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2005-05",
+   "score": 56.2,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2005-06",
+   "score": 57.4,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2005-07",
+   "score": 56.9,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2005-08",
+   "score": 56.7,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2005-09",
+   "score": 58.1,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2005-10",
+   "score": 56.2,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2005-11",
+   "score": 56.1,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2005-12",
+   "score": 57.6,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2006-01",
+   "score": 57.8,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2006-02",
+   "score": 57.5,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2006-03",
+   "score": 55.5,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2006-04",
+   "score": 55.8,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2006-05",
+   "score": 56.6,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2006-06",
+   "score": 60.2,
+   "class": "SEVERE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2006-07",
+   "score": 60.5,
+   "class": "SEVERE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2006-08",
+   "score": 61.5,
+   "class": "SEVERE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2006-09",
+   "score": 56.4,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2006-10",
+   "score": 56.5,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2006-11",
+   "score": 56.9,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2006-12",
+   "score": 59.3,
+   "class": "MODERATE",
+   "live": 19,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2007-01",
+   "score": 63.8,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2007-02",
+   "score": 63.9,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2007-03",
+   "score": 71.1,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2007-04",
+   "score": 70.7,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2007-05",
+   "score": 70.7,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2007-06",
+   "score": 73.1,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2007-07",
+   "score": 71.5,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2007-08",
+   "score": 71.2,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2007-09",
+   "score": 72.3,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2007-10",
+   "score": 71.7,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2007-11",
+   "score": 70.7,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2007-12",
+   "score": 73.8,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2008-01",
+   "score": 73.8,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2008-02",
+   "score": 72.9,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2008-03",
+   "score": 74.6,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2008-04",
+   "score": 74.4,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2008-05",
+   "score": 74.3,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2008-06",
+   "score": 72.7,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2008-07",
+   "score": 73.6,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2008-08",
+   "score": 73.2,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2008-09",
+   "score": 71.4,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2008-10",
+   "score": 72.7,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2008-11",
+   "score": 71.2,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2008-12",
+   "score": 68.8,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2009-01",
+   "score": 69.2,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2009-02",
+   "score": 69.3,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2009-03",
+   "score": 67.5,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2009-04",
+   "score": 67.7,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2009-05",
+   "score": 66.9,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2009-06",
+   "score": 63.6,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2009-07",
+   "score": 64.3,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2009-08",
+   "score": 65.2,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2009-09",
+   "score": 66.4,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2009-10",
+   "score": 68.1,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2009-11",
+   "score": 68.9,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2009-12",
+   "score": 65.9,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2010-01",
+   "score": 66.1,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2010-02",
+   "score": 66.0,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2010-03",
+   "score": 63.7,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2010-04",
+   "score": 63.9,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2010-05",
+   "score": 61.8,
+   "class": "SEVERE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2010-06",
+   "score": 58.9,
+   "class": "MODERATE",
+   "live": 20,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2010-07",
+   "score": 59.7,
+   "class": "MODERATE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2010-08",
+   "score": 59.6,
+   "class": "MODERATE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2010-09",
+   "score": 56.9,
+   "class": "MODERATE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2010-10",
+   "score": 57.5,
+   "class": "MODERATE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2010-11",
+   "score": 57.5,
+   "class": "MODERATE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2010-12",
+   "score": 57.2,
+   "class": "MODERATE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2011-01",
+   "score": 57.5,
+   "class": "MODERATE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2011-02",
+   "score": 57.9,
+   "class": "MODERATE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2011-03",
+   "score": 56.0,
+   "class": "MODERATE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2011-04",
+   "score": 57.6,
+   "class": "MODERATE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2011-05",
+   "score": 57.6,
+   "class": "MODERATE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2011-06",
+   "score": 57.0,
+   "class": "MODERATE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2011-07",
+   "score": 56.5,
+   "class": "MODERATE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2011-08",
+   "score": 55.1,
+   "class": "MODERATE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2011-09",
+   "score": 54.6,
+   "class": "MODERATE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2011-10",
+   "score": 54.4,
+   "class": "MODERATE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2011-11",
+   "score": 55.8,
+   "class": "MODERATE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2011-12",
+   "score": 58.0,
+   "class": "MODERATE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2012-01",
+   "score": 57.9,
+   "class": "MODERATE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2012-02",
+   "score": 58.3,
+   "class": "MODERATE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2012-03",
+   "score": 59.8,
+   "class": "MODERATE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2012-04",
+   "score": 60.3,
+   "class": "SEVERE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2012-05",
+   "score": 59.9,
+   "class": "MODERATE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2012-06",
+   "score": 62.4,
+   "class": "SEVERE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2012-07",
+   "score": 63.2,
+   "class": "SEVERE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2012-08",
+   "score": 63.9,
+   "class": "SEVERE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2012-09",
+   "score": 64.1,
+   "class": "SEVERE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2012-10",
+   "score": 63.4,
+   "class": "SEVERE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2012-11",
+   "score": 62.9,
+   "class": "SEVERE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2012-12",
+   "score": 64.2,
+   "class": "SEVERE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2013-01",
+   "score": 63.5,
+   "class": "SEVERE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2013-02",
+   "score": 63.1,
+   "class": "SEVERE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2013-03",
+   "score": 68.4,
+   "class": "SEVERE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2013-04",
+   "score": 69.1,
+   "class": "SEVERE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2013-05",
+   "score": 69.0,
+   "class": "SEVERE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2013-06",
+   "score": 69.9,
+   "class": "SEVERE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2013-07",
+   "score": 70.2,
+   "class": "SEVERE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2013-08",
+   "score": 70.8,
+   "class": "SEVERE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2013-09",
+   "score": 70.4,
+   "class": "SEVERE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2013-10",
+   "score": 70.1,
+   "class": "SEVERE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2013-11",
+   "score": 70.1,
+   "class": "SEVERE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2013-12",
+   "score": 69.7,
+   "class": "SEVERE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2014-01",
+   "score": 70.2,
+   "class": "SEVERE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2014-02",
+   "score": 70.4,
+   "class": "SEVERE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2014-03",
+   "score": 72.0,
+   "class": "SEVERE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2014-04",
+   "score": 70.7,
+   "class": "SEVERE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2014-05",
+   "score": 70.1,
+   "class": "SEVERE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2014-06",
+   "score": 70.7,
+   "class": "SEVERE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2014-07",
+   "score": 72.4,
+   "class": "SEVERE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2014-08",
+   "score": 72.6,
+   "class": "SEVERE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2014-09",
+   "score": 71.2,
+   "class": "SEVERE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2014-10",
+   "score": 70.1,
+   "class": "SEVERE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2014-11",
+   "score": 69.6,
+   "class": "SEVERE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2014-12",
+   "score": 66.2,
+   "class": "SEVERE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2015-01",
+   "score": 65.5,
+   "class": "SEVERE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2015-02",
+   "score": 66.3,
+   "class": "SEVERE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2015-03",
+   "score": 65.7,
+   "class": "SEVERE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2015-04",
+   "score": 66.8,
+   "class": "SEVERE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2015-05",
+   "score": 66.9,
+   "class": "SEVERE",
+   "live": 21,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2015-06",
+   "score": 64.3,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2015-07",
+   "score": 63.5,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2015-08",
+   "score": 62.5,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2015-09",
+   "score": 61.0,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2015-10",
+   "score": 60.7,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2015-11",
+   "score": 60.3,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2015-12",
+   "score": 59.6,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2016-01",
+   "score": 58.7,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2016-02",
+   "score": 58.7,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2016-03",
+   "score": 58.6,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2016-04",
+   "score": 59.2,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2016-05",
+   "score": 59.5,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2016-06",
+   "score": 59.7,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2016-07",
+   "score": 60.2,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2016-08",
+   "score": 60.5,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2016-09",
+   "score": 59.4,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2016-10",
+   "score": 61.4,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2016-11",
+   "score": 59.9,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2016-12",
+   "score": 60.1,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2017-01",
+   "score": 60.3,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2017-02",
+   "score": 60.5,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2017-03",
+   "score": 59.0,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2017-04",
+   "score": 59.0,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2017-05",
+   "score": 60.2,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2017-06",
+   "score": 58.3,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2017-07",
+   "score": 58.6,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2017-08",
+   "score": 58.9,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2017-09",
+   "score": 60.9,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2017-10",
+   "score": 60.7,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2017-11",
+   "score": 60.6,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2017-12",
+   "score": 62.1,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2018-01",
+   "score": 63.7,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2018-02",
+   "score": 63.0,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2018-03",
+   "score": 62.6,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2018-04",
+   "score": 61.1,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2018-05",
+   "score": 60.7,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2018-06",
+   "score": 58.9,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2018-07",
+   "score": 58.2,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2018-08",
+   "score": 58.8,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2018-09",
+   "score": 58.4,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2018-10",
+   "score": 57.9,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2018-11",
+   "score": 56.3,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2018-12",
+   "score": 55.5,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2019-01",
+   "score": 56.6,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2019-02",
+   "score": 57.1,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2019-03",
+   "score": 57.1,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2019-04",
+   "score": 57.0,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2019-05",
+   "score": 57.1,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2019-06",
+   "score": 56.2,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2019-07",
+   "score": 56.1,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2019-08",
+   "score": 56.7,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2019-09",
+   "score": 57.1,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2019-10",
+   "score": 56.9,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2019-11",
+   "score": 57.1,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2019-12",
+   "score": 56.6,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2020-01",
+   "score": 57.3,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2020-02",
+   "score": 57.5,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2020-03",
+   "score": 52.2,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2020-04",
+   "score": 52.2,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2020-05",
+   "score": 53.1,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2020-06",
+   "score": 50.9,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2020-07",
+   "score": 50.0,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2020-08",
+   "score": 49.5,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2020-09",
+   "score": 51.4,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2020-10",
+   "score": 52.8,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2020-11",
+   "score": 54.0,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2020-12",
+   "score": 51.8,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2021-01",
+   "score": 53.2,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2021-02",
+   "score": 53.9,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2021-03",
+   "score": 55.0,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2021-04",
+   "score": 56.0,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2021-05",
+   "score": 57.4,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2021-06",
+   "score": 57.2,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2021-07",
+   "score": 58.8,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2021-08",
+   "score": 57.9,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2021-09",
+   "score": 58.2,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2021-10",
+   "score": 58.3,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2021-11",
+   "score": 59.0,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2021-12",
+   "score": 56.2,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2022-01",
+   "score": 55.4,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2022-02",
+   "score": 54.2,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2022-03",
+   "score": 52.3,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2022-04",
+   "score": 52.6,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2022-05",
+   "score": 50.5,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2022-06",
+   "score": 49.7,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2022-07",
+   "score": 49.1,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2022-08",
+   "score": 49.5,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2022-09",
+   "score": 47.9,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2022-10",
+   "score": 47.8,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2022-11",
+   "score": 48.2,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2022-12",
+   "score": 48.8,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2023-01",
+   "score": 48.8,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2023-02",
+   "score": 48.6,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2023-03",
+   "score": 48.8,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2023-04",
+   "score": 50.5,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2023-05",
+   "score": 48.5,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2023-06",
+   "score": 46.3,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2023-07",
+   "score": 47.2,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2023-08",
+   "score": 47.0,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2023-09",
+   "score": 48.7,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2023-10",
+   "score": 47.7,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2023-11",
+   "score": 48.3,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2023-12",
+   "score": 49.6,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2024-01",
+   "score": 49.3,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2024-02",
+   "score": 49.6,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2024-03",
+   "score": 49.5,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2024-04",
+   "score": 49.5,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2024-05",
+   "score": 49.6,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2024-06",
+   "score": 51.7,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2024-07",
+   "score": 51.7,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2024-08",
+   "score": 51.9,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2024-09",
+   "score": 53.2,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2024-10",
+   "score": 53.9,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2024-11",
+   "score": 54.6,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2024-12",
+   "score": 58.1,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2025-01",
+   "score": 58.6,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2025-02",
+   "score": 58.5,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2025-03",
+   "score": 58.2,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2025-04",
+   "score": 56.3,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2025-05",
+   "score": 56.5,
+   "class": "MODERATE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2025-06",
+   "score": 62.2,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2025-07",
+   "score": 64.8,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2025-08",
+   "score": 64.8,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2025-09",
+   "score": 66.9,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2025-10",
+   "score": 67.0,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2025-11",
+   "score": 66.8,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2025-12",
+   "score": 67.2,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2026-01",
+   "score": 67.4,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2026-02",
+   "score": 67.3,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2026-03",
+   "score": 67.8,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2026-04",
+   "score": 68.6,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2026-05",
+   "score": 68.7,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2026-06",
+   "score": 69.6,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2026-07",
+   "score": 69.4,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2026-08",
+   "score": 69.4,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  },
+  {
+   "month": "2026-09",
+   "score": 69.5,
+   "class": "SEVERE",
+   "live": 23,
+   "total": 23,
+   "drawn": true
+  }
+ ],
+ "blocks": [
+  {
+   "month": "1986-01",
+   "A": null,
+   "B": null,
+   "C": null,
+   "D": null,
+   "E": 0.6,
+   "F": null
+  },
+  {
+   "month": "1986-02",
+   "A": null,
+   "B": null,
+   "C": null,
+   "D": null,
+   "E": 0.2,
+   "F": null
+  },
+  {
+   "month": "1986-03",
+   "A": 95.9,
+   "B": null,
+   "C": null,
+   "D": 0.0,
+   "E": 41.5,
+   "F": null
+  },
+  {
+   "month": "1986-04",
+   "A": 78.0,
+   "B": null,
+   "C": null,
+   "D": 0.0,
+   "E": 49.2,
+   "F": null
+  },
+  {
+   "month": "1986-05",
+   "A": 82.3,
+   "B": null,
+   "C": null,
+   "D": 0.0,
+   "E": 49.9,
+   "F": null
+  },
+  {
+   "month": "1986-06",
+   "A": 95.5,
+   "B": 87.8,
+   "C": null,
+   "D": 50.0,
+   "E": 31.4,
+   "F": 53.8
+  },
+  {
+   "month": "1986-07",
+   "A": 95.1,
+   "B": 87.8,
+   "C": null,
+   "D": 50.0,
+   "E": 28.1,
+   "F": 53.8
+  },
+  {
+   "month": "1986-08",
+   "A": 95.3,
+   "B": 87.8,
+   "C": null,
+   "D": 50.0,
+   "E": 22.4,
+   "F": 53.8
+  },
+  {
+   "month": "1986-09",
+   "A": 93.6,
+   "B": 100.0,
+   "C": null,
+   "D": 50.0,
+   "E": 10.3,
+   "F": 56.9
+  },
+  {
+   "month": "1986-10",
+   "A": 94.8,
+   "B": 100.0,
+   "C": null,
+   "D": 57.6,
+   "E": 20.9,
+   "F": 56.9
+  },
+  {
+   "month": "1986-11",
+   "A": 94.2,
+   "B": 100.0,
+   "C": null,
+   "D": 57.6,
+   "E": 12.9,
+   "F": 56.9
+  },
+  {
+   "month": "1986-12",
+   "A": 96.2,
+   "B": 76.7,
+   "C": null,
+   "D": 57.6,
+   "E": 18.6,
+   "F": 47.0
+  },
+  {
+   "month": "1987-01",
+   "A": 97.4,
+   "B": 76.7,
+   "C": null,
+   "D": 57.6,
+   "E": 25.5,
+   "F": 47.0
+  },
+  {
+   "month": "1987-02",
+   "A": 97.4,
+   "B": 76.7,
+   "C": null,
+   "D": 57.6,
+   "E": 25.7,
+   "F": 47.0
+  },
+  {
+   "month": "1987-03",
+   "A": 91.8,
+   "B": 95.5,
+   "C": null,
+   "D": 57.6,
+   "E": 19.8,
+   "F": 40.1
+  },
+  {
+   "month": "1987-04",
+   "A": 95.2,
+   "B": 95.5,
+   "C": null,
+   "D": 57.6,
+   "E": 22.2,
+   "F": 40.1
+  },
+  {
+   "month": "1987-05",
+   "A": 95.9,
+   "B": 95.5,
+   "C": null,
+   "D": 57.6,
+   "E": 22.6,
+   "F": 40.1
+  },
+  {
+   "month": "1987-06",
+   "A": 93.8,
+   "B": 100.0,
+   "C": null,
+   "D": 58.1,
+   "E": 14.7,
+   "F": 21.0
+  },
+  {
+   "month": "1987-07",
+   "A": 93.8,
+   "B": 100.0,
+   "C": null,
+   "D": 58.1,
+   "E": 13.3,
+   "F": 21.0
+  },
+  {
+   "month": "1987-08",
+   "A": 94.0,
+   "B": 100.0,
+   "C": null,
+   "D": 58.1,
+   "E": 14.9,
+   "F": 21.0
+  },
+  {
+   "month": "1987-09",
+   "A": 93.6,
+   "B": 100.0,
+   "C": null,
+   "D": 58.6,
+   "E": 14.6,
+   "F": 22.6
+  },
+  {
+   "month": "1987-10",
+   "A": 93.1,
+   "B": 100.0,
+   "C": null,
+   "D": 49.1,
+   "E": 15.4,
+   "F": 22.6
+  },
+  {
+   "month": "1987-11",
+   "A": 92.4,
+   "B": 100.0,
+   "C": null,
+   "D": 49.6,
+   "E": 14.2,
+   "F": 22.6
+  },
+  {
+   "month": "1987-12",
+   "A": 92.5,
+   "B": 100.0,
+   "C": null,
+   "D": 49.5,
+   "E": 13.8,
+   "F": 22.8
+  },
+  {
+   "month": "1988-01",
+   "A": 92.2,
+   "B": 100.0,
+   "C": null,
+   "D": 50.5,
+   "E": 10.2,
+   "F": 22.8
+  },
+  {
+   "month": "1988-02",
+   "A": 92.2,
+   "B": 100.0,
+   "C": null,
+   "D": 50.5,
+   "E": 9.6,
+   "F": 22.8
+  },
+  {
+   "month": "1988-03",
+   "A": 75.2,
+   "B": 75.0,
+   "C": null,
+   "D": 52.0,
+   "E": 14.4,
+   "F": 11.8
+  },
+  {
+   "month": "1988-04",
+   "A": 75.0,
+   "B": 75.0,
+   "C": null,
+   "D": 53.0,
+   "E": 21.4,
+   "F": 11.8
+  },
+  {
+   "month": "1988-05",
+   "A": 73.0,
+   "B": 75.0,
+   "C": null,
+   "D": 53.2,
+   "E": 24.3,
+   "F": 11.8
+  },
+  {
+   "month": "1988-06",
+   "A": 74.7,
+   "B": 83.7,
+   "C": null,
+   "D": 53.6,
+   "E": 22.3,
+   "F": 24.7
+  },
+  {
+   "month": "1988-07",
+   "A": 74.2,
+   "B": 83.7,
+   "C": null,
+   "D": 54.5,
+   "E": 27.2,
+   "F": 24.7
+  },
+  {
+   "month": "1988-08",
+   "A": 73.6,
+   "B": 83.7,
+   "C": null,
+   "D": 56.9,
+   "E": 24.8,
+   "F": 24.7
+  },
+  {
+   "month": "1988-09",
+   "A": 66.1,
+   "B": 90.0,
+   "C": null,
+   "D": 55.9,
+   "E": 24.9,
+   "F": 24.6
+  },
+  {
+   "month": "1988-10",
+   "A": 65.0,
+   "B": 90.0,
+   "C": null,
+   "D": 55.7,
+   "E": 26.2,
+   "F": 24.6
+  },
+  {
+   "month": "1988-11",
+   "A": 65.3,
+   "B": 90.0,
+   "C": null,
+   "D": 55.6,
+   "E": 31.6,
+   "F": 24.6
+  },
+  {
+   "month": "1988-12",
+   "A": 62.3,
+   "B": 74.5,
+   "C": null,
+   "D": 55.8,
+   "E": 23.9,
+   "F": 29.7
+  },
+  {
+   "month": "1989-01",
+   "A": 63.0,
+   "B": 74.5,
+   "C": null,
+   "D": 57.6,
+   "E": 26.1,
+   "F": 29.7
+  },
+  {
+   "month": "1989-02",
+   "A": 63.0,
+   "B": 74.5,
+   "C": null,
+   "D": 57.6,
+   "E": 26.2,
+   "F": 29.7
+  },
+  {
+   "month": "1989-03",
+   "A": 58.5,
+   "B": 75.0,
+   "C": null,
+   "D": 57.5,
+   "E": 39.1,
+   "F": 32.9
+  },
+  {
+   "month": "1989-04",
+   "A": 54.8,
+   "B": 75.0,
+   "C": null,
+   "D": 56.7,
+   "E": 27.6,
+   "F": 32.9
+  },
+  {
+   "month": "1989-05",
+   "A": 59.4,
+   "B": 75.0,
+   "C": null,
+   "D": 55.2,
+   "E": 26.2,
+   "F": 32.9
+  },
+  {
+   "month": "1989-06",
+   "A": 58.4,
+   "B": 88.7,
+   "C": null,
+   "D": 54.7,
+   "E": 18.9,
+   "F": 36.1
+  },
+  {
+   "month": "1989-07",
+   "A": 57.9,
+   "B": 88.7,
+   "C": null,
+   "D": 52.9,
+   "E": 17.4,
+   "F": 36.1
+  },
+  {
+   "month": "1989-08",
+   "A": 57.8,
+   "B": 88.7,
+   "C": null,
+   "D": 51.5,
+   "E": 27.9,
+   "F": 36.1
+  },
+  {
+   "month": "1989-09",
+   "A": 58.1,
+   "B": 94.4,
+   "C": null,
+   "D": 50.8,
+   "E": 26.1,
+   "F": 39.7
+  },
+  {
+   "month": "1989-10",
+   "A": 57.5,
+   "B": 94.4,
+   "C": null,
+   "D": 48.3,
+   "E": 19.5,
+   "F": 39.7
+  },
+  {
+   "month": "1989-11",
+   "A": 54.9,
+   "B": 94.4,
+   "C": null,
+   "D": 48.3,
+   "E": 20.1,
+   "F": 39.7
+  },
+  {
+   "month": "1989-12",
+   "A": 51.5,
+   "B": 94.5,
+   "C": null,
+   "D": 48.3,
+   "E": 19.9,
+   "F": 51.1
+  },
+  {
+   "month": "1990-01",
+   "A": 54.9,
+   "B": 94.5,
+   "C": null,
+   "D": 48.2,
+   "E": 17.9,
+   "F": 51.1
+  },
+  {
+   "month": "1990-02",
+   "A": 54.9,
+   "B": 94.5,
+   "C": null,
+   "D": 48.2,
+   "E": 19.7,
+   "F": 51.1
+  },
+  {
+   "month": "1990-03",
+   "A": 50.0,
+   "B": 94.6,
+   "C": null,
+   "D": 47.4,
+   "E": 25.0,
+   "F": 26.6
+  },
+  {
+   "month": "1990-04",
+   "A": 48.2,
+   "B": 94.6,
+   "C": null,
+   "D": 49.9,
+   "E": 23.6,
+   "F": 26.6
+  },
+  {
+   "month": "1990-05",
+   "A": 45.7,
+   "B": 94.6,
+   "C": null,
+   "D": 49.6,
+   "E": 21.9,
+   "F": 26.6
+  },
+  {
+   "month": "1990-06",
+   "A": 41.1,
+   "B": 91.2,
+   "C": null,
+   "D": 49.6,
+   "E": 18.2,
+   "F": 39.0
+  },
+  {
+   "month": "1990-07",
+   "A": 41.6,
+   "B": 91.2,
+   "C": null,
+   "D": 51.0,
+   "E": 17.9,
+   "F": 39.0
+  },
+  {
+   "month": "1990-08",
+   "A": 40.9,
+   "B": 91.2,
+   "C": null,
+   "D": 50.8,
+   "E": 21.5,
+   "F": 39.0
+  },
+  {
+   "month": "1990-09",
+   "A": 40.4,
+   "B": 91.4,
+   "C": null,
+   "D": 55.3,
+   "E": 22.7,
+   "F": 17.6
+  },
+  {
+   "month": "1990-10",
+   "A": 40.2,
+   "B": 91.4,
+   "C": null,
+   "D": 61.1,
+   "E": 23.6,
+   "F": 17.6
+  },
+  {
+   "month": "1990-11",
+   "A": 41.2,
+   "B": 91.4,
+   "C": null,
+   "D": 60.4,
+   "E": 19.7,
+   "F": 17.6
+  },
+  {
+   "month": "1990-12",
+   "A": 37.8,
+   "B": 57.6,
+   "C": null,
+   "D": 57.7,
+   "E": 18.8,
+   "F": 18.9
+  },
+  {
+   "month": "1991-01",
+   "A": 32.9,
+   "B": 57.6,
+   "C": null,
+   "D": 56.3,
+   "E": 18.9,
+   "F": 18.9
+  },
+  {
+   "month": "1991-02",
+   "A": 32.9,
+   "B": 57.6,
+   "C": null,
+   "D": 56.3,
+   "E": 16.4,
+   "F": 18.9
+  },
+  {
+   "month": "1991-03",
+   "A": 41.3,
+   "B": 85.0,
+   "C": null,
+   "D": 57.3,
+   "E": 16.2,
+   "F": 33.8
+  },
+  {
+   "month": "1991-04",
+   "A": 47.5,
+   "B": 85.0,
+   "C": null,
+   "D": 53.6,
+   "E": 21.5,
+   "F": 33.8
+  },
+  {
+   "month": "1991-05",
+   "A": 43.8,
+   "B": 85.0,
+   "C": null,
+   "D": 53.0,
+   "E": 21.6,
+   "F": 33.8
+  },
+  {
+   "month": "1991-06",
+   "A": 37.1,
+   "B": 95.1,
+   "C": null,
+   "D": 53.6,
+   "E": 21.5,
+   "F": 14.7
+  },
+  {
+   "month": "1991-07",
+   "A": 34.4,
+   "B": 95.1,
+   "C": null,
+   "D": 52.4,
+   "E": 20.8,
+   "F": 14.7
+  },
+  {
+   "month": "1991-08",
+   "A": 37.5,
+   "B": 95.1,
+   "C": null,
+   "D": 52.8,
+   "E": 18.0,
+   "F": 14.7
+  },
+  {
+   "month": "1991-09",
+   "A": 32.9,
+   "B": 93.5,
+   "C": null,
+   "D": 51.9,
+   "E": 21.5,
+   "F": 9.6
+  },
+  {
+   "month": "1991-10",
+   "A": 32.2,
+   "B": 93.5,
+   "C": null,
+   "D": 57.4,
+   "E": 17.0,
+   "F": 9.6
+  },
+  {
+   "month": "1991-11",
+   "A": 30.0,
+   "B": 93.5,
+   "C": null,
+   "D": 56.8,
+   "E": 22.3,
+   "F": 9.6
+  },
+  {
+   "month": "1991-12",
+   "A": 30.2,
+   "B": 95.2,
+   "C": null,
+   "D": 57.0,
+   "E": 23.0,
+   "F": 10.4
+  },
+  {
+   "month": "1992-01",
+   "A": 27.2,
+   "B": 95.2,
+   "C": null,
+   "D": 57.9,
+   "E": 23.3,
+   "F": 10.4
+  },
+  {
+   "month": "1992-02",
+   "A": 27.2,
+   "B": 95.2,
+   "C": null,
+   "D": 57.9,
+   "E": 23.8,
+   "F": 10.4
+  },
+  {
+   "month": "1992-03",
+   "A": 28.3,
+   "B": 100.0,
+   "C": null,
+   "D": 56.6,
+   "E": 43.3,
+   "F": 6.5
+  },
+  {
+   "month": "1992-04",
+   "A": 27.2,
+   "B": 100.0,
+   "C": null,
+   "D": 56.8,
+   "E": 35.8,
+   "F": 6.5
+  },
+  {
+   "month": "1992-05",
+   "A": 26.7,
+   "B": 100.0,
+   "C": null,
+   "D": 57.2,
+   "E": 35.2,
+   "F": 6.5
+  },
+  {
+   "month": "1992-06",
+   "A": 28.3,
+   "B": 98.5,
+   "C": null,
+   "D": 56.6,
+   "E": 40.7,
+   "F": 3.6
+  },
+  {
+   "month": "1992-07",
+   "A": 27.6,
+   "B": 98.5,
+   "C": null,
+   "D": 56.3,
+   "E": 43.3,
+   "F": 3.6
+  },
+  {
+   "month": "1992-08",
+   "A": 30.1,
+   "B": 98.5,
+   "C": null,
+   "D": 56.3,
+   "E": 44.5,
+   "F": 3.6
+  },
+  {
+   "month": "1992-09",
+   "A": 29.1,
+   "B": 95.5,
+   "C": null,
+   "D": 56.3,
+   "E": 35.9,
+   "F": 11.9
+  },
+  {
+   "month": "1992-10",
+   "A": 33.5,
+   "B": 95.5,
+   "C": null,
+   "D": 56.9,
+   "E": 37.7,
+   "F": 11.9
+  },
+  {
+   "month": "1992-11",
+   "A": 37.7,
+   "B": 95.5,
+   "C": null,
+   "D": 56.9,
+   "E": 37.9,
+   "F": 11.9
+  },
+  {
+   "month": "1992-12",
+   "A": 35.5,
+   "B": 97.0,
+   "C": null,
+   "D": 56.9,
+   "E": 40.6,
+   "F": 11.4
+  },
+  {
+   "month": "1993-01",
+   "A": 22.4,
+   "B": 97.0,
+   "C": null,
+   "D": 56.9,
+   "E": 41.8,
+   "F": 11.4
+  },
+  {
+   "month": "1993-02",
+   "A": 22.4,
+   "B": 97.0,
+   "C": null,
+   "D": 56.9,
+   "E": 41.1,
+   "F": 11.4
+  },
+  {
+   "month": "1993-03",
+   "A": 30.9,
+   "B": 100.0,
+   "C": null,
+   "D": 56.9,
+   "E": 47.1,
+   "F": 22.6
+  },
+  {
+   "month": "1993-04",
+   "A": 28.8,
+   "B": 100.0,
+   "C": null,
+   "D": 56.9,
+   "E": 46.6,
+   "F": 22.6
+  },
+  {
+   "month": "1993-05",
+   "A": 29.1,
+   "B": 100.0,
+   "C": null,
+   "D": 56.9,
+   "E": 49.9,
+   "F": 22.6
+  },
+  {
+   "month": "1993-06",
+   "A": 41.9,
+   "B": 100.0,
+   "C": null,
+   "D": 56.9,
+   "E": 41.3,
+   "F": 30.6
+  },
+  {
+   "month": "1993-07",
+   "A": 44.3,
+   "B": 100.0,
+   "C": null,
+   "D": 56.9,
+   "E": 41.7,
+   "F": 30.6
+  },
+  {
+   "month": "1993-08",
+   "A": 44.5,
+   "B": 100.0,
+   "C": null,
+   "D": 56.9,
+   "E": 40.8,
+   "F": 30.6
+  },
+  {
+   "month": "1993-09",
+   "A": 45.7,
+   "B": 98.6,
+   "C": null,
+   "D": 56.9,
+   "E": 41.3,
+   "F": 50.8
+  },
+  {
+   "month": "1993-10",
+   "A": 46.5,
+   "B": 98.6,
+   "C": null,
+   "D": 50.0,
+   "E": 44.2,
+   "F": 50.8
+  },
+  {
+   "month": "1993-11",
+   "A": 46.8,
+   "B": 98.6,
+   "C": null,
+   "D": 50.0,
+   "E": 44.7,
+   "F": 50.8
+  },
+  {
+   "month": "1993-12",
+   "A": 51.4,
+   "B": 100.0,
+   "C": null,
+   "D": 50.0,
+   "E": 52.8,
+   "F": 49.2
+  },
+  {
+   "month": "1994-01",
+   "A": 42.3,
+   "B": 100.0,
+   "C": null,
+   "D": 50.0,
+   "E": 53.4,
+   "F": 49.2
+  },
+  {
+   "month": "1994-02",
+   "A": 42.3,
+   "B": 100.0,
+   "C": null,
+   "D": 50.0,
+   "E": 54.1,
+   "F": 49.2
+  },
+  {
+   "month": "1994-03",
+   "A": 49.2,
+   "B": 100.0,
+   "C": null,
+   "D": 50.0,
+   "E": 50.4,
+   "F": 58.2
+  },
+  {
+   "month": "1994-04",
+   "A": 49.4,
+   "B": 100.0,
+   "C": null,
+   "D": 50.0,
+   "E": 60.8,
+   "F": 58.2
+  },
+  {
+   "month": "1994-05",
+   "A": 49.5,
+   "B": 100.0,
+   "C": null,
+   "D": 50.0,
+   "E": 60.0,
+   "F": 58.2
+  },
+  {
+   "month": "1994-06",
+   "A": 49.6,
+   "B": 94.5,
+   "C": null,
+   "D": 49.5,
+   "E": 50.8,
+   "F": 72.0
+  },
+  {
+   "month": "1994-07",
+   "A": 50.5,
+   "B": 94.5,
+   "C": null,
+   "D": 49.5,
+   "E": 44.8,
+   "F": 72.0
+  },
+  {
+   "month": "1994-08",
+   "A": 50.4,
+   "B": 94.5,
+   "C": null,
+   "D": 49.5,
+   "E": 44.7,
+   "F": 72.0
+  },
+  {
+   "month": "1994-09",
+   "A": 52.5,
+   "B": 90.5,
+   "C": null,
+   "D": 49.1,
+   "E": 51.1,
+   "F": 64.8
+  },
+  {
+   "month": "1994-10",
+   "A": 52.3,
+   "B": 90.5,
+   "C": null,
+   "D": 43.0,
+   "E": 53.9,
+   "F": 64.8
+  },
+  {
+   "month": "1994-11",
+   "A": 51.6,
+   "B": 90.5,
+   "C": null,
+   "D": 43.0,
+   "E": 58.4,
+   "F": 64.8
+  },
+  {
+   "month": "1994-12",
+   "A": 50.0,
+   "B": 94.7,
+   "C": null,
+   "D": 42.1,
+   "E": 54.5,
+   "F": 72.6
+  },
+  {
+   "month": "1995-01",
+   "A": 49.7,
+   "B": 94.7,
+   "C": null,
+   "D": 42.1,
+   "E": 51.3,
+   "F": 72.6
+  },
+  {
+   "month": "1995-02",
+   "A": 49.7,
+   "B": 94.7,
+   "C": null,
+   "D": 42.1,
+   "E": 50.3,
+   "F": 72.6
+  },
+  {
+   "month": "1995-03",
+   "A": 48.3,
+   "B": 90.8,
+   "C": null,
+   "D": 43.7,
+   "E": 33.4,
+   "F": 80.4
+  },
+  {
+   "month": "1995-04",
+   "A": 48.2,
+   "B": 90.8,
+   "C": null,
+   "D": 43.4,
+   "E": 32.4,
+   "F": 80.4
+  },
+  {
+   "month": "1995-05",
+   "A": 49.4,
+   "B": 90.8,
+   "C": null,
+   "D": 43.6,
+   "E": 30.9,
+   "F": 80.4
+  },
+  {
+   "month": "1995-06",
+   "A": 50.6,
+   "B": 98.7,
+   "C": null,
+   "D": 43.6,
+   "E": 38.5,
+   "F": 87.8
+  },
+  {
+   "month": "1995-07",
+   "A": 51.9,
+   "B": 98.7,
+   "C": null,
+   "D": 43.4,
+   "E": 44.1,
+   "F": 87.8
+  },
+  {
+   "month": "1995-08",
+   "A": 50.9,
+   "B": 98.7,
+   "C": null,
+   "D": 43.4,
+   "E": 47.7,
+   "F": 87.8
+  },
+  {
+   "month": "1995-09",
+   "A": 49.9,
+   "B": 100.0,
+   "C": null,
+   "D": 43.9,
+   "E": 31.2,
+   "F": 84.6
+  },
+  {
+   "month": "1995-10",
+   "A": 49.8,
+   "B": 100.0,
+   "C": null,
+   "D": 35.0,
+   "E": 28.6,
+   "F": 84.6
+  },
+  {
+   "month": "1995-11",
+   "A": 48.2,
+   "B": 100.0,
+   "C": null,
+   "D": 35.0,
+   "E": 28.6,
+   "F": 84.6
+  },
+  {
+   "month": "1995-12",
+   "A": 60.1,
+   "B": 99.0,
+   "C": null,
+   "D": 34.6,
+   "E": 29.4,
+   "F": 79.6
+  },
+  {
+   "month": "1996-01",
+   "A": 60.6,
+   "B": 99.0,
+   "C": null,
+   "D": 34.6,
+   "E": 32.6,
+   "F": 79.6
+  },
+  {
+   "month": "1996-02",
+   "A": 60.6,
+   "B": 99.0,
+   "C": null,
+   "D": 34.6,
+   "E": 32.5,
+   "F": 79.6
+  },
+  {
+   "month": "1996-03",
+   "A": 64.8,
+   "B": 100.0,
+   "C": null,
+   "D": 32.5,
+   "E": 31.5,
+   "F": 84.2
+  },
+  {
+   "month": "1996-04",
+   "A": 64.9,
+   "B": 100.0,
+   "C": null,
+   "D": 32.5,
+   "E": 35.1,
+   "F": 84.2
+  },
+  {
+   "month": "1996-05",
+   "A": 65.6,
+   "B": 100.0,
+   "C": null,
+   "D": 32.5,
+   "E": 39.2,
+   "F": 84.2
+  },
+  {
+   "month": "1996-06",
+   "A": 66.8,
+   "B": 99.0,
+   "C": null,
+   "D": 34.6,
+   "E": 42.6,
+   "F": 84.8
+  },
+  {
+   "month": "1996-07",
+   "A": 65.4,
+   "B": 99.0,
+   "C": null,
+   "D": 34.7,
+   "E": 40.7,
+   "F": 84.8
+  },
+  {
+   "month": "1996-08",
+   "A": 66.7,
+   "B": 99.0,
+   "C": null,
+   "D": 34.7,
+   "E": 40.5,
+   "F": 84.8
+  },
+  {
+   "month": "1996-09",
+   "A": 63.5,
+   "B": 100.0,
+   "C": null,
+   "D": 32.5,
+   "E": 53.5,
+   "F": 83.5
+  },
+  {
+   "month": "1996-10",
+   "A": 63.4,
+   "B": 100.0,
+   "C": null,
+   "D": 30.8,
+   "E": 49.2,
+   "F": 83.5
+  },
+  {
+   "month": "1996-11",
+   "A": 64.2,
+   "B": 100.0,
+   "C": null,
+   "D": 30.8,
+   "E": 43.8,
+   "F": 83.5
+  },
+  {
+   "month": "1996-12",
+   "A": 56.4,
+   "B": 99.4,
+   "C": null,
+   "D": 30.8,
+   "E": 37.5,
+   "F": 91.4
+  },
+  {
+   "month": "1997-01",
+   "A": 56.6,
+   "B": 99.4,
+   "C": null,
+   "D": 30.8,
+   "E": 40.5,
+   "F": 91.4
+  },
+  {
+   "month": "1997-02",
+   "A": 56.6,
+   "B": 99.4,
+   "C": null,
+   "D": 30.8,
+   "E": 37.5,
+   "F": 91.4
+  },
+  {
+   "month": "1997-03",
+   "A": 52.8,
+   "B": 100.0,
+   "C": null,
+   "D": 31.7,
+   "E": 45.2,
+   "F": 85.5
+  },
+  {
+   "month": "1997-04",
+   "A": 52.4,
+   "B": 100.0,
+   "C": null,
+   "D": 31.7,
+   "E": 47.7,
+   "F": 85.5
+  },
+  {
+   "month": "1997-05",
+   "A": 52.0,
+   "B": 100.0,
+   "C": null,
+   "D": 31.7,
+   "E": 44.5,
+   "F": 85.5
+  },
+  {
+   "month": "1997-06",
+   "A": 62.1,
+   "B": 99.4,
+   "C": 2.4,
+   "D": 31.0,
+   "E": 44.1,
+   "F": 87.4
+  },
+  {
+   "month": "1997-07",
+   "A": 63.1,
+   "B": 99.4,
+   "C": 2.4,
+   "D": 31.0,
+   "E": 43.3,
+   "F": 87.4
+  },
+  {
+   "month": "1997-08",
+   "A": 64.1,
+   "B": 99.4,
+   "C": 2.4,
+   "D": 31.0,
+   "E": 43.2,
+   "F": 87.4
+  },
+  {
+   "month": "1997-09",
+   "A": 69.3,
+   "B": 100.0,
+   "C": 2.4,
+   "D": 27.7,
+   "E": 43.2,
+   "F": 89.5
+  },
+  {
+   "month": "1997-10",
+   "A": 69.0,
+   "B": 100.0,
+   "C": 2.4,
+   "D": 27.8,
+   "E": 43.3,
+   "F": 89.5
+  },
+  {
+   "month": "1997-11",
+   "A": 68.9,
+   "B": 100.0,
+   "C": 2.4,
+   "D": 27.9,
+   "E": 42.1,
+   "F": 89.5
+  },
+  {
+   "month": "1997-12",
+   "A": 74.1,
+   "B": 99.1,
+   "C": 2.3,
+   "D": 27.0,
+   "E": 47.8,
+   "F": 95.3
+  },
+  {
+   "month": "1998-01",
+   "A": 74.0,
+   "B": 99.1,
+   "C": 2.3,
+   "D": 27.1,
+   "E": 47.2,
+   "F": 95.3
+  },
+  {
+   "month": "1998-02",
+   "A": 74.0,
+   "B": 99.1,
+   "C": 2.3,
+   "D": 27.1,
+   "E": 47.3,
+   "F": 95.3
+  },
+  {
+   "month": "1998-03",
+   "A": 76.1,
+   "B": 97.3,
+   "C": 2.3,
+   "D": 27.7,
+   "E": 39.6,
+   "F": 86.4
+  },
+  {
+   "month": "1998-04",
+   "A": 75.8,
+   "B": 97.3,
+   "C": 2.3,
+   "D": 27.9,
+   "E": 40.1,
+   "F": 86.4
+  },
+  {
+   "month": "1998-05",
+   "A": 76.6,
+   "B": 97.3,
+   "C": 2.3,
+   "D": 28.1,
+   "E": 39.7,
+   "F": 86.4
+  },
+  {
+   "month": "1998-06",
+   "A": 78.9,
+   "B": 100.0,
+   "C": 2.2,
+   "D": 27.5,
+   "E": 38.3,
+   "F": 87.0
+  },
+  {
+   "month": "1998-07",
+   "A": 79.2,
+   "B": 100.0,
+   "C": 2.2,
+   "D": 27.6,
+   "E": 38.6,
+   "F": 87.0
+  },
+  {
+   "month": "1998-08",
+   "A": 78.7,
+   "B": 100.0,
+   "C": 2.2,
+   "D": 27.8,
+   "E": 37.8,
+   "F": 87.0
+  },
+  {
+   "month": "1998-09",
+   "A": 82.9,
+   "B": 99.2,
+   "C": 2.2,
+   "D": 26.9,
+   "E": 33.3,
+   "F": 88.5
+  },
+  {
+   "month": "1998-10",
+   "A": 84.5,
+   "B": 99.2,
+   "C": 2.2,
+   "D": 27.0,
+   "E": 33.6,
+   "F": 88.5
+  },
+  {
+   "month": "1998-11",
+   "A": 85.2,
+   "B": 99.2,
+   "C": 2.2,
+   "D": 27.1,
+   "E": 34.5,
+   "F": 88.5
+  },
+  {
+   "month": "1998-12",
+   "A": 87.3,
+   "B": 98.9,
+   "C": 2.1,
+   "D": 25.9,
+   "E": 33.9,
+   "F": 87.5
+  },
+  {
+   "month": "1999-01",
+   "A": 88.0,
+   "B": 98.9,
+   "C": 2.1,
+   "D": 26.0,
+   "E": 34.4,
+   "F": 87.5
+  },
+  {
+   "month": "1999-02",
+   "A": 88.0,
+   "B": 98.9,
+   "C": 2.1,
+   "D": 26.0,
+   "E": 34.6,
+   "F": 87.5
+  },
+  {
+   "month": "1999-03",
+   "A": 86.4,
+   "B": 100.0,
+   "C": 2.1,
+   "D": 25.9,
+   "E": 36.9,
+   "F": 90.0
+  },
+  {
+   "month": "1999-04",
+   "A": 87.8,
+   "B": 100.0,
+   "C": 2.1,
+   "D": 26.1,
+   "E": 35.0,
+   "F": 90.0
+  },
+  {
+   "month": "1999-05",
+   "A": 88.0,
+   "B": 100.0,
+   "C": 2.1,
+   "D": 26.2,
+   "E": 39.5,
+   "F": 90.0
+  },
+  {
+   "month": "1999-06",
+   "A": 89.3,
+   "B": 100.0,
+   "C": 2.0,
+   "D": 26.0,
+   "E": 41.8,
+   "F": 90.8
+  },
+  {
+   "month": "1999-07",
+   "A": 89.3,
+   "B": 100.0,
+   "C": 2.0,
+   "D": 26.2,
+   "E": 40.6,
+   "F": 90.8
+  },
+  {
+   "month": "1999-08",
+   "A": 89.1,
+   "B": 100.0,
+   "C": 2.0,
+   "D": 26.3,
+   "E": 43.5,
+   "F": 90.8
+  },
+  {
+   "month": "1999-09",
+   "A": 91.2,
+   "B": 100.0,
+   "C": 2.0,
+   "D": 26.1,
+   "E": 50.9,
+   "F": 95.1
+  },
+  {
+   "month": "1999-10",
+   "A": 91.4,
+   "B": 100.0,
+   "C": 2.0,
+   "D": 26.3,
+   "E": 50.2,
+   "F": 95.1
+  },
+  {
+   "month": "1999-11",
+   "A": 91.3,
+   "B": 100.0,
+   "C": 2.0,
+   "D": 26.4,
+   "E": 49.2,
+   "F": 95.1
+  },
+  {
+   "month": "1999-12",
+   "A": 82.9,
+   "B": 99.5,
+   "C": 5.9,
+   "D": 25.9,
+   "E": 50.1,
+   "F": 92.2
+  },
+  {
+   "month": "2000-01",
+   "A": 83.0,
+   "B": 99.5,
+   "C": 5.9,
+   "D": 26.0,
+   "E": 50.7,
+   "F": 92.2
+  },
+  {
+   "month": "2000-02",
+   "A": 83.0,
+   "B": 99.5,
+   "C": 5.9,
+   "D": 26.0,
+   "E": 51.0,
+   "F": 92.2
+  },
+  {
+   "month": "2000-03",
+   "A": 77.4,
+   "B": 100.0,
+   "C": 1.9,
+   "D": 25.9,
+   "E": 52.4,
+   "F": 85.2
+  },
+  {
+   "month": "2000-04",
+   "A": 77.9,
+   "B": 100.0,
+   "C": 1.9,
+   "D": 26.1,
+   "E": 52.0,
+   "F": 85.2
+  },
+  {
+   "month": "2000-05",
+   "A": 77.4,
+   "B": 100.0,
+   "C": 1.9,
+   "D": 26.2,
+   "E": 52.8,
+   "F": 85.2
+  },
+  {
+   "month": "2000-06",
+   "A": 77.5,
+   "B": 100.0,
+   "C": 3.8,
+   "D": 25.7,
+   "E": 51.3,
+   "F": 91.2
+  },
+  {
+   "month": "2000-07",
+   "A": 77.5,
+   "B": 100.0,
+   "C": 3.8,
+   "D": 25.8,
+   "E": 50.4,
+   "F": 91.2
+  },
+  {
+   "month": "2000-08",
+   "A": 77.1,
+   "B": 100.0,
+   "C": 3.8,
+   "D": 25.9,
+   "E": 51.8,
+   "F": 91.2
+  },
+  {
+   "month": "2000-09",
+   "A": 79.2,
+   "B": 97.5,
+   "C": 3.7,
+   "D": 25.1,
+   "E": 55.7,
+   "F": 90.1
+  },
+  {
+   "month": "2000-10",
+   "A": 79.9,
+   "B": 97.5,
+   "C": 3.7,
+   "D": 25.1,
+   "E": 56.6,
+   "F": 90.1
+  },
+  {
+   "month": "2000-11",
+   "A": 79.5,
+   "B": 97.5,
+   "C": 3.7,
+   "D": 25.2,
+   "E": 55.0,
+   "F": 90.1
+  },
+  {
+   "month": "2000-12",
+   "A": 77.9,
+   "B": 98.5,
+   "C": 7.3,
+   "D": 25.1,
+   "E": 40.8,
+   "F": 82.8
+  },
+  {
+   "month": "2001-01",
+   "A": 78.3,
+   "B": 98.5,
+   "C": 7.3,
+   "D": 25.1,
+   "E": 41.5,
+   "F": 82.8
+  },
+  {
+   "month": "2001-02",
+   "A": 78.3,
+   "B": 98.5,
+   "C": 7.3,
+   "D": 25.1,
+   "E": 41.4,
+   "F": 82.8
+  },
+  {
+   "month": "2001-03",
+   "A": 80.5,
+   "B": 96.5,
+   "C": 10.7,
+   "D": 25.1,
+   "E": 43.4,
+   "F": 82.1
+  },
+  {
+   "month": "2001-04",
+   "A": 80.1,
+   "B": 96.5,
+   "C": 10.7,
+   "D": 24.8,
+   "E": 46.5,
+   "F": 82.1
+  },
+  {
+   "month": "2001-05",
+   "A": 80.2,
+   "B": 96.5,
+   "C": 10.7,
+   "D": 25.0,
+   "E": 46.2,
+   "F": 82.1
+  },
+  {
+   "month": "2001-06",
+   "A": 78.1,
+   "B": 93.8,
+   "C": 49.4,
+   "D": 25.3,
+   "E": 48.2,
+   "F": 74.7
+  },
+  {
+   "month": "2001-07",
+   "A": 78.5,
+   "B": 93.8,
+   "C": 49.4,
+   "D": 26.5,
+   "E": 47.2,
+   "F": 74.7
+  },
+  {
+   "month": "2001-08",
+   "A": 77.3,
+   "B": 93.8,
+   "C": 49.4,
+   "D": 26.8,
+   "E": 45.9,
+   "F": 74.7
+  },
+  {
+   "month": "2001-09",
+   "A": 70.3,
+   "B": 94.6,
+   "C": 52.8,
+   "D": 25.0,
+   "E": 30.6,
+   "F": 57.7
+  },
+  {
+   "month": "2001-10",
+   "A": 69.1,
+   "B": 94.6,
+   "C": 52.8,
+   "D": 27.0,
+   "E": 29.2,
+   "F": 57.7
+  },
+  {
+   "month": "2001-11",
+   "A": 74.7,
+   "B": 94.6,
+   "C": 52.8,
+   "D": 27.1,
+   "E": 32.6,
+   "F": 57.7
+  },
+  {
+   "month": "2001-12",
+   "A": 85.2,
+   "B": 90.3,
+   "C": 54.9,
+   "D": 27.7,
+   "E": 37.6,
+   "F": 48.4
+  },
+  {
+   "month": "2002-01",
+   "A": 85.0,
+   "B": 90.3,
+   "C": 54.9,
+   "D": 27.8,
+   "E": 36.2,
+   "F": 48.4
+  },
+  {
+   "month": "2002-02",
+   "A": 85.0,
+   "B": 90.3,
+   "C": 54.9,
+   "D": 27.8,
+   "E": 36.5,
+   "F": 48.4
+  },
+  {
+   "month": "2002-03",
+   "A": 75.4,
+   "B": 91.7,
+   "C": 40.4,
+   "D": 29.0,
+   "E": 48.5,
+   "F": 38.5
+  },
+  {
+   "month": "2002-04",
+   "A": 75.5,
+   "B": 91.7,
+   "C": 40.4,
+   "D": 29.1,
+   "E": 48.6,
+   "F": 38.5
+  },
+  {
+   "month": "2002-05",
+   "A": 75.6,
+   "B": 91.7,
+   "C": 40.4,
+   "D": 29.2,
+   "E": 47.0,
+   "F": 38.5
+  },
+  {
+   "month": "2002-06",
+   "A": 67.9,
+   "B": 93.3,
+   "C": 50.1,
+   "D": 29.1,
+   "E": 48.3,
+   "F": 25.3
+  },
+  {
+   "month": "2002-07",
+   "A": 67.8,
+   "B": 93.3,
+   "C": 50.1,
+   "D": 29.2,
+   "E": 46.2,
+   "F": 25.3
+  },
+  {
+   "month": "2002-08",
+   "A": 69.5,
+   "B": 93.3,
+   "C": 50.1,
+   "D": 29.3,
+   "E": 44.3,
+   "F": 25.3
+  },
+  {
+   "month": "2002-09",
+   "A": 60.8,
+   "B": 89.8,
+   "C": 45.0,
+   "D": 30.1,
+   "E": 45.2,
+   "F": 21.7
+  },
+  {
+   "month": "2002-10",
+   "A": 60.0,
+   "B": 89.8,
+   "C": 45.0,
+   "D": 39.3,
+   "E": 45.7,
+   "F": 21.7
+  },
+  {
+   "month": "2002-11",
+   "A": 60.2,
+   "B": 89.8,
+   "C": 45.0,
+   "D": 35.0,
+   "E": 44.2,
+   "F": 21.7
+  },
+  {
+   "month": "2002-12",
+   "A": 58.8,
+   "B": 84.9,
+   "C": 46.5,
+   "D": 35.2,
+   "E": 44.1,
+   "F": 21.1
+  },
+  {
+   "month": "2003-01",
+   "A": 59.4,
+   "B": 84.9,
+   "C": 46.5,
+   "D": 35.3,
+   "E": 43.0,
+   "F": 21.1
+  },
+  {
+   "month": "2003-02",
+   "A": 59.4,
+   "B": 84.9,
+   "C": 46.5,
+   "D": 35.3,
+   "E": 42.9,
+   "F": 21.1
+  },
+  {
+   "month": "2003-03",
+   "A": 60.9,
+   "B": 88.0,
+   "C": 41.6,
+   "D": 36.4,
+   "E": 43.2,
+   "F": 12.6
+  },
+  {
+   "month": "2003-04",
+   "A": 61.1,
+   "B": 88.0,
+   "C": 41.6,
+   "D": 36.6,
+   "E": 42.7,
+   "F": 12.6
+  },
+  {
+   "month": "2003-05",
+   "A": 61.0,
+   "B": 88.0,
+   "C": 41.6,
+   "D": 36.7,
+   "E": 40.6,
+   "F": 12.6
+  },
+  {
+   "month": "2003-06",
+   "A": 56.4,
+   "B": 85.2,
+   "C": 30.1,
+   "D": 36.6,
+   "E": 41.7,
+   "F": 10.6
+  },
+  {
+   "month": "2003-07",
+   "A": 56.7,
+   "B": 85.2,
+   "C": 30.1,
+   "D": 36.7,
+   "E": 45.8,
+   "F": 10.6
+  },
+  {
+   "month": "2003-08",
+   "A": 55.3,
+   "B": 85.2,
+   "C": 30.1,
+   "D": 36.7,
+   "E": 48.8,
+   "F": 10.6
+  },
+  {
+   "month": "2003-09",
+   "A": 58.2,
+   "B": 90.5,
+   "C": 19.5,
+   "D": 37.8,
+   "E": 47.1,
+   "F": 13.8
+  },
+  {
+   "month": "2003-10",
+   "A": 59.4,
+   "B": 90.5,
+   "C": 19.5,
+   "D": 50.7,
+   "E": 46.7,
+   "F": 13.8
+  },
+  {
+   "month": "2003-11",
+   "A": 59.3,
+   "B": 90.5,
+   "C": 19.5,
+   "D": 50.8,
+   "E": 45.6,
+   "F": 13.8
+  },
+  {
+   "month": "2003-12",
+   "A": 55.2,
+   "B": 90.5,
+   "C": 12.5,
+   "D": 50.7,
+   "E": 41.0,
+   "F": 17.2
+  },
+  {
+   "month": "2004-01",
+   "A": 55.1,
+   "B": 90.5,
+   "C": 12.5,
+   "D": 50.8,
+   "E": 40.8,
+   "F": 17.2
+  },
+  {
+   "month": "2004-02",
+   "A": 55.1,
+   "B": 90.5,
+   "C": 12.5,
+   "D": 50.8,
+   "E": 40.7,
+   "F": 17.2
+  },
+  {
+   "month": "2004-03",
+   "A": 53.1,
+   "B": 92.0,
+   "C": 15.2,
+   "D": 51.8,
+   "E": 42.6,
+   "F": 16.3
+  },
+  {
+   "month": "2004-04",
+   "A": 53.1,
+   "B": 92.0,
+   "C": 15.2,
+   "D": 51.9,
+   "E": 45.6,
+   "F": 16.3
+  },
+  {
+   "month": "2004-05",
+   "A": 52.5,
+   "B": 92.0,
+   "C": 15.2,
+   "D": 52.1,
+   "E": 45.9,
+   "F": 16.3
+  },
+  {
+   "month": "2004-06",
+   "A": 55.1,
+   "B": 92.0,
+   "C": 12.0,
+   "D": 52.2,
+   "E": 49.5,
+   "F": 10.3
+  },
+  {
+   "month": "2004-07",
+   "A": 54.0,
+   "B": 92.0,
+   "C": 12.0,
+   "D": 53.3,
+   "E": 46.2,
+   "F": 10.3
+  },
+  {
+   "month": "2004-08",
+   "A": 55.2,
+   "B": 92.0,
+   "C": 12.0,
+   "D": 51.9,
+   "E": 41.2,
+   "F": 10.3
+  },
+  {
+   "month": "2004-09",
+   "A": 55.7,
+   "B": 92.1,
+   "C": 11.8,
+   "D": 52.3,
+   "E": 41.5,
+   "F": 18.6
+  },
+  {
+   "month": "2004-10",
+   "A": 56.9,
+   "B": 92.1,
+   "C": 11.8,
+   "D": 52.7,
+   "E": 43.5,
+   "F": 18.6
+  },
+  {
+   "month": "2004-11",
+   "A": 57.3,
+   "B": 92.1,
+   "C": 11.8,
+   "D": 52.7,
+   "E": 46.6,
+   "F": 18.6
+  },
+  {
+   "month": "2004-12",
+   "A": 51.6,
+   "B": 89.8,
+   "C": 10.7,
+   "D": 53.2,
+   "E": 44.4,
+   "F": 31.5
+  },
+  {
+   "month": "2005-01",
+   "A": 46.5,
+   "B": 89.8,
+   "C": 10.7,
+   "D": 53.3,
+   "E": 45.9,
+   "F": 31.5
+  },
+  {
+   "month": "2005-02",
+   "A": 46.5,
+   "B": 89.8,
+   "C": 10.7,
+   "D": 53.3,
+   "E": 46.5,
+   "F": 31.5
+  },
+  {
+   "month": "2005-03",
+   "A": 63.2,
+   "B": 93.1,
+   "C": 9.6,
+   "D": 55.9,
+   "E": 46.3,
+   "F": 37.4
+  },
+  {
+   "month": "2005-04",
+   "A": 63.2,
+   "B": 93.1,
+   "C": 9.6,
+   "D": 57.0,
+   "E": 46.1,
+   "F": 37.4
+  },
+  {
+   "month": "2005-05",
+   "A": 63.2,
+   "B": 93.1,
+   "C": 9.6,
+   "D": 54.8,
+   "E": 45.4,
+   "F": 37.4
+  },
+  {
+   "month": "2005-06",
+   "A": 64.2,
+   "B": 91.9,
+   "C": 7.5,
+   "D": 56.3,
+   "E": 44.2,
+   "F": 43.2
+  },
+  {
+   "month": "2005-07",
+   "A": 64.4,
+   "B": 91.9,
+   "C": 7.5,
+   "D": 54.8,
+   "E": 46.5,
+   "F": 43.2
+  },
+  {
+   "month": "2005-08",
+   "A": 64.4,
+   "B": 91.9,
+   "C": 7.5,
+   "D": 55.1,
+   "E": 48.2,
+   "F": 43.2
+  },
+  {
+   "month": "2005-09",
+   "A": 63.6,
+   "B": 92.0,
+   "C": 7.2,
+   "D": 55.3,
+   "E": 47.4,
+   "F": 51.1
+  },
+  {
+   "month": "2005-10",
+   "A": 63.6,
+   "B": 92.0,
+   "C": 7.2,
+   "D": 45.2,
+   "E": 49.8,
+   "F": 51.1
+  },
+  {
+   "month": "2005-11",
+   "A": 63.4,
+   "B": 92.0,
+   "C": 7.2,
+   "D": 46.4,
+   "E": 51.3,
+   "F": 51.1
+  },
+  {
+   "month": "2005-12",
+   "A": 61.8,
+   "B": 93.3,
+   "C": 11.1,
+   "D": 45.4,
+   "E": 49.0,
+   "F": 55.0
+  },
+  {
+   "month": "2006-01",
+   "A": 61.8,
+   "B": 93.3,
+   "C": 11.1,
+   "D": 45.2,
+   "E": 48.0,
+   "F": 55.0
+  },
+  {
+   "month": "2006-02",
+   "A": 61.8,
+   "B": 93.3,
+   "C": 11.1,
+   "D": 45.2,
+   "E": 49.5,
+   "F": 55.0
+  },
+  {
+   "month": "2006-03",
+   "A": 58.1,
+   "B": 91.7,
+   "C": 7.5,
+   "D": 45.2,
+   "E": 48.4,
+   "F": 56.1
+  },
+  {
+   "month": "2006-04",
+   "A": 58.0,
+   "B": 91.7,
+   "C": 7.5,
+   "D": 45.4,
+   "E": 46.4,
+   "F": 56.1
+  },
+  {
+   "month": "2006-05",
+   "A": 58.1,
+   "B": 91.7,
+   "C": 7.5,
+   "D": 47.9,
+   "E": 43.6,
+   "F": 56.1
+  },
+  {
+   "month": "2006-06",
+   "A": 61.0,
+   "B": 94.2,
+   "C": 10.9,
+   "D": 48.4,
+   "E": 44.5,
+   "F": 62.5
+  },
+  {
+   "month": "2006-07",
+   "A": 60.9,
+   "B": 94.2,
+   "C": 10.9,
+   "D": 50.3,
+   "E": 44.1,
+   "F": 62.5
+  },
+  {
+   "month": "2006-08",
+   "A": 61.3,
+   "B": 94.2,
+   "C": 10.9,
+   "D": 50.1,
+   "E": 37.7,
+   "F": 62.5
+  },
+  {
+   "month": "2006-09",
+   "A": 46.9,
+   "B": 90.8,
+   "C": 19.2,
+   "D": 50.1,
+   "E": 40.2,
+   "F": 59.7
+  },
+  {
+   "month": "2006-10",
+   "A": 47.0,
+   "B": 90.8,
+   "C": 19.2,
+   "D": 48.3,
+   "E": 37.8,
+   "F": 59.7
+  },
+  {
+   "month": "2006-11",
+   "A": 47.0,
+   "B": 90.8,
+   "C": 19.2,
+   "D": 47.6,
+   "E": 34.3,
+   "F": 59.7
+  },
+  {
+   "month": "2006-12",
+   "A": 52.6,
+   "B": 91.3,
+   "C": 21.4,
+   "D": 45.5,
+   "E": 36.2,
+   "F": 61.7
+  },
+  {
+   "month": "2007-01",
+   "A": 52.6,
+   "B": 91.3,
+   "C": 46.6,
+   "D": 45.7,
+   "E": 39.9,
+   "F": 61.7
+  },
+  {
+   "month": "2007-02",
+   "A": 52.6,
+   "B": 91.3,
+   "C": 47.4,
+   "D": 45.7,
+   "E": 40.3,
+   "F": 61.7
+  },
+  {
+   "month": "2007-03",
+   "A": 69.8,
+   "B": 94.0,
+   "C": 44.6,
+   "D": 48.5,
+   "E": 35.4,
+   "F": 61.2
+  },
+  {
+   "month": "2007-04",
+   "A": 69.1,
+   "B": 94.0,
+   "C": 45.4,
+   "D": 46.8,
+   "E": 35.3,
+   "F": 61.2
+  },
+  {
+   "month": "2007-05",
+   "A": 69.8,
+   "B": 94.0,
+   "C": 46.9,
+   "D": 45.1,
+   "E": 37.5,
+   "F": 61.2
+  },
+  {
+   "month": "2007-06",
+   "A": 75.1,
+   "B": 95.2,
+   "C": 45.6,
+   "D": 43.8,
+   "E": 37.6,
+   "F": 65.0
+  },
+  {
+   "month": "2007-07",
+   "A": 76.1,
+   "B": 95.2,
+   "C": 35.4,
+   "D": 42.6,
+   "E": 36.2,
+   "F": 65.0
+  },
+  {
+   "month": "2007-08",
+   "A": 76.4,
+   "B": 95.2,
+   "C": 31.6,
+   "D": 43.3,
+   "E": 34.1,
+   "F": 65.0
+  },
+  {
+   "month": "2007-09",
+   "A": 81.0,
+   "B": 93.0,
+   "C": 38.0,
+   "D": 41.2,
+   "E": 36.0,
+   "F": 61.8
+  },
+  {
+   "month": "2007-10",
+   "A": 80.8,
+   "B": 93.0,
+   "C": 36.6,
+   "D": 39.3,
+   "E": 36.1,
+   "F": 61.8
+  },
+  {
+   "month": "2007-11",
+   "A": 81.2,
+   "B": 93.0,
+   "C": 30.4,
+   "D": 40.5,
+   "E": 36.3,
+   "F": 61.8
+  },
+  {
+   "month": "2007-12",
+   "A": 86.1,
+   "B": 92.2,
+   "C": 41.8,
+   "D": 43.0,
+   "E": 34.5,
+   "F": 55.1
+  },
+  {
+   "month": "2008-01",
+   "A": 84.4,
+   "B": 92.2,
+   "C": 38.0,
+   "D": 43.9,
+   "E": 26.8,
+   "F": 55.1
+  },
+  {
+   "month": "2008-02",
+   "A": 84.4,
+   "B": 92.2,
+   "C": 37.4,
+   "D": 43.9,
+   "E": 31.6,
+   "F": 55.1
+  },
+  {
+   "month": "2008-03",
+   "A": 89.0,
+   "B": 90.0,
+   "C": 45.2,
+   "D": 42.8,
+   "E": 31.5,
+   "F": 51.0
+  },
+  {
+   "month": "2008-04",
+   "A": 86.4,
+   "B": 90.0,
+   "C": 48.3,
+   "D": 42.2,
+   "E": 29.9,
+   "F": 51.0
+  },
+  {
+   "month": "2008-05",
+   "A": 87.1,
+   "B": 90.0,
+   "C": 49.0,
+   "D": 41.1,
+   "E": 32.6,
+   "F": 51.0
+  },
+  {
+   "month": "2008-06",
+   "A": 83.2,
+   "B": 81.7,
+   "C": 56.1,
+   "D": 43.8,
+   "E": 34.8,
+   "F": 53.0
+  },
+  {
+   "month": "2008-07",
+   "A": 87.0,
+   "B": 81.7,
+   "C": 53.9,
+   "D": 44.9,
+   "E": 36.1,
+   "F": 53.0
+  },
+  {
+   "month": "2008-08",
+   "A": 86.8,
+   "B": 81.7,
+   "C": 51.3,
+   "D": 45.3,
+   "E": 34.9,
+   "F": 53.0
+  },
+  {
+   "month": "2008-09",
+   "A": 84.6,
+   "B": 80.7,
+   "C": 52.8,
+   "D": 43.6,
+   "E": 26.4,
+   "F": 42.5
+  },
+  {
+   "month": "2008-10",
+   "A": 84.1,
+   "B": 80.7,
+   "C": 51.4,
+   "D": 56.1,
+   "E": 27.1,
+   "F": 42.5
+  },
+  {
+   "month": "2008-11",
+   "A": 79.1,
+   "B": 80.7,
+   "C": 51.4,
+   "D": 55.5,
+   "E": 25.3,
+   "F": 42.5
+  },
+  {
+   "month": "2008-12",
+   "A": 74.4,
+   "B": 76.2,
+   "C": 53.4,
+   "D": 59.9,
+   "E": 11.8,
+   "F": 29.0
+  },
+  {
+   "month": "2009-01",
+   "A": 74.6,
+   "B": 76.2,
+   "C": 53.6,
+   "D": 60.0,
+   "E": 9.7,
+   "F": 29.0
+  },
+  {
+   "month": "2009-02",
+   "A": 74.6,
+   "B": 76.2,
+   "C": 53.6,
+   "D": 60.0,
+   "E": 9.4,
+   "F": 29.0
+  },
+  {
+   "month": "2009-03",
+   "A": 75.4,
+   "B": 70.9,
+   "C": 63.8,
+   "D": 60.0,
+   "E": 7.1,
+   "F": 13.3
+  },
+  {
+   "month": "2009-04",
+   "A": 75.8,
+   "B": 70.9,
+   "C": 64.7,
+   "D": 60.2,
+   "E": 7.6,
+   "F": 13.3
+  },
+  {
+   "month": "2009-05",
+   "A": 73.8,
+   "B": 70.9,
+   "C": 65.0,
+   "D": 60.3,
+   "E": 9.1,
+   "F": 13.3
+  },
+  {
+   "month": "2009-06",
+   "A": 73.1,
+   "B": 68.7,
+   "C": 67.4,
+   "D": 60.3,
+   "E": 15.9,
+   "F": 3.7
+  },
+  {
+   "month": "2009-07",
+   "A": 76.4,
+   "B": 68.7,
+   "C": 68.5,
+   "D": 60.4,
+   "E": 20.7,
+   "F": 3.7
+  },
+  {
+   "month": "2009-08",
+   "A": 78.9,
+   "B": 68.7,
+   "C": 69.3,
+   "D": 60.5,
+   "E": 21.8,
+   "F": 3.7
+  },
+  {
+   "month": "2009-09",
+   "A": 77.8,
+   "B": 72.2,
+   "C": 74.6,
+   "D": 60.5,
+   "E": 23.4,
+   "F": 3.2
+  },
+  {
+   "month": "2009-10",
+   "A": 76.5,
+   "B": 72.2,
+   "C": 76.1,
+   "D": 72.8,
+   "E": 23.1,
+   "F": 3.2
+  },
+  {
+   "month": "2009-11",
+   "A": 78.7,
+   "B": 72.2,
+   "C": 76.1,
+   "D": 72.8,
+   "E": 23.0,
+   "F": 3.2
+  },
+  {
+   "month": "2009-12",
+   "A": 68.2,
+   "B": 73.8,
+   "C": 77.6,
+   "D": 72.9,
+   "E": 24.8,
+   "F": 4.4
+  },
+  {
+   "month": "2010-01",
+   "A": 68.5,
+   "B": 73.8,
+   "C": 78.1,
+   "D": 73.0,
+   "E": 25.1,
+   "F": 4.4
+  },
+  {
+   "month": "2010-02",
+   "A": 68.5,
+   "B": 73.8,
+   "C": 77.5,
+   "D": 73.0,
+   "E": 24.8,
+   "F": 4.4
+  },
+  {
+   "month": "2010-03",
+   "A": 58.7,
+   "B": 76.2,
+   "C": 79.5,
+   "D": 73.0,
+   "E": 25.8,
+   "F": 5.6
+  },
+  {
+   "month": "2010-04",
+   "A": 59.9,
+   "B": 76.2,
+   "C": 81.0,
+   "D": 73.2,
+   "E": 29.3,
+   "F": 5.6
+  },
+  {
+   "month": "2010-05",
+   "A": 58.1,
+   "B": 76.2,
+   "C": 75.8,
+   "D": 73.2,
+   "E": 32.6,
+   "F": 5.6
+  },
+  {
+   "month": "2010-06",
+   "A": 44.5,
+   "B": 78.2,
+   "C": 75.9,
+   "D": 73.3,
+   "E": 24.6,
+   "F": 6.6
+  },
+  {
+   "month": "2010-07",
+   "A": 44.6,
+   "B": 78.2,
+   "C": 76.7,
+   "D": 76.8,
+   "E": 24.5,
+   "F": 6.6
+  },
+  {
+   "month": "2010-08",
+   "A": 44.8,
+   "B": 78.2,
+   "C": 75.5,
+   "D": 76.7,
+   "E": 23.5,
+   "F": 6.6
+  },
+  {
+   "month": "2010-09",
+   "A": 40.6,
+   "B": 72.5,
+   "C": 74.3,
+   "D": 76.2,
+   "E": 23.8,
+   "F": 9.2
+  },
+  {
+   "month": "2010-10",
+   "A": 41.6,
+   "B": 72.5,
+   "C": 76.0,
+   "D": 75.9,
+   "E": 23.9,
+   "F": 9.2
+  },
+  {
+   "month": "2010-11",
+   "A": 42.5,
+   "B": 72.5,
+   "C": 75.6,
+   "D": 75.3,
+   "E": 24.8,
+   "F": 9.2
+  },
+  {
+   "month": "2010-12",
+   "A": 41.0,
+   "B": 77.8,
+   "C": 65.8,
+   "D": 75.8,
+   "E": 26.6,
+   "F": 14.3
+  },
+  {
+   "month": "2011-01",
+   "A": 42.0,
+   "B": 77.8,
+   "C": 67.0,
+   "D": 76.4,
+   "E": 29.2,
+   "F": 14.3
+  },
+  {
+   "month": "2011-02",
+   "A": 42.0,
+   "B": 77.8,
+   "C": 69.4,
+   "D": 77.8,
+   "E": 31.1,
+   "F": 14.3
+  },
+  {
+   "month": "2011-03",
+   "A": 37.8,
+   "B": 80.1,
+   "C": 60.6,
+   "D": 78.4,
+   "E": 33.7,
+   "F": 19.6
+  },
+  {
+   "month": "2011-04",
+   "A": 42.1,
+   "B": 80.1,
+   "C": 61.9,
+   "D": 79.5,
+   "E": 35.6,
+   "F": 19.6
+  },
+  {
+   "month": "2011-05",
+   "A": 43.1,
+   "B": 80.1,
+   "C": 60.1,
+   "D": 79.3,
+   "E": 35.7,
+   "F": 19.6
+  },
+  {
+   "month": "2011-06",
+   "A": 41.2,
+   "B": 84.2,
+   "C": 50.3,
+   "D": 79.8,
+   "E": 35.0,
+   "F": 23.5
+  },
+  {
+   "month": "2011-07",
+   "A": 39.3,
+   "B": 84.2,
+   "C": 52.1,
+   "D": 79.8,
+   "E": 35.9,
+   "F": 23.5
+  },
+  {
+   "month": "2011-08",
+   "A": 39.3,
+   "B": 84.2,
+   "C": 44.2,
+   "D": 79.6,
+   "E": 34.5,
+   "F": 23.5
+  },
+  {
+   "month": "2011-09",
+   "A": 36.4,
+   "B": 86.3,
+   "C": 40.6,
+   "D": 79.4,
+   "E": 37.7,
+   "F": 29.4
+  },
+  {
+   "month": "2011-10",
+   "A": 35.0,
+   "B": 86.3,
+   "C": 43.1,
+   "D": 78.9,
+   "E": 38.7,
+   "F": 29.4
+  },
+  {
+   "month": "2011-11",
+   "A": 41.5,
+   "B": 86.3,
+   "C": 40.6,
+   "D": 78.0,
+   "E": 39.8,
+   "F": 29.4
+  },
+  {
+   "month": "2011-12",
+   "A": 41.9,
+   "B": 74.8,
+   "C": 41.3,
+   "D": 78.6,
+   "E": 39.9,
+   "F": 52.9
+  },
+  {
+   "month": "2012-01",
+   "A": 40.6,
+   "B": 74.8,
+   "C": 44.0,
+   "D": 78.0,
+   "E": 40.8,
+   "F": 52.9
+  },
+  {
+   "month": "2012-02",
+   "A": 40.6,
+   "B": 74.8,
+   "C": 45.8,
+   "D": 78.5,
+   "E": 40.9,
+   "F": 52.9
+  },
+  {
+   "month": "2012-03",
+   "A": 39.7,
+   "B": 76.0,
+   "C": 45.7,
+   "D": 76.6,
+   "E": 45.7,
+   "F": 65.8
+  },
+  {
+   "month": "2012-04",
+   "A": 41.7,
+   "B": 76.0,
+   "C": 44.4,
+   "D": 76.7,
+   "E": 45.5,
+   "F": 65.8
+  },
+  {
+   "month": "2012-05",
+   "A": 41.1,
+   "B": 76.0,
+   "C": 42.6,
+   "D": 75.3,
+   "E": 43.3,
+   "F": 65.8
+  },
+  {
+   "month": "2012-06",
+   "A": 32.7,
+   "B": 88.2,
+   "C": 42.5,
+   "D": 74.1,
+   "E": 43.0,
+   "F": 78.8
+  },
+  {
+   "month": "2012-07",
+   "A": 32.9,
+   "B": 88.2,
+   "C": 42.9,
+   "D": 75.3,
+   "E": 39.9,
+   "F": 78.8
+  },
+  {
+   "month": "2012-08",
+   "A": 33.3,
+   "B": 88.2,
+   "C": 45.7,
+   "D": 76.2,
+   "E": 40.8,
+   "F": 78.8
+  },
+  {
+   "month": "2012-09",
+   "A": 31.7,
+   "B": 87.0,
+   "C": 47.0,
+   "D": 75.2,
+   "E": 41.0,
+   "F": 83.5
+  },
+  {
+   "month": "2012-10",
+   "A": 30.3,
+   "B": 87.0,
+   "C": 47.3,
+   "D": 73.2,
+   "E": 40.8,
+   "F": 83.5
+  },
+  {
+   "month": "2012-11",
+   "A": 29.1,
+   "B": 87.0,
+   "C": 45.7,
+   "D": 73.8,
+   "E": 39.7,
+   "F": 83.5
+  },
+  {
+   "month": "2012-12",
+   "A": 30.4,
+   "B": 91.8,
+   "C": 48.0,
+   "D": 72.5,
+   "E": 42.4,
+   "F": 82.5
+  },
+  {
+   "month": "2013-01",
+   "A": 26.0,
+   "B": 91.8,
+   "C": 49.9,
+   "D": 74.6,
+   "E": 41.5,
+   "F": 82.5
+  },
+  {
+   "month": "2013-02",
+   "A": 26.0,
+   "B": 91.8,
+   "C": 49.0,
+   "D": 73.6,
+   "E": 42.2,
+   "F": 82.5
+  },
+  {
+   "month": "2013-03",
+   "A": 40.8,
+   "B": 89.5,
+   "C": 49.6,
+   "D": 74.5,
+   "E": 44.5,
+   "F": 86.4
+  },
+  {
+   "month": "2013-04",
+   "A": 41.3,
+   "B": 89.5,
+   "C": 50.3,
+   "D": 75.4,
+   "E": 42.8,
+   "F": 86.4
+  },
+  {
+   "month": "2013-05",
+   "A": 39.6,
+   "B": 89.5,
+   "C": 51.3,
+   "D": 77.8,
+   "E": 43.2,
+   "F": 86.4
+  },
+  {
+   "month": "2013-06",
+   "A": 42.7,
+   "B": 95.3,
+   "C": 46.1,
+   "D": 77.4,
+   "E": 47.0,
+   "F": 86.8
+  },
+  {
+   "month": "2013-07",
+   "A": 43.3,
+   "B": 95.3,
+   "C": 49.6,
+   "D": 77.7,
+   "E": 51.1,
+   "F": 86.8
+  },
+  {
+   "month": "2013-08",
+   "A": 44.1,
+   "B": 95.3,
+   "C": 48.3,
+   "D": 78.4,
+   "E": 48.1,
+   "F": 86.8
+  },
+  {
+   "month": "2013-09",
+   "A": 45.7,
+   "B": 95.7,
+   "C": 48.5,
+   "D": 77.2,
+   "E": 48.7,
+   "F": 82.4
+  },
+  {
+   "month": "2013-10",
+   "A": 44.9,
+   "B": 95.7,
+   "C": 49.3,
+   "D": 73.4,
+   "E": 45.7,
+   "F": 82.4
+  },
+  {
+   "month": "2013-11",
+   "A": 46.2,
+   "B": 95.7,
+   "C": 49.7,
+   "D": 72.5,
+   "E": 48.3,
+   "F": 82.4
+  },
+  {
+   "month": "2013-12",
+   "A": 48.5,
+   "B": 96.6,
+   "C": 50.0,
+   "D": 73.2,
+   "E": 50.6,
+   "F": 75.9
+  },
+  {
+   "month": "2014-01",
+   "A": 49.3,
+   "B": 96.6,
+   "C": 49.3,
+   "D": 74.0,
+   "E": 48.8,
+   "F": 75.9
+  },
+  {
+   "month": "2014-02",
+   "A": 49.3,
+   "B": 96.6,
+   "C": 50.3,
+   "D": 73.8,
+   "E": 48.5,
+   "F": 75.9
+  },
+  {
+   "month": "2014-03",
+   "A": 49.1,
+   "B": 98.3,
+   "C": 49.7,
+   "D": 71.9,
+   "E": 47.6,
+   "F": 83.2
+  },
+  {
+   "month": "2014-04",
+   "A": 45.0,
+   "B": 98.3,
+   "C": 50.0,
+   "D": 71.4,
+   "E": 46.2,
+   "F": 83.2
+  },
+  {
+   "month": "2014-05",
+   "A": 42.9,
+   "B": 98.3,
+   "C": 49.3,
+   "D": 71.8,
+   "E": 44.9,
+   "F": 83.2
+  },
+  {
+   "month": "2014-06",
+   "A": 45.3,
+   "B": 98.3,
+   "C": 50.6,
+   "D": 71.7,
+   "E": 47.4,
+   "F": 82.7
+  },
+  {
+   "month": "2014-07",
+   "A": 49.6,
+   "B": 98.3,
+   "C": 48.5,
+   "D": 72.2,
+   "E": 44.1,
+   "F": 82.7
+  },
+  {
+   "month": "2014-08",
+   "A": 49.9,
+   "B": 98.3,
+   "C": 47.9,
+   "D": 72.1,
+   "E": 42.3,
+   "F": 82.7
+  },
+  {
+   "month": "2014-09",
+   "A": 50.9,
+   "B": 98.7,
+   "C": 45.2,
+   "D": 71.7,
+   "E": 51.7,
+   "F": 83.2
+  },
+  {
+   "month": "2014-10",
+   "A": 50.5,
+   "B": 98.7,
+   "C": 44.0,
+   "D": 64.7,
+   "E": 49.2,
+   "F": 83.2
+  },
+  {
+   "month": "2014-11",
+   "A": 50.0,
+   "B": 98.7,
+   "C": 43.3,
+   "D": 64.1,
+   "E": 49.9,
+   "F": 83.2
+  },
+  {
+   "month": "2014-12",
+   "A": 47.9,
+   "B": 97.7,
+   "C": 36.6,
+   "D": 62.4,
+   "E": 49.5,
+   "F": 78.9
+  },
+  {
+   "month": "2015-01",
+   "A": 47.0,
+   "B": 97.7,
+   "C": 34.7,
+   "D": 62.9,
+   "E": 50.1,
+   "F": 78.9
+  },
+  {
+   "month": "2015-02",
+   "A": 47.0,
+   "B": 97.7,
+   "C": 39.7,
+   "D": 62.8,
+   "E": 51.1,
+   "F": 78.9
+  },
+  {
+   "month": "2015-03",
+   "A": 48.2,
+   "B": 98.7,
+   "C": 36.8,
+   "D": 63.9,
+   "E": 52.2,
+   "F": 75.3
+  },
+  {
+   "month": "2015-04",
+   "A": 49.8,
+   "B": 98.7,
+   "C": 39.1,
+   "D": 62.5,
+   "E": 50.3,
+   "F": 75.3
+  },
+  {
+   "month": "2015-05",
+   "A": 50.7,
+   "B": 98.7,
+   "C": 39.5,
+   "D": 62.4,
+   "E": 52.4,
+   "F": 75.3
+  },
+  {
+   "month": "2015-06",
+   "A": 46.7,
+   "B": 98.0,
+   "C": 37.8,
+   "D": 61.9,
+   "E": 53.2,
+   "F": 72.8
+  },
+  {
+   "month": "2015-07",
+   "A": 46.7,
+   "B": 98.0,
+   "C": 32.9,
+   "D": 61.8,
+   "E": 51.9,
+   "F": 72.8
+  },
+  {
+   "month": "2015-08",
+   "A": 46.8,
+   "B": 98.0,
+   "C": 29.0,
+   "D": 60.4,
+   "E": 52.0,
+   "F": 72.8
+  },
+  {
+   "month": "2015-09",
+   "A": 47.2,
+   "B": 96.7,
+   "C": 29.6,
+   "D": 60.4,
+   "E": 54.1,
+   "F": 67.3
+  },
+  {
+   "month": "2015-10",
+   "A": 45.1,
+   "B": 96.7,
+   "C": 29.7,
+   "D": 58.1,
+   "E": 49.4,
+   "F": 67.3
+  },
+  {
+   "month": "2015-11",
+   "A": 46.1,
+   "B": 96.7,
+   "C": 28.0,
+   "D": 58.1,
+   "E": 52.0,
+   "F": 67.3
+  },
+  {
+   "month": "2015-12",
+   "A": 46.7,
+   "B": 94.6,
+   "C": 25.4,
+   "D": 51.8,
+   "E": 48.7,
+   "F": 70.2
+  },
+  {
+   "month": "2016-01",
+   "A": 44.7,
+   "B": 94.6,
+   "C": 22.9,
+   "D": 51.8,
+   "E": 46.8,
+   "F": 70.2
+  },
+  {
+   "month": "2016-02",
+   "A": 44.7,
+   "B": 94.6,
+   "C": 22.1,
+   "D": 51.7,
+   "E": 45.5,
+   "F": 70.2
+  },
+  {
+   "month": "2016-03",
+   "A": 43.0,
+   "B": 96.5,
+   "C": 25.9,
+   "D": 53.5,
+   "E": 45.4,
+   "F": 65.1
+  },
+  {
+   "month": "2016-04",
+   "A": 43.0,
+   "B": 96.5,
+   "C": 28.6,
+   "D": 53.5,
+   "E": 44.8,
+   "F": 65.1
+  },
+  {
+   "month": "2016-05",
+   "A": 44.3,
+   "B": 96.5,
+   "C": 29.4,
+   "D": 53.5,
+   "E": 46.9,
+   "F": 65.1
+  },
+  {
+   "month": "2016-06",
+   "A": 47.4,
+   "B": 96.2,
+   "C": 30.5,
+   "D": 53.3,
+   "E": 50.0,
+   "F": 62.4
+  },
+  {
+   "month": "2016-07",
+   "A": 47.7,
+   "B": 96.2,
+   "C": 32.8,
+   "D": 53.3,
+   "E": 50.4,
+   "F": 62.4
+  },
+  {
+   "month": "2016-08",
+   "A": 48.8,
+   "B": 96.2,
+   "C": 34.1,
+   "D": 53.3,
+   "E": 52.5,
+   "F": 62.4
+  },
+  {
+   "month": "2016-09",
+   "A": 47.7,
+   "B": 96.2,
+   "C": 34.3,
+   "D": 53.1,
+   "E": 52.2,
+   "F": 58.3
+  },
+  {
+   "month": "2016-10",
+   "A": 48.5,
+   "B": 96.2,
+   "C": 38.1,
+   "D": 60.2,
+   "E": 53.0,
+   "F": 58.3
+  },
+  {
+   "month": "2016-11",
+   "A": 46.6,
+   "B": 96.2,
+   "C": 37.6,
+   "D": 60.2,
+   "E": 57.9,
+   "F": 58.3
+  },
+  {
+   "month": "2016-12",
+   "A": 46.4,
+   "B": 96.5,
+   "C": 40.4,
+   "D": 60.0,
+   "E": 56.0,
+   "F": 55.5
+  },
+  {
+   "month": "2017-01",
+   "A": 46.6,
+   "B": 96.5,
+   "C": 41.1,
+   "D": 60.0,
+   "E": 56.4,
+   "F": 55.5
+  },
+  {
+   "month": "2017-02",
+   "A": 46.6,
+   "B": 96.5,
+   "C": 42.3,
+   "D": 60.0,
+   "E": 56.8,
+   "F": 55.5
+  },
+  {
+   "month": "2017-03",
+   "A": 46.2,
+   "B": 96.0,
+   "C": 40.3,
+   "D": 60.0,
+   "E": 56.9,
+   "F": 51.5
+  },
+  {
+   "month": "2017-04",
+   "A": 46.1,
+   "B": 96.0,
+   "C": 40.9,
+   "D": 59.9,
+   "E": 57.0,
+   "F": 51.5
+  },
+  {
+   "month": "2017-05",
+   "A": 47.6,
+   "B": 96.0,
+   "C": 42.8,
+   "D": 59.9,
+   "E": 55.1,
+   "F": 51.5
+  },
+  {
+   "month": "2017-06",
+   "A": 42.9,
+   "B": 98.4,
+   "C": 41.3,
+   "D": 57.8,
+   "E": 56.1,
+   "F": 50.8
+  },
+  {
+   "month": "2017-07",
+   "A": 42.4,
+   "B": 98.4,
+   "C": 43.0,
+   "D": 57.8,
+   "E": 55.4,
+   "F": 50.8
+  },
+  {
+   "month": "2017-08",
+   "A": 43.3,
+   "B": 98.4,
+   "C": 40.9,
+   "D": 57.8,
+   "E": 52.2,
+   "F": 50.8
+  },
+  {
+   "month": "2017-09",
+   "A": 46.5,
+   "B": 98.4,
+   "C": 42.9,
+   "D": 57.3,
+   "E": 55.9,
+   "F": 56.0
+  },
+  {
+   "month": "2017-10",
+   "A": 47.4,
+   "B": 98.4,
+   "C": 44.3,
+   "D": 58.7,
+   "E": 62.1,
+   "F": 56.0
+  },
+  {
+   "month": "2017-11",
+   "A": 48.1,
+   "B": 98.4,
+   "C": 42.4,
+   "D": 58.7,
+   "E": 62.1,
+   "F": 56.0
+  },
+  {
+   "month": "2017-12",
+   "A": 51.7,
+   "B": 98.4,
+   "C": 43.7,
+   "D": 57.9,
+   "E": 61.0,
+   "F": 55.5
+  },
+  {
+   "month": "2018-01",
+   "A": 54.1,
+   "B": 98.4,
+   "C": 45.5,
+   "D": 57.9,
+   "E": 58.3,
+   "F": 55.5
+  },
+  {
+   "month": "2018-02",
+   "A": 54.1,
+   "B": 98.4,
+   "C": 44.1,
+   "D": 57.8,
+   "E": 60.5,
+   "F": 55.5
+  },
+  {
+   "month": "2018-03",
+   "A": 50.6,
+   "B": 99.1,
+   "C": 41.1,
+   "D": 57.1,
+   "E": 62.0,
+   "F": 63.3
+  },
+  {
+   "month": "2018-04",
+   "A": 46.7,
+   "B": 99.1,
+   "C": 43.9,
+   "D": 57.0,
+   "E": 66.5,
+   "F": 63.3
+  },
+  {
+   "month": "2018-05",
+   "A": 45.3,
+   "B": 99.1,
+   "C": 42.8,
+   "D": 57.0,
+   "E": 64.8,
+   "F": 63.3
+  },
+  {
+   "month": "2018-06",
+   "A": 41.9,
+   "B": 98.2,
+   "C": 42.7,
+   "D": 56.4,
+   "E": 68.6,
+   "F": 65.0
+  },
+  {
+   "month": "2018-07",
+   "A": 39.1,
+   "B": 98.2,
+   "C": 42.1,
+   "D": 56.5,
+   "E": 66.5,
+   "F": 65.0
+  },
+  {
+   "month": "2018-08",
+   "A": 40.5,
+   "B": 98.2,
+   "C": 42.1,
+   "D": 56.3,
+   "E": 65.3,
+   "F": 65.0
+  },
+  {
+   "month": "2018-09",
+   "A": 40.2,
+   "B": 96.2,
+   "C": 42.5,
+   "D": 55.9,
+   "E": 64.6,
+   "F": 65.3
+  },
+  {
+   "month": "2018-10",
+   "A": 40.5,
+   "B": 96.2,
+   "C": 38.7,
+   "D": 56.4,
+   "E": 63.9,
+   "F": 65.3
+  },
+  {
+   "month": "2018-11",
+   "A": 37.5,
+   "B": 96.2,
+   "C": 34.5,
+   "D": 56.4,
+   "E": 61.8,
+   "F": 65.3
+  },
+  {
+   "month": "2018-12",
+   "A": 38.2,
+   "B": 98.6,
+   "C": 26.6,
+   "D": 56.2,
+   "E": 58.5,
+   "F": 62.5
+  },
+  {
+   "month": "2019-01",
+   "A": 34.9,
+   "B": 98.6,
+   "C": 32.4,
+   "D": 56.4,
+   "E": 51.3,
+   "F": 62.5
+  },
+  {
+   "month": "2019-02",
+   "A": 34.9,
+   "B": 98.6,
+   "C": 34.5,
+   "D": 56.4,
+   "E": 50.9,
+   "F": 62.5
+  },
+  {
+   "month": "2019-03",
+   "A": 39.2,
+   "B": 92.2,
+   "C": 34.0,
+   "D": 56.6,
+   "E": 57.1,
+   "F": 68.1
+  },
+  {
+   "month": "2019-04",
+   "A": 40.1,
+   "B": 92.2,
+   "C": 36.6,
+   "D": 56.6,
+   "E": 63.5,
+   "F": 68.1
+  },
+  {
+   "month": "2019-05",
+   "A": 41.0,
+   "B": 92.2,
+   "C": 33.1,
+   "D": 57.2,
+   "E": 61.1,
+   "F": 68.1
+  },
+  {
+   "month": "2019-06",
+   "A": 35.0,
+   "B": 94.6,
+   "C": 34.0,
+   "D": 57.0,
+   "E": 54.7,
+   "F": 66.0
+  },
+  {
+   "month": "2019-07",
+   "A": 36.7,
+   "B": 94.6,
+   "C": 33.7,
+   "D": 56.6,
+   "E": 58.6,
+   "F": 66.0
+  },
+  {
+   "month": "2019-08",
+   "A": 36.2,
+   "B": 94.6,
+   "C": 31.9,
+   "D": 57.9,
+   "E": 52.9,
+   "F": 66.0
+  },
+  {
+   "month": "2019-09",
+   "A": 36.1,
+   "B": 96.3,
+   "C": 34.9,
+   "D": 58.0,
+   "E": 60.3,
+   "F": 68.7
+  },
+  {
+   "month": "2019-10",
+   "A": 34.7,
+   "B": 96.3,
+   "C": 33.9,
+   "D": 61.1,
+   "E": 59.8,
+   "F": 68.7
+  },
+  {
+   "month": "2019-11",
+   "A": 34.8,
+   "B": 96.3,
+   "C": 32.4,
+   "D": 62.9,
+   "E": 59.0,
+   "F": 68.7
+  },
+  {
+   "month": "2019-12",
+   "A": 36.4,
+   "B": 94.7,
+   "C": 37.5,
+   "D": 64.0,
+   "E": 58.0,
+   "F": 58.7
+  },
+  {
+   "month": "2020-01",
+   "A": 38.6,
+   "B": 94.7,
+   "C": 36.1,
+   "D": 64.0,
+   "E": 56.2,
+   "F": 58.7
+  },
+  {
+   "month": "2020-02",
+   "A": 38.6,
+   "B": 94.7,
+   "C": 36.3,
+   "D": 64.0,
+   "E": 55.2,
+   "F": 58.7
+  },
+  {
+   "month": "2020-03",
+   "A": 38.0,
+   "B": 98.3,
+   "C": 11.7,
+   "D": 74.8,
+   "E": 56.6,
+   "F": 46.3
+  },
+  {
+   "month": "2020-04",
+   "A": 29.6,
+   "B": 98.3,
+   "C": 15.3,
+   "D": 79.2,
+   "E": 46.5,
+   "F": 46.3
+  },
+  {
+   "month": "2020-05",
+   "A": 29.7,
+   "B": 98.3,
+   "C": 17.7,
+   "D": 79.0,
+   "E": 43.5,
+   "F": 46.3
+  },
+  {
+   "month": "2020-06",
+   "A": 37.7,
+   "B": 89.8,
+   "C": 22.7,
+   "D": 77.6,
+   "E": 53.2,
+   "F": 35.2
+  },
+  {
+   "month": "2020-07",
+   "A": 38.5,
+   "B": 89.8,
+   "C": 26.1,
+   "D": 76.2,
+   "E": 64.1,
+   "F": 35.2
+  },
+  {
+   "month": "2020-08",
+   "A": 39.4,
+   "B": 89.8,
+   "C": 26.7,
+   "D": 76.2,
+   "E": 70.5,
+   "F": 35.2
+  },
+  {
+   "month": "2020-09",
+   "A": 47.7,
+   "B": 91.1,
+   "C": 22.9,
+   "D": 76.2,
+   "E": 71.9,
+   "F": 33.5
+  },
+  {
+   "month": "2020-10",
+   "A": 47.6,
+   "B": 91.1,
+   "C": 26.2,
+   "D": 80.7,
+   "E": 71.3,
+   "F": 33.5
+  },
+  {
+   "month": "2020-11",
+   "A": 48.5,
+   "B": 91.1,
+   "C": 29.4,
+   "D": 82.3,
+   "E": 70.9,
+   "F": 33.5
+  },
+  {
+   "month": "2020-12",
+   "A": 43.4,
+   "B": 92.8,
+   "C": 30.4,
+   "D": 80.4,
+   "E": 68.5,
+   "F": 27.8
+  },
+  {
+   "month": "2021-01",
+   "A": 45.5,
+   "B": 92.8,
+   "C": 33.2,
+   "D": 82.2,
+   "E": 69.5,
+   "F": 27.8
+  },
+  {
+   "month": "2021-02",
+   "A": 45.5,
+   "B": 92.8,
+   "C": 36.3,
+   "D": 83.0,
+   "E": 69.9,
+   "F": 27.8
+  },
+  {
+   "month": "2021-03",
+   "A": 44.2,
+   "B": 96.0,
+   "C": 35.9,
+   "D": 83.0,
+   "E": 72.3,
+   "F": 33.5
+  },
+  {
+   "month": "2021-04",
+   "A": 45.9,
+   "B": 96.0,
+   "C": 37.8,
+   "D": 84.3,
+   "E": 72.8,
+   "F": 33.5
+  },
+  {
+   "month": "2021-05",
+   "A": 48.2,
+   "B": 96.0,
+   "C": 37.1,
+   "D": 90.0,
+   "E": 74.1,
+   "F": 33.5
+  },
+  {
+   "month": "2021-06",
+   "A": 46.0,
+   "B": 99.0,
+   "C": 36.9,
+   "D": 86.2,
+   "E": 67.9,
+   "F": 31.0
+  },
+  {
+   "month": "2021-07",
+   "A": 49.7,
+   "B": 99.0,
+   "C": 36.3,
+   "D": 87.0,
+   "E": 65.9,
+   "F": 31.0
+  },
+  {
+   "month": "2021-08",
+   "A": 47.1,
+   "B": 99.0,
+   "C": 36.1,
+   "D": 87.8,
+   "E": 65.9,
+   "F": 31.0
+  },
+  {
+   "month": "2021-09",
+   "A": 46.8,
+   "B": 100.0,
+   "C": 35.2,
+   "D": 89.6,
+   "E": 62.5,
+   "F": 28.7
+  },
+  {
+   "month": "2021-10",
+   "A": 48.4,
+   "B": 100.0,
+   "C": 34.9,
+   "D": 89.0,
+   "E": 64.9,
+   "F": 28.7
+  },
+  {
+   "month": "2021-11",
+   "A": 50.3,
+   "B": 100.0,
+   "C": 33.1,
+   "D": 90.5,
+   "E": 63.6,
+   "F": 28.7
+  },
+  {
+   "month": "2021-12",
+   "A": 50.0,
+   "B": 99.8,
+   "C": 33.4,
+   "D": 91.4,
+   "E": 67.0,
+   "F": 17.1
+  },
+  {
+   "month": "2022-01",
+   "A": 50.6,
+   "B": 99.8,
+   "C": 30.3,
+   "D": 91.9,
+   "E": 69.9,
+   "F": 17.1
+  },
+  {
+   "month": "2022-02",
+   "A": 50.6,
+   "B": 99.8,
+   "C": 27.0,
+   "D": 91.8,
+   "E": 73.7,
+   "F": 17.1
+  },
+  {
+   "month": "2022-03",
+   "A": 50.4,
+   "B": 100.0,
+   "C": 28.0,
+   "D": 83.9,
+   "E": 76.8,
+   "F": 14.8
+  },
+  {
+   "month": "2022-04",
+   "A": 48.9,
+   "B": 100.0,
+   "C": 28.2,
+   "D": 83.9,
+   "E": 71.6,
+   "F": 14.8
+  },
+  {
+   "month": "2022-05",
+   "A": 47.8,
+   "B": 100.0,
+   "C": 18.5,
+   "D": 82.2,
+   "E": 68.4,
+   "F": 14.8
+  },
+  {
+   "month": "2022-06",
+   "A": 44.9,
+   "B": 98.5,
+   "C": 15.9,
+   "D": 78.4,
+   "E": 68.2,
+   "F": 23.2
+  },
+  {
+   "month": "2022-07",
+   "A": 41.5,
+   "B": 98.5,
+   "C": 18.2,
+   "D": 78.3,
+   "E": 66.9,
+   "F": 23.2
+  },
+  {
+   "month": "2022-08",
+   "A": 41.4,
+   "B": 98.5,
+   "C": 20.8,
+   "D": 75.0,
+   "E": 64.4,
+   "F": 23.2
+  },
+  {
+   "month": "2022-09",
+   "A": 40.8,
+   "B": 97.8,
+   "C": 16.0,
+   "D": 73.1,
+   "E": 66.0,
+   "F": 24.5
+  },
+  {
+   "month": "2022-10",
+   "A": 40.3,
+   "B": 97.8,
+   "C": 17.3,
+   "D": 70.1,
+   "E": 64.5,
+   "F": 24.5
+  },
+  {
+   "month": "2022-11",
+   "A": 40.1,
+   "B": 97.8,
+   "C": 20.4,
+   "D": 69.2,
+   "E": 64.4,
+   "F": 24.5
+  },
+  {
+   "month": "2022-12",
+   "A": 37.9,
+   "B": 96.5,
+   "C": 20.4,
+   "D": 68.4,
+   "E": 60.8,
+   "F": 31.1
+  },
+  {
+   "month": "2023-01",
+   "A": 36.2,
+   "B": 96.5,
+   "C": 21.9,
+   "D": 68.3,
+   "E": 58.7,
+   "F": 31.1
+  },
+  {
+   "month": "2023-02",
+   "A": 36.2,
+   "B": 96.5,
+   "C": 21.0,
+   "D": 67.9,
+   "E": 58.7,
+   "F": 31.1
+  },
+  {
+   "month": "2023-03",
+   "A": 36.0,
+   "B": 97.0,
+   "C": 18.9,
+   "D": 67.4,
+   "E": 64.1,
+   "F": 38.5
+  },
+  {
+   "month": "2023-04",
+   "A": 36.5,
+   "B": 97.0,
+   "C": 24.2,
+   "D": 66.9,
+   "E": 60.7,
+   "F": 38.5
+  },
+  {
+   "month": "2023-05",
+   "A": 32.7,
+   "B": 97.0,
+   "C": 22.6,
+   "D": 66.5,
+   "E": 62.5,
+   "F": 38.5
+  },
+  {
+   "month": "2023-06",
+   "A": 20.5,
+   "B": 96.9,
+   "C": 26.8,
+   "D": 66.4,
+   "E": 63.6,
+   "F": 45.5
+  },
+  {
+   "month": "2023-07",
+   "A": 20.5,
+   "B": 96.9,
+   "C": 31.4,
+   "D": 65.2,
+   "E": 62.1,
+   "F": 45.5
+  },
+  {
+   "month": "2023-08",
+   "A": 22.2,
+   "B": 96.9,
+   "C": 30.6,
+   "D": 63.1,
+   "E": 64.7,
+   "F": 45.5
+  },
+  {
+   "month": "2023-09",
+   "A": 20.6,
+   "B": 97.2,
+   "C": 35.3,
+   "D": 62.2,
+   "E": 64.3,
+   "F": 52.0
+  },
+  {
+   "month": "2023-10",
+   "A": 21.3,
+   "B": 97.2,
+   "C": 30.8,
+   "D": 62.4,
+   "E": 66.8,
+   "F": 52.0
+  },
+  {
+   "month": "2023-11",
+   "A": 20.2,
+   "B": 97.2,
+   "C": 34.9,
+   "D": 62.0,
+   "E": 64.7,
+   "F": 52.0
+  },
+  {
+   "month": "2023-12",
+   "A": 22.0,
+   "B": 96.7,
+   "C": 41.8,
+   "D": 61.6,
+   "E": 61.3,
+   "F": 46.8
+  },
+  {
+   "month": "2024-01",
+   "A": 21.4,
+   "B": 96.7,
+   "C": 41.3,
+   "D": 61.3,
+   "E": 61.5,
+   "F": 46.8
+  },
+  {
+   "month": "2024-02",
+   "A": 21.4,
+   "B": 96.7,
+   "C": 43.4,
+   "D": 61.3,
+   "E": 61.7,
+   "F": 46.8
+  },
+  {
+   "month": "2024-03",
+   "A": 21.0,
+   "B": 96.9,
+   "C": 45.9,
+   "D": 61.7,
+   "E": 60.5,
+   "F": 42.6
+  },
+  {
+   "month": "2024-04",
+   "A": 22.2,
+   "B": 96.9,
+   "C": 45.0,
+   "D": 61.6,
+   "E": 61.4,
+   "F": 42.6
+  },
+  {
+   "month": "2024-05",
+   "A": 22.2,
+   "B": 96.9,
+   "C": 45.7,
+   "D": 61.2,
+   "E": 61.9,
+   "F": 42.6
+  },
+  {
+   "month": "2024-06",
+   "A": 28.1,
+   "B": 96.9,
+   "C": 45.4,
+   "D": 60.9,
+   "E": 60.6,
+   "F": 42.4
+  },
+  {
+   "month": "2024-07",
+   "A": 27.7,
+   "B": 96.9,
+   "C": 46.3,
+   "D": 60.8,
+   "E": 60.8,
+   "F": 42.4
+  },
+  {
+   "month": "2024-08",
+   "A": 29.6,
+   "B": 96.9,
+   "C": 45.5,
+   "D": 60.8,
+   "E": 62.8,
+   "F": 42.4
+  },
+  {
+   "month": "2024-09",
+   "A": 27.2,
+   "B": 95.6,
+   "C": 47.3,
+   "D": 63.5,
+   "E": 58.8,
+   "F": 48.0
+  },
+  {
+   "month": "2024-10",
+   "A": 29.0,
+   "B": 95.6,
+   "C": 48.8,
+   "D": 63.5,
+   "E": 60.5,
+   "F": 48.0
+  },
+  {
+   "month": "2024-11",
+   "A": 28.8,
+   "B": 95.6,
+   "C": 50.3,
+   "D": 64.0,
+   "E": 57.8,
+   "F": 48.0
+  },
+  {
+   "month": "2024-12",
+   "A": 31.2,
+   "B": 96.2,
+   "C": 49.7,
+   "D": 64.6,
+   "E": 57.1,
+   "F": 60.3
+  },
+  {
+   "month": "2025-01",
+   "A": 32.8,
+   "B": 96.2,
+   "C": 50.9,
+   "D": 64.6,
+   "E": 58.9,
+   "F": 60.3
+  },
+  {
+   "month": "2025-02",
+   "A": 32.8,
+   "B": 96.2,
+   "C": 50.1,
+   "D": 64.6,
+   "E": 58.7,
+   "F": 60.3
+  },
+  {
+   "month": "2025-03",
+   "A": 33.1,
+   "B": 96.5,
+   "C": 48.1,
+   "D": 64.7,
+   "E": 55.1,
+   "F": 57.2
+  },
+  {
+   "month": "2025-04",
+   "A": 32.8,
+   "B": 96.5,
+   "C": 41.3,
+   "D": 64.1,
+   "E": 57.5,
+   "F": 57.2
+  },
+  {
+   "month": "2025-05",
+   "A": 31.5,
+   "B": 96.5,
+   "C": 44.6,
+   "D": 64.3,
+   "E": 57.9,
+   "F": 57.2
+  },
+  {
+   "month": "2025-06",
+   "A": 40.1,
+   "B": 95.3,
+   "C": 47.8,
+   "D": 64.4,
+   "E": 54.0,
+   "F": 66.1
+  },
+  {
+   "month": "2025-07",
+   "A": 46.4,
+   "B": 95.3,
+   "C": 49.9,
+   "D": 64.4,
+   "E": 54.4,
+   "F": 66.1
+  },
+  {
+   "month": "2025-08",
+   "A": 47.0,
+   "B": 95.3,
+   "C": 49.5,
+   "D": 64.4,
+   "E": 54.7,
+   "F": 66.1
+  },
+  {
+   "month": "2025-09",
+   "A": 47.1,
+   "B": 95.9,
+   "C": 50.5,
+   "D": 64.6,
+   "E": 52.6,
+   "F": 72.8
+  },
+  {
+   "month": "2025-10",
+   "A": 48.2,
+   "B": 95.9,
+   "C": 49.4,
+   "D": 63.5,
+   "E": 52.4,
+   "F": 72.8
+  },
+  {
+   "month": "2025-11",
+   "A": 48.8,
+   "B": 95.9,
+   "C": 46.8,
+   "D": 63.6,
+   "E": 51.3,
+   "F": 72.8
+  },
+  {
+   "month": "2025-12",
+   "A": 46.5,
+   "B": 95.5,
+   "C": 49.2,
+   "D": 65.0,
+   "E": 52.5,
+   "F": 76.7
+  },
+  {
+   "month": "2026-01",
+   "A": 46.3,
+   "B": 95.5,
+   "C": 50.1,
+   "D": 65.2,
+   "E": 52.0,
+   "F": 76.7
+  },
+  {
+   "month": "2026-02",
+   "A": 46.3,
+   "B": 95.5,
+   "C": 48.9,
+   "D": 65.2,
+   "E": 51.3,
+   "F": 76.7
+  },
+  {
+   "month": "2026-03",
+   "A": 44.9,
+   "B": 95.5,
+   "C": 46.8,
+   "D": 65.6,
+   "E": 50.7,
+   "F": 83.1
+  },
+  {
+   "month": "2026-04",
+   "A": 46.1,
+   "B": 95.5,
+   "C": 49.8,
+   "D": 66.6,
+   "E": 53.0,
+   "F": 83.1
+  },
+  {
+   "month": "2026-05",
+   "A": 47.4,
+   "B": 95.5,
+   "C": 50.7,
+   "D": 66.8,
+   "E": 56.7,
+   "F": 83.1
+  },
+  {
+   "month": "2026-06",
+   "A": 48.2,
+   "B": 94.5,
+   "C": 50.9,
+   "D": 67.1,
+   "E": 57.4,
+   "F": 87.5
+  },
+  {
+   "month": "2026-07",
+   "A": 48.2,
+   "B": 94.5,
+   "C": 50.3,
+   "D": 66.3,
+   "E": 57.1,
+   "F": 87.5
+  },
+  {
+   "month": "2026-08",
+   "A": 47.8,
+   "B": 94.5,
+   "C": 51.0,
+   "D": 66.0,
+   "E": 57.1,
+   "F": 87.5
+  },
+  {
+   "month": "2026-09",
+   "A": 48.3,
+   "B": 95.0,
+   "C": 50.0,
+   "D": 65.2,
+   "E": 58.6,
+   "F": 89.4
+  }
+ ],
+ "today": {
+  "score": 68.9,
+  "class": "SEVERE"
+ },
+ "today_pctile": 82,
+ "pctile_from": "2001-06",
+ "share_severe": 57,
+ "bands": {
+  "mild_below": 35,
+  "severe_above": 60
+ },
+ "recessions": [
+  {
+   "start": "1990-07",
+   "end": "1991-03",
+   "exogenous": false
+  },
+  {
+   "start": "2001-03",
+   "end": "2001-11",
+   "exogenous": false
+  },
+  {
+   "start": "2007-12",
+   "end": "2009-06",
+   "exogenous": false
+  },
+  {
+   "start": "2020-02",
+   "end": "2020-04",
+   "exogenous": true
+  }
+ ],
+ "analogs": {
+  "recession_starts": [
+   {
+    "peak": "1990-07",
+    "trough": "1991-03",
+    "reading": 60.9,
+    "class": "SEVERE",
+    "live": 14,
+    "total": 23,
+    "months": 8,
+    "unemployment_rise_pp": 2.3,
+    "real_gdp_pct": -1.4,
+    "exogenous": false
+   },
+   {
+    "peak": "2001-03",
+    "trough": "2001-11",
+    "reading": 67.6,
+    "class": "SEVERE",
+    "live": 17,
+    "total": 23,
+    "months": 8,
+    "unemployment_rise_pp": 2.0,
+    "real_gdp_pct": -0.4,
+    "exogenous": false
+   },
+   {
+    "peak": "2007-12",
+    "trough": "2009-06",
+    "reading": 70.7,
+    "class": "SEVERE",
+    "live": 20,
+    "total": 23,
+    "months": 18,
+    "unemployment_rise_pp": 5.0,
+    "real_gdp_pct": -3.8,
+    "exogenous": false
+   },
+   {
+    "peak": "2020-02",
+    "trough": "2020-04",
+    "reading": 57.3,
+    "class": "MODERATE",
+    "live": 23,
+    "total": 23,
+    "months": 2,
+    "unemployment_rise_pp": 11.3,
+    "real_gdp_pct": -9.1,
+    "exogenous": true
+   }
+  ],
+  "nearest": [
+   {
+    "from": "2001-06",
+    "to": "2002-02",
+    "months": 9,
+    "mean_reading": 71.4,
+    "already_in_recession": true,
+    "recession_within_24m": null,
+    "unemployment_chg_24m": 1.8
+   },
+   {
+    "from": "2007-03",
+    "to": "2010-02",
+    "months": 32,
+    "mean_reading": 70.0,
+    "already_in_recession": false,
+    "recession_within_24m": "2007-12",
+    "unemployment_chg_24m": 4.3
+   },
+   {
+    "from": "2012-09",
+    "to": "2015-06",
+    "months": 30,
+    "mean_reading": 68.9,
+    "already_in_recession": false,
+    "recession_within_24m": null,
+    "unemployment_chg_24m": -1.9
+   }
+  ],
+  "band": 5.0
+ },
+ "method": "Each point re-runs today's index code on the data published by that month (current vintage; ranks use only history up to then, from 1976). Inputs enter once they have 10 years of history, so the early line uses fewer inputs; it is not drawn below half. Last point is today's live reading."
+}
