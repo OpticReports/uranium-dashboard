@@ -23,8 +23,14 @@ def test_exec_target_shape_and_states():
 
         # inject a pending on S3 and a trailed position on S4
         s3, s4 = ENGINE.books["S3"], ENGINE.books["S4"]
-        old3, old4 = (s3.pending, s3.position), (s4.pending, s4.position)
+        old3 = (s3.pending, s3.position, s3.halted)
+        old4 = (s4.pending, s4.position, s4.halted)
         try:
+            # HERMETIC: ENGINE is process-global and other tests in the suite
+            # leave positions/halts on it. Set every field the state mapping
+            # reads, not just the ones this test injects (2026-09-30).
+            s3.position, s3.halted = None, False
+            s4.pending, s4.halted = None, False
             s3.pending = Pending(side="L", limit=59_000.0,
                                  signal_ts=1_700_000_000, atr_signal=800.0)
             s4.position = Position(side="S", entry_ts=1_700_000_000,
@@ -42,8 +48,8 @@ def test_exec_target_shape_and_states():
             assert tr["state"] == "S"
             assert tr["position"]["stop"] == 63_210.12   # trail wins over stop_price
         finally:
-            s3.pending, s3.position = old3
-            s4.pending, s4.position = old4
+            s3.pending, s3.position, s3.halted = old3
+            s4.pending, s4.position, s4.halted = old4
 
 
 def test_exec_target_token_auth():
