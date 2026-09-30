@@ -47,6 +47,40 @@ def _rolling_corr(a: list[float], b: list[float], win: int = 60) -> list[float |
     return out
 
 
+FTQ_WINDOWS = (20, 60, 120)
+
+
+def flight_to_quality_windows(dates: list, sp_ret: list[float],
+                              bond_ret: list[float]) -> dict:
+    """Counts behind the flight-to-quality fraction, per trailing window of
+    trading days: bid / down days, the window's dates, and where the current
+    fraction ranks in that window's own history (share of past readings at or
+    below it). A 20-day window holds ~10 down days, so one day moves it ~0.1;
+    the 60/120-day windows say whether a reading is noise."""
+    out = {"windows": [], "history_from": dates[0].isoformat() if dates else None}
+    downs = [br for s_, br in zip(sp_ret, bond_ret) if s_ < 0]
+    out["base_rate"] = round(sum(1 for br in downs if br > 0) / len(downs), 3) if downs else None
+    for win in FTQ_WINDOWS:
+        if len(dates) < win:
+            continue
+        hist = []
+        for i in range(win - 1, len(dates)):
+            d = [br for s_, br in zip(sp_ret[i - win + 1:i + 1], bond_ret[i - win + 1:i + 1])
+                 if s_ < 0]
+            if d:
+                hist.append((sum(1 for br in d if br > 0), len(d)))
+        if not hist:
+            continue
+        bid, down = hist[-1]
+        frac = bid / down
+        rank = sum(1 for b, n in hist if b / n <= frac) / len(hist)
+        out["windows"].append({
+            "days": win, "bid": bid, "down": down,
+            "start": dates[-win].isoformat(), "end": dates[-1].isoformat(),
+            "pctile": round(100 * rank, 1)})
+    return out
+
+
 def build_crossasset_metrics(bundle: dict[str, tuple[list, list]]) -> list[MetricResult]:
     out: list[MetricResult] = []
     sp = bundle.get("sp500", ([], []))
@@ -67,10 +101,13 @@ def build_crossasset_metrics(bundle: dict[str, tuple[list, list]]) -> list[Metri
         downs = [(s, br) for s, br in zip(sp_ret[lo:i + 1], bond_ret[lo:i + 1]) if s < 0]
         ftq_dates.append(dates[i])
         ftq_vals.append(round(sum(1 for _, br in downs if br > 0) / len(downs), 2) if downs else None)
-    out.append(simple_metric(
+    ftq = simple_metric(
         "crossasset.flight_to_quality", "H", "Flight-to-quality (20d)", ftq_dates, ftq_vals,
         unit="frac", source="FRED:SP500,DGS10",
-        note="Share of equity down-days with a Treasury bid. Falling = money not rotating stocks->bonds."))
+        note=("Share of S&P 500 down days on which the 10y yield fell (a Treasury bid). "
+              "Status uses the 20-day window; the longer windows show whether it is noise."))
+    ftq.extra = flight_to_quality_windows(dates, sp_ret, bond_ret)
+    out.append(ftq)
 
     hy = bundle.get("hy_oas", ([], []))
     out.append(simple_metric(
