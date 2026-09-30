@@ -199,6 +199,13 @@ def _fetch_bundle_uncached(start: str) -> dict[str, tuple[list[date], list[float
     bundle["ofr_fsi"] = fetch_fsi()
     bundle["cot_net_short"] = fetch_lev_net_short()
     bundle.update(fetch_margin_stats())
+    from .household_debt import extend_household_debt
+    before = bundle.get("hh_debt_gdp", ([], []))
+    bundle["hh_debt_gdp"] = extend_household_debt(
+        before, bundle.get("hh_debt_z1", ([], [])), bundle.get("gdp", ([], [])))
+    if before[0] and bundle["hh_debt_gdp"][0][0] == before[0][0]:
+        logger.warning("household debt/GDP: Z.1 back-extension unavailable (CMDEBT or GDP "
+                       "missing) — severity ranks it against 2008+ only")
     return bundle
 
 

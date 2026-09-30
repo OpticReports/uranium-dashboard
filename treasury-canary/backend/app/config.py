@@ -112,7 +112,9 @@ FRED_FOREIGN: dict[str, str] = {
 # block; several blocks also reuse series already in the bundle.
 FRED_SEVERITY: dict[str, str] = {
     # A. private leverage excess
-    "hh_debt_gdp": "HDTGPDUSQ163N",   # household debt / GDP (BIS)
+    "hh_debt_gdp": "HDTGPDUSQ163N",   # household debt / GDP (starts 2005;
+                                      # extended back with Z.1, sources/household_debt.py)
+    "hh_debt_z1": "CMDEBT",           # Z.1 household+nonprofit debt, $mm (the back-extension)
     "priv_credit": "CRDQUSAPABIS",    # total private nonfin credit, $ (BIS)
     "corp_debt": "BCNSDODNS",         # nonfin corporate debt securities+loans, $
     "dsr": "TDSP",                     # household debt-service ratio

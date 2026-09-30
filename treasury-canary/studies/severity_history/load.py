@@ -30,7 +30,7 @@ def fred(sid: str, start: date = START):
     return d, v
 
 
-def bundle() -> dict:
+def bundle(extend: bool = True) -> dict:
     from app.sources.finra_margin import parse_margin_workbook
     from app.sources.ice_reference import splice
     out = {}
@@ -42,4 +42,7 @@ def bundle() -> dict:
         elif os.path.exists(path):
             out[key] = fred(sid)
     out["margin_debit"] = parse_margin_workbook(os.path.join(DATA, "finra_margin.xlsx"))["margin_debit"]
+    if extend:   # exactly as fetch_bundle does
+        from app.sources.household_debt import extend_household_debt
+        out["hh_debt_gdp"] = extend_household_debt(out["hh_debt_gdp"], out["hh_debt_z1"], out["gdp"])
     return out

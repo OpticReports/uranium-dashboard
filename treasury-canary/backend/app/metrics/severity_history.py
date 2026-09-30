@@ -183,9 +183,9 @@ def history_payload(bundle: dict, *, end: date | None = None) -> dict:
         "method": ("Each point re-runs today's index code on the data published by that "
                    "month (current vintage; ranks use only history up to then, from 1976). "
                    "Inputs enter once they have 10 years of history, so the early line uses "
-                   "fewer inputs; it is not drawn below half. Household debt/GDP and debt "
-                   "service start in 2005 on FRED and enter only in 2016, so every reading "
-                   "before then, all recession-start readings included, lacks the index's "
-                   "main predictor. The line's last point is the rebuilt current month "
+                   "fewer inputs; it is not drawn below half. Household debt/GDP is extended "
+                   "back to 1976 with the Fed's Z.1; debt service starts in 2005 on FRED and "
+                   "enters only in 2015, so readings before then (the 1990, 2001 and 2007 "
+                   "recession-start readings included) lack it. The line's last point is the rebuilt current month "
                    "(lagged inputs); the dot is today's live reading."),
     }
