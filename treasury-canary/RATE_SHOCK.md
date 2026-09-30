@@ -5,6 +5,15 @@ how does a rising 20y/30y affect recession odds and stock prices, and are we
 tracking it?" This study answers it with the same discipline as the margin
 work: pre-registered rules, one evaluation, frozen stats, bootstrap evidence.
 
+> **ERRATUM (2026-09-30):** the SPIKE recession figure (44% vs 21%, "roughly
+> doubled") does not survive a per-alert re-test. Counted the way the live
+> alert fires, with outcomes a real-time reader could use, 10 of 33 crossings
+> were followed by a recession within 12 months (30% vs 20%, p = 0.11), all in
+> 1979-1990 and none of the 17 since; ex-1979-82 the ratio is 0.53, and the
+> effect cannot be separated from the yield curve. The 44% counted overlapping
+> weeks plus 2009 weeks after the recession was announced. See
+> `studies/rate-spike-recession.md`. The stock-return findings are unaffected.
+
 ## Method (pre-registered before any forward return was computed)
 
 - Long yield: DGS30 (1977-02+) spliced with DGS20 across the 2002-02..2006-02

@@ -57,6 +57,8 @@ _TITLE = {
     "curve_new_inversion": "Yield curve inverted",
     "rate_path_shift": "Fed rate odds moved",
     "cycle_phase_change": "Business cycle changed phase",
+    "rate_spike": "30-year yield crossed the +75bp spike line",
+    "rate_spike_approach": "30-year yield approaching the spike line",
 }
 _LEVEL = {"WARN": "heads-up", "RED": "alert", "CRITICAL": "critical"}
 

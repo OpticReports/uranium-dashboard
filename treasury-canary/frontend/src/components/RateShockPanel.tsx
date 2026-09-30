@@ -3,6 +3,7 @@ import {
   CartesianGrid,
   ComposedChart,
   Line,
+  ReferenceArea,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -176,13 +177,25 @@ export default function RateShockPanel() {
                         : [`${Number(v).toFixed(2)}%`, "30y yield"]
                     }
                   />
+                  {/* approach band: the alert's "getting close" zone. No odds
+                      claim attaches to it (studies/rate-spike-recession.md). */}
+                  {data.thresholds.approach_bp != null && (
+                    <ReferenceArea
+                      yAxisId="bp"
+                      y1={data.thresholds.approach_bp}
+                      y2={data.thresholds.spike_bp}
+                      fill="#fbbf24"
+                      fillOpacity={0.08}
+                      stroke="none"
+                    />
+                  )}
                   <ReferenceLine
                     yAxisId="bp"
                     y={data.thresholds.spike_bp}
                     stroke="#fbbf24"
                     strokeDasharray="5 4"
                     label={{
-                      value: "spike +75bp",
+                      value: data.spike_label ?? "spike +75bp",
                       position: "insideTopRight",
                       style: { fill: "#fbbf24", fontSize: 9 },
                     }}
@@ -224,14 +237,33 @@ export default function RateShockPanel() {
             </div>
           )}
 
+          {data.current.d60_bp != null &&
+            data.current.d60_bp < data.thresholds.spike_bp &&
+            data.current.d60_bp >= (data.thresholds.approach_bp ?? Infinity) && (
+              <p className="mt-2 text-[11px] text-amber-300">
+                Approaching the spike line: {data.current.d60_bp > 0 ? "+" : ""}
+                {data.current.d60_bp}bp of +{data.thresholds.spike_bp}bp. A crossing
+                sends an alert.
+              </p>
+            )}
           <p className="mt-2 text-[10px] leading-relaxed text-slate-500">
             Colored line: 30y yield change over 60 trading days (the shock
-            gauge). Grey: 30y level (right axis). Crossing +75bp = SPIKE
-            (recession odds double to 44% vs 21% baseline; NOT a validated
-            stock-sell signal). Crossing −75bp = PLUNGE (the study's strongest
-            validated equity BUY configuration: 97% of weeks higher 12 months
-            later). Regime from the stock-bond correlation tile decides how a
-            move transmits. {data.note}
+            gauge). Grey: 30y level (right axis). Crossing +75bp = SPIKE and
+            sends an alert; the shaded band below it is the approach zone.
+            {data.spike_recession ? (
+              <>
+                {" "}Recession record per alert since 1977:{" "}
+                {data.spike_recession.hits} of {data.spike_recession.events} were
+                followed by a recession within 12 months (
+                {data.spike_recession.rate_pct}% vs {data.spike_recession.base_pct}%
+                normally), all in {data.spike_recession.hits_window}, none of the{" "}
+                {data.spike_recession.since_1990.events} since — not a reliable
+                recession warning on its own, and not a stock-sell signal.
+              </>
+            ) : null}{" "}
+            Crossing −75bp = PLUNGE (the study's strongest validated equity BUY
+            configuration: 97% of weeks higher 12 months later). Regime from the
+            stock-bond correlation tile decides how a move transmits. {data.note}
           </p>
         </>
       )}

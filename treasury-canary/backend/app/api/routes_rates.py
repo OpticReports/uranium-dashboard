@@ -22,7 +22,59 @@ from ..sources.fred import fetch_bundle
 router = APIRouter(tags=["rates"])
 
 RATE_THRESHOLDS = {"spike_bp": 75.0, "plunge_bp": -75.0, "window_bdays": 60,
-                   "corr_pos": 0.2, "corr_neg": -0.2}
+                   "corr_pos": 0.2, "corr_neg": -0.2,
+                   # alert hysteresis (studies/rate-spike-recession.md, A6):
+                   # WARN fires on a crossing up through +75 and re-arms only
+                   # below +60; the untested "approaching" INFO at +60 carries
+                   # no odds claim and re-arms below +45.
+                   "rearm_bp": 60.0, "approach_bp": 60.0, "approach_rearm_bp": 45.0}
+
+# The recession evidence behind the +75bp line, re-tested 2026-09-30
+# (studies/rate-spike-recession.md, pre-registered, power measured first, two
+# independent verifiers). The unit is THIS alert — the 75/60 state machine on
+# the daily 60-trading-day change — and the outcome is a recession within 12
+# months that a real-time reader could not yet have known about. It REPLACES
+# RATE_SHOCK's "44% vs 21%", which counted overlapping weeks plus 2009 weeks
+# after the recession had been announced, and leaned on the Volcker cluster.
+RATE_SPIKE_RECESSION = {
+    "events": 33, "hits": 10, "rate_pct": 30, "base_pct": 20, "ratio": 1.5,
+    "ci90_pct": [19, 45], "p_one_sided": 0.11,
+    "hits_window": "1979-1990",
+    "since_1990": {"from": "1990-04", "events": 17, "hits": 0},
+    "ex_volcker_ratio": 0.53,
+    "beyond_curve": "inseparable",     # spike term p=0.49 once the curve is in
+    "power_note": "with 6 recessions since 1977 even a true tripling of "
+                  "recession risk after a spike would be confirmed ~1 time in 9",
+}
+
+
+def spike_alert_template(curve_prob_pct: float | None) -> str:
+    """spike_alert_text as a str.format template with {d60} — the event
+    detector fills in the value AT THE CROSSING, not today's."""
+    return spike_alert_text(None, curve_prob_pct)
+
+
+def spike_alert_text(d60_bp: float | None, curve_prob_pct: float | None) -> str:
+    """The words on the phone when the 30y crosses +75bp. Every clause is a
+    measured fact from RATE_SPIKE_RECESSION — no 'odds doubled'. d60_bp=None
+    returns a template with a {d60} field (other braces escaped)."""
+    r = RATE_SPIKE_RECESSION
+    cp = (f" The yield-curve recession model reads {curve_prob_pct:.0f}% for the "
+          f"next 12 months — that is the number to weigh." if curve_prob_pct is not None
+          else "")
+    move = "{d60:+.0f}" if d60_bp is None else f"{d60_bp:+.0f}"
+    return (f"The 30-year yield rose {move}bp in 60 trading days, past the "
+            f"+75bp spike line. History: {r['hits']} of {r['events']} past alerts were "
+            f"followed by a recession within 12 months ({r['rate_pct']}% vs "
+            f"{r['base_pct']}% normally), but all of them in {r['hits_window']}; none "
+            f"of the {r['since_1990']['events']} since. On its own this is not a "
+            f"reliable recession warning.{cp}")
+
+
+def spike_line_label() -> str:
+    r = RATE_SPIKE_RECESSION
+    return (f"spike +75bp · recession followed {r['hits']}/{r['events']} "
+            f"(all pre-1991)")
 
 # Frozen study output. Baseline (all 2,480 weeks): recession within 12m 21%;
 # fwd12m median +12.0% / 79% positive / worst -46.3.
@@ -32,9 +84,13 @@ RATE_BASELINE = {"n": 2480, "rec_12m_pct": 21,
                  "fwd12m": {"median": 12.0, "pct_pos": 79, "worst": -46.3}}
 
 RATE_SHOCK_STATS = {
+    # rec_12m_pct is RATE_SHOCK's week-level ANY12 figure, kept as the frozen
+    # record; the alert and copy use RATE_SPIKE_RECESSION instead.
     "SPIKE": {"n": 151, "episodes": 24, "rec_12m_pct": 44,
               "fwd12m": {"median": 12.1, "pct_pos": 64, "worst": -16.9},
-              "label": "long yield +75bp or more in 60 trading days"},
+              "label": "long yield +75bp or more in 60 trading days",
+              "rec_note": "week-level count; re-tested per alert: 10 of 33, "
+                          "all 1979-1990, none of 17 since"},
     "PLUNGE": {"n": 154, "episodes": 22, "rec_12m_pct": 32,
                "fwd12m": {"median": 22.1, "pct_pos": 97, "worst": -25.0},
                "label": "long yield -75bp or more in 60 trading days"},
@@ -48,8 +104,10 @@ RATE_MATRIX = {
         "POS": {"n": 112, "episodes": 15, "rec_12m_pct": 47,
                 "fwd12m": {"median": 11.5, "pct_pos": 62, "worst": -16.5},
                 "evidence": "NOT significant for stocks (p=0.21): returns near "
-                            "baseline with a milder worst case. The real signal "
-                            "is the recession column: 47% vs 21% baseline."},
+                            "baseline with a milder worst case. The recession "
+                            "column (47%) counts overlapping weeks; re-tested per "
+                            "alert, every recession that followed a spike was in "
+                            "1979-1990 and none of the 17 alerts since."},
         "MIXED": {"n": 32, "episodes": 9, "rec_12m_pct": 28,
                   "fwd12m": {"median": 9.4, "pct_pos": 66, "worst": -16.9},
                   "evidence": "small sample, not significant"},
@@ -134,20 +192,20 @@ def _summary(level, d60_bp, state, regime, cell) -> list[str]:
             f"since 1977): this configuration saw the S&P higher 12 months "
             f"later {f12['pct_pos']}% of the time (median "
             f"{f12['median']:+.1f}%, worst {f12['worst']:+.1f}%) vs baseline "
-            f"79% / +12.0%. A recession began within 12 months after "
-            f"{cell['rec_12m_pct']}% of these weeks, vs 21% of all weeks. "
-            f"Evidence: {cell['evidence']}.")
+            f"79% / +12.0%. Evidence: {cell['evidence']}.")
+    r = RATE_SPIKE_RECESSION
     out.append(
-        "The folk model — 'yields rise, so sell stocks and buy bonds' — is "
-        "only half true. Rate SPIKES roughly double forward recession odds "
-        "(44% vs 21%) but were NOT a reliable stock-sell signal: 12-month "
-        "returns after spikes ran near baseline, with milder worst cases, "
-        "because crashes historically started from calm-rate weeks, not "
-        "spike weeks. The validated signal points the other way: yield "
-        "PLUNGES — rate relief, especially in the no-hedge regime — "
-        "preceded rising stocks almost without exception. Watch spikes for "
-        "recession risk; watch plunges for equity opportunity; and watch "
-        "the correlation regime to know which transmission applies.")
+        "The folk model — 'yields rise, so sell stocks and buy bonds' — does "
+        "not hold up. SPIKES were not a reliable stock-sell signal: 12-month "
+        "returns after them ran near baseline, with milder worst cases. Nor "
+        "are they a reliable recession signal on their own: re-tested alert "
+        f"by alert, {r['hits']} of {r['events']} were followed by a recession "
+        f"within 12 months ({r['rate_pct']}% vs {r['base_pct']}% normally), all "
+        f"in {r['hits_window']}, none of the {r['since_1990']['events']} since, and "
+        "the effect can't be separated from what the yield curve already says. "
+        "The validated signal points the other way: yield PLUNGES — rate "
+        "relief, especially in the no-hedge regime — preceded rising stocks "
+        "almost without exception.")
     return out
 
 
@@ -191,6 +249,8 @@ def rates_shock():
         "shock_stats": RATE_SHOCK_STATS,
         "matrix": RATE_MATRIX,
         "thresholds": RATE_THRESHOLDS,
+        "spike_recession": RATE_SPIKE_RECESSION,
+        "spike_label": spike_line_label(),
         "note": "Frozen pre-registered study, 1977-2026 (RATE_SHOCK.md): "
                 "weekly obs overlap; episode counts are the honest n; "
                 "bootstrap evidence per cell with BH-FDR over 9 cells. Long "

@@ -639,6 +639,22 @@ export interface RateShock {
   shock_stats: Record<RateShockState, RateShockCell & { label: string }>;
   matrix: Record<RateShockState, Record<CorrRegime, RateShockCell>>;
   thresholds: Record<string, number>;
+  /** re-tested per-alert recession record (studies/rate-spike-recession.md) */
+  spike_recession?: {
+    events: number;
+    hits: number;
+    rate_pct: number;
+    base_pct: number;
+    ratio: number;
+    ci90_pct: [number, number];
+    p_one_sided: number;
+    hits_window: string;
+    since_1990: { from: string; events: number; hits: number };
+    ex_volcker_ratio: number;
+    beyond_curve: string;
+    power_note: string;
+  };
+  spike_label?: string;
   note: string;
 }
 

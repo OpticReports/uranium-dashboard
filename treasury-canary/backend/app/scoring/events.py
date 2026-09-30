@@ -126,6 +126,8 @@ def detect_rate_spike(dates: list[date], d60_bp: list[float | None], asof: date,
         elif approach_armed and approach_bp <= v < spike_bp:
             last_approach = (d, v)
             approach_armed = False
+    if last_spike and last_approach and last_approach[0] <= last_spike[0]:
+        last_approach = None                # superseded by the spike itself
     out: list[Event] = []
     for kind, hit, sev, text in (("rate_spike", last_spike, spike_severity, spike_text),
                                  ("rate_spike_approach", last_approach,

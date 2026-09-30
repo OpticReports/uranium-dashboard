@@ -204,6 +204,39 @@ def run_refresh(session: Session) -> dict:
     except Exception as exc:  # noqa: BLE001
         logger.warning("cycle phase check failed: %s", exc)
 
+    # --- long-yield spike line (+75bp / 60 trading days) --------------------
+    # studies/rate-spike-recession.md: the words carry the measured record
+    # (10 of 33, all 1979-1990) and quote the curve model's probability, not
+    # "recession odds doubled". Stateless replay -> once per crossing.
+    try:
+        from ..api.routes_rates import RATE_THRESHOLDS as RT
+        from ..api.routes_rates import spike_alert_template
+        from ..scoring.events import detect_rate_spike
+        ld, lv = bundle.get("30y", ([], []))
+        pts = [(d, v) for d, v in zip(ld, lv) if v is not None]
+        w = int(RT["window_bdays"])
+        sd = [pts[i][0] for i in range(w, len(pts))]
+        sv = [round((pts[i][1] - pts[i - w][1]) * 100) for i in range(w, len(pts))]
+        curve_pct = None
+        try:
+            from ..metrics.recession_model import cached_models_and_spread, predict
+            _m, _sp = cached_models_and_spread()
+            if _m.get(12) and _sp is not None:
+                curve_pct = predict(_m[12]["b0"], _m[12]["b1"], _m[12]["cov"],
+                                    _sp)["probability_pct"]
+        except Exception:  # noqa: BLE001
+            pass
+        new_events.extend(detect_rate_spike(
+            sd, sv, today, spike_bp=RT["spike_bp"], rearm_bp=RT["rearm_bp"],
+            approach_bp=RT["approach_bp"], approach_rearm_bp=RT["approach_rearm_bp"],
+            recent_days=10, spike_severity="WARN", approach_severity="INFO",
+            spike_text=spike_alert_template(curve_pct),
+            approach_text=("The 30-year yield is up {d60:+.0f}bp in 60 trading days "
+                           "(crossed on {date}), approaching the +75bp spike line. "
+                           "No odds claim attaches to this level.")))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("rate spike check failed: %s", exc)
+
     # --- Duration Squeeze Radar: condition flips + calendar pre-briefs -------
     # Pre-registered scorecard (docs/research/tlt-squeeze-2026, spec v2): a
     # TRIGGER condition flipping to MET is the event the card exists for ->
