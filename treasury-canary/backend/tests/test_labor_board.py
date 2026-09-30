@@ -76,7 +76,7 @@ def test_frozen_record_equals_the_study_output():
     assert best["hits"] == a2["hits"] >= rec["hits"]
     assert best["false_alarms_1972_2020"] == len(a2["false_alarms"])
     assert best["fired_2024"] in a2["final_2021_2024"]
-    assert f"{best['hits']} of 7" in rec["text"]
+    assert f"{best['hits']} of 7 vs {rec['hits']}" in rec["text"] and "did better" in rec["text"]
     # erratum: 1981 is LATE under spec A3 (window must lie INSIDE a spell)
     p81 = next(x for x in res["composite"]["per_peak"] if x["peak"] == "1981-07")
     assert p81["outcome"] == "LATE" and "late for 1973 and 1981" in rec["text"]
@@ -85,6 +85,7 @@ def test_frozen_record_equals_the_study_output():
 def test_board_payload_on_frozen_data():
     series = {k: _load(sid) for k, sid in RL.BOARD_SERIES.items()}
     p = RL.board_payload(series)
+    json.dumps(p)                                   # the route must serialise (no lambdas)
     assert p["month"] == "2026-08"                  # evaluated on the jobs-report grid
     assert p["state"] == "CLEAR" and p["n_lit"] == 0 and p["missing"] == []
     assert p["c1_source"] == "SAHMREALTIME"
@@ -97,7 +98,9 @@ def test_board_payload_on_frozen_data():
     assert "upper bound" in paur["label"].lower()
     assert paur["trend"] == "flat"                  # +0.04 sits inside the dead band
     v = p["strip_verdict"]
-    assert v.startswith("U-3 4.14% vs participation-adjusted 4.58%") and "at most 0.44pp" in v
+    assert v.startswith("U-3 4.14% vs participation-adjusted 4.58%: counting every prime-age")
+    assert "adds at most 0.44pp" in v and "25th percentile" in v
+    assert "slack sits outside the headline" not in v        # U-6 is 3.6pp above U-3
     assert "job-finding rate" in v.split("Better:")[0]          # worse side
     assert "U-6" in v.split("Better:")[1]
 
@@ -121,11 +124,19 @@ def test_missing_rules_never_read_clear():
     a2 = next(r for r in p["rules"] if r["id"] == "A2")
     assert p["state"] == "INCOMPLETE" and a2["stale"] and a2["lit"] is None
     assert a2["month"] == "2026-07"
-    # no real-time Sahm -> C1 from UNRATE, not a dead Board
+    # real-time Sahm missing or a month behind: C1 is MISSING for the CPS
+    # month (never CLEAR for an older month, never swapped for UNRATE)
+    for sahm in (([], []), (series["sahm"][0][:-1], series["sahm"][1][:-1])):
+        s = dict(series)
+        s["sahm"] = sahm
+        p = RL.board_payload(s)
+        assert p["month"] == "2026-08" and p["state"] == "INCOMPLETE"
+        assert p["missing"] == ["C1"] and p["c1_source"] == "SAHMREALTIME"
+    # no jobs-report month at all -> no state, never CLEAR
     s = dict(series)
-    s["sahm"] = ([], [])
+    s["sahm"], s["unrate"] = ([], []), ([], [])
     p = RL.board_payload(s)
-    assert p["state"] == "CLEAR" and "SAHMREALTIME unavailable" in p["c1_source"]
+    assert p["state"] is None and p["month"] is None
 
 
 def test_alert_stands_with_a_rule_missing_and_quotes_the_margin():
@@ -144,7 +155,8 @@ def test_alert_stands_with_a_rule_missing_and_quotes_the_margin():
     assert p["state"] == "ALERT"                     # a missing rule only lowers the count
     ev = RL.board_alert_event(p, date(2024, 9, 6))
     assert ev is not None and "A2 Job losers" in ev.rationale
-    assert "+0.31pp (line 0.3)" in ev.rationale      # the marginal crossing is visible
+    assert "+0.309pp (line 0.3)" in ev.rationale     # the marginal crossing is visible
+    assert "A1 not yet available" in ev.rationale and ev.detail["missing"] == ["A1"]
 
 
 def test_ledger_persists_each_onset_at_first_sight():
@@ -158,6 +170,37 @@ def test_ledger_persists_each_onset_at_first_sight():
     # nothing before the out-of-sample start is ever listed
     series = {k: _load(sid) for k, sid in RL.BOARD_SERIES.items()}
     assert all(r["month"] >= "2026-09" for r in RL.board_payload(series)["ledger"])
+
+
+def test_ledger_logic_on_the_2024_replay(monkeypatch):
+    # the ledger code path, exercised on real onsets: open the window at 2024-01
+    series = {k: _load(sid) for k, sid in RL.BOARD_SERIES.items()}
+    monkeypatch.setattr(RL, "LEDGER_FROM", (2024, 1))
+    got = [(r["month"], r["kind"], r.get("value")) for r in RL.board_payload(series)["ledger"]]
+    assert got == [("2024-07", "C1", 0.53), ("2024-08", "A2", 0.309),
+                   ("2024-08", "ALERT", None), ("2024-08", "B2", 0.52)]
+    monkeypatch.setattr(RL, "LEDGER_FROM", (2024, 8))       # the start month is included
+    got = [(r["month"], r["kind"]) for r in RL.board_payload(series)["ledger"]]
+    assert got == [("2024-08", "A2"), ("2024-08", "ALERT"), ("2024-08", "B2")]
+
+
+def test_live_onsets_are_the_study_onsets():
+    # the live ledger's onset rule reproduces the frozen study's onsets exactly
+    res = json.load(open(os.path.join(ROOT, "studies", "labor_stress", "results.json")))
+    series = {k: _load(sid) for k, sid in RL.BOARD_SERIES.items()}
+    lit = L.lit(L.rule_values(series, sahm_from="unrate"))
+    for rid in L.RULES:
+        ons = [L.ym_str(k) for k in L.onsets(lit[rid]) if (1972, 1) <= k <= (2020, 12)]
+        assert ons == sorted(res["rules"][rid]["onsets_classified"]), rid
+
+
+def test_nei_change_is_suppressed_in_jan_2027_and_ordinals():
+    d = [date(2026, m, 1) for m in range(1, 13)] + [date(2027, 1, 1)]
+    v = [8.07] + [7.6] * 11 + [7.5]
+    nei = next(x for x in L.strip({"nei": (d, v)}) if x["key"] == "nei")
+    assert nei["chg_12m"] is None and nei["trend"] is None   # not "better" on an artefact
+    assert [L._ordinal(n) for n in (1, 2, 3, 11, 12, 13, 21, 22, 25, 101)] == \
+        ["1st", "2nd", "3rd", "11th", "12th", "13th", "21st", "22nd", "25th", "101st"]
 
 
 def test_alert_fires_only_on_a_new_episode():

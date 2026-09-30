@@ -44,10 +44,12 @@ def sahm_series():
         "series": series[::step], "recessions": bands, "trigger": SAHM_TRIGGER,
         "current": latest, "triggered": (latest is not None and latest >= SAHM_TRIGGER),
         "source": source,
-        "note": "Sahm gap = 3mo-avg unemployment minus its 12mo low. On current-vintage data "
-                ">=0.50 lit within 3 months of the start of 5 of 7 recessions since 1972 "
-                "(late in 1973 and 1981), and also in 2003 and Jul-2024 without one "
-                "(studies/labor-stress-board.md).",
+        "note": "Sahm gap = 3mo-avg unemployment minus its 12mo low. The real-time series "
+                "plotted here: >=0.50 lit within 3 months after the start of 3 of 7 "
+                "recessions since 1972 (later for 1973, 1981, 1990 and 2007), and without "
+                "one in 1976 and Jul-2024. On revised data: 5 of 7, and also 2003 and "
+                "2024 without one (studies/labor-stress-board.md). A confirmation "
+                "signal, not a lead.",
     }
 
 
@@ -95,28 +97,30 @@ BOARD_RECORD = {
              "a median 2 months before the Sahm rule where both caught one. It was "
              "late for 1973 and 1981. It never started an alert without a recession "
              "nearby 1972-2020 — but it did in Aug 2024, with no recession. Job losers "
-             "alone, one of its six rules, did as well (6 of 7, same Aug-2024 misfire). "
-             "A confirmation signal, not an early warning."),
+             "alone, one of its six rules, did better on hits (6 of 7 vs 5, 0 false "
+             "alarms, same Aug-2024 misfire). A confirmation signal, not an early "
+             "warning."),
 }
 LEDGER_FROM = (2026, 9)     # out-of-sample begins with this data month (spec v1 A1)
 
 
 def board_payload(series: dict, *, sahm_from: str = "series") -> dict:
     """Pure: raw FRED observations -> the panel payload (testable offline).
-    Evaluated on the monthly jobs-report grid: the Board's month is the last
-    month the slack leg is observed (weekly legs map to that grid, spec A6).
-    A rule with no value for that month is MISSING, never counted as unlit:
-    the state is then INCOMPLETE, not CLEAR (a missing rule can only lower
-    the count, so an ALERT on the rules present stands)."""
+    Evaluated on the monthly jobs-report grid: the Board's month is the
+    latest CPS month (UNRATE, or C1 if later); weekly legs map to that grid
+    (spec A6). A rule with no value for that month — empty, all-None or
+    lagging, SAHMREALTIME included — is MISSING, never counted as unlit: the
+    state is then INCOMPLETE, not CLEAR (a missing rule can only lower the
+    count, so an ALERT on the rules present stands). No rule is ever swapped
+    for a different instrument."""
     from ..metrics import labor_stress as L
     c1_source = "SAHMREALTIME" if sahm_from == "series" else "UNRATE (current vintage)"
-    if sahm_from == "series" and not any(v is not None for v in series.get("sahm", ([], []))[1]):
-        sahm_from, c1_source = "unrate", "UNRATE (SAHMREALTIME unavailable)"
     vals = L.rule_values(series, sahm_from=sahm_from)
     lit = L.lit(vals)
     states = L.board(lit)
-    grid = sorted(k for k in states if k in vals.get("C1", {}))
-    months = grid[-BOARD_CHART_MONTHS:]
+    ud, uv = series.get("unrate") or ([], [])
+    cps = sorted(set(L.monthly(ud, uv)) | set(vals.get("C1", {})))
+    months = cps[-BOARD_CHART_MONTHS:]
     last = months[-1] if months else None
     missing = [rid for rid in L.RULES if last is None or last not in vals.get(rid, {})]
     rules = []
@@ -135,7 +139,7 @@ def board_payload(series: dict, *, sahm_from: str = "series") -> dict:
         })
     history = []
     for k in months:
-        row = {"month": L.ym_str(k), "state": states[k]}
+        row = {"month": L.ym_str(k), "state": states.get(k)}
         for rid, spec in L.RULES.items():
             x = vals.get(rid, {}).get(k)
             row[rid] = round(x / spec["threshold"], 3) if x is not None else None
@@ -145,10 +149,13 @@ def board_payload(series: dict, *, sahm_from: str = "series") -> dict:
     # observed unlit months first). The first-sight record is persisted by
     # board_ledger_events -> EventLog, so R2 scores what was seen at the time.
     ledger, quiet = [], 0
-    for k in grid:
+    for k in cps:
+        if k not in states:          # unobserved: neither quiet nor lit
+            continue
         if states[k] == "ALERT":
             if quiet >= 6 and k >= LEDGER_FROM:
-                ledger.append({"month": L.ym_str(k), "kind": "ALERT", "event": "ALERT onset"})
+                ledger.append({"month": L.ym_str(k), "kind": "ALERT", "event": "ALERT onset",
+                               "c1_source": c1_source})
             quiet = 0
         else:
             quiet += 1
@@ -156,11 +163,12 @@ def board_payload(series: dict, *, sahm_from: str = "series") -> dict:
         for k in L.onsets(lit[rid]):
             if k >= LEDGER_FROM:
                 ledger.append({"month": L.ym_str(k), "kind": rid,
-                               "event": f"{rid} onset", "value": vals[rid][k]})
+                               "event": f"{rid} onset", "value": vals[rid][k],
+                               "c1_source": c1_source})
     ledger.sort(key=lambda r: (r["month"], r["kind"]))
     if last is None:
         state = None
-    elif states[last] == "ALERT":
+    elif states.get(last) == "ALERT":
         state = "ALERT"
     else:
         state = "INCOMPLETE" if missing else "CLEAR"
@@ -185,8 +193,9 @@ def board_payload(series: dict, *, sahm_from: str = "series") -> dict:
 
 
 def _rule_reading(r: dict) -> str:
+    # 3dp: rules compare at 3dp, and A1 is strict (0.200 unlit, 0.201 lit)
     u = "%" if r["unit"] == "%" else "pp"
-    return f"{r['id']} {r['label']} {r['value']:+.2f}{u} (line {r['threshold']:g})"
+    return f"{r['id']} {r['label']} {r['value']:+.3f}{u} (line {r['threshold']:g})"
 
 
 def board_alert_event(payload: dict, today):
@@ -200,12 +209,16 @@ def board_alert_event(payload: dict, today):
         return None
     lit = "; ".join(_rule_reading(r) for r in payload["rules"]
                     if r["lit"] and not r.get("stale"))
+    missing = payload.get("missing") or []
+    gap = f" {', '.join(missing)} not yet available for this month." if missing else ""
     return Event(
         event_type="labor_board_alert", severity="WARN", asof=today,
         dedup_key=f"labor_board:{payload['month']}",
         rationale=(f"Labor Stress Board ALERT for {payload['month']}: a layoff rule and a "
-                   f"slack rule are lit together ({lit}). {BOARD_RECORD['text']}"),
-        detail={"month": payload["month"], "n_lit": payload["n_lit"]})
+                   f"slack rule are lit together ({lit}).{gap} {BOARD_RECORD['text']}"),
+        detail={"month": payload["month"], "n_lit": payload["n_lit"],
+                "n_evaluated": payload.get("n_evaluated"), "missing": missing,
+                "c1_source": payload.get("c1_source")})
 
 
 def board_ledger_events(payload: dict, today) -> list:

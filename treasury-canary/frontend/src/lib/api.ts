@@ -659,7 +659,8 @@ export interface LaborBoard {
   c1_source: string;
   month: string | null;
   rules: LaborBoardRule[];
-  history: Array<{ month: string; state: LaborBoardState } & Record<string, number | null | string>>;
+  /** state is null for a CPS month no rule has reached yet */
+  history: Array<{ month: string; state: LaborBoardState | null } & Record<string, number | null | string>>;
   strip: LaborStripItem[];
   /** computed one-line answer to "is the headline rate too good?" */
   strip_verdict: string | null;

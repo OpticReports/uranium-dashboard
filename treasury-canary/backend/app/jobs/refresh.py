@@ -98,16 +98,24 @@ def _upsert_snapshot(session: Session, **kw) -> None:
 
 
 def _persist_event(session: Session, ev: Event) -> bool:
-    row = EventLog(
-        event_type=ev.event_type, severity=ev.severity, asof=ev.asof,
-        dedup_key=ev.dedup_key, rationale=ev.rationale, detail_json=ev.detail_json(),
-    )
-    session.add(row)
+    """Idempotent per (event_type, dedup_key): an event already logged is
+    skipped WITHOUT touching the rest of the refresh. (A session.rollback()
+    here used to discard every snapshot and event written earlier in the
+    same refresh whenever a detector re-emitted a known key — e.g. a curve
+    re-steepening held for weeks, or a labor ledger onset — while events
+    already paged were never stored, so they re-paged.)"""
+    if session.execute(select(EventLog.id).where(
+            EventLog.event_type == ev.event_type,
+            EventLog.dedup_key == ev.dedup_key)).first():
+        return False
     try:
-        session.flush()
+        with session.begin_nested():     # SAVEPOINT: a race loses only this row
+            session.add(EventLog(
+                event_type=ev.event_type, severity=ev.severity, asof=ev.asof,
+                dedup_key=ev.dedup_key, rationale=ev.rationale,
+                detail_json=ev.detail_json()))
         return True
     except IntegrityError:
-        session.rollback()   # already logged this transition -> idempotent skip
         return False
 
 
@@ -246,7 +254,10 @@ def run_refresh(session: Session) -> dict:
         from ..api.routes_labor import (_board_series, board_alert_event,
                                         board_ledger_events, board_payload)
         payload = board_payload(_board_series())
-        if payload.get("missing"):
+        if payload.get("state") is None:
+            logger.warning("labor board unavailable: no jobs-report month (UNRATE and "
+                           "SAHMREALTIME empty)")
+        elif payload.get("missing"):
             logger.warning("labor board INCOMPLETE for %s: %s not available",
                            payload.get("month"), ", ".join(payload["missing"]))
         ev = board_alert_event(payload, today)

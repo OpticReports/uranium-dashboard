@@ -107,7 +107,7 @@ export default function LaborStressBoard() {
           </span>
           <span className="text-xs text-slate-300">
             {data.state == null
-              ? "no data — FRED unavailable"
+              ? "no data — the jobs-report month cannot be set (UNRATE and Sahm unavailable)"
               : data.missing.length > 0
                 ? `${data.n_lit} of ${data.n_evaluated} available rules lit — ${data.missing.join(", ")} not yet available for ${data.month}`
                 : `${data.n_lit} of ${data.n_rules} rules lit`}
@@ -127,18 +127,19 @@ export default function LaborStressBoard() {
               />
               <span className="text-slate-300">
                 <span className="font-mono text-slate-500">{r.id}</span> {r.label}
+                {r.id === "C1" && <span className="text-slate-500"> ({data.c1_source})</span>}
               </span>
               <span
                 className="ml-auto whitespace-nowrap font-mono tabular-nums"
                 style={{ color: r.lit ? "#f87171" : r.lit == null ? "#94a3b8" : "#cbd5e1" }}
               >
-                {fmt(r.value, r.unit)} / {r.threshold}
+                {fmt(r.value, r.unit, r.unit === "pp" ? 3 : 2)} / {r.threshold}
                 {r.unit === "%" ? "%" : ""}
                 {r.lit ? " · LIT" : ""}
                 {!r.lit && r.watch != null && r.value != null && r.value >= r.watch
                   ? ` · watch ${r.watch} crossed`
                   : ""}
-                {r.stale && r.month ? ` · ${r.month}, not yet for ${data.month}` : ""}
+                {r.stale && r.month ? ` · ${r.month}, not yet for ${data.month ?? "the Board month"}` : ""}
                 {r.value == null ? " · no data" : ""}
               </span>
             </div>
@@ -224,8 +225,8 @@ export default function LaborStressBoard() {
       <p className="mt-2 text-[10px] leading-relaxed text-slate-500">
         12-month change colored red when it moves the worse way, green the better way, grey when under
         ±0.05. Percentile of the latest value in the series' own history (* = since 1994, after the CPS
-        redesign). A month in brackets = that measure's latest data is not yet for {data.month}. C1
-        source: {data.c1_source}. {data.note}
+        redesign). A month in brackets = that measure's latest month differs from the Board month
+        {data.month ? ` (${data.month})` : ""}. {data.note}
       </p>
     </Panel>
   );

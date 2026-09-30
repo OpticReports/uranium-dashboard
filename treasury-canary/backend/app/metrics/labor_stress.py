@@ -302,6 +302,7 @@ def _pct_rank(hist: list[float], v: float) -> float | None:
 
 def _item(key: str, label: str, s: dict[YM, float], *, unit: str, worse: str,
           pct_from: YM | None = None, note="", yoy_only: bool = False,
+          suppress_chg_at: YM | None = None,
           decimals: int = 2) -> dict | None:
     if not s:
         return None
@@ -318,6 +319,8 @@ def _item(key: str, label: str, s: dict[YM, float], *, unit: str, worse: str,
         trend = "worse" if (chg > 0) == (worse == "up") else "better"
     if callable(note):
         note = note(last)
+    if suppress_chg_at is not None and last == suppress_chg_at:
+        chg, trend = None, None
     return {"key": key, "label": label, "month": f"{last[0]}-{last[1]:02d}",
             "value": None if yoy_only else round(v, decimals),
             "chg_12m": chg, "trend": trend,
@@ -362,6 +365,7 @@ def strip(series: dict[str, tuple[list[date], list[float | None]]]) -> list[dict
         _item("u3_wantjob", "Unemployed + want a job (not in labor force)", u3wj,
               unit="%", worse="up"),
         _item("nei", "Non-Employment Index (Richmond Fed)", nei, unit="%", worse="up",
+              suppress_chg_at=(2027, 1),
               note=("Jan-2026 is a population-control spike (+0.34 then −0.35); its "
                     "12-month change is suppressed in Jan-2027" if (2026, 1) in nei else "")),
         _item("epop_prime", "Prime-age (25-54) employment rate", g.get("epop_prime", {}),
@@ -386,9 +390,10 @@ def strip(series: dict[str, tuple[list[date], list[float | None]]]) -> list[dict
               worse="down", decimals=1),
         _item("fb_lfpr", "Foreign-born participation (not seasonally adj.)",
               g.get("fb_lfpr", {}), unit="pp", worse="down", yoy_only=True, decimals=1,
-              note=lambda last: ("includes the June-2026 drop (−0.9, NSA; native-born +0.3) "
-                                 "— immigration/survey-response effects, not established "
-                                 "as demand" if _spans(last, (2026, 6)) else "")),
+              note=lambda last: ("includes the June-2026 drop (−0.9 NSA vs native-born +0.3; "
+                                 "a typical June is +0.5 for both, so −1.4 vs −0.2 against "
+                                 "the season) — immigration/survey-response effects, not "
+                                 "established as demand" if _spans(last, (2026, 6)) else "")),
         _item("nb_lfpr", "Native-born participation (not seasonally adj.)",
               g.get("nb_lfpr", {}), unit="pp", worse="down", yoy_only=True, decimals=1,
               note=lambda last: ("ages 16+ (aging lowers it every year); this change spans "
@@ -408,6 +413,11 @@ _SHORT = {"u3": "U-3", "paur": "participation-adjusted", "u6": "U-6",
           "fb_lfpr": "foreign-born participation", "nb_lfpr": "native-born participation"}
 
 
+def _ordinal(n: int) -> str:
+    suf = "th" if 10 <= n % 100 <= 13 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suf}"
+
+
 def strip_verdict(items: list[dict]) -> str | None:
     """One computed line answering "is the headline rate too good?" from the
     strip itself (no judgment beyond the dead band)."""
@@ -416,10 +426,12 @@ def strip_verdict(items: list[dict]) -> str | None:
     if not u3 or not pa or u3["value"] is None or pa["value"] is None:
         return None
     gap = pa["value"] - u3["value"]
-    out = (f"U-3 {u3['value']:.2f}% vs participation-adjusted {pa['value']:.2f}% (an upper "
-           f"bound): at most {gap:.2f}pp of slack sits outside the headline")
+    out = (f"U-3 {u3['value']:.2f}% vs participation-adjusted {pa['value']:.2f}%: counting "
+           f"every prime-age participation drop below its 24-month high as unemployment "
+           f"adds at most {gap:.2f}pp")
     if pa["percentile"] is not None:
-        out += f", and that adjusted rate is at the {pa['percentile']:.0f}th percentile of its history"
+        out += (f", and that adjusted rate is at the {_ordinal(round(pa['percentile']))} "
+                f"percentile of its history")
     out += "."
     if u3["chg_12m"] is not None and pa["chg_12m"] is not None:
         out += (f" Over 12 months: U-3 {u3['chg_12m']:+.2f}pp, adjusted "

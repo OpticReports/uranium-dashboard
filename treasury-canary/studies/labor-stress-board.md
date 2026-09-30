@@ -18,7 +18,8 @@ full record in the session scratchpad, summary here):
   insured unemployment 1.1%, SOS −0.004, JOLTS layoffs 1.0%, job losers −202K
   y/y); the want-a-job count and U-6 FELL; ~43% of the H1-2026 participation
   drop is the Jan-2026 population-control break, ~16% aging; the June drop is
-  concentrated among the foreign-born (−0.9pp NSA vs native-born +0.3); over
+  concentrated among the foreign-born (−0.9pp NSA vs native-born +0.3; a
+  typical June is +0.5 for both, so −1.4 vs −0.2 against the season); over
   12 months both fell 0.7pp, native-born mostly via the Jan-2026 population-
   control step (~0.4pp) and aging — demand weakness is neither shown nor
   ruled out.
@@ -293,7 +294,9 @@ ones included; C1 in the study comes from `_sahm_from_unrate`, which rounds to
 month (up to 0.067pp off in 2025-11..2026-07; no lit state changes anywhere);
 the LIVE panel's C1 is SAHMREALTIME, whose standalone 1972-2020 record is 3 of
 7 with a false alarm in 1976-11 — weaker than the current-vintage Sahm row
-above (the Board's own record is the same under either);
+above (the Board's hits, false alarms and 2024-08 onset are the same under
+either; with real-time C1 its 1980 hit is +2 months, not +1, and its paired
+timing vs real-time Sahm is −1);
 the 2021-2024 tier was seen during design; A1 inherits COVEMP through the
 IUR; A3's 1973/1980 hits are coverage-affected (masking them leaves the Board
 at 5 hits — its 1973 miss and 1980 hit come from other legs); 7 recessions.
@@ -302,9 +305,12 @@ then are listed live by `/labor/board` (`ledger`: ALERT onsets and each
 rule's onsets) and persisted at first sight as `labor_board_onset` INFO events
 in the EventLog (idempotent per onset; carries `first_seen`), so R2 scores
 what was seen at the time, not a list recomputed after January CPS revisions.
-That event log is the implementation of A1's `ledger.csv` (the Render disk is
-ephemeral); R2 exports it to `labor_stress/ledger.csv`. The live board reports
-INCOMPLETE — never CLEAR — when any rule has no value for the Board month.
+That event log is the implementation of A1's `ledger.csv` (the repo checkout,
+where `ledger.csv` would live, is not persisted on Render; the EventLog is on
+the persistent `/app/data` disk); R2 exports it to `labor_stress/ledger.csv`.
+The live board's month is the latest jobs-report (CPS) month; it reports
+INCOMPLETE — never CLEAR — when any rule, the real-time Sahm series included,
+has no value for that month, and it never substitutes another instrument.
 
 Figures (`labor_stress/charts.py` → `labor_stress/figs/`): `fig_board_timeline`
 (every rule's lit months vs NBER recessions, Board row incl. Aug 2024),
@@ -320,3 +326,5 @@ adjusted), `fig_hire_fire` (job-finding rate vs insured unemployment),
 | spec v0, reviewer 2 — independent refutation | B1 and B3 confirmed; B2's 1-50% refuted (≈0% with the real slack leg) but the size test kept + a paired value-added check; B4 PARTLY — COVEMP normalization breaks 1979-80, raw A3 kept with flags; S1, S2 confirmed | A1-A6 follow reviewer 2 where the two disagreed, because it measured |
 | RESULTS, verifier A — independent re-derivation from the spec alone (2026-09-30) | ALL headline numbers reproduced (rule values at 3dp in every month; onsets, classes, 5/7, 0 FA, 2024-08, timing −2, size p 0.0018, today CLEAR 0/6); no blocking. 4 should-fix: LIT-THROUGH looser than A3's text; SOS at exactly 0.200 in 2023; C1 2dp/gap handling; live C1 (SAHMREALTIME) standalone record 3/7 | all four: LIT-THROUGH corrected + re-run (labels only — erratum above); SOS margin, C1 notes and live-C1 record in the honesty box |
 | RESULTS + dashboard, verifier B — inference, wording, live behaviour (2026-09-30) | WARN correct, RED correctly withheld. 2 BLOCKING: (1) `board_payload` returned CLEAR with a layoff or labor-force series empty (tested; reproduced by the author); (2) the paired check presented a delay as value added and never said A2 alone matches the Board (facts re-checked by the author). 13 should-fix (record text, duty-cycle reason, alert values, strip verdict, dead band, nativity notes, ledger persistence, /labor/sahm note, panel states, dated glossary) | (1) INCOMPLETE state + `missing` + warning log + gate test; (2) RESULTS rewritten above; all 13 should-fix applied |
+| fixes, verifier C — code and live behaviour (2026-09-30) | Board-state logic holds under every partial input tried. 1 BLOCKING, reproduced end to end with the real `run_refresh`: a re-emitted event key made `_persist_event` call `session.rollback()`, discarding the whole refresh (snapshots, earlier events — already paged, so they re-page). PRE-EXISTING: the live service's saved history stops at 2026-09-24 while `/metrics` (computed live) runs to 09-28, consistent with this. 6 should-fix: lagging SAHMREALTIME read CLEAR for an older month; fallback instrument could enter the ledger; ledger logic untested from 2026-09 on (5 mutants survived); payload never JSON-serialised in tests; null-month UI text; alert silent on missing rules and printed 2dp against 3dp rules | savepoint + pre-check in `_persist_event` with a DB-level gate test (fails on the old code); Board month anchored on the CPS month, fallback removed (a lagging Sahm → INCOMPLETE); ledger tests on the 2024 replay and against results.json onsets; `study.py` now uses the shared `onsets`; the rest applied |
+| fixes, verifier D — numbers and wording (2026-09-30) | every changed number reproduces; re-running `study.py` gives a byte-identical results.json. 3 BLOCKING (text): "at most 0.44pp of slack outside the headline" is false (U-6 sits 3.6pp above; the bound is on one channel); "lowest since 2016" false (Dec-2024, Apr-2026 lower); the Sahm tile and glossary still claimed "every recession since the 1970s". 9 should-fix (real-time Sahm plotted under a revised-data note; "did as well" understates A2; ~0.5pp vs 0.44; June seasonal; ephemeral-disk claim; NEI suppression claimed but not implemented; ordinal; LaborPanel subtitle; missing months in LIT-THROUGH) | all applied; LIT-THROUGH now treats missing months as neither (results.json unchanged); NEI suppression implemented and tested |

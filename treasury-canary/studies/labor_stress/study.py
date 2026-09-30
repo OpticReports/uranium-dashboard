@@ -53,16 +53,9 @@ def s(k):
 # ------------------------------------------------------------ scoring (A3)
 def onsets(flags: dict) -> list:
     """First lit month preceded by >= QUIET OBSERVED unlit months; a spell lit
-    at the first computable month is left-censored (never an onset)."""
-    out, unlit = [], 0
-    for k in sorted(flags):
-        if flags[k]:
-            if unlit >= QUIET:
-                out.append(k)
-            unlit = 0
-        else:
-            unlit += 1
-    return out
+    at the first computable month is left-censored (never an onset). The
+    shared implementation, so the live ledger uses the identical rule."""
+    return L.onsets(flags, QUIET)
 
 
 def classify(o) -> tuple[str, str | None]:
@@ -94,9 +87,12 @@ def score(flags: dict) -> dict:
         # run tested only that p-6 was lit, which labelled 1981 LIT-THROUGH
         # though every rule went dark before the 1981-07 peak. No hit, false
         # alarm or gate depends on this label.)
+        # Missing months are "neither" (A3): the window's OBSERVED months must
+        # all be lit, and so must the last observed month before p-6.
         k6 = L.ym_add(p, -6)
-        win = [L.ym_add(p, i) for i in range(-6, 4)]
-        if all(flags.get(m) for m in win) and flags.get(L.ym_add(k6, -1)):
+        obs = [m for m in (L.ym_add(p, i) for i in range(-6, 4)) if m in flags]
+        before = [m for m in flags if m < k6]
+        if obs and all(flags[m] for m in obs) and before and flags[max(before)]:
             per_peak.append({"peak": s(p), "outcome": "LIT-THROUGH"})
             continue
         late = [o for o in in_score if cls[o] == ("LATE", s(p))]

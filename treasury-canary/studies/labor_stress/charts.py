@@ -81,7 +81,7 @@ def fig_timeline():
     fig.suptitle("Labor Stress Board, 1972-2026 (in-sample): flagged 5 of 7 recessions, 3 months "
                  "before to 1 month after they began, a median 2 months before the Sahm rule.\n"
                  "No alert without a recession nearby 1972-2020 — then one in Aug 2024 with none. "
-                 "Job losers alone did as well. Grey = NBER recessions.",
+                 "Job losers alone did better (6 of 7). Grey = NBER recessions.",
                  x=0.01, ha="left", fontsize=10.5, color=INK)
     fig.subplots_adjust(left=0.24, right=0.98, top=0.86, bottom=0.08)
     fig.savefig(os.path.join(OUT, "fig_board_timeline.png"), dpi=160, facecolor=SURF)
@@ -118,7 +118,7 @@ def fig_slack():
     ax.legend(loc="upper right", fontsize=8, frameon=False)
     ax.set_xlim(dt.date(2015, 1, 1), dt.date(2027, 3, 1))
     ax.set_title("Is 4.1% too good? Broader measures fell with the headline over the past year;\n"
-                 "the participation-adjusted rate — an upper bound — runs ~0.5pp higher and flat",
+                 "the participation-adjusted rate — an upper bound — runs ~0.4pp higher and flat",
                  loc="left", fontsize=10.5, color=INK)
     fig.tight_layout()
     fig.savefig(os.path.join(OUT, "fig_hidden_slack.png"), dpi=160, facecolor=SURF)
@@ -143,10 +143,11 @@ def fig_hire_fire():
                     weight="bold")
         ax.set_title(lab, loc="left", fontsize=9, color=INK2)
         ax.set_xlim(dt.date(1994, 1, 1), dt.date(2027, 1, 1))
-    fig.suptitle("Low-hire, low-fire: the job-finding rate is its lowest since 2016 (outside the "
-                 "2020-21 pandemic), while benefit claims stay near record lows", x=0.01, ha="left",
+    fig.suptitle("Low-hire, low-fire: the job-finding rate (24.2%) is near its lowest since 2016 "
+                 "outside the 2020-21 pandemic (Dec-2024 and Apr-2026 dipped lower),\nwhile "
+                 "benefit claims stay near record lows", x=0.01, ha="left",
                  fontsize=10.5, color=INK)
-    fig.tight_layout(rect=(0, 0, 1, 0.92))
+    fig.tight_layout(rect=(0, 0, 1, 0.9))
     fig.savefig(os.path.join(OUT, "fig_hire_fire.png"), dpi=160, facecolor=SURF)
 
 
