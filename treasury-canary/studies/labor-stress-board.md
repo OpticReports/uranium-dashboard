@@ -267,6 +267,12 @@ at 5 hits — its 1973 miss and 1980 hit come from other legs); 7 recessions.
 Out-of-sample begins with data month 2026-09 (released 2026-10-02): onsets from
 then are listed live by `/labor/board` (`ledger`) and scored at R2.
 
+Figures (`labor_stress/charts.py` → `labor_stress/figs/`): `fig_board_timeline`
+(every rule's lit months vs NBER recessions, Board row incl. Aug 2024),
+`fig_hidden_slack` (U-3 vs U-6, unemployed + want-a-job, participation-
+adjusted), `fig_hire_fire` (job-finding rate vs insured unemployment),
+`fig_rate_spike_episodes` (the rate-spike re-test, 3 of 20 episodes).
+
 ### Counter-agent log
 
 | review | verdict | adopted |
