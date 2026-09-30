@@ -16,15 +16,19 @@ from .severity import build_severity
 _WEEKLY, _MONTHLY, _QUARTERLY = 7, 60, 180
 LAGS: dict[str, int] = {
     "effr": _WEEKLY, "hy_oas": _WEEKLY, "mtg30": _WEEKLY,
-    "core_pce": _MONTHLY, "saving_rate": _MONTHLY, "inv_sales": _MONTHLY,
+    "core_pce": _MONTHLY, "saving_rate": _MONTHLY,
     "months_supply": _MONTHLY, "margin_debit": _MONTHLY,
-    "gdp": _QUARTERLY, "hh_debt_gdp": _QUARTERLY, "priv_credit": _QUARTERLY,
+    "inv_sales": 75,          # MTIS ~6 weeks after the month ends
+    "gdp": _QUARTERLY,
+    # checked against real-time ALFRED vintages (verifier, 2026-09-30): these
+    # four were published later than their frequency class implies
+    "hh_debt_gdp": 460, "priv_credit": 275,
     "corp_debt": _QUARTERLY, "margin_debt": _QUARTERLY, "bottom50_nw": _QUARTERLY,
     "dsr": _QUARTERLY, "equity_liab": _QUARTERLY, "med_house_px": _QUARTERLY,
     "delinq_cc": _QUARTERLY, "delinq_cre": _QUARTERLY, "fed_debt_gdp": _QUARTERLY,
     "vac_rental": _QUARTERLY, "vac_owner": _QUARTERLY, "capex_info": _QUARTERLY,
     "capex_soft": _QUARTERLY,
-    "deficit_gdp": 300,       # fiscal year stamped Jan 1, published ~October
+    "deficit_gdp": 390,       # fiscal year stamped Jan 1, on FRED ~end-January next year
     "med_income": 630,        # stamped Jan 1, Census publishes September next year
 }
 MIN_HISTORY_DAYS = 3652       # an input enters only with >= 10 years of as-of history
@@ -69,11 +73,12 @@ def _n_components(result: dict) -> tuple[int, int]:
 
 def severity_history(bundle: dict, *, end: date | None = None) -> list[dict]:
     """Monthly point-in-time readings with block scores and input coverage."""
-    last_obs = max((d[-1] for d, _ in (bundle.get(k, ([], [])) for k in LAGS) if d),
-                   default=None)
-    end = end or last_obs or date.today()
+    end = end or date.today()
+    grid = month_ends(GRID_FROM, end)
+    if not grid or grid[-1] < end:
+        grid.append(end)          # the current, partial month, as of `end`
     rows = []
-    for t in month_ends(GRID_FROM, end):
+    for t in grid:
         r = build_severity(as_of(bundle, t))
         live, total = _n_components(r)
         rows.append({
@@ -114,6 +119,7 @@ def history_payload(bundle: dict, *, end: date | None = None) -> dict:
     today = live["severity_score"]
     by = {r["month"]: r for r in rows}
     full = [r for r in rows if r["drawn"] and r["live"] >= ANALOG_MIN_LIVE * r["total"]]
+    allin = [r for r in rows if r["drawn"] and r["live"] == r["total"]]
     pctile = (round(100 * sum(1 for r in full if r["score"] <= today) / len(full))
               if full and today is not None else None)
     peaks = [f"{p.year}-{p.month:02d}" for p, _, _ in PEAKS]
@@ -141,14 +147,16 @@ def history_payload(bundle: dict, *, end: date | None = None) -> dict:
                 episodes.append([r])
     nearest = []
     for ep in episodes:
-        s = _ym(ep[0]["month"])
-        rec = next((k for k in peaks if 0 <= _ym(k) - s <= ANALOG_HORIZON), None)
+        s, e = _ym(ep[0]["month"]), _ym(ep[-1]["month"])
+        # a recession that began during the stretch or within 24 months after it
+        rec = next((k for k in peaks if s <= _ym(k) <= e + ANALOG_HORIZON), None)
         in_rec = any(_ym(k) <= s <= _ym(f"{tr.year}-{tr.month:02d}")
                      for k, (_, tr, _) in zip(peaks, PEAKS))
         u0, u1 = un.get(ep[0]["month"]), un.get(_ym_str(s + ANALOG_HORIZON))
         nearest.append({
             "from": ep[0]["month"], "to": ep[-1]["month"], "months": len(ep),
             "mean_reading": round(sum(x["score"] for x in ep) / len(ep), 1),
+            "live": min(x["live"] for x in ep), "total": ep[0]["total"],
             "already_in_recession": in_rec,
             "recession_within_24m": rec,
             "unemployment_chg_24m": round(u1 - u0, 1) if u0 is not None and u1 is not None else None,
@@ -160,8 +168,14 @@ def history_payload(bundle: dict, *, end: date | None = None) -> dict:
         "today": {"score": today, "class": live["severity_class"]},
         "today_pctile": pctile,
         "pctile_from": full[0]["month"] if full else None,
-        "share_severe": (round(100 * sum(1 for r in rows if r["drawn"] and r["score"] > 60)
-                               / max(1, sum(1 for r in rows if r["drawn"]))) if rows else None),
+        # both shares and percentiles on comparable inputs, not the thin early years
+        "share_severe": (round(100 * sum(1 for r in full if r["score"] > 60) / len(full))
+                         if full else None),
+        "share_severe_all_inputs": (round(100 * sum(1 for r in allin if r["score"] > 60)
+                                          / len(allin)) if allin else None),
+        "pctile_all_inputs": (round(100 * sum(1 for r in allin if r["score"] <= today)
+                                    / len(allin)) if allin and today is not None else None),
+        "all_inputs_from": allin[0]["month"] if allin else None,
         "bands": {"mild_below": 35, "severe_above": 60},
         "recessions": [{"start": k, "end": f"{tr.year}-{tr.month:02d}", "exogenous": exo}
                        for k, (_, tr, exo) in zip(peaks, PEAKS)],
@@ -169,6 +183,9 @@ def history_payload(bundle: dict, *, end: date | None = None) -> dict:
         "method": ("Each point re-runs today's index code on the data published by that "
                    "month (current vintage; ranks use only history up to then, from 1976). "
                    "Inputs enter once they have 10 years of history, so the early line uses "
-                   "fewer inputs; it is not drawn below half. Last point is today's live "
-                   "reading."),
+                   "fewer inputs; it is not drawn below half. Household debt/GDP and debt "
+                   "service start in 2005 on FRED and enter only in 2016, so every reading "
+                   "before then, all recession-start readings included, lacks the index's "
+                   "main predictor. The line's last point is the rebuilt current month "
+                   "(lagged inputs); the dot is today's live reading."),
     }

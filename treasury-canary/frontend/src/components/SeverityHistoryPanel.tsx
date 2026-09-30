@@ -62,10 +62,15 @@ export default function SeverityHistoryPanel() {
   const last = rows[rows.length - 1];
   const yearAgo = rows[rows.length - 13];
   const threeAgo = rows[rows.length - 37];
+  // like for like: the rebuilt current month vs rebuilt months back
   const trend = (a?: { score: number | null }) =>
-    a && a.score != null && data.today.score != null
-      ? `${data.today.score - a.score >= 0 ? "+" : ""}${(data.today.score - a.score).toFixed(0)}`
+    a && a.score != null && last?.score != null
+      ? `${last.score - a.score >= 0 ? "+" : ""}${(last.score - a.score).toFixed(0)}`
       : "—";
+  const starts = data.analogs.recession_starts;
+  const s2007 = starts.find((s) => s.peak.startsWith("2007"));
+  const s2001 = starts.find((s) => s.peak.startsWith("2001"));
+  const calm = data.analogs.nearest.filter((n) => !n.already_in_recession && !n.recession_within_24m);
 
   return (
     <Panel
@@ -81,13 +86,17 @@ export default function SeverityHistoryPanel() {
           vs 1 year ago <span className="font-mono">{trend(yearAgo)}</span> · vs 3 years ago{" "}
           <span className="font-mono">{trend(threeAgo)}</span>
         </span>
-        {data.today_pctile != null && (
+        {data.pctile_all_inputs != null && (
           <span>
-            higher than {data.today_pctile}% of months since {data.pctile_from?.slice(0, 4)}
+            at or above {data.pctile_all_inputs}% of months since {data.all_inputs_from?.slice(0, 4)} (all inputs
+            live; SEVERE in {data.share_severe_all_inputs}% of them)
           </span>
         )}
-        {data.share_severe != null && (
-          <span className="text-slate-400">it read SEVERE (&gt;60) in {data.share_severe}% of all months</span>
+        {data.today_pctile != null && (
+          <span className="text-slate-400">
+            {data.today_pctile}% since {data.pctile_from?.slice(0, 4)} on ≥¾ of inputs (SEVERE in{" "}
+            {data.share_severe}%)
+          </span>
         )}
       </div>
 
@@ -110,7 +119,7 @@ export default function SeverityHistoryPanel() {
               contentStyle={{ backgroundColor: "#0f172a", border: "1px solid #334155", borderRadius: 6, fontSize: 11 }}
               labelFormatter={(m: string) => fmtMonth(m)}
               formatter={(v: number, _n: string, item: { payload?: { live: number; total: number } }) => [
-                `${Number(v).toFixed(1)} (${item.payload?.live} of ${item.payload?.total} inputs)`,
+                `${Number(v).toFixed(1)} (${item.payload?.live} of ${item.payload?.total} components)`,
                 "severity",
               ]}
             />
@@ -149,7 +158,7 @@ export default function SeverityHistoryPanel() {
                 <th className="px-2 py-1 text-right">Reading</th>
                 <th className="px-2 py-1 text-right">Months</th>
                 <th className="px-2 py-1 text-right">Unemp. rise</th>
-                <th className="pl-2 py-1 text-right">Real GDP</th>
+                <th className="pl-2 py-1 text-right">Real GDP drawdown</th>
               </tr>
             </thead>
             <tbody>
@@ -170,6 +179,10 @@ export default function SeverityHistoryPanel() {
               ))}
             </tbody>
           </table>
+          <p className="mt-1 text-[10px] text-slate-500">
+            These readings use 14-20 of 23 components and lack household debt; three data points do not show the
+            reading predicts depth.
+          </p>
         </div>
         <div>
           <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
@@ -180,8 +193,8 @@ export default function SeverityHistoryPanel() {
               <tr className="border-b border-panelborder text-[10px] uppercase tracking-wide text-slate-500">
                 <th className="py-1 pr-2 text-left">Period</th>
                 <th className="px-2 py-1 text-right">Avg</th>
-                <th className="px-2 py-1 text-left">Next 24 months</th>
-                <th className="pl-2 py-1 text-right">Unemp. 24m</th>
+                <th className="px-2 py-1 text-left">During or ≤24m after</th>
+                <th className="pl-2 py-1 text-right">Unemp. +24m</th>
               </tr>
             </thead>
             <tbody>
@@ -190,7 +203,10 @@ export default function SeverityHistoryPanel() {
                   <td className="py-1 pr-2 text-slate-300">
                     {fmtMonth(n.from)} – {fmtMonth(n.to)}
                   </td>
-                  <td className="px-2 py-1 text-right font-mono text-slate-200">{n.mean_reading.toFixed(0)}</td>
+                  <td className="px-2 py-1 text-right font-mono text-slate-200">
+                    {n.mean_reading.toFixed(0)}
+                    <span className="text-[10px] text-slate-500"> {n.live}/{n.total}</span>
+                  </td>
                   <td className="px-2 py-1 text-slate-300">
                     {n.already_in_recession
                       ? "already in recession"
@@ -208,10 +224,14 @@ export default function SeverityHistoryPanel() {
         </div>
       </div>
       <p className="mt-2 text-[10px] leading-relaxed text-slate-500">
-        Descriptive only: three recessions the index is built for since 1986 cannot validate it. The highest
-        pre-recession reading (2007, ~71) came before the deepest recession, but 2001 read ~68 and was mild, and
-        2012-15 read ~69 for two and a half years with no recession. Current-vintage data; the weights were set in
-        2026 with this history in view.
+        Descriptive only: three recessions the index is built for since 1986 cannot validate it. Every past reading
+        here lacks household debt/GDP and debt service (FRED data start 2005, so they enter in 2016); today&apos;s
+        includes them, so those readings are a smaller index, not today&apos;s.
+        {s2007?.reading != null && s2001?.reading != null
+          ? ` The highest pre-recession reading (${s2007.peak.slice(0, 4)}, ${s2007.reading.toFixed(0)}) came before the deepest recession, but ${s2001.peak.slice(0, 4)} read ${s2001.reading.toFixed(0)} and was mild.`
+          : ""}
+        {calm.map((n) => ` ${n.from.slice(0, 4)}-${n.to.slice(0, 4)} averaged ${n.mean_reading.toFixed(0)} with no recession${n.from.startsWith("2012") ? " (about 2-3 points lower with household debt included)" : ""}.`).join("")}
+        {" "}Current-vintage data; the weights were set in 2026 with this history in view.
       </p>
     </Panel>
   );

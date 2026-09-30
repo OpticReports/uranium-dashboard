@@ -805,6 +805,9 @@ export interface SeverityHistory {
   today_pctile: number | null;
   pctile_from: string | null;
   share_severe: number | null;
+  share_severe_all_inputs: number | null;
+  pctile_all_inputs: number | null;
+  all_inputs_from: string | null;
   bands: { mild_below: number; severe_above: number };
   recessions: Array<{ start: string; end: string; exogenous: boolean }>;
   analogs: {
@@ -815,7 +818,7 @@ export interface SeverityHistory {
       unemployment_rise_pp?: number; real_gdp_pct?: number; exogenous?: boolean;
     }>;
     nearest: Array<{
-      from: string; to: string; months: number; mean_reading: number;
+      from: string; to: string; months: number; mean_reading: number; live: number; total: number;
       already_in_recession: boolean; recession_within_24m: string | null;
       unemployment_chg_24m: number | null;
     }>;

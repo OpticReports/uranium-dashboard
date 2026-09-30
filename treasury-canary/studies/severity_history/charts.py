@@ -19,7 +19,7 @@ def t(m):
     return dt.date(y, mo, 15)
 
 
-fig, ax = plt.subplots(figsize=(12, 4.8))
+fig, ax = plt.subplots(figsize=(12, 5.1))
 fig.patch.set_facecolor(SURF)
 ax.set_facecolor(SURF)
 ax.grid(color=GRID, lw=0.8, axis="y")
@@ -32,14 +32,16 @@ ys = [r["score"] if r["drawn"] else float("nan") for r in R["series"]]
 ax.plot(xs, ys, color=S1, lw=1.8)
 ax.axhline(60, color=CRIT, lw=1, ls="--")
 ax.axhline(35, color=AMB, lw=1, ls="--")
-ax.text(dt.date(1986, 3, 1), 61.5, "SEVERE above 60", color=CRIT, fontsize=8)
-ax.text(dt.date(1986, 3, 1), 36.5, "MILD below 35", color=AMB, fontsize=8)
+ax.text(dt.date(2026, 12, 1), 61.5, "SEVERE above 60", color=CRIT, fontsize=8, ha="right")
+ax.text(dt.date(2026, 12, 1), 36.5, "MILD below 35", color=AMB, fontsize=8, ha="right")
 for s in R["analogs"]["recession_starts"]:
     y, m = map(int, s["peak"].split("-"))
     d = dt.date(y - (m == 1), (m - 2) % 12 + 1, 15)
     ax.plot([d], [s["reading"]], "o", color=CRIT, ms=7, mec=SURF, mew=1.5, zorder=4)
-    ax.annotate(f"{s['peak'][:4]}: {s['reading']:.0f}\nU +{s['unemployment_rise_pp']}pp",
-                xy=(d, s["reading"]), xytext=(-28 if s["peak"] < "1995" else 0, 12),
+    lab = (f"{s['peak'][:4]} (pandemic,\noutside index): {s['reading']:.0f}" if s.get("exogenous")
+           else f"{s['peak'][:4]}: {s['reading']:.0f}\nU +{s['unemployment_rise_pp']}pp")
+    ax.annotate(lab,
+                xy=(d, s["reading"]), xytext=(-40 if s["peak"] < "1995" else 0, 20 if s["peak"] < "1995" else 12),
                 textcoords="offset points", ha="center", fontsize=8, color=INK)
 ax.plot([xs[-1]], [R["today"]["score"]], "o", color=S1, ms=8, mec=SURF, mew=1.5, zorder=5)
 ax.annotate(f"today {R['today']['score']:.0f}", xy=(xs[-1], R["today"]["score"]),
@@ -48,9 +50,11 @@ ax.annotate(f"today {R['today']['score']:.0f}", xy=(xs[-1], R["today"]["score"])
 ax.set_ylim(20, 100)
 ax.set_xlim(dt.date(1985, 6, 1), dt.date(2027, 3, 1))
 ax.set_ylabel("severity (0-100)", color=INK2)
-ax.set_title("Severity index replayed since 1986: up from ~50 in 2023 to 69 now. It read SEVERE in "
-             f"{R['share_severe']}% of months;\nbefore 2007 it read 71 (deep recession), before 2001 "
-             "68 (mild), and 2012-15 sat near 69 with no recession. Grey = NBER recessions.",
+ax.set_title("Severity index replayed since 1986: up from ~52 in Dec-2023 to 69 now, at or above "
+             f"{R['pctile_all_inputs']}% of months since all inputs exist ({R['all_inputs_from'][:4]}).\n"
+             "Before 2007 it read 71 (deep recession), before 2001 68 (mild); 2012-15 averaged 69 with "
+             "no recession.\nPast readings lack household debt (FRED data from 2005), so they are a "
+             "smaller index than today's. Grey = NBER recessions.",
              loc="left", fontsize=10.5, color=INK)
 fig.tight_layout()
 fig.savefig(os.path.join(HERE, "fig_severity_history.png"), dpi=160, facecolor=SURF)
