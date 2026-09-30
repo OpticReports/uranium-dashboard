@@ -141,9 +141,15 @@ def build_severity(bundle: dict) -> dict:
     margin_pair = finra_margin if margin_monthly else g("margin_debt", ([], []))
     _, margin_ratio = _ratio_series(margin_pair, g("gdp", ([], [])), 0.1)
     _, b50_ratio = _ratio_series(g("bottom50_nw", ([], [])), g("gdp", ([], [])), 0.1)
+    # The Z.1 back-extension (sources/household_debt.py) starts the series in
+    # 1976; if it failed, say so on the component rather than silently ranking
+    # against 2008+ (it moves the index by ~1 point).
+    hh_d, _ = _clean(g("hh_debt_gdp", ([], [])))
+    hh_note = ("Mian-Sufi-Verner: THE severity predictor — the buildup rate, not the level."
+               + (" Z.1 back-extension unavailable: ranked vs 2008+ only."
+                  if hh_d and hh_d[0] >= date(2000, 1, 1) else ""))
     A = Block("A", "Private leverage excess", [
-        _delta_comp("hh_debt_3y", "Household debt/GDP, 3y change", hh, Q3Y, "pp",
-                    "Mian-Sufi-Verner: THE severity predictor — the buildup rate, not the level."),
+        _delta_comp("hh_debt_3y", "Household debt/GDP, 3y change", hh, Q3Y, "pp", hh_note),
         _delta_comp("corp_debt_3y", "Corporate debt/GDP, 3y change", corp_ratio, Q3Y, "pp",
                     "JST credit-boom channel, corporate leg (milder than household unless it hits banks)."),
         _delta_comp("priv_credit_3y", "Private credit/GDP, 3y change", pc_ratio, Q3Y, "pp",

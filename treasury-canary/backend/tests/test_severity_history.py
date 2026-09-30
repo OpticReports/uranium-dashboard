@@ -170,3 +170,13 @@ def test_household_debt_splice_refuses_to_substitute():
     # silently becomes the Z.1 series; a missing Z.1 leaves it unchanged
     assert extend_household_debt(([], []), raw["hh_debt_z1"], raw["gdp"]) == ([], [])
     assert extend_household_debt(raw["hh_debt_gdp"], ([], []), raw["gdp"]) == raw["hh_debt_gdp"]
+
+
+def test_a_failed_z1_extension_is_said_not_silent():
+    raw = load.bundle(extend=False)       # as if CMDEBT/GDP had failed to fetch
+    note = next(c["note"] for b in build_severity(raw)["blocks"] for c in b["components"]
+                if c["id"] == "hh_debt_3y")
+    assert "Z.1 back-extension unavailable" in note
+    note_ok = next(c["note"] for b in build_severity(load.bundle())["blocks"]
+                   for c in b["components"] if c["id"] == "hh_debt_3y")
+    assert "unavailable" not in note_ok

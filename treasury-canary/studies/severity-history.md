@@ -33,8 +33,9 @@ vintages). Every other lag matched or was more conservative.
 **Minimum history.** An input is used at t only if its as-of history already
 spans ≥ 10 years (from 1976 or its first observation). Never binds today (every
 input has ≥ 18 years), so the live number is unaffected. Consequence, stated
-up front: several inputs start late on FRED — household debt/GDP (BIS) and
-the debt-service ratio in 2005, EFFR 2000-07, HY OAS 1996-12, FINRA margin
+up front: several inputs start late on FRED — household debt/GDP (IMF FSI,
+from 2005; extended back to 1976 with Z.1 in v2, see below) and the
+debt-service ratio in 2005, EFFR 2000-07, HY OAS 1996-12, FINRA margin
 1997, card delinquency 1991, inventories/sales 1992 — so they enter the
 history 10 years later. The chart shows the live-input count at every point
 and does not draw the line where fewer than half of the inputs are live.
@@ -66,16 +67,21 @@ nominal GDP) — for the LIVE index and the history alike.
 
 - **Fit over the overlap (2005Q1-2025Q2, 82 quarters):** 3-year changes
   correlate 0.97, mean gap +0.14pp (sd 1.34, max 4.4); levels run ~2.3pp
-  apart (different GDP basis), which only matters where a 3-year window
-  crosses the join.
+  apart (the IMF FSI definition and GDP basis are not documented on FRED; a
+  4-quarter-average GDP denominator fits the changes worse, corr 0.95), which
+  only matters where a 3-year window crosses the join. CMDEBT includes
+  nonprofits (~4-5%); a households-only Z.1 series exists only from 1987 and
+  fits no better.
 - **Rule:** the published series wins wherever it exists; before 2005Q1 the
   Z.1 ratio is shifted by the gap at 2005Q1 only (−0.4pp) so the join is
   continuous and pre-2005 3-year changes are pure Z.1. Either input missing →
   the published series unchanged (no silent substitution).
 - **Live effect:** severity 68.9 → **67.7** (still SEVERE). Today's 3-year
   change (−5.8pp, households deleveraging) ranked at the 39th percentile
-  against 2008+; against 1976+ (which includes the 2000s boom) it is the
-  15th.
+  against 2008+ changes; against 1979+ (3-year changes from 1976 levels,
+  which include the 2000s boom) it is the 15th. If the Z.1 fetch fails the
+  live index falls back to the published series, logs a warning and says so on
+  the component (it would read 68.9 again).
 
 ## RESULTS — frozen 2026-09-30 (`severity_history/results.json`, v1 lags, v2 household debt)
 
@@ -107,8 +113,8 @@ a severity index; the ordering 2007 > 2001 ≈ 1990 matches depth only loosely.
 The debt-service ratio starts 2005 on FRED (enters ~2015), so every reading
 before then runs without it. Household debt before 2005 is Z.1-based (a close
 but not identical measure). Point-in-time ranks drift: the 1986-87 readings of
-83-93 mostly reflect a short yardstick (equity/GDP making new highs vs a 1976
-start). Current-vintage data: rebuilding 5 dates from real-time ALFRED
+82-92 mostly reflect a short yardstick (equity/GDP making new highs vs a 1976
+start; drawn months only). Current-vintage data: rebuilding 5 dates from real-time ALFRED
 vintages (v1, before the Z.1 extension) moved them by up to 3 points in no
 consistent direction, mostly BEA tech-capex revisions. Publication lags are
 approximations (the household-debt series keeps the published series' 460-day
@@ -121,3 +127,4 @@ Weights set in 2026 with this history in view.
 |---|---|---|
 | code, look-ahead, numbers (2026-09-30) | 11 months re-derived independently, all match; BLOCKING: 4 lags too short vs ALFRED (gate checked its own constants); should-fix: live grid ended a month early, method text false, hard-coded prose, vacuous drawn-rule test, endpoint CPU cost, quantify revisions | lags fixed + pinned to ALFRED-verified dates in tests; end=today; method rewritten; prose built from data; drawn test on 1986-03..05; scheduler warm-up, no caching of degraded builds; revisions quantified |
 | claims, wording, UI (2026-09-30) | BLOCKING: "SEVERE in 57%" used the thin early years; analog readings lack the #1 predictor and the UI did not say so. Should-fix: C driver, like-for-like trend, percentile wording, episode outcome over its whole span, GDP label, 2020 label, 1990 label | all applied |
+| v2 Z.1 household-debt extension (2026-09-30) | PASS, no blocking: series/units/splice/look-ahead correct; 68.9 → 67.7 and 38.6 → 14.5 reproduced (robust to 4q/2q GDP and BIS alternatives). Should-fix: IMF not BIS; the "GDP basis" cause was unmeasured and not supported; a failed Z.1 fetch silently reverts the rank; 1979+ wording; unused HCCSDODNS.csv; 2020 parenthetical; 82-92 | all applied; failed extension now logged and noted on the component (tested) |
