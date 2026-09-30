@@ -22,7 +22,7 @@ import { InlineError, Loading, Panel } from "./ui";
 
 const STATE_STYLE: Record<LaborBoardState, { color: string; bg: string; label: string }> = {
   CLEAR: { color: "#34d399", bg: "rgba(52,211,153,0.08)", label: "CLEAR" },
-  WATCH: { color: "#fbbf24", bg: "rgba(251,191,36,0.10)", label: "WATCH — one rule lit" },
+  WATCH: { color: "#fbbf24", bg: "rgba(251,191,36,0.10)", label: "WATCH" },
   ALERT: { color: "#f87171", bg: "rgba(248,113,113,0.12)", label: "ALERT — layoffs confirmed by slack" },
 };
 
@@ -100,8 +100,14 @@ export default function LaborStressBoard() {
           <span className="text-sm font-bold tracking-wide" style={{ color: st?.color ?? "#94a3b8" }}>
             {st?.label ?? "UNAVAILABLE"}
           </span>
-          <span className="ml-auto font-mono text-[11px] text-slate-400">{data.month}</span>
+          <span className="text-xs text-slate-300">
+            {data.n_lit} of {data.n_rules} rules lit
+          </span>
+          <span className="ml-auto font-mono text-[11px] text-slate-400">jobs data {data.month}</span>
         </div>
+        <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400">
+          Backtest record: {data.record.text}
+        </p>
         <div className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2">
           {data.rules.map((r) => (
             <div key={r.id} className="flex items-baseline gap-2 text-xs">
@@ -170,6 +176,13 @@ export default function LaborStressBoard() {
         Each line is a rule's value divided by its trigger, so all share one scale: crossing 1.0 lights
         the rule. Layoff rules (A) must light together with a slack rule (B or the Sahm rule C) for ALERT.
       </p>
+
+      {data.ledger.length > 0 && (
+        <p className="mt-2 text-[11px] text-amber-300">
+          Out-of-sample record since Sep 2026 data:{" "}
+          {data.ledger.map((l) => `${l.event} ${l.month}`).join(" · ")}
+        </p>
+      )}
 
       <h3 className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
         Is the headline rate too good? — hidden-slack strip

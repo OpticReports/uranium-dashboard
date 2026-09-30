@@ -79,26 +79,44 @@ def _board_series() -> dict:
         return {k: f.result() for k, f in futs.items()}
 
 
-def board_payload(series: dict) -> dict:
-    """Pure: raw FRED observations -> the panel payload (testable offline)."""
+# Frozen backtest record (studies/labor-stress-board.md RESULTS, one
+# pre-registered run; gated against labor_stress/results.json in tests).
+BOARD_RECORD = {
+    "hits": 5, "peaks": 7, "false_alarms_1972_2020": 0,
+    "sahm_false_alarms_1972_2020": 1, "paired_timing_vs_sahm": -2,
+    "fired_2024": "2024-08", "red_gate": "fail",
+    "text": ("Since 1972 the Board lit within 6 months before to 3 months after 5 of 7 "
+             "recession starts, a median 2 months earlier than the Sahm rule, and "
+             "never lit without a recession nearby 1972-2020 — but it did light in "
+             "Aug 2024 with no recession. A confirmation signal, not a 12-month "
+             "early warning."),
+}
+LEDGER_FROM = (2026, 9)     # out-of-sample begins with this data month (spec v1 A1)
+
+
+def board_payload(series: dict, *, sahm_from: str = "series") -> dict:
+    """Pure: raw FRED observations -> the panel payload (testable offline).
+    Evaluated on the monthly jobs-report grid: the Board's month is the last
+    month the slack leg is observed (weekly legs map to that grid, spec A6)."""
     from ..metrics import labor_stress as L
-    vals = L.rule_values(series)
+    vals = L.rule_values(series, sahm_from=sahm_from)
     lit = L.lit(vals)
     states = L.board(lit)
-    months = sorted(states)[-BOARD_CHART_MONTHS:]
+    grid = sorted(k for k in states if k in vals.get("C1", {}))
+    months = grid[-BOARD_CHART_MONTHS:]
+    last = months[-1] if months else None
     rules = []
     for rid, spec in L.RULES.items():
         v = vals.get(rid, {})
-        last = max(v) if v else None
+        k = last if last in v else (max(v) if v else None)
         rules.append({
             "id": rid, "leg": spec["leg"], "label": spec["label"],
             "threshold": spec["threshold"], "unit": spec["unit"],
             "watch": spec.get("watch"),
-            "value": v[last] if last else None,
-            "month": f"{last[0]}-{last[1]:02d}" if last else None,
-            "lit": lit[rid].get(last) if last else None,
-            # distance to trigger: value / threshold (1.0 = the line)
-            "ratio": round(v[last] / spec["threshold"], 3) if last else None,
+            "value": v[k] if k else None,
+            "month": f"{k[0]}-{k[1]:02d}" if k else None,
+            "lit": lit[rid].get(k) if k else None,
+            "ratio": round(v[k] / spec["threshold"], 3) if k else None,
         })
     history = []
     for k in months:
@@ -107,16 +125,46 @@ def board_payload(series: dict) -> dict:
             x = vals.get(rid, {}).get(k)
             row[rid] = round(x / spec["threshold"], 3) if x is not None else None
         history.append(row)
-    last = months[-1] if months else None
+    # out-of-sample ledger: ALERT onsets (>= 6 observed non-ALERT months first)
+    ledger, quiet = [], 0
+    for k in grid:
+        if states[k] == "ALERT":
+            if quiet >= 6 and k >= LEDGER_FROM:
+                ledger.append({"month": f"{k[0]}-{k[1]:02d}", "event": "ALERT onset"})
+            quiet = 0
+        else:
+            quiet += 1
+    n_lit = sum(1 for r in rules if r["lit"])
     return {
-        "state": states[last] if last else None,
+        "state": ("ALERT" if last and states[last] == "ALERT" else "CLEAR") if last else None,
+        "n_lit": n_lit, "n_rules": len(rules),
         "month": f"{last[0]}-{last[1]:02d}" if last else None,
         "rules": rules, "history": history, "strip": L.strip(series),
+        "record": BOARD_RECORD, "ledger": ledger,
         "note": ("ALERT = a layoff rule (A) AND a slack rule (B/C) lit in the same "
-                 "month; WATCH = any one rule lit. The Board answers 'is a "
+                 "month. Any single rule was lit in 32% of months 1972-2020, so the "
+                 "panel shows a count, not a WATCH state. The Board answers 'is a "
                  "layoff-driven downturn confirmed?'; the strip answers 'is the "
                  "headline rate too good?' — they can disagree."),
     }
+
+
+def board_alert_event(payload: dict, today):
+    """A WARN event when the latest month starts a new ALERT episode."""
+    from ..scoring.events import Event
+    if not payload.get("history") or payload.get("state") != "ALERT":
+        return None
+    hist = payload["history"]
+    prior = [h["state"] for h in hist[-7:-1]]
+    if len(prior) < 6 or any(p == "ALERT" for p in prior):
+        return None
+    lit = ", ".join(f"{r['id']} {r['label']}" for r in payload["rules"] if r["lit"])
+    return Event(
+        event_type="labor_board_alert", severity="WARN", asof=today,
+        dedup_key=f"labor_board:{payload['month']}",
+        rationale=(f"Labor Stress Board ALERT for {payload['month']}: a layoff rule and a "
+                   f"slack rule are lit together ({lit}). {BOARD_RECORD['text']}"),
+        detail={"month": payload["month"], "n_lit": payload["n_lit"]})
 
 
 @router.get("/labor/board")

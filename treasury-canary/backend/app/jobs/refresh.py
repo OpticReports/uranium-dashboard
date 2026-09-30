@@ -239,6 +239,17 @@ def run_refresh(session: Session) -> dict:
     except Exception as exc:  # noqa: BLE001
         logger.warning("rate spike check failed: %s", exc)
 
+    # --- Labor Stress Board (studies/labor-stress-board.md): WARN on a new
+    # ALERT episode. The RED gate failed (it lit in Aug 2024 with no
+    # recession), so this never pages at RED; the text carries the record.
+    try:
+        from ..api.routes_labor import _board_series, board_alert_event, board_payload
+        ev = board_alert_event(board_payload(_board_series()), today)
+        if ev:
+            new_events.append(ev)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("labor board check failed: %s", exc)
+
     # --- Duration Squeeze Radar: condition flips + calendar pre-briefs -------
     # Pre-registered scorecard (docs/research/tlt-squeeze-2026, spec v2): a
     # TRIGGER condition flipping to MET is the event the card exists for ->

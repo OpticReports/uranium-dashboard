@@ -642,11 +642,25 @@ export interface LaborStripItem {
 
 export interface LaborBoard {
   state: LaborBoardState | null;
+  /** rules lit this month (any single rule was lit in 32% of months, so the
+      panel shows this count rather than a WATCH state) */
+  n_lit: number;
+  n_rules: number;
   month: string | null;
   rules: LaborBoardRule[];
   history: Array<{ month: string; state: LaborBoardState } & Record<string, number | null | string>>;
   strip: LaborStripItem[];
-  record?: Record<string, unknown>;
+  record: {
+    hits: number;
+    peaks: number;
+    false_alarms_1972_2020: number;
+    sahm_false_alarms_1972_2020: number;
+    paired_timing_vs_sahm: number;
+    fired_2024: string;
+    red_gate: string;
+    text: string;
+  };
+  ledger: Array<{ month: string; event: string }>;
   note: string;
 }
 

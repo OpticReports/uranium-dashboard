@@ -216,6 +216,57 @@ robustness grid passes 1-4 + 6; (8) the population-control sensitivity does
 not flip (1)-(6). Otherwise the Board ships at WARN, its alert text carrying
 the measured record.
 
+---
+
+## RESULTS — frozen 2026-09-30 (`labor_stress/results.json`, one run)
+
+**RED gate: FAIL** → the Board ships at WARN with its measured record.
+
+| | recession starts HIT (of 7) | false alarms 1972-2020 | fired in FINAL 2021-24? | paired timing vs Sahm |
+|---|---|---|---|---|
+| **Board** (layoffs AND slack, same month) | **5** (4 of 6 ex-2020) | **0** | **yes — 2024-08** | **−2 months** (median, earlier) |
+| slack leg alone (B1∨B2∨C1) | 4 | 0 | yes — 2024-07 | — |
+| C1 Sahm (current vintage) | 5 | 1 (2003-07) | yes — 2024-07 | — |
+| A1 SOS (insured unemployment) ★ | 5 | 0 | **no** | — |
+| A2 job losers | 6 | 0 | yes — 2024-08 | — |
+| A3 continuing claims | 5 | 0 | yes — 2023-04 | — |
+| B1 prime-age EPOP drawdown | 4 | 0 | no | — |
+| B2 participation-adjusted U | 5 | 0 | yes — 2024-08 | — |
+
+Criteria: (1) ≥6 hits FAIL (5: 1973 came LATE, 1974-07; 1981 LIT-THROUGH from
+the 1980 recession); (2) FAs ≤ Sahm PASS (0 vs 1); (3) zero FINAL-tier onsets
+FAIL (2024-08); (4) paired timing PASS (−2: 1980 0, 1990 −2, 2001 −6, 2007
+−2, 2020 −1); (5) size PASS (p = 0.0018, 0 of 541 rotations as good); (6)
+paired value-added: no hit lost PASS, removes a slack-leg false alarm FAIL
+(the slack leg had none 1972-2020; the layoff leg's contribution is TIMING —
+it turned 2001 from LIT-THROUGH into a hit 3 months before the peak — not
+false-alarm removal); (7) grid FAIL (0 of 81); (8) population-control
+sensitivity unchanged.
+
+- **The design aim failed where it mattered.** The AND was meant to reject
+  the 2024 supply-driven Sahm alarm. It did not: job losers rose 0.309pp
+  (just over A2's 0.30 line) in Aug-Sep 2024, exactly as the research pass
+  had reported — a threshold choice that should have been caught at spec
+  time. SOS alone (a published rule) stayed quiet through 2021-2026.
+- **What it is good for:** a layoff-confirmed slack signal that, in 48 years,
+  never lit without a recession nearby and led the Sahm rule by a median of 2
+  months where both hit. It is a CONFIRMATION instrument (hits cluster in
+  −3..+1 months of the peak), not a 12-month early warning.
+- **WATCH duty cycle** (any rule lit): 32% of months 1972-2020, 40% since
+  2021 → above the 33% ceiling, so the panel shows "N of 6 rules lit", not a
+  WATCH state.
+- **Today (data month 2026-08):** Board CLEAR; 0 of 6 rules lit; nearest is
+  the prime-age employment drawdown at 0.40 (its 0.30 watch tier crossed, the
+  0.50 rule not).
+
+Honesty box: current-vintage CPS for every rule (real-time Sahm is a
+sensitivity and gives the same 5 hits); thresholds in-sample, ★ ones included;
+the 2021-2024 tier was seen during design; A1 inherits COVEMP through the
+IUR; A3's 1973/1980 hits are coverage-affected (masking them leaves the Board
+at 5 hits — its 1973 miss and 1980 hit come from other legs); 7 recessions.
+Out-of-sample begins with data month 2026-09 (released 2026-10-02): onsets from
+then are listed live by `/labor/board` (`ledger`) and scored at R2.
+
 ### Counter-agent log
 
 | review | verdict | adopted |
