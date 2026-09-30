@@ -376,3 +376,15 @@ def test_gate_t4_is_manual_partial_with_asof():
     c = cond_t4()
     assert c.state == PARTIAL and c.asof == "2026-08-25"
     assert "manual (by commit)" in c.detail
+
+
+def test_t1_reads_hikes_and_cuts_in_words():
+    """A bare '66.3 bp/6m' read as cuts priced; it was hikes. The card and the
+    alert text must say which way the market leans."""
+    c = cond_t1(+66.3)
+    assert c.value == 66.3 and c.display == "+66bp hikes priced" and c.state == NOT_MET
+    assert c.detail.startswith("Fed funds futures price +66bp hikes priced over 6 months")
+    assert "needs >50bp of CUTS" in c.detail
+    assert cond_t1(-60.0).display == "60bp cuts priced"
+    assert cond_t1(0.2).display == "no change priced"
+    assert cond_t1(None).display is None

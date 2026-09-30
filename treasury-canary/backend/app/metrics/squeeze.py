@@ -77,6 +77,7 @@ class Condition:
     unit: str = ""
     detail: str = ""
     asof: str | None = None
+    display: str | None = None     # plain reading for the card when value+unit mislead
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -164,6 +165,15 @@ def cond_f4(si_rows: list[dict]) -> Condition:
     return c
 
 
+def t1_reading(chg_6m_bp: float) -> str:
+    """The signed 6m change in plain words: +66.3 -> '+66bp hikes priced'."""
+    if chg_6m_bp >= 0.5:
+        return f"+{chg_6m_bp:.0f}bp hikes priced"
+    if chg_6m_bp <= -0.5:
+        return f"{abs(chg_6m_bp):.0f}bp cuts priced"
+    return "no change priced"
+
+
 def cond_t1(chg_6m_bp: float | None, today: date | None = None) -> Condition:
     c = Condition("T1", "Fed pivot",
                   "first cut after ≥6-mo hold, or >50bp cuts priced 6m", STALE)
@@ -173,10 +183,14 @@ def cond_t1(chg_6m_bp: float | None, today: date | None = None) -> Condition:
                     f"unconfirmed as of {T1_MANUAL_FIRST_CUT['asof']}; "
                     "priced-cuts leg STALE")
         return c
+    reading = ""
     if chg_6m_bp is not None:
-        c.value, c.unit = chg_6m_bp, "bp/6m"
+        c.value, c.unit = chg_6m_bp, "bp/6m"      # signed: + = hikes, − = cuts
+        c.display = t1_reading(chg_6m_bp)
+        reading = (f"Fed funds futures price {c.display} over 6 months "
+                   f"(needs >{abs(T1_CUTS_PRICED_BP):.0f}bp of CUTS). ")
     c.asof = (today or date.today()).isoformat()
-    c.detail = ("ZQ-implied 6m path (first-order). The first-cut-after-hold "
+    c.detail = (reading + "ZQ-implied 6m path (first-order). The first-cut-after-hold "
                 "leg is MANUAL — flipped by commit on the FOMC day it "
                 f"happens (unconfirmed as of {T1_MANUAL_FIRST_CUT['asof']}), "
                 "NOT scored automatically")
