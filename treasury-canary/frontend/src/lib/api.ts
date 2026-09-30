@@ -611,6 +611,45 @@ export interface MarginFast {
 export type RateShockState = "SPIKE" | "PLUNGE" | "NEUTRAL";
 export type CorrRegime = "POS" | "MIXED" | "NEG";
 
+export type LaborBoardState = "CLEAR" | "WATCH" | "ALERT";
+
+export interface LaborBoardRule {
+  id: string;
+  leg: "A" | "B" | "C";
+  label: string;
+  threshold: number;
+  unit: string;
+  watch: number | null;
+  value: number | null;
+  month: string | null;
+  lit: boolean | null;
+  /** value / threshold — 1.0 is the trigger line */
+  ratio: number | null;
+}
+
+export interface LaborStripItem {
+  key: string;
+  label: string;
+  month: string;
+  value: number | null;
+  chg_12m: number | null;
+  percentile: number | null;
+  pct_from: string | null;
+  unit: string;
+  worse: "up" | "down";
+  note: string;
+}
+
+export interface LaborBoard {
+  state: LaborBoardState | null;
+  month: string | null;
+  rules: LaborBoardRule[];
+  history: Array<{ month: string; state: LaborBoardState } & Record<string, number | null | string>>;
+  strip: LaborStripItem[];
+  record?: Record<string, unknown>;
+  note: string;
+}
+
 export interface RateShockCell {
   n: number;
   episodes: number;
@@ -868,6 +907,7 @@ export const api = {
     ),
   recessionModel: () => getJson<RecessionModel>("/recession-model"),
   laborSahm: () => getJson<SahmSeries>("/labor/sahm"),
+  laborBoard: () => getJson<LaborBoard>("/labor/board"),
   marginLeverage: () => getJson<MarginLeverage>("/margin/leverage"),
   marginFast: () => getJson<MarginFast>("/margin/fast"),
   ratesShock: () => getJson<RateShock>("/rates/shock"),

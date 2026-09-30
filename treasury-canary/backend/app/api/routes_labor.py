@@ -47,3 +47,78 @@ def sahm_series():
         "note": "Sahm gap = 3mo-avg unemployment minus its 12mo low. >=0.50 has marked the "
                 "onset of every recession since the 1970s.",
     }
+
+
+# ── Labor Stress Board (studies/labor-stress-board.md) ───────────────────────
+# Series fetched on their own long histories (the shared bundle starts 1976):
+# SOS needs 78 weeks of warm-up and the strip's percentiles use full history.
+BOARD_SERIES = {
+    # rule inputs
+    "iursa": "IURSA", "ccnsa": "CCNSA", "covemp": "COVEMP",
+    "job_losers": "LNS13023621", "clf": "CLF16OV", "epop_prime": "LNS12300060",
+    "lfpr_prime": "LNS11300060", "pop16": "LNU00000060", "unemploy": "UNEMPLOY",
+    "unrate": "UNRATE", "sahm": "SAHMREALTIME",
+    # strip-only
+    "u6": "U6RATE", "nilfwjn": "NILFWJN", "nei": "NEIM156SFRBRIC",
+    "ue_flow": "LNS17100000", "jolts_hires": "JTSHIR", "jolts_quits": "JTSQUR",
+    "jolts_layoffs": "JTSLDR", "lt_share": "LNS13025703", "lt_level": "UEMP27OV",
+    "med_dur": "UEMPMED", "hours": "AWHNONAG", "fb_lfpr": "LNU01373395",
+    "nb_lfpr": "LNU01373413",
+}
+BOARD_START = "1967-01-01"
+BOARD_CHART_MONTHS = 180
+
+
+def _board_series() -> dict:
+    from concurrent.futures import ThreadPoolExecutor
+
+    from ..sources.fred import fetch_series
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        futs = {k: ex.submit(fetch_series, sid, BOARD_START)
+                for k, sid in BOARD_SERIES.items()}
+        return {k: f.result() for k, f in futs.items()}
+
+
+def board_payload(series: dict) -> dict:
+    """Pure: raw FRED observations -> the panel payload (testable offline)."""
+    from ..metrics import labor_stress as L
+    vals = L.rule_values(series)
+    lit = L.lit(vals)
+    states = L.board(lit)
+    months = sorted(states)[-BOARD_CHART_MONTHS:]
+    rules = []
+    for rid, spec in L.RULES.items():
+        v = vals.get(rid, {})
+        last = max(v) if v else None
+        rules.append({
+            "id": rid, "leg": spec["leg"], "label": spec["label"],
+            "threshold": spec["threshold"], "unit": spec["unit"],
+            "watch": spec.get("watch"),
+            "value": v[last] if last else None,
+            "month": f"{last[0]}-{last[1]:02d}" if last else None,
+            "lit": lit[rid].get(last) if last else None,
+            # distance to trigger: value / threshold (1.0 = the line)
+            "ratio": round(v[last] / spec["threshold"], 3) if last else None,
+        })
+    history = []
+    for k in months:
+        row = {"month": f"{k[0]}-{k[1]:02d}", "state": states[k]}
+        for rid, spec in L.RULES.items():
+            x = vals.get(rid, {}).get(k)
+            row[rid] = round(x / spec["threshold"], 3) if x is not None else None
+        history.append(row)
+    last = months[-1] if months else None
+    return {
+        "state": states[last] if last else None,
+        "month": f"{last[0]}-{last[1]:02d}" if last else None,
+        "rules": rules, "history": history, "strip": L.strip(series),
+        "note": ("ALERT = a layoff rule (A) AND a slack rule (B/C) lit in the same "
+                 "month; WATCH = any one rule lit. The Board answers 'is a "
+                 "layoff-driven downturn confirmed?'; the strip answers 'is the "
+                 "headline rate too good?' — they can disagree."),
+    }
+
+
+@router.get("/labor/board")
+def labor_board():
+    return board_payload(_board_series())

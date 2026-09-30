@@ -174,3 +174,98 @@ def board(lit_map: dict[str, dict[YM, bool]], window: int = 1) -> dict[YM, str]:
         now = any(lit_map[r].get(k) for r in RULES)
         out[k] = "ALERT" if (a and b) else ("WATCH" if now else "CLEAR")
     return out
+
+
+# ── "Real slack" strip: display only, no alerts ─────────────────────────────
+# Answers "is 4.1% too good?" (the Board answers "is a layoff-driven downturn
+# confirmed?" — the two can disagree). Corrections from the spec review (S5/S6):
+# duration items get percentiles from 1994 only (the CPS redesign raised
+# measured durations); the long-term unemployment RATE sits beside the share;
+# PAUR is labelled an upper bound with its gap in persons; the Jan-2026 NEI
+# spike is flagged; nativity series (not seasonally adjusted) show the
+# 12-month change only.
+STRIP_KEYS = ("unemploy", "clf", "lfpr_prime", "pop16", "u6", "nilfwjn", "nei",
+              "epop_prime", "ue_flow", "jolts_hires", "jolts_quits", "jolts_layoffs",
+              "lt_share", "lt_level", "med_dur", "hours", "fb_lfpr", "nb_lfpr")
+
+
+def _pct_rank(hist: list[float], v: float) -> float | None:
+    return round(100 * sum(1 for h in hist if h <= v) / len(hist)) if hist else None
+
+
+def _item(key: str, label: str, s: dict[YM, float], *, unit: str, worse: str,
+          pct_from: YM | None = None, note: str = "", yoy_only: bool = False,
+          decimals: int = 2) -> dict | None:
+    if not s:
+        return None
+    last = max(s)
+    v = s[last]
+    prev = s.get(ym_add(last, -12))
+    hist = [x for k, x in s.items() if pct_from is None or k >= pct_from]
+    return {"key": key, "label": label, "month": f"{last[0]}-{last[1]:02d}",
+            "value": None if yoy_only else round(v, decimals),
+            "chg_12m": round(v - prev, decimals) if prev is not None else None,
+            "percentile": None if yoy_only else _pct_rank(hist, v),
+            "pct_from": f"{pct_from[0]}" if pct_from else None,
+            "unit": unit, "worse": worse, "note": note}
+
+
+def strip(series: dict[str, tuple[list[date], list[float | None]]]) -> list[dict]:
+    g = {k: monthly(*v) for k, v in series.items() if v and v[0]}
+    un, lf = g.get("unemploy", {}), g.get("clf", {})
+    u3 = {k: 100 * un[k] / lf[k] for k in un if k in lf}
+    pa = paur(un, lf, g.get("lfpr_prime", {}), g.get("pop16", {}))
+    gap_persons = {}
+    for k in pa:
+        hist = [g["lfpr_prime"][j] for j in (ym_add(k, -i) for i in range(24))
+                if j in g["lfpr_prime"]]
+        gap_persons[k] = max(0.0, max(hist) - g["lfpr_prime"][k]) / 100 * g["pop16"][k]
+    wj = g.get("nilfwjn", {})
+    u3wj = {k: 100 * (un[k] + wj[k]) / (lf[k] + wj[k]) for k in un if k in lf and k in wj}
+    ue = g.get("ue_flow", {})
+    ue_rate = {k: 100 * ue[k] / un[ym_add(k, -1)] for k in ue if ym_add(k, -1) in un}
+    lt = g.get("lt_level", {})
+    lt_rate = {k: 100 * lt[k] / lf[k] for k in lt if k in lf}
+    y94 = (1994, 1)
+    last_gap = gap_persons[max(gap_persons)] if gap_persons else None
+    nei = g.get("nei", {})
+    items = [
+        _item("u3", "Unemployment rate (U-3, unrounded)", u3, unit="%", worse="up"),
+        _item("paur", "Participation-adjusted unemployment (upper bound)", pa, unit="%",
+              worse="up", note=(f"adds back {last_gap / 1000:.2f}M prime-age-equivalent "
+                                "people below the 24-month participation high, counting "
+                                "population-control and immigration effects as hidden "
+                                "unemployment" if last_gap is not None else "")),
+        _item("u6", "U-6 (incl. part-time for economic reasons, marginally attached)",
+              g.get("u6", {}), unit="%", worse="up", decimals=1),
+        _item("u3_wantjob", "Unemployed + want a job (not in labor force)", u3wj,
+              unit="%", worse="up"),
+        _item("nei", "Non-Employment Index (Richmond Fed)", nei, unit="%", worse="up",
+              note=("Jan-2026 is a population-control spike (+0.34 then −0.35); its "
+                    "12-month change is suppressed in Jan-2027" if (2026, 1) in nei else "")),
+        _item("epop_prime", "Prime-age (25-54) employment rate", g.get("epop_prime", {}),
+              unit="%", worse="down", decimals=1),
+        _item("job_finding", "Job-finding rate (unemployed → employed, monthly)",
+              ma3(ue_rate), unit="%", worse="down",
+              note="3-month average; flows missing Oct-Nov 2025"),
+        _item("hires", "JOLTS hires rate", g.get("jolts_hires", {}), unit="%",
+              worse="down", decimals=1),
+        _item("quits", "JOLTS quits rate", g.get("jolts_quits", {}), unit="%",
+              worse="down", decimals=1),
+        _item("layoffs", "JOLTS layoffs rate", g.get("jolts_layoffs", {}), unit="%",
+              worse="up", decimals=1),
+        _item("lt_share", "Long-term unemployed (27+ wks), share", g.get("lt_share", {}),
+              unit="%", worse="up", pct_from=y94, decimals=1,
+              note="a share rises mechanically when few new layoffs join the pool"),
+        _item("lt_rate", "Long-term unemployed (27+ wks), % of labor force", lt_rate,
+              unit="%", worse="up", pct_from=y94),
+        _item("med_dur", "Median weeks unemployed", g.get("med_dur", {}), unit="wks",
+              worse="up", pct_from=y94, decimals=1),
+        _item("hours", "Average weekly hours (private)", g.get("hours", {}), unit="hrs",
+              worse="down", decimals=1),
+        _item("fb_lfpr", "Foreign-born participation (not seasonally adj.)",
+              g.get("fb_lfpr", {}), unit="pp", worse="down", yoy_only=True, decimals=1),
+        _item("nb_lfpr", "Native-born participation (not seasonally adj.)",
+              g.get("nb_lfpr", {}), unit="pp", worse="down", yoy_only=True, decimals=1),
+    ]
+    return [x for x in items if x]
