@@ -93,3 +93,50 @@ def detect_metric_flip(metric: MetricResult, prev_status: str | None,
         rationale=f"{metric.label} -> {metric.status.value} (value {metric.value}). {metric.note}".strip(),
         detail={"metric_id": metric.metric_id, "value": metric.value, "status": metric.status.value},
     )
+
+
+def detect_rate_spike(dates: list[date], d60_bp: list[float | None], asof: date, *,
+                      spike_bp: float, rearm_bp: float, approach_bp: float,
+                      approach_rearm_bp: float, recent_days: int,
+                      spike_severity: str, approach_severity: str,
+                      spike_text: str, approach_text: str) -> list[Event]:
+    """Long-yield SPIKE (and approach) crossings of the 60-trading-day change.
+
+    Stateless: replays the whole d60 history through a hysteresis state
+    machine, so the answer depends only on the data — a redeploy or an empty
+    event table cannot invent or lose a crossing. A crossing fires once
+    (dedup on its date) and re-arms only after d60 falls back below the
+    re-arm level, so a series hovering at the line cannot flood the phone.
+    Only a crossing within `recent_days` of `asof` is returned: a cold start
+    must not replay an old episode as news.
+    """
+    spike_armed = approach_armed = True
+    last_spike = last_approach = None
+    for d, v in zip(dates, d60_bp):
+        if v is None:
+            continue
+        if not spike_armed and v < rearm_bp:
+            spike_armed = True
+        if not approach_armed and v < approach_rearm_bp:
+            approach_armed = True
+        if spike_armed and v >= spike_bp:
+            last_spike = (d, v)
+            spike_armed = False
+            approach_armed = False          # the spike supersedes the approach
+        elif approach_armed and approach_bp <= v < spike_bp:
+            last_approach = (d, v)
+            approach_armed = False
+    out: list[Event] = []
+    for kind, hit, sev, text in (("rate_spike", last_spike, spike_severity, spike_text),
+                                 ("rate_spike_approach", last_approach,
+                                  approach_severity, approach_text)):
+        if hit is None or (asof - hit[0]).days > recent_days:
+            continue
+        d, v = hit
+        out.append(Event(
+            event_type=kind, severity=sev, asof=asof,
+            dedup_key=f"{kind}:{d.isoformat()}",
+            rationale=text.format(d60=v, date=d.isoformat()),
+            detail={"crossed_on": d.isoformat(), "d60_bp": v,
+                    "spike_bp": spike_bp, "approach_bp": approach_bp}))
+    return out
