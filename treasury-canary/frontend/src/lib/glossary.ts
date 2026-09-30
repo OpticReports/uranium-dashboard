@@ -197,9 +197,9 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     read: "Negative = diversification intact: on bad equity days, bonds rally. A flip to positive — both falling together, 2022-style — is a regime break: usually means INFLATION/RATES are the threat rather than growth, and there's nowhere to hide.",
   },
   "crossasset.flight_to_quality": {
-    title: "Flight-to-quality score (20d)",
+    title: "Flight-to-quality score (60d)",
     what: "On days stocks fall, is money actually rotating into Treasuries?",
-    calc: "Over the last 20 sessions: share of equity down-days on which the 10y yield FELL (bond bid). 1.0 = bonds caught every equity selloff; 0 = none.",
+    calc: "Over the last 60 sessions (~33 down days): share of equity down-days on which the 10y yield FELL (bond bid). 1.0 = bonds caught every equity selloff; 0 = none. The card also shows the 20-day (fast, noisy: one day moves it ~0.1) and 120-day windows. Since 2016 the 60-day window read below 0.4 on 26% of days, almost all in the 2021-26 regime where stocks and bonds move together.",
     read: "≥0.6 = the classic risk-off reflex is working. Low readings alongside falling stocks = bonds are part of the problem (rates-driven selloff) — the dangerous configuration.",
   },
   "crossasset.hy_oas": {
