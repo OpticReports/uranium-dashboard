@@ -1,0 +1,267 @@
+{
+ "checks": [
+  {
+   "name": "gross notional within 0.1% of today",
+   "pass": true,
+   "detail": "$15,000 -> $15,008 (+0.055%)"
+  },
+  {
+   "name": "blast radius (cap as a fraction of equity) UNCHANGED",
+   "pass": true,
+   "detail": "19.99% -> 20.00%"
+  },
+  {
+   "name": "DD halt line unchanged in real terms",
+   "pass": true,
+   "detail": "17.49% -> 17.50% of equity"
+  },
+  {
+   "name": "DAILY halt line unchanged in real terms",
+   "pass": true,
+   "detail": "3.00% -> 3.00% of equity"
+  },
+  {
+   "name": "cap/target headroom ratio preserved",
+   "pass": true,
+   "detail": "1.333x -> 1.333x"
+  },
+  {
+   "name": "in-sample maxDD within 0.3pp of today",
+   "pass": true,
+   "detail": "-2.21% -> -2.42%"
+  },
+  {
+   "name": "guard2 invariant MAX_ACCOUNT_LEV >= DD_HALT_PCT holds",
+   "pass": true,
+   "detail": "0.2 >= 0.175"
+  },
+  {
+   "name": "no new sizing constant is required (frac rail == MAX_ACCOUNT_LEV)",
+   "pass": true,
+   "detail": "cap_notional = min(MAX_NOTIONAL_USD, MAX_ACCOUNT_LEV*base), unchanged code"
+  },
+  {
+   "name": "cap_clamp RED always precedes guard2 WARN as equity grows",
+   "pass": true,
+   "detail": "clamp at equity $225,000 < WARN at $257,143 (provable while MAX_ACCOUNT_LEV > DD_HALT_PCT)"
+  },
+  {
+   "name": "MAX_NOTIONAL_USD >= DD_HALT_PCT * base (guard2, absolute arm)",
+   "pass": true,
+   "detail": "45,000 >= 17,510"
+  },
+  {
+   "name": "NAIVE flip (base only) is NOT risk-neutral - it is the trap",
+   "pass": true,
+   "detail": "wants $30,017, rail delivers 66.6%, halt line 17.5% -> 35.0% of equity"
+  }
+ ],
+ "configs_at_live_equity": {
+  "TODAY": {
+   "kelly_m": 0.2,
+   "base": 50000.0,
+   "gross": 15000.000000000002,
+   "gross_frac": 0.1499175453500575,
+   "cap": 20000.0,
+   "cap_frac": 0.1998900604667433,
+   "headroom": 1.3333333333333333,
+   "dd_line_usd": 17500.0,
+   "dd_line_frac": 0.17490380290840038,
+   "daily_line_usd": 3000.0,
+   "daily_line_frac": 0.029983509070011495,
+   "mult": 1.1292130480689406,
+   "maxdd_pct": -2.212773069764651,
+   "delivered": 1.0,
+   "clamps": 0,
+   "exposure_frac": 0.1499175453500575,
+   "exposure_pages": false
+  },
+  "STEP 1": {
+   "kelly_m": 0.1,
+   "base": 100055.0,
+   "gross": 15008.250000000002,
+   "gross_frac": 0.15000000000000002,
+   "cap": 20011.0,
+   "cap_frac": 0.2,
+   "headroom": 1.3333333333333333,
+   "dd_line_usd": 17509.625,
+   "dd_line_frac": 0.175,
+   "daily_line_usd": 3001.65,
+   "daily_line_frac": 0.030000000000000002,
+   "mult": 1.1359186224500022,
+   "maxdd_pct": -2.4168727755628505,
+   "delivered": 1.0,
+   "clamps": 0,
+   "exposure_frac": 0.15000000000000002,
+   "exposure_pages": false
+  },
+  "STEP 2": {
+   "kelly_m": 0.2,
+   "base": 100055.0,
+   "gross": 30016.500000000004,
+   "gross_frac": 0.30000000000000004,
+   "cap": 40022.0,
+   "cap_frac": 0.4,
+   "headroom": 1.3333333333333333,
+   "dd_line_usd": 17509.625,
+   "dd_line_frac": 0.175,
+   "daily_line_usd": 3001.65,
+   "daily_line_frac": 0.030000000000000002,
+   "mult": 1.2856036699164426,
+   "maxdd_pct": -4.783614085086874,
+   "delivered": 1.0,
+   "clamps": 0,
+   "exposure_frac": 0.30000000000000004,
+   "exposure_pages": false
+  },
+  "NAIVE flip": {
+   "kelly_m": 0.2,
+   "base": 100055.0,
+   "gross": 30016.500000000004,
+   "gross_frac": 0.30000000000000004,
+   "cap": 20000.0,
+   "cap_frac": 0.1998900604667433,
+   "headroom": 0.6663002015558109,
+   "dd_line_usd": 35019.25,
+   "dd_line_frac": 0.35,
+   "daily_line_usd": 6003.3,
+   "daily_line_frac": 0.060000000000000005,
+   "mult": 1.1951328116482494,
+   "maxdd_pct": -3.11026357906079,
+   "delivered": 0.6662658063925921,
+   "clamps": 245,
+   "exposure_frac": 0.30000000000000004,
+   "exposure_pages": false
+  }
+ },
+ "step1_ladder": [
+  {
+   "equity": 100055.0,
+   "gross": 15008.250000000002,
+   "frac": 0.15000000000000002,
+   "cap": 20011.0,
+   "frac_cap": 20011.0,
+   "abs_cap": 45000.0,
+   "binding": "fraction",
+   "mult": 1.1359186224500022,
+   "maxdd": -2.4168727755628505,
+   "delivered": 1.0,
+   "guard2_warn": false
+  },
+  {
+   "equity": 125000.0,
+   "gross": 18750.000000000004,
+   "frac": 0.15000000000000002,
+   "cap": 25000.0,
+   "frac_cap": 25000.0,
+   "abs_cap": 45000.0,
+   "binding": "fraction",
+   "mult": 1.1359186224500035,
+   "maxdd": -2.416872775562906,
+   "delivered": 1.0,
+   "guard2_warn": false
+  },
+  {
+   "equity": 150000.0,
+   "gross": 22500.000000000004,
+   "frac": 0.15000000000000002,
+   "cap": 30000.0,
+   "frac_cap": 30000.0,
+   "abs_cap": 45000.0,
+   "binding": "fraction",
+   "mult": 1.1359186224500022,
+   "maxdd": -2.4168727755628727,
+   "delivered": 1.0,
+   "guard2_warn": false
+  },
+  {
+   "equity": 200000.0,
+   "gross": 30000.000000000004,
+   "frac": 0.15000000000000002,
+   "cap": 40000.0,
+   "frac_cap": 40000.0,
+   "abs_cap": 45000.0,
+   "binding": "fraction",
+   "mult": 1.1359186224500017,
+   "maxdd": -2.4168727755628727,
+   "delivered": 1.0,
+   "guard2_warn": false
+  },
+  {
+   "equity": 500000.0,
+   "gross": 45000.0,
+   "frac": 0.09,
+   "cap": 45000.0,
+   "frac_cap": 100000.0,
+   "abs_cap": 45000.0,
+   "binding": "ABSOLUTE",
+   "mult": 1.0900904172679358,
+   "maxdd": -1.5373330911793714,
+   "delivered": 0.6357325483405784,
+   "guard2_warn": true
+  },
+  {
+   "equity": 1000000.0,
+   "gross": 45000.0,
+   "frac": 0.045,
+   "cap": 45000.0,
+   "frac_cap": 200000.0,
+   "abs_cap": 45000.0,
+   "binding": "ABSOLUTE",
+   "mult": 1.0578508949733452,
+   "maxdd": -1.2805631393092543,
+   "delivered": 0.3314180985983229,
+   "guard2_warn": true
+  },
+  {
+   "equity": 3000000.0,
+   "gross": 45000.0,
+   "frac": 0.015,
+   "cap": 45000.0,
+   "frac_cap": 600000.0,
+   "abs_cap": 45000.0,
+   "binding": "ABSOLUTE",
+   "mult": 1.0210629799210544,
+   "maxdd": -0.49726476894159655,
+   "delivered": 0.11445881243801262,
+   "guard2_warn": true
+  },
+  {
+   "equity": 6673668.0,
+   "gross": 45000.0,
+   "frac": 0.006742918586900038,
+   "cap": 45000.0,
+   "frac_cap": 1334733.6,
+   "abs_cap": 45000.0,
+   "binding": "ABSOLUTE",
+   "mult": 1.009468397253678,
+   "maxdd": -0.22421360196756002,
+   "delivered": 0.05181899938101507,
+   "guard2_warn": true
+  }
+ ],
+ "ratchet": {
+  "proportional_to_equity": 225000.0,
+  "guard2_warns_at_equity": 257142.85714285716
+ },
+ "answer": {
+  "$100,000": {
+   "step1_equity": 666666.6666666667,
+   "step2_equity": 333333.3333333334,
+   "kelly_env_equity": 185185.18518518517,
+   "dd30_equity": 75757.57575757576,
+   "abs_ceiling_needed_step1": 100000.0,
+   "max_notional_usd_needed_step1": 133333.33333333334,
+   "max_notional_usd_needed_step2": 133333.33333333334
+  },
+  "$1,000,000": {
+   "step1_equity": 6666666.666666667,
+   "step2_equity": 3333333.3333333335,
+   "kelly_env_equity": 1851851.8518518517,
+   "dd30_equity": 757575.7575757576,
+   "abs_ceiling_needed_step1": 1000000.0,
+   "max_notional_usd_needed_step1": 1333333.3333333335,
+   "max_notional_usd_needed_step2": 1333333.3333333335
+  }
+ }
+}

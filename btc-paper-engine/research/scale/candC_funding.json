@@ -1,0 +1,207 @@
+{
+ "generated_utc": "2026-09-28T18:55:22Z",
+ "universe": [
+  "BTC",
+  "ETH",
+  "SOL",
+  "XRP",
+  "LTC",
+  "DOGE"
+ ],
+ "assets": {
+  "BTC": {
+   "n_stamps": 20002,
+   "mean_annualised_pct": 10.56330394160584,
+   "median_annualised_pct": 10.950000000000001,
+   "frac_positive_stamps": 0.8793120687931207,
+   "rolling30d_min_pct": -1.0111997259361996,
+   "rolling30d_p10_pct": 2.574575129209432,
+   "rolling30d_median_pct": 9.909560949237171,
+   "rolling30d_p90_pct": 18.28494557991679,
+   "rolling30d_max_pct": 40.94079844993065
+  },
+  "ETH": {
+   "n_stamps": 20002,
+   "mean_annualised_pct": 9.637460198540145,
+   "median_annualised_pct": 10.950000000000001,
+   "frac_positive_stamps": 0.8446155384461553,
+   "rolling30d_min_pct": -3.6113332061026355,
+   "rolling30d_p10_pct": 1.9347051573370326,
+   "rolling30d_median_pct": 8.236257399445218,
+   "rolling30d_p90_pct": 18.385479179251043,
+   "rolling30d_max_pct": 48.181285326490986
+  },
+  "SOL": {
+   "n_stamps": 20002,
+   "mean_annualised_pct": 6.742050656934308,
+   "median_annualised_pct": 10.950000000000001,
+   "frac_positive_stamps": 0.7481751824817519,
+   "rolling30d_min_pct": -17.75057121886269,
+   "rolling30d_p10_pct": -6.209810463079056,
+   "rolling30d_median_pct": 5.757705611650486,
+   "rolling30d_p90_pct": 17.75518541825243,
+   "rolling30d_max_pct": 53.939033948405005
+  },
+  "XRP": {
+   "n_stamps": 20002,
+   "mean_annualised_pct": 8.160901375182485,
+   "median_annualised_pct": 10.950000000000001,
+   "frac_positive_stamps": 0.7933706629337066,
+   "rolling30d_min_pct": -18.213652763384193,
+   "rolling30d_p10_pct": -5.360204513176145,
+   "rolling30d_median_pct": 8.339864993342582,
+   "rolling30d_p90_pct": 19.275021313065196,
+   "rolling30d_max_pct": 46.790315543966706
+  },
+  "LTC": {
+   "n_stamps": 20002,
+   "mean_annualised_pct": 12.008356392700733,
+   "median_annualised_pct": 10.950000000000001,
+   "frac_positive_stamps": 0.895010498950105,
+   "rolling30d_min_pct": -3.9376056632454923,
+   "rolling30d_p10_pct": 4.827888217531207,
+   "rolling30d_median_pct": 9.223080694036062,
+   "rolling30d_p90_pct": 21.179121642607498,
+   "rolling30d_max_pct": 61.2638849708738
+  },
+  "DOGE": {
+   "n_stamps": 20002,
+   "mean_annualised_pct": 11.226506448175181,
+   "median_annualised_pct": 10.950000000000001,
+   "frac_positive_stamps": 0.8305669433056694,
+   "rolling30d_min_pct": -10.326263471999999,
+   "rolling30d_p10_pct": -0.1811351369209414,
+   "rolling30d_median_pct": 7.945118860194175,
+   "rolling30d_p90_pct": 24.5078316004993,
+   "rolling30d_max_pct": 72.79735965436892
+  }
+ },
+ "per_leg": {
+  "BTC/S3": {
+   "n": 96,
+   "short_frac": 0.4583333333333333,
+   "mean_held_hours": 38.791666666666664,
+   "mean_bp_round_trip": -0.6781875833333716,
+   "median_bp_round_trip": -0.2960370000001933,
+   "worst_bp_round_trip": -14.999999999998348,
+   "total_pct_per_yr_of_notional": -0.30286524417747407,
+   "vs_fee_ratio": 0.07849393325617726
+  },
+  "BTC/S4": {
+   "n": 28,
+   "short_frac": 0.5357142857142857,
+   "mean_held_hours": 205.53571428571428,
+   "mean_bp_round_trip": -4.579866035714676,
+   "median_bp_round_trip": 6.373211999999503,
+   "worst_bp_round_trip": -218.07991400000012,
+   "total_pct_per_yr_of_notional": -1.8026282211900189,
+   "vs_fee_ratio": 0.5300770874669763
+  },
+  "ETH/S3": {
+   "n": 102,
+   "short_frac": 0.5392156862745098,
+   "mean_held_hours": 36.5,
+   "mean_bp_round_trip": 0.14768364705873657,
+   "median_bp_round_trip": 0.03598749999979278,
+   "worst_bp_round_trip": -15.140973999999696,
+   "total_pct_per_yr_of_notional": 0.07005978072576521,
+   "vs_fee_ratio": -0.017093014705872288
+  },
+  "ETH/S4": {
+   "n": 19,
+   "short_frac": 0.47368421052631576,
+   "mean_held_hours": 234.26315789473685,
+   "mean_bp_round_trip": -16.66626889473743,
+   "median_bp_round_trip": -3.805339999999741,
+   "worst_bp_round_trip": -438.23414099999985,
+   "total_pct_per_yr_of_notional": -5.997912163988977,
+   "vs_fee_ratio": 1.9289663072612766
+  },
+  "SOL/S3": {
+   "n": 26,
+   "short_frac": 0.5,
+   "mean_held_hours": 40.0,
+   "mean_bp_round_trip": -4.785201038461443,
+   "median_bp_round_trip": -0.5191750000000349,
+   "worst_bp_round_trip": -59.46625499999872,
+   "total_pct_per_yr_of_notional": -2.0655755300795042,
+   "vs_fee_ratio": 0.5538427127848892
+  },
+  "SOL/S4": {
+   "n": 49,
+   "short_frac": 0.4489795918367347,
+   "mean_held_hours": 341.53061224489795,
+   "mean_bp_round_trip": -15.36837910204076,
+   "median_bp_round_trip": -7.715330999999575,
+   "worst_bp_round_trip": -298.4817789999985,
+   "total_pct_per_yr_of_notional": -3.7825128061058764,
+   "vs_fee_ratio": 1.7787475812547175
+  },
+  "XRP/S3": {
+   "n": 12,
+   "short_frac": 0.5833333333333334,
+   "mean_held_hours": 24.666666666666668,
+   "mean_bp_round_trip": 1.5425837499998591,
+   "median_bp_round_trip": 0.8408789999999993,
+   "worst_bp_round_trip": -2.7684040000000576,
+   "total_pct_per_yr_of_notional": 0.5194221185338834,
+   "vs_fee_ratio": -0.1785397858796133
+  },
+  "XRP/S4": {
+   "n": 17,
+   "short_frac": 0.5294117647058824,
+   "mean_held_hours": 319.70588235294116,
+   "mean_bp_round_trip": -28.03290335294153,
+   "median_bp_round_trip": -3.331043999999783,
+   "worst_bp_round_trip": -396.2238629999965,
+   "total_pct_per_yr_of_notional": -7.252637714343843,
+   "vs_fee_ratio": 3.2445489991830474
+  },
+  "LTC/S3": {
+   "n": 90,
+   "short_frac": 0.5111111111111111,
+   "mean_held_hours": 42.977777777777774,
+   "mean_bp_round_trip": -0.397413088889225,
+   "median_bp_round_trip": -0.3605355000002586,
+   "worst_bp_round_trip": -43.38228899999963,
+   "total_pct_per_yr_of_notional": -0.16606731056581842,
+   "vs_fee_ratio": 0.04599688528810474
+  },
+  "LTC/S4": {
+   "n": 10,
+   "short_frac": 0.5,
+   "mean_held_hours": 123.1,
+   "mean_bp_round_trip": 2.102908400000156,
+   "median_bp_round_trip": 0.16228999999997828,
+   "worst_bp_round_trip": -15.080038999998186,
+   "total_pct_per_yr_of_notional": 1.4537929837855965,
+   "vs_fee_ratio": -0.24339217592594395
+  },
+  "DOGE/S3": {
+   "n": 32,
+   "short_frac": 0.5625,
+   "mean_held_hours": 35.75,
+   "mean_bp_round_trip": -3.02335706249989,
+   "median_bp_round_trip": 0.7499999999999174,
+   "worst_bp_round_trip": -63.59504199999797,
+   "total_pct_per_yr_of_notional": -1.1008410388317356,
+   "vs_fee_ratio": 0.34992558593748724
+  },
+  "DOGE/S4": {
+   "n": 31,
+   "short_frac": 0.4838709677419355,
+   "mean_held_hours": 306.4193548387097,
+   "mean_bp_round_trip": -19.54213183870973,
+   "median_bp_round_trip": -4.76179000000021,
+   "worst_bp_round_trip": -391.65980500000074,
+   "total_pct_per_yr_of_notional": -5.100361274147152,
+   "vs_fee_ratio": 2.261820814665478
+  }
+ },
+ "portfolio": {
+  "btc_only_pct_yr": -0.6778059884306102,
+  "six_asset_pct_yr": -1.3174942028822882,
+  "delta_pct_yr": -0.639688214451678,
+  "fee_load_pct_yr_6asset": 2.0212008350730692
+ }
+}

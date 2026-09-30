@@ -574,8 +574,9 @@ services:
       # the old 0.80 ceiling are RETIRED: btc-paper-engine/RESEARCH_FEES.md
       # re-fitted Kelly on the fee we actually pay (8.64 bps round trip -
       # 4 of 4 intended-maker entries crossed and paid taker, not the
-      # modelled 6.00) and the binding S6 envelope is 0.22. Setting KELLY_M
-      # above 0.20 here does NOT take effect: mirror.KELLY_M_CAP clamps
+      # modelled 6.00) and the binding S6 envelope is 0.22. KELLY_M_CAP was
+      # raised to 0.30 on 2026-09-30 (RESEARCH_CAGR.md, Casey's approval).
+      # Setting KELLY_M above 0.30 here does NOT take effect: the cap clamps
       # sizing to the cap and pages kelly_over_cap every poll (throttled to
       # one phone ping per 30 min). The executor keeps running and keeps
       # protecting open positions - it does not refuse to boot, because an
@@ -588,13 +589,44 @@ services:
       # deploys more than the old rung D. SIZING_BASE_USD, MAX_NOTIONAL_USD
       # and MAX_ACCOUNT_LEV have NO repo ceiling; they are still yours to
       # set. What the code does now is make a breach LOUD:
-      # mirror.MAX_EXPOSURE_FRAC (0.30 of equity, gross) pages
+      # mirror.MAX_EXPOSURE_FRAC (0.45 of the account's peak, gross) pages
       # exposure_over_cap and names the base rather than blaming KELLY_M.
       # Loud is not impossible. Treat a base change as a ramp step.
       # Change KELLY_M one step at a time, never alongside SIZING_BASE_USD.
-      # Current dashboard values (2026-09-21, Hyperliquid live phase):
-      # KELLY_M 0.20, SIZING_BASE_USD 50000, MAX_NOTIONAL_USD 20000,
-      # MAX_ACCOUNT_LEV 2.0, DD_HALT_PCT 0.35 (% of sizing base).
+      # Current dashboard values (2026-09-30, Hyperliquid live phase):
+      # KELLY_M 0.30, SIZING_BASE_USD 100000, MAX_NOTIONAL_USD 60000,
+      # MAX_ACCOUNT_LEV 2.0, DD_HALT_PCT 0.30 (% of sizing base),
+      # DAILY_LOSS_HALT_PCT 0.06. Engine blend 70/30 @1.5x.
+      # THE 0.30 STEP (Casey, 2026-09-30, RESEARCH_CAGR.md): gross
+      # 0.30 x 1.5 x 100000 = $45,000 (pullback 31,500 / trend 13,500).
+      # DD halt $30,000 (Casey's -30%) sits inside cap_notional 60,000, so the
+      # coherence guard is quiet. 0.30 is ON _roll_day's strictly-greater
+      # manual-resume line, so DAILY_LOSS still auto-rearms; going past 0.30
+      # needs a repo change AND a decision about that rule.
+      #
+      # THE 2x BASE STEP (2026-09-28, Casey's call): base 50000 -> 100000 and
+      # cap 20000 -> 40000, TOGETHER. Gross deployed 15000 -> 30000 = 30.0% of
+      # the ~$100.1k account, which is MAX_EXPOSURE_FRAC exactly - the full
+      # authorised Kelly envelope, and the largest this book has carried.
+      # EVERY ratio is preserved because the cap doubled with the base:
+      #   base 2x | gross 2x | MAX_NOTIONAL 2x | DRAWDOWN halt 2x (17500 ->
+      #   35000, it is a % of base) | DAILY_LOSS 2x (3000 -> 6000)
+      # This is the point of expressing rails as percentages. MAX_NOTIONAL_USD
+      # is the ONE absolute dollar rail, so it is the one that has to be moved
+      # by hand - and the one that broke when the base moved alone.
+      #
+      # WHAT WENT WRONG ON THE WAY, recorded so it is not repeated: the base
+      # was first raised to 100000 with KELLY_M 0.22 and the cap left at
+      # 20000. That produced (a) kelly_over_cap x269 - 0.22 is over
+      # KELLY_M_CAP 0.20 and was silently clamped, so it bought nothing at
+      # all; (b) halt_config - the DRAWDOWN halt needed a 35000 loss against
+      # a 20000 cap_notional, i.e. a TOTAL loss of the largest permitted
+      # position could not fire the breaker (1.8x short); (c) cap_clamp
+      # waiting to fire, since the pullback leg alone wants 22500. The fix is
+      # the cap, not the halt percentage: DD_HALT_PCT was left at 0.35
+      # because it is already proportional. Lowering it to 0.175 - which was
+      # briefly proposed - would have TIGHTENED risk relative to the book
+      # rather than holding it constant, and Casey caught that.
       #
       # KELLY_M REACHED THE CEILING 2026-09-21 (Casey's call). 0.135 -> 0.20
       # is step B of the v3 staircase and the last rung that exists: C and D
@@ -614,11 +646,15 @@ services:
       # Casey took the step anyway with tripwires instead of a gate:
       # revert to 0.135 on realized P&L <= -$500 since 09-21, any new halt,
       # a cap_clamp RED, equity <= $97,900, or exposure/kelly_over_cap.
-      # Those tripwires do the bounding here because the DRAWDOWN halt
-      # ($17,500) is LARGER than the whole gross book ($15,000) - a total
-      # loss of every open position still could not trip it. Lowering
-      # DD_HALT_PCT to 0.25 would put the halt inside the book; not done,
-      # because that is a separate decision from the sizing step.
+      # Those tripwires do the bounding here because the DRAWDOWN halt is
+      # LARGER than the whole gross book - a total loss of every open
+      # position still could not trip it. That was $17,500 vs $15,000 at the
+      # 50000 base and is $35,000 vs $30,000 at 100000: the same 1.167x
+      # ratio, preserved by the proportional step. Lowering DD_HALT_PCT to
+      # put the halt inside the book remains a separate decision from sizing.
+      # NOTE the interaction the coherence guard enforces: the halt is also
+      # compared against cap_notional, so MAX_NOTIONAL_USD must stay >= the
+      # halt threshold (40000 >= 35000) or the breaker is unreachable.
       #
       # THE 2x SIZE STEP (2026-09-16, Casey's call): base 25000 -> 50000 and
       # cap 10000 -> 20000, TOGETHER. Net exposure 2.53% -> 5.07% of the

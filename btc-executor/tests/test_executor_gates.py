@@ -6786,7 +6786,9 @@ def test_gate_kelly_cap_pages_at_boot(tmp_path):
     ex = Executor(FakeVenue(), cfg, cfg.state_path)
     ev = [e for e in ex.state.events if e["kind"] == "kelly_over_cap"]
     assert len(ev) == 1 and ev[0]["level"] == "RED"
-    assert "0.35" in ev[0]["msg"] and "0.2" in ev[0]["msg"]
+    assert "0.35" in ev[0]["msg"]
+    assert f"repo cap {mirror.KELLY_M_CAP}" in ev[0]["msg"]
+    assert f"sized at {mirror.KELLY_M_CAP}" in ev[0]["msg"]
 
 
 def test_gate_kelly_cap_silent_when_within(tmp_path):
@@ -6835,10 +6837,10 @@ def test_gate_kelly_cap_value_is_pinned():
     the constant to 0.29 and the entire suite stayed green, so a +45% size
     raise was a one-character diff past a merge-blocking gate. The whole
     control rests on the number being reviewed, so the number is asserted."""
-    assert mirror.KELLY_M_CAP == 0.20
+    assert mirror.KELLY_M_CAP == 0.30        # raised 0.20 -> 0.30, 2026-09-29
     # and the two factors it is only meaningful alongside
     assert mirror.REFERENCE_LEV == 1.5
-    assert mirror.MAX_EXPOSURE_FRAC == pytest.approx(0.30)
+    assert mirror.MAX_EXPOSURE_FRAC == pytest.approx(0.45)
     assert mirror.MAX_BLEND_LEV == 2.0
 
 
@@ -6860,7 +6862,7 @@ def test_gate_kelly_cap_is_not_env_overridable(tmp_path, monkeypatch):
     ex.cfg.kelly_m = 0.80
     ex.cfg.kelly_m_cap = 0.80                              # wishful thinking
     assert ex._effective_kelly_m() == pytest.approx(mirror.KELLY_M_CAP)
-    assert mirror.KELLY_M_CAP == 0.20                      # env did not move it
+    assert mirror.KELLY_M_CAP == 0.30                      # env did not move it
 
 
 def test_gate_kelly_cap_page_actually_reaches_the_phone(tmp_path, monkeypatch):
@@ -7010,7 +7012,7 @@ def test_gate_over_cap_env_does_not_hold_daily_loss_hostage(tmp_path):
     v = FakeVenue()
     ex = mkexec(tmp_path, v)
     ex.cfg.kelly_m = 0.56                     # raw > 0.30 ...
-    assert ex._effective_kelly_m() == pytest.approx(0.20)   # ... effective is not
+    assert ex._effective_kelly_m() == pytest.approx(mirror.KELLY_M_CAP)  # ... effective is not above 0.30
     ex.state.halted = "DAILY_LOSS"
     ex.state.day_key = "2020-01-01"           # force a rollover
     ex.step(target())
@@ -7110,3 +7112,38 @@ def test_gate_pulse_red_kinds_carry_no_sizes_or_prices(tmp_path, monkeypatch):
     monkeypatch.setattr(m.settings, "exec_token", "")
     body = TestClient(m.app).get("/pulse").text
     assert "0.03134" not in body and "80757" not in body, body
+
+
+def test_gate_cap_sits_on_the_daily_loss_manual_line(tmp_path):
+    """KELLY_M_CAP 0.30 is chosen to sit ON _roll_day's strictly-greater
+    manual-resume line: at the cap DAILY_LOSS must still auto-rearm. If
+    either number moves, this pins the interaction (2026-09-29)."""
+    ex = mkexec(tmp_path, FakeVenue())
+    ex.cfg.kelly_m = 0.30
+    assert ex._effective_kelly_m() == pytest.approx(0.30)
+    ex.state.day_key = "2000-01-01"
+    ex.state.halted = "DAILY_LOSS"
+    ex._roll_day(ex.venue.equity())
+    assert ex.state.halted is None, "DAILY_LOSS must auto-rearm AT the cap"
+    ex.cfg.kelly_m = 0.80                                  # clamps to 0.30
+    ex.state.day_key = "2000-01-01"
+    ex.state.halted = "DAILY_LOSS"
+    ex._roll_day(ex.venue.equity())
+    assert ex.state.halted is None, "an over-cap env is clamped, not held"
+
+
+def test_gate_exposure_check_ignores_drawdown_but_catches_config(tmp_path):
+    """At the cap with SIZING_BASE_USD == the account's peak, an ordinary
+    10% drawdown must NOT page exposure_over_cap (it used to, every poll);
+    a base above the peak still must."""
+    v = FakeVenue(equity=100_000.0)
+    ex = mkexec(tmp_path, v)
+    ex.cfg.kelly_m = 0.30
+    ex.cfg.sizing_base_usd = 100_000.0
+    ex.cfg.max_notional_usd = 10_000_000.0
+    ex.state.high_water = 100_000.0
+    ex._check_exposure(90_000.0, {"w_trend": 0.30, "lev": 1.5})
+    assert not [e for e in ex.state.events if e["kind"] == "exposure_over_cap"]
+    ex.cfg.sizing_base_usd = 150_000.0                     # config breach
+    ex._check_exposure(90_000.0, {"w_trend": 0.30, "lev": 1.5})
+    assert [e for e in ex.state.events if e["kind"] == "exposure_over_cap"]

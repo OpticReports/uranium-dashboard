@@ -11,7 +11,7 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
-from .config import settings
+from .config import LIVE_LEV, LIVE_W_TREND, settings
 from .live import ENGINE, start_background_loop
 from .store.db import (
     BarRow, EquitySnapRow, EventRow, SignalRow, TradeRow, init_db, log_event,
@@ -113,7 +113,7 @@ def exec_target(x_exec_token: str | None = Header(default=None)):
             "bar_iso": _iso(ENGINE.last_processed or None),
             "price": ENGINE.cur_price,
             "degraded": ENGINE.degraded, "data_halt": ENGINE.data_halt,
-            "blend": {"w_trend": 0.25, "lev": 1.5},
+            "blend": {"w_trend": LIVE_W_TREND, "lev": LIVE_LEV},
             "legs": {"pullback": _leg("S3"), "trend": _leg("S4")}}
 
 
@@ -425,7 +425,7 @@ def replay_compare(window: str = "2y", start: str | None = None,
         st.update(_risk_stats(steps, yrs, total, b.mtm_max_dd))
         out[n] = st
     if "S3" in res.books and "S4" in res.books:
-        out["S5"] = _blend_stats("S5", res.books["S3"], res.books["S4"], 0.25, 1.5)
+        out["S5"] = _blend_stats("S5", res.books["S3"], res.books["S4"], LIVE_W_TREND, LIVE_LEV)
         out["S6"] = _blend_stats("S6", res.books["S3"], res.books["S4"], 0.25, 2.0)
     bars_win = [b for b in bars_ if t0 <= b.ts <= t1]
     hold = _hold_stats(bars_win, ENGINE.books_cfg[0].start_equity,
@@ -517,7 +517,7 @@ def kelly_compare(window: str = "2y"):
                for n, b in res.books.items()}
     descs = {n: b.cfg.strategy for n, b in res.books.items()}
     if "S3" in res.books and "S4" in res.books:
-        streams["S5"] = _blend_steps(res.books["S3"], res.books["S4"], 0.25, 1.5)
+        streams["S5"] = _blend_steps(res.books["S3"], res.books["S4"], LIVE_W_TREND, LIVE_LEV)
         streams["S6"] = _blend_steps(res.books["S3"], res.books["S4"], 0.25, 2.0)
         descs["S5"], descs["S6"] = "blend 75/25 @1.5x", "blend 75/25 @2.0x"
     books = {n: analyze(streams[n], n, descs.get(n, ""))

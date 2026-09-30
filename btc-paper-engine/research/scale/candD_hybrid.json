@@ -1,0 +1,84 @@
+{
+  "arms": {
+    "spot OHLC + spot volume  (LIVE config)": {
+      "n": 148,
+      "mean_pct": 0.304,
+      "sd_pct": 3.26,
+      "kelly_m": 2.99,
+      "p10": 0.47,
+      "prob_negative_edge": 0.064,
+      "dd30_m": 0.92,
+      "recommended_m": 0.47,
+      "authorised_gross_usd": 70538.775,
+      "rec_m_across_seeds": [
+        0.47,
+        0.56,
+        0.53,
+        0.53,
+        0.43,
+        0.45
+      ],
+      "verdict": "OVERSIZED: engine supports only ~0.5x current size"
+    },
+    "perp OHLC + perp volume": {
+      "n": 113,
+      "mean_pct": 0.109,
+      "sd_pct": 3.3,
+      "kelly_m": 1.01,
+      "p10": 0.0,
+      "prob_negative_edge": 0.343,
+      "dd30_m": 0.66,
+      "recommended_m": 0.0,
+      "authorised_gross_usd": 0.0,
+      "rec_m_across_seeds": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "verdict": "EDGE NOT DISTINGUISHABLE FROM ZERO (34% of bootstrap resamples non-positive) \u2014 kill rule: size zero standalone; value, if any, is as a diversifier"
+    },
+    "perp OHLC + SPOT volume  (the missing cell)": {
+      "n": 117,
+      "mean_pct": 0.219,
+      "sd_pct": 3.3,
+      "kelly_m": 2.02,
+      "p10": 0.0,
+      "prob_negative_edge": 0.191,
+      "dd30_m": 0.77,
+      "recommended_m": 0.0,
+      "authorised_gross_usd": 0.0,
+      "rec_m_across_seeds": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "verdict": "OVERSIZED: engine supports only ~0.0x current size"
+    },
+    "spot OHLC + PERP volume  (control)": {
+      "n": 145,
+      "mean_pct": 0.255,
+      "sd_pct": 3.24,
+      "kelly_m": 2.52,
+      "p10": 0.0,
+      "prob_negative_edge": 0.11,
+      "dd30_m": 0.86,
+      "recommended_m": 0.0,
+      "authorised_gross_usd": 0.0,
+      "rec_m_across_seeds": [
+        0.0,
+        0.04,
+        0.01,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "verdict": "OVERSIZED: engine supports only ~0.0x current size"
+    }
+  }
+}

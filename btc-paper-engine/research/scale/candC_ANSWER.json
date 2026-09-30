@@ -1,0 +1,390 @@
+{
+ "candidate": "C \u2014 more notional via diversification across Hyperliquid perps",
+ "generated_utc": "2026-09-28T19:17:34Z",
+ "verdict": "promising-needs-work",
+ "one_line": "The risk-side mechanism is real and robustly measured (price rho 0.71 -> strategy rho 0.15, buying 1.63x more gross notional at the same drawdown budget, net of funding). But under the repo's OWN Kelly instrument the 6-asset book authorises ZERO, the benefit INVERTS to 0.89x in a sustained drawdown, and the single asset carrying the result (ETH) fails family-wise multiple testing at p=0.275.",
+ "basis": {
+  "universe": [
+   "BTC",
+   "ETH",
+   "SOL",
+   "XRP",
+   "LTC",
+   "DOGE"
+  ],
+  "selection_rule": "liquidity only, pre-registered, no return information",
+  "bars": 4790,
+  "years": 2.1872146118721463,
+  "window": "2024-06-17 -> 2026-09-28",
+  "data": "Hyperliquid candleSnapshot",
+  "fee_rt_bps": 8.64,
+  "engine": "shipped run_replay/core.py, ZERO per-asset fitting",
+  "equity": 100055.0,
+  "live_gross_today": 15000.000000000002,
+  "in_sample": true
+ },
+ "headline_numbers": {
+  "k_btc_alone_DD30": 1.003,
+  "k_6asset_DD30": 1.666,
+  "gross_btc_alone": 100355.165,
+  "gross_6asset": 166691.63,
+  "multiple_gross_of_funding": 1.6610169491525424,
+  "multiple_net_of_funding": 1.6268656716417913,
+  "multiple_liquidity_weighted": 1.3928215353938187,
+  "multiple_fixture_btc_basis": 1.248788368336026,
+  "multiple_sustained_drawdown": 0.8867505551443375,
+  "equity_for_1m_btc_alone": 997008.9730807579,
+  "equity_for_1m_6asset": 600240.0960384154
+ },
+ "mechanism": {
+  "price_rho": 0.7138570637224045,
+  "strategy_rho": 0.15190036027843895,
+  "strategy_rho_90ci": [
+   0.12388663985532548,
+   0.17996338156551167
+  ],
+  "mean_assets_in_market": 2.7396659707724424,
+  "why": "each leg is in market ~20% of bars and picks its own side; the TIMING GAP decorrelates, not a hedge"
+ },
+ "what_kills_it": {
+  "1_authorised_size_is_zero": {
+   "note": "KELLY.md rec = min(half-K, bootstrap p10, c*m*, dd30); p10 BINDS everywhere",
+   "terms": {
+    "BTC only (today's book)": {
+     "kelly_star": 2.75,
+     "terms": {
+      "half_kelly": 1.375,
+      "bootstrap_p10": 0.0,
+      "c_star_x_mstar": 0.726784366670425,
+      "dd30": 1.003
+     },
+     "binding": "bootstrap_p10",
+     "recommended_k": 0.0,
+     "prob_neg_edge": 0.293,
+     "killed_by_kill_rule": true,
+     "coins": [
+      "BTC"
+     ],
+     "rec_gross_usd": 0.0,
+     "x_live": 0.0
+    },
+    "BTC+ETH": {
+     "kelly_star": 7.0,
+     "terms": {
+      "half_kelly": 3.5,
+      "bootstrap_p10": 0.75,
+      "c_star_x_mstar": 4.942582116682996,
+      "dd30": 1.278
+     },
+     "binding": "bootstrap_p10",
+     "recommended_k": 0.75,
+     "prob_neg_edge": 0.087,
+     "killed_by_kill_rule": false,
+     "coins": [
+      "BTC",
+      "ETH"
+     ],
+     "rec_gross_usd": 75041.25,
+     "x_live": 5.00275
+    },
+    "BTC+ETH+SOL": {
+     "kelly_star": 6.5,
+     "terms": {
+      "half_kelly": 3.25,
+      "bootstrap_p10": 0.0,
+      "c_star_x_mstar": 3.8750711119422423,
+      "dd30": 1.47
+     },
+     "binding": "bootstrap_p10",
+     "recommended_k": 0.0,
+     "prob_neg_edge": 0.117,
+     "killed_by_kill_rule": false,
+     "coins": [
+      "BTC",
+      "ETH",
+      "SOL"
+     ],
+     "rec_gross_usd": 0.0,
+     "x_live": 0.0
+    },
+    "all 6 assets": {
+     "kelly_star": 6.173180019046283,
+     "terms": {
+      "half_kelly": 3.0865900095231416,
+      "bootstrap_p10": 0.0,
+      "c_star_x_mstar": 3.056092609999526,
+      "dd30": 1.666
+     },
+     "binding": "bootstrap_p10",
+     "recommended_k": 0.0,
+     "prob_neg_edge": 0.233,
+     "killed_by_kill_rule": false,
+     "coins": [
+      "BTC",
+      "ETH",
+      "SOL",
+      "XRP",
+      "LTC",
+      "DOGE"
+     ],
+     "rec_gross_usd": 0.0,
+     "x_live": 0.0
+    }
+   }
+  },
+  "2_crash_case": {
+   "strategy_rho_full": 0.15190036027843895,
+   "strategy_rho_dd15": 0.29754910026073433,
+   "side_concentration_full": 0.8282860716594517,
+   "side_concentration_dd15": 0.8922522632241302,
+   "frac_bars_all_same_side": 0.6802751275793211,
+   "crash_only_multiple": 0.8867505551443375
+  },
+  "3_multiple_testing": {
+   "observed_ann_SR": {
+    "BTC/S3": 0.7785548409170228,
+    "BTC/S4": -0.7520811967339728,
+    "ETH/S3": 1.4491225336425158,
+    "ETH/S4": -0.483615835401368,
+    "SOL/S3": -0.6575663400636537,
+    "SOL/S4": 0.6171016829374059,
+    "XRP/S3": -1.3264012753683851,
+    "XRP/S4": 0.7713785729563085,
+    "LTC/S3": 0.5322717592934768,
+    "LTC/S4": -1.9253543601981935,
+    "DOGE/S3": -0.17349445114194928,
+    "DOGE/S4": 0.6628800375418887
+   },
+   "best_leg": "ETH/S3",
+   "best_ann_SR": 1.4491225336425158,
+   "null_block_bars": 60,
+   "null_draws": 4000,
+   "null_max_median": 1.180641600145583,
+   "null_max_p95": 1.966495356109245,
+   "p_single": 0.01675,
+   "p_familywise": 0.27525,
+   "verdict": "DOES NOT survive family-wise at 5% \u2014 ATTACK LANDS"
+  },
+  "4_data_basis": {
+   "s4_annSR_fixture_same_window": 0.2,
+   "s4_annSR_hl_same_window": -0.78,
+   "s4_trades_fixture": 59,
+   "s4_trades_hl": 28,
+   "note": "donchian entry (channel break) and exit (wick-touch trail) are both wick-sensitive; the fixture is a different venue's print. Same window, same engine, opposite sign.",
+   "window_json": "candC_window.json"
+  }
+ },
+ "what_survives": {
+  "budget_sensitivity": {
+   "grid": {
+    "dd0.15_p0.05": {
+     "k_btc": 0.408,
+     "k_6": 0.631,
+     "mult": 1.5465686274509804
+    },
+    "dd0.15_p0.1": {
+     "k_btc": 0.467,
+     "k_6": 0.781,
+     "mult": 1.6723768736616702
+    },
+    "dd0.15_p0.2": {
+     "k_btc": 0.549,
+     "k_6": 0.929,
+     "mult": 1.692167577413479
+    },
+    "dd0.2_p0.05": {
+     "k_btc": 0.558,
+     "k_6": 0.859,
+     "mult": 1.5394265232974909
+    },
+    "dd0.2_p0.1": {
+     "k_btc": 0.635,
+     "k_6": 1.063,
+     "mult": 1.6740157480314959
+    },
+    "dd0.2_p0.2": {
+     "k_btc": 0.751,
+     "k_6": 1.259,
+     "mult": 1.6764314247669772
+    },
+    "dd0.3_p0.05": {
+     "k_btc": 0.886,
+     "k_6": 1.349,
+     "mult": 1.5225733634311511
+    },
+    "dd0.3_p0.1": {
+     "k_btc": 1.003,
+     "k_6": 1.666,
+     "mult": 1.6610169491525424
+    },
+    "dd0.3_p0.2": {
+     "k_btc": 1.181,
+     "k_6": 1.963,
+     "mult": 1.6621507197290433
+    },
+    "dd0.4_p0.05": {
+     "k_btc": 1.249,
+     "k_6": 1.897,
+     "mult": 1.5188150520416333
+    },
+    "dd0.4_p0.1": {
+     "k_btc": 1.428,
+     "k_6": 2.334,
+     "mult": 1.6344537815126052
+    },
+    "dd0.4_p0.2": {
+     "k_btc": 1.657,
+     "k_6": 2.742,
+     "mult": 1.6547978273989137
+    }
+   },
+   "mult_min": 1.5188150520416333,
+   "mult_median": 1.657907388275728,
+   "mult_max": 1.692167577413479
+  },
+  "seed_stability": {
+   "ratio_mean": 1.6323017062401177,
+   "ratio_sd": 0.05888019132595163,
+   "ratio_min": 1.5502439024390244,
+   "ratio_max": 1.7054108216432866
+  },
+  "block_sensitivity": {
+   "20": {
+    "k_btc": 1.042,
+    "k_6asset": 1.565,
+    "ratio": 1.501919385796545
+   },
+   "60": {
+    "k_btc": 1.003,
+    "k_6asset": 1.666,
+    "ratio": 1.6610169491525424
+   },
+   "120": {
+    "k_btc": 1.055,
+    "k_6asset": 1.763,
+    "ratio": 1.671090047393365
+   },
+   "240": {
+    "k_btc": 1.128,
+    "k_6asset": 1.835,
+    "ratio": 1.6267730496453903
+   }
+  },
+  "funding_delta_pct_yr_of_notional": -0.639688214451678,
+  "oracle_over_headline": 1.0234093637454982,
+  "rho_one_anchor_returns": 1.0,
+  "rho_zero_anchor": 2.055001661681622
+ },
+ "the_one_actionable_row": {
+  "config": "BTC + ETH only (2 assets, 4 legs), shipped 75/25 within asset, equal across",
+  "recommended_k_full_kelly_min": 0.75,
+  "recommended_k_net_of_funding": 0.725,
+  "authorised_gross_usd_net": 72539.875,
+  "x_live_today": 4.835991666666666,
+  "equity_for_100k": 137931.03448275864,
+  "equity_for_1m": 1379310.3448275863,
+  "implied_KELLY_M_at_base_equity": 0.48333333333333334,
+  "p10_seed_stability": {
+   "values": [
+    0.75,
+    0.75,
+    1.0,
+    0.5,
+    1.225,
+    0.975,
+    0.725,
+    1.25,
+    1.0,
+    0.0
+   ],
+   "mean": 0.8175000000000001,
+   "min": 0.0,
+   "max": 1.25,
+   "frac_zero": 0.1
+  },
+  "n_pairs_positive_of_15": 2,
+  "caveat": "both surviving pairs contain ETH; ETH is the single point of failure and fails family-wise testing"
+ },
+ "rails_at_1m": {
+  "BTC": {
+   "per_asset_at_100k": 16666.666666666668,
+   "per_asset_at_1m": 166666.66666666666,
+   "probe_bps": 1.782819544924319,
+   "ask_ladder_usd": 34888692.04749999,
+   "frac_of_ladder_at_1m": 0.00477709701583982
+  },
+  "ETH": {
+   "per_asset_at_100k": 16666.666666666668,
+   "per_asset_at_1m": 166666.66666666666,
+   "probe_bps": 4.821305240370055,
+   "ask_ladder_usd": 58627878.8289,
+   "frac_of_ladder_at_1m": 0.0028427886185865225
+  },
+  "SOL": {
+   "per_asset_at_100k": 16666.666666666668,
+   "per_asset_at_1m": 166666.66666666666,
+   "probe_bps": 4.1718815185665115,
+   "ask_ladder_usd": 43554514.965,
+   "frac_of_ladder_at_1m": 0.0038266220344916804
+  },
+  "XRP": {
+   "per_asset_at_100k": 16666.666666666668,
+   "per_asset_at_1m": 166666.66666666666,
+   "probe_bps": 3.307972213033583,
+   "ask_ladder_usd": 14472489.222,
+   "frac_of_ladder_at_1m": 0.01151610231730644
+  },
+  "LTC": {
+   "per_asset_at_100k": 16666.666666666668,
+   "per_asset_at_1m": 166666.66666666666,
+   "probe_bps": 8.052587709010961,
+   "ask_ladder_usd": 443066.23029999994,
+   "frac_of_ladder_at_1m": 0.37616648543450654
+  },
+  "DOGE": {
+   "per_asset_at_100k": 16666.666666666668,
+   "per_asset_at_1m": 166666.66666666666,
+   "probe_bps": 1.7599259794454092,
+   "ask_ladder_usd": 984388.15281,
+   "frac_of_ladder_at_1m": 0.16930990706349505
+  }
+ },
+ "open_questions": [
+  "WHICH BTC BAR SERIES IS THE REGISTERED OBJECTIVE \u2014 the repo fixture or Hyperliquid's own candles? Over the IDENTICAL window the donchian leg is +0.20 ann.SR / 59 trades on the fixture and -0.78 / 28 trades on HL, and the diversification multiple is 1.25x vs 1.66x. The book EXECUTES on HL, which argues HL's prints are the execution-correct basis, but every published number in the repo rests on the fixture. This is a dated protocol amendment Casey signs, not something I can resolve, and it moves the answer by a third.",
+  "IS THERE ANY LONGER OR OUT-OF-SAMPLE ETH HISTORY? Hyperliquid serves only 5,000 candles (2.19y) and ETH is the single asset carrying this entire candidate. Its 1.45 ann.SR fails family-wise multiple testing on that window (p=0.275). Pulling ETH bars from another venue would re-open the data-basis problem above rather than settle it. Without an independent window I cannot distinguish ETH's edge from the best of twelve tries, and I will not size on it. This is the single decisive missing input.",
+  "IS A 6x INCREASE IN LIVE-MONEY SURFACE AREA ACCEPTABLE? mirror.py's sizing rails (_leg_frac, _base, _cap_room, _leg_qty, _check_exposure, _check_kelly_cap) are scalar single-asset throughout, and cap_room is consumed SEQUENTIALLY across legs. barbell-lab check_slippage freezes ONE set of slip norms from the first 10 fills; BTC spread is 0.12bp and SOL's is 8.3bp, so a single CUSUM across 6 assets is meaningless. This is a rails rewrite on the live path, not a config change.",
+  "IS CASEY ADDING CAPITAL, AND ON WHAT TRAJECTORY? Unchanged from phase 1 and still decisive: even the 6-asset DD-budget number needs ~$600k of equity for $1m of gross, and the BTC+ETH row that actually authorises anything needs ~$1.38m. No diversification result removes the capital requirement; it cuts it ~40%.",
+  "SHOULD THE DEPTH GATE BE A STANDING RAIL? It is unstable: re-sampled 6 times, LTC passed 5/6, LINK 4/6 and SUI 2/6 at a $125k probe. At $1m equal-weighted, LTC's per-asset share is 37.6% of its visible ask ladder. Any multi-asset book needs a live depth precondition per asset per entry, which does not exist today."
+ ],
+ "artifacts": [
+  "candC_charts.py",
+  "candC_counter.json",
+  "candC_counter.py",
+  "candC_crash.json",
+  "candC_crash.py",
+  "candC_data",
+  "candC_fetch.json",
+  "candC_fetch.py",
+  "candC_fig1_the_answer.png",
+  "candC_fig2_mechanism.png",
+  "candC_fig3_crash.png",
+  "candC_fig4_robustness.png",
+  "candC_funding.json",
+  "candC_funding.py",
+  "candC_lib.py",
+  "candC_multi.json",
+  "candC_multi.py",
+  "candC_net.json",
+  "candC_net.py",
+  "candC_net_streams.npz",
+  "candC_oracle.json",
+  "candC_oracle.py",
+  "candC_p10.json",
+  "candC_p10.py",
+  "candC_portfolio.json",
+  "candC_portfolio.py",
+  "candC_streams.npz",
+  "candC_window.json",
+  "candC_window.py"
+ ]
+}

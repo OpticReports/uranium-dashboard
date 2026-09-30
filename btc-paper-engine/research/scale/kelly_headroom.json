@@ -1,0 +1,432 @@
+{
+  "cases": {
+    "full|FIXED|k_live_0.0999": {
+      "kelly": {
+        "book": "full/FIXED/k_live_0.0999",
+        "current": "gross median $15,000 on $100,055 equity",
+        "n": 318,
+        "mean_pct": 0.041,
+        "sd_pct": 0.36,
+        "min_pct": -0.74,
+        "worst_feasible_m": 4.0,
+        "g_current": 0.0004,
+        "kelly_m": 4.0,
+        "g_at_kelly": 0.00152,
+        "bootstrap": {
+          "p10": 4.0,
+          "p50": 4.0,
+          "p90": 4.0,
+          "prob_negative_edge": 0.002
+        },
+        "half_kelly_m": 2.0,
+        "conservative_m": 2.0,
+        "shrinkage_c_star": 0.8,
+        "dd_constrained": {
+          "p_maxdd20_le_10pct": 4.0,
+          "p_maxdd30_le_10pct": 4.0,
+          "analytic_dd20": 0.71,
+          "analytic_dd30": 1.07
+        },
+        "dd_at_current": {
+          "p_dd_gt_20": 0.0,
+          "p_dd_gt_30": 0.0
+        },
+        "recommended_m": 2.0,
+        "verdict": "UNDERSIZED: engine supports ~2.0x current size"
+      },
+      "current_gross_usd": {
+        "median": 15000.000000000004,
+        "max": 15000.000000000004,
+        "p99": 15000.000000000004
+      },
+      "gross_usd_at_recommended_m": {
+        "median": 30000.000000000007,
+        "p99": 30000.000000000007,
+        "max": 30000.000000000007
+      }
+    },
+    "full|FIXED|k_1.0_research_S5": {
+      "kelly": {
+        "book": "full/FIXED/k_1.0_research_S5",
+        "current": "gross median $150,082 on $100,055 equity",
+        "n": 318,
+        "mean_pct": 0.407,
+        "sd_pct": 3.62,
+        "min_pct": -7.44,
+        "worst_feasible_m": 4.0,
+        "g_current": 0.00342,
+        "kelly_m": 3.3,
+        "g_at_kelly": 0.00659,
+        "bootstrap": {
+          "p10": 1.74,
+          "p50": 3.24,
+          "p90": 4.0,
+          "prob_negative_edge": 0.002
+        },
+        "half_kelly_m": 1.65,
+        "conservative_m": 1.65,
+        "shrinkage_c_star": 0.8,
+        "dd_constrained": {
+          "p_maxdd20_le_10pct": 0.49,
+          "p_maxdd30_le_10pct": 0.76,
+          "analytic_dd20": 0.58,
+          "analytic_dd30": 0.89
+        },
+        "dd_at_current": {
+          "p_dd_gt_20": 0.91,
+          "p_dd_gt_30": 0.338
+        },
+        "recommended_m": 0.76,
+        "verdict": "OVERSIZED: engine supports only ~0.8x current size"
+      },
+      "current_gross_usd": {
+        "median": 150082.5,
+        "max": 150082.5,
+        "p99": 150082.5
+      },
+      "gross_usd_at_recommended_m": {
+        "median": 114062.7,
+        "p99": 114062.7,
+        "max": 114062.7
+      }
+    },
+    "full|VOLTARGET|k_live_0.0999": {
+      "kelly": {
+        "book": "full/VOLTARGET/k_live_0.0999",
+        "current": "gross median $15,390 on $100,055 equity",
+        "n": 318,
+        "mean_pct": 0.049,
+        "sd_pct": 0.41,
+        "min_pct": -0.44,
+        "worst_feasible_m": 4.0,
+        "g_current": 0.00048,
+        "kelly_m": 4.0,
+        "g_at_kelly": 0.00181,
+        "bootstrap": {
+          "p10": 4.0,
+          "p50": 4.0,
+          "p90": 4.0,
+          "prob_negative_edge": 0.002
+        },
+        "half_kelly_m": 2.0,
+        "conservative_m": 2.0,
+        "shrinkage_c_star": 0.82,
+        "dd_constrained": {
+          "p_maxdd20_le_10pct": 4.0,
+          "p_maxdd30_le_10pct": 4.0,
+          "analytic_dd20": 0.71,
+          "analytic_dd30": 1.07
+        },
+        "dd_at_current": {
+          "p_dd_gt_20": 0.0,
+          "p_dd_gt_30": 0.0
+        },
+        "recommended_m": 2.0,
+        "verdict": "UNDERSIZED: engine supports ~2.0x current size"
+      },
+      "current_gross_usd": {
+        "median": 15390.182176421593,
+        "max": 47332.92460040354,
+        "p99": 39225.462133938534
+      },
+      "gross_usd_at_recommended_m": {
+        "median": 30780.364352843186,
+        "p99": 78450.92426787707,
+        "max": 94665.84920080708
+      }
+    },
+    "full|VOLTARGET|k_1.0_research_S5": {
+      "kelly": {
+        "book": "full/VOLTARGET/k_1.0_research_S5",
+        "current": "gross median $153,986 on $100,055 equity",
+        "n": 318,
+        "mean_pct": 0.487,
+        "sd_pct": 4.13,
+        "min_pct": -4.36,
+        "worst_feasible_m": 4.0,
+        "g_current": 0.00406,
+        "kelly_m": 3.54,
+        "g_at_kelly": 0.00812,
+        "bootstrap": {
+          "p10": 1.97,
+          "p50": 3.46,
+          "p90": 4.0,
+          "prob_negative_edge": 0.002
+        },
+        "half_kelly_m": 1.77,
+        "conservative_m": 1.77,
+        "shrinkage_c_star": 0.82,
+        "dd_constrained": {
+          "p_maxdd20_le_10pct": 0.46,
+          "p_maxdd30_le_10pct": 0.73,
+          "analytic_dd20": 0.63,
+          "analytic_dd30": 0.95
+        },
+        "dd_at_current": {
+          "p_dd_gt_20": 0.93,
+          "p_dd_gt_30": 0.356
+        },
+        "recommended_m": 0.73,
+        "verdict": "OVERSIZED: engine supports only ~0.7x current size"
+      },
+      "current_gross_usd": {
+        "median": 153986.46776618622,
+        "max": 473589.5770893375,
+        "p99": 392470.36138112197
+      },
+      "gross_usd_at_recommended_m": {
+        "median": 112410.12146931594,
+        "p99": 286503.36380821903,
+        "max": 345720.39127521636
+      }
+    },
+    "last_2y|FIXED|k_live_0.0999": {
+      "kelly": {
+        "book": "last_2y/FIXED/k_live_0.0999",
+        "current": "gross median $15,000 on $100,055 equity",
+        "n": 151,
+        "mean_pct": 0.025,
+        "sd_pct": 0.33,
+        "min_pct": -0.63,
+        "worst_feasible_m": 4.0,
+        "g_current": 0.00025,
+        "kelly_m": 4.0,
+        "g_at_kelly": 0.00092,
+        "bootstrap": {
+          "p10": 0.55,
+          "p50": 4.0,
+          "p90": 4.0,
+          "prob_negative_edge": 0.092
+        },
+        "half_kelly_m": 2.0,
+        "conservative_m": 0.55,
+        "shrinkage_c_star": 0.47,
+        "dd_constrained": {
+          "p_maxdd20_le_10pct": 4.0,
+          "p_maxdd30_le_10pct": 4.0,
+          "analytic_dd20": 0.71,
+          "analytic_dd30": 1.07
+        },
+        "dd_at_current": {
+          "p_dd_gt_20": 0.0,
+          "p_dd_gt_30": 0.0
+        },
+        "recommended_m": 0.55,
+        "verdict": "OVERSIZED: engine supports only ~0.6x current size"
+      },
+      "current_gross_usd": {
+        "median": 15000.000000000004,
+        "max": 15000.000000000004,
+        "p99": 15000.000000000004
+      },
+      "gross_usd_at_recommended_m": {
+        "median": 8250.000000000002,
+        "p99": 8250.000000000002,
+        "max": 8250.000000000002
+      }
+    },
+    "last_2y|FIXED|k_1.0_research_S5": {
+      "kelly": {
+        "book": "last_2y/FIXED/k_1.0_research_S5",
+        "current": "gross median $150,082 on $100,055 equity",
+        "n": 151,
+        "mean_pct": 0.251,
+        "sd_pct": 3.3,
+        "min_pct": -6.3,
+        "worst_feasible_m": 4.0,
+        "g_current": 0.00197,
+        "kelly_m": 2.38,
+        "g_at_kelly": 0.00296,
+        "bootstrap": {
+          "p10": 0.06,
+          "p50": 2.5,
+          "p90": 4.0,
+          "prob_negative_edge": 0.093
+        },
+        "half_kelly_m": 1.19,
+        "conservative_m": 0.06,
+        "shrinkage_c_star": 0.47,
+        "dd_constrained": {
+          "p_maxdd20_le_10pct": 0.52,
+          "p_maxdd30_le_10pct": 0.82,
+          "analytic_dd20": 0.42,
+          "analytic_dd30": 0.64
+        },
+        "dd_at_current": {
+          "p_dd_gt_20": 0.756,
+          "p_dd_gt_30": 0.242
+        },
+        "recommended_m": 0.06,
+        "verdict": "OVERSIZED: engine supports only ~0.1x current size"
+      },
+      "current_gross_usd": {
+        "median": 150082.5,
+        "max": 150082.5,
+        "p99": 150082.5
+      },
+      "gross_usd_at_recommended_m": {
+        "median": 9004.949999999999,
+        "p99": 9004.949999999999,
+        "max": 9004.949999999999
+      }
+    },
+    "last_2y|VOLTARGET|k_live_0.0999": {
+      "kelly": {
+        "book": "last_2y/VOLTARGET/k_live_0.0999",
+        "current": "gross median $16,825 on $100,055 equity",
+        "n": 151,
+        "mean_pct": 0.025,
+        "sd_pct": 0.35,
+        "min_pct": -0.42,
+        "worst_feasible_m": 4.0,
+        "g_current": 0.00024,
+        "kelly_m": 4.0,
+        "g_at_kelly": 0.0009,
+        "bootstrap": {
+          "p10": 0.0,
+          "p50": 4.0,
+          "p90": 4.0,
+          "prob_negative_edge": 0.115
+        },
+        "half_kelly_m": 2.0,
+        "conservative_m": 0.0,
+        "shrinkage_c_star": 0.44,
+        "dd_constrained": {
+          "p_maxdd20_le_10pct": 4.0,
+          "p_maxdd30_le_10pct": 4.0,
+          "analytic_dd20": 0.71,
+          "analytic_dd30": 1.07
+        },
+        "dd_at_current": {
+          "p_dd_gt_20": 0.0,
+          "p_dd_gt_30": 0.0
+        },
+        "recommended_m": 0.0,
+        "verdict": "OVERSIZED: engine supports only ~0.0x current size"
+      },
+      "current_gross_usd": {
+        "median": 16824.711141039374,
+        "max": 31649.722276579836,
+        "p99": 28570.10972055325
+      },
+      "gross_usd_at_recommended_m": {
+        "median": 0.0,
+        "p99": 0.0,
+        "max": 0.0
+      }
+    },
+    "last_2y|VOLTARGET|k_1.0_research_S5": {
+      "kelly": {
+        "book": "last_2y/VOLTARGET/k_1.0_research_S5",
+        "current": "gross median $168,340 on $100,055 equity",
+        "n": 151,
+        "mean_pct": 0.25,
+        "sd_pct": 3.5,
+        "min_pct": -4.22,
+        "worst_feasible_m": 4.0,
+        "g_current": 0.0019,
+        "kelly_m": 2.16,
+        "g_at_kelly": 0.00265,
+        "bootstrap": {
+          "p10": 0.0,
+          "p50": 2.23,
+          "p90": 4.0,
+          "prob_negative_edge": 0.115
+        },
+        "half_kelly_m": 1.08,
+        "conservative_m": 0.0,
+        "shrinkage_c_star": 0.44,
+        "dd_constrained": {
+          "p_maxdd20_le_10pct": 0.49,
+          "p_maxdd30_le_10pct": 0.76,
+          "analytic_dd20": 0.38,
+          "analytic_dd30": 0.58
+        },
+        "dd_at_current": {
+          "p_dd_gt_20": 0.854,
+          "p_dd_gt_30": 0.299
+        },
+        "recommended_m": 0.0,
+        "verdict": "OVERSIZED: engine supports only ~0.0x current size"
+      },
+      "current_gross_usd": {
+        "median": 168339.64732166944,
+        "max": 316671.29623831954,
+        "p99": 285858.2328089955
+      },
+      "gross_usd_at_recommended_m": {
+        "median": 0.0,
+        "p99": 0.0,
+        "max": 0.0
+      }
+    }
+  },
+  "headline_live_book_headroom": {
+    "live_gross_usd": 15000.0,
+    "FIXED_recommended_m_full": 2.0,
+    "FIXED_recommended_m_2y": 0.55,
+    "VOLTARGET_recommended_m_full": 2.0,
+    "VOLTARGET_recommended_m_2y": 0.0,
+    "BINDING_recommended_m": 0.55,
+    "FIXED_authorised_gross_usd_binding": 8250.0,
+    "VOLTARGET_binding_m": 0.0,
+    "VOLTARGET_authorised_gross_usd_binding": {
+      "median": 0.0,
+      "p99": 0.0
+    },
+    "which_criterion_binds": {
+      "full|FIXED|k_live_0.0999": "half_kelly = 2.00",
+      "full|VOLTARGET|k_live_0.0999": "half_kelly = 2.00",
+      "last_2y|FIXED|k_live_0.0999": "bootstrap_p10 = 0.55",
+      "last_2y|VOLTARGET|k_live_0.0999": "bootstrap_p10 = 0.00"
+    },
+    "MAX_NOTIONAL_USD_today": 20000.0
+  },
+  "pipe_check_vs_KELLY_md_S5": {
+    "KELLY_md_S5_published": {
+      "m_star": 3.5,
+      "boot_p10_p90": [
+        1.0,
+        4.0
+      ],
+      "half_K": 1.8,
+      "c_star": 0.64,
+      "m_at_DD30": 0.94,
+      "P_dd_gt_20_at_current": 0.63,
+      "recommended_m": 0.94,
+      "n": 146,
+      "window": "2y replay, cash_apy 4%, 6bp"
+    },
+    "mine_last_2y_FIXED_k1": {
+      "n": 151,
+      "kelly_m": 2.38,
+      "half_kelly_m": 1.19,
+      "shrinkage_c_star": 0.47,
+      "conservative_m": 0.06,
+      "dd_constrained": {
+        "p_maxdd20_le_10pct": 0.52,
+        "p_maxdd30_le_10pct": 0.82,
+        "analytic_dd20": 0.42,
+        "analytic_dd30": 0.64
+      },
+      "dd_at_current": {
+        "p_dd_gt_20": 0.756,
+        "p_dd_gt_30": 0.242
+      },
+      "recommended_m": 0.06,
+      "verdict": "OVERSIZED: engine supports only ~0.1x current size",
+      "bootstrap": {
+        "p10": 0.06,
+        "p50": 2.5,
+        "p90": 4.0,
+        "prob_negative_edge": 0.093
+      }
+    },
+    "differences_that_explain_any_gap": [
+      "my fee is the engine's 12bp round trip; KELLY.md's cell is 6bp",
+      "my cash_apy is 0; KELLY.md's published S5 row is cash_apy 4%",
+      "my bars are the repo fixture 2022-02..2026-07; KELLY.md's 2y replay window differs",
+      "my stream is the exit-step BLEND; KELLY.md's S5 row is the same construction, so this is the closest available comparison"
+    ]
+  }
+}

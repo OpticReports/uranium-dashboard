@@ -39,7 +39,7 @@ interface EqPoint { ts: number; equity: number }
 const BOOK_COLORS: Record<string, string> = { S1: "#38bdf8", S2: "#f97316", S3: "#94a3b8", S4: "#c084fc", S5: "#34d399", S6: "#fbbf24", HOLD: "#e2e8f0" };
 const BOOK_LABEL: Record<string, string> = {
   S1: "S1 · vol-target 5.5%", S2: "S2 · 1.95x aggressive", S3: "S3 · 1x control",
-  S4: "S4 · Donchian trend", S5: "S5 · blend 75/25 @1.5x", S6: "S6 · blend 75/25 @2x",
+  S4: "S4 · Donchian trend", S5: "S5 · blend 70/30 @1.5x", S6: "S6 · blend 75/25 @2x",
   HOLD: "Buy & hold BTC",
 };
 
@@ -62,7 +62,7 @@ const BOOK_GLOSSARY: Record<string, { title: string; body: string[] }> = {
     "ENTRY: market at next bar's open (taker fees both sides). EXIT: only via a 5×ATR chandelier trail that ratchets behind the best close — no target, no time stop. Cuts losers fast, holds winners for weeks.",
     "SIZING: 1× equity. Halt at −50% (trend books breathe deep by design).",
     "WHY IT'S HERE despite weak recent standalone numbers: 12 years of validated trend edge (2013-2021 MAR 3.2; 2022-24 +205%), monthly correlation −0.15 to the pullback. It earns in exactly the regime that starves the pullback — sustained trends and crashes (last 6 months: +30% while BTC fell 28%). Judged as a portfolio member on ≥12 months; pre-registered retirement rule in RESEARCH_S4.md." ] },
-  S5: { title: "S5 — 75/25 blend @ 1.5× (production candidate)", body: [
+  S5: { title: "S5 — 70/30 blend @ 1.5× (live since 2026-09-30; was 75/25)", body: [
     "A derived book: 75% weight on S3 (1× pullback) + 25% on S4 (1× trend), continuously rebalanced each 4h snapshot, levered 1.5×. No trades of its own — it holds the two books in fixed proportion.",
     "WHY: the two strategies' −0.15 correlation makes the blend smoother than either parent; leverage converts that smoothness into growth. Sizing-frontier result (2022-2026): ~+44%/yr at −21% max DD — the pure pullback needs 2× leverage and −38% drawdowns to match that CAGR.",
     "CAVEATS: frontier computed on 4.6y of modern-era data; the 75/25 weighting is itself a mild selection; correlations converge in crises. The live curve, not the frontier table, gets the final vote." ] },

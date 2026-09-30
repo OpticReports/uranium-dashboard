@@ -1,0 +1,408 @@
+{
+ "candidate": "A - risk-based / volatility-targeted sizing",
+ "verdict": "REJECT as a route to larger size. Keep ONLY as a risk-consistency change, if at all.",
+ "killer_number": {
+  "statement": "At an identical drawdown budget, vol-targeting raises the per-trade notional CEILING 3.11x but the notional actually DEPLOYED only 1.11x - and on the holdout the deployed gain is 1.00x while the DD envelope shrinks 10.3%.",
+  "mean_notional_ratio_full": 1.1085141655383344,
+  "mean_notional_ratio_holdout": 1.0034447131904272,
+  "max_notional_ratio_full": 3.113887271504123,
+  "max_notional_ratio_holdout": 1.6619448119661453,
+  "k_max_ratio_full_16seeds": {
+   "mean": 0.9867266438894531,
+   "sd": 0.00812235177039,
+   "min": 0.9699669065873747,
+   "max": 1.0009144888150379,
+   "n_above_1": 1,
+   "t_vs_1": -6.329138237010918
+  },
+  "k_max_ratio_holdout_16seeds": {
+   "mean": 0.8972653282259867,
+   "sd": 0.009252418415986258,
+   "min": 0.8805322701496631,
+   "max": 0.9149134139997402,
+   "n_above_1": 0,
+   "t_vs_1": -43.003856394061025
+  }
+ },
+ "mechanism_bound": {
+  "formula": "mean deployed notional multiple = mean(s)*mean(1/s) = 1 + CV^2(s)",
+  "measured_pullback": {
+   "n": 190,
+   "mean_s": 0.03529023310701228,
+   "harmonic_mean_s": 0.03142216888925283,
+   "arith_over_harmonic": 1.1230998481165448,
+   "cv_s": 0.34160459646009844,
+   "one_plus_cv2": 1.1166937003226667,
+   "predicted_vs_measured_gap_pct": 0.6406147793878159,
+   "s_p10": 0.021792910966783288,
+   "s_p90": 0.050333387889377086,
+   "max_notional_mult_uncapped": 3.155528306693569
+  },
+  "measured_trend": {
+   "n": 128,
+   "mean_s": 0.07212874952369751,
+   "harmonic_mean_s": 0.06414874826868264,
+   "arith_over_harmonic": 1.1243983938952509,
+   "cv_s": 0.340203365223646,
+   "one_plus_cv2": 1.1157383297094934,
+   "predicted_vs_measured_gap_pct": 0.8660064185757488,
+   "s_p10": 0.04277265052576128,
+   "s_p90": 0.10680781045931428,
+   "max_notional_mult_uncapped": 2.998065864198048
+  },
+  "invariant_to_stop_width": "A3: CV(s) identical 0.3416/0.3402 at stop 1.0/2.0/2.5/3.5/5.0 x ATR",
+  "bound_by_atr_lookback": [
+   {
+    "atr_n": 5,
+    "cv_bar_level": 0.5064731571292321,
+    "bound_bar_level": 1.2484043202493882
+   },
+   {
+    "atr_n": 7,
+    "cv_bar_level": 0.47711900036382476,
+    "bound_bar_level": 1.212773702066907
+   },
+   {
+    "atr_n": 14,
+    "cv_bar_level": 0.425479162106657,
+    "bound_bar_level": 1.1634922710280786
+   },
+   {
+    "atr_n": 30,
+    "cv_bar_level": 0.3780006728950852,
+    "bound_bar_level": 1.1312927231347198
+   },
+   {
+    "atr_n": 60,
+    "cv_bar_level": 0.34288522067153293,
+    "bound_bar_level": 1.109516371855637
+   }
+  ]
+ },
+ "why_it_fails": {
+  "vol_mean_reversion_H41": [
+   {
+    "quintile": 1,
+    "trail_lo": 0.0036787532145940442,
+    "trail_hi": 0.009914828779760201,
+    "n": 1950,
+    "ratio_median": 1.1692600746735993,
+    "ratio_mean": 1.2685296532013244,
+    "ratio_p90": 1.734394697128363,
+    "pct_expanded": 0.7564102564102564
+   },
+   {
+    "quintile": 2,
+    "trail_lo": 0.009914828779760201,
+    "trail_hi": 0.012099378268002456,
+    "n": 1950,
+    "ratio_median": 1.0428972563289607,
+    "ratio_mean": 1.1189614058837403,
+    "ratio_p90": 1.5214211942264664,
+    "pct_expanded": 0.5671794871794872
+   },
+   {
+    "quintile": 3,
+    "trail_lo": 0.012099378268002456,
+    "trail_hi": 0.014558223013552243,
+    "n": 1951,
+    "ratio_median": 0.9691911951394996,
+    "ratio_mean": 1.0303128379020567,
+    "ratio_p90": 1.3878276437352899,
+    "pct_expanded": 0.4566888774987186
+   },
+   {
+    "quintile": 4,
+    "trail_lo": 0.014558223013552243,
+    "trail_hi": 0.018188637618520673,
+    "n": 1949,
+    "ratio_median": 0.9100833741501168,
+    "ratio_mean": 0.9844261224363767,
+    "ratio_p90": 1.351334067402505,
+    "pct_expanded": 0.33299127757824526
+   },
+   {
+    "quintile": 5,
+    "trail_lo": 0.018188637618520673,
+    "trail_hi": 0.05493859121032282,
+    "n": 1951,
+    "ratio_median": 0.8120305539967556,
+    "ratio_mean": 0.8750266071969856,
+    "ratio_p90": 1.204063163880528,
+    "pct_expanded": 0.23577652485904665
+   }
+  ],
+  "spearman": -0.43637033175479434,
+  "reading": "Trailing ATR14 systematically UNDERSTATES forward vol in calm regimes (Q1 1.169x) and OVERSTATES it in violent ones (Q5 0.812x). Vol-targeting sizes up exactly where the estimate is too low."
+ },
+ "repo_instrument_verdict": {
+  "note": "app.engine.kelly.analyze, shipped SEED/BOOT_DRAWS/MEAN_BLOCK, on the S5 blend per-step stream",
+  "full": {
+   "FIXED_rec_m": 0.76,
+   "VT_cap2_rec_m": 0.73
+  },
+  "holdout": {
+   "FIXED_rec_m": 0.3,
+   "FIXED_p10": 0.3,
+   "VT_cap2_rec_m": 0.0,
+   "VT_cap2_p10": 0.0,
+   "mechanism": "kill rule did NOT fire (pneg 0.102 < 0.25). rec collapses because the bootstrap p10 of m* goes 0.30 -> 0.00: in >10% of block resamples of the holdout, vol-targeted blend returns have non-positive mean."
+  }
+ },
+ "what_it_DOES_buy": {
+  "risk_consistency": {
+   "cv_realised_loss_fixed": 0.35600803966823685,
+   "cv_realised_loss_vt": 0.192796909874634,
+   "p95_loss_ratio": 0.6889054556297305,
+   "mean_loss_ratio": 1.0248854531792828
+  },
+  "halt_coherence": {
+   "FIXED": {
+    "risk_usd": {
+     "mean": 346.08387747677216,
+     "median": 319.93987289481106,
+     "p10": 198.83183974128158,
+     "p90": 508.4253683380185,
+     "min": 90.21910223650707,
+     "max": 863.4834733693731,
+     "cv": 0.39033050795179247
+    },
+    "risk_pct_of_equity_mean": 0.003458936359769848,
+    "dd_halt_usd": 17500.0,
+    "dd_halt_pct_of_real_equity": 0.17490380290840038,
+    "daily_halt_usd": 3000.0,
+    "losers_to_dd_halt": {
+     "at_mean_risk": 50.56577650362963,
+     "at_p90_risk": 34.4199976826597,
+     "at_p10_risk": 88.01407270973733
+    },
+    "losers_to_daily_halt_at_mean": 8.66841882919365
+   },
+   "VT_uncapped": {
+    "risk_usd": {
+     "mean": 346.08387747677216,
+     "median": 397.0151224538881,
+     "p10": 270.48281071386566,
+     "p90": 397.0151224538882,
+     "min": 270.4828107138656,
+     "max": 397.01512245388824,
+     "cv": 0.1792977088879095
+    },
+    "risk_pct_of_equity_mean": 0.003458936359769848,
+    "dd_halt_usd": 17500.0,
+    "dd_halt_pct_of_real_equity": 0.17490380290840038,
+    "daily_halt_usd": 3000.0,
+    "losers_to_dd_halt": {
+     "at_mean_risk": 50.56577650362963,
+     "at_p90_risk": 44.07892548735989,
+     "at_p10_risk": 64.69912063474023
+    },
+    "losers_to_daily_halt_at_mean": 8.66841882919365
+   }
+  }
+ },
+ "rail_consequence": {
+  "today_cap_notional": 20000.0,
+  "fixed_max_gross": 15000.0,
+  "vt_max_gross": 39965.042645245005,
+  "max_notional_usd_needed_for_vt": 39965.042645245005,
+  "rail_multiple": 1.9982521322622502,
+  "mean_deployment_multiple": 1.0937544577462035,
+  "rail_cost_per_unit_of_size": 1.826965931987934,
+  "note": "MAX_ACCOUNT_LEV 2.0 x base 50,000 = 100,000 is NOT the binder today; MAX_NOTIONAL_USD 20,000 is."
+ },
+ "concurrent_gross_at_live_k": {
+  "FIXED": {
+   "pct_bars_in_market": 0.9155168966206758,
+   "gross_when_in_market": {
+    "mean": 6070.765534563721,
+    "median": 3750.0,
+    "p90": 15000.0,
+    "p99": 15000.0,
+    "max": 15000.0
+   },
+   "risk_when_in_market": {
+    "mean": 362.4617518661045,
+    "median": 296.1042009368133,
+    "p99": 1217.7885293410134,
+    "max": 1286.0411007592884
+   },
+   "pct_bars_over_live_cap": 0.0,
+   "pct_in_market_bars_over_live_cap": 0.0,
+   "max_notional_usd_required": 15000.0,
+   "vs_FIXED": {
+    "mean_gross": 1.0,
+    "max_gross": 1.0,
+    "rail_required": 1.0
+   }
+  },
+  "VT_cap1.5": {
+   "pct_bars_in_market": 0.9155168966206758,
+   "gross_when_in_market": {
+    "mean": 6281.110765468252,
+    "median": 4378.369408897185,
+    "p90": 15793.98546152528,
+    "p99": 22181.73201237552,
+    "max": 22500.0
+   },
+   "risk_when_in_market": {
+    "mean": 339.80842851974603,
+    "median": 270.48281071386566,
+    "p99": 667.4979331677539,
+    "max": 667.4979331677539
+   },
+   "pct_bars_over_live_cap": 0.03539292141571686,
+   "pct_in_market_bars_over_live_cap": 0.03865894943758873,
+   "max_notional_usd_required": 22500.0,
+   "vs_FIXED": {
+    "mean_gross": 1.0346488807230219,
+    "max_gross": 1.5,
+    "rail_required": 1.5
+   }
+  },
+  "VT_cap2.0": {
+   "pct_bars_in_market": 0.9155168966206758,
+   "gross_when_in_market": {
+    "mean": 6500.800963171232,
+    "median": 4378.369408897185,
+    "p90": 15793.98546152528,
+    "p99": 23754.263012123403,
+    "max": 30000.0
+   },
+   "risk_when_in_market": {
+    "mean": 346.2318780425609,
+    "median": 270.48281071386566,
+    "p99": 667.4979331677539,
+    "max": 667.4979331677539
+   },
+   "pct_bars_over_live_cap": 0.04039192161567687,
+   "pct_in_market_bars_over_live_cap": 0.04411925303046849,
+   "max_notional_usd_required": 30000.0,
+   "vs_FIXED": {
+    "mean_gross": 1.0708371005533186,
+    "max_gross": 2.0,
+    "rail_required": 2.0
+   }
+  },
+  "VT_uncapped": {
+   "pct_bars_in_market": 0.9155168966206758,
+   "gross_when_in_market": {
+    "mean": 6639.926865361084,
+    "median": 4378.369408897185,
+    "p90": 15793.98546152528,
+    "p99": 26317.846806711343,
+    "max": 39965.042645245005
+   },
+   "risk_when_in_market": {
+    "mean": 349.12454578188783,
+    "median": 270.48281071386566,
+    "p99": 667.4979331677539,
+    "max": 667.4979331677539
+   },
+   "pct_bars_over_live_cap": 0.04089182163567286,
+   "pct_in_market_bars_over_live_cap": 0.04466528338975647,
+   "max_notional_usd_required": 39965.042645245005,
+   "vs_FIXED": {
+    "mean_gross": 1.0937544577462035,
+    "max_gross": 2.664336176349667,
+    "rail_required": 2.664336176349667
+   }
+  }
+ },
+ "fee_basis_sensitivity": {
+  "12.00_registered": {
+   "full": {
+    "k_fixed": 0.7837714628440153,
+    "k_vt": 0.7734286448139756,
+    "k_ratio": 0.986803783347113,
+    "mean_notional_ratio": 1.1085141655383348,
+    "max_notional_ratio": 3.113887271504123,
+    "sr_fixed": 0.11215741156773475,
+    "sr_vt": 0.1178953499555634,
+    "sr_ratio": 1.0511596898289988,
+    "mean_notional_bonus_uncapped": 1.1233379768553335
+   },
+   "holdout": {
+    "k_fixed": 0.8823138674142683,
+    "k_vt": 0.7811561859070935,
+    "k_ratio": 0.8853495504908813,
+    "mean_notional_ratio": 1.0034447131904272,
+    "max_notional_ratio": 1.6619448119661453,
+    "sr_fixed": 0.08403283620463634,
+    "sr_vt": 0.07836178546226105,
+    "sr_ratio": 0.9325138719754125,
+    "mean_notional_bonus_uncapped": 1.1333881771714553
+   }
+  },
+  "8.64_measured": {
+   "full": {
+    "k_fixed": 0.8112390778114786,
+    "k_vt": 0.8050924663293699,
+    "k_ratio": 0.9924231812171934,
+    "mean_notional_ratio": 1.1148266485728557,
+    "max_notional_ratio": 3.131619440549735,
+    "sr_fixed": 0.1197837519229719,
+    "sr_vt": 0.12541173781954268,
+    "sr_ratio": 1.0469845517962229,
+    "mean_notional_bonus_uncapped": 1.1233379768553335
+   },
+   "holdout": {
+    "k_fixed": 0.9122880007689673,
+    "k_vt": 0.8109538878288731,
+    "k_ratio": 0.8889231110628665,
+    "mean_notional_ratio": 1.0074949444931212,
+    "max_notional_ratio": 1.6686529652029822,
+    "sr_fixed": 0.0924779800139412,
+    "sr_vt": 0.0873908148178771,
+    "sr_ratio": 0.9449905242815944,
+    "mean_notional_bonus_uncapped": 1.1333881771714553
+   }
+  },
+  "2.88_full_maker": {
+   "full": {
+    "k_fixed": 0.8568334542633238,
+    "k_vt": 0.8644573910823965,
+    "k_ratio": 1.0088978047964146,
+    "mean_notional_ratio": 1.1333332188937915,
+    "max_notional_ratio": 3.183605581596089,
+    "sr_fixed": 0.13285288441783946,
+    "sr_vt": 0.13828836494051522,
+    "sr_ratio": 1.0409135303798183,
+    "mean_notional_bonus_uncapped": 1.1233379768553335
+   },
+   "holdout": {
+    "k_fixed": 0.9664508989590104,
+    "k_vt": 0.8730669393826247,
+    "k_ratio": 0.9033743362679139,
+    "mean_notional_ratio": 1.023873792286164,
+    "max_notional_ratio": 1.695780260566454,
+    "sr_fixed": 0.10694590770637336,
+    "sr_vt": 0.10286413306748203,
+    "sr_ratio": 0.9618332788375775,
+    "mean_notional_bonus_uncapped": 1.1333881771714553
+   }
+  }
+ },
+ "beta_variant": {
+  "definition": "s_used = s^beta * mean(s)^(1-beta); beta=0 IS the shipped fixed sizing, beta=1 is full vol-targeting",
+  "best_full_k_ratio": 1.0166009340370201,
+  "holdout_monotone_decreasing": true,
+  "verdict": "no beta beats beta=0 on the holdout; best full-sample k_max gain anywhere is +1.7% at beta=0.375"
+ },
+ "not_modelled": [
+  "funding (phase 1: ~0 net on the pullback leg, trend leg unmeasured)",
+  "market impact (phase 1: 1.02bp at $1m, irrelevant at these sizes)",
+  "cash_apy = 0 throughout - UNRESOLVED open question. Direction: vol-targeting holds 1.12x less idle cash, so cash_apy>0 makes this verdict MORE negative, not less.",
+  "intrabar gap risk beyond the exit bar's open (4h bars cannot see it). Measured gaps: 1/66 pullback stops, 0/128 trend stops; blend cost -0.04% final, -0.03pp DD.",
+  "queue position / fill realism at larger notional",
+  "core.py _size() latent defect NEUTRALISED by per-leg replays with per-leg tcfg.stop_atr, NOT fixed in code - it remains a pre-condition on any vol_target adoption"
+ ],
+ "basis": "trade-close (exit-step) blend, cash_apy 0, registered fee 12.00bps round trip; MTM per leg reported in candA_voltarget.json leg_mtm. IN-SAMPLE on a fixture carrying ~2,515 prior trials.",
+ "validation": [
+  "V0 recompound vs engine equity: max rel err 1.63e-15",
+  "V1 analytic nf path vs engine equity: max rel err 1.60e-07 (core.py qty rounding)",
+  "blend final NAV 2.96287 vs committed scripts/bench_blend.py 2.9628742",
+  "my vectorised dd_prob vs shipped kelly.dd_prob: 0.330/0.870 vs 0.3375/0.88125 at k=1.0/1.5",
+  "trade-set identity FIXED vs every VT cap: 318/318 identical (entry_ts, exit_ts, prices, exit reason) - no dd_halt confound"
+ ]
+}
