@@ -24,7 +24,10 @@ const STATE_STYLE: Record<LaborBoardState, { color: string; bg: string; label: s
   CLEAR: { color: "#34d399", bg: "rgba(52,211,153,0.08)", label: "CLEAR" },
   WATCH: { color: "#fbbf24", bg: "rgba(251,191,36,0.10)", label: "WATCH" },
   ALERT: { color: "#f87171", bg: "rgba(248,113,113,0.12)", label: "ALERT — layoffs confirmed by slack" },
+  INCOMPLETE: { color: "#fbbf24", bg: "rgba(251,191,36,0.10)", label: "INCOMPLETE — cannot confirm CLEAR" },
 };
+
+const TREND_COLOR = { worse: "#fca5a5", better: "#86efac", flat: "#94a3b8" } as const;
 
 // categorical slots, fixed order (never cycled); A = layoffs, B/C = slack
 const RULE_COLOR: Record<string, string> = {
@@ -38,12 +41,14 @@ function fmt(v: number | null, unit: string, d = 2): string {
   return `${v > 0 && unit !== "%" ? "+" : ""}${s}${unit === "%" ? "%" : unit === "pp" ? "pp" : ""}`;
 }
 
-function StripRow({ it }: { it: LaborStripItem }) {
-  const bad = it.chg_12m != null && (it.worse === "up" ? it.chg_12m > 0 : it.chg_12m < 0);
+function StripRow({ it, boardMonth }: { it: LaborStripItem; boardMonth: string | null }) {
   return (
     <tr className="border-b border-panelborder/50 last:border-0 align-top">
       <td className="py-1.5 pr-3 text-slate-300">
         {it.label}
+        {boardMonth && it.month !== boardMonth && (
+          <span className="ml-1 font-mono text-[10px] text-slate-500">({it.month})</span>
+        )}
         {it.note && <div className="text-[10px] leading-snug text-slate-500">{it.note}</div>}
       </td>
       <td className="px-2 py-1.5 text-right font-mono tabular-nums text-slate-200">
@@ -51,7 +56,7 @@ function StripRow({ it }: { it: LaborStripItem }) {
       </td>
       <td
         className="px-2 py-1.5 text-right font-mono tabular-nums"
-        style={{ color: it.chg_12m == null ? "#64748b" : bad ? "#fca5a5" : "#86efac" }}
+        style={{ color: it.trend ? TREND_COLOR[it.trend] : "#64748b" }}
       >
         {it.chg_12m != null ? `${it.chg_12m > 0 ? "+" : ""}${it.chg_12m}` : "—"}
       </td>
@@ -101,7 +106,11 @@ export default function LaborStressBoard() {
             {st?.label ?? "UNAVAILABLE"}
           </span>
           <span className="text-xs text-slate-300">
-            {data.n_lit} of {data.n_rules} rules lit
+            {data.state == null
+              ? "no data — FRED unavailable"
+              : data.missing.length > 0
+                ? `${data.n_lit} of ${data.n_evaluated} available rules lit — ${data.missing.join(", ")} not yet available for ${data.month}`
+                : `${data.n_lit} of ${data.n_rules} rules lit`}
           </span>
           <span className="ml-auto font-mono text-[11px] text-slate-400">jobs data {data.month}</span>
         </div>
@@ -121,11 +130,16 @@ export default function LaborStressBoard() {
               </span>
               <span
                 className="ml-auto whitespace-nowrap font-mono tabular-nums"
-                style={{ color: r.lit ? "#f87171" : "#cbd5e1" }}
+                style={{ color: r.lit ? "#f87171" : r.lit == null ? "#94a3b8" : "#cbd5e1" }}
               >
                 {fmt(r.value, r.unit)} / {r.threshold}
                 {r.unit === "%" ? "%" : ""}
                 {r.lit ? " · LIT" : ""}
+                {!r.lit && r.watch != null && r.value != null && r.value >= r.watch
+                  ? ` · watch ${r.watch} crossed`
+                  : ""}
+                {r.stale && r.month ? ` · ${r.month}, not yet for ${data.month}` : ""}
+                {r.value == null ? " · no data" : ""}
               </span>
             </div>
           ))}
@@ -177,16 +191,19 @@ export default function LaborStressBoard() {
         the rule. Layoff rules (A) must light together with a slack rule (B or the Sahm rule C) for ALERT.
       </p>
 
-      {data.ledger.length > 0 && (
-        <p className="mt-2 text-[11px] text-amber-300">
-          Out-of-sample record since Sep 2026 data:{" "}
-          {data.ledger.map((l) => `${l.event} ${l.month}`).join(" · ")}
-        </p>
-      )}
+      <p className={`mt-2 text-[11px] ${data.ledger.length > 0 ? "text-amber-300" : "text-slate-500"}`}>
+        Out-of-sample since {data.ledger_from} data:{" "}
+        {data.ledger.length > 0
+          ? data.ledger.map((l) => `${l.event} ${l.month}`).join(" · ")
+          : "no onsets yet"}
+      </p>
 
       <h3 className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
         Is the headline rate too good? — hidden-slack strip
       </h3>
+      {data.strip_verdict && (
+        <p className="mt-1 text-[11px] leading-relaxed text-slate-300">{data.strip_verdict}</p>
+      )}
       <div className="mt-1 overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
@@ -199,14 +216,16 @@ export default function LaborStressBoard() {
           </thead>
           <tbody>
             {data.strip.map((it) => (
-              <StripRow key={it.key} it={it} />
+              <StripRow key={it.key} it={it} boardMonth={data.month} />
             ))}
           </tbody>
         </table>
       </div>
       <p className="mt-2 text-[10px] leading-relaxed text-slate-500">
-        12-month change colored red when it moves the worse way. Percentile of the latest value in the
-        series' own history (* = since 1994, after the CPS redesign). {data.note}
+        12-month change colored red when it moves the worse way, green the better way, grey when under
+        ±0.05. Percentile of the latest value in the series' own history (* = since 1994, after the CPS
+        redesign). A month in brackets = that measure's latest data is not yet for {data.month}. C1
+        source: {data.c1_source}. {data.note}
       </p>
     </Panel>
   );

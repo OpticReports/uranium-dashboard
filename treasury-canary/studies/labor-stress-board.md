@@ -9,15 +9,19 @@ trouble ahead on the research dashboard. Look at Henrik Zeberg's work.
 full record in the session scratchpad, summary here):
 - Headline U-3 is **4.1%** (Aug 2026), not ~4.7%; peak 4.5% (Nov 2025).
 - WORSE than the headline: hiring (CPS job-finding 24.3% vs 26.3% a year ago;
-  JOLTS hires 3.3%, lowest pre-2020 print since 2013), duration (27.0% of the
-  unemployed out 27+ weeks, above the pre-2009 max, with a 1994-redesign
-  caveat), prime-age employment rate (June-2026 step down), a participation-
-  adjusted unemployment rate ~4.6% (an upper bound).
+  JOLTS hires 3.3%, in a 3.1-3.5 range since mid-2024 — the lowest range since
+  2013 outside Apr-2020 — +0.1 y/y), duration (27.0% of the unemployed out
+  27+ weeks, 76th pct since 1994; the long-term unemployment RATE 1.14% is at
+  the 60th pct), prime-age employment rate (June-2026 step down), a
+  participation-adjusted unemployment rate ~4.6% (an upper bound).
 - NOT worse: every layoff measure (claims 197K, continuing claims −9.5% y/y,
   insured unemployment 1.1%, SOS −0.004, JOLTS layoffs 1.0%, job losers −202K
   y/y); the want-a-job count and U-6 FELL; ~43% of the H1-2026 participation
   drop is the Jan-2026 population-control break, ~16% aging; the June drop is
-  concentrated among the foreign-born (immigration / nonresponse, not demand).
+  concentrated among the foreign-born (−0.9pp NSA vs native-born +0.3); over
+  12 months both fell 0.7pp, native-born mostly via the Jan-2026 population-
+  control step (~0.4pp) and aging — demand weakness is neither shown nor
+  ruled out.
 - **Zeberg**: a useful checklist; his composite model is proprietary and
   unreplicable, his headline labor numbers lean on the population-control
   break (2.2M "left" → ~0.7M net; 5.6% counterfactual → ~4.6-5.0%), and his
@@ -218,7 +222,7 @@ the measured record.
 
 ---
 
-## RESULTS — frozen 2026-09-30 (`labor_stress/results.json`, one run)
+## RESULTS — frozen 2026-09-30 (`labor_stress/results.json`, one run; one label erratum below)
 
 **RED gate: FAIL** → the Board ships at WARN with its measured record.
 
@@ -233,25 +237,48 @@ the measured record.
 | B1 prime-age EPOP drawdown | 4 | 0 | no | — |
 | B2 participation-adjusted U | 5 | 0 | yes — 2024-08 | — |
 
-Criteria: (1) ≥6 hits FAIL (5: 1973 came LATE, 1974-07; 1981 LIT-THROUGH from
-the 1980 recession); (2) FAs ≤ Sahm PASS (0 vs 1); (3) zero FINAL-tier onsets
-FAIL (2024-08); (4) paired timing PASS (−2: 1980 0, 1990 −2, 2001 −6, 2007
-−2, 2020 −1); (5) size PASS (p = 0.0018, 0 of 541 rotations as good); (6)
-paired value-added: no hit lost PASS, removes a slack-leg false alarm FAIL
-(the slack leg had none 1972-2020; the layoff leg's contribution is TIMING —
-it turned 2001 from LIT-THROUGH into a hit 3 months before the peak — not
-false-alarm removal); (7) grid FAIL (0 of 81); (8) population-control
-sensitivity unchanged.
+Criteria: (1) ≥6 hits FAIL (5: 1973 came LATE, 1974-07; 1981 LATE, 1981-11
+— lit from 1980 into 1981-04, dark at the 1981-07 peak); (2) FAs ≤ Sahm PASS
+(0 vs 1); (3) zero FINAL-tier onsets FAIL (2024-08); (4) paired timing PASS
+(−2: 1980 0, 1990 −2, 2001 −6, 2007 −2, 2020 −1); (5) size PASS (p = 0.0018,
+0 of 541 rotations as good); (6) paired value-added: no hit lost PASS,
+removes a slack-leg false alarm FAIL (the slack leg had no false alarms
+1972-2020, so there was nothing to remove. An AND can only delay the slack
+leg, and it did: 2001 from Aug-2000 (EARLY) to Dec-2000 — a one-month ALERT
+on two marginal crossings (A3 10.1 vs 10, B1 0.53 vs 0.50), CLEAR Jan-Mar,
+relit Apr-2001 — and 2007 from Aug-2007 to Dec-2007. The extra hit comes
+from the scoring window, not from information the layoff leg adds); (7) grid
+FAIL (0 of 81); (8) population-control sensitivity unchanged.
+
+**Erratum (after verification, 2026-09-30):** the first run labelled a peak
+LIT-THROUGH when month p−6 was lit; spec A3 requires the whole window
+[p−6, p+3] inside a spell begun before p−6. Corrected in `study.py` and
+re-run: 1981 is LATE for the Board, A1, A2, A3 and Sahm and a MISS for B2
+and the slack leg; 2001 is EARLY (2000-08) for B1 and the slack leg. No hit,
+false alarm, timing or gate changed (the counter-agent predicted exactly
+these labels before the re-run).
 
 - **The design aim failed where it mattered.** The AND was meant to reject
   the 2024 supply-driven Sahm alarm. It did not: job losers rose 0.309pp
   (just over A2's 0.30 line) in Aug-Sep 2024, exactly as the research pass
   had reported — a threshold choice that should have been caught at spec
-  time. SOS alone (a published rule) stayed quiet through 2021-2026.
-- **What it is good for:** a layoff-confirmed slack signal that, in 48 years,
-  never lit without a recession nearby and led the Sahm rule by a median of 2
-  months where both hit. It is a CONFIRMATION instrument (hits cluster in
-  −3..+1 months of the peak), not a 12-month early warning.
+  time. SOS alone (a published rule) stayed quiet through 2021-2026 — with
+  ZERO margin: it sat at exactly 0.200 for 12 weeks (2023-09-02..11-18;
+  monthly 2023-09/10 = 0.200) and is unlit only because the published rule
+  is strict "more than 0.2" (Richmond Fed EB 25-07). With ≥ it would have a
+  FINAL-tier onset in 2023-09 (the Board is unaffected: A3 was already lit
+  then and the slack leg was not).
+- **It does not beat its best single component in-sample.** A2 job losers
+  alone scored 6 hits, 0 false alarms and the same Aug-2024 misfire; A1 SOS
+  alone 5 hits, 0 false alarms and no 2021-26 onset. Switching to either now
+  would be post-hoc; they stay display-only rows. Unregistered mirror check:
+  vs the layoff leg alone (onsets 2023-04 and 2024-08), slack confirmation
+  removed the Apr-2023 continuing-claims misfire — in the tier seen during
+  design.
+- **What it is good for:** a layoff-confirmed slack signal that, in 1972-2020,
+  never started an alert without a recession nearby and led the Sahm rule by
+  a median of 2 months where both hit. It is a CONFIRMATION instrument (hits
+  in −3..+1 months of the peak, typically +1), not a 12-month early warning.
 - **WATCH duty cycle** (any rule lit): 32% of months 1972-2020, 40% since
   2021 → above the 33% ceiling, so the panel shows "N of 6 rules lit", not a
   WATCH state.
@@ -260,12 +287,24 @@ sensitivity unchanged.
   0.50 rule not).
 
 Honesty box: current-vintage CPS for every rule (real-time Sahm is a
-sensitivity and gives the same 5 hits); thresholds in-sample, ★ ones included;
+sensitivity and gives the same 5 hits for the Board); thresholds in-sample, ★
+ones included; C1 in the study comes from `_sahm_from_unrate`, which rounds to
+2dp and counts observations, not months, across the missing Oct-2025 CPS
+month (up to 0.067pp off in 2025-11..2026-07; no lit state changes anywhere);
+the LIVE panel's C1 is SAHMREALTIME, whose standalone 1972-2020 record is 3 of
+7 with a false alarm in 1976-11 — weaker than the current-vintage Sahm row
+above (the Board's own record is the same under either);
 the 2021-2024 tier was seen during design; A1 inherits COVEMP through the
 IUR; A3's 1973/1980 hits are coverage-affected (masking them leaves the Board
 at 5 hits — its 1973 miss and 1980 hit come from other legs); 7 recessions.
 Out-of-sample begins with data month 2026-09 (released 2026-10-02): onsets from
-then are listed live by `/labor/board` (`ledger`) and scored at R2.
+then are listed live by `/labor/board` (`ledger`: ALERT onsets and each
+rule's onsets) and persisted at first sight as `labor_board_onset` INFO events
+in the EventLog (idempotent per onset; carries `first_seen`), so R2 scores
+what was seen at the time, not a list recomputed after January CPS revisions.
+That event log is the implementation of A1's `ledger.csv` (the Render disk is
+ephemeral); R2 exports it to `labor_stress/ledger.csv`. The live board reports
+INCOMPLETE — never CLEAR — when any rule has no value for the Board month.
 
 Figures (`labor_stress/charts.py` → `labor_stress/figs/`): `fig_board_timeline`
 (every rule's lit months vs NBER recessions, Board row incl. Aug 2024),
@@ -279,3 +318,5 @@ adjusted), `fig_hire_fire` (job-finding rate vs insured unemployment),
 |---|---|---|
 | spec v0, reviewer 1 (2026-09-30) | 4 BLOCKING: holdout seen in design; no size check; scoring undefined (1980/81, late onsets, timing); A3 carries 1972/1978 UI coverage breaks | all four addressed (A1-A4), plus S1-S6, NITs |
 | spec v0, reviewer 2 — independent refutation | B1 and B3 confirmed; B2's 1-50% refuted (≈0% with the real slack leg) but the size test kept + a paired value-added check; B4 PARTLY — COVEMP normalization breaks 1979-80, raw A3 kept with flags; S1, S2 confirmed | A1-A6 follow reviewer 2 where the two disagreed, because it measured |
+| RESULTS, verifier A — independent re-derivation from the spec alone (2026-09-30) | ALL headline numbers reproduced (rule values at 3dp in every month; onsets, classes, 5/7, 0 FA, 2024-08, timing −2, size p 0.0018, today CLEAR 0/6); no blocking. 4 should-fix: LIT-THROUGH looser than A3's text; SOS at exactly 0.200 in 2023; C1 2dp/gap handling; live C1 (SAHMREALTIME) standalone record 3/7 | all four: LIT-THROUGH corrected + re-run (labels only — erratum above); SOS margin, C1 notes and live-C1 record in the honesty box |
+| RESULTS + dashboard, verifier B — inference, wording, live behaviour (2026-09-30) | WARN correct, RED correctly withheld. 2 BLOCKING: (1) `board_payload` returned CLEAR with a layoff or labor-force series empty (tested; reproduced by the author); (2) the paired check presented a delay as value added and never said A2 alone matches the Board (facts re-checked by the author). 13 should-fix (record text, duty-cycle reason, alert values, strip verdict, dead band, nativity notes, ledger persistence, /labor/sahm note, panel states, dated glossary) | (1) INCOMPLETE state + `missing` + warning log + gate test; (2) RESULTS rewritten above; all 13 should-fix applied |

@@ -243,10 +243,16 @@ def run_refresh(session: Session) -> dict:
     # ALERT episode. The RED gate failed (it lit in Aug 2024 with no
     # recession), so this never pages at RED; the text carries the record.
     try:
-        from ..api.routes_labor import _board_series, board_alert_event, board_payload
-        ev = board_alert_event(board_payload(_board_series()), today)
+        from ..api.routes_labor import (_board_series, board_alert_event,
+                                        board_ledger_events, board_payload)
+        payload = board_payload(_board_series())
+        if payload.get("missing"):
+            logger.warning("labor board INCOMPLETE for %s: %s not available",
+                           payload.get("month"), ", ".join(payload["missing"]))
+        ev = board_alert_event(payload, today)
         if ev:
             new_events.append(ev)
+        new_events.extend(board_ledger_events(payload, today))
     except Exception as exc:  # noqa: BLE001
         logger.warning("labor board check failed: %s", exc)
 

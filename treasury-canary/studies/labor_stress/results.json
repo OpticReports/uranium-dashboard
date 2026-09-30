@@ -18,7 +18,8 @@
     },
     {
      "peak": "1981-07",
-     "outcome": "LIT-THROUGH"
+     "outcome": "LATE",
+     "onset": "1981-12"
     },
     {
      "peak": "1990-07",
@@ -80,7 +81,8 @@
     },
     {
      "peak": "1981-07",
-     "outcome": "LIT-THROUGH"
+     "outcome": "LATE",
+     "onset": "1981-11"
     },
     {
      "peak": "1990-07",
@@ -145,7 +147,8 @@
     },
     {
      "peak": "1981-07",
-     "outcome": "LIT-THROUGH"
+     "outcome": "LATE",
+     "onset": "1981-12"
     },
     {
      "peak": "1990-07",
@@ -218,7 +221,8 @@
     },
     {
      "peak": "2001-03",
-     "outcome": "LIT-THROUGH"
+     "outcome": "EARLY",
+     "onset": "2000-08"
     },
     {
      "peak": "2007-12",
@@ -269,7 +273,8 @@
     },
     {
      "peak": "1981-07",
-     "outcome": "LIT-THROUGH"
+     "outcome": "MISS",
+     "onset": null
     },
     {
      "peak": "1990-07",
@@ -333,7 +338,8 @@
     },
     {
      "peak": "1981-07",
-     "outcome": "LIT-THROUGH"
+     "outcome": "LATE",
+     "onset": "1981-11"
     },
     {
      "peak": "1990-07",
@@ -438,7 +444,8 @@
    },
    {
     "peak": "1981-07",
-    "outcome": "LIT-THROUGH"
+    "outcome": "LATE",
+    "onset": "1981-11"
    },
    {
     "peak": "1990-07",
@@ -499,7 +506,8 @@
    },
    {
     "peak": "1981-07",
-    "outcome": "LIT-THROUGH"
+    "outcome": "MISS",
+    "onset": null
    },
    {
     "peak": "1990-07",
@@ -509,7 +517,8 @@
    },
    {
     "peak": "2001-03",
-    "outcome": "LIT-THROUGH"
+    "outcome": "EARLY",
+    "onset": "2000-08"
    },
    {
     "peak": "2007-12",
@@ -557,7 +566,8 @@
    },
    {
     "peak": "1981-07",
-    "outcome": "LIT-THROUGH"
+    "outcome": "LATE",
+    "onset": "1981-11"
    },
    {
     "peak": "1990-07",

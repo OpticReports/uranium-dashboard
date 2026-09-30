@@ -60,6 +60,7 @@ _TITLE = {
     "rate_spike": "30-year yield crossed the +75bp spike line",
     "rate_spike_approach": "30-year yield approaching the spike line",
     "labor_board_alert": "Labor Stress Board: layoffs confirmed by slack",
+    "labor_board_onset": "Labor Stress Board: out-of-sample onset (ledger)",
 }
 _LEVEL = {"WARN": "heads-up", "RED": "alert", "CRITICAL": "critical"}
 

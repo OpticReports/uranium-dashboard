@@ -78,11 +78,12 @@ def fig_timeline():
     ax.set_ylim(-1.6, len(rows) + 2)
     ax.set_yticks([])
     ax.set_xlim(dt.date(1971, 6, 1), dt.date(2026, 12, 1))
-    ax.set_title("Labor Stress Board, 1972-2026: lit within −6..+3 months of 5 of 7 recession "
-                 "starts, a median 2 months before the Sahm rule,\nnever without a recession "
-                 "nearby through 2020 — then lit in Aug 2024 with none. Grey = NBER recessions.",
-                 loc="left", fontsize=10.5, color=INK)
-    fig.subplots_adjust(left=0.24, right=0.98, top=0.85, bottom=0.08)
+    fig.suptitle("Labor Stress Board, 1972-2026 (in-sample): flagged 5 of 7 recessions, 3 months "
+                 "before to 1 month after they began, a median 2 months before the Sahm rule.\n"
+                 "No alert without a recession nearby 1972-2020 — then one in Aug 2024 with none. "
+                 "Job losers alone did as well. Grey = NBER recessions.",
+                 x=0.01, ha="left", fontsize=10.5, color=INK)
+    fig.subplots_adjust(left=0.24, right=0.98, top=0.86, bottom=0.08)
     fig.savefig(os.path.join(OUT, "fig_board_timeline.png"), dpi=160, facecolor=SURF)
 
 

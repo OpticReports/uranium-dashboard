@@ -611,7 +611,9 @@ export interface MarginFast {
 export type RateShockState = "SPIKE" | "PLUNGE" | "NEUTRAL";
 export type CorrRegime = "POS" | "MIXED" | "NEG";
 
-export type LaborBoardState = "CLEAR" | "WATCH" | "ALERT";
+/** INCOMPLETE = at least one rule has no value for the Board month (a missing
+    rule is never counted as unlit, so the Board cannot claim CLEAR) */
+export type LaborBoardState = "CLEAR" | "WATCH" | "ALERT" | "INCOMPLETE";
 
 export interface LaborBoardRule {
   id: string;
@@ -622,7 +624,10 @@ export interface LaborBoardRule {
   watch: number | null;
   value: number | null;
   month: string | null;
+  /** null when the rule has no value for the Board month */
   lit: boolean | null;
+  /** the value shown is from an earlier month than the Board month */
+  stale: boolean;
   /** value / threshold — 1.0 is the trigger line */
   ratio: number | null;
 }
@@ -633,6 +638,8 @@ export interface LaborStripItem {
   month: string;
   value: number | null;
   chg_12m: number | null;
+  /** 12-month change direction; "flat" inside the ±0.05 dead band */
+  trend: "worse" | "better" | "flat" | null;
   percentile: number | null;
   pct_from: string | null;
   unit: string;
@@ -642,14 +649,20 @@ export interface LaborStripItem {
 
 export interface LaborBoard {
   state: LaborBoardState | null;
-  /** rules lit this month (any single rule was lit in 32% of months, so the
-      panel shows this count rather than a WATCH state) */
+  /** rules lit this month (any single rule was lit in 40% of months since
+      2021, above the spec's 33% ceiling, so the panel shows this count rather
+      than a WATCH state) */
   n_lit: number;
   n_rules: number;
+  n_evaluated: number;
+  missing: string[];
+  c1_source: string;
   month: string | null;
   rules: LaborBoardRule[];
   history: Array<{ month: string; state: LaborBoardState } & Record<string, number | null | string>>;
   strip: LaborStripItem[];
+  /** computed one-line answer to "is the headline rate too good?" */
+  strip_verdict: string | null;
   record: {
     hits: number;
     peaks: number;
@@ -660,7 +673,8 @@ export interface LaborBoard {
     red_gate: string;
     text: string;
   };
-  ledger: Array<{ month: string; event: string }>;
+  ledger: Array<{ month: string; kind: string; event: string; value?: number }>;
+  ledger_from: string;
   note: string;
 }
 

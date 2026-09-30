@@ -89,9 +89,14 @@ def score(flags: dict) -> dict:
             per_peak.append({"peak": s(p), "outcome": "HIT", "onset": s(hits[0]),
                              "timing": L.ym_diff(hits[0], p)})
             continue
-        # lit-through: the rule is lit at p-6 in a spell begun before it
+        # lit-through (A3): the WHOLE window [p-6, p+3] lies inside one lit
+        # spell begun before p-6. (Corrected after verification: the first
+        # run tested only that p-6 was lit, which labelled 1981 LIT-THROUGH
+        # though every rule went dark before the 1981-07 peak. No hit, false
+        # alarm or gate depends on this label.)
         k6 = L.ym_add(p, -6)
-        if flags.get(k6):
+        win = [L.ym_add(p, i) for i in range(-6, 4)]
+        if all(flags.get(m) for m in win) and flags.get(L.ym_add(k6, -1)):
             per_peak.append({"peak": s(p), "outcome": "LIT-THROUGH"})
             continue
         late = [o for o in in_score if cls[o] == ("LATE", s(p))]

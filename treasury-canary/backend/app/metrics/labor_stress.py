@@ -46,6 +46,25 @@ def ym_diff(a: YM, b: YM) -> int:
     return (a[0] * 12 + a[1]) - (b[0] * 12 + b[1])
 
 
+def ym_str(k: YM) -> str:
+    return f"{k[0]}-{k[1]:02d}"
+
+
+def onsets(flags: dict[YM, bool], quiet: int = 6) -> list[YM]:
+    """Spec v1 A3: first lit month preceded by >= `quiet` OBSERVED unlit
+    months (missing months are neither); a spell lit at the first computable
+    month is left-censored (never an onset)."""
+    out, unlit = [], 0
+    for k in sorted(flags):
+        if flags[k]:
+            if unlit >= quiet:
+                out.append(k)
+            unlit = 0
+        else:
+            unlit += 1
+    return out
+
+
 def monthly(dates: list[date], vals: list[float | None]) -> dict[YM, float]:
     """Monthly (or weekly -> last value dated in the month)."""
     out: dict[YM, float] = {}
@@ -274,12 +293,15 @@ STRIP_KEYS = ("unemploy", "clf", "lfpr_prime", "pop_prime", "u6", "nilfwjn", "ne
               "lt_share", "lt_level", "med_dur", "hours", "fb_lfpr", "nb_lfpr")
 
 
+TREND_DEAD_BAND = 0.05     # |12-month change| below this reads "flat", not worse/better
+
+
 def _pct_rank(hist: list[float], v: float) -> float | None:
     return round(100 * sum(1 for h in hist if h <= v) / len(hist)) if hist else None
 
 
 def _item(key: str, label: str, s: dict[YM, float], *, unit: str, worse: str,
-          pct_from: YM | None = None, note: str = "", yoy_only: bool = False,
+          pct_from: YM | None = None, note="", yoy_only: bool = False,
           decimals: int = 2) -> dict | None:
     if not s:
         return None
@@ -287,12 +309,26 @@ def _item(key: str, label: str, s: dict[YM, float], *, unit: str, worse: str,
     v = s[last]
     prev = s.get(ym_add(last, -12))
     hist = [x for k, x in s.items() if pct_from is None or k >= pct_from]
+    chg = round(v - prev, decimals) if prev is not None else None
+    if chg is None:
+        trend = None
+    elif abs(chg) < TREND_DEAD_BAND:
+        trend = "flat"
+    else:
+        trend = "worse" if (chg > 0) == (worse == "up") else "better"
+    if callable(note):
+        note = note(last)
     return {"key": key, "label": label, "month": f"{last[0]}-{last[1]:02d}",
             "value": None if yoy_only else round(v, decimals),
-            "chg_12m": round(v - prev, decimals) if prev is not None else None,
+            "chg_12m": chg, "trend": trend,
             "percentile": None if yoy_only else _pct_rank(hist, v),
             "pct_from": f"{pct_from[0]}" if pct_from else None,
             "unit": unit, "worse": worse, "note": note}
+
+
+def _spans(last: YM, k: YM) -> bool:
+    """True while month k falls inside the 12-month change ending at `last`."""
+    return 0 <= ym_diff(last, k) < 12
 
 
 def strip(series: dict[str, tuple[list[date], list[float | None]]]) -> list[dict]:
@@ -349,8 +385,48 @@ def strip(series: dict[str, tuple[list[date], list[float | None]]]) -> list[dict
         _item("hours", "Average weekly hours (private)", g.get("hours", {}), unit="hrs",
               worse="down", decimals=1),
         _item("fb_lfpr", "Foreign-born participation (not seasonally adj.)",
-              g.get("fb_lfpr", {}), unit="pp", worse="down", yoy_only=True, decimals=1),
+              g.get("fb_lfpr", {}), unit="pp", worse="down", yoy_only=True, decimals=1,
+              note=lambda last: ("includes the June-2026 drop (−0.9, NSA; native-born +0.3) "
+                                 "— immigration/survey-response effects, not established "
+                                 "as demand" if _spans(last, (2026, 6)) else "")),
         _item("nb_lfpr", "Native-born participation (not seasonally adj.)",
-              g.get("nb_lfpr", {}), unit="pp", worse="down", yoy_only=True, decimals=1),
+              g.get("nb_lfpr", {}), unit="pp", worse="down", yoy_only=True, decimals=1,
+              note=lambda last: ("ages 16+ (aging lowers it every year); this change spans "
+                                 "the Jan-2026 population-control step (Dec→Jan −0.5 vs a "
+                                 "typical −0.1)" if _spans(last, (2026, 1))
+                                 else "ages 16+ (aging lowers it every year)")),
     ]
     return [x for x in items if x]
+
+
+_SHORT = {"u3": "U-3", "paur": "participation-adjusted", "u6": "U-6",
+          "u3_wantjob": "unemployed + want a job", "nei": "non-employment index",
+          "epop_prime": "prime-age employment rate", "job_finding": "job-finding rate",
+          "hires": "hires", "quits": "quits", "layoffs": "layoffs",
+          "lt_share": "long-term share", "lt_rate": "long-term unemployment rate",
+          "med_dur": "median duration", "hours": "weekly hours",
+          "fb_lfpr": "foreign-born participation", "nb_lfpr": "native-born participation"}
+
+
+def strip_verdict(items: list[dict]) -> str | None:
+    """One computed line answering "is the headline rate too good?" from the
+    strip itself (no judgment beyond the dead band)."""
+    by = {x["key"]: x for x in items}
+    u3, pa = by.get("u3"), by.get("paur")
+    if not u3 or not pa or u3["value"] is None or pa["value"] is None:
+        return None
+    gap = pa["value"] - u3["value"]
+    out = (f"U-3 {u3['value']:.2f}% vs participation-adjusted {pa['value']:.2f}% (an upper "
+           f"bound): at most {gap:.2f}pp of slack sits outside the headline")
+    if pa["percentile"] is not None:
+        out += f", and that adjusted rate is at the {pa['percentile']:.0f}th percentile of its history"
+    out += "."
+    if u3["chg_12m"] is not None and pa["chg_12m"] is not None:
+        out += (f" Over 12 months: U-3 {u3['chg_12m']:+.2f}pp, adjusted "
+                f"{pa['chg_12m']:+.2f}pp.")
+    rest = [x for x in items if x["key"] not in ("u3", "paur")]
+    worse = [_SHORT.get(x["key"], x["key"]) for x in rest if x.get("trend") == "worse"]
+    better = [_SHORT.get(x["key"], x["key"]) for x in rest if x.get("trend") == "better"]
+    out += f" Worse than a year ago: {', '.join(worse) or 'none'}."
+    out += f" Better: {', '.join(better) or 'none'}."
+    return out

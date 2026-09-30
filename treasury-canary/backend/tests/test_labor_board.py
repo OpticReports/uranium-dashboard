@@ -67,13 +67,27 @@ def test_frozen_record_equals_the_study_output():
     assert (rec["red_gate"] == "fail") == (res["criteria"]["ship_red_alert"] is False)
     assert f"{rec['hits']} of {rec['peaks']}" in rec["text"]
     assert "Aug 2024" in rec["text"]               # the failure travels with the claim
+    assert "median 2 months" in rec["text"] and rec["paired_timing_vs_sahm"] == -2
+    assert rec["hits_ex2020"] == res["composite"]["hits_ex2020"]
+    assert f"{rec['hits_ex2020']} of 6 excluding 2020" in rec["text"]
+    # the Board does not beat its best single rule, and says so
+    a2 = res["rules"]["A2"]
+    best = rec["best_single"]
+    assert best["hits"] == a2["hits"] >= rec["hits"]
+    assert best["false_alarms_1972_2020"] == len(a2["false_alarms"])
+    assert best["fired_2024"] in a2["final_2021_2024"]
+    assert f"{best['hits']} of 7" in rec["text"]
+    # erratum: 1981 is LATE under spec A3 (window must lie INSIDE a spell)
+    p81 = next(x for x in res["composite"]["per_peak"] if x["peak"] == "1981-07")
+    assert p81["outcome"] == "LATE" and "late for 1973 and 1981" in rec["text"]
 
 
 def test_board_payload_on_frozen_data():
     series = {k: _load(sid) for k, sid in RL.BOARD_SERIES.items()}
     p = RL.board_payload(series)
     assert p["month"] == "2026-08"                  # evaluated on the jobs-report grid
-    assert p["state"] == "CLEAR" and p["n_lit"] == 0
+    assert p["state"] == "CLEAR" and p["n_lit"] == 0 and p["missing"] == []
+    assert p["c1_source"] == "SAHMREALTIME"
     assert p["ledger"] == []                        # out-of-sample starts 2026-09
     b1 = next(r for r in p["rules"] if r["id"] == "B1")
     assert b1["value"] == 0.4 and b1["lit"] is False
@@ -81,13 +95,77 @@ def test_board_payload_on_frozen_data():
     assert {"u3", "paur", "u6", "nei", "job_finding", "lt_rate", "fb_lfpr"} <= keys
     paur = next(s for s in p["strip"] if s["key"] == "paur")
     assert "upper bound" in paur["label"].lower()
+    assert paur["trend"] == "flat"                  # +0.04 sits inside the dead band
+    v = p["strip_verdict"]
+    assert v.startswith("U-3 4.14% vs participation-adjusted 4.58%") and "at most 0.44pp" in v
+    assert "job-finding rate" in v.split("Better:")[0]          # worse side
+    assert "U-6" in v.split("Better:")[1]
+
+
+def test_missing_rules_never_read_clear():
+    series = {k: _load(sid) for k, sid in RL.BOARD_SERIES.items()}
+    for drop, gone in ((("iursa", "ccnsa", "job_losers"), ["A1", "A2", "A3"]),
+                       (("clf",), ["A2", "B2"]), (("epop_prime",), ["B1"])):
+        s = dict(series)
+        for k in drop:
+            s[k] = ([], [])
+        p = RL.board_payload(s)
+        assert p["state"] == "INCOMPLETE", drop
+        assert p["missing"] == gone and p["n_evaluated"] == 6 - len(gone)
+        assert all(r["lit"] is None for r in p["rules"] if r["id"] in gone)
+    # a lagging layoff series: its stale value is shown, never counted
+    s = dict(series)
+    d, v = s["job_losers"]
+    s["job_losers"] = (d[:-1], v[:-1])
+    p = RL.board_payload(s)
+    a2 = next(r for r in p["rules"] if r["id"] == "A2")
+    assert p["state"] == "INCOMPLETE" and a2["stale"] and a2["lit"] is None
+    assert a2["month"] == "2026-07"
+    # no real-time Sahm -> C1 from UNRATE, not a dead Board
+    s = dict(series)
+    s["sahm"] = ([], [])
+    p = RL.board_payload(s)
+    assert p["state"] == "CLEAR" and "SAHMREALTIME unavailable" in p["c1_source"]
+
+
+def test_alert_stands_with_a_rule_missing_and_quotes_the_margin():
+    # data through Aug 2024 (current vintage; FRED dates monthly observations
+    # to the 1st, so this is a state test, not a real-time replay), with
+    # insured unemployment down
+    cut = date(2024, 8, 31)
+    series = {}
+    for k, sid in RL.BOARD_SERIES.items():
+        d, v = _load(sid)
+        keep = [i for i, x in enumerate(d) if x <= cut]
+        series[k] = ([d[i] for i in keep], [v[i] for i in keep])
+    series["iursa"] = ([], [])
+    p = RL.board_payload(series)
+    assert p["month"] == "2024-08" and p["missing"] == ["A1"]
+    assert p["state"] == "ALERT"                     # a missing rule only lowers the count
+    ev = RL.board_alert_event(p, date(2024, 9, 6))
+    assert ev is not None and "A2 Job losers" in ev.rationale
+    assert "+0.31pp (line 0.3)" in ev.rationale      # the marginal crossing is visible
+
+
+def test_ledger_persists_each_onset_at_first_sight():
+    p = {"month": "2026-11", "ledger": [
+        {"month": "2026-10", "kind": "A2", "event": "A2 onset", "value": 0.31},
+        {"month": "2026-11", "kind": "ALERT", "event": "ALERT onset"}]}
+    evs = RL.board_ledger_events(p, date(2026, 12, 4))
+    assert [e.dedup_key for e in evs] == ["A2:2026-10", "ALERT:2026-11"]
+    assert all(e.severity == "INFO" and e.event_type == "labor_board_onset" for e in evs)
+    assert evs[0].detail["first_seen"] == "2026-12-04" and evs[0].detail["value"] == 0.31
+    # nothing before the out-of-sample start is ever listed
+    series = {k: _load(sid) for k, sid in RL.BOARD_SERIES.items()}
+    assert all(r["month"] >= "2026-09" for r in RL.board_payload(series)["ledger"])
 
 
 def test_alert_fires_only_on_a_new_episode():
     def payload(states):
         return {"state": states[-1], "month": "2026-10", "n_lit": 2,
                 "history": [{"state": s} for s in states],
-                "rules": [{"id": "A2", "label": "x", "lit": True}]}
+                "rules": [{"id": "A2", "label": "x", "lit": True, "stale": False,
+                           "value": 0.309, "unit": "pp", "threshold": 0.3}]}
     fresh = RL.board_alert_event(payload(["CLEAR"] * 6 + ["ALERT"]), date(2026, 11, 6))
     assert fresh is not None and fresh.severity == "WARN"
     assert "Aug 2024" in fresh.rationale
