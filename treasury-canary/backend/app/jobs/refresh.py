@@ -206,11 +206,12 @@ def run_refresh(session: Session) -> dict:
 
     # --- long-yield spike line (+75bp / 60 trading days) --------------------
     # studies/rate-spike-recession.md: the words carry the measured record
-    # (10 of 33, all 1979-1990) and quote the curve model's probability, not
-    # "recession odds doubled". Stateless replay -> once per crossing.
+    # (3 of 20 episodes, all by 1990) and quote the curve model's probability,
+    # not "recession odds doubled". Stateless replay -> once per crossing; a
+    # crossing within 26 weeks of the last reads "re-crossing, same episode".
     try:
         from ..api.routes_rates import RATE_THRESHOLDS as RT
-        from ..api.routes_rates import spike_alert_template
+        from ..api.routes_rates import spike_alert_template, spike_recross_template
         from ..scoring.events import detect_rate_spike
         ld, lv = bundle.get("30y", ([], []))
         pts = [(d, v) for d, v in zip(ld, lv) if v is not None]
@@ -231,6 +232,7 @@ def run_refresh(session: Session) -> dict:
             approach_bp=RT["approach_bp"], approach_rearm_bp=RT["approach_rearm_bp"],
             recent_days=10, spike_severity="WARN", approach_severity="INFO",
             spike_text=spike_alert_template(curve_pct),
+            recross_text=spike_recross_template(curve_pct),
             approach_text=("The 30-year yield is up {d60:+.0f}bp in 60 trading days "
                            "(crossed on {date}), approaching the +75bp spike line. "
                            "No odds claim attaches to this level.")))

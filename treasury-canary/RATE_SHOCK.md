@@ -6,12 +6,13 @@ tracking it?" This study answers it with the same discipline as the margin
 work: pre-registered rules, one evaluation, frozen stats, bootstrap evidence.
 
 > **ERRATUM (2026-09-30):** the SPIKE recession figure (44% vs 21%, "roughly
-> doubled") does not survive a per-alert re-test. Counted the way the live
-> alert fires, with outcomes a real-time reader could use, 10 of 33 crossings
-> were followed by a recession within 12 months (30% vs 20%, p = 0.11), all in
-> 1979-1990 and none of the 17 since; ex-1979-82 the ratio is 0.53, and the
-> effect cannot be separated from the yield curve. The 44% counted overlapping
-> weeks plus 2009 weeks after the recession was announced. See
+> doubled") does not survive a re-test. Of the 68 spike weeks it scored as
+> hits, 64 were 1979-82 and 4 fell inside the already-announced 2008-09
+> recession; the other 83 spike weeks had none (vs a 14% base). Counted per
+> spike episode, with outcomes a real-time reader could use, a recession began
+> within 12 months after 3 of 20 episodes (15% vs 20% for a random day), all
+> by 1990, none of the 13 since; the effect can't be separated from the yield
+> curve, and with 6 recessions it can be neither confirmed nor ruled out. See
 > `studies/rate-spike-recession.md`. The stock-return findings are unaffected.
 
 ## Method (pre-registered before any forward return was computed)

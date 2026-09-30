@@ -54,18 +54,34 @@ def test_cold_start_does_not_replay_old_crossings():
     assert detect_rate_spike(d, v, d[-1], **KW) == []
 
 
+def test_recrossing_within_26_weeks_reads_as_same_episode():
+    kw = dict(KW, recross_text="recross {d60:+.0f} after {prev}")
+    d, v = _days([40, 80, 50, 78])           # re-armed, crossed again 2 days later
+    ev = detect_rate_spike(d, v, d[-1], **kw)
+    assert ev[0].rationale == f"recross +78 after {d[1].isoformat()}"
+    assert ev[0].detail["recrossing"] is True
+    far = [date(2025, 1, 1), date(2025, 1, 2), date(2025, 1, 3), date(2026, 1, 1)]
+    ev = detect_rate_spike(far, [40, 80, 50, 78], far[-1], **kw)
+    assert ev[0].detail["recrossing"] is False and ev[0].rationale.startswith("spike")
+
+
 def test_frozen_numbers_equal_the_study_output():
     res = json.load(open(os.path.join(ROOT, "studies", "rate_spike", "results.json")))
     t = res["T1"]
     s = R.RATE_SPIKE_RECESSION
-    assert (s["events"], s["hits"]) == (t["n"], t["k"])
-    assert s["rate_pct"] == round(100 * t["rate"])
+    eps = t["episode_list"]
+    assert (s["episodes"], s["episode_hits"]) == (len(eps), sum(e["hit"] for e in eps))
+    assert (s["episodes"], s["episode_hits"]) == (t["episodes_n"], t["episodes_k"])
+    assert s["episode_rate_pct"] == round(100 * t["episodes_k"] / t["episodes_n"])
     assert s["base_pct"] == round(100 * t["base"])
-    assert s["ratio"] == round(t["R"], 1)
-    assert s["p_one_sided"] == round(t["p_shift_one_sided"], 2)
-    since = [e for e in t["events"] if e["date"] >= "1990-04-01"]
-    assert s["since_1990"]["events"] == len(since)
+    assert max(e["first"] for e in eps if e["hit"])[:4] <= s["hits_by"]
+    since = [e for e in eps if e["first"] >= "1990-04-01"]
+    assert s["since_1990"]["episodes"] == len(since)
     assert s["since_1990"]["hits"] == sum(e["hit"] for e in since)
+    a = s["alerts"]
+    assert (a["n"], a["hits"]) == (t["n"], t["k"])
+    assert a["lead"] == sum(1 for e in t["events"] if e["hit"] and e["tag"] == "LEAD")
+    assert a["late"] == sum(1 for e in t["events"] if e["hit"] and e["tag"] == "LATE")
     assert s["ex_volcker_ratio"] == round(res["T1_ex_volcker"]["R"], 2)
     assert s["beyond_curve"] == res["T2"]["words"]
     assert res["gate_2x"]["pass"] is False    # the words below assume a FAIL
@@ -73,12 +89,14 @@ def test_frozen_numbers_equal_the_study_output():
 
 def test_words_state_the_record_and_never_claim_doubling():
     txt = R.spike_alert_template(23.0).format(d60=81, date="2026-10-05")
-    assert "10 of 33" in txt and "none of the 17 since" in txt
+    assert "3 of 20" in txt and "none of the 13 since" in txt
     assert "23%" in txt                       # always quotes the curve model
-    assert "not a reliable recession warning" in txt
+    assert "confirm or rule out" in txt       # the power limit travels with it
+    assert "unavailable" in R.spike_alert_template(None)   # never silently dropped
     summary = " ".join(R._summary(5.5, 80, "SPIKE", "POS", R.RATE_MATRIX["SPIKE"]["POS"]))
     surfaces = {
         "alert": txt, "summary": summary, "label": R.spike_line_label(),
+        "recross": R.spike_recross_template(20.0),
         "panel": open(os.path.join(ROOT, "frontend", "src", "components",
                                    "RateShockPanel.tsx")).read(),
         "glossary": open(os.path.join(ROOT, "frontend", "src", "lib", "glossary.ts")).read(),
@@ -86,4 +104,6 @@ def test_words_state_the_record_and_never_claim_doubling():
     for name, text in surfaces.items():
         assert not re.search(r"(roughly )?doubl(e|es|ed) (forward )?recession odds|"
                              r"recession odds double", text, re.I), name
-        assert "44% vs 21%" not in text or name == "glossary_record", name
+        assert "44% vs 21%" not in text, name
+        # never imply spikes now LOWER the odds (a post-hoc subsample)
+        assert not re.search(r"lower(s|ed)? (the )?(recession )?odds", text, re.I), name

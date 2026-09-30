@@ -30,22 +30,36 @@ RATE_THRESHOLDS = {"spike_bp": 75.0, "plunge_bp": -75.0, "window_bdays": 60,
                    "rearm_bp": 60.0, "approach_bp": 60.0, "approach_rearm_bp": 45.0}
 
 # The recession evidence behind the +75bp line, re-tested 2026-09-30
-# (studies/rate-spike-recession.md, pre-registered, power measured first, two
-# independent verifiers). The unit is THIS alert — the 75/60 state machine on
-# the daily 60-trading-day change — and the outcome is a recession within 12
-# months that a real-time reader could not yet have known about. It REPLACES
-# RATE_SHOCK's "44% vs 21%", which counted overlapping weeks plus 2009 weeks
-# after the recession had been announced, and leaned on the Volcker cluster.
+# (studies/rate-spike-recession.md: pre-registered, power measured first, two
+# independent verifiers). Unit = the spike EPISODE (alerts < 26 weeks apart are
+# one episode — the same unit the alert uses for "re-crossing"); outcome = a
+# recession beginning within 12 months that a real-time reader could not yet
+# have known about. It REPLACES RATE_SHOCK's "44% vs 21%": of the 68 spike
+# weeks that figure scored as hits, 64 were 1979-82 and 4 fell inside the
+# already-announced 2008-09 recession; the other 83 spike weeks had none (vs a
+# 14% base). Per ALERT the record is 10 of 33 (8 onsets after the alert, 2
+# inside the 1981 recession before it was announced) — 8 of those 10 are
+# repeat crossings within two Volcker episodes, which is why the episode is
+# the unit quoted.
 RATE_SPIKE_RECESSION = {
-    "events": 33, "hits": 10, "rate_pct": 30, "base_pct": 20, "ratio": 1.5,
-    "ci90_pct": [19, 45], "p_one_sided": 0.11,
-    "hits_window": "1979-1990",
-    "since_1990": {"from": "1990-04", "events": 17, "hits": 0},
+    "episodes": 20, "episode_hits": 3, "episode_rate_pct": 15, "base_pct": 20,
+    "hits_by": "1990",
+    "since_1990": {"from": "1990-04", "episodes": 13, "hits": 0},
+    "alerts": {"n": 33, "hits": 10, "lead": 8, "late": 2},
+    "gate_2x": "fail",
     "ex_volcker_ratio": 0.53,
     "beyond_curve": "inseparable",     # spike term p=0.49 once the curve is in
     "power_note": "with 6 recessions since 1977 even a true tripling of "
                   "recession risk after a spike would be confirmed ~1 time in 9",
 }
+SAME_EPISODE_DAYS = 182
+
+
+def _curve_clause(curve_prob_pct: float | None) -> str:
+    if curve_prob_pct is None:
+        return " Yield-curve recession model: unavailable right now."
+    return (f" Yield-curve recession model: {curve_prob_pct:.0f}% for the next 12 "
+            f"months — that is the number to weigh.")
 
 
 def spike_alert_template(curve_prob_pct: float | None) -> str:
@@ -55,26 +69,33 @@ def spike_alert_template(curve_prob_pct: float | None) -> str:
 
 
 def spike_alert_text(d60_bp: float | None, curve_prob_pct: float | None) -> str:
-    """The words on the phone when the 30y crosses +75bp. Every clause is a
-    measured fact from RATE_SPIKE_RECESSION — no 'odds doubled'. d60_bp=None
-    returns a template with a {d60} field (other braces escaped)."""
+    """Words on the phone for the FIRST crossing of an episode. Every clause is
+    a measured fact from RATE_SPIKE_RECESSION — no 'odds doubled', and nothing
+    implying spikes now LOWER the odds (that would be a post-hoc subsample).
+    d60_bp=None returns a template with a {d60} field."""
     r = RATE_SPIKE_RECESSION
-    cp = (f" The yield-curve recession model reads {curve_prob_pct:.0f}% for the "
-          f"next 12 months — that is the number to weigh." if curve_prob_pct is not None
-          else "")
     move = "{d60:+.0f}" if d60_bp is None else f"{d60_bp:+.0f}"
-    return (f"The 30-year yield rose {move}bp in 60 trading days, past the "
-            f"+75bp spike line. History: {r['hits']} of {r['events']} past alerts were "
-            f"followed by a recession within 12 months ({r['rate_pct']}% vs "
-            f"{r['base_pct']}% normally), but all of them in {r['hits_window']}; none "
-            f"of the {r['since_1990']['events']} since. On its own this is not a "
-            f"reliable recession warning.{cp}")
+    return (f"The 30-year yield rose {move}bp in 60 trading days, past the +75bp "
+            f"spike line. History: a recession began within 12 months after "
+            f"{r['episode_hits']} of {r['episodes']} past spike episodes "
+            f"({r['episode_rate_pct']}%, vs {r['base_pct']}% for a random day), all by "
+            f"{r['hits_by']}; none of the {r['since_1990']['episodes']} since. Too few "
+            f"recessions to confirm or rule out a link.{_curve_clause(curve_prob_pct)}")
+
+
+def spike_recross_template(curve_prob_pct: float | None) -> str:
+    """A crossing within SAME_EPISODE_DAYS of the previous one (A6): no history
+    line repeated as fresh news. Fields: {d60}, {prev}."""
+    return ("Re-crossing in the same spike episode (first crossed {prev}): the "
+            "30-year is up {d60:+.0f}bp in 60 trading days. Nothing new in the "
+            "historical record." + _curve_clause(curve_prob_pct))
 
 
 def spike_line_label() -> str:
     r = RATE_SPIKE_RECESSION
-    return (f"spike +75bp · recession followed {r['hits']}/{r['events']} "
-            f"(all pre-1991)")
+    return (f"spike +75bp · recession followed {r['episode_hits']}/{r['episodes']} "
+            f"episodes, all ≤{r['hits_by']}")
+
 
 # Frozen study output. Baseline (all 2,480 weeks): recession within 12m 21%;
 # fwd12m median +12.0% / 79% positive / worst -46.3.
@@ -89,8 +110,9 @@ RATE_SHOCK_STATS = {
     "SPIKE": {"n": 151, "episodes": 24, "rec_12m_pct": 44,
               "fwd12m": {"median": 12.1, "pct_pos": 64, "worst": -16.9},
               "label": "long yield +75bp or more in 60 trading days",
-              "rec_note": "week-level count; re-tested per alert: 10 of 33, "
-                          "all 1979-1990, none of 17 since"},
+              "rec_note": "week-level count (64 of its 68 hit-weeks are "
+                          "1979-82); re-tested per episode: 3 of 20, all by "
+                          "1990, none of 13 since"},
     "PLUNGE": {"n": 154, "episodes": 22, "rec_12m_pct": 32,
                "fwd12m": {"median": 22.1, "pct_pos": 97, "worst": -25.0},
                "label": "long yield -75bp or more in 60 trading days"},
@@ -105,9 +127,9 @@ RATE_MATRIX = {
                 "fwd12m": {"median": 11.5, "pct_pos": 62, "worst": -16.5},
                 "evidence": "NOT significant for stocks (p=0.21): returns near "
                             "baseline with a milder worst case. The recession "
-                            "column (47%) counts overlapping weeks; re-tested per "
-                            "alert, every recession that followed a spike was in "
-                            "1979-1990 and none of the 17 alerts since."},
+                            "column (47%) counts overlapping weeks, nearly all "
+                            "1979-82; re-tested per episode, a recession followed "
+                            "3 of 20 spike episodes, all by 1990, none of 13 since."},
         "MIXED": {"n": 32, "episodes": 9, "rec_12m_pct": 28,
                   "fwd12m": {"median": 9.4, "pct_pos": 66, "worst": -16.9},
                   "evidence": "small sample, not significant"},
@@ -197,16 +219,30 @@ def _summary(level, d60_bp, state, regime, cell) -> list[str]:
     out.append(
         "The folk model — 'yields rise, so sell stocks and buy bonds' — does "
         "not hold up. SPIKES were not a reliable stock-sell signal: 12-month "
-        "returns after them ran near baseline, with milder worst cases. Nor "
-        "are they a reliable recession signal on their own: re-tested alert "
-        f"by alert, {r['hits']} of {r['events']} were followed by a recession "
-        f"within 12 months ({r['rate_pct']}% vs {r['base_pct']}% normally), all "
-        f"in {r['hits_window']}, none of the {r['since_1990']['events']} since, and "
-        "the effect can't be separated from what the yield curve already says. "
-        "The validated signal points the other way: yield PLUNGES — rate "
-        "relief, especially in the no-hedge regime — preceded rising stocks "
-        "almost without exception.")
+        "returns after them ran near baseline, with milder worst cases. Nor are "
+        "they a demonstrated recession signal on their own: a recession began "
+        f"within 12 months after {r['episode_hits']} of {r['episodes']} spike "
+        f"episodes ({r['episode_rate_pct']}% vs {r['base_pct']}% for a random day), all "
+        f"by {r['hits_by']}, none of the {r['since_1990']['episodes']} since — too few "
+        "recessions to confirm or rule out a link, and it can't be separated from "
+        "what the yield curve already says. The validated signal points the other "
+        "way: yield PLUNGES — rate relief, especially in the no-hedge regime — "
+        "preceded rising stocks almost without exception.")
     return out
+
+
+def _live_curve_prob() -> float | None:
+    """The dashboard's 12-month yield-curve recession probability, quoted next
+    to every spike statement (spec A4)."""
+    try:
+        from ..metrics.recession_model import cached_models_and_spread, predict
+        m, sp = cached_models_and_spread()
+        if m.get(12) and sp is not None:
+            return round(predict(m[12]["b0"], m[12]["b1"], m[12]["cov"], sp)
+                         ["probability_pct"], 1)
+    except Exception:  # noqa: BLE001
+        pass
+    return None
 
 
 @router.get("/rates/shock")
@@ -250,6 +286,7 @@ def rates_shock():
         "matrix": RATE_MATRIX,
         "thresholds": RATE_THRESHOLDS,
         "spike_recession": RATE_SPIKE_RECESSION,
+        "curve_prob_pct": _live_curve_prob(),
         "spike_label": spike_line_label(),
         "note": "Frozen pre-registered study, 1977-2026 (RATE_SHOCK.md): "
                 "weekly obs overlap; episode counts are the honest n; "

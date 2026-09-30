@@ -183,9 +183,56 @@ RATE_SHOCK's week-level 44% vs 21% (≈2.1×) is larger than a genuine doubling
 of hazard would typically produce — it leans on the Volcker cluster. The
 words shipped will state the measured ratio with its CI and this limit.
 
+---
+
+## RESULTS — frozen 2026-09-30 (`rate_spike/results.json`, one run; a
+deterministic re-run after a JSON-format fix reproduced it bit for bit)
+
+**Gate "about 2×": FAIL** — and it fails on the ex-1979-82 condition under
+every outcome definition, not on a p-value near the line.
+
+| unit | record | vs base (RT12, random eligible day 20%) |
+|---|---|---|
+| **spike episode** (A3/A6 unit) | **3 of 20** (15%) — 1979-10, 1980-08, 1990-02; all LEAD | 0.75× |
+| episodes since 1990-04 | **0 of 13** | — |
+| alert (crossing) | 10 of 33 (30%; Wilson 90% 19-45%), one-sided shift p 0.11 | 1.51× |
+| alerts, ex-1979-82 | 2 of 25 (8%) | **0.53×** |
+
+- 8 of the 10 alert-level hits are repeat crossings inside two Volcker
+  episodes; 2 (1981-08-20, 1981-10-20) are LATE — that recession had begun
+  but was not yet announced. Per episode, the record sits BELOW the base rate.
+- Definition sensitivity: strict ONSET12 R 1.83 (p 0.052); ex-2020 R 1.69
+  (p 0.056); ANY12 R 1.80 on [m, m+12] (1.88 on [m+1, m+12]) with p 0.012 —
+  its extra 6 hits are alerts that fired inside already-announced recessions.
+  The ex-Volcker condition fails under all of them (RT12 0.53, ONSET12 0.80,
+  ANY12 1.28).
+- **T2:** spike coefficient 0.42 given the curve, rotation p 0.49 — per A4,
+  "can't be separated from the yield curve with 6 recessions". The curve alone
+  expected 8.2 of the 10 alert hits. The ≥30%-curve stratum ratio (3.75) is vs
+  the unconditional base and is NOT quoted anywhere.
+- **Why RATE_SHOCK said 44% vs 21%:** of the 68 spike WEEKS it scored as hits,
+  64 were 1979-82 and 4 fell inside the already-announced 2008-09 recession;
+  the other 83 spike weeks had none (vs a 14% base). Reproduced independently
+  by both verifiers and here.
+- **Cannot be said:** that spikes now LOWER recession odds (the post-1983
+  negative coefficient comes from a subsample chosen where the hits stop), or
+  that the effect is zero (power 8.6% at a true ×2).
+
+**Words shipped** (every surface, gated in `backend/tests/test_rate_spike.py`):
+alert — "a recession began within 12 months after 3 of 20 past spike episodes
+(15%, vs 20% for a random day), all by 1990; none of the 13 since. Too few
+recessions to confirm or rule out a link. Yield-curve recession model: N%";
+a crossing within 26 weeks of the last reads "re-crossing, same episode"
+without repeating the history. **Deviation from A3's template** ("R× (k of N
+events)"): the event count repeats two Volcker episodes eight times and A6
+already makes the episode the alert's unit, so the episode figure leads; the
+event figure is kept in the frozen record, not in the words.
+
 ### Counter-agent log
 
 | review | verdict | adopted |
 |---|---|---|
 | spec v0 (2026-09-30) | not runnable: unit ≠ alert, NBER hindsight in the outcome, T2 gate near-certain to fail and ship its default words, T1 mixed units, power unknown | B1-B4, S1-S4, NITs (A1-A8); each data claim re-derived from raw files first |
 | gate power (2026-09-30) | measured before the run: 3.5% false-positive, 8.6% at a true ×2, 11% at ×3 | recorded; gate unchanged; words built to state the limit |
+| results, verifier A (2026-09-30) — independent re-derivation | all 39 events, 6 onsets, 6 exclusions, 10/33, R 1.513, p 0.1118, ex-Volcker 0.534 reproduced bit-for-bit; my brief's "0 of 21 since 1990" wrong (17 alerts / 13 episodes) | count fixed before shipping (my own gate caught it first); ANY12 window stated; NaN → null in results.json |
+| results, verifier B — inference/wording | gate FAIL holds; BLOCKING: the "10 of 33, 30% vs 20%" headline misdescribed 2 LATE hits and was inflated by repeat Volcker crossings (per episode 3/20 = 15%); A6 re-crossing rule unimplemented | words rebuilt on the episode unit; re-crossing branch + gate; curve model always quoted ("unavailable" if missing); erratum names the 64/68 Volcker driver; no "lower odds" wording (gated) |

@@ -159,7 +159,11 @@ def t1(f: pd.DataFrame, events: list, ycol: str = "rt12",
             "p_shift_one_sided": p_up, "p_shift_two_sided": p_two,
             "distinct_onsets_hit": onsets_hit,
             "events": [{"date": str(d.date()), "hit": int(y[p]), "tag": g["tag"].iloc[p],
-                        "onset": g["onset_hit"].iloc[p]} for d, p in zip(dates, ev_pos)]}
+                        "onset": (g["onset_hit"].iloc[p]
+                                  if isinstance(g["onset_hit"].iloc[p], str) else None)}
+                       for d, p in zip(dates, ev_pos)],
+            "episode_list": [{"first": str(dates[i].date()), "hit": int(y[ev_pos[i]]),
+                              "tag": g["tag"].iloc[ev_pos[i]]} for i in eps]}
 
 
 def gate_2x(main: dict, exv: dict) -> dict:
@@ -237,7 +241,8 @@ def main() -> dict:
     fr = daily_frame(raw)
     res["T1_raw_d60"] = t1(fr, warn_events(raw))
     res["T2"] = t2(f, ev)
-    json.dump(res, open(os.path.join(HERE, "results.json"), "w"), indent=1, default=str)
+    json.dump(res, open(os.path.join(HERE, "results.json"), "w"), indent=1,
+              default=str, allow_nan=False)
     return res
 
 

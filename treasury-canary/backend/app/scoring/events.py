@@ -99,7 +99,9 @@ def detect_rate_spike(dates: list[date], d60_bp: list[float | None], asof: date,
                       spike_bp: float, rearm_bp: float, approach_bp: float,
                       approach_rearm_bp: float, recent_days: int,
                       spike_severity: str, approach_severity: str,
-                      spike_text: str, approach_text: str) -> list[Event]:
+                      spike_text: str, approach_text: str,
+                      recross_text: str | None = None,
+                      same_episode_days: int = 182) -> list[Event]:
     """Long-yield SPIKE (and approach) crossings of the 60-trading-day change.
 
     Stateless: replays the whole d60 history through a hysteresis state
@@ -111,7 +113,7 @@ def detect_rate_spike(dates: list[date], d60_bp: list[float | None], asof: date,
     must not replay an old episode as news.
     """
     spike_armed = approach_armed = True
-    last_spike = last_approach = None
+    last_spike = last_approach = prev_spike = None
     for d, v in zip(dates, d60_bp):
         if v is None:
             continue
@@ -120,7 +122,7 @@ def detect_rate_spike(dates: list[date], d60_bp: list[float | None], asof: date,
         if not approach_armed and v < approach_rearm_bp:
             approach_armed = True
         if spike_armed and v >= spike_bp:
-            last_spike = (d, v)
+            prev_spike, last_spike = last_spike, (d, v)
             spike_armed = False
             approach_armed = False          # the spike supersedes the approach
         elif approach_armed and approach_bp <= v < spike_bp:
@@ -135,10 +137,15 @@ def detect_rate_spike(dates: list[date], d60_bp: list[float | None], asof: date,
         if hit is None or (asof - hit[0]).days > recent_days:
             continue
         d, v = hit
+        recross = bool(kind == "rate_spike" and prev_spike and recross_text
+                       and (d - prev_spike[0]).days < same_episode_days)
+        body = (recross_text.format(d60=v, date=d.isoformat(),
+                                    prev=prev_spike[0].isoformat())
+                if recross else text.format(d60=v, date=d.isoformat()))
         out.append(Event(
             event_type=kind, severity=sev, asof=asof,
             dedup_key=f"{kind}:{d.isoformat()}",
-            rationale=text.format(d60=v, date=d.isoformat()),
-            detail={"crossed_on": d.isoformat(), "d60_bp": v,
+            rationale=body,
+            detail={"crossed_on": d.isoformat(), "d60_bp": v, "recrossing": recross,
                     "spike_bp": spike_bp, "approach_bp": approach_bp}))
     return out

@@ -252,13 +252,18 @@ export default function RateShockPanel() {
             sends an alert; the shaded band below it is the approach zone.
             {data.spike_recession ? (
               <>
-                {" "}Recession record per alert since 1977:{" "}
-                {data.spike_recession.hits} of {data.spike_recession.events} were
-                followed by a recession within 12 months (
-                {data.spike_recession.rate_pct}% vs {data.spike_recession.base_pct}%
-                normally), all in {data.spike_recession.hits_window}, none of the{" "}
-                {data.spike_recession.since_1990.events} since — not a reliable
-                recession warning on its own, and not a stock-sell signal.
+                {" "}Recession record per spike episode since 1977: a recession
+                began within 12 months after {data.spike_recession.episode_hits} of{" "}
+                {data.spike_recession.episodes} ({data.spike_recession.episode_rate_pct}%
+                vs {data.spike_recession.base_pct}% for a random day), all by{" "}
+                {data.spike_recession.hits_by}, none of the{" "}
+                {data.spike_recession.since_1990.episodes} since. Too few recessions to
+                confirm or rule out a link, and not a stock-sell signal. Yield-curve
+                recession model:{" "}
+                {data.curve_prob_pct != null
+                  ? `${Math.round(data.curve_prob_pct)}% for the next 12 months`
+                  : "unavailable"}
+                .
               </>
             ) : null}{" "}
             Crossing −75bp = PLUNGE (the study's strongest validated equity BUY

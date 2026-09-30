@@ -273,10 +273,10 @@ between the total-return and price-only rows: **~25-31%**.
   expensive) and 1999-2000 (20% up; CAPE 43).
 - **RATE_SHOCK context (corrected 2026-09-30):** the 30y is +0.56pp over 60
   trading days — below the +0.75pp spike line. RATE_SHOCK's "spikes roughly
-  doubled recession odds (44% vs 21%)" did not survive a per-alert re-test:
-  10 of 33 crossings were followed by a recession within 12 months (30% vs
-  20%), all in 1979-1990, none of the 17 since, and inseparable from the yield
-  curve (`studies/rate-spike-recession.md`). The 3m10y curve is +0.94pp (not
+  doubled recession odds (44% vs 21%)" did not survive a re-test: a recession
+  began within 12 months after 3 of 20 spike episodes (15% vs 20%), all by
+  1990, none of the 13 since, and inseparable from the yield curve
+  (`studies/rate-spike-recession.md`). The 3m10y curve is +0.94pp (not
   inverted).
 
 ### Analogs (fig2) — illustrations, not odds

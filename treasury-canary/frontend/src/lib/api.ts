@@ -641,19 +641,20 @@ export interface RateShock {
   thresholds: Record<string, number>;
   /** re-tested per-alert recession record (studies/rate-spike-recession.md) */
   spike_recession?: {
-    events: number;
-    hits: number;
-    rate_pct: number;
+    episodes: number;
+    episode_hits: number;
+    episode_rate_pct: number;
     base_pct: number;
-    ratio: number;
-    ci90_pct: [number, number];
-    p_one_sided: number;
-    hits_window: string;
-    since_1990: { from: string; events: number; hits: number };
+    hits_by: string;
+    since_1990: { from: string; episodes: number; hits: number };
+    alerts: { n: number; hits: number; lead: number; late: number };
+    gate_2x: string;
     ex_volcker_ratio: number;
     beyond_curve: string;
     power_note: string;
   };
+  /** live 12-month yield-curve recession probability (quoted beside spikes) */
+  curve_prob_pct?: number | null;
   spike_label?: string;
   note: string;
 }
