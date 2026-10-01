@@ -25,6 +25,7 @@ from .engine.core import (
     eval_donchian, eval_signal, process_closed_bar, resolve_open_exit,
 )
 from .engine.replay import accrue_cash_yield, book_stats, compute_indicators
+from .volsize import size_mult
 from .sources.bitstamp import fetch_4h_bars, kraken_price, last_price
 from .store.db import (
     BarRow, BookStateRow, EquitySnapRow, SignalRow, TradeRow,
@@ -56,6 +57,12 @@ class Engine:
         # state - a false 'resumed' page then a fresh RED on every restart,
         # and (pre-existing) a routine engine_exit flatten of a live leg.
         self.booted = False
+        # vol-targeted entry size (app/volsize.py): closes from the repo
+        # fixture (2022-01..) merged with every persisted live bar, rebuilt
+        # once per processed bar; results cached per signal bar.
+        self._vol_closes: dict[int, float] = {}
+        self._vol_key: int | None = None
+        self._vol_cache: dict[int, dict] = {}
 
     # ---------- persistence ----------
 
@@ -437,6 +444,45 @@ class Engine:
             return {"inception": start_ts,
                     "books": {n: {"equity": round(b.equity, 2), "trades": len(b.trades)}
                               for n, b in self.books.items()}}
+
+    def _vol_history(self) -> dict[int, float]:
+        if self._vol_key == self.last_processed and self._vol_closes:
+            return self._vol_closes
+        import csv as _csv
+        import os as _os
+        fix = _os.path.join(_os.path.dirname(__file__), "..", "tests",
+                            "fixtures", "bars_4h_btcusd.csv")
+        closes: dict[int, float] = {}
+        try:
+            for r in _csv.DictReader(open(fix)):
+                closes[int(r["ts_open_unix"])] = float(r["close"])
+        except OSError:
+            logger.warning("vol sizing: fixture not readable at %s", fix)
+        with session_scope() as s:
+            for row in s.query(BarRow).all():
+                closes[row.ts_open] = row.close
+        for b in self.bars:
+            closes[b.ts] = b.close
+        # only CLOSED, processed bars: a signal is evaluated at its bar's
+        # close, so nothing newer than last_processed may inform its size
+        if self.last_processed:
+            closes = {t: c for t, c in closes.items() if t <= self.last_processed}
+        self._vol_closes, self._vol_key = closes, self.last_processed
+        return closes
+
+    def size_mult_for(self, signal_ts: int | None) -> dict:
+        """Entry-size multiplier for the entry signalled on bar `signal_ts`
+        (RESEARCH_SHARPE.md H1, down-only). 1.0 = today's size."""
+        if signal_ts is None:
+            return {"m": 1.0, "basis": "no_signal", "sigma_now": None,
+                    "sigma_ref": None}
+        hit = self._vol_cache.get(signal_ts)
+        if hit is not None:
+            return hit
+        res = size_mult(self._vol_history(), int(signal_ts))
+        if res["basis"] == "vol_target":      # final once its bars are in
+            self._vol_cache[signal_ts] = res
+        return res
 
     def status(self) -> dict:
         return {

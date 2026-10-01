@@ -7,6 +7,21 @@ from app.live import ENGINE
 from app.main import app
 
 
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _no_background_engine():
+    """HERMETIC (2026-10-01): TestClient's lifespan starts the real engine
+    loop, whose boot() restores book state from the DB on a background
+    thread - racing the positions these tests inject. It surfaced when
+    /exec/target got slower (vol sizing loads history on its first call)."""
+    old = (settings.run_engine, settings.run_funding_monitor)
+    settings.run_engine = settings.run_funding_monitor = False
+    yield
+    settings.run_engine, settings.run_funding_monitor = old
+
+
 def test_exec_target_shape_and_states():
     # /exec/target answers 503 until boot() has restored the DB (2026-09-08):
     # fresh Book() defaults served during boot read as a real engine state
