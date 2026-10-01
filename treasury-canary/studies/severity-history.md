@@ -35,7 +35,7 @@ spans ≥ 10 years (from 1976 or its first observation). Never binds today (ever
 input has ≥ 18 years), so the live number is unaffected. Consequence, stated
 up front: several inputs start late on FRED — household debt/GDP (IMF FSI,
 from 2005; extended back to 1976 with Z.1 in v2, see below) and the
-debt-service ratio in 2005 (restored to 1980 from an archived vintage in v3), EFFR 2000-07, HY OAS 1996-12, FINRA margin
+debt-service ratio in 2005, EFFR 2000-07, HY OAS 1996-12, FINRA margin
 1997, card delinquency 1991, inventories/sales 1992 — so they enter the
 history 10 years later. The chart shows the live-input count at every point
 and does not draw the line where fewer than half of the inputs are live.
@@ -83,62 +83,43 @@ nominal GDP) — for the LIVE index and the history alike.
   live index falls back to the published series, logs a warning and says so on
   the component (it would read 68.9 again).
 
-## v3 — debt-service ratio restored to 1980 (Casey, 2026-10-01)
+## RESULTS — frozen 2026-09-30 (`severity_history/results.json`, v1 lags, v2 household debt)
 
-FRED now serves TDSP from 2005 only. ALFRED's vintage of 2025-12-31 has it
-from 1980Q1, and over the 82 overlapping quarters it matches today's FRED to
-≤ 0.17pp (0.000 at 2005Q1; level correlation 0.9998): a truncation, not a
-methodology revision. The archived history is frozen in
-`app/data/ice_reference/TDSP.csv` and spliced at the source layer exactly like
-the ICE spreads (live FRED wins on overlap, so only 1980Q1-2004Q4 is used).
-No shift is needed. **Live effect:** 67.7 → **68.0**; today's DSR (11.1%)
-ranks at the 29th percentile against 1980+ instead of the 22nd against 2005+.
-The latest-starting input is now EFFR (2000-07), so all 23 components are
-live from 2010-07.
-
-## RESULTS — frozen 2026-10-01 (`severity_history/results.json`, v1 lags, v2 household debt, v3 debt service)
-
-- **Trend:** 49.5 (Dec-2023) → 57.6 (Dec-2024) → 66.6 (Dec-2025) → 68.0 today
+- **Trend:** 49.2 (Dec-2023) → 57.2 (Dec-2024) → 66.2 (Dec-2025) → 67.7 today
   (live). Drivers, Dec-2023 → live: tech capex (block F 47 → 89), private
-  leverage (A 22 → 46), amplification (C 42 → 47).
-- **High by its own history on comparable inputs:** at or above 88% of months
-  since 2010-07, when all 23 components exist (SEVERE in 33% of them); 82% of
-  months since 1997-06 on ≥ 75% of inputs (SEVERE in 53%). The wider window
-  (2010+ rather than 2015+) brings in the high 2012-15 readings, so today
-  ranks lower than the v2 figure of 97% — a fairer denominator, not a change
-  in today's reading.
+  leverage (A 21 → 45), amplification (C 42 → 47).
+- **High by its own history on comparable inputs:** at or above 97% of months
+  since 2015-06, when all 23 components exist (SEVERE in 14% of them); 85% of
+  months since 1999-12 on ≥ 75% of inputs (SEVERE in 43%). Counting the thin,
+  short-yardstick early months too is not a fair denominator.
 - **Recession starts** (reading the month BEFORE the NBER peak; real GDP =
   largest peak-to-trough quarterly fall around the recession):
 
 | recession began | reading before | components | months | unemployment rise | real GDP drawdown |
 |---|---|---|---|---|---|
-| 1990-07 | 65.9 | 16/23 | 8 | +2.3pp | −1.4% |
-| 2001-03 | 67.3 | 19/23 | 8 | +2.0pp | −0.4% |
-| 2007-12 | 73.2 | 22/23 | 18 | +5.0pp | −3.8% |
-| 2020-02 (exogenous) | 56.6 | 23/23 | 2 | +11.3pp | −9.1% |
+| 1990-07 | 64.9 | 15/23 | 8 | +2.3pp | −1.4% |
+| 2001-03 | 66.3 | 18/23 | 8 | +2.0pp | −0.4% |
+| 2007-12 | 72.4 | 21/23 | 18 | +5.0pp | −3.8% |
+| 2020-02 (exogenous) | 55.1 | 23/23 | 2 | +11.3pp | −9.1% |
 
-- **Nearest readings (±5 of 68.0, ≥ 75% inputs, excluding the last 24
-  months):** 1997-09..2002-05 (recession began 2001-03, during the stretch);
-  2006-06..2007-08 (recession began 2007-12; unemployment +1.0pp over 24m
-  from the first month); 2008-09..2010-08 (already in recession);
-  2012-07..2015-05 (no recession; −2.0pp). Of the three stretches that began
-  outside a recession, two led into one. (The 24-month unemployment change
-  runs from each stretch's first month, so for the long 1997-2002 stretch it
-  is −0.7pp and says little.)
+- **Nearest readings (±5 of 67.7, ≥ 75% inputs, excluding the last 24
+  months):** 1999-12..2002-05 (recession began 2001-03; unemployment +1.7pp
+  over 24m); 2006-08..2007-11 (recession began 2007-12; +1.4pp); 2008-06..
+  2010-06 (already in recession); 2012-12..2015-05 (no recession; −2.3pp). Of
+  the three stretches that began outside a recession, two led into one.
 
 Honesty box: descriptive only — three endogenous recessions cannot validate
 a severity index; the ordering 2007 > 2001 ≈ 1990 matches depth only loosely.
-Household debt before 2005 is Z.1-based (a close but not identical measure);
-the debt-service ratio before 2005 is the Fed's own series from an archived
-FRED vintage. EFFR (2000), HY spreads (1996), FINRA margin (1997), card
-delinquency (1991) and inventories/sales (1992) still start late, so readings
-before 2010 use fewer components. Point-in-time ranks drift: the 1986-87
-readings of 82-92 mostly reflect a short yardstick (equity/GDP making new
-highs vs a 1976 start; drawn months only). Current-vintage data: rebuilding 5
-dates from real-time ALFRED vintages (v1) moved them by up to 3 points in no
+The debt-service ratio starts 2005 on FRED (enters ~2015), so every reading
+before then runs without it. Household debt before 2005 is Z.1-based (a close
+but not identical measure). Point-in-time ranks drift: the 1986-87 readings of
+82-92 mostly reflect a short yardstick (equity/GDP making new highs vs a 1976
+start; drawn months only). Current-vintage data: rebuilding 5 dates from real-time ALFRED
+vintages (v1, before the Z.1 extension) moved them by up to 3 points in no
 consistent direction, mostly BEA tech-capex revisions. Publication lags are
-approximations (the household-debt series keeps a 460-day lag for its Z.1 part
-too — conservative). Weights set in 2026 with this history in view.
+approximations (the household-debt series keeps the published series' 460-day
+lag for its Z.1 part too — conservative, Z.1 is out ~165 days after the stamp).
+Weights set in 2026 with this history in view.
 
 ### Counter-agent log
 

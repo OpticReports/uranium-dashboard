@@ -50,11 +50,11 @@ ax.annotate(f"today {R['today']['score']:.0f}", xy=(xs[-1], R["today"]["score"])
 ax.set_ylim(20, 100)
 ax.set_xlim(dt.date(1985, 6, 1), dt.date(2027, 3, 1))
 ax.set_ylabel("severity (0-100)", color=INK2)
-ax.set_title(f"Severity index replayed since 1986: up from ~50 in Dec-2023 to {R['today']['score']:.0f} now, at or above "
+ax.set_title(f"Severity index replayed since 1986: up from ~49 in Dec-2023 to {R['today']['score']:.0f} now, at or above "
              f"{R['pctile_all_inputs']}% of months since all inputs exist ({R['all_inputs_from'][:4]}).\n"
-             "Before 2007 it read 73 (deep recession), before 2001 67 and 1990 66 (mild); 2012-15 averaged "
-             "67 with no recession.\nHousehold debt (Z.1) and debt service (archived 1980+) extended back; "
-             "a few inputs start 1996-2000. Grey = NBER recessions.",
+             "Before 2007 it read 72 (deep recession), before 2001 66 and 1990 65 (mild); 2012-15 averaged "
+             "67 with no recession.\nHousehold debt extended back with the Fed's Z.1; debt service only "
+             "from 2015. Grey = NBER recessions.",
              loc="left", fontsize=10.5, color=INK)
 fig.tight_layout()
 fig.savefig(os.path.join(HERE, "fig_severity_history.png"), dpi=160, facecolor=SURF)

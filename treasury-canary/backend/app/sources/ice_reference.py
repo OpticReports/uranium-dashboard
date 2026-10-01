@@ -32,12 +32,8 @@ from functools import lru_cache
 
 _DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "ice_reference")
 
-# Series whose FRED history was truncated: the ICE BofA spreads (April 2026),
-# and the Fed's household debt-service ratio TDSP, which FRED now serves from
-# 2005 only (frozen from the ALFRED vintage of 2025-12-31, 1980Q1-2025Q2; it
-# matches today's FRED to <= 0.17pp on all 82 overlapping quarters and exactly
-# at 2005Q1 — a truncation, not a methodology revision). See MANIFEST.md.
-FROZEN_SERIES = {"BAMLH0A3HYC", "BAMLC0A4CBBB", "BAMLH0A0HYM2", "BAMLC0A0CM", "TDSP"}
+# Series whose FRED history was truncated in April 2026.
+FROZEN_SERIES = {"BAMLH0A3HYC", "BAMLC0A4CBBB", "BAMLH0A0HYM2", "BAMLC0A0CM"}
 
 
 @lru_cache(maxsize=None)

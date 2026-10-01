@@ -64,19 +64,3 @@ an archived capture of FRED's own CSV endpoint.
   does not: 5,229 CCC days agreeing across snapshots ~5 years apart, zero mismatches.
 - **Never fetch upstream at runtime.** Unversioned personal repos are deletable and rewritable.
   Pull once, freeze, verify by checksum.
-
-## TDSP — household debt-service ratio (added 2026-10-01)
-
-FRED now serves TDSP from **2005Q1** only; the Fed's series runs from 1980. The severity index
-ranks the debt-service ratio's LEVEL against its history, so the truncation made it a 20-year
-rank and kept it out of the severity back-history before 2015.
-
-| series | rows | range | sha256 |
-|---|---|---|---|
-| `TDSP` | 182 | 1980-01-01 .. 2025-04-01 | `05e316b79d4546d608371734f19c0f9fb0d8dc88e14853db0a4bbee8a01aeab5` |
-
-Source: ALFRED real-time vintage **2025-12-31** (`alfredgraph.csv?id=TDSP&vintage_date=2025-12-31`),
-the last vintage before the truncation. Reconciled against today's FRED: **82 overlapping quarters
-(2005Q1-2025Q2), max abs difference 0.174pp, 0.000 at 2005Q1, level correlation 0.9998** — the
-same series, cut, not a methodology change. Live FRED wins on overlap as for every file here, so
-only 1980Q1-2004Q4 is ever used.

@@ -40,7 +40,7 @@ def bundle(extend: bool = True) -> dict:
             d, v = fred(sid) if os.path.exists(path) else ([], [])
             out[key] = splice(sid, d, v)
         elif os.path.exists(path):
-            out[key] = splice(sid, *fred(sid)) if extend else fred(sid)
+            out[key] = fred(sid)
     out["margin_debit"] = parse_margin_workbook(os.path.join(DATA, "finra_margin.xlsx"))["margin_debit"]
     if extend:   # exactly as fetch_bundle does
         from app.sources.household_debt import extend_household_debt

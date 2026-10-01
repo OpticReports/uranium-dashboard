@@ -32,11 +32,10 @@ def payload(bundle):
 
 def test_today_is_the_live_index(bundle, payload):
     # the frozen bundle reproduces the live /severity of 2026-09-30 exactly
-    # 68.9 with FRED as served; 67.7 with household debt/GDP extended back
-    # with Z.1; 68.0 with the debt-service ratio's archived 1980+ history too
+    # (68.9 before household debt/GDP was extended back with Z.1; 67.7 after)
     assert build_severity(load.bundle(extend=False))["severity_score"] == 68.9
-    assert build_severity(bundle)["severity_score"] == 68.0
-    assert payload["today"] == {"score": 68.0, "class": "SEVERE"}
+    assert build_severity(bundle)["severity_score"] == 67.7
+    assert payload["today"] == {"score": 67.7, "class": "SEVERE"}
 
 
 def test_no_observation_is_used_before_it_was_published(bundle):
@@ -65,11 +64,9 @@ def test_lags_are_no_shorter_than_the_real_release_schedule(bundle):
 
 
 def test_late_starting_inputs_enter_ten_years_later(bundle):
-    # EFFR starts 2000-07: absent until 2010-07
-    assert SH.as_of(bundle, date(2010, 6, 30))["effr"] == ([], [])
-    assert SH.as_of(bundle, date(2010, 8, 31))["effr"][0]
-    # debt service, with its archived 1980+ history, is live from 1990
-    assert SH.as_of(bundle, date(1990, 12, 31))["dsr"][0]
+    # debt service starts 2005 on FRED: absent until ~2015
+    assert SH.as_of(bundle, date(2014, 12, 31))["dsr"] == ([], [])
+    assert SH.as_of(bundle, date(2016, 6, 30))["dsr"][0]
     # household debt/GDP, extended back with Z.1, is live from 1987
     assert SH.as_of(bundle, date(1990, 6, 30))["hh_debt_gdp"][0]
     assert SH.as_of(bundle, date(2008, 6, 30))["effr"] == ([], [])      # EFFR from 2000-07
@@ -79,14 +76,14 @@ def test_payload_matches_the_frozen_study_and_serialises(payload):
     frozen = json.load(open(os.path.join(STUDY, "results.json")))
     assert json.loads(json.dumps(payload, allow_nan=False)) == frozen
     s = {r["month"]: r for r in payload["series"]}
-    assert s["2007-11"]["score"] == 73.2 and s["2023-12"]["score"] == 49.5
+    assert s["2007-11"]["score"] == 72.4 and s["2023-12"]["score"] == 49.2
     # the months the drawn rule actually hides (4 of 23 components live)
     for m in ("1986-03", "1986-04", "1986-05"):
         assert s[m]["score"] is not None and not s[m]["drawn"]
     # shares and percentiles on comparable inputs, not the thin early years
-    assert (payload["share_severe"], payload["today_pctile"], payload["pctile_from"]) == (53, 82, "1997-06")
+    assert (payload["share_severe"], payload["today_pctile"], payload["pctile_from"]) == (43, 85, "1999-12")
     assert (payload["share_severe_all_inputs"], payload["pctile_all_inputs"],
-            payload["all_inputs_from"]) == (33, 88, "2010-07")
+            payload["all_inputs_from"]) == (14, 97, "2015-06")
     assert "extended back to 1976 with the Fed's Z.1" in payload["method"]
     assert "the dot is today's live reading" in payload["method"]
 
@@ -126,15 +123,15 @@ def test_recession_outcomes_are_the_data():
 
 def test_analogs(payload):
     starts = {s["peak"]: s for s in payload["analogs"]["recession_starts"]}
-    assert starts["2007-12"]["reading"] == 73.2 and starts["2020-02"]["exogenous"]
-    assert starts["1990-07"]["reading"] == 65.9
+    assert starts["2007-12"]["reading"] == 72.4 and starts["2020-02"]["exogenous"]
+    assert starts["1990-07"]["reading"] == 64.9
     near = payload["analogs"]["nearest"]
-    assert [(n["from"], n["to"]) for n in near] == [("1997-09", "2002-05"), ("2006-06", "2007-08"),
-                                                    ("2008-09", "2010-08"), ("2012-07", "2015-05")]
+    assert [(n["from"], n["to"]) for n in near] == [("1999-12", "2002-05"), ("2006-08", "2007-11"),
+                                                    ("2008-06", "2010-06"), ("2012-12", "2015-05")]
     assert all(n["live"] >= 0.75 * n["total"] for n in near)
     assert near[0]["recession_within_24m"] == "2001-03" and near[1]["recession_within_24m"] == "2007-12"
     assert near[2]["already_in_recession"]
-    assert near[3]["recession_within_24m"] is None and near[3]["unemployment_chg_24m"] == -2.0
+    assert near[3]["recession_within_24m"] is None and near[3]["unemployment_chg_24m"] == -2.3
     # the current stretch is never its own analog (no outcome yet)
     assert all(n["to"] < "2024-10" for n in near)
 
@@ -183,20 +180,3 @@ def test_a_failed_z1_extension_is_said_not_silent():
     note_ok = next(c["note"] for b in build_severity(load.bundle())["blocks"]
                    for c in b["components"] if c["id"] == "hh_debt_3y")
     assert "unavailable" not in note_ok
-
-
-# ── debt-service ratio frozen history (app/data/ice_reference/TDSP.csv) ─────
-def test_dsr_frozen_history_is_the_same_series():
-    from app.sources.ice_reference import frozen_history, splice
-    fd, fv = frozen_history("TDSP")
-    assert fd[0] == date(1980, 1, 1) and fd[-1] == date(2025, 4, 1) and len(fd) == 182
-    cur = {d: v for d, v in zip(*load.fred("TDSP")) if v is not None}
-    frozen = dict(zip(fd, fv))
-    ov = [d for d in frozen if d in cur]
-    assert len(ov) == 82 and max(abs(frozen[d] - cur[d]) for d in ov) < 0.2
-    assert frozen[date(2005, 1, 1)] == pytest.approx(cur[date(2005, 1, 1)], abs=1e-6)
-    # live FRED wins on overlap; the frozen file only fills 1980Q1-2004Q4
-    d, v = splice("TDSP", *load.fred("TDSP"))
-    got = dict(zip(d, v))
-    assert all(got[x] == y for x, y in cur.items())
-    assert min(d) == date(1980, 1, 1) and got[date(1990, 1, 1)] == frozen[date(1990, 1, 1)]
