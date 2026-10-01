@@ -6,6 +6,7 @@ import {
 import { api } from "../lib/api";
 import { fmtNum, fmtPct, fmtMoney, FLAG_LABELS } from "../lib/format";
 import InfoTip from "../components/InfoTip";
+import BacktestPanel from "../components/BacktestPanel";
 
 // Calls Log: every exact trade call the tracker (or the desk) has made, graded
 // against what price actually did — the honest track record that tells us which
@@ -48,6 +49,7 @@ export default function CallsLog({ onPick }) {
   const [card, setCard] = useState(null);
   const [perf, setPerf] = useState(null);
   const [paper, setPaper] = useState(null);
+  const [backtest, setBacktest] = useState(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -57,6 +59,8 @@ export default function CallsLog({ onPick }) {
     api.callsScorecard().then(setCard).catch(() => setCard(null));
     api.callsPerformance().then(setPerf).catch(() => setPerf(null));
     api.callsPaper().then(setPaper).catch(() => setPaper(null));
+    // Frozen build artifact; failing to load it hides the panel, never the page.
+    api.callsBacktest().then(setBacktest).catch(() => setBacktest(null));
   }, []);
   useEffect(load, [load]);
 
@@ -141,6 +145,8 @@ export default function CallsLog({ onPick }) {
       {card && <Scorecard card={card} />}
 
       {perf && <PerformanceOverTime perf={perf} />}
+
+      {backtest && <BacktestPanel bt={backtest} />}
 
       <div className="bg-panel border border-edge rounded-xl p-4">
         <h3 className="font-semibold mb-3">🔴 Open calls ({open.length})</h3>
