@@ -63,11 +63,56 @@ def render(r: dict) -> str:
     return "\n".join(lines)
 
 
+BEGIN2, END2 = "<!-- RESULTS2:BEGIN -->", "<!-- RESULTS2:END -->"
+ORDER2 = ["B0", "L1", "L2", "L3", "L4", "L5", "L6", "L7", "G1", "G2", "G3", "G4", "X1", "X2", "S3",
+          "M2", "M3", "M4", "RP2", "RP3"]
+
+
+def render2(r: dict) -> str:
+    v = r["variants"]
+    b0 = v["B0"]["full"]
+    lines = [f"_Window 2007-11-15 → {r['generated']} unless the start column says later. Judge: CAGR ≥ XBI + "
+             f"{r['judge']['cagr_edge_pp']*100:.0f} pp ({(b0['cagr']+r['judge']['cagr_edge_pp'])*100:.1f}%), max DD ≤ XBI's "
+             f"({b0['max_dd']*100:.1f}%), CAGR above XBI in ≥ {r['judge']['subperiods_needed']} of 3 sub-periods; a passer must also "
+             f"pass with margin +1 pp and costs ×2._", "",
+             "| id | rule | start | gross | CAGR | max DD | Sharpe | Calmar | worst yr | sub-period CAGR wins | pass |",
+             "|---|---|---|---|---|---|---|---|---|---|---|"]
+    for vid in ORDER2:
+        if vid not in v:
+            continue
+        x, f, j = v[vid], v[vid]["full"], v[vid].get("judge") or {}
+        tag = "bench" if vid == "B0" else ("**PASS, robust**" if j.get("robust") else
+                                            "PASS (fails sensitivity)" if j.get("passes") else "no")
+        wy = f"{f['worst_year']} {p(f['worst_year_ret'])}" if f.get("worst_year") else "—"
+        lines.append(f"| {vid} | {x['note']} | {x['start'][:7]} | {x['avg_gross']:.2f}× | {pct(f['cagr'])} | {p(f['max_dd'])} | "
+                     f"{f['sharpe']:.2f} | {f['calmar']:.2f} | {wy} | {j.get('subperiod_cagr_wins', '—')}/3 | {tag} |")
+    keys = list(r["subperiods"])
+    lines += ["", "**Sub-periods (CAGR / max DD):**", "", "| id | " + " | ".join(keys) + " |", "|---|" + "---|" * len(keys)]
+    for vid in ["B0", "RP3", "RP2", "M4", "M3", "X2", "L2"]:
+        if vid not in v:
+            continue
+        cells = [f"{pct(s['cagr'])} / {p(s['max_dd'])}" if (s := v[vid]["subperiods"].get(k)) else "—" for k in keys]
+        lines.append(f"| {vid} | " + " | ".join(cells) + " |")
+    for vid in r.get("passers", []):
+        s = v[vid].get("sensitivity", {})
+        lines += ["", f"**{vid} sensitivity:** " + "; ".join(
+            f"{k.replace('_', ' ')} → {pct(w['full']['cagr'])} / DD {p(w['full']['max_dd'])} / Sharpe {w['full']['sharpe']:.2f} "
+            f"({'passes' if w['judge']['passes'] else 'FAILS'})" for k, w in s.items())]
+        yrs = v[vid]["full"]["years_ret"]
+        lines += ["", f"**{vid} by calendar year vs XBI:** " + ", ".join(
+            f"{y} {pct(x, 0)} (XBI {pct(b0['years_ret'].get(y, 0), 0)})" for y, x in yrs.items())]
+    return "\n".join(lines)
+
+
 def main() -> None:
     r = json.loads((HERE / "results.json").read_text())
     body = render(r)
     text = DOC.read_text()
     new = re.sub(re.escape(BEGIN) + ".*?" + re.escape(END), f"{BEGIN}\n{body}\n{END}", text, flags=re.S)
+    p2 = HERE / "results2.json"
+    if p2.exists() and BEGIN2 in new:
+        body2 = render2(json.loads(p2.read_text()))
+        new = re.sub(re.escape(BEGIN2) + ".*?" + re.escape(END2), f"{BEGIN2}\n{body2}\n{END2}", new, flags=re.S)
     DOC.write_text(new)
     print("rendered", DOC.relative_to(BACKEND.parent))
 
