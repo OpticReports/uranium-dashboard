@@ -108,3 +108,50 @@ would block every pullback short (price above its 200-day average since
 - **P3** The lower drawdown would make room for more size. The binding limit is
   still the daily-loss rule, which becomes manual-resume above KELLY_M 0.30.
   Changing size is that decision, unchanged from RESEARCH_CAGR.
+
+## ADDENDUM 2026-10-01 — modern regime only (Casey's call)
+
+Casey: "the early years of BTC don't matter, completely different market
+size and regime — need a fair comparison." The window choice was made after
+the 2013+ results were seen. Script `research/sharpe/modern.py`, figure
+`research/sharpe/modern_answer.png`.
+
+| since 2019 / since 2020 | Sharpe | gain (90% CI) | $/yr @0.30 | worst DD | years beaten |
+|---|---|---|---|---|---|
+| live engine | 1.05 / 1.14 | — | $11.3k / $12.1k | −$12.4k / −$11.0k | — |
+| vol-target down-only | 1.18 / 1.25 | +0.14 [+0.04,+0.23] / +0.11 [+0.01,+0.22] | $11.1k / $11.7k | −$9.5k / −$7.6k | 7/8, 6/7 |
+| vol-target registered | 1.20 / 1.25 | +0.15 [+0.03,+0.27] / +0.11 [−0.02,+0.24] | $12.7k / $13.2k | −$10.2k / −$8.8k | 5/8, 4/7 |
+| 200-day gate | 1.05 / 1.05 | +0.01 / −0.09 | — | — | rejected |
+| carry static | 1.27 / 1.36 | +0.22 / +0.22 (vs T-bills +0.15 / +0.14) | $13.7k / $14.5k | — | blocked on HL |
+| vol-target down-only + carry | 1.44 / 1.51 | +0.39 / +0.36 (vs T-bills +0.32 / +0.28) | $13.5k / $14.0k | −$7.8k / −$7.6k | blocked on HL |
+
+The verdicts do not change: vol-targeting holds up, the gate fails, carry
+helps but cannot run on HL as the account is set up. H1 and H2 2019+ and
+carry 2020+ match counter-agents A and B's independent numbers exactly.
+
+**What does change is size.** The 0.30 ceiling was set by the full
+2013+ history. On the modern windows the bootstrap-safe size (P(DD > 30%
+over 2y) ≤ 10%) is:
+
+| | k | $/yr | realised worst DD | days > $6k loss | peak gross |
+|---|---|---|---|---|---|
+| today | 0.30 | $11.3k | −$12.4k | 0 | $51k |
+| live engine, 2019+ | 0.73 | $27.6k | −$30.3k | 11 | $124k |
+| live engine, 2020+ | 0.75 | $30.5k | −$27.7k | 10 | $128k |
+| vol-target down-only, 2019+ | 0.94 | $34.8k | −$29.8k | 16 | $157k |
+| vol-target down-only, 2020+ | 0.95 | $37.0k | −$24.1k | 12 | $159k |
+
+The live-engine row cross-checks the verified CAGR-study `sizing.json` (2019+
+k_safe 0.746, 2020+ 0.764). The vol-target sizing rows are NOT yet
+independently verified.
+
+To run any of it you would need to:
+
+- raise `KELLY_M_CAP` (code);
+- raise `MAX_NOTIONAL_USD` to about $130–160k;
+- re-strike the daily-loss rail, because at this size a $6k day happens
+  10–16 times in 7 years, and above KELLY_M 0.30 each one is a manual-resume
+  halt.
+
+In-sample on one bear market (2022). Sizing to it means accepting that the
+next bear may be worse.
