@@ -511,6 +511,11 @@ class Engine:
             "last_processed_bar": self.last_processed,
             "bars_cached": len(self.bars),
             "price": self.cur_price,
+            # the entry-size multiplier a signal on the latest processed bar
+            # would get (RESEARCH_SHARPE.md H1, down-only); public so the
+            # deploy can be checked without the exec token
+            "vol_size": {k: v for k, v in self.size_mult_for(
+                self.last_processed or None).items() if k in ("m", "basis")},
             "books": {**self._blend_status(), **{n: {**book_stats(b),
                           "state": ("HALTED" if b.halted else
                                     b.position.side if b.position else

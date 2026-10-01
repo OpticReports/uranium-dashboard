@@ -181,14 +181,17 @@ def test_vol_history_reads_the_real_fixture(monkeypatch):
     assert max(ENGINE._vol_closes) <= TS[6000]           # nothing newer
 
 
-def test_a_pending_older_than_last_processed_is_not_starved(monkeypatch):
-    """Review M1: a pending created just before last_processed advances must
-    still see its own signal bar."""
+def test_a_pending_newer_than_last_processed_is_not_starved(monkeypatch):
+    """Review M1: catch_up creates the pending on bar s BEFORE it advances
+    last_processed. With the cache WARM at s-1 (the real race), the poll in
+    that window must still size off a history that contains bar s."""
     from app.live import ENGINE
     monkeypatch.setattr(ENGINE, "last_processed", TS[5999])   # not yet advanced
-    ENGINE._vol_closes, ENGINE._vol_key, ENGINE._vol_cache = {}, None, {}
+    ENGINE._vol_closes = {t: c for t, c in CLOSES.items() if t <= TS[5999]}
+    ENGINE._vol_key, ENGINE._vol_cache = TS[5999], {}
     got = ENGINE.size_mult_for(TS[6000])
     assert got["basis"] == "vol_target"
+    assert got["m"] == V.size_mult(CLOSES, TS[6000])["m"]
 
 
 def test_an_exception_fails_to_todays_size_not_a_500(monkeypatch):
@@ -207,3 +210,14 @@ def test_an_exception_fails_to_todays_size_not_a_500(monkeypatch):
     assert r.status_code == 200
     pl = r.json()["legs"]["pullback"]
     assert pl["size_mult"] == 1.0 and pl["size_mult_basis"] == "error"
+
+
+def test_status_reports_the_live_multiplier(monkeypatch):
+    """Post-deploy check without the exec token: /status carries the m a
+    signal on the latest processed bar would get."""
+    from app.live import ENGINE
+    monkeypatch.setattr(ENGINE, "last_processed", TS[6000])
+    ENGINE._vol_closes, ENGINE._vol_key, ENGINE._vol_cache = CLOSES, TS[6000], {}
+    vs = ENGINE.status()["vol_size"]
+    assert vs["basis"] == "vol_target"
+    assert vs["m"] == V.size_mult(CLOSES, TS[6000])["m"]

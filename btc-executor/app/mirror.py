@@ -1561,8 +1561,9 @@ class Executor:
             # A silent fallback - engine error, missing history, an engine
             # that predates the field - must reach the phone.
             self._event("RED", "size_mult_fallback",
-                        f"{leg} entry sized WITHOUT the vol target (engine "
-                        f"basis {basis!r}) at KELLY_M "
+                        f"{leg}: the engine supplied no vol target (basis "
+                        f"{basis!r}) - any entry or top-up for this leg is "
+                        f"sized at FULL size at KELLY_M "
                         f"{self._effective_kelly_m()}")
         if raw is None:
             return 1.0
