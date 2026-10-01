@@ -191,8 +191,8 @@ export const GLOSSARY = {
   max_drawdown: {
     title: "Max drawdown",
     what: "The worst peak-to-trough fall in book value over the window — the most you would have been down from a prior high at the worst moment.",
-    calc: "On the DAILY marked-to-market curve: max over all days of (running peak − value) / running peak. Open positions are marked at the adjusted close, so intraday lows are not captured.",
-    read: "35% means the book was at one point worth 65% of its earlier high. Compare it with CAGR (Calmar = CAGR / max DD): a strategy that earns 15%/yr with a 35% hole is a very different ride from one earning 15% with a 15% hole.",
+    calc: "On the DAILY marked-to-market curve: max over all days of (running peak − value) / running peak. Open positions are marked at the adjusted close, so intraday lows are not captured. Measured on the full daily curve, not the display points.",
+    read: "35% means the book was at one point worth 65% of its earlier high; 65% means 35¢ on the peak dollar. Compare it with CAGR (Calmar = CAGR / max DD) and with XBI over the same window before blaming the engine: the sector itself has holes of the same depth, and whether a hole is survivable is a question about you, not the strategy.",
   },
   underwater: {
     title: "Longest underwater stretch",
@@ -211,5 +211,41 @@ export const GLOSSARY = {
     what: "n/a means there's no data for that input — deliberately different from a real 0.",
     calc: "Missing components are dropped from the Alpha Signal's weighting rather than counted as zero, so a name isn't penalized for patchy data.",
     read: "Common for thin-float names (options/short interest) and profitable names (runway). Treat low-confidence rows with extra caution.",
+  },
+  backtest_replay: {
+    title: "10-year replay (mechanical shadow)",
+    what: "What the tracker's replayable signals would have produced if every fire had been eligible to become a call, 2016 to Aug-2026, graded with the same exit rules the live calls use.",
+    calc: "Fires are regenerated on daily bars with the live, pre-registered thresholds; each becomes a call entered at the next open with a 3×ATR stop, 3:1 target and a 45-day time-stop (cut to the day before the catalyst for catalyst-driven flags); the book holds at most 10 at once, so most fires were skipped at the cap; sized at a fixed fraction of the previous close's equity in a $100k book; marked to market daily; slippage charged by liquidity tier.",
+    read: "The machinery's mechanical shadow, not the system — and a flattered one: it trades today's survivors, which lifts every absolute number, while the live conviction gates and auto-triggers have no history and are not in it. Only the comparison to the XBI row on the same tab means anything.",
+  },
+  sharpe: {
+    title: "Sharpe ratio",
+    what: "Return earned per unit of day-to-day volatility — the standard 'how smooth was the ride' number.",
+    calc: "Mean daily return divided by the standard deviation of daily returns, annualized with √252, risk-free rate 0. From the full daily equity curve.",
+    read: "On its own it means little — the sector's Sharpe swings from near zero to near one across these windows. Read it against the XBI row on the same tab: beating the sector is the claim that matters. It punishes upside volatility as much as downside — see Sortino.",
+  },
+  sortino: {
+    title: "Sortino ratio",
+    what: "Like Sharpe, but only the downside part of the volatility counts against you.",
+    calc: "Mean daily return divided by the downside deviation — the square root of the average, over ALL days, of min(daily return, 0)² (up days contribute zero but still count) — annualized with √252, rf 0.",
+    read: "Above Sharpe when the AVERAGE DAILY return is positive (the gap is the upside volatility Sharpe punished); below Sharpe when it is negative, because a negative mean is divided by a smaller number. Note that is the average day, not whether the period lost money: on the 2020–22 tab the combined book (−0.26 / −0.35) shows the negative case, while XBI lost money over the window yet keeps a positive average day (0.09 / 0.13).",
+  },
+  calmar: {
+    title: "Calmar ratio",
+    what: "Annual return earned per unit of worst-case pain.",
+    calc: "CAGR divided by max drawdown over the same period.",
+    read: "0.10 means the book earned 10¢ a year for every $1 of peak-to-trough loss endured. Anything under ~0.3 says the drawdown is the story, not the return.",
+  },
+  r_window: {
+    title: "Trailing window in R-units (realization basis)",
+    what: "The same engine's record over the 2 / 5 / 10 years ending at the replay's last bar (not today), counted in risk units instead of dollars. The 10-year window is the whole replay.",
+    calc: "Each call risks 1R. A call belongs to the window it EXITED in. Total R is the sum of realized R (slippage inside); max DD (R) is the deepest fall of the running total from a peak that starts at 0.",
+    read: "No daily marks, so no Sharpe or % drawdown here — those need the daily bar cache. R-units are comparable across years regardless of what the book was worth at the time.",
+  },
+  sizing_sensitivity: {
+    title: "What risk per call buys",
+    what: "The same combined-book calls sized at 0.5% / 1% / 2% of equity each — how leverage changed the outcome — plus one different book for comparison: relative-strength fires only, ungated, at 1%.",
+    calc: "The dollar-book addendum of the 10-year replay: the combined book re-run at three fixed risk fractions, and the single-signal rel-strength book at 1%. A separate run from the window tables, so the 1% row differs from them by a few dollars.",
+    read: "Doubling risk from 0.5% to 1% added 2.9 points of CAGR and 25 points of max drawdown; doubling again added 1.1 points of CAGR and 24 more of drawdown. Risk per call buys CAGR almost entirely with drawdown: the edge per call is thin, and concentration cannot manufacture more of it — it only amplifies the hole.",
   },
 };
