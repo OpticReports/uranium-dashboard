@@ -104,15 +104,30 @@ export default function BacktestPanel({ bt }) {
       {winR && (
         <>
           {winD ? (
-            <DollarTable
-              win={winD}
-              books={bt.books}
-              note={winD.note ? `dollars, daily mark-to-market — ${winD.note}` : "dollars, daily mark-to-market — full daily curve"}
-            />
+            <>
+              <DollarTable
+                win={winD}
+                books={bt.books}
+                note={winD.note ? `dollars, daily mark-to-market — ${winD.note}` : "dollars, daily mark-to-market — full daily curve"}
+              />
+              {trailingD?.status === "ok" && trailingD.v0_gate && (
+                <div className="text-[10px] text-gray-600 mt-1">
+                  Recomputed from a {trailingD.basis?.lane || "refetched"} price cache that reproduces the
+                  documented book (gate: max DD {fmtPct(trailingD.v0_gate.max_dd, 1)}, Sharpe{" "}
+                  {fmtNum(trailingD.v0_gate.sharpe, 3)} vs documented {fmtPct(trailingD.v0_gate.expected?.max_dd, 1)} /{" "}
+                  {fmtNum(trailingD.v0_gate.expected?.sharpe, 2)}).
+                  {trailingD.basis?.normalized && Object.keys(trailingD.basis.normalized).length > 0 && (
+                    <> Basis normalized by a constant factor for:{" "}
+                      {Object.entries(trailingD.basis.normalized).map(([s, f]) => `${s} (×${(1 / f.factor).toFixed(2)})`).join(", ")}
+                      {" "}— returns unchanged, units matched to the frozen entries.</>
+                  )}
+                </div>
+              )}
+            </>
           ) : (
             <div className="mt-3 text-xs text-amber-300/90 bg-amber-900/10 border border-amber-800/40 rounded-lg px-3 py-2">
-              Dollar stats (Sharpe, max DD in %) for this window are <b>not available</b>: this
-              build {trailingD?.reason || "did not have the daily price cache the replay was built from"}.
+              Dollar stats (Sharpe, max DD in %) for this window are <b>not available</b> —{" "}
+              {trailingD?.reason || "this build did not have the daily price cache the replay was built from"}.
               The same window is shown below in R-units from the complete call record.
             </div>
           )}
@@ -133,9 +148,10 @@ export default function BacktestPanel({ bt }) {
           {bt.caveats.map((c, i) => <li key={i}>{c}</li>)}
         </ul>
         <div className="text-[10px] text-gray-600 mt-2">
-          How these are known: every dollar figure is copied from the full daily curves of the
-          variants run, whose machinery gate re-asserts the documented book within ±1% on every
-          run; a test freezes the same numbers here. Source: {bt.sources.reports.join(", ")} ·
+          How these are known: every dollar figure in the window tables is copied from the full
+          daily curves of the variants run, whose machinery gate re-asserts the documented book
+          within ±1% on every run; a test freezes the same numbers here. The sizing table is the
+          replay report's own addendum. Source: {bt.sources.reports.join(", ")} ·
           results generated {bt.sources.variants_results.generated?.slice(0, 10)} ·
           summary built {bt.generated?.slice(0, 10)}
         </div>
@@ -193,7 +209,7 @@ function DollarTable({ win, books, note }) {
 
 function RTable({ w }) {
   const tiles = [
-    { label: "Calls exited", value: w.n_calls },
+    { label: "Calls exited", value: w.n_calls?.toLocaleString() },
     { label: "Total R", value: fmtNum(w.total_r, 1), c: signColor(w.total_r) },
     { label: "Max DD (R)", value: fmtNum(w.max_dd_r, 1), c: w.max_dd_r > 0 ? "text-rose-300" : "" },
     { label: "Hit rate", value: fmtPct(w.hit_rate, 0) },

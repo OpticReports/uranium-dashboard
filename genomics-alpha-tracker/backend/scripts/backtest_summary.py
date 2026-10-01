@@ -116,9 +116,10 @@ CAVEATS = [
     "in the engine's favour.",
     "The catalyst calendar is point-in-time but not perfectly so: it uses the "
     "sponsor's SUBMIT dates, which precede public posting by a median of 2 "
-    "days (p90 5, max 92). Rebuilding on true post dates moved the "
-    "catalyst flags' excess UP, so the lead hurt rather than helped, and no "
-    "verdict changed - measured, not assumed.",
+    "days (p90 5, max 92). Rebuilding on true post dates moved the two "
+    "catalyst-timing flags' average R per call UP (binary unchanged), so the "
+    "lead hurt rather than helped, and no verdict changed - measured, not "
+    "assumed.",
     "A catalyst's primary-completion date is an ESTIMATE of when a trial "
     "finishes, not a readout date; data often lands months either side. The "
     "catalyst windows approximate event proximity, nothing more.",
@@ -235,9 +236,13 @@ def _display_curves(var: dict) -> dict:
             "start_equity": START_EQUITY, "rows": rows}
 
 
-HINT = ("Run `python -m scripts.backtest_summary` with backend/data/"
-        "backtest_bars.json and spy_bars_raw.json present (refetch them with "
-        "`python -m scripts.backtest_calls_10y --refresh`), then commit the JSON.")
+HINT = ("Rebuild the two gitignored cache files on a DIVIDEND-ADJUSTED basis with "
+        "`python -m scripts.refresh_backtest_bars` (needs FMP_API_KEY; it also "
+        "normalizes any symbol whose series differs from the frozen basis by a "
+        "constant adjustment factor and logs which), then "
+        "`python -m scripts.backtest_summary`, then commit the JSON. The app's "
+        "FMP provider writes an UNADJUSTED cache and will fail the V0 gate - "
+        "LLY's decade of dividends alone moves Sharpe by 0.01.")
 
 
 def v0_mismatch(full: dict) -> str | None:
@@ -275,13 +280,20 @@ def trailing_daily(taken: list[dict]) -> dict:
     mkt = load_market()
     curve = run_call_book(taken, mkt)
     full = seg_stats(curve, START, END)
+    # Which lane the cache came from and any per-symbol basis factors the
+    # refresh script applied - shown on the page, because a reader deciding
+    # whether to trust a trailing Sharpe deserves to know a symbol's series
+    # was put into the frozen units by a constant.
+    sidecar = BACKEND / "data" / "backtest_bars_basis.json"
+    basis = json.loads(sidecar.read_text()) if sidecar.exists() else None
     bad = v0_mismatch(full)
     if bad:
         return {"status": "unavailable",
                 "reason": ("the daily price cache present at build time did not "
                            "reproduce the documented book, so nothing computed "
                            "from it is shown"),
-                "detail": f"V0 gate failed: {bad}", "hint": HINT, "windows": None}
+                "detail": f"V0 gate failed: {bad}", "hint": HINT, "windows": None,
+                "basis": basis}
     bench = {"XBI": buyhold_curve(mkt["px"]["XBI"], mkt["calendar"]),
              "SPY": load_spy_curve(mkt["calendar"])}
     windows = {}
@@ -294,10 +306,11 @@ def trailing_daily(taken: list[dict]) -> dict:
         windows[f"{yrs}y"] = {"start": lo.isoformat(), "end": END.isoformat(),
                               "years": round((END - lo).days / 365.25, 2),
                               "books": books}
-    return {"status": "ok", "basis": "dollars, daily MTM, full daily curve",
+    return {"status": "ok", "measurement": "dollars, daily MTM, full daily curve",
             "v0_gate": {"end_value": full["end_value"], "cagr": full["cagr"],
                         "max_dd": full["max_dd"], "sharpe": full["sharpe"],
-                        "passed": True},
+                        "expected": V0_EXPECTED, "passed": True},
+            "basis": basis,
             "windows": windows,
             "curve_daily": [[d.isoformat(), round(v, 2)] for d, v in curve]}
 

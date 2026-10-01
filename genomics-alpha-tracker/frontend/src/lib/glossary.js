@@ -190,7 +190,7 @@ export const GLOSSARY = {
   },
   backtest_replay: {
     title: "10-year replay (mechanical shadow)",
-    what: "What the tracker's replayable signals would have produced if every fire had become a call, 2016 to Aug-2026, graded with the same exit rules the live calls use.",
+    what: "What the tracker's replayable signals would have produced if every fire had been eligible to become a call, 2016 to Aug-2026, graded with the same exit rules the live calls use.",
     calc: "Fires are regenerated on daily bars with the live, pre-registered thresholds; each becomes a call entered at the next open with a 3×ATR stop, 3:1 target and a 45-day time-stop (cut to the day before the catalyst for catalyst-driven flags); the book holds at most 10 at once, so most fires were skipped at the cap; sized at a fixed fraction of the previous close's equity in a $100k book; marked to market daily; slippage charged by liquidity tier.",
     read: "The machinery's mechanical shadow, not the system — and a flattered one: it trades today's survivors, which lifts every absolute number, while the live conviction gates and auto-triggers have no history and are not in it. Only the comparison to the XBI row on the same tab means anything.",
   },
@@ -204,13 +204,13 @@ export const GLOSSARY = {
     title: "Sharpe ratio",
     what: "Return earned per unit of day-to-day volatility — the standard 'how smooth was the ride' number.",
     calc: "Mean daily return divided by the standard deviation of daily returns, annualized with √252, risk-free rate 0. From the full daily equity curve.",
-    read: "Below ~0.5 is sector-beta territory — compare it to the XBI row on the same tab; above 1 is genuinely good. It punishes upside volatility as much as downside — see Sortino.",
+    read: "On its own it means little — the sector's Sharpe swings from near zero to near one across these windows. Read it against the XBI row on the same tab: beating the sector is the claim that matters. It punishes upside volatility as much as downside — see Sortino.",
   },
   sortino: {
     title: "Sortino ratio",
     what: "Like Sharpe, but only the downside part of the volatility counts against you.",
     calc: "Mean daily return divided by the downside deviation — the square root of the average, over ALL days, of min(daily return, 0)² (up days contribute zero but still count) — annualized with √252, rf 0.",
-    read: "Above Sharpe when the period made money (the gap is the upside volatility Sharpe punished); BELOW Sharpe in a losing period, because a negative mean is divided by a smaller number. The 2020–22 tab shows exactly that.",
+    read: "Above Sharpe when the AVERAGE DAILY return is positive (the gap is the upside volatility Sharpe punished); below Sharpe when it is negative, because a negative mean is divided by a smaller number. Note that is the average day, not whether the period lost money: on the 2020–22 tab the combined book (−0.26 / −0.35) shows the negative case, while XBI lost money over the window yet keeps a positive average day (0.09 / 0.13).",
   },
   calmar: {
     title: "Calmar ratio",
@@ -226,8 +226,8 @@ export const GLOSSARY = {
   },
   sizing_sensitivity: {
     title: "What risk per call buys",
-    what: "The same calls sized at 0.5% / 1% / 2% of equity each — how leverage changed the outcome.",
-    calc: "The dollar-book addendum of the 10-year replay, re-run at three fixed risk fractions.",
-    read: "CAGR barely moves; drawdown roughly doubles with each doubling of risk. The edge per call is thin, and concentration cannot manufacture more of it — it only amplifies the hole.",
+    what: "The same combined-book calls sized at 0.5% / 1% / 2% of equity each — how leverage changed the outcome — plus one different book for comparison: relative-strength fires only, ungated, at 1%.",
+    calc: "The dollar-book addendum of the 10-year replay: the combined book re-run at three fixed risk fractions, and the single-signal rel-strength book at 1%. A separate run from the window tables, so the 1% row differs from them by a few dollars.",
+    read: "Doubling risk from 0.5% to 1% added 2.9 points of CAGR and 25 points of max drawdown; doubling again added 1.1 points of CAGR and 24 more of drawdown. Risk per call buys CAGR almost entirely with drawdown: the edge per call is thin, and concentration cannot manufacture more of it — it only amplifies the hole.",
   },
 };

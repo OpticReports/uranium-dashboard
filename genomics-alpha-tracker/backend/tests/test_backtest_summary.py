@@ -65,6 +65,7 @@ def test_gate_committed_summary_matches_the_generator():
     the bar cache was present at build time; it is pinned separately."""
     built = S.build()
     committed = backtest.load_summary()
+    assert set(built) == set(committed), "a key was added or removed without regenerating"
     for k in committed:
         if k in ("generated", "trailing_daily"):
             continue
@@ -94,7 +95,7 @@ def test_gate_recomputed_trailing_dollars_agree_with_the_copied_full_period():
     s = backtest.load_summary()
     td = s["trailing_daily"]
     if td["status"] != "ok":
-        pytest.skip("bar cache was not present at build time")
+        pytest.skip(f"no gate-passing bar cache at build time: {td.get('detail')}")
     assert set(td["windows"]) == {"2y", "5y", "10y"}
     ten, full = td["windows"]["10y"]["books"]["V0"], s["windows_daily"]["full"]["books"]["V0"]
     for k, tol in (("max_dd", V0_TOL["max_dd"]), ("sharpe", V0_TOL["sharpe"]),
