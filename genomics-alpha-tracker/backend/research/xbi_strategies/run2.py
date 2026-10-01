@@ -181,9 +181,10 @@ def main() -> None:
         if v["judge"] and v["judge"]["passes"]:
             sens = {}
             # margin +1pp
-            X.MARGIN_SPREAD = 0.025
+            saved_margin = X.MARGIN_SPREAD
+            X.MARGIN_SPREAD = saved_margin + 0.01
             r2, _, f2, s2 = run_one(m, start, rule, end)
-            X.MARGIN_SPREAD = 0.015
+            X.MARGIN_SPREAD = saved_margin
             sens["margin_plus_1pp"] = {"full": f2, "judge": judge2(f2, s2, bfull, bsubs)}
             # costs x2
             saved = dict(X.COST_BPS)
