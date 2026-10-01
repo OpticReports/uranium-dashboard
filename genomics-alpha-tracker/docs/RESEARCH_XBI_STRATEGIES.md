@@ -32,7 +32,8 @@ the trade-off cleanly: lever R1 back toward XBI's volatility (1.8× gross,
 margin paid) and you get 11.3% with a 53% drawdown (C1a); hold XBI at 50%
 with TLT/GLD inverse-vol around it and you get 10.2% / 43% (C1d). Both
 pass the rule on paper and neither is evidence — they were chosen after
-looking.
+looking, and C1a clears the drawdown bar by 0.66 pp on an assumed margin
+rate.
 
 ## Read this first (one line each)
 
@@ -184,4 +185,15 @@ entry cost). Findings and what changed:
   partial first/last years now excluded from "worst year"; the cash leg
   trades free (consistent with PREREG's wording, ~1–2 bps/yr on T1/T5).
 
-**Round 2b (re-check of the fix): PENDING** — appended when it reports.
+**Round 2b (re-check of the fix, same reviewer): MATCH, no lookahead.**
+A dollar-holdings simulator written from scratch (carry positions,
+month-end rebalance from drifted holdings, cost paid from cash)
+reproduced B2 (7.465% / 39.02% / Sharpe 0.541) and R1 (8.155% / 30.62% /
+0.763) to four decimals, and B0 from the raw cache to the one 5 bps entry
+cost. Drift arithmetic confirmed (x(1+rₛ)/(1+rₚ), shorts sign-preserving,
+cash implicit). Remaining NOTEs, none changing a verdict: post-trade
+weights are understated by the day's cost factor on trade days (≤ 25 bps
+of weight, those days only); C1a clears the 10 pp bar by 0.66 pp and only
+at ~1.8× gross on BIL + 1.5% margin — a 1 pp wider margin spread would
+plausibly flip it, which is one more reason it is a post-hoc curiosity;
+the partial-year test is month-granular (not hit).
