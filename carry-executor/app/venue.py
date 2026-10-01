@@ -15,6 +15,7 @@ import math
 
 logger = logging.getLogger(__name__)
 
+ALLOWED_MARKETS = {("ETH", "UETH")}   # (perp, spot) this service may trade
 PERP_MAX_DECIMALS = 6        # perp px: <= 5 sig figs and <= 6 - szDecimals decimals
 SPOT_MAX_DECIMALS = 8        # spot px: <= 5 sig figs and <= 8 - szDecimals decimals
 
@@ -46,6 +47,10 @@ class HLCarryVenue:
         from hyperliquid.utils import constants
 
         self.cfg = cfg
+        if (cfg.perp_coin, cfg.spot_token) not in ALLOWED_MARKETS:
+            raise RuntimeError(
+                f"carry may trade only {sorted(ALLOWED_MARKETS)}, not "
+                f"({cfg.perp_coin}, {cfg.spot_token}) - BTC belongs to btc-executor")
         self.testnet = bool(getattr(cfg, "hl_testnet", False))
         self.network = "testnet" if self.testnet else "mainnet"
         base = constants.TESTNET_API_URL if self.testnet else constants.MAINNET_API_URL
@@ -60,12 +65,29 @@ class HLCarryVenue:
         self.perp_coin = cfg.perp_coin
         self.spot_token = cfg.spot_token
         self.info = Info(base, skip_ws=True)
+        self._refuse_btc_executor_key(wallet.address)
         self.exchange = Exchange(wallet, base, account_address=self.address)
         self.spot_pair, self.spot_sz_dec = self._resolve_spot_pair()
         self.perp_sz_dec = self._resolve_perp_decimals()
         logger.info("carry venue ready: %s perp %s / spot %s (%s) addr=%s",
                     self.network, self.perp_coin, self.spot_token,
                     self.spot_pair, self.address)
+
+    def _refuse_btc_executor_key(self, signer: str) -> None:
+        """HL nonces are per signer: sharing btc-executor's agent key would
+        make the two services reject each other's orders (review MINOR-3).
+        A positive match refuses to boot; an unreadable list only warns."""
+        try:
+            agents = self.info.extra_agents(self.address) or []
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("could not read agent list (%s) - key check skipped", exc)
+            return
+        for a in agents:
+            if str(a.get("address", "")).lower() == signer.lower() and \
+                    str(a.get("name", "")).upper().startswith("BTC EXECUTOR"):
+                raise RuntimeError(
+                    f"HL_SECRET_KEY is btc-executor's agent ({a.get('name')}) - "
+                    f"approve a separate API wallet for carry-executor")
 
     # ---------- metadata ----------
 

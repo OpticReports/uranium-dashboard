@@ -18,7 +18,7 @@ from fastapi import FastAPI, Header, HTTPException
 from . import alerts
 from .carry import CarryExecutor
 from .config import settings
-from .feed import get_carry_target
+from .feed import btc_executor_ready, get_carry_target
 
 logging.basicConfig(level=getattr(logging, settings.log_level.upper(), logging.INFO))
 logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -41,7 +41,8 @@ def _auth(token: str | None, read_ok: bool = False) -> None:
 def _loop() -> None:
     while True:
         try:
-            EXEC.step(get_carry_target(settings.engine_url, settings.exec_token))
+            EXEC.step(get_carry_target(settings.engine_url,
+                                       settings.engine_read_token))
         except Exception as exc:  # noqa: BLE001
             logger.exception("carry pass failed: %s", exc)
         time.sleep(settings.poll_seconds)
@@ -53,7 +54,8 @@ def _boot() -> None:
     if os.environ.get("CARRY_NO_LOOP"):
         return
     from .venue import HLCarryVenue
-    EXEC = CarryExecutor(HLCarryVenue(settings), settings, settings.state_path)
+    EXEC = CarryExecutor(HLCarryVenue(settings), settings, settings.state_path,
+                         preflight_fn=lambda: btc_executor_ready(settings.btc_executor_url))
     alerts.send(f"carry-executor {BUILD} booted: dry_run={settings.dry_run} "
                 f"enabled={settings.carry_enabled} notional=${settings.carry_notional_usd:,.0f}")
     threading.Thread(target=_loop, daemon=True).start()

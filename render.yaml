@@ -270,6 +270,9 @@ services:
       # on the btc-executor service. Enter once in the Render dashboard.
       - key: EXEC_TOKEN
         sync: false
+      - key: EXEC_READ_TOKEN
+        sync: false            # read-only: /carry/target + /exec/target only;
+                               # carry-executor's ENGINE_READ_TOKEN (2026-10-01)
       # Funding-regime monitor pages (RESEARCH_CARRY.md deployment policy:
       # V6 carry sleeve parked until 30d INTX funding >= 8%/yr, hysteresis
       # to 5%). Same Canary Optics bot as the executors — paste the same
@@ -792,8 +795,15 @@ services:
     envVars:
       - key: ENGINE_URL
         value: https://btc-paper-engine.onrender.com
+      - key: ENGINE_READ_TOKEN
+        sync: false            # = btc-paper-engine's EXEC_READ_TOKEN. NEVER its
+                               # EXEC_TOKEN: that one can halt/reset the books
+                               # the live BTC executor mirrors
+      - key: BTC_EXECUTOR_URL
+        value: https://btc-executor.onrender.com   # opens only if its /pulse
+                                                    # says equity_counts_spot_tokens
       - key: EXEC_TOKEN
-        sync: false            # the btc-paper-engine EXEC_TOKEN (reads /carry/target)
+        sync: false            # THIS service's own /halt,/resume token - a new value
       - key: EXEC_READ_TOKEN
         sync: false
       - key: HL_SECRET_KEY

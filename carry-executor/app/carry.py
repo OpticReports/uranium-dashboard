@@ -60,7 +60,8 @@ class CarryState:
 
 
 class CarryExecutor:
-    def __init__(self, venue, cfg, state_path: str, alert_fn=None, clock=None):
+    def __init__(self, venue, cfg, state_path: str, alert_fn=None, clock=None,
+                 preflight_fn=None):
         self.venue = venue
         self.cfg = cfg
         self.state_path = state_path
@@ -71,6 +72,9 @@ class CarryExecutor:
         self._sent_at: dict[str, float] = {}
         self._last_intent: str | None = None
         self._cross_ok = False
+        # (ok, why) - may risk be ADDED? Default allows; main.py wires the
+        # btc-executor capability check (review SERIOUS-3)
+        self.preflight_fn = preflight_fn or (lambda: (True, "no preflight"))
 
     # ---------- persistence / events ----------
 
@@ -283,6 +287,14 @@ class CarryExecutor:
         # ---- cross margin BEFORE any risk-adding order (review SERIOUS-1:
         # it ran after the spot buy, so a leverage failure stranded spot) ----
         dS = q - S
+        if dS * px_s >= MIN_ORDER_USD and not self.cfg.dry_run:
+            ok, pf_why = self.preflight_fn()
+            if not ok:
+                # adding spot is blocked; closes, reductions and the hedge of
+                # what is already held still run
+                self._event("RED", "open_blocked", pf_why, rate_limit=True)
+                q = S
+                dS = 0.0
         opening = (dS * px_s >= MIN_ORDER_USD
                    or (-S - P) * px_p <= -MIN_ORDER_USD)
         if opening and not self.cfg.dry_run and not self._cross_ok:

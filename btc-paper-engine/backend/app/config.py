@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     # Shared secret for /exec/target (the live-executor signal feed). Empty =
     # endpoint open (dev); set in production so book state isn't public.
     exec_token: str = ""
+    # READ-ONLY companion (2026-10-01): satisfies GET /carry/target and GET
+    # /exec/target and NOTHING else - not halt/resume/reset. carry-executor
+    # holds this, never EXEC_TOKEN, so a leak of the carry service's env
+    # cannot halt or reset the books the live BTC executor mirrors.
+    exec_read_token: str = ""
 
     @property
     def cors_list(self) -> list[str]:

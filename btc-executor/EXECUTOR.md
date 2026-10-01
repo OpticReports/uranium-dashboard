@@ -371,3 +371,26 @@ so it is measured identically regardless of how fast the size ramps).
   instead of tripping the breaker. Any equity move while positions are
   open takes the normal halt path. Limitation: a transfer landing during a
   service restart is absorbed as baseline, not detected as a jump.
+
+
+## ETH carry sleeve in the same account (2026-10-01)
+
+carry-executor (its own agent key) holds long spot UETH and a short ETH perp in
+this main account (see `carry-executor/CARRY.md`). It changes three things here:
+
+- **Equity:** `hl.py equity()` = spot USDC (which carries every perp's uPnL,
+  verified live) plus non-USDC spot tokens at their spot mid.
+  - A held token that cannot be priced (no pair, no mid, or mid <= 0) stops
+    the equity read if it cost >= $50; it is skipped only if it is dust.
+  - An empty `spot_meta` raises and is never cached.
+  - `/pulse` publishes `equity_counts_spot_tokens: true`, and carry-executor
+    will not open without it.
+- **Margin:** the sleeve's short shares the USDC cross-margin pool. Nothing
+  here reads total margin; `_cap_room` sizes off the fixed base. HL rejecting
+  an order for insufficient margin is the only backstop, and the headroom is
+  large (carry review stress table: the short liquidates near ETH +227% with
+  BTC flat).
+- **Known gap:** while the BTC book is flat, an UNHEDGED UETH move larger than
+  the transfer floor (possible only after a carry hedge failure) is read by
+  `_reconcile_transfers` as a transfer, not a loss. Accepted: the hedged
+  sleeve nets to basis (sd ~$10 on $30k), and carry-executor pages `unhedged`.

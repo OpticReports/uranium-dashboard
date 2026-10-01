@@ -91,6 +91,12 @@ def derive_cloid(our_cloid: str) -> str:
     return "0x" + hashlib.sha256(our_cloid.encode()).hexdigest()[:32]
 
 
+# A held spot token that cannot be priced is skipped only if it COST less
+# than this (airdrop dust); anything larger stops the equity read instead of
+# being valued at 0 (review 2026-10-01 SERIOUS-1).
+MATERIAL_SPOT_USD = 50.0
+
+
 class HyperliquidVenue:
     def __init__(self, cfg):
         # lazy import: the test suite must never need the SDK installed
@@ -423,6 +429,12 @@ class HyperliquidVenue:
             pair = u.get("tokens") or []
             if len(pair) == 2 and pair[1] == usdc and pair[0] in toks:
                 out[toks[pair[0]]] = u["name"]
+        if usdc is None or not out:
+            # NEVER cache an empty or USDC-less map (review 2026-10-01
+            # SERIOUS-1): cached for an hour it valued a $30k UETH holding at
+            # $0, read as a -$30k day, and halted + flattened the BTC book.
+            raise RuntimeError("spot_meta carried no USDC pairs - refusing to "
+                               "value spot tokens from it")
         self._spot_pairs_cache = (now, out)
         return out
 
@@ -449,23 +461,33 @@ class HyperliquidVenue:
                 continue
             q = float(b.get("total") or 0.0)
             if q:
-                others.append((c, q))
+                # entryNtl: what the holding COST. Airdropped dust carries 0;
+                # the carry sleeve's UETH carries ~$30k. It decides whether
+                # an unpriceable token may be skipped or must stop the read.
+                ntl = abs(float(b.get("entryNtl") or 0.0))
+                others.append((c, q, ntl))
         if not others:
             return 0.0
         pairs = self._spot_pairs()
         mids = self.info.all_mids() or {}
         val = 0.0
-        for c, q in others:
+        for c, q, ntl in others:
             key = pairs.get(c)
-            if key is None:
-                logger.warning("spot token %s has no USDC pair - not valued "
-                               "in equity", c)
+            raw = mids.get(key) if key is not None else None
+            try:
+                px = float(raw) if raw is not None else 0.0
+            except (TypeError, ValueError):
+                px = 0.0
+            if px > 0:
+                val += q * px
                 continue
-            px = mids.get(key)
-            if px is None:
-                raise RuntimeError(f"all_mids carried no spot mid for {c} "
-                                   f"({key}) - refusing to value it at 0")
-            val += q * float(px)
+            # unpriceable (no USDC pair, no mid, or a mid <= 0)
+            if ntl >= MATERIAL_SPOT_USD:
+                raise RuntimeError(
+                    f"cannot price spot {c} (cost ${ntl:,.0f}; pair {key}, "
+                    f"mid {raw!r}) - refusing to value it at 0")
+            logger.warning("spot token %s unpriceable and immaterial (cost "
+                           "$%.0f) - not valued in equity", c, ntl)
         return val
 
     def equity(self) -> float:

@@ -458,3 +458,26 @@ def test_spot_held_by_a_resting_order_pages(mk):
     ex.step(target(armed=False))
     assert not [c for c in v.calls if c[:2] == ("spot", "SELL")]
     assert "spot_locked" in kinds(ex, "RED")
+
+
+def test_open_is_blocked_until_btc_executor_values_spot_tokens(mk):
+    """Review SERIOUS-3: opening while btc-executor still counts USDC only
+    reads the swap as a -$30k day and halts the BTC book."""
+    ex, v = mk()
+    ex.preflight_fn = lambda: (False, "old build")
+    ex.step(target())
+    assert v.calls == [] and "open_blocked" in kinds(ex, "RED")
+    ex.preflight_fn = lambda: (True, "ok")
+    ex.step(target())
+    assert v.spot_qty == pytest.approx(7.5)
+
+
+def test_a_blocked_preflight_never_blocks_a_close_or_the_hedge(mk):
+    ex, v = mk()
+    ex.step(target())
+    ex.preflight_fn = lambda: (False, "btc-executor down")
+    v.perp_qty = -5.0
+    ex.step(target())                                # hedge repair still runs
+    assert v.perp_qty == pytest.approx(-7.5)
+    ex.step(target(armed=False))                     # close still runs
+    assert v.spot_qty == 0 and v.perp_qty == 0

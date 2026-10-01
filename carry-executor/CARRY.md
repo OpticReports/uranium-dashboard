@@ -61,22 +61,34 @@ refuses to start there. DRY_RUN on mainnet is the rehearsal.
 
 ## Go-live (Casey's actions)
 
-1. **Approve a new API wallet** in Hyperliquid (API → generate). Give it a
-   name such as "CARRY EXECUTOR". This is the third named agent slot of 3.
-   Keep its key for step 2.
-2. **Create the Render service** from the blueprint (`carry-executor`). Set:
-   - `HL_SECRET_KEY` (the new agent);
-   - `HL_ACCOUNT_ADDRESS` (the main account, same as btc-executor);
-   - `EXEC_TOKEN` (the engine's);
-   - `EXEC_READ_TOKEN`;
-   - the Telegram vars.
+**Precondition:** btc-executor and btc-paper-engine must be on the build that
+includes this change. Merging to main deploys both. The carry service also
+checks this itself: it will not open while btc-executor's public `/pulse`
+lacks `equity_counts_spot_tokens: true`. That build is what makes btc-executor
+count spot UETH in equity instead of reading the swap as a $30k loss.
 
-   Leave `DRY_RUN` and `CARRY_NOTIONAL_USD` unset at first.
-3. **Dry run:** set `CARRY_NOTIONAL_USD=30000`, keep `DRY_RUN` unset. Check
-   `/pulse`: the signal is read, and the dry-run intent shows a spot BUY of
-   ~30000/px UETH. Let it run for at least a day.
-4. **Live:** set `DRY_RUN=false`. The first pass with ETH armed opens the
-   sleeve; you get a "✅ carry opened" page.
+1. **Approve a new API wallet** in Hyperliquid (API → generate). Name it
+   "CARRY EXECUTOR". This is the third named slot of 3. The service refuses to
+   start on btc-executor's key.
+2. **btc-paper-engine (Render):** add `EXEC_READ_TOKEN` (a new random value).
+   It can read `/carry/target` and `/exec/target` and nothing else.
+3. **Create the `carry-executor` service** from the blueprint and set:
+
+   | variable | value |
+   |---|---|
+   | `HL_SECRET_KEY` | the new agent's key |
+   | `HL_ACCOUNT_ADDRESS` | the main account |
+   | `ENGINE_READ_TOKEN` | the engine's `EXEC_READ_TOKEN` from step 2. **Never** the engine's `EXEC_TOKEN`, which can halt and reset the BTC books |
+   | `EXEC_TOKEN` / `EXEC_READ_TOKEN` | new values, for this service's own `/halt` `/resume` `/status` |
+   | Telegram vars | same bot as the other services |
+
+   Leave `DRY_RUN` and `CARRY_NOTIONAL_USD` unset.
+4. **Dry run:** set `CARRY_NOTIONAL_USD=30000` and keep `DRY_RUN` unset.
+   Check `/pulse`: the signal reads ARMED (HL ETH is ~10%/yr today), and the
+   dry-run intent shows a spot BUY of ~30000/px UETH. Run it for at least a
+   day.
+5. **Live:** set `DRY_RUN=false`. On the first armed pass it opens, and you
+   get a "✅ carry opened" page carrying the venue's liquidation price.
 
 To exit: `CARRY_ENABLED=false` (unwind), or `POST /halt` (freeze).
 

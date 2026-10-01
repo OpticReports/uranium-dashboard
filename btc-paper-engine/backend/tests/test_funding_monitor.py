@@ -187,7 +187,8 @@ def test_snapshot_shape_and_history():
     snap = h.mon.snapshot()
     assert snap["policy"]["arm_pct"] == 8.0
     assert snap["policy"]["disarm_pct"] == 5.0
-    assert snap["policy"]["gate_venue"] == "INTX"
+    assert snap["policy"]["gate_venue"] == "HL_ETH"
+    assert snap["policy"]["btc_reference_venue"] == "INTX"
     assert snap["history_points"] == 2
     assert set(snap["history"][-1]) == {"ts", "INTX", "HL"}
     assert snap["venues"]["INTX"]["mean_ann_pct"] == 6.0
@@ -344,3 +345,62 @@ def test_carry_target_endpoint_shape_and_auth(monkeypatch):
     assert d["armed"] is True and d["known"] is True and d["venue"] == "HL_ETH"
     assert set(d) >= {"mean_ann_pct", "coverage", "last_checked",
                       "check_seconds", "arm_pct", "disarm_pct"}
+
+
+
+def test_a_failed_state_load_never_overwrites_the_saved_gate():
+    """Review SERIOUS-4: a transient DB error at first touch marked the state
+    loaded, the next check ran from empty and persisted armed=False over an
+    ARMED carry gate - closing a sleeve nothing decided to close."""
+    h, cv = _carry_harness()
+    h.means[cv] = 9.0
+    h.mon.check()
+    saved = h.saved
+    assert saved["venues"][cv]["armed"] is True
+    # a fresh monitor (restart) whose first load fails, funding now in the band
+    from app.funding_monitor import FundingMonitor
+    calls = {"n": 0}
+
+    def flaky_load():
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("db busy")
+        return h.saved
+    m2 = FundingMonitor(fetchers=h.mon.fetchers, alert_fn=h.alerts.append,
+                        load_fn=flaky_load, save_fn=h._save, clock=lambda: NOW)
+    h.means[cv] = 6.0
+    m2.check()                                      # load fails: no transition
+    assert h.saved["venues"][cv]["armed"] is True    # not overwritten
+    assert m2.carry_target()["armed"] is True        # second load succeeds
+    m2.check()
+    assert h.saved["venues"][cv]["armed"] is True    # 6% is inside the band: holds
+
+
+def test_carry_target_is_unknown_while_the_saved_state_cannot_load():
+    from app.funding_monitor import FundingMonitor
+
+    def boom():
+        raise RuntimeError("db down")
+    m = FundingMonitor(fetchers={}, alert_fn=lambda *_: None, load_fn=boom,
+                       save_fn=lambda *_: None, clock=lambda: NOW)
+    m.state = {"venues": {"HL_ETH": {"armed": True, "insufficient": False}},
+               "history": [], "last_checked": NOW}
+    assert m.carry_target()["known"] is False
+
+
+def test_carry_target_accepts_the_read_token_and_halt_does_not(monkeypatch):
+    from fastapi.testclient import TestClient
+    from app import funding_monitor as fm
+    from app.config import settings
+    from app.main import app
+    monkeypatch.setattr(settings, "run_engine", False)
+    monkeypatch.setattr(settings, "run_funding_monitor", False)
+    h, cv = _carry_harness()
+    h.mon.check()
+    monkeypatch.setattr(fm, "MONITOR", h.mon)
+    monkeypatch.setattr(settings, "exec_token", "write")
+    monkeypatch.setattr(settings, "exec_read_token", "read")
+    with TestClient(app) as c:
+        assert c.get("/carry/target", headers={"X-Exec-Token": "read"}).status_code == 200
+        assert c.get("/carry/target", headers={"X-Exec-Token": "nope"}).status_code == 401
+        assert c.post("/books/S3/halt", headers={"X-Exec-Token": "read"}).status_code == 401

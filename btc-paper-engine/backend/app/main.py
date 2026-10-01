@@ -68,9 +68,17 @@ def carry_target(x_exec_token: str | None = Header(default=None)):
     """Machine-readable carry decision for carry-executor (2026-10-01): the
     funding monitor's HL ETH state, ARM >= 8% / DISARM < 5% on the 30d mean.
     The engine decides; the executor holds the keys and only executes."""
-    _require_exec_token(x_exec_token)
+    _require_read_token(x_exec_token)
     from .funding_monitor import MONITOR
     return MONITOR.carry_target()
+
+
+def _require_read_token(x_exec_token: str | None) -> None:
+    """Read-only surfaces accept EXEC_TOKEN or EXEC_READ_TOKEN (review
+    2026-10-01 SERIOUS-2: carry-executor held the WRITE token to do a GET)."""
+    ok = {t for t in (settings.exec_token, settings.exec_read_token) if t}
+    if ok and x_exec_token not in ok:
+        raise HTTPException(status_code=401, detail="bad exec token")
 
 
 def _require_exec_token(x_exec_token: str | None) -> None:
@@ -89,7 +97,7 @@ def exec_target(x_exec_token: str | None = Header(default=None)):
     and S4 (trend) legs of the S5 blend — pending limit orders, open positions
     with current protective levels, and data-health flags. The executor mirrors
     this; the paper engine itself never touches an exchange."""
-    _require_exec_token(x_exec_token)
+    _require_read_token(x_exec_token)
     if not ENGINE.booted:
         # Fresh Book() defaults are not an engine state. Serving them read
         # as halted=False / no position / bar_ts=0 to the executor while

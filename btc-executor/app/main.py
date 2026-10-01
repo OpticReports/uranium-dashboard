@@ -275,6 +275,11 @@ def pulse():
     _rv = _ramp_v4(st)
     rv = _rv["rows"]
     return {"ready": True, "dry_run": settings.dry_run,
+            # CAPABILITY flag, not state: this build values non-USDC spot
+            # (the ETH carry sleeve's UETH) in equity. carry-executor refuses
+            # to OPEN unless it reads True here - an older build would read
+            # the USDC->UETH swap as a -$30k day and halt the BTC book.
+            "equity_counts_spot_tokens": True,
             # which commit produced every other field below — without it a
             # reading cannot be attributed to a build (2026-08-28)
             "build": _build_sha(),

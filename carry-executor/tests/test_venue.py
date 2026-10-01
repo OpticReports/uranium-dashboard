@@ -228,3 +228,58 @@ def test_price_grid(px, dec, maxd, mode, want):
 def test_round_down_never_rounds_up():
     assert round_down(7.56789, 4) == 7.5678
     assert round_down(0.00009, 4) == 0.0
+
+
+def test_only_eth_ueth_may_be_traded(venue):
+    from app.venue import HLCarryVenue
+
+    class Cfg:
+        hl_secret_key = "0x" + "11" * 32
+        hl_account_address = "0xMAIN"
+        hl_testnet = False
+        perp_coin = "BTC"
+        spot_token = "UBTC"
+    with pytest.raises(RuntimeError, match="btc-executor"):
+        HLCarryVenue(Cfg())
+
+
+def test_refuses_btc_executors_agent_key(monkeypatch, venue):
+    from app.venue import HLCarryVenue
+    monkeypatch.setattr(_FakeInfo, "extra_agents", lambda self, u: [
+        {"name": "BTC EXECUTOR 2", "address": "0xAGENT"}], raising=False)
+
+    class Cfg:
+        hl_secret_key = "0x" + "11" * 32
+        hl_account_address = "0xMAIN"
+        hl_testnet = False
+        perp_coin = "ETH"
+        spot_token = "UETH"
+    with pytest.raises(RuntimeError, match="separate API wallet"):
+        HLCarryVenue(Cfg())
+    monkeypatch.setattr(_FakeInfo, "extra_agents", lambda self, u: [
+        {"name": "CARRY EXECUTOR", "address": "0xagent"}], raising=False)
+    assert HLCarryVenue(Cfg()).spot_pair == "@151"
+
+
+def test_btc_executor_readiness_check(monkeypatch):
+    from app import feed
+
+    class R:
+        def __init__(self, d):
+            self.d = d
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return self.d
+    monkeypatch.setattr(feed.httpx, "get", lambda *a, **k: R({"build": "abc"}))
+    assert feed.btc_executor_ready("x")[0] is False
+    monkeypatch.setattr(feed.httpx, "get",
+                        lambda *a, **k: R({"equity_counts_spot_tokens": True}))
+    assert feed.btc_executor_ready("x")[0] is True
+
+    def boom(*a, **k):
+        raise RuntimeError("down")
+    monkeypatch.setattr(feed.httpx, "get", boom)
+    assert feed.btc_executor_ready("x")[0] is False

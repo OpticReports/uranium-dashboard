@@ -173,7 +173,12 @@ class FundingMonitor:
             if saved:
                 self.state.update(saved)
         except Exception as exc:  # noqa: BLE001
+            # NOT loaded (review 2026-10-01 SERIOUS-4): marking it loaded let
+            # the next check() run from an empty state and overwrite the saved
+            # row - in the 5-8% band that flipped an ARMED carry gate to
+            # DISARMED and closed a sleeve nothing decided to close.
             logger.warning("funding monitor state load failed: %s", exc)
+            return
         self._loaded = True
 
     def _persist(self) -> None:
@@ -259,6 +264,10 @@ class FundingMonitor:
                 readings[venue] = (None, 0.0)
         with self._lock:
             self._ensure_loaded()
+            if not self._loaded:
+                # saved state unreadable: no transition, no persist, so the
+                # stored hysteresis survives until the DB answers again
+                return self.snapshot_locked()
             for venue, (mean_pct, coverage) in readings.items():
                 self._transition(venue, mean_pct, coverage, readings)
             self.state["last_checked"] = int(now)
@@ -283,7 +292,9 @@ class FundingMonitor:
             v = dict(self.state.get("venues", {}).get(CARRY_VENUE) or {})
             return {"venue": CARRY_VENUE, "coin": "ETH",
                     "armed": bool(v.get("armed", False)),
-                    "known": bool(v) and not v.get("insufficient", True),
+                    # unknown until the saved state has actually loaded
+                    "known": self._loaded and bool(v)
+                    and not v.get("insufficient", True),
                     "mean_ann_pct": v.get("mean_ann_pct"),
                     "coverage": v.get("coverage"),
                     "last_change_ts": v.get("last_change_ts"),
@@ -298,7 +309,10 @@ class FundingMonitor:
             "policy": {"window_days": WINDOW_DAYS,
                        "arm_pct": settings.funding_arm_pct,
                        "disarm_pct": settings.funding_disarm_pct,
-                       "gate_venue": "INTX",
+                       # the TRADED gate since 2026-10-01 (ETH carry);
+                       # INTX stays as the BTC-sleeve reference reading
+                       "gate_venue": CARRY_VENUE,
+                       "btc_reference_venue": "INTX",
                        "doc": "btc-paper-engine/RESEARCH_CARRY.md"},
             "last_checked": self.state.get("last_checked"),
             "venues": self.state.get("venues", {}),

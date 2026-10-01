@@ -11,7 +11,16 @@ class Settings(BaseSettings):
 
     # the decision brain: btc-paper-engine's funding monitor (keyless)
     engine_url: str = "https://btc-paper-engine.onrender.com"
-    exec_token: str = ""                 # must match the engine's EXEC_TOKEN
+    # the engine's READ-ONLY token (its EXEC_READ_TOKEN) - never its write
+    # EXEC_TOKEN, which can halt/reset the books btc-executor mirrors
+    # (review 2026-10-01 SERIOUS-2)
+    engine_read_token: str = ""
+    # btc-executor's public /pulse: carry refuses to OPEN unless that build
+    # values spot tokens in equity (review SERIOUS-3)
+    btc_executor_url: str = "https://btc-executor.onrender.com"
+    # THIS service's own control tokens (/halt, /resume, /status) - a fresh
+    # value, not the engine's or btc-executor's
+    exec_token: str = ""
     exec_read_token: str = ""            # read-only: GET /status only
 
     # Hyperliquid: an AGENT (API) wallet of its own - not btc-executor's.
@@ -24,6 +33,8 @@ class Settings(BaseSettings):
     dry_run: bool = True                 # fail-safe: a fresh deploy sends nothing
     carry_enabled: bool = True           # False = unwind the sleeve and stay flat
 
+    # PINNED in venue.py to (ETH, UETH): PERP_COIN=BTC would short BTC in the
+    # account the BTC book trades (review MINOR-2)
     perp_coin: str = "ETH"
     spot_token: str = "UETH"             # HL's bridged ETH spot token
     carry_notional_usd: float = 0.0      # FAIL-SAFE 0 = never open; Render sets 30000

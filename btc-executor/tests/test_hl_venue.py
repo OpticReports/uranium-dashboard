@@ -106,9 +106,14 @@ class _FakeInfo:
         return {"tokens": [{"name": "USDC", "index": 0},
                            {"name": "UBTC", "index": 197},
                            {"name": "UETH", "index": 221},
+                           {"name": "USDH", "index": 360},
                            {"name": "DUST", "index": 999}],
                 "universe": [{"name": "@142", "tokens": [197, 0], "index": 142},
-                             {"name": "@151", "tokens": [221, 0], "index": 151}]}
+                             {"name": "@151", "tokens": [221, 0], "index": 151},
+                             # a NON-USDC quote for the same token listed AFTER
+                             # the USDC pair, as live (UETH/USDH @235): without
+                             # the quote check it would overwrite @151
+                             {"name": "@235", "tokens": [221, 360], "index": 235}]}
 
     def extra_agents(self, user):
         return self.agents
@@ -1056,8 +1061,8 @@ def test_gate_delisted_coin_is_reported_as_untradable(venue):
 def test_gate_equity_values_spot_tokens_at_their_spot_mid(venue):
     venue.info.abstraction = "unifiedAccount"
     venue.info.spot_usdc = 70_000.0
-    venue.info.spot_tokens = [{"coin": "UETH", "total": "7.5"}]
-    venue.info.mids = {"BTC": "80000.0", "@151": "4000.0"}
+    venue.info.spot_tokens = [{"coin": "UETH", "total": "7.5", "entryNtl": "30000"}]
+    venue.info.mids = {"BTC": "80000.0", "@151": "4000.0", "@235": "1.0"}
     assert venue.equity() == pytest.approx(70_000.0 + 7.5 * 4000.0)
     assert venue.equity_parts["spot_tokens"] == pytest.approx(30_000.0)
 
@@ -1065,10 +1070,38 @@ def test_gate_equity_values_spot_tokens_at_their_spot_mid(venue):
 def test_gate_a_missing_spot_mid_raises_rather_than_reading_as_a_loss(venue):
     venue.info.abstraction = "unifiedAccount"
     venue.info.spot_usdc = 70_000.0
-    venue.info.spot_tokens = [{"coin": "UETH", "total": "7.5"}]
+    venue.info.spot_tokens = [{"coin": "UETH", "total": "7.5", "entryNtl": "30000"}]
     venue.info.mids = {"BTC": "80000.0"}               # no "@151"
     with pytest.raises(RuntimeError, match="UETH"):
         venue.equity()
+    venue.info.mids = {"BTC": "80000.0", "@151": "0.0"}   # a zero mid is missing too
+    with pytest.raises(RuntimeError, match="UETH"):
+        venue.equity()
+
+
+def test_gate_an_empty_spot_meta_raises_and_is_not_cached(venue):
+    """Review SERIOUS-1: spot_meta -> {} was cached for an hour and valued a
+    $30k UETH holding at $0 - a false -$30k day that halts the BTC book."""
+    venue.info.abstraction = "unifiedAccount"
+    venue.info.spot_usdc = 70_000.0
+    venue.info.spot_tokens = [{"coin": "UETH", "total": "7.5", "entryNtl": "30000"}]
+    venue.info.mids = {"BTC": "80000.0", "@151": "4000.0"}
+    good = venue.info.spot_meta
+    venue.info.spot_meta = lambda: {}
+    with pytest.raises(RuntimeError, match="USDC pairs"):
+        venue.equity()
+    venue.info.spot_meta = good                        # next read recovers at once
+    assert venue.equity() == pytest.approx(100_000.0)
+
+
+def test_gate_priced_airdrop_dust_without_a_mid_does_not_stop_the_book(venue):
+    """The flip side: a token WITH a pair but no mid used to raise on every
+    step forever. Immaterial (cost < $50) -> skipped."""
+    venue.info.abstraction = "unifiedAccount"
+    venue.info.spot_usdc = 1_000.0
+    venue.info.spot_tokens = [{"coin": "UBTC", "total": "0.0001", "entryNtl": "0"}]
+    venue.info.mids = {"BTC": "80000.0"}               # no "@142"
+    assert venue.equity() == pytest.approx(1_000.0)
 
 
 def test_gate_unpriceable_dust_is_skipped_and_zero_balances_cost_nothing(venue):
