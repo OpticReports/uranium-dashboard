@@ -63,7 +63,7 @@ btc-executor  --Coinbase Advanced API-->  BTC perp product
 | AGENT_EXPIRED halt (Hyperliquid) | a Hyperliquid agent (API) wallet has a hard expiry the venue publishes (`extraAgents.validUntil`; ours 2027-02-24). Past it EVERY order is rejected — entries, stops, and the flatten itself — so a position open at expiry is naked and the executor cannot get itself out. The rail therefore fires at **T-1 day, while the key still works** and `_halt_locked`'s cancel/flatten can actually execute; RED pages start at T-14 days so the renewal is routine rather than an outage. The agent is matched by ADDRESS, never by the operator-editable display name, and a clean list that does not contain us (revoked, never approved, or a key belonging to another wallet) reads as expired-NOW rather than as healthy. An UNREADABLE expiry is a WARN after 6h dark, never a halt: an info-endpoint outage says nothing about whether our key can still sign, and halting a healthy book on a read failure is self-inflicted damage of the kind the halt exists to prevent. Checked hourly, not per poll. `/pulse` publishes `agent_days_left`. Coinbase has no such method and is untouched (duck-typed) |
 | **THE PERP WALLET IS NOT THE BALANCE** | `clearinghouseState.marginSummary.accountValue` reports the **PERP POOL ONLY**. On this account it reads ~$64 while the real account value is ~$100k of spot USDC — the `portfolio` endpoint's `accountValue` shows 99,931 for the same moment. `hl.py`'s `equity()` sums spot + perp precisely because of this, and says so in its docstring (2026-08-28: it read $0.00 against a real $998.99 in spot). **There has never been a spot->perp `accountClassTransfer` on this account** — the full non-funding ledger is one deposit and four spot sends — and perps have traded for weeks regardless, so spot is what backs the book. Do NOT read the perp figure as buying power, do NOT raise a margin alarm from it, and do NOT ask for a transfer: there is nothing to transfer and no procedure to give. Misread twice by an agent that had just quoted the `equity()` docstring; recorded here and in CLAUDE.md because reading the fix is evidently not the same as applying it |
 | **DISCLOSED LIMIT — the $10 floor (Hyperliquid)** | HL rejects any order under $10 notional (`MinTradeNtl`) and the docs grant reduce-only NO exemption, so a position whose remaining notional falls under $10 cannot be closed by ANY order we send — not its stop, not the halt's flatten. No order-level rail can fix this: there is no order the venue will accept. It is held away by SIZING, not by code — at KELLY_M 0.135 on a $1k base the smaller (trend) leg is ~$51, about 5x the floor, so reaching it needs an >80% partial-fill shortfall. The adapter raises a named `MinNotionalRejected` so the page says WHY rather than looking like a generic rejection storm; the residue is cleared by a manual close on the Hyperliquid UI. **Re-check this margin before lowering KELLY_M or SIZING_BASE_USD** — at KELLY_M 0.05 the trend leg is $18.75, under 2x the floor |
-| daily-loss halt | day loss > DAILY_LOSS_HALT_PCT (6%) **of the sizing base** -> cancel all, flatten, halt. Auto-rearms at UTC rollover at KELLY_M <= 0.30; MANUAL above. Boundary caveat: a rearm grants a fresh full day budget, so worst-case loss across a UTC boundary is ~2x the daily rail |
+| daily-loss halt | day loss > DAILY_LOSS_HALT_PCT (6%) **of the sizing base** -> cancel all, flatten, halt. Auto-rearms at UTC rollover **at every size** (since 2026-10-01; previously MANUAL above KELLY_M 0.30). Above KELLY_M 0.30 the threshold SCALES: 6% x effective KELLY_M / 0.30 (15% at 0.75) — `mirror._daily_loss_pct`. Boundary caveat: a rearm grants a fresh full day budget, so worst-case loss across a UTC boundary is ~2x the daily rail (~$30k at 0.75, the DRAWDOWN line) |
 | drawdown halt | equity below high-water minus DD_HALT_PCT (live: 0.35) **of the sizing base** -> same, manual resume |
 | loss halts need a real recovery, or an explicit forgiveness | A plain `/resume` on `DAILY_LOSS` or `DRAWDOWN` is REFUSED while the breach is still live, and says so. It used to clear the flag while leaving `high_water` and `day_start_equity` untouched, so `_check_halts` saw the same breach on the very next poll and re-halted — and since `_breach_count` is never reset it re-halted immediately, skipping the debounce. That was a loop, not a resume, escapable only by redeploy. Two ways out now: let equity recover above the line, or call **`/resume?reanchor=1`**, which moves both marks to current equity and pages `resume_reanchored`. Re-anchoring FORGIVES the drawdown — the next one is measured from the new, lower mark — so it needs its own flag, the same shape as `?adopt_venue=1`. A resume on an account whose equity cannot be read is refused outright: that is a guess, not a decision. Non-loss halts (KILL and the operational ones) still clear on a plain resume |
 | kill switch | POST /kill -> same; POST /resume to clear (manual only). Resume also verifies every stop ref against the venue and clears dead ones — but on a leg the ledger believes HOLDS, a dead ref is cleared only once the venue BACKS the ledger (clearing it hands the mirror a placement path that is not reduce-only: on a flat venue that arms a full-size NAKED stop). Divergence -> `LEDGER_DIVERGENCE` halt. Unreadable venue -> the ref is left STRICTLY ALONE: not cleared **and not cancelled**, because in a correlated outage (status UNKNOWN *and* position unreadable — one API failure, and what 2026-08-26 actually looked like) cancelling first killed a live stop and then went on believing in it, and the churn guard suppressed replacement forever. Pages `stop_ref_unverified` (ACTION) |
@@ -130,6 +130,8 @@ most of the v2 staircase's reasoning. What they established, with numbers:
 
 ### The schedule
 
+**2026-10-01: ceiling RAISED to 0.75** (Casey, `btc-paper-engine/RESEARCH_SHARPE.md` addendum — modern-regime −30% budget, with the engine's vol-targeted entry multiplier). The history below is kept as written.
+
 **CAPPED AT STEP B (0.20) since 2026-09-10 — see "The ceiling" below.**
 
 | step | KELLY_M | advance at | pullback entry | max step |
@@ -191,7 +193,7 @@ reached the retired rungs with `KELLY_M` pinned at exactly 0.20:
 So the invariant is now stated where the Kelly envelope actually lives —
 as a fraction of **capital**, not as one multiplier:
 
-- `MAX_EXPOSURE_FRAC = 0.45` (0.30 cap × 1.5, since 2026-09-30) — `_check_exposure` pages `exposure_over_cap`
+- `MAX_EXPOSURE_FRAC = 1.125` (0.75 cap × 1.5, since 2026-10-01; 0.45 from 2026-09-30) — `_check_exposure` pages `exposure_over_cap`
   when `kelly × lev × base / max(equity, high_water)` breaches it, naming
   `SIZING_BASE_USD` rather than blaming `KELLY_M`. It **pages, it does not
   clamp**: clamping on live equity would shrink entry size during a
@@ -204,7 +206,7 @@ as a fraction of **capital**, not as one multiplier:
   parsed with no schema check, and `w_trend > 1` made the pullback weight
   negative, which dropped a whole leg silently at `if qty <= 0: return`.
 
-**Enforced in code, not just here.** `mirror.KELLY_M_CAP = 0.20`:
+**Enforced in code, not just here.** `mirror.KELLY_M_CAP` (0.20 at the time of writing; 0.30 2026-09-30; **0.75 2026-10-01**):
 
 - it **clamps**, it does not refuse to boot — but the reason is narrower than
   first written. A crash-looping container does **not** leave a naked
@@ -281,7 +283,7 @@ which the sample size cannot support.
 - **ramp drawdown <= -$5,000 -> step DOWN one.** The $17,500 DRAWDOWN halt
   fired in 0 of 382 simulated ramps — at step D it needs a 41.7% adverse
   move, i.e. it is unreachable during the ramp and cannot do this job;
-- **above KELLY_M 0.30 the daily-loss halt reverts to MANUAL resume.** At
+- **SUPERSEDED 2026-10-01** — the daily-loss halt now auto-rearms at every size and its threshold scales with KELLY_M above 0.30. Original rule: **above KELLY_M 0.30 the daily-loss halt reverts to MANUAL resume.** At
   steps C/D a single ordinary-bad trade (-15.6% on notional, the worst in six
   years) trips the $3,000 daily rail — and auto-rearm would silently clear
   the only breaker that is actually reachable during the ramp. IMPLEMENTED
@@ -336,8 +338,8 @@ so it is measured identically regardless of how fast the size ramps).
 ## Halt automation (2026-08-07)
 
 - **DAILY_LOSS auto-rearms** at the UTC day rollover (informational ✅
-  alert) while KELLY_M <= 0.30; above that it holds for manual resume (ramp
-  v3 rule, enforced in code). Rearm caveat, disclosed: the new day gets a
+  alert) at every size since 2026-10-01 (it held for manual resume above
+  KELLY_M 0.30 until then); above 0.30 its threshold scales with size. Rearm caveat, disclosed: the new day gets a
   fresh full budget anchored at post-loss equity, and if the engine still
   holds its position the mirror re-enters it - worst case across a boundary
   is roughly 2x the daily rail. Below 0.30 the dollar amounts are small and

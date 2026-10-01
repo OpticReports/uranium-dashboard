@@ -655,7 +655,8 @@ def test_gate_alert_tier_labels(tmp_path, monkeypatch):
 
 def test_gate_daily_loss_auto_rearms_drawdown_does_not(tmp_path):
     """DAILY_LOSS is a rate limiter: it clears itself at the UTC day
-    rollover WHILE KELLY_M <= 0.30 (above that: manual, ramp v3 rule).
+    rollover at every size (the KELLY_M > 0.30 manual line was removed
+    2026-10-01; the threshold scales with size instead).
     DRAWDOWN stays manual — auto-reset there would turn the floor into a
     retry loop."""
     v = FakeVenue(equity=30_000.0)
@@ -1022,30 +1023,45 @@ def test_gate_slippage_sign_adverse_positive(tmp_path):
     assert s1 == pytest.approx(10.0) and s2 == pytest.approx(10.0)
 
 
-def test_gate_daily_loss_manual_resume_above_030(tmp_path, monkeypatch):
-    """Ramp v3's "manual resume above KELLY_M 0.30" was doc-only (counter-
-    agent 2026-08-11): _roll_day cleared DAILY_LOSS unconditionally."""
-    v = FakeVenue()
+def test_gate_daily_loss_auto_rearms_at_every_size(tmp_path):
+    """Ramp v3 made DAILY_LOSS manual-resume above KELLY_M 0.30. Casey
+    replaced that 2026-10-01 ("scale + auto re-arm"): the threshold scales
+    with size instead, and the halt re-arms at the UTC rollover at ANY size,
+    including the new 0.75 cap."""
+    for i, k in enumerate((0.05, 0.30, 0.56, 0.75)):
+        ex = mkexec(tmp_path / str(i), FakeVenue())
+        ex.cfg.kelly_m = k
+        ex.state.halted = "DAILY_LOSS"
+        ex.state.day_key = "2020-01-01"                   # force a rollover
+        ex.step(target())
+        assert ex.state.halted is None, k
+        assert any(e["kind"] == "auto_rearm" for e in ex.state.events), k
+
+
+def test_gate_daily_loss_threshold_scales_with_effective_size(tmp_path):
+    """6% of base at <= 0.30 (never tighter below it), x KELLY_M/0.30 above:
+    15% at 0.75. EFFECTIVE size: an over-cap env must not widen the rail."""
+    ex = mkexec(tmp_path, FakeVenue())
+    for k, want in ((0.05, 0.06), (0.20, 0.06), (0.30, 0.06), (0.45, 0.09),
+                    (0.75, 0.15), (2.0, 0.15)):
+        ex.cfg.kelly_m = k
+        assert ex._daily_loss_pct() == pytest.approx(want), k
+
+
+def test_gate_daily_loss_breach_uses_the_scaled_line(tmp_path):
+    """_breach_for is shared by _check_halts and resume(): at 0.75 on a $100k
+    base a $10k day must NOT halt and a $16k day must."""
+    v = FakeVenue(equity=100_000.0)
     ex = mkexec(tmp_path, v)
-    # _roll_day reads the EFFECTIVE kelly (counter-agent 2026-09-10): with
-    # KELLY_M_CAP at 0.20 this rule is DORMANT, because a book clamped to
-    # 0.20 is not the "meaningful evidence" size the rule was written for.
-    # Exercising it therefore needs a cap that permits >0.30 - which is also
-    # the state the rule revives itself in if the ceiling is ever raised.
-    monkeypatch.setattr(mirror, "KELLY_M_CAP", 0.80)
-    ex.cfg.kelly_m = 0.56
-    ex.state.halted = "DAILY_LOSS"
-    ex.state.day_key = "2020-01-01"                       # force a rollover
-    ex.step(target())
-    assert ex.state.halted == "DAILY_LOSS"                # NOT auto-cleared
-    assert not any(e["kind"] == "auto_rearm" for e in ex.state.events)
-    ex2 = mkexec(tmp_path / "b", FakeVenue())
-    ex2.cfg.kelly_m = 0.05
-    ex2.state.halted = "DAILY_LOSS"
-    ex2.state.day_key = "2020-01-01"
-    ex2.step(target())
-    assert ex2.state.halted is None                       # token size: rearms
-    assert any(e["kind"] == "auto_rearm" for e in ex2.state.events)
+    ex.cfg.kelly_m = 0.75
+    ex.cfg.sizing_base_usd = 100_000.0
+    ex.state.day_start_equity = 100_000.0
+    ex.state.high_water = 100_000.0
+    assert ex._breach_for(90_000.0) is None
+    b = ex._breach_for(84_000.0)
+    assert b is not None and b[0] == "DAILY_LOSS" and "15.0%" in b[1]
+    ex.cfg.kelly_m = 0.30                                  # today's line
+    assert ex._breach_for(93_000.0)[0] == "DAILY_LOSS"
 
 
 def test_gate_config_change_pages(tmp_path):
@@ -6767,7 +6783,8 @@ def test_gate_kelly_cap_clamps_entry_size(tmp_path):
     from app.mirror import KELLY_M_CAP
     v = FakeVenue()
     ex = mkexec(tmp_path, v)
-    ex.cfg.kelly_m = 0.56                                  # retired rung D
+    ex.cfg.kelly_m = 0.95                                  # over the 0.75 cap
+    ex.cfg.max_notional_usd = 1_000_000.0                  # rails out of the way
     pend = {"pending": {"side": "L", "limit": 59_000.0, "signal_ts": NOW},
             "position": None}
     ex.step(target(pull=pend))
@@ -6775,18 +6792,18 @@ def test_gate_kelly_cap_clamps_entry_size(tmp_path):
     assert qty == pytest.approx(KELLY_M_CAP * 1.5 * 0.75 * 10_000 / 59_000,
                                 abs=1e-4)
     # and emphatically NOT the env value
-    assert qty < 0.56 * 1.5 * 0.75 * 10_000 / 59_000 * 0.9
+    assert qty < 0.95 * 1.5 * 0.75 * 10_000 / 59_000 * 0.9
 
 
 def test_gate_kelly_cap_pages_at_boot(tmp_path):
     """Clamping silently would be the same failure with better arithmetic."""
     cfg = Cfg()
     cfg.state_path = str(tmp_path / "state.json")
-    cfg.kelly_m = 0.35                                     # retired rung C
+    cfg.kelly_m = 0.85                                     # over the 0.75 cap
     ex = Executor(FakeVenue(), cfg, cfg.state_path)
     ev = [e for e in ex.state.events if e["kind"] == "kelly_over_cap"]
     assert len(ev) == 1 and ev[0]["level"] == "RED"
-    assert "0.35" in ev[0]["msg"]
+    assert "0.85" in ev[0]["msg"]
     assert f"repo cap {mirror.KELLY_M_CAP}" in ev[0]["msg"]
     assert f"sized at {mirror.KELLY_M_CAP}" in ev[0]["msg"]
 
@@ -6837,10 +6854,12 @@ def test_gate_kelly_cap_value_is_pinned():
     the constant to 0.29 and the entire suite stayed green, so a +45% size
     raise was a one-character diff past a merge-blocking gate. The whole
     control rests on the number being reviewed, so the number is asserted."""
-    assert mirror.KELLY_M_CAP == 0.30        # raised 0.20 -> 0.30, 2026-09-29
-    # and the two factors it is only meaningful alongside
+    assert mirror.KELLY_M_CAP == 0.75        # 0.20 -> 0.30 (09-29) -> 0.75 (10-01)
+    # and the factors it is only meaningful alongside
     assert mirror.REFERENCE_LEV == 1.5
-    assert mirror.MAX_EXPOSURE_FRAC == pytest.approx(0.45)
+    assert mirror.MAX_EXPOSURE_FRAC == pytest.approx(1.125)
+    assert mirror.DAILY_LOSS_REF_KELLY == 0.30
+    assert (mirror.SIZE_MULT_MIN, mirror.SIZE_MULT_MAX) == (0.5, 1.0)
     assert mirror.MAX_BLEND_LEV == 2.0
 
 
@@ -6856,13 +6875,13 @@ def test_gate_kelly_cap_is_not_env_overridable(tmp_path, monkeypatch):
     the env var SET."""
     from app.config import Settings
     assert "kelly_m_cap" not in Settings.model_fields
-    monkeypatch.setenv("KELLY_M_CAP", "0.80")
+    monkeypatch.setenv("KELLY_M_CAP", "0.95")
     monkeypatch.setenv("MAX_EXPOSURE_FRAC", "9.0")
     ex = mkexec(tmp_path, FakeVenue())
-    ex.cfg.kelly_m = 0.80
-    ex.cfg.kelly_m_cap = 0.80                              # wishful thinking
+    ex.cfg.kelly_m = 0.95
+    ex.cfg.kelly_m_cap = 0.95                              # wishful thinking
     assert ex._effective_kelly_m() == pytest.approx(mirror.KELLY_M_CAP)
-    assert mirror.KELLY_M_CAP == 0.30                      # env did not move it
+    assert mirror.KELLY_M_CAP == 0.75                      # env did not move it
 
 
 def test_gate_kelly_cap_page_actually_reaches_the_phone(tmp_path, monkeypatch):
@@ -6877,7 +6896,7 @@ def test_gate_kelly_cap_page_actually_reaches_the_phone(tmp_path, monkeypatch):
     monkeypatch.setattr(alerts, "send", lambda msg: sent.append(msg))
     cfg = Cfg()
     cfg.state_path = str(tmp_path / "state.json")
-    cfg.kelly_m = 0.56
+    cfg.kelly_m = 0.95
     Executor(FakeVenue(), cfg, cfg.state_path)
     hits = [m for m in sent if "kelly_over_cap" in m]
     assert hits, "the over-cap condition must reach the phone, not just the log"
@@ -6889,7 +6908,7 @@ def test_gate_kelly_cap_change_under_a_running_process_pages(tmp_path):
     """Boot is not the only way KELLY_M can change."""
     ex = mkexec(tmp_path, FakeVenue())
     ex.step(target())                                      # snapshot stored
-    ex.cfg.kelly_m = 0.56
+    ex.cfg.kelly_m = 0.95
     ex.step(target())
     assert [e for e in ex.state.events if e["kind"] == "kelly_over_cap"]
 
@@ -6909,7 +6928,7 @@ def test_gate_exposure_over_cap_catches_the_sizing_base_bypass(tmp_path):
     ex.cfg.max_notional_usd = 1_000_000.0                  # rails out of the way
     ex.step(target())
     assert not [e for e in ex.state.events if e["kind"] == "exposure_over_cap"]
-    ex.cfg.sizing_base_usd = 3_000.0                       # > retired rung D
+    ex.cfg.sizing_base_usd = 8_000.0                       # 2.4x equity > 1.125
     ex.step(target())
     ev = [e for e in ex.state.events if e["kind"] == "exposure_over_cap"]
     assert ev and ev[0]["level"] == "RED"
@@ -6972,8 +6991,10 @@ def test_gate_advance_ok_is_false_at_the_ceiling(tmp_path, monkeypatch):
     assert m._next_rung() is not None or True              # sanity: callable
     monkeypatch.setattr(m.settings, "kelly_m", 0.10)
     assert m._next_rung() == pytest.approx(0.20)           # B is reachable
-    monkeypatch.setattr(m.settings, "kelly_m", 0.20)
-    assert m._next_rung() is None                          # C is retired
+    monkeypatch.setattr(m.settings, "kelly_m", 0.30)
+    assert m._next_rung() == pytest.approx(0.75)           # Casey's step
+    monkeypatch.setattr(m.settings, "kelly_m", 0.75)
+    assert m._next_rung() is None                          # at the cap
     # and no retired rung is even listed
     assert all(r <= mirror.KELLY_M_CAP for r in m.RAMP_RUNGS)
 
@@ -6985,7 +7006,7 @@ def test_gate_fills_record_the_size_they_were_taken_at(tmp_path):
     exists to protect."""
     v = FakeVenue()
     ex = mkexec(tmp_path, v, dry_run=False)
-    ex.cfg.kelly_m = 0.56
+    ex.cfg.kelly_m = 0.95
     ex.step(target(trend={"pending": {"side": "S", "limit": -1.0,
                                       "signal_ts": NOW}, "position": None}))
     fills = getattr(ex.state, "fills", []) or []
@@ -7011,14 +7032,16 @@ def test_gate_over_cap_env_does_not_hold_daily_loss_hostage(tmp_path):
     between them."""
     v = FakeVenue()
     ex = mkexec(tmp_path, v)
-    ex.cfg.kelly_m = 0.56                     # raw > 0.30 ...
-    assert ex._effective_kelly_m() == pytest.approx(mirror.KELLY_M_CAP)  # ... effective is not above 0.30
+    ex.cfg.kelly_m = 0.95                     # raw over the cap ...
+    assert ex._effective_kelly_m() == pytest.approx(mirror.KELLY_M_CAP)
     ex.state.halted = "DAILY_LOSS"
     ex.state.day_key = "2020-01-01"           # force a rollover
     ex.step(target())
     assert ex.state.halted is None, (
-        "a book clamped to 0.20 is not the 'meaningful evidence' size the "
-        "manual-resume rule was written for - it must auto-rearm")
+        "DAILY_LOSS auto-rearms at every size since 2026-10-01; an over-cap "
+        "env must not hold the book halted")
+    # and the over-cap env does not widen the rail past the cap's 15%
+    assert ex._daily_loss_pct() == pytest.approx(0.15)
 
 
 def test_gate_advance_ok_itself_is_false_at_the_ceiling(tmp_path, monkeypatch):
@@ -7037,7 +7060,7 @@ def test_gate_advance_ok_itself_is_false_at_the_ceiling(tmp_path, monkeypatch):
     r = _ramp_v4(st)
     assert r["coverage_complete"] is True and r["slippage_sanity"]["ok"] is True
     assert r["advance_ok"] is True                     # rung B is reachable
-    monkeypatch.setattr(m.settings, "kelly_m", 0.20)   # already at the ceiling
+    monkeypatch.setattr(m.settings, "kelly_m", 0.75)   # already at the ceiling
     r2 = _ramp_v4(st)
     assert r2["coverage_complete"] is True             # execution still perfect
     assert r2["advance_ok"] is False, (
@@ -7114,18 +7137,18 @@ def test_gate_pulse_red_kinds_carry_no_sizes_or_prices(tmp_path, monkeypatch):
     assert "0.03134" not in body and "80757" not in body, body
 
 
-def test_gate_cap_sits_on_the_daily_loss_manual_line(tmp_path):
-    """KELLY_M_CAP 0.30 is chosen to sit ON _roll_day's strictly-greater
-    manual-resume line: at the cap DAILY_LOSS must still auto-rearm. If
-    either number moves, this pins the interaction (2026-09-29)."""
+def test_gate_daily_loss_rearms_at_the_cap_and_over_it(tmp_path):
+    """Superseded the 2026-09-29 'cap sits ON the manual line' gate: the
+    manual line is gone (2026-10-01). At the 0.75 cap and with an over-cap
+    env, DAILY_LOSS still auto-rearms."""
     ex = mkexec(tmp_path, FakeVenue())
-    ex.cfg.kelly_m = 0.30
-    assert ex._effective_kelly_m() == pytest.approx(0.30)
+    ex.cfg.kelly_m = 0.75
+    assert ex._effective_kelly_m() == pytest.approx(0.75)
     ex.state.day_key = "2000-01-01"
     ex.state.halted = "DAILY_LOSS"
     ex._roll_day(ex.venue.equity())
     assert ex.state.halted is None, "DAILY_LOSS must auto-rearm AT the cap"
-    ex.cfg.kelly_m = 0.80                                  # clamps to 0.30
+    ex.cfg.kelly_m = 0.95                                  # clamps to 0.75
     ex.state.day_key = "2000-01-01"
     ex.state.halted = "DAILY_LOSS"
     ex._roll_day(ex.venue.equity())
@@ -7138,7 +7161,7 @@ def test_gate_exposure_check_ignores_drawdown_but_catches_config(tmp_path):
     a base above the peak still must."""
     v = FakeVenue(equity=100_000.0)
     ex = mkexec(tmp_path, v)
-    ex.cfg.kelly_m = 0.30
+    ex.cfg.kelly_m = 0.75
     ex.cfg.sizing_base_usd = 100_000.0
     ex.cfg.max_notional_usd = 10_000_000.0
     ex.state.high_water = 100_000.0
@@ -7147,3 +7170,97 @@ def test_gate_exposure_check_ignores_drawdown_but_catches_config(tmp_path):
     ex.cfg.sizing_base_usd = 150_000.0                     # config breach
     ex._check_exposure(90_000.0, {"w_trend": 0.30, "lev": 1.5})
     assert [e for e in ex.state.events if e["kind"] == "exposure_over_cap"]
+
+
+# --- vol-targeted entry size (RESEARCH_SHARPE.md H1, down-only; 2026-10-01).
+# The engine publishes legs.<leg>.size_mult in [0.5, 1.0], frozen per signal
+# bar. It may only SHRINK a fresh entry; absent means today's size.
+
+def _pend_pull(mult=None):
+    d = {"pending": {"side": "L", "limit": 59_000.0, "signal_ts": NOW},
+         "position": None}
+    if mult is not None:
+        d["size_mult"] = mult
+    return d
+
+
+def test_gate_size_mult_scales_a_fresh_entry(tmp_path):
+    v0, v1 = FakeVenue(), FakeVenue()
+    mkexec(tmp_path / "a", v0).step(target(pull=_pend_pull()))
+    ex = mkexec(tmp_path / "b", v1)
+    ex.step(target(pull=_pend_pull(0.6)))
+    q0, q1 = v0.calls[0][2], v1.calls[0][2]
+    assert q0 == pytest.approx(0.20 * 1.5 * 0.75 * 10_000 / 59_000, abs=1e-4)
+    assert q1 == pytest.approx(0.6 * q0, abs=1e-4)
+    assert [e for e in ex.state.events if e["kind"] == "size_mult"]
+    assert ex.state.legs["pullback"].target_qty == pytest.approx(q1, abs=1e-4)
+
+
+def test_gate_size_mult_absent_or_one_is_todays_size(tmp_path):
+    for i, m in enumerate((None, 1.0)):
+        v = FakeVenue()
+        ex = mkexec(tmp_path / str(i), v)
+        ex.step(target(pull=_pend_pull(m)))
+        assert v.calls[0][2] == pytest.approx(
+            0.20 * 1.5 * 0.75 * 10_000 / 59_000, abs=1e-4)
+        assert not [e for e in ex.state.events
+                    if e["kind"] in ("size_mult", "size_mult_invalid")]
+
+
+@pytest.mark.parametrize("raw,want", [("x", 1.0), (float("nan"), 1.0),
+                                      (True, 1.0), (1.7, 1.0), (0.1, 0.5),
+                                      (-3, 0.5), ([0.7], 1.0)])
+def test_gate_size_mult_invalid_is_clamped_and_paged(tmp_path, raw, want):
+    """Never more than today's size; never silent."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    ex.step(target(pull=_pend_pull(raw)))
+    base = 0.20 * 1.5 * 0.75 * 10_000 / 59_000
+    assert v.calls[0][2] == pytest.approx(want * base, abs=1e-4)
+    ev = [e for e in ex.state.events if e["kind"] == "size_mult_invalid"]
+    assert ev and ev[0]["level"] == "RED"
+
+
+def test_gate_size_mult_applies_to_the_chase(tmp_path):
+    """Engine shows a position the executor never entered (restart, missed
+    entry): the market chase sizes at the entry's m too."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v, dry_run=False)
+    pos = {"pending": None, "size_mult": 0.5,
+           "position": {"side": "L", "entry_price": 59_000.0, "entry_ts": NOW,
+                        "signal_ts": NOW, "stop": 56_500.0, "exit_flag": None}}
+    ex.step(target(pull=pos))
+    mk = [c for c in v.calls if c[0] == "MARKET"]
+    assert mk, "setup: the chase must send a market entry"
+    full = 0.20 * 1.5 * 0.75 * 10_000 / v.mid()
+    assert mk[0][2] == pytest.approx(0.5 * full, abs=2e-4)
+
+
+def test_gate_size_mult_never_resizes_an_open_leg(tmp_path):
+    """A lower m arriving for a leg already held must not part-close it."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    ex.step(target(pull=_pend_pull(1.0)))
+    v.orders[f"P-{NOW}-E1"]["status"] = "FILLED"
+    pos = {"pending": None, "size_mult": 1.0,
+           "position": {"side": "L", "entry_price": 59_000.0, "entry_ts": NOW,
+                        "signal_ts": NOW, "stop": 56_500.0, "exit_flag": None}}
+    ex.step(target(pull=pos))
+    held = ex.state.legs["pullback"].qty
+    assert held > 0
+    n = len(v.calls)
+    pos["size_mult"] = 0.5
+    for _ in range(3):
+        ex.step(target(pull=pos))
+    assert ex.state.legs["pullback"].qty == pytest.approx(held)
+    assert not [c for c in v.calls[n:] if c[0] == "MARKET"]
+
+
+def test_gate_size_mult_cannot_beat_the_notional_rail(tmp_path):
+    """m <= 1 by construction, so the clamp order is irrelevant - but pin it:
+    a clamped valid m still respects cap_notional."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    ex.cfg.max_notional_usd = 500.0
+    ex.step(target(pull=_pend_pull(0.9)))
+    assert v.calls[0][2] * 59_000 <= 500.0 + 1e-6

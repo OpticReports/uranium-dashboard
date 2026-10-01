@@ -67,7 +67,23 @@ BAR_SECONDS = 14_400
 # mark-to-market study puts the -30%-drawdown size at ~0.39-0.50 and the
 # DAILY_LOSS manual-resume line (strictly > 0.30, see _roll_day) at 0.30. The
 # cap sits ON that line so the daily-loss halt keeps auto-rearming.
-KELLY_M_CAP = 0.30
+# RAISED 0.30 -> 0.75 (Casey, 2026-10-01, RESEARCH_SHARPE.md addendum). On the
+# modern regime (2019+/2020+; Casey: "the early years of BTC don't matter")
+# the bootstrap-safe -30% size is ~0.73-0.76 for the live engine and ~0.94
+# with the vol-targeted entry multiplier the engine now publishes. Casey's
+# first step is 0.75, so the ceiling is exactly that step: going further is
+# another code change. The daily-loss manual-resume line is gone (Casey chose
+# "scale + auto re-arm"): the DAILY_LOSS threshold scales with size instead -
+# see _daily_loss_pct.
+KELLY_M_CAP = 0.75
+# DAILY_LOSS_HALT_PCT is struck at this size: above it the threshold grows in
+# proportion (6% of base at 0.30 -> 15% at 0.75), so the halt keeps meaning
+# "an unusually bad day for THIS book" instead of firing on ordinary volatility
+# 10-16 times in 7 years. Below it the threshold is unchanged (never tighter).
+DAILY_LOSS_REF_KELLY = 0.30
+# Engine-published entry-size multiplier (vol targeting, down-only). Anything
+# outside this band is a malformed payload: clamped, paged.
+SIZE_MULT_MIN, SIZE_MULT_MAX = 0.5, 1.0
 # WHAT THE CAP DOES NOT DO, made explicit because two counter-agents found it
 # independently (2026-09-10, both BLOCKING): leg notional is
 # `kelly_m * lev * weight * base`, and KELLY_M_CAP bounds ONE factor. With
@@ -80,7 +96,7 @@ KELLY_M_CAP = 0.30
 # So the invariant is stated where the Kelly envelope actually lives - as a
 # fraction of CAPITAL, not as one multiplier:
 #   gross deployed notional / equity  <=  MAX_EXPOSURE_FRAC
-# which is the same 0.30 the cap authorises at the blend we actually ship.
+# which is what the cap authorises at the blend we actually ship.
 # _check_exposure pages when the CONFIG would breach it. It pages rather than
 # clamps deliberately: clamping on live equity would shrink entry size during
 # a drawdown, which is a real change to how the book trades and is Casey's
@@ -88,7 +104,7 @@ KELLY_M_CAP = 0.30
 # deep drawdown raises the ratio on its own, so this can page without anyone
 # touching the config. That is Kelly telling the truth, not a false alarm.
 REFERENCE_LEV = 1.5          # the blend /exec/target actually ships (S5)
-MAX_EXPOSURE_FRAC = KELLY_M_CAP * REFERENCE_LEV        # 0.45 of equity, gross
+MAX_EXPOSURE_FRAC = KELLY_M_CAP * REFERENCE_LEV        # 1.125 of equity, gross
 # The largest blend leverage the engine publishes (S6 = 2.0x, bench_blend.py).
 # Anything above this is a malformed or hostile payload, not a strategy
 # change, and is clamped at the door.
@@ -1343,10 +1359,10 @@ class Executor:
                                  f"for the cloid named above if this repeats; "
                                  f"the ref is kept so the executor will not "
                                  f"re-send",
-            "kelly_over_cap": "the ramp cannot go here. RESEARCH_FEES.md "
-                               "puts the binding S6 Kelly envelope at 0.22, "
-                               "so rungs C (0.35), D (0.56) and the 0.80 "
-                               "ceiling are outside it - trading CONTINUES, "
+            "kelly_over_cap": "the ramp cannot go here. The cap is the size "
+                               "Casey approved (RESEARCH_SHARPE.md addendum: "
+                               "0.75 on the modern-regime -30% budget) - "
+                               "trading CONTINUES, "
                                "sized at the cap. Either lower KELLY_M in "
                                "the Render env to <= the cap, or, if new "
                                "evidence justifies a higher ceiling, raise "
@@ -1367,6 +1383,12 @@ class Executor:
                                   "publishing something unexpected, so check "
                                   "the engine before trusting its next "
                                   "signal",
+            "size_mult_invalid": "the PAPER ENGINE sent an entry-size "
+                                 "multiplier outside [0.5, 1.0] or not a "
+                                 "number. The entry was sized at the clamped "
+                                 "value (or 1.0, today's size) and trading "
+                                 "continues - check the engine's vol "
+                                 "sizing before its next signal",
             "config_change": "sizing/risk config changed - if this was you "
                              "(ramp step, base change), ignore; if NOT, a "
                              "sync or fat-finger altered live risk limits - "
@@ -1404,6 +1426,7 @@ class Executor:
         # still LOGGED - only the phone pings are rate-limited. Halts, mode
         # changes and live-trade events are never suppressed.
         RATE_LIMITED = {"halt_config", "cap_clamp", "leg_sync_error",
+                        "size_mult_invalid",
                         # persistent by nature: true every poll until the
                         # operator edits the env or the cap is raised
                         "kelly_over_cap", "exposure_over_cap",
@@ -1506,11 +1529,41 @@ class Executor:
         return max(0.0, cap_notional / px - other
                    - abs(self.state.legs[leg].qty))
 
-    def _leg_qty(self, leg: str, blend: dict, px: float, equity: float) -> float:
+    def _size_mult(self, leg: str, tl: dict) -> float:
+        """The engine's vol-targeted entry multiplier for this leg
+        (RESEARCH_SHARPE.md H1, down-only). Absent -> 1.0: an engine that
+        predates it sizes exactly as before. Non-numeric/NaN -> 1.0 (today's
+        size, the tested regime) and paged; numeric but outside
+        [SIZE_MULT_MIN, SIZE_MULT_MAX] -> clamped and paged. It can only
+        SHRINK an entry, so no failure here can push a leg past a cap."""
+        raw = tl.get("size_mult") if isinstance(tl, dict) else None
+        if raw is None:
+            return 1.0
+        try:
+            m = float(raw)
+        except (TypeError, ValueError):
+            m = float("nan")
+        if isinstance(raw, bool) or m != m:
+            self._event("RED", "size_mult_invalid",
+                        f"engine size_mult={raw!r} for {leg} is not a number "
+                        f"- sizing at 1.0")
+            return 1.0
+        if m < SIZE_MULT_MIN or m > SIZE_MULT_MAX:
+            c = min(SIZE_MULT_MAX, max(SIZE_MULT_MIN, m))
+            self._event("RED", "size_mult_invalid",
+                        f"engine size_mult={m} for {leg} is outside "
+                        f"[{SIZE_MULT_MIN}, {SIZE_MULT_MAX}] - sizing at {c}")
+            return c
+        return m
+
+    def _leg_qty(self, leg: str, blend: dict, px: float, equity: float,
+                 mult: float = 1.0) -> float:
         """Unsigned BTC qty for a fresh leg entry, capped so the whole account
-        stays inside max_notional_usd and max_account_lev (of the base)."""
+        stays inside max_notional_usd and max_account_lev (of the base).
+        `mult` is the engine's vol-targeted entry multiplier, already
+        validated by _size_mult (<= 1.0, so it only shrinks)."""
         base = self._base(equity)
-        want = self._leg_frac(leg, blend) * base / px
+        want = self._leg_frac(leg, blend) * base * mult / px
         # netted_qty counts: it is engine exposure the venue is about to
         # re-hold, so a fresh entry must leave room for it under the caps
         other = sum(abs(l.qty) + abs(l.netted_qty)
@@ -1543,52 +1596,36 @@ class Executor:
         if day != self.state.day_key:
             # DAILY_LOSS is a rate limiter ("stop for today"), not a
             # model-falsification event: it re-arms itself at the UTC day
-            # boundary. DRAWDOWN and KILL stay manual-resume by design —
+            # boundary. DRAWDOWN and KILL stay manual-resume by design -
             # the circuit breaker with automatic reset is a retry loop.
-            # ABOVE KELLY_M 0.30 the rule flips to manual (EXECUTOR.md ramp
-            # v3): at that size a breach is meaningful evidence and auto-
-            # rearm would clear the only breaker reachable during the ramp,
-            # granting a fresh full budget at 00:00 UTC mid-move. This rule
-            # was doc-only until 2026-08-11 (counter-agent find).
             #
-            # EFFECTIVE, not raw (counter-agent 2026-09-10, BLOCKING). The
-            # first cut of the cap read raw kelly_m here on the argument that
-            # raw "errs strict". It does the opposite. With KELLY_M_CAP at
-            # 0.20, raw > 0.30 is reachable ONLY in the clamped state - i.e.
-            # only when the book is trading at the SAFE size - so the rule's
-            # own premise ("at that size a breach is meaningful evidence") is
-            # false in every state that can reach it. A fat-fingered
-            # KELLY_M=0.56 plus one ordinary -6% day would then hold
-            # DAILY_LOSS through every rollover, and _step_locked returns at
-            # `if self.state.halted` BEFORE stop maintenance and engine-exit
-            # mirroring. That is the same unmanaged-book harm the cap
-            # deliberately refuses to cause by halting, arrived at sideways.
-            # Reading effective makes the rule dormant while the cap is below
-            # 0.30 and revives it automatically if the cap is ever raised.
+            # HISTORY. Ramp v3 flipped DAILY_LOSS to MANUAL above KELLY_M
+            # 0.30 (2026-08-11), read on the EFFECTIVE size (counter-agent
+            # 2026-09-10). SUPERSEDED 2026-10-01 (Casey: "scale + auto
+            # re-arm", RESEARCH_SHARPE.md addendum): the threshold now SCALES
+            # with size (_daily_loss_pct), so a breach at 0.75 is the same
+            # unusual day it was at 0.30, and it auto-rearms at every size.
+            # A human-gated halt had cut 2019+ CAGR ~11% -> ~1% in the ruin
+            # review, and _step_locked returns on `halted` BEFORE stop
+            # maintenance, so a held halt is also an unmanaged book.
             if self.state.day_key and self.state.halted == "DAILY_LOSS":
-                if self._effective_kelly_m() > 0.30:
-                    self._event("RED", "halt",
-                                f"DAILY_LOSS held through UTC rollover {day}: "
-                                f"KELLY_M {self._effective_kelly_m()} > 0.30 "
-                                f"requires MANUAL resume (ramp v3 rule)")
+                self.state.halted = None
+                self._breach_count = 0
+                self._verify_stop_refs()
+                # _verify_stop_refs can HALT (LEDGER_DIVERGENCE). Emitting
+                # the ✅ "cleared" page unconditionally put "cleared" and
+                # "halted" on the operator's phone in the same minute
+                # (re-gate 2026-08-26 N3).
+                if self.state.halted:
+                    self._event("RED", "auto_rearm_blocked",
+                                f"DAILY_LOSS would have cleared at {day} "
+                                f"but stop-ref hygiene halted the book "
+                                f"({self.state.halted}) - it is NOT "
+                                f"resumed")
                 else:
-                    self.state.halted = None
-                    self._breach_count = 0
-                    self._verify_stop_refs()
-                    # _verify_stop_refs can HALT (LEDGER_DIVERGENCE). Emitting
-                    # the ✅ "cleared" page unconditionally put "cleared" and
-                    # "halted" on the operator's phone in the same minute
-                    # (re-gate 2026-08-26 N3).
-                    if self.state.halted:
-                        self._event("RED", "auto_rearm_blocked",
-                                    f"DAILY_LOSS would have cleared at {day} "
-                                    f"but stop-ref hygiene halted the book "
-                                    f"({self.state.halted}) - it is NOT "
-                                    f"resumed")
-                    else:
-                        self._event("INFO", "auto_rearm",
-                                    f"DAILY_LOSS cleared at UTC day rollover "
-                                    f"{day}")
+                    self._event("INFO", "auto_rearm",
+                                f"DAILY_LOSS cleared at UTC day rollover "
+                                f"{day}")
             self.state.day_key = day
             self.state.day_start_equity = equity
             try:
@@ -1641,6 +1678,15 @@ class Executor:
                         f"{self.state.high_water:.0f}")
         self._last_flat_equity = equity
 
+    def _daily_loss_pct(self) -> float:
+        """DAILY_LOSS_HALT_PCT scaled to the size actually traded: x
+        max(1, effective KELLY_M / DAILY_LOSS_REF_KELLY). EFFECTIVE, not raw,
+        for the reason _roll_day's old comment gave: an over-cap env must not
+        widen the rail beyond what the book is really sized at. Never below
+        the configured pct, so small rungs keep today's line."""
+        k = self._effective_kelly_m()
+        return self.cfg.daily_loss_halt_pct * max(1.0, k / DAILY_LOSS_REF_KELLY)
+
     def _breach_for(self, equity: float) -> tuple[str, str] | None:
         """Is a loss threshold breached RIGHT NOW? Extracted so /resume asks
         the same question _check_halts does (2026-09-09). Duplicating this
@@ -1648,11 +1694,12 @@ class Executor:
         that immediately re-fired could ever disagree."""
         st = self.state
         base_d, base_h = self._base(st.day_start_equity), self._base(st.high_water)
+        dpct = self._daily_loss_pct()
         if st.day_start_equity > 0 and \
-                equity < st.day_start_equity - self.cfg.daily_loss_halt_pct * base_d:
+                equity < st.day_start_equity - dpct * base_d:
             return ("DAILY_LOSS",
                     f"equity {equity:.0f} < day start {st.day_start_equity:.0f}"
-                    f" - {self.cfg.daily_loss_halt_pct:.0%} of base {base_d:.0f}")
+                    f" - {dpct:.1%} of base {base_d:.0f}")
         if st.high_water > 0 and \
                 equity < st.high_water - self.cfg.dd_halt_pct * base_h:
             return ("DRAWDOWN",
@@ -1701,7 +1748,7 @@ class Executor:
                            self.cfg.max_account_lev * base_h)
         if cap_notional > 0:
             for label, pct in (("DRAWDOWN", self.cfg.dd_halt_pct),
-                               ("DAILY_LOSS", self.cfg.daily_loss_halt_pct)):
+                               ("DAILY_LOSS", self._daily_loss_pct())):
                 need = pct * base_h
                 if need > cap_notional:
                     self._event("WARN", "halt_config",
@@ -2496,7 +2543,8 @@ class Executor:
                 # partial re-opened at its partial size, a clamped R) is
                 # topped up through the same chase (panel F4).
                 self._enter_from_fill(leg, led, pos, blend, equity,
-                                      entries_ok)
+                                      entries_ok,
+                                      mult=self._size_mult(leg, tl))
             if led.qty != 0.0:
                 self._maintain_stop(leg, led, pos)
             return
@@ -2623,9 +2671,14 @@ class Executor:
             limit_px = pend.get("limit")
             if not limit_px or limit_px <= 0:      # -1.0 = market-entry sentinel
                 limit_px = self.venue.mid()
-            qty = self._leg_qty(leg, blend, limit_px, equity)
+            mult = self._size_mult(leg, tl)
+            qty = self._leg_qty(leg, blend, limit_px, equity, mult)
             if qty <= 0:
                 return
+            if mult < 1.0:
+                self._event("INFO", "size_mult",
+                            f"{leg} entry sized x{mult:.3f} (vol target): "
+                            f"{qty:.5f} BTC")
             side = _order_side(pend["side"])
             led.entry_n += 1
             led.target_qty = qty
@@ -2727,7 +2780,7 @@ class Executor:
 
     def _enter_from_fill(self, leg: str, led: LegLedger, pos: dict,
                          blend: dict, equity: float,
-                         entries_ok: bool = True) -> None:
+                         entries_ok: bool = True, mult: float = 1.0) -> None:
         """Engine position appeared. If our entry order (partially) missed,
         chase the remainder at market so the legs stay in sync.
 
@@ -2745,7 +2798,9 @@ class Executor:
           buy more (the old code market-bought during blindness).
         """
         px_ref = self.venue.mid()
-        want = self._leg_qty(leg, blend, px_ref, equity)
+        # the multiplier is frozen per SIGNAL bar by the engine, so a chase
+        # after a restart sizes at the entry's m, not today's
+        want = self._leg_qty(leg, blend, px_ref, equity, mult)
         filled = 0.0
         was_flat, had_ref = led.qty == 0.0, bool(led.entry_cloid)
         if led.target_qty > 0 and not was_flat:

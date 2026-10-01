@@ -604,6 +604,15 @@ services:
       # manual-resume line, so DAILY_LOSS still auto-rearms; going past 0.30
       # needs a repo change AND a decision about that rule.
       #
+      # THE 0.75 STEP (Casey, 2026-10-01, RESEARCH_SHARPE.md addendum):
+      # KELLY_M_CAP raised to 0.75 in the repo; the engine publishes a
+      # vol-targeted entry multiplier (0.5-1.0, only ever shrinks). Set in
+      # this order: MAX_NOTIONAL_USD 130000 FIRST (gross at 0.75 = 0.75 x
+      # 1.5 x 100000 = $112,500; backtest peak ~$124-128k), THEN KELLY_M
+      # 0.75. DAILY_LOSS_HALT_PCT stays 0.06: the executor scales it to 15%
+      # ($15k) at 0.75 and it auto-rearms at every size. DD_HALT_PCT 0.30
+      # ($30k) unchanged.
+      #
       # THE 2x BASE STEP (2026-09-28, Casey's call): base 50000 -> 100000 and
       # cap 20000 -> 40000, TOGETHER. Gross deployed 15000 -> 30000 = 30.0% of
       # the ~$100.1k account, which is MAX_EXPOSURE_FRAC exactly - the full
