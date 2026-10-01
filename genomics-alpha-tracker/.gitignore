@@ -22,6 +22,7 @@ backend/data/*
 !backend/data/backtest_variants_r2_results.json
 !backend/data/backtest_variants_r3_results.json
 !backend/data/bil_bars_raw.json
+!backend/data/backtest_executor_mirror_results.json
 *.db
 *.sqlite3
 

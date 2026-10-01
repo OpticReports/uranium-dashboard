@@ -43,6 +43,12 @@ from ..models import PriceBar, RegimeLog, ShadowGrade, TradeCall
 
 router = APIRouter(prefix="/blend3070", tags=["blend"])
 
+# Executor-mirror backtest routes (GET /blend3070/mirror-backtest, /status,
+# POST /run) live in routers/mirror_backtest.py and mount under this prefix.
+from .mirror_backtest import router as _mirror_router  # noqa: E402
+
+router.include_router(_mirror_router)
+
 # H13 registered construction (docs/BACKTEST_VARIANTS_R2.md R2-A + the 30/70
 # H13 entry): 30% R2-A sleeve / 70% SPY, 5pp rebalance band, BIL on idle
 # sleeve cash, <=10 open, 1% of sleeve equity risked per call.
