@@ -181,8 +181,8 @@ export default function SeverityHistoryPanel() {
           </table>
           <p className="mt-1 text-[10px] text-slate-500">
             These readings use {Math.min(...starts.filter((s) => !s.exogenous).map((s) => s.live ?? 0))}-
-            {Math.max(...starts.filter((s) => !s.exogenous).map((s) => s.live ?? 0))} of 23 components (no debt-service
-            ratio before 2015); three data points do not show the reading predicts depth.
+            {Math.max(...starts.filter((s) => !s.exogenous).map((s) => s.live ?? 0))} of 23 components (all are live only
+            from 2010); three data points do not show the reading predicts depth.
           </p>
         </div>
         <div>
@@ -226,8 +226,9 @@ export default function SeverityHistoryPanel() {
       </div>
       <p className="mt-2 text-[10px] leading-relaxed text-slate-500">
         Descriptive only: three recessions the index is built for since 1986 cannot validate it. Household
-        debt/GDP is extended back to 1976 with the Fed&apos;s Z.1; the debt-service ratio starts in 2005 on FRED, so
-        readings before 2015 run without it and use fewer components than today&apos;s.
+        debt/GDP is extended back to 1976 with the Fed&apos;s Z.1 and the debt-service ratio with its archived 1980+
+        history; a few inputs (fed funds, HY spreads, margin debt) start 1996-2000, so readings before 2010 use
+        fewer components than today&apos;s.
         {s2007?.reading != null && s2001?.reading != null
           ? ` The highest pre-recession reading (${s2007.peak.slice(0, 4)}, ${s2007.reading.toFixed(0)}) came before the deepest recession, but ${s2001.peak.slice(0, 4)} read ${s2001.reading.toFixed(0)} and was mild.`
           : ""}
