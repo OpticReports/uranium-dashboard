@@ -57,7 +57,7 @@ refuses to start there. DRY_RUN on mainnet is the rehearsal.
 | cross-margin setup | done BEFORE any risk-adding order; if it fails, nothing is bought that pass |
 | UETH locked in a resting spot order | RED `spot_locked` (cancel it on the HL UI) |
 | `POST /halt` / `/resume` (EXEC_TOKEN) | stop / restart sending; legs left as they are |
-| btc-executor stops counting UETH (rollback) while the sleeve is held | RED `sleeve_unseen` after 3 passes; nothing is unwound |
+| btc-executor stops counting UETH (rollback) while the sleeve is held | RED `sleeve_unseen` after 3 passes (~15 min); nothing is unwound. Not checked while carry is HALTED |
 | unreadable state file | boots HALTED |
 
 ## Go-live (Casey's actions)

@@ -300,8 +300,15 @@ class CarryExecutor:
         dS = q - S
         pf = None
         if dS * px_s >= MIN_ORDER_USD or S * px_s >= MIN_ORDER_USD:
-            # run in DRY_RUN too, so the rehearsal exercises it (NOTE-F)
-            pf = self.preflight_fn()
+            # run in DRY_RUN too, so the rehearsal exercises it (NOTE-F).
+            # Never lets a raise abort the pass: a close or unwind must still
+            # run (re-review-3 MINOR-2)
+            try:
+                pf = self.preflight_fn()
+            except Exception as exc:  # noqa: BLE001
+                pf = (False, f"preflight raised {exc}")
+        if pf is not None and pf[0]:
+            self._unseen_n = 0     # any good read clears it, held or not (MINOR-1)
         if S * px_s >= MIN_ORDER_USD and pf is not None:
             # a sleeve is HELD: btc-executor must still count it (re-review
             # MINOR-C - a btc-executor rollback mid-sleeve would read UETH as
@@ -321,6 +328,7 @@ class CarryExecutor:
                 self._event("RED", "open_blocked", pf_why, rate_limit=True)
                 q = S
                 dS = 0.0
+                resized = False    # no "✅ resized" page for a blocked resize
         opening = (dS * px_s >= MIN_ORDER_USD
                    or (-S - P) * px_p <= -MIN_ORDER_USD)
         if opening and not self.cfg.dry_run and not self._cross_ok:

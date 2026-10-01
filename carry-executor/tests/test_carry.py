@@ -559,3 +559,66 @@ def test_a_held_sleeve_pages_when_btc_executor_stops_counting_it(mk):
     ex.preflight_fn = lambda: (True, "ok")
     ex.step(target())
     assert ex._unseen_n == 0
+
+
+def test_a_reopened_sleeve_starts_its_unseen_count_afresh(mk):
+    """Re-review-3 MINOR-1: a count left over from a closed sleeve paged the
+    NEXT sleeve on its first blip."""
+    ex, v = mk()
+    ex.step(target())
+    bad = lambda: (False, "flag missing")
+    ex.preflight_fn = bad
+    for _ in range(3):
+        ex.step(target())
+    ex.step(target(armed=False))                   # closes, still failing
+    assert v.spot_qty == pytest.approx(0.0)
+    ex.preflight_fn = lambda: (True, "ok")
+    ex.step(target())                              # re-opens
+    assert v.spot_qty > 0
+    n = kinds(ex, "RED").count("sleeve_unseen")
+    ex.preflight_fn = bad
+    ex.step(target())                              # one blip
+    assert kinds(ex, "RED").count("sleeve_unseen") == n
+
+
+def test_a_raising_preflight_never_stops_a_close(mk):
+    """Re-review-3 MINOR-2: the preflight now runs on every held pass, so a
+    raise in it must not abort the unwind."""
+    ex, v = mk()
+    ex.step(target())
+
+    def boom():
+        raise RuntimeError("btc-executor unreachable")
+    ex.preflight_fn = boom
+    ex.step(target(armed=False))
+    assert v.spot_qty == pytest.approx(0.0) and v.perp_qty == pytest.approx(0.0)
+
+
+def test_margin_guard_pages_once_while_it_stays_in_the_buffer(mk):
+    """Re-review-3 MINOR-5: an unwind that cannot fill (no liquidity inside
+    the slippage cap) re-trips the guard every pass - one page, not one per
+    5 minutes."""
+    ex, v = mk()
+    ex.step(target())
+    v.liq_px = 4500.0
+    v.perp_mid = v.spot_mid = 3900.0
+    v.fill = {"spot": 0.0, "perp": 0.0}
+    for _ in range(3):
+        ex.step(target())
+    assert len([m for m in ex.sent if "margin_guard" in m
+                and "unreliable" not in m]) == 1
+
+
+def test_a_blocked_resize_does_not_page_resized(mk):
+    """Re-review-3 MINOR-6: a month-start resize up that the preflight
+    blocks pages open_blocked only, and keeps the resized target to retry."""
+    ex, v = mk()
+    ex.step(target())
+    v.spot_mid = v.perp_mid = 2000.0               # 7.5 x 2000 = 15k: -50% drift
+    ex.preflight_fn = lambda: (False, "old build")
+    ex.clock = lambda: NOW + 40 * 86400
+    ex.step(target(last_checked=NOW + 40 * 86400 - 600))
+    assert "open_blocked" in kinds(ex, "RED")
+    assert "resized" not in kinds(ex)
+    assert v.spot_qty == pytest.approx(7.5)
+    assert ex.state.target_qty == pytest.approx(15.0)

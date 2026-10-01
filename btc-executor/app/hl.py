@@ -95,6 +95,11 @@ def derive_cloid(our_cloid: str) -> str:
 # than this (airdrop dust); anything larger stops the equity read instead of
 # being valued at 0 (review 2026-10-01 SERIOUS-1).
 MATERIAL_SPOT_USD = 50.0
+# Always material when unpriceable, whatever its cost basis or what this
+# process has seen: the carry sleeve's token. Covers bridged-in UETH (entryNtl
+# 0) right after a restart, when the last-seen price is gone (re-review-3
+# MINOR-3).
+ALWAYS_MATERIAL_SPOT = frozenset({"UETH"})
 
 
 class HyperliquidVenue:
@@ -490,7 +495,8 @@ class HyperliquidVenue:
             # process saw (re-review MINOR-A: UETH bridged in rather than
             # bought carries entryNtl 0, and would otherwise be skipped).
             seen = q * last.get(c, 0.0)
-            if ntl >= MATERIAL_SPOT_USD or seen >= MATERIAL_SPOT_USD:
+            if (c in ALWAYS_MATERIAL_SPOT or ntl >= MATERIAL_SPOT_USD
+                    or seen >= MATERIAL_SPOT_USD):
                 raise RuntimeError(
                     f"cannot price spot {c} (cost ${ntl:,.0f}, last seen "
                     f"${seen:,.0f}; pair {key}, mid {raw!r}) - refusing to "

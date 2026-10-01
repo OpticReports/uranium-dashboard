@@ -1140,13 +1140,27 @@ def test_gate_a_bridged_in_holding_with_no_cost_still_raises_once_seen(venue):
         venue.equity()
 
 
+def test_gate_ueth_without_a_price_raises_even_after_a_restart(venue):
+    """Re-review-3 MINOR-3: the last-seen price lives in memory; a fresh
+    process with bridged-in UETH (entryNtl 0) and no mid must still raise."""
+    venue.info.abstraction = "unifiedAccount"
+    venue.info.spot_usdc = 70_000.0
+    venue.info.spot_tokens = [{"coin": "UETH", "total": "7.5", "entryNtl": "0.0"}]
+    venue.info.mids = {"BTC": "80000.0"}
+    with pytest.raises(RuntimeError, match="UETH"):
+        venue.equity()
+
+
 def test_gate_pulse_capability_flag_matches_what_equity_does():
     """Re-review MINOR-C: /pulse's equity_counts_spot_tokens is what lets
     carry-executor open. It must stay tied to equity() actually valuing spot
-    tokens - a revert of either side fails here."""
+    tokens - a revert of either side fails here (the equity half is also
+    exercised by test_gate_equity_values_spot_tokens_at_their_spot_mid)."""
     import inspect
+    from fastapi.testclient import TestClient
     import app.hl as hl
-    import app.main as m
-    claims = '"equity_counts_spot_tokens": True' in inspect.getsource(m)
-    does = "_spot_token_value" in inspect.getsource(hl.HyperliquidVenue.equity)
-    assert claims and does
+    from app.main import app
+    with TestClient(app) as c:
+        d = c.get("/pulse").json()
+    assert d.get("ready") is True and d.get("equity_counts_spot_tokens") is True
+    assert "_spot_token_value" in inspect.getsource(hl.HyperliquidVenue.equity)
