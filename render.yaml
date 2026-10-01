@@ -765,6 +765,57 @@ services:
       - key: TELEGRAM_CHAT_ID
         sync: false
 
+  # --- Carry Executor (ETH funding carry, Casey 2026-10-01) -----------------
+  # Long spot UETH / short ETH perp in the MAIN Hyperliquid account, $30k,
+  # on while btc-paper-engine's funding monitor has HL ETH ARMED (30d funding
+  # >= 8%/yr, off < 5%) - GET /carry/target. The engine decides; this service
+  # holds its OWN agent wallet (not btc-executor's) and only executes.
+  # Ships DRY_RUN=true and CARRY_NOTIONAL_USD unset (= 0, never opens).
+  # Runbook: carry-executor/CARRY.md
+  - type: web
+    name: carry-executor
+    runtime: docker
+    dockerfilePath: carry-executor/Dockerfile
+    dockerContext: carry-executor
+    plan: starter
+    healthCheckPath: /health
+    autoDeploy: true
+    buildFilter:
+      paths:
+        - carry-executor/app/**
+        - carry-executor/Dockerfile
+        - carry-executor/requirements.txt
+    disk:
+      name: carry-exec-data
+      mountPath: /app/data
+      sizeGB: 1
+    envVars:
+      - key: ENGINE_URL
+        value: https://btc-paper-engine.onrender.com
+      - key: EXEC_TOKEN
+        sync: false            # the btc-paper-engine EXEC_TOKEN (reads /carry/target)
+      - key: EXEC_READ_TOKEN
+        sync: false
+      - key: HL_SECRET_KEY
+        sync: false            # a NEW agent wallet approved on the main account
+      - key: HL_ACCOUNT_ADDRESS
+        sync: false            # the MAIN account address (same as btc-executor)
+      # Every trading-behaviour variable is sync:false, as on btc-executor:
+      # the Render dashboard is the source of truth and a blueprint sync must
+      # never flip a live service. Code defaults fail safe.
+      - key: DRY_RUN
+        sync: false            # unset = true (sends nothing)
+      - key: CARRY_NOTIONAL_USD
+        sync: false            # unset = 0 (never opens); approved size 30000
+      - key: CARRY_ENABLED
+        sync: false            # false = unwind and stay flat
+      - key: STATE_PATH
+        value: /app/data/carry_state.json
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+
   # --- IBKR Executor (El Nino options ladder first) --------------------------
   # ALL automated IBKR trading routes through this one service (CLAUDE.md
   # separation-of-powers rule). Ships OFFLINE: with no TWS credentials it
