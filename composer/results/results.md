@@ -1779,3 +1779,78 @@ overlay lenses in full, because their central sign assumption will no
 longer hold. Note this changes the ATTRIBUTION lens only — it does not
 resurrect the overlays, which failed on participation cost (0 of 92 cells
 improved maxDD at all), not on sign.
+
+
+## Addendum 34 — Q4 quarterly batch: regime bootstrap + slippage (2026-10-01)
+
+Standing analysis cadence, run on schedule. Analysis only; no trades.
+
+### A. 55-year regime bootstrap (regime_boot.py)
+Spine now 1971-01..2026-09 (669 months). Engine records: HG 135mo,
+SLEEVE 68mo, KMLM 41mo (CRASH bucket still only 3), HARV 41mo.
+
+AS-MEASURED           CAGR med   DD p95       CONSERVATIVE-KMLM  CAGR med  DD p95
+  19/39/27/15          +127.6%    14.0%                           +69.7%   37.7%
+  29/29/27/15 (OURS)   +114.6%    13.7%                           +71.6%   36.9%
+  45/27/27/0           +127.9%    19.7%                           +83.4%   46.3%
+  25/25/27/23          +101.0%    11.5%                           +66.0%   31.6%
+  15/25/27/33           +90.7%     9.0%                           +58.0%   25.3%
+
+FINDINGS: (1) RANKING UNCHANGED. Under the conservative (decision) lens our
+29/29/27/15 now dominates the 19/39 alternative on BOTH axes (+71.6% vs
++69.7% CAGR, 36.9% vs 37.7% DD p95). The defensive allocations buy lower DD
+with materially lower CAGR, as always. (2) THE TRACKED NUMBER — the
+AS-MEASURED vs CONSERVATIVE gap — is ESSENTIALLY UNCHANGED: ~43.0pp this
+quarter vs ~44.1pp at the add.-18 run. That is NOT measurable convergence:
+KMLM added one month of record (40->41) and ZERO new crash months (3->3), so
+there is no new hostile-regime information for the conservative lens to
+absorb. Caveat: the prior figure came from a slightly different script path
+(rebal_boot.py), so a ~1pp move is inside method noise either way.
+(3) CONSEQUENCE for Operation 3: the KMLM earn-back case remains unproven
+for the same reason it was in August — the live record still contains no
+hostile regime. No action; the monthly report-only check continues.
+
+### B. Realized slippage (slippage_measure.py) — ALERT FIRED, THEN REFUTED
+Headline as the script reports it: full window 2025-12-01..2026-10-01, 501
+fills / $15.8M notional, +5.29 bps/side notional-weighted; new quarter alone
+(07-30..10-01) +6.06 bps on 239 fills. Both ABOVE the 5.0bps engine
+assumption, which trips the script's warning and nominally touches the
+ideas-backlog migration gate ("build the IBKR stack if measured live
+slippage trends >5bps/side").
+
+INVESTIGATED BEFORE REPORTING — the gate is NOT tripped. The metric is
+drift-dominated and unstable:
+- Re-measuring the SAME baseline window today gives +4.90 bps, not the
+  +2.94 bps recorded in add. 14b. Same window, different answer: the
+  trade-activity report now returns 262 fills / $10.43M where it returned
+  253 / $10.0M. Nine late-appearing fills move the aggregate by ~2bps.
+- The estimator is dominated by a handful of fills with impossible
+  "slippage": +321.6bps (TNA buy), -206.4 (UDOW sell), -115.3 (TQQQ sell),
+  -91.9 (UGE sell). These are 7 minutes of 3x-ETF drift between the ~15:53
+  fill and the 16:00 close benchmark, not execution cost. Dropping the top-5
+  contributors moves the figure to +7.58 bps — HIGHER. A statistic that
+  swings +2.94 / +4.90 / +7.58 on the same data is not measuring anything.
+- DRIFT-ADJUSTED estimator (demean each day's fills by that day's common
+  move, which cancels the fill-to-close drift): equal-weighted
+  +0.59 +/- 1.83 bps/side over 472 fills — STATISTICALLY ZERO, and far
+  below the 5bps assumption.
+- Raw fill-vs-close by side: buys +2.33 +/- 3.24, sells -0.84 +/- 2.48 —
+  each individually indistinguishable from zero.
+- ZVOL, the thin-name canary: the quarter's headline +24.0 bps/side is
+  noise. Over the full window ZVOL is +7.7 +/- 10.7 bps (n=22) — NOT
+  significant. VBF's +20.5 bps is legacy: all 8 VBF fills predate the
+  2026-07-30 VBF->VCIT swap, so that leg is already fixed.
+
+VERDICT: no evidence slippage has risen. Composer execution remains at or
+below its own 5bps model at this book size; the add.-14b conclusion (IBKR
+migration case CLOSED at current scale) STANDS. What this quarter actually
+found is a DEFECTIVE INSTRUMENT: the notional-weighted fill-vs-close
+estimator has a noise floor far larger than the effect it is meant to
+detect, because 3x ETFs move 50-300bps in the 7 minutes between fill and
+close, and notional weighting concentrates that noise in a few large fills.
+PROPOSED FIX (not yet implemented; needs counter-agent review before it
+becomes the tripwire): make the within-day demeaned, equal-weighted
+estimator with its standard error the headline and the alert condition, and
+require the alert to clear 2 standard errors rather than a bare threshold.
+Until that lands, treat the script's ">5bps" warning as advisory only and
+read the equal-weighted SE line beside it.
