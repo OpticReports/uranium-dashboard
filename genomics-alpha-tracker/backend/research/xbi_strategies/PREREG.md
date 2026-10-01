@@ -71,3 +71,28 @@ with a story attached (JPM conference); treat any pass as a candidate for
 out-of-sample watching, not a rule.
 
 **Never present any CAGR here as a forecast.**
+
+---
+
+## Amendments after counter-agent round 2 (2026-10-01, recorded, not silently edited)
+
+The round-2 code review found the first engine re-levelled every variant
+to its target DAILY at zero cost, which made the "monthly" labels false and
+left short-leg re-levelling free (SERIOUS). Changes, all applied before the
+numbers above the RESULTS markers in the study doc were (re)written:
+
+1. The engine now CARRIES positions: weights drift with price, and a rule
+   trades from the drifted book to its target only on the days it decides
+   to, paying cost on the whole move. Cadences: monthly (B2, B3, T2, T3, T4,
+   P1–P4, N1, N2, R1, C1x), daily-on-change (B0, B1, T1, T5, D2, S1, S2,
+   M1), 5pp band on the target (V1–V3, D1), daily reset (P5).
+2. P1/P2/P3 re-level monthly (the frozen table did not say; daily was the
+   accidental first reading).
+3. Study start moved from 2007-09-04 to 2007-11-15, the first bar where
+   every 252-bar indicator is valid, so T3/T4/D1 are not flat for a reason
+   unrelated to their rule. T4's BIL hurdle is 0 until BIL has 12 months
+   (2008-05-29).
+4. Single-name borrow is 3%/yr (omitted from the cost list above).
+5. N1/N2 trade the ELIGIBLE survivors: 9 names at 2016-09, 31 by the end
+   (23 of the 32 listed 2018–2024), not "the 32".
+6. Worst calendar year excludes the partial first/last years.

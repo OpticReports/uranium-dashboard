@@ -18,7 +18,7 @@ VOL_TARGET = 0.20
 
 
 def build(m: Market) -> dict[str, tuple[int, callable, str]]:
-    start = first_index_on_or_after(m, "2007-09-04")
+    start = first_index_on_or_after(m, "2007-11-15")      # same amended start as run.py
     vol60 = {s: m.vol(s, 60) for s in ("XBI", "TLT", "GLD")}
     sma200 = m.sma("XBI", 200)
     px = m.px["XBI"]
@@ -36,11 +36,12 @@ def build(m: Market) -> dict[str, tuple[int, callable, str]]:
         p = np.array([w[s] for s in syms]) @ R
         return p.std(ddof=1) * math.sqrt(252)
 
-    def monthly(fn):
+    def monthly(fn):                        # decide at month-end, drift in between (None = no trade)
         def f(i, st):
             if m.month_end[i] or "w" not in st:
                 st["w"] = fn(i)
-            return st["w"]
+                return st["w"]
+            return None
         return f
 
     def c1a(i):                             # R1 levered to a 20% vol target, cap 2.0, margin cost
@@ -75,7 +76,7 @@ def main() -> None:
     m = Market()
     out = json.loads(OUT.read_text())
     end = m.n - 1
-    b0 = simulate(m, lambda i, st: {"XBI": 1.0}, first_index_on_or_after(m, "2007-09-04"))["eq"]
+    b0 = simulate(m, lambda i, st: {"XBI": 1.0}, first_index_on_or_after(m, "2007-11-15"))["eq"]
     for vid, (start, rule, note) in build(m).items():
         res = simulate(m, rule, start)
         eq = res["eq"]

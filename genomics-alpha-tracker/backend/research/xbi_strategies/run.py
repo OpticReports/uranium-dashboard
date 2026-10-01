@@ -49,24 +49,39 @@ def build_rules(m: Market) -> dict[str, tuple[int, callable, str]]:
     name_mom = {s: m.momentum(s, 252, 21) for s in m.names}
     name_sma = {s: m.sma(s, 200) for s in m.names}
 
-    START = first_index_on_or_after(m, "2007-09-04")
+    # Round-2 amendment: start at the first bar where EVERY 252-bar indicator
+    # is valid (PREREG said 200 bars; T3/T4/D1 sat flat for 52 bars otherwise).
+    START = first_index_on_or_after(m, "2007-11-15")
     START_LEV = first_index_on_or_after(m, "2015-06-01")
     START_NAMES = first_index_on_or_after(m, "2016-09-01")
 
-    def hold(w):                       # keep weights between monthly checks
+    # The engine carries positions; a rule returns None to say "no trade
+    # today" and the book drifts. Three wrappers express the three cadences.
+    def hold(w):                       # decide at month-end only, drift in between
         def f(i, st):
             if m.month_end[i] or "w" not in st:
                 st["w"] = w(i, st)
-            return st["w"]
+                return st["w"]
+            return None
         return f
 
-    def banded(target, band=0.05):     # continuous sizing with a no-trade band
+    def sticky(w):                     # daily discrete rule: trade only when the decision changes
+        def f(i, st):
+            t = w(i, st)
+            if st.get("last") != t:
+                st["last"] = t
+                return t
+            return None
+        return f
+
+    def banded(target, band=0.05):     # continuous sizing with a no-trade band on the TARGET
         def f(i, st):
             t = target(i, st)
             t = 0.0 if t != t else t                    # NaN indicator → flat
             if "w" not in st or abs(t - st["w"]) > band:
                 st["w"] = t
-            return {"XBI": st["w"]} if st["w"] else {}
+                return {"XBI": t} if t else {}
+            return None
         return f
 
     def t1(i, st): return {"XBI": 1.0} if px[i] > sma200[i] else {}
@@ -132,31 +147,31 @@ def build_rules(m: Market) -> dict[str, tuple[int, callable, str]]:
         return {s: v / tot for s, v in iv.items()} if tot else {}
 
     return {
-        "B0": (START, lambda i, st: {"XBI": 1.0}, "XBI buy & hold (benchmark)"),
-        "B1": (START, lambda i, st: {"SPY": 1.0}, "SPY buy & hold"),
-        "B2": (START, hold(lambda i, st: {"XBI": 0.5}), "50/50 XBI/BIL, monthly"),
-        "B3": (START, hold(lambda i, st: {"XBI": 0.6, "TLT": 0.4}), "60/40 XBI/TLT, monthly"),
-        "T1": (START, t1, "close > SMA200 → XBI else BIL"),
+        "B0": (START, sticky(lambda i, st: {"XBI": 1.0}), "XBI buy & hold (benchmark)"),
+        "B1": (START, sticky(lambda i, st: {"SPY": 1.0}), "SPY buy & hold"),
+        "B2": (START, hold(lambda i, st: {"XBI": 0.5}), "50/50 XBI/BIL, monthly rebalance"),
+        "B3": (START, hold(lambda i, st: {"XBI": 0.6, "TLT": 0.4}), "60/40 XBI/TLT, monthly rebalance"),
+        "T1": (START, sticky(t1), "close > SMA200 → XBI else BIL"),
         "T2": (START, hold(t2), "month-end close > 10m SMA → XBI else BIL"),
         "T3": (START, hold(t3), "12-1 momentum > 0 → XBI else BIL"),
-        "T4": (START, hold(t4), "dual momentum XBI/SPY vs BIL"),
-        "T5": (START, t5, "XBI/SPY ratio > SMA200 → XBI else SPY"),
-        "V1": (START, banded(vt(1.0)), "vol target 20%, cap 1.0"),
-        "V2": (START, banded(vt(1.5)), "vol target 20%, cap 1.5 (margin)"),
-        "V3": (START, banded(v3_target), "SMA200 gate × vol target 20%"),
-        "D1": (START, banded(d1_target), "de-risk as 1y drawdown deepens"),
-        "D2": (START, d2, "buy the dip: 0.5 base, 1.0 while DD>20%"),
-        "S1": (START, s1, "XBI Nov–Mar, BIL otherwise"),
-        "S2": (START, s2, "Nov–Mar and close > SMA200"),
-        "M1": (START, m1, "RSI(2)<10 buy, exit >70 or 10 bars"),
-        "P1": (START, p1, "long XBI / short β·SPY (60d, cap 1)"),
-        "P2": (START, p2, "long XBI / short IBB"),
-        "P3": (START, p3, "long XBI / short XLV"),
-        "P4": (START_LEV, p4, "XBI + short 10% LABU + 10% LABD, monthly reset"),
-        "P5": (START_LEV, p5, "short 50% LABU / 50% LABD, daily reset"),
-        "N1": (START_NAMES, hold(n1), "XBI + short 5 worst 12-1 survivors, 10% each"),
-        "N2": (START_NAMES, hold(n2), "XBI + short survivors below SMA200 (50% total)"),
-        "R1": (START, hold(r1), "inverse-vol XBI/TLT/GLD, monthly"),
+        "T4": (START, hold(t4), "dual momentum XBI/SPY vs BIL (hurdle 0 until BIL has 12m, 2008-05)"),
+        "T5": (START, sticky(t5), "XBI/SPY ratio > SMA200 → XBI else SPY"),
+        "V1": (START, banded(vt(1.0)), "vol target 20%, cap 1.0, 5pp band"),
+        "V2": (START, banded(vt(1.5)), "vol target 20%, cap 1.5 (margin), 5pp band"),
+        "V3": (START, banded(v3_target), "SMA200 gate × vol target 20%, 5pp band"),
+        "D1": (START, banded(d1_target), "de-risk as 1y drawdown deepens, 5pp band"),
+        "D2": (START, sticky(d2), "buy the dip: 0.5 base, 1.0 while DD>20% (drifts between flips)"),
+        "S1": (START, sticky(s1), "XBI Nov–Mar, BIL otherwise"),
+        "S2": (START, sticky(s2), "Nov–Mar and close > SMA200"),
+        "M1": (START, sticky(m1), "RSI(2)<10 buy, exit >70 or 10 bars"),
+        "P1": (START, hold(p1), "long XBI / short β·SPY (60d, cap 1), monthly re-level"),
+        "P2": (START, hold(p2), "long XBI / short IBB, monthly re-level"),
+        "P3": (START, hold(p3), "long XBI / short XLV, monthly re-level"),
+        "P4": (START_LEV, hold(p4), "XBI + short 10% LABU + 10% LABD, monthly reset"),
+        "P5": (START_LEV, p5, "short 50% LABU / 50% LABD, daily reset (cost on every reset)"),
+        "N1": (START_NAMES, hold(n1), "XBI + short 5 worst 12-1 of the eligible survivors (9→31 names), monthly"),
+        "N2": (START_NAMES, hold(n2), "XBI + short eligible survivors below SMA200 (9→31 names, 50% total), monthly"),
+        "R1": (START, hold(r1), "inverse-vol XBI/TLT/GLD, monthly rebalance"),
     }
 
 
@@ -164,7 +179,13 @@ def param_maps(m: Market, start: int) -> dict:
     px, out = m.px["XBI"], {"T1_sma": {}, "V1_target": {}}
     for n in range(100, 301, 25):
         s = m.sma("XBI", n)
-        res = simulate(m, lambda i, st, s=s: {"XBI": 1.0} if px[i] > s[i] else {}, start)
+        def trule(i, st, s=s):
+            t = {"XBI": 1.0} if px[i] > s[i] else {}
+            if st.get("last") != t:
+                st["last"] = t
+                return t
+            return None
+        res = simulate(m, trule, start)
         st = stats(m.d, res["eq"], start, m.n - 1)
         out["T1_sma"][str(n)] = {k: st[k] for k in ("cagr", "max_dd", "sharpe", "calmar")}
     vol20 = m.vol("XBI", 20)
@@ -173,7 +194,8 @@ def param_maps(m: Market, start: int) -> dict:
             t = min(1.0, tgt / vol20[i]) if vol20[i] > 0 else 0.0
             if "w" not in st or abs(t - st["w"]) > 0.05:
                 st["w"] = t
-            return {"XBI": st["w"]}
+                return {"XBI": t}
+            return None
         st = stats(m.d, simulate(m, rule, start)["eq"], start, m.n - 1)
         out["V1_target"][f"{tgt:.3f}"] = {k: st[k] for k in ("cagr", "max_dd", "sharpe", "calmar")}
     return out

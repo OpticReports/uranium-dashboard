@@ -157,40 +157,51 @@ def _rate(table: dict, sym: str, names: list[str]) -> float:
 
 
 def simulate(m: Market, rule, start: int, end: int | None = None) -> dict:
-    """rule(i, state) -> dict[sym, weight] decided at the close of bar i.
-    Returns the daily equity curve from bar `start` (equity 1.0 at start)."""
+    """rule(i, state) -> dict[sym, weight] decided at the close of bar i, or
+    None meaning 'do not trade today - let the positions drift'.
+
+    Positions are CARRIED: after each day's returns the weights drift with
+    price, and a rule that returns a target is traded from the DRIFTED
+    weights to that target, paying cost on the whole move. (Round-2
+    counter-agent: the first draft re-levelled every variant to its target
+    daily at zero cost, which made 'monthly' labels false and left short-leg
+    re-levelling free.) Returns the daily equity curve from bar `start`."""
     end = m.n - 1 if end is None else end
     eq = np.full(m.n, np.nan)
     eq[start] = 1.0
-    w_prev: dict[str, float] = {}
+    held: dict[str, float] = {}            # drifted weights carried into the close of i
     state: dict = {}
     turnover = 0.0
     costs = 0.0
     weights_log = []
     for i in range(start, end):
-        w = rule(i, state)
-        w = {s: float(x) for s, x in w.items()
-             if x == x and x != 0.0 and not np.isnan(m.px[s][i])}      # x == x drops NaN
-        # trade at the close of i: cost on |delta w|
+        target = rule(i, state)
         tc = 0.0
-        for s in set(w) | set(w_prev):
-            dw = abs(w.get(s, 0.0) - w_prev.get(s, 0.0))
-            tc += dw * _rate(COST_BPS, s, m.names) / 1e4
-            turnover += dw
+        if target is None:
+            w = dict(held)
+        else:
+            w = {s: float(x) for s, x in target.items()
+                 if x == x and x != 0.0 and not np.isnan(m.px[s][i])}      # x == x drops NaN
+            for s in set(w) | set(held):                 # trade at the close of i
+                dw = abs(w.get(s, 0.0) - held.get(s, 0.0))
+                tc += dw * _rate(COST_BPS, s, m.names) / 1e4
+                turnover += dw
         long_sum = sum(x for x in w.values() if x > 0)
         cash = 1.0 - long_sum
         r = 0.0
+        grown: dict[str, float] = {}
         for s, x in w.items():
             rs = m.ret[s][i + 1]
             if np.isnan(rs):
                 rs = 0.0
             r += x * rs
+            grown[s] = x * (1.0 + rs)
             if x < 0:
                 r -= abs(x) * _rate(BORROW, s, m.names) / TD
         r += cash * m.cash[i + 1] if cash >= 0 else cash * (m.cash[i + 1] + MARGIN_SPREAD / TD)
         eq[i + 1] = eq[i] * (1.0 + r) * (1.0 - tc)
         costs += tc
-        w_prev = w
+        held = {s: g / (1.0 + r) for s, g in grown.items()} if 1.0 + r > 0 else {}
         weights_log.append(long_sum - sum(x for x in w.values() if x < 0))
     years = (m.d[end] - m.d[start]).days / 365.25
     return {"eq": eq, "start": start, "end": end, "turnover_py": turnover / years,
@@ -234,14 +245,19 @@ def stats(dates: list[date], eq: np.ndarray, i0: int, i1: int) -> dict:
     for y in sorted(yrs):
         yr_ret[y] = yrs[y][-1] / prev - 1.0
         prev = yrs[y][-1]
-    worst_y = min(yr_ret, key=yr_ret.get) if yr_ret else None
+    # worst CALENDAR year: partial first/last years are reported but not eligible
+    partial = {y for y in yr_ret if (y == dates[i0].year and dates[i0].month > 1)
+               or (y == dates[i1].year and dates[i1].month < 12)}
+    full_years = {y: v for y, v in yr_ret.items() if y not in partial}
+    worst_y = min(full_years, key=full_years.get) if full_years else None
     return {"start": dates[i0].isoformat(), "end": dates[i1].isoformat(), "years": round(years, 2),
             "end_value": float(seg[-1] / seg[0]), "cagr": float(cagr), "vol": float(sd * math.sqrt(TD)),
             "sharpe": float(sharpe), "sortino": float(sortino), "max_dd": mdd,
             "calmar": float(cagr / mdd) if mdd > 0 else float("nan"),
             "underwater_days": int(longest), "underwater_open": open_end,
             "worst_year": worst_y, "worst_year_ret": float(yr_ret[worst_y]) if worst_y else None,
-            "years_ret": {str(y): float(v) for y, v in yr_ret.items()}}
+            "years_ret": {str(y): float(v) for y, v in yr_ret.items()},
+            "partial_years": sorted(str(y) for y in partial)}
 
 
 def weekly(dates: list[date], eq: np.ndarray, i0: int, i1: int) -> list[list]:
