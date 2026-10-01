@@ -92,6 +92,16 @@ services:
         sync: false
       - key: BLEND_READ_TOKEN
         sync: false
+      # The executor book's R2-A sleeve weight, published on
+      # /blend3070/intents (rebalance.target). 0.30 = the H13 30/70
+      # registration; 1.0 = sleeve only, no SPY core. UNSET publishes null
+      # and the executor keeps the weight its book already runs at (so a
+      # redeploy can never re-weight live money); a set value is adopted
+      # after two agreeing polls with a Telegram page, then the SPY is sold
+      # in one rebalance; no re-seed. sync:false: an allocation lever is
+      # never a blueprint literal a sync can revert.
+      - key: BLEND_SLEEVE_TARGET
+        sync: false
 
   # --- Barbell Lab (personal quant research platform) ------------------------
   # Lives at research.optic.capital/portfolio-optimizer behind the genomics

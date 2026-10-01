@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
@@ -112,6 +113,24 @@ class Settings(BaseSettings):
     # sees the token. Both unset = the tab shows its "not connected" card.
     blend_upstream: str = ""            # BLEND_UPSTREAM (executor base URL)
     blend_read_token: str = ""          # BLEND_READ_TOKEN
+    # The R2-A sleeve's target weight of the executor's book, published in
+    # GET /blend3070/intents rebalance.target and read by the executor every
+    # poll (it owns the dollars; this is the construction). 0.30 = the H13
+    # 30/70 registration; 1.0 = sleeve only, no SPY core (Casey 2026-10-01:
+    # "mirror the engine"). Flipping it is ONE rebalance at the executor
+    # (SPY sold core->sleeve), adopted after two agreeing polls; no re-seed.
+    # UNSET publishes null: the executor then keeps the target its book
+    # already runs at (persisted), so a redeploy with the env missing can
+    # never re-weight live money. A non-numeric value fails boot (loud).
+    blend_sleeve_target: float | None = None   # BLEND_SLEEVE_TARGET
+
+    @field_validator("blend_sleeve_target", mode="before")
+    @classmethod
+    def _blank_sleeve_target(cls, v):
+        # Render's sync:false prompt can leave the value blank: blank = unset
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v
 
 
 @functools.lru_cache

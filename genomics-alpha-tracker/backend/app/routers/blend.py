@@ -28,6 +28,7 @@ from fastapi import APIRouter, Depends
 from sqlmodel import Session, select
 
 from ..calls.rules import BarLike
+from ..config import get_settings
 from ..calls.shadow import (
     ENGINE_TRAILING,
     TIME_STOP_DAYS,
@@ -42,6 +43,12 @@ from ..models import PriceBar, RegimeLog, ShadowGrade, TradeCall
 
 router = APIRouter(prefix="/blend3070", tags=["blend"])
 
+# Executor-mirror backtest routes (GET /blend3070/mirror-backtest, /status,
+# POST /run) live in routers/mirror_backtest.py and mount under this prefix.
+from .mirror_backtest import router as _mirror_router  # noqa: E402
+
+router.include_router(_mirror_router)
+
 # H13 registered construction (docs/BACKTEST_VARIANTS_R2.md R2-A + the 30/70
 # H13 entry): 30% R2-A sleeve / 70% SPY, 5pp rebalance band, BIL on idle
 # sleeve cash, <=10 open, 1% of sleeve equity risked per call.
@@ -52,6 +59,20 @@ BOOK_PARAMS = {
     "cash_vehicle": "BIL",
     "core": "SPY",
 }
+
+
+def sleeve_target() -> float | None:
+    """BLEND_SLEEVE_TARGET when set and inside (0, 1], else None. None means
+    "no instruction": the executor keeps the target its book already runs
+    at. Publishing a default here would let an unset env re-weight live
+    money on a redeploy (counter-agent 2026-10-01)."""
+    try:
+        t = get_settings().blend_sleeve_target
+        t = None if t is None else float(t)
+    except (TypeError, ValueError):
+        return None
+    return t if (t is not None and 0.0 < t <= 1.0) else None
+
 
 # Exit signals stay visible this many days after the shadow engine graded
 # them, so an executor that polls after the scheduler's shadow pass still
@@ -280,16 +301,23 @@ def get_intents(session: Session = Depends(get_session)):
                 "trail_level": g.exit_price if g.status == "stopped" else None,
             })
 
+    # Sleeve weights are executor-side state (the tracker never learns
+    # account equity): needed stays null, the executor decides. The target
+    # key is OMITTED when BLEND_SLEEVE_TARGET is unset: an executor build
+    # that predates the persisted target reads a missing key as its 0.30
+    # default, while a present null would TypeError its planner every
+    # cycle (counter-agent 2026-10-01).
+    rebalance = {"needed": None, "current_sleeve_weight": None}
+    t = sleeve_target()
+    if t is not None:
+        rebalance["target"] = t
     return {
         "as_of": as_of,
         "gate": gate,
         "entries": entries,
         "exits": exits,
         "stops": stops,
-        # Sleeve weights are executor-side state (the tracker never learns
-        # account equity): needed stays null, the executor decides.
-        "rebalance": {"needed": None, "current_sleeve_weight": None,
-                      "target": 0.30},
+        "rebalance": rebalance,
         "book_params": dict(BOOK_PARAMS),
         "contract": CONTRACT,
     }

@@ -182,6 +182,30 @@ export const GLOSSARY = {
     calc: "Normalized × Weight. The Alpha Signal is the sum of these divided by the sum of the non-missing weights (a weighted average).",
     read: "This is where you see which drivers are carrying — or dragging — the score. Add the Weighted column (over the used weights) and you get the headline number.",
   },
+  mirror_backtest: {
+    title: "Executor mirror backtest",
+    what: "A 10-year replay of the R2-A call engine's fire set, re-run through the live ibkr-executor's mechanics (whole shares, cash clip, T+2 market-on-open fills, ratchet-up-only 3×ATR stop placed at fill, fire-anchored 90-day time stop, IBKR commissions, idle cash in BIL) instead of the paper backtest's conventions.",
+    calc: "$100k book, 1% of sleeve equity risked per call, ≤10 open, 200dma XBI gate, tiered slippage 10/40/100 bps per side. The trailing 5y/2y windows are slices of the same 10y curve (positions carry in), not fresh books. CAGR on calendar days, max drawdown and Sharpe/Sortino (rf=0) on the daily curve.",
+    read: "It is a replayable shadow of the live book, NOT the live book: hindsight-tiered 32-name universe (survivorship), in-sample thresholds, assumed costs, and the live sentiment/revision/options lanes are absent. Treat the numbers as the shape of the strategy's risk, not a forecast.",
+  },
+  max_drawdown: {
+    title: "Max drawdown",
+    what: "The worst peak-to-trough fall in book value over the window — the most you would have been down from a prior high at the worst moment.",
+    calc: "On the DAILY marked-to-market curve: max over all days of (running peak − value) / running peak. Open positions are marked at the adjusted close, so intraday lows are not captured.",
+    read: "35% means the book was at one point worth 65% of its earlier high. Compare it with CAGR (Calmar = CAGR / max DD): a strategy that earns 15%/yr with a 35% hole is a very different ride from one earning 15% with a 15% hole.",
+  },
+  underwater: {
+    title: "Longest underwater stretch",
+    what: "The longest run of days the book spent below a previous high before making a new one — how long you would have had to wait to get back to even.",
+    calc: "For each running peak, days (calendar) from that peak to the first later day the curve exceeds it. If the curve has not recovered by the window end the stretch is measured to the end and flagged as still open.",
+    read: "Max drawdown says how deep; this says how long. A 500-day stretch means roughly a year and a half of 'am I wrong?' — the behavioural test most strategies fail before the math does.",
+  },
+  block_bootstrap: {
+    title: "Block bootstrap cone (p5 / p50 / p95)",
+    what: "A resampling estimate of how much the CAGR and max drawdown could plausibly vary if the same daily returns had arrived in a different order.",
+    calc: "Stationary block bootstrap: the window's daily returns are resampled in random blocks (mean length 21 trading days, wrap-around) to the window's length, 2,000 seeded draws; p5/p50/p95 are the empirical percentiles of each draw's CAGR and max drawdown.",
+    read: "Read p5 as 'a bad ordering of the same history', not a true worst case — it reuses the observed returns, so it cannot show regimes the sample never saw. A p5 CAGR below zero means the strategy's edge is not robust to sequencing luck.",
+  },
   na: {
     title: "“n/a” vs 0",
     what: "n/a means there's no data for that input — deliberately different from a real 0.",
