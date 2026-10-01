@@ -7,6 +7,7 @@ import { api } from "../lib/api";
 import { fmtNum, fmtPct, fmtMoney, FLAG_LABELS } from "../lib/format";
 import InfoTip from "../components/InfoTip";
 import BacktestPanel from "../components/BacktestPanel";
+import ExecutorMirror from "../components/ExecutorMirror";
 
 // Calls Log: every exact trade call the tracker (or the desk) has made, graded
 // against what price actually did — the honest track record that tells us which
@@ -50,16 +51,25 @@ export default function CallsLog({ onPick }) {
   const [perf, setPerf] = useState(null);
   const [paper, setPaper] = useState(null);
   const [backtest, setBacktest] = useState(null);
+  // null = not run yet (GET 404s); the panel still renders its window layout.
+  const [mirror, setMirror] = useState(null);
+  const [mirrorErr, setMirrorErr] = useState(null);   // a 500/401 is not "not run yet"
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState(null);
   const [showForm, setShowForm] = useState(false);
 
+  const loadMirror = useCallback(() => {
+    api.mirrorBacktest()
+      .then((d) => { setMirror(d); setMirrorErr(null); })
+      .catch((e) => { setMirror(null); setMirrorErr(e?.message || "request failed"); });
+  }, []);
   const load = useCallback(() => {
     api.calls().then(setCalls).catch(() => setCalls([]));
     api.callsScorecard().then(setCard).catch(() => setCard(null));
     api.callsPerformance().then(setPerf).catch(() => setPerf(null));
     api.callsPaper().then(setPaper).catch(() => setPaper(null));
-  }, []);
+    loadMirror();
+  }, [loadMirror]);
   useEffect(load, [load]);
   // The replay summary is a frozen build artifact: fetch it once, not on
   // every call mutation - and never hide a failure, because a silent absence
@@ -147,6 +157,8 @@ export default function CallsLog({ onPick }) {
       {paper?.enabled && <PaperAccount paper={paper} />}
 
       {card && <Scorecard card={card} />}
+
+      <ExecutorMirror data={mirror} onReload={loadMirror} loadError={mirrorErr} />
 
       {perf && <PerformanceOverTime perf={perf} />}
 

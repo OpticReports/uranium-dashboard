@@ -107,7 +107,8 @@ def leg_trades(bars: list[Bar], strategy: str, *,
                trail_atr: float = 5.0, channel: int = 20,
                donchian_fn: Callable | None = None,
                inds: list[Ind] | None = None,
-               warmup_bars: int = 210, leg: str | None = None) -> list[Trade]:
+               warmup_bars: int = 210, leg: str | None = None,
+               signal_fn: Callable | None = None) -> list[Trade]:
     """Run ONE engine book over `bars` and return its round trips.
 
     Mirrors app.engine.replay.run_replay exactly (same bar gating, same
@@ -115,7 +116,10 @@ def leg_trades(bars: list[Bar], strategy: str, *,
     unit-size with dd_halt disabled, so trades depend only on the rules.
     `donchian_fn` replaces core._process_donchian for the duration of the
     call (restored in `finally`) - the ONLY monkeypatch in this module, and
-    it swaps a whole function, never a keyword default."""
+    it swaps a whole function, never a keyword default.
+    `signal_fn(i, bar, ind, sig) -> sig` may veto the strategy's signal on
+    bar i (it sees only data up to and including bar i's close, which is
+    when the engine evaluates signals). None = production behaviour."""
     scfg = scfg or SignalCfg()
     tcfg = tcfg or TradeCfg(taker_fee_bps=LIVE_TAKER_BPS)
     if inds is not None and channel != 20:
@@ -147,6 +151,8 @@ def leg_trades(bars: list[Bar], strategy: str, *,
                 sig = core.eval_donchian(bar, ind)
             else:
                 sig = eval_signal(bar, ind, scfg)
+            if signal_fn is not None:
+                sig = signal_fn(i, bar, ind, sig)
             process_closed_bar(book, bar, ind, scfg, tcfg, sig)
     finally:
         core._process_donchian = orig

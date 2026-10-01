@@ -25,6 +25,7 @@ from .engine.core import (
     eval_donchian, eval_signal, process_closed_bar, resolve_open_exit,
 )
 from .engine.replay import accrue_cash_yield, book_stats, compute_indicators
+from .volsize import size_mult
 from .sources.bitstamp import fetch_4h_bars, kraken_price, last_price
 from .store.db import (
     BarRow, BookStateRow, EquitySnapRow, SignalRow, TradeRow,
@@ -56,6 +57,12 @@ class Engine:
         # state - a false 'resumed' page then a fresh RED on every restart,
         # and (pre-existing) a routine engine_exit flatten of a live leg.
         self.booted = False
+        # vol-targeted entry size (app/volsize.py): closes from the repo
+        # fixture (2022-01..) merged with every persisted live bar, rebuilt
+        # once per processed bar; results cached per signal bar.
+        self._vol_closes: dict[int, float] = {}
+        self._vol_key: int | None = None
+        self._vol_cache: dict[int, dict] = {}
 
     # ---------- persistence ----------
 
@@ -438,6 +445,64 @@ class Engine:
                     "books": {n: {"equity": round(b.equity, 2), "trades": len(b.trades)}
                               for n, b in self.books.items()}}
 
+    def _vol_history(self, need_ts: int | None = None) -> dict[int, float]:
+        # one read of last_processed for both the filter and the cache key
+        # (review 2026-10-01 M1: it was read twice, and catch_up advances it
+        # AFTER creating the pending)
+        lp = self.last_processed
+        if (self._vol_key == lp and self._vol_closes
+                and (need_ts is None or need_ts in self._vol_closes)):
+            return self._vol_closes
+        import csv as _csv
+        import os as _os
+        fix = _os.path.join(_os.path.dirname(__file__), "..", "tests",
+                            "fixtures", "bars_4h_btcusd.csv")
+        closes: dict[int, float] = {}
+        try:
+            with open(fix) as fh:
+                for r in _csv.DictReader(fh):
+                    closes[int(r["ts_open_unix"])] = float(r["close"])
+        except OSError:
+            logger.warning("vol sizing: fixture not readable at %s", fix)
+        with session_scope() as s:
+            for row in s.query(BarRow).all():
+                closes[row.ts_open] = row.close
+        for b in self.bars:
+            closes[b.ts] = b.close
+        # only CLOSED bars up to the newest one the signal could have seen:
+        # a signal is evaluated at its bar's close. volsize.size_mult's grid
+        # also ends at the signal bar, so this is defence in depth; it admits
+        # need_ts itself so a pending created moments before last_processed
+        # advances is not sized off a history missing its own bar.
+        hi = max(lp or 0, need_ts or 0)
+        if hi:
+            closes = {t: c for t, c in closes.items() if t <= hi}
+        self._vol_closes, self._vol_key = closes, lp
+        return closes
+
+    def size_mult_for(self, signal_ts: int | None) -> dict:
+        """Entry-size multiplier for the entry signalled on bar `signal_ts`
+        (RESEARCH_SHARPE.md H1, down-only). 1.0 = today's size."""
+        if signal_ts is None:
+            return {"m": 1.0, "basis": "no_signal", "sigma_now": None,
+                    "sigma_ref": None}
+        hit = self._vol_cache.get(signal_ts)
+        if hit is not None:
+            return hit
+        # FAIL TOWARD TODAY'S SIZE, NEVER TOWARD A 500 (review 2026-10-01
+        # S1): /exec/target is the live executor's only feed, and a failed
+        # fetch skips its whole step - halt checks and stop maintenance
+        # included. The executor pages any non-vol_target basis above 0.30.
+        try:
+            res = size_mult(self._vol_history(int(signal_ts)), int(signal_ts))
+        except Exception:  # noqa: BLE001
+            logger.exception("vol sizing failed for signal %s", signal_ts)
+            return {"m": 1.0, "basis": "error", "sigma_now": None,
+                    "sigma_ref": None}
+        if res["basis"] == "vol_target":      # final once its bars are in
+            self._vol_cache[signal_ts] = res
+        return res
+
     def status(self) -> dict:
         return {
             "degraded": self.degraded, "data_halt": self.data_halt,
@@ -446,6 +511,11 @@ class Engine:
             "last_processed_bar": self.last_processed,
             "bars_cached": len(self.bars),
             "price": self.cur_price,
+            # the entry-size multiplier a signal on the latest processed bar
+            # would get (RESEARCH_SHARPE.md H1, down-only); public so the
+            # deploy can be checked without the exec token
+            "vol_size": {k: v for k, v in self.size_mult_for(
+                self.last_processed or None).items() if k in ("m", "basis")},
             "books": {**self._blend_status(), **{n: {**book_stats(b),
                           "state": ("HALTED" if b.halted else
                                     b.position.side if b.position else

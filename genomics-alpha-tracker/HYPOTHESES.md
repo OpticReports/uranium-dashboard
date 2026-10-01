@@ -269,3 +269,33 @@ call trigger · `retired` → failed the gate or decayed; kept for the record.
 _Add new hypotheses at the bottom of the backlog. When one changes status,
 edit its entry — this file is the audit trail of what the research suggested
 and whether the market agreed._
+
+- **Allocation study, 0/100 sleeve (2026-09-30, counter-agent verified):**
+  Casey asked whether to drop the SPY core and run the R2-A sleeve alone on
+  a $100k line, since the other account (a factor/gold/managed-futures
+  barbell, ~$824k) already carries the beta. Study: five lenses, 15 claims
+  refuted by three skeptics each (7 survived, 8 corrected), synthesis.
+  Verdict: the household framing holds (at 0/100 the sleeve is 10.8% of the
+  total and 22.9% of equity-like, inside H13's 10-50% band numerically,
+  with ~$41k in biotech names on an average day because the sleeve is 59%
+  cash), BUT H13's band and the corr 0.27 / beta 0.34 were measured vs SPY
+  only - R2-A's correlation to the barbell's holdings is measured nowhere
+  in this repo; and $100k of sleeve is a 6.7x scale-up of the risk unit
+  ($150 -> $1,000 per call) on an engine with no closed live calls, whose
+  standalone replay is worse than SPY on every headline stat (Sharpe 0.73
+  vs 0.89, maxDD 35.6% vs 33.7%) and whose deepest episode was a 28-month
+  grind from the Jan-2021 peak into May 2023 (the 2020-22 sub-period's
+  26.8% is boundary-truncated; >= 30.8% on the display curve). Recommended:
+  flip the EXISTING $50k book to 0/100 only after the live record since
+  09-04 shows clean fills, then let the +$50k in through pre-registered
+  live gates (Wilson-90 hit-rate bands, avg R, sleeve DD < 25%, 28-day
+  cooldowns); a deposit path (POST /blend/deposit) must exist first -
+  BLEND_BOOK_USD is read once at seed and re-seeding on top of held
+  positions is the double-deployment the bootstrap guard blocks. The
+  sleeve weight is a tracker literal (routers/blend.py:292) read by the
+  executor every poll; no executor code is needed for the weight flip.
+  P1 inputs still owed: the live record (tracker /calls, /shadow/track-
+  record; executor /blend/feed), Casey's drawdown budget on total NLV,
+  whether the $100k is new money, and rho(R2-A, barbell) measured on the
+  Render host where bars are cached. Standing: no money moves on this
+  study; it is an allocation memo, not an engine change.

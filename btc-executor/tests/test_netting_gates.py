@@ -2210,3 +2210,31 @@ def test_gate_M23_an_unfilled_close_does_not_cycle_the_stop(tmp_path):
     assert v.orders[stop_cloid]["status"] == "OPEN"
     assert len(_open_stops(v)) == 1
     assert abs(p.qty - Q_P) < 1e-9
+
+
+def test_gate_F4c_topup_toward_target_qty_even_after_a_size_raise(tmp_path):
+    """Review 2026-10-01 N6: removing `want = min(want, led.target_qty)` in
+    _enter_from_fill survived the whole suite. F4's top-up, but with the size
+    raised between the partial and the booking (the 0.30 -> 0.75 go-live):
+    the chase must stop at what the entry ASKED for, not at the new size."""
+    v = HLFake2()
+    ex = mk(tmp_path, v)
+    trend_tl = _pos(entry_ts=T_ENTRY, side="S", stop=79_850.0)
+    trend_short(ex, v, stop=79_850.0)
+    pcloid = pullback_limit(ex, v, trend_tl)
+    v.partial_fill(pcloid, 0.005)
+    pend = target(pull={"pending": {"side": "L", "limit": MID,
+                                    "signal_ts": S_PULL}, "position": None},
+                  trend=trend_tl)
+    ex.step(pend)
+    p, t = ex.state.legs["pullback"], ex.state.legs["trend"]
+    v.fire_stop(t.stop_cloid)
+    ex.step(pend)
+    assert abs(p.qty - 0.005) < 1e-9
+    ex.cfg.sizing_base_usd = BASE * 2                 # size raised mid-trade
+    booked = target(pull=_pos(entry_ts=S_PULL + 14_400, side="L",
+                              stop=75_300.0))
+    ex.step(booked)
+    ex.step(booked)
+    assert ex.state.halted is None
+    assert abs(p.qty - Q_P) < 1e-9, f"topped up past the entry target: {p.qty}"

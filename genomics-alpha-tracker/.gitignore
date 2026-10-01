@@ -37,6 +37,7 @@ backend/data/*
 # what C7 routes; without this file the correction is not reproducible.
 !backend/data/r2a_exposure.json
 !backend/data/bil_bars_raw.json
+!backend/data/backtest_executor_mirror_results.json
 *.db
 *.sqlite3
 
