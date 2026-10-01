@@ -481,3 +481,61 @@ def test_a_blocked_preflight_never_blocks_a_close_or_the_hedge(mk):
     assert v.perp_qty == pytest.approx(-7.5)
     ex.step(target(armed=False))                     # close still runs
     assert v.spot_qty == 0 and v.perp_qty == 0
+
+
+# ---------------------------------------------------------------- re-review (2026-10-01)
+
+def test_a_blocked_top_up_keeps_the_intended_target(mk):
+    """MINOR-A: a transient preflight block wrote the stub size into the
+    persisted target, and the sleeve stayed at 3.0 for the month."""
+    v = FakeVenue()
+    v.fill["spot"] = 0.4
+    ex, v = mk(v)
+    ex.step(target())                                # 3.0 of 7.5 fills
+    v.fill["spot"] = 1.0
+    ex.preflight_fn = lambda: (False, "btc-executor redeploying")
+    ex.step(target())
+    assert ex.state.target_qty == pytest.approx(7.5)
+    ex.preflight_fn = lambda: (True, "ok")
+    ex.step(target())
+    assert v.spot_qty == pytest.approx(7.5) and v.perp_qty == pytest.approx(-7.5)
+
+
+def test_hold_never_rewrites_the_target(mk):
+    """MINOR-B: a stub adopted under HOLD parked an ARMED sleeve at the stub."""
+    v = FakeVenue()
+    v.spot_qty, v.perp_qty = 3.75, -3.75
+    ex, v = mk(v)
+    ex.step(None)                                    # HOLD: adopt, no orders
+    assert v.calls == [] and ex.state.on and ex.state.target_qty == 0.0
+    ex.step(target())                                # armed: opens to notional
+    assert v.spot_qty == pytest.approx(7.5)
+    ex.step(None)                                    # HOLD keeps 7.5 as target
+    assert ex.state.target_qty == pytest.approx(7.5)
+
+
+def test_notional_zero_with_a_lost_state_file_keeps_the_sleeve(mk):
+    """MINOR-C: state lost + notional unset + armed used to sell the sleeve."""
+    v = FakeVenue()
+    v.spot_qty, v.perp_qty = 7.5, -7.5
+    ex, v = mk(v, carry_notional_usd=0.0)
+    ex.step(target())
+    assert v.calls == [] and v.spot_qty == pytest.approx(7.5)
+
+
+def test_dry_run_exercises_the_preflight(mk):
+    ex, v = mk(dry_run=True)
+    ex.preflight_fn = lambda: (False, "old btc-executor build")
+    ex.step(target())
+    assert "open_blocked" in kinds(ex, "RED") and v.calls == []
+    assert not [e for e in ex.state.events if e["kind"] == "dry_run_intent"
+                and "spot BUY" in e["msg"]]
+
+
+def test_pulse_shows_the_margin_latch(mk):
+    ex, v = mk()
+    ex.step(target())
+    v.liq_px = 4500.0
+    v.perp_mid = v.spot_mid = 3900.0
+    ex.step(target())
+    assert ex.pulse()["guard_until"] == pytest.approx(NOW + C.GUARD_COOLDOWN_S)

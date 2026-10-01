@@ -225,9 +225,10 @@ class CarryExecutor:
         if not self.cfg.carry_enabled:
             desired = False
         notional = self._notional()
-        if desired and notional <= 0 and not self.state.on:
-            # 0 = never OPEN. An open sleeve keeps its size (review MINOR-5:
-            # it used to unwind); CARRY_ENABLED=false is the close switch.
+        if desired and notional <= 0 and not held_on:
+            # 0 = never OPEN. A held sleeve keeps its size (review MINOR-5;
+            # held_on, not state.on, so a lost state file can't unwind it -
+            # re-review MINOR-C); CARRY_ENABLED=false is the close switch.
             desired = False
         now = self.clock()
         liq = v.get("liq_px")
@@ -245,7 +246,8 @@ class CarryExecutor:
                 self._event("RED", "margin_guard",
                             f"ETH {px_p:,.2f} is within {self.cfg.liq_buffer:.0%} "
                             f"of the short's liquidation {liq:,.2f} - unwinding; "
-                            f"no re-open for {GUARD_COOLDOWN_S // 3600}h")
+                            f"no re-open for {GUARD_COOLDOWN_S // 3600}h",
+                            rate_limit=True)
         if now < self.state.guard_until:
             # LATCHED: without it an armed sleeve re-opened on the next pass
             # and unwound again every 5 minutes (review SERIOUS-2)
@@ -274,6 +276,8 @@ class CarryExecutor:
                     if abs(q * px_s / notional - 1.0) > self.cfg.resize_drift:
                         q = notional / px_s
                         resized = True
+            elif notional <= 0:
+                q = S                     # held sleeve, size 0: keep it as is
             else:
                 # OPEN toward the notional. dS = q - S, so whatever the account
                 # already holds (a lost state file, a stub left by a partial
@@ -286,8 +290,16 @@ class CarryExecutor:
 
         # ---- cross margin BEFORE any risk-adding order (review SERIOUS-1:
         # it ran after the spot buy, so a leverage failure stranded spot) ----
+        # what to PERSIST as the target. HOLD and a blocked preflight change
+        # this pass's orders, never the sleeve's intended size (re-review
+        # MINOR-A/B: both wrote a stub size into target_qty for a month). An
+        # adoption under HOLD persists 0, so the next armed pass OPENS.
+        q_persist = q
+        if armed is None:
+            q_persist = self.state.target_qty if was_on else 0.0
         dS = q - S
-        if dS * px_s >= MIN_ORDER_USD and not self.cfg.dry_run:
+        if dS * px_s >= MIN_ORDER_USD:
+            # run in DRY_RUN too, so the rehearsal exercises it (NOTE-F)
             ok, pf_why = self.preflight_fn()
             if not ok:
                 # adding spot is blocked; closes, reductions and the hedge of
@@ -335,7 +347,7 @@ class CarryExecutor:
 
         # ---- state + pages (only on what the venue now confirms) ----
         if not self.cfg.dry_run:
-            self.state.target_qty = q
+            self.state.target_qty = q_persist
             now_on = desired and S * px_s >= MIN_ORDER_USD
             if resize_month:
                 self.state.last_resize_month = resize_month
@@ -353,7 +365,7 @@ class CarryExecutor:
                 self._event("INFO", "resized", f"target {q:.4f} UETH (~${q * px_s:,.0f})")
             self.state.on = now_on
             if not now_on:
-                self.state.target_qty = 0.0 if not desired else q
+                self.state.target_qty = 0.0 if not desired else q_persist
         self._check_hedge(v)
 
     def _reread(self, prev: dict) -> dict:
@@ -408,5 +420,8 @@ class CarryExecutor:
                 "on": self.state.on, "halted": self.state.halted,
                 "spot_qty": v.get("spot_qty"), "perp_qty": v.get("perp_qty"),
                 "hedge_gap_usd": gap, "signal": self.state.last_signal,
+                # margin-guard latch (unix ts; 0 = none). /resume does NOT
+                # lift it - the guard fired on the venue's own numbers
+                "guard_until": self.state.guard_until or None,
                 "last_step_ts": self.state.last_step_ts,
                 "red_kinds_24h": kinds}
