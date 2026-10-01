@@ -140,18 +140,19 @@ def test_intents_shape_and_gate_on_entry(session, client):
                              "trail_level": 94.0}]
     assert out["exits"] == []
     assert out["rebalance"] == {"needed": None, "current_sleeve_weight": None,
-                                "target": 0.30}
+                                "target": None}      # unset = no instruction
     assert out["book_params"] == BOOK_PARAMS
     assert "equity" in out["contract"]      # the executor-reconciles contract
 
 
-def test_sleeve_target_is_a_setting_clamped_to_unit_interval(session, client, monkeypatch):
+def test_sleeve_target_setting_publishes_or_stays_silent(session, client, monkeypatch):
     """BLEND_SLEEVE_TARGET publishes the construction; 1.0 = no SPY core.
-    Out-of-range values fall back to the registered 0.30, never null/0."""
+    Unset or out-of-range publishes null (the executor keeps its persisted
+    target), never a default that could re-weight live money."""
     from app import config
     last_bar = _seed_name(session)
     _seed_xbi(session, above=True, last_date=last_bar)
-    for env, want in (("1.0", 1.0), ("0.6", 0.6), ("0", 0.30), ("1.5", 0.30), ("abc", 0.30)):
+    for env, want in (("1.0", 1.0), ("0.6", 0.6), ("0.30", 0.30), ("0", None), ("1.5", None)):
         monkeypatch.setenv("BLEND_SLEEVE_TARGET", env)
         config.get_settings.cache_clear()
         try:

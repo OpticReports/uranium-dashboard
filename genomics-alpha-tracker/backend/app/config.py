@@ -117,8 +117,11 @@ class Settings(BaseSettings):
     # poll (it owns the dollars; this is the construction). 0.30 = the H13
     # 30/70 registration; 1.0 = sleeve only, no SPY core (Casey 2026-10-01:
     # "mirror the engine"). Flipping it is ONE rebalance at the executor
-    # (SPY sold core->sleeve), no re-seed. Clamped to (0, 1].
-    blend_sleeve_target: float = 0.30   # BLEND_SLEEVE_TARGET
+    # (SPY sold core->sleeve), adopted after two agreeing polls; no re-seed.
+    # UNSET publishes null: the executor then keeps the target its book
+    # already runs at (persisted), so a redeploy with the env missing can
+    # never re-weight live money. A non-numeric value fails boot (loud).
+    blend_sleeve_target: float | None = None   # BLEND_SLEEVE_TARGET
 
 
 @functools.lru_cache

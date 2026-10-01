@@ -382,6 +382,13 @@ class BlendState:
     # restart cannot re-sweep it
     prefund_usd: float = 0.0
     prefund_date: str = ""
+    # The sleeve's target weight the book is RUN at (persisted): adopted
+    # from the tracker's published value only after SLEEVE_TARGET_CONFIRM
+    # consecutive polls agree AND paged; a null/invalid/absent publication
+    # never moves money (2026-10-01 counter-agent: a tracker redeploy with
+    # the env unset would otherwise rebuy the whole core in one cycle).
+    sleeve_target: float | None = None
+    sleeve_target_seen: list = field(default_factory=list)   # [value, n]
     bootstrap_ack_date: str = ""  # trading date the ack was granted on; the
                                   # ack is only honoured on that same date
     bootstrap_ack: bool = False  # operator acknowledged (via /resume) that a
@@ -541,6 +548,8 @@ class Blend3070Manager:
                 commissions_unreported=int(raw.get("commissions_unreported", 0) or 0),
                 prefund_usd=float(raw.get("prefund_usd", 0.0) or 0.0),
                 prefund_date=raw.get("prefund_date", "") or "",
+                sleeve_target=_num_or_none(raw.get("sleeve_target")),
+                sleeve_target_seen=list(raw.get("sleeve_target_seen") or []),
                 mode=stored_mode,
             )
             try:
@@ -685,6 +694,8 @@ class Blend3070Manager:
                    "commissions_unreported": self.state.commissions_unreported,
                    "prefund_usd": self.state.prefund_usd,
                    "prefund_date": self.state.prefund_date,
+                   "sleeve_target": self.state.sleeve_target,
+                   "sleeve_target_seen": self.state.sleeve_target_seen,
                    "mode": self.state.mode,
                    "events": self.state.events[-300:]}
         fd, tmp_path = tempfile.mkstemp(
@@ -894,7 +905,7 @@ class Blend3070Manager:
         max_open = min(MAX_OPEN, params.get("max_open", MAX_OPEN))
         risk_frac = params.get("risk_frac", RISK_FRAC)
         band = params.get("band", BAND)
-        target = _sleeve_target(self, payload)
+        target = _sleeve_target(self, payload, alerts)
         budget = getattr(self.cfg, "blend_budget", 0.0) or 0.0
 
         if not st.initialized:
@@ -907,6 +918,7 @@ class Blend3070Manager:
                 book = min(book, budget)
             st.sleeve_cash = target * book
             st.core_cash = (1.0 - target) * book
+            st.sleeve_target = target
             st.initialized = True
             st.bootstrap_ack = False    # one-shot: consumed by this seed
             self._event("INFO", f"book initialized: ${book:,.0f} "
@@ -1235,6 +1247,21 @@ class Blend3070Manager:
             # A same-day blip never releases it (round 2).
             st.prefund_usd, st.prefund_date = 0.0, ""
 
+        # 4b) sleeve-only book (target 1.0): once the SPY is gone, any cash
+        #     left on the core side is a ledger residue (rounding, or the
+        #     core sell's commission, which leaves it NEGATIVE) - move it to
+        #     the sleeve BEFORE the weight decision so step 5 never plans a
+        #     core sell for cash and step 7 never buys SPY with it
+        #     (2026-10-01, counter-agent MED/LOW). Needs no quote.
+        if (target >= 1.0 - 1e-9 and st.spy_qty == 0
+                and abs(st.core_cash) > CASH_EPS and not pending_book):
+            moved = st.core_cash
+            self.on_transfer(moved)
+            projected_cash += moved
+            funds += moved
+            self._event("INFO", f"sleeve-only book: ${moved:,.2f} of core "
+                                f"cash residue moved to the sleeve")
+
         # 5) band rebalance (~1x/year expected): executor-side weights.
         #    M4: NEVER computed from absent prices — a missing SPY (or BIL)
         #    quote zeroes a whole ledger side, manufactures a spurious
@@ -1270,20 +1297,6 @@ class Blend3070Manager:
                 else:
                     projected_cash -= usd
                     funds -= usd
-
-        # 5b) sleeve-only book (target 1.0): once the SPY is gone, any cash
-        #     left on the core side is a ledger residue (rounding of the
-        #     core sell) - move it to the sleeve so the feed never shows a
-        #     phantom core and the sweep can park it (2026-10-01).
-        if (target >= 1.0 - 1e-9 and st.spy_qty == 0
-                and st.core_cash > CASH_EPS and not pending_book
-                and rebalance_intent is None):
-            moved = st.core_cash
-            self.on_transfer(moved)
-            projected_cash += moved
-            funds += moved
-            self._event("INFO", f"sleeve-only book: ${moved:,.2f} of core "
-                                f"cash residue moved to the sleeve")
 
         # 6) SINGLE PER-CYCLE CASH LEDGER resolution: everything above was
         #    planned against one projected ledger; fund the total shortfall
@@ -1337,7 +1350,7 @@ class Blend3070Manager:
             if (rebalance_intent is not None
                 and rebalance_intent["direction"] == "sleeve_to_core") else 0.0)
         core_buy = None
-        if (not pending_book and spy_px > 0
+        if (not pending_book and spy_px > 0 and target < 1.0 - 1e-9
                 and core_cash_proj > max(MIN_ORDER_USD, spy_px)):
             core_buy = {"action": "CORE_BUY", "symbol": CORE,
                         "qty": int(core_cash_proj // spy_px),
@@ -1905,22 +1918,65 @@ def fetch_intents(cfg) -> dict | None:
         return None
 
 
-def _sleeve_target(mgr: "Blend3070Manager", payload: dict) -> float:
-    """The sleeve's target weight of the book, from the tracker payload
-    (rebalance.target; the tracker publishes BLEND_SLEEVE_TARGET). Clamped
-    to (0, 1]: null/0/out-of-range must never size the sleeve against an
-    empty book or buy a core the construction does not have - it falls back
-    to TARGET_SLEEVE with a once-a-day WARN (2026-10-01)."""
-    raw = (payload.get("rebalance") or {}).get("target", TARGET_SLEEVE)
+SLEEVE_TARGET_CONFIRM = 2   # consecutive polls a NEW published target must
+                            # agree before the book is re-weighted to it
+
+
+def _sleeve_target(mgr: "Blend3070Manager", payload: dict,
+                   alerts: list | None = None) -> float:
+    """The sleeve's target weight the book is run at.
+
+    The book PERSISTS its target (st.sleeve_target; seeded at TARGET_SLEEVE).
+    The tracker publishes BLEND_SLEEVE_TARGET as rebalance.target, null when
+    unset. Rules (2026-10-01, counter-agent HIGH):
+    - null / absent / non-numeric / outside (0, 1]: the persisted target is
+      used and NOTHING is re-weighted; a non-null bad value is a once-a-day
+      WARN. A tracker redeploy with the env unset therefore cannot flip a
+      sleeve-only book back to 30/70.
+    - a valid DIFFERENT value is adopted only after SLEEVE_TARGET_CONFIRM
+      consecutive polls agree, with a Telegram page naming the move (a
+      mid-deploy blip of one poll never sells or buys the core)."""
+    st = mgr.state
+    current = st.sleeve_target if st.sleeve_target is not None else TARGET_SLEEVE
+    reb = payload.get("rebalance") or {}
+    raw = reb.get("target")
+    if raw is None:
+        st.sleeve_target_seen = []
+        return current
     try:
         t = float(raw)
     except (TypeError, ValueError):
         t = float("nan")
     if not (0.0 < t <= 1.0):
+        st.sleeve_target_seen = []
         mgr._event_once_today("WARN", "sleeve_target_invalid",
                               f"tracker published sleeve target {raw!r}; "
-                              f"using {TARGET_SLEEVE:.0%}")
-        return TARGET_SLEEVE
+                              f"book stays at {current:.0%}")
+        return current
+    if abs(t - current) < 1e-9:
+        st.sleeve_target_seen = []
+        return current
+    if not st.initialized:
+        # a fresh seed has nothing to re-weight: take the published value
+        st.sleeve_target, st.sleeve_target_seen = t, []
+        return t
+    seen = st.sleeve_target_seen or [None, 0]
+    n = (seen[1] + 1) if seen[0] is not None and abs(seen[0] - t) < 1e-9 else 1
+    if n < SLEEVE_TARGET_CONFIRM:
+        st.sleeve_target_seen = [t, n]
+        mgr._event("INFO", f"tracker publishes sleeve target {t:.0%} "
+                           f"(book at {current:.0%}): awaiting "
+                           f"{SLEEVE_TARGET_CONFIRM - n} more poll(s) before "
+                           f"re-weighting")
+        return current
+    st.sleeve_target, st.sleeve_target_seen = t, []
+    msg = (f"sleeve target {current:.0%} -> {t:.0%} adopted from the tracker: "
+           + ("the SPY core will be SOLD and swept to BIL"
+              if t > current else "SPY will be BOUGHT to rebuild the core")
+           + " in this cycle (BLEND_SLEEVE_TARGET on the tracker)")
+    mgr._event("WARN", msg)
+    if alerts is not None:
+        alerts.append("⚠️ blend " + msg)
     return t
 
 

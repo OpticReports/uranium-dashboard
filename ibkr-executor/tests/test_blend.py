@@ -4798,10 +4798,13 @@ def test_day_old_journal_is_held_when_history_is_unavailable(tmp_path):
 
 
 # --- sleeve-only construction (target 1.0; Casey 2026-10-01 "mirror the engine")
-# MUTATION-VERIFIED: dropping the (0,1] clamp in _sleeve_target turns
-# test_sleeve_target_invalid_falls_back red; dropping the residue transfer
-# (step 5b) turns test_sleeve_only_moves_core_residue red; the seed split and
-# the one-pass SPY sale are pinned by test_sleeve_only_seed_and_rebalance.
+# MUTATION-VERIFIED: dropping the (0,1] check in _sleeve_target turns
+# test_sleeve_target_bad_or_absent_never_moves_money red; adopting a changed
+# target on the FIRST poll (SLEEVE_TARGET_CONFIRM=1) turns
+# test_sleeve_target_change_needs_two_polls_and_pages red; dropping the
+# residue transfer (step 4b) or the CORE_BUY gate turns
+# test_sleeve_only_moves_core_residue red; dropping the persistence turns
+# test_sleeve_target_persists red.
 
 def _pl_target(t):
     pl = payload()
@@ -4809,59 +4812,124 @@ def _pl_target(t):
     return pl
 
 
+def _sleeve_only_book(m, bil_qty=100, core_cash=0.0):
+    _seed_initialized(m, sleeve_cash=0.0, bil_qty=bil_qty, spy_qty=0, core_cash=core_cash)
+    m.state.sleeve_target = 1.0
+
+
 def test_sleeve_only_seed_and_rebalance(tmp_path):
-    # a fresh seed at target 1.0 puts the whole book in the sleeve
+    # a fresh seed at a published 1.0 puts the whole book in the sleeve at once
     m = mk(tmp_path)
-    a = DryAdapter()
-    run_cycle(m, a, _pl_target(1.0), "2026-08-20", alert=lambda _: None)
+    run_cycle(m, DryAdapter(), _pl_target(1.0), "2026-08-20", alert=lambda _: None)
     assert m.state.initialized and m.state.core_cash == 0.0 and m.state.spy_qty == 0
-    assert m.state.bil_qty == 100                     # $10k swept to BIL
+    assert m.state.sleeve_target == 1.0 and m.state.bil_qty == 100
     assert any("100% sleeve / 0% core" in e["msg"] for e in m.state.events)
-    # a 30/70-shaped book flipped to 1.0 sells ALL the SPY in one pass,
-    # moves the proceeds to the sleeve, sweeps them, and never buys a core
+    # a 30/70 book flipped to 1.0: poll 1 waits, poll 2 sells ALL the SPY in
+    # one pass, sweeps the proceeds, pages, and never buys a core again
     m2 = mk(tmp_path / "b")
     _seed_initialized(m2, sleeve_cash=0.0, bil_qty=30, spy_qty=70)
-    out = run_cycle(m2, DryAdapter(), _pl_target(1.0), "2026-08-20", alert=lambda _: None)
+    alerts = []
+    out = run_cycle(m2, DryAdapter(), _pl_target(1.0), "2026-08-20", alert=alerts.append)
+    assert not [o for o in out if o["action"] in ("REBALANCE", "CORE_BUY")]
+    assert m2.state.spy_qty == 70 and m2.state.sleeve_target is None
+    out = run_cycle(m2, DryAdapter(), _pl_target(1.0), "2026-08-20", alert=alerts.append)
     (rb,) = [o for o in out if o["action"] == "REBALANCE"]
     assert rb["direction"] == "core_to_sleeve" and rb["usd"] == pytest.approx(7_000.0)
     assert not [o for o in out if o["action"] == "CORE_BUY"]
     assert m2.state.spy_qty == 0 and m2.state.core_cash == pytest.approx(0.0, abs=1e-6)
-    assert m2.state.bil_qty == 100
-    out = run_cycle(m2, DryAdapter(), _pl_target(1.0), "2026-08-21", alert=lambda _: None)
+    assert m2.state.bil_qty == 100 and m2.state.sleeve_target == 1.0
+    assert any("30% -> 100%" in a and "SOLD" in a for a in alerts)
+    out = run_cycle(m2, DryAdapter(), _pl_target(1.0), "2026-08-21", alert=alerts.append)
     assert not [o for o in out if o["action"] in ("REBALANCE", "CORE_BUY")]
 
 
 def test_sleeve_only_moves_core_residue(tmp_path):
-    m = mk(tmp_path)
-    _seed_initialized(m, sleeve_cash=0.0, bil_qty=97, spy_qty=0, core_cash=258.0)
+    # a small residue (rounding) and a LARGE one (an unadopted seed-time
+    # core buy) both go to the sleeve: no core sell for cash, no SPY buy
+    for residue, bil, want_bil, want_cash in ((258.0, 97, 99, 58.0), (600.0, 94, 100, 0.0)):
+        m = mk(tmp_path / f"r{int(residue)}")
+        _sleeve_only_book(m, bil_qty=bil, core_cash=residue)
+        out = run_cycle(m, DryAdapter(), _pl_target(1.0), "2026-08-20", alert=lambda _: None)
+        assert m.state.core_cash == 0.0, residue
+        assert not [o for o in out if o["action"] in ("CORE_BUY", "REBALANCE")], residue
+        assert m.state.bil_qty == want_bil and m.state.sleeve_cash == pytest.approx(want_cash)
+        assert any("residue moved to the sleeve" in e["msg"] for e in m.state.events)
+    # the FLIP cycle itself: SPY still held, core cash left over -> the
+    # core sell is planned and no SPY is bought with the leftover in the
+    # same cycle (the CORE_BUY gate is load-bearing here: 4b cannot run
+    # while spy_qty > 0)
+    m = mk(tmp_path / "flip")
+    _seed_initialized(m, sleeve_cash=0.0, bil_qty=30, spy_qty=64, core_cash=600.0)
+    m.state.sleeve_target = 1.0
     out = run_cycle(m, DryAdapter(), _pl_target(1.0), "2026-08-20", alert=lambda _: None)
-    assert m.state.core_cash == 0.0
-    assert any("residue moved to the sleeve" in e["msg"] for e in m.state.events)
-    (sw,) = [o for o in out if o["action"] == "SWEEP"]
-    assert sw["qty"] == 2 and m.state.bil_qty == 99
-    assert m.state.sleeve_cash == pytest.approx(58.0)
+    assert [o for o in out if o["action"] == "REBALANCE"][0]["direction"] == "core_to_sleeve"
+    assert not [o for o in out if o["action"] == "CORE_BUY"]
+    assert m.state.spy_qty == 0
+    out = run_cycle(m, DryAdapter(), _pl_target(1.0), "2026-08-20", alert=lambda _: None)
+    assert m.state.core_cash == 0.0 and not [o for o in out if o["action"] == "CORE_BUY"]
+    # the core sell's commission leaves core_cash NEGATIVE: moved too
+    m = mk(tmp_path / "neg")
+    _sleeve_only_book(m, bil_qty=100, core_cash=-1.0)
+    m.state.sleeve_cash = 5.0
+    run_cycle(m, DryAdapter(), _pl_target(1.0), "2026-08-20", alert=lambda _: None)
+    assert m.state.core_cash == 0.0 and m.state.sleeve_cash == pytest.approx(4.0)
 
 
-def test_sleeve_target_invalid_falls_back(tmp_path):
+def test_sleeve_target_bad_or_absent_never_moves_money(tmp_path):
+    # the dangerous direction: a sleeve-only book sees a null / bad / absent
+    # target -> nothing is sold, bought or swept
     m = mk(tmp_path)
-    _seed_initialized(m, sleeve_cash=0.0, bil_qty=30, spy_qty=70)     # at 30/70
+    _sleeve_only_book(m)
     for bad in (None, 0, 1.5, "abc", -0.3):
         out = m.step("2026-08-20", _pl_target(bad), PRICES)
-        assert not [o for o in out if o["action"] == "REBALANCE"], bad
+        assert not [o for o in out if o["action"] in ("REBALANCE", "CORE_BUY", "SWEEP")], bad
+        assert m.state.sleeve_target == 1.0
     assert sum("sleeve target" in e["msg"] for e in m.state.events) == 1   # once a day
-    pl = payload(); pl.pop("rebalance")                                     # absent -> default
-    assert not [o for o in m.step("2026-08-20", pl, PRICES) if o["action"] == "REBALANCE"]
+    pl = payload(); pl.pop("rebalance")
+    assert not [o for o in m.step("2026-08-20", pl, PRICES) if o["action"] != "ALERT"]
+    # ... and a 30/70 book with a persisted None keeps the 0.30 default
+    m2 = mk(tmp_path / "b")
+    _seed_initialized(m2, sleeve_cash=0.0, bil_qty=30, spy_qty=70)
+    for bad in (None, 0, "abc"):
+        assert not [o for o in m2.step("2026-08-20", _pl_target(bad), PRICES) if o["action"] == "REBALANCE"]
+
+
+def test_sleeve_target_change_needs_two_polls_and_pages(tmp_path):
+    # a tracker redeploy publishing 0.30 for ONE poll must not rebuy the core
+    m = mk(tmp_path)
+    _sleeve_only_book(m)
+    alerts = []
+    out = run_cycle(m, DryAdapter(), _pl_target(0.30), "2026-08-20", alert=alerts.append)
+    assert not [o for o in out if o["action"] in ("REBALANCE", "CORE_BUY", "SWEEP")]
+    assert m.state.sleeve_target == 1.0 and m.state.sleeve_target_seen == [0.30, 1]
+    # a different value in between resets the count
+    run_cycle(m, DryAdapter(), _pl_target(0.6), "2026-08-20", alert=alerts.append)
+    assert m.state.sleeve_target_seen == [0.6, 1] and m.state.sleeve_target == 1.0
+    # two agreeing polls adopt it, with a page, and the core is rebuilt
+    run_cycle(m, DryAdapter(), _pl_target(0.30), "2026-08-20", alert=alerts.append)
+    out = run_cycle(m, DryAdapter(), _pl_target(0.30), "2026-08-20", alert=alerts.append)
+    assert m.state.sleeve_target == 0.30
+    assert [o for o in out if o["action"] == "REBALANCE"][0]["direction"] == "sleeve_to_core"
+    assert any("100% -> 30%" in a and "BOUGHT" in a for a in alerts)
+    assert m.state.spy_qty == 70
+
+
+def test_sleeve_target_persists(tmp_path):
+    m = mk(tmp_path)
+    _sleeve_only_book(m)
+    m.state.sleeve_target_seen = [0.3, 1]
+    m.save()
+    st = Blend3070Manager(m.cfg, m.state_path).state
+    assert st.sleeve_target == 1.0 and st.sleeve_target_seen == [0.3, 1]
 
 
 def test_sleeve_only_entries_size_against_the_whole_book(tmp_path):
     m = mk(tmp_path)
-    _seed_initialized(m, sleeve_cash=0.0, bil_qty=100, spy_qty=0)
+    _sleeve_only_book(m)
     pl = _pl_target(1.0); pl["entries"] = [entry()]; pl["stops"] = [stop_row()]
-    out = m.step("2026-08-20", pl, PRICES)
-    (ent,) = [o for o in out if o["action"] == "ENTER"]
+    (ent,) = [o for o in m.step("2026-08-20", pl, PRICES) if o["action"] == "ENTER"]
     assert ent["qty"] == 16            # 1% of $10,000 = $100 risk / $6 per share
     m2 = mk(tmp_path / "b")
     _seed_initialized(m2, sleeve_cash=0.0, bil_qty=30, spy_qty=70)
-    pl2 = payload(entries=[entry()], stops=[stop_row()])
-    (ent2,) = [o for o in m2.step("2026-08-20", pl2, PRICES) if o["action"] == "ENTER"]
+    (ent2,) = [o for o in m2.step("2026-08-20", payload(entries=[entry()], stops=[stop_row()]), PRICES) if o["action"] == "ENTER"]
     assert ent2["qty"] == 5            # 1% of the $3,000 sleeve

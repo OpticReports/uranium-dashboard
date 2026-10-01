@@ -55,15 +55,17 @@ BOOK_PARAMS = {
 }
 
 
-def sleeve_target() -> float:
-    """BLEND_SLEEVE_TARGET clamped to (0, 1]: a bad value must never publish
-    null or 0 (the executor would size every entry against an empty sleeve)
-    - it falls back to the registered 0.30."""
+def sleeve_target() -> float | None:
+    """BLEND_SLEEVE_TARGET when set and inside (0, 1], else None. None means
+    "no instruction": the executor keeps the target its book already runs
+    at. Publishing a default here would let an unset env re-weight live
+    money on a redeploy (counter-agent 2026-10-01)."""
     try:
-        t = float(get_settings().blend_sleeve_target)
+        t = get_settings().blend_sleeve_target
+        t = None if t is None else float(t)
     except (TypeError, ValueError):
-        return 0.30
-    return t if 0.0 < t <= 1.0 else 0.30
+        return None
+    return t if (t is not None and 0.0 < t <= 1.0) else None
 
 
 # Exit signals stay visible this many days after the shadow engine graded
