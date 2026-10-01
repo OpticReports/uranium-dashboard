@@ -98,7 +98,17 @@ class _FakeInfo:
         return self.abstraction
 
     def spot_user_state(self, address):
-        return {"balances": [{"coin": "USDC", "total": str(self.spot_usdc)}]}
+        return {"balances": [{"coin": "USDC", "total": str(self.spot_usdc)}]
+                + list(getattr(self, "spot_tokens", []))}
+
+    def spot_meta(self):
+        self.spot_meta_calls = getattr(self, "spot_meta_calls", 0) + 1
+        return {"tokens": [{"name": "USDC", "index": 0},
+                           {"name": "UBTC", "index": 197},
+                           {"name": "UETH", "index": 221},
+                           {"name": "DUST", "index": 999}],
+                "universe": [{"name": "@142", "tokens": [197, 0], "index": 142},
+                             {"name": "@151", "tokens": [221, 0], "index": 151}]}
 
     def extra_agents(self, user):
         return self.agents
@@ -808,15 +818,17 @@ def test_gate_equity_does_not_double_count_once_a_position_pledges_margin(venue)
 
 
 def test_gate_equity_records_both_pools_for_the_operator(venue):
-    """Whether the unified spot figure carries unrealised perp PnL is
-    UNVERIFIED until a live position exists. Keep both numbers so the first
-    one settles it instead of being guessed at."""
+    """Keep every pool visible to the operator. SETTLED 2026-10-01 on the
+    live account: the unified spot USDC figure moves cent-for-cent with
+    perp unrealized PnL (sampled against the open BTC leg). spot_tokens is
+    the non-USDC spot value (the ETH carry sleeve's UETH)."""
     venue.info.abstraction = "unifiedAccount"
     venue.info.spot_usdc = 999.00
     venue.info.state = {"marginSummary": {"accountValue": "12.34"},
                         "assetPositions": []}
     venue.equity()
-    assert venue.equity_parts == {"perp": 12.34, "spot": 999.00}
+    assert venue.equity_parts == {"perp": 12.34, "spot": 999.00,
+                                  "spot_tokens": 0.0}
 
 
 # ---------------------------------------------------------------------------
@@ -1035,3 +1047,47 @@ def test_gate_delisted_coin_is_reported_as_untradable(venue):
     assert flags["trading_disabled"] is True, \
         "a delisted coin still reported as tradable"
     assert flags["venue"] == "hyperliquid"
+
+
+
+# ---------------------------------------------------------------------------
+# 2026-10-01: the ETH carry sleeve holds spot UETH in this account. Equity
+# must value it, or the swap reads as a -30% loss and halts the BTC book.
+def test_gate_equity_values_spot_tokens_at_their_spot_mid(venue):
+    venue.info.abstraction = "unifiedAccount"
+    venue.info.spot_usdc = 70_000.0
+    venue.info.spot_tokens = [{"coin": "UETH", "total": "7.5"}]
+    venue.info.mids = {"BTC": "80000.0", "@151": "4000.0"}
+    assert venue.equity() == pytest.approx(70_000.0 + 7.5 * 4000.0)
+    assert venue.equity_parts["spot_tokens"] == pytest.approx(30_000.0)
+
+
+def test_gate_a_missing_spot_mid_raises_rather_than_reading_as_a_loss(venue):
+    venue.info.abstraction = "unifiedAccount"
+    venue.info.spot_usdc = 70_000.0
+    venue.info.spot_tokens = [{"coin": "UETH", "total": "7.5"}]
+    venue.info.mids = {"BTC": "80000.0"}               # no "@151"
+    with pytest.raises(RuntimeError, match="UETH"):
+        venue.equity()
+
+
+def test_gate_unpriceable_dust_is_skipped_and_zero_balances_cost_nothing(venue):
+    venue.info.abstraction = "unifiedAccount"
+    venue.info.spot_usdc = 1_000.0
+    venue.info.spot_tokens = [{"coin": "DUST", "total": "5"},
+                              {"coin": "UBTC", "total": "0.0"}]
+    venue.info.mids = {"BTC": "80000.0"}
+    assert venue.equity() == pytest.approx(1_000.0)
+    venue.info.spot_tokens = []
+    n = getattr(venue.info, "spot_meta_calls", 0)
+    venue.equity()
+    assert getattr(venue.info, "spot_meta_calls", 0) == n  # no extra call when USDC-only
+
+
+def test_gate_spot_tokens_are_ignored_when_not_unified(venue):
+    venue.info.abstraction = "disabled"
+    venue.info.state = {"marginSummary": {"accountValue": "250.0"},
+                        "assetPositions": []}
+    venue.info.spot_tokens = [{"coin": "UETH", "total": "7.5"}]
+    venue.info.mids = {"BTC": "80000.0", "@151": "4000.0"}
+    assert venue.equity() == pytest.approx(250.0)

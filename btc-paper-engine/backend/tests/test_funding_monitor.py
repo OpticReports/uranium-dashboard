@@ -274,3 +274,73 @@ def test_intx_payload_parse_descending_pages(monkeypatch):
     assert calls == [0, 100]                   # stopped once past the cutoff
     assert len(out) == 1                       # old rows filtered out
     assert list(out.values()) == [2e-6]
+
+
+# ---- the traded carry gate (HL_ETH, 2026-10-01) ------------------------------
+
+def _carry_harness():
+    from app.funding_monitor import CARRY_VENUE
+    h = Harness()
+    h.means[CARRY_VENUE] = 6.0
+    h.hours[CARRY_VENUE] = EXPECTED_STAMPS
+
+    def fetch(now_s):
+        if CARRY_VENUE in h.raise_for:
+            raise RuntimeError("venue down")
+        return make_rates(h.means[CARRY_VENUE], h.hours[CARRY_VENUE], now_s)
+    h.mon.fetchers[CARRY_VENUE] = fetch
+    return h, CARRY_VENUE
+
+
+def test_default_fetchers_include_the_eth_carry_venue():
+    from app.funding_monitor import CARRY_VENUE
+    assert CARRY_VENUE == "HL_ETH"
+    assert set(FundingMonitor().fetchers) == {"INTX", "HL", "HL_ETH"}
+
+
+def test_carry_venue_arms_and_disarms_with_hysteresis_and_carry_wording():
+    h, cv = _carry_harness()
+    h.mon.check()
+    t = h.mon.carry_target()
+    assert t["venue"] == cv and t["coin"] == "ETH"
+    assert t["known"] is True and t["armed"] is False
+    h.means[cv] = 8.0
+    h.mon.check()
+    assert h.mon.carry_target()["armed"] is True
+    assert any("CARRY ON" in a for a in h.alerts)
+    h.means[cv] = 5.5                              # band holds
+    h.mon.check()
+    assert h.mon.carry_target()["armed"] is True
+    h.means[cv] = 4.9
+    h.mon.check()
+    assert h.mon.carry_target()["armed"] is False
+    assert any("CARRY OFF" in a for a in h.alerts)
+    assert not any("parked" in a for a in h.alerts if "ETH" in a)
+
+
+def test_carry_target_unknown_when_data_insufficient_or_never_fetched():
+    h, cv = _carry_harness()
+    assert h.mon.carry_target()["known"] is False   # never checked
+    h.hours[cv] = 10                                 # < 50% coverage
+    h.mon.check()
+    assert h.mon.carry_target()["known"] is False
+
+
+def test_carry_target_endpoint_shape_and_auth(monkeypatch):
+    from fastapi.testclient import TestClient
+    from app import funding_monitor as fm
+    from app.config import settings
+    from app.main import app
+    monkeypatch.setattr(settings, "run_engine", False)
+    monkeypatch.setattr(settings, "run_funding_monitor", False)
+    h, cv = _carry_harness()
+    h.means[cv] = 9.0
+    h.mon.check()
+    monkeypatch.setattr(fm, "MONITOR", h.mon)
+    monkeypatch.setattr(settings, "exec_token", "sekrit")
+    with TestClient(app) as c:
+        assert c.get("/carry/target").status_code == 401
+        d = c.get("/carry/target", headers={"X-Exec-Token": "sekrit"}).json()
+    assert d["armed"] is True and d["known"] is True and d["venue"] == "HL_ETH"
+    assert set(d) >= {"mean_ann_pct", "coverage", "last_checked",
+                      "check_seconds", "arm_pct", "disarm_pct"}

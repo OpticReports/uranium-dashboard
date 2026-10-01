@@ -47,6 +47,11 @@ MIN_COVERAGE = 0.5          # below this the reading is untrusted: no transition
 _HISTORY_MAX = 1000
 
 _HL_URL = "https://api.hyperliquid.xyz/info"
+# The venue whose state the live carry sleeve FOLLOWS (Casey, 2026-10-01:
+# ETH carry in the main HL account, gated 8% on / 5% off, $30k). The
+# monitor decides; carry-executor (credentialed) only executes, via
+# GET /carry/target.
+CARRY_VENUE = "HL_ETH"
 _INTX_URL = ("https://api.international.coinbase.com/api/v1/"
              "instruments/BTC-PERP/funding")
 
@@ -54,7 +59,7 @@ _INTX_URL = ("https://api.international.coinbase.com/api/v1/"
 # ---------------------------------------------------------------- fetchers
 
 def fetch_hl_hourly(now_s: float | None = None, days: int = 31,
-                    timeout: float = 30.0) -> dict[int, float]:
+                    timeout: float = 30.0, coin: str = "BTC") -> dict[int, float]:
     """Hyperliquid hourly funding, {hour_epoch_s: rate}. Ascending pages,
     500 stamps (~21d) per call; stamps carry second-level jitter so keys
     are bucketed to the hour (last write wins - dedupes re-prints)."""
@@ -65,7 +70,7 @@ def fetch_hl_hourly(now_s: float | None = None, days: int = 31,
     with httpx.Client(timeout=timeout) as client:
         for _ in range(5):
             r = client.post(_HL_URL, json={
-                "type": "fundingHistory", "coin": "BTC",
+                "type": "fundingHistory", "coin": coin,
                 "startTime": cur, "endTime": now_ms})
             r.raise_for_status()
             batch = r.json() or []
@@ -144,8 +149,12 @@ class FundingMonitor:
 
     def __init__(self, fetchers=None, alert_fn=None, load_fn=None,
                  save_fn=None, clock=None):
-        self.fetchers = fetchers or {"INTX": fetch_intx_hourly,
-                                     "HL": fetch_hl_hourly}
+        self.fetchers = fetchers or {
+            "INTX": fetch_intx_hourly, "HL": fetch_hl_hourly,
+            # the TRADED gate since 2026-10-01: the ETH carry sleeve
+            # (carry-executor) is long spot UETH / short the HL ETH perp
+            CARRY_VENUE: lambda now_s: fetch_hl_hourly(now_s=now_s,
+                                                       coin="ETH")}
         self.alert_fn = alert_fn or alerts.send
         self.load_fn = load_fn or _default_load
         self.save_fn = save_fn or _default_save
@@ -200,7 +209,13 @@ class FundingMonitor:
         if not v["armed"] and mean_pct >= arm - 1e-9:   # inclusive under float noise
             v["armed"] = True
             v["last_change_ts"] = int(self.clock())
-            if venue == "INTX":
+            if venue == CARRY_VENUE:
+                self.alert_fn(
+                    f"⚡ CARRY ON — HL ETH perp 30d funding "
+                    f"{mean_pct:.1f}%/yr ≥ {arm:g}% ({other}). carry-executor "
+                    f"opens the ETH carry sleeve (long spot UETH / short ETH "
+                    f"perp) on its next pass. Turns off < {disarm:g}%.")
+            elif venue == "INTX":
                 self.alert_fn(
                     f"⚡ FUNDING REGIME ARMED — INTX BTC perp 30d "
                     f"funding {mean_pct:.1f}%/yr ≥ {arm:g}% "
@@ -215,6 +230,13 @@ class FundingMonitor:
         elif v["armed"] and mean_pct < disarm - 1e-9:   # strict under float noise
             v["armed"] = False
             v["last_change_ts"] = int(self.clock())
+            if venue == CARRY_VENUE:
+                self.alert_fn(
+                    f"⚡ CARRY OFF — HL ETH perp 30d funding "
+                    f"{mean_pct:.1f}%/yr < {disarm:g}% ({other}). "
+                    f"carry-executor closes the ETH carry sleeve on its next "
+                    f"pass.")
+                return
             label = ("FUNDING REGIME DISARMED — INTX" if venue == "INTX"
                      else "\U0001f4c9 HL funding disarmed —")
             self.alert_fn(
@@ -251,6 +273,24 @@ class FundingMonitor:
     def snapshot(self) -> dict:
         with self._lock:
             return self.snapshot_locked()
+
+    def carry_target(self) -> dict:
+        """What carry-executor follows. The ENGINE decides (keyless brain);
+        the executor only executes and refuses to act on a stale or
+        insufficient signal."""
+        with self._lock:
+            self._ensure_loaded()
+            v = dict(self.state.get("venues", {}).get(CARRY_VENUE) or {})
+            return {"venue": CARRY_VENUE, "coin": "ETH",
+                    "armed": bool(v.get("armed", False)),
+                    "known": bool(v) and not v.get("insufficient", True),
+                    "mean_ann_pct": v.get("mean_ann_pct"),
+                    "coverage": v.get("coverage"),
+                    "last_change_ts": v.get("last_change_ts"),
+                    "last_checked": self.state.get("last_checked"),
+                    "check_seconds": settings.funding_check_seconds,
+                    "arm_pct": settings.funding_arm_pct,
+                    "disarm_pct": settings.funding_disarm_pct}
 
     def snapshot_locked(self) -> dict:
         self._ensure_loaded()

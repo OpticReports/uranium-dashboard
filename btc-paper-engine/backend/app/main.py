@@ -63,6 +63,16 @@ def funding():
     return MONITOR.snapshot()
 
 
+@app.get("/carry/target")
+def carry_target(x_exec_token: str | None = Header(default=None)):
+    """Machine-readable carry decision for carry-executor (2026-10-01): the
+    funding monitor's HL ETH state, ARM >= 8% / DISARM < 5% on the 30d mean.
+    The engine decides; the executor holds the keys and only executes."""
+    _require_exec_token(x_exec_token)
+    from .funding_monitor import MONITOR
+    return MONITOR.carry_target()
+
+
 def _require_exec_token(x_exec_token: str | None) -> None:
     """The book control surface (halt/resume/reset/resume-data) mutated a
     live-feeding engine with NO auth on a public URL, while the runbook

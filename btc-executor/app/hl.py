@@ -164,9 +164,9 @@ class HyperliquidVenue:
         # many watches; fetch the account's fills at most once per
         # FILLS_CACHE_S across them.
         self._fills_cache: tuple[float, list | None] = (0.0, None)
-        # last equity read decomposed, for the operator: whether the
-        # unified spot figure also carries unrealised perp PnL is
-        # UNVERIFIED until a live position exists to measure it against.
+        # last equity read decomposed, for the operator. SETTLED 2026-10-01:
+        # the unified spot USDC figure DOES carry unrealised perp PnL (it
+        # moved cent-for-cent with the open BTC leg's uPnL, sampled live).
         self.equity_parts: dict = {}
         # the venue's minimum ORDER NOTIONAL, read by the drill
         # harness: a lot is not always a sendable order here.
@@ -400,12 +400,73 @@ class HyperliquidVenue:
         logger.error("hyperliquid agent mismatch: %s", self.agent_note)
         return 0.0
 
-    def _spot_usdc(self) -> float:
-        sp = self.info.spot_user_state(self.address) or {}
+    def _spot_usdc(self, sp: dict | None = None) -> float:
+        sp = sp if sp is not None else (
+            self.info.spot_user_state(self.address) or {})
         for b in sp.get("balances", []):
             if (b or {}).get("coin") == "USDC":
                 return float(b.get("total") or 0.0)
         return 0.0
+
+    def _spot_pairs(self) -> dict[str, str]:
+        """token name -> its USDC spot pair's all_mids key ("@151" for
+        UETH/USDC). Cached for an hour: listings change, slowly."""
+        now = time.time()
+        hit = getattr(self, "_spot_pairs_cache", None)
+        if hit and now - hit[0] < 3600:
+            return hit[1]
+        m = self.info.spot_meta() or {}
+        toks = {t["index"]: t["name"] for t in m.get("tokens", [])}
+        usdc = next((i for i, n in toks.items() if n == "USDC"), None)
+        out: dict[str, str] = {}
+        for u in m.get("universe", []):
+            pair = u.get("tokens") or []
+            if len(pair) == 2 and pair[1] == usdc and pair[0] in toks:
+                out[toks[pair[0]]] = u["name"]
+        self._spot_pairs_cache = (now, out)
+        return out
+
+    def _spot_token_value(self, sp: dict) -> float:
+        """USD value of every NON-USDC spot balance, at its spot mid.
+
+        WHY (2026-10-01, the ETH carry sleeve): the sleeve swaps ~$30k of
+        USDC into spot UETH in this same account. Counted as USDC-only, that
+        swap reads as a -30% equity drop and trips DAILY_LOSS and DRAWDOWN
+        on the BTC book while nothing was lost. The carry's SHORT ETH perp
+        P&L is already inside the USDC total (unified: the spot USDC figure
+        moves cent-for-cent with perp unrealized PnL - measured live
+        2026-10-01 against the open BTC leg), so USDC + tokens-at-mid is the
+        whole account and the hedged sleeve nets to ~0.
+
+        A token WITH a USDC pair whose mid is missing RAISES: valuing it at
+        0 would be the same false -$30k. A token with no USDC pair at all
+        (airdrop dust) is skipped with a warning - consistently, so the halt
+        DELTAS are unaffected."""
+        others = []
+        for b in sp.get("balances", []):
+            c = (b or {}).get("coin")
+            if c == "USDC" or not c:
+                continue
+            q = float(b.get("total") or 0.0)
+            if q:
+                others.append((c, q))
+        if not others:
+            return 0.0
+        pairs = self._spot_pairs()
+        mids = self.info.all_mids() or {}
+        val = 0.0
+        for c, q in others:
+            key = pairs.get(c)
+            if key is None:
+                logger.warning("spot token %s has no USDC pair - not valued "
+                               "in equity", c)
+                continue
+            px = mids.get(key)
+            if px is None:
+                raise RuntimeError(f"all_mids carried no spot mid for {c} "
+                                   f"({key}) - refusing to value it at 0")
+            val += q * float(px)
+        return val
 
     def equity(self) -> float:
         """Total USD backing the perp book.
@@ -446,9 +507,12 @@ class HyperliquidVenue:
         # the moment a position pledges any of it - and equity feeds
         # day_start_equity and high_water, so an equity that jumps when a
         # position opens moves both halt thresholds with it.
-        spot = self._spot_usdc()
-        self.equity_parts = {"perp": perp, "spot": spot}
-        return spot
+        sp = self.info.spot_user_state(self.address) or {}
+        spot = self._spot_usdc(sp)
+        tokens = self._spot_token_value(sp)
+        self.equity_parts = {"perp": perp, "spot": spot,
+                             "spot_tokens": tokens}
+        return spot + tokens
 
     def position(self) -> float:
         """Signed BTC position. A clean response with no row for our coin is
