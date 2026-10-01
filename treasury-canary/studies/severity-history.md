@@ -83,15 +83,32 @@ nominal GDP) — for the LIVE index and the history alike.
   live index falls back to the published series, logs a warning and says so on
   the component (it would read 68.9 again).
 
-## RESULTS — frozen 2026-09-30 (`severity_history/results.json`, v1 lags, v2 household debt)
+## v3 — debt-service ratio back-extension: tried and WITHDRAWN (2026-10-01)
 
-- **Trend:** 49.2 (Dec-2023) → 57.2 (Dec-2024) → 66.2 (Dec-2025) → 67.7 today
+FRED serves TDSP from 2005. ALFRED's 2025-12-31 vintage runs from 1980, but
+the Fed revised the series between the 2024-06-30 and 2024-09-30 vintages
+for 2005Q1 onward ONLY (up 0.7-2.9pp, e.g. 2005Q1 12.62 → 14.80), leaving
+1980-2004 on the old basis; FRED then dropped the old part. That vintage has
+a +2.5pp step at 2005Q1, the largest quarterly move in 45 years. The first
+attempt compared 2005+ with 2005+ (new basis on both sides), called it "a
+truncation", and spliced it — ranking today's revised DSR against unrevised
+history (live 68.0, dsr 29th pct). On a consistent basis, extending the
+history LOWERS today's rank (2024-06-30 vintage: 17th pct vs 2005+, 7th vs
+1980+). Withdrawn after review; a gate test keeps TDSP out of the frozen
+splice. A seam-adjusted bridge (×1.1726 at 2005Q1, live 67.1) is possible but
+is a modeled assumption — the revision gap varies 0.7-2.9pp — so it waits
+for Casey's call. Separately, the review found the 180-day dsr lag admitted
+unpublished quarters at 29 of 300 month-ends 2001-2025 (ALFRED); it is now
+244 days.
+
+## RESULTS — frozen 2026-10-01 (`severity_history/results.json`, v1 lags + dsr 244, v2 household debt)
+
+- **Trend:** 49.0 (Dec-2023) → 57.2 (Dec-2024) → 66.2 (Dec-2025) → 67.7 today
   (live). Drivers, Dec-2023 → live: tech capex (block F 47 → 89), private
   leverage (A 21 → 45), amplification (C 42 → 47).
 - **High by its own history on comparable inputs:** at or above 97% of months
-  since 2015-06, when all 23 components exist (SEVERE in 14% of them); 85% of
-  months since 1999-12 on ≥ 75% of inputs (SEVERE in 43%). Counting the thin,
-  short-yardstick early months too is not a fair denominator.
+  since 2015-09, when all 23 components exist (SEVERE in 12% of them); 85% of
+  months since 1999-12 on ≥ 75% of inputs (SEVERE in 43%).
 - **Recession starts** (reading the month BEFORE the NBER peak; real GDP =
   largest peak-to-trough quarterly fall around the recession):
 
@@ -100,18 +117,18 @@ nominal GDP) — for the LIVE index and the history alike.
 | 1990-07 | 64.9 | 15/23 | 8 | +2.3pp | −1.4% |
 | 2001-03 | 66.3 | 18/23 | 8 | +2.0pp | −0.4% |
 | 2007-12 | 72.4 | 21/23 | 18 | +5.0pp | −3.8% |
-| 2020-02 (exogenous) | 55.1 | 23/23 | 2 | +11.3pp | −9.1% |
+| 2020-02 (exogenous) | 54.9 | 23/23 | 2 | +11.3pp | −9.1% |
 
 - **Nearest readings (±5 of 67.7, ≥ 75% inputs, excluding the last 24
   months):** 1999-12..2002-05 (recession began 2001-03; unemployment +1.7pp
   over 24m); 2006-08..2007-11 (recession began 2007-12; +1.4pp); 2008-06..
-  2010-06 (already in recession); 2012-12..2015-05 (no recession; −2.3pp). Of
+  2010-06 (already in recession); 2012-12..2015-07 (no recession; −2.3pp). Of
   the three stretches that began outside a recession, two led into one.
 
 Honesty box: descriptive only — three endogenous recessions cannot validate
 a severity index; the ordering 2007 > 2001 ≈ 1990 matches depth only loosely.
-The debt-service ratio starts 2005 on FRED (enters ~2015), so every reading
-before then runs without it. Household debt before 2005 is Z.1-based (a close
+The debt-service ratio starts 2005 on FRED (enters 2015-09), so every reading
+before then runs without it (its older history is on a different basis — v3). Household debt before 2005 is Z.1-based (a close
 but not identical measure). Point-in-time ranks drift: the 1986-87 readings of
 82-92 mostly reflect a short yardstick (equity/GDP making new highs vs a 1976
 start; drawn months only). Current-vintage data: rebuilding 5 dates from real-time ALFRED
@@ -128,3 +145,4 @@ Weights set in 2026 with this history in view.
 | code, look-ahead, numbers (2026-09-30) | 11 months re-derived independently, all match; BLOCKING: 4 lags too short vs ALFRED (gate checked its own constants); should-fix: live grid ended a month early, method text false, hard-coded prose, vacuous drawn-rule test, endpoint CPU cost, quantify revisions | lags fixed + pinned to ALFRED-verified dates in tests; end=today; method rewritten; prose built from data; drawn test on 1986-03..05; scheduler warm-up, no caching of degraded builds; revisions quantified |
 | claims, wording, UI (2026-09-30) | BLOCKING: "SEVERE in 57%" used the thin early years; analog readings lack the #1 predictor and the UI did not say so. Should-fix: C driver, like-for-like trend, percentile wording, episode outcome over its whole span, GDP label, 2020 label, 1990 label | all applied |
 | v2 Z.1 household-debt extension (2026-09-30) | PASS, no blocking: series/units/splice/look-ahead correct; 68.9 → 67.7 and 38.6 → 14.5 reproduced (robust to 4q/2q GDP and BIS alternatives). Should-fix: IMF not BIS; the "GDP basis" cause was unmeasured and not supported; a failed Z.1 fetch silently reverts the rank; 1979+ wording; unused HCCSDODNS.csv; 2020 parenthetical; 82-92 | all applied; failed extension now logged and noted on the component (tested) |
+| v3 TDSP 1980+ splice (2026-10-01) | BLOCK: the frozen vintage mixes bases (Fed revised 2005+ only, +2.5pp step at 2005Q1); the overlap check compared new basis with new basis; live 68.0 / dsr 29 were artifacts; separately the 180-day dsr lag leaked unpublished quarters (29 of 300 month-ends) | splice reverted (not merged); gate test keeps TDSP out; dsr lag 244 with ALFRED-pinned tests; bridge left as Casey's call |
