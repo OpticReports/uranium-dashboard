@@ -351,3 +351,110 @@ def test_pulse_shape(mk):
     assert p["on"] is True and p["hedge_gap_usd"] == 0
     assert set(p) >= {"dry_run", "enabled", "halted", "spot_qty", "perp_qty",
                       "signal", "last_step_ts", "red_kinds_24h"}
+
+
+# ---------------------------------------------------------------- review fixes (2026-10-01)
+
+def test_perp_failure_after_spot_fill_still_counts_the_gap_and_pages(mk):
+    """SERIOUS-1: the hedge check was skipped on a failed pass, so a perp leg
+    that kept failing left ~$30k naked with ONE rate-limited step_error."""
+    v = FakeVenue()
+    ex, v = mk(v)
+    real = v.ioc
+
+    def ioc(market, *a, **k):
+        if market == "perp":
+            raise RuntimeError("Insufficient margin to place order.")
+        return real(market, *a, **k)
+    v.ioc = ioc
+    ex.step(target())
+    ex.step(target())
+    assert v.spot_qty == pytest.approx(7.5) and v.perp_qty == 0
+    assert "unhedged" in kinds(ex, "RED")
+    assert any("carry unhedged" in m for m in ex.sent)
+
+
+def test_cross_margin_failure_aborts_before_any_spot_is_bought(mk):
+    v = FakeVenue()
+
+    def boom(lev):
+        raise RuntimeError("Cannot switch leverage type with open position")
+    v.ensure_cross = boom
+    ex, v = mk(v)
+    ex.step(target())
+    assert v.calls == [] and v.spot_qty == 0
+    assert "step_error" in kinds(ex, "RED")
+
+
+def test_margin_guard_latches_for_a_day(mk):
+    """SERIOUS-2: without a latch an armed sleeve re-opened every pass and
+    unwound again (~23bp a round trip, every 5 minutes)."""
+    ex, v = mk()
+    ex.step(target())
+    v.liq_px = 4500.0
+    v.perp_mid = v.spot_mid = 3900.0
+    ex.step(target())
+    assert v.spot_qty == 0 and v.perp_qty == 0
+    n = len(v.calls)
+    v.liq_px = None
+    ex.step(target())                               # still armed, inside the latch
+    assert len(v.calls) == n
+    ex.clock = lambda: NOW + C.GUARD_COOLDOWN_S + 60
+    ex.step(target(last_checked=NOW + C.GUARD_COOLDOWN_S))
+    assert v.spot_qty > 0                           # re-opens after the latch
+
+
+def test_a_liquidation_price_below_the_mark_is_not_acted_on(mk):
+    ex, v = mk()
+    ex.step(target())
+    v.liq_px = 1000.0                               # nonsense for a short
+    n = len(v.calls)
+    ex.step(target())
+    assert len(v.calls) == n and v.spot_qty == pytest.approx(7.5)
+    assert "margin_guard_unreliable" in kinds(ex, "RED")
+
+
+def test_a_stub_left_behind_is_topped_up_to_the_notional_not_adopted(mk):
+    """MINOR-3: an armed sleeve with a lost state file / a 3.0 stub used to
+    stay at the stub size for up to a month."""
+    v = FakeVenue()
+    v.spot_qty, v.perp_qty = 3.0, -3.0
+    ex, v = mk(v)
+    ex.step(target())
+    assert v.spot_qty == pytest.approx(7.5) and v.perp_qty == pytest.approx(-7.5)
+    assert v.calls[0] == ("spot", "BUY", 4.5, False)   # never on top of 7.5
+
+
+def test_a_failed_resize_does_not_consume_the_month(mk):
+    ex, v = mk()
+    ex.step(target())
+    month0 = ex.state.last_resize_month
+    v.spot_mid = v.perp_mid = 6000.0
+    ex.clock = lambda: NOW + 40 * 86400
+    v.order_fail = "rate limited"
+    ex.step(target(last_checked=NOW + 40 * 86400 - 600))
+    assert ex.state.last_resize_month == month0
+    v.order_fail = None
+    ex.step(target(last_checked=NOW + 40 * 86400 - 300))
+    assert v.spot_qty == pytest.approx(5.0)
+
+
+def test_notional_zero_never_opens_but_keeps_an_open_sleeve(mk):
+    ex, v = mk()
+    ex.step(target())
+    ex.cfg.carry_notional_usd = 0.0
+    n = len(v.calls)
+    ex.step(target())
+    assert len(v.calls) == n and v.spot_qty == pytest.approx(7.5)
+    ex2, v2 = mk(FakeVenue(), sub="z", carry_notional_usd=0.0)
+    ex2.step(target())
+    assert v2.calls == []
+
+
+def test_spot_held_by_a_resting_order_pages(mk):
+    ex, v = mk()
+    ex.step(target())
+    v.spot_hold = 7.5
+    ex.step(target(armed=False))
+    assert not [c for c in v.calls if c[:2] == ("spot", "SELL")]
+    assert "spot_locked" in kinds(ex, "RED")

@@ -24,6 +24,13 @@ $30k, gated 8% on / 5% off, a separate service.**
 - **Margin:** the ETH perp is set to CROSS margin (5×) before the first short,
   so the account's USDC backs it.
 
+**It owns ETH and UETH in this account.** Any extra UETH, or a manual ETH perp
+position, is traded back to the sleeve's target. Don't hold ETH or UETH by
+hand in the main account. It never touches BTC.
+
+There is no testnet rehearsal: HL testnet has no UETH pair, so the service
+refuses to start there. DRY_RUN on mainnet is the rehearsal.
+
 ## Funding (where the money comes from)
 
 - About $30k of the ~$100k spot USDC, which is idle collateral, becomes UETH.
@@ -40,13 +47,15 @@ $30k, gated 8% on / 5% off, a separate service.**
 | rail | behaviour |
 |---|---|
 | `DRY_RUN` (default **true**) | sends nothing; logs each distinct intended order once |
-| `CARRY_NOTIONAL_USD` (default **0**) | 0 never opens; approved size 30000 |
+| `CARRY_NOTIONAL_USD` (default **0**) | 0 never opens. An open sleeve keeps its size at 0; close it with `CARRY_ENABLED=false`. Approved size: 30000 |
 | `CARRY_MAX_NOTIONAL_USD` (repo, 50k) | env above it sizes at the cap and pages |
 | stale / unknown / malformed decision | **holds the venue**: no open, close or re-size, and never re-buys a sleeve the account no longer holds. Only the hedge is kept matched |
 | `CARRY_ENABLED=false` | unwinds and stays flat; works without the engine |
-| margin guard | ETH mid within 15% of the short's liquidation price → unwind + RED |
+| margin guard | ETH mid within 15% of the short's liquidation price → unwind + RED, then **no re-open for 24h**. A liquidation price at or below the mark (nonsense for a short) is ignored and paged. The first open logs the venue's liquidation price |
 | unreadable venue | no orders; RED after 3 passes |
-| hedge gap > $50 for 2 passes | RED `unhedged` |
+| hedge gap > $50 for 2 passes | RED `unhedged`, also counted on passes that failed mid-way, from a fresh read |
+| cross-margin setup | done BEFORE any risk-adding order; if it fails, nothing is bought that pass |
+| UETH locked in a resting spot order | RED `spot_locked` (cancel it on the HL UI) |
 | `POST /halt` / `/resume` (EXEC_TOKEN) | stop / restart sending; legs left as they are |
 | unreadable state file | boots HALTED |
 

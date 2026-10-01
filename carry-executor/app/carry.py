@@ -40,6 +40,7 @@ HEDGE_TOL_USD = 50.0          # residual |spot + perp| x px tolerated
 HEDGE_GAP_PAGE_POLLS = 2
 VENUE_FAIL_PAGE_POLLS = 3
 SIGNAL_GRACE_S = 3600         # past 2 x the monitor's check interval
+GUARD_COOLDOWN_S = 24 * 3600  # after a margin-guard unwind, stay flat this long
 
 
 @dataclass
@@ -49,6 +50,7 @@ class CarryState:
     opened_ts: int | None = None
     last_resize_month: str = ""
     halted: str | None = None
+    guard_until: float = 0.0
     hedge_gap_polls: int = 0
     venue_fail_polls: int = 0
     last_read: dict = field(default_factory=dict)
@@ -105,7 +107,7 @@ class CarryExecutor:
             self.alert_fn(f"🚨 carry {kind}: {msg}")
         elif level == "ACTION":
             self.alert_fn(f"🔴 ACTION NEEDED (you) — carry {kind}: {msg}")
-        elif level == "INFO" and kind in ("opened", "closed", "resized", "resumed"):
+        elif level == "INFO" and kind in ("opened", "adopted", "closed", "resized", "resumed"):
             self.alert_fn(f"✅ carry {kind}: {msg}")
 
     # ---------- the decision ----------
@@ -169,10 +171,19 @@ class CarryExecutor:
                 self._step(target)
             except Exception as exc:  # noqa: BLE001
                 # an order or re-read failure mid-pass: the next pass re-reads
-                # the venue and repairs toward the target; the hedge check
-                # pages if a gap persists
+                # the venue and repairs toward the target. The hedge check
+                # MUST still run (review 2026-10-01 SERIOUS-1: a perp leg that
+                # kept failing after the spot buy filled left ~$30k naked with
+                # the unhedged counter never incrementing) - on a FRESH read,
+                # since last_read may predate the fill.
                 self._event("RED", "step_error", f"{type(exc).__name__}: {exc}",
                             rate_limit=True)
+                try:
+                    v = self.venue.read()
+                    self.state.last_read = v
+                    self._check_hedge(v)
+                except Exception:  # noqa: BLE001
+                    pass
             finally:
                 self.state.last_step_ts = int(self.clock())
                 self._save()
@@ -210,17 +221,37 @@ class CarryExecutor:
         if not self.cfg.carry_enabled:
             desired = False
         notional = self._notional()
-        if desired and notional <= 0:
+        if desired and notional <= 0 and not self.state.on:
+            # 0 = never OPEN. An open sleeve keeps its size (review MINOR-5:
+            # it used to unwind); CARRY_ENABLED=false is the close switch.
             desired = False
-        if P < 0 and v.get("liq_px") and px_p >= v["liq_px"] * (1 - self.cfg.liq_buffer):
-            self._event("RED", "margin_guard",
-                        f"ETH {px_p:,.2f} is within {self.cfg.liq_buffer:.0%} of "
-                        f"the short's liquidation {v['liq_px']:,.2f} - unwinding")
+        now = self.clock()
+        liq = v.get("liq_px")
+        if P < 0 and liq:
+            if liq <= px_p:
+                # a short's liquidation price sits ABOVE the mark; one at or
+                # below it is not a number to act on (review SERIOUS-2:
+                # liquidationPx under a unified account is unverified)
+                self._event("RED", "margin_guard_unreliable",
+                            f"venue reports liquidation {liq:,.2f} at/below "
+                            f"ETH {px_p:,.2f} for a short - ignoring it",
+                            rate_limit=True)
+            elif px_p >= liq * (1 - self.cfg.liq_buffer):
+                self.state.guard_until = now + GUARD_COOLDOWN_S
+                self._event("RED", "margin_guard",
+                            f"ETH {px_p:,.2f} is within {self.cfg.liq_buffer:.0%} "
+                            f"of the short's liquidation {liq:,.2f} - unwinding; "
+                            f"no re-open for {GUARD_COOLDOWN_S // 3600}h")
+        if now < self.state.guard_until:
+            # LATCHED: without it an armed sleeve re-opened on the next pass
+            # and unwound again every 5 minutes (review SERIOUS-2)
             desired = False
 
         # ---- target spot quantity ----
         was_on = self.state.on
         resized = False
+        resize_month = None
+        sent = 0
         if armed is None and desired:
             # HOLD means hold THE VENUE: spot stays exactly where it is (no
             # open, no close, no re-size, no re-buying a sleeve that the
@@ -231,31 +262,49 @@ class CarryExecutor:
         elif desired:
             if self.state.on and self.state.target_qty > 0:
                 q = self.state.target_qty
-                month = time.strftime("%Y-%m", time.gmtime(self.clock()))
-                if month != self.state.last_resize_month:
-                    self.state.last_resize_month = month
+                month = time.strftime("%Y-%m", time.gmtime(now))
+                if month != self.state.last_resize_month and notional > 0:
+                    # recorded only once the pass completes (review MINOR-4:
+                    # a failed resize order used to consume the month)
+                    resize_month = month
                     if abs(q * px_s / notional - 1.0) > self.cfg.resize_drift:
                         q = notional / px_s
                         resized = True
-            elif S * px_s >= MIN_ORDER_USD:
-                # a sleeve the state file does not know about (restart with a
-                # lost file): ADOPT what the account holds, never buy on top
-                q = S
             else:
+                # OPEN toward the notional. dS = q - S, so whatever the account
+                # already holds (a lost state file, a stub left by a partial
+                # close) is counted, never bought on top (review MINOR-3:
+                # adopting S here stuck an armed sleeve at a stub size)
                 q = notional / px_s
             q = min(q, CARRY_MAX_NOTIONAL_USD / px_s)
         else:
             q = 0.0
 
-        # ---- spot leg toward the target ----
+        # ---- cross margin BEFORE any risk-adding order (review SERIOUS-1:
+        # it ran after the spot buy, so a leverage failure stranded spot) ----
         dS = q - S
+        opening = (dS * px_s >= MIN_ORDER_USD
+                   or (-S - P) * px_p <= -MIN_ORDER_USD)
+        if opening and not self.cfg.dry_run and not self._cross_ok:
+            self.venue.ensure_cross(self.cfg.cross_leverage)
+            self._cross_ok = True
+
+        # ---- spot leg toward the target ----
         if abs(dS) * px_s >= MIN_ORDER_USD:
             if dS > 0:
                 self._order("spot", True, dS, px_s)
+                sent += 1
             else:
                 avail = max(0.0, S - v.get("spot_hold", 0.0))
                 if avail * px_s >= MIN_ORDER_USD:
                     self._order("spot", False, min(-dS, avail), px_s)
+                    sent += 1
+                if avail + 1e-12 < -dS:
+                    self._event("RED", "spot_locked",
+                                f"{v.get('spot_hold', 0.0):.4f} UETH is held by a "
+                                f"resting spot order - can only sell {avail:.4f} "
+                                f"of {-dS:.4f}; cancel it on the HL UI",
+                                rate_limit=True)
             if not self.cfg.dry_run:
                 v = self._reread(v)
                 S, P = v["spot_qty"], v["perp_qty"]
@@ -266,10 +315,8 @@ class CarryExecutor:
             is_buy = dP > 0
             reduce_only = (is_buy and P < 0 and dP <= -P + 1e-12) or \
                           (not is_buy and P > 0 and -dP <= P + 1e-12)
-            if not is_buy and not self.cfg.dry_run and not self._cross_ok:
-                self.venue.ensure_cross(self.cfg.cross_leverage)
-                self._cross_ok = True
             self._order("perp", is_buy, abs(dP), px_p, reduce_only=reduce_only)
+            sent += 1
             if not self.cfg.dry_run:
                 v = self._reread(v)
                 S, P = v["spot_qty"], v["perp_qty"]
@@ -278,12 +325,16 @@ class CarryExecutor:
         if not self.cfg.dry_run:
             self.state.target_qty = q
             now_on = desired and S * px_s >= MIN_ORDER_USD
+            if resize_month:
+                self.state.last_resize_month = resize_month
             if now_on and not was_on:
                 self.state.opened_ts = int(self.clock())
                 self.state.last_resize_month = time.strftime("%Y-%m", time.gmtime(self.clock()))
-                self._event("INFO", "opened",
+                liq_note = (f"; venue liquidation px {v.get('liq_px')}"
+                            if v.get("liq_px") else "; venue reports no liquidation px")
+                self._event("INFO", "opened" if sent else "adopted",
                             f"long {S:.4f} UETH / short {-P:.4f} ETH "
-                            f"(~${S * px_s:,.0f}); {why}")
+                            f"(~${S * px_s:,.0f}); {why}{liq_note}")
             elif was_on and not desired and S * px_s < MIN_ORDER_USD:
                 self._event("INFO", "closed", f"sleeve flat (spot {S:.4f}, perp {P:.4f}); {why}")
             elif resized:
