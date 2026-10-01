@@ -4831,7 +4831,7 @@ def test_sleeve_only_seed_and_rebalance(tmp_path):
     alerts = []
     out = run_cycle(m2, DryAdapter(), _pl_target(1.0), "2026-08-20", alert=alerts.append)
     assert not [o for o in out if o["action"] in ("REBALANCE", "CORE_BUY")]
-    assert m2.state.spy_qty == 70 and m2.state.sleeve_target is None
+    assert m2.state.spy_qty == 70 and m2.state.sleeve_target == 0.30   # inferred from the shape
     out = run_cycle(m2, DryAdapter(), _pl_target(1.0), "2026-08-20", alert=alerts.append)
     (rb,) = [o for o in out if o["action"] == "REBALANCE"]
     assert rb["direction"] == "core_to_sleeve" and rb["usd"] == pytest.approx(7_000.0)
@@ -4933,3 +4933,21 @@ def test_sleeve_only_entries_size_against_the_whole_book(tmp_path):
     _seed_initialized(m2, sleeve_cash=0.0, bil_qty=30, spy_qty=70)
     (ent2,) = [o for o in m2.step("2026-08-20", payload(entries=[entry()], stops=[stop_row()]), PRICES) if o["action"] == "ENTER"]
     assert ent2["qty"] == 5            # 1% of the $3,000 sleeve
+
+
+def test_sleeve_target_is_inferred_from_the_book_shape(tmp_path):
+    """A pre-field state file: a sleeve-only book must load as 1.0, not as
+    the 0.30 default (which would rebuild the core on two agreeing polls)."""
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=0.0, bil_qty=100, spy_qty=0)   # sleeve_target None
+    out = run_cycle(m, DryAdapter(), _pl_target(1.0), "2026-08-20", alert=lambda _: None)
+    assert m.state.sleeve_target == 1.0
+    assert not [o for o in out if o["action"] in ("REBALANCE", "CORE_BUY")]
+    m2 = mk(tmp_path / "b")
+    _seed_initialized(m2, sleeve_cash=0.0, bil_qty=30, spy_qty=70)
+    run_cycle(m2, DryAdapter(), payload(), "2026-08-20", alert=lambda _: None)
+    assert m2.state.sleeve_target == 0.30
+    # the first agreeing poll pages (the abort window), the second moves money
+    alerts = []
+    run_cycle(m2, DryAdapter(), _pl_target(1.0), "2026-08-20", alert=alerts.append)
+    assert any("abort" in a for a in alerts) and m2.state.spy_qty == 70

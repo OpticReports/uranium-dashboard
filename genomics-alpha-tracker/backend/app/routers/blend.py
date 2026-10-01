@@ -295,16 +295,23 @@ def get_intents(session: Session = Depends(get_session)):
                 "trail_level": g.exit_price if g.status == "stopped" else None,
             })
 
+    # Sleeve weights are executor-side state (the tracker never learns
+    # account equity): needed stays null, the executor decides. The target
+    # key is OMITTED when BLEND_SLEEVE_TARGET is unset: an executor build
+    # that predates the persisted target reads a missing key as its 0.30
+    # default, while a present null would TypeError its planner every
+    # cycle (counter-agent 2026-10-01).
+    rebalance = {"needed": None, "current_sleeve_weight": None}
+    t = sleeve_target()
+    if t is not None:
+        rebalance["target"] = t
     return {
         "as_of": as_of,
         "gate": gate,
         "entries": entries,
         "exits": exits,
         "stops": stops,
-        # Sleeve weights are executor-side state (the tracker never learns
-        # account equity): needed stays null, the executor decides.
-        "rebalance": {"needed": None, "current_sleeve_weight": None,
-                      "target": sleeve_target()},
+        "rebalance": rebalance,
         "book_params": dict(BOOK_PARAMS),
         "contract": CONTRACT,
     }

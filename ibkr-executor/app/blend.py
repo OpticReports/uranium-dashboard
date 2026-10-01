@@ -1937,6 +1937,15 @@ def _sleeve_target(mgr: "Blend3070Manager", payload: dict,
       consecutive polls agree, with a Telegram page naming the move (a
       mid-deploy blip of one poll never sells or buys the core)."""
     st = mgr.state
+    if st.sleeve_target is None and st.initialized:
+        # state file from before the field existed: infer the weight from
+        # the book's SHAPE, never from the file's age - a sleeve-only book
+        # loaded as 0.30 would rebuild its core (counter-agent 2026-10-01)
+        st.sleeve_target = (1.0 if (st.spy_qty == 0 and not any(
+            r.get("kind") == "core-buy" for r in st.pending_book_orders.values()))
+            else TARGET_SLEEVE)
+        mgr._event("INFO", f"sleeve target inferred from the book: "
+                           f"{st.sleeve_target:.0%}")
     current = st.sleeve_target if st.sleeve_target is not None else TARGET_SLEEVE
     reb = payload.get("rebalance") or {}
     raw = reb.get("target")
@@ -1964,16 +1973,19 @@ def _sleeve_target(mgr: "Blend3070Manager", payload: dict,
     n = (seen[1] + 1) if seen[0] is not None and abs(seen[0] - t) < 1e-9 else 1
     if n < SLEEVE_TARGET_CONFIRM:
         st.sleeve_target_seen = [t, n]
-        mgr._event("INFO", f"tracker publishes sleeve target {t:.0%} "
-                           f"(book at {current:.0%}): awaiting "
-                           f"{SLEEVE_TARGET_CONFIRM - n} more poll(s) before "
-                           f"re-weighting")
+        msg = (f"tracker publishes sleeve target {t:.0%} (book at "
+               f"{current:.0%}): re-weighting after {SLEEVE_TARGET_CONFIRM - n} "
+               f"more agreeing poll(s) - unset BLEND_SLEEVE_TARGET on the "
+               f"tracker now to abort")
+        mgr._event("INFO", msg)
+        if alerts is not None and n == 1:
+            alerts.append("⚠️ blend " + msg)          # the abort window
         return current
     st.sleeve_target, st.sleeve_target_seen = t, []
     msg = (f"sleeve target {current:.0%} -> {t:.0%} adopted from the tracker: "
            + ("the SPY core will be SOLD and swept to BIL"
               if t > current else "SPY will be BOUGHT to rebuild the core")
-           + " in this cycle (BLEND_SLEEVE_TARGET on the tracker)")
+           + " from this cycle (BLEND_SLEEVE_TARGET on the tracker)")
     mgr._event("WARN", msg)
     if alerts is not None:
         alerts.append("⚠️ blend " + msg)
@@ -4123,6 +4135,8 @@ def _execute_rebalance(mgr: Blend3070Manager, adapter, it: dict,
         if spy_px <= 0:
             return False
         qty = min(mgr.state.spy_qty, int(round(usd / spy_px)))
+        if mgr.state.sleeve_target is not None and mgr.state.sleeve_target >= 1.0 - 1e-9:
+            qty = mgr.state.spy_qty          # sleeve-only: never strand a share
         if qty <= 0:
             return False
         # Write-ahead journal + deterministic client id (counter-agent N15):

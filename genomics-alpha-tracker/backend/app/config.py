@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
@@ -122,6 +123,14 @@ class Settings(BaseSettings):
     # already runs at (persisted), so a redeploy with the env missing can
     # never re-weight live money. A non-numeric value fails boot (loud).
     blend_sleeve_target: float | None = None   # BLEND_SLEEVE_TARGET
+
+    @field_validator("blend_sleeve_target", mode="before")
+    @classmethod
+    def _blank_sleeve_target(cls, v):
+        # Render's sync:false prompt can leave the value blank: blank = unset
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v
 
 
 @functools.lru_cache

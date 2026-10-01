@@ -139,8 +139,9 @@ def test_intents_shape_and_gate_on_entry(session, client):
     assert out["stops"] == [{"symbol": "CRSP", "call_id": call.id,
                              "trail_level": 94.0}]
     assert out["exits"] == []
-    assert out["rebalance"] == {"needed": None, "current_sleeve_weight": None,
-                                "target": None}      # unset = no instruction
+    assert out["rebalance"] == {"needed": None, "current_sleeve_weight": None}
+    # unset = the key is OMITTED (an older executor reads absence as 0.30;
+    # a present null would break its planner)
     assert out["book_params"] == BOOK_PARAMS
     assert "equity" in out["contract"]      # the executor-reconciles contract
 
@@ -152,14 +153,15 @@ def test_sleeve_target_setting_publishes_or_stays_silent(session, client, monkey
     from app import config
     last_bar = _seed_name(session)
     _seed_xbi(session, above=True, last_date=last_bar)
-    for env, want in (("1.0", 1.0), ("0.6", 0.6), ("0.30", 0.30), ("0", None), ("1.5", None)):
+    for env, want in (("1.0", 1.0), ("0.6", 0.6), ("0.30", 0.30), ("0", None), ("1.5", None), ("", None), (" ", None)):
         monkeypatch.setenv("BLEND_SLEEVE_TARGET", env)
         config.get_settings.cache_clear()
         try:
             out = client.get("/blend3070/intents").json()
         finally:
             config.get_settings.cache_clear()
-        assert out["rebalance"]["target"] == want, env
+        assert out["rebalance"].get("target") == want, env
+        assert ("target" in out["rebalance"]) == (want is not None), env
 
 
 def test_gate_off_suppresses_entries_but_not_stops(session, client):
