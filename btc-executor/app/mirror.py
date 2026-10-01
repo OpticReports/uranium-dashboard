@@ -343,6 +343,11 @@ class ExecState:
     rails_venue: str | None = None
     day_key: str = ""
     day_start_equity: float = 0.0
+    # the scaled DAILY_LOSS pct FROZEN at the last UTC rollover (0.0 = not
+    # yet frozen -> computed live). Review 2026-10-01 S1: read live, a
+    # mid-day KELLY_M change moved the line under legs sized at the OLD
+    # KELLY_M - a de-risking step-down could flatten the book on the spot.
+    day_loss_pct: float = 0.0
     high_water: float = 0.0
     events: list = field(default_factory=list)
     # one mark per UTC day: {d, equity, position_btc} — the raw series for
@@ -435,6 +440,7 @@ class Executor:
         except Exception:  # noqa: BLE001
             pass
         self._breach_count = 0
+        self._dl_notice = None      # (day_key, pending pct) last paged
         self._last_flat_equity = None      # transfer-reconciliation baseline
         self._fill_watch: list[dict] = []  # orders pending a fill-price read
         self._sent_at: dict[str, float] = {}   # per-kind Telegram cooldown
@@ -1197,7 +1203,8 @@ class Executor:
             raw = json.load(open(self.state_path))
             st = ExecState(**{k: raw[k] for k in
                               ("halted", "day_key", "day_start_equity",
-                               "high_water", "venue") if k in raw})
+                               "day_loss_pct", "high_water", "venue")
+                              if k in raw})
             # Filter unknown keys: a state file written by a NEWER build
             # carries fields this LegLedger lacks, and the bare except below
             # would discard the entire state - un-halting a killed executor
@@ -1256,6 +1263,7 @@ class Executor:
         os.makedirs(os.path.dirname(self.state_path) or ".", exist_ok=True)
         d = {"halted": self.state.halted, "day_key": self.state.day_key,
              "day_start_equity": self.state.day_start_equity,
+             "day_loss_pct": self.state.day_loss_pct,
              "high_water": self.state.high_water,
              "legs": {n: asdict(l) for n, l in self.state.legs.items()},
              "events": self.state.events[-200:],
@@ -1389,6 +1397,13 @@ class Executor:
                                  "value (or 1.0, today's size) and trading "
                                  "continues - check the engine's vol "
                                  "sizing before its next signal",
+            "size_mult_fallback": "this entry went in at FULL size because "
+                                  "the paper engine did not supply a vol-"
+                                  "target multiplier (see its basis). Above "
+                                  "KELLY_M 0.30 that is the size the -30% "
+                                  "budget was not computed for: check the "
+                                  "engine's /exec/target size_mult_basis, and "
+                                  "if it persists lower KELLY_M to 0.30",
             "config_change": "sizing/risk config changed - if this was you "
                              "(ramp step, base change), ignore; if NOT, a "
                              "sync or fat-finger altered live risk limits - "
@@ -1426,7 +1441,7 @@ class Executor:
         # still LOGGED - only the phone pings are rate-limited. Halts, mode
         # changes and live-trade events are never suppressed.
         RATE_LIMITED = {"halt_config", "cap_clamp", "leg_sync_error",
-                        "size_mult_invalid",
+                        "size_mult_invalid", "size_mult_fallback",
                         # persistent by nature: true every poll until the
                         # operator edits the env or the cap is raised
                         "kelly_over_cap", "exposure_over_cap",
@@ -1537,13 +1552,30 @@ class Executor:
         [SIZE_MULT_MIN, SIZE_MULT_MAX] -> clamped and paged. It can only
         SHRINK an entry, so no failure here can push a leg past a cap."""
         raw = tl.get("size_mult") if isinstance(tl, dict) else None
+        basis = tl.get("size_mult_basis") if isinstance(tl, dict) else None
+        if basis != "vol_target" and \
+                self._effective_kelly_m() > DAILY_LOSS_REF_KELLY:
+            # Review 2026-10-01 (both verifiers): m = 1.0 is the UNCONDITIONED
+            # book, and above 0.30 that is the size the -30% budget was NOT
+            # computed for (live engine @0.75: -$30.9k in-sample on 2019+).
+            # A silent fallback - engine error, missing history, an engine
+            # that predates the field - must reach the phone.
+            self._event("RED", "size_mult_fallback",
+                        f"{leg} entry sized WITHOUT the vol target (engine "
+                        f"basis {basis!r}) at KELLY_M "
+                        f"{self._effective_kelly_m()}")
         if raw is None:
             return 1.0
-        try:
-            m = float(raw)
-        except (TypeError, ValueError):
-            m = float("nan")
-        if isinstance(raw, bool) or m != m:
+        # numbers only (review 2026-10-01 N1/M1): a string is not a schema
+        # the engine speaks, and float(10**400) raises OverflowError, which
+        # escaped and skipped stop maintenance every poll.
+        m = float("nan")
+        if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+            try:
+                m = float(raw)
+            except (OverflowError, ValueError):
+                m = float("inf") if raw > 0 else float("nan")
+        if m != m:
             self._event("RED", "size_mult_invalid",
                         f"engine size_mult={raw!r} for {leg} is not a number "
                         f"- sizing at 1.0")
@@ -1608,6 +1640,20 @@ class Executor:
             # A human-gated halt had cut 2019+ CAGR ~11% -> ~1% in the ruin
             # review, and _step_locked returns on `halted` BEFORE stop
             # maintenance, so a held halt is also an unmanaged book.
+            if self.state.day_key and self.state.halted == "DAILY_LOSS" \
+                    and self.state.high_water > 0 and equity < \
+                    self.state.high_water - self.cfg.dd_halt_pct * \
+                    self._base(self.state.high_water):
+                # Review 2026-10-01 S2: an account that is ALSO below the
+                # DRAWDOWN line must not re-arm and re-buy the book at
+                # 00:00. DRAWDOWN is manual-resume; it takes over the halt.
+                self.state.halted = "DRAWDOWN"
+                self._event("RED", "halt",
+                            f"DRAWDOWN at UTC rollover {day}: equity "
+                            f"{equity:.0f} is below HWM "
+                            f"{self.state.high_water:.0f} - "
+                            f"{self.cfg.dd_halt_pct:.0%} of base; the "
+                            f"DAILY_LOSS halt is NOT re-armed (manual resume)")
             if self.state.day_key and self.state.halted == "DAILY_LOSS":
                 self.state.halted = None
                 self._breach_count = 0
@@ -1628,6 +1674,7 @@ class Executor:
                                 f"{day}")
             self.state.day_key = day
             self.state.day_start_equity = equity
+            self.state.day_loss_pct = self._daily_loss_pct_live()
             try:
                 pos = self.venue.position()
             except Exception:  # noqa: BLE001
@@ -1678,7 +1725,7 @@ class Executor:
                         f"{self.state.high_water:.0f}")
         self._last_flat_equity = equity
 
-    def _daily_loss_pct(self) -> float:
+    def _daily_loss_pct_live(self) -> float:
         """DAILY_LOSS_HALT_PCT scaled to the size actually traded: x
         max(1, effective KELLY_M / DAILY_LOSS_REF_KELLY). EFFECTIVE, not raw,
         for the reason _roll_day's old comment gave: an over-cap env must not
@@ -1686,6 +1733,18 @@ class Executor:
         the configured pct, so small rungs keep today's line."""
         k = self._effective_kelly_m()
         return self.cfg.daily_loss_halt_pct * max(1.0, k / DAILY_LOSS_REF_KELLY)
+
+    def _daily_loss_pct(self) -> float:
+        """The line in force TODAY: frozen at the UTC rollover, so a KELLY_M
+        change takes effect on the daily rail at the next rollover, together
+        with the legs it actually sized (review 2026-10-01 S1). Before the
+        first rollover (fresh state) it is computed live."""
+        if not self.state.day_loss_pct:
+            # first read after a deploy that predates the field: freeze the
+            # line the book is sized at NOW, not whatever KELLY_M becomes
+            # later today
+            self.state.day_loss_pct = self._daily_loss_pct_live()
+        return self.state.day_loss_pct
 
     def _breach_for(self, equity: float) -> tuple[str, str] | None:
         """Is a loss threshold breached RIGHT NOW? Extracted so /resume asks
@@ -1695,16 +1754,20 @@ class Executor:
         st = self.state
         base_d, base_h = self._base(st.day_start_equity), self._base(st.high_water)
         dpct = self._daily_loss_pct()
-        if st.day_start_equity > 0 and \
-                equity < st.day_start_equity - dpct * base_d:
-            return ("DAILY_LOSS",
-                    f"equity {equity:.0f} < day start {st.day_start_equity:.0f}"
-                    f" - {dpct:.1%} of base {base_d:.0f}")
+        # DRAWDOWN FIRST (review 2026-10-01 S2): when both lines are crossed
+        # the halt must be the manual-resume one. Checked second, a
+        # DAILY_LOSS label auto-rearmed at 00:00 and re-bought the whole book
+        # on an account already below the drawdown line.
         if st.high_water > 0 and \
                 equity < st.high_water - self.cfg.dd_halt_pct * base_h:
             return ("DRAWDOWN",
                     f"equity {equity:.0f} < HWM {st.high_water:.0f}"
                     f" - {self.cfg.dd_halt_pct:.0%} of base {base_h:.0f}")
+        if st.day_start_equity > 0 and \
+                equity < st.day_start_equity - dpct * base_d:
+            return ("DAILY_LOSS",
+                    f"equity {equity:.0f} < day start {st.day_start_equity:.0f}"
+                    f" - {dpct:.1%} of base {base_d:.0f}")
         return None
 
     def _check_halts(self, equity: float) -> None:
@@ -1713,9 +1776,27 @@ class Executor:
         it would be fully funded — anchoring to account equity instead would
         false-trigger on routine swings (or, worse, never trigger as the
         account shrinks)."""
+        if self.state.halted == "DAILY_LOSS":
+            # the flatten can slip the account past the DRAWDOWN line after a
+            # DAILY_LOSS halt; relabel so it cannot auto-rearm (review S2)
+            b = self._breach_for(equity)
+            if b is not None and b[0] == "DRAWDOWN":
+                self.state.halted = "DRAWDOWN"
+                self._event("RED", "halt",
+                            f"DAILY_LOSS upgraded to DRAWDOWN: {b[1]} - "
+                            f"manual resume")
+                self._save_state()
         if self.state.halted:
             return
         st = self.state
+        if st.day_loss_pct and abs(st.day_loss_pct
+                                   - self._daily_loss_pct_live()) > 1e-9 \
+                and self._dl_notice != (st.day_key, self._daily_loss_pct_live()):
+            self._dl_notice = (st.day_key, self._daily_loss_pct_live())
+            self._event("INFO", "daily_loss_line_pending",
+                        f"daily-loss line stays {st.day_loss_pct:.1%} of base "
+                        f"today; {self._daily_loss_pct_live():.1%} (from the "
+                        f"new KELLY_M) takes effect at the next UTC rollover")
         base_d = self._base(st.day_start_equity)
         base_h = self._base(st.high_water)
         # coherence guard: a DD halt deeper than ~80% of the account can

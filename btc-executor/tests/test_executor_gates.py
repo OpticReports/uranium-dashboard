@@ -1045,7 +1045,7 @@ def test_gate_daily_loss_threshold_scales_with_effective_size(tmp_path):
     for k, want in ((0.05, 0.06), (0.20, 0.06), (0.30, 0.06), (0.45, 0.09),
                     (0.75, 0.15), (2.0, 0.15)):
         ex.cfg.kelly_m = k
-        assert ex._daily_loss_pct() == pytest.approx(want), k
+        assert ex._daily_loss_pct_live() == pytest.approx(want), k
 
 
 def test_gate_daily_loss_breach_uses_the_scaled_line(tmp_path):
@@ -1060,7 +1060,8 @@ def test_gate_daily_loss_breach_uses_the_scaled_line(tmp_path):
     assert ex._breach_for(90_000.0) is None
     b = ex._breach_for(84_000.0)
     assert b is not None and b[0] == "DAILY_LOSS" and "15.0%" in b[1]
-    ex.cfg.kelly_m = 0.30                                  # today's line
+    ex.cfg.kelly_m = 0.30
+    ex.state.day_loss_pct = 0.0                            # new day: re-freeze
     assert ex._breach_for(93_000.0)[0] == "DAILY_LOSS"
 
 
@@ -7041,7 +7042,7 @@ def test_gate_over_cap_env_does_not_hold_daily_loss_hostage(tmp_path):
         "DAILY_LOSS auto-rearms at every size since 2026-10-01; an over-cap "
         "env must not hold the book halted")
     # and the over-cap env does not widen the rail past the cap's 15%
-    assert ex._daily_loss_pct() == pytest.approx(0.15)
+    assert ex._daily_loss_pct_live() == pytest.approx(0.15)
 
 
 def test_gate_advance_ok_itself_is_false_at_the_ceiling(tmp_path, monkeypatch):
@@ -7264,3 +7265,125 @@ def test_gate_size_mult_cannot_beat_the_notional_rail(tmp_path):
     ex.cfg.max_notional_usd = 500.0
     ex.step(target(pull=_pend_pull(0.9)))
     assert v.calls[0][2] * 59_000 <= 500.0 + 1e-6
+
+
+# --- review 2026-10-01 (two independent verifiers) -------------------------
+
+def test_gate_daily_loss_line_is_frozen_for_the_day(tmp_path):
+    """S1: a mid-day KELLY_M change must not move today's line under legs
+    sized at the old KELLY_M. Step-DOWN 0.75 -> 0.30 on a -$10k day used to
+    halt and market-sell the whole book; step-UP widened the line under
+    0.30-sized legs. It takes effect at the next UTC rollover."""
+    v = FakeVenue(equity=100_000.0)
+    ex = mkexec(tmp_path, v)
+    ex.cfg.kelly_m, ex.cfg.sizing_base_usd = 0.75, 100_000.0
+    ex.cfg.max_notional_usd = 1_000_000.0
+    ex.step(target())                                      # rollover freezes 15%
+    assert ex.state.day_loss_pct == pytest.approx(0.15)
+    ex.cfg.kelly_m = 0.30                                  # de-risk mid-day
+    v._equity = 90_000.0
+    for _ in range(5):
+        ex.step(target())
+    assert ex.state.halted is None
+    assert [e for e in ex.state.events if e["kind"] == "daily_loss_line_pending"]
+    ex.state.day_key = "2000-01-01"                        # next rollover
+    ex.step(target())
+    assert ex.state.day_loss_pct == pytest.approx(0.06)
+    # step-UP: 0.30 frozen, 0.75 set mid-day -> still 6% today
+    ex2 = mkexec(tmp_path / "up", FakeVenue(equity=100_000.0))
+    ex2.cfg.kelly_m, ex2.cfg.sizing_base_usd = 0.30, 100_000.0
+    ex2.step(target())
+    ex2.cfg.kelly_m = 0.75
+    assert ex2._daily_loss_pct() == pytest.approx(0.06)
+
+
+def test_gate_daily_loss_line_survives_a_restart(tmp_path):
+    v = FakeVenue(equity=100_000.0)
+    ex = mkexec(tmp_path, v)
+    ex.cfg.kelly_m, ex.cfg.sizing_base_usd = 0.75, 100_000.0
+    ex.step(target())
+    ex._save_state()
+    ex2 = mkexec(tmp_path, v)                              # same state file
+    ex2.cfg.kelly_m = 0.30
+    assert ex2.state.day_loss_pct == pytest.approx(0.15)
+
+
+def test_gate_drawdown_wins_when_both_lines_are_crossed(tmp_path):
+    """S2: equity under BOTH lines must halt DRAWDOWN (manual), not
+    DAILY_LOSS (which auto-rearms and re-buys at 00:00)."""
+    v = FakeVenue(equity=100_000.0)
+    ex = mkexec(tmp_path, v)
+    ex.cfg.kelly_m, ex.cfg.sizing_base_usd = 0.75, 100_000.0
+    ex.cfg.dd_halt_pct = 0.30
+    ex.state.high_water, ex.state.day_start_equity = 100_000.0, 85_500.0
+    ex.state.day_loss_pct = 0.15
+    assert ex._breach_for(69_800.0)[0] == "DRAWDOWN"
+
+
+def test_gate_daily_loss_upgrades_to_drawdown_and_does_not_rearm(tmp_path):
+    """S2, the slip path: halted DAILY_LOSS, then equity is below the DRAWDOWN
+    line -> relabelled DRAWDOWN; and a rollover never re-arms it."""
+    v = FakeVenue(equity=69_000.0)
+    ex = mkexec(tmp_path, v)
+    ex.cfg.kelly_m, ex.cfg.sizing_base_usd = 0.75, 100_000.0
+    ex.cfg.dd_halt_pct = 0.30
+    ex.state.day_key = time.strftime("%Y-%m-%d", time.gmtime())
+    ex.state.high_water, ex.state.day_start_equity = 100_000.0, 85_000.0
+    ex.state.halted = "DAILY_LOSS"
+    ex.step(target())
+    assert ex.state.halted == "DRAWDOWN"
+    # and directly at a rollover, without a poll in between
+    ex2 = mkexec(tmp_path / "b", FakeVenue(equity=69_000.0))
+    ex2.cfg.kelly_m, ex2.cfg.sizing_base_usd = 0.75, 100_000.0
+    ex2.cfg.dd_halt_pct = 0.30
+    ex2.state.high_water = 100_000.0
+    ex2.state.halted, ex2.state.day_key = "DAILY_LOSS", "2000-01-01"
+    ex2._roll_day(69_000.0)
+    assert ex2.state.halted == "DRAWDOWN"
+    assert not [e for e in ex2.state.events if e["kind"] == "auto_rearm"]
+
+
+def test_gate_coherence_guard_uses_the_scaled_daily_line(tmp_path):
+    """M2: mutation (e) - unscaled pct in the second coherence guard -
+    survived the whole suite."""
+    v = FakeVenue(equity=100_000.0)
+    ex = mkexec(tmp_path, v)
+    ex.cfg.kelly_m, ex.cfg.sizing_base_usd = 0.75, 100_000.0
+    ex.cfg.max_notional_usd = 12_000.0                     # < scaled $15k
+    ex.cfg.dd_halt_pct = 0.10                              # keep DD line quiet
+    ex.step(target())
+    ev = [e for e in ex.state.events if e["kind"] == "halt_config"
+          and "DAILY_LOSS" in e["msg"]]
+    assert ev, "a $15k daily line against a $12k cap must page"
+
+
+@pytest.mark.parametrize("raw", ["0.6", 10 ** 400, -(10 ** 400)])
+def test_gate_size_mult_rejects_strings_and_survives_huge_ints(tmp_path, raw):
+    """N1 + M1: strings are not numbers; 10**400 raised OverflowError and
+    skipped stop maintenance every poll."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    m = ex._size_mult("pullback", {"size_mult": raw})
+    assert m in (1.0, 0.5)
+    assert [e for e in ex.state.events if e["kind"] == "size_mult_invalid"]
+
+
+def test_gate_size_mult_fallback_pages_above_030(tmp_path):
+    """Both verifiers: an entry sized without the vol target at KELLY_M 0.75
+    is the unconditioned book - it must page. At <= 0.30 it is today's
+    regime and stays quiet."""
+    v = FakeVenue()
+    ex = mkexec(tmp_path, v)
+    ex.cfg.kelly_m, ex.cfg.max_notional_usd = 0.75, 1_000_000.0
+    ex.step(target(pull=_pend_pull(1.0)))                  # no basis key
+    ev = [e for e in ex.state.events if e["kind"] == "size_mult_fallback"]
+    assert ev and ev[0]["level"] == "RED"
+    ex2 = mkexec(tmp_path / "ok", FakeVenue())
+    ex2.cfg.kelly_m, ex2.cfg.max_notional_usd = 0.75, 1_000_000.0
+    p = _pend_pull(0.8)
+    p["size_mult_basis"] = "vol_target"
+    ex2.step(target(pull=p))
+    assert not [e for e in ex2.state.events if e["kind"] == "size_mult_fallback"]
+    ex3 = mkexec(tmp_path / "small", FakeVenue())          # Cfg 0.20
+    ex3.step(target(pull=_pend_pull(1.0)))
+    assert not [e for e in ex3.state.events if e["kind"] == "size_mult_fallback"]

@@ -342,8 +342,11 @@ so it is measured identically regardless of how fast the size ramps).
   KELLY_M 0.30 until then); above 0.30 its threshold scales with size. Rearm caveat, disclosed: the new day gets a
   fresh full budget anchored at post-loss equity, and if the engine still
   holds its position the mirror re-enters it - worst case across a boundary
-  is roughly 2x the daily rail. Below 0.30 the dollar amounts are small and
-  this is accepted; above 0.30 the manual gate closes it.
+  is roughly 2x the daily rail (~$30k at 0.75 = the DRAWDOWN line). Since
+  2026-10-01 the scaled line is FROZEN at each rollover (a mid-day KELLY_M
+  change takes effect next day), DRAWDOWN is checked first, and a DAILY_LOSS
+  halt with equity under the DRAWDOWN line is relabelled DRAWDOWN (manual) -
+  at a poll or at the rollover - so it can never auto-rearm and re-buy.
 - **LEDGER_DIVERGENCE and STOP_UNPLACEABLE are protection failures, not
   risk breaches** (2026-08-26), and are ALWAYS manual-resume at every
   KELLY_M — the auto-rearm is keyed on `DAILY_LOSS` alone. `LEDGER_DIVERGENCE`

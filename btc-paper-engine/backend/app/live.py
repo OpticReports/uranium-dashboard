@@ -445,8 +445,13 @@ class Engine:
                     "books": {n: {"equity": round(b.equity, 2), "trades": len(b.trades)}
                               for n, b in self.books.items()}}
 
-    def _vol_history(self) -> dict[int, float]:
-        if self._vol_key == self.last_processed and self._vol_closes:
+    def _vol_history(self, need_ts: int | None = None) -> dict[int, float]:
+        # one read of last_processed for both the filter and the cache key
+        # (review 2026-10-01 M1: it was read twice, and catch_up advances it
+        # AFTER creating the pending)
+        lp = self.last_processed
+        if (self._vol_key == lp and self._vol_closes
+                and (need_ts is None or need_ts in self._vol_closes)):
             return self._vol_closes
         import csv as _csv
         import os as _os
@@ -454,8 +459,9 @@ class Engine:
                             "fixtures", "bars_4h_btcusd.csv")
         closes: dict[int, float] = {}
         try:
-            for r in _csv.DictReader(open(fix)):
-                closes[int(r["ts_open_unix"])] = float(r["close"])
+            with open(fix) as fh:
+                for r in _csv.DictReader(fh):
+                    closes[int(r["ts_open_unix"])] = float(r["close"])
         except OSError:
             logger.warning("vol sizing: fixture not readable at %s", fix)
         with session_scope() as s:
@@ -463,11 +469,15 @@ class Engine:
                 closes[row.ts_open] = row.close
         for b in self.bars:
             closes[b.ts] = b.close
-        # only CLOSED, processed bars: a signal is evaluated at its bar's
-        # close, so nothing newer than last_processed may inform its size
-        if self.last_processed:
-            closes = {t: c for t, c in closes.items() if t <= self.last_processed}
-        self._vol_closes, self._vol_key = closes, self.last_processed
+        # only CLOSED bars up to the newest one the signal could have seen:
+        # a signal is evaluated at its bar's close. volsize.size_mult's grid
+        # also ends at the signal bar, so this is defence in depth; it admits
+        # need_ts itself so a pending created moments before last_processed
+        # advances is not sized off a history missing its own bar.
+        hi = max(lp or 0, need_ts or 0)
+        if hi:
+            closes = {t: c for t, c in closes.items() if t <= hi}
+        self._vol_closes, self._vol_key = closes, lp
         return closes
 
     def size_mult_for(self, signal_ts: int | None) -> dict:
@@ -479,7 +489,16 @@ class Engine:
         hit = self._vol_cache.get(signal_ts)
         if hit is not None:
             return hit
-        res = size_mult(self._vol_history(), int(signal_ts))
+        # FAIL TOWARD TODAY'S SIZE, NEVER TOWARD A 500 (review 2026-10-01
+        # S1): /exec/target is the live executor's only feed, and a failed
+        # fetch skips its whole step - halt checks and stop maintenance
+        # included. The executor pages any non-vol_target basis above 0.30.
+        try:
+            res = size_mult(self._vol_history(int(signal_ts)), int(signal_ts))
+        except Exception:  # noqa: BLE001
+            logger.exception("vol sizing failed for signal %s", signal_ts)
+            return {"m": 1.0, "basis": "error", "sigma_now": None,
+                    "sigma_ref": None}
         if res["basis"] == "vol_target":      # final once its bars are in
             self._vol_cache[signal_ts] = res
         return res
