@@ -148,10 +148,11 @@ export default function BacktestPanel({ bt }) {
           {bt.caveats.map((c, i) => <li key={i}>{c}</li>)}
         </ul>
         <div className="text-[10px] text-gray-600 mt-2">
-          How these are known: every dollar figure in the window tables is copied from the full
-          daily curves of the variants run, whose machinery gate re-asserts the documented book
-          within ±1% on every run; a test freezes the same numbers here. The sizing table is the
-          replay report's own addendum. Source: {bt.sources.reports.join(", ")} ·
+          How these are known: the full-period and sub-period dollar figures are copied from the
+          full daily curves of the variants run, whose machinery gate re-asserts the documented
+          book within ±1% on every run; a test freezes the same numbers here.
+          {trailingD?.status === "ok" && " The trailing 2y/5y windows are recomputed from a refetched price cache that passed that same gate (footnote on those tabs)."}
+          {" "}The sizing table is the replay report's own addendum. Source: {bt.sources.reports.join(", ")} ·
           results generated {bt.sources.variants_results.generated?.slice(0, 10)} ·
           summary built {bt.generated?.slice(0, 10)}
         </div>
@@ -165,7 +166,7 @@ function DollarTable({ win, books, note }) {
   return (
     <div className="mt-3 overflow-x-auto">
       <div className="text-xs text-gray-400 mb-1">
-        {win.start} → {win.end} ({win.years}y) · {note || "dollars, daily mark-to-market"}
+        {win.start} → {win.end} ({Number(win.years).toFixed(2)}y) · {note || "dollars, daily mark-to-market"}
       </div>
       <table className="w-full text-sm">
         <thead>
@@ -218,7 +219,7 @@ function RTable({ w }) {
   return (
     <div className="mt-3">
       <div className="text-xs text-gray-400 mb-1">
-        {w.start} → {w.end} ({w.years}y) · <b>R-units, realization basis</b> — a call counts in the
+        {w.start} → {w.end} ({Number(w.years).toFixed(2)}y) · <b>R-units, realization basis</b> — a call counts in the
         window it exited in; 1R risked per call, ≤10 open; slippage inside R
         <InfoTip term="r_window" />
       </div>
