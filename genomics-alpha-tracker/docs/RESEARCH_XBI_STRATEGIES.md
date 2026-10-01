@@ -210,14 +210,21 @@ round 1; margin BIL + 1.5%/yr on any gross above 1.0._
 
 **One variant passes, and it is not an XBI strategy.** RP3 — an
 inverse-volatility mix of XBI, QQQ, GLD and TLT levered to a 25% vol
-target (about 2.3× gross) — returns 18.5% a year with a 49% max drawdown
-and Sharpe 0.82, and still passes with margin at BIL + 2.5% and with
-costs doubled. Inverse-vol gives the highest-volatility asset the smallest
-weight, so XBI is the minor sleeve of that book (the verifier reports the
-exact average weight below). The honest name for RP3 is "a levered
-multi-asset book that contains XBI", and its CAGR comes from leverage on
-bonds, gold and the QQQ bull market, with 2022 (−39%) as the year all four
-fell together.
+target (2.3× gross, at the 2.5× cap on 65% of rebalances) — returns 18.5%
+a year with a 49% max drawdown and Sharpe 0.82, and still passes with
+margin at BIL + 2.5% and with costs doubled. But XBI is 16% of that book
+(TLT 32%, GLD 28%, QQQ 24%); the SAME rule WITHOUT XBI also passes the
+frozen rule (17.5% / 48% / 0.82), and with SPY in XBI's place it does
+better on every metric (18.8% / 46% / 0.86). The honest name for RP3 is
+"a 2.3× levered bond/gold/Nasdaq book with a biotech sleeve". Its edge
+over XBI is one regime: +17 pp a year in 2007-2012 when levered bonds and
+gold rallied; it LOSES to XBI in 2013-2018; 2022 was a −39% year and the
+book was underwater for 1,667 days (Feb 2021 → Sep 2025). The pass is
+also conditional on financing at IBKR's cheapest tier: the margin
+breakeven is BIL + 4.6%, and at the rates most retail brokers charged
+over this window (BIL + 5–8%) RP3 is at or below XBI. A Reg-T version
+(cap 2.0×) still passes at 16.6% / 46.5%. No margin-call or forced
+deleveraging is modelled; intramonth gross reached 3.1× in October 2008.
 
 Everything that is actually XBI-with-a-lever fails on drawdown: constant
 1.25×/1.5×/2× XBI (L1–L3) add 1 to 1.3 pp of CAGR for 9 to 26 pp of extra
@@ -295,6 +302,42 @@ _Window 2007-11-15 → 2026-10-01 unless the start column says later. Judge: CAG
 
 ## Counter-agent verdict (round 2)
 
-_Appended when the two verification agents report (independent
-re-implementation of RP3 and M4; adversarial review of run2.py incl.
-margin-rate sensitivity and the XBI-less control)._
+**Verifier A (independent re-implementation, no shared code): MATCH to
+4+ decimals** on B0, RP3, both RP3 sensitivity rows and M4 (CAGR, max DD,
+Sharpe, end value, average gross). Composition of RP3 at its 228
+rebalances: base weights XBI 15.7% / QQQ 23.9% / GLD 28.2% / TLT 32.2%;
+scale 2.30× on average, at the 2.5× cap 65% of the time; unlevered
+portfolio vol 10.1%, so the 25% target is reached through the cap.
+Fragility noted: the cache is capped at 5,000 bars and the start index is
+exactly 252, so a cache one bar shorter would silently make M4's first
+rebalance XBI-only (NaN momentum is filtered, not flagged).
+
+**Verifier B (adversarial review of run2.py): no arithmetic or lookahead
+defect; "the problem is what the number is a number of."** Findings, all
+now in the short answer above:
+
+- SERIOUS: RP3 is a levered risk-parity book that happens to contain XBI.
+  The un-pre-registered control without XBI (QQQ/GLD/TLT, same rule)
+  passes judge2 at 17.5% / 48.0% / 0.82; SPY in XBI's place gives 18.8% /
+  45.9% / 0.86. XBI contributes +1.0 pp CAGR for +1.4 pp DD and nothing
+  to Sharpe. Daily correlation of RP3 to XBI: 0.66.
+- SERIOUS: the 2-of-3 sub-period win is one regime — +17.3 pp in
+  2007-2012 (levered TLT/GLD), −0.6 pp in 2013-2018 (loses), +5.5 pp in
+  2019-2026 (QQQ).
+- SERIOUS: margin. BIL + 1.5% ≈ IBKR Pro's lowest tier. Recomputed: BIL +
+  3% → 16.2% / 51.5% (passes); BIL + 5% → 13.3% / 54.2% (FAILS the 13.9%
+  bar); BIL + 8% → 9.0% (below XBI); breakeven BIL + 4.6%. No margin-call
+  model; max intramonth gross 3.11× (2008-10-27); 29% of days above the
+  cap. Reg T caps initial leverage at 2.0×: that version is 16.6% / 46.5%
+  / 0.85 and still passes.
+- MINOR: the judging rule hides the pain: worst year 2022 −39.3%; the DD
+  trough is 2023-10-03 (TLT's bottom); longest underwater 1,667 days.
+- NOTE (code): run2.py restored the margin spread with a hard-coded 0.015
+  rather than the saved value — fixed; costs ×2 is a weak test for a
+  3×/yr-turnover book (drag 16 → 31 bps); Sharpe is raw, not excess over
+  BIL (symmetric across rows, ~0.04).
+
+**Verdict: the number is right and reproduced; the claim "an XBI
+strategy with better CAGR" is not supported.** What this round shows is
+that CAGR above XBI's on this path came from leverage on low-volatility
+assets at a cheap financing rate, and XBI was not needed for it.
