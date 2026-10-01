@@ -298,9 +298,23 @@ class CarryExecutor:
         if armed is None:
             q_persist = self.state.target_qty if was_on else 0.0
         dS = q - S
-        if dS * px_s >= MIN_ORDER_USD:
+        pf = None
+        if dS * px_s >= MIN_ORDER_USD or S * px_s >= MIN_ORDER_USD:
             # run in DRY_RUN too, so the rehearsal exercises it (NOTE-F)
-            ok, pf_why = self.preflight_fn()
+            pf = self.preflight_fn()
+        if S * px_s >= MIN_ORDER_USD and pf is not None:
+            # a sleeve is HELD: btc-executor must still count it (re-review
+            # MINOR-C - a btc-executor rollback mid-sleeve would read UETH as
+            # a -$30k day). Paged after 3 passes so a redeploy's boot window
+            # stays quiet; nothing is unwound for it.
+            self._unseen_n = 0 if pf[0] else getattr(self, "_unseen_n", 0) + 1
+            if self._unseen_n >= 3:
+                self._event("RED", "sleeve_unseen",
+                            f"btc-executor may not count the UETH sleeve in "
+                            f"equity ({pf[1]}) - its halts could misfire",
+                            rate_limit=True)
+        if dS * px_s >= MIN_ORDER_USD:
+            ok, pf_why = pf
             if not ok:
                 # adding spot is blocked; closes, reductions and the hedge of
                 # what is already held still run

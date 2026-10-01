@@ -478,14 +478,23 @@ class HyperliquidVenue:
                 px = float(raw) if raw is not None else 0.0
             except (TypeError, ValueError):
                 px = 0.0
+            last = getattr(self, "_spot_last_px", None)
+            if last is None:
+                last = self._spot_last_px = {}
             if px > 0:
+                last[c] = px
                 val += q * px
                 continue
-            # unpriceable (no USDC pair, no mid, or a mid <= 0)
-            if ntl >= MATERIAL_SPOT_USD:
+            # unpriceable (no USDC pair, no mid, or a mid <= 0). Material if
+            # it COST >= $50, or if it was WORTH >= $50 at the last mid this
+            # process saw (re-review MINOR-A: UETH bridged in rather than
+            # bought carries entryNtl 0, and would otherwise be skipped).
+            seen = q * last.get(c, 0.0)
+            if ntl >= MATERIAL_SPOT_USD or seen >= MATERIAL_SPOT_USD:
                 raise RuntimeError(
-                    f"cannot price spot {c} (cost ${ntl:,.0f}; pair {key}, "
-                    f"mid {raw!r}) - refusing to value it at 0")
+                    f"cannot price spot {c} (cost ${ntl:,.0f}, last seen "
+                    f"${seen:,.0f}; pair {key}, mid {raw!r}) - refusing to "
+                    f"value it at 0")
             logger.warning("spot token %s unpriceable and immaterial (cost "
                            "$%.0f) - not valued in equity", c, ntl)
         return val

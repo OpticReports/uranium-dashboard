@@ -1124,3 +1124,29 @@ def test_gate_spot_tokens_are_ignored_when_not_unified(venue):
     venue.info.spot_tokens = [{"coin": "UETH", "total": "7.5"}]
     venue.info.mids = {"BTC": "80000.0", "@151": "4000.0"}
     assert venue.equity() == pytest.approx(250.0)
+
+
+def test_gate_a_bridged_in_holding_with_no_cost_still_raises_once_seen(venue):
+    """Re-review MINOR-A: UETH that arrives by bridge carries entryNtl 0. Once
+    this process has seen it priced, losing its mid must RAISE, not skip it
+    as dust - skipping reads as a -$30k day."""
+    venue.info.abstraction = "unifiedAccount"
+    venue.info.spot_usdc = 70_000.0
+    venue.info.spot_tokens = [{"coin": "UETH", "total": "7.5", "entryNtl": "0.0"}]
+    venue.info.mids = {"BTC": "80000.0", "@151": "4000.0"}
+    assert venue.equity() == pytest.approx(100_000.0)
+    venue.info.mids = {"BTC": "80000.0"}               # mid gone
+    with pytest.raises(RuntimeError, match="last seen"):
+        venue.equity()
+
+
+def test_gate_pulse_capability_flag_matches_what_equity_does():
+    """Re-review MINOR-C: /pulse's equity_counts_spot_tokens is what lets
+    carry-executor open. It must stay tied to equity() actually valuing spot
+    tokens - a revert of either side fails here."""
+    import inspect
+    import app.hl as hl
+    import app.main as m
+    claims = '"equity_counts_spot_tokens": True' in inspect.getsource(m)
+    does = "_spot_token_value" in inspect.getsource(hl.HyperliquidVenue.equity)
+    assert claims and does

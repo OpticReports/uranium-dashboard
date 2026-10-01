@@ -57,6 +57,7 @@ refuses to start there. DRY_RUN on mainnet is the rehearsal.
 | cross-margin setup | done BEFORE any risk-adding order; if it fails, nothing is bought that pass |
 | UETH locked in a resting spot order | RED `spot_locked` (cancel it on the HL UI) |
 | `POST /halt` / `/resume` (EXEC_TOKEN) | stop / restart sending; legs left as they are |
+| btc-executor stops counting UETH (rollback) while the sleeve is held | RED `sleeve_unseen` after 3 passes; nothing is unwound |
 | unreadable state file | boots HALTED |
 
 ## Go-live (Casey's actions)
@@ -84,9 +85,9 @@ count spot UETH in equity instead of reading the swap as a $30k loss.
 
    Leave `DRY_RUN` and `CARRY_NOTIONAL_USD` unset.
 4. **Dry run:** set `CARRY_NOTIONAL_USD=30000` and keep `DRY_RUN` unset.
-   Check `/pulse`: the signal reads ARMED (HL ETH is ~10%/yr today), and the
-   dry-run intent shows a spot BUY of ~30000/px UETH. Run it for at least a
-   day.
+   Check `/pulse`: the btc-executor preflight passes (no `open_blocked`),
+   the signal reads ARMED (HL ETH is ~10%/yr today), and the dry-run intent
+   shows a spot BUY of ~30000/px UETH. Run it for at least a day.
 5. **Live:** set `DRY_RUN=false`. On the first armed pass it opens, and you
    get a "✅ carry opened" page carrying the venue's liquidation price.
 

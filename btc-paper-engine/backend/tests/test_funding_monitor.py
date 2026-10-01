@@ -388,6 +388,25 @@ def test_carry_target_is_unknown_while_the_saved_state_cannot_load():
     assert m.carry_target()["known"] is False
 
 
+def test_a_persistently_unloadable_state_pages_once():
+    from app.funding_monitor import FundingMonitor
+    sent, fail = [], [True]
+
+    def load():
+        if fail[0]:
+            raise RuntimeError("db down")
+        return {}
+    m = FundingMonitor(fetchers={}, alert_fn=sent.append, load_fn=load,
+                       save_fn=lambda *_: None, clock=lambda: NOW)
+    m.check(); m.check()
+    assert sent == []
+    m.check(); m.check(); m.check()
+    assert len(sent) == 1 and "cannot load" in sent[0]
+    fail[0] = False
+    m.check()
+    assert m._loaded and m._load_fails == 0
+
+
 def test_carry_target_accepts_the_read_token_and_halt_does_not(monkeypatch):
     from fastapi.testclient import TestClient
     from app import funding_monitor as fm

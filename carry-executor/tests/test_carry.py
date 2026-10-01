@@ -539,3 +539,23 @@ def test_pulse_shows_the_margin_latch(mk):
     v.perp_mid = v.spot_mid = 3900.0
     ex.step(target())
     assert ex.pulse()["guard_until"] == pytest.approx(NOW + C.GUARD_COOLDOWN_S)
+
+
+def test_a_held_sleeve_pages_when_btc_executor_stops_counting_it(mk):
+    """Re-review MINOR-C: a btc-executor rollback mid-sleeve re-opens the
+    blind window. Paged after 3 passes (a redeploy's boot stays quiet), and
+    nothing is unwound for it."""
+    ex, v = mk()
+    ex.step(target())
+    held = v.spot_qty
+    assert held > 0
+    ex.preflight_fn = lambda: (False, "equity_counts_spot_tokens missing")
+    ex.step(target())
+    ex.step(target())
+    assert "sleeve_unseen" not in kinds(ex, "RED")
+    ex.step(target())
+    assert "sleeve_unseen" in kinds(ex, "RED")
+    assert v.spot_qty == pytest.approx(held)
+    ex.preflight_fn = lambda: (True, "ok")
+    ex.step(target())
+    assert ex._unseen_n == 0

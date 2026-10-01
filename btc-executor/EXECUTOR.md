@@ -381,10 +381,15 @@ this main account (see `carry-executor/CARRY.md`). It changes three things here:
 - **Equity:** `hl.py equity()` = spot USDC (which carries every perp's uPnL,
   verified live) plus non-USDC spot tokens at their spot mid.
   - A held token that cannot be priced (no pair, no mid, or mid <= 0) stops
-    the equity read if it cost >= $50; it is skipped only if it is dust.
+    the equity read if it cost >= $50, or was worth >= $50 at the last mid
+    this process saw (bridged-in UETH carries no cost); otherwise it is dust
+    and skipped.
   - An empty `spot_meta` raises and is never cached.
-  - `/pulse` publishes `equity_counts_spot_tokens: true`, and carry-executor
-    will not open without it.
+  - `/pulse` publishes `equity_counts_spot_tokens: true` (a gate test ties it
+    to `equity()` calling `_spot_token_value`). carry-executor will not open
+    without it, and pages `sleeve_unseen` if it goes missing for 3 passes
+    while the sleeve is held. **Do not roll btc-executor back past this build
+    while the sleeve is on.**
 - **Margin:** the sleeve's short shares the USDC cross-margin pool. Nothing
   here reads total margin; `_cap_room` sizes off the fixed base. HL rejecting
   an order for insufficient margin is the only backstop, and the headroom is

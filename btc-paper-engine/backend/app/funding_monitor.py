@@ -178,7 +178,9 @@ class FundingMonitor:
             # row - in the 5-8% band that flipped an ARMED carry gate to
             # DISARMED and closed a sleeve nothing decided to close.
             logger.warning("funding monitor state load failed: %s", exc)
+            self._load_err = str(exc)
             return
+        self._load_fails = 0
         self._loaded = True
 
     def _persist(self) -> None:
@@ -266,7 +268,19 @@ class FundingMonitor:
             self._ensure_loaded()
             if not self._loaded:
                 # saved state unreadable: no transition, no persist, so the
-                # stored hysteresis survives until the DB answers again
+                # stored hysteresis survives until the DB answers again.
+                # Paged once at the 3rd failed pass in a row (re-review
+                # NOTE): otherwise an unreadable row silences the monitor.
+                self._load_fails = getattr(self, "_load_fails", 0) + 1
+                if self._load_fails == 3:
+                    try:
+                        self.alert_fn(
+                            f"🚨 funding monitor cannot load its saved state "
+                            f"({getattr(self, '_load_err', '?')}) - no gate "
+                            f"transitions until it does; the carry signal "
+                            f"ages to stale and carry-executor holds.")
+                    except Exception:  # noqa: BLE001
+                        logger.exception("load-failure alert failed")
                 return self.snapshot_locked()
             for venue, (mean_pct, coverage) in readings.items():
                 self._transition(venue, mean_pct, coverage, readings)
