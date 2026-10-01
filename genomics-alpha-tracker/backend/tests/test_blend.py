@@ -145,6 +145,22 @@ def test_intents_shape_and_gate_on_entry(session, client):
     assert "equity" in out["contract"]      # the executor-reconciles contract
 
 
+def test_sleeve_target_is_a_setting_clamped_to_unit_interval(session, client, monkeypatch):
+    """BLEND_SLEEVE_TARGET publishes the construction; 1.0 = no SPY core.
+    Out-of-range values fall back to the registered 0.30, never null/0."""
+    from app import config
+    last_bar = _seed_name(session)
+    _seed_xbi(session, above=True, last_date=last_bar)
+    for env, want in (("1.0", 1.0), ("0.6", 0.6), ("0", 0.30), ("1.5", 0.30), ("abc", 0.30)):
+        monkeypatch.setenv("BLEND_SLEEVE_TARGET", env)
+        config.get_settings.cache_clear()
+        try:
+            out = client.get("/blend3070/intents").json()
+        finally:
+            config.get_settings.cache_clear()
+        assert out["rebalance"]["target"] == want, env
+
+
 def test_gate_off_suppresses_entries_but_not_stops(session, client):
     last_bar = _seed_name(session)
     _seed_xbi(session, above=False, last_date=last_bar)

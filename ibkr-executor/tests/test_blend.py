@@ -4795,3 +4795,73 @@ def test_day_old_journal_is_held_when_history_is_unavailable(tmp_path):
     a.complete = True
     blend_mod.reconcile(m, a, "2026-08-20", alerts.append)
     assert not m.state.pending_book_orders
+
+
+# --- sleeve-only construction (target 1.0; Casey 2026-10-01 "mirror the engine")
+# MUTATION-VERIFIED: dropping the (0,1] clamp in _sleeve_target turns
+# test_sleeve_target_invalid_falls_back red; dropping the residue transfer
+# (step 5b) turns test_sleeve_only_moves_core_residue red; the seed split and
+# the one-pass SPY sale are pinned by test_sleeve_only_seed_and_rebalance.
+
+def _pl_target(t):
+    pl = payload()
+    pl["rebalance"]["target"] = t
+    return pl
+
+
+def test_sleeve_only_seed_and_rebalance(tmp_path):
+    # a fresh seed at target 1.0 puts the whole book in the sleeve
+    m = mk(tmp_path)
+    a = DryAdapter()
+    run_cycle(m, a, _pl_target(1.0), "2026-08-20", alert=lambda _: None)
+    assert m.state.initialized and m.state.core_cash == 0.0 and m.state.spy_qty == 0
+    assert m.state.bil_qty == 100                     # $10k swept to BIL
+    assert any("100% sleeve / 0% core" in e["msg"] for e in m.state.events)
+    # a 30/70-shaped book flipped to 1.0 sells ALL the SPY in one pass,
+    # moves the proceeds to the sleeve, sweeps them, and never buys a core
+    m2 = mk(tmp_path / "b")
+    _seed_initialized(m2, sleeve_cash=0.0, bil_qty=30, spy_qty=70)
+    out = run_cycle(m2, DryAdapter(), _pl_target(1.0), "2026-08-20", alert=lambda _: None)
+    (rb,) = [o for o in out if o["action"] == "REBALANCE"]
+    assert rb["direction"] == "core_to_sleeve" and rb["usd"] == pytest.approx(7_000.0)
+    assert not [o for o in out if o["action"] == "CORE_BUY"]
+    assert m2.state.spy_qty == 0 and m2.state.core_cash == pytest.approx(0.0, abs=1e-6)
+    assert m2.state.bil_qty == 100
+    out = run_cycle(m2, DryAdapter(), _pl_target(1.0), "2026-08-21", alert=lambda _: None)
+    assert not [o for o in out if o["action"] in ("REBALANCE", "CORE_BUY")]
+
+
+def test_sleeve_only_moves_core_residue(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=0.0, bil_qty=97, spy_qty=0, core_cash=258.0)
+    out = run_cycle(m, DryAdapter(), _pl_target(1.0), "2026-08-20", alert=lambda _: None)
+    assert m.state.core_cash == 0.0
+    assert any("residue moved to the sleeve" in e["msg"] for e in m.state.events)
+    (sw,) = [o for o in out if o["action"] == "SWEEP"]
+    assert sw["qty"] == 2 and m.state.bil_qty == 99
+    assert m.state.sleeve_cash == pytest.approx(58.0)
+
+
+def test_sleeve_target_invalid_falls_back(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=0.0, bil_qty=30, spy_qty=70)     # at 30/70
+    for bad in (None, 0, 1.5, "abc", -0.3):
+        out = m.step("2026-08-20", _pl_target(bad), PRICES)
+        assert not [o for o in out if o["action"] == "REBALANCE"], bad
+    assert sum("sleeve target" in e["msg"] for e in m.state.events) == 1   # once a day
+    pl = payload(); pl.pop("rebalance")                                     # absent -> default
+    assert not [o for o in m.step("2026-08-20", pl, PRICES) if o["action"] == "REBALANCE"]
+
+
+def test_sleeve_only_entries_size_against_the_whole_book(tmp_path):
+    m = mk(tmp_path)
+    _seed_initialized(m, sleeve_cash=0.0, bil_qty=100, spy_qty=0)
+    pl = _pl_target(1.0); pl["entries"] = [entry()]; pl["stops"] = [stop_row()]
+    out = m.step("2026-08-20", pl, PRICES)
+    (ent,) = [o for o in out if o["action"] == "ENTER"]
+    assert ent["qty"] == 16            # 1% of $10,000 = $100 risk / $6 per share
+    m2 = mk(tmp_path / "b")
+    _seed_initialized(m2, sleeve_cash=0.0, bil_qty=30, spy_qty=70)
+    pl2 = payload(entries=[entry()], stops=[stop_row()])
+    (ent2,) = [o for o in m2.step("2026-08-20", pl2, PRICES) if o["action"] == "ENTER"]
+    assert ent2["qty"] == 5            # 1% of the $3,000 sleeve

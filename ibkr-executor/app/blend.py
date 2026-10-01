@@ -894,7 +894,7 @@ class Blend3070Manager:
         max_open = min(MAX_OPEN, params.get("max_open", MAX_OPEN))
         risk_frac = params.get("risk_frac", RISK_FRAC)
         band = params.get("band", BAND)
-        target = (payload.get("rebalance") or {}).get("target", TARGET_SLEEVE)
+        target = _sleeve_target(self, payload)
         budget = getattr(self.cfg, "blend_budget", 0.0) or 0.0
 
         if not st.initialized:
@@ -1270,6 +1270,20 @@ class Blend3070Manager:
                 else:
                     projected_cash -= usd
                     funds -= usd
+
+        # 5b) sleeve-only book (target 1.0): once the SPY is gone, any cash
+        #     left on the core side is a ledger residue (rounding of the
+        #     core sell) - move it to the sleeve so the feed never shows a
+        #     phantom core and the sweep can park it (2026-10-01).
+        if (target >= 1.0 - 1e-9 and st.spy_qty == 0
+                and st.core_cash > CASH_EPS and not pending_book
+                and rebalance_intent is None):
+            moved = st.core_cash
+            self.on_transfer(moved)
+            projected_cash += moved
+            funds += moved
+            self._event("INFO", f"sleeve-only book: ${moved:,.2f} of core "
+                                f"cash residue moved to the sleeve")
 
         # 6) SINGLE PER-CYCLE CASH LEDGER resolution: everything above was
         #    planned against one projected ledger; fund the total shortfall
@@ -1889,6 +1903,25 @@ def fetch_intents(cfg) -> dict | None:
     except Exception as exc:  # noqa: BLE001
         logger.warning("blend intents fetch failed: %s", exc)
         return None
+
+
+def _sleeve_target(mgr: "Blend3070Manager", payload: dict) -> float:
+    """The sleeve's target weight of the book, from the tracker payload
+    (rebalance.target; the tracker publishes BLEND_SLEEVE_TARGET). Clamped
+    to (0, 1]: null/0/out-of-range must never size the sleeve against an
+    empty book or buy a core the construction does not have - it falls back
+    to TARGET_SLEEVE with a once-a-day WARN (2026-10-01)."""
+    raw = (payload.get("rebalance") or {}).get("target", TARGET_SLEEVE)
+    try:
+        t = float(raw)
+    except (TypeError, ValueError):
+        t = float("nan")
+    if not (0.0 < t <= 1.0):
+        mgr._event_once_today("WARN", "sleeve_target_invalid",
+                              f"tracker published sleeve target {raw!r}; "
+                              f"using {TARGET_SLEEVE:.0%}")
+        return TARGET_SLEEVE
+    return t
 
 
 def payload_is_stale(payload: dict, today: str) -> bool:

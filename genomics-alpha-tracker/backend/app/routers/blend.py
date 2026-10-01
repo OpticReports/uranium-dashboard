@@ -28,6 +28,7 @@ from fastapi import APIRouter, Depends
 from sqlmodel import Session, select
 
 from ..calls.rules import BarLike
+from ..config import get_settings
 from ..calls.shadow import (
     ENGINE_TRAILING,
     TIME_STOP_DAYS,
@@ -52,6 +53,18 @@ BOOK_PARAMS = {
     "cash_vehicle": "BIL",
     "core": "SPY",
 }
+
+
+def sleeve_target() -> float:
+    """BLEND_SLEEVE_TARGET clamped to (0, 1]: a bad value must never publish
+    null or 0 (the executor would size every entry against an empty sleeve)
+    - it falls back to the registered 0.30."""
+    try:
+        t = float(get_settings().blend_sleeve_target)
+    except (TypeError, ValueError):
+        return 0.30
+    return t if 0.0 < t <= 1.0 else 0.30
+
 
 # Exit signals stay visible this many days after the shadow engine graded
 # them, so an executor that polls after the scheduler's shadow pass still
@@ -289,7 +302,7 @@ def get_intents(session: Session = Depends(get_session)):
         # Sleeve weights are executor-side state (the tracker never learns
         # account equity): needed stays null, the executor decides.
         "rebalance": {"needed": None, "current_sleeve_weight": None,
-                      "target": 0.30},
+                      "target": sleeve_target()},
         "book_params": dict(BOOK_PARAMS),
         "contract": CONTRACT,
     }
