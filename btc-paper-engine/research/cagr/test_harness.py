@@ -63,11 +63,14 @@ def test_monkeypatch_is_restored():
     assert core._process_donchian is orig
 
 
-def test_resting_stop_variant_differs_and_never_fills_above_open_on_longs():
+def test_resting_stop_variant_matches_production_and_fills_inside_the_bar():
+    """H1 shipped (core._process_donchian is the resting-stop order since
+    2026-09-30), so the research variant must now equal production exactly.
+    Before the ship this asserted they DIFFERED."""
     base = H.leg_trades(BARS, "donchian", start_ts=T0, tcfg=TCFG)
     alt = H.leg_trades(BARS, "donchian", start_ts=T0, tcfg=TCFG,
                        donchian_fn=H.process_donchian_resting_stop)
-    assert [t.entry_ts for t in base] != [t.entry_ts for t in alt]
+    assert base == alt
     by_ts = {b.ts: b for b in BARS}
     for t in alt:
         if t.exit_ts is None:
