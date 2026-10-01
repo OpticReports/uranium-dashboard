@@ -24,7 +24,8 @@ LAGS: dict[str, int] = {
     # four were published later than their frequency class implies
     "hh_debt_gdp": 460, "priv_credit": 275,
     "corp_debt": _QUARTERLY, "margin_debt": _QUARTERLY, "bottom50_nw": _QUARTERLY,
-    "dsr": _QUARTERLY, "equity_liab": _QUARTERLY, "med_house_px": _QUARTERLY,
+    "dsr": 244,               # ALFRED: 180 admitted unpublished quarters (2001-04, 2024)
+    "equity_liab": _QUARTERLY, "med_house_px": _QUARTERLY,
     "delinq_cc": _QUARTERLY, "delinq_cre": _QUARTERLY, "fed_debt_gdp": _QUARTERLY,
     "vac_rental": _QUARTERLY, "vac_owner": _QUARTERLY, "capex_info": _QUARTERLY,
     "capex_soft": _QUARTERLY,

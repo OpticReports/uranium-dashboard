@@ -61,6 +61,12 @@ def test_lags_are_no_shorter_than_the_real_release_schedule(bundle):
     assert last("hh_debt_gdp", date(2025, 6, 30)) <= date(2024, 7, 1)
     assert last("deficit_gdp", date(2023, 12, 31)) <= date(2022, 1, 1)
     assert last("inv_sales", date(2020, 1, 31)) <= date(2019, 11, 1)
+    assert last("dsr", date(2024, 6, 30)) <= date(2023, 10, 1)
+    # before dsr has 10 years of history, pin the lag itself: ALFRED had not
+    # published 2003Q3 by 2004-02-29, nor 2006Q1 by 2006-06-30
+    lag = timedelta(days=SH.LAGS["dsr"])
+    assert date(2003, 7, 1) + lag > date(2004, 2, 29)
+    assert date(2006, 1, 1) + lag > date(2006, 6, 30)
 
 
 def test_late_starting_inputs_enter_ten_years_later(bundle):
@@ -76,14 +82,14 @@ def test_payload_matches_the_frozen_study_and_serialises(payload):
     frozen = json.load(open(os.path.join(STUDY, "results.json")))
     assert json.loads(json.dumps(payload, allow_nan=False)) == frozen
     s = {r["month"]: r for r in payload["series"]}
-    assert s["2007-11"]["score"] == 72.4 and s["2023-12"]["score"] == 49.2
+    assert s["2007-11"]["score"] == 72.4 and s["2023-12"]["score"] == 49.0
     # the months the drawn rule actually hides (4 of 23 components live)
     for m in ("1986-03", "1986-04", "1986-05"):
         assert s[m]["score"] is not None and not s[m]["drawn"]
     # shares and percentiles on comparable inputs, not the thin early years
     assert (payload["share_severe"], payload["today_pctile"], payload["pctile_from"]) == (43, 85, "1999-12")
     assert (payload["share_severe_all_inputs"], payload["pctile_all_inputs"],
-            payload["all_inputs_from"]) == (14, 97, "2015-06")
+            payload["all_inputs_from"]) == (12, 97, "2015-09")
     assert "extended back to 1976 with the Fed's Z.1" in payload["method"]
     assert "the dot is today's live reading" in payload["method"]
 
@@ -127,7 +133,7 @@ def test_analogs(payload):
     assert starts["1990-07"]["reading"] == 64.9
     near = payload["analogs"]["nearest"]
     assert [(n["from"], n["to"]) for n in near] == [("1999-12", "2002-05"), ("2006-08", "2007-11"),
-                                                    ("2008-06", "2010-06"), ("2012-12", "2015-05")]
+                                                    ("2008-06", "2010-06"), ("2012-12", "2015-07")]
     assert all(n["live"] >= 0.75 * n["total"] for n in near)
     assert near[0]["recession_within_24m"] == "2001-03" and near[1]["recession_within_24m"] == "2007-12"
     assert near[2]["already_in_recession"]
@@ -180,3 +186,12 @@ def test_a_failed_z1_extension_is_said_not_silent():
     note_ok = next(c["note"] for b in build_severity(load.bundle())["blocks"]
                    for c in b["components"] if c["id"] == "hh_debt_3y")
     assert "unavailable" not in note_ok
+
+
+def test_tdsp_is_not_spliced_across_its_2005_methodology_break():
+    """FRED serves TDSP from 2005; ALFRED vintages from 2024-09-30 hold
+    1980-2004 on the OLD basis next to 2005+ revised up 0.7-2.9pp (a +2.5pp
+    step at 2005Q1). Splicing that history in (tried 2026-10-01, withdrawn
+    after review) ranked today's revised ratio against unrevised history."""
+    from app.sources.ice_reference import FROZEN_SERIES, frozen_history
+    assert "TDSP" not in FROZEN_SERIES and frozen_history("TDSP") == ((), ())
