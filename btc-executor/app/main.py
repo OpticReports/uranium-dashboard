@@ -421,6 +421,9 @@ def status(x_exec_token: str | None = Header(default=None),
                "max_notional_usd": settings.max_notional_usd,
                "max_account_lev": settings.max_account_lev,
                "daily_loss_halt_pct": settings.daily_loss_halt_pct,
+               # the line actually enforced: scaled with effective KELLY_M
+               # above mirror.DAILY_LOSS_REF_KELLY (2026-10-01)
+               "daily_loss_halt_pct_effective": EXEC._daily_loss_pct(),
                "dd_halt_pct": settings.dd_halt_pct},
            "halted": st.halted,
            "day_start_equity": st.day_start_equity,
@@ -552,8 +555,9 @@ def _ramp_v4(st) -> dict:
             "unattributed_total": sum(r["unattributed"] for r in rows.values()),
             "note": f"advance KELLY_M only when advance_ok AND the target "
                     f"rung is <= KELLY_M_CAP ({mirror.KELLY_M_CAP}): these rows "
-                    f"EXECUTION evidence and say nothing about the Kelly "
-                    f"envelope, which RESEARCH_FEES.md puts at 0.22. "
+                    f"EXECUTION evidence and say nothing about the sizing "
+                    f"envelope (RESEARCH_SHARPE.md addendum: ~0.75 on the "
+                    f"modern-regime -30% budget). "
                     f"advance_ok means every row met AND "
                     "|mean slip| < 15bps. The slip CUSUM (barbell-lab edge "
                     "monitor) is the continuous control and arms at the same "
@@ -563,7 +567,7 @@ def _ramp_v4(st) -> dict:
 
 # EXECUTOR.md "The schedule". Rungs above KELLY_M_CAP are RETIRED and are
 # deliberately absent - this list is what /ramp is allowed to point at.
-RAMP_RUNGS = (0.05, 0.10, 0.20)
+RAMP_RUNGS = (0.05, 0.10, 0.20, 0.30, 0.75)   # 0.30 2026-09-30, 0.75 2026-10-01 (Casey)
 
 
 def _next_rung() -> float | None:

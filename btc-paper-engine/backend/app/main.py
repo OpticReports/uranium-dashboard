@@ -102,12 +102,20 @@ def exec_target(x_exec_token: str | None = Header(default=None)):
         if b.pending is not None:
             pend = {"side": b.pending.side, "limit": b.pending.limit,
                     "signal_ts": b.pending.signal_ts}
+        # Entry-size multiplier for the entry this leg is working or holds,
+        # frozen per signal bar (RESEARCH_SHARPE.md H1, down-only: 0.5-1.0).
+        # Leg-level, not inside pending/position, so those payloads keep
+        # their exact shape; an executor that predates it ignores it.
+        sig = (b.pending.signal_ts if b.pending is not None else
+               b.position.signal_ts if b.position is not None else None)
+        vm = ENGINE.size_mult_for(sig)
         return {"book": book, "halted": b.halted,
                 "halt_reason": b.halt_reason,
                 "state": ("HALTED" if b.halted else
                           b.position.side if b.position else
                           "PENDING" if b.pending else "FLAT"),
-                "pending": pend, "position": pos}
+                "pending": pend, "position": pos,
+                "size_mult": vm["m"], "size_mult_basis": vm["basis"]}
 
     return {"bar_ts": ENGINE.last_processed,
             "bar_iso": _iso(ENGINE.last_processed or None),
