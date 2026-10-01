@@ -124,6 +124,23 @@ def test_resize_only_at_month_start_and_beyond_drift():
     # Mar 1 (day 59): 30k, no drift
     assert m["fees"] == pytest.approx(30_000e-3 + 30_000e-3)
     assert m["switches"] == 1
+    step = np.diff(np.concatenate([[0.0], pnl]))
+    hits = grid[np.where(step < 0)[0]] // DAY
+    assert list(hits) == [0, 31]                  # entry, then Feb 1 only
+
+
+def test_no_resize_inside_the_drift_band():
+    grid = np.arange(0, 40 * DAY, B, dtype=np.int64)
+    closes = {int(t): (100.0 if t < 3 * DAY else 120.0) for t in grid}
+    pnl, m = S.carry(grid, closes, np.array([], dtype=np.int64), np.array([]),
+                     gated=False, notional=30_000, spot_bps=10, perp_bps=0)
+    assert m["fees"] == pytest.approx(30_000e-3)  # +20% drift: entry fee only
+
+
+def test_hl_funding_file_is_read_in_seconds():
+    ts, r = S.load_funding("funding_hyperliquid_btc.csv")
+    assert S.ts_of("2023-05-01") < ts[0] < S.ts_of("2023-06-01")
+    assert np.all(np.diff(ts) > 0)
 
 
 def test_gate_hysteresis_and_no_lookahead():
@@ -137,8 +154,45 @@ def test_gate_hysteresis_and_no_lookahead():
     # on from day 30 (first full window, 12%), stays on through the 6% band
     # (hysteresis), turns off once the 30d mean drops under 5%
     assert m["switches"] == 2
-    q_on = np.diff(pnl) != 0
-    assert not q_on[: 30 * 6 - 1].any()           # nothing before day 30
+    step = np.diff(np.concatenate([[0.0], pnl]))
+    earning = np.where(step > 0)[0]
+    assert grid[earning[0]] >= 30 * DAY            # nothing before day 30
+    # 30d mean = 6%*(90-d)/30 + 2%*(d-90)/30 ... crosses 5% at day 97.5,
+    # so the gate turns off at the day-98 decision; a single 8% threshold
+    # (no hysteresis) would turn off near day 70 (audit mutation M3)
+    off = grid[earning[-1]] // DAY
+    assert off == 97
+
+
+def test_gate_does_not_arm_below_8_percent():
+    days = 90
+    grid = np.arange(0, days * DAY, B, dtype=np.int64)
+    closes = {int(t): 100.0 for t in grid}
+    fts = np.arange(8 * 3600, days * DAY + 1, 8 * 3600, dtype=np.int64)
+    pnl, m = S.carry(grid, closes, fts, np.full(len(fts), 0.079 / (3 * 365)),
+                     gated=True)
+    assert m["switches"] == 0 and m["fees"] == 0.0
+    pnl, m = S.carry(grid, closes, fts, np.full(len(fts), 0.081 / (3 * 365)),
+                     gated=True)
+    assert m["switches"] == 1
+
+
+def test_funding_priced_at_the_stamp_bars_close():
+    grid = np.arange(0, 2 * DAY, B, dtype=np.int64)
+    closes = {int(t): 100.0 + i for i, t in enumerate(grid)}
+    fts = np.array([16 * 3600], dtype=np.int64)          # closes bar 3 (12:00 open)
+    pnl, m = S.carry(grid, closes, fts, np.array([1e-3]), gated=False,
+                     notional=30_000, spot_bps=0, perp_bps=0)
+    q = 30_000 / 100.0                                    # entered at bar 0's close
+    assert m["funding"] == pytest.approx(1e-3 * q * 103.0)
+
+
+# ---- metric ------------------------------------------------------------------
+def test_gate_decision_ignores_a_stamp_at_the_decision_time():
+    days = 60
+    grid = np.arange(0, days * DAY, B, dtype=np.int64)
+    closes = {int(t): 100.0 for t in grid}
+    fts = np.arange(8 * 3600, days * DAY + 1, 8 * 3600, dtype=np.int64)
     # a rate spike on stamp s must not switch the gate before day(s)+1
     fr2 = np.full(len(fts), 0.0)
     fr2[fts == 40 * DAY] = 0.5                     # one huge stamp at 00:00 day 40
@@ -147,7 +201,6 @@ def test_gate_hysteresis_and_no_lookahead():
     assert grid[first_cost] >= 41 * DAY           # stamp at 00:00 is s < ts only next day
 
 
-# ---- metric ------------------------------------------------------------------
 def test_daily_pnl_and_sharpe():
     ts = np.arange(0, 3 * DAY, B)
     cum = np.arange(1, len(ts) + 1, dtype=float)   # +1 per bar

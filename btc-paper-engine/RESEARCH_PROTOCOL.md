@@ -21,7 +21,8 @@ future test batch — an uncounted trial silently lowers the evidence bar.
 | S3 fee-model correction (2026-09) | 24 | RESEARCH_FEES.md |
 | CAGR study: 7 registered + 11 diagnostic trend-share sweep (2026-09-28) | 18 | RESEARCH_CAGR.md |
 | Sharpe study (registered 2026-10-01) | 5 | research/sharpe/PREREG.md |
-| **Total** | **~2,538** | |
+| Sharpe study counter-agent diagnostics: 8 new rule configs (SMA 150/250d, H1 down-only, up-only, cap 1.2, vol window 90/360, H1+H2); +100-shuffle placebo and ~30 re-slices/nulls not counted as rules | 8 | RESEARCH_SHARPE.md |
+| **Total** | **~2,546** | |
 
 Fee-study note (2026-09-10): the fee row counts 24, not the 14 its
 pre-registration declared — 14 registered grid arms, plus 8 Kelly re-fits

@@ -105,9 +105,17 @@ class World:
 
 
 def load_funding(name):
-    rows = list(csv.reader(open(os.path.join(DATA, name))))[1:]
-    return np.array([int(r[0]) for r in rows], dtype=np.int64), \
-        np.array([float(r[1]) for r in rows])
+    """(ts_seconds, rate per stamp). Hyperliquid's file is in MILLISECONDS
+    (header ts_ms); read as seconds it silently yields zero funding (audit
+    2026-10-01, finding 1)."""
+    rows = list(csv.reader(open(os.path.join(DATA, name))))
+    hdr, rows = rows[0], rows[1:]
+    ts = np.array([int(float(r[0])) for r in rows], dtype=np.int64)
+    if hdr[0].endswith("_ms") or ts.max() > 10 ** 11:
+        ts = ts // 1000
+    assert ts.max() < 10 ** 11
+    order = np.argsort(ts, kind="stable")
+    return ts[order], np.array([float(r[1]) for r in rows])[order]
 
 
 # --------------------------------------------------------------------------
@@ -187,7 +195,12 @@ def carry(grid_ts, close_by_ts, fund_ts, fund_rate, gated, *,
             k += 1
         last_px = c
         out[j] = cum
-    return out, dict(fees=fees, funding=funding, switches=n_switch)
+    last_stamp = int(fund_ts[-1]) if len(fund_ts) else None
+    return out, dict(fees=fees, funding=funding, switches=n_switch,
+                     funding_ends=last_stamp,
+                     uncovered_days=max(0.0, (int(grid_ts[-1]) + H.BAR_S
+                                              - (last_stamp or 0)) / DAY - 1)
+                     if len(grid_ts) else 0.0)
 
 
 def _is_month_start(ts):
