@@ -10,9 +10,9 @@ import InfoTip from "../components/InfoTip";
 // lives — so "how deep was the hole" sits next to "what has it done lately".
 //
 // Two measurement bases are shown and NEVER mixed in one table:
-//   dollars, daily mark-to-market  — full period + pre-registered sub-periods
-//                                    (and the trailing windows, when the daily
-//                                    bar cache was present at build time)
+//   dollars, daily mark-to-market  — full period + pre-registered sub-periods,
+//                                    and the trailing windows where the daily
+//                                    bar cache reproduced the documented book
 //   R-units, realization basis     — trailing 2y / 5y / 10y from the complete
 //                                    call record (no daily marks, so no Sharpe)
 // The payload says which is which; this component just refuses to blur them.
@@ -23,24 +23,31 @@ const COLORS = { V0: "#38bdf8", V5: "#a78bfa", XBI: "#f59e0b", SPY: "#9ca3af" };
 const ddColor = (v) => (v >= 0.5 ? "text-rose-400" : v >= 0.3 ? "text-amber-400" : "text-gray-200");
 const signColor = (v) => (v > 0 ? "text-emerald-400" : v < 0 ? "text-rose-400" : "text-gray-200");
 
+const tabLabel = (mode, key, bt) => {
+  if (mode === "d") return key === "full" ? "Full period" : key;
+  if (key === "10y") return "10y (= full replay)";
+  return `Trailing ${key} to ${bt.period.end}`;
+};
+
 export default function BacktestPanel({ bt }) {
   const daily = bt.windows_daily || {};
   const trailingR = bt.trailing_r?.windows || {};
   const trailingD = bt.trailing_daily;
-  const dailyKeys = Object.keys(daily);
   const tabs = [
-    ...dailyKeys.map((k) => ({ id: `d:${k}`, label: k === "full" ? `Full (${bt.period.years}y)` : k })),
-    ...Object.keys(trailingR).map((k) => ({ id: `t:${k}`, label: `Trailing ${k}` })),
+    ...Object.keys(daily).map((k) => ({ id: `d:${k}`, label: tabLabel("d", k, bt) })),
+    ...Object.keys(trailingR).map((k) => ({ id: `t:${k}`, label: tabLabel("t", k, bt) })),
   ];
   const [tab, setTab] = useState(tabs[0]?.id);
 
   const [mode, key] = (tab || "d:full").split(":");
   const win = mode === "d" ? daily[key] : null;
   const winR = mode === "t" ? trailingR[key] : null;
-  const winD = mode === "t" && trailingD?.status === "ok" ? trailingD.windows?.[key] : null;
+  const winD = mode === "t" ? trailingD?.windows?.[key] : null;
 
   const v0 = daily.full?.books?.V0;
   const xbi = daily.full?.books?.XBI;
+  const cb = bt.combined_book || {};
+  const fires = (cb.n_calls || 0) + (cb.skipped_at_cap || 0);
 
   return (
     <div className="bg-panel border border-edge rounded-xl p-4">
@@ -53,10 +60,12 @@ export default function BacktestPanel({ bt }) {
           <p className="text-xs text-gray-400 mt-1 max-w-2xl">
             Every replayable signal fired over {bt.period.start} → {bt.period.end} on
             today's {bt.period.n_names}-name universe, graded with the production exit
-            rules, sized into a {fmtMoney(bt.protocol.start_equity)} book. This is the
-            engine's <b>mechanical shadow</b> — the live gates and triggers have no history
-            and were not replayed — and it trades <b>survivors only</b>. The live paper book
-            above is the honest measure of the full system.
+            rules. A {fmtMoney(bt.protocol.start_equity)} book holding at most{" "}
+            {bt.protocol.cap_open_calls} calls took <b>{cb.n_calls?.toLocaleString()}</b> of
+            those {fires.toLocaleString()} fires ({cb.skipped_at_cap?.toLocaleString()} skipped
+            at the cap). This is the engine's <b>mechanical shadow</b> — the live gates and
+            triggers have no history and were not replayed — and it trades <b>survivors
+            only</b>. The live paper book above is the honest measure of the full system.
           </p>
         </div>
         {v0 && (
@@ -67,8 +76,12 @@ export default function BacktestPanel({ bt }) {
             </div>
             <div className="text-xs text-gray-400 mt-1">
               Sharpe {fmtNum(v0.sharpe, 2)} · CAGR {fmtPct(v0.cagr, 1)}
-              {xbi && <span className="text-gray-500"> · XBI {fmtNum(xbi.sharpe, 2)} / {fmtPct(xbi.cagr, 1)}</span>}
             </div>
+            {xbi && (
+              <div className="text-[11px] text-gray-500">
+                XBI buy &amp; hold: max DD {fmtPct(xbi.max_dd, 1)} · Sharpe {fmtNum(xbi.sharpe, 2)} · CAGR {fmtPct(xbi.cagr, 1)}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -91,12 +104,16 @@ export default function BacktestPanel({ bt }) {
       {winR && (
         <>
           {winD ? (
-            <DollarTable win={winD} books={bt.books} note="dollars, daily mark-to-market — full daily curve" />
+            <DollarTable
+              win={winD}
+              books={bt.books}
+              note={winD.note ? `dollars, daily mark-to-market — ${winD.note}` : "dollars, daily mark-to-market — full daily curve"}
+            />
           ) : (
             <div className="mt-3 text-xs text-amber-300/90 bg-amber-900/10 border border-amber-800/40 rounded-lg px-3 py-2">
-              Dollar stats (Sharpe, max DD in %) for this window are <b>not available</b>:{" "}
-              {trailingD?.reason || "the daily bar cache was absent when this summary was built."}{" "}
-              Shown below instead: the same window in R-units from the complete call record.
+              Dollar stats (Sharpe, max DD in %) for this window are <b>not available</b>: this
+              build {trailingD?.reason || "did not have the daily price cache the replay was built from"}.
+              The same window is shown below in R-units from the complete call record.
             </div>
           )}
           <RTable w={winR} />
@@ -116,7 +133,10 @@ export default function BacktestPanel({ bt }) {
           {bt.caveats.map((c, i) => <li key={i}>{c}</li>)}
         </ul>
         <div className="text-[10px] text-gray-600 mt-2">
-          Source: {bt.sources.reports.join(", ")} · results generated {bt.sources.variants_results.generated?.slice(0, 10)} ·
+          How these are known: every dollar figure is copied from the full daily curves of the
+          variants run, whose machinery gate re-asserts the documented book within ±1% on every
+          run; a test freezes the same numbers here. Source: {bt.sources.reports.join(", ")} ·
+          results generated {bt.sources.variants_results.generated?.slice(0, 10)} ·
           summary built {bt.generated?.slice(0, 10)}
         </div>
       </div>
@@ -140,7 +160,9 @@ function DollarTable({ win, books, note }) {
             <th className="py-1.5 pr-3 text-right">Sharpe<InfoTip term="sharpe" /></th>
             <th className="py-1.5 pr-3 text-right">Sortino<InfoTip term="sortino" /></th>
             <th className="py-1.5 pr-3 text-right">Calmar<InfoTip term="calmar" /></th>
-            <th className="py-1.5 text-right">End value</th>
+            <th className="py-1.5 text-right whitespace-nowrap">Book value at end
+              <span className="block text-[9px] normal-case text-gray-600">running, not re-based</span>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -149,10 +171,10 @@ function DollarTable({ win, books, note }) {
             const b = books[k] || {};
             return (
               <tr key={k} className={`border-b border-edge/50 ${b.kind === "benchmark" ? "text-gray-400" : ""}`}>
-                <td className="py-1.5 pr-3">
+                <td className="py-1.5 pr-3 whitespace-nowrap">
                   <span className="inline-block w-2 h-2 rounded-sm mr-2" style={{ background: COLORS[k] }} />
                   <span className={b.kind === "engine" ? "font-semibold text-gray-200" : ""}>{b.label || k}</span>
-                  {b.sub && <span className="text-xs text-gray-500 ml-2">{b.sub}</span>}
+                  {b.sub && <span className="hidden sm:inline text-xs text-gray-500 ml-2">{b.sub}</span>}
                 </td>
                 <td className={`py-1.5 pr-3 text-right ${signColor(s.cagr)}`}>{fmtPct(s.cagr, 1)}</td>
                 <td className={`py-1.5 pr-3 text-right ${ddColor(s.max_dd)}`}>{fmtPct(s.max_dd, 1)}</td>
@@ -193,15 +215,21 @@ function RTable({ w }) {
         ))}
       </div>
       {w.curve?.length > 2 && (
-        <ResponsiveContainer width="100%" height={120}>
-          <LineChart data={w.curve.map(([date, cum_r]) => ({ date, cum_r }))} margin={{ left: -20, right: 10, top: 8 }}>
-            <CartesianGrid stroke="#1f2937" />
-            <XAxis dataKey="date" tick={{ fontSize: 9, fill: "#94a3b8" }} minTickGap={40} />
-            <YAxis tick={{ fontSize: 9, fill: "#94a3b8" }} />
-            <Tooltip contentStyle={TOOLTIP} formatter={(v) => `${fmtNum(v, 1)}R`} />
-            <Line type="stepAfter" dataKey="cum_r" name="cumulative R" stroke={COLORS.V0} dot={false} strokeWidth={2} />
-          </LineChart>
-        </ResponsiveContainer>
+        <>
+          <div className="text-[10px] text-gray-600 mt-2">
+            Cumulative R by exit date — display resolution ({w.curve.length} of {w.n_calls} exits drawn);
+            the Max DD (R) tile is from every exit
+          </div>
+          <ResponsiveContainer width="100%" height={120}>
+            <LineChart data={w.curve.map(([date, cum_r]) => ({ date, cum_r }))} margin={{ left: -20, right: 10, top: 8 }}>
+              <CartesianGrid stroke="#1f2937" />
+              <XAxis dataKey="date" tick={{ fontSize: 9, fill: "#94a3b8" }} minTickGap={40} />
+              <YAxis tick={{ fontSize: 9, fill: "#94a3b8" }} />
+              <Tooltip contentStyle={TOOLTIP} formatter={(v) => `${fmtNum(v, 1)}R`} />
+              <Line type="stepAfter" dataKey="cum_r" name="cumulative R" stroke={COLORS.V0} dot={false} strokeWidth={2} />
+            </LineChart>
+          </ResponsiveContainer>
+        </>
       )}
     </div>
   );
@@ -238,8 +266,8 @@ function EquityChart({ curves, books }) {
 // only understate a trough, never invent one — said in the caption.
 function DrawdownChart({ curves, books }) {
   const rows = curves?.rows || [];
-  const keys = ["V0", "XBI"].filter((k) => rows.some((r) => r[k] !== undefined));
   const data = useMemo(() => {
+    const keys = ["V0", "XBI"].filter((k) => rows.some((r) => r[k] !== undefined));
     const peak = {};
     return rows.map((r) => {
       const o = { date: r.date };
@@ -250,8 +278,9 @@ function DrawdownChart({ curves, books }) {
       }
       return o;
     });
-  }, [rows, keys]);
+  }, [rows]);
   if (rows.length < 3) return null;
+  const keys = ["V0", "XBI"].filter((k) => k in (data[0] || {}));
   return (
     <div>
       <div className="text-xs text-gray-400 mb-1">
@@ -276,14 +305,14 @@ function DrawdownChart({ curves, books }) {
 function SizingSensitivity({ s }) {
   if (!s?.rows?.length) return null;
   return (
-    <div className="mt-4">
+    <div className="mt-4 overflow-x-auto">
       <div className="text-xs text-gray-400 mb-1">
-        What risk per call buys — full period, combined book<InfoTip term="sizing_sensitivity" />
+        What risk per call buys — full period<InfoTip term="sizing_sensitivity" />
       </div>
       <table className="text-xs">
         <thead>
           <tr className="text-left text-gray-500 border-b border-edge">
-            <th className="py-1 pr-4">risk / call</th>
+            <th className="py-1 pr-4">book</th>
             <th className="py-1 pr-4 text-right">CAGR</th>
             <th className="py-1 pr-4 text-right">max DD</th>
             <th className="py-1 pr-4 text-right">Sharpe</th>
@@ -292,8 +321,8 @@ function SizingSensitivity({ s }) {
         </thead>
         <tbody>
           {s.rows.map((r) => (
-            <tr key={r.risk_frac} className="border-b border-edge/40 text-gray-300">
-              <td className="py-1 pr-4">{fmtPct(r.risk_frac, 1)}</td>
+            <tr key={r.label || r.risk_frac} className="border-b border-edge/40 text-gray-300">
+              <td className="py-1 pr-4 whitespace-nowrap">{r.label || fmtPct(r.risk_frac, 1)}</td>
               <td className="py-1 pr-4 text-right">{fmtPct(r.cagr, 1)}</td>
               <td className={`py-1 pr-4 text-right ${ddColor(r.max_dd)}`}>{fmtPct(r.max_dd, 1)}</td>
               <td className="py-1 pr-4 text-right">{fmtNum(r.sharpe, 2)}</td>
@@ -302,7 +331,9 @@ function SizingSensitivity({ s }) {
           ))}
         </tbody>
       </table>
-      <div className="text-[10px] text-gray-600 mt-1">{s.source}</div>
+      <div className="text-[10px] text-gray-600 mt-1">
+        {s.source} — a separate run from the tables above, hence the few dollars' difference on the 1% row.
+      </div>
     </div>
   );
 }

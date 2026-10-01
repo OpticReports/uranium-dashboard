@@ -29,3 +29,11 @@ def load_summary() -> dict:
             f"{SUMMARY_PATH.name} is not present; run "
             "`python -m scripts.backtest_summary` and commit the result")
     return json.loads(SUMMARY_PATH.read_text())
+
+
+@lru_cache(maxsize=1)
+def summary_bytes() -> bytes:
+    """The response body, serialized ONCE. Returning the dict would have
+    FastAPI re-encode ~90 KB on every request (measured ~17 ms); the artifact
+    never changes within a process, so neither should the bytes."""
+    return json.dumps(load_summary(), separators=(",", ":")).encode()

@@ -262,6 +262,9 @@ Windows shown, each labelled with its measurement basis:
   are gitignored, so the generator must run where this replay last ran and
   the JSON be committed. Until then the panel shows the gap as a gap.
 
-The panel's "Read honestly" list mirrors "Read this first" above. The summary
+The panel's "Read honestly" list condenses "Read this first" above - the
+gates not replayed, survivorship, the sizing/MTM/slippage protocol, the
+measured point-in-time catalyst lead, PCD being an estimate, and the
+sector-beta reading - into one screen for a non-quant. The summary
 lives inside the app package rather than under `data/` because the Render
 disk is mounted over `/app/data` and hides whatever the image carried there.

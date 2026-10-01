@@ -59,10 +59,14 @@ export default function CallsLog({ onPick }) {
     api.callsScorecard().then(setCard).catch(() => setCard(null));
     api.callsPerformance().then(setPerf).catch(() => setPerf(null));
     api.callsPaper().then(setPaper).catch(() => setPaper(null));
-    // Frozen build artifact; failing to load it hides the panel, never the page.
-    api.callsBacktest().then(setBacktest).catch(() => setBacktest(null));
   }, []);
   useEffect(load, [load]);
+  // The replay summary is a frozen build artifact: fetch it once, not on
+  // every call mutation - and never hide a failure, because a silent absence
+  // is the one failure the gate tests cannot see at runtime.
+  useEffect(() => {
+    api.callsBacktest().then(setBacktest).catch((e) => setBacktest({ error: e.message }));
+  }, []);
 
   const run = async (fn, label) => {
     setBusy(true);
@@ -146,7 +150,13 @@ export default function CallsLog({ onPick }) {
 
       {perf && <PerformanceOverTime perf={perf} />}
 
-      {backtest && <BacktestPanel bt={backtest} />}
+      {backtest && (backtest.error ? (
+        <div className="bg-panel border border-edge rounded-xl p-4 text-xs text-amber-300/90">
+          10-year replay summary unavailable: {backtest.error}
+        </div>
+      ) : (
+        <BacktestPanel bt={backtest} />
+      ))}
 
       <div className="bg-panel border border-edge rounded-xl p-4">
         <h3 className="font-semibold mb-3">🔴 Open calls ({open.length})</h3>

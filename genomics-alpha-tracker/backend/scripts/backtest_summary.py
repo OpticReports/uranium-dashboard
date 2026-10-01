@@ -50,6 +50,8 @@ from scripts.backtest_variants_10y import (  # noqa: E402
     SPY_RAW,
     START,
     START_EQUITY,
+    V0_EXPECTED,
+    V0_TOL,
     buyhold_curve,
     load_market,
     load_spy_curve,
@@ -71,7 +73,11 @@ TRAILING_YEARS = (2, 5, 10)
 BOOKS = {
     "V0": {"label": "Combined replayable book", "sub": "1% risk/call, <=10 open",
            "kind": "engine"},
-    "V5": {"label": "Rel-strength only", "sub": "1% risk/call, <=10 open, XBI>50dma gate",
+    # V5 is the pre-registered single-signal variant (rel-strength fires gated
+    # on XBI>50dma). It did NOT survive its campaign (Sharpe 0.34 vs V0's 0.42);
+    # it is shown because it is the only single-signal book the variants run
+    # computed on full daily curves, not because it is better.
+    "V5": {"label": "Rel-strength only, gated", "sub": "1% risk/call, <=10 open, XBI>50dma gate",
            "kind": "variant"},
     "XBI": {"label": "XBI buy & hold", "sub": "sector benchmark", "kind": "benchmark"},
     "SPY": {"label": "SPY buy & hold", "sub": "market benchmark", "kind": "benchmark"},
@@ -83,30 +89,48 @@ STAT_KEYS = ("end_value", "cagr", "max_dd", "sharpe", "sortino", "calmar")
 # machinery gate (to $4). They answer one question - what risk/call buys -
 # and the answer is almost entirely drawdown.
 SIZING_SENSITIVITY = [
-    {"risk_frac": 0.005, "end_value": 156_601, "cagr": 0.043, "max_dd": 0.401,
-     "sharpe": 0.42, "sortino": 0.62, "calmar": 0.11},
-    {"risk_frac": 0.01, "end_value": 208_764, "cagr": 0.072, "max_dd": 0.655,
-     "sharpe": 0.42, "sortino": 0.61, "calmar": 0.11},
-    {"risk_frac": 0.02, "end_value": 233_656, "cagr": 0.083, "max_dd": 0.899,
-     "sharpe": 0.40, "sortino": 0.59, "calmar": 0.09},
+    {"label": "combined book @ 0.5%", "risk_frac": 0.005, "end_value": 156_601,
+     "cagr": 0.043, "max_dd": 0.401, "sharpe": 0.42, "sortino": 0.62, "calmar": 0.11},
+    {"label": "combined book @ 1%", "risk_frac": 0.01, "end_value": 208_764,
+     "cagr": 0.072, "max_dd": 0.655, "sharpe": 0.42, "sortino": 0.61, "calmar": 0.11},
+    {"label": "combined book @ 2%", "risk_frac": 0.02, "end_value": 233_656,
+     "cagr": 0.083, "max_dd": 0.899, "sharpe": 0.40, "sortino": 0.59, "calmar": 0.09},
+    # The one single-signal book in the addendum that beats both V0 and XBI on
+    # Sharpe. Doc-frozen like the rows above; the ungated rel-strength book
+    # was never a pre-registered variant, so no full-daily-curve stats exist.
+    {"label": "rel-strength only, ungated @ 1%", "risk_frac": 0.01, "end_value": 246_236,
+     "cagr": 0.089, "max_dd": 0.512, "sharpe": 0.48, "sortino": 0.70, "calmar": 0.17},
 ]
 
 CAVEATS = [
     "This is the MECHANICAL SHADOW of the engine, not the engine: the live "
     "composite>=55 gate, confidence sizing and the auto-trigger set "
     "(sentiment ramp / revision clusters / options+social) have no history and "
-    "were not replayed. Every replayable fire became a fixed-size call.",
+    "were not replayed. Every replayable fire became a fixed-size call, and "
+    "the book held at most 10 at once - 3,872 of 5,008 fires were skipped at "
+    "that cap, and the price-only pullback row is excluded to avoid "
+    "double-counting its own superset flag.",
     "Survivorship: the replay trades TODAY'S universe. Names that died or "
     "delisted between 2016 and now are absent, which flatters every absolute "
     "number. XBI and SPY carry no such tailwind, so the comparison is unfair "
     "in the engine's favour.",
+    "The catalyst calendar is point-in-time but not perfectly so: it uses the "
+    "sponsor's SUBMIT dates, which precede public posting by a median of 2 "
+    "days (p90 5, max 92). Rebuilding on true post dates moved the "
+    "catalyst flags' excess UP, so the lead hurt rather than helped, and no "
+    "verdict changed - measured, not assumed.",
+    "A catalyst's primary-completion date is an ESTIMATE of when a trial "
+    "finishes, not a readout date; data often lands months either side. The "
+    "catalyst windows approximate event proximity, nothing more.",
     "Sizing is fixed-fraction (risk f% of the previous close's equity per "
     "call), daily mark-to-market on adjusted closes forward-filled on the XBI "
     "calendar, tiered slippage (A=10 / B=40 / C=100 bps per side) inside the "
-    "realized R, rf = 0 for Sharpe and Sortino.",
+    "realized R, rf = 0 for Sharpe and Sortino. 'Book value at end' is the "
+    "running book, not re-based per window.",
     "The replay ends 2026-08-19. The 2y and 5y windows are anchored to THAT "
-    "date, not today. What the engine has done since lives in the live paper "
-    "book above - the only honest measure of the full system.",
+    "date, not today, and the 10y window is the whole 10.6-year replay. What "
+    "the engine has done since lives in the live paper book above - the only "
+    "honest measure of the full system.",
     "Read against the benchmark row: at mechanical sizing the replayable "
     "engine ~= sector beta over the decade, with a worse drawdown at 1% risk. "
     "Raising risk per call bought CAGR almost entirely with drawdown.",
@@ -211,22 +235,53 @@ def _display_curves(var: dict) -> dict:
             "start_equity": START_EQUITY, "rows": rows}
 
 
+HINT = ("Run `python -m scripts.backtest_summary` with backend/data/"
+        "backtest_bars.json and spy_bars_raw.json present (refetch them with "
+        "`python -m scripts.backtest_calls_10y --refresh`), then commit the JSON.")
+
+
+def v0_mismatch(full: dict) -> str | None:
+    """The same machinery gate scripts/backtest_variants_10y.py applies on
+    every run, applied to a RECOMPUTED book before any of its numbers are
+    allowed onto the page.
+
+    A bar cache fetched later, from another lane or with a different
+    adjustment basis, would otherwise put trailing-window Sharpe and %-DD on
+    the page that silently disagree with the copied full-period row beside
+    them. Either the cache reproduces the documented book, or nothing from
+    it is shown."""
+    got = {"end": full["end_value"], "cagr": full["cagr"],
+           "max_dd": full["max_dd"], "sharpe": full["sharpe"]}
+    bad = [f"{k} {got[k]:.4g} vs documented {exp}"
+           for k, exp in V0_EXPECTED.items()
+           if abs(got[k] - exp) > max(0.01 * abs(exp), V0_TOL[k])]
+    return "; ".join(bad) or None
+
+
 def trailing_daily(taken: list[dict]) -> dict:
     """2y/5y/10y dollar windows on the FULL daily curve. Needs the bar cache.
 
     Absent cache -> status=unavailable with the path named, so the gap is
     visible on the page instead of looking like a number that was never
-    asked for."""
+    asked for. Cache present but failing the V0 gate -> the same, with the
+    mismatch named: a wrong number is worse than a gap."""
     missing = [p for p in (BARS_CACHE, SPY_RAW) if not p.exists()]
     if missing:
         return {"status": "unavailable",
-                "reason": ("daily bar cache not present in this checkout: "
-                           + ", ".join(str(p.relative_to(BACKEND)) for p in missing)
-                           + ". Run `python -m scripts.backtest_summary` where "
-                             "scripts/backtest_calls_10y.py last ran."),
-                "windows": None}
+                "reason": ("needs the daily price cache the replay was built "
+                           "from, which this build did not have"),
+                "detail": "missing: " + ", ".join(str(p.relative_to(BACKEND)) for p in missing),
+                "hint": HINT, "windows": None}
     mkt = load_market()
     curve = run_call_book(taken, mkt)
+    full = seg_stats(curve, START, END)
+    bad = v0_mismatch(full)
+    if bad:
+        return {"status": "unavailable",
+                "reason": ("the daily price cache present at build time did not "
+                           "reproduce the documented book, so nothing computed "
+                           "from it is shown"),
+                "detail": f"V0 gate failed: {bad}", "hint": HINT, "windows": None}
     bench = {"XBI": buyhold_curve(mkt["px"]["XBI"], mkt["calendar"]),
              "SPY": load_spy_curve(mkt["calendar"])}
     windows = {}
@@ -240,8 +295,24 @@ def trailing_daily(taken: list[dict]) -> dict:
                               "years": round((END - lo).days / 365.25, 2),
                               "books": books}
     return {"status": "ok", "basis": "dollars, daily MTM, full daily curve",
+            "v0_gate": {"end_value": full["end_value"], "cagr": full["cagr"],
+                        "max_dd": full["max_dd"], "sharpe": full["sharpe"],
+                        "passed": True},
             "windows": windows,
             "curve_daily": [[d.isoformat(), round(v, 2)] for d, v in curve]}
+
+
+def with_full_as_10y(td: dict, windows_daily: dict) -> dict:
+    """The 10y window IS the full replay, and the full replay's dollar stats
+    exist whether or not the bar cache does. Without this the page claimed
+    a gap on the 10y tab that the Full tab had already filled."""
+    if td["status"] == "ok" or "full" not in windows_daily:
+        return td
+    full = windows_daily["full"]
+    td = {**td, "status": "partial",
+          "windows": {"10y": {**full, "note": ("the 10y window is the full replay; "
+                                               "copied from the full-period row")}}}
+    return td
 
 
 def build() -> dict:
@@ -267,6 +338,7 @@ def build() -> dict:
                     for y in TRAILING_YEARS},
     }
 
+    windows_daily = _window_stats_from_variants(var)
     return {
         "schema": SCHEMA,
         "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -291,9 +363,9 @@ def build() -> dict:
                           "avg_r_net": res["combined_book"]["summary"]["avg_r"],
                           "total_r": res["combined_book"]["summary"]["total_r"],
                           "max_dd_r": res["combined_book"]["summary"]["max_dd_r"]},
-        "windows_daily": _window_stats_from_variants(var),
+        "windows_daily": windows_daily,
         "trailing_r": trailing_r,
-        "trailing_daily": trailing_daily(taken),
+        "trailing_daily": with_full_as_10y(trailing_daily(taken), windows_daily),
         "curves": _display_curves(var),
         "sizing_sensitivity": {"source": "docs/BACKTEST_CALLS_10Y.md dollar-book addendum "
                                          "(doc-frozen; the 1% row is the gate-reproduced one)",
@@ -314,7 +386,13 @@ def main() -> None:
         print(f"  trailing {k} (R, realization): n={w['n_calls']} total {w['total_r']:+.1f}R "
               f"maxDD {w['max_dd_r']:.1f}R hit {w['hit_rate']:.0%}")
     print(f"  trailing dollar windows: {td}"
-          + ("" if td == "ok" else f" - {out['trailing_daily']['reason']}"))
+          + ("" if td == "ok" else f" - {out['trailing_daily']['reason']} "
+                                   f"({out['trailing_daily'].get('detail', '')})"))
+    if td == "ok":
+        for k, w in out["trailing_daily"]["windows"].items():
+            v = w["books"]["V0"]
+            print(f"    {k}: CAGR {v['cagr']:+.2%} maxDD {v['max_dd']:.1%} "
+                  f"Sharpe {v['sharpe']:.2f}  (XBI {w['books']['XBI']['sharpe']:.2f})")
 
 
 if __name__ == "__main__":
