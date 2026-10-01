@@ -20,7 +20,8 @@ future test batch — an uncounted trial silently lowers the evidence bar.
 | S4 trail robustness diagnostic (2026-09) | 63 | RESEARCH_TRAIL.md |
 | S3 fee-model correction (2026-09) | 24 | RESEARCH_FEES.md |
 | CAGR study: 7 registered + 11 diagnostic trend-share sweep (2026-09-28) | 18 | RESEARCH_CAGR.md |
-| **Total** | **~2,533** | |
+| Sharpe study (registered 2026-10-01) | 5 | research/sharpe/PREREG.md |
+| **Total** | **~2,538** | |
 
 Fee-study note (2026-09-10): the fee row counts 24, not the 14 its
 pre-registration declared — 14 registered grid arms, plus 8 Kelly re-fits
