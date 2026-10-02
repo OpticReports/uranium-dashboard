@@ -1,15 +1,15 @@
 {
   "peaks": {
-    "mbkiXcuNDjueXpiox5Av": 1884.33,
-    "nNdBk7hc5NiBzeRvbI5T": 25248.51,
+    "mbkiXcuNDjueXpiox5Av": 1892.29,
+    "nNdBk7hc5NiBzeRvbI5T": 25274.54,
     "YPTSJFJwD2ZKfAeYJUbW": 40378.17,
     "ORQNCfZnA18wmsMWVhf8": 35223.93
   },
   "accident_gauge": "YELLOW",
   "peak_dates": {
     "YPTSJFJwD2ZKfAeYJUbW": "2026-08-17",
-    "nNdBk7hc5NiBzeRvbI5T": "2026-10-01",
-    "mbkiXcuNDjueXpiox5Av": "2026-09-22"
+    "nNdBk7hc5NiBzeRvbI5T": "2026-10-02",
+    "mbkiXcuNDjueXpiox5Av": "2026-10-02"
   },
   "book_peak": 100006.18
 }
