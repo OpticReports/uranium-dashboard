@@ -2,19 +2,38 @@
 """Measure REALIZED Composer execution slippage from actual account fills.
 
 Pulls the trade-activity report (real fills: avg fill price, qty, side,
-timestamp) and benchmarks each fill against the same day's official close --
-the price the backtest engine credits. Signed slippage = side x (fill/close-1).
-The fill-to-close gap includes ~7min of market drift (fills ~15:53 ET, close
-16:00), which is direction-random and averages out across fills; the
-notional-weighted mean is the systematic execution cost per side.
+timestamp) and benchmarks each fill against the same day's official close.
 
-Context (addendum 14/14b): Composer's backtest engine ASSUMES 5.0bps/side.
-First live measurement 2026-07-29: +1.91bps/side notional-weighted over 224
-fills / $9.1M notional (equal-weighted -3.2bps, SE 3.4 -- indistinguishable
-from zero). Re-run QUARTERLY as the book scales toward $1M: rising slippage
-(>5bps sustained, or thin names ZVOL/VBF/VXZ/VIXM trending worse) is the
-tripwire for the thin-ticker swaps / IBKR migration gate in
-research/ideas-backlog.md.
+THE IDENTIFICATION PROBLEM (why the naive estimator was wrong, add. 34):
+fills run ~15:53 ET, the close is 16:00, so
+
+    fill/close - 1  =  (7-minute market drift)  +  (execution cost)
+
+and on 3x ETFs the drift term is 50-300bps -- orders of magnitude larger
+than the cost we want. Notional-weighting concentrated that noise in a few
+large fills, so the statistic returned +2.94 / +4.90 / +7.58 bps on the SAME
+data depending on which fills were in the window. It was not measuring
+execution.
+
+THE FIX -- the two terms have different signatures, so they separate:
+  * drift hits buys and sells in the SAME direction, and scales with the
+    instrument's market beta (TQQQ drifts ~3x SPY);
+  * execution cost is SIGN-dependent: a buy pays up, a sell receives less.
+So fit, over all fills jointly,
+
+    fill/close - 1  =  beta_i * m_day  +  c * side_i  +  e
+
+with one free drift term m_day per fill-day (absorbing that day's move) and
+a single cost coefficient c. Betas are estimated from daily returns vs SPY,
+not hardcoded. c is the execution cost per side; its standard error comes
+from the regression residuals. c is identified by days carrying BOTH buys
+and sells (a same-side-only day is fully absorbed by its own m_day), so the
+report states how many fills actually identify it.
+
+Context (addendum 14/14b/34): Composer's backtest engine ASSUMES 5.0bps/side.
+The alert fires only when c is above 5.0bps by more than 2 standard errors --
+a bare threshold crossing on a noisy statistic is not evidence. Thin names
+(ZVOL/VBF/VXZ/VIXM) are reported with their own SEs for the same reason.
 
 Usage: slippage_measure.py [--since 2025-12-01] [--until today] [--account UUID]
 Prices come from Yahoo daily closes (as-traded, split-corrected).
@@ -43,6 +62,96 @@ def yahoo_closes(t):
         out[d] = q["close"][i] * fut
     return out
 
+
+def estimate_betas(px, spy, tickers):
+    """Market beta of each ticker from overlapping daily returns vs SPY.
+
+    Scales the per-day drift term. A missing/short series falls back to 1.0,
+    which under-removes drift for levered names rather than inventing an
+    exposure.
+    """
+    sd = sorted(spy)
+    sr = {b: spy[b] / spy[a] - 1 for a, b in zip(sd, sd[1:]) if spy[a]}
+    out = {}
+    for t in tickers:
+        q = px.get(t) or {}
+        d = sorted(q)
+        sxy = sxx = 0.0
+        n = 0
+        for aa, bb in zip(d, d[1:]):
+            if bb in sr and q[aa]:
+                x = sr[bb]; y = q[bb] / q[aa] - 1
+                sxy += x * y; sxx += x * x; n += 1
+        out[t] = (sxy / sxx) if (n >= 60 and sxx > 0) else 1.0
+    return out
+
+
+def _within(samples, betas, cost_mask):
+    """Profile out the per-day drift terms analytically (no numpy).
+
+    Model: raw_i = beta_i * m_day + c * z_i + e_i, with one free m per day.
+    For any c the LS m_day is sum(beta*(raw - c*z))/sum(beta^2) over that day,
+    so substituting back is exactly a beta-weighted within-day transform:
+        v~_i = v_i - beta_i * (sum_j beta_j v_j / sum_j beta_j^2)
+    Then c = sum(raw~ * z~) / sum(z~^2). Returns (c, se, dof, n_days).
+    """
+    byday = collections.defaultdict(list)
+    for i, (raw, side, day, t, _) in enumerate(samples):
+        byday[day].append(i)
+    rt, zt = {}, {}
+    for day, ids in byday.items():
+        bb = sum(betas.get(samples[i][3], 1.0) ** 2 for i in ids)
+        if bb <= 0:
+            continue
+        pr = sum(betas.get(samples[i][3], 1.0) * samples[i][0] for i in ids) / bb
+        pz = sum(betas.get(samples[i][3], 1.0) * cost_mask(samples[i]) for i in ids) / bb
+        for i in ids:
+            b = betas.get(samples[i][3], 1.0)
+            rt[i] = samples[i][0] - b * pr
+            zt[i] = cost_mask(samples[i]) - b * pz
+    szz = sum(v * v for v in zt.values())
+    if szz <= 0:
+        return None
+    c = sum(rt[i] * zt[i] for i in rt) / szz
+    ssr = sum((rt[i] - c * zt[i]) ** 2 for i in rt)
+    dof = len(rt) - len(byday) - 1
+    if dof <= 0:
+        return None
+    se = math.sqrt((ssr / dof) / szz)
+    return c, se, dof, len(byday)
+
+
+def fit_cost(samples, betas):
+    """Execution cost per side, with the 7-minute drift removed.
+
+    Returns (c, se, n_used, n_identifying, n_mixed_days). c is identified by
+    days carrying BOTH buys and sells: a same-side-only day is absorbed
+    entirely by its own drift term.
+    """
+    out = _within(samples, betas, lambda s: s[1])
+    if not out:
+        return None
+    c, se, _, _ = out
+    sides = collections.defaultdict(set)
+    for _, side, day, _, _ in samples:
+        sides[day].add(side)
+    mixed = {d for d, v in sides.items() if len(v) > 1}
+    n_ident = sum(1 for _, _, d, _, _ in samples if d in mixed)
+    return c, se, len(samples), n_ident, len(mixed)
+
+
+def group_cost(samples, betas, keep):
+    """Same model with the cost term restricted to `keep` tickers; all other
+    fills still contribute their day's drift term."""
+    if not any(t in keep for _, _, _, t, _ in samples):
+        return None
+    out = _within(samples, betas, lambda s: s[1] if s[3] in keep else 0.0)
+    if not out:
+        return None
+    c, se, _, _ = out
+    return c, se, sum(1 for _, _, _, t, _ in samples if t in keep)
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--account")
@@ -57,7 +166,8 @@ def main():
         rows = list(csv.DictReader(io.StringIO(r.read().decode())))
 
     px, samples, missing = {}, [], set()
-    tot_signed = tot_notional = 0.0
+    tot_notional = 0.0
+    legacy_signed = 0.0
     for r in rows:
         if r["Status"] != "filled" or not r["Average Fill Price"]: continue
         t = r["Symbol"]
@@ -69,29 +179,66 @@ def main():
         if not close: missing.add(f"{t}@{day}"); continue
         fill = float(r["Average Fill Price"]); qty = float(r["Filled Quantity"])
         side = 1 if r["Side"] == "buy" else -1
-        samples.append((side*(fill/close-1), fill*qty, t))
-        tot_signed += side*(fill-close)*qty; tot_notional += fill*qty
+        notional = fill * qty
+        samples.append((fill / close - 1, side, day, t, notional))
+        legacy_signed += side * (fill / close - 1) * notional
+        tot_notional += notional
 
     n = len(samples)
-    if n < 20:
-        print(f"only {n} fills in window — not enough for a stable estimate"); return
-    w_mean = sum(s*w for s, w, _ in samples)/tot_notional
-    eq = sum(s for s, _, _ in samples)/n
-    se = math.sqrt(sum((s-eq)**2 for s, _, _ in samples)/(n-1)/n)
     print(f"window {a.since}..{a.until}: {n} fills, ${tot_notional:,.0f} notional "
           f"({len(missing)} skipped)")
-    print(f"REALIZED SLIPPAGE: {w_mean*1e4:+.2f} bps/side notional-weighted "
-          f"(equal {eq*1e4:+.2f} ± {se*1e4:.2f}; engine assumption 5.0)")
-    byt = collections.defaultdict(list)
-    for s, w, t in samples: byt[t].append((s, w))
+    if n < 30:
+        print(f"only {n} fills — not enough for a stable estimate"); return
+
+    try: spy = yahoo_closes("SPY")
+    except Exception: spy = {}
+    betas = estimate_betas(px, spy, {t for _, _, _, t, _ in samples})
+
+    fit = fit_cost(samples, betas)
+    if not fit:
+        print("estimator could not be identified on this window"); return
+    c, se, n_used, n_ident, n_mixed_days = fit
+    c_bps, se_bps = c * 1e4, se * 1e4
+
+    print(f"EXECUTION COST: {c_bps:+.2f} +/- {se_bps:.2f} bps/side "
+          f"(drift-separated; engine assumption 5.0)")
+    lo, hi = c_bps - 2 * se_bps, c_bps + 2 * se_bps
+    print(f"  95% interval [{lo:+.2f}, {hi:+.2f}] bps  |  "
+          f"{n_ident}/{n_used} fills across {n_mixed_days} mixed-side days identify it")
+    verdict = ("ABOVE" if lo > 5.0 else "BELOW" if hi < 5.0 else
+               "INDISTINGUISHABLE FROM")
+    print(f"  -> {verdict} the 5.0bps engine assumption")
+
+    # legacy statistic, kept for continuity with addenda 14b/34 only
+    print(f"  [legacy notional-weighted fill-vs-close: "
+          f"{legacy_signed / tot_notional * 1e4:+.2f} bps — drift-contaminated, "
+          f"see addendum 34; not the decision number]")
+
+    print("  betas used (drift scaling): " + ", ".join(
+        f"{t} {betas[t]:.1f}" for t in sorted(betas, key=lambda x: -betas[x])[:6]))
+
     thin = {"ZVOL", "VBF", "VXZ", "VIXM"}
-    for t in sorted(thin & set(byt)):
-        ws = sum(w for _, w in byt[t])
-        print(f"  thin-name {t}: {sum(s*w for s, w in byt[t])/ws*1e4:+.1f} bps/side "
-              f"(n={len(byt[t])}, ${ws:,.0f})")
-    if w_mean*1e4 > 5.0:
-        print("  !! measured slippage above the 5bps engine assumption — "
+    present = sorted(thin & {t for _, _, _, t, _ in samples})
+    if present:
+        print("  thin names (same model, cost term restricted to each):")
+        for t in present:
+            g = group_cost(samples, betas, {t})
+            if not g:
+                continue
+            gc, gse, gn = g
+            flag = "" if abs(gc * 1e4) <= 2 * gse * 1e4 else "   <- significant"
+            print(f"    {t:5s} {gc*1e4:+7.2f} +/- {gse*1e4:5.2f} bps/side "
+                  f"(n={gn}){flag}")
+        gall = group_cost(samples, betas, thin)
+        if gall:
+            gc, gse, gn = gall
+            print(f"    {'ALL':5s} {gc*1e4:+7.2f} +/- {gse*1e4:5.2f} bps/side "
+                  f"(n={gn}) — the capacity canary")
+
+    if lo > 5.0:
+        print("  !! execution cost is ABOVE the 5bps engine assumption by >2 SE — "
               "review ideas-backlog.md scale/migration gates")
+
 
 if __name__ == "__main__":
     main()
