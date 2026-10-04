@@ -98,41 +98,63 @@ To exit: `CARRY_ENABLED=false` (unwind), or `POST /halt` (freeze).
 `review/carry_review.py` is read-only. It rebuilds the sleeve's results from
 the venue's own records:
 - fills on ETH and `@151` since the sleeve started;
-- every hourly funding payment;
-- hourly candles (daily ones for boundaries older than the venue's last
-  5000 hours).
+- every funding payment;
+- the published hourly rates;
+- hourly candles (daily ones for hours older than the venue's last 5000).
 
 It splits the P&L into **funding - fees + price**:
 - **funding** is exact, from the venue;
-- **fees** are exact: perp fees in USDC, spot buy fees taken in UETH;
+- **fees** are exact and booked at each fill's price: perp fees in USDC,
+  spot buy fees taken in UETH;
 - **price** is both legs marked at the same moment (basis plus any
   unhedged part).
 
-It reports the review month, the previous month and inception to date. It
-also shows yields on notional (only after 168 hours open), uptime,
-opens/closes and the worst hedge gap after a pass. Below that come a
-position snapshot (hedge gap, spot-perp basis, liquidation distance) and
-the gate state.
+Beside price it shows **ETH's move** and what the same notional would have
+made **unhedged**: a working hedge keeps price near zero whatever ETH does.
+It reports the review month, the previous month, inception to date and a
+by-month table. Yields on notional appear only after 168 hours open. It also
+shows uptime, opens/closes, the worst hedge gap after a pass, the position
+(hedge gap, spot-perp basis, liquidation distance) and the gate state.
 
-**Integrity checks.** Before any number is trusted, the replayed UETH and
-ETH holdings must match the venue, and every hour the short was held must
-carry a funding payment. A flag means: explain it first. The exit code is
-2 when flags are open.
+**Funding history format.** Hyperliquid keeps funding rows hourly for about
+8 days, then merges each UTC day into one row (`nSamples` = hours paid). The
+review therefore takes hours open, notional and expected funding from the
+replayed short and the published hourly rates. The rows supply only the
+dollars; merged rows are booked on their own day.
+
+**Integrity checks:**
+- the replayed UETH and ETH holdings must match the venue;
+- every hour the short was held must carry exactly one payment, checked per
+  UTC day so merged rows are covered;
+- funding since the current open must match the venue's
+  `cumFunding.sinceOpen`.
+
+A flag means: explain it before acting on any number.
+
+**Exit codes:**
+- 0 clean;
+- 2 integrity flags;
+- 3 the venue could not be read: an error report is written with no
+  numbers; re-run later.
+
+An engine outage or a chart failure only adds notes to the report.
 
 **Proposals only.** The rules can propose these changes; nothing is ever
 applied, and Casey approves any change:
-- below cash for two months: raise the ON threshold or pause;
+- net yield below cash for two months: raise the ON threshold or pause;
 - flapping (3+ opens/closes with under 60% uptime): widen the band;
 - price drag larger than half the funding;
-- funding received more than 3% off the published rates;
+- funding received more than 1% (and $1) off the published rates;
 - liquidation less than 100% away;
 - the 30-day mean within 1 point of the OFF line;
-- a size CANDIDATE after two strong months with wide liquidation room.
+- a size CANDIDATE: only on two months of funding net of fees more than 4
+  points over cash, with net yield at or above cash, wide liquidation room,
+  and no other proposal open.
 
 Run: `python carry-executor/review/carry_review.py --month previous --out DIR`
 (or `--month current`, or `--month YYYY-MM`). It writes
-`carry_review_<month>.{md,json,png}`. A Routine runs it on the 1st of each
-month and sends the chart and summary.
+`carry_review_<month>.{md,json,png}`. A Routine runs it at 08:56 UTC on the
+1st of each month and sends the chart and summary.
 
 ## Honesty box
 
