@@ -1345,6 +1345,19 @@ def load_inputs(fetch_missing: bool = False, refresh_bars_if_missing: bool = Fal
     import scripts.backtest_variants_r2 as _r2
     # 1) decide on a rebuild BEFORE any path is resolved (a seed_data copy
     #    must never shadow a freshly written data/ cache - counter-agent MED)
+    # 0) the committed FROZEN cache (image copy under seed_data on Render,
+    #    where the disk mount hides data/): copy it in before deciding on any
+    #    refetch, so the machinery check runs against the record the stored
+    #    numbers were produced from, not against whatever FMP serves today.
+    seeded = []
+    for path in (CACHE, DATA / "spy_bars_raw.json", BASIS_SIDECAR):
+        alt = SEED_DATA / path.name
+        if not path.exists() and alt.exists():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(alt.read_bytes())
+            seeded.append(path.name)
+    if seeded:
+        print(f"seeded the committed frozen cache from seed_data: {seeded}")
     incomplete = _cache_incomplete() if (force_refresh or refresh_bars_if_missing) else None
     if force_refresh or (refresh_bars_if_missing and incomplete):
         print(f"bars cache {'refresh requested' if force_refresh else incomplete}: rebuilding on the "

@@ -60,8 +60,17 @@ from pathlib import Path
 BACKEND = Path(__file__).resolve().parent.parent
 DATA = BACKEND / "data"
 PX_CACHE = DATA / "px_cache"
-R2A_DAILY = DATA / "r2a_daily.json"
-R2A_EXPOSURE = DATA / "r2a_exposure.json"
+# Rounds 4-6 were run and counter-agent verified on the AUGUST 2026 Yahoo-basis
+# R2-A sleeve. On 2026-10-04 the campaign was re-based on the committed FMP
+# cache and data/r2a_daily.json now holds the re-based curve (end $469,241.76
+# vs $430,406.29). This harness keeps reading the sleeve its results were
+# produced from - archived under *_yahoo_2026-08.json - because its own price
+# lane (stockanalysis.com) was unreachable from the re-basing environment, so
+# rounds 4-6 could not be re-run. Their stored results remain consistent with
+# these inputs; re-run them on the re-based sleeve before quoting a round 4-6
+# number alongside a re-based round 2-3 number.
+R2A_DAILY = DATA / "r2a_daily_yahoo_2026-08.json"
+R2A_EXPOSURE = DATA / "r2a_exposure_yahoo_2026-08.json"
 BARS_CACHE = DATA / "backtest_bars.json"
 # `campaign_rounds` is the multiple-comparison SNAPSHOT each round's record
 # was judged and frozen against — round-6 counter-agent M3. The campaign-wide
@@ -218,7 +227,7 @@ REPRO_REAL = {
     "INC-SPY": {"cagr": 0.1543, "max_dd": 0.245, "sharpe_rf0": 0.95,
                 "sharpe_bil": 0.76, "sortino_rf0": 1.38},
 }
-R2A_END_VALUE = 430_406.29
+R2A_END_VALUE = 430_406.29          # the archived Yahoo-basis sleeve this harness reads (see above)
 
 
 # --- data lane ---------------------------------------------------------------------

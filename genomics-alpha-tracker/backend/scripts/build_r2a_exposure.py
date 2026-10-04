@@ -105,6 +105,12 @@ def main() -> None:
     drift = max(abs(r[1] - v) for r, (_d, v) in zip(rows, ref, strict=True))
     assert drift == 0.0, f"equity diverged from run_call_book by {drift}"
 
+    if "--refreeze" in sys.argv:
+        # Re-basing the campaign on the committed FMP cache (2026-10-04): the
+        # rebuilt curve BECOMES the frozen R2-A dollar curve. The previous
+        # Yahoo-basis curve is kept as data/r2a_daily_yahoo_2026-08.json.
+        FROZEN.write_text(json.dumps([[d, round(e, 6)] for d, e, _i, _n in rows]))
+        print(f"Re-froze {FROZEN} from the rebuilt curve ({len(rows)} days, end ${rows[-1][1]:,.2f})")
     frozen = {d: v for d, v in json.loads(FROZEN.read_text())}
     assert len(frozen) == len(rows), "frozen curve length != rebuilt length"
     gap = max(abs(r[1] - frozen[r[0]]) for r in rows)

@@ -4,6 +4,8 @@ _Script `backend/scripts/backtest_executor_mirror.py` · results
 `backend/data/backtest_executor_mirror_results.json` · served at
 `GET /blend3070/mirror-backtest` · shown on the Calls Log page under the Scorecard_
 
+_Re-based 2026-10-04 on the committed FMP-lane cache (`backend/data/backtest_bars.json`): every survival verdict is unchanged, path-dependent levels moved by up to 9%. The superseded Yahoo-basis numbers and the reasons are in `REBASE_FMP_LANE_2026-10-04.md`._
+
 **Question (Casey, 2026-10-01):** "have you run a 2-5-10 year backtest on how
 the geo executor would have performed? how do you know what the max DD is?"
 
@@ -359,3 +361,117 @@ beats the sleeve alone on every stat (Sharpe 0.98 vs 0.61, max DD 27% vs
 29%, P(10y CAGR<0) 0.1% vs 5.5%); keep 30/70. The drawdown question is
 answered at ~29% realized / 34% bootstrap median / 53% p95 for a sleeve-only
 book, 27% / 26% / 39% for the live 30/70 book.
+
+## Results
+
+<!-- RESULTS:BEGIN (written by scripts/backtest_executor_mirror.py — do not edit by hand) -->
+
+_Generated 2026-10-04T21:29:03.624638+00:00 by `scripts/backtest_executor_mirror.py` · period 2016-01-04 → 2026-08-19 · results JSON `backend/data/backtest_executor_mirror_results.json`_
+
+**Machinery**: R2-A reproduces to $469,241.76 (stored $469,241.76, |diff| $0.0000, verified=True); the new engine in r2a_mode reduces to run_call_book with max |diff| 1.16e-10 and 0 row mismatches. SPY source: spy_bars_raw.json (adjusted 'a'; lane per protocol.cache_basis). BIL annualized +2.13% (0 proxy days).
+
+- lag 1: 5008 fires → 4963 graded (42 open at data end excluded, 3 no sizing reference, 0 no open, 0 no fire bar) → 3059 gate-on → 677 taken (2382 skipped at the cap); 0 pre-fill tracker exits.
+- lag 2: 5008 fires → 4963 graded (42 open at data end excluded, 3 no sizing reference, 0 no open, 0 no fire bar) → 3059 gate-on → 675 taken (2384 skipped at the cap); 21 pre-fill tracker exits.
+
+### Window full: 2016-01-04 → 2026-08-19
+
+| variant | end value | CAGR | max DD | Sharpe | Sortino | Calmar | longest underwater (cal days) | worst year | trades |
+|---|---|---|---|---|---|---|---|---|---|
+| r2a_ref | $469,242 | +15.67% | 35.6% | 0.76 | 1.15 | 0.44 | 1233 | 2022 -17.2% | - |
+| r2a_ref_carry | $529,524 | +16.99% | 34.3% | 0.82 | 1.23 | 0.50 | 1176 | 2022 -16.3% | - |
+| exec_t1_nocost_nocarry | $278,246 | +10.11% | 30.7% | 0.57 | 0.86 | 0.33 | 1305 | 2022 -16.4% | 675 |
+| exec_t1_nocarry | $267,048 | +9.69% | 31.0% | 0.55 | 0.83 | 0.31 | 1308 | 2022 -16.5% | 675 |
+| exec_t2_nocarry | $279,907 | +10.17% | 30.9% | 0.58 | 0.88 | 0.33 | 1274 | 2022 -16.8% | 673 |
+| exec_t2_carry | $317,509 | +11.49% | 29.4% | 0.64 | 0.98 | 0.39 | 1269 | 2022 -16.0% | 673 |
+| exec_t1_carry | $302,607 | +10.99% | 29.5% | 0.61 | 0.92 | 0.37 | 1270 | 2022 -15.7% | 675 |
+| blend3070_t2_carry | $419,779 | +14.47% | 28.3% | 0.97 | 1.37 | 0.51 | 715 | 2022 -17.6% | 673 |
+| blend3070_t1_carry | $422,227 | +14.53% | 28.3% | 0.96 | 1.36 | 0.51 | 722 | 2022 -17.5% | 674 |
+| blend3070_paper_t2_carry | $432,849 | +14.79% | 27.9% | 0.99 | 1.40 | 0.53 | 715 | 2022 -17.1% | - |
+
+### Window 5y: 2021-08-19 → 2026-08-19
+
+| variant | end value | CAGR | max DD | Sharpe | Sortino | Calmar | longest underwater (cal days) | worst year | trades |
+|---|---|---|---|---|---|---|---|---|---|
+| r2a_ref | $469,242 | +9.08% | 23.5% | 0.55 | 0.84 | 0.39 | 499 | 2022 -17.2% | - |
+| r2a_ref_carry | $529,524 | +11.18% | 22.1% | 0.65 | 0.99 | 0.50 | 498 | 2022 -16.3% | - |
+| exec_t1_nocost_nocarry | $278,246 | +4.77% | 23.7% | 0.34 | 0.51 | 0.20 | 667 | 2022 -16.4% | 289 |
+| exec_t1_nocarry | $267,048 | +4.40% | 23.9% | 0.32 | 0.48 | 0.18 | 667 | 2022 -16.5% | 289 |
+| exec_t2_nocarry | $279,907 | +6.28% | 23.0% | 0.43 | 0.66 | 0.27 | 929 | 2022 -16.8% | 287 |
+| exec_t2_carry | $317,509 | +8.41% | 22.0% | 0.54 | 0.83 | 0.38 | 859 | 2022 -16.0% | 287 |
+| exec_t1_carry | $302,607 | +6.44% | 22.7% | 0.43 | 0.64 | 0.28 | 564 | 2022 -15.7% | 289 |
+| blend3070_t2_carry | $419,779 | +11.98% | 20.4% | 0.86 | 1.25 | 0.59 | 715 | 2022 -17.6% | 287 |
+| blend3070_t1_carry | $422,227 | +11.41% | 20.3% | 0.82 | 1.18 | 0.56 | 722 | 2022 -17.5% | 289 |
+| blend3070_paper_t2_carry | $432,849 | +12.37% | 19.7% | 0.88 | 1.29 | 0.63 | 715 | 2022 -17.1% | - |
+
+### Window 2y: 2024-08-19 → 2026-08-19
+
+| variant | end value | CAGR | max DD | Sharpe | Sortino | Calmar | longest underwater (cal days) | worst year | trades |
+|---|---|---|---|---|---|---|---|---|---|
+| r2a_ref | $469,242 | +8.33% | 20.4% | 0.46 | 0.71 | 0.41 | 252 | 2024 -2.1% (partial) | - |
+| r2a_ref_carry | $529,524 | +10.91% | 19.9% | 0.57 | 0.87 | 0.55 | 190 | 2024 -1.4% (partial) | - |
+| exec_t1_nocost_nocarry | $278,246 | +7.22% | 21.3% | 0.41 | 0.63 | 0.34 | 282 | 2026 -2.7% (partial) | 144 |
+| exec_t1_nocarry | $267,048 | +6.66% | 21.5% | 0.39 | 0.60 | 0.31 | 282 | 2026 -3.1% (partial) | 144 |
+| exec_t2_nocarry | $279,907 | +10.36% | 17.5% | 0.55 | 0.87 | 0.59 | 282 | 2024 -0.9% (partial) | 142 |
+| exec_t2_carry | $317,509 | +13.24% | 17.2% | 0.67 | 1.05 | 0.77 | 267 | 2024 -0.0% (partial) | 142 |
+| exec_t1_carry | $302,607 | +9.28% | 21.0% | 0.49 | 0.76 | 0.44 | 267 | 2026 -2.1% (partial) | 144 |
+| blend3070_t2_carry | $419,779 | +17.00% | 13.6% | 1.15 | 1.71 | 1.25 | 197 | 2024 +3.8% (partial) | 142 |
+| blend3070_t1_carry | $422,227 | +15.89% | 13.5% | 1.07 | 1.59 | 1.18 | 197 | 2024 +4.7% (partial) | 144 |
+| blend3070_paper_t2_carry | $432,849 | +17.69% | 13.7% | 1.17 | 1.77 | 1.30 | 195 | 2024 +4.0% (partial) | - |
+
+### Attribution ladder (full window, each step adds one delta)
+
+| step | variant | adds | end value | CAGR | max DD | Sharpe |
+|---|---|---|---|---|---|---|
+| L0 | r2a_ref | paper R2-A (reused) | $469,242 | +15.67% | 35.6% | 0.76 |
+| L0b | r2a_ref_carry | + BIL on idle cash (paper) | $529,524 | +16.99% | 34.3% | 0.82 |
+| L1 | exec_t1_nocost_nocarry | executor mechanics (whole shares, cash clip, uncapped risk, day-zero stop, ratchet, fire-close peak, fire+90 next-open time stop), T+1 | $278,246 | +10.11% | 30.7% | 0.57 |
+| L2 | exec_t1_nocarry | + IBKR fixed commissions + $1 BIL orders | $267,048 | +9.69% | 31.0% | 0.55 |
+| L3 | exec_t2_nocarry | + T+2 fill (pre-fund) | $279,907 | +10.17% | 30.9% | 0.58 |
+| L4 | exec_t2_carry | + BIL carry = PRIMARY 0/100 | $317,509 | +11.49% | 29.4% | 0.64 |
+| L5 | exec_t1_carry | T+1 at full realism | $302,607 | +10.99% | 29.5% | 0.61 |
+| B1 | blend3070_t2_carry | 30/70 band-rebalanced, T+2 = PRIMARY comparison | $419,779 | +14.47% | 28.3% | 0.97 |
+| B2 | blend3070_t1_carry | 30/70, T+1 | $422,227 | +14.53% | 28.3% | 0.96 |
+| P1 | blend3070_paper_t2_carry | 30/70 PAPER daily mix (R3 construction) | $432,849 | +14.79% | 27.9% | 0.99 |
+
+### Deltas (A − B, per window)
+
+| delta | window | CAGR | max DD | Sharpe | end value |
+|---|---|---|---|---|---|
+| t1_vs_t2 | full | -0.50% | +0.16% | -0.03 | $-14,902 |
+| t1_vs_t2 | 5y | -1.97% | +0.77% | -0.11 | $-14,902 |
+| t1_vs_t2 | 2y | -3.96% | +3.79% | -0.17 | $-14,902 |
+| carry_on_vs_off | full | +1.32% | -1.51% | +0.06 | $+37,603 |
+| carry_on_vs_off | 5y | +2.13% | -1.05% | +0.11 | $+37,603 |
+| carry_on_vs_off | 2y | +2.88% | -0.30% | +0.12 | $+37,603 |
+| costs | full | -0.42% | +0.32% | -0.02 | $-11,198 |
+| costs | 5y | -0.37% | +0.19% | -0.02 | $-11,198 |
+| costs | 2y | -0.56% | +0.20% | -0.02 | $-11,198 |
+| exec_vs_r2a | full | -5.50% | -4.93% | -0.18 | $-212,015 |
+| exec_vs_r2a | 5y | -2.77% | -0.20% | -0.11 | $-212,015 |
+| exec_vs_r2a | 2y | +2.33% | -2.63% | +0.10 | $-212,015 |
+| mechanics_vs_r2a | full | -5.55% | -4.92% | -0.20 | $-190,996 |
+| mechanics_vs_r2a | 5y | -4.32% | +0.28% | -0.21 | $-190,996 |
+| mechanics_vs_r2a | 2y | -1.11% | +0.85% | -0.05 | $-190,996 |
+| blend_t1_vs_t2 | full | +0.06% | +0.08% | -0.00 | $+2,448 |
+| blend_t1_vs_t2 | 5y | -0.57% | -0.10% | -0.04 | $+2,448 |
+| blend_t1_vs_t2 | 2y | -1.11% | -0.06% | -0.08 | $+2,448 |
+| blend_band_vs_paper | full | -0.32% | +0.39% | -0.02 | $-13,070 |
+| blend_band_vs_paper | 5y | -0.39% | +0.76% | -0.03 | $-13,070 |
+| blend_band_vs_paper | 2y | -0.69% | -0.10% | -0.03 | $-13,070 |
+
+### Bootstrap cones (stationary block, mean 21d; window's own daily returns)
+
+| variant | window | draws | CAGR p5 / p50 / p95 | max DD p5 / p50 / p95 | P(CAGR<0) |
+|---|---|---|---|---|---|
+| exec_t2_carry | full | 2000 | +0.6% / +11.4% / +23.3% | 22.6% / 33.4% / 52.2% | 4.3% |
+| exec_t2_carry | 5y | 2000 | -3.0% / +8.5% / +22.1% | 16.4% / 25.3% / 41.0% | 12.2% |
+| exec_t2_carry | 2y | 2000 | -7.9% / +13.0% / +43.2% | 14.1% / 22.3% / 36.7% | 17.6% |
+| blend3070_t2_carry | full | 2000 | +6.4% / +14.4% / +22.6% | 14.6% / 26.3% / 40.1% | 0.1% |
+| blend3070_t2_carry | 5y | 2000 | +2.2% / +12.2% / +22.6% | 12.1% / 18.2% / 30.1% | 1.8% |
+| blend3070_t2_carry | 2y | 2000 | +2.2% / +17.1% / +33.2% | 7.7% / 12.5% / 20.2% | 2.8% |
+
+### 30/70 context (stored R3 numbers, different construction)
+
+- R3 paper 30/70 baseline: $489,706 / +16.13% / 29.4% / Sharpe 1.04; R3-A (BIL on idle sleeve cash): $507,841 / +16.53% / 29.3% / Sharpe 1.06 — daily-rebalanced paper mixes of the PAPER R2-A; B1 above is the executor's band-rebalanced book on the executor-mechanics sleeve.
+
+<!-- RESULTS:END -->
