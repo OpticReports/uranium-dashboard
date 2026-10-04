@@ -6,6 +6,7 @@ every market here is built in-test by `make_market`.
 from __future__ import annotations
 
 import json
+import random
 import math
 import threading
 from dataclasses import replace
@@ -1092,3 +1093,70 @@ def test_spy_is_adjusted_detects_a_price_return_cache(tmp_path):
     import inspect
     src = inspect.getsource(mod.run_mirror)
     assert "SPY IS PRICE-RETURN ONLY" in src and "spy_adjusted is False" in src
+
+
+# --- 17. Round 9 exit-rule ablation ----------------------------------------------------
+
+def test_ablation_arms_span_paper_to_executor_and_reduce():
+    import scripts.backtest_exit_ablation as ab
+    names = [n for n, _, _ in ab.arms()]
+    assert names[0] == "P" and names[-1] == "E" and len(names) == 1 + 9 + 9 + 3 + 1
+    assert ab.all_flipped_is_executor()
+    assert ab.E_CFG.commission_model == "none" and not ab.E_CFG.carry and ab.E_CFG.entry_lag == 1
+    # every forward arm differs from P in exactly one knob; every backward arm from E in one
+    for n, cfg, base in ab.arms():
+        if n.startswith("F_"):
+            assert sum(1 for k, _, _ in ab.KNOBS if getattr(cfg, k) != getattr(ab.P_CFG, k)) == 1 and base == "P"
+        if n.startswith("B_"):
+            assert sum(1 for k, _, _ in ab.KNOBS if getattr(cfg, k) != getattr(ab.E_CFG, k)) == 1 and base == "E"
+    rows, mkt, tiers, bil, spy = _study_inputs()
+    # P reduces to the paper book, E equals the mirror's mechanics-only executor book
+    ref_rows, _ = build_trailing_rows(rows, mkt, tiers)
+    ta, _ = select_capped(gate_rows(ref_rows, mkt["xbi_above_prior"][200], key="entry_date"), 10)
+    paper = run_call_book(ta, mkt)
+    cp, _ = ab.run_arm(ab.P_CFG, rows, mkt, tiers)
+    assert max(abs(a[1] - b[1]) for a, b in zip(cp, paper)) < 1e-6
+    ce, _ = ab.run_arm(ab.E_CFG, rows, mkt, tiers)
+    res = run_mirror(rows, mkt, tiers, r2a_stored_end=paper[-1][1], bil=bil, spy_px=spy, draws=5)
+    assert res["variants"]["exec_t1_nocost_nocarry"]["windows"]["full"]["end_value"] == pytest.approx(ce[-1][1])
+
+
+def test_ablation_results_shape_shares_and_verdicts():
+    import scripts.backtest_exit_ablation as ab
+    rows, mkt, tiers, bil, spy = _study_inputs()
+    res = ab.run_ablation(rows, mkt, tiers, draws=8, seed=1)
+    assert set(res["arms"]) == {n for n, _, _ in ab.arms()}
+    g = res["mechanics_gap"]
+    assert g["gap_cagr"] == pytest.approx(g["cagr_E"] - g["cagr_P"])
+    for knob, _, _ in ab.KNOBS:
+        f, b = res["arms"][f"F_{knob}"], res["arms"][f"B_{knob}"]
+        if f["gap_share"] is not None:
+            assert f["gap_share"] == pytest.approx(f["delta_vs_base"]["cagr"] / g["gap_cagr"])
+        if b["recovery_share"] is not None:
+            assert b["recovery_share"] == pytest.approx(b["delta_vs_base"]["cagr"] / -g["gap_cagr"])
+        assert set(f["subperiod_cagr_delta"]) == {n for n, _, _ in ab.SUB_PERIODS if n in res["windows"]}
+        v = res["verdicts"][knob]
+        assert set(v["tests"]) == {"forward_gap_share_ge_0.5", "backward_recovery_share_ge_0.5",
+                                   "sharpe_ci_excludes_zero_both", "subperiod_sign_2_of_3_both"}
+        assert v["carries_the_gap"] == all(v["tests"].values())
+        assert v["proposal"] == (v["carries_the_gap"] and v["backward_max_dd_within_slack"])
+    # P and E have no bootstrap against themselves; every other arm does, with a CI
+    assert res["arms"]["P"]["sharpe_delta_bootstrap"] == {} and res["arms"]["E"]["sharpe_delta_bootstrap"] == {}
+    bt = res["arms"]["F_ratchet"]["sharpe_delta_bootstrap"]
+    assert bt["draws"] == 8 and bt["p2_5"] <= bt["p50"] <= bt["p97_5"]
+    assert res["contract"].endswith("R9_EXIT_ABLATION.md") and len(res["honesty"]) >= 5
+    ab.print_table(res)      # must not raise
+
+
+def test_paired_sharpe_bootstrap_is_paired_and_deterministic():
+    import scripts.backtest_exit_ablation as ab
+    rng = random.Random(3)
+    ra = [rng.gauss(0.0005, 0.02) for _ in range(300)]
+    same = ab.paired_sharpe_bootstrap(ra, list(ra), draws=50, seed=7)
+    assert same["p2_5"] == same["p50"] == same["p97_5"] == 0.0 and same["excludes_zero"] is False
+    rb = [x - 0.004 for x in ra]           # a uniformly worse series: the paired delta is strictly > 0
+    up = ab.paired_sharpe_bootstrap(ra, rb, draws=50, seed=7)
+    assert up["p2_5"] > 0 and up["excludes_zero"] is True
+    assert ab.paired_sharpe_bootstrap(ra, rb, draws=50, seed=7) == up      # deterministic per seed
+    assert ab.paired_sharpe_bootstrap(ra, rb, draws=50, seed=8) != up
+    assert ab.paired_sharpe_bootstrap(ra[:2], rb[:2]) == {}
