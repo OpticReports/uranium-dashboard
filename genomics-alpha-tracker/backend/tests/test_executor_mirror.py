@@ -602,18 +602,38 @@ def test_machinery_check_refuses_drift(tmp_path, monkeypatch):
     ref_rows, _ = build_trailing_rows(rows, mkt, tiers)
     ta, _ = select_capped(gate_rows(ref_rows, mkt["xbi_above_prior"][200], key="entry_date"), 10)
     r2a_end = run_call_book(ta, mkt)[-1][1]
-    with pytest.raises(SystemExit):
-        run_mirror(rows, mkt, tiers, r2a_stored_end=r2a_end + 5.0, bil=bil, spy_px=spy, draws=5)
-    res = run_mirror(rows, mkt, tiers, r2a_stored_end=r2a_end + 5.0, bil=bil, spy_px=spy,
+    big = 0.05 * r2a_end                    # 5% off: outside the +/-1% V0 tolerance
+    with pytest.raises(SystemExit, match="MACHINERY CHECK FAILED"):
+        run_mirror(rows, mkt, tiers, r2a_stored_end=r2a_end + big, bil=bil, spy_px=spy, draws=5)
+    res = run_mirror(rows, mkt, tiers, r2a_stored_end=r2a_end + big, bil=bil, spy_px=spy,
                      draws=5, allow_cache_drift=True)
     assert res["protocol"]["cache_verified"] is False
-    assert res["protocol"]["r2a_reproduction"]["abs_diff"] == pytest.approx(5.0)
+    assert res["protocol"]["cache_exact"] is False
+    assert res["protocol"]["r2a_reproduction"]["abs_diff"] == pytest.approx(big)
+    assert res["protocol"]["r2a_reproduction"]["rel_diff"] == pytest.approx(big / (r2a_end + big), rel=1e-9)
+    # inside the tolerance but not to the dollar: verified, not exact, honesty line, lane recorded
+    small = 0.004 * r2a_end
+    res2 = run_mirror(rows, mkt, tiers, r2a_stored_end=r2a_end + small, bil=bil, spy_px=spy,
+                      draws=5, cache_basis={"lane": "fmp dividend-adjusted", "normalized": {}})
+    assert res2["protocol"]["cache_verified"] is True and res2["protocol"]["cache_exact"] is False
+    assert res2["protocol"]["cache_basis"]["lane"] == "fmp dividend-adjusted"
+    assert any("NOT THE AUGUST CAMPAIGN CACHE" in h and "fmp dividend-adjusted" in h
+               for h in res2["honesty"])
+    # to the dollar: exact, no basis line
+    res3 = run_mirror(rows, mkt, tiers, r2a_stored_end=r2a_end + 0.5, bil=bil, spy_px=spy, draws=5)
+    assert res3["protocol"]["cache_verified"] is True and res3["protocol"]["cache_exact"] is True
+    assert not any("NOT THE AUGUST" in h for h in res3["honesty"])
+    # the strict dollar standard is still available as a parameter
+    with pytest.raises(SystemExit):
+        run_mirror(rows, mkt, tiers, r2a_stored_end=r2a_end + small, bil=bil, spy_px=spy,
+                   draws=5, machinery_tol_rel=0.0)
+    big = r2a_end + big
     # main(): a failed check writes nothing; --allow-cache-drift writes the JSON + report section
     out, rep = tmp_path / "res.json", tmp_path / "doc.md"
     rep.write_text("# doc\n\nintro\n\n" + mod.REPORT_BEGIN + "\nold\n" + mod.REPORT_END + "\n\ntail\n")
-    monkeypatch.setattr(mod, "load_inputs", lambda fetch_missing=False: {
+    monkeypatch.setattr(mod, "load_inputs", lambda fetch_missing=False, **kw: {
         "fire_rows": rows, "tiers": tiers, "mkt": mkt, "bil": bil, "proxy_days": [],
-        "spy_px": spy, "spy_source": "synthetic", "r2a_stored_end": r2a_end + 5.0, "r3": None})
+        "spy_px": spy, "spy_source": "synthetic", "r2a_stored_end": big, "r3": None})
     with pytest.raises(SystemExit):
         mod.main(["--out", str(out), "--report", str(rep), "--draws", "5"])
     assert not out.exists() and "old" in rep.read_text()
@@ -625,6 +645,43 @@ def test_machinery_check_refuses_drift(tmp_path, monkeypatch):
     assert "old" not in text and "RED: cache NOT verified" in text
     assert text.startswith("# doc\n\nintro") and text.rstrip().endswith("tail")
     assert "exec_t2_carry" in text
+
+
+def test_load_inputs_rebuilds_a_missing_cache_on_the_fmp_lane(tmp_path, monkeypatch):
+    """The August campaign cache is gone: a missing cache is rebuilt via
+    scripts/refresh_backtest_bars (needs FMP), never silently analysed around;
+    the sidecar it writes is carried into the results as cache_basis."""
+    missing = tmp_path / "backtest_bars.json"
+    monkeypatch.setattr(mod, "CACHE", missing)
+    monkeypatch.setattr(mod, "BASIS_SIDECAR", tmp_path / "backtest_bars_basis.json")
+    calls = []
+    monkeypatch.setattr(mod, "refresh_bars", lambda: calls.append("refresh"))
+    # no rebuild requested -> the SystemExit names the refresh script
+    with pytest.raises(SystemExit, match="refresh_backtest_bars"):
+        mod.load_inputs()
+    assert calls == []
+    # rebuild requested -> refresh runs; the cache is still absent here (stub), so it exits
+    with pytest.raises(SystemExit):
+        mod.load_inputs(refresh_bars_if_missing=True)
+    assert calls == ["refresh"]
+    # force refresh runs even when the cache exists
+    missing.write_text("{}")
+    with pytest.raises(Exception):      # the stub cache is empty: downstream fails, refresh ran
+        mod.load_inputs(force_refresh=True)
+    assert calls == ["refresh", "refresh"]
+    # the sidecar is read when present
+    (tmp_path / "backtest_bars_basis.json").write_text(
+        json.dumps({"lane": "fmp dividend-adjusted", "normalized": {"ATAI": {"factor": 0.0728}}}))
+    assert mod.load_cache_basis()["normalized"]["ATAI"]["factor"] == 0.0728
+
+
+def test_row_mismatch_examples_name_the_rows():
+    a = [{"fire_date": "2026-07-17", "symbol": "ATAI", "flag": "x_trail", "entry_date": "2026-07-23",
+          "exit_date": "2026-07-31", "status": "stopped", "entry": 2.99, "exit": 2.43, "r_net": -1.09}]
+    b = [dict(a[0], entry_date="2026-07-21")]
+    assert mod._row_mismatches(a, b) == 1
+    assert mod._row_mismatch_examples(a, b) == [["2026-07-17", "ATAI", "x"]]
+    assert mod._row_mismatch_examples(a, a) == []
 
 
 # --- 16. API ---------------------------------------------------------------------------
@@ -691,6 +748,8 @@ def test_api_mirror_backtest_run_single_flight(api, monkeypatch):
     assert calls[0]["cmd"][1:3] == ["-m", "scripts.backtest_executor_mirror"]
     assert "--out" in calls[0]["cmd"] and str(disk) in calls[0]["cmd"] and "--fetch-missing" in calls[0]["cmd"]
     assert "--no-report" in calls[0]["cmd"]          # the doc is not writable on the host
+    # no bars cache on the host -> the script is told to rebuild the FMP lane
+    assert ("--refresh-bars" in calls[0]["cmd"]) == (not mb.bars_cache_path().exists())
     assert client.post("/blend3070/mirror-backtest/run").status_code == 409
     assert client.get("/blend3070/mirror-backtest/status").json()["running"] is True
     procs[0].done.set()
@@ -714,6 +773,25 @@ def test_api_mirror_backtest_run_single_flight(api, monkeypatch):
     assert st["returncode"] == 1 and "MACHINERY CHECK FAILED" in st["error"]
     assert client.post("/blend3070/mirror-backtest/run").status_code == 202   # free again
     procs[-1].done.set()
+
+
+def test_api_mirror_backtest_run_skips_refresh_when_cache_present(api, tmp_path, monkeypatch):
+    client, mb, disk, committed = api
+    cache = tmp_path / "backtest_bars.json"
+    monkeypatch.setattr(mb, "bars_cache_path", lambda: cache)
+    calls = []
+    def fake_popen(cmd, **kw):
+        calls.append(cmd); p = _FakeProc(); p.done.set(); return p
+    monkeypatch.setattr(mb, "popen", fake_popen)
+    assert client.post("/blend3070/mirror-backtest/run").status_code == 202
+    assert "--refresh-bars" in calls[0]
+    import time
+    for _ in range(50):
+        if not mb._state["running"]: break
+        time.sleep(0.05)
+    cache.write_text("{}")
+    assert client.post("/blend3070/mirror-backtest/run").status_code == 202
+    assert "--refresh-bars" not in calls[1]
 
 
 def test_api_mirror_backtest_basic_auth_gate(api, monkeypatch):

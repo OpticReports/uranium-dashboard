@@ -119,14 +119,20 @@ export function normalizeMirror(raw) {
   for (const [k, aliases] of Object.entries(VARIANT_ALIASES)) out[k] = pickVariant(variants, aliases);
   const caveats = raw.contract?.caveats || raw.honesty || raw.protocol?.honesty || raw.meta?.caveats || [];
   const cacheVerified = raw.protocol?.cache_verified ?? raw.meta?.cache_verified ?? null;
+  const cacheExact = raw.protocol?.cache_exact ?? null;
+  const basisLane = raw.protocol?.cache_basis?.lane ?? null;
   const drift = raw.protocol?.r2a_reproduction?.abs_diff ?? raw.meta?.r2a_drift ?? null;
+  const driftRel = raw.protocol?.r2a_reproduction?.rel_diff ?? null;
   return {
     generated: raw.generated || null,
     period: Array.isArray(raw.period) ? raw.period.join(" → ") : (raw.period || null),
     variants: out,
     caveats: Array.isArray(caveats) ? caveats : [],
     cacheVerified,
+    cacheExact,
+    basisLane,
     drift,
+    driftRel,
     servedFrom: raw.served_from || null,
   };
 }
@@ -324,6 +330,16 @@ export default function ExecutorMirror({ data, onReload, loadError }) {
           Bars cache did not reproduce the stored R2-A end value
           {m.drift !== null && m.drift !== undefined ? ` (off by ${fmtMoney(m.drift)})` : ""} — these
           numbers were produced with --allow-cache-drift and are NOT comparable to the R2 / R3 docs.
+        </div>
+      )}
+      {m?.cacheVerified === true && m?.cacheExact === false && (
+        <div className="text-xs text-amber-200 bg-amber-900/30 border border-amber-700 rounded px-3 py-2 mt-2">
+          Bars are the {m.basisLane || "rebuilt"} lane, not the August campaign cache: R2-A reproduces
+          within the ±1% V0 machinery tolerance
+          {m.driftRel !== null && m.driftRel !== undefined ? ` (${(m.driftRel * 100).toFixed(3)}% off` : ""}
+          {m.drift !== null && m.drift !== undefined ? `, ${fmtMoney(m.drift)})` : (m.driftRel != null ? ")" : "")}
+          {" "}but not to the dollar. Absolute levels match the R2 / R3 docs within that tolerance; the executor
+          deltas are measured inside this run.
         </div>
       )}
 

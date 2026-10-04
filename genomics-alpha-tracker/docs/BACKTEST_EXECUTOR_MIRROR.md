@@ -37,6 +37,7 @@ run". The results section at the bottom is written by the script.
 - **Sizing proxy**: lag-2 entries are sized on sleeve equity at the fire-day close (the executor sizes at T+1 ~10:30 on live marks).
 - **Trailing windows are SLICES** of the 10-year curve (positions entered before the window carry in — the house SUB_PERIODS convention), not fresh $100k books started at the window open.
 - **Measurement basis**: daily mark-to-market on adjusted closes; max DD on the daily curve; CAGR calendar-day (365.25); Sharpe/Sortino √252, rf = 0; bootstrap = stationary block (mean 21d) of the window's own daily returns.
+- **Bars basis**: the August 2026 campaign cache (raw Yahoo chart API) was built in a cloud session, never committed, and no longer exists; the reproducible source is the FMP dividend-adjusted lane (`scripts/refresh_backtest_bars.py`, ATAI basis-normalized by a constant factor, returns unchanged). Machinery check 1 passes at the repo's ±1% V0 tolerance (`cache_verified`) and separately records whether it lands to the dollar (`cache_exact`); the results JSON carries the lane and every basis factor.
 - **Never present these in-sample CAGRs as a forecast.**
 
 ## Protocol
@@ -113,25 +114,32 @@ computed on the daily curve.
 
 ## How to run
 
-The replay needs `backend/data/backtest_bars.json` (gitignored, ~10 MB, produced
-ONCE by `python -m scripts.backtest_calls_10y --refresh` on the machine that
-ran the campaign). A refetch through FMP (adj_close = close) will NOT
-reproduce the stored rows and fails machinery check 1 by design.
+The replay needs `backend/data/backtest_bars.json` (gitignored, ~10 MB). The
+August 2026 campaign cache no longer exists anywhere (built in a cloud
+session, never committed), so the cache is REBUILT on the FMP
+dividend-adjusted lane by `scripts/refresh_backtest_bars.py` (needs
+`FMP_API_KEY`; ATAI is basis-normalized by a constant factor, documented in
+`data/backtest_bars_basis.json`; `spy_bars_raw.json` is written alongside so
+the SPY leg is total-return). Machinery check 1 then decides: R2-A must
+reproduce the stored $430,406.29 within ±1% (the repo's V0 machinery gate;
+the FMP lane reproduces V0 itself to $1) or nothing is written.
 
-- **Casey's machine (recommended):**
-  `cd genomics-alpha-tracker/backend && python -m scripts.backtest_executor_mirror --fetch-missing`
-  then commit `backend/data/backtest_executor_mirror_results.json` and this
-  doc (the script rewrites the results section below). `--fetch-missing`
-  fetches only symbols absent from the cache (SPY) and never overwrites.
-- **Render shell** (only once the cache is on the host or committed):
-  `cd /app && python -m scripts.backtest_executor_mirror --out /app/data/backtest_executor_mirror_results.json --fetch-missing`
+- **Render shell (genomics-alpha-tracker service, recommended):**
+  `cd /app && python3 -m scripts.backtest_executor_mirror --out /app/data/backtest_executor_mirror_results.json --no-report`
+  — a missing cache is rebuilt automatically (`--refresh-bars` forces it);
+  the results land on the data disk and the Calls Log panel serves them first.
 - **Dashboard**: the "Run 10-year replay" button on the Calls Log page →
   `POST /blend3070/mirror-backtest/run` (Basic-gated like every other POST)
-  runs the script as a subprocess on the host, log at
-  `/app/data/backtest_executor_mirror.log`, status at `GET …/status`.
-  Without the cache it exits non-zero and the status shows the log tail.
-- Options: `--allow-cache-drift` (publish with cache_verified=false),
-  `--draws N`, `--seed S`, `--report PATH`, `--no-report`.
+  runs the script as a subprocess on the host with `--refresh-bars` when the
+  cache is absent, log at `/app/data/backtest_executor_mirror.log`, status at
+  `GET …/status`. A failed machinery check exits non-zero and the status
+  shows the log tail.
+- **Locally** (any machine with `FMP_API_KEY`): `cd genomics-alpha-tracker/backend && python -m scripts.backtest_executor_mirror`
+  then commit `backend/data/backtest_executor_mirror_results.json` and this
+  doc (the script rewrites the results section below).
+- Options: `--refresh-bars`, `--allow-cache-drift` (publish with
+  cache_verified=false), `--fetch-missing` (symbols absent from the cache,
+  never overwrites), `--draws N`, `--seed S`, `--report PATH`, `--no-report`.
 - Tests (synthetic bars, no cache): `python -m pytest -q tests/test_executor_mirror.py`.
 
 Serving: `GET /blend3070/mirror-backtest` returns the results JSON from the
