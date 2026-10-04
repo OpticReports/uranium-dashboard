@@ -213,7 +213,8 @@ def commission(cfg: ExecCfg, qty: float, notional: float) -> float:
 
 def grade_executor(bars: list[BarLike], atrs: list[float | None], i_fire: int,
                    cfg: ExecCfg, *, stored_entry: float | None = None,
-                   stored_risk: float | None = None) -> dict | None:
+                   stored_risk: float | None = None,
+                   stored_entry_index: int | None = None) -> dict | None:
     """Walk one fire from its fire bar under `cfg`. Size-independent, so rows
     are graded once per lag (like build_trailing_rows) and re-used by every
     book that shares the lag.
@@ -240,7 +241,12 @@ def grade_executor(bars: list[BarLike], atrs: list[float | None], i_fire: int,
     fb = bars[i_fire]
     if fb.close is None or fb.close <= 0:
         return {"status": "skip_no_fire_close"}
-    j = i_fire + cfg.entry_lag
+    # Paper mode enters on the STORED row's entry bar, never i_fire + 1: a lane
+    # bar the campaign's data lacked between fire and entry would otherwise
+    # pull the entry a session early (CERS 2026-07-20, FMP lane, 2026-10-04).
+    j = stored_entry_index if stored_entry_index is not None else i_fire + cfg.entry_lag
+    if j <= i_fire:
+        return {"status": "skip_no_open"}
     if j >= n:
         return None
     eb = bars[j]
@@ -352,8 +358,15 @@ def build_exec_rows(fire_rows: list[dict], mkt: dict, tiers: dict[str, str],
         if i_fire is None or i_fire + 1 >= len(bars):
             meta["no_fire_bar"] += 1
             continue
-        kw = ({"stored_entry": t["entry"], "stored_risk": t["risk"]}
-              if cfg.paper_arith else {})
+        kw: dict = {}
+        if cfg.paper_arith:
+            # row-for-row build_trailing_rows: the stored row's entry BAR too
+            j_stored = idx_cache[sym].get(date.fromisoformat(t["entry_date"]))
+            if j_stored is None:
+                meta["no_fire_bar"] += 1        # the engine skips it the same way
+                continue
+            kw = {"stored_entry": t["entry"], "stored_risk": t["risk"],
+                  "stored_entry_index": j_stored}
         g = grade_executor(bars, atr_cache[sym], i_fire, cfg, **kw)
         if g is None:
             meta["open_at_end_excluded"] += 1
