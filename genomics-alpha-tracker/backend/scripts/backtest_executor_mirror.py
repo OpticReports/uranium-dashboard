@@ -1049,48 +1049,59 @@ def _curve_reproduction(got: list, stored: list | None) -> dict | None:
 
 
 def divergence_report(got: list, stored: list, taken: list[dict], mkt: dict,
-                      tol: float = 1e-4, lookback_days: int = 15, bar_pad: int = 4) -> dict:
+                      tol: float = 1e-4, lookback_days: int = 15, bar_pad: int = 4,
+                      top_jumps: int = 5) -> dict:
     """Where and why the replayed R2-A curve leaves the frozen one. The
     stored rows carry the ENTRY and the risk unit, so a divergence can only
     come from an EXIT (a trailing-stop bar the lane prints differently) or a
-    gate day; this names the first divergent date, the taken calls whose
-    entry or exit falls in the lookback window before it, and the lane's
-    bars around each of those exits, so the suspect bar can be compared with
-    another source by hand."""
+    gate day. Reports (a) the first divergent date and (b) the largest
+    day-over-day JUMPS in the relative gap - a one-call flip is a step, while
+    rounding noise is a drift - each with the taken calls whose entry or exit
+    falls in the lookback window before it and the lane's bars around those
+    exits, so the suspect bar can be compared with another source by hand."""
     st = {}
     for d, v in stored:
         st[d if isinstance(d, date) else date.fromisoformat(str(d)[:10])] = float(v)
-    first = None
-    for d, v in got:
-        w = st.get(d)
-        if w and abs(v - w) / abs(w) > tol:
-            first = (d, v, w)
-            break
-    if first is None:
-        return {"first_divergence": None}
-    d0, v0, w0 = first
-    lo = d0 - timedelta(days=lookback_days)
-    hi = d0 + timedelta(days=2)
-    suspects = []
-    for t in taken:
-        ed = date.fromisoformat(t["entry_date"])
-        xd = date.fromisoformat(t["exit_date"])
-        if lo <= xd <= hi or lo <= ed <= hi:
-            bars = mkt["bars"].get(t["symbol"], [])
-            idx = {b.date: i for i, b in enumerate(bars)}
-            j = idx.get(xd)
-            around = []
-            if j is not None:
-                for b in bars[max(0, j - bar_pad): j + bar_pad + 1]:
-                    around.append({"date": b.date.isoformat(), "open": b.open, "high": b.high,
-                                   "low": b.low, "close": b.close})
-            suspects.append({"symbol": t["symbol"], "flag": t["flag"], "entry_date": t["entry_date"],
-                             "entry": t["entry"], "risk": t["risk"], "exit_date": t["exit_date"],
-                             "exit": t["exit"], "status": t["status"], "bars_around_exit": around})
-    suspects.sort(key=lambda t: t["exit_date"])
-    return {"first_divergence": {"date": d0.isoformat(), "got": v0, "stored": w0,
-                                 "rel_diff": (v0 - w0) / w0},
-            "window": [lo.isoformat(), hi.isoformat()], "suspects": suspects}
+    series = [(d, (v - st[d]) / st[d]) for d, v in got if st.get(d)]
+    first = next(((d, r) for d, r in series if abs(r) > tol), None)
+
+    def suspects_near(d0: date) -> list[dict]:
+        lo, hi = d0 - timedelta(days=lookback_days), d0 + timedelta(days=2)
+        out = []
+        for t in taken:
+            ed = date.fromisoformat(t["entry_date"])
+            xd = date.fromisoformat(t["exit_date"])
+            if lo <= xd <= hi or lo <= ed <= hi:
+                bars = mkt["bars"].get(t["symbol"], [])
+                idx = {b.date: i for i, b in enumerate(bars)}
+                j = idx.get(xd)
+                around = []
+                if j is not None:
+                    for b in bars[max(0, j - bar_pad): j + bar_pad + 1]:
+                        around.append({"date": b.date.isoformat(), "open": b.open, "high": b.high,
+                                       "low": b.low, "close": b.close})
+                out.append({"symbol": t["symbol"], "flag": t["flag"], "entry_date": t["entry_date"],
+                            "entry": t["entry"], "risk": t["risk"], "exit_date": t["exit_date"],
+                            "exit": t["exit"], "status": t["status"], "bars_around_exit": around})
+        out.sort(key=lambda t: t["exit_date"])
+        return out
+
+    jumps = []
+    for i in range(1, len(series)):
+        d, r = series[i]
+        jumps.append((abs(r - series[i - 1][1]), d, series[i - 1][1], r))
+    jumps.sort(reverse=True)
+    rep = {"first_divergence": None, "jumps": []}
+    if first is not None:
+        d0, r0 = first
+        rep["first_divergence"] = {"date": d0.isoformat(), "rel_diff": r0,
+                                   "got": next(v for d, v in got if d == d0), "stored": st[d0],
+                                   "suspects": suspects_near(d0)}
+    for delta, d, before, after in jumps[:top_jumps]:
+        rep["jumps"].append({"date": d.isoformat(), "rel_diff_before": before,
+                             "rel_diff_after": after, "delta": delta,
+                             "suspects": suspects_near(d)})
+    return rep
 
 
 def clip_bars_to(mkt: dict, end: date) -> dict:

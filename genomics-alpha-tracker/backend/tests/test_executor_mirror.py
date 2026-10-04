@@ -831,11 +831,17 @@ def test_divergence_report_names_the_first_date_and_the_suspect_exits():
     rep = mod.divergence_report(curve, stored, ta, mkt)
     assert rep["first_divergence"]["date"] == d0.isoformat()
     assert rep["first_divergence"]["rel_diff"] == pytest.approx(-0.02 / 1.02, rel=1e-6)
-    lo, hi = rep["window"]
-    assert all(lo <= s["exit_date"] <= hi or lo <= s["entry_date"] <= hi for s in rep["suspects"])
+    # the step is the largest jump, and it is the same date
+    assert rep["jumps"][0]["date"] == d0.isoformat()
+    assert rep["jumps"][0]["delta"] == pytest.approx(0.02 / 1.02, rel=1e-6)
+    assert rep["jumps"][0]["rel_diff_before"] == 0 and len(rep["jumps"]) == 5
+    sus = rep["jumps"][0]["suspects"]
+    lo = (d0 - timedelta(days=15)).isoformat(); hi = (d0 + timedelta(days=2)).isoformat()
+    assert all(lo <= s["exit_date"] <= hi or lo <= s["entry_date"] <= hi for s in sus)
     assert all(len(s["bars_around_exit"]) >= 5 and {"open", "high", "low", "close"} <= set(s["bars_around_exit"][0])
-               for s in rep["suspects"] if s["bars_around_exit"])
-    assert rep["suspects"] == sorted(rep["suspects"], key=lambda t: t["exit_date"])
+               for s in sus if s["bars_around_exit"])
+    assert sus == sorted(sus, key=lambda t: t["exit_date"])
+    assert rep["first_divergence"]["suspects"] == sus
     # the ISO-string shape of the on-disk curve works too
     assert mod.divergence_report(curve, [(d.isoformat(), v) for d, v in stored], ta, mkt)["first_divergence"]["date"] == d0.isoformat()
 
