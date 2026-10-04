@@ -206,6 +206,64 @@ E-vs-mirror guards, sign-aware CI, Bonferroni-8, actionability tags
 per-arm grading counts, basis-clean flag, 10,000 draws, tracker+executor tag
 for ratchet/day-zero, floor-overlap statement. Results pending the host run.
 
+## Round 9 results — exit-rule ablation (2026-10-04, first host run, 4,000-draw preview)
+
+Contract: VARIANTS_PREREGISTRATION_R9_EXIT_ABLATION.md (+ addenda 1, 2).
+FMP lane, bars clipped to 2026-08-19, no costs, no carry, lag 1. Machinery:
+P reduced to the mirror's r2a_ref; E ended at $278,246, equal to the
+published mirror run. Basis switch P0 − P: −0.07 pp CAGR (clean).
+Mechanics gap E − P0: −5.48 pp CAGR, −0.195 Sharpe, max DD 35.4% → 30.7%.
+
+| rule flipped | fwd share (P0 + rule) | bwd recovery (E − rule) | fwd Sharpe CI95 | bwd Sharpe CI95 | sub 3/3 | where |
+|---|---|---|---|---|---|---|
+| **ratchet-up-only trail (H14, primary)** | **1.02** | **0.76** | [−0.396, −0.024] | [−0.007, +0.359] | yes / yes | tracker+executor |
+| day-zero stop at L0 | 0.35 | 0.08 | [−0.170, +0.059] | [−0.031, +0.080] | 2 / 1 | tracker+executor |
+| time stop anchored at fire | 0.22 | 0.26 | [−0.140, +0.046] | [−0.022, +0.170] | 3 / 3 | tracker |
+| time stop fills next open | 0.19 | 0.19 | [−0.139, +0.060] | [−0.013, +0.110] | 2 / 2 | tracker |
+| peak seeded at fire close | 0.18 | −0.13 | [−0.121, +0.098] | [−0.086, +0.014] | 2 / 1 | tracker |
+| cash clip | 0.02 | 0.04 | spans 0 | spans 0 | 1 / 2 | not actionable |
+| risk cap 0.5× entry | 0.00 | 0.00 | spans 0 | spans 0 | 2 / 1 | executor |
+| whole shares | 0.00 | 0.00 | spans 0 | spans 0 | 2 / 2 | not actionable |
+| G_stop (seed + ratchet + day-zero) | 0.96 | — | [−0.392, +0.004] | — | 3 | — |
+
+**Verdict under the contract: NULL, no proposal.** The primary fails the
+sign-aware CI test on the backward side by 0.007 at 4,000 draws (both
+ratchet tests are marginal: half-width ≈ 0.18 either way, forward passes by
+0.024), AND the action bar fails on its own: B_ratchet max DD 33.5% vs E
+30.7% = +2.8 pp > 2 pp. The pending 10,000-draw interval therefore cannot
+change the action, only the label on H14.
+
+**H14 standing**: strongly supported on point estimates (all of the gap
+forward, three-quarters backward, 3/3 sub-periods both ways), not confirmed
+under the contract's interval test.
+
+**Mechanism** (counter-agent, round 9 results): the stop each day is peak −
+3×ATR14 of the prior bar. Without the ratchet the level FALLS when ATR
+expands; with it the level is held. ATR expansion in a biotech is catalyst
+proximity, which the fire flags select for, so the ratchet pins the stop at
+the pre-expansion distance just as the stock starts swinging and the
+position is stopped on noise during the move it was bought for. It cannot
+protect against the losses that make the drawdown (gap fills are open-first
+wherever the stop sits); it trims the right tail. Earlier exits free cap
+slots (F_ratchet 658 taken vs P0 600; E 677 vs B_ratchet 632) and each
+replacement entry carries fresh gap risk, so turnover rises and drawdown does
+not fall: −5.6 pp CAGR for −0.8 pp max DD. E's lower drawdown than paper
+(30.7 vs 35.4) is the PACKAGE, not the ratchet: backward DD increments
+(ratchet +2.8, cash clip +2.4, peak seed +2.1, time-stop anchor +1.5) sum to
+8.5 pp against a 4.7 pp total, strongly non-additive.
+
+**Counter-agent (results): PASS WITH CORRECTIONS**, applied: lead with the
+drawdown bar; 10,000 draws as the number of record (addendum 2); both
+ratchet tests marginal, the backward interval shifted not wider; "all
+forward, three-quarters backward"; DD deltas are point comparisons without an
+interval; fixed FIRE set wording; G_stop's spanning interval reported.
+
+**Next step** (no code change to live money): the tracker's shadow grader
+re-grades every live call under the SAME ratchet rule the executor obeys, so
+the live record cannot yet test H14. Add an observe-only second grading
+under the campaign's non-ratchet exit to GET /shadow/track-record, and let
+the live record decide.
+
 ## Pending DD questions (ranked)
 
 | P | question | what it moves | status |
