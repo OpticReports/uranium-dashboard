@@ -130,6 +130,12 @@ MIN_ORDER_USD = 50.0            # blend.py MIN_ORDER_USD: core/BIL dust floor
 MACHINERY_TOL_USD = 1.0          # cache_exact: the campaign cache lands to the dollar
 MACHINERY_TOL_REL = 0.01         # cache_verified: the repo's V0 machinery gate (+/-1%)
 BASIS_SIDECAR = DATA / "backtest_bars_basis.json"   # written by scripts/refresh_backtest_bars.py
+R2A_DAILY = DATA / "r2a_daily.json"                 # the frozen R2-A dollar curve (committed)
+# Curve-level reproduction tolerances (the V0 gate's max_dd / sharpe tolerances
+# from backtest_variants_10y.V0_TOL; the point-wise gap uses the same 1%)
+CURVE_TOL_REL = 0.01
+MAXDD_TOL = 0.0065
+SHARPE_TOL = 0.005
 REDUCTION_TOL = 1e-6
 
 REPORT_BEGIN = "<!-- RESULTS:BEGIN (written by scripts/backtest_executor_mirror.py — do not edit by hand) -->"
@@ -780,7 +786,10 @@ def run_mirror(fire_rows: list[dict], mkt: dict, tiers: dict[str, str], *,
                allow_cache_drift: bool = False, end: date | None = None,
                machinery_tol: float = MACHINERY_TOL_USD,
                machinery_tol_rel: float = MACHINERY_TOL_REL,
-               cache_basis: dict | None = None) -> dict:
+               cache_basis: dict | None = None,
+               r2a_stored_meta: dict | None = None,
+               r2a_stored_curve: list | None = None,
+               bars_info: dict | None = None) -> dict:
     """The whole study on injected inputs (no file or network access):
     machinery checks -> rows per lag -> books -> window stats -> bootstrap ->
     results dict (the JSON). Raises SystemExit on a machinery failure unless
@@ -798,15 +807,38 @@ def run_mirror(fire_rows: list[dict], mkt: dict, tiers: dict[str, str], *,
     rel_diff = (abs_diff / abs(r2a_stored_end)) if abs_diff is not None and r2a_stored_end else None
     cache_exact = (abs_diff is not None and abs_diff <= machinery_tol)
     tol_usd = max(machinery_tol, machinery_tol_rel * abs(r2a_stored_end or 0.0))
-    cache_verified = (abs_diff is not None and abs_diff <= tol_usd)
+    end_ok = (abs_diff is not None and abs_diff <= tol_usd)
+    # The same gate verifies the TRADE SET and the CURVE, not one scalar
+    # (counter-agent 2026-10-04, HIGH/MED): two curves can meet at the end
+    # with different drawdowns, and bars that run past the campaign's data
+    # end grade the 44 open-at-end calls the campaign never entered.
+    rows_got = {"n_regraded": len(trail_rows), "open_at_end_excluded": a_open,
+                "n_taken": len(ta), "skipped_at_cap": sa}
+    rows_stored = ({k: r2a_stored_meta.get(k) for k in rows_got} if r2a_stored_meta else None)
+    rows_match = (None if rows_stored is None else
+                  all(rows_stored[k] == rows_got[k] for k in rows_got))
+    curve_check = _curve_reproduction(r2a_curve, r2a_stored_curve)
+    curve_ok = (curve_check is None or (
+        curve_check["max_rel_diff"] <= CURVE_TOL_REL
+        and curve_check["max_dd_abs_diff"] <= MAXDD_TOL
+        and curve_check["sharpe_abs_diff"] <= SHARPE_TOL))
+    cache_verified = end_ok and curve_ok
     if r2a_stored_end is not None and not cache_verified and not allow_cache_drift:
+        why = (f"end ${r2a_end:,.2f} vs stored ${r2a_stored_end:,.2f} (|diff| ${abs_diff:,.2f} = "
+               f"{rel_diff:.2%}, tolerance ${tol_usd:,.2f})")
+        if curve_check is not None:
+            why += (f"; curve max point-wise gap {curve_check['max_rel_diff']:.3%} (tol "
+                    f"{CURVE_TOL_REL:.0%}), max DD {curve_check['max_dd_got']:.4f} vs "
+                    f"{curve_check['max_dd_stored']:.4f} (tol {MAXDD_TOL}), Sharpe "
+                    f"{curve_check['sharpe_got']:.4f} vs {curve_check['sharpe_stored']:.4f} "
+                    f"(tol {SHARPE_TOL})")
+        if rows_match is False:
+            why += f"; trade set {rows_got} vs stored {rows_stored}"
         raise SystemExit(
-            f"MACHINERY CHECK FAILED: R2-A reproduces to ${r2a_end:,.2f} vs stored "
-            f"${r2a_stored_end:,.2f} (|diff| ${abs_diff:,.2f} = {rel_diff:.2%} > the "
-            f"{machinery_tol_rel:.0%} V0 machinery tolerance, ${tol_usd:,.2f}). The bars are not "
-            f"on the campaign basis — nothing written. Rebuild them with "
-            f"`python -m scripts.refresh_backtest_bars` (or --refresh-bars), or re-run with "
-            f"--allow-cache-drift to publish with cache_verified=false.")
+            f"MACHINERY CHECK FAILED: R2-A does not reproduce within the V0 machinery "
+            f"tolerances: {why}. The bars are not on the campaign basis — nothing written. "
+            f"Rebuild them with `python -m scripts.refresh_backtest_bars` (or --refresh-bars), "
+            f"or re-run with --allow-cache-drift to publish with cache_verified=false.")
 
     # ---- MACHINERY CHECK 2: the new engine in r2a_mode reduces to the reused recipe
     r2a_rows, _ = build_exec_rows(fire_rows, mkt, tiers, R2A_MODE)
@@ -931,13 +963,23 @@ def run_mirror(fire_rows: list[dict], mkt: dict, tiers: dict[str, str], *,
             "r2a_reproduction": {"stored": r2a_stored_end, "got": r2a_end, "abs_diff": abs_diff,
                                  "rel_diff": rel_diff, "tolerance_usd": machinery_tol,
                                  "tolerance_rel": machinery_tol_rel,
-                                 "tolerance_applied_usd": tol_usd},
+                                 "tolerance_applied_usd": tol_usd,
+                                 "curve": curve_check,
+                                 "curve_tolerances": {"max_rel_diff": CURVE_TOL_REL,
+                                                      "max_dd": MAXDD_TOL, "sharpe": SHARPE_TOL},
+                                 "rows": {"got": rows_got, "stored": rows_stored,
+                                          "match": rows_match}},
+            "bars": bars_info or {},
             "bootstrap": {"draws": draws, "mean_block_days": BOOT_MEAN_BLOCK, "seed": seed,
                           "seed_offsets": WINDOW_SEED_OFFSET, "variants": list(BOOTSTRAP_VARIANTS)},
             "curves_note": "~400 pts per window for display only; stats computed on the daily curve; dd = drawdown from the running peak since the window start",
         },
         "machinery": {"r2a_end_value": r2a_end, "r2a_stored": r2a_stored_end, "abs_diff": abs_diff,
                       "rel_diff": rel_diff, "cache_verified": cache_verified, "cache_exact": cache_exact,
+                      "end_within_tolerance": end_ok, "curve_within_tolerance": curve_ok,
+                      "curve": curve_check, "rows": {"got": rows_got, "stored": rows_stored,
+                                                     "match": rows_match},
+                      "bars": bars_info or {},
                       "row_reduction_mismatches": row_mismatch,
                       "reduction_check_max_abs_diff": red_diff},
         "rows": {str(lag): {k: v for k, v in rows_by_lag[lag][1].items()} for lag in (1, 2)},
@@ -948,13 +990,63 @@ def run_mirror(fire_rows: list[dict], mkt: dict, tiers: dict[str, str], *,
             "unadjusting provider), so the 30/70 rows omit SPY dividends (~1.3-1.5 pp/yr "
             "understated for the core leg); re-run with spy_bars_raw.json present."]
             if spy_adjusted is False else []) + ([
-            f"BARS ARE NOT THE AUGUST CAMPAIGN CACHE: R2-A reproduces to ${r2a_end:,.2f} vs the "
-            f"stored ${r2a_stored_end:,.2f} ({rel_diff:.3%} off, inside the repo's +/-1% V0 machinery "
-            f"tolerance but not to the dollar) on the "
-            f"{(cache_basis or {}).get('lane', 'unknown')} lane; absolute levels are comparable to "
-            f"the R2/R3 docs within that tolerance, the executor deltas are measured within this run."]
+            f"BARS ARE NOT THE AUGUST CAMPAIGN CACHE ({(cache_basis or {}).get('lane', 'unknown')} "
+            f"lane{', clipped to ' + bars_info['clipped_to'] if (bars_info or {}).get('clipped_to') else ''}): "
+            f"R2-A reproduces to ${r2a_end:,.2f} vs the stored ${r2a_stored_end:,.2f} "
+            f"({rel_diff:.3%} off, inside the +/-1% V0 machinery tolerance, not to the dollar)"
+            + (f"; full daily curve max point-wise gap {curve_check['max_rel_diff']:.3%}, max DD "
+               f"{curve_check['max_dd_got']:.2%} vs {curve_check['max_dd_stored']:.2%}, Sharpe "
+               f"{curve_check['sharpe_got']:.3f} vs {curve_check['sharpe_stored']:.3f}"
+               if curve_check else "; NO stored daily curve was available for a curve-level check")
+            + (f"; trade set identical ({rows_got['n_taken']} taken, {rows_got['open_at_end_excluded']} open at data end)"
+               if rows_match else (f"; TRADE SET DIFFERS: {rows_got} vs stored {rows_stored}"
+                                   if rows_match is False else ""))
+            + ". Absolute levels are comparable to the R2/R3 docs only as far as that curve-level "
+            "check goes; the executor deltas are measured within this run."]
             if (cache_verified and not cache_exact and r2a_stored_end is not None) else []),
     }
+
+
+def _curve_reproduction(got: list, stored: list | None) -> dict | None:
+    """Point-wise comparison of the replayed R2-A dollar curve with the frozen
+    one (data/r2a_daily.json), plus max DD / Sharpe on each over the common
+    span. None when no stored curve was supplied."""
+    if not stored or not got:
+        return None
+    st = {}
+    for d, v in stored:
+        st[d if isinstance(d, date) else date.fromisoformat(str(d)[:10])] = float(v)
+    pairs = [(d, v, st[d]) for d, v in got if d in st and st[d]]
+    if len(pairs) < 2:
+        return None
+    max_rel = max(abs(v - w) / abs(w) for _, v, w in pairs)
+    lo, hi = pairs[0][0], pairs[-1][0]
+    sg = seg_stats([(d, v) for d, v, _ in pairs], lo, hi)
+    ss = seg_stats([(d, w) for d, _, w in pairs], lo, hi)
+    dd_g, dd_s = sg.get("max_dd", float("nan")), ss.get("max_dd", float("nan"))
+    sh_g, sh_s = sg.get("sharpe", float("nan")), ss.get("sharpe", float("nan"))
+    return {"n_compared": len(pairs), "span": [lo.isoformat(), hi.isoformat()],
+            "max_rel_diff": max_rel, "max_dd_got": dd_g, "max_dd_stored": dd_s,
+            "max_dd_abs_diff": abs(dd_g - dd_s), "sharpe_got": sh_g, "sharpe_stored": sh_s,
+            "sharpe_abs_diff": abs(sh_g - sh_s)}
+
+
+def clip_bars_to(mkt: dict, end: date) -> dict:
+    """Drop every bar after `end` from mkt['bars'] (in place) and report what
+    was there. The graders walk the whole bar list, so bars past the
+    campaign's data end would ENTER calls the campaign counted as open at
+    data end (44 of them) and change the trade set (counter-agent
+    2026-10-04, HIGH). The calendar/px are already clipped by load_market."""
+    last = max((b.date for bars in mkt["bars"].values() for b in bars[-1:]), default=None)
+    n_dropped = 0
+    for sym, bars in mkt["bars"].items():
+        keep = [b for b in bars if b.date <= end]
+        n_dropped += len(bars) - len(keep)
+        mkt["bars"][sym] = keep
+    gate = mkt.get("xbi_above_prior", {}).get(200, {})
+    return {"last_bar_before_clip": last.isoformat() if last else None,
+            "clipped_to": end.isoformat(), "bars_dropped": n_dropped,
+            "gate_defined_from": min(gate).isoformat() if gate else None}
 
 
 def _row_mismatches(a: list[dict], b: list[dict], tol: float = 1e-9) -> int:
@@ -1017,7 +1109,7 @@ def load_spy_px(calendar: list[date], mkt: dict) -> tuple[dict[date, float | Non
             if d in by:
                 last = by[d]
             out[d] = last
-        return out, "spy_bars_raw.json (stockanalysis adjusted 'a')"
+        return out, "spy_bars_raw.json (adjusted 'a'; lane per protocol.cache_basis)"
     if "SPY" in mkt["px"]:
         return mkt["px"]["SPY"], "backtest_bars.json SPY adj_close"
     return None, "none (30/70 variants skipped — run with --fetch-missing)"
@@ -1083,16 +1175,19 @@ def load_cache_basis() -> dict | None:
 def load_inputs(fetch_missing: bool = False, refresh_bars_if_missing: bool = False,
                 force_refresh: bool = False) -> dict:
     """Everything main() needs from disk (the only place files are read)."""
-    # committed campaign inputs may live in the image's seed_data copy
     import scripts.backtest_variants_10y as _v10
     import scripts.backtest_variants_r2 as _r2
+    # 1) decide on a rebuild BEFORE any path is resolved (a seed_data copy
+    #    must never shadow a freshly written data/ cache - counter-agent MED)
+    incomplete = _cache_incomplete()
+    if force_refresh or (refresh_bars_if_missing and incomplete):
+        print(f"bars cache {'refresh requested' if force_refresh else incomplete}: rebuilding on the "
+              f"FMP dividend-adjusted lane (scripts/refresh_backtest_bars.py)")
+        refresh_bars()
+    # 2) committed campaign inputs may live in the image's seed_data copy
     _v10.BARS_CACHE = _input(_v10.BARS_CACHE)
     _r2.BIL_RAW = _input(_r2.BIL_RAW)
     calls_results, r2_results, r3_results = _input(CALLS_RESULTS), _input(R2_RESULTS), _input(R3_RESULTS)
-    if force_refresh or (refresh_bars_if_missing and not CACHE.exists()):
-        print(f"bars cache {'refresh requested' if force_refresh else 'missing'}: rebuilding on the "
-              f"FMP dividend-adjusted lane (scripts/refresh_backtest_bars.py)")
-        refresh_bars()
     if not CACHE.exists():
         raise SystemExit(
             f"bars cache missing: {CACHE} — it is gitignored. The August 2026 campaign cache no "
@@ -1108,19 +1203,42 @@ def load_inputs(fetch_missing: bool = False, refresh_bars_if_missing: bool = Fal
     fire_rows = [t for f in LIVE_SET_FLAGS for t in res["call_rows"][f]]
     tiers = res["tiers"]
     mkt = load_market()
+    # 3) the campaign's data ended at END (fetched 2026-08-20 before the
+    #    close); a lane that runs past it would enter the open-at-end calls
+    bars_info = clip_bars_to(mkt, _v10.END)
     calendar = mkt["calendar"]
     bil, proxy_days = load_bil_yield(calendar)
     spy_px, spy_source = load_spy_px(calendar, mkt)
-    stored = json.loads(r2_results.read_text())["variants"]["R2-A"]["stats"]["full"]["end_value"]
+    r2a_var = json.loads(r2_results.read_text())["variants"]["R2-A"]
+    stored = r2a_var["stats"]["full"]["end_value"]
     if abs(stored - R2A_END) > 1.0:
         raise SystemExit(f"stored R2-A {stored} != R2A_END constant {R2A_END}")
+    stored_meta = r2a_var.get("meta") or None
+    r2a_daily = _input(R2A_DAILY)
+    stored_curve = json.loads(r2a_daily.read_text()) if r2a_daily.exists() else None
     r3 = json.loads(r3_results.read_text()) if r3_results.exists() else None
     spy_adjusted = (True if spy_source.startswith("spy_bars_raw") else
                     (spy_is_adjusted(CACHE) if spy_px is not None else None))
     return {"fire_rows": fire_rows, "tiers": tiers, "mkt": mkt, "bil": bil,
             "proxy_days": proxy_days, "spy_px": spy_px, "spy_source": spy_source,
             "spy_adjusted": spy_adjusted, "r2a_stored_end": stored, "r3": r3,
-            "cache_basis": load_cache_basis()}
+            "cache_basis": load_cache_basis(), "r2a_stored_meta": stored_meta,
+            "r2a_stored_curve": stored_curve, "bars_info": bars_info}
+
+
+def _cache_incomplete() -> str | None:
+    """Why the bars cache needs a rebuild, or None. A lane cache (sidecar
+    present) without spy_bars_raw.json, or an unreadable JSON, counts as
+    incomplete: both used to be silently used (counter-agent 2026-10-04)."""
+    if not CACHE.exists():
+        return "missing"
+    try:
+        json.loads(CACHE.read_text())
+    except (OSError, ValueError):
+        return "unreadable"
+    if BASIS_SIDECAR.exists() and not SPY_RAW.exists():
+        return "incomplete (lane cache without spy_bars_raw.json)"
+    return None
 
 
 def print_table(res: dict) -> None:
@@ -1308,7 +1426,10 @@ def main(argv: list[str] | None = None) -> int:
                      spy_source=inp["spy_source"], spy_adjusted=inp.get("spy_adjusted"),
                      draws=args.draws, seed=args.seed,
                      allow_cache_drift=args.allow_cache_drift,
-                     cache_basis=inp.get("cache_basis"))
+                     cache_basis=inp.get("cache_basis"),
+                     r2a_stored_meta=inp.get("r2a_stored_meta"),
+                     r2a_stored_curve=inp.get("r2a_stored_curve"),
+                     bars_info=inp.get("bars_info"))
     write_results(res, args.out)
     print_table(res)
     print(f"\nResults written to {args.out}")
