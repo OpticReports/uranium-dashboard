@@ -893,3 +893,132 @@ def test_failures_never_leave_a_stale_chart(tmp_path, monkeypatch, where, code):
     assert R.main(["--month", "current", "--out", str(tmp_path), "--now-ms", str(now)]) == code
     assert not stale.exists()
     assert "NOT PRODUCED" in (tmp_path / f"carry_review_{month}.md").read_text()
+
+
+
+# ------------------------------------------------------------------ scoped-review gaps
+
+def _cum_after(rows, opened):
+    return -sum(float(r["delta"]["usdc"]) for r in rows if r["time"] // H * H > opened)
+
+
+@pytest.mark.parametrize("boundary_h", [10, 12, 16])
+def test_a_partially_merged_open_day_is_not_subtracted_twice(boundary_h):
+    day = (T0 // D) * D
+    d5 = day + 5 * D
+    fills = close_reopen(d5 + 10 * H, d5 + 14 * H)
+    rp = R.replay(fills, PAIR)
+    now = day + 20 * D + 8 * H + 56 * 60_000
+    hourly = hourly_funding(rp, flat(2700.0), T0, now)
+    cum = _cum_after(hourly, d5 + 14 * H + 2000)
+    rows = merge_days(hourly, d5 + boundary_h * H)          # merge boundary inside the day
+    v = venue(fills, rows, now, flat(2700.0), flat(2700.0), cum=cum)
+    assert R.integrity(v, rp) == []
+    v = venue(fills, rows, now, flat(2700.0), flat(2700.0), cum=cum - 0.374)
+    assert any("cumFunding" in f for f in R.integrity(v, rp))
+
+
+def test_a_hot_pre_open_day_cannot_hide_a_one_hour_gap():
+    day = (T0 // D) * D
+    d5 = day + 5 * D
+    close_at, reopen_at = d5 + 23 * H - 60_000, d5 + 23 * H - 30_000
+    fills = close_reopen(close_at, reopen_at)
+    rp = R.replay(fills, PAIR)
+    now = day + 20 * D + 8 * H + 56 * 60_000
+    hi = 0.0003                                             # 24x baseline before the open
+
+    def rate_of(m):
+        return hi if d5 <= m < d5 + 23 * H else RATE
+    rows = []
+    for m in range(first_mark_after(T0), now + 1, H):
+        p = rp.at(m - 1).perp
+        if abs(p) > R.MIN_QTY:
+            rows.append({"time": m + 17, "delta": {"coin": "ETH", "usdc": str(-p * 2700.0 * rate_of(m)),
+                         "szi": str(p), "fundingRate": str(rate_of(m)), "nSamples": None}})
+    rates = [{"coin": "ETH", "fundingRate": str(rate_of(m)), "time": m + 30}
+             for m in range((T0 - 40 * D) // H * H, now + 1, H)]
+    cum = _cum_after(rows, reopen_at + 2000)
+    merged = merge_days(rows, now - 8 * D)
+    v = venue(fills, merged, now, flat(2700.0), flat(2700.0), cum=cum, rates=rates)
+    assert R.integrity(v, rp) == []
+    gap = 11.09 * 2700.0 * RATE                             # one baseline hour, $0.374
+    v = venue(fills, merged, now, flat(2700.0), flat(2700.0), cum=cum - gap, rates=rates)
+    assert any("cumFunding" in f for f in R.integrity(v, rp))
+
+
+def test_a_perp_close_exactly_on_a_mark_uses_the_size_before_it():
+    day = (T0 // D) * D
+    d5 = day + 5 * D
+    fills = REAL + [
+        fill(d5 + 10 * H - 2000, PAIR, "A", 11.09603845, 2700.0, 30.0, "USDC", 11.09603845),
+        fill(d5 + 10 * H, "ETH", "B", 11.096, 2700.0, 13.0, "USDC", -11.096),   # 10:00:00.000
+        fill(d5 + 14 * H, PAIR, "B", 11.1, 2700.0, 0.0074, "UETH", 0.0),
+        fill(d5 + 14 * H + 2000, "ETH", "A", 11.09, 2700.0, 13.0, "USDC", 0.0)]
+    rp = R.replay(fills, PAIR)
+    now = day + 20 * D + 8 * H + 56 * 60_000
+    hourly = hourly_funding(rp, flat(2700.0), T0, now)
+    assert any(r["time"] // H * H == d5 + 10 * H for r in hourly)   # 10:00 still paid
+    cum = _cum_after(hourly, d5 + 14 * H + 2000)
+    v = venue(fills, merge_days(hourly, now - 8 * D), now, flat(2700.0), flat(2700.0), cum=cum)
+    assert R.integrity(v, rp) == []
+
+
+def test_the_cum_check_waits_for_the_newest_hour_to_publish():
+    m = first_mark_after(T0) + 10 * H
+    now = m + 500
+    fund = [r for r in hourly_funding(RP_REAL, flat(2700.0), T0, now) if r["time"] < m]
+    settled = -sum(float(r["delta"]["usdc"]) for r in fund) - 11.096 * 2700.0 * RATE
+    v = venue(REAL, fund, now, flat(2700.0), flat(2700.0), cum=settled)
+    assert R.integrity(v, RP_REAL) == []
+    assert any("not published yet" in n for n in v.notes)
+
+
+def test_naked_long_prices_each_perp_fill_at_its_own_price():
+    """Two hedge fills at different prices, the second outside the pass's last
+    minute, and a spot leg trailing the perp: each fill counts at its price."""
+    t = first_mark_after(T0) + 5 * H + 10 * 60_000
+    fills = [fill(t, "ETH", "A", 5.0, 2700.0, 1.0, "USDC", 0.0),
+             fill(t + 20_000, "ETH", "A", 6.0, 2710.0, 1.0, "USDC", -5.0),
+             fill(t + 45_000, PAIR, "B", 11.0, 2705.0, 0.007, "UETH", 0.0),
+             fill(t + 90_000, PAIR, "B", 0.01, 2705.0, 0.0, "UETH", 10.993)]
+    rp = R.replay(fills, PAIR)
+    now = t + 3 * H
+    v = venue(fills, [], now, flat(2720.0), flat(2720.0))
+    w = R.window(v, rp, T0, now + 1, "x")
+    want = 5.0 * (2710.0 - 2700.0) + 11.0 * (2720.0 - 2710.0)
+    assert w["unhedged_equiv_usd"] == pytest.approx(want, abs=0.01)
+
+
+def test_a_sub_hour_round_trip_still_has_a_yardstick():
+    t = first_mark_after(T0) + 5 * H + 10 * 60_000
+    fills = [fill(t, PAIR, "B", 11.1, 2700.0, 0.0074, "UETH", 0.0),
+             fill(t + 2000, "ETH", "A", 11.09, 2700.0, 13.0, "USDC", 0.0),
+             fill(t + 30 * 60_000, PAIR, "A", 11.0926, 2750.0, 30.0, "USDC", 11.0926),
+             fill(t + 30 * 60_000 + 2000, "ETH", "B", 11.09, 2750.0, 13.0, "USDC", -11.09)]
+    rp = R.replay(fills, PAIR)
+    now = t + 3 * H
+    v = venue(fills, [], now, flat(2750.0), flat(2750.0))
+    w = R.window(v, rp, T0, now + 1, "x")
+    assert w["on_hours"] == 0
+    assert w["unhedged_equiv_usd"] == pytest.approx(11.09 * 50.0, abs=0.01)
+
+
+def test_the_chart_annotation_carries_the_md_numbers(tmp_path, monkeypatch):
+    import matplotlib.axes
+    texts = []
+    orig = matplotlib.axes.Axes.annotate
+
+    def spy(self, text, *a, **k):
+        texts.append(text)
+        return orig(self, text, *a, **k)
+    monkeypatch.setattr(matplotlib.axes.Axes, "annotate", spy)
+    now = T0 + 3 * D
+    v = venue(REAL, hourly_funding(RP_REAL, flat(2700.0), T0, now), now,
+              flat(2700.0), flat(2690.0), liq=8800.0)
+    r = R.build(v, "2026-10")
+    rp = r.pop("_replay")
+    ltd = r["inception_to_date"]
+    R.chart(v, rp, R.series(v, rp), str(tmp_path / "c.png"), "t", ltd=ltd)
+    note = [t for t in texts if "naked long" in t]
+    assert len(note) == 1
+    assert R._money(ltd["unhedged_equiv_usd"]) in note[0] and R._money(ltd["price_usd"]) in note[0]

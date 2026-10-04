@@ -81,6 +81,7 @@ DAY_MS = 24 * HOUR_MS
 PUBLISH_GRACE_MS = 120_000          # a funding row can trail its mark this long
 FUNDING_FLOOR_USD = 1.0             # funding check ignores gaps below this
 CUM_TOL_USD = 0.05                  # userFunding vs cumFunding.sinceOpen
+CUM_TOL_SCALE = 0.0005              # + this x the modelled pre-open amount removed
 ARM_PCT, DISARM_PCT = 8.0, 5.0      # the engine's gate, for the chart
 
 
@@ -521,8 +522,9 @@ def window(v: VenueData, rp: Replay, t0: int, t1: int, label: str) -> dict:
         e0 = v.px("perp", t0)
     e1 = v.px("perp", min(t1, v.now_ms))
     eth_move = e1 / e0 - 1 if e0 else None
-    naked = naked_long(v, rp, t0, t1) if on_hours or any(
-        t0 <= t < t1 for t, _ in rp.passes) else None
+    held_any = on_hours or abs(rp.at(t0).perp) > MIN_QTY or any(
+        f.get("coin") == PERP and t0 <= f["time"] < t1 for f in v.fills)
+    naked = naked_long(v, rp, t0, t1) if held_any else None
 
     def ann(x):
         if not notional_hours or on_hours < MIN_ANN_HOURS:
@@ -565,30 +567,20 @@ def window(v: VenueData, rp: Replay, t0: int, t1: int, label: str) -> dict:
 def naked_long(v: VenueData, rp: Replay, t0: int, t1: int) -> float:
     """What a LONG perp of the short's size would have made over exactly the
     time the short was held in [t0, t1): the yardstick for the price line.
-    Split at every hour mark and every pass; a pass is priced at its own
-    perp fill, a mark at that hour's close, now at the mid."""
+    Walks every perp fill at its own price (same-ms fills one at a time);
+    t0 and the end are priced like price_usd (hour close, or mid now)."""
     end = min(t1, v.now_ms)
-    fill_px = {}
-    for f in sorted(v.fills, key=lambda x: x["time"]):
-        if f.get("coin") == PERP:
-            fill_px[f["time"]] = float(f["px"])
-    pass_px = {}
-    for t, _ in rp.passes:                     # the pass's last perp fill price
-        ps = [fill_px[x] for x in fill_px if t - PASS_GROUP_MS <= x <= t]
-        if ps:
-            pass_px[t] = ps[-1]
-    cuts = sorted({t0, end} | set(hour_marks(t0, t1, v.now_ms))
-                  | {t for t in pass_px if t0 < t < end})
-
-    def price(t):
-        if t in pass_px:
-            return pass_px[t]
-        return v.px("perp", t)
-    total = 0.0
-    for a, b in zip(cuts, cuts[1:]):
-        size = abs(rp.at(a).perp)
-        if size > MIN_QTY:
-            total += size * (price(b) - price(a))
+    size, px_prev, total = rp.at(t0).perp, v.px("perp", t0), 0.0
+    for f in sorted((f for f in v.fills if f.get("coin") == PERP), key=lambda f: f["time"]):
+        if not (t0 < f["time"] < end):
+            continue
+        px = float(f["px"])
+        if abs(size) > MIN_QTY:
+            total += abs(size) * (px - px_prev)
+        size += float(f["sz"]) * (1 if f["side"] == "B" else -1)
+        px_prev = px
+    if abs(size) > MIN_QTY:
+        total += abs(size) * (v.px("perp", end) - px_prev)
     return total
 
 
@@ -665,10 +657,22 @@ def integrity(v: VenueData, rp: Replay) -> list:
                     break
                 removed += -p * v.px("perp", m) * rate
         got -= removed
-        tol = max(CUM_TOL_USD, 0.002 * abs(removed))
+        tol = max(CUM_TOL_USD, CUM_TOL_SCALE * abs(removed))
+        # the venue settles an hour before userFunding shows it: a run in the
+        # first PUBLISH_GRACE of an hour compares a settled total with a row
+        # that is not out yet
+        newest = (v.now_ms // HOUR_MS) * HOUR_MS
+        if not skip and v.now_ms - newest < PUBLISH_GRACE_MS and newest > opened \
+                and abs(held(rp, newest)) > MIN_QTY \
+                and newest not in {funding_key(r) for r in v.funding if not is_daily(r)}:
+            v.notes.append("cumFunding check skipped: the newest hour's payment is not "
+                           "published yet")
+            skip = None
         if skip:
             v.notes.append("cumFunding check skipped: a published rate is missing on "
                            "the merged day the short opened")
+        elif skip is None:
+            pass
         elif abs(got + v.cum_since_open) > tol:
             flags.append(f"funding since the short opened: ${got:,.4f} received per "
                          f"userFunding vs ${-v.cum_since_open:,.4f} per the venue's "
