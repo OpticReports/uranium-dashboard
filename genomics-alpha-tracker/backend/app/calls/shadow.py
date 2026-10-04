@@ -15,7 +15,10 @@ must earn a LIVE track record first. This module builds that record:
   - H14 (round 9 exit-rule ablation, 2026-10-04): every live auto-call is
     graded a SECOND time under the identical trailing engine with the
     ratchet removed (the trail may FALL when ATR expands — the campaign
-    grader's convention). The replay said the ratchet-up-only rule carries
+    grader's RATCHET convention; its other conventions — entry at the next
+    open, no stop on the entry bar, time stop from the entry bar — are NOT
+    reproduced, so the live test is round 9's BACKWARD arm, executor minus
+    the ratchet, on the same calls). The replay said the ratchet-up-only rule carries
     the whole executor-vs-paper gap on point estimates but did not clear the
     pre-registered interval and drawdown bars; the live paired record
     decides. Rows are tagged ENGINE_NORATCHET and are read by NOTHING that
@@ -74,9 +77,11 @@ def grade_trailing(
 
     `ratchet=True` (the default, and what every live level is driven by) is
     the shadow book's rule: the trail never falls. `ratchet=False` is the
-    campaign grader's rule (backtest_variants_10y.grade_trailing): the level
-    is recomputed from the peak and the prior-bar ATR every day and FALLS
-    when ATR expands. Only the H14 observe-only grading passes False.
+    campaign grader's RATCHET convention only (backtest_variants_10y.
+    grade_trailing): the level is recomputed from the peak and the prior-bar
+    ATR every day and FALLS when ATR expands; the entry, the entry-bar stop
+    and the time-stop anchor stay the shadow book's. Only the H14
+    observe-only grading passes False.
 
     Conventions (campaign contract, counter-agent-verified):
     - trail = (max close since entry through the PRIOR bar)
@@ -303,7 +308,84 @@ def log_regime(session: Session) -> RegimeLog | None:
     return row
 
 
-def shadow_track_record(session: Session) -> dict:
+def _h14_block(session: Session, calls: list, grades: dict, asof: date, side) -> dict:
+    """H14: the SAME calls graded with and without the ratchet, on MATURED
+    calls only. The no-ratchet engine never exits earlier than the ratchet
+    engine (its level is <= the ratcheted level every day), so pairs that
+    exist while a cohort is young are enriched for same-day lower fills and
+    quick follow-through — a read before maturity is biased AGAINST the
+    no-ratchet rule with a definite sign (counter-agent, 2026-10-04). A call
+    is matured once the time stop plus the data-gap failsafe has passed:
+    both engines are then necessarily graded. Each matured pair is also
+    checked for INTEGRITY: the ratchet grade is recomputed from today's bars
+    and the pair counts only if it reproduces the stored row (the ingester
+    revises bars inside a 7-day lookback, and the no-ratchet cohort was
+    back-filled from later bars than the ratchet rows). Observe-only;
+    nothing reads these rows for a level."""
+    risk_cfg = calls_config().get("risk", {})
+    atr_window = risk_cfg.get("atr_window", 14)
+    noratchet = {
+        g.call_id: g
+        for g in session.exec(
+            select(ShadowGrade).where(ShadowGrade.engine == ENGINE_NORATCHET)
+        ).all()
+    }
+    by_id = {c.id: c for c in calls if c.direction == "long"}
+    matured = {i for i, c in by_id.items()
+               if c.call_date + timedelta(days=TIME_STOP_DAYS + 7) < asof}
+    stable: list[tuple] = []
+    unstable = 0
+    for i in sorted(matured):
+        if i not in grades or i not in noratchet:
+            continue
+        c, r, n = by_id[i], grades[i], noratchet[i]
+        bars = _bars_for(session, c.symbol, c.call_date - timedelta(days=atr_window * 3))
+        again = grade_trailing(bars, c.entry_price, c.call_date, c.atr_at_entry,
+                               TRAIL_MULT, TIME_STOP_DAYS, atr_window)
+        if (again is not None and again.exit_date == r.exit_date
+                and abs(round(again.exit_price, 4) - r.exit_price) < 1e-9):
+            stable.append((r, n))
+        else:
+            unstable += 1
+    deltas = [(n.r_multiple - r.r_multiple)
+              for r, n in stable if r.r_multiple is not None and n.r_multiple is not None]
+    divergent = [(r, n) for r, n in stable
+                 if not (r.exit_date == n.exit_date and abs(r.exit_price - n.exit_price) < 1e-9)]
+    div_deltas = [(n.r_multiple - r.r_multiple) for r, n in divergent
+                  if r.r_multiple is not None and n.r_multiple is not None]
+    return {
+        "engines": [ENGINE_TRAILING, ENGINE_NORATCHET],
+        "as_of": asof,
+        "maturity_rule": f"call_date + {TIME_STOP_DAYS} + 7 days < as_of",
+        "n_pairs": len(stable),
+        "n_divergent_pairs": len(divergent),
+        "n_identical_exit": len(stable) - len(divergent),
+        "unstable_pairs": unstable,
+        "n_immature": sum(1 for i in by_id if i not in matured),
+        "matured_unpaired": sum(1 for i in matured if i not in grades or i not in noratchet),
+        "invariant_violations": sum(1 for i in noratchet if i not in grades),
+        ENGINE_TRAILING: side([r.r_multiple for r, _ in stable], [r.status for r, _ in stable]),
+        ENGINE_NORATCHET: side([n.r_multiple for _, n in stable], [n.status for _, n in stable]),
+        "paired_delta_r": {
+            "avg": (sum(deltas) / len(deltas)) if deltas else None,
+            "total": sum(deltas) if deltas else None,
+            "avg_on_divergent": (sum(div_deltas) / len(div_deltas)) if div_deltas else None,
+            "n_noratchet_better": sum(1 for d in div_deltas if d > 0),
+            "n_ratchet_better": sum(1 for d in div_deltas if d < 0),
+        },
+        "reading_rule": (
+            "matured, integrity-checked pairs only; the record says nothing below ~30 "
+            "divergent pairs (HYPOTHESES.md H14); this is round 9's BACKWARD arm (executor "
+            "minus the ratchet) and tests the exit mechanism, not the CAGR gap"
+        ),
+        "note": (
+            "H14 (round 9 ablation): same calls, same engine, trail allowed to FALL "
+            "when ATR expands vs ratchet-up-only; observe-only, decides nothing by itself"
+        ),
+    }
+
+
+def shadow_track_record(session: Session, asof: date | None = None) -> dict:
     """Per-engine comparison on the SAME calls — the H11 live evidence.
 
     Only CLOSED PAIRS (live call closed AND shadow graded) enter the
@@ -311,6 +393,7 @@ def shadow_track_record(session: Session) -> dict:
     Hit = R > 0 on both sides (same basis both engines). Pending buckets
     make the independence visible; regime carries H8's gate log summary.
     """
+    asof = asof or date.today()
     calls = session.exec(select(TradeCall).where(TradeCall.source == "auto_flag")).all()
     grades = {
         g.call_id: g
@@ -332,44 +415,7 @@ def shadow_track_record(session: Session) -> dict:
             "by_status": counts,
         }
 
-    # H14: the SAME calls graded with and without the ratchet. Pairs need both
-    # shadow grades, not the live status (the live book is irrelevant to the
-    # ratchet question). Observe-only; nothing reads these rows for a level.
-    noratchet = {
-        g.call_id: g
-        for g in session.exec(
-            select(ShadowGrade).where(ShadowGrade.engine == ENGINE_NORATCHET)
-        ).all()
-    }
-    h14_pairs = [(grades[i], noratchet[i]) for i in grades if i in noratchet]
-    h14_deltas = [
-        (n.r_multiple - r.r_multiple)
-        for r, n in h14_pairs if r.r_multiple is not None and n.r_multiple is not None
-    ]
-    h14 = {
-        "engines": [ENGINE_TRAILING, ENGINE_NORATCHET],
-        "n_pairs": len(h14_pairs),
-        ENGINE_TRAILING: _side([r.r_multiple for r, _ in h14_pairs], [r.status for r, _ in h14_pairs]),
-        ENGINE_NORATCHET: _side([n.r_multiple for _, n in h14_pairs], [n.status for _, n in h14_pairs]),
-        "paired_delta_r": {
-            "avg": (sum(h14_deltas) / len(h14_deltas)) if h14_deltas else None,
-            "total": sum(h14_deltas) if h14_deltas else None,
-            "n_noratchet_better": sum(1 for d in h14_deltas if d > 0),
-            "n_ratchet_better": sum(1 for d in h14_deltas if d < 0),
-            "n_identical_exit": sum(
-                1 for r, n in h14_pairs
-                if r.exit_date == n.exit_date and abs(r.exit_price - n.exit_price) < 1e-9
-            ),
-        },
-        "pending": {
-            "ratchet_graded_noratchet_open": sum(1 for i in grades if i not in noratchet),
-            "noratchet_graded_ratchet_open": sum(1 for i in noratchet if i not in grades),
-        },
-        "note": (
-            "H14 (round 9 ablation): same calls, same engine, trail allowed to FALL "
-            "when ATR expands vs ratchet-up-only; observe-only, decides nothing by itself"
-        ),
-    }
+    h14 = _h14_block(session, calls, grades, asof, _side)
 
     regime_rows = session.exec(select(RegimeLog)).all()
     latest_regime = max(regime_rows, key=lambda r: r.date) if regime_rows else None

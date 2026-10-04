@@ -324,8 +324,30 @@ and whether the market agreed._
   `h14_ratchet` on `GET /shadow/track-record`. Nothing reads those rows for
   a level (the executor intents filter on `trailing_3atr`); the live stop
   rule is unchanged, and so is its data-bug guard.
-- **Prediction:** on the same live calls, the no-ratchet grade shows a
-  higher average R than the ratchet grade; the live paired record, not the
-  replay, decides whether the rule is ever changed (and a change would land
-  in BOTH the tracker's shadow grader and the executor).
+- **What the live record tests (pre-registered 2026-10-04):** the EXIT
+  MECHANISM on the same calls, i.e. round 9's BACKWARD arm (executor minus
+  the ratchet: share 0.76, Sharpe CI [−0.009, +0.357]) — not the 5.5 pp CAGR
+  gap, whose slot-churn channel and counterfactual trade set are invisible
+  to a per-call comparison. A positive paired ΔR is NECESSARY, not
+  sufficient, for any rule change. The shadow engine reproduces only the
+  campaign's ratchet convention; entry, entry-bar stop and time-stop anchor
+  stay the shadow book's (shared by both engines, so they do not bias the
+  pair).
+- **Statistic and reading rule:** matured, integrity-checked pairs only
+  (`h14_ratchet` on `GET /shadow/track-record`: call_date + 97 days < as-of,
+  ratchet grade reproduced from current bars). Primary statistic: mean
+  paired ΔR on DIVERGENT pairs with a one-sided bootstrap interval, plus
+  the sign count (no-ratchet better vs ratchet better). The record says
+  NOTHING below ~30 divergent pairs (≈300 matured pairs at the replay's
+  ≳10% exit-divergence rate; at 100 matured pairs it is a mechanism check,
+  not a test). An early read is biased AGAINST the no-ratchet rule with a
+  definite sign; never read `paired_delta_r` from an immature cohort.
+- **Missing input (asked, 2026-10-04):** the live auto-call fire rate, which
+  sets the horizon to 300 matured pairs; not in the repo (host DB). No
+  horizon is published until it is answered.
+- **Prediction:** on matured divergent pairs the no-ratchet grade shows a
+  higher mean R and wins the sign count; the live paired record, not the
+  replay, decides whether the rule is ever changed (a change would land in
+  BOTH the tracker's shadow grader and the executor, whose ratchet guard is
+  also a data-bug safety).
 - **Status:** observing (second shadow engine live as of 2026-10-04).

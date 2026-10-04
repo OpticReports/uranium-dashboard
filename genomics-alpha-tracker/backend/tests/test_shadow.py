@@ -82,8 +82,9 @@ def test_trailing_ratchets_up_only():
 
 def test_trailing_without_ratchet_lets_the_trail_fall():
     """H14: the same bars as the ratchet test; with ratchet=False the d4
-    level is the RAW 110 - 3*(54/14) = 98.43, which d4's low (101) does not
-    reach, so the position survives d4 and the two rules diverge."""
+    level is the RAW 111 - 3*(54/14) = 99.43 (peak through d3 is 111), which
+    d4's low (101) does not reach, so the position survives d4 and the two
+    rules diverge."""
     bars = _pre_entry_bars() + [
         BarLike(D0 + timedelta(days=1), 106.0, 100.0, 105.0, 100.0),
         BarLike(D0 + timedelta(days=2), 111.0, 105.0, 110.0, 105.0),
@@ -398,22 +399,38 @@ def test_h14_grades_diverge_when_atr_expands_and_intents_ignore_the_second_engin
     session.delete(made[0]); session.commit()
     open_, grades = _open_shadow_calls(session)
     assert [c.id for c in open_] == [call.id] and grades == {}
-    # idempotent per engine
-    assert evaluate_shadow_calls(session) != [] or True
-    rec = shadow_track_record(session)
-    h = rec["h14_ratchet"]
-    assert h["n_pairs"] in (0, 1) and set(h["pending"]) == {"ratchet_graded_noratchet_open", "noratchet_graded_ratchet_open"}
+    # re-grading restores the ratchet row only (idempotent per engine) ...
+    assert [g.engine for g in evaluate_shadow_calls(session)] == [ENGINE_TRAILING]
+    # ... and before maturity the pair is NOT read (the early read is biased against H14)
+    h = shadow_track_record(session)["h14_ratchet"]
+    assert h["n_pairs"] == 0 and h["n_immature"] == 1 and h["invariant_violations"] == 0
+    # matured: one DIVERGENT pair, ratchet better, with the paired delta on the live risk unit (6)
+    h = shadow_track_record(session, asof=call.call_date + timedelta(days=98))["h14_ratchet"]
+    assert h["n_pairs"] == 1 and h["n_divergent_pairs"] == 1 and h["n_identical_exit"] == 0
+    assert h["unstable_pairs"] == 0 and h["n_immature"] == 0 and h["matured_unpaired"] == 0
+    assert h["paired_delta_r"]["n_ratchet_better"] == 1 and h["paired_delta_r"]["n_noratchet_better"] == 0
+    # R is computed from the unrounded exit (exit_price is stored to 4 dp)
+    assert abs(h["paired_delta_r"]["avg"] - ((100.0 - 3.0 * (45.0 / 14.0)) - 94.0) / 6.0) < 1e-6
+    assert h["paired_delta_r"]["avg_on_divergent"] == h["paired_delta_r"]["avg"]
+    # a bar revised after grading breaks the pair's integrity: counted, not paired
+    bar = session.exec(select(PriceBar).where(PriceBar.symbol == "CRSP")
+                       .where(PriceBar.date == d + timedelta(days=2))).one()
+    bar.low = 95.0; session.add(bar); session.commit()        # the ratchet stop at 94 no longer reproduces
+    h = shadow_track_record(session, asof=call.call_date + timedelta(days=98))["h14_ratchet"]
+    assert h["n_pairs"] == 0 and h["unstable_pairs"] == 1
 
 
 def test_track_record_h14_pairs_the_two_engines(session):
-    _closed_pair(session)                       # both engines exit identically here
+    call = _closed_pair(session)                # both engines exit identically here
     rec = shadow_track_record(session)
-    h = rec["h14_ratchet"]
+    assert rec["h14_ratchet"]["n_pairs"] == 0 and rec["h14_ratchet"]["n_immature"] == 1   # today's call
+    h = shadow_track_record(session, asof=call.call_date + timedelta(days=98))["h14_ratchet"]
     assert h["engines"] == [ENGINE_TRAILING, ENGINE_NORATCHET] and h["n_pairs"] == 1
-    assert h["paired_delta_r"]["avg"] == 0 and h["paired_delta_r"]["n_identical_exit"] == 1
+    assert h["paired_delta_r"]["avg"] == 0 and h["n_identical_exit"] == 1 and h["n_divergent_pairs"] == 0
+    assert h["paired_delta_r"]["avg_on_divergent"] is None
     assert h["paired_delta_r"]["n_noratchet_better"] == 0 and h["paired_delta_r"]["n_ratchet_better"] == 0
     assert h[ENGINE_TRAILING]["avg_r"] == h[ENGINE_NORATCHET]["avg_r"]
-    assert h["pending"] == {"ratchet_graded_noratchet_open": 0, "noratchet_graded_ratchet_open": 0}
+    assert h["unstable_pairs"] == 0 and h["invariant_violations"] == 0 and "reading_rule" in h
     # the existing H11 comparison is untouched by the second engine
     assert rec["closed_pairs"]["n"] == 1 and rec["engine"] == ENGINE_TRAILING
 
@@ -457,7 +474,7 @@ def test_api_shapes(session, client):
     rec = client.get("/shadow/track-record").json()
     assert rec["engine"] == ENGINE_TRAILING
     assert set(rec) >= {"params", "closed_pairs", "pending", "regime", "note", "h14_ratchet"}
-    assert rec["h14_ratchet"]["n_pairs"] == 1
+    assert rec["h14_ratchet"]["n_pairs"] == 0 and rec["h14_ratchet"]["n_immature"] == 1   # today's call
     assert rec["closed_pairs"]["n"] == 1
     assert rec["regime"]["above_50dma"] is True
 
