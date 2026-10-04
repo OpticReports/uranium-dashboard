@@ -187,9 +187,14 @@ call trigger · `retired` → failed the gate or decayed; kept for the record.
 - **Hypothesis:** the combined-flag call book with a 200dma prior-close XBI
   regime gate and 3.0xATR trailing exits (no fixed target, 90d time stop)
   produces materially better risk-adjusted results than the live fixed
-  3:1-target engine — replay: $430,406 / +14.73% CAGR / 35.6% maxDD /
-  0.73 Sharpe vs V0's 0.42 and V2's 0.58 (double-baseline survivor, 2/3
-  sub-periods; its one miss is 2023-2026 vs V2).
+  3:1-target engine — replay: $469,242 / +15.67% CAGR / 35.6% maxDD /
+  0.76 Sharpe vs V0's 0.42 and V2's 0.58 (double-baseline survivor).
+  Re-based 2026-10-04 on the committed FMP cache; the Yahoo-basis replay
+  read $430,406 / +14.73% / 0.73 and beat both baselines in 2/3
+  sub-periods (its miss was 2023-2026 vs V2); on the re-based cache it
+  beats them in 3/3, because the +9% move landed in that window. The
+  full-period verdict is unchanged; that sub-period cell is the one place
+  the re-basing flattered R2-A (docs/REBASE_FMP_LANE_2026-10-04.md).
 - **Prediction:** live observe-only tracking of the same construction shows
   higher R expectancy and shallower book drawdown than the production
   engine's graded record over the same window.
@@ -230,6 +235,11 @@ call trigger · `retired` → failed the gate or decayed; kept for the record.
 - **Implement:** no action until H11's shadow-graded live record exists; then
   an allocation memo, not an engine change. Weights were swept post-hoc —
   the claim is the plateau, never a point weight.
+- **Re-based 2026-10-04:** the 30/70 baseline on the committed FMP cache is
+  +16.17% trading-day CAGR / 29.4% maxDD / 1.04 Sharpe (was +15.89% / 29.3%
+  / 1.02 on the Yahoo basis); the correlation and blend numbers below were
+  measured on the Yahoo-basis sleeve, which rounds 4-6 still read
+  (archived as `r2a_daily_yahoo_2026-08.json`). Plateau claim unchanged.
 - **Source:** docs/BACKTEST_VARIANTS_R2.md (R2-A) + correlation/blend
   analysis 2026-08-20 (this entry). Inherits every replay caveat.
 - **Status:** proposed (blocked on H11). Round-3 notes: BIL-on-idle-cash is
