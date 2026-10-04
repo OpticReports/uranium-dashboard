@@ -147,3 +147,18 @@ rule, the metrics and the action bar are unchanged except where stated.
    trades; percentile intervals, not bias-corrected; B_cash_clip runs
    negative cash with no margin cost (uncosted leverage); uncapped risk
    uses the lane's ATR, the campaign's uncapped ATR is not stored.
+
+## Addendum 2 — 2026-10-04, after the first host run, before the number of record is read
+
+1. **Draw count.** The contract said 2,000 draws; the committed default was
+   raised to 10,000 before any run (the Bonferroni-8 tail at p0.3125 rests
+   on ~6 resamples at 2,000) and that is the number of record. A 4,000-draw
+   CLI run was made first on the host because deploys kept killing the
+   longer one; it is a PREVIEW. The seeded stationary bootstrap consumes one
+   RNG stream, so the first 4,000 draws of the 10,000 run are the 4,000 run:
+   the same sample extended, not a re-roll.
+2. **Wording.** The paired interval is conditional on the fixed FIRE set
+   (the trade set changes across arms through cap-slot turnover: 598 to 677
+   taken); "taken" is the count handed to the book, not book entries.
+3. **Max DD carries no interval** in this design; the 2 pp action bar is a
+   single-path, single-episode point comparison, binding as registered.

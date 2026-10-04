@@ -82,10 +82,14 @@ HONESTY = [
     "economics).",
     "Never present these in-sample CAGRs as a forecast.",
     # addendum 1, item 9
-    "The paired Sharpe-delta interval is CONDITIONAL on this single in-sample path and the fixed trade "
-    "set: a few dozen divergent trades drive it, so it is an interval on these events, not on the "
-    "strategy; 21-day blocks overstate the effective sample for trades that diverge over ~65 days "
+    "The paired Sharpe-delta interval is CONDITIONAL on this single in-sample path and the fixed FIRE "
+    "set (the trade set changes across arms through cap-slot turnover; 'taken' is the count handed to "
+    "the book): a few dozen divergent trades drive it, so it is an interval on these events, not on "
+    "the strategy; 21-day blocks overstate the effective sample for trades that diverge over ~65 days "
     "(see the 63-day sensitivity); percentile intervals, not bias-corrected.",
+    "Max DD carries no interval in this design: the 2 pp action bar and every drawdown delta are "
+    "single-path, single-episode point comparisons (the mirror's own bootstrap put max DD p5/p95 at "
+    "23%/53% for a comparable book).",
     "Multiplicity: H14 (ratchet) is the single pre-registered primary at the uncorrected 95% level; "
     "the other seven knobs are exploratory and each reports whether it survives a Bonferroni-8 "
     "interval; the group arms are descriptive; shares of the gap need not sum to one (interactions).",
