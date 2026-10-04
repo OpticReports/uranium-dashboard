@@ -55,7 +55,16 @@ Nothing else. Not the engine code, not the tests, not this file.
 Behavioral invariants (never hold through a binary, Tier C never auto-calls,
 direction rules, gap-aware grading) are enforced by the test suite —
 `pytest` must stay green on every proposal, and the agent may not edit tests
-to make them pass.
+to make them pass. Two halves, since 2026-10-04: the engine's MECHANICS are
+tested against trigger / risk / horizon / `min_composite` values the tests
+own (`tests/conftest.py`), so a bounded tune of those knobs does not touch
+them; and the LIVE `calls.yaml` is checked for shape and for the rules that
+must survive any tune (`tests/test_calls_config.py`: real flag types only,
+mapping-valued conditions, long-side triggers only, Tier C never auto-calls,
+risk and horizon sane and ordered). Demoting the last trigger writes
+`triggers: {}` and is legal — the engine simply makes no calls. The
+time-stop gate's `horizon_days` maps to BOTH `default_days` and `max_days`;
+move them together. A proposal that fails the second half is malformed.
 
 ## Workflow per cycle
 
