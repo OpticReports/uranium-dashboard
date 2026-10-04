@@ -206,7 +206,7 @@ E-vs-mirror guards, sign-aware CI, Bonferroni-8, actionability tags
 per-arm grading counts, basis-clean flag, 10,000 draws, tracker+executor tag
 for ratchet/day-zero, floor-overlap statement. Results pending the host run.
 
-## Round 9 results — exit-rule ablation (2026-10-04, first host run, 4,000-draw preview)
+## Round 9 results — exit-rule ablation (2026-10-04; interval of record = 10,000 draws)
 
 Contract: VARIANTS_PREREGISTRATION_R9_EXIT_ABLATION.md (+ addenda 1, 2).
 FMP lane, bars clipped to 2026-08-19, no costs, no carry, lag 1. Machinery:
@@ -216,7 +216,7 @@ Mechanics gap E − P0: −5.48 pp CAGR, −0.195 Sharpe, max DD 35.4% → 30.7%
 
 | rule flipped | fwd share (P0 + rule) | bwd recovery (E − rule) | fwd Sharpe CI95 | bwd Sharpe CI95 | sub 3/3 | where |
 |---|---|---|---|---|---|---|
-| **ratchet-up-only trail (H14, primary)** | **1.02** | **0.76** | [−0.396, −0.024] | [−0.007, +0.359] | yes / yes | tracker+executor |
+| **ratchet-up-only trail (H14, primary)** | **1.02** | **0.76** | [−0.397, −0.019] | [−0.009, +0.357] | yes / yes | tracker+executor |
 | day-zero stop at L0 | 0.35 | 0.08 | [−0.170, +0.059] | [−0.031, +0.080] | 2 / 1 | tracker+executor |
 | time stop anchored at fire | 0.22 | 0.26 | [−0.140, +0.046] | [−0.022, +0.170] | 3 / 3 | tracker |
 | time stop fills next open | 0.19 | 0.19 | [−0.139, +0.060] | [−0.013, +0.110] | 2 / 2 | tracker |
@@ -227,11 +227,14 @@ Mechanics gap E − P0: −5.48 pp CAGR, −0.195 Sharpe, max DD 35.4% → 30.7%
 | G_stop (seed + ratchet + day-zero) | 0.96 | — | [−0.392, +0.004] | — | 3 | — |
 
 **Verdict under the contract: NULL, no proposal.** The primary fails the
-sign-aware CI test on the backward side by 0.007 at 4,000 draws (both
-ratchet tests are marginal: half-width ≈ 0.18 either way, forward passes by
-0.024), AND the action bar fails on its own: B_ratchet max DD 33.5% vs E
-30.7% = +2.8 pp > 2 pp. The pending 10,000-draw interval therefore cannot
-change the action, only the label on H14.
+sign-aware CI test on the backward side by 0.009 at 10,000 draws (the
+interval of record; the 4,000-draw preview read 0.007, same seeded stream
+extended). Both ratchet tests are marginal: half-width ≈ 0.18 either way,
+forward passes by 0.019. Bonferroni-8 intervals span zero both ways. AND the
+action bar fails on its own: B_ratchet max DD 33.5% vs E
+30.7% = +2.8 pp > 2 pp. The other seven knobs fail on share alone
+(ratchet rows: F_ratchet p2.5/p50/p97.5 = −0.397/−0.203/−0.019, B_ratchet
+−0.009/+0.171/+0.357).
 
 **H14 standing**: strongly supported on point estimates (all of the gap
 forward, three-quarters backward, 3/3 sub-periods both ways), not confirmed
