@@ -35,19 +35,36 @@ now committed (gitignore exceptions). Three properties matter:
   days agree exactly; MRNA pays no dividend). One bar of 1,934; it cannot move
   a verdict and is left as delivered so the cache stays a verbatim record of
   the lane. Found by the independent verifier, 2026-10-04.
-- **Reproducible by construction.** The mirror's machinery check now reads
-  `cache_verified: true, cache_exact: true` (R2-A to $0.000003). On Render the
-  script seeds the committed cache from the image before any refetch decision.
+- **Reproducible by construction - which is a self-consistency check, not a
+  cross-check.** The mirror's machinery check now reads `cache_verified: true,
+  cache_exact: true` (R2-A to $0.000003) because the stored R2-A was produced
+  from this same cache; the check now guards against the cache or the code
+  drifting, no longer against the August campaign record, which is gone. On
+  Render the script seeds the committed cache from the image before any
+  refetch decision, and replaces a disk cache that is not a frozen-lane cache
+  (the 2026-10-04 Render run left one behind).
 
 ## What moved, and what did not
 
-Every survival verdict in rounds 1-3 is unchanged. Books that re-grade
-individual positions reproduce to the dollar (V0 $208,755 vs $208,760). Books
+Every FULL-PERIOD survival verdict in rounds 1-3 is unchanged. Two
+sub-period cells did move, and both deserve saying plainly: R2-A now beats
+both baselines in 2023-2026 as well (3/3 sub-periods, was 2/3 - its +9%
+end-value move landed entirely in that window: CAGR +16.5% → +19.4%,
+Sharpe 0.82 → 0.92), and R3-B loses its one sub-period win (2023-2026
+vs the 30/70 baseline, yes → no). The re-basing flattered the flagship
+variant in one cell, and the mirror's run notes attribute the whole R2-A
+move to ONE call of 601 swapping at the cap - a reminder that a capped,
+path-dependent book's sub-period verdicts are fragile to the day-level
+data they ride on.
+
+Books that re-grade individual positions reproduce within the panel's own
+gate (V0 $208,755 vs $208,760, a $5 difference against a ±$50 gate). Books
 whose path depends on the exact OHLC - trailing exits (V10, R2-A), momentum
 rankings (V6a/V6b, R2-E) and the blends built on R2-A - moved by 2% to 9%,
 because sub-basis-point differences between FMP's adjustment and Yahoo's shift
 a trailing exit or a rank by a day and the capped book is path-dependent from
-there. No drawdown changed by more than 0.1 pp.
+there. No full-period drawdown changed by more than 0.1 pp (the largest
+sub-period change is R2-A's 2020-2022 max DD, 26.8% → 27.0%).
 
 | round | variant | end (Yahoo basis) | end (FMP basis) | Δ | max DD | Sharpe | survives |
 |---|---|---|---|---|---|---|---|
@@ -78,7 +95,10 @@ there. No drawdown changed by more than 0.1 pp.
 | Round 3 | R3-E | $509,413 | $525,647 | +3.2% | 29.7% → 29.7% | 1.04 → 1.06 | True → True |
 
 Round 3's H13 30/70 baseline: +16.17% trading-day CAGR / 29.4% maxDD / 1.04
-Sharpe (was +15.89% / 29.3% / 1.02). The constants edited to the re-based
+Sharpe (was +15.89% / 29.3% / 1.02). Two CAGR conventions appear for this one
+book: the H13 pre-registration annualizes on trading days (+16.17%); the
+campaign tables and the mirror doc use the house calendar-day convention
+(+16.13%). Same curve. The constants edited to the re-based
 values, each with the superseded value kept beside it: `R2A_END` in
 `backtest_variants_r3.py` (469,241.76, was 430,406.29) and the `H13` targets
 there; `R2A_END_VALUE` in `backtest_core_variants.py` is deliberately NOT
@@ -113,4 +133,41 @@ file.
 
 ## Counter-agent verdict
 
-_Appended when the verification agents report._
+**Verifier A (independent reproduction, 2026-10-04): PASS.** In a clean
+copy, rounds 1-3, the R2-A re-freeze and the mirror (full 2,000 draws) all
+exit 0 with machinery checks passed; every regenerated JSON matches the
+committed one on every numeric field (5,729 / 4,502 / 3,434 / 2,672 / 8,016
+/ 20,424 fields, zero differences). Full-period `survives` identical to
+origin/main for all 25 variants; all 25 table rows above checked against
+both JSONs. Constants: `R2A_END` within $0.004 of the stored R2-A; `H13`
+within 2e-6 / 4e-5 / 1.5e-4 of the run; `R2A_END_VALUE` within $0.002 of the
+archived sleeve it reads, and the archive is byte-identical to main's file.
+Cache: max date 2026-08-19 everywhere; ATAI's largest daily move 33% (no
+step at the break); committed/unadjusted ratio median 1.0000 for ATAI, a
+constant 1.00095 for ILMN (the whole-series factor), 1.0000 for MRNA except
+the one bar recorded above. Minors applied: stale Yahoo-basis strings in
+round 3's messages; the MRNA bad print recorded.
+
+**Verifier B (adversarial review): no arithmetic or lookahead defect;
+four serious honesty/operational findings, all applied.** (1) Two
+sub-period verdict cells moved (R2-A gained 2023-2026, R3-B lost it) while
+the write-up said "unchanged" - now stated above and in HYPOTHESES H11.
+(2) The Render disk already held a refetched pre-segment-fix cache that the
+seeding would not replace - the mirror now replaces any disk cache whose
+sidecar does not prove it is a frozen-lane cache, all three files together,
+atomically. (3) The break detector required the split day's own move to be
+under 2% and would otherwise fall back silently to the whole-series rule,
+recreating the cliff - it now matches on the log jump within 25%, and a
+residual-cliff guard reverts any normalization that leaves a ~factor step
+anywhere in the series; the committed cache is byte-identical under the new
+detector. (4) The mirror doc's hand-written half still presented the
+Yahoo-basis numbers and "not committed" status - rewritten. Minors applied:
+"no drawdown moved" scoped to full-period; `cache_exact` named as a
+self-consistency check; the two CAGR conventions for the 30/70 book
+labelled; round 4-6 sleeve labels point at the archived file. Verified
+correct by B: END truncation on all outputs, START unchanged, the XBI
+200dma gate loses nothing at the window end, the Dockerfile and
+.dockerignore admit the committed cache into seed_data, no other reader of
+the R2-A sleeve mixes bases, the mirror JSON matches what
+ExecutorMirror.jsx normalizes, and the Calls Log summary's moves (≤0.07%)
+sit inside its gates.

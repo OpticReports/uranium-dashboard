@@ -28,7 +28,8 @@ Everything that already exists is IMPORTED, never re-implemented: the bars
 loader, the cap selector, the R2-A book, seg_stats, downsample, the BIL
 yield loader, the R3 blend helpers. Two machinery checks run before any
 number is reported: (1) the reused R2-A recipe reproduces the stored
-$430,406.29 within the repo's V0 machinery tolerance (+/-1%, the gate
+R2-A end value (469,241.76 since the 2026-10-04 re-basing on the committed
+FMP cache; 430,406.29 on the old Yahoo basis) within the repo's V0 machinery tolerance (+/-1%, the gate
 backtest_variants_10y.py and backtest_summary.py apply) — cache_exact says
 whether it also lands to $1; a miss means the bars are not on the campaign
 basis (abort, or --allow-cache-drift to publish with cache_verified=false);
@@ -1349,15 +1350,31 @@ def load_inputs(fetch_missing: bool = False, refresh_bars_if_missing: bool = Fal
     #    where the disk mount hides data/): copy it in before deciding on any
     #    refetch, so the machinery check runs against the record the stored
     #    numbers were produced from, not against whatever FMP serves today.
-    seeded = []
-    for path in (CACHE, DATA / "spy_bars_raw.json", BASIS_SIDECAR):
-        alt = SEED_DATA / path.name
-        if not path.exists() and alt.exists():
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_bytes(alt.read_bytes())
-            seeded.append(path.name)
-    if seeded:
-        print(f"seeded the committed frozen cache from seed_data: {seeded}")
+    #    The disk may already hold a cache an earlier run refetched (the
+    #    2026-10-04 Render run wrote one with the pre-segment ATAI fix), which
+    #    would otherwise shadow the committed record forever. A disk cache is
+    #    kept only when its sidecar proves it IS a frozen-lane cache (carries
+    #    the window `end` and per-symbol `segment`s); anything else is
+    #    replaced by the seed, all three files together, atomically.
+    seed_files = [(CACHE, SEED_DATA / CACHE.name), (SPY_RAW, SEED_DATA / SPY_RAW.name),
+                  (BASIS_SIDECAR, SEED_DATA / BASIS_SIDECAR.name)]
+    if not force_refresh and all(alt.exists() for _p, alt in seed_files):
+        disk_is_frozen = False
+        try:
+            sc = json.loads(BASIS_SIDECAR.read_text()) if BASIS_SIDECAR.exists() else {}
+            disk_is_frozen = (CACHE.exists() and SPY_RAW.exists() and bool(sc.get("end"))
+                              and all("segment" in v for v in (sc.get("normalized") or {}).values()))
+        except (OSError, ValueError):
+            disk_is_frozen = False
+        if not disk_is_frozen:
+            for path, alt in seed_files:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                tmp = path.with_suffix(path.suffix + ".seed.tmp")
+                tmp.write_bytes(alt.read_bytes())
+                tmp.replace(path)
+            print(f"seeded the committed frozen cache from seed_data (disk cache was "
+                  f"{'absent' if not CACHE.exists() else 'not a frozen-lane cache'}): "
+                  f"{[p.name for p, _a in seed_files]}")
     incomplete = _cache_incomplete() if (force_refresh or refresh_bars_if_missing) else None
     if force_refresh or (refresh_bars_if_missing and incomplete):
         print(f"bars cache {'refresh requested' if force_refresh else incomplete}: rebuilding on the "

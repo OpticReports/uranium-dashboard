@@ -10,7 +10,8 @@ _Re-based 2026-10-04 on the committed FMP-lane cache (`backend/data/backtest_bar
 the geo executor would have performed? how do you know what the max DD is?"
 
 **Short answer:** the only numbers that existed were the PAPER R2-A book
-(BACKTEST_VARIANTS_R2.md: +14.73% CAGR, 35.6% max DD, Sharpe 0.73, 10y) and
+(BACKTEST_VARIANTS_R2.md: +15.67% CAGR, 35.6% max DD, Sharpe 0.76, 10y, on
+the re-based cache; +14.73% / 0.73 on the old Yahoo basis) and
 the paper 30/70 blends (R3). The ibkr-executor's blend3070 book does NOT
 trade the way that paper book does — it fills a session later, in whole
 shares, never leveraged, with a resting day-zero stop, a ratchet-up-only
@@ -21,11 +22,12 @@ paper number is attributable — and reports max DD on the daily curve for
 the full 10y, trailing 5y and trailing 2y windows, with a block-bootstrap
 cone around each.
 
-**Status:** code + synthetic-bar tests + this doc are in the repo. The
-numbers are NOT yet produced — the replay needs the gitignored 10-year
-bars cache (`backend/data/backtest_bars.json`), which lives on Casey's
-machine, not in the agent container or on the Render disk. See "How to
-run". The results section at the bottom is written by the script.
+**Status (2026-10-04):** published. The bars cache is now COMMITTED
+(`backend/data/backtest_bars.json`, the frozen FMP-lane cache of
+`REBASE_FMP_LANE_2026-10-04.md`), the machinery checks pass against it
+(`cache_verified: true, cache_exact: true`) and the results JSON is
+committed as `backend/data/backtest_executor_mirror_results.json`. The
+results section at the bottom is written by the script.
 
 ## Read this first (honesty block — one line each)
 
@@ -39,7 +41,7 @@ run". The results section at the bottom is written by the script.
 - **Sizing proxy**: lag-2 entries are sized on sleeve equity at the fire-day close (the executor sizes at T+1 ~10:30 on live marks).
 - **Trailing windows are SLICES** of the 10-year curve (positions entered before the window carry in — the house SUB_PERIODS convention), not fresh $100k books started at the window open.
 - **Measurement basis**: daily mark-to-market on adjusted closes; max DD on the daily curve; CAGR calendar-day (365.25); Sharpe/Sortino √252, rf = 0; bootstrap = stationary block (mean 21d) of the window's own daily returns.
-- **Bars basis**: the August 2026 campaign cache (raw Yahoo chart API) was built in a cloud session, never committed, and no longer exists; the reproducible source is the FMP dividend-adjusted lane (`scripts/refresh_backtest_bars.py`, ATAI basis-normalized by a constant factor, returns unchanged). Bars are CLIPPED to the campaign's data end (2026-08-19) before anything is graded, because a lane that runs later would enter the 44 calls the campaign counted as open at data end. Machinery check 1 then verifies the END VALUE (±1%), the FULL DAILY CURVE against the frozen `data/r2a_daily.json` (max point-wise gap ≤1%, max DD within 0.0065, Sharpe within 0.005 — the V0 gate's own tolerances) and the TRADE-SET counts against the stored R2-A meta: the bar-coverage counts (regraded 4964 / open-at-end 44) must match exactly, taken / skipped-at-cap are reported only (a lane's high/low can land a stop a day earlier near the cap boundary); `cache_verified` needs the end value, the curve, the calendar length and the coverage counts, `cache_exact` records the $1 standard separately, and the results JSON carries the lane, every basis factor, the clip and the gate's first defined date.
+- **Bars basis**: the August 2026 campaign cache (raw Yahoo chart API) was built in a cloud session, never committed, and no longer exists; the reproducible source is the FMP dividend-adjusted lane (`scripts/refresh_backtest_bars.py`, ATAI basis-normalized by a constant factor on the segment its frozen entries sit in, ILMN whole-series; returns inside a segment unchanged) - and since 2026-10-04 that cache is committed and the stored R2-A is produced from it, so the check below is a self-consistency check against the record, not a cross-check against the lost August cache. Bars are CLIPPED to the campaign's data end (2026-08-19) before anything is graded, because a lane that runs later would enter the 44 calls the campaign counted as open at data end. Machinery check 1 then verifies the END VALUE (±1%), the FULL DAILY CURVE against the frozen `data/r2a_daily.json` (max point-wise gap ≤1%, max DD within 0.0065, Sharpe within 0.005 — the V0 gate's own tolerances) and the TRADE-SET counts against the stored R2-A meta: the bar-coverage counts (regraded 4964 / open-at-end 44) must match exactly, taken / skipped-at-cap are reported only (a lane's high/low can land a stop a day earlier near the cap boundary); `cache_verified` needs the end value, the curve, the calendar length and the coverage counts, `cache_exact` records the $1 standard separately, and the results JSON carries the lane, every basis factor, the clip and the gate's first defined date.
 - **Never present these in-sample CAGRs as a forecast.**
 
 ## Protocol
@@ -55,7 +57,8 @@ Sharpe/Sortino √252 · CAGR calendar-day.
 
 **Machinery checks (both must pass before anything is reported):**
 1. The REUSED R2-A recipe (`build_trailing_rows` → gate → `select_capped` →
-   `run_call_book`) reproduces the stored end value **$430,406.29 to $1**. A
+   `run_call_book`) reproduces the stored end value **$469,241.76 to $1**
+   (re-based 2026-10-04; the Yahoo-basis value was $430,406.29). A
    miss means the bars cache is not the campaign cache: the script aborts
    and writes nothing (`--allow-cache-drift` publishes with
    `protocol.cache_verified=false` and the UI shows a red banner).
@@ -123,7 +126,7 @@ dividend-adjusted lane by `scripts/refresh_backtest_bars.py` (needs
 `FMP_API_KEY`; ATAI is basis-normalized by a constant factor, documented in
 `data/backtest_bars_basis.json`; `spy_bars_raw.json` is written alongside so
 the SPY leg is total-return). Machinery check 1 then decides: R2-A must
-reproduce the stored $430,406.29 within ±1% (the repo's V0 machinery gate;
+reproduce the stored $469,241.76 within ±1% (the repo's V0 machinery gate;
 the FMP lane reproduces V0 itself to $1) or nothing is written.
 
 - **Render shell (genomics-alpha-tracker service, recommended):**
@@ -285,16 +288,20 @@ the live record decide.
 ## Results
 
 First real run: 2026-10-04 on the genomics-alpha-tracker Render host, FMP
-dividend-adjusted lane (start 2015-07-23; ATAI basis 0.0728, ILMN 0.99905),
-bars clipped to 2026-08-19, published with `--allow-cache-drift`
-(`cache_verified=false`: R2-A replays to $469,242 vs the stored $430,406,
-+9.0%, one call of 601 flipped at the cap; bar coverage identical 4964 / 44;
-max DD 35.58% vs 35.57%). The results JSON lives on the host's data disk
-(`/app/data/backtest_executor_mirror_results.json`) and is served by the
-Calls Log panel; it is not committed. Counter-agent round 2 (results):
-PASS WITH CORRECTIONS, applied below and in the code (commit after this
-doc). The lag-2 rows below predate the live cap-occupancy fix
-(select_capped_exec) and move by at most the T+1/T+2 delta on the re-run.
+dividend-adjusted lane, published with `--allow-cache-drift` because R2-A
+replayed to $469,242 vs the then-stored Yahoo-basis $430,406 (+9.0%, one
+call of 601 flipped at the cap; bar coverage identical 4964 / 44; max DD
+35.58% vs 35.57%). That run also left a pre-segment-fix cache on the host's
+data disk, which the seeding step now replaces.
+
+Publishable run: 2026-10-04, after the campaign was re-based on the committed
+frozen cache (`REBASE_FMP_LANE_2026-10-04.md`): machinery checks pass with
+`cache_verified: true, cache_exact: true`, and the results JSON is committed
+as `backend/data/backtest_executor_mirror_results.json` (served from the
+data disk first, then the image's seed_data copy). Counter-agent rounds on
+the build: round 1 (code) and round 2 (results, PASS WITH CORRECTIONS,
+applied); on the re-basing: two rounds recorded in the re-basing doc. The
+lag-2 rows below are from the committed run.
 
 **Full window 2016-01-04 → 2026-08-19, $100k start**
 

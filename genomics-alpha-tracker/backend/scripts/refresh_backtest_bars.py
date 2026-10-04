@@ -83,7 +83,7 @@ UNITY_TOL = 0.0001
 # of its Sharpe and flipped its survival verdict (2026-10-04). The factor is
 # therefore applied only to the SEGMENT the frozen entries sit in: a one-day
 # jump of ~1/factor (or ~factor) in the adjusted closes marks the break.
-BREAK_TOL = 0.02
+BREAK_TOL = 0.25              # on the LOG jump: the split day's own move may be large
 # The campaign's registered window end. Bars after it must not be in the
 # frozen cache: with them present, round 2 graded exits that fall outside the
 # window (5,002 rows regraded vs the stored 4,964) and R2-A moved 6%.
@@ -160,17 +160,26 @@ def basis_breaks(rows: list[dict], factor: float) -> list[int]:
     break tolerance of 1 (ILMN: 0.999) cannot be told from an ordinary daily
     move, so no break is inferred and the factor applies to the whole
     series, as it did before segments existed."""
-    if abs(factor - 1.0) <= 2 * BREAK_TOL:
+    import math
+    target = abs(math.log(factor))
+    if target <= 2 * BREAK_TOL:
         return []
     out = []
     for i in range(1, len(rows)):
         a, b = rows[i - 1].get("adj_close"), rows[i].get("adj_close")
         if not a or not b:
             continue
-        jump = b / a
-        if abs(jump * factor - 1.0) <= BREAK_TOL or abs(jump / factor - 1.0) <= BREAK_TOL:
+        if abs(abs(math.log(b / a)) - target) <= BREAK_TOL:
             out.append(i)
     return out
+
+
+def residual_cliff(rows: list[dict], factor: float) -> str | None:
+    """After normalization no one-day jump of ~factor or ~1/factor may remain
+    anywhere in the series; if one does, the segment choice was wrong and the
+    series must be left alone for the gate to refuse."""
+    hit = basis_breaks(rows, factor)
+    return rows[hit[0]]["date"] if hit else None
 
 
 def normalize_basis(bars: dict[str, list[dict]]) -> dict[str, dict]:
@@ -203,6 +212,15 @@ def normalize_basis(bars: dict[str, list[dict]]) -> dict[str, dict]:
             for key in ("open", "high", "low", "close", "adj_close"):
                 if r.get(key) is not None:
                     r[key] = r[key] / k
+        cliff = residual_cliff(rows, k)
+        if cliff:
+            for r in rows[lo:hi]:                     # undo: the gate must see the raw lane
+                for key in ("open", "high", "low", "close", "adj_close"):
+                    if r.get(key) is not None:
+                        r[key] = r[key] * k
+            print(f"  basis: {sym} would still have a {1 / k:.1f}x cliff at {cliff} after "
+                  f"normalizing {segment} - left alone for the gate to see")
+            continue
         applied[sym] = {**f, "segment": segment, "rows_divided": hi - lo, "rows_total": len(rows),
                         "note": ("segment divided by a constant factor to match the frozen entry "
                                  "basis; returns inside the segment unchanged")}

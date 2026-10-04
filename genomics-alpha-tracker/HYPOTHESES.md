@@ -188,10 +188,13 @@ call trigger · `retired` → failed the gate or decayed; kept for the record.
   regime gate and 3.0xATR trailing exits (no fixed target, 90d time stop)
   produces materially better risk-adjusted results than the live fixed
   3:1-target engine — replay: $469,242 / +15.67% CAGR / 35.6% maxDD /
-  0.76 Sharpe vs V0's 0.42 and V2's 0.58 (double-baseline survivor, 2/3
-  sub-periods; its one miss is 2023-2026 vs V2). Re-based 2026-10-04 on
-  the committed FMP cache; the Yahoo-basis replay read $430,406 / +14.73%
-  / 0.73 (docs/REBASE_FMP_LANE_2026-10-04.md). Verdict unchanged.
+  0.76 Sharpe vs V0's 0.42 and V2's 0.58 (double-baseline survivor).
+  Re-based 2026-10-04 on the committed FMP cache; the Yahoo-basis replay
+  read $430,406 / +14.73% / 0.73 and beat both baselines in 2/3
+  sub-periods (its miss was 2023-2026 vs V2); on the re-based cache it
+  beats them in 3/3, because the +9% move landed in that window. The
+  full-period verdict is unchanged; that sub-period cell is the one place
+  the re-basing flattered R2-A (docs/REBASE_FMP_LANE_2026-10-04.md).
 - **Prediction:** live observe-only tracking of the same construction shows
   higher R expectancy and shallower book drawdown than the production
   engine's graded record over the same window.

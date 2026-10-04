@@ -21,9 +21,10 @@ verdict on the B.5-as-core study):
   * daily marked-to-market total returns on adjusted closes (stockanalysis
     field 'a'), disk-cached under backend/data/px_cache so re-runs never
     re-fetch; the API is the only data lane and it is used politely.
-  * the R2-A sleeve is the FROZEN dollar curve (data/r2a_daily.json), reused
+  * the R2-A sleeve is the FROZEN dollar curve (R2A_DAILY below: the archived
+    Yahoo-basis data/r2a_daily_yahoo_2026-08.json this round was run on), reused
     verbatim and NEVER recomputed. Its daily INVESTED notional comes from
-    data/r2a_exposure.json (scripts/build_r2a_exposure.py rebuilds it from the
+    R2A_EXPOSURE (scripts/build_r2a_exposure.py rebuilds it from the
     round-2 pipeline and gates it against the frozen curve), so the idle
     CAPITAL fraction C7 routes is exact, not inferred from zero-return days.
   * Sharpe on BOTH bases (rf=0 and BIL-excess) is always computed and printed.
@@ -2309,8 +2310,8 @@ def main(argv: list[str] | None = None) -> None:      # noqa: PLR0915
                       "seed": BOOT_SEED, "paired": True, "circular": True,
                       "basis": "BIL-excess daily returns"},
         "gate_source": getattr(ctxs["real"], "gate_source", None),
-        "sleeve": "FROZEN R2-A dollar curve (data/r2a_daily.json), reused verbatim; "
-                  "daily invested notional from data/r2a_exposure.json",
+        "sleeve": f"FROZEN R2-A dollar curve ({R2A_DAILY.name}), reused verbatim; "
+                  f"daily invested notional from {R2A_EXPOSURE.name}",
         "sleeve_idle_capital_real": idle,
         "mechanism_real": mechanism_table(rc),
         "corr_core_sleeve_real": pearson(curve_returns(rc.core, rc.dates),
