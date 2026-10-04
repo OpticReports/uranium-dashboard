@@ -261,11 +261,13 @@ ratchet tests marginal, the backward interval shifted not wider; "all
 forward, three-quarters backward"; DD deltas are point comparisons without an
 interval; fixed FIRE set wording; G_stop's spanning interval reported.
 
-**Next step** (no code change to live money): the tracker's shadow grader
-re-grades every live call under the SAME ratchet rule the executor obeys, so
-the live record cannot yet test H14. Add an observe-only second grading
-under the campaign's non-ratchet exit to GET /shadow/track-record, and let
-the live record decide.
+**Next step, BUILT 2026-10-04** (no code change to live money): the tracker's
+shadow grader re-grades every live call a second time under the identical
+engine with the ratchet removed (`ShadowGrade.engine = trailing_3atr_noratchet`);
+the paired record is `h14_ratchet` on `GET /shadow/track-record`. The
+executor intents filter on `trailing_3atr`, so the second engine's rows can
+never close a call for the live book or move a level. The live paired record
+decides H14 (HYPOTHESES.md H14, observing).
 
 ## Pending DD questions (ranked)
 

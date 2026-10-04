@@ -16,6 +16,7 @@ import pytest
 from app.calls import manager
 from app.calls.rules import BarLike
 from app.calls.shadow import (
+    ENGINE_NORATCHET,
     ENGINE_TRAILING,
     evaluate_shadow_calls,
     grade_trailing,
@@ -77,6 +78,29 @@ def test_trailing_ratchets_up_only():
     assert ex.status == "stopped"
     assert ex.exit_date == D0 + timedelta(days=4)
     assert abs(ex.exit_price - (110.0 - 3.0 * (36.0 / 14.0))) < 1e-9  # 102.2857...
+
+
+def test_trailing_without_ratchet_lets_the_trail_fall():
+    """H14: the same bars as the ratchet test; with ratchet=False the d4
+    level is the RAW 111 - 3*(54/14) = 99.43 (peak through d3 is 111), which
+    d4's low (101) does not reach, so the position survives d4 and the two
+    rules diverge."""
+    bars = _pre_entry_bars() + [
+        BarLike(D0 + timedelta(days=1), 106.0, 100.0, 105.0, 100.0),
+        BarLike(D0 + timedelta(days=2), 111.0, 105.0, 110.0, 105.0),
+        BarLike(D0 + timedelta(days=3), 130.0, 110.0, 111.0, 110.0),
+        BarLike(D0 + timedelta(days=4), 104.0, 101.0, 101.0, 104.0),
+    ]
+    assert grade_trailing(bars, 100.0, D0, atr_at_entry=2.0, ratchet=False) is None
+    # ... and a later bar through the fallen level stops at THAT level
+    bars.append(BarLike(D0 + timedelta(days=5), 101.0, 97.0, 98.0, 100.0))
+    ex = grade_trailing(bars, 100.0, D0, atr_at_entry=2.0, ratchet=False)
+    assert ex.status == "stopped" and ex.exit_date == D0 + timedelta(days=5)
+    # level on d5 = peak 111 - 3 * ATR14 through d4; TRs d1..d4 = 6, 6, 20, 10 (d4: low 101 vs
+    # prior close 111) plus ten flat pre-entry bars of 2 -> ATR14 = 62/14
+    assert abs(ex.exit_price - (111.0 - 3.0 * (62.0 / 14.0))) < 1e-9
+    # the default is byte-identical to the ratchet rule (every live level depends on it)
+    assert grade_trailing(bars, 100.0, D0, atr_at_entry=2.0).exit_date == D0 + timedelta(days=4)
 
 
 def test_trailing_time_stop_on_the_deadline_bar():
@@ -197,10 +221,12 @@ def test_shadow_open_while_live_closed_then_exits_later(session):
                          open=110.0, high=110.0, low=105.0, close=106.0))
     session.commit()
     made = evaluate_shadow_calls(session)
-    assert len(made) == 1
-    g = made[0]
+    # both shadow engines exit here (the peak rose, so the level never had to fall)
+    assert sorted(g.engine for g in made) == sorted([ENGINE_TRAILING, ENGINE_NORATCHET])
+    g = next(g for g in made if g.engine == ENGINE_TRAILING)
     expected_exit = 119.0 - 3.0 * (46.0 / 14.0)
     assert g.engine == ENGINE_TRAILING and g.status == "stopped"
+    assert next(x for x in made if x.engine == ENGINE_NORATCHET).exit_price == g.exit_price
     assert abs(g.exit_price - round(expected_exit, 4)) < 1e-9
     # R uses the LIVE risk unit (entry - stop = 6) so engines are comparable.
     assert abs(g.r_multiple - (expected_exit - 100.0) / 6.0) < 1e-6
@@ -221,15 +247,16 @@ def test_shadow_closes_while_live_still_open(session):
     session.commit()
 
     assert manager.evaluate_calls(session) == []         # live STILL OPEN
-    made = evaluate_shadow_calls(session)
+    made = [g for g in evaluate_shadow_calls(session) if g.engine == ENGINE_TRAILING]
     assert len(made) == 1
     assert made[0].status == "stopped"
     assert abs(made[0].exit_price - round(110.0 - 3.0 * (36.0 / 14.0), 4)) < 1e-9
     assert session.get(TradeCall, call.id).status == "open"   # book untouched
 
-    # Idempotent: a graded call is never re-graded.
+    # Idempotent: a graded call is never re-graded (one row per engine; both exit here).
     assert evaluate_shadow_calls(session) == []
-    assert len(session.exec(select(ShadowGrade)).all()) == 1
+    assert sorted(g.engine for g in session.exec(select(ShadowGrade)).all()) == \
+        sorted([ENGINE_TRAILING, ENGINE_NORATCHET])
 
 
 def test_shadow_backfills_missing_atr_at_entry(session):
@@ -338,6 +365,76 @@ def test_track_record_compares_engines_on_the_same_calls(session):
     assert rec["regime"]["above_200dma"] is None  # latest logged row
 
 
+def test_h14_grades_diverge_when_atr_expands_and_intents_ignore_the_second_engine(session):
+    """A flat name, then a wide-range bar that expands ATR without touching
+    the trail, then a dip: the ratchet engine stops at the held level, the
+    no-ratchet engine survives on the fallen level. The executor intents'
+    open-call view filters on ENGINE_TRAILING, so the second engine's row
+    never closes a call for the live book."""
+    from app.routers.blend import _open_shadow_calls
+    last_bar = _seed_name(session)
+    call = _make_auto_call(session)
+    d = last_bar
+    # d+1: wide range (TR 13), close flat; d+2: ATR through d+1 = (13*2+13)/14 = 2.7857
+    session.add(PriceBar(symbol="CRSP", date=d + timedelta(days=1), open=100.0, high=110.0, low=97.0, close=100.0))
+    # d+2: open 95, low 92: ratchet trail held at 94 (entry 100 - 3*2) -> stops at 94;
+    #      no-ratchet level = 100 - 3*2.7857 = 91.64 -> low 92 does not reach it
+    session.add(PriceBar(symbol="CRSP", date=d + timedelta(days=2), open=95.0, high=96.0, low=92.0, close=93.0))
+    session.commit()
+    made = evaluate_shadow_calls(session)
+    assert [g.engine for g in made] == [ENGINE_TRAILING]
+    assert made[0].status == "stopped" and abs(made[0].exit_price - 94.0) < 1e-9
+    open_, grades = _open_shadow_calls(session)
+    assert call.id in grades and open_ == []
+    # d+3 pierces the fallen level: the no-ratchet engine stops there, later and lower
+    session.add(PriceBar(symbol="CRSP", date=d + timedelta(days=3), open=92.0, high=92.5, low=90.0, close=91.0))
+    session.commit()
+    made2 = evaluate_shadow_calls(session)
+    assert [g.engine for g in made2] == [ENGINE_NORATCHET]
+    n = made2[0]
+    assert n.status == "stopped" and n.exit_date == d + timedelta(days=3)
+    # level on d+3 = peak 100 - 3 * ATR14 through d+2 (TRs: 12 x 2, 13, 8 -> 45/14)
+    assert abs(n.exit_price - round(100.0 - 3.0 * (45.0 / 14.0), 4)) < 1e-9   # stored to 4 dp
+    # a second-engine row with NO ratchet row would still leave the call open for intents
+    session.delete(made[0]); session.commit()
+    open_, grades = _open_shadow_calls(session)
+    assert [c.id for c in open_] == [call.id] and grades == {}
+    # re-grading restores the ratchet row only (idempotent per engine) ...
+    assert [g.engine for g in evaluate_shadow_calls(session)] == [ENGINE_TRAILING]
+    # ... and before maturity the pair is NOT read (the early read is biased against H14)
+    h = shadow_track_record(session)["h14_ratchet"]
+    assert h["n_pairs"] == 0 and h["n_immature"] == 1 and h["invariant_violations"] == 0
+    # matured: one DIVERGENT pair, ratchet better, with the paired delta on the live risk unit (6)
+    h = shadow_track_record(session, asof=call.call_date + timedelta(days=98))["h14_ratchet"]
+    assert h["n_pairs"] == 1 and h["n_divergent_pairs"] == 1 and h["n_identical_exit"] == 0
+    assert h["unstable_pairs"] == 0 and h["n_immature"] == 0 and h["matured_unpaired"] == 0
+    assert h["paired_delta_r"]["n_ratchet_better"] == 1 and h["paired_delta_r"]["n_noratchet_better"] == 0
+    # R is computed from the unrounded exit (exit_price is stored to 4 dp)
+    assert abs(h["paired_delta_r"]["avg"] - ((100.0 - 3.0 * (45.0 / 14.0)) - 94.0) / 6.0) < 1e-6
+    assert h["paired_delta_r"]["avg_on_divergent"] == h["paired_delta_r"]["avg"]
+    # a bar revised after grading breaks the pair's integrity: counted, not paired
+    bar = session.exec(select(PriceBar).where(PriceBar.symbol == "CRSP")
+                       .where(PriceBar.date == d + timedelta(days=2))).one()
+    bar.low = 95.0; session.add(bar); session.commit()        # the ratchet stop at 94 no longer reproduces
+    h = shadow_track_record(session, asof=call.call_date + timedelta(days=98))["h14_ratchet"]
+    assert h["n_pairs"] == 0 and h["unstable_pairs"] == 1
+
+
+def test_track_record_h14_pairs_the_two_engines(session):
+    call = _closed_pair(session)                # both engines exit identically here
+    rec = shadow_track_record(session)
+    assert rec["h14_ratchet"]["n_pairs"] == 0 and rec["h14_ratchet"]["n_immature"] == 1   # today's call
+    h = shadow_track_record(session, asof=call.call_date + timedelta(days=98))["h14_ratchet"]
+    assert h["engines"] == [ENGINE_TRAILING, ENGINE_NORATCHET] and h["n_pairs"] == 1
+    assert h["paired_delta_r"]["avg"] == 0 and h["n_identical_exit"] == 1 and h["n_divergent_pairs"] == 0
+    assert h["paired_delta_r"]["avg_on_divergent"] is None
+    assert h["paired_delta_r"]["n_noratchet_better"] == 0 and h["paired_delta_r"]["n_ratchet_better"] == 0
+    assert h[ENGINE_TRAILING]["avg_r"] == h[ENGINE_NORATCHET]["avg_r"]
+    assert h["unstable_pairs"] == 0 and h["invariant_violations"] == 0 and "reading_rule" in h
+    # the existing H11 comparison is untouched by the second engine
+    assert rec["closed_pairs"]["n"] == 1 and rec["engine"] == ENGINE_TRAILING
+
+
 def test_track_record_pending_buckets(session):
     last_bar = _seed_name(session)
     _make_auto_call(session)
@@ -376,7 +473,8 @@ def test_api_shapes(session, client):
 
     rec = client.get("/shadow/track-record").json()
     assert rec["engine"] == ENGINE_TRAILING
-    assert set(rec) >= {"params", "closed_pairs", "pending", "regime", "note"}
+    assert set(rec) >= {"params", "closed_pairs", "pending", "regime", "note", "h14_ratchet"}
+    assert rec["h14_ratchet"]["n_pairs"] == 0 and rec["h14_ratchet"]["n_immature"] == 1   # today's call
     assert rec["closed_pairs"]["n"] == 1
     assert rec["regime"]["above_50dma"] is True
 
