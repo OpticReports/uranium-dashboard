@@ -1854,3 +1854,76 @@ estimator with its standard error the headline and the alert condition, and
 require the alert to clear 2 standard errors rather than a bare threshold.
 Until that lands, treat the script's ">5bps" warning as advisory only and
 read the equal-weighted SE line beside it.
+
+
+## Addendum 35 — the add.-34 slippage fix FAILED counter-agent review; the
+## script is now ADVISORY ONLY (2026-10-04)
+
+Owner asked for the add.-34 instrument defect to be fixed. A replacement
+estimator was built and then REJECTED by adversarial review. Recording the
+failure because the negative result is the useful part.
+
+WHAT WAS BUILT. raw = beta_i*m_day + c*side_i + e, fit over all fills with a
+free drift term per day and betas from returns vs SPY; day effects profiled
+out analytically (pure Python — numpy does not survive container restarts).
+Rationale: drift hits buys and sells alike and scales with beta, while cost
+is sign-dependent, so the two should separate. Alert required c-2se > 5.0.
+
+WHAT VALIDATED. Algebra exact — counter-agent reproduced c to 2.2e-19 and se
+to 1.6e-19 against a dense least-squares solve; dof/SE formulas correct for
+the n_days nuisance parameters. Noise concentration genuinely FIXED: Kish
+effective n = 331 of 505 fills (old statistic was dominated by a handful);
+day-resample sd 1.14 vs legacy 1.97. Synthetic recovery of known 0/2/5/10bps
+costs within 2 SE, bias +0.007bps, 2-SE false-positive rate 2.0% vs 2.5%.
+
+WHY IT FAILED ANYWAY — the drift model is misspecified and LEAKS into c:
+1. INVARIANCE TEST (my own, decisive): re-benchmark the SAME fills — identical
+   true cost — against the PRIOR day's close instead of same-day. A correct
+   drift model leaves c unchanged. c moves +2.03 -> -16.79 bps.
+2. ZERO-COST PLACEBO (counter-agent): reprice every fill at a real intraday
+   market price at its own fill minute, so true cost is 0.00 by construction.
+   The estimator returns +7.36 +/- 2.86 bps (bar open +7.11, midpoint +6.74).
+   Near-zero-beta/quiet names come back +0.42 +/- 0.44 (the model works
+   there); levered names +18.31 +/- 7.06.
+3. MECHANISM, measured: beta*m_day absorbs only ~50% of drift variance (my
+   number; agent measured R^2=0.300 on its intraday subset) because the last
+   minutes are NOT one-factor — semis, the vol complex and rates move
+   separately from SPY. And side is NOT exogenous: Composer picks side
+   conditional on the same day's move (corr = -0.16 over 58 days), so the
+   surviving drift does not cancel between buys and sells. Residual drift
+   full-window: buys +0.69 vs sells -2.27 bps -> +1.48 bps straight into c
+   (agent measured +5.89 on the recent quarter).
+The leak is the SAME ORDER as the 5bps effect being policed. My validation
+missed it because the synthetic DGP WAS the model — drift exactly
+proportional to beta, iid errors, one instant. It verified the algebra and
+nothing about the identifying assumption. Lesson, adopted: a synthetic test
+drawn from your own model is not a test; a construction-zero placebo is.
+
+OTHER CONFIRMED DEFECTS: reported SE ~55% too narrow (day-clustered CR1 3.07
+vs 1.98 shipped; group_cost used the POOLED sigma so ZVOL's SE was 8.44 vs
+14.37 clustered); 14 of 510 fills execute 09:31-14:00, not the ~15:53 the
+method assumes, biasing the headline down 1.0-1.5bps; one fill (2026-07-07
+SOXL) moves c by 1.9bps; betas were estimated on SPLIT-UNADJUSTED prices, so
+phantom +437%/+928%/+319% split-day returns corrupted SQQQ/UVXY/VXZ betas by
+12-36%; two bare excepts allowed silent degeneration (SPY fetch failure sends
+every beta to 1.0 and moves the headline 1.5bps with nothing printed).
+
+ACTIONS TAKEN NOW: (1) the script NO LONGER FIRES AN ALERT under either
+estimator — both print as ADVISORY with the leakage and SE caveats inline;
+(2) betas now use a new yahoo_adjusted() split-adjusted series; (3) SPY and
+per-ticker fetch failures print loudly instead of degrading silently.
+POLICY's standing quarterly run stays, as analysis only.
+
+P0 BEFORE THIS CAN EVER GATE A DECISION: (a) benchmark each fill against the
+INTRADAY price at its own timestamp — eliminates the drift term instead of
+modelling it, and is the real fix; (b) gate on a construction-zero placebo
+(require |c_placebo| < 1bp) as a standing regression test; (c) day x
+timestamp-bucket effects, or hard-filter to 15:45-16:00; (d) day-clustered
+SEs, per-group sigma in group_cost; (e) pin the window / persist the order-ID
+set so two runs are comparable.
+
+STANDING CONCLUSION UNCHANGED AND UNDAMAGED: there is still no evidence
+slippage has risen. Honest full-window estimate +2.1 bps with a clustered
++/-3.07, and the recent quarter is ~0 after debiasing. The add.-14b verdict
+(IBKR migration case CLOSED at current scale) stands — but it stands on the
+weakness of the evidence for a rise, not on this instrument.

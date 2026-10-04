@@ -30,10 +30,26 @@ from the regression residuals. c is identified by days carrying BOTH buys
 and sells (a same-side-only day is fully absorbed by its own m_day), so the
 report states how many fills actually identify it.
 
-Context (addendum 14/14b/34): Composer's backtest engine ASSUMES 5.0bps/side.
-The alert fires only when c is above 5.0bps by more than 2 standard errors --
-a bare threshold crossing on a noisy statistic is not evidence. Thin names
-(ZVOL/VBF/VXZ/VIXM) are reported with their own SEs for the same reason.
+*** STATUS: NOT A TRIPWIRE. ADVISORY ONLY. (addendum 35) ***
+Counter-agent review FAILED this estimator for alerting. The algebra is exact
+(verified to 1e-19 against a dense solve), and the noise-concentration defect
+of the old statistic is genuinely fixed -- but the drift model is misspecified
+and LEAKS drift into c:
+  * beta_i * m_day absorbs only ~50% of drift variance; the last minutes are
+    not one-factor (semis, the vol complex and rates move separately from SPY);
+  * side is NOT exogenous -- Composer picks side conditional on the same day's
+    move -- so the surviving drift does not cancel between buys and sells;
+  * invariance test: re-benchmarking the SAME fills (identical true cost)
+    against the PRIOR day's close moves c from +2.03 to -16.79 bps. A correct
+    drift model would leave c unchanged.
+  * on a zero-cost placebo (fills repriced at real intraday market prices at
+    their own fill minute) the counter-agent measured c = +7.36 +/- 2.86 where
+    0.00 is correct.
+The leakage is the same order as the 5bps effect being policed, so NEITHER this
+nor the legacy statistic may fire an alert. Both are printed as advisory.
+THE REAL FIX is to benchmark each fill against the intraday price at its own
+timestamp, eliminating the drift term rather than modelling it. Until then this
+script reports; it does not decide. Full P0 list in results.md addendum 35.
 
 Usage: slippage_measure.py [--since 2025-12-01] [--until today] [--account UUID]
 Prices come from Yahoo daily closes (as-traded, split-corrected).
@@ -41,6 +57,24 @@ Prices come from Yahoo daily closes (as-traded, split-corrected).
 import argparse, csv, datetime, io, json, math, time, urllib.request
 import collections
 import composerlib as cl
+
+def yahoo_adjusted(t):
+    """Split-ADJUSTED daily closes — correct series for estimating betas.
+    yahoo_closes() deliberately returns AS-TRADED prices (right for comparing
+    against fill prices, wrong for returns: a reverse split shows up as a
+    +437% day and corrupts the beta, add. 35 finding 8)."""
+    url = (f"https://query1.finance.yahoo.com/v8/finance/chart/{t.replace('.','-')}"
+           "?period1=1609459200&period2=4102444800&interval=1d")
+    req = urllib.request.Request(url, headers={"user-agent": "Mozilla/5.0"})
+    res = json.load(urllib.request.urlopen(req, timeout=60))["chart"]["result"][0]
+    q = res["indicators"]["quote"][0]
+    out = {}
+    for i, ts in enumerate(res["timestamp"]):
+        if q["close"][i] is None: continue
+        d = datetime.datetime.fromtimestamp(ts, tz=datetime.timezone.utc).date().isoformat()
+        out[d] = q["close"][i]
+    return out
+
 
 def yahoo_closes(t):
     url = (f"https://query1.finance.yahoo.com/v8/finance/chart/{t.replace('.','-')}"
@@ -190,9 +224,19 @@ def main():
     if n < 30:
         print(f"only {n} fills — not enough for a stable estimate"); return
 
-    try: spy = yahoo_closes("SPY")
-    except Exception: spy = {}
-    betas = estimate_betas(px, spy, {t for _, _, _, t, _ in samples})
+    try:
+        spy = yahoo_adjusted("SPY")
+    except Exception as e:
+        print(f"  !! SPY fetch FAILED ({e}) — every beta falls back to 1.0 and the "
+              f"drift model degenerates. Figures below are not usable."); spy = {}
+    adj, bad = {}, []
+    for t in {t for _, _, _, t, _ in samples}:
+        try: adj[t] = yahoo_adjusted(t); time.sleep(0.2)
+        except Exception: adj[t] = {}; bad.append(t)
+    if bad:
+        print(f"  !! adjusted-series fetch failed for {sorted(bad)} — their betas "
+              f"fall back to 1.0")
+    betas = estimate_betas(adj, spy, {t for _, _, _, t, _ in samples})
 
     fit = fit_cost(samples, betas)
     if not fit:
@@ -207,7 +251,10 @@ def main():
           f"{n_ident}/{n_used} fills across {n_mixed_days} mixed-side days identify it")
     verdict = ("ABOVE" if lo > 5.0 else "BELOW" if hi < 5.0 else
                "INDISTINGUISHABLE FROM")
-    print(f"  -> {verdict} the 5.0bps engine assumption")
+    print(f"  -> nominally {verdict} the 5.0bps engine assumption")
+    print("  *** ADVISORY ONLY — this estimator leaks drift into c (add. 35); "
+          "it does NOT fire the migration gate. Reported SE is also ~55% too "
+          "narrow (day-clustered is ~1.55x wider). ***")
 
     # legacy statistic, kept for continuity with addenda 14b/34 only
     print(f"  [legacy notional-weighted fill-vs-close: "
@@ -236,8 +283,9 @@ def main():
                   f"(n={gn}) — the capacity canary")
 
     if lo > 5.0:
-        print("  !! execution cost is ABOVE the 5bps engine assumption by >2 SE — "
-              "review ideas-backlog.md scale/migration gates")
+        print("  !! point estimate clears 5bps by >2 SE — NOT actionable on its "
+              "own: re-run only after the add.-35 P0 fixes (intraday benchmark, "
+              "timestamp buckets, clustered SE) and confirm with a placebo run.")
 
 
 if __name__ == "__main__":
