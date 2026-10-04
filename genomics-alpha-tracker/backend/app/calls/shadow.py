@@ -83,8 +83,7 @@ def grade_trailing(
               - trail_mult * ATR14 recomputed daily THROUGH THE PRIOR BAR —
       no same-bar information ever sets the level that grades the bar.
       `bars` should therefore include pre-entry history so the daily ATR is
-      computable; where it is not, `atr_at_entry` seeds the trail. The trail
-      RATCHETS UP ONLY — an ATR blowout never lowers a level already earned.
+      computable; where it is not, `atr_at_entry` seeds the trail. With ratchet=True (the live rule) the trail RATCHETS UP ONLY — an ATR blowout never lowers a level already earned; with ratchet=False (H14 shadow only) the level may fall.
     - Open-first gap-aware fills, exactly grade_call's philosophy: a bar that
       opens through the trail fills at the OPEN, not the level.
     - Time stop: exit at the close of the LAST bar at-or-before
@@ -102,7 +101,7 @@ def grade_trailing(
     )
     history: list[BarLike] = []   # every clean bar STRICTLY BEFORE the bar being graded
     peak = entry                  # max close since entry through the prior bar
-    trail: float | None = None    # ratchets up only
+    trail: float | None = None    # ratchets up only when ratchet=True (the live rule)
     prev: BarLike | None = None   # last post-entry bar processed
     for b in clean:
         if b.date <= entry_date:
