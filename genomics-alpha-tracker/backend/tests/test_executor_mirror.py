@@ -1097,55 +1097,167 @@ def test_spy_is_adjusted_detects_a_price_return_cache(tmp_path):
 
 # --- 17. Round 9 exit-rule ablation ----------------------------------------------------
 
-def test_ablation_arms_span_paper_to_executor_and_reduce():
+def _knob_market():
+    """A market built to exercise EVERY knob (counter-agent, round 9 code
+    review): regime-switching volatility (a falling trail), gap-down fill
+    bars (the day-zero floor), a wild name whose 3xATR exceeds half its
+    price (the risk cap), simultaneous quiet fires (the cash clip), a slow
+    riser (expiries, so the time-stop anchor and fill bite)."""
+    rng = random.Random(20261004)
+    ds = dates(760, start=date(2022, 1, 3))
+    bars: dict[str, list[BarLike]] = {}
+
+    def walk(start, vol_fn, drift=0.0, gap_at=()):
+        out, c = [], start
+        for i, d in enumerate(ds):
+            v = vol_fn(i)
+            o = c * (1 + rng.gauss(0, v / 3))
+            if i in gap_at:
+                o = c * 0.84                            # a gap down through any published level
+            cl = o * (1 + drift + rng.gauss(0, v))
+            hi = max(o, cl) * (1 + abs(rng.gauss(0, v / 2)))
+            lo = min(o, cl) * (1 - abs(rng.gauss(0, v / 2)))
+            out.append(BarLike(d, hi, lo, cl, o))
+            c = cl
+        return out
+
+    fire_idx = list(range(30, 700, 23))
+    bars["RISER"] = walk(50.0, lambda i: 0.012, drift=0.0012)
+    bars["REGIME"] = walk(80.0, lambda i: 0.01 if (i // 60) % 2 == 0 else 0.045, drift=0.0004)
+    bars["WILD"] = walk(20.0, lambda i: 0.14, drift=0.001)      # 0.5 x price < 3xATR14 < price: the cap binds, L0 stays > 0
+    gaps = {k + 1 for k in fire_idx[::3]}
+    bars["GAPPY"] = walk(30.0, lambda i: 0.015, drift=0.0008, gap_at=gaps)
+    for n in ("Q1", "Q2", "Q3", "Q4"):
+        bars[n] = walk(40.0, lambda i: 0.02, drift=0.0006)   # ~1/6 of equity each: the clip binds some days, not all
+    mkt = make_market(bars)
+    rows = []
+    for sym in bars:
+        for i in fire_idx:
+            if i + 1 < len(ds):
+                rows.append(fire_row(bars[sym], i, sym))
+    tiers = {s: "A" for s in bars}
+    return rows, mkt, tiers
+
+
+def test_ablation_arms_span_p0_to_executor_and_reduce():
     import scripts.backtest_exit_ablation as ab
     names = [n for n, _, _ in ab.arms()]
-    assert names[0] == "P" and names[-1] == "E" and len(names) == 1 + 9 + 9 + 3 + 1
+    assert names[:2] == ["P", "P0"] and names[-1] == "E" and len(names) == 2 + 8 + 8 + 3 + 1
     assert ab.all_flipped_is_executor()
     assert ab.E_CFG.commission_model == "none" and not ab.E_CFG.carry and ab.E_CFG.entry_lag == 1
-    # every forward arm differs from P in exactly one knob; every backward arm from E in one
+    assert not ab.P0_CFG.paper_arith and ab.P_CFG.paper_arith
     for n, cfg, base in ab.arms():
         if n.startswith("F_"):
-            assert sum(1 for k, _, _ in ab.KNOBS if getattr(cfg, k) != getattr(ab.P_CFG, k)) == 1 and base == "P"
+            assert sum(1 for k, _, _ in ab.KNOBS if getattr(cfg, k) != getattr(ab.P0_CFG, k)) == 1 and base == "P0"
         if n.startswith("B_"):
             assert sum(1 for k, _, _ in ab.KNOBS if getattr(cfg, k) != getattr(ab.E_CFG, k)) == 1 and base == "E"
+    assert set(ab.WHERE) == {k for k, _, _ in ab.KNOBS}
     rows, mkt, tiers, bil, spy = _study_inputs()
-    # P reduces to the paper book, E equals the mirror's mechanics-only executor book
-    ref_rows, _ = build_trailing_rows(rows, mkt, tiers)
-    ta, _ = select_capped(gate_rows(ref_rows, mkt["xbi_above_prior"][200], key="entry_date"), 10)
-    paper = run_call_book(ta, mkt)
-    cp, _ = ab.run_arm(ab.P_CFG, rows, mkt, tiers)
-    assert max(abs(a[1] - b[1]) for a, b in zip(cp, paper)) < 1e-6
+    ref, p, n = ab.paper_anchor(rows, mkt, tiers)
+    assert max(abs(a[1] - b[1]) for a, b in zip(ref, p)) < 1e-6 and n > 0
     ce, _ = ab.run_arm(ab.E_CFG, rows, mkt, tiers)
-    res = run_mirror(rows, mkt, tiers, r2a_stored_end=paper[-1][1], bil=bil, spy_px=spy, draws=5)
+    res = run_mirror(rows, mkt, tiers, r2a_stored_end=ref[-1][1], bil=bil, spy_px=spy, draws=5)
     assert res["variants"]["exec_t1_nocost_nocarry"]["windows"]["full"]["end_value"] == pytest.approx(ce[-1][1])
 
 
-def test_ablation_results_shape_shares_and_verdicts():
+def test_ablation_every_single_flip_is_a_real_mechanism():
+    """Each F arm must differ from P0 and each B arm from E on the
+    knob-exercising market (three forward arms were no-ops in the first
+    draft)."""
     import scripts.backtest_exit_ablation as ab
-    rows, mkt, tiers, bil, spy = _study_inputs()
+    rows, mkt, tiers = _knob_market()
+    base = {"P0": ab.run_arm(ab.P0_CFG, rows, mkt, tiers)[0], "E": ab.run_arm(ab.E_CFG, rows, mkt, tiers)[0]}
+    assert base["P0"][-1][1] != base["E"][-1][1]
+    for n, cfg, b in ab.arms():
+        if n in ("P", "P0", "E"):
+            continue
+        cv, _ = ab.run_arm(cfg, rows, mkt, tiers)
+        assert cv[-1][1] != base[b][-1][1], f"{n} is a no-op against {b}"
+
+
+def test_day_zero_floor_is_a_resting_stop_at_the_published_level():
+    """P0 + day_zero_stop: a fill-bar gap below L0 exits at the open; under
+    the executor's own settings the floor changes nothing (trail >= L0)."""
+    ds = dates(40, start=date(2024, 1, 2))
+    bars = [BarLike(d, 101.0, 99.0, 100.0, 100.0) for d in ds]
+    j = 20
+    bars[j] = BarLike(ds[j], 90.0, 85.0, 88.0, 86.0)          # gap down on the fill bar
+    atrs = atr_series(bars)
+    L0 = bars[j - 1].close - 3 * atrs[j - 1]
+    assert bars[j].open <= L0 < bars[j - 1].close
+    off = mod.grade_executor(bars, atrs, j - 1, replace(mod.P0_CFG if hasattr(mod, "P0_CFG") else mod.R2A_MODE, paper_arith=False))
+    on = mod.grade_executor(bars, atrs, j - 1, replace(mod.R2A_MODE, paper_arith=False, day_zero_stop=True))
+    assert on["status"] == "stopped" and on["exit_date"] == ds[j] and on["exit"] == pytest.approx(bars[j].open)
+    assert not (off and off.get("status") == "stopped" and off.get("exit_date") == ds[j])
+    ex_on = mod.grade_executor(bars, atrs, j - 1, mod.EXEC_T1)
+    ex_off = mod.grade_executor(bars, atrs, j - 1, replace(mod.EXEC_T1, day_zero_stop=False))
+    assert ex_on["status"] == "stopped" and ex_on["exit"] == pytest.approx(bars[j].open)
+    # without the resting STP the executor's trail only applies from the bar AFTER the fill:
+    # the fill-bar gap is not an exit (unchanged behaviour)
+    assert ex_off is None or ex_off.get("exit_date") != ds[j]
+
+
+def test_ablation_results_shape_machinery_and_verdicts():
+    import scripts.backtest_exit_ablation as ab
+    rows, mkt, tiers = _knob_market()
     res = ab.run_ablation(rows, mkt, tiers, draws=8, seed=1)
     assert set(res["arms"]) == {n for n, _, _ in ab.arms()}
     g = res["mechanics_gap"]
-    assert g["gap_cagr"] == pytest.approx(g["cagr_E"] - g["cagr_P"])
+    assert g["gap_cagr"] == pytest.approx(g["cagr_E"] - g["cagr_P0"])
+    assert res["machinery"]["p_reduction_max_abs_diff"] < 1e-6 and res["machinery"]["e_vs_mirror"]["stored_mirror_end"] is None
+    assert "cagr" in res["basis_switch"]["P0_minus_P"]
     for knob, _, _ in ab.KNOBS:
         f, b = res["arms"][f"F_{knob}"], res["arms"][f"B_{knob}"]
-        if f["gap_share"] is not None:
-            assert f["gap_share"] == pytest.approx(f["delta_vs_base"]["cagr"] / g["gap_cagr"])
-        if b["recovery_share"] is not None:
-            assert b["recovery_share"] == pytest.approx(b["delta_vs_base"]["cagr"] / -g["gap_cagr"])
-        assert set(f["subperiod_cagr_delta"]) == {n for n, _, _ in ab.SUB_PERIODS if n in res["windows"]}
+        assert f["gap_share"] == pytest.approx(f["delta_vs_base"]["cagr"] / g["gap_cagr"])
+        assert b["recovery_share"] == pytest.approx(b["delta_vs_base"]["cagr"] / -g["gap_cagr"])
         v = res["verdicts"][knob]
-        assert set(v["tests"]) == {"forward_gap_share_ge_0.5", "backward_recovery_share_ge_0.5",
-                                   "sharpe_ci_excludes_zero_both", "subperiod_sign_2_of_3_both"}
-        assert v["carries_the_gap"] == all(v["tests"].values())
-        assert v["proposal"] == (v["carries_the_gap"] and v["backward_max_dd_within_slack"])
-    # P and E have no bootstrap against themselves; every other arm does, with a CI
+        assert v["where_it_lives"] == ab.WHERE[knob] and v["primary"] == (knob == "ratchet")
+        if v["where_it_lives"] == "not_actionable":
+            assert v["proposal"] is False
+        assert "bonf_lo" in f["sharpe_delta_bootstrap"] and f["sharpe_delta_bootstrap"]["bonf_family"] == 8
     assert res["arms"]["P"]["sharpe_delta_bootstrap"] == {} and res["arms"]["E"]["sharpe_delta_bootstrap"] == {}
-    bt = res["arms"]["F_ratchet"]["sharpe_delta_bootstrap"]
-    assert bt["draws"] == 8 and bt["p2_5"] <= bt["p50"] <= bt["p97_5"]
-    assert res["contract"].endswith("R9_EXIT_ABLATION.md") and len(res["honesty"]) >= 5
-    ab.print_table(res)      # must not raise
+    assert len(res["honesty"]) >= 10 and res["contract"].startswith("docs/VARIANTS_PREREGISTRATION_R9")
+    ab.print_table(res)
+    # the E-vs-mirror guard refuses when the bars changed under the study
+    e_end = res["arms"]["E"]["stats"]["full"]["end_value"]
+    with pytest.raises(SystemExit, match="bars changed"):
+        ab.run_ablation(rows, mkt, tiers, draws=4, seed=1, mirror_e_end=e_end + 5.0)
+    ok = ab.run_ablation(rows, mkt, tiers, draws=4, seed=1, mirror_e_end=e_end + 0.5)
+    assert ok["machinery"]["e_vs_mirror"]["abs_diff"] == pytest.approx(0.5)
+
+
+def test_knob_verdict_fixed_numbers():
+    import scripts.backtest_exit_ablation as ab
+    ci_neg = {"p2_5": -0.30, "p50": -0.20, "p97_5": -0.10, "bonf_lo": -0.35, "bonf_hi": -0.05}
+    ci_pos = {"p2_5": 0.10, "p50": 0.20, "p97_5": 0.30, "bonf_lo": 0.05, "bonf_hi": 0.35}
+    ci_span = {"p2_5": -0.10, "p50": 0.05, "p97_5": 0.20, "bonf_lo": -0.15, "bonf_hi": 0.25}
+    sub_neg = {"a": -0.01, "b": -0.02, "c": 0.01}
+    sub_pos = {"a": 0.01, "b": 0.02, "c": -0.01}
+    f = {"gap_share": 0.6, "subperiod_cagr_delta": sub_neg, "sharpe_delta_bootstrap": ci_neg}
+    b = {"recovery_share": 0.55, "subperiod_cagr_delta": sub_pos, "sharpe_delta_bootstrap": ci_pos}
+    v = ab.knob_verdict("ratchet", f, b, gap_cagr=-0.05, gap_sharpe=-0.2, max_dd_B=0.31, max_dd_E=0.30)
+    assert v["carries_the_gap"] and v["survives_bonferroni_8"] and v["proposal"] and v["primary"]
+    assert v["where_it_lives"] == "executor"
+    # max-DD slack: 2.1 pp worse than E blocks the proposal, 1.9 pp does not
+    assert not ab.knob_verdict("ratchet", f, b, -0.05, -0.2, 0.321, 0.30)["proposal"]
+    assert ab.knob_verdict("ratchet", f, b, -0.05, -0.2, 0.319, 0.30)["proposal"]
+    # a knob that lowers CAGR but RAISES Sharpe is NOT on the gap's side -> fails (sign-aware CI)
+    f_up = dict(f, sharpe_delta_bootstrap=ci_pos)
+    assert not ab.knob_verdict("ratchet", f_up, b, -0.05, -0.2, 0.31, 0.30)["tests"]["sharpe_ci_on_gap_side_both"]
+    # a 95% CI on the side but a Bonferroni interval that spans zero: carries, no bonf8
+    f_w = dict(f, sharpe_delta_bootstrap=dict(ci_neg, bonf_hi=0.02))
+    vw = ab.knob_verdict("ratchet", f_w, b, -0.05, -0.2, 0.31, 0.30)
+    assert vw["carries_the_gap"] and not vw["survives_bonferroni_8"]
+    # shares below 0.5, or a spanning CI, or a 1-of-3 sub-period sign: no carry
+    assert not ab.knob_verdict("ratchet", dict(f, gap_share=0.4), b, -0.05, -0.2, 0.31, 0.30)["carries_the_gap"]
+    assert not ab.knob_verdict("ratchet", dict(f, sharpe_delta_bootstrap=ci_span), b, -0.05, -0.2, 0.31, 0.30)["carries_the_gap"]
+    assert not ab.knob_verdict("ratchet", dict(f, subperiod_cagr_delta={"a": -0.01, "b": 0.02, "c": 0.01}), b, -0.05, -0.2, 0.31, 0.30)["carries_the_gap"]
+    # not actionable: carries but never a proposal; a positive gap flips every sign convention
+    vc = ab.knob_verdict("cash_clip", f, b, -0.05, -0.2, 0.31, 0.30)
+    assert vc["carries_the_gap"] and not vc["proposal"] and vc["where_it_lives"] == "not_actionable"
+    f2 = {"gap_share": 0.7, "subperiod_cagr_delta": sub_pos, "sharpe_delta_bootstrap": ci_pos}
+    b2 = {"recovery_share": 0.7, "subperiod_cagr_delta": sub_neg, "sharpe_delta_bootstrap": ci_neg}
+    assert ab.knob_verdict("peak_seed", f2, b2, gap_cagr=0.05, gap_sharpe=0.2, max_dd_B=0.30, max_dd_E=0.30)["carries_the_gap"]
 
 
 def test_paired_sharpe_bootstrap_is_paired_and_deterministic():
@@ -1156,7 +1268,7 @@ def test_paired_sharpe_bootstrap_is_paired_and_deterministic():
     assert same["p2_5"] == same["p50"] == same["p97_5"] == 0.0 and same["excludes_zero"] is False
     rb = [x - 0.004 for x in ra]           # a uniformly worse series: the paired delta is strictly > 0
     up = ab.paired_sharpe_bootstrap(ra, rb, draws=50, seed=7)
-    assert up["p2_5"] > 0 and up["excludes_zero"] is True
+    assert up["p2_5"] > 0 and up["excludes_zero"] is True and up["bonf_lo"] <= up["p2_5"]
     assert ab.paired_sharpe_bootstrap(ra, rb, draws=50, seed=7) == up      # deterministic per seed
     assert ab.paired_sharpe_bootstrap(ra, rb, draws=50, seed=8) != up
     assert ab.paired_sharpe_bootstrap(ra[:2], rb[:2]) == {}

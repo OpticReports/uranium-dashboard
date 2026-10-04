@@ -304,6 +304,13 @@ def grade_executor(bars: list[BarLike], atrs: list[float | None], i_fire: int,
             exit_px = eb.close
         return {**core, "status": "prefill_exit", "exit_date": eb.date, "exit": exit_px}
 
+    # day_zero_stop = the executor's resting STP at the PUBLISHED level L0
+    # (blend.py _ensure_stop right after the fill): a floor the trail can
+    # only replace with a higher level, in force from the fill bar itself.
+    # Under the executor's own settings (fire-close seed + ratchet) the
+    # trail already starts at L0, so this is identical; on the paper side
+    # it is the mechanism the round-9 ablation flips (addendum 1, item 2).
+    floor = L0 if (cfg.day_zero_stop and L0 is not None and L0 > 0) else None
     prev: BarLike | None = None
     for k in range(j, n):
         b = bars[k]
@@ -322,11 +329,12 @@ def grade_executor(bars: list[BarLike], atrs: list[float | None], i_fire: int,
             trail = level if (trail is None or not cfg.ratchet) else max(trail, level)
         elif not cfg.ratchet:
             trail = None                               # grade_trailing: no level, no stop
-        if trail is not None and (k > j or cfg.day_zero_stop):
-            if b.open is not None and b.open <= trail:
+        stop = trail if floor is None else (floor if trail is None else max(floor, trail))
+        if stop is not None and (k > j or floor is not None):
+            if b.open is not None and b.open <= stop:
                 return {**core, "status": "stopped", "exit_date": b.date, "exit": b.open}
-            if b.low <= trail:
-                return {**core, "status": "stopped", "exit_date": b.date, "exit": trail}
+            if b.low <= stop:
+                return {**core, "status": "stopped", "exit_date": b.date, "exit": stop}
         if cfg.time_stop_fill == "deadline_close" and b.date == deadline:
             return {**core, "status": "expired", "exit_date": b.date, "exit": b.close}
         peak = b.close if peak is None else max(peak, b.close)
