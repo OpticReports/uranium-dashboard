@@ -30,6 +30,11 @@ now committed (gitignore exceptions). Three properties matter:
   only to the segment the frozen entries sit in (a one-day jump of ~1/factor
   marks the break); a near-unity factor (ILMN, 0.999) applies to the whole
   series. Both are recorded in the sidecar.
+- **One known bad print.** MRNA's 2023-05-30 bar in the dividend-adjusted lane
+  sits 2.44% above FMP's unadjusted series for that day (all neighbouring
+  days agree exactly; MRNA pays no dividend). One bar of 1,934; it cannot move
+  a verdict and is left as delivered so the cache stays a verbatim record of
+  the lane. Found by the independent verifier, 2026-10-04.
 - **Reproducible by construction.** The mirror's machinery check now reads
   `cache_verified: true, cache_exact: true` (R2-A to $0.000003). On Render the
   script seeds the committed cache from the image before any refetch decision.
