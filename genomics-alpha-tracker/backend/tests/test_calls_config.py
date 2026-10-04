@@ -3,9 +3,10 @@ tests/conftest.py's pin deliberately stops the engine tests from proving.
 
 TUNING.md lets a gated proposal edit calls.yaml and forbids editing tests, so
 these assert SHAPE and the rules that must survive any tune - never which
-flags happen to be triggers today (promotion and demotion must stay legal).
-They read the YAML through app.config.load_yaml_config, which the pin does
-not touch.
+flags happen to be triggers today (promotion and demotion must stay legal,
+down to an empty trigger list, which simply leaves the engine quiet). They
+read the YAML through app.config.load_yaml_config, which the pin does not
+touch.
 """
 from __future__ import annotations
 
@@ -18,6 +19,9 @@ from tests.conftest import PINNED_KEYS
 # (manager.generate_calls hard-codes direction="long"), so these may be
 # observed and graded but must never generate a long call.
 NEVER_LONG_TRIGGERS = {"runway_cliff_approaching"}
+# Only these flags write evidence["direction"] (app/scoring/flags.py), so a
+# direction condition on any other flag can never match: a dead trigger.
+DIRECTIONAL_FLAGS = {"analyst_revision_cluster"}
 ALLOWED_CONDITION_KEYS = {"direction"}
 ALLOWED_DIRECTIONS = {"upward"}          # long-only engine; a short book would widen this
 
@@ -30,18 +34,17 @@ def live_calls() -> dict:
 
 def test_live_trigger_list_is_a_well_formed_mapping():
     """A list, a null, or a bare key here makes generate_calls crash or go
-    silent in production while the pinned engine tests stay green."""
-    cfg = live_calls()
-    triggers = cfg.get("triggers")
+    silent in production while the pinned engine tests stay green. An EMPTY
+    mapping is legal: it is what demoting the last trigger writes."""
+    triggers = live_calls().get("triggers")
     assert isinstance(triggers, dict), "calls.triggers must be a mapping flag_type -> {conditions}"
-    if cfg.get("enabled", True):
-        assert triggers, "no call triggers configured while calls are enabled: say `enabled: false` instead"
     known = set(flags_config())
     for flag_type, cond in triggers.items():
         assert flag_type in known, f"{flag_type!r} is not a flag the engine emits: dead config"
         assert isinstance(cond, dict), f"{flag_type}: conditions must be a mapping (a bare key is YAML null)"
         assert set(cond) <= ALLOWED_CONDITION_KEYS, f"{flag_type}: unknown condition {set(cond) - ALLOWED_CONDITION_KEYS}"
         if "direction" in cond:
+            assert flag_type in DIRECTIONAL_FLAGS, f"{flag_type} never carries a direction: this trigger can never fire"
             assert cond["direction"] in ALLOWED_DIRECTIONS, f"{flag_type}: direction {cond['direction']!r}"
 
 
@@ -55,6 +58,9 @@ def test_live_triggers_are_long_side_only():
 
 
 def test_live_risk_and_horizon_are_sane():
+    """The time-stop gate's single `horizon_days` maps to BOTH default_days
+    and max_days (the engine clips the default at the max), so a tune of one
+    without the other is a no-op and is rejected here."""
     cfg = live_calls()
     risk, horizon = cfg["risk"], cfg["horizon"]
     assert int(risk["atr_window"]) >= 5
@@ -73,26 +79,45 @@ def test_live_gates_that_back_invariants():
 
 
 def test_pinned_sets_have_the_live_shape():
-    """The test-owned knobs must keep the same keys as the live file, so a
-    key added to calls.yaml is not silently missing from every engine test."""
+    """The test-owned knob blocks must keep the same keys as the live file,
+    so a key added to calls.yaml is not silently missing from every engine
+    test. (Adding a key is an engineering change, not a tuning lane.)"""
     cfg = live_calls()
     for key, pinned in PINNED_KEYS.items():
-        if key == "triggers":
+        if key == "triggers" or not isinstance(pinned, dict):
             continue
         assert set(pinned) == set(cfg[key]), f"calls.{key}: pinned keys {set(pinned)} vs live {set(cfg[key])}"
 
 
+def test_tuning_evidence_echoes_the_live_file_not_the_pin():
+    """The tuner acts on GET /tuning/evidence; it must see reality even when
+    this suite's pin differs from the file (true whenever a tune has moved
+    a pinned knob). Imported here, after the pin, to prove the binding is
+    independent of import order."""
+    from app.routers import tuning
+
+    live = live_calls()
+    echoed = tuning.calls_config()
+    for key in PINNED_KEYS:
+        assert echoed[key] == live[key], f"/tuning/evidence would echo the pinned {key}, not the file"
+
+
 def test_engine_is_quiet_with_no_triggers(session, monkeypatch):
-    """The one engine branch the pin makes unreachable: no triggers -> no calls."""
+    """The one engine branch the pin makes unreachable: no triggers -> no calls.
+    Non-vacuous: the same seeded flag DOES produce a call under the pin."""
     from app.calls import manager
-    from app.config import calls_config          # already the pinned function here
+    from tests.test_calls import _fire_flag, _seed_name
 
-    base = calls_config()
-    monkeypatch.setattr(manager, "calls_config", lambda: {**base, "triggers": {}})
+    _seed_name(session)
+    _fire_flag(session)
+    pinned = manager.calls_config
+    monkeypatch.setattr(manager, "calls_config", lambda: {**pinned(), "triggers": {}})
     assert manager.generate_calls(session) == []
+    monkeypatch.setattr(manager, "calls_config", pinned)
+    assert len(manager.generate_calls(session)) == 1
 
 
-@pytest.mark.parametrize("key", ["triggers", "risk", "horizon"])
+@pytest.mark.parametrize("key", sorted(PINNED_KEYS))
 def test_engine_sees_the_pinned_knobs_not_the_file(key):
     """Proves the pin is active for the engine's own binding."""
     from app.calls import manager
