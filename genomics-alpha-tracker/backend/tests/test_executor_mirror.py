@@ -602,18 +602,38 @@ def test_machinery_check_refuses_drift(tmp_path, monkeypatch):
     ref_rows, _ = build_trailing_rows(rows, mkt, tiers)
     ta, _ = select_capped(gate_rows(ref_rows, mkt["xbi_above_prior"][200], key="entry_date"), 10)
     r2a_end = run_call_book(ta, mkt)[-1][1]
-    with pytest.raises(SystemExit):
-        run_mirror(rows, mkt, tiers, r2a_stored_end=r2a_end + 5.0, bil=bil, spy_px=spy, draws=5)
-    res = run_mirror(rows, mkt, tiers, r2a_stored_end=r2a_end + 5.0, bil=bil, spy_px=spy,
+    big = 0.05 * r2a_end                    # 5% off: outside the +/-1% V0 tolerance
+    with pytest.raises(SystemExit, match="MACHINERY CHECK FAILED"):
+        run_mirror(rows, mkt, tiers, r2a_stored_end=r2a_end + big, bil=bil, spy_px=spy, draws=5)
+    res = run_mirror(rows, mkt, tiers, r2a_stored_end=r2a_end + big, bil=bil, spy_px=spy,
                      draws=5, allow_cache_drift=True)
     assert res["protocol"]["cache_verified"] is False
-    assert res["protocol"]["r2a_reproduction"]["abs_diff"] == pytest.approx(5.0)
+    assert res["protocol"]["cache_exact"] is False
+    assert res["protocol"]["r2a_reproduction"]["abs_diff"] == pytest.approx(big)
+    assert res["protocol"]["r2a_reproduction"]["rel_diff"] == pytest.approx(big / (r2a_end + big), rel=1e-9)
+    # inside the tolerance but not to the dollar: verified, not exact, honesty line, lane recorded
+    small = 0.004 * r2a_end
+    res2 = run_mirror(rows, mkt, tiers, r2a_stored_end=r2a_end + small, bil=bil, spy_px=spy,
+                      draws=5, cache_basis={"lane": "fmp dividend-adjusted", "normalized": {}})
+    assert res2["protocol"]["cache_verified"] is True and res2["protocol"]["cache_exact"] is False
+    assert res2["protocol"]["cache_basis"]["lane"] == "fmp dividend-adjusted"
+    assert any("NOT THE AUGUST CAMPAIGN CACHE" in h and "fmp dividend-adjusted" in h
+               for h in res2["honesty"])
+    # to the dollar: exact, no basis line
+    res3 = run_mirror(rows, mkt, tiers, r2a_stored_end=r2a_end + 0.5, bil=bil, spy_px=spy, draws=5)
+    assert res3["protocol"]["cache_verified"] is True and res3["protocol"]["cache_exact"] is True
+    assert not any("NOT THE AUGUST" in h for h in res3["honesty"])
+    # the strict dollar standard is still available as a parameter
+    with pytest.raises(SystemExit):
+        run_mirror(rows, mkt, tiers, r2a_stored_end=r2a_end + small, bil=bil, spy_px=spy,
+                   draws=5, machinery_tol_rel=0.0)
+    big = r2a_end + big
     # main(): a failed check writes nothing; --allow-cache-drift writes the JSON + report section
     out, rep = tmp_path / "res.json", tmp_path / "doc.md"
     rep.write_text("# doc\n\nintro\n\n" + mod.REPORT_BEGIN + "\nold\n" + mod.REPORT_END + "\n\ntail\n")
-    monkeypatch.setattr(mod, "load_inputs", lambda fetch_missing=False: {
+    monkeypatch.setattr(mod, "load_inputs", lambda fetch_missing=False, **kw: {
         "fire_rows": rows, "tiers": tiers, "mkt": mkt, "bil": bil, "proxy_days": [],
-        "spy_px": spy, "spy_source": "synthetic", "r2a_stored_end": r2a_end + 5.0, "r3": None})
+        "spy_px": spy, "spy_source": "synthetic", "r2a_stored_end": big, "r3": None})
     with pytest.raises(SystemExit):
         mod.main(["--out", str(out), "--report", str(rep), "--draws", "5"])
     assert not out.exists() and "old" in rep.read_text()
@@ -625,6 +645,185 @@ def test_machinery_check_refuses_drift(tmp_path, monkeypatch):
     assert "old" not in text and "RED: cache NOT verified" in text
     assert text.startswith("# doc\n\nintro") and text.rstrip().endswith("tail")
     assert "exec_t2_carry" in text
+
+
+def test_load_inputs_rebuilds_a_missing_cache_on_the_fmp_lane(tmp_path, monkeypatch):
+    """The August campaign cache is gone: a missing cache is rebuilt via
+    scripts/refresh_backtest_bars (needs FMP), never silently analysed around;
+    the sidecar it writes is carried into the results as cache_basis."""
+    missing = tmp_path / "backtest_bars.json"
+    monkeypatch.setattr(mod, "CACHE", missing)
+    monkeypatch.setattr(mod, "BASIS_SIDECAR", tmp_path / "backtest_bars_basis.json")
+    monkeypatch.setattr(mod, "R2A_DAILY", tmp_path / "r2a_daily.json")
+    calls = []
+    monkeypatch.setattr(mod, "refresh_bars", lambda: calls.append("refresh"))
+    # no rebuild requested -> the SystemExit names the refresh script
+    with pytest.raises(SystemExit, match="refresh_backtest_bars"):
+        mod.load_inputs()
+    assert calls == []
+    # rebuild requested -> refresh runs; the cache is still absent here (stub), so it exits
+    with pytest.raises(SystemExit):
+        mod.load_inputs(refresh_bars_if_missing=True)
+    assert calls == ["refresh"]
+    # force refresh runs even when the cache exists; stop right after it
+    missing.write_text("{}")
+    monkeypatch.setattr(mod, "load_market", lambda: (_ for _ in ()).throw(RuntimeError("stop")))
+    with pytest.raises(RuntimeError, match="stop"):
+        mod.load_inputs(force_refresh=True)
+    assert calls == ["refresh", "refresh"]
+    # a lane cache (sidecar) without spy_bars_raw.json is incomplete -> rebuilt
+    monkeypatch.setattr(mod, "SPY_RAW", tmp_path / "spy_bars_raw.json")
+    (tmp_path / "backtest_bars_basis.json").write_text(json.dumps({"lane": "fmp dividend-adjusted"}))
+    assert mod._cache_incomplete().startswith("incomplete")
+    with pytest.raises(RuntimeError, match="stop"):
+        mod.load_inputs(refresh_bars_if_missing=True)
+    assert calls == ["refresh", "refresh", "refresh"]
+    # an unreadable cache is incomplete too; a complete lane cache is not
+    missing.write_text("{not json")
+    assert mod._cache_incomplete() == "unreadable"
+    missing.write_text("{}")
+    (tmp_path / "spy_bars_raw.json").write_text(json.dumps({"data": []}))
+    assert mod._cache_incomplete() is None
+    # the sidecar is read when present
+    (tmp_path / "backtest_bars_basis.json").write_text(
+        json.dumps({"lane": "fmp dividend-adjusted", "normalized": {"ATAI": {"factor": 0.0728}}}))
+    assert mod.load_cache_basis()["normalized"]["ATAI"]["factor"] == 0.0728
+
+
+def test_bars_past_the_campaign_data_end_are_clipped_and_counted():
+    """Bars after END would ENTER the open-at-end calls the campaign excluded
+    (counter-agent HIGH): clip them and report the trade-set counts."""
+    rows, mkt, tiers, bil, spy = _study_inputs()
+    last = max(b.date for bars in mkt["bars"].values() for b in bars)
+    end = last - timedelta(days=120)
+    ref_rows, open_before = build_trailing_rows(rows, mkt, tiers)
+    info = mod.clip_bars_to(mkt, end)
+    assert info["last_bar_before_clip"] == last.isoformat() and info["clipped_to"] == end.isoformat()
+    assert info["bars_dropped"] > 0 and info["gate_defined_from"]
+    assert all(b.date <= end for bars in mkt["bars"].values() for b in bars)
+    ref_after, open_after = build_trailing_rows(rows, mkt, tiers)
+    # the late fires are now open at data end or never graded: never ENTERED
+    assert open_after >= open_before and len(ref_after) < len(ref_rows)
+    # run_mirror reports the counts against a stored meta and flags a mismatch in honesty
+    ta, sa = select_capped(gate_rows(ref_after, mkt["xbi_above_prior"][200], key="entry_date"), 10)
+    r2a_curve = run_call_book(ta, mkt)
+    meta = {"n_regraded": len(ref_after), "open_at_end_excluded": open_after,
+            "n_taken": len(ta), "skipped_at_cap": sa}
+    res = run_mirror(rows, mkt, tiers, r2a_stored_end=r2a_curve[-1][1] + 0.002 * r2a_curve[-1][1],
+                     bil=bil, spy_px=spy, draws=5, end=end, r2a_stored_meta=meta,
+                     r2a_stored_curve=r2a_curve, bars_info=info,
+                     cache_basis={"lane": "fmp dividend-adjusted"})
+    m = res["machinery"]
+    assert m["rows"]["match"] is True and m["bars"]["clipped_to"] == end.isoformat()
+    assert m["curve"]["max_rel_diff"] == 0 and m["curve_within_tolerance"] is True
+    assert res["protocol"]["cache_verified"] is True and res["protocol"]["cache_exact"] is False
+    line = [h for h in res["honesty"] if "NOT THE AUGUST" in h][0]
+    assert "clipped to " + end.isoformat() in line and "trade set identical" in line
+    # a stored meta that disagrees is named, not hidden
+    res2 = run_mirror(rows, mkt, tiers, r2a_stored_end=r2a_curve[-1][1] + 0.002 * r2a_curve[-1][1],
+                      bil=bil, spy_px=spy, draws=5, end=end,
+                      r2a_stored_meta=dict(meta, n_taken=meta["n_taken"] + 1),
+                      r2a_stored_curve=r2a_curve, bars_info=info)
+    assert res2["machinery"]["rows"]["match"] is False
+    assert res2["machinery"]["bar_coverage_matches_stored"] is True       # n_taken is report-only
+    assert res2["protocol"]["cache_verified"] is True
+    assert any("TRADE SET DIFFERS" in h for h in res2["honesty"])
+    # a bar-coverage count that differs GATES the verdict (counter-agent N1)
+    with pytest.raises(SystemExit, match="trade set"):
+        run_mirror(rows, mkt, tiers, r2a_stored_end=r2a_curve[-1][1], bil=bil, spy_px=spy, draws=5,
+                   end=end, r2a_stored_meta=dict(meta, open_at_end_excluded=meta["open_at_end_excluded"] + 1),
+                   r2a_stored_curve=r2a_curve, bars_info=info)
+    # exact end + differing taken count still gets an honesty line
+    res3 = run_mirror(rows, mkt, tiers, r2a_stored_end=r2a_curve[-1][1], bil=bil, spy_px=spy, draws=5,
+                      end=end, r2a_stored_meta=dict(meta, n_taken=meta["n_taken"] + 1),
+                      r2a_stored_curve=r2a_curve, bars_info=info)
+    assert res3["protocol"]["cache_exact"] is True
+    assert any("TRADE SET DIFFERS" in h for h in res3["honesty"])
+    # a stored curve with a missing date is a calendar mismatch and refuses (counter-agent N2)
+    short = r2a_curve[:-3]
+    chk = mod._curve_reproduction(r2a_curve, short)
+    assert chk["n_compared"] == chk["n_stored"] == len(short) and chk["n_got"] == len(r2a_curve)
+    with pytest.raises(SystemExit, match="calendar mismatch"):
+        run_mirror(rows, mkt, tiers, r2a_stored_end=r2a_curve[-1][1], bil=bil, spy_px=spy, draws=5,
+                   end=end, r2a_stored_curve=short)
+
+
+def test_curve_level_check_refuses_a_different_drawdown():
+    """Same end value, different path: the end-only check passed, the curve
+    check must not (counter-agent MED)."""
+    rows, mkt, tiers, bil, spy = _study_inputs()
+    ref_rows, _ = build_trailing_rows(rows, mkt, tiers)
+    ta, _ = select_capped(gate_rows(ref_rows, mkt["xbi_above_prior"][200], key="entry_date"), 10)
+    curve = run_call_book(ta, mkt)
+    # a stored curve with the same end but a 30% dip in the middle
+    k = len(curve) // 2
+    dipped = [(d, v * (0.7 if k - 20 <= i <= k + 20 else 1.0)) for i, (d, v) in enumerate(curve)]
+    chk = mod._curve_reproduction(curve, dipped)
+    assert chk["n_compared"] == len(curve) and chk["max_rel_diff"] > 0.3
+    assert chk["max_dd_abs_diff"] > mod.MAXDD_TOL
+    with pytest.raises(SystemExit, match="curve max point-wise gap"):
+        run_mirror(rows, mkt, tiers, r2a_stored_end=curve[-1][1], bil=bil, spy_px=spy, draws=5,
+                   r2a_stored_curve=dipped)
+    res = run_mirror(rows, mkt, tiers, r2a_stored_end=curve[-1][1], bil=bil, spy_px=spy, draws=5,
+                     r2a_stored_curve=dipped, allow_cache_drift=True)
+    assert res["protocol"]["cache_verified"] is False and res["machinery"]["end_within_tolerance"] is True
+    # the stored curve as ISO-date strings (the JSON on disk) compares identically
+    iso = [(d.isoformat(), v) for d, v in curve]
+    assert mod._curve_reproduction(curve, iso)["max_rel_diff"] == 0
+    assert mod._curve_reproduction(curve, None) is None
+
+
+def test_refresh_script_resolves_seed_data_and_writes_atomically(tmp_path, monkeypatch):
+    """On Render the disk is mounted AT data/ and hides the committed inputs
+    (counter-agent HIGH); and nothing may be written until every fetch is in
+    hand (MED)."""
+    import scripts.refresh_backtest_bars as rb
+    data, seed = tmp_path / "data", tmp_path / "seed_data"
+    data.mkdir(); seed.mkdir()
+    (seed / "backtest_calls_10y_results.json").write_text(json.dumps({
+        "tiers": {"AAA": "A"}, "call_rows": {"f": [{"symbol": "AAA", "entry_date": "2020-01-02", "entry": 10.0}]}}))
+    monkeypatch.setattr(rb, "DATA", data); monkeypatch.setattr(rb, "SEED_DATA", seed)
+    monkeypatch.setattr(rb, "CALLS_RESULTS", data / "backtest_calls_10y_results.json")
+    monkeypatch.setattr(rb, "BARS_CACHE", data / "backtest_bars.json")
+    monkeypatch.setattr(rb, "BASIS_SIDECAR", data / "backtest_bars_basis.json")
+    monkeypatch.setattr(rb, "SPY_RAW", data / "spy_bars_raw.json")
+    monkeypatch.setattr(rb, "LANE_CACHE", data / "lane")
+    assert rb.universe() == ["AAA", "XBI"]            # resolved from seed_data
+    row = {"date": "2020-01-02", "adjOpen": 10.0, "adjHigh": 11.0, "adjLow": 9.0, "adjClose": 10.5, "volume": 1}
+    # SPY fetch fails -> nothing written at all
+    def fetch_fail(sym, start, cache_dir):
+        if sym == "SPY":
+            raise RuntimeError("rate limited")
+        return [row]
+    monkeypatch.setattr(rb, "fmp_bars", fetch_fail)
+    with pytest.raises(RuntimeError):
+        rb.main()
+    assert not (data / "backtest_bars.json").exists() and not (data / "spy_bars_raw.json").exists()
+    assert not list(data.glob("*.tmp"))
+    # all fetches succeed -> all three files, the cache last, the lane start recorded
+    monkeypatch.setattr(rb, "fmp_bars", lambda sym, start, cache_dir: [row])
+    rb.main()
+    assert json.loads((data / "backtest_bars.json").read_text())["AAA"][0]["close"] == 10.5
+    assert json.loads((data / "spy_bars_raw.json").read_text())["data"] == [{"t": "2020-01-02", "a": 10.5}]
+    side = json.loads((data / "backtest_bars_basis.json").read_text())
+    assert side["lane"] == "fmp dividend-adjusted" and side["start"] == rb.START == "2015-07-23"
+    assert not list(data.glob("*.tmp"))
+    # a failure INSIDE the atomic write leaves neither a tmp file nor a target (counter-agent N4)
+    import os
+    target = data / "atomic_probe.json"
+    monkeypatch.setattr(rb.os, "replace", lambda a, b: (_ for _ in ()).throw(OSError("disk full")))
+    with pytest.raises(OSError, match="disk full"):
+        rb._write_atomic(target, "{}")
+    assert not target.exists() and not list(data.glob("atomic_probe.json.*"))
+
+
+def test_row_mismatch_examples_name_the_rows():
+    a = [{"fire_date": "2026-07-17", "symbol": "ATAI", "flag": "x_trail", "entry_date": "2026-07-23",
+          "exit_date": "2026-07-31", "status": "stopped", "entry": 2.99, "exit": 2.43, "r_net": -1.09}]
+    b = [dict(a[0], entry_date="2026-07-21")]
+    assert mod._row_mismatches(a, b) == 1
+    assert mod._row_mismatch_examples(a, b) == [["2026-07-17", "ATAI", "x"]]
+    assert mod._row_mismatch_examples(a, a) == []
 
 
 # --- 16. API ---------------------------------------------------------------------------
@@ -714,6 +913,25 @@ def test_api_mirror_backtest_run_single_flight(api, monkeypatch):
     assert st["returncode"] == 1 and "MACHINERY CHECK FAILED" in st["error"]
     assert client.post("/blend3070/mirror-backtest/run").status_code == 202   # free again
     procs[-1].done.set()
+
+
+def test_api_mirror_backtest_run_skips_refresh_when_cache_present(api, tmp_path, monkeypatch):
+    client, mb, disk, committed = api
+    cache = tmp_path / "backtest_bars.json"
+    monkeypatch.setattr(mb, "bars_cache_path", lambda: cache)
+    calls = []
+    def fake_popen(cmd, **kw):
+        calls.append(cmd); p = _FakeProc(); p.done.set(); return p
+    monkeypatch.setattr(mb, "popen", fake_popen)
+    assert client.post("/blend3070/mirror-backtest/run").status_code == 202
+    assert "--refresh-bars" in calls[0]
+    import time
+    for _ in range(50):
+        if not mb._state["running"]: break
+        time.sleep(0.05)
+    cache.write_text("{}")
+    assert client.post("/blend3070/mirror-backtest/run").status_code == 202
+    assert "--refresh-bars" not in calls[1]
 
 
 def test_api_mirror_backtest_basic_auth_gate(api, monkeypatch):
