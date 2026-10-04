@@ -584,7 +584,8 @@ def test_variant_ladder_shape_and_deltas():
                       ("exec_t2_carry", "exec_t1_carry", "exec_t2_nocarry", "r2a_ref"))
     assert res["deltas"]["t1_vs_t2"]["full"]["cagr"] == pytest.approx(v5["cagr"] - v4["cagr"])
     assert res["deltas"]["carry_on_vs_off"]["full"]["end_value"] == pytest.approx(v4["end_value"] - v3["end_value"])
-    assert res["deltas"]["exec_vs_r2a"]["full"]["max_dd"] == pytest.approx(v4["max_dd"] - v0["max_dd"])
+    v0c = res["variants"]["r2a_ref_carry"]["windows"]["full"]
+    assert res["deltas"]["exec_vs_r2a"]["full"]["max_dd"] == pytest.approx(v4["max_dd"] - v0c["max_dd"])
     assert v4["end_value"] > v3["end_value"]                     # carry only adds
     assert v4["trades"]["n_trades"] > 0 and v4["trades"]["bil_orders"] > 0
     assert res["variants"]["exec_t1_nocarry"]["windows"]["full"]["end_value"] < \
@@ -900,6 +901,28 @@ def test_r2a_mode_enters_on_the_stored_entry_bar_not_fire_plus_one():
     bars = mkt["bars"][one["symbol"]]
     i = {b.date.isoformat(): k for k, b in enumerate(bars)}[one["fire_date"]]
     assert one["entry_date"] == bars[i + 2].date.isoformat()
+
+
+def test_lag2_cap_slot_is_held_from_the_t1_cycle():
+    """Live counts a pending MOO as open from the T+1 sizing cycle: at lag 2 a
+    call occupies its slot from gate_date (fire+1), not from the fill bar."""
+    rows = [{"gate_date": "2024-01-02", "entry_date": "2024-01-05", "exit_date": "2024-01-10",
+             "symbol": f"S{i}", "flag": "f"} for i in range(10)]
+    late = {"gate_date": "2024-01-03", "entry_date": "2024-01-04", "exit_date": "2024-01-20",
+            "symbol": "LATE", "flag": "f"}
+    # live: ten pending MOOs hold their slots from 01-02 -> the call gated 01-03 is refused
+    taken, skipped = mod.select_capped_exec(rows + [late], 10)
+    assert skipped == 1 and all(t["symbol"] != "LATE" for t in taken)
+    # fill-bar occupancy (select_capped) admits it: its fill 01-04 precedes theirs, so LATE takes
+    # a slot and one of the ten is refused instead
+    t_old, s_old = select_capped(rows + [late], 10)
+    assert s_old == 1 and any(t["symbol"] == "LATE" for t in t_old)
+    # lag 1 (gate_date == entry_date) reduces to select_capped exactly
+    rows1 = [dict(r, gate_date=r["entry_date"]) for r in rows]
+    late1 = dict(late, gate_date=late["entry_date"])
+    assert mod.select_capped_exec(rows1 + [late1], 10) == select_capped(rows1 + [late1], 10)
+    assert mod._cagr_floor(0.09, [(date(2016, 1, 4), 1.0), (date(2026, 8, 19), 1.0)]) == pytest.approx(0.00814, abs=2e-4)
+    assert mod._cagr_floor(None, []) == 0.0
 
 
 def test_row_mismatch_examples_name_the_rows():
