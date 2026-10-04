@@ -299,3 +299,33 @@ and whether the market agreed._
   whether the $100k is new money, and rho(R2-A, barbell) measured on the
   Render host where bars are cached. Standing: no money moves on this
   study; it is an allocation memo, not an engine change.
+
+### H14 — The ratchet-up-only trail, not execution, is the executor-vs-paper gap
+- **Hypothesis:** the live stop rule (trail never lowered after an ATR
+  expansion — the tracker's shadow grader AND the executor's guard) costs
+  the R2-A book most of the 5.5 pp/yr gap the executor-fidelity replay
+  measured against the paper engine, whose trail is recomputed from the
+  peak and the prior-bar ATR every day and FALLS when ATR expands.
+- **Evidence (round 9 exit-rule ablation, pre-registered, two counter-agent
+  rounds, 2026-10-04):** flipping only the ratchet explains 1.02 of the gap
+  forward and 0.76 backward (3/3 sub-periods both ways); paired Sharpe
+  interval of record (10,000 draws) forward [−0.397, −0.019], backward
+  [−0.009, +0.357] — the backward side spans zero by 0.009; removing the
+  ratchet from the executor adds 2.8 pp of max DD (> the 2 pp bar).
+  **Null under the contract: no proposal.** Mechanism: the ratchet pins the
+  stop at the pre-expansion distance exactly as a catalyst approaches and
+  the stock starts swinging; it trims the right tail, not the left (gap
+  fills land wherever the stop sits), and earlier exits churn cap slots
+  (658 vs 600 trades). Docs: BACKTEST_EXECUTOR_MIRROR.md (round 9),
+  VARIANTS_PREREGISTRATION_R9_EXIT_ABLATION.md.
+- **Implement:** observe-only. Every live auto-call is now ALSO graded under
+  the identical trailing engine with the ratchet removed
+  (`ShadowGrade.engine = trailing_3atr_noratchet`); the paired record is
+  `h14_ratchet` on `GET /shadow/track-record`. Nothing reads those rows for
+  a level (the executor intents filter on `trailing_3atr`); the live stop
+  rule is unchanged, and so is its data-bug guard.
+- **Prediction:** on the same live calls, the no-ratchet grade shows a
+  higher average R than the ratchet grade; the live paired record, not the
+  replay, decides whether the rule is ever changed (and a change would land
+  in BOTH the tracker's shadow grader and the executor).
+- **Status:** observing (second shadow engine live as of 2026-10-04).
