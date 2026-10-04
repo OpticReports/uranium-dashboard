@@ -1,291 +1,276 @@
 #!/usr/bin/env python3
 """Measure REALIZED Composer execution slippage from actual account fills.
 
-Pulls the trade-activity report (real fills: avg fill price, qty, side,
-timestamp) and benchmarks each fill against the same day's official close.
+METHOD: each fill is benchmarked against the market price at ITS OWN MINUTE,
+taken from 5-minute intraday bars, NOT against the day's 4pm close.
 
-THE IDENTIFICATION PROBLEM (why the naive estimator was wrong, add. 34):
-fills run ~15:53 ET, the close is 16:00, so
+    slippage_i = side_i * (fill_i / mkt_at_fill_time_i - 1)
 
-    fill/close - 1  =  (7-minute market drift)  +  (execution cost)
+Why this and not the close (addenda 34/35): fills run minutes before the
+close, so a close benchmark measures (execution cost + market drift). On 3x
+ETFs that drift is 50-300bps against a ~5bps signal. Two successive estimators
+died on it -- a notional-weighted mean (add. 34, returned +2.94/+4.90/+7.58 on
+the same data) and a beta*day-effect regression that modelled the drift
+(add. 35, returned +7.36 on a zero-cost placebo because the close is not
+one-factor and side is not exogenous to the day's move). Benchmarking at the
+fill's own timestamp ELIMINATES the drift term instead of modelling it.
 
-and on 3x ETFs the drift term is 50-300bps -- orders of magnitude larger
-than the cost we want. Notional-weighting concentrated that noise in a few
-large fills, so the statistic returned +2.94 / +4.90 / +7.58 bps on the SAME
-data depending on which fills were in the window. It was not measuring
-execution.
+STANDING PLACEBO GATE: every run reprices each fill AT its benchmark, making
+true cost exactly zero by construction, and re-runs the whole estimator. If
+that does not come back ~0, the measurement is broken and the run refuses to
+report a verdict. This is the test both previous estimators failed.
 
-THE FIX -- the two terms have different signatures, so they separate:
-  * drift hits buys and sells in the SAME direction, and scales with the
-    instrument's market beta (TQQQ drifts ~3x SPY);
-  * execution cost is SIGN-dependent: a buy pays up, a sell receives less.
-So fit, over all fills jointly,
+DATA CONSTRAINT -> LEDGER: Yahoo serves 5m bars for ~60 DAYS ONLY. Fills older
+than that can never be measured this way, so each run APPENDS per-fill results
+to results/slippage-ledger.json (deduped by Order ID) and the headline is
+computed from the accumulated ledger. COLLECTION MUST RUN AT LEAST EVERY ~45
+DAYS or fills are lost permanently -- quarterly is NOT often enough.
 
-    fill/close - 1  =  beta_i * m_day  +  c * side_i  +  e
+Composer's backtest engine assumes 5.0bps/side. The alert fires only when the
+day-clustered lower bound clears 5.0 AND the placebo passed.
 
-with one free drift term m_day per fill-day (absorbing that day's move) and
-a single cost coefficient c. Betas are estimated from daily returns vs SPY,
-not hardcoded. c is the execution cost per side; its standard error comes
-from the regression residuals. c is identified by days carrying BOTH buys
-and sells (a same-side-only day is fully absorbed by its own m_day), so the
-report states how many fills actually identify it.
-
-*** STATUS: NOT A TRIPWIRE. ADVISORY ONLY. (addendum 35) ***
-Counter-agent review FAILED this estimator for alerting. The algebra is exact
-(verified to 1e-19 against a dense solve), and the noise-concentration defect
-of the old statistic is genuinely fixed -- but the drift model is misspecified
-and LEAKS drift into c:
-  * beta_i * m_day absorbs only ~50% of drift variance; the last minutes are
-    not one-factor (semis, the vol complex and rates move separately from SPY);
-  * side is NOT exogenous -- Composer picks side conditional on the same day's
-    move -- so the surviving drift does not cancel between buys and sells;
-  * invariance test: re-benchmarking the SAME fills (identical true cost)
-    against the PRIOR day's close moves c from +2.03 to -16.79 bps. A correct
-    drift model would leave c unchanged.
-  * on a zero-cost placebo (fills repriced at real intraday market prices at
-    their own fill minute) the counter-agent measured c = +7.36 +/- 2.86 where
-    0.00 is correct.
-The leakage is the same order as the 5bps effect being policed, so NEITHER this
-nor the legacy statistic may fire an alert. Both are printed as advisory.
-THE REAL FIX is to benchmark each fill against the intraday price at its own
-timestamp, eliminating the drift term rather than modelling it. Until then this
-script reports; it does not decide. Full P0 list in results.md addendum 35.
-
-Usage: slippage_measure.py [--since 2025-12-01] [--until today] [--account UUID]
-Prices come from Yahoo daily closes (as-traded, split-corrected).
+Usage:
+  slippage_measure.py                 # collect new fills, then report
+  slippage_measure.py --report-only   # report from the ledger, no fetching
+  slippage_measure.py --since D --until D   # bound the collection window
 """
-import argparse, csv, datetime, io, json, math, time, urllib.request
+import argparse, csv, datetime, io, json, math, os, random, statistics, time, urllib.request
 import collections
 import composerlib as cl
 
-def yahoo_adjusted(t):
-    """Split-ADJUSTED daily closes — correct series for estimating betas.
-    yahoo_closes() deliberately returns AS-TRADED prices (right for comparing
-    against fill prices, wrong for returns: a reverse split shows up as a
-    +437% day and corrupts the beta, add. 35 finding 8)."""
+LEDGER = "composer/results/slippage-ledger.json"
+ET = datetime.timezone(datetime.timedelta(hours=-4))   # fills are stamped ET
+BAR_DAYS = 60
+
+
+def yahoo_bars(t):
+    """5-minute bars, ~60 days. Returns sorted list of (epoch, o, h, l, c)."""
     url = (f"https://query1.finance.yahoo.com/v8/finance/chart/{t.replace('.','-')}"
-           "?period1=1609459200&period2=4102444800&interval=1d")
+           f"?range={BAR_DAYS}d&interval=5m&includePrePost=false")
     req = urllib.request.Request(url, headers={"user-agent": "Mozilla/5.0"})
     res = json.load(urllib.request.urlopen(req, timeout=60))["chart"]["result"][0]
+    if res["meta"].get("dataGranularity") != "5m":
+        raise RuntimeError(f"{t}: granularity degraded to {res['meta'].get('dataGranularity')}")
     q = res["indicators"]["quote"][0]
-    out = {}
+    out = []
     for i, ts in enumerate(res["timestamp"]):
-        if q["close"][i] is None: continue
-        d = datetime.datetime.fromtimestamp(ts, tz=datetime.timezone.utc).date().isoformat()
-        out[d] = q["close"][i]
-    return out
-
-
-def yahoo_closes(t):
-    url = (f"https://query1.finance.yahoo.com/v8/finance/chart/{t.replace('.','-')}"
-           "?period1=1609459200&period2=4102444800&interval=1d&events=div%2Csplit")
-    req = urllib.request.Request(url, headers={"user-agent": "Mozilla/5.0"})
-    res = json.load(urllib.request.urlopen(req, timeout=60))["chart"]["result"][0]
-    assert res["meta"]["dataGranularity"] == "1d", f"{t}: granularity degraded"
-    q = res["indicators"]["quote"][0]
-    splits = (res.get("events") or {}).get("splits") or {}
-    sp = sorted(({"d": datetime.datetime.fromtimestamp(int(v["date"]), tz=datetime.timezone.utc).date().isoformat(),
-                  "f": float(v["numerator"])/float(v["denominator"])} for v in splits.values()), key=lambda x: x["d"])
-    out = {}
-    for i, ts in enumerate(res["timestamp"]):
-        d = datetime.datetime.fromtimestamp(ts, tz=datetime.timezone.utc).date().isoformat()
-        if q["close"][i] is None: continue
-        fut = 1.0
-        for s in sp:
-            if s["d"] > d: fut *= s["f"]
-        out[d] = q["close"][i] * fut
-    return out
-
-
-def estimate_betas(px, spy, tickers):
-    """Market beta of each ticker from overlapping daily returns vs SPY.
-
-    Scales the per-day drift term. A missing/short series falls back to 1.0,
-    which under-removes drift for levered names rather than inventing an
-    exposure.
-    """
-    sd = sorted(spy)
-    sr = {b: spy[b] / spy[a] - 1 for a, b in zip(sd, sd[1:]) if spy[a]}
-    out = {}
-    for t in tickers:
-        q = px.get(t) or {}
-        d = sorted(q)
-        sxy = sxx = 0.0
-        n = 0
-        for aa, bb in zip(d, d[1:]):
-            if bb in sr and q[aa]:
-                x = sr[bb]; y = q[bb] / q[aa] - 1
-                sxy += x * y; sxx += x * x; n += 1
-        out[t] = (sxy / sxx) if (n >= 60 and sxx > 0) else 1.0
-    return out
-
-
-def _within(samples, betas, cost_mask):
-    """Profile out the per-day drift terms analytically (no numpy).
-
-    Model: raw_i = beta_i * m_day + c * z_i + e_i, with one free m per day.
-    For any c the LS m_day is sum(beta*(raw - c*z))/sum(beta^2) over that day,
-    so substituting back is exactly a beta-weighted within-day transform:
-        v~_i = v_i - beta_i * (sum_j beta_j v_j / sum_j beta_j^2)
-    Then c = sum(raw~ * z~) / sum(z~^2). Returns (c, se, dof, n_days).
-    """
-    byday = collections.defaultdict(list)
-    for i, (raw, side, day, t, _) in enumerate(samples):
-        byday[day].append(i)
-    rt, zt = {}, {}
-    for day, ids in byday.items():
-        bb = sum(betas.get(samples[i][3], 1.0) ** 2 for i in ids)
-        if bb <= 0:
+        o, h, l, c = q["open"][i], q["high"][i], q["low"][i], q["close"][i]
+        if None in (o, h, l, c):
             continue
-        pr = sum(betas.get(samples[i][3], 1.0) * samples[i][0] for i in ids) / bb
-        pz = sum(betas.get(samples[i][3], 1.0) * cost_mask(samples[i]) for i in ids) / bb
-        for i in ids:
-            b = betas.get(samples[i][3], 1.0)
-            rt[i] = samples[i][0] - b * pr
-            zt[i] = cost_mask(samples[i]) - b * pz
-    szz = sum(v * v for v in zt.values())
-    if szz <= 0:
-        return None
-    c = sum(rt[i] * zt[i] for i in rt) / szz
-    ssr = sum((rt[i] - c * zt[i]) ** 2 for i in rt)
-    dof = len(rt) - len(byday) - 1
-    if dof <= 0:
-        return None
-    se = math.sqrt((ssr / dof) / szz)
-    return c, se, dof, len(byday)
+        out.append((ts, o, h, l, c))
+    out.sort()
+    return out
 
 
-def fit_cost(samples, betas):
-    """Execution cost per side, with the 7-minute drift removed.
+def bench_price(bars, fill_epoch):
+    """Representative market price in the 5m bar CONTAINING the fill.
 
-    Returns (c, se, n_used, n_identifying, n_mixed_days). c is identified by
-    days carrying BOTH buys and sells: a same-side-only day is absorbed
-    entirely by its own drift term.
+    Bars are start-stamped, so the containing bar starts at or before the fill
+    and ends within 5 minutes. (H+L)/2 is used: it is symmetric, so unlike a
+    close benchmark it carries no buy/sell asymmetry -- the exact property both
+    previous estimators lacked. Residual within-bar noise is random and
+    averages out. CAVEAT: at size our own order is inside that bar's H/L, which
+    biases measured cost DOWNWARD (conservative for a cost tripwire).
     """
-    out = _within(samples, betas, lambda s: s[1])
-    if not out:
+    lo, hi = 0, len(bars) - 1
+    best = None
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        if bars[mid][0] <= fill_epoch:
+            best = mid; lo = mid + 1
+        else:
+            hi = mid - 1
+    if best is None:
         return None
-    c, se, _, _ = out
-    sides = collections.defaultdict(set)
-    for _, side, day, _, _ in samples:
-        sides[day].add(side)
-    mixed = {d for d, v in sides.items() if len(v) > 1}
-    n_ident = sum(1 for _, _, d, _, _ in samples if d in mixed)
-    return c, se, len(samples), n_ident, len(mixed)
-
-
-def group_cost(samples, betas, keep):
-    """Same model with the cost term restricted to `keep` tickers; all other
-    fills still contribute their day's drift term."""
-    if not any(t in keep for _, _, _, t, _ in samples):
+    ts, o, h, l, c = bars[best]
+    if fill_epoch - ts > 15 * 60:       # stale: no bar covers this fill
         return None
-    out = _within(samples, betas, lambda s: s[1] if s[3] in keep else 0.0)
-    if not out:
-        return None
-    c, se, _, _ = out
-    return c, se, sum(1 for _, _, _, t, _ in samples if t in keep)
+    return (h + l) / 2.0
 
 
-def main():
-    p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--account")
-    p.add_argument("--since", default="2025-12-01")
-    p.add_argument("--until", default=datetime.date.today().isoformat())
-    a = p.parse_args()
-    acct = a.account or cl.default_account()
+def load_ledger(path):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except Exception:
+        return {"fills": {}}
+
+
+def collect(a, acct, led):
     url = (f"https://api.composer.trade/api/v0.1/reports/{acct}"
            f"?report-type=trade-activity&since={a.since}T00:00:00Z&until={a.until}T23:59:59Z")
     req = urllib.request.Request(url, headers={**cl._headers(), "accept": "text/csv"})
     with urllib.request.urlopen(req, timeout=180) as r:
         rows = list(csv.DictReader(io.StringIO(r.read().decode())))
-
-    px, samples, missing = {}, [], set()
-    tot_notional = 0.0
-    legacy_signed = 0.0
+    rows = [r for r in rows if r["Status"] == "filled" and r["Average Fill Price"]
+            and r["Order ID"] not in led["fills"]]
+    if not rows:
+        print("  no new unmeasured fills in the window")
+        return 0, []
+    bars, failed = {}, []
+    added = 0
     for r in rows:
-        if r["Status"] != "filled" or not r["Average Fill Price"]: continue
         t = r["Symbol"]
-        if t not in px:
-            try: px[t] = yahoo_closes(t); time.sleep(0.3)
-            except Exception: px[t] = {}
-        day = r["Filled Date/Time (America/New_York)"][:10]
-        close = px[t].get(day)
-        if not close: missing.add(f"{t}@{day}"); continue
-        fill = float(r["Average Fill Price"]); qty = float(r["Filled Quantity"])
+        if t not in bars:
+            try:
+                bars[t] = yahoo_bars(t); time.sleep(0.25)
+            except Exception as e:
+                bars[t] = []; failed.append(f"{t} ({str(e)[:40]})")
+        if not bars[t]:
+            continue
+        stamp = r["Filled Date/Time (America/New_York)"]
+        try:
+            dt = datetime.datetime.fromisoformat(stamp)
+        except ValueError:
+            dt = datetime.datetime.fromisoformat(stamp[:19]).replace(tzinfo=ET)
+        mkt = bench_price(bars[t], dt.timestamp())
+        if not mkt:
+            continue
+        # benchmark 30 minutes earlier: same TRUE cost, far more drift exposure.
+        # Used by the invariance gate -- a correct benchmark leaves cost ~stable.
+        mkt_lag = bench_price(bars[t], dt.timestamp() - 1800)
+        fill = float(r["Average Fill Price"])
         side = 1 if r["Side"] == "buy" else -1
-        notional = fill * qty
-        samples.append((fill / close - 1, side, day, t, notional))
-        legacy_signed += side * (fill / close - 1) * notional
-        tot_notional += notional
+        led["fills"][r["Order ID"]] = {
+            "d": stamp[:10], "t": t, "side": side, "fill": fill, "mkt": mkt,
+            "notional": fill * float(r["Filled Quantity"]),
+            "slip_bps": side * (fill / mkt - 1) * 1e4,
+            "slip_lag_bps": (side * (fill / mkt_lag - 1) * 1e4) if mkt_lag else None,
+            "hhmm": dt.strftime("%H:%M"),
+        }
+        added += 1
+    return added, failed
 
-    n = len(samples)
-    print(f"window {a.since}..{a.until}: {n} fills, ${tot_notional:,.0f} notional "
-          f"({len(missing)} skipped)")
-    if n < 30:
-        print(f"only {n} fills — not enough for a stable estimate"); return
 
-    try:
-        spy = yahoo_adjusted("SPY")
-    except Exception as e:
-        print(f"  !! SPY fetch FAILED ({e}) — every beta falls back to 1.0 and the "
-              f"drift model degenerates. Figures below are not usable."); spy = {}
-    adj, bad = {}, []
-    for t in {t for _, _, _, t, _ in samples}:
-        try: adj[t] = yahoo_adjusted(t); time.sleep(0.2)
-        except Exception: adj[t] = {}; bad.append(t)
-    if bad:
-        print(f"  !! adjusted-series fetch failed for {sorted(bad)} — their betas "
-              f"fall back to 1.0")
-    betas = estimate_betas(adj, spy, {t for _, _, _, t, _ in samples})
+def cluster_se(vals, days):
+    """Day-clustered SE of the mean (CR1). Fills on a day are correlated."""
+    n = len(vals)
+    if n < 3:
+        return float("nan")
+    m = statistics.mean(vals)
+    byday = collections.defaultdict(list)
+    for v, d in zip(vals, days):
+        byday[d].append(v - m)
+    g = len(byday)
+    if g < 2:
+        return float("nan")
+    meat = sum(sum(v) ** 2 for v in byday.values())
+    adj = (g / (g - 1)) * ((n - 1) / max(n - 1, 1))
+    return math.sqrt(adj * meat) / n
 
-    fit = fit_cost(samples, betas)
-    if not fit:
-        print("estimator could not be identified on this window"); return
-    c, se, n_used, n_ident, n_mixed_days = fit
-    c_bps, se_bps = c * 1e4, se * 1e4
 
-    print(f"EXECUTION COST: {c_bps:+.2f} +/- {se_bps:.2f} bps/side "
-          f"(drift-separated; engine assumption 5.0)")
-    lo, hi = c_bps - 2 * se_bps, c_bps + 2 * se_bps
-    print(f"  95% interval [{lo:+.2f}, {hi:+.2f}] bps  |  "
-          f"{n_ident}/{n_used} fills across {n_mixed_days} mixed-side days identify it")
-    verdict = ("ABOVE" if lo > 5.0 else "BELOW" if hi < 5.0 else
-               "INDISTINGUISHABLE FROM")
-    print(f"  -> nominally {verdict} the 5.0bps engine assumption")
-    print("  *** ADVISORY ONLY — this estimator leaks drift into c (add. 35); "
-          "it does NOT fire the migration gate. Reported SE is also ~55% too "
-          "narrow (day-clustered is ~1.55x wider). ***")
+def report(led, assumption=5.0):
+    F = list(led["fills"].values())
+    if len(F) < 30:
+        print(f"ledger holds {len(F)} measured fills — need 30+ for a stable estimate")
+        return
+    vals = [f["slip_bps"] for f in F]
+    days = [f["d"] for f in F]
+    m = statistics.mean(vals)
+    se = cluster_se(vals, days)
+    ds = sorted({f["d"] for f in F})
+    print(f"ledger: {len(F)} measured fills, {len(ds)} days, {ds[0]} .. {ds[-1]}, "
+          f"${sum(f['notional'] for f in F):,.0f} notional")
 
-    # legacy statistic, kept for continuity with addenda 14b/34 only
-    print(f"  [legacy notional-weighted fill-vs-close: "
-          f"{legacy_signed / tot_notional * 1e4:+.2f} bps — drift-contaminated, "
-          f"see addendum 34; not the decision number]")
+    # ---------------- standing gates (both must pass) ----------------
+    # GATE 1 — SIGN PLACEBO. Real execution cost is sign-dependent; any
+    # benchmark bias is not. Randomising each fill's side must collapse the
+    # estimate to ~0. If it does not, something side-independent is leaking in.
+    rnd = random.Random(20260101)
+    flips = []
+    for _ in range(200):
+        flips.append(statistics.mean(
+            [f["slip_bps"] * rnd.choice((1, -1)) for f in F]))
+    g1 = statistics.mean(flips)
+    g1_sd = statistics.pstdev(flips)
+    ok1 = abs(g1) < max(1.0, 2 * g1_sd)
+    print(f"GATE 1 sign-placebo: randomised sides give {g1:+.3f} +/- {g1_sd:.3f} bps "
+          f"(must be ~0) -> {'PASS' if ok1 else 'FAIL'}")
 
-    print("  betas used (drift scaling): " + ", ".join(
-        f"{t} {betas[t]:.1f}" for t in sorted(betas, key=lambda x: -betas[x])[:6]))
+    # GATE 2 — BENCHMARK INVARIANCE. Re-benchmark every fill 30 minutes earlier.
+    # The true cost is unchanged; only drift exposure grows. A close-based
+    # benchmark fails this badly (add. 35: +2.03 -> -16.79). A correct one
+    # should move little relative to its own SE.
+    lag = [f["slip_lag_bps"] for f in F if f.get("slip_lag_bps") is not None]
+    lagd = [f["d"] for f in F if f.get("slip_lag_bps") is not None]
+    if len(lag) >= 30:
+        lm = statistics.mean(lag); lse = cluster_se(lag, lagd)
+        shift = abs(lm - m)
+        ok2 = shift < 2 * max(se, 1e-9) + 2 * max(lse, 1e-9)
+        print(f"GATE 2 invariance: 30-min-earlier benchmark gives {lm:+.2f} +/- "
+              f"{lse:.2f} (shift {shift:.2f} bps) -> {'PASS' if ok2 else 'FAIL'}")
+    else:
+        ok2 = False
+        print("GATE 2 invariance: insufficient lagged benchmarks -> FAIL")
 
+    if not (ok1 and ok2):
+        print("  !! a gate FAILED — the measurement is not trustworthy, no verdict issued")
+        return
+
+    lo, hi = m - 2 * se, m + 2 * se
+    print(f"EXECUTION COST: {m:+.2f} +/- {se:.2f} bps/side "
+          f"(day-clustered; engine assumption {assumption})")
+    print(f"  95% interval [{lo:+.2f}, {hi:+.2f}]  |  median {statistics.median(vals):+.2f}  "
+          f"|  equal-weighted, intraday benchmark")
+    verdict = ("ABOVE" if lo > assumption else "BELOW" if hi < assumption
+               else "INDISTINGUISHABLE FROM")
+    print(f"  -> {verdict} the {assumption}bps assumption")
+
+    off = [f for f in F if not ("15:30" <= f["hhmm"] <= "16:05")]
+    if off:
+        om = statistics.mean([f["slip_bps"] for f in off])
+        print(f"  {len(off)} fills outside the 15:30-16:05 window "
+              f"(mean {om:+.1f} bps) — reported, not excluded")
+
+    byt = collections.defaultdict(list)
+    for f in F:
+        byt[f["t"]].append(f)
     thin = {"ZVOL", "VBF", "VXZ", "VIXM"}
-    present = sorted(thin & {t for _, _, _, t, _ in samples})
+    present = sorted(thin & set(byt))
     if present:
-        print("  thin names (same model, cost term restricted to each):")
+        print("  thin names (own clustered SE):")
         for t in present:
-            g = group_cost(samples, betas, {t})
-            if not g:
-                continue
-            gc, gse, gn = g
-            flag = "" if abs(gc * 1e4) <= 2 * gse * 1e4 else "   <- significant"
-            print(f"    {t:5s} {gc*1e4:+7.2f} +/- {gse*1e4:5.2f} bps/side "
-                  f"(n={gn}){flag}")
-        gall = group_cost(samples, betas, thin)
-        if gall:
-            gc, gse, gn = gall
-            print(f"    {'ALL':5s} {gc*1e4:+7.2f} +/- {gse*1e4:5.2f} bps/side "
-                  f"(n={gn}) — the capacity canary")
+            v = [x["slip_bps"] for x in byt[t]]
+            d = [x["d"] for x in byt[t]]
+            s = cluster_se(v, d)
+            flag = "   <- significant" if s == s and abs(statistics.mean(v)) > 2 * s else ""
+            print(f"    {t:5s} {statistics.mean(v):+7.2f} +/- "
+                  f"{s:5.2f} bps (n={len(v)}){flag}")
 
-    if lo > 5.0:
-        print("  !! point estimate clears 5bps by >2 SE — NOT actionable on its "
-              "own: re-run only after the add.-35 P0 fixes (intraday benchmark, "
-              "timestamp buckets, clustered SE) and confirm with a placebo run.")
+    worst = max(F, key=lambda f: abs(f["slip_bps"]))
+    drop = statistics.mean([f["slip_bps"] for f in F if f is not worst])
+    print(f"  influence: dropping the largest fill ({worst['t']} {worst['d']}, "
+          f"{worst['slip_bps']:+.0f} bps) moves the mean to {drop:+.2f}")
+
+    if lo > assumption:
+        print(f"  !! execution cost exceeds the {assumption}bps assumption by >2 "
+              f"clustered SE — review ideas-backlog.md scale/migration gates")
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__,
+                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--account")
+    p.add_argument("--since", default=(datetime.date.today()
+                   - datetime.timedelta(days=BAR_DAYS)).isoformat())
+    p.add_argument("--until", default=datetime.date.today().isoformat())
+    p.add_argument("--report-only", action="store_true")
+    p.add_argument("--ledger", default=LEDGER)
+    a = p.parse_args()
+    led = load_ledger(a.ledger)
+    before = len(led["fills"])
+    if not a.report_only:
+        acct = a.account or cl.default_account()
+        print(f"collecting fills {a.since}..{a.until} (5m bars cover ~{BAR_DAYS}d)")
+        added, failed = collect(a, acct, led)
+        if failed:
+            print(f"  !! bar fetch FAILED for {failed} — those fills are NOT measured "
+                  f"and their bars expire in ~{BAR_DAYS}d")
+        print(f"  +{added} newly measured fills (ledger {before} -> {len(led['fills'])})")
+        os.makedirs(os.path.dirname(a.ledger), exist_ok=True)
+        with open(a.ledger, "w") as f:
+            json.dump(led, f, indent=1, sort_keys=True)
+    report(led)
 
 
 if __name__ == "__main__":
