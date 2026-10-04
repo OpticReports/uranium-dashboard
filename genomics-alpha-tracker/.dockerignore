@@ -4,6 +4,11 @@
 **/*.pyc
 **/.pytest_cache
 **/.ruff_cache
-backend/data
+# The Dockerfile COPYs backend/data to /app/seed_data (the committed campaign
+# JSONs; the Render disk mounts over /app/data and hides them). Exclude the
+# directory but let the top-level JSON files through - everything else under
+# it (SQLite, caches, bar files) stays out of the image.
+backend/data/**
+!backend/data/*.json
 **/.env
 .git
