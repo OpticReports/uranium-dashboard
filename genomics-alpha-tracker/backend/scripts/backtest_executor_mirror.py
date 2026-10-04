@@ -817,12 +817,19 @@ def run_mirror(fire_rows: list[dict], mkt: dict, tiers: dict[str, str], *,
     rows_stored = ({k: r2a_stored_meta.get(k) for k in rows_got} if r2a_stored_meta else None)
     rows_match = (None if rows_stored is None else
                   all(rows_stored[k] == rows_got[k] for k in rows_got))
+    # n_regraded / open_at_end_excluded are BAR-COVERAGE facts (a miss means a
+    # missing entry-date bar or a wrong clip) and gate the verdict; n_taken /
+    # skipped_at_cap may legitimately shift by a row when a lane's high/low
+    # lands a stop a day earlier near the cap boundary - reported only.
+    coverage_ok = (rows_stored is None or all(
+        rows_stored[k] == rows_got[k] for k in ("n_regraded", "open_at_end_excluded")))
     curve_check = _curve_reproduction(r2a_curve, r2a_stored_curve)
     curve_ok = (curve_check is None or (
         curve_check["max_rel_diff"] <= CURVE_TOL_REL
         and curve_check["max_dd_abs_diff"] <= MAXDD_TOL
-        and curve_check["sharpe_abs_diff"] <= SHARPE_TOL))
-    cache_verified = end_ok and curve_ok
+        and curve_check["sharpe_abs_diff"] <= SHARPE_TOL
+        and curve_check["n_compared"] == curve_check["n_stored"] == curve_check["n_got"]))
+    cache_verified = end_ok and curve_ok and coverage_ok
     if r2a_stored_end is not None and not cache_verified and not allow_cache_drift:
         why = (f"end ${r2a_end:,.2f} vs stored ${r2a_stored_end:,.2f} (|diff| ${abs_diff:,.2f} = "
                f"{rel_diff:.2%}, tolerance ${tol_usd:,.2f})")
@@ -832,6 +839,10 @@ def run_mirror(fire_rows: list[dict], mkt: dict, tiers: dict[str, str], *,
                     f"{curve_check['max_dd_stored']:.4f} (tol {MAXDD_TOL}), Sharpe "
                     f"{curve_check['sharpe_got']:.4f} vs {curve_check['sharpe_stored']:.4f} "
                     f"(tol {SHARPE_TOL})")
+        if curve_check is not None and not (
+                curve_check["n_compared"] == curve_check["n_stored"] == curve_check["n_got"]):
+            why += (f"; calendar mismatch: {curve_check['n_compared']} common dates vs "
+                    f"{curve_check['n_stored']} stored / {curve_check['n_got']} replayed")
         if rows_match is False:
             why += f"; trade set {rows_got} vs stored {rows_stored}"
         raise SystemExit(
@@ -977,6 +988,7 @@ def run_mirror(fire_rows: list[dict], mkt: dict, tiers: dict[str, str], *,
         "machinery": {"r2a_end_value": r2a_end, "r2a_stored": r2a_stored_end, "abs_diff": abs_diff,
                       "rel_diff": rel_diff, "cache_verified": cache_verified, "cache_exact": cache_exact,
                       "end_within_tolerance": end_ok, "curve_within_tolerance": curve_ok,
+                      "bar_coverage_matches_stored": coverage_ok,
                       "curve": curve_check, "rows": {"got": rows_got, "stored": rows_stored,
                                                      "match": rows_match},
                       "bars": bars_info or {},
@@ -1003,7 +1015,11 @@ def run_mirror(fire_rows: list[dict], mkt: dict, tiers: dict[str, str], *,
                                    if rows_match is False else ""))
             + ". Absolute levels are comparable to the R2/R3 docs only as far as that curve-level "
             "check goes; the executor deltas are measured within this run."]
-            if (cache_verified and not cache_exact and r2a_stored_end is not None) else []),
+            if (cache_verified and not cache_exact and r2a_stored_end is not None) else []) + ([
+            f"TRADE SET DIFFERS FROM THE STORED R2-A: {rows_got} vs stored {rows_stored} (bar "
+            f"coverage {'matches' if coverage_ok else 'DOES NOT match'}; the end value and curve "
+            f"are within tolerance)."]
+            if (cache_verified and cache_exact and rows_match is False) else []),
     }
 
 
@@ -1025,7 +1041,8 @@ def _curve_reproduction(got: list, stored: list | None) -> dict | None:
     ss = seg_stats([(d, w) for d, _, w in pairs], lo, hi)
     dd_g, dd_s = sg.get("max_dd", float("nan")), ss.get("max_dd", float("nan"))
     sh_g, sh_s = sg.get("sharpe", float("nan")), ss.get("sharpe", float("nan"))
-    return {"n_compared": len(pairs), "span": [lo.isoformat(), hi.isoformat()],
+    return {"n_compared": len(pairs), "n_stored": len(st), "n_got": len(got),
+            "span": [lo.isoformat(), hi.isoformat()],
             "max_rel_diff": max_rel, "max_dd_got": dd_g, "max_dd_stored": dd_s,
             "max_dd_abs_diff": abs(dd_g - dd_s), "sharpe_got": sh_g, "sharpe_stored": sh_s,
             "sharpe_abs_diff": abs(sh_g - sh_s)}
@@ -1179,7 +1196,7 @@ def load_inputs(fetch_missing: bool = False, refresh_bars_if_missing: bool = Fal
     import scripts.backtest_variants_r2 as _r2
     # 1) decide on a rebuild BEFORE any path is resolved (a seed_data copy
     #    must never shadow a freshly written data/ cache - counter-agent MED)
-    incomplete = _cache_incomplete()
+    incomplete = _cache_incomplete() if (force_refresh or refresh_bars_if_missing) else None
     if force_refresh or (refresh_bars_if_missing and incomplete):
         print(f"bars cache {'refresh requested' if force_refresh else incomplete}: rebuilding on the "
               f"FMP dividend-adjusted lane (scripts/refresh_backtest_bars.py)")
@@ -1215,7 +1232,10 @@ def load_inputs(fetch_missing: bool = False, refresh_bars_if_missing: bool = Fal
         raise SystemExit(f"stored R2-A {stored} != R2A_END constant {R2A_END}")
     stored_meta = r2a_var.get("meta") or None
     r2a_daily = _input(R2A_DAILY)
-    stored_curve = json.loads(r2a_daily.read_text()) if r2a_daily.exists() else None
+    if not r2a_daily.exists():
+        raise SystemExit(f"frozen R2-A daily curve missing: {R2A_DAILY} (committed input; without "
+                         f"it machinery check 1 would degrade to an end-value-only check)")
+    stored_curve = json.loads(r2a_daily.read_text())
     r3 = json.loads(r3_results.read_text()) if r3_results.exists() else None
     spy_adjusted = (True if spy_source.startswith("spy_bars_raw") else
                     (spy_is_adjusted(CACHE) if spy_px is not None else None))

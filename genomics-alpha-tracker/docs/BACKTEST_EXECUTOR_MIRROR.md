@@ -37,7 +37,7 @@ run". The results section at the bottom is written by the script.
 - **Sizing proxy**: lag-2 entries are sized on sleeve equity at the fire-day close (the executor sizes at T+1 ~10:30 on live marks).
 - **Trailing windows are SLICES** of the 10-year curve (positions entered before the window carry in — the house SUB_PERIODS convention), not fresh $100k books started at the window open.
 - **Measurement basis**: daily mark-to-market on adjusted closes; max DD on the daily curve; CAGR calendar-day (365.25); Sharpe/Sortino √252, rf = 0; bootstrap = stationary block (mean 21d) of the window's own daily returns.
-- **Bars basis**: the August 2026 campaign cache (raw Yahoo chart API) was built in a cloud session, never committed, and no longer exists; the reproducible source is the FMP dividend-adjusted lane (`scripts/refresh_backtest_bars.py`, ATAI basis-normalized by a constant factor, returns unchanged). Bars are CLIPPED to the campaign's data end (2026-08-19) before anything is graded, because a lane that runs later would enter the 44 calls the campaign counted as open at data end. Machinery check 1 then verifies the END VALUE (±1%), the FULL DAILY CURVE against the frozen `data/r2a_daily.json` (max point-wise gap ≤1%, max DD within 0.0065, Sharpe within 0.005 — the V0 gate's own tolerances) and reports the TRADE-SET counts (regraded / open-at-end / taken / skipped) against the stored R2-A meta; `cache_verified` needs all of it, `cache_exact` records the $1 standard separately, and the results JSON carries the lane, every basis factor, the clip and the gate's first defined date.
+- **Bars basis**: the August 2026 campaign cache (raw Yahoo chart API) was built in a cloud session, never committed, and no longer exists; the reproducible source is the FMP dividend-adjusted lane (`scripts/refresh_backtest_bars.py`, ATAI basis-normalized by a constant factor, returns unchanged). Bars are CLIPPED to the campaign's data end (2026-08-19) before anything is graded, because a lane that runs later would enter the 44 calls the campaign counted as open at data end. Machinery check 1 then verifies the END VALUE (±1%), the FULL DAILY CURVE against the frozen `data/r2a_daily.json` (max point-wise gap ≤1%, max DD within 0.0065, Sharpe within 0.005 — the V0 gate's own tolerances) and the TRADE-SET counts against the stored R2-A meta: the bar-coverage counts (regraded 4964 / open-at-end 44) must match exactly, taken / skipped-at-cap are reported only (a lane's high/low can land a stop a day earlier near the cap boundary); `cache_verified` needs the end value, the curve, the calendar length and the coverage counts, `cache_exact` records the $1 standard separately, and the results JSON carries the lane, every basis factor, the clip and the gate's first defined date.
 - **Never present these in-sample CAGRs as a forecast.**
 
 ## Protocol
@@ -137,6 +137,9 @@ the FMP lane reproduces V0 itself to $1) or nothing is written.
 - **Locally** (any machine with `FMP_API_KEY`): `cd genomics-alpha-tracker/backend && python -m scripts.backtest_executor_mirror`
   then commit `backend/data/backtest_executor_mirror_results.json` and this
   doc (the script rewrites the results section below).
+- `--refresh-bars` rebuilds from the per-symbol lane files under
+  `data/bars_cache_fmp_adj/` when they exist (reproducible, no refetch);
+  delete that directory to refetch from FMP.
 - Options: `--refresh-bars`, `--allow-cache-drift` (publish with
   cache_verified=false), `--fetch-missing` (symbols absent from the cache,
   never overwrites), `--draws N`, `--seed S`, `--report PATH`, `--no-report`.

@@ -654,6 +654,7 @@ def test_load_inputs_rebuilds_a_missing_cache_on_the_fmp_lane(tmp_path, monkeypa
     missing = tmp_path / "backtest_bars.json"
     monkeypatch.setattr(mod, "CACHE", missing)
     monkeypatch.setattr(mod, "BASIS_SIDECAR", tmp_path / "backtest_bars_basis.json")
+    monkeypatch.setattr(mod, "R2A_DAILY", tmp_path / "r2a_daily.json")
     calls = []
     monkeypatch.setattr(mod, "refresh_bars", lambda: calls.append("refresh"))
     # no rebuild requested -> the SystemExit names the refresh script
@@ -724,7 +725,27 @@ def test_bars_past_the_campaign_data_end_are_clipped_and_counted():
                       r2a_stored_meta=dict(meta, n_taken=meta["n_taken"] + 1),
                       r2a_stored_curve=r2a_curve, bars_info=info)
     assert res2["machinery"]["rows"]["match"] is False
+    assert res2["machinery"]["bar_coverage_matches_stored"] is True       # n_taken is report-only
+    assert res2["protocol"]["cache_verified"] is True
     assert any("TRADE SET DIFFERS" in h for h in res2["honesty"])
+    # a bar-coverage count that differs GATES the verdict (counter-agent N1)
+    with pytest.raises(SystemExit, match="trade set"):
+        run_mirror(rows, mkt, tiers, r2a_stored_end=r2a_curve[-1][1], bil=bil, spy_px=spy, draws=5,
+                   end=end, r2a_stored_meta=dict(meta, open_at_end_excluded=meta["open_at_end_excluded"] + 1),
+                   r2a_stored_curve=r2a_curve, bars_info=info)
+    # exact end + differing taken count still gets an honesty line
+    res3 = run_mirror(rows, mkt, tiers, r2a_stored_end=r2a_curve[-1][1], bil=bil, spy_px=spy, draws=5,
+                      end=end, r2a_stored_meta=dict(meta, n_taken=meta["n_taken"] + 1),
+                      r2a_stored_curve=r2a_curve, bars_info=info)
+    assert res3["protocol"]["cache_exact"] is True
+    assert any("TRADE SET DIFFERS" in h for h in res3["honesty"])
+    # a stored curve with a missing date is a calendar mismatch and refuses (counter-agent N2)
+    short = r2a_curve[:-3]
+    chk = mod._curve_reproduction(r2a_curve, short)
+    assert chk["n_compared"] == chk["n_stored"] == len(short) and chk["n_got"] == len(r2a_curve)
+    with pytest.raises(SystemExit, match="calendar mismatch"):
+        run_mirror(rows, mkt, tiers, r2a_stored_end=r2a_curve[-1][1], bil=bil, spy_px=spy, draws=5,
+                   end=end, r2a_stored_curve=short)
 
 
 def test_curve_level_check_refuses_a_different_drawdown():
@@ -787,6 +808,13 @@ def test_refresh_script_resolves_seed_data_and_writes_atomically(tmp_path, monke
     side = json.loads((data / "backtest_bars_basis.json").read_text())
     assert side["lane"] == "fmp dividend-adjusted" and side["start"] == rb.START == "2015-07-23"
     assert not list(data.glob("*.tmp"))
+    # a failure INSIDE the atomic write leaves neither a tmp file nor a target (counter-agent N4)
+    import os
+    target = data / "atomic_probe.json"
+    monkeypatch.setattr(rb.os, "replace", lambda a, b: (_ for _ in ()).throw(OSError("disk full")))
+    with pytest.raises(OSError, match="disk full"):
+        rb._write_atomic(target, "{}")
+    assert not target.exists() and not list(data.glob("atomic_probe.json.*"))
 
 
 def test_row_mismatch_examples_name_the_rows():
