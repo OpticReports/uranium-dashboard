@@ -1086,21 +1086,44 @@ def divergence_report(got: list, stored: list, taken: list[dict], mkt: dict,
         out.sort(key=lambda t: t["exit_date"])
         return out
 
+    def open_on(d0: date) -> list[dict]:
+        return sorted(({"symbol": t["symbol"], "flag": t["flag"], "entry_date": t["entry_date"],
+                        "exit_date": t["exit_date"], "status": t["status"]}
+                       for t in taken
+                       if date.fromisoformat(t["entry_date"]) <= d0 <= date.fromisoformat(t["exit_date"])),
+                      key=lambda t: t["entry_date"])
+
+    def slim(sus: list[dict]) -> list[dict]:
+        return [{k: v for k, v in t.items() if k != "bars_around_exit"} for t in sus]
+
     jumps = []
     for i in range(1, len(series)):
         d, r = series[i]
         jumps.append((abs(r - series[i - 1][1]), d, series[i - 1][1], r))
     jumps.sort(reverse=True)
-    rep = {"first_divergence": None, "jumps": []}
+    rep = {"first_divergence": None, "crossings": [], "jumps": []}
     if first is not None:
         d0, r0 = first
         rep["first_divergence"] = {"date": d0.isoformat(), "rel_diff": r0,
                                    "got": next(v for d, v in got if d == d0), "stored": st[d0],
-                                   "suspects": suspects_near(d0)}
+                                   "suspects": slim(suspects_near(d0))}
+    # The ORIGIN of a trade-set difference: the first date the gap exceeds
+    # each threshold, with the replay's open book on that date. Bars are
+    # printed for the 0.5% crossing only, to keep the paste readable.
+    for thr in (0.001, 0.005, 0.01, 0.02, 0.05):
+        hit = next(((d, r) for d, r in series if abs(r) > thr), None)
+        if hit is None:
+            continue
+        d, r = hit
+        entry = {"threshold": thr, "date": d.isoformat(), "rel_diff": r,
+                 "open_positions": open_on(d)}
+        sus = suspects_near(d)
+        entry["suspects"] = sus if thr == 0.005 else slim(sus)
+        rep["crossings"].append(entry)
     for delta, d, before, after in jumps[:top_jumps]:
         rep["jumps"].append({"date": d.isoformat(), "rel_diff_before": before,
                              "rel_diff_after": after, "delta": delta,
-                             "suspects": suspects_near(d)})
+                             "suspects": slim(suspects_near(d))})
     return rep
 
 

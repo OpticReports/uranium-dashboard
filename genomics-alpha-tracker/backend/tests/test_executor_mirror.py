@@ -836,12 +836,21 @@ def test_divergence_report_names_the_first_date_and_the_suspect_exits():
     assert rep["jumps"][0]["delta"] == pytest.approx(0.02 / 1.02, rel=1e-6)
     assert rep["jumps"][0]["rel_diff_before"] == 0 and len(rep["jumps"]) == 5
     sus = rep["jumps"][0]["suspects"]
+    full = next(c for c in rep["crossings"] if c["threshold"] == 0.005)["suspects"]
+    assert all(len(s["bars_around_exit"]) >= 5 and {"open", "high", "low", "close"} <= set(s["bars_around_exit"][0])
+               for s in full if s["bars_around_exit"])
     lo = (d0 - timedelta(days=15)).isoformat(); hi = (d0 + timedelta(days=2)).isoformat()
     assert all(lo <= s["exit_date"] <= hi or lo <= s["entry_date"] <= hi for s in sus)
-    assert all(len(s["bars_around_exit"]) >= 5 and {"open", "high", "low", "close"} <= set(s["bars_around_exit"][0])
-               for s in sus if s["bars_around_exit"])
+    assert all("bars_around_exit" not in s for s in sus)      # jumps are slim; bars live on the 0.5% crossing
     assert sus == sorted(sus, key=lambda t: t["exit_date"])
-    assert rep["first_divergence"]["suspects"] == sus
+    assert rep["first_divergence"]["suspects"] == [{k: v for k, v in t.items() if k != "bars_around_exit"} for t in sus]
+    # crossings: a 2% step crosses 0.1 / 0.5 / 1% on the same date, never 2% or 5%
+    assert [c["threshold"] for c in rep["crossings"]] == [0.001, 0.005, 0.01]
+    assert all(c["date"] == d0.isoformat() for c in rep["crossings"])
+    c5 = next(c for c in rep["crossings"] if c["threshold"] == 0.005)
+    assert [{k: v for k, v in t.items() if k != "bars_around_exit"} for t in c5["suspects"]] == sus and all("bars_around_exit" not in t for t in rep["crossings"][0]["suspects"])
+    assert all(t["entry_date"] <= d0.isoformat() <= t["exit_date"] for t in c5["open_positions"])
+    assert len(c5["open_positions"]) == sum(1 for t in ta if t["entry_date"] <= d0.isoformat() <= t["exit_date"])
     # the ISO-string shape of the on-disk curve works too
     assert mod.divergence_report(curve, [(d.isoformat(), v) for d, v in stored], ta, mkt)["first_divergence"]["date"] == d0.isoformat()
 
