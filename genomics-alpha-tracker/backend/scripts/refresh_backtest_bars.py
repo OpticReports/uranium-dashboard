@@ -68,7 +68,13 @@ SEED_DATA = BACKEND / "seed_data"   # the image copy of backend/data (Render mou
 START = "2015-07-23"
 MIN_ENTRIES = 5               # fewer frozen entries than this: no inference
 CONSTANT_TOL = 1.005          # max/min ratio inside this = "a constant factor"
-UNITY_TOL = 0.005             # |factor - 1| inside this = already on the frozen basis
+# |factor - 1| inside this = already on the frozen basis. 1 bp, not 50:
+# ILMN's FMP series sits a CONSTANT 0.095% below the frozen entries (the
+# 2024 GRAIL spin-off adjusted differently from the campaign's Yahoo lane);
+# left alone, every ILMN stop level was 0.1% low, one trailing exit moved a
+# day, held a cap slot, and the path-dependent book ended 8.7% away from
+# the stored R2-A while the drawdown matched (first Render run, 2026-10-04).
+UNITY_TOL = 0.0001
 
 
 def _input(path: Path) -> Path:

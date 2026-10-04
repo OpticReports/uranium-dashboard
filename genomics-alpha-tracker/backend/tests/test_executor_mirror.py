@@ -840,6 +840,22 @@ def test_divergence_report_names_the_first_date_and_the_suspect_exits():
     assert mod.divergence_report(curve, [(d.isoformat(), v) for d, v in stored], ta, mkt)["first_divergence"]["date"] == d0.isoformat()
 
 
+def test_refresh_basis_factor_catches_a_sub_percent_constant_offset():
+    """ILMN on the FMP lane is a constant 0.095% below the frozen entries;
+    a 0.5% unity tolerance left it alone and the replay drifted 8.7%."""
+    import scripts.refresh_backtest_bars as rb
+    entries = [(f"2020-01-{d:02d}", 100.0 + d) for d in range(2, 12)]
+    lane = {d: {"open": e * 0.99905} for d, e in entries}
+    f = rb.basis_factor(lane, entries)
+    assert f is not None and f["factor"] == pytest.approx(0.99905, abs=1e-6) and f["n"] == 10
+    # a genuinely-on-basis series (rounding noise only) is left alone
+    noise = {d: {"open": e * (1 + ((i % 3) - 1) * 2e-5)} for i, (d, e) in enumerate(entries)}
+    assert rb.basis_factor(noise, entries) is None
+    # a DRIFTING ratio is left alone so the machinery gate sees it
+    drift = {d: {"open": e * (1 + 0.002 * i)} for i, (d, e) in enumerate(entries)}
+    assert rb.basis_factor(drift, entries) is None
+
+
 def test_row_mismatch_examples_name_the_rows():
     a = [{"fire_date": "2026-07-17", "symbol": "ATAI", "flag": "x_trail", "entry_date": "2026-07-23",
           "exit_date": "2026-07-31", "status": "stopped", "entry": 2.99, "exit": 2.43, "r_net": -1.09}]
