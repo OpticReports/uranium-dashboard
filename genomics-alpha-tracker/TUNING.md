@@ -55,7 +55,13 @@ Nothing else. Not the engine code, not the tests, not this file.
 Behavioral invariants (never hold through a binary, Tier C never auto-calls,
 direction rules, gap-aware grading) are enforced by the test suite —
 `pytest` must stay green on every proposal, and the agent may not edit tests
-to make them pass.
+to make them pass. Two halves, since 2026-10-04: the engine's MECHANICS are
+tested against trigger / risk / horizon sets the tests own
+(`tests/conftest.py`, so a gated tune of those knobs cannot break them), and
+the LIVE `calls.yaml` is checked for shape and for the rules that must
+survive any tune (`tests/test_calls_config.py`: real flag types only,
+long-side triggers only, Tier C never auto-calls, sane risk/horizon). A
+proposal that fails the second half is malformed, not merely unlucky.
 
 ## Workflow per cycle
 
