@@ -119,14 +119,31 @@ export function normalizeMirror(raw) {
   for (const [k, aliases] of Object.entries(VARIANT_ALIASES)) out[k] = pickVariant(variants, aliases);
   const caveats = raw.contract?.caveats || raw.honesty || raw.protocol?.honesty || raw.meta?.caveats || [];
   const cacheVerified = raw.protocol?.cache_verified ?? raw.meta?.cache_verified ?? null;
+  const cacheExact = raw.protocol?.cache_exact ?? null;
+  const basisLane = raw.protocol?.cache_basis?.lane ?? null;
   const drift = raw.protocol?.r2a_reproduction?.abs_diff ?? raw.meta?.r2a_drift ?? null;
+  const driftRel = raw.protocol?.r2a_reproduction?.rel_diff ?? null;
+  const mach = raw.machinery || {};
+  const machineryFacts = {
+    coverage: mach.bar_coverage_matches_stored ?? null,
+    rowsGot: mach.rows?.got ?? null,
+    rowsStored: mach.rows?.stored ?? null,
+    maxDdGot: mach.curve?.max_dd_got ?? null,
+    maxDdStored: mach.curve?.max_dd_stored ?? null,
+    sharpeGot: mach.curve?.sharpe_got ?? null,
+    sharpeStored: mach.curve?.sharpe_stored ?? null,
+  };
   return {
     generated: raw.generated || null,
     period: Array.isArray(raw.period) ? raw.period.join(" → ") : (raw.period || null),
     variants: out,
     caveats: Array.isArray(caveats) ? caveats : [],
     cacheVerified,
+    cacheExact,
+    basisLane,
     drift,
+    driftRel,
+    machineryFacts,
     servedFrom: raw.served_from || null,
   };
 }
@@ -321,9 +338,31 @@ export default function ExecutorMirror({ data, onReload, loadError }) {
       )}
       {m?.cacheVerified === false && (
         <div className="text-xs text-rose-200 bg-rose-900/40 border border-rose-700 rounded px-3 py-2 mt-2">
-          Bars cache did not reproduce the stored R2-A end value
-          {m.drift !== null && m.drift !== undefined ? ` (off by ${fmtMoney(m.drift)})` : ""} — these
-          numbers were produced with --allow-cache-drift and are NOT comparable to the R2 / R3 docs.
+          <div className="font-semibold">Bars are the {m.basisLane || "rebuilt"} lane, NOT the campaign cache — absolute levels are not the R2 / R3 docs' numbers.</div>
+          <div className="mt-1">
+            R2-A replays {m.driftRel !== null && m.driftRel !== undefined ? `${(m.driftRel * 100).toFixed(2)}% ` : ""}
+            {m.drift !== null && m.drift !== undefined ? `(${fmtMoney(m.drift)}) ` : ""}from the stored end value.
+            {m.machineryFacts?.rowsGot && m.machineryFacts?.rowsStored && (
+              <> Bar coverage {m.machineryFacts.coverage ? "identical" : "DIFFERS"} ({m.machineryFacts.rowsGot.n_regraded} regraded,
+              {" "}{m.machineryFacts.rowsGot.open_at_end_excluded} open at data end); trade set {m.machineryFacts.rowsGot.n_taken} taken /
+              {" "}{m.machineryFacts.rowsGot.skipped_at_cap} skipped vs stored {m.machineryFacts.rowsStored.n_taken} / {m.machineryFacts.rowsStored.skipped_at_cap}.</>
+            )}
+            {m.machineryFacts?.maxDdGot != null && m.machineryFacts?.maxDdStored != null && (
+              <> Max DD {(m.machineryFacts.maxDdGot * 100).toFixed(2)}% vs stored {(m.machineryFacts.maxDdStored * 100).toFixed(2)}%;
+              Sharpe {m.machineryFacts.sharpeGot?.toFixed(3)} vs {m.machineryFacts.sharpeStored?.toFixed(3)}.</>
+            )}
+            {" "}Deltas are measured within this run; those smaller than the lane-drift noise floor (commissions, T+1 vs T+2, band vs paper) are not robust, the mechanics gap, the carry gain and the 30/70 blend's drawdown/Sharpe gain are.
+          </div>
+        </div>
+      )}
+      {m?.cacheVerified === true && m?.cacheExact === false && (
+        <div className="text-xs text-amber-200 bg-amber-900/30 border border-amber-700 rounded px-3 py-2 mt-2">
+          Bars are the {m.basisLane || "rebuilt"} lane, not the August campaign cache: R2-A reproduces
+          within the ±1% V0 machinery tolerance
+          {m.driftRel !== null && m.driftRel !== undefined ? ` (${(m.driftRel * 100).toFixed(3)}% off` : ""}
+          {m.drift !== null && m.drift !== undefined ? `, ${fmtMoney(m.drift)})` : (m.driftRel != null ? ")" : "")}
+          {" "}but not to the dollar. Absolute levels match the R2 / R3 docs within that tolerance; the executor
+          deltas are measured inside this run.
         </div>
       )}
 

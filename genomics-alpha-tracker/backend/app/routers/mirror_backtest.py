@@ -42,8 +42,8 @@ RESULTS_NAME = "backtest_executor_mirror_results.json"
 LOG_NAME = "backtest_executor_mirror.log"
 NOT_RUN_DETAIL = (
     "executor mirror backtest not run yet — POST /blend3070/mirror-backtest/run on the "
-    "host (needs backend/data/backtest_bars.json) or commit "
-    "backend/data/backtest_executor_mirror_results.json"
+    "host (rebuilds backend/data/backtest_bars.json on the FMP dividend-adjusted lane when "
+    "absent; needs FMP_API_KEY) or commit backend/data/backtest_executor_mirror_results.json"
 )
 ERROR_TAIL_LINES = 20
 
@@ -57,6 +57,11 @@ popen = subprocess.Popen   # indirection so tests can stub the process
 
 def disk_path() -> Path:
     return Path(settings.cache_dir).parent / RESULTS_NAME
+
+
+def bars_cache_path() -> Path:
+    """The replay's bars cache (gitignored; on the data disk once refreshed)."""
+    return BACKEND_DIR / "data" / "backtest_bars.json"
 
 
 def committed_path() -> Path:
@@ -164,6 +169,10 @@ def run_replay():
         # on the host; the results JSON is the deliverable there
         cmd = [sys.executable, "-m", "scripts.backtest_executor_mirror",
                "--out", str(out), "--fetch-missing", "--no-report"]
+        if not bars_cache_path().exists():
+            # the August campaign cache is gone; the script rebuilds the FMP
+            # dividend-adjusted lane itself (needs FMP_API_KEY on the host)
+            cmd.append("--refresh-bars")
         try:
             log_fh = open(log, "w")  # noqa: SIM115 — handed to the subprocess
             try:

@@ -42,8 +42,10 @@ which is the frozen round-7 record.
 from __future__ import annotations
 
 import json
+import os
 import statistics
 import sys
+import tempfile
 from collections import defaultdict
 from pathlib import Path
 
@@ -58,16 +60,63 @@ BARS_CACHE = DATA / "backtest_bars.json"
 BASIS_SIDECAR = DATA / "backtest_bars_basis.json"
 SPY_RAW = DATA / "spy_bars_raw.json"
 LANE_CACHE = DATA / "bars_cache_fmp_adj"
-START = "2015-09-01"          # ATR warm-up before the replay's 2016-01-01 start
+SEED_DATA = BACKEND / "seed_data"   # the image copy of backend/data (Render mounts the disk AT data/)
+# The campaign cache was fetched 2026-08-20 with fetch_bars(years=11): end =
+# 2026-08-21, start = end - (365.25*11 + 30) days = 2015-07-23. Matching it
+# keeps the XBI 200dma gate defined from the same bar (the gate is undefined
+# for the first 199 bars and silently drops entries there).
+START = "2015-07-23"
 MIN_ENTRIES = 5               # fewer frozen entries than this: no inference
 CONSTANT_TOL = 1.005          # max/min ratio inside this = "a constant factor"
-UNITY_TOL = 0.005             # |factor - 1| inside this = already on the frozen basis
+# |factor - 1| inside this = already on the frozen basis. 1 bp, not 50:
+# ILMN's FMP series sits a CONSTANT 0.095% below the frozen entries (the
+# 2024 GRAIL spin-off adjusted differently from the campaign's Yahoo lane);
+# left alone, every ILMN stop level was 0.1% low, one trailing exit moved a
+# day, held a cap slot, and the path-dependent book ended 8.7% away from
+# the stored R2-A while the drawdown matched (first Render run, 2026-10-04).
+UNITY_TOL = 0.0001
+
+
+def _input(path: Path) -> Path:
+    """A committed campaign input: data/ when present, else the image's
+    seed_data copy (on Render the persistent disk is mounted AT data/ and
+    hides the committed files - counter-agent 2026-10-04, HIGH)."""
+    if path.exists():
+        return path
+    alt = SEED_DATA / path.name
+    return alt if alt.exists() else path
+
+
+def _rel(path: Path) -> str:
+    try:
+        return str(path.relative_to(BACKEND))
+    except ValueError:
+        return str(path)
+
+
+def _write_atomic(path: Path, text: str) -> None:
+    """tmp + fsync + rename: a crash mid-write can never leave a truncated
+    JSON that `.exists()` and blocks the next auto-refresh."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=path.name + ".", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as fh:
+            fh.write(text)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def frozen_entries() -> dict[str, list[tuple[str, float]]]:
     """Every replayed call's (entry_date, entry price), per symbol - the
     frozen basis the lane is compared against. Inputs, not outcomes."""
-    res = json.loads(CALLS_RESULTS.read_text())
+    res = json.loads(_input(CALLS_RESULTS).read_text())
     out: dict[str, list[tuple[str, float]]] = defaultdict(list)
     for rows in res["call_rows"].values():
         for t in rows:
@@ -129,26 +178,32 @@ def to_cache_rows(rows: list[dict]) -> list[dict]:
 
 
 def universe() -> list[str]:
-    res = json.loads(CALLS_RESULTS.read_text())
+    res = json.loads(_input(CALLS_RESULTS).read_text())
     return sorted(res["tiers"]) + ["XBI"]
 
 
 def main() -> None:
+    # Fetch EVERYTHING first, write NOTHING until all of it is in hand: a
+    # failed SPY fetch used to leave backtest_bars.json without
+    # spy_bars_raw.json, and the next run would silently fetch SPY through
+    # the unadjusting app provider instead (counter-agent 2026-10-04, MED).
     bars: dict[str, list[dict]] = {}
     for sym in universe():
         rows = to_cache_rows(fmp_bars(sym, start=START, cache_dir=LANE_CACHE))
+        if not rows:
+            raise SystemExit(f"{sym}: the FMP lane returned no bars - nothing written")
         bars[sym] = rows
         print(f"  {sym}: {len(rows)} bars {rows[0]['date']}..{rows[-1]['date']}")
+    spy = [r for r in fmp_bars("SPY", start=START, cache_dir=LANE_CACHE) if r.get("adjClose")]
+    if not spy:
+        raise SystemExit("SPY: the FMP lane returned no bars - nothing written")
     applied = normalize_basis(bars)
-    BARS_CACHE.write_text(json.dumps(bars))
-    BASIS_SIDECAR.write_text(json.dumps({"lane": "fmp dividend-adjusted",
-                                         "normalized": applied}, indent=1))
-
-    spy = fmp_bars("SPY", start=START, cache_dir=LANE_CACHE)
-    SPY_RAW.write_text(json.dumps({"data": [{"t": r["date"], "a": r["adjClose"]}
-                                            for r in spy if r.get("adjClose")]}))
-    print(f"wrote {BARS_CACHE.relative_to(BACKEND)} ({len(bars)} symbols) and "
-          f"{SPY_RAW.relative_to(BACKEND)} ({len(spy)} rows), dividend-adjusted basis")
+    _write_atomic(SPY_RAW, json.dumps({"data": [{"t": r["date"], "a": r["adjClose"]} for r in spy]}))
+    _write_atomic(BASIS_SIDECAR, json.dumps({"lane": "fmp dividend-adjusted", "start": START,
+                                             "normalized": applied}, indent=1))
+    _write_atomic(BARS_CACHE, json.dumps(bars))      # last: its presence means "complete"
+    print(f"wrote {_rel(BARS_CACHE)} ({len(bars)} symbols) and "
+          f"{_rel(SPY_RAW)} ({len(spy)} rows), dividend-adjusted basis")
     print("next: python -m scripts.backtest_summary   (the V0 gate decides)")
 
 

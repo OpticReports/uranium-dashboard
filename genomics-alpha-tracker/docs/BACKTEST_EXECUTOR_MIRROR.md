@@ -37,6 +37,7 @@ run". The results section at the bottom is written by the script.
 - **Sizing proxy**: lag-2 entries are sized on sleeve equity at the fire-day close (the executor sizes at T+1 ~10:30 on live marks).
 - **Trailing windows are SLICES** of the 10-year curve (positions entered before the window carry in — the house SUB_PERIODS convention), not fresh $100k books started at the window open.
 - **Measurement basis**: daily mark-to-market on adjusted closes; max DD on the daily curve; CAGR calendar-day (365.25); Sharpe/Sortino √252, rf = 0; bootstrap = stationary block (mean 21d) of the window's own daily returns.
+- **Bars basis**: the August 2026 campaign cache (raw Yahoo chart API) was built in a cloud session, never committed, and no longer exists; the reproducible source is the FMP dividend-adjusted lane (`scripts/refresh_backtest_bars.py`, ATAI basis-normalized by a constant factor, returns unchanged). Bars are CLIPPED to the campaign's data end (2026-08-19) before anything is graded, because a lane that runs later would enter the 44 calls the campaign counted as open at data end. Machinery check 1 then verifies the END VALUE (±1%), the FULL DAILY CURVE against the frozen `data/r2a_daily.json` (max point-wise gap ≤1%, max DD within 0.0065, Sharpe within 0.005 — the V0 gate's own tolerances) and the TRADE-SET counts against the stored R2-A meta: the bar-coverage counts (regraded 4964 / open-at-end 44) must match exactly, taken / skipped-at-cap are reported only (a lane's high/low can land a stop a day earlier near the cap boundary); `cache_verified` needs the end value, the curve, the calendar length and the coverage counts, `cache_exact` records the $1 standard separately, and the results JSON carries the lane, every basis factor, the clip and the gate's first defined date.
 - **Never present these in-sample CAGRs as a forecast.**
 
 ## Protocol
@@ -113,25 +114,35 @@ computed on the daily curve.
 
 ## How to run
 
-The replay needs `backend/data/backtest_bars.json` (gitignored, ~10 MB, produced
-ONCE by `python -m scripts.backtest_calls_10y --refresh` on the machine that
-ran the campaign). A refetch through FMP (adj_close = close) will NOT
-reproduce the stored rows and fails machinery check 1 by design.
+The replay needs `backend/data/backtest_bars.json` (gitignored, ~10 MB). The
+August 2026 campaign cache no longer exists anywhere (built in a cloud
+session, never committed), so the cache is REBUILT on the FMP
+dividend-adjusted lane by `scripts/refresh_backtest_bars.py` (needs
+`FMP_API_KEY`; ATAI is basis-normalized by a constant factor, documented in
+`data/backtest_bars_basis.json`; `spy_bars_raw.json` is written alongside so
+the SPY leg is total-return). Machinery check 1 then decides: R2-A must
+reproduce the stored $430,406.29 within ±1% (the repo's V0 machinery gate;
+the FMP lane reproduces V0 itself to $1) or nothing is written.
 
-- **Casey's machine (recommended):**
-  `cd genomics-alpha-tracker/backend && python -m scripts.backtest_executor_mirror --fetch-missing`
-  then commit `backend/data/backtest_executor_mirror_results.json` and this
-  doc (the script rewrites the results section below). `--fetch-missing`
-  fetches only symbols absent from the cache (SPY) and never overwrites.
-- **Render shell** (only once the cache is on the host or committed):
-  `cd /app && python -m scripts.backtest_executor_mirror --out /app/data/backtest_executor_mirror_results.json --fetch-missing`
+- **Render shell (genomics-alpha-tracker service, recommended):**
+  `cd /app && python3 -m scripts.backtest_executor_mirror --out /app/data/backtest_executor_mirror_results.json --no-report`
+  — a missing cache is rebuilt automatically (`--refresh-bars` forces it);
+  the results land on the data disk and the Calls Log panel serves them first.
 - **Dashboard**: the "Run 10-year replay" button on the Calls Log page →
   `POST /blend3070/mirror-backtest/run` (Basic-gated like every other POST)
-  runs the script as a subprocess on the host, log at
-  `/app/data/backtest_executor_mirror.log`, status at `GET …/status`.
-  Without the cache it exits non-zero and the status shows the log tail.
-- Options: `--allow-cache-drift` (publish with cache_verified=false),
-  `--draws N`, `--seed S`, `--report PATH`, `--no-report`.
+  runs the script as a subprocess on the host with `--refresh-bars` when the
+  cache is absent, log at `/app/data/backtest_executor_mirror.log`, status at
+  `GET …/status`. A failed machinery check exits non-zero and the status
+  shows the log tail.
+- **Locally** (any machine with `FMP_API_KEY`): `cd genomics-alpha-tracker/backend && python -m scripts.backtest_executor_mirror`
+  then commit `backend/data/backtest_executor_mirror_results.json` and this
+  doc (the script rewrites the results section below).
+- `--refresh-bars` rebuilds from the per-symbol lane files under
+  `data/bars_cache_fmp_adj/` when they exist (reproducible, no refetch);
+  delete that directory to refetch from FMP.
+- Options: `--refresh-bars`, `--allow-cache-drift` (publish with
+  cache_verified=false), `--fetch-missing` (symbols absent from the cache,
+  never overwrites), `--draws N`, `--seed S`, `--report PATH`, `--no-report`.
 - Tests (synthetic bars, no cache): `python -m pytest -q tests/test_executor_mirror.py`.
 
 Serving: `GET /blend3070/mirror-backtest` returns the results JSON from the
@@ -175,6 +186,15 @@ on the RESULTS once the replay has run - re-derive the machinery numbers,
 spot-check five rows against the bars, recompute the window stats from the
 stored daily curve, and confirm the bootstrap seed reproduces.
 
+
+**Round 2 (results, 2026-10-04): PASS WITH CORRECTIONS.** Live fidelity of the
+executor cfg confirmed against `ibkr-executor/app/blend.py` (ratchet-up-only,
+day-zero STP at the published level, risk unit = fire close − trail, 90 d
+deadline). Corrections 1–6 listed under Results; all applied. Round 1 on the
+FMP-lane code change the same day: BLOCK (refresh inputs unreachable on
+Render; bars ran past the campaign's data end) → fixed → PASS WITH
+CORRECTIONS → applied.
+
 ## Pending DD questions (ranked)
 
 | P | question | what it moves | status |
@@ -190,8 +210,80 @@ stored daily curve, and confirm the bootstrap seed reproduces.
 
 ## Results
 
-_Not run yet. The section between the markers is rewritten by the script on every run._
+First real run: 2026-10-04 on the genomics-alpha-tracker Render host, FMP
+dividend-adjusted lane (start 2015-07-23; ATAI basis 0.0728, ILMN 0.99905),
+bars clipped to 2026-08-19, published with `--allow-cache-drift`
+(`cache_verified=false`: R2-A replays to $469,242 vs the stored $430,406,
++9.0%, one call of 601 flipped at the cap; bar coverage identical 4964 / 44;
+max DD 35.58% vs 35.57%). The results JSON lives on the host's data disk
+(`/app/data/backtest_executor_mirror_results.json`) and is served by the
+Calls Log panel; it is not committed. Counter-agent round 2 (results):
+PASS WITH CORRECTIONS, applied below and in the code (commit after this
+doc). The lag-2 rows below predate the live cap-occupancy fix
+(select_capped_exec) and move by at most the T+1/T+2 delta on the re-run.
 
-<!-- RESULTS:BEGIN (written by scripts/backtest_executor_mirror.py — do not edit by hand) -->
-_No results yet — run the script on a machine with `backend/data/backtest_bars.json` (see "How to run")._
-<!-- RESULTS:END -->
+**Full window 2016-01-04 → 2026-08-19, $100k start**
+
+| variant | end | CAGR | max DD | Sharpe | Sortino | Calmar | underwater | worst yr |
+|---|---|---|---|---|---|---|---|---|
+| r2a_ref (paper, no carry) | $469,242 | 15.67% | 35.6% | 0.76 | 1.15 | 0.44 | 1233 d | 2022 −17.2% |
+| r2a_ref_carry (paper + BIL) | $529,524 | 16.99% | 34.3% | 0.82 | 1.23 | 0.50 | 1176 d | 2022 −16.3% |
+| exec_t1_nocost_nocarry (mechanics only) | $278,246 | 10.11% | 30.7% | 0.57 | 0.86 | 0.33 | 1305 d | 2022 −16.4% |
+| exec_t1_nocarry | $267,048 | 9.69% | 31.0% | 0.55 | 0.83 | 0.31 | 1308 d | 2022 −16.5% |
+| exec_t2_nocarry | $259,666 | 9.40% | 30.7% | 0.55 | 0.82 | 0.31 | 1224 d | 2022 −16.2% |
+| **exec_t2_carry (live sleeve rules)** | $294,301 | 10.70% | 29.2% | 0.61 | 0.91 | 0.37 | 1181 d | 2022 −15.4% |
+| exec_t1_carry | $302,607 | 10.99% | 29.5% | 0.61 | 0.92 | 0.37 | 1270 d | 2022 −15.7% |
+| **blend3070_t2_carry (live book)** | $428,445 | 14.69% | 27.4% | 0.98 | 1.39 | 0.54 | 709 d | 2022 −16.4% |
+| blend3070_t1_carry | $422,227 | 14.53% | 28.3% | 0.96 | 1.36 | 0.51 | 722 d | 2022 −17.5% |
+| blend3070_paper_t2_carry | $422,419 | 14.53% | 27.8% | 0.97 | 1.37 | 0.52 | 710 d | 2022 −16.9% |
+
+**Trailing windows (slices of the same curve; positions carry in)**
+
+| variant | 5y CAGR | 5y max DD | 5y Sharpe | 2y CAGR | 2y max DD | 2y Sharpe |
+|---|---|---|---|---|---|---|
+| r2a_ref_carry | 11.18% | 22.1% | 0.65 | 10.91% | 19.9% | 0.57 |
+| exec_t2_carry | 7.69% | 21.8% | 0.49 | 9.95% | 21.8% | 0.53 |
+| blend3070_t2_carry | 11.95% | 19.5% | 0.85 | 16.06% | 13.4% | 1.08 |
+
+**Bootstrap (stationary block, mean 21 d, 2,000 draws, same draws for both)**
+
+| | 10y CAGR p5 / p50 / p95 | 10y max DD p5 / p50 / p95 | P(10y CAGR < 0) |
+|---|---|---|---|
+| exec_t2_carry | −0.2% / 10.5% / 22.0% | 23% / 34% / 53% | 5.5% |
+| blend3070_t2_carry | 6.7% / 14.6% / 22.7% | 15% / 26% / 39% | 0.1% |
+
+**Deltas, full window (CAGR / max DD / Sharpe)**: carry on vs off +1.30 pp /
+−1.5 pp / +0.06; costs −0.42 pp / +0.3 pp / −0.02; T+1 vs T+2 +0.29 pp;
+mechanics vs paper (no costs, no carry on either side) −5.55 pp / −4.9 pp /
+−0.20; executor vs paper with carry on both sides −6.3 pp.
+
+**What the counter-agent corrected (round 2, results)**
+
+1. The −5.5 pp "mechanics" gap is a RULE MISMATCH INSIDE OUR OWN STACK, not
+   execution friction: the executor obeys the tracker's published shadow
+   levels (`app/calls/shadow.py grade_trailing`: fire-close peak seed, trail
+   ratchets up only, day-zero stop), while the campaign's R2-A grader
+   (`backtest_variants_10y.grade_trailing`) seeds the peak at the entry
+   close, has no entry-bar stop and lets the trail FALL when ATR expands.
+   Which knob carries the gap is an ablation question (ratchet, seed,
+   day-zero stop, time-stop anchor and fill, cash clip, whole shares, risk
+   cap), pre-registered, R3-F sensitivity caveat; a winner lands in the
+   tracker's published levels.
+2. The 2y "executor beats paper" reading was carry-asymmetric (exec with
+   carry vs paper without); like-for-like the executor trails by ~1 pp in
+   every window. `exec_vs_r2a` now compares carry-on to carry-on.
+3. Noise floor: one cap-boundary flip on this lane moved the 10y end value
+   9% (~0.8 pp CAGR). Deltas below that (costs, T+1/T+2, band vs paper)
+   are not robust; mechanics, carry and the blend's DD/Sharpe gain are.
+4. Lag-2 cap occupancy was one day more generous than live (slot held from
+   the fill bar, not the T+1 cycle); fixed in `select_capped_exec`.
+5. Bootstrap P(CAGR<0) and the DD cones are reshuffles of this in-sample
+   survivor history: lower bounds, not forecasts.
+6. 5y/2y rows are the running book's growth over the slice, not a fresh
+   5-year track record.
+
+**Verdict for the book**: on the executor's own replay the 30/70 construction
+beats the sleeve alone on every stat (Sharpe 0.98 vs 0.61, max DD 27% vs
+29%, P(10y CAGR<0) 0.1% vs 5.5%); keep 30/70. The drawdown question is
+answered at ~29% realized / 34% bootstrap median / 53% p95 for a sleeve-only
+book, 27% / 26% / 39% for the live 30/70 book.
