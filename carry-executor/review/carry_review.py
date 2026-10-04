@@ -81,7 +81,9 @@ DAY_MS = 24 * HOUR_MS
 PUBLISH_GRACE_MS = 120_000          # a funding row can trail its mark this long
 FUNDING_FLOOR_USD = 1.0             # funding check ignores gaps below this
 CUM_TOL_USD = 0.05                  # userFunding vs cumFunding.sinceOpen
-CUM_TOL_SCALE = 0.0005              # + this x the modelled pre-open amount removed
+CUM_TOL_SCALE = 0.001               # + this x the modelled pre-open amount removed:
+                                    # candle close vs the venue's oracle is a ~3.5 bp
+                                    # BIAS (max day 4.2 bp), not noise; 10 bp = 2x that
 ARM_PCT, DISARM_PCT = 8.0, 5.0      # the engine's gate, for the chart
 
 
@@ -571,10 +573,14 @@ def naked_long(v: VenueData, rp: Replay, t0: int, t1: int) -> float:
     t0 and the end are priced like price_usd (hour close, or mid now)."""
     end = min(t1, v.now_ms)
     size, px_prev, total = rp.at(t0).perp, v.px("perp", t0), 0.0
-    for f in sorted((f for f in v.fills if f.get("coin") == PERP), key=lambda f: f["time"]):
+    perp_fills = sorted((f for f in v.fills if f.get("coin") == PERP), key=lambda f: f["time"])
+    for i, f in enumerate(perp_fills):
         if not (t0 < f["time"] < end):
             continue
         px = float(f["px"])
+        if i == 0 and f.get("startPosition") is not None and abs(size) <= MIN_QTY:
+            size = float(f["startPosition"])     # a pre-sleeve perp, seeded as replay() does
+            px_prev = px
         if abs(size) > MIN_QTY:
             total += abs(size) * (px - px_prev)
         size += float(f["sz"]) * (1 if f["side"] == "B" else -1)
@@ -607,6 +613,9 @@ def integrity(v: VenueData, rp: Replay) -> list:
         flags.append(f"replayed {SPOT_TOKEN} {b.s_net:.6f} != venue "
                      f"{v.snap_spot_qty:.6f} (manual trade, transfer or a "
                      f"fill the replay missed)")
+    if b.perp > MIN_QTY:
+        flags.append(f"the {PERP} perp is LONG {b.perp:+.4f}: the sleeve is a short "
+                     f"(manual trade?)")
     if abs(b.perp - v.snap_perp_szi) > QTY_TOL:
         flags.append(f"replayed {PERP} perp {b.perp:+.6f} != venue "
                      f"{v.snap_perp_szi:+.6f} (manual trade or a fill the replay missed)")
@@ -639,7 +648,7 @@ def integrity(v: VenueData, rp: Replay) -> list:
         # A merged row on the day the short (re)opened also holds that day's
         # payments on the PREVIOUS position, which sinceOpen does not count
         # (BTC book, 2026-09-18, verified live): take them out at the
-        # published rates on the replayed size (model error ~0.04%/hour).
+        # published rates on the replayed size (candle-vs-oracle bias ~3.5 bp).
         day0 = (opened // DAY_MS) * DAY_MS
         skip, removed = False, 0.0
         # only if that merged row was actually counted in `got` (a reopen
@@ -662,17 +671,15 @@ def integrity(v: VenueData, rp: Replay) -> list:
         # first PUBLISH_GRACE of an hour compares a settled total with a row
         # that is not out yet
         newest = (v.now_ms // HOUR_MS) * HOUR_MS
-        if not skip and v.now_ms - newest < PUBLISH_GRACE_MS and newest > opened \
-                and abs(held(rp, newest)) > MIN_QTY \
-                and newest not in {funding_key(r) for r in v.funding if not is_daily(r)}:
+        grace = (not skip and v.now_ms - newest < PUBLISH_GRACE_MS and newest > opened
+                 and abs(held(rp, newest)) > MIN_QTY
+                 and newest not in {funding_key(r) for r in v.funding if not is_daily(r)})
+        if grace:
             v.notes.append("cumFunding check skipped: the newest hour's payment is not "
                            "published yet")
-            skip = None
-        if skip:
+        elif skip:
             v.notes.append("cumFunding check skipped: a published rate is missing on "
                            "the merged day the short opened")
-        elif skip is None:
-            pass
         elif abs(got + v.cum_since_open) > tol:
             flags.append(f"funding since the short opened: ${got:,.4f} received per "
                          f"userFunding vs ${-v.cum_since_open:,.4f} per the venue's "

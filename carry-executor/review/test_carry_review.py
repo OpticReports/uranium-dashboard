@@ -946,7 +946,7 @@ def test_a_hot_pre_open_day_cannot_hide_a_one_hour_gap():
     assert any("cumFunding" in f for f in R.integrity(v, rp))
 
 
-def test_a_perp_close_exactly_on_a_mark_uses_the_size_before_it():
+def test_a_perp_close_exactly_on_a_mark_follows_the_pre_mark_convention():
     day = (T0 // D) * D
     d5 = day + 5 * D
     fills = REAL + [
@@ -1022,3 +1022,24 @@ def test_the_chart_annotation_carries_the_md_numbers(tmp_path, monkeypatch):
     note = [t for t in texts if "naked long" in t]
     assert len(note) == 1
     assert R._money(ltd["unhedged_equiv_usd"]) in note[0] and R._money(ltd["price_usd"]) in note[0]
+
+
+
+def test_a_pre_sleeve_perp_is_in_the_naked_walk_like_in_price():
+    t = T0 + 60_000
+    fills = [fill(t, "ETH", "A", 4.0, 2700.0, 0.0, "USDC", -3.0),
+             fill(T0 + 2 * D, "ETH", "B", 7.0, 2800.0, 0.0, "USDC", -7.0)]
+    rp = R.replay(fills, PAIR)
+    now = T0 + 3 * D
+    v = venue(fills, [], now, flat(2800.0), flat(2800.0))
+    w = R.window(v, rp, T0, now + 1, "ltd")
+    assert w["price_usd"] == pytest.approx(-700.0, abs=0.01)
+    assert w["unhedged_equiv_usd"] == pytest.approx(700.0, abs=0.01)   # exact mirror
+
+
+def test_a_long_perp_is_flagged():
+    fills = REAL + [fill(T0 + 5 * H, "ETH", "B", 20.0, 2700.0, 1.0, "USDC", -11.096)]
+    now = T0 + 6 * H
+    rp = R.replay(fills, PAIR)
+    v = venue(fills, hourly_funding(rp, flat(2700.0), T0, now), now, flat(2700.0), flat(2700.0))
+    assert any("is LONG" in f for f in R.integrity(v, rp))
