@@ -1048,6 +1048,51 @@ def _curve_reproduction(got: list, stored: list | None) -> dict | None:
             "sharpe_abs_diff": abs(sh_g - sh_s)}
 
 
+def divergence_report(got: list, stored: list, taken: list[dict], mkt: dict,
+                      tol: float = 1e-4, lookback_days: int = 15, bar_pad: int = 4) -> dict:
+    """Where and why the replayed R2-A curve leaves the frozen one. The
+    stored rows carry the ENTRY and the risk unit, so a divergence can only
+    come from an EXIT (a trailing-stop bar the lane prints differently) or a
+    gate day; this names the first divergent date, the taken calls whose
+    entry or exit falls in the lookback window before it, and the lane's
+    bars around each of those exits, so the suspect bar can be compared with
+    another source by hand."""
+    st = {}
+    for d, v in stored:
+        st[d if isinstance(d, date) else date.fromisoformat(str(d)[:10])] = float(v)
+    first = None
+    for d, v in got:
+        w = st.get(d)
+        if w and abs(v - w) / abs(w) > tol:
+            first = (d, v, w)
+            break
+    if first is None:
+        return {"first_divergence": None}
+    d0, v0, w0 = first
+    lo = d0 - timedelta(days=lookback_days)
+    hi = d0 + timedelta(days=2)
+    suspects = []
+    for t in taken:
+        ed = date.fromisoformat(t["entry_date"])
+        xd = date.fromisoformat(t["exit_date"])
+        if lo <= xd <= hi or lo <= ed <= hi:
+            bars = mkt["bars"].get(t["symbol"], [])
+            idx = {b.date: i for i, b in enumerate(bars)}
+            j = idx.get(xd)
+            around = []
+            if j is not None:
+                for b in bars[max(0, j - bar_pad): j + bar_pad + 1]:
+                    around.append({"date": b.date.isoformat(), "open": b.open, "high": b.high,
+                                   "low": b.low, "close": b.close})
+            suspects.append({"symbol": t["symbol"], "flag": t["flag"], "entry_date": t["entry_date"],
+                             "entry": t["entry"], "risk": t["risk"], "exit_date": t["exit_date"],
+                             "exit": t["exit"], "status": t["status"], "bars_around_exit": around})
+    suspects.sort(key=lambda t: t["exit_date"])
+    return {"first_divergence": {"date": d0.isoformat(), "got": v0, "stored": w0,
+                                 "rel_diff": (v0 - w0) / w0},
+            "window": [lo.isoformat(), hi.isoformat()], "suspects": suspects}
+
+
 def clip_bars_to(mkt: dict, end: date) -> dict:
     """Drop every bar after `end` from mkt['bars'] (in place) and report what
     was there. The graders walk the whole bar list, so bars past the
@@ -1436,10 +1481,24 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--draws", type=int, default=BOOT_DRAWS)
     ap.add_argument("--seed", type=int, default=BOOT_SEED)
     ap.add_argument("--no-report", action="store_true")
+    ap.add_argument("--diagnose", action="store_true",
+                    help="no replay: print where the lane's R2-A curve first leaves the frozen one "
+                         "and the taken calls / bars around it, then exit 0")
     args = ap.parse_args(argv)
 
     inp = load_inputs(fetch_missing=args.fetch_missing, refresh_bars_if_missing=True,
                       force_refresh=args.refresh_bars)
+    if args.diagnose:
+        mkt = inp["mkt"]
+        trail_rows, a_open = build_trailing_rows(inp["fire_rows"], mkt, inp["tiers"])
+        ta, sa = select_capped(gate_rows(trail_rows, mkt["xbi_above_prior"][200], key="entry_date"), CAP)
+        curve = run_call_book(ta, mkt)
+        rep = divergence_report(curve, inp.get("r2a_stored_curve") or [], ta, mkt)
+        rep["counts"] = {"n_regraded": len(trail_rows), "open_at_end_excluded": a_open,
+                         "n_taken": len(ta), "skipped_at_cap": sa}
+        rep["bars"] = inp.get("bars_info")
+        print(json.dumps(_round(rep, 6), indent=1))
+        return 0
     res = run_mirror(inp["fire_rows"], inp["mkt"], inp["tiers"],
                      r2a_stored_end=inp["r2a_stored_end"], bil=inp["bil"],
                      proxy_days=inp["proxy_days"], spy_px=inp["spy_px"],

@@ -817,6 +817,29 @@ def test_refresh_script_resolves_seed_data_and_writes_atomically(tmp_path, monke
     assert not target.exists() and not list(data.glob("atomic_probe.json.*"))
 
 
+def test_divergence_report_names_the_first_date_and_the_suspect_exits():
+    rows, mkt, tiers, bil, spy = _study_inputs()
+    ref_rows, _ = build_trailing_rows(rows, mkt, tiers)
+    ta, _ = select_capped(gate_rows(ref_rows, mkt["xbi_above_prior"][200], key="entry_date"), 10)
+    curve = run_call_book(ta, mkt)
+    assert mod.divergence_report(curve, curve, ta, mkt)["first_divergence"] is None
+    # the frozen curve departs after an exit in the middle of the run
+    k = len(curve) // 2
+    d0 = curve[k][0]
+    exits = sorted(t["exit_date"] for t in ta if date.fromisoformat(t["exit_date"]) <= d0)
+    stored = [(d, v * (1.02 if i >= k else 1.0)) for i, (d, v) in enumerate(curve)]
+    rep = mod.divergence_report(curve, stored, ta, mkt)
+    assert rep["first_divergence"]["date"] == d0.isoformat()
+    assert rep["first_divergence"]["rel_diff"] == pytest.approx(-0.02 / 1.02, rel=1e-6)
+    lo, hi = rep["window"]
+    assert all(lo <= s["exit_date"] <= hi or lo <= s["entry_date"] <= hi for s in rep["suspects"])
+    assert all(len(s["bars_around_exit"]) >= 5 and {"open", "high", "low", "close"} <= set(s["bars_around_exit"][0])
+               for s in rep["suspects"] if s["bars_around_exit"])
+    assert rep["suspects"] == sorted(rep["suspects"], key=lambda t: t["exit_date"])
+    # the ISO-string shape of the on-disk curve works too
+    assert mod.divergence_report(curve, [(d.isoformat(), v) for d, v in stored], ta, mkt)["first_divergence"]["date"] == d0.isoformat()
+
+
 def test_row_mismatch_examples_name_the_rows():
     a = [{"fire_date": "2026-07-17", "symbol": "ATAI", "flag": "x_trail", "entry_date": "2026-07-23",
           "exit_date": "2026-07-31", "status": "stopped", "entry": 2.99, "exit": 2.43, "r_net": -1.09}]
