@@ -1,0 +1,84 @@
+{
+  "results": [
+    {
+      "symphony": "mbkiXcuNDjueXpiox5Av",
+      "name": "The Holy Grail w Sorts & Safe Sectors  139 | 38 | 2015 (Modified #1)",
+      "window": [
+        "2025-12-05",
+        "2026-10-02"
+      ],
+      "n_days": 206,
+      "live_cumulative_return": 0.8923,
+      "model_cumulative_return": 0.7886,
+      "cumulative_gap": 0.1037,
+      "mean_daily_gap_bps": 2.86,
+      "annualized_gap": 0.072,
+      "worst_daily_gap_bps": -377.6,
+      "best_daily_gap_bps": 380.3,
+      "daily_return_correlation": 0.96,
+      "live_beta_to_model": 0.98,
+      "live_model_vol_ratio": 1.02,
+      "live_max_drawdown": 0.2105
+    },
+    {
+      "symphony": "ORQNCfZnA18wmsMWVhf8",
+      "name": "VIX Harvester + HYG Credit Guard",
+      "window": [
+        "2026-07-22",
+        "2026-10-02"
+      ],
+      "n_days": 51,
+      "live_cumulative_return": -0.0152,
+      "model_cumulative_return": 0.0116,
+      "cumulative_gap": -0.0269,
+      "mean_daily_gap_bps": -5.2,
+      "annualized_gap": -0.1311,
+      "worst_daily_gap_bps": -388.8,
+      "best_daily_gap_bps": 60.1,
+      "daily_return_correlation": 0.118,
+      "live_beta_to_model": 0.181,
+      "live_model_vol_ratio": 1.54,
+      "live_max_drawdown": 0.0403
+    },
+    {
+      "symphony": "YPTSJFJwD2ZKfAeYJUbW",
+      "name": "KMLM switcher + VIX sleeve 75/25",
+      "window": [
+        "2026-07-07",
+        "2026-10-02"
+      ],
+      "n_days": 62,
+      "live_cumulative_return": 0.313,
+      "model_cumulative_return": 0.3163,
+      "cumulative_gap": -0.0033,
+      "mean_daily_gap_bps": -0.37,
+      "annualized_gap": -0.0094,
+      "worst_daily_gap_bps": -182.8,
+      "best_daily_gap_bps": 323.9,
+      "daily_return_correlation": 0.989,
+      "live_beta_to_model": 0.991,
+      "live_model_vol_ratio": 1.002,
+      "live_max_drawdown": 0.1475
+    },
+    {
+      "symphony": "nNdBk7hc5NiBzeRvbI5T",
+      "name": "Crash Convexity Sleeve \u2014 InverseHold + Bond Frontrunner 50/50",
+      "window": [
+        "2026-07-07",
+        "2026-10-02"
+      ],
+      "n_days": 62,
+      "live_cumulative_return": 0.1797,
+      "model_cumulative_return": 0.1592,
+      "cumulative_gap": 0.0205,
+      "mean_daily_gap_bps": 2.94,
+      "annualized_gap": 0.0741,
+      "worst_daily_gap_bps": -136.7,
+      "best_daily_gap_bps": 178.1,
+      "daily_return_correlation": 0.969,
+      "live_beta_to_model": 1.044,
+      "live_model_vol_ratio": 1.076,
+      "live_max_drawdown": 0.0481
+    }
+  ]
+}

@@ -88,12 +88,43 @@ def bench_price(bars, fill_epoch):
     return (h + l) / 2.0
 
 
+def bar_halfrange_bps(bars, fill_epoch):
+    """Measurement CEILING for a fill: our print lies inside its bar, so the
+    largest |slippage| it can ever show is half the bar's range. A fill whose
+    ceiling is under the threshold being policed cannot express it."""
+    lo, hi = 0, len(bars) - 1
+    best = None
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        if bars[mid][0] <= fill_epoch:
+            best = mid; lo = mid + 1
+        else:
+            hi = mid - 1
+    if best is None:
+        return None
+    ts, o, h, l, c = bars[best]
+    if fill_epoch - ts > 15 * 60 or (h + l) <= 0:
+        return None
+    return (h - l) / (h + l) * 1e4          # half-range / midpoint, in bps
+
+
 def load_ledger(path):
+    """Load the ledger. A CORRUPT file must never be silently replaced with an
+    empty one -- that was a confirmed data-destruction path (add. 36): a bare
+    except plus an unconditional write took 218 fills to 0 while printing
+    'ledger 0 -> 0'. Bars expire in ~60 days, so a lost ledger is lost forever."""
+    if not os.path.exists(path):
+        return {"fills": {}}
     try:
         with open(path) as f:
-            return json.load(f)
-    except Exception:
-        return {"fills": {}}
+            led = json.load(f)
+        if "fills" not in led or not isinstance(led["fills"], dict):
+            raise ValueError("ledger missing a 'fills' object")
+        return led
+    except Exception as e:
+        raise SystemExit(
+            f"REFUSING TO RUN: ledger at {path} is unreadable ({e}).\n"
+            f"It is NOT being overwritten. Restore it from git, then re-run.")
 
 
 def collect(a, acct, led):
@@ -107,7 +138,7 @@ def collect(a, acct, led):
     if not rows:
         print("  no new unmeasured fills in the window")
         return 0, []
-    bars, failed = {}, []
+    bars, failed, dropped = {}, [], []
     added = 0
     for r in rows:
         t = r["Symbol"]
@@ -125,10 +156,12 @@ def collect(a, acct, led):
             dt = datetime.datetime.fromisoformat(stamp[:19]).replace(tzinfo=ET)
         mkt = bench_price(bars[t], dt.timestamp())
         if not mkt:
+            dropped.append(f"{t}@{stamp[:16]}")
             continue
         # benchmark 30 minutes earlier: same TRUE cost, far more drift exposure.
         # Used by the invariance gate -- a correct benchmark leaves cost ~stable.
         mkt_lag = bench_price(bars[t], dt.timestamp() - 1800)
+        cap_bps = bar_halfrange_bps(bars[t], dt.timestamp())
         fill = float(r["Average Fill Price"])
         side = 1 if r["Side"] == "buy" else -1
         led["fills"][r["Order ID"]] = {
@@ -136,9 +169,13 @@ def collect(a, acct, led):
             "notional": fill * float(r["Filled Quantity"]),
             "slip_bps": side * (fill / mkt - 1) * 1e4,
             "slip_lag_bps": (side * (fill / mkt_lag - 1) * 1e4) if mkt_lag else None,
+            "cap_bps": cap_bps,
             "hhmm": dt.strftime("%H:%M"),
         }
         added += 1
+    if dropped:
+        print(f"  !! {len(dropped)} fills had NO covering bar and are unmeasured: "
+              f"{dropped[:6]}{' ...' if len(dropped) > 6 else ''}")
     return added, failed
 
 
@@ -172,39 +209,52 @@ def report(led, assumption=5.0):
     print(f"ledger: {len(F)} measured fills, {len(ds)} days, {ds[0]} .. {ds[-1]}, "
           f"${sum(f['notional'] for f in F):,.0f} notional")
 
-    # ---------------- standing gates (both must pass) ----------------
-    # GATE 1 — SIGN PLACEBO. Real execution cost is sign-dependent; any
-    # benchmark bias is not. Randomising each fill's side must collapse the
-    # estimate to ~0. If it does not, something side-independent is leaking in.
-    rnd = random.Random(20260101)
-    flips = []
-    for _ in range(200):
-        flips.append(statistics.mean(
-            [f["slip_bps"] * rnd.choice((1, -1)) for f in F]))
-    g1 = statistics.mean(flips)
-    g1_sd = statistics.pstdev(flips)
-    ok1 = abs(g1) < max(1.0, 2 * g1_sd)
-    print(f"GATE 1 sign-placebo: randomised sides give {g1:+.3f} +/- {g1_sd:.3f} bps "
-          f"(must be ~0) -> {'PASS' if ok1 else 'FAIL'}")
+    # ---------------- standing gates (all must pass) ----------------
+    # GATE 1 — UNSIGNED BIAS. The previous sign-randomisation gate was an
+    # algebraic IDENTITY: mean(slip * +/-1) has expectation 0 for ANY input, and
+    # its tolerance GREW with the bias (verified add. 36: injecting +1000 bps
+    # still PASSED). Replaced with the real question — is there a bias that does
+    # NOT depend on side? Take raw (fill/mkt-1) UNSIGNED; a clean benchmark
+    # centres it on zero, a skewed one does not.
+    unsigned = [f["slip_bps"] * f["side"] for f in F]
+    g1 = statistics.mean(unsigned)
+    g1se = cluster_se(unsigned, days)
+    ok1 = abs(g1) < 2 * g1se if g1se == g1se else False
+    print(f"GATE 1 unsigned-bias: benchmark sits {g1:+.3f} +/- {g1se:.3f} bps off "
+          f"the fills (must be within 2 SE of 0) -> {'PASS' if ok1 else 'FAIL'}")
 
-    # GATE 2 — BENCHMARK INVARIANCE. Re-benchmark every fill 30 minutes earlier.
-    # The true cost is unchanged; only drift exposure grows. A close-based
-    # benchmark fails this badly (add. 35: +2.03 -> -16.79). A correct one
-    # should move little relative to its own SE.
+    # GATE 2 — BENCHMARK-DEFINITION PERTURBATION, absolute bound. The previous
+    # version perturbed only the lookup TIME, so any timestamp-independent
+    # benchmark (a daily close) returned shift == 0 and passed trivially; its
+    # tolerance also scaled with noise, so a worse benchmark passed more easily.
+    # Now: an ABSOLUTE bound, well inside the 5bps being policed.
     lag = [f["slip_lag_bps"] for f in F if f.get("slip_lag_bps") is not None]
     lagd = [f["d"] for f in F if f.get("slip_lag_bps") is not None]
+    TOL = 1.5
     if len(lag) >= 30:
-        lm = statistics.mean(lag); lse = cluster_se(lag, lagd)
+        lm = statistics.mean(lag)
         shift = abs(lm - m)
-        ok2 = shift < 2 * max(se, 1e-9) + 2 * max(lse, 1e-9)
-        print(f"GATE 2 invariance: 30-min-earlier benchmark gives {lm:+.2f} +/- "
-              f"{lse:.2f} (shift {shift:.2f} bps) -> {'PASS' if ok2 else 'FAIL'}")
+        ok2 = shift < TOL
+        print(f"GATE 2 time-perturbation: 30-min-earlier benchmark shifts the "
+              f"answer {shift:.2f} bps (absolute bound {TOL}) -> "
+              f"{'PASS' if ok2 else 'FAIL'}")
     else:
         ok2 = False
-        print("GATE 2 invariance: insufficient lagged benchmarks -> FAIL")
+        print("GATE 2 time-perturbation: insufficient lagged benchmarks -> FAIL")
 
-    if not (ok1 and ok2):
-        print("  !! a gate FAILED — the measurement is not trustworthy, no verdict issued")
+    # GATE 3 — RESOLUTION. Our own print sits inside the bar, so a fill can only
+    # register |slip| <= (bar half-range). Fills whose ceiling is below the
+    # threshold being policed CANNOT express it and silently drag the mean toward
+    # zero (add. 36: they are concentrated in the cash sleeve). Require that a
+    # majority of fills can actually register 5 bps.
+    able = [f for f in F if f.get("cap_bps") is None or f["cap_bps"] >= 5.0]
+    frac = len(able) / len(F)
+    ok3 = frac >= 0.5
+    print(f"GATE 3 resolution: {len(able)}/{len(F)} ({frac:.0%}) of fills can "
+          f"physically register 5 bps (need >=50%) -> {'PASS' if ok3 else 'FAIL'}")
+
+    if not (ok1 and ok2 and ok3):
+        print("  !! a gate FAILED — measurement not trustworthy, no verdict issued")
         return
 
     lo, hi = m - 2 * se, m + 2 * se
@@ -214,7 +264,18 @@ def report(led, assumption=5.0):
           f"|  equal-weighted, intraday benchmark")
     verdict = ("ABOVE" if lo > assumption else "BELOW" if hi < assumption
                else "INDISTINGUISHABLE FROM")
-    print(f"  -> {verdict} the {assumption}bps assumption")
+    print(f"  -> pooled: {verdict} the {assumption}bps assumption")
+    if able and len(able) < len(F):
+        av = [f["slip_bps"] for f in able]; ad = [f["d"] for f in able]
+        am = statistics.mean(av); ase = cluster_se(av, ad)
+        alo, ahi = am - 2 * ase, am + 2 * ase
+        averd = ("ABOVE" if alo > assumption else "BELOW" if ahi < assumption
+                 else "INDISTINGUISHABLE FROM")
+        print(f"  RESOLVED SUBSET (fills that can register 5bps, n={len(able)}): "
+              f"{am:+.2f} +/- {ase:.2f}, 95% [{alo:+.2f}, {ahi:+.2f}]")
+        print(f"  -> resolved: {averd} the {assumption}bps assumption "
+              f"<- the binding read; the pooled figure is diluted by fills that "
+              f"cannot express a 5bps cost")
 
     off = [f for f in F if not ("15:30" <= f["hhmm"] <= "16:05")]
     if off:
@@ -251,8 +312,12 @@ def main():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--account")
+    # Yahoo serves ~60 TRADING days, i.e. ~86 calendar days. Defaulting to 60
+    # CALENDAR days silently left 111 measurable fills ($3.5M) uncollected
+    # until their bars expired (add. 36). Reach past the window and let the
+    # bar lookup reject what it cannot cover.
     p.add_argument("--since", default=(datetime.date.today()
-                   - datetime.timedelta(days=BAR_DAYS)).isoformat())
+                   - datetime.timedelta(days=95)).isoformat())
     p.add_argument("--until", default=datetime.date.today().isoformat())
     p.add_argument("--report-only", action="store_true")
     p.add_argument("--ledger", default=LEDGER)
@@ -267,9 +332,14 @@ def main():
             print(f"  !! bar fetch FAILED for {failed} — those fills are NOT measured "
                   f"and their bars expire in ~{BAR_DAYS}d")
         print(f"  +{added} newly measured fills (ledger {before} -> {len(led['fills'])})")
+        if len(led["fills"]) < before:
+            raise SystemExit(f"REFUSING TO WRITE: ledger would shrink "
+                             f"{before} -> {len(led['fills'])}")
         os.makedirs(os.path.dirname(a.ledger), exist_ok=True)
-        with open(a.ledger, "w") as f:
+        tmp = a.ledger + ".tmp"
+        with open(tmp, "w") as f:
             json.dump(led, f, indent=1, sort_keys=True)
+        os.replace(tmp, a.ledger)          # atomic; a crash cannot truncate
     report(led)
 
 

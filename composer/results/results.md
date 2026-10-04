@@ -1927,3 +1927,99 @@ slippage has risen. Honest full-window estimate +2.1 bps with a clustered
 +/-3.07, and the recent quarter is ~0 after debiasing. The add.-14b verdict
 (IBKR migration case CLOSED at current scale) stands — but it stands on the
 weakness of the evidence for a rise, not on this instrument.
+
+
+## Addendum 36 — slippage v3 ALSO failed review; stop measuring fill-by-fill,
+## the aggregate measure already answers the question (2026-10-04)
+
+Third estimator, third failure. Recording because the conclusion is a change
+of approach, not another patch.
+
+V3 WHAT WAS BUILT: benchmark each fill against the market price in the 5-minute
+bar containing it, eliminating the fill-to-close drift instead of modelling it.
+Headline +1.09 +/- 0.80 bps/side, apparently BELOW the 5.0 assumption.
+
+WHAT THE COUNTER-AGENT CONFIRMED AS SOUND: bars start-stamped, containing bar
+selected for 218/218 fills, stored benchmarks reproduce bit-for-bit on refetch;
+split adjustment structurally immune (same-instant price ratio, so any
+multiplicative factor cancels — the v2 bug cannot recur by construction); DST
+handled on the live path; CR1 clustering correct, verdict robust to t(39),
+ticker clustering and wild bootstrap; dedup idempotent; the self-impact claim
+(our print inside the bar biases cost DOWNWARD, i.e. conservative) verified.
+
+WHY IT FAILED — the gates licensing the verdict were not tests:
+1. GATE 1 WAS AN ALGEBRAIC IDENTITY. mean(slip_i * +/-1) has expectation zero
+   for ANY input, and its tolerance GREW with the bias. Verified myself:
+   injecting +1000 bps of side-correlated artifact gives headline +1001 bps and
+   the gate still PASSES. It could never fail. This is the second time I built
+   a gate that cannot fail (add. 35's placebo was tautological for the same
+   underlying reason) — a gate must be shown to fail on a broken input BEFORE
+   it is trusted, and neither was.
+2. GATE 2 WAS BLIND BY CONSTRUCTION. It perturbed only the lookup TIME, so any
+   timestamp-independent benchmark (a daily close — exactly the v2 defect)
+   returns shift == 0 and passes trivially. Its tolerance also scaled with the
+   lagged estimate's noise, so a NOISIER wrong benchmark passed more easily.
+   (On the 218-fill ledger the agent computed tolerance 54.59 vs v2's 18.82
+   shift = PASS; on the expanded 328-fill ledger tolerance tightens to 7.71 and
+   v2 would fail — so the specific "would have passed v2" claim is
+   ledger-size-dependent, but the structural blindness is not.)
+3. MEASUREMENT CEILING, the finding that flips the verdict. Our own print lies
+   inside its bar, so a fill can only ever register |slip| <= half the bar
+   range. 39% of fills cannot express 5 bps at all — concentrated in the cash
+   sleeve (BOXX/PULS/BIL, median ceiling 0.4-1.0 bps). They drag the pooled
+   mean toward zero. Restricted to fills that CAN register 5 bps: +1.98 +/-
+   1.61, 95% hi +5.20 -> INDISTINGUISHABLE, not BELOW.
+4. BENCHMARK CHOICE FLIPS IT: (H+L)/2 +1.09, open +1.91 [hi +5.12], close
+   -0.81, OHLC/4 +0.82. Bar-open crosses 5.0. (H+L)/2 is the lowest-variance
+   choice, not a neutral one.
+5. THIN NAMES ARE UNMEASURED, NOT CHEAP. We trade 5.6% of VXZ ADV and 8.5% of
+   ZVOL per clip; sqrt-law impact ~10 and ~22 bps against reported +4.8/+1.5 and
+   a 13-14 bps ceiling. VXZ has no covering bar on 19 of 59 days — the illiquid,
+   expensive days are silently excluded.
+6. DATA-DESTRUCTION BUG: a bare except plus an unconditional write turned a
+   218-fill ledger into 0 while printing "ledger 0 -> 0". Bars expire in ~60
+   days, so a lost ledger is lost permanently.
+7. COVERAGE: 181 fills ($7.99M, through 2026-07-09) are permanently
+   unmeasurable; 111 more ($3.50M) were measurable but uncollected because
+   --since defaulted to 60 CALENDAR days while Yahoo serves 60 TRADING days.
+
+FIXED NOW: ledger load refuses to run on a corrupt file and never overwrites
+it; atomic write plus a refuse-on-shrink guard; collection window widened to 95
+days (recovered 110 of the 111 expiring fills — ledger 218 -> 328, $7.9M);
+unmeasured fills printed loudly instead of dropped silently; both worthless
+gates replaced (unsigned-bias with a real SE; time-perturbation with an
+ABSOLUTE 1.5bps bound) plus a new resolution gate requiring >=50% of fills to
+be able to register 5 bps; stratified headline reporting the resolved subset
+beside the pooled one. WITH HONEST GATES, GATE 2 NOW FAILS (shift 2.55 vs
+bound 1.50) AND NO VERDICT IS ISSUED. That is the correct behaviour: at this
+sample size the benchmark cannot be validated to the precision the question
+needs.
+
+DECISION — STOP TUNING THIS. Three estimators have failed, each differently,
+and the pattern is that the measurement noise exceeds the ~5bps effect at our
+trade count and data resolution. Continuing to adjust gates until one passes is
+how overfitting happens.
+THE AGGREGATE MEASURE ALREADY ANSWERS THE QUESTION, with far more statistical
+power, because it uses every DAY rather than every FILL and captures total
+implementation shortfall (slippage + timing + fees + anything else):
+  divergence.py, live vs model, deposit-adjusted, as of 2026-10-02 --
+    HG     live +89.23% vs model +78.86%   gap +10.37%   corr 0.960
+    KMLM   live +31.30% vs model +31.63%   gap  -0.33%   corr 0.989
+    SLEEVE live +17.97% vs model +15.92%   gap  +2.05%   corr 0.969
+    HARV   live  -1.52% vs model  +1.16%   gap  -2.69%   corr 0.118  <- see below
+Three of four engines are at or ABOVE their model. Whatever execution costs,
+it is not visibly eating returns. That is the decision-grade answer; the
+fill-level number is not, and may not be obtainable with free data.
+STANDING CHANGE: the slippage script stays as an ADVISORY diagnostic with
+honest gates (it will refuse a verdict until one is warranted); the migration
+gate in ideas-backlog.md is re-anchored to the DIVERGENCE measure — a
+sustained negative live-vs-model gap on liquid engines is the signal that
+execution has degraded, not a fill-level bps figure.
+
+NEW FLAG — HARV IS NOT TRACKING ITS MODEL. corr 0.118 (others 0.96-0.99), beta
+0.18, vol-ratio 1.54, gap -2.69% over 51 days. NOT a cash artifact: restricting
+to days the model actually moved (>20bps) gives corr +0.125, essentially
+unchanged. No POLICY tier fires (its drawdown is 4.0% vs a 12% tripwire), so
+this is report-only. Caveat: 51-day window, only 13 model-moving days — too
+thin to act on, but it is the first time any engine has shown this signature
+and it is now on the monthly watch list alongside the KMLM earn-back check.
