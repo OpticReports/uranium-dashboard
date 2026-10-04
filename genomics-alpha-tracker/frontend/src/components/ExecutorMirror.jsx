@@ -351,7 +351,7 @@ export default function ExecutorMirror({ data, onReload, loadError }) {
               <> Max DD {(m.machineryFacts.maxDdGot * 100).toFixed(2)}% vs stored {(m.machineryFacts.maxDdStored * 100).toFixed(2)}%;
               Sharpe {m.machineryFacts.sharpeGot?.toFixed(3)} vs {m.machineryFacts.sharpeStored?.toFixed(3)}.</>
             )}
-            {" "}The executor deltas and the drawdown profile are measured within this run and stand on their own.
+            {" "}Deltas are measured within this run; those smaller than the lane-drift noise floor (commissions, T+1 vs T+2, band vs paper) are not robust, the mechanics gap, the carry gain and the 30/70 blend's drawdown/Sharpe gain are.
           </div>
         </div>
       )}

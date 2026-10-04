@@ -755,6 +755,27 @@ def stationary_bootstrap(rets: list[float], horizon_years: float, draws: int = B
             "prob_cagr_negative": sum(1 for c in cagrs if c < 0) / len(cagrs)}
 
 
+def select_capped_exec(rows: list[dict], cap: int | None) -> tuple[list[dict], int]:
+    """select_capped with LIVE slot occupancy: the executor counts a pending
+    MOO as open from the T+1 sizing cycle (blend.py: open_count = positions -
+    exiting + pending_entries), so a lag-2 call holds its cap slot from its
+    gate_date (fire+1), not from the fill bar; a slot frees the day after the
+    exit, as in select_capped (counter-agent 2026-10-04, MED: the fill-bar
+    rule let ~38 lag-2 calls in that live would have refused)."""
+    key = lambda t: (t.get("gate_date", t["entry_date"]), t["entry_date"], t["symbol"], t.get("flag", ""))  # noqa: E731
+    ordered = sorted(rows, key=key)
+    taken: list[dict] = []
+    open_exits: list[str] = []
+    for t in ordered:
+        occupy_from = t.get("gate_date", t["entry_date"])
+        open_exits = [x for x in open_exits if x >= occupy_from]
+        if cap is not None and len(open_exits) >= cap:
+            continue
+        taken.append(t)
+        open_exits.append(t["exit_date"])
+    return taken, len(rows) - len(taken)
+
+
 def diff_stats(a: dict, b: dict) -> dict:
     return {k: (a[k] - b[k]) if (a and b) else None
             for k in ("cagr", "max_dd", "sharpe", "end_value")}
@@ -780,6 +801,9 @@ HONESTY = [
     "SURVIVORSHIP: the 32-name universe is today's watchlist; dead/delisted names are absent — absolute numbers flattered.",
     "HINDSIGHT TIERS: liquidity tiers (and so slippage) are full-sample median ADDV, known only ex post.",
     "IN-SAMPLE: the fire thresholds and the 3xATR/90d exit parameters were chosen on this same history; exit-parameter sensitivity per R3-F (2.5-3.5x, 60-120d) is the honest range, not the center.",
+    "EXIT RULE, NOT EXECUTION FRICTION: the executor obeys the TRACKER's published shadow levels (app/calls/shadow.py grade_trailing: peak seeded at the FIRE close, trail ratchets UP only, day-zero stop at the published level). The campaign's R2-A grader (backtest_variants_10y.grade_trailing) seeds the peak at the ENTRY close, has no entry-bar stop and lets the trail FALL when ATR expands. The 'mechanics' delta is that rule mismatch inside our own stack, bundled (ratchet, seed, day-zero stop, time-stop anchor/fill, cash clip, whole shares); which knob carries it is an ABLATION question, not settled here.",
+    "BOOTSTRAP = RESHUFFLES OF THIS IN-SAMPLE, SURVIVOR HISTORY: P(CAGR<0) and the drawdown cones are a lower bound on the real risk, not a forecast; 21-day blocks destroy multi-year regime persistence (the 1,233-day underwater stretch), so sequence risk is understated.",
+    "LAG-2 CAP OCCUPANCY: a pending MOO holds its slot from the T+1 cycle, as live (select_capped_exec); the first published run occupied from the fill bar and let ~38 more calls in.",
     "REPLAYABLE SHADOW, NOT THE LIVE BOOK: sentiment/revision/options lanes are absent, no composite gate, no 14-day per-symbol cooldown — duplicate same-day fires remain distinct calls (242 pairs); the live engine runs rolling tiers + discovery, not this fixed universe.",
     "SELECTION: 21 prior judged variants preceded R2-A; this mirror inherits those selection effects.",
     "COSTS ASSUMED, NOT MEASURED: IBKR Fixed ($0.005/sh, $1 min, 1% cap), $1 per BIL order, tiered slippage 10/40/100 bps per side, SPY 10 bps; BIL bid/ask, partial fills and MOO auction slippage beyond the tiered bps are not modeled.",
@@ -880,7 +904,7 @@ def run_mirror(fire_rows: list[dict], mkt: dict, tiers: dict[str, str], *,
     for lag in (1, 2):
         cfg = replace(EXEC_T2, entry_lag=lag)
         rows, rmeta = build_exec_rows(fire_rows, mkt, tiers, cfg)
-        taken, skipped = select_capped(gate_rows(rows, up200), CAP)
+        taken, skipped = select_capped_exec(gate_rows(rows, up200), CAP)
         rows_by_lag[lag] = (taken, {**rmeta, "n_graded": len(rows), "n_gated": len(gate_rows(rows, up200)),
                                     "n_taken": len(taken), "skipped_at_cap": skipped}, skipped)
 
@@ -949,7 +973,7 @@ def run_mirror(fire_rows: list[dict], mkt: dict, tiers: dict[str, str], *,
     deltas = {"t1_vs_t2": _d("exec_t1_carry", "exec_t2_carry"),
               "carry_on_vs_off": _d("exec_t2_carry", "exec_t2_nocarry"),
               "costs": _d("exec_t1_nocarry", "exec_t1_nocost_nocarry"),
-              "exec_vs_r2a": _d("exec_t2_carry", "r2a_ref"),
+              "exec_vs_r2a": _d("exec_t2_carry", "r2a_ref_carry"),     # carry on BOTH sides
               "mechanics_vs_r2a": _d("exec_t1_nocost_nocarry", "r2a_ref"),
               "blend_t1_vs_t2": _d("blend3070_t1_carry", "blend3070_t2_carry"),
               "blend_band_vs_paper": _d("blend3070_t2_carry", "blend3070_paper_t2_carry")}
@@ -1043,10 +1067,22 @@ def run_mirror(fire_rows: list[dict], mkt: dict, tiers: dict[str, str], *,
             + (f"; max DD {curve_check['max_dd_got']:.2%} vs stored {curve_check['max_dd_stored']:.2%}, "
                f"Sharpe {curve_check['sharpe_got']:.3f} vs {curve_check['sharpe_stored']:.3f}, "
                f"curve max point-wise gap {curve_check['max_rel_diff']:.1%}" if curve_check else "")
-            + ". The ABSOLUTE levels are not the R2/R3 docs' numbers; the executor deltas and the "
-            "drawdown profile are measured within this run and stand on their own."]
+            + f". The ABSOLUTE levels are not the R2/R3 docs' numbers (only max DD and bar coverage "
+            f"map). Deltas are measured within this run, but a single cap-boundary flip on this lane "
+            f"moved the 10y end value {rel_diff:+.1%} (~{_cagr_floor(rel_diff, r2a_curve):.1%} of CAGR): "
+            f"deltas smaller than that (commissions, T+1 vs T+2, band vs paper) sit below the lane-drift "
+            f"noise floor; the mechanics gap, the carry gain and the 30/70 blend's drawdown/Sharpe gain "
+            f"are well above it."]
             if (not cache_verified and r2a_stored_end is not None) else []),
     }
+
+
+def _cagr_floor(rel_diff: float | None, curve: list) -> float:
+    """The CAGR-equivalent of an end-value gap over the curve's span."""
+    if not rel_diff or len(curve) < 2:
+        return 0.0
+    years = max((curve[-1][0] - curve[0][0]).days / 365.25, 1e-9)
+    return abs((1.0 + abs(rel_diff)) ** (1.0 / years) - 1.0)
 
 
 def _curve_reproduction(got: list, stored: list | None) -> dict | None:
