@@ -569,6 +569,7 @@ def test_end_labels_are_spread_apart_in_order():
     assert out[0] > out[1] > out[2] > out[3]
     assert R._money(-33.87) == "-$33.87" and R._money(0.37) == "$0.37"
     assert R._money(-0.001) == "$0.00" and R._usd(-0.004) == "$0.00"
+    assert str(R._r(-0.001)) == "0.0"                       # no -0.0 in the json
 
 
 
@@ -718,10 +719,177 @@ def test_the_eth_move_sits_beside_the_price_component():
         return 2700.0 * (1 + 0.10 * (t - T0) / (30 * D))    # ETH +10% over the month
     v = venue(REAL, hourly_funding(RP_REAL, up, T0, now), now, up, up)
     w = R.window(v, RP_REAL, T0, now + 1, "ltd")
-    assert w["eth_move_pct"] == pytest.approx(10.0, abs=0.3)
-    assert w["unhedged_equiv_usd"] == pytest.approx(0.10 * w["avg_notional_usd"], rel=0.05)
+    assert w["eth_move_pct"] == pytest.approx((up(now) / 2703.9 - 1) * 100, abs=0.01)
+    assert w["unhedged_equiv_usd"] == pytest.approx(11.096 * (up(now) - 2703.9), abs=1.0)
     assert abs(w["price_usd"]) < 0.01 * abs(w["unhedged_equiv_usd"])   # hedged: ~0
     r = R.build(v, R.ym_of(now))
     r.pop("_replay")
     md = R.markdown(r)
-    assert "UNHEDGED" in md and "ETH move" in md and "## By month" in md
+    assert "naked long of the same size" in md and "ETH move" in md and "## By month" in md
+
+
+
+# ------------------------------------------------------------------ final-round gaps
+
+def close_reopen(close_at, reopen_at, px=2700.0):
+    return REAL + [
+        fill(close_at, PAIR, "A", 11.09603845, px, 30.0, "USDC", 11.09603845),
+        fill(close_at + 2000, "ETH", "B", 11.096, px, 13.0, "USDC", -11.096),
+        fill(reopen_at, PAIR, "B", 11.1, px, 0.0074, "UETH", 0.0),
+        fill(reopen_at + 2000, "ETH", "A", 11.09, px, 13.0, "USDC", 0.0)]
+
+
+@pytest.mark.parametrize("reopen_h", [14, 22.99, 23.5])
+def test_cum_check_clean_for_a_merged_reopen_at_any_hour(reopen_h):
+    """A reopen after 23:00 books the merged open-day row BEFORE the open: then
+    nothing may be subtracted (it was never counted)."""
+    day = (T0 // D) * D
+    close_at = day + 5 * D + 10 * H
+    reopen_at = day + 5 * D + int(reopen_h * H)
+    fills = close_reopen(close_at, reopen_at)
+    rp = R.replay(fills, PAIR)
+    now = day + 20 * D + 8 * H + 56 * 60_000
+    hourly = hourly_funding(rp, flat(2700.0), T0, now)
+    cum = -sum(float(r["delta"]["usdc"]) for r in hourly if r["time"] // H * H > reopen_at)
+    merged = merge_days(hourly, now - 8 * D)
+    v = venue(fills, merged, now, flat(2700.0), flat(2700.0), cum=cum)
+    assert R.integrity(v, rp) == []
+    v = venue(fills, merged, now, flat(2700.0), flat(2700.0), cum=cum - 1.0)
+    assert any("cumFunding.sinceOpen" in f for f in R.integrity(v, rp))
+
+
+def test_a_missing_rate_on_the_merged_open_day_skips_with_a_note():
+    day = (T0 // D) * D
+    close_at, reopen_at = day + 5 * D + 10 * H, day + 5 * D + 14 * H
+    fills = close_reopen(close_at, reopen_at)
+    rp = R.replay(fills, PAIR)
+    now = day + 20 * D + 8 * H + 56 * 60_000
+    hourly = hourly_funding(rp, flat(2700.0), T0, now)
+    cum = -sum(float(r["delta"]["usdc"]) for r in hourly if r["time"] // H * H >= reopen_at)
+    gone = day + 5 * D + 3 * H                              # a HELD pre-open mark
+    rates = [r for r in rate_rows(T0 - 40 * D, now) if r["time"] // H * H != gone]
+    v = venue(fills, merge_days(hourly, now - 8 * D), now, flat(2700.0), flat(2700.0),
+              cum=cum - 1.0, rates=rates)
+    assert R.integrity(v, rp) == []
+    assert sum("cumFunding check skipped" in n for n in v.notes) == 1
+
+
+def test_the_naked_long_counts_only_the_hours_held():
+    """Final-review SERIOUS: the yardstick must follow the hours the short was
+    actually held, not the whole window's ETH move."""
+    nov0 = R.month_bounds("2026-11")[0]
+    close_at, reopen_at = nov0 + 9 * D + 12 * H, nov0 + 19 * D + 12 * H
+    now = nov0 + 30 * D + 9 * H
+    # (A) ETH +10% only while the sleeve was CLOSED
+    def a(t):
+        return 2700.0 if t < close_at else (2970.0 if t >= reopen_at else
+                                             2700.0 + 270.0 * (t - close_at) / (reopen_at - close_at))
+    fills = close_reopen(close_at, reopen_at, px=2700.0)
+    fills[-2]["px"] = fills[-1]["px"] = "2970.0"            # reopened at the new price
+    rp = R.replay(fills, PAIR)
+    v = venue(fills, hourly_funding(rp, a, T0, now), now, a, a)
+    w = R.window(v, rp, *R.month_bounds("2026-11"), "nov")
+    assert w["uptime_pct"] < 70
+    assert abs(w["unhedged_equiv_usd"]) < 1.0               # nothing moved while held
+    # (C) ETH 2700 -> 3000 while OPEN, back to 2700 while CLOSED
+    def c(t):
+        if t <= close_at:
+            return 2700.0 + 300.0 * max(0, t - nov0) / (close_at - nov0)
+        return 2700.0
+    fills = close_reopen(close_at, reopen_at, px=2700.0)
+    fills[-4]["px"] = fills[-3]["px"] = "3000.0"            # closed at the top
+    rp = R.replay(fills, PAIR)
+    v = venue(fills, hourly_funding(rp, c, T0, now), now, c, c)
+    w = R.window(v, rp, *R.month_bounds("2026-11"), "nov")
+    assert w["unhedged_equiv_usd"] == pytest.approx(11.096 * 300.0, rel=0.01)
+    assert w["eth_move_pct"] == pytest.approx(0.0, abs=0.01)
+
+
+def test_eth_move_from_inception_uses_the_entry_fill_not_a_candle():
+    now = T0 + 3 * D
+    fills = [dict(f, px="2800.0") for f in REAL]
+    rp = R.replay(fills, PAIR)
+    v = venue(fills, hourly_funding(rp, flat(2700.0), T0, now), now, flat(2700.0), flat(2700.0))
+    w = R.window(v, rp, T0, now + 1, "ltd")
+    assert w["eth_move_pct"] == pytest.approx((2700.0 / 2800.0 - 1) * 100, abs=0.01)
+    assert w["unhedged_equiv_usd"] == pytest.approx(11.096 * -100.0, abs=0.5)
+
+
+def test_a_flip_through_zero_is_a_new_open():
+    fills = REAL + [fill(T0 + 5 * H, "ETH", "B", 20.0, 2700.0, 1.0, "USDC", -11.096)]
+    rp = R.replay(fills, PAIR)
+    assert rp.at(T0 + 6 * H).perp == pytest.approx(8.904)
+    assert rp.perp_open_ms() == T0 + 5 * H
+
+
+def test_inception_to_date_equals_the_months_when_run_exactly_on_a_mark():
+    now = R.month_bounds("2026-11")[0] + 5 * D            # exactly 00:00:00.000
+    v = venue(REAL, hourly_funding(RP_REAL, flat(2700.0), T0, now), now,
+              flat(2700.0), flat(2701.0), liq=8800.0)
+    r = R.build(v, "2026-11")
+    for k in ("funding_usd", "hour_marks", "on_hours"):
+        assert r["inception_to_date"][k] == pytest.approx(
+            sum(m[k] for m in r["months"]), abs=0.02), k
+
+
+def test_hours_older_than_the_hourly_history_are_counted():
+    now = T0 + 300 * D
+    v = venue(REAL, hourly_funding(RP_REAL, flat(2700.0), T0, now), now,
+              flat(2700.0), flat(2700.0))
+    v.perp_h = [c for c in v.perp_h if c["t"] >= now - 5000 * H]
+    w = R.window(v, RP_REAL, *R.month_bounds("2026-10"), "oct")
+    assert w["hours_priced_daily"] == w["on_hours"] > 0
+    w = R.window(v, RP_REAL, *R.month_bounds("2027-07"), "jul")
+    assert w["hours_priced_daily"] == 0
+
+
+def test_candidate_needs_steady_uptime_a_clean_prior_month_and_an_open_gate(pv):
+    hi = _m(funding_yield_ann_pct=12.0, net_yield_ann_pct=11.0)
+    assert _kinds(hi, hi, pv) == ["CANDIDATE"]
+    assert _kinds(_m(funding_yield_ann_pct=15.0, uptime_pct=25.0), hi, pv) == ["NONE"]
+    assert _kinds(hi, _m(funding_yield_ann_pct=12.0, price_usd=-150.0), pv) == ["NONE"]
+    pv.engine_funding = {"venues": {"HL_ETH": {"armed": True, "mean_ann_pct": 5.6}}}
+    assert _kinds(hi, hi, pv) == ["NOTE"]                  # about to close: no size-up
+    pv.engine_funding = {"venues": {"HL_ETH": {"armed": True, "mean_ann_pct": 5.6,
+                                               "insufficient": True}}}
+    assert _kinds(hi, hi, pv) == ["CANDIDATE"]             # frozen gate: no close NOTE
+
+
+def test_gate_coercion_rejects_nan_inf_and_bool(pv):
+    for x in ("nan", "inf", float("nan"), "1e400", True, [1], {}, "", "5.5%"):
+        pv.engine_funding = {"venues": {"HL_ETH": {"armed": True, "mean_ann_pct": x}}}
+        assert R.gate_state(pv)["mean_ann_pct"] is None, x
+    pv.engine_funding = {"venues": {"HL_ETH": {"armed": True, "mean_ann_pct": 6.0,
+                                               "insufficient": True}}}
+    r = R.build(pv, "2026-11")
+    r.pop("_replay")
+    assert "insufficient data, state frozen" in R.markdown(r)
+
+
+def test_chart_renders_money_as_text_and_matches_the_md(tmp_path):
+    import matplotlib
+    now = T0 + 3 * D
+    v = venue(REAL, hourly_funding(RP_REAL, flat(2700.0), T0, now), now,
+              flat(2700.0), flat(2690.0), liq=8800.0)
+    r = R.build(v, "2026-10")
+    rp = r.pop("_replay")
+    R.chart(v, rp, R.series(v, rp), str(tmp_path / "c.png"), "t", ltd=r["inception_to_date"])
+    assert matplotlib.rcParams["text.parse_math"] is False
+
+
+@pytest.mark.parametrize("where,code", [("fetch", 3), ("build", 4)])
+def test_failures_never_leave_a_stale_chart(tmp_path, monkeypatch, where, code):
+    month = "2026-10"
+    stale = tmp_path / f"carry_review_{month}.png"
+    stale.write_bytes(b"old chart")
+    now = T0 + 3 * D
+    v = venue(REAL, hourly_funding(RP_REAL, flat(2700.0), T0, now), now,
+              flat(2700.0), flat(2700.0))
+    if where == "fetch":
+        monkeypatch.setattr(R, "fetch_all", lambda *a, **k: (_ for _ in ()).throw(KeyError("szi")))
+    else:
+        monkeypatch.setattr(R, "fetch_all", lambda *a, **k: v)
+        monkeypatch.setattr(R, "build", lambda *a, **k: (_ for _ in ()).throw(ValueError("bad")))
+    assert R.main(["--month", "current", "--out", str(tmp_path), "--now-ms", str(now)]) == code
+    assert not stale.exists()
+    assert "NOT PRODUCED" in (tmp_path / f"carry_review_{month}.md").read_text()

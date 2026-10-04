@@ -353,10 +353,10 @@ class Replay:
         opened = None
         prev = 0.0
         for t, bk in self.points:
-            if abs(prev) <= MIN_QTY and abs(bk.perp) > MIN_QTY:
-                opened = t
-            elif abs(bk.perp) <= MIN_QTY:
+            if abs(bk.perp) <= MIN_QTY:
                 opened = None
+            elif abs(prev) <= MIN_QTY or (prev > 0) != (bk.perp > 0):
+                opened = t                       # from flat, or a flip through zero
             prev = bk.perp
         return opened
 
@@ -521,7 +521,8 @@ def window(v: VenueData, rp: Replay, t0: int, t1: int, label: str) -> dict:
         e0 = v.px("perp", t0)
     e1 = v.px("perp", min(t1, v.now_ms))
     eth_move = e1 / e0 - 1 if e0 else None
-    avg_ntl = notional_hours / on_hours if on_hours else None
+    naked = naked_long(v, rp, t0, t1) if on_hours or any(
+        t0 <= t < t1 for t, _ in rp.passes) else None
 
     def ann(x):
         if not notional_hours or on_hours < MIN_ANN_HOURS:
@@ -545,8 +546,8 @@ def window(v: VenueData, rp: Replay, t0: int, t1: int, label: str) -> dict:
         "hours": round((min(t1, v.now_ms) - t0) / HOUR_MS, 1),
         "hour_marks": len(marks), "on_hours": on_hours,
         "uptime_pct": round(100 * on_hours / len(marks), 1) if marks else None,
-        "funding_usd": round(funding, 2), "fees_usd": round(fees, 2),
-        "price_usd": round(price, 2), "total_usd": round(total, 2),
+        "funding_usd": _r(funding), "fees_usd": _r(fees),
+        "price_usd": _r(price), "total_usd": _r(total),
         "avg_notional_usd": round(notional_hours / on_hours, 0) if on_hours else None,
         "funding_yield_ann_pct": _r(ann(funding)),
         "net_yield_ann_pct": _r(ann(total)),
@@ -554,12 +555,41 @@ def window(v: VenueData, rp: Replay, t0: int, t1: int, label: str) -> dict:
         "hours_without_rate": no_rate,
         "hours_priced_daily": daily_px,
         "eth_move_pct": _r(None if eth_move is None else eth_move * 100),
-        "unhedged_equiv_usd": _r(None if avg_ntl is None or eth_move is None
-                                 else avg_ntl * eth_move),
+        "unhedged_equiv_usd": _r(naked),
         "opens": sum(1 for k, _ in trips if k == "open"),
         "closes": sum(1 for k, _ in trips if k == "close"),
         "max_pass_gap_usd": round(max(gaps), 2) if gaps else 0.0,
     }
+
+
+def naked_long(v: VenueData, rp: Replay, t0: int, t1: int) -> float:
+    """What a LONG perp of the short's size would have made over exactly the
+    time the short was held in [t0, t1): the yardstick for the price line.
+    Split at every hour mark and every pass; a pass is priced at its own
+    perp fill, a mark at that hour's close, now at the mid."""
+    end = min(t1, v.now_ms)
+    fill_px = {}
+    for f in sorted(v.fills, key=lambda x: x["time"]):
+        if f.get("coin") == PERP:
+            fill_px[f["time"]] = float(f["px"])
+    pass_px = {}
+    for t, _ in rp.passes:                     # the pass's last perp fill price
+        ps = [fill_px[x] for x in fill_px if t - PASS_GROUP_MS <= x <= t]
+        if ps:
+            pass_px[t] = ps[-1]
+    cuts = sorted({t0, end} | set(hour_marks(t0, t1, v.now_ms))
+                  | {t for t in pass_px if t0 < t < end})
+
+    def price(t):
+        if t in pass_px:
+            return pass_px[t]
+        return v.px("perp", t)
+    total = 0.0
+    for a, b in zip(cuts, cuts[1:]):
+        size = abs(rp.at(a).perp)
+        if size > MIN_QTY:
+            total += size * (price(b) - price(a))
+    return total
 
 
 def is_on(b: Book, px: float) -> bool:
@@ -569,7 +599,7 @@ def is_on(b: Book, px: float) -> bool:
 
 
 def _r(x, n=2):
-    return None if x is None else round(x, n)
+    return None if x is None else round(x, n) + 0.0     # never -0.0 in the json
 
 
 def iso(t_ms: int) -> str:
@@ -619,20 +649,27 @@ def integrity(v: VenueData, rp: Replay) -> list:
         # (BTC book, 2026-09-18, verified live): take them out at the
         # published rates on the replayed size (model error ~0.04%/hour).
         day0 = (opened // DAY_MS) * DAY_MS
-        skip = False
-        if any(is_daily(r) and funding_key(r) // DAY_MS == opened // DAY_MS for r in v.funding):
+        skip, removed = False, 0.0
+        # only if that merged row was actually counted in `got` (a reopen
+        # after 23:00 books it before the open), and only for marks whose
+        # payment is not already an hourly row of its own
+        if any(is_daily(r) and funding_key(r) // DAY_MS == opened // DAY_MS
+               and funding_key(r) >= opened for r in v.funding):
+            hourly_marks = {funding_key(r) for r in v.funding if not is_daily(r)}
             for m in hour_marks(day0, opened, v.now_ms):
                 p, rate = held(rp, m), v.rate_at(m)
-                if abs(p) <= MIN_QTY:
+                if abs(p) <= MIN_QTY or m in hourly_marks:
                     continue
                 if rate is None:
                     skip = True
                     break
-                got -= -p * v.px("perp", m) * rate
+                removed += -p * v.px("perp", m) * rate
+        got -= removed
+        tol = max(CUM_TOL_USD, 0.002 * abs(removed))
         if skip:
             v.notes.append("cumFunding check skipped: a published rate is missing on "
                            "the merged day the short opened")
-        elif abs(got + v.cum_since_open) > CUM_TOL_USD:
+        elif abs(got + v.cum_since_open) > tol:
             flags.append(f"funding since the short opened: ${got:,.4f} received per "
                          f"userFunding vs ${-v.cum_since_open:,.4f} per the venue's "
                          f"cumFunding.sinceOpen")
@@ -645,14 +682,16 @@ def gate_state(v: VenueData) -> dict:
     eth = (v.engine_funding or {}).get("venues") if isinstance(v.engine_funding, dict) else None
     eth = (eth or {}).get("HL_ETH") if isinstance(eth, dict) else None
     eth = eth if isinstance(eth, dict) else {}
+    x = eth.get("mean_ann_pct")
     try:
-        mean = float(eth["mean_ann_pct"]) if eth.get("mean_ann_pct") is not None else None
+        mean = None if x is None or isinstance(x, bool) else float(x)
         if mean is not None and not math.isfinite(mean):
             mean = None
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         mean = None
     armed = eth.get("armed") if isinstance(eth.get("armed"), bool) else None
-    return {"armed": armed, "mean_ann_pct": mean}
+    ins = eth.get("insufficient") if isinstance(eth.get("insufficient"), bool) else None
+    return {"armed": armed, "mean_ann_pct": mean, "insufficient": ins}
 
 
 def proposals(month: dict, prev: dict | None, ltd: dict, v: VenueData,
@@ -687,9 +726,11 @@ def proposals(month: dict, prev: dict | None, ltd: dict, v: VenueData,
         diff = month["funding_usd"] - month["expected_funding_usd"]
         if abs(diff) > max(FUNDING_FLOOR_USD,
                            FUNDING_CHECK_TOL * abs(month["expected_funding_usd"])):
+            miss = month.get("hours_without_rate") or 0
             out.append(("INVESTIGATE", f"Funding received {_money(month['funding_usd'])} vs "
                         f"{_money(month['expected_funding_usd'])} expected from the "
-                        f"published hourly rates on the replayed short."))
+                        f"published hourly rates on the replayed short"
+                        + (f" ({miss} held hours had no published rate)." if miss else ".")))
     if v.liq_px and v.perp_mid and abs(v.snap_perp_szi) > MIN_QTY:
         dist = v.liq_px / v.perp_mid - 1
         if dist < 1.0:
@@ -697,7 +738,9 @@ def proposals(month: dict, prev: dict | None, ltd: dict, v: VenueData,
                         f"{dist:.0%} above ETH: consider a smaller sleeve."))
     eth = gate_state(v)
     mean = eth.get("mean_ann_pct")
-    if mean is not None and eth.get("armed") and mean < DISARM_PCT + 1:
+    near_off = (mean is not None and eth.get("armed") and mean < DISARM_PCT + 1
+                and not eth.get("insufficient"))
+    if near_off:
         out.append(("NOTE", f"HL ETH 30-day funding {mean:.1f}% is within 1 point "
                     f"of the OFF line ({DISARM_PCT:g}%): a close is likely soon."))
     # size-up only on the carry's OWN yield (funding net of fees, not the
@@ -708,10 +751,17 @@ def proposals(month: dict, prev: dict | None, ltd: dict, v: VenueData,
             return None
         return f * (1 - w["fees_usd"] / n) if n > 0 else f
     cy, py_ = (carry_yield(month), carry_yield(prev)) if both else (None, None)
+    def nz(x):
+        return -1e9 if x is None else x
+
+    def residual_ok(w):
+        return not (w.get("funding_usd", 0) > 20
+                    and abs(w.get("price_usd", 0)) > 0.5 * w["funding_usd"])
     if cash is not None and cy is not None and py_ is not None \
             and cy > cash + 4 and py_ > cash + 4 \
-            and min(month.get("net_yield_ann_pct") or -1e9,
-                    prev.get("net_yield_ann_pct") or -1e9) >= cash \
+            and min(nz(month.get("net_yield_ann_pct")), nz(prev.get("net_yield_ann_pct"))) >= cash \
+            and min(nz(month.get("uptime_pct")), nz(prev.get("uptime_pct"))) >= 80 \
+            and residual_ok(prev) and not near_off \
             and not any(k in ("INVESTIGATE", "PROPOSE") for k, _ in out) \
             and v.liq_px and v.perp_mid and v.liq_px / v.perp_mid - 1 > 1.5:
         out.append(("CANDIDATE", f"Funding net of fees {cy:.1f}% and {py_:.1f}% (two "
@@ -817,7 +867,8 @@ def spread(vals: list, gap: float) -> list:
     return out
 
 
-def chart(v: VenueData, rp: Replay, s: dict, path: str, title: str) -> None:
+def chart(v: VenueData, rp: Replay, s: dict, path: str, title: str,
+          ltd: dict | None = None) -> None:
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.dates as mdates
@@ -846,13 +897,11 @@ def chart(v: VenueData, rp: Replay, s: dict, path: str, title: str) -> None:
         a1.plot(x, y, color=c, linewidth=w, label=name, solid_capstyle="round",
                 marker="o" if len(y) < 40 else None, markersize=3)
     a1.axhline(0, color=COL["muted"], linewidth=0.8)
-    perp_fills = [f for f in v.fills if f.get("coin") == PERP]
-    if perp_fills and abs(v.snap_perp_szi) > MIN_QTY:
-        e0 = float(perp_fills[0]["px"])
-        naked = abs(v.snap_perp_szi) * (v.perp_mid - e0)
-        a1.annotate(f"ETH {v.perp_mid / e0 - 1:+.1%} since the open: the same notional "
-                    f"unhedged would be {_money(naked)}; the sleeve's price line is "
-                    f"{_money(s['price'][-1])}",
+    if ltd and ltd.get("unhedged_equiv_usd") is not None:
+        a1.annotate(f"ETH {ltd['eth_move_pct']:+.1f}% since the open: a naked long of the "
+                    f"same size over the hours held would have made "
+                    f"{_money(ltd['unhedged_equiv_usd'])}; the sleeve's price line is "
+                    f"{_money(ltd['price_usd'])}",
                     (0.5, 0.0), xycoords="axes fraction", xytext=(0, -46),
                     textcoords="offset points", ha="center", va="top", fontsize=9,
                     color=COL["ink"], annotation_clip=False)
@@ -955,6 +1004,7 @@ def build(v: VenueData, month: str) -> dict:
             if v.liq_px else None,
         },
         "gate": {"armed": eth.get("armed"), "mean_ann_pct": eth.get("mean_ann_pct"),
+                 "insufficient": eth.get("insufficient"),
                  "arm_pct": ARM_PCT, "disarm_pct": DISARM_PCT},
         "cash_apy_pct": None if v.cash_apy is None else round(v.cash_apy * 100, 2),
         "integrity_flags": flags,
@@ -997,7 +1047,7 @@ def markdown(r: dict) -> str:
     L += [row("Funding received", "funding_usd", _usd), row("Fees", "fees_usd", _usd),
           row("Price (basis + unhedged)", "price_usd", _usd),
           row("_ETH move over the window_", "eth_move_pct", _pct),
-          row("_Same notional UNHEDGED would have made_", "unhedged_equiv_usd", _usd),
+          row("_A naked long of the same size, over the hours held_", "unhedged_equiv_usd", _usd),
           row("**Sleeve total**", "total_usd", _usd),
           row("Funding yield (ann., on notional)", "funding_yield_ann_pct", _pct),
           row("**Net yield (ann., on notional)**", "net_yield_ann_pct", _pct),
@@ -1008,10 +1058,12 @@ def markdown(r: dict) -> str:
           f"| Opens / closes | {'-' if m.get('empty') else str(m['opens']) + ' / ' + str(m['closes'])} "
           f"| {ltd.get('opens', 0)} / {ltd.get('closes', 0)} |",
           row("Expected funding (published rates)", "expected_funding_usd", _usd),
+          row("Held hours with no published rate", "hours_without_rate",
+              lambda x: "n/a" if x is None else str(x)),
           row("Worst hedge gap after a pass", "max_pass_gap_usd", _usd), "",
-          "The hedge at a glance: compare **Price** with the unhedged line above it. "
-          "A matched sleeve keeps Price near zero whatever ETH does; the earnings "
-          "are the funding.", ""]
+          "The hedge at a glance: compare **Price** with the naked-long line above it "
+          "(same size, same hours held). A matched sleeve keeps Price near zero whatever "
+          "ETH does; the earnings are the funding.", ""]
     L += [f"Cash benchmark: {_pct(r['cash_apy_pct'])} (engine `cash_apy`, today's value "
           f"applied to every month).", ""]
     L += ["## Position now", "",
@@ -1026,7 +1078,9 @@ def markdown(r: dict) -> str:
           f"- HL ETH 30-day funding {_pct(g['mean_ann_pct'])}, "
           f"{'UNKNOWN' if g['armed'] is None else 'ARMED' if g['armed'] else 'DISARMED'}"
           f" (ON >= {g['arm_pct']:g}%, "
-          f"OFF < {g['disarm_pct']:g}%)", ""]
+          f"OFF < {g['disarm_pct']:g}%)"
+          + (" - engine: insufficient data, state frozen" if g.get("insufficient") else ""),
+          ""]
     if len(r["months"]) > 1:
         L += ["## By month", "", "| Month | Funding | Fees | Price | Total | Net yield | Uptime |",
               "|---|---:|---:|---:|---:|---:|---:|"]
@@ -1071,25 +1125,36 @@ def main(argv=None) -> int:
         month = a.month
     chart_from = min(CARRY_START_MS, now - a.chart_days * 24 * HOUR_MS)
     os.makedirs(a.out, exist_ok=True)
-    try:
-        v = fetch_all(now, chart_from)
-    except FetchError as exc:
-        # no partial numbers: say exactly what failed; exit 3 = retry later
+    png = os.path.join(a.out, f"carry_review_{month}.png")
+    if os.path.exists(png):
+        os.remove(png)                      # never send an earlier run's chart
+
+    def not_produced(why: str, what: str, code: int) -> int:
         msg = (f"# ETH carry sleeve: monthly review ({month}) - NOT PRODUCED\n\n"
-               f"The venue could not be read at {iso(now)}: {exc}\n\n"
-               f"No numbers are reported. Re-run later.\n")
+               f"{why} at {iso(now)}: {what}\n\nNo numbers are reported. "
+               + ("Re-run later.\n" if code == 3 else "This is a defect: investigate.\n"))
         with open(os.path.join(a.out, f"carry_review_{month}.md"), "w") as fh:
             fh.write(msg)
         with open(os.path.join(a.out, f"carry_review_{month}.json"), "w") as fh:
-            json.dump({"error": str(exc), "generated": iso(now), "month": month}, fh)
+            json.dump({"error": what, "generated": iso(now), "month": month,
+                       "exit_code": code}, fh)
         print(msg)
-        return 3
-    r = build(v, month)
-    rp = r.pop("_replay")
-    # the numbers first: a chart failure must never lose the review
-    png = os.path.join(a.out, f"carry_review_{month}.png")
+        return code
     try:
-        chart(v, rp, series(v, rp), png, f"Carry review - {month} (generated {r['generated']})")
+        v = fetch_all(now, chart_from)
+    except Exception as exc:  # noqa: BLE001 - any unreadable venue answer: retry
+        return not_produced("The venue could not be read", repr(exc), 3)
+    try:
+        r = build(v, month)
+        md_probe = markdown({**r, "notes": list(r["notes"])})   # fail before writing
+    except Exception as exc:  # noqa: BLE001
+        return not_produced("The review could not be computed", repr(exc), 4)
+    rp = r.pop("_replay")
+    del md_probe
+    # a chart failure must never lose the review
+    try:
+        chart(v, rp, series(v, rp), png, f"Carry review - {month} (generated {r['generated']})",
+              ltd=r["inception_to_date"])
     except Exception as exc:  # noqa: BLE001
         png = None
         r["notes"].append(f"chart failed: {exc!r}")
