@@ -195,6 +195,17 @@ FMP-lane code change the same day: BLOCK (refresh inputs unreachable on
 Render; bars ran past the campaign's data end) → fixed → PASS WITH
 CORRECTIONS → applied.
 
+**Round 9 code (exit-rule ablation, 2026-10-04): BLOCK → rebuilt → PASS WITH
+CORRECTIONS → applied.** First draft: three forward arms were no-ops (the
+paper-arithmetic switch short-circuited the sizing knobs) and the day-zero
+stop was not one; the P reduction was not asserted on real data; proposals
+were emitted for knobs nobody can change. Rebuilt on the P0 ledger basis
+with the day-zero stop as a resting STP floor at L0, reduction and
+E-vs-mirror guards, sign-aware CI, Bonferroni-8, actionability tags
+(contract addendum 1, committed before the rebuild). Re-review corrections:
+per-arm grading counts, basis-clean flag, 10,000 draws, tracker+executor tag
+for ratchet/day-zero, floor-overlap statement. Results pending the host run.
+
 ## Pending DD questions (ranked)
 
 | P | question | what it moves | status |
