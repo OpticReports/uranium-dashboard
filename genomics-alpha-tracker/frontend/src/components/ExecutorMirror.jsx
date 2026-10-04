@@ -123,6 +123,16 @@ export function normalizeMirror(raw) {
   const basisLane = raw.protocol?.cache_basis?.lane ?? null;
   const drift = raw.protocol?.r2a_reproduction?.abs_diff ?? raw.meta?.r2a_drift ?? null;
   const driftRel = raw.protocol?.r2a_reproduction?.rel_diff ?? null;
+  const mach = raw.machinery || {};
+  const machineryFacts = {
+    coverage: mach.bar_coverage_matches_stored ?? null,
+    rowsGot: mach.rows?.got ?? null,
+    rowsStored: mach.rows?.stored ?? null,
+    maxDdGot: mach.curve?.max_dd_got ?? null,
+    maxDdStored: mach.curve?.max_dd_stored ?? null,
+    sharpeGot: mach.curve?.sharpe_got ?? null,
+    sharpeStored: mach.curve?.sharpe_stored ?? null,
+  };
   return {
     generated: raw.generated || null,
     period: Array.isArray(raw.period) ? raw.period.join(" → ") : (raw.period || null),
@@ -133,6 +143,7 @@ export function normalizeMirror(raw) {
     basisLane,
     drift,
     driftRel,
+    machineryFacts,
     servedFrom: raw.served_from || null,
   };
 }
@@ -327,9 +338,21 @@ export default function ExecutorMirror({ data, onReload, loadError }) {
       )}
       {m?.cacheVerified === false && (
         <div className="text-xs text-rose-200 bg-rose-900/40 border border-rose-700 rounded px-3 py-2 mt-2">
-          Bars cache did not reproduce the stored R2-A end value
-          {m.drift !== null && m.drift !== undefined ? ` (off by ${fmtMoney(m.drift)})` : ""} — these
-          numbers were produced with --allow-cache-drift and are NOT comparable to the R2 / R3 docs.
+          <div className="font-semibold">Bars are the {m.basisLane || "rebuilt"} lane, NOT the campaign cache — absolute levels are not the R2 / R3 docs' numbers.</div>
+          <div className="mt-1">
+            R2-A replays {m.driftRel !== null && m.driftRel !== undefined ? `${(m.driftRel * 100).toFixed(2)}% ` : ""}
+            {m.drift !== null && m.drift !== undefined ? `(${fmtMoney(m.drift)}) ` : ""}from the stored end value.
+            {m.machineryFacts?.rowsGot && m.machineryFacts?.rowsStored && (
+              <> Bar coverage {m.machineryFacts.coverage ? "identical" : "DIFFERS"} ({m.machineryFacts.rowsGot.n_regraded} regraded,
+              {" "}{m.machineryFacts.rowsGot.open_at_end_excluded} open at data end); trade set {m.machineryFacts.rowsGot.n_taken} taken /
+              {" "}{m.machineryFacts.rowsGot.skipped_at_cap} skipped vs stored {m.machineryFacts.rowsStored.n_taken} / {m.machineryFacts.rowsStored.skipped_at_cap}.</>
+            )}
+            {m.machineryFacts?.maxDdGot != null && m.machineryFacts?.maxDdStored != null && (
+              <> Max DD {(m.machineryFacts.maxDdGot * 100).toFixed(2)}% vs stored {(m.machineryFacts.maxDdStored * 100).toFixed(2)}%;
+              Sharpe {m.machineryFacts.sharpeGot?.toFixed(3)} vs {m.machineryFacts.sharpeStored?.toFixed(3)}.</>
+            )}
+            {" "}The executor deltas and the drawdown profile are measured within this run and stand on their own.
+          </div>
         </div>
       )}
       {m?.cacheVerified === true && m?.cacheExact === false && (

@@ -1019,7 +1019,20 @@ def run_mirror(fire_rows: list[dict], mkt: dict, tiers: dict[str, str], *,
             f"TRADE SET DIFFERS FROM THE STORED R2-A: {rows_got} vs stored {rows_stored} (bar "
             f"coverage {'matches' if coverage_ok else 'DOES NOT match'}; the end value and curve "
             f"are within tolerance)."]
-            if (cache_verified and cache_exact and rows_match is False) else []),
+            if (cache_verified and cache_exact and rows_match is False) else []) + ([
+            f"CACHE NOT VERIFIED (published with --allow-cache-drift on the "
+            f"{(cache_basis or {}).get('lane', 'unknown')} lane): R2-A replays to ${r2a_end:,.2f} vs the "
+            f"stored ${r2a_stored_end:,.2f} ({rel_diff:+.2%})"
+            + (f"; bar coverage {'identical' if coverage_ok else 'DIFFERS'} "
+               f"({rows_got['n_regraded']} regraded, {rows_got['open_at_end_excluded']} open at data end); "
+               f"trade set {rows_got['n_taken']} taken / {rows_got['skipped_at_cap']} skipped at cap vs stored "
+               f"{rows_stored['n_taken']} / {rows_stored['skipped_at_cap']}" if rows_stored else "")
+            + (f"; max DD {curve_check['max_dd_got']:.2%} vs stored {curve_check['max_dd_stored']:.2%}, "
+               f"Sharpe {curve_check['sharpe_got']:.3f} vs {curve_check['sharpe_stored']:.3f}, "
+               f"curve max point-wise gap {curve_check['max_rel_diff']:.1%}" if curve_check else "")
+            + ". The ABSOLUTE levels are not the R2/R3 docs' numbers; the executor deltas and the "
+            "drawdown profile are measured within this run and stand on their own."]
+            if (not cache_verified and r2a_stored_end is not None) else []),
     }
 
 
