@@ -1155,7 +1155,7 @@ def test_ablation_arms_span_p0_to_executor_and_reduce():
     rows, mkt, tiers, bil, spy = _study_inputs()
     ref, p, n = ab.paper_anchor(rows, mkt, tiers)
     assert max(abs(a[1] - b[1]) for a, b in zip(ref, p)) < 1e-6 and n > 0
-    ce, _ = ab.run_arm(ab.E_CFG, rows, mkt, tiers)
+    ce, _, _ = ab.run_arm(ab.E_CFG, rows, mkt, tiers)
     res = run_mirror(rows, mkt, tiers, r2a_stored_end=ref[-1][1], bil=bil, spy_px=spy, draws=5)
     assert res["variants"]["exec_t1_nocost_nocarry"]["windows"]["full"]["end_value"] == pytest.approx(ce[-1][1])
 
@@ -1167,11 +1167,14 @@ def test_ablation_every_single_flip_is_a_real_mechanism():
     import scripts.backtest_exit_ablation as ab
     rows, mkt, tiers = _knob_market()
     base = {"P0": ab.run_arm(ab.P0_CFG, rows, mkt, tiers)[0], "E": ab.run_arm(ab.E_CFG, rows, mkt, tiers)[0]}
+    # the grading counts travel with the arm: day_zero_stop refuses L0 <= 0 fires
+    g_e = ab.run_arm(ab.E_CFG, rows, mkt, tiers)[2]
+    assert g_e["n_graded"] >= g_e["n_gated"] >= g_e["n_taken"] and "skip_no_sizing_reference" in g_e
     assert base["P0"][-1][1] != base["E"][-1][1]
     for n, cfg, b in ab.arms():
         if n in ("P", "P0", "E"):
             continue
-        cv, _ = ab.run_arm(cfg, rows, mkt, tiers)
+        cv, _, _ = ab.run_arm(cfg, rows, mkt, tiers)
         assert cv[-1][1] != base[b][-1][1], f"{n} is a no-op against {b}"
 
 
@@ -1185,7 +1188,7 @@ def test_day_zero_floor_is_a_resting_stop_at_the_published_level():
     atrs = atr_series(bars)
     L0 = bars[j - 1].close - 3 * atrs[j - 1]
     assert bars[j].open <= L0 < bars[j - 1].close
-    off = mod.grade_executor(bars, atrs, j - 1, replace(mod.P0_CFG if hasattr(mod, "P0_CFG") else mod.R2A_MODE, paper_arith=False))
+    off = mod.grade_executor(bars, atrs, j - 1, replace(mod.R2A_MODE, paper_arith=False))
     on = mod.grade_executor(bars, atrs, j - 1, replace(mod.R2A_MODE, paper_arith=False, day_zero_stop=True))
     assert on["status"] == "stopped" and on["exit_date"] == ds[j] and on["exit"] == pytest.approx(bars[j].open)
     assert not (off and off.get("status") == "stopped" and off.get("exit_date") == ds[j])
@@ -1206,6 +1209,14 @@ def test_ablation_results_shape_machinery_and_verdicts():
     assert g["gap_cagr"] == pytest.approx(g["cagr_E"] - g["cagr_P0"])
     assert res["machinery"]["p_reduction_max_abs_diff"] < 1e-6 and res["machinery"]["e_vs_mirror"]["stored_mirror_end"] is None
     assert "cagr" in res["basis_switch"]["P0_minus_P"]
+    assert res["basis_switch"]["clean"] == (abs(res["basis_switch"]["P0_minus_P"]["cagr"]) <= ab.BASIS_CLEAN_CAGR)
+    for n, a in res["arms"].items():
+        assert "grading" in a and a["grading"]["n_taken"] == a["n_taken"]
+        if n.startswith("F_"):
+            assert "gap_share_vs_P" in a
+        if n.startswith("B_"):
+            assert "recovery_share_vs_P" in a
+    assert ab.WHERE["ratchet"] == "tracker+executor" and ab.ABL_DRAWS == 10000
     for knob, _, _ in ab.KNOBS:
         f, b = res["arms"][f"F_{knob}"], res["arms"][f"B_{knob}"]
         assert f["gap_share"] == pytest.approx(f["delta_vs_base"]["cagr"] / g["gap_cagr"])
@@ -1237,7 +1248,7 @@ def test_knob_verdict_fixed_numbers():
     b = {"recovery_share": 0.55, "subperiod_cagr_delta": sub_pos, "sharpe_delta_bootstrap": ci_pos}
     v = ab.knob_verdict("ratchet", f, b, gap_cagr=-0.05, gap_sharpe=-0.2, max_dd_B=0.31, max_dd_E=0.30)
     assert v["carries_the_gap"] and v["survives_bonferroni_8"] and v["proposal"] and v["primary"]
-    assert v["where_it_lives"] == "executor"
+    assert v["where_it_lives"] == "tracker+executor"
     # max-DD slack: 2.1 pp worse than E blocks the proposal, 1.9 pp does not
     assert not ab.knob_verdict("ratchet", f, b, -0.05, -0.2, 0.321, 0.30)["proposal"]
     assert ab.knob_verdict("ratchet", f, b, -0.05, -0.2, 0.319, 0.30)["proposal"]

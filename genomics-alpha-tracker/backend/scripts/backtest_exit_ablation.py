@@ -18,6 +18,7 @@ Usage:  python -m scripts.backtest_exit_ablation [--out PATH] [--draws N] [--see
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import random
 import sys
@@ -35,11 +36,10 @@ from scripts.backtest_executor_mirror import (  # noqa: E402
 from scripts.backtest_variants_10y import SUB_PERIODS, run_call_book, seg_stats, select_capped  # noqa: E402
 from scripts.backtest_variants_r2 import build_trailing_rows  # noqa: E402
 
-import json  # noqa: E402
-
 RESULTS = DATA / "backtest_exit_ablation_results.json"
 ABL_SEED = 20261004
-ABL_DRAWS = 2000
+ABL_DRAWS = 10000              # the Bonferroni-8 tail sits at p0.3125: 2,000 draws rest it on ~6 resamples
+BASIS_CLEAN_CAGR = 0.008       # the contract's lane-drift noise floor: |CAGR(P0) - CAGR(P)| must sit under it
 TRADING_DAYS = 252
 BLOCK_SENSITIVITY = 63
 N_EXPLORATORY = 8                  # Bonferroni family for the per-knob intervals
@@ -57,7 +57,7 @@ KNOBS: list[tuple[str, object, object]] = [
     ("cash_clip", False, True),
 ]
 WHERE = {"peak_seed": "tracker", "time_stop_anchor": "tracker", "time_stop_fill": "tracker",
-         "ratchet": "executor", "day_zero_stop": "executor", "risk_cap": "executor",
+         "ratchet": "tracker+executor", "day_zero_stop": "tracker+executor", "risk_cap": "executor",
          "integer_shares": "not_actionable", "cash_clip": "not_actionable"}
 GROUPS = {"G_stop": ("peak_seed", "ratchet", "day_zero_stop"),
           "G_time": ("time_stop_anchor", "time_stop_fill"),
@@ -92,8 +92,18 @@ HONESTY = [
     "B_cash_clip (and P0 / the paper book) run negative cash with no margin cost: uncosted leverage.",
     "Uncapped risk (risk_cap None) uses the lane's 3xATR14; the campaign's uncapped ATR is not stored, "
     "so F_risk_cap / B_risk_cap carry a lane-vs-campaign ATR caveat.",
-    "A proposal for ratchet or day_zero_stop is an EXECUTOR code change (ibkr-executor/app/blend.py; "
-    "the ratchet guard is also a data-bug safety), not a tracker publication change.",
+    "A proposal for ratchet or day_zero_stop is a change in BOTH the tracker's shadow grader "
+    "(app/calls/shadow.py ratchets the published level up only) AND the executor "
+    "(ibkr-executor/app/blend.py never applies a level below the working stop, which is also a "
+    "data-bug safety).",
+    "The day-zero floor is a WEAK RATCHET (the resting STP at L0 is only ever replaced by a higher "
+    "level), so ratchet and day_zero_stop OVERLAP: F_ratchet has no floor while B_ratchet keeps one; "
+    "the forward and backward ratchet arms are not mirror images, G_stop shows the joint.",
+    "day_zero_stop's share INCLUDES the refusal of fires whose published level is <= 0 (L0 = "
+    "close - 3xATR; the executor skips them as 'no sizing reference'); each arm's grading counts "
+    "are in the JSON (arms.<name>.grading).",
+    "A Sharpe-delta interval that excludes zero is not materiality: deterministic effects (whole "
+    "shares) read as 'significant' at any size; the >= 0.5 share tests carry the materiality.",
 ]
 
 
@@ -133,13 +143,19 @@ def paper_anchor(fire_rows: list[dict], mkt: dict, tiers: dict) -> tuple[list, l
     return run_call_book(ta, mkt), run_executor_book(ta, mkt, P_CFG)["curve"], len(ta)
 
 
-def run_arm(cfg: ExecCfg, fire_rows: list[dict], mkt: dict, tiers: dict) -> tuple[list, int]:
+def run_arm(cfg: ExecCfg, fire_rows: list[dict], mkt: dict, tiers: dict) -> tuple[list, int, dict]:
     """Every non-anchor arm runs the executor path: lane grading under cfg,
-    gate on the gate date, live cap occupancy, the ledger book."""
-    rows, _ = build_exec_rows(fire_rows, mkt, tiers, cfg)
-    taken, _ = select_capped_exec(gate_rows(rows, mkt["xbi_above_prior"][200]), CAP)
+    gate on the gate date, live cap occupancy, the ledger book. Returns the
+    curve, the taken count and the grading counts (so a knob that REFUSES
+    fires - day_zero_stop drops L0 <= 0 - is visible, counter-agent N1)."""
+    rows, meta = build_exec_rows(fire_rows, mkt, tiers, cfg)
+    gated = gate_rows(rows, mkt["xbi_above_prior"][200])
+    taken, skipped = select_capped_exec(gated, CAP)
     book = run_executor_book(taken, mkt, cfg)
-    return book["curve"], len(taken)
+    grading = {k: v for k, v in meta.items() if isinstance(v, (int, float))}
+    grading.update({"n_graded": len(rows), "n_gated": len(gated), "n_taken": len(taken),
+                    "skipped_at_cap": skipped})
+    return book["curve"], len(taken), grading
 
 
 def daily_rets(curve: list, lo: date, hi: date) -> list[float]:
@@ -233,6 +249,9 @@ def knob_verdict(knob: str, f: dict, b: dict, gap_cagr: float, gap_sharpe: float
 def stored_mirror_end(name: str = "exec_t1_nocost_nocarry") -> float | None:
     path = _input(MIRROR_RESULTS)
     if not path.exists():
+        print(f"WARNING: no mirror results at {path}: E cannot be checked against the published "
+              f"mirror run (e_vs_mirror.stored_mirror_end = null). On the Render host the file is "
+              f"present; locally run the mirror first for the guard to bite.", file=sys.stderr)
         return None
     try:
         return float(json.loads(path.read_text())["variants"][name]["windows"]["full"]["end_value"])
@@ -261,12 +280,14 @@ def run_ablation(fire_rows: list[dict], mkt: dict, tiers: dict, *, draws: int = 
                          f"{reduction_tol}) — nothing written")
     curves: dict[str, list] = {"P": p_curve}
     n_taken: dict[str, int] = {"P": n_p}
+    grading: dict[str, dict] = {"P": {"n_taken": n_p, "path": "paper grader (build_trailing_rows)"}}
     for name, cfg, _base in arms():
         if name == "P":
             continue
-        cv, n = run_arm(cfg, fire_rows, mkt, tiers)
+        cv, n, g = run_arm(cfg, fire_rows, mkt, tiers)
         curves[name] = cv
         n_taken[name] = n
+        grading[name] = g
     e_end = curves["E"][-1][1]
     e_check = {"stored_mirror_end": mirror_e_end, "got": e_end,
                "abs_diff": (abs(e_end - mirror_e_end) if mirror_e_end is not None else None)}
@@ -280,6 +301,8 @@ def run_ablation(fire_rows: list[dict], mkt: dict, tiers: dict, *, draws: int = 
     sharpe = {n: stats[n]["full"].get("sharpe", float("nan")) for n in stats}
     gap = cagr["E"] - cagr["P0"]
     gap_sharpe = sharpe["E"] - sharpe["P0"]
+    gap_vs_p = cagr["E"] - cagr["P"]
+    basis_clean = abs(cagr["P0"] - cagr["P"]) <= BASIS_CLEAN_CAGR
     results: dict[str, dict] = {}
     for name, cfg, base in arms():
         d_full = {k: stats[name]["full"].get(k, float("nan")) - stats[base]["full"].get(k, float("nan"))
@@ -290,13 +313,16 @@ def run_ablation(fire_rows: list[dict], mkt: dict, tiers: dict, *, draws: int = 
                                         daily_rets(curves[base], lo_full, hi_full), draws,
                                         BOOT_MEAN_BLOCK, seed)
                 if name != base else {})
-        entry = {"base": base, "cfg": cfg.label, "n_taken": n_taken[name],
+        entry = {"base": base, "cfg": cfg.label, "n_taken": n_taken[name], "grading": grading[name],
                  "stats": stats[name], "delta_vs_base": d_full,
                  "subperiod_cagr_delta": sub, "sharpe_delta_bootstrap": boot}
         if name.startswith("F_") or name in GROUPS:
             entry["gap_share"] = _share(d_full["cagr"], gap)
+            # counter-agent N2: when the basis is not clean, the share against P too
+            entry["gap_share_vs_P"] = _share(stats[name]["full"].get("cagr", float("nan")) - cagr["P"], gap_vs_p)
         elif name.startswith("B_"):
             entry["recovery_share"] = _share(d_full["cagr"], -gap)
+            entry["recovery_share_vs_P"] = _share(d_full["cagr"], -gap_vs_p)
         results[name] = entry
 
     verdicts: dict[str, dict] = {}
@@ -336,7 +362,11 @@ def run_ablation(fire_rows: list[dict], mkt: dict, tiers: dict, *, draws: int = 
                      "bars": bars_info or {}, "cache_basis": cache_basis or {}},
         "machinery": {"p_reduction_max_abs_diff": red, "p_n_taken": n_p, "e_vs_mirror": e_check},
         "basis_switch": {"P0_minus_P": {k: stats["P0"]["full"].get(k, float("nan")) - stats["P"]["full"].get(k, float("nan"))
-                                       for k in ("cagr", "max_dd", "sharpe", "end_value")}},
+                                       for k in ("cagr", "max_dd", "sharpe", "end_value")},
+                         "clean": basis_clean, "clean_tolerance_cagr": BASIS_CLEAN_CAGR,
+                         "note": ("basis switch inside the noise floor: shares are read against P0" if basis_clean else
+                                  "BASIS NOT CLEAN: the ledger basis moves CAGR by more than the noise floor; "
+                                  "read every share against BOTH bases (gap_share / gap_share_vs_P)")},
         "mechanics_gap": {"cagr_P": cagr["P"], "cagr_P0": cagr["P0"], "cagr_E": cagr["E"], "gap_cagr": gap,
                           "sharpe_P0": sharpe["P0"], "sharpe_E": sharpe["E"], "gap_sharpe": gap_sharpe,
                           "max_dd_P0": stats["P0"]["full"].get("max_dd"), "max_dd_E": stats["E"]["full"].get("max_dd")},
@@ -349,7 +379,8 @@ def run_ablation(fire_rows: list[dict], mkt: dict, tiers: dict, *, draws: int = 
 def print_table(res: dict) -> None:
     g = res["mechanics_gap"]
     bs = res["basis_switch"]["P0_minus_P"]
-    print(f"\nbasis switch P0 - P: CAGR {bs['cagr']:+.2%}  maxDD {bs['max_dd']:+.2%}  Sharpe {bs['sharpe']:+.3f}  end ${bs['end_value']:+,.0f}")
+    print(f"\nbasis switch P0 - P: CAGR {bs['cagr']:+.2%}  maxDD {bs['max_dd']:+.2%}  Sharpe {bs['sharpe']:+.3f}  "
+          f"end ${bs['end_value']:+,.0f}  -> {'clean' if res['basis_switch']['clean'] else 'NOT CLEAN (read shares against both bases)'}")
     print(f"mechanics gap (E - P0), full window: CAGR {g['gap_cagr']:+.2%} (P0 {g['cagr_P0']:.2%} -> E {g['cagr_E']:.2%}); "
           f"Sharpe {g['sharpe_P0']:.3f} -> {g['sharpe_E']:.3f}; maxDD {g['max_dd_P0']:.1%} -> {g['max_dd_E']:.1%}")
     sgn_c = -1 if g["gap_cagr"] < 0 else 1
