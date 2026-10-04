@@ -273,6 +273,7 @@ def run_ablation(fire_rows: list[dict], mkt: dict, tiers: dict, *, draws: int = 
             windows[name] = (max(lo, lo_full), min(hi, hi_full))
 
     # ---- machinery: P reduces to the mirror's r2a_ref; E matches the mirror's stored run
+    print("ablation: paper anchor (P) ...", flush=True)
     ref_curve, p_curve, n_p = paper_anchor(fire_rows, mkt, tiers)
     red = max(abs(a[1] - b[1]) for a, b in zip(ref_curve, p_curve)) if ref_curve else 0.0
     if len(ref_curve) != len(p_curve) or red > reduction_tol:
@@ -288,6 +289,7 @@ def run_ablation(fire_rows: list[dict], mkt: dict, tiers: dict, *, draws: int = 
         curves[name] = cv
         n_taken[name] = n
         grading[name] = g
+        print(f"ablation: arm {name:16s} end ${cv[-1][1]:>12,.0f}  taken {n}", flush=True)
     e_end = curves["E"][-1][1]
     e_check = {"stored_mirror_end": mirror_e_end, "got": e_end,
                "abs_diff": (abs(e_end - mirror_e_end) if mirror_e_end is not None else None)}
@@ -309,6 +311,8 @@ def run_ablation(fire_rows: list[dict], mkt: dict, tiers: dict, *, draws: int = 
                   for k in ("cagr", "max_dd", "sharpe", "end_value")}
         sub = {w: stats[name][w].get("cagr", float("nan")) - stats[base][w].get("cagr", float("nan"))
                for w in windows if w != "full"}
+        if name != base:
+            print(f"ablation: bootstrap {name} vs {base} ({draws} draws) ...", flush=True)
         boot = (paired_sharpe_bootstrap(daily_rets(curves[name], lo_full, hi_full),
                                         daily_rets(curves[base], lo_full, hi_full), draws,
                                         BOOT_MEAN_BLOCK, seed)
