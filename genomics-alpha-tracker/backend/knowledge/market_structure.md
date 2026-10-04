@@ -2,7 +2,7 @@
 
 Purpose: a cited grounding note on the market-structure regularities that govern small/mid-cap genomics trading — short interest, insider buying, analyst-revision drift, liquidity/slippage, sector beta, and volatility-based risk sizing.
 
-Last researched: 2026-07-20
+Last researched: 2026-10-01 (quarterly pass; previous 2026-07-20)
 
 ---
 
@@ -34,6 +34,8 @@ This note informs **entries, position sizing, and risk framing** for thin biotec
 - Empirical work on GME confirms the price action was statistically abnormal and driven by coordinated retail flow (Reddit activity Granger-causes GME returns; Lyócsa et al., 2021) and by options-hedging feedback ("gamma squeeze": coordinated call buying forces market-maker delta-hedging, a mechanic modeled by Pedersen, 2022) [S5][S6]. None of these drivers are readable from short interest itself.
 
 **Practical framing.** Use short interest as (a) a **bearish prior** on the name and (b) a **volatility/gap-risk amplifier** flag, not as a bullish squeeze setup. A squeeze needs: an exogenous positive catalyst, hard-to-borrow / low free float, and evidence of forced buying (rising borrow fees, options gamma). Absent those, "high SI → squeeze" is a losing base-rate bet. Short interest is reported on a lag (twice-monthly FINRA settlement, published with delay), so the number you see is stale — another reason not to lean on it mechanically.
+
+**There is still no monthly SEC short-position dataset, and will not be until 2028.** SEC Rule 13f-2 / Form SHO — which requires institutional managers over a threshold to report short positions, with the SEC publishing aggregated per-security data at a one-month delay — has had its compliance date extended twice. As of the 3 December 2025 order the first filings are due **14 February 2028**, covering a January 2028 reporting period [S28]. Until then, twice-monthly FINRA settlement data is the only short-interest source, with all the staleness above. Recorded because the rule is widely described as if it were already in force; do not build a flag or a memo on a dataset that does not exist yet.
 
 ---
 
@@ -164,3 +166,4 @@ Markets **underreact** to analyst information, producing predictable post-event 
 25. **New Concepts in Technical Trading Systems** (introduces ATR and the True Range calculation) — Wilder, J. W. (1978), Trend Research. (Overview: https://en.wikipedia.org/wiki/Average_true_range)
 26. **Average True Range: Dynamic Stop-Loss Levels & Volatility-Normalized Position Sizing** — LuxAlgo research note (ATR stop multiples ~1.5–3×; constant-risk sizing formula), accessed 2026. https://www.luxalgo.com/blog/average-true-range-dynamic-stop-loss-levels/
 27. **How to Trade Biotech Stocks: Strategies and Tools for FDA Plays** (binary-event gap magnitudes: FDA approval ~50–200% moves; 10–20% weekly swings; catalyst-diversification) — Benzinga Pro, accessed 2026. https://www.benzinga.com/pro/blog/how-to-trade-biotech-stocks-strategies-and-tools-for-fda-plays
+28. **SEC Rule 13f-2 / Form SHO — short-position reporting, compliance further extended** — U.S. SEC exemptive order of 3 December 2025 granting an additional two-year extension; first Form SHO filings due 14 February 2028 for the January 2028 reporting period. The SEC will publish aggregated per-security short-position data at a one-month delay once filings begin. https://www.morganlewis.com/pubs/2025/12/short-sale-reporting-on-form-sho-compliance-date-further-extended-to-2028 — rule background: https://natlawreview.com/article/sec-rule-13f-2-and-form-sho-new-short-position-reporting-requirements-certain

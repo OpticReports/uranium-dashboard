@@ -2,7 +2,7 @@
 
 **Purpose:** Grounding base rates on FDA regulatory catalysts (PDUFA, AdComm, CRL) and their documented price/financing behavior, for calibrating trade memos around biotech regulatory events.
 
-**Last researched:** 2026-07-20
+**Last researched:** 2026-10-01 (quarterly pass; previous 2026-07-20)
 
 ---
 
@@ -17,7 +17,7 @@ These figures calibrate the **probability** and **expected-move** sections of a 
   - **[HEURISTIC]** = practitioner consensus with no rigorous public dataset behind the magnitude.
 - Weight them accordingly. Do **not** present a heuristic band as if it were a measured probability in a memo. Where a study exists, cite it; where only practitioner knowledge exists, say so.
 - Ranges are given where sources disagree. When a memo needs a point estimate, state the range and pick a value with a one-line rationale — do not invent a false-precision number.
-- Re-pull the numbers before leaning on any specific figure: PDUFA cycles, annual novel-drug counts, and yearly concordance all move year to year. This note was researched 2026-07-20.
+- Re-pull the numbers before leaning on any specific figure: PDUFA cycles, annual novel-drug counts, and yearly concordance all move year to year. This note was researched 2026-10-01.
 
 **Interpretation guardrails (read before quoting any number in a memo):**
 
@@ -61,7 +61,7 @@ Direction to always encode: **downside on failure tends to exceed upside on appr
 
 - Standard review target is ~10 months from the 60-day filing-acceptance milestone; priority review is ~6 months [Source 2].
 - The PDUFA date is a *decision deadline, not an approval*. The action can be either outcome. The FDA can also act *early* (increasingly common) or, rarely, miss the date.
-- In 2024, CDER met or beat the PDUFA goal date for 47 of 50 (94%) novel-drug approvals [Source 1]; across all CDER approvals, ~96% met the goal date in 2025 [Source 2]. These are *punctuality* stats, not approve/deny odds.
+- In 2025, CDER approved **46 novel drugs**; **85%** were approved in the first review cycle and CDER met its PDUFA goals **96%** of the time [Source 18]. In 2024 the equivalents were 50 novel approvals, 47 of 50 (94%) meeting the goal date and 37 of 50 (74%) first-cycle [Source 1]. These are *punctuality* and *cycle* stats, not approve/deny odds.
 
 **What the stock typically does.** The single most-watched binary.
 
@@ -133,8 +133,9 @@ Compact table; scope and caveats in the notes below. Every figure carries surviv
 
 | Metric | Figure | Scope / period | Source |
 |---|---|---|---|
-| Novel drugs meeting PDUFA goal date (timeliness, *not* approval) | 94% (47/50) in 2024; ~96% of CDER approvals in 2025 | CDER novel approvals | [1], [2] |
-| First-cycle approval rate, novel drugs | ~74% (37/50, 2024); ~84% (46/55, 2023); ~85% (39/46, 2017); ~81% (166/204, 2011-2016); ≥85% most years since 2017 | CDER novel drugs | [1], [6] |
+| Novel drugs meeting PDUFA goal date (timeliness, *not* approval) | ~96% in 2025; 94% (47/50) in 2024 | CDER novel approvals | [18], [1] |
+| First-cycle approval rate, novel drugs | **85% in 2025 (of 46)**; ~74% (37/50, 2024); ~84% (46/55, 2023); ~85% (39/46, 2017); ~81% (166/204, 2011-2016) | CDER novel drugs | [18], [1], [6] |
+| Novel approvals per year (volume, not a rate) | 46 in 2025 (25 orphan, 14 oncology, ~50% expedited); 50 in 2024 | CDER novel approvals | [18], [1] |
 | CRL frequency, original NDAs/BLAs | ~37% of applications received a CRL | PDUFA VI cycle, 2018-2022 | [7] |
 | FDA–AdComm overall concordance | 88% (262/298 votes) | 2010-2021 | [3] |
 | FDA–AdComm overall agreement (alt. estimate) | 86% (2017-2022); 78% (2008-2015) | 2008-2022 | [4] |
@@ -344,7 +345,7 @@ Corollary asymmetries a memo should encode:
 7. **Idiosyncratic dominance.** Indication, competitive landscape, label details, safety-database size, manufacturing readiness, prior CRLs, short interest, float, and cash runway routinely swamp the base rate for any single name. Base rates set the *prior*; the specific facts move it a lot.
 8. **Reflexivity of "priced in."** The more a catalyst is anticipated (designations, positive AdComm, strong data), the smaller the approval surprise and the larger the *relative* downside if it fails. A "high approval probability" name is not automatically a good long into the print.
 9. **Small denominators.** Several concordance sub-rates rest on modest samples (e.g., 60 negative initial-approval votes [3]; 7 AdComms in 2025 [5]). Treat sub-bucket percentages as noisy.
-10. **Numbers age.** Cycles (PDUFA VI vs VII), annual novel-drug counts, and yearly concordance all move. Re-pull before relying on a specific figure; this note was researched 2026-07-20.
+10. **Numbers age.** Cycles (PDUFA VI vs VII), annual novel-drug counts, and yearly concordance all move. Re-pull before relying on a specific figure; this note was researched 2026-10-01.
 
 ---
 
@@ -401,4 +402,7 @@ Corollary asymmetries a memo should encode:
 
 16. **Why Some FDA Approvals Trigger Stock Drops Instead of Gains ("sell the news")** — Biotech Analyzer. [HEURISTIC] Long-anticipated approvals often pop then drift down as the outcome was priced in during run-up; ~12-18 months to meaningful revenue; dilution/label risk caps upside. https://biotechanalyzer.com/insights/why-some-fda-approvals-trigger-stock-drops-instead-of-gains
 
+
 17. **FDA publication of Complete Response Letters / CRL transparency** — U.S. FDA (openFDA CRL dataset) and Pharmacy Times coverage, 2025. FDA has begun publishing hundreds of historical CRLs and is moving toward real-time release, making deficiency details public. https://open.fda.gov/apis/transparency/completeresponseletters/ and https://www.pharmacytimes.com/view/fda-publishes-hundreds-of-complete-response-letters-from-first-half-of-the-decade
+
+18. **New Drug Therapy Approvals 2025 (Advancing Health Through Innovation)** — U.S. FDA / CDER, Jan 2026, as summarised by RAPS. 46 novel approvals; 85% approved in the first review cycle; PDUFA goals met ~96% of the time; 25 with orphan designation (>half for rare disease); 14 oncology; ~50% used an expedited pathway (fast track, breakthrough or priority review). The FDA landing page confirms the headline count of 46; the aggregate breakdowns are published only inside the report PDF, so RAPS is cited for those. NOT OBTAINED this pass: the first-in-class count and the NME-vs-BLA split (the report PDF would not parse in the research environment) — do not infer them. https://www.fda.gov/drugs/novel-drug-approvals-fda/novel-drug-approvals-2025 — report PDF: https://www.fda.gov/files/drugs/published/new-drug-therapy-2025-annual-report.pdf — summary: https://www.raps.org/resource/cder-approved-46-novel-drugs-in-2025-half-for-rar.html
