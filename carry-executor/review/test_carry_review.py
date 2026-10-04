@@ -365,7 +365,8 @@ def test_a_run_seconds_after_the_hour_is_not_a_missing_payment():
 # ------------------------------------------------------------------ proposals
 
 def _m(**kw):
-    base = {"empty": False, "net_yield_ann_pct": 9.0, "opens": 0, "closes": 0,
+    base = {"empty": False, "net_yield_ann_pct": 9.0, "funding_yield_ann_pct": 9.5,
+            "fees_usd": 0.0, "opens": 0, "closes": 0,
             "uptime_pct": 100.0, "funding_usd": 200.0, "price_usd": 5.0,
             "expected_funding_usd": 200.5}
     base.update(kw)
@@ -390,8 +391,8 @@ def test_each_proposal_rule_fires_alone_at_its_threshold(pv):
     assert _kinds(_m(opens=2, closes=1, uptime_pct=61.0), None, pv) == ["NONE"]
     assert _kinds(_m(price_usd=-101.0), None, pv) == ["INVESTIGATE"]       # > half funding
     assert _kinds(_m(price_usd=-99.0), None, pv) == ["NONE"]
-    assert _kinds(_m(expected_funding_usd=190.0), None, pv) == ["INVESTIGATE"]   # 5% off
-    assert _kinds(_m(expected_funding_usd=195.0), None, pv) == ["NONE"]          # 2.5% off
+    assert _kinds(_m(expected_funding_usd=197.0), None, pv) == ["INVESTIGATE"]   # 1.5% off
+    assert _kinds(_m(expected_funding_usd=199.0), None, pv) == ["NONE"]          # 0.5% off
     assert _kinds(_m(funding_usd=2.10, expected_funding_usd=1.90), None, pv) == ["NONE"]  # < $1
     pv.liq_px = 5000.0                                                     # +85%
     assert _kinds(_m(), None, pv) == ["PROPOSE"]
@@ -399,8 +400,22 @@ def test_each_proposal_rule_fires_alone_at_its_threshold(pv):
     pv.engine_funding = {"venues": {"HL_ETH": {"armed": True, "mean_ann_pct": 5.9}}}
     assert _kinds(_m(), None, pv) == ["NOTE"]
     pv.engine_funding = {"venues": {"HL_ETH": {"armed": True, "mean_ann_pct": 10.0}}}
-    assert _kinds(_m(net_yield_ann_pct=8.1), _m(net_yield_ann_pct=8.1), pv) == ["CANDIDATE"]
-    assert _kinds(_m(net_yield_ann_pct=7.9), _m(net_yield_ann_pct=8.1), pv) == ["NONE"]
+    hi = _m(funding_yield_ann_pct=8.1)
+    assert _kinds(hi, _m(funding_yield_ann_pct=8.1), pv) == ["CANDIDATE"]
+    assert _kinds(_m(funding_yield_ann_pct=7.9), hi, pv) == ["NONE"]
+    # fees count against it: 8.5% gross with 10% of funding spent on fees = 7.65%
+    assert _kinds(_m(funding_yield_ann_pct=8.5, fees_usd=20.0), hi, pv) == ["NONE"]
+    # never on basis: a big price component plus normal funding is no CANDIDATE
+    assert _kinds(_m(price_usd=180.0, net_yield_ann_pct=16.0), _m(net_yield_ann_pct=16.0),
+                  pv) == ["INVESTIGATE"]
+    # never beside a proposal to cut back (below cash on net, despite funding)
+    assert _kinds(_m(net_yield_ann_pct=3.0, funding_yield_ann_pct=9.0),
+                  _m(net_yield_ann_pct=3.0, funding_yield_ann_pct=9.0), pv) == ["PROPOSE"]
+    # never beside an open question
+    assert _kinds(_m(funding_yield_ann_pct=12.0, price_usd=-150.0), hi, pv) == ["INVESTIGATE"]
+    pv.liq_px = 6000.0                                                     # +122%: too close
+    assert _kinds(hi, hi, pv) == ["NONE"]
+    pv.liq_px = 8800.0
     assert _kinds(_m(), None, pv, ["x"]) == ["INVESTIGATE"]
 
 
@@ -540,6 +555,8 @@ def test_main_writes_the_numbers_even_when_the_chart_fails(tmp_path, monkeypatch
     assert sorted(p.name for p in tmp_path.iterdir()) == [
         "carry_review_2026-10.json", "carry_review_2026-10.md"]
     assert "chart failed" in (tmp_path / "carry_review_2026-10.md").read_text()
+    assert any("chart failed" in n for n in
+               json.loads((tmp_path / "carry_review_2026-10.json").read_text())["notes"])
     v.snap_perp_szi = -5.0                                  # an integrity flag -> exit 2
     v.notes = []
     assert R.main(["--month", "current", "--out", str(tmp_path), "--now-ms", str(now)]) == 2
@@ -551,3 +568,160 @@ def test_end_labels_are_spread_apart_in_order():
     assert all(b - a >= 2.5 - 1e-9 for a, b in zip(srt, srt[1:]))
     assert out[0] > out[1] > out[2] > out[3]
     assert R._money(-33.87) == "-$33.87" and R._money(0.37) == "$0.37"
+    assert R._money(-0.001) == "$0.00" and R._usd(-0.004) == "$0.00"
+
+
+
+# ------------------------------------------------------------------ re-review gaps
+
+def test_cum_check_survives_a_merged_close_and_reopen_day():
+    """A same-UTC-day close + reopen whose day is later MERGED: the merged row
+    also holds the payments on the previous short, which cumFunding.sinceOpen
+    does not count (verified on the BTC book, 2026-09-18)."""
+    day = (T0 // D) * D
+    close_at, reopen_at = day + 5 * D + 10 * H, day + 5 * D + 14 * H
+    fills = REAL + [
+        fill(close_at, PAIR, "A", 11.09603845, 2700.0, 30.0, "USDC", 11.09603845),
+        fill(close_at + 2000, "ETH", "B", 11.096, 2700.0, 13.0, "USDC", -11.096),
+        fill(reopen_at, PAIR, "B", 11.1, 2700.0, 0.0074, "UETH", 0.0),
+        fill(reopen_at + 2000, "ETH", "A", 11.09, 2700.0, 13.0, "USDC", 0.0)]
+    rp = R.replay(fills, PAIR)
+    now = day + 20 * D + 8 * H + 56 * 60_000
+    hourly = hourly_funding(rp, flat(2700.0), T0, now)
+    assert rp.perp_open_ms() == reopen_at + 2000
+    cum = -sum(float(r["delta"]["usdc"]) for r in hourly if r["time"] // H * H >= reopen_at)
+    merged = merge_days(hourly, now - 8 * D)
+    assert any(R.is_daily(r) and r["time"] == day + 5 * D for r in merged)
+    v = venue(fills, merged, now, flat(2700.0), flat(2700.0), cum=cum)
+    assert R.integrity(v, rp) == []
+    v = venue(fills, hourly, now, flat(2700.0), flat(2700.0), cum=cum)
+    assert R.integrity(v, rp) == []
+    v = venue(fills, merged, now, flat(2700.0), flat(2700.0), cum=cum - 1.0)   # still bites
+    assert any("cumFunding.sinceOpen" in f for f in R.integrity(v, rp))
+    # the reopen and close are counted; the closed hours lower uptime
+    w = R.window(v, rp, T0, now + 1, "ltd")
+    assert (w["opens"], w["closes"]) == (2, 1)
+    assert w["on_hours"] == w["hour_marks"] - 4 and w["uptime_pct"] < 100.0
+
+
+def test_merged_rows_survive_fetch_all_and_are_booked_on_their_day():
+    """Through the real fetch path: the sleeve's first day comes back merged and
+    stamped Oct 4 00:00:00.000 - before CARRY_START (16:47) - and must be kept."""
+    now = R.month_bounds("2026-11")[0] + 8 * H + 56 * 60_000
+    hourly = hourly_funding(RP_REAL, flat(2700.0), T0, now)
+    merged = merge_days(hourly, now - 8 * D - 9 * H)
+    first = merged[0]
+    assert first["time"] < T0 and R.funding_key(first) == (T0 // D) * D + 23 * H
+    post = fake_post(REAL, now)
+
+    def post2(body):
+        if body["type"] == "userFunding":
+            return [r for r in merged if body["startTime"] <= r["time"] <= body["endTime"]]
+        return post(body)
+    v = R.fetch_all(now, now - 60 * D, post=post2, get=lambda u: {"cash_apy": 0.04})
+    assert v.funding[0] is not None and any(R.is_daily(r) and r["time"] == first["time"]
+                                            for r in v.funding)
+    v.cum_since_open = -sum(float(r["delta"]["usdc"]) for r in hourly)
+    assert R.integrity(v, R.replay(v.fills, v.spot_pair)) == []
+    oct_ = R.window(v, R.replay(v.fills, v.spot_pair), *R.month_bounds("2026-10"), "oct")
+    assert oct_["funding_usd"] == pytest.approx(
+        sum(float(r["delta"]["usdc"]) for r in hourly if r["time"] < R.month_bounds("2026-11")[0]),
+        abs=0.01)
+
+
+@pytest.mark.parametrize("now_iso,want", [("2026-11-01T08:56:00", "2026-10"),
+                                          ("2027-01-01T08:56:00", "2026-12")])
+def test_the_routine_invocation_reviews_the_previous_month(tmp_path, monkeypatch, now_iso, want):
+    import datetime as dt
+    now = int(dt.datetime.fromisoformat(now_iso).replace(tzinfo=dt.timezone.utc).timestamp() * 1000)
+    v = venue(REAL, hourly_funding(RP_REAL, flat(2700.0), T0, now), now,
+              flat(2700.0), flat(2700.0), liq=8800.0,
+              cum=None)
+    monkeypatch.setattr(R, "fetch_all", lambda *a, **k: v)
+    monkeypatch.setattr(R, "chart", lambda *a, **k: None)
+    assert R.main(["--month", "previous", "--out", str(tmp_path), "--now-ms", str(now)]) == 0
+    r = json.loads((tmp_path / f"carry_review_{want}.json").read_text())
+    assert r["month"]["label"] == want
+    a, b = R.month_bounds(want)
+    assert r["month"]["uptime_pct"] == 100.0
+    assert r["month"]["hour_marks"] == len(R.hour_marks(a, b, now))
+
+
+def test_round_trip_uptime_and_a_closed_month():
+    close = T0 + 50 * H + 30 * 60_000
+    fills = round_trip(close)
+    rp = R.replay(fills, PAIR)
+    now = T0 + 40 * D
+    v = venue(fills, hourly_funding(rp, flat(2050.0), T0, now), now, flat(2100.0), flat(2050.0))
+    w = R.window(v, rp, T0, T0 + 60 * H, "x")
+    assert w["hour_marks"] == 60 and w["on_hours"] == 51 and w["uptime_pct"] == 85.0
+    nov = R.window(v, rp, *R.month_bounds("2026-11"), "2026-11")      # closed all month
+    assert nov["on_hours"] == 0 and nov["uptime_pct"] == 0.0
+    assert nov["funding_yield_ann_pct"] is None and nov["fees_usd"] == 0.0
+    assert (nov["opens"], nov["closes"]) == (0, 0)
+    assert _kinds(nov, None, v) == ["NONE"]
+
+
+def test_a_run_a_minute_after_the_hour_with_the_row_present_is_clean():
+    m = first_mark_after(T0) + 10 * H
+    now = m + 61_000                                        # row for mark m IS published
+    fund = hourly_funding(RP_REAL, flat(2700.0), T0, now)
+    assert any(r["time"] // H * H == m for r in fund)
+    v = venue(REAL, fund, now, flat(2700.0), flat(2700.0))
+    assert R.integrity(v, RP_REAL) == []
+
+
+def test_an_open_short_without_a_liquidation_price_still_reports(tmp_path, monkeypatch):
+    now = T0 + 5 * H
+    post = fake_post(REAL, now)
+
+    def post2(body):
+        out = post(body)
+        if body["type"] == "clearinghouseState":
+            out["assetPositions"][0]["position"]["liquidationPx"] = None
+        return out
+    v = R.fetch_all(now, T0, post=post2, get=lambda u: {"cash_apy": 0.04})
+    assert v.liq_px is None
+    r = R.build(v, "2026-10")
+    r.pop("_replay")
+    assert "liquidation price unavailable" in R.markdown(r)
+
+
+def test_a_malformed_engine_answer_is_unknown_not_a_crash(pv):
+    for eng in ({"venues": {"HL_ETH": {"armed": True, "mean_ann_pct": "9.5"}}},
+                {"venues": {"HL_ETH": {"armed": "yes", "mean_ann_pct": "abc"}}},
+                {"venues": None}, {"venues": []}, [], None):
+        pv.engine_funding = eng
+        R.proposals(_m(), None, _m(), pv, [])
+        g = R.gate_state(pv)
+        assert g["armed"] in (True, False, None)
+    pv.engine_funding = {"venues": {"HL_ETH": {"armed": True, "mean_ann_pct": "5.5"}}}
+    assert _kinds(_m(), None, pv) == ["NOTE"]               # coerced, rule still works
+
+
+def test_a_venue_that_cannot_be_read_gives_an_error_report_and_exit_3(tmp_path, monkeypatch):
+    def down(*a, **k):
+        raise R.FetchError("info spotMeta failed after 4 tries: null response")
+    monkeypatch.setattr(R, "fetch_all", down)
+    now = R.month_bounds("2026-11")[0] + 9 * H
+    assert R.main(["--month", "previous", "--out", str(tmp_path), "--now-ms", str(now)]) == 3
+    md = (tmp_path / "carry_review_2026-10.md").read_text()
+    assert "NOT PRODUCED" in md and "null response" in md
+    assert "error" in json.loads((tmp_path / "carry_review_2026-10.json").read_text())
+
+
+def test_the_eth_move_sits_beside_the_price_component():
+    """Casey's question: the review must SHOW that price risk is hedged."""
+    now = T0 + 30 * D
+
+    def up(t):
+        return 2700.0 * (1 + 0.10 * (t - T0) / (30 * D))    # ETH +10% over the month
+    v = venue(REAL, hourly_funding(RP_REAL, up, T0, now), now, up, up)
+    w = R.window(v, RP_REAL, T0, now + 1, "ltd")
+    assert w["eth_move_pct"] == pytest.approx(10.0, abs=0.3)
+    assert w["unhedged_equiv_usd"] == pytest.approx(0.10 * w["avg_notional_usd"], rel=0.05)
+    assert abs(w["price_usd"]) < 0.01 * abs(w["unhedged_equiv_usd"])   # hedged: ~0
+    r = R.build(v, R.ym_of(now))
+    r.pop("_replay")
+    md = R.markdown(r)
+    assert "UNHEDGED" in md and "ETH move" in md and "## By month" in md
