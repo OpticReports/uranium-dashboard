@@ -871,6 +871,37 @@ def test_refresh_basis_factor_catches_a_sub_percent_constant_offset():
     assert rb.basis_factor(drift, entries) is None
 
 
+def test_r2a_mode_enters_on_the_stored_entry_bar_not_fire_plus_one():
+    """A lane bar between the fire and the stored entry (one the campaign's
+    data lacked) must not pull the paper-mode entry a session early: the
+    reduction to build_trailing_rows stays row-for-row (CERS 2026-07-20)."""
+    rows, mkt, tiers, bil, spy = _study_inputs()
+    shifted = []
+    for t in rows:
+        bars = mkt["bars"][t["symbol"]]
+        idx = {b.date.isoformat(): i for i, b in enumerate(bars)}
+        i = idx[t["fire_date"]]
+        if i + 2 < len(bars) and len(shifted) % 3 == 0:
+            e = bars[i + 2]                        # the campaign entered two bars after the fire
+            t = dict(t, entry_date=e.date.isoformat(), entry=e.open)
+        shifted.append(t)
+    assert sum(1 for a, b in zip(rows, shifted) if a["entry_date"] != b["entry_date"]) > 0
+    ref, _ = build_trailing_rows(shifted, mkt, tiers)
+    got, _ = mod.build_exec_rows(shifted, mkt, tiers, mod.R2A_MODE)
+    assert mod._row_mismatches(ref, got) == 0 and mod._row_mismatch_examples(ref, got) == []
+    # a stored entry_date absent from the lane is skipped by both graders alike
+    missing = [dict(shifted[0], entry_date="1999-01-04")] + shifted[1:]
+    ref2, _ = build_trailing_rows(missing, mkt, tiers)
+    got2, _ = mod.build_exec_rows(missing, mkt, tiers, mod.R2A_MODE)
+    assert len(ref2) == len(got2) and mod._row_mismatches(ref2, got2) == 0
+    # executor modes are untouched: the fill is still fire + lag
+    ex, _ = mod.build_exec_rows(shifted, mkt, tiers, mod.EXEC_T2)
+    one = ex[0]
+    bars = mkt["bars"][one["symbol"]]
+    i = {b.date.isoformat(): k for k, b in enumerate(bars)}[one["fire_date"]]
+    assert one["entry_date"] == bars[i + 2].date.isoformat()
+
+
 def test_row_mismatch_examples_name_the_rows():
     a = [{"fire_date": "2026-07-17", "symbol": "ATAI", "flag": "x_trail", "entry_date": "2026-07-23",
           "exit_date": "2026-07-31", "status": "stopped", "entry": 2.99, "exit": 2.43, "r_net": -1.09}]
