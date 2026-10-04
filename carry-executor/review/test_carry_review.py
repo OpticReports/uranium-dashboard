@@ -1,8 +1,11 @@
 """Gates for the monthly carry review (carry_review.py). No network: venue
-data is built here; fetch_all runs against a fake `post`."""
+data is built here in the venue's own formats (hourly funding rows a few ms
+after the mark; MERGED daily rows for days older than ~8 days); fetch_all
+and main run against fakes."""
 from __future__ import annotations
 
 import json
+import math
 import os
 import sys
 
@@ -12,8 +15,10 @@ sys.path.insert(0, os.path.dirname(__file__))
 import carry_review as R  # noqa: E402
 
 H = R.HOUR_MS
-T0 = R.CARRY_START_MS
+D = R.DAY_MS
+T0 = R.CARRY_START_MS                     # 2026-10-04 16:47Z
 PAIR = "@151"
+RATE = 0.0000125                          # 10.95%/yr, HL's baseline hourly rate
 
 
 def fill(t, coin, side, sz, px, fee, tok, start=None):
@@ -31,26 +36,71 @@ def candles(t_from, t_to, f, iv=H):
     return out
 
 
-def funding_row(t, szi, rate, px):
-    return {"time": t, "delta": {"type": "funding", "coin": "ETH",
-                                 "usdc": str(-szi * px * rate), "szi": str(szi),
-                                 "fundingRate": str(rate), "nSamples": None}}
+def first_mark_after(t):
+    return -(-(t + 1) // H) * H
+
+
+def hourly_funding(rp, perp_f, t_from, t_to, rate=RATE, skip=()):
+    """The venue's hourly rows: one per held mark, ~17 ms after it, paid on
+    the size held just before the mark at that mark's price."""
+    rows, m = [], first_mark_after(t_from)
+    while m <= t_to:
+        p = rp.at(m - 1).perp
+        if abs(p) > R.MIN_QTY and m not in skip:
+            rows.append({"time": m + 17, "hash": "0x0", "delta": {
+                "type": "funding", "coin": "ETH", "usdc": str(-p * perp_f(m) * rate),
+                "szi": str(p), "fundingRate": str(rate), "nSamples": None}})
+        m += H
+    return rows
+
+
+def merge_days(rows, older_than):
+    """What the venue does to rows older than ~8 days: one row per UTC day,
+    stamped D 00:00:00.000, nSamples = hours paid, usdc = the day's sum."""
+    days, keep = {}, []
+    for r in rows:
+        if r["time"] >= older_than:
+            keep.append(r)
+            continue
+        d = (r["time"] // D) * D
+        x = days.setdefault(d, {"usdc": 0.0, "n": 0, "szi": 0.0})
+        x["usdc"] += float(r["delta"]["usdc"])
+        x["n"] += 1
+        x["szi"] += float(r["delta"]["szi"])
+    merged = [{"time": d, "hash": "0x0", "delta": {
+        "type": "funding", "coin": "ETH", "usdc": str(x["usdc"]), "szi": str(x["szi"] / x["n"]),
+        "fundingRate": str(RATE), "nSamples": x["n"]}} for d, x in sorted(days.items())]
+    return merged + keep
+
+
+def rate_rows(t_from, t_to, rate=RATE):
+    out, m = [], (t_from // H) * H
+    while m <= t_to:
+        out.append({"coin": "ETH", "fundingRate": str(rate), "premium": "0", "time": m + 30})
+        m += H
+    return out
 
 
 def venue(fills, funding, now, spot_f, perp_f, spot_qty=None, szi=None, liq=None,
-          rates=None, cash=0.04, eng=None):
+          rates=None, cash=0.04, eng=None, cum=None):
     rp = R.replay(fills, PAIR)
     b = rp.at(now)
     return R.VenueData(
-        fills=fills, funding=funding, rates=rates or [],
-        perp_h=candles(T0 - 2 * 24 * H, now, perp_f), perp_d=candles(T0 - 5 * 24 * H, now, perp_f, 24 * H),
-        spot_h=candles(T0 - 2 * 24 * H, now, spot_f), spot_d=candles(T0 - 5 * 24 * H, now, spot_f, 24 * H),
+        fills=fills, funding=funding,
+        rates=rate_rows(T0 - 40 * D, now) if rates is None else rates,
+        perp_h=candles(T0 - 2 * D, now, perp_f), perp_d=candles(T0 - 5 * D, now, perp_f, D),
+        spot_h=candles(T0 - 2 * D, now, spot_f), spot_d=candles(T0 - 5 * D, now, spot_f, D),
         spot_pair=PAIR,
         snap_spot_qty=b.s_net if spot_qty is None else spot_qty,
         snap_perp_szi=b.perp if szi is None else szi,
         liq_px=liq, perp_mid=perp_f(now), spot_mid=spot_f(now),
-        engine_funding=eng or {"venues": {"HL_ETH": {"armed": True, "mean_ann_pct": 10.0}}},
-        cash_apy=cash, now_ms=now, chart_from_ms=T0 - 10 * 24 * H)
+        engine_funding={"venues": {"HL_ETH": {"armed": True, "mean_ann_pct": 10.0}}}
+        if eng is None else eng,
+        cash_apy=cash, now_ms=now, chart_from_ms=T0 - 10 * D, cum_since_open=cum)
+
+
+def flat(px):
+    return lambda t: px
 
 
 # the sleeve's real opening fills, 2026-10-04
@@ -63,89 +113,43 @@ REAL = [
     fill(T0 + 414_000, PAIR, "B", 0.0074, 2704.3, 0.000004972, "UETH", 11.088643422),
     fill(T0 + 415_000, "ETH", "A", 0.0074, 2704.3, 0.008645, "USDC", -11.0886),
 ]
+RP_REAL = R.replay(REAL, PAIR)
 
+
+# ------------------------------------------------------------------ replay
 
 def test_replay_reproduces_the_venue_holdings_from_real_fills():
-    rp = R.replay(REAL, PAIR)
-    b = rp.at(T0 + 10 * H)
+    b = RP_REAL.at(T0 + 10 * H)
     assert b.s_net == pytest.approx(11.09603845, abs=1e-9)   # venue UETH total
     assert b.perp == pytest.approx(-11.096, abs=1e-9)        # venue szi
     assert b.fee_ueth == pytest.approx(0.00746155, abs=1e-12)
+    assert b.fee_spot_usd == pytest.approx(0.007456578 * 2703.7 + 0.000004972 * 2704.3)
     assert b.fees_usdc == pytest.approx(3.118903 + 4.277409 + 5.556112 + 0.008645)
-    assert rp.flags == []                                    # startPosition chain agrees
-    assert len(rp.passes) == 2                               # open pass + top-up pass
+    assert RP_REAL.flags == []                               # startPosition chain agrees
+    assert len(RP_REAL.passes) == 2                          # open pass + top-up pass
+    assert RP_REAL.perp_open_ms() == T0 + 112_000
 
 
-def test_value_splits_price_and_fees_by_hand():
-    rp = R.replay(REAL, PAIR)
-    b = rp.at(T0 + H)
+def test_value_books_fees_at_fill_price_and_marks_what_is_held():
+    b = RP_REAL.at(T0 + H)
     m = R.value(b, spot_px=2800.0, perp_px=2810.0)
     spot_cost = 11.0961 * 2703.7 + 0.0074 * 2704.3
     perp_proceeds = 11.0886 * 2703.9 + 0.0074 * 2704.3
-    price = (11.1035 * 2800.0 - spot_cost) + (perp_proceeds - 11.096 * 2810.0)
+    fee_spot_usd = 0.007456578 * 2703.7 + 0.000004972 * 2704.3
+    assert m["fees"] == pytest.approx(b.fees_usdc + fee_spot_usd, abs=1e-9)
+    price = (11.09603845 * 2800.0 - spot_cost + fee_spot_usd) + (perp_proceeds - 11.096 * 2810.0)
     assert m["price"] == pytest.approx(price, abs=1e-6)
-    assert m["fees"] == pytest.approx(b.fees_usdc + 0.00746155 * 2800.0, abs=1e-6)
-    # the identity the report relies on: net UETH x px - cash = price - UETH fees
-    assert b.s_net * 2800.0 + b.spot_cash == pytest.approx(
-        b.s_gross * 2800.0 + b.spot_cash - b.fee_ueth * 2800.0)
+    # the total is what the account actually has: UETH held + cash moved + short
+    total = 11.09603845 * 2800.0 - spot_cost + (perp_proceeds - 11.096 * 2810.0) - b.fees_usdc
+    assert m["price"] - m["fees"] == pytest.approx(total, abs=1e-6)
 
 
-def round_trip(close_at, p_open=2000.0, p_close=2100.0, basis=0.0):
-    """Open 10 UETH / -10 ETH at p_open, close at p_close; spot fee 0.01 UETH
-    on the buy, $2 USDC on the sell, perp fees $5 per side."""
-    return [
-        fill(T0 + 60_000, PAIR, "B", 10.0, p_open, 0.01, "UETH", 0.0),
-        fill(T0 + 62_000, "ETH", "A", 9.99, p_open + basis, 5.0, "USDC", 0.0),
-        fill(close_at, PAIR, "A", 9.99, p_close, 2.0, "USDC", 9.99),
-        fill(close_at + 2_000, "ETH", "B", 9.99, p_close, 5.0, "USDC", -9.99),
-    ]
-
-
-def test_round_trip_total_is_funding_minus_fees_plus_basis():
-    close = T0 + 50 * H + 30 * 60_000
-    fills = round_trip(close, basis=1.0)                    # shorted $1 above spot buy
-    fund = [funding_row(T0 + h * H, -9.99, 0.0000125, 2050.0) for h in range(1, 51)]
-    now = T0 + 60 * H
-    v = venue(fills, fund, now, lambda t: 2100.0, lambda t: 2100.0)
-    rp = R.replay(fills, PAIR)
-    w = R.window(v, rp, T0, now, "ltd")
-    funding = sum(float(r["delta"]["usdc"]) for r in fund)
-    fees = 5.0 + 5.0 + 2.0 + 0.01 * 2100.0                  # UETH fee marked at 2100
-    # spot: bought 10 @2000, sold 9.99 @2100 -> 0.01 UETH left = the fee; perp:
-    # short 9.99 @2001, bought back @2100
-    price = (0.01 * 2100.0 - 20000.0 + 9.99 * 2100.0) + (9.99 * 2001.0 - 9.99 * 2100.0)
-    assert w["funding_usd"] == pytest.approx(round(funding, 2), abs=0.01)
-    assert w["fees_usd"] == pytest.approx(fees, abs=0.01)
-    assert w["price_usd"] == pytest.approx(round(price, 2), abs=0.01)
-    assert w["total_usd"] == pytest.approx(round(funding - fees + price, 2), abs=0.02)
-    assert (w["opens"], w["closes"]) == (1, 1)
-    assert w["on_hours"] == 50
-
-
-def test_month_windows_add_up_to_inception_to_date():
-    """Additivity: the books are marked at each boundary, so two adjacent
-    windows must sum to the window that spans both."""
-    fills = REAL
-    now = T0 + 40 * 24 * H
-    fund = [funding_row(T0 + h * H, -11.096, 0.0000125 + (h % 7) * 1e-6, 2700.0)
-            for h in range(1, int((now - T0) / H))]
-    import math
-    v = venue(fills, fund, now, lambda t: 2700 + 50 * math.sin(t / 7e7),
-              lambda t: 2701 + 50 * math.sin(t / 7e7))
-    rp = R.replay(fills, PAIR)
-    mid = T0 + 20 * 24 * H + 17 * 60_000
-    a, b = R.window(v, rp, T0, mid, "a"), R.window(v, rp, mid, now, "b")
-    ab = R.window(v, rp, T0, now, "ab")
-    for k in ("funding_usd", "fees_usd", "price_usd", "total_usd"):
-        assert a[k] + b[k] == pytest.approx(ab[k], abs=0.03), k
-    assert a["on_hours"] + b["on_hours"] == ab["on_hours"]
-
-
-def test_dust_after_a_close_does_not_count_as_open():
-    b = R.Book(s_gross=10.0, fee_ueth=0.0, perp=0.0)
-    assert R.is_on(b, 2000.0)
-    b = R.Book(s_gross=0.004, perp=0.0)                    # $8 of UETH dust
-    assert not R.is_on(b, 2000.0)
+def test_a_month_with_no_fills_has_no_fees():
+    now = T0 + 70 * D
+    v = venue(REAL, [], now, lambda t: 2700 + t / 1e8, lambda t: 2700 + t / 1e8)
+    a, b = R.month_bounds("2026-11")
+    w = R.window(v, RP_REAL, a, b, "2026-11")
+    assert w["fees_usd"] == 0.0
 
 
 def test_pre_existing_inventory_is_seeded_and_flagged():
@@ -158,29 +162,259 @@ def test_pre_existing_inventory_is_seeded_and_flagged():
 def test_a_fill_the_replay_missed_is_flagged():
     fills = [fill(T0 + 60_000, PAIR, "B", 1.0, 2000.0, 0.001, "UETH", 0.0),
              fill(T0 + 9 * H, PAIR, "B", 1.0, 2000.0, 0.001, "UETH", 1.5)]  # venue had 1.5
+    assert any("spot replay drift" in f for f in R.replay(fills, PAIR).flags)
+
+
+# ------------------------------------------------------------------ prices
+
+def test_price_at_uses_the_last_closed_candle_never_a_future_one():
+    cs = [{"t": k * H, "T": (k + 1) * H - 1, "o": str(100 + k), "c": str(200 + k)}
+          for k in range(10, 15)]
+    assert R.price_at(cs, 13 * H) == 212.0          # boundary: candle 12 closed, 13 open
+    assert R.price_at(cs, 13 * H - 1) == 212.0      # exactly at candle 12's close
+    assert R.price_at(cs, 13 * H - 2) == 211.0
+    assert R.price_at(cs, 5 * H) == 110.0           # before every close: first open
+    assert R.price_at(cs, 99 * H) == 214.0
+
+
+def test_daily_candles_mark_boundaries_older_than_the_hourly_history():
+    now = T0 + 300 * D
+    v = venue(REAL, [], now, lambda t: 1000.0 + t / 1e9, lambda t: 1000.0 + t / 1e9)
+    v.perp_h = [c for c in v.perp_h if c["t"] >= now - 5000 * H]   # venue keeps 5000
+    t = T0 + 3 * D
+    assert v.px("perp", t) == pytest.approx(R.price_at(v.perp_d, t))
+    assert v.px("perp", now) == v.perp_mid
+
+
+def test_clean_candles_drops_the_in_progress_candle_and_duplicates():
+    now = 10 * H + 5
+    cs = [{"t": 9 * H, "T": 10 * H - 1, "c": "1"}, {"t": 10 * H, "T": 11 * H - 1, "c": "2"},
+          {"t": 9 * H, "T": 10 * H - 1, "c": "1"}]
+    assert R.clean_candles(cs, now) == [{"t": 9 * H, "T": 10 * H - 1, "c": "1"}]
+
+
+# ------------------------------------------------------------------ windows
+
+def round_trip(close_at, p_open=2000.0, basis=1.0, p_close=2100.0):
+    """Open 10 UETH / -9.99 ETH, close both at p_close. Spot buy fee 0.01 UETH,
+    spot sell fee $2 USDC, perp fees $5 per side."""
+    return [
+        fill(T0 + 60_000, PAIR, "B", 10.0, p_open, 0.01, "UETH", 0.0),
+        fill(T0 + 62_000, "ETH", "A", 9.99, p_open + basis, 5.0, "USDC", 0.0),
+        fill(close_at, PAIR, "A", 9.99, p_close, 2.0, "USDC", 9.99),
+        fill(close_at + 2_000, "ETH", "B", 9.99, p_close, 5.0, "USDC", -9.99),
+    ]
+
+
+def test_round_trip_total_is_funding_minus_fees_plus_basis():
+    close = T0 + 50 * H + 30 * 60_000
+    fills = round_trip(close)
     rp = R.replay(fills, PAIR)
-    assert any("spot replay drift" in f for f in rp.flags)
+    now = T0 + 60 * H
+    fund = hourly_funding(rp, flat(2050.0), T0, now)
+    v = venue(fills, fund, now, flat(2100.0), flat(2050.0))
+    v.perp_mid = v.spot_mid = 2100.0
+    w = R.window(v, rp, T0, now, "ltd")
+    funding = sum(float(r["delta"]["usdc"]) for r in fund)
+    fees = 5.0 + 5.0 + 2.0 + 0.01 * 2000.0              # UETH fee at its fill price
+    price = (0.0 * 2100 - 20000.0 + 9.99 * 2100.0 + 0.01 * 2000.0) \
+        + (9.99 * 2001.0 - 9.99 * 2100.0)
+    assert w["funding_usd"] == pytest.approx(funding, abs=0.01)
+    assert w["fees_usd"] == pytest.approx(fees, abs=0.01)
+    assert w["price_usd"] == pytest.approx(price, abs=0.01)
+    assert w["total_usd"] == pytest.approx(funding - fees + price, abs=0.02)
+    assert (w["opens"], w["closes"]) == (1, 1)
+    assert w["on_hours"] == len(fund) == 51             # 17:00 d0 .. 19:00 d2
+    # same price and rate as the payments: expected must equal received
+    assert w["expected_funding_usd"] == pytest.approx(funding, abs=0.01)
+    assert w["hours_without_rate"] == 0
 
 
-def test_integrity_catches_venue_mismatch_and_missing_funding():
+def test_month_windows_add_up_to_inception_to_date():
+    now = T0 + 40 * D
+
+    def wave(t):
+        return 2700 + 50 * math.sin(t / 7e7)
+    fund = hourly_funding(RP_REAL, wave, T0, now)
+    v = venue(REAL, fund, now, wave, lambda t: wave(t) + 1)
+    nov = R.month_bounds("2026-11")[0]
+    a = R.window(v, RP_REAL, T0, nov, "oct")
+    b = R.window(v, RP_REAL, nov, now + 1, "nov")
+    ab = R.window(v, RP_REAL, T0, now + 1, "ab")
+    for k in ("funding_usd", "fees_usd", "price_usd", "total_usd", "expected_funding_usd"):
+        assert a[k] + b[k] == pytest.approx(ab[k], abs=0.03), k
+    assert a["on_hours"] + b["on_hours"] == ab["on_hours"]
+    assert a["hour_marks"] + b["hour_marks"] == ab["hour_marks"]
+
+
+def test_a_fully_open_month_reads_100_percent_across_its_boundaries():
+    """Rows land ~17 ms after the mark: the Nov 1 00:00 payment is November's,
+    the Dec 1 00:00 payment December's (booked at the mark, [t0, t1))."""
+    now = T0 + 70 * D
+    fund = hourly_funding(RP_REAL, flat(2700.0), T0, now)
+    v = venue(REAL, fund, now, flat(2700.0), flat(2700.0))
+    w = R.window(v, RP_REAL, *R.month_bounds("2026-11"), "2026-11")
+    assert w["hour_marks"] == w["on_hours"] == 720
+    assert w["uptime_pct"] == 100.0
+    assert w["funding_usd"] == pytest.approx(720 * 11.096 * 2700.0 * RATE, abs=0.01)
+    cur = R.window(v, RP_REAL, *R.month_bounds("2026-12"), "2026-12")
+    assert cur["uptime_pct"] == 100.0
+
+
+def test_merged_daily_rows_give_the_same_month_as_hourly_rows():
+    """THE venue behaviour the first version missed: on 2026-11-01 everything
+    older than ~8 days comes back as one row per day. Results must not move."""
+    now = R.month_bounds("2026-11")[0] + 8 * H + 56 * 60_000      # 1 Nov 08:56Z
+    hourly = hourly_funding(RP_REAL, flat(2700.0), T0, now)
+    merged = merge_days(hourly, now - 8 * D - 9 * H)
+    assert merged[0]["time"] == (T0 // D) * D and merged[0]["delta"]["nSamples"] == 7
+    rv = venue(REAL, hourly, now, flat(2700.0), flat(2700.0))
+    mv = venue(REAL, merged, now, flat(2700.0), flat(2700.0))
+    oct_h = R.window(rv, RP_REAL, *R.month_bounds("2026-10"), "oct")
+    oct_m = R.window(mv, RP_REAL, *R.month_bounds("2026-10"), "oct")
+    for k in ("funding_usd", "on_hours", "hour_marks", "uptime_pct", "expected_funding_usd",
+              "total_usd", "funding_yield_ann_pct", "net_yield_ann_pct"):
+        assert oct_m[k] == pytest.approx(oct_h[k], abs=0.01), k
+    assert oct_m["uptime_pct"] == 100.0
+    assert oct_m["funding_yield_ann_pct"] == pytest.approx(RATE * 8760 * 100, abs=0.01)
+    assert R.integrity(mv, RP_REAL) == []
+    assert "INVESTIGATE" not in [k for k, _ in R.proposals(oct_m, None, oct_m, mv, [])]
+    # and the chart spreads a merged day back over its hours
+    s_h, s_m = R.series(rv, RP_REAL), R.series(mv, RP_REAL)
+    assert s_m["funding"][-1] == pytest.approx(s_h["funding"][-1], abs=0.01)
+    assert max(abs(a - b) for a, b in zip(s_m["funding"], s_h["funding"])) < 0.05
+
+
+def test_a_merged_row_fetched_from_mid_day_is_not_lost():
+    """fetch_all asks from the start of the UTC day: a mid-day startTime
+    drops the merged row of the sleeve's first day (live-verified)."""
+    calls = []
+
+    def post(body):
+        t = body["type"]
+        if t == "spotMeta":
+            return {"tokens": [{"name": "USDC", "index": 0}, {"name": "UETH", "index": 221}],
+                    "universe": [{"name": "@151", "tokens": [221, 0], "index": 151}]}
+        if t == "userFunding":
+            calls.append(body["startTime"])
+            return []
+        if t in ("userFillsByTime", "fundingHistory"):
+            return []
+        if t == "candleSnapshot":
+            return candles(T0 - D, T0 + 3 * H, flat(1.0))
+        if t == "clearinghouseState":
+            return {"assetPositions": []}
+        if t == "spotClearinghouseState":
+            return {"balances": []}
+        return {"ETH": "1", "@151": "1"}
+    R.fetch_all(T0 + 3 * H, T0, post=post, get=lambda u: {})
+    assert calls[0] == (T0 // D) * D
+
+
+def test_uptime_counts_hour_marks_and_short_windows_are_not_annualised():
+    now = T0 + 20 * 60_000                                  # 20 minutes in: one mark
+    v = venue(REAL, hourly_funding(RP_REAL, flat(2700.0), T0, now), now,
+              flat(2700.0), flat(2700.0))
+    w = R.window(v, RP_REAL, T0, now + 1, "x")
+    assert w["uptime_pct"] == 100.0 and w["hour_marks"] == 1
+    assert w["net_yield_ann_pct"] is None and w["funding_yield_ann_pct"] is None
+
+
+def test_dust_after_a_close_does_not_count_as_open():
+    assert R.is_on(R.Book(s_gross=10.0), 2000.0)
+    assert not R.is_on(R.Book(s_gross=0.004), 2000.0)       # $8 of UETH dust
+
+
+# ------------------------------------------------------------------ integrity
+
+def test_integrity_is_clean_on_a_matching_venue():
     now = T0 + 20 * H
-    fund = [funding_row(T0 + h * H, -11.096, 0.0000125, 2700.0)
-            for h in range(1, 20) if h not in (5, 6, 7)]
-    v = venue(REAL, fund, now, lambda t: 2700.0, lambda t: 2700.0, spot_qty=11.5)
-    flags = R.integrity(v, R.replay(REAL, PAIR))
-    assert any("!= venue" in f for f in flags)
-    assert any("carry no funding payment" in f for f in flags)
-    v2 = venue(REAL, [funding_row(T0 + h * H, -11.096, 0.0000125, 2700.0)
-                      for h in range(1, 20)], now, lambda t: 2700.0, lambda t: 2700.0)
-    assert R.integrity(v2, R.replay(REAL, PAIR)) == []
+    fund = hourly_funding(RP_REAL, flat(2700.0), T0, now)
+    cum = -sum(float(r["delta"]["usdc"]) for r in fund)
+    v = venue(REAL, fund, now, flat(2700.0), flat(2700.0), cum=cum)
+    assert R.integrity(v, RP_REAL) == []
 
+
+def test_integrity_catches_each_kind_of_mismatch():
+    now = T0 + 20 * H
+    fund = hourly_funding(RP_REAL, flat(2700.0), T0, now)
+    v = venue(REAL, fund, now, flat(2700.0), flat(2700.0), spot_qty=11.5)
+    assert any(f"replayed {R.SPOT_TOKEN}" in f for f in R.integrity(v, RP_REAL))
+    v = venue(REAL, fund, now, flat(2700.0), flat(2700.0), szi=-8.0)
+    assert any("replayed ETH perp" in f for f in R.integrity(v, RP_REAL))
+    gone = first_mark_after(T0) + 5 * H                     # 22:00 on day one
+    v = venue(REAL, [r for r in fund if r["time"] // H * H != gone], now,
+              flat(2700.0), flat(2700.0))
+    assert any("held 7 h, paid 6" in f for f in R.integrity(v, RP_REAL))   # even ONE hour
+    dup = fund + [{"time": first_mark_after(T0) + 40, "delta": {   # one hour paid twice
+        "coin": "ETH", "usdc": "1", "szi": "-1", "fundingRate": "0.00001", "nSamples": None}}]
+    v = venue(REAL, dup, now, flat(2700.0), flat(2700.0))
+    assert any("paid 8" in f for f in R.integrity(v, RP_REAL))
+    v = venue(REAL, fund, now, flat(2700.0), flat(2700.0), cum=-999.0)
+    assert any("cumFunding.sinceOpen" in f for f in R.integrity(v, RP_REAL))
+
+
+def test_a_run_seconds_after_the_hour_is_not_a_missing_payment():
+    m = first_mark_after(T0) + 10 * H
+    now = m + 500                                           # row for mark m not out yet
+    fund = [r for r in hourly_funding(RP_REAL, flat(2700.0), T0, now) if r["time"] < m]
+    v = venue(REAL, fund, now, flat(2700.0), flat(2700.0))
+    assert R.integrity(v, RP_REAL) == []
+
+
+# ------------------------------------------------------------------ proposals
+
+def _m(**kw):
+    base = {"empty": False, "net_yield_ann_pct": 9.0, "opens": 0, "closes": 0,
+            "uptime_pct": 100.0, "funding_usd": 200.0, "price_usd": 5.0,
+            "expected_funding_usd": 200.5}
+    base.update(kw)
+    return base
+
+
+def _kinds(month, prev, v, flags=()):
+    return [k for k, _ in R.proposals(month, prev, month, v, list(flags))]
+
+
+@pytest.fixture
+def pv():
+    return venue(REAL, [], T0 + 70 * D, flat(2700.0), flat(2700.0), liq=8800.0)
+
+
+def test_each_proposal_rule_fires_alone_at_its_threshold(pv):
+    assert _kinds(_m(), None, pv) == ["NONE"]
+    low = _m(net_yield_ann_pct=3.9)
+    assert _kinds(low, _m(net_yield_ann_pct=3.9), pv) == ["PROPOSE"]       # below cash x2
+    assert _kinds(low, _m(net_yield_ann_pct=4.1), pv) == ["NONE"]          # only one month
+    assert _kinds(_m(opens=2, closes=1, uptime_pct=59.0), None, pv) == ["PROPOSE"]
+    assert _kinds(_m(opens=2, closes=1, uptime_pct=61.0), None, pv) == ["NONE"]
+    assert _kinds(_m(price_usd=-101.0), None, pv) == ["INVESTIGATE"]       # > half funding
+    assert _kinds(_m(price_usd=-99.0), None, pv) == ["NONE"]
+    assert _kinds(_m(expected_funding_usd=190.0), None, pv) == ["INVESTIGATE"]   # 5% off
+    assert _kinds(_m(expected_funding_usd=195.0), None, pv) == ["NONE"]          # 2.5% off
+    assert _kinds(_m(funding_usd=2.10, expected_funding_usd=1.90), None, pv) == ["NONE"]  # < $1
+    pv.liq_px = 5000.0                                                     # +85%
+    assert _kinds(_m(), None, pv) == ["PROPOSE"]
+    pv.liq_px = 8800.0
+    pv.engine_funding = {"venues": {"HL_ETH": {"armed": True, "mean_ann_pct": 5.9}}}
+    assert _kinds(_m(), None, pv) == ["NOTE"]
+    pv.engine_funding = {"venues": {"HL_ETH": {"armed": True, "mean_ann_pct": 10.0}}}
+    assert _kinds(_m(net_yield_ann_pct=8.1), _m(net_yield_ann_pct=8.1), pv) == ["CANDIDATE"]
+    assert _kinds(_m(net_yield_ann_pct=7.9), _m(net_yield_ann_pct=8.1), pv) == ["NONE"]
+    assert _kinds(_m(), None, pv, ["x"]) == ["INVESTIGATE"]
+
+
+def test_a_missing_cash_benchmark_never_reads_as_zero(pv):
+    pv.cash_apy = None
+    assert _kinds(_m(net_yield_ann_pct=5.0), _m(net_yield_ann_pct=5.0), pv) == ["NOTE"]
+    assert _kinds(_m(net_yield_ann_pct=2.0), _m(net_yield_ann_pct=2.0), pv) == ["NOTE"]
+
+
+# ------------------------------------------------------------------ fetching
 
 def test_paginate_never_drops_or_doubles_rows_at_a_page_edge():
     rows = [{"time": t, "k": i} for i, t in enumerate([1, 2, 3, 3, 4, 5, 6, 6, 7, 8])]
-
-    def page(s, e, cap=3):
-        return [r for r in rows if s <= r["time"] <= e][:cap]
-    out = R.paginate(lambda s, e: page(s, e), 0, 100, 3)
+    out = R.paginate(lambda s, e: [r for r in rows if s <= r["time"] <= e][:3], 0, 100, 3)
     assert sorted(r["k"] for r in out) == list(range(len(rows)))
 
 
@@ -195,115 +429,125 @@ def test_paginate_rejects_a_non_list_page():
         R.paginate(lambda s, e: None, 0, 10, 5)
 
 
-def test_daily_candles_mark_boundaries_older_than_the_hourly_history():
-    now = T0 + 300 * 24 * H
-    v = venue(REAL, [], now, lambda t: 1000.0 + t / 1e9, lambda t: 1000.0 + t / 1e9)
-    v.perp_h = [c for c in v.perp_h if c["t"] >= now - 5000 * H]   # venue keeps 5000
-    t = T0 + 3 * 24 * H
-    assert v.px("perp", t) == pytest.approx(R.price_at(v.perp_d, t))
-    assert v.px("perp", now) == v.perp_mid
-
-
-def test_proposals_fire_on_their_rules_and_only_propose():
-    now = T0 + 70 * 24 * H
-    v = venue(REAL, [], now, lambda t: 2700.0, lambda t: 2700.0, liq=3500.0,
-              eng={"venues": {"HL_ETH": {"armed": True, "mean_ann_pct": 5.6}}})
-    low = {"empty": False, "net_yield_ann_pct": 2.0, "opens": 2, "closes": 2,
-           "uptime_pct": 40.0, "funding_usd": 100.0, "price_usd": -80.0,
-           "expected_funding_usd": 150.0}
-    kinds = [k for k, _ in R.proposals(low, dict(low), low, v, [])]
-    text = " ".join(t for _, t in R.proposals(low, dict(low), low, v, []))
-    assert kinds.count("PROPOSE") == 3          # below cash x2, flapping, liq 30%
-    assert "INVESTIGATE" in kinds                # price drag + funding mismatch
-    assert "NOTE" in kinds and "OFF line" in text
-    clean = {"empty": False, "net_yield_ann_pct": 9.0, "opens": 0, "closes": 0,
-             "uptime_pct": 100.0, "funding_usd": 200.0, "price_usd": 5.0,
-             "expected_funding_usd": 201.0}
-    v.liq_px = 8800.0
-    v.engine_funding = {"venues": {"HL_ETH": {"armed": True, "mean_ann_pct": 10.0}}}
-    assert [k for k, _ in R.proposals(clean, dict(clean), clean, v, [])] == ["CANDIDATE"]
-    assert [k for k, _ in R.proposals(clean, None, clean, v, [])] == ["NONE"]
-    assert R.proposals(clean, None, clean, v, ["x"])[0][0] == "INVESTIGATE"
-
-
-def test_build_markdown_and_chart_end_to_end(tmp_path):
-    now = T0 + 30 * 24 * H
-    fund = [funding_row(T0 + h * H, -11.096, 0.0000125, 2700.0)
-            for h in range(1, int((now - T0) / H) + 1)]
-    rates = [{"coin": "ETH", "fundingRate": "0.0000125", "premium": "0",
-              "time": T0 - 40 * 24 * H + h * H} for h in range(70 * 24)]
-    v = venue(REAL, fund, now, lambda t: 2700.0, lambda t: 2701.0, liq=8800.0,
-              rates=rates)
-    r = R.build(v, R.ym_of(now))
-    rp = r.pop("_replay")
-    assert r["integrity_flags"] == []
-    md = R.markdown(r)
-    assert "Integrity: CLEAN" in md and "Proposals" in md and "Honesty box" in md
-    json.dumps(r)                                            # serialisable
-    png = tmp_path / "c.png"
-    R.chart(v, rp, R.series(v, rp), str(png), "t")
-    assert png.stat().st_size > 10_000
-
-
-def test_fetch_all_filters_coins_and_refuses_a_null_snapshot():
-    fills = REAL + [fill(T0 + 70_000, "BTC", "B", 0.01, 80000, 1, "USDC", 0)]
+def fake_post(fills, now, snap_null=False, no_candles=False):
     meta = {"tokens": [{"name": "USDC", "index": 0}, {"name": "UETH", "index": 221}],
             "universe": [{"name": "@151", "tokens": [221, 0], "index": 151}]}
-    now = T0 + 5 * H
+    fund = hourly_funding(R.replay([f for f in fills if f["coin"] != "BTC"], PAIR),
+                          flat(2700.0), T0, now)
 
-    def post(body, snap_null=False):
+    def post(body):
         t = body["type"]
         if t == "spotMeta":
             return meta
         if t == "userFillsByTime":
             return [f for f in fills if body["startTime"] <= f["time"] <= body["endTime"]]
         if t == "userFunding":
-            return [funding_row(T0 + H, -11.096, 0.0000125, 2700.0),
-                    {"time": T0 + H, "delta": {"coin": "BTC", "usdc": "-1", "szi": "0.03",
-                                               "fundingRate": "0.00001"}}]
-        if t in ("fundingHistory", "candleSnapshot"):
-            return []
+            return fund + [{"time": T0 + H, "delta": {"coin": "BTC", "usdc": "-1",
+                                                      "szi": "0.03", "fundingRate": "1e-5"}}]
+        if t == "fundingHistory":
+            return rate_rows(body["startTime"], body["endTime"])[:500]
+        if t == "candleSnapshot":
+            iv = H if body["req"]["interval"] == "1h" else D
+            return [] if no_candles else candles(body["req"]["startTime"], now,
+                                                 flat(2700.0), iv)[:5000]
         if t == "clearinghouseState":
             return None if snap_null else {"assetPositions": [{"position": {
-                "coin": "ETH", "szi": "-11.096", "liquidationPx": "8847.4"}}]}
+                "coin": "ETH", "szi": "-11.096", "liquidationPx": "8847.4",
+                "cumFunding": {"sinceOpen": str(-sum(float(r["delta"]["usdc"]) for r in fund))}}}]}
         if t == "spotClearinghouseState":
             return {"balances": [{"coin": "UETH", "total": "11.09603845"}]}
         if t == "allMids":
-            return {"ETH": "2705", "@151": "2704"}
+            return {"ETH": "2700", "@151": "2700"}
         raise AssertionError(t)
+    return post
+
+
+def test_fetch_all_filters_coins_and_refuses_bad_snapshots():
+    fills = REAL + [fill(T0 + 70_000, "BTC", "B", 0.01, 80000, 1, "USDC", 0)]
+    now = T0 + 5 * H
 
     def get(url):
         return {"venues": {}} if url.endswith("/funding") else {"cash_apy": 0.04}
-    v = R.fetch_all(now, T0, post=post, get=get)
+    v = R.fetch_all(now, T0, post=fake_post(fills, now), get=get)
     assert {f["coin"] for f in v.fills} == {"ETH", PAIR}
-    assert len(v.funding) == 1 and v.liq_px == pytest.approx(8847.4)
-    assert v.cash_apy == 0.04
-
-    def post_null(body):
-        return post(body, snap_null=True)
+    assert v.funding and all(r["delta"]["coin"] == "ETH" for r in v.funding)
+    assert v.liq_px == pytest.approx(8847.4) and v.cash_apy == 0.04 and v.notes == []
+    assert v.cum_since_open is not None
+    assert R.integrity(v, R.replay(v.fills, v.spot_pair)) == []
     with pytest.raises(R.FetchError):
-        R.fetch_all(now, T0, post=post_null, get=get)
+        R.fetch_all(now, T0, post=fake_post(fills, now, snap_null=True), get=get)
+    with pytest.raises(R.FetchError, match="no candles"):
+        R.fetch_all(now, T0, post=fake_post(fills, now, no_candles=True), get=get)
 
 
-def test_uptime_counts_hour_marks_and_short_windows_are_not_annualised():
-    now = T0 + 20 * 60_000                                  # 20 minutes after start
-    v = venue(REAL, [funding_row(T0 + 13 * 60_000, -11.096, 0.0000125, 2700.0)],
-              now, lambda t: 2700.0, lambda t: 2700.0)
-    w = R.window(v, R.replay(REAL, PAIR), T0, now, "x")
-    assert w["uptime_pct"] <= 100.0
-    assert w["net_yield_ann_pct"] is None and w["funding_yield_ann_pct"] is None
-    now = T0 + 10 * 24 * H                                  # 10 days, every hour paid
-    fund = [funding_row(((T0 // H) + h) * H + 3, -11.096, 0.0000125, 2700.0)
-            for h in range(1, 10 * 24 + 1)]
-    v = venue(REAL, fund, now, lambda t: 2700.0, lambda t: 2700.0)
-    w = R.window(v, R.replay(REAL, PAIR), T0, now, "x")
-    assert w["uptime_pct"] == pytest.approx(100.0, abs=0.5)
-    assert w["funding_yield_ann_pct"] == pytest.approx(0.0000125 * 8760 * 100, rel=0.01)
+def test_an_engine_outage_degrades_but_never_kills_the_review():
+    now = T0 + 5 * H
+
+    def down(url):
+        raise R.FetchError("engine down")
+    v = R.fetch_all(now, T0, post=fake_post(REAL, now), get=down)
+    assert v.engine_funding == {} and v.cash_apy is None and len(v.notes) == 2
+    r = R.build(v, "2026-10")
+    r.pop("_replay")
+    md = R.markdown(r)
+    assert "Degraded inputs" in md and "UNKNOWN" in md
+
+
+# ------------------------------------------------------------------ end to end
+
+def test_build_markdown_series_and_chart_end_to_end(tmp_path):
+    now = T0 + 30 * D
+    v = venue(REAL, hourly_funding(RP_REAL, flat(2700.0), T0, now), now,
+              flat(2700.0), flat(2701.0), liq=8800.0)
+    r = R.build(v, R.ym_of(now))
+    rp = r.pop("_replay")
+    assert r["integrity_flags"] == [] and r["notes"] == []
+    assert [x["label"] for x in r["months"]] == ["2026-10", "2026-11"]
+    md = R.markdown(r)
+    assert "Integrity: CLEAN" in md and "Proposals" in md and "Honesty box" in md
+    assert "Short liquidates at 8,800" in md
+    json.dumps(r)
+    s = R.series(v, rp)
+    assert s["t"] == sorted(s["t"])
+    assert s["total"][-1] == pytest.approx(r["inception_to_date"]["total_usd"], abs=0.02)
+    assert s["funding"][-1] == pytest.approx(r["inception_to_date"]["funding_usd"], abs=0.02)
+    assert s["rate"][-1] == pytest.approx(RATE * 8760 * 100)
+    png = tmp_path / "c.png"
+    R.chart(v, rp, s, str(png), "t")
+    assert png.stat().st_size > 10_000
+
+
+def test_previous_month_of_january_is_december():
+    now = R.month_bounds("2027-01")[0] + 9 * H
+    v = venue(REAL, hourly_funding(RP_REAL, flat(2700.0), T0, now), now,
+              flat(2700.0), flat(2700.0), liq=8800.0)
+    r = R.build(v, "2027-01")
+    assert r["month"]["label"] == "2027-01" and r["previous_month"]["label"] == "2026-12"
+    assert r["previous_month"]["hour_marks"] == 31 * 24
+
+
+def test_main_writes_the_numbers_even_when_the_chart_fails(tmp_path, monkeypatch):
+    now = T0 + 3 * D
+    v = venue(REAL, hourly_funding(RP_REAL, flat(2700.0), T0, now), now,
+              flat(2700.0), flat(2700.0), liq=8800.0)
+    monkeypatch.setattr(R, "fetch_all", lambda *a, **k: v)
+
+    def boom(*a, **k):
+        raise RuntimeError("no display")
+    monkeypatch.setattr(R, "chart", boom)
+    rc = R.main(["--month", "current", "--out", str(tmp_path), "--now-ms", str(now)])
+    assert rc == 0
+    assert sorted(p.name for p in tmp_path.iterdir()) == [
+        "carry_review_2026-10.json", "carry_review_2026-10.md"]
+    assert "chart failed" in (tmp_path / "carry_review_2026-10.md").read_text()
+    v.snap_perp_szi = -5.0                                  # an integrity flag -> exit 2
+    v.notes = []
+    assert R.main(["--month", "current", "--out", str(tmp_path), "--now-ms", str(now)]) == 2
 
 
 def test_end_labels_are_spread_apart_in_order():
     out = R.spread([0.37, -1.12, -33.12, -33.87], 2.5)
     srt = sorted(out)
     assert all(b - a >= 2.5 - 1e-9 for a, b in zip(srt, srt[1:]))
-    assert out[0] > out[1] > out[2] > out[3]                # order kept
+    assert out[0] > out[1] > out[2] > out[3]
     assert R._money(-33.87) == "-$33.87" and R._money(0.37) == "$0.37"
