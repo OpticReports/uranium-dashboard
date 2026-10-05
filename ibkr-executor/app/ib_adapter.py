@@ -1251,7 +1251,11 @@ class IBAdapter:
         the book's order-derived cash ledger never had (dividends, interest,
         commissions and anything a human does are invisible to the ledger).
         TotalCashValue, not AvailableFunds: the latter moves with margin and
-        open orders."""
+        open orders. AvailableFunds is returned ALONGSIDE it (never instead,
+        stage 2, 2026-10-05) as `available_funds`, None when the venue does
+        not report it: the capital adoption waits on it so a deposit that
+        has landed but not settled is not spent before the venue would let
+        it be."""
         try:
             self._require_connected()
             self._pump()
@@ -1289,7 +1293,8 @@ class IBAdapter:
                 tag = getattr(row, "tag", "")
                 cur = getattr(row, "currency", "") or ""
                 acct = getattr(row, "account", "") or ""
-                if tag not in ("TotalCashValue", "NetLiquidation"):
+                if tag not in ("TotalCashValue", "NetLiquidation",
+                               "AvailableFunds"):
                     continue
                 if cur not in ("USD", ""):      # BASE may not be USD
                     continue
@@ -1304,8 +1309,12 @@ class IBAdapter:
                 return None
             if "TotalCashValue" not in vals or vals["TotalCashValue"] != vals["TotalCashValue"]:
                 return None
+            avail = vals.get("AvailableFunds")
+            if avail is not None and avail != avail:      # NaN -> no claim
+                avail = None
             return {"total_cash": vals["TotalCashValue"],
                     "net_liq": vals.get("NetLiquidation"),
+                    "available_funds": avail,
                     "ts": time.time()}
         except Exception as exc:  # noqa: BLE001
             logger.warning("account_cash unavailable (no claim): %s", exc)

@@ -178,12 +178,13 @@ def test_gate_feed_shape(tmp_path, monkeypatch):
     assert set(body) == {"mode", "halted", "gate", "book", "positions",
                          "trades", "equity_curve", "unreconciled",
                          "unverifiable", "unprotected",
-                         "last_cycle", "marks_age_s", "cash"}
+                         "last_cycle", "marks_age_s", "cash",
+                         "capital_events"}
     assert body["marks_age_s"] is not None       # cached-marks staleness
     assert body["marks_age_s"] < 60.0            # cache just refreshed
     assert set(body["book"]) == {"sleeve_cash", "core_qty", "bil_qty",
                                  "equity_estimate", "budget_utilization",
-                                 "initial_book_usd"}
+                                 "initial_book_usd", "capital_contributed"}
     assert body["gate"] is True and body["halted"] is None
     assert body["book"]["core_qty"] == 70
     assert body["book"]["equity_estimate"] == pytest.approx(10_000.0)
