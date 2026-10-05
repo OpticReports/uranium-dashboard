@@ -174,6 +174,52 @@ because measurement 3 needs it.
 | P2 | Should Tier 1 names ever generate calls directly? This design says only after promotion to the core. | scope |
 | P3 | Promote-from-Sector cap: how many per week, separate from the auto cap? | Promote path |
 
+## Amendments before any measurement data (2026-10-05, recorded, not silently edited)
+
+1. **Mandate (Casey: "all of the above").** Genomics for this tier means
+   genetic medicines broadly: gene editing, gene therapy, RNA/mRNA and
+   oligonucleotide medicines, cell therapy (incl. CAR-T, TCR-T, TIL), cancer
+   vaccines, sequencing and genomics tools, genomic and molecular
+   diagnostics, AND large companies with a genomics franchise (Vertex).
+   Kiniksa-type companies with no genetic-medicine, tools or diagnostics
+   activity are out. This is the labelling standard for measurements 1, 2
+   and 4.
+2. **Provider quota (Casey: "a huge amount of allowable API calls").** No
+   number was given; the quota half of measurement 3's gate is taken as met
+   on Casey's statement. Measurement 3 still reports calls per day by
+   provider against our own client-side limiter (600/minute for FMP) and the
+   CT.gov politeness delay, plus runtime and database growth.
+3. **Measurement 3 dry run.** One day, not one week: Casey's quota answer
+   removes the constraint the week was meant to probe, and the Tier 0
+   snapshot has no history to replay. Per-day figures are extrapolated and
+   labelled as such.
+4. **Rule (b) point-in-time method.** Membership signals (GENETIC
+   intervention, title keyword, own-trial therapeutic partner) are read from
+   the company's own interventional phase 2/3 trials whose
+   StudyFirstPostDate is on or before the evaluation date; titles,
+   interventions and sponsors come from the CURRENT record (they rarely
+   change; a later edit is look-ahead and is stated). Catalyst DATES (primary
+   completion, status) are point-in-time from CT.gov record history, the
+   `scripts/build_pit_catalysts.py` method, for phase 2/3 trials of the names
+   whose ranking or funnel replay needs them.
+5. **Labels.** Every name in the measured population, not only sampled
+   ones, is labelled by TWO independent counter-agents who see only the
+   company's name, industry and FMP profile description (never tier,
+   watchlist or queue membership); disagreements go to a third. The
+   pre-registered random-50 samples of measurement 2 are drawn from these
+   labels with a fixed seed (20261005) and reported as specified; the
+   full-population precision and misses are reported beside them as
+   supplementary figures.
+6. **Funnel replay baseline.** The live funnel only existed from
+   2026-09-08; the baseline replays the SHIPPED funnel code's lanes over the
+   whole window as if it had run every weekday (movers: a close-to-close
+   |move| >= 10% with prior-day cap >= $300M queues the name from that day
+   on; catalyst: each name's weekday rotation day, point-in-time phase-3
+   dates and rule-(b) tags). A queued name is visible from its queue date
+   onward. The production export (`security`, `universe_candidate`) supplies
+   the core's discovery promotions and the live queue for 2026-09-08 onward,
+   used to cross-check the replay for those weeks.
+
 ## Counter-agent verdict
 
 **Round 1 (2026-10-05): not approvable as written - all findings applied in
