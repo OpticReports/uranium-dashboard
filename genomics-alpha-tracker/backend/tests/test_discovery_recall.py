@@ -25,6 +25,14 @@ from app.models import Security, UniverseCandidate
 TODAY = date(2026, 10, 5)
 
 
+@pytest.fixture(autouse=True)
+def _no_network(monkeypatch):
+    """A test that forgets to stub a fetcher must fail, not query Nasdaq."""
+    def _blocked(*a, **k):
+        raise AssertionError("network call in a unit test")
+    monkeypatch.setattr(httpx, "get", _blocked)
+
+
 def _cfg(**over):
     cfg = dict(disc._DEFAULTS)
     cfg.update(over)
@@ -174,8 +182,9 @@ def test_tags_from_studies_the_candidate_is_not_on_are_ignored(monkeypatch):
                "last": 100.0, "pct_change": 0.1, "market_cap": 356e9}]
     partners = disc.universe_partner_names(UNIVERSE, MODS)
     out, _ = disc.catalyst_lane(census, set(), _cfg(rotation_days=1), TODAY, partners)
-    # title keywords on returned studies still count (pre-existing behaviour),
-    # but nothing from the John Merck Fund study's sponsors or interventions
+    # title keywords on returned studies still count (pre-existing behaviour,
+    # kept for recall), but nothing from the John Merck Fund study's sponsors,
+    # collaborators or interventions
     assert "genomics-partner" not in out["MRK"]["genomics_tags"]
     assert "gene-therapy" not in out["MRK"]["genomics_tags"]
 
@@ -275,7 +284,7 @@ def test_run_discovery_merges_the_supplement_without_duplicates(session, monkeyp
     hc = [{"symbol": "AAA", "name": "A Bio", "last": 1.0, "pct_change": 0.0, "market_cap": 1e9}]
     supp = [{"symbol": "AAA", "name": "dup", "last": 1.0, "pct_change": 0.0, "market_cap": 1e9},
             {"symbol": "TXG", "name": "10x Genomics", "last": 1.0, "pct_change": 14.0, "market_cap": 1.2e10}]
-    monkeypatch.setattr(disc, "fetch_census", lambda: hc)
+    monkeypatch.setattr(disc, "fetch_census_with_asof", lambda: (hc, None))
     monkeypatch.setattr(disc, "fetch_census_supplement", lambda cfg: supp)
     monkeypatch.setattr(disc, "_fetch_ctgov_trials", lambda cleaned: [])
     monkeypatch.setattr("app.utils.cache.set", lambda key, value: None)
@@ -286,7 +295,7 @@ def test_run_discovery_merges_the_supplement_without_duplicates(session, monkeyp
 
 def test_supplement_is_skipped_when_the_health_care_census_is_dark(session, monkeypatch):
     called = []
-    monkeypatch.setattr(disc, "fetch_census", lambda: [])
+    monkeypatch.setattr(disc, "fetch_census_with_asof", lambda: ([], None))
     monkeypatch.setattr(disc, "fetch_census_supplement", lambda cfg: called.append(1) or [])
     monkeypatch.setattr("app.utils.cache.set", lambda key, value: None)
     assert disc.run_discovery(session)["census"] == 0
@@ -400,3 +409,56 @@ def test_catchup_after_a_missed_anchor():
     assert not discovery_catchup_due(mon_2200, (21, 45), datetime(2026, 10, 5, 21, 46))
     assert not discovery_catchup_due(datetime(2026, 10, 5, 20, 0), (21, 45), None)    # before the anchor
     assert not discovery_catchup_due(datetime(2026, 10, 4, 22, 0), (21, 45), None)    # Sunday
+
+
+# --- counter-agent round 2: the screener's own as-of date ------------------------------
+
+def test_parse_asof():
+    assert disc.parse_asof("Last price as of Oct 2, 2026") == date(2026, 10, 2)
+    assert disc.parse_asof("Last price as of September 30, 2026") == date(2026, 9, 30)
+    assert disc.parse_asof(None) is None and disc.parse_asof("garbage") is None
+
+
+def test_adrs_are_companies_not_instruments():
+    """'depositary' must never be an instrument marker: BioNTech, argenx and
+    Legend list as ADRs (the first draft of the filter dropped 29 of them)."""
+    assert not disc.is_instrument_row("BioNTech SE American Depositary Share")
+    assert not disc.is_instrument_row("RLX Technology Inc. American Depositary Shares each representing the right to receive")
+    assert disc.is_instrument_row("Revolution Medicines Inc. Warrant")
+    assert disc.is_instrument_row("Fortress Biotech Inc. 9.375% Series A Cumulative Redeemable Perpetual Preferred")
+
+
+def test_health_care_census_drops_units_and_warrants(monkeypatch, passthrough_cache):
+    page = {"data": {"totalrecords": 2, "asof": "Last price as of Oct 2, 2026", "table": {"rows": [
+        {"symbol": "BTSGU", "name": "BrightSpring Health Services, Inc. Tangible Equity Unit",
+         "lastsale": "$80", "pctchange": "1%", "marketCap": "39,000,000,000"},
+        {"symbol": "LLY", "name": "Eli Lilly and Company Common Stock",
+         "lastsale": "$1,142.85", "pctchange": "-0.609%", "marketCap": "1,000,000,000,000"}]}}}
+    monkeypatch.setattr(httpx, "get", lambda *a, **k: _Resp(page))
+    rows, asof = disc.fetch_census_with_asof()
+    assert [r["symbol"] for r in rows] == ["LLY"] and asof == date(2026, 10, 2)
+
+
+def _run_with(session, monkeypatch, asof, rows):
+    monkeypatch.setattr(disc, "fetch_census_with_asof", lambda: (rows, asof))
+    monkeypatch.setattr(disc, "fetch_census_supplement", lambda cfg: [])
+    monkeypatch.setattr(disc, "_fetch_ctgov_trials", lambda cleaned: [])
+    return disc.run_discovery(session)
+
+
+def test_moves_are_dated_by_the_snapshot_and_never_re_read(session, monkeypatch, tmp_path):
+    """At 22:50 UTC on a Monday the screener still showed Friday's close. The
+    move must be dated Friday, and Tuesday's run reading the SAME snapshot must
+    not re-record it as a new session's move."""
+    store = {}
+    monkeypatch.setattr("app.utils.cache.set", lambda k, v: store.__setitem__(k, v))
+    monkeypatch.setattr("app.utils.cache.get", lambda k, ttl=None: store.get(k))
+    rows = [{"symbol": "MOVR", "name": "Mover Bio", "last": 10.0, "pct_change": 14.0, "market_cap": 1e9}]
+    fri = date(2026, 10, 2)
+    s1 = _run_with(session, monkeypatch, fri, rows)
+    assert s1["movers"] == 1 and s1["asof"] == "2026-10-02"
+    assert session.get(UniverseCandidate, "MOVR").evidence["date"] == "2026-10-02"
+    s2 = _run_with(session, monkeypatch, fri, rows)                 # same snapshot again
+    assert s2["movers"] == 0 and "already read" in s2["movers_note"]
+    s3 = _run_with(session, monkeypatch, date(2026, 10, 5), rows)   # a new session
+    assert s3["movers"] == 1

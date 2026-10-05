@@ -156,6 +156,30 @@ _STRIP_TRAILING = {
 }
 
 
+# NOT "depositary": ADRs are real companies (BioNTech, argenx, Legend...),
+# and NOT "rights" ("...representing the right to receive" is ADR prose).
+_INSTRUMENT_RE = re.compile(r"(?i)\b(preferred|warrants?|units?)\b")
+
+
+def is_instrument_row(name: str) -> bool:
+    """Warrants, units, preferreds: listed instruments, not companies
+    (BTSGU 'Tangible Equity Unit' shows a $39B cap). Never census rows."""
+    return bool(_INSTRUMENT_RE.search(name or ""))
+
+
+def parse_asof(raw: Any) -> date | None:
+    """'Last price as of Oct 2, 2026' -> date(2026, 10, 2); anything else None."""
+    m = re.search(r"([A-Z][a-z]{2,8})\s+(\d{1,2}),\s*(\d{4})", str(raw or ""))
+    if not m:
+        return None
+    for fmt in ("%b %d %Y", "%B %d %Y"):
+        try:
+            return datetime.strptime(f"{m.group(1)} {m.group(2)} {m.group(3)}", fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
 def clean_company_name(name: str) -> str:
     """Screener display name -> a plausible CT.gov sponsor query.
 
@@ -357,6 +381,11 @@ def _evidence_inputs(evidence: dict, today: date) -> tuple[int | None, float | N
 # --- Census fetch ---------------------------------------------------------------
 
 def fetch_census() -> list[dict]:
+    """Rows only; see fetch_census_with_asof for the snapshot date."""
+    return fetch_census_with_asof()[0]
+
+
+def fetch_census_with_asof() -> tuple[list[dict], date | None]:
     """Full US-listed healthcare census from the Nasdaq screener.
 
     ~1,100 names, paginated 100/page (~11 calls), cached 24h so one sweep per
@@ -365,8 +394,9 @@ def fetch_census() -> list[dict]:
     commas -> None/float). On failure the lane goes dark for the run (logged
     warning, []) — discovery never crashes ingestion.
     """
-    def _producer() -> list[dict]:
+    def _producer() -> dict:
         rows: list[dict] = []
+        asof = None
         offset, total = 0, None
         while total is None or offset < total:
             params = {"tableonly": "true", "limit": "100", "offset": str(offset),
@@ -378,6 +408,7 @@ def fetch_census() -> list[dict]:
             )
             resp.raise_for_status()
             data = (resp.json() or {}).get("data") or {}
+            asof = asof or data.get("asof")
             total = int(data.get("totalrecords") or 0)
             page = (data.get("table") or {}).get("rows") or []
             if not page:
@@ -390,18 +421,22 @@ def fetch_census() -> list[dict]:
             # Never cache an empty census: a transient API hiccup would
             # otherwise blind the movers lane for a full 24h TTL.
             raise RuntimeError("census returned 0 rows")
-        return rows
+        return {"asof": asof, "rows": rows}
 
     try:
         raw = cache.cached("discovery:census", _producer, ttl=CENSUS_TTL)
     except Exception as exc:  # noqa: BLE001
         logger.warning("discovery census fetch failed: %s — movers/catalyst lanes dark this run", exc)
-        return []
+        return [], None
+
+    # a pre-2026-10-05 cache entry is a bare list with no as-of stamp
+    asof = parse_asof(raw.get("asof")) if isinstance(raw, dict) else None
+    raw_rows = raw.get("rows") if isinstance(raw, dict) else raw
 
     out = []
-    for row in raw or []:
+    for row in raw_rows or []:
         sym = str(row.get("symbol") or "").strip().upper()
-        if not sym:
+        if not sym or is_instrument_row(str(row.get("name") or "")):
             continue
         out.append({
             "symbol": sym,
@@ -410,7 +445,7 @@ def fetch_census() -> list[dict]:
             "pct_change": parse_pct(row.get("pctchange")),
             "market_cap": parse_money(row.get("marketCap")),
         })
-    return out
+    return out, asof
 
 
 def fetch_census_supplement(cfg: dict) -> list[dict]:
@@ -451,7 +486,7 @@ def fetch_census_supplement(cfg: dict) -> list[dict]:
         industry = str(row.get("industry") or "")
         if not ((prefixes and industry.startswith(prefixes)) or genomics_tags_for([name])):
             continue
-        if re.search(r"(?i)\b(preferred|warrants?|rights?|units?|depositary)\b", name):
+        if is_instrument_row(name):
             continue                       # BRKRP-style instruments: bogus caps, not companies
         out.append({
             "symbol": sym,
@@ -591,7 +626,7 @@ def _parse_loose_date(value) -> date | None:
 # --- Candidate lanes -------------------------------------------------------------
 
 def movers_lane(census: list[dict], universe_symbols: set[str], cfg: dict,
-                today: date) -> dict[str, dict]:
+                today: date, move_date: date | None = None) -> dict[str, dict]:
     """The MISS-DETECTOR: census names with a big same-day move that are NOT
     in the universe (any active state). A move the desk can't explain from
     coverage is exactly the MRNA-shaped gap this pipeline exists to close."""
@@ -610,7 +645,7 @@ def movers_lane(census: list[dict], universe_symbols: set[str], cfg: dict,
             "last_price": row["last"],
             "sources": {"mover"},
             "genomics_tags": set(genomics_tags_for([row["name"]])),
-            "evidence": {"move_pct": pct, "date": today.isoformat(), "market_cap": mcap,
+            "evidence": {"move_pct": pct, "date": (move_date or today).isoformat(), "market_cap": mcap,
                          **({"census_source": row["census_source"]} if row.get("census_source") else {})},
         }
     return out
@@ -650,6 +685,12 @@ def catalyst_lane(census: list[dict], universe_symbols: set[str], cfg: dict,
         near_p3 = (nearest_pcd is not None and
                    (date.fromisoformat(nearest_pcd) - today).days <= cfg["catalyst_horizon_days"])
         active_p23 = any("PHASE3" in t["phase"] or "PHASE2" in t["phase"] for t in trials)
+        # Title keywords read EVERY returned study (pre-existing behaviour,
+        # kept on purpose: investigator-led trials of a company's product carry
+        # the descriptive titles - restricting titles to the company's own
+        # trials dropped Iovance and ProKidney, real cell-therapy names). The
+        # NEW signals - sponsors/collaborators, GENETIC interventions,
+        # partners - read only the company's own interventional phase 2/3 trials.
         own = qualifying_studies(studies, cleaned)
         partners = trial_partner_names(own)
         tags = set(genomics_tags_for([row["name"]] + [t["title"] for t in trials] + partners))
@@ -920,7 +961,7 @@ def run_discovery(session: Session) -> dict:
     the sweep itself never raises."""
     cfg = get_cfg()
     today = date.today()
-    census = fetch_census()
+    census, asof = fetch_census_with_asof()
     supplement = fetch_census_supplement(cfg) if census else []
     seen = {r["symbol"] for r in census}
     census = census + [r for r in supplement if r["symbol"] not in seen]
@@ -931,7 +972,15 @@ def run_discovery(session: Session) -> dict:
     partner_names = universe_partner_names(securities, cfg.get("partner_modalities") or [],
                                            promoted_by_discovery)
 
-    movers = movers_lane(census, universe, cfg, today)
+    # The screener's own "Last price as of" date, not the wall clock: at 22:50
+    # UTC on a Monday it still showed Friday's close (counter-agent round 2).
+    # A snapshot already read is never re-read as a new session's moves.
+    last_asof = cache.get("discovery:last_asof", ttl=10**9)
+    if asof is not None and last_asof == asof.isoformat():
+        movers, movers_note = {}, f"skipped: snapshot as of {asof} already read"
+    else:
+        movers = movers_lane(census, universe, cfg, today, move_date=asof)
+        movers_note = None if asof else "no as-of stamp: moves dated with the run date"
     cats, checked = catalyst_lane(census, universe, cfg, today, partner_names)
     merged = _merge_lanes(movers, cats)
     n_new, n_updated = upsert_candidates(session, merged, cfg, today)
@@ -940,6 +989,8 @@ def run_discovery(session: Session) -> dict:
     summary = {
         "census": len(census),
         "census_supplement": len([r for r in supplement if r["symbol"] not in seen]),
+        "asof": asof.isoformat() if asof else None,
+        **({"movers_note": movers_note} if movers_note else {}),
         "movers": len(movers),
         "catalyst_checked": checked,
         "candidates_new": n_new,
@@ -949,5 +1000,7 @@ def run_discovery(session: Session) -> dict:
     # Last-run breadcrumb for GET /discovery/summary (file cache survives the
     # process; a huge TTL read makes it effectively "most recent run").
     cache.set("discovery:last_run", {**summary, "at": datetime.utcnow().isoformat()})
+    if asof is not None and census:
+        cache.set("discovery:last_asof", asof.isoformat())
     logger.info("discovery sweep: %s", summary)
     return summary

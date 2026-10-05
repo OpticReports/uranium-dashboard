@@ -187,7 +187,7 @@ def start_scheduler() -> BackgroundScheduler:
                           max_instances=1, coalesce=True, misfire_grace_time=3600)
             logger.info("Scheduled 'discovery' weekdays at %02d:%02d UTC (after the US close)", *at)
             from .utils import cache as _cache
-            last = (_cache.get("discovery:last_run") or {}).get("at")
+            last = (_cache.get("discovery:last_run", ttl=10**9) or {}).get("at")
             try:
                 last_at = datetime.fromisoformat(last) if last else None
             except ValueError:

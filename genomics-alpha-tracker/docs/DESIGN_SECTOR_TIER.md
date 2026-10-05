@@ -1,6 +1,6 @@
 # Design + pre-registration: a watched genomics SECTOR tier
 
-_Status: DESIGN, revision 2 (after counter-agent review). No code until
+_Status: DESIGN, revision 3 (after two counter-agent rounds). No code until
 Casey approves this document and answers the P1 questions below. The
 measurements are run before the build decision; their results are appended,
 never edited in._
@@ -35,7 +35,9 @@ name per trading day, from the all-sector `download=true` call (the only
 call that returns volume, sector and industry). The date comes from the
 paginated health-care call's "as of" stamp, because the download call
 carries none; a snapshot whose as-of date has not changed (holiday, stale
-feed) is not saved. Prices are the screener's last sale, which is NOT
+feed) is not saved. The funnel already does this since 2026-10-05: the
+screener still showed Friday's close at 22:50 UTC on a Monday, so moves are
+dated by the as-of stamp and an already-read snapshot is never re-read. Prices are the screener's last sale, which is NOT
 split-adjusted: a day with a |move| ≥ 50% is flagged for an adjusted-price
 check before it is used. Names that drop off the screener are marked "gone
 since <date>", never deleted; identity is symbol plus name, so a reused
@@ -44,11 +46,11 @@ ticker starts a new history. Cost: the calls the sweep already makes.
 **Tier 1 — Genomics sector.** A classified, watched set on its own Sector
 screen. No calls are generated from it.
 
-- *Expected size.* The rule below, run on today's census and cached CT.gov
-  data, tags about 80-90 names including the core (38 outside the core
-  before the round-1 fixes narrowed rule (b); fewer after). The size is an
-  OUTPUT of the rule, not a target; thresholds are not loosened to hit a
-  number.
+- *Expected size.* Rules (a), (b) and the industry half of (c), run on the
+  2026-10-05 census and cached CT.gov data, tag about 60 names including the
+  core (the profile-description half of (c) could not be computed offline
+  and adds to that). The size is an OUTPUT of the rule, not a target;
+  thresholds are not loosened to hit a number.
 - *Classification rule* (pre-registered; re-run weekly; every decision
   logged with its evidence). A census name with market cap ≥ $300M is IN if
   any of:
@@ -56,8 +58,14 @@ screen. No calls are generated from it.
   (b) on the company's OWN interventional phase 2/3 trials (lead sponsor or
       named collaborator, whole-word match): a GENETIC intervention, a
       genomics keyword in a title, or a therapeutic-modality core name as a
-      collaborator (the discovery recall-fix signals, with the round-1
-      restrictions);
+      collaborator. NOTE the shipped funnel differs on titles: it reads title
+      keywords from EVERY returned study, because investigator-led trials of
+      a company's product carry the descriptive titles (restricting titles to
+      own trials dropped Iovance and ProKidney). Tier 1 uses the stricter
+      own-trial rule for membership and measurement 2 tests what it misses;
+      if the misses sample shows the same cell-therapy losses, the title
+      half of rule (b) reverts to the funnel's behaviour BEFORE the build
+      decision, and that change is recorded here;
   (c) industry "Biotechnology: Laboratory Analytical Instruments", or a
       genomics keyword in the company's FMP profile description (checked at
       most once a month per name; this replaces a hand-made allow-list,
@@ -113,16 +121,26 @@ move's name genomics / not genomics under the mandate Casey sets below.
   empty.
 - Metric: of the labelled genomics moves that were NOT visible to the
   baseline, the share where Tier 1 had the name in the Sector screen's top
-  25 (by the screen's default sort) or showed a dated catalyst within 30
-  days. Reported with n and a Wilson 90% interval.
-- Also reported: the enrichment ratio (Tier 1 movers ÷ Tier 1 size) ÷
-  (census genomics movers ÷ census size), so size alone cannot pass.
+  25 or showed a dated catalyst within 30 days. The screen's default sort,
+  frozen here: days to the nearest dated catalyst ascending, ties broken by
+  20-day dollar volume descending, undated names last. Reported with n and
+  a Wilson 90% interval.
+- Also reported: the enrichment ratio (genomics-LABELLED movers in Tier 1 ÷
+  Tier 1 size) ÷ (genomics-labelled movers in the census ÷ census size), so
+  size alone cannot pass.
+- Rule (c)'s data (industry, FMP profile text) exists only as of today, so
+  names that enter Tier 1 ONLY through rule (c) carry look-ahead: their
+  contribution is reported separately as an upper bound and excluded from
+  the primary metric.
 - A figure using TODAY's classification may appear only as a labelled
   upper bound.
 
 **2. Classification quality.** The counter-agent labels a random 50
 non-core Tier 1 names (precision) AND a random 50 census names NOT in Tier
 1 (what the rule misses), against the mandate. Every disagreement listed.
+The misses share is reported with its Wilson 90% interval; at n = 50 a
+count of 5 spans roughly 4-19%, so the gate below uses the count and the
+interval is reported beside it, not hidden.
 
 **3. Cost.** Added calls per day by provider (CT.gov: about 105 per weekday
 to evaluate rule (b) weekly for all ~520 census names ≥ $300M; FMP: the
@@ -133,7 +151,9 @@ plan limit.
 
 **4. The two known misses, point-in-time, rules (a)-(c) only, empty manual
 lists.** MRNA on 2026-08-18 (the day before its readout) and VRTX on the
-day before its largest move in the window. A "no" is reported as a finding.
+day before its largest move in the window. Informational, not a gate: two
+names cannot decide a build. A "no" is reported as a finding with the rule
+that missed it.
 
 **Decision rule (frozen).** BUILD Tier 1 if, on measurement 1, at least 15
 labelled genomics moves were invisible to the baseline AND Tier 1 surfaced
@@ -180,4 +200,14 @@ ticker reuse, Discovery-tab overlap, partner set = core only, which
 measurement needs Tier 0) and NOTEs (weekday rotation gap, cell therapy in
 the mandate, overstated validation of the recall signals) applied.
 
-**Round 2:** _appended when the re-review reports._
+**Round 2 (2026-10-05): round-1 items confirmed addressed in the body; the
+decision rule can now fail.** New findings applied in this revision: the
+claim that rule (b)'s restriction also shipped in the funnel was only half
+true (titles still read every study) - now stated, with the reason and a
+pre-decision check; rule (c) look-ahead in measurement 1 - rule-(c)-only
+names excluded from the primary metric; the default sort was a free
+parameter - frozen; the enrichment numerator - genomics-labelled movers;
+measurement 4's consequence - informational; the misses gate's interval -
+reported; the size estimate - re-measured at about 60. The screener
+staleness finding (Friday's close still served on Monday evening) was fixed
+in the funnel code, and Tier 0 already planned for it.

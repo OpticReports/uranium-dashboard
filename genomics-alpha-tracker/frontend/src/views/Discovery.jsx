@@ -126,6 +126,9 @@ export default function Discovery({ onPick }) {
             last run: census {summary.last_run.census}, movers {summary.last_run.movers},
             CT.gov checked {summary.last_run.catalyst_checked}, new{" "}
             {summary.last_run.candidates_new}
+            {summary.last_run.asof && <> · prices as of {summary.last_run.asof}</>}
+            {summary.last_run.at && <> · ran {String(summary.last_run.at).slice(0, 16).replace("T", " ")} UTC</>}
+            {summary.last_run.movers_note && <> · movers {summary.last_run.movers_note}</>}
           </span>
         )}
       </div>

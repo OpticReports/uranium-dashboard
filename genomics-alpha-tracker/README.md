@@ -166,8 +166,9 @@ propose-only. Endpoints: `GET /discovery/candidates`, `GET /discovery/summary`,
 
 **Recall fixes (2026-10-05, after Vertex was found missing).** Vertex
 ($128B, co-owner of Casgevy with CRISPR Therapeutics) scored 60 with zero
-genomics tags because its Casgevy trials are titled "CTX001". Now, on the
-candidate's OWN interventional phase 2/3 trials only (it is the lead sponsor
+genomics tags because its Casgevy trials are titled "CTX001". Trial-title keywords still read every
+returned study (investigator-led trials of a company's product carry the
+descriptive titles). New, on the candidate's OWN interventional phase 2/3 trials only (it is the lead sponsor
 or a named collaborator — CT.gov's sponsor search is fuzzy: "Merck" returns
 "The John Merck Fund"): the genomics keyword match also reads the trials'
 sponsors and collaborators; a GENETIC intervention tags gene-therapy; a
@@ -181,7 +182,11 @@ non-health-care rows filed as "Biotechnology: …" or with a genomics keyword
 in the name (10x, PacBio, Bruker, Agilent, Waters…; preferreds and warrants
 dropped); those names never take the mega-cap fast path on a move alone
 (Waters passed the drug-trial check through a sponsor named "John Waters").
-The census cache TTL is 20h so a daily run always refetches. The sweep runs
+The census cache TTL is 20h so a daily run always refetches, and moves are
+dated by the screener's own "Last price as of" stamp (it still showed
+Friday's close at 22:50 UTC on a Monday); a snapshot already read is never
+re-read as a new session. Warrants, units and preferreds are dropped from
+both censuses (ADRs are kept). The sweep runs
 weekdays at 21:45 UTC (`at_utc` in `intervals.yaml`), after the US close,
 with a catch-up run at boot when a restart missed the anchor.
 
