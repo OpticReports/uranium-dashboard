@@ -45,12 +45,17 @@ in `CHANGELOG.md` with deploy IDs, and pushed.
 
 ## Pre-authorized operation 2 — sleeve scale-up to 15%
 
-- Review date: first daily check on or after **2027-01-06** (~2 trading
-  quarters after the sleeve's first fill on 2026-07-07), and monthly
-  thereafter until it passes or the owner cancels.
-- Criterion (measured by `divergence.py` on the sleeve; distribution-aware
-  since 2026-10-05 — add. 38):
-  - ≥120 trading days of live history, AND
+- Review date: first daily check on or after **2027-01-22** (the day the
+  measurement window below first reaches 120 trading days; was 2027-01-06,
+  moved 2026-10-05 with the window change), and monthly thereafter until it
+  passes or the owner cancels.
+- Criterion (measured by `divergence.py nNdBk7hc5NiBzeRvbI5T --start
+  2026-08-01` on the sleeve; distribution-aware since 2026-10-05 — add. 38):
+  - Window starts **2026-08-01** (owner decision 2026-10-05): the sleeve was
+    edited live on 2026-07-31 (BIL → BOXX) and the backtest is always the
+    current version, so the 07-07..07-31 days compare two different
+    strategies. Do not read Op 2 off the full live history.
+  - ≥120 trading days of live history inside that window, AND
   - live~backtest daily-return correlation ≥ **0.90**, AND
   - annualized live-vs-model gap ≥ **−10%/yr** (live may lag the model by up
     to 10 points annualized; worse than that = fail).
