@@ -76,7 +76,7 @@ import os
 import tempfile
 import time
 from dataclasses import asdict, dataclass, field, fields
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -165,6 +165,29 @@ CAPITAL_REQUEST_MAX_USD = 5_000_000.0  # endpoint sanity bound - a typo
                                        # guard, not a limit (raise it
                                        # deliberately, with a review)
 CAPITAL_EVENTS_MAX = 100               # persisted capital events kept
+# KILL-LEDGER TRIPWIRES (2026-10-05; ibkr-executor/ledger.csv). ALERT-ONLY:
+# nothing here halts, sells or blocks - every line in the ledger names a
+# human action, and the code's only job is to make the line OBSERVABLE and
+# to page when it is crossed. Drawdowns are read on FLOW-ADJUSTED indices
+# (chain-linked across adopted deposits for the book; across rebalance
+# transfers and the sleeve share of deposits for the sleeve), so a deposit
+# is never a new high and a transfer is never a loss.
+TRIP_BOOK_REVIEW_DD = 0.25        # ledger: REVIEW, book drawdown
+TRIP_BOOK_REGIME_DD = 0.35        # ledger: REGIME REVIEW, book drawdown
+TRIP_SLEEVE_KILL_DD = 0.45        # ledger: MODEL-RISK KILL, sleeve (level =
+                                  # Casey's call at arming; 0.52 ~ p95)
+TRIP_UNDERWATER_DAYS = 913        # ledger: >= 30 calendar months under water
+TRIP_UNRECONCILED_SESSIONS = 3    # ledger: PROCESS KILL, record age (sessions)
+TRIP_REARM_PP = 0.05              # a DD line re-arms once the drawdown has
+                                  # recovered this far below its level (or at
+                                  # a new high) - one page per crossing
+# Overnight core buy (2026-10-05): a CORE_BUY planned while the regular
+# session is CLOSED rests as a MKT order for the open and fills at the
+# opening price, not at the quote it was sized on. Sized to the core cash
+# with under one share of slack, a gap-up at the open makes it cost more
+# than the bucket holds (a cash account may reject it). Size it at this
+# much above the quote; the next in-session cycle buys what is left.
+CORE_BUY_OVERNIGHT_HEADROOM = 0.01
 
 
 def _num_or_none(v):
@@ -180,6 +203,25 @@ def _valid_baseline(b):
             and _num_or_none(b.get("ledger")) is not None):
         return b
     return None
+
+
+def _parse_date(v) -> date | None:
+    try:
+        return date.fromisoformat(str(v))
+    except (TypeError, ValueError):
+        return None
+
+
+def _valid_trip(t):
+    """A persisted tripwire series must carry a positive finite HWM; anything
+    else restarts the series (loudly, via the INFO the first snapshot logs)
+    rather than paging off garbage."""
+    if not isinstance(t, dict):
+        return None
+    hwm = _num_or_none(t.get("hwm"))
+    if hwm is None or hwm <= 0 or not math.isfinite(hwm):
+        return None
+    return t
 
 
 def _valid_capital_request(r):
@@ -684,6 +726,16 @@ class BlendState:
                                                          #   usd, sleeve_usd,
                                                          #   core_usd,
                                                          #   sleeve_target}]
+    # kill-ledger tripwires (alert-only): per series {"base": {date, value,
+    # index} | None, "cur": {...} | None, "day_flow": float, "hwm": float,
+    # "hwm_date": str, "since": str}; flows land in trip_pending_* until
+    # the next snapshot consumes them; trip_alerted: line -> bool (armed
+    # = False) plus "unrec:<key>" -> date paged
+    trip_book: dict | None = None
+    trip_sleeve: dict | None = None
+    trip_pending_book: float = 0.0
+    trip_pending_sleeve: float = 0.0
+    trip_alerted: dict = field(default_factory=dict)
     capital_request: dict | None = None   # journaled adoption request
                                           # {usd, ts, date}: written by the
                                           # API thread, EXECUTED by the loop
@@ -868,6 +920,12 @@ class Blend3070Manager:
                 capital_events=[e for e in (raw.get("capital_events") or [])
                                 if isinstance(e, dict)][-CAPITAL_EVENTS_MAX:],
                 capital_request=_valid_capital_request(raw.get("capital_request")),
+                trip_book=_valid_trip(raw.get("trip_book")),
+                trip_sleeve=_valid_trip(raw.get("trip_sleeve")),
+                trip_pending_book=float(_num_or_none(raw.get("trip_pending_book")) or 0.0),
+                trip_pending_sleeve=float(_num_or_none(raw.get("trip_pending_sleeve")) or 0.0),
+                trip_alerted=(raw.get("trip_alerted")
+                              if isinstance(raw.get("trip_alerted"), dict) else {}),
                 mode=stored_mode,
             )
             try:
@@ -1072,6 +1130,11 @@ class Blend3070Manager:
                    "capital_contributed": self.state.capital_contributed,
                    "capital_events": list(self.state.capital_events[-CAPITAL_EVENTS_MAX:]),
                    "capital_request": self.state.capital_request,
+                   "trip_book": self.state.trip_book,
+                   "trip_sleeve": self.state.trip_sleeve,
+                   "trip_pending_book": self.state.trip_pending_book,
+                   "trip_pending_sleeve": self.state.trip_pending_sleeve,
+                   "trip_alerted": _snapshot(self.state.trip_alerted),
                    "mode": self.state.mode,
                    "events": self.state.events[-300:]}
         fd, tmp_path = tempfile.mkstemp(
@@ -1234,6 +1297,225 @@ class Blend3070Manager:
             curve.append([today, value])
             del curve[:-EQUITY_CURVE_MAX]
         self.save()
+
+    # ---------- kill-ledger tripwires (alert-only, 2026-10-05) ----------
+
+    def _trip_series_update(self, key: str, today: str, value: float,
+                            pending_attr: str) -> dict | None:
+        """Chain-link one series to today's snapshot. The index moves by
+        today's return net of the day's flows: index = base.index *
+        (value - day_flow) / base.value, where base is the previous DAY's
+        last point (same-day cycles update today's point in place, as the
+        equity curve does). Returns the series dict, or None when it cannot
+        be computed (a non-positive base value: never page off it)."""
+        st = self.state
+        ser = getattr(st, key)
+        pending = getattr(st, pending_attr)
+        setattr(st, pending_attr, 0.0)
+        if ser is None:
+            ser = {"base": None, "cur": {"date": today, "value": value,
+                                         "index": 1.0},
+                   "day_flow": 0.0, "hwm": 1.0, "hwm_date": today,
+                   "since": today}
+            setattr(st, key, ser)
+            return ser
+        cur = ser.get("cur") or {}
+        if cur.get("date") != today:
+            ser["base"] = cur or None
+            ser["day_flow"] = 0.0
+        ser["day_flow"] = float(ser.get("day_flow") or 0.0) + pending
+        base = ser.get("base")
+        if not base or (_num_or_none(base.get("value")) or 0.0) <= 0:
+            # no previous day yet (first day of the series): today's point
+            # restarts at the base index, flows absorbed
+            idx = (cur.get("index") if cur.get("date") == today
+                   else (base or {}).get("index", 1.0)) or 1.0
+            ser["cur"] = {"date": today, "value": value, "index": idx}
+            return ser
+        idx = float(base["index"]) * (value - ser["day_flow"]) / float(base["value"])
+        ser["cur"] = {"date": today, "value": value, "index": idx}
+        if idx > float(ser["hwm"]):
+            ser["hwm"], ser["hwm_date"] = idx, today
+        return ser
+
+    @staticmethod
+    def _trip_dd(ser: dict | None) -> float | None:
+        if not ser or not ser.get("cur"):
+            return None
+        hwm = float(ser.get("hwm") or 0.0)
+        idx = float(ser["cur"].get("index") or 0.0)
+        return max(0.0, 1.0 - idx / hwm) if hwm > 0 else None
+
+    def _trip_bootstrap_book(self) -> None:
+        """First run on a book with history: replay the persisted equity
+        curve into the book index, with ADOPTED deposits as flows on their
+        dates, so the HWM and the underwater clock start at go-live, not at
+        this build's first boot. (The sleeve has no persisted history: its
+        series starts at the first snapshot after this build - said on
+        /status as trip.sleeve.since.)"""
+        st = self.state
+        curve = [p for p in st.equity_curve
+                 if isinstance(p, (list, tuple)) and len(p) == 2
+                 and (_num_or_none(p[1]) or 0.0) > 0]
+        if len(curve) < 1:
+            return
+        flows: dict[str, float] = {}
+        for e in st.capital_events:
+            if e.get("kind") == "deposit_adopted" and e.get("date"):
+                flows[e["date"]] = flows.get(e["date"], 0.0) + float(e.get("usd") or 0.0)
+        first_d, first_v = curve[0]
+        ser = {"base": None, "cur": {"date": first_d, "value": float(first_v),
+                                     "index": 1.0},
+               "day_flow": 0.0, "hwm": 1.0, "hwm_date": first_d,
+               "since": first_d}
+        for d, v in curve[1:]:
+            prev = ser["cur"]
+            idx = prev["index"] * (float(v) - flows.get(d, 0.0)) / prev["value"]
+            ser["base"] = prev
+            ser["day_flow"] = flows.get(d, 0.0)
+            ser["cur"] = {"date": d, "value": float(v), "index": idx}
+            if idx > ser["hwm"]:
+                ser["hwm"], ser["hwm_date"] = idx, d
+        st.trip_book = ser
+        # flows already folded into the replayed history must not be applied
+        # again at the next snapshot
+        st.trip_pending_book = 0.0
+        self._event("INFO", f"tripwire book index bootstrapped from the equity "
+                            f"curve: {len(curve)} cycle days since {first_d}, "
+                            f"HWM {ser['hwm_date']}, drawdown "
+                            f"{self._trip_dd(ser):.1%}")
+
+    def update_tripwires(self, today: str, prices: dict[str, float],
+                         alert) -> dict | None:
+        """Advance both indices to this cycle's marks and page any ledger
+        line crossed. Same skip rule as the equity snapshot (M4: no point on
+        a missing SPY/BIL quote). Never raises - reporting must never fail a
+        cycle closed. Returns the tripwire summary (tests)."""
+        st = self.state
+        try:
+            if not st.initialized or not prices:
+                return None
+            if prices.get(CORE, 0.0) <= 0 or prices.get(CASH_VEHICLE, 0.0) <= 0:
+                return None
+            if st.trip_book is None:
+                self._trip_bootstrap_book()
+            self._trip_series_update("trip_book", today, self.book_value(prices),
+                                     "trip_pending_book")
+            self._trip_series_update("trip_sleeve", today,
+                                     self.sleeve_value(prices),
+                                     "trip_pending_sleeve")
+            self._trip_check_lines(today, alert)
+            self.save()
+            return self.tripwire_summary(today)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("update_tripwires failed (ignored): %s", exc)
+            return None
+
+    def _trip_page(self, key: str, level: str, msg: str, alert) -> None:
+        self.state.trip_alerted[key] = True
+        self._event(level, "tripwire " + msg)
+        alert(("🚨🚨 " if level == "RED" else "⚠️ ") + "blend tripwire " + msg
+              + " ALERT-ONLY: the code does nothing; ibkr-executor/ledger.csv "
+                "names the action.")
+
+    def _trip_dd_line(self, key: str, dd: float | None, level_dd: float,
+                      page_level: str, what: str, alert) -> None:
+        if dd is None:
+            return
+        fired = bool(self.state.trip_alerted.get(key))
+        if dd >= level_dd and not fired:
+            self._trip_page(key, page_level,
+                            f"{what}: drawdown {dd:.1%} >= {level_dd:.0%} "
+                            f"(flow-adjusted, from the high-water mark).", alert)
+        elif fired and dd < level_dd - TRIP_REARM_PP:
+            self.state.trip_alerted[key] = False
+            self._event("INFO", f"tripwire {what} re-armed (drawdown "
+                                f"{dd:.1%})")
+
+    def _trip_check_lines(self, today: str, alert) -> None:
+        st = self.state
+        bdd, sdd = self._trip_dd(st.trip_book), self._trip_dd(st.trip_sleeve)
+        self._trip_dd_line("book_review", bdd, TRIP_BOOK_REVIEW_DD, "WARN",
+                           "REVIEW (book)", alert)
+        self._trip_dd_line("book_regime", bdd, TRIP_BOOK_REGIME_DD, "RED",
+                           "REGIME REVIEW (book)", alert)
+        self._trip_dd_line("sleeve_kill", sdd, TRIP_SLEEVE_KILL_DD, "RED",
+                           "MODEL-RISK KILL line (sleeve)", alert)
+        uw = self._trip_underwater_days(today)
+        fired = bool(st.trip_alerted.get("underwater"))
+        if uw is not None and uw >= TRIP_UNDERWATER_DAYS and not fired:
+            self._trip_page("underwater", "WARN",
+                            f"REVIEW (time under water): {uw} days below the "
+                            f"book's high-water mark of "
+                            f"{st.trip_book['hwm_date']}.", alert)
+        elif fired and (uw or 0) < TRIP_UNDERWATER_DAYS:
+            st.trip_alerted["underwater"] = False      # a new high re-arms
+        # PROCESS KILL line: an unreconciled record older than N sessions
+        today_d = _parse_date(today)
+        for k, rec in _snapshot(st.unreconciled).items():
+            ak = f"unrec:{k}"
+            if st.trip_alerted.get(ak):
+                continue
+            ts = _num_or_none((rec or {}).get("ts"))
+            if ts is None or today_d is None:
+                continue
+            born = datetime.fromtimestamp(ts, timezone.utc).date()
+            sessions = sum(1 for i in range(1, (today_d - born).days + 1)
+                           if is_trading_day(born + timedelta(days=i)))
+            if sessions >= TRIP_UNRECONCILED_SESSIONS:
+                self._trip_page(ak, "RED",
+                                f"PROCESS KILL line: unreconciled record {k} "
+                                f"is {sessions} sessions old (>= "
+                                f"{TRIP_UNRECONCILED_SESSIONS}).", alert)
+        for ak in [a for a in st.trip_alerted if a.startswith("unrec:")]:
+            if ak[len("unrec:"):] not in st.unreconciled:
+                st.trip_alerted.pop(ak, None)      # record resolved: forget
+
+    def _trip_underwater_days(self, today: str) -> int | None:
+        ser = self.state.trip_book
+        if not ser or not ser.get("cur"):
+            return None
+        hd, td = _parse_date(ser.get("hwm_date")), _parse_date(today)
+        if hd is None or td is None:
+            return None
+        if float(ser["cur"]["index"]) >= float(ser["hwm"]) - 1e-12:
+            return 0
+        return (td - hd).days
+
+    def tripwire_summary(self, today: str | None = None) -> dict:
+        """Public-safe: drawdowns, dates and line states only."""
+        st = self.state
+        today = today or _utc_today()
+
+        def ser_view(ser):
+            if not ser:
+                return None
+            return {"drawdown": (round(self._trip_dd(ser), 4)
+                                 if self._trip_dd(ser) is not None else None),
+                    "hwm_date": ser.get("hwm_date"), "since": ser.get("since"),
+                    "as_of": (ser.get("cur") or {}).get("date")}
+        bdd, sdd = self._trip_dd(st.trip_book), self._trip_dd(st.trip_sleeve)
+        uw = self._trip_underwater_days(today)
+        lines = [
+            {"line": "REVIEW: book drawdown", "level": TRIP_BOOK_REVIEW_DD,
+             "value": bdd, "paged": bool(st.trip_alerted.get("book_review"))},
+            {"line": "REGIME REVIEW: book drawdown", "level": TRIP_BOOK_REGIME_DD,
+             "value": bdd, "paged": bool(st.trip_alerted.get("book_regime"))},
+            {"line": "MODEL-RISK KILL: sleeve drawdown", "level": TRIP_SLEEVE_KILL_DD,
+             "value": sdd, "paged": bool(st.trip_alerted.get("sleeve_kill"))},
+            {"line": "REVIEW: days under water", "level": TRIP_UNDERWATER_DAYS,
+             "value": uw, "paged": bool(st.trip_alerted.get("underwater"))},
+            {"line": "PROCESS KILL: unreconciled sessions",
+             "level": TRIP_UNRECONCILED_SESSIONS,
+             "value": len(st.unreconciled),
+             "paged": any(a.startswith("unrec:") and v
+                          for a, v in _snapshot(st.trip_alerted).items())},
+        ]
+        for ln in lines:
+            if isinstance(ln["value"], float):
+                ln["value"] = round(ln["value"], 4)
+        return {"book": ser_view(st.trip_book), "sleeve": ser_view(st.trip_sleeve),
+                "underwater_days": uw, "lines": lines, "alert_only": True}
 
     # ---------- the decision step ----------
 
@@ -1835,9 +2117,17 @@ class Blend3070Manager:
         core_buy = None
         if (not pending_book and spy_px > 0 and target < 1.0 - 1e-9
                 and core_cash_proj > max(MIN_ORDER_USD, spy_px)):
-            core_buy = {"action": "CORE_BUY", "symbol": CORE,
-                        "qty": int(core_cash_proj // spy_px),
-                        "reason": "invest idle core cash"}
+            overnight = not regular_session_open()
+            px_for_size = spy_px * (1.0 + (CORE_BUY_OVERNIGHT_HEADROOM
+                                           if overnight else 0.0))
+            qty = int(core_cash_proj // px_for_size)
+            if qty > 0:
+                core_buy = {"action": "CORE_BUY", "symbol": CORE, "qty": qty,
+                            "reason": ("invest idle core cash"
+                                       + (f" (rests for the open: sized "
+                                          f"{CORE_BUY_OVERNIGHT_HEADROOM:.0%} "
+                                          f"above the quote)" if overnight
+                                          else ""))}
 
         # 8) BIL sweep of idle sleeve cash (buy) from the resolved ledger.
         #    Under a budget cap, the sweep is clamped to the remaining gross
@@ -2186,6 +2476,9 @@ class Blend3070Manager:
         """+usd moves core -> sleeve; -usd moves sleeve -> core."""
         self.state.sleeve_cash += usd
         self.state.core_cash -= usd
+        # a transfer is a FLOW for the sleeve's tripwire index, never a
+        # gain or a loss (the book's index does not see it: internal)
+        self.state.trip_pending_sleeve += usd
         self.save()
 
     # ---------- control ----------
@@ -2422,6 +2715,7 @@ class Blend3070Manager:
             "core_cash": round(st.core_cash, 2),
             "budget_cap": getattr(self.cfg, "blend_budget", 0.0) or None,
             "capital": self.capital_summary(),
+            "tripwires": self.tripwire_summary(),
             "gate": st.last_gate,
             "budget_utilization": None,
             # A list SLICE is a C-level copy; the encoder never sees the
@@ -2485,6 +2779,7 @@ class Blend3070Manager:
                 "capital_contributed": capital["contributed"],
             },
             "capital_events": capital["events"],
+            "tripwires": self.tripwire_summary(today),
             "positions": positions,
             "trades": list(st.trades[-TRADE_LOG_MAX:]),
             "equity_curve": list(st.equity_curve),
@@ -4381,6 +4676,9 @@ def reconcile_cash(mgr: Blend3070Manager, adapter, alert) -> dict | None:
                    f"{drift:+,.2f} more than the book's ledger since the "
                    f"baseline of {b_day} ({st.cash_drift_cycles} quiet cycles). "
                    + ("Dividends/interest the ledger cannot see, or a deposit"
+                      " - it sits uninvested until adopted: once confirmed on "
+                      "TWS, POST /blend/cash/adopt with that amount (rounded "
+                      "down) to reinvest it through the book"
                       if drift > 0 else
                       "Fees, slippage the ledger did not charge, or a withdrawal")
                    + ". Stage 1 is alert-only: nothing adopted."
@@ -4571,6 +4869,9 @@ def adopt_capital(mgr: Blend3070Manager, adapter, prices: dict[str, float],
         stage = "mutating"
         st.sleeve_cash += sleeve_usd
         st.core_cash += core_usd
+        # flows for the tripwire indices: a deposit is never a new high
+        st.trip_pending_book += usd
+        st.trip_pending_sleeve += sleeve_usd
         st.capital_contributed = round((st.capital_contributed or 0.0) + usd, 2)
         st.capital_events.append({
             "date": today, "ts": int(now), "kind": "deposit_adopted",
@@ -5593,6 +5894,7 @@ def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
     # serve — they must NEVER touch the adapter/ib_async loop themselves.
     mgr.mark_cache = {"prices": post_prices, "ts": time.time()}
     mgr.record_equity_snapshot(today, post_prices)  # daily equity point
+    mgr.update_tripwires(today, post_prices, alert)  # kill-ledger lines (alert-only)
     mgr.check_budget_alarm(post_prices, alert)      # 85% one-shot / 75% re-arm
     mgr.save()
     return intents

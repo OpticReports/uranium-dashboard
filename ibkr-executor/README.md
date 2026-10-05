@@ -1097,7 +1097,10 @@ capital_contributed}, capital_events (date, kind, usd and the sleeve/core
 split; kinds: `seed` (the curve's first point), `inferred` (the seed
 backfilled at the stage-2 build's first boot on a pre-field file - dated by
 THAT boot, no split) and `deposit_adopted` - only the last kind is a FLOW
-to remove before a drawdown read), positions, trades
+to remove before a drawdown read), tripwires (the kill ledger's lines,
+alert-only: flow-adjusted book and sleeve drawdown, high-water-mark date,
+series start date, days under water, each line's level and whether it has
+paged - see "Kill criteria"), positions, trades
 (last 200, persisted), equity_curve (one point per cycle day),
 unreconciled (count), last_cycle: {date, ok, error}, marks_age_s}`. Marks
 come from the loop-thread quote cache (adapter review M2 — the feed never
@@ -1251,11 +1254,13 @@ The procedure, in this order:
    tracker payload is present): `CORE_BUY` SPY from the idle core cash
    and `SWEEP` BIL from the idle sleeve cash - journaled MKT orders;
    outside the session they rest for the open and are adopted by
-   reconcile 2b next cycle. Both are sized to the bucket with under a
-   share of slack, so an open that gaps up can make the venue reject the
-   resting buy in a CASH account (insufficient funds): reconcile 2b then
-   clears the journal with a RED page and the same cycle re-plans it at
-   the smaller size - it costs a session, not money. Confirm the fills on
+   reconcile 2b next cycle. A core buy planned while the session is
+   CLOSED is sized 1% above the quote (`CORE_BUY_OVERNIGHT_HEADROOM`), so
+   an open that gaps up by less than that cannot make it cost more than
+   the core bucket holds; the in-session cycle after the fill buys the
+   share or so left over. A larger gap can still be rejected in a CASH
+   account: reconcile 2b clears the journal with a RED page and the same
+   cycle re-plans it - a session's delay, not money. Confirm the fills on
    `/status` the next morning (`spy_qty`, `bil_qty`, `trades`).
 6. **What does NOT change**: open sleeve positions (sized at entry);
    `BLEND_BOOK_USD` (leave it: it only labels the feed's seed line and
@@ -1268,6 +1273,16 @@ The procedure, in this order:
    in the state file from the ADOPTED page before trusting the feed's
    dashed line, a flow-adjusted drawdown read, or the stage-1 thresholds
    (see the deploy note under Rollout gates).
+8. **Reinvest dividends and distributions at every monthly review.** SPY
+   dividends and BIL distributions land in the account as cash the book
+   does not own, and sit UNINVESTED until adopted (roughly $2k a year on
+   a $120k book at 2026 yields). The stage-1 drift pages them ("...it sits
+   uninvested until adopted"); `blend.cash.drift` on `/status` is the
+   amount accumulated since the last baseline. Confirm it on TWS (the
+   activity statement's dividend lines), then `POST /blend/cash/adopt`
+   with that amount rounded down: it is credited 30/70 and invested by
+   the next planning cycle, and the stage-1 clock restarts. Nothing adopts
+   it automatically - only an amount the operator typed is ever adopted.
 
 The original staged rehearsal, kept for the record and for any FUTURE
 strategy's cutover (the per-leg discipline still applies):
@@ -1346,11 +1361,11 @@ a ~45-50% SPY event and would have sold the sleeve into an index trough.
 
 | line | level | observable from | action |
 |---|---|---|---|
-| REVIEW | book drawdown ≥ 25% from the HWM | `/blend/feed` equity_curve, by hand (no HWM is tracked) | written review within 5 sessions; nothing on the book |
-| REGIME REVIEW | book drawdown ≥ 35% | same | review the CORE weight decision; explicitly not a sleeve flatten |
-| MODEL-RISK KILL (sleeve) | sleeve drawdown ≥ 45%, transfer-adjusted | **not observable yet** — instrument is the next build | `/kill` as coded, then a human review before `/resume` |
-| REVIEW | ≥ 30 months under water | feed curve HWM date | written review; the sleeve weight is the only lever, via a new study |
-| PROCESS KILL | a POSITION row unreconciled for 3 sessions | `/status` blend.unreconciled | `/kill`, reconcile by hand, then `/resume` |
+| REVIEW | book drawdown ≥ 25% from the HWM | `/blend/feed` `tripwires` (flow-adjusted; bootstrapped from the equity curve, so the series starts at go-live); WARN page on the crossing | written review within 5 sessions; nothing on the book |
+| REGIME REVIEW | book drawdown ≥ 35% | same; RED page | review the CORE weight decision; explicitly not a sleeve flatten |
+| MODEL-RISK KILL (sleeve) | sleeve drawdown ≥ 45%, transfer-adjusted | `tripwires.sleeve` (transfers and the sleeve share of deposits are flows); RED page. The sleeve series STARTS at the instrument's first boot (no sleeve history was persisted) | `/kill` as coded, then a human review before `/resume` |
+| REVIEW | ≥ 30 months under water | `tripwires.underwater_days` (913 days); WARN page | written review; the sleeve weight is the only lever, via a new study |
+| PROCESS KILL | a POSITION row unreconciled for 3 sessions | `/status` blend.unreconciled; RED page when a record is 3 trading sessions old | `/kill`, reconcile by hand, then `/resume` |
 
 Basis (executor-fidelity replay, committed results JSON): the live 30/70
 rules realized a 28.3% max DD (SPY-led, 2020), bootstrap p50 26.3% / p95
@@ -1382,12 +1397,26 @@ cash-adoption request (a `/status` event says so; the `/kill` page does
 not). `/resume` clears every halt and
 enforces no review. There is no entries-only halt. And `/kill`'s flatten
 path has never run against a real venue (Operating rules): the first live
-`/kill` is its own test. The sleeve kill line's instrument is due by the
-first R1 review (2026-11-05); its level is set then from the live
-transfer-adjusted series, not from the $100k replay. Until the executor alerts
-on these lines itself (next build, alert-only), they are read by hand at
-every R1 monthly review and the venue-vs-book position check is a named
-manual TWS step.
+`/kill` is its own test.
+
+**The tripwire instrument (built 2026-10-05, alert-only).** Every cycle,
+after the equity snapshot, `update_tripwires` advances two chain-linked
+indices: the BOOK (adopted deposits are flows) and the SLEEVE (rebalance
+transfers via `on_transfer` and the sleeve share of deposits are flows),
+so a deposit is never a new high and a transfer is never a loss. Same-day
+cycles update the day's point in place; a missing SPY/BIL quote skips the
+update (the equity curve's M4 rule). Each line pages ONCE per crossing
+and re-arms after a 5 pp recovery or a new high; the PROCESS line pages
+once per record. NOTHING here halts, sells or blocks: every page ends
+"ALERT-ONLY: the code does nothing; ibkr-executor/ledger.csv names the
+action". The book index is bootstrapped from the persisted equity curve
+on first run (deposits on their dates as flows); the sleeve index starts
+at the first snapshot after this build, so a sleeve drawdown already in
+progress at that moment is under-read. The sleeve line pages at 45% as
+written; the level itself is Casey's call at the first R1 review
+(2026-11-05) - 45% is a ~13%-per-decade false page on the replay, 52%
+(p95) about 5%. The venue-vs-book position check stays a named manual TWS
+step at every R1 review.
 
 ## Rollout gates
 

@@ -172,6 +172,44 @@ export default function Execution() {
         )}
       </div>
 
+      {/* kill-ledger tripwires (alert-only; executor 2026-10-05) */}
+      {feed.tripwires && (
+        <div className="bg-panel border border-edge rounded-xl p-4">
+          <div className="text-xs text-gray-400 mb-2">
+            Kill-ledger tripwires — ALERT-ONLY (the executor pages; ibkr-executor/ledger.csv names the
+            action). Drawdowns are flow-adjusted: a deposit is not a new high, a rebalance transfer is
+            not a loss.
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+            {(feed.tripwires.lines || []).map((ln) => {
+              const isDD = typeof ln.level === "number" && ln.level < 1;
+              const val = ln.value == null ? "n/a" : isDD ? `${(ln.value * 100).toFixed(1)}%` : String(ln.value);
+              const lvl = isDD ? `${(ln.level * 100).toFixed(0)}%` : String(ln.level);
+              const frac = ln.value == null || !ln.level ? 0 : Math.min(ln.value / ln.level, 1);
+              return (
+                <div key={ln.line} className="border border-edge rounded-lg px-3 py-2">
+                  <div className="flex justify-between gap-2">
+                    <span className="text-gray-300">{ln.line}</span>
+                    <span className={ln.paged ? "text-rose-300 font-semibold" : "text-gray-400"}>
+                      {val} / {lvl}{ln.paged ? " — PAGED" : ""}
+                    </span>
+                  </div>
+                  <div className="h-1.5 mt-1 bg-ink rounded overflow-hidden">
+                    <div className={`h-full ${frac >= 1 ? "bg-rose-600/80" : frac >= 0.7 ? "bg-amber-500/70" : "bg-sky-600/60"}`}
+                      style={{ width: `${frac * 100}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="text-[11px] text-gray-500 mt-2">
+            book series since {feed.tripwires.book?.since ?? "n/a"} (high-water mark{" "}
+            {feed.tripwires.book?.hwm_date ?? "n/a"}); sleeve series since{" "}
+            {feed.tripwires.sleeve?.since ?? "n/a"} (high-water mark {feed.tripwires.sleeve?.hwm_date ?? "n/a"})
+          </div>
+        </div>
+      )}
+
       {/* open positions */}
       <div className="overflow-x-auto bg-panel border border-edge rounded-xl">
         <div className="px-3 pt-3 text-xs text-gray-400">Open positions (sleeve)</div>
