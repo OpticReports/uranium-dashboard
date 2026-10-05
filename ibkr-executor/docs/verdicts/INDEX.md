@@ -1029,8 +1029,24 @@ name, reconstruct it from `git log origin/main -- ibkr-executor/`.
     step 4: expect silence while waiting; the age is on `/status`).
   * `A9` NOTE — a cap exactly at gross + N adopts and fires the 85% alarm.
     **documented** (runbook step 2: never AT the cap).
-* **Re-review of the corrections:** see the line appended below this entry.
-* **Suite:** 490 before the corrections; the corrections add 5 gates.
+* **Re-review of the corrections (C, one verifier - every finding was
+  MINOR or NOTE): PASS WITH CORRECTIONS.** `C1` MINOR — the A3 correction
+  added the `inferred` capital-event kind (the seed backfilled at the
+  stage-2 build's first boot, dated by that boot) and the chain-link rule
+  did not exclude it: an R1 reader applying it literally would book a
+  −98% day on the boot date and cross both review lines. **closed**:
+  README feed description + kill-criteria rule and ledger.csv rows 1/3 say
+  `deposit_adopted` rows only. `C2` NOTE — the dropped-path exception log
+  claimed "request kept"; **closed**: `stage = "dropped"` and its own log
+  line (the on-disk copy is re-evaluated once by a restart; the venue
+  checks make a double credit impossible). `C3` NOTE — the residual A1
+  window after the re-check (a handful of statements) is ledger-only and
+  coherent (reproduced: one page, disk agrees with memory, nothing placed
+  while halted); **accepted**. `C4` NOTE — this record said the
+  corrections add 5 gates; they add 4 test functions (the cancel/409
+  checks live inside the endpoint gate). Every A/B closure verified as
+  claimed (see the agent's CLOSED-AS-CLAIMED list in the session record).
+* **Suite:** 490 before the corrections, 494 after (4 gates added).
 
 ## Standing UNKNOWNs
 

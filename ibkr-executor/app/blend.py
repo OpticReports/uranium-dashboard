@@ -4461,11 +4461,13 @@ def adopt_capital(mgr: Blend3070Manager, adapter, prices: dict[str, float],
             # not also silence the operator; the in-memory state is the
             # truth of this process either way and the next successful
             # save persists it.
+            nonlocal stage
             if st.capital_request is req:
                 st.capital_request = None
             mgr._event(level, "capital adoption " + msg)
             alert(("🚨🚨 " if level == "RED" else "⚠️ ")
                   + "blend capital adoption " + msg)
+            stage = "dropped"
             mgr.save()
             return {"status": status, "usd": usd, "reason": msg}
 
@@ -4601,6 +4603,15 @@ def adopt_capital(mgr: Blend3070Manager, adapter, prices: dict[str, float],
         if stage == "checking":
             logger.exception("adopt_capital failed before any ledger change "
                              "(request kept, retried next cycle): %s", exc)
+        elif stage == "dropped":
+            # C2: the request is cleared in memory and the page went out,
+            # but the save failed - the on-disk file still carries the
+            # request, so a RESTART re-evaluates it once against the venue
+            # (the venue checks make a double credit impossible)
+            logger.exception("adopt_capital: request dropped in memory and "
+                             "paged, but the save failed - the on-disk copy "
+                             "still carries it; a restart re-evaluates it "
+                             "once: %s", exc)
         else:
             # the credit is in memory and the request is cleared; the next
             # successful save persists both (nothing was placed: every

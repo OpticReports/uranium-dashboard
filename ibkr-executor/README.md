@@ -1093,9 +1093,11 @@ Env (all optional until the paper gate):
 Public-safe JSON for the research dashboard, gated by `READ_TOKEN`:
 `{mode, halted, gate, book: {sleeve_cash, core_qty, bil_qty,
 equity_estimate, budget_utilization, initial_book_usd,
-capital_contributed}, capital_events (seed + adopted deposits: date, kind,
-usd and the sleeve/core split - the flow-adjusted basis for any drawdown
-read off the curve), positions, trades
+capital_contributed}, capital_events (date, kind, usd and the sleeve/core
+split; kinds: `seed` (the curve's first point), `inferred` (the seed
+backfilled at the stage-2 build's first boot on a pre-field file - dated by
+THAT boot, no split) and `deposit_adopted` - only the last kind is a FLOW
+to remove before a drawdown read), positions, trades
 (last 200, persisted), equity_curve (one point per cycle day),
 unreconciled (count), last_cycle: {date, ok, error}, marks_age_s}`. Marks
 come from the loop-thread quote cache (adapter review M2 — the feed never
@@ -1362,9 +1364,12 @@ so they still land only when an operator adopts them by amount. **Read the
 HWM lines on the flow-adjusted series**: a deposit adopted through stage 2
 is a step UP in `equity_curve` that is not a gain and would mask a
 drawdown in progress. CHAIN-LINK, never subtract: on each `capital_events`
-date d take the day's return as `(E_d - usd_d) / E_{d-1} - 1`, every other
-day `E_t / E_{t-1} - 1`, cumulate into an index and read the HWM and the
-drawdown off the index. Subtracting the cumulative deposits from each
+date d of kind `deposit_adopted` ONLY (`seed` is the curve's first point
+and `inferred` is the seed backfilled at the stage-2 build's first boot,
+dated by that boot - neither is a flow) take the day's return as
+`(E_d - usd_d) / E_{d-1} - 1`, every other day `E_t / E_{t-1} - 1`,
+cumulate into an index and read the HWM and the drawdown off the index.
+Subtracting the cumulative deposits from each
 point gives a dollar P&L series whose percentage drawdown is wrong after
 a deposit (seed 50k, HWM 52k, adopt 70k, fall 122k -> 100k: chain-linked
 18.0%, subtracted 42.3% - a false crossing of both review lines).
