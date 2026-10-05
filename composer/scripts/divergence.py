@@ -59,7 +59,45 @@ def analyze(acct, sym_id, sym_name):
         "live_beta_to_model": round(_beta(lr, mr), 3),
         "live_model_vol_ratio": round(_vol_ratio(lr, mr), 3),
         "live_max_drawdown": round(cl.max_drawdown(lv), 4),
+        "ex_dates": ex_dates_in_window(
+            set((cl.get(f"/portfolio/accounts/{acct}/symphony-stats-meta")
+                 .get("symphonies") and []) or []) or _held_tickers(bt),
+            common[0], common[-1]),
     }
+
+
+def _held_tickers(bt):
+    """Tickers the model actually held over the window."""
+    w = bt.get("tdvm_weights") or {}
+    return {t for t, dd in w.items() if any(v and v > 1e-6 for v in dd.values())}
+
+
+def ex_dates_in_window(tickers, start, end):
+    """Distribution ex-dates for held tickers inside the window.
+
+    WHY (addendum 37): the live curve is a price path that DROPS on an ex-date;
+    the model backtest uses ADJUSTED closes, which include the distribution. So
+    a fat distribution shows up as a live-vs-model gap that is not a tracking
+    failure at all. ZVOL pays ~$0.485/month on a ~$7.50 share (~6%), and a
+    single ex-date created HARV's entire -2.69% gap. Informational only -- this
+    adjusts nothing, it just stops the next reader drawing the wrong conclusion.
+    """
+    import urllib.request, json as _j, datetime as _dt
+    out = []
+    for t in sorted(tickers):
+        try:
+            url = (f"https://query1.finance.yahoo.com/v8/finance/chart/{t}"
+                   f"?period1=1680000000&period2=4102444800&interval=1d&events=div")
+            rq = urllib.request.Request(url, headers={"user-agent": "Mozilla/5.0"})
+            res = _j.load(urllib.request.urlopen(rq, timeout=30))["chart"]["result"][0]
+            for v in ((res.get("events") or {}).get("dividends") or {}).values():
+                d = _dt.datetime.fromtimestamp(int(v["date"]),
+                        tz=_dt.timezone.utc).date().isoformat()
+                if start <= d <= end:
+                    out.append((d, t, float(v["amount"])))
+        except Exception:
+            continue
+    return sorted(out)
 
 
 def _beta(lr, mr):
@@ -96,6 +134,11 @@ def show(r):
     print(f"      daily return correlation live~model: {r['daily_return_correlation']:+.3f}"
           + ("   <- LOW: check rebalance timing/fills"
              if abs(r["daily_return_correlation"]) < 0.9 else ""))
+    for d, t, amt in r.get("ex_dates") or []:
+        print(f"      !! {t} ex-distribution {d} (${amt:.4f}/sh) — the live curve "
+              f"drops on the ex-date, the model uses adjusted closes. Any gap "
+              f"around here is a DISTRIBUTION artifact until proven otherwise "
+              f"(addendum 37).")
 
 
 def main():

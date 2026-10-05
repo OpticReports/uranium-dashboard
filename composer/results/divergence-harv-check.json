@@ -1,0 +1,56 @@
+{
+  "results": [
+    {
+      "symphony": "ORQNCfZnA18wmsMWVhf8",
+      "name": "VIX Harvester + HYG Credit Guard",
+      "window": [
+        "2026-07-22",
+        "2026-10-02"
+      ],
+      "n_days": 51,
+      "live_cumulative_return": -0.0152,
+      "model_cumulative_return": 0.0116,
+      "cumulative_gap": -0.0269,
+      "mean_daily_gap_bps": -5.2,
+      "annualized_gap": -0.1311,
+      "worst_daily_gap_bps": -388.8,
+      "best_daily_gap_bps": 60.1,
+      "daily_return_correlation": 0.118,
+      "live_beta_to_model": 0.181,
+      "live_model_vol_ratio": 1.54,
+      "live_max_drawdown": 0.0403,
+      "ex_dates": [
+        [
+          "2026-07-22",
+          "ZVOL",
+          0.485
+        ],
+        [
+          "2026-07-31",
+          "PULS",
+          0.171
+        ],
+        [
+          "2026-08-19",
+          "ZVOL",
+          0.485
+        ],
+        [
+          "2026-08-31",
+          "PULS",
+          0.177
+        ],
+        [
+          "2026-09-23",
+          "ZVOL",
+          0.485
+        ],
+        [
+          "2026-09-30",
+          "PULS",
+          0.171
+        ]
+      ]
+    }
+  ]
+}

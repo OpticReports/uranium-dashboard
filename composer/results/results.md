@@ -2023,3 +2023,58 @@ unchanged. No POLICY tier fires (its drawdown is 4.0% vs a 12% tripwire), so
 this is report-only. Caveat: 51-day window, only 13 model-moving days — too
 thin to act on, but it is the first time any engine has shown this signature
 and it is now on the monthly watch list alongside the KMLM earn-back check.
+
+
+## Addendum 37 — HARV divergence diagnosed: ONE distribution ex-date, not a
+## tracking failure. One unresolved question for the owner. (2026-10-05)
+
+The add.-36 flag (HARV live-vs-model corr 0.118, gap -2.69%) is NOT an engine
+or execution problem. Diagnosis, in order:
+
+1. THE GAP IS ONE DAY. 2026-08-19 alone: live -2.78% vs model +1.11%, a -389bps
+   divergence that moved cumulative from +0.60% to -3.44%. Every other day is
+   noise; top-5 days are 63% of total |gap| and this one dominates them.
+2. THAT DAY ZVOL WENT EX-DISTRIBUTION: $0.4850/share, paid MONTHLY, on a ~$7.87
+   share — a 6.2% payout. We held 4,062.52 shares => $1,970.
+3. THE MODEL CAPTURES IT, THE LIVE CURVE DOES NOT. Composer's backtest uses
+   ADJUSTED closes: ZVOL adjclose 6.9498 -> 7.1051 = +2.23%, and 0.52 x 2.23%
+   = +1.16% ~ the model's +1.11%. The live series follows the PRICE path: raw
+   close 7.87 -> 7.55 = -4.07%. The entire divergence is the distribution.
+4. EXECUTION IS INNOCENT. The two fills around it measured +0.0 bps (buy
+   2026-08-18) and +3.2 bps (sell 2026-08-19) against the intraday benchmark —
+   clean. This was never a slippage problem.
+5. NOT SYSTEMATIC. Across 33 ZVOL ex-dates since 2023-12, we held a position on
+   exactly ONE. The harvester holds ZVOL ~6% of days, so overlap is rare. HARV
+   is not broken and no POLICY tier fires (live maxDD 4.0% vs a 12% tripwire).
+6. THE LOW CORRELATION IS A CONSEQUENCE, NOT A SECOND PROBLEM: one -389bps day
+   inside a 51-day window of near-cash returns destroys the correlation.
+
+MISSING KEY INPUT — NOT ANALYSED AROUND (CLAUDE.md rule). Whether the $1,970
+was actually CREDITED cannot be settled from the API: the symphony series shows
+$0 flow on the ex-date, the account series shows no external inflow that week,
+and the arithmetic does not close — the live position lost $1,037 while the raw
+round trip (bought $32,013 on 08-18, sold $30,267 on 08-19) lost $1,747, so
+roughly $710 arrived from somewhere, not $1,970. Composer may book
+distributions inside the position without exposing them as a flow. OWNER ACTION
+REQUESTED: check the Composer account activity/statement for a ZVOL
+distribution around 2026-08-19 to 2026-08-26 and report the amount and date.
+Until then the $1,970 is UNVERIFIED, and no verdict is recorded on whether it
+was received.
+
+INSTRUMENT DEFECT FOUND (third in this family, same shape as add. 34/35/36):
+divergence.py compares a live PRICE path against a model built on ADJUSTED
+closes, so ANY distribution-paying holding produces a spurious negative gap.
+This matters beyond HARV — divergence.py is the measurement behind POLICY
+Operation 3 (the KMLM earn-back) and behind the newly re-anchored migration
+gate (add. 36). A fat distribution could false-fail an engine. Holdings in the
+current window carry ZVOL (~6%/month!) and PULS (~0.35%/month) distributions.
+FIX SHIPPED (deliberately minimal, informational only — it computes no new
+number and so cannot produce a wrong one): divergence.py now lists every
+ex-date for held tickers inside the window and labels any nearby gap a
+distribution artifact until proven otherwise. A full distribution-aware
+live-curve reconstruction is NOT attempted here; after three failed estimators
+in this family, the right move is to flag rather than to rebuild in a hurry.
+
+STANDING CORRECTION to add. 36: the HARV watch item is CLOSED as a tracking
+concern. What replaces it is the narrower question above (was the cash
+received) plus the divergence.py distribution defect.
