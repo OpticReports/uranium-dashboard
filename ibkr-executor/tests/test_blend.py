@@ -8951,11 +8951,13 @@ def test_gate_capital_adopt_refuses_more_than_the_venue_holds(tmp_path):
     alerts = []
     m.request_capital_adoption(7_000, "2026-08-20")
     r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
-    assert r["status"] == "refused" and "$2,000.00 LESS" in r["reason"]
+    assert r["status"] == "refused" and "holds LESS cash" in r["reason"]
     assert m.state.capital_request is None
     assert m.state.sleeve_cash == 0.0 and m.state.core_cash == 0.0
     assert m.state.capital_contributed == 10_000.0 and not m.state.capital_events
     assert alerts[0].startswith("🚨🚨") and "5,000" not in alerts[0]
+    # B2: not even DERIVABLE - no shortfall figure either (usd is known)
+    assert "2,000" not in alerts[0] and "2,000" not in r["reason"]
     assert m.state.events[-1]["level"] == "RED"
     # a book order the ledger owns is NOT unowned cash: ledger cash counts
     m2 = _capital_book(tmp_path / "b")
@@ -8963,7 +8965,7 @@ def test_gate_capital_adopt_refuses_more_than_the_venue_holds(tmp_path):
     a2 = _VenueCashAdapter(total=8_000.0, available=8_000.0)   # 6,000 unowned
     m2.request_capital_adoption(7_000, "2026-08-20")
     r2 = blend_mod.adopt_capital(m2, a2, PRICES, "2026-08-20", alerts.append)
-    assert r2["status"] == "refused" and "$1,000.00 LESS" in r2["reason"]
+    assert r2["status"] == "refused" and "holds LESS cash" in r2["reason"]
     # within the rounding tolerance it adopts
     m3 = _capital_book(tmp_path / "c")
     a3 = _VenueCashAdapter(total=6_999.50, available=6_999.50)
@@ -8982,7 +8984,8 @@ def test_gate_capital_adopt_waits_for_settlement_then_adopts(tmp_path):
     alerts = []
     m.request_capital_adoption(7_000, "2026-08-20")
     r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
-    assert r["status"] == "deferred" and "$4,000.00 short" in r["reason"]
+    assert r["status"] == "deferred" and "do not cover it yet" in r["reason"]
+    assert "4,000" not in r["reason"] and "3,000" not in r["reason"]   # B2
     assert m.state.capital_request is not None and alerts == []
     assert m.state.sleeve_cash == 0.0 and m.state.core_cash == 0.0
     n_events = len(m.state.events)
@@ -9084,10 +9087,12 @@ def test_gate_capital_adopt_refused_on_a_halted_or_unseeded_book(tmp_path):
 
 def test_gate_capital_request_validation_replacement_and_expiry(tmp_path):
     m = _capital_book(tmp_path)
-    for bad in ("abc", None, -5, 0, float("nan"), float("inf"), 6_000_000):
+    for bad in ("abc", None, -5, 0, float("nan"), float("inf"), 6_000_000,
+                True, False, 0.004, "0.001"):
         with pytest.raises(ValueError):
             m.request_capital_adoption(bad, "2026-08-20")
     assert m.state.capital_request is None
+    assert m.request_capital_adoption(0.005, "2026-08-20")["usd"] == 0.01
     m.request_capital_adoption("7000", "2026-08-20")         # a string number is fine
     m.request_capital_adoption(7_500, "2026-08-20")          # the latest wins
     assert m.state.capital_request["usd"] == 7_500.0
@@ -9139,15 +9144,20 @@ def test_gate_capital_contributed_seed_and_pre_field_inference(tmp_path):
         raw.pop(k, None)
     json.dump(raw, open(m.state_path, "w"))
     m2 = Blend3070Manager(m.cfg, m.state_path)
-    assert m2.state.capital_contributed == 8_000.0 and m2.state.capital_events == []
-    assert any("inferred from the seed config" in e["msg"] for e in m2.state.events)
+    assert m2.state.capital_contributed == 8_000.0 and m2.capital_inferred == 8_000.0
+    (iev,) = m2.state.capital_events
+    assert iev["kind"] == "inferred" and iev["usd"] == 8_000.0
+    assert iev["sleeve_usd"] is None and iev["core_usd"] is None
+    (wev,) = [e for e in m2.state.events if "INFERRED from the seed config" in e["msg"]]
+    assert wev["level"] == "WARN"
     m2.save()
     m2.cfg.blend_book_usd = 999_999.0                # env changed later
     m3 = Blend3070Manager(m2.cfg, m2.state_path)
     assert m3.state.capital_contributed == 8_000.0   # persisted, not re-inferred
+    assert m3.capital_inferred is None               # nothing to page
     # an UNSEEDED pre-field file infers nothing
     m4 = mk(tmp_path / "u")
-    assert m4.state.capital_contributed is None
+    assert m4.state.capital_contributed is None and m4.capital_inferred is None
 
 
 def test_gate_capital_sleeve_only_book_adopts_everything_to_the_sleeve(tmp_path):
@@ -9217,4 +9227,120 @@ def test_gate_capital_adopt_endpoint_journals_and_wakes_the_loop(tmp_path, monke
         st = c.get("/status", params={"token": "sekrit"}).json()["blend"]
         assert st["capital"]["request_pending"]["usd"] == 7_000.0
         assert st["capital"]["contributed"] == 10_000.0
+        # B5: the operator can WITHDRAW it without /kill
+        assert c.post("/blend/cash/adopt/cancel").status_code == 401
+        assert c.get("/blend/cash/adopt/cancel", params={"token": "sekrit"}).status_code == 405
+        r = c.post("/blend/cash/adopt/cancel", params={"token": "sekrit"})
+        assert r.status_code == 200 and r.json()["cancelled"]["usd"] == 7_000.0
+        assert B.state.capital_request is None
+        assert r.json()["capital"]["request_pending"] is None
+        assert c.post("/blend/cash/adopt/cancel",
+                      params={"token": "sekrit"}).json()["cancelled"] is None
+        # B8e: a halted book answers 409 up front, journals nothing
+        B.halt("KILL")
+        r = c.post("/blend/cash/adopt", params={"token": "sekrit"}, json={"usd": 7000})
+        assert r.status_code == 409 and "halted (KILL)" in r.json()["detail"]
+        assert B.state.capital_request is None
+        B.resume("2026-08-20")
     service.BLEND = None
+
+
+def test_gate_capital_adopt_rechecks_the_halt_after_the_venue_read(tmp_path):
+    """A1/B1 (MF2-5's rule): /kill takes no lock a cycle holds, so it can
+    land DURING adapter.account_cash() - after the first halted check
+    passed. The credit must re-read the halt (and whether the request it
+    holds is still the journaled one) immediately before mutating."""
+    m = _capital_book(tmp_path)
+    alerts = []
+
+    class _KillDuringRead(_VenueCashAdapter):
+        def account_cash(self):
+            m.request_flatten("2026-08-20")        # /kill lands mid-read
+            return super().account_cash()
+
+    a = _KillDuringRead(total=7_000.0, available=7_000.0)
+    m.request_capital_adoption(7_000, "2026-08-20")
+    r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
+    assert r["status"] == "refused" and "landed while the venue" in r["reason"]
+    assert m.state.sleeve_cash == 0.0 and m.state.core_cash == 0.0
+    assert m.state.capital_contributed == 10_000.0 and not m.state.capital_events
+    assert m.state.capital_request is None and m.state.halted == "KILL"
+    # a cancel landing mid-read is honoured the same way
+    m2 = _capital_book(tmp_path / "b")
+
+    class _CancelDuringRead(_VenueCashAdapter):
+        def account_cash(self):
+            m2.clear_capital_request("operator")
+            return super().account_cash()
+
+    m2.request_capital_adoption(7_000, "2026-08-20")
+    r = blend_mod.adopt_capital(m2, _CancelDuringRead(7_000.0, 7_000.0), PRICES,
+                                "2026-08-20", alerts.append)
+    assert r["status"] == "refused" and m2.state.core_cash == 0.0
+
+
+def test_gate_capital_adopt_pages_before_it_saves(tmp_path, monkeypatch):
+    """A2: a save that fails after the credit must not also silence the
+    operator - the ADOPTED page goes out first, the request is cleared in
+    memory, and the next successful save persists the credited ledger."""
+    m = _capital_book(tmp_path)
+    a = _VenueCashAdapter(total=7_000.0, available=7_000.0)
+    alerts = []
+    m.request_capital_adoption(7_000, "2026-08-20")
+    real_save = m.save
+    calls = {"n": 0}
+
+    def _flaky_save():
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise OSError("disk full")
+        real_save()
+
+    monkeypatch.setattr(m, "save", _flaky_save)
+    assert blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append) is None
+    assert any("ADOPTED $7,000.00" in x for x in alerts)      # paged anyway
+    assert m.state.core_cash == 4_900.0 and m.state.capital_request is None
+    m.save()                                                  # the next save lands it
+    m2 = Blend3070Manager(m.cfg, m.state_path)
+    assert m2.state.core_cash == 4_900.0 and m2.state.capital_request is None
+
+
+def test_gate_stage1_thresholds_scale_with_contributed_capital(tmp_path):
+    """B7: warn at max($25, 0.1%) / RED at 1% of CONTRIBUTED capital once
+    known (120k -> 120 / 1,200), else of the seed config (50k -> 50 / 500)."""
+    m = mk(tmp_path, blend_book_usd=50_000.0)
+    _seed_initialized(m, sleeve_cash=0.0, spy_qty=70, bil_qty=30)
+    m.state.capital_contributed = 120_000.0
+    a = _CashAdapter(1_000.0)
+    alerts = []
+    blend_mod.reconcile_cash(m, a, alerts.append)             # baseline
+    a.cash = 1_100.0                                          # +100: under 120
+    blend_mod.reconcile_cash(m, a, alerts.append)
+    r = blend_mod.reconcile_cash(m, a, alerts.append)
+    assert r["drift"] == 100.0 and r["cycles"] == 0 and r["fired"] is None
+    a.cash = 1_000.0 + 700.0                                  # +700: WARN, not RED
+    blend_mod.reconcile_cash(m, a, alerts.append)
+    r = blend_mod.reconcile_cash(m, a, alerts.append)
+    assert r["fired"] == "WARN"
+    m.rebaseline_cash("test")
+    m.state.capital_contributed = None                        # seed config basis
+    a.cash = 2_000.0
+    blend_mod.reconcile_cash(m, a, alerts.append)             # baseline
+    a.cash = 2_700.0                                          # +700 of 50k = 1.4%: RED
+    blend_mod.reconcile_cash(m, a, alerts.append)
+    assert blend_mod.reconcile_cash(m, a, alerts.append)["fired"] == "RED"
+
+
+def test_gate_capital_split_uses_the_shape_inferred_target(tmp_path):
+    """B6: a sleeve-only book whose file predates sleeve_target infers 1.0
+    from its SHAPE in step(); the stage-2 split must use the same
+    inference, or the capital event records a 30/70 split the book never
+    ran."""
+    m = _capital_book(tmp_path)
+    m.state.sleeve_target, m.state.spy_qty = None, 0
+    a = _VenueCashAdapter(total=7_000.0, available=7_000.0)
+    m.request_capital_adoption(7_000, "2026-08-20")
+    r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", lambda *_: None)
+    assert r["status"] == "adopted" and r["sleeve_usd"] == 7_000.0
+    assert m.state.sleeve_target == 1.0 and m.state.core_cash == 0.0
+    assert m.state.capital_events[-1]["sleeve_target"] == 1.0

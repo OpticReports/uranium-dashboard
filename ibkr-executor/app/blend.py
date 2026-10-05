@@ -713,6 +713,13 @@ class Blend3070Manager:
         # boot save below is conditional on it.
         self._evidence_preserved = False
         self.state = self._load()
+        # Set when this boot had to INFER capital_contributed (a state file
+        # with no capital fields): service startup turns it into a Telegram
+        # page, the archived_state pattern (counter-agents A3/B3: a rollback
+        # to a pre-stage-2 build drops the capital keys, and the roll-
+        # forward would otherwise re-infer the seed in silence while the
+        # book carries an adopted deposit).
+        self.capital_inferred: float | None = None
         if self.state.initialized and self.state.capital_contributed is None:
             # A book written before the field existed: adoptions did not
             # exist either, so the seed (BLEND_BOOK_USD clamped by
@@ -721,11 +728,24 @@ class Blend3070Manager:
             # loop's first save persists it, so a later change to the env
             # var cannot rewrite history. Deliberately NOT the first
             # equity-curve point: that is a VALUE (post-commission marks),
-            # not a contribution.
-            self.state.capital_contributed = self._seed_book_usd()
-            self._event("INFO", f"capital contributed inferred from the seed "
-                                f"config: ${self.state.capital_contributed:,.2f} "
-                                f"(pre-field state file)")
+            # not a contribution. Recorded as a capital event of its own
+            # kind, so the record never claims it was a seed.
+            inferred = round(self._seed_book_usd(), 2)
+            self.state.capital_contributed = inferred
+            self.capital_inferred = inferred
+            self.state.capital_events.append({
+                "date": _utc_today(), "ts": int(time.time()),
+                "kind": "inferred", "usd": inferred,
+                "sleeve_usd": None, "core_usd": None,
+                "sleeve_target": self.state.sleeve_target})
+            del self.state.capital_events[:-CAPITAL_EVENTS_MAX]
+            self._event("WARN", f"capital contributed INFERRED from the seed "
+                                f"config: ${inferred:,.2f} (the state file "
+                                f"carried no capital fields - a pre-stage-2 "
+                                f"file, or a rollback dropped them). If a "
+                                f"deposit was adopted before, restore "
+                                f"capital_contributed by hand from the "
+                                f"ADOPTED page")
         if self.archived_state and self._evidence_preserved:
             # Z-J: the archive/drift branches set `halted` and rebuild the
             # book IN MEMORY only — a crash before the loop's first save()
@@ -2281,9 +2301,11 @@ class Blend3070Manager:
         executes it (adopt_capital) on a quiet cycle, against the venue.
         A second request replaces the first (the operator's latest number
         wins; nothing accumulates). Raises ValueError on a bad amount."""
-        v = _num_or_none(usd)
-        if v is None or not math.isfinite(v) or v <= 0:
-            raise ValueError("usd must be a positive number")
+        v = None if isinstance(usd, bool) else _num_or_none(usd)
+        if v is not None and math.isfinite(v):
+            v = round(v, 2)             # the amount that would be journaled
+        if v is None or not math.isfinite(v) or v < 0.01:
+            raise ValueError("usd must be a positive number (at least 0.01)")
         if v > CAPITAL_REQUEST_MAX_USD:
             raise ValueError(f"usd {v:,.2f} exceeds the endpoint's sanity "
                              f"bound {CAPITAL_REQUEST_MAX_USD:,.0f} - raise "
@@ -2650,16 +2672,7 @@ def _sleeve_target(mgr: "Blend3070Manager", payload: dict,
       consecutive polls agree, with a Telegram page naming the move (a
       mid-deploy blip of one poll never sells or buys the core)."""
     st = mgr.state
-    if st.sleeve_target is None and st.initialized:
-        # state file from before the field existed: infer the weight from
-        # the book's SHAPE, never from the file's age - a sleeve-only book
-        # loaded as 0.30 would rebuild its core (counter-agent 2026-10-01)
-        st.sleeve_target = (1.0 if (st.spy_qty == 0 and not any(
-            r.get("kind") == "core-buy" for r in st.pending_book_orders.values()))
-            else TARGET_SLEEVE)
-        mgr._event("INFO", f"sleeve target inferred from the book: "
-                           f"{st.sleeve_target:.0%}")
-    current = st.sleeve_target if st.sleeve_target is not None else TARGET_SLEEVE
+    current = _persisted_sleeve_target(mgr)
     reb = payload.get("rebalance") or {}
     raw = reb.get("target")
     if raw is None:
@@ -2703,6 +2716,23 @@ def _sleeve_target(mgr: "Blend3070Manager", payload: dict,
     if alerts is not None:
         alerts.append("⚠️ blend " + msg)
     return t
+
+
+def _persisted_sleeve_target(mgr: Blend3070Manager) -> float:
+    """The weight the book is RUN at. A state file from before the field
+    existed infers it from the book's SHAPE, never from the file's age - a
+    sleeve-only book loaded as 0.30 would rebuild its core (counter-agent
+    2026-10-01). One definition for the tracker-target pass and the stage-2
+    split (counter-agent B6: the split used TARGET_SLEEVE while step()
+    inferred 1.0 on the same cycle)."""
+    st = mgr.state
+    if st.sleeve_target is None and st.initialized:
+        st.sleeve_target = (1.0 if (st.spy_qty == 0 and not any(
+            r.get("kind") == "core-buy" for r in st.pending_book_orders.values()))
+            else TARGET_SLEEVE)
+        mgr._event("INFO", f"sleeve target inferred from the book: "
+                           f"{st.sleeve_target:.0%}")
+    return st.sleeve_target if st.sleeve_target is not None else TARGET_SLEEVE
 
 
 def payload_is_stale(payload: dict, today: str) -> bool:
@@ -4421,16 +4451,22 @@ def adopt_capital(mgr: Blend3070Manager, adapter, prices: dict[str, float],
     req = st.capital_request
     if req is None:
         return None
+    stage = "checking"      # for the honest log on an exception (A2)
     try:
         usd = _num_or_none(req.get("usd"))
         now = time.time()
 
         def _drop(level: str, status: str, msg: str) -> dict:
-            st.capital_request = None
+            # The page goes out BEFORE the save (A2): a failing save must
+            # not also silence the operator; the in-memory state is the
+            # truth of this process either way and the next successful
+            # save persists it.
+            if st.capital_request is req:
+                st.capital_request = None
             mgr._event(level, "capital adoption " + msg)
-            mgr.save()
             alert(("🚨🚨 " if level == "RED" else "⚠️ ")
                   + "blend capital adoption " + msg)
+            mgr.save()
             return {"status": status, "usd": usd, "reason": msg}
 
         def _defer(key: str, msg: str) -> dict:
@@ -4490,28 +4526,47 @@ def adopt_capital(mgr: Blend3070Manager, adapter, prices: dict[str, float],
                           f"account cash this cycle (no claim)")
         ledger = st.sleeve_cash + st.core_cash
         unowned = float(venue["total_cash"]) - ledger
+        # B2: the messages below carry NO figure the account's cash level
+        # could be derived from (usd is known, so a shortfall would hand it
+        # over by one subtraction) - the stage-1 rule holds on every
+        # surface: the operator reads the account's cash off TWS.
         if unowned + CAPITAL_ADOPT_TOL_USD < usd:
             return _drop("RED", "refused",
-                         f"${usd:,.2f} REFUSED: the account holds "
-                         f"${usd - unowned:,.2f} LESS cash the book does not "
-                         f"own than requested - nothing adopted. Check that "
-                         f"the deposit has landed and re-issue the amount "
+                         f"${usd:,.2f} REFUSED: the account holds LESS cash "
+                         f"the book does not own than that - nothing "
+                         f"adopted. Read the account's cash off TWS, check "
+                         f"the deposit has landed, and re-issue an amount "
                          f"the account actually holds")
         avail = _num_or_none(venue.get("available_funds"))
         if avail is not None and avail + CAPITAL_ADOPT_TOL_USD < usd:
             # the cash is THERE but not yet usable (a cash account's T+1
             # settlement, a deposit hold): adopting it now would plan a
-            # core buy the venue rejects. Wait; retried every cycle.
+            # core buy the venue rejects. Wait; retried every cycle. An
+            # absent AvailableFunds claim does NOT block (fail-open on
+            # this guard only: the worst case is a venue-rejected MKT
+            # buy that reconcile 2b clears and re-plans).
             return _defer("capital_wait_settle",
                           f"${usd:,.2f} waits: the venue's available-to-"
-                          f"trade funds fall ${usd - avail:,.2f} short of "
-                          f"it (settlement / deposit hold) - retried every "
-                          f"cycle for {CAPITAL_REQUEST_TTL_S / 86_400:.0f} "
-                          f"days from the request")
-        target = (st.sleeve_target if st.sleeve_target is not None
-                  else TARGET_SLEEVE)
+                          f"trade funds do not cover it yet (settlement / "
+                          f"deposit hold) - retried every cycle for "
+                          f"{CAPITAL_REQUEST_TTL_S / 86_400:.0f} days from "
+                          f"the request; no page while waiting, the age "
+                          f"is on /status")
+        # A1/B1 (MF2-5's rule): /kill takes no lock a cycle holds, so it can
+        # land DURING the venue round-trip above - cancelling the request
+        # and halting the book after the first check passed. Re-read
+        # immediately before the credit; the window is now a few
+        # statements, and the consequence past it is ledger-only.
+        if (st.capital_request is not req or st.halted
+                or st.flatten_request is not None):
+            return _drop("WARN", "refused",
+                         f"${usd:,.2f} REFUSED: a /kill (or a cancel) "
+                         f"landed while the venue was being read - nothing "
+                         f"adopted; re-issue after /resume if still intended")
+        target = _persisted_sleeve_target(mgr)
         sleeve_usd = round(target * usd, 2)
         core_usd = round(usd - sleeve_usd, 2)
+        stage = "mutating"
         st.sleeve_cash += sleeve_usd
         st.core_cash += core_usd
         st.capital_contributed = round((st.capital_contributed or 0.0) + usd, 2)
@@ -4527,19 +4582,32 @@ def adopt_capital(mgr: Blend3070Manager, adapter, prices: dict[str, float],
         msg = (f"ADOPTED ${usd:,.2f} of account cash into the book: sleeve "
                f"+${sleeve_usd:,.2f} / core +${core_usd:,.2f} at the book's "
                f"{target:.0%} sleeve target; contributed capital now "
-               f"${st.capital_contributed:,.2f}. This cycle plans the "
-               f"{CORE} core buy and the {CASH_VEHICLE} sweep from the idle "
-               f"cash (MKT; placed outside the session they rest for the "
-               f"open). New entries size off the larger sleeve from now on; "
-               f"open positions keep the size they were entered at")
+               f"${st.capital_contributed:,.2f}. The next planning cycle "
+               f"(this one, when a tracker payload is present) buys the "
+               f"{CORE} core and sweeps the sleeve's idle cash to "
+               f"{CASH_VEHICLE} (MKT; placed outside the session they rest "
+               f"for the open). New entries size off the larger sleeve from "
+               f"now on; open positions keep the size they were entered at")
         mgr._event("WARN", "capital adoption " + msg)
-        mgr.save()
+        stage = "mutated"
+        # page BEFORE the save (A2): the ledger is credited in this process
+        # whether or not the disk takes it; the operator must hear it
         alert("💰 blend capital adoption " + msg)
+        mgr.save()
         return {"status": "adopted", "usd": round(usd, 2),
                 "sleeve_usd": sleeve_usd, "core_usd": core_usd,
                 "contributed": st.capital_contributed}
     except Exception as exc:  # noqa: BLE001
-        logger.exception("adopt_capital failed (request kept): %s", exc)
+        if stage == "checking":
+            logger.exception("adopt_capital failed before any ledger change "
+                             "(request kept, retried next cycle): %s", exc)
+        else:
+            # the credit is in memory and the request is cleared; the next
+            # successful save persists both (nothing was placed: every
+            # placement journals with its own save first)
+            logger.exception("adopt_capital failed AFTER crediting the ledger "
+                             "in memory (stage %s): persisted by the next "
+                             "successful save: %s", stage, exc)
         return None
 
 

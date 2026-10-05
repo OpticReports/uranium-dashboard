@@ -765,6 +765,21 @@ def _build_managers():
                 # another mode (e.g. DRY placeholder prices) — starting clean.
                 logger.warning("blend: %s", BLEND.archived_state)
                 send(f"⚠️ blend: starting a FRESH book — {BLEND.archived_state}")
+        if getattr(BLEND, "capital_inferred", None) is not None:
+            # Stage 2 (counter-agents A3/B3): the state file carried no
+            # capital fields - a pre-stage-2 file (expected exactly once,
+            # at this build's first boot) or a rollback that dropped them.
+            # Said out loud, because a silent re-inference after a deposit
+            # was adopted would publish the wrong contributed capital.
+            logger.warning("blend: capital contributed inferred from the "
+                           "seed config: %.2f", BLEND.capital_inferred)
+            send(f"⚠️ blend: capital contributed INFERRED from the seed "
+                 f"config: ${BLEND.capital_inferred:,.2f} (the state file "
+                 f"carried no capital fields). Expected once, at the first "
+                 f"boot of the stage-2 build; after a ROLLBACK it means an "
+                 f"adopted deposit is no longer counted - verify "
+                 f"blend.capital.contributed on /status and restore it by "
+                 f"hand from the ADOPTED page if needed")
 
 
 def _build_adapter():
@@ -1860,6 +1875,16 @@ def blend_cash_adopt(body: dict | None = Body(default=None),
     today = datetime.now(timezone.utc).date().isoformat()
     try:
         with BLEND_LOCK:
+            # B8e: a halted book (or one with a flatten queued) would only
+            # refuse and DROP the request on its next cycle - say so now
+            # rather than answer "journaled". The loop-side check stays
+            # (a /kill can still land in between).
+            if BLEND.state.halted or BLEND.state.flatten_request is not None:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"blend book is halted ({BLEND.state.halted}) or "
+                           f"has a flatten queued: nothing journaled; "
+                           f"/resume first, then re-issue")
             req = BLEND.request_capital_adoption(usd, today)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -1868,7 +1893,26 @@ def blend_cash_adopt(body: dict | None = Body(default=None),
             "note": ("journaled; the execution loop adopts it on its next "
                      "quiet cycle once the venue confirms the cash - watch "
                      "/status blend.capital and blend.events, and the "
-                     "Telegram page")}
+                     "Telegram page. POST /blend/cash/adopt/cancel withdraws "
+                     "it while it is still pending")}
+
+
+@app.api_route("/blend/cash/adopt/cancel", methods=["POST"])
+def blend_cash_adopt_cancel(x_exec_token: str | None = Header(default=None),
+                            token: str | None = Query(default=None)):
+    """Withdraw a journaled, not-yet-executed adoption request (B5: without
+    this the only cancel lever was /kill, which sells the sleeve). Nothing
+    else is touched. Answers what was cleared (null when nothing was
+    pending)."""
+    _auth(x_exec_token, token)
+    if BLEND is None:
+        return {"ok": False, "reason": "blend disabled"}
+    with BLEND_LOCK:
+        prior = BLEND.clear_capital_request("operator")
+        return {"ok": True, "cancelled": prior,
+                "capital": BLEND.capital_summary()}
+
+
 
 
 @app.post("/resume")            # B3: POST only, same reason as /kill

@@ -943,6 +943,95 @@ name, reconstruct it from `git log origin/main -- ibkr-executor/`.
 
 ---
 
+## Round 22 — stage-2 cash adoption: resizing the live book after a deposit (2026-10-05)
+
+* **The ask.** Casey deposited ~$70k into the live account, removed every
+  non-book position and asked for the book to be resized. The book's
+  capital is its LEDGER (seeded once at `BLEND_BOOK_USD` $50,000 inside
+  `BLEND_BUDGET` $60,000); a deposit was invisible to it (stage 1 only
+  pages a RED drift) and no lever existed to grow a live book.
+* **Reviewed:** the stage-2 build (`56c99891` on the feature branch, the
+  diff as committed) — `POST /blend/cash/adopt {"usd": N}` journals a
+  request; the loop thread executes `blend.adopt_capital` before `step()`
+  (TTL, seeded, not halted, quiet cycle, `BLEND_BUDGET`, venue unowned
+  cash, `AvailableFunds`), credits the buckets by the persisted sleeve
+  target, grows `capital_contributed`, records `capital_events`, re-baselines
+  stage 1; the same cycle deploys through CORE_BUY / SWEEP. Two
+  independent counter-agents, different lenses (A: money and the venue;
+  B: control surface, state, concurrency, public safety, tests, docs), each
+  reading the real code and reproducing in a scratch copy; B ran 23
+  mutations against the new gates (22 caught; M17 the stage-1 threshold
+  basis not caught → B7).
+* **Verdict A: PASS WITH CORRECTIONS. Verdict B: PASS WITH CORRECTIONS.**
+  No BLOCKING or SERIOUS finding.
+* **Findings and status (all remediated in the commit carrying this entry
+  unless marked otherwise):**
+  * `A1`/`B1` MINOR — `/kill` (BLEND_HALT_LOCK, never waits for a cycle)
+    can land during `adapter.account_cash()` after the halted check passed;
+    the credit then proceeded against a cancelled request (reproduced by
+    both). **closed**: the halt and the request identity are re-read
+    immediately before the credit; gate
+    `test_gate_capital_adopt_rechecks_the_halt_after_the_venue_read`.
+  * `A2` MINOR — mutation before `save()`; a failing save left the credit
+    in memory with no page and a log that said "request kept". **closed**:
+    page before save in both the adopted and the dropped paths; the
+    exception log states the stage honestly; gate
+    `test_gate_capital_adopt_pages_before_it_saves`.
+  * `A3`/`B3` MINOR — a rollback to a pre-stage-2 build drops the capital
+    keys (money ledger intact, measured on `68dfd72c`); the roll-forward
+    re-inferred the seed in silence. **closed**: WARN event + an `inferred`
+    capital event + a boot Telegram page (`archived_state` pattern); README
+    deploy note gets a third hinge and the runbook a restore step.
+  * `A4` MINOR — the HWM instruction said "subtract the deposits": a
+    dollar P&L series whose % drawdown overstates after a deposit (50k →
+    52k HWM → +70k → 100k: 18.0% chain-linked vs 42.3% subtracted, a false
+    crossing of both review lines). **closed**: README kill-criteria
+    section and ledger.csv rows 1/4 now say chain-link, with the example.
+  * `A5`/`B4` NOTE/MINOR — `{"usd": true}` journaled $1.00; `0.004` passed
+    `> 0` and was journaled as 0.0 then dropped with a RED page.
+    **closed**: bools rejected, round first, minimum $0.01.
+  * `A6`/`B8a` NOTE — the ADOPTED page claimed "this cycle plans" even on a
+    payload-less cycle. **closed**: wording ("the next planning cycle —
+    this one when a tracker payload is present"), README too.
+  * `B2` MINOR — the refusal/deferral messages carried a SHORTFALL figure;
+    with `usd` known the venue level was one subtraction away, on Telegram
+    and `/status` events, while the README rule says the level is never
+    published. **closed**: no figure in either message (the operator reads
+    TWS); gates assert the shortfall digits are absent.
+  * `B5` MINOR — no withdraw path short of `/kill` (which sells the
+    sleeve). **closed**: `POST /blend/cash/adopt/cancel` (EXEC_TOKEN, POST
+    only, under BLEND_LOCK); runbook says a re-POST corrects and `/kill` is
+    not a cancel button.
+  * `B6` MINOR (not the live book) — a sleeve-only book whose file predates
+    `sleeve_target` split by `TARGET_SLEEVE` while `step()` inferred 1.0.
+    **closed**: `_persisted_sleeve_target()` is the one shape inference,
+    used by both; gate `test_gate_capital_split_uses_the_shape_inferred_target`.
+  * `B7` MINOR (tests) — the stage-1 threshold basis change had no gate.
+    **closed**: `test_gate_stage1_thresholds_scale_with_contributed_capital`.
+  * `B8b/c/d/e` NOTE — quiet rule's third reason omitted from the README;
+    the "what /kill does" paragraph silent on the request; ledger.csv
+    separator; a halted book answered 200 "journaled" then dropped the
+    request. **closed**: README wording; ledger separator; the endpoint
+    answers 409 on a halted book (loop-side check kept).
+  * `B9` NOTE — the POST waits for an in-flight cycle (BLEND_LOCK).
+    **closed**: runbook line.
+  * `B10` NOTE — a `ReferenceLine x` off the category domain renders
+    nothing, silently (recharts 2.15.4); the adoption date equals the
+    cycle-day point's date in the normal case. **accepted** (cosmetic).
+  * `B11` NOTE — absent `AvailableFunds` fails OPEN on the settlement
+    guard. **documented** (README): the worst case is a venue-rejected MKT
+    buy that reconcile 2b clears and re-plans.
+  * `A7` NOTE — the two resting MKT buys are sized with under a share of
+    slack; a gap-up can make a CASH account reject one at the open; 2b
+    re-plans the same cycle. Pre-existing seed-path shape. **documented**
+    (runbook step 5); no haircut added (keeps the diff to the ask).
+  * `A8` NOTE — deferrals never page. By design; **documented** (runbook
+    step 4: expect silence while waiting; the age is on `/status`).
+  * `A9` NOTE — a cap exactly at gross + N adopts and fires the 85% alarm.
+    **documented** (runbook step 2: never AT the cap).
+* **Re-review of the corrections:** see the line appended below this entry.
+* **Suite:** 490 before the corrections; the corrections add 5 gates.
+
 ## Standing UNKNOWNs
 
 * `mf-6`, `mf-11`, `mf-12`, `mf3-12` — referenced by id in this campaign's

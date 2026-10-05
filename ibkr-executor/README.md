@@ -525,24 +525,33 @@ unreconciled venue state. Phases IN ORDER:
    **Stage 2 = CONFIRM-ONLY cash adoption (2026-10-05, Casey: "resize the
    positions and the strategy" after a deposit).** Nothing is ever adopted
    from the drift measurement: the operator journals an AMOUNT with
-   `POST /blend/cash/adopt {"usd": N}` (EXEC_TOKEN, POST only; `/kill`
-   cancels it; a second POST replaces it; it expires unexecuted after 5
-   days) and the LOOP thread executes it on the next quiet cycle, in
-   `blend.adopt_capital`, only if ALL of: the book is seeded and not
-   halted; no journal is in flight and no fill inside 15 min (the stage-1
-   quiet rule, shared helper); `BLEND_BUDGET` can hold gross + N (else
-   REFUSED, RED page: raise the cap first, after 16:00 ET); the venue's
-   `TotalCashValue` minus the ledger's two buckets is at least N (else
-   REFUSED, RED page naming the SHORTFALL - never the account's level);
-   and the venue's `AvailableFunds` covers N (else DEFERRED once a day:
-   a cash account's T+1 settlement or a deposit hold - retried every
-   cycle). It then credits the two buckets by the book's PERSISTED sleeve
-   target, grows `capital_contributed` (seed + every adoption; inferred
-   once from the seed config on a pre-field state file), appends a
+   `POST /blend/cash/adopt {"usd": N}` (EXEC_TOKEN, POST only; 409 on a
+   halted book; `POST /blend/cash/adopt/cancel` withdraws it while
+   pending; `/kill` cancels it; a second POST replaces it; it expires
+   unexecuted after 5 days) and the LOOP thread executes it on the next
+   quiet cycle, in `blend.adopt_capital`, only if ALL of: the book is
+   seeded and not halted; no journal is in flight, no fresh unreconciled
+   record and no fill inside 15 min (the stage-1 quiet rule, shared
+   helper); `BLEND_BUDGET` can hold gross + N (else REFUSED, RED page:
+   raise the cap first, after 16:00 ET); the venue's `TotalCashValue`
+   minus the ledger's two buckets is at least N (else REFUSED, RED page -
+   it names no figure the account's level could be derived from); and
+   the venue's `AvailableFunds` covers N (else DEFERRED once a day, no
+   page: a cash account's T+1 settlement or a deposit hold - retried
+   every cycle; an ABSENT AvailableFunds claim does not block, the worst
+   case being a venue-rejected MKT buy that reconcile 2b clears and
+   re-plans). The halt is re-read after the venue round-trip (a `/kill`
+   can land during it). It then credits the two buckets by the book's
+   PERSISTED sleeve target (shape-inferred on a pre-field file, as
+   `step()` does), grows `capital_contributed` (seed + every adoption;
+   inferred once from the seed config on a pre-field state file, with a
+   WARN event, an `inferred` capital event and a boot page), appends a
    `capital_events` row, re-baselines the stage-1 clock (the ledger just
-   moved by design), pages Telegram, and the SAME cycle's `step()` buys
-   the SPY core and sweeps the sleeve's cash to BIL through the ordinary
-   path (MKT; placed outside the session they rest for the open). Per-
+   moved by design), pages Telegram BEFORE saving, and the next planning
+   cycle's `step()` - the same cycle when a tracker payload is present -
+   buys the SPY core and sweeps the sleeve's cash to BIL through the
+   ordinary path (MKT; placed outside the session they rest for the
+   open). Per-
    entry risk (1% of sleeve equity) sizes off the larger sleeve from then
    on; OPEN positions keep the size they were entered at (sized at entry
    per the pre-registered contract - there is no top-up rule). The stage-1
@@ -1210,31 +1219,53 @@ The procedure, in this order:
 2. **Raise `BLEND_BUDGET` first, after 16:00 ET** (Operating rule 1: an env
    change restarts the container and fires an IB Key push). It must hold
    the whole book after the deposit - gross deployed + the amount - with
-   headroom under the 85% utilization alarm (`0.85 x BLEND_BUDGET`). The
-   adoption REFUSES (RED page) while the cap is too small.
+   headroom under the 85% utilization alarm (`0.85 x BLEND_BUDGET`), never
+   AT the cap (a cap exactly at gross + amount adopts, lands utilization
+   at ~100%, fires the alarm and blocks entries). The adoption REFUSES
+   (RED page) while the cap is too small.
 3. **Journal the amount** (any time; it executes on the loop thread):
    `curl -X POST "$EXECUTOR/blend/cash/adopt" -H "X-Exec-Token: $EXEC_TOKEN"
    -H "content-type: application/json" -d '{"usd": 70000}'`. Use a round
    figure at or below the account's unowned cash; a few dollars left
    unowned sit still (zero drift). The response says "journaled"; nothing
-   has moved yet.
+   has moved yet. The call waits for any cycle in flight (it takes
+   `BLEND_LOCK`), so curl can sit for the length of a cycle on a slow
+   gateway - a retry merely replaces the request. A halted book answers
+   409 and journals nothing. **To correct an amount, POST again** (the
+   latest wins); **to withdraw it, `POST /blend/cash/adopt/cancel`** -
+   `/kill` is not a cancel button (it sells the sleeve; it does cancel
+   the request as a side effect).
 4. **Watch `/status`** `blend.capital.request_pending` (with its age) and
    `blend.events`: `ADOPTED ...` with the sleeve/core split, or a `waits:`
-   line naming what it is waiting for (settlement is the usual one), or a
-   `REFUSED` line (shortfall / budget / halted) - the request is dropped on
-   a refusal, re-issue after fixing the cause. The Telegram page says the
-   same. The adoption is also a step up in the Execution tab's equity
-   curve, marked with the amount; the dashed line moves to the new
-   contributed capital.
-5. **The same cycle plans the deployment**: `CORE_BUY` SPY from the idle
-   core cash and `SWEEP` BIL from the idle sleeve cash - journaled MKT
-   orders; outside the session they rest for the open and are adopted by
-   reconcile 2b next cycle. Confirm the fills on `/status` the next
-   morning (`spy_qty`, `bil_qty`, `trades`).
+   line naming what it is waiting for (settlement is the usual one - a
+   deferral is said once a day on `/status` and NEVER pages: expect
+   silence until it lands), or a `REFUSED` line (venue shortfall / budget
+   / halted) - the request is dropped on a refusal, re-issue after fixing
+   the cause. The Telegram page says the same on ADOPTED and REFUSED. The
+   adoption is also a step up in the Execution tab's equity curve,
+   marked with the amount; the dashed line moves to the new contributed
+   capital.
+5. **The next planning cycle deploys it** (the same cycle when the
+   tracker payload is present): `CORE_BUY` SPY from the idle core cash
+   and `SWEEP` BIL from the idle sleeve cash - journaled MKT orders;
+   outside the session they rest for the open and are adopted by
+   reconcile 2b next cycle. Both are sized to the bucket with under a
+   share of slack, so an open that gaps up can make the venue reject the
+   resting buy in a CASH account (insufficient funds): reconcile 2b then
+   clears the journal with a RED page and the same cycle re-plans it at
+   the smaller size - it costs a session, not money. Confirm the fills on
+   `/status` the next morning (`spy_qty`, `bil_qty`, `trades`).
 6. **What does NOT change**: open sleeve positions (sized at entry);
    `BLEND_BOOK_USD` (leave it: it only labels the feed's seed line and
    would be wrong as a resize lever); the sleeve weight (the tracker's
    `BLEND_SLEEVE_TARGET`, adopted on its own rules).
+7. **After any ROLLBACK to a pre-stage-2 build**: that build's first save
+   drops `capital_contributed` / `capital_events` (the money ledger
+   survives), and the roll-forward re-infers the SEED and pages
+   "capital contributed INFERRED". Restore `capital_contributed` by hand
+   in the state file from the ADOPTED page before trusting the feed's
+   dashed line, a flow-adjusted drawdown read, or the stage-1 thresholds
+   (see the deploy note under Rollout gates).
 
 The original staged rehearsal, kept for the record and for any FUTURE
 strategy's cutover (the per-leg discipline still applies):
@@ -1330,15 +1361,20 @@ total-return replay): stage-2 cash adoption (2026-10-05) is confirm-only,
 so they still land only when an operator adopts them by amount. **Read the
 HWM lines on the flow-adjusted series**: a deposit adopted through stage 2
 is a step UP in `equity_curve` that is not a gain and would mask a
-drawdown in progress - subtract the cumulative `capital_events` after the
-seed (feed field; `book.capital_contributed` is the running total) from
-each point, or chain-link returns across the event dates, before computing
-the HWM and the drawdown.
+drawdown in progress. CHAIN-LINK, never subtract: on each `capital_events`
+date d take the day's return as `(E_d - usd_d) / E_{d-1} - 1`, every other
+day `E_t / E_{t-1} - 1`, cumulate into an index and read the HWM and the
+drawdown off the index. Subtracting the cumulative deposits from each
+point gives a dollar P&L series whose percentage drawdown is wrong after
+a deposit (seed 50k, HWM 52k, adopt 70k, fall 122k -> 100k: chain-linked
+18.0%, subtracted 42.3% - a false crossing of both review lines).
 
 What `/kill` actually does: cancels the sleeve's stops and MKT-sells the
 sleeve positions only (SPY and BIL untouched); the proceeds sit in sleeve
 CASH, swept to BIL only after `/resume` because `step()` plans nothing while
-halted; it also halts the parked ladder. `/resume` clears every halt and
+halted; it also halts the parked ladder and cancels any pending stage-2
+cash-adoption request (a `/status` event says so; the `/kill` page does
+not). `/resume` clears every halt and
 enforces no review. There is no entries-only halt. And `/kill`'s flatten
 path has never run against a real venue (Operating rules): the first live
 `/kill` is its own test. The sleeve kill line's instrument is due by the
@@ -1365,6 +1401,17 @@ prevents this lives in the build being rolled *away* from, so it cannot help:
 the fix protects the forward direction only (a future build's book read by
 this one). Deploying this build is therefore a **one-way door for the book**,
 and that has to be known before the deploy, not after.
+
+**A third hinge (stage 2, 2026-10-05): `capital_contributed` /
+`capital_events` / `capital_request`.** A pre-stage-2 build loads the file
+un-halted with the money ledger intact (measured on `68dfd72c`), but its
+first save DROPS the three keys; rolling forward then re-infers the SEED
+(`min(BLEND_BOOK_USD, BLEND_BUDGET)`) and pages it. After an adopted
+deposit that is the wrong number for the feed's contributed-capital line,
+any flow-adjusted drawdown read and the stage-1 drift thresholds (tighter,
+the safe direction) - restore it by hand from the ADOPTED page (Operating
+rules, "Resizing the live book", step 7). A pending request is dropped
+(fail-closed; re-issue).
 
 **The same door now has a second hinge: `stand_in_rows` (MF-C).** A book this
 build wrote after a drifted load carries the STAND-IN register — the record of
