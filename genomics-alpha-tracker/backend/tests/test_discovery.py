@@ -532,11 +532,13 @@ def test_auto_promote_config_off_is_propose_only(session):
 
 def test_run_discovery_summary_shape(session, monkeypatch, passthrough_cache):
     monkeypatch.setattr(disc, "fetch_census", lambda: _census())
+    monkeypatch.setattr(disc, "fetch_census_supplement", lambda cfg: [])
     monkeypatch.setattr(disc, "_fetch_ctgov_trials", lambda cleaned: [])
     session.add(Security(symbol="MRNA", name="Moderna", active=True))
     session.commit()
     summary = disc.run_discovery(session)
     assert summary["census"] == 7
+    assert summary["census_supplement"] == 0
     assert summary["movers"] == 2                       # MRK + DOWN
     assert summary["candidates_new"] == 2
     assert summary["candidates_updated"] == 0

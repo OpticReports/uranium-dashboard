@@ -98,6 +98,20 @@ def _discovery_job():
         logger.exception("Discovery job failed: %s", exc)
 
 
+def discovery_trigger(job_cfg: dict) -> tuple[int, int] | None:
+    """`at_utc: "HH:MM"` in intervals.yaml -> (hour, minute), else None (the
+    legacy boot-relative interval). A malformed value raises at boot rather
+    than silently falling back to the drifting interval."""
+    raw = job_cfg.get("at_utc")
+    if raw in (None, ""):
+        return None
+    hh, mm = str(raw).split(":")
+    hour, minute = int(hh), int(mm)
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        raise ValueError(f"discovery at_utc out of range: {raw!r}")
+    return hour, minute
+
+
 def start_scheduler() -> BackgroundScheduler:
     global _scheduler
     if _scheduler is not None:
@@ -143,14 +157,25 @@ def start_scheduler() -> BackgroundScheduler:
 
     discovery_cfg = cfg.get("discovery", {})
     if discovery_cfg.get("enabled", True):
-        sched.add_job(_discovery_job, "interval",
-                      minutes=discovery_cfg.get("interval_minutes", 1440),
-                      id="discovery", max_instances=1, coalesce=True,
-                      # after the initial ingestion + scoring sweep, so the
-                      # census cache and universe state are warm
-                      next_run_time=now + timedelta(minutes=10))
-        logger.info("Scheduled 'discovery' every %d min (first run in 10 min)",
-                    discovery_cfg.get("interval_minutes", 1440))
+        at = discovery_trigger(discovery_cfg)
+        if at is not None:
+            # Anchored after the US close on weekdays: the movers lane reads
+            # ONE screener snapshot per run (cached 24h), so a boot-relative
+            # interval drifted with every redeploy and could snapshot an
+            # intraday move that later faded. No boot run in this mode.
+            sched.add_job(_discovery_job, "cron", hour=at[0], minute=at[1],
+                          day_of_week="mon-fri", id="discovery",
+                          max_instances=1, coalesce=True)
+            logger.info("Scheduled 'discovery' weekdays at %02d:%02d UTC (after the US close)", *at)
+        else:
+            sched.add_job(_discovery_job, "interval",
+                          minutes=discovery_cfg.get("interval_minutes", 1440),
+                          id="discovery", max_instances=1, coalesce=True,
+                          # after the initial ingestion + scoring sweep, so the
+                          # census cache and universe state are warm
+                          next_run_time=now + timedelta(minutes=10))
+            logger.info("Scheduled 'discovery' every %d min (first run in 10 min)",
+                        discovery_cfg.get("interval_minutes", 1440))
 
     sched.start()
     _scheduler = sched

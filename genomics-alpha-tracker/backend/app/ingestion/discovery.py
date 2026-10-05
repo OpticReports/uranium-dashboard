@@ -64,6 +64,21 @@ _DEFAULTS: dict[str, Any] = {
     "auto_promote_fastpath_mcap": 10e9,
     "auto_promote_fastpath_mover_pct": 10.0,
     "auto_promote_per_week": 3,
+    # Census supplement (2026-10-05): genomics tools and instrument makers are
+    # NOT in Nasdaq's health_care sector (10x, PacBio, Bruker, Agilent sit in
+    # Industrials as "Biotechnology: Laboratory Analytical Instruments"). Any
+    # non-health-care row whose industry starts with one of these prefixes, or
+    # whose name carries a genomics keyword, joins the census.
+    "census_supplement": True,
+    "census_supplement_industry_prefixes": ["Biotechnology:"],
+    # Trial-partner signal (2026-10-05): a trial whose lead sponsor or a
+    # collaborator is a GENOMICS-MODALITY universe name tags the candidate
+    # "genomics-partner" (Vertex <- CRISPR Therapeutics). Restricted to these
+    # subsector tags on purpose: counting ANY universe name pulled in BMY and
+    # INCY through their Eli Lilly collaborations (full-census simulation).
+    "partner_modalities": ["gene-editing", "mrna", "rna", "oligo", "sequencing",
+                           "proteomics", "liquid-biopsy", "synbio", "cell-therapy",
+                           "gene-therapy"],
 }
 
 # keyword (matched case-insensitively in company name + trial titles) -> theme
@@ -157,6 +172,56 @@ def genomics_tags_for(texts: list[str]) -> list[str]:
     """Deduped, sorted theme tags keyword-matched across the given texts."""
     blob = " ".join(t.lower() for t in texts if t)
     return sorted({tag for kw, tag in GENOMICS_KEYWORDS.items() if kw in blob})
+
+
+def trial_partner_names(studies: list[dict]) -> list[str]:
+    """Lead sponsor + collaborator names across raw CT.gov studies."""
+    out: list[str] = []
+    for study in studies or []:
+        sc = ((study.get("protocolSection", {}) or {})
+              .get("sponsorCollaboratorsModule", {}) or {})
+        lead = (sc.get("leadSponsor") or {}).get("name")
+        if lead:
+            out.append(str(lead))
+        out += [str(c.get("name")) for c in sc.get("collaborators", []) or [] if c.get("name")]
+    return out
+
+
+def has_genetic_intervention(studies: list[dict]) -> bool:
+    """Any trial arm with a GENETIC intervention (CT.gov's own gene-therapy /
+    gene-transfer label; Sarepta uses it, CRISPR/Intellia label BIOLOGICAL)."""
+    for study in studies or []:
+        arms = ((study.get("protocolSection", {}) or {})
+                .get("armsInterventionsModule", {}) or {})
+        for iv in arms.get("interventions", []) or []:
+            if str(iv.get("type") or "").upper() == "GENETIC":
+                return True
+    return False
+
+
+def genomics_partner_hits(partners: list[str], partner_names: set[str],
+                          own_name: str) -> list[str]:
+    """Universe genomics-modality names (lower-case) that appear in a trial's
+    sponsor/collaborator list - excluding the candidate's own name, so a
+    company is never its own partner."""
+    own = (own_name or "").lower()
+    blob = [p.lower() for p in partners if p]
+    return sorted({n for n in partner_names
+                   if n and n not in own and any(n in p for p in blob)})
+
+
+def universe_partner_names(securities, modalities: list[str] | set[str]) -> set[str]:
+    """Cleaned display names + registered CT.gov sponsor aliases of ACTIVE
+    universe names whose subsector carries a genomics modality. Names shorter
+    than 4 characters are dropped (substring noise)."""
+    mods = set(modalities or [])
+    out: set[str] = set()
+    for s in securities or []:
+        if not getattr(s, "active", True) or not (set(getattr(s, "subsector", None) or []) & mods):
+            continue
+        out.add(clean_company_name(getattr(s, "name", "") or "").lower())
+        out.update(str(n).lower() for n in (getattr(s, "ctgov_names", None) or []))
+    return {n for n in out if len(n) >= 4}
 
 
 def rotation_bucket(symbol: str, rotation_days: int) -> int:
@@ -293,11 +358,61 @@ def fetch_census() -> list[dict]:
     return out
 
 
+def fetch_census_supplement(cfg: dict) -> list[dict]:
+    """Genomics names OUTSIDE Nasdaq's health_care sector (see the
+    census_supplement defaults): one all-sector download call, cached 24h,
+    filtered to non-health-care rows whose industry starts with a configured
+    prefix or whose name carries a genomics keyword. Same row shape as
+    fetch_census(). Failure -> [] (logged), never raises."""
+    if not cfg.get("census_supplement", True):
+        return []
+    prefixes = tuple(cfg.get("census_supplement_industry_prefixes") or ())
+
+    def _producer() -> list[dict]:
+        params = {"tableonly": "true", "download": "true", "limit": "10000"}
+        resp = with_backoff(
+            lambda: httpx.get(_SCREENER_URL, params=params, headers=_HEADERS,
+                              timeout=settings.http_timeout_seconds),
+            retries=2,
+        )
+        resp.raise_for_status()
+        rows = ((resp.json() or {}).get("data") or {}).get("rows") or []
+        if not rows:
+            raise RuntimeError("all-sector screener returned 0 rows")
+        return rows
+
+    try:
+        raw = cache.cached("discovery:census_supplement", _producer, ttl=86400)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("discovery census supplement failed: %s — health-care census only this run", exc)
+        return []
+
+    out = []
+    for row in raw or []:
+        sym = str(row.get("symbol") or "").strip().upper()
+        if not sym or str(row.get("sector") or "") == "Health Care":
+            continue
+        name = str(row.get("name") or sym).strip()
+        industry = str(row.get("industry") or "")
+        if not ((prefixes and industry.startswith(prefixes)) or genomics_tags_for([name])):
+            continue
+        out.append({
+            "symbol": sym,
+            "name": name,
+            "last": parse_money(row.get("lastsale")),
+            "pct_change": parse_pct(row.get("pctchange")),
+            "market_cap": parse_money(row.get("marketCap")),
+        })
+    return out
+
+
 def _fetch_ctgov_trials(cleaned_name: str) -> list[dict]:
     """Active trials sponsored by (a fuzzy match of) the company. Cached 7
     days per name — with the 10-day rotation, each name costs ~1 CT.gov call
     per cycle. [] (a valid outcome: no trials found) is cached too."""
-    key = f"discovery:ctgov:{cleaned_name}"
+    # v2 key: the field list grew (collaborators, intervention types) -
+    # never serve a cached v1 page that lacks them.
+    key = f"discovery:ctgov2:{cleaned_name}"
 
     def _producer():
         params = {
@@ -310,7 +425,8 @@ def _fetch_ctgov_trials(cleaned_name: str) -> list[dict]:
             # PCDs are re-filtered downstream anyway.
             "filter.advanced": f"AREA[PrimaryCompletionDate]RANGE[{date.today().isoformat()},MAX]",
             "sort": "PrimaryCompletionDate:asc",
-            "fields": "NCTId|BriefTitle|Phase|PrimaryCompletionDate|OverallStatus|LeadSponsorName",
+            "fields": ("NCTId|BriefTitle|Phase|PrimaryCompletionDate|OverallStatus|"
+                       "LeadSponsorName|CollaboratorName|InterventionType"),
             "pageSize": "50",
         }
         # NO browser UA here: ClinicalTrials.gov's WAF 403s a Chrome UA sent
@@ -442,12 +558,16 @@ def movers_lane(census: list[dict], universe_symbols: set[str], cfg: dict,
 
 
 def catalyst_lane(census: list[dict], universe_symbols: set[str], cfg: dict,
-                  today: date) -> tuple[dict[str, dict], int]:
+                  today: date, partner_names: set[str] | None = None
+                  ) -> tuple[dict[str, dict], int]:
     """ROTATING CT.gov sweep over the census (today's deterministic bucket).
 
     A name is a candidate if it has a phase-3 trial completing within
     catalyst_horizon_days, OR any active PHASE2/PHASE3 trial plus a genomics
-    keyword match. Returns (candidates, names_checked)."""
+    keyword match. The genomics match runs over the company name, trial
+    titles AND trial sponsors/collaborators; a GENETIC intervention tags
+    gene-therapy; a genomics-modality universe partner (partner_names) tags
+    genomics-partner. Returns (candidates, names_checked)."""
     rotation_days = int(cfg["rotation_days"])
     bucket_today = today.toordinal() % rotation_days
     out: dict[str, dict] = {}
@@ -462,7 +582,8 @@ def catalyst_lane(census: list[dict], universe_symbols: set[str], cfg: dict,
             continue
         checked += 1
         cleaned = clean_company_name(row["name"])
-        trials = _summarize_trials(_fetch_ctgov_trials(cleaned), today)
+        studies = _fetch_ctgov_trials(cleaned)
+        trials = _summarize_trials(studies, today)
 
         p3_pcds = [t["pcd"] for t in trials
                    if "PHASE3" in t["phase"] and t["pcd"] and t["pcd"] >= today.isoformat()]
@@ -470,7 +591,13 @@ def catalyst_lane(census: list[dict], universe_symbols: set[str], cfg: dict,
         near_p3 = (nearest_pcd is not None and
                    (date.fromisoformat(nearest_pcd) - today).days <= cfg["catalyst_horizon_days"])
         active_p23 = any("PHASE3" in t["phase"] or "PHASE2" in t["phase"] for t in trials)
-        tags = set(genomics_tags_for([row["name"]] + [t["title"] for t in trials]))
+        partners = trial_partner_names(studies)
+        tags = set(genomics_tags_for([row["name"]] + [t["title"] for t in trials] + partners))
+        if has_genetic_intervention(studies):
+            tags.add("gene-therapy")
+        partner_hits = genomics_partner_hits(partners, partner_names or set(), cleaned)
+        if partner_hits:
+            tags.add("genomics-partner")
 
         if not (near_p3 or (active_p23 and tags)):
             continue
@@ -480,7 +607,8 @@ def catalyst_lane(census: list[dict], universe_symbols: set[str], cfg: dict,
             "last_price": row["last"],
             "sources": {"catalyst"},
             "genomics_tags": tags,
-            "evidence": {"trials": trials[:5], "nearest_pcd": nearest_pcd},
+            "evidence": {"trials": trials[:5], "nearest_pcd": nearest_pcd,
+                         **({"genomics_partners": partner_hits} if partner_hits else {})},
         }
     return out, checked
 
@@ -726,16 +854,22 @@ def run_discovery(session: Session) -> dict:
     cfg = get_cfg()
     today = date.today()
     census = fetch_census()
-    universe = {s.symbol for s in session.exec(select(Security)).all()}
+    supplement = fetch_census_supplement(cfg) if census else []
+    seen = {r["symbol"] for r in census}
+    census = census + [r for r in supplement if r["symbol"] not in seen]
+    securities = session.exec(select(Security)).all()
+    universe = {s.symbol for s in securities}
+    partner_names = universe_partner_names(securities, cfg.get("partner_modalities") or [])
 
     movers = movers_lane(census, universe, cfg, today)
-    cats, checked = catalyst_lane(census, universe, cfg, today)
+    cats, checked = catalyst_lane(census, universe, cfg, today, partner_names)
     merged = _merge_lanes(movers, cats)
     n_new, n_updated = upsert_candidates(session, merged, cfg, today)
     promoted = auto_promote(session, cfg, today)
 
     summary = {
         "census": len(census),
+        "census_supplement": len([r for r in supplement if r["symbol"] not in seen]),
         "movers": len(movers),
         "catalyst_checked": checked,
         "candidates_new": n_new,

@@ -65,3 +65,22 @@ discovery:
   # At most this many promotions per rolling 7 days (auto AND manual both
   # count — simplest honest reading of "the universe grows slowly").
   auto_promote_per_week: 3
+
+  # --- Recall fixes (2026-10-05, after the Vertex audit) ----------------------
+  # Census supplement: genomics tools/instrument makers are NOT in Nasdaq's
+  # health_care sector (10x, PacBio, Bruker, Agilent, Waters sit in
+  # Industrials as "Biotechnology: Laboratory Analytical Instruments"). Any
+  # non-health-care row whose industry starts with one of these prefixes, or
+  # whose NAME carries a genomics keyword, joins the census (23 names today).
+  census_supplement: true
+  census_supplement_industry_prefixes: ["Biotechnology:"]
+  # Trial-partner signal: the genomics keyword match also runs over trial
+  # sponsors/collaborators, a GENETIC intervention tags gene-therapy, and a
+  # trial partnered with a universe name carrying one of these subsector tags
+  # tags "genomics-partner". Vertex scored 60 with zero tags (its Casgevy
+  # trials are titled "CTX001") and now scores 76 via CRISPR Therapeutics.
+  # Full-census simulation 2026-10-05 (499 eligible names): Vertex is the
+  # only newly auto-promotable name; counting ANY universe name instead of
+  # these modalities also pulled in BMY and INCY through Eli Lilly.
+  partner_modalities: [gene-editing, mrna, rna, oligo, sequencing, proteomics,
+                       liquid-biopsy, synbio, cell-therapy, gene-therapy]

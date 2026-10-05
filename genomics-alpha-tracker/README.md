@@ -164,13 +164,31 @@ records a reason and suppresses re-entry for 90 days; set
 propose-only. Endpoints: `GET /discovery/candidates`, `GET /discovery/summary`,
 `POST /discovery/run`, `POST /discovery/candidates/{sym}/promote|dismiss`.
 
-**Known blind spots** (counter-agent, 2026-08-19): the Nasdaq
-`sector=health_care` census misses genomics *tools/diagnostics* classified
-elsewhere (verified absent: EXAS, TXG, PACB, TEM, TMO, DHR) — tools coverage
-still relies on watchlist curation; slow re-rates that never print a ≥10% day
-only surface via the catalyst lane; CT.gov registered-name mismatches
-under-detect catalysts (mitigated in the tracker by `ctgov_names`, not
-available for names we don't know yet).
+**Recall fixes (2026-10-05, after Vertex was found missing).** Vertex
+($128B, co-owner of Casgevy with CRISPR Therapeutics) scored 60 with zero
+genomics tags because its Casgevy trials are titled "CTX001". Now: the
+genomics keyword match also reads trial sponsors and collaborators; a CT.gov
+GENETIC intervention tags gene-therapy; a trial partnered with a universe
+name carrying a genomics modality tags `genomics-partner` (Vertex → 76). A
+full-census simulation (499 eligible names) found Vertex the only newly
+auto-promotable name and four new queue candidates; counting ANY universe
+name as a partner pulled in BMY and INCY through Eli Lilly, hence the
+modality restriction (`partner_modalities` in `config/discovery.yaml`). The
+census gains non-health-care rows filed as "Biotechnology: …" or carrying a
+genomics keyword in the name (10x, PacBio, Bruker, Agilent, Waters: 23 names).
+The sweep runs weekdays at 21:45 UTC (`at_utc` in `intervals.yaml`), after
+the US close, instead of drifting with each redeploy.
+
+**Known blind spots** (counter-agent 2026-08-19, updated 2026-10-05): the
+census is still a FUNNEL, not a watched sector: names that never trip a lane
+are discarded unseen and nothing lists the sector (the sector-tier design in
+`docs/DESIGN_SECTOR_TIER.md` addresses this). Tools names filed outside both
+health care and "Biotechnology:" (TMO, DHR in Industrial Machinery; TEM in
+Computer Software) are still absent — coverage relies on watchlist curation;
+slow re-rates that never print a ≥10% day at the close only surface via the
+catalyst lane; CT.gov registered-name mismatches under-detect catalysts
+(mitigated in the tracker by `ctgov_names`, not available for names we don't
+know yet).
 
 ---
 
