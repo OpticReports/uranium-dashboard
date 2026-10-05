@@ -309,11 +309,14 @@ and whether the market agreed._
   whether the $100k is new money, and rho(R2-A, barbell) measured on the
   Render host where bars are cached. Standing: no money moves on this
   study; it is an allocation memo, not an engine change.
-  KILL CRITERIA for the live book (2026-10-05): ibkr-executor/ledger.csv —
-  model-risk kill at a 35% book drawdown from the high-water mark, reviews
-  at 25% and at 30 months under water, a process kill on unreconciled
-  state; basis = the executor-fidelity replay (realized 27.4%, bootstrap
-  p50 25.7% / p95 39.0%).
+  KILL CRITERIA for the live book (2026-10-05, 38 days after go-live):
+  ibkr-executor/ledger.csv — book-level REVIEW lines at 25% and 35%
+  drawdown (the 35% is a SPY-regime event, P = 12.4% per decade under the
+  replay) and at 30 months under water; a SLEEVE model-risk KILL at 45%
+  transfer-adjusted sleeve drawdown, written but NOT ARMED until the
+  executor can measure it; a process kill on an unreconciled position row.
+  Basis = the committed executor-fidelity replay (book 28.3% realized,
+  p50 26.3% / p95 40.1%; sleeve 29.4%, p50 33.4% / p95 52.2%).
 
 ### H14 — The ratchet-up-only trail, not execution, is the executor-vs-paper gap
 - **Hypothesis:** the live stop rule (trail never lowered after an ATR
