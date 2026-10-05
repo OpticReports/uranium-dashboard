@@ -163,8 +163,12 @@ _INSTRUMENT_RE = re.compile(r"(?i)\b(preferred|warrants?|units?)\b")
 
 def is_instrument_row(name: str) -> bool:
     """Warrants, units, preferreds: listed instruments, not companies
-    (BTSGU 'Tangible Equity Unit' shows a $39B cap). Never census rows."""
-    return bool(_INSTRUMENT_RE.search(name or ""))
+    (BTSGU 'Tangible Equity Unit' shows a $39B cap). Never census rows.
+    'Common Units' (operating MLPs) and 'Preferred Bank' are companies."""
+    n = name or ""
+    if re.search(r"(?i)\bcommon units?\b|\bpreferred bank\b", n):
+        return False
+    return bool(_INSTRUMENT_RE.search(n))
 
 
 def parse_asof(raw: Any) -> date | None:
@@ -428,6 +432,20 @@ def fetch_census_with_asof() -> tuple[list[dict], date | None]:
     except Exception as exc:  # noqa: BLE001
         logger.warning("discovery census fetch failed: %s — movers/catalyst lanes dark this run", exc)
         return [], None
+    # A cached snapshot whose as-of was already read can hide a NEWER session
+    # (a manual run cached it before the screener rolled over; counter-agent
+    # round 3): fetch once more, keep the cache if that fails.
+    if isinstance(raw, dict):
+        cached_asof = parse_asof(raw.get("asof"))
+        last = cache.get("discovery:last_asof", ttl=10**9)
+        if cached_asof is not None and last and cached_asof.isoformat() <= last:
+            try:
+                fresh = _producer()
+                cache.set("discovery:census", fresh)
+                cache.set("discovery:census_supplement:stale", True)
+                raw = fresh
+            except Exception as exc:  # noqa: BLE001
+                logger.info("discovery census refetch failed (%s) — keeping the cached snapshot", exc)
 
     # a pre-2026-10-05 cache entry is a bare list with no as-of stamp
     asof = parse_asof(raw.get("asof")) if isinstance(raw, dict) else None
@@ -471,6 +489,12 @@ def fetch_census_supplement(cfg: dict) -> list[dict]:
             raise RuntimeError("all-sector screener returned 0 rows")
         return rows
 
+    if cache.get("discovery:census_supplement:stale", ttl=10**9):
+        try:
+            cache.set("discovery:census_supplement", _producer())
+        except Exception as exc:  # noqa: BLE001
+            logger.info("discovery supplement refetch failed (%s) — keeping the cached rows", exc)
+        cache.set("discovery:census_supplement:stale", False)
     try:
         raw = cache.cached("discovery:census_supplement", _producer, ttl=CENSUS_TTL)
     except Exception as exc:  # noqa: BLE001
@@ -976,8 +1000,8 @@ def run_discovery(session: Session) -> dict:
     # UTC on a Monday it still showed Friday's close (counter-agent round 2).
     # A snapshot already read is never re-read as a new session's moves.
     last_asof = cache.get("discovery:last_asof", ttl=10**9)
-    if asof is not None and last_asof == asof.isoformat():
-        movers, movers_note = {}, f"skipped: snapshot as of {asof} already read"
+    if asof is not None and last_asof and asof.isoformat() <= last_asof:
+        movers, movers_note = {}, f"skipped: snapshot as of {asof} already read (last read {last_asof})"
     else:
         movers = movers_lane(census, universe, cfg, today, move_date=asof)
         movers_note = None if asof else "no as-of stamp: moves dated with the run date"
@@ -1000,7 +1024,7 @@ def run_discovery(session: Session) -> dict:
     # Last-run breadcrumb for GET /discovery/summary (file cache survives the
     # process; a huge TTL read makes it effectively "most recent run").
     cache.set("discovery:last_run", {**summary, "at": datetime.utcnow().isoformat()})
-    if asof is not None and census:
+    if asof is not None and census and not (last_asof and asof.isoformat() <= last_asof):
         cache.set("discovery:last_asof", asof.isoformat())
     logger.info("discovery sweep: %s", summary)
     return summary

@@ -462,3 +462,48 @@ def test_moves_are_dated_by_the_snapshot_and_never_re_read(session, monkeypatch,
     assert s2["movers"] == 0 and "already read" in s2["movers_note"]
     s3 = _run_with(session, monkeypatch, date(2026, 10, 5), rows)   # a new session
     assert s3["movers"] == 1
+
+
+# --- counter-agent round 3 ----------------------------------------------------------------
+
+def test_title_keywords_read_every_returned_study(monkeypatch):
+    """Recall guard for the reverted restriction: Iovance's descriptive titles
+    sit on investigator-led trials of its product, not on its own trials."""
+    monkeypatch.setattr(disc, "_fetch_ctgov_trials", lambda cleaned: [
+        _study("N1", "Tumor Infiltrating Lymphocyte Cell Therapy in Melanoma", ["PHASE2"], "2028-01",
+               lead="M.D. Anderson Cancer Center")])
+    census = [{"symbol": "IOVA", "name": "Iovance Biotherapeutics Inc. Common Stock",
+               "last": 3.0, "pct_change": 0.0, "market_cap": 1.2e9}]
+    out, _ = disc.catalyst_lane(census, set(), _cfg(rotation_days=1), TODAY, set())
+    assert out["IOVA"]["genomics_tags"] == {"cell-therapy"}
+
+
+def test_mlp_common_units_and_preferred_bank_are_companies():
+    assert not disc.is_instrument_row("MPLX LP Common Units Representing Limited Partner Interests")
+    assert not disc.is_instrument_row("Preferred Bank Common Stock")
+
+
+def test_a_cached_already_read_snapshot_is_refetched_once(monkeypatch):
+    """A manual run cached Monday's snapshot; the screener has since rolled to
+    Tuesday. The evening run must refetch, not skip Tuesday as 'already read'."""
+    store = {"discovery:census": {"asof": "Last price as of Oct 5, 2026", "rows": []},
+             "discovery:last_asof": "2026-10-05"}
+    monkeypatch.setattr("app.utils.cache.get", lambda k, ttl=None: store.get(k))
+    monkeypatch.setattr("app.utils.cache.set", lambda k, v: store.__setitem__(k, v))
+    monkeypatch.setattr("app.utils.cache.cached", lambda k, producer, ttl=None: store[k])
+    page = {"data": {"totalrecords": 1, "asof": "Last price as of Oct 6, 2026", "table": {"rows": [
+        {"symbol": "MOVR", "name": "Mover Bio Inc.", "lastsale": "$1", "pctchange": "12%",
+         "marketCap": "1,000,000,000"}]}}}
+    monkeypatch.setattr(httpx, "get", lambda *a, **k: _Resp(page))
+    rows, asof = disc.fetch_census_with_asof()
+    assert asof == date(2026, 10, 6) and [r["symbol"] for r in rows] == ["MOVR"]
+    assert store["discovery:census_supplement:stale"] is True
+
+
+def test_an_older_snapshot_never_moves_last_asof_backwards(session, monkeypatch):
+    store = {"discovery:last_asof": "2026-10-05"}
+    monkeypatch.setattr("app.utils.cache.set", lambda k, v: store.__setitem__(k, v))
+    monkeypatch.setattr("app.utils.cache.get", lambda k, ttl=None: store.get(k))
+    rows = [{"symbol": "MOVR", "name": "Mover Bio", "last": 1.0, "pct_change": 14.0, "market_cap": 1e9}]
+    s = _run_with(session, monkeypatch, date(2026, 10, 2), rows)
+    assert s["movers"] == 0 and store["discovery:last_asof"] == "2026-10-05"

@@ -246,7 +246,6 @@ def test_catalyst_lane_phase2_needs_genomics_keyword(monkeypatch):
     # No near phase-3; PHASE2 only -> candidate ONLY with a genomics match.
     _mock_trials(monkeypatch, {
         "Plain Pharma": [_study("NCT2", "A statin study", ["PHASE2"], "2027-06")],
-        # the title counts only on the company's OWN trial (2026-10-05)
         "Edit Bio": [_study("NCT3", "CRISPR gene editing in TTR amyloidosis",
                             ["PHASE2"], "2027-06", lead="Edit Bio, Inc.")],
     })
