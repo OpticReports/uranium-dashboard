@@ -74,13 +74,16 @@ discovery:
   # whose NAME carries a genomics keyword, joins the census (23 names today).
   census_supplement: true
   census_supplement_industry_prefixes: ["Biotechnology:"]
-  # Trial-partner signal: the genomics keyword match also runs over trial
-  # sponsors/collaborators, a GENETIC intervention tags gene-therapy, and a
-  # trial partnered with a universe name carrying one of these subsector tags
-  # tags "genomics-partner". Vertex scored 60 with zero tags (its Casgevy
-  # trials are titled "CTX001") and now scores 76 via CRISPR Therapeutics.
-  # Full-census simulation 2026-10-05 (499 eligible names): Vertex is the
-  # only newly auto-promotable name; counting ANY universe name instead of
-  # these modalities also pulled in BMY and INCY through Eli Lilly.
-  partner_modalities: [gene-editing, mrna, rna, oligo, sequencing, proteomics,
-                       liquid-biopsy, synbio, cell-therapy, gene-therapy]
+  # Trial-partner signal. On the candidate's OWN interventional phase 2/3
+  # trials only (it is the lead sponsor or a named collaborator - CT.gov's
+  # sponsor search is fuzzy: "Merck" returns "The John Merck Fund"): the
+  # genomics keyword match also reads those trials' sponsors/collaborators,
+  # a GENETIC intervention tags gene-therapy, and a collaborator that is a
+  # universe name with one of these THERAPEUTIC modalities tags
+  # "genomics-partner" (whole-word match; "illumina" never matches
+  # "Illumination"). Discovery-promoted names never seed partners.
+  # Vertex scored 60 with zero tags (its Casgevy trials are titled "CTX001")
+  # and scores 76 via CRISPR Therapeutics. Diagnostics/tools modalities are
+  # excluded (on a trial they are test vendors: Natera tagged JAZZ); counting
+  # ANY universe name pulled in BMY and INCY through Eli Lilly.
+  partner_modalities: [gene-editing, mrna, rna, oligo, cell-therapy, gene-therapy]

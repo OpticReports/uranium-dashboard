@@ -25,6 +25,7 @@ return None for missing data ("--", "", "NA") — never a silent zero.
 from __future__ import annotations
 
 import logging
+import re
 import zlib
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -40,6 +41,10 @@ from ..utils.ratelimit import with_backoff
 logger = logging.getLogger(__name__)
 
 _SCREENER_URL = "https://api.nasdaq.com/api/screener/stocks"
+# 20h, not 24h: the cache stamps the time a fetch FINISHES, so against a
+# daily 21:45 run a 24h TTL served the previous day's snapshot every other
+# day (Tue/Thu re-read Mon/Wed moves; counter-agent 2026-10-05).
+CENSUS_TTL = 20 * 3600
 _CT_BASE = "https://clinicaltrials.gov/api/v2/studies"
 # Nasdaq's API rejects default client UAs; a browser UA + JSON accept works.
 _HEADERS = {
@@ -76,8 +81,10 @@ _DEFAULTS: dict[str, Any] = {
     # "genomics-partner" (Vertex <- CRISPR Therapeutics). Restricted to these
     # subsector tags on purpose: counting ANY universe name pulled in BMY and
     # INCY through their Eli Lilly collaborations (full-census simulation).
-    "partner_modalities": ["gene-editing", "mrna", "rna", "oligo", "sequencing",
-                           "proteomics", "liquid-biopsy", "synbio", "cell-therapy",
+    # THERAPEUTIC modalities only: a sequencing / liquid-biopsy / proteomics
+    # name on a trial is usually a test vendor (Natera on an AACR consortium
+    # trial tagged JAZZ and BeOne; counter-agent 2026-10-05).
+    "partner_modalities": ["gene-editing", "mrna", "rna", "oligo", "cell-therapy",
                            "gene-therapy"],
 }
 
@@ -174,6 +181,47 @@ def genomics_tags_for(texts: list[str]) -> list[str]:
     return sorted({tag for kw, tag in GENOMICS_KEYWORDS.items() if kw in blob})
 
 
+def _word_in(needle: str, hay: str) -> bool:
+    """Case-insensitive whole-word containment ('illumina' is NOT in
+    'Illumination Health'; 'merck' IS in 'Merck Sharp & Dohme')."""
+    return re.search(rf"(?<![a-z0-9]){re.escape(needle.lower())}(?![a-z0-9])", hay.lower()) is not None
+
+
+def is_own_study(study: dict, cleaned_name: str) -> bool:
+    """The candidate is the lead sponsor or a named collaborator, matched as a
+    whole-word PREFIX of the sponsor's cleaned name. CT.gov's sponsor search
+    is fuzzy: 'Merck' returns 'The John Merck Fund', 'NHC' a hospital
+    network - those studies must not tag the candidate."""
+    sc = ((study.get("protocolSection", {}) or {})
+          .get("sponsorCollaboratorsModule", {}) or {})
+    names = [(sc.get("leadSponsor") or {}).get("name")] + \
+            [c.get("name") for c in sc.get("collaborators", []) or []]
+    want = (cleaned_name or "").lower().strip()
+    if not want:
+        return False
+    for n in names:
+        if not n:
+            continue
+        got = clean_company_name(str(n)).lower()
+        if got == want or got.startswith(want + " "):
+            return True
+    return False
+
+
+def is_interventional_p23(study: dict) -> bool:
+    """Phase 2 or 3 (observational registries and phase-less studies carry
+    no phase and are excluded - MYGN's carrier-screening study is typed
+    GENETIC but is not a gene therapy)."""
+    phases = ((study.get("protocolSection", {}) or {}).get("designModule", {}) or {}).get("phases") or []
+    return any("PHASE2" in p or "PHASE3" in p for p in phases)
+
+
+def qualifying_studies(studies: list[dict], cleaned_name: str) -> list[dict]:
+    """The only studies whose sponsors, collaborators and intervention types
+    may tag a candidate: its OWN interventional phase 2/3 trials."""
+    return [s for s in studies or [] if is_own_study(s, cleaned_name) and is_interventional_p23(s)]
+
+
 def trial_partner_names(studies: list[dict]) -> list[str]:
     """Lead sponsor + collaborator names across raw CT.gov studies."""
     out: list[str] = []
@@ -205,18 +253,25 @@ def genomics_partner_hits(partners: list[str], partner_names: set[str],
     sponsor/collaborator list - excluding the candidate's own name, so a
     company is never its own partner."""
     own = (own_name or "").lower()
-    blob = [p.lower() for p in partners if p]
+    blob = [p for p in partners if p]
     return sorted({n for n in partner_names
-                   if n and n not in own and any(n in p for p in blob)})
+                   if n and not _word_in(n, own) and any(_word_in(n, p) for p in blob)})
 
 
-def universe_partner_names(securities, modalities: list[str] | set[str]) -> set[str]:
+def universe_partner_names(securities, modalities: list[str] | set[str],
+                           exclude_symbols: set[str] | None = None) -> set[str]:
     """Cleaned display names + registered CT.gov sponsor aliases of ACTIVE
-    universe names whose subsector carries a genomics modality. Names shorter
-    than 4 characters are dropped (substring noise)."""
+    universe names whose subsector carries a therapeutic genomics modality.
+    exclude_symbols: discovery-promoted names, whose subsector is their own
+    machine-assigned tags - letting them seed partners would grow the
+    partner set by itself (counter-agent 2026-10-05). Names shorter than 4
+    characters are dropped (match noise)."""
     mods = set(modalities or [])
+    skip = set(exclude_symbols or ())
     out: set[str] = set()
     for s in securities or []:
+        if getattr(s, "symbol", None) in skip:
+            continue
         if not getattr(s, "active", True) or not (set(getattr(s, "subsector", None) or []) & mods):
             continue
         out.add(clean_company_name(getattr(s, "name", "") or "").lower())
@@ -338,7 +393,7 @@ def fetch_census() -> list[dict]:
         return rows
 
     try:
-        raw = cache.cached("discovery:census", _producer, ttl=86400)
+        raw = cache.cached("discovery:census", _producer, ttl=CENSUS_TTL)
     except Exception as exc:  # noqa: BLE001
         logger.warning("discovery census fetch failed: %s — movers/catalyst lanes dark this run", exc)
         return []
@@ -382,7 +437,7 @@ def fetch_census_supplement(cfg: dict) -> list[dict]:
         return rows
 
     try:
-        raw = cache.cached("discovery:census_supplement", _producer, ttl=86400)
+        raw = cache.cached("discovery:census_supplement", _producer, ttl=CENSUS_TTL)
     except Exception as exc:  # noqa: BLE001
         logger.warning("discovery census supplement failed: %s — health-care census only this run", exc)
         return []
@@ -396,12 +451,15 @@ def fetch_census_supplement(cfg: dict) -> list[dict]:
         industry = str(row.get("industry") or "")
         if not ((prefixes and industry.startswith(prefixes)) or genomics_tags_for([name])):
             continue
+        if re.search(r"(?i)\b(preferred|warrants?|rights?|units?|depositary)\b", name):
+            continue                       # BRKRP-style instruments: bogus caps, not companies
         out.append({
             "symbol": sym,
             "name": name,
             "last": parse_money(row.get("lastsale")),
             "pct_change": parse_pct(row.get("pctchange")),
             "market_cap": parse_money(row.get("marketCap")),
+            "census_source": "supplement",
         })
     return out
 
@@ -552,7 +610,8 @@ def movers_lane(census: list[dict], universe_symbols: set[str], cfg: dict,
             "last_price": row["last"],
             "sources": {"mover"},
             "genomics_tags": set(genomics_tags_for([row["name"]])),
-            "evidence": {"move_pct": pct, "date": today.isoformat(), "market_cap": mcap},
+            "evidence": {"move_pct": pct, "date": today.isoformat(), "market_cap": mcap,
+                         **({"census_source": row["census_source"]} if row.get("census_source") else {})},
         }
     return out
 
@@ -591,9 +650,10 @@ def catalyst_lane(census: list[dict], universe_symbols: set[str], cfg: dict,
         near_p3 = (nearest_pcd is not None and
                    (date.fromisoformat(nearest_pcd) - today).days <= cfg["catalyst_horizon_days"])
         active_p23 = any("PHASE3" in t["phase"] or "PHASE2" in t["phase"] for t in trials)
-        partners = trial_partner_names(studies)
+        own = qualifying_studies(studies, cleaned)
+        partners = trial_partner_names(own)
         tags = set(genomics_tags_for([row["name"]] + [t["title"] for t in trials] + partners))
-        if has_genetic_intervention(studies):
+        if has_genetic_intervention(own):
             tags.add("gene-therapy")
         partner_hits = genomics_partner_hits(partners, partner_names or set(), cleaned)
         if partner_hits:
@@ -608,7 +668,8 @@ def catalyst_lane(census: list[dict], universe_symbols: set[str], cfg: dict,
             "sources": {"catalyst"},
             "genomics_tags": tags,
             "evidence": {"trials": trials[:5], "nearest_pcd": nearest_pcd,
-                         **({"genomics_partners": partner_hits} if partner_hits else {})},
+                         **({"genomics_partners": partner_hits} if partner_hits else {}),
+                         **({"census_source": row["census_source"]} if row.get("census_source") else {})},
         }
     return out, checked
 
@@ -772,6 +833,12 @@ def auto_promote(session: Session, cfg: dict | None = None,
 
     def _fast_precheck(c: UniverseCandidate) -> bool:
         pcd_days, mover_pct, mover_age = _evidence_inputs(c.evidence or {}, today)
+        # A census-SUPPLEMENT name (lab instruments etc., outside health care)
+        # never takes the fast path on a move alone: Waters ($42B) passed the
+        # drug-trial check through a CT.gov sponsor named "John Waters". It
+        # needs a genomics tag, or the standard path.
+        if (c.evidence or {}).get("census_source") == "supplement" and not (c.genomics_tags or []):
+            return False
         return (
             c.market_cap is not None
             and c.market_cap >= cfg["auto_promote_fastpath_mcap"]
@@ -859,7 +926,10 @@ def run_discovery(session: Session) -> dict:
     census = census + [r for r in supplement if r["symbol"] not in seen]
     securities = session.exec(select(Security)).all()
     universe = {s.symbol for s in securities}
-    partner_names = universe_partner_names(securities, cfg.get("partner_modalities") or [])
+    promoted_by_discovery = {c.symbol for c in session.exec(
+        select(UniverseCandidate).where(UniverseCandidate.status == "promoted")).all()}
+    partner_names = universe_partner_names(securities, cfg.get("partner_modalities") or [],
+                                           promoted_by_discovery)
 
     movers = movers_lane(census, universe, cfg, today)
     cats, checked = catalyst_lane(census, universe, cfg, today, partner_names)

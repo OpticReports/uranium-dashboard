@@ -40,7 +40,10 @@ universe:
   # therapy (with CRSP); 15 active phase-3 trials. Discovery scored it 60 and
   # never surfaced it - the miss that prompted the recall fixes in
   # discovery.yaml. A large-cap: the liquidity tier puts it in A.
-  - {symbol: VRTX, name: Vertex Pharmaceuticals,      subsector: [gene-editing, rare-disease], active: true}
+  # Subsector is genetic-medicines, NOT gene-editing, on purpose: a
+  # gene-editing tag would make every Vertex collaborator a discovery
+  # "genomics partner" (Zai Lab via povetacicept, a non-genomics drug).
+  - {symbol: VRTX, name: Vertex Pharmaceuticals,      subsector: [genetic-medicines, rare-disease], active: true}
 
   # --- Sequencing / tools / instruments ---
   - {symbol: TXG,  name: 10x Genomics,                subsector: [tools, sequencing],      active: true}

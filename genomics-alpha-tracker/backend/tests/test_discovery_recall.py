@@ -80,8 +80,35 @@ def test_genetic_intervention_detects_ctgov_gene_transfer_label():
 def test_universe_partner_names_are_modality_restricted():
     names = disc.universe_partner_names(UNIVERSE, MODS)
     assert names == {"crispr therapeutics", "moderna", "modernatx"}
+    # diagnostics/tools modalities are vendors on a trial, not partners
+    assert "sequencing" not in MODS and "liquid-biopsy" not in MODS
     # Eli Lilly (pharma), Butterfly (devices) and an INACTIVE gene-editing name never count
     assert "eli lilly" not in names and "butterfly network" not in names and "old edit co" not in names
+
+
+def test_discovery_promoted_names_never_seed_partners():
+    class _S(_Sec):
+        def __init__(self, sym, *a, **k):
+            super().__init__(*a, **k)
+            self.symbol = sym
+    secs = [_S("CRSP", "CRISPR Therapeutics", ["gene-editing"]), _S("PROM", "Promoted Bio", ["gene-editing"])]
+    assert disc.universe_partner_names(secs, MODS, {"PROM"}) == {"crispr therapeutics"}
+
+
+def test_partner_match_is_whole_word():
+    assert disc.genomics_partner_hits(["Illumination Health LLC"], {"illumina"}, "X") == []
+    assert disc.genomics_partner_hits(["Illumina, Inc."], {"illumina"}, "X") == ["illumina"]
+
+
+def test_only_the_candidates_own_phase23_studies_qualify():
+    """CT.gov's sponsor search is fuzzy: 'Merck' returns a study run by The
+    John Merck Fund with Illumina collaborating. It must not tag Merck."""
+    fund = _study("NF", "Newborn genome sequencing", ["PHASE2"], "2027", lead="The John Merck Fund",
+                  collaborators=["Illumina"])
+    own = _study("NO", "Pembrolizumab study", ["PHASE3"], "2027", lead="Merck Sharp & Dohme LLC")
+    registry = _study("NR", "Carrier screening", [], "2027", lead="Merck Sharp & Dohme LLC", interventions=["GENETIC"])
+    assert disc.qualifying_studies([fund, own, registry], "Merck") == [own]
+    assert disc.is_own_study(own, "Merck") and not disc.is_own_study(fund, "Merck")
 
 
 def test_partner_hits_exclude_the_candidate_itself():
@@ -134,6 +161,25 @@ def test_without_the_partner_signal_vertex_stays_at_60(monkeypatch, session):
     assert disc.auto_promote(session, _cfg(), TODAY) == []
 
 
+def test_tags_from_studies_the_candidate_is_not_on_are_ignored(monkeypatch):
+    """The Merck / NHC / J&J false positives: the study is returned by the
+    fuzzy sponsor search but the candidate is neither lead nor collaborator."""
+    near = (TODAY + timedelta(days=23)).isoformat()
+    monkeypatch.setattr(disc, "_fetch_ctgov_trials", lambda cleaned: [
+        _study("N1", "Pembrolizumab in NSCLC", ["PHASE3"], near, lead="Merck Sharp & Dohme LLC"),
+        _study("N2", "Newborn Genomic Sequencing", ["PHASE2"], "2027-01", lead="The John Merck Fund",
+               collaborators=["Illumina", "Moderna, Inc"], interventions=["GENETIC"]),
+    ])
+    census = [{"symbol": "MRK", "name": "Merck & Company, Inc. Common Stock",
+               "last": 100.0, "pct_change": 0.1, "market_cap": 356e9}]
+    partners = disc.universe_partner_names(UNIVERSE, MODS)
+    out, _ = disc.catalyst_lane(census, set(), _cfg(rotation_days=1), TODAY, partners)
+    # title keywords on returned studies still count (pre-existing behaviour),
+    # but nothing from the John Merck Fund study's sponsors or interventions
+    assert "genomics-partner" not in out["MRK"]["genomics_tags"]
+    assert "gene-therapy" not in out["MRK"]["genomics_tags"]
+
+
 def test_a_big_pharma_partner_is_not_a_genomics_partner(monkeypatch):
     """The simulation's false positive: BMY/INCY partner with Eli Lilly. Lilly
     is in the universe but carries no genomics modality, so no tag."""
@@ -146,7 +192,8 @@ def test_a_big_pharma_partner_is_not_a_genomics_partner(monkeypatch):
 
 def test_genetic_intervention_alone_makes_a_phase2_name_a_candidate(monkeypatch):
     monkeypatch.setattr(disc, "_fetch_ctgov_trials", lambda cleaned: [
-        _study("N9", "A Gene Transfer Study in DMD", ["PHASE2"], "2028-01", interventions=["GENETIC"])])
+        _study("N9", "A Study in DMD", ["PHASE2"], "2028-01", lead="Sarepta Therapeutics, Inc.",
+               interventions=["GENETIC"])])
     census = [{"symbol": "SRPT", "name": "Sarepta Therapeutics, Inc. Common Stock",
                "last": 20.0, "pct_change": 0.1, "market_cap": 2.1e9}]
     out, _ = disc.catalyst_lane(census, set(), _cfg(rotation_days=1), TODAY, set())
@@ -285,9 +332,71 @@ def test_scheduler_registers_a_weekday_cron_for_discovery(monkeypatch):
         monkeypatch.setattr(sch, "_scheduler", None)
 
 
-def test_vertex_is_on_the_watchlist():
+def test_vertex_is_on_the_watchlist_but_does_not_seed_partners():
     from app.config import watchlist_config
 
     syms = {e["symbol"]: e for e in watchlist_config()["universe"]}
     assert "VRTX" in syms and syms["VRTX"]["active"] is True
-    assert "gene-editing" in syms["VRTX"]["subsector"]
+    # genetic-medicines, not gene-editing: a modality tag would make every Vertex
+    # collaborator a "genomics partner" (Zai Lab via povetacicept)
+    assert not (set(syms["VRTX"]["subsector"]) & set(disc._DEFAULTS["partner_modalities"]))
+
+
+# --- the three serious findings of counter-agent round 1 -------------------------------
+
+def test_a_supplement_name_never_takes_the_fast_path_on_a_move_alone(session, monkeypatch):
+    """Waters ($42B lab instruments) passed the drug-trial check through a CT.gov
+    sponsor named 'John Waters'. A supplement name needs a genomics tag."""
+    monkeypatch.setattr(disc, "_has_drug_trial", lambda name: True)
+    ev = {"move_pct": -12.0, "date": TODAY.isoformat(), "census_source": "supplement"}
+    session.add(UniverseCandidate(symbol="WAT", name="Waters Corporation Common Stock", status="new",
+                                  score=41.0, market_cap=41.8e9, genomics_tags=[], sources=["mover"],
+                                  evidence=ev, first_seen=TODAY, last_seen=TODAY))
+    session.commit()
+    assert disc.auto_promote(session, _cfg(), TODAY) == []
+    assert session.get(Security, "WAT") is None
+
+
+def test_a_health_care_mega_cap_mover_still_takes_the_fast_path(session, monkeypatch):
+    """The MRNA fix must survive: same shape, health-care census, promoted."""
+    monkeypatch.setattr(disc, "_has_drug_trial", lambda name: True)
+    ev = {"move_pct": 11.6, "date": TODAY.isoformat()}
+    session.add(UniverseCandidate(symbol="MRNA", name="Moderna, Inc. Common Stock", status="new",
+                                  score=41.0, market_cap=23.8e9, genomics_tags=[], sources=["mover"],
+                                  evidence=ev, first_seen=TODAY, last_seen=TODAY))
+    session.commit()
+    assert disc.auto_promote(session, _cfg(), TODAY) == ["MRNA"]
+
+
+def test_census_ttl_is_shorter_than_a_day():
+    """The cache stamps when a fetch FINISHES; against a daily 21:45 run a 24h
+    TTL re-served yesterday's snapshot every other day."""
+    assert disc.CENSUS_TTL < 23 * 3600
+
+
+def test_supplement_drops_preferreds_and_other_instruments(monkeypatch, passthrough_cache):
+    rows = [_dl_row("BRKRP", "Bruker Corporation 6.375% Mandatory Convertible Preferred Stock, Series A",
+                    "Industrials", "Biotechnology: Laboratory Analytical Instruments", mcap="71,000,000,000"),
+            _dl_row("BRKR", "Bruker Corporation Common Stock", "Industrials",
+                    "Biotechnology: Laboratory Analytical Instruments")]
+    monkeypatch.setattr(httpx, "get", lambda *a, **k: _Resp({"data": {"rows": rows}}))
+    out = disc.fetch_census_supplement(_cfg())
+    assert [r["symbol"] for r in out] == ["BRKR"] and out[0]["census_source"] == "supplement"
+
+
+def test_unquoted_at_utc_is_accepted():
+    from app.scheduler import discovery_trigger
+
+    assert discovery_trigger({"at_utc": 21 * 60 + 45}) == (21, 45)   # YAML 1.1 sexagesimal
+
+
+def test_catchup_after_a_missed_anchor():
+    from datetime import datetime
+
+    from app.scheduler import discovery_catchup_due
+    mon_2200 = datetime(2026, 10, 5, 22, 0)
+    assert discovery_catchup_due(mon_2200, (21, 45), None)
+    assert discovery_catchup_due(mon_2200, (21, 45), datetime(2026, 10, 2, 21, 46))   # last ran Friday
+    assert not discovery_catchup_due(mon_2200, (21, 45), datetime(2026, 10, 5, 21, 46))
+    assert not discovery_catchup_due(datetime(2026, 10, 5, 20, 0), (21, 45), None)    # before the anchor
+    assert not discovery_catchup_due(datetime(2026, 10, 4, 22, 0), (21, 45), None)    # Sunday
