@@ -7,6 +7,44 @@ history is a complete audit trail. Newest first.
 Format per entry:
 
 ```
+## 2026-10-05 — divergence.py — distribution-aware rebuild, RATIFIED (add. 38)
+
+- Change (instrument only; no symphony mutated): `scripts/divergence.py` split
+  into I/O (`analyze`) and pure math (`analyze_series`). Live deposit-adjusted
+  curve (a price path) vs Composer backtest (total return): the distribution
+  term `w(t-1) x D/P_prev x (1+r_adj)` (Yahoo multiplicative convention,
+  weights lagged one day) is removed from the model on ex-dates the model
+  exited within 4 days (LEAKED); held-through income stays in (live is
+  re-credited inside the symphony on pay date). Corr/beta/vol-ratio on
+  live+income vs model total return. Add.-36 basis kept under
+  `*_total_return_basis`; `annualized_gap_all_exdates_stripped` shows the
+  lenient every-ex-date number and its bias. `distribution_data: INCOMPLETE`
+  on any unfetched held payer or off-calendar weight; a missing
+  `deposit_adjusted_series` is now an error (was a silent raw fall-back);
+  "credit pending" flag on rows classified inside the last 4 model days.
+  `monitor.py run_diagnostic()` returns None on INCOMPLETE; the gauge-RED
+  sweep line flags it. POLICY Op2/Op3 got a parenthetical; no threshold changed.
+- Why: add. 37 found the comparison charged every distribution as a tracking
+  gap (HARV corr 0.118 / -13.1%/yr was ZVOL's 6.2% payout on 2026-08-19).
+  Op2 (sleeve scale-up) and Op3 (KMLM earn-back) are measured by this script.
+- Before (add. 36 basis, 2026-10-05 panel): HG gap +10.37% corr 0.960;
+  KMLM -0.33% / 0.989; SLEEVE +2.05% / 0.969; HARV -2.69% / 0.118.
+- After: HG +13.09% / 0.960 (ann +9.1%/yr); KMLM +1.12% / 0.988 (+3.5%);
+  SLEEVE +2.20% / 0.969 (+7.9%); HARV +0.59% / 0.857 (+3.1%; worst day
+  -61 bps 08-19 = genuine ZVOL fill shortfall). Op2/Op3 verdicts unchanged,
+  ~18 pp/yr margin. Add.-37 owner question CLOSED: $1,970.41 = ZVOL 08-19
+  distribution credited to ACCOUNT unallocated cash 08-20, redeployed 08-25.
+- Counter-agent: four lenses (math/conventions, gate power, consumers &
+  impact, cash trail) — none refuted, none blocking. 36 gate tests with
+  broken-input counterparts (`python3 -m unittest
+  composer.scripts.tests.test_divergence`), 46/50 source mutants killed.
+  Known forward risk: fund-agnostic HELD/LEAKED rule mislabels a fast payer
+  (ZVOL ex+1) the model holds <5 days — none on this panel; condition logged.
+- Artifacts: results/divergence-2026-10-05-distaware.json,
+  results/divergence-distribution-fix-2026-10-05.html,
+  scripts/tests/test_divergence.py + fixtures/divergence-{panel,yahoo,account}-2026-10-05.json.
+  No service redeploy (scripts run locally).
+
 ## 2026-08-24 — EXECUTED: $1,965 cash deployed to underweights (owner-directed)
 
 - Owner instruction (chat): "There is about $1,900 in composer cash, can you

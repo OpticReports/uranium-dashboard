@@ -49,7 +49,17 @@ def run_diagnostic(acct, sid, name):
     try:
         import divergence
         r = divergence.analyze(acct, sid, name)
-        return None if "error" in r else r
+        if "error" in r:
+            return None
+        # add. 38 panel: a Yahoo outage for one payer leaves the primary
+        # numbers UNADJUSTED (the add.-36 false alarm) — never read a tier-1
+        # reason off an INCOMPLETE run
+        if r.get("distribution_data", "COMPLETE") != "COMPLETE":
+            print(f"  (diagnostic unavailable for {name[:30]}: distribution data "
+                  f"INCOMPLETE — {r.get('distribution_missing_tickers')}"
+                  f"{r.get('weight_dates_off_calendar') or ''})")
+            return None
+        return r
     except Exception as e:  # noqa: BLE001
         print(f"  (diagnostic unavailable for {name[:30]}: {e})")
         return None
@@ -266,8 +276,12 @@ def main():
             for s2 in meta:
                 r2 = divergence.analyze(acct, s2["id"], s2["name"])
                 if "error" not in r2:
+                    flag = ("" if r2.get("distribution_data", "COMPLETE") == "COMPLETE"
+                            else f"   !! DIST DATA INCOMPLETE {r2.get('distribution_missing_tickers')}"
+                                 f" — numbers NOT distribution-adjusted")
                     print(f"    {s2['name'][:30]:32} corr {r2['daily_return_correlation']:+.2f} "
-                          f"beta {r2['live_beta_to_model']:.2f} vol-ratio {r2['live_model_vol_ratio']:.2f}")
+                          f"beta {r2['live_beta_to_model']:.2f} vol-ratio {r2['live_model_vol_ratio']:.2f}"
+                          + flag)
         except Exception as e:  # noqa: BLE001
             print(f"  [tempo] divergence sweep unavailable: {e}")
 

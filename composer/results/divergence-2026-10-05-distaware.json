@@ -1,0 +1,815 @@
+{
+  "results": [
+    {
+      "symphony": "mbkiXcuNDjueXpiox5Av",
+      "name": "The Holy Grail w Sorts & Safe Sectors  139 | 38 | 2015 (Modified #1)",
+      "window": [
+        "2025-12-05",
+        "2026-10-02"
+      ],
+      "n_days": 206,
+      "measurement_basis": "gap: live deposit-adjusted PRICE path vs model with LEAKED distribution terms removed (w(t-1) x D/P_prev x (1+r_adj) on the ex-date; held-through rows stay in the model because their income re-enters live on pay date); corr/beta/vol: live + every term vs model total return; add. 38 (panel-revised)",
+      "live_cumulative_return": 0.8923,
+      "model_cumulative_return": 0.7614,
+      "cumulative_gap": 0.1309,
+      "mean_daily_gap_bps": 3.6,
+      "annualized_gap": 0.0906,
+      "worst_daily_gap_bps": -377.6,
+      "worst_daily_gap_date": "2026-06-30",
+      "best_daily_gap_bps": 380.3,
+      "best_daily_gap_date": "2026-04-08",
+      "daily_return_correlation": 0.96,
+      "live_beta_to_model": 0.979,
+      "live_model_vol_ratio": 1.019,
+      "live_max_drawdown": 0.2105,
+      "model_cumulative_return_all_exdates_stripped": 0.7527,
+      "annualized_gap_all_exdates_stripped": 0.0967,
+      "held_through_credit_bias_annualized": 0.0061,
+      "model_total_return_cumulative": 0.7886,
+      "cumulative_gap_total_return_basis": 0.1037,
+      "mean_daily_gap_bps_total_return_basis": 2.86,
+      "annualized_gap_total_return_basis": 0.072,
+      "daily_return_correlation_total_return_basis": 0.96,
+      "live_beta_to_model_total_return_basis": 0.98,
+      "live_model_vol_ratio_total_return_basis": 1.02,
+      "distribution_data": "COMPLETE",
+      "distribution_missing_tickers": [],
+      "weight_dates_off_calendar": [],
+      "distribution_ledger": [
+        {
+          "date": "2025-12-23",
+          "applied_on": "2025-12-23",
+          "ticker": "TNA",
+          "amount": 0.03,
+          "prev_close": 49.939999,
+          "yield": 0.000601,
+          "adj_ret": -0.018633,
+          "weight": 1.0,
+          "weight_date": "2025-12-22",
+          "term_bps": 5.895274,
+          "treatment": "LEAKED",
+          "held_days_checked": 5,
+          "subtracted_bps": 5.895274,
+          "expected_income_usd": 0.615457
+        },
+        {
+          "date": "2025-12-24",
+          "applied_on": "2025-12-24",
+          "ticker": "SSO",
+          "amount": 0.116,
+          "prev_close": 59.130001,
+          "yield": 0.001962,
+          "adj_ret": 0.00688,
+          "weight": 1.0,
+          "weight_date": "2025-12-23",
+          "term_bps": 19.752756,
+          "treatment": "LEAKED",
+          "held_days_checked": 5,
+          "subtracted_bps": 19.752756,
+          "expected_income_usd": 2.019612
+        },
+        {
+          "date": "2026-02-02",
+          "applied_on": "2026-02-02",
+          "ticker": "BIL",
+          "amount": 0.274,
+          "prev_close": 91.650002,
+          "yield": 0.00299,
+          "adj_ret": 0.000153,
+          "weight": 1.0,
+          "weight_date": "2026-01-30",
+          "term_bps": 29.900925,
+          "treatment": "LEAKED",
+          "held_days_checked": 5,
+          "subtracted_bps": 29.900925,
+          "expected_income_usd": 3.336133
+        },
+        {
+          "date": "2026-03-02",
+          "applied_on": "2026-03-02",
+          "ticker": "BIL",
+          "amount": 0.243,
+          "prev_close": 91.620003,
+          "yield": 0.002652,
+          "adj_ret": 0.000142,
+          "weight": 1.0,
+          "weight_date": "2026-02-27",
+          "term_bps": 26.526368,
+          "treatment": "LEAKED",
+          "held_days_checked": 5,
+          "subtracted_bps": 26.526368,
+          "expected_income_usd": 3.304158
+        },
+        {
+          "date": "2026-04-01",
+          "applied_on": "2026-04-01",
+          "ticker": "BIL",
+          "amount": 0.264,
+          "prev_close": 91.639999,
+          "yield": 0.002881,
+          "adj_ret": 0.000263,
+          "weight": 1.0,
+          "weight_date": "2026-03-31",
+          "term_bps": 28.815949,
+          "treatment": "LEAKED",
+          "held_days_checked": 5,
+          "subtracted_bps": 28.815949,
+          "expected_income_usd": 3.582092
+        },
+        {
+          "date": "2026-06-23",
+          "applied_on": "2026-06-23",
+          "ticker": "TNA",
+          "amount": 0.088,
+          "prev_close": 73.709999,
+          "yield": 0.001194,
+          "adj_ret": -0.02991,
+          "weight": 1.0,
+          "weight_date": "2026-06-22",
+          "term_bps": 11.581597,
+          "treatment": "LEAKED",
+          "held_days_checked": 5,
+          "subtracted_bps": 11.581597,
+          "expected_income_usd": 270.305619
+        },
+        {
+          "date": "2026-08-03",
+          "applied_on": "2026-08-03",
+          "ticker": "BIL",
+          "amount": 0.273,
+          "prev_close": 91.68,
+          "yield": 0.002978,
+          "adj_ret": 0.000142,
+          "weight": 1.0,
+          "weight_date": "2026-07-31",
+          "term_bps": 29.78172,
+          "treatment": "LEAKED",
+          "held_days_checked": 5,
+          "subtracted_bps": 29.78172,
+          "expected_income_usd": 231.210215
+        },
+        {
+          "date": "2026-09-01",
+          "applied_on": "2026-09-01",
+          "ticker": "BIL",
+          "amount": 0.28,
+          "prev_close": 91.660004,
+          "yield": 0.003055,
+          "adj_ret": 0.000109,
+          "weight": 1.0,
+          "weight_date": "2026-08-31",
+          "term_bps": 30.551013,
+          "treatment": "HELD_THROUGH",
+          "held_days_checked": 5,
+          "subtracted_bps": 0.0,
+          "expected_income_usd": 227.832899
+        },
+        {
+          "date": "2026-09-23",
+          "applied_on": "2026-09-23",
+          "ticker": "TQQQ",
+          "amount": 0.156,
+          "prev_close": 80.830002,
+          "yield": 0.00193,
+          "adj_ret": -0.024965,
+          "weight": 1.0,
+          "weight_date": "2026-09-22",
+          "term_bps": 18.817952,
+          "treatment": "HELD_THROUGH",
+          "held_days_checked": 5,
+          "subtracted_bps": 0.0,
+          "expected_income_usd": 162.788168
+        }
+      ],
+      "distribution_totals": {
+        "n_rows": 9,
+        "n_leaked": 7,
+        "n_held_through": 2,
+        "term_bps": 201.62,
+        "subtracted_bps": 152.25,
+        "held_through_bps": 49.37,
+        "expected_income_usd": 904.99,
+        "expected_income_usd_basis": "MODEL entitlement (w(t-1) x live $ x yield); live's own only where live matched the model that morning"
+      },
+      "ex_dates": [
+        [
+          "2025-12-10",
+          "TECL",
+          8.038
+        ],
+        [
+          "2025-12-18",
+          "BIL",
+          0.365
+        ],
+        [
+          "2025-12-23",
+          "TNA",
+          0.03
+        ],
+        [
+          "2025-12-24",
+          "QLD",
+          0.023
+        ],
+        [
+          "2025-12-24",
+          "SSO",
+          0.116
+        ],
+        [
+          "2025-12-24",
+          "TQQQ",
+          0.086
+        ],
+        [
+          "2025-12-24",
+          "UDOW",
+          0.195
+        ],
+        [
+          "2026-02-02",
+          "BIL",
+          0.274
+        ],
+        [
+          "2026-03-02",
+          "BIL",
+          0.243
+        ],
+        [
+          "2026-03-24",
+          "TECL",
+          0.103
+        ],
+        [
+          "2026-03-24",
+          "TNA",
+          0.02
+        ],
+        [
+          "2026-03-25",
+          "QLD",
+          0.013
+        ],
+        [
+          "2026-03-25",
+          "SSO",
+          0.114
+        ],
+        [
+          "2026-03-25",
+          "TQQQ",
+          0.072
+        ],
+        [
+          "2026-03-25",
+          "UDOW",
+          0.144
+        ],
+        [
+          "2026-04-01",
+          "BIL",
+          0.264
+        ],
+        [
+          "2026-05-01",
+          "BIL",
+          0.27
+        ],
+        [
+          "2026-06-01",
+          "BIL",
+          0.269
+        ],
+        [
+          "2026-06-23",
+          "TECL",
+          0.209
+        ],
+        [
+          "2026-06-23",
+          "TNA",
+          0.088
+        ],
+        [
+          "2026-06-24",
+          "QLD",
+          0.061
+        ],
+        [
+          "2026-06-24",
+          "SSO",
+          0.128
+        ],
+        [
+          "2026-06-24",
+          "TQQQ",
+          0.171
+        ],
+        [
+          "2026-06-24",
+          "UDOW",
+          0.209
+        ],
+        [
+          "2026-07-01",
+          "BIL",
+          0.268
+        ],
+        [
+          "2026-08-03",
+          "BIL",
+          0.273
+        ],
+        [
+          "2026-09-01",
+          "BIL",
+          0.28
+        ],
+        [
+          "2026-09-22",
+          "TECL",
+          0.209
+        ],
+        [
+          "2026-09-22",
+          "TNA",
+          0.042
+        ],
+        [
+          "2026-09-23",
+          "QLD",
+          0.027
+        ],
+        [
+          "2026-09-23",
+          "SSO",
+          0.118
+        ],
+        [
+          "2026-09-23",
+          "TQQQ",
+          0.156
+        ],
+        [
+          "2026-09-23",
+          "UDOW",
+          0.146
+        ],
+        [
+          "2026-10-01",
+          "BIL",
+          0.263
+        ]
+      ]
+    },
+    {
+      "symphony": "ORQNCfZnA18wmsMWVhf8",
+      "name": "VIX Harvester + HYG Credit Guard",
+      "window": [
+        "2026-07-22",
+        "2026-10-02"
+      ],
+      "n_days": 51,
+      "measurement_basis": "gap: live deposit-adjusted PRICE path vs model with LEAKED distribution terms removed (w(t-1) x D/P_prev x (1+r_adj) on the ex-date; held-through rows stay in the model because their income re-enters live on pay date); corr/beta/vol: live + every term vs model total return; add. 38 (panel-revised)",
+      "live_cumulative_return": -0.0152,
+      "model_cumulative_return": -0.0212,
+      "cumulative_gap": 0.0059,
+      "mean_daily_gap_bps": 1.22,
+      "annualized_gap": 0.0308,
+      "worst_daily_gap_bps": -61.2,
+      "worst_daily_gap_date": "2026-08-19",
+      "best_daily_gap_bps": 60.1,
+      "best_daily_gap_date": "2026-10-01",
+      "daily_return_correlation": 0.857,
+      "live_beta_to_model": 0.835,
+      "live_model_vol_ratio": 0.974,
+      "live_max_drawdown": 0.0403,
+      "model_cumulative_return_all_exdates_stripped": -0.0301,
+      "annualized_gap_all_exdates_stripped": 0.0763,
+      "held_through_credit_bias_annualized": 0.0455,
+      "model_total_return_cumulative": 0.0116,
+      "cumulative_gap_total_return_basis": -0.0269,
+      "mean_daily_gap_bps_total_return_basis": -5.2,
+      "annualized_gap_total_return_basis": -0.1311,
+      "daily_return_correlation_total_return_basis": 0.118,
+      "live_beta_to_model_total_return_basis": 0.181,
+      "live_model_vol_ratio_total_return_basis": 1.54,
+      "distribution_data": "COMPLETE",
+      "distribution_missing_tickers": [],
+      "weight_dates_off_calendar": [],
+      "distribution_ledger": [
+        {
+          "date": "2026-07-31",
+          "applied_on": "2026-07-31",
+          "ticker": "PULS",
+          "amount": 0.171,
+          "prev_close": 49.689999,
+          "yield": 0.003441,
+          "adj_ret": 0.000424,
+          "weight": 1.0,
+          "weight_date": "2026-07-30",
+          "term_bps": 34.427959,
+          "treatment": "HELD_THROUGH",
+          "held_days_checked": 5,
+          "subtracted_bps": 0.0,
+          "expected_income_usd": 129.617074
+        },
+        {
+          "date": "2026-08-19",
+          "applied_on": "2026-08-19",
+          "ticker": "ZVOL",
+          "amount": 0.485,
+          "prev_close": 7.87,
+          "yield": 0.061626,
+          "adj_ret": 0.022343,
+          "weight": 0.52,
+          "weight_date": "2026-08-18",
+          "term_bps": 327.617302,
+          "treatment": "LEAKED",
+          "held_days_checked": 5,
+          "subtracted_bps": 327.617302,
+          "expected_income_usd": 1194.821391
+        },
+        {
+          "date": "2026-08-31",
+          "applied_on": "2026-08-31",
+          "ticker": "PULS",
+          "amount": 0.177,
+          "prev_close": 49.709999,
+          "yield": 0.003561,
+          "adj_ret": 0.000141,
+          "weight": 1.0,
+          "weight_date": "2026-08-28",
+          "term_bps": 35.611554,
+          "treatment": "HELD_THROUGH",
+          "held_days_checked": 5,
+          "subtracted_bps": 0.0,
+          "expected_income_usd": 131.959823
+        },
+        {
+          "date": "2026-09-30",
+          "applied_on": "2026-09-30",
+          "ticker": "PULS",
+          "amount": 0.171,
+          "prev_close": 49.610001,
+          "yield": 0.003447,
+          "adj_ret": 0.000425,
+          "weight": 0.64,
+          "weight_date": "2026-09-29",
+          "term_bps": 22.069439,
+          "treatment": "HELD_THROUGH",
+          "held_days_checked": 3,
+          "subtracted_bps": 0.0,
+          "expected_income_usd": 82.544518
+        }
+      ],
+      "distribution_totals": {
+        "n_rows": 4,
+        "n_leaked": 1,
+        "n_held_through": 3,
+        "term_bps": 419.73,
+        "subtracted_bps": 327.62,
+        "held_through_bps": 92.11,
+        "expected_income_usd": 1538.94,
+        "expected_income_usd_basis": "MODEL entitlement (w(t-1) x live $ x yield); live's own only where live matched the model that morning"
+      },
+      "ex_dates": [
+        [
+          "2026-07-22",
+          "ZVOL",
+          0.485
+        ],
+        [
+          "2026-07-31",
+          "PULS",
+          0.171
+        ],
+        [
+          "2026-08-19",
+          "ZVOL",
+          0.485
+        ],
+        [
+          "2026-08-31",
+          "PULS",
+          0.177
+        ],
+        [
+          "2026-09-23",
+          "ZVOL",
+          0.485
+        ],
+        [
+          "2026-09-30",
+          "PULS",
+          0.171
+        ]
+      ]
+    },
+    {
+      "symphony": "YPTSJFJwD2ZKfAeYJUbW",
+      "name": "KMLM switcher + VIX sleeve 75/25",
+      "window": [
+        "2026-07-07",
+        "2026-10-02"
+      ],
+      "n_days": 62,
+      "measurement_basis": "gap: live deposit-adjusted PRICE path vs model with LEAKED distribution terms removed (w(t-1) x D/P_prev x (1+r_adj) on the ex-date; held-through rows stay in the model because their income re-enters live on pay date); corr/beta/vol: live + every term vs model total return; add. 38 (panel-revised)",
+      "live_cumulative_return": 0.313,
+      "model_cumulative_return": 0.3019,
+      "cumulative_gap": 0.0112,
+      "mean_daily_gap_bps": 1.41,
+      "annualized_gap": 0.0354,
+      "worst_daily_gap_bps": -182.8,
+      "worst_daily_gap_date": "2026-07-29",
+      "best_daily_gap_bps": 352.4,
+      "best_daily_gap_date": "2026-09-01",
+      "daily_return_correlation": 0.988,
+      "live_beta_to_model": 0.99,
+      "live_model_vol_ratio": 1.003,
+      "live_max_drawdown": 0.1475,
+      "model_cumulative_return_all_exdates_stripped": 0.2985,
+      "annualized_gap_all_exdates_stripped": 0.0459,
+      "held_through_credit_bias_annualized": 0.0105,
+      "model_total_return_cumulative": 0.3163,
+      "cumulative_gap_total_return_basis": -0.0033,
+      "mean_daily_gap_bps_total_return_basis": -0.37,
+      "annualized_gap_total_return_basis": -0.0094,
+      "daily_return_correlation_total_return_basis": 0.989,
+      "live_beta_to_model_total_return_basis": 0.991,
+      "live_model_vol_ratio_total_return_basis": 1.002,
+      "distribution_data": "COMPLETE",
+      "distribution_missing_tickers": [],
+      "weight_dates_off_calendar": [],
+      "distribution_ledger": [
+        {
+          "date": "2026-07-31",
+          "applied_on": "2026-07-31",
+          "ticker": "PULS",
+          "amount": 0.171,
+          "prev_close": 49.689999,
+          "yield": 0.003441,
+          "adj_ret": 0.000424,
+          "weight": 0.25,
+          "weight_date": "2026-07-30",
+          "term_bps": 8.60699,
+          "treatment": "HELD_THROUGH",
+          "held_days_checked": 5,
+          "subtracted_bps": 0.0,
+          "expected_income_usd": 81.354027
+        },
+        {
+          "date": "2026-08-19",
+          "applied_on": "2026-08-19",
+          "ticker": "ZVOL",
+          "amount": 0.485,
+          "prev_close": 7.87,
+          "yield": 0.061626,
+          "adj_ret": 0.022343,
+          "weight": 0.13,
+          "weight_date": "2026-08-18",
+          "term_bps": 81.904326,
+          "treatment": "LEAKED",
+          "held_days_checked": 5,
+          "subtracted_bps": 81.904326,
+          "expected_income_usd": 778.788724
+        },
+        {
+          "date": "2026-08-31",
+          "applied_on": "2026-08-31",
+          "ticker": "PULS",
+          "amount": 0.177,
+          "prev_close": 49.709999,
+          "yield": 0.003561,
+          "adj_ret": 0.000141,
+          "weight": 0.25,
+          "weight_date": "2026-08-28",
+          "term_bps": 8.902888,
+          "treatment": "HELD_THROUGH",
+          "held_days_checked": 5,
+          "subtracted_bps": 0.0,
+          "expected_income_usd": 82.410468
+        },
+        {
+          "date": "2026-09-01",
+          "applied_on": "2026-09-01",
+          "ticker": "TLT",
+          "amount": 0.315,
+          "prev_close": 82.519997,
+          "yield": 0.003817,
+          "adj_ret": -0.004075,
+          "weight": 0.749,
+          "weight_date": "2026-08-31",
+          "term_bps": 28.47474,
+          "treatment": "LEAKED",
+          "held_days_checked": 5,
+          "subtracted_bps": 28.47474,
+          "expected_income_usd": 263.406113
+        },
+        {
+          "date": "2026-09-22",
+          "applied_on": "2026-09-22",
+          "ticker": "SOXL",
+          "amount": 0.093,
+          "prev_close": 141.929993,
+          "yield": 0.000655,
+          "adj_ret": 0.0713,
+          "weight": 0.375,
+          "weight_date": "2026-09-21",
+          "term_bps": 2.632396,
+          "treatment": "HELD_THROUGH",
+          "held_days_checked": 5,
+          "subtracted_bps": 0.0,
+          "expected_income_usd": 22.421439
+        },
+        {
+          "date": "2026-09-30",
+          "applied_on": "2026-09-30",
+          "ticker": "PULS",
+          "amount": 0.171,
+          "prev_close": 49.610001,
+          "yield": 0.003447,
+          "adj_ret": 0.000425,
+          "weight": 0.16,
+          "weight_date": "2026-09-29",
+          "term_bps": 5.51736,
+          "treatment": "HELD_THROUGH",
+          "held_days_checked": 3,
+          "subtracted_bps": 0.0,
+          "expected_income_usd": 51.235209
+        }
+      ],
+      "distribution_totals": {
+        "n_rows": 6,
+        "n_leaked": 2,
+        "n_held_through": 4,
+        "term_bps": 136.04,
+        "subtracted_bps": 110.38,
+        "held_through_bps": 25.66,
+        "expected_income_usd": 1279.62,
+        "expected_income_usd_basis": "MODEL entitlement (w(t-1) x live $ x yield); live's own only where live matched the model that morning"
+      },
+      "ex_dates": [
+        [
+          "2026-07-22",
+          "ZVOL",
+          0.485
+        ],
+        [
+          "2026-07-31",
+          "PULS",
+          0.171
+        ],
+        [
+          "2026-08-03",
+          "TLT",
+          0.33
+        ],
+        [
+          "2026-08-19",
+          "ZVOL",
+          0.485
+        ],
+        [
+          "2026-08-31",
+          "PULS",
+          0.177
+        ],
+        [
+          "2026-09-01",
+          "TLT",
+          0.315
+        ],
+        [
+          "2026-09-22",
+          "SOXL",
+          0.093
+        ],
+        [
+          "2026-09-22",
+          "TECL",
+          0.209
+        ],
+        [
+          "2026-09-23",
+          "SQQQ",
+          0.473
+        ],
+        [
+          "2026-09-23",
+          "ZVOL",
+          0.485
+        ],
+        [
+          "2026-09-30",
+          "PULS",
+          0.171
+        ],
+        [
+          "2026-10-01",
+          "TLT",
+          0.312
+        ]
+      ]
+    },
+    {
+      "symphony": "nNdBk7hc5NiBzeRvbI5T",
+      "name": "Crash Convexity Sleeve \u2014 InverseHold + Bond Frontrunner 50/50",
+      "window": [
+        "2026-07-07",
+        "2026-10-02"
+      ],
+      "n_days": 62,
+      "measurement_basis": "gap: live deposit-adjusted PRICE path vs model with LEAKED distribution terms removed (w(t-1) x D/P_prev x (1+r_adj) on the ex-date; held-through rows stay in the model because their income re-enters live on pay date); corr/beta/vol: live + every term vs model total return; add. 38 (panel-revised)",
+      "live_cumulative_return": 0.1797,
+      "model_cumulative_return": 0.1576,
+      "cumulative_gap": 0.022,
+      "mean_daily_gap_bps": 3.15,
+      "annualized_gap": 0.0794,
+      "worst_daily_gap_bps": -136.7,
+      "worst_daily_gap_date": "2026-07-10",
+      "best_daily_gap_bps": 178.1,
+      "best_daily_gap_date": "2026-07-08",
+      "daily_return_correlation": 0.969,
+      "live_beta_to_model": 1.036,
+      "live_model_vol_ratio": 1.068,
+      "live_max_drawdown": 0.0481,
+      "model_cumulative_return_all_exdates_stripped": 0.1549,
+      "annualized_gap_all_exdates_stripped": 0.0889,
+      "held_through_credit_bias_annualized": 0.0095,
+      "model_total_return_cumulative": 0.1592,
+      "cumulative_gap_total_return_basis": 0.0205,
+      "mean_daily_gap_bps_total_return_basis": 2.94,
+      "annualized_gap_total_return_basis": 0.0741,
+      "daily_return_correlation_total_return_basis": 0.969,
+      "live_beta_to_model_total_return_basis": 1.044,
+      "live_model_vol_ratio_total_return_basis": 1.076,
+      "distribution_data": "COMPLETE",
+      "distribution_missing_tickers": [],
+      "weight_dates_off_calendar": [],
+      "distribution_ledger": [
+        {
+          "date": "2026-09-22",
+          "applied_on": "2026-09-22",
+          "ticker": "LABD",
+          "amount": 0.071,
+          "prev_close": 7.1,
+          "yield": 0.01,
+          "adj_ret": -0.066724,
+          "weight": 0.25,
+          "weight_date": "2026-09-21",
+          "term_bps": 23.331911,
+          "treatment": "HELD_THROUGH",
+          "held_days_checked": 5,
+          "subtracted_bps": 0.0,
+          "expected_income_usd": 184.977627
+        },
+        {
+          "date": "2026-09-22",
+          "applied_on": "2026-09-22",
+          "ticker": "TMV",
+          "amount": 0.227,
+          "prev_close": 43.25,
+          "yield": 0.005249,
+          "adj_ret": 0.002022,
+          "weight": 0.25,
+          "weight_date": "2026-09-21",
+          "term_bps": 13.147922,
+          "treatment": "LEAKED",
+          "held_days_checked": 5,
+          "subtracted_bps": 13.147922,
+          "expected_income_usd": 97.086522
+        }
+      ],
+      "distribution_totals": {
+        "n_rows": 2,
+        "n_leaked": 1,
+        "n_held_through": 1,
+        "term_bps": 36.48,
+        "subtracted_bps": 13.15,
+        "held_through_bps": 23.33,
+        "expected_income_usd": 282.06,
+        "expected_income_usd_basis": "MODEL entitlement (w(t-1) x live $ x yield); live's own only where live matched the model that morning"
+      },
+      "ex_dates": [
+        [
+          "2026-09-22",
+          "LABD",
+          0.071
+        ],
+        [
+          "2026-09-22",
+          "SOXL",
+          0.093
+        ],
+        [
+          "2026-09-22",
+          "TMV",
+          0.227
+        ]
+      ]
+    }
+  ]
+}

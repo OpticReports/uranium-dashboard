@@ -48,7 +48,8 @@ in `CHANGELOG.md` with deploy IDs, and pushed.
 - Review date: first daily check on or after **2027-01-06** (~2 trading
   quarters after the sleeve's first fill on 2026-07-07), and monthly
   thereafter until it passes or the owner cancels.
-- Criterion (measured by `divergence.py` on the sleeve):
+- Criterion (measured by `divergence.py` on the sleeve; distribution-aware
+  since 2026-10-05 — add. 38):
   - ≥120 trading days of live history, AND
   - live~backtest daily-return correlation ≥ **0.90**, AND
   - annualized live-vs-model gap ≥ **−10%/yr** (live may lag the model by up
@@ -69,7 +70,8 @@ target allocation is now the DEFAULT, so this operation inverts: it now
 monitors whether KMLM EARNS BACK the higher 19/39/27/15 weight.
 
 - Check date: first daily check on or after **2026-08-07**, then MONTHLY.
-- Measurement: `divergence.py YPTSJFJwD2ZKfAeYJUbW` (live vs backtest) plus
+- Measurement: `divergence.py YPTSJFJwD2ZKfAeYJUbW` (live vs backtest;
+  distribution-aware since 2026-10-05 — add. 38) plus
   the quarterly regime-bootstrap convergence read (Standing analysis cadence).
 - On PASS (ALL criteria, sustained 2 consecutive monthly checks, AND at
   least one live hostile-regime month in the record — hardened 2026-08-01,

@@ -2078,3 +2078,89 @@ in this family, the right move is to flag rather than to rebuild in a hurry.
 STANDING CORRECTION to add. 36: the HARV watch item is CLOSED as a tracking
 concern. What replaces it is the narrower question above (was the cash
 received) plus the divergence.py distribution defect.
+
+
+## Addendum 38 — divergence.py rebuilt distribution-aware; HARV false alarm
+## resolved; add.-37 owner question CLOSED; instrument RATIFIED (2026-10-05)
+
+RESULTS (frozen 2026-10-05 panel; a live CLI run reproduces it bit-for-bit):
+
+engine | gap old -> new    | corr old -> new | beta | vol  | ann gap new | $ leaked/entitled
+HG     | +10.37% -> +13.09% | 0.960 -> 0.960 | 0.98 | 1.02 | +9.1%/yr   |   514 /   905
+KMLM   |  -0.33% ->  +1.12% | 0.989 -> 0.988 | 0.99 | 1.00 | +3.5%/yr   | 1,042 / 1,280
+SLEEVE |  +2.05% ->  +2.20% | 0.969 -> 0.969 | 1.04 | 1.07 | +7.9%/yr   |    97 /   282
+HARV   |  -2.69% ->  +0.59% | 0.118 -> 0.857 | 0.83 | 0.97 | +3.1%/yr   | 1,195 / 1,539
+
+Op2 (SLEEVE) / Op3 (KMLM): no criterion flips; ~18 pp/yr margin vs the gates.
+HARV corr 0.857 (<0.90) is now the honest read: worst day -61 bps on 08-19 =
+ZVOL sold 7.4502 vs the 7.55 close — a genuine fill, not a distribution.
+Chart: results/divergence-distribution-fix-2026-10-05.html.
+
+MEASUREMENT BASIS. Live deposit-adjusted curve is a PRICE path (drops w*D/P on
+ex-date; <=0.3 bps on the clean cases). Model = Composer backtest = total return
+on Yahoo adjclose. Each ex-date term w(t-1) x D/P_prev x (1+r_adj) is classified
+from the model's own continuity: LEAKED (model exits within 4 days) is removed
+from the model; HELD_THROUGH stays (live is credited inside the symphony on pay
+date, so the mean gap is unbiased). Corr/beta/vol on live+terms vs model total
+return — stripping from the model made ZVOL 08-19 a shared manufactured outlier
+(HARV corr 0.946, beta 1.14). Add.-36 numbers kept under *_total_return_basis.
+
+CONVENTION: multiplicative (Yahoo adjclose), not additive (P+D)/P_prev. Separated
+on the one high-yield case (ZVOL y 6.16%, r_adj +2.23%): residual -0.24 bps vs
++6.91 additive against a 0.01-0.14 bps floor; low-yield cases cannot tell them
+apart (<0.5 bps) — n=1 at high yield. Weights lag one day (w(t-1) earns r(t)):
+fit SD 0.01-0.14 bps vs 34-372 bps for w(t). The backtest is NOT frictionless: it
+charges itself 10.27 bps x one-way turnover (fit SD 0.1 bps, n=157; 7-8%/yr on
+HG/KMLM/HARV), so the gap nets live fill shortfall against a modeled cost.
+
+ADD.-37 OWNER QUESTION — CLOSED. The $1,970 WAS credited: to ACCOUNT unallocated
+cash on 08-20 (ex+1), not inside HARV. Evidence: account value minus sum of
+symphony values jumped +1,969.44 on 08-20; fills 4,062.519 sh x 0.485 = 1,970.32;
+API unallocated 1,970.41 on 08-24 (CHANGELOG); redeployed 08-25 as +859/+502/+611
+"deposits" that deposit_adjusted strips. The "$710 from somewhere" was arithmetic:
+-320 bps distribution + -69 bps fill on $37.3k = -389 bps. Rule (9/9 cases): payer
+still held on pay date -> credited in-symphony (PULS ex+2, BIL ex+3, ProShares
+ex+4, Direxion ex+5); sold before -> account cash (ZVOL 08-19, BIL 08-03 $231,
+TMV 09-22 $97). Permanent live-curve leaks: HARV -3.2%, KMLM -0.8%, HG -0.3%,
+SLEEVE -0.13%. A Composer statement line would make this independent of the
+residual inference (optional; not needed for the verdict).
+
+COUNTER-AGENT PANEL (four lenses, final round) — none refuted, none blocking:
+- Math & conventions: NOT REFUTED; independent stdlib recompute reproduces every
+  consumer key on all four engines to the printed digit.
+- Gate power: NOT REFUTED; 46/50 core mutants killed (4 survivors equivalent),
+  every mandated break caught by physical gates, not pins. Gap: Yahoo wire
+  parser success path untested (5/5 parser mutants survive).
+- Consumers & impact: CONFIRMED; monitor.py behaviour unchanged except HARV
+  vol-ratio 1.54 -> 0.97; INCOMPLETE -> "diagnostic unavailable".
+- Cash trail & claims: CONFIRMED; forward defect named: classifier is
+  fund-agnostic (ex..ex+4), so a ZVOL ex-date inside a 1-2 day model hold would
+  be mislabelled LEAKED (lenient, ~3%/yr on Op3). No such case on this panel.
+Fixed after the panel: second moments off the artefact pair; HELD/LEAKED
+classifier; 36 gate tests; missing deposit_adjusted_series is now an ERROR (the
+silent raw fall-back read HARV corr 0.22 / +46%/yr as COMPLETE); "credit
+pending" flag on rows classified inside the last 4 model days; README/show()
+no longer claim every LEAKED row reached account cash (3/3 observed; the
+model-only rows — KMLM TLT 09-01, four pre-edit HG rows, 91 bps — had none).
+
+BROKEN-INPUT DEMO (suite predicates): ex-dates +1 day -> -389 bps returns; w(t)
+for w(t-1) -> -389; amounts zeroed -> clean cases -30 bps; ZVOL unfetched ->
+INCOMPLETE; raw $ as live -> 30 pins blown; model edited to hold ZVOL -> label
+flips, T1 fails; additive -> 6.8 bps on the 1.0 bps reproduction gate; no cost
+-> SD 2.6 bps; off-calendar weight -> INCOMPLETE. 13/13 broken inputs fail.
+
+NOT MODELED: pay dates (held-through +w*y recredit stays in the daily series; a
+read within 5 days of a fat ex-date is provisional — the CLI now says so); live
+per-symphony share counts (model-only rows read in live's favour); intraday
+fill timing; the 10.3 bps turnover friction; decision-divergence days (HG
+08-17/18 +254 bps, KMLM 08-31/09-01 +324 bps dominate the residual gap);
+HG/SLEEVE live edits 07-30/31 (full-window numbers mix two strategies pre-08-01).
+
+VERDICT: divergence.py RATIFIED as the Op2/Op3 and migration-gate instrument
+(fourth in a family where three failed), on three standing conditions: (1) a
+verdict with a "credit pending" row is provisional — re-read after 5 trading
+days; (2) a LEAKED row for ZVOL/PULS/BIL with model hold <5 days is checked
+against the account-cash residual before acting, until a per-fund lag table
+ships with its gate test; (3) Yahoo wire-format test + INCOMPLETE on the
+adjclose fall-back before the next Yahoo shape change. Conditions (2) and (3)
+are code work, scheduled as add. 38b. No threshold changed; owner to confirm.
