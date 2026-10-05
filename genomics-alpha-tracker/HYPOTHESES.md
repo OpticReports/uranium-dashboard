@@ -352,9 +352,14 @@ and whether the market agreed._
   ≳10% exit-divergence rate; at 100 matured pairs it is a mechanism check,
   not a test). An early read is biased AGAINST the no-ratchet rule with a
   definite sign; never read `paired_delta_r` from an immature cohort.
-- **Missing input (asked, 2026-10-04):** the live auto-call fire rate, which
-  sets the horizon to 300 matured pairs; not in the repo (host DB). No
-  horizon is published until it is answered.
+- **Fire rate (host DB, 2026-10-05):** 27 auto-calls since the book went
+  live — Jul 9, Aug 6, Sep 12 — about 9 a month. Horizon at that rate:
+  ~100 matured pairs (a mechanism check) by about Sep 2027, ~300 matured
+  pairs (the first real test, ~30 divergent) by about mid-2029. The 27
+  existing calls mature between Oct 2026 and Jan 2027 and give the first
+  look at whether live divergent pairs resemble the replay's (same-day lower
+  fill vs a later, higher exit). A faster fire rate shortens this; nothing
+  else does.
 - **Prediction:** on matured divergent pairs the no-ratchet grade shows a
   higher mean R and wins the sign count; the live paired record, not the
   replay, decides whether the rule is ever changed (a change would land in
