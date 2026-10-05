@@ -219,6 +219,70 @@ because measurement 3 needs it.
    onward. The production export (`security`, `universe_candidate`) supplies
    the core's discovery promotions and the live queue for 2026-09-08 onward,
    used to cross-check the replay for those weeks.
+7. **Implementation choices the design left open** (recorded 2026-10-05
+   while only the data was being assembled; no tier membership, label or
+   metric existed yet).
+   - *Core before the tracker existed.* The tracker was created on
+     2026-06-25. Its first committed watchlist is taken to have stood from
+     the start of the window, and later additions are dated by their commit
+     (MRNA 2026-08-19, VRTX 2026-10-05). An empty core before June would
+     count every core name's move as unseen by the baseline and inflate
+     Tier 1's recall. If the production export arrives, its
+     `security.created_at` adds UI and discovery additions.
+   - *Warm-up.* The funnel replay and the weekly Tier 1 evaluation both
+     start on 2025-08-01, two months before the window, so neither starts
+     cold. The replay's queue never expires, as shipped, and dismissals are
+     not modelled. Both choices favour the baseline.
+   - *Weekly evaluation.* Tier 1 is evaluated on Mondays with data as of
+     that day's close. The screen on day P uses the latest evaluation on or
+     before P. "Leaves after four consecutive weekly misses" means a member
+     is any name that was IN at one of the last four evaluations and is
+     still listed.
+   - *Census on a past day.* A name is in the census on day t if it has an
+     FMP bar on or before t and, if delisted, t is before its delisting
+     date. Its cap is FMP's historical cap on the latest date on or before
+     t.
+   - *Dated catalyst on the Sector screen.* The primary completion date of
+     the company's own interventional phase 2/3 trials, as CT.gov showed it
+     on the evaluation date. Only trials with the funnel's active statuses
+     count (recruiting, active-not-recruiting, enrolling-by-invitation), and
+     only dates on or after day P. Month-only dates are read as the 15th,
+     as the shipped parser does. "Within 30 days" means 0 to 30 days after
+     P.
+   - *20-day dollar volume.* The mean of FMP adjusted close times volume
+     over the 20 trading days ending on P.
+   - *Rule (c) in the primary metric.* For the primary figures, Tier 1 is
+     rules (a) and (b) only, for both membership and ranking. A move whose
+     name was in Tier 1 on P only through rule (c) is removed from the
+     denominator. The labelled upper bound adds rule (c) to membership and
+     ranking and keeps every move in the denominator. The enrichment ratio
+     is split the same way.
+   - *Enrichment ratio, by distinct names.* The numerator is the share of
+     names that were ever in Tier 1 in the window which are
+     genomics-labelled and had at least one measured move while in Tier 1.
+     The denominator is the same share for the eligible census (names with
+     a cap of $300M or more on some day of the window). Moves flagged as
+     M&A are left out of every primary figure.
+   - *Measurement 2 samples.* The precision sample is drawn from today's
+     (2026-10-05) non-core Tier 1, all rules; rule (c) has no look-ahead
+     today. The misses sample is drawn from today's census names with a cap
+     of $300M or more that are not in Tier 1; a name below the size floor
+     is not a classification miss. Both use
+     `random.Random(20261005).sample(sorted(symbols), 50)`.
+   - *Titles and descriptions.* Rule (b) reads the full brief title. The
+     funnel replay reads the first 120 characters, as shipped. Rule (c)
+     reads the full FMP description from the cached profile.
+   - *Labels.* Labellers never see Tier 1 status. They see the name, the
+     screener and FMP industries, and the FMP description, and may use what
+     they already know about the company, but no tools. A large company is
+     IN when a marketed product or a phase 3 programme in an amendment-1
+     modality is a material part of its business.
+   - *Posting lag.* CT.gov version dates are quality-control dates; public
+     posting follows. A version counts as visible from its date plus L days.
+     L is measured from the gap between each study's version-0 date and its
+     StudyFirstPostDate (95th percentile) and reported.
+   - *Day before.* P is the prior trading day in FMP's bars, and the funnel
+     replay at P includes P's own close, since the sweep runs at 21:45 UTC.
 
 ## Counter-agent verdict
 
