@@ -1231,6 +1231,46 @@ result. Same lesson as counter-review `Z-M` for probes: an unversioned gate
 is not a gate, and an unversioned verdict is not a verdict. **Write the
 next round's verdict there in the same commit as its remediation.**
 
+## Kill criteria (the book's ledger)
+
+`ibkr-executor/ledger.csv` holds the blend3070 book's tripwires, written
+2026-10-05 — 38 days AFTER go-live (2026-08-28), against the IC rule that
+tripwires precede money, and recorded as such. Each row carries its basis,
+the JSON key it was read from, what is observable and from where, and the
+action AS THE CODE IMPLEMENTS IT. Counter-agent round 1 (BLOCK) rewrote the
+first draft: the original 35% book-level "model-risk kill" could only fire on
+a ~45-50% SPY event and would have sold the sleeve into an index trough.
+
+| line | level | observable from | action |
+|---|---|---|---|
+| REVIEW | book drawdown ≥ 25% from the HWM | `/blend/feed` equity_curve, by hand (no HWM is tracked) | written review within 5 sessions; nothing on the book |
+| REGIME REVIEW | book drawdown ≥ 35% | same | review the CORE weight decision; explicitly not a sleeve flatten |
+| MODEL-RISK KILL (sleeve) | sleeve drawdown ≥ 45%, transfer-adjusted | **not observable yet** — instrument is the next build | `/kill` as coded, then a human review before `/resume` |
+| REVIEW | ≥ 30 months under water | feed curve HWM date | written review; the sleeve weight is the only lever, via a new study |
+| PROCESS KILL | a POSITION row unreconciled for 3 sessions | `/status` blend.unreconciled | `/kill`, reconcile by hand, then `/resume` |
+
+Basis (executor-fidelity replay, committed results JSON): the live 30/70
+rules realized a 28.3% max DD (SPY-led, 2020), bootstrap p50 26.3% / p95
+40.1%, P(≥35% in 10.6 y) = 12.4% (a lower bound); the sleeve alone realized
+29.4%, p50 33.4% / p95 52.2%, P(≥45%) = 13%. A halt rule was never replayed;
+on these curves the 25% line is first crossed a few weeks before the trough
+(2020-03-20 book; 2020-03-09 and 2023-02-21 sleeve). The ledger's curve
+credits no SPY dividends or BIL distributions (~2 pp/yr of drag vs the
+total-return replay) until stage-2 cash adoption exists.
+
+What `/kill` actually does: cancels the sleeve's stops and MKT-sells the
+sleeve positions only (SPY and BIL untouched); the proceeds sit in sleeve
+CASH, swept to BIL only after `/resume` because `step()` plans nothing while
+halted; it also halts the parked ladder. `/resume` clears every halt and
+enforces no review. There is no entries-only halt. And `/kill`'s flatten
+path has never run against a real venue (Operating rules): the first live
+`/kill` is its own test. The sleeve kill line's instrument is due by the
+first R1 review (2026-11-05); its level is set then from the live
+transfer-adjusted series, not from the $100k replay. Until the executor alerts
+on these lines itself (next build, alert-only), they are read by hand at
+every R1 monthly review and the venue-vs-book position check is a named
+manual TWS step.
+
 ## Rollout gates
 
 1. IB adapter vs IBKR PAPER account (free simulated twin, real market data)
