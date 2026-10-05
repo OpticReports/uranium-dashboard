@@ -1231,6 +1231,28 @@ result. Same lesson as counter-review `Z-M` for probes: an unversioned gate
 is not a gate, and an unversioned verdict is not a verdict. **Write the
 next round's verdict there in the same commit as its remediation.**
 
+## Kill criteria (the book's ledger)
+
+`ibkr-executor/ledger.csv` holds the blend3070 book's tripwires, written
+2026-10-05 with the executor-fidelity replay in hand (the IC-process rule:
+kill criteria are written BEFORE they are needed, never invented after).
+One line each; the ledger carries the basis and the numbers.
+
+| line | level | action |
+|---|---|---|
+| model-risk KILL | book drawdown ≥ 35% from the high-water mark (daily MTM, since the 2026-09-04 seed) | flatten the sleeve to BIL, `/kill`; no resume without a written review of what differed from the replay |
+| REVIEW | book drawdown ≥ 25% | written review within 5 sessions; no action on the book |
+| REVIEW | ≥ 30 months under water | written review; the sleeve weight is the only lever, and only via a new pre-registered study |
+| process KILL | unreconciled > 0 for 3 sessions, or a venue position the book does not know | `/kill` until reconciled by hand |
+
+Why 35% and not 25%: the replay of the live rules realized 27.4% max DD with
+a bootstrap median of 25.7% and p95 of 39.0%; 25% is the normal range of
+this engine, and a 25% halt replayed on R2-A fired AT the trough twice
+(2020-03, 2023-01). The kill line is a model-risk test ("this is not the
+engine that was replayed"), not a return rule. Until the executor alerts on
+these lines itself, they are checked by hand from `/status` at every R1
+monthly review; an alert-only tripwire in the executor is the next build.
+
 ## Rollout gates
 
 1. IB adapter vs IBKR PAPER account (free simulated twin, real market data)
