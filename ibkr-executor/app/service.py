@@ -19,7 +19,7 @@ import time
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
-from fastapi import FastAPI, Header, HTTPException, Query
+from fastapi import Body, FastAPI, Header, HTTPException, Query
 
 from .alerts import send
 from .outages import OutageLog
@@ -1838,6 +1838,37 @@ def blend_cash_rebaseline(x_exec_token: str | None = Header(default=None),
     with BLEND_LOCK:
         BLEND.rebaseline_cash("operator")
         return {"ok": True, "cash": BLEND.cash_summary()}
+
+
+@app.api_route("/blend/cash/adopt", methods=["POST"])
+def blend_cash_adopt(body: dict | None = Body(default=None),
+                     x_exec_token: str | None = Header(default=None),
+                     token: str | None = Query(default=None)):
+    """Stage-2 cash adoption (2026-10-05): journal a request to adopt
+    `{"usd": <amount>}` of the ACCOUNT's cash into the book's ledger. This
+    thread only validates and journals (under BLEND_LOCK, so it never
+    interleaves with a cycle); the LOOP thread executes it on a quiet
+    cycle after the venue confirms that much unowned, available cash and
+    BLEND_BUDGET can hold the larger book - `blend.adopt_capital` names
+    every reason it would defer or refuse. The request expires unexecuted
+    after CAPITAL_REQUEST_TTL_S; `/kill` cancels it. A second POST replaces
+    the first. POST only, like every mutation (B3)."""
+    _auth(x_exec_token, token)
+    if BLEND is None:
+        return {"ok": False, "reason": "blend disabled"}
+    usd = body.get("usd") if isinstance(body, dict) else None
+    today = datetime.now(timezone.utc).date().isoformat()
+    try:
+        with BLEND_LOCK:
+            req = BLEND.request_capital_adoption(usd, today)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    LOOP_WAKE.set()      # run the cycle now rather than at the next poll
+    return {"ok": True, "capital_request": req,
+            "note": ("journaled; the execution loop adopts it on its next "
+                     "quiet cycle once the venue confirms the cash - watch "
+                     "/status blend.capital and blend.events, and the "
+                     "Telegram page")}
 
 
 @app.post("/resume")            # B3: POST only, same reason as /kill

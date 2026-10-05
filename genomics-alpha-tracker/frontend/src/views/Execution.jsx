@@ -62,6 +62,13 @@ export default function Execution() {
   const positions = feed.positions || [];
   const util = book.budget_utilization; // fraction of BLEND_BUDGET or null
   const lastCycle = feed.last_cycle || {};
+  // Contributed capital (seed + adopted deposits, executor stage-2 cash
+  // adoption 2026-10-05) is the flow-adjusted basis: a deposit is a STEP in
+  // the curve, not a gain, so the dashed line sits at what was put in and
+  // each adoption is marked where it landed. Older executors publish only
+  // initial_book_usd; fall back to it.
+  const contributed = book.capital_contributed ?? book.initial_book_usd ?? null;
+  const deposits = (feed.capital_events || []).filter((e) => e.kind === "deposit_adopted");
 
   return (
     <div className="space-y-4">
@@ -112,7 +119,9 @@ export default function Execution() {
       {/* equity curve */}
       <div className="bg-panel border border-edge rounded-xl p-4">
         <div className="text-xs text-gray-400 mb-1">
-          Book equity (daily cycle snapshots; dashed line = initial BLEND_BOOK_USD)
+          Book equity (daily cycle snapshots; dashed line = contributed capital
+          {contributed != null ? ` ${fmtMoney(contributed)}` : ""}: seed + adopted deposits
+          {deposits.length > 0 ? `; ${deposits.length} deposit${deposits.length > 1 ? "s" : ""} marked` : ""})
         </div>
         {curve.length > 1 ? (
           <ResponsiveContainer width="100%" height={180}>
@@ -123,9 +132,13 @@ export default function Execution() {
                 tickFormatter={(v) => `$${(v / 1000).toFixed(1)}k`} width={46} />
               <Tooltip contentStyle={{ background: "#121826", border: "1px solid #1f2937", fontSize: 12 }}
                 formatter={(v) => fmtMoney(v)} />
-              {book.initial_book_usd != null && (
-                <ReferenceLine y={book.initial_book_usd} stroke="#4b5563" strokeDasharray="3 3" />
+              {contributed != null && (
+                <ReferenceLine y={contributed} stroke="#4b5563" strokeDasharray="3 3" />
               )}
+              {deposits.map((e, i) => (
+                <ReferenceLine key={`dep-${i}`} x={e.date} stroke="#a78bfa" strokeDasharray="2 2"
+                  label={{ value: `+${fmtMoney(e.usd)}`, fontSize: 9, fill: "#a78bfa", position: "insideTopRight" }} />
+              ))}
               <Line type="stepAfter" dataKey="value" stroke="#38bdf8" dot={false} strokeWidth={2} />
             </LineChart>
           </ResponsiveContainer>

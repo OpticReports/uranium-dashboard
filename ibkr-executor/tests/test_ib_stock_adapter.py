@@ -1821,6 +1821,15 @@ def test_account_cash_reads_total_cash_value(ib_adapter):
                          _acct("TotalCashValue", 12.5, currency="EUR")]
     out = ib_adapter.account_cash()
     assert out["total_cash"] == 49680.58 and out["net_liq"] == 99680.58
+    # stage 2 (2026-10-05): AvailableFunds rides ALONGSIDE, never instead -
+    # the capital adoption waits on it for settlement
+    assert out["available_funds"] == 51000.0
+    fake.account_rows = [_acct("TotalCashValue", 49680.58)]
+    out = ib_adapter.account_cash()
+    assert out["total_cash"] == 49680.58 and out["available_funds"] is None
+    fake.account_rows = [_acct("TotalCashValue", 49680.58),
+                         _acct("AvailableFunds", "nan")]
+    assert ib_adapter.account_cash()["available_funds"] is None
     fake.account_rows = [_acct("AvailableFunds", 51000.0)]
     assert ib_adapter.account_cash() is None          # no claim, no raise
     fake.account_rows = None                           # venue returns junk

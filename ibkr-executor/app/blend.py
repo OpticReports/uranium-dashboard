@@ -143,6 +143,28 @@ CASH_SKIP_WARN_S = 6 * 3600.0   # the cash reconcile skipped this long for
                                 # one reason -> say so once a day (round 3:
                                 # a parked unreconciled exit had suspended it
                                 # forever, silently)
+# CASH ADOPTION, stage 2 (2026-10-05, Casey: "resize the positions and the
+# strategy" after a deposit). The book's capital is its LEDGER, seeded once
+# from BLEND_BOOK_USD; cash that lands in the account later is invisible to
+# it (stage 1 only alerts) and BLEND_BOOK_USD is read only at the seed, so
+# a live book had no way to grow. Adoption is CONFIRM-ONLY: the operator
+# journals an AMOUNT (POST /blend/cash/adopt, EXEC_TOKEN); the LOOP thread
+# executes it on a quiet cycle, only after the venue confirms the account
+# holds at least that much cash the book does not own, only when
+# BLEND_BUDGET can hold the larger book, and only once the venue says that
+# much is available to trade (a cash account's T+1 settlement, a deposit
+# hold). A drift measurement alone never moves the ledger: a number the
+# operator never typed is never adopted. The adopted cash is split by the
+# book's PERSISTED sleeve target and the same cycle's step() deploys it
+# through the existing core-buy / BIL-sweep path - no new order kinds.
+CAPITAL_ADOPT_TOL_USD = 1.0        # venue-vs-request tolerance (rounding)
+CAPITAL_REQUEST_TTL_S = 5 * 86_400.0   # a request older than this expires
+                                       # unexecuted (covers a T+1 settlement
+                                       # across a long weekend): re-issue it
+CAPITAL_REQUEST_MAX_USD = 5_000_000.0  # endpoint sanity bound - a typo
+                                       # guard, not a limit (raise it
+                                       # deliberately, with a review)
+CAPITAL_EVENTS_MAX = 100               # persisted capital events kept
 
 
 def _num_or_none(v):
@@ -158,6 +180,18 @@ def _valid_baseline(b):
             and _num_or_none(b.get("ledger")) is not None):
         return b
     return None
+
+
+def _valid_capital_request(r):
+    """A journaled adoption request must carry a positive, finite amount and
+    a numeric timestamp; anything else is dropped at load (a malformed
+    request must never be executed, and never 500 the feed)."""
+    if not isinstance(r, dict):
+        return None
+    usd, ts = _num_or_none(r.get("usd")), _num_or_none(r.get("ts"))
+    if usd is None or ts is None or usd <= 0 or not math.isfinite(usd):
+        return None
+    return r
 
 # ENTRY SESSION WINDOW (2026-09-03). Entries are MOO orders with TIF=OPG:
 # the venue accepts them only for the NEXT opening auction and REJECTS them
@@ -640,6 +674,21 @@ class BlendState:
     last_reconcile_ts: float = 0.0   # wall clock of the last SUCCESSFUL
                                      # reconcile pass (venue-history horizon
                                      # guard, adapter review m2)
+    # Capital (stage-2 cash adoption, 2026-10-05): what the operator has put
+    # INTO the book - the seed plus every adopted deposit. The flow-adjusted
+    # basis the kill ledger's HWM lines need (a deposit is not a gain). None
+    # on a file from before the field: inferred ONCE at load from the seed
+    # config (the only capital a pre-field book can have been given).
+    capital_contributed: float | None = None
+    capital_events: list = field(default_factory=list)   # [{date, ts, kind,
+                                                         #   usd, sleeve_usd,
+                                                         #   core_usd,
+                                                         #   sleeve_target}]
+    capital_request: dict | None = None   # journaled adoption request
+                                          # {usd, ts, date}: written by the
+                                          # API thread, EXECUTED by the loop
+                                          # thread (adopt_capital), cleared
+                                          # by /kill
     mode: str = ""      # "dry:paper" | "real:paper" | "real:live" — the mode
                         # this book's fills belong to. A book built in one
                         # mode is FICTION in another (DryAdapter fills at
@@ -664,6 +713,19 @@ class Blend3070Manager:
         # boot save below is conditional on it.
         self._evidence_preserved = False
         self.state = self._load()
+        if self.state.initialized and self.state.capital_contributed is None:
+            # A book written before the field existed: adoptions did not
+            # exist either, so the seed (BLEND_BOOK_USD clamped by
+            # BLEND_BUDGET, exactly as step's seed branch computed it) is
+            # the only capital it was ever given. Inferred ONCE - the
+            # loop's first save persists it, so a later change to the env
+            # var cannot rewrite history. Deliberately NOT the first
+            # equity-curve point: that is a VALUE (post-commission marks),
+            # not a contribution.
+            self.state.capital_contributed = self._seed_book_usd()
+            self._event("INFO", f"capital contributed inferred from the seed "
+                                f"config: ${self.state.capital_contributed:,.2f} "
+                                f"(pre-field state file)")
         if self.archived_state and self._evidence_preserved:
             # Z-J: the archive/drift branches set `halted` and rebuild the
             # book IN MEMORY only — a crash before the loop's first save()
@@ -782,6 +844,10 @@ class Blend3070Manager:
                 prefund_date=raw.get("prefund_date", "") or "",
                 sleeve_target=_num_or_none(raw.get("sleeve_target")),
                 sleeve_target_seen=list(raw.get("sleeve_target_seen") or []),
+                capital_contributed=_num_or_none(raw.get("capital_contributed")),
+                capital_events=[e for e in (raw.get("capital_events") or [])
+                                if isinstance(e, dict)][-CAPITAL_EVENTS_MAX:],
+                capital_request=_valid_capital_request(raw.get("capital_request")),
                 mode=stored_mode,
             )
             try:
@@ -983,6 +1049,9 @@ class Blend3070Manager:
                    "prefund_date": self.state.prefund_date,
                    "sleeve_target": self.state.sleeve_target,
                    "sleeve_target_seen": self.state.sleeve_target_seen,
+                   "capital_contributed": self.state.capital_contributed,
+                   "capital_events": list(self.state.capital_events[-CAPITAL_EVENTS_MAX:]),
+                   "capital_request": self.state.capital_request,
                    "mode": self.state.mode,
                    "events": self.state.events[-300:]}
         fd, tmp_path = tempfile.mkstemp(
@@ -1218,14 +1287,21 @@ class Blend3070Manager:
             # a fresh seed's own fills must never straddle a cash baseline
 
             self.rebaseline_cash('seed', save=False)
-            book = getattr(self.cfg, "blend_book_usd", 10_000.0)
-            if budget > 0:
-                book = min(book, budget)
+            book = self._seed_book_usd()
             st.sleeve_cash = target * book
             st.core_cash = (1.0 - target) * book
             st.sleeve_target = target
             st.initialized = True
             st.bootstrap_ack = False    # one-shot: consumed by this seed
+            # the seed is the book's first capital event (stage 2)
+            st.capital_contributed = round(float(book), 2)
+            st.capital_events.append({
+                "date": today, "ts": int(time.time()), "kind": "seed",
+                "usd": round(float(book), 2),
+                "sleeve_usd": round(target * book, 2),
+                "core_usd": round((1.0 - target) * book, 2),
+                "sleeve_target": target})
+            del st.capital_events[:-CAPITAL_EVENTS_MAX]
             self._event("INFO", f"book initialized: ${book:,.0f} "
                                 f"({target:.0%} sleeve / {1 - target:.0%} core)")
 
@@ -2114,6 +2190,15 @@ class Blend3070Manager:
         # means "undo my kill", never "seed a second book" (re-review).
         self.state.bootstrap_ack = False
         self.state.bootstrap_ack_date = ""
+        # ...and any standing capital-adoption request, for the same reason:
+        # a /kill then /resume must never adopt cash into a book the
+        # operator just stopped (stage 2). Re-issue it after the review.
+        if self.state.capital_request is not None:
+            usd = _num_or_none(self.state.capital_request.get("usd"))
+            self.state.capital_request = None
+            self._event("WARN", f"kill: pending capital adoption request "
+                                f"(${(usd or 0.0):,.2f}) CANCELLED - re-issue "
+                                f"it after /resume if still intended")
         self.state.halted = "KILL"
         self._event("RED", "kill: halt engaged; flatten queued for the "
                            "execution loop")
@@ -2176,6 +2261,76 @@ class Blend3070Manager:
         self._event("INFO", f"cash reconcile re-baselined ({reason})")
         if save:
             self.save()
+
+    # ---------- capital (stage-2 cash adoption, 2026-10-05) ----------
+
+    def _seed_book_usd(self) -> float:
+        """What a FRESH book seeds with: BLEND_BOOK_USD clamped by
+        BLEND_BUDGET. One definition for the seed branch, the feed's
+        `initial_book_usd` and the pre-field inference of
+        `capital_contributed` (they used to compute it separately)."""
+        book = float(getattr(self.cfg, "blend_book_usd", 10_000.0) or 0.0)
+        budget = float(getattr(self.cfg, "blend_budget", 0.0) or 0.0)
+        if budget > 0 and book > 0:
+            book = min(book, budget)
+        return book
+
+    def request_capital_adoption(self, usd, today: str) -> dict:
+        """Journal a stage-2 adoption request (API thread, under BLEND_LOCK).
+        VALIDATION ONLY - no ledger write, no venue call: the loop thread
+        executes it (adopt_capital) on a quiet cycle, against the venue.
+        A second request replaces the first (the operator's latest number
+        wins; nothing accumulates). Raises ValueError on a bad amount."""
+        v = _num_or_none(usd)
+        if v is None or not math.isfinite(v) or v <= 0:
+            raise ValueError("usd must be a positive number")
+        if v > CAPITAL_REQUEST_MAX_USD:
+            raise ValueError(f"usd {v:,.2f} exceeds the endpoint's sanity "
+                             f"bound {CAPITAL_REQUEST_MAX_USD:,.0f} - raise "
+                             f"CAPITAL_REQUEST_MAX_USD deliberately if real")
+        prior = self.state.capital_request
+        self.state.capital_request = {"usd": round(v, 2),
+                                      "ts": int(time.time()), "date": today}
+        self._event("WARN", f"capital adoption REQUESTED: ${v:,.2f}"
+                            + (f" (replaces the pending "
+                               f"${_num_or_none(prior.get('usd')) or 0:,.2f})"
+                               if prior else "")
+                            + " - executes on the next QUIET cycle once the "
+                              "venue confirms that much unowned, available "
+                              "cash and BLEND_BUDGET can hold it; expires "
+                              f"unexecuted after {CAPITAL_REQUEST_TTL_S / 86_400:.0f} "
+                              "days")
+        self.save()
+        return dict(self.state.capital_request)
+
+    def clear_capital_request(self, reason: str = "operator") -> dict | None:
+        """Withdraw a journaled request (never executed). Returns it."""
+        prior = self.state.capital_request
+        self.state.capital_request = None
+        if prior is not None:
+            self._event("INFO", f"capital adoption request "
+                                f"(${_num_or_none(prior.get('usd')) or 0:,.2f}) "
+                                f"cleared ({reason})")
+            self.save()
+        return prior
+
+    def capital_summary(self) -> dict:
+        """Public-safe: contributed capital, the capital events (dates and
+        amounts the OPERATOR supplied - never a venue level) and whether a
+        request is pending."""
+        st = self.state
+        req = st.capital_request
+        return {"contributed": (round(st.capital_contributed, 2)
+                                if st.capital_contributed is not None else None),
+                "events": [{"date": e.get("date"), "kind": e.get("kind"),
+                            "usd": e.get("usd"),
+                            "sleeve_usd": e.get("sleeve_usd"),
+                            "core_usd": e.get("core_usd")}
+                           for e in list(st.capital_events[-CAPITAL_EVENTS_MAX:])],
+                "request_pending": ({"usd": req.get("usd"), "date": req.get("date"),
+                                     "age_s": round(time.time()
+                                                    - float(req.get("ts") or 0), 1)}
+                                    if req else None)}
 
     def cash_summary(self) -> dict:
         """Public-safe: ledger cash, the delta drift and its age, commissions.
@@ -2244,6 +2399,7 @@ class Blend3070Manager:
             "spy_qty": st.spy_qty,
             "core_cash": round(st.core_cash, 2),
             "budget_cap": getattr(self.cfg, "blend_budget", 0.0) or None,
+            "capital": self.capital_summary(),
             "gate": st.last_gate,
             "budget_utilization": None,
             # A list SLICE is a C-level copy; the encoder never sees the
@@ -2287,10 +2443,8 @@ class Blend3070Manager:
                               "unprotected": _is_unprotected(pos),
                               "unverified_cycles": pos.unverified_cycles})
         util = self.budget_utilization(prices)
-        book_usd = getattr(self.cfg, "blend_book_usd", 0.0) or 0.0
-        budget = getattr(self.cfg, "blend_budget", 0.0) or 0.0
-        if budget > 0 and book_usd > 0:
-            book_usd = min(book_usd, budget)    # same clamp as first boot
+        book_usd = self._seed_book_usd()        # same clamp as first boot
+        capital = self.capital_summary()
         return {
             "halted": st.halted,
             "gate": st.last_gate,
@@ -2303,7 +2457,12 @@ class Blend3070Manager:
                 "budget_utilization": (round(util, 4)
                                        if util is not None else None),
                 "initial_book_usd": book_usd or None,
+                # stage 2: seed + adopted deposits - the flow-adjusted basis
+                # for any drawdown read off the curve (a deposit is a step
+                # in the curve, not a gain)
+                "capital_contributed": capital["contributed"],
             },
+            "capital_events": capital["events"],
             "positions": positions,
             "trades": list(st.trades[-TRADE_LOG_MAX:]),
             "equity_curve": list(st.equity_curve),
@@ -4143,16 +4302,7 @@ def reconcile_cash(mgr: Blend3070Manager, adapter, alert) -> dict | None:
         if not st.initialized:
             return None            # a seed's own fills must never straddle a baseline
         now = time.time()
-        # A parked unreconciled record used to suspend the reconcile FOREVER
-        # (nothing ever pops it): round 3 gates on its AGE - once the park is
-        # older than the quiet window its proceeds simply show as drift,
-        # which is what the alert is for.
-        fresh_unrec = [k for k, r in st.unreconciled.items()
-                       if now - float((r or {}).get("ts") or 0) < CASH_QUIET_S]
-        skip = ("pending journals" if (st.pending_entries or st.pending_book_orders)
-                else "fresh unreconciled record" if fresh_unrec
-                else "recent fill" if (st.last_fill_ts and now - st.last_fill_ts < CASH_QUIET_S)
-                else None)
+        skip = _cash_quiet_reason(st, now)
         if skip:
             st.cash_drift_cycles = 0     # persistence = CONSECUTIVE quiet cycles
             _note_cash_skip(mgr, skip, now)
@@ -4177,7 +4327,10 @@ def reconcile_cash(mgr: Blend3070Manager, adapter, alert) -> dict | None:
         b = st.cash_baseline
         drift = (float(venue["total_cash"]) - b["venue"]) - (ledger - b["ledger"])
         st.cash_drift, st.cash_drift_ts = round(drift, 4), time.time()
-        book = float(getattr(mgr.cfg, "blend_book_usd", 0.0) or 0.0)
+        # the thresholds scale with the book's CAPITAL: contributed (seed +
+        # adopted deposits, stage 2) once known, else the seed config
+        book = float(st.capital_contributed
+                     or getattr(mgr.cfg, "blend_book_usd", 0.0) or 0.0)
         warn_at = max(CASH_WARN_USD, CASH_WARN_FRAC * book)
         red_at = max(warn_at, CASH_RED_FRAC * book)
         if abs(drift) > warn_at:
@@ -4214,6 +4367,179 @@ def reconcile_cash(mgr: Blend3070Manager, adapter, alert) -> dict | None:
                 "cycles": st.cash_drift_cycles}
     except Exception as exc:  # noqa: BLE001
         logger.warning("reconcile_cash failed (ignored): %s", exc)
+        return None
+
+
+def _cash_quiet_reason(st: BlendState, now: float) -> str | None:
+    """Why the account's cash cannot be compared to the ledger right now
+    (None = quiet). Shared by the stage-1 reconcile and the stage-2
+    adoption: both read TotalCashValue, and both must wait out IB's
+    account-push lag after a fill and any journal whose cash is in flight.
+    A parked unreconciled record used to suspend the reconcile FOREVER
+    (nothing ever pops it): round 3 gates on its AGE - once the park is
+    older than the quiet window its proceeds simply show as drift, which
+    is what the alert is for."""
+    fresh_unrec = [k for k, r in st.unreconciled.items()
+                   if now - float((r or {}).get("ts") or 0) < CASH_QUIET_S]
+    return ("pending journals" if (st.pending_entries or st.pending_book_orders)
+            else "fresh unreconciled record" if fresh_unrec
+            else "recent fill" if (st.last_fill_ts and now - st.last_fill_ts < CASH_QUIET_S)
+            else None)
+
+
+def adopt_capital(mgr: Blend3070Manager, adapter, prices: dict[str, float],
+                  today: str, alert) -> dict | None:
+    """Stage-2 cash adoption (2026-10-05): execute a journaled operator
+    request on the LOOP thread. Returns a record for tests - {status:
+    adopted | deferred | refused | expired, ...} - or None when no request
+    is pending. Never raises (a failing adoption must not fail the cycle
+    closed; the request stays journaled and is retried next cycle).
+
+    What it checks, in order - each a different failure with a different
+    remedy, so each has its own message:
+      expired   - older than CAPITAL_REQUEST_TTL_S: dropped, re-issue.
+      refused   - the book is not initialized, is halted or has a flatten
+                  queued; BLEND_BUDGET cannot hold the larger book; or the
+                  venue holds LESS unowned cash than requested. Dropped
+                  with a RED event + page: the operator must act first.
+      deferred  - not a quiet cycle (journals in flight, a fill inside
+                  CASH_QUIET_S); missing SPY/BIL quote while a budget cap
+                  needs gross exposure; the adapter has no cash claim; or
+                  the venue says less than the request is AVAILABLE to
+                  trade (settlement, a deposit hold). Kept, retried every
+                  cycle, said once a day.
+      adopted   - the ledger's two buckets are credited by the PERSISTED
+                  sleeve target, capital_contributed grows by the amount,
+                  a capital event is recorded, the stage-1 clock is
+                  re-baselined (the ledger just moved by design), and the
+                  SAME cycle's step() plans the SPY core buy and the BIL
+                  sweep from the idle cash.
+    Venue LEVELS are never written into events or pages (the stage-1
+    rule): every number here is the operator's own amount or a shortfall
+    against it."""
+    st = mgr.state
+    req = st.capital_request
+    if req is None:
+        return None
+    try:
+        usd = _num_or_none(req.get("usd"))
+        now = time.time()
+
+        def _drop(level: str, status: str, msg: str) -> dict:
+            st.capital_request = None
+            mgr._event(level, "capital adoption " + msg)
+            mgr.save()
+            alert(("🚨🚨 " if level == "RED" else "⚠️ ")
+                  + "blend capital adoption " + msg)
+            return {"status": status, "usd": usd, "reason": msg}
+
+        def _defer(key: str, msg: str) -> dict:
+            # request KEPT; said once a day per reason (a stuck request is
+            # visible on /status as capital.request_pending with its age)
+            mgr._event_once_today("WARN", key, "capital adoption " + msg)
+            return {"status": "deferred", "usd": usd, "reason": msg}
+
+        if usd is None or usd <= 0 or not math.isfinite(usd):
+            return _drop("RED", "refused", f"request malformed ({req!r}): "
+                                           f"dropped, nothing adopted")
+        age = now - float(req.get("ts") or 0)
+        if age > CAPITAL_REQUEST_TTL_S:
+            return _drop("WARN", "expired",
+                         f"request for ${usd:,.2f} EXPIRED unexecuted after "
+                         f"{age / 86_400:.1f} days (it waited on the "
+                         f"conditions the events above name): nothing "
+                         f"adopted; re-issue it if still intended")
+        if not st.initialized:
+            return _drop("RED", "refused",
+                         f"${usd:,.2f} REFUSED: the book is not seeded - a "
+                         f"fresh book takes its capital from BLEND_BOOK_USD "
+                         f"at the seed, there is nothing to adopt into")
+        if st.halted or st.flatten_request is not None:
+            return _drop("WARN", "refused",
+                         f"${usd:,.2f} REFUSED: the book is halted "
+                         f"({st.halted}) or a flatten is queued - nothing "
+                         f"adopted; re-issue after /resume if still intended")
+        quiet = _cash_quiet_reason(st, now)
+        if quiet:
+            return _defer("capital_wait_quiet",
+                          f"${usd:,.2f} waits: not a quiet cycle ({quiet})")
+        budget = float(getattr(mgr.cfg, "blend_budget", 0.0) or 0.0)
+        if budget > 0:
+            spy_px = prices.get(CORE, 0.0) or 0.0
+            bil_px = prices.get(CASH_VEHICLE, 0.0) or 0.0
+            if spy_px <= 0 or bil_px <= 0:
+                # r7's rule: gross exposure computes LOW on a missing quote
+                return _defer("capital_wait_quotes",
+                              f"${usd:,.2f} waits: missing {CORE}/"
+                              f"{CASH_VEHICLE} quote - the BLEND_BUDGET "
+                              f"basis (gross exposure) is not computable")
+            gross = mgr.gross_exposure(prices)
+            if gross + usd > budget + CAPITAL_ADOPT_TOL_USD:
+                return _drop("RED", "refused",
+                             f"${usd:,.2f} REFUSED: BLEND_BUDGET "
+                             f"${budget:,.0f} cannot hold the book after it "
+                             f"(gross ${gross:,.0f} deployed + ${usd:,.0f} = "
+                             f"${gross + usd:,.0f}) - the sweep would be "
+                             f"clamped and entries blocked. Raise "
+                             f"BLEND_BUDGET first (after 16:00 ET: an env "
+                             f"change restarts the service) and re-issue")
+        venue = adapter.account_cash()
+        if not venue or venue.get("total_cash") is None:
+            return _defer("capital_wait_venue",
+                          f"${usd:,.2f} waits: the adapter returned no "
+                          f"account cash this cycle (no claim)")
+        ledger = st.sleeve_cash + st.core_cash
+        unowned = float(venue["total_cash"]) - ledger
+        if unowned + CAPITAL_ADOPT_TOL_USD < usd:
+            return _drop("RED", "refused",
+                         f"${usd:,.2f} REFUSED: the account holds "
+                         f"${usd - unowned:,.2f} LESS cash the book does not "
+                         f"own than requested - nothing adopted. Check that "
+                         f"the deposit has landed and re-issue the amount "
+                         f"the account actually holds")
+        avail = _num_or_none(venue.get("available_funds"))
+        if avail is not None and avail + CAPITAL_ADOPT_TOL_USD < usd:
+            # the cash is THERE but not yet usable (a cash account's T+1
+            # settlement, a deposit hold): adopting it now would plan a
+            # core buy the venue rejects. Wait; retried every cycle.
+            return _defer("capital_wait_settle",
+                          f"${usd:,.2f} waits: the venue's available-to-"
+                          f"trade funds fall ${usd - avail:,.2f} short of "
+                          f"it (settlement / deposit hold) - retried every "
+                          f"cycle for {CAPITAL_REQUEST_TTL_S / 86_400:.0f} "
+                          f"days from the request")
+        target = (st.sleeve_target if st.sleeve_target is not None
+                  else TARGET_SLEEVE)
+        sleeve_usd = round(target * usd, 2)
+        core_usd = round(usd - sleeve_usd, 2)
+        st.sleeve_cash += sleeve_usd
+        st.core_cash += core_usd
+        st.capital_contributed = round((st.capital_contributed or 0.0) + usd, 2)
+        st.capital_events.append({
+            "date": today, "ts": int(now), "kind": "deposit_adopted",
+            "usd": round(usd, 2), "sleeve_usd": sleeve_usd,
+            "core_usd": core_usd, "sleeve_target": target})
+        del st.capital_events[:-CAPITAL_EVENTS_MAX]
+        st.capital_request = None
+        # the ledger just moved by design: the stage-1 delta clock would
+        # read it as a -usd drift against the unchanged account
+        mgr.rebaseline_cash("capital adopted", save=False)
+        msg = (f"ADOPTED ${usd:,.2f} of account cash into the book: sleeve "
+               f"+${sleeve_usd:,.2f} / core +${core_usd:,.2f} at the book's "
+               f"{target:.0%} sleeve target; contributed capital now "
+               f"${st.capital_contributed:,.2f}. This cycle plans the "
+               f"{CORE} core buy and the {CASH_VEHICLE} sweep from the idle "
+               f"cash (MKT; placed outside the session they rest for the "
+               f"open). New entries size off the larger sleeve from now on; "
+               f"open positions keep the size they were entered at")
+        mgr._event("WARN", "capital adoption " + msg)
+        mgr.save()
+        alert("💰 blend capital adoption " + msg)
+        return {"status": "adopted", "usd": round(usd, 2),
+                "sleeve_usd": sleeve_usd, "core_usd": core_usd,
+                "contributed": st.capital_contributed}
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("adopt_capital failed (request kept): %s", exc)
         return None
 
 
@@ -4999,6 +5325,13 @@ def run_cycle(mgr: Blend3070Manager, adapter, payload: dict | None,
                       f"was lost, restore it; if seeding on top IS intended, "
                       f"/resume acknowledges and allows it once.")
             return []
+
+    # STAGE-2 CAPITAL ADOPTION (2026-10-05): a journaled operator request is
+    # executed HERE - on the loop thread (it reads the venue), after the
+    # reconcile passes (the quiet-cycle rule needs their journals settled)
+    # and BEFORE the plan, so the same cycle's step() deploys what it
+    # adopts through the ordinary core-buy / sweep path.
+    adopt_capital(mgr, adapter, prices, today, alert)
 
     intents = mgr.step(today, payload, prices)
     exit_unsettled = False     # a funding exit deferred/UNRECONCILED (N5)

@@ -521,9 +521,36 @@ unreconciled venue state. Phases IN ORDER:
    one reason holding for 6 h is said once a day. A parked unreconciled
    record older than the quiet window no longer suspends the compare - its
    proceeds show as drift, which is what the alert is for (round 3). Commissions are now debited from the bucket that
-   traded, off the venue's commissionReport, at every fill. Stage 2
-   (adopting positive drift into the ledger) is a separate, opt-in change
-   to be turned on with two weeks of stage-1 data, not before.
+   traded, off the venue's commissionReport, at every fill.
+   **Stage 2 = CONFIRM-ONLY cash adoption (2026-10-05, Casey: "resize the
+   positions and the strategy" after a deposit).** Nothing is ever adopted
+   from the drift measurement: the operator journals an AMOUNT with
+   `POST /blend/cash/adopt {"usd": N}` (EXEC_TOKEN, POST only; `/kill`
+   cancels it; a second POST replaces it; it expires unexecuted after 5
+   days) and the LOOP thread executes it on the next quiet cycle, in
+   `blend.adopt_capital`, only if ALL of: the book is seeded and not
+   halted; no journal is in flight and no fill inside 15 min (the stage-1
+   quiet rule, shared helper); `BLEND_BUDGET` can hold gross + N (else
+   REFUSED, RED page: raise the cap first, after 16:00 ET); the venue's
+   `TotalCashValue` minus the ledger's two buckets is at least N (else
+   REFUSED, RED page naming the SHORTFALL - never the account's level);
+   and the venue's `AvailableFunds` covers N (else DEFERRED once a day:
+   a cash account's T+1 settlement or a deposit hold - retried every
+   cycle). It then credits the two buckets by the book's PERSISTED sleeve
+   target, grows `capital_contributed` (seed + every adoption; inferred
+   once from the seed config on a pre-field state file), appends a
+   `capital_events` row, re-baselines the stage-1 clock (the ledger just
+   moved by design), pages Telegram, and the SAME cycle's `step()` buys
+   the SPY core and sweeps the sleeve's cash to BIL through the ordinary
+   path (MKT; placed outside the session they rest for the open). Per-
+   entry risk (1% of sleeve equity) sizes off the larger sleeve from then
+   on; OPEN positions keep the size they were entered at (sized at entry
+   per the pre-registered contract - there is no top-up rule). The stage-1
+   drift thresholds scale with `capital_contributed`. Dividends and BIL
+   distributions are still NOT adopted on their own: they accumulate as
+   unowned cash and can be adopted the same way, by an explicit amount.
+   Runbook: "Resizing the live book after a deposit" under Operating
+   rules.
    **Entries are only PLANNED outside the regular session** (2026-09-03):
    a MOO/OPG order is accepted for the next opening auction and REJECTED
    once the session is open, so a fire first seen mid-session is held for
@@ -1044,8 +1071,8 @@ Env (all optional until the paper gate):
 | `TRACKER_URL` | tracker base URL, e.g. `https://research.optic.capital` |
 | `TRACKER_API_TOKEN` | PREFERRED: the tracker's dedicated read-only `BLEND_API_TOKEN` — valid for GET /blend3070/intents only, so this service never holds the dashboard password. When set, Basic creds are not sent |
 | `TRACKER_USER` / `TRACKER_PASSWORD` | fallback: the tracker's HTTP Basic dashboard login (its DASHBOARD_USER/PASSWORD) — dashboard creds only, no broker credential enters the blend path |
-| `BLEND_BUDGET` | per-strategy gross-exposure cap in USD; 0 (default) = disabled. When set, crossing 85% utilization sends a one-time Telegram alert ("review and raise BLEND_BUDGET"), re-armed once utilization drops below 75% |
-| `BLEND_BOOK_USD` | initial paper book (default 10,000), split sleeve/core at first boot by the tracker's published target |
+| `BLEND_BUDGET` | per-strategy gross-exposure cap in USD; 0 (default) = disabled. When set, crossing 85% utilization sends a one-time Telegram alert ("review and raise BLEND_BUDGET"), re-armed once utilization drops below 75%. A stage-2 cash adoption is REFUSED while gross + the amount would exceed it: raise it BEFORE adopting a deposit (after 16:00 ET) |
+| `BLEND_BOOK_USD` | initial paper book (default 10,000), split sleeve/core at first boot by the tracker's published target. **Read once, at the seed - NOT the lever for a live book**: a deposit is adopted through `POST /blend/cash/adopt` (stage 2), which grows the persisted `capital_contributed`; changing this on a seeded book changes only the feed's `initial_book_usd` line |
 | (tracker) `BLEND_SLEEVE_TARGET` | the sleeve's target weight of the book, published by the TRACKER on `/blend3070/intents` `rebalance.target` and read here every poll; 0.30 = the H13 30/70, 1.0 = sleeve only (no SPY core). The book PERSISTS the weight it runs at: a published value that differs is adopted only after two consecutive agreeing polls, with a Telegram page, then the SPY is sold in one `core_to_sleeve` pass and swept to BIL (no re-seed, no executor restart). Unset/null/0/out-of-range publishes no instruction: the book keeps its weight (a once-a-day WARN on a non-null bad value). A redeploy with the env missing therefore cannot flip a sleeve-only book back to 30/70 |
 | `BLEND_STATE_PATH` | persisted book state (default `./data/blend_state.json`). **It MUST be declared in render.yaml onto the mounted disk (`/app/data/blend_state.json`) and it is (corrective round B2).** Undeclared, the default resolved to the container's EPHEMERAL layer — NOT the `ibkr-data` disk mounted at `/app/data` that `STATE_PATH` has always used — so with `autoDeploy: true` every deploy DESTROYED the live book and re-seeded a fresh one on top of shares the account still held: positions forgotten, resting GTC stops orphaned, `halted` and any queued `/kill` flatten lost. It is also what made B1's restart-boundary double-sell routine rather than exotic — a deploy is a restart. Saves are atomic: a UNIQUE temp file per write (`mkstemp` in the state directory) + fsync + rename, so two threads saving at once can never clobber each other's partial file or publish truncated JSON (counter-review x11 — a single shared `.tmp` made that promise false; and counter-review mf3-10 — the save additionally SNAPSHOTS every shared container before it walks it, because mf2-9's in-save prune iterated a dict the loop thread was inserting into and CPython answered `RuntimeError: dictionary changed size during iteration`, reproduced 1-10 times per 8s run across 8 runs, 0 after the fix, and raised straight out of `/kill` (`tests/probes/mf3/save_race.py`); the same treatment now covers `STATE_PATH`, the El Niño ladder book; an unreadable ladder book — and a leg-row SCHEMA DRIFT after a deploy rollback — is PRESERVED as `.corrupt-<ts>` and loud, and a drifted book additionally comes back `halted="SCHEMA_DRIFT"` with every leg field this build understands intact, so `step()` cannot re-OPEN a spread that is still live at the venue, counter-review y2). The BLEND book gets the same treatment on its own position rows (counter-review Z-D — Z1 added `stop_cover_qty`, so a rollback to a build without it hit an unfiltered `BlendPosition(**row)` and came back a FRESH, un-halted book with entries UNBLOCKED while real shares and GTC stops rested at the venue): unknown fields are dropped, fields the row does not carry are DEFAULTED (a renamed or removed field used to raise inside the handler and fall through to the fresh-book branch — counter-review ZF-4; the ladder never had that hole because every `LegState` field is defaulted), a row that still cannot be rebuilt is NAMED and left to the preserved file rather than dropped in silence (counter-review ZF-6), positions/cash/stop refs are kept, the file is preserved as `.corrupt-<ts>` and the book comes back `halted="SCHEMA_DRIFT"` — reconcile still runs and still protects it, only new decisions stop. **What this protects is the NEXT rollback — a book written by a FUTURE build, read by THIS one. It cannot protect a rollback FROM this build to an older one** (counter-review ZF-3): the reader is the older build, the fix is not in it, and the fix is therefore structurally unreachable from this side — see the deploy note under "Rollout gates". Both managers PERSIST that recovered state at load (counter-review Z-J: it used to live in memory until the loop's first save, so a crash in between lost the halt AND the preserved rows) — but only when the `.corrupt-<ts>` rename actually SUCCEEDED, because when it fails the file still sitting at the state path is the only copy of the evidence and the boot save would destroy it (counter-review ZF-7); the halt then lives in memory only and the alert says so. A `SCHEMA_DRIFT` halt is cleared by `/resume` exactly like a KILL — deliberately, because every field this build understands survives the drifted load, so nothing live is re-opened — and the resume alert NAMES the halt it cleared, for the ladder and for the blend book separately (counter-review Z-K). Service writers serialize their read-modify-write under `BLEND_LOCK` (blend: the loop's `run_cycle` and `/resume`) / `MGR_LOCK` (ladder: the loop's ladder section, `/kill` and `/resume`) — with ONE deliberate exception, `/kill`'s blend halt, which takes `BLEND_HALT_LOCK` instead so it can never queue behind a cycle (counter-review MF-A; mf2-6 — this line claimed the old discipline for a round after it was dropped). `/kill`'s LADDER halt takes no lock at all when `MGR_LOCK` is busy: it writes a separate `<STATE_PATH>.kill` sentinel, atomically, and never touches `legs` from an API thread. The state is MODE-TAGGED (`dry:paper` / `real:paper` / `real:live`): on any mode change the previous book is archived alongside and a FRESH book starts, with a Telegram alert — a book's fills are fiction in any other mode (DRY fills at placeholder prices; paper fills aren't live fills), so they must never be reconciled against a venue that never saw them. Losing a `real:*` book that way is NOT routine, and `_current_mode()` reports `dry` whenever creds are merely ABSENT — an unauthenticated boot (a gateway still waiting on its 2FA approval) is enough to trigger it. Such a load is `archived_state_critical` and comes back `halted="MODE_CHANGE_FROM_REAL"`; `/resume` clears THAT halt only and grants NO permission to seed. The next cycle then meets the separate bootstrap guard, which refuses to seed a fresh book while the venue still holds SPY/BIL (or cannot answer) — seeding on top of real holdings takes a SECOND, separately-informed `/resume`. Both belts exist because a fresh book's ledger is structurally blind to venue holdings, so `BLEND_BUDGET` cannot see the double-deployment coming |
 | `IB_CLIENT_ID` | IB API client id (code default 17; **declared in render.yaml as 17** — B10, kept at the default at the 2026-09-10 merge so a blueprint sync cannot flip the live session's id on the deploy that restarts the gateway). A gateway/TWS accepts ONE session per client id; a collision costs ~10 min of connect retries (20 x 15s timeout + 15s sleep) and an `ExecutorConnectionError` the boot-retry loop catches and pages — the loop does not die. The gateway runs inside this container (`TrustedIPs=127.0.0.1`), so no external client can hold the id; change it only with the gateway idle |
@@ -1056,7 +1083,10 @@ Env (all optional until the paper gate):
 
 Public-safe JSON for the research dashboard, gated by `READ_TOKEN`:
 `{mode, halted, gate, book: {sleeve_cash, core_qty, bil_qty,
-equity_estimate, budget_utilization, initial_book_usd}, positions, trades
+equity_estimate, budget_utilization, initial_book_usd,
+capital_contributed}, capital_events (seed + adopted deposits: date, kind,
+usd and the sleeve/core split - the flow-adjusted basis for any drawdown
+read off the curve), positions, trades
 (last 200, persisted), equity_curve (one point per cycle day),
 unreconciled (count), last_cycle: {date, ok, error}, marks_age_s}`. Marks
 come from the loop-thread quote cache (adapter review M2 — the feed never
@@ -1166,6 +1196,46 @@ on the loop thread) has never run against IBKR.
    no jts.ini is persisted) - and `TWOFA_TIMEOUT_ACTION=restart` with
    `RELOGIN_AFTER_TWOFA_TIMEOUT=yes` together.
 
+### Resizing the live book after a deposit (stage-2 cash adoption, 2026-10-05)
+
+The book cannot see a deposit: its capital is the ledger, seeded once from
+`BLEND_BOOK_USD`, and stage 1 only pages a RED cash drift. Changing
+`BLEND_BOOK_USD` on a seeded book resizes NOTHING (it is read at the seed).
+The procedure, in this order:
+
+1. **Confirm the account is clean**: only the book's positions (SPY, BIL
+   and the sleeve names on `/status`) plus cash. Note the cash. In a CASH
+   account "Buying power" below the cash figure means part of it is not
+   yet settled/available - the adoption will wait for it on its own.
+2. **Raise `BLEND_BUDGET` first, after 16:00 ET** (Operating rule 1: an env
+   change restarts the container and fires an IB Key push). It must hold
+   the whole book after the deposit - gross deployed + the amount - with
+   headroom under the 85% utilization alarm (`0.85 x BLEND_BUDGET`). The
+   adoption REFUSES (RED page) while the cap is too small.
+3. **Journal the amount** (any time; it executes on the loop thread):
+   `curl -X POST "$EXECUTOR/blend/cash/adopt" -H "X-Exec-Token: $EXEC_TOKEN"
+   -H "content-type: application/json" -d '{"usd": 70000}'`. Use a round
+   figure at or below the account's unowned cash; a few dollars left
+   unowned sit still (zero drift). The response says "journaled"; nothing
+   has moved yet.
+4. **Watch `/status`** `blend.capital.request_pending` (with its age) and
+   `blend.events`: `ADOPTED ...` with the sleeve/core split, or a `waits:`
+   line naming what it is waiting for (settlement is the usual one), or a
+   `REFUSED` line (shortfall / budget / halted) - the request is dropped on
+   a refusal, re-issue after fixing the cause. The Telegram page says the
+   same. The adoption is also a step up in the Execution tab's equity
+   curve, marked with the amount; the dashed line moves to the new
+   contributed capital.
+5. **The same cycle plans the deployment**: `CORE_BUY` SPY from the idle
+   core cash and `SWEEP` BIL from the idle sleeve cash - journaled MKT
+   orders; outside the session they rest for the open and are adopted by
+   reconcile 2b next cycle. Confirm the fills on `/status` the next
+   morning (`spy_qty`, `bil_qty`, `trades`).
+6. **What does NOT change**: open sleeve positions (sized at entry);
+   `BLEND_BOOK_USD` (leave it: it only labels the feed's seed line and
+   would be wrong as a resize lever); the sleeve weight (the tracker's
+   `BLEND_SLEEVE_TARGET`, adopted on its own rules).
+
 The original staged rehearsal, kept for the record and for any FUTURE
 strategy's cutover (the per-leg discipline still applies):
 
@@ -1256,7 +1326,14 @@ rules realized a 28.3% max DD (SPY-led, 2020), bootstrap p50 26.3% / p95
 on these curves the 25% line is first crossed a few weeks before the trough
 (2020-03-20 book; 2020-03-09 and 2023-02-21 sleeve). The ledger's curve
 credits no SPY dividends or BIL distributions (~2 pp/yr of drag vs the
-total-return replay) until stage-2 cash adoption exists.
+total-return replay): stage-2 cash adoption (2026-10-05) is confirm-only,
+so they still land only when an operator adopts them by amount. **Read the
+HWM lines on the flow-adjusted series**: a deposit adopted through stage 2
+is a step UP in `equity_curve` that is not a gain and would mask a
+drawdown in progress - subtract the cumulative `capital_events` after the
+seed (feed field; `book.capital_contributed` is the running total) from
+each point, or chain-link returns across the event dates, before computing
+the HWM and the drawdown.
 
 What `/kill` actually does: cancels the sleeve's stops and MKT-sells the
 sleeve positions only (SPY and BIL untouched); the proceeds sit in sleeve

@@ -8844,3 +8844,377 @@ def test_sleeve_target_is_inferred_from_the_book_shape(tmp_path):
     alerts = []
     run_cycle(m2, DryAdapter(), _pl_target(1.0), "2026-08-20", alert=alerts.append)
     assert any("abort" in a for a in alerts) and m2.state.spy_qty == 70
+
+
+# --- stage 2: capital adoption (2026-10-05) ---------------------------------
+# Casey added funds to the account and asked for the book to be resized. The
+# book's capital is its LEDGER (seeded once from BLEND_BOOK_USD); stage 1
+# only ALERTS on a deposit. These gates pin the confirm-only adoption: the
+# operator journals an amount, the loop thread checks it against the venue
+# (unowned cash, available funds, BLEND_BUDGET, a quiet cycle) and credits
+# the ledger by the PERSISTED sleeve target, and the same cycle deploys it
+# through the ordinary core-buy / sweep path. Nothing is adopted from a
+# drift measurement; a venue LEVEL is never written into an event.
+
+class _VenueCashAdapter(DryAdapter):
+    """DryAdapter that also answers the account's cash: `total` and the
+    available-to-trade funds (`available`, None = the venue does not report
+    it). `total=None` = no claim."""
+
+    def __init__(self, total, available=None):
+        super().__init__()
+        self.total, self.available = total, available
+
+    def account_cash(self):
+        if self.total is None:
+            return None
+        return {"total_cash": self.total, "net_liq": None,
+                "available_funds": self.available, "ts": _time.time()}
+
+
+def _capital_book(tmp_path, **cfg):
+    """A seeded 30/70 book worth $10,000 at PRICES (SPY 100, BIL 100): core
+    70 SPY, sleeve 30 BIL, both cash buckets EMPTY - so the account's
+    TotalCashValue IS the unowned cash."""
+    m = mk(tmp_path, **cfg)
+    _seed_initialized(m, sleeve_cash=0.0, spy_qty=70, bil_qty=30, core_cash=0.0)
+    m.state.sleeve_target = 0.30
+    m.state.capital_contributed = 10_000.0
+    return m
+
+
+def test_gate_capital_adopt_credits_the_ledger_by_the_persisted_target_and_deploys(tmp_path):
+    """MUTATION-VERIFIED: splitting by TARGET_SLEEVE instead of the persisted
+    target (set the book to 0.5 below) turns this red; skipping the
+    rebaseline leaves cash_baseline set; dropping the run_cycle hook leaves
+    the ledger unchanged after the cycle."""
+    m = _capital_book(tmp_path)
+    m.state.sleeve_target = 0.50                       # the book's OWN weight
+    m.state.spy_qty, m.state.bil_qty = 50, 50          # ...and held AT it
+    m.state.cash_baseline = {"venue": 0.0, "ledger": 0.0, "ts": _time.time()}
+    a = _VenueCashAdapter(total=7_000.0, available=7_000.0)
+    alerts = []
+    req = m.request_capital_adoption(7_000, "2026-08-20")
+    assert req["usd"] == 7_000.0 and m.state.capital_request == req
+    r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
+    assert r["status"] == "adopted" and r["usd"] == 7_000.0
+    assert m.state.sleeve_cash == pytest.approx(3_500.0)
+    assert m.state.core_cash == pytest.approx(3_500.0)
+    assert m.state.capital_contributed == pytest.approx(17_000.0)
+    assert m.state.capital_request is None
+    assert m.state.cash_baseline is None               # stage-1 clock restarted
+    ev = m.state.capital_events[-1]
+    assert ev["kind"] == "deposit_adopted" and ev["usd"] == 7_000.0
+    assert ev["sleeve_usd"] == 3_500.0 and ev["core_usd"] == 3_500.0
+    assert ev["sleeve_target"] == 0.5 and ev["date"] == "2026-08-20"
+    assert len(alerts) == 1 and "ADOPTED $7,000.00" in alerts[0]
+    assert "open positions keep the size" in alerts[0]
+    # the plan deploys it: idle core cash -> SPY, idle sleeve cash -> BIL
+    intents = m.step("2026-08-20", payload(), PRICES)
+    kinds = {i["action"]: i for i in intents}
+    assert kinds["CORE_BUY"]["qty"] == 35 and kinds["SWEEP"]["qty"] == 35
+    # persisted and reloaded intact
+    m.save()
+    m2 = Blend3070Manager(m.cfg, m.state_path)
+    assert m2.state.capital_contributed == pytest.approx(17_000.0)
+    assert m2.state.capital_events[-1] == ev and m2.state.capital_request is None
+
+
+def test_gate_capital_adopt_end_to_end_through_run_cycle(tmp_path):
+    """The whole path: journal -> run_cycle adopts on the loop thread's
+    cycle -> the SAME cycle buys the core and sweeps the sleeve."""
+    m = _capital_book(tmp_path)
+    a = _VenueCashAdapter(total=7_000.0, available=7_000.0)
+    alerts = []
+    m.request_capital_adoption(7_000, "2026-08-20")
+    blend_mod.run_cycle(m, a, payload(), "2026-08-20", alert=alerts.append)
+    assert m.state.capital_request is None
+    assert m.state.capital_contributed == pytest.approx(17_000.0)
+    assert m.state.spy_qty == 70 + 49 and m.state.bil_qty == 30 + 21
+    assert m.state.core_cash == pytest.approx(0.0, abs=1e-6)
+    assert m.state.sleeve_cash == pytest.approx(0.0, abs=1e-6)
+    kinds = [(t["kind"], t["side"], t["qty"]) for t in m.state.trades]
+    assert ("core", "BUY", 49) in kinds and ("sweep", "BUY", 21) in kinds
+    assert any("ADOPTED $7,000.00" in x for x in alerts)
+    # a second cycle with no request is a no-op (nothing adopts twice)
+    before = (m.state.spy_qty, m.state.bil_qty, m.state.capital_contributed)
+    blend_mod.run_cycle(m, a, payload(), "2026-08-20", alert=alerts.append)
+    assert (m.state.spy_qty, m.state.bil_qty, m.state.capital_contributed) == before
+
+
+def test_gate_capital_adopt_refuses_more_than_the_venue_holds(tmp_path):
+    """The venue is the only ground truth for the amount: a request the
+    account cannot back is DROPPED with a RED page naming the shortfall
+    (a delta - never the account's cash level), ledger untouched."""
+    m = _capital_book(tmp_path)
+    a = _VenueCashAdapter(total=5_000.0, available=5_000.0)
+    alerts = []
+    m.request_capital_adoption(7_000, "2026-08-20")
+    r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
+    assert r["status"] == "refused" and "$2,000.00 LESS" in r["reason"]
+    assert m.state.capital_request is None
+    assert m.state.sleeve_cash == 0.0 and m.state.core_cash == 0.0
+    assert m.state.capital_contributed == 10_000.0 and not m.state.capital_events
+    assert alerts[0].startswith("🚨🚨") and "5,000" not in alerts[0]
+    assert m.state.events[-1]["level"] == "RED"
+    # a book order the ledger owns is NOT unowned cash: ledger cash counts
+    m2 = _capital_book(tmp_path / "b")
+    m2.state.core_cash = 2_000.0                       # the book's own cash
+    a2 = _VenueCashAdapter(total=8_000.0, available=8_000.0)   # 6,000 unowned
+    m2.request_capital_adoption(7_000, "2026-08-20")
+    r2 = blend_mod.adopt_capital(m2, a2, PRICES, "2026-08-20", alerts.append)
+    assert r2["status"] == "refused" and "$1,000.00 LESS" in r2["reason"]
+    # within the rounding tolerance it adopts
+    m3 = _capital_book(tmp_path / "c")
+    a3 = _VenueCashAdapter(total=6_999.50, available=6_999.50)
+    m3.request_capital_adoption(7_000, "2026-08-20")
+    assert blend_mod.adopt_capital(m3, a3, PRICES, "2026-08-20",
+                                   alerts.append)["status"] == "adopted"
+
+
+def test_gate_capital_adopt_waits_for_settlement_then_adopts(tmp_path):
+    """A deposit that has LANDED but is not AVAILABLE (a cash account's T+1,
+    a deposit hold) is deferred - request kept, said once a day - and
+    adopted once the venue says it is usable. No available-funds claim at
+    all (None) does not block."""
+    m = _capital_book(tmp_path)
+    a = _VenueCashAdapter(total=7_000.0, available=3_000.0)
+    alerts = []
+    m.request_capital_adoption(7_000, "2026-08-20")
+    r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
+    assert r["status"] == "deferred" and "$4,000.00 short" in r["reason"]
+    assert m.state.capital_request is not None and alerts == []
+    assert m.state.sleeve_cash == 0.0 and m.state.core_cash == 0.0
+    n_events = len(m.state.events)
+    blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
+    assert len(m.state.events) == n_events          # said once a day
+    assert m.status_summary(PRICES)["capital"]["request_pending"]["usd"] == 7_000.0
+    a.available = 7_000.0
+    assert blend_mod.adopt_capital(m, a, PRICES, "2026-08-20",
+                                   alerts.append)["status"] == "adopted"
+    m2 = _capital_book(tmp_path / "b")
+    m2.request_capital_adoption(7_000, "2026-08-20")
+    assert blend_mod.adopt_capital(m2, _VenueCashAdapter(7_000.0, None), PRICES,
+                                   "2026-08-20", alerts.append)["status"] == "adopted"
+
+
+def test_gate_capital_adopt_waits_for_a_quiet_cycle_and_a_venue_claim(tmp_path):
+    """Same quiet rule as the stage-1 reconcile (shared helper): journals in
+    flight, a fill inside CASH_QUIET_S, a fresh unreconciled record and an
+    adapter with no cash claim all DEFER (request kept, ledger untouched)."""
+    m = _capital_book(tmp_path)
+    a = _VenueCashAdapter(total=7_000.0, available=7_000.0)
+    alerts = []
+    m.request_capital_adoption(7_000, "2026-08-20")
+    m.state.pending_book_orders["x"] = {"kind": "sweep", "date": "2026-08-20"}
+    r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
+    assert r["status"] == "deferred" and "pending journals" in r["reason"]
+    m.state.pending_book_orders.clear()
+    m.state.last_fill_ts = _time.time()
+    r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
+    assert r["status"] == "deferred" and "recent fill" in r["reason"]
+    m.state.last_fill_ts = _time.time() - blend_mod.CASH_QUIET_S - 1
+    m.state.unreconciled["7"] = {"ts": _time.time(), "symbol": "CRSP"}
+    r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
+    assert r["status"] == "deferred" and "unreconciled" in r["reason"]
+    m.state.unreconciled.clear()
+    r = blend_mod.adopt_capital(m, _VenueCashAdapter(None), PRICES,
+                                "2026-08-20", alerts.append)
+    assert r["status"] == "deferred" and "no claim" in r["reason"]
+    assert m.state.capital_request is not None and alerts == []
+    assert m.state.sleeve_cash == 0.0 and m.state.core_cash == 0.0
+    # the stage-1 reconcile uses the same helper and still skips the same way
+    m.state.pending_entries["9"] = {"intent": {}, "date": "2026-08-20"}
+    assert blend_mod.reconcile_cash(m, a, alerts.append) is None
+    assert blend_mod.adopt_capital(m, a, PRICES, "2026-08-20",
+                                   alerts.append)["status"] == "deferred"
+    m.state.pending_entries.clear()
+    assert blend_mod.adopt_capital(m, a, PRICES, "2026-08-20",
+                                   alerts.append)["status"] == "adopted"
+
+
+def test_gate_capital_adopt_respects_blend_budget(tmp_path):
+    """BLEND_BUDGET must hold the larger book BEFORE the cash is adopted,
+    or the sweep is clamped and entries blocked for no reason: refused
+    with a RED page naming the cap. A missing SPY/BIL quote (gross reads
+    LOW, r7) defers rather than passes. No cap = no check."""
+    alerts = []
+    m = _capital_book(tmp_path, blend_budget=12_000.0)  # gross 10,000 + 7,000
+    a = _VenueCashAdapter(total=7_000.0, available=7_000.0)
+    m.request_capital_adoption(7_000, "2026-08-20")
+    r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
+    assert r["status"] == "refused" and "BLEND_BUDGET $12,000" in r["reason"]
+    assert m.state.capital_request is None and alerts[0].startswith("🚨🚨")
+    assert m.state.core_cash == 0.0
+    m2 = _capital_book(tmp_path / "b", blend_budget=20_000.0)
+    m2.request_capital_adoption(7_000, "2026-08-20")
+    r = blend_mod.adopt_capital(m2, a, {"BIL": 100.0}, "2026-08-20", alerts.append)
+    assert r["status"] == "deferred" and "missing SPY/BIL quote" in r["reason"]
+    assert m2.state.capital_request is not None
+    assert blend_mod.adopt_capital(m2, a, PRICES, "2026-08-20",
+                                   alerts.append)["status"] == "adopted"
+    # exactly at the cap (within tolerance) adopts
+    m3 = _capital_book(tmp_path / "c", blend_budget=17_000.0)
+    m3.request_capital_adoption(7_000, "2026-08-20")
+    assert blend_mod.adopt_capital(m3, a, PRICES, "2026-08-20",
+                                   alerts.append)["status"] == "adopted"
+
+
+def test_gate_capital_adopt_refused_on_a_halted_or_unseeded_book(tmp_path):
+    alerts = []
+    m = _capital_book(tmp_path)
+    a = _VenueCashAdapter(total=7_000.0, available=7_000.0)
+    m.request_capital_adoption(7_000, "2026-08-20")
+    m.halt("KILL")
+    r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
+    assert r["status"] == "refused" and "halted (KILL)" in r["reason"]
+    assert m.state.capital_request is None and m.state.core_cash == 0.0
+    m2 = mk(tmp_path / "b")                          # never seeded
+    m2.request_capital_adoption(7_000, "2026-08-20")
+    r = blend_mod.adopt_capital(m2, a, PRICES, "2026-08-20", alerts.append)
+    assert r["status"] == "refused" and "not seeded" in r["reason"]
+    assert m2.state.capital_request is None and m2.state.sleeve_cash == 0.0
+    # and a queued flatten on an un-halted book refuses too
+    m3 = _capital_book(tmp_path / "c")
+    m3.request_capital_adoption(7_000, "2026-08-20")
+    m3.state.flatten_request = {"ts": 1, "date": "2026-08-20"}
+    assert blend_mod.adopt_capital(m3, a, PRICES, "2026-08-20",
+                                   alerts.append)["status"] == "refused"
+
+
+def test_gate_capital_request_validation_replacement_and_expiry(tmp_path):
+    m = _capital_book(tmp_path)
+    for bad in ("abc", None, -5, 0, float("nan"), float("inf"), 6_000_000):
+        with pytest.raises(ValueError):
+            m.request_capital_adoption(bad, "2026-08-20")
+    assert m.state.capital_request is None
+    m.request_capital_adoption("7000", "2026-08-20")         # a string number is fine
+    m.request_capital_adoption(7_500, "2026-08-20")          # the latest wins
+    assert m.state.capital_request["usd"] == 7_500.0
+    assert "replaces the pending $7,000.00" in m.state.events[-1]["msg"]
+    # a request older than the TTL expires unexecuted
+    m.state.capital_request["ts"] = _time.time() - blend_mod.CAPITAL_REQUEST_TTL_S - 1
+    alerts = []
+    a = _VenueCashAdapter(total=8_000.0, available=8_000.0)
+    r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", alerts.append)
+    assert r["status"] == "expired" and m.state.capital_request is None
+    assert m.state.core_cash == 0.0 and alerts[0].startswith("⚠️")
+    # the operator can withdraw one
+    m.request_capital_adoption(7_500, "2026-08-20")
+    assert m.clear_capital_request("operator")["usd"] == 7_500.0
+    assert m.state.capital_request is None and m.clear_capital_request() is None
+    # a malformed journaled request is dropped at LOAD, never executed
+    m.state.capital_request = {"usd": "junk", "ts": _time.time()}
+    m.save()
+    assert Blend3070Manager(m.cfg, m.state_path).state.capital_request is None
+
+
+def test_gate_kill_cancels_a_pending_capital_request(tmp_path):
+    """A /kill then /resume must never adopt cash into a book the operator
+    just stopped - the bootstrap-ack rule, applied to capital."""
+    m = _capital_book(tmp_path)
+    m.request_capital_adoption(7_000, "2026-08-20")
+    m.request_flatten("2026-08-20")
+    assert m.state.capital_request is None and m.state.halted == "KILL"
+    assert any("CANCELLED" in e["msg"] for e in m.state.events)
+    m.resume("2026-08-20")
+    assert m.state.capital_request is None           # resume grants nothing
+
+
+def test_gate_capital_contributed_seed_and_pre_field_inference(tmp_path):
+    """A fresh seed records itself as the first capital event; a state file
+    from before the field infers the seed (BLEND_BOOK_USD clamped by
+    BLEND_BUDGET) ONCE and persists it, so a later env change cannot
+    rewrite it."""
+    m = mk(tmp_path, blend_budget=8_000.0)           # seed = min(10k, 8k)
+    a = DryAdapter()
+    blend_mod.run_cycle(m, a, payload(), "2026-08-20", alert=lambda *_: None)
+    assert m.state.initialized and m.state.capital_contributed == 8_000.0
+    (ev,) = [e for e in m.state.capital_events if e["kind"] == "seed"]
+    assert ev["usd"] == 8_000.0 and ev["sleeve_usd"] == 2_400.0
+    assert ev["core_usd"] == 5_600.0 and ev["sleeve_target"] == 0.30
+    # pre-field file: strip the fields and reload
+    raw = json.load(open(m.state_path))
+    for k in ("capital_contributed", "capital_events", "capital_request"):
+        raw.pop(k, None)
+    json.dump(raw, open(m.state_path, "w"))
+    m2 = Blend3070Manager(m.cfg, m.state_path)
+    assert m2.state.capital_contributed == 8_000.0 and m2.state.capital_events == []
+    assert any("inferred from the seed config" in e["msg"] for e in m2.state.events)
+    m2.save()
+    m2.cfg.blend_book_usd = 999_999.0                # env changed later
+    m3 = Blend3070Manager(m2.cfg, m2.state_path)
+    assert m3.state.capital_contributed == 8_000.0   # persisted, not re-inferred
+    # an UNSEEDED pre-field file infers nothing
+    m4 = mk(tmp_path / "u")
+    assert m4.state.capital_contributed is None
+
+
+def test_gate_capital_sleeve_only_book_adopts_everything_to_the_sleeve(tmp_path):
+    m = _capital_book(tmp_path)
+    m.state.sleeve_target, m.state.spy_qty = 1.0, 0
+    a = _VenueCashAdapter(total=7_000.0, available=7_000.0)
+    m.request_capital_adoption(7_000, "2026-08-20")
+    r = blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", lambda *_: None)
+    assert r["status"] == "adopted"
+    assert m.state.sleeve_cash == 7_000.0 and m.state.core_cash == 0.0
+    pl = payload()
+    pl["rebalance"]["target"] = 1.0
+    intents = m.step("2026-08-20", pl, PRICES)
+    assert not any(i["action"] == "CORE_BUY" for i in intents)
+    (sweep,) = [i for i in intents if i["action"] == "SWEEP"]
+    assert sweep["qty"] == 70
+
+
+def test_gate_capital_feed_and_status_are_public_safe(tmp_path):
+    """The feed carries contributed capital and the capital events (the
+    operator's own amounts and dates); /status adds the pending request.
+    Neither ever carries the account's cash level."""
+    m = _capital_book(tmp_path)
+    a = _VenueCashAdapter(total=7_123.45, available=7_123.45)
+    m.request_capital_adoption(7_000, "2026-08-20")
+    st = m.status_summary(PRICES)
+    assert st["capital"]["request_pending"]["usd"] == 7_000.0
+    assert st["capital"]["contributed"] == 10_000.0
+    blend_mod.adopt_capital(m, a, PRICES, "2026-08-20", lambda *_: None)
+    feed = m.feed(PRICES, "2026-08-20")
+    assert feed["book"]["capital_contributed"] == 17_000.0
+    (ev,) = feed["capital_events"]
+    assert set(ev) == {"date", "kind", "usd", "sleeve_usd", "core_usd"}
+    assert ev["kind"] == "deposit_adopted" and ev["usd"] == 7_000.0
+    blob = json.dumps(feed) + json.dumps(m.status_summary(PRICES))
+    assert "7123" not in blob and "7,123" not in blob
+    assert "total_cash" not in blob and "available_funds" not in blob
+    assert m.status_summary(PRICES)["capital"]["request_pending"] is None
+
+
+def test_gate_capital_adopt_endpoint_journals_and_wakes_the_loop(tmp_path, monkeypatch):
+    """POST /blend/cash/adopt: EXEC_TOKEN-gated, POST only, validates the
+    amount, journals it under BLEND_LOCK and wakes the loop - which, with
+    the DryAdapter's no-claim cash, DEFERS it (request kept, nothing
+    adopted) and says so on /status."""
+    client, service = _service_client(tmp_path, monkeypatch)
+    with client as c:
+        assert _wait_until(lambda: service.BLEND is not None
+                           and service.LAST["loop_ok"] > 0)
+        B = service.BLEND
+        _seed_initialized(B, sleeve_cash=0.0, spy_qty=70, bil_qty=30)
+        B.state.sleeve_target = 0.30
+        B.state.capital_contributed = 10_000.0      # a seeded book carries it
+        assert c.post("/blend/cash/adopt", json={"usd": 7000}).status_code == 401
+        assert c.get("/blend/cash/adopt", params={"token": "sekrit"}).status_code == 405
+        r = c.post("/blend/cash/adopt", params={"token": "sekrit"}, json={"usd": -1})
+        assert r.status_code == 400 and "positive" in r.json()["detail"]
+        r = c.post("/blend/cash/adopt", params={"token": "sekrit"}, json={"usd": 7000})
+        assert r.status_code == 200 and r.json()["ok"] is True
+        assert r.json()["capital_request"]["usd"] == 7_000.0
+        assert B.state.capital_request["usd"] == 7_000.0
+        # the loop ran a cycle on the wake and deferred it (no venue claim)
+        assert _wait_until(lambda: any("no claim" in e["msg"]
+                                       for e in B.state.events), timeout=20.0)
+        assert B.state.capital_request is not None
+        assert B.state.sleeve_cash == 0.0 and B.state.core_cash == 0.0
+        st = c.get("/status", params={"token": "sekrit"}).json()["blend"]
+        assert st["capital"]["request_pending"]["usd"] == 7_000.0
+        assert st["capital"]["contributed"] == 10_000.0
+    service.BLEND = None
