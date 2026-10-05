@@ -169,14 +169,21 @@ class ExecCfg:
     bil_order_cost: bool = True          # +$1 BIL sell at entry (pre-fund), +$1 re-sweep at exit
     carry: bool = True                   # idle sleeve cash earns BIL total return (needs a yield series)
     paper_arith: bool = False            # run_call_book P&L arithmetic (reduction check only)
+    # ROUND 10 sizing levers (docs/VARIANTS_PREREGISTRATION_R10_SIZING.md); defaults = the live rule
+    sizing: str = "risk"                 # 'risk' | 'slot_fill' (spendable cash / free slots) | 'inverse_occupancy'
+    risk_frac_max: float = 0.03          # inverse_occupancy clamp ceiling (floor = risk_frac)
+    start_equity: float | None = None    # None -> START_EQUITY; the live book's base is 120_000
 
     @property
     def label(self) -> str:
-        return (f"lag={self.entry_lag} seed={self.peak_seed} ratchet={self.ratchet} "
+        base = (f"lag={self.entry_lag} seed={self.peak_seed} ratchet={self.ratchet} "
                 f"dz_stop={self.day_zero_stop} cap={self.risk_cap} ts={self.time_stop_anchor}/"
                 f"{self.time_stop_fill} target={self.sleeve_target} int={self.integer_shares} "
                 f"clip={self.cash_clip} comm={self.commission_model} bil$={self.bil_order_cost} "
                 f"carry={self.carry}")
+        if self.sizing != "risk":
+            base += f" sizing={self.sizing}"
+        return base
 
 
 EXEC_T2 = ExecCfg()
@@ -426,7 +433,8 @@ def run_executor_book(rows: list[dict], mkt: dict, cfg: ExecCfg, *,
     today in select_capped order, sized at risk_frac of the SLEEVE equity at
     the close of the FIRE day (= the prior close for lag 1 — run_call_book's
     prev_equity; the nearest daily proxy to the T+1 ~10:30 marks for lag 2),
-    qty = min(floor(risk$/risk), floor(spendable cash/entry_ref)), cost at the
+    qty = min(floor(risk$/risk), floor(spendable cash/entry_ref)) (cfg.sizing
+    'slot_fill' / 'inverse_occupancy' replace the risk$ leg, round 10), cost at the
     actual fill (cash may dip below zero by the fill-vs-entry_ref gap, as the
     executor's ledger does — never clipped at the fill); (3) MTM on adjusted
     closes; (4) 30/70 band rebalance + core buy.
@@ -443,8 +451,9 @@ def run_executor_book(rows: list[dict], mkt: dict, cfg: ExecCfg, *,
     blend = target < 1.0 - 1e-9
     bil_fee = cfg.commission_usd if cfg.bil_order_cost else 0.0
 
-    sleeve_cash = target * START_EQUITY
-    core_cash = (1.0 - target) * START_EQUITY
+    start_eq = START_EQUITY if cfg.start_equity is None else cfg.start_equity
+    sleeve_cash = target * start_eq
+    core_cash = (1.0 - target) * start_eq
     spy_qty = 0
     positions: list[dict] = []
     curve: list[tuple[date, float]] = []
@@ -488,9 +497,22 @@ def run_executor_book(rows: list[dict], mkt: dict, cfg: ExecCfg, *,
                 size_eq = prev_sleeve_eq
             else:
                 size_eq = sleeve_eq_by.get(t["fire_date"], prev_sleeve_eq)
-            risk_usd = cfg.risk_frac * size_eq
             risk = t["risk"]
-            qty = risk_usd / risk
+            # `positions` is the OPEN list at this moment: today's exits are
+            # already applied, earlier same-day entries already appended.
+            if cfg.sizing == "slot_fill":
+                free_slots = max(CAP - len(positions), 1)
+                qty = (max(sleeve_cash, 0.0) / free_slots) / t["entry_ref"]
+            else:
+                if cfg.sizing == "inverse_occupancy":
+                    risk_frac = min(cfg.risk_frac_max,
+                                    max(cfg.risk_frac, cfg.risk_frac * CAP / (len(positions) + 1)))
+                elif cfg.sizing == "risk":
+                    risk_frac = cfg.risk_frac
+                else:
+                    raise ValueError(f"unknown sizing {cfg.sizing!r}")
+                risk_usd = risk_frac * size_eq
+                qty = risk_usd / risk
             if cfg.integer_shares:
                 qty = math.floor(qty)
             if cfg.cash_clip:
@@ -511,7 +533,8 @@ def run_executor_book(rows: list[dict], mkt: dict, cfg: ExecCfg, *,
             ev["entries"] += 1
             trades.append({"entry_date": ds, "exit_date": t["exit_date"], "status": t["status"],
                            "hold_days": t["hold_days"], "qty": qty, "r_net": t["r_net"],
-                           "prefill_exit": t.get("prefill_exit", False), "symbol": t["symbol"]})
+                           "prefill_exit": t.get("prefill_exit", False), "symbol": t["symbol"],
+                           "fill": t["entry"], "exit": t["exit"]})
             if t["exit_date"] <= ds:                    # same-bar exit: realize now
                 sleeve_cash += _exit_proceeds(cfg, p, ev)
             else:

@@ -374,3 +374,33 @@ and whether the market agreed._
   BOTH the tracker's shadow grader and the executor, whose ratchet guard is
   also a data-bug safety).
 - **Status:** observing (second shadow engine live as of 2026-10-04).
+
+### H15 — The 30% sleeve's idle cash is the cap and the gate, not the 1% sizing rule (NULL on sizing)
+- **Hypothesis (Casey, 2026-10-05: "so much of that cash is sitting around
+  doing nothing? dynamically increase the trade size based on how many open
+  trades there are?"):** H15a the live rules keep the sleeve well under
+  full deployment; H15b raising risk per entry is leverage, not edge; H15c
+  sizing by free slots does not improve Sharpe because open count is a
+  regime signal.
+- **Evidence (round 10 sizing study, pre-registered, two counter-agent
+  verifiers + re-review, 2026-10-05):** S0 (1%) deploys 37% of the sleeve
+  on average (p50 42%, p90 74%), is AT the 10-cap on 27% of days and at 0
+  open on 29% (gate off); 78% of gated fires are skipped at the cap — the
+  binding constraint is cap × notional-per-slot (≈ 74% deployed at a full
+  cap) and the gate, so H15a's "cap on a small minority of days" half was
+  REFUTED. Uniform risk 1.5/2/3%: CAGR +1.4/+1.3/+1.8 pp with max DD
+  +1.0/+2.0/+2.8 pp and Sharpe 0.966 → 0.965/0.922/0.902 (H15b CONFIRMED).
+  Slot-fill (D1): best point Sharpe 1.021 and +4.8 pp CAGR, but the
+  Bonferroni-5 interval is [−0.197, +0.276], DD +2.0 pp (at the bar), the 5y
+  sign flips at the $120k base, and 47% of the edge is four CDNA entries in
+  2017 each sized at ~30% of the sleeve (slot-fill concentrates in one name
+  when few slots are open). Inverse-occupancy (D2, Casey's form): below S0
+  on every statistic (H15c CONFIRMED). The idle cash earned $9,789 of BIL
+  carry on a $30k sleeve over 10.6 y (+0.43 pp CAGR). **NULL on all ten
+  cells under the contract: keep risk 1%.** Docs:
+  BACKTEST_EXECUTOR_MIRROR.md (round 10), VARIANTS_PREREGISTRATION_R10_SIZING.md.
+- **Implement:** nothing. The lever that moves deployment is the cap (and
+  the fire rate), which is a selection study (it changes which calls are
+  taken), not a sizing one; the kill ledger's sleeve drawdown lines were set
+  on the 1% / cap-10 rules and would need re-deriving with any change.
+- **Status:** closed (null), 2026-10-05.
