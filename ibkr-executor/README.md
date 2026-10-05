@@ -1262,7 +1262,11 @@ What `/kill` actually does: cancels the sleeve's stops and MKT-sells the
 sleeve positions only (SPY and BIL untouched); the proceeds sit in sleeve
 CASH, swept to BIL only after `/resume` because `step()` plans nothing while
 halted; it also halts the parked ladder. `/resume` clears every halt and
-enforces no review. There is no entries-only halt. Until the executor alerts
+enforces no review. There is no entries-only halt. And `/kill`'s flatten
+path has never run against a real venue (Operating rules): the first live
+`/kill` is its own test. The sleeve kill line's instrument is due by the
+first R1 review (2026-11-05); its level is set then from the live
+transfer-adjusted series, not from the $100k replay. Until the executor alerts
 on these lines itself (next build, alert-only), they are read by hand at
 every R1 monthly review and the venue-vs-book position check is a named
 manual TWS step.
