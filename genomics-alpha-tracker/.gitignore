@@ -38,6 +38,10 @@ backend/data/*
 !backend/data/r2a_exposure.json
 !backend/data/bil_bars_raw.json
 !backend/data/backtest_executor_mirror_results.json
+# Round 10's frozen sizing-study results (the H15a deployment numbers, the paired
+# bootstrap per arm and base, the reduction gate). Round-9's ablation results were
+# never allow-listed and are not in the checkout; this one is (counter-agent A1).
+!backend/data/backtest_sizing_study_results.json
 # The FROZEN campaign price cache (FMP dividend-adjusted lane, segment-normalized,
 # truncated at the registered window end) and the archived Yahoo-basis R2-A sleeve
 # that rounds 4-6 still read. Re-based 2026-10-04; see docs/REBASE_FMP_LANE_2026-10-04.md.

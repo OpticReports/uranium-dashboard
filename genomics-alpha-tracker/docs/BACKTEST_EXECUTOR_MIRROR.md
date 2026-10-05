@@ -211,6 +211,22 @@ E-vs-mirror guards, sign-aware CI, Bonferroni-8, actionability tags
 per-arm grading counts, basis-clean flag, 10,000 draws, tracker+executor tag
 for ratchet/day-zero, floor-overlap statement. Results pending the host run.
 
+**Round 10 code (sleeve sizing study, 2026-10-05): PASS WITH CORRECTIONS ×2
+→ applied → re-review PASS.** Built and run as a workflow: one builder, two
+independent verifiers with different lenses (arithmetic/implementation;
+statistics/decision rule/honesty), one fixer, one re-verifier. SERIOUS (A1):
+the results JSON was gitignored and would have been dropped from the commit
+— allow-listed. MINOR: H15a's "cap on a small minority of days" half was
+REFUTED by the study's own numbers (reported as confirmed) — split;
+`share_days_at_cap` / `share_days_zero_open` added; the carry was in the
+JSON but not the table — added; the 5y-sign reason key misnamed — fixed;
+the replay's occupancy denominator counts filled positions only (the live
+executor also counts pending T+2 MOOs) — recorded as an honesty line with
+the measured share (39% of entries land on a day with a held-but-unfilled
+slot; verdicts unaffected). Re-verifier recomputed the reduction gate
+($419,779.14 to the cent against the stored mirror), the deployment
+statistics and the D1 bootstrap independently: all equal.
+
 ## Round 9 results — exit-rule ablation (2026-10-04; interval of record = 10,000 draws)
 
 Contract: VARIANTS_PREREGISTRATION_R9_EXIT_ABLATION.md (+ addenda 1, 2).
@@ -273,6 +289,75 @@ the paired record is `h14_ratchet` on `GET /shadow/track-record`. The
 executor intents filter on `trailing_3atr`, so the second engine's rows can
 never close a call for the live book or move a level. The live paired record
 decides H14 (HYPOTHESES.md H14, observing).
+
+## Round 10 results — sleeve sizing (2026-10-05; interval of record = 10,000 draws)
+
+Contract: VARIANTS_PREREGISTRATION_R10_SIZING.md (committed before the code).
+Question (Casey): does the 30% sleeve sit idle, and would dynamic sizing by
+open-slot count, or more risk per entry, make the cash work harder? Arms on
+the LIVE book shape (30/70, T+2, IBKR costs, BIL carry, XBI gate, cap 10):
+S0 risk 1% (live), S1 1.5%, S2 2%, S3 3%, D1 slot-fill (remaining cash ÷
+free slots), D2 inverse-occupancy (1% × 10 ÷ (open+1), capped 3%). Results
+JSON: `backend/data/backtest_sizing_study_results.json`; script
+`backend/scripts/backtest_sizing_study.py`; gates `tests/test_sizing_study.py`
+(reduction: S0 reproduces the stored `blend3070_t2_carry` book to the cent).
+
+**Verdict: NULL on all ten arm/base cells. Keep 1%.** No arm's Bonferroni-5
+interval of the book Sharpe delta vs S0 clears zero (lower bounds −0.124 to
+−0.326); every arm widens max DD; every CAGR gain is leverage.
+
+| arm | book end ($100k) | CAGR | max DD | Sharpe | sleeve deployed (mean) | days at cap | worst trade (% sleeve) | ΔSharpe p50 | Bonf-5 lo | verdict |
+|---|---|---|---|---|---|---|---|---|---|---|
+| S0 risk 1% | $419,779 | 14.47% | 28.3% | 0.966 | 37.2% | 26.6% | −2.6% | — | — | anchor |
+| S1 risk 1.5% | $475,527 | 15.82% | 29.2% | 0.965 | 50.2% | 34.3% at ≥9 | −3.9% | −0.005 | −0.124 | NULL (leverage) |
+| S2 risk 2% | $475,276 | 15.81% | 30.3% | 0.922 | 54.9% | 25.5% | −5.1% | −0.048 | −0.234 | NULL (leverage) |
+| S3 risk 3% | $497,059 | 16.30% | 31.1% | 0.902 | 58.0% | 9.7% | −7.8% | −0.068 | −0.325 | NULL (leverage; fails 5y sign and the 2 pp DD bar) |
+| D1 slot-fill | $650,675 | 19.29% | 30.2% | 1.021 | 54.8% | 37.2% | −5.3% | +0.047 | −0.197 | NULL (leverage; DD +2.0 pp at the bar; 5y sign flips at $120k) |
+| D2 inverse-occupancy | $457,585 | 15.40% | 28.8% | 0.936 | 50.2% | 26.2% | −6.8% | −0.034 | −0.212 | NULL (leverage) |
+
+The $120,000 base (a $36k sleeve, whole shares) reproduces every verdict;
+S0 Sharpe 0.967 vs 0.966, skipped-for-zero-shares 1 vs 2. 63-day blocks
+agree in sign on every arm.
+
+**What the sleeve actually does (H15a, split verdict):** S0 holds 37% of
+sleeve equity in positions on average (p50 42%, p90 74%; 52% on days with
+≥ 1 open), sits AT the 10-slot cap on 27% of days and at ≥ 9 on 39%, and
+at 0 open on 29% of days (the 200dma gate is off: 2022, 2025-H1). 78% of
+gated fires (2,384 of 3,059) were skipped at the cap. The binding
+constraint on idle cash is therefore cap × notional-per-slot (10 × ~7–8%
+≈ 74% deployed at a full cap) plus the gate — NOT the 1% rule. A cap arm is
+outside this contract.
+
+**The carry ("is the cash doing nothing?"):** S0's idle sleeve cash earned
+$9,789 of BIL total return over 10.6 y on a $30k starting sleeve ($11,813
+at $120k): +0.43 pp of CAGR, +0.026 Sharpe vs the no-carry counterfactual.
+Small, positive, realised (not a forecast).
+
+**Why D1 is not a finding:** D1's +4.8 pp CAGR is 47% one calendar year
+(2017: 0.205 of a 0.438 total log-ratio vs S0), and that year is four CDNA
+entries in Jul–Aug 2017 each sized at 29–32% of the sleeve — slot-fill
+concentrates the sleeve in ONE name when few slots are open (the cap is per
+call, not per symbol). That is single-name event risk, and the interval
+says so: 95% [−0.14, +0.21], Bonferroni-5 [−0.197, +0.276]. D2 (Casey's
+inverse-occupancy form) is below S0 on every statistic: bigger bets land
+when the signal set is thin.
+
+**Honesty:** in-sample over the same 10.6 y as every prior round; the fire
+set is the tracker's (survivor-shaped universe); fire rate taken as given;
+measurement is daily trade-close MTM on adjusted closes; costs = IBKR fixed
+schedule + tiered slippage; carry = realised BIL total return; the replay's
+occupancy counts filled positions only (the live executor also counts
+pending T+2 MOOs; 39% of entries land on such a day — a D1/D2 live
+implementation would size differently on those days); worst-trade figures
+are gross of costs and measured against sleeve equity at the entry close; a
+dynamic arm would need an executor build plus a tracker publication.
+
+**Next step: none proposed.** The lever that would change deployment is the
+cap (and the fire rate), which is a different pre-registration (a cap arm
+changes WHICH calls are taken, so it is a selection study, not a sizing
+one). If Casey wants more of the sleeve working, that is the study to run
+— with the caveat that the sleeve's drawdown lines in the kill ledger were
+set on the 1% / cap-10 rules.
 
 ## Pending DD questions (ranked)
 
