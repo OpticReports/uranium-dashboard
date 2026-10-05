@@ -43,5 +43,9 @@ jobs:
   discovery:
     # Dynamic universe discovery sweep (census + CT.gov rotation lanes).
     # Daily: the census is cached 24h anyway; thresholds live in discovery.yaml.
+    # at_utc anchors the sweep after the US close on weekdays (21:45 UTC =
+    # 17:45 EDT / 16:45 EST), so the movers lane always reads a close-to-close
+    # move. Remove it to fall back to interval_minutes from boot.
     enabled: true
     interval_minutes: 1440
+    at_utc: "21:45"

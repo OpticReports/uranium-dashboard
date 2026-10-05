@@ -45,12 +45,12 @@ def _screener_payload(rows, total):
             "message": None, "status": {"rCode": 200}}
 
 
-def _study(nct, title, phases, pcd):
+def _study(nct, title, phases, pcd, lead="X"):
     return {"protocolSection": {
         "identificationModule": {"nctId": nct, "briefTitle": title},
         "statusModule": {"overallStatus": "RECRUITING",
                          "primaryCompletionDateStruct": {"date": pcd}},
-        "sponsorCollaboratorsModule": {"leadSponsor": {"name": "X"}},
+        "sponsorCollaboratorsModule": {"leadSponsor": {"name": lead}},
         "designModule": {"phases": phases},
     }}
 
@@ -247,7 +247,7 @@ def test_catalyst_lane_phase2_needs_genomics_keyword(monkeypatch):
     _mock_trials(monkeypatch, {
         "Plain Pharma": [_study("NCT2", "A statin study", ["PHASE2"], "2027-06")],
         "Edit Bio": [_study("NCT3", "CRISPR gene editing in TTR amyloidosis",
-                            ["PHASE2"], "2027-06")],
+                            ["PHASE2"], "2027-06", lead="Edit Bio, Inc.")],
     })
     census = [
         {"symbol": "PLN", "name": "Plain Pharma Inc.", "last": 10.0,
@@ -531,12 +531,14 @@ def test_auto_promote_config_off_is_propose_only(session):
 
 
 def test_run_discovery_summary_shape(session, monkeypatch, passthrough_cache):
-    monkeypatch.setattr(disc, "fetch_census", lambda: _census())
+    monkeypatch.setattr(disc, "fetch_census_with_asof", lambda: (_census(), None))
+    monkeypatch.setattr(disc, "fetch_census_supplement", lambda cfg: [])
     monkeypatch.setattr(disc, "_fetch_ctgov_trials", lambda cleaned: [])
     session.add(Security(symbol="MRNA", name="Moderna", active=True))
     session.commit()
     summary = disc.run_discovery(session)
     assert summary["census"] == 7
+    assert summary["census_supplement"] == 0
     assert summary["movers"] == 2                       # MRK + DOWN
     assert summary["candidates_new"] == 2
     assert summary["candidates_updated"] == 0

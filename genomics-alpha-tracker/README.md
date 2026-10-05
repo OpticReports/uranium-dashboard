@@ -164,13 +164,42 @@ records a reason and suppresses re-entry for 90 days; set
 propose-only. Endpoints: `GET /discovery/candidates`, `GET /discovery/summary`,
 `POST /discovery/run`, `POST /discovery/candidates/{sym}/promote|dismiss`.
 
-**Known blind spots** (counter-agent, 2026-08-19): the Nasdaq
-`sector=health_care` census misses genomics *tools/diagnostics* classified
-elsewhere (verified absent: EXAS, TXG, PACB, TEM, TMO, DHR) — tools coverage
-still relies on watchlist curation; slow re-rates that never print a ≥10% day
-only surface via the catalyst lane; CT.gov registered-name mismatches
-under-detect catalysts (mitigated in the tracker by `ctgov_names`, not
-available for names we don't know yet).
+**Recall fixes (2026-10-05, after Vertex was found missing).** Vertex
+($128B, co-owner of Casgevy with CRISPR Therapeutics) scored 60 with zero
+genomics tags because its Casgevy trials are titled "CTX001". Trial-title keywords still read every
+returned study (investigator-led trials of a company's product carry the
+descriptive titles). New, on the candidate's OWN interventional phase 2/3 trials only (it is the lead sponsor
+or a named collaborator — CT.gov's sponsor search is fuzzy: "Merck" returns
+"The John Merck Fund"): the genomics keyword match also reads the trials'
+sponsors and collaborators; a GENETIC intervention tags gene-therapy; a
+collaborator that is a universe name with a THERAPEUTIC genomics modality
+tags `genomics-partner` (whole-word match; discovery-promoted names never
+seed partners). Vertex → 76. Full-census simulation (498 eligible names):
+tags grow for six genetic-medicine names only, Vertex is the only newly
+auto-promotable name, and it is the only name that would become promotable
+even if every name's phase-3 date fell inside 60 days. The census gains
+non-health-care rows filed as "Biotechnology: …" or with a genomics keyword
+in the name (10x, PacBio, Bruker, Agilent, Waters…; preferreds and warrants
+dropped); those names never take the mega-cap fast path on a move alone
+(Waters passed the drug-trial check through a sponsor named "John Waters").
+The census cache TTL is 20h so a daily run always refetches, and moves are
+dated by the screener's own "Last price as of" stamp (it still showed
+Friday's close at 22:50 UTC on a Monday); a snapshot already read is never
+re-read as a new session. Warrants, units and preferreds are dropped from
+both censuses (ADRs are kept). The sweep runs
+weekdays at 21:45 UTC (`at_utc` in `intervals.yaml`), after the US close,
+with a catch-up run at boot when a restart missed the anchor.
+
+**Known blind spots** (counter-agent 2026-08-19, updated 2026-10-05): the
+census is still a FUNNEL, not a watched sector: names that never trip a lane
+are discarded unseen and nothing lists the sector (the sector-tier design in
+`docs/DESIGN_SECTOR_TIER.md` addresses this). Tools names filed outside both
+health care and "Biotechnology:" (TMO, DHR in Industrial Machinery; TEM in
+Computer Software) are still absent — coverage relies on watchlist curation;
+slow re-rates that never print a ≥10% day at the close only surface via the
+catalyst lane; CT.gov registered-name mismatches under-detect catalysts
+(mitigated in the tracker by `ctgov_names`, not available for names we don't
+know yet).
 
 ---
 
