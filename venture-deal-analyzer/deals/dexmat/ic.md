@@ -127,7 +127,12 @@ enthusiasm is real, I know who it is."**
    **2026-10-06: exclusivity answered — [LP-VERIFIED] exclusive (Casey).**
    License is SIGNED (Casey, 2026-10-06). Residual: royalty/cost;
    field stability (humidity) unchanged.
-   Crux 2 (October price) asked of the sponsor 2026-10-06, awaiting reply.
+   Crux 2 (October price) asked of the sponsor 2026-10-06. Reply same day
+   [SPONSOR-CLAIMED, verbal]: production COST $1.12/m vs the $1.33/m basis
+   behind $0.48/ft (→ ≈$0.41/ft at 20% markup); real sales only after
+   qualification, CEO est. 2–3 months. Status ◐: cost claim, not a live
+   price; no document. Settles the timing question: the hard evidence
+   (sales at price, anchor orders) lands ~Dec 2026–Jan 2027.
    Sizing note (2026-10-06): $50k standing view; moves to $100k if one
    more of {anchor commitment in writing, $0.48/ft live} resolves.
 

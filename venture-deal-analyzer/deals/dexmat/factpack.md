@@ -557,7 +557,19 @@ ranked format. Clock context: **round closes 2026-09-28.**
    Moves: cost-curve credibility — a hard, near-term check on the
    whole roadmap. **UPDATE 2026-10-06: asked the sponsor directly by
    Casey (did $0.48/ft go live in October; price sheet or invoice).
-   Awaiting reply.**
+   Awaiting reply.** **◐ REPLY 2026-10-06 (sponsor, Alex Golding, chat;
+   [SPONSOR-CLAIMED], no document supplied):** "it is happening. It will
+   actually be less. $0.48/ft was based on $1.33/m. They are producing
+   at $1.12/meter." Reconciliation [DER]: $1.33/m = $0.405/ft, so $1.33
+   is a COST basis and $0.48/ft = cost + ~18–20% markup (1.33 × 1.2 =
+   $0.486/ft) — consistent with the memo's 20%-markup plan (#9). At
+   $1.12/m cost + 20% → ≈ $0.41/ft, ~21x below today's $8.49/ft list.
+   NOT yet a live price: "CEO thinks they will finish qualification in
+   2–3 months, then they can do real sales." Residual ask: the cost
+   report or a quote/invoice at that price; at what volume $1.12/m holds.
+   Also from the same reply: focus is milspec wire ("ESG was where they
+   started, not where they are going") — matches our specialty/aero
+   beachhead base case, not the copper-replacement story.
 9. ● **Margin plan: 99%-now/50%-later (DD notes) vs 20% markup (memo)**
    (NEW). Moves: unit-economics score; also a candor probe.
 
