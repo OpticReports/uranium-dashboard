@@ -125,7 +125,8 @@ enthusiasm is real, I know who it is."**
    this is a specialty business at a full price. Evidence: term-sheet
    status and the exclusivity ask.
    **2026-10-06: exclusivity answered — [LP-VERIFIED] exclusive (Casey).**
-   Residual: signed or term-sheet stage; field stability unchanged.
+   License is SIGNED (Casey, 2026-10-06). Residual: royalty/cost;
+   field stability (humidity) unchanged.
    Crux 2 (October price) asked of the sponsor 2026-10-06, awaiting reply.
    Sizing note (2026-10-06): $50k standing view; moves to $100k if one
    more of {anchor commitment in writing, $0.48/ft live} resolves.

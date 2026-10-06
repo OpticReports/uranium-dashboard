@@ -524,8 +524,8 @@ ranked format. Clock context: **round closes 2026-09-28.**
    1144x branch belongs to the whole industry, not DexMat.
    **UPDATE 2026-10-06 (from Casey): [LP-VERIFIED] the license is
    EXCLUSIVE.** Settles ownership of the tail branch (concession C2's
-   "belongs to the whole industry" no longer applies). Still open:
-   signed vs term-sheet stage, cost/royalty, and field stability
+   "belongs to the whole industry" no longer applies). **SIGNED
+   (Casey, 2026-10-06).** Still open: cost/royalty, and field stability
    (humidity; "3–5 yrs" per Pasquali) — exclusivity resolves who owns
    the tail, not whether it works.
 3. ● **Which outcome tree is operative — 25/40/5 or 35/60/5 — and the
